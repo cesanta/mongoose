@@ -12,5 +12,4 @@
 
 #include <pico/stdlib.h>
 int mkdir(const char *, mode_t);
-#define MG_ENABLE_ATOMIC 1
 #endif

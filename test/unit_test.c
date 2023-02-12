@@ -2686,32 +2686,41 @@ static void test_poll(void) {
   mg_mgr_free(&mgr);
 }
 
-#if MG_ENABLE_ATOMIC
-#define NMESSAGES 49999
+#define NMESSAGES 99999
 static uint32_t s_qcrc = 0;
+static int s_out, s_in;
 static void producer(void *param) {
   struct mg_queue *q = (struct mg_queue *) param;
-  volatile size_t i, n, len;
-  for (i = 0; i < NMESSAGES; i++) {
-    char buf[100];
-    char *p;
-    mg_random(buf, sizeof(buf));
-    n = ((unsigned char *) buf)[0] % sizeof(buf);
-    while ((len = mg_queue_space(q, &p)) < n) (void) 0;
-    memcpy(p, buf, n);
-    mg_queue_add(q, n);
-    s_qcrc = mg_crc32(s_qcrc, buf, n);
+  char tmp[64 * 1024], *buf;
+  size_t len, ofs = sizeof(tmp);
+  for (s_out = 0; s_out < NMESSAGES; s_out++) {
+    if (ofs >= sizeof(tmp)) mg_random(tmp, sizeof(tmp)), ofs = 0;
+    len = ((uint8_t *) tmp)[ofs] % 55 + 1;
+    if (ofs + len > sizeof(tmp)) len = sizeof(tmp) - ofs;
+    while ((mg_queue_book(q, &buf, len)) < len) (void) 0;
+    memcpy(buf, &tmp[ofs], len);
+    s_qcrc = mg_crc32(s_qcrc, buf, len);
+    ofs += len;
+#if 0
+    fprintf(stderr, "-->prod %3d  %8x  %-3lu %zu/%zu/%lu\n", s_out, s_qcrc, len, q->tail,
+           q->head, buf - q->buf);
+#endif
+    mg_queue_add(q, len);
   }
 }
 
 static uint32_t consumer(struct mg_queue *q) {
-  uint32_t i, crc = 0;
-  for (i = 0; i < NMESSAGES; i++) {
-    char *p;
-    volatile size_t len;
-    while ((len = mg_queue_next(q, &p)) == MG_QUEUE_EMPTY) (void) 0;
-    crc = mg_crc32(crc, (char *) p, len);
-    mg_queue_del(q);
+  uint32_t crc = 0;
+  for (s_in = 0; s_in < NMESSAGES; s_in++) {
+    char *buf;
+    size_t len;
+    while ((len = mg_queue_next(q, &buf)) == 0) (void) 0;
+    crc = mg_crc32(crc, buf, len);
+#if 0
+    fprintf(stderr, "-->cons %3u  %8x  %-3lu %zu/%zu/%lu\n", s_in, crc, len, q->tail,
+           q->head, buf - q->buf);
+#endif
+    mg_queue_del(q, len);
   }
   return crc;
 }
@@ -2739,68 +2748,18 @@ static void start_thread(void (*f)(void *), void *p) {
   (void) f, (void) p;
 }
 #endif
-#endif
 
 static void test_queue(void) {
-  char buf[512], *p;
-  size_t size = sizeof(size);
-  struct mg_queue queue, *q = &queue;
-
-  memset(q, 0, sizeof(*q));
-  q->buf = buf;
-  q->len = sizeof(buf);
-
-  ASSERT(mg_queue_next(q, &p) == MG_QUEUE_EMPTY);
-
-  // Write "hi"
-  ASSERT(mg_queue_space(q, &p) == sizeof(buf) - size);
-  ASSERT(mg_queue_printf(q, "hi") == 2);
-  ASSERT(q->head == size + 2);
-  ASSERT(mg_queue_next(q, &p) == 2);
-
-  // Write zero-length message
-  ASSERT(mg_queue_space(q, &p) == sizeof(buf) - 2 - 2 * size);
-  ASSERT(mg_queue_printf(q, "") == 0);
-  ASSERT(q->head == size * 2 + 2);
-  ASSERT(mg_queue_next(q, &p) == 2);
-
-  // Write "dude"
-  ASSERT(mg_queue_space(q, &p) == sizeof(buf) - 2 - 3 * size);
-  ASSERT(mg_queue_printf(q, "dude") == 4);
-  ASSERT(q->head == size * 3 + 2 + 4);
-  ASSERT(mg_queue_next(q, &p) == 2);
-
-  // Read "hi"
-  ASSERT(mg_queue_next(q, &p) == 2);
-  ASSERT(memcmp(p, "hi", 2) == 0);
-  mg_queue_del(q);
-  ASSERT(q->head == size * 3 + 2 + 4);
-  ASSERT(q->tail == size + 2);
-
-  // Read empty message
-  ASSERT(mg_queue_next(q, &p) == 0);
-  mg_queue_del(q);
-  ASSERT(q->tail == size * 2 + 2);
-
-  ASSERT(mg_queue_next(q, &p) == 4);
-  ASSERT(memcmp(p, "dude", 4) == 0);
-  mg_queue_del(q);
-  ASSERT(q->tail == q->head);
-
-  ASSERT(mg_queue_space(q, &p) == sizeof(buf) - size);
-  ASSERT(q->tail == 0 && q->head == 0);
-  q->tail = q->head = 0;
-
-#if MG_ENABLE_ATOMIC
-  {
-    // Test concurrent queue access
-    uint32_t crc;
-    start_thread(producer, q);
-    crc = consumer(q);
-    MG_INFO(("DONE. %x %x", s_qcrc, crc));
-    ASSERT(s_qcrc == crc);
-  }
-#endif
+  char buf[512];
+  struct mg_queue queue;
+  uint32_t crc;
+  memset(buf, 0x55, sizeof(buf));
+  mg_queue_init(&queue, buf, sizeof(buf));
+  start_thread(producer, &queue);  // Start producer in a separate thread
+  crc = consumer(&queue);          // Consumer eats data in this thread
+  MG_INFO(("CRC1 %8x", s_qcrc));   // Show CRCs
+  MG_INFO(("CRC2 %8x", crc));
+  ASSERT(s_qcrc == crc);
 }
 
 int main(void) {

@@ -223,7 +223,6 @@ static inline int mg_mkdir(const char *path, mode_t mode) {
 #define MG_PATH_MAX 100
 #define MG_ENABLE_SOCKET 0
 #define MG_ENABLE_DIRLIST 0
-#define MG_ENABLE_ATOMIC 1
 
 #endif
 
@@ -240,7 +239,6 @@ static inline int mg_mkdir(const char *path, mode_t mode) {
 
 #include <pico/stdlib.h>
 int mkdir(const char *, mode_t);
-#define MG_ENABLE_ATOMIC 1
 #endif
 
 
@@ -599,10 +597,6 @@ struct timeval {
 #define MG_ENABLE_TCPIP 0  // Mongoose built-in network stack
 #endif
 
-#ifndef MG_ENABLE_ATOMIC
-#define MG_ENABLE_ATOMIC 0  // Required by mg_queue
-#endif
-
 #ifndef MG_ENABLE_LWIP
 #define MG_ENABLE_LWIP 0  // lWIP network stack
 #endif
@@ -674,6 +668,10 @@ struct timeval {
 
 #ifndef MG_ENABLE_PACKED_FS
 #define MG_ENABLE_PACKED_FS 0
+#endif
+
+#ifndef MG_ENABLE_ASSERT
+#define MG_ENABLE_ASSERT 0
 #endif
 
 #ifndef MG_IO_SIZE
@@ -792,40 +790,32 @@ char *mg_remove_double_dots(char *s);
 
 
 
-
-#if MG_ENABLE_ATOMIC
-#include <stdatomic.h>
-#elif !defined(_Atomic)
-#define _Atomic
-#endif
-
 // Single producer, single consumer non-blocking queue
 //
 // Producer:
-//    void *buf;
-//    while (mg_queue_space(q, &buf) < len) WAIT();  // Wait for free space
-//    memcpy(buf, data, len);  // Copy data to the queue
-//    mg_queue_add(q, len);    // Advance q->head
+//    char *buf;
+//    while (mg_queue_book(q, &buf) < len) WAIT();  // Wait for space
+//    memcpy(buf, my_data, len);   // Copy data to the queue
+//    mg_queue_add(q, len);
 //
 // Consumer:
-//    void *buf;
-//    while ((len = mg_queue_next(q, &buf)) == MG_QUEUE_EMPTY) WAIT();
-//    mg_hexdump(buf, len);    // Handle message
-//    mg_queue_del(q);         // Delete message
+//    char *buf;
+//    while ((len = mg_queue_get(q, &buf)) == 0) WAIT();
+//    mg_hexdump(buf, len); // Handle message
+//    mg_queue_del(q, len);
 //
 struct mg_queue {
   char *buf;
-  size_t len;
-  volatile _Atomic size_t tail;
-  volatile _Atomic size_t head;
+  size_t size;
+  volatile size_t tail;
+  volatile size_t head;
 };
 
-#define MG_QUEUE_EMPTY ((size_t) ~0ul)  // Next message size when queue is empty
-
-void mg_queue_add(struct mg_queue *, size_t len);       // Advance head
-void mg_queue_del(struct mg_queue *);                   // Advance tail
-size_t mg_queue_space(struct mg_queue *, char **);      // Get free space
-size_t mg_queue_next(struct mg_queue *, char **);       // Get next message size
+void mg_queue_init(struct mg_queue *, char *, size_t);        // Init queue
+size_t mg_queue_book(struct mg_queue *, char **buf, size_t);  // Reserve space
+void mg_queue_add(struct mg_queue *, size_t);                 // Add new message
+size_t mg_queue_next(struct mg_queue *, char **);  // Get oldest message
+void mg_queue_del(struct mg_queue *, size_t);      // Delete oldest message
 
 
 
@@ -957,6 +947,12 @@ bool mg_file_printf(struct mg_fs *fs, const char *path, const char *fmt, ...);
 
 
 
+
+#if MG_ENABLE_ASSERT
+#include <assert.h>
+#elif !defined(assert)
+#define assert(x)
+#endif
 
 void mg_random(void *buf, size_t len);
 char *mg_random_str(char *buf, size_t len);

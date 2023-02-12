@@ -3497,7 +3497,7 @@ void mg_mgr_init(struct mg_mgr *mgr) {
 size_t mg_queue_vprintf(struct mg_queue *q, const char *fmt, va_list *ap) {
   size_t len = mg_snprintf(NULL, 0, fmt, ap);
   char *buf;
-  if (mg_queue_space(q, &buf) < len + 1) {
+  if (len == 0 || mg_queue_book(q, &buf, len + 1) < len + 1) {
     len = 0;  // Nah. Not enough space
   } else {
     len = mg_vsnprintf((char *)buf, len + 1, fmt, ap);
@@ -3613,43 +3613,85 @@ size_t mg_print_mac(void (*out)(char, void *), void *arg, va_list *ap) {
 #endif
 
 
-// Every message in the queue is prepended by the message length (ML)
-// ML is sizeof(size_t) in size
-// Tail points to the message data
-//
-//    |------| ML | message1 |  ML | message2 |--- free space ---|
-//    ^      ^                                ^                  ^
-//   buf    tail                             head               len
 
-size_t mg_queue_space(struct mg_queue *q, char **buf) {
-  size_t ofs;
-  if (q->head > 0 && q->tail >= q->head) {  // All messages read?
-    q->head = 0;                            // Yes. Reset head first
-    q->tail = 0;                            // Now reset the tail
+#if defined(__GNUC__) || defined(__clang__)
+#define MG_MEMORY_BARRIER() __sync_synchronize()
+#elif defined(_MSC_VER) && _MSC_VER >= 1700
+#define MG_MEMORY_BARRIER() MemoryBarrier()
+#elif !defined(MG_MEMORY_BARRIER)
+#define MG_MEMORY_BARRIER()
+#endif
+
+// Every message in a queue is prepended by a 32-bit message length (ML).
+// If ML is 0, then it is the end, and reader must wrap to the beginning.
+//
+//  Queue when q->tail <= q->head:
+//  |----- free -----| ML | message1 | ML | message2 |  ----- free ------|
+//  ^                ^                               ^                   ^
+// buf              tail                            head                len
+//
+//  Queue when q->tail > q->head:
+//  | ML | message2 |----- free ------| ML | message1 | 0 |---- free ----|
+//  ^               ^                 ^                                  ^
+// buf             head              tail                               len
+
+void mg_queue_init(struct mg_queue *q, char *buf, size_t size) {
+  q->size = size;
+  q->buf = buf;
+  q->head = q->tail = 0;
+}
+
+static size_t mg_queue_read_len(struct mg_queue *q) {
+  uint32_t n = 0;
+  MG_MEMORY_BARRIER();
+  memcpy(&n, q->buf + q->tail, sizeof(n));
+  assert(q->tail + n + sizeof(n) <= q->size);
+  return n;
+}
+
+static void mg_queue_write_len(struct mg_queue *q, size_t len) {
+  uint32_t n = (uint32_t) len;
+  memcpy(q->buf + q->head, &n, sizeof(n));
+  MG_MEMORY_BARRIER();
+}
+
+size_t mg_queue_book(struct mg_queue *q, char **buf, size_t len) {
+  size_t space = 0, hs = sizeof(uint32_t) * 2;  // *2 is for the 0 marker
+  if (q->head >= q->tail && q->head + len + hs <= q->size) {
+    space = q->size - q->head - hs;  // There is enough space
+  } else if (q->head >= q->tail && q->tail > hs) {
+    mg_queue_write_len(q, 0);  // Not enough space ahead
+    q->head = 0;               // Wrap head to the beginning
   }
-  ofs = q->head + sizeof(size_t);
-  if (buf != NULL) *buf = q->buf + ofs;
-  return ofs > q->len ? 0 : q->len - ofs;
+  if (q->head + hs + len < q->tail) space = q->tail - q->head - hs;
+  if (buf != NULL) *buf = q->buf + q->head + sizeof(uint32_t);
+  return space;
 }
 
 size_t mg_queue_next(struct mg_queue *q, char **buf) {
-  size_t len = MG_QUEUE_EMPTY;
-  if (q->tail < q->head) memcpy(&len, &q->buf[q->tail], sizeof(len));
-  if (buf != NULL) *buf = &q->buf[q->tail + sizeof(len)];
+  size_t len = 0;
+  if (q->tail != q->head) {
+    len = mg_queue_read_len(q);
+    if (len == 0) {  // Zero (head wrapped) ?
+      q->tail = 0;   // Reset tail to the start
+      if (q->head > q->tail) len = mg_queue_read_len(q);  // Read again
+    }
+  }
+  if (buf != NULL) *buf = q->buf + q->tail + sizeof(uint32_t);
+  assert(q->tail + len <= q->size);
   return len;
 }
 
 void mg_queue_add(struct mg_queue *q, size_t len) {
-  size_t head = q->head + len + (size_t) sizeof(head);  // New head
-  if (head <= q->len) {                                 // Have space ?
-    memcpy(q->buf + q->head, &len, sizeof(len));        // Yes. Store ML
-    q->head = head;                                     // Advance head
-  }
+  assert(len > 0);
+  mg_queue_write_len(q, len);
+  assert(q->head + sizeof(uint32_t) * 2 + len <= q->size);
+  q->head += len + sizeof(uint32_t);
 }
 
-void mg_queue_del(struct mg_queue *q) {
-  size_t len = mg_queue_next(q, NULL), tail = q->tail + len + sizeof(size_t);
-  if (len != MG_QUEUE_EMPTY) q->tail = tail;
+void mg_queue_del(struct mg_queue *q, size_t len) {
+  q->tail += len + sizeof(uint32_t);
+  assert(q->tail + sizeof(uint32_t) <= q->size);
 }
 
 #ifdef MG_ENABLE_LINES
@@ -3807,7 +3849,7 @@ static uint32_t blk0(union char64long16 *block, int i) {
   w = rol(w, 30);
 
 static void mg_sha1_transform(uint32_t state[5],
-                              const unsigned char buffer[64]) {
+                              const unsigned char *buffer) {
   uint32_t a, b, c, d, e;
   union char64long16 block[1];
 
@@ -6035,14 +6077,14 @@ volatile uint32_t RESERVED0, EIR, EIMR, RESERVED1, RDAR, TDAR, RESERVED2[3], ECR
 const uint32_t EIMR_RX_ERR = 0x2400000;              // Intr mask RXF+EBERR
 
 void ETH_IRQHandler(void);
-static bool mg_tcpip_driver_imxrt1020_init(struct mip_if *ifp);
+static bool mg_tcpip_driver_imxrt1020_init(struct mg_tcpip_if *ifp);
 static void wait_phy_complete(void);
-static struct mip_if *s_ifp;                         // MIP interface
+static struct mg_tcpip_if *s_ifp;                         // MIP interface
 
-static size_t mg_tcpip_driver_imxrt1020_tx(const void *, size_t , struct mip_if *);
-static bool mg_tcpip_driver_imxrt1020_up(struct mip_if *ifp);
+static size_t mg_tcpip_driver_imxrt1020_tx(const void *, size_t , struct mg_tcpip_if *);
+static bool mg_tcpip_driver_imxrt1020_up(struct mg_tcpip_if *ifp);
 
-enum { PHY_ADDR = 0x02, PHY_BCR = 0, PHY_BSR = 1 };     // PHY constants
+enum { IMXRT1020_PHY_ADDR = 0x02, IMXRT1020_PHY_BCR = 0, IMXRT1020_PHY_BSR = 1 };     // PHY constants
 
 void delay(uint32_t);
 void delay (uint32_t di) {
@@ -6061,7 +6103,7 @@ static void wait_phy_complete(void) {
   ENET->EIR |= BIT(23); // MII interrupt clear
 }
 
-static uint32_t eth_read_phy(uint8_t addr, uint8_t reg) {
+static uint32_t imxrt1020_eth_read_phy(uint8_t addr, uint8_t reg) {
   ENET->EIR |= BIT(23); // MII interrupt clear
   uint32_t mask_phy_adr_reg = 0x1f; // 0b00011111: Ensure we write 5 bits (Phy address & register)
   uint32_t phy_transaction = 0x00;
@@ -6077,7 +6119,7 @@ static uint32_t eth_read_phy(uint8_t addr, uint8_t reg) {
   return (ENET->MMFR & 0x0000ffff);
 }
 
-static void eth_write_phy(uint8_t addr, uint8_t reg, uint32_t val) {
+static void imxrt1020_eth_write_phy(uint8_t addr, uint8_t reg, uint32_t val) {
   ENET->EIR |= BIT(23); // MII interrupt clear
   uint8_t mask_phy_adr_reg = 0x1f; // 0b00011111: Ensure we write 5 bits (Phy address & register)
   uint32_t mask_phy_data = 0x0000ffff; // Ensure we write 16 bits (data)
@@ -6116,7 +6158,7 @@ uint8_t tx_data_buffer[(ENET_TXBD_NUM)][((unsigned int)(((ENET_TXBUFF_SIZE)) + (
 // Initialise driver imx_rt1020
 
 // static bool mg_tcpip_driver_imxrt1020_init(uint8_t *mac, void *data) { // VO
-static bool mg_tcpip_driver_imxrt1020_init(struct mip_if *ifp) {
+static bool mg_tcpip_driver_imxrt1020_init(struct mg_tcpip_if *ifp) {
 
   struct mg_tcpip_driver_imxrt1020_data *d = (struct mg_tcpip_driver_imxrt1020_data *) ifp->driver_data;
   s_ifp = ifp;
@@ -6131,17 +6173,17 @@ static bool mg_tcpip_driver_imxrt1020_init(struct mip_if *ifp) {
 
   // Setup MII/RMII MDC clock divider (<= 2.5MHz).
   ENET->MSCR = 0x130; // HOLDTIME 2 clk, Preamble enable, MDC MII_Speed Div 0x30
-  eth_write_phy(PHY_ADDR, PHY_BCR, 0x8000); // PHY W @0x00 D=0x8000 Soft reset
-  while (eth_read_phy(PHY_ADDR, PHY_BSR) & BIT(15)) {delay(0x5000);} // Wait finished poll 10ms
+  imxrt1020_eth_write_phy(IMXRT1020_PHY_ADDR, IMXRT1020_PHY_BCR, 0x8000); // PHY W @0x00 D=0x8000 Soft reset
+  while (imxrt1020_eth_read_phy(IMXRT1020_PHY_ADDR, IMXRT1020_PHY_BSR) & BIT(15)) {delay(0x5000);} // Wait finished poll 10ms
 
   // PHY: Start Link
   {
-    eth_write_phy(PHY_ADDR, PHY_BCR, 0x1200); // PHY W @0x00 D=0x1200 Autonego enable + start
-    eth_write_phy(PHY_ADDR, 0x1f, 0x8180);    // PHY W @0x1f D=0x8180 Ref clock 50 MHz at XI input
+    imxrt1020_eth_write_phy(IMXRT1020_PHY_ADDR, IMXRT1020_PHY_BCR, 0x1200); // PHY W @0x00 D=0x1200 Autonego enable + start
+    imxrt1020_eth_write_phy(IMXRT1020_PHY_ADDR, 0x1f, 0x8180);    // PHY W @0x1f D=0x8180 Ref clock 50 MHz at XI input
 
-    uint32_t bcr = eth_read_phy(PHY_ADDR, PHY_BCR);
+    uint32_t bcr = imxrt1020_eth_read_phy(IMXRT1020_PHY_ADDR, IMXRT1020_PHY_BCR);
     bcr &= ~BIT(10); // Isolation -> Normal
-    eth_write_phy(PHY_ADDR, PHY_BCR, bcr);
+    imxrt1020_eth_write_phy(IMXRT1020_PHY_ADDR, IMXRT1020_PHY_BCR, bcr);
   }
 
   // Disable ENET
@@ -6199,23 +6241,23 @@ static bool mg_tcpip_driver_imxrt1020_init(struct mip_if *ifp) {
 }
 
 // Transmit frame
-static uint32_t s_txno;
+static uint32_t s_rt1020_txno;
 
-static size_t mg_tcpip_driver_imxrt1020_tx(const void *buf, size_t len, struct mip_if *ifp) {
+static size_t mg_tcpip_driver_imxrt1020_tx(const void *buf, size_t len, struct mg_tcpip_if *ifp) {
 
   if (len > sizeof(tx_data_buffer[ENET_TXBD_NUM])) {
   //  MG_ERROR(("Frame too big, %ld", (long) len));
     len = 0;  // Frame is too big
-  } else if ((tx_buffer_descriptor[s_txno].control & BIT(15))) {
+  } else if ((tx_buffer_descriptor[s_rt1020_txno].control & BIT(15))) {
   MG_ERROR(("No free descriptors"));
     // printf("D0 %lx SR %lx\n", (long) s_txdesc[0][0], (long) ETH->DMASR);
     len = 0;  // All descriptors are busy, fail
   } else {
-    memcpy(tx_data_buffer[s_txno], buf, len);     // Copy data
-    tx_buffer_descriptor[s_txno].length = (uint16_t) len;  // Set data len
-    tx_buffer_descriptor[s_txno].control |= (uint16_t)(BIT(10)); // TC (transmit CRC)
-    //  tx_buffer_descriptor[s_txno].control &= (uint16_t)(BIT(14) | BIT(12)); // Own doesn't affect HW
-    tx_buffer_descriptor[s_txno].control |= (uint16_t)(BIT(15) | BIT(11)); // R+L (ready+last)
+    memcpy(tx_data_buffer[s_rt1020_txno], buf, len);     // Copy data
+    tx_buffer_descriptor[s_rt1020_txno].length = (uint16_t) len;  // Set data len
+    tx_buffer_descriptor[s_rt1020_txno].control |= (uint16_t)(BIT(10)); // TC (transmit CRC)
+    //  tx_buffer_descriptor[s_rt1020_txno].control &= (uint16_t)(BIT(14) | BIT(12)); // Own doesn't affect HW
+    tx_buffer_descriptor[s_rt1020_txno].control |= (uint16_t)(BIT(15) | BIT(11)); // R+L (ready+last)
     ENET->TDAR = BIT(24); // Descriptor updated. Hand over to DMA.
     // INFO
     // Relevant Descriptor bits: 15(R)  Ready
@@ -6223,36 +6265,34 @@ static size_t mg_tcpip_driver_imxrt1020_tx(const void *buf, size_t len, struct m
     //                           10(TC) transmis CRC
     // __DSB(); // ARM errata 838869 Cortex-M4, M4F, M7, M7F: "store immediate overlapping
                 // exception" return might vector to incorrect interrupt.
-    if (++s_txno >= ENET_TXBD_NUM) s_txno = 0;
+    if (++s_rt1020_txno >= ENET_TXBD_NUM) s_rt1020_txno = 0;
   }
   (void) ifp;
   return len;
 }
 
 // IRQ (RX)
-static uint32_t s_rxno;
+static uint32_t s_rt1020_rxno;
 
 void ENET_IRQHandler(void) {
   ENET->EIMR = 0;           // Mask interrupts.
   uint32_t eir = ENET->EIR; // Read EIR
   ENET->EIR = 0xffffffff;   // Clear interrupts
 
-  qp_mark(QP_IRQTRIGGERED, 0);
-
   if (eir & EIMR_RX_ERR) // Global mask used
   {
-    if (rx_buffer_descriptor[s_rxno].control & BIT(15)) {
+    if (rx_buffer_descriptor[s_rt1020_rxno].control & BIT(15)) {
       ENET->EIMR = EIMR_RX_ERR; // Enable interrupts
       return;  // Empty? -> exit.
     }
     // Read inframes
     else { // Frame received, loop
       for (uint32_t i = 0; i < 10; i++) {  // read as they arrive but not forever
-        if (rx_buffer_descriptor[s_rxno].control & BIT(15)) break;  // exit when done
-        uint32_t len = (rx_buffer_descriptor[s_rxno].length);
-        mg_tcpip_qwrite(rx_buffer_descriptor[s_rxno].buffer, len > 4 ? len - 4 : len, s_ifp);
-        rx_buffer_descriptor[s_rxno].control |= BIT(15); // Inform DMA RX is empty
-        if (++s_rxno >= ENET_RXBD_NUM) s_rxno = 0;
+        if (rx_buffer_descriptor[s_rt1020_rxno].control & BIT(15)) break;  // exit when done
+        uint32_t len = (rx_buffer_descriptor[s_rt1020_rxno].length);
+        mg_tcpip_qwrite(rx_buffer_descriptor[s_rt1020_rxno].buffer, len > 4 ? len - 4 : len, s_ifp);
+        rx_buffer_descriptor[s_rt1020_rxno].control |= BIT(15); // Inform DMA RX is empty
+        if (++s_rt1020_rxno >= ENET_RXBD_NUM) s_rt1020_rxno = 0;
       }
     }
   }
@@ -6260,15 +6300,15 @@ void ENET_IRQHandler(void) {
 }
 
 // Up/down status
-static bool mg_tcpip_driver_imxrt1020_up(struct mip_if *ifp) {
-  uint32_t bsr = eth_read_phy(PHY_ADDR, PHY_BSR);
+static bool mg_tcpip_driver_imxrt1020_up(struct mg_tcpip_if *ifp) {
+  uint32_t bsr = imxrt1020_eth_read_phy(IMXRT1020_PHY_ADDR, IMXRT1020_PHY_BSR);
   (void) ifp;
   return bsr & BIT(2) ? 1 : 0;
 }
 
 // API
 struct mg_tcpip_driver mg_tcpip_driver_imxrt1020 = {
-  mg_tcpip_driver_imxrt1020_init, mg_tcpip_driver_imxrt1020_tx, mip_driver_rx,
+  mg_tcpip_driver_imxrt1020_init, mg_tcpip_driver_imxrt1020_tx, mg_tcpip_driver_rx,
   mg_tcpip_driver_imxrt1020_up};
 
 #endif

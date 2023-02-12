@@ -3,7 +3,6 @@
 #define MG_ENABLE_TCPIP 1
 #define MG_ENABLE_PACKED_FS 0
 
-#include <assert.h>
 #include "mongoose.c"
 #include "driver_mock.c"
 

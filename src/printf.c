@@ -6,7 +6,7 @@
 size_t mg_queue_vprintf(struct mg_queue *q, const char *fmt, va_list *ap) {
   size_t len = mg_snprintf(NULL, 0, fmt, ap);
   char *buf;
-  if (mg_queue_space(q, &buf) < len + 1) {
+  if (len == 0 || mg_queue_book(q, &buf, len + 1) < len + 1) {
     len = 0;  // Nah. Not enough space
   } else {
     len = mg_vsnprintf((char *)buf, len + 1, fmt, ap);

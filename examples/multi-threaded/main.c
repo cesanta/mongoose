@@ -15,7 +15,7 @@ struct thread_data {
   struct mg_str body;     // Copy of message body
 };
 
-static void start_thread(void (*f)(void *), void *p) {
+static void start_thread(void *(*f)(void *), void *p) {
 #ifdef _WIN32
 #define usleep(x) Sleep((x) / 1000)
   _beginthread((void(__cdecl *)(void *)) f, 0, p);
@@ -25,18 +25,17 @@ static void start_thread(void (*f)(void *), void *p) {
   pthread_attr_t attr;
   (void) pthread_attr_init(&attr);
   (void) pthread_attr_setdetachstate(&attr, PTHREAD_CREATE_DETACHED);
-  pthread_create(&thread_id, &attr, (void *(*) (void *) ) f, p);
+  pthread_create(&thread_id, &attr, f, p);
   pthread_attr_destroy(&attr);
 #endif
 }
 
-static void worker_thread(void *param) {
+static void *worker_thread(void *param) {
   struct thread_data *d = (struct thread_data *) param;
   char buf[100];  // On-stack buffer for the message queue
 
-  d->queue.buf = buf;          // Caller passed us an empty queue with NULL
-  d->queue.len = sizeof(buf);  // buffer. Initialise it now
-  usleep(1 * 1000 * 1000);     // Simulate long execution time
+  mg_queue_init(&d->queue, buf, sizeof(buf));  // Init queue
+  usleep(1 * 1000 * 1000);                     // Simulate long execution time
 
   // Send a response to the connection
   if (d->body.len == 0) {
@@ -48,9 +47,10 @@ static void worker_thread(void *param) {
   }
 
   // Wait until connection reads our message, then it is safe to quit
-  while (mg_queue_next(&d->queue, NULL) != MG_QUEUE_EMPTY) usleep(1000);
+  while (d->queue.tail != d->queue.head) usleep(1000);
   MG_INFO(("done, cleaning up..."));
   free(d);
+  return NULL;
 }
 
 // HTTP request callback
@@ -68,10 +68,11 @@ static void fn(struct mg_connection *c, int ev, void *ev_data, void *fn_data) {
     size_t len;
     char *buf;
     // Check if we have a message from the worker
-    if (d != NULL && (len = mg_queue_next(&d->queue, &buf)) != MG_QUEUE_EMPTY) {
+    if (d != NULL && (len = mg_queue_next(&d->queue, &buf)) > 0) {
       // Got message from worker. Send a response and cleanup
       mg_http_reply(c, 200, "", "%.*s\n", (int) len, buf);
-      mg_queue_del(&d->queue);  // Delete message: signal worker that we're done
+      mg_queue_del(&d->queue, len);  // Delete message
+      *(void **) c->data = NULL;     // Forget about thread data
     }
   }
   (void) fn_data;
