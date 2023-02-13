@@ -1,14 +1,12 @@
 // Copyright (c) 2022 Cesanta Software Limited
 // All rights reserved
 
-#include "mcu.h"
+#include "hal.h"
 #include "mongoose.h"
 #include "tusb.h"
 
 #define LED PIN('B', 7)  // On-board LED pin (blue)
-static uint64_t s_ticks;
 static struct mg_tcpip_if *s_ifp;
-uint32_t SystemCoreClock = SYS_FREQUENCY;
 const uint8_t tud_network_mac_address[6] = {2, 2, 0x84, 0x6A, 0x96, 0};
 
 static void blink_cb(void *arg) {  // Blink periodically
@@ -16,12 +14,20 @@ static void blink_cb(void *arg) {  // Blink periodically
   (void) arg;
 }
 
-uint64_t mg_millis(void) {  // Declare our own uptime function
+static volatile uint64_t s_ticks;  // Milliseconds since boot
+void SysTick_Handler(void) {       // SyStick IRQ handler, triggered every 1ms
+  s_ticks++;
+}
+
+uint64_t mg_millis(void) {  // Let Mongoose use our uptime function
   return s_ticks;           // Return number of milliseconds since boot
 }
 
-void SysTick_Handler(void) {  // SyStick IRQ handler, triggered every 1ms
-  s_ticks++;
+void mg_random(void *buf, size_t len) {  // Use on-board RNG
+  for (size_t n = 0; n < len; n += sizeof(uint32_t)) {
+    uint32_t r = rng_read();
+    memcpy((char *) buf + n, &r, n + sizeof(r) > len ? len - n : sizeof(r));
+  }
 }
 
 bool tud_network_recv_cb(const uint8_t *buf, uint16_t len) {
@@ -73,20 +79,18 @@ static void fn(struct mg_connection *c, int ev, void *ev_data, void *fn_data) {
 }
 
 int main(void) {
-  clock_init();                            // Set clock
-  SysTick_Config(SystemCoreClock / 1000);  // Defined in core_cm4.h
-  gpio_set_mode(LED, GPIO_MODE_OUTPUT);    // Setup blue LED
-  uart_init(USART3, 115200);               // It is wired to the debug port
+  gpio_output(LED);               // Setup blue LED
+  uart_init(UART_DEBUG, 115200);  // Initialise debug printf
 
-  struct mg_mgr mgr;        // Initialise Mongoose event manager
-  mg_mgr_init(&mgr);        // and attach it to the MIP interface
+  struct mg_mgr mgr;        // Initialise 
+  mg_mgr_init(&mgr);        // Mongoose event manager
   mg_log_set(MG_LL_DEBUG);  // Set log level
-  mg_timer_add(&mgr, 500, MG_TIMER_REPEAT, blink_cb, &mgr);
+
 
   MG_INFO(("Init TCP/IP stack ..."));
   struct mg_tcpip_driver driver = {
       .tx = usb_tx, .rx = mg_tcpip_driver_rx, .up = usb_up};
-  struct mg_tcpip_if mif = {.mac = {2, 0, 1, 2, 3, 0x77},
+  struct mg_tcpip_if mif = {.mac = GENERATE_LOCALLY_ADMINISTERED_MAC(),
                             .ip = mg_htonl(MG_U32(192, 168, 3, 1)),
                             .mask = mg_htonl(MG_U32(255, 255, 255, 0)),
                             .enable_dhcp_server = true,
@@ -94,6 +98,7 @@ int main(void) {
                             .queue.len = 4096};
   s_ifp = &mif;
   mg_tcpip_init(&mgr, &mif);
+  mg_timer_add(&mgr, 500, MG_TIMER_REPEAT, blink_cb, &mgr);
   mg_http_listen(&mgr, "tcp://0.0.0.0:80", fn, &mgr);
 
   MG_INFO(("Init USB ..."));
