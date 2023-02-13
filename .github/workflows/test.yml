@@ -112,7 +112,7 @@ jobs:
     - if: ${{ env.GO == 1 }}
       run:  make -C examples/stm32/nucleo-f746zg-baremetal test VCON_API_KEY=${{secrets.VCON_API_KEY}}
     - if: ${{ env.GO == 1 }}
-      run:  make -C examples/stm32/nucleo-f746zg-freertos-mip test VCON_API_KEY=${{secrets.VCON_API_KEY}}
+      run:  make -C examples/stm32/nucleo-f746zg-freertos test VCON_API_KEY=${{secrets.VCON_API_KEY}}
 
   test_f4:
     runs-on: ubuntu-latest
@@ -125,7 +125,7 @@ jobs:
     - if: ${{ env.GO == 1 }}
       run:  make -C examples/stm32/nucleo-f429zi-baremetal test VCON_API_KEY=${{secrets.VCON_API_KEY}}
     - if: ${{ env.GO == 1 }}
-      run:  make -C examples/stm32/nucleo-f429zi-freertos-mip test VCON_API_KEY=${{secrets.VCON_API_KEY}}
+      run:  make -C examples/stm32/nucleo-f429zi-freertos test VCON_API_KEY=${{secrets.VCON_API_KEY}}
 
   test_h7:
     runs-on: ubuntu-latest
@@ -165,11 +165,11 @@ jobs:
           - path: stm32/stm32-nucleo-f429z
           - path: stm32/stm32-nucleo-h743z
           - path: stm32/nucleo-f429zi-baremetal
-          - path: stm32/nucleo-f429zi-freertos-mip
-          - path: stm32/nucleo-f429zi-usb-rndis
+          - path: stm32/nucleo-f429zi-freertos
+          - path: stm32/nucleo-f429zi-rndis
           - path: stm32/nucleo-f746zg-baremetal
-          - path: stm32/nucleo-f746zg-freertos-mip
-          - path: stm32/nucleo-f746zg-usb-rndis
+          - path: stm32/nucleo-f746zg-freertos
+          - path: stm32/nucleo-f746zg-rndis
           - path: nxp/nxp-mimxrt1020-azurertos
           - path: nxp/nxp-frdmk66f-freertos
           - path: nxp/nxp-lpcxpresso54s018m-freertos
