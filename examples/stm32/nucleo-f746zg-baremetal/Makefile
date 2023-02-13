@@ -8,7 +8,7 @@ LDFLAGS ?= -Tlink.ld -nostdlib -nostartfiles --specs nano.specs -lc -lgcc -Wl,--
 SOURCES = main.c syscalls.c sysinit.c
 SOURCES += cmsis_f7/Source/Templates/gcc/startup_stm32f746xx.s # ST startup file. Compiler-dependent!
 
-# Mongoose-specific source code files and build options. See https://mongoose.ws/documentation/#build-options
+# Mongoose-specific. See https://mongoose.ws/documentation/#build-options
 SOURCES += mongoose.c net.c packed_fs.c
 CFLAGS += -DMG_ENABLE_TCPIP=1 -DMG_ARCH=MG_ARCH_NEWLIB -DMG_ENABLE_CUSTOM_MILLIS=1
 CFLAGS += -DMG_ENABLE_CUSTOM_RANDOM=1 -DMG_ENABLE_PACKED_FS=1 $(CFLAGS_EXTRA)

@@ -15,7 +15,7 @@ CFLAGS += -IFreeRTOS-Kernel/include
 CFLAGS += -IFreeRTOS-Kernel/portable/GCC/ARM_CM7/r0p1 -Wno-conversion
 
 SOURCES += mongoose.c  net.c packed_fs.c
-CFLAGS += $(CFLAGS_EXTRA)       # Mongoose options are defined in mongoose_custom.h
+CFLAGS += $(CFLAGS_EXTRA)  # Mongoose options are defined in mongoose_custom.h
 
 ifeq ($(OS),Windows_NT)
   RM = cmd /C del /Q /F /S
