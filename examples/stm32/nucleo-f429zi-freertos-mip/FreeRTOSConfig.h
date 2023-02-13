@@ -1,6 +1,6 @@
 #pragma once
 
-#include "mcu.h"
+#include "hal.h"
 
 #define configUSE_PREEMPTION 1
 #define configCPU_CLOCK_HZ SYS_FREQUENCY
@@ -13,7 +13,7 @@
 #define configUSE_CO_ROUTINES 0
 #define configUSE_MALLOC_FAILED_HOOK 0
 #define configMINIMAL_STACK_SIZE 128
-#define configTOTAL_HEAP_SIZE (1024 * 98)
+#define configTOTAL_HEAP_SIZE (1024 * 128)
 #define INCLUDE_vTaskDelay 1
 
 #ifdef __NVIC_PRIO_BITS

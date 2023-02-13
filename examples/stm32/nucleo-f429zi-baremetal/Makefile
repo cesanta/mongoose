@@ -32,7 +32,7 @@ flash: firmware.bin
 
 cmsis_core:     # ARM CMSIS core headers
 	git clone --depth 1 -b 5.9.0 https://github.com/ARM-software/CMSIS_5 $@
-cmsis_f4:       # ARM CMSIS core headers
+cmsis_f4:       # ST CMSIS headers for STM32F4 series
 	git clone --depth 1 -b v2.6.8 https://github.com/STMicroelectronics/cmsis_device_f4 $@
 
 # Automated remote test. Requires env variable VCON_API_KEY set. See https://vcon.io/automated-firmware-tests/

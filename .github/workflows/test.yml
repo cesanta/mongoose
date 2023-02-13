@@ -124,6 +124,8 @@ jobs:
       run: sudo apt -y update; sudo apt -y install gcc-arm-none-eabi
     - if: ${{ env.GO == 1 }}
       run:  make -C examples/stm32/nucleo-f429zi-baremetal test VCON_API_KEY=${{secrets.VCON_API_KEY}}
+    - if: ${{ env.GO == 1 }}
+      run:  make -C examples/stm32/nucleo-f429zi-freertos-mip test VCON_API_KEY=${{secrets.VCON_API_KEY}}
 
   test_h7:
     runs-on: ubuntu-latest

@@ -1,6 +1,6 @@
 #include <sys/stat.h>
 
-#include "mcu.h"
+#include "hal.h"
 
 int _fstat(int fd, struct stat *st) {
   if (fd < 0) return -1;
