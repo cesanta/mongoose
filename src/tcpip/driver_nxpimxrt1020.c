@@ -19,14 +19,14 @@ volatile uint32_t RESERVED0, EIR, EIMR, RESERVED1, RDAR, TDAR, RESERVED2[3], ECR
 const uint32_t EIMR_RX_ERR = 0x2400000;              // Intr mask RXF+EBERR
 
 void ETH_IRQHandler(void);
-static bool mg_tcpip_driver_imxrt1020_init(struct mip_if *ifp);
+static bool mg_tcpip_driver_imxrt1020_init(struct mg_tcpip_if *ifp);
 static void wait_phy_complete(void);
-static struct mip_if *s_ifp;                         // MIP interface
+static struct mg_tcpip_if *s_ifp;                         // MIP interface
 
-static size_t mg_tcpip_driver_imxrt1020_tx(const void *, size_t , struct mip_if *);
-static bool mg_tcpip_driver_imxrt1020_up(struct mip_if *ifp);
+static size_t mg_tcpip_driver_imxrt1020_tx(const void *, size_t , struct mg_tcpip_if *);
+static bool mg_tcpip_driver_imxrt1020_up(struct mg_tcpip_if *ifp);
 
-enum { PHY_ADDR = 0x02, PHY_BCR = 0, PHY_BSR = 1 };     // PHY constants
+enum { IMXRT1020_PHY_ADDR = 0x02, IMXRT1020_PHY_BCR = 0, IMXRT1020_PHY_BSR = 1 };     // PHY constants
 
 void delay(uint32_t);
 void delay (uint32_t di) {
@@ -45,7 +45,7 @@ static void wait_phy_complete(void) {
   ENET->EIR |= BIT(23); // MII interrupt clear
 }
 
-static uint32_t eth_read_phy(uint8_t addr, uint8_t reg) {
+static uint32_t imxrt1020_eth_read_phy(uint8_t addr, uint8_t reg) {
   ENET->EIR |= BIT(23); // MII interrupt clear
   uint32_t mask_phy_adr_reg = 0x1f; // 0b00011111: Ensure we write 5 bits (Phy address & register)
   uint32_t phy_transaction = 0x00;
@@ -61,7 +61,7 @@ static uint32_t eth_read_phy(uint8_t addr, uint8_t reg) {
   return (ENET->MMFR & 0x0000ffff);
 }
 
-static void eth_write_phy(uint8_t addr, uint8_t reg, uint32_t val) {
+static void imxrt1020_eth_write_phy(uint8_t addr, uint8_t reg, uint32_t val) {
   ENET->EIR |= BIT(23); // MII interrupt clear
   uint8_t mask_phy_adr_reg = 0x1f; // 0b00011111: Ensure we write 5 bits (Phy address & register)
   uint32_t mask_phy_data = 0x0000ffff; // Ensure we write 16 bits (data)
@@ -100,7 +100,7 @@ uint8_t tx_data_buffer[(ENET_TXBD_NUM)][((unsigned int)(((ENET_TXBUFF_SIZE)) + (
 // Initialise driver imx_rt1020
 
 // static bool mg_tcpip_driver_imxrt1020_init(uint8_t *mac, void *data) { // VO
-static bool mg_tcpip_driver_imxrt1020_init(struct mip_if *ifp) {
+static bool mg_tcpip_driver_imxrt1020_init(struct mg_tcpip_if *ifp) {
 
   struct mg_tcpip_driver_imxrt1020_data *d = (struct mg_tcpip_driver_imxrt1020_data *) ifp->driver_data;
   s_ifp = ifp;
@@ -115,17 +115,17 @@ static bool mg_tcpip_driver_imxrt1020_init(struct mip_if *ifp) {
 
   // Setup MII/RMII MDC clock divider (<= 2.5MHz).
   ENET->MSCR = 0x130; // HOLDTIME 2 clk, Preamble enable, MDC MII_Speed Div 0x30
-  eth_write_phy(PHY_ADDR, PHY_BCR, 0x8000); // PHY W @0x00 D=0x8000 Soft reset
-  while (eth_read_phy(PHY_ADDR, PHY_BSR) & BIT(15)) {delay(0x5000);} // Wait finished poll 10ms
+  imxrt1020_eth_write_phy(IMXRT1020_PHY_ADDR, IMXRT1020_PHY_BCR, 0x8000); // PHY W @0x00 D=0x8000 Soft reset
+  while (imxrt1020_eth_read_phy(IMXRT1020_PHY_ADDR, IMXRT1020_PHY_BSR) & BIT(15)) {delay(0x5000);} // Wait finished poll 10ms
 
   // PHY: Start Link
   {
-    eth_write_phy(PHY_ADDR, PHY_BCR, 0x1200); // PHY W @0x00 D=0x1200 Autonego enable + start
-    eth_write_phy(PHY_ADDR, 0x1f, 0x8180);    // PHY W @0x1f D=0x8180 Ref clock 50 MHz at XI input
+    imxrt1020_eth_write_phy(IMXRT1020_PHY_ADDR, IMXRT1020_PHY_BCR, 0x1200); // PHY W @0x00 D=0x1200 Autonego enable + start
+    imxrt1020_eth_write_phy(IMXRT1020_PHY_ADDR, 0x1f, 0x8180);    // PHY W @0x1f D=0x8180 Ref clock 50 MHz at XI input
 
-    uint32_t bcr = eth_read_phy(PHY_ADDR, PHY_BCR);
+    uint32_t bcr = imxrt1020_eth_read_phy(IMXRT1020_PHY_ADDR, IMXRT1020_PHY_BCR);
     bcr &= ~BIT(10); // Isolation -> Normal
-    eth_write_phy(PHY_ADDR, PHY_BCR, bcr);
+    imxrt1020_eth_write_phy(IMXRT1020_PHY_ADDR, IMXRT1020_PHY_BCR, bcr);
   }
 
   // Disable ENET
@@ -183,23 +183,23 @@ static bool mg_tcpip_driver_imxrt1020_init(struct mip_if *ifp) {
 }
 
 // Transmit frame
-static uint32_t s_txno;
+static uint32_t s_rt1020_txno;
 
-static size_t mg_tcpip_driver_imxrt1020_tx(const void *buf, size_t len, struct mip_if *ifp) {
+static size_t mg_tcpip_driver_imxrt1020_tx(const void *buf, size_t len, struct mg_tcpip_if *ifp) {
 
   if (len > sizeof(tx_data_buffer[ENET_TXBD_NUM])) {
   //  MG_ERROR(("Frame too big, %ld", (long) len));
     len = 0;  // Frame is too big
-  } else if ((tx_buffer_descriptor[s_txno].control & BIT(15))) {
+  } else if ((tx_buffer_descriptor[s_rt1020_txno].control & BIT(15))) {
   MG_ERROR(("No free descriptors"));
     // printf("D0 %lx SR %lx\n", (long) s_txdesc[0][0], (long) ETH->DMASR);
     len = 0;  // All descriptors are busy, fail
   } else {
-    memcpy(tx_data_buffer[s_txno], buf, len);     // Copy data
-    tx_buffer_descriptor[s_txno].length = (uint16_t) len;  // Set data len
-    tx_buffer_descriptor[s_txno].control |= (uint16_t)(BIT(10)); // TC (transmit CRC)
-    //  tx_buffer_descriptor[s_txno].control &= (uint16_t)(BIT(14) | BIT(12)); // Own doesn't affect HW
-    tx_buffer_descriptor[s_txno].control |= (uint16_t)(BIT(15) | BIT(11)); // R+L (ready+last)
+    memcpy(tx_data_buffer[s_rt1020_txno], buf, len);     // Copy data
+    tx_buffer_descriptor[s_rt1020_txno].length = (uint16_t) len;  // Set data len
+    tx_buffer_descriptor[s_rt1020_txno].control |= (uint16_t)(BIT(10)); // TC (transmit CRC)
+    //  tx_buffer_descriptor[s_rt1020_txno].control &= (uint16_t)(BIT(14) | BIT(12)); // Own doesn't affect HW
+    tx_buffer_descriptor[s_rt1020_txno].control |= (uint16_t)(BIT(15) | BIT(11)); // R+L (ready+last)
     ENET->TDAR = BIT(24); // Descriptor updated. Hand over to DMA.
     // INFO
     // Relevant Descriptor bits: 15(R)  Ready
@@ -207,36 +207,34 @@ static size_t mg_tcpip_driver_imxrt1020_tx(const void *buf, size_t len, struct m
     //                           10(TC) transmis CRC
     // __DSB(); // ARM errata 838869 Cortex-M4, M4F, M7, M7F: "store immediate overlapping
                 // exception" return might vector to incorrect interrupt.
-    if (++s_txno >= ENET_TXBD_NUM) s_txno = 0;
+    if (++s_rt1020_txno >= ENET_TXBD_NUM) s_rt1020_txno = 0;
   }
   (void) ifp;
   return len;
 }
 
 // IRQ (RX)
-static uint32_t s_rxno;
+static uint32_t s_rt1020_rxno;
 
 void ENET_IRQHandler(void) {
   ENET->EIMR = 0;           // Mask interrupts.
   uint32_t eir = ENET->EIR; // Read EIR
   ENET->EIR = 0xffffffff;   // Clear interrupts
 
-  qp_mark(QP_IRQTRIGGERED, 0);
-
   if (eir & EIMR_RX_ERR) // Global mask used
   {
-    if (rx_buffer_descriptor[s_rxno].control & BIT(15)) {
+    if (rx_buffer_descriptor[s_rt1020_rxno].control & BIT(15)) {
       ENET->EIMR = EIMR_RX_ERR; // Enable interrupts
       return;  // Empty? -> exit.
     }
     // Read inframes
     else { // Frame received, loop
       for (uint32_t i = 0; i < 10; i++) {  // read as they arrive but not forever
-        if (rx_buffer_descriptor[s_rxno].control & BIT(15)) break;  // exit when done
-        uint32_t len = (rx_buffer_descriptor[s_rxno].length);
-        mg_tcpip_qwrite(rx_buffer_descriptor[s_rxno].buffer, len > 4 ? len - 4 : len, s_ifp);
-        rx_buffer_descriptor[s_rxno].control |= BIT(15); // Inform DMA RX is empty
-        if (++s_rxno >= ENET_RXBD_NUM) s_rxno = 0;
+        if (rx_buffer_descriptor[s_rt1020_rxno].control & BIT(15)) break;  // exit when done
+        uint32_t len = (rx_buffer_descriptor[s_rt1020_rxno].length);
+        mg_tcpip_qwrite(rx_buffer_descriptor[s_rt1020_rxno].buffer, len > 4 ? len - 4 : len, s_ifp);
+        rx_buffer_descriptor[s_rt1020_rxno].control |= BIT(15); // Inform DMA RX is empty
+        if (++s_rt1020_rxno >= ENET_RXBD_NUM) s_rt1020_rxno = 0;
       }
     }
   }
@@ -244,15 +242,15 @@ void ENET_IRQHandler(void) {
 }
 
 // Up/down status
-static bool mg_tcpip_driver_imxrt1020_up(struct mip_if *ifp) {
-  uint32_t bsr = eth_read_phy(PHY_ADDR, PHY_BSR);
+static bool mg_tcpip_driver_imxrt1020_up(struct mg_tcpip_if *ifp) {
+  uint32_t bsr = imxrt1020_eth_read_phy(IMXRT1020_PHY_ADDR, IMXRT1020_PHY_BSR);
   (void) ifp;
   return bsr & BIT(2) ? 1 : 0;
 }
 
 // API
 struct mg_tcpip_driver mg_tcpip_driver_imxrt1020 = {
-  mg_tcpip_driver_imxrt1020_init, mg_tcpip_driver_imxrt1020_tx, mip_driver_rx,
+  mg_tcpip_driver_imxrt1020_init, mg_tcpip_driver_imxrt1020_tx, mg_tcpip_driver_rx,
   mg_tcpip_driver_imxrt1020_up};
 
 #endif
