@@ -8,10 +8,14 @@ LDFLAGS ?= -Tlink.ld -nostdlib -nostartfiles --specs nano.specs -lc -lgcc -Wl,--
 SOURCES = main.c syscalls.c sysinit.c
 SOURCES += cmsis_f4/Source/Templates/gcc/startup_stm32f429xx.s # ST startup file. Compiler-dependent!
 
-# Mongoose-specific source code files and build options. See https://mongoose.ws/documentation/#build-options
-SOURCES += mongoose.c net.c packed_fs.c
-CFLAGS += -DMG_ENABLE_TCPIP=1 -DMG_ARCH=MG_ARCH_NEWLIB -DMG_ENABLE_CUSTOM_MILLIS=1
-CFLAGS += -DMG_ENABLE_CUSTOM_RANDOM=1 -DMG_ENABLE_PACKED_FS=1 $(CFLAGS_EXTRA)
+# FreeRTOS
+SOURCES += FreeRTOS-Kernel/portable/MemMang/heap_4.c
+SOURCES += FreeRTOS-Kernel/portable/GCC/ARM_CM4F/port.c
+CFLAGS += -IFreeRTOS-Kernel/include 
+CFLAGS += -IFreeRTOS-Kernel/portable/GCC/ARM_CM4F -Wno-conversion
+
+SOURCES += mongoose.c  net.c packed_fs.c
+CFLAGS += $(CFLAGS_EXTRA)       # Mongoose options are defined in mongoose_custom.h
 
 ifeq ($(OS),Windows_NT)
   RM = cmd /C del /Q /F /S
@@ -24,8 +28,8 @@ all build example: firmware.bin
 firmware.bin: firmware.elf
 	arm-none-eabi-objcopy -O binary $< $@
 
-firmware.elf: cmsis_core cmsis_f4 $(SOURCES) hal.h link.ld
-	arm-none-eabi-gcc $(SOURCES) $(CFLAGS) $(LDFLAGS) -o $@
+firmware.elf: FreeRTOS-Kernel cmsis_core cmsis_f4 $(SOURCES) hal.h link.ld 
+	arm-none-eabi-gcc $(SOURCES) $(wildcard FreeRTOS-Kernel/*.c) $(CFLAGS) $(LDFLAGS) -o $@
 
 flash: firmware.bin
 	st-flash --reset write $< 0x8000000
@@ -34,6 +38,8 @@ cmsis_core:     # ARM CMSIS core headers
 	git clone --depth 1 -b 5.9.0 https://github.com/ARM-software/CMSIS_5 $@
 cmsis_f4:       # ST CMSIS headers for STM32F4 series
 	git clone --depth 1 -b v2.6.8 https://github.com/STMicroelectronics/cmsis_device_f4 $@
+FreeRTOS-Kernel:  # FreeRTOS sources
+	git clone --depth 1 -b V10.5.0 https://github.com/FreeRTOS/FreeRTOS-Kernel $@
 
 # Automated remote test. Requires env variable VCON_API_KEY set. See https://vcon.io/automated-firmware-tests/
 DEVICE_URL ?= https://dash.vcon.io/api/v3/devices/2
@@ -47,4 +53,4 @@ test: update
 	grep 'MQTT connected' /tmp/output.txt   # Check for MQTT connection success
 
 clean:
-	$(RM) firmware.* *.su cmsis_core cmsis_f4
+	$(RM) firmware.* *.su cmsis_core cmsis_f4 FreeRTOS-Kernel

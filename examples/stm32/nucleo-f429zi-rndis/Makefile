@@ -8,10 +8,24 @@ LDFLAGS ?= -Tlink.ld -nostdlib -nostartfiles --specs nano.specs -lc -lgcc -Wl,--
 SOURCES = main.c syscalls.c sysinit.c
 SOURCES += cmsis_f4/Source/Templates/gcc/startup_stm32f429xx.s # ST startup file. Compiler-dependent!
 
-# Mongoose-specific source code files and build options. See https://mongoose.ws/documentation/#build-options
-SOURCES += mongoose.c net.c packed_fs.c
+# TinyUSB
+SOURCES += tinyusb/src/tusb.c
+SOURCES += tinyusb/src/common/tusb_fifo.c
+SOURCES += tinyusb/src/device/usbd.c
+SOURCES += tinyusb/src/device/usbd_control.c
+SOURCES += tinyusb/src/class/net/ecm_rndis_device.c
+SOURCES += tinyusb/src/class/net/ncm_device.c
+SOURCES += tinyusb/src/portable/synopsys/dwc2/dcd_dwc2.c
+SOURCES += tinyusb/lib/networking/rndis_reports.c
+SOURCES += usb_descriptors.c
+CFLAGS += -Itinyusb/src -Itinyusb/lib/networking
+CFLAGS += -DSTM32F429xx
+CFLAGS += -Wno-conversion -Wno-sign-conversion
+
+# Mongoose-specific. See https://mongoose.ws/documentation/#build-options
+SOURCES += mongoose.c 
 CFLAGS += -DMG_ENABLE_TCPIP=1 -DMG_ARCH=MG_ARCH_NEWLIB -DMG_ENABLE_CUSTOM_MILLIS=1
-CFLAGS += -DMG_ENABLE_CUSTOM_RANDOM=1 -DMG_ENABLE_PACKED_FS=1 $(CFLAGS_EXTRA)
+CFLAGS += -DMG_ENABLE_CUSTOM_RANDOM=1 -DMG_IO_SIZE=512 $(CFLAGS_EXTRA)
 
 ifeq ($(OS),Windows_NT)
   RM = cmd /C del /Q /F /S
@@ -24,7 +38,7 @@ all build example: firmware.bin
 firmware.bin: firmware.elf
 	arm-none-eabi-objcopy -O binary $< $@
 
-firmware.elf: cmsis_core cmsis_f4 $(SOURCES) hal.h link.ld
+firmware.elf: cmsis_core cmsis_f4 tinyusb $(SOURCES) hal.h link.ld 
 	arm-none-eabi-gcc $(SOURCES) $(CFLAGS) $(LDFLAGS) -o $@
 
 flash: firmware.bin
@@ -34,17 +48,8 @@ cmsis_core:     # ARM CMSIS core headers
 	git clone --depth 1 -b 5.9.0 https://github.com/ARM-software/CMSIS_5 $@
 cmsis_f4:       # ST CMSIS headers for STM32F4 series
 	git clone --depth 1 -b v2.6.8 https://github.com/STMicroelectronics/cmsis_device_f4 $@
-
-# Automated remote test. Requires env variable VCON_API_KEY set. See https://vcon.io/automated-firmware-tests/
-DEVICE_URL ?= https://dash.vcon.io/api/v3/devices/2
-update: firmware.bin
-	curl --fail-with-body -su :$(VCON_API_KEY) $(DEVICE_URL)/ota --data-binary @$<
-
-test update: CFLAGS_EXTRA += -DUART_DEBUG=USART1
-test: update
-	curl --fail-with-body -su :$(VCON_API_KEY) $(DEVICE_URL)/tx?t=5 | tee /tmp/output.txt
-	grep 'READY, IP:' /tmp/output.txt       # Check for network init
-	grep 'MQTT connected' /tmp/output.txt   # Check for MQTT connection success
+tinyusb:        # TinyUSB sources
+	git clone --depth 1 -b 0.14.0 https://github.com/hathach/tinyusb $@
 
 clean:
-	$(RM) firmware.* *.su cmsis_core cmsis_f4
+	$(RM) firmware.* cmsis_core cmsis_f4 tinyusb
