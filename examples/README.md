@@ -1,4 +1,4 @@
-# Mongooose Network Library Examples
+# Mongoose Network Library Examples
 
 In order to build and run any of the existing examples, please follow:
 https://mongoose.ws/documentation/#how-to-build-and-run-examples
