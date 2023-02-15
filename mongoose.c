@@ -1614,9 +1614,9 @@ void mg_http_reply(struct mg_connection *c, int code, const char *headers,
   mg_vxprintf(mg_pfn_iobuf, &c->send, fmt, &ap);
   va_end(ap);
   if (c->send.len > 15) {
-    size_t n = mg_snprintf((char *) &c->send.buf[len - 14], 11, "%-10lu",
+    size_t n = mg_snprintf((char *) &c->send.buf[len - 15], 11, "%-10lu",
                            (unsigned long) (c->send.len - len));
-    c->send.buf[len - 14 + n] = ' ';  // Change ending 0 to space
+    c->send.buf[len - 15 + n] = ' ';  // Change ending 0 to space
     c->is_resp = 0;
   }
   c->is_resp = 0;
