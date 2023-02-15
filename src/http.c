@@ -318,17 +318,16 @@ void mg_http_reply(struct mg_connection *c, int code, const char *headers,
                    const char *fmt, ...) {
   va_list ap;
   size_t len;
-  mg_printf(c, "HTTP/1.1 %d %s\r\n%sContent-Length:           \r\n\r\n", code,
+  mg_printf(c, "HTTP/1.1 %d %s\r\n%sContent-Length:            \r\n\r\n", code,
             mg_http_status_code_str(code), headers == NULL ? "" : headers);
   len = c->send.len;
   va_start(ap, fmt);
   mg_vxprintf(mg_pfn_iobuf, &c->send, fmt, &ap);
   va_end(ap);
-  if (c->send.len > 15) {
-    size_t n = mg_snprintf((char *) &c->send.buf[len - 14], 11, "%-10lu",
+  if (c->send.len > 16) {
+    size_t n = mg_snprintf((char *) &c->send.buf[len - 15], 11, "%-10lu",
                            (unsigned long) (c->send.len - len));
-    c->send.buf[len - 14 + n] = ' ';  // Change ending 0 to space
-    c->is_resp = 0;
+    c->send.buf[len - 15 + n] = ' ';  // Change ending 0 to space
   }
   c->is_resp = 0;
 }
