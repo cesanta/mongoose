@@ -1,8 +1,8 @@
-SOURCES = ../../mongoose.c main.c net.c packed_fs.c
+SOURCES = mongoose.c main.c net.c packed_fs.c
 CFLAGS = -W -Wall -Wextra -g
 
 # Mongoose build options. See https://mongoose.ws/documentation/#build-options
-CFLAGS += -I ../.. -DMG_ENABLE_PACKED_FS=1
+CFLAGS += -DMG_ENABLE_PACKED_FS=1
 
 ifeq ($(OS),Windows_NT)
   # Windows settings. Assume MinGW compiler
