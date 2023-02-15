@@ -1,1 +1,1 @@
-See detailed tutorial at https://mongoose.ws/tutorials/captive-dns-portal/
+See detailed tutorial at https://mongoose.ws/tutorials/captive-dns-server/
