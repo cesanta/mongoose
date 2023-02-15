@@ -13,23 +13,25 @@ ifeq ($(OS),Windows_NT)
   CFLAGS += -lws2_32            # Link against Winsock library
   DELETE = cmd /C del /Q /F /S  # Command prompt command to delete files
   OUT ?= -o $(PROG)             # Build output
+  PACK = pack.exe
 else
   # Mac, Linux
   PROG ?= example
   DELETE = rm -rf
   OUT ?= -o $(PROG)
+  PACK = ./pack
 endif
 
 all: $(PROG)
 	$(RUN) ./$(PROG) $(ARGS)
 
 $(PROG): $(SOURCES) $(FILES_TO_EMBED)
-	$(CC) ../../test/pack.c -o pack
-	./pack $(FILES_TO_EMBED) > packed_fs.c
+	$(CC) ../../test/pack.c -o $(PACK)
+	$(PACK) $(FILES_TO_EMBED) > packed_fs.c
 	$(CC) $(SOURCES) $(CFLAGS) $(CFLAGS_MONGOOSE) $(CFLAGS_EXTRA) $(OUT)
 
 clean:
-	$(DELETE) $(PROG) *.dSYM pack
+	$(DELETE) $(PROG) *.dSYM $(PACK)
 
 .PHONY: compress expand gzipped plain all
 
