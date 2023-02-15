@@ -4,7 +4,6 @@
 #define MG_ENABLE_PACKED_FS 0
 #define MG_ENABLE_LINES 1
 
-#include <assert.h>
 #include <sys/socket.h>
 #ifndef __OpenBSD__
 #include <linux/if.h>

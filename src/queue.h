@@ -1,38 +1,30 @@
 #pragma once
 
-#include "arch.h"    // For size_t
-#include "config.h"  // For MG_ENABLE_ATOMIC
-
-#if MG_ENABLE_ATOMIC
-#include <stdatomic.h>
-#elif !defined(_Atomic)
-#define _Atomic
-#endif
+#include "arch.h"  // For size_t
 
 // Single producer, single consumer non-blocking queue
 //
 // Producer:
-//    void *buf;
-//    while (mg_queue_space(q, &buf) < len) WAIT();  // Wait for free space
-//    memcpy(buf, data, len);  // Copy data to the queue
-//    mg_queue_add(q, len);    // Advance q->head
+//    char *buf;
+//    while (mg_queue_book(q, &buf) < len) WAIT();  // Wait for space
+//    memcpy(buf, my_data, len);   // Copy data to the queue
+//    mg_queue_add(q, len);
 //
 // Consumer:
-//    void *buf;
-//    while ((len = mg_queue_next(q, &buf)) == MG_QUEUE_EMPTY) WAIT();
-//    mg_hexdump(buf, len);    // Handle message
-//    mg_queue_del(q);         // Delete message
+//    char *buf;
+//    while ((len = mg_queue_get(q, &buf)) == 0) WAIT();
+//    mg_hexdump(buf, len); // Handle message
+//    mg_queue_del(q, len);
 //
 struct mg_queue {
   char *buf;
-  size_t len;
-  volatile _Atomic size_t tail;
-  volatile _Atomic size_t head;
+  size_t size;
+  volatile size_t tail;
+  volatile size_t head;
 };
 
-#define MG_QUEUE_EMPTY ((size_t) ~0ul)  // Next message size when queue is empty
-
-void mg_queue_add(struct mg_queue *, size_t len);       // Advance head
-void mg_queue_del(struct mg_queue *);                   // Advance tail
-size_t mg_queue_space(struct mg_queue *, char **);      // Get free space
-size_t mg_queue_next(struct mg_queue *, char **);       // Get next message size
+void mg_queue_init(struct mg_queue *, char *, size_t);        // Init queue
+size_t mg_queue_book(struct mg_queue *, char **buf, size_t);  // Reserve space
+void mg_queue_add(struct mg_queue *, size_t);                 // Add new message
+size_t mg_queue_next(struct mg_queue *, char **);  // Get oldest message
+void mg_queue_del(struct mg_queue *, size_t);      // Delete oldest message

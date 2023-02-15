@@ -71,7 +71,7 @@ jobs:
     - if: ${{ env.GO == 1 }}
       run:  make test upload-coverage TFLAGS=-DNO_SNTP_CHECK SSL=OPENSSL ASAN_OPTIONS= OPENSSL=`echo /usr/local/Cellar/openssl*/*`
     - if: ${{ env.GO == 1 }}
-      run:  make test SSL=MBEDTLS TFLAGS="-DNO_SNTP_CHECK -DMG_ENABLE_ATOMIC=1" ASAN_OPTIONS= MBEDTLS=`echo /usr/local/Cellar/mbedtls*/*`
+      run:  make test SSL=MBEDTLS TFLAGS=-DNO_SNTP_CHECK ASAN_OPTIONS= MBEDTLS=`echo /usr/local/Cellar/mbedtls*/*`
     - if: ${{ env.GO == 1 }}
       run: make mg_prefix
   windows:

@@ -8,10 +8,6 @@
 #define MG_ENABLE_TCPIP 0  // Mongoose built-in network stack
 #endif
 
-#ifndef MG_ENABLE_ATOMIC
-#define MG_ENABLE_ATOMIC 0  // Required by mg_queue
-#endif
-
 #ifndef MG_ENABLE_LWIP
 #define MG_ENABLE_LWIP 0  // lWIP network stack
 #endif
@@ -83,6 +79,10 @@
 
 #ifndef MG_ENABLE_PACKED_FS
 #define MG_ENABLE_PACKED_FS 0
+#endif
+
+#ifndef MG_ENABLE_ASSERT
+#define MG_ENABLE_ASSERT 0
 #endif
 
 #ifndef MG_IO_SIZE

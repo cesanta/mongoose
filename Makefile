@@ -1,6 +1,6 @@
 SRCS = mongoose.c test/unit_test.c test/packed_fs.c
 HDRS = $(wildcard src/*.h) $(wildcard src/tcpip/*.h)
-DEFS ?= -DMG_MAX_HTTP_HEADERS=7 -DMG_ENABLE_LINES -DMG_ENABLE_PACKED_FS=1 -DMG_ENABLE_SSI=1
+DEFS ?= -DMG_MAX_HTTP_HEADERS=7 -DMG_ENABLE_LINES -DMG_ENABLE_PACKED_FS=1 -DMG_ENABLE_SSI=1 -DMG_ENABLE_ASSERT=1
 WARN ?= -pedantic -W -Wall -Werror -Wshadow -Wdouble-promotion -fno-common -Wconversion -Wundef
 OPTS ?= -O3 -g3
 INCS ?= -Isrc -I.
@@ -15,10 +15,10 @@ ASAN_OPTIONS ?= detect_leaks=1
 EXAMPLES := $(dir $(wildcard examples/*/Makefile))
 PREFIX ?= /usr/local
 VERSION ?= $(shell cut -d'"' -f2 src/version.h)
-COMMON_CFLAGS ?= $(C_WARN) $(WARN) $(INCS) $(DEFS) -DMG_ENABLE_IPV6=$(IPV6) $(TFLAGS)
-CFLAGS ?= $(OPTS) $(ASAN) $(COMMON_CFLAGS) -pthread 
+COMMON_CFLAGS ?= $(C_WARN) $(WARN) $(INCS) $(DEFS) -DMG_ENABLE_IPV6=$(IPV6) $(TFLAGS) -pthread
+CFLAGS ?= $(OPTS) $(ASAN) $(COMMON_CFLAGS)
 VALGRIND_CFLAGS ?= $(OPTS) $(COMMON_CFLAGS)
-VALGRIND_RUN ?= valgrind --tool=memcheck --gen-suppressions=all --leak-check=full --show-leak-kinds=all --leak-resolution=high --track-origins=yes --error-exitcode=1 --exit-on-first-error=yes
+VALGRIND_RUN ?= valgrind --tool=memcheck --gen-suppressions=all --leak-check=full --show-leak-kinds=all --leak-resolution=high --track-origins=yes --error-exitcode=1 --exit-on-first-error=yes --fair-sched=yes
 .PHONY: examples test valgrind mip_test
 
 ifeq "$(findstring ++,$(CC))" ""
