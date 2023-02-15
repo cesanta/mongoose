@@ -1,38 +1,39 @@
-PROG ?= example
-SOURCES ?= ../../mongoose.c main.c packed_fs.c
-CFLAGS ?= -I../.. -DMG_ENABLE_PACKED_FS=1 -DMG_ENABLE_LINES=1 $(EXTRA)
+SOURCES = mongoose.c main.c packed_fs.c  # Source code files
+CFLAGS = -W -Wall -Wextra -g -I.         # Build options
+
+# Mongoose build options. See https://mongoose.ws/documentation/#build-options
+CFLAGS_MONGOOSE += -DMG_ENABLE_PACKED_FS=1
+
 FILES_TO_EMBED ?= $(wildcard web_root/*)
-ROOT ?= $(realpath $(CURDIR)/../../..)
-DOCKER ?= docker run --rm -e Tmp=. -e WINEDEBUG=-all -v $(ROOT):$(ROOT) -w $(CURDIR)
-VC98 ?= $(DOCKER) mdashnet/vc98 wine
-MINGW ?= $(DOCKER) mdashnet/mingw
+
+ifeq ($(OS),Windows_NT)
+  # Windows settings. Assume MinGW compiler. To use VC: make CC=cl CFLAGS=/MD OUT=/Feprog.exe
+  PROG ?= example.exe           # Use .exe suffix for the binary
+  CC = gcc                      # Use MinGW gcc compiler
+  CFLAGS += -lws2_32            # Link against Winsock library
+  DELETE = cmd /C del /Q /F /S  # Command prompt command to delete files
+  OUT ?= -o $(PROG)             # Build output
+else
+  # Mac, Linux
+  PROG ?= example
+  DELETE = rm -rf
+  OUT ?= -o $(PROG)
+endif
 
 all: $(PROG)
-	$(RUN) ./$(PROG)
+	$(RUN) ./$(PROG) $(ARGS)
 
 $(PROG): $(SOURCES) $(FILES_TO_EMBED)
 	$(CC) ../../test/pack.c -o pack
 	./pack $(FILES_TO_EMBED) > packed_fs.c
-	$(CC) -W -Wall -Wextra -O0 -g3 $(CFLAGS) -o $(PROG) $(SOURCES)
-
-
-mingw: $(SOURCES) $(FILES_TO_EMBED)
-	$(MINGW) i686-w64-mingw32-gcc $(CFLAGS) ../../test/pack.c -o pack.exe
-	$(MINGW) wine cmd /c 'pack.exe $(FILES_TO_EMBED) > packed_fs.c'
-	$(MINGW) i686-w64-mingw32-gcc $(CFLAGS) $(SOURCES) -lws2_32 -o $(PROG).exe
-	$(MINGW) wine $(PROG).exe
-
-vc98: $(SOURCES) $(FILES_TO_EMBED)
-	$(VC98) cl.exe /nologo $(CFLAGS) ../../test/pack.c /Fepack.exe
-	$(VC98) cmd /c 'pack.exe $(FILES_TO_EMBED) > packed_fs.c'
-	$(VC98) cl.exe /nologo /O2 $(CFLAGS) $(SOURCES) /Fe$(PROG).exe
-	$(VC98) $(PROG).exe
+	$(CC) $(SOURCES) $(CFLAGS) $(CFLAGS_MONGOOSE) $(CFLAGS_EXTRA) $(OUT)
 
 clean:
-	rm -rf $(PROG) *.o *.dSYM *.gcov *.gcno *.gcda *.obj *.exe *.ilk *.pdb log.txt pack
+	$(DELETE) $(PROG) *.dSYM pack
 
 .PHONY: compress expand gzipped plain all
 
+# See tutorial
 gzipped: compress
 	$(MAKE) all
 
