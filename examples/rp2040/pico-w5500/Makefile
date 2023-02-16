@@ -1,12 +1,10 @@
-SDK_VERSION ?= 1.5.0
-SDK_REPO ?= https://github.com/raspberrypi/pico-sdk
+all example build obj/firmware.uf2: obj pico-sdk main.c net.c packed_fs.c
+	cd obj && cmake .. && make
 
-all example build build/firmware.uf2: pico-sdk main.c net.c packed_fs.c
-	test -d build || mkdir build
-	cd build && cmake .. && make
-
+obj:
+	mkdir $@
 pico-sdk:
-	git clone --depth 1 -b $(SDK_VERSION) $(SDK_REPO) $@
+	git clone --depth 1 -b 1.5.0 https://github.com/raspberrypi/pico-sdk $@
 	cd $@ && git submodule update --init
 
 # Requires env variable VCON_API_KEY set
@@ -16,8 +14,8 @@ test: update
 	grep 'Ethernet: up' /tmp/output.txt
 	grep 'MQTT connected' /tmp/output.txt
 
-update: build/firmware.uf2
+update: obj/firmware.uf2
 	curl --fail -su :$(VCON_API_KEY) $(DEVICE_URL)/ota?uf2=1 --data-binary @$<
 
 clean:
-	rm -rf pico-sdk build
+	rm -rf pico-sdk obj
