@@ -79,6 +79,10 @@ int main() {
 
 **Step 3.** Add `mongoose.c` to the build and recompile - and that is it!
 
+> NOTE: If you're building for some embedded systems, you may need to add
+> some extra compilation flags, for example on FreeRTOS it would be
+> `-DMG_ARCH=MG_ARCH_FREERTOS`. See [Build options](#build-options) below.
+
 
 `mg_mgr_poll()` iterates over all connections, accepts new connections, sends and
 receives data, closes connections, and calls event handler functions for the
@@ -91,11 +95,9 @@ protocol-specific handler function that is set implicitly. For example, a
 protocol-specific handler is called before a user-specific handler.  It parses
 incoming data and may invoke protocol-specific events like `MG_EV_HTTP_MSG`.
 
-
-<span class="badge bg-danger">NOTE:</span>
-Since Mongoose's core is not protected against concurrent accesses, make
-sure that all `mg_*` API functions are called from the same thread or RTOS
-task.
+> NOTE: Since Mongoose's core is not protected against concurrent accesses,
+> make sure that all `mg_*` API functions are called from the same thread or
+> RTOS task.
 
 ## Connections and event manager
 
