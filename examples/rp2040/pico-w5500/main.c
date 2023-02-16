@@ -4,6 +4,7 @@
 #include <stdio.h>
 #include <string.h>
 #include "hardware/spi.h"
+#include "pico/rand.h"
 #include "pico/stdlib.h"
 
 #include "mongoose.h"
@@ -11,12 +12,23 @@
 enum { BLINK_PERIOD_MS = 1000 };
 enum { LED = 25, SPI_CS = 17, SPI_CLK = 18, SPI_TX = 19, SPI_RX = 16 };  // Pins
 
-static void spi_begin(void *spi) { gpio_put(SPI_CS, 0); }
-static void spi_end(void *spi) { gpio_put(SPI_CS, 1); }
+static void spi_begin(void *spi) {
+  gpio_put(SPI_CS, 0);
+}
+static void spi_end(void *spi) {
+  gpio_put(SPI_CS, 1);
+}
 static uint8_t spi_txn(void *spi, uint8_t byte) {
   uint8_t result = 0;
   spi_write_read_blocking(spi0, &byte, &result, 1);
   return result;
+}
+
+void mg_random(void *buf, size_t len) {
+  for (size_t n = 0; n < len; n += sizeof(uint32_t)) {
+    uint32_t r = get_rand_32();
+    memcpy((char *) buf + n, &r, n + sizeof(r) > len ? len - n : sizeof(r));
+  }
 }
 
 static void timer_cb(void *arg) {
@@ -45,12 +57,12 @@ int main(void) {
   // Init Mongoose
   struct mg_tcpip_spi spi = {NULL, spi_begin, spi_end, spi_txn};
   struct mg_tcpip_if mif = {.mac = {2, 0, 1, 2, 3, 5},
-                       .driver = &mg_tcpip_driver_w5500,
-                       .driver_data = &spi};
-  struct mg_mgr mgr;        // Declare event manager
-  mg_mgr_init(&mgr);        // Init event manager
-  mg_log_set(MG_LL_DEBUG);  // Set DEBUG log level
-  mg_tcpip_init(&mgr, &mif);     // Init TCP/IP stack
+                            .driver = &mg_tcpip_driver_w5500,
+                            .driver_data = &spi};
+  struct mg_mgr mgr;          // Declare event manager
+  mg_mgr_init(&mgr);          // Init event manager
+  mg_log_set(MG_LL_DEBUG);    // Set DEBUG log level
+  mg_tcpip_init(&mgr, &mif);  // Init TCP/IP stack
   mg_timer_add(&mgr, BLINK_PERIOD_MS, MG_TIMER_REPEAT, timer_cb, &mif);
 
   MG_INFO(("Waiting until network is up..."));
