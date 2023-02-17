@@ -23,7 +23,8 @@ robust, and easy. Features include:
 - Asynchronous DNS resolver
 - Tiny static and run-time footprint
 - Source code is both ISO C and ISO C++ compliant
-- Very easy to integrate: just copy `mongoose.c` and `mongoose.h` files to your build tree
+- Very easy to integrate: just copy `mongoose.c` and `mongoose.h` files to your source tree. See
+  [exact steps](https://mongoose.ws/documentation/#2-minute-integration-guide)
 - Works with any network stack with socket API, like LwIP or FreeRTOS-Plus-TCP
 - Provides a built-in TCP/IP stack with drivers for bare metal or RTOS systems
    - A complete Web device dashboard
