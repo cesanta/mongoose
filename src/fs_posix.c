@@ -26,7 +26,7 @@ static int p_stat(const char *path, size_t *size, time_t *mtime) {
     FILE *fp = _wfopen(tmp, L"rb");
     if (fp != NULL) {
       fseek(fp, 0, SEEK_END);
-      if (_ftelli64(fp) > 0) st.st_size = _ftelli64(fp);
+      if (ftell(fp) > 0) st.st_size = ftell(fp); // Use _ftelli64 on win10+
       fclose(fp);
     }
   }
