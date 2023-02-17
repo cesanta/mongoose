@@ -2,7 +2,7 @@ SOURCES = main.c mongoose.c       # Source code files
 CFLAGS = -W -Wall -Wextra -g -I.  # Build options
 
 # Mongoose build options. See https://mongoose.ws/documentation/#build-options
-CFLAGS_MONGOOSE += -DMG_HTTP_DIRLIST_TIME=1 -DMG_ENABLE_SSI=1
+CFLAGS_MONGOOSE += -DMG_ENABLE_SSI=1
 CFLAGS_MONGOOSE += -DMG_ENABLE_LINES=1 -DMG_ENABLE_IPV6=1
 
 ifeq ($(OS),Windows_NT)

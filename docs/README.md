@@ -1041,6 +1041,7 @@ struct mg_http_serve_opts {
   const char *extra_headers;  // Extra HTTP headers to add in responses
   const char *mime_types;     // Extra mime types, ext1=type1,ext2=type2,..
   const char *page404;        // Path to the 404 page, or NULL by default
+  int time_spec;              // Format of last modified date.
   struct mg_fs *fs;           // Filesystem implementation. Use NULL for POSIX
 };
 ```
