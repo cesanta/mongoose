@@ -105,6 +105,10 @@
 #define MG_HTTP_INDEX "index.html"
 #endif
 
+#ifndef MG_HTTP_DIRLIST_TIME_FMT
+#define MG_HTTP_DIRLIST_TIME_FMT "%Y/%m/%d %H:%M:%S"
+#endif
+
 #ifndef MG_PATH_MAX
 #ifdef PATH_MAX
 #define MG_PATH_MAX PATH_MAX

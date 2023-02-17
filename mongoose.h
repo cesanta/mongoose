@@ -694,6 +694,10 @@ struct timeval {
 #define MG_HTTP_INDEX "index.html"
 #endif
 
+#ifndef MG_HTTP_DIRLIST_TIME_FMT
+#define MG_HTTP_DIRLIST_TIME_FMT "%Y/%m/%d %H:%M:%S"
+#endif
+
 #ifndef MG_PATH_MAX
 #ifdef PATH_MAX
 #define MG_PATH_MAX PATH_MAX
@@ -1207,12 +1211,6 @@ struct mg_http_message {
   struct mg_str message;  // Request + headers + body
 };
 
-enum {
-  MG_TIMESPEC_OFF = 0, // %ld - seconds
-  MG_TIMESPEC_LOCAL, // %Y/%m/%d %H:%M:%S - local time
-  MG_TIMESPEC_UTC // %Y/%m/%d %H:%M:%S - utc time
-};
-
 // Parameter for mg_http_serve_dir()
 struct mg_http_serve_opts {
   const char *root_dir;       // Web root directory, must be non-NULL
@@ -1220,7 +1218,6 @@ struct mg_http_serve_opts {
   const char *extra_headers;  // Extra HTTP headers to add in responses
   const char *mime_types;     // Extra mime types, ext1=type1,ext2=type2,..
   const char *page404;        // Path to the 404 page, or NULL by default
-  int time_spec;              // Format of last modified date.
   struct mg_fs *fs;           // Filesystem implementation. Use NULL for POSIX
 };
 

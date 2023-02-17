@@ -562,19 +562,11 @@ static void printdirentry(const char *name, void *userdata) {
     } else {
       mg_snprintf(sz, sizeof(sz), "%lld", (uint64_t) size);
     }
-    if (d->opts->time_spec == MG_TIMESPEC_LOCAL) {
-      char time_str[30];
-      struct tm *time_info = localtime(&t);
-      strftime(time_str, sizeof time_str, "%Y/%m/%d %H:%M:%S", time_info);
-      mg_snprintf(mod, sizeof(mod), "%s", time_str);
-    } else if (d->opts->time_spec == MG_TIMESPEC_UTC) {
-      char time_str[30];
-      struct tm *time_info = gmtime(&t);
-      strftime(time_str, sizeof time_str, "%Y/%m/%d %H:%M:%S", time_info);
-      mg_snprintf(mod, sizeof(mod), "%s", time_str);
-    } else {
-      mg_snprintf(mod, sizeof(mod), "%ld", (unsigned long) t);
-    }
+
+    char time_str[100];
+    struct tm *time_info = gmtime(&t);
+    strftime(time_str, sizeof time_str, MG_HTTP_DIRLIST_TIME_FMT, time_info);
+    mg_snprintf(mod, sizeof(mod), "%s", time_str);
 
     n = (int) mg_url_encode(name, strlen(name), path, sizeof(path));
     mg_printf(d->c,
