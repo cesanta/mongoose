@@ -1,41 +1,38 @@
-PROG ?= example
-ROOT ?= $(realpath $(CURDIR)/../..)
-CFLAGS ?= -DMG_ENABLE_LINES $(EXTRA_CFLAGS)
-LIN = docker run -it --rm -v $(ROOT):$(ROOT) -w $(CURDIR) mdashnet/cc2
-SSL = ?
+SOURCES = main.c mongoose.c       # Source code files
+CFLAGS = -W -Wall -Wextra -g -I.  # Build options
 
+# Mongoose build options. See https://mongoose.ws/documentation/#build-options
+CFLAGS_MONGOOSE += -DMG_ENABLE_LINES=1
+
+SSL = ?
 ifeq "$(SSL)" "MBEDTLS"
-CFLAGS += -DMG_ENABLE_MBEDTLS=1 -lmbedtls -lmbedcrypto -lmbedx509
+CFLAGS += -lmbedtls -lmbedcrypto -lmbedx509
+CFLAGS_MONGOOSE += -DMG_ENABLE_MBEDTLS=1
+endif
+ifeq "$(SSL)" "OPENSSL"
+CFLAGS += -lssl -lcrypto
+CFLAGS_MONGOOSE += -DMG_ENABLE_OPENSSL=1
 endif
 
-ifeq "$(SSL)" "OPENSSL"
-CFLAGS += -DMG_ENABLE_OPENSSL=1 -lssl -lcrypto
+ifeq ($(OS),Windows_NT)
+  # Windows settings. Assume MinGW compiler. To use VC: make CC=cl CFLAGS=/MD OUT=/Feprog.exe
+  PROG ?= example.exe           # Use .exe suffix for the binary
+  CC = gcc                      # Use MinGW gcc compiler
+  CFLAGS += -lws2_32            # Link against Winsock library
+  DELETE = cmd /C del /Q /F /S  # Command prompt command to delete files
+  OUT ?= -o $(PROG)             # Build output
+else
+  # Mac, Linux
+  PROG ?= example
+  DELETE = rm -rf
+  OUT ?= -o $(PROG)
 endif
 
 all: $(PROG)
 	$(RUN) ./$(PROG) $(ARGS)
 
-$(PROG): main.c
-	$(CC) ../../mongoose.c -I../.. -W -Wall $(CFLAGS) -o $(PROG) main.c
-
-linux: all
-linux: CFLAGS += -O2 -g -fsanitize=address,undefined,shift,null,return,bounds,alignment,object-size,bool,enum -static-libasan
-linux: CC = $(LIN) cc
-linux: RUN = $(LIN)
-
-
-ROOT ?= $(realpath $(CURDIR)/../..)
-DOCKER = docker run -it --rm -e Tmp=. -e WINEDEBUG=-all -v $(ROOT):$(ROOT) -w $(CURDIR)
-WDEFS = -DMG_ENABLE_MBEDTLS -DMG_ENABLE_LINES -Imbedtls/include -Imbedtls/library $(EXTRA)
-WFLAGS = /nologo -O2 -I. -I../.. ws2_32.lib advapi32.lib /link /out:$(PROG).exe
-WSRCS = ../../mongoose.c main.c mbedtls/library/*.c
-$(PROG).exe: main.c mbedtls
-	$(DOCKER) mdashnet/vc2017 wine cl $(WSRCS) $(WDEFS) $(WFLAGS)
-vc2017: ARGS = https://cesanta.com
-vc2017: $(PROG).exe
-	$(DOCKER) mdashnet/vc2017 wine $(PROG).exe $(ARGS)
-mbedtls:
-	git clone --depth 1 -b v3.1.0 https://github.com/ARMmbed/mbedtls
+$(PROG): $(SOURCES)
+	$(CC) $(SOURCES) $(CFLAGS) $(CFLAGS_MONGOOSE) $(CFLAGS_EXTRA) $(OUT)
 
 clean:
-	rm -rf $(PROG) _CL* *.o *.dSYM *.gcov *.gcno *.gcda *.obj *.exe *.ilk *.pdb mbedtls
+	$(DELETE) $(PROG) *.o *.obj *.exe *.dSYM

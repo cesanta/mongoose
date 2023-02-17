@@ -21,12 +21,14 @@ endif
 all: $(PROG)
 	$(RUN) ./$(PROG) $(ARGS)
 
+ifneq ($(OS),Windows_NT)
 # Before embedding files, gzip them to save space
 packed_fs.c: $(shell find web_root -type f) Makefile
 	rm -rf tmp/web_root && mkdir tmp && cp -r web_root tmp/
 	find tmp -type f | xargs -n1 gzip
 	$(CC) ../../test/pack.c -o pack
 	cd tmp && ../pack `find web_root -type f` > ../$@
+endif
 
 $(PROG): $(SOURCES)
 	$(CC) $(SOURCES) $(CFLAGS) $(CFLAGS_MONGOOSE) $(CFLAGS_EXTRA) $(OUT)
