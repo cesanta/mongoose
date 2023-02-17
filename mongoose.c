@@ -357,7 +357,7 @@ static void mg_sendnsreq(struct mg_connection *c, struct mg_str *name, int ms,
     d->c = c;
     c->is_resolving = 1;
     MG_VERBOSE(("%lu resolving %.*s @ %s, txnid %hu", c->id, (int) name->len,
-                name->ptr, &dnsc->url, d->txnid));
+                name->ptr, dnsc->url, d->txnid));
     if (!mg_dns_send(dnsc->c, name, d->txnid, ipv6)) {
       mg_error(dnsc->c, "DNS send");
     }
@@ -1056,6 +1056,16 @@ static int p_stat(const char *path, size_t *size, time_t *mtime) {
   wchar_t tmp[MG_PATH_MAX];
   MultiByteToWideChar(CP_UTF8, 0, path, -1, tmp, sizeof(tmp) / sizeof(tmp[0]));
   if (_wstati64(tmp, &st) != 0) return 0;
+  // If path is a symlink, windows reports 0 in st.st_size.
+  // Get a real file size by opening it and jumping to the end
+  if (st.st_size == 0 && (st.st_mode & _S_IFREG)) {
+    FILE *fp = _wfopen(tmp, L"rb");
+    if (fp != NULL) {
+      fseek(fp, 0, SEEK_END);
+      if (_ftelli64(fp) > 0) st.st_size = _ftelli64(fp);
+      fclose(fp);
+    }
+  }
 #else
   struct MG_STAT_STRUCT st;
   if (MG_STAT_FUNC(path, &st) != 0) return 0;
