@@ -13,11 +13,11 @@ vast number of open source and commercial products - it even runs on the
 International Space Station!  Mongoose makes embedded network programming fast,
 robust, and easy. Features include:
 
-- Cross-platform
+- Cross-platform:
   - works on Linux/UNIX, MacOS, Windows, Android
   - works on STM32, NXP, ESP32, NRF52, TI, Microchip, ...
   - write code once - and it'll work everywhere
-  - ideal for the unification of the network infrastructure code
+  - ideal for the unification of the network infrastructure code across company
 - Built-in protocols: plain TCP/UDP, HTTP, MQTT, Websocket
 - SSL/TLS support: mbedTLS, OpenSSL or custom (via API)
 - Asynchronous DNS resolver
@@ -30,7 +30,7 @@ robust, and easy. Features include:
   [bare metal example on Nucleo-F429ZI](examples/stm32/nucleo-f429zi-baremetal)
   is only 6 files
    - For comparison, a CubeIDE generated HTTP example is 400+ files
-- Detailed [user guide + API reference](https://mongoose.ws/documentation/) and
+- Detailed [user guide, API reference](https://mongoose.ws/documentation/) and
   [tons of tutorials](https://mongoose.ws/tutorials/) available
 
 
