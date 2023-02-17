@@ -15,7 +15,7 @@ robust, and easy. Features include:
 
 - Cross-platform:
   - works on Linux/UNIX, MacOS, Windows, Android
-  - works on STM32, NXP, ESP32, NRF52, TI, Microchip, ...
+  - works on STM32, NXP, ESP32, NRF52, TI, Microchip, and other
   - write code once - and it'll work everywhere
   - ideal for the unification of the network infrastructure code across company
 - Built-in protocols: plain TCP/UDP, HTTP, MQTT, Websocket
