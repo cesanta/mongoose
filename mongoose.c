@@ -6060,6 +6060,13 @@ size_t mg_ws_wrap(struct mg_connection *c, size_t len, int op) {
 #endif
 
 
+/*
+ * Todo
+ * This driver doesn't support 10M line autoconfiguration yet.
+ * Packets aren't sent if the link negociated 10M line.
+ * todo: MAC back auto reconfiguration.
+ */
+
 #if MG_ENABLE_TCPIP && defined(MG_ENABLE_DRIVER_IMXRT1020)
 struct imx_rt1020_enet {
 volatile uint32_t RESERVED0, EIR, EIMR, RESERVED1, RDAR, TDAR, RESERVED2[3], ECR, RESERVED3[6], MMFR, MSCR, RESERVED4[7], MIBC, RESERVED5[7], RCR, RESERVED6[15], TCR, RESERVED7[7], PALR, PAUR, OPD, TXIC0, TXIC1, TXIC2, RESERVED8, RXIC0, RXIC1, RXIC2, RESERVED9[3], IAUR, IALR, GAUR, GALR, RESERVED10[7], TFWR, RESERVED11[14], RDSR, TDSR, MRBR[2], RSFL, RSEM, RAEM, RAFL, TSEM, TAEM, TAFL, TIPG, FTRL, RESERVED12[3], TACC, RACC, RESERVED13[15], RMON_T_PACKETS, RMON_T_BC_PKT, RMON_T_MC_PKT, RMON_T_CRC_ALIGN, RMON_T_UNDERSIZE, RMON_T_OVERSIZE, RMON_T_FRAG, RMON_T_JAB, RMON_T_COL, RMON_T_P64, RMON_T_P65TO127, RMON_T_P128TO255, RMON_T_P256TO511, RMON_T_P512TO1023, RMON_T_P1024TO2048, RMON_T_GTE2048, RMON_T_OCTETS, IEEE_T_DROP, IEEE_T_FRAME_OK, IEEE_T_1COL, IEEE_T_MCOL, IEEE_T_DEF, IEEE_T_LCOL, IEEE_T_EXCOL, IEEE_T_MACERR, IEEE_T_CSERR, IEEE_T_SQE, IEEE_T_FDXFC, IEEE_T_OCTETS_OK, RESERVED14[3], RMON_R_PACKETS, RMON_R_BC_PKT, RMON_R_MC_PKT, RMON_R_CRC_ALIGN, RMON_R_UNDERSIZE, RMON_R_OVERSIZE, RMON_R_FRAG, RMON_R_JAB, RESERVED15, RMON_R_P64, RMON_R_P65TO127, RMON_R_P128TO255, RMON_R_P256TO511, RMON_R_P512TO1023, RMON_R_P1024TO2047, RMON_R_GTE2048, RMON_R_OCTETS, IEEE_R_DROP, IEEE_R_FRAME_OK, IEEE_R_CRC, IEEE_R_ALIGN, IEEE_R_MACERR, IEEE_R_FDXFC, IEEE_R_OCTETS_OK, RESERVED16[71], ATCR, ATVR, ATOFF, ATPER, ATCOR, ATINC, ATSTMP, RESERVED17[122], TGSR, TCSR0, TCCR0, TCSR1, TCCR1, TCSR2, TCCR2, TCSR3;
@@ -6237,8 +6244,6 @@ static bool mg_tcpip_driver_imxrt1020_init(struct mg_tcpip_if *ifp) {
 
   // RX Descriptor activation
   ENET->RDAR = BIT(24); // Activate Receive Descriptor
-
-  if (ifp->queue.len == 0) ifp->queue.len = 8192;
   return true;
 }
 
@@ -6291,8 +6296,11 @@ void ENET_IRQHandler(void) {
     else { // Frame received, loop
       for (uint32_t i = 0; i < 10; i++) {  // read as they arrive but not forever
         if (rx_buffer_descriptor[s_rt1020_rxno].control & BIT(15)) break;  // exit when done
-        uint32_t len = (rx_buffer_descriptor[s_rt1020_rxno].length);
-        mg_tcpip_qwrite(rx_buffer_descriptor[s_rt1020_rxno].buffer, len > 4 ? len - 4 : len, s_ifp);
+        // Process if CRC OK and frame not truncated
+        if (!(rx_buffer_descriptor[s_rt1020_rxno].control & (BIT(2) | BIT(0)))) {
+          uint32_t len = (rx_buffer_descriptor[s_rt1020_rxno].length);
+          mg_tcpip_qwrite(rx_buffer_descriptor[s_rt1020_rxno].buffer, len > 4 ? len - 4 : len, s_ifp);
+        }
         rx_buffer_descriptor[s_rt1020_rxno].control |= BIT(15); // Inform DMA RX is empty
         if (++s_rt1020_rxno >= ENET_RXBD_NUM) s_rt1020_rxno = 0;
       }
@@ -6310,7 +6318,7 @@ static bool mg_tcpip_driver_imxrt1020_up(struct mg_tcpip_if *ifp) {
 
 // API
 struct mg_tcpip_driver mg_tcpip_driver_imxrt1020 = {
-  mg_tcpip_driver_imxrt1020_init, mg_tcpip_driver_imxrt1020_tx, mg_tcpip_driver_rx,
+  mg_tcpip_driver_imxrt1020_init, mg_tcpip_driver_imxrt1020_tx, NULL,
   mg_tcpip_driver_imxrt1020_up};
 
 #endif
@@ -6470,7 +6478,6 @@ static bool mg_tcpip_driver_stm32_init(struct mg_tcpip_if *ifp) {
   ETH->MACA0LR = (uint32_t) (ifp->mac[3] << 24) |
                  ((uint32_t) ifp->mac[2] << 16) |
                  ((uint32_t) ifp->mac[1] << 8) | ifp->mac[0];
-  if (ifp->queue.len == 0) ifp->queue.len = 8192;
   return true;
 }
 
@@ -6532,9 +6539,9 @@ void ETH_IRQHandler(void) {
   ETH->DMARPDR = 0;     // and resume RX
 }
 
-struct mg_tcpip_driver mg_tcpip_driver_stm32 = {
-    mg_tcpip_driver_stm32_init, mg_tcpip_driver_stm32_tx, mg_tcpip_driver_rx,
-    mg_tcpip_driver_stm32_up};
+struct mg_tcpip_driver mg_tcpip_driver_stm32 = {mg_tcpip_driver_stm32_init,
+                                                mg_tcpip_driver_stm32_tx, NULL,
+                                                mg_tcpip_driver_stm32_up};
 #endif
 
 #ifdef MG_ENABLE_LINES
@@ -6745,7 +6752,6 @@ static bool mg_tcpip_driver_stm32h_init(struct mg_tcpip_if *ifp) {
   ETH->MACA0LR = (uint32_t) (ifp->mac[3] << 24) |
                  ((uint32_t) ifp->mac[2] << 16) |
                  ((uint32_t) ifp->mac[1] << 8) | ifp->mac[0];
-  if (ifp->queue.len == 0) ifp->queue.len = 8192;
   return true;
 }
 
@@ -6813,7 +6819,7 @@ void ETH_IRQHandler(void) {
 }
 
 struct mg_tcpip_driver mg_tcpip_driver_stm32h = {
-    mg_tcpip_driver_stm32h_init, mg_tcpip_driver_stm32h_tx, mg_tcpip_driver_rx,
+    mg_tcpip_driver_stm32h_init, mg_tcpip_driver_stm32h_tx, NULL,
     mg_tcpip_driver_stm32h_up};
 #endif
 
@@ -7000,8 +7006,6 @@ static bool mg_tcpip_driver_tm4c_init(struct mg_tcpip_if *ifp) {
                      ((uint32_t) ifp->mac[1] << 8) | ifp->mac[0];
   // NOTE(scaprile) There are 3 additional slots for filtering, disabled by
   // default. This also applies to the STM32 driver (at least for F7)
-
-  if (ifp->queue.len == 0) ifp->queue.len = 8192;
   return true;
 }
 
@@ -7067,9 +7071,9 @@ void EMAC0_IRQHandler(void) {
   EMAC->EMACRXPOLLD = 0;      // and resume RX
 }
 
-struct mg_tcpip_driver mg_tcpip_driver_tm4c = {
-    mg_tcpip_driver_tm4c_init, mg_tcpip_driver_tm4c_tx, mg_tcpip_driver_rx,
-    mg_tcpip_driver_tm4c_up};
+struct mg_tcpip_driver mg_tcpip_driver_tm4c = {mg_tcpip_driver_tm4c_init,
+                                               mg_tcpip_driver_tm4c_tx, NULL,
+                                               mg_tcpip_driver_tm4c_up};
 #endif
 
 #ifdef MG_ENABLE_LINES
@@ -7298,53 +7302,9 @@ struct pkt {
   struct dhcp *dhcp;
 };
 
-static void q_copyin(struct queue *q, const uint8_t *buf, size_t len,
-                     size_t head) {
-  size_t left = q->len - head;
-  memcpy(&q->buf[head], buf, left < len ? left : len);
-  if (left < len) memcpy(q->buf, &buf[left], len - left);
-}
-
-static void q_copyout(struct queue *q, uint8_t *buf, size_t len, size_t tail) {
-  size_t left = q->len - tail;
-  memcpy(buf, &q->buf[tail], left < len ? left : len);
-  if (left < len) memcpy(&buf[left], q->buf, len - left);
-}
-
-static bool q_write(struct queue *q, const void *buf, size_t len) {
-  bool success = false;
-  size_t left = (q->len - q->head + q->tail - 1) % q->len;
-  if (len + sizeof(size_t) <= left) {
-    q_copyin(q, (uint8_t *) &len, sizeof(len), q->head);
-    q_copyin(q, (uint8_t *) buf, len, (q->head + sizeof(size_t)) % q->len);
-    q->head = (q->head + sizeof(len) + len) % q->len;
-    success = true;
-  }
-  return success;
-}
-
-static inline size_t q_avail(struct queue *q) {
-  size_t n = 0;
-  if (q->tail != q->head) q_copyout(q, (uint8_t *) &n, sizeof(n), q->tail);
-  return n;
-}
-
-static size_t q_read(struct queue *q, void *buf) {
-  size_t n = q_avail(q);
-  if (n > 0) {
-    q_copyout(q, (uint8_t *) buf, n, (q->tail + sizeof(n)) % q->len);
-    q->tail = (q->tail + sizeof(n) + n) % q->len;
-  }
-  return n;
-}
-
-static struct mg_str mkstr(void *buf, size_t len) {
-  struct mg_str str = {(char *) buf, len};
-  return str;
-}
-
 static void mkpay(struct pkt *pkt, void *p) {
-  pkt->pay = mkstr(p, (size_t) (&pkt->raw.ptr[pkt->raw.len] - (char *) p));
+  pkt->pay =
+      mg_str_n((char *) p, (size_t) (&pkt->raw.ptr[pkt->raw.len] - (char *) p));
 }
 
 static uint32_t csumup(uint32_t sum, const void *buf, size_t len) {
@@ -7960,9 +7920,17 @@ static void mg_tcpip_poll(struct mg_tcpip_if *ifp, uint64_t uptime_ms) {
   if (ifp->ip == 0 && expired_1000ms) tx_dhcp_discover(ifp);
 
   // Read data from the network
-  size_t len = ifp->driver->rx((void *) ifp->rx.ptr, ifp->rx.len, ifp);
-  if (len) {
-    mg_tcpip_rx(ifp, (void *) ifp->rx.ptr, len);
+  if (ifp->driver->rx != NULL) {  // Polling driver. We must call it
+    size_t len =
+        ifp->driver->rx(ifp->recv_queue.buf, ifp->recv_queue.size, ifp);
+    if (len > 0) mg_tcpip_rx(ifp, ifp->recv_queue.buf, len);
+  } else {  // Interrupt-based driver. Fills recv queue itself
+    char *buf;
+    size_t len = mg_queue_next(&ifp->recv_queue, &buf);
+    if (len > 0) {
+      mg_tcpip_rx(ifp, buf, len);
+      mg_queue_del(&ifp->recv_queue, len);
+    }
   }
 
   // Process timeouts
@@ -7993,20 +7961,19 @@ static void mg_tcpip_poll(struct mg_tcpip_if *ifp, uint64_t uptime_ms) {
 // somewhere fast. Note that newlib's malloc is not thread safe, thus use
 // our lock-free queue with preallocated buffer to copy data and return asap
 void mg_tcpip_qwrite(void *buf, size_t len, struct mg_tcpip_if *ifp) {
-  if (q_write(&ifp->queue, buf, len)) {
+  char *p;
+  if (mg_queue_book(&ifp->recv_queue, &p, len) >= len) {
+    memcpy(p, buf, len);
+    mg_queue_add(&ifp->recv_queue, len);
     ifp->nrecv++;
   } else {
     ifp->ndrop++;
   }
 }
 
-size_t mg_tcpip_qread(void *buf, struct mg_tcpip_if *ifp) {
-  return q_read(&ifp->queue, buf);
-}
-
 size_t mg_tcpip_driver_rx(void *buf, size_t len, struct mg_tcpip_if *ifp) {
-  return mg_tcpip_qread((void *) ifp->rx.ptr, ifp);
-  (void) len, (void) buf;
+  (void) buf, (void) len, (void) ifp;
+  return 0;
 }
 
 void mg_tcpip_init(struct mg_mgr *mgr, struct mg_tcpip_if *ifp) {
@@ -8021,10 +7988,10 @@ void mg_tcpip_init(struct mg_mgr *mgr, struct mg_tcpip_if *ifp) {
   if (ifp->driver->init && !ifp->driver->init(ifp)) {
     MG_ERROR(("driver init failed"));
   } else {
-    size_t maxpktsize = 1540;
-    ifp->rx.ptr = (char *) calloc(1, maxpktsize), ifp->rx.len = maxpktsize;
-    ifp->tx.ptr = (char *) calloc(1, maxpktsize), ifp->tx.len = maxpktsize;
-    if (ifp->queue.len) ifp->queue.buf = (uint8_t *) calloc(1, ifp->queue.len);
+    size_t framesize = 1540;
+    ifp->tx.ptr = (char *) calloc(1, framesize), ifp->tx.len = framesize;
+    ifp->recv_queue.size = ifp->driver->rx ? framesize : 8192;
+    ifp->recv_queue.buf = (char *) calloc(1, ifp->recv_queue.size);
     ifp->timer_1000ms = mg_millis();
     mgr->priv = ifp;
     ifp->mgr = mgr;
@@ -8038,7 +8005,7 @@ void mg_tcpip_init(struct mg_mgr *mgr, struct mg_tcpip_if *ifp) {
 }
 
 void mg_tcpip_free(struct mg_tcpip_if *ifp) {
-  free((char *) ifp->rx.ptr);
+  free(ifp->recv_queue.buf);
   free((char *) ifp->tx.ptr);
 }
 

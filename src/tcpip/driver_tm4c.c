@@ -178,8 +178,6 @@ static bool mg_tcpip_driver_tm4c_init(struct mg_tcpip_if *ifp) {
                      ((uint32_t) ifp->mac[1] << 8) | ifp->mac[0];
   // NOTE(scaprile) There are 3 additional slots for filtering, disabled by
   // default. This also applies to the STM32 driver (at least for F7)
-
-  if (ifp->queue.len == 0) ifp->queue.len = 8192;
   return true;
 }
 
@@ -245,7 +243,7 @@ void EMAC0_IRQHandler(void) {
   EMAC->EMACRXPOLLD = 0;      // and resume RX
 }
 
-struct mg_tcpip_driver mg_tcpip_driver_tm4c = {
-    mg_tcpip_driver_tm4c_init, mg_tcpip_driver_tm4c_tx, mg_tcpip_driver_rx,
-    mg_tcpip_driver_tm4c_up};
+struct mg_tcpip_driver mg_tcpip_driver_tm4c = {mg_tcpip_driver_tm4c_init,
+                                               mg_tcpip_driver_tm4c_tx, NULL,
+                                               mg_tcpip_driver_tm4c_up};
 #endif

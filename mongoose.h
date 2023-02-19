@@ -1502,6 +1502,7 @@ void mg_rpc_list(struct mg_rpc_req *r);
 
 
 
+
 struct mg_tcpip_if;  // MIP network interface
 
 struct mg_tcpip_driver {
@@ -1511,27 +1512,17 @@ struct mg_tcpip_driver {
   bool (*up)(struct mg_tcpip_if *);                           // Up/down status
 };
 
-// Receive queue - single producer, single consumer queue.  Interrupt-based
-// drivers copy received frames to the queue in interrupt context.
-// mg_tcpip_poll() function runs in event loop context, reads from the queue
-struct queue {
-  uint8_t *buf;
-  size_t len;
-  volatile size_t tail, head;
-};
-
 // Network interface
 struct mg_tcpip_if {
   uint8_t mac[6];                  // MAC address. Must be set to a valid MAC
   uint32_t ip, mask, gw;           // IP address, mask, default gateway
-  struct mg_str rx;                // Output (TX) buffer
-  struct mg_str tx;                // Input (RX) buffer
+  struct mg_str tx;                // Output (TX) buffer
   bool enable_dhcp_client;         // Enable DCHP client
   bool enable_dhcp_server;         // Enable DCHP server
   struct mg_tcpip_driver *driver;  // Low level driver
   void *driver_data;               // Driver-specific data
   struct mg_mgr *mgr;              // Mongoose event manager
-  struct queue queue;              // Set queue.len for interrupt based drivers
+  struct mg_queue recv_queue;      // Receive queue
 
   // Internal state, user can use it but should not change it
   uint8_t gwmac[6];         // Router's MAC
@@ -1560,7 +1551,7 @@ extern struct mg_tcpip_driver mg_tcpip_driver_stm32;
 extern struct mg_tcpip_driver mg_tcpip_driver_w5500;
 extern struct mg_tcpip_driver mg_tcpip_driver_tm4c;
 extern struct mg_tcpip_driver mg_tcpip_driver_stm32h;
-extern struct mg_tcpip_driver mg_tcpip_driver_imxrt1020;
+extern struct mg_tcpip_driver mg_tcpip_driver_imxrt;
 
 // Drivers that require SPI, can use this SPI abstraction
 struct mg_tcpip_spi {

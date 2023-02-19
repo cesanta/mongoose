@@ -150,7 +150,6 @@ static bool mg_tcpip_driver_stm32_init(struct mg_tcpip_if *ifp) {
   ETH->MACA0LR = (uint32_t) (ifp->mac[3] << 24) |
                  ((uint32_t) ifp->mac[2] << 16) |
                  ((uint32_t) ifp->mac[1] << 8) | ifp->mac[0];
-  if (ifp->queue.len == 0) ifp->queue.len = 8192;
   return true;
 }
 
@@ -212,7 +211,7 @@ void ETH_IRQHandler(void) {
   ETH->DMARPDR = 0;     // and resume RX
 }
 
-struct mg_tcpip_driver mg_tcpip_driver_stm32 = {
-    mg_tcpip_driver_stm32_init, mg_tcpip_driver_stm32_tx, mg_tcpip_driver_rx,
-    mg_tcpip_driver_stm32_up};
+struct mg_tcpip_driver mg_tcpip_driver_stm32 = {mg_tcpip_driver_stm32_init,
+                                                mg_tcpip_driver_stm32_tx, NULL,
+                                                mg_tcpip_driver_stm32_up};
 #endif

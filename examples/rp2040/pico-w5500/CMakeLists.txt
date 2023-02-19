@@ -18,6 +18,6 @@ pico_enable_stdio_uart(firmware 1)
 add_definitions(-DMG_ARCH=MG_ARCH_RP2040)
 add_definitions(-DMG_ENABLE_TCPIP=1)
 add_definitions(-DMG_ENABLE_PACKED_FS=1)
-add_definitions(-DMG_ENABLE_MBEDTLS=1)
+add_definitions(-DMG_ENABLE_MBEDTLS=0) # TODO(cpq): enable
 add_definitions(-DMG_ENABLE_CUSTOM_RANDOM=1)
 add_definitions(-DMG_ENABLE_FILE=0)
