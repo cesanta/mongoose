@@ -1,24 +1,22 @@
-SOURCES = mongoose.c main.c net.c packed_fs.c # Source code files
-CFLAGS = -W -Wall -Wextra -g -I.              # Build options
+PROG ?= example                   # Program we are building
+DELETE = rm -rf                   # Command to remove files
+OUT ?= -o $(PROG)                 # Compiler argument for output file
+SOURCES = main.c mongoose.c net.c packed_fs.c      # Source code files
+CFLAGS = -W -Wall -Wextra -g -I.  # Build options
 
 # Mongoose build options. See https://mongoose.ws/documentation/#build-options
 CFLAGS_MONGOOSE += -DMG_ENABLE_PACKED_FS=1
 
-ifeq ($(OS),Windows_NT)
-  # Windows settings. Assume MinGW compiler. To use VC: make CC=cl CFLAGS=/MD OUT=/Feprog.exe
+ifeq ($(OS),Windows_NT)   # Windows settings. Assume MinGW compiler. To use VC: make CC=cl CFLAGS=/MD OUT=/Feprog.exe
   PROG ?= example.exe           # Use .exe suffix for the binary
   CC = gcc                      # Use MinGW gcc compiler
   CFLAGS += -lws2_32            # Link against Winsock library
   DELETE = cmd /C del /Q /F /S  # Command prompt command to delete files
   OUT ?= -o $(PROG)             # Build output
-else
-  # Mac, Linux
-  PROG ?= example
-  DELETE = rm -rf
-  OUT ?= -o $(PROG)
+  MAKE += WINDOWS=1 CC=$(CC)
 endif
 
-all: $(PROG)
+all: $(PROG)              # Default target. Build and run program
 	$(RUN) ./$(PROG) $(ARGS)
 
 ifneq ($(OS),Windows_NT)
@@ -30,8 +28,14 @@ packed_fs.c: $(shell find web_root -type f) Makefile
 	cd tmp && ../pack `find web_root -type f` > ../$@
 endif
 
-$(PROG): $(SOURCES)
+$(PROG): $(SOURCES)       # Build program from sources
 	$(CC) $(SOURCES) $(CFLAGS) $(CFLAGS_MONGOOSE) $(CFLAGS_EXTRA) $(OUT)
 
-clean:
-	$(DELETE) $(PROG) *.o *.obj *.exe *.dSYM pack tmp
+clean:                    # Cleanup. Delete built program and all build artifacts
+	$(DELETE) $(PROG) *.o *.obj *.exe *.dSYM pack tmp mbedtls
+
+# see https://mongoose.ws/tutorials/tls/#how-to-build for TLS build options
+
+mbedtls:                  # Pull and build mbedTLS library
+	git clone --depth 1 -b v2.28.2 https://github.com/mbed-tls/mbedtls $@
+	$(MAKE) -C mbedtls/library

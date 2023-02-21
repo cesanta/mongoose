@@ -35,6 +35,7 @@ static void cb(struct mg_connection *c, int ev, void *ev_data, void *fn_data) {
       mg_http_serve_dir(c, ev_data, &opts);
     }
   }
+  (void) fn_data;
 }
 
 int main(void) {
