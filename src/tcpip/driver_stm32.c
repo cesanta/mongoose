@@ -1,4 +1,4 @@
-#include "mip.h"
+#include "tcpip.h"
 
 #if MG_ENABLE_TCPIP && MG_ENABLE_DRIVER_STM32
 struct stm32_eth {
