@@ -8,7 +8,7 @@
 //    4. Receives that message back from the subscribed topic and closes
 //    5. Timer-based reconnection logic revives the connection when it is down
 //
-// To enable SSL/TLS, make SSL=OPENSSL or make SSL=MBEDTLS 
+// To enable SSL/TLS, see https://mongoose.ws/tutorials/tls/#how-to-build
 
 #include "mongoose.h"
 

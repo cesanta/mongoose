@@ -5,7 +5,7 @@
 //    1. Run `make`. This builds and starts a proxy on port 8000
 //    2. Start your browser, go to https://localhost:8000
 //
-// To enable SSL/TLS, add SSL=OPENSSL or SSL=MBEDTLS
+// To enable SSL/TLS, see https://mongoose.ws/tutorials/tls/#how-to-build
 
 static const char *s_backend_url =
 #if defined(MG_ENABLE_MBEDTLS) || defined(MG_ENABLE_OPENSSL)

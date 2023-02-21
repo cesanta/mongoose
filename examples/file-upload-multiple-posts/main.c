@@ -23,11 +23,11 @@ static void cb(struct mg_connection *c, int ev, void *ev_data, void *fn_data) {
       mg_http_serve_dir(c, ev_data, &opts);
     }
   }
+  (void) fn_data;
 }
 
 int main(void) {
   struct mg_mgr mgr;
-  struct mg_timer t1;
 
   mg_mgr_init(&mgr);
   mg_log_set(MG_LL_DEBUG);  // Set log level

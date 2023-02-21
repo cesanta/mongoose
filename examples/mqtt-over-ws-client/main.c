@@ -7,7 +7,7 @@
 //    3. Publishes message `hello` to the `s_topic`
 //    4. Receives that message back from the subscribed topic and exits
 //
-// To enable SSL/TLS, make SSL=OPENSSL or make SSL=MBEDTLS
+// To enable SSL/TLS, see https://mongoose.ws/tutorials/tls/#how-to-build
 
 #include "mongoose.h"
 

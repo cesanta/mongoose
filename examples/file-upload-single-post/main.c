@@ -26,6 +26,7 @@ static void cb(struct mg_connection *c, int ev, void *ev_data, void *fn_data) {
     struct mg_http_serve_opts opts = {.root_dir = "web_root"};
     mg_http_serve_dir(c, hm, &opts);
   }
+  (void) fn_data;
 }
 
 int main(void) {

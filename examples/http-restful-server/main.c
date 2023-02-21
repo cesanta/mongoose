@@ -9,7 +9,7 @@
 //    any other URI serves static files from s_root_dir
 //
 // To enable SSL/TLS (using self-signed certificates in PEM files),
-//    1. make SSL=OPENSSL or make SSL=MBEDTLS
+//    1. See https://mongoose.ws/tutorials/tls/#how-to-build
 //    2. curl -k https://127.0.0.1:8443
 
 #include "mongoose.h"
