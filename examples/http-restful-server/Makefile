@@ -1,20 +1,32 @@
-PROG ?= example
-CFLAGS ?= -W -Wall -DMG_ENABLE_LINES=1
-SSL = ?
+PROG ?= example                   # Program we are building
+DELETE = rm -rf                   # Command to remove files
+OUT ?= -o $(PROG)                 # Compiler argument for output file
+SOURCES = main.c mongoose.c       # Source code files
+CFLAGS = -W -Wall -Wextra -g -I.  # Build options
 
-ifeq "$(SSL)" "MBEDTLS"
-CFLAGS += -DMG_ENABLE_MBEDTLS=1 -lmbedtls -lmbedcrypto -lmbedx509 -I$(MBEDTLS)/include -I/usr/include -L$(MBEDTLS)/lib -lmbedtls -lmbedcrypto -lmbedx509
+# Mongoose build options. See https://mongoose.ws/documentation/#build-options
+CFLAGS_MONGOOSE += -DMG_ENABLE_LINES=1
+
+ifeq ($(OS),Windows_NT)   # Windows settings. Assume MinGW compiler. To use VC: make CC=cl CFLAGS=/MD OUT=/Feprog.exe
+  PROG ?= example.exe           # Use .exe suffix for the binary
+  CC = gcc                      # Use MinGW gcc compiler
+  CFLAGS += -lws2_32            # Link against Winsock library
+  DELETE = cmd /C del /Q /F /S  # Command prompt command to delete files
+  OUT ?= -o $(PROG)             # Build output
+  MAKE += WINDOWS=1 CC=$(CC)
 endif
 
-ifeq "$(SSL)" "OPENSSL"
-CFLAGS += -DMG_ENABLE_OPENSSL=1 -lssl -lcrypto
-endif
+all: $(PROG)              # Default target. Build and run program
+	$(RUN) ./$(PROG) $(ARGS)
 
-all: $(PROG)
-	$(DEBUGGER) ./$(PROG) $(ARGS)
+$(PROG): $(SOURCES)       # Build program from sources
+	$(CC) $(SOURCES) $(CFLAGS) $(CFLAGS_MONGOOSE) $(CFLAGS_EXTRA) $(OUT)
 
-$(PROG): main.c
-	$(CC) ../../mongoose.c -I../.. $(CFLAGS) $(EFLAGS) -o $(PROG) main.c
+clean:                    # Cleanup. Delete built program and all build artifacts
+	$(DELETE) $(PROG) *.o *.obj *.exe *.dSYM mbedtls
 
-clean:
-	rm -rf $(PROG) *.o *.dSYM *.gcov *.gcno *.gcda *.obj *.exe *.ilk *.pdb
+# see https://mongoose.ws/tutorials/tls/#how-to-build for TLS build options
+
+mbedtls:                  # Pull and build mbedTLS library
+	git clone --depth 1 -b v2.28.2 https://github.com/mbed-tls/mbedtls $@
+	$(MAKE) -C mbedtls/library

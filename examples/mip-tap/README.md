@@ -1,6 +1,6 @@
-# MIP TCP / IP stack on a tap interface
+# Mongoose TCP/IP stack on a tap interface
 
-This example allows the use of Mongoose's MIP built-in TCP/IP stack in systems that support a TUN/TAP device. The application opens a TAP device and uses the standard socket interface to read and write on it.
+This example allows the use of Mongoose's built-in TCP/IP stack in systems that support a TUN/TAP device. The application opens a TAP device and uses the standard socket interface to read and write on it.
 
 The interface can be created by the example itself, but it will also disappear when the example exits. Since we usually need to do something before, like setting up a DHCP server or establishing some connections to the rest of the world, we'll manually create a specific TAP interface and the example will open it; this way, we can have everything setup in advance.
 
@@ -17,13 +17,13 @@ In some systems, you might need superuser privileges to open the device with the
 
 ### Use as a virtual interface
 
-In this scenario, MIP is only reachable from the hosting machine, but you can add forwarding and masquerading later. Once you have your TAP interface up and running with an IP address, you can configure any services on it.
+In this scenario, Mongoose is only reachable from the hosting machine, but you can add forwarding and masquerading later. Once you have your TAP interface up and running with an IP address, you can configure any services on it.
 
 - Add an IP address
   ```sh
   $ sudo ip addr add 192.168.0.1/24 dev tap0
   ```
-- Start your DHCP server at that interface serving that subnet, or otherwise configure MIP to use a fixed address within that subnet.
+- Start your DHCP server at that interface serving that subnet, or otherwise configure Mongoose to use a fixed address within that subnet.
 - Now start the example opening the very same TAP interface:
   ```sh
   $ make -C examples/mip-tap/ clean all
@@ -44,7 +44,7 @@ As you can't access any other host than your workstation, you need to add any re
 
 If you happen to have a virtual bridge interface (for linking several virtual machines together, for example) (probably `br0` or `virbr0`), we can take advantage of it.
 
-We will attach one end of the virtual interface to a bridge, which will also be attached to your network interface. In this case, MIP will have access to your network (and through it, to the Internet) and will also be reachable from your own workstation and other hosts in your network. You don't need to add IP addresses as in the example above, unless you don't have a DHCP server in your network, in which case you will configure MIP for a fixed address in your subnet.
+We will attach one end of the virtual interface to a bridge, which will also be attached to your network interface. In this case, Mongoose will have access to your network (and through it, to the Internet) and will also be reachable from your own workstation and other hosts in your network. You don't need to add IP addresses as in the example above, unless you don't have a DHCP server in your network, in which case you will configure Mongoose for a fixed address in your subnet.
 
 - If you don't already have a virtual bridge interface, as mentioned above, you'll have to create it and attach your network interface (NIC) to it. Your IP address has to be assigned to the bridge, instead of the NIC. If you are using DHCP, the client must run on the bridge interface instead of the NIC.
   ```sh
@@ -109,7 +109,7 @@ If you have _Docker_ running, it may introduce firewall rules that will disrupt 
 
 ### Forward/Masquerade
 
-Once you have your virtual interface up and running with an IP address, you can use your Linux to NAT and forward MIP traffic to another interface, for example the one that connects you to the Internet. In this case, MIP will have access to the Internet and will also be reachable from your own workstation; but not from any other hosts in your local network (if there is one). You can use this setup with a direct connection to the Internet or being part of a network, when you want to isolate MIP from the rest of your network.
+Once you have your virtual interface up and running with an IP address, you can use your Linux to NAT and forward Mongoose traffic to another interface, for example the one that connects you to the Internet. In this case, Mongoose will have access to the Internet and will also be reachable from your own workstation; but not from any other hosts in your local network (if there is one). You can use this setup with a direct connection to the Internet or being part of a network, when you want to isolate Mongoose from the rest of your network.
 
 - We assume you already have a firewall in place (you should); to configure masquerading and forwarding do:
   ```sh
