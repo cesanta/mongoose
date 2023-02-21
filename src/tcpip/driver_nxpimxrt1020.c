@@ -1,4 +1,11 @@
-#include "mip.h"
+#include "tcpip.h"
+
+/*
+ * Todo
+ * This driver doesn't support 10M line autoconfiguration yet.
+ * Packets aren't sent if the link negociated 10M line.
+ * todo: MAC back auto reconfiguration.
+ */
 
 #if MG_ENABLE_TCPIP && defined(MG_ENABLE_DRIVER_IMXRT1020)
 struct imx_rt1020_enet {
@@ -231,8 +238,11 @@ void ENET_IRQHandler(void) {
     else { // Frame received, loop
       for (uint32_t i = 0; i < 10; i++) {  // read as they arrive but not forever
         if (rx_buffer_descriptor[s_rt1020_rxno].control & BIT(15)) break;  // exit when done
-        uint32_t len = (rx_buffer_descriptor[s_rt1020_rxno].length);
-        mg_tcpip_qwrite(rx_buffer_descriptor[s_rt1020_rxno].buffer, len > 4 ? len - 4 : len, s_ifp);
+        // Process if CRC OK and frame not truncated
+        if (!(rx_buffer_descriptor[s_rt1020_rxno].control & (BIT(2) | BIT(0)))) {
+          uint32_t len = (rx_buffer_descriptor[s_rt1020_rxno].length);
+          mg_tcpip_qwrite(rx_buffer_descriptor[s_rt1020_rxno].buffer, len > 4 ? len - 4 : len, s_ifp);
+        }
         rx_buffer_descriptor[s_rt1020_rxno].control |= BIT(15); // Inform DMA RX is empty
         if (++s_rt1020_rxno >= ENET_RXBD_NUM) s_rt1020_rxno = 0;
       }
