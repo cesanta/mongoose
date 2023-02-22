@@ -12,7 +12,13 @@
 
 #include "mongoose.h"
 
-static const char *s_url = "mqtt://broker.hivemq.com:1883";
+static const char *s_url = 
+#if MG_ENABLE_MBEDTLS || MG_ENABLE_OPENSSL
+  "mqtts://broker.hivemq.com:8883";
+#else
+  "mqtt://broker.hivemq.com:1883";
+#endif
+
 static const char *s_sub_topic = "mg/+/test";
 static const char *s_pub_topic = "mg/clnt/test";
 static int s_qos = 1;
