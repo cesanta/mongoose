@@ -9,9 +9,15 @@
 //
 // To enable SSL/TLS, see https://mongoose.ws/tutorials/tls/#how-to-build
 
+static const char *s_url = 
+#if defined(MG_ENABLE_MBEDTLS) || defined(MG_ENABLE_OPENSSL)
+  "wss://broker.hivemq.com:8884/mqtt";
+#else
+  "ws://broker.hivemq.com:8000/mqtt";
+#endif
+
 #include "mongoose.h"
 
-static const char *s_url = "ws://broker.hivemq.com:8000/mqtt";
 static const char *s_topic = "mg/test";
 
 static void fn(struct mg_connection *c, int ev, void *ev_data, void *fn_data) {

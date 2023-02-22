@@ -4,7 +4,11 @@
 #include "mongoose.h"
 
 #if !defined(MQTT_SERVER)
-#define MQTT_SERVER "mqtt://broker.hivemq.com:1883"
+#if MG_ENABLE_MBEDTLS || MG_ENABLE_OPENSSL
+  #define MQTT_SERVER "mqtts://broker.hivemq.com:8883"
+#else
+  #define MQTT_SERVER "mqtt://broker.hivemq.com:1883"
+#endif
 #endif
 #define MQTT_PUBLISH_TOPIC "mg/my_device"
 #define MQTT_SUBSCRIBE_TOPIC "mg/#"

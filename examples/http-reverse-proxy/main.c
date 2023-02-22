@@ -7,15 +7,15 @@
 //
 // To enable SSL/TLS, see https://mongoose.ws/tutorials/tls/#how-to-build
 
+#include "mongoose.h"
+
 static const char *s_backend_url =
-#if defined(MG_ENABLE_MBEDTLS) || defined(MG_ENABLE_OPENSSL)
+#if MG_ENABLE_MBEDTLS || MG_ENABLE_OPENSSL
     "https://cesanta.com";
 #else
     "http://info.cern.ch";
 #endif
 static const char *s_listen_url = "http://localhost:8000";
-
-#include "mongoose.h"
 
 // Forward client request to the backend connection, rewriting the Host header
 static void forward_request(struct mg_http_message *hm,

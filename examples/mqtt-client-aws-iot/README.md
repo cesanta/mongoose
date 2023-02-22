@@ -1,1 +1,1 @@
-See detailed tutorial at https://mongoose.ws/tutorials/aws-iot/
+See detailed tutorial at https://mongoose.ws/tutorials/mqtt-client-aws-iot/
