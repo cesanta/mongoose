@@ -19,14 +19,16 @@ static void cfn(struct mg_connection *c, int ev, void *ev_data, void *fn_data) {
     MG_INFO(("CLIENT has been initialized"));
   } else if (ev == MG_EV_CONNECT) {
     MG_INFO(("CLIENT connected"));
-#if (MG_ENABLE_MBEDTLS == 1) || (MG_ENABLE_OPENSSL == 1)
+#if MG_ENABLE_MBEDTLS || MG_ENABLE_OPENSSL
     struct mg_tls_opts opts = {.ca = "ss_ca.pem"};
     mg_tls_init(c, &opts);
+    MG_INFO(("CLIENT initialized TLS"));
 #endif
     *i = 1;  // do something
   } else if (ev == MG_EV_READ) {
     struct mg_iobuf *r = &c->recv;
     MG_INFO(("CLIENT got data: %.*s", r->len, r->buf));
+    r->len = 0;             // Tell Mongoose we've consumed data
   } else if (ev == MG_EV_CLOSE) {
     MG_INFO(("CLIENT disconnected"));
     // signal we are done
@@ -53,18 +55,20 @@ static void sfn(struct mg_connection *c, int ev, void *ev_data, void *fn_data) {
     MG_INFO(("SERVER is listening"));
   } else if (ev == MG_EV_ACCEPT) {
     MG_INFO(("SERVER accepted a connection"));
-#if (MG_ENABLE_MBEDTLS == 1) || (MG_ENABLE_OPENSSL == 1)
+#if MG_ENABLE_MBEDTLS || MG_ENABLE_OPENSSL
     struct mg_tls_opts opts = {
         //.ca = "ss_ca.pem",         // Uncomment to enable two-way SSL
         .cert = "ss_server.pem",     // Certificate PEM file
         .certkey = "ss_server.pem",  // This pem contains both cert and key
     };
     mg_tls_init(c, &opts);
+    MG_INFO(("SERVER initialized TLS"));
 #endif
   } else if (ev == MG_EV_READ) {
     struct mg_iobuf *r = &c->recv;
     MG_INFO(("SERVER got data: %.*s", r->len, r->buf));
     mg_send(c, r->buf, r->len);  // echo it back
+    r->len = 0;                  // Tell Mongoose we've consumed data
   } else if (ev == MG_EV_CLOSE) {
     MG_INFO(("SERVER disconnected"));
   } else if (ev == MG_EV_ERROR) {
