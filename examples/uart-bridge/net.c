@@ -34,7 +34,9 @@ void config_write(struct mg_str config);
 #else
 void uart_init(int tx, int rx, int baud) {
   // We use stdin/stdout as UART. Make stdin non-blocking
+#if MG_ARCH != MG_ARCH_WIN32
   fcntl(0, F_SETFL, fcntl(0, F_GETFL) | O_NONBLOCK);
+#endif
   (void) tx, (void) rx, (void) baud;
 }
 
@@ -44,7 +46,12 @@ void uart_write(const void *buf, size_t len) {
 }
 
 int uart_read(void *buf, size_t len) {
+#if MG_ARCH == MG_ARCH_WIN32
+  (void) buf, (void) len;
+  return 0;
+#else
   return read(0, buf, len);  // Read from stdin
+#endif
 }
 
 char *config_read(void) {
