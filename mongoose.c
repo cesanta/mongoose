@@ -4278,6 +4278,7 @@ static void mg_set_non_blocking_mode(MG_SOCKET_TYPE fd) {
 bool mg_open_listener(struct mg_connection *c, const char *url) {
   MG_SOCKET_TYPE fd = MG_INVALID_SOCKET;
   bool success = false;
+  const int ipv6_only = 1;
   c->loc.port = mg_htons(mg_url_port(url));
   if (!mg_aton(mg_url_host(url), &c->loc)) {
     MG_ERROR(("invalid listening URL: %s", url));
@@ -4314,6 +4315,10 @@ bool mg_open_listener(struct mg_connection *c, const char *url) {
       // "Using SO_REUSEADDR and SO_EXCLUSIVEADDRUSE"
       MG_ERROR(("exclusiveaddruse: %d", MG_SOCK_ERR(rc)));
 #endif
+    } else if( c->loc.is_ip6
+        && (rc = setsockopt(fd, IPPROTO_IPV6, IPV6_V6ONLY, (const void *)&ipv6_only, sizeof(ipv6_only))) != 0)
+    {
+      MG_ERROR(("ipv6_only: %d", MG_SOCK_ERR(rc)));
     } else if ((rc = bind(fd, &usa.sa, slen)) != 0) {
       MG_ERROR(("bind: %d", MG_SOCK_ERR(rc)));
     } else if ((type == SOCK_STREAM &&
