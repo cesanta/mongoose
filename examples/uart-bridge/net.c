@@ -34,7 +34,9 @@ void config_write(struct mg_str config);
 #else
 void uart_init(int tx, int rx, int baud) {
   // We use stdin/stdout as UART. Make stdin non-blocking
+#if MG_ARCH != MG_ARCH_WIN32
   fcntl(0, F_SETFL, fcntl(0, F_GETFL) | O_NONBLOCK);
+#endif
   (void) tx, (void) rx, (void) baud;
 }
 
@@ -44,7 +46,12 @@ void uart_write(const void *buf, size_t len) {
 }
 
 int uart_read(void *buf, size_t len) {
+#if MG_ARCH == MG_ARCH_WIN32
+  (void) buf, (void) len;
+  return 0;
+#else
   return read(0, buf, len);  // Read from stdin
+#endif
 }
 
 char *config_read(void) {
@@ -202,7 +209,8 @@ void uart_bridge_fn(struct mg_connection *c, int ev, void *ev_data,
                     s_state.mqtt.enable ? "true" : "false", "rx", s_state.rx,
                     "tx", s_state.tx, "baud", s_state.baud);
     } else {
-      struct mg_http_serve_opts opts = {0};
+      struct mg_http_serve_opts opts;
+      memset(&opts, 0, sizeof(opts));
 #if 1
       opts.root_dir = "/web_root";
       opts.fs = &mg_fs_packed;
