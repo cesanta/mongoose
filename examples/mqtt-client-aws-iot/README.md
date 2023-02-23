@@ -1,1 +1,2 @@
-See detailed tutorial at https://mongoose.ws/tutorials/mqtt-client-aws-iot/
+- This example requires generating AWS and user credentials and downloading certificates
+- This example requires building with TLS support; before running, see detailed tutorial at https://mongoose.ws/tutorials/mqtt-client-aws-iot/

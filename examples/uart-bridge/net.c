@@ -202,7 +202,8 @@ void uart_bridge_fn(struct mg_connection *c, int ev, void *ev_data,
                     s_state.mqtt.enable ? "true" : "false", "rx", s_state.rx,
                     "tx", s_state.tx, "baud", s_state.baud);
     } else {
-      struct mg_http_serve_opts opts = {0};
+      struct mg_http_serve_opts opts;
+      memset(&opts, 0, sizeof(opts));
 #if 1
       opts.root_dir = "/web_root";
       opts.fs = &mg_fs_packed;
