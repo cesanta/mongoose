@@ -184,8 +184,6 @@ static bool mg_tcpip_driver_imxrt1020_init(struct mg_tcpip_if *ifp) {
 
   // RX Descriptor activation
   ENET->RDAR = BIT(24); // Activate Receive Descriptor
-
-  if (ifp->queue.len == 0) ifp->queue.len = 8192;
   return true;
 }
 
@@ -260,7 +258,7 @@ static bool mg_tcpip_driver_imxrt1020_up(struct mg_tcpip_if *ifp) {
 
 // API
 struct mg_tcpip_driver mg_tcpip_driver_imxrt1020 = {
-  mg_tcpip_driver_imxrt1020_init, mg_tcpip_driver_imxrt1020_tx, mg_tcpip_driver_rx,
+  mg_tcpip_driver_imxrt1020_init, mg_tcpip_driver_imxrt1020_tx, NULL,
   mg_tcpip_driver_imxrt1020_up};
 
 #endif

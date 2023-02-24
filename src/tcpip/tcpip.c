@@ -128,53 +128,9 @@ struct pkt {
   struct dhcp *dhcp;
 };
 
-static void q_copyin(struct queue *q, const uint8_t *buf, size_t len,
-                     size_t head) {
-  size_t left = q->len - head;
-  memcpy(&q->buf[head], buf, left < len ? left : len);
-  if (left < len) memcpy(q->buf, &buf[left], len - left);
-}
-
-static void q_copyout(struct queue *q, uint8_t *buf, size_t len, size_t tail) {
-  size_t left = q->len - tail;
-  memcpy(buf, &q->buf[tail], left < len ? left : len);
-  if (left < len) memcpy(&buf[left], q->buf, len - left);
-}
-
-static bool q_write(struct queue *q, const void *buf, size_t len) {
-  bool success = false;
-  size_t left = (q->len - q->head + q->tail - 1) % q->len;
-  if (len + sizeof(size_t) <= left) {
-    q_copyin(q, (uint8_t *) &len, sizeof(len), q->head);
-    q_copyin(q, (uint8_t *) buf, len, (q->head + sizeof(size_t)) % q->len);
-    q->head = (q->head + sizeof(len) + len) % q->len;
-    success = true;
-  }
-  return success;
-}
-
-static inline size_t q_avail(struct queue *q) {
-  size_t n = 0;
-  if (q->tail != q->head) q_copyout(q, (uint8_t *) &n, sizeof(n), q->tail);
-  return n;
-}
-
-static size_t q_read(struct queue *q, void *buf) {
-  size_t n = q_avail(q);
-  if (n > 0) {
-    q_copyout(q, (uint8_t *) buf, n, (q->tail + sizeof(n)) % q->len);
-    q->tail = (q->tail + sizeof(n) + n) % q->len;
-  }
-  return n;
-}
-
-static struct mg_str mkstr(void *buf, size_t len) {
-  struct mg_str str = {(char *) buf, len};
-  return str;
-}
-
 static void mkpay(struct pkt *pkt, void *p) {
-  pkt->pay = mkstr(p, (size_t) (&pkt->raw.ptr[pkt->raw.len] - (char *) p));
+  pkt->pay =
+      mg_str_n((char *) p, (size_t) (&pkt->raw.ptr[pkt->raw.len] - (char *) p));
 }
 
 static uint32_t csumup(uint32_t sum, const void *buf, size_t len) {
@@ -790,9 +746,17 @@ static void mg_tcpip_poll(struct mg_tcpip_if *ifp, uint64_t uptime_ms) {
   if (ifp->ip == 0 && expired_1000ms) tx_dhcp_discover(ifp);
 
   // Read data from the network
-  size_t len = ifp->driver->rx((void *) ifp->rx.ptr, ifp->rx.len, ifp);
-  if (len) {
-    mg_tcpip_rx(ifp, (void *) ifp->rx.ptr, len);
+  if (ifp->driver->rx != NULL) {  // Polling driver. We must call it
+    size_t len =
+        ifp->driver->rx(ifp->recv_queue.buf, ifp->recv_queue.size, ifp);
+    if (len > 0) mg_tcpip_rx(ifp, ifp->recv_queue.buf, len);
+  } else {  // Interrupt-based driver. Fills recv queue itself
+    char *buf;
+    size_t len = mg_queue_next(&ifp->recv_queue, &buf);
+    if (len > 0) {
+      mg_tcpip_rx(ifp, buf, len);
+      mg_queue_del(&ifp->recv_queue, len);
+    }
   }
 
   // Process timeouts
@@ -823,20 +787,19 @@ static void mg_tcpip_poll(struct mg_tcpip_if *ifp, uint64_t uptime_ms) {
 // somewhere fast. Note that newlib's malloc is not thread safe, thus use
 // our lock-free queue with preallocated buffer to copy data and return asap
 void mg_tcpip_qwrite(void *buf, size_t len, struct mg_tcpip_if *ifp) {
-  if (q_write(&ifp->queue, buf, len)) {
+  char *p;
+  if (mg_queue_book(&ifp->recv_queue, &p, len) >= len) {
+    memcpy(p, buf, len);
+    mg_queue_add(&ifp->recv_queue, len);
     ifp->nrecv++;
   } else {
     ifp->ndrop++;
   }
 }
 
-size_t mg_tcpip_qread(void *buf, struct mg_tcpip_if *ifp) {
-  return q_read(&ifp->queue, buf);
-}
-
 size_t mg_tcpip_driver_rx(void *buf, size_t len, struct mg_tcpip_if *ifp) {
-  return mg_tcpip_qread((void *) ifp->rx.ptr, ifp);
-  (void) len, (void) buf;
+  (void) buf, (void) len, (void) ifp;
+  return 0;
 }
 
 void mg_tcpip_init(struct mg_mgr *mgr, struct mg_tcpip_if *ifp) {
@@ -851,10 +814,10 @@ void mg_tcpip_init(struct mg_mgr *mgr, struct mg_tcpip_if *ifp) {
   if (ifp->driver->init && !ifp->driver->init(ifp)) {
     MG_ERROR(("driver init failed"));
   } else {
-    size_t maxpktsize = 1540;
-    ifp->rx.ptr = (char *) calloc(1, maxpktsize), ifp->rx.len = maxpktsize;
-    ifp->tx.ptr = (char *) calloc(1, maxpktsize), ifp->tx.len = maxpktsize;
-    if (ifp->queue.len) ifp->queue.buf = (uint8_t *) calloc(1, ifp->queue.len);
+    size_t framesize = 1540;
+    ifp->tx.ptr = (char *) calloc(1, framesize), ifp->tx.len = framesize;
+    ifp->recv_queue.size = ifp->driver->rx ? framesize : 8192;
+    ifp->recv_queue.buf = (char *) calloc(1, ifp->recv_queue.size);
     ifp->timer_1000ms = mg_millis();
     mgr->priv = ifp;
     ifp->mgr = mgr;
@@ -868,7 +831,7 @@ void mg_tcpip_init(struct mg_mgr *mgr, struct mg_tcpip_if *ifp) {
 }
 
 void mg_tcpip_free(struct mg_tcpip_if *ifp) {
-  free((char *) ifp->rx.ptr);
+  free(ifp->recv_queue.buf);
   free((char *) ifp->tx.ptr);
 }
 

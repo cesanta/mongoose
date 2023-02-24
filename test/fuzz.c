@@ -81,8 +81,7 @@ int LLVMFuzzerTestOneInput(const uint8_t *data, size_t size) {
     mg_tcpip_rx(&mif, pkt, size);
     mg_mgr_free(&mgr);
     free(pkt);
-    free((char *) mif.rx.ptr);
-    free((char *) mif.tx.ptr);
+    mg_tcpip_free(&mif);
   }
 
   return 0;
