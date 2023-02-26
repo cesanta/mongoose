@@ -1309,9 +1309,7 @@ static void test_http_range(void) {
   ASSERT(mgr.conns == NULL);
 }
 
-static void f1(void *arg) {
-  (*(int *) arg)++;
-}
+static void f1(void *arg) { (*(int *) arg)++; }
 
 static void test_timer(void) {
   int v1 = 0, v2 = 0, v3 = 0;
@@ -1465,6 +1463,14 @@ static void test_str(void) {
     struct mg_str s = mg_strdup(mg_str("a"));
     ASSERT(mg_strcmp(s, mg_str("a")) == 0);
     free((void *) s.ptr);
+  }
+
+  {
+    const char *s;
+    struct mg_str a = mg_str("hello"), b = mg_str("a"), c = mg_str(NULL);
+    ASSERT((s = mg_strstr(a, b)) == NULL);
+    ASSERT((s = mg_strstr(a, c)) != NULL);
+    ASSERT(s == a.ptr);
   }
 
   ASSERT(mg_strcmp(mg_str(""), mg_str(NULL)) == 0);
@@ -2744,9 +2750,7 @@ static void start_thread(void (*f)(void *), void *p) {
   pthread_attr_destroy(&attr);
 }
 #else
-static void start_thread(void (*f)(void *), void *p) {
-  (void) f, (void) p;
-}
+static void start_thread(void (*f)(void *), void *p) { (void) f, (void) p; }
 #endif
 
 static void test_queue(void) {
