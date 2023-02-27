@@ -201,7 +201,7 @@ jobs:
     steps:
       - uses: actions/checkout@v3
         with: { fetch-depth: 2 }
-      - run: if ./test/match_changed_files.sh '^src|^examples/${{ matrix.example.path }}'; then sudo apt -y update ; sudo apt -y install gcc-arm-none-eabi ; fi
+      - run: if ./test/match_changed_files.sh '^src|^examples/${{ matrix.example.path }}'; then echo GO=1 >> $GITHUB_ENV ; fi
       - if: ${{ env.GO == 1 }}
         run: sudo apt -y update ; sudo apt -y install gcc-arm-none-eabi
       - if: ${{ env.GO == 1 }}
