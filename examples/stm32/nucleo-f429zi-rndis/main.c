@@ -88,8 +88,7 @@ int main(void) {
 
 
   MG_INFO(("Init TCP/IP stack ..."));
-  struct mg_tcpip_driver driver = {
-      .tx = usb_tx, .rx = mg_tcpip_driver_rx, .up = usb_up};
+  struct mg_tcpip_driver driver = {.tx = usb_tx, .up = usb_up};
   struct mg_tcpip_if mif = {.mac = GENERATE_LOCALLY_ADMINISTERED_MAC(),
                             .ip = mg_htonl(MG_U32(192, 168, 3, 1)),
                             .mask = mg_htonl(MG_U32(255, 255, 255, 0)),
