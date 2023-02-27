@@ -64,8 +64,8 @@ struct mg_tcpip_spi {
 
 #if MG_ENABLE_TCPIP
 #if !defined(MG_ENABLE_DRIVER_STM32H) && !defined(MG_ENABLE_DRIVER_TM4C)
-#define MG_ENABLE_DRIVER_STM32 1
+  #define MG_ENABLE_DRIVER_STM32 1
 #else
-#define MG_ENABLE_DRIVER_STM32 0
+  #define MG_ENABLE_DRIVER_STM32 0
 #endif
 #endif

@@ -95,7 +95,7 @@ int main(void) {
                             .mask = mg_htonl(MG_U32(255, 255, 255, 0)),
                             .enable_dhcp_server = true,
                             .driver = &driver,
-                            .queue.len = 4096};
+                            .recv_queue.size = 4096};
   s_ifp = &mif;
   mg_tcpip_init(&mgr, &mif);
   mg_timer_add(&mgr, 500, MG_TIMER_REPEAT, blink_cb, &mgr);
