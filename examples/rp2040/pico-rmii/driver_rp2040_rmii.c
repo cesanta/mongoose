@@ -256,7 +256,6 @@ static bool mg_tcpip_driver_rp2040_rmii_init(struct mg_tcpip_if *ifp) {
       (struct mg_tcpip_driver_rp2040_rmii_data *) ifp->driver_data;
   uint rx_sm_addr, tx_sm_addr;
   s_ifp = ifp;
-  if (ifp->queue.len == 0) ifp->queue.len = 8192;
   rx_sm_addr = pio_add_program(pio0, &rmii_rx_program);
   tx_sm_addr = pio_add_program(pio0, &rmii_tx_program);
   smi_wr_addr = pio_add_program(pio0, &smi_wr_program);
@@ -338,7 +337,7 @@ static void rx_irq(void) {
 }
 
 static size_t mg_tcpip_driver_rp2040_rmii_rx(void *buf, size_t buflen, struct mg_tcpip_if *ifp) {
-  size_t len = mg_tcpip_qread(buf, ifp);
+  size_t len = 0; // mg_tcpip_qread(buf, ifp);
   if (len == 0) return 0;
   len -= 4;                           // exclude CRC from frame length
   uint32_t crc = crc_calc(buf, len);  // calculate CRC and compare

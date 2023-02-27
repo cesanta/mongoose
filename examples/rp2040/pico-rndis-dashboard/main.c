@@ -56,13 +56,13 @@ int main(void) {
   mg_mgr_init(&mgr);  // and attach it to the MIP interface
   mg_timer_add(&mgr, 500, MG_TIMER_REPEAT, blink_cb, &mgr);
 
-  struct mg_tcpip_driver driver = {.tx = usb_tx, .rx = mg_tcpip_driver_rx, .up = usb_up};
+  struct mg_tcpip_driver driver = {.tx = usb_tx, .up = usb_up};
   struct mg_tcpip_if mif = {.mac = {2, 0, 1, 2, 3, 0x77},
                        .ip = mg_htonl(MG_U32(192, 168, 3, 1)),
                        .mask = mg_htonl(MG_U32(255, 255, 255, 0)),
                        .enable_dhcp_server = true,
                        .driver = &driver,
-                       .queue.len = 4096};
+                       .recv_queue.size = 4096};
   s_ifp = &mif;
   mg_tcpip_init(&mgr, &mif);
   tusb_init();
