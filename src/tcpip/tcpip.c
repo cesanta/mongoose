@@ -693,10 +693,16 @@ static void mg_tcpip_rx(struct mg_tcpip_if *ifp, void *buf, size_t len) {
   pkt.raw.len = len;
   pkt.eth = (struct eth *) buf;
   if (pkt.raw.len < sizeof(*pkt.eth)) return;  // Truncated - runt?
-  if (memcmp(pkt.eth->dst, ifp->mac, sizeof(pkt.eth->dst)) != 0 &&
-      memcmp(pkt.eth->dst, broadcast, sizeof(pkt.eth->dst)) != 0) {
-    // Not for us. Drop silently
-  } else if (pkt.eth->type == mg_htons(0x806)) {
+  if (ifp->enable_mac_check &&
+      memcmp(pkt.eth->dst, ifp->mac, sizeof(pkt.eth->dst)) != 0 &&
+      memcmp(pkt.eth->dst, broadcast, sizeof(pkt.eth->dst)) != 0)
+    return;
+  if (ifp->enable_crc32_check && len > 4) {
+    len -= 4;  // TODO(scaprile): check on bigendian
+    uint32_t crc = mg_crc32(0, (const char *) buf, len);
+    if (memcmp((void *) ((size_t) buf + len), &crc, sizeof(crc))) return;
+  }
+  if (pkt.eth->type == mg_htons(0x806)) {
     pkt.arp = (struct arp *) (pkt.eth + 1);
     if (sizeof(*pkt.eth) + sizeof(*pkt.arp) > pkt.raw.len) return;  // Truncated
     rx_arp(ifp, &pkt);
@@ -797,11 +803,6 @@ void mg_tcpip_qwrite(void *buf, size_t len, struct mg_tcpip_if *ifp) {
   }
 }
 
-size_t mg_tcpip_driver_rx(void *buf, size_t len, struct mg_tcpip_if *ifp) {
-  (void) buf, (void) len, (void) ifp;
-  return 0;
-}
-
 void mg_tcpip_init(struct mg_mgr *mgr, struct mg_tcpip_if *ifp) {
   // If MAC address is not set, make a random one
   if (ifp->mac[0] == 0 && ifp->mac[1] == 0 && ifp->mac[2] == 0 &&
@@ -816,7 +817,8 @@ void mg_tcpip_init(struct mg_mgr *mgr, struct mg_tcpip_if *ifp) {
   } else {
     size_t framesize = 1540;
     ifp->tx.ptr = (char *) calloc(1, framesize), ifp->tx.len = framesize;
-    ifp->recv_queue.size = ifp->driver->rx ? framesize : 8192;
+    if (ifp->recv_queue.size == 0)
+      ifp->recv_queue.size = ifp->driver->rx ? framesize : 8192;
     ifp->recv_queue.buf = (char *) calloc(1, ifp->recv_queue.size);
     ifp->timer_1000ms = mg_millis();
     mgr->priv = ifp;

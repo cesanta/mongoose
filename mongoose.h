@@ -1514,11 +1514,13 @@ struct mg_tcpip_driver {
 
 // Network interface
 struct mg_tcpip_if {
-  uint8_t mac[6];                  // MAC address. Must be set to a valid MAC
-  uint32_t ip, mask, gw;           // IP address, mask, default gateway
-  struct mg_str tx;                // Output (TX) buffer
-  bool enable_dhcp_client;         // Enable DCHP client
-  bool enable_dhcp_server;         // Enable DCHP server
+  uint8_t mac[6];           // MAC address. Must be set to a valid MAC
+  uint32_t ip, mask, gw;    // IP address, mask, default gateway
+  struct mg_str tx;         // Output (TX) buffer
+  bool enable_dhcp_client;  // Enable DCHP client
+  bool enable_dhcp_server;  // Enable DCHP server
+  bool enable_crc32_check;  // Do a CRC check on rx frames and strip it
+  bool enable_mac_check;    // Do a MAC check on rx frames
   struct mg_tcpip_driver *driver;  // Low level driver
   void *driver_data;               // Driver-specific data
   struct mg_mgr *mgr;              // Mongoose event manager
@@ -1543,9 +1545,6 @@ struct mg_tcpip_if {
 void mg_tcpip_init(struct mg_mgr *, struct mg_tcpip_if *);
 void mg_tcpip_free(struct mg_tcpip_if *);
 void mg_tcpip_qwrite(void *buf, size_t len, struct mg_tcpip_if *ifp);
-size_t mg_tcpip_qread(void *buf, struct mg_tcpip_if *ifp);
-// conveniency rx function for IRQ-driven drivers
-size_t mg_tcpip_driver_rx(void *buf, size_t len, struct mg_tcpip_if *ifp);
 
 extern struct mg_tcpip_driver mg_tcpip_driver_stm32;
 extern struct mg_tcpip_driver mg_tcpip_driver_w5500;
