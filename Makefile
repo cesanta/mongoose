@@ -13,6 +13,7 @@ IPV6 ?= 1
 ASAN ?= -fsanitize=address,undefined,alignment -fno-sanitize-recover=all -fno-omit-frame-pointer -fno-common
 ASAN_OPTIONS ?= detect_leaks=1
 EXAMPLES := $(dir $(wildcard examples/*/Makefile))
+EXAMPLES_WIN := $(dir $(wildcard examples/device-dashboard/Makefile) $(wildcard examples/file-*/Makefile) $(wildcard examples/http-*/Makefile) $(wildcard examples/mqtt-*/Makefile) $(wildcard examples/websocket-*/Makefile) $(wildcard examples/webui-*/Makefile))
 PREFIX ?= /usr/local
 VERSION ?= $(shell cut -d'"' -f2 src/version.h)
 COMMON_CFLAGS ?= $(C_WARN) $(WARN) $(INCS) $(DEFS) -DMG_ENABLE_IPV6=$(IPV6) $(TFLAGS) -pthread
@@ -56,6 +57,11 @@ mip_tap_test: test/mip_tap_test.c mongoose.c mongoose.h Makefile
 
 examples:
 	@for X in $(EXAMPLES); do test -f $$X/Makefile || continue; $(MAKE) -C $$X example || exit 1; done
+
+examples_win:
+	$(foreach X, $(EXAMPLES_WIN), $(MAKE) -C $(X) example &)
+clean_examples_win:
+	$(foreach X, $(EXAMPLES_WIN), $(MAKE) -C $(X) clean &)
 
 test/packed_fs.c: Makefile src/ssi.h test/fuzz.c test/data/a.txt
 	$(CC) $(CFLAGS) test/pack.c -o pack
