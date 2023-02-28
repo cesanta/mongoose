@@ -42,6 +42,8 @@ int main(void) {
   struct mg_tcpip_if mif = {
       .mac = {2, 0, 1, 2, 3, 5},
       .ip = 0,
+      .enable_mac_check = true,
+      .enable_crc32_check = true,
       .driver = &mg_tcpip_driver_rp2040_rmii,
       .driver_data = &driver_data,
   };

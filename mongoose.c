@@ -5672,11 +5672,16 @@ uint16_t mg_ntohs(uint16_t net) {
 }
 
 uint32_t mg_crc32(uint32_t crc, const char *buf, size_t len) {
-  int i;
+  static const uint32_t crclut[16] = {
+      // table for polynomial 0xEDB88320 (reflected)
+      0x00000000, 0x1DB71064, 0x3B6E20C8, 0x26D930AC, 0x76DC4190, 0x6B6B51F4,
+      0x4DB26158, 0x5005713C, 0xEDB88320, 0xF00F9344, 0xD6D6A3E8, 0xCB61B38C,
+      0x9B64C2B0, 0x86D3D2D4, 0xA00AE278, 0xBDBDF21C};
   crc = ~crc;
   while (len--) {
-    crc ^= *(unsigned char *) buf++;
-    for (i = 0; i < 8; i++) crc = crc & 1 ? (crc >> 1) ^ 0xedb88320 : crc >> 1;
+    uint8_t byte = *(uint8_t *)buf++;
+    crc = crclut[(crc ^ byte) & 0x0F] ^ (crc >> 4);
+    crc = crclut[(crc ^ (byte >> 4)) & 0x0F] ^ (crc >> 4);
   }
   return ~crc;
 }
@@ -5754,7 +5759,6 @@ uint64_t mg_millis(void) {
 #endif
 }
 #endif
-
 
 #ifdef MG_ENABLE_LINES
 #line 1 "src/ws.c"
@@ -7867,10 +7871,16 @@ static void mg_tcpip_rx(struct mg_tcpip_if *ifp, void *buf, size_t len) {
   pkt.raw.len = len;
   pkt.eth = (struct eth *) buf;
   if (pkt.raw.len < sizeof(*pkt.eth)) return;  // Truncated - runt?
-  if (memcmp(pkt.eth->dst, ifp->mac, sizeof(pkt.eth->dst)) != 0 &&
-      memcmp(pkt.eth->dst, broadcast, sizeof(pkt.eth->dst)) != 0) {
-    // Not for us. Drop silently
-  } else if (pkt.eth->type == mg_htons(0x806)) {
+  if (ifp->enable_mac_check &&
+      memcmp(pkt.eth->dst, ifp->mac, sizeof(pkt.eth->dst)) != 0 &&
+      memcmp(pkt.eth->dst, broadcast, sizeof(pkt.eth->dst)) != 0)
+    return;
+  if (ifp->enable_crc32_check && len > 4) {
+    len -= 4;  // TODO(scaprile): check on bigendian
+    uint32_t crc = mg_crc32(0, (const char *) buf, len);
+    if (memcmp((void *) ((size_t) buf + len), &crc, sizeof(crc))) return;
+  }
+  if (pkt.eth->type == mg_htons(0x806)) {
     pkt.arp = (struct arp *) (pkt.eth + 1);
     if (sizeof(*pkt.eth) + sizeof(*pkt.arp) > pkt.raw.len) return;  // Truncated
     rx_arp(ifp, &pkt);
@@ -7971,11 +7981,6 @@ void mg_tcpip_qwrite(void *buf, size_t len, struct mg_tcpip_if *ifp) {
   }
 }
 
-size_t mg_tcpip_driver_rx(void *buf, size_t len, struct mg_tcpip_if *ifp) {
-  (void) buf, (void) len, (void) ifp;
-  return 0;
-}
-
 void mg_tcpip_init(struct mg_mgr *mgr, struct mg_tcpip_if *ifp) {
   // If MAC address is not set, make a random one
   if (ifp->mac[0] == 0 && ifp->mac[1] == 0 && ifp->mac[2] == 0 &&
@@ -7990,7 +7995,8 @@ void mg_tcpip_init(struct mg_mgr *mgr, struct mg_tcpip_if *ifp) {
   } else {
     size_t framesize = 1540;
     ifp->tx.ptr = (char *) calloc(1, framesize), ifp->tx.len = framesize;
-    ifp->recv_queue.size = ifp->driver->rx ? framesize : 8192;
+    if (ifp->recv_queue.size == 0)
+      ifp->recv_queue.size = ifp->driver->rx ? framesize : 8192;
     ifp->recv_queue.buf = (char *) calloc(1, ifp->recv_queue.size);
     ifp->timer_1000ms = mg_millis();
     mgr->priv = ifp;

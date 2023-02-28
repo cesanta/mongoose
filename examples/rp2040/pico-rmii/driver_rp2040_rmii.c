@@ -29,21 +29,21 @@ static dma_channel_config dmacfg_tx;
 
 static uint8_t s_rxbuf[2][ETH_PKT_SIZE];  // ping-pong buffer
 static uint8_t s_txbuf[ETH_PKT_SIZE];
-static struct mg_tcpip_if *s_ifp;             // MIP interface
+static struct mg_tcpip_if *s_ifp;  // MIP interface
 
 #define rmii_tx_wrap_target 0
 #define rmii_tx_wrap 8
 
 static const uint16_t rmii_tx_program_instructions[] = {
     //     .wrap_target
-    0xe000, //  0: set    pins, 0         side 0     
-    0x80a0, //  1: pull   block           side 0     
-    0xe03d, //  2: set    x, 29           side 0     
-    0xf101, //  3: set    pins, 1         side 1 [1] 
-    0x1144, //  4: jmp    x--, 4          side 1 [1] 
-    0xf103, //  5: set    pins, 3         side 1 [1] 
-    0x7002, //  6: out    pins, 2         side 1     
-    0x10e6, //  7: jmp    !osre, 6        side 1     
+    0xe000,  //  0: set    pins, 0         side 0
+    0x80a0,  //  1: pull   block           side 0
+    0xe03d,  //  2: set    x, 29           side 0
+    0xf101,  //  3: set    pins, 1         side 1 [1]
+    0x1144,  //  4: jmp    x--, 4          side 1 [1]
+    0xf103,  //  5: set    pins, 3         side 1 [1]
+    0x7002,  //  6: out    pins, 2         side 1
+    0x10e6,  //  7: jmp    !osre, 6        side 1
              //     .wrap
 };
 
@@ -216,21 +216,6 @@ static inline void smi_rd_init(PIO pio, uint sm, uint addr, uint gpio) {
   pio_sm_init(pio, sm, addr, &c);
 }
 
-static inline uint32_t crc_calc(const uint8_t *data, int length) {
-  static const uint32_t crclut[16] = {
-      // table for polynomial 0xEDB88320 (reflected)
-      0x00000000, 0x1DB71064, 0x3B6E20C8, 0x26D930AC, 0x76DC4190, 0x6B6B51F4,
-      0x4DB26158, 0x5005713C, 0xEDB88320, 0xF00F9344, 0xD6D6A3E8, 0xCB61B38C,
-      0x9B64C2B0, 0x86D3D2D4, 0xA00AE278, 0xBDBDF21C};
-  uint32_t crc = 0xFFFFFFFF;
-  while (--length >= 0) {
-    uint8_t byte = *data++;
-    crc = crclut[(crc ^ byte) & 0x0F] ^ (crc >> 4);
-    crc = crclut[(crc ^ (byte >> 4)) & 0x0F] ^ (crc >> 4);
-  }
-  return ~crc;
-}
-
 static void eth_write_phy(int addr, int reg, int val, uint8_t gpio) {
   uint16_t op = 0x5002 | (addr << 7) | (reg << 2);  // b0101aaaaarrrrr10
   smi_wr_init(pio0, SMITXSM, smi_wr_addr, gpio);
@@ -299,12 +284,12 @@ static bool mg_tcpip_driver_rp2040_rmii_init(struct mg_tcpip_if *ifp) {
 }
 
 static size_t mg_tcpip_driver_rp2040_rmii_tx(const void *buf, size_t len,
-                                 struct mg_tcpip_if *ifp) {
+                                             struct mg_tcpip_if *ifp) {
   dma_channel_wait_for_finish_blocking(dma_tx);
   memset(s_txbuf, 0, 60);  // pre-pad
   memcpy(s_txbuf, buf, len);
   if (len < 60) len = 60;                 // pad
-  uint32_t crc = crc_calc(s_txbuf, len);  // host is little-endian
+  uint32_t crc = mg_crc32(0, s_txbuf, len);  // host is little-endian
   memcpy(s_txbuf + len, (uint8_t *) &crc, 4);
   len += 4;
   sleep_us(10);  // enforce IFG in case software has been lightning fast...
@@ -324,29 +309,15 @@ static void rx_irq(void) {
       1;  // 2 buffers, switch to the available one as fast as possible
   size_t len = ETH_PKT_SIZE - hw->transfer_count;
   dma_channel_abort(dma_rx);
-  dma_channel_set_write_addr(dma_rx, s_rxbuf[rxno], true); // restart DMA
+  dma_channel_set_write_addr(dma_rx, s_rxbuf[rxno], true);  // restart DMA
   pio_interrupt_clear(pio0,
                       0);  // ACK PIO IRQ so the state machine resumes receiving
   // NOTE(scaprile) Here we could check addressing to avoid queuing frames not
-  // for us, or we can defer that for later as we do with CRC The max amount of
-  // time we can linger here is what it takes for the other buffer to fill
-  // (<8us) and that includes irq chaining
+  // for us. The max amount of time we can linger here is what it takes for the
+  // other buffer to fill (<8us) and that includes irq chaining
   if (len >= 64 && len <= ETH_PKT_SIZE)
     mg_tcpip_qwrite(s_rxbuf[s_rxno], len, s_ifp);
   s_rxno = rxno;
-}
-
-static size_t mg_tcpip_driver_rp2040_rmii_rx(void *buf, size_t buflen, struct mg_tcpip_if *ifp) {
-  size_t len = 0; // mg_tcpip_qread(buf, ifp);
-  if (len == 0) return 0;
-  len -= 4;                           // exclude CRC from frame length
-  uint32_t crc = crc_calc(buf, len);  // calculate CRC and compare
-  // NOTE(scaprile) Here we could check addressing to avoid delivering frames
-  // not for us, though MIP already does that (now ?)
-  if (memcmp(&((uint8_t *) buf)[len], &crc,
-             sizeof(crc)))  // host is little-endian
-    return 0;
-  return len;
 }
 
 static bool mg_tcpip_driver_rp2040_rmii_up(struct mg_tcpip_if *ifp) {
@@ -360,6 +331,6 @@ static bool mg_tcpip_driver_rp2040_rmii_up(struct mg_tcpip_if *ifp) {
 struct mg_tcpip_driver mg_tcpip_driver_rp2040_rmii = {
     mg_tcpip_driver_rp2040_rmii_init,
     mg_tcpip_driver_rp2040_rmii_tx,
-    mg_tcpip_driver_rp2040_rmii_rx,
+    NULL,
     mg_tcpip_driver_rp2040_rmii_up,
 };
