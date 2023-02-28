@@ -13,13 +13,16 @@ IPV6 ?= 1
 ASAN ?= -fsanitize=address,undefined,alignment -fno-sanitize-recover=all -fno-omit-frame-pointer -fno-common
 ASAN_OPTIONS ?= detect_leaks=1
 EXAMPLES := $(dir $(wildcard examples/*/Makefile))
+EXAMPLES_MAC := $(filter-out examples/mip-pcap/ examples/mip-tap/, $(EXAMPLES))
+EXAMPLES_WIN := $(dir $(wildcard examples/device-dashboard/Makefile) $(wildcard examples/file-*/Makefile) $(wildcard examples/http-*/Makefile) $(wildcard examples/mqtt-*/Makefile) $(wildcard examples/websocket-*/Makefile) $(wildcard examples/webui-*/Makefile))
+EXAMPLES_EMBEDDED := $(filter-out $(wildcard examples/zephyr/*/), $(dir $(wildcard examples/*/*/Makefile)))
 PREFIX ?= /usr/local
 VERSION ?= $(shell cut -d'"' -f2 src/version.h)
 COMMON_CFLAGS ?= $(C_WARN) $(WARN) $(INCS) $(DEFS) -DMG_ENABLE_IPV6=$(IPV6) $(TFLAGS) -pthread
 CFLAGS ?= $(OPTS) $(ASAN) $(COMMON_CFLAGS)
 VALGRIND_CFLAGS ?= $(OPTS) $(COMMON_CFLAGS)
 VALGRIND_RUN ?= valgrind --tool=memcheck --gen-suppressions=all --leak-check=full --show-leak-kinds=all --leak-resolution=high --track-origins=yes --error-exitcode=1 --exit-on-first-error=yes --fair-sched=yes
-.PHONY: examples test valgrind mip_test
+.PHONY: clean_examples examples mip_test test valgrind
 
 ifeq "$(findstring ++,$(CC))" ""
 # $(CC) does not end with ++, i.e. we're using C. Apply C flags
@@ -56,6 +59,18 @@ mip_tap_test: test/mip_tap_test.c mongoose.c mongoose.h Makefile
 
 examples:
 	@for X in $(EXAMPLES); do test -f $$X/Makefile || continue; $(MAKE) -C $$X example || exit 1; done
+clean_examples:
+	for X in $(EXAMPLES); do test -f $$X/Makefile || continue; $(MAKE) -C $$X clean || exit 1; done
+
+examples_mac:
+	for X in $(EXAMPLES_MAC); do test -f $$X/Makefile || continue; $(MAKE) -C $$X example || exit 1; done
+clean_examples_mac:
+	for X in $(EXAMPLES_MAC); do test -f $$X/Makefile || continue; $(MAKE) -C $$X clean || exit 1; done
+
+examples_win:
+	$(foreach X, $(EXAMPLES_WIN), $(MAKE) -C $(X) example &)
+clean_examples_win:
+	$(foreach X, $(EXAMPLES_WIN), $(MAKE) -C $(X) clean &)
 
 test/packed_fs.c: Makefile src/ssi.h test/fuzz.c test/data/a.txt
 	$(CC) $(CFLAGS) test/pack.c -o pack
@@ -181,6 +196,11 @@ mongoose.c: Makefile $(wildcard src/*.c) $(wildcard src/tcpip/*.c)
 mongoose.h: $(HDRS) Makefile
 	(cat src/license.h; echo; echo '#ifndef MONGOOSE_H'; echo '#define MONGOOSE_H'; echo; cat src/version.h ; echo; echo '#ifdef __cplusplus'; echo 'extern "C" {'; echo '#endif'; cat src/arch.h src/arch_*.h src/net_*.h src/config.h src/str.h src/queue.h src/fmt.h src/log.h src/timer.h src/fs.h src/util.h src/url.h src/iobuf.h src/base64.h src/md5.h src/sha1.h src/event.h src/net.h src/http.h src/ssi.h src/tls.h src/tls_mbed.h src/tls_openssl.h src/ws.h src/sntp.h src/mqtt.h src/dns.h src/json.h src/rpc.h src/tcpip/tcpip.h src/tcpip/driver_*.h | sed -e '/keep/! s,#include ".*,,' -e 's,^#pragma once,,'; echo; echo '#ifdef __cplusplus'; echo '}'; echo '#endif'; echo '#endif  // MONGOOSE_H')> $@
 
-clean:
+
+clean: clean_examples clean_embedded
 	rm -rf $(PROG) *.exe *.o *.dSYM *_test* ut fuzzer *.gcov *.gcno *.gcda *.obj *.exe *.ilk *.pdb slow-unit* _CL_* infer-out data.txt crash-* test/packed_fs.c pack arduino tmp
-	find examples -maxdepth 3 -name zephyr -prune -o -name Makefile -print | xargs dirname | xargs -n1 make clean -C
+	#find examples -maxdepth 3 -name zephyr -prune -o -name Makefile -print | xargs dirname | xargs -n1 make clean -C
+
+clean_embedded:
+	for X in $(EXAMPLES_EMBEDDED); do test -f $$X/Makefile || continue; $(MAKE) -C $$X clean || exit 1; done
+
