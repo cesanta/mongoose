@@ -114,6 +114,13 @@ jobs:
     - name: test they clean
       run: make clean_examples_win
       shell: cmd
+  examples_mac:
+    runs-on: macos-latest
+    env: { HOMEBREW_NO_AUTO_UPDATE: 1 }
+    steps:
+    - uses: actions/checkout@v3
+    - run: make examples_mac
+    - run: make clean_examples_mac
 
   test_f7:
     runs-on: ubuntu-latest
