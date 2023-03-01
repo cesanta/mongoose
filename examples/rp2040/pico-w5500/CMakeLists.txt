@@ -22,6 +22,3 @@ add_definitions(-DMG_ENABLE_PACKED_FS=1)
 add_definitions(-DMG_ENABLE_MBEDTLS=0) # TODO(cpq): enable
 add_definitions(-DMG_ENABLE_CUSTOM_RANDOM=1)
 add_definitions(-DMG_ENABLE_FILE=0)
-
-# Extra build flags (enable if needed)
-add_definitions(-DDUAL_CONFIG=0)
