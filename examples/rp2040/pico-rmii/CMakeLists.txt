@@ -21,6 +21,3 @@ pico_enable_stdio_uart(firmware 0)   # to USB
 # Mongoose build flags
 add_definitions(-DMG_ENABLE_TCPIP=1)
 add_definitions(-DMG_ENABLE_PACKED_FS=1)
-
-# Extra build flags (enable if needed)
-add_definitions(-DDUAL_CONFIG=0)
