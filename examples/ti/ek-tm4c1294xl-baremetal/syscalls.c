@@ -1,6 +1,6 @@
 #include <sys/stat.h>
 
-#include "mcu.h"
+#include "hal.h"
 
 int _fstat(int fd, struct stat *st) {
   if (fd < 0) return -1;
@@ -56,7 +56,7 @@ int _getpid(void) {
 
 int _write(int fd, char *ptr, int len) {
   (void) fd, (void) ptr, (void) len;
-  if (fd == 1) uart_write_buf(UART0, ptr, (size_t) len);
+  if (fd == 1) uart_write_buf(UART_DEBUG, ptr, (size_t) len);
   return -1;
 }
 
@@ -84,3 +84,5 @@ int mkdir(const char *path, mode_t mode) {
   (void) path, (void) mode;
   return -1;
 }
+
+void _init(void) {}

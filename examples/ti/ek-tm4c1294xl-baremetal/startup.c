@@ -2,22 +2,27 @@
 // All rights reserved
 
 // Startup code
-__attribute__((naked, noreturn)) void _reset(void) {
+__attribute__((naked, noreturn)) void Reset_Handler(void) {
   // Initialise memory
   extern long _sbss, _ebss, _sdata, _edata, _sidata;
   for (long *src = &_sbss; src < &_ebss; src++) *src = 0;
   for (long *src = &_sdata, *dst = &_sidata; src < &_edata;) *src++ = *dst++;
 
-  // Call main()
+  // Call the clock system initialization function
+  extern void SystemInit(void);
+  SystemInit();
+  // Call static constructors
+  extern void __libc_init_array(void);
+  __libc_init_array();
+  // Call the application entry point
   extern void main(void);
   main();
-  for (;;) (void) 0;
+  for (;;) (void) 0;  // Infinite loop
 }
 
 void __attribute__((weak)) DefaultIRQHandler(void) {
   for (;;) (void) 0;
 }
-
 #define WEAK_ALIAS __attribute__((weak, alias("DefaultIRQHandler")))
 
 WEAK_ALIAS void NMI_Handler(void);
@@ -128,11 +133,12 @@ WEAK_ALIAS void I2C7_Handler(void);
 WEAK_ALIAS void I2C8_Handler(void);
 WEAK_ALIAS void I2C9_Handler(void);
 
-// IRQ table, 2.5.1 Table 2-9
 extern void _estack();
+
+// IRQ table
 __attribute__((section(".vectors"))) void (*tab[16 + 114])(void) = {
     // Cortex interrupts
-    _estack, _reset, NMI_Handler, HardFault_Handler, MemManage_Handler,
+    _estack, Reset_Handler, NMI_Handler, HardFault_Handler, MemManage_Handler,
     BusFault_Handler, UsageFault_Handler, 0, 0, 0, 0, SVC_Handler,
     DebugMon_Handler, 0, PendSV_Handler, SysTick_Handler,
 
