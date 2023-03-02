@@ -1,13 +1,13 @@
-ENTRY(_reset);
+ENTRY(Reset_Handler);
 MEMORY {
-  flash(rx)  : ORIGIN = 0x00000000, LENGTH = 1024k
+  flash(rx) : ORIGIN = 0x00000000, LENGTH = 1024k
   sram(rwx) : ORIGIN = 0x20000000, LENGTH = 256k
 }
 _estack     = ORIGIN(sram) + LENGTH(sram);    /* stack points to end of SRAM */
 
 SECTIONS {
   .vectors  : { KEEP(*(.vectors)) }   > flash
-  .text     : { *(.text*) }           > flash
+  .text     : { *(.text* .text.*) }   > flash
   .rodata   : { *(.rodata*) }         > flash
 
   .data : {
@@ -17,6 +17,7 @@ SECTIONS {
     _edata = .;  /* for init_ram() */
   } > sram AT > flash
   _sidata = LOADADDR(.data);
+  . = ALIGN (CONSTANT (COMMONPAGESIZE));
 
   .bss : {
     _sbss = .;              /* for init_ram() */
