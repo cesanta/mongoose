@@ -17,7 +17,6 @@ SECTIONS {
     _edata = .;  /* for init_ram() */
   } > sram AT > flash
   _sidata = LOADADDR(.data);
-  . = ALIGN (CONSTANT (COMMONPAGESIZE));
 
   .bss : {
     _sbss = .;              /* for init_ram() */
