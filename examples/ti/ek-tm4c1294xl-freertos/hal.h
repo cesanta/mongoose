@@ -173,3 +173,13 @@ static inline int uart_read_ready(UART0_Type *uart) {
 static inline uint8_t uart_read_byte(UART0_Type *uart) {
   return (uint8_t) (uart->DR & 0xFF);
 }
+
+// Helper macro for reading pre-flashed MAC from user registers
+#define READ_PREFLASHED_MAC()                                               \
+  {                                                                         \
+    (FLASH_CTRL->USERREG0 >> 0) & 0xFF, (FLASH_CTRL->USERREG0 >> 8) & 0xFF, \
+        (FLASH_CTRL->USERREG0 >> 16) & 0xFF,                                \
+        (FLASH_CTRL->USERREG1 >> 0) & 0xFF,                                 \
+        (FLASH_CTRL->USERREG1 >> 8) & 0xFF,                                 \
+        (FLASH_CTRL->USERREG1 >> 16) & 0xFF                                 \
+  }
