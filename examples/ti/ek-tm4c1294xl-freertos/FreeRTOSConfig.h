@@ -1,9 +1,9 @@
 #pragma once
 
-#include "mcu.h"
+#include "hal.h"
 
 #define configUSE_PREEMPTION 1
-#define configCPU_CLOCK_HZ FREQ
+#define configCPU_CLOCK_HZ SYS_FREQUENCY
 #define configTICK_RATE_HZ 1000
 #define configMAX_PRIORITIES 5
 #define configUSE_16_BIT_TICKS 0
