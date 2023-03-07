@@ -36,5 +36,4 @@ struct timeval {
 #define MG_PATH_MAX 128
 #endif
 
-
 #endif

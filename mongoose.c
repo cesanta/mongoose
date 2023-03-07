@@ -17,6 +17,11 @@
 //
 // SPDX-License-Identifier: GPL-2.0-only or commercial
 
+#define MG_ENABLE_WOLFSSL_DEBUGaf 1
+
+#include <wolfssl/options.h>
+#include <wolfssl/wolfcrypt/settings.h>
+
 #include "mongoose.h"
 
 #ifdef MG_ENABLE_LINES
@@ -2284,6 +2289,7 @@ static void http_cb(struct mg_connection *c, int ev, void *evd, void *fnd) {
     struct mg_http_message hm;
     // mg_hexdump(c->recv.buf, c->recv.len);
     while (c->recv.buf != NULL && c->recv.len > 0) {
+      
       bool next = false;
       int hlen = mg_http_parse((char *) c->recv.buf, c->recv.len, &hm);
       if (hlen < 0) {
@@ -2718,7 +2724,7 @@ long mg_json_get_long(struct mg_str json, const char *path, long dflt) {
 
 
 static void default_logger(char c, void *param) {
-  putchar(c);
+  // putchar(c);
   (void) c, (void) param;
 }
 

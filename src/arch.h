@@ -47,7 +47,7 @@
 #endif  // !defined(MG_ARCH)
 
 // http://esr.ibiblio.org/?p=5095
-#define MG_BIG_ENDIAN (*(uint16_t *)"\0\xff" < 0x100)
+#define MG_BIG_ENDIAN (*(uint16_t *) "\0\xff" < 0x100)
 
 #include "arch_esp32.h"
 #include "arch_esp8266.h"
@@ -57,6 +57,6 @@
 #include "arch_rtx.h"
 #include "arch_rtx_lwip.h"
 #include "arch_unix.h"
+#include "arch_wasm.h"
 #include "arch_win32.h"
 #include "arch_zephyr.h"
-#include "arch_wasm.h"

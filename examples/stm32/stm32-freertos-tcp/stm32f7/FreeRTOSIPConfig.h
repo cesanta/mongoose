@@ -15,7 +15,7 @@
 #endif
 
 #define ipconfigBYTE_ORDER pdFREERTOS_LITTLE_ENDIAN
-#define ipconfigREPLY_TO_INCOMING_PINGS       1
+#define ipconfigREPLY_TO_INCOMING_PINGS 1
 #define ipconfigDRIVER_INCLUDED_TX_IP_CHECKSUM (1)
 #define ipconfigDRIVER_INCLUDED_RX_IP_CHECKSUM (1)
 #define ipconfigZERO_COPY_RX_DRIVER (1)

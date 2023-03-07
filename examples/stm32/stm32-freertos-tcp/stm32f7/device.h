@@ -84,8 +84,8 @@ static inline void init_clock(void) {
 
 #define delay(ms) vTaskDelay(pdMS_TO_TICKS(ms))
 
-#define LED1 PIN('B', 0)  // On-board LED pin
-#define LED2 PIN('B', 7)  // On-board LED pin
+#define LED1 PIN('B', 0)   // On-board LED pin
+#define LED2 PIN('B', 7)   // On-board LED pin
 #define LED3 PIN('B', 14)  // On-board LED pin
 
 static inline void led_toggle(void) {

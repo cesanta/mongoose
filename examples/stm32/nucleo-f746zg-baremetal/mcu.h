@@ -18,12 +18,13 @@
 /* System clock
 5.3.3: APB1 clock <= 54MHz; APB2 clock <= 108MHz
 3.3.2, Table 5: configure flash latency (WS) in accordance to clock freq
-38.4: The AHB clock frequency must be at least 25 MHz when the Ethernet controller is used */
+38.4: The AHB clock frequency must be at least 25 MHz when the Ethernet
+controller is used */
 enum { APB1_PRE = 5 /* AHB clock / 4 */, APB2_PRE = 4 /* AHB clock / 2 */ };
 enum { PLL_HSI = 16, PLL_M = 8, PLL_N = 216, PLL_P = 2 };  // Run at 216 Mhz
 //#define PLL_FREQ PLL_HSI
 #define PLL_FREQ (PLL_HSI * PLL_N / PLL_M / PLL_P)
-#define FLASH_LATENCY 7 
+#define FLASH_LATENCY 7
 #define FREQ (PLL_FREQ * 1000000)
 
 static inline void spin(volatile uint32_t count) {
@@ -176,9 +177,11 @@ static inline void uart_init(struct uart *uart, unsigned long baud) {
 
   gpio_init(tx, GPIO_MODE_AF, GPIO_OTYPE_PUSH_PULL, GPIO_SPEED_HIGH, 0, af);
   gpio_init(rx, GPIO_MODE_AF, GPIO_OTYPE_PUSH_PULL, GPIO_SPEED_HIGH, 0, af);
-  uart->CR1 = 0;                          // Disable this UART
-  uart->BRR = FREQ / 4 / baud;      // Baud rate, "4" is APBx prescaler, different from APBx_PRE
-                                    // TODO(): make this configurable ?
+  uart->CR1 = 0;  // Disable this UART
+  uart->BRR =
+      FREQ / 4 /
+      baud;  // Baud rate, "4" is APBx prescaler, different from APBx_PRE
+             // TODO(): make this configurable ?
   uart->CR1 |= BIT(0) | BIT(2) | BIT(3);  // Set UE, RE, TE
 }
 static inline void uart_write_byte(struct uart *uart, uint8_t byte) {
@@ -205,8 +208,8 @@ static inline void clock_init(void) {  // Set clock frequency
   while ((PWR->CSR1 & BIT(17)) == 0) spin(1);  // Wait until done
 #endif
   SCB->CPACR |= ((3UL << 10 * 2) | (3UL << 11 * 2));  // Enable FPU
-  asm ("DSB");
-  asm ("ISB");
+  asm("DSB");
+  asm("ISB");
   FLASH->ACR |= FLASH_LATENCY | BIT(8) | BIT(9);    // Flash latency, prefetch
   RCC->PLLCFGR &= ~((BIT(17) - 1));                 // Clear PLL multipliers
   RCC->PLLCFGR |= (((PLL_P - 2) / 2) & 3) << 16;    // Set PLL_P

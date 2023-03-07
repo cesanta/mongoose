@@ -7,7 +7,6 @@
 #include <ctype.h>
 #include <errno.h>
 #include <fcntl.h>
-#include <zephyr/net/socket.h>
 #include <stdarg.h>
 #include <stdbool.h>
 #include <stdint.h>
@@ -16,6 +15,7 @@
 #include <string.h>
 #include <sys/types.h>
 #include <time.h>
+#include <zephyr/net/socket.h>
 
 #define MG_PUTCHAR(x) printk("%c", x)
 #ifndef strdup

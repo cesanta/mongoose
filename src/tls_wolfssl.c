@@ -51,7 +51,10 @@ void mg_tls_init(struct mg_connection *c, const struct mg_tls_opts *opts) {
       mg_error(c, "load('%s') %d err %d", opts->ca, rc, mg_tls_err(tls, rc));
       goto fail;
     }
+  }else{
+      wolfSSL_CTX_set_verify(tls->ctx, WOLFSSL_VERIFY_NONE, 0);
   }
+
 
   if (opts->cert != NULL && opts->cert[0] != '\0') {
     const char *key = opts->certkey;
