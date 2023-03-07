@@ -57,7 +57,7 @@ static void server(void *args) {
   ethernet_init();
   struct mg_tcpip_driver_tm4c_data driver_data = {.mdc_cr = 1};
   struct mg_tcpip_if mif = {
-      .mac = {2, 0, 1, 2, 3, 5},
+      .mac = READ_PREFLASHED_MAC(),
       .driver = &mg_tcpip_driver_tm4c,
       .driver_data = &driver_data,
   };
