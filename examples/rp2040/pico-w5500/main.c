@@ -6,6 +6,7 @@
 #include "hardware/spi.h"
 #include "pico/rand.h"
 #include "pico/stdlib.h"
+#include "pico/unique_id.h"
 
 #include "mongoose.h"
 
@@ -31,41 +32,57 @@ void mg_random(void *buf, size_t len) {
   }
 }
 
-static void timer_cb(void *arg) {
-  gpio_put(PICO_DEFAULT_LED_PIN, !gpio_get_out_level(PICO_DEFAULT_LED_PIN));
-  bool up = ((struct mg_tcpip_if *) arg)->state == MIP_STATE_READY;
-  MG_INFO(("Ethernet: %s", up ? "up" : "down"));  // Show network status
+static void timer_fn(void *arg) {
+  gpio_put(PICO_DEFAULT_LED_PIN,
+           !gpio_get_out_level(PICO_DEFAULT_LED_PIN));  // Blink LED
+  struct mg_tcpip_if *ifp = arg;                        // And show
+  const char *names[] = {"down", "up", "ready"};        // network stats
+  MG_INFO(("Ethernet: %s, IP: %M, rx:%u, tx:%u, dr:%u, er:%u",
+           names[ifp->state], mg_print_ip4, &ifp->ip, ifp->nrecv, ifp->nsent,
+           ifp->ndrop, ifp->nerr));
 }
 
-int main(void) {
-  stdio_init_all();
-  MG_INFO(("Starting ..."));
-
-  // Init LED
-  gpio_init(LED);
-  gpio_set_dir(LED, GPIO_OUT);
-
+static void eth_spi_init(void) {
   // Init SPI pins
   spi_init(spi0, 500 * 1000);
   gpio_set_function(SPI_RX, GPIO_FUNC_SPI);   // MISO
   gpio_set_function(SPI_TX, GPIO_FUNC_SPI);   // MOSI
   gpio_set_function(SPI_CLK, GPIO_FUNC_SPI);  // CLK
   gpio_init(SPI_CS);                          // CS
-  gpio_set_dir(SPI_CS, GPIO_OUT);             // Set CS it to output
+  gpio_set_dir(SPI_CS, GPIO_OUT);             // Set CS to output
   gpio_put(SPI_CS, 1);                        // And drive CS high (inactive)
+}
 
-  // Init Mongoose
+// Helper macro for MAC generation
+#define GENERATE_LOCALLY_ADMINISTERED_MAC(id) \
+  { 2, id[3], id[4], id[5], id[6], id[7] }
+
+int main(void) {
+  stdio_init_all();
+  gpio_init(LED);  // Setup board LED
+  gpio_set_dir(LED, GPIO_OUT);
+  eth_spi_init();  // Initialise SPI pins
+  MG_INFO(("Starting ..."));
+
+  pico_unique_board_id_t board_id;
+  pico_get_unique_board_id(&board_id);
+  uint8_t *id = board_id.id;
+
+  struct mg_mgr mgr;        // Initialise
+  mg_mgr_init(&mgr);        // Mongoose event manager
+  mg_log_set(MG_LL_DEBUG);  // Set log level
+
+  // Initialise Mongoose network stack
+  // Specify MAC address, and IP/mask/GW in network byte order for static
+  // IP configuration. If IP/mask/GW are unset, DHCP is going to be used
   struct mg_tcpip_spi spi = {NULL, spi_begin, spi_end, spi_txn};
-  struct mg_tcpip_if mif = {.mac = {2, 0, 1, 2, 3, 5},
+  struct mg_tcpip_if mif = {.mac = GENERATE_LOCALLY_ADMINISTERED_MAC(id),
                             .driver = &mg_tcpip_driver_w5500,
                             .driver_data = &spi};
-  struct mg_mgr mgr;          // Declare event manager
-  mg_mgr_init(&mgr);          // Init event manager
-  mg_log_set(MG_LL_DEBUG);    // Set DEBUG log level
-  mg_tcpip_init(&mgr, &mif);  // Init TCP/IP stack
-  mg_timer_add(&mgr, BLINK_PERIOD_MS, MG_TIMER_REPEAT, timer_cb, &mif);
+  mg_tcpip_init(&mgr, &mif);
+  mg_timer_add(&mgr, BLINK_PERIOD_MS, MG_TIMER_REPEAT, timer_fn, &mif);
 
-  MG_INFO(("Waiting until network is up..."));
+  MG_INFO(("MAC: %M. Waiting for IP...", mg_print_mac, mif.mac));
   while (mif.state != MIP_STATE_READY) {
     mg_mgr_poll(&mgr, 0);
   }
