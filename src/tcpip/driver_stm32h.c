@@ -233,7 +233,7 @@ static size_t mg_tcpip_driver_stm32h_tx(const void *buf, size_t len,
 static bool mg_tcpip_driver_stm32h_up(struct mg_tcpip_if *ifp) {
   uint32_t bsr = eth_read_phy(PHY_ADDR, PHY_BSR);
   bool up = bsr & BIT(2) ? 1 : 0;
-  if ((ifp->state == MIP_STATE_DOWN) && up) {  // link state just went up
+  if ((ifp->state == MG_TCPIP_STATE_DOWN) && up) {  // link state just went up
     uint32_t scsr = eth_read_phy(PHY_ADDR, PHY_CSCR);
     uint32_t maccr = ETH->MACCR | BIT(14) | BIT(13);  // 100M, Full-duplex
     if ((scsr & BIT(3)) == 0) maccr &= ~BIT(14);      // 10M

@@ -209,7 +209,7 @@ static size_t mg_tcpip_driver_tm4c_tx(const void *buf, size_t len,
 static bool mg_tcpip_driver_tm4c_up(struct mg_tcpip_if *ifp) {
   uint32_t bmsr = emac_read_phy(EPHY_ADDR, EPHYBMSR);
   bool up = (bmsr & BIT(2)) ? 1 : 0;
-  if ((ifp->state == MIP_STATE_DOWN) && up) {  // link state just went up
+  if ((ifp->state == MG_TCPIP_STATE_DOWN) && up) {  // link state just went up
     uint32_t sts = emac_read_phy(EPHY_ADDR, EPHYSTS);
     uint32_t emaccfg = EMAC->EMACCFG | BIT(14) | BIT(11);  // 100M, Full-duplex
     if (sts & BIT(1)) emaccfg &= ~BIT(14);                 // 10M

@@ -22,7 +22,7 @@ static void test_statechange(void) {
   struct mg_tcpip_if iface;
   memset(&iface, 0, sizeof(iface));
   iface.ip = mg_htonl(0x01020304);
-  iface.state = MIP_STATE_READY;
+  iface.state = MG_TCPIP_STATE_READY;
   iface.tx.ptr = tx, iface.tx.len = sizeof(tx);
   iface.driver = &mg_tcpip_driver_mock;
   onstatechange(&iface);

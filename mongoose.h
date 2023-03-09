@@ -1514,32 +1514,32 @@ struct mg_tcpip_driver {
 
 // Network interface
 struct mg_tcpip_if {
-  uint8_t mac[6];           // MAC address. Must be set to a valid MAC
-  uint32_t ip, mask, gw;    // IP address, mask, default gateway
-  struct mg_str tx;         // Output (TX) buffer
-  bool enable_dhcp_client;  // Enable DCHP client
-  bool enable_dhcp_server;  // Enable DCHP server
-  bool enable_crc32_check;  // Do a CRC check on rx frames and strip it
-  bool enable_mac_check;    // Do a MAC check on rx frames
+  uint8_t mac[6];                  // MAC address. Must be set to a valid MAC
+  uint32_t ip, mask, gw;           // IP address, mask, default gateway
+  struct mg_str tx;                // Output (TX) buffer
+  bool enable_dhcp_client;         // Enable DCHP client
+  bool enable_dhcp_server;         // Enable DCHP server
+  bool enable_crc32_check;         // Do a CRC check on rx frames and strip it
+  bool enable_mac_check;           // Do a MAC check on rx frames
   struct mg_tcpip_driver *driver;  // Low level driver
   void *driver_data;               // Driver-specific data
   struct mg_mgr *mgr;              // Mongoose event manager
   struct mg_queue recv_queue;      // Receive queue
 
   // Internal state, user can use it but should not change it
-  uint8_t gwmac[6];         // Router's MAC
-  uint64_t now;             // Current time
-  uint64_t timer_1000ms;    // 1000 ms timer: for DHCP and link state
-  uint64_t lease_expire;    // Lease expiration time
-  uint16_t eport;           // Next ephemeral port
-  volatile uint32_t ndrop;  // Number of received, but dropped frames
-  volatile uint32_t nrecv;  // Number of received frames
-  volatile uint32_t nsent;  // Number of transmitted frames
-  volatile uint32_t nerr;   // Number of driver errors
-  uint8_t state;            // Current state
-#define MIP_STATE_DOWN 0    // Interface is down
-#define MIP_STATE_UP 1      // Interface is up
-#define MIP_STATE_READY 2   // Interface is up and has IP
+  uint8_t gwmac[6];             // Router's MAC
+  uint64_t now;                 // Current time
+  uint64_t timer_1000ms;        // 1000 ms timer: for DHCP and link state
+  uint64_t lease_expire;        // Lease expiration time
+  uint16_t eport;               // Next ephemeral port
+  volatile uint32_t ndrop;      // Number of received, but dropped frames
+  volatile uint32_t nrecv;      // Number of received frames
+  volatile uint32_t nsent;      // Number of transmitted frames
+  volatile uint32_t nerr;       // Number of driver errors
+  uint8_t state;                // Current state
+#define MG_TCPIP_STATE_DOWN 0   // Interface is down
+#define MG_TCPIP_STATE_UP 1     // Interface is up
+#define MG_TCPIP_STATE_READY 2  // Interface is up and has IP
 };
 
 void mg_tcpip_init(struct mg_mgr *, struct mg_tcpip_if *);
