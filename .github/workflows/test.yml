@@ -213,7 +213,7 @@ jobs:
           - path: infineon/infineon-xmc4700_4800-lwip-rtx-rtos
           - path: ti/ti-ek-tm4c1294xl-http-server
           - path: ti/ek-tm4c1294xl-baremetal
-          - path: ti/ek-tm4c1294xl-freertos-mip
+          - path: ti/ek-tm4c1294xl-freertos
           - path: rp2040/pico-rmii
           - path: rp2040/pico-rndis-dashboard
           - path: rp2040/pico-w
