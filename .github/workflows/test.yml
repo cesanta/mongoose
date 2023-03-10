@@ -167,8 +167,10 @@ jobs:
     - run: if ./test/match_changed_files.sh "^src|examples/ti/ek-tm4c" ; then echo GO=1 >> $GITHUB_ENV ; fi
     - if: ${{ env.GO == 1 }}
       run: sudo apt -y update; sudo apt -y install gcc-arm-none-eabi
+    - run: echo GO=0 > $GITHUB_ENV ; if ./test/match_changed_files.sh "^src|examples/ti/ek-tm4c1294xl-baremetal" ; then echo GO=1 > $GITHUB_ENV ; fi
     - if: ${{ env.GO == 1 }}
       run:  make -C examples/ti/ek-tm4c1294xl-baremetal test VCON_API_KEY=${{secrets.VCON_API_KEY}}
+    - run: echo GO=0 > $GITHUB_ENV ; if ./test/match_changed_files.sh "^src|examples/ti/ek-tm4c1294xl-freertos" ; then echo GO=1 > $GITHUB_ENV ; fi
     - if: ${{ env.GO == 1 }}
       run:  make -C examples/ti/ek-tm4c1294xl-freertos test VCON_API_KEY=${{secrets.VCON_API_KEY}}
 
