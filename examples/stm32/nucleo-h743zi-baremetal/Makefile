@@ -8,7 +8,7 @@ LDFLAGS ?= -Tlink.ld -nostdlib -nostartfiles --specs nano.specs -lc -lgcc -Wl,--
 SOURCES = main.c syscalls.c sysinit.c
 SOURCES += cmsis_h7/Source/Templates/gcc/startup_stm32h743xx.s # ST startup file. Compiler-dependent!
 
-# Mongoose-specific source code files and build options. See https://mongoose.ws/documentation/#build-options
+# Mongoose-specific. See https://mongoose.ws/documentation/#build-options
 SOURCES += mongoose.c net.c packed_fs.c
 CFLAGS += -DMG_ENABLE_TCPIP=1 -DMG_ARCH=MG_ARCH_NEWLIB -DMG_ENABLE_PACKED_FS=1
 CFLAGS += -DMG_ENABLE_CUSTOM_RANDOM=1 -DMG_ENABLE_CUSTOM_MILLIS=1
@@ -41,11 +41,11 @@ DEVICE_URL ?= https://dash.vcon.io/api/v3/devices/6
 update: firmware.bin
 	curl --fail-with-body -su :$(VCON_API_KEY) $(DEVICE_URL)/ota --data-binary @$<
 
-update test: CFLAGS_EXTRA += -DUART_DEBUG=USART1
+test update: CFLAGS_EXTRA += -DUART_DEBUG=USART1
 test: update
 	curl --fail-with-body -su :$(VCON_API_KEY) $(DEVICE_URL)/tx?t=5 | tee /tmp/output.txt
 	grep 'READY, IP:' /tmp/output.txt       # Check for network init
 	grep 'MQTT connected' /tmp/output.txt   # Check for MQTT connection success
 
 clean:
-	@rm -rf firmware.* *.su cmsis_core cmsis_h7
+	$(RM) firmware.* *.su cmsis_core cmsis_h7
