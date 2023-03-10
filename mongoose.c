@@ -6511,7 +6511,7 @@ static size_t mg_tcpip_driver_stm32_tx(const void *buf, size_t len,
 static bool mg_tcpip_driver_stm32_up(struct mg_tcpip_if *ifp) {
   uint32_t bsr = eth_read_phy(PHY_ADDR, PHY_BSR);
   bool up = bsr & BIT(2) ? 1 : 0;
-  if ((ifp->state == MIP_STATE_DOWN) && up) {  // link state just went up
+  if ((ifp->state == MG_TCPIP_STATE_DOWN) && up) {  // link state just went up
     uint32_t scsr = eth_read_phy(PHY_ADDR, PHY_CSCR);
     uint32_t maccr = ETH->MACCR | BIT(14) | BIT(11);  // 100M, Full-duplex
     if ((scsr & BIT(3)) == 0) maccr &= ~BIT(14);      // 10M
@@ -6787,7 +6787,7 @@ static size_t mg_tcpip_driver_stm32h_tx(const void *buf, size_t len,
 static bool mg_tcpip_driver_stm32h_up(struct mg_tcpip_if *ifp) {
   uint32_t bsr = eth_read_phy(PHY_ADDR, PHY_BSR);
   bool up = bsr & BIT(2) ? 1 : 0;
-  if ((ifp->state == MIP_STATE_DOWN) && up) {  // link state just went up
+  if ((ifp->state == MG_TCPIP_STATE_DOWN) && up) {  // link state just went up
     uint32_t scsr = eth_read_phy(PHY_ADDR, PHY_CSCR);
     uint32_t maccr = ETH->MACCR | BIT(14) | BIT(13);  // 100M, Full-duplex
     if ((scsr & BIT(3)) == 0) maccr &= ~BIT(14);      // 10M
@@ -7042,7 +7042,7 @@ static size_t mg_tcpip_driver_tm4c_tx(const void *buf, size_t len,
 static bool mg_tcpip_driver_tm4c_up(struct mg_tcpip_if *ifp) {
   uint32_t bmsr = emac_read_phy(EPHY_ADDR, EPHYBMSR);
   bool up = (bmsr & BIT(2)) ? 1 : 0;
-  if ((ifp->state == MIP_STATE_DOWN) && up) {  // link state just went up
+  if ((ifp->state == MG_TCPIP_STATE_DOWN) && up) {  // link state just went up
     uint32_t sts = emac_read_phy(EPHY_ADDR, EPHYSTS);
     uint32_t emaccfg = EMAC->EMACCFG | BIT(14) | BIT(11);  // 100M, Full-duplex
     if (sts & BIT(1)) emaccfg &= ~BIT(14);                 // 10M
@@ -7352,7 +7352,7 @@ static void arp_ask(struct mg_tcpip_if *ifp, uint32_t ip) {
 }
 
 static void onstatechange(struct mg_tcpip_if *ifp) {
-  if (ifp->state == MIP_STATE_READY) {
+  if (ifp->state == MG_TCPIP_STATE_READY) {
     MG_INFO(("READY, IP: %M", mg_print_ip4, &ifp->ip));
     MG_INFO(("       GW: %M", mg_print_ip4, &ifp->gw));
     if (ifp->lease_expire > ifp->now) {
@@ -7360,10 +7360,10 @@ static void onstatechange(struct mg_tcpip_if *ifp) {
           ("       Lease: %lld sec", (ifp->lease_expire - ifp->now) / 1000));
     }
     arp_ask(ifp, ifp->gw);
-  } else if (ifp->state == MIP_STATE_UP) {
+  } else if (ifp->state == MG_TCPIP_STATE_UP) {
     MG_ERROR(("Link up"));
     srand((unsigned int) mg_millis());
-  } else if (ifp->state == MIP_STATE_DOWN) {
+  } else if (ifp->state == MG_TCPIP_STATE_DOWN) {
     MG_ERROR(("Link down"));
   }
 }
@@ -7533,7 +7533,7 @@ static void rx_dhcp_client(struct mg_tcpip_if *ifp, struct pkt *pkt) {
   if (ip && mask && gw && ifp->ip == 0) {
     memcpy(ifp->gwmac, pkt->eth->src, sizeof(ifp->gwmac));
     ifp->ip = ip, ifp->gw = gw, ifp->mask = mask;
-    ifp->state = MIP_STATE_READY;
+    ifp->state = MG_TCPIP_STATE_READY;
     onstatechange(ifp);
     tx_dhcp_request(ifp, pkt->eth->src, ip, pkt->dhcp->siaddr);
     uint64_t rand;
@@ -7916,16 +7916,16 @@ static void mg_tcpip_poll(struct mg_tcpip_if *ifp, uint64_t uptime_ms) {
   // Handle physical interface up/down status
   if (expired_1000ms && ifp->driver->up) {
     bool up = ifp->driver->up(ifp);
-    bool current = ifp->state != MIP_STATE_DOWN;
+    bool current = ifp->state != MG_TCPIP_STATE_DOWN;
     if (up != current) {
-      ifp->state = up == false               ? MIP_STATE_DOWN
-                   : ifp->enable_dhcp_client ? MIP_STATE_UP
-                                             : MIP_STATE_READY;
+      ifp->state = up == false               ? MG_TCPIP_STATE_DOWN
+                   : ifp->enable_dhcp_client ? MG_TCPIP_STATE_UP
+                                             : MG_TCPIP_STATE_READY;
       if (!up && ifp->enable_dhcp_client) ifp->ip = 0;
       onstatechange(ifp);
     }
   }
-  if (ifp->state == MIP_STATE_DOWN) return;
+  if (ifp->state == MG_TCPIP_STATE_DOWN) return;
 
   // If IP not configured, send DHCP
   if (ifp->ip == 0 && expired_1000ms) tx_dhcp_discover(ifp);
@@ -8109,7 +8109,7 @@ void mg_mgr_poll(struct mg_mgr *mgr, int ms) {
 bool mg_send(struct mg_connection *c, const void *buf, size_t len) {
   struct mg_tcpip_if *ifp = (struct mg_tcpip_if *) c->mgr->priv;
   bool res = false;
-  if (ifp->ip == 0 || ifp->state != MIP_STATE_READY) {
+  if (ifp->ip == 0 || ifp->state != MG_TCPIP_STATE_READY) {
     mg_error(c, "net down");
   } else if (c->is_udp) {
     struct connstate *s = (struct connstate *) (c + 1);
