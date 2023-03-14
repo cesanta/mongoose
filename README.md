@@ -31,8 +31,7 @@ robust, and easy. Features include:
   [bare metal example on Nucleo-F429ZI](examples/stm32/nucleo-f429zi-baremetal)
   is only 6 files
    - For comparison, a CubeIDE generated HTTP example is 400+ files
-- Detailed [user guide, API reference](https://mongoose.ws/documentation/) and
-  [tons of tutorials](https://mongoose.ws/tutorials/) available
+- Detailed [user guide, API reference and tons of tutorials](https://mongoose.ws/documentation/) available
 
 
 # Commercial use
