@@ -9,7 +9,7 @@ struct mg_tcpip_spi spi = {
     [](void *) { digitalWrite(SS_PIN, HIGH); },         // end transaction
     [](void *, uint8_t c) { return SPI.transfer(c); },  // execute transaction
 };
-struct mg_tcpip_if mif = {.mac = {2, 0, 1, 2, 3, 5}};  // MIP network interface
+struct mg_tcpip_if mif = {.mac = {2, 0, 1, 2, 3, 5}};  // network interface
 
 void setup() {
   Serial.begin(115200);
