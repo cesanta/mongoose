@@ -45,7 +45,7 @@ static void ethernet_init(void) {
 
 static void server(void *args) {
   struct mg_mgr mgr;        // Initialise Mongoose event manager
-  mg_mgr_init(&mgr);        // and attach it to the MIP interface
+  mg_mgr_init(&mgr);        // and attach it to the interface
   mg_log_set(MG_LL_DEBUG);  // Set log level
 
   // Initialise Mongoose network stack
