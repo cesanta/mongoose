@@ -2692,6 +2692,18 @@ static void test_poll(void) {
   mg_mgr_free(&mgr);
 }
 
+static void no_op_callback(struct mg_connection *c, int ev, void *ev_data,
+                           void *fn_data) {
+}
+
+static void test_two_servers_on_same_port_fails(void) {
+  struct mg_mgr mgr;
+  mg_mgr_init(&mgr);
+  ASSERT(mg_http_listen(&mgr, "http://127.0.0.1:12346", no_op_callback, NULL) != NULL);
+  ASSERT(mg_http_listen(&mgr, "http://127.0.0.1:12346", no_op_callback, NULL) == NULL);
+  mg_mgr_free(&mgr);
+}
+
 #define NMESSAGES 99999
 static uint32_t s_qcrc = 0;
 static int s_out, s_in;
@@ -2809,6 +2821,7 @@ int main(void) {
   test_sntp();
   test_mqtt();
   test_poll();
+  test_two_servers_on_same_port_fails();
   printf("SUCCESS. Total tests: %d\n", s_num_tests);
 
   return EXIT_SUCCESS;
