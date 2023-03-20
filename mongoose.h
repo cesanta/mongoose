@@ -36,9 +36,10 @@ extern "C" {
 #define MG_ARCH_AZURERTOS 6  // MS Azure RTOS
 #define MG_ARCH_ZEPHYR 7     // Zephyr RTOS
 #define MG_ARCH_NEWLIB 8     // Bare metal ARM
-#define MG_ARCH_RTX 9        // Keil MDK RTX
+#define MG_ARCH_RTX 9        // Keil RTX
 #define MG_ARCH_TIRTOS 10    // Texas Semi TI-RTOS
 #define MG_ARCH_RP2040 11    // Raspberry Pi RP2040
+#define MG_ARCH_ARMCC 12     // Keil MDK with Configuration Wizard
 
 #if !defined(MG_ARCH)
 #if defined(__unix__) || defined(__APPLE__)
@@ -58,10 +59,14 @@ extern "C" {
 #define MG_ARCH MG_ARCH_AZURERTOS
 #elif defined(PICO_TARGET_NAME)
 #define MG_ARCH MG_ARCH_RP2040
+#elif defined(__ARMCC_VERSION)
+#define MG_ARCH MG_ARCH_ARMCC
 #endif
 #endif  // !defined(MG_ARCH)
 
-#if !defined(MG_ARCH) || (MG_ARCH == MG_ARCH_CUSTOM)
+// if the user did not specify an MG_ARCH, or specified a custom one, OR
+// we guessed a known IDE, pull the customized config (Configuration Wizard)
+#if !defined(MG_ARCH) || (MG_ARCH == MG_ARCH_CUSTOM) || MG_ARCH == MG_ARCH_ARMCC
 #include "mongoose_custom.h"  // keep this include
 #endif
 
@@ -242,7 +247,7 @@ int mkdir(const char *, mode_t);
 #endif
 
 
-#if MG_ARCH == MG_ARCH_RTX
+#if MG_ARCH == MG_ARCH_ARMCC || MG_ARCH == MG_ARCH_RTX
 
 #include <ctype.h>
 #include <errno.h>
@@ -255,7 +260,20 @@ int mkdir(const char *, mode_t);
 #include <string.h>
 #include <time.h>
 
-#if !defined MG_ENABLE_RL && (!defined(MG_ENABLE_LWIP) || !MG_ENABLE_LWIP)
+#define strdup(s) ((char *) mg_strdup(mg_str(s)).ptr)
+
+#if defined(__ARMCC_VERSION)
+#define mode_t size_t
+#define mkdir(a, b) mg_mkdir(a, b)
+static inline int mg_mkdir(const char *path, mode_t mode) {
+  (void) path, (void) mode;
+  return -1;
+}
+#endif
+
+#if MG_ARCH == MG_ARCH_RTX && !defined MG_ENABLE_RL && \
+    (!defined(MG_ENABLE_LWIP) || !MG_ENABLE_LWIP) &&   \
+    (!defined(MG_ENABLE_TCPIP) || !MG_ENABLE_TCPIP)
 #define MG_ENABLE_RL 1
 #endif
 
