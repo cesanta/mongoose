@@ -1,7 +1,5 @@
 #pragma once
 
-#include <errno.h>	// we are not using lwIP
-
 // See https://mongoose.ws/documentation/#build-options
 #define MG_ARCH MG_ARCH_FREERTOS
 #define MG_ENABLE_TCPIP 1
