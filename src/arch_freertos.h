@@ -3,7 +3,9 @@
 #if MG_ARCH == MG_ARCH_FREERTOS
 
 #include <ctype.h>
-// #include <errno.h> // Cannot include errno - might conflict with lwip!
+#if !defined(MG_ENABLE_LWIP) || !MG_ENABLE_LWIP
+#include <errno.h>
+#endif
 #include <stdarg.h>
 #include <stdbool.h>
 #include <stddef.h>
@@ -11,7 +13,12 @@
 #include <stdio.h>
 #include <stdlib.h> // rand(), strtol(), atoi()
 #include <string.h>
+#if defined(__ARMCC_VERSION)
+#define mode_t size_t
+#include <time.h>
+#else
 #include <sys/stat.h>
+#endif
 
 #include <FreeRTOS.h>
 #include <task.h>
