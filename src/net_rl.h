@@ -3,9 +3,7 @@
 #if defined(MG_ENABLE_RL) && MG_ENABLE_RL
 #include <rl_net.h>
 
-#define MG_ENABLE_CUSTOM_MILLIS 1
 #define closesocket(x) closesocket(x)
-#define mkdir(a, b) (-1)
 
 #define TCP_NODELAY SO_KEEPALIVE
 

@@ -171,7 +171,9 @@ extern "C" {
 #if MG_ARCH == MG_ARCH_FREERTOS
 
 #include <ctype.h>
-// #include <errno.h> // Cannot include errno - might conflict with lwip!
+#if !defined(MG_ENABLE_LWIP) || !MG_ENABLE_LWIP
+#include <errno.h>
+#endif
 #include <stdarg.h>
 #include <stdbool.h>
 #include <stddef.h>
@@ -179,7 +181,12 @@ extern "C" {
 #include <stdio.h>
 #include <stdlib.h> // rand(), strtol(), atoi()
 #include <string.h>
+#if defined(__ARMCC_VERSION)
+#define mode_t size_t
+#include <time.h>
+#else
 #include <sys/stat.h>
+#endif
 
 #include <FreeRTOS.h>
 #include <task.h>
@@ -564,8 +571,17 @@ static inline int mg_getpeername(MG_SOCKET_TYPE fd, void *buf, socklen_t *len) {
 
 
 #if defined(MG_ENABLE_LWIP) && MG_ENABLE_LWIP
-#if defined(__GNUC__)
+
+#if defined(__GNUC__) && !defined(__ARMCC_VERSION)
 #include <sys/stat.h>
+#endif
+
+struct timeval;
+
+#include <lwip/sockets.h>
+
+#if !LWIP_TIMEVAL_PRIVATE
+#if defined(__GNUC__) && !defined(__ARMCC_VERSION) // armclang sets both
 #include <sys/time.h>
 #else
 struct timeval {
@@ -573,8 +589,7 @@ struct timeval {
   long tv_usec;
 };
 #endif
-
-#include <lwip/sockets.h>
+#endif
 
 #if LWIP_SOCKET != 1
 // Sockets support disabled in LWIP by default
@@ -586,9 +601,7 @@ struct timeval {
 #if defined(MG_ENABLE_RL) && MG_ENABLE_RL
 #include <rl_net.h>
 
-#define MG_ENABLE_CUSTOM_MILLIS 1
 #define closesocket(x) closesocket(x)
-#define mkdir(a, b) (-1)
 
 #define TCP_NODELAY SO_KEEPALIVE
 
