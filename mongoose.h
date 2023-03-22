@@ -27,19 +27,20 @@ extern "C" {
 #endif
 
 
-#define MG_ARCH_CUSTOM 0     // User creates its own mongoose_custom.h
-#define MG_ARCH_UNIX 1       // Linux, BSD, Mac, ...
-#define MG_ARCH_WIN32 2      // Windows
-#define MG_ARCH_ESP32 3      // ESP32
-#define MG_ARCH_ESP8266 4    // ESP8266
-#define MG_ARCH_FREERTOS 5   // FreeRTOS
-#define MG_ARCH_AZURERTOS 6  // MS Azure RTOS
-#define MG_ARCH_ZEPHYR 7     // Zephyr RTOS
-#define MG_ARCH_NEWLIB 8     // Bare metal ARM
-#define MG_ARCH_RTX 9        // Keil RTX
-#define MG_ARCH_TIRTOS 10    // Texas Semi TI-RTOS
-#define MG_ARCH_RP2040 11    // Raspberry Pi RP2040
-#define MG_ARCH_ARMCC 12     // Keil MDK with Configuration Wizard
+#define MG_ARCH_CUSTOM 0       // User creates its own mongoose_custom.h
+#define MG_ARCH_UNIX 1         // Linux, BSD, Mac, ...
+#define MG_ARCH_WIN32 2        // Windows
+#define MG_ARCH_ESP32 3        // ESP32
+#define MG_ARCH_ESP8266 4      // ESP8266
+#define MG_ARCH_FREERTOS 5     // FreeRTOS
+#define MG_ARCH_AZURERTOS 6    // MS Azure RTOS
+#define MG_ARCH_ZEPHYR 7       // Zephyr RTOS
+#define MG_ARCH_NEWLIB 8       // Bare metal ARM
+#define MG_ARCH_CMSIS_RTOS1 9  // CMSIS-RTOS API v1 (Keil RTX)
+#define MG_ARCH_TIRTOS 10      // Texas Semi TI-RTOS
+#define MG_ARCH_RP2040 11      // Raspberry Pi RP2040
+#define MG_ARCH_ARMCC 12       // Keil MDK-Core with Configuration Wizard
+#define MG_ARCH_CMSIS_RTOS2 13 // CMSIS-RTOS API v2 (Keil RTX5, FreeRTOS)
 
 #if !defined(MG_ARCH)
 #if defined(__unix__) || defined(__APPLE__)
@@ -254,7 +255,8 @@ int mkdir(const char *, mode_t);
 #endif
 
 
-#if MG_ARCH == MG_ARCH_ARMCC || MG_ARCH == MG_ARCH_RTX
+#if MG_ARCH == MG_ARCH_ARMCC || MG_ARCH == MG_ARCH_CMSIS_RTOS1 || \
+    MG_ARCH == MG_ARCH_CMSIS_RTOS2
 
 #include <ctype.h>
 #include <errno.h>
@@ -266,6 +268,13 @@ int mkdir(const char *, mode_t);
 #include <stdlib.h>
 #include <string.h>
 #include <time.h>
+#if MG_ARCH == MG_ARCH_CMSIS_RTOS1
+#include "cmsis_os.h"  // keep this include
+// https://developer.arm.com/documentation/ka003821/latest
+extern uint32_t rt_time_get(void);
+#elif MG_ARCH == MG_ARCH_CMSIS_RTOS2
+#include "cmsis_os2.h"  // keep this include
+#endif
 
 #define strdup(s) ((char *) mg_strdup(mg_str(s)).ptr)
 
@@ -278,8 +287,8 @@ static inline int mg_mkdir(const char *path, mode_t mode) {
 }
 #endif
 
-#if MG_ARCH == MG_ARCH_RTX && !defined MG_ENABLE_RL && \
-    (!defined(MG_ENABLE_LWIP) || !MG_ENABLE_LWIP) &&   \
+#if (MG_ARCH == MG_ARCH_CMSIS_RTOS1 || MG_ARCH == MG_ARCH_CMSIS_RTOS2) &&     \
+    !defined MG_ENABLE_RL && (!defined(MG_ENABLE_LWIP) || !MG_ENABLE_LWIP) && \
     (!defined(MG_ENABLE_TCPIP) || !MG_ENABLE_TCPIP)
 #define MG_ENABLE_RL 1
 #endif
