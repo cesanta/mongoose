@@ -516,24 +516,12 @@ int sscanf(const char *, const char *, ...);
 
 #if defined(MG_ENABLE_FREERTOS_TCP) && MG_ENABLE_FREERTOS_TCP
 
-#include <ctype.h>
-#include <errno.h>
 #include <limits.h>
-#include <stdarg.h>
-#include <stdbool.h>
-#include <stddef.h>
-#include <stdio.h>
-#include <stdlib.h>
-#include <string.h>
-#include <sys/stat.h>
-#include <time.h>
-
-#include <FreeRTOS.h>
 #include <list.h>
-#include <task.h>
 
 #include <FreeRTOS_IP.h>
 #include <FreeRTOS_Sockets.h>
+#include <FreeRTOS_errno_TCP.h>  // contents to be moved and file removed, some day
 
 #define MG_SOCKET_TYPE Socket_t
 #define MG_INVALID_SOCKET FREERTOS_INVALID_SOCKET
@@ -549,6 +537,17 @@ int sscanf(const char *, const char *, ...);
 #define SO_ERROR 0
 #define SOL_SOCKET 0
 #define SO_REUSEADDR 0
+#undef EINTR
+#undef EWOULDBLOCK
+#undef EINPROGRESS
+#undef EPIPE
+#undef ECONNRESET
+#define EINTR pdFREERTOS_ERRNO_EINTR
+#define EWOULDBLOCK pdFREERTOS_ERRNO_EWOULDBLOCK
+#define EINPROGRESS pdFREERTOS_ERRNO_EINPROGRESS
+#define EPIPE 0
+#define ECONNRESET 0
+#define EINTR pdFREERTOS_ERRNO_EINTR
 #define sockaddr_in freertos_sockaddr
 #define sockaddr freertos_sockaddr
 #define accept(a, b, c) FreeRTOS_accept((a), (b), (c))
