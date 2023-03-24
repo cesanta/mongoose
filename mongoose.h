@@ -537,17 +537,20 @@ int sscanf(const char *, const char *, ...);
 #define SO_ERROR 0
 #define SOL_SOCKET 0
 #define SO_REUSEADDR 0
-#undef EINTR
-#undef EWOULDBLOCK
-#undef EINPROGRESS
-#undef EPIPE
-#undef ECONNRESET
-#define EINTR pdFREERTOS_ERRNO_EINTR
-#define EWOULDBLOCK pdFREERTOS_ERRNO_EWOULDBLOCK
-#define EINPROGRESS pdFREERTOS_ERRNO_EINPROGRESS
-#define EPIPE 0
-#define ECONNRESET 0
-#define EINTR pdFREERTOS_ERRNO_EINTR
+
+#define MG_SOCK_ERR(errcode) ((errcode) < 0 ? (errcode) : 0)
+
+#define MG_SOCK_PENDING(errcode)                 \
+  ((errcode) == -pdFREERTOS_ERRNO_EWOULDBLOCK || \
+   (errcode) == -pdFREERTOS_ERRNO_EISCONN ||     \
+   (errcode) == -pdFREERTOS_ERRNO_EINPROGRESS || \
+   (errcode) == -pdFREERTOS_ERRNO_EAGAIN)
+
+#define MG_SOCK_RESET(errcode) ((errcode) == -pdFREERTOS_ERRNO_ENOTCONN)
+
+// actually only if optional timeout is enabled
+#define MG_SOCK_INTR(fd) (fd == NULL)
+
 #define sockaddr_in freertos_sockaddr
 #define sockaddr freertos_sockaddr
 #define accept(a, b, c) FreeRTOS_accept((a), (b), (c))
