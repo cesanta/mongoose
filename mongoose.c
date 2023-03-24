@@ -4598,8 +4598,9 @@ static void mg_iotest(struct mg_mgr *mgr, int ms) {
     EventBits_t bits = FreeRTOS_FD_ISSET(c->fd, mgr->ss);
     c->is_readable = bits & (eSELECT_READ | eSELECT_EXCEPT) ? 1U : 0;
     c->is_writable = bits & eSELECT_WRITE ? 1U : 0;
-    FreeRTOS_FD_CLR(c->fd, mgr->ss,
-                    eSELECT_READ | eSELECT_EXCEPT | eSELECT_WRITE);
+    if (c->fd != MG_INVALID_SOCKET)
+      FreeRTOS_FD_CLR(c->fd, mgr->ss,
+                      eSELECT_READ | eSELECT_EXCEPT | eSELECT_WRITE);
   }
 #elif MG_ENABLE_EPOLL
   size_t max = 1;
