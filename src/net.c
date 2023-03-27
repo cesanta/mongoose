@@ -2,6 +2,7 @@
 #include "fmt.h"
 #include "log.h"
 #include "net.h"
+#include "printf.h"
 #include "timer.h"
 #include "tls.h"
 

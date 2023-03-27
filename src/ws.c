@@ -4,6 +4,7 @@
 #include "fmt.h"
 #include "http.h"
 #include "log.h"
+#include "printf.h"
 #include "sha1.h"
 #include "url.h"
 #include "util.h"

@@ -1,7 +1,7 @@
 #include "event.h"
-#include "fmt.h"
 #include "log.h"
 #include "net.h"
+#include "printf.h"
 
 void mg_call(struct mg_connection *c, int ev, void *ev_data) {
   // Run user-defined handler first, in order to give it an ability

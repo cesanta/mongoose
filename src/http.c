@@ -5,6 +5,7 @@
 #include "json.h"
 #include "log.h"
 #include "net.h"
+#include "printf.h"
 #include "ssi.h"
 #include "util.h"
 #include "version.h"
