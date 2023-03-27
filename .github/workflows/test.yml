@@ -195,7 +195,6 @@ jobs:
           - path: esp32/uart-bridge
           - path: esp8266/http-client-server
           - path: stm32/nucleo-h743zi-baremetal
-          - path: stm32/stm32-freertos-tcp
           - path: stm32/stm32-nucleo-f746z
           - path: stm32/stm32-nucleo-f746zg
           - path: stm32/stm32-nucleo-f429z
@@ -205,6 +204,7 @@ jobs:
           - path: stm32/nucleo-f429zi-rndis
           - path: stm32/nucleo-f746zg-baremetal
           - path: stm32/nucleo-f746zg-freertos
+          - path: stm32/nucleo-f746zg-freertos-tcp
           - path: stm32/nucleo-f746zg-rndis
           - path: nxp/nxp-mimxrt1020-azurertos
           - path: nxp/nxp-frdmk66f-freertos
