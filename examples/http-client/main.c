@@ -5,7 +5,7 @@
 // print the response and exit.
 // You can change `s_url` from the command line by executing: ./example YOUR_URL
 //
-// To enable SSL/TLS, make SSL=OPENSSL or make SSL=MBEDTLS
+// To enable SSL/TLS, , see https://mongoose.ws/tutorials/tls/#how-to-build
 
 #include "mongoose.h"
 
