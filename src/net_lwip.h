@@ -1,8 +1,17 @@
 #pragma once
 
 #if defined(MG_ENABLE_LWIP) && MG_ENABLE_LWIP
-#if defined(__GNUC__)
+
+#if defined(__GNUC__) && !defined(__ARMCC_VERSION)
 #include <sys/stat.h>
+#endif
+
+struct timeval;
+
+#include <lwip/sockets.h>
+
+#if !LWIP_TIMEVAL_PRIVATE
+#if defined(__GNUC__) && !defined(__ARMCC_VERSION) // armclang sets both
 #include <sys/time.h>
 #else
 struct timeval {
@@ -10,8 +19,7 @@ struct timeval {
   long tv_usec;
 };
 #endif
-
-#include <lwip/sockets.h>
+#endif
 
 #if LWIP_SOCKET != 1
 // Sockets support disabled in LWIP by default

@@ -5,8 +5,7 @@ DOCKER ?= docker run --rm \
           -w $(realpath $(CURDIR)) \
           -e ZEPHYR_BASE=$(ZEPHYR_DIR)/zephyr \
           $(DOCKER_ARGS) zephyrprojectrtos/ci
-#BUILD_ARGS ?= -b qemu_x86 -DOVERLAY_CONFIG=overlay-e1000.conf
-BUILD_ARGS ?= -b nucleo_f429zi
+BUILD_ARGS ?= -b nucleo_f746zg
 .PHONY: build
 
 example:
@@ -18,7 +17,7 @@ zephyr:
 
 build:
 	cp $(TOP_DIR)/mongoose.[ch] src/
-	$(DOCKER) west build $(BUILD_ARGS) -p auto $(realpath $(CURDIR))
+	$(DOCKER) west build $(BUILD_ARGS) -p auto $(realpath $(CURDIR)) $(OVERLAY)
 
 run: DOCKER_ARGS ?= --cap-add=NET_ADMIN --device /dev/net/tun --net=host -it
 run:
@@ -39,3 +38,7 @@ flash:
 
 debug:
 	$(DOCKER) west debug --build-dir $(realpath $(CURDIR))/build
+
+test: BUILD_ARGS = -b qemu_x86
+test: OVERLAY = -DOVERLAY_CONFIG=overlay-e1000.conf
+test: build run

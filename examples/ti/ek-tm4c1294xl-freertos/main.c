@@ -48,7 +48,7 @@ static void ethernet_init(void) {
 
 static void server(void *args) {
   struct mg_mgr mgr;        // Initialise Mongoose event manager
-  mg_mgr_init(&mgr);        // and attach it to the MIP interface
+  mg_mgr_init(&mgr);        // and attach it to the interface
   mg_log_set(MG_LL_DEBUG);  // Set log level
 
   // Initialise Mongoose network stack
@@ -69,7 +69,7 @@ static void server(void *args) {
   mg_timer_add(&mgr, BLINK_PERIOD_MS, MG_TIMER_REPEAT, timer_fn, &mif);
 
   MG_INFO(("MAC: %M. Waiting for IP...", mg_print_mac, mif.mac));
-  while (mif.state != MIP_STATE_READY) {
+  while (mif.state != MG_TCPIP_STATE_READY) {
     mg_mgr_poll(&mgr, 0);
   }
 

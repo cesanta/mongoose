@@ -27,18 +27,20 @@ extern "C" {
 #endif
 
 
-#define MG_ARCH_CUSTOM 0     // User creates its own mongoose_custom.h
-#define MG_ARCH_UNIX 1       // Linux, BSD, Mac, ...
-#define MG_ARCH_WIN32 2      // Windows
-#define MG_ARCH_ESP32 3      // ESP32
-#define MG_ARCH_ESP8266 4    // ESP8266
-#define MG_ARCH_FREERTOS 5   // FreeRTOS
-#define MG_ARCH_AZURERTOS 6  // MS Azure RTOS
-#define MG_ARCH_ZEPHYR 7     // Zephyr RTOS
-#define MG_ARCH_NEWLIB 8     // Bare metal ARM
-#define MG_ARCH_RTX 9        // Keil MDK RTX
-#define MG_ARCH_TIRTOS 10    // Texas Semi TI-RTOS
-#define MG_ARCH_RP2040 11    // Raspberry Pi RP2040
+#define MG_ARCH_CUSTOM 0       // User creates its own mongoose_custom.h
+#define MG_ARCH_UNIX 1         // Linux, BSD, Mac, ...
+#define MG_ARCH_WIN32 2        // Windows
+#define MG_ARCH_ESP32 3        // ESP32
+#define MG_ARCH_ESP8266 4      // ESP8266
+#define MG_ARCH_FREERTOS 5     // FreeRTOS
+#define MG_ARCH_AZURERTOS 6    // MS Azure RTOS
+#define MG_ARCH_ZEPHYR 7       // Zephyr RTOS
+#define MG_ARCH_NEWLIB 8       // Bare metal ARM
+#define MG_ARCH_CMSIS_RTOS1 9  // CMSIS-RTOS API v1 (Keil RTX)
+#define MG_ARCH_TIRTOS 10      // Texas Semi TI-RTOS
+#define MG_ARCH_RP2040 11      // Raspberry Pi RP2040
+#define MG_ARCH_ARMCC 12       // Keil MDK-Core with Configuration Wizard
+#define MG_ARCH_CMSIS_RTOS2 13 // CMSIS-RTOS API v2 (Keil RTX5, FreeRTOS)
 
 #if !defined(MG_ARCH)
 #if defined(__unix__) || defined(__APPLE__)
@@ -58,10 +60,14 @@ extern "C" {
 #define MG_ARCH MG_ARCH_AZURERTOS
 #elif defined(PICO_TARGET_NAME)
 #define MG_ARCH MG_ARCH_RP2040
+#elif defined(__ARMCC_VERSION)
+#define MG_ARCH MG_ARCH_ARMCC
 #endif
 #endif  // !defined(MG_ARCH)
 
-#if !defined(MG_ARCH) || (MG_ARCH == MG_ARCH_CUSTOM)
+// if the user did not specify an MG_ARCH, or specified a custom one, OR
+// we guessed a known IDE, pull the customized config (Configuration Wizard)
+#if !defined(MG_ARCH) || (MG_ARCH == MG_ARCH_CUSTOM) || MG_ARCH == MG_ARCH_ARMCC
 #include "mongoose_custom.h"  // keep this include
 #endif
 
@@ -166,7 +172,9 @@ extern "C" {
 #if MG_ARCH == MG_ARCH_FREERTOS
 
 #include <ctype.h>
-// #include <errno.h> // Cannot include errno - might conflict with lwip!
+#if !defined(MG_ENABLE_LWIP) || !MG_ENABLE_LWIP
+#include <errno.h>
+#endif
 #include <stdarg.h>
 #include <stdbool.h>
 #include <stddef.h>
@@ -174,7 +182,12 @@ extern "C" {
 #include <stdio.h>
 #include <stdlib.h> // rand(), strtol(), atoi()
 #include <string.h>
+#if defined(__ARMCC_VERSION)
+#define mode_t size_t
+#include <time.h>
+#else
 #include <sys/stat.h>
+#endif
 
 #include <FreeRTOS.h>
 #include <task.h>
@@ -242,7 +255,8 @@ int mkdir(const char *, mode_t);
 #endif
 
 
-#if MG_ARCH == MG_ARCH_RTX
+#if MG_ARCH == MG_ARCH_ARMCC || MG_ARCH == MG_ARCH_CMSIS_RTOS1 || \
+    MG_ARCH == MG_ARCH_CMSIS_RTOS2
 
 #include <ctype.h>
 #include <errno.h>
@@ -254,8 +268,28 @@ int mkdir(const char *, mode_t);
 #include <stdlib.h>
 #include <string.h>
 #include <time.h>
+#if MG_ARCH == MG_ARCH_CMSIS_RTOS1
+#include "cmsis_os.h"  // keep this include
+// https://developer.arm.com/documentation/ka003821/latest
+extern uint32_t rt_time_get(void);
+#elif MG_ARCH == MG_ARCH_CMSIS_RTOS2
+#include "cmsis_os2.h"  // keep this include
+#endif
 
-#if !defined MG_ENABLE_RL && (!defined(MG_ENABLE_LWIP) || !MG_ENABLE_LWIP)
+#define strdup(s) ((char *) mg_strdup(mg_str(s)).ptr)
+
+#if defined(__ARMCC_VERSION)
+#define mode_t size_t
+#define mkdir(a, b) mg_mkdir(a, b)
+static inline int mg_mkdir(const char *path, mode_t mode) {
+  (void) path, (void) mode;
+  return -1;
+}
+#endif
+
+#if (MG_ARCH == MG_ARCH_CMSIS_RTOS1 || MG_ARCH == MG_ARCH_CMSIS_RTOS2) &&     \
+    !defined MG_ENABLE_RL && (!defined(MG_ENABLE_LWIP) || !MG_ENABLE_LWIP) && \
+    (!defined(MG_ENABLE_TCPIP) || !MG_ENABLE_TCPIP)
 #define MG_ENABLE_RL 1
 #endif
 
@@ -482,24 +516,12 @@ int sscanf(const char *, const char *, ...);
 
 #if defined(MG_ENABLE_FREERTOS_TCP) && MG_ENABLE_FREERTOS_TCP
 
-#include <ctype.h>
-#include <errno.h>
 #include <limits.h>
-#include <stdarg.h>
-#include <stdbool.h>
-#include <stddef.h>
-#include <stdio.h>
-#include <stdlib.h>
-#include <string.h>
-#include <sys/stat.h>
-#include <time.h>
-
-#include <FreeRTOS.h>
 #include <list.h>
-#include <task.h>
 
 #include <FreeRTOS_IP.h>
 #include <FreeRTOS_Sockets.h>
+#include <FreeRTOS_errno_TCP.h>  // contents to be moved and file removed, some day
 
 #define MG_SOCKET_TYPE Socket_t
 #define MG_INVALID_SOCKET FREERTOS_INVALID_SOCKET
@@ -515,6 +537,20 @@ int sscanf(const char *, const char *, ...);
 #define SO_ERROR 0
 #define SOL_SOCKET 0
 #define SO_REUSEADDR 0
+
+#define MG_SOCK_ERR(errcode) ((errcode) < 0 ? (errcode) : 0)
+
+#define MG_SOCK_PENDING(errcode)                 \
+  ((errcode) == -pdFREERTOS_ERRNO_EWOULDBLOCK || \
+   (errcode) == -pdFREERTOS_ERRNO_EISCONN ||     \
+   (errcode) == -pdFREERTOS_ERRNO_EINPROGRESS || \
+   (errcode) == -pdFREERTOS_ERRNO_EAGAIN)
+
+#define MG_SOCK_RESET(errcode) ((errcode) == -pdFREERTOS_ERRNO_ENOTCONN)
+
+// actually only if optional timeout is enabled
+#define MG_SOCK_INTR(fd) (fd == NULL)
+
 #define sockaddr_in freertos_sockaddr
 #define sockaddr freertos_sockaddr
 #define accept(a, b, c) FreeRTOS_accept((a), (b), (c))
@@ -546,8 +582,17 @@ static inline int mg_getpeername(MG_SOCKET_TYPE fd, void *buf, socklen_t *len) {
 
 
 #if defined(MG_ENABLE_LWIP) && MG_ENABLE_LWIP
-#if defined(__GNUC__)
+
+#if defined(__GNUC__) && !defined(__ARMCC_VERSION)
 #include <sys/stat.h>
+#endif
+
+struct timeval;
+
+#include <lwip/sockets.h>
+
+#if !LWIP_TIMEVAL_PRIVATE
+#if defined(__GNUC__) && !defined(__ARMCC_VERSION) // armclang sets both
 #include <sys/time.h>
 #else
 struct timeval {
@@ -555,8 +600,7 @@ struct timeval {
   long tv_usec;
 };
 #endif
-
-#include <lwip/sockets.h>
+#endif
 
 #if LWIP_SOCKET != 1
 // Sockets support disabled in LWIP by default
@@ -568,9 +612,7 @@ struct timeval {
 #if defined(MG_ENABLE_RL) && MG_ENABLE_RL
 #include <rl_net.h>
 
-#define MG_ENABLE_CUSTOM_MILLIS 1
 #define closesocket(x) closesocket(x)
-#define mkdir(a, b) (-1)
 
 #define TCP_NODELAY SO_KEEPALIVE
 
@@ -1514,32 +1556,32 @@ struct mg_tcpip_driver {
 
 // Network interface
 struct mg_tcpip_if {
-  uint8_t mac[6];           // MAC address. Must be set to a valid MAC
-  uint32_t ip, mask, gw;    // IP address, mask, default gateway
-  struct mg_str tx;         // Output (TX) buffer
-  bool enable_dhcp_client;  // Enable DCHP client
-  bool enable_dhcp_server;  // Enable DCHP server
-  bool enable_crc32_check;  // Do a CRC check on rx frames and strip it
-  bool enable_mac_check;    // Do a MAC check on rx frames
+  uint8_t mac[6];                  // MAC address. Must be set to a valid MAC
+  uint32_t ip, mask, gw;           // IP address, mask, default gateway
+  struct mg_str tx;                // Output (TX) buffer
+  bool enable_dhcp_client;         // Enable DCHP client
+  bool enable_dhcp_server;         // Enable DCHP server
+  bool enable_crc32_check;         // Do a CRC check on rx frames and strip it
+  bool enable_mac_check;           // Do a MAC check on rx frames
   struct mg_tcpip_driver *driver;  // Low level driver
   void *driver_data;               // Driver-specific data
   struct mg_mgr *mgr;              // Mongoose event manager
   struct mg_queue recv_queue;      // Receive queue
 
   // Internal state, user can use it but should not change it
-  uint8_t gwmac[6];         // Router's MAC
-  uint64_t now;             // Current time
-  uint64_t timer_1000ms;    // 1000 ms timer: for DHCP and link state
-  uint64_t lease_expire;    // Lease expiration time
-  uint16_t eport;           // Next ephemeral port
-  volatile uint32_t ndrop;  // Number of received, but dropped frames
-  volatile uint32_t nrecv;  // Number of received frames
-  volatile uint32_t nsent;  // Number of transmitted frames
-  volatile uint32_t nerr;   // Number of driver errors
-  uint8_t state;            // Current state
-#define MIP_STATE_DOWN 0    // Interface is down
-#define MIP_STATE_UP 1      // Interface is up
-#define MIP_STATE_READY 2   // Interface is up and has IP
+  uint8_t gwmac[6];             // Router's MAC
+  uint64_t now;                 // Current time
+  uint64_t timer_1000ms;        // 1000 ms timer: for DHCP and link state
+  uint64_t lease_expire;        // Lease expiration time
+  uint16_t eport;               // Next ephemeral port
+  volatile uint32_t ndrop;      // Number of received, but dropped frames
+  volatile uint32_t nrecv;      // Number of received frames
+  volatile uint32_t nsent;      // Number of transmitted frames
+  volatile uint32_t nerr;       // Number of driver errors
+  uint8_t state;                // Current state
+#define MG_TCPIP_STATE_DOWN 0   // Interface is down
+#define MG_TCPIP_STATE_UP 1     // Interface is up
+#define MG_TCPIP_STATE_READY 2  // Interface is up and has IP
 };
 
 void mg_tcpip_init(struct mg_mgr *, struct mg_tcpip_if *);

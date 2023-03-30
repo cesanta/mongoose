@@ -75,7 +75,7 @@ int main(void) {
   mg_timer_add(&mgr, BLINK_PERIOD_MS, MG_TIMER_REPEAT, timer_fn, &mif);
 
   MG_INFO(("MAC: %M. Waiting for IP...", mg_print_mac, mif.mac));
-  while (mif.state != MIP_STATE_READY) {
+  while (mif.state != MG_TCPIP_STATE_READY) {
     mg_mgr_poll(&mgr, 0);
   }
 

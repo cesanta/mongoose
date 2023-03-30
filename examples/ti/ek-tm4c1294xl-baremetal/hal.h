@@ -133,22 +133,18 @@ static inline void gpio_irq_attach(uint16_t pin) {
 #define UARTNO(u) ((uint8_t) (((unsigned int) (u) -UART0_BASE) / UART_OFFSET))
 
 static inline void uart_init(UART0_Type *uart, unsigned long baud) {
-  struct uarthw {
-    uint16_t rx, tx;  // pins
-    uint8_t af;       // Alternate function
-  };
-  // rx, tx, af for UART0,1,2
-  struct uarthw uarthw[3] = {{PIN('A', 0), PIN('A', 1), 1},
-                             {PIN('B', 0), PIN('B', 1), 1},
-                             {PIN('A', 6), PIN('A', 7), 1}};  // or PD4, PD5...
-
+  uint8_t af = 1;           // Alternate function
+  uint16_t rx = 0, tx = 0;  // pins
   uint8_t uartno = UARTNO(uart);
+
   SYSCTL->RCGCUART |= BIT(uartno);  // Enable peripheral clock
 
-  gpio_init(uarthw[uartno].tx, GPIO_MODE_AF, GPIO_OTYPE_PUSH_PULL,
-            GPIO_SPEED_HIGH, 0, uarthw[uartno].af);
-  gpio_init(uarthw[uartno].rx, GPIO_MODE_AF, GPIO_OTYPE_PUSH_PULL,
-            GPIO_SPEED_HIGH, 0, uarthw[uartno].af);
+  if (uart == UART0) tx = PIN('A', 0), rx = PIN('A', 1);
+  if (uart == UART1) tx = PIN('B', 0), rx = PIN('B', 1);
+  if (uart == UART2) tx = PIN('A', 6), rx = PIN('A', 7);  // or PD4, PD5...
+
+  gpio_init(tx, GPIO_MODE_AF, GPIO_OTYPE_PUSH_PULL, GPIO_SPEED_HIGH, 0, af);
+  gpio_init(rx, GPIO_MODE_AF, GPIO_OTYPE_PUSH_PULL, GPIO_SPEED_HIGH, 0, af);
   // (16.3.2) ClkDiv = 16 (HSE=0)
   // BRD = BRDI + BRDF = UARTSysClk / (ClkDiv * Baud Rate)
   // UARTFBRD[DIVFRAC] = integer(BRDF * 64 + 0.5)

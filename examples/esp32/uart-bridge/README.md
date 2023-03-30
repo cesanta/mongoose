@@ -1,30 +1,10 @@
 # A UART to network bridge for ESP32
 
-This example is a demonstration of how Mongoose Library could be integrated
-into an embedded device and provide a UART-to-Network bridge capability:
-
-- A device opens listening TCP port and Websocket port and waits for connections
-- When a client connects, data is exchanged with the device's UART
-- Everything that client send, is sent to the UART
-- Everything that is read from the UART, gets sent to the client
-- Multiple clients are allowed
-- Live UART console allows to talk to the UART from the web page
-- Web UI is hardcoded into the binary and does not need a filesystem
-
-# Screenshots
-
 ![](../../uart-bridge/screenshots/dashboard.png)
 
-# Build and flash
+- See detailed tutorial at https://mongoose.ws/tutorials/esp32/uart-bridge/
 
-Build requires Docker installed, and uses Espressif's ESP-IDF docker image:
-
-```sh
-make build
-make flash PORT=/dev/YOURSERIAL
-```
-
-# Flash pre-built firmware
+## Flash pre-built firmware
 
 You can flash a pre-built firmware to the ESP32 device using the following
 instructions:

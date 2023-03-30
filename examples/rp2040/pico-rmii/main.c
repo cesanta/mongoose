@@ -24,10 +24,10 @@ int main(void) {
   stdio_init_all();
 
   struct mg_mgr mgr;        // Initialise Mongoose event manager
-  mg_mgr_init(&mgr);        // and attach it to the MIP interface
+  mg_mgr_init(&mgr);        // and attach it to the interface
   mg_log_set(MG_LL_DEBUG);  // Set log level
 
-  MG_INFO(("Init MIP"));
+  MG_INFO(("Init TCP/IP"));
   // Initialise Mongoose network stack and specific driver
   // Set consecutive GPIOs for RMII (tx and rx) and SMI function groups
   struct mg_tcpip_driver_rp2040_rmii_data driver_data = {
