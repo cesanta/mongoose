@@ -1,4 +1,4 @@
-// Copyright (c) 2020 Cesanta Software Limited
+// Copyright (c) 2023 Cesanta Software Limited
 // All rights reserved
 //
 // Example MQTT client. It performs the following steps:
@@ -12,31 +12,23 @@
 
 #include "mongoose.h"
 
-static const char *s_url = 
-#if MG_ENABLE_MBEDTLS || MG_ENABLE_OPENSSL
-  "mqtts://broker.hivemq.com:8883";
-#else
-  "mqtt://broker.hivemq.com:1883";
-#endif
-
-static const char *s_sub_topic = "mg/+/test";
-static const char *s_pub_topic = "mg/clnt/test";
-static int s_qos = 1;
-static struct mg_connection *s_conn;
+static const char *s_url = "mqtt://broker.hivemq.com:1883";
+static const char *s_sub_topic = "mg/+/test";     // Publish topic
+static const char *s_pub_topic = "mg/clnt/test";  // Subscribe topic
+static int s_qos = 1;                             // MQTT QoS
+static struct mg_connection *s_conn;              // Client connection
 
 // Handle interrupts, like Ctrl-C
 static int s_signo;
-static void signal_handler(int signo) {
-  s_signo = signo;
-}
+static void signal_handler(int signo) { s_signo = signo; }
 
 static void fn(struct mg_connection *c, int ev, void *ev_data, void *fn_data) {
   if (ev == MG_EV_OPEN) {
-    MG_INFO(("CREATED"));
+    MG_INFO(("%lu CREATED", c->id));
     // c->is_hexdumping = 1;
   } else if (ev == MG_EV_ERROR) {
     // On error, log error message
-    MG_ERROR(("%p %s", c->fd, (char *) ev_data));
+    MG_ERROR(("%lu ERROR %s", c->id, (char *) ev_data));
   } else if (ev == MG_EV_CONNECT) {
     // If target URL is SSL/TLS, command client connection to use TLS
     if (mg_url_is_ssl(s_url)) {
@@ -47,21 +39,20 @@ static void fn(struct mg_connection *c, int ev, void *ev_data, void *fn_data) {
     // MQTT connect is successful
     struct mg_str subt = mg_str(s_sub_topic);
     struct mg_str pubt = mg_str(s_pub_topic), data = mg_str("hello");
-    MG_INFO(("CONNECTED to %s", s_url));
+    MG_INFO(("%lu CONNECTED to %s", c->id, s_url));
     mg_mqtt_sub(c, subt, s_qos);
-    MG_INFO(("SUBSCRIBED to %.*s", (int) subt.len, subt.ptr));
+    MG_INFO(("%lu SUBSCRIBED to %.*s", c->id, (int) subt.len, subt.ptr));
 
     mg_mqtt_pub(c, pubt, data, s_qos, false);
-    MG_INFO(("PUBLISHED %.*s -> %.*s", (int) data.len, data.ptr,
+    MG_INFO(("%lu PUBLISHED %.*s -> %.*s", c->id, (int) data.len, data.ptr,
              (int) pubt.len, pubt.ptr));
   } else if (ev == MG_EV_MQTT_MSG) {
     // When we get echo response, print it
     struct mg_mqtt_message *mm = (struct mg_mqtt_message *) ev_data;
-    MG_INFO(("RECEIVED %.*s <- %.*s", (int) mm->data.len, mm->data.ptr,
-             (int) mm->topic.len, mm->topic.ptr));
-    c->is_closing = 1;
+    MG_INFO(("%lu RECEIVED %.*s <- %.*s", c->id, (int) mm->data.len,
+             mm->data.ptr, (int) mm->topic.len, mm->topic.ptr));
   } else if (ev == MG_EV_CLOSE) {
-    MG_INFO(("CLOSED"));
+    MG_INFO(("%lu CLOSED", c->id));
     s_conn = NULL;  // Mark that we're closed
   }
   (void) fn_data;
@@ -73,21 +64,41 @@ static void timer_fn(void *arg) {
   struct mg_mqtt_opts opts = {.clean = true,
                               .will_qos = s_qos,
                               .will_topic = mg_str(s_pub_topic),
-                              .will_message = mg_str("goodbye")};
+                              .will_message = mg_str("bye")};
   if (s_conn == NULL) s_conn = mg_mqtt_connect(mgr, s_url, &opts, fn, NULL);
 }
 
-int main(void) {
+int main(int argc, char *argv[]) {
   struct mg_mgr mgr;
-  int topts = MG_TIMER_REPEAT | MG_TIMER_RUN_NOW;
+  int i;
+
+  // Parse command-line flags
+  for (i = 1; i < argc; i++) {
+    if (strcmp(argv[i], "-u") == 0 && argv[i + 1] != NULL) {
+      s_url = argv[++i];
+    } else if (strcmp(argv[i], "-p") == 0 && argv[i + 1] != NULL) {
+      s_pub_topic = argv[++i];
+    } else if (strcmp(argv[i], "-s") == 0 && argv[i + 1] != NULL) {
+      s_sub_topic = argv[++i];
+    } else if (strcmp(argv[i], "-v") == 0 && argv[i + 1] != NULL) {
+      mg_log_set(atoi(argv[++i]));
+    } else {
+      MG_ERROR(("Unknown option: %s. Usage:", argv[i]));
+      MG_ERROR(
+          ("%s [-u mqtts://SERVER:PORT] [-p PUB_TOPIC] [-s SUB_TOPIC] "
+           "[-v DEBUG_LEVEL]",
+           argv[0], argv[i]));
+      return 1;
+    }
+  }
 
   signal(SIGINT, signal_handler);   // Setup signal handlers - exist event
   signal(SIGTERM, signal_handler);  // manager loop on SIGINT and SIGTERM
 
-  mg_mgr_init(&mgr);                                // Init event manager
-  mg_timer_add(&mgr, 3000, topts, timer_fn, &mgr);  // Init timer
-  while (s_signo == 0) mg_mgr_poll(&mgr, 1000);     // Event loop, 1s timeout
-  mg_mgr_free(&mgr);                                // Finished, cleanup
+  mg_mgr_init(&mgr);
+  mg_timer_add(&mgr, 3000, MG_TIMER_REPEAT | MG_TIMER_RUN_NOW, timer_fn, &mgr);
+  while (s_signo == 0) mg_mgr_poll(&mgr, 1000);  // Event loop, 1s timeout
+  mg_mgr_free(&mgr);                             // Finished, cleanup
 
   return 0;
 }
