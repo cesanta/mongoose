@@ -369,7 +369,7 @@ static void mqtt_cb(struct mg_connection *c, int ev, void *evd, void *fnd) {
 }
 
 static void test_mqtt_base(void);
-static void test_mqtt_base() {
+static void test_mqtt_base(void) {
   char buf[50] = {0};
   struct mqtt_data test_data = {buf, 50, 0, 0};
   struct mg_mgr mgr;
@@ -1029,6 +1029,18 @@ static void test_http_client(void) {
     mg_tls_init(c, &opts);
     for (i = 0; i < 500 && ok <= 0; i++) mg_mgr_poll(&mgr, 10);
     ASSERT(ok == 777);
+    mg_mgr_poll(&mgr, 1);
+
+    // Test host validation only (no CA, no cert)
+    ok = 0;
+    opts.srvname = host;
+    opts.ca = NULL;
+    c = mg_http_connect(&mgr, url, f3, &ok);
+    ASSERT(c != NULL);
+    mg_tls_init(c, &opts);
+    for (i = 0; i < 1500 && ok <= 0; i++) mg_mgr_poll(&mgr, 10);
+    ASSERT(ok == 200);
+    c->is_closing = 1;
     mg_mgr_poll(&mgr, 1);
   }
 #endif
