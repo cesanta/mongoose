@@ -12,6 +12,7 @@ ifeq ($(OS),Windows_NT)
   DELETE = cmd /C del /f /q /s  # Command prompt command to delete files
 else
   # Mac, Linux
+  CFLAGS += -pthread
   PROG ?= example
   DELETE = rm -rf
 endif
