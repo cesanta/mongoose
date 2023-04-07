@@ -242,6 +242,16 @@ jobs:
         run: sudo apt -y update ; sudo apt -y install gcc-arm-none-eabi
       - if: ${{ env.GO == 1 }}
         run: make -C examples/${{ matrix.example.path }} build
+  
+  cube_examples:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+        with: { fetch-depth: 2 }
+      - run: if ./test/match_changed_files.sh '^src|examples/stm32/nucleo-*-cube-*'; then echo GO=1 >> $GITHUB_ENV ; fi
+      - if: ${{ env.GO == 1 }}
+        run: cd test/cube && make
+
   zephyr_examples:
     runs-on: ubuntu-latest
     steps:
