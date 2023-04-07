@@ -1,6 +1,5 @@
 #include "fmt.h"
-#include "iobuf.h"
-#include "queue.h"
+#include "printf.h"
 #include "util.h"
 
 size_t mg_queue_vprintf(struct mg_queue *q, const char *fmt, va_list *ap) {

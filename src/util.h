@@ -2,7 +2,6 @@
 
 #include "arch.h"
 #include "config.h"
-#include "fmt.h"
 #include "net.h"
 #include "str.h"
 

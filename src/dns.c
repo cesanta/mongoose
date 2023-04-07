@@ -1,5 +1,6 @@
 #include "dns.h"
 #include "log.h"
+#include "printf.h"
 #include "str.h"
 #include "timer.h"
 #include "url.h"

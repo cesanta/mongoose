@@ -1,5 +1,5 @@
 #include "fmt.h"
-#include "iobuf.h"
+#include "printf.h"
 #include "util.h"
 
 static bool is_digit(int c) { return c >= '0' && c <= '9'; }

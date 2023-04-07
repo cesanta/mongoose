@@ -1,6 +1,6 @@
-#include "ssi.h"
-#include "fmt.h"
 #include "log.h"
+#include "printf.h"
+#include "ssi.h"
 
 #ifndef MG_MAX_SSI_DEPTH
 #define MG_MAX_SSI_DEPTH 5

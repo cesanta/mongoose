@@ -117,6 +117,7 @@ int mg_base64_decode(const char *src, int n, char *dst) {
 
 
 
+
 struct dns_data {
   struct dns_data *next;
   struct mg_connection *c;
@@ -1293,6 +1294,7 @@ struct mg_fs mg_fs_posix = {p_stat,  p_list, p_open,   p_close,  p_read,
 #ifdef MG_ENABLE_LINES
 #line 1 "src/http.c"
 #endif
+
 
 
 
@@ -3243,6 +3245,7 @@ struct mg_connection *mg_mqtt_listen(struct mg_mgr *mgr, const char *url,
 
 
 
+
 size_t mg_vprintf(struct mg_connection *c, const char *fmt, va_list *ap) {
   size_t old = c->send.len;
   mg_vxprintf(mg_pfn_iobuf, &c->send, fmt, ap);
@@ -3487,7 +3490,6 @@ void mg_mgr_init(struct mg_mgr *mgr) {
 #ifdef MG_ENABLE_LINES
 #line 1 "src/printf.c"
 #endif
-
 
 
 
@@ -4093,6 +4095,7 @@ struct mg_connection *mg_sntp_connect(struct mg_mgr *mgr, const char *url,
 #ifdef MG_ENABLE_LINES
 #line 1 "src/sock.c"
 #endif
+
 
 
 
@@ -5765,6 +5768,7 @@ uint64_t mg_millis(void) {
 #ifdef MG_ENABLE_LINES
 #line 1 "src/ws.c"
 #endif
+
 
 
 
