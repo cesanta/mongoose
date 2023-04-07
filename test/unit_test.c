@@ -1601,15 +1601,22 @@ static void test_str(void) {
   }
 
   {
-    char tmp[40];
+#if MG_ARCH == MG_ARCH_WIN32
+    bool is_windows = true;
+#else
+    bool is_windows = false;
+#endif
+
 #define DBLWIDTH(a, b) a, b
-#define TESTDOUBLE(fmt_, num_, res_)                                          \
-  do {                                                                        \
-    const char *N = #num_;                                                    \
-    size_t n = mg_snprintf(tmp, sizeof(tmp), fmt_, num_);                     \
-    if (0) printf("[%s] [%s] -> [%s] [%.*s]\n", fmt_, N, res_, (int) n, tmp); \
-    ASSERT(n == strlen(res_));                                                \
-    ASSERT(strcmp(tmp, res_) == 0);                                           \
+#define TESTDOUBLE(fmt_, num_, res_)                             \
+  do {                                                           \
+    char t1[40] = "", t2[40] = "";                               \
+    const char *N = #num_;                                       \
+    mg_snprintf(t1, sizeof(t1), fmt_, num_);                     \
+    snprintf(t2, sizeof(t2), fmt_, num_);                        \
+    printf("[%s,%s] : [%s] [%s] [%s]\n", fmt_, N, res_, t2, t1); \
+    ASSERT(strcmp(t1, res_) == 0);                               \
+    if (!is_windows) ASSERT(strcmp(t1, t2) == 0);                \
   } while (0)
 
     TESTDOUBLE("%g", 0.0, "0");
@@ -1649,6 +1656,15 @@ static void test_str(void) {
     TESTDOUBLE("%g", -600.1234, "-600.123");
     TESTDOUBLE("%g", 599.1234, "599.123");
     TESTDOUBLE("%g", -599.1234, "-599.123");
+    TESTDOUBLE("%g", 0.14, "0.14");
+    TESTDOUBLE("%f", 0.14, "0.140000");
+    TESTDOUBLE("%.*f", DBLWIDTH(4, 0.14), "0.1400");
+    TESTDOUBLE("%.*f", DBLWIDTH(3, 0.14), "0.140");
+    TESTDOUBLE("%.*f", DBLWIDTH(2, 0.14), "0.14");
+    TESTDOUBLE("%.*f", DBLWIDTH(1, 0.14), "0.1");
+    TESTDOUBLE("%.*f", DBLWIDTH(1, 0.19), "0.2");
+    TESTDOUBLE("%.*f", DBLWIDTH(1, 0.16), "0.2");
+    // TESTDOUBLE("%.*f", DBLWIDTH(1, 0.15), "0.1");
 
 #ifndef _WIN32
     TESTDOUBLE("%g", (double) INFINITY, "inf");

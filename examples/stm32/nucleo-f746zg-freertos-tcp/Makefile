@@ -15,7 +15,6 @@ CFLAGS += -IFreeRTOS-Kernel/include
 CFLAGS += -IFreeRTOS-Kernel/portable/GCC/ARM_CM7/r0p1 -Wno-conversion
 
 # FreeRTOS-Plus-TCP
-SOURCES += $(wildcard FreeRTOS-TCP/source/*.c)
 SOURCES += FreeRTOS-TCP/source/portable/BufferManagement/BufferAllocation_2.c
 SOURCES += FreeRTOS-TCP/source/portable/NetworkInterface/Common/phyHandling.c
 SOURCES += FreeRTOS-TCP/source/portable/NetworkInterface/STM32Fxx/NetworkInterface.c
@@ -44,7 +43,7 @@ firmware.bin: firmware.elf
 	arm-none-eabi-objcopy -O binary $< $@
 
 firmware.elf: FreeRTOS-TCP FreeRTOS-Kernel cmsis_core cmsis_f7 $(SOURCES) hal.h link.ld 
-	arm-none-eabi-gcc $(SOURCES) $(wildcard FreeRTOS-Kernel/*.c) $(CFLAGS) $(LDFLAGS) -o $@
+	arm-none-eabi-gcc $(SOURCES) $(wildcard FreeRTOS-TCP/source/*.c) $(wildcard FreeRTOS-Kernel/*.c) $(CFLAGS) $(LDFLAGS) -o $@
 
 flash: firmware.bin
 	st-flash --reset write $< 0x8000000
