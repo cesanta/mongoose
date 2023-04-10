@@ -571,7 +571,7 @@ static void mg_iotest(struct mg_mgr *mgr, int ms) {
     }
   }
 #else
-  struct timeval tv = {ms / 1000, (ms % 1000) * 1000}, tv_zero = {0, 0};
+  struct timeval tv = {ms / 1000, (ms % 1000) * 1000}, tv_zero = {0, 0}, *tvp;
   struct mg_connection *c;
   fd_set rset, wset, eset;
   MG_SOCKET_TYPE maxfd = 0;
@@ -580,17 +580,18 @@ static void mg_iotest(struct mg_mgr *mgr, int ms) {
   FD_ZERO(&rset);
   FD_ZERO(&wset);
   FD_ZERO(&eset);
+  tvp = ms < 0 ? NULL : &tv;
   for (c = mgr->conns; c != NULL; c = c->next) {
     c->is_readable = c->is_writable = 0;
     if (skip_iotest(c)) continue;
     FD_SET(FD(c), &eset);
     if (can_read(c)) FD_SET(FD(c), &rset);
     if (can_write(c)) FD_SET(FD(c), &wset);
-    if (mg_tls_pending(c) > 0) tv = tv_zero;
+    if (mg_tls_pending(c) > 0) tvp = &tv_zero;
     if (FD(c) > maxfd) maxfd = FD(c);
   }
 
-  if ((rc = select((int) maxfd + 1, &rset, &wset, &eset, &tv)) < 0) {
+  if ((rc = select((int) maxfd + 1, &rset, &wset, &eset, tvp)) < 0) {
 #if MG_ARCH == MG_ARCH_WIN32
     if (maxfd == 0) Sleep(ms);  // On Windows, select fails if no sockets
 #else
