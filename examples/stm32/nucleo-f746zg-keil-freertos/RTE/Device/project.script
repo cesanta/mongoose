@@ -1,0 +1,7 @@
+load STM32F746ZGTx 
+project name STCubeGenerated 
+project toolchain "MDK-ARM V5" 
+project path "C:\Users\scaprile\Documents\Keil\nucleo-f746zg-keil-baremetal\RTE\Device\STM32F746ZGTx\" 
+set tpl_path "C:\Users\scaprile\AppData\Local\Arm\Packs\Keil\STM32F7xx_DFP\2.15.1\MDK\CubeMX" 
+set dest_path "STM32F746ZGTx" 
+SetCopyLibrary  "copy as reference"
