@@ -199,15 +199,19 @@ void uart_bridge_fn(struct mg_connection *c, int ev, void *ev_data,
       mg_http_reply(c, 200, "", "true\n");
     } else if (mg_http_match_uri(hm, "/api/config/get")) {
       mg_http_reply(c, 200, "Content-Type: application/json\r\n",
-                    "{%Q:{%Q:%Q,%Q:%s},%Q:{%Q:%Q,%Q:%s},%Q:{%Q:%Q,%Q:%s},"
-                    "%Q:%d,%Q:%d,%Q:%d}\n",
-                    "tcp", "url", s_state.tcp.url, "enable",
-                    s_state.tcp.enable ? "true" : "false", "ws", "url",
-                    s_state.websocket.url, "enable",
-                    s_state.websocket.enable ? "true" : "false", "mqtt", "url",
-                    s_state.mqtt.url, "enable",
-                    s_state.mqtt.enable ? "true" : "false", "rx", s_state.rx,
-                    "tx", s_state.tx, "baud", s_state.baud);
+                    "{%m:{%m:%m,%m:%s},%m:{%m:%m,%m:%s},%m:{%m:%m,%m:%s},"
+                    "%m:%d,%m:%d,%m:%d}\n",
+                    mg_print_esc, 0, "tcp", mg_print_esc, 0, "url",
+                    mg_print_esc, 0, s_state.tcp.url, mg_print_esc, 0, "enable",
+                    s_state.tcp.enable ? "true" : "false", mg_print_esc, 0,
+                    "ws", mg_print_esc, 0, "url", mg_print_esc, 0,
+                    s_state.websocket.url, mg_print_esc, 0, "enable",
+                    s_state.websocket.enable ? "true" : "false", mg_print_esc,
+                    0, "mqtt", mg_print_esc, 0, "url", mg_print_esc, 0,
+                    s_state.mqtt.url, mg_print_esc, 0, "enable",
+                    s_state.mqtt.enable ? "true" : "false", mg_print_esc, 0,
+                    "rx", s_state.rx, mg_print_esc, 0, "tx", s_state.tx,
+                    mg_print_esc, 0, "baud", s_state.baud);
     } else {
       struct mg_http_serve_opts opts;
       memset(&opts, 0, sizeof(opts));

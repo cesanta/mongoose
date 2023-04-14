@@ -15,7 +15,7 @@ static void fn(struct mg_connection *c, int ev, void *ev_data, void *fn_data) {
     struct mg_http_message *hm = (struct mg_http_message *) ev_data;
     if (mg_http_match_uri(hm, "/api/watch")) {
       mg_ws_upgrade(c, hm, NULL);  // Upgrade HTTP to Websocket
-      c->data[0] = 'W';           // Set some unique mark on the connection
+      c->data[0] = 'W';            // Set some unique mark on the connection
     } else {
       struct mg_http_serve_opts opts = {.root_dir = s_web_root};
       mg_http_serve_dir(c, ev_data, &opts);
@@ -29,8 +29,9 @@ static void push(struct mg_mgr *mgr, const char *name, const void *data) {
   struct mg_connection *c;
   for (c = mgr->conns; c != NULL; c = c->next) {
     if (c->data[0] != 'W') continue;
-    mg_ws_printf(c, WEBSOCKET_OP_TEXT, "{%Q:%Q,%Q:%Q}", "name", name, "data",
-                 data);
+    mg_ws_printf(c, WEBSOCKET_OP_TEXT, "{%m:%m,%m:%m}", mg_print_esc, 0, "name",
+                 mg_print_esc, 0, name, mg_print_esc, 0, "data", mg_print_esc,
+                 0, data);
   }
 }
 

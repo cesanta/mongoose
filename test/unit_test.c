@@ -1321,7 +1321,9 @@ static void test_http_range(void) {
   ASSERT(mgr.conns == NULL);
 }
 
-static void f1(void *arg) { (*(int *) arg)++; }
+static void f1(void *arg) {
+  (*(int *) arg)++;
+}
 
 static void test_timer(void) {
   int v1 = 0, v2 = 0, v3 = 0;
@@ -1557,7 +1559,7 @@ static void test_str(void) {
     const char *expected;
 
     expected = "\"\"";
-    mg_snprintf(buf, sizeof(buf), "%Q", "");
+    mg_snprintf(buf, sizeof(buf), "%m", mg_print_esc, 0, "");
     ASSERT(strcmp(buf, expected) == 0);
 
     expected = "";
@@ -1569,20 +1571,20 @@ static void test_str(void) {
     ASSERT(strcmp(buf, expected) == 0);
 
     expected = "\"hi, \\\"\"";
-    mg_snprintf(buf, sizeof(buf), "\"hi, %q\"", "\"");
+    mg_snprintf(buf, sizeof(buf), "\"hi, %M\"", mg_print_esc, 0, "\"");
     MG_INFO(("[%s] [%s]", buf, expected));
     ASSERT(strcmp(buf, expected) == 0);
 
     expected = "\"a'b\"";
-    mg_snprintf(buf, sizeof(buf), "%Q", "a'b");
+    mg_snprintf(buf, sizeof(buf), "%m", mg_print_esc, 0, "a'b");
     ASSERT(strcmp(buf, expected) == 0);
 
     expected = "\"a\\b\\n\\f\\r\\t\\\"\"";
-    mg_snprintf(buf, sizeof(buf), "%Q", "a\b\n\f\r\t\"");
+    mg_snprintf(buf, sizeof(buf), "%m", mg_print_esc, 0, "a\b\n\f\r\t\"");
     ASSERT(strcmp(buf, expected) == 0);
 
     expected = "\"abc\"";
-    mg_snprintf(buf, sizeof(buf), "%.*Q", 3, "abcdef");
+    mg_snprintf(buf, sizeof(buf), "%m", mg_print_esc, 3, "abcdef");
     ASSERT(strcmp(buf, expected) == 0);
 
     p = mg_mprintf("[%s,%M,%s]", "null", pf1, 2, 3, "hi");
@@ -1679,15 +1681,16 @@ static void test_str(void) {
   {
     const char *expected = "[\"MA==\",\"MAo=\",\"MAr+\",\"MAr+Zw==\"]";
     char tmp[100], s[] = "0\n\xfeg";
-    ASSERT(mg_snprintf(tmp, sizeof(tmp), "[%V,%V,%V,%V]", 1, s, 2, s, 3, s, 4,
-                       s) == 33);
+    ASSERT(mg_snprintf(tmp, sizeof(tmp), "[%m,%m,%m,%m]", mg_print_base64, 1, s,
+                       mg_print_base64, 2, s, mg_print_base64, 3, s,
+                       mg_print_base64, 4, s) == 33);
     ASSERT(strcmp(tmp, expected) == 0);
   }
 
   {
     const char *expected = "\"002001200220616263\"";
     char tmp[100], s[] = "\x00 \x01 \x02 abc";
-    ASSERT(mg_snprintf(tmp, sizeof(tmp), "%H", 9, s) == 20);
+    ASSERT(mg_snprintf(tmp, sizeof(tmp), "%m", mg_print_hex, 9, s) == 20);
     ASSERT(strcmp(tmp, expected) == 0);
   }
 
@@ -2778,7 +2781,9 @@ static void start_thread(void (*f)(void *), void *p) {
   pthread_attr_destroy(&attr);
 }
 #else
-static void start_thread(void (*f)(void *), void *p) { (void) f, (void) p; }
+static void start_thread(void (*f)(void *), void *p) {
+  (void) f, (void) p;
+}
 #endif
 
 static void test_queue(void) {

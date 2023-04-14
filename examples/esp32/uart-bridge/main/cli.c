@@ -2,8 +2,9 @@
 
 static void cli_wifi(const char *ssid, const char *pass) {
   if (wifi_init(ssid, pass)) {
-    mg_file_printf(&mg_fs_posix, WIFI_FILE, "{%Q:%Q,%Q:%Q}\n", "ssid", ssid,
-                   "pass", pass);
+    mg_file_printf(&mg_fs_posix, WIFI_FILE, "{%m:%m,%m:%m}\n", mg_print_esc, 0,
+                   "ssid", mg_print_esc, 0, ssid, mg_print_esc, 0, "pass",
+                   mg_print_esc, 0, pass);
     MG_INFO(("Reboot now"));
   }
 }

@@ -5,9 +5,9 @@
 
 #if !defined(MQTT_SERVER)
 #if MG_ENABLE_MBEDTLS || MG_ENABLE_OPENSSL
-  #define MQTT_SERVER "mqtts://broker.hivemq.com:8883"
+#define MQTT_SERVER "mqtts://broker.hivemq.com:8883"
 #else
-  #define MQTT_SERVER "mqtt://broker.hivemq.com:1883"
+#define MQTT_SERVER "mqtt://broker.hivemq.com:1883"
 #endif
 #endif
 #define MQTT_PUBLISH_TOPIC "mg/my_device"
@@ -115,7 +115,8 @@ static void send_notification(struct mg_mgr *mgr, const char *fmt, ...) {
 
 // Send simulated metrics data to the dashboard, for chart rendering
 static void timer_metrics_fn(void *param) {
-  send_notification(param, "{%Q:%Q,%Q:[%lu, %d]}", "name", "metrics", "data",
+  send_notification(param, "{%m:%m,%m:[%lu, %d]}", mg_print_esc, 0, "name",
+                    mg_print_esc, 0, "metrics", mg_print_esc, 0, "data",
                     (unsigned long) ourtime(NULL),
                     10 + (int) ((double) rand() * 10 / RAND_MAX));
 }
@@ -132,14 +133,17 @@ static void mqtt_fn(struct mg_connection *c, int ev, void *ev_data, void *fnd) {
     s_connected = true;
     c->is_hexdumping = 1;
     mg_mqtt_sub(s_mqtt, mg_str(s_config.sub), 2);
-    send_notification(c->mgr, "{%Q:%Q,%Q:null}", "name", "config", "data");
+    send_notification(c->mgr, "{%m:%m,%m:null}", mg_print_esc, 0, "name",
+                      mg_print_esc, 0, "config", mg_print_esc, 0, "data");
     MG_INFO(("MQTT connected, server %s", MQTT_SERVER));
   } else if (ev == MG_EV_MQTT_MSG) {
     struct mg_mqtt_message *mm = ev_data;
-    send_notification(c->mgr, "{%Q:%Q,%Q:{%Q: %.*Q, %Q: %.*Q, %Q: %d}}", "name",
-                      "message", "data", "topic", (int) mm->topic.len,
-                      mm->topic.ptr, "data", (int) mm->data.len, mm->data.ptr,
-                      "qos", (int) mm->qos);
+    send_notification(c->mgr, "{%m:%m,%m:{%m: %m, %m: %m, %m: %d}}",
+                      mg_print_esc, 0, "name", mg_print_esc, 0, "message",
+                      mg_print_esc, 0, "data", mg_print_esc, 0, "topic",
+                      mg_print_esc, (int) mm->topic.len, mm->topic.ptr,
+                      mg_print_esc, 0, "data", mg_print_esc, (int) mm->data.len,
+                      mm->data.ptr, mg_print_esc, 0, "qos", (int) mm->qos);
   } else if (ev == MG_EV_MQTT_CMD) {
     struct mg_mqtt_message *mm = (struct mg_mqtt_message *) ev_data;
     MG_DEBUG(("%lu cmd %d qos %d", c->id, mm->cmd, mm->qos));
@@ -147,7 +151,8 @@ static void mqtt_fn(struct mg_connection *c, int ev, void *ev_data, void *fnd) {
     s_mqtt = NULL;
     if (s_connected) {
       s_connected = false;
-      send_notification(c->mgr, "{%Q:%Q,%Q:null}", "name", "config", "data");
+      send_notification(c->mgr, "{%m:%m,%m:null}", mg_print_esc, 0, "name",
+                        mg_print_esc, 0, "config", mg_print_esc, 0, "data");
     }
   }
   (void) fnd;
@@ -216,11 +221,15 @@ void device_dashboard_fn(struct mg_connection *c, int ev, void *ev_data,
       mg_http_reply(c, 403, "", "Denied\n");
     } else if (mg_http_match_uri(hm, "/api/config/get")) {
 #ifdef DISABLE_ROUTING
-      mg_http_reply(c, 200, NULL, "{%Q:%Q,%Q:%Q,%Q:%Q}\n", "url", s_config.url,
-                    "pub", s_config.pub, "sub", s_config.sub);
+      mg_http_reply(c, 200, NULL, "{%m:%m,%m:%m,%m:%m}\n", mg_print_esc, 0,
+                    "url", mg_print_esc, 0, s_config.url, mg_print_esc, 0,
+                    "pub", mg_print_esc, 0, s_config.pub, mg_print_esc, 0,
+                    "sub", mg_print_esc, 0, s_config.sub);
 #else
-      mg_http_reply(c, 200, NULL, "{%Q:%Q,%Q:%Q,%Q:%Q,%Q:%s}\n", "url",
-                    s_config.url, "pub", s_config.pub, "sub", s_config.sub,
+      mg_http_reply(c, 200, NULL, "{%m:%m,%m:%m,%m:%m,%m:%s}\n", mg_print_esc,
+                    0, "url", mg_print_esc, 0, s_config.url, mg_print_esc, 0,
+                    "pub", mg_print_esc, 0, s_config.pub, mg_print_esc, 0,
+                    "sub", mg_print_esc, 0, s_config.sub, mg_print_esc, 0,
                     "connected", s_connected ? "true" : "false");
 #endif
     } else if (mg_http_match_uri(hm, "/api/config/set")) {
@@ -230,7 +239,8 @@ void device_dashboard_fn(struct mg_connection *c, int ev, void *ev_data,
         update_config(&hm->body, "pub", &s_config.pub);
         update_config(&hm->body, "sub", &s_config.sub);
         if (s_mqtt) s_mqtt->is_closing = 1;  // Ask to disconnect from MQTT
-        send_notification(c->mgr, "{%Q:%Q,%Q:null}", "name", "config", "data");
+        send_notification(c->mgr, "{%m:%m,%m:null}", mg_print_esc, 0, "name",
+                          mg_print_esc, 0, "config", mg_print_esc, 0, "data");
         mg_http_reply(c, 200, "", "ok\n");
       } else {
         mg_http_reply(c, 403, "", "Denied\n");
@@ -246,8 +256,9 @@ void device_dashboard_fn(struct mg_connection *c, int ev, void *ev_data,
       c->data[0] = 'W';  // Mark ourselves as a event listener
       mg_ws_upgrade(c, hm, NULL);
     } else if (mg_http_match_uri(hm, "/api/login")) {
-      mg_http_reply(c, 200, NULL, "{%Q:%Q,%Q:%Q}\n", "user", u->name, "token",
-                    u->token);
+      mg_http_reply(c, 200, NULL, "{%m:%m,%m:%m}\n", mg_print_esc, 0, "user",
+                    mg_print_esc, 0, u->name, mg_print_esc, 0, "token",
+                    mg_print_esc, 0, u->token);
     } else {
       struct mg_http_serve_opts opts;
       memset(&opts, 0, sizeof(opts));

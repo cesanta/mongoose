@@ -412,7 +412,9 @@ void mg_error(struct mg_connection *c, const char *fmt, ...) {
 
 
 
-static bool is_digit(int c) { return c >= '0' && c <= '9'; }
+static bool is_digit(int c) {
+  return c >= '0' && c <= '9';
+}
 
 static int addexp(char *buf, int e, int sign) {
   int n = 0;
@@ -527,61 +529,10 @@ static size_t mg_lld(char *buf, int64_t val, bool is_signed, bool is_hex) {
 }
 
 static size_t scpy(void (*out)(char, void *), void *ptr, char *buf,
-                   size_t len) {
+                          size_t len) {
   size_t i = 0;
   while (i < len && buf[i] != '\0') out(buf[i++], ptr);
   return i;
-}
-
-static char mg_esc(int c, bool esc) {
-  const char *p, *esc1 = "\b\f\n\r\t\\\"", *esc2 = "bfnrt\\\"";
-  for (p = esc ? esc1 : esc2; *p != '\0'; p++) {
-    if (*p == c) return esc ? esc2[p - esc1] : esc1[p - esc2];
-  }
-  return 0;
-}
-
-static char mg_escape(int c) { return mg_esc(c, true); }
-
-static size_t qcpy(void (*out)(char, void *), void *ptr, char *buf,
-                   size_t len) {
-  size_t i = 0, extra = 0;
-  for (i = 0; i < len && buf[i] != '\0'; i++) {
-    char c = mg_escape(buf[i]);
-    if (c) {
-      out('\\', ptr), out(c, ptr), extra++;
-    } else {
-      out(buf[i], ptr);
-    }
-  }
-  return i + extra;
-}
-
-static size_t Qcpy(void (*out)(char, void *), void *ptr, char *buf,
-                   size_t len) {
-  size_t n = 2;
-  out('"', ptr);
-  n += qcpy(out, ptr, buf, len);
-  out('"', ptr);
-  return n;
-}
-
-static size_t bcpy(void (*out)(char, void *), void *ptr, uint8_t *buf,
-                   size_t len) {
-  size_t i, n = 0;
-  const char *t =
-      "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
-  out('"', ptr), n++;
-  for (i = 0; i < len; i += 3) {
-    uint8_t c1 = buf[i], c2 = i + 1 < len ? buf[i + 1] : 0,
-            c3 = i + 2 < len ? buf[i + 2] : 0;
-    char tmp[4] = {t[c1 >> 2], t[(c1 & 3) << 4 | (c2 >> 4)], '=', '='};
-    if (i + 1 < len) tmp[2] = t[(c2 & 15) << 2 | (c3 >> 6)];
-    if (i + 2 < len) tmp[3] = t[c3 & 63];
-    n += scpy(out, ptr, tmp, sizeof(tmp));
-  }
-  out('"', ptr), n++;
-  return n;
 }
 
 size_t mg_xprintf(void (*out)(char, void *), void *ptr, const char *fmt, ...) {
@@ -648,40 +599,23 @@ size_t mg_vxprintf(void (*out)(char, void *), void *param, const char *fmt,
         n += scpy(out, param, tmp, k);
         for (j = 0; pad == ' ' && minus && k < w && j + k < w; j++)
           n += scpy(out, param, &pad, 1);
-      } else if (c == 'M') {
+      } else if (c == 'm' || c == 'M') {
         mg_pm_t f = va_arg(*ap, mg_pm_t);
+        if (c == 'm') out('"', param);
         n += f(out, param, ap);
+        if (c == 'm') n += 2, out('"', param);
       } else if (c == 'c') {
         int ch = va_arg(*ap, int);
         out((char) ch, param);
         n++;
-      } else if (c == 'H') {
-        // Print hex-encoded double-quoted string
-        size_t bl = (size_t) va_arg(*ap, int);
-        uint8_t *p = va_arg(*ap, uint8_t *), dquote = '"';
-        const char *hex = "0123456789abcdef";
-        n += scpy(out, param, (char *) &dquote, 1);
-        for (j = 0; j < bl; j++) {
-          n += scpy(out, param, (char *) &hex[(p[j] >> 4) & 15], 1);
-          n += scpy(out, param, (char *) &hex[p[j] & 15], 1);
-        }
-        n += scpy(out, param, (char *) &dquote, 1);
-      } else if (c == 'V') {
-        // Print base64-encoded double-quoted string
-        size_t len = (size_t) va_arg(*ap, int);
-        uint8_t *buf = va_arg(*ap, uint8_t *);
-        n += bcpy(out, param, buf, len);
-      } else if (c == 's' || c == 'Q' || c == 'q') {
+      } else if (c == 's') {
         char *p = va_arg(*ap, char *);
-        size_t (*f)(void (*)(char, void *), void *, char *, size_t) = scpy;
-        if (c == 'Q') f = Qcpy;
-        if (c == 'q') f = qcpy;
         if (pr == ~0U) pr = p == NULL ? 0 : strlen(p);
         for (j = 0; !minus && pr < w && j + pr < w; j++)
-          n += f(out, param, &pad, 1);
-        n += f(out, param, p, pr);
+          n += scpy(out, param, &pad, 1);
+        n += scpy(out, param, p, pr);
         for (j = 0; minus && pr < w && j + pr < w; j++)
-          n += f(out, param, &pad, 1);
+          n += scpy(out, param, &pad, 1);
       } else if (c == '%') {
         out('%', param);
         n++;
@@ -3500,7 +3434,7 @@ size_t mg_queue_vprintf(struct mg_queue *q, const char *fmt, va_list *ap) {
   if (len == 0 || mg_queue_book(q, &buf, len + 1) < len + 1) {
     len = 0;  // Nah. Not enough space
   } else {
-    len = mg_vsnprintf((char *)buf, len + 1, fmt, ap);
+    len = mg_vsnprintf((char *) buf, len + 1, fmt, ap);
     mg_queue_add(q, len);
   }
   return len;
@@ -3608,6 +3542,73 @@ size_t mg_print_mac(void (*out)(char, void *), void *arg, va_list *ap) {
                     p[3], p[4], p[5]);
 }
 
+static char mg_esc(int c, bool esc) {
+  const char *p, *esc1 = "\b\f\n\r\t\\\"", *esc2 = "bfnrt\\\"";
+  for (p = esc ? esc1 : esc2; *p != '\0'; p++) {
+    if (*p == c) return esc ? esc2[p - esc1] : esc1[p - esc2];
+  }
+  return 0;
+}
+
+static char mg_escape(int c) {
+  return mg_esc(c, true);
+}
+
+static size_t qcpy(void (*out)(char, void *), void *ptr, char *buf,
+                   size_t len) {
+  size_t i = 0, extra = 0;
+  for (i = 0; i < len && buf[i] != '\0'; i++) {
+    char c = mg_escape(buf[i]);
+    if (c) {
+      out('\\', ptr), out(c, ptr), extra++;
+    } else {
+      out(buf[i], ptr);
+    }
+  }
+  return i + extra;
+}
+
+static size_t bcpy(void (*out)(char, void *), void *arg, uint8_t *buf,
+                   size_t len) {
+  size_t i, j, n = 0;
+  const char *t =
+      "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
+  for (i = 0; i < len; i += 3) {
+    uint8_t c1 = buf[i], c2 = i + 1 < len ? buf[i + 1] : 0,
+            c3 = i + 2 < len ? buf[i + 2] : 0;
+    char tmp[4] = {t[c1 >> 2], t[(c1 & 3) << 4 | (c2 >> 4)], '=', '='};
+    if (i + 1 < len) tmp[2] = t[(c2 & 15) << 2 | (c3 >> 6)];
+    if (i + 2 < len) tmp[3] = t[c3 & 63];
+    for (j = 0; j < sizeof(tmp) && tmp[j] != '\0'; j++) out(tmp[j], arg);
+    n += j;
+  }
+  return n;
+}
+
+size_t mg_print_hex(void (*out)(char, void *), void *arg, va_list *ap) {
+  size_t bl = (size_t) va_arg(*ap, int);
+  uint8_t *p = va_arg(*ap, uint8_t *);
+  const char *hex = "0123456789abcdef";
+  size_t j;
+  for (j = 0; j < bl; j++) {
+    out(hex[(p[j] >> 4) & 0x0F], arg);
+    out(hex[p[j] & 0x0F], arg);
+  }
+  return 2 * bl;
+}
+size_t mg_print_base64(void (*out)(char, void *), void *arg, va_list *ap) {
+  size_t len = (size_t) va_arg(*ap, int);
+  uint8_t *buf = va_arg(*ap, uint8_t *);
+  return bcpy(out, arg, buf, len);
+}
+
+size_t mg_print_esc(void (*out)(char, void *), void *arg, va_list *ap) {
+  size_t len = (size_t) va_arg(*ap, int);
+  char *p = va_arg(*ap, char *);
+  if (len == 0) len = p == NULL ? 0 : strlen(p);
+  return qcpy(out, arg, p, len);
+}
+
 #ifdef MG_ENABLE_LINES
 #line 1 "src/queue.c"
 #endif
@@ -3699,6 +3700,7 @@ void mg_queue_del(struct mg_queue *q, size_t len) {
 #endif
 
 
+
 void mg_rpc_add(struct mg_rpc **head, struct mg_str method,
                 void (*fn)(struct mg_rpc_req *), void *fn_data) {
   struct mg_rpc *rpc = (struct mg_rpc *) calloc(1, sizeof(*rpc));
@@ -3741,15 +3743,16 @@ void mg_rpc_process(struct mg_rpc_req *r) {
              (off = mg_json_get(r->frame, "$.error", &len)) > 0) {
     mg_rpc_call(r, mg_str(""));  // JSON response! call "" method handler
   } else {
-    mg_rpc_err(r, -32700, "%.*Q", (int) r->frame.len, r->frame.ptr);  // Invalid
+    mg_rpc_err(r, -32700, "%m", mg_print_esc, (int) r->frame.len,
+               r->frame.ptr);  // Invalid
   }
 }
 
 void mg_rpc_vok(struct mg_rpc_req *r, const char *fmt, va_list *ap) {
   int len, off = mg_json_get(r->frame, "$.id", &len);
   if (off > 0) {
-    mg_xprintf(r->pfn, r->pfn_data, "{%Q:%.*s,%Q:", "id", len,
-               &r->frame.ptr[off], "result");
+    mg_xprintf(r->pfn, r->pfn_data, "{%m:%.*s,%m:", mg_print_esc, 0, "id", len,
+               &r->frame.ptr[off], mg_print_esc, 0, "result");
     mg_vxprintf(r->pfn, r->pfn_data, fmt == NULL ? "null" : fmt, ap);
     mg_xprintf(r->pfn, r->pfn_data, "}");
   }
@@ -3766,10 +3769,11 @@ void mg_rpc_verr(struct mg_rpc_req *r, int code, const char *fmt, va_list *ap) {
   int len, off = mg_json_get(r->frame, "$.id", &len);
   mg_xprintf(r->pfn, r->pfn_data, "{");
   if (off > 0) {
-    mg_xprintf(r->pfn, r->pfn_data, "%Q:%.*s,", "id", len, &r->frame.ptr[off]);
+    mg_xprintf(r->pfn, r->pfn_data, "%m:%.*s,", mg_print_esc, 0, "id", len,
+               &r->frame.ptr[off]);
   }
-  mg_xprintf(r->pfn, r->pfn_data, "%Q:{%Q:%d,%Q:", "error", "code", code,
-             "message");
+  mg_xprintf(r->pfn, r->pfn_data, "%m:{%m:%d,%m:", mg_print_esc, 0, "error",
+             mg_print_esc, 0, "code", code, mg_print_esc, 0, "message");
   mg_vxprintf(r->pfn, r->pfn_data, fmt == NULL ? "null" : fmt, ap);
   mg_xprintf(r->pfn, r->pfn_data, "}}");
 }
@@ -3786,8 +3790,8 @@ static size_t print_methods(mg_pfn_t pfn, void *pfn_data, va_list *ap) {
   size_t len = 0;
   for (h = *head; h != NULL; h = h->next) {
     if (h->method.len == 0) continue;  // Ignore response handler
-    len += mg_xprintf(pfn, pfn_data, "%s%.*Q", h == *head ? "" : ",",
-                      (int) h->method.len, h->method.ptr);
+    len += mg_xprintf(pfn, pfn_data, "%s%m", h == *head ? "" : ",",
+                      mg_print_esc, (int) h->method.len, h->method.ptr);
   }
   return len;
 }

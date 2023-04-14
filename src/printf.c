@@ -1,5 +1,5 @@
-#include "fmt.h"
 #include "printf.h"
+#include "fmt.h"
 #include "util.h"
 
 size_t mg_queue_vprintf(struct mg_queue *q, const char *fmt, va_list *ap) {
@@ -8,7 +8,7 @@ size_t mg_queue_vprintf(struct mg_queue *q, const char *fmt, va_list *ap) {
   if (len == 0 || mg_queue_book(q, &buf, len + 1) < len + 1) {
     len = 0;  // Nah. Not enough space
   } else {
-    len = mg_vsnprintf((char *)buf, len + 1, fmt, ap);
+    len = mg_vsnprintf((char *) buf, len + 1, fmt, ap);
     mg_queue_add(q, len);
   }
   return len;
@@ -114,4 +114,71 @@ size_t mg_print_mac(void (*out)(char, void *), void *arg, va_list *ap) {
   uint8_t *p = va_arg(*ap, uint8_t *);
   return mg_xprintf(out, arg, "%02x:%02x:%02x:%02x:%02x:%02x", p[0], p[1], p[2],
                     p[3], p[4], p[5]);
+}
+
+static char mg_esc(int c, bool esc) {
+  const char *p, *esc1 = "\b\f\n\r\t\\\"", *esc2 = "bfnrt\\\"";
+  for (p = esc ? esc1 : esc2; *p != '\0'; p++) {
+    if (*p == c) return esc ? esc2[p - esc1] : esc1[p - esc2];
+  }
+  return 0;
+}
+
+static char mg_escape(int c) {
+  return mg_esc(c, true);
+}
+
+static size_t qcpy(void (*out)(char, void *), void *ptr, char *buf,
+                   size_t len) {
+  size_t i = 0, extra = 0;
+  for (i = 0; i < len && buf[i] != '\0'; i++) {
+    char c = mg_escape(buf[i]);
+    if (c) {
+      out('\\', ptr), out(c, ptr), extra++;
+    } else {
+      out(buf[i], ptr);
+    }
+  }
+  return i + extra;
+}
+
+static size_t bcpy(void (*out)(char, void *), void *arg, uint8_t *buf,
+                   size_t len) {
+  size_t i, j, n = 0;
+  const char *t =
+      "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
+  for (i = 0; i < len; i += 3) {
+    uint8_t c1 = buf[i], c2 = i + 1 < len ? buf[i + 1] : 0,
+            c3 = i + 2 < len ? buf[i + 2] : 0;
+    char tmp[4] = {t[c1 >> 2], t[(c1 & 3) << 4 | (c2 >> 4)], '=', '='};
+    if (i + 1 < len) tmp[2] = t[(c2 & 15) << 2 | (c3 >> 6)];
+    if (i + 2 < len) tmp[3] = t[c3 & 63];
+    for (j = 0; j < sizeof(tmp) && tmp[j] != '\0'; j++) out(tmp[j], arg);
+    n += j;
+  }
+  return n;
+}
+
+size_t mg_print_hex(void (*out)(char, void *), void *arg, va_list *ap) {
+  size_t bl = (size_t) va_arg(*ap, int);
+  uint8_t *p = va_arg(*ap, uint8_t *);
+  const char *hex = "0123456789abcdef";
+  size_t j;
+  for (j = 0; j < bl; j++) {
+    out(hex[(p[j] >> 4) & 0x0F], arg);
+    out(hex[p[j] & 0x0F], arg);
+  }
+  return 2 * bl;
+}
+size_t mg_print_base64(void (*out)(char, void *), void *arg, va_list *ap) {
+  size_t len = (size_t) va_arg(*ap, int);
+  uint8_t *buf = va_arg(*ap, uint8_t *);
+  return bcpy(out, arg, buf, len);
+}
+
+size_t mg_print_esc(void (*out)(char, void *), void *arg, va_list *ap) {
+  size_t len = (size_t) va_arg(*ap, int);
+  char *p = va_arg(*ap, char *);
+  if (len == 0) len = p == NULL ? 0 : strlen(p);
+  return qcpy(out, arg, p, len);
 }

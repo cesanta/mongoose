@@ -16,7 +16,9 @@ static const char *s_root_dir = "web_root";
 #define MQTT_PUBLISH_TOPIC "mg/my_device"
 #define MQTT_SUBSCRIBE_TOPIC "mg/#"
 
-static struct config { char *url, *pub, *sub; } s_config;
+static struct config {
+  char *url, *pub, *sub;
+} s_config;
 
 // Try to update a single configuration value
 static void update_config(struct mg_str json, const char *path, char **value) {
@@ -36,8 +38,10 @@ static void fn(struct mg_connection *c, int ev, void *ev_data, void *fn_data) {
     struct mg_http_message *hm = (struct mg_http_message *) ev_data;
     if (mg_http_match_uri(hm, "/api/config/get")) {
       mg_http_reply(c, 200, "Content-Type: application/json\r\n",
-                    "{%Q:%Q,%Q:%Q,%Q:%Q}\n", "url", s_config.url, "pub",
-                    s_config.pub, "sub", s_config.sub);
+                    "{%m:%m,%m:%m,%m:%m}\n", mg_print_esc, 0, "url",
+                    mg_print_esc, 0, s_config.url, mg_print_esc, 0, "pub",
+                    mg_print_esc, 0, s_config.pub, mg_print_esc, 0, "sub",
+                    mg_print_esc, 0, s_config.sub);
     } else if (mg_http_match_uri(hm, "/api/config/set")) {
       struct mg_str json = hm->body;
       update_config(json, "$.url", &s_config.url);

@@ -2,7 +2,9 @@
 #include "printf.h"
 #include "util.h"
 
-static bool is_digit(int c) { return c >= '0' && c <= '9'; }
+static bool is_digit(int c) {
+  return c >= '0' && c <= '9';
+}
 
 static int addexp(char *buf, int e, int sign) {
   int n = 0;
@@ -117,61 +119,10 @@ static size_t mg_lld(char *buf, int64_t val, bool is_signed, bool is_hex) {
 }
 
 static size_t scpy(void (*out)(char, void *), void *ptr, char *buf,
-                   size_t len) {
+                          size_t len) {
   size_t i = 0;
   while (i < len && buf[i] != '\0') out(buf[i++], ptr);
   return i;
-}
-
-static char mg_esc(int c, bool esc) {
-  const char *p, *esc1 = "\b\f\n\r\t\\\"", *esc2 = "bfnrt\\\"";
-  for (p = esc ? esc1 : esc2; *p != '\0'; p++) {
-    if (*p == c) return esc ? esc2[p - esc1] : esc1[p - esc2];
-  }
-  return 0;
-}
-
-static char mg_escape(int c) { return mg_esc(c, true); }
-
-static size_t qcpy(void (*out)(char, void *), void *ptr, char *buf,
-                   size_t len) {
-  size_t i = 0, extra = 0;
-  for (i = 0; i < len && buf[i] != '\0'; i++) {
-    char c = mg_escape(buf[i]);
-    if (c) {
-      out('\\', ptr), out(c, ptr), extra++;
-    } else {
-      out(buf[i], ptr);
-    }
-  }
-  return i + extra;
-}
-
-static size_t Qcpy(void (*out)(char, void *), void *ptr, char *buf,
-                   size_t len) {
-  size_t n = 2;
-  out('"', ptr);
-  n += qcpy(out, ptr, buf, len);
-  out('"', ptr);
-  return n;
-}
-
-static size_t bcpy(void (*out)(char, void *), void *ptr, uint8_t *buf,
-                   size_t len) {
-  size_t i, n = 0;
-  const char *t =
-      "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
-  out('"', ptr), n++;
-  for (i = 0; i < len; i += 3) {
-    uint8_t c1 = buf[i], c2 = i + 1 < len ? buf[i + 1] : 0,
-            c3 = i + 2 < len ? buf[i + 2] : 0;
-    char tmp[4] = {t[c1 >> 2], t[(c1 & 3) << 4 | (c2 >> 4)], '=', '='};
-    if (i + 1 < len) tmp[2] = t[(c2 & 15) << 2 | (c3 >> 6)];
-    if (i + 2 < len) tmp[3] = t[c3 & 63];
-    n += scpy(out, ptr, tmp, sizeof(tmp));
-  }
-  out('"', ptr), n++;
-  return n;
 }
 
 size_t mg_xprintf(void (*out)(char, void *), void *ptr, const char *fmt, ...) {
@@ -238,40 +189,23 @@ size_t mg_vxprintf(void (*out)(char, void *), void *param, const char *fmt,
         n += scpy(out, param, tmp, k);
         for (j = 0; pad == ' ' && minus && k < w && j + k < w; j++)
           n += scpy(out, param, &pad, 1);
-      } else if (c == 'M') {
+      } else if (c == 'm' || c == 'M') {
         mg_pm_t f = va_arg(*ap, mg_pm_t);
+        if (c == 'm') out('"', param);
         n += f(out, param, ap);
+        if (c == 'm') n += 2, out('"', param);
       } else if (c == 'c') {
         int ch = va_arg(*ap, int);
         out((char) ch, param);
         n++;
-      } else if (c == 'H') {
-        // Print hex-encoded double-quoted string
-        size_t bl = (size_t) va_arg(*ap, int);
-        uint8_t *p = va_arg(*ap, uint8_t *), dquote = '"';
-        const char *hex = "0123456789abcdef";
-        n += scpy(out, param, (char *) &dquote, 1);
-        for (j = 0; j < bl; j++) {
-          n += scpy(out, param, (char *) &hex[(p[j] >> 4) & 15], 1);
-          n += scpy(out, param, (char *) &hex[p[j] & 15], 1);
-        }
-        n += scpy(out, param, (char *) &dquote, 1);
-      } else if (c == 'V') {
-        // Print base64-encoded double-quoted string
-        size_t len = (size_t) va_arg(*ap, int);
-        uint8_t *buf = va_arg(*ap, uint8_t *);
-        n += bcpy(out, param, buf, len);
-      } else if (c == 's' || c == 'Q' || c == 'q') {
+      } else if (c == 's') {
         char *p = va_arg(*ap, char *);
-        size_t (*f)(void (*)(char, void *), void *, char *, size_t) = scpy;
-        if (c == 'Q') f = Qcpy;
-        if (c == 'q') f = qcpy;
         if (pr == ~0U) pr = p == NULL ? 0 : strlen(p);
         for (j = 0; !minus && pr < w && j + pr < w; j++)
-          n += f(out, param, &pad, 1);
-        n += f(out, param, p, pr);
+          n += scpy(out, param, &pad, 1);
+        n += scpy(out, param, p, pr);
         for (j = 0; minus && pr < w && j + pr < w; j++)
-          n += f(out, param, &pad, 1);
+          n += scpy(out, param, &pad, 1);
       } else if (c == '%') {
         out('%', param);
         n++;
