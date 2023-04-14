@@ -59,8 +59,9 @@ static void timer_fn(void *arg) {
   // Broadcast message to all connected websocket clients.
   for (struct mg_connection *c = mgr->conns; c != NULL; c = c->next) {
     if (c->data[0] != 'W') continue;
-    mg_ws_printf(c, WEBSOCKET_OP_TEXT, "{%Q:%Q,%Q:[%d,%d,%d]}", "method",
-                 "notification1", "params", 1, 2, 3);
+    mg_ws_printf(c, WEBSOCKET_OP_TEXT, "{%m:%m,%m:[%d,%d,%d]}", mg_print_esc, 0,
+                 "method", mg_print_esc, 0, "notification1", mg_print_esc, 0,
+                 "params", 1, 2, 3);
   }
 }
 

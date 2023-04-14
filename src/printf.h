@@ -13,6 +13,9 @@ size_t mg_queue_vprintf(struct mg_queue *, const char *fmt, va_list *);
 size_t mg_queue_printf(struct mg_queue *, const char *fmt, ...);
 
 // %M print helper functions
+size_t mg_print_base64(void (*out)(char, void *), void *arg, va_list *ap);
+size_t mg_print_esc(void (*out)(char, void *), void *arg, va_list *ap);
+size_t mg_print_hex(void (*out)(char, void *), void *arg, va_list *ap);
 size_t mg_print_ip(void (*out)(char, void *), void *arg, va_list *ap);
 size_t mg_print_ip_port(void (*out)(char, void *), void *arg, va_list *ap);
 size_t mg_print_ip4(void (*out)(char, void *), void *arg, va_list *ap);
