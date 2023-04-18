@@ -4294,28 +4294,32 @@ bool mg_open_listener(struct mg_connection *c, const char *url) {
 
     if ((fd = socket(af, type, proto)) == MG_INVALID_SOCKET) {
       MG_ERROR(("socket: %d", MG_SOCK_ERR(-1)));
-#if ((MG_ARCH == MG_ARCH_WIN32) || (MG_ARCH == MG_ARCH_UNIX) || \
-     (defined(LWIP_SOCKET) && SO_REUSE == 1))
+#if defined(SO_REUSEADDR) && (!defined(LWIP_SOCKET) || SO_REUSE)
     } else if ((rc = setsockopt(fd, SOL_SOCKET, SO_REUSEADDR, (char *) &on,
                                 sizeof(on))) != 0) {
-      // 1. SO_RESUSEADDR is not enabled on Windows because the semantics of
-      //    SO_REUSEADDR on UNIX and Windows is different. On Windows,
-      //    SO_REUSEADDR allows to bind a socket to a port without error even
-      //    if the port is already open by another program. This is not the
-      //    behavior SO_REUSEADDR was designed for, and leads to hard-to-track
-      //    failure scenarios. Therefore, SO_REUSEADDR was disabled on Windows
-      //    unless SO_EXCLUSIVEADDRUSE is supported and set on a socket.
-      // 2. In case of LWIP, SO_REUSEADDR should be explicitly enabled, by
-      // defining
-      //    SO_REUSE (in lwipopts.h), otherwise the code below will compile
-      //    but won't work! (setsockopt will return EINVAL)
-      MG_ERROR(("reuseaddr: %d", MG_SOCK_ERR(rc)));
+      // 1. SO_RESUSEADDR semantics on UNIX and Windows is different.  On
+      // Windows, SO_REUSEADDR allows to bind a socket to a port without error
+      // even if the port is already open by another program. This is not the
+      // behavior SO_REUSEADDR was designed for, and leads to hard-to-track
+      // failure scenarios.
+      //
+      // 2. For LWIP, SO_REUSEADDR should be explicitly enabled by defining
+      // SO_REUSE = 1 in lwipopts.h, otherwise the code below will compile but
+      // won't work! (setsockopt will return EINVAL)
+      MG_ERROR(("setsockopt(SO_REUSEADDR): %d", MG_SOCK_ERR(rc)));
 #endif
-#if MG_ARCH == MG_ARCH_WIN32 && !defined(SO_EXCLUSIVEADDRUSE) && !defined(WINCE)
+#if defined(SO_EXCLUSIVEADDRUSE)
     } else if ((rc = setsockopt(fd, SOL_SOCKET, SO_EXCLUSIVEADDRUSE,
                                 (char *) &on, sizeof(on))) != 0) {
       // "Using SO_REUSEADDR and SO_EXCLUSIVEADDRUSE"
-      MG_ERROR(("exclusiveaddruse: %d", MG_SOCK_ERR(rc)));
+      MG_ERROR(("setsockopt(SO_EXCLUSIVEADDRUSE): %d", MG_SOCK_ERR(rc)));
+#endif
+#if defined(IPV6_V6ONLY)
+    } else if (c->loc.is_ip6 &&
+               (rc = setsockopt(fd, IPPROTO_IPV6, IPV6_V6ONLY, (char *) &on,
+                                sizeof(on))) != 0) {
+      // See #2089. Allow to bind v4 and v6 sockets on the same port
+      MG_ERROR(("setsockopt(IPV6_V6ONLY): %d", MG_SOCK_ERR(rc)));
 #endif
     } else if ((rc = bind(fd, &usa.sa, slen)) != 0) {
       MG_ERROR(("bind: %d", MG_SOCK_ERR(rc)));
