@@ -132,7 +132,12 @@ static void mqtt_fn(struct mg_connection *c, int ev, void *ev_data, void *fnd) {
   } else if (ev == MG_EV_MQTT_OPEN) {
     s_connected = true;
     c->is_hexdumping = 1;
-    mg_mqtt_sub(s_mqtt, mg_str(s_config.sub), 2);
+    struct mg_mqtt_opts sub_opts;
+    memset(&sub_opts, 0, sizeof(sub_opts));
+    sub_opts.topic = mg_str(s_config.sub);
+    sub_opts.qos = 2;
+    
+    mg_mqtt_sub(s_mqtt, &sub_opts);
     send_notification(c->mgr, "{%m:%m,%m:null}", mg_print_esc, 0, "name",
                       mg_print_esc, 0, "config", mg_print_esc, 0, "data");
     MG_INFO(("MQTT connected, server %s", MQTT_SERVER));
@@ -249,7 +254,13 @@ void device_dashboard_fn(struct mg_connection *c, int ev, void *ev_data,
       char buf[256];
       if (s_connected &&
           mg_http_get_var(&hm->body, "message", buf, sizeof(buf)) > 0) {
-        mg_mqtt_pub(s_mqtt, mg_str(s_config.pub), mg_str(buf), 1, false);
+        struct mg_mqtt_opts pub_opts;
+        memset(&pub_opts, 0, sizeof(pub_opts));
+        pub_opts.topic = mg_str(s_config.pub);
+        pub_opts.message = mg_str(buf);
+        pub_opts.qos = 2, pub_opts.retain = false;
+
+        mg_mqtt_pub(s_mqtt, &pub_opts);
       }
       mg_http_reply(c, 200, "", "ok\n");
     } else if (mg_http_match_uri(hm, "/api/watch")) {

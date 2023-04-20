@@ -350,6 +350,7 @@ struct mqtt_data {
 static void mqtt_cb(struct mg_connection *c, int ev, void *evd, void *fnd) {
   struct mqtt_data *test_data = (struct mqtt_data *) fnd;
   char *buf = test_data->buf;
+
   if (ev == MG_EV_MQTT_OPEN) {
     buf[0] = *(int *) evd == 0 ? 'X' : 'Y';
   } else if (ev == MG_EV_MQTT_CMD) {
@@ -364,8 +365,54 @@ static void mqtt_cb(struct mg_connection *c, int ev, void *evd, void *fnd) {
     struct mg_mqtt_message *mm = (struct mg_mqtt_message *) evd;
     snprintf(buf + 1, test_data->bufsize, "%.*s/%.*s", (int) mm->topic.len,
              mm->topic.ptr, (int) mm->data.len, mm->data.ptr);
+
+    if (mm->cmd == MQTT_CMD_PUBLISH && c->is_mqtt5) {
+      size_t pos = 0;
+      struct mg_mqtt_prop prop;
+
+      // note: the server will send the properties sorted by their ID
+      ASSERT((pos = mg_mqtt_next_prop(mm, &prop, pos)) > 0);
+      ASSERT(prop.iv == 10 && prop.id == MQTT_PROP_MESSAGE_EXPIRY_INTERVAL);
+
+      ASSERT((pos = mg_mqtt_next_prop(mm, &prop, pos)) > 0);
+      ASSERT(prop.id == MQTT_PROP_CONTENT_TYPE);
+      ASSERT(strncmp(prop.val.ptr, "test_content_val_2", prop.val.len) == 0 &&
+             prop.val.len == strlen("test_content_val_2"));
+
+      ASSERT((pos = mg_mqtt_next_prop(mm, &prop, pos)) > 0);
+      ASSERT(prop.id == MQTT_PROP_USER_PROPERTY);
+      ASSERT(strncmp(prop.key.ptr, "test_key_1", prop.key.len) == 0 &&
+             prop.key.len == strlen("test_key_1"));
+      ASSERT(strncmp(prop.val.ptr, "test_value_1", prop.val.len) == 0 &&
+             prop.val.len == strlen("test_value_1"));
+
+      ASSERT((pos = mg_mqtt_next_prop(mm, &prop, pos)) > 0);
+      ASSERT(prop.id == MQTT_PROP_USER_PROPERTY);
+      ASSERT(strncmp(prop.key.ptr, "test_key_2", prop.key.len) == 0 &&
+             prop.key.len == strlen("test_key_2"));
+      ASSERT(strncmp(prop.val.ptr, "test_value_2", prop.val.len) == 0 &&
+             prop.val.len == strlen("test_value_2"));
+
+      ASSERT((pos = mg_mqtt_next_prop(mm, &prop, pos)) == 0);
+    }
   }
   (void) c;
+}
+
+static void construct_props(struct mg_mqtt_prop *props) {
+  props[0].id = MQTT_PROP_MESSAGE_EXPIRY_INTERVAL;
+  props[0].iv = 10;
+
+  props[1].id = MQTT_PROP_USER_PROPERTY;
+  props[1].key = mg_str("test_key_1");
+  props[1].val = mg_str("test_value_1");
+
+  props[2].id = MQTT_PROP_USER_PROPERTY;
+  props[2].key = mg_str("test_key_2");
+  props[2].val = mg_str("test_value_2");
+
+  props[3].id = MQTT_PROP_CONTENT_TYPE;
+  props[3].val = mg_str("test_content_val_2");
 }
 
 static void test_mqtt_base(void);
@@ -396,6 +443,7 @@ static void test_mqtt_ver(uint8_t mqtt_version) {
   struct mg_str topic = mg_str("x/f12"), data = mg_str("hi");
   struct mg_connection *c;
   struct mg_mqtt_opts opts;
+  struct mg_mqtt_prop properties[4];
   const char *url = "mqtt://broker.hivemq.com:1883";
   int i;
   mg_mgr_init(&mgr);
@@ -406,11 +454,15 @@ static void test_mqtt_ver(uint8_t mqtt_version) {
   if (buf[0] != 'X') MG_INFO(("[%s]", buf));
   ASSERT(buf[0] == 'X');
   ASSERT(test_data.subscribed == 0);
-  mg_mqtt_sub(c, topic, 1);
+
+  opts.topic = topic, opts.qos = 1;
+  mg_mqtt_sub(c, &opts);
   for (i = 0; i < 500 && test_data.subscribed == 0; i++) mg_mgr_poll(&mgr, 10);
   ASSERT(test_data.subscribed == 1);
   ASSERT(test_data.published == 0);
-  mg_mqtt_pub(c, topic, data, 1, false);
+
+  opts.topic = topic, opts.message = data, opts.qos = 1, opts.retain = false;
+  mg_mqtt_pub(c, &opts);
   for (i = 0; i < 500 && test_data.published == 0; i++) mg_mgr_poll(&mgr, 10);
   ASSERT(test_data.published == 1);
   for (i = 0; i < 500 && buf[1] == 0; i++) mg_mgr_poll(&mgr, 10);
@@ -422,24 +474,32 @@ static void test_mqtt_ver(uint8_t mqtt_version) {
   test_data.published = 0;
   memset(buf, 0, sizeof(buf));
   memset(&opts, 0, sizeof(opts));
-  opts.clean = true;
-  opts.will_qos = 1;
-  opts.will_retain = true;
-  opts.keepalive = 20;
+
+  opts.clean = true, opts.qos = 1, opts.retain = true, opts.keepalive = 20;
   opts.version = mqtt_version;
-  opts.will_topic = mg_str(mg_random_str(will_topic, sizeof(will_topic)));
-  opts.will_message = mg_str("mg_will_messsage");
+  opts.topic = mg_str(mg_random_str(will_topic, sizeof(will_topic)));
+  opts.message = mg_str("mg_will_messsage");
   opts.client_id = mg_str(mg_random_str(client_id, sizeof(client_id)));
   c = mg_mqtt_connect(&mgr, url, &opts, mqtt_cb, &test_data);
   for (i = 0; i < 300 && buf[0] == 0; i++) mg_mgr_poll(&mgr, 10);
   if (buf[0] != 'X') MG_INFO(("[%s]", buf));
   ASSERT(buf[0] == 'X');
   ASSERT(test_data.subscribed == 0);
-  mg_mqtt_sub(c, topic, 1);
+
+  opts.topic = topic, opts.qos = 1;
+  mg_mqtt_sub(c, &opts);
   for (i = 0; i < 500 && test_data.subscribed == 0; i++) mg_mgr_poll(&mgr, 10);
   ASSERT(test_data.subscribed == 1);
   ASSERT(test_data.published == 0);
-  mg_mqtt_pub(c, topic, data, 1, false);
+
+  opts.topic = topic, opts.message = data, opts.qos = 1, opts.retain = false;
+  if (mqtt_version == 5) {
+    opts.props = properties;
+    opts.num_props = 4;
+    construct_props(properties);
+  }
+
+  mg_mqtt_pub(c, &opts);
   for (i = 0; i < 500 && test_data.published == 0; i++) mg_mgr_poll(&mgr, 10);
   ASSERT(test_data.published == 1);
   for (i = 0; i < 500 && buf[1] == 0; i++) mg_mgr_poll(&mgr, 10);
@@ -452,8 +512,8 @@ static void test_mqtt_ver(uint8_t mqtt_version) {
 
 static void test_mqtt(void) {
   test_mqtt_base();
-  test_mqtt_ver(5);
   test_mqtt_ver(4);
+  test_mqtt_ver(5);
   test_mqtt_base();
 }
 
@@ -580,7 +640,7 @@ static int cmpbody(const char *buf, const char *str) {
   struct mg_str s = mg_str(str);
   size_t len = strlen(buf);
   mg_http_parse(buf, len, &hm);
-  if (hm.body.len > len) hm.body.len = len - (size_t) (hm.body.ptr - buf);
+  if (hm.body.len > len) hm.body.len = len - (size_t)(hm.body.ptr - buf);
   return mg_strcmp(hm.body, s);
 }
 

@@ -1414,19 +1414,102 @@ int64_t mg_sntp_parse(const unsigned char *buf, size_t len);
 #define MQTT_CMD_DISCONNECT 14
 #define MQTT_CMD_AUTH 15
 
+#define MQTT_PROP_PAYLOAD_FORMAT_INDICATOR 0x01
+#define MQTT_PROP_MESSAGE_EXPIRY_INTERVAL 0x02
+#define MQTT_PROP_CONTENT_TYPE 0x03
+#define MQTT_PROP_RESPONSE_TOPIC 0x08
+#define MQTT_PROP_CORRELATION_DATA 0x09
+#define MQTT_PROP_SUBSCRIPTION_IDENTIFIER 0x0B
+#define MQTT_PROP_SESSION_EXPIRY_INTERVAL 0x11
+#define MQTT_PROP_ASSIGNED_CLIENT_IDENTIFIER 0x12
+#define MQTT_PROP_SERVER_KEEP_ALIVE 0x13
+#define MQTT_PROP_AUTHENTICATION_METHOD 0x15
+#define MQTT_PROP_AUTHENTICATION_DATA 0x16
+#define MQTT_PROP_REQUEST_PROBLEM_INFORMATION 0x17
+#define MQTT_PROP_WILL_DELAY_INTERVAL 0x18
+#define MQTT_PROP_REQUEST_RESPONSE_INFORMATION 0x19
+#define MQTT_PROP_RESPONSE_INFORMATION 0x1A
+#define MQTT_PROP_SERVER_REFERENCE 0x1C
+#define MQTT_PROP_REASON_STRING 0x1F
+#define MQTT_PROP_RECEIVE_MAXIMUM 0x21
+#define MQTT_PROP_TOPIC_ALIAS_MAXIMUM 0x22
+#define MQTT_PROP_TOPIC_ALIAS 0x23
+#define MQTT_PROP_MAXIMUM_QOS 0x24
+#define MQTT_PROP_RETAIN_AVAILABLE 0x25
+#define MQTT_PROP_USER_PROPERTY 0x26
+#define MQTT_PROP_MAXIMUM_PACKET_SIZE 0x27
+#define MQTT_PROP_WILDCARD_SUBSCRIPTION_AVAILABLE 0x28
+#define MQTT_PROP_SUBSCRIPTION_IDENTIFIER_AVAILABLE 0x29
+#define MQTT_PROP_SHARED_SUBSCRIPTION_AVAILABLE 0x2A
+
+enum {
+  MQTT_PROP_TYPE_BYTE,
+  MQTT_PROP_TYPE_STRING,
+  MQTT_PROP_TYPE_STRING_PAIR,
+  MQTT_PROP_TYPE_BINARY_DATA,
+  MQTT_PROP_TYPE_VARIABLE_INT,
+  MQTT_PROP_TYPE_INT,
+  MQTT_PROP_TYPE_SHORT
+};
+
 enum { MQTT_OK, MQTT_INCOMPLETE, MQTT_MALFORMED };
+
+struct mqtt_prop_map_t {
+  uint8_t id;
+  uint8_t type;
+};
+
+static const struct mqtt_prop_map_t mqtt_prop_map[] = {
+    {MQTT_PROP_PAYLOAD_FORMAT_INDICATOR, MQTT_PROP_TYPE_BYTE},
+    {MQTT_PROP_MESSAGE_EXPIRY_INTERVAL, MQTT_PROP_TYPE_INT},
+    {MQTT_PROP_CONTENT_TYPE, MQTT_PROP_TYPE_STRING},
+    {MQTT_PROP_RESPONSE_TOPIC, MQTT_PROP_TYPE_STRING},
+    {MQTT_PROP_CORRELATION_DATA, MQTT_PROP_TYPE_BINARY_DATA},
+    {MQTT_PROP_SUBSCRIPTION_IDENTIFIER, MQTT_PROP_TYPE_VARIABLE_INT},
+    {MQTT_PROP_SESSION_EXPIRY_INTERVAL, MQTT_PROP_TYPE_INT},
+    {MQTT_PROP_ASSIGNED_CLIENT_IDENTIFIER, MQTT_PROP_TYPE_STRING},
+    {MQTT_PROP_SERVER_KEEP_ALIVE, MQTT_PROP_TYPE_SHORT},
+    {MQTT_PROP_AUTHENTICATION_METHOD, MQTT_PROP_TYPE_STRING},
+    {MQTT_PROP_AUTHENTICATION_DATA, MQTT_PROP_TYPE_BINARY_DATA},
+    {MQTT_PROP_REQUEST_PROBLEM_INFORMATION, MQTT_PROP_TYPE_BYTE},
+    {MQTT_PROP_WILL_DELAY_INTERVAL, MQTT_PROP_TYPE_INT},
+    {MQTT_PROP_REQUEST_RESPONSE_INFORMATION, MQTT_PROP_TYPE_BYTE},
+    {MQTT_PROP_RESPONSE_INFORMATION, MQTT_PROP_TYPE_STRING},
+    {MQTT_PROP_SERVER_REFERENCE, MQTT_PROP_TYPE_STRING},
+    {MQTT_PROP_REASON_STRING, MQTT_PROP_TYPE_STRING},
+    {MQTT_PROP_RECEIVE_MAXIMUM, MQTT_PROP_TYPE_SHORT},
+    {MQTT_PROP_TOPIC_ALIAS_MAXIMUM, MQTT_PROP_TYPE_SHORT},
+    {MQTT_PROP_TOPIC_ALIAS, MQTT_PROP_TYPE_SHORT},
+    {MQTT_PROP_MAXIMUM_QOS, MQTT_PROP_TYPE_BYTE},
+    {MQTT_PROP_RETAIN_AVAILABLE, MQTT_PROP_TYPE_BYTE},
+    {MQTT_PROP_USER_PROPERTY, MQTT_PROP_TYPE_STRING_PAIR},
+    {MQTT_PROP_MAXIMUM_PACKET_SIZE, MQTT_PROP_TYPE_INT},
+    {MQTT_PROP_WILDCARD_SUBSCRIPTION_AVAILABLE, MQTT_PROP_TYPE_BYTE},
+    {MQTT_PROP_SUBSCRIPTION_IDENTIFIER_AVAILABLE, MQTT_PROP_TYPE_BYTE},
+    {MQTT_PROP_SHARED_SUBSCRIPTION_AVAILABLE, MQTT_PROP_TYPE_BYTE}};
+
+struct mg_mqtt_prop {
+  uint8_t id;         // Enumerated at MQTT5 Reference
+  uint32_t iv;        // integer value for 8-, 16-, 32-bit integers types
+  struct mg_str key;  // non-NULL only for user property type
+  struct mg_str val;  // non-NULL only for UTF-8 types and user properties
+};
 
 struct mg_mqtt_opts {
   struct mg_str user;          // Username, can be empty
   struct mg_str pass;          // Password, can be empty
   struct mg_str client_id;     // Client ID
-  struct mg_str will_topic;    // Will topic
-  struct mg_str will_message;  // Will message
-  uint8_t will_qos;            // Will message quality of service
+  struct mg_str topic;         // topic
+  struct mg_str message;       // message
+  uint8_t qos;                 // message quality of service
   uint8_t version;             // Can be 4 (3.1.1), or 5. If 0, assume 4.
   uint16_t keepalive;          // Keep-alive timer in seconds
-  bool will_retain;            // Retain last will
+  bool retain;                 // Retain last will
   bool clean;                  // Use clean session, 0 or 1
+  struct mg_mqtt_prop *props;  // MQTT5 props array
+  int num_props;               // number of props
+  struct mg_mqtt_prop *will_props;  // only found in the CONNECT packet
+  int num_will_props;      // number of will props
 };
 
 struct mg_mqtt_message {
@@ -1437,6 +1520,8 @@ struct mg_mqtt_message {
   uint8_t cmd;  // MQTT command, one of MQTT_CMD_*
   uint8_t qos;  // Quality of service
   uint8_t ack;  // Connack return code. 0 - success
+  size_t props_start;  // offset to the start of the properties
+  size_t props_size;   // length of the properties
 };
 
 struct mg_connection *mg_mqtt_connect(struct mg_mgr *, const char *url,
@@ -1445,15 +1530,17 @@ struct mg_connection *mg_mqtt_connect(struct mg_mgr *, const char *url,
 struct mg_connection *mg_mqtt_listen(struct mg_mgr *mgr, const char *url,
                                      mg_event_handler_t fn, void *fn_data);
 void mg_mqtt_login(struct mg_connection *c, const struct mg_mqtt_opts *opts);
-void mg_mqtt_pub(struct mg_connection *c, struct mg_str topic,
-                 struct mg_str data, int qos, bool retain);
-void mg_mqtt_sub(struct mg_connection *, struct mg_str topic, int qos);
+void mg_mqtt_pub(struct mg_connection *c, const struct mg_mqtt_opts *opts);
+void mg_mqtt_sub(struct mg_connection *, const struct mg_mqtt_opts *opts);
 int mg_mqtt_parse(const uint8_t *, size_t, uint8_t, struct mg_mqtt_message *);
 void mg_mqtt_send_header(struct mg_connection *, uint8_t cmd, uint8_t flags,
                          uint32_t len);
 void mg_mqtt_ping(struct mg_connection *);
 void mg_mqtt_pong(struct mg_connection *);
-void mg_mqtt_disconnect(struct mg_connection *);
+void mg_mqtt_disconnect(struct mg_connection *,
+                        const struct mg_mqtt_opts *opts);
+size_t mg_mqtt_next_prop(struct mg_mqtt_message *, struct mg_mqtt_prop *,
+                         size_t ofs);
 
 
 
