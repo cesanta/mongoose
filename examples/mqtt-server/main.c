@@ -79,6 +79,7 @@ static void fn(struct mg_connection *c, int ev, void *ev_data, void *fn_data) {
         int num_topics = 0;
         while ((pos = mg_mqtt_next_sub(mm, &topic, &qos, pos)) > 0) {
           struct sub *sub = calloc(1, sizeof(*sub));
+          if (sub == NULL) continue;
           sub->c = c;
           sub->topic = mg_strdup(topic);
           sub->qos = qos;

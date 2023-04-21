@@ -59,8 +59,10 @@ static void fn(struct mg_connection *c, int ev, void *ev_data, void *fn_data) {
     // Received HTTP request. Allocate thread data and spawn a worker thread
     struct mg_http_message *hm = (struct mg_http_message *) ev_data;
     struct thread_data *d = (struct thread_data *) calloc(1, sizeof(*d));
-    d->body = mg_strdup(hm->body);   // Pass received body to the worker
-    start_thread(worker_thread, d);  // Start a thread
+    if (d) {
+      d->body = mg_strdup(hm->body);   // Pass received body to the worker
+      start_thread(worker_thread, d);  // Start a thread
+    }
     *(void **) c->data = d;          // Memorise data pointer in c->data
   } else if (ev == MG_EV_POLL) {
     // Poll event. Delivered to us every mg_mgr_poll interval or faster
