@@ -914,6 +914,7 @@ static void *packed_open(const char *path, int flags) {
   if (data == NULL) return NULL;
   if (flags & MG_FS_WRITE) return NULL;
   fp = (struct packed_file *) calloc(1, sizeof(*fp));
+  if (fp == NULL) return NULL;
   fp->size = size;
   fp->data = data;
   return (void *) fp;
