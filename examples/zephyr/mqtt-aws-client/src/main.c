@@ -31,11 +31,7 @@ static void fn(struct mg_connection *c, int ev, void *ev_data, void *fn_data) {
     struct mg_str topic = mg_str(s_rx_topic);
     MG_INFO(("Connected to %s", s_url));
     MG_INFO(("Subscribing to %s", s_rx_topic));
-    struct mg_mqtt_opts sub_opts;
-    memset(&sub_opts, 0, sizeof(sub_opts));
-    sub_opts.topic = topic;
-    sub_opts.qos = s_qos;
-    mg_mqtt_sub(c, &sub_opts);
+    mg_mqtt_sub(c, topic, s_qos);
     c->data[0] = 'X';  // Set a label that we're logged in
   } else if (ev == MG_EV_MQTT_MSG) {
     // When we receive MQTT message, print it
@@ -48,12 +44,7 @@ static void fn(struct mg_connection *c, int ev, void *ev_data, void *fn_data) {
     if (now_second != prev_second) {
       struct mg_str topic = mg_str(s_tx_topic), data = mg_str("{\"a\":123}");
       MG_INFO(("Publishing to %s", s_tx_topic));
-      struct mg_mqtt_opts pub_opts;
-      memset(&pub_opts, 0, sizeof(pub_opts));
-      pub_opts.topic = topic;
-      pub_opts.message = data;
-      pub_opts.qos = s_qos, pub_opts.retain = false;
-      mg_mqtt_pub(c, &pub_opts);
+      mg_mqtt_pub(c, topic, data, s_qos, false);
       prev_second = now_second;
     }
   }

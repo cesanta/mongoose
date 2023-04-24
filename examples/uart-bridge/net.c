@@ -107,11 +107,7 @@ static void mq_fn(struct mg_connection *c, int ev, void *evd, void *fnd) {
     // c->is_hexdumping = 1;
   } else if (ev == MG_EV_MQTT_OPEN) {
     c->data[0] = 'M';
-    struct mg_mqtt_opts sub_opts;
-    memset(&sub_opts, 0, sizeof(sub_opts));
-    sub_opts.topic = mqtt_topic("rx", "b/rx");
-    sub_opts.qos = 1;
-    mg_mqtt_sub(c, &sub_opts);  // Subscribe to RX topic
+    mg_mqtt_sub(c, mqtt_topic("rx", "b/rx"), 1);  // Subscribe to RX topic
   } else if (ev == MG_EV_MQTT_MSG) {
     struct mg_mqtt_message *mm = evd;        // MQTT message
     uart_write(mm->data.ptr, mm->data.len);  // Send to UART
@@ -144,14 +140,8 @@ static void timer_fn(void *param) {
     for (struct mg_connection *c = mgr->conns; c != NULL; c = c->next) {
       if (c->data[0] == 'W') mg_ws_send(c, buf, len, WEBSOCKET_OP_TEXT);
       if (c->data[0] == 'T') mg_send(c, buf, len);
-      if (c->data[0] == 'M') {
-        struct mg_mqtt_opts pub_opts;
-        memset(&pub_opts, 0, sizeof(pub_opts));
-        pub_opts.topic = mqtt_topic("tx", "b/tx");
-        pub_opts.message = mg_str_n(buf, len);
-        pub_opts.qos = 1, pub_opts.retain = false;
-        mg_mqtt_pub(c, &pub_opts);
-      }
+      if (c->data[0] == 'M')
+        mg_mqtt_pub(c, mqtt_topic("tx", "b/tx"), mg_str_n(buf, len), 1, false);
     }
   }
 }

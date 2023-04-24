@@ -40,18 +40,10 @@ static void fn(struct mg_connection *c, int ev, void *ev_data, void *fn_data) {
     struct mg_str subt = mg_str(s_sub_topic);
     struct mg_str pubt = mg_str(s_pub_topic), data = mg_str("hello");
     MG_INFO(("%lu CONNECTED to %s", c->id, s_url));
-    struct mg_mqtt_opts sub_opts;
-    memset(&sub_opts, 0, sizeof(sub_opts));
-    sub_opts.topic = subt;
-    sub_opts.qos = s_qos;
-    mg_mqtt_sub(c, &sub_opts);
+    mg_mqtt_sub(c, subt, s_qos);
     MG_INFO(("%lu SUBSCRIBED to %.*s", c->id, (int) subt.len, subt.ptr));
-    struct mg_mqtt_opts pub_opts;
-    memset(&pub_opts, 0, sizeof(pub_opts));
-    pub_opts.topic = pubt;
-    pub_opts.message = data;
-    pub_opts.qos = s_qos, pub_opts.retain = false;
-    mg_mqtt_pub(c, &pub_opts);
+
+    mg_mqtt_pub(c, pubt, data, s_qos, false);
     MG_INFO(("%lu PUBLISHED %.*s -> %.*s", c->id, (int) data.len, data.ptr,
              (int) pubt.len, pubt.ptr));
   } else if (ev == MG_EV_MQTT_MSG) {
@@ -70,10 +62,9 @@ static void fn(struct mg_connection *c, int ev, void *ev_data, void *fn_data) {
 static void timer_fn(void *arg) {
   struct mg_mgr *mgr = (struct mg_mgr *) arg;
   struct mg_mqtt_opts opts = {.clean = true,
-                              .qos = s_qos,
-                              .topic = mg_str(s_pub_topic),
-                              .version = 4,
-                              .message = mg_str("bye")};
+                              .will_qos = s_qos,
+                              .will_topic = mg_str(s_pub_topic),
+                              .will_message = mg_str("bye")};
   if (s_conn == NULL) s_conn = mg_mqtt_connect(mgr, s_url, &opts, fn, NULL);
 }
 
