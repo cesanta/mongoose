@@ -8309,6 +8309,15 @@ void mg_connect_resolved(struct mg_connection *c) {
     MG_DEBUG(("%lu ARP lookup...", c->id));
     arp_ask(ifp, c->rem.ip);
     c->is_arplooking = 1;
+  } else if (c->rem.ip == (ifp->ip | ~ifp->mask)) {
+    struct connstate *s = (struct connstate *) (c + 1);
+    memset(s->mac, 0xFF, sizeof(s->mac));  // local broadcast
+  } else if ((*((uint8_t *) &c->rem.ip) & 0xE0) == 0xE0) {
+    struct connstate *s = (struct connstate *) (c + 1);  // 224 to 239, E0 to EF
+    uint8_t mcastp[3] = {0x01, 0x00, 0x5E};              // multicast group
+    memcpy(s->mac, mcastp, 3);
+    memcpy(s->mac + 3, ((uint8_t *) &c->rem.ip) + 1, 3);  // 23 LSb
+    s->mac[3] &= 0x7F;
   } else {
     struct connstate *s = (struct connstate *) (c + 1);
     memcpy(s->mac, ifp->gwmac, sizeof(ifp->gwmac));
