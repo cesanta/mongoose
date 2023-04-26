@@ -7937,14 +7937,20 @@ static struct mg_connection *accept_conn(struct mg_connection *lsn,
 long mg_io_send(struct mg_connection *c, const void *buf, size_t len) {
   struct mg_tcpip_if *ifp = (struct mg_tcpip_if *) c->mgr->priv;
   struct connstate *s = (struct connstate *) (c + 1);
-  size_t max_headers_len = 14 + 24 /* max IP */ + 60 /* max TCP */;
-  if (len + max_headers_len > ifp->tx.len) len = ifp->tx.len - max_headers_len;
-  if (tx_tcp(ifp, s->mac, c->rem.ip, TH_PUSH | TH_ACK, c->loc.port, c->rem.port,
-             mg_htonl(s->seq), mg_htonl(s->ack), buf, len) > 0) {
-    s->seq += (uint32_t) len;
-    if (s->ttype == MIP_TTYPE_ACK) settmout(c, MIP_TTYPE_KEEPALIVE);
+  if (c->is_udp) {
+    size_t max_headers_len = 14 + 24 /* max IP */ + 8 /* UDP */;
+    if (len + max_headers_len > ifp->tx.len) len = ifp->tx.len - max_headers_len;
+    tx_udp(ifp, s->mac, ifp->ip, c->loc.port, c->rem.ip, c->rem.port, buf, len);
   } else {
-    return MG_IO_ERR;
+    size_t max_headers_len = 14 + 24 /* max IP */ + 60 /* max TCP */;
+    if (len + max_headers_len > ifp->tx.len) len = ifp->tx.len - max_headers_len;
+    if (tx_tcp(ifp, s->mac, c->rem.ip, TH_PUSH | TH_ACK, c->loc.port, c->rem.port,
+               mg_htonl(s->seq), mg_htonl(s->ack), buf, len) > 0) {
+      s->seq += (uint32_t) len;
+      if (s->ttype == MIP_TTYPE_ACK) settmout(c, MIP_TTYPE_KEEPALIVE);
+    } else {
+      return MG_IO_ERR;
+    }
   }
   return (long) len;
 }
