@@ -1683,28 +1683,30 @@ void mg_http_serve_file(struct mg_connection *c, struct mg_http_message *hm,
                         const struct mg_http_serve_opts *opts) {
   char etag[64], tmp[MG_PATH_MAX];
   struct mg_fs *fs = opts->fs == NULL ? &mg_fs_posix : opts->fs;
-  struct mg_fd *fd = path == NULL ? NULL : mg_fs_open(fs, path, MG_FS_READ);
+  struct mg_fd *fd = NULL;
   size_t size = 0;
   time_t mtime = 0;
   struct mg_str *inm = NULL;
   struct mg_str mime = guess_content_type(mg_str(path), opts->mime_types);
   bool gzip = false;
 
-  // If file does not exist, we try to open file PATH.gz - and if such
-  // pre-compressed .gz file exists, serve it with the Content-Encoding: gzip
-  // Note - we ignore Accept-Encoding, cause we don't have a choice
-  if (fd == NULL) {
-    MG_DEBUG(("NULL [%s]", path));
-    mg_snprintf(tmp, sizeof(tmp), "%s.gz", path);
-    if ((fd = mg_fs_open(fs, tmp, MG_FS_READ)) != NULL) {
-      gzip = true;
-      path = tmp;
-    } else if (opts->page404 != NULL) {
-      // No precompressed file, serve 404
-      fd = mg_fs_open(fs, opts->page404, MG_FS_READ);
-      mime = guess_content_type(mg_str(path), opts->mime_types);
-      path = opts->page404;
+  if (path != NULL) {
+    // If a browser sends us "Accept-Encoding: gzip", try to open .gz first
+    struct mg_str *ae = mg_http_get_header(hm, "Accept-Encoding");
+    if (ae != NULL && mg_strstr(*ae, mg_str("gzip")) != NULL) {
+      mg_snprintf(tmp, sizeof(tmp), "%s.gz", path);
+      fd = mg_fs_open(fs, tmp, MG_FS_READ);
+      if (fd != NULL) gzip = true, path = tmp;
     }
+    // No luck opening .gz? Open what we've told to open
+    if (fd == NULL) fd = mg_fs_open(fs, path, MG_FS_READ);
+  }
+
+  // Failed to open, and page404 is configured? Open it, then
+  if (fd == NULL && opts->page404 != NULL) {
+    fd = mg_fs_open(fs, opts->page404, MG_FS_READ);
+    mime = guess_content_type(mg_str(path), opts->mime_types);
+    path = opts->page404;
   }
 
   if (fd == NULL || fs->st(path, &size, &mtime) == 0) {

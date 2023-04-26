@@ -635,21 +635,25 @@ static int fetch(struct mg_mgr *mgr, char *buf, const char *url,
   return fd.code;
 }
 
-static int cmpbody(const char *buf, const char *str) {
+static struct mg_http_message gethm(const char *buf) {
   struct mg_http_message hm;
+  memset(&hm, 0, sizeof(hm));
+  mg_http_parse(buf, strlen(buf), &hm);
+  return hm;
+}
+
+static int cmpbody(const char *buf, const char *str) {
   struct mg_str s = mg_str(str);
+  struct mg_http_message hm = gethm(buf);
   size_t len = strlen(buf);
   mg_http_parse(buf, len, &hm);
-  if (hm.body.len > len) hm.body.len = len - (size_t)(hm.body.ptr - buf);
+  if (hm.body.len > len) hm.body.len = len - (size_t) (hm.body.ptr - buf);
   return mg_strcmp(hm.body, s);
 }
 
 static bool cmpheader(const char *buf, const char *name, const char *value) {
-  struct mg_http_message hm;
-  struct mg_str *h;
-  size_t len = strlen(buf);
-  mg_http_parse(buf, len, &hm);
-  h = mg_http_get_header(&hm, name);
+  struct mg_http_message hm = gethm(buf);
+  struct mg_str *h = mg_http_get_header(&hm, name);
   return h != NULL && mg_strcmp(*h, mg_str(value)) == 0;
 }
 
@@ -765,9 +769,23 @@ static void test_http_server(void) {
   ASSERT(fetch(&mgr, buf, url, "GET /dredir/ HTTP/1.0\n\n") == 200);
   ASSERT(cmpbody(buf, "hi\n") == 0);
 
-  ASSERT(fetch(&mgr, buf, url, "GET /dredirgz/ HTTP/1.0\n\n") == 200);
+  ASSERT(fetch(&mgr, buf, url,
+               "GET /dredirgz/ HTTP/1.0\n"
+               "Accept-Encoding: gzip\n\n") == 200);
   ASSERT(cmpheader(buf, "Content-Type", "text/html; charset=utf-8"));
   ASSERT(cmpheader(buf, "Content-Encoding", "gzip"));
+
+  ASSERT(fetch(&mgr, buf, url, "GET /gzip.txt HTTP/1.0\n\n") == 200);
+  ASSERT(cmpbody(buf, "hi\n") == 0);
+  ASSERT(gethm(buf).body.len == 3);
+  ASSERT(cmpheader(buf, "Content-Encoding", "gzip") == false);
+
+  ASSERT(fetch(&mgr, buf, url,
+               "GET /gzip.txt HTTP/1.0\n"
+               "Accept-Encoding: foo,gzip\n\n") == 200);
+  mg_hexdump(buf, strlen(buf));
+  ASSERT(cmpheader(buf, "Content-Encoding", "gzip") == true);
+  ASSERT(gethm(buf).body.len == 23);
 
   ASSERT(fetch(&mgr, buf, url, "GET /..ddot HTTP/1.0\n\n") == 301);
   ASSERT(fetch(&mgr, buf, url, "GET /..ddot/ HTTP/1.0\n\n") == 200);
@@ -937,7 +955,9 @@ static void test_http_server(void) {
   // Pre-compressed files
   {
     struct mg_http_message hm;
-    ASSERT(fetch(&mgr, buf, url, "HEAD /hello.txt HTTP/1.0\n\n") == 200);
+    ASSERT(fetch(&mgr, buf, url,
+                 "HEAD /hello.txt HTTP/1.0\n"
+                 "Accept-Encoding: gzip\n\n") == 200);
     mg_http_parse(buf, strlen(buf), &hm);
     ASSERT(mg_http_get_header(&hm, "Content-Encoding") != NULL);
     ASSERT(mg_strcmp(*mg_http_get_header(&hm, "Content-Encoding"),
@@ -1381,9 +1401,7 @@ static void test_http_range(void) {
   ASSERT(mgr.conns == NULL);
 }
 
-static void f1(void *arg) {
-  (*(int *) arg)++;
-}
+static void f1(void *arg) { (*(int *) arg)++; }
 
 static void test_timer(void) {
   int v1 = 0, v2 = 0, v3 = 0;
@@ -2841,9 +2859,7 @@ static void start_thread(void (*f)(void *), void *p) {
   pthread_attr_destroy(&attr);
 }
 #else
-static void start_thread(void (*f)(void *), void *p) {
-  (void) f, (void) p;
-}
+static void start_thread(void (*f)(void *), void *p) { (void) f, (void) p; }
 #endif
 
 static void test_queue(void) {
