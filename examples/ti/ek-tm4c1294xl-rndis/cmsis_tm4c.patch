@@ -1,0 +1,13 @@
+diff --git a/Device/TI/TM4C/Include/TM4C1294NCPDT.h b/Device/TI/TM4C/Include/TM4C1294NCPDT.h
+index d2e48b4..cb1a843 100644
+--- a/Device/TI/TM4C/Include/TM4C1294NCPDT.h
++++ b/Device/TI/TM4C/Include/TM4C1294NCPDT.h
+@@ -841,7 +841,7 @@ typedef struct {                                    /*!< USB0 Structure
+     __O  uint8_t   CSRL0;                           /*!< USB Control and Status Endpoint 0 Low                                 */
+   };
+   __O  uint8_t   CSRH0;                             /*!< USB Control and Status Endpoint 0 High                                */
+-  __I  uint16_t  RESERVED24[3];
++  __I  uint16_t  RESERVED24[2];
+   __IO uint8_t   COUNT0;                            /*!< USB Receive Byte Count Endpoint 0                                     */
+   __I  uint8_t   RESERVED25[1];
+   __IO uint8_t   TYPE0;                             /*!< USB Type Endpoint 0                                                   */
