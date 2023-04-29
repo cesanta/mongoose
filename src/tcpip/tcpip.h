@@ -1,5 +1,6 @@
 #pragma once
 
+#if MG_ENABLE_TCPIP
 #include "arch.h"
 #include "net.h"
 #include "queue.h"
@@ -61,7 +62,6 @@ struct mg_tcpip_spi {
   uint8_t (*txn)(void *, uint8_t);  // SPI transaction: write 1 byte, read reply
 };
 
-#if MG_ENABLE_TCPIP
 #if !defined(MG_ENABLE_DRIVER_STM32H) && !defined(MG_ENABLE_DRIVER_TM4C)
 #define MG_ENABLE_DRIVER_STM32 1
 #else

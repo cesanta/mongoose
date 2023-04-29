@@ -1598,6 +1598,7 @@ void mg_rpc_verr(struct mg_rpc_req *, int code, const char *fmt, va_list *);
 void mg_rpc_list(struct mg_rpc_req *r);
 
 
+#if MG_ENABLE_TCPIP
 
 
 
@@ -1659,7 +1660,6 @@ struct mg_tcpip_spi {
   uint8_t (*txn)(void *, uint8_t);  // SPI transaction: write 1 byte, read reply
 };
 
-#if MG_ENABLE_TCPIP
 #if !defined(MG_ENABLE_DRIVER_STM32H) && !defined(MG_ENABLE_DRIVER_TM4C)
 #define MG_ENABLE_DRIVER_STM32 1
 #else
