@@ -7850,9 +7850,11 @@ static void rx_udp(struct mg_tcpip_if *ifp, struct pkt *pkt) {
   struct mg_connection *c = getpeer(ifp->mgr, pkt, true);
   if (c == NULL) {
     // No UDP listener on this port. Should send ICMP, but keep silent.
-  } else if (c != NULL) {
+  } else {
     c->rem.port = pkt->udp->sport;
     c->rem.ip = pkt->ip->src;
+    struct connstate *s = (struct connstate *) (c + 1);
+    memcpy(s->mac, pkt->eth->src, sizeof(s->mac));
     if (c->recv.len >= MG_MAX_RECV_SIZE) {
       mg_error(c, "max_recv_buf_size reached");
     } else if (c->recv.size - c->recv.len < pkt->pay.len &&
