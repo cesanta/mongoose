@@ -73,12 +73,13 @@ static void *ff_open(const char *path, int flags) {
   unsigned char mode = FA_READ;
   if (flags & MG_FS_WRITE) mode |= FA_WRITE | FA_OPEN_ALWAYS | FA_OPEN_APPEND;
   if (f_open(&f, path, mode) == 0) {
-    FIL *fp = calloc(1, sizeof(*fp));
-    memcpy(fp, &f, sizeof(*fp));
-    return fp;
-  } else {
-    return NULL;
+    FIL *fp;
+    if ((fp = calloc(1, sizeof(*fp))) != NULL) {
+      memcpy(fp, &f, sizeof(*fp));
+      return fp;
+    }
   }
+  return NULL;
 }
 
 static void ff_close(void *fp) {
