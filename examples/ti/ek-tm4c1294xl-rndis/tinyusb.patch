@@ -1,0 +1,14 @@
+diff --git a/src/portable/mentor/musb/musb_tm4c.h b/src/portable/mentor/musb/musb_tm4c.h
+index 65a1751..fb17bdb 100644
+--- a/src/portable/mentor/musb/musb_tm4c.h
++++ b/src/portable/mentor/musb/musb_tm4c.h
+@@ -33,7 +33,8 @@
+ 
+ #if CFG_TUSB_MCU == OPT_MCU_TM4C123
+   #include "TM4C123.h"
+-//#elif CFG_TUSB_MCU == OPT_MCU_TM4C129
++#elif CFG_TUSB_MCU == OPT_MCU_TM4C129
++  #include "TM4C129.h"
+ #else
+   #error "Unsupported MCUs"
+ #endif
