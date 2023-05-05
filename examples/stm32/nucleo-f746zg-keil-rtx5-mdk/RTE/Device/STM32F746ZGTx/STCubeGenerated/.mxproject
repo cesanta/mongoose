@@ -8,5 +8,5 @@ SourceFiles=;;
 HeaderPath=..\Inc
 HeaderFiles=stm32f7xx_it.h;stm32f7xx_hal_conf.h;main.h;
 SourcePath=..\Src
-SourceFiles=stm32f7xx_it.c;stm32f7xx_hal_msp.c;main.c;
+SourceFiles=stm32f7xx_it.c;stm32f7xx_hal_msp.c;stm32f7xx_hal_timebase_tim.c;main.c;
 

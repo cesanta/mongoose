@@ -84,18 +84,6 @@ static void MX_RNG_Init(void);
 /* Private user code ---------------------------------------------------------*/
 /* USER CODE BEGIN 0 */
 
-// https://www.keil.com/pack/doc/STM32Cube/html/cubemx_using.html
-uint32_t HAL_GetTick (void) {
-  static uint32_t ticks = 0U;
-  uint32_t i;
-  if (osKernelGetState() == osKernelRunning) {
-    return (uint32_t)osKernelGetTickCount();
-  } 
-  /* If Kernel is not running wait approximately 1 ms then increment and return auxiliary tick counter value */
-  for (i = (SystemCoreClock >> 14U); i > 0U; i--) { __NOP(); __NOP(); __NOP(); __NOP(); __NOP(); __NOP(); __NOP(); __NOP(); __NOP(); __NOP(); __NOP(); __NOP(); }
-  return ++ticks;
-}
-
 void mx_init(void) {
   SystemClock_Config();
   MX_GPIO_Init();
@@ -309,6 +297,27 @@ static void MX_GPIO_Init(void)
 /* USER CODE BEGIN 4 */
 
 /* USER CODE END 4 */
+
+/**
+  * @brief  Period elapsed callback in non blocking mode
+  * @note   This function is called  when TIM6 interrupt took place, inside
+  * HAL_TIM_IRQHandler(). It makes a direct call to HAL_IncTick() to increment
+  * a global variable "uwTick" used as application time base.
+  * @param  htim : TIM handle
+  * @retval None
+  */
+void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim)
+{
+  /* USER CODE BEGIN Callback 0 */
+
+  /* USER CODE END Callback 0 */
+  if (htim->Instance == TIM6) {
+    HAL_IncTick();
+  }
+  /* USER CODE BEGIN Callback 1 */
+
+  /* USER CODE END Callback 1 */
+}
 
 /**
   * @brief  This function is executed in case of error occurrence.
