@@ -605,6 +605,12 @@
           <targetInfo name="Target 1"/>
         </targetInfos>
       </component>
+      <component Cclass="Device" Cgroup="STM32Cube HAL" Csub="TIM" Cvendor="Keil" Cversion="1.3.0" condition="STM32F7 HAL DMA">
+        <package name="STM32F7xx_DFP" schemaVersion="1.7.7" url="https://www.keil.com/pack/" vendor="Keil" version="2.15.1"/>
+        <targetInfos>
+          <targetInfo name="Target 1"/>
+        </targetInfos>
+      </component>
       <component Cclass="Device" Cgroup="STM32Cube HAL" Csub="UART" Cvendor="Keil" Cversion="1.3.0" condition="STM32F7 HAL DMA">
         <package name="STM32F7xx_DFP" schemaVersion="1.7.7" url="https://www.keil.com/pack/" vendor="Keil" version="2.15.1"/>
         <targetInfos>
