@@ -193,7 +193,12 @@ bool mg_open_listener(struct mg_connection *c, const char *url) {
 
     if ((fd = socket(af, type, proto)) == MG_INVALID_SOCKET) {
       MG_ERROR(("socket: %d", MG_SOCK_ERR(-1)));
-#if defined(SO_REUSEADDR) && (!defined(LWIP_SOCKET) || SO_REUSE)
+#if defined(SO_EXCLUSIVEADDRUSE)
+    } else if ((rc = setsockopt(fd, SOL_SOCKET, SO_EXCLUSIVEADDRUSE,
+                                (char *) &on, sizeof(on))) != 0) {
+      // "Using SO_REUSEADDR and SO_EXCLUSIVEADDRUSE"
+      MG_ERROR(("setsockopt(SO_EXCLUSIVEADDRUSE): %d %d", on, MG_SOCK_ERR(rc)));
+#elif defined(SO_REUSEADDR) && (!defined(LWIP_SOCKET) || SO_REUSE)
     } else if ((rc = setsockopt(fd, SOL_SOCKET, SO_REUSEADDR, (char *) &on,
                                 sizeof(on))) != 0) {
       // 1. SO_REUSEADDR semantics on UNIX and Windows is different.  On
@@ -206,12 +211,6 @@ bool mg_open_listener(struct mg_connection *c, const char *url) {
       // SO_REUSE = 1 in lwipopts.h, otherwise the code below will compile but
       // won't work! (setsockopt will return EINVAL)
       MG_ERROR(("setsockopt(SO_REUSEADDR): %d", MG_SOCK_ERR(rc)));
-#endif
-#if defined(SO_EXCLUSIVEADDRUSE)
-    } else if ((rc = setsockopt(fd, SOL_SOCKET, SO_EXCLUSIVEADDRUSE,
-                                (char *) &on, sizeof(on))) != 0) {
-      // "Using SO_REUSEADDR and SO_EXCLUSIVEADDRUSE"
-      MG_ERROR(("setsockopt(SO_EXCLUSIVEADDRUSE): %d", MG_SOCK_ERR(rc)));
 #endif
 #if defined(IPV6_V6ONLY)
     } else if (c->loc.is_ip6 &&
