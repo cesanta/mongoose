@@ -64,6 +64,7 @@ static void fn(struct mg_connection *c, int ev, void *ev_data, void *fn_data) {
       }
       c->fn_data = c2;
       forward_request(hm, c2);
+      c->is_resp = 0; // process further msgs in keep-alive connection
       c2->is_hexdumping = 1;
     }
   } else if (ev == MG_EV_CLOSE) {
