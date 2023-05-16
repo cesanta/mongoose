@@ -833,19 +833,7 @@ char *mg_remove_double_dots(char *s);
 
 
 // Single producer, single consumer non-blocking queue
-//
-// Producer:
-//    char *buf;
-//    while (mg_queue_book(q, &buf) < len) WAIT();  // Wait for space
-//    memcpy(buf, my_data, len);   // Copy data to the queue
-//    mg_queue_add(q, len);
-//
-// Consumer:
-//    char *buf;
-//    while ((len = mg_queue_get(q, &buf)) == 0) WAIT();
-//    mg_hexdump(buf, len); // Handle message
-//    mg_queue_del(q, len);
-//
+
 struct mg_queue {
   char *buf;
   size_t size;
