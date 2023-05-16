@@ -790,6 +790,10 @@ static void test_http_server(void) {
   ASSERT(fetch(&mgr, buf, url, "GET /..ddot HTTP/1.0\n\n") == 301);
   ASSERT(fetch(&mgr, buf, url, "GET /..ddot/ HTTP/1.0\n\n") == 200);
   ASSERT(cmpbody(buf, "hi\n") == 0);
+  ASSERT(fetch(&mgr, buf, url, "GET /a.txt HTTP/1.0\n"
+        "Content-Length: -123\n\n") == 0);
+  ASSERT(fetch(&mgr, buf, url, "POST /a.txt HTTP/1.0\n"
+               "Content-Length: -123\n\n") == 0);
 
   {
     extern char *mg_http_etag(char *, size_t, size_t, time_t);
