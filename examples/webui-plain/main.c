@@ -38,10 +38,9 @@ static void fn(struct mg_connection *c, int ev, void *ev_data, void *fn_data) {
     struct mg_http_message *hm = (struct mg_http_message *) ev_data;
     if (mg_http_match_uri(hm, "/api/config/get")) {
       mg_http_reply(c, 200, "Content-Type: application/json\r\n",
-                    "{%m:%m,%m:%m,%m:%m}\n", mg_print_esc, 0, "url",
-                    mg_print_esc, 0, s_config.url, mg_print_esc, 0, "pub",
-                    mg_print_esc, 0, s_config.pub, mg_print_esc, 0, "sub",
-                    mg_print_esc, 0, s_config.sub);
+                    "{%m:%m,%m:%m,%m:%m}\n", MG_ESC("url"),
+                    MG_ESC(s_config.url), MG_ESC("pub"), MG_ESC(s_config.pub),
+                    MG_ESC("sub"), MG_ESC(s_config.sub));
     } else if (mg_http_match_uri(hm, "/api/config/set")) {
       struct mg_str json = hm->body;
       update_config(json, "$.url", &s_config.url);

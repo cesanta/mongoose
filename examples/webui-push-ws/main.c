@@ -29,9 +29,8 @@ static void push(struct mg_mgr *mgr, const char *name, const void *data) {
   struct mg_connection *c;
   for (c = mgr->conns; c != NULL; c = c->next) {
     if (c->data[0] != 'W') continue;
-    mg_ws_printf(c, WEBSOCKET_OP_TEXT, "{%m:%m,%m:%m}", mg_print_esc, 0, "name",
-                 mg_print_esc, 0, name, mg_print_esc, 0, "data", mg_print_esc,
-                 0, data);
+    mg_ws_printf(c, WEBSOCKET_OP_TEXT, "{%m:%m,%m:%m}", MG_ESC("name"),
+                 MG_ESC(name), MG_ESC("data"), MG_ESC(data));
   }
 }
 
