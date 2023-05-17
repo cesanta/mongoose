@@ -18,7 +18,7 @@ static void fn(struct mg_connection *c, int ev, void *ev_data, void *fn_data) {
     struct mg_http_message *hm = (struct mg_http_message *) ev_data;
     if (mg_http_match_uri(hm, "/api/f1")) {
       mg_http_reply(c, 200, "Content-Type: application/json\r\n", "{%m:%d}\n",
-                    mg_print_esc, 0, "result", 123);
+                    MG_ESC("result"), 123);
     } else if (mg_http_match_uri(hm, "/api/sum")) {
       // Attempt to fetch a JSON array from the body, hm->body
       struct mg_str json = hm->body;
@@ -27,7 +27,7 @@ static void fn(struct mg_connection *c, int ev, void *ev_data, void *fn_data) {
           mg_json_get_num(json, "$[1]", &num2)) {
         // Success! create a JSON response
         mg_http_reply(c, 200, "Content-Type: application/json\r\n", "{%m:%g}\n",
-                      mg_print_esc, 0, "result", num1 + num2);
+                      MG_ESC("result"), num1 + num2);
       }
     } else {
       struct mg_http_serve_opts opts = {.root_dir = s_root_dir};
