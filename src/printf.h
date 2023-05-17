@@ -25,3 +25,6 @@ size_t mg_print_mac(void (*out)(char, void *), void *arg, va_list *ap);
 // Various output functions
 void mg_pfn_iobuf(char ch, void *param);  // param: struct mg_iobuf *
 void mg_pfn_stdout(char c, void *param);  // param: ignored
+
+// A helper macro for printing JSON: mg_snprintf(buf, len, "%m", MG_ESC("hi"))
+#define MG_ESC(str) mg_print_esc, 0, (str)
