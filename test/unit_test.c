@@ -2137,10 +2137,12 @@ static void eh5(struct mg_connection *c, int ev, void *ev_data, void *fn_data) {
 
 static void test_http_chunked_case(mg_event_handler_t s, mg_event_handler_t c,
                                    int req_count, const char *expected) {
+  char url[100];
   struct mg_mgr mgr;
-  const char *url = "http://127.0.0.1:12344";
   uint32_t i, crc = 0, expected_crc = mg_crc32(0, expected, strlen(expected));
   struct mg_connection *conn;
+  static uint16_t port = 32344; // To prevent bind errors on Windows
+  mg_snprintf(url, sizeof(url), "http://127.0.0.1:%d", port++);
   mg_mgr_init(&mgr);
   mg_http_listen(&mgr, url, s, NULL);
   conn = mg_http_connect(&mgr, url, c, &crc);
@@ -2799,7 +2801,7 @@ static void test_poll(void) {
   int count = 0, i;
   struct mg_mgr mgr;
   mg_mgr_init(&mgr);
-  mg_http_listen(&mgr, "http://127.0.0.1:12346", ph, &count);
+  mg_http_listen(&mgr, "http://127.0.0.1:42346", ph, &count); // To prevent bind errors on Windows
   for (i = 0; i < 10; i++) mg_mgr_poll(&mgr, 0);
   ASSERT(count == 10);
   mg_mgr_free(&mgr);
