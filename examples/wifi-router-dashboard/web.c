@@ -20,6 +20,16 @@ struct event {
   const char *text;
 };
 
+// DHCP configuration
+struct dhcp {
+  bool enabled;
+  uint8_t address_begin;
+  uint8_t address_end;
+  unsigned long lease_time_sec;
+};
+
+static struct dhcp s_dhcp = {true, 10, 255, 86400};
+
 // Mocked events
 static struct event s_events[] = {
     {.type = 0, .prio = 0, .text = "here goes event 1"},
@@ -30,12 +40,6 @@ static struct event s_events[] = {
     {.type = 2, .prio = 0, .text = "more again..."},
     {.type = 1, .prio = 1, .text = "oops. it happened again"},
 };
-
-static int event_next(int no, struct event *e) {
-  if (no < 0 || no >= (int) (sizeof(s_events) / sizeof(s_events[0]))) return 0;
-  *e = s_events[no];
-  return no + 1;
-}
 
 static const char *s_json_header =
     "Content-Type: application/json\r\n"
@@ -61,6 +65,12 @@ static const char *s_ssl_key =
     "AwEHoUQDQgAEc0kEuTh3de5VHjSPupKfVmLtHMbhCIvyU46YWwpnSQ9XFL4ZszPf\n"
     "6YbyU/ZGtdGfbaGYYJwatKNMX00OIwtb8A==\n"
     "-----END EC PRIVATE KEY-----\n";
+
+static int event_next(int no, struct event *e) {
+  if (no < 0 || no >= (int) (sizeof(s_events) / sizeof(s_events[0]))) return 0;
+  *e = s_events[no];
+  return no + 1;
+}
 
 // SNTP connection event handler. When we get a response from an SNTP server,
 // adjust s_boot_timestamp. We'll get a valid time from that point on
@@ -160,10 +170,10 @@ static size_t print_events(void (*out)(char, void *), void *ptr, va_list *ap) {
   int no = 0;
   while ((no = event_next(no, &e)) != 0) {
     len += mg_xprintf(out, ptr, "%s{%m:%lu,%m:%d,%m:%d,%m:%m}",  //
-                      len == 0 ? "" : ",",                              //
-                      MG_ESC("time"), e.timestamp,                      //
-                      MG_ESC("type"), e.type,                           //
-                      MG_ESC("prio"), e.prio,                           //
+                      len == 0 ? "" : ",",                       //
+                      MG_ESC("time"), e.timestamp,               //
+                      MG_ESC("type"), e.type,                    //
+                      MG_ESC("prio"), e.prio,                    //
                       MG_ESC("text"), MG_ESC(e.text));
   }
   (void) ap;
@@ -172,6 +182,28 @@ static size_t print_events(void (*out)(char, void *), void *ptr, va_list *ap) {
 
 static void handle_events_get(struct mg_connection *c) {
   mg_http_reply(c, 200, s_json_header, "[%M]", print_events);
+}
+
+static void handle_dhcp_set(struct mg_connection *c, struct mg_str body) {
+  struct dhcp dhcp = {};
+  mg_json_get_bool(body, "$.enabled", &dhcp.enabled);
+  dhcp.address_begin = mg_json_get_long(body, "$.address_begin", 0);
+  dhcp.address_end = mg_json_get_long(body, "$.address_end", 0);
+  dhcp.lease_time_sec = mg_json_get_long(body, "$.lease_time_sec", 0);
+  s_dhcp = dhcp;  // Save to the device flash, too
+  bool ok = true;
+  mg_http_reply(c, 200, s_json_header,
+                "{%m:%s,%m:%m}",                           //
+                MG_ESC("status"), ok ? "true" : "false",  //
+                MG_ESC("message"), MG_ESC(ok ? "Success" : "Failed"));
+}
+
+static void handle_dhcp_get(struct mg_connection *c) {
+  mg_http_reply(c, 200, s_json_header, "{%m:%s,%m:%hhu,%m:%hhu,%m:%lu}",  //
+                MG_ESC("enabled"), s_dhcp.enabled ? "true" : "false",     //
+                MG_ESC("address_begin"), s_dhcp.address_begin,            //
+                MG_ESC("address_end"), s_dhcp.address_end,                //
+                MG_ESC("lease_time_sec"), s_dhcp.lease_time_sec);
 }
 
 // HTTP request handler function
@@ -195,6 +227,10 @@ static void fn(struct mg_connection *c, int ev, void *ev_data, void *fn_data) {
       handle_stats_get(c);
     } else if (mg_http_match_uri(hm, "/api/events/get")) {
       handle_events_get(c);
+    } else if (mg_http_match_uri(hm, "/api/dhcp/get")) {
+      handle_dhcp_get(c);
+    } else if (mg_http_match_uri(hm, "/api/dhcp/set")) {
+      handle_dhcp_set(c, hm->body);
     } else {
       struct mg_http_serve_opts opts;
       memset(&opts, 0, sizeof(opts));

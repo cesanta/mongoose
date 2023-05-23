@@ -55,6 +55,44 @@ function Button({title, onclick, disabled, cls, icon, ref, colors, hovercolor, d
 <//>`
 };
 
+function Toast({ok, text, close}) {
+  const closebtn = useRef(null);
+  const from = 'translate-y-2 opacity-0 sm:translate-y-0 sm:translate-x-2';
+  const to = 'translate-y-0 opacity-100 sm:translate-x-0';
+  const [tr, setTr] = useState(from);
+  useEffect(function() {
+    setTr(to); 
+    setTimeout(ev => closebtn && closebtn.current.click && closebtn.current.click(), 1500);
+  }, []);
+  const onclose = ev => { setTr(from); setTimeout(close, 300); };
+  return html`
+<div aria-live="assertive" class="z-10 pointer-events-none absolute inset-0 flex items-end px-4 py-6 sm:items-start sm:p-6">
+  <div class="flex w-full flex-col items-center space-y-4 sm:items-end">
+    <div class="pointer-events-auto w-full max-w-sm overflow-hidden rounded-lg bg-white shadow-lg ring-1 ring-black ring-opacity-5 transform ease-out duration-300 transition ${tr}">
+      <div class="p-4">
+        <div class="flex items-start">
+          <div class="flex-shrink-0">
+            <${ok ? IconOk : IconFailed} class="h-6 w-6 ${ok ? 'text-green-400' : 'text-red-400'}" />
+          <//>
+          <div class="ml-3 w-0 flex-1 pt-0.5">
+            <p class="text-sm font-medium text-gray-900">${text}</p>
+            <p class="hidden mt-1 text-sm text-gray-500">Anyone with a link can now view this file.</p>
+          <//>
+          <div class="ml-4 flex flex-shrink-0">
+            <button type="button" ref=${closebtn} onclick=${onclose} class="inline-flex rounded-md bg-white text-gray-400 hover:text-gray-500 focus:outline-none">
+              <span class="sr-only">Close</span>
+              <svg class="h-5 w-5" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
+                <path d="M6.28 5.22a.75.75 0 00-1.06 1.06L8.94 10l-3.72 3.72a.75.75 0 101.06 1.06L10 11.06l3.72 3.72a.75.75 0 101.06-1.06L11.06 10l3.72-3.72a.75.75 0 00-1.06-1.06L10 8.94 6.28 5.22z" />
+              <//>
+            <//>
+          <//>
+        <//>
+      <//>
+    <//>
+  <//>
+<//>`;
+};
+
 function Login({login}) {
   const [user, setUser] = useState('');
   const [pass, setPass] = useState('');
@@ -298,8 +336,84 @@ function Main({}) {
 <//>`;
 };
 
-function Devices({}) {
-  return html`<div class="p-2">Devices<//>`;
+function TextValue({value, setfn, disabled, placeholder, type, addonRight, addonLeft, attr}) {
+  const f = type == 'number' ? x => setfn(parseInt(x)) : setfn;
+  return html`
+<div class="flex w-full items-center rounded border shadow-sm">
+  ${ addonLeft && html`<span class="inline-flex font-normal truncate py-1 border-r bg-slate-100 items-center border-gray-300 px-2 text-gray-500 text-xs">${addonLeft}</>` }
+  <input type=${type || 'text'} disabled=${disabled} 
+    oninput=${ev => f(ev.target.value)} ...${attr}
+    class="font-normal text-sm rounded w-full flex-1 py-0.5 px-2 text-gray-700 placeholder:text-gray-400 focus:outline-none disabled:cursor-not-allowed disabled:bg-gray-100 disabled:text-gray-500" placeholder=${placeholder} value=${value} />
+  ${ addonRight && html`<span class="inline-flex font-normal truncate py-1 border-l bg-slate-100 items-center border-gray-300 px-2 text-gray-500 text-xs">${addonRight}</>` }
+<//>`;
+};
+
+function SelectValue({value, setfn, options}) {
+  const toInt = x => x == parseInt(x) ? parseInt(x) : x;
+  const onchange = ev => setfn(toInt(ev.target.value));
+  return html`
+<select onchange=${onchange} class="w-full rounded font-normal border py-0.5 px-1 text-gray-600 focus:outline-none text-sm">
+  ${options.map(v => html`<option value=${v[0]} selected=${v[0] == value}>${v[1]}<//>`) }
+<//>`;
+};
+
+function SwitchValue({value, setfn}) {
+  const onclick = ev => setfn(!value);
+  const bg = !!value ? 'bg-blue-600' : 'bg-gray-200';
+  const tr = !!value ? 'translate-x-5' : 'translate-x-0';
+  return html`
+<button type="button" onclick=${onclick} class="${bg} inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus:ring-0 ring-0" role="switch" aria-checked=${!!value}>
+  <span aria-hidden="true" class="${tr} pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 focus:ring-0 transition duration-200 ease-in-out"></span>
+</button>`;
+};
+
+function Setting(props) {
+  return html`
+<div class=${props.cls || 'grid grid-cols-2 gap-2 my-1'}>
+  <label class="flex items-center text-sm text-gray-700 mr-2 font-medium">${props.title}<//>
+  <div class="flex items-center">
+    ${props.type == 'switch' ? h(SwitchValue, props) : 
+      props.type == 'select' ? h(SelectValue, props) :
+      h(TextValue, props) }
+  <//>
+<//>`;
+};
+
+function DHCP({}) {
+  const [dhcp, setDhcp] = useState(null);
+  const [saveResult, setSaveResult] = useState(null);
+  const refresh = () => fetch('/api/dhcp/get')
+    .then(r => r.json())
+    .then(r => setDhcp(r));
+  useEffect(refresh, []);
+
+  const mksetfn = k => (v => setDhcp(x => Object.assign({}, x, {[k]: v}))); 
+  const onsave = ev => fetch('/api/dhcp/set', {
+    method: 'post', body: JSON.stringify(dhcp) 
+  }).then(r => r.json())
+    .then(r => setSaveResult(r))
+    .then(refresh);
+
+  if (!dhcp) return '';
+  return html`
+<div class="m-4 grid grid-cols-1 gap-4 md:grid-cols-2">
+
+  <div class="py-1 divide-y border rounded bg-white flex flex-col">
+    <div class="font-light uppercase flex items-center text-gray-600 px-4 py-2">
+      DHCP Server Settings
+    <//>
+    <div class="py-2 px-5 flex-1 flex flex-col relative">
+      ${saveResult && html`<${Toast} ok=${saveResult.status}
+        text=${saveResult.message} close=${() => setSaveResult(null)} />`}
+
+      <${Setting} title="Enabled" value=${dhcp.enabled} setfn=${mksetfn('enabled')} type="switch" />
+      <${Setting} title="Start Address" value=${dhcp.address_begin} setfn=${mksetfn('address_begin')} type="number" addonLeft="192.168.0." disabled=${!dhcp.enabled} />
+      <${Setting} title="End Address" value=${dhcp.address_end} setfn=${mksetfn('address_end')} type="number" addonLeft="192.168.0." disabled=${!dhcp.enabled} />
+      <${Setting} title="Lease Time" value=${dhcp.lease_time_sec} setfn=${mksetfn('lease_time_sec')} type="number" addonRight="seconds" disabled=${!dhcp.enabled} />
+      <div class="mb-1 mt-3 flex place-content-end"><${Button} icon=${IconSave} onclick=${onsave} title="Save Settings" /><//>
+    <//>
+  <//>
+<//>`;
 };
 
 const App = function({}) {
@@ -325,7 +439,7 @@ const App = function({}) {
   <div class="${showSidebar && 'pl-72'} transition-all duration-300 transform">
     <${Router} onChange=${ev => setUrl(ev.url)} history=${History.createHashHistory()} >
       <${Main} default=${true} />
-      <${Devices} path="aa" />
+      <${DHCP} path="dhcp" />
     <//>
   <//>
 <//>`;
