@@ -15,7 +15,6 @@ ifeq ($(OS),Windows_NT)         # Windows settings. Assume MinGW compiler. To us
   CFLAGS += -lws2_32            # Link against Winsock library
   DELETE = cmd /C del /Q /F /S  # Command prompt command to delete files
   OUT ?= -o $(PROG)             # Build output
-  CFLAGS += -DSIGPIPE=0         # No SIGPIPE on Windows
 endif
 
 all: $(PROG)              # Default target. Build and run program
