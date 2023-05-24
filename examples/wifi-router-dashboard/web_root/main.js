@@ -99,7 +99,7 @@ function Login({login}) {
   const onsubmit = function(ev) {
     const authhdr = 'Basic ' + btoa(user + ':' + pass);
     const headers = {Authorization: authhdr};
-    return fetch('/api/login', {headers}).then(login).finally(r => setPass(''));
+    return fetch('api/login', {headers}).then(login).finally(r => setPass(''));
   };
   return html`
 <div class="h-full flex items-center justify-center bg-slate-100">
@@ -212,7 +212,7 @@ function Stat({title, text, tipText, tipIcon, tipColors}) {
 
 function Events({}) {
   const [events, setEvents] = useState([]);
-  const refresh = () => fetch('/api/events/get').then(r => r.json()).then(r => setEvents(r)).catch(e => console.log(e));
+  const refresh = () => fetch('api/events/get').then(r => r.json()).then(r => setEvents(r)).catch(e => console.log(e));
   useEffect(refresh, []);
 
   const Th = props => html`<th scope="col" class="sticky top-0 z-10 border-b border-slate-300 bg-white bg-opacity-75 py-1.5 px-4 text-left text-sm font-semibold text-slate-900 backdrop-blur backdrop-filter">${props.title}</th>`;
@@ -315,7 +315,7 @@ function SpeedChart({stats}) {
 
 function Main({}) {
   const [stats, setStats] = useState(null);
-  const refresh = () => fetch('/api/stats/get').then(r => r.json()).then(r => setStats(r));
+  const refresh = () => fetch('api/stats/get').then(r => r.json()).then(r => setStats(r));
   useEffect(refresh, []);
   if (!stats) return '';
   return html`
@@ -382,13 +382,13 @@ function Setting(props) {
 function DHCP({}) {
   const [dhcp, setDhcp] = useState(null);
   const [saveResult, setSaveResult] = useState(null);
-  const refresh = () => fetch('/api/dhcp/get')
+  const refresh = () => fetch('api/dhcp/get')
     .then(r => r.json())
     .then(r => setDhcp(r));
   useEffect(refresh, []);
 
   const mksetfn = k => (v => setDhcp(x => Object.assign({}, x, {[k]: v}))); 
-  const onsave = ev => fetch('/api/dhcp/set', {
+  const onsave = ev => fetch('api/dhcp/set', {
     method: 'post', body: JSON.stringify(dhcp) 
   }).then(r => r.json())
     .then(r => setSaveResult(r))
@@ -422,12 +422,12 @@ const App = function({}) {
   const [user, setUser] = useState('');
   const [showSidebar, setShowSidebar] = useState(true);
 
-  const logout = () => fetch('/api/logout').then(r => setUser(''));
+  const logout = () => fetch('api/logout').then(r => setUser(''));
   const login = r => !r.ok ? setLoading(false) : r.json()
       .then(r => setUser(r.user))
       .finally(r => setLoading(false));
 
-  useEffect(() => fetch('/api/login').then(login), []);
+  useEffect(() => fetch('api/login').then(login), []);
 
   if (loading) return '';  // Show blank page on initial load
   if (!user) return html`<${Login} login=${login} />`; // If not logged in, show login screen
