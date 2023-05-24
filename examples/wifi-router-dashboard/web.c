@@ -28,7 +28,7 @@ struct dhcp {
   unsigned long lease_time_sec;
 };
 
-static struct dhcp s_dhcp = {true, 10, 255, 86400};
+static struct dhcp s_dhcp = {true, 10, 250, 86400};
 
 // Mocked events
 static struct event s_events[] = {
@@ -185,7 +185,8 @@ static void handle_events_get(struct mg_connection *c) {
 }
 
 static void handle_dhcp_set(struct mg_connection *c, struct mg_str body) {
-  struct dhcp dhcp = {};
+  struct dhcp dhcp;
+  memset(&dhcp, 0, sizeof(dhcp));
   mg_json_get_bool(body, "$.enabled", &dhcp.enabled);
   dhcp.address_begin = mg_json_get_long(body, "$.address_begin", 0);
   dhcp.address_end = mg_json_get_long(body, "$.address_end", 0);
