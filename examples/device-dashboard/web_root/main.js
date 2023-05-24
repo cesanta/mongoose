@@ -72,7 +72,7 @@ const Login = function(props) {
   const [pass, setPass] = useState('');
   const login = ev =>
       fetch(
-          '/api/login',
+          'api/login',
           {headers: {Authorization: 'Basic ' + btoa(user + ':' + pass)}})
           .then(r => r.json())
           .then(r => r && props.login(r))
@@ -113,7 +113,7 @@ const Configuration = function(props) {
     setSub(props.config.sub);
   }, [props.config]);
 
-  const update = (name, val) => fetch('/api/config/set', {
+  const update = (name, val) => fetch('api/config/set', {
                                   method: 'post',
                                   body: `${name}=${encodeURIComponent(val)}`
                                 }).catch(err => err);
@@ -184,7 +184,7 @@ const Messages = function(props) {
     return PubSub.unsubscribe(id);
   }, []);
 
-  const sendmessage = ev => fetch('/api/message/send', {
+  const sendmessage = ev => fetch('api/message/send', {
                               method: 'post',
                               body: `message=${encodeURIComponent(txt)}`
                             }).then(r => setTxt(''));
@@ -310,7 +310,7 @@ const App = function(props) {
   const [config, setConfig] = useState({});
 
   const getconfig = () =>
-      fetch('/api/config/get', {headers: {Authorization: ''}})
+      fetch('api/config/get', {headers: {Authorization: ''}})
           .then(r => r.json())
           .then(r => setConfig(r))
           .catch(err => console.log(err));
@@ -319,7 +319,7 @@ const App = function(props) {
   // to all subscribed components
   const watch = function() {
     var l = window.location, proto = l.protocol.replace('http', 'ws');
-    var tid, wsURI = proto + '//' + l.host + '/api/watch'
+    var tid, wsURI = proto + '//' + l.host + l.pathname + 'api/watch'
     var reconnect = function() {
       var ws = new WebSocket(wsURI);
       // ws.onopen = () => console.log('ws connected');
@@ -360,7 +360,7 @@ const App = function(props) {
   useEffect(() => {
     // Called once at init time
     PubSub.subscribe(msg => msg.name == 'config' && getconfig());
-    fetch('/api/login', {headers: {Authorization: ''}})
+    fetch('api/login', {headers: {Authorization: ''}})
         .then(r => r.json())
         .then(r => login(r))
         .catch(err => setUser(''));
