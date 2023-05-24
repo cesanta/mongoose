@@ -1,4 +1,5 @@
 PROG ?= example                   # Program we are building
+PACK ?= ./pack                    # Packing executable
 DELETE = rm -rf                   # Command to remove files
 OUT ?= -o $(PROG)                 # Compiler argument for output file
 SOURCES = main.c mongoose.c net.c packed_fs.c      # Source code files
@@ -7,8 +8,11 @@ CFLAGS = -W -Wall -Wextra -g -I.  # Build options
 # Mongoose build options. See https://mongoose.ws/documentation/#build-options
 CFLAGS_MONGOOSE += -DMG_ENABLE_PACKED_FS=1
 
+FILES_TO_EMBED ?= $(wildcard web_root/*)
+
 ifeq ($(OS),Windows_NT)   # Windows settings. Assume MinGW compiler. To use VC: make CC=cl CFLAGS=/MD OUT=/Feprog.exe
   PROG ?= example.exe           # Use .exe suffix for the binary
+  PACK = pack.exe               # Packing executable
   CC = gcc                      # Use MinGW gcc compiler
   CFLAGS += -lws2_32            # Link against Winsock library
   DELETE = cmd /C del /Q /F /S  # Command prompt command to delete files
@@ -19,12 +23,14 @@ endif
 all: $(PROG)              # Default target. Build and run program
 	$(RUN) ./$(PROG) $(ARGS)
 
-ifneq ($(OS),Windows_NT)
 # Before embedding files, gzip them to save space
-packed_fs.c: $(shell find web_root -type f) Makefile
+packed_fs.c: $(FILES_TO_EMBED) Makefile
+	$(CC) ../../test/pack.c -o $(PACK)
+ifeq ($(OS),Windows_NT)
+	$(PACK) $(FILES_TO_EMBED) > $@
+else
 	rm -rf tmp/web_root && mkdir tmp && cp -r web_root tmp/
 	find tmp -type f | xargs -n1 gzip
-	$(CC) ../../test/pack.c -o pack
 	cd tmp && ../pack `find web_root -type f` > ../$@
 endif
 
