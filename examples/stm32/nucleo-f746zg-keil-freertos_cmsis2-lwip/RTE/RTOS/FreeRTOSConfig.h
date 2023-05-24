@@ -51,7 +51,7 @@
 //  <o>Minimal stack size [words] <0-65535>
 //  <i> Stack for idle task and default task stack in words.
 //  <i> Default: 128
-#define configMINIMAL_STACK_SIZE                ((uint16_t)(128))
+#define configMINIMAL_STACK_SIZE                ((uint16_t)(256))
 
 //  <o>Total heap size [bytes] <0-0xFFFFFFFF>
 //  <i> Heap memory size in bytes.
