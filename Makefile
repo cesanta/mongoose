@@ -17,6 +17,8 @@ EXAMPLES_MAC := $(filter-out examples/mip-pcap/ examples/mip-tap/, $(EXAMPLES))
 EXAMPLES_WIN := $(dir $(wildcard examples/device-dashboard/Makefile) $(wildcard examples/file-*/Makefile) $(wildcard examples/http-*/Makefile) $(wildcard examples/mqtt-*/Makefile) $(wildcard examples/websocket-*/Makefile) $(wildcard examples/webui-*/Makefile))
 EXAMPLES_EMBEDDED := $(filter-out $(wildcard examples/zephyr/*/), $(dir $(wildcard examples/*/*/Makefile)))
 PREFIX ?= /usr/local
+LIBDIR ?= $(PREFIX)/lib
+INCLUDEDIR ?= $(PREFIX)/include
 VERSION ?= $(shell cut -d'"' -f2 src/version.h)
 COMMON_CFLAGS ?= $(C_WARN) $(WARN) $(INCS) $(DEFS) -DMG_ENABLE_IPV6=$(IPV6) $(TFLAGS) -pthread
 CFLAGS ?= $(OPTS) $(ASAN) $(COMMON_CFLAGS)
@@ -35,13 +37,13 @@ endif
 ifeq "$(SSL)" "MBEDTLS"
 MBEDTLS ?= /usr/local
 CFLAGS  += -DMG_ENABLE_MBEDTLS=1 -I$(MBEDTLS)/include -I/usr/include
-LDFLAGS ?= -L$(MBEDTLS)/lib -lmbedtls -lmbedcrypto -lmbedx509
+LDFLAGS += -L$(MBEDTLS)/lib -lmbedtls -lmbedcrypto -lmbedx509
 endif
 
 ifeq "$(SSL)" "OPENSSL"
 OPENSSL ?= /usr/local
 CFLAGS  += -DMG_ENABLE_OPENSSL=1 -I$(OPENSSL)/include
-LDFLAGS ?= -L$(OPENSSL)/lib -lssl -lcrypto
+LDFLAGS += -L$(OPENSSL)/lib -lssl -lcrypto
 endif
 
 all:
@@ -178,17 +180,18 @@ mingw++: Makefile mongoose.h $(SRCS)
 	$(DOCKER) mdashnet/mingw x86_64-w64-mingw32-g++ $(SRCS) -W -Wall -Werror -I. $(DEFS) -lwsock32 -o $@.exe
 
 linux-libs: CFLAGS += -fPIC
+linux-libs: LDFLAGS += -Wl,-soname,libmongoose.so.$(VERSION)
 linux-libs: mongoose.o
 	$(CC) mongoose.o $(LDFLAGS) -shared -o libmongoose.so.$(VERSION)
 	$(AR) rcs libmongoose.a mongoose.o
 
 install: linux-libs
-	install -Dm644 libmongoose.a libmongoose.so.$(VERSION) $(DESTDIR)$(PREFIX)/lib
-	ln -s libmongoose.so.$(VERSION) $(DESTDIR)$(PREFIX)/lib/libmongoose.so
-	install -Dm644 mongoose.h $(DESTDIR)$(PREFIX)/include/mongoose.h
+	install -Dm644 libmongoose.a libmongoose.so.$(VERSION) $(DESTDIR)$(LIBDIR)
+	ln -s libmongoose.so.$(VERSION) $(DESTDIR)$(LIBDIR)/libmongoose.so
+	install -Dm644 mongoose.h $(DESTDIR)$(INCLUDEDIR)/mongoose.h
 
 uninstall:
-	rm -rf $(DESTDIR)$(PREFIX)/lib/libmongoose.a $(DESTDIR)$(PREFIX)/lib/libmongoose.so.$(VERSION) $(DESTDIR)$(PREFIX)/include/mongoose.h $(DESTDIR)$(PREFIX)/lib/libmongoose.so
+	rm -rf $(DESTDIR)$(LIBDIR)/libmongoose.a $(DESTDIR)$(LIBDIR)/libmongoose.so.$(VERSION) $(DESTDIR)$(INCLUDEDIR)/mongoose.h $(DESTDIR)$(LIBDIR)/libmongoose.so
 
 mongoose.c: Makefile $(wildcard src/*.c) $(wildcard src/tcpip/*.c)
 	(cat src/license.h; echo; echo '#include "mongoose.h"' ; (for F in src/*.c src/tcpip/*.c ; do echo; echo '#ifdef MG_ENABLE_LINES'; echo "#line 1 \"$$F\""; echo '#endif'; cat $$F | sed -e 's,#include ".*,,'; done))> $@
