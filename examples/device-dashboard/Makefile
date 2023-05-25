@@ -24,14 +24,13 @@ all: $(PROG)              # Default target. Build and run program
 	$(RUN) ./$(PROG) $(ARGS)
 
 # Before embedding files, gzip them to save space
-packed_fs.c: $(FILES_TO_EMBED) Makefile
+packed_fs.c: ca.pem $(FILES_TO_EMBED) Makefile
 	$(CC) ../../test/pack.c -o $(PACK)
 ifeq ($(OS),Windows_NT)
-	$(PACK) $(FILES_TO_EMBED) > $@
+	$(PACK) ca.pem $(FILES_TO_EMBED) > $@
 else
-	rm -rf tmp/web_root && mkdir tmp && cp -r web_root tmp/
-	find tmp -type f | xargs -n1 gzip
-	cd tmp && ../pack `find web_root -type f` > ../$@
+	rm -rf tmp/web_root && mkdir tmp && cp -r web_root tmp/ && cp -f ca.pem tmp/
+	cd tmp && echo $(FILES_TO_EMBED) | xargs -n1 gzip && ../pack ca.pem `find web_root -type f` > ../$@
 endif
 
 $(PROG): $(SOURCES)       # Build program from sources

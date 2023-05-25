@@ -126,8 +126,15 @@ static void timer_metrics_fn(void *param) {
 // MQTT event handler function
 static void mqtt_fn(struct mg_connection *c, int ev, void *ev_data, void *fnd) {
   if (ev == MG_EV_CONNECT && mg_url_is_ssl(s_config.url)) {
-    struct mg_tls_opts opts = {.ca = "ca.pem",
-                               .srvname = mg_url_host(s_config.url)};
+    struct mg_tls_opts opts;
+    memset(&opts, 0, sizeof(opts));
+    opts.srvname = mg_url_host(s_config.url);
+#ifndef DISABLE_PACKEDFS
+    opts.ca = "/ca.pem";
+    opts.fs = &mg_fs_packed;
+#else
+    opts.ca = "ca.pem";
+#endif
     mg_tls_init(c, &opts);
   } else if (ev == MG_EV_MQTT_OPEN) {
     s_connected = true;
@@ -195,9 +202,10 @@ static void timer_sntp_fn(void *param) {  // SNTP timer function. Sync up time
 #endif
 
 // HTTP request handler function
+// fn_data: bit0 -> don't start services, bit1 -> use TLS
 void device_dashboard_fn(struct mg_connection *c, int ev, void *ev_data,
                          void *fn_data) {
-  if (ev == MG_EV_OPEN && c->is_listening) {
+  if (ev == MG_EV_OPEN && c->is_listening && !((size_t) fn_data & (1 << 0))) {
     mg_timer_add(c->mgr, 1000, MG_TIMER_REPEAT, timer_metrics_fn, c->mgr);
 #ifndef DISABLE_ROUTING
     mg_timer_add(c->mgr, 1000, MG_TIMER_REPEAT, timer_mqtt_fn, c->mgr);
@@ -206,7 +214,7 @@ void device_dashboard_fn(struct mg_connection *c, int ev, void *ev_data,
     s_config.url = strdup(MQTT_SERVER);
     s_config.pub = strdup(MQTT_PUBLISH_TOPIC);
     s_config.sub = strdup(MQTT_SUBSCRIBE_TOPIC);
-  } else if (ev == MG_EV_ACCEPT && fn_data != NULL) {
+  } else if (ev == MG_EV_ACCEPT && ((size_t) fn_data & (1 << 1))) {
     struct mg_tls_opts opts = {.cert = s_ssl_cert, .certkey = s_ssl_key};
     mg_tls_init(c, &opts);
   } else if (ev == MG_EV_HTTP_MSG) {
@@ -269,7 +277,7 @@ void device_dashboard_fn(struct mg_connection *c, int ev, void *ev_data,
     } else {
       struct mg_http_serve_opts opts;
       memset(&opts, 0, sizeof(opts));
-#if 1
+#ifndef DISABLE_PACKEDFS
       opts.root_dir = "/web_root";
       opts.fs = &mg_fs_packed;
 #else
