@@ -829,8 +829,6 @@ char *mg_hex(const void *buf, size_t len, char *dst);
 void mg_unhex(const char *buf, size_t len, unsigned char *to);
 unsigned long mg_unhexn(const char *s, size_t len);
 int mg_check_ip_acl(struct mg_str acl, uint32_t remote_ip);
-int64_t mg_to64(struct mg_str str);
-uint64_t mg_tou64(struct mg_str str);
 char *mg_remove_double_dots(char *s);
 
 

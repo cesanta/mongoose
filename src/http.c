@@ -1,7 +1,7 @@
+#include "http.h"
 #include "arch.h"
 #include "base64.h"
 #include "fmt.h"
-#include "http.h"
 #include "json.h"
 #include "log.h"
 #include "net.h"
@@ -10,6 +10,22 @@
 #include "util.h"
 #include "version.h"
 #include "ws.h"
+
+bool mg_to_size_t(struct mg_str str, size_t *val);
+bool mg_to_size_t(struct mg_str str, size_t *val) {
+  uint64_t result = 0, max = 1844674407370955160 /* (UINT64_MAX-9)/10 */;
+  size_t i = 0;
+  while (i < str.len && (str.ptr[i] == ' ' || str.ptr[i] == '\t')) i++;
+  if (i < str.len && str.ptr[i] == '-') return false;
+  while (i < str.len && str.ptr[i] >= '0' && str.ptr[i] <= '9') {
+    if (result > max) return false;
+    result *= 10;
+    result += (unsigned) (str.ptr[i] - '0');
+    i++;
+  }
+  *val = (size_t) result;
+  return true;
+}
 
 // Chunk deletion marker is the MSB in the "processed" counter
 #define MG_DMARK ((size_t) 1 << (sizeof(size_t) * 8 - 1))
@@ -150,7 +166,9 @@ int mg_url_decode(const char *src, size_t src_len, char *dst, size_t dst_len,
   return i >= src_len && j < dst_len ? (int) j : -1;
 }
 
-static bool isok(uint8_t c) { return c == '\n' || c == '\r' || c >= ' '; }
+static bool isok(uint8_t c) {
+  return c == '\n' || c == '\r' || c >= ' ';
+}
 
 int mg_http_get_request_len(const unsigned char *buf, size_t buf_len) {
   size_t i;
@@ -231,9 +249,7 @@ int mg_http_parse(const char *s, size_t len, struct mg_http_message *hm) {
   mg_http_parse_headers(s, end, hm->headers,
                         sizeof(hm->headers) / sizeof(hm->headers[0]));
   if ((cl = mg_http_get_header(hm, "Content-Length")) != NULL) {
-    int64_t content_len = mg_to64(*cl);
-    if(content_len < 0) return -1;
-    hm->body.len = (size_t) content_len;
+    if (mg_to_size_t(*cl, &hm->body.len) == false) return -1;
     hm->message.len = (size_t) req_len + hm->body.len;
   }
 
@@ -430,18 +446,18 @@ static struct mg_str guess_content_type(struct mg_str path, const char *extra) {
   return mg_str("text/plain; charset=utf-8");
 }
 
-static int getrange(struct mg_str *s, int64_t *a, int64_t *b) {
+static int getrange(struct mg_str *s, size_t *a, size_t *b) {
   size_t i, numparsed = 0;
   // MG_INFO(("%.*s", (int) s->len, s->ptr));
   for (i = 0; i + 6 < s->len; i++) {
     if (memcmp(&s->ptr[i], "bytes=", 6) == 0) {
       struct mg_str p = mg_str_n(s->ptr + i + 6, s->len - i - 6);
       if (p.len > 0 && p.ptr[0] >= '0' && p.ptr[0] <= '9') numparsed++;
-      *a = mg_to64(p);
+      if (!mg_to_size_t(p, a)) return 0;
       // MG_INFO(("PPP [%.*s] %d", (int) p.len, p.ptr, numparsed));
       while (p.len && p.ptr[0] >= '0' && p.ptr[0] <= '9') p.ptr++, p.len--;
       if (p.len && p.ptr[0] == '-') p.ptr++, p.len--;
-      *b = mg_to64(p);
+      if (!mg_to_size_t(p, b)) return 0;
       if (p.len > 0 && p.ptr[0] >= '0' && p.ptr[0] <= '9') numparsed++;
       // MG_INFO(("PPP [%.*s] %d", (int) p.len, p.ptr, numparsed));
       break;
@@ -493,12 +509,12 @@ void mg_http_serve_file(struct mg_connection *c, struct mg_http_message *hm,
   } else {
     int n, status = 200;
     char range[100];
-    int64_t r1 = 0, r2 = 0, cl = (int64_t) size;
-
+    size_t r1 = 0, r2 = 0, cl = size;
+    
     // Handle Range header
     struct mg_str *rh = mg_http_get_header(hm, "Range");
     range[0] = '\0';
-    if (rh != NULL && (n = getrange(rh, &r1, &r2)) > 0 && r1 >= 0 && r2 >= 0) {
+    if (rh != NULL && (n = getrange(rh, &r1, &r2)) > 0) {
       // If range is specified like "400-", set second limit to content len
       if (n == 1) r2 = cl - 1;
       if (r1 > r2 || r2 >= cl) {
@@ -510,9 +526,9 @@ void mg_http_serve_file(struct mg_connection *c, struct mg_http_message *hm,
         status = 206;
         cl = r2 - r1 + 1;
         mg_snprintf(range, sizeof(range),
-                    "Content-Range: bytes %lld-%lld/%lld\r\n", r1, r1 + cl - 1,
-                    (int64_t) size);
-        fs->sk(fd->fd, (size_t) r1);
+                    "Content-Range: bytes %llu-%llu/%llu\r\n", (uint64_t) r1,
+                    (uint64_t) (r1 + cl - 1), (uint64_t) size);
+        fs->sk(fd->fd, r1);
       }
     }
     mg_printf(c,
@@ -522,8 +538,8 @@ void mg_http_serve_file(struct mg_connection *c, struct mg_http_message *hm,
               "Content-Length: %llu\r\n"
               "%s%s%s\r\n",
               status, mg_http_status_code_str(status), (int) mime.len, mime.ptr,
-              etag, cl, gzip ? "Content-Encoding: gzip\r\n" : "", range,
-              opts->extra_headers ? opts->extra_headers : "");
+              etag, (uint64_t) cl, gzip ? "Content-Encoding: gzip\r\n" : "",
+              range, opts->extra_headers ? opts->extra_headers : "");
     if (mg_vcasecmp(&hm->method, "HEAD") == 0) {
       c->is_draining = 1;
       c->is_resp = 0;
@@ -534,7 +550,7 @@ void mg_http_serve_file(struct mg_connection *c, struct mg_http_message *hm,
                                         sizeof(size_t) * sizeof(size_t)];
       c->pfn = static_cb;
       c->pfn_data = fd;
-      *clp = (size_t) cl;
+      *clp = cl;
     }
   }
 }

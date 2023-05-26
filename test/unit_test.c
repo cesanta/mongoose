@@ -790,10 +790,18 @@ static void test_http_server(void) {
   ASSERT(fetch(&mgr, buf, url, "GET /..ddot HTTP/1.0\n\n") == 301);
   ASSERT(fetch(&mgr, buf, url, "GET /..ddot/ HTTP/1.0\n\n") == 200);
   ASSERT(cmpbody(buf, "hi\n") == 0);
-  ASSERT(fetch(&mgr, buf, url, "GET /a.txt HTTP/1.0\n"
-        "Content-Length: -123\n\n") == 0);
-  ASSERT(fetch(&mgr, buf, url, "POST /a.txt HTTP/1.0\n"
+  ASSERT(fetch(&mgr, buf, url,
+               "GET /a.txt HTTP/1.0\n"
                "Content-Length: -123\n\n") == 0);
+  ASSERT(fetch(&mgr, buf, url,
+               "POST /a.txt HTTP/1.0\n"
+               "Content-Length: -123\n\n") == 0);
+  ASSERT(fetch(&mgr, buf, url,
+               "GET /a.txt HTTP/1.0\n"
+               "Content-Length: 19000000000000000000\n\n") == 0);
+  ASSERT(fetch(&mgr, buf, url,
+               "POST /a.txt HTTP/1.0\n"
+               "Content-Length: 19000000000000000000\n\n") == 0);
 
   {
     extern char *mg_http_etag(char *, size_t, size_t, time_t);
@@ -1405,7 +1413,9 @@ static void test_http_range(void) {
   ASSERT(mgr.conns == NULL);
 }
 
-static void f1(void *arg) { (*(int *) arg)++; }
+static void f1(void *arg) {
+  (*(int *) arg)++;
+}
 
 static void test_timer(void) {
   int v1 = 0, v2 = 0, v3 = 0;
@@ -1964,14 +1974,19 @@ static void test_util(void) {
     free(s);
   }
 
-  ASSERT(mg_to64(mg_str("-9223372036854775809")) == 0);
-  ASSERT(mg_to64(mg_str("9223372036854775800")) == 0);
-  ASSERT(mg_to64(mg_str("9223372036854775700")) > 0);
-  ASSERT(mg_tou64(mg_str("0")) == 0);
-  ASSERT(mg_tou64(mg_str("123")) == 123);
-  ASSERT(mg_tou64(mg_str("")) == 0);
-  ASSERT(mg_tou64(mg_str("-")) == 0);
-  ASSERT(mg_tou64(mg_str("18446744073709551615")) == 18446744073709551615U);
+  {
+    extern bool mg_to_size_t(struct mg_str, size_t *);
+    size_t val = 1;
+    ASSERT(mg_to_size_t(mg_str("0"), &val) && val == 0);
+    ASSERT(mg_to_size_t(mg_str("123"), &val) && val == 123);
+    ASSERT(mg_to_size_t(mg_str(""), &val) && val == 0);
+    ASSERT(mg_to_size_t(mg_str("-"), &val) == false);
+    ASSERT(mg_to_size_t(mg_str("18446744073709551616"), &val) ==
+           false);  // range +1
+    ASSERT(mg_to_size_t(mg_str("18446744073709551610"), &val) == false);
+    // TODO(): ASSERT(mg_to_size_t(mg_str("18446744073709551609"), &val) &&
+    //         val == 18446744073709551609U);  // our max or SIZE_MAX
+  }
 
   {
     size_t i;
@@ -2865,7 +2880,9 @@ static void start_thread(void (*f)(void *), void *p) {
   pthread_attr_destroy(&attr);
 }
 #else
-static void start_thread(void (*f)(void *), void *p) { (void) f, (void) p; }
+static void start_thread(void (*f)(void *), void *p) {
+  (void) f, (void) p;
+}
 #endif
 
 static void test_queue(void) {
