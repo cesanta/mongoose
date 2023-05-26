@@ -1,16 +1,16 @@
-PROG ?= example                   # Program we are building
-PACK ?= ./pack                    # Packing executable
-DELETE = rm -rf                   # Command to remove files
-OUT ?= -o $(PROG)                 # Compiler argument for output file
-SOURCES = main.c mongoose.c net.c packed_fs.c      # Source code files
-CFLAGS = -W -Wall -Wextra -g -I.  # Build options
+PROG ?= ./example       # Program we are building
+PACK ?= ./pack          # Packing executable
+DELETE = rm -rf         # Command to remove files
+OUT ?= -o $(PROG)       # Compiler argument for output file
+SOURCES = main.c mongoose.c net.c       # Source code files
+CFLAGS = -W -Wall -Wextra -g -I.        # Build options
 
 # Mongoose build options. See https://mongoose.ws/documentation/#build-options
-CFLAGS_MONGOOSE += -DMG_ENABLE_PACKED_FS=1
+CFLAGS_MONGOOSE +=
 
 FILES_TO_EMBED ?= $(wildcard web_root/*)
 
-ifeq ($(OS),Windows_NT)   # Windows settings. Assume MinGW compiler. To use VC: make CC=cl CFLAGS=/MD OUT=/Feprog.exe
+ifeq ($(OS),Windows_NT)         # Windows settings. Assume MinGW compiler. To use VC: make CC=cl CFLAGS=/MD OUT=/Feprog.exe
   PROG ?= example.exe           # Use .exe suffix for the binary
   PACK = pack.exe               # Packing executable
   CC = gcc                      # Use MinGW gcc compiler
@@ -20,27 +20,32 @@ ifeq ($(OS),Windows_NT)   # Windows settings. Assume MinGW compiler. To use VC: 
   MAKE += WINDOWS=1 CC=$(CC)
 endif
 
-all: $(PROG)              # Default target. Build and run program
-	$(RUN) ./$(PROG) $(ARGS)
+# Default target. Build and run program
+all: $(PROG)
+	$(RUN) $(PROG) $(ARGS)
 
-# Before embedding files, gzip them to save space
-packed_fs.c: ca.pem $(FILES_TO_EMBED) Makefile
-	$(CC) ../../test/pack.c -o $(PACK)
-ifeq ($(OS),Windows_NT)
-	$(PACK) ca.pem $(FILES_TO_EMBED) > $@
-else
-	rm -rf tmp/web_root && mkdir tmp && cp -r web_root tmp/ && cp -f ca.pem tmp/
-	cd tmp && echo $(FILES_TO_EMBED) | xargs -n1 gzip && ../pack ca.pem `find web_root -type f` > ../$@
-endif
-
-$(PROG): $(SOURCES)       # Build program from sources
+# Build program from sources
+$(PROG): $(SOURCES)
 	$(CC) $(SOURCES) $(CFLAGS) $(CFLAGS_MONGOOSE) $(CFLAGS_EXTRA) $(OUT)
 
-clean:                    # Cleanup. Delete built program and all build artifacts
-	$(DELETE) $(PROG) *.o *.obj *.exe *.dSYM pack tmp mbedtls
+# Bundle JS libraries (preact, preact-router, ...) into a single file
+web_root/bundle.js:
+	curl -s https://npm.reversehttp.com/preact,preact/hooks,htm/preact,preact-router -o $@
 
-# see https://mongoose.ws/tutorials/tls/#how-to-build for TLS build options
+# Create optimised CSS. Prerequisite: npm -g i tailwindcss tailwindcss-font-inter
+web_root/main.css: web_root/index.html web_root/main.js
+	npx tailwindcss -o $@ --minify
 
-mbedtls:                  # Pull and build mbedTLS library
+# Generate packed filesystem for serving Web UI
+packed_fs.c: $(wildcard web_root/*) Makefile web_root/main.css web_root/bundle.js
+	$(CC) ../../test/pack.c -o $(PACK)
+	$(PACK) $(wildcard web_root/*) > $@
+
+# Pull and build mbedTLS library. See https://mongoose.ws/tutorials/tls/#how-to-build for TLS build options
+mbedtls:
 	git clone --depth 1 -b v2.28.2 https://github.com/mbed-tls/mbedtls $@
 	$(MAKE) -C mbedtls/library
+
+# Cleanup. Delete built program and all build artifacts
+clean:
+	$(DELETE) $(PROG) $(PACK) *.o *.obj *.exe *.dSYM mbedtls
