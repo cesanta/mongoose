@@ -1,26 +1,32 @@
-// Copyright (c) 2020-2022 Cesanta Software Limited
+// Copyright (c) 2020-2023 Cesanta Software Limited
 // All rights reserved
 
 #include "mongoose.h"
+#include "net.h"
 
-const char *s_listening_url = "http://0.0.0.0:8000";
-const char *s_listening_surl = "https://0.0.0.0:8443";
-
-void device_dashboard_fn(struct mg_connection *, int, void *, void *);
+static int s_sig_num;
+static void signal_handler(int sig_num) {
+  signal(sig_num, signal_handler);
+  s_sig_num = sig_num;
+}
 
 int main(void) {
   struct mg_mgr mgr;
+
+  signal(SIGPIPE, SIG_IGN);
+  signal(SIGINT, signal_handler);
+  signal(SIGTERM, signal_handler);
+
   mg_log_set(MG_LL_DEBUG);  // Set debug log level
   mg_mgr_init(&mgr);
-  mg_http_listen(&mgr, s_listening_url, device_dashboard_fn,
-                 NULL);  // see net.c
-  MG_INFO(("Listening on %s", s_listening_url));
-#if MG_ENABLE_MBEDTLS || MG_ENABLE_OPENSSL
-  mg_http_listen(&mgr, s_listening_surl, device_dashboard_fn,
-                 (void *) 3);  // see net.c
-  MG_INFO(("Listening on %s", s_listening_surl));
-#endif
-  while (mgr.conns != NULL) mg_mgr_poll(&mgr, 500);
+
+  web_init(&mgr);
+  while (s_sig_num == 0) {
+    mg_mgr_poll(&mgr, 50);
+  }
+
   mg_mgr_free(&mgr);
+  MG_INFO(("Exiting on signal %d", s_sig_num));
+
   return 0;
 }

@@ -2,6 +2,7 @@
 // All rights reserved
 
 #include "mongoose.h"
+#include "net.h"
 
 // Zephyr: Define a semaphore and network management callback to be able to wait
 // until our IP address is ready. The main function will start and block on this
@@ -26,8 +27,7 @@ int main(int argc, char *argv[]) {
 
   mg_mgr_init(&mgr);
 
-  extern void device_dashboard_fn(struct mg_connection *, int, void *, void *);
-  mg_http_listen(&mgr, "http://0.0.0.0:8000", device_dashboard_fn, NULL);
+  web_init(&mgr);
 
   // Start infinite event loop
   MG_INFO(("Mongoose version : v%s", MG_VERSION));

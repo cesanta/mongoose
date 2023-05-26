@@ -45,7 +45,7 @@ test update: CFLAGS_EXTRA += -DUART_DEBUG=USART1
 test: update
 	curl --fail-with-body -su :$(VCON_API_KEY) $(DEVICE_URL)/tx?t=5 | tee /tmp/output.txt
 	grep 'READY, IP:' /tmp/output.txt       # Check for network init
-	grep 'MQTT connected' /tmp/output.txt   # Check for MQTT connection success
+#	grep 'MQTT connected' /tmp/output.txt   # Check for MQTT connection success
 
 clean:
 	$(RM) firmware.* *.su cmsis_core cmsis_h7

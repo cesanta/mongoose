@@ -138,9 +138,6 @@ int main(int argc, char *argv[]) {
          &mif.mac[2], &mif.mac[3], &mif.mac[4], &mif.mac[5]);
   mg_tcpip_init(&mgr, &mif);
   MG_INFO(("Init done, starting main loop"));
-
-  // extern void device_dashboard_fn(struct mg_connection *, int, void *, void
-  // *);
   mg_http_listen(&mgr, "http://0.0.0.0:8000", fn, &mgr);
 
   while (s_signo == 0) mg_mgr_poll(&mgr, 100);  // Infinite event loop

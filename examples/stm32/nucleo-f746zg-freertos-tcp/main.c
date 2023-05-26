@@ -2,7 +2,7 @@
 // All rights reserved
 
 #include "hal.h"
-#include "mongoose.h"
+#include "net.h"
 
 #define LED1 PIN('B', 0)   // On-board LED pin (green)
 #define LED2 PIN('B', 7)   // On-board LED pin (blue)
@@ -52,8 +52,7 @@ static void server(void *args) {
   mg_log_set(MG_LL_DEBUG);  // Set log level
 
   MG_INFO(("Initialising application..."));
-  extern void device_dashboard_fn(struct mg_connection *, int, void *, void *);
-  mg_http_listen(&mgr, "http://0.0.0.0", device_dashboard_fn, NULL);
+  web_init(&mgr);
 
   MG_INFO(("Starting event loop"));
   for (;;) mg_mgr_poll(&mgr, 1000);  // Infinite event loop

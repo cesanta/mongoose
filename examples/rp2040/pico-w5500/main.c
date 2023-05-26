@@ -9,6 +9,7 @@
 #include "pico/unique_id.h"
 
 #include "mongoose.h"
+#include "net.h"
 
 enum { BLINK_PERIOD_MS = 1000 };
 enum { LED = 25, SPI_CS = 17, SPI_CLK = 18, SPI_TX = 19, SPI_RX = 16 };  // Pins
@@ -88,9 +89,7 @@ int main(void) {
   }
 
   MG_INFO(("Initialising application..."));
-  extern void device_dashboard_fn(struct mg_connection *, int, void *, void *);
-  mg_http_listen(&mgr, "http://0.0.0.0:80", device_dashboard_fn, NULL);
-  mg_http_listen(&mgr, "https://0.0.0.0:443", device_dashboard_fn, "");  // SSL
+  web_init(&mgr);
 
   MG_INFO(("Starting event loop"));
   for (;;) {

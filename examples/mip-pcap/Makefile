@@ -1,12 +1,12 @@
 PROG ?= example                   # Program we are building
 DELETE = rm -rf                   # Command to remove files
 OUT ?= -o $(PROG)                 # Compiler argument for output file
-SOURCES = main.c mongoose.c net.c packed_fs.c      # Source code files
+SOURCES = main.c mongoose.c       # Source code files
 CFLAGS = -W -Wall -Wextra -g -I.  # Build options
-CFLAGS += -lpcap          # link with libpcap
+CFLAGS += -lpcap                  # link with libpcap
 
 # Mongoose build options. See https://mongoose.ws/documentation/#build-options
-CFLAGS_MONGOOSE += -DMG_ENABLE_LINES=1 -DMG_ENABLE_TCPIP=1 -DMG_ENABLE_SOCKET=0 -DMG_ENABLE_PACKED_FS=1
+CFLAGS_MONGOOSE += -DMG_ENABLE_LINES=1 -DMG_ENABLE_TCPIP=1 -DMG_ENABLE_SOCKET=0
 
 ifeq ($(OS),Windows_NT)   # Windows settings. Assume MinGW compiler. To use VC: make CC=cl CFLAGS=/MD OUT=/Feprog.exe
   PROG ?= example.exe           # Use .exe suffix for the binary
