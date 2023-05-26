@@ -1,6 +1,7 @@
 // Copyright (c) 2020-2023 Cesanta Software Limited
 // All rights reserved
 
+#include "mongoose.h"
 #include "net.h"
 
 static int s_sig_num;

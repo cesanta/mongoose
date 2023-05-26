@@ -211,7 +211,7 @@ function Settings({}) {
           toggle button, dropdown select, input field with left and right
           addons. Device settings are received by calling
           /api/settings/get API call, which returns settings JSON object.
-          Clicking on a save button calls /api/settings/set
+          Clicking on the save button calls /api/settings/set
           API call" />
   <//>
 

@@ -237,6 +237,7 @@ static void fn(struct mg_connection *c, int ev, void *ev_data, void *fn_data) {
       struct mg_http_serve_opts opts;
       memset(&opts, 0, sizeof(opts));
 #if MG_ENABLE_PACKED_FS
+      opts.root_dir = "/web_root";
       opts.fs = &mg_fs_packed;
 #else
       opts.root_dir = "web_root";

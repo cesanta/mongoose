@@ -2,11 +2,8 @@
 // All rights reserved
 
 #include "esp_spiffs.h"
-//#include "freertos/FreeRTOS.h"
 #include "mongoose.h"
-
-const char *s_listening_url = "http://0.0.0.0:80";
-void device_dashboard_fn(struct mg_connection *, int, void *, void *);
+#include "net.h"
 
 #define WIFI_SSID "YOUR_WIFI_NETWORK_NAME"  // SET THIS!
 #define WIFI_PASS "YOUR_WIFI_PASSWORD"      // SET THIS!
@@ -29,7 +26,12 @@ void app_main(void) {
   struct mg_mgr mgr;
   mg_log_set(MG_LL_DEBUG);  // Set log level
   mg_mgr_init(&mgr);
-  MG_INFO(("Mongoose v%s on %s", MG_VERSION, s_listening_url));
-  mg_http_listen(&mgr, s_listening_url, device_dashboard_fn, NULL);
+  MG_INFO(("Mongoose version : v%s", MG_VERSION));
+  MG_INFO(("Listening on     : %s", HTTP_URL));
+#if MG_ENABLE_MBEDTLS
+  MG_INFO(("Listening on     : %s", HTTPS_URL));
+#endif
+
+  web_init(&mgr);
   for (;;) mg_mgr_poll(&mgr, 1000);  // Infinite event loop
 }

@@ -8,8 +8,6 @@ CFLAGS = -W -Wall -Wextra -g -I.        # Build options
 # Mongoose build options. See https://mongoose.ws/documentation/#build-options
 CFLAGS_MONGOOSE +=
 
-FILES_TO_EMBED ?= $(wildcard web_root/*)
-
 ifeq ($(OS),Windows_NT)         # Windows settings. Assume MinGW compiler. To use VC: make CC=cl CFLAGS=/MD OUT=/Feprog.exe
   PROG ?= example.exe           # Use .exe suffix for the binary
   PACK = pack.exe               # Packing executable

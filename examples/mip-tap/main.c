@@ -1,9 +1,7 @@
 // Copyright (c) 2022 Cesanta Software Limited
 // All rights reserved
 //
-// example using MIP and a TUN/TAP interface
-
-static const char *s_listening_address = "http://0.0.0.0:8000";
+// example using built-in TCP/IP stack and TUN/TAP interface
 
 #include <sys/socket.h>
 #ifndef __OpenBSD__
@@ -15,7 +13,9 @@ static const char *s_listening_address = "http://0.0.0.0:8000";
 #include <net/if_types.h>
 #endif
 #include <sys/ioctl.h>
+
 #include "mongoose.h"
+#include "net.h"
 
 static int s_signo;
 void signal_handler(int signo) {
@@ -23,7 +23,7 @@ void signal_handler(int signo) {
 }
 
 static size_t tap_tx(const void *buf, size_t len, struct mg_tcpip_if *ifp) {
-  ssize_t res = write(*(int*) ifp->driver_data, buf, len);
+  ssize_t res = write(*(int *) ifp->driver_data, buf, len);
   if (res < 0) {
     MG_ERROR(("tap_tx failed: %d", errno));
     return 0;
@@ -62,9 +62,9 @@ int main(int argc, char *argv[]) {
 
   // Open network interface
 #ifndef __OpenBSD__
-  const char* tuntap_device = "/dev/net/tun";
+  const char *tuntap_device = "/dev/net/tun";
 #else
-  const char* tuntap_device = "/dev/tap0";
+  const char *tuntap_device = "/dev/tap0";
 #endif
   int fd = open(tuntap_device, O_RDWR);
   struct ifreq ifr;
@@ -77,7 +77,7 @@ int main(int argc, char *argv[]) {
     abort();  // return EXIT_FAILURE;
   }
 #else
-  ifr.ifr_flags = (short)(IFF_UP | IFF_BROADCAST | IFF_MULTICAST);
+  ifr.ifr_flags = (short) (IFF_UP | IFF_BROADCAST | IFF_MULTICAST);
   if (ioctl(fd, TUNSIFMODE, (void *) &ifr) < 0) {
     MG_ERROR(("Failed to setup TAP interface: %s", ifr.ifr_name));
     abort();  // return EXIT_FAILURE;
@@ -101,11 +101,12 @@ int main(int argc, char *argv[]) {
 
   // Start infinite event loop
   MG_INFO(("Mongoose version : v%s", MG_VERSION));
-  MG_INFO(("Listening on     : %s", s_listening_address));
+  MG_INFO(("Listening on     : %s", HTTP_URL));
+#if MG_ENABLE_MBEDTLS || MG_ENABLE_OPENSSL
+  MG_INFO(("Listening on     : %s", HTTPS_URL));
+#endif
 
-  extern void device_dashboard_fn(struct mg_connection *, int, void *, void *);
-  mg_http_listen(&mgr, s_listening_address, device_dashboard_fn, NULL);
-
+  web_init(&mgr);
   while (s_signo == 0) mg_mgr_poll(&mgr, 100);  // Infinite event loop
 
   mg_mgr_free(&mgr);
