@@ -12,10 +12,12 @@ int main(void) {
   struct mg_mgr mgr;
   mg_log_set(MG_LL_DEBUG);  // Set debug log level
   mg_mgr_init(&mgr);
-  mg_http_listen(&mgr, s_listening_url, device_dashboard_fn, NULL);
+  mg_http_listen(&mgr, s_listening_url, device_dashboard_fn,
+                 NULL);  // see net.c
   MG_INFO(("Listening on %s", s_listening_url));
 #if MG_ENABLE_MBEDTLS || MG_ENABLE_OPENSSL
-  mg_http_listen(&mgr, s_listening_surl, device_dashboard_fn, "");
+  mg_http_listen(&mgr, s_listening_surl, device_dashboard_fn,
+                 (void *) 3);  // see net.c
   MG_INFO(("Listening on %s", s_listening_surl));
 #endif
   while (mgr.conns != NULL) mg_mgr_poll(&mgr, 500);
