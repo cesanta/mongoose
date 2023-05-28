@@ -12,4 +12,6 @@
 #define HTTPS_URL "http://0.0.0.0:8443"
 #endif
 
+#define MAX_DEVICE_NAME 40
+
 void web_init(struct mg_mgr *mgr);
