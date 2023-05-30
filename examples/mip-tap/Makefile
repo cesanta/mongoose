@@ -7,6 +7,9 @@ CFLAGS = -W -Wall -Wextra -g -I.  # Build options
 # Mongoose build options. See https://mongoose.ws/documentation/#build-options
 CFLAGS_MONGOOSE += -DMG_ENABLE_LINES=1 -DMG_ENABLE_TCPIP=1 -DMG_ENABLE_SOCKET=0 -DMG_ENABLE_PACKED_FS=1
 
+# Example specific build options. See README.md
+CFLAGS += -DHTTP_URL=\"http://0.0.0.0/\"
+
 ifeq ($(OS),Windows_NT)   # Windows settings. Assume MinGW compiler. To use VC: make CC=cl CFLAGS=/MD OUT=/Feprog.exe
   PROG ?= example.exe           # Use .exe suffix for the binary
   CC = gcc                      # Use MinGW gcc compiler
