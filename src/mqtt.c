@@ -449,7 +449,9 @@ static void mqtt_cb(struct mg_connection *c, int ev, void *ev_data,
               uint32_t remaining_len = sizeof(id);
               if (c->is_mqtt5) remaining_len += 1;
 
-              mg_mqtt_send_header(c, MQTT_CMD_PUBACK, 0, remaining_len);
+              mg_mqtt_send_header(
+                  c, mm.qos == 2 ? MQTT_CMD_PUBREC : MQTT_CMD_PUBACK, 0,
+                  remaining_len);
               mg_send(c, &id, sizeof(id));
 
               if (c->is_mqtt5) {
@@ -457,7 +459,7 @@ static void mqtt_cb(struct mg_connection *c, int ev, void *ev_data,
                 mg_send(c, &zero, sizeof(zero));
               }
             }
-            mg_call(c, MG_EV_MQTT_MSG, &mm);
+            mg_call(c, MG_EV_MQTT_MSG, &mm);  // let the app handle qos2 stuff
             break;
           }
         }
