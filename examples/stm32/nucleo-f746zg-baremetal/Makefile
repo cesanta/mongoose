@@ -14,7 +14,7 @@ CFLAGS += -DMG_ENABLE_TCPIP=1 -DMG_ARCH=MG_ARCH_NEWLIB -DMG_ENABLE_CUSTOM_MILLIS
 CFLAGS += -DMG_ENABLE_CUSTOM_RANDOM=1 -DMG_ENABLE_PACKED_FS=1 $(CFLAGS_EXTRA)
 
 # Example specific build options. See README.md
-CFLAGS += -DHTTP_URL=\"http://0.0.0.0/\"
+CFLAGS += -DHTTP_URL=\"http://0.0.0.0/\" -DHTTPS_URL=\"https://0.0.0.0/\"
 
 ifeq ($(OS),Windows_NT)
   RM = cmd /C del /Q /F /S
@@ -27,7 +27,7 @@ all build example: firmware.bin
 firmware.bin: firmware.elf
 	arm-none-eabi-objcopy -O binary $< $@
 
-firmware.elf: cmsis_core cmsis_f7 $(SOURCES) hal.h link.ld 
+firmware.elf: cmsis_core cmsis_f7 $(SOURCES) hal.h link.ld Makefile
 	arm-none-eabi-gcc $(SOURCES) $(CFLAGS) $(LDFLAGS) -o $@
 
 flash: firmware.bin
@@ -37,6 +37,14 @@ cmsis_core:     # ARM CMSIS core headers
 	git clone --depth 1 -b 5.9.0 https://github.com/ARM-software/CMSIS_5 $@
 cmsis_f7:       # ST CMSIS headers for STM32F7 series
 	git clone --depth 1 -b v1.2.8 https://github.com/STMicroelectronics/cmsis_device_f7 $@
+mbedtls:        # mbedTLS library
+	git clone --depth 1 -b v2.28.2 https://github.com/mbed-tls/mbedtls $@
+
+ifeq ($(TLS), mbedtls)
+CFLAGS += -DMG_ENABLE_MBEDTLS=1 -Wno-conversion -Imbedtls/include
+CFLAGS += -DMBEDTLS_CONFIG_FILE=\"mbedtls_config.h\" mbedtls/library/*.c
+firmware.elf: mbedtls
+endif
 
 # Automated remote test. Requires env variable VCON_API_KEY set. See https://vcon.io/automated-firmware-tests/
 DEVICE_URL ?= https://dash.vcon.io/api/v3/devices/5
