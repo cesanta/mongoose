@@ -388,7 +388,7 @@ static void accept_conn(struct mg_mgr *mgr, struct mg_connection *lsn) {
 #endif
       MG_ERROR(("%lu accept failed, errno %d", lsn->id, MG_SOCK_ERR(-1)));
 #if (MG_ARCH != MG_ARCH_WIN32) && !MG_ENABLE_FREERTOS_TCP && \
-    (MG_ARCH != MG_ARCH_TIRTOS) && !MG_ENABLE_POLL
+    (MG_ARCH != MG_ARCH_TIRTOS) && !MG_ENABLE_POLL && MG_ENABLE_EPOLL
   } else if ((long) fd >= FD_SETSIZE) {
     MG_ERROR(("%ld > %ld", (long) fd, (long) FD_SETSIZE));
     closesocket(fd);
