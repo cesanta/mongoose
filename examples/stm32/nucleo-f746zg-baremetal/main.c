@@ -2,6 +2,7 @@
 // All rights reserved
 
 #include "hal.h"
+#include "mongoose.h"
 #include "net.h"
 
 #define LED1 PIN('B', 0)   // On-board LED pin (green)
