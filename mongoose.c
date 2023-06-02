@@ -3372,9 +3372,9 @@ static void mqtt_cb(struct mg_connection *c, int ev, void *ev_data,
             MG_DEBUG(("%lu [%.*s] -> [%.*s]", c->id, (int) mm.topic.len,
                       mm.topic.ptr, (int) mm.data.len, mm.data.ptr));
             if (mm.qos > 0) {
-              uint16_t id = mg_htons(mm.id);
+              uint16_t id = mg_ntohs(mm.id);
               uint32_t remaining_len = sizeof(id);
-              if (c->is_mqtt5) remaining_len += 1;
+              if (c->is_mqtt5) remaining_len += 2; // 3.4.2
 
               mg_mqtt_send_header(
                   c, mm.qos == 2 ? MQTT_CMD_PUBREC : MQTT_CMD_PUBACK, 0,
@@ -3386,7 +3386,21 @@ static void mqtt_cb(struct mg_connection *c, int ev, void *ev_data,
                 mg_send(c, &zero, sizeof(zero));
               }
             }
-            mg_call(c, MG_EV_MQTT_MSG, &mm);  // let the app handle qos2 stuff
+            mg_call(c, MG_EV_MQTT_MSG, &mm);  // let the app handle qos stuff
+            break;
+          }
+          case MQTT_CMD_PUBREC: { // MQTT5: 3.5.2-1 TODO(): variable header rc
+            uint16_t id = mg_ntohs(mm.id);
+            uint32_t remaining_len = sizeof(id);  // MQTT5 3.6.2-1
+            mg_mqtt_send_header(c, MQTT_CMD_PUBREL, 2, remaining_len);
+            mg_send(c, &id, sizeof(id));  // MQTT5 3.6.1-1, flags = 2
+            break;
+          }
+          case MQTT_CMD_PUBREL: { // MQTT5: 3.6.2-1 TODO(): variable header rc
+            uint16_t id = mg_ntohs(mm.id);
+            uint32_t remaining_len = sizeof(id);  // MQTT5 3.7.2-1
+            mg_mqtt_send_header(c, MQTT_CMD_PUBCOMP, 0, remaining_len);
+            mg_send(c, &id, sizeof(id));
             break;
           }
         }
