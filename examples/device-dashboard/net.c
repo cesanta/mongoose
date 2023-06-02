@@ -72,6 +72,15 @@ static int event_next(int no, struct event *e) {
   return no + 1;
 }
 
+// This is for newlib and TLS (mbedTLS)
+int _gettimeofday(struct timeval *tv, void *tz) {
+  uint64_t now = mg_millis() + s_boot_timestamp;
+  (void) tz;
+  tv->tv_sec = (time_t) (now / 1000);
+  tv->tv_usec = (unsigned long) ((now % 1000) * 1000);
+  return 0;
+}
+
 // SNTP connection event handler. When we get a response from an SNTP server,
 // adjust s_boot_timestamp. We'll get a valid time from that point on
 static void sfn(struct mg_connection *c, int ev, void *ev_data, void *fn_data) {

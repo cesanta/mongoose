@@ -9,13 +9,11 @@ CFLAGS = -W -Wall -Wextra -g -I.        # Build options
 CFLAGS_MONGOOSE +=
 
 ifeq ($(OS),Windows_NT)         # Windows settings. Assume MinGW compiler. To use VC: make CC=cl CFLAGS=/MD OUT=/Feprog.exe
-  PROG ?= example.exe           # Use .exe suffix for the binary
+  PROG = example.exe            # Use .exe suffix for the binary
   PACK = pack.exe               # Packing executable
   CC = gcc                      # Use MinGW gcc compiler
   CFLAGS += -lws2_32            # Link against Winsock library
   DELETE = cmd /C del /Q /F /S  # Command prompt command to delete files
-  OUT ?= -o $(PROG)             # Build output
-  MAKE += WINDOWS=1 CC=$(CC)
 endif
 
 # Default target. Build and run program
@@ -39,10 +37,14 @@ packed_fs.c: $(wildcard web_root/*) Makefile web_root/main.css web_root/bundle.j
 	$(CC) ../../test/pack.c -o $(PACK)
 	$(PACK) $(wildcard web_root/*) > $@
 
-# Pull and build mbedTLS library. See https://mongoose.ws/tutorials/tls/#how-to-build for TLS build options
 mbedtls:
 	git clone --depth 1 -b v2.28.2 https://github.com/mbed-tls/mbedtls $@
-	$(MAKE) -C mbedtls/library
+
+ifeq ($(TLS), mbedtls)
+CFLAGS += -DMG_ENABLE_MBEDTLS=1 -Wno-conversion -Imbedtls/include
+CFLAGS += -DMBEDTLS_CONFIG_FILE=\"mbedtls_config.h\" mbedtls/library/*.c
+$(PROG): mbedtls
+endif
 
 # Cleanup. Delete built program and all build artifacts
 clean:
