@@ -231,24 +231,24 @@ bool mg_json_get_bool(struct mg_str json, const char *path, bool *v) {
   return found;
 }
 
-static bool json_unescape(const char *s, size_t len, char *to, size_t n) {
+bool mg_json_unescape(struct mg_str s, char *to, size_t n) {
   size_t i, j;
-  for (i = 0, j = 0; i < len && j < n; i++, j++) {
-    if (s[i] == '\\' && i + 5 < len && s[i + 1] == 'u') {
+  for (i = 0, j = 0; i < s.len && j < n; i++, j++) {
+    if (s.ptr[i] == '\\' && i + 5 < s.len && s.ptr[i + 1] == 'u') {
       //  \uXXXX escape. We could process a simple one-byte chars
       // \u00xx from the ASCII range. More complex chars would require
       // dragging in a UTF8 library, which is too much for us
-      if (s[i + 2] != '0' || s[i + 3] != '0') return false;  // Give up
-      ((unsigned char *) to)[j] = (unsigned char) mg_unhexn(s + i + 4, 2);
+      if (s.ptr[i + 2] != '0' || s.ptr[i + 3] != '0') return false;  // Give up
+      ((unsigned char *) to)[j] = (unsigned char) mg_unhexn(s.ptr + i + 4, 2);
 
       i += 5;
-    } else if (s[i] == '\\' && i + 1 < len) {
-      char c = json_esc(s[i + 1], 0);
+    } else if (s.ptr[i] == '\\' && i + 1 < s.len) {
+      char c = json_esc(s.ptr[i + 1], 0);
       if (c == 0) return false;
       to[j] = c;
       i++;
     } else {
-      to[j] = s[i];
+      to[j] = s.ptr[i];
     }
   }
   if (j >= n) return false;
@@ -261,8 +261,8 @@ char *mg_json_get_str(struct mg_str json, const char *path) {
   int len = 0, off = mg_json_get(json, path, &len);
   if (off >= 0 && len > 1 && json.ptr[off] == '"') {
     if ((result = (char *) calloc(1, (size_t) len)) != NULL &&
-        !json_unescape(json.ptr + off + 1, (size_t) (len - 2), result,
-                       (size_t) len)) {
+        !mg_json_unescape(mg_str_n(json.ptr + off + 1, (size_t) (len - 2)),
+                          result, (size_t) len)) {
       free(result);
       result = NULL;
     }

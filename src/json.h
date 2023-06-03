@@ -17,3 +17,5 @@ long mg_json_get_long(struct mg_str json, const char *path, long dflt);
 char *mg_json_get_str(struct mg_str json, const char *path);
 char *mg_json_get_hex(struct mg_str json, const char *path, int *len);
 char *mg_json_get_b64(struct mg_str json, const char *path, int *len);
+
+bool mg_json_unescape(struct mg_str str, char *buf, size_t len);
