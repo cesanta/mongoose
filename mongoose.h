@@ -1458,28 +1458,28 @@ struct mg_mqtt_opts {
   struct mg_str user;               // Username, can be empty
   struct mg_str pass;               // Password, can be empty
   struct mg_str client_id;          // Client ID
-  struct mg_str topic;              // topic
-  struct mg_str message;            // message
+  struct mg_str topic;              // message/subscription topic
+  struct mg_str message;            // message content
   uint8_t qos;                      // message quality of service
-  uint8_t version;                  // Can be 4 (3.1.1), or 5. If 0, assume 4.
+  uint8_t version;                  // Can be 4 (3.1.1), or 5. If 0, assume 4
   uint16_t keepalive;               // Keep-alive timer in seconds
-  bool retain;                      // Retain last will
-  bool clean;                       // Use clean session, 0 or 1
+  bool retain;                      // Retain flag
+  bool clean;                       // Clean session flag
   struct mg_mqtt_prop *props;       // MQTT5 props array
   size_t num_props;                 // number of props
-  struct mg_mqtt_prop *will_props;  // Valid only for CONNECT packet
+  struct mg_mqtt_prop *will_props;  // Valid only for CONNECT packet (MQTT5)
   size_t num_will_props;            // Number of will props
 };
 
 struct mg_mqtt_message {
-  struct mg_str topic;  // Parsed topic
-  struct mg_str data;   // Parsed message
-  struct mg_str dgram;  // Whole MQTT datagram, including headers
+  struct mg_str topic;  // Parsed topic for PUBLISH
+  struct mg_str data;   // Parsed message for PUBLISH
+  struct mg_str dgram;  // Whole MQTT packet, including headers
   uint16_t id;          // For PUBACK, PUBREC, PUBREL, PUBCOMP, SUBACK, PUBLISH
   uint8_t cmd;          // MQTT command, one of MQTT_CMD_*
   uint8_t qos;          // Quality of service
-  uint8_t ack;          // Connack return code. 0 - success
-  size_t props_start;   // Offset to the start of the properties
+  uint8_t ack;          // CONNACK return code, 0 = success
+  size_t props_start;   // Offset to the start of the properties (MQTT5)
   size_t props_size;    // Length of the properties
 };
 

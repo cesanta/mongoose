@@ -564,6 +564,7 @@ connect_with_options:
   for (i = 0; i < 500 && !(test_data.flags & flags_completed); i++)
     mg_mgr_poll(&mgr, 10);
   // TODO(): retry sending PUBREL on failure after an expected timeout
+  // or broker sends PUBREC again
   ASSERT(test_data.flags & flags_completed);
   for (i = 0; i < 500 && buf[1] == 0; i++) mg_mgr_poll(&mgr, 10);
   if (strcmp(buf, "Xx/f12/hi") != 0) MG_INFO(("[%s]", buf));
