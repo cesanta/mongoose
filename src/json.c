@@ -182,6 +182,7 @@ int mg_json_get(struct mg_str json, const char *path, int *toklen) {
         } else if (c == '}') {  // Empty object
           MG_EOO('}');
           expecting = S_COMMA_OR_EOO;
+          if (depth == ed && ei >= 0) ci++;
         } else {
           return MG_JSON_INVALID;
         }
