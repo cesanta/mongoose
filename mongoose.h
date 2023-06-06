@@ -629,7 +629,10 @@ struct timeval {
 #define MG_SOCK_RESET(errcode) \
   ((errcode) == BSD_ECONNABORTED || (errcode) == BSD_ECONNRESET)
 
-#define MG_SOCK_INTR(fd) 0
+// In blocking mode, which is enabled by default, accept() waits for a
+// connection request. In non blocking mode, you must call accept()
+// again if the error code BSD_EWOULDBLOCK is returned.
+#define MG_SOCK_INTR(fd) (fd == BSD_EWOULDBLOCK)
 
 #define socklen_t int
 #endif
