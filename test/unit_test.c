@@ -475,17 +475,16 @@ static void test_mqtt_ver(uint8_t mqtt_version) {
   // Publish with QoS0 to subscribed topic and check reception
   opts.topic = topic, opts.message = data, opts.qos = 0, opts.retain = false;
   mg_mqtt_pub(c, &opts);
-  for (i = 0; i < 500 && test_data.flags == 0; i++) mg_mgr_poll(&mgr, 10);
-  ASSERT(test_data.flags == 0);  // No PUBACK for QoS0
   for (i = 0; i < 500 && buf[1] == 0; i++) mg_mgr_poll(&mgr, 10);
   if (strcmp(buf, "Xx/f12/hi") != 0) MG_INFO(("[%s]", buf));
+  ASSERT(!(test_data.flags & flags_published)); // No PUBACK for QoS0
   ASSERT(strcmp(buf, "Xx/f12/hi") == 0);
   memset(buf + 1, 0, sizeof(buf) - 1);
   test_data.flags = 0;
 
   // Publish with QoS1 to subscribed topic and check reception
   opts.topic = topic, opts.message = data, opts.qos = 1, opts.retain = false;
-  retries = 1;
+  retries = 0;  // don't do retries for test speed
   do {  // retry on failure after an expected timeout
     mg_mqtt_pub(c, &opts);
     for (i = 0; i < 500 && test_data.flags == 0; i++) mg_mgr_poll(&mgr, 10);
@@ -534,7 +533,7 @@ connect_with_options:
     opts.num_props = 4;
     construct_props(properties);
   }
-  retries = 1;
+  retries = 0;  // don't do retries for test speed
   do {  // retry on failure after an expected timeout
     mg_mqtt_pub(c, &opts);
     for (i = 0; i < 500 && test_data.flags == 0; i++) mg_mgr_poll(&mgr, 10);
@@ -552,7 +551,7 @@ connect_with_options:
     opts.num_props = 4;
     construct_props(properties);
   }
-  retries = 1;
+  retries = 0;  // don't do retries for test speed
   do {  // retry on failure after an expected timeout
     mg_mqtt_pub(c, &opts);
     for (i = 0; i < 500 && !(test_data.flags & flags_received); i++)
