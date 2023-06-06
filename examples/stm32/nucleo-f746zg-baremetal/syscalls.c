@@ -86,3 +86,13 @@ int mkdir(const char *path, mode_t mode) {
 }
 
 void _init(void) {}
+
+extern uint64_t mg_now(void);
+
+int _gettimeofday(struct timeval *tv, void *tz) {
+  uint64_t now = mg_now();
+  (void) tz;
+  tv->tv_sec = (time_t) (now / 1000);
+  tv->tv_usec = (unsigned long) ((now % 1000) * 1000);
+  return 0;
+}
