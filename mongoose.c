@@ -3062,9 +3062,17 @@ static size_t get_properties_length(struct mg_mqtt_prop *props, size_t count) {
       case MQTT_PROP_TYPE_VARIABLE_INT:
         size += compute_variable_length_size((uint32_t) props[i].iv);
         break;
-      case MQTT_PROP_TYPE_INT: size += (uint32_t) sizeof(uint32_t); break;
-      case MQTT_PROP_TYPE_SHORT: size += (uint32_t) sizeof(uint16_t); break;
-      default: return size;  // cannot parse further down
+      case MQTT_PROP_TYPE_INT:
+        size += (uint32_t) sizeof(uint32_t);
+        break;
+      case MQTT_PROP_TYPE_SHORT:
+        size += (uint32_t) sizeof(uint16_t);
+        break;
+      case MQTT_PROP_TYPE_BYTE:
+        size += (uint32_t) sizeof(uint8_t);
+        break;
+      default:
+        return size;  // cannot parse further down
     }
   }
 
@@ -3168,7 +3176,8 @@ size_t mg_mqtt_next_prop(struct mg_mqtt_message *msg, struct mg_mqtt_prop *prop,
       prop->iv = decode_variable_length((char *) i, &bytes_consumed);
       new_pos += bytes_consumed;
       break;
-    default: new_pos = 0;
+    default:
+      new_pos = 0;
   }
 
   return new_pos;
@@ -3340,7 +3349,8 @@ int mg_mqtt_parse(const uint8_t *buf, size_t len, uint8_t version,
       m->data.len = (size_t) (end - p);
       break;
     }
-    default: break;
+    default:
+      break;
   }
   return MQTT_OK;
 }
@@ -3375,7 +3385,7 @@ static void mqtt_cb(struct mg_connection *c, int ev, void *ev_data,
             if (mm.qos > 0) {
               uint16_t id = mg_ntohs(mm.id);
               uint32_t remaining_len = sizeof(id);
-              if (c->is_mqtt5) remaining_len += 2; // 3.4.2
+              if (c->is_mqtt5) remaining_len += 2;  // 3.4.2
 
               mg_mqtt_send_header(
                   c, mm.qos == 2 ? MQTT_CMD_PUBREC : MQTT_CMD_PUBACK, 0,
@@ -3390,14 +3400,14 @@ static void mqtt_cb(struct mg_connection *c, int ev, void *ev_data,
             mg_call(c, MG_EV_MQTT_MSG, &mm);  // let the app handle qos stuff
             break;
           }
-          case MQTT_CMD_PUBREC: { // MQTT5: 3.5.2-1 TODO(): variable header rc
+          case MQTT_CMD_PUBREC: {  // MQTT5: 3.5.2-1 TODO(): variable header rc
             uint16_t id = mg_ntohs(mm.id);
             uint32_t remaining_len = sizeof(id);  // MQTT5 3.6.2-1
             mg_mqtt_send_header(c, MQTT_CMD_PUBREL, 2, remaining_len);
             mg_send(c, &id, sizeof(id));  // MQTT5 3.6.1-1, flags = 2
             break;
           }
-          case MQTT_CMD_PUBREL: { // MQTT5: 3.6.2-1 TODO(): variable header rc
+          case MQTT_CMD_PUBREL: {  // MQTT5: 3.6.2-1 TODO(): variable header rc
             uint16_t id = mg_ntohs(mm.id);
             uint32_t remaining_len = sizeof(id);  // MQTT5 3.7.2-1
             mg_mqtt_send_header(c, MQTT_CMD_PUBCOMP, 0, remaining_len);
