@@ -176,10 +176,7 @@ static void onstatechange(struct mg_tcpip_if *ifp) {
   if (ifp->state == MG_TCPIP_STATE_READY) {
     MG_INFO(("READY, IP: %M", mg_print_ip4, &ifp->ip));
     MG_INFO(("       GW: %M", mg_print_ip4, &ifp->gw));
-    if (ifp->lease_expire > ifp->now) {
-      MG_INFO(
-          ("       Lease: %lld sec", (ifp->lease_expire - ifp->now) / 1000));
-    }
+    MG_INFO(("      MAC: %M", mg_print_mac, &ifp->mac));
     arp_ask(ifp, ifp->gw);
   } else if (ifp->state == MG_TCPIP_STATE_UP) {
     MG_ERROR(("Link up"));
@@ -233,6 +230,7 @@ static void tx_udp(struct mg_tcpip_if *ifp, uint8_t *mac_dst, uint32_t ip_src,
 
 static void tx_dhcp(struct mg_tcpip_if *ifp, uint8_t *mac_dst, uint32_t ip_src,
                     uint32_t ip_dst, uint8_t *opts, size_t optslen) {
+  // https://datatracker.ietf.org/doc/html/rfc2132#section-9.6
   struct dhcp dhcp = {1, 1, 6, 0, 0, 0, 0, 0, 0, 0, 0, {0}, 0, {0}};
   dhcp.magic = mg_htonl(0x63825363);
   memcpy(&dhcp.hwaddr, ifp->mac, sizeof(ifp->mac));
@@ -255,6 +253,7 @@ static void tx_dhcp_request(struct mg_tcpip_if *ifp, uint8_t *mac_dst,
   memcpy(opts + 14, &ip_dst, sizeof(ip_dst));
   memcpy(opts + 20, &ip_src, sizeof(ip_src));
   tx_dhcp(ifp, mac_dst, ip_src, ip_dst, opts, sizeof(opts));
+  MG_DEBUG(("DHCP req sent"));
 }
 
 static void tx_dhcp_discover(struct mg_tcpip_if *ifp) {
@@ -265,7 +264,7 @@ static void tx_dhcp_discover(struct mg_tcpip_if *ifp) {
       255           // End of options
   };
   tx_dhcp(ifp, mac, 0, 0xffffffff, opts, sizeof(opts));
-  MG_DEBUG(("DHCP discover sent"));
+  MG_DEBUG(("DHCP discover sent. Our MAC: %M", mg_print_mac, ifp->mac));
 }
 
 static struct mg_connection *getpeer(struct mg_mgr *mgr, struct pkt *pkt,
@@ -347,7 +346,9 @@ static void rx_dhcp_client(struct mg_tcpip_if *ifp, struct pkt *pkt) {
     } else if (p[0] == 51 && p[1] == 4 && p + 6 < end) {  // Lease
       uint32_t lease = 0;
       memcpy(&lease, p + 2, sizeof(lease));
-      ifp->lease_expire = ifp->now + mg_ntohl(lease) * 1000;
+      lease = mg_ntohl(lease);
+      ifp->lease_expire = ifp->now + lease * 1000;
+      MG_INFO(("Lease: %u sec (%lld)", lease, ifp->lease_expire / 1000));
     }
     p += p[1] + 2;
   }
@@ -501,13 +502,16 @@ long mg_io_send(struct mg_connection *c, const void *buf, size_t len) {
   struct connstate *s = (struct connstate *) (c + 1);
   if (c->is_udp) {
     size_t max_headers_len = 14 + 24 /* max IP */ + 8 /* UDP */;
-    if (len + max_headers_len > ifp->tx.len) len = ifp->tx.len - max_headers_len;
+    if (len + max_headers_len > ifp->tx.len) {
+      len = ifp->tx.len - max_headers_len;
+    }
     tx_udp(ifp, s->mac, ifp->ip, c->loc.port, c->rem.ip, c->rem.port, buf, len);
   } else {
     size_t max_headers_len = 14 + 24 /* max IP */ + 60 /* max TCP */;
-    if (len + max_headers_len > ifp->tx.len) len = ifp->tx.len - max_headers_len;
-    if (tx_tcp(ifp, s->mac, c->rem.ip, TH_PUSH | TH_ACK, c->loc.port, c->rem.port,
-               mg_htonl(s->seq), mg_htonl(s->ack), buf, len) > 0) {
+    if (len + max_headers_len > ifp->tx.len)
+      len = ifp->tx.len - max_headers_len;
+    if (tx_tcp(ifp, s->mac, c->rem.ip, TH_PUSH | TH_ACK, c->loc.port,
+               c->rem.port, mg_htonl(s->seq), mg_htonl(s->ack), buf, len) > 0) {
       s->seq += (uint32_t) len;
       if (s->ttype == MIP_TTYPE_ACK) settmout(c, MIP_TTYPE_KEEPALIVE);
     } else {
@@ -762,6 +766,13 @@ static void mg_tcpip_poll(struct mg_tcpip_if *ifp, uint64_t uptime_ms) {
 
   // If IP not configured, send DHCP
   if (ifp->ip == 0 && expired_1000ms) tx_dhcp_discover(ifp);
+
+  // If a DHCP lease is 30 min prior to expire, attempt to renew (every 10s)
+  if (expired_1000ms && ifp->lease_expire > 0 && ifp->ip != 0 &&
+      ifp->now + 30 * 60 * 1000 > ifp->lease_expire &&
+      ((ifp->now / 1000) % 10) == 0) {
+    tx_dhcp_request(ifp, ifp->gwmac, ifp->ip, ifp->gw); // Renew DHCP lease
+  }
 
   // Read data from the network
   if (ifp->driver->rx != NULL) {  // Polling driver. We must call it
