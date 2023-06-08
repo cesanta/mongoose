@@ -1,7 +1,7 @@
 // Copyright (c) 2023 Cesanta Software Limited
 // All rights reserved
 
-#include "web.h"
+#include "net.h"
 
 // Authenticated user.
 // A user can be authenticated by:
