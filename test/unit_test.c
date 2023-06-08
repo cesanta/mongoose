@@ -385,9 +385,11 @@ static void mqtt_cb(struct mg_connection *c, int ev, void *evd, void *fnd) {
       size_t pos = 0;
       struct mg_mqtt_prop prop;
 
-      // note: the server will send the properties sorted by their ID
       ASSERT((pos = mg_mqtt_next_prop(mm, &prop, pos)) > 0);
       ASSERT(prop.iv == 10 && prop.id == MQTT_PROP_MESSAGE_EXPIRY_INTERVAL);
+
+      ASSERT((pos = mg_mqtt_next_prop(mm, &prop, pos)) > 0);
+      ASSERT(prop.id == MQTT_PROP_PAYLOAD_FORMAT_INDICATOR);
 
       ASSERT((pos = mg_mqtt_next_prop(mm, &prop, pos)) > 0);
       ASSERT(prop.id == MQTT_PROP_CONTENT_TYPE);
@@ -428,6 +430,9 @@ static void construct_props(struct mg_mqtt_prop *props) {
 
   props[3].id = MQTT_PROP_CONTENT_TYPE;
   props[3].val = mg_str("test_content_val_2");
+
+  props[4].id = MQTT_PROP_PAYLOAD_FORMAT_INDICATOR;
+  props[4].iv = 1;
 }
 
 static void test_mqtt_base(void);
@@ -471,7 +476,7 @@ static void test_mqtt_ver(uint8_t mqtt_version) {
   struct mg_mgr mgr;
   struct mg_connection *c;
   struct mg_mqtt_opts opts;
-  struct mg_mqtt_prop properties[4];
+  struct mg_mqtt_prop properties[5];
   const char *url = "mqtt://broker.hivemq.com:1883";
   int i, retries;
   mg_mgr_init(&mgr);
@@ -554,7 +559,7 @@ connect_with_options:
   opts.message = mg_str("hi1"), opts.qos = 1, opts.retain = false;
   if (mqtt_version == 5) {
     opts.props = properties;
-    opts.num_props = 4;
+    opts.num_props = 5;
     construct_props(properties);
   }
   retries = 0;  // don't do retries for test speed
@@ -573,7 +578,7 @@ connect_with_options:
   opts.message = mg_str("hi2"), opts.qos = 2, opts.retain = false;
   if (mqtt_version == 5) {
     opts.props = properties;
-    opts.num_props = 4;
+    opts.num_props = 5;
     construct_props(properties);
   }
   retries = 0;  // don't do retries for test speed
