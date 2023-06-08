@@ -2,7 +2,7 @@ PROG ?= ./example                 # Program we are building
 PACK ?= ./pack                    # Packing executable
 DELETE = rm -rf                   # Command to remove files
 OUT ?= -o $(PROG)                 # Compiler argument for output file
-SOURCES = main.c mongoose.c web.c # Source code files
+SOURCES = main.c mongoose.c net.c # Source code files
 CFLAGS = -W -Wall -Wextra -g -I.  # Build options
 
 # Mongoose build options. See https://mongoose.ws/documentation/#build-options
