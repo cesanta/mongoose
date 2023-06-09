@@ -101,7 +101,7 @@ size_t mg_print_ip6(void (*out)(char, void *), void *arg, va_list *ap) {
 
 size_t mg_print_ip(void (*out)(char, void *), void *arg, va_list *ap) {
   struct mg_addr *addr = va_arg(*ap, struct mg_addr *);
-  if (addr->is_ip6) return print_ip6(out, arg, (uint16_t *) addr->ip6);
+  if (addr->is_ip6) return print_ip6(out, arg, (uint16_t *) addr->ip);
   return print_ip4(out, arg, (uint8_t *) &addr->ip);
 }
 

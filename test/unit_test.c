@@ -1887,12 +1887,20 @@ static void test_str(void) {
 
   {
     char buf[100];
-    struct mg_addr a = {mg_htons(3), mg_htonl(0x2000001), {1, 100, 33}, false};
+    struct mg_addr a;
+    uint32_t addr = mg_htonl(0x2000001);
+    memcpy(a.ip, &addr, sizeof(uint32_t));
+    a.port = mg_htons(3);
+    a.is_ip6 = false;
+
     ASSERT(mg_snprintf(buf, sizeof(buf), "%M %d", mg_print_ip, &a, 7) == 9);
     ASSERT(strcmp(buf, "2.0.0.1 7") == 0);
     ASSERT(mg_snprintf(buf, sizeof(buf), "%M %d", mg_print_ip_port, &a, 7) ==
            11);
     ASSERT(strcmp(buf, "2.0.0.1:3 7") == 0);
+
+    memset(a.ip, 0, sizeof(a.ip));
+    a.ip[0] = 1, a.ip[1] = 100, a.ip[2] = 33;
     a.is_ip6 = true;
     ASSERT(mg_snprintf(buf, sizeof(buf), "%M %d", mg_print_ip, &a, 7) == 24);
     ASSERT(strcmp(buf, "[164:2100:0:0:0:0:0:0] 7") == 0);
@@ -1980,6 +1988,7 @@ static void test_dns(void) {
 static void test_util(void) {
   char buf[100], *p, *s;
   struct mg_addr a;
+  uint32_t ipv4;
   memset(&a, 0, sizeof(a));
   ASSERT(mg_file_printf(&mg_fs_posix, "data.txt", "%s", "hi") == true);
   // if (system("ls -l") != 0) (void) 0;
@@ -1993,54 +2002,55 @@ static void test_util(void) {
   ASSERT(mg_aton(mg_str("0.0.0.-1"), &a) == false);
   ASSERT(mg_aton(mg_str("127.0.0.1"), &a) == true);
   ASSERT(a.is_ip6 == false);
-  ASSERT(a.ip == mg_htonl(0x7f000001));
+  memcpy(&ipv4, a.ip, sizeof(ipv4));
+  ASSERT(ipv4 == mg_htonl(0x7f000001));
 
   ASSERT(mg_aton(mg_str("1:2:3:4:5:6:7:8"), &a) == true);
   ASSERT(a.is_ip6 == true);
   ASSERT(
-      memcmp(a.ip6,
+      memcmp(a.ip,
              "\x00\x01\x00\x02\x00\x03\x00\x04\x00\x05\x00\x06\x00\x07\x00\x08",
-             sizeof(a.ip6)) == 0);
+             sizeof(a.ip)) == 0);
 
-  memset(a.ip6, 0xaa, sizeof(a.ip6));
+  memset(a.ip, 0xaa, sizeof(a.ip));
   ASSERT(mg_aton(mg_str("1::1"), &a) == true);
   ASSERT(a.is_ip6 == true);
   ASSERT(
-      memcmp(a.ip6,
+      memcmp(a.ip,
              "\x00\x01\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x01",
-             sizeof(a.ip6)) == 0);
+             sizeof(a.ip)) == 0);
 
-  memset(a.ip6, 0xaa, sizeof(a.ip6));
+  memset(a.ip, 0xaa, sizeof(a.ip));
   ASSERT(mg_aton(mg_str("::fFff:1.2.3.4"), &a) == true);
   ASSERT(a.is_ip6 == true);
-  ASSERT(memcmp(a.ip6,
+  ASSERT(memcmp(a.ip,
                 "\x00\x00\x00\x00\x00\x00\x00\x00"
                 "\x00\x00\xff\xff\x01\x02\x03\x04",
-                sizeof(a.ip6)) == 0);
+                sizeof(a.ip)) == 0);
 
-  memset(a.ip6, 0xaa, sizeof(a.ip6));
+  memset(a.ip, 0xaa, sizeof(a.ip));
   ASSERT(mg_aton(mg_str("::1"), &a) == true);
   ASSERT(a.is_ip6 == true);
   ASSERT(
-      memcmp(a.ip6,
+      memcmp(a.ip,
              "\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x01",
-             sizeof(a.ip6)) == 0);
+             sizeof(a.ip)) == 0);
 
-  memset(a.ip6, 0xaa, sizeof(a.ip6));
+  memset(a.ip, 0xaa, sizeof(a.ip));
   ASSERT(mg_aton(mg_str("1::"), &a) == true);
   ASSERT(a.is_ip6 == true);
   ASSERT(
-      memcmp(a.ip6,
+      memcmp(a.ip,
              "\x00\x01\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00",
-             sizeof(a.ip6)) == 0);
+             sizeof(a.ip)) == 0);
 
-  memset(a.ip6, 0xaa, sizeof(a.ip6));
+  memset(a.ip, 0xaa, sizeof(a.ip));
   ASSERT(mg_aton(mg_str("2001:4860:4860::8888"), &a) == true);
   ASSERT(a.is_ip6 == true);
   ASSERT(
-      memcmp(a.ip6,
+      memcmp(a.ip,
              "\x20\x01\x48\x60\x48\x60\x00\x00\x00\x00\x00\x00\x00\x00\x88\x88",
-             sizeof(a.ip6)) == 0);
+             sizeof(a.ip)) == 0);
 
   ASSERT(strcmp(mg_hex("abc", 3, buf), "616263") == 0);
   ASSERT(mg_url_decode("a=%", 3, buf, sizeof(buf), 0) < 0);
