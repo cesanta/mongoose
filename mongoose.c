@@ -238,7 +238,7 @@ bool mg_dns_parse(const uint8_t *buf, size_t len, struct mg_dns_message *dm) {
       break;  // Return success
     } else if (rr.alen == 16 && rr.atype == 28 && rr.aclass == 1) {
       dm->addr.is_ip6 = true;
-      memcpy(&dm->addr.ip6, &buf[ofs - 16], 16);
+      memcpy(&dm->addr.ip, &buf[ofs - 16], 16);
       dm->resolved = true;
       break;  // Return success
     }
@@ -3494,15 +3494,16 @@ size_t mg_printf(struct mg_connection *c, const char *fmt, ...) {
 }
 
 static bool mg_atonl(struct mg_str str, struct mg_addr *addr) {
+  uint32_t localhost = mg_htonl(0x7f000001);
   if (mg_vcasecmp(&str, "localhost") != 0) return false;
-  addr->ip = mg_htonl(0x7f000001);
+  memcpy(addr->ip, &localhost, sizeof(uint32_t));
   addr->is_ip6 = false;
   return true;
 }
 
 static bool mg_atone(struct mg_str str, struct mg_addr *addr) {
   if (str.len > 0) return false;
-  addr->ip = 0;
+  memset(addr->ip, 0, sizeof(addr->ip));
   addr->is_ip6 = false;
   return true;
 }
@@ -3530,15 +3531,18 @@ static bool mg_aton4(struct mg_str str, struct mg_addr *addr) {
 
 static bool mg_v4mapped(struct mg_str str, struct mg_addr *addr) {
   int i;
+  uint32_t ipv4;
   if (str.len < 14) return false;
   if (str.ptr[0] != ':' || str.ptr[1] != ':' || str.ptr[6] != ':') return false;
   for (i = 2; i < 6; i++) {
     if (str.ptr[i] != 'f' && str.ptr[i] != 'F') return false;
   }
+  //struct mg_str s = mg_str_n(&str.ptr[7], str.len - 7);
   if (!mg_aton4(mg_str_n(&str.ptr[7], str.len - 7), addr)) return false;
-  memset(addr->ip6, 0, sizeof(addr->ip6));
-  addr->ip6[10] = addr->ip6[11] = 255;
-  memcpy(&addr->ip6[12], &addr->ip, 4);
+  memcpy(&ipv4, addr->ip, sizeof(ipv4));
+  memset(addr->ip, 0, sizeof(addr->ip));
+  addr->ip[10] = addr->ip[11] = 255;
+  memcpy(&addr->ip[12], &ipv4, 4);
   addr->is_ip6 = true;
   return true;
 }
@@ -3555,8 +3559,8 @@ static bool mg_aton6(struct mg_str str, struct mg_addr *addr) {
       if (i > j + 3) return false;
       // MG_DEBUG(("%zu %zu [%.*s]", i, j, (int) (i - j + 1), &str.ptr[j]));
       val = mg_unhexn(&str.ptr[j], i - j + 1);
-      addr->ip6[n] = (uint8_t) ((val >> 8) & 255);
-      addr->ip6[n + 1] = (uint8_t) (val & 255);
+      addr->ip[n] = (uint8_t) ((val >> 8) & 255);
+      addr->ip[n + 1] = (uint8_t) (val & 255);
     } else if (str.ptr[i] == ':') {
       j = i + 1;
       if (i > 0 && str.ptr[i - 1] == ':') {
@@ -3566,16 +3570,17 @@ static bool mg_aton6(struct mg_str str, struct mg_addr *addr) {
         n += 2;
       }
       if (n > 14) return false;
-      addr->ip6[n] = addr->ip6[n + 1] = 0;  // For trailing ::
+      addr->ip[n] = addr->ip[n + 1] = 0;  // For trailing ::
     } else {
       return false;
     }
   }
   if (n < 14 && dc == 42) return false;
   if (n < 14) {
-    memmove(&addr->ip6[dc + (14 - n)], &addr->ip6[dc], n - dc + 2);
-    memset(&addr->ip6[dc], 0, 14 - n);
+    memmove(&addr->ip[dc + (14 - n)], &addr->ip[dc], n - dc + 2);
+    memset(&addr->ip[dc], 0, 14 - n);
   }
+  
   addr->is_ip6 = true;
   return true;
 }
@@ -3825,7 +3830,7 @@ size_t mg_print_ip6(void (*out)(char, void *), void *arg, va_list *ap) {
 
 size_t mg_print_ip(void (*out)(char, void *), void *arg, va_list *ap) {
   struct mg_addr *addr = va_arg(*ap, struct mg_addr *);
-  if (addr->is_ip6) return print_ip6(out, arg, (uint16_t *) addr->ip6);
+  if (addr->is_ip6) return print_ip6(out, arg, (uint16_t *) addr->ip);
   return print_ip4(out, arg, (uint8_t *) &addr->ip);
 }
 
@@ -4456,12 +4461,12 @@ static socklen_t tousa(struct mg_addr *a, union usa *usa) {
   memset(usa, 0, sizeof(*usa));
   usa->sin.sin_family = AF_INET;
   usa->sin.sin_port = a->port;
-  *(uint32_t *) &usa->sin.sin_addr = a->ip;
+  memcpy(&usa->sin.sin_addr, a->ip, sizeof(uint32_t));
 #if MG_ENABLE_IPV6
   if (a->is_ip6) {
     usa->sin.sin_family = AF_INET6;
     usa->sin6.sin6_port = a->port;
-    memcpy(&usa->sin6.sin6_addr, a->ip6, sizeof(a->ip6));
+    memcpy(&usa->sin6.sin6_addr, a->ip, sizeof(a->ip));
     len = sizeof(usa->sin6);
   }
 #endif
@@ -4471,10 +4476,10 @@ static socklen_t tousa(struct mg_addr *a, union usa *usa) {
 static void tomgaddr(union usa *usa, struct mg_addr *a, bool is_ip6) {
   a->is_ip6 = is_ip6;
   a->port = usa->sin.sin_port;
-  memcpy(&a->ip, &usa->sin.sin_addr, sizeof(a->ip));
+  memcpy(&a->ip, &usa->sin.sin_addr, sizeof(uint32_t));
 #if MG_ENABLE_IPV6
   if (is_ip6) {
-    memcpy(a->ip6, &usa->sin6.sin6_addr, sizeof(a->ip6));
+    memcpy(a->ip, &usa->sin6.sin6_addr, sizeof(a->ip));
     a->port = usa->sin6.sin6_port;
   }
 #endif
@@ -7786,7 +7791,7 @@ static void rx_arp(struct mg_tcpip_if *ifp, struct pkt *pkt) {
       if (c != NULL && c->is_arplooking) {
         struct connstate *s = (struct connstate *) (c + 1);
         memcpy(s->mac, pkt->arp->sha, sizeof(s->mac));
-        MG_DEBUG(("%lu ARP resolved %M -> %M", c->id, mg_print_ip4, &c->rem.ip,
+        MG_DEBUG(("%lu ARP resolved %M -> %M", c->id, mg_print_ip4, c->rem.ip,
                   mg_print_mac, s->mac));
         c->is_arplooking = 0;
       }
@@ -7885,7 +7890,7 @@ static void rx_udp(struct mg_tcpip_if *ifp, struct pkt *pkt) {
     // No UDP listener on this port. Should send ICMP, but keep silent.
   } else {
     c->rem.port = pkt->udp->sport;
-    c->rem.ip = pkt->ip->src;
+    memcpy(c->rem.ip, &pkt->ip->src, sizeof(uint32_t));
     struct connstate *s = (struct connstate *) (c + 1);
     memcpy(s->mac, pkt->eth->src, sizeof(s->mac));
     if (c->recv.len >= MG_MAX_RECV_SIZE) {
@@ -7959,7 +7964,7 @@ static struct mg_connection *accept_conn(struct mg_connection *lsn,
   s->seq = mg_ntohl(pkt->tcp->ack), s->ack = mg_ntohl(pkt->tcp->seq);
   memcpy(s->mac, pkt->eth->src, sizeof(s->mac));
   settmout(c, MIP_TTYPE_KEEPALIVE);
-  c->rem.ip = pkt->ip->src;
+  memcpy(c->rem.ip, &pkt->ip->src, sizeof(uint32_t));
   c->rem.port = pkt->tcp->sport;
   MG_DEBUG(("%lu accepted %M", c->id, mg_print_ip_port, &c->rem));
   LIST_ADD_HEAD(struct mg_connection, &lsn->mgr->conns, c);
@@ -7978,17 +7983,19 @@ static struct mg_connection *accept_conn(struct mg_connection *lsn,
 long mg_io_send(struct mg_connection *c, const void *buf, size_t len) {
   struct mg_tcpip_if *ifp = (struct mg_tcpip_if *) c->mgr->priv;
   struct connstate *s = (struct connstate *) (c + 1);
+  uint32_t rem_ip;
+  memcpy(&rem_ip, c->rem.ip, sizeof(uint32_t));
   if (c->is_udp) {
     size_t max_headers_len = 14 + 24 /* max IP */ + 8 /* UDP */;
     if (len + max_headers_len > ifp->tx.len) {
       len = ifp->tx.len - max_headers_len;
     }
-    tx_udp(ifp, s->mac, ifp->ip, c->loc.port, c->rem.ip, c->rem.port, buf, len);
+    tx_udp(ifp, s->mac, ifp->ip, c->loc.port, rem_ip, c->rem.port, buf, len);
   } else {
     size_t max_headers_len = 14 + 24 /* max IP */ + 60 /* max TCP */;
     if (len + max_headers_len > ifp->tx.len)
       len = ifp->tx.len - max_headers_len;
-    if (tx_tcp(ifp, s->mac, c->rem.ip, TH_PUSH | TH_ACK, c->loc.port,
+    if (tx_tcp(ifp, s->mac, rem_ip, TH_PUSH | TH_ACK, c->loc.port,
                c->rem.port, mg_htonl(s->seq), mg_htonl(s->ack), buf, len) > 0) {
       s->seq += (uint32_t) len;
       if (s->ttype == MIP_TTYPE_ACK) settmout(c, MIP_TTYPE_KEEPALIVE);
@@ -8271,17 +8278,19 @@ static void mg_tcpip_poll(struct mg_tcpip_if *ifp, uint64_t uptime_ms) {
     if (c->is_udp || c->is_listening) continue;
     if (c->is_connecting || c->is_resolving) continue;
     struct connstate *s = (struct connstate *) (c + 1);
+    uint32_t rem_ip;
+    memcpy(&rem_ip, c->rem.ip, sizeof(uint32_t));
     if (uptime_ms > s->timer) {
       if (s->ttype == MIP_TTYPE_ACK) {
         MG_DEBUG(("%lu ack %x %x", c->id, s->seq, s->ack));
-        tx_tcp(ifp, s->mac, c->rem.ip, TH_ACK, c->loc.port, c->rem.port,
+        tx_tcp(ifp, s->mac, rem_ip, TH_ACK, c->loc.port, c->rem.port,
                mg_htonl(s->seq), mg_htonl(s->ack), "", 0);
       } else {
         if (s->tmiss++ > 2) {
           mg_error(c, "keepalive");
         } else {
           MG_DEBUG(("%lu keepalive", c->id));
-          tx_tcp(ifp, s->mac, c->rem.ip, TH_ACK, c->loc.port, c->rem.port,
+          tx_tcp(ifp, s->mac, rem_ip, TH_ACK, c->loc.port, c->rem.port,
                  mg_htonl(s->seq - 1), mg_htonl(s->ack), "", 0);
         }
       }
@@ -8349,32 +8358,36 @@ static void send_syn(struct mg_connection *c) {
   struct connstate *s = (struct connstate *) (c + 1);
   uint32_t isn = mg_htonl((uint32_t) mg_ntohs(c->loc.port));
   struct mg_tcpip_if *ifp = (struct mg_tcpip_if *) c->mgr->priv;
-  tx_tcp(ifp, s->mac, c->rem.ip, TH_SYN, c->loc.port, c->rem.port, isn, 0, NULL,
+  uint32_t rem_ip;
+  memcpy(&rem_ip, c->rem.ip, sizeof(uint32_t));
+  tx_tcp(ifp, s->mac, rem_ip, TH_SYN, c->loc.port, c->rem.port, isn, 0, NULL,
          0);
 }
 
 void mg_connect_resolved(struct mg_connection *c) {
   struct mg_tcpip_if *ifp = (struct mg_tcpip_if *) c->mgr->priv;
+  uint32_t rem_ip;
+  memcpy(&rem_ip, c->rem.ip, sizeof(uint32_t));
   c->is_resolving = 0;
   if (ifp->eport < MG_EPHEMERAL_PORT_BASE) ifp->eport = MG_EPHEMERAL_PORT_BASE;
-  c->loc.ip = ifp->ip;
+  memcpy(c->loc.ip, &ifp->ip, sizeof(uint32_t));
   c->loc.port = mg_htons(ifp->eport++);
   MG_DEBUG(("%lu %M -> %M", c->id, mg_print_ip_port, &c->loc, mg_print_ip_port,
             &c->rem));
   mg_call(c, MG_EV_RESOLVE, NULL);
-  if (((c->rem.ip & ifp->mask) == (ifp->ip & ifp->mask))) {
+  if (((rem_ip & ifp->mask) == (ifp->ip & ifp->mask))) {
     // If we're in the same LAN, fire an ARP lookup. TODO(cpq): handle this!
     MG_DEBUG(("%lu ARP lookup...", c->id));
-    arp_ask(ifp, c->rem.ip);
+    arp_ask(ifp, rem_ip);
     c->is_arplooking = 1;
-  } else if (c->rem.ip == (ifp->ip | ~ifp->mask)) {
+  } else if (rem_ip == (ifp->ip | ~ifp->mask)) {
     struct connstate *s = (struct connstate *) (c + 1);
     memset(s->mac, 0xFF, sizeof(s->mac));  // local broadcast
-  } else if ((*((uint8_t *) &c->rem.ip) & 0xE0) == 0xE0) {
+  } else if ((*((uint8_t *) &rem_ip) & 0xE0) == 0xE0) {
     struct connstate *s = (struct connstate *) (c + 1);  // 224 to 239, E0 to EF
     uint8_t mcastp[3] = {0x01, 0x00, 0x5E};              // multicast group
     memcpy(s->mac, mcastp, 3);
-    memcpy(s->mac + 3, ((uint8_t *) &c->rem.ip) + 1, 3);  // 23 LSb
+    memcpy(s->mac + 3, ((uint8_t *) &rem_ip) + 1, 3);  // 23 LSb
     s->mac[3] &= 0x7F;
   } else {
     struct connstate *s = (struct connstate *) (c + 1);
@@ -8404,11 +8417,13 @@ static void write_conn(struct mg_connection *c) {
 
 static void close_conn(struct mg_connection *c) {
   struct connstate *s = (struct connstate *) (c + 1);
+  uint32_t rem_ip;
+  memcpy(&rem_ip, c->rem.ip, sizeof(uint32_t));
   mg_iobuf_free(&s->raw);  // For TLS connections, release raw data
   if (c->is_udp == false && c->is_listening == false) {  // For TCP conns,
     struct mg_tcpip_if *ifp =
         (struct mg_tcpip_if *) c->mgr->priv;  // send TCP FIN
-    tx_tcp(ifp, s->mac, c->rem.ip, TH_FIN | TH_ACK, c->loc.port, c->rem.port,
+    tx_tcp(ifp, s->mac, rem_ip, TH_FIN | TH_ACK, c->loc.port, c->rem.port,
            mg_htonl(s->seq), mg_htonl(s->ack), NULL, 0);
   }
   mg_close_conn(c);
@@ -8441,11 +8456,13 @@ void mg_mgr_poll(struct mg_mgr *mgr, int ms) {
 bool mg_send(struct mg_connection *c, const void *buf, size_t len) {
   struct mg_tcpip_if *ifp = (struct mg_tcpip_if *) c->mgr->priv;
   bool res = false;
+  uint32_t rem_ip;
+  memcpy(&rem_ip, c->rem.ip, sizeof(uint32_t));
   if (ifp->ip == 0 || ifp->state != MG_TCPIP_STATE_READY) {
     mg_error(c, "net down");
   } else if (c->is_udp) {
     struct connstate *s = (struct connstate *) (c + 1);
-    tx_udp(ifp, s->mac, ifp->ip, c->loc.port, c->rem.ip, c->rem.port, buf, len);
+    tx_udp(ifp, s->mac, ifp->ip, c->loc.port, rem_ip, c->rem.port, buf, len);
     res = true;
   } else {
     res = mg_iobuf_add(&c->send, c->send.len, buf, len);

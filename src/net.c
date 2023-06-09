@@ -22,15 +22,16 @@ size_t mg_printf(struct mg_connection *c, const char *fmt, ...) {
 }
 
 static bool mg_atonl(struct mg_str str, struct mg_addr *addr) {
+  uint32_t localhost = mg_htonl(0x7f000001);
   if (mg_vcasecmp(&str, "localhost") != 0) return false;
-  addr->ip = mg_htonl(0x7f000001);
+  memcpy(addr->ip, &localhost, sizeof(uint32_t));
   addr->is_ip6 = false;
   return true;
 }
 
 static bool mg_atone(struct mg_str str, struct mg_addr *addr) {
   if (str.len > 0) return false;
-  addr->ip = 0;
+  memset(addr->ip, 0, sizeof(addr->ip));
   addr->is_ip6 = false;
   return true;
 }
@@ -58,15 +59,18 @@ static bool mg_aton4(struct mg_str str, struct mg_addr *addr) {
 
 static bool mg_v4mapped(struct mg_str str, struct mg_addr *addr) {
   int i;
+  uint32_t ipv4;
   if (str.len < 14) return false;
   if (str.ptr[0] != ':' || str.ptr[1] != ':' || str.ptr[6] != ':') return false;
   for (i = 2; i < 6; i++) {
     if (str.ptr[i] != 'f' && str.ptr[i] != 'F') return false;
   }
+  //struct mg_str s = mg_str_n(&str.ptr[7], str.len - 7);
   if (!mg_aton4(mg_str_n(&str.ptr[7], str.len - 7), addr)) return false;
-  memset(addr->ip6, 0, sizeof(addr->ip6));
-  addr->ip6[10] = addr->ip6[11] = 255;
-  memcpy(&addr->ip6[12], &addr->ip, 4);
+  memcpy(&ipv4, addr->ip, sizeof(ipv4));
+  memset(addr->ip, 0, sizeof(addr->ip));
+  addr->ip[10] = addr->ip[11] = 255;
+  memcpy(&addr->ip[12], &ipv4, 4);
   addr->is_ip6 = true;
   return true;
 }
@@ -83,8 +87,8 @@ static bool mg_aton6(struct mg_str str, struct mg_addr *addr) {
       if (i > j + 3) return false;
       // MG_DEBUG(("%zu %zu [%.*s]", i, j, (int) (i - j + 1), &str.ptr[j]));
       val = mg_unhexn(&str.ptr[j], i - j + 1);
-      addr->ip6[n] = (uint8_t) ((val >> 8) & 255);
-      addr->ip6[n + 1] = (uint8_t) (val & 255);
+      addr->ip[n] = (uint8_t) ((val >> 8) & 255);
+      addr->ip[n + 1] = (uint8_t) (val & 255);
     } else if (str.ptr[i] == ':') {
       j = i + 1;
       if (i > 0 && str.ptr[i - 1] == ':') {
@@ -94,16 +98,17 @@ static bool mg_aton6(struct mg_str str, struct mg_addr *addr) {
         n += 2;
       }
       if (n > 14) return false;
-      addr->ip6[n] = addr->ip6[n + 1] = 0;  // For trailing ::
+      addr->ip[n] = addr->ip[n + 1] = 0;  // For trailing ::
     } else {
       return false;
     }
   }
   if (n < 14 && dc == 42) return false;
   if (n < 14) {
-    memmove(&addr->ip6[dc + (14 - n)], &addr->ip6[dc], n - dc + 2);
-    memset(&addr->ip6[dc], 0, 14 - n);
+    memmove(&addr->ip[dc + (14 - n)], &addr->ip[dc], n - dc + 2);
+    memset(&addr->ip[dc], 0, 14 - n);
   }
+  
   addr->is_ip6 = true;
   return true;
 }
