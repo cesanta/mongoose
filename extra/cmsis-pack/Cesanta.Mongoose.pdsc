@@ -1,0 +1,266 @@
+<?xml version="1.0" encoding="utf-8"?>
+
+<package schemaVersion="1.7.2" xmlns:xs="http://www.w3.org/2001/XMLSchema-instance" xs:noNamespaceSchemaLocation="https://raw.githubusercontent.com/Open-CMSIS-Pack/Open-CMSIS-Pack-Spec/v1.7.7/schema/PACK.xsd">
+  <vendor>Cesanta</vendor>
+  <name>Mongoose</name>
+  <description>Mongoose Embedded Web server, HTTP/MQTT/Websocket library</description>
+  <url>https://mongoose.ws/downloads/armpack/</url>
+  <supportContact>https://mongoose.ws/contact/</supportContact>
+  <license>License.txt</license>
+  <repository type="git">https://github.com/cesanta/mongoose.git</repository>
+  <releases>
+    <release version="7.10.0" date="2023-05-24" tag="7.10">
+      See https://github.com/cesanta/mongoose/releases/tag/7.10
+    </release>
+  </releases>
+
+  <keywords>
+    <!-- keywords for indexing -->
+    <keyword>Web Server</keyword>
+    <keyword>HTTP</keyword>
+    <keyword>MQTT</keyword>
+    <keyword>SNTP</keyword>
+    <keyword>Websocket</keyword>
+    <keyword>network</keyword>
+  </keywords>
+
+  <taxonomy>
+  <description Cclass="Network Library">Networking services library with or without a built-in TCP/IP stack</description>
+  </taxonomy>
+
+  <components>
+    <component Cclass="Network Library" Cgroup="Mongoose" Cversion="7.10.0">
+      <description>Mongoose HTTP/MQTT/Websocket Library</description>
+      <files>
+        <file category="header" name="Mongoose/mongoose.h"/>
+        <file category="source" name="Mongoose/mongoose.c"/>
+        <file category="header" name="Mongoose/config/mongoose_custom.h" attr="config" version="1.0.0"/>
+      </files>
+    </component>
+  </components>
+
+  <examples>
+    <!-- STM32 NUCLEO-F746ZG -->
+    <example name="Mongoose baremetal" doc="README.md" folder="Boards/ST/NUCLEO-F746ZG/nucleo-f746zg-keil-baremetal">
+      <description>Baremetal web device dashboard using Mongoose</description>
+      <board name="NUCLEO-F746ZG" vendor="STMicroelectronics"/>
+      <project>
+        <environment name="uv" load="device-dashboard.uvprojx"/>
+      </project>
+      <attributes>
+        <component Cclass="CMSIS" Cgroup="CORE"/>
+        <component Cclass="Device" Cgroup="Startup"/>
+        <category>Getting Started</category>
+        <category>Network</category>
+        <keyword>Web Server</keyword>
+        <keyword>HTTP</keyword>
+        <keyword>MQTT</keyword>
+        <keyword>SNTP</keyword>
+        <keyword>network</keyword>
+      </attributes>
+    </example>
+    <example name="Mongoose in FreeRTOS" doc="README.md" folder="Boards/ST/NUCLEO-F746ZG/nucleo-f746zg-keil-freertos">
+      <description>Web device dashboard using Mongoose as a FreeRTOS task</description>
+      <board name="NUCLEO-F746ZG" vendor="STMicroelectronics"/>
+      <project>
+        <environment name="uv" load="device-dashboard.uvprojx"/>
+      </project>
+      <attributes>
+        <component Cclass="CMSIS" Cgroup="CORE"/>
+        <component Cclass="Device" Cgroup="Startup"/>
+        <component Cclass="RTOS" Cgroup="FreeRTOS"/>
+        <category>Getting Started</category>
+        <category>Network</category>
+        <keyword>Web Server</keyword>
+        <keyword>HTTP</keyword>
+        <keyword>MQTT</keyword>
+        <keyword>SNTP</keyword>
+        <keyword>network</keyword>
+      </attributes>
+    </example>
+    <example name="Mongoose in FreeRTOS/CMSIS-RTOS" doc="README.md" folder="Boards/ST/NUCLEO-F746ZG/nucleo-f746zg-keil-freertos_cmsis2">
+      <description>Web device dashboard using Mongoose as a FreeRTOS task using CMSIS-RTOS v2 API</description>
+      <board name="NUCLEO-F746ZG" vendor="STMicroelectronics"/>
+      <project>
+        <environment name="uv" load="device-dashboard.uvprojx"/>
+      </project>
+      <attributes>
+        <component Cclass="CMSIS" Cgroup="CORE"/>
+        <component Cclass="CMSIS" Cgroup="RTOS2"/>
+        <component Cclass="Device" Cgroup="Startup"/>
+        <component Cclass="RTOS" Cgroup="FreeRTOS"/>
+        <category>Getting Started</category>
+        <category>Network</category>
+        <keyword>Web Server</keyword>
+        <keyword>HTTP</keyword>
+        <keyword>MQTT</keyword>
+        <keyword>SNTP</keyword>
+        <keyword>network</keyword>
+      </attributes>
+    </example>
+    <example name="Mongoose over FreeRTOS/CMSIS-RTOS + lwIP" doc="README.md" folder="Boards/ST/NUCLEO-F746ZG/nucleo-f746zg-keil-freertos_cmsis2-lwip">
+      <description>Web device dashboard using Mongoose over FreeRTOS + lwIP with CMSIS-RTOS v2 API</description>
+      <board name="NUCLEO-F746ZG" vendor="STMicroelectronics"/>
+      <project>
+        <environment name="uv" load="device-dashboard.uvprojx"/>
+      </project>
+      <attributes>
+        <component Cclass="CMSIS" Cgroup="CORE"/>
+        <component Cclass="CMSIS" Cgroup="RTOS2"/>
+        <component Cclass="Device" Cgroup="Startup"/>
+        <component Cclass="RTOS" Cgroup="FreeRTOS"/>
+        <component Cclass="Network" Cgroup="lwIP"/>
+        <category>Getting Started</category>
+        <category>Network</category>
+        <keyword>Web Server</keyword>
+        <keyword>HTTP</keyword>
+        <keyword>MQTT</keyword>
+        <keyword>SNTP</keyword>
+        <keyword>network</keyword>
+      </attributes>
+    </example>
+    <example name="Mongoose over FreeRTOS + lwIP" doc="README.md" folder="Boards/ST/NUCLEO-F746ZG/nucleo-f746zg-keil-freertos-lwip">
+      <description>Web device dashboard using Mongoose over FreeRTOS + lwIP with FreeRTOS API</description>
+      <board name="NUCLEO-F746ZG" vendor="STMicroelectronics"/>
+      <project>
+        <environment name="uv" load="device-dashboard.uvprojx"/>
+      </project>
+      <attributes>
+        <component Cclass="CMSIS" Cgroup="CORE"/>
+        <component Cclass="Device" Cgroup="Startup"/>
+        <component Cclass="RTOS" Cgroup="FreeRTOS"/>
+        <component Cclass="Network" Cgroup="lwIP"/>
+        <category>Getting Started</category>
+        <category>Network</category>
+        <keyword>Web Server</keyword>
+        <keyword>HTTP</keyword>
+        <keyword>MQTT</keyword>
+        <keyword>SNTP</keyword>
+        <keyword>network</keyword>
+      </attributes>
+    </example>
+    <example name="Mongoose over FreeRTOS+ TCP" doc="README.md" folder="Boards/ST/NUCLEO-F746ZG/nucleo-f746zg-keil-freertos-tcp">
+      <description>Web device dashboard using Mongoose over FreeRTOS-Plus-TCP stack</description>
+      <board name="NUCLEO-F746ZG" vendor="STMicroelectronics"/>
+      <project>
+        <environment name="uv" load="device-dashboard.uvprojx"/>
+      </project>
+      <attributes>
+        <component Cclass="CMSIS" Cgroup="CORE"/>
+        <component Cclass="Device" Cgroup="Startup"/>
+        <component Cclass="RTOS" Cgroup="FreeRTOS"/>
+        <component Cclass="FreeRTOS" Cgroup="FreeRTOS+ TCP"/>
+        <category>Getting Started</category>
+        <category>Network</category>
+        <keyword>Web Server</keyword>
+        <keyword>HTTP</keyword>
+        <keyword>MQTT</keyword>
+        <keyword>SNTP</keyword>
+        <keyword>network</keyword>
+      </attributes>
+    </example>
+    <example name="Mongoose in RTX" doc="README.md" folder="Boards/ST/NUCLEO-F746ZG/nucleo-f746zg-keil-rtx">
+      <description>Web device dashboard using Mongoose as an RTX task using CMSIS-RTOS v1 API</description>
+      <board name="NUCLEO-F746ZG" vendor="STMicroelectronics"/>
+      <project>
+        <environment name="uv" load="device-dashboard.uvprojx"/>
+      </project>
+      <attributes>
+        <component Cclass="CMSIS" Cgroup="CORE"/>
+        <component Cclass="CMSIS" Cgroup="RTOS"/>
+        <component Cclass="Device" Cgroup="Startup"/>
+        <category>Getting Started</category>
+        <category>Network</category>
+        <category>CMSIS-RTX</category>
+        <keyword>Web Server</keyword>
+        <keyword>HTTP</keyword>
+        <keyword>MQTT</keyword>
+        <keyword>SNTP</keyword>
+        <keyword>network</keyword>
+      </attributes>
+    </example>
+    <example name="Mongoose in RTX5" doc="README.md" folder="Boards/ST/NUCLEO-F746ZG/nucleo-f746zg-keil-rtx5">
+      <description>Web device dashboard using Mongoose as an RTX5 task using CMSIS-RTOS v2 API</description>
+      <board name="NUCLEO-F746ZG" vendor="STMicroelectronics"/>
+      <project>
+        <environment name="uv" load="device-dashboard.uvprojx"/>
+      </project>
+      <attributes>
+        <component Cclass="CMSIS" Cgroup="CORE"/>
+        <component Cclass="CMSIS" Cgroup="RTOS2"/>
+        <component Cclass="Device" Cgroup="Startup"/>
+        <category>Getting Started</category>
+        <category>Network</category>
+        <category>CMSIS-RTX</category>
+        <keyword>Web Server</keyword>
+        <keyword>HTTP</keyword>
+        <keyword>MQTT</keyword>
+        <keyword>SNTP</keyword>
+        <keyword>network</keyword>
+      </attributes>
+    </example>
+    <example name="Mongoose over RTX5 + lwIP" doc="README.md" folder="Boards/ST/NUCLEO-F746ZG/nucleo-f746zg-keil-rtx5-lwip">
+      <description>Web device dashboard using Mongoose over RTX5 + lwIP</description>
+      <board name="NUCLEO-F746ZG" vendor="STMicroelectronics"/>
+      <project>
+        <environment name="uv" load="device-dashboard.uvprojx"/>
+      </project>
+      <attributes>
+        <component Cclass="CMSIS" Cgroup="CORE"/>
+        <component Cclass="CMSIS" Cgroup="RTOS2"/>
+        <component Cclass="Device" Cgroup="Startup"/>
+        <component Cclass="Network" Cgroup="lwIP"/>
+        <category>Getting Started</category>
+        <category>Network</category>
+        <category>CMSIS-RTX</category>
+        <keyword>Web Server</keyword>
+        <keyword>HTTP</keyword>
+        <keyword>MQTT</keyword>
+        <keyword>SNTP</keyword>
+        <keyword>network</keyword>
+      </attributes>
+    </example>
+    <example name="Mongoose over RTX5 + MDK" doc="README.md" folder="Boards/ST/NUCLEO-F746ZG/nucleo-f746zg-keil-rtx5-mdk">
+      <description>Web device dashboard using Mongoose over RTX5 + the MDK TCP/IP stack</description>
+      <board name="NUCLEO-F746ZG" vendor="STMicroelectronics"/>
+      <project>
+        <environment name="uv" load="device-dashboard.uvprojx"/>
+      </project>
+      <attributes>
+        <component Cclass="CMSIS" Cgroup="CORE"/>
+        <component Cclass="CMSIS" Cgroup="RTOS2"/>
+        <component Cclass="Device" Cgroup="Startup"/>
+        <component Cclass="Network" Cgroup="Socket" Csub="BSD"/>
+        <category>Getting Started</category>
+        <category>Network</category>
+        <category>CMSIS-RTX</category>
+        <keyword>Web Server</keyword>
+        <keyword>HTTP</keyword>
+        <keyword>MQTT</keyword>
+        <keyword>SNTP</keyword>
+        <keyword>network</keyword>
+      </attributes>
+    </example>
+    <example name="Mongoose over RTX + MDK" doc="README.md" folder="Boards/ST/NUCLEO-F746ZG/nucleo-f746zg-keil-rtx-mdk">
+      <description>Web device dashboard using Mongoose over RTX + the MDK TCP/IP stack</description>
+      <board name="NUCLEO-F746ZG" vendor="STMicroelectronics"/>
+      <project>
+        <environment name="uv" load="device-dashboard.uvprojx"/>
+      </project>
+      <attributes>
+        <component Cclass="CMSIS" Cgroup="CORE"/>
+        <component Cclass="CMSIS" Cgroup="RTOS"/>
+        <component Cclass="Device" Cgroup="Startup"/>
+        <component Cclass="Network" Cgroup="Socket" Csub="BSD"/>
+        <category>Getting Started</category>
+        <category>Network</category>
+        <category>CMSIS-RTX</category>
+        <keyword>Web Server</keyword>
+        <keyword>HTTP</keyword>
+        <keyword>MQTT</keyword>
+        <keyword>SNTP</keyword>
+        <keyword>network</keyword>
+      </attributes>
+    </example>
+  </examples>
+</package>
