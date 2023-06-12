@@ -3,6 +3,7 @@
 
 #include "hal.h"
 #include "mongoose.h"
+#include "net.h"
 #include "main.h"
 
 #define BLINK_PERIOD_MS 1000  // LED blinking period in millis
@@ -53,8 +54,7 @@ static void server(void *args) {
   }
 
   MG_INFO(("Initialising application..."));
-  extern void device_dashboard_fn(struct mg_connection *, int, void *, void *);
-  mg_http_listen(&mgr, "http://0.0.0.0", device_dashboard_fn, NULL);
+  web_init(&mgr);
 
   MG_INFO(("Starting event loop"));
   for (;;) mg_mgr_poll(&mgr, 1);  // Infinite event loop
