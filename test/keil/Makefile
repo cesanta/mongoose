@@ -2,11 +2,14 @@
 PROJECTS ?= $(wildcard ../../tutorials/stm32/nucleo-*-keil-*)
 TARGET ?= "Target 1"
 
+MAKEFILEPATH := $(dir $(word $(words $(MAKEFILE_LIST)),$(MAKEFILE_LIST)))
+BATPATH := $(subst /,\,$(MAKEFILEPATH))
+
 all: $(PROJECTS)
 	
 # Need to test inside .bat to check and transfer errors
 $(PROJECTS): FORCE
-	unitest.bat $(subst /,\,$@) $(TARGET)
+	$(BATPATH)unitest.bat $(subst /,\,$@) $(TARGET)
 
 FORCE:
 
