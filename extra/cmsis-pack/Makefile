@@ -9,11 +9,11 @@ all:
 	cp ../../LICENSE License.txt
 	cp ../../README.md .
 	cp ../../mongoose.[ch] Mongoose/
-	grep -l device_dashboard_fn Boards/*/*/*/main.c | xargs -n 1 dirname | sed 's.$$./.' | xargs -n 1 cp ../../examples/device-dashboard/net.c
-	grep -l device_dashboard_fn Boards/*/*/*/main.c | xargs -n 1 dirname | sed 's.$$./.' | xargs -n 1 cp ../../examples/device-dashboard/packed_fs.c
+	grep -l net.h Boards/*/*/*/main.c | xargs -n 1 dirname | sed 's.$$./.' | xargs -n 1 cp ../../examples/device-dashboard/net.[ch]
+	grep -l net.h Boards/*/*/*/main.c | xargs -n 1 dirname | sed 's.$$./.' | xargs -n 1 cp ../../examples/device-dashboard/packed_fs.c
 	$(GENPACK)
 	rm License.txt README.md Mongoose/mongoose.[ch]
-	rm -f Boards/*/*/*/net.c
+	rm -f Boards/*/*/*/net.[ch]
 	rm -f Boards/*/*/*/packed_fs.c
 
 clean:
@@ -44,6 +44,7 @@ keilexamples: $(KEILDIRS)
 
 $(KEILDIRS): FORCE  # copy anyway, even if not needed
 	copy /Y ..\..\examples\device-dashboard\net.c $(subst /,\,$@)
+	copy /Y ..\..\examples\device-dashboard\net.h $(subst /,\,$@)
 	copy /Y ..\..\examples\device-dashboard\packed_fs.c $(subst /,\,$@)
 # not removed
 
