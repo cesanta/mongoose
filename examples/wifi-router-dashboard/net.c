@@ -20,6 +20,46 @@ struct event {
   const char *text;
 };
 
+// Connected Devices
+struct device {
+  char *dev_name;
+  char *mac;
+  char *ip_addr;
+  int speed;
+  char *connected_to;
+  int lease_time_left;
+  char *last_seen;
+};
+
+static struct device s_devices[] = {
+  { .dev_name = "espressif", 
+    .mac = "02:11:22:33:44:55", 
+    .ip_addr = "192.168.1.1/24",
+    .speed = 1000,
+    .connected_to = "Ethernet",
+    .lease_time_left = 1000,
+    .last_seen = "13h20m ago"
+  },
+
+  { .dev_name = "windows11", 
+    .mac = "01:22:11:44:33:55", 
+    .ip_addr = "192.168.1.2/24",
+    .speed = 200,
+    .connected_to = "Wifi 2.4 GHz",
+    .lease_time_left = 4141,
+    .last_seen = "23s ago"
+  },
+
+  { .dev_name = "iRobot-2", 
+    .mac = "01:22:11:44:33:42", 
+    .ip_addr = "192.168.1.3/24",
+    .speed = 600,
+    .connected_to = "Wifi 5GHz",
+    .lease_time_left = 1141,
+    .last_seen = "20m ago"
+  }
+};
+
 // DHCP configuration
 struct dhcp {
   bool enabled;
@@ -184,6 +224,33 @@ static void handle_events_get(struct mg_connection *c) {
   mg_http_reply(c, 200, s_json_header, "[%M]", print_events);
 }
 
+static void handle_devices_get(struct mg_connection *c) {
+  char test_json[1024];
+  int nr_devs = sizeof(s_devices) / sizeof(struct device);
+  memset(test_json, 0, sizeof(test_json));
+  test_json[0] = '[';
+  for (int i = 0; i < nr_devs; i++) {
+    size_t current_length = strlen(test_json);
+
+    mg_snprintf(test_json + current_length, sizeof(test_json) - current_length,
+        "{%m:\"%s\",%m:\"%s\", %m:\"%s\", %m:%d,%m:\"%s\",%m:%d,%m:\"%s\"}",  //
+        MG_ESC("dev_name"), s_devices[i].dev_name,   //
+        MG_ESC("mac"), s_devices[i].mac,             //
+        MG_ESC("ip"), s_devices[i].ip_addr,          //
+        MG_ESC("speed"), s_devices[i].speed,         //
+        MG_ESC("connected_to"), s_devices[i].connected_to, //
+        MG_ESC("lease_time_left"), s_devices[i].lease_time_left, //
+        MG_ESC("last_seen"), s_devices[i].last_seen);
+
+    if (i < nr_devs - 1) {
+        strncat(test_json, ",", sizeof(test_json) - strlen(test_json) - 1);
+    }
+  }
+
+  strncat(test_json, "]", sizeof(test_json) - strlen(test_json) - 1);
+  mg_http_reply(c, 200, s_json_header, "%s", test_json);
+}
+
 static void handle_dhcp_set(struct mg_connection *c, struct mg_str body) {
   struct dhcp dhcp;
   memset(&dhcp, 0, sizeof(dhcp));
@@ -228,6 +295,8 @@ static void fn(struct mg_connection *c, int ev, void *ev_data, void *fn_data) {
       handle_stats_get(c);
     } else if (mg_http_match_uri(hm, "/api/events/get")) {
       handle_events_get(c);
+    } else if (mg_http_match_uri(hm, "/api/devices/get")) {
+      handle_devices_get(c);
     } else if (mg_http_match_uri(hm, "/api/dhcp/get")) {
       handle_dhcp_get(c);
     } else if (mg_http_match_uri(hm, "/api/dhcp/set")) {

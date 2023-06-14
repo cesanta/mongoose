@@ -179,6 +179,60 @@ function Main({}) {
 <//>`;
 };
 
+function Devices({}) {
+  const [devices, setDevices] = useState(null);
+  const refresh = () => fetch('api/devices/get')
+    .then(r => r.json())
+    .then(r => setDevices(r));
+  useEffect(refresh, []);
+
+  const th = props => html`<th scope="col" class="sticky top-0 z-10 border-b border-slate-300 bg-white bg-opacity-75 py-1.5 px-4 text-left text-sm font-semibold text-slate-900 backdrop-blur backdrop-filter">${props.title}</th>`;
+  const td = props => html`<td class="whitespace-nowrap border-b border-slate-200 py-2 px-4 pr-3 text-sm text-slate-900">${props.text}</td>`;
+
+  const Device = ({d}) => html`
+<tr>
+  <${td} text=${d.dev_name} />
+  <${td} text=${d.mac} />
+  <${td} text=${d.ip} />
+  <${td} text=${d.speed} />
+  <${td} text=${d.connected_to} />
+  <${td} text=${d.lease_time_left} />
+  <${td} text=${d.last_seen} />
+<//>`;
+
+if (!devices) return '';
+return html`
+<div class="flex flex-col p-6 bg-gray-50 dark:bg-gray-900">
+  <div class="overflow-x-auto shadow-xl rounded-xl bg-white dark:bg-gray-800 p-6">
+
+    <div class="flex justify-end mb-4">
+      <${Button} title="Refresh" icon=${Icons.refresh} onclick=${refresh}  />
+    </div>
+
+    <div class="align-middle inline-block w-full">
+      <div class="overflow-hidden">
+        <table class="min-w-full divide-y divide-gray-200 dark:divide-gray-700 text-sm md:text-base lg:text-lg">
+          <thead class="bg-gray-200 dark:bg-gray-700 text-gray-600 dark:text-gray-300">
+            <tr>
+              <${th} title="Device Name" />
+              <${th} title="MAC address" />
+              <${th} title="IP address" />
+              <${th} title="Speed (Mbps)" />
+              <${th} title="Connected to" />
+              <${th} title="Lease time left" />
+              <${th} title="Last seen" />
+            </tr>
+          </thead>
+          <tbody class="bg-white dark:bg-gray-900 text-gray-800 dark:text-gray-200">
+            ${devices.map(d => h(Device, {d}))}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</div>`;
+};
+
 function DHCP({}) {
   const [dhcp, setDhcp] = useState(null);
   const [saveResult, setSaveResult] = useState(null);
@@ -240,6 +294,7 @@ const App = function({}) {
     <${Router} onChange=${ev => setUrl(ev.url)} history=${History.createHashHistory()} >
       <${Main} default=${true} />
       <${DHCP} path="dhcp" />
+      <${Devices} path="devices" />
     <//>
   <//>
 <//>`;
