@@ -202,13 +202,11 @@ function Devices({}) {
 
 if (!devices) return '';
 return html`
-<div class="flex flex-col p-6 bg-gray-50 dark:bg-gray-900">
-  <div class="overflow-x-auto shadow-xl rounded-xl bg-white dark:bg-gray-800 p-6">
-
-    <div class="flex justify-end mb-4">
-      <${Button} title="Refresh" icon=${Icons.refresh} onclick=${refresh}  />
-    </div>
-
+  <div class="overflow-x-auto shadow-xl rounded-xl bg-white dark:bg-gray-800 my-3 mx-4">
+    <div class="font-light uppercase flex text-slate-600 px-4 py-2 justify-between">
+      Connected devices
+      <${Button} title="Refresh table" icon=${Icons.refresh} onclick=${refresh} mx-2 />
+    <//>
     <div class="align-middle inline-block w-full">
       <div class="overflow-hidden">
         <table class="min-w-full divide-y divide-gray-200 dark:divide-gray-700 text-sm md:text-base lg:text-lg">
@@ -229,8 +227,7 @@ return html`
         </table>
       </div>
     </div>
-  </div>
-</div>`;
+  </div>`;
 };
 
 function DHCP({}) {
