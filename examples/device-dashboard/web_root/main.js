@@ -1,6 +1,6 @@
 'use strict';
 import { h, render, useState, useEffect, useRef, html, Router } from  './bundle.js';
-import { Icons, Login, Setting, Button, Stat, tipColors, Colored, Notification } from './components.js';
+import { Icons, Login, Setting, Button, Stat, tipColors, Colored, Notification, Pagination } from './components.js';
 
 const Logo = props => html`<svg class=${props.class} xmlns="http://www.w3.org/2000/svg" viewBox="0 0 12.87 12.85"><defs><style>.ll-cls-1{fill:none;stroke:#000;stroke-miterlimit:10;stroke-width:0.5px;}</style></defs><g id="Layer_2" data-name="Layer 2"><g id="Layer_1-2" data-name="Layer 1"><path class="ll-cls-1" d="M12.62,1.82V8.91A1.58,1.58,0,0,1,11,10.48H4a1.44,1.44,0,0,1-1-.37A.69.69,0,0,1,2.84,10l-.1-.12a.81.81,0,0,1-.15-.48V5.57a.87.87,0,0,1,.86-.86H4.73V7.28a.86.86,0,0,0,.86.85H9.42a.85.85,0,0,0,.85-.85V3.45A.86.86,0,0,0,10.13,3,.76.76,0,0,0,10,2.84a.29.29,0,0,0-.12-.1,1.49,1.49,0,0,0-1-.37H2.39V1.82A1.57,1.57,0,0,1,4,.25H11A1.57,1.57,0,0,1,12.62,1.82Z"/><path class="ll-cls-1" d="M10.48,10.48V11A1.58,1.58,0,0,1,8.9,12.6H1.82A1.57,1.57,0,0,1,.25,11V3.94A1.57,1.57,0,0,1,1.82,2.37H8.9a1.49,1.49,0,0,1,1,.37l.12.1a.76.76,0,0,1,.11.14.86.86,0,0,1,.14.47V7.28a.85.85,0,0,1-.85.85H8.13V5.57a.86.86,0,0,0-.85-.86H3.45a.87.87,0,0,0-.86.86V9.4a.81.81,0,0,0,.15.48l.1.12a.69.69,0,0,0,.13.11,1.44,1.44,0,0,0,1,.37Z"/></g></g></svg>`;
 
@@ -44,6 +44,7 @@ function Sidebar({url, show}) {
     <div class="flex flex-1 flex-col">
       <${NavLink} title="Dashboard" icon=${Icons.home} href="/" url=${url} />
       <${NavLink} title="Settings" icon=${Icons.settings} href="/settings" url=${url} />
+      <${NavLink} title="Events" icon=${Icons.alert} href="/events" url=${url} />
     <//>
   <//>
 <//>`;
@@ -51,8 +52,18 @@ function Sidebar({url, show}) {
 
 function Events({}) {
   const [events, setEvents] = useState([]);
-  const refresh = () => fetch('api/events/get').then(r => r.json()).then(r => setEvents(r)).catch(e => console.log(e));
-  useEffect(refresh, []);
+  const [page, setPage] = useState(1);
+
+  const refresh = () => fetch(`api/events/get?page=${page}`).then(r => r.json()).then(r => {console.log(r); setEvents(r)}).catch(e => console.log(e));
+  useEffect(refresh, [page]);
+
+  useEffect(() => {
+    setPage(JSON.parse(localStorage.getItem('page')));
+      }, []);
+
+  useEffect(() => {
+    localStorage.setItem('page', page.toString());
+  }, [page]);
 
   const Th = props => html`<th scope="col" class="sticky top-0 z-10 border-b border-slate-300 bg-white bg-opacity-75 py-1.5 px-4 text-left text-sm font-semibold text-slate-900 backdrop-blur backdrop-filter">${props.title}</th>`;
   const Td = props => html`<td class="whitespace-nowrap border-b border-slate-200 py-2 px-4 pr-3 text-sm text-slate-900">${props.text}</td>`;
@@ -61,6 +72,7 @@ function Events({}) {
     const colors = [tipColors.red, tipColors.yellow, tipColors.green][prio];
     return html`<${Colored} colors=${colors} text=${text} />`;
   };
+
   const Event = ({e}) => html`
 <tr>
   <${Td} text=${['power', 'hardware', 'tier3', 'tier4'][e.type]} />
@@ -68,16 +80,16 @@ function Events({}) {
   <${Td} text=${e.time || '1970-01-01'} />
   <${Td} text=${e.text} />
 <//>`;
-  //console.log(events);
 
   return html`
-<div class="my-4 h-64 divide-y divide-gray-200 rounded bg-white overflow-auto">
-  <div class="font-light uppercase flex items-center text-slate-600 px-4 py-2">
-    Event Log
-  <//>
-  <div class="">
-    <table class="">
-      <thead>
+<div class="divide-y divide-gray-200 overflow-x-auto shadow-xl rounded-xl bg-white dark:bg-gray-700 my-3 mx-10">
+  <div class="font-light flex items-center text-slate-600 px-4 py-2 justify-between">
+    EVENT LOG
+    <${Pagination} currentPage=${page} setPageFn=${setPage} totalItems=${events.totalCount} itemsPerPage=20 />
+  </div>
+  <div class="align-middle inline-block w-full">
+      <table class="w-full divide-y divide-gray-200 dark:divide-gray-700 text-sm md:text-base lg:text-lg">
+        <thead class="bg-gray-200 dark:bg-gray-700 text-gray-600 dark:text-gray-300">
         <tr>
           <${Th} title="Type" />
           <${Th} title="Prio" />
@@ -85,8 +97,8 @@ function Events({}) {
           <${Th} title="Description" />
         </tr>
       </thead>
-      <tbody>
-        ${events.map(e => h(Event, {e}))}
+      <tbody class="bg-white dark:bg-gray-900 text-gray-800 dark:text-gray-200">
+        ${(events.arr ? events.arr : []).map(e => h(Event, {e}))}
       </tbody>
     </table>
   <//>
@@ -148,15 +160,6 @@ function Main({}) {
     <//>
   <//>
   <div class="p-4 sm:p-2 mx-auto grid grid-cols-1 lg:grid-cols-2 gap-4">
-    <${Events} />
-
-    <div class="my-4 hx-24 bg-white border rounded-md shadow-lg" role="alert">
-      <${DeveloperNote}
-        text="Events data is also received from the backend,
-        via the /api/events/get API call, which returns an array of objects each
-        representing an event. Events table is scrollable,
-        Table header is sticky" />
-    <//>
 
     <${Chart} data=${stats.points} />
 
@@ -244,6 +247,7 @@ const App = function({}) {
     <${Router} onChange=${ev => setUrl(ev.url)} history=${History.createHashHistory()} >
       <${Main} default=${true} />
       <${Settings} path="settings" />
+      <${Events} path="events">
     <//>
   <//>
 <//>`;
