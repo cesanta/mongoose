@@ -13,12 +13,8 @@ struct user {
   const char *name, *pass, *access_token;
 };
 
-// Event log entry
-struct event {
-  int type, prio;
-  unsigned long timestamp;
-  const char *text;
-};
+int events_no;
+struct ui_event events[MAX_EVENTS_NO];
 
 // Settings
 struct settings {
@@ -29,17 +25,6 @@ struct settings {
 };
 
 static struct settings s_settings = {true, 1, 57, NULL};
-
-// Mocked events
-static struct event s_events[] = {
-    {.type = 0, .prio = 0, .text = "here goes event 1"},
-    {.type = 1, .prio = 2, .text = "event 2..."},
-    {.type = 2, .prio = 1, .text = "another event"},
-    {.type = 1, .prio = 1, .text = "something happened!"},
-    {.type = 2, .prio = 0, .text = "once more..."},
-    {.type = 2, .prio = 0, .text = "more again..."},
-    {.type = 1, .prio = 1, .text = "oops. it happened again"},
-};
 
 static const char *s_json_header =
     "Content-Type: application/json\r\n"
@@ -65,12 +50,6 @@ static const char *s_ssl_key =
     "AwEHoUQDQgAEc0kEuTh3de5VHjSPupKfVmLtHMbhCIvyU46YWwpnSQ9XFL4ZszPf\n"
     "6YbyU/ZGtdGfbaGYYJwatKNMX00OIwtb8A==\n"
     "-----END EC PRIVATE KEY-----\n";
-
-static int event_next(int no, struct event *e) {
-  if (no < 0 || no >= (int) (sizeof(s_events) / sizeof(s_events[0]))) return 0;
-  *e = s_events[no];
-  return no + 1;
-}
 
 // This is for newlib and TLS (mbedTLS)
 uint64_t mg_now(void) {
@@ -170,22 +149,34 @@ static void handle_stats_get(struct mg_connection *c) {
 
 static size_t print_events(void (*out)(char, void *), void *ptr, va_list *ap) {
   size_t len = 0;
-  struct event e;
-  int no = 0;
-  while ((no = event_next(no, &e)) != 0) {
+  int page_number = va_arg(*ap, int);
+  int start = (page_number - 1) * EVENTS_PER_PAGE;
+  int end = start + EVENTS_PER_PAGE;
+
+  for (int i = start; i < end && i < events_no; i++) {
     len += mg_xprintf(out, ptr, "%s{%m:%lu,%m:%d,%m:%d,%m:%m}",  //
                       len == 0 ? "" : ",",                       //
-                      MG_ESC("time"), e.timestamp,               //
-                      MG_ESC("type"), e.type,                    //
-                      MG_ESC("prio"), e.prio,                    //
-                      MG_ESC("text"), MG_ESC(e.text));
+                      MG_ESC("time"), events[i].timestamp,       //
+                      MG_ESC("type"), events[i].type,            //
+                      MG_ESC("prio"), events[i].prio,            //
+                      MG_ESC("text"), MG_ESC(events[i].text));
   }
-  (void) ap;
+
   return len;
 }
 
-static void handle_events_get(struct mg_connection *c) {
-  mg_http_reply(c, 200, s_json_header, "[%M]", print_events);
+static void handle_events_get(struct mg_connection *c, struct mg_str query) {
+  int page_number;
+  bool is_last_page;
+
+  // query is represented by 'page=<page_id>'
+  page_number = atoi(query.ptr + 5);
+  if (page_number > events_no / EVENTS_PER_PAGE + 1 || page_number < 1)
+    page_number = 1;
+
+  mg_http_reply(c, 200, s_json_header, "{%m:[%M], %m:%d}", MG_ESC("arr"),
+                print_events, page_number,
+                MG_ESC("totalCount"), events_no);
 }
 
 static void handle_settings_set(struct mg_connection *c, struct mg_str body) {
@@ -240,7 +231,7 @@ static void fn(struct mg_connection *c, int ev, void *ev_data, void *fn_data) {
     } else if (mg_http_match_uri(hm, "/api/stats/get")) {
       handle_stats_get(c);
     } else if (mg_http_match_uri(hm, "/api/events/get")) {
-      handle_events_get(c);
+      handle_events_get(c, hm->query);
     } else if (mg_http_match_uri(hm, "/api/settings/get")) {
       handle_settings_get(c);
     } else if (mg_http_match_uri(hm, "/api/settings/set")) {
