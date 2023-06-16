@@ -127,7 +127,7 @@ jobs:
     steps:
     - uses: actions/checkout@v3
       with: { fetch-depth: 2 }
-    - run: if ./test/match_changed_files.sh "^src|examples/stm32/nucleo-f7" ; then echo GO=1 >> $GITHUB_ENV ; fi
+    - run: if ./test/match_changed_files.sh "^src|examples/device-dashboard|examples/stm32/nucleo-f7" ; then echo GO=1 >> $GITHUB_ENV ; fi
     - if: ${{ env.GO == 1 }}
       run: sudo apt -y update; sudo apt -y install gcc-arm-none-eabi
     - if: ${{ env.GO == 1 }}
@@ -142,7 +142,7 @@ jobs:
     steps:
     - uses: actions/checkout@v3
       with: { fetch-depth: 2 }
-    - run: if ./test/match_changed_files.sh "^src|examples/stm32/nucleo-f4" ; then echo GO=1 >> $GITHUB_ENV ; fi
+    - run: if ./test/match_changed_files.sh "^src|examples/device-dashboard|examples/stm32/nucleo-f4" ; then echo GO=1 >> $GITHUB_ENV ; fi
     - if: ${{ env.GO == 1 }}
       run: sudo apt -y update; sudo apt -y install gcc-arm-none-eabi
     - if: ${{ env.GO == 1 }}
@@ -155,7 +155,7 @@ jobs:
     steps:
     - uses: actions/checkout@v3
       with: { fetch-depth: 3 }
-    - run: if ./test/match_changed_files.sh "^src|examples/stm32/nucleo-h7" ; then echo GO=1 >> $GITHUB_ENV ; fi
+    - run: if ./test/match_changed_files.sh "^src|examples/device-dashboard|examples/stm32/nucleo-h7" ; then echo GO=1 >> $GITHUB_ENV ; fi
     - if: ${{ env.GO == 1 }}
       run: sudo apt -y update; sudo apt -y install gcc-arm-none-eabi
     - if: ${{ env.GO == 1 }}
@@ -166,7 +166,7 @@ jobs:
     steps:
     - uses: actions/checkout@v3
       with: { fetch-depth: 2 }
-    - run: if ./test/match_changed_files.sh "^src|examples/ti/ek-tm4c" ; then echo GO=1 >> $GITHUB_ENV ; fi
+    - run: if ./test/match_changed_files.sh "^src|examples/device-dashboard|examples/ti/ek-tm4c" ; then echo GO=1 >> $GITHUB_ENV ; fi
     - if: ${{ env.GO == 1 }}
       run: sudo apt -y update; sudo apt -y install gcc-arm-none-eabi
     - run: echo GO=0 > $GITHUB_ENV ; if ./test/match_changed_files.sh "^src|examples/ti/ek-tm4c1294xl-baremetal" ; then echo GO=1 > $GITHUB_ENV ; fi
@@ -181,7 +181,7 @@ jobs:
     steps:
     - uses: actions/checkout@v3
       with: { fetch-depth: 2 }
-    - run: if ./test/match_changed_files.sh "^src|examples/rp2040/pico-w5500" ; then echo GO=1 >> $GITHUB_ENV ; fi
+    - run: if ./test/match_changed_files.sh "^src|examples/device-dashboard|examples/rp2040/pico-w5500" ; then echo GO=1 >> $GITHUB_ENV ; fi
     - if: ${{ env.GO == 1 }}
       run: sudo apt -y update; sudo apt -y install gcc-arm-none-eabi
     - if: ${{ env.GO == 1 }}

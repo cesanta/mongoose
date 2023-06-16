@@ -149,8 +149,8 @@ static void handle_stats_get(struct mg_connection *c) {
 
 static size_t print_events(void (*out)(char, void *), void *ptr, va_list *ap) {
   size_t len = 0;
-  int page_number = va_arg(*ap, int);
-  int start = (page_number - 1) * EVENTS_PER_PAGE;
+  int pageno = va_arg(*ap, int);
+  int start = (pageno - 1) * EVENTS_PER_PAGE;
   int end = start + EVENTS_PER_PAGE;
 
   for (int i = start; i < end && i < events_no; i++) {
@@ -166,17 +166,13 @@ static size_t print_events(void (*out)(char, void *), void *ptr, va_list *ap) {
 }
 
 static void handle_events_get(struct mg_connection *c, struct mg_str query) {
-  int page_number;
-  bool is_last_page;
-
+  int pageno;
   // query is represented by 'page=<page_id>'
-  page_number = atoi(query.ptr + 5);
-  if (page_number > events_no / EVENTS_PER_PAGE + 1 || page_number < 1)
-    page_number = 1;
+  pageno = atoi(query.ptr + 5);
+  if (pageno > events_no / EVENTS_PER_PAGE + 1 || pageno < 1) pageno = 1;
 
   mg_http_reply(c, 200, s_json_header, "{%m:[%M], %m:%d}", MG_ESC("arr"),
-                print_events, page_number,
-                MG_ESC("totalCount"), events_no);
+                print_events, pageno, MG_ESC("totalCount"), events_no);
 }
 
 static void handle_settings_set(struct mg_connection *c, struct mg_str body) {
