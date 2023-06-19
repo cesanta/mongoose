@@ -7817,9 +7817,11 @@ static void rx_icmp(struct mg_tcpip_if *ifp, struct pkt *pkt) {
 
 static void rx_dhcp_client(struct mg_tcpip_if *ifp, struct pkt *pkt) {
   uint32_t ip = 0, gw = 0, mask = 0;
+  // perform size check first, then access fields
   uint8_t *p = pkt->dhcp->options,
           *end = (uint8_t *) &pkt->raw.ptr[pkt->raw.len];
   if (end < (uint8_t *) (pkt->dhcp + 1)) return;
+  if (memcmp(&pkt->dhcp->xid, ifp->mac + 2, sizeof(pkt->dhcp->xid))) return;
   while (p + 1 < end && p[0] != 255) {  // Parse options
     if (p[0] == 1 && p[1] == sizeof(ifp->mask) && p + 6 < end) {  // Mask
       memcpy(&mask, p + 2, sizeof(mask));
@@ -7995,8 +7997,8 @@ long mg_io_send(struct mg_connection *c, const void *buf, size_t len) {
     size_t max_headers_len = 14 + 24 /* max IP */ + 60 /* max TCP */;
     if (len + max_headers_len > ifp->tx.len)
       len = ifp->tx.len - max_headers_len;
-    if (tx_tcp(ifp, s->mac, rem_ip, TH_PUSH | TH_ACK, c->loc.port,
-               c->rem.port, mg_htonl(s->seq), mg_htonl(s->ack), buf, len) > 0) {
+    if (tx_tcp(ifp, s->mac, rem_ip, TH_PUSH | TH_ACK, c->loc.port, c->rem.port,
+               mg_htonl(s->seq), mg_htonl(s->ack), buf, len) > 0) {
       s->seq += (uint32_t) len;
       if (s->ttype == MIP_TTYPE_ACK) settmout(c, MIP_TTYPE_KEEPALIVE);
     } else {
@@ -8256,7 +8258,7 @@ static void mg_tcpip_poll(struct mg_tcpip_if *ifp, uint64_t uptime_ms) {
   if (expired_1000ms && ifp->lease_expire > 0 && ifp->ip != 0 &&
       ifp->now + 30 * 60 * 1000 > ifp->lease_expire &&
       ((ifp->now / 1000) % 10) == 0) {
-    tx_dhcp_request(ifp, ifp->gwmac, ifp->ip, ifp->gw); // Renew DHCP lease
+    tx_dhcp_request(ifp, ifp->gwmac, ifp->ip, ifp->gw);  // Renew DHCP lease
   }
 
   // Read data from the network
