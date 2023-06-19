@@ -13,9 +13,6 @@ struct user {
   const char *name, *pass, *access_token;
 };
 
-int events_no;
-struct ui_event events[MAX_EVENTS_NO];
-
 // Settings
 struct settings {
   bool log_enabled;
@@ -54,6 +51,23 @@ static const char *s_ssl_key =
 // This is for newlib and TLS (mbedTLS)
 uint64_t mg_now(void) {
   return mg_millis() + s_boot_timestamp;
+}
+
+int ui_event_next(int no, struct ui_event *e) {
+  if (no < 0 || no >= MAX_EVENTS_NO)
+    return 0;
+
+  srand(no);
+  e->type = (uint8_t) rand() % 4;
+  e->prio = (uint8_t) rand() % 3;
+  e->timestamp = (unsigned long) (mg_now() - 86400 * 1000 /* one day back */ +
+                              no * 300 * 1000 /* 5 mins between alerts */ +
+                              1000 * (rand() % 300) /* randomize event time */) /
+             1000;
+             
+  mg_snprintf(e->text, MAX_EVENT_TEXT_SIZE,
+              "event#%d", no);
+  return no + 1;
 }
 
 // SNTP connection event handler. When we get a response from an SNTP server,
@@ -149,30 +163,29 @@ static void handle_stats_get(struct mg_connection *c) {
 
 static size_t print_events(void (*out)(char, void *), void *ptr, va_list *ap) {
   size_t len = 0;
-  int pageno = va_arg(*ap, int);
-  int start = (pageno - 1) * EVENTS_PER_PAGE;
-  int end = start + EVENTS_PER_PAGE;
+  struct ui_event ev;
+  int pageno = va_arg(*ap, unsigned);
+  int no = (pageno - 1) * EVENTS_PER_PAGE;
+  int end = no + EVENTS_PER_PAGE;
 
-  for (int i = start; i < end && i < events_no; i++) {
+  while ((no = ui_event_next(no, &ev)) != 0 && no <= end) {
     len += mg_xprintf(out, ptr, "%s{%m:%lu,%m:%d,%m:%d,%m:%m}",  //
                       len == 0 ? "" : ",",                       //
-                      MG_ESC("time"), events[i].timestamp,       //
-                      MG_ESC("type"), events[i].type,            //
-                      MG_ESC("prio"), events[i].prio,            //
-                      MG_ESC("text"), MG_ESC(events[i].text));
+                      MG_ESC("time"), ev.timestamp,       //
+                      MG_ESC("type"), ev.type,            //
+                      MG_ESC("prio"), ev.prio,            //
+                      MG_ESC("text"), MG_ESC(ev.text));
   }
 
   return len;
 }
 
 static void handle_events_get(struct mg_connection *c, struct mg_str query) {
-  int pageno;
-  // query is represented by 'page=<page_id>'
-  pageno = atoi(query.ptr + 5);
-  if (pageno > events_no / EVENTS_PER_PAGE + 1 || pageno < 1) pageno = 1;
+  int pageno = atoi(query.ptr + 5); // query is represented by 'page=<page_id>'
 
+  if (pageno > MAX_EVENTS_NO / EVENTS_PER_PAGE + 1 || pageno < 1) pageno = 1;
   mg_http_reply(c, 200, s_json_header, "{%m:[%M], %m:%d}", MG_ESC("arr"),
-                print_events, pageno, MG_ESC("totalCount"), events_no);
+                print_events, pageno, MG_ESC("totalCount"), MAX_EVENTS_NO);
 }
 
 static void handle_settings_set(struct mg_connection *c, struct mg_str body) {

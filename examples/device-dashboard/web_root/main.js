@@ -77,7 +77,7 @@ function Events({}) {
 <tr>
   <${Td} text=${['power', 'hardware', 'tier3', 'tier4'][e.type]} />
   <${Td} text=${html`<${Prio} prio=${e.prio}/>`} />
-  <${Td} text=${e.time || '1970-01-01'} />
+  <${Td} text=${e.time ? (new Date(e.time * 1000)).toLocaleString() : '1970-01-01'} />
   <${Td} text=${e.text} />
 <//>`;
 
