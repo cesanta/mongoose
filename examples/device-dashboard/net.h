@@ -13,19 +13,15 @@
 #endif
 
 #define MAX_DEVICE_NAME 40
-#define MAX_EVENTS_NO 1000
+#define MAX_EVENTS_NO 400
 #define MAX_EVENT_TEXT_SIZE 10
 #define EVENTS_PER_PAGE 20
 
 // Event log entry
 struct ui_event {
-  int type, prio;
+  uint8_t type, prio;
   unsigned long timestamp;
   char text[10];
 };
 
-extern int events_no;
-extern struct ui_event events[MAX_EVENTS_NO];
-
-void ui_event_next();
 void web_init(struct mg_mgr *mgr);
