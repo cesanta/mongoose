@@ -78,6 +78,13 @@ __attribute__((weak)) int _read(int file, char *ptr, int len)
   return len;
 }
 
+#ifdef UART_DEBUG // For internal testing purposes
+#include "hal.h"
+int _write(int file, char *ptr, int len) {
+  if (file == 1) uart_write_buf(USART1, ptr, len);
+  return len;
+}
+#else
 __attribute__((weak)) int _write(int file, char *ptr, int len)
 {
 //  (void)file;
@@ -89,9 +96,9 @@ __attribute__((weak)) int _write(int file, char *ptr, int len)
 //  }
 	extern UART_HandleTypeDef huart3;
 	if (file == 1) HAL_UART_Transmit(&huart3, (uint8_t *)ptr, len, 1000);
-
   return len;
 }
+#endif
 
 int _close(int file)
 {

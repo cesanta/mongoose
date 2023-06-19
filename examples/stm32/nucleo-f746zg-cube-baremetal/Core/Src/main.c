@@ -142,6 +142,7 @@ int main(void)
   MX_RNG_Init();
   MX_USART3_UART_Init();
   /* USER CODE BEGIN 2 */
+  test_init();  // for internal testing purposes only
   MG_INFO(("Starting, CPU freq %g MHz", (double) SystemCoreClock / 1000000));
 
   struct mg_mgr mgr;        // Initialise

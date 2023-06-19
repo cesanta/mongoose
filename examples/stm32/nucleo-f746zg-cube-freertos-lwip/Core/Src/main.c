@@ -113,6 +113,7 @@ int main(void)
   MX_RNG_Init();
   MX_USART3_UART_Init();
   /* USER CODE BEGIN 2 */
+  test_init();  // for internal testing purposes only
 
   /* USER CODE END 2 */
 
