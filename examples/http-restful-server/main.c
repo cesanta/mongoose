@@ -15,14 +15,15 @@
 #include "mongoose.h"
 
 static const char *s_http_addr = "http://0.0.0.0:8000";    // HTTP port
-static const char *s_https_addr = "https://0.0.0.0:443";  // HTTPS port
+static const char *s_https_addr = "https://0.0.0.0:8443";  // HTTPS port
 static const char *s_root_dir = ".";
 
 // We use the same event handler function for HTTP and HTTPS connections
 // fn_data is NULL for plain HTTP, and non-NULL for HTTPS
 static void fn(struct mg_connection *c, int ev, void *ev_data, void *fn_data) {
   if (ev == MG_EV_ACCEPT && fn_data != NULL) {
-    struct mg_tls_session_opts opts = {0};
+    struct mg_tls_session_opts opts;
+    memset(&opts, 0, sizeof(opts));
     mg_tls_init(c, &opts);
   } else if (ev == MG_EV_HTTP_MSG) {
     struct mg_http_message *hm = (struct mg_http_message *) ev_data;
@@ -59,8 +60,8 @@ int main(void) {
   };
   mg_log_set(MG_LL_DEBUG);                      // Set log level
   mg_mgr_init(&mgr);                            // Initialise event manager
-  if(!(mgr.tls_ctx = mg_tls_ctx_init(&opts)))         // Create TLS context
-    return 1;
+  mgr.tls_ctx = mg_tls_ctx_init(&opts);         // Create TLS context
+
   mg_http_listen(&mgr, s_http_addr, fn, NULL);  // Create HTTP listener
   mg_http_listen(&mgr, s_https_addr, fn, (void *) 1);  // HTTPS listener
   for (;;) mg_mgr_poll(&mgr, 1000);                    // Infinite event loop

@@ -615,7 +615,7 @@ static void test_mqtt(void) {
 }
 
 static void eh1(struct mg_connection *c, int ev, void *ev_data, void *fn_data) {
-  struct mg_tls_opts *topts = (struct mg_tls_opts *) fn_data;
+  struct mg_tls_session_opts *topts = (struct mg_tls_session_opts *) fn_data;
   if (ev == MG_EV_ACCEPT && topts != NULL) mg_tls_init(c, topts);
   if (ev == MG_EV_HTTP_MSG) {
     struct mg_http_message *hm = (struct mg_http_message *) ev_data;
@@ -708,17 +708,20 @@ static int fetch(struct mg_mgr *mgr, char *buf, const char *url,
   ASSERT(c != NULL);
   if (mg_url_is_ssl(url)) {
     struct mg_tls_opts opts;
+    struct mg_tls_session_opts sopts;
     struct mg_str host = mg_url_host(url);
     memset(&opts, 0, sizeof(opts));
+    memset(&sopts, 0, sizeof(sopts));
     opts.ca = "./test/data/ca.pem";
     if (strstr(url, "127.0.0.1") != NULL) {
       // Local connection, use self-signed certificates
       opts.ca = "./test/data/ss_ca.pem";
       opts.cert = "./test/data/ss_client.pem";
     } else {
-      opts.srvname = host;
+      sopts.srvname = host;
     }
-    mg_tls_init(c, &opts);
+    mgr->tls_ctx = mg_tls_ctx_init(&opts);
+    mg_tls_init(c, &sopts);
     if (c->tls == NULL) fd.closed = 1;
   }
   // c->is_hexdumping = 1;
@@ -729,6 +732,7 @@ static int fetch(struct mg_mgr *mgr, char *buf, const char *url,
   for (i = 0; i < 50 && buf[0] == '\0'; i++) mg_mgr_poll(mgr, 1);
   if (!fd.closed) c->is_closing = 1;
   mg_mgr_poll(mgr, 1);
+  if (mg_url_is_ssl(url)) mg_tls_ctx_free(mgr->tls_ctx);
   return fd.code;
 }
 
@@ -1150,18 +1154,20 @@ static void test_tls(void) {
                              "./test/data/ss_server.pem",
                              "./test/data/ss_server.pem",
                              NULL,
-                             {0, 0},
                              NULL};
+  struct mg_tls_session_opts sopts = {NULL, 0};
   struct mg_mgr mgr;
   struct mg_connection *c;
   const char *url = "https://127.0.0.1:12347";
   char buf[FETCH_BUF_SIZE];
   mg_mgr_init(&mgr);
-  c = mg_http_listen(&mgr, url, eh1, (void *) &opts);
+  mgr.tls_ctx = mg_tls_ctx_init(&opts);
+  c = mg_http_listen(&mgr, url, eh1, (void *) &sopts);
   ASSERT(c != NULL);
   ASSERT(fetch(&mgr, buf, url, "GET /a.txt HTTP/1.0\n\n") == 200);
   // MG_INFO(("%s", buf));
   ASSERT(cmpbody(buf, "hello\n") == 0);
+  mg_tls_ctx_free(mgr.tls_ctx);
   mg_mgr_free(&mgr);
   ASSERT(mgr.conns == NULL);
 #endif
