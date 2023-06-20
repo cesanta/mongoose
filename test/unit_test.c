@@ -1211,10 +1211,12 @@ static void test_http_client(void) {
     const char *url = "https://cesanta.com";
     struct mg_str host = mg_url_host(url);
     struct mg_tls_opts opts = {
-        "./test/data/ca.pem", NULL, NULL, NULL, NULL, host, NULL};
+        "./test/data/ca.pem", NULL, NULL, NULL, NULL, NULL};
+    struct mg_tls_session_opts sopts = {host};
     c = mg_http_connect(&mgr, url, f3, &ok);
     ASSERT(c != NULL);
-    mg_tls_init(c, &opts);
+    mgr.tls_ctx = mg_tls_ctx_init(&opts);
+    mg_tls_init(c, &sopts);
     for (i = 0; i < 1500 && ok <= 0; i++) mg_mgr_poll(&mgr, 1000);
     ASSERT(ok == 200);
     c->is_closing = 1;
@@ -1222,25 +1224,28 @@ static void test_http_client(void) {
 
     // Test failed host validation
     ok = 0;
-    opts.srvname = mg_str("dummy");
+    sopts.srvname = mg_str("dummy");
     c = mg_http_connect(&mgr, url, f3, &ok);
     ASSERT(c != NULL);
-    mg_tls_init(c, &opts);
+    mg_tls_init(c, &sopts);
     for (i = 0; i < 500 && ok <= 0; i++) mg_mgr_poll(&mgr, 10);
     ASSERT(ok == 777);
     mg_mgr_poll(&mgr, 1);
 
     // Test host validation only (no CA, no cert)
     ok = 0;
-    opts.srvname = host;
+    sopts.srvname = host;
     opts.ca = NULL;
+    mg_tls_ctx_free(mgr.tls_ctx);
     c = mg_http_connect(&mgr, url, f3, &ok);
     ASSERT(c != NULL);
-    mg_tls_init(c, &opts);
+    mgr.tls_ctx = mg_tls_ctx_init(&opts);
+    mg_tls_init(c, &sopts);
     for (i = 0; i < 1500 && ok <= 0; i++) mg_mgr_poll(&mgr, 10);
     ASSERT(ok == 200);
     c->is_closing = 1;
     mg_mgr_poll(&mgr, 1);
+    mg_tls_ctx_free(mgr.tls_ctx);
   }
 #endif
 
