@@ -1,7 +1,15 @@
 #include "tls.h"
 
 #if !MG_ENABLE_MBEDTLS && !MG_ENABLE_OPENSSL && !MG_ENABLE_CUSTOM_TLS
-void mg_tls_init(struct mg_connection *c, const struct mg_tls_opts *opts) {
+void* mg_tls_ctx_init(const struct mg_tls_opts *opts) {
+  (void) opts;
+  MG_ERROR(("TLS is not enabled"));
+  return NULL;
+}
+void mg_tls_ctx_free(void *ctx) {
+  (void) ctx;
+}
+void mg_tls_init(struct mg_connection *c, struct mg_tls_session_opts *opts) {
   (void) opts;
   mg_error(c, "TLS is not enabled");
 }

@@ -29,4 +29,10 @@ clean:                    # Cleanup. Delete built program and all build artifact
 
 mbedtls:                  # Pull and build mbedTLS library
 	git clone --depth 1 -b v2.28.2 https://github.com/mbed-tls/mbedtls $@
-	$(MAKE) -C mbedtls/library
+
+ifeq ($(TLS), mbedtls)
+CFLAGS += -DMG_ENABLE_MBEDTLS=1 -Wno-conversion -Imbedtls/include
+CFLAGS += mbedtls/library/*.c
+$(PROG): mbedtls
+endif
+

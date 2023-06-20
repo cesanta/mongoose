@@ -15,18 +15,14 @@
 #include "mongoose.h"
 
 static const char *s_http_addr = "http://0.0.0.0:8000";    // HTTP port
-static const char *s_https_addr = "https://0.0.0.0:8443";  // HTTPS port
+static const char *s_https_addr = "https://0.0.0.0:443";  // HTTPS port
 static const char *s_root_dir = ".";
 
 // We use the same event handler function for HTTP and HTTPS connections
 // fn_data is NULL for plain HTTP, and non-NULL for HTTPS
 static void fn(struct mg_connection *c, int ev, void *ev_data, void *fn_data) {
   if (ev == MG_EV_ACCEPT && fn_data != NULL) {
-    struct mg_tls_opts opts = {
-        //.ca = "ca.pem",         // Uncomment to enable two-way SSL
-        .cert = "server.pem",     // Certificate PEM file
-        .certkey = "server.pem",  // This pem contains both cert and key
-    };
+    struct mg_tls_session_opts opts = {0};
     mg_tls_init(c, &opts);
   } else if (ev == MG_EV_HTTP_MSG) {
     struct mg_http_message *hm = (struct mg_http_message *) ev_data;
@@ -56,11 +52,19 @@ static void fn(struct mg_connection *c, int ev, void *ev_data, void *fn_data) {
 
 int main(void) {
   struct mg_mgr mgr;                            // Event manager
+  struct mg_tls_opts opts = {
+      //.ca = "ca.pem",         // Uncomment to enable two-way SSL
+      .cert = "server.pem",     // Certificate PEM file
+      .certkey = "server.pem",  // This pem contains both cert and key
+  };
   mg_log_set(MG_LL_DEBUG);                      // Set log level
   mg_mgr_init(&mgr);                            // Initialise event manager
+  if(!(mgr.tls_ctx = mg_tls_ctx_init(&opts)))         // Create TLS context
+    return 1;
   mg_http_listen(&mgr, s_http_addr, fn, NULL);  // Create HTTP listener
   mg_http_listen(&mgr, s_https_addr, fn, (void *) 1);  // HTTPS listener
   for (;;) mg_mgr_poll(&mgr, 1000);                    // Infinite event loop
+  mg_tls_ctx_free(mgr.tls_ctx);                        // Free TLS context
   mg_mgr_free(&mgr);
   return 0;
 }

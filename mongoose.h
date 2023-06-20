@@ -1339,11 +1339,16 @@ struct mg_tls_opts {
   const char *cert;       // Certificate
   const char *certkey;    // Certificate key
   const char *ciphers;    // Cipher list
-  struct mg_str srvname;  // If not empty, enables server name verification
   struct mg_fs *fs;       // FS API for reading certificate files
 };
 
-void mg_tls_init(struct mg_connection *, const struct mg_tls_opts *);
+struct mg_tls_session_opts {
+  struct mg_str srvname;  // If not empty, enables server name verification
+};
+
+void* mg_tls_ctx_init(const struct mg_tls_opts *);
+void mg_tls_ctx_free(void *ctx);
+void mg_tls_init(struct mg_connection *, struct mg_tls_session_opts *opts);
 void mg_tls_free(struct mg_connection *);
 long mg_tls_send(struct mg_connection *, const void *buf, size_t len);
 long mg_tls_recv(struct mg_connection *, void *buf, size_t len);
@@ -1360,15 +1365,22 @@ void mg_tls_handshake(struct mg_connection *);
 #include <mbedtls/debug.h>
 #include <mbedtls/net_sockets.h>
 #include <mbedtls/ssl.h>
+#include <mbedtls/ssl_ticket.h>
 
-struct mg_tls {
-  char *cafile;             // CA certificate path
+struct mg_tls_ctx {
   mbedtls_x509_crt ca;      // Parsed CA certificate
   mbedtls_x509_crt cert;    // Parsed certificate
-  mbedtls_ssl_context ssl;  // SSL/TLS context
-  mbedtls_ssl_config conf;  // SSL-TLS config
   mbedtls_pk_context pk;    // Private key context
+  mbedtls_ssl_ticket_context ticket_ctx; // Session tickets context
+  uint8_t have_ca:1;        // CA certificate is set
+  uint8_t have_cert:1;      // Certificate is set
 };
+
+struct mg_tls {
+  mbedtls_ssl_config conf;  // SSL-TLS config
+  struct mbedtls_ssl_context ssl; // SSL-TLS context
+};
+
 #endif
 
 
