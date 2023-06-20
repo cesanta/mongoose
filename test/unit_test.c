@@ -1155,7 +1155,7 @@ static void test_tls(void) {
                              "./test/data/ss_server.pem",
                              NULL,
                              NULL};
-  struct mg_tls_session_opts sopts = {NULL, 0};
+  struct mg_tls_session_opts sopts = {{NULL, 0}};
   struct mg_mgr mgr;
   struct mg_connection *c;
   const char *url = "https://127.0.0.1:12347";
