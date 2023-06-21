@@ -19,6 +19,7 @@
 /* Includes ------------------------------------------------------------------*/
 #include "main.h"
 #include "string.h"
+#include "cmsis_os.h"
 
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
@@ -70,6 +71,20 @@ RNG_HandleTypeDef hrng;
 
 UART_HandleTypeDef huart3;
 
+/* Definitions for Blinker */
+osThreadId_t BlinkerHandle;
+const osThreadAttr_t Blinker_attributes = {
+  .name = "Blinker",
+  .stack_size = 128 * 4,
+  .priority = (osPriority_t) osPriorityNormal,
+};
+/* Definitions for Server */
+osThreadId_t ServerHandle;
+const osThreadAttr_t Server_attributes = {
+  .name = "Server",
+  .stack_size = 2048 * 4,
+  .priority = (osPriority_t) osPriorityNormal,
+};
 /* USER CODE BEGIN PV */
 
 /* USER CODE END PV */
@@ -80,16 +95,15 @@ static void MX_GPIO_Init(void);
 static void MX_ETH_Init(void);
 static void MX_RNG_Init(void);
 static void MX_USART3_UART_Init(void);
+void blinker(void *argument);
+void server(void *argument);
+
 /* USER CODE BEGIN PFP */
 
 /* USER CODE END PFP */
 
 /* Private user code ---------------------------------------------------------*/
 /* USER CODE BEGIN 0 */
-uint64_t mg_millis(void) {  // Let Mongoose use our uptime function
-  return (uint64_t)HAL_GetTick();     // Return number of milliseconds since boot
-}
-
 void mg_random(void *buf, size_t len) {  // Use on-board RNG
   extern RNG_HandleTypeDef hrng;
   for (size_t n = 0; n < len; n += sizeof(uint32_t)) {
@@ -100,7 +114,6 @@ void mg_random(void *buf, size_t len) {  // Use on-board RNG
 }
 
 static void timer_fn(void *arg) {
-  HAL_GPIO_TogglePin(GPIOE, GPIO_PIN_1);   // Blink On-board yellow LED
   struct mg_tcpip_if *ifp = arg;                  // And show
   const char *names[] = {"down", "up", "ready"};  // network stats
   MG_INFO(("Ethernet: %s, IP: %M, rx:%u, tx:%u, dr:%u, er:%u",
@@ -145,34 +158,46 @@ int main(void)
   test_init();  // for internal testing purposes only
   MG_INFO(("Chip revision: %c, max cpu clock: %u MHz", chiprev(),
            (chiprev() == 'V') ? 480 : 400));
-  MG_INFO(("Starting, CPU freq %g MHz", (double) SystemCoreClock / 1000000));
-
-  struct mg_mgr mgr;        // Initialise
-  mg_mgr_init(&mgr);        // Mongoose event manager
-  mg_log_set(MG_LL_DEBUG);  // Set log level
-
-  // Initialise Mongoose network stack
-  // Specify MAC address, and IP/mask/GW in network byte order for static
-  // IP configuration. If IP/mask/GW are unset, DHCP is going to be used
-  struct mg_tcpip_driver_stm32h_data driver_data = {.mdc_cr = 4};
-  struct mg_tcpip_if mif = {.mac = GENERATE_LOCALLY_ADMINISTERED_MAC(),
-                            .driver = &mg_tcpip_driver_stm32h,
-                            .driver_data = &driver_data};
-  mg_tcpip_init(&mgr, &mif);
-  mg_timer_add(&mgr, BLINK_PERIOD_MS, MG_TIMER_REPEAT, timer_fn, &mif);
-
-  MG_INFO(("MAC: %M. Waiting for IP...", mg_print_mac, mif.mac));
-  while (mif.state != MG_TCPIP_STATE_READY) {
-    mg_mgr_poll(&mgr, 0);
-  }
-
-  MG_INFO(("Initialising application..."));
-  web_init(&mgr);
-
-  MG_INFO(("Starting event loop"));
 
   /* USER CODE END 2 */
 
+  /* Init scheduler */
+  osKernelInitialize();
+
+  /* USER CODE BEGIN RTOS_MUTEX */
+  /* add mutexes, ... */
+  /* USER CODE END RTOS_MUTEX */
+
+  /* USER CODE BEGIN RTOS_SEMAPHORES */
+  /* add semaphores, ... */
+  /* USER CODE END RTOS_SEMAPHORES */
+
+  /* USER CODE BEGIN RTOS_TIMERS */
+  /* start timers, add new ones, ... */
+  /* USER CODE END RTOS_TIMERS */
+
+  /* USER CODE BEGIN RTOS_QUEUES */
+  /* add queues, ... */
+  /* USER CODE END RTOS_QUEUES */
+
+  /* Create the thread(s) */
+  /* creation of Blinker */
+  BlinkerHandle = osThreadNew(blinker, NULL, &Blinker_attributes);
+
+  /* creation of Server */
+  ServerHandle = osThreadNew(server, NULL, &Server_attributes);
+
+  /* USER CODE BEGIN RTOS_THREADS */
+  /* add threads, ... */
+  /* USER CODE END RTOS_THREADS */
+
+  /* USER CODE BEGIN RTOS_EVENTS */
+  /* add events, ... */
+  /* USER CODE END RTOS_EVENTS */
+
+  /* Start scheduler */
+  osKernelStart();
+  /* We should never get here as control is now taken by the scheduler */
   /* Infinite loop */
   /* USER CODE BEGIN WHILE */
   while (1)
@@ -180,7 +205,6 @@ int main(void)
     /* USER CODE END WHILE */
 
     /* USER CODE BEGIN 3 */
-	mg_mgr_poll(&mgr, 0);
   }
   /* USER CODE END 3 */
 }
@@ -451,6 +475,85 @@ static void MX_GPIO_Init(void)
 /* USER CODE BEGIN 4 */
 
 /* USER CODE END 4 */
+
+/* USER CODE BEGIN Header_blinker */
+/**
+  * @brief  Function implementing the Blinker thread.
+  * @param  argument: Not used
+  * @retval None
+  */
+/* USER CODE END Header_blinker */
+void blinker(void *argument)
+{
+  /* USER CODE BEGIN 5 */
+	for (;;) {
+	    HAL_GPIO_TogglePin(GPIOE, GPIO_PIN_1);   // Blink On-board yellow LED
+	    osDelay((osKernelGetTickFreq() * BLINK_PERIOD_MS) / 1000U);
+	}
+	(void) argument;
+
+  /* USER CODE END 5 */
+}
+
+/* USER CODE BEGIN Header_server */
+/**
+* @brief Function implementing the Server thread.
+* @param argument: Not used
+* @retval None
+*/
+/* USER CODE END Header_server */
+void server(void *argument)
+{
+  /* USER CODE BEGIN server */
+	struct mg_mgr mgr;        // Initialise Mongoose event manager
+	mg_mgr_init(&mgr);        // and attach it to the interface
+	mg_log_set(MG_LL_DEBUG);  // Set log level
+
+	// Initialise Mongoose network stack
+	// Specify MAC address, and IP/mask/GW in network byte order for static
+	// IP configuration. If IP/mask/GW are unset, DHCP is going to be used
+	struct mg_tcpip_driver_stm32h_data driver_data = {.mdc_cr = 4};
+	struct mg_tcpip_if mif = {.mac = GENERATE_LOCALLY_ADMINISTERED_MAC(),
+	                          .driver = &mg_tcpip_driver_stm32h,
+	                          .driver_data = &driver_data};
+	mg_tcpip_init(&mgr, &mif);
+	mg_timer_add(&mgr, BLINK_PERIOD_MS, MG_TIMER_REPEAT, timer_fn, &mif);
+
+	MG_INFO(("MAC: %M. Waiting for IP...", mg_print_mac, mif.mac));
+	while (mif.state != MG_TCPIP_STATE_READY) {
+	    mg_mgr_poll(&mgr, 0);
+	}
+
+	MG_INFO(("Initialising application..."));
+  web_init(&mgr);
+
+	MG_INFO(("Starting event loop"));
+	for (;;) mg_mgr_poll(&mgr, 1);  // Infinite event loop
+	(void) argument;
+
+  /* USER CODE END server */
+}
+
+/**
+  * @brief  Period elapsed callback in non blocking mode
+  * @note   This function is called  when TIM6 interrupt took place, inside
+  * HAL_TIM_IRQHandler(). It makes a direct call to HAL_IncTick() to increment
+  * a global variable "uwTick" used as application time base.
+  * @param  htim : TIM handle
+  * @retval None
+  */
+void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim)
+{
+  /* USER CODE BEGIN Callback 0 */
+
+  /* USER CODE END Callback 0 */
+  if (htim->Instance == TIM6) {
+    HAL_IncTick();
+  }
+  /* USER CODE BEGIN Callback 1 */
+
+  /* USER CODE END Callback 1 */
+}
 
 /**
   * @brief  This function is executed in case of error occurrence.
