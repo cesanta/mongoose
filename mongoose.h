@@ -1628,7 +1628,7 @@ struct mg_tcpip_if {
   uint8_t gwmac[6];             // Router's MAC
   uint64_t now;                 // Current time
   uint64_t timer_1000ms;        // 1000 ms timer: for DHCP and link state
-  uint64_t lease_expire;        // Lease expiration time
+  uint64_t lease_expire;        // Lease expiration time, in ms
   uint16_t eport;               // Next ephemeral port
   volatile uint32_t ndrop;      // Number of received, but dropped frames
   volatile uint32_t nrecv;      // Number of received frames
@@ -1637,7 +1637,8 @@ struct mg_tcpip_if {
   uint8_t state;                // Current state
 #define MG_TCPIP_STATE_DOWN 0   // Interface is down
 #define MG_TCPIP_STATE_UP 1     // Interface is up
-#define MG_TCPIP_STATE_READY 2  // Interface is up and has IP
+#define MG_TCPIP_STATE_REQ 2    // Interface is up and has requested an IP
+#define MG_TCPIP_STATE_READY 3  // Interface is up and has an IP assigned
 };
 
 void mg_tcpip_init(struct mg_mgr *, struct mg_tcpip_if *);
