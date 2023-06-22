@@ -161,6 +161,8 @@ jobs:
       run: make -C test/cube test PROJECTS=../../examples/stm32/nucleo-f429zi-cube-baremetal VCON_API_KEY=${{secrets.VCON_API_KEY}} DEVICE=2
     - if: ${{ env.GO == 1 }}
       run: make -C test/cube test PROJECTS=../../examples/stm32/nucleo-f429zi-cube-freertos VCON_API_KEY=${{secrets.VCON_API_KEY}} DEVICE=2
+    - if: ${{ env.GO == 1 }}
+      run: make -C test/cube test PROJECTS=../../examples/stm32/nucleo-f429zi-cube-freertos-lwip VCON_API_KEY=${{secrets.VCON_API_KEY}} DEVICE=2
 
   test_h7:
     runs-on: ubuntu-latest
