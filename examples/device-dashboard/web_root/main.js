@@ -55,7 +55,7 @@ function Events({}) {
   const [page, setPage] = useState(1);
 
   const refresh = () =>
-    fetch('/api/events/get', {
+    fetch('/api/events/set', {
         method: 'POST', body: JSON.stringify({page: page}),
       }).then(r => r.json())
         .then(r => setEvents(r));
