@@ -180,10 +180,8 @@ static size_t print_events(void (*out)(char, void *), void *ptr, va_list *ap) {
   return len;
 }
 
-static void handle_events_get(struct mg_connection *c, struct mg_str query) {
-  int pageno = atoi(query.ptr + 5); // query is represented by 'page=<page_id>'
-
-  if (pageno > MAX_EVENTS_NO / EVENTS_PER_PAGE + 1 || pageno < 1) pageno = 1;
+static void handle_events_get(struct mg_connection *c, struct mg_http_message *hm) {
+  int pageno = mg_json_get_long(hm->body, "$.page", 1);
   mg_http_reply(c, 200, s_json_header, "{%m:[%M], %m:%d}", MG_ESC("arr"),
                 print_events, pageno, MG_ESC("totalCount"), MAX_EVENTS_NO);
 }
@@ -240,7 +238,7 @@ static void fn(struct mg_connection *c, int ev, void *ev_data, void *fn_data) {
     } else if (mg_http_match_uri(hm, "/api/stats/get")) {
       handle_stats_get(c);
     } else if (mg_http_match_uri(hm, "/api/events/get")) {
-      handle_events_get(c, hm->query);
+      handle_events_get(c, hm);
     } else if (mg_http_match_uri(hm, "/api/settings/get")) {
       handle_settings_get(c);
     } else if (mg_http_match_uri(hm, "/api/settings/set")) {

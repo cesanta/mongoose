@@ -54,7 +54,19 @@ function Events({}) {
   const [events, setEvents] = useState([]);
   const [page, setPage] = useState(1);
 
-  const refresh = () => fetch(`api/events/get?page=${page}`).then(r => r.json()).then(r => {console.log(r); setEvents(r)}).catch(e => console.log(e));
+  const refresh = () =>
+    fetch('/api/events/get',
+      {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          page: page
+        }),
+      }).then(r => r.json())
+        .then(r => setEvents(r));
+
   useEffect(refresh, [page]);
 
   useEffect(() => {
@@ -81,7 +93,32 @@ function Events({}) {
   <${Td} text=${e.text} />
 <//>`;
 
-  return html`
+return html`
+<div class="m-8 divide-y divide-gray-200 overflow-auto rounded bg-white">
+  <div class="font-semibold flex items-center text-gray-600 px-3 justify-between">
+    <div class="font-semibold flex items-center text-gray-600">
+      <div class="mr-4">EVENT LOG</div>
+    </div>
+    <${Pagination} currentPage=${page} setPageFn=${setPage} totalItems=400 itemsPerPage=20 />
+  <//>
+  <div class="inline-block min-w-full align-middle" style="max-height: 82vh; overflow: auto;">
+    <table class="min-w-full border-separate border-spacing-0">
+      <thead>
+        <tr>
+          <${Th} title="Type" />
+          <${Th} title="Prio" />
+          <${Th} title="Time" />
+          <${Th} title="Description" />
+        </tr>
+      </thead>
+      <tbody>
+        ${(events.arr ? events.arr : []).map(e => h(Event, {e}))}
+      </tbody>
+    </table>
+  <//>
+<//>`
+
+  /*return html`
 <div class="divide-y divide-gray-200 overflow-x-auto shadow-xl rounded-xl bg-white dark:bg-gray-700 my-3 mx-10">
   <div class="font-light flex items-center text-slate-600 px-4 py-2 justify-between">
     EVENT LOG
@@ -102,7 +139,7 @@ function Events({}) {
       </tbody>
     </table>
   <//>
-<//>`;
+<//>`;*/
 };
 
 function Chart({data}) {
@@ -247,7 +284,7 @@ const App = function({}) {
     <${Router} onChange=${ev => setUrl(ev.url)} history=${History.createHashHistory()} >
       <${Main} default=${true} />
       <${Settings} path="settings" />
-      <${Events} path="events">
+      <${Events} path="events" />
     <//>
   <//>
 <//>`;
