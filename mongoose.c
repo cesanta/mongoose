@@ -7712,19 +7712,24 @@ static void tx_udp(struct mg_tcpip_if *ifp, uint8_t *mac_dst, uint32_t ip_src,
 }
 
 static void tx_dhcp(struct mg_tcpip_if *ifp, uint8_t *mac_dst, uint32_t ip_src,
-                    uint32_t ip_dst, uint8_t *opts, size_t optslen) {
+                    uint32_t ip_dst, uint8_t *opts, size_t optslen,
+                    bool ciaddr) {
   // https://datatracker.ietf.org/doc/html/rfc2132#section-9.6
   struct dhcp dhcp = {1, 1, 6, 0, 0, 0, 0, 0, 0, 0, 0, {0}, 0, {0}};
   dhcp.magic = mg_htonl(0x63825363);
   memcpy(&dhcp.hwaddr, ifp->mac, sizeof(ifp->mac));
   memcpy(&dhcp.xid, ifp->mac + 2, sizeof(dhcp.xid));
   memcpy(&dhcp.options, opts, optslen);
+  if (ciaddr) dhcp.ciaddr = ip_src;
   tx_udp(ifp, mac_dst, ip_src, mg_htons(68), ip_dst, mg_htons(67), &dhcp,
          sizeof(dhcp));
 }
 
-static void tx_dhcp_request(struct mg_tcpip_if *ifp, uint8_t *mac_dst,
-                            uint32_t ip_src, uint32_t ip_dst) {
+static const uint8_t broadcast[] = {255, 255, 255, 255, 255, 255};
+
+// RFC-2131 #4.3.6, #4.4.1
+static void tx_dhcp_request_sel(struct mg_tcpip_if *ifp, uint32_t ip_req,
+                                uint32_t ip_srv) {
   uint8_t opts[] = {
       53, 1, 3,                 // Type: DHCP request
       55, 2, 1,   3,            // GW and mask
@@ -7733,20 +7738,30 @@ static void tx_dhcp_request(struct mg_tcpip_if *ifp, uint8_t *mac_dst,
       50, 4, 0,   0,   0,   0,  // Requested IP
       255                       // End of options
   };
-  memcpy(opts + 14, &ip_dst, sizeof(ip_dst));
-  memcpy(opts + 20, &ip_src, sizeof(ip_src));
-  tx_dhcp(ifp, mac_dst, ip_src, ip_dst, opts, sizeof(opts));
+  memcpy(opts + 14, &ip_srv, sizeof(ip_srv));
+  memcpy(opts + 20, &ip_req, sizeof(ip_req));
+  tx_dhcp(ifp, (uint8_t *) broadcast, 0, 0xffffffff, opts, sizeof(opts), false);
+  MG_DEBUG(("DHCP req sent"));
+}
+
+// RFC-2131 #4.3.6, #4.4.5 (renewing: unicast, rebinding: bcast)
+static void tx_dhcp_request_re(struct mg_tcpip_if *ifp, uint8_t *mac_dst,
+                               uint32_t ip_src, uint32_t ip_dst) {
+  uint8_t opts[] = {
+      53, 1, 3,  // Type: DHCP request
+      255        // End of options
+  };
+  tx_dhcp(ifp, mac_dst, ip_src, ip_dst, opts, sizeof(opts), true);
   MG_DEBUG(("DHCP req sent"));
 }
 
 static void tx_dhcp_discover(struct mg_tcpip_if *ifp) {
-  uint8_t mac[6] = {255, 255, 255, 255, 255, 255};
   uint8_t opts[] = {
       53, 1, 1,     // Type: DHCP discover
       55, 2, 1, 3,  // Parameters: ip, mask
       255           // End of options
   };
-  tx_dhcp(ifp, mac, 0, 0xffffffff, opts, sizeof(opts));
+  tx_dhcp(ifp, (uint8_t *) broadcast, 0, 0xffffffff, opts, sizeof(opts), false);
   MG_DEBUG(("DHCP discover sent. Our MAC: %M", mg_print_mac, ifp->mac));
 }
 
@@ -7816,37 +7831,51 @@ static void rx_icmp(struct mg_tcpip_if *ifp, struct pkt *pkt) {
 }
 
 static void rx_dhcp_client(struct mg_tcpip_if *ifp, struct pkt *pkt) {
-  uint32_t ip = 0, gw = 0, mask = 0;
+  uint32_t ip = 0, gw = 0, mask = 0, lease = 0;
+  uint8_t msgtype = 0, state = ifp->state;
   // perform size check first, then access fields
   uint8_t *p = pkt->dhcp->options,
           *end = (uint8_t *) &pkt->raw.ptr[pkt->raw.len];
   if (end < (uint8_t *) (pkt->dhcp + 1)) return;
   if (memcmp(&pkt->dhcp->xid, ifp->mac + 2, sizeof(pkt->dhcp->xid))) return;
-  while (p + 1 < end && p[0] != 255) {  // Parse options
+  while (p + 1 < end && p[0] != 255) {  // Parse options RFC-1533 #9
     if (p[0] == 1 && p[1] == sizeof(ifp->mask) && p + 6 < end) {  // Mask
       memcpy(&mask, p + 2, sizeof(mask));
     } else if (p[0] == 3 && p[1] == sizeof(ifp->gw) && p + 6 < end) {  // GW
       memcpy(&gw, p + 2, sizeof(gw));
       ip = pkt->dhcp->yiaddr;
     } else if (p[0] == 51 && p[1] == 4 && p + 6 < end) {  // Lease
-      uint32_t lease = 0;
       memcpy(&lease, p + 2, sizeof(lease));
       lease = mg_ntohl(lease);
-      ifp->lease_expire = ifp->now + lease * 1000;
-      MG_INFO(("Lease: %u sec (%lld)", lease, ifp->lease_expire / 1000));
+    } else if (p[0] == 53 && p[1] == 1 && p + 6 < end) {  // Msg Type
+      msgtype = p[2];
     }
     p += p[1] + 2;
   }
-  if (ip && mask && gw && ifp->ip == 0) {
-    memcpy(ifp->gwmac, pkt->eth->src, sizeof(ifp->gwmac));
-    ifp->ip = ip, ifp->gw = gw, ifp->mask = mask;
-    ifp->state = MG_TCPIP_STATE_READY;
-    onstatechange(ifp);
-    tx_dhcp_request(ifp, pkt->eth->src, ip, pkt->dhcp->siaddr);
-    uint64_t rand;
-    mg_random(&rand, sizeof(rand));
-    srand((unsigned int) (rand + mg_millis()));
+  // Process message type, RFC-1533 (9.4); RFC-2131 (3.1, 4)
+  if (msgtype == 6 && ifp->ip == ip) {  // DHCPNACK, release IP
+    ifp->state = MG_TCPIP_STATE_UP, ifp->ip = 0;
+  } else if (msgtype == 2 && ifp->state == MG_TCPIP_STATE_UP && ip && gw &&
+             lease) {                                 // DHCPOFFER
+    tx_dhcp_request_sel(ifp, ip, pkt->dhcp->siaddr);  // select IP, (4.4.1)
+    ifp->state = MG_TCPIP_STATE_REQ;                  // REQUESTING state
+  } else if (msgtype == 5) {                          // DHCPACK
+    if (ifp->state == MG_TCPIP_STATE_REQ && ip && gw && lease) {  // got an IP
+      ifp->lease_expire = ifp->now + lease * 1000;
+      MG_INFO(("Lease: %u sec (%lld)", lease, ifp->lease_expire / 1000));
+      // assume DHCP server = router until ARP resolves
+      memcpy(ifp->gwmac, pkt->eth->src, sizeof(ifp->gwmac));
+      ifp->ip = ip, ifp->gw = gw, ifp->mask = mask;
+      ifp->state = MG_TCPIP_STATE_READY;  // BOUND state
+      uint64_t rand;
+      mg_random(&rand, sizeof(rand));
+      srand((unsigned int) (rand + mg_millis()));
+    } else if (ifp->state == MG_TCPIP_STATE_READY && ifp->ip == ip) {  // renew
+      ifp->lease_expire = ifp->now + lease * 1000;
+      MG_INFO(("Lease: %u sec (%lld)", lease, ifp->lease_expire / 1000));
+    }  // TODO(): accept provided T1/T2 and store server IP for renewal (4.4)
   }
+  if (ifp->state != state) onstatechange(ifp);
 }
 
 // Simple DHCP server that assigns a next IP address: ifp->ip + 1
@@ -8033,16 +8062,16 @@ static void read_conn(struct mg_connection *c, struct pkt *pkt) {
     if (s->ack == ack) {
       MG_VERBOSE(("ignoring duplicate pkt"));
     } else {
-      // TODO(cpq): peer sent us SEQ which we don't expect. Retransmit rather
-      // than close this connection
+      // TODO(cpq): peer sent us SEQ which we don't expect. Retransmit
+      // rather than close this connection
       mg_error(c, "SEQ != ACK: %x %x %x", seq, s->ack, ack);
     }
   } else if (io->size - io->len < pkt->pay.len &&
              !mg_iobuf_resize(io, io->len + pkt->pay.len)) {
     mg_error(c, "oom");
   } else {
-    // Copy TCP payload into the IO buffer. If the connection is plain text, we
-    // copy to c->recv. If the connection is TLS, this data is encrypted,
+    // Copy TCP payload into the IO buffer. If the connection is plain text,
+    // we copy to c->recv. If the connection is TLS, this data is encrypted,
     // therefore we copy that encrypted data to the s->raw iobuffer instead,
     // and then call mg_tls_recv() to decrypt it. NOTE: mg_tls_recv() will
     // call back mg_io_recv() which grabs raw data from s->raw
@@ -8080,7 +8109,8 @@ static void read_conn(struct mg_connection *c, struct pkt *pkt) {
         }
       }
     } else {
-      // Plain text connection, data is already in c->recv, trigger MG_EV_READ
+      // Plain text connection, data is already in c->recv, trigger
+      // MG_EV_READ
       mg_call(c, MG_EV_READ, &pkt->pay.len);
     }
   }
@@ -8189,7 +8219,6 @@ static void rx_ip6(struct mg_tcpip_if *ifp, struct pkt *pkt) {
 }
 
 static void mg_tcpip_rx(struct mg_tcpip_if *ifp, void *buf, size_t len) {
-  const uint8_t broadcast[] = {255, 255, 255, 255, 255, 255};
   struct pkt pkt;
   memset(&pkt, 0, sizeof(pkt));
   pkt.raw.ptr = (char *) buf;
@@ -8251,14 +8280,19 @@ static void mg_tcpip_poll(struct mg_tcpip_if *ifp, uint64_t uptime_ms) {
   }
   if (ifp->state == MG_TCPIP_STATE_DOWN) return;
 
-  // If IP not configured, send DHCP
-  if (ifp->ip == 0 && expired_1000ms) tx_dhcp_discover(ifp);
-
-  // If a DHCP lease is 30 min prior to expire, attempt to renew (every 10s)
-  if (expired_1000ms && ifp->lease_expire > 0 && ifp->ip != 0 &&
-      ifp->now + 30 * 60 * 1000 > ifp->lease_expire &&
-      ((ifp->now / 1000) % 10) == 0) {
-    tx_dhcp_request(ifp, ifp->gwmac, ifp->ip, ifp->gw);  // Renew DHCP lease
+  // DHCP RFC-2131 (4.4)
+  if (ifp->state == MG_TCPIP_STATE_UP && expired_1000ms) {
+    tx_dhcp_discover(ifp);  // INIT (4.4.1)
+  } else if (expired_1000ms && ifp->state == MG_TCPIP_STATE_READY &&
+             ifp->lease_expire > 0) {  // BOUND / RENEWING / REBINDING
+    if (ifp->now >= ifp->lease_expire) {
+      ifp->state = MG_TCPIP_STATE_UP, ifp->ip = 0;  // expired, release IP
+      onstatechange(ifp);
+    } else if (ifp->now + 30 * 60 * 1000 > ifp->lease_expire &&
+               ((ifp->now / 1000) % 60) == 0) {
+      // hack: 30 min before deadline, try to rebind (4.3.6) every min
+      tx_dhcp_request_re(ifp, (uint8_t *) broadcast, ifp->ip, 0xffffffff);
+    }  // TODO(): Handle T1 (RENEWING) and T2 (REBINDING) (4.4.5)
   }
 
   // Read data from the network
@@ -8339,8 +8373,8 @@ void mg_tcpip_init(struct mg_mgr *mgr, struct mg_tcpip_if *ifp) {
     if (ifp->ip == 0) ifp->enable_dhcp_client = true;
     memset(ifp->gwmac, 255, sizeof(ifp->gwmac));  // Set to broadcast
     mg_random(&ifp->eport, sizeof(ifp->eport));   // Random from 0 to 65535
-    ifp->eport |=
-        MG_EPHEMERAL_PORT_BASE;  // Random from MG_EPHEMERAL_PORT_BASE to 65535
+    ifp->eport |= MG_EPHEMERAL_PORT_BASE;         // Random from
+                                           // MG_EPHEMERAL_PORT_BASE to 65535
     if (ifp->tx.ptr == NULL || ifp->recv_queue.buf == NULL) MG_ERROR(("OOM"));
   }
 }
