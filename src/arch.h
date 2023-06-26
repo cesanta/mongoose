@@ -14,6 +14,7 @@
 #define MG_ARCH_RP2040 11      // Raspberry Pi RP2040
 #define MG_ARCH_ARMCC 12       // Keil MDK-Core with Configuration Wizard
 #define MG_ARCH_CMSIS_RTOS2 13 // CMSIS-RTOS API v2 (Keil RTX5, FreeRTOS)
+#define MG_ARCH_RTTHREAD 14    // RT-Thread RTOS
 
 #if !defined(MG_ARCH)
 #if defined(__unix__) || defined(__APPLE__)
@@ -35,6 +36,8 @@
 #define MG_ARCH MG_ARCH_RP2040
 #elif defined(__ARMCC_VERSION)
 #define MG_ARCH MG_ARCH_ARMCC
+#elif defined(__RTTHREAD__)
+#define MG_ARCH MG_ARCH_RTTHREAD
 #endif
 #endif  // !defined(MG_ARCH)
 

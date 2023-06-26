@@ -41,6 +41,7 @@ extern "C" {
 #define MG_ARCH_RP2040 11      // Raspberry Pi RP2040
 #define MG_ARCH_ARMCC 12       // Keil MDK-Core with Configuration Wizard
 #define MG_ARCH_CMSIS_RTOS2 13 // CMSIS-RTOS API v2 (Keil RTX5, FreeRTOS)
+#define MG_ARCH_RTTHREAD 14    // RT-Thread RTOS
 
 #if !defined(MG_ARCH)
 #if defined(__unix__) || defined(__APPLE__)
@@ -62,6 +63,8 @@ extern "C" {
 #define MG_ARCH MG_ARCH_RP2040
 #elif defined(__ARMCC_VERSION)
 #define MG_ARCH MG_ARCH_ARMCC
+#elif defined(__RTTHREAD__)
+#define MG_ARCH MG_ARCH_RTTHREAD
 #endif
 #endif  // !defined(MG_ARCH)
 
@@ -253,6 +256,30 @@ static inline int mg_mkdir(const char *path, mode_t mode) {
 #include <pico/stdlib.h>
 int mkdir(const char *, mode_t);
 #endif
+
+
+#if MG_ARCH == MG_ARCH_RTTHREAD
+
+#include <rtthread.h>
+#include <ctype.h>
+#include <errno.h>
+#include <fcntl.h>
+#include <sys/socket.h>
+#include <sys/select.h>
+#include <stdarg.h>
+#include <stdbool.h>
+#include <stdint.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <sys/types.h>
+#include <time.h>
+
+#ifndef MG_IO_SIZE
+#define MG_IO_SIZE 1460
+#endif
+
+#endif // MG_ARCH == MG_ARCH_RTTHREAD
 
 
 #if MG_ARCH == MG_ARCH_ARMCC || MG_ARCH == MG_ARCH_CMSIS_RTOS1 || \
