@@ -1,3 +1,5 @@
+//  NOTE: API calls must start with 'api/' in order to serve the app at any URI
+
 'use strict';
 import { h, render, useState, useEffect, useRef, html, Router } from  './bundle.js';
 import { Icons, Login, Setting, Button, Stat, tipColors, Colored, Notification, Pagination } from './components.js';
@@ -55,7 +57,7 @@ function Events({}) {
   const [page, setPage] = useState(1);
 
   const refresh = () =>
-    fetch('/api/events/set', {
+    fetch('api/events/get', {
         method: 'POST', body: JSON.stringify({page: page}),
       }).then(r => r.json())
         .then(r => setEvents(r));
@@ -109,30 +111,7 @@ return html`
       </tbody>
     </table>
   <//>
-<//>`
-
-  /*return html`
-<div class="divide-y divide-gray-200 overflow-x-auto shadow-xl rounded-xl bg-white dark:bg-gray-700 my-3 mx-10">
-  <div class="font-light flex items-center text-slate-600 px-4 py-2 justify-between">
-    EVENT LOG
-    <${Pagination} currentPage=${page} setPageFn=${setPage} totalItems=${events.totalCount} itemsPerPage=20 />
-  </div>
-  <div class="align-middle inline-block w-full">
-      <table class="w-full divide-y divide-gray-200 dark:divide-gray-700 text-sm md:text-base lg:text-lg">
-        <thead class="bg-gray-200 dark:bg-gray-700 text-gray-600 dark:text-gray-300">
-        <tr>
-          <${Th} title="Type" />
-          <${Th} title="Prio" />
-          <${Th} title="Time" />
-          <${Th} title="Description" />
-        </tr>
-      </thead>
-      <tbody class="bg-white dark:bg-gray-900 text-gray-800 dark:text-gray-200">
-        ${(events.arr ? events.arr : []).map(e => h(Event, {e}))}
-      </tbody>
-    </table>
-  <//>
-<//>`;*/
+<//>`;
 };
 
 function Chart({data}) {
@@ -196,7 +175,7 @@ function Main({}) {
     <div class="my-4 hx-24 bg-white border rounded-md shadow-lg" role="alert">
       <${DeveloperNote}
         text="This chart is an SVG image, generated on the fly from the
-        data returned by the /api/stats/get API call" />
+        data returned by the api/stats/get API call" />
     <//>
   <//>
 <//>`;
@@ -243,8 +222,8 @@ function Settings({}) {
         text="A variety of controls are pre-defined to ease the development:
           toggle button, dropdown select, input field with left and right
           addons. Device settings are received by calling
-          /api/settings/get API call, which returns settings JSON object.
-          Clicking on the save button calls /api/settings/set
+          api/settings/get API call, which returns settings JSON object.
+          Clicking on the save button calls api/settings/set
           API call" />
   <//>
 
