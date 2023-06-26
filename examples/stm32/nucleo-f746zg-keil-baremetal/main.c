@@ -36,6 +36,7 @@ int main(void) {
   mx_init();                // Setup clock and all peripherals configured in CubeMX
                                 // Initialise random number generator
                             // Initialise ethernet pins
+  test_init();  // for internal testing purposes only
   MG_INFO(("Starting, CPU freq %g MHz", (double) SystemCoreClock / 1000000));
 
   struct mg_mgr mgr;        // Initialise
