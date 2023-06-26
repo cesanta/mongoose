@@ -113,6 +113,8 @@ uint64_t mg_millis(void) {
   return (uint64_t)rt_time_get();
 #elif MG_ARCH == MG_ARCH_CMSIS_RTOS2
   return (uint64_t)((osKernelGetTickCount() * 1000) / osKernelGetTickFreq());
+#elif MG_ARCH == MG_ARCH_RTTHREAD
+  return (uint64_t) ((rt_tick_get() * 1000) / RT_TICK_PER_SECOND);
 #elif MG_ARCH == MG_ARCH_UNIX && defined(__APPLE__)
   // Apple CLOCK_MONOTONIC_RAW is equivalent to CLOCK_BOOTTIME on linux
   // Apple CLOCK_UPTIME_RAW is equivalent to CLOCK_MONOTONIC_RAW on linux
