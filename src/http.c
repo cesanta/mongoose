@@ -199,22 +199,24 @@ struct mg_str *mg_http_get_header(struct mg_http_message *h, const char *name) {
   return NULL;
 }
 
-static void mg_http_parse_headers(const char *s, const char *end,
+static bool mg_http_parse_headers(const char *s, const char *end,
                                   struct mg_http_header *h, int max_headers) {
   int i;
   for (i = 0; i < max_headers; i++) {
     struct mg_str k, v, tmp;
-    const char *he = skip(s, end, "\n", &tmp);
+    const char *he = skip(s, end, "\r\n", &tmp);
+    if (tmp.len == 0) break;  // empty header = EOH
     s = skip(s, he, ": \r\n", &k);
     s = skip(s, he, "\r\n", &v);
     if (k.len == tmp.len) continue;
     while (v.len > 0 && v.ptr[v.len - 1] == ' ') v.len--;  // Trim spaces
-    if (k.len == 0) break;
+    if (k.len == 0) return false;                          // empty name
     // MG_INFO(("--HH [%.*s] [%.*s] [%.*s]", (int) tmp.len - 1, tmp.ptr,
     //(int) k.len, k.ptr, (int) v.len, v.ptr));
     h[i].name = k;
     h[i].value = v;
   }
+  return true;
 }
 
 int mg_http_parse(const char *s, size_t len, struct mg_http_message *hm) {
@@ -246,8 +248,9 @@ int mg_http_parse(const char *s, size_t len, struct mg_http_message *hm) {
     hm->uri.len = (size_t) (qs - hm->uri.ptr);
   }
 
-  mg_http_parse_headers(s, end, hm->headers,
-                        sizeof(hm->headers) / sizeof(hm->headers[0]));
+  if (!mg_http_parse_headers(s, end, hm->headers,
+                             sizeof(hm->headers) / sizeof(hm->headers[0])))
+    return -1;  // error when parsing
   if ((cl = mg_http_get_header(hm, "Content-Length")) != NULL) {
     if (mg_to_size_t(*cl, &hm->body.len) == false) return -1;
     hm->message.len = (size_t) req_len + hm->body.len;
@@ -558,7 +561,7 @@ void mg_http_serve_file(struct mg_connection *c, struct mg_http_message *hm,
     int n, status = 200;
     char range[100];
     size_t r1 = 0, r2 = 0, cl = size;
-    
+
     // Handle Range header
     struct mg_str *rh = mg_http_get_header(hm, "Range");
     range[0] = '\0';
