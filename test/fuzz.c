@@ -22,6 +22,14 @@ int LLVMFuzzerTestOneInput(const uint8_t *data, size_t size) {
 
   struct mg_http_message hm;
   mg_http_parse((const char *) data, size, &hm);
+  mg_crc32(0, hm.method.ptr, hm.method.len);
+  mg_crc32(0, hm.uri.ptr, hm.uri.len);
+  mg_crc32(0, hm.uri.ptr, hm.uri.len);
+  for (size_t i = 0; i < sizeof(hm.headers) / sizeof(hm.headers[0]) ; i++) {
+    struct mg_str *k = &hm.headers[i].name, *v = &hm.headers[i].value;
+    mg_crc32(0, k->ptr, k->len);
+    mg_crc32(0, v->ptr, v->len);
+  }
   mg_http_parse(NULL, 0, &hm);
 
   struct mg_str body = mg_str_n((const char *) data, size);
@@ -34,8 +42,14 @@ int LLVMFuzzerTestOneInput(const uint8_t *data, size_t size) {
 
   struct mg_mqtt_message mm;
   mg_mqtt_parse(data, size, 0, &mm);
+  mg_crc32(0, mm.topic.ptr, mm.topic.len);
+  mg_crc32(0, mm.data.ptr, mm.data.len);
+  mg_crc32(0, mm.dgram.ptr, mm.dgram.len);
   mg_mqtt_parse(NULL, 0, 0, &mm);
   mg_mqtt_parse(data, size, 5, &mm);
+  mg_crc32(0, mm.topic.ptr, mm.topic.len);
+  mg_crc32(0, mm.data.ptr, mm.data.len);
+  mg_crc32(0, mm.dgram.ptr, mm.dgram.len);
   mg_mqtt_parse(NULL, 0, 5, &mm);
 
   mg_sntp_parse(data, size);
