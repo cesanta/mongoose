@@ -21,14 +21,15 @@ int LLVMFuzzerTestOneInput(const uint8_t *data, size_t size) {
   mg_dns_parse(NULL, 0, &dm);
 
   struct mg_http_message hm;
-  mg_http_parse((const char *) data, size, &hm);
-  mg_crc32(0, hm.method.ptr, hm.method.len);
-  mg_crc32(0, hm.uri.ptr, hm.uri.len);
-  mg_crc32(0, hm.uri.ptr, hm.uri.len);
-  for (size_t i = 0; i < sizeof(hm.headers) / sizeof(hm.headers[0]) ; i++) {
-    struct mg_str *k = &hm.headers[i].name, *v = &hm.headers[i].value;
-    mg_crc32(0, k->ptr, k->len);
-    mg_crc32(0, v->ptr, v->len);
+  if (mg_http_parse((const char *) data, size, &hm) > 0) {
+    mg_crc32(0, hm.method.ptr, hm.method.len);
+    mg_crc32(0, hm.uri.ptr, hm.uri.len);
+    mg_crc32(0, hm.uri.ptr, hm.uri.len);
+    for (size_t i = 0; i < sizeof(hm.headers) / sizeof(hm.headers[0]); i++) {
+      struct mg_str *k = &hm.headers[i].name, *v = &hm.headers[i].value;
+      mg_crc32(0, k->ptr, k->len);
+      mg_crc32(0, v->ptr, v->len);
+    }
   }
   mg_http_parse(NULL, 0, &hm);
 
@@ -41,15 +42,17 @@ int LLVMFuzzerTestOneInput(const uint8_t *data, size_t size) {
   mg_url_decode(NULL, 0, tmp, 1, 1);
 
   struct mg_mqtt_message mm;
-  mg_mqtt_parse(data, size, 0, &mm);
-  mg_crc32(0, mm.topic.ptr, mm.topic.len);
-  mg_crc32(0, mm.data.ptr, mm.data.len);
-  mg_crc32(0, mm.dgram.ptr, mm.dgram.len);
+  if (mg_mqtt_parse(data, size, 0, &mm) == MQTT_OK) {
+    mg_crc32(0, mm.topic.ptr, mm.topic.len);
+    mg_crc32(0, mm.data.ptr, mm.data.len);
+    mg_crc32(0, mm.dgram.ptr, mm.dgram.len);
+  }
   mg_mqtt_parse(NULL, 0, 0, &mm);
-  mg_mqtt_parse(data, size, 5, &mm);
-  mg_crc32(0, mm.topic.ptr, mm.topic.len);
-  mg_crc32(0, mm.data.ptr, mm.data.len);
-  mg_crc32(0, mm.dgram.ptr, mm.dgram.len);
+  if (mg_mqtt_parse(data, size, 5, &mm) == MQTT_OK) {
+    mg_crc32(0, mm.topic.ptr, mm.topic.len);
+    mg_crc32(0, mm.data.ptr, mm.data.len);
+    mg_crc32(0, mm.dgram.ptr, mm.dgram.len);
+  }
   mg_mqtt_parse(NULL, 0, 5, &mm);
 
   mg_sntp_parse(data, size);
@@ -73,9 +76,9 @@ int LLVMFuzzerTestOneInput(const uint8_t *data, size_t size) {
 
   if (size > 0) {
     struct mg_tcpip_if mif = {.ip = 0x01020304,
-                         .mask = 255,
-                         .gw = 0x01010101,
-                         .driver = &mg_tcpip_driver_mock};
+                              .mask = 255,
+                              .gw = 0x01010101,
+                              .driver = &mg_tcpip_driver_mock};
     struct mg_mgr mgr;
     mg_mgr_init(&mgr);
     mg_tcpip_init(&mgr, &mif);
