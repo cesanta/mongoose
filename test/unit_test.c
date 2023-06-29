@@ -2,6 +2,7 @@
 
 #include "float.h"  // For DBL_EPSILON and HUGE_VAL
 #include "math.h"
+#include "data/keydata.h"
 
 static int s_num_tests = 0;
 
@@ -313,7 +314,7 @@ static void test_sntp_server(const char *url) {
   struct mg_connection *c = NULL;
   int i;
 
-  mg_mgr_init(&mgr);
+  mg_mgr_init(&mgr, NULL);
   c = mg_sntp_connect(&mgr, url, sntp_cb, &ms);
   ASSERT(c != NULL);
   ASSERT(c->is_udp == 1);
@@ -443,7 +444,7 @@ static void test_mqtt_base(void) {
   struct mg_connection *c;
   const char *url = "mqtt://broker.hivemq.com:1883";
   int i;
-  mg_mgr_init(&mgr);
+  mg_mgr_init(&mgr, NULL);
 
   // Ping the client
   c = mg_mqtt_connect(&mgr, url, NULL, mqtt_cb, &test_data);
@@ -479,7 +480,7 @@ static void test_mqtt_ver(uint8_t mqtt_version) {
   struct mg_mqtt_prop properties[5];
   const char *url = "mqtt://broker.hivemq.com:1883";
   int i, retries;
-  mg_mgr_init(&mgr);
+  mg_mgr_init(&mgr, NULL);
 
   // Connect with empty client ID, no options, ergo no MQTT != 3.1.1
   if (mqtt_version != 4) goto connect_with_options;
@@ -533,7 +534,7 @@ connect_with_options:
   test_data.flags = 0;
   memset(mbuf, 0, sizeof(mbuf));
   memset(&opts, 0, sizeof(opts));
-  mg_mgr_init(&mgr);
+  mg_mgr_init(&mgr, NULL);
 
   opts.clean = true, opts.qos = 1, opts.retain = false, opts.keepalive = 20;
   opts.version = mqtt_version;
@@ -615,8 +616,6 @@ static void test_mqtt(void) {
 }
 
 static void eh1(struct mg_connection *c, int ev, void *ev_data, void *fn_data) {
-  struct mg_tls_session_opts *topts = (struct mg_tls_session_opts *) fn_data;
-  if (ev == MG_EV_ACCEPT && topts != NULL) mg_tls_init(c, topts);
   if (ev == MG_EV_HTTP_MSG) {
     struct mg_http_message *hm = (struct mg_http_message *) ev_data;
     MG_INFO(("[%.*s %.*s] message len %d", (int) hm->method.len, hm->method.ptr,
@@ -703,28 +702,27 @@ static int fetch(struct mg_mgr *mgr, char *buf, const char *url,
                  const char *fmt, ...) {
   struct fetch_data fd = {buf, 0, 0};
   int i;
-  struct mg_connection *c = mg_http_connect(mgr, url, fcb, &fd);
   va_list ap;
-  ASSERT(c != NULL);
-  if (mg_url_is_ssl(url)) {
+  if (mg_url_is_ssl(url) && mgr->tls_ctx == NULL) {
     struct mg_tls_opts opts;
     struct mg_tls_session_opts sopts;
     struct mg_str host = mg_url_host(url);
     memset(&opts, 0, sizeof(opts));
     memset(&sopts, 0, sizeof(sopts));
-    opts.ca = "./test/data/ca.pem";
+    opts.client_ca = (struct mg_str){ (char*)ca_pem, ca_pem_len };
     if (strstr(url, "127.0.0.1") != NULL) {
       // Local connection, use self-signed certificates
-      opts.ca = "./test/data/ss_ca.pem";
-      opts.cert = "./test/data/ss_client.pem";
+      opts.client_ca = (struct mg_str){ (char*)ss_ca_pem, ss_ca_pem_len };
+      opts.server_cert = (struct mg_str){ (char*)ss_server_pem, ss_server_pem_len };
     } else {
       sopts.srvname = host;
     }
     mgr->tls_ctx = mg_tls_ctx_init(&opts);
-    mg_tls_init(c, &sopts);
-    if (c->tls == NULL) fd.closed = 1;
+    ASSERT(mgr->tls_ctx != NULL);
   }
   // c->is_hexdumping = 1;
+  struct mg_connection *c = mg_http_connect(mgr, url, fcb, &fd);
+  ASSERT(c != NULL);
   va_start(ap, fmt);
   mg_vprintf(c, fmt, &ap);
   va_end(ap);
@@ -732,7 +730,6 @@ static int fetch(struct mg_mgr *mgr, char *buf, const char *url,
   for (i = 0; i < 50 && buf[0] == '\0'; i++) mg_mgr_poll(mgr, 1);
   if (!fd.closed) c->is_closing = 1;
   mg_mgr_poll(mgr, 1);
-  if (mg_url_is_ssl(url)) mg_tls_ctx_free(mgr->tls_ctx);
   return fd.code;
 }
 
@@ -808,7 +805,7 @@ static void test_ws(void) {
   struct mg_mgr mgr;
   int i, done = 0;
 
-  mg_mgr_init(&mgr);
+  mg_mgr_init(&mgr, NULL);
   ASSERT(mg_http_listen(&mgr, url, eh1, NULL) != NULL);
   mg_ws_connect(&mgr, url, wcb, &done, "%s", "Sec-WebSocket-Protocol: meh\r\n");
   for (i = 0; i < 30; i++) mg_mgr_poll(&mgr, 1);
@@ -841,7 +838,7 @@ static void test_http_server(void) {
   const char *url = "http://127.0.0.1:12346";
   char buf[FETCH_BUF_SIZE];
 
-  mg_mgr_init(&mgr);
+  mg_mgr_init(&mgr, NULL);
   mg_http_listen(&mgr, url, eh1, NULL);
 
   ASSERT(fetch(&mgr, buf, url, "GET /a.txt HTTP/1.0\n\n") == 200);
@@ -1126,7 +1123,7 @@ static void test_http_404(void) {
   const char *url = "http://127.0.0.1:22343";
   char buf[FETCH_BUF_SIZE];
 
-  mg_mgr_init(&mgr);
+  mg_mgr_init(&mgr, NULL);
   mg_http_listen(&mgr, url, h4, NULL);
 
   ASSERT(fetch(&mgr, buf, url, "GET /a.txt HTTP/1.0\n\n") == 200);
@@ -1149,25 +1146,22 @@ static void test_http_404(void) {
 
 static void test_tls(void) {
 #if MG_ENABLE_MBEDTLS || MG_ENABLE_OPENSSL
-  struct mg_tls_opts opts = {"./test/data/ss_ca.pem",
-                             NULL,
-                             "./test/data/ss_server.pem",
-                             "./test/data/ss_server.pem",
-                             NULL,
-                             NULL};
+  struct mg_tls_opts opts;
+  memset(&opts, 0, sizeof(opts));
+  opts.client_ca = (struct mg_str ) {(char*)ss_ca_pem, ss_ca_pem_len};
+  opts.server_cert = (struct mg_str ) {(char*)ss_server_pem, ss_server_pem_len};
+  opts.client_cert = (struct mg_str ) {(char*)ss_client_pem, ss_client_pem_len};
   struct mg_tls_session_opts sopts = {{NULL, 0}};
   struct mg_mgr mgr;
   struct mg_connection *c;
   const char *url = "https://127.0.0.1:12347";
   char buf[FETCH_BUF_SIZE];
-  mg_mgr_init(&mgr);
-  mgr.tls_ctx = mg_tls_ctx_init(&opts);
+  mg_mgr_init(&mgr, &opts);
   c = mg_http_listen(&mgr, url, eh1, (void *) &sopts);
   ASSERT(c != NULL);
   ASSERT(fetch(&mgr, buf, url, "GET /a.txt HTTP/1.0\n\n") == 200);
   // MG_INFO(("%s", buf));
   ASSERT(cmpbody(buf, "hello\n") == 0);
-  mg_tls_ctx_free(mgr.tls_ctx);
   mg_mgr_free(&mgr);
   ASSERT(mgr.conns == NULL);
 #endif
@@ -1198,7 +1192,7 @@ static void test_http_client(void) {
   struct mg_mgr mgr;
   struct mg_connection *c;
   int i, ok = 0;
-  mg_mgr_init(&mgr);
+  mg_mgr_init(&mgr, NULL);
   c = mg_http_connect(&mgr, "http://cesanta.com", f3, &ok);
   ASSERT(c != NULL);
   for (i = 0; i < 500 && ok <= 0; i++) mg_mgr_poll(&mgr, 10);
@@ -1209,43 +1203,37 @@ static void test_http_client(void) {
 #if MG_ENABLE_MBEDTLS || MG_ENABLE_OPENSSL
   {
     const char *url = "https://cesanta.com";
-    struct mg_str host = mg_url_host(url);
-    struct mg_tls_opts opts = {
-        "./test/data/ca.pem", NULL, NULL, NULL, NULL, NULL};
-    struct mg_tls_session_opts sopts = {host};
+    struct mg_tls_opts opts;
+    memset(&opts, 0, sizeof(opts));
+    opts.client_ca = (struct mg_str ) {(char*)ca_pem, ca_pem_len};
+    mgr.tls_ctx = mg_tls_ctx_init(&opts);
     c = mg_http_connect(&mgr, url, f3, &ok);
     ASSERT(c != NULL);
-    mgr.tls_ctx = mg_tls_ctx_init(&opts);
-    mg_tls_init(c, &sopts);
     for (i = 0; i < 1500 && ok <= 0; i++) mg_mgr_poll(&mgr, 1000);
     ASSERT(ok == 200);
     c->is_closing = 1;
     mg_mgr_poll(&mgr, 1);
 
     // Test failed host validation
+#if 0 //NB: This cannot be done with the current API - no way to set custom host name (Allan)
     ok = 0;
     sopts.srvname = mg_str("dummy");
     c = mg_http_connect(&mgr, url, f3, &ok);
     ASSERT(c != NULL);
-    mg_tls_init(c, &sopts);
     for (i = 0; i < 500 && ok <= 0; i++) mg_mgr_poll(&mgr, 10);
     ASSERT(ok == 777);
     mg_mgr_poll(&mgr, 1);
+#endif
 
     // Test host validation only (no CA, no cert)
     ok = 0;
-    sopts.srvname = host;
-    opts.ca = NULL;
-    mg_tls_ctx_free(mgr.tls_ctx);
+    opts.client_ca.ptr = 0;
     c = mg_http_connect(&mgr, url, f3, &ok);
     ASSERT(c != NULL);
-    mgr.tls_ctx = mg_tls_ctx_init(&opts);
-    mg_tls_init(c, &sopts);
     for (i = 0; i < 1500 && ok <= 0; i++) mg_mgr_poll(&mgr, 10);
     ASSERT(ok == 200);
     c->is_closing = 1;
     mg_mgr_poll(&mgr, 1);
-    mg_tls_ctx_free(mgr.tls_ctx);
   }
 #endif
 
@@ -1297,7 +1285,7 @@ static void test_http_no_content_length(void) {
   struct mg_mgr mgr;
   const char *url = "http://127.0.0.1:12348";
   int i;
-  mg_mgr_init(&mgr);
+  mg_mgr_init(&mgr, NULL);
   mg_http_listen(&mgr, url, f4, (void *) buf1);
   mg_http_connect(&mgr, url, f4c, (void *) buf2);
   for (i = 0; i < 1000 && strchr(buf2, 'c') == NULL; i++) mg_mgr_poll(&mgr, 10);
@@ -1321,7 +1309,7 @@ static void test_http_pipeline(void) {
   const char *url = "http://127.0.0.1:12377";
   struct mg_connection *c;
   int i, ok = 0;
-  mg_mgr_init(&mgr);
+  mg_mgr_init(&mgr, NULL);
   mg_http_listen(&mgr, url, f5, (void *) &ok);
   c = mg_http_connect(&mgr, url, NULL, NULL);
   mg_printf(c, "POST / HTTP/1.0\nContent-Length: 5\n\n12345GET / HTTP/1.0\n\n");
@@ -1486,7 +1474,7 @@ static void test_http_range(void) {
   struct mg_http_message hm;
   char buf[FETCH_BUF_SIZE];
 
-  mg_mgr_init(&mgr);
+  mg_mgr_init(&mgr, NULL);
   mg_http_listen(&mgr, url, ehr, NULL);
 
   ASSERT(fetch(&mgr, buf, url, "GET /range.txt HTTP/1.0\n\n") == 200);
@@ -1624,7 +1612,7 @@ static void test_timer(void) {
   // Test proper timer deallocation, see #1539
   {
     struct mg_mgr mgr;
-    mg_mgr_init(&mgr);
+    mg_mgr_init(&mgr, NULL);
     mg_timer_add(&mgr, 1, MG_TIMER_REPEAT, f1, NULL);
     mg_mgr_free(&mgr);
     ASSERT(mgr.conns == NULL);
@@ -1941,7 +1929,7 @@ static void test_dns_error(const char *dns_server_url, const char *errstr) {
   struct mg_mgr mgr;
   char *buf = NULL;
   int i;
-  mg_mgr_init(&mgr);
+  mg_mgr_init(&mgr, NULL);
   mgr.dns4.url = dns_server_url;
   mgr.dnstimeout = 10;
   MG_DEBUG(("opening dummy DNS listener @ [%s]...", dns_server_url));
@@ -2184,7 +2172,7 @@ static void test_http_upload(void) {
   const char *s1 = "ok (chunked)\n";
   const char *s2 = "ok (8 foo\nbar\n)\n";
 
-  mg_mgr_init(&mgr);
+  mg_mgr_init(&mgr, NULL);
   mg_http_listen(&mgr, url, us, (void *) &del);
 
   mg_http_connect(&mgr, url, uc, (void *) &s1);
@@ -2280,7 +2268,7 @@ static void test_http_chunked_case(mg_event_handler_t s, mg_event_handler_t c,
   struct mg_connection *conn;
   static uint16_t port = 32344;  // To prevent bind errors on Windows
   mg_snprintf(url, sizeof(url), "http://127.0.0.1:%d", port++);
-  mg_mgr_init(&mgr);
+  mg_mgr_init(&mgr, NULL);
   mg_http_listen(&mgr, url, s, NULL);
   conn = mg_http_connect(&mgr, url, c, &crc);
   while (conn != NULL && req_count-- > 0) {
@@ -2316,7 +2304,7 @@ static void test_http_chunked(void) {
 static void test_invalid_listen_addr(void) {
   struct mg_mgr mgr;
   struct mg_connection *c;
-  mg_mgr_init(&mgr);
+  mg_mgr_init(&mgr, NULL);
   c = mg_http_listen(&mgr, "invalid:31:14", eh1, NULL);
   ASSERT(c == NULL);
   mg_mgr_free(&mgr);
@@ -2402,7 +2390,7 @@ static void test_http_stream_buffer(void) {
   const char *url = "tcp://127.0.0.1:12344";
   uint32_t i;
   struct stream_status status;
-  mg_mgr_init(&mgr);
+  mg_mgr_init(&mgr, NULL);
   mg_listen(&mgr, url, eh10, &status);
 
   status.polls = 0;
@@ -2464,7 +2452,7 @@ static void test_packed(void) {
   const char *url = "http://127.0.0.1:12351";
   char buf[FETCH_BUF_SIZE],
       *data = mg_file_read(&mg_fs_posix, "Makefile", NULL);
-  mg_mgr_init(&mgr);
+  mg_mgr_init(&mgr, NULL);
   mg_http_listen(&mgr, url, eh7, NULL);
 
   // Load top level file directly
@@ -2509,7 +2497,7 @@ int send(int sock, const void *buf, size_t len, int flags) {
 static void test_pipe_proto(bool is_udp) {
   struct mg_mgr mgr;
   int i, sock, done = 0;
-  mg_mgr_init(&mgr);
+  mg_mgr_init(&mgr, NULL);
   ASSERT((sock = mg_mkpipe(&mgr, eh6, (void *) &done, is_udp)) >= 0);
   ASSERT(send(sock, "hi", 2, 0) == 2);
   for (i = 0; i < 10 && done == 0; i++) mg_mgr_poll(&mgr, 1);
@@ -2540,7 +2528,7 @@ static void test_udp(void) {
   struct mg_mgr mgr;
   const char *url = "udp://127.0.0.1:12353";
   int i, done = 0;
-  mg_mgr_init(&mgr);
+  mg_mgr_init(&mgr, NULL);
   mg_listen(&mgr, url, u1, (void *) &done);
   mg_connect(&mgr, url, u1, (void *) &done);
   for (i = 0; i < 5; i++) mg_mgr_poll(&mgr, 1);
@@ -2625,7 +2613,7 @@ static void test_ws_fragmentation(void) {
   struct mg_mgr mgr;
   int i, done = 0;
 
-  mg_mgr_init(&mgr);
+  mg_mgr_init(&mgr, NULL);
   ASSERT(mg_http_listen(&mgr, url, w2, NULL) != NULL);
   mg_ws_connect(&mgr, url, w3, &done, "%s", "Sec-WebSocket-Protocol: echo\r\n");
   for (i = 0; i < 25; i++) mg_mgr_poll(&mgr, 1);
@@ -2652,7 +2640,7 @@ static void test_rewrites(void) {
   const char *url = "http://LOCALHOST:12358";
   const char *expected = "#define MG_VERSION \"" MG_VERSION "\"\n";
   struct mg_mgr mgr;
-  mg_mgr_init(&mgr);
+  mg_mgr_init(&mgr, NULL);
   ASSERT(mg_http_listen(&mgr, url, h7, NULL) != NULL);
   ASSERT(fetch(&mgr, buf, url, "GET /a.txt HTTP/1.0\n\n") == 200);
   ASSERT(cmpbody(buf, "hello\n") == 0);
@@ -2941,7 +2929,7 @@ static void ph(struct mg_connection *c, int ev, void *ev_data, void *fn_data) {
 static void test_poll(void) {
   int count = 0, i;
   struct mg_mgr mgr;
-  mg_mgr_init(&mgr);
+  mg_mgr_init(&mgr, NULL);
   mg_http_listen(&mgr, "http://127.0.0.1:42346", ph,
                  &count);  // To prevent bind errors on Windows
   for (i = 0; i < 10; i++) mg_mgr_poll(&mgr, 0);

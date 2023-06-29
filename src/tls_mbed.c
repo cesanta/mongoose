@@ -74,13 +74,6 @@ static int rng_get(void *p_rng, unsigned char *buf, size_t len) {
 }
 //#endif
 
-static struct mg_str mg_loadfile(struct mg_fs *fs, const char *path) {
-  size_t n = 0;
-  if (path[0] == '-') return mg_str(path);
-  char *p = mg_file_read(fs, path, &n);
-  return mg_str_n(p, n);
-}
-
 void mg_tls_init(struct mg_connection *c, struct mg_tls_session_opts *opts) {
   struct mg_tls_ctx *ctx = (struct mg_tls_ctx *) c->mgr->tls_ctx;
   if(!ctx) {
@@ -108,16 +101,21 @@ void mg_tls_init(struct mg_connection *c, struct mg_tls_session_opts *opts) {
   mbedtls_ssl_conf_rng(&tls->conf, mbed_rng, c);
   if (c->is_client && ctx->client_ca) {
     mbedtls_ssl_conf_ca_chain(&tls->conf, ctx->client_ca, NULL);
-
-    if (opts->srvname.len > 0) {
-      char *x = mg_mprintf("%.*s", (int) opts->srvname.len, opts->srvname.ptr);
-      mbedtls_ssl_set_hostname(&tls->ssl, x);
-      free(x);
-    }
     mbedtls_ssl_conf_authmode(&tls->conf, MBEDTLS_SSL_VERIFY_REQUIRED);
-   } else {
-      mbedtls_ssl_conf_authmode(&tls->conf, MBEDTLS_SSL_VERIFY_NONE);
-   }
+    if (opts && opts->srvname.len > 0) {
+      struct mg_addr addr;
+      if(!mg_aton(opts->srvname, &addr)) { // if srvname is not an IP address
+        char *host = mg_mprintf("%.*s", (int) opts->srvname.len, opts->srvname.ptr);
+        mbedtls_ssl_set_hostname(&tls->ssl, host);
+        free(host);
+      }
+    }
+  } else if (!c->is_client && ctx->server_ca) {
+    mbedtls_ssl_conf_ca_chain(&tls->conf, ctx->server_ca, NULL);
+    mbedtls_ssl_conf_authmode(&tls->conf, MBEDTLS_SSL_VERIFY_REQUIRED);
+  } else {
+    mbedtls_ssl_conf_authmode(&tls->conf, MBEDTLS_SSL_VERIFY_NONE);
+  }
 
   if(!c->is_client && ctx->server_cert) {
     rc = mbedtls_ssl_conf_own_cert(&tls->conf, ctx->server_cert, ctx->server_key);
@@ -154,11 +152,46 @@ fail:
   mg_tls_free(c);
 }
 
+static int load_cert(struct mg_str cert, mbedtls_x509_crt** cert_out) {
+  int rc;
+  if (!cert.ptr || cert.ptr[0] == '\0'  || cert.ptr[0] == '*')
+    return 1;
+
+  if(!(*cert_out = (struct mbedtls_x509_crt *) calloc(1, sizeof(**cert_out))))
+    return 0;
+  if((rc = mbedtls_x509_crt_parse(*cert_out, (uint8_t *) cert.ptr, cert.len)) != 0) {
+    MG_ERROR(("parse(%s) err %#x", *cert_out, -rc));
+    return 0;
+  }
+  return 1;
+}
+
+static int load_cert_and_key(struct mg_str cert, struct mg_str key,
+                             mbedtls_x509_crt** cert_out, mbedtls_pk_context** key_out) {
+  int rc;
+  if (!cert.ptr || cert.ptr[0] == '\0')
+    return 1;
+
+  key = key.ptr == NULL ? cert : key;
+  if(!(*cert_out = (struct mbedtls_x509_crt *) calloc(1, sizeof(**cert_out))))
+    return 0;
+  if((rc = mbedtls_x509_crt_parse(*cert_out, (uint8_t *) cert.ptr, cert.len)) != 0) {
+    MG_ERROR(("parse(%s) err %#x", *cert_out, -rc));
+    return 0;
+  }
+  if(!(*key_out = (struct mbedtls_pk_context *) calloc(1, sizeof(**key_out))))
+    return 0;
+  if((rc = mbedtls_pk_parse_key(*key_out, (uint8_t *) key.ptr, key.len, NULL,
+                            0 MGRNG)) != 0) {
+    MG_ERROR(("tls key(%s) %#x", key, -rc));
+    return 0;
+  }
+  return 1;
+}
+
 #define MG_MBEDTLS_DEBUG_LEVEL 6
 void* mg_tls_ctx_init(const struct mg_tls_opts *opts) {
-  struct mg_fs *fs = opts->fs == NULL ? &mg_fs_posix : opts->fs;
-  int rc = 0;
-
+  int rc;
   struct mg_tls_ctx *tls = (struct mg_tls_ctx *) calloc(1, sizeof(*tls));
   if (tls == NULL) {
     MG_ERROR(("TLS OOM"));
@@ -171,62 +204,14 @@ void* mg_tls_ctx_init(const struct mg_tls_opts *opts) {
   mbedtls_debug_set_threshold(MG_MBEDTLS_DEBUG_LEVEL);
 #endif
 
-  if (opts->client_ca != NULL && strcmp(opts->client_ca, "*") != 0) {
-    struct mg_str s = mg_loadfile(fs, opts->client_ca);
-    if(!(tls->client_ca = (struct mbedtls_x509_crt *) calloc(1, sizeof(*tls->client_ca))))
-      goto fail;
-    rc = mbedtls_x509_crt_parse(tls->client_ca, (uint8_t *) s.ptr, s.len + 1);
-    if (opts->client_ca[0] != '-') free((char *) s.ptr);
-    if (rc != 0) {
-      MG_ERROR(("parse(%s) err %#x", opts->client_ca, -rc));
-      goto fail;
-    }
-  }
-  if (opts->server_cert != NULL && opts->server_cert[0] != '\0') {
-    struct mg_str s = mg_loadfile(fs, opts->server_cert);
-    const char *key = opts->server_key == NULL ? opts->server_cert : opts->server_key;
-    if(!(tls->server_cert = (struct mbedtls_x509_crt *) calloc(1, sizeof(*tls->server_cert))))
-      goto fail;
-    rc = mbedtls_x509_crt_parse(tls->server_cert, (uint8_t *) s.ptr, s.len + 1);
-    if (opts->server_cert[0] != '-') free((char *) s.ptr);
-    if (rc != 0) {
-      MG_ERROR(("parse(%s) err %#x", opts->server_cert, -rc));
-      goto fail;
-    }
-    s = mg_loadfile(fs, key);
-    if(!(tls->server_key = (struct mbedtls_pk_context *) calloc(1, sizeof(*tls->server_key))))
-      goto fail;
-    rc = mbedtls_pk_parse_key(tls->server_key, (uint8_t *) s.ptr, s.len + 1, NULL,
-                              0 MGRNG);
-    if (key[0] != '-') free((char *) s.ptr);
-    if (rc != 0) {
-      MG_ERROR(("tls key(%s) %#x", key, -rc));
-      goto fail;
-    }
-  }
-
-  if (opts->client_cert != NULL && opts->client_cert[0] != '\0') {
-    struct mg_str s = mg_loadfile(fs, opts->client_cert);
-    const char *key = opts->client_key == NULL ? opts->client_cert : opts->client_key;
-    if(!(tls->client_cert = (struct mbedtls_x509_crt *) calloc(1, sizeof(*tls->client_cert))))
-      goto fail;
-    rc = mbedtls_x509_crt_parse(tls->client_cert, (uint8_t *) s.ptr, s.len + 1);
-    if (opts->client_cert[0] != '-') free((char *) s.ptr);
-    if (rc != 0) {
-      MG_ERROR(("parse(%s) err %#x", opts->client_cert, -rc));
-      goto fail;
-    }
-    s = mg_loadfile(fs, key);
-    if(!(tls->client_key = (struct mbedtls_pk_context *) calloc(1, sizeof(*tls->client_key))))
-      goto fail;
-    rc = mbedtls_pk_parse_key(tls->client_key, (uint8_t *) s.ptr, s.len + 1, NULL,
-                              0 MGRNG);
-    if (key[0] != '-') free((char *) s.ptr);
-    if (rc != 0) {
-      MG_ERROR(("tls key(%s) %#x", key, -rc));
-      goto fail;
-    }
-  }
+  if(!load_cert(opts->client_ca, &tls->client_ca))
+    goto fail;
+  if(!load_cert(opts->server_ca, &tls->server_ca))
+    goto fail;
+  if(!load_cert_and_key(opts->server_cert, opts->server_key, &tls->server_cert, &tls->server_key))
+    goto fail;
+  if(!load_cert_and_key(opts->client_cert, opts->client_key, &tls->client_cert, &tls->client_key))
+    goto fail;
 
   mbedtls_ssl_ticket_init(&tls->ticket_ctx);
   if ((rc = mbedtls_ssl_ticket_setup(&tls->ticket_ctx, rng_get, NULL,
@@ -236,6 +221,7 @@ void* mg_tls_ctx_init(const struct mg_tls_opts *opts) {
   }
 
   return tls;
+
 fail:
   mg_tls_ctx_free(tls);
   return NULL;

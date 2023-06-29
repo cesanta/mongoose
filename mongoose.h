@@ -1225,8 +1225,9 @@ struct mg_connection {
   unsigned is_writable : 1;    // Connection is ready to write
 };
 
+struct mg_tls_opts;
 void mg_mgr_poll(struct mg_mgr *, int ms);
-void mg_mgr_init(struct mg_mgr *);
+void mg_mgr_init(struct mg_mgr *, struct mg_tls_opts *tls_opts);
 void mg_mgr_free(struct mg_mgr *);
 
 struct mg_connection *mg_listen(struct mg_mgr *, const char *url,
@@ -1334,12 +1335,12 @@ void mg_http_serve_ssi(struct mg_connection *c, const char *root,
 
 
 struct mg_tls_opts {
-  const char *ca;         // CA certificate file. For both listeners and clients
-  const char *crl;        // Certificate Revocation List. For clients
-  const char *cert;       // Certificate
-  const char *certkey;    // Certificate key
-  const char *ciphers;    // Cipher list
-  struct mg_fs *fs;       // FS API for reading certificate files
+  struct mg_str server_ca;
+  struct mg_str client_ca;
+  struct mg_str server_cert;
+  struct mg_str server_key;
+  struct mg_str client_cert;
+  struct mg_str client_key;
 };
 
 struct mg_tls_session_opts {
@@ -1368,12 +1369,13 @@ void mg_tls_handshake(struct mg_connection *);
 #include <mbedtls/ssl_ticket.h>
 
 struct mg_tls_ctx {
-  mbedtls_x509_crt ca;      // Parsed CA certificate
-  mbedtls_x509_crt cert;    // Parsed certificate
-  mbedtls_pk_context pk;    // Private key context
+  mbedtls_x509_crt* server_ca;      // Parsed CA certificate
+  mbedtls_x509_crt* client_ca;      // Parsed CA certificate
+  mbedtls_x509_crt* server_cert;    // Parsed server certificate
+  mbedtls_pk_context* server_key;    // Parsed server private key context
+  mbedtls_x509_crt* client_cert;    // Parsed client certificate
+  mbedtls_pk_context* client_key;    // Parsed client private key context
   mbedtls_ssl_ticket_context ticket_ctx; // Session tickets context
-  uint8_t have_ca:1;        // CA certificate is set
-  uint8_t have_cert:1;      // Certificate is set
 };
 
 struct mg_tls {

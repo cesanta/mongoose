@@ -74,8 +74,9 @@ struct mg_connection {
   unsigned is_writable : 1;    // Connection is ready to write
 };
 
+struct mg_tls_opts;
 void mg_mgr_poll(struct mg_mgr *, int ms);
-void mg_mgr_init(struct mg_mgr *);
+void mg_mgr_init(struct mg_mgr *, struct mg_tls_opts *tls_opts);
 void mg_mgr_free(struct mg_mgr *);
 
 struct mg_connection *mg_listen(struct mg_mgr *, const char *url,

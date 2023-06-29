@@ -164,6 +164,15 @@ struct mg_connection *mg_connect(struct mg_mgr *mgr, const char *url,
     MG_DEBUG(("%lu %p %s", c->id, c->fd, url));
     mg_call(c, MG_EV_OPEN, NULL);
     mg_resolve(c, url);
+    if(mg_url_is_ssl(url)) {
+      struct mg_tls_session_opts opts;
+      opts.srvname = mg_url_host(url);
+      mg_tls_init(c, &opts);
+      if(!c->tls) {
+        MG_ERROR(("SSL init failed"));
+        return c;
+      }
+    }
   }
   return c;
 }
@@ -227,9 +236,13 @@ void mg_mgr_free(struct mg_mgr *mgr) {
 #if MG_ENABLE_EPOLL
   if (mgr->epoll_fd >= 0) close(mgr->epoll_fd), mgr->epoll_fd = -1;
 #endif
+  if(mgr->tls_ctx) {
+    mg_tls_ctx_free(mgr->tls_ctx);
+    mgr->tls_ctx = NULL;
+  }
 }
 
-void mg_mgr_init(struct mg_mgr *mgr) {
+void mg_mgr_init(struct mg_mgr *mgr, struct mg_tls_opts *tls_opts) {
   memset(mgr, 0, sizeof(*mgr));
 #if MG_ENABLE_EPOLL
   if ((mgr->epoll_fd = epoll_create1(0)) < 0) MG_ERROR(("epoll: %d", errno));
@@ -250,4 +263,8 @@ void mg_mgr_init(struct mg_mgr *mgr) {
   mgr->dnstimeout = 3000;
   mgr->dns4.url = "udp://8.8.8.8:53";
   mgr->dns6.url = "udp://[2001:4860:4860::8888]:53";
+  if(tls_opts) {
+    if(!(mgr->tls_ctx = mg_tls_ctx_init(tls_opts)))
+      MG_ERROR(("TLS init failed"));
+  }
 }

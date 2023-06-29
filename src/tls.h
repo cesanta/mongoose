@@ -5,13 +5,12 @@
 #include "tls_openssl.h"
 
 struct mg_tls_opts {
-  const char *server_ca;         // CA certificate file for server
-  const char *client_ca;         // CA certificate file for client
-  const char *server_cert;
-  const char *server_key;
-  const char *client_cert;
-  const char *client_key;
-  struct mg_fs *fs;
+  struct mg_str server_ca;
+  struct mg_str client_ca;
+  struct mg_str server_cert;
+  struct mg_str server_key;
+  struct mg_str client_cert;
+  struct mg_str client_key;
 };
 
 struct mg_tls_session_opts {

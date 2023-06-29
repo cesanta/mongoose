@@ -1066,7 +1066,7 @@ static void mg_hfn(struct mg_connection *c, int ev, void *ev_data, void *fnd) {
 void mg_hello(const char *url) {
   struct mg_mgr mgr;
   bool done = false;
-  mg_mgr_init(&mgr);
+  mg_mgr_init(&mgr, NULL);
   if (mg_http_listen(&mgr, url, mg_hfn, &done) == NULL) done = true;
   while (done == false) mg_mgr_poll(&mgr, 100);
   mg_mgr_free(&mgr);
