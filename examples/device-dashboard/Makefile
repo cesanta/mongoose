@@ -29,7 +29,7 @@ web_root/bundle.js:
 	curl -s https://npm.reversehttp.com/preact,preact/hooks,htm/preact,preact-router -o $@
 
 # Create optimised CSS. Prerequisite: npm -g i tailwindcss tailwindcss-font-inter
-web_root/main.css: web_root/index.html web_root/main.js
+web_root/main.css: web_root/index.html $(wildcard web_root/*.js)
 	npx tailwindcss -o $@ --minify
 
 # Generate packed filesystem for serving Web UI
