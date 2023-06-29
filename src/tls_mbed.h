@@ -12,12 +12,13 @@
 #include <mbedtls/ssl_ticket.h>
 
 struct mg_tls_ctx {
-  mbedtls_x509_crt ca;      // Parsed CA certificate
-  mbedtls_x509_crt cert;    // Parsed certificate
-  mbedtls_pk_context pk;    // Private key context
+  mbedtls_x509_crt* server_ca;      // Parsed CA certificate
+  mbedtls_x509_crt* client_ca;      // Parsed CA certificate
+  mbedtls_x509_crt* server_cert;    // Parsed server certificate
+  mbedtls_pk_context* server_key;    // Parsed server private key context
+  mbedtls_x509_crt* client_cert;    // Parsed client certificate
+  mbedtls_pk_context* client_key;    // Parsed client private key context
   mbedtls_ssl_ticket_context ticket_ctx; // Session tickets context
-  uint8_t have_ca:1;        // CA certificate is set
-  uint8_t have_cert:1;      // Certificate is set
 };
 
 struct mg_tls {
