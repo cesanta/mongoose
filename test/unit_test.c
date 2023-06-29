@@ -616,6 +616,7 @@ static void test_mqtt(void) {
 }
 
 static void eh1(struct mg_connection *c, int ev, void *ev_data, void *fn_data) {
+  (void) fn_data;
   if (ev == MG_EV_HTTP_MSG) {
     struct mg_http_message *hm = (struct mg_http_message *) ev_data;
     MG_INFO(("[%.*s %.*s] message len %d", (int) hm->method.len, hm->method.ptr,
@@ -712,9 +713,13 @@ static int fetch(struct mg_mgr *mgr, char *buf, const char *url,
     opts.client_ca = (struct mg_str){ (char*)ca_pem, ca_pem_len };
     if (strstr(url, "127.0.0.1") != NULL) {
       // Local connection, use self-signed certificates
-      opts.client_ca = (struct mg_str){ (char*)ss_ca_pem, ss_ca_pem_len };
-      opts.server_cert = (struct mg_str){ (char*)ss_server_pem, ss_server_pem_len };
+      opts.client_ca.ptr = (char*)ss_ca_pem;
+      opts.client_ca.len = ss_ca_pem_len;
+      opts.server_cert.ptr = (char*)ss_server_pem;
+      opts.server_cert.len = ss_server_pem_len;
     } else {
+      opts.client_ca.ptr = (char*)ca_pem;
+      opts.client_ca.len = ca_pem_len;
       sopts.srvname = host;
     }
     mgr->tls_ctx = mg_tls_ctx_init(&opts);
@@ -1148,9 +1153,13 @@ static void test_tls(void) {
 #if MG_ENABLE_MBEDTLS || MG_ENABLE_OPENSSL
   struct mg_tls_opts opts;
   memset(&opts, 0, sizeof(opts));
-  opts.client_ca = (struct mg_str ) {(char*)ss_ca_pem, ss_ca_pem_len};
-  opts.server_cert = (struct mg_str ) {(char*)ss_server_pem, ss_server_pem_len};
-  opts.client_cert = (struct mg_str ) {(char*)ss_client_pem, ss_client_pem_len};
+  opts.client_ca.ptr = (char*)ss_ca_pem;
+  opts.client_ca.len = ss_ca_pem_len;
+  opts.server_cert.ptr = (char*)ss_server_pem;
+  opts.server_cert.len = ss_server_pem_len;
+  opts.client_cert.ptr = (char*)ss_client_pem;
+  opts.client_cert.len = ss_client_pem_len;
+
   struct mg_tls_session_opts sopts = {{NULL, 0}};
   struct mg_mgr mgr;
   struct mg_connection *c;

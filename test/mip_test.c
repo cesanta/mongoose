@@ -36,7 +36,7 @@ static void ph(struct mg_connection *c, int ev, void *ev_data, void *fn_data) {
 static void test_poll(void) {
   int count = 0, i;
   struct mg_mgr mgr;
-  mg_mgr_init(&mgr);
+  mg_mgr_init(&mgr, NULL);
   struct mg_tcpip_if mif;
   memset(&mif, 0, sizeof(mif));
   mif.driver = &mg_tcpip_driver_mock;

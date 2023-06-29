@@ -157,7 +157,7 @@ static void test_http_fetch(void) {
 
   // Events
   struct mg_mgr mgr;  // Event manager
-  mg_mgr_init(&mgr);  // Initialise event manager
+  mg_mgr_init(&mgr, NULL);  // Initialise event manager
 
   // MIP driver
   struct mg_tcpip_driver driver;
