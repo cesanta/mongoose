@@ -704,27 +704,7 @@ static int fetch(struct mg_mgr *mgr, char *buf, const char *url,
   struct fetch_data fd = {buf, 0, 0};
   int i;
   va_list ap;
-  if (mg_url_is_ssl(url) && mgr->tls_ctx == NULL) {
-    struct mg_tls_opts opts;
-    struct mg_tls_session_opts sopts;
-    struct mg_str host = mg_url_host(url);
-    memset(&opts, 0, sizeof(opts));
-    memset(&sopts, 0, sizeof(sopts));
-    if (strstr(url, "127.0.0.1") != NULL) {
-      // Local connection, use self-signed certificates
-      opts.client_ca.ptr = (char*)ss_ca_pem;
-      opts.client_ca.len = ss_ca_pem_len;
-      opts.server_cert.ptr = (char*)ss_server_pem;
-      opts.server_cert.len = ss_server_pem_len;
-    } else {
-      opts.client_ca.ptr = (char*)ca_pem;
-      opts.client_ca.len = ca_pem_len;
-      sopts.srvname = host;
-    }
-    mgr->tls_ctx = mg_tls_ctx_init(&opts);
-    ASSERT(mgr->tls_ctx != NULL);
-  }
-  // c->is_hexdumping = 1;
+
   struct mg_connection *c = mg_http_connect(mgr, url, fcb, &fd);
   ASSERT(c != NULL);
   va_start(ap, fmt);
@@ -1200,23 +1180,28 @@ static void test_http_client(void) {
   struct mg_mgr mgr;
   struct mg_connection *c;
   int i, ok = 0;
+  const char *url = "http://cesanta.com";
+#if MG_ENABLE_MBEDTLS || MG_ENABLE_OPENSSL
+  struct mg_tls_opts opts;
+  memset(&opts, 0, sizeof(opts));
+  opts.client_ca.ptr = (char *) ca_pem;
+  opts.client_ca.len = ca_pem_len;
+  mg_mgr_init(&mgr, &opts);
+#else
   mg_mgr_init(&mgr, NULL);
-  c = mg_http_connect(&mgr, "http://cesanta.com", f3, &ok);
+#endif
+
+  c = mg_http_connect(&mgr, url, f3, &ok);
   ASSERT(c != NULL);
   for (i = 0; i < 500 && ok <= 0; i++) mg_mgr_poll(&mgr, 10);
   ASSERT(ok == 301);
   c->is_closing = 1;
   mg_mgr_poll(&mgr, 0);
   ok = 0;
+
 #if MG_ENABLE_MBEDTLS || MG_ENABLE_OPENSSL
   {
-    const char *url = "https://cesanta.com";
-    struct mg_tls_opts opts;
-    memset(&opts, 0, sizeof(opts));
-    opts.client_ca.ptr = (char*)ca_pem;
-    opts.client_ca.len = ca_pem_len;
-    mgr.tls_ctx = mg_tls_ctx_init(&opts);
-    c = mg_http_connect(&mgr, url, f3, &ok);
+    c = mg_http_connect(&mgr, "https://cesanta.com", f3, &ok);
     ASSERT(c != NULL);
     for (i = 0; i < 1500 && ok <= 0; i++) mg_mgr_poll(&mgr, 1000);
     ASSERT(ok == 200);
@@ -1224,7 +1209,7 @@ static void test_http_client(void) {
     mg_mgr_poll(&mgr, 1);
 
     // Test failed host validation
-#if 0 //NB: This cannot be done with the current API - no way to set custom host name (Allan)
+#if 0  // NB: This cannot be done with the current API - no way to set custom host name (Allan)
     ok = 0;
     sopts.srvname = mg_str("dummy");
     c = mg_http_connect(&mgr, url, f3, &ok);
@@ -1232,7 +1217,6 @@ static void test_http_client(void) {
     for (i = 0; i < 500 && ok <= 0; i++) mg_mgr_poll(&mgr, 10);
     ASSERT(ok == 777);
     mg_mgr_poll(&mgr, 1);
-#endif
 
     // Test host validation only (no CA, no cert)
     ok = 0;
@@ -1243,6 +1227,8 @@ static void test_http_client(void) {
     ASSERT(ok == 200);
     c->is_closing = 1;
     mg_mgr_poll(&mgr, 1);
+  }
+#endif
   }
 #endif
 

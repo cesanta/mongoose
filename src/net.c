@@ -165,10 +165,8 @@ struct mg_connection *mg_connect(struct mg_mgr *mgr, const char *url,
     mg_call(c, MG_EV_OPEN, NULL);
     mg_resolve(c, url);
     if(mg_url_is_ssl(url)) {
-      struct mg_tls_session_opts opts;
-      opts.srvname = mg_url_host(url);
-      mg_tls_init(c, &opts);
-      if(!c->tls) {
+      struct mg_str host = mg_url_host(url);
+      if(!mg_tls_init(c, &host)) {
         MG_ERROR(("SSL init failed"));
         return c;
       }

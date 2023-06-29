@@ -74,11 +74,11 @@ static int rng_get(void *p_rng, unsigned char *buf, size_t len) {
 }
 //#endif
 
-void mg_tls_init(struct mg_connection *c, struct mg_tls_session_opts *opts) {
+bool mg_tls_init(struct mg_connection *c, struct mg_str *server_name) {
   struct mg_tls_ctx *ctx = (struct mg_tls_ctx *) c->mgr->tls_ctx;
   if(!ctx) {
       mg_error(c, "TLS context not initialized");
-      return;
+      return false;
   }
   int rc = 0;
   struct mg_tls *tls = (struct mg_tls *) calloc(1, sizeof(*tls));
@@ -102,10 +102,10 @@ void mg_tls_init(struct mg_connection *c, struct mg_tls_session_opts *opts) {
   if (c->is_client && ctx->client_ca) {
     mbedtls_ssl_conf_ca_chain(&tls->conf, ctx->client_ca, NULL);
     mbedtls_ssl_conf_authmode(&tls->conf, MBEDTLS_SSL_VERIFY_REQUIRED);
-    if (opts && opts->srvname.len > 0) {
+    if (server_name && server_name->ptr) {
       struct mg_addr addr;
-      if(!mg_aton(opts->srvname, &addr)) { // if srvname is not an IP address
-        char *host = mg_mprintf("%.*s", (int) opts->srvname.len, opts->srvname.ptr);
+      if(!mg_aton(*server_name, &addr)) { // if srvname is not an IP address
+        char *host = mg_mprintf("%.*s", (int) server_name->len, server_name->ptr);
         mbedtls_ssl_set_hostname(&tls->ssl, host);
         free(host);
       }
@@ -147,9 +147,11 @@ void mg_tls_init(struct mg_connection *c, struct mg_tls_session_opts *opts) {
   if (c->is_client && c->is_resolving == 0 && c->is_connecting == 0) {
     mg_tls_handshake(c);
   }
-  return;
+  return true;
+
 fail:
   mg_tls_free(c);
+  return false;
 }
 
 static int load_cert(struct mg_str cert, mbedtls_x509_crt** cert_out) {
@@ -189,7 +191,7 @@ static int load_cert_and_key(struct mg_str cert, struct mg_str key,
   return 1;
 }
 
-#define MG_MBEDTLS_DEBUG_LEVEL 6
+//#define MG_MBEDTLS_DEBUG_LEVEL 6
 void* mg_tls_ctx_init(const struct mg_tls_opts *opts) {
   int rc;
   struct mg_tls_ctx *tls = (struct mg_tls_ctx *) calloc(1, sizeof(*tls));
