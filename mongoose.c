@@ -5499,9 +5499,10 @@ void* mg_tls_ctx_init(const struct mg_tls_opts *opts) {
 void mg_tls_ctx_free(void *ctx) {
   (void) ctx;
 }
-void mg_tls_init(struct mg_connection *c, struct mg_tls_session_opts *opts) {
+bool mg_tls_init(struct mg_connection *c, struct mg_str *opts) {
   (void) opts;
   mg_error(c, "TLS is not enabled");
+  return false;
 }
 void mg_tls_handshake(struct mg_connection *c) {
   (void) c;
@@ -5833,19 +5834,8 @@ static int mg_tls_err(struct mg_tls *tls, int res) {
   return err;
 }
 
-void* mg_tls_ctx_init(const struct mg_tls_opts *opts) {
-  struct mg_tls_opts *ctx = calloc(1, sizeof(*ctx));
-  *ctx = *opts;
-  return ctx;
-}
-
-void mg_tls_ctx_free(void *ctx) {
-  free(ctx);
-}
-
-void mg_tls_init(struct mg_connection *c, struct mg_tls_session_opts *opts) {
+void mg_tls_init(struct mg_connection *c, const struct mg_tls_opts *opts) {
   struct mg_tls *tls = (struct mg_tls *) calloc(1, sizeof(*tls));
-  struct mg_tls_opts *ctx = (struct mg_tls_opts *) c->mgr->tls_ctx;
   const char *id = "mongoose";
   static unsigned char s_initialised = 0;
   int rc;
@@ -5860,9 +5850,9 @@ void mg_tls_init(struct mg_connection *c, struct mg_tls_session_opts *opts) {
     s_initialised++;
   }
   MG_DEBUG(("%lu Setting TLS, CA: %s, cert: %s, key: %s", c->id,
-            ctx->ca == NULL ? "null" : ctx->ca,
-            ctx->cert == NULL ? "null" : ctx->cert,
-            ctx->certkey == NULL ? "null" : ctx->certkey));
+            opts->ca == NULL ? "null" : opts->ca,
+            opts->cert == NULL ? "null" : opts->cert,
+            opts->certkey == NULL ? "null" : opts->certkey));
   tls->ctx = c->is_client ? SSL_CTX_new(SSLv23_client_method())
                           : SSL_CTX_new(SSLv23_server_method());
   if ((tls->ssl = SSL_new(tls->ctx)) == NULL) {
@@ -5883,25 +5873,25 @@ void mg_tls_init(struct mg_connection *c, struct mg_tls_session_opts *opts) {
   SSL_set_options(tls->ssl, SSL_OP_CIPHER_SERVER_PREFERENCE);
 #endif
 
-  if (ctx->ca != NULL && ctx->ca[0] != '\0') {
+  if (opts->ca != NULL && opts->ca[0] != '\0') {
     SSL_set_verify(tls->ssl, SSL_VERIFY_PEER | SSL_VERIFY_FAIL_IF_NO_PEER_CERT,
                    NULL);
-    if ((rc = SSL_CTX_load_verify_locations(tls->ctx, ctx->ca, NULL)) != 1) {
-      mg_error(c, "load('%s') %d err %d", ctx->ca, rc, mg_tls_err(tls, rc));
+    if ((rc = SSL_CTX_load_verify_locations(tls->ctx, opts->ca, NULL)) != 1) {
+      mg_error(c, "load('%s') %d err %d", opts->ca, rc, mg_tls_err(tls, rc));
       goto fail;
     }
   }
-  if (ctx->cert != NULL && ctx->cert[0] != '\0') {
-    const char *key = ctx->certkey;
-    if (key == NULL) key = ctx->cert;
-    if ((rc = SSL_use_certificate_file(tls->ssl, ctx->cert, 1)) != 1) {
+  if (opts->cert != NULL && opts->cert[0] != '\0') {
+    const char *key = opts->certkey;
+    if (key == NULL) key = opts->cert;
+    if ((rc = SSL_use_certificate_file(tls->ssl, opts->cert, 1)) != 1) {
       mg_error(c, "Invalid SSL cert, err %d", mg_tls_err(tls, rc));
       goto fail;
     } else if ((rc = SSL_use_PrivateKey_file(tls->ssl, key, 1)) != 1) {
       mg_error(c, "Invalid SSL key, err %d", mg_tls_err(tls, rc));
       goto fail;
 #if OPENSSL_VERSION_NUMBER > 0x10100000L
-    } else if ((rc = SSL_use_certificate_chain_file(tls->ssl, ctx->cert)) !=
+    } else if ((rc = SSL_use_certificate_chain_file(tls->ssl, opts->cert)) !=
                1) {
       mg_error(c, "Invalid chain, err %d", mg_tls_err(tls, rc));
       goto fail;
@@ -5913,7 +5903,7 @@ void mg_tls_init(struct mg_connection *c, struct mg_tls_session_opts *opts) {
 #endif
     }
   }
-  if (ctx->ciphers != NULL) SSL_set_cipher_list(tls->ssl, ctx->ciphers);
+  if (opts->ciphers != NULL) SSL_set_cipher_list(tls->ssl, opts->ciphers);
 #if OPENSSL_VERSION_NUMBER >= 0x10100000L
   if (opts->srvname.len > 0) {
     char *s = mg_mprintf("%.*s", (int) opts->srvname.len, opts->srvname.ptr);

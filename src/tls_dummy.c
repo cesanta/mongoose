@@ -8,9 +8,10 @@ void* mg_tls_ctx_init(const struct mg_tls_opts *opts) {
 void mg_tls_ctx_free(void *ctx) {
   (void) ctx;
 }
-void mg_tls_init(struct mg_connection *c, struct mg_tls_session_opts *opts) {
+bool mg_tls_init(struct mg_connection *c, struct mg_str *opts) {
   (void) opts;
   mg_error(c, "TLS is not enabled");
+  return false;
 }
 void mg_tls_handshake(struct mg_connection *c) {
   (void) c;
