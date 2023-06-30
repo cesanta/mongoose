@@ -211,42 +211,41 @@ export function Pagination({ totalItems, itemsPerPage, currentPage, setPageFn })
   const lessThanSymbol = "<";
   const greaterThanSymbol = ">";
   const whiteSpace = " ";
+  const itemcls = 'relative inline-flex items-center px-3 py-1 text-sm focus:z-20 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-0 focus-visible:outline-blue-600';
 
   const PageItem = ({ page, isActive }) => (
     html`<a
       onClick=${() => setPageFn(page)}
-      className=${`relative inline-flex items-center px-4 py-2 text-sm font-semibold ${isActive ? 'bg-blue-600 text-white' : ' cursor-pointer text-gray-900 ring-1 ring-inset ring-gray-300 hover:bg-gray-50'} focus:z-20 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600`}
+      class="${itemcls} ${isActive ? 'bg-blue-600 text-white' : 'cursor-pointer text-gray-700 ring-1 ring-inset ring-gray-300 hover:bg-gray-50'}"
     >
       ${page}
     </a>`
   );
 
   return html`
-    <div className="flex items-center justify-between bg-white px-2 py-1.5">
-      <div className="hidden sm:flex sm:flex-1 sm:items-center sm:justify-between space-x-4">
-          <p className="text-sm text-gray-700">
-            showing <span className="font-medium">${(currentPage - 1) * itemsPerPage + 1}</span> - <span className="font-medium">${Math.min(currentPage * itemsPerPage, totalItems)}</span> of ${whiteSpace}
-            <span className="font-medium">${totalItems}</span> results
+    <div class="flex items-center justify-between bg-white px-3 py-2">
+      <div class="sm:flex sm:flex-1 sm:items-center sm:justify-between space-x-4 whitespace-nowrap select-none">
+          <p class="text-sm text-slate-500 font-medium">
+            showing <span class="font-bold text-slate-700">${(currentPage - 1) * itemsPerPage + 1}</span> - <span class="font-medium">${Math.min(currentPage * itemsPerPage, totalItems)}</span> of ${whiteSpace}
+            <span class="font-bold text-slate-700">${totalItems}</span> results
           </p>
         <div>
-          <nav className="isolate inline-flex -space-x-px rounded-md shadow-sm" aria-label="Pagination">
+          <nav class="isolate inline-flex -space-x-px rounded-md" aria-label="Pagination">
             <a
               onClick=${() => setPageFn(Math.max(currentPage - 1, 1))}
-              className="relative inline-flex px-4 py-2 text-gray-400 ring-1 ring-inset ring-gray-300 hover:bg-gray-50 ${currentPage != 1 ? 'cursor-pointer' : ''} focus:z-20 focus:outline-offset-0">
+              class="relative inline-flex px-3 items-center text-gray-400 ring-1 ring-inset ring-gray-300 hover:bg-gray-50 ${currentPage != 1 ? 'cursor-pointer' : ''} focus:z-20 focus:outline-offset-0">
               ${lessThanSymbol}
             </a>
 
             <${PageItem} page=${1} isActive=${currentPage === 1} />
-            ${currentPage > maxPageRange + 2 ? html`<span className="relative inline-flex items-center px-4 py-2 text-sm font-semibold text-gray-700 ring-1 ring-inset ring-gray-300 focus:outline-offset-0">...</span>` : ''}
-            ${Array.from({length: Math.min(totalPages, maxPageRange * 2 + 1)}, (_, i) => Math.max(2, currentPage - maxPageRange) + i).map(page => page > 1 && page < totalPages && html`
-              <${PageItem} page=${page} isActive=${currentPage === page} />
-            `)}
-            ${currentPage < totalPages - (maxPageRange + 1) ? html`<span className="relative inline-flex items-center px-4 py-2 text-sm font-semibold text-gray-700 ring-1 ring-inset ring-gray-300 focus:outline-offset-0">...</span>` : ''}
+            ${currentPage > maxPageRange + 2 ? html`<span class="${itemcls} ring-1 ring-inset ring-gray-300 text-slate-300">...</span>` : ''}
+            ${Array.from({length: Math.min(totalPages, maxPageRange * 2 + 1)}, (_, i) => Math.max(2, currentPage - maxPageRange) + i).map(page => page > 1 && page < totalPages && html`<${PageItem} page=${page} isActive=${currentPage === page} />`)}
+            ${currentPage < totalPages - (maxPageRange + 1) ? html`<span class="${itemcls} ring-1 ring-inset ring-gray-300 text-slate-300">...</span>` : ''}
             ${totalPages > 1 ? html`<${PageItem} page=${totalPages} isActive=${currentPage === totalPages} />` : ''}
 
             <a
               onClick=${() => setPageFn(Math.min(currentPage + 1, totalPages))}
-              className="relative inline-flex px-4 py-2 text-gray-400 ring-1 ring-inset ring-gray-300 hover:bg-gray-50 ${currentPage != totalPages ? 'cursor-pointer' : ''} focus:z-20 focus:outline-offset-0">
+              class="relative inline-flex px-3 items-center text-gray-400 ring-1 ring-inset ring-gray-300 hover:bg-gray-50 ${currentPage != totalPages ? 'cursor-pointer' : ''} focus:z-20 focus:outline-offset-0">
               ${greaterThanSymbol}
             </a>
           </nav>
