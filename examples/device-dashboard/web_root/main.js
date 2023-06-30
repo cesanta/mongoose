@@ -89,7 +89,7 @@ function Events({}) {
 <//>`;
 
 return html`
-<div class="m-8 divide-y divide-gray-200 overflow-auto rounded bg-white">
+<div class="m-4 divide-y divide-gray-200 overflow-auto rounded bg-white">
   <div class="font-semibold flex items-center text-gray-600 px-3 justify-between whitespace-nowrap">
     <div class="font-semibold flex items-center text-gray-600">
       <div class="mr-4">EVENT LOG</div>
