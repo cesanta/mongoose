@@ -610,6 +610,7 @@ struct printdirentrydata {
   const char *dir;
 };
 
+#if MG_ENABLE_DIRLIST
 static void printdirentry(const char *name, void *userdata) {
   struct printdirentrydata *d = (struct printdirentrydata *) userdata;
   struct mg_fs *fs = d->opts->fs == NULL ? &mg_fs_posix : d->opts->fs;
@@ -716,6 +717,7 @@ static void listdir(struct mg_connection *c, struct mg_http_message *hm,
   memcpy(c->send.buf + off - 12, tmp, n);  // Set content length
   c->is_resp = 0;                          // Mark response end
 }
+#endif
 
 // Resolve requested file into `path` and return its fs->st() result
 static int uri_to_path2(struct mg_connection *c, struct mg_http_message *hm,
@@ -724,13 +726,20 @@ static int uri_to_path2(struct mg_connection *c, struct mg_http_message *hm,
   int flags, tmp;
   // Append URI to the root_dir, and sanitize it
   size_t n = mg_snprintf(path, path_size, "%.*s", (int) dir.len, dir.ptr);
-  if (n > path_size) n = path_size;
+  if (n > path_size) {
+    mg_http_reply(c, 400, "", "Exceeded path size");
+    return -1;
+  }
   path[path_size - 1] = '\0';
-  if (n + 2 < path_size) path[n++] = '/', path[n] = '\0';
+  // Terminate root dir with /
+  if (n + 2 < path_size && path[n-1] != '/') path[n++] = '/', path[n] = '\0';
   mg_url_decode(hm->uri.ptr + url.len, hm->uri.len - url.len, path + n,
                 path_size - n, 0);
   path[path_size - 1] = '\0';  // Double-check
-  mg_remove_double_dots(path);
+  if (!mg_path_is_sane(path)) {
+    mg_http_reply(c, 400, "", "Invalid path");
+    return -1;
+  }
   n = strlen(path);
   while (n > 1 && path[n - 1] == '/') path[--n] = 0;  // Trim trailing slashes
   flags = mg_vcmp(&hm->uri, "/") == 0 ? MG_FS_DIR : fs->st(path, NULL, NULL);
@@ -790,7 +799,11 @@ void mg_http_serve_dir(struct mg_connection *c, struct mg_http_message *hm,
   if (flags < 0) {
     // Do nothing: the response has already been sent by uri_to_path()
   } else if (flags & MG_FS_DIR) {
+#if MG_ENABLE_DIRLIST
     listdir(c, hm, opts, path);
+#else
+    mg_http_reply(c, 403, "", "Forbidden\n");
+#endif
   } else if (flags && sp != NULL &&
              mg_globmatch(sp, strlen(sp), path, strlen(path))) {
     mg_http_serve_ssi(c, opts->root_dir, path);
