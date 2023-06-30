@@ -3,7 +3,7 @@
 #if !MG_ENABLE_MBEDTLS && !MG_ENABLE_OPENSSL && !MG_ENABLE_CUSTOM_TLS
 void* mg_tls_ctx_init(const struct mg_tls_opts *opts) {
   (void) opts;
-  return NULL;
+  return (void *)mg_tls_ctx_init;
 }
 void mg_tls_ctx_free(void *ctx) {
   (void) ctx;

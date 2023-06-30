@@ -3690,7 +3690,7 @@ struct mg_connection *mg_connect(struct mg_mgr *mgr, const char *url,
     if(mg_url_is_ssl(url)) {
       struct mg_str host = mg_url_host(url);
       if(!mg_tls_init(c, &host)) {
-        MG_ERROR(("SSL init failed"));
+        MG_ERROR(("TLS init failed"));
         return c;
       }
     }
@@ -3715,6 +3715,7 @@ struct mg_connection *mg_listen(struct mg_mgr *mgr, const char *url,
     c->fn_data = fn_data;
     mg_call(c, MG_EV_OPEN, NULL);
     MG_DEBUG(("%lu %p %s", c->id, c->fd, url));
+    if(mg_url_is_ssl(url)) c->is_tls = 1;
   }
   return c;
 }
@@ -4884,7 +4885,13 @@ static void accept_conn(struct mg_mgr *mgr, struct mg_connection *lsn) {
               &c->rem, mg_print_ip_port, &c->loc));
     mg_call(c, MG_EV_OPEN, NULL);
     mg_call(c, MG_EV_ACCEPT, NULL);
-    if(mgr->tls_ctx && !mg_tls_init(c, NULL))  mg_error(c, "SSL init failed");
+    //    if (c->is_tls && (!mgr->tls_ctx || !mg_tls_init(c, NULL))) {// if the
+    //    URL is TLS and there is no ctxt, it must fail too
+    if (c->is_tls) {
+      c->is_tls = 0;
+      if (!mgr->tls_ctx || !mg_tls_init(c, NULL))
+        mg_error(c, "TLS init failed");
+    }
   }
 }
 
@@ -5494,7 +5501,7 @@ void mg_timer_poll(struct mg_timer **head, uint64_t now_ms) {
 #if !MG_ENABLE_MBEDTLS && !MG_ENABLE_OPENSSL && !MG_ENABLE_CUSTOM_TLS
 void* mg_tls_ctx_init(const struct mg_tls_opts *opts) {
   (void) opts;
-  return NULL;
+  return (void *)mg_tls_ctx_init;
 }
 void mg_tls_ctx_free(void *ctx) {
   (void) ctx;

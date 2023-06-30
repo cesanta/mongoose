@@ -22,9 +22,9 @@ static const char *s_root_dir = ".";
 // fn_data is NULL for plain HTTP, and non-NULL for HTTPS
 static void fn(struct mg_connection *c, int ev, void *ev_data, void *fn_data) {
   if (ev == MG_EV_ACCEPT && fn_data != NULL) {
-    struct mg_tls_session_opts opts;
-    memset(&opts, 0, sizeof(opts));
-    mg_tls_init(c, &opts);
+    //    struct mg_tls_session_opts opts;
+    //    memset(&opts, 0, sizeof(opts));
+    //    mg_tls_init(c, &opts);
   } else if (ev == MG_EV_HTTP_MSG) {
     struct mg_http_message *hm = (struct mg_http_message *) ev_data;
     if (mg_http_match_uri(hm, "/api/stats")) {
@@ -52,20 +52,23 @@ static void fn(struct mg_connection *c, int ev, void *ev_data, void *fn_data) {
 }
 
 int main(void) {
-  struct mg_mgr mgr;                            // Event manager
+  struct mg_mgr mgr;  // Event manager
+  char *server_pem = mg_file_read(&mg_fs_posix, "server.pem", NULL);
   struct mg_tls_opts opts = {
-      //.ca = "ca.pem",         // Uncomment to enable two-way SSL
-      .cert = "server.pem",     // Certificate PEM file
-      .certkey = "server.pem",  // This pem contains both cert and key
+      //.server_ca = mg_str(mg_file_read(&mg_fs_posix, "ca.pem")),
+      .server_cert = mg_str(server_pem),  // Certificate PEM file
+      .server_key = mg_str(server_pem)    // contains both cert and key
   };
-  mg_log_set(MG_LL_DEBUG);                      // Set log level
-  mg_mgr_init(&mgr);                            // Initialise event manager
-  mgr.tls_ctx = mg_tls_ctx_init(&opts);         // Create TLS context
+  opts.server_cert.len += 1;
+  opts.server_cert.len += 1;
+  mg_log_set(MG_LL_DEBUG);   // Set log level
+  mg_mgr_init(&mgr, &opts);  // Initialise event manager
 
-  mg_http_listen(&mgr, s_http_addr, fn, NULL);  // Create HTTP listener
+  mg_http_listen(&mgr, s_http_addr, fn, NULL);         // Create HTTP listener
   mg_http_listen(&mgr, s_https_addr, fn, (void *) 1);  // HTTPS listener
   for (;;) mg_mgr_poll(&mgr, 1000);                    // Infinite event loop
-  mg_tls_ctx_free(mgr.tls_ctx);                        // Free TLS context
   mg_mgr_free(&mgr);
+  free(server_pem);
+  // free((char *)opts.server_ca.ptr);
   return 0;
 }

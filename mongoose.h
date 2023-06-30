@@ -1343,10 +1343,6 @@ struct mg_tls_opts {
   struct mg_str client_key;
 };
 
-struct mg_tls_session_opts {
-  struct mg_str srvname;  // If not empty, enables server name verification
-};
-
 void* mg_tls_ctx_init(const struct mg_tls_opts *);
 void mg_tls_ctx_free(void *ctx);
 bool mg_tls_init(struct mg_connection *, struct mg_str *opts);
