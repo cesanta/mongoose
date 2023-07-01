@@ -18,7 +18,7 @@ robust, and easy. Features include:
   - works on STM32, NXP, ESP32, NRF52, TI, Microchip, and other
   - write code once - and it'll work everywhere
   - ideal for the unification of the network infrastructure code across company
-- Built-in protocols: plain TCP/UDP, HTTP, MQTT, Websocket
+- Built-in protocols: plain TCP/UDP, SNTP, HTTP, MQTT, Websocket
 - SSL/TLS support: mbedTLS, OpenSSL or custom (via API)
 - Asynchronous DNS resolver
 - Tiny static and run-time footprint
