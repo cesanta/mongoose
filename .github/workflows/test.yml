@@ -131,7 +131,7 @@ jobs:
     - if: ${{ env.GO == 1 }}
       run: sudo apt -y update; sudo apt -y install gcc-arm-none-eabi
     - if: ${{ env.GO == 1 }}
-      run:  make -C examples/stm32/nucleo-f746zg-baremetal test VCON_API_KEY=${{secrets.VCON_API_KEY}}
+      run:  make -C examples/stm32/nucleo-f746zg-make-baremetal-builtin test VCON_API_KEY=${{secrets.VCON_API_KEY}}
     - if: ${{ env.GO == 1 }}
       run:  make -C examples/stm32/nucleo-f746zg-freertos test VCON_API_KEY=${{secrets.VCON_API_KEY}}
     - if: ${{ env.GO == 1 }}
@@ -153,7 +153,7 @@ jobs:
     - if: ${{ env.GO == 1 }}
       run: sudo apt -y update; sudo apt -y install gcc-arm-none-eabi
     - if: ${{ env.GO == 1 }}
-      run:  make -C examples/stm32/nucleo-f429zi-baremetal test VCON_API_KEY=${{secrets.VCON_API_KEY}}
+      run:  make -C examples/stm32/nucleo-f429zi-make-baremetal-builtin test VCON_API_KEY=${{secrets.VCON_API_KEY}}
     - if: ${{ env.GO == 1 }}
       run:  make -C examples/stm32/nucleo-f429zi-freertos test VCON_API_KEY=${{secrets.VCON_API_KEY}}
     - run: echo GO=0 >> $GITHUB_ENV ; if ./test/match_changed_files.sh '^src|examples/stm32/nucleo-f4.*-cube-'; then echo GO=1 >> $GITHUB_ENV ; fi
@@ -173,7 +173,7 @@ jobs:
     - if: ${{ env.GO == 1 }}
       run: sudo apt -y update; sudo apt -y install gcc-arm-none-eabi
     - if: ${{ env.GO == 1 }}
-      run:  make -C examples/stm32/nucleo-h743zi-baremetal test VCON_API_KEY=${{secrets.VCON_API_KEY}}
+      run:  make -C examples/stm32/nucleo-h743zi-make-baremetal-builtin test VCON_API_KEY=${{secrets.VCON_API_KEY}}
     - run: echo GO=0 >> $GITHUB_ENV ; if ./test/match_changed_files.sh '^src|examples/stm32/nucleo-h7.*-cube-'; then echo GO=1 >> $GITHUB_ENV ; fi
     - if: ${{ env.GO == 1 }}
       run: make -C test/cube test PROJECTS=../../examples/stm32/nucleo-h743zi-cube-baremetal VCON_API_KEY=${{secrets.VCON_API_KEY}} DEVICE=6
@@ -215,15 +215,15 @@ jobs:
           - path: esp32/device-dashboard
           - path: esp32/uart-bridge
           - path: esp8266/http-client-server
-          - path: stm32/nucleo-h743zi-baremetal
+          - path: stm32/nucleo-h743zi-make-baremetal-builtin
           - path: stm32/stm32-nucleo-f746z
           - path: stm32/stm32-nucleo-f746zg
           - path: stm32/stm32-nucleo-f429z
           - path: stm32/stm32-nucleo-h743z
-          - path: stm32/nucleo-f429zi-baremetal
+          - path: stm32/nucleo-f429zi-make-baremetal-builtin
           - path: stm32/nucleo-f429zi-freertos
           - path: stm32/nucleo-f429zi-rndis
-          - path: stm32/nucleo-f746zg-baremetal
+          - path: stm32/nucleo-f746zg-make-baremetal-builtin
           - path: stm32/nucleo-f746zg-freertos
           - path: stm32/nucleo-f746zg-freertos-tcp
           - path: stm32/nucleo-f746zg-rndis
