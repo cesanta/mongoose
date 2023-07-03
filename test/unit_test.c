@@ -1190,6 +1190,7 @@ static void test_http_client(void) {
   struct mg_tls_opts opts;
   memset(&opts, 0, sizeof(opts));
   opts.client_ca = mg_str(mg_file_read(&mg_fs_posix, "ca.pem", NULL));
+  //opts.client_ca.len += 1;
   mg_mgr_init(&mgr, &opts);
 
   c = mg_http_connect(&mgr, url, f3, &ok);
@@ -1244,6 +1245,7 @@ static void test_http_client(void) {
 
   mg_mgr_free(&mgr);
   ASSERT(mgr.conns == NULL);
+  free((char *)opts.client_ca.ptr);
 }
 
 static void f4(struct mg_connection *c, int ev, void *ev_data, void *fn_data) {

@@ -414,12 +414,10 @@ static void accept_conn(struct mg_mgr *mgr, struct mg_connection *lsn) {
               &c->rem, mg_print_ip_port, &c->loc));
     mg_call(c, MG_EV_OPEN, NULL);
     mg_call(c, MG_EV_ACCEPT, NULL);
-    //    if (c->is_tls && (!mgr->tls_ctx || !mg_tls_init(c, NULL))) {// if the
-    //    URL is TLS and there is no ctxt, it must fail too
     if (c->is_tls) {
       c->is_tls = 0;
-      if (!mgr->tls_ctx || !mg_tls_init(c, NULL))
-        mg_error(c, "TLS init failed");
+      if (!mgr->tls_ctx || !mg_tls_init(c, NULL))  // if the URL is TLS and
+        mg_error(c, "TLS init failed");  // there is no ctxt, it must fail too
     }
   }
 }
