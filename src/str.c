@@ -187,23 +187,12 @@ void mg_unhex(const char *buf, size_t len, unsigned char *to) {
   }
 }
 
-char *mg_remove_double_dots(char *s) {
-  char *saved = s, *p = s;
-  while (*s != '\0') {
-    *p++ = *s++;
-    if (s[-1] == '/' || s[-1] == '\\') {
-      while (s[0] != '\0') {
-        if (s[0] == '/' || s[0] == '\\') {
-          s++;
-        } else if (s[0] == '.' && s[1] == '.' &&
-                   (s[2] == '/' || s[2] == '\\')) {
-          s += 2;
-        } else {
-          break;
-        }
-      }
+bool mg_path_is_sane(const char *path) {
+  const char *s = path;
+  for (; s[0] != '\0'; s++) {
+    if (s == path || s[0] == '/' || s[0] == '\\') {  // Subdir?
+      if (s[1] == '.' && s[2] == '.') return false;  // Starts with ..
     }
   }
-  *p = '\0';
-  return saved;
+  return true;
 }
