@@ -20,6 +20,12 @@
 #define PINNO(pin) (pin & 255)
 #define PINBANK(pin) (pin >> 8)
 
+#define LED1 PIN('B', 0)   // On-board LED pin (green)
+#define LED2 PIN('E', 1)   // On-board LED pin (yellow)
+#define LED3 PIN('B', 14)  // On-board LED pin (red)
+
+#define LED LED2              // Use yellow LED for blinking
+
 // System clock (2.1, Figure 1; 8.5, Figure 45; 8.5.5, Figure 47; 8.5.6, Figure
 // 49) CPU_FREQUENCY <= 480 MHz; hclk = CPU_FREQUENCY / HPRE ; hclk <= 240 MHz;
 // APB clocks <= 120 MHz. D1 domain bus matrix (and so flash) runs at hclk
@@ -151,6 +157,21 @@ static inline char chiprev(void) {
   if (rev == 0x1003) return 'Y';
   if (rev == 0x2003) return 'V';
   return '?';
+}
+
+static inline void ethernet_init(void) {
+  // Initialise Ethernet. Enable MAC GPIO pins, see
+  // https://www.st.com/resource/en/user_manual/um2407-stm32h7-nucleo144-boards-mb1364-stmicroelectronics.pdf
+  uint16_t pins[] = {PIN('A', 1),  PIN('A', 2),  PIN('A', 7),
+                     PIN('B', 13), PIN('C', 1),  PIN('C', 4),
+                     PIN('C', 5),  PIN('G', 11), PIN('G', 13)};
+  for (size_t i = 0; i < sizeof(pins) / sizeof(pins[0]); i++) {
+    gpio_init(pins[i], GPIO_MODE_AF, GPIO_OTYPE_PUSH_PULL, GPIO_SPEED_INSANE,
+              GPIO_PULL_NONE, 11);  // 11 is the Ethernet function
+  }
+  NVIC_EnableIRQ(ETH_IRQn);                     // Setup Ethernet IRQ handler
+  SETBITS(SYSCFG->PMCR, 7 << 21, 4 << 21);      // Use RMII (12.3.1)
+  RCC->AHB1ENR |= BIT(15) | BIT(16) | BIT(17);  // Enable Ethernet clocks
 }
 
 #define UUID ((uint8_t *) UID_BASE)  // Unique 96-bit chip ID. TRM 61.1

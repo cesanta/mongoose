@@ -5,11 +5,6 @@
 #include "mongoose.h"
 #include "net.h"
 
-#define LED1 PIN('B', 0)   // On-board LED pin (green)
-#define LED2 PIN('B', 7)   // On-board LED pin (blue)
-#define LED3 PIN('B', 14)  // On-board LED pin (red)
-
-#define LED LED2              // Use blue LED for blinking
 #define BLINK_PERIOD_MS 1000  // LED blinking period in millis
 
 static volatile uint64_t s_ticks;  // Milliseconds since boot
@@ -35,22 +30,6 @@ static void timer_fn(void *arg) {
   MG_INFO(("Ethernet: %s, IP: %M, rx:%u, tx:%u, dr:%u, er:%u",
            names[ifp->state], mg_print_ip4, &ifp->ip, ifp->nrecv, ifp->nsent,
            ifp->ndrop, ifp->nerr));
-}
-
-static void ethernet_init(void) {
-  // Initialise Ethernet. Enable MAC GPIO pins, see
-  // https://www.farnell.com/datasheets/2014265.pdf section 6.10
-  uint16_t pins[] = {PIN('A', 1),  PIN('A', 2),  PIN('A', 7),
-                     PIN('B', 13), PIN('C', 1),  PIN('C', 4),
-                     PIN('C', 5),  PIN('G', 11), PIN('G', 13)};
-  for (size_t i = 0; i < sizeof(pins) / sizeof(pins[0]); i++) {
-    gpio_init(pins[i], GPIO_MODE_AF, GPIO_OTYPE_PUSH_PULL, GPIO_SPEED_INSANE,
-              GPIO_PULL_NONE, 11);  // 11 is the Ethernet function
-  }
-  NVIC_EnableIRQ(ETH_IRQn);                // Setup Ethernet IRQ handler
-  SYSCFG->PMC |= SYSCFG_PMC_MII_RMII_SEL;  // Use RMII. Goes first!
-  RCC->AHB1ENR |=
-      RCC_AHB1ENR_ETHMACEN | RCC_AHB1ENR_ETHMACTXEN | RCC_AHB1ENR_ETHMACRXEN;
 }
 
 int main(void) {
