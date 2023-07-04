@@ -3452,8 +3452,9 @@ static void mqtt_cb(struct mg_connection *c, int ev, void *ev_data,
               if (c->is_mqtt5) remaining_len += 2;  // 3.4.2
 
               mg_mqtt_send_header(
-                  c, mm.qos == 2 ? MQTT_CMD_PUBREC : MQTT_CMD_PUBACK, 0,
-                  remaining_len);
+                  c,
+                  (uint8_t) (mm.qos == 2 ? MQTT_CMD_PUBREC : MQTT_CMD_PUBACK),
+                  0, remaining_len);
               mg_send(c, &id, sizeof(id));
 
               if (c->is_mqtt5) {
