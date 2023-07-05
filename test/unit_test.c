@@ -1922,7 +1922,7 @@ static void test_str(void) {
 
 static void fn1(struct mg_connection *c, int ev, void *ev_data, void *fn_data) {
   if (ev == MG_EV_ERROR) {
-    ASSERT(* (void **) fn_data == NULL);
+    ASSERT(*(void **) fn_data == NULL);
     *(char **) fn_data = mg_mprintf("%s", (char *) ev_data);
   }
   (void) c;
@@ -2543,16 +2543,18 @@ static void test_udp(void) {
 }
 
 static void test_check_ip_acl(void) {
-  uint32_t ip = mg_htonl(0x01020304);
-  ASSERT(mg_check_ip_acl(mg_str(NULL), ip) == 1);
-  ASSERT(mg_check_ip_acl(mg_str(""), ip) == 1);
-  ASSERT(mg_check_ip_acl(mg_str("invalid"), ip) == -1);
-  ASSERT(mg_check_ip_acl(mg_str("+hi"), ip) == -2);
-  ASSERT(mg_check_ip_acl(mg_str("+//"), ip) == -2);
-  ASSERT(mg_check_ip_acl(mg_str("-0.0.0.0/0"), ip) == 0);
-  ASSERT(mg_check_ip_acl(mg_str("-0.0.0.0/0,+1.0.0.0/8"), ip) == 1);
-  ASSERT(mg_check_ip_acl(mg_str("-0.0.0.0/0,+1.2.3.4"), ip) == 1);
-  ASSERT(mg_check_ip_acl(mg_str("-0.0.0.0/0,+1.0.0.0/16"), ip) == 0);
+  struct mg_addr ip = {{1,2,3,4}, 0, false};  // 1.2.3.4
+  ASSERT(mg_check_ip_acl(mg_str(NULL), &ip) == 1);
+  ASSERT(mg_check_ip_acl(mg_str(""), &ip) == 1);
+  ASSERT(mg_check_ip_acl(mg_str("invalid"), &ip) == -1);
+  ASSERT(mg_check_ip_acl(mg_str("+hi"), &ip) == -2);
+  ASSERT(mg_check_ip_acl(mg_str("+//"), &ip) == -2);
+  ASSERT(mg_check_ip_acl(mg_str("-0.0.0.0/0"), &ip) == 0);
+  ASSERT(mg_check_ip_acl(mg_str("-0.0.0.0/0,+1.0.0.0/8"), &ip) == 1);
+  ASSERT(mg_check_ip_acl(mg_str("-0.0.0.0/0,+1.2.3.4"), &ip) == 1);
+  ASSERT(mg_check_ip_acl(mg_str("-0.0.0.0/0,+1.0.0.0/16"), &ip) == 0);
+  ip.is_ip6 = true;
+  ASSERT(mg_check_ip_acl(mg_str("-0.0.0.0/0"), &ip) == -1);  // not yet supported
 }
 
 static void w3(struct mg_connection *c, int ev, void *ev_data, void *fn_data) {
