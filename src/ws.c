@@ -146,12 +146,15 @@ static bool mg_ws_client_handshake(struct mg_connection *c) {
     mg_error(c, "not http");  // Some just, not an HTTP request
   } else if (n > 0) {
     if (n < 15 || memcmp(c->recv.buf + 9, "101", 3) != 0) {
-      mg_error(c, "handshake error");
+      mg_error(c, "ws handshake error");
     } else {
       struct mg_http_message hm;
-      mg_http_parse((char *) c->recv.buf, c->recv.len, &hm);
-      c->is_websocket = 1;
-      mg_call(c, MG_EV_WS_OPEN, &hm);
+      if (mg_http_parse((char *) c->recv.buf, c->recv.len, &hm)) {
+        c->is_websocket = 1;
+        mg_call(c, MG_EV_WS_OPEN, &hm);
+      } else {
+        mg_error(c, "ws handshake error");
+      }
     }
     mg_iobuf_del(&c->recv, 0, (size_t) n);
   } else {

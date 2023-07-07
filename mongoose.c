@@ -1412,16 +1412,6 @@ int mg_http_get_request_len(const unsigned char *buf, size_t buf_len) {
   }
   return 0;
 }
-
-static const char *skip(const char *s, const char *e, const char *d,
-                        struct mg_str *v) {
-  v->ptr = s;
-  while (s < e && *s != '\n' && strchr(d, *s) == NULL) s++;
-  v->len = (size_t) (s - v->ptr);
-  while (s < e && strchr(d, *s) != NULL) s++;
-  return s;
-}
-
 struct mg_str *mg_http_get_header(struct mg_http_message *h, const char *name) {
   size_t i, n = strlen(name), max = sizeof(h->headers) / sizeof(h->headers[0]);
   for (i = 0; i < max && h->headers[i].name.len > 0; i++) {
@@ -1431,22 +1421,42 @@ struct mg_str *mg_http_get_header(struct mg_http_message *h, const char *name) {
   return NULL;
 }
 
+// Get character length. Used to parse method, URI, headers
+static size_t clen(const char *s) {
+  uint8_t c = *(uint8_t *) s;
+  if (c > ' ' && c < '~') return 1;  // Usual ascii printed char
+  if ((c & 0xe0) == 0xc0) return 2;  // 2-byte UTF8
+  if ((c & 0xf0) == 0xe0) return 3;  // 3-byte UTF8
+  if ((c & 0xf8) == 0xf0) return 4;  // 4-byte UTF8
+  return 0;
+}
+
+// Skip until the newline. Return advanced `s`, or NULL on error
+static const char *skiptorn(const char *s, const char *end, struct mg_str *v) {
+  v->ptr = s;
+  while (s < end && s[0] != '\n' && s[0] != '\r') s++, v->len++;  // To newline
+  if (s >= end || (s[0] == '\r' && s[1] != '\n')) return NULL;    // Stray \r
+  if (s < end && s[0] == '\r') s++;                               // Skip \r
+  if (s >= end || *s++ != '\n') return NULL;                      // Skip \n
+  return s;
+}
+
 static bool mg_http_parse_headers(const char *s, const char *end,
-                                  struct mg_http_header *h, int max_headers) {
-  int i;
-  for (i = 0; i < max_headers; i++) {
-    struct mg_str k, v, tmp;
-    const char *he = skip(s, end, "\r\n", &tmp);
-    if (tmp.len == 0) break;  // empty header = EOH
-    s = skip(s, he, ": \r\n", &k);
-    if (k.ptr[k.len] != ':') return false;  // Invalid header
-    s = skip(s, he, "\r\n", &v);
+                                  struct mg_http_header *h, size_t max_hdrs) {
+  size_t i, n;
+  for (i = 0; i < max_hdrs; i++) {
+    struct mg_str k = {NULL, 0}, v = {NULL, 0};
+    if (s >= end) return false;
+    if (s[0] == '\n' || (s[0] == '\r' && s[1] == '\n')) break;
+    k.ptr = s;
+    while (s < end && s[0] != ':' && (n = clen(s)) > 0) s += n, k.len += n;
+    if (k.len == 0) return false;               // Empty name
+    if (s >= end || *s++ != ':') return false;  // Invalid, not followed by :
+    while (s < end && s[0] == ' ') s++;         // Skip spaces
+    if ((s = skiptorn(s, end, &v)) == NULL) return false;
     while (v.len > 0 && v.ptr[v.len - 1] == ' ') v.len--;  // Trim spaces
-    if (k.len == 0) return false;                          // empty name
-    // MG_INFO(("--HH [%.*s] [%.*s] [%.*s]", (int) tmp.len, tmp.ptr,
-    //(int) k.len, k.ptr, (int) v.len, v.ptr));
-    h[i].name = k;
-    h[i].value = v;
+    // MG_INFO(("--HH [%.*s] [%.*s]", (int) k.len, k.ptr, (int) v.len, v.ptr));
+    h[i].name = k, h[i].value = v;  // Success. Assign values
   }
   return true;
 }
@@ -1455,6 +1465,7 @@ int mg_http_parse(const char *s, size_t len, struct mg_http_message *hm) {
   int is_response, req_len = mg_http_get_request_len((unsigned char *) s, len);
   const char *end = s == NULL ? NULL : s + req_len, *qs;  // Cannot add to NULL
   struct mg_str *cl;
+  size_t n;
 
   memset(hm, 0, sizeof(*hm));
   if (req_len <= 0) return req_len;
@@ -1466,9 +1477,13 @@ int mg_http_parse(const char *s, size_t len, struct mg_http_message *hm) {
   hm->message.len = hm->body.len = (size_t) ~0;  // Set body length to infinite
 
   // Parse request line
-  s = skip(s, end, " ", &hm->method);
-  s = skip(s, end, " ", &hm->uri);
-  s = skip(s, end, "\r\n", &hm->proto);
+  hm->method.ptr = s;
+  while (s < end && (n = clen(s)) > 0) s += n, hm->method.len += n;
+  while (s < end && s[0] == ' ') s++;  // Skip spaces
+  hm->uri.ptr = s;
+  while (s < end && (n = clen(s)) > 0) s += n, hm->uri.len += n;
+  while (s < end && s[0] == ' ') s++;  // Skip spaces
+  if ((s = skiptorn(s, end, &hm->proto)) == NULL) return false;
 
   // Sanity check. Allow protocol/reason to be empty
   if (hm->method.len == 0 || hm->uri.len == 0) return -1;
@@ -6263,12 +6278,15 @@ static bool mg_ws_client_handshake(struct mg_connection *c) {
     mg_error(c, "not http");  // Some just, not an HTTP request
   } else if (n > 0) {
     if (n < 15 || memcmp(c->recv.buf + 9, "101", 3) != 0) {
-      mg_error(c, "handshake error");
+      mg_error(c, "ws handshake error");
     } else {
       struct mg_http_message hm;
-      mg_http_parse((char *) c->recv.buf, c->recv.len, &hm);
-      c->is_websocket = 1;
-      mg_call(c, MG_EV_WS_OPEN, &hm);
+      if (mg_http_parse((char *) c->recv.buf, c->recv.len, &hm)) {
+        c->is_websocket = 1;
+        mg_call(c, MG_EV_WS_OPEN, &hm);
+      } else {
+        mg_error(c, "ws handshake error");
+      }
     }
     mg_iobuf_del(&c->recv, 0, (size_t) n);
   } else {

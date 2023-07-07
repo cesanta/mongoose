@@ -745,7 +745,7 @@ static int cmpbody(const char *buf, const char *str) {
   struct mg_str s = mg_str(str);
   struct mg_http_message hm = gethm(buf);
   size_t len = strlen(buf);
-  mg_http_parse(buf, len, &hm);
+  // mg_http_parse(buf, len, &hm);
   if (hm.body.len > len) hm.body.len = len - (size_t) (hm.body.ptr - buf);
   return mg_strcmp(hm.body, s);
 }
@@ -857,6 +857,7 @@ static void test_http_server(void) {
 
   // Fetch file with unicode chars in filename
   ASSERT(fetch(&mgr, buf, url, "GET /київ.txt HTTP/1.0\n\n") == 200);
+  MG_INFO(("%s", buf));
   ASSERT(cmpbody(buf, "є\n") == 0);
 
   ASSERT(fetch(&mgr, buf, url, "GET /../fuzz.c HTTP/1.0\n\n") == 400);
@@ -1350,6 +1351,9 @@ static void test_http_parse(void) {
     ASSERT(req.query.len == 0);
     ASSERT(req.message.len == len);
     ASSERT(req.body.len == 0);
+    ASSERT(mg_vcmp(&req.method, "GET") == 0);
+    ASSERT(mg_vcmp(&req.uri, "/blah") == 0);
+    ASSERT(mg_vcmp(&req.proto, "HTTP/1.0") == 0);
     for (idx = 0; idx < len; idx++) ASSERT(mg_http_parse(s, idx, &req) == 0);
   }
 
@@ -1384,6 +1388,30 @@ static void test_http_parse(void) {
     ASSERT(mg_vcmp(&req.headers[2].name, "v") == 0);
     ASSERT(mg_vcmp(&req.headers[2].value, "k") == 0);
     ASSERT(req.body.len == 0);
+  }
+
+  // #2292: fail on stray \r inside the headers
+  ASSERT(mg_http_parse("a є\n\n", 6, &req) > 0);
+  ASSERT(mg_http_parse("a b\n\n", 5, &req) > 0);
+  ASSERT(mg_http_parse("a b\na:\n\n", 8, &req) > 0);
+  ASSERT(mg_http_parse("a b\na:\r\n\n", 9, &req) > 0);
+  ASSERT(mg_http_parse("a b\n\ra:\r\n\n", 10, &req) == -1);
+  ASSERT(mg_http_parse("a b\na:\r1\n\n", 10, &req) == -1);
+  ASSERT(mg_http_parse("a b\na: \r1\n\n", 11, &req) == -1);
+  ASSERT(mg_http_parse("a b\na: \rb:\n\n", 12, &req) == -1);
+  ASSERT(mg_http_parse("a b\na: \nb:\n\n", 12, &req) > 0);
+
+  {
+    const char *s = "ґєт /слеш вах вах\nмісто:  кіїв \n\n";
+    ASSERT(mg_http_parse(s, strlen(s), &req) == (int) strlen(s));
+    ASSERT(req.body.len == 0);
+    ASSERT(req.headers[1].name.len == 0);
+    ASSERT(mg_vcmp(&req.headers[0].name, "місто") == 0);
+    ASSERT(mg_vcmp(&req.headers[0].value, "кіїв") == 0);
+    ASSERT((v = mg_http_get_header(&req, "місто")) != NULL);
+    ASSERT(mg_vcmp(&req.method, "ґєт") == 0);
+    ASSERT(mg_vcmp(&req.uri, "/слеш") == 0);
+    ASSERT(mg_vcmp(&req.proto, "вах вах") == 0);
   }
 
   {
@@ -2570,7 +2598,7 @@ static void test_udp(void) {
 }
 
 static void test_check_ip_acl(void) {
-  struct mg_addr ip = {{1,2,3,4}, 0, false};  // 1.2.3.4
+  struct mg_addr ip = {{1, 2, 3, 4}, 0, false};  // 1.2.3.4
   ASSERT(mg_check_ip_acl(mg_str(NULL), &ip) == 1);
   ASSERT(mg_check_ip_acl(mg_str(""), &ip) == 1);
   ASSERT(mg_check_ip_acl(mg_str("invalid"), &ip) == -1);
@@ -2581,7 +2609,8 @@ static void test_check_ip_acl(void) {
   ASSERT(mg_check_ip_acl(mg_str("-0.0.0.0/0,+1.2.3.4"), &ip) == 1);
   ASSERT(mg_check_ip_acl(mg_str("-0.0.0.0/0,+1.0.0.0/16"), &ip) == 0);
   ip.is_ip6 = true;
-  ASSERT(mg_check_ip_acl(mg_str("-0.0.0.0/0"), &ip) == -1);  // not yet supported
+  ASSERT(mg_check_ip_acl(mg_str("-0.0.0.0/0"), &ip) ==
+         -1);  // not yet supported
 }
 
 static void w3(struct mg_connection *c, int ev, void *ev_data, void *fn_data) {
@@ -3057,6 +3086,7 @@ int main(void) {
   test_str();
   test_globmatch();
   test_get_header_var();
+  test_http_parse();
   test_rewrites();
   test_check_ip_acl();
   test_udp();
@@ -3068,7 +3098,6 @@ int main(void) {
   test_http_chunked();
   test_http_upload();
   test_http_stream_buffer();
-  test_http_parse();
   test_util();
   test_dns();
   test_timer();
