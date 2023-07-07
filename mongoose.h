@@ -858,7 +858,6 @@ bool mg_split(struct mg_str *s, struct mg_str *k, struct mg_str *v, char delim);
 char *mg_hex(const void *buf, size_t len, char *dst);
 void mg_unhex(const char *buf, size_t len, unsigned char *to);
 unsigned long mg_unhexn(const char *s, size_t len);
-int mg_check_ip_acl(struct mg_str acl, uint32_t remote_ip);
 bool mg_path_is_sane(const char *path);
 
 
@@ -1042,6 +1041,9 @@ uint64_t mg_millis(void);
 #define MG_U8P(ADDR) ((uint8_t *) (ADDR))
 #define MG_IPADDR_PARTS(ADDR) \
   MG_U8P(ADDR)[0], MG_U8P(ADDR)[1], MG_U8P(ADDR)[2], MG_U8P(ADDR)[3]
+
+struct mg_addr;
+int mg_check_ip_acl(struct mg_str acl, struct mg_addr *remote_ip);
 
 // Linked list management macros
 #define LIST_ADD_HEAD(type_, head_, elem_) \

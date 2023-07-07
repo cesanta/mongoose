@@ -30,6 +30,9 @@ uint64_t mg_millis(void);
 #define MG_IPADDR_PARTS(ADDR) \
   MG_U8P(ADDR)[0], MG_U8P(ADDR)[1], MG_U8P(ADDR)[2], MG_U8P(ADDR)[3]
 
+struct mg_addr;
+int mg_check_ip_acl(struct mg_str acl, struct mg_addr *remote_ip);
+
 // Linked list management macros
 #define LIST_ADD_HEAD(type_, head_, elem_) \
   do {                                     \
