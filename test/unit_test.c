@@ -845,6 +845,9 @@ static void test_http_server(void) {
   ASSERT(fetch(&mgr, buf, url, "GET /a.txt HTTP/1.0\n\n") == 200);
   ASSERT(cmpbody(buf, "hello\n") == 0);
 
+  // Invalid header: failure
+  ASSERT(fetch(&mgr, buf, url, "GET /a.txt HTTP/1.0\nA B\n\n") == 0);
+
   ASSERT(fetch(&mgr, buf, url, "GET /%%61.txt HTTP/1.0\n\n") == 200);
   ASSERT(cmpbody(buf, "hello\n") == 0);
 
@@ -1351,16 +1354,40 @@ static void test_http_parse(void) {
   }
 
   {
-    static const char *s = "get b c\nz :  k \nb: t\nvvv\n\n xx";
+    const char *s = "get b c\nb: t\nv:vv\n\n xx";
     ASSERT(mg_http_parse(s, strlen(s), &req) == (int) strlen(s) - 3);
-    ASSERT(req.headers[2].name.len == 0);
+  }
+
+  {
+    const char *s = "get b c\nb: t\nv:\n\n xx";
+    ASSERT(mg_http_parse(s, strlen(s), &req) == (int) strlen(s) - 3);
+  }
+
+  {
+    const char *s = "get b c\nb: t\nv v\n\n xx";
+    ASSERT(mg_http_parse(s, strlen(s), &req) == -1);
+  }
+
+  {
+    const char *s = "get b c\nb: t\n : aa\n\n";
+    ASSERT(mg_http_parse(s, strlen(s), &req) == -1);
+  }
+
+  {
+    const char *s = "get b c\nz:  k \nb: t\nv:k\n\n xx";
+    ASSERT(mg_http_parse(s, strlen(s), &req) == (int) strlen(s) - 3);
+    ASSERT(req.headers[3].name.len == 0);
+    ASSERT(mg_vcmp(&req.headers[0].name, "z") == 0);
     ASSERT(mg_vcmp(&req.headers[0].value, "k") == 0);
+    ASSERT(mg_vcmp(&req.headers[1].name, "b") == 0);
     ASSERT(mg_vcmp(&req.headers[1].value, "t") == 0);
+    ASSERT(mg_vcmp(&req.headers[2].name, "v") == 0);
+    ASSERT(mg_vcmp(&req.headers[2].value, "k") == 0);
     ASSERT(req.body.len == 0);
   }
 
   {
-    const char *s = "a b c\r\nContent-Length: 21 \r\nb: t\r\nvvv\r\n\r\nabc";
+    const char *s = "a b c\r\nContent-Length: 21 \r\nb: t\r\nv:v\r\n\r\nabc";
     ASSERT(mg_http_parse(s, strlen(s), &req) == (int) strlen(s) - 3);
     ASSERT(req.body.len == 21);
     ASSERT(req.message.len == 21 - 3 + strlen(s));
@@ -1452,9 +1479,9 @@ static void test_http_parse(void) {
     struct mg_http_message hm;
     const char *s = "a b c\n\n";
     ASSERT(mg_http_parse(s, strlen(s), &hm) == (int) strlen(s));
-    s = "a b\nc\n\n";
+    s = "a b\nc:d\n\n";
     ASSERT(mg_http_parse(s, strlen(s), &hm) == (int) strlen(s));
-    s = "a\nb\nc\n\n";
+    s = "a\nb:b\nc:c\n\n";
     ASSERT(mg_http_parse(s, strlen(s), &hm) < 0);
   }
 }
@@ -1922,7 +1949,7 @@ static void test_str(void) {
 
 static void fn1(struct mg_connection *c, int ev, void *ev_data, void *fn_data) {
   if (ev == MG_EV_ERROR) {
-    ASSERT(* (void **) fn_data == NULL);
+    ASSERT(*(void **) fn_data == NULL);
     *(char **) fn_data = mg_mprintf("%s", (char *) ev_data);
   }
   (void) c;

@@ -1,7 +1,7 @@
-#include "http.h"
 #include "arch.h"
 #include "base64.h"
 #include "fmt.h"
+#include "http.h"
 #include "json.h"
 #include "log.h"
 #include "net.h"
@@ -207,11 +207,11 @@ static bool mg_http_parse_headers(const char *s, const char *end,
     const char *he = skip(s, end, "\r\n", &tmp);
     if (tmp.len == 0) break;  // empty header = EOH
     s = skip(s, he, ": \r\n", &k);
+    if (k.ptr[k.len] != ':') return false;  // Invalid header
     s = skip(s, he, "\r\n", &v);
-    if (k.len == tmp.len) continue;
     while (v.len > 0 && v.ptr[v.len - 1] == ' ') v.len--;  // Trim spaces
     if (k.len == 0) return false;                          // empty name
-    // MG_INFO(("--HH [%.*s] [%.*s] [%.*s]", (int) tmp.len - 1, tmp.ptr,
+    // MG_INFO(("--HH [%.*s] [%.*s] [%.*s]", (int) tmp.len, tmp.ptr,
     //(int) k.len, k.ptr, (int) v.len, v.ptr));
     h[i].name = k;
     h[i].value = v;
@@ -735,7 +735,7 @@ static int uri_to_path2(struct mg_connection *c, struct mg_http_message *hm,
   }
   path[path_size - 1] = '\0';
   // Terminate root dir with /
-  if (n + 2 < path_size && path[n-1] != '/') path[n++] = '/', path[n] = '\0';
+  if (n + 2 < path_size && path[n - 1] != '/') path[n++] = '/', path[n] = '\0';
   mg_url_decode(hm->uri.ptr + url.len, hm->uri.len - url.len, path + n,
                 path_size - n, 0);
   path[path_size - 1] = '\0';  // Double-check
