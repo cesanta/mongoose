@@ -3,6 +3,8 @@
 #define MG_ENABLE_TCPIP 1
 #define MG_ENABLE_PACKED_FS 0
 
+#define MIP_TEST
+
 #include "mongoose.c"
 #include "driver_mock.c"
 
@@ -48,9 +50,126 @@ static void test_poll(void) {
   mg_mgr_free(&mgr);
 }
 
+#define DRIVER_BUF_SIZE 1540
+
+struct driver_data {
+  char buf[DRIVER_BUF_SIZE];
+  size_t len;
+};
+
+static struct driver_data s_driver_data;
+
+static size_t if_tx(const void *buf, size_t len, struct mg_tcpip_if *ifp) {
+  struct driver_data *driver_data = (struct driver_data *) ifp->driver_data;
+  if (len > DRIVER_BUF_SIZE) len = DRIVER_BUF_SIZE;
+  memcpy(driver_data->buf, buf, len);
+  return len;
+}
+
+static bool if_up(struct mg_tcpip_if *ifp) {
+  return ifp->driver_data ? true : false;
+}
+
+static size_t if_rx(void *buf, size_t len, struct mg_tcpip_if *ifp) {
+  struct driver_data *driver_data = (struct driver_data *) ifp->driver_data;
+  if (len > driver_data->len) len = driver_data->len;
+  memcpy(buf, driver_data->buf, len);
+  return len;
+}
+
+static void create_tcp_pkt(struct eth *e, struct ip *ip, uint32_t seq,
+                           uint32_t ack, uint8_t flags, size_t payload_len) {
+  struct tcp t;
+  memset(&t, 0, sizeof(struct tcp));
+  t.flags = flags;
+  t.seq = mg_htonl(seq);
+  t.ack = mg_htonl(ack);
+  t.off = 5 << 4;
+  memcpy(s_driver_data.buf, e, sizeof(*e));
+  memcpy(s_driver_data.buf + sizeof(*e), ip, sizeof(*ip));
+  memcpy(s_driver_data.buf + sizeof(*e) + sizeof(*ip), &t, sizeof(struct tcp));
+  s_driver_data.len =
+      sizeof(*e) + sizeof(*ip) + sizeof(struct tcp) + payload_len;
+}
+
+static void test_retransmit(void) {
+  struct mg_mgr mgr;
+  struct eth e;
+  struct ip ip;
+  struct tcp *t;
+  struct mg_tcpip_driver driver;
+  struct mg_tcpip_if mif;
+  struct mg_connection *c;
+
+  mg_mgr_init(&mgr);
+  memset(&mif, 0, sizeof(mif));
+  memset(&s_driver_data, 0, sizeof(struct driver_data));
+  driver.init = NULL, driver.tx = if_tx, driver.up = if_up, driver.rx = if_rx;
+  mif.driver = &driver;
+  mif.driver_data = &s_driver_data;
+  mg_tcpip_init(&mgr, &mif);
+  c = mg_alloc_conn(&mgr);
+  LIST_ADD_HEAD(struct mg_connection, &mgr.conns, c);
+  c->is_listening = 1;
+  mg_mgr_poll(&mgr, 0);
+
+  memset(&e, 0, sizeof(e));
+  memcpy(e.dst, mif.mac, 6 * sizeof(uint8_t));
+  e.type = mg_htons(0x800);
+
+  memset(&ip, 0, sizeof(ip));
+  ip.ver = 4 << 4, ip.proto = 6;
+  ip.len = mg_htons(sizeof(ip) + sizeof(struct tcp));
+
+  // SYN
+  create_tcp_pkt(&e, &ip, 1000, 0, TH_SYN | TH_ACK, 0);
+  mg_mgr_poll(&mgr, 0);
+
+  // SYN-ACK
+  t = (struct tcp *) (s_driver_data.buf + sizeof(struct eth) +
+                      sizeof(struct ip));
+  ASSERT((t->flags == (TH_SYN | TH_ACK)));
+  ASSERT((t->ack == mg_htonl(1001)));
+
+  // ACK
+  create_tcp_pkt(&e, &ip, 1001, 1, TH_ACK, 0);
+  mg_mgr_poll(&mgr, 0);
+
+  // packet with seq_no = 1001
+  ip.len =
+      mg_htons(sizeof(struct ip) + sizeof(struct tcp) + /* TCP Payload */ 1);
+  create_tcp_pkt(&e, &ip, 1001, 1, TH_PUSH | TH_ACK, 1);
+  mg_mgr_poll(&mgr, 0);
+  t = (struct tcp *) (s_driver_data.buf + sizeof(struct eth) +
+                      sizeof(struct ip));
+  ASSERT((t->flags == TH_ACK));
+  ASSERT((t->ack == mg_htonl(1002)));
+
+  // packet with seq_no = 1003
+  create_tcp_pkt(&e, &ip, 1003, 1, TH_PUSH | TH_ACK, 1);
+  mg_mgr_poll(&mgr, 0);
+  t = (struct tcp *) (s_driver_data.buf + sizeof(struct eth) +
+                      sizeof(struct ip));
+  ASSERT((t->flags == TH_ACK));
+  ASSERT((t->ack == mg_htonl(1002)));
+
+  // retransmitting packet with seq_no = 1002
+  create_tcp_pkt(&e, &ip, 1002, 1, TH_PUSH | TH_ACK, 1);
+  mg_mgr_poll(&mgr, 0);
+  t = (struct tcp *) (s_driver_data.buf + sizeof(struct eth) +
+                      sizeof(struct ip));
+  ASSERT((t->flags == TH_ACK));
+  ASSERT((t->ack == mg_htonl(1003)));
+
+  s_driver_data.len = 0;
+  mg_mgr_free(&mgr);
+  mg_tcpip_free(&mif);
+}
+
 int main(void) {
   test_statechange();
   test_poll();
+  test_retransmit();
   printf("SUCCESS. Total tests: %d\n", s_num_tests);
   return 0;
 }

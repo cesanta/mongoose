@@ -8064,9 +8064,11 @@ static void read_conn(struct mg_connection *c, struct pkt *pkt) {
     if (s->ack == ack) {
       MG_VERBOSE(("ignoring duplicate pkt"));
     } else {
-      // TODO(cpq): peer sent us SEQ which we don't expect. Retransmit
-      // rather than close this connection
-      mg_error(c, "SEQ != ACK: %x %x %x", seq, s->ack, ack);
+      uint32_t rem_ip;
+      memcpy(&rem_ip, c->rem.ip, sizeof(uint32_t));
+      MG_DEBUG(("SEQ != ACK: %x %x %x", seq, s->ack, ack));
+      tx_tcp((struct mg_tcpip_if *) c->mgr->priv, s->mac, rem_ip, TH_ACK, c->loc.port,
+           c->rem.port, mg_htonl(s->seq), mg_htonl(s->ack), "", 0);
     }
   } else if (io->size - io->len < pkt->pay.len &&
              !mg_iobuf_resize(io, io->len + pkt->pay.len)) {
@@ -8083,10 +8085,12 @@ static void read_conn(struct mg_connection *c, struct pkt *pkt) {
     MG_DEBUG(("%lu SEQ %x -> %x", c->id, mg_htonl(pkt->tcp->seq), s->ack));
     // Advance ACK counter
     s->ack = (uint32_t) (mg_htonl(pkt->tcp->seq) + pkt->pay.len);
-#if 0
+#ifdef MIP_TEST
     // Send ACK immediately
+    uint32_t rem_ip;
+    memcpy(&rem_ip, c->rem.ip, sizeof(uint32_t));
     MG_DEBUG(("  imm ACK", c->id, mg_htonl(pkt->tcp->seq), s->ack));
-    tx_tcp((struct mg_tcpip_if *) c->mgr->priv, c->rem.ip, TH_ACK, c->loc.port,
+    tx_tcp((struct mg_tcpip_if *) c->mgr->priv, s->mac, rem_ip, TH_ACK, c->loc.port,
            c->rem.port, mg_htonl(s->seq), mg_htonl(s->ack), "", 0);
 #else
     // if not already running, setup a timer to send an ACK later
