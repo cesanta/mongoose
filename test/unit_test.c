@@ -1,8 +1,8 @@
 #include "mongoose.h"
 
+#include "data/keydata.h"
 #include "float.h"  // For DBL_EPSILON and HUGE_VAL
 #include "math.h"
-#include "data/keydata.h"
 
 static int s_num_tests = 0;
 
@@ -1129,27 +1129,27 @@ static void test_http_404(void) {
 }
 
 static void test_tls(void) {
+  struct mg_mgr mgr;
+  char buf[FETCH_BUF_SIZE];
+  struct mg_connection *c;  // HTTP listener
+  const char *url = "http://127.0.0.1:12374";
   struct mg_tls_opts opts;
   memset(&opts, 0, sizeof(opts));
-  opts.client_ca.ptr = (char*)ss_ca_pem;
+  opts.client_ca.ptr = (char *) ss_ca_pem;
   opts.client_ca.len = ss_ca_pem_len;
-  opts.server_cert.ptr = (char*)ss_server_pem;
+  opts.server_cert.ptr = (char *) ss_server_pem;
   opts.server_cert.len = ss_server_pem_len;
-  opts.client_cert.ptr = (char*)ss_client_pem;
+  opts.client_cert.ptr = (char *) ss_client_pem;
   opts.client_cert.len = ss_client_pem_len;
 
-  struct mg_mgr mgr;
   mg_mgr_init(&mgr, &opts);
-  char buf[FETCH_BUF_SIZE];
-  struct mg_connection *c; // HTTP listener
-  const char *url = "http://127.0.0.1:12374";
   c = mg_http_listen(&mgr, url, eh1, NULL);
   ASSERT(c != NULL);
   ASSERT(fetch(&mgr, buf, url, "GET /a.txt HTTP/1.0\n\n") == 200);
   // MG_INFO(("%s", buf));
   ASSERT(cmpbody(buf, "hello\n") == 0);
 #if MG_ENABLE_MBEDTLS || MG_ENABLE_OPENSSL
-  struct mg_connection *sc; // HTTPS listener
+  struct mg_connection *sc;  // HTTPS listener
   const char *surl = "https://127.0.0.1:12347";
   sc = mg_http_listen(&mgr, surl, eh1, NULL);
   ASSERT(sc != NULL);
@@ -1190,7 +1190,7 @@ static void test_http_client(void) {
   struct mg_tls_opts opts;
   memset(&opts, 0, sizeof(opts));
   opts.client_ca = mg_str(mg_file_read(&mg_fs_posix, "ca.pem", NULL));
-  //opts.client_ca.len += 1;
+  // opts.client_ca.len += 1;
   mg_mgr_init(&mgr, &opts);
 
   c = mg_http_connect(&mgr, url, f3, &ok);
@@ -1211,7 +1211,8 @@ static void test_http_client(void) {
     mg_mgr_poll(&mgr, 1);
 
     // Test failed host validation
-#if 0  // NB: This cannot be done with the current API - no way to set custom host name (Allan)
+#if 0  // NB: This cannot be done with the current API - no way to set custom
+       // host name (Allan)
     ok = 0;
     sopts.srvname = mg_str("dummy");
     c = mg_http_connect(&mgr, url, f3, &ok);
@@ -1245,7 +1246,7 @@ static void test_http_client(void) {
 
   mg_mgr_free(&mgr);
   ASSERT(mgr.conns == NULL);
-  free((char *)opts.client_ca.ptr);
+  free((char *) opts.client_ca.ptr);
 }
 
 static void f4(struct mg_connection *c, int ev, void *ev_data, void *fn_data) {
