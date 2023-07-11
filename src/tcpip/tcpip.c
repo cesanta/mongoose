@@ -600,7 +600,7 @@ static void read_conn(struct mg_connection *c, struct pkt *pkt) {
     MG_DEBUG(("%lu SEQ %x -> %x", c->id, mg_htonl(pkt->tcp->seq), s->ack));
     // Advance ACK counter
     s->ack = (uint32_t) (mg_htonl(pkt->tcp->seq) + pkt->pay.len);
-#ifdef MIP_TEST
+#if 0
     // Send ACK immediately
     uint32_t rem_ip;
     memcpy(&rem_ip, c->rem.ip, sizeof(uint32_t));
