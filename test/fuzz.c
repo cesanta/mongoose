@@ -80,7 +80,7 @@ int LLVMFuzzerTestOneInput(const uint8_t *data, size_t size) {
                               .gw = 0x01010101,
                               .driver = &mg_tcpip_driver_mock};
     struct mg_mgr mgr;
-    mg_mgr_init(&mgr);
+    mg_mgr_init(&mgr, NULL);
     mg_tcpip_init(&mgr, &mif);
 
     // Make a copy of the random data, in order to modify it
