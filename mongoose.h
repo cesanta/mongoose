@@ -1345,7 +1345,7 @@ struct mg_tls_opts {
 
 void* mg_tls_ctx_init(const struct mg_tls_opts *);
 void mg_tls_ctx_free(void *ctx);
-bool mg_tls_init(struct mg_connection *, struct mg_str *opts);
+bool mg_tls_init(struct mg_connection *, struct mg_str *server_name);
 void mg_tls_free(struct mg_connection *);
 long mg_tls_send(struct mg_connection *, const void *buf, size_t len);
 long mg_tls_recv(struct mg_connection *, void *buf, size_t len);
@@ -1386,6 +1386,15 @@ struct mg_tls {
 
 #include <openssl/err.h>
 #include <openssl/ssl.h>
+
+struct mg_tls_ctx {
+  X509 *server_cert;
+  EVP_PKEY *server_key;
+  STACK_OF(X509_INFO) *server_ca;
+  X509 *client_cert;
+  EVP_PKEY *client_key;
+  STACK_OF(X509_INFO) *client_ca;
+};
 
 struct mg_tls {
   SSL_CTX *ctx;

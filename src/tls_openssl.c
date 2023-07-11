@@ -20,31 +20,30 @@ static int mg_tls_err(struct mg_tls *tls, int res) {
   return err;
 }
 
-static STACK_OF(X509_INFO) *load_ca_certs(const char *ca, int ca_len) {
+static STACK_OF(X509_INFO) * load_ca_certs(const char *ca, int ca_len) {
   BIO *ca_bio = BIO_new_mem_buf(ca, ca_len);
   if (!ca_bio) return NULL;
 
-  STACK_OF(X509_INFO) *certs =
-      PEM_X509_INFO_read_bio(ca_bio, NULL, NULL, NULL);
+  STACK_OF(X509_INFO) *certs = PEM_X509_INFO_read_bio(ca_bio, NULL, NULL, NULL);
 
   BIO_free(ca_bio);
   return certs;
 }
 
-static bool add_ca_certs(SSL_CTX *ctx, STACK_OF(X509_INFO) *certs) {
+static bool add_ca_certs(SSL_CTX *ctx, STACK_OF(X509_INFO) * certs) {
   X509_STORE *cert_store = SSL_CTX_get_cert_store(ctx);
   for (int i = 0; i < sk_X509_INFO_num(certs); i++) {
     X509_INFO *cert_info = sk_X509_INFO_value(certs, i);
-    if (cert_info->x509 && !X509_STORE_add_cert (cert_store, cert_info->x509))
-        return false;
+    if (cert_info->x509 && !X509_STORE_add_cert(cert_store, cert_info->x509))
+      return false;
   }
 
   return true;
 }
 
-static EVP_PKEY* load_key(const char *key, int key_len) {
+static EVP_PKEY *load_key(const char *key, int key_len) {
   BIO *key_bio = BIO_new_mem_buf(key, key_len);
-  if(!key_bio) return NULL;
+  if (!key_bio) return NULL;
 
   EVP_PKEY *priv_key = PEM_read_bio_PrivateKey(key_bio, NULL, 0, NULL);
 
@@ -52,9 +51,9 @@ static EVP_PKEY* load_key(const char *key, int key_len) {
   return priv_key;
 }
 
-static X509* load_cert(const char *cert, int cert_len) {
+static X509 *load_cert(const char *cert, int cert_len) {
   BIO *cert_bio = BIO_new_mem_buf(cert, cert_len);
-  if(!cert_bio) return NULL;
+  if (!cert_bio) return NULL;
 
   X509 *x509 = PEM_read_bio_X509(cert_bio, NULL, 0, NULL);
 
@@ -62,43 +61,43 @@ static X509* load_cert(const char *cert, int cert_len) {
   return x509;
 }
 
-void* mg_tls_ctx_init(const struct mg_tls_opts *opts) {
+void *mg_tls_ctx_init(const struct mg_tls_opts *opts) {
   static unsigned char s_initialised = 0;
   if (!s_initialised) {
     SSL_library_init();
     s_initialised++;
   }
 
-  struct mg_tls_ctx *ctx = calloc(1, sizeof(*ctx));
-  if(ctx == NULL) return NULL;
+  struct mg_tls_ctx *ctx = (struct mg_tls_ctx *) calloc(1, sizeof(*ctx));
+  if (ctx == NULL) return (void *) NULL;
 
   if (opts->server_cert.ptr && opts->server_cert.ptr[0] != '\0') {
     struct mg_str key = opts->server_key;
-    if(!key.ptr) key = opts->server_cert;
-    if(!(ctx->server_cert = load_cert(opts->server_cert.ptr, (int)opts->server_cert.len)))
+    if (!key.ptr) key = opts->server_cert;
+    if (!(ctx->server_cert =
+              load_cert(opts->server_cert.ptr, (int) opts->server_cert.len)))
       goto fail;
-    if(!(ctx->server_key = load_key(key.ptr, (int)key.len)))
-      goto fail;
+    if (!(ctx->server_key = load_key(key.ptr, (int) key.len))) goto fail;
   }
 
-  if(opts->server_ca.ptr && opts->server_ca.ptr[0] != '\0') {
+  if (opts->server_ca.ptr && opts->server_ca.ptr[0] != '\0') {
     if (!(ctx->server_ca =
               load_ca_certs(opts->server_ca.ptr, (int) opts->server_ca.len)))
       goto fail;
   }
 
-  if(opts->client_cert.ptr && opts->client_cert.ptr[0] != '\0') {
+  if (opts->client_cert.ptr && opts->client_cert.ptr[0] != '\0') {
     struct mg_str key = opts->client_key;
-    if(!key.ptr) key = opts->client_cert;
-    if(!(ctx->client_cert = load_cert(opts->client_cert.ptr, (int)opts->client_cert.len)))
-        goto fail;
-    if(!(ctx->client_key = load_key(key.ptr, (int)key.len)))
-        goto fail;
+    if (!key.ptr) key = opts->client_cert;
+    if (!(ctx->client_cert =
+              load_cert(opts->client_cert.ptr, (int) opts->client_cert.len)))
+      goto fail;
+    if (!(ctx->client_key = load_key(key.ptr, (int) key.len))) goto fail;
   }
 
-  if(opts->client_ca.ptr && opts->client_ca.ptr[0] != '\0') {
-    if(!(ctx->client_ca =
-          load_ca_certs(opts->client_ca.ptr, (int) opts->client_ca.len)))
+  if (opts->client_ca.ptr && opts->client_ca.ptr[0] != '\0') {
+    if (!(ctx->client_ca =
+              load_ca_certs(opts->client_ca.ptr, (int) opts->client_ca.len)))
       goto fail;
   }
 
@@ -111,13 +110,15 @@ fail:
 
 void mg_tls_ctx_free(void *ctx) {
   struct mg_tls_ctx *tls_ctx = (struct mg_tls_ctx *) ctx;
-  if(tls_ctx) {
-    if(tls_ctx->server_cert) X509_free(tls_ctx->server_cert);
-    if(tls_ctx->server_key) EVP_PKEY_free(tls_ctx->server_key);
-    if(tls_ctx->server_ca) sk_X509_INFO_pop_free(tls_ctx->server_ca, X509_INFO_free);
-    if(tls_ctx->client_cert) X509_free(tls_ctx->client_cert);
-    if(tls_ctx->client_key) EVP_PKEY_free(tls_ctx->client_key);
-    if(tls_ctx->client_ca) sk_X509_INFO_pop_free(tls_ctx->client_ca, X509_INFO_free);
+  if (tls_ctx) {
+    if (tls_ctx->server_cert) X509_free(tls_ctx->server_cert);
+    if (tls_ctx->server_key) EVP_PKEY_free(tls_ctx->server_key);
+    if (tls_ctx->server_ca)
+      sk_X509_INFO_pop_free(tls_ctx->server_ca, X509_INFO_free);
+    if (tls_ctx->client_cert) X509_free(tls_ctx->client_cert);
+    if (tls_ctx->client_key) EVP_PKEY_free(tls_ctx->client_key);
+    if (tls_ctx->client_ca)
+      sk_X509_INFO_pop_free(tls_ctx->client_ca, X509_INFO_free);
     free(ctx);
   }
 }
@@ -176,7 +177,7 @@ bool mg_tls_init(struct mg_connection *c, struct mg_str *server_name) {
 
   SSL_set_mode(tls->ssl, SSL_MODE_ACCEPT_MOVING_WRITE_BUFFER);
 #if OPENSSL_VERSION_NUMBER > 0x10002000L
-      SSL_set_ecdh_auto(tls->ssl, 1);
+  SSL_set_ecdh_auto(tls->ssl, 1);
 #endif
 
 #if OPENSSL_VERSION_NUMBER >= 0x10100000L
