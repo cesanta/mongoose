@@ -1153,7 +1153,7 @@ static void test_tls(void) {
   const char *surl = "https://127.0.0.1:12347";
   sc = mg_http_listen(&mgr, surl, eh1, NULL);
   ASSERT(sc != NULL);
-  ASSERT(fetch(&mgr, buf, url, "GET /a.txt HTTP/1.0\n\n") == 200);
+  ASSERT(fetch(&mgr, buf, surl, "GET /a.txt HTTP/1.0\n\n") == 200);
   // MG_INFO(("%s", buf));
   ASSERT(cmpbody(buf, "hello\n") == 0);
 #endif
