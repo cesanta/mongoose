@@ -126,26 +126,25 @@ void mg_tls_ctx_free(void *ctx) {
 bool mg_tls_init(struct mg_connection *c, struct mg_str *server_name) {
   struct mg_tls *tls = (struct mg_tls *) calloc(1, sizeof(*tls));
   struct mg_tls_ctx *ctx = (struct mg_tls_ctx *) c->mgr->tls_ctx;
-  const char *id = "mongoose";
+  if(!ctx) {
+    mg_error(c, "TLS context not initialized");
+    goto fail;
+  }
 
   if (tls == NULL) {
     mg_error(c, "TLS OOM");
     goto fail;
   }
 
-  tls->ctx = c->is_client ? SSL_CTX_new(SSLv23_client_method())
-                          : SSL_CTX_new(SSLv23_server_method());
+  tls->ctx = c->is_client ? SSL_CTX_new(TLS_client_method())
+                          : SSL_CTX_new(TLS_server_method());
   if ((tls->ssl = SSL_new(tls->ctx)) == NULL) {
     mg_error(c, "SSL_new");
     goto fail;
   }
-  SSL_set_session_id_context(tls->ssl, (const uint8_t *) id,
-                             (unsigned) strlen(id));
-  // Disable deprecated protocols
-  SSL_set_options(tls->ssl, SSL_OP_NO_SSLv2);
-  SSL_set_options(tls->ssl, SSL_OP_NO_SSLv3);
-  SSL_set_options(tls->ssl, SSL_OP_NO_TLSv1);
-  SSL_set_options(tls->ssl, SSL_OP_NO_TLSv1_1);
+
+  SSL_set_min_proto_version(tls->ssl, TLS1_2_VERSION);
+
 #ifdef MG_ENABLE_OPENSSL_NO_COMPRESSION
   SSL_set_options(tls->ssl, SSL_OP_NO_COMPRESSION);
 #endif
@@ -160,8 +159,14 @@ bool mg_tls_init(struct mg_connection *c, struct mg_str *server_name) {
       if (!add_ca_certs(tls->ctx, ctx->client_ca)) goto fail;
     }
     if (ctx->client_cert && ctx->client_key) {
-      SSL_CTX_use_certificate(tls->ctx, ctx->client_cert);
-      SSL_CTX_use_PrivateKey(tls->ctx, ctx->client_key);
+      if(SSL_use_certificate(tls->ssl, ctx->client_cert)!=1) {
+        mg_error(c, "SSL_CTX_use_certificate");
+        goto fail;
+      }
+      if(SSL_use_PrivateKey(tls->ssl, ctx->client_key)!=1) {
+        mg_error(c, "SSL_CTX_use_PrivateKey");
+        goto fail;
+      }
     }
   } else {
     if (ctx->server_ca) {
@@ -170,8 +175,14 @@ bool mg_tls_init(struct mg_connection *c, struct mg_str *server_name) {
       if (!add_ca_certs(tls->ctx, ctx->server_ca)) goto fail;
     }
     if (ctx->server_cert && ctx->server_key) {
-      SSL_CTX_use_certificate(tls->ctx, ctx->server_cert);
-      SSL_CTX_use_PrivateKey(tls->ctx, ctx->server_key);
+      if(SSL_use_certificate(tls->ssl, ctx->server_cert)!=1) {
+        mg_error(c, "SSL_CTX_use_certificate");
+        goto fail;
+      }
+      if(SSL_use_PrivateKey(tls->ssl, ctx->server_key)!=1) {
+        mg_error(c, "SSL_CTX_use_PrivateKey");
+        goto fail;
+      }
     }
   }
 

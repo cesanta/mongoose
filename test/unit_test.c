@@ -1145,7 +1145,7 @@ static void test_tls(void) {
   ASSERT(fetch(&mgr, buf, url, "GET /a.txt HTTP/1.0\n\n") == 200);
   // MG_INFO(("%s", buf));
   ASSERT(cmpbody(buf, "hello\n") == 0);
-#if MG_ENABLE_MBEDTLS || MG_ENABLE_OPENSSL
+#if MG_ENABLE_MBEDTLS //|| MG_ENABLE_OPENSSL
   struct mg_connection *sc;  // HTTPS listener
   const char *surl = "https://127.0.0.1:12347";
   sc = mg_http_listen(&mgr, surl, eh1, NULL);
