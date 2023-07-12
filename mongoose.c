@@ -3787,7 +3787,7 @@ void mg_mgr_init(struct mg_mgr *mgr, struct mg_tls_opts *tls_opts) {
   mgr->dns6.url = "udp://[2001:4860:4860::8888]:53";
   if(tls_opts) {
     if(!(mgr->tls_ctx = mg_tls_ctx_init(tls_opts)))
-      MG_ERROR(("TLS init failed"));
+      MG_ERROR(("TLS context init failed"));
   }
 }
 
@@ -4885,9 +4885,9 @@ static void accept_conn(struct mg_mgr *mgr, struct mg_connection *lsn) {
               &c->rem, mg_print_ip_port, &c->loc));
     mg_call(c, MG_EV_OPEN, NULL);
     mg_call(c, MG_EV_ACCEPT, NULL);
-    if (c->is_tls) {
-      c->is_tls = 0;
-      if (!mgr->tls_ctx || !mg_tls_init(c, NULL))  // if the URL is TLS and
+    if (lsn->is_tls) {
+      c->is_tls = 1;
+      if (!mgr->tls_ctx || !mg_tls_init(c, NULL))  // if the listener is TLS and
         mg_error(c, "TLS init failed");  // there is no ctxt, it must fail too
     }
   }
@@ -5723,6 +5723,20 @@ static int load_cert_and_key(struct mg_str cert, struct mg_str key,
   return 1;
 }
 
+
+static struct mg_str tls_adjust_size(struct mg_str file) {
+  if(file.ptr == NULL || file.len == 0)
+    return file;
+
+  //Check if it looks like DER encoded
+  if((file.ptr[0]<=23 && file.ptr[0]!=10 && file.ptr[0]!=13) || file.ptr[file.len-1]==0)
+    return file;
+
+  //Must be PEM encoded, the caller is expected to provide trailing null
+  struct mg_str ret = {file.ptr, file.len+1};
+  return ret;
+}
+
 //#define MG_MBEDTLS_DEBUG_LEVEL 6
 void* mg_tls_ctx_init(const struct mg_tls_opts *opts) {
   int rc;
@@ -5738,13 +5752,15 @@ void* mg_tls_ctx_init(const struct mg_tls_opts *opts) {
   mbedtls_debug_set_threshold(MG_MBEDTLS_DEBUG_LEVEL);
 #endif
 
-  if(!load_cert(opts->client_ca, &tls->client_ca))
+  if(!load_cert(tls_adjust_size(opts->client_ca), &tls->client_ca))
     goto fail;
-  if(!load_cert(opts->server_ca, &tls->server_ca))
+  if(!load_cert(tls_adjust_size(opts->server_ca), &tls->server_ca))
     goto fail;
-  if(!load_cert_and_key(opts->server_cert, opts->server_key, &tls->server_cert, &tls->server_key))
+  if(!load_cert_and_key(tls_adjust_size(opts->server_cert),
+          tls_adjust_size(opts->server_key), &tls->server_cert, &tls->server_key))
     goto fail;
-  if(!load_cert_and_key(opts->client_cert, opts->client_key, &tls->client_cert, &tls->client_key))
+  if(!load_cert_and_key(tls_adjust_size(opts->client_cert),
+          tls_adjust_size(opts->client_key), &tls->client_cert, &tls->client_key))
     goto fail;
 
   mbedtls_ssl_ticket_init(&tls->ticket_ctx);
@@ -5884,6 +5900,8 @@ void *mg_tls_ctx_init(const struct mg_tls_opts *opts) {
   static unsigned char s_initialised = 0;
   if (!s_initialised) {
     SSL_library_init();
+    OpenSSL_add_all_algorithms();
+    SSL_load_error_strings();
     s_initialised++;
   }
 
@@ -5958,6 +5976,8 @@ bool mg_tls_init(struct mg_connection *c, struct mg_str *server_name) {
     mg_error(c, "SSL_new");
     goto fail;
   }
+  SSL_CTX_set_cipher_list(tls->ctx, "HIGH:!aNULL:!eNULL:@STRENGTH");
+  SSL_CTX_set_ciphersuites(tls->ctx, "TLS_AES_256_GCM_SHA384:TLS_AES_128_GCM_SHA256");
   SSL_set_session_id_context(tls->ssl, (const uint8_t *) id,
                              (unsigned) strlen(id));
   // Disable deprecated protocols
@@ -5989,8 +6009,8 @@ bool mg_tls_init(struct mg_connection *c, struct mg_str *server_name) {
       if (!add_ca_certs(tls->ctx, ctx->server_ca)) goto fail;
     }
     if (ctx->server_cert && ctx->server_key) {
-      SSL_CTX_use_certificate(tls->ctx, ctx->server_cert);
-      SSL_CTX_use_PrivateKey(tls->ctx, ctx->server_key);
+      int rc = SSL_CTX_use_certificate(tls->ctx, ctx->server_cert);
+      rc = SSL_CTX_use_PrivateKey(tls->ctx, ctx->server_key);
     }
   }
 
@@ -6056,7 +6076,8 @@ long mg_tls_recv(struct mg_connection *c, void *buf, size_t len) {
   struct mg_tls *tls = (struct mg_tls *) c->tls;
   int n = SSL_read(tls->ssl, buf, (int) len);
   if (n < 0 && mg_tls_err(tls, n) == 0) return MG_IO_WAIT;
-  if (n <= 0) return MG_IO_ERR;
+  if (n <= 0)
+    return MG_IO_ERR;
   return n;
 }
 

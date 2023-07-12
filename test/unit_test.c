@@ -1135,12 +1135,9 @@ static void test_tls(void) {
   const char *url = "http://127.0.0.1:12374";
   struct mg_tls_opts opts;
   memset(&opts, 0, sizeof(opts));
-  opts.client_ca.ptr = (char *) ss_ca_pem;
-  opts.client_ca.len = ss_ca_pem_len;
-  opts.server_cert.ptr = (char *) ss_server_pem;
-  opts.server_cert.len = ss_server_pem_len;
-  opts.client_cert.ptr = (char *) ss_client_pem;
-  opts.client_cert.len = ss_client_pem_len;
+  opts.client_ca = mg_str_n(ss_ca_pem, strlen(ss_ca_pem) + 1);
+  opts.server_cert = mg_str_n(ss_server_pem, strlen(ss_server_pem) + 1);
+  opts.client_cert = mg_str_n(ss_client_pem, strlen(ss_client_pem) + 1);
 
   mg_mgr_init(&mgr, &opts);
   c = mg_http_listen(&mgr, url, eh1, NULL);

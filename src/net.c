@@ -264,6 +264,6 @@ void mg_mgr_init(struct mg_mgr *mgr, struct mg_tls_opts *tls_opts) {
   mgr->dns6.url = "udp://[2001:4860:4860::8888]:53";
   if(tls_opts) {
     if(!(mgr->tls_ctx = mg_tls_ctx_init(tls_opts)))
-      MG_ERROR(("TLS init failed"));
+      MG_ERROR(("TLS context init failed"));
   }
 }

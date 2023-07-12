@@ -191,6 +191,20 @@ static int load_cert_and_key(struct mg_str cert, struct mg_str key,
   return 1;
 }
 
+
+static struct mg_str tls_adjust_size(struct mg_str file) {
+  if(file.ptr == NULL || file.len == 0)
+    return file;
+
+  //Check if it looks like DER encoded
+  if((file.ptr[0]<=23 && file.ptr[0]!=10 && file.ptr[0]!=13) || file.ptr[file.len-1]==0)
+    return file;
+
+  //Must be PEM encoded, the caller is expected to provide trailing null
+  struct mg_str ret = {file.ptr, file.len+1};
+  return ret;
+}
+
 //#define MG_MBEDTLS_DEBUG_LEVEL 6
 void* mg_tls_ctx_init(const struct mg_tls_opts *opts) {
   int rc;
@@ -206,13 +220,15 @@ void* mg_tls_ctx_init(const struct mg_tls_opts *opts) {
   mbedtls_debug_set_threshold(MG_MBEDTLS_DEBUG_LEVEL);
 #endif
 
-  if(!load_cert(opts->client_ca, &tls->client_ca))
+  if(!load_cert(tls_adjust_size(opts->client_ca), &tls->client_ca))
     goto fail;
-  if(!load_cert(opts->server_ca, &tls->server_ca))
+  if(!load_cert(tls_adjust_size(opts->server_ca), &tls->server_ca))
     goto fail;
-  if(!load_cert_and_key(opts->server_cert, opts->server_key, &tls->server_cert, &tls->server_key))
+  if(!load_cert_and_key(tls_adjust_size(opts->server_cert),
+          tls_adjust_size(opts->server_key), &tls->server_cert, &tls->server_key))
     goto fail;
-  if(!load_cert_and_key(opts->client_cert, opts->client_key, &tls->client_cert, &tls->client_key))
+  if(!load_cert_and_key(tls_adjust_size(opts->client_cert),
+          tls_adjust_size(opts->client_key), &tls->client_cert, &tls->client_key))
     goto fail;
 
   mbedtls_ssl_ticket_init(&tls->ticket_ctx);
