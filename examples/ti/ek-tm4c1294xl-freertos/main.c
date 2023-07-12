@@ -14,8 +14,8 @@
 #define BLINK_PERIOD_MS 1000  // LED blinking period in millis
 
 static void timer_fn(void *arg) {
-  struct mg_tcpip_if *ifp = arg;                  // And show
-  const char *names[] = {"down", "up", "ready"};  // network stats
+  struct mg_tcpip_if *ifp = arg;                         // And show
+  const char *names[] = {"down", "up", "req", "ready"};  // network stats
   MG_INFO(("Ethernet: %s, IP: %M, rx:%u, tx:%u, dr:%u, er:%u",
            names[ifp->state], mg_print_ip4, &ifp->ip, ifp->nrecv, ifp->nsent,
            ifp->ndrop, ifp->nerr));

@@ -35,9 +35,9 @@ void mg_random(void *buf, size_t len) {
 
 static void timer_fn(void *arg) {
   gpio_put(PICO_DEFAULT_LED_PIN,
-           !gpio_get_out_level(PICO_DEFAULT_LED_PIN));  // Blink LED
-  struct mg_tcpip_if *ifp = arg;                        // And show
-  const char *names[] = {"down", "up", "ready"};        // network stats
+           !gpio_get_out_level(PICO_DEFAULT_LED_PIN));   // Blink LED
+  struct mg_tcpip_if *ifp = arg;                         // And show
+  const char *names[] = {"down", "up", "req", "ready"};  // network stats
   MG_INFO(("Ethernet: %s, IP: %M, rx:%u, tx:%u, dr:%u, er:%u",
            names[ifp->state], mg_print_ip4, &ifp->ip, ifp->nrecv, ifp->nsent,
            ifp->ndrop, ifp->nerr));
