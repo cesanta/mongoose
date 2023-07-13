@@ -4682,6 +4682,11 @@ bool mg_open_listener(struct mg_connection *c, const char *url) {
                                 (char *) &on, sizeof(on))) != 0) {
       // "Using SO_REUSEADDR and SO_EXCLUSIVEADDRUSE"
       MG_ERROR(("setsockopt(SO_EXCLUSIVEADDRUSE): %d %d", on, MG_SOCK_ERR(rc)));
+#elif defined(SO_REUSEPORT)
+    } else if ((rc = setsockopt(fd, SOL_SOCKET, SO_REUSEPORT, (char *) &on,
+                                sizeof(on))) != 0) {
+      // Since Linux 3.9, SO_REUSEPORT is required in addition to SO_REUSEADDR.
+      MG_ERROR(("setsockopt(SO_REUSEPORT): %d", MG_SOCK_ERR(rc)));
 #elif defined(SO_REUSEADDR) && (!defined(LWIP_SOCKET) || SO_REUSE)
     } else if ((rc = setsockopt(fd, SOL_SOCKET, SO_REUSEADDR, (char *) &on,
                                 sizeof(on))) != 0) {
