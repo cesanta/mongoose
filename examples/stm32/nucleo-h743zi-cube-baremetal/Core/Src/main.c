@@ -152,8 +152,6 @@ int main(void)
   mg_log_set(MG_LL_DEBUG);  // Set log level
 
   // Initialise Mongoose network stack
-  // Specify MAC address, and IP/mask/GW in network byte order for static
-  // IP configuration. If IP/mask/GW are unset, DHCP is going to be used
   struct mg_tcpip_driver_stm32h_data driver_data = {.mdc_cr = 4};
   struct mg_tcpip_if mif = {.mac = GENERATE_LOCALLY_ADMINISTERED_MAC(),
                             .driver = &mg_tcpip_driver_stm32h,
