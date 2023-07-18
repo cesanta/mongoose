@@ -8257,7 +8257,7 @@ static void rx_ip(struct mg_tcpip_if *ifp, struct pkt *pkt) {
     MG_DEBUG(("UDP %M:%hu -> %M:%hu len %u", mg_print_ip4, &pkt->ip->src,
               mg_ntohs(pkt->udp->sport), mg_print_ip4, &pkt->ip->dst,
               mg_ntohs(pkt->udp->dport), (int) pkt->pay.len));
-    if (pkt->udp->dport == mg_htons(68)) {
+    if (ifp->enable_dhcp_client && pkt->udp->dport == mg_htons(68)) {
       pkt->dhcp = (struct dhcp *) (pkt->udp + 1);
       mkpay(pkt, pkt->dhcp + 1);
       rx_dhcp_client(ifp, pkt);
