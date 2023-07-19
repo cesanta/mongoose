@@ -1,0 +1,33 @@
+name: "CodeQL Scanning"
+# https://github.com/github/codeql-action
+
+on:
+  push:
+    paths:
+      - "Makefile"
+      - "mongoose.c"
+      - "mongoose.h"
+      - test/unit-test
+      - test/mip-test
+
+jobs:
+  CodeQL-Build:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+    permissions:
+      security-events: write
+    steps:
+    - uses: actions/checkout@v3
+      with: { fetch-depth: 2 }
+
+    - name: Initialize CodeQL
+      uses: github/codeql-action/init@v2
+        with:
+          languages: cpp
+    - run: |
+      make test
+      make mip_test
+
+    - name: Perform CodeQL Analysis
+      uses: github/codeql-action/analyze@v2
