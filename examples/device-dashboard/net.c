@@ -218,6 +218,17 @@ static void handle_settings_get(struct mg_connection *c) {
                 MG_ESC("device_name"), MG_ESC(s_settings.device_name));
 }
 
+static void handle_led_get(struct mg_connection *c) {
+  mg_http_reply(c, 200, s_json_header, "%s", led_get() ? "true" : "false");
+}
+
+static void handle_led_set(struct mg_connection *c, struct mg_str body) {
+  bool on = false;
+  mg_json_get_bool(body, "$.on", &on);
+  led_set(on);
+  mg_http_reply(c, 200, s_json_header, "true");
+}
+
 // HTTP request handler function
 static void fn(struct mg_connection *c, int ev, void *ev_data, void *fn_data) {
   if (ev == MG_EV_ACCEPT && fn_data != NULL) {
@@ -243,6 +254,10 @@ static void fn(struct mg_connection *c, int ev, void *ev_data, void *fn_data) {
       handle_settings_get(c);
     } else if (mg_http_match_uri(hm, "/api/settings/set")) {
       handle_settings_set(c, hm->body);
+    } else if (mg_http_match_uri(hm, "/api/led/get")) {
+      handle_led_get(c);
+    } else if (mg_http_match_uri(hm, "/api/led/set")) {
+      handle_led_set(c, hm->body);
     } else {
       struct mg_http_serve_opts opts;
       memset(&opts, 0, sizeof(opts));

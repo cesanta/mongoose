@@ -155,28 +155,18 @@ function DeveloperNote({text}) {
 };
 
 function Main({}) {
-  const [stats, setStats] = useState(null);
-  const refresh = () => fetch('api/stats/get').then(r => r.json()).then(r => setStats(r));
+  const [led, setLed] = useState(false);
+  const refresh = () => fetch('api/led/get').then(r => r.json()).then(r => setLed(r));
   useEffect(refresh, []);
-  if (!stats) return '';
+  const setled = v => fetch('api/led/set', {
+    method: 'post', body: JSON.stringify({on: !led}) 
+  }).then(refresh);
+
   return html`
-<div class="p-2">
-  <div class="p-4 sm:p-2 mx-auto grid grid-cols-2 lg:grid-cols-4 gap-4">
-    <${Stat} title="Temperature" text="${stats.temperature} °C" tipText="good" tipIcon=${Icons.ok} tipColors=${tipColors.green} />
-    <${Stat} title="Humidity" text="${stats.humidity} %" tipText="warn" tipIcon=${Icons.warn} tipColors=${tipColors.yellow} />
-    <div class="bg-white col-span-2 border rounded-md shadow-lg" role="alert">
-      <${DeveloperNote} text="Stats data is received from the Mongoose backend" />
-    <//>
-  <//>
-  <div class="p-4 sm:p-2 mx-auto grid grid-cols-1 lg:grid-cols-2 gap-4">
-
-    <${Chart} data=${stats.points} />
-
-    <div class="my-4 hx-24 bg-white border rounded-md shadow-lg" role="alert">
-      <${DeveloperNote}
-        text="This chart is an SVG image, generated on the fly from the
-        data returned by the api/stats/get API call" />
-    <//>
+<div class="m-4 grid grid-cols-2 gap-4">
+  <div class="bg-white p-2 divide-y">
+    <h1>LED control<//>
+    <${Setting} title="My LED:" value=${led} setfn=${setled} type="switch" />
   <//>
 <//>`;
 };
