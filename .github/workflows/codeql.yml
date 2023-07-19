@@ -28,8 +28,8 @@ jobs:
       with:
         languages: cpp
     - run: |
-        make test CC=gcc
-        ./test/setup_ga_network.sh && make mip_test CC=gcc
+        make test CC=gcc ASAN= ASAN_OPTIONS=
+        ./test/setup_ga_network.sh && make mip_test CC=gcc ASAN= ASAN_OPTIONS=
 
     - name: Perform CodeQL Analysis
       uses: github/codeql-action/analyze@v2
