@@ -95,7 +95,7 @@ musl: WARN += -Wno-sign-conversion
 musl: CC = $(DOCKER) mdashnet/cc1 gcc
 musl: RUN = $(DOCKER) mdashnet/cc1
 
-# Make sure we can build from an unamalgamated sources
+# Make sure we can build from unamalgamated sources
 unamalgamated: $(HDRS) Makefile test/packed_fs.c
 	$(CC) src/*.c test/packed_fs.c test/unit_test.c $(CFLAGS) $(LDFLAGS) -g -o unit_test
 
