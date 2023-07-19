@@ -10,15 +10,6 @@ static void signal_handler(int sig_num) {
   s_sig_num = sig_num;
 }
 
-// Simulate LED
-static bool s_led_status = true;
-bool led_get(void) {
-  return s_led_status;
-}
-void led_set(bool val) {
-  s_led_status = val;
-}
-
 int main(void) {
   struct mg_mgr mgr;
 

@@ -24,7 +24,4 @@ struct ui_event {
   char text[10];
 };
 
-bool led_get(void);
-void led_set(bool);
-
 void web_init(struct mg_mgr *mgr);
