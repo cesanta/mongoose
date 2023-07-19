@@ -3074,7 +3074,7 @@ static void mg_send_u32(struct mg_connection *c, uint32_t value) {
   mg_send(c, &value, sizeof(value));
 }
 
-static uint8_t compute_variable_length_size(size_t length) {
+static uint8_t varint_size(size_t length) {
   uint8_t bytes_needed = 0;
   do {
     bytes_needed++;
@@ -3083,8 +3083,8 @@ static uint8_t compute_variable_length_size(size_t length) {
   return bytes_needed;
 }
 
-static int encode_variable_length(uint8_t *buf, size_t value) {
-  int len = 0;
+static size_t encode_varint(uint8_t *buf, size_t value) {
+  size_t len = 0;
 
   do {
     uint8_t byte = (uint8_t) (value % 128);
@@ -3097,16 +3097,15 @@ static int encode_variable_length(uint8_t *buf, size_t value) {
 }
 
 static size_t decode_varint(const uint8_t *buf, size_t len, size_t *value) {
-  uint32_t multiplier = 1;
-  size_t offset;
+  size_t multiplier = 1, offset;
   *value = 0;
 
   for (offset = 0; offset < 4 && offset < len; offset++) {
     uint8_t encoded_byte = buf[offset];
-    *value += (encoded_byte & 0x7F) * multiplier;
+    *value += (encoded_byte & 0x7f) * multiplier;
     multiplier *= 128;
 
-    if (!(encoded_byte & 0x80)) return offset + 1;
+    if ((encoded_byte & 0x80) == 0) return offset + 1;
   }
 
   return 0;
@@ -3138,7 +3137,7 @@ static size_t get_properties_length(struct mg_mqtt_prop *props, size_t count) {
         size += (uint32_t) (props[i].val.len + sizeof(uint16_t));
         break;
       case MQTT_PROP_TYPE_VARIABLE_INT:
-        size += compute_variable_length_size((uint32_t) props[i].iv);
+        size += varint_size((uint32_t) props[i].iv);
         break;
       case MQTT_PROP_TYPE_INT:
         size += (uint32_t) sizeof(uint32_t);
@@ -3161,7 +3160,7 @@ static size_t get_properties_length(struct mg_mqtt_prop *props, size_t count) {
 // size of the variable length of the content
 static size_t get_props_size(struct mg_mqtt_prop *props, size_t count) {
   size_t size = get_properties_length(props, count);
-  size += compute_variable_length_size(size);
+  size += varint_size(size);
   return size;
 }
 
@@ -3170,10 +3169,10 @@ static void mg_send_mqtt_properties(struct mg_connection *c,
   size_t total_size = get_properties_length(props, nprops);
   uint8_t buf_v[4] = {0, 0, 0, 0};
   uint8_t buf[4] = {0, 0, 0, 0};
-  int i, len = encode_variable_length(buf, total_size);
+  size_t i, len = encode_varint(buf, total_size);
 
   mg_send(c, buf, (size_t) len);
-  for (i = 0; i < (int) nprops; i++) {
+  for (i = 0; i < nprops; i++) {
     mg_send(c, &props[i].id, sizeof(props[i].id));
     switch (mqtt_prop_type_by_id(props[i].id)) {
       case MQTT_PROP_TYPE_STRING_PAIR:
@@ -3200,7 +3199,7 @@ static void mg_send_mqtt_properties(struct mg_connection *c,
         mg_send(c, props[i].val.ptr, props[i].val.len);
         break;
       case MQTT_PROP_TYPE_VARIABLE_INT:
-        len = encode_variable_length(buf_v, props[i].iv);
+        len = encode_varint(buf_v, props[i].iv);
         mg_send(c, buf_v, (size_t) len);
         break;
     }
