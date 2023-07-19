@@ -10,6 +10,8 @@ on:
       - test/unit-test
       - test/mip-test
 
+env:
+  IPV6: 0
 jobs:
   CodeQL-Build:
     runs-on: ubuntu-latest
@@ -26,8 +28,8 @@ jobs:
       with:
         languages: cpp
     - run: |
-        make test
-        make mip_test
+        make test CC=gcc
+        ./test/setup_ga_network.sh && make mip_test CC=gcc
 
     - name: Perform CodeQL Analysis
       uses: github/codeql-action/analyze@v2
