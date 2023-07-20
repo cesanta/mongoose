@@ -5,7 +5,7 @@
 #include "net.h"
 #include "queue.h"
 
-struct mg_tcpip_if;  // MIP network interface
+struct mg_tcpip_if;  // Mongoose TCP/IP network interface
 
 struct mg_tcpip_driver {
   bool (*init)(struct mg_tcpip_if *);                         // Init driver
@@ -21,8 +21,8 @@ struct mg_tcpip_if {
   struct mg_str tx;                // Output (TX) buffer
   bool enable_dhcp_client;         // Enable DCHP client
   bool enable_dhcp_server;         // Enable DCHP server
-  bool enable_crc32_check;         // Do a CRC check on rx frames and strip it
-  bool enable_mac_check;           // Do a MAC check on rx frames
+  bool enable_crc32_check;         // Do a CRC check on RX frames and strip it
+  bool enable_mac_check;           // Do a MAC check on RX frames
   struct mg_tcpip_driver *driver;  // Low level driver
   void *driver_data;               // Driver-specific data
   struct mg_mgr *mgr;              // Mongoose event manager
@@ -62,10 +62,4 @@ struct mg_tcpip_spi {
   void (*end)(void *);              // SPI end: slave select high
   uint8_t (*txn)(void *, uint8_t);  // SPI transaction: write 1 byte, read reply
 };
-
-#if !defined(MG_ENABLE_DRIVER_STM32H) && !defined(MG_ENABLE_DRIVER_TM4C)
-#define MG_ENABLE_DRIVER_STM32 1
-#else
-#define MG_ENABLE_DRIVER_STM32 0
-#endif
 #endif

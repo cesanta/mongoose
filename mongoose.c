@@ -6702,7 +6702,7 @@ struct mg_tcpip_driver mg_tcpip_driver_imxrt1020 = {
 #endif
 
 
-#if MG_ENABLE_TCPIP && MG_ENABLE_DRIVER_STM32
+#if MG_ENABLE_TCPIP && defined(MG_ENABLE_DRIVER_STM32) && MG_ENABLE_DRIVER_STM32
 struct stm32_eth {
   volatile uint32_t MACCR, MACFFR, MACHTHR, MACHTLR, MACMIIAR, MACMIIDR, MACFCR,
       MACVLANTR, RESERVED0[2], MACRWUFFR, MACPMTCSR, RESERVED1, MACDBGR, MACSR,
@@ -8144,8 +8144,9 @@ static void read_conn(struct mg_connection *c, struct pkt *pkt) {
       uint32_t rem_ip;
       memcpy(&rem_ip, c->rem.ip, sizeof(uint32_t));
       MG_DEBUG(("SEQ != ACK: %x %x %x", seq, s->ack, ack));
-      tx_tcp((struct mg_tcpip_if *) c->mgr->priv, s->mac, rem_ip, TH_ACK, c->loc.port,
-           c->rem.port, mg_htonl(s->seq), mg_htonl(s->ack), "", 0);
+      tx_tcp((struct mg_tcpip_if *) c->mgr->priv, s->mac, rem_ip, TH_ACK,
+             c->loc.port, c->rem.port, mg_htonl(s->seq), mg_htonl(s->ack), "",
+             0);
     }
   } else if (io->size - io->len < pkt->pay.len &&
              !mg_iobuf_resize(io, io->len + pkt->pay.len)) {
@@ -8371,7 +8372,7 @@ static void mg_tcpip_poll(struct mg_tcpip_if *ifp, uint64_t uptime_ms) {
     if (ifp->now >= ifp->lease_expire) {
       ifp->state = MG_TCPIP_STATE_UP, ifp->ip = 0;  // expired, release IP
       onstatechange(ifp);
-    } else if (ifp->now + 30 * 60 * 1000 > ifp->lease_expire &&
+    } else if (ifp->now + 30UL * 60UL * 1000UL > ifp->lease_expire &&
                ((ifp->now / 1000) % 60) == 0) {
       // hack: 30 min before deadline, try to rebind (4.3.6) every min
       tx_dhcp_request_re(ifp, (uint8_t *) broadcast, ifp->ip, 0xffffffff);
