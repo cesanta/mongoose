@@ -65,6 +65,7 @@
 #endif
 #if MG_CMSISPACK_NET == 0
 #define MG_ENABLE_TCPIP 1
+#define MG_ENABLE_DRIVER_STM32 1
 #elif MG_CMSISPACK_NET == 1
 #define MG_ENABLE_LWIP 1
 #elif MG_CMSISPACK_NET == 2
