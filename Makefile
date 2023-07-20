@@ -154,30 +154,6 @@ mingw: Makefile mongoose.h $(SRCS)
 	$(DOCKER) mdashnet/mingw x86_64-w64-mingw32-gcc $(SRCS) -W -Wall -Werror -I. $(DEFS) -lwsock32 -o $@.exe
 	$(DOCKER) mdashnet/mingw wine64 $@.exe
 
-arduino: ENV = -v $(CWD)/arduino:/root
-arduino:
-	curl -sL http://downloads.arduino.cc/arduino-1.8.19-linux64.tar.xz | unxz | tar -xf -
-	mv arduino-* $@
-
-arduino-xiao-board:
-	$(DOCKER) mdashnet/cc2 ./arduino/arduino --pref "boardsmanager.additional.urls=https://files.seeedstudio.com/arduino/package_seeeduino_boards_index.json" --save-prefs
-	$(DOCKER) mdashnet/cc2 ./arduino/arduino --pref "compiler.warning_level=all" --save-prefs
-	$(DOCKER) mdashnet/cc2 ./arduino/arduino --install-boards Seeeduino:samd
-
-arduino-xiao: ENV = -v $(CWD)/arduino:/root
-arduino-xiao: arduino arduino-xiao-board
-	rm -rf tmp; mkdir tmp
-	cp examples/arduino/w5500/w5500.ino tmp/tmp.ino
-	cp mongoose.c mongoose.h examples/arduino/w5500/mongoose_custom.h tmp/
-	$(DOCKER) mdashnet/cc2 ./arduino/arduino --verbose --verify --board Seeeduino:samd:seeed_XIAO_m0 tmp/tmp.ino
-
-arduino-nano: ENV = -v $(CWD)/arduino:/root
-arduino-nano: arduino
-	rm -rf tmp; mkdir tmp
-	cp examples/arduino/w5500/w5500.ino tmp/tmp.ino
-	cp mongoose.c mongoose.h examples/arduino/w5500/mongoose_custom.h tmp/
-	$(DOCKER) mdashnet/cc2 ./arduino/arduino --verbose --verify --board arduino:avr:nano tmp/tmp.ino
-
 mingw++: Makefile mongoose.h $(SRCS)
 	$(DOCKER) mdashnet/mingw x86_64-w64-mingw32-g++ $(SRCS) -W -Wall -Werror -I. $(DEFS) -lwsock32 -o $@.exe
 
@@ -203,7 +179,7 @@ mongoose.h: $(HDRS) Makefile
 
 
 clean: clean_examples clean_embedded
-	rm -rf $(PROG) *.exe *.o *.dSYM *_test* ut fuzzer *.gcov *.gcno *.gcda *.obj *.exe *.ilk *.pdb slow-unit* _CL_* infer-out data.txt crash-* test/packed_fs.c pack arduino tmp
+	rm -rf $(PROG) *.exe *.o *.dSYM *_test* ut fuzzer *.gcov *.gcno *.gcda *.obj *.exe *.ilk *.pdb slow-unit* _CL_* infer-out data.txt crash-* test/packed_fs.c pack
 	#find examples -maxdepth 3 -name zephyr -prune -o -name Makefile -print | xargs dirname | xargs -n1 make clean -C
 
 clean_embedded:
