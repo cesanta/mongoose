@@ -25,7 +25,7 @@ CFLAGS += -Wno-conversion -Wno-sign-conversion
 # Mongoose-specific. See https://mongoose.ws/documentation/#build-options
 SOURCES += mongoose.c 
 CFLAGS += -DMG_ENABLE_TCPIP=1 -DMG_ARCH=MG_ARCH_NEWLIB -DMG_ENABLE_CUSTOM_MILLIS=1
-CFLAGS += -DMG_ENABLE_CUSTOM_RANDOM=1 -DMG_IO_SIZE=512 $(CFLAGS_EXTRA)
+CFLAGS += -DMG_ENABLE_CUSTOM_RANDOM=1 -DMG_IO_SIZE=512 -DMG_ENABLE_DRIVER_STM32=1 $(CFLAGS_EXTRA)
 
 ifeq ($(OS),Windows_NT)
   RM = cmd /C del /Q /F /S

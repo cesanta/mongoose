@@ -29,7 +29,7 @@ CFLAGS += -DSTM32F7xx -Wno-unused-parameter
 CFLAGS += -DSTM32F746xx -Wno-sign-compare -Wno-undef -Wno-shadow -Wno-array-bounds -Wno-error
 
 SOURCES += mongoose.c  net.c packed_fs.c
-CFLAGS += $(CFLAGS_EXTRA)  # Mongoose options are defined in mongoose_custom.h
+CFLAGS += -DMG_ENABLE_DRIVER_STM32=1 $(CFLAGS_EXTRA)  # Mongoose options are defined in mongoose_custom.h
 
 # Example specific build options. See README.md
 CFLAGS += -DHTTP_URL=\"http://0.0.0.0/\"
