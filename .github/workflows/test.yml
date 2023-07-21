@@ -75,14 +75,6 @@ jobs:
     - run: if ./test/match_changed_files.sh '^test|^src/.*.[ch]' ; then echo GO=1 >> $GITHUB_ENV ; fi
     - if: ${{ env.GO == 1 }}
       run: make vc98 vc17 vc22 mingw mingw++
-  arduino-xiao:
-    runs-on: ubuntu-latest
-    steps:
-    - uses: actions/checkout@v3
-      with: { fetch-depth: 2 }
-    - run: if ./test/match_changed_files.sh '^examples/arduino|^src/.*.[ch]'  ; then echo GO=1 >> $GITHUB_ENV ; fi
-    - if: ${{ env.GO == 1 }}
-      run: make arduino-xiao
   arm:
     runs-on: ubuntu-latest
     steps:
@@ -121,6 +113,7 @@ jobs:
     - uses: actions/checkout@v3
     - run: make examples_mac
     - run: make clean_examples_mac
+
 
   test_f7:
     runs-on: ubuntu-latest
@@ -205,6 +198,21 @@ jobs:
       run: sudo apt -y update; sudo apt -y install gcc-arm-none-eabi
     - if: ${{ env.GO == 1 }}
       run:  make -C examples/rp2040/pico-w5500 test VCON_API_KEY=${{secrets.VCON_API_KEY}}
+
+
+  arduino:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v3
+      with: { fetch-depth: 2 }
+    - run: if ./test/match_changed_files.sh '^examples/arduino|^src/.*.[ch]'  ; then echo GO=1 >> $GITHUB_ENV ; fi
+    - if: ${{ env.GO == 1 }}
+      run: make -C examples/arduino arduino-xiao
+#    - if: ${{ env.GO == 1 }}
+#      run: make -C examples/arduino arduino-nano
+    - if: ${{ env.GO == 1 }}
+      run: make -C examples/arduino clean
+
 
   matrix_examples:
     runs-on: ubuntu-latest
