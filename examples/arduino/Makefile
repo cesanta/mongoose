@@ -1,5 +1,3 @@
-DOCKER ?= docker run --platform linux/amd64 --rm $(ENV) -v $(CWD):$(CWD) -w $(CWD)
-CWD ?= $(realpath $(CURDIR))
 
 all:
 example:
@@ -11,24 +9,20 @@ arduino:
 	mv arduino-* $@
 
 arduino-xiao-board:
-	$(DOCKER) mdashnet/cc2 ./arduino/arduino --pref "boardsmanager.additional.urls=https://files.seeedstudio.com/arduino/package_seeeduino_boards_index.json" --save-prefs
-	$(DOCKER) mdashnet/cc2 ./arduino/arduino --pref "compiler.warning_level=all" --save-prefs
-	$(DOCKER) mdashnet/cc2 ./arduino/arduino --install-boards Seeeduino:samd
+	./arduino/arduino --pref "boardsmanager.additional.urls=https://files.seeedstudio.com/arduino/package_seeeduino_boards_index.json" --save-prefs
+	./arduino/arduino --pref "compiler.warning_level=all" --save-prefs
+	./arduino/arduino --install-boards Seeeduino:samd
 
-arduino-xiao: ENV = -v $(CWD):/root
 arduino-xiao: arduino arduino-xiao-board
-	rm -rf tmp; mkdir tmp
-	cp w5500/w5500.ino tmp/tmp.ino
-	cp ../../mongoose.[ch] w5500/mongoose_custom.h tmp/
-	$(DOCKER) mdashnet/cc2 ./arduino/arduino --verbose --verify --board Seeeduino:samd:seeed_XIAO_m0 tmp/tmp.ino
+	cd w5500-http && ../arduino/arduino --verbose --verify --board Seeeduino:samd:seeed_XIAO_m0 w5500-http.ino
+	cd w5500-mqtt && ../arduino/arduino --verbose --verify --board Seeeduino:samd:seeed_XIAO_m0 w5500-mqtt.ino
 
-arduino-nano: ENV = -v $(CWD)/arduino:/root
 arduino-nano: arduino
-	rm -rf tmp; mkdir tmp
-	cp w5500/w5500.ino tmp/tmp.ino
-	cp ../../mongoose.[ch] w5500/mongoose_custom.h tmp/
-	$(DOCKER) mdashnet/cc2 ./arduino/arduino --verbose --verify --board arduino:avr:nano tmp/tmp.ino
+	cd w5500-http && ../arduino/arduino --pref compiler.cpp.extra_flags=-DMG_ENABLE_LOG=0 --verbose --verify --board arduino:avr:nano w5500-http.ino
+	cd w5500-mqtt && ../arduino/arduino --pref compiler.cpp.extra_flags=-DMG_ENABLE_LOG=0 --verbose --verify --board arduino:avr:nano w5500-mqtt.ino
 
-clean: 
-	rm -rf arduino tmp
+clean:
+	rm -rf arduino 
 
+cleanall: clean		#otherwise some parts of xiao-board installation will fail as already installed
+	rm -rf ~/.arduino15 ~/.oracle_jre_usage
