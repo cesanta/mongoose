@@ -71,7 +71,9 @@ static void fn(struct mg_connection *c, int ev, void *ev_data, void *fn_data) {
 
 static void timer_fn(void *arg) {
   struct mg_mgr *mgr = (struct mg_mgr *) arg;
-  struct mg_mqtt_opts opts = {.clean = true};
+  struct mg_mqtt_opts opts;
+  memset(&opts, 0, sizeof(opts));
+  opts.clean = true;
   if (mif.state == MG_TCPIP_STATE_READY && mqtt_connection == NULL) {
     mqtt_connection = mg_mqtt_connect(mgr, MQTT_SERVER, &opts, fn, NULL);
   }
