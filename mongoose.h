@@ -1326,7 +1326,7 @@ void mg_http_serve_ssi(struct mg_connection *c, const char *root,
 #define MG_TLS_CUSTOM 4   // Custom implementation
 
 #ifndef MG_TLS
-#define MG_TLS MG_TLS_NONE
+#define MG_TLS MG_TLS_BUILTIN
 #endif
 
 
