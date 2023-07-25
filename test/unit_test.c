@@ -744,9 +744,7 @@ static int fetch(struct mg_mgr *mgr, char *buf, const char *url,
   if (mgr->tls_ctx == NULL) {
     struct mg_tls_opts opts;
     memset(&opts, 0, sizeof(opts));
-#if MG_TLS
     opts.client_ca = mg_str(CA_ISRG_ROOT_X1);
-#endif
     if (strstr(url, "127.0.0.1") != NULL) {
       // Local connection, use self-signed certificates
       opts.client_ca = mg_str(s_tls_ca);
@@ -1234,9 +1232,7 @@ static void test_http_client(void) {
   int i, ok = 0;
   memset(&opts, 0, sizeof(opts));
   mg_mgr_init(&mgr);
-#if MG_TLS
   opts.client_ca = mg_str(CA_ISRG_ROOT_X2 CA_ISRG_ROOT_X1);
-#endif
   mg_tls_ctx_init(&mgr, &opts);
   c = mg_http_connect(&mgr, "http://cesanta.com", f3, &ok);
   ASSERT(c != NULL);

@@ -89,7 +89,7 @@ static uint64_t s_boot_timestamp = 0;  // Updated by SNTP
 // Certificate generation procedure:
 // openssl ecparam -name prime256v1 -genkey -noout -out key.pem
 // openssl req -new -key key.pem -x509 -nodes -days 3650 -out cert.pem
-static const char *s_ssl_cert =
+static const char *s_tls_cert =
     "-----BEGIN CERTIFICATE-----\n"
     "MIIBCTCBsAIJAK9wbIDkHnAoMAoGCCqGSM49BAMCMA0xCzAJBgNVBAYTAklFMB4X\n"
     "DTIzMDEyOTIxMjEzOFoXDTMzMDEyNjIxMjEzOFowDTELMAkGA1UEBhMCSUUwWTAT\n"
@@ -99,7 +99,7 @@ static const char *s_ssl_cert =
     "aEWiBp1xshs4iz6WbpxrS1IHucrqkZuJLfNZGZI=\n"
     "-----END CERTIFICATE-----\n";
 
-static const char *s_ssl_key =
+static const char *s_tls_key =
     "-----BEGIN EC PRIVATE KEY-----\n"
     "MHcCAQEEICBz3HOkQLPBDtdknqC7k1PNsWj6HfhyNB5MenfjmqiooAoGCCqGSM49\n"
     "AwEHoUQDQgAEc0kEuTh3de5VHjSPupKfVmLtHMbhCIvyU46YWwpnSQ9XFL4ZszPf\n"
@@ -276,10 +276,7 @@ static void handle_dhcp_get(struct mg_connection *c) {
 
 // HTTP request handler function
 static void fn(struct mg_connection *c, int ev, void *ev_data, void *fn_data) {
-  if (ev == MG_EV_ACCEPT && fn_data != NULL) {
-    struct mg_tls_opts opts = {.cert = s_ssl_cert, .certkey = s_ssl_key};
-    mg_tls_init(c, &opts);
-  } else if (ev == MG_EV_HTTP_MSG) {
+  if (ev == MG_EV_HTTP_MSG) {
     struct mg_http_message *hm = (struct mg_http_message *) ev_data;
     struct user *u = authenticate(hm);
 
@@ -316,13 +313,16 @@ static void fn(struct mg_connection *c, int ev, void *ev_data, void *fn_data) {
               hm->method.ptr, (int) hm->uri.len, hm->uri.ptr, (int) 3,
               &c->send.buf[9]));
   }
+  (void) fn_data;
 }
 
 void web_init(struct mg_mgr *mgr) {
+  struct mg_tls_opts opts = {0};
+  opts.server_cert = mg_str(s_tls_cert);
+  opts.server_key = mg_str(s_tls_key);
+  mg_tls_ctx_init(mgr, &opts);
   mg_http_listen(mgr, HTTP_URL, fn, NULL);
-#if MG_ENABLE_MBEDTLS || MG_ENABLE_OPENSSL
-  mg_http_listen(mgr, HTTPS_URL, fn, "");
-#endif
+  mg_http_listen(mgr, HTTPS_URL, fn, NULL);
 
   // mg_timer_add(c->mgr, 1000, MG_TIMER_REPEAT, timer_mqtt_fn, c->mgr);
   mg_timer_add(mgr, 3600 * 1000, MG_TIMER_RUN_NOW | MG_TIMER_REPEAT,

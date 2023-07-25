@@ -59,8 +59,7 @@ int main(int argc, char *argv[]) {
   if (argc > 1) s_url = argv[1];  // Use URL provided in the command line
   mg_log_set(atoi(log_level));    // Set to 0 to disable debug
   mg_mgr_init(&mgr);              // Initialise event manager
-  struct mg_tls_opts opts = {.client_ca =
-                                 mg_str(CA_ISRG_ROOT_X2 CA_ISRG_ROOT_X1)};
+  struct mg_tls_opts opts = {.client_ca = mg_str(CA_ALL)};
   mg_tls_ctx_init(&mgr, &opts);
   mg_http_connect(&mgr, s_url, fn, &done);  // Create client connection
   while (!done) mg_mgr_poll(&mgr, 50);      // Event manager loops until 'done'

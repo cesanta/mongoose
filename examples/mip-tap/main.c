@@ -102,9 +102,7 @@ int main(int argc, char *argv[]) {
   // Start infinite event loop
   MG_INFO(("Mongoose version : v%s", MG_VERSION));
   MG_INFO(("Listening on     : %s", HTTP_URL));
-#if MG_ENABLE_MBEDTLS || MG_ENABLE_OPENSSL
   MG_INFO(("Listening on     : %s", HTTPS_URL));
-#endif
 
   web_init(&mgr);
   while (s_signo == 0) mg_mgr_poll(&mgr, 100);  // Infinite event loop

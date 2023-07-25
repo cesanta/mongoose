@@ -10,7 +10,7 @@
 #include "mongoose.h"
 
 static const char *s_backend_url =
-#if MG_ENABLE_MBEDTLS || MG_ENABLE_OPENSSL
+#if MG_TLS
     "https://cesanta.com";
 #else
     "http://info.cern.ch";
@@ -37,7 +37,7 @@ static void forward_request(struct mg_http_message *hm,
 }
 
 static void fn2(struct mg_connection *c, int ev, void *ev_data, void *fn_data) {
-  struct mg_connection *c2 = fn_data;
+  struct mg_connection *c2 = (struct mg_connection *)fn_data;
   if (ev == MG_EV_READ) {
     // All incoming data from the backend, forward to the client
     if (c2 != NULL) mg_send(c2, c->recv.buf, c->recv.len);
@@ -58,10 +58,6 @@ static void fn(struct mg_connection *c, int ev, void *ev_data, void *fn_data) {
     if (c2 == NULL) {
       mg_error(c, "Cannot create backend connection");
     } else {
-      if (mg_url_is_ssl(s_backend_url)) {
-        struct mg_tls_opts opts = {.ca = "ca.pem"};
-        mg_tls_init(c2, &opts);
-      }
       c->fn_data = c2;
       forward_request(hm, c2);
       c->is_resp = 0; // process further msgs in keep-alive connection
@@ -78,6 +74,8 @@ int main(void) {
 
   mg_log_set(MG_LL_DEBUG);                       // Set log level
   mg_mgr_init(&mgr);                             // Initialise event manager
+  struct mg_tls_opts opts = {.client_ca = mg_str(CA_ALL)};
+  mg_tls_ctx_init(&mgr, &opts);
   mg_http_listen(&mgr, s_listen_url, fn, NULL);  // Start proxy
   for (;;) mg_mgr_poll(&mgr, 1000);              // Event loop
   mg_mgr_free(&mgr);
