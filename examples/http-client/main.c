@@ -28,12 +28,6 @@ static void fn(struct mg_connection *c, int ev, void *ev_data, void *fn_data) {
     // Connected to server. Extract host name from URL
     struct mg_str host = mg_url_host(s_url);
 
-    // If s_url is https://, tell client connection to use TLS
-    if (mg_url_is_ssl(s_url)) {
-      struct mg_tls_opts opts = {.ca = "ca.pem", .srvname = host};
-      mg_tls_init(c, &opts);
-    }
-
     // Send request
     int content_length = s_post_data ? strlen(s_post_data) : 0;
     mg_printf(c,
@@ -65,6 +59,9 @@ int main(int argc, char *argv[]) {
   if (argc > 1) s_url = argv[1];  // Use URL provided in the command line
   mg_log_set(atoi(log_level));    // Set to 0 to disable debug
   mg_mgr_init(&mgr);              // Initialise event manager
+  struct mg_tls_opts opts = {.client_ca =
+                                 mg_str(CA_ISRG_ROOT_X2 CA_ISRG_ROOT_X1)};
+  mg_tls_ctx_init(&mgr, &opts);
   mg_http_connect(&mgr, s_url, fn, &done);  // Create client connection
   while (!done) mg_mgr_poll(&mgr, 50);      // Event manager loops until 'done'
   mg_mgr_free(&mgr);                        // Free resources
