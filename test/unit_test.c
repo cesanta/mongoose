@@ -1183,10 +1183,10 @@ static void test_http_404(void) {
 
 static void test_tls(void) {
 #if MG_TLS
-  struct mg_tls_opts opts = {};
-  opts.client_ca = s_tls_ca;
-  opts.server_cert = s_tls_cert;
-  opts.server_key = s_tls_key;
+  struct mg_tls_opts opts = {0};
+  opts.client_ca = mg_str(s_tls_ca);
+  opts.server_cert = mg_str(s_tls_cert);
+  opts.server_key = mg_str(s_tls_key);
   struct mg_mgr mgr;
   struct mg_connection *c;
   const char *url = "https://127.0.0.1:12347";
@@ -1242,7 +1242,6 @@ static void test_http_client(void) {
 #if MG_TLS
   {
     const char *url = "https://cesanta.com";
-    struct mg_str host = mg_url_host(url);
     c = mg_http_connect(&mgr, url, f3, &ok);
     ASSERT(c != NULL);
     for (i = 0; i < 1500 && ok <= 0; i++) mg_mgr_poll(&mgr, 1000);
