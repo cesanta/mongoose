@@ -5774,6 +5774,7 @@ void mg_tls_ctx_free(struct mg_mgr *mgr) {
     mbedtls_x509_crt_free(&ctx->client_cert);
     mbedtls_pk_free(&ctx->client_key);
     mbedtls_x509_crt_free(&ctx->client_ca);
+    mbedtls_x509_crt_free(&ctx->server_ca);
 #ifdef MBEDTLS_SSL_SESSION_TICKETS
     mbedtls_ssl_ticket_free(&ctx->ticket_ctx);
 #endif
