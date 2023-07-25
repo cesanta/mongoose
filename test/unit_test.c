@@ -1248,7 +1248,6 @@ static void test_http_client(void) {
 #if MG_TLS
   {
     const char *url = "https://cesanta.com";
-    // struct mg_str host = mg_url_host(url); TODO() This requires attention
     c = mg_http_connect(&mgr, url, f3, &ok);
     ASSERT(c != NULL);
     for (i = 0; i < 1500 && ok <= 0; i++) mg_mgr_poll(&mgr, 1000);
