@@ -744,7 +744,9 @@ static int fetch(struct mg_mgr *mgr, char *buf, const char *url,
   if (mgr->tls_ctx == NULL) {
     struct mg_tls_opts opts;
     memset(&opts, 0, sizeof(opts));
+#if MG_TLS
     opts.client_ca = mg_str(CA_ISRG_ROOT_X1);
+#endif
     if (strstr(url, "127.0.0.1") != NULL) {
       // Local connection, use self-signed certificates
       opts.client_ca = mg_str(s_tls_ca);
@@ -1183,10 +1185,11 @@ static void test_http_404(void) {
 
 static void test_tls(void) {
 #if MG_TLS
-  struct mg_tls_opts opts = {};
-  opts.client_ca = s_tls_ca;
-  opts.server_cert = s_tls_cert;
-  opts.server_key = s_tls_key;
+  struct mg_tls_opts opts;
+  memset(&opts, 0, sizeof(opts));
+  opts.client_ca = mg_str(s_tls_ca);
+  opts.server_cert = mg_str(s_tls_cert);
+  opts.server_key = mg_str(s_tls_key);
   struct mg_mgr mgr;
   struct mg_connection *c;
   const char *url = "https://127.0.0.1:12347";
@@ -1225,12 +1228,15 @@ static void f3(struct mg_connection *c, int ev, void *ev_data, void *fn_data) {
 }
 
 static void test_http_client(void) {
-  struct mg_tls_opts opts = {0};
+  struct mg_tls_opts opts;
+  memset(&opts, 0, sizeof(opts));
   struct mg_mgr mgr;
   struct mg_connection *c = NULL;
   int i, ok = 0;
   mg_mgr_init(&mgr);
+#if MG_TLS
   opts.client_ca = mg_str(CA_ISRG_ROOT_X2 CA_ISRG_ROOT_X1);
+#endif
   mg_tls_ctx_init(&mgr, &opts);
   c = mg_http_connect(&mgr, "http://cesanta.com", f3, &ok);
   ASSERT(c != NULL);
@@ -1242,7 +1248,7 @@ static void test_http_client(void) {
 #if MG_TLS
   {
     const char *url = "https://cesanta.com";
-    struct mg_str host = mg_url_host(url);
+    // struct mg_str host = mg_url_host(url); TODO() This requires attention
     c = mg_http_connect(&mgr, url, f3, &ok);
     ASSERT(c != NULL);
     for (i = 0; i < 1500 && ok <= 0; i++) mg_mgr_poll(&mgr, 1000);
