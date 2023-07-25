@@ -1,20 +1,31 @@
 #pragma once
 
+#define MG_TLS_NONE 0     // No TLS support
+#define MG_TLS_MBED 1     // mbedTLS
+#define MG_TLS_OPENSSL 2  // OpenSSL
+#define MG_TLS_BUILTIN 3  // Built-in
+#define MG_TLS_CUSTOM 4   // Custom implementation
+
+#ifndef MG_TLS
+#define MG_TLS MG_TLS_NONE
+#endif
+
 #include "net.h"
 #include "tls_mbed.h"
 #include "tls_openssl.h"
 
 struct mg_tls_opts {
-  const char *ca;         // CA certificate file. For both listeners and clients
-  const char *crl;        // Certificate Revocation List. For clients
-  const char *cert;       // Certificate
-  const char *certkey;    // Certificate key
-  const char *ciphers;    // Cipher list
-  struct mg_str srvname;  // If not empty, enables server name verification
-  struct mg_fs *fs;       // FS API for reading certificate files
+  struct mg_str client_ca;
+  struct mg_str server_ca;
+  struct mg_str server_cert;
+  struct mg_str server_key;
+  struct mg_str client_cert;
+  struct mg_str client_key;
 };
 
-void mg_tls_init(struct mg_connection *, const struct mg_tls_opts *);
+void mg_tls_ctx_init(struct mg_mgr *, const struct mg_tls_opts *);
+void mg_tls_ctx_free(struct mg_mgr *);
+void mg_tls_init(struct mg_connection *, struct mg_str hostname);
 void mg_tls_free(struct mg_connection *);
 long mg_tls_send(struct mg_connection *, const void *buf, size_t len);
 long mg_tls_recv(struct mg_connection *, void *buf, size_t len);

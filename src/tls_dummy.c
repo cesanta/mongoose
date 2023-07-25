@@ -1,8 +1,8 @@
 #include "tls.h"
 
-#if !MG_ENABLE_MBEDTLS && !MG_ENABLE_OPENSSL && !MG_ENABLE_CUSTOM_TLS
-void mg_tls_init(struct mg_connection *c, const struct mg_tls_opts *opts) {
-  (void) opts;
+#if MG_TLS == MG_TLS_NONE
+void mg_tls_init(struct mg_connection *c, struct mg_str hostname) {
+  (void) hostname;
   mg_error(c, "TLS is not enabled");
 }
 void mg_tls_handshake(struct mg_connection *c) {
@@ -20,5 +20,11 @@ long mg_tls_send(struct mg_connection *c, const void *buf, size_t len) {
 size_t mg_tls_pending(struct mg_connection *c) {
   (void) c;
   return 0;
+}
+void mg_tls_ctx_free(struct mg_mgr *mgr) {
+  mgr->tls_ctx = NULL;
+}
+void mg_tls_ctx_init(struct mg_mgr *mgr, const struct mg_tls_opts *opts) {
+  (void) opts, (void) mgr;
 }
 #endif

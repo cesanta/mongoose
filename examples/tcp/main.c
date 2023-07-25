@@ -12,6 +12,41 @@ static struct c_res_s {
   struct mg_connection *c;
 } c_res;
 
+// Self signed certificates
+// https://mongoose.ws/documentation/tutorials/tls/#self-signed-certificates
+static const char *s_tls_ca =
+    "-----BEGIN CERTIFICATE-----\n"
+    "MIIBqjCCAU+gAwIBAgIUESoOPGqMhf9uarzblVFwzrQweMcwCgYIKoZIzj0EAwIw\n"
+    "RDELMAkGA1UEBhMCSUUxDzANBgNVBAcMBkR1YmxpbjEQMA4GA1UECgwHQ2VzYW50\n"
+    "YTESMBAGA1UEAwwJVGVzdCBSb290MCAXDTIwMDUwOTIxNTE0NFoYDzIwNTAwNTA5\n"
+    "MjE1MTQ0WjBEMQswCQYDVQQGEwJJRTEPMA0GA1UEBwwGRHVibGluMRAwDgYDVQQK\n"
+    "DAdDZXNhbnRhMRIwEAYDVQQDDAlUZXN0IFJvb3QwWTATBgcqhkjOPQIBBggqhkjO\n"
+    "PQMBBwNCAAQsq9ECZiSW1xI+CVBP8VDuUehVA166sR2YsnJ5J6gbMQ1dUCH/QvLa\n"
+    "dBdeU7JlQcH8hN5KEbmM9BnZxMor6ussox0wGzAMBgNVHRMEBTADAQH/MAsGA1Ud\n"
+    "DwQEAwIBrjAKBggqhkjOPQQDAgNJADBGAiEAnHFsAIwGQQyRL81B04dH6d86Iq0l\n"
+    "fL8OKzndegxOaB0CIQCPwSIwEGFdURDqCC0CY2dnMrUGY5ZXu3hHCojZGS7zvg==\n"
+    "-----END CERTIFICATE-----\n";
+
+static const char *s_tls_cert =
+    "-----BEGIN CERTIFICATE-----\n"
+    "MIIBhzCCASygAwIBAgIUbnMoVd8TtWH1T09dANkK2LU6IUswCgYIKoZIzj0EAwIw\n"
+    "RDELMAkGA1UEBhMCSUUxDzANBgNVBAcMBkR1YmxpbjEQMA4GA1UECgwHQ2VzYW50\n"
+    "YTESMBAGA1UEAwwJVGVzdCBSb290MB4XDTIwMDUwOTIxNTE0OVoXDTMwMDUwOTIx\n"
+    "NTE0OVowETEPMA0GA1UEAwwGc2VydmVyMFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcD\n"
+    "QgAEkuBGnInDN6l06zVVQ1VcrOvH5FDu9MC6FwJc2e201P8hEpq0Q/SJS2nkbSuW\n"
+    "H/wBTTBaeXN2uhlBzMUWK790KKMvMC0wCQYDVR0TBAIwADALBgNVHQ8EBAMCA6gw\n"
+    "EwYDVR0lBAwwCgYIKwYBBQUHAwEwCgYIKoZIzj0EAwIDSQAwRgIhAPo6xx7LjCdZ\n"
+    "QY133XvLjAgVFrlucOZHONFVQuDXZsjwAiEAzHBNligA08c5U3SySYcnkhurGg50\n"
+    "BllCI0eYQ9ggp/o=\n"
+    "-----END CERTIFICATE-----\n";
+
+static const char *s_tls_key =
+    "-----BEGIN PRIVATE KEY-----\n"
+    "MIGHAgEAMBMGByqGSM49AgEGCCqGSM49AwEHBG0wawIBAQQglNni0t9Dg9icgG8w\n"
+    "kbfxWSS+TuNgbtNybIQXcm3NHpmhRANCAASS4EacicM3qXTrNVVDVVys68fkUO70\n"
+    "wLoXAlzZ7bTU/yESmrRD9IlLaeRtK5Yf/AFNMFp5c3a6GUHMxRYrv3Qo\n"
+    "-----END PRIVATE KEY-----\n";
+
 // CLIENT event handler
 static void cfn(struct mg_connection *c, int ev, void *ev_data, void *fn_data) {
   int *i = &((struct c_res_s *) fn_data)->i;
@@ -19,16 +54,11 @@ static void cfn(struct mg_connection *c, int ev, void *ev_data, void *fn_data) {
     MG_INFO(("CLIENT has been initialized"));
   } else if (ev == MG_EV_CONNECT) {
     MG_INFO(("CLIENT connected"));
-#if MG_ENABLE_MBEDTLS || MG_ENABLE_OPENSSL
-    struct mg_tls_opts opts = {.ca = "ss_ca.pem"};
-    mg_tls_init(c, &opts);
-    MG_INFO(("CLIENT initialized TLS"));
-#endif
     *i = 1;  // do something
   } else if (ev == MG_EV_READ) {
     struct mg_iobuf *r = &c->recv;
     MG_INFO(("CLIENT got data: %.*s", r->len, r->buf));
-    r->len = 0;             // Tell Mongoose we've consumed data
+    r->len = 0;  // Tell Mongoose we've consumed data
   } else if (ev == MG_EV_CLOSE) {
     MG_INFO(("CLIENT disconnected"));
     // signal we are done
@@ -55,15 +85,6 @@ static void sfn(struct mg_connection *c, int ev, void *ev_data, void *fn_data) {
     MG_INFO(("SERVER is listening"));
   } else if (ev == MG_EV_ACCEPT) {
     MG_INFO(("SERVER accepted a connection"));
-#if MG_ENABLE_MBEDTLS || MG_ENABLE_OPENSSL
-    struct mg_tls_opts opts = {
-        //.ca = "ss_ca.pem",         // Uncomment to enable two-way SSL
-        .cert = "ss_server.pem",     // Certificate PEM file
-        .certkey = "ss_server.pem",  // This pem contains both cert and key
-    };
-    mg_tls_init(c, &opts);
-    MG_INFO(("SERVER initialized TLS"));
-#endif
   } else if (ev == MG_EV_READ) {
     struct mg_iobuf *r = &c->recv;
     MG_INFO(("SERVER got data: %.*s", r->len, r->buf));
@@ -96,9 +117,14 @@ int main(void) {
   struct mg_connection *c;
 
   mg_log_set(MG_LL_INFO);  // Set log level
-  mg_mgr_init(&mgr);        // Initialize event manager
-  mg_timer_add(&mgr, 15000, MG_TIMER_REPEAT | MG_TIMER_RUN_NOW, timer_fn,
-               &mgr);                     // Init timer for demo purposes, 15s
+  mg_mgr_init(&mgr);       // Initialize event manager
+
+  struct mg_tls_opts opts = {.client_ca = mg_str(s_tls_ca),
+                             .server_cert = mg_str(s_tls_cert),
+                             .server_key = mg_str(s_tls_key)};
+  mg_tls_ctx_init(&mgr, &opts);
+
+  mg_timer_add(&mgr, 15000, MG_TIMER_REPEAT | MG_TIMER_RUN_NOW, timer_fn, &mgr);
   c = mg_listen(&mgr, s_lsn, sfn, NULL);  // Create server connection
   if (c == NULL) {
     MG_INFO(("SERVER cant' open a connection"));

@@ -41,7 +41,7 @@ mbedtls:
 	git clone --depth 1 -b v2.28.2 https://github.com/mbed-tls/mbedtls $@
 
 ifeq ($(TLS), mbedtls)
-CFLAGS += -DMG_ENABLE_MBEDTLS=1 -Wno-conversion -Imbedtls/include
+CFLAGS += -DMG_TLS=MG_TLS_MBED -Wno-conversion -Imbedtls/include
 CFLAGS += -DMBEDTLS_CONFIG_FILE=\"mbedtls_config.h\" mbedtls/library/*.c
 $(PROG): mbedtls
 endif

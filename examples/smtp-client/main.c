@@ -1,7 +1,6 @@
 #include "mongoose.h"
 
-static const char *server =
-    "tcp://mail.domain.com:587";  // Change this! Your mail server and port
+static const char *server = "tcp://smtp.gmail.com:587";
 static const char *user = "aaa@domain.com";  // Change this! Your mail account
 static const char *pass = "xxxxxxxxxxxxxx";  // Change this! Your mail password
 static const char *to = "bbb@domain.com";    // Change this! Destination email
@@ -29,8 +28,8 @@ static void fn(struct mg_connection *c, int ev, void *ev_data, void *fn_data) {
         mg_printf(c, "STARTTLS\r\n");
         *state = STARTTLS_WAIT;
       } else if (*state == STARTTLS_WAIT) {
-        struct mg_tls_opts opts = {.ca = "ca.pem"};
-        mg_tls_init(c, &opts);
+        struct mg_str host = mg_url_host(server);
+        mg_tls_init(c, host);
         *state = AUTH;
       } else if (*state == AUTH) {
         char a[100], b[300] = "";
@@ -75,7 +74,11 @@ static void fn(struct mg_connection *c, int ev, void *ev_data, void *fn_data) {
 int main(void) {
   struct mg_mgr mgr;
   mg_mgr_init(&mgr);
-  // mg_log_set(MG_LL_VERBOSE);
+
+  struct mg_tls_opts opts = {.client_ca = mg_str(CA_GLOBALSIGN_RSA)};
+  mg_tls_ctx_init(&mgr, &opts);
+
+  mg_log_set(MG_LL_DEBUG);
   mg_connect(&mgr, server, fn, NULL);
   while (s_quit == false) mg_mgr_poll(&mgr, 1000);
   return 0;

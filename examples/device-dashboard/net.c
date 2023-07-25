@@ -31,7 +31,7 @@ static uint64_t s_boot_timestamp = 0;  // Updated by SNTP
 // Certificate generation procedure:
 // openssl ecparam -name prime256v1 -genkey -noout -out key.pem
 // openssl req -new -key key.pem -x509 -nodes -days 3650 -out cert.pem
-static const char *s_ssl_cert =
+static const char *s_tls_cert =
     "-----BEGIN CERTIFICATE-----\n"
     "MIIBCTCBsAIJAK9wbIDkHnAoMAoGCCqGSM49BAMCMA0xCzAJBgNVBAYTAklFMB4X\n"
     "DTIzMDEyOTIxMjEzOFoXDTMzMDEyNjIxMjEzOFowDTELMAkGA1UEBhMCSUUwWTAT\n"
@@ -41,7 +41,7 @@ static const char *s_ssl_cert =
     "aEWiBp1xshs4iz6WbpxrS1IHucrqkZuJLfNZGZI=\n"
     "-----END CERTIFICATE-----\n";
 
-static const char *s_ssl_key =
+static const char *s_tls_key =
     "-----BEGIN EC PRIVATE KEY-----\n"
     "MHcCAQEEICBz3HOkQLPBDtdknqC7k1PNsWj6HfhyNB5MenfjmqiooAoGCCqGSM49\n"
     "AwEHoUQDQgAEc0kEuTh3de5VHjSPupKfVmLtHMbhCIvyU46YWwpnSQ9XFL4ZszPf\n"
@@ -54,19 +54,18 @@ uint64_t mg_now(void) {
 }
 
 int ui_event_next(int no, struct ui_event *e) {
-  if (no < 0 || no >= MAX_EVENTS_NO)
-    return 0;
+  if (no < 0 || no >= MAX_EVENTS_NO) return 0;
 
   srand(no);
   e->type = (uint8_t) rand() % 4;
   e->prio = (uint8_t) rand() % 3;
-  e->timestamp = (unsigned long) (mg_now() - 86400 * 1000 /* one day back */ +
-                              no * 300 * 1000 /* 5 mins between alerts */ +
-                              1000 * (rand() % 300) /* randomize event time */) /
-             1000;
-             
-  mg_snprintf(e->text, MAX_EVENT_TEXT_SIZE,
-              "event#%d", no);
+  e->timestamp =
+      (unsigned long) (mg_now() - 86400 * 1000 /* one day back */ +
+                       no * 300 * 1000 /* 5 mins between alerts */ +
+                       1000 * (rand() % 300) /* randomize event time */) /
+      1000;
+
+  mg_snprintf(e->text, MAX_EVENT_TEXT_SIZE, "event#%d", no);
   return no + 1;
 }
 
@@ -171,16 +170,17 @@ static size_t print_events(void (*out)(char, void *), void *ptr, va_list *ap) {
   while ((no = ui_event_next(no, &ev)) != 0 && no <= end) {
     len += mg_xprintf(out, ptr, "%s{%m:%lu,%m:%d,%m:%d,%m:%m}",  //
                       len == 0 ? "" : ",",                       //
-                      MG_ESC("time"), ev.timestamp,       //
-                      MG_ESC("type"), ev.type,            //
-                      MG_ESC("prio"), ev.prio,            //
+                      MG_ESC("time"), ev.timestamp,              //
+                      MG_ESC("type"), ev.type,                   //
+                      MG_ESC("prio"), ev.prio,                   //
                       MG_ESC("text"), MG_ESC(ev.text));
   }
 
   return len;
 }
 
-static void handle_events_get(struct mg_connection *c, struct mg_http_message *hm) {
+static void handle_events_get(struct mg_connection *c,
+                              struct mg_http_message *hm) {
   int pageno = mg_json_get_long(hm->body, "$.page", 1);
   mg_http_reply(c, 200, s_json_header, "{%m:[%M], %m:%d}", MG_ESC("arr"),
                 print_events, pageno, MG_ESC("totalCount"), MAX_EVENTS_NO);
@@ -220,10 +220,7 @@ static void handle_settings_get(struct mg_connection *c) {
 
 // HTTP request handler function
 static void fn(struct mg_connection *c, int ev, void *ev_data, void *fn_data) {
-  if (ev == MG_EV_ACCEPT && fn_data != NULL) {
-    struct mg_tls_opts opts = {.cert = s_ssl_cert, .certkey = s_ssl_key};
-    mg_tls_init(c, &opts);
-  } else if (ev == MG_EV_HTTP_MSG) {
+  if (ev == MG_EV_HTTP_MSG) {
     struct mg_http_message *hm = (struct mg_http_message *) ev_data;
     struct user *u = authenticate(hm);
 
@@ -258,15 +255,19 @@ static void fn(struct mg_connection *c, int ev, void *ev_data, void *fn_data) {
               hm->method.ptr, (int) hm->uri.len, hm->uri.ptr, (int) 3,
               &c->send.buf[9]));
   }
+  (void) fn_data;
 }
 
 void web_init(struct mg_mgr *mgr) {
+  struct mg_tls_opts opts = {0};
+  opts.server_cert = mg_str(s_tls_cert);
+  opts.server_key = mg_str(s_tls_key);
+  mg_tls_ctx_init(mgr, &opts);
+
   s_settings.device_name = strdup("My Device");
 
   mg_http_listen(mgr, HTTP_URL, fn, NULL);
-#if MG_ENABLE_MBEDTLS || MG_ENABLE_OPENSSL
-  mg_http_listen(mgr, HTTPS_URL, fn, "");
-#endif
+  mg_http_listen(mgr, HTTPS_URL, fn, NULL);
 
   // mg_timer_add(c->mgr, 1000, MG_TIMER_REPEAT, timer_mqtt_fn, c->mgr);
   mg_timer_add(mgr, 3600 * 1000, MG_TIMER_RUN_NOW | MG_TIMER_REPEAT,

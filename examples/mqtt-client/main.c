@@ -20,7 +20,9 @@ static struct mg_connection *s_conn;              // Client connection
 
 // Handle interrupts, like Ctrl-C
 static int s_signo;
-static void signal_handler(int signo) { s_signo = signo; }
+static void signal_handler(int signo) {
+  s_signo = signo;
+}
 
 static void fn(struct mg_connection *c, int ev, void *ev_data, void *fn_data) {
   if (ev == MG_EV_OPEN) {
@@ -29,12 +31,6 @@ static void fn(struct mg_connection *c, int ev, void *ev_data, void *fn_data) {
   } else if (ev == MG_EV_ERROR) {
     // On error, log error message
     MG_ERROR(("%lu ERROR %s", c->id, (char *) ev_data));
-  } else if (ev == MG_EV_CONNECT) {
-    // If target URL is SSL/TLS, command client connection to use TLS
-    if (mg_url_is_ssl(s_url)) {
-      struct mg_tls_opts opts = {.ca = "ca.pem"};
-      mg_tls_init(c, &opts);
-    }
   } else if (ev == MG_EV_MQTT_OPEN) {
     // MQTT connect is successful
     struct mg_str subt = mg_str(s_sub_topic);
@@ -105,6 +101,7 @@ int main(int argc, char *argv[]) {
   signal(SIGTERM, signal_handler);  // manager loop on SIGINT and SIGTERM
 
   mg_mgr_init(&mgr);
+  mg_tls_init_client(&mgr, "ca.pem");
   mg_timer_add(&mgr, 3000, MG_TIMER_REPEAT | MG_TIMER_RUN_NOW, timer_fn, &mgr);
   while (s_signo == 0) mg_mgr_poll(&mgr, 1000);  // Event loop, 1s timeout
   mg_mgr_free(&mgr);                             // Finished, cleanup

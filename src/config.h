@@ -36,18 +36,6 @@
 #define MG_ENABLE_FATFS 0
 #endif
 
-#ifndef MG_ENABLE_MBEDTLS
-#define MG_ENABLE_MBEDTLS 0
-#endif
-
-#ifndef MG_ENABLE_OPENSSL
-#define MG_ENABLE_OPENSSL 0
-#endif
-
-#ifndef MG_ENABLE_CUSTOM_TLS
-#define MG_ENABLE_CUSTOM_TLS 0
-#endif
-
 #ifndef MG_ENABLE_SSI
 #define MG_ENABLE_SSI 0
 #endif

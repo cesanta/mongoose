@@ -9,7 +9,7 @@
 #endif
 
 #if !defined(HTTPS_URL)
-#define HTTPS_URL "http://0.0.0.0:8443"
+#define HTTPS_URL "https://0.0.0.0:8443"
 #endif
 
 #define MAX_DEVICE_NAME 40
