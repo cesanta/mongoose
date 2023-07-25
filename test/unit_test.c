@@ -1229,10 +1229,10 @@ static void f3(struct mg_connection *c, int ev, void *ev_data, void *fn_data) {
 
 static void test_http_client(void) {
   struct mg_tls_opts opts;
-  memset(&opts, 0, sizeof(opts));
   struct mg_mgr mgr;
   struct mg_connection *c = NULL;
   int i, ok = 0;
+  memset(&opts, 0, sizeof(opts));
   mg_mgr_init(&mgr);
 #if MG_TLS
   opts.client_ca = mg_str(CA_ISRG_ROOT_X2 CA_ISRG_ROOT_X1);
