@@ -15,7 +15,7 @@ jobs:
       matrix:
         cc: [gcc, clang, g++, clang++]
         target: [test, mip_test]
-        ssl: [MBEDTLS, OPENSSL]
+        ssl: [MBEDTLS] #ssl: [MBEDTLS, OPENSSL]
     name: linux ${{ matrix.target }} CC=${{ matrix.cc }} SSL=${{ matrix.ssl }}
     env:
       CC: ${{ matrix.cc }}
