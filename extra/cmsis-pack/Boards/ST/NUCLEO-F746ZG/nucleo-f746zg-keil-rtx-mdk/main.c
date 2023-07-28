@@ -3,8 +3,8 @@
 
 #include "hal.h"
 #include "mongoose.h"
-#include "net.h"
 #include "main.h"
+#include "net.h"
 #include "cmsis_os.h" 
 
 #define BLINK_PERIOD_MS 1000  // LED blinking period in millis
