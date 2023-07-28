@@ -1,14 +1,13 @@
 // Copyright (c) 2023 Cesanta Software Limited
 // All rights reserved
 
+#include "cmsis_os2.h"
 #include "hal.h"
+#include "main.h"
 #include "mongoose.h"
 #include "net.h"
-#include "main.h"
-#include "cmsis_os2.h" 
 
 #define BLINK_PERIOD_MS 1000  // LED blinking period in millis
-
 
 void mg_random(void *buf, size_t len) {  // Use on-board RNG
   extern RNG_HandleTypeDef hrng;
@@ -20,8 +19,8 @@ void mg_random(void *buf, size_t len) {  // Use on-board RNG
 }
 
 static void timer_fn(void *arg) {
-  struct mg_tcpip_if *ifp = arg;                  // And show
-  const char *names[] = {"down", "up", "ready"};  // network stats
+  struct mg_tcpip_if *ifp = arg;                         // And show
+  const char *names[] = {"down", "up", "req", "ready"};  // network stats
   MG_INFO(("Ethernet: %s, IP: %M, rx:%u, tx:%u, dr:%u, er:%u",
            names[ifp->state], mg_print_ip4, &ifp->ip, ifp->nrecv, ifp->nsent,
            ifp->ndrop, ifp->nerr));
@@ -59,7 +58,7 @@ static void server(void *args) {
 
 static void blinker(void *args) {
   for (;;) {
-    HAL_GPIO_TogglePin(GPIOB, GPIO_PIN_7);   // Blink On-board blue LED
+    HAL_GPIO_TogglePin(GPIOB, GPIO_PIN_7);  // Blink On-board blue LED
     osDelay((osKernelGetTickFreq() * BLINK_PERIOD_MS) / 1000U);
   }
   (void) args;
@@ -68,16 +67,18 @@ static void blinker(void *args) {
 extern void mx_init(void);
 
 int main(void) {
-  mx_init();                // Setup clock and all peripherals configured in CubeMX
-                                // Initialise random number generator
-                            // Initialise ethernet pins
-  osKernelInitialize();                 // Initialize CMSIS-RTOS
-  osThreadNew(blinker, NULL, NULL);  // Create the blinker thread with a default stack size
+  mx_init();             // Setup clock and all peripherals configured in CubeMX
+                         // Initialise random number generator
+                         // Initialise ethernet pins
+  osKernelInitialize();  // Initialize CMSIS-RTOS
+  osThreadNew(blinker, NULL,
+              NULL);  // Create the blinker thread with a default stack size
   const osThreadAttr_t server_attr = {
-    .stack_size = 8192                            // Create the server thread with a stack size of 8KB bytes
+      .stack_size =
+          8192  // Create the server thread with a stack size of 8KB bytes
   };
   osThreadNew(server, NULL, &server_attr);
-  osKernelStart();  // This blocks     
+  osKernelStart();  // This blocks
   return 0;
 }
 

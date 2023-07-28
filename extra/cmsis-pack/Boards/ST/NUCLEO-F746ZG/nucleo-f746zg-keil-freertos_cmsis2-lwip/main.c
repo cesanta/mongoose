@@ -3,8 +3,8 @@
 
 #include "hal.h"
 #include "mongoose.h"
-#include "net.h"
 #include "main.h"
+#include "net.h"
 #include "cmsis_os2.h" 
 #include "ethernetif.h"
 #include "lwip/dhcp.h"

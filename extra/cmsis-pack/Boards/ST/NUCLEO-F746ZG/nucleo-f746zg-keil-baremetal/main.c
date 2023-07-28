@@ -2,14 +2,14 @@
 // All rights reserved
 
 #include "hal.h"
+#include "main.h"
 #include "mongoose.h"
 #include "net.h"
-#include "main.h"
 
 #define BLINK_PERIOD_MS 1000  // LED blinking period in millis
 
-uint64_t mg_millis(void) {  // Let Mongoose use our uptime function
-  return (uint64_t)HAL_GetTick();     // Return number of milliseconds since boot
+uint64_t mg_millis(void) {          // Let Mongoose use our uptime function
+  return (uint64_t) HAL_GetTick();  // Return number of milliseconds since boot
 }
 
 void mg_random(void *buf, size_t len) {  // Use on-board RNG
@@ -22,9 +22,9 @@ void mg_random(void *buf, size_t len) {  // Use on-board RNG
 }
 
 static void timer_fn(void *arg) {
-  HAL_GPIO_TogglePin(GPIOB, GPIO_PIN_7);   // Blink On-board blue LED
-  struct mg_tcpip_if *ifp = arg;                  // And show
-  const char *names[] = {"down", "up", "ready"};  // network stats
+  HAL_GPIO_TogglePin(GPIOB, GPIO_PIN_7);  // Blink On-board blue LED
+  struct mg_tcpip_if *ifp = arg;          // And show
+  const char *names[] = {"down", "up", "req", "ready"};  // network stats
   MG_INFO(("Ethernet: %s, IP: %M, rx:%u, tx:%u, dr:%u, er:%u",
            names[ifp->state], mg_print_ip4, &ifp->ip, ifp->nrecv, ifp->nsent,
            ifp->ndrop, ifp->nerr));
@@ -33,9 +33,9 @@ static void timer_fn(void *arg) {
 extern void mx_init(void);
 
 int main(void) {
-  mx_init();                // Setup clock and all peripherals configured in CubeMX
-                                // Initialise random number generator
-                            // Initialise ethernet pins
+  mx_init();    // Setup clock and all peripherals configured in CubeMX
+                // Initialise random number generator
+                // Initialise ethernet pins
   MG_INFO(("Starting, CPU freq %g MHz", (double) SystemCoreClock / 1000000));
 
   struct mg_mgr mgr;        // Initialise

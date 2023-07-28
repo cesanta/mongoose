@@ -2,16 +2,17 @@
 // All rights reserved
 
 #include "hal.h"
+#include "main.h"
 #include "mongoose.h"
 #include "net.h"
-#include "main.h"
 
 #define BLINK_PERIOD_MS 1000  // LED blinking period in millis
 
 extern void xPortSysTickHandler(void);
-void SysTick_Handler (void) {
+void SysTick_Handler(void) {
   HAL_IncTick();
-  // xPortSysTickHandler() must be called after vTaskStartScheduler() and mx_init() takes longer than 1ms 
+  // xPortSysTickHandler() must be called after vTaskStartScheduler() and
+  // mx_init() takes longer than 1ms
   if (xTaskGetSchedulerState() != taskSCHEDULER_NOT_STARTED)
     xPortSysTickHandler();
 }
@@ -26,8 +27,8 @@ void mg_random(void *buf, size_t len) {  // Use on-board RNG
 }
 
 static void timer_fn(void *arg) {
-  struct mg_tcpip_if *ifp = arg;                  // And show
-  const char *names[] = {"down", "up", "ready"};  // network stats
+  struct mg_tcpip_if *ifp = arg;                         // And show
+  const char *names[] = {"down", "up", "req", "ready"};  // network stats
   MG_INFO(("Ethernet: %s, IP: %M, rx:%u, tx:%u, dr:%u, er:%u",
            names[ifp->state], mg_print_ip4, &ifp->ip, ifp->nrecv, ifp->nsent,
            ifp->ndrop, ifp->nerr));
@@ -65,7 +66,7 @@ static void server(void *args) {
 
 static void blinker(void *args) {
   for (;;) {
-    HAL_GPIO_TogglePin(GPIOB, GPIO_PIN_7);   // Blink On-board blue LED
+    HAL_GPIO_TogglePin(GPIOB, GPIO_PIN_7);  // Blink On-board blue LED
     vTaskDelay(pdMS_TO_TICKS(BLINK_PERIOD_MS));
   }
   (void) args;
@@ -74,9 +75,9 @@ static void blinker(void *args) {
 extern void mx_init(void);
 
 int main(void) {
-  mx_init();                // Setup clock and all peripherals configured in CubeMX
-                                // Initialise random number generator
-                            // Initialise ethernet pins
+  mx_init();  // Setup clock and all peripherals configured in CubeMX
+              // Initialise random number generator
+              // Initialise ethernet pins
   // Start tasks. NOTE: stack sizes are in 32-bit words
   xTaskCreate(blinker, "blinker", 128, ":)", configMAX_PRIORITIES - 1, NULL);
   xTaskCreate(server, "server", 2048, 0, configMAX_PRIORITIES - 1, NULL);

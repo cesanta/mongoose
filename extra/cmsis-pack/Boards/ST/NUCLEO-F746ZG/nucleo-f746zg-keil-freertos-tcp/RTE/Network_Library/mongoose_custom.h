@@ -74,4 +74,4 @@
 #endif
 
 
-// Add your customization below this comment
+#define MG_ENABLE_TCPIP 1
