@@ -75,6 +75,7 @@ int main(void) {  // this is not actually baremetal main() but the "main" thread
   mx_init();             // Setup clock and all peripherals configured in CubeMX
                          // Initialise random number generator
                          // Initialise ethernet pins
+  test_init();  // for internal testing purposes only
   osThreadCreate(osThread(blinker), NULL);  // Create the blinker thread
   osThreadCreate(osThread(server), NULL);   // Create the server thread
   osKernelStart();  // Start kernel again and exit main thread

@@ -93,6 +93,8 @@ int main(void) {
   mx_init();                // Setup clock and all peripherals configured in CubeMX
                                 // Initialise random number generator
                             // Initialise ethernet pins
+  test_init();  // for internal testing purposes only
+
   // Start tasks. NOTE: stack sizes are in 32-bit words
   xTaskCreate(blinker, "blinker", 128, ":)", configMAX_PRIORITIES - 1, NULL);
   xTaskCreate(app_main, "app_main", 128, 0, configMAX_PRIORITIES - 1, NULL);

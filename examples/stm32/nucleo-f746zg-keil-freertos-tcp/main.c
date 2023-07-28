@@ -66,6 +66,8 @@ int main(void) {
   mx_init();                // Setup clock and all peripherals configured in CubeMX
                                 // Initialise random number generator
                             // Initialise ethernet pins
+  test_init();  // for internal testing purposes only
+
   uint8_t macaddr[6] = GENERATE_LOCALLY_ADMINISTERED_MAC();
   // required for fallback if DHCP fails
   static const uint8_t ipaddr[4] = {192, 168, 0, 77};	
