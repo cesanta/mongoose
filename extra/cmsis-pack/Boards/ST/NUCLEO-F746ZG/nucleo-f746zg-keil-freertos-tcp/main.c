@@ -3,8 +3,8 @@
 
 #include "hal.h"
 #include "mongoose.h"
-#include "net.h"
 #include "main.h"
+#include "net.h"
 
 extern RNG_HandleTypeDef hrng;
 
