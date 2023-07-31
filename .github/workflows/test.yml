@@ -131,9 +131,9 @@ jobs:
       run:  make -C examples/stm32/nucleo-f746zg-freertos-tcp test VCON_API_KEY=${{secrets.VCON_API_KEY}}
     - run: echo GO=0 >> $GITHUB_ENV ; if ./test/match_changed_files.sh '^src|examples/stm32/nucleo-f7.*-cube-'; then echo GO=1 >> $GITHUB_ENV ; fi
     - if: ${{ env.GO == 1 }}
-      run: make -C test/cube test PROJECTS=../../examples/stm32/nucleo-f746zg-cube-baremetal VCON_API_KEY=${{secrets.VCON_API_KEY}} DEVICE=5
+      run: make -C test/cube test PROJECTS=../../examples/stm32/nucleo-f746zg-cube-baremetal-builtin VCON_API_KEY=${{secrets.VCON_API_KEY}} DEVICE=5
     - if: ${{ env.GO == 1 }}
-      run: make -C test/cube test PROJECTS=../../examples/stm32/nucleo-f746zg-cube-freertos VCON_API_KEY=${{secrets.VCON_API_KEY}} DEVICE=5
+      run: make -C test/cube test PROJECTS=../../examples/stm32/nucleo-f746zg-cube-freertos-builtin VCON_API_KEY=${{secrets.VCON_API_KEY}} DEVICE=5
     - if: ${{ env.GO == 1 }}
       run: make -C test/cube test PROJECTS=../../examples/stm32/nucleo-f746zg-cube-freertos-lwip VCON_API_KEY=${{secrets.VCON_API_KEY}} DEVICE=5
 
@@ -151,9 +151,9 @@ jobs:
       run:  make -C examples/stm32/nucleo-f429zi-freertos test VCON_API_KEY=${{secrets.VCON_API_KEY}}
     - run: echo GO=0 >> $GITHUB_ENV ; if ./test/match_changed_files.sh '^src|examples/stm32/nucleo-f4.*-cube-'; then echo GO=1 >> $GITHUB_ENV ; fi
     - if: ${{ env.GO == 1 }}
-      run: make -C test/cube test PROJECTS=../../examples/stm32/nucleo-f429zi-cube-baremetal VCON_API_KEY=${{secrets.VCON_API_KEY}} DEVICE=2
+      run: make -C test/cube test PROJECTS=../../examples/stm32/nucleo-f429zi-cube-baremetal-builtin VCON_API_KEY=${{secrets.VCON_API_KEY}} DEVICE=2
     - if: ${{ env.GO == 1 }}
-      run: make -C test/cube test PROJECTS=../../examples/stm32/nucleo-f429zi-cube-freertos VCON_API_KEY=${{secrets.VCON_API_KEY}} DEVICE=2
+      run: make -C test/cube test PROJECTS=../../examples/stm32/nucleo-f429zi-cube-freertos-builtin VCON_API_KEY=${{secrets.VCON_API_KEY}} DEVICE=2
     - if: ${{ env.GO == 1 }}
       run: make -C test/cube test PROJECTS=../../examples/stm32/nucleo-f429zi-cube-freertos-lwip VCON_API_KEY=${{secrets.VCON_API_KEY}} DEVICE=2
 
@@ -169,9 +169,9 @@ jobs:
       run:  make -C examples/stm32/nucleo-h743zi-make-baremetal-builtin test VCON_API_KEY=${{secrets.VCON_API_KEY}}
     - run: echo GO=0 >> $GITHUB_ENV ; if ./test/match_changed_files.sh '^src|examples/stm32/nucleo-h7.*-cube-'; then echo GO=1 >> $GITHUB_ENV ; fi
     - if: ${{ env.GO == 1 }}
-      run: make -C test/cube test PROJECTS=../../examples/stm32/nucleo-h743zi-cube-baremetal VCON_API_KEY=${{secrets.VCON_API_KEY}} DEVICE=6
+      run: make -C test/cube test PROJECTS=../../examples/stm32/nucleo-h743zi-cube-baremetal-builtin VCON_API_KEY=${{secrets.VCON_API_KEY}} DEVICE=6
     - if: ${{ env.GO == 1 }}
-      run: make -C test/cube test PROJECTS=../../examples/stm32/nucleo-h743zi-cube-freertos VCON_API_KEY=${{secrets.VCON_API_KEY}} DEVICE=6
+      run: make -C test/cube test PROJECTS=../../examples/stm32/nucleo-h743zi-cube-freertos-builtin VCON_API_KEY=${{secrets.VCON_API_KEY}} DEVICE=6
 
   test_tm4c:
     runs-on: ubuntu-latest
