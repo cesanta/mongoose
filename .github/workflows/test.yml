@@ -120,13 +120,13 @@ jobs:
     steps:
     - uses: actions/checkout@v3
       with: { fetch-depth: 2 }
-    - run: if ./test/match_changed_files.sh "^src|examples/device-dashboard|examples/stm32/nucleo-f7" ; then echo GO=1 >> $GITHUB_ENV ; fi
+    - run: if ./test/match_changed_files.sh "^src|examples/device-dashboard|examples/stm32/nucleo-f7.*-make-" ; then echo GO=1 >> $GITHUB_ENV ; fi
     - if: ${{ env.GO == 1 }}
       run: sudo apt -y update; sudo apt -y install gcc-arm-none-eabi
     - if: ${{ env.GO == 1 }}
       run:  make -C examples/stm32/nucleo-f746zg-make-baremetal-builtin test VCON_API_KEY=${{secrets.VCON_API_KEY}}
     - if: ${{ env.GO == 1 }}
-      run:  make -C examples/stm32/nucleo-f746zg-freertos test VCON_API_KEY=${{secrets.VCON_API_KEY}}
+      run:  make -C examples/stm32/nucleo-f746zg-make-freertos-builtin test VCON_API_KEY=${{secrets.VCON_API_KEY}}
     - if: ${{ env.GO == 1 }}
       run:  make -C examples/stm32/nucleo-f746zg-freertos-tcp test VCON_API_KEY=${{secrets.VCON_API_KEY}}
     - run: echo GO=0 >> $GITHUB_ENV ; if ./test/match_changed_files.sh '^src|examples/stm32/nucleo-f7.*-cube-'; then echo GO=1 >> $GITHUB_ENV ; fi
@@ -142,13 +142,13 @@ jobs:
     steps:
     - uses: actions/checkout@v3
       with: { fetch-depth: 2 }
-    - run: if ./test/match_changed_files.sh "^src|examples/device-dashboard|examples/stm32/nucleo-f4" ; then echo GO=1 >> $GITHUB_ENV ; fi
+    - run: if ./test/match_changed_files.sh "^src|examples/device-dashboard|examples/stm32/nucleo-f4.*-make-" ; then echo GO=1 >> $GITHUB_ENV ; fi
     - if: ${{ env.GO == 1 }}
       run: sudo apt -y update; sudo apt -y install gcc-arm-none-eabi
     - if: ${{ env.GO == 1 }}
       run:  make -C examples/stm32/nucleo-f429zi-make-baremetal-builtin test VCON_API_KEY=${{secrets.VCON_API_KEY}}
     - if: ${{ env.GO == 1 }}
-      run:  make -C examples/stm32/nucleo-f429zi-freertos test VCON_API_KEY=${{secrets.VCON_API_KEY}}
+      run:  make -C examples/stm32/nucleo-f429zi-make-freertos-builtin test VCON_API_KEY=${{secrets.VCON_API_KEY}}
     - run: echo GO=0 >> $GITHUB_ENV ; if ./test/match_changed_files.sh '^src|examples/stm32/nucleo-f4.*-cube-'; then echo GO=1 >> $GITHUB_ENV ; fi
     - if: ${{ env.GO == 1 }}
       run: make -C test/cube test PROJECTS=../../examples/stm32/nucleo-f429zi-cube-baremetal-builtin VCON_API_KEY=${{secrets.VCON_API_KEY}} DEVICE=2
@@ -162,7 +162,7 @@ jobs:
     steps:
     - uses: actions/checkout@v3
       with: { fetch-depth: 3 }
-    - run: if ./test/match_changed_files.sh "^src|examples/device-dashboard|examples/stm32/nucleo-h7" ; then echo GO=1 >> $GITHUB_ENV ; fi
+    - run: if ./test/match_changed_files.sh "^src|examples/device-dashboard|examples/stm32/nucleo-h7.*-make-" ; then echo GO=1 >> $GITHUB_ENV ; fi
     - if: ${{ env.GO == 1 }}
       run: sudo apt -y update; sudo apt -y install gcc-arm-none-eabi
     - if: ${{ env.GO == 1 }}
@@ -224,10 +224,10 @@ jobs:
           - path: esp32/uart-bridge
           - path: esp8266/http-client-server
           - path: stm32/nucleo-f429zi-make-baremetal-builtin
-          - path: stm32/nucleo-f429zi-freertos
+          - path: stm32/nucleo-f429zi-make-freertos-builtin
           - path: stm32/nucleo-f429zi-rndis
           - path: stm32/nucleo-f746zg-make-baremetal-builtin
-          - path: stm32/nucleo-f746zg-freertos
+          - path: stm32/nucleo-f746zg-make-freertos-builtin
           - path: stm32/nucleo-f746zg-freertos-tcp
           - path: stm32/nucleo-f746zg-rndis
           - path: stm32/nucleo-h743zi-make-baremetal-builtin
