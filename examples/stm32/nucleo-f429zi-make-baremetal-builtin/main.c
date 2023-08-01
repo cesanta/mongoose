@@ -33,7 +33,7 @@ static void timer_fn(void *arg) {
 }
 
 int main(void) {
-  gpio_output(LED);               // Setup green LED
+  gpio_output(LED);               // Setup blue LED
   uart_init(UART_DEBUG, 115200);  // Initialise debug printf
   ethernet_init();                // Initialise ethernet pins
   MG_INFO(("Starting, CPU freq %g MHz", (double) SystemCoreClock / 1000000));
