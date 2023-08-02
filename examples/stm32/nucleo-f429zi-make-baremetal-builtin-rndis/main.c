@@ -5,7 +5,6 @@
 #include "mongoose.h"
 #include "tusb.h"
 
-#define LED PIN('B', 7)  // On-board LED pin (blue)
 static struct mg_tcpip_if *s_ifp;
 const uint8_t tud_network_mac_address[6] = {2, 2, 0x84, 0x6A, 0x96, 0};
 
@@ -101,15 +100,7 @@ int main(void) {
   mg_http_listen(&mgr, "tcp://0.0.0.0:80", fn, &mgr);
 
   MG_INFO(("Init USB ..."));
-  gpio_init(PIN('A', 11), GPIO_MODE_AF, GPIO_OTYPE_PUSH_PULL, GPIO_SPEED_HIGH,
-            GPIO_PULL_NONE, 10);  // D+
-  gpio_init(PIN('A', 12), GPIO_MODE_AF, GPIO_OTYPE_PUSH_PULL, GPIO_SPEED_HIGH,
-            GPIO_PULL_NONE, 10);  // D-
-  gpio_init(PIN('A', 9), GPIO_MODE_INPUT, GPIO_OTYPE_PUSH_PULL, GPIO_SPEED_HIGH,
-            GPIO_PULL_NONE, 0);  // VBUS
-  gpio_init(PIN('A', 10), GPIO_MODE_AF, GPIO_OTYPE_OPEN_DRAIN, GPIO_SPEED_HIGH,
-            GPIO_PULL_UP, 10);          // ID
-  RCC->AHB2ENR |= RCC_AHB2ENR_OTGFSEN;  // Enable USB FS clock
+  usb_init();
   tusb_init();
 
   MG_INFO(("Init done, starting main loop ..."));
