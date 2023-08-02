@@ -1696,6 +1696,7 @@ extern struct mg_tcpip_driver mg_tcpip_driver_w5500;
 extern struct mg_tcpip_driver mg_tcpip_driver_tm4c;
 extern struct mg_tcpip_driver mg_tcpip_driver_stm32h;
 extern struct mg_tcpip_driver mg_tcpip_driver_imxrt;
+extern struct mg_tcpip_driver mg_tcpip_driver_same54;
 
 // Drivers that require SPI, can use this SPI abstraction
 struct mg_tcpip_spi {
@@ -1720,6 +1721,17 @@ struct mg_tcpip_driver_imxrt1020_data {
   //    66 MHz        0x0D           4  <-- value for iMXRT1020-EVK at max freq.
   int mdc_cr;  // Valid values: -1, 0, 1, 2, 3, 4
 };
+
+
+#if MG_ENABLE_TCPIP && defined(MG_ENABLE_DRIVER_SAME54) && MG_ENABLE_DRIVER_SAME54
+
+#include "hal.h" // keep this include
+
+struct mg_tcpip_driver_same54_data {
+    int mdc_cr;
+};
+
+#endif
 
 
 struct mg_tcpip_driver_stm32_data {
