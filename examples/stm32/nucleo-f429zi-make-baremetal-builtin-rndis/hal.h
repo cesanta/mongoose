@@ -1,10 +1,10 @@
 // Copyright (c) 2022 Cesanta Software Limited
 // All rights reserved
-// https://www.st.com/resource/en/reference_manual/dm00124865-stm32f75xxx-and-stm32f74xxx-advanced-arm-based-32-bit-mcus-stmicroelectronics.pdf
+// https://www.st.com/resource/en/reference_manual/dm00031020-stm32f405-415-stm32f407-417-stm32f427-437-and-stm32f429-439-advanced-arm-based-32-bit-mcus-stmicroelectronics.pdf
 
 #pragma once
 
-#include <stm32f746xx.h>
+#include <stm32f429xx.h>
 
 #include <stdbool.h>
 #include <stdint.h>
@@ -17,15 +17,20 @@
 #define PINNO(pin) (pin & 255)
 #define PINBANK(pin) (pin >> 8)
 
-/* System clock
-5.3.3: APB1 clock <= 54MHz; APB2 clock <= 108MHz
-3.3.2, Table 5: configure flash latency (WS) in accordance to clock freq
-38.4: The AHB clock frequency must be at least 25 MHz when the Ethernet
-controller is used */
+#define LED1 PIN('B', 0)   // On-board LED pin (green)
+#define LED2 PIN('B', 7)   // On-board LED pin (blue)
+#define LED3 PIN('B', 14)  // On-board LED pin (red)
+
+#define LED LED2              // Use blue LED for blinking
+
+// System clock
+// 6.3.3: APB1 clock <= 45MHz; APB2 clock <= 90MHz
+// 3.5.1, Table 11: configure flash latency (WS) in accordance to clock freq
+// 33.4: The AHB clock must be at least 25 MHz when Ethernet is used
 enum { APB1_PRE = 5 /* AHB clock / 4 */, APB2_PRE = 4 /* AHB clock / 2 */ };
-enum { PLL_HSI = 16, PLL_M = 8, PLL_N = 216, PLL_P = 2, PLL_Q = 9 };
-#define FLASH_LATENCY 7 
-#define SYS_FREQUENCY ((PLL_HSI * PLL_N / PLL_M / PLL_P) * 1000000) // Core 216 MHz, USB 48 MHz
+enum { PLL_HSI = 16, PLL_M = 8, PLL_N = 168, PLL_P = 2, PLL_Q = 7 };
+#define FLASH_LATENCY 5
+#define SYS_FREQUENCY ((PLL_HSI * PLL_N / PLL_M / PLL_P) * 1000000) // Core 168 MHz, USB 48 MHz
 #define APB2_FREQUENCY (SYS_FREQUENCY / (BIT(APB2_PRE - 3)))
 #define APB1_FREQUENCY (SYS_FREQUENCY / (BIT(APB1_PRE - 3)))
 
@@ -90,7 +95,7 @@ static inline void irq_exti_attach(uint16_t pin) {
 #endif
 
 static inline void uart_init(USART_TypeDef *uart, unsigned long baud) {
-  // https://www.st.com/resource/en/datasheet/stm32f746zg.pdf
+  // https://www.st.com/resource/en/datasheet/stm32f429zi.pdf
   uint8_t af = 7;           // Alternate function
   uint16_t rx = 0, tx = 0;  // pins
   uint32_t freq = 0;        // Bus frequency. UART1 is on APB2, rest on APB1
@@ -105,22 +110,36 @@ static inline void uart_init(USART_TypeDef *uart, unsigned long baud) {
 
   gpio_init(tx, GPIO_MODE_AF, GPIO_OTYPE_PUSH_PULL, GPIO_SPEED_HIGH, 0, af);
   gpio_init(rx, GPIO_MODE_AF, GPIO_OTYPE_PUSH_PULL, GPIO_SPEED_HIGH, 0, af);
-  uart->CR1 = 0;                          // Disable this UART
-  uart->BRR = freq / baud;                // Set baud rate
-  uart->CR1 |= BIT(0) | BIT(2) | BIT(3);  // Set UE, RE, TE
+  uart->CR1 = 0;                           // Disable this UART
+  uart->BRR = freq / baud;                 // Set baud rate
+  uart->CR1 |= BIT(13) | BIT(2) | BIT(3);  // Set UE, RE, TE
 }
 static inline void uart_write_byte(USART_TypeDef *uart, uint8_t byte) {
-  uart->TDR = byte;
-  while ((uart->ISR & BIT(7)) == 0) spin(1);
+  uart->DR = byte;
+  while ((uart->SR & BIT(7)) == 0) spin(1);
 }
 static inline void uart_write_buf(USART_TypeDef *uart, char *buf, size_t len) {
   while (len-- > 0) uart_write_byte(uart, *(uint8_t *) buf++);
 }
 static inline int uart_read_ready(USART_TypeDef *uart) {
-  return uart->ISR & BIT(5);  // If RXNE bit is set, data is ready
+  return uart->SR & BIT(5);  // If RXNE bit is set, data is ready
 }
 static inline uint8_t uart_read_byte(USART_TypeDef *uart) {
-  return (uint8_t) (uart->RDR & 255);
+  return (uint8_t) (uart->DR & 255);
+}
+
+static inline void usb_init() {
+  gpio_init(PIN('A', 11), GPIO_MODE_AF, GPIO_OTYPE_PUSH_PULL, GPIO_SPEED_HIGH,
+            GPIO_PULL_NONE, 10);  // D+
+  gpio_init(PIN('A', 12), GPIO_MODE_AF, GPIO_OTYPE_PUSH_PULL, GPIO_SPEED_HIGH,
+            GPIO_PULL_NONE, 10);  // D-
+  gpio_init(PIN('A', 9), GPIO_MODE_INPUT, GPIO_OTYPE_PUSH_PULL, GPIO_SPEED_HIGH,
+            GPIO_PULL_NONE, 0);  // VBUS
+  gpio_init(PIN('A', 10), GPIO_MODE_AF, GPIO_OTYPE_OPEN_DRAIN, GPIO_SPEED_HIGH,
+            GPIO_PULL_UP, 10);                    // ID
+  RCC->AHB2ENR |= RCC_AHB2ENR_OTGFSEN;            // Enable USB FS clock
+  USB_OTG_FS->GCCFG |= USB_OTG_GCCFG_NOVBUSSENS;  // VBUS sensing disable
+  USB_OTG_FS->GCCFG |= USB_OTG_GCCFG_VBUSBSEN;    // VBUS sensing enable
 }
 
 static inline void rng_init(void) {
@@ -132,7 +151,7 @@ static inline uint32_t rng_read(void) {
   return RNG->DR;
 }
 
-#define UUID ((uint8_t *) UID_BASE)  // Unique 96-bit chip ID. TRM 41.1
+#define UUID ((uint8_t *) UID_BASE)  // Unique 96-bit chip ID. TRM 39.1
 
 // Helper macro for MAC generation
 #define GENERATE_LOCALLY_ADMINISTERED_MAC()                        \
