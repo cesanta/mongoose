@@ -847,7 +847,7 @@ static void mg_tcpip_poll(struct mg_tcpip_if *ifp, uint64_t uptime_ms) {
   // Process timeouts
   for (struct mg_connection *c = ifp->mgr->conns; c != NULL; c = c->next) {
     if (c->is_udp || c->is_listening) continue;
-    if (c->is_connecting || c->is_resolving) continue;
+    if (!c->is_arplooking && (c->is_connecting || c->is_resolving)) continue;
     struct connstate *s = (struct connstate *) (c + 1);
     uint32_t rem_ip;
     memcpy(&rem_ip, c->rem.ip, sizeof(uint32_t));
@@ -949,7 +949,7 @@ void mg_connect_resolved(struct mg_connection *c) {
             &c->rem));
   mg_call(c, MG_EV_RESOLVE, NULL);
   if (((rem_ip & ifp->mask) == (ifp->ip & ifp->mask))) {
-    // If we're in the same LAN, fire an ARP lookup. TODO(cpq): handle this!
+    // If we're in the same LAN, fire an ARP lookup.
     MG_DEBUG(("%lu ARP lookup...", c->id));
     arp_ask(ifp, rem_ip);
     settmout(c, MIP_TTYPE_ARP);
