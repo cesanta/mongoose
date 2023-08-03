@@ -762,6 +762,7 @@ static void mg_tcpip_rx(struct mg_tcpip_if *ifp, void *buf, size_t len) {
   pkt.raw.ptr = (char *) buf;
   pkt.raw.len = len;
   pkt.eth = (struct eth *) buf;
+  //mg_hexdump(buf, len > 16 ? 16: len);
   if (pkt.raw.len < sizeof(*pkt.eth)) return;  // Truncated - runt?
   if (ifp->enable_mac_check &&
       memcmp(pkt.eth->dst, ifp->mac, sizeof(pkt.eth->dst)) != 0 &&

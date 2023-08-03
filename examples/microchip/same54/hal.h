@@ -149,13 +149,18 @@ static inline uint32_t rng_read(void) {
   return TRNG_REGS->TRNG_DATA;
 }
 
-#define UUID ((uint8_t *) UID_BASE)  // Unique 96-bit chip ID. TRM 39.1
+#define UID_BASE_W0 0x008061FC    // Word 0 location of the 128-bit chip ID
+#define UID_BASE_W1_3 0x00806010  // Words 1-3 location of the 128-bit chip ID
 
-// Helper macro for MAC generation
-#define GENERATE_LOCALLY_ADMINISTERED_MAC()                        \
-  {                                                                \
-    2, UUID[0] ^ UUID[1], UUID[2] ^ UUID[3], UUID[4] ^ UUID[5],    \
-        UUID[6] ^ UUID[7] ^ UUID[8], UUID[9] ^ UUID[10] ^ UUID[11] \
+#define UUID(n) ((n >= 0 && n <= 3) ? \
+                     (((uint8_t *) UID_BASE_W0)[n]) : \
+                     (((uint8_t *) UID_BASE_W1_3)[n - 4]))
+
+#define GENERATE_LOCALLY_ADMINISTERED_MAC()                         \
+  {                                                                 \
+    2, UUID(0) ^ UUID(1) ^ UUID(2), UUID(3) ^ UUID(4) ^ UUID(5),    \
+        UUID(6) ^ UUID(7) ^ UUID(8), UUID(9) ^ UUID(10) ^ UUID(11), \
+        UUID(12) ^ UUID(13) ^ UUID(14) ^ UUID(15)                   \
   }
 
 static inline bool timer_expired(volatile uint64_t *t, uint64_t prd,
@@ -194,9 +199,9 @@ static inline void ethernet_init(void) {
     PORT_REGS->GROUP[bank].PORT_PINCFG[no] |= PORT_PINCFG_PMUXEN_Msk;
     volatile uint8_t *m = &PORT_REGS->GROUP[bank].PORT_PMUX[no / 2], v = m[0];
     if (no & 1) {
-      m[0] = (uint8_t) (v & ~0xf0) | PORT_PMUX_PMUXO(af[i]);
+      m[0] = (uint8_t) ((v & ~0xf0) | PORT_PMUX_PMUXO(af[i]));
     } else {
-      m[0] = (uint8_t) (v & ~0x0f) | PORT_PMUX_PMUXE(af[i]);
+      m[0] = (uint8_t) ((v & ~0x0f) | PORT_PMUX_PMUXE(af[i]));
     }
   }
 
