@@ -9,8 +9,9 @@
 #define MIP_TCP_KEEPALIVE_MS 45000  // TCP keep-alive period, ms
 #endif
 
-#define MIP_TCP_ACK_MS 150  // Timeout for ACKing
-#define MIP_TCP_ARP_MS 100  // Timeout for ARP response
+#define MIP_TCP_ACK_MS 150    // Timeout for ACKing
+#define MIP_TCP_ARP_MS 100    // Timeout for ARP response
+#define MIP_TCP_SYN_MS 15000  // Timeout for connection establishment
 
 struct connstate {
   uint32_t seq, ack;           // TCP seq/ack counters
@@ -20,6 +21,7 @@ struct connstate {
 #define MIP_TTYPE_KEEPALIVE 0  // Connection is idle for long, send keepalive
 #define MIP_TTYPE_ACK 1        // Peer sent us data, we have to ack it soon
 #define MIP_TTYPE_ARP 2        // ARP resolve sent, waiting for response
+#define MIP_TTYPE_SYN 3        // SYN sent, waiting for response
   uint8_t tmiss;               // Number of keep-alive misses
   struct mg_iobuf raw;         // For TLS only. Incoming raw data
 };
@@ -158,6 +160,7 @@ static void settmout(struct mg_connection *c, uint8_t type) {
   struct connstate *s = (struct connstate *) (c + 1);
   unsigned n = type == MIP_TTYPE_ACK   ? MIP_TCP_ACK_MS
                : type == MIP_TTYPE_ARP ? MIP_TCP_ARP_MS
+               : type == MIP_TTYPE_SYN ? MIP_TCP_SYN_MS
                                        : MIP_TCP_KEEPALIVE_MS;
   s->timer = ifp->now + n;
   s->ttype = type;
@@ -344,8 +347,8 @@ static void rx_arp(struct mg_tcpip_if *ifp, struct pkt *pkt) {
         MG_DEBUG(("%lu ARP resolved %M -> %M", c->id, mg_print_ip4, c->rem.ip,
                   mg_print_mac, s->mac));
         c->is_arplooking = 0;
-        settmout(c, MIP_TTYPE_KEEPALIVE);
         send_syn(c);
+        settmout(c, MIP_TTYPE_SYN);
       }
     }
   }
@@ -846,8 +849,7 @@ static void mg_tcpip_poll(struct mg_tcpip_if *ifp, uint64_t uptime_ms) {
 
   // Process timeouts
   for (struct mg_connection *c = ifp->mgr->conns; c != NULL; c = c->next) {
-    if (c->is_udp || c->is_listening) continue;
-    if (c->is_connecting || c->is_resolving) continue;
+    if (c->is_udp || c->is_listening || c->is_resolving) continue;
     struct connstate *s = (struct connstate *) (c + 1);
     uint32_t rem_ip;
     memcpy(&rem_ip, c->rem.ip, sizeof(uint32_t));
@@ -858,6 +860,8 @@ static void mg_tcpip_poll(struct mg_tcpip_if *ifp, uint64_t uptime_ms) {
                mg_htonl(s->seq), mg_htonl(s->ack), "", 0);
       } else if (s->ttype == MIP_TTYPE_ARP) {
         mg_error(c, "ARP timeout");
+      } else if (s->ttype == MIP_TTYPE_SYN) {
+        mg_error(c, "Connection timeout");
       } else {
         if (s->tmiss++ > 2) {
           mg_error(c, "keepalive");
@@ -949,7 +953,7 @@ void mg_connect_resolved(struct mg_connection *c) {
             &c->rem));
   mg_call(c, MG_EV_RESOLVE, NULL);
   if (((rem_ip & ifp->mask) == (ifp->ip & ifp->mask))) {
-    // If we're in the same LAN, fire an ARP lookup. TODO(cpq): handle this!
+    // If we're in the same LAN, fire an ARP lookup.
     MG_DEBUG(("%lu ARP lookup...", c->id));
     arp_ask(ifp, rem_ip);
     settmout(c, MIP_TTYPE_ARP);
@@ -971,6 +975,7 @@ void mg_connect_resolved(struct mg_connection *c) {
       mg_call(c, MG_EV_CONNECT, NULL);
     } else {
       send_syn(c);
+      settmout(c, MIP_TTYPE_SYN);
       c->is_connecting = 1;
     }
   }
