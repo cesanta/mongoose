@@ -135,7 +135,7 @@ void GMAC_Handler(void) {
   uint32_t isr = GMAC_REGS->GMAC_ISR;
   uint32_t rsr = GMAC_REGS->GMAC_RSR;
   uint32_t tsr = GMAC_REGS->GMAC_TSR;
-  // MG_INFO(("ISR: 0x%x, TSR: 0x%x, RSR: 0x%x", isr, tsr, rsr));
+  MG_INFO(("ISR: 0x%x, TSR: 0x%x, RSR: 0x%x", isr, tsr, rsr));
   if (isr & BIT(1)) {
     if (rsr & BIT(1)) {
       for (int i = 0; i < 10; i++) {
