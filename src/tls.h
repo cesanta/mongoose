@@ -7,7 +7,7 @@
 #define MG_TLS_CUSTOM 4   // Custom implementation
 
 #ifndef MG_TLS
-#define MG_TLS MG_TLS_BUILTIN
+#define MG_TLS MG_TLS_NONE
 #endif
 
 #include "net.h"

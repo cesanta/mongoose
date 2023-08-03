@@ -1326,7 +1326,7 @@ void mg_http_serve_ssi(struct mg_connection *c, const char *root,
 #define MG_TLS_CUSTOM 4   // Custom implementation
 
 #ifndef MG_TLS
-#define MG_TLS MG_TLS_BUILTIN
+#define MG_TLS MG_TLS_NONE
 #endif
 
 
@@ -1724,8 +1724,6 @@ struct mg_tcpip_driver_imxrt1020_data {
 
 
 #if MG_ENABLE_TCPIP && defined(MG_ENABLE_DRIVER_SAME54) && MG_ENABLE_DRIVER_SAME54
-
-#include "hal.h" // keep this include
 
 struct mg_tcpip_driver_same54_data {
     int mdc_cr;

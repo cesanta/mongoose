@@ -5519,7 +5519,8 @@ static inline uint32_t mg_swap32(uint32_t v) {
   return (v >> 24) | (v >> 8 & 0xff00) | (v << 8 & 0xff0000) | (v << 24);
 }
 static inline uint64_t mg_swap64(uint64_t v) {
-  return (((uint64_t) mg_swap32((uint32_t) v)) << 32) | mg_swap32(v >> 32);
+  return (((uint64_t) mg_swap32((uint32_t) v)) << 32) |
+         mg_swap32((uint32_t) (v >> 32));
 }
 static inline uint16_t mg_be16(uint16_t v) {
   return mg_is_big_endian() ? mg_swap16(v) : v;
@@ -5569,7 +5570,7 @@ long mg_tls_recv(struct mg_connection *c, void *buf, size_t len) {
   (void) c, (void) buf, (void) len;
   char tmp[8192];
   long n = mg_io_recv(c, tmp, sizeof(tmp));
-  if (n > 0) mg_hexdump(tmp, n);
+  if (n > 0) mg_hexdump(tmp, (size_t) n);
   MG_INFO(("AAAAAAAA"));
   return -1;
   // struct mg_tls *tls = (struct mg_tls *) c->tls;
@@ -5592,7 +5593,7 @@ void mg_tls_handshake(struct mg_connection *c) {
     mg_iobuf_resize(rio, rio->len + 1);
     long n = mg_io_recv(c, &rio->buf[rio->len], rio->size - rio->len);
     if (n > 0) {
-      rio->len += n;
+      rio->len += (size_t) n;
     } else if (n == MG_IO_WAIT) {
       break;
     } else {
@@ -5609,7 +5610,7 @@ void mg_tls_handshake(struct mg_connection *c) {
     mg_error(c, "no 22");
     return;
   }
-  if (rio->len < TLS_HDR_SIZE + record_len) return;
+  if (rio->len < (size_t) TLS_HDR_SIZE + record_len) return;
   // Got full hello
   // struct tls_hello *hello = (struct tls_hello *) (hdr + 1);
   MG_INFO(("CT=%d V=%hx L=%hu", record_type, record_version, record_len));
@@ -5629,8 +5630,8 @@ void mg_tls_handshake(struct mg_connection *c) {
   add16(wio, 51), add16(wio, 36), add16(wio, 29), add16(wio, 32);  // keyshare
   mg_iobuf_add(wio, wio->len, NULL, 32);                           // 32 random
   mg_random(wio->buf + wio->len - 32, 32);                         // bytes
-  *(uint16_t *) &wio->buf[ofs + 3] = mg_be16(wio->len - ofs - 5);
-  *(uint16_t *) &wio->buf[ofs + 7] = mg_be16(wio->len - ofs - 9);
+  *(uint16_t *) &wio->buf[ofs + 3] = mg_be16((uint16_t) (wio->len - ofs - 5));
+  *(uint16_t *) &wio->buf[ofs + 7] = mg_be16((uint16_t) (wio->len - ofs - 9));
 
   // Change cipher. Cipher's payload is an encypted app data
   // ofs = wio->len;
@@ -5645,7 +5646,7 @@ void mg_tls_handshake(struct mg_connection *c) {
   add8(wio, 0), add16(wio, 2), add16(wio, 0);          // empty 2 bytes
   add8(wio, 11);                                       // certificate message
   add8(wio, 0), add16(wio, 4), add32(wio, 0x1020304);  // len
-  *(uint16_t *) &wio->buf[ofs + 3] = mg_be16(wio->len - ofs - 5);
+  *(uint16_t *) &wio->buf[ofs + 3] = mg_be16((uint16_t)(wio->len - ofs - 5));
 
   mg_io_send(c, wio->buf, wio->len);
   wio->len = 0;
@@ -7031,215 +7032,131 @@ struct mg_tcpip_driver mg_tcpip_driver_imxrt1020 = {
 #endif
 
 
-#if MG_ENABLE_TCPIP && defined(MG_ENABLE_DRIVER_SAME54) && MG_ENABLE_DRIVER_SAME54
+#if MG_ENABLE_TCPIP && defined(MG_ENABLE_DRIVER_SAME54) && \
+    MG_ENABLE_DRIVER_SAME54
+
+#include <sam.h>
 
 #undef BIT
 #define BIT(x) ((uint32_t) 1 << (x))
 #define ETH_PKT_SIZE 1536  // Max frame size
-#define GMAC_DESC_CNT 4     // Descriptors count
-#define GMAC_DS 2           // Descriptor size (words)
+#define ETH_DESC_CNT 4     // Descriptors count
+#define ETH_DS 2           // Descriptor size (words)
 
-static uint8_t s_rxbuf[GMAC_DESC_CNT][ETH_PKT_SIZE];  // RX ethernet buffers
-static uint8_t s_txbuf[GMAC_DESC_CNT][ETH_PKT_SIZE];  // TX ethernet buffers
-static uint32_t s_rxdesc[GMAC_DESC_CNT][GMAC_DS];      // RX descriptors
-static uint32_t s_txdesc[GMAC_DESC_CNT][GMAC_DS];      // TX descriptors
-static uint8_t s_txno;                               // Current TX descriptor
-static uint8_t s_rxno;                               // Current RX descriptor
+static uint8_t s_rxbuf[ETH_DESC_CNT][ETH_PKT_SIZE] __attribute__((aligned(8)));
+static uint8_t s_txbuf[ETH_DESC_CNT][ETH_PKT_SIZE] __attribute__((aligned(8)));
+static uint32_t s_rxdesc[ETH_DESC_CNT][ETH_DS];  // RX descriptors
+static uint32_t s_txdesc[ETH_DESC_CNT][ETH_DS];  // TX descriptors
+static uint8_t s_txno;                           // Current TX descriptor
+static uint8_t s_rxno;                           // Current RX descriptor
 
 static struct mg_tcpip_if *s_ifp;  // MIP interface
-enum { PHY_ADDR = 0, PHY_BCR = 0, PHY_BSR = 1};
+enum { PHY_ADDR = 0, PHY_BCR = 0, PHY_BSR = 1 };
 
 static uint16_t eth_read_phy(uint8_t addr, uint8_t reg) {
-  GMAC_REGS->GMAC_MAN = GMAC_MAN_CLTTO_Msk | GMAC_MAN_OP(2) |   // Setting the read operation
-                        GMAC_MAN_WTN(2) | GMAC_MAN_PHYA(addr) | // PHY address
-                        GMAC_MAN_REGA(reg);   // Setting the register
-  while (!(GMAC_REGS->GMAC_NSR & GMAC_NSR_IDLE_Msk)); // Waiting until the read op is complete
-  return GMAC_REGS->GMAC_MAN & GMAC_MAN_DATA_Msk;   // Getting the read value
+  GMAC_REGS->GMAC_MAN = GMAC_MAN_CLTTO_Msk |
+                        GMAC_MAN_OP(2) |  // Setting the read operation
+                        GMAC_MAN_WTN(2) | GMAC_MAN_PHYA(addr) |  // PHY address
+                        GMAC_MAN_REGA(reg);  // Setting the register
+  while (!(GMAC_REGS->GMAC_NSR & GMAC_NSR_IDLE_Msk)) (void) 0;
+  return GMAC_REGS->GMAC_MAN & GMAC_MAN_DATA_Msk;  // Getting the read value
 }
 
+#if 0
 static void eth_write_phy(uint8_t addr, uint8_t reg, uint16_t val) {
   GMAC_REGS->GMAC_MAN = GMAC_MAN_CLTTO_Msk | GMAC_MAN_OP(1) |   // Setting the write operation
                         GMAC_MAN_WTN(2) | GMAC_MAN_PHYA(addr) | // PHY address
                         GMAC_MAN_REGA(reg) | GMAC_MAN_DATA(val);  // Setting the register
   while (!(GMAC_REGS->GMAC_NSR & GMAC_NSR_IDLE_Msk)); // Waiting until the write op is complete
 }
+#endif
 
 static bool mg_tcpip_driver_same54_init(struct mg_tcpip_if *ifp) {
   struct mg_tcpip_driver_same54_data *d =
       (struct mg_tcpip_driver_same54_data *) ifp->driver_data;
   s_ifp = ifp;
 
-  // enabling GMAC bus clocks
-  MCLK_REGS->MCLK_AHBMASK |= MCLK_AHBMASK_GMAC(1);
-  MCLK_REGS->MCLK_APBCMASK |= MCLK_APBCMASK_GMAC(1);
-   
-  GMAC_REGS->GMAC_NCR &= ~GMAC_NCR_RXEN_Msk; // Disable receive circuit
-  GMAC_REGS->GMAC_NCR &= ~GMAC_NCR_TXEN_Msk; // Disable transmit circuit
-
-  GMAC_REGS->GMAC_DCFGR = GMAC_DCFGR_DRBS(0x18);
-  GMAC_REGS->GMAC_DCFGR |= GMAC_DCFGR_TXPBMS(1);
-  GMAC_REGS->GMAC_DCFGR |= GMAC_DCFGR_RXBMS(2);
-  GMAC_REGS->GMAC_DCFGR |= GMAC_DCFGR_FBLDO(4);
-
-  // Init RX descriptors
-  for (int i = 0; i < GMAC_DESC_CNT; i++) {
-    s_rxdesc[i][0] = ((uint32_t) s_rxbuf[i]) & 0xfffffffc;  // Point to data buffer (bits [31:2])
-    s_rxdesc[i][1] = 0;
-  }
-  s_rxdesc[GMAC_DESC_CNT - 1][0] |= BIT(1); // Marking last rx descriptor
+  MCLK_REGS->MCLK_APBCMASK |= MCLK_APBCMASK_GMAC_Msk;
+  MCLK_REGS->MCLK_AHBMASK |= MCLK_AHBMASK_GMAC_Msk;
+  GMAC_REGS->GMAC_NCFGR = GMAC_NCFGR_CLK(d->mdc_cr);  // Set MDC divider
+  GMAC_REGS->GMAC_NCR = 0;                            // Disable RX & TX
+  GMAC_REGS->GMAC_NCR |= GMAC_NCR_MPE_Msk;            // Enable MDC & MDIO
 
   // Init TX descriptors
-  for (int i = 0; i < GMAC_DESC_CNT; i++) {
+  for (int i = 0; i < ETH_DESC_CNT; i++) {
     s_txdesc[i][0] = (uint32_t) s_txbuf[i];  // Point to data buffer
-    s_txdesc[i][1] = BIT(31); // Setting the OWN bit
+    s_txdesc[i][1] = BIT(31);                // OWN bit
   }
-  s_txdesc[GMAC_DESC_CNT - 1][1] |= BIT(30); // Marking last tx descriptor
+  s_txdesc[ETH_DESC_CNT - 1][1] |= BIT(30);  // Last tx descriptor - wrap
 
-  // let the controller know about the descriptor addresses
-  GMAC_REGS->GMAC_RBQB = (uint32_t) s_rxdesc;
-  GMAC_REGS->GMAC_TBQB = (uint32_t) s_txdesc;
-
-  // GPIO pin configuration
-  MCLK_REGS->MCLK_APBBMASK |= MCLK_APBBMASK_PORT_Msk; // //enable bus clock for PORT
-  uint16_t pins[] = {PIN('A', 12), PIN('A', 13), PIN('A', 14), PIN('A', 15),
-                     PIN('A', 17), PIN('A', 18), PIN('A', 19),
-                     PIN('C', 11), PIN('C', 12),  PIN('C', 20)};
-
-  uint32_t pin_fns[] = {
-        MUX_PA12L_GMAC_GRX1, MUX_PA13L_GMAC_GRX0, MUX_PA14L_GMAC_GTXCK,
-        MUX_PA15L_GMAC_GRXER, MUX_PA17L_GMAC_GTXEN, MUX_PA18L_GMAC_GTX0,
-        MUX_PA19L_GMAC_GTX1, MUX_PC11L_GMAC_GMDC, MUX_PC12L_GMAC_GMDIO,
-        MUX_PC20L_GMAC_GRXDV
-  };
-
-  for (uint32_t i = 0; i < sizeof(pins) / sizeof(uint16_t); i++) {
-    uint8_t group = (uint8_t) (pins[i] >> 8);
-    uint8_t pin_no = (uint8_t) pins[i];
-    PORT_REGS->GROUP[group].PORT_PINCFG[pin_no] |= PORT_PINCFG_PMUXEN_Msk;
-    if (pin_no % 2)
-      PORT_REGS->GROUP[group].PORT_PMUX[pin_no / 2] |= (uint8_t) PORT_PMUX_PMUXO(pin_fns[i]);
-    else
-      PORT_REGS->GROUP[group].PORT_PMUX[pin_no / 2] |= (uint8_t) PORT_PMUX_PMUXE(pin_fns[i]);
+  // Init RX descriptors
+  for (int i = 0; i < ETH_DESC_CNT; i++) {
+    s_rxdesc[i][0] = (uint32_t) s_rxbuf[i];  // Address of the data buffer
+    s_rxdesc[i][1] = 0;                      // Clear status
   }
+  s_rxdesc[ETH_DESC_CNT - 1][0] |= BIT(1);  // Last rx descriptor
 
-  PORT_REGS->GROUP[0].PORT_PINCFG[17] |= PORT_PINCFG_DRVSTR_Msk;
-  PORT_REGS->GROUP[0].PORT_PINCFG[18] |= PORT_PINCFG_DRVSTR_Msk;
-  PORT_REGS->GROUP[0].PORT_PINCFG[19] |= PORT_PINCFG_DRVSTR_Msk;
+  GMAC_REGS->GMAC_TBQB = (uint32_t) s_txdesc;  // about the descriptor addresses
+  GMAC_REGS->GMAC_RBQB = (uint32_t) s_rxdesc;  // Let the controller know
 
-  GMAC_REGS->GMAC_UR &= ~GMAC_UR_MII_Msk; // RMII operation mode
+  // Select RMII operation mode
+  GMAC_REGS->GMAC_UR &= ~GMAC_UR_MII_Msk;
 
-  // Resetting the PHY
-  /*uint64_t start = mg_millis(), now = start;
-  PORT_REGS->GROUP[2].PORT_DIRSET = PORT_PC21;
-  PORT_REGS->GROUP[2].PORT_OUTCLR = PORT_PC21;
-  for (; now - start < 10000; now = mg_millis());
-  PORT_REGS->GROUP[2].PORT_OUTSET = PORT_PC21;
-  for (start = mg_millis(), now = start; now - start < 10000; now = mg_millis());*/
+  // Configure the receive filter
+  GMAC_REGS->GMAC_NCFGR |= GMAC_NCFGR_MAXFS_Msk | GMAC_NCFGR_MTIHEN_Msk |
+                           GMAC_NCFGR_SPD_Msk | GMAC_NCFGR_FD_Msk;
 
-  // Clock advanced configuration
-#if 0
-  uint8_t mdc_clk_div = 5;
+  // Clear transmit status register
+  GMAC_REGS->GMAC_TSR = GMAC_TSR_HRESP_Msk | GMAC_TSR_UND_Msk |
+                        GMAC_TSR_TXCOMP_Msk | GMAC_TSR_TFC_Msk |
+                        GMAC_TSR_TXGO_Msk | GMAC_TSR_RLE_Msk |
+                        GMAC_TSR_COL_Msk | GMAC_TSR_UBR_Msk;
 
-  // get MCLK from GCLK_GENERATOR 0
-  uint32_t div = 512;
-  uint32_t mclk;
-  if (!(GCLK_REGS->GCLK_GENCTRL[0] & GCLK_GENCTRL_DIVSEL_Msk))
-    div = ((GCLK_REGS->GCLK_GENCTRL[0] & 0x00FF0000) >> 16);
-  switch (GCLK_REGS->GCLK_GENCTRL[0] & GCLK_GENCTRL_SRC_Msk) {
-    case GCLK_GENCTRL_SRC_XOSC0_Val:
-      mclk = 32000000UL; /* 32MHz */
-      break;
-    case GCLK_GENCTRL_SRC_XOSC1_Val:
-      mclk = 32000000UL; /* 32MHz */
-      break;
-    case GCLK_GENCTRL_SRC_OSCULP32K_Val:
-      mclk = 32000UL;
-      break;
-    case GCLK_GENCTRL_SRC_XOSC32K_Val:
-      mclk = 32000UL;
-      break;
-    case GCLK_GENCTRL_SRC_DFLL_Val:
-      mclk = 48000000UL; /* 48MHz */
-      break;
-    case GCLK_GENCTRL_SRC_DPLL0_Val:
-      mclk = 200000000UL; /* 200MHz */
-      break;
-    case GCLK_GENCTRL_SRC_DPLL1_Val:
-      mclk = 200000000UL; /* 200MHz */
-      break;
-    default:
-      mclk = 200000000UL; /* 200MHz */
-  }
+  // Clear receive status register
+  GMAC_REGS->GMAC_RSR = GMAC_RSR_HNO_Msk | GMAC_RSR_RXOVR_Msk |
+                        GMAC_RSR_REC_Msk | GMAC_RSR_BNA_Msk;
 
-  mclk /= div;
+  // First disable all GMAC interrupts
+  GMAC_REGS->GMAC_IDR = ~0U;
 
-  uint8_t crs[] = {0, 1, 2, 3, 4, 5};          // GMAC->NCFGR::CLK values
-  uint8_t dividers[] = {8, 16, 32, 48, 64, 128};  // Respective CLK dividers
-  for (int i = 0; i < 6; i++) {
-    if (mclk / dividers[i] <= 2375000UL /* 2.5MHz - 5% */) {
-      mdc_clk_div = crs[i];
-      break;
-    }
-  }
+  // Only the desired ones are enabled
+  GMAC_REGS->GMAC_IER = GMAC_IER_HRESP_Msk | GMAC_IER_ROVR_Msk |
+                        GMAC_IER_TCOMP_Msk | GMAC_IER_TFC_Msk |
+                        GMAC_IER_RLEX_Msk | GMAC_IER_TUR_Msk |
+                        GMAC_IER_RXUBR_Msk | GMAC_IER_RCOMP_Msk;
 
-#endif
+  // Enable the GMAC to transmit and receive data
+  GMAC_REGS->GMAC_NCR |= GMAC_NCR_TXEN_Msk | GMAC_NCR_RXEN_Msk;
 
-  GMAC_REGS->GMAC_NCFGR = GMAC_NCFGR_CLK(5); // set the MDC clock
-  GMAC_REGS->GMAC_NCR |= GMAC_NCR_MPE_Msk; //enable management port
-
-  // configure MAC
-  GMAC_REGS->SA[0].GMAC_SAT = ((uint32_t) ifp->mac[5] << 8U) | ifp->mac[4];
-  GMAC_REGS->SA[0].GMAC_SAB = (uint32_t) (ifp->mac[3] << 24) |
-                 ((uint32_t) ifp->mac[2] << 16) |
-                 ((uint32_t) ifp->mac[1] << 8) | ifp->mac[0];
-
-  //Configure the receive filter
-  GMAC_REGS->GMAC_NCFGR |= GMAC_NCFGR_MAXFS_Msk;
-
-  //GMAC_REGS->GMAC_IER = GMAC_IER_RCOMP(1); // Enable the receive interrupt
-  GMAC_REGS->GMAC_IER = 0x3ffcfcff; // Enabling all interrupts
   NVIC_EnableIRQ(GMAC_IRQn);
-
-  GMAC_REGS->GMAC_NCR |= GMAC_NCR_TXEN_Msk;  // Enable transmit circuit
-  GMAC_REGS->GMAC_NCR |= GMAC_NCR_RXEN_Msk ; // Enable receive circuit
 
   return true;
 }
 
 static size_t mg_tcpip_driver_same54_tx(const void *buf, size_t len,
-                                       struct mg_tcpip_if *ifp) {
-  //MG_INFO(("DMAC_CTRL: 0x%x", DMAC_REGS->DMAC_CTRL));
-  MG_INFO(("GMAC_TSR: 0x%x", GMAC_REGS->GMAC_TSR));
-  GMAC_REGS->GMAC_TSR |= 0x21;
-  uint32_t rsr = GMAC_REGS->GMAC_RSR;
-  MG_INFO(("GMAC_RSR: 0x%x", rsr));
-  GMAC_REGS->GMAC_RSR = rsr;
+                                        struct mg_tcpip_if *ifp) {
   if (len > sizeof(s_txbuf[s_txno])) {
     MG_ERROR(("Frame too big, %ld", (long) len));
     len = 0;  // Frame is too big
-  } else if (!(s_txdesc[s_txno][1] & BIT(31))) {
+  } else if ((s_txdesc[s_txno][1] & BIT(31)) == 0) {
     ifp->nerr++;
     MG_ERROR(("No free descriptors"));
     len = 0;  // All descriptors are busy, fail
   } else {
-    memcpy(s_txbuf[s_txno], buf, len);     // Copy data
-    if (++s_txno >= GMAC_DESC_CNT) {
-      s_txdesc[GMAC_DESC_CNT - 1][1] = (len & (BIT(14) - 1)) | BIT(15)| BIT(30);
-      s_txno = 0;
-      MG_INFO(("s_tx_no: %d, tx_desc.status: 0x%x", GMAC_DESC_CNT - 1, s_txdesc[GMAC_DESC_CNT - 1][1]));
-    } else {
-      s_txdesc[s_txno - 1][1] = (len & (BIT(14) - 1)) | BIT(15);
-      MG_INFO(("s_tx_no: %d, tx_desc.status: 0x%x", s_txno - 1, s_txdesc[s_txno - 1][1]));
-    }
+    uint32_t status = len | BIT(15);  // Frame length, last chunk
+    if (s_txno == ETH_DESC_CNT - 1) status |= BIT(30);  // wrap
+    memcpy(s_txbuf[s_txno], buf, len);                  // Copy data
+    s_txdesc[s_txno][1] = status;
+    if (++s_txno >= ETH_DESC_CNT) s_txno = 0;
   }
   __DSB();  // Ensure descriptors have been written
-  GMAC_REGS->GMAC_NCR |= GMAC_NCR_TSTART_Msk; // Enable transmission
+  GMAC_REGS->GMAC_NCR |= GMAC_NCR_TSTART_Msk;  // Enable transmission
   return len;
 }
 
 static bool mg_tcpip_driver_same54_up(struct mg_tcpip_if *ifp) {
   uint16_t bsr = eth_read_phy(PHY_ADDR, PHY_BSR);
-  //MG_INFO(("BSR: 0x%x", bsr));
+  // MG_INFO(("BSR: 0x%x", bsr));
   bool up = bsr & BIT(2) ? 1 : 0;
   (void) ifp;
   return up;
@@ -7247,69 +7164,37 @@ static bool mg_tcpip_driver_same54_up(struct mg_tcpip_if *ifp) {
 
 void GMAC_Handler(void);
 void GMAC_Handler(void) {
-  MG_INFO(("Entering GMAC IRQ HANDLER"));
   uint32_t isr = GMAC_REGS->GMAC_ISR;
-  MG_INFO(("isr: 0x%x", isr));
-  if (/*GMAC_REGS->GMAC_ISR*/ isr & GMAC_ISR_RCOMP_Msk) {
-    int frame_start = -1;
-    int frame_end = -1;
-
-    // find the start of the frame
-    for (int i = s_rxno; i < GMAC_DESC_CNT + s_rxno; i++) {
-      int desc_index = i % GMAC_DESC_CNT;
-      if (!(s_rxdesc[desc_index][0] & 1)) break;
-      if (s_rxdesc[desc_index][1] & BIT(14))
-        frame_start = desc_index;
-    }
-
-    // if frame start not found, then clear the own bit
-    if (frame_start == -1) {
-      for (int i = s_rxno; i < GMAC_DESC_CNT + s_rxno; i++) {
-        int desc_index = i % GMAC_DESC_CNT;
-        if (!(s_rxdesc[desc_index][0] & 1)) {
-          break;
-        } else {
-          s_rxdesc[desc_index][0] &= ~(BIT(0));
-        }
+  uint32_t rsr = GMAC_REGS->GMAC_RSR;
+  uint32_t tsr = GMAC_REGS->GMAC_TSR;
+  // MG_INFO(("ISR: 0x%x, TSR: 0x%x, RSR: 0x%x", isr, tsr, rsr));
+  if (isr & BIT(1)) {
+    if (rsr & BIT(1)) {
+      for (int i = 0; i < 10; i++) {
+        if ((s_rxdesc[s_rxno][0] & BIT(0)) == 0) break;
+        uint32_t len = s_rxdesc[s_rxno][1] & (BIT(14) - 1);
+        mg_tcpip_qwrite(s_rxbuf[s_rxno], len, s_ifp);
+        s_rxdesc[s_rxno][0] &= ~BIT(0);  // Disown
+        if (++s_rxno >= ETH_DESC_CNT) s_rxno = 0;
       }
-      return;
-    }
-
-    // find the end of the frame
-    for (int i = frame_start; i < GMAC_DESC_CNT + frame_start; i++) {
-      int desc_index = i % GMAC_DESC_CNT;
-      if (s_rxdesc[desc_index][1] & BIT(15))
-        frame_end = desc_index;
-    }
-
-    // clear all used buffers until you reach start of frame
-    for (int i = 0; i < GMAC_DESC_CNT; i++) {
-      int desc_index = (i + s_rxno) % GMAC_DESC_CNT;
-      if (s_rxno == frame_start) break;
-      if (++s_rxno >= GMAC_DESC_CNT) s_rxno = 0;
-      s_rxdesc[desc_index][0] &= ~(BIT(0)); // Clearing the OWN bit
-    }
-
-    // from start of frame to end of frame you copy into queue
-    size_t offset = 0, len;
-    for (int i = 0; i < GMAC_DESC_CNT; i++) {
-      int desc_index = (i + s_rxno) % GMAC_DESC_CNT;
-      if (desc_index == frame_start)
-        offset = (GMAC_REGS->GMAC_NCFGR & GMAC_NCFGR_RXBUFO_Msk) >> GMAC_NCFGR_RXBUFO_Pos;
-      else
-        offset = 0;
-      len = s_rxdesc[s_rxno][1] & (BIT(13) - 1);
-      mg_tcpip_qwrite(s_rxbuf[s_rxno] + offset, len, s_ifp);
-      s_rxdesc[desc_index][0] &= ~(BIT(0)); // Clearing the OWN bit
-      if (++s_rxno >= GMAC_DESC_CNT) s_rxno = 0;
-      if (desc_index == frame_end) break;
     }
   }
+
+  if ((tsr & (GMAC_TSR_HRESP_Msk | GMAC_TSR_UND_Msk | GMAC_TSR_TXCOMP_Msk |
+              GMAC_TSR_TFC_Msk | GMAC_TSR_TXGO_Msk | GMAC_TSR_RLE_Msk |
+              GMAC_TSR_COL_Msk | GMAC_TSR_UBR_Msk)) != 0) {
+    GMAC_REGS->GMAC_TSR = tsr;
+    MG_INFO((" --> %#x %#x", s_txdesc[s_txno][1], tsr));
+    if (!(s_txdesc[s_txno][1] & BIT(31))) s_txdesc[s_txno][1] |= BIT(31);
+  }
+
+  GMAC_REGS->GMAC_RSR = rsr;
+  GMAC_REGS->GMAC_TSR = tsr;
 }
 
-struct mg_tcpip_driver mg_tcpip_driver_same54 = {mg_tcpip_driver_same54_init,
-                                                mg_tcpip_driver_same54_tx, NULL,
-                                                mg_tcpip_driver_same54_up};
+struct mg_tcpip_driver mg_tcpip_driver_same54 = {
+    mg_tcpip_driver_same54_init, mg_tcpip_driver_same54_tx, NULL,
+    mg_tcpip_driver_same54_up};
 #endif
 
 #ifdef MG_ENABLE_LINES
@@ -8971,8 +8856,8 @@ static void mg_tcpip_rx(struct mg_tcpip_if *ifp, void *buf, size_t len) {
     mkpay(&pkt, pkt.ip + 1);
     rx_ip(ifp, &pkt);
   } else {
-    MG_DEBUG(("  Unknown eth type %x", mg_htons(pkt.eth->type)));
-    mg_hexdump(buf, len >= 16 ? 16 : len);
+    MG_DEBUG(("Unknown eth type %x", mg_htons(pkt.eth->type)));
+    mg_hexdump(buf, len >= 32 ? 32 : len);
   }
 }
 

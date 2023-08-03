@@ -794,8 +794,8 @@ static void mg_tcpip_rx(struct mg_tcpip_if *ifp, void *buf, size_t len) {
     mkpay(&pkt, pkt.ip + 1);
     rx_ip(ifp, &pkt);
   } else {
-    MG_DEBUG(("  Unknown eth type %x", mg_htons(pkt.eth->type)));
-    mg_hexdump(buf, len >= 16 ? 16 : len);
+    MG_DEBUG(("Unknown eth type %x", mg_htons(pkt.eth->type)));
+    mg_hexdump(buf, len >= 32 ? 32 : len);
   }
 }
 

@@ -176,3 +176,39 @@ static inline void gpio_set_irq_handler(uint16_t pin, void (*fn)(void *),
                                         void *arg) {
   (void) pin, (void) fn, (void) arg;
 }
+
+static inline void ethernet_init(void) {
+  uint16_t pins[] = {PIN('A', 12), PIN('A', 13), PIN('A', 14), PIN('A', 15),
+                     PIN('A', 17), PIN('A', 18), PIN('A', 19), PIN('C', 11),
+                     PIN('C', 12), PIN('C', 20)};
+  uint32_t af[] = {MUX_PA12L_GMAC_GRX1,  MUX_PA13L_GMAC_GRX0,
+                   MUX_PA14L_GMAC_GTXCK, MUX_PA15L_GMAC_GRXER,
+                   MUX_PA17L_GMAC_GTXEN, MUX_PA18L_GMAC_GTX0,
+                   MUX_PA19L_GMAC_GTX1,  MUX_PC11L_GMAC_GMDC,
+                   MUX_PC12L_GMAC_GMDIO, MUX_PC20L_GMAC_GRXDV};
+
+  MCLK_REGS->MCLK_APBBMASK |= MCLK_APBBMASK_PORT_Msk;
+
+  for (size_t i = 0; i < sizeof(pins) / sizeof(pins[0]); i++) {
+    int bank = PINBANK(pins[i]), no = PINNO(pins[i]);
+    PORT_REGS->GROUP[bank].PORT_PINCFG[no] |= PORT_PINCFG_PMUXEN_Msk;
+    volatile uint8_t *m = &PORT_REGS->GROUP[bank].PORT_PMUX[no / 2], v = m[0];
+    if (no & 1) {
+      m[0] = (uint8_t) (v & ~0xf0) | PORT_PMUX_PMUXO(af[i]);
+    } else {
+      m[0] = (uint8_t) (v & ~0x0f) | PORT_PMUX_PMUXE(af[i]);
+    }
+  }
+
+  PORT_REGS->GROUP[0].PORT_PINCFG[17] |= PORT_PINCFG_DRVSTR_Msk;
+  PORT_REGS->GROUP[0].PORT_PINCFG[18] |= PORT_PINCFG_DRVSTR_Msk;
+  PORT_REGS->GROUP[0].PORT_PINCFG[19] |= PORT_PINCFG_DRVSTR_Msk;
+
+  // Reset PHY
+  uint16_t phy_pin = PIN('C', 21);
+  gpio_output(phy_pin);
+  gpio_write(phy_pin, false);
+  spin(999);
+  gpio_write(phy_pin, true);
+  spin(999);
+}

@@ -10,6 +10,7 @@
 
 void SystemInit(void) {  // Called automatically by startup code
   clock_init();
+  rng_init();
 }
 
 static volatile uint64_t s_ticks;  // Milliseconds since boot
@@ -36,11 +37,15 @@ static void timer_fn(void *arg) {
            ifp->ndrop, ifp->nerr));
 }
 
+static void fn(struct mg_connection *c, int ev, void *ev_data, void *fn_data) {
+  if (ev == MG_EV_HTTP_MSG) mg_http_reply(c, 200, "", "ok\n");
+  }
+
 int main(void) {
   gpio_input(BUTTON_PIN);
   gpio_output(LED_PIN);
   uart_init(UART_DEBUG, 115200);
-  rng_init();
+  ethernet_init();
 
   MG_INFO(("Starting, CPU freq %g MHz", (double) clock_sys_freq() / 1000000));
 
@@ -49,8 +54,8 @@ int main(void) {
   mg_log_set(MG_LL_DEBUG);  // Set log level
 
   // Initialise Mongoose network stack
-  struct mg_tcpip_driver_same54_data driver_data = {.mdc_cr = 4};
-  struct mg_tcpip_if mif = {.mac = {0x02, 0x14, 0x30, 0x00, 0x1a, 0x00},
+  struct mg_tcpip_driver_same54_data driver_data = {.mdc_cr = 5};
+  struct mg_tcpip_if mif = {.mac = {2, 3, 4, 5, 6, 7},
                             // Uncomment below for static configuration:
                             // .ip = mg_htonl(MG_U32(192, 168, 0, 223)),
                             // .mask = mg_htonl(MG_U32(255, 255, 255, 0)),
@@ -58,7 +63,7 @@ int main(void) {
                             .driver = &mg_tcpip_driver_same54,
                             .driver_data = &driver_data};
   mg_tcpip_init(&mgr, &mif);
-  mg_timer_add(&mgr, BLINK_PERIOD_MS, MG_TIMER_REPEAT, timer_fn, &mif);
+  mg_timer_add(&mgr, LOG_PERIOD_MS, MG_TIMER_REPEAT, timer_fn, &mif);
 
   MG_INFO(("MAC: %M. Waiting for IP...", mg_print_mac, mif.mac));
   while (mif.state != MG_TCPIP_STATE_READY) {
@@ -66,7 +71,8 @@ int main(void) {
   }
 
   MG_INFO(("Initialising application..."));
-  web_init(&mgr);
+  mg_http_listen(&mgr, "http://0.0.0.0", fn, NULL);
+  //web_init(&mgr);
 
   MG_INFO(("Starting event loop"));
   for (;;) {

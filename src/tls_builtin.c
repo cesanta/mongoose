@@ -20,7 +20,8 @@ static inline uint32_t mg_swap32(uint32_t v) {
   return (v >> 24) | (v >> 8 & 0xff00) | (v << 8 & 0xff0000) | (v << 24);
 }
 static inline uint64_t mg_swap64(uint64_t v) {
-  return (((uint64_t) mg_swap32((uint32_t) v)) << 32) | mg_swap32(v >> 32);
+  return (((uint64_t) mg_swap32((uint32_t) v)) << 32) |
+         mg_swap32((uint32_t) (v >> 32));
 }
 static inline uint16_t mg_be16(uint16_t v) {
   return mg_is_big_endian() ? mg_swap16(v) : v;
@@ -70,7 +71,7 @@ long mg_tls_recv(struct mg_connection *c, void *buf, size_t len) {
   (void) c, (void) buf, (void) len;
   char tmp[8192];
   long n = mg_io_recv(c, tmp, sizeof(tmp));
-  if (n > 0) mg_hexdump(tmp, n);
+  if (n > 0) mg_hexdump(tmp, (size_t) n);
   MG_INFO(("AAAAAAAA"));
   return -1;
   // struct mg_tls *tls = (struct mg_tls *) c->tls;
@@ -93,7 +94,7 @@ void mg_tls_handshake(struct mg_connection *c) {
     mg_iobuf_resize(rio, rio->len + 1);
     long n = mg_io_recv(c, &rio->buf[rio->len], rio->size - rio->len);
     if (n > 0) {
-      rio->len += n;
+      rio->len += (size_t) n;
     } else if (n == MG_IO_WAIT) {
       break;
     } else {
@@ -110,7 +111,7 @@ void mg_tls_handshake(struct mg_connection *c) {
     mg_error(c, "no 22");
     return;
   }
-  if (rio->len < TLS_HDR_SIZE + record_len) return;
+  if (rio->len < (size_t) TLS_HDR_SIZE + record_len) return;
   // Got full hello
   // struct tls_hello *hello = (struct tls_hello *) (hdr + 1);
   MG_INFO(("CT=%d V=%hx L=%hu", record_type, record_version, record_len));
@@ -130,8 +131,8 @@ void mg_tls_handshake(struct mg_connection *c) {
   add16(wio, 51), add16(wio, 36), add16(wio, 29), add16(wio, 32);  // keyshare
   mg_iobuf_add(wio, wio->len, NULL, 32);                           // 32 random
   mg_random(wio->buf + wio->len - 32, 32);                         // bytes
-  *(uint16_t *) &wio->buf[ofs + 3] = mg_be16(wio->len - ofs - 5);
-  *(uint16_t *) &wio->buf[ofs + 7] = mg_be16(wio->len - ofs - 9);
+  *(uint16_t *) &wio->buf[ofs + 3] = mg_be16((uint16_t) (wio->len - ofs - 5));
+  *(uint16_t *) &wio->buf[ofs + 7] = mg_be16((uint16_t) (wio->len - ofs - 9));
 
   // Change cipher. Cipher's payload is an encypted app data
   // ofs = wio->len;
@@ -146,7 +147,7 @@ void mg_tls_handshake(struct mg_connection *c) {
   add8(wio, 0), add16(wio, 2), add16(wio, 0);          // empty 2 bytes
   add8(wio, 11);                                       // certificate message
   add8(wio, 0), add16(wio, 4), add32(wio, 0x1020304);  // len
-  *(uint16_t *) &wio->buf[ofs + 3] = mg_be16(wio->len - ofs - 5);
+  *(uint16_t *) &wio->buf[ofs + 3] = mg_be16((uint16_t)(wio->len - ofs - 5));
 
   mg_io_send(c, wio->buf, wio->len);
   wio->len = 0;
