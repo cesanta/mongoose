@@ -10,6 +10,7 @@
 #endif
 
 #define MIP_TCP_ACK_MS 150  // Timeout for ACKing
+#define MIP_TCP_ARP_MS 100  // Timeout for ARP response
 
 struct connstate {
   uint32_t seq, ack;           // TCP seq/ack counters
@@ -18,6 +19,7 @@ struct connstate {
   uint8_t ttype;               // Timer type. 0: ack, 1: keep-alive
 #define MIP_TTYPE_KEEPALIVE 0  // Connection is idle for long, send keepalive
 #define MIP_TTYPE_ACK 1        // Peer sent us data, we have to ack it soon
+#define MIP_TTYPE_ARP 2        // ARP resolve sent, waiting for response
   uint8_t tmiss;               // Number of keep-alive misses
   struct mg_iobuf raw;         // For TLS only. Incoming raw data
 };
@@ -128,6 +130,8 @@ struct pkt {
   struct dhcp *dhcp;
 };
 
+static void send_syn(struct mg_connection *c);
+
 static void mkpay(struct pkt *pkt, void *p) {
   pkt->pay =
       mg_str_n((char *) p, (size_t) (&pkt->raw.ptr[pkt->raw.len] - (char *) p));
@@ -147,6 +151,17 @@ static uint16_t csumfin(uint32_t sum) {
 static uint16_t ipcsum(const void *buf, size_t len) {
   uint32_t sum = csumup(0, buf, len);
   return csumfin(sum);
+}
+
+static void settmout(struct mg_connection *c, uint8_t type) {
+  struct mg_tcpip_if *ifp = (struct mg_tcpip_if *) c->mgr->priv;
+  struct connstate *s = (struct connstate *) (c + 1);
+  unsigned n = type == MIP_TTYPE_ACK   ? MIP_TCP_ACK_MS
+               : type == MIP_TTYPE_ARP ? MIP_TCP_ARP_MS
+                                       : MIP_TCP_KEEPALIVE_MS;
+  s->timer = ifp->now + n;
+  s->ttype = type;
+  MG_VERBOSE(("%lu %d -> %llx", c->id, type, s->timer));
 }
 
 static size_t ether_output(struct mg_tcpip_if *ifp, size_t len) {
@@ -286,6 +301,9 @@ static struct mg_connection *getpeer(struct mg_mgr *mgr, struct pkt *pkt,
                                      bool lsn) {
   struct mg_connection *c = NULL;
   for (c = mgr->conns; c != NULL; c = c->next) {
+    if (c->is_arplooking && pkt->arp &&
+        memcmp(&pkt->arp->spa, c->rem.ip, sizeof(pkt->arp->spa)) == 0)
+      break;
     if (c->is_udp && pkt->udp && c->loc.port == pkt->udp->dport) break;
     if (!c->is_udp && pkt->tcp && c->loc.port == pkt->tcp->dport &&
         lsn == c->is_listening && (lsn || c->rem.port == pkt->tcp->sport))
@@ -310,8 +328,8 @@ static void rx_arp(struct mg_tcpip_if *ifp, struct pkt *pkt) {
     memcpy(arp->sha, ifp->mac, sizeof(pkt->arp->sha));
     arp->tpa = pkt->arp->spa;
     arp->spa = ifp->ip;
-    MG_DEBUG(("ARP: tell %M we're %M", mg_print_ip4, &arp->tpa, mg_print_ip4,
-              &ifp->ip));
+    MG_DEBUG(("ARP: tell %M we're %M", mg_print_ip4, &arp->tpa, mg_print_mac,
+              &ifp->mac));
     ether_output(ifp, PDIFF(eth, arp + 1));
   } else if (pkt->arp->op == mg_htons(2)) {
     if (memcmp(pkt->arp->tha, ifp->mac, sizeof(pkt->arp->tha)) != 0) return;
@@ -326,6 +344,8 @@ static void rx_arp(struct mg_tcpip_if *ifp, struct pkt *pkt) {
         MG_DEBUG(("%lu ARP resolved %M -> %M", c->id, mg_print_ip4, c->rem.ip,
                   mg_print_mac, s->mac));
         c->is_arplooking = 0;
+        settmout(c, MIP_TTYPE_KEEPALIVE);
+        send_syn(c);
       }
     }
   }
@@ -477,9 +497,10 @@ static size_t tx_tcp(struct mg_tcpip_if *ifp, uint8_t *dst_mac, uint32_t dst_ip,
   cs = csumup(cs, &ip->dst, sizeof(ip->dst));
   cs = csumup(cs, pseudo, sizeof(pseudo));
   tcp->csum = csumfin(cs);
-  MG_DEBUG(("TCP %M:%hu -> %M:%hu fl %x len %u", mg_print_ip4, &ip->src,
-            mg_ntohs(tcp->sport), mg_print_ip4, &ip->dst, mg_ntohs(tcp->dport),
-            tcp->flags, (int) len));
+  MG_VERBOSE(("TCP %M:%hu -> %M:%hu fl %x len %u", mg_print_ip4, &ip->src,
+              mg_ntohs(tcp->sport), mg_print_ip4, &ip->dst,
+              mg_ntohs(tcp->dport), tcp->flags, (int) len));
+  // mg_hexdump(ifp->tx.ptr, PDIFF(ifp->tx.ptr, tcp + 1) + len);
   return ether_output(ifp, PDIFF(ifp->tx.ptr, tcp + 1) + len);
 }
 
@@ -490,15 +511,6 @@ static size_t tx_tcp_pkt(struct mg_tcpip_if *ifp, struct pkt *pkt,
   return tx_tcp(ifp, pkt->eth->src, pkt->ip->src, flags, pkt->tcp->dport,
                 pkt->tcp->sport, seq, mg_htonl(mg_ntohl(pkt->tcp->seq) + delta),
                 buf, len);
-}
-
-static void settmout(struct mg_connection *c, uint8_t type) {
-  struct mg_tcpip_if *ifp = (struct mg_tcpip_if *) c->mgr->priv;
-  struct connstate *s = (struct connstate *) (c + 1);
-  unsigned n = type == MIP_TTYPE_ACK ? MIP_TCP_ACK_MS : MIP_TCP_KEEPALIVE_MS;
-  s->timer = ifp->now + n;
-  s->ttype = type;
-  MG_VERBOSE(("%lu %d -> %llx", c->id, type, s->timer));
 }
 
 static struct mg_connection *accept_conn(struct mg_connection *lsn,
@@ -561,7 +573,6 @@ long mg_io_recv(struct mg_connection *c, void *buf, size_t len) {
   if (len > s->raw.len) len = s->raw.len;
   memcpy(buf, s->raw.buf, len);
   mg_iobuf_del(&s->raw, 0, len);
-  MG_DEBUG(("%lu", len));
   return (long) len;
 }
 
@@ -582,7 +593,7 @@ static void read_conn(struct mg_connection *c, struct pkt *pkt) {
     } else {
       uint32_t rem_ip;
       memcpy(&rem_ip, c->rem.ip, sizeof(uint32_t));
-      MG_DEBUG(("SEQ != ACK: %x %x %x", seq, s->ack, ack));
+      MG_VERBOSE(("SEQ != ACK: %x %x %x", seq, s->ack, ack));
       tx_tcp((struct mg_tcpip_if *) c->mgr->priv, s->mac, rem_ip, TH_ACK,
              c->loc.port, c->rem.port, mg_htonl(s->seq), mg_htonl(s->ack), "",
              0);
@@ -599,7 +610,7 @@ static void read_conn(struct mg_connection *c, struct pkt *pkt) {
     memcpy(&io->buf[io->len], pkt->pay.ptr, pkt->pay.len);
     io->len += pkt->pay.len;
 
-    MG_DEBUG(("%lu SEQ %x -> %x", c->id, mg_htonl(pkt->tcp->seq), s->ack));
+    MG_VERBOSE(("%lu SEQ %x -> %x", c->id, mg_htonl(pkt->tcp->seq), s->ack));
     // Advance ACK counter
     s->ack = (uint32_t) (mg_htonl(pkt->tcp->seq) + pkt->pay.len);
 #if 0
@@ -652,6 +663,7 @@ static void rx_tcp(struct mg_tcpip_if *ifp, struct pkt *pkt) {
     settmout(c, MIP_TTYPE_KEEPALIVE);
     mg_call(c, MG_EV_CONNECT, NULL);  // Let user know
   } else if (c != NULL && c->is_connecting) {
+    // mg_hexdump(pkt->raw.ptr, pkt->raw.len);
     tx_tcp_pkt(ifp, pkt, TH_RST | TH_ACK, pkt->tcp->ack, NULL, 0);
   } else if (c != NULL && pkt->tcp->flags & TH_RST) {
     mg_error(c, "peer RST");  // RFC-1122 4.2.2.13
@@ -660,7 +672,7 @@ static void rx_tcp(struct mg_tcpip_if *ifp, struct pkt *pkt) {
     MG_DEBUG(("%lu %d %M:%hu -> %M:%hu", c->id, (int) pkt->raw.len,
               mg_print_ip4, &pkt->ip->src, mg_ntohs(pkt->tcp->sport),
               mg_print_ip4, &pkt->ip->dst, mg_ntohs(pkt->tcp->dport)));
-    mg_hexdump(pkt->pay.buf, pkt->pay.len);
+    mg_hexdump(pkt->pay.ptr, pkt->pay.len);
 #endif
     s->tmiss = 0;                         // Reset missed keep-alive counter
     if (s->ttype == MIP_TTYPE_KEEPALIVE)  // Advance keep-alive timer
@@ -683,7 +695,7 @@ static void rx_tcp(struct mg_tcpip_if *ifp, struct pkt *pkt) {
   } else if (!c->is_accepted) {  // no peer
     tx_tcp_pkt(ifp, pkt, TH_RST | TH_ACK, pkt->tcp->ack, NULL, 0);
   } else {
-    // MG_DEBUG(("dropped silently.."));
+    // MG_VERBOSE(("dropped silently.."));
   }
 }
 
@@ -697,9 +709,9 @@ static void rx_ip(struct mg_tcpip_if *ifp, struct pkt *pkt) {
     pkt->udp = (struct udp *) (pkt->ip + 1);
     if (pkt->pay.len < sizeof(*pkt->udp)) return;
     mkpay(pkt, pkt->udp + 1);
-    MG_DEBUG(("UDP %M:%hu -> %M:%hu len %u", mg_print_ip4, &pkt->ip->src,
-              mg_ntohs(pkt->udp->sport), mg_print_ip4, &pkt->ip->dst,
-              mg_ntohs(pkt->udp->dport), (int) pkt->pay.len));
+    MG_VERBOSE(("UDP %M:%hu -> %M:%hu len %u", mg_print_ip4, &pkt->ip->src,
+                mg_ntohs(pkt->udp->sport), mg_print_ip4, &pkt->ip->dst,
+                mg_ntohs(pkt->udp->dport), (int) pkt->pay.len));
     if (ifp->enable_dhcp_client && pkt->udp->dport == mg_htons(68)) {
       pkt->dhcp = (struct dhcp *) (pkt->udp + 1);
       mkpay(pkt, pkt->dhcp + 1);
@@ -718,9 +730,9 @@ static void rx_ip(struct mg_tcpip_if *ifp, struct pkt *pkt) {
     uint16_t iplen = mg_ntohs(pkt->ip->len);
     uint16_t off = (uint16_t) (sizeof(*pkt->ip) + ((pkt->tcp->off >> 4) * 4U));
     if (iplen >= off) pkt->pay.len = (size_t) (iplen - off);
-    MG_DEBUG(("TCP %M:%hu -> %M:%hu len %u", mg_print_ip4, &pkt->ip->src,
-              mg_ntohs(pkt->tcp->sport), mg_print_ip4, &pkt->ip->dst,
-              mg_ntohs(pkt->tcp->dport), (int) pkt->pay.len));
+    MG_VERBOSE(("TCP %M:%hu -> %M:%hu len %u", mg_print_ip4, &pkt->ip->src,
+                mg_ntohs(pkt->tcp->sport), mg_print_ip4, &pkt->ip->dst,
+                mg_ntohs(pkt->tcp->dport), (int) pkt->pay.len));
     rx_tcp(ifp, pkt);
   }
 }
@@ -841,14 +853,16 @@ static void mg_tcpip_poll(struct mg_tcpip_if *ifp, uint64_t uptime_ms) {
     memcpy(&rem_ip, c->rem.ip, sizeof(uint32_t));
     if (uptime_ms > s->timer) {
       if (s->ttype == MIP_TTYPE_ACK) {
-        MG_DEBUG(("%lu ack %x %x", c->id, s->seq, s->ack));
+        MG_VERBOSE(("%lu ack %x %x", c->id, s->seq, s->ack));
         tx_tcp(ifp, s->mac, rem_ip, TH_ACK, c->loc.port, c->rem.port,
                mg_htonl(s->seq), mg_htonl(s->ack), "", 0);
+      } else if (s->ttype == MIP_TTYPE_ARP) {
+        mg_error(c, "ARP timeout");
       } else {
         if (s->tmiss++ > 2) {
           mg_error(c, "keepalive");
         } else {
-          MG_DEBUG(("%lu keepalive", c->id));
+          MG_VERBOSE(("%lu keepalive", c->id));
           tx_tcp(ifp, s->mac, rem_ip, TH_ACK, c->loc.port, c->rem.port,
                  mg_htonl(s->seq - 1), mg_htonl(s->ack), "", 0);
         }
@@ -938,7 +952,9 @@ void mg_connect_resolved(struct mg_connection *c) {
     // If we're in the same LAN, fire an ARP lookup. TODO(cpq): handle this!
     MG_DEBUG(("%lu ARP lookup...", c->id));
     arp_ask(ifp, rem_ip);
+    settmout(c, MIP_TTYPE_ARP);
     c->is_arplooking = 1;
+    c->is_connecting = 1;
   } else if (rem_ip == (ifp->ip | ~ifp->mask)) {
     struct connstate *s = (struct connstate *) (c + 1);
     memset(s->mac, 0xFF, sizeof(s->mac));  // local broadcast
@@ -979,7 +995,8 @@ static void close_conn(struct mg_connection *c) {
   uint32_t rem_ip;
   memcpy(&rem_ip, c->rem.ip, sizeof(uint32_t));
   mg_iobuf_free(&s->raw);  // For TLS connections, release raw data
-  if (c->is_udp == false && c->is_listening == false) {  // For TCP conns,
+  if (c->is_udp == false && c->is_listening == false &&
+      c->is_connecting == false) {  // For TCP conns,
     struct mg_tcpip_if *ifp =
         (struct mg_tcpip_if *) c->mgr->priv;  // send TCP FIN
     tx_tcp(ifp, s->mac, rem_ip, TH_FIN | TH_ACK, c->loc.port, c->rem.port,
