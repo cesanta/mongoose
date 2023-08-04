@@ -22,3 +22,14 @@ packcreator:
 clean:
 	rm -rf Files
 	rm *.pack
+
+
+# Test examples included in new pack to be released
+testexamples: unpack
+	$(MAKE) -f ../../test/cube/Makefile "PROJECTS=$(wildcard Projects/*/Examples/*)"
+	rm -rf Projects
+
+unpack: FORCE
+	unzip -x Cesanta.I-CUBE-Mongoose.*.pack Projects/*
+
+FORCE:
