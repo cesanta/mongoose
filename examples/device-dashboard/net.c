@@ -56,14 +56,14 @@ uint64_t mg_now(void) {
 int ui_event_next(int no, struct ui_event *e) {
   if (no < 0 || no >= MAX_EVENTS_NO) return 0;
 
-  srand(no);
+  srand((unsigned) no);
   e->type = (uint8_t) rand() % 4;
   e->prio = (uint8_t) rand() % 3;
   e->timestamp =
-      (unsigned long) (mg_now() - 86400 * 1000 /* one day back */ +
+      (unsigned long) ((int64_t) mg_now() - 86400 * 1000 /* one day back */ +
                        no * 300 * 1000 /* 5 mins between alerts */ +
                        1000 * (rand() % 300) /* randomize event time */) /
-      1000;
+      1000UL;
 
   mg_snprintf(e->text, MAX_EVENT_TEXT_SIZE, "event#%d", no);
   return no + 1;
@@ -163,7 +163,7 @@ static void handle_stats_get(struct mg_connection *c) {
 static size_t print_events(void (*out)(char, void *), void *ptr, va_list *ap) {
   size_t len = 0;
   struct ui_event ev;
-  int pageno = va_arg(*ap, unsigned);
+  int pageno = va_arg(*ap, int);
   int no = (pageno - 1) * EVENTS_PER_PAGE;
   int end = no + EVENTS_PER_PAGE;
 
