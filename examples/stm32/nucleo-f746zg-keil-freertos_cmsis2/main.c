@@ -70,6 +70,7 @@ int main(void) {
   mx_init();             // Setup clock and all peripherals configured in CubeMX
                          // Initialise random number generator
                          // Initialise ethernet pins
+  test_init();  // for internal testing purposes only
   osKernelInitialize();  // Initialize CMSIS-RTOS
   osThreadNew(blinker, NULL,
               NULL);  // Create the blinker thread with a default stack size
