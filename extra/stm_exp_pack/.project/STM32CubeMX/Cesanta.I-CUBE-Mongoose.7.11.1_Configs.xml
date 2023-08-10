@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="UTF-8" standalone="no"?>
-<IP xmlns="http://mcd.rou.st.com/modules.php?name=mcu" xmlns:ns0="http://www.w3.org/2001/XMLSchema-instance" DBVersion="V4.0" Name="I-CUBE-Mongoose" RootFolder="Packs/Cesanta/I-CUBE-Mongoose/7.11.0/" Version="7.11.0" ns0:schemaLocation="http://mcd.rou.st.com/modules.php?name=mcu ../../../../../../../doc/V4/Development/Specifications/db/thirdPartyDb.xsd">
+<IP xmlns="http://mcd.rou.st.com/modules.php?name=mcu" xmlns:ns0="http://www.w3.org/2001/XMLSchema-instance" DBVersion="V4.0" Name="I-CUBE-Mongoose" RootFolder="Packs/Cesanta/I-CUBE-Mongoose/7.11.1/" Version="7.11.1" ns0:schemaLocation="http://mcd.rou.st.com/modules.php?name=mcu ../../../../../../../doc/V4/Development/Specifications/db/thirdPartyDb.xsd">
     <RefConfig Name="NetworkOoLibraryJjMongoose">
         <Component Name="NetworkOoLibrary:Mongoose:$NetworkOoLibraryJjMongoose"/>
         <ConfigFile Name="config"/>
