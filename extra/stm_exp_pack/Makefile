@@ -24,10 +24,19 @@ clean:
 	rm *.pack
 
 
+# update MX info in examples
+updateexamples:
+	find Examples/ -name '.mxproject' -exec sed -i 's/$(OLDREL)/$(NEWREL)/g' {} \; && \
+	find Examples/ -name '*.ioc' -exec sed -i 's/$(OLDREL)/$(NEWREL)/g' {} \;
+	
+
+
 # Test examples included in new pack to be released
 testexamples: unpack
+	cp Cesanta.I-CUBE-Mongoose.*.pack /tmp/
 	$(MAKE) -f ../../test/cube/Makefile "PROJECTS=$(wildcard Projects/*/Examples/*)"
 	rm -rf Projects
+	mv /tmp/Cesanta.I-CUBE-Mongoose.*.pack .
 
 unpack: FORCE
 	unzip -x Cesanta.I-CUBE-Mongoose.*.pack Projects/*
