@@ -762,7 +762,6 @@ static void mg_tcpip_rx(struct mg_tcpip_if *ifp, void *buf, size_t len) {
   pkt.raw.ptr = (char *) buf;
   pkt.raw.len = len;
   pkt.eth = (struct eth *) buf;
-  //mg_hexdump(buf, len > 16 ? 16: len);
   if (pkt.raw.len < sizeof(*pkt.eth)) return;  // Truncated - runt?
   if (ifp->enable_mac_check &&
       memcmp(pkt.eth->dst, ifp->mac, sizeof(pkt.eth->dst)) != 0 &&
@@ -795,8 +794,8 @@ static void mg_tcpip_rx(struct mg_tcpip_if *ifp, void *buf, size_t len) {
     mkpay(&pkt, pkt.ip + 1);
     rx_ip(ifp, &pkt);
   } else {
-    MG_DEBUG(("Unknown eth type %x", mg_htons(pkt.eth->type)));
-    mg_hexdump(buf, len >= 32 ? 32 : len);
+    MG_DEBUG(("  Unknown eth type %x", mg_htons(pkt.eth->type)));
+    mg_hexdump(buf, len >= 16 ? 16 : len);
   }
 }
 
