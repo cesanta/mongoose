@@ -30,9 +30,9 @@ SourceFiles=;
 
 [ThirdPartyIp]
 ThirdPartyIpNumber=1
-ThirdPartyIpName#0=Cesanta.I-CUBE-Mongoose.7.9.5
+ThirdPartyIpName#0=Cesanta.I-CUBE-Mongoose.7.11.0
 
-[ThirdPartyIp#Cesanta.I-CUBE-Mongoose.7.9.5]
+[ThirdPartyIp#Cesanta.I-CUBE-Mongoose.7.11.0]
 header=Middlewares/Third_Party/Cesanta_Network Library/Mongoose/mongoose.h;
 source=Middlewares/Third_Party/Cesanta_Network Library/Mongoose/mongoose.c;
 
