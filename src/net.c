@@ -65,7 +65,7 @@ static bool mg_v4mapped(struct mg_str str, struct mg_addr *addr) {
   for (i = 2; i < 6; i++) {
     if (str.ptr[i] != 'f' && str.ptr[i] != 'F') return false;
   }
-  // struct mg_str s = mg_str_n(&str.ptr[7], str.len - 7);
+  //struct mg_str s = mg_str_n(&str.ptr[7], str.len - 7);
   if (!mg_aton4(mg_str_n(&str.ptr[7], str.len - 7), addr)) return false;
   memcpy(&ipv4, addr->ip, sizeof(ipv4));
   memset(addr->ip, 0, sizeof(addr->ip));
@@ -108,7 +108,7 @@ static bool mg_aton6(struct mg_str str, struct mg_addr *addr) {
     memmove(&addr->ip[dc + (14 - n)], &addr->ip[dc], n - dc + 2);
     memset(&addr->ip[dc], 0, 14 - n);
   }
-
+  
   addr->is_ip6 = true;
   return true;
 }
@@ -162,7 +162,7 @@ struct mg_connection *mg_connect(struct mg_mgr *mgr, const char *url,
     c->is_client = true;
     c->fn_data = fn_data;
     MG_DEBUG(("%lu %p %s", c->id, c->fd, url));
-    mg_call(c, MG_EV_OPEN, (void *) url);
+    mg_call(c, MG_EV_OPEN, NULL);
     mg_resolve(c, url);
     if (mg_url_is_ssl(url)) {
       struct mg_str host = mg_url_host(url);
