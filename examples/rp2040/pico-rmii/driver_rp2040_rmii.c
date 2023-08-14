@@ -32,7 +32,7 @@ static uint8_t s_txbuf[ETH_PKT_SIZE];
 static struct mg_tcpip_if *s_ifp;  // MIP interface
 
 #define rmii_tx_wrap_target 0
-#define rmii_tx_wrap 8
+#define rmii_tx_wrap 7
 
 static const uint16_t rmii_tx_program_instructions[] = {
     //     .wrap_target
@@ -49,7 +49,7 @@ static const uint16_t rmii_tx_program_instructions[] = {
 
 static const struct pio_program rmii_tx_program = {
     .instructions = rmii_tx_program_instructions,
-    .length = 9,
+    .length = 8,
     .origin = -1,
 };
 
@@ -288,7 +288,7 @@ static size_t mg_tcpip_driver_rp2040_rmii_tx(const void *buf, size_t len,
   dma_channel_wait_for_finish_blocking(dma_tx);
   memset(s_txbuf, 0, 60);  // pre-pad
   memcpy(s_txbuf, buf, len);
-  if (len < 60) len = 60;                 // pad
+  if (len < 60) len = 60;                    // pad
   uint32_t crc = mg_crc32(0, s_txbuf, len);  // host is little-endian
   memcpy(s_txbuf + len, (uint8_t *) &crc, 4);
   len += 4;
