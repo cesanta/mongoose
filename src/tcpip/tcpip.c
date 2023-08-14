@@ -12,6 +12,7 @@
 #define MIP_TCP_ACK_MS 150    // Timeout for ACKing
 #define MIP_TCP_ARP_MS 100    // Timeout for ARP response
 #define MIP_TCP_SYN_MS 15000  // Timeout for connection establishment
+#define MIP_TCP_FIN_MS 1000   // Timeout for closing connection
 
 struct connstate {
   uint32_t seq, ack;           // TCP seq/ack counters
@@ -22,8 +23,9 @@ struct connstate {
 #define MIP_TTYPE_ACK 1        // Peer sent us data, we have to ack it soon
 #define MIP_TTYPE_ARP 2        // ARP resolve sent, waiting for response
 #define MIP_TTYPE_SYN 3        // SYN sent, waiting for response
-  uint8_t tmiss;               // Number of keep-alive misses
-  struct mg_iobuf raw;         // For TLS only. Incoming raw data
+#define MIP_TTYPE_FIN 4  // FIN sent, waiting until terminating the connection
+  uint8_t tmiss;         // Number of keep-alive misses
+  struct mg_iobuf raw;   // For TLS only. Incoming raw data
 };
 
 #pragma pack(push, 1)
@@ -161,6 +163,7 @@ static void settmout(struct mg_connection *c, uint8_t type) {
   unsigned n = type == MIP_TTYPE_ACK   ? MIP_TCP_ACK_MS
                : type == MIP_TTYPE_ARP ? MIP_TCP_ARP_MS
                : type == MIP_TTYPE_SYN ? MIP_TCP_SYN_MS
+               : type == MIP_TTYPE_FIN ? MIP_TCP_FIN_MS
                                        : MIP_TCP_KEEPALIVE_MS;
   s->timer = ifp->now + n;
   s->ttype = type;
@@ -584,9 +587,27 @@ static void read_conn(struct mg_connection *c, struct pkt *pkt) {
   struct mg_iobuf *io = c->is_tls ? &s->raw : &c->recv;
   uint32_t seq = mg_ntohl(pkt->tcp->seq);
   s->raw.align = c->recv.align;
+  uint32_t rem_ip;
+  memcpy(&rem_ip, c->rem.ip, sizeof(uint32_t));
   if (pkt->tcp->flags & TH_FIN) {
-    s->ack = mg_htonl(pkt->tcp->seq) + 1, s->seq = mg_htonl(pkt->tcp->ack);
-    c->is_closing = 1;
+    // If we initiated the closure, we reply with ACK upon receiving FIN
+    // If we didn't initiate it, we reply with FIN as part of the normal TCP
+    // closure process
+    uint8_t flags = TH_ACK;
+    s->ack = (uint32_t) (mg_htonl(pkt->tcp->seq) + pkt->pay.len + 1);
+    if (c->is_draining && s->ttype == MIP_TTYPE_FIN) {
+      if (s->seq == mg_htonl(pkt->tcp->ack))
+        // Checking for simultaneous closure
+        s->seq++;
+      else
+        s->seq = mg_htonl(pkt->tcp->ack);
+    } else {
+      flags |= TH_FIN;
+      c->is_draining = 1;
+      settmout(c, MIP_TTYPE_FIN);
+    }
+    tx_tcp((struct mg_tcpip_if *) c->mgr->priv, s->mac, rem_ip, flags,
+           c->loc.port, c->rem.port, mg_htonl(s->seq), mg_htonl(s->ack), "", 0);
   } else if (pkt->pay.len == 0) {
     // TODO(cpq): handle this peer's ACK
   } else if (seq != s->ack) {
@@ -594,8 +615,6 @@ static void read_conn(struct mg_connection *c, struct pkt *pkt) {
     if (s->ack == ack) {
       MG_VERBOSE(("ignoring duplicate pkt"));
     } else {
-      uint32_t rem_ip;
-      memcpy(&rem_ip, c->rem.ip, sizeof(uint32_t));
       MG_VERBOSE(("SEQ != ACK: %x %x %x", seq, s->ack, ack));
       tx_tcp((struct mg_tcpip_if *) c->mgr->priv, s->mac, rem_ip, TH_ACK,
              c->loc.port, c->rem.port, mg_htonl(s->seq), mg_htonl(s->ack), "",
@@ -762,7 +781,7 @@ static void mg_tcpip_rx(struct mg_tcpip_if *ifp, void *buf, size_t len) {
   pkt.raw.ptr = (char *) buf;
   pkt.raw.len = len;
   pkt.eth = (struct eth *) buf;
-  //mg_hexdump(buf, len > 16 ? 16: len);
+  // mg_hexdump(buf, len > 16 ? 16: len);
   if (pkt.raw.len < sizeof(*pkt.eth)) return;  // Truncated - runt?
   if (ifp->enable_mac_check &&
       memcmp(pkt.eth->dst, ifp->mac, sizeof(pkt.eth->dst)) != 0 &&
@@ -863,6 +882,9 @@ static void mg_tcpip_poll(struct mg_tcpip_if *ifp, uint64_t uptime_ms) {
         mg_error(c, "ARP timeout");
       } else if (s->ttype == MIP_TTYPE_SYN) {
         mg_error(c, "Connection timeout");
+      } else if (s->ttype == MIP_TTYPE_FIN) {
+        c->is_closing = 1;
+        continue;
       } else {
         if (s->tmiss++ > 2) {
           mg_error(c, "keepalive");
@@ -872,6 +894,7 @@ static void mg_tcpip_poll(struct mg_tcpip_if *ifp, uint64_t uptime_ms) {
                  mg_htonl(s->seq - 1), mg_htonl(s->ack), "", 0);
         }
       }
+
       settmout(c, MIP_TTYPE_KEEPALIVE);
     }
   }
@@ -996,18 +1019,23 @@ static void write_conn(struct mg_connection *c) {
   }
 }
 
-static void close_conn(struct mg_connection *c) {
+static void init_closure(struct mg_connection *c) {
   struct connstate *s = (struct connstate *) (c + 1);
-  uint32_t rem_ip;
-  memcpy(&rem_ip, c->rem.ip, sizeof(uint32_t));
-  mg_iobuf_free(&s->raw);  // For TLS connections, release raw data
   if (c->is_udp == false && c->is_listening == false &&
       c->is_connecting == false) {  // For TCP conns,
     struct mg_tcpip_if *ifp =
         (struct mg_tcpip_if *) c->mgr->priv;  // send TCP FIN
+    uint32_t rem_ip;
+    memcpy(&rem_ip, c->rem.ip, sizeof(uint32_t));
     tx_tcp(ifp, s->mac, rem_ip, TH_FIN | TH_ACK, c->loc.port, c->rem.port,
            mg_htonl(s->seq), mg_htonl(s->ack), NULL, 0);
+    settmout(c, MIP_TTYPE_FIN);
   }
+}
+
+static void close_conn(struct mg_connection *c) {
+  struct connstate *s = (struct connstate *) (c + 1);
+  mg_iobuf_free(&s->raw);  // For TLS connections, release raw data
   mg_close_conn(c);
 }
 
@@ -1023,13 +1051,15 @@ void mg_mgr_poll(struct mg_mgr *mgr, int ms) {
   mg_timer_poll(&mgr->timers, now);
   for (c = mgr->conns; c != NULL; c = tmp) {
     tmp = c->next;
+    struct connstate *s = (struct connstate *) (c + 1);
     mg_call(c, MG_EV_POLL, &now);
     MG_VERBOSE(("%lu .. %c%c%c%c%c", c->id, c->is_tls ? 'T' : 't',
                 c->is_connecting ? 'C' : 'c', c->is_tls_hs ? 'H' : 'h',
                 c->is_resolving ? 'R' : 'r', c->is_closing ? 'C' : 'c'));
     if (c->is_tls_hs) mg_tls_handshake(c);
     if (can_write(c)) write_conn(c);
-    if (c->is_draining && c->send.len == 0) c->is_closing = 1;
+    if (c->is_draining && c->send.len == 0 && s->ttype != MIP_TTYPE_FIN)
+      init_closure(c);
     if (c->is_closing) close_conn(c);
   }
   (void) ms;

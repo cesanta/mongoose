@@ -101,10 +101,12 @@ char *fetch(struct mg_mgr *mgr, const char *url, const char *fn_data) {
     mg_mgr_poll(mgr, 100);
     usleep(10000);  // 10 ms. Slow down poll loop to ensure packets transit
   }
+
   if (mgr->conns != 0) {
     conn->is_closing = 1;
     mg_mgr_poll(mgr, 0);
   }
+
   mg_mgr_poll(mgr, 0);
   if (!post_reply.http_responses_received)
     return 0;
@@ -175,9 +177,9 @@ static void test_http_fetch(void) {
 
 #if MG_USING_DHCP == 1
 #else
-  mif.ip = 0x0220a8c0;    // 192.168.32.2 // Triggering a network failure
-  mif.mask = 0x00ffffff;  // 255.255.255.0
-  mif.gw = 0x0120a8c0;    // 192.168.32.1
+  mif.ip = mg_htonl(MG_U32(192, 168, 32, 2));    // Triggering a network failure
+  mif.mask = mg_htonl(MG_U32(255, 255, 255, 0));
+  mif.gw = mg_htonl(MG_U32(192, 168, 32, 1));
 #endif
 
   sscanf(mac, "%hhx:%hhx:%hhx:%hhx:%hhx:%hhx", &mif.mac[0], &mif.mac[1],
@@ -235,7 +237,7 @@ static void test_http_fetch(void) {
 
   // Clear
   mg_mgr_free(&mgr);
-  mg_tcpip_free(&mif);             // Release after mg_mgr
+  mg_tcpip_free(&mif);         // Release after mg_mgr
   ASSERT(mgr.conns == NULL);  // Deconstruction OK
   close(fd);
 }
