@@ -241,7 +241,7 @@ bool mg_open_listener(struct mg_connection *c, const char *url) {
   return success;
 }
 
-long mg_io_recv(struct mg_connection *c, void *buf, size_t len) {
+static long recv_raw(struct mg_connection *c, void *buf, size_t len) {
   long n = 0;
   if (c->is_udp) {
     union usa usa;
@@ -257,20 +257,43 @@ long mg_io_recv(struct mg_connection *c, void *buf, size_t len) {
   return n;
 }
 
+static bool ioalloc(struct mg_connection *c, struct mg_iobuf *io) {
+  bool res = false;
+  if (io->len >= MG_MAX_RECV_SIZE) {
+    mg_error(c, "MG_MAX_RECV_SIZE");
+  } else if (io->size <= io->len &&
+             !mg_iobuf_resize(io, io->size + MG_IO_SIZE)) {
+    mg_error(c, "OOM");
+  } else {
+    res = true;
+  }
+  return res;
+}
+
 // NOTE(lsm): do only one iteration of reads, cause some systems
 // (e.g. FreeRTOS stack) return 0 instead of -1/EWOULDBLOCK when no data
 static void read_conn(struct mg_connection *c) {
-  long n = -1;
-  if (c->recv.len >= MG_MAX_RECV_SIZE) {
-    mg_error(c, "max_recv_buf_size reached");
-  } else if (c->recv.size <= c->recv.len &&
-             !mg_iobuf_resize(&c->recv, c->recv.size + MG_IO_SIZE)) {
-    mg_error(c, "oom");
-  } else {
+  if (ioalloc(c, &c->recv)) {
     char *buf = (char *) &c->recv.buf[c->recv.len];
     size_t len = c->recv.size - c->recv.len;
-    n = c->is_tls ? mg_tls_recv(c, buf, len) : mg_io_recv(c, buf, len);
-    MG_DEBUG(("%lu %ld snd %ld/%ld rcv %ld/%ld n=%ld err=%d", c->id, c->fd,
+    long n = -1;
+    if (c->is_tls) {
+      if (!ioalloc(c, &c->rtls)) return;
+      n = recv_raw(c, (char *) &c->rtls.buf[c->rtls.len],
+                   c->rtls.size - c->rtls.len);
+      // MG_DEBUG(("%lu %ld", c->id, n));
+      if (n == MG_IO_ERR) {
+        c->is_closing = 1;
+      } else if (n > 0) {
+        c->rtls.len += (size_t) n;
+        if (c->is_tls_hs) mg_tls_handshake(c);
+        if (c->is_tls_hs) return;
+        n = mg_tls_recv(c, buf, len);
+      }
+    } else {
+      n = recv_raw(c, buf, len);
+    }
+    MG_DEBUG(("%lu %p snd %ld/%ld rcv %ld/%ld n=%ld err=%d", c->id, c->fd,
               (long) c->send.len, (long) c->send.size, (long) c->recv.len,
               (long) c->recv.size, n, MG_SOCK_ERR(n)));
     iolog(c, buf, n, true);
@@ -592,8 +615,8 @@ void mg_mgr_poll(struct mg_mgr *mgr, int ms) {
       if (c->is_readable) accept_conn(mgr, c);
     } else if (c->is_connecting) {
       if (c->is_readable || c->is_writable) connect_conn(c);
-    } else if (c->is_tls_hs) {
-      if ((c->is_readable || c->is_writable)) mg_tls_handshake(c);
+      //} else if (c->is_tls_hs) {
+      //  if ((c->is_readable || c->is_writable)) mg_tls_handshake(c);
     } else {
       if (c->is_readable) read_conn(c);
       if (c->is_writable) write_conn(c);

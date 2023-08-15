@@ -2,8 +2,12 @@
 
 #if MG_TLS == MG_TLS_BUILTIN
 struct tls_data {
-  struct mg_iobuf send;
-  struct mg_iobuf recv;
+  uint8_t client_random[32];  // From client hello
+  uint8_t client_pub[32];     // From client hello
+};
+struct tls_ctx {
+  struct mg_iobuf server_cert;  // Decoded server certificate
+  struct mg_iobuf server_key;   // Decoded server private key
 };
 
 #define MG_LOAD_BE16(p) ((uint16_t) ((MG_U8P(p)[0] << 8U) | MG_U8P(p)[1]))
@@ -16,6 +20,10 @@ static inline bool mg_is_big_endian(void) {
 static inline uint16_t mg_swap16(uint16_t v) {
   return (uint16_t) ((v << 8U) | (v >> 8U));
 }
+static inline uint16_t mg_be16(uint16_t v) {
+  return mg_is_big_endian() ? mg_swap16(v) : v;
+}
+#if 0
 static inline uint32_t mg_swap32(uint32_t v) {
   return (v >> 24) | (v >> 8 & 0xff00) | (v << 8 & 0xff0000) | (v << 24);
 }
@@ -23,12 +31,10 @@ static inline uint64_t mg_swap64(uint64_t v) {
   return (((uint64_t) mg_swap32((uint32_t) v)) << 32) |
          mg_swap32((uint32_t) (v >> 32));
 }
-static inline uint16_t mg_be16(uint16_t v) {
-  return mg_is_big_endian() ? mg_swap16(v) : v;
-}
 static inline uint32_t mg_be32(uint32_t v) {
   return mg_is_big_endian() ? mg_swap32(v) : v;
 }
+#endif
 
 static inline void add8(struct mg_iobuf *io, uint8_t data) {
   mg_iobuf_add(io, io->len, &data, sizeof(data));
@@ -45,7 +51,7 @@ static inline void add32(struct mg_iobuf *io, uint32_t data) {
 void mg_tls_init(struct mg_connection *c, const struct mg_tls_opts *opts) {
   struct tls_data *tls = (struct tls_data *) calloc(1, sizeof(struct tls_data));
   if (tls != NULL) {
-    tls->send.align = tls->recv.align = MG_IO_SIZE;
+    // tls->send.align = tls->recv.align = MG_IO_SIZE;
     c->tls = tls;
     c->is_tls = c->is_tls_hs = 1;
   } else {
@@ -56,8 +62,8 @@ void mg_tls_init(struct mg_connection *c, const struct mg_tls_opts *opts) {
 void mg_tls_free(struct mg_connection *c) {
   struct tls_data *tls = c->tls;
   if (tls != NULL) {
-    mg_iobuf_free(&tls->send);
-    mg_iobuf_free(&tls->recv);
+    // mg_iobuf_free(&tls->send);
+    // mg_iobuf_free(&tls->recv);
   }
   free(c->tls);
   c->tls = NULL;
@@ -86,36 +92,24 @@ size_t mg_tls_pending(struct mg_connection *c) {
   return 0;
 }
 void mg_tls_handshake(struct mg_connection *c) {
-  struct tls_data *tls = c->tls;
-  struct mg_iobuf *rio = &tls->recv;
-  struct mg_iobuf *wio = &tls->send;
-  // Pull data from TCP
-  for (;;) {
-    mg_iobuf_resize(rio, rio->len + 1);
-    long n = mg_io_recv(c, &rio->buf[rio->len], rio->size - rio->len);
-    if (n > 0) {
-      rio->len += (size_t) n;
-    } else if (n == MG_IO_WAIT) {
-      break;
-    } else {
-      mg_error(c, "IO err");
-      return;
-    }
-  }
+  // struct tls_data *tls = c->tls;
+  struct mg_iobuf *rio = &c->raw;
+  struct mg_iobuf *wio = &c->send;
+
   // Look if we've pulled everything
   if (rio->len < TLS_HDR_SIZE) return;
   uint8_t record_type = rio->buf[0];
   uint16_t record_len = MG_LOAD_BE16(rio->buf + 3);
   uint16_t record_version = MG_LOAD_BE16(rio->buf + 1);
   if (record_type != 22) {
-    mg_error(c, "no 22");
+    mg_error(c, "not a handshake");
     return;
   }
   if (rio->len < (size_t) TLS_HDR_SIZE + record_len) return;
   // Got full hello
   // struct tls_hello *hello = (struct tls_hello *) (hdr + 1);
   MG_INFO(("CT=%d V=%hx L=%hu", record_type, record_version, record_len));
-  mg_hexdump(rio->buf, rio->len);
+  // mg_hexdump(rio->buf, rio->len);
 
   // Send response. Server Hello
   size_t ofs = wio->len;
@@ -128,6 +122,8 @@ void mg_tls_handshake(struct mg_connection *c) {
   add8(wio, 0);        // Compression method: 0
   add16(wio, 46);      // Extensions length
   add16(wio, 43), add16(wio, 2), add16(wio, 0x304);  // extension: TLS 1.3
+
+  // Key share: use curve x25519 (id 29)
   add16(wio, 51), add16(wio, 36), add16(wio, 29), add16(wio, 32);  // keyshare
   mg_iobuf_add(wio, wio->len, NULL, 32);                           // 32 random
   mg_random(wio->buf + wio->len - 32, 32);                         // bytes
@@ -147,7 +143,7 @@ void mg_tls_handshake(struct mg_connection *c) {
   add8(wio, 0), add16(wio, 2), add16(wio, 0);          // empty 2 bytes
   add8(wio, 11);                                       // certificate message
   add8(wio, 0), add16(wio, 4), add32(wio, 0x1020304);  // len
-  *(uint16_t *) &wio->buf[ofs + 3] = mg_be16((uint16_t)(wio->len - ofs - 5));
+  *(uint16_t *) &wio->buf[ofs + 3] = mg_be16((uint16_t) (wio->len - ofs - 5));
 
   mg_io_send(c, wio->buf, wio->len);
   wio->len = 0;
@@ -157,6 +153,7 @@ void mg_tls_handshake(struct mg_connection *c) {
   mg_error(c, "doh");
 }
 void mg_tls_ctx_free(struct mg_mgr *mgr) {
+  free(mgr->tls_ctx);
   mgr->tls_ctx = NULL;
 }
 void mg_tls_ctx_init(struct mg_mgr *mgr) {

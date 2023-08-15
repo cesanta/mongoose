@@ -104,7 +104,8 @@ static bool mg_aton6(struct mg_str str, struct mg_addr *addr) {
     } else if (str.ptr[i] == '%') {       // Scope ID
       for (i = i + 1; i < str.len; i++) {
         if (str.ptr[i] < '0' || str.ptr[i] > '9') return false;
-        addr->scope_id *= 10, addr->scope_id += (uint8_t) (str.ptr[i] - '0');
+        addr->scope_id = (uint8_t) (addr->scope_id * 10);
+        addr->scope_id = (uint8_t) (addr->scope_id + (str.ptr[i] - '0'));
       }
     } else {
       return false;
@@ -131,7 +132,7 @@ struct mg_connection *mg_alloc_conn(struct mg_mgr *mgr) {
       (struct mg_connection *) calloc(1, sizeof(*c) + mgr->extraconnsize);
   if (c != NULL) {
     c->mgr = mgr;
-    c->send.align = c->recv.align = MG_IO_SIZE;
+    c->send.align = c->recv.align = c->rtls.align = MG_IO_SIZE;
     c->id = ++mgr->nextid;
     MG_PROF_INIT(c);
   }
@@ -153,6 +154,7 @@ void mg_close_conn(struct mg_connection *c) {
   mg_tls_free(c);
   mg_iobuf_free(&c->recv);
   mg_iobuf_free(&c->send);
+  mg_iobuf_free(&c->rtls);
   mg_bzero((unsigned char *) c, sizeof(*c));
   free(c);
 }
@@ -223,6 +225,14 @@ struct mg_timer *mg_timer_add(struct mg_mgr *mgr, uint64_t milliseconds,
     t->id = mgr->timerid++;
   }
   return t;
+}
+
+long mg_io_recv(struct mg_connection *c, void *buf, size_t len) {
+  if (c->rtls.len == 0) return MG_IO_WAIT;
+  if (len > c->rtls.len) len = c->rtls.len;
+  memcpy(buf, c->rtls.buf, len);
+  mg_iobuf_del(&c->rtls, 0, len);
+  return (long) len;
 }
 
 void mg_mgr_free(struct mg_mgr *mgr) {

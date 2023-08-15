@@ -1254,6 +1254,7 @@ struct mg_connection {
   struct mg_iobuf recv;        // Incoming data
   struct mg_iobuf send;        // Outgoing data
   struct mg_iobuf prof;        // Profile data enabled by MG_ENABLE_PROFILE
+  struct mg_iobuf rtls;        // TLS only. Incoming encrypted data
   mg_event_handler_t fn;       // User-specified event handler function
   void *fn_data;               // User-specified function parameter
   mg_event_handler_t pfn;      // Protocol-specific handler function
@@ -1526,6 +1527,7 @@ struct mg_tls {
 #include <openssl/ssl.h>
 
 struct mg_tls {
+  BIO_METHOD *bm;
   SSL_CTX *ctx;
   SSL *ssl;
 };

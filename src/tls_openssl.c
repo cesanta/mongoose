@@ -5,7 +5,7 @@
 static int tls_err_cb(const char *s, size_t len, void *c) {
   int n = (int) len - 1;
   MG_ERROR(("%lu %.*s", ((struct mg_connection *) c)->id, n, s));
-  return 0; // undocumented
+  return 0;  // undocumented
 }
 
 static int mg_tls_err(struct mg_connection *c, struct mg_tls *tls, int res) {
@@ -61,10 +61,41 @@ static X509 *load_cert(struct mg_str s) {
   return cert;
 }
 
+
+static long mg_bio_ctrl(BIO *b, int cmd, long larg, void *pargs) {
+  long ret = 0;
+  if (cmd == BIO_CTRL_PUSH) ret = 1;
+  if (cmd == BIO_CTRL_POP) ret = 1;
+  if (cmd == BIO_CTRL_FLUSH) ret = 1;
+  if (cmd == BIO_C_SET_NBIO) ret = 1;
+  // MG_DEBUG(("%d -> %ld", cmd, ret));
+  (void) b, (void) cmd, (void) larg, (void) pargs;
+  return ret;
+}
+
+static int mg_bio_read(BIO *bio, char *buf, int len) {
+  struct mg_connection *c = (struct mg_connection *) BIO_get_data(bio);
+  long res = mg_io_recv(c, buf, (size_t) len);
+  // MG_DEBUG(("%p %d %ld", buf, len, res));
+  len = res > 0 ? (int) res : -1;
+  if (res == MG_IO_WAIT) BIO_set_retry_read(bio);
+  return len;
+}
+
+static int mg_bio_write(BIO *bio, const char *buf, int len) {
+  struct mg_connection *c = (struct mg_connection *) BIO_get_data(bio);
+  long res = mg_io_send(c, buf, (size_t) len);
+  // MG_DEBUG(("%p %d %ld", buf, len, res));
+  len = res > 0 ? (int) res : -1;
+  if (res == MG_IO_WAIT) BIO_set_retry_write(bio);
+  return len;
+}
+
 void mg_tls_init(struct mg_connection *c, const struct mg_tls_opts *opts) {
   struct mg_tls *tls = (struct mg_tls *) calloc(1, sizeof(*tls));
   const char *id = "mongoose";
   static unsigned char s_initialised = 0;
+  BIO *bio = NULL;
   int rc;
 
   if (tls == NULL) {
@@ -129,7 +160,7 @@ void mg_tls_init(struct mg_connection *c, const struct mg_tls_opts *opts) {
 
   SSL_set_mode(tls->ssl, SSL_MODE_ACCEPT_MOVING_WRITE_BUFFER);
 #if OPENSSL_VERSION_NUMBER > 0x10002000L
-  SSL_set_ecdh_auto(tls->ssl, 1);
+  (void) SSL_set_ecdh_auto(tls->ssl, 1);
 #endif
 #if OPENSSL_VERSION_NUMBER >= 0x10100000L
   if (opts->name.len > 0) {
@@ -139,6 +170,16 @@ void mg_tls_init(struct mg_connection *c, const struct mg_tls_opts *opts) {
     free(s);
   }
 #endif
+
+  tls->bm = BIO_meth_new(BIO_get_new_index() | BIO_TYPE_SOURCE_SINK, "bio_mg");
+  BIO_meth_set_write(tls->bm, mg_bio_write);
+  BIO_meth_set_read(tls->bm, mg_bio_read);
+  BIO_meth_set_ctrl(tls->bm, mg_bio_ctrl);
+
+  bio = BIO_new(tls->bm);
+  BIO_set_data(bio, c);
+  SSL_set_bio(tls->ssl, bio, bio);
+
   c->tls = tls;
   c->is_tls = 1;
   c->is_tls_hs = 1;
@@ -153,9 +194,7 @@ fail:
 
 void mg_tls_handshake(struct mg_connection *c) {
   struct mg_tls *tls = (struct mg_tls *) c->tls;
-  int rc;
-  SSL_set_fd(tls->ssl, (int) (size_t) c->fd);
-  rc = c->is_client ? SSL_connect(tls->ssl) : SSL_accept(tls->ssl);
+  int rc = c->is_client ? SSL_connect(tls->ssl) : SSL_accept(tls->ssl);
   if (rc == 1) {
     MG_DEBUG(("%lu success", c->id));
     c->is_tls_hs = 0;
@@ -171,6 +210,7 @@ void mg_tls_free(struct mg_connection *c) {
   if (tls == NULL) return;
   SSL_free(tls->ssl);
   SSL_CTX_free(tls->ctx);
+  BIO_meth_free(tls->bm);
   free(tls);
   c->tls = NULL;
 }
