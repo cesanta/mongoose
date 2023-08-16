@@ -13,16 +13,20 @@
 
 bool mg_to_size_t(struct mg_str str, size_t *val);
 bool mg_to_size_t(struct mg_str str, size_t *val) {
-  uint64_t result = 0, max = 1844674407370955160 /* (UINT64_MAX-9)/10 */;
-  size_t i = 0;
+  size_t i = 0, max = (size_t) -1, max2 = max / 10, result = 0, ndigits = 0;
   while (i < str.len && (str.ptr[i] == ' ' || str.ptr[i] == '\t')) i++;
   if (i < str.len && str.ptr[i] == '-') return false;
   while (i < str.len && str.ptr[i] >= '0' && str.ptr[i] <= '9') {
-    if (result > max) return false;
+    size_t digit = (size_t) (str.ptr[i] - '0');
+    if (result > max2) return false;  // Overflow
     result *= 10;
-    result += (unsigned) (str.ptr[i] - '0');
-    i++;
+    if (result > max - digit) return false;  // Overflow
+    result += digit;
+    i++, ndigits++;
   }
+  while (i < str.len && (str.ptr[i] == ' ' || str.ptr[i] == '\t')) i++;
+  if (ndigits == 0) return false;  // #2322: Content-Length = 1 * DIGIT
+  if (i != str.len) return false;  // Ditto
   *val = (size_t) result;
   return true;
 }
@@ -514,20 +518,16 @@ static struct mg_str guess_content_type(struct mg_str path, const char *extra) {
 
 static int getrange(struct mg_str *s, size_t *a, size_t *b) {
   size_t i, numparsed = 0;
-  // MG_INFO(("%.*s", (int) s->len, s->ptr));
   for (i = 0; i + 6 < s->len; i++) {
-    if (memcmp(&s->ptr[i], "bytes=", 6) == 0) {
-      struct mg_str p = mg_str_n(s->ptr + i + 6, s->len - i - 6);
-      if (p.len > 0 && p.ptr[0] >= '0' && p.ptr[0] <= '9') numparsed++;
-      if (!mg_to_size_t(p, a)) return 0;
-      // MG_INFO(("PPP [%.*s] %d", (int) p.len, p.ptr, numparsed));
-      while (p.len && p.ptr[0] >= '0' && p.ptr[0] <= '9') p.ptr++, p.len--;
-      if (p.len && p.ptr[0] == '-') p.ptr++, p.len--;
-      if (!mg_to_size_t(p, b)) return 0;
-      if (p.len > 0 && p.ptr[0] >= '0' && p.ptr[0] <= '9') numparsed++;
-      // MG_INFO(("PPP [%.*s] %d", (int) p.len, p.ptr, numparsed));
-      break;
+    struct mg_str k, v = mg_str_n(s->ptr + i + 6, s->len - i - 6);
+    if (memcmp(&s->ptr[i], "bytes=", 6) != 0) continue;
+    if (mg_split(&v, &k, NULL, '-')) {
+      if (mg_to_size_t(k, a)) numparsed++;
+      if (v.len > 0 && mg_to_size_t(v, b)) numparsed++;
+    } else {
+      if (mg_to_size_t(v, a)) numparsed++;
     }
+    break;
   }
   return (int) numparsed;
 }
