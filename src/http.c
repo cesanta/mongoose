@@ -744,15 +744,17 @@ static int uri_to_path2(struct mg_connection *c, struct mg_http_message *hm,
   int flags, tmp;
   // Append URI to the root_dir, and sanitize it
   size_t n = mg_snprintf(path, path_size, "%.*s", (int) dir.len, dir.ptr);
-  if (n > path_size) {
+  if (n + 2 >= path_size) {
     mg_http_reply(c, 400, "", "Exceeded path size");
     return -1;
   }
   path[path_size - 1] = '\0';
-  // Terminate root dir with /
-  if (n + 2 < path_size && path[n - 1] != '/') path[n++] = '/', path[n] = '\0';
-  mg_url_decode(hm->uri.ptr + url.len, hm->uri.len - url.len, path + n,
-                path_size - n, 0);
+  // Terminate root dir with slash
+  if (n > 0 && path[n - 1] != '/') path[n++] = '/', path[n] = '\0';
+  if (url.len < hm->uri.len) {
+    mg_url_decode(hm->uri.ptr + url.len, hm->uri.len - url.len, path + n,
+                  path_size - n, 0);
+  }
   path[path_size - 1] = '\0';  // Double-check
   if (!mg_path_is_sane(path)) {
     mg_http_reply(c, 400, "", "Invalid path");
@@ -801,7 +803,7 @@ static int uri_to_path(struct mg_connection *c, struct mg_http_message *hm,
   struct mg_fs *fs = opts->fs == NULL ? &mg_fs_posix : opts->fs;
   struct mg_str k, v, s = mg_str(opts->root_dir), u = {0, 0}, p = {0, 0};
   while (mg_commalist(&s, &k, &v)) {
-    if (v.len == 0) v = k, k = mg_str("/");
+    if (v.len == 0) v = k, k = mg_str("/"), u = k, p = v;
     if (hm->uri.len < k.len) continue;
     if (mg_strcmp(k, mg_str_n(hm->uri.ptr, k.len)) != 0) continue;
     u = k, p = v;
@@ -1042,7 +1044,6 @@ static void deliver_normal_chunks(struct mg_connection *c, size_t hlen,
 static void http_cb(struct mg_connection *c, int ev, void *evd, void *fnd) {
   if (ev == MG_EV_READ || ev == MG_EV_CLOSE) {
     struct mg_http_message hm;
-    // mg_hexdump(c->recv.buf, c->recv.len);
     while (c->recv.buf != NULL && c->recv.len > 0) {
       bool next = false;
       int hlen = mg_http_parse((char *) c->recv.buf, c->recv.len, &hm);
