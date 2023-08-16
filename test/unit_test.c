@@ -2939,6 +2939,18 @@ static void test_json(void) {
   ASSERT(mg_json_get_long(mg_str("[0, 42]"), "$[1]", 0) == 42);
   ASSERT(mg_json_get_long(mg_str("[[], 42]"), "$[1]", 0) == 42);
   ASSERT(mg_json_get_long(mg_str("[{}, 42]"), "$[1]", 0) == 42);
+
+  json = mg_str("[{\"a\":1},{\"a\":2}]");
+  ASSERT(mg_json_get_long(json, "$[0]", -1) == -1);
+  ASSERT(mg_json_get_long(json, "$[0].a", -1) == 1);
+  ASSERT(mg_json_get_long(json, "$[1].a", -1) == 2);
+  ASSERT(mg_json_get_long(json, "$[2].a", -1) == -1);
+
+  json = mg_str("[{\"a1\":1},{\"a\":2}]");
+  ASSERT(mg_json_get_long(json, "$[0]", -1) == -1);
+  ASSERT(mg_json_get_long(json, "$[0].a", -1) == -1);
+  ASSERT(mg_json_get_long(json, "$[1].a", -1) == 2);
+  ASSERT(mg_json_get_long(json, "$[2].a", -1) == -1);
 }
 
 static void resp_rpc(struct mg_rpc_req *r) {
