@@ -181,9 +181,9 @@ static void config_apply(struct mg_str s) {
   if (mg_json_get_num(s, "$.tx", &v)) s_state.tx = (int) v;
   if (mg_json_get_num(s, "$.baud", &v)) s_state.baud = (int) v;
 
-  if (s_state.mqtt.c) s_state.mqtt.c->is_closing = 1;
-  if (s_state.tcp.c) s_state.tcp.c->is_closing = 1;
-  if (s_state.websocket.c) s_state.websocket.c->is_closing = 1;
+  if (s_state.mqtt.c) s_state.mqtt.c->is_draining = 1;
+  if (s_state.tcp.c) s_state.tcp.c->is_draining = 1;
+  if (s_state.websocket.c) s_state.websocket.c->is_draining = 1;
 }
 
 // HTTP request handler function

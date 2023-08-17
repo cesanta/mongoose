@@ -27,7 +27,7 @@ static void cb2(struct mg_connection *c, int ev, void *ev_data, void *fn_data) {
   } else if (ev == MG_EV_HTTP_MSG) {
     struct mg_http_message *hm = ev_data;  // Print HTTP response
     MG_INFO(("Fetched:\n%.*s", (int) hm->message.len, hm->message.ptr));
-    c->is_closing = 1;
+    c->is_draining = 1;
   }
 }
 

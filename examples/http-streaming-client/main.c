@@ -39,7 +39,7 @@ static void fn(struct mg_connection *c, int ev, void *ev_data, void *fn_data) {
     // Response is received. Print it
     struct mg_http_message *hm = (struct mg_http_message *) ev_data;
     fwrite(hm->body.ptr, 1, hm->body.len, stdout);
-    c->is_closing = 1;         // Tell mongoose to close this connection
+    c->is_draining = 1;        // Tell mongoose to close this connection
     *(bool *) fn_data = true;  // Tell event loop to stop
   } else if (ev == MG_EV_ERROR) {
     *(bool *) fn_data = true;  // Error, tell event loop to stop

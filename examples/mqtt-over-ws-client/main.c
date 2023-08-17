@@ -66,7 +66,7 @@ static void fn(struct mg_connection *c, int ev, void *ev_data, void *fn_data) {
             len = mg_ws_wrap(c, c->send.len - len, WEBSOCKET_OP_BINARY);
           } else {
             MG_ERROR(("%lu MQTT auth failed, code %d", c->id, mm.ack));
-            c->is_closing = 1;
+            c->is_draining = 1;
           }
           break;
         case MQTT_CMD_PUBLISH: {
@@ -74,7 +74,7 @@ static void fn(struct mg_connection *c, int ev, void *ev_data, void *fn_data) {
                     mm.topic.ptr, (int) mm.data.len, mm.data.ptr));
           MG_INFO(("RECEIVED %.*s <- %.*s", (int) mm.data.len, mm.data.ptr,
                    (int) mm.topic.len, mm.topic.ptr));
-          c->is_closing = 1;
+          c->is_draining = 1;
           break;
         }
       }
