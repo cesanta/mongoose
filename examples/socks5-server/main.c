@@ -44,7 +44,7 @@ enum {
 static void handshake(struct mg_connection *c) {
   struct mg_iobuf *r = &c->recv;
   if (r->buf[0] != VERSION) {
-    c->is_closing = 1;
+    c->is_draining = 1;
   } else if (r->len > 2 && (size_t) r->buf[1] + 2 <= r->len) {
     /* https://www.ietf.org/rfc/rfc1928.txt paragraph 3 */
     uint8_t reply[2] = {VERSION, HANDSHAKE_FAILURE};
