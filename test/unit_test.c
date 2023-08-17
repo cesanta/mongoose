@@ -1579,6 +1579,7 @@ static void test_http_range(void) {
 
   fetch(&mgr, buf, url, "%s", "GET /range.txt HTTP/1.0\nRange: bytes=5-10\n\n");
   ASSERT(mg_http_parse(buf, strlen(buf), &hm) > 0);
+  printf("%s", buf);
   ASSERT(mg_strcmp(hm.uri, mg_str("206")) == 0);
   ASSERT(mg_strcmp(hm.proto, mg_str("Partial Content")) == 0);
   ASSERT(mg_strcmp(hm.body, mg_str(" of co")) == 0);
@@ -2184,16 +2185,15 @@ static void test_util(void) {
 
   {
     extern bool mg_to_size_t(struct mg_str, size_t *);
-    size_t val = 1;
+    size_t val, max = (size_t) -1;
     ASSERT(mg_to_size_t(mg_str("0"), &val) && val == 0);
     ASSERT(mg_to_size_t(mg_str("123"), &val) && val == 123);
-    ASSERT(mg_to_size_t(mg_str(""), &val) && val == 0);
+    ASSERT(mg_to_size_t(mg_str(" 123 \t"), &val) && val == 123);
+    ASSERT(mg_to_size_t(mg_str(""), &val) == false);
+    ASSERT(mg_to_size_t(mg_str(" 123x"), &val) == false);
     ASSERT(mg_to_size_t(mg_str("-"), &val) == false);
-    ASSERT(mg_to_size_t(mg_str("18446744073709551616"), &val) ==
-           false);  // range +1
-    ASSERT(mg_to_size_t(mg_str("18446744073709551610"), &val) == false);
-    // TODO(): ASSERT(mg_to_size_t(mg_str("18446744073709551609"), &val) &&
-    //         val == 18446744073709551609U);  // our max or SIZE_MAX
+    mg_snprintf(buf, sizeof(buf), sizeof(max) == 8 ? "%llu" : "%lu", max);
+    ASSERT(mg_to_size_t(mg_str(buf), &val) && val == max);
   }
 
   {
