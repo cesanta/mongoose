@@ -2016,7 +2016,7 @@ static void test_str(void) {
 
 static void fn1(struct mg_connection *c, int ev, void *ev_data, void *fn_data) {
   if (ev == MG_EV_ERROR) {
-    ASSERT(*(void **) fn_data == NULL);
+    free(*(char **) fn_data); // See #2263
     *(char **) fn_data = mg_mprintf("%s", (char *) ev_data);
   }
   (void) c;
