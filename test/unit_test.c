@@ -2579,11 +2579,6 @@ static void test_packed(void) {
   ASSERT(mgr.conns == NULL);
 }
 
-static void eh6(struct mg_connection *c, int ev, void *ev_data, void *fn_data) {
-  if (ev == MG_EV_READ) *(int *) fn_data = 1;
-  (void) c, (void) ev_data;
-}
-
 #if (MG_ENABLE_SOCKET == 0)
 int send(int sock, const void *buf, size_t len, int flags);
 int send(int sock, const void *buf, size_t len, int flags) {
@@ -2591,23 +2586,6 @@ int send(int sock, const void *buf, size_t len, int flags) {
   return -1;
 }
 #endif
-
-static void test_pipe_proto(bool is_udp) {
-  struct mg_mgr mgr;
-  int i, sock, done = 0;
-  mg_mgr_init(&mgr);
-  ASSERT((sock = mg_mkpipe(&mgr, eh6, (void *) &done, is_udp)) >= 0);
-  ASSERT(send(sock, "hi", 2, 0) == 2);
-  for (i = 0; i < 10 && done == 0; i++) mg_mgr_poll(&mgr, 1);
-  ASSERT(done == 1);
-  mg_mgr_free(&mgr);
-  ASSERT(mgr.conns == NULL);
-}
-
-static void test_pipe(void) {
-  test_pipe_proto(true);
-  test_pipe_proto(false);
-}
 
 static void u1(struct mg_connection *c, int ev, void *ev_data, void *fn_data) {
   if (ev == MG_EV_CONNECT) {
@@ -3141,7 +3119,6 @@ int main(void) {
   test_rewrites();
   test_check_ip_acl();
   test_udp();
-  test_pipe();
   test_packed();
   test_crc32();
   test_multipart();

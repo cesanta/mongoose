@@ -418,64 +418,6 @@ static void accept_conn(struct mg_mgr *mgr, struct mg_connection *lsn) {
   }
 }
 
-static bool mg_socketpair(MG_SOCKET_TYPE sp[2], union usa usa[2], bool udp) {
-  MG_SOCKET_TYPE sock;
-  socklen_t n = sizeof(usa[0].sin);
-  bool success = false;
-
-  sock = sp[0] = sp[1] = MG_INVALID_SOCKET;
-  (void) memset(&usa[0], 0, sizeof(usa[0]));
-  usa[0].sin.sin_family = AF_INET;
-  *(uint32_t *) &usa->sin.sin_addr = mg_htonl(0x7f000001U);  // 127.0.0.1
-  usa[1] = usa[0];
-
-  if (udp && (sp[0] = socket(AF_INET, SOCK_DGRAM, 0)) != MG_INVALID_SOCKET &&
-      (sp[1] = socket(AF_INET, SOCK_DGRAM, 0)) != MG_INVALID_SOCKET &&
-      bind(sp[0], &usa[0].sa, n) == 0 && bind(sp[1], &usa[1].sa, n) == 0 &&
-      getsockname(sp[0], &usa[0].sa, &n) == 0 &&
-      getsockname(sp[1], &usa[1].sa, &n) == 0 &&
-      connect(sp[0], &usa[1].sa, n) == 0 &&
-      connect(sp[1], &usa[0].sa, n) == 0) {
-    success = true;
-  } else if (!udp &&
-             (sock = socket(AF_INET, SOCK_STREAM, 0)) != MG_INVALID_SOCKET &&
-             bind(sock, &usa[0].sa, n) == 0 &&
-             listen(sock, MG_SOCK_LISTEN_BACKLOG_SIZE) == 0 &&
-             getsockname(sock, &usa[0].sa, &n) == 0 &&
-             (sp[0] = socket(AF_INET, SOCK_STREAM, 0)) != MG_INVALID_SOCKET &&
-             connect(sp[0], &usa[0].sa, n) == 0 &&
-             (sp[1] = raccept(sock, &usa[1], &n)) != MG_INVALID_SOCKET) {
-    success = true;
-  }
-  if (success) {
-    mg_set_non_blocking_mode(sp[1]);
-  } else {
-    if (sp[0] != MG_INVALID_SOCKET) closesocket(sp[0]);
-    if (sp[1] != MG_INVALID_SOCKET) closesocket(sp[1]);
-    sp[0] = sp[1] = MG_INVALID_SOCKET;
-  }
-  if (sock != MG_INVALID_SOCKET) closesocket(sock);
-  return success;
-}
-
-int mg_mkpipe(struct mg_mgr *mgr, mg_event_handler_t fn, void *fn_data,
-              bool udp) {
-  union usa usa[2];
-  MG_SOCKET_TYPE sp[2] = {MG_INVALID_SOCKET, MG_INVALID_SOCKET};
-  struct mg_connection *c = NULL;
-  if (!mg_socketpair(sp, usa, udp)) {
-    MG_ERROR(("Cannot create socket pair"));
-  } else if ((c = mg_wrapfd(mgr, (int) sp[1], fn, fn_data)) == NULL) {
-    closesocket(sp[0]);
-    closesocket(sp[1]);
-    sp[0] = sp[1] = MG_INVALID_SOCKET;
-  } else {
-    tomgaddr(&usa[0], &c->rem, false);
-    MG_DEBUG(("%lu %p pipe %lu", c->id, c->fd, (unsigned long) sp[0]));
-  }
-  return (int) sp[0];
-}
-
 static bool can_read(const struct mg_connection *c) {
   return c->is_full == false;
 }
