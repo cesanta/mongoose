@@ -1533,6 +1533,7 @@ int mg_http_parse(const char *s, size_t len, struct mg_http_message *hm) {
     hm->body.len = 0;
     hm->message.len = (size_t) req_len;
   }
+  if (hm->message.len < (size_t) req_len) return -1; // Overflow protection
 
   return req_len;
 }
