@@ -1,10 +1,10 @@
 #pragma once
 
-#if MG_ENABLE_TCPIP
 #include "arch.h"
 #include "net.h"
 #include "queue.h"
 
+#if defined(MG_ENABLE_TCPIP) && MG_ENABLE_TCPIP
 struct mg_tcpip_if;  // Mongoose TCP/IP network interface
 
 struct mg_tcpip_driver {

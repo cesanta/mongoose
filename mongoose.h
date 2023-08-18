@@ -1642,11 +1642,11 @@ void mg_rpc_verr(struct mg_rpc_req *, int code, const char *fmt, va_list *);
 void mg_rpc_list(struct mg_rpc_req *r);
 
 
-#if MG_ENABLE_TCPIP
 
 
 
 
+#if defined(MG_ENABLE_TCPIP) && MG_ENABLE_TCPIP
 struct mg_tcpip_if;  // Mongoose TCP/IP network interface
 
 struct mg_tcpip_driver {
