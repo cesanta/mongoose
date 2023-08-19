@@ -2,11 +2,11 @@ PROG ?= ./example       # Program we are building
 PACK ?= ./pack          # Packing executable
 DELETE = rm -rf         # Command to remove files
 OUT ?= -o $(PROG)       # Compiler argument for output file
-SOURCES = main.c mongoose.c net.c       # Source code files
-CFLAGS = -W -Wall -Wextra -g -I.        # Build options
+SOURCES = main.c mongoose.c net.c packed_fs.c   # Source code files
+CFLAGS = -W -Wall -Wextra -g -I.                # Build options
 
 # Mongoose build options. See https://mongoose.ws/documentation/#build-options
-CFLAGS_MONGOOSE +=
+CFLAGS_MONGOOSE += -DMG_ENABLE_PACKED_FS=1
 
 ifeq ($(OS),Windows_NT)         # Windows settings. Assume MinGW compiler. To use VC: make CC=cl CFLAGS=/MD OUT=/Feprog.exe
   PROG = example.exe            # Use .exe suffix for the binary
@@ -33,9 +33,9 @@ web_root/main.css: web_root/index.html $(wildcard web_root/*.js)
 	npx tailwindcss -o $@ --minify
 
 # Generate packed filesystem for serving Web UI
-packed_fs.c: $(wildcard web_root/*) Makefile web_root/main.css web_root/bundle.js
+packed_fs.c: $(wildcard web_root/*) $(wildcard certs/*) Makefile web_root/main.css web_root/bundle.js
 	$(CC) ../../test/pack.c -o $(PACK)
-	$(PACK) $(wildcard web_root/*) > $@
+	$(PACK) $(wildcard web_root/*) $(wildcard certs/*) > $@
 
 mbedtls:
 	git clone --depth 1 -b v2.28.2 https://github.com/mbed-tls/mbedtls $@

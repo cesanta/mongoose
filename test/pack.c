@@ -29,11 +29,9 @@ static const char *code =
     "  while (*a && (*a == *b)) a++, b++;\n"
     "  return *(const unsigned char *) a - *(const unsigned char *) b;\n"
     "}\n"
-    "const char *mg_unlist(size_t no);\n"
     "const char *mg_unlist(size_t no) {\n"
     "  return packed_files[no].name;\n"
     "}\n"
-    "const char *mg_unpack(const char *path, size_t *size, time_t *mtime);\n"
     "const char *mg_unpack(const char *name, size_t *size, time_t *mtime) {\n"
     "  const struct packed_file *p;\n"
     "  for (p = packed_files; p->name != NULL; p++) {\n"
@@ -53,6 +51,10 @@ int main(int argc, char *argv[]) {
   printf("%s", "#include <string.h>\n");
   printf("%s", "#include <time.h>\n");
   printf("%s", "\n");
+  printf("%s", "#if defined(__cplusplus)\nextern \"C\" {\n#endif\n");
+  printf("%s", "const char *mg_unlist(size_t no);\n");
+  printf("%s", "const char *mg_unpack(const char *, size_t *, time_t *);\n");
+  printf("%s", "#if defined(__cplusplus)\n}\n#endif\n\n");
 
   for (i = 1; i < argc; i++) {
     if (strcmp(argv[i], "-s") == 0) {

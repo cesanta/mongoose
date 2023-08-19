@@ -28,26 +28,6 @@ static const char *s_json_header =
     "Cache-Control: no-cache\r\n";
 static uint64_t s_boot_timestamp = 0;  // Updated by SNTP
 
-// Certificate generation procedure:
-// openssl ecparam -name prime256v1 -genkey -noout -out key.pem
-// openssl req -new -key key.pem -x509 -nodes -days 3650 -out cert.pem
-static const char *s_tls_cert =
-    "-----BEGIN CERTIFICATE-----\n"
-    "MIIBCTCBsAIJAK9wbIDkHnAoMAoGCCqGSM49BAMCMA0xCzAJBgNVBAYTAklFMB4X\n"
-    "DTIzMDEyOTIxMjEzOFoXDTMzMDEyNjIxMjEzOFowDTELMAkGA1UEBhMCSUUwWTAT\n"
-    "BgcqhkjOPQIBBggqhkjOPQMBBwNCAARzSQS5OHd17lUeNI+6kp9WYu0cxuEIi/JT\n"
-    "jphbCmdJD1cUvhmzM9/phvJT9ka10Z9toZhgnBq0o0xfTQ4jC1vwMAoGCCqGSM49\n"
-    "BAMCA0gAMEUCIQCe0T2E0GOiVe9KwvIEPeX1J1J0T7TNacgR0Ya33HV9VgIgNvdn\n"
-    "aEWiBp1xshs4iz6WbpxrS1IHucrqkZuJLfNZGZI=\n"
-    "-----END CERTIFICATE-----\n";
-
-static const char *s_tls_key =
-    "-----BEGIN EC PRIVATE KEY-----\n"
-    "MHcCAQEEICBz3HOkQLPBDtdknqC7k1PNsWj6HfhyNB5MenfjmqiooAoGCCqGSM49\n"
-    "AwEHoUQDQgAEc0kEuTh3de5VHjSPupKfVmLtHMbhCIvyU46YWwpnSQ9XFL4ZszPf\n"
-    "6YbyU/ZGtdGfbaGYYJwatKNMX00OIwtb8A==\n"
-    "-----END EC PRIVATE KEY-----\n";
-
 // This is for newlib and TLS (mbedTLS)
 uint64_t mg_now(void) {
   return mg_millis() + s_boot_timestamp;
@@ -243,11 +223,11 @@ static void fn(struct mg_connection *c, int ev, void *ev_data, void *fn_data) {
     } else {
       struct mg_http_serve_opts opts;
       memset(&opts, 0, sizeof(opts));
-#if MG_ENABLE_PACKED_FS
-      opts.root_dir = "/web_root";
-      opts.fs = &mg_fs_packed;
+#if MG_ARCH == MG_ARCH_UNIX || MG_ARCH == MG_ARCH_WIN32
+      opts.root_dir = "web_root";  // On workstations, use filesystem
 #else
-      opts.root_dir = "web_root";
+      opts.root_dir = "/web_root";  // On embedded, use packed files
+      opts.fs = &mg_fs_packed;
 #endif
       mg_http_serve_dir(c, ev_data, &opts);
     }
@@ -260,8 +240,8 @@ static void fn(struct mg_connection *c, int ev, void *ev_data, void *fn_data) {
 
 void web_init(struct mg_mgr *mgr) {
   struct mg_tls_opts opts = {0};
-  opts.server_cert = mg_str(s_tls_cert);
-  opts.server_key = mg_str(s_tls_key);
+  opts.server_cert = mg_unpacked("/certs/server_cert.pem");
+  opts.server_key = mg_unpacked("/certs/server_key.pem");
   mg_tls_ctx_init(mgr, &opts);
 
   s_settings.device_name = strdup("My Device");
