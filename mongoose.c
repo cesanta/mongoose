@@ -1493,15 +1493,16 @@ int mg_http_parse(const char *s, size_t len, struct mg_http_message *hm) {
   while (s < end && s[0] == ' ') s++;  // Skip spaces
   if ((s = skiptorn(s, end, &hm->proto)) == NULL) return false;
 
-  // Sanity check. Allow protocol/reason to be empty
-  if (hm->method.len == 0 || hm->uri.len == 0) return -1;
-
   // If URI contains '?' character, setup query string
   if ((qs = (const char *) memchr(hm->uri.ptr, '?', hm->uri.len)) != NULL) {
     hm->query.ptr = qs + 1;
     hm->query.len = (size_t) (&hm->uri.ptr[hm->uri.len] - (qs + 1));
     hm->uri.len = (size_t) (qs - hm->uri.ptr);
   }
+
+  // Sanity check. Allow protocol/reason to be empty
+  // Do this check after hm->method.len and hm->uri.len are finalised
+  if (hm->method.len == 0 || hm->uri.len == 0) return -1;
 
   if (!mg_http_parse_headers(s, end, hm->headers,
                              sizeof(hm->headers) / sizeof(hm->headers[0])))
