@@ -237,6 +237,7 @@ jobs:
           - path: esp32/uart-bridge
           - path: esp8266/http-client-server
           - path: microchip/same54/device-dashboard
+          - path: microchip/same54/mqtt-client
           - path: infineon/infineon-xmc4700_4800-lwip-rtx-rtos
           - path: nxp/nxp-mimxrt1020-azurertos
           - path: nxp/nxp-frdmk66f-freertos
