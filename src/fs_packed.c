@@ -8,13 +8,11 @@ struct packed_file {
   size_t pos;
 };
 
-const char *mg_unpack(const char *path, size_t *size, time_t *mtime);
-const char *mg_unlist(size_t no);
-
 #if MG_ENABLE_PACKED_FS
 #else
 const char *mg_unpack(const char *path, size_t *size, time_t *mtime) {
-  (void) path, (void) size, (void) mtime;
+  *size = 0, *mtime = 0;
+  (void) path;
   return NULL;
 }
 const char *mg_unlist(size_t no) {
@@ -22,6 +20,12 @@ const char *mg_unlist(size_t no) {
   return NULL;
 }
 #endif
+
+struct mg_str mg_unpacked(const char *path) {
+  size_t len = 0;
+  const char *buf = mg_unpack(path, &len, NULL);
+  return mg_str_n(buf, len);
+}
 
 static int is_dir_prefix(const char *prefix, size_t n, const char *path) {
   // MG_INFO(("[%.*s] [%s] %c", (int) n, prefix, path, path[n]));

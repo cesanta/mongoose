@@ -40,3 +40,8 @@ void mg_fs_close(struct mg_fd *fd);
 char *mg_file_read(struct mg_fs *fs, const char *path, size_t *size);
 bool mg_file_write(struct mg_fs *fs, const char *path, const void *, size_t);
 bool mg_file_printf(struct mg_fs *fs, const char *path, const char *fmt, ...);
+
+// Packed API
+const char *mg_unpack(const char *path, size_t *size, time_t *mtime);
+const char *mg_unlist(size_t no);             // Get no'th packed filename
+struct mg_str mg_unpacked(const char *path);  // Packed file as mg_str
