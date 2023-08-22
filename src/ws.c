@@ -43,7 +43,7 @@ static void ws_handshake(struct mg_connection *c, const struct mg_str *wskey,
   mg_sha1_update(&sha_ctx, (unsigned char *) wskey->ptr, wskey->len);
   mg_sha1_update(&sha_ctx, (unsigned char *) magic, 36);
   mg_sha1_final(sha, &sha_ctx);
-  mg_base64_encode(sha, sizeof(sha), (char *) b64_sha);
+  mg_base64_encode(sha, sizeof(sha), (char *) b64_sha, sizeof(b64_sha));
   mg_xprintf(mg_pfn_iobuf, &c->send,
              "HTTP/1.1 101 Switching Protocols\r\n"
              "Upgrade: websocket\r\n"
@@ -242,7 +242,7 @@ struct mg_connection *mg_ws_connect(struct mg_mgr *mgr, const char *url,
     char nonce[16], key[30];
     struct mg_str host = mg_url_host(url);
     mg_random(nonce, sizeof(nonce));
-    mg_base64_encode((unsigned char *) nonce, sizeof(nonce), key);
+    mg_base64_encode((unsigned char *) nonce, sizeof(nonce), key, sizeof(key));
     mg_xprintf(mg_pfn_iobuf, &c->send,
                "GET %s HTTP/1.1\r\n"
                "Upgrade: websocket\r\n"

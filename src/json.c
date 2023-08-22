@@ -280,8 +280,9 @@ char *mg_json_get_b64(struct mg_str json, const char *path, int *slen) {
   int len = 0, off = mg_json_get(json, path, &len);
   if (off >= 0 && json.ptr[off] == '"' && len > 1 &&
       (result = (char *) calloc(1, (size_t) len)) != NULL) {
-    int k = mg_base64_decode(json.ptr + off + 1, len - 2, result);
-    if (slen != NULL) *slen = k;
+    size_t k = mg_base64_decode(json.ptr + off + 1, (size_t) (len - 2), result,
+                                (size_t) len);
+    if (slen != NULL) *slen = (int) k;
   }
   return result;
 }

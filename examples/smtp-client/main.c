@@ -34,7 +34,7 @@ static void fn(struct mg_connection *c, int ev, void *ev_data, void *fn_data) {
       } else if (*state == AUTH) {
         char a[100], b[300] = "";
         size_t n = mg_snprintf(a, sizeof(a), "%c%s%c%s", 0, user, 0, pass);
-        mg_base64_encode((uint8_t *) a, n, b);
+        mg_base64_encode((uint8_t *) a, n, b, sizeof(b));
         mg_printf(c, "AUTH PLAIN %s\r\n", b);
         *state = FROM;
       } else if (*state == FROM) {

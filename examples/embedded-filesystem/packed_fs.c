@@ -2,6 +2,15 @@
 #include <string.h>
 #include <time.h>
 
+#if defined(__cplusplus)
+extern "C" {
+#endif
+const char *mg_unlist(size_t no);
+const char *mg_unpack(const char *, size_t *, time_t *);
+#if defined(__cplusplus)
+}
+#endif
+
 static const unsigned char v1[] = {
   60,  33,  68,  79,  67,  84,  89,  80,  69,  32, 104, 116, // <!DOCTYPE ht
  109, 108,  62,  10,  60, 104, 116, 109, 108,  32, 108,  97, // ml>.<html la
@@ -1537,10 +1546,10 @@ static const struct packed_file {
   size_t size;
   time_t mtime;
 } packed_files[] = {
-  {"/web_root/index.html", v1, sizeof(v1), 1660216320},
-  {"/web_root/main.js", v2, sizeof(v2), 1660216320},
-  {"/web_root/preact.min.js", v3, sizeof(v3), 1660216320},
-  {"/web_root/style.css", v4, sizeof(v4), 1660216320},
+  {"/web_root/index.html", v1, sizeof(v1), 1692212839},
+  {"/web_root/main.js", v2, sizeof(v2), 1692212839},
+  {"/web_root/preact.min.js", v3, sizeof(v3), 1692212839},
+  {"/web_root/style.css", v4, sizeof(v4), 1692212839},
   {NULL, NULL, 0, 0}
 };
 
@@ -1548,11 +1557,9 @@ static int scmp(const char *a, const char *b) {
   while (*a && (*a == *b)) a++, b++;
   return *(const unsigned char *) a - *(const unsigned char *) b;
 }
-const char *mg_unlist(size_t no);
 const char *mg_unlist(size_t no) {
   return packed_files[no].name;
 }
-const char *mg_unpack(const char *path, size_t *size, time_t *mtime);
 const char *mg_unpack(const char *name, size_t *size, time_t *mtime) {
   const struct packed_file *p;
   for (p = packed_files; p->name != NULL; p++) {
