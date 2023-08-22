@@ -50,7 +50,7 @@ firmware.elf: mbedtls
 endif
 
 # Automated remote test. Requires env variable VCON_API_KEY set. See https://vcon.io/automated-firmware-tests/
-DEVICE_URL ?= https://dash.vcon.io/api/v3/devices/10
+DEVICE_URL ?= https://dash.vcon.io/api/v3/devices/11
 update: firmware.bin
 	curl --fail-with-body -su :$(VCON_API_KEY) $(DEVICE_URL)/ota --data-binary @$<
 
