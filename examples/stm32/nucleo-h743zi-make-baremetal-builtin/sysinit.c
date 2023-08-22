@@ -28,14 +28,14 @@ void SystemInit(void) {  // Called automatically by startup code
   SCB->CPACR |= ((3UL << 10 * 2) | (3UL << 11 * 2));  // Enable FPU
   asm("DSB");
   asm("ISB");
-  PWR->CR3 |= BIT(1);                           // select LDO (reset value)
-  while ((PWR->CSR1 && BIT(13)) == 0) spin(1);  // ACTVOSRDY
-  PWR->D3CR |= BIT(15) | BIT(14);               // Select VOS1
+  PWR->CR3 |= BIT(1);                          // select LDO (reset value)
+  while ((PWR->CSR1 & BIT(13)) == 0) spin(1);  // ACTVOSRDY
+  PWR->D3CR |= BIT(15) | BIT(14);              // Select VOS1
   uint32_t f = PWR->D3CR;  // fake read to wait for bus clocking
-  while ((PWR->CSR1 && BIT(13)) == 0) spin(1);  // ACTVOSRDY
-  SYSCFG->PWRCR |= BIT(0);                      // ODEN
+  while ((PWR->CSR1 & BIT(13)) == 0) spin(1);  // ACTVOSRDY
+  SYSCFG->PWRCR |= BIT(0);                     // ODEN
   f = SYSCFG->PWRCR;
-  while ((PWR->CSR1 && BIT(13)) == 0) spin(1);  // ACTVOSRDY
+  while ((PWR->CSR1 & BIT(13)) == 0) spin(1);  // ACTVOSRDY
   (void) f;
   SETBITS(
       RCC->D1CFGR, (0x0F << 8) | (7 << 4) | (0x0F << 0),
