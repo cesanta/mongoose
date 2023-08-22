@@ -92,15 +92,15 @@ void mg_http_bauth(struct mg_connection *c, const char *user,
   size_t need = c->send.len + 36 + (u.len + p.len) * 2;
   if (c->send.size < need) mg_iobuf_resize(&c->send, need);
   if (c->send.size >= need) {
-    int i, n = 0;
+    size_t i, n = 0;
     char *buf = (char *) &c->send.buf[c->send.len];
     memcpy(buf, "Authorization: Basic ", 21);  // DON'T use mg_send!
-    for (i = 0; i < (int) u.len; i++) {
+    for (i = 0; i < u.len; i++) {
       n = mg_base64_update(((unsigned char *) u.ptr)[i], buf + 21, n);
     }
     if (p.len > 0) {
       n = mg_base64_update(':', buf + 21, n);
-      for (i = 0; i < (int) p.len; i++) {
+      for (i = 0; i < p.len; i++) {
         n = mg_base64_update(((unsigned char *) p.ptr)[i], buf + 21, n);
       }
     }
@@ -863,11 +863,11 @@ void mg_http_creds(struct mg_http_message *hm, char *user, size_t userlen,
   user[0] = pass[0] = '\0';
   if (v != NULL && v->len > 6 && memcmp(v->ptr, "Basic ", 6) == 0) {
     char buf[256];
-    int n = mg_base64_decode(v->ptr + 6, (int) v->len - 6, buf);
-    const char *p = (const char *) memchr(buf, ':', n > 0 ? (size_t) n : 0);
+    size_t n = mg_base64_decode(v->ptr + 6, v->len - 6, buf, sizeof(buf));
+    const char *p = (const char *) memchr(buf, ':', n > 0 ? n : 0);
     if (p != NULL) {
-      mg_snprintf(user, userlen, "%.*s", (int) (p - buf), buf);
-      mg_snprintf(pass, passlen, "%.*s", n - (int) (p - buf) - 1, p + 1);
+      mg_snprintf(user, userlen, "%.*s", p - buf, buf);
+      mg_snprintf(pass, passlen, "%.*s", n - (size_t) (p - buf) - 1, p + 1);
     }
   } else if (v != NULL && v->len > 7 && memcmp(v->ptr, "Bearer ", 7) == 0) {
     mg_snprintf(pass, passlen, "%.*s", (int) v->len - 7, v->ptr + 7);

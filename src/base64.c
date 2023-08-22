@@ -1,7 +1,6 @@
-#include "arch.h"
 #include "base64.h"
 
-static int mg_b64idx(int c) {
+static int mg_base64_encode_single(int c) {
   if (c < 26) {
     return c + 'A';
   } else if (c < 52) {
@@ -13,7 +12,7 @@ static int mg_b64idx(int c) {
   }
 }
 
-static int mg_b64rev(int c) {
+static int mg_base64_decode_single(int c) {
   if (c >= 'A' && c <= 'Z') {
     return c - 'A';
   } else if (c >= 'a' && c <= 'z') {
@@ -31,24 +30,24 @@ static int mg_b64rev(int c) {
   }
 }
 
-int mg_base64_update(unsigned char ch, char *to, int n) {
-  int rem = (n & 3) % 3;
+size_t mg_base64_update(unsigned char ch, char *to, size_t n) {
+  unsigned long rem = (n & 3) % 3;
   if (rem == 0) {
-    to[n] = (char) mg_b64idx(ch >> 2);
+    to[n] = (char) mg_base64_encode_single(ch >> 2);
     to[++n] = (char) ((ch & 3) << 4);
   } else if (rem == 1) {
-    to[n] = (char) mg_b64idx(to[n] | (ch >> 4));
+    to[n] = (char) mg_base64_encode_single(to[n] | (ch >> 4));
     to[++n] = (char) ((ch & 15) << 2);
   } else {
-    to[n] = (char) mg_b64idx(to[n] | (ch >> 6));
-    to[++n] = (char) mg_b64idx(ch & 63);
+    to[n] = (char) mg_base64_encode_single(to[n] | (ch >> 6));
+    to[++n] = (char) mg_base64_encode_single(ch & 63);
     n++;
   }
   return n;
 }
 
-int mg_base64_final(char *to, int n) {
-  int saved = n;
+size_t mg_base64_final(char *to, size_t n) {
+  size_t saved = n;
   // printf("---[%.*s]\n", n, to);
   if (n & 3) n = mg_base64_update(0, to, n);
   if ((saved & 3) == 2) n--;
@@ -58,19 +57,25 @@ int mg_base64_final(char *to, int n) {
   return n;
 }
 
-int mg_base64_encode(const unsigned char *p, int n, char *to) {
-  int i, len = 0;
+size_t mg_base64_encode(const unsigned char *p, size_t n, char *to, size_t dl) {
+  size_t i, len = 0;
+  if (dl > 0) to[0] = '\0';
+  if (dl < ((n / 3) + (n % 3 ? 1 : 0)) * 4 + 1) return 0;
   for (i = 0; i < n; i++) len = mg_base64_update(p[i], to, len);
   len = mg_base64_final(to, len);
   return len;
 }
 
-int mg_base64_decode(const char *src, int n, char *dst) {
+size_t mg_base64_decode(const char *src, size_t n, char *dst, size_t dl) {
   const char *end = src == NULL ? NULL : src + n;  // Cannot add to NULL
-  int len = 0;
+  size_t len = 0;
+  if (dl > 0) dst[0] = '\0';
+  if (dl < n / 4 * 3 + 1) return 0;
   while (src != NULL && src + 3 < end) {
-    int a = mg_b64rev(src[0]), b = mg_b64rev(src[1]), c = mg_b64rev(src[2]),
-        d = mg_b64rev(src[3]);
+    int a = mg_base64_decode_single(src[0]),
+        b = mg_base64_decode_single(src[1]),
+        c = mg_base64_decode_single(src[2]),
+        d = mg_base64_decode_single(src[3]);
     if (a == 64 || a < 0 || b == 64 || b < 0 || c < 0 || d < 0) return 0;
     dst[len++] = (char) ((a << 2) | (b >> 4));
     if (src[2] != '=') {

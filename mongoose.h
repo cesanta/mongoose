@@ -1084,10 +1084,11 @@ void mg_iobuf_free(struct mg_iobuf *);
 size_t mg_iobuf_add(struct mg_iobuf *, size_t, const void *, size_t);
 size_t mg_iobuf_del(struct mg_iobuf *, size_t ofs, size_t len);
 
-int mg_base64_update(unsigned char p, char *to, int len);
-int mg_base64_final(char *to, int len);
-int mg_base64_encode(const unsigned char *p, int n, char *to);
-int mg_base64_decode(const char *src, int n, char *dst);
+
+size_t mg_base64_update(unsigned char input_byte, char *buf, size_t len);
+size_t mg_base64_final(char *buf, size_t len);
+size_t mg_base64_encode(const unsigned char *p, size_t n, char *buf, size_t);
+size_t mg_base64_decode(const char *src, size_t n, char *dst, size_t);
 
 
 

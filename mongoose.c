@@ -24,8 +24,7 @@
 #endif
 
 
-
-static int mg_b64idx(int c) {
+static int mg_base64_encode_single(int c) {
   if (c < 26) {
     return c + 'A';
   } else if (c < 52) {
@@ -37,7 +36,7 @@ static int mg_b64idx(int c) {
   }
 }
 
-static int mg_b64rev(int c) {
+static int mg_base64_decode_single(int c) {
   if (c >= 'A' && c <= 'Z') {
     return c - 'A';
   } else if (c >= 'a' && c <= 'z') {
@@ -55,24 +54,24 @@ static int mg_b64rev(int c) {
   }
 }
 
-int mg_base64_update(unsigned char ch, char *to, int n) {
-  int rem = (n & 3) % 3;
+size_t mg_base64_update(unsigned char ch, char *to, size_t n) {
+  unsigned long rem = (n & 3) % 3;
   if (rem == 0) {
-    to[n] = (char) mg_b64idx(ch >> 2);
+    to[n] = (char) mg_base64_encode_single(ch >> 2);
     to[++n] = (char) ((ch & 3) << 4);
   } else if (rem == 1) {
-    to[n] = (char) mg_b64idx(to[n] | (ch >> 4));
+    to[n] = (char) mg_base64_encode_single(to[n] | (ch >> 4));
     to[++n] = (char) ((ch & 15) << 2);
   } else {
-    to[n] = (char) mg_b64idx(to[n] | (ch >> 6));
-    to[++n] = (char) mg_b64idx(ch & 63);
+    to[n] = (char) mg_base64_encode_single(to[n] | (ch >> 6));
+    to[++n] = (char) mg_base64_encode_single(ch & 63);
     n++;
   }
   return n;
 }
 
-int mg_base64_final(char *to, int n) {
-  int saved = n;
+size_t mg_base64_final(char *to, size_t n) {
+  size_t saved = n;
   // printf("---[%.*s]\n", n, to);
   if (n & 3) n = mg_base64_update(0, to, n);
   if ((saved & 3) == 2) n--;
@@ -82,19 +81,25 @@ int mg_base64_final(char *to, int n) {
   return n;
 }
 
-int mg_base64_encode(const unsigned char *p, int n, char *to) {
-  int i, len = 0;
+size_t mg_base64_encode(const unsigned char *p, size_t n, char *to, size_t dl) {
+  size_t i, len = 0;
+  if (dl > 0) to[0] = '\0';
+  if (dl < ((n / 3) + (n % 3 ? 1 : 0)) * 4 + 1) return 0;
   for (i = 0; i < n; i++) len = mg_base64_update(p[i], to, len);
   len = mg_base64_final(to, len);
   return len;
 }
 
-int mg_base64_decode(const char *src, int n, char *dst) {
+size_t mg_base64_decode(const char *src, size_t n, char *dst, size_t dl) {
   const char *end = src == NULL ? NULL : src + n;  // Cannot add to NULL
-  int len = 0;
+  size_t len = 0;
+  if (dl > 0) dst[0] = '\0';
+  if (dl < n / 4 * 3 + 1) return 0;
   while (src != NULL && src + 3 < end) {
-    int a = mg_b64rev(src[0]), b = mg_b64rev(src[1]), c = mg_b64rev(src[2]),
-        d = mg_b64rev(src[3]);
+    int a = mg_base64_decode_single(src[0]),
+        b = mg_base64_decode_single(src[1]),
+        c = mg_base64_decode_single(src[2]),
+        d = mg_base64_decode_single(src[3]);
     if (a == 64 || a < 0 || b == 64 || b < 0 || c < 0 || d < 0) return 0;
     dst[len++] = (char) ((a << 2) | (b >> 4));
     if (src[2] != '=') {
@@ -1328,15 +1333,15 @@ void mg_http_bauth(struct mg_connection *c, const char *user,
   size_t need = c->send.len + 36 + (u.len + p.len) * 2;
   if (c->send.size < need) mg_iobuf_resize(&c->send, need);
   if (c->send.size >= need) {
-    int i, n = 0;
+    size_t i, n = 0;
     char *buf = (char *) &c->send.buf[c->send.len];
     memcpy(buf, "Authorization: Basic ", 21);  // DON'T use mg_send!
-    for (i = 0; i < (int) u.len; i++) {
+    for (i = 0; i < u.len; i++) {
       n = mg_base64_update(((unsigned char *) u.ptr)[i], buf + 21, n);
     }
     if (p.len > 0) {
       n = mg_base64_update(':', buf + 21, n);
-      for (i = 0; i < (int) p.len; i++) {
+      for (i = 0; i < p.len; i++) {
         n = mg_base64_update(((unsigned char *) p.ptr)[i], buf + 21, n);
       }
     }
@@ -2099,11 +2104,11 @@ void mg_http_creds(struct mg_http_message *hm, char *user, size_t userlen,
   user[0] = pass[0] = '\0';
   if (v != NULL && v->len > 6 && memcmp(v->ptr, "Basic ", 6) == 0) {
     char buf[256];
-    int n = mg_base64_decode(v->ptr + 6, (int) v->len - 6, buf);
-    const char *p = (const char *) memchr(buf, ':', n > 0 ? (size_t) n : 0);
+    size_t n = mg_base64_decode(v->ptr + 6, v->len - 6, buf, sizeof(buf));
+    const char *p = (const char *) memchr(buf, ':', n > 0 ? n : 0);
     if (p != NULL) {
-      mg_snprintf(user, userlen, "%.*s", (int) (p - buf), buf);
-      mg_snprintf(pass, passlen, "%.*s", n - (int) (p - buf) - 1, p + 1);
+      mg_snprintf(user, userlen, "%.*s", p - buf, buf);
+      mg_snprintf(pass, passlen, "%.*s", n - (size_t) (p - buf) - 1, p + 1);
     }
   } else if (v != NULL && v->len > 7 && memcmp(v->ptr, "Bearer ", 7) == 0) {
     mg_snprintf(pass, passlen, "%.*s", (int) v->len - 7, v->ptr + 7);
@@ -2716,8 +2721,9 @@ char *mg_json_get_b64(struct mg_str json, const char *path, int *slen) {
   int len = 0, off = mg_json_get(json, path, &len);
   if (off >= 0 && json.ptr[off] == '"' && len > 1 &&
       (result = (char *) calloc(1, (size_t) len)) != NULL) {
-    int k = mg_base64_decode(json.ptr + off + 1, len - 2, result);
-    if (slen != NULL) *slen = k;
+    size_t k = mg_base64_decode(json.ptr + off + 1, (size_t) (len - 2), result,
+                                (size_t) len);
+    if (slen != NULL) *slen = (int) k;
   }
   return result;
 }
@@ -7544,7 +7550,7 @@ static void ws_handshake(struct mg_connection *c, const struct mg_str *wskey,
   mg_sha1_update(&sha_ctx, (unsigned char *) wskey->ptr, wskey->len);
   mg_sha1_update(&sha_ctx, (unsigned char *) magic, 36);
   mg_sha1_final(sha, &sha_ctx);
-  mg_base64_encode(sha, sizeof(sha), (char *) b64_sha);
+  mg_base64_encode(sha, sizeof(sha), (char *) b64_sha, sizeof(b64_sha));
   mg_xprintf(mg_pfn_iobuf, &c->send,
              "HTTP/1.1 101 Switching Protocols\r\n"
              "Upgrade: websocket\r\n"
@@ -7743,7 +7749,7 @@ struct mg_connection *mg_ws_connect(struct mg_mgr *mgr, const char *url,
     char nonce[16], key[30];
     struct mg_str host = mg_url_host(url);
     mg_random(nonce, sizeof(nonce));
-    mg_base64_encode((unsigned char *) nonce, sizeof(nonce), key);
+    mg_base64_encode((unsigned char *) nonce, sizeof(nonce), key, sizeof(key));
     mg_xprintf(mg_pfn_iobuf, &c->send,
                "GET %s HTTP/1.1\r\n"
                "Upgrade: websocket\r\n"
