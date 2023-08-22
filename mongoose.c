@@ -986,7 +986,19 @@ void mg_resolve(struct mg_connection *c, const char *url) {
 
 
 
+
 void mg_call(struct mg_connection *c, int ev, void *ev_data) {
+#if MG_ENABLE_PROFILE
+  const char *names[] = {
+      "EV_ERROR",    "EV_OPEN",      "EV_POLL",      "EV_RESOLVE",
+      "EV_CONNECT",  "EV_ACCEPT",    "EV_TLS_HS",    "EV_READ",
+      "EV_WRITE",    "EV_CLOSE",     "EV_HTTP_MSG",  "EV_HTTP_CHUNK",
+      "EV_WS_OPEN",  "EV_WS_MSG",    "EV_WS_CTL",    "EV_MQTT_CMD",
+      "EV_MQTT_MSG", "EV_MQTT_OPEN", "EV_SNTP_TIME", "EV_USER"};
+  if (ev != MG_EV_POLL && ev < (int) (sizeof(names) / sizeof(names[0]))) {
+    MG_PROF_ADD(c, names[ev]);
+  }
+#endif
   // Run user-defined handler first, in order to give it an ability
   // to intercept processing (e.g. clean input buffer) before the
   // protocol handler kicks in
@@ -4182,6 +4194,7 @@ struct mg_connection *mg_mqtt_listen(struct mg_mgr *mgr, const char *url,
 
 
 
+
 size_t mg_vprintf(struct mg_connection *c, const char *fmt, va_list *ap) {
   size_t old = c->send.len;
   mg_vxprintf(mg_pfn_iobuf, &c->send, fmt, ap);
@@ -4308,6 +4321,7 @@ struct mg_connection *mg_alloc_conn(struct mg_mgr *mgr) {
     c->mgr = mgr;
     c->send.align = c->recv.align = MG_IO_SIZE;
     c->id = ++mgr->nextid;
+    MG_PROF_INIT(c);
   }
   return c;
 }
@@ -4321,6 +4335,8 @@ void mg_close_conn(struct mg_connection *c) {
   // before we deallocate received data, see #1331
   mg_call(c, MG_EV_CLOSE, NULL);
   MG_DEBUG(("%lu %ld closed", c->id, c->fd));
+  MG_PROF_DUMP(c);
+  MG_PROF_FREE(c);
 
   mg_tls_free(c);
   mg_iobuf_free(&c->recv);
@@ -4357,6 +4373,7 @@ struct mg_connection *mg_listen(struct mg_mgr *mgr, const char *url,
     MG_ERROR(("OOM %s", url));
   } else if (!mg_open_listener(c, url)) {
     MG_ERROR(("Failed: %s, errno %d", url, errno));
+    MG_PROF_FREE(c);
     free(c);
     c = NULL;
   } else {

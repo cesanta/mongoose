@@ -23,6 +23,16 @@ void mg_random(void *buf, size_t len) {  // Use on-board RNG
   }
 }
 
+#ifdef MQTT_DASHBOARD
+void hal_gpio_write(int pin, bool status) {  // For MQTT dashboard HAL
+  gpio_write((uint16_t) pin, status);
+}
+
+bool hal_gpio_read(int pin) {  // For MQTT dashboard HAL
+  return gpio_read((uint16_t) pin);
+}
+#endif
+
 static void timer_fn(void *arg) {
   gpio_toggle(LED);                                      // Blink LED
   struct mg_tcpip_if *ifp = arg;                         // And show
@@ -37,13 +47,10 @@ int main(void) {
   uart_init(UART_DEBUG, 115200);  // Initialise debug printf
   ethernet_init();                // Initialise ethernet pins
 
-  #ifdef MQTT_DASHBOARD
-    // User can customise the MQTT url, device ID or the root topic below
-  #define DEVICE_ID "H723ZG"
-    g_url = MQTT_SERVER_URL;
-    g_device_id = DEVICE_ID;
-    g_root_topic = DEFAULT_ROOT_TOPIC;
-  #endif
+  // User can customise the MQTT url, device ID or the root topic below
+#ifdef MQTT_DASHBOARD
+  g_device_id = "H723ZG";
+#endif
 
   MG_INFO(("Starting, CPU freq %g MHz", (double) SystemCoreClock / 1000000));
 

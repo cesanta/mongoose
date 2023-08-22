@@ -49,6 +49,7 @@ struct mg_connection {
   unsigned long id;            // Auto-incrementing unique connection ID
   struct mg_iobuf recv;        // Incoming data
   struct mg_iobuf send;        // Outgoing data
+  struct mg_iobuf prof;        // Profile data enabled by MG_ENABLE_PROFILE
   mg_event_handler_t fn;       // User-specified event handler function
   void *fn_data;               // User-specified function parameter
   mg_event_handler_t pfn;      // Protocol-specific handler function

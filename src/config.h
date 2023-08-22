@@ -153,3 +153,7 @@
 #define MG_EPOLL_ADD(c)
 #define MG_EPOLL_MOD(c, wr)
 #endif
+
+#ifndef MG_ENABLE_PROFILE
+#define MG_ENABLE_PROFILE 0
+#endif

@@ -12,13 +12,13 @@ static void signal_handler(int signo) {
 // Mocked device pins
 static bool s_pins[100];
 
-void gpio_write(int pin, bool status) {
+void hal_gpio_write(int pin, bool status) {
   if (pin >= 0 && pin <= (int) (sizeof(s_pins) / sizeof(s_pins[0]))) {
     s_pins[pin] = status;
   }
 }
 
-bool gpio_read(int pin) {
+bool hal_gpio_read(int pin) {
   return (pin >= 0 && pin <= (int) (sizeof(s_pins) / sizeof(s_pins[0])))
              ? s_pins[pin]
              : false;

@@ -29,7 +29,7 @@ static void fn(struct mg_connection *c, int ev, void *ev_data, void *fn_data) {
 
     // If s_url is https://, tell client connection to use TLS
     if (mg_url_is_ssl(s_url)) {
-      struct mg_tls_opts opts = {.ca = s_ca, .srvname = host};
+      struct mg_tls_opts opts = {.ca = s_ca, .name = host};
       mg_tls_init(c, &opts);
     }
 
