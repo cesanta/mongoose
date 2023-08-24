@@ -23,7 +23,7 @@ void mg_random(void *buf, size_t len) {  // Use on-board RNG
   }
 }
 
-void timer_fn(void *arg) {
+static void timer_fn(void *arg) {
   gpio_toggle(LED);                                      // Blink LED
   struct mg_tcpip_if *ifp = arg;                         // And show
   const char *names[] = {"down", "up", "req", "ready"};  // network stats
@@ -43,7 +43,7 @@ int main(void) {
   mg_log_set(MG_LL_DEBUG);  // Set log level
 
   // Initialise Mongoose network stack
-  struct mg_tcpip_driver_stm32h_data driver_data = {.mdc_cr = 0};
+  struct mg_tcpip_driver_stm32h_data driver_data = {.mdc_cr = 4};
   struct mg_tcpip_if mif = {.mac = GENERATE_LOCALLY_ADMINISTERED_MAC(),
                             // Uncomment below for static configuration:
                             // .ip = mg_htonl(MG_U32(192, 168, 0, 223)),
@@ -52,16 +52,20 @@ int main(void) {
                             .driver = &mg_tcpip_driver_stm32h,
                             .driver_data = &driver_data};
   mg_tcpip_init(&mgr, &mif);
+  mg_timer_add(&mgr, BLINK_PERIOD_MS, MG_TIMER_REPEAT, timer_fn, &mif);
+
   MG_INFO(("MAC: %M. Waiting for IP...", mg_print_mac, mif.mac));
   while (mif.state != MG_TCPIP_STATE_READY) {
     mg_mgr_poll(&mgr, 0);
   }
-  mg_timer_add(&mgr, BLINK_PERIOD_MS, MG_TIMER_REPEAT, timer_fn, &mif);
+
   MG_INFO(("Initialising application..."));
   web_init(&mgr);
+
   MG_INFO(("Starting event loop"));
   for (;;) {
     mg_mgr_poll(&mgr, 0);
   }
+
   return 0;
 }
