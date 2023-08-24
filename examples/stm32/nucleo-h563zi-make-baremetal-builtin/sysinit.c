@@ -13,6 +13,11 @@ void SystemInit(void) {  // Called automatically by startup code
   SCB->CPACR |= ((3UL << 20U) | (3UL << 22U));  // Enable FPU
   asm("DSB");
   asm("ISB");
+
+  // Set flash latency. RM0481, section 7.11.1, section 7.3.4 table 37
+  SETBITS(FLASH->ACR, (FLASH_ACR_WRHIGHFREQ_Msk | FLASH_ACR_LATENCY_Msk),
+          FLASH_ACR_LATENCY_5WS | FLASH_ACR_WRHIGHFREQ_1);
+
   if (ldo_is_on()) {
     PWR->VOSCR = PWR_VOSCR_VOS_0 | PWR_VOSCR_VOS_1;  // Select VOS0
   } else {
@@ -21,7 +26,6 @@ void SystemInit(void) {  // Called automatically by startup code
   uint32_t f = PWR->VOSCR;  // fake read to wait for bus clocking
   while ((PWR->VOSSR & PWR_VOSSR_ACTVOSRDY) == 0) spin(1);
   (void) f;
-  FLASH->ACR |= FLASH_LATENCY;
   RCC->CR = RCC_CR_HSION;                          // Clear HSI clock divisor
   while ((RCC->CR & RCC_CR_HSIRDY) == 0) spin(1);  // Wait until done
   RCC->CFGR2 = (PPRE3 << 12) | (PPRE2 << 8) | (PPRE1 << 4) | (HPRE << 0);

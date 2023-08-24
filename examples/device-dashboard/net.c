@@ -83,7 +83,7 @@ static struct user *authenticate(struct mg_http_message *hm) {
   char user[64], pass[64];
   struct user *u, *result = NULL;
   mg_http_creds(hm, user, sizeof(user), pass, sizeof(pass));
-  MG_INFO(("user [%s] pass [%s]", user, pass));
+  MG_VERBOSE(("user [%s] pass [%s]", user, pass));
 
   if (user[0] != '\0' && pass[0] != '\0') {
     // Both user and password is set, search by user/password
@@ -198,6 +198,67 @@ static void handle_settings_get(struct mg_connection *c) {
                 MG_ESC("device_name"), MG_ESC(s_settings.device_name));
 }
 
+static void handle_firmware_upload(struct mg_connection *c,
+                                   struct mg_http_message *hm) {
+  char name[64], offset[20], total[20];
+  struct mg_str data = hm->body;
+  long ofs = -1, tot = -1;
+  name[0] = offset[0] = '\0';
+  mg_http_get_var(&hm->query, "name", name, sizeof(name));
+  mg_http_get_var(&hm->query, "offset", offset, sizeof(offset));
+  mg_http_get_var(&hm->query, "total", total, sizeof(total));
+  MG_INFO(("File %s, offset %s, len %lu", name, offset, data.len));
+  if ((ofs = mg_json_get_long(mg_str(offset), "$", -1)) < 0 ||
+      (tot = mg_json_get_long(mg_str(total), "$", -1)) < 0) {
+    mg_http_reply(c, 500, "", "offset and total not set\n");
+  } else if (ofs == 0 && mg_ota_begin((size_t) tot) == false) {
+    mg_http_reply(c, 500, "", "mg_ota_begin(%ld) failed\n", tot);
+  } else if (data.len > 0 && mg_ota_write(data.ptr, data.len) == false) {
+    mg_http_reply(c, 500, "", "mg_ota_write(%lu) @%ld failed\n", data.len, ofs);
+    mg_ota_end();
+  } else if (data.len == 0 && mg_ota_end() == false) {
+    mg_http_reply(c, 500, "", "mg_ota_end() failed\n", tot);
+  } else {
+    mg_http_reply(c, 200, s_json_header, "true\n");
+    if (data.len == 0) {
+      // Successful mg_ota_end() called, schedule device reboot
+      mg_timer_add(c->mgr, 500, 0, (void (*)(void *)) mg_sys_reset, NULL);
+    }
+  }
+}
+
+static void handle_firmware_commit(struct mg_connection *c) {
+  mg_http_reply(c, 200, s_json_header, "%s\n",
+                mg_ota_commit() ? "true" : "false");
+}
+
+static void handle_firmware_rollback(struct mg_connection *c) {
+  mg_http_reply(c, 200, s_json_header, "%s\n",
+                mg_ota_rollback() ? "true" : "false");
+}
+
+static size_t print_status(void (*out)(char, void *), void *ptr, va_list *ap) {
+  struct mg_ota_data *os = va_arg(*ap, struct mg_ota_data *);
+  return mg_xprintf(
+      out, ptr, "{%m:%s,%m:%c%x%c,%m:%u,%m:%u,%m:%u,%m:%u,%m:%u}",
+      MG_ESC("valid"), os->magic == MG_OTA_MAGIC ? "true" : "false",
+      MG_ESC("magic"), '"', os->magic, '"', MG_ESC("crc32"), os->crc32,
+      MG_ESC("size"), os->size, MG_ESC("time"), os->time, MG_ESC("booted"),
+      os->booted, MG_ESC("golden"), os->golden);
+}
+
+static void handle_firmware_status(struct mg_connection *c) {
+  struct mg_ota_data od[2];
+  mg_ota_status(od);
+  mg_http_reply(c, 200, s_json_header, "[%M,%M]\n", print_status, &od[0],
+                print_status, &od[1]);
+}
+
+static void handle_sys_reset(struct mg_connection *c) {
+  mg_http_reply(c, 200, s_json_header, "true\n");
+  mg_timer_add(c->mgr, 500, 0, (void (*)(void *)) mg_sys_reset, NULL);
+}
+
 // HTTP request handler function
 static void fn(struct mg_connection *c, int ev, void *ev_data, void *fn_data) {
   if (ev == MG_EV_HTTP_MSG) {
@@ -220,6 +281,16 @@ static void fn(struct mg_connection *c, int ev, void *ev_data, void *fn_data) {
       handle_settings_get(c);
     } else if (mg_http_match_uri(hm, "/api/settings/set")) {
       handle_settings_set(c, hm->body);
+    } else if (mg_http_match_uri(hm, "/api/firmware/upload")) {
+      handle_firmware_upload(c, hm);
+    } else if (mg_http_match_uri(hm, "/api/firmware/commit")) {
+      handle_firmware_commit(c);
+    } else if (mg_http_match_uri(hm, "/api/firmware/rollback")) {
+      handle_firmware_rollback(c);
+    } else if (mg_http_match_uri(hm, "/api/firmware/status")) {
+      handle_firmware_status(c);
+    } else if (mg_http_match_uri(hm, "/api/sys/reset")) {
+      handle_sys_reset(c);
     } else {
       struct mg_http_serve_opts opts;
       memset(&opts, 0, sizeof(opts));
@@ -249,7 +320,6 @@ void web_init(struct mg_mgr *mgr) {
   mg_http_listen(mgr, HTTP_URL, fn, NULL);
   mg_http_listen(mgr, HTTPS_URL, fn, NULL);
 
-  // mg_timer_add(c->mgr, 1000, MG_TIMER_REPEAT, timer_mqtt_fn, c->mgr);
   mg_timer_add(mgr, 3600 * 1000, MG_TIMER_RUN_NOW | MG_TIMER_REPEAT,
                timer_sntp_fn, mgr);
 }

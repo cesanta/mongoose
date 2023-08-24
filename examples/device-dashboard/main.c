@@ -17,7 +17,6 @@ int main(void) {
   signal(SIGINT, signal_handler);
   signal(SIGTERM, signal_handler);
 
-  srand(time(NULL));
   mg_log_set(MG_LL_DEBUG);  // Set debug log level
   mg_mgr_init(&mgr);
 

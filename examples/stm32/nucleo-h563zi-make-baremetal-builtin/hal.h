@@ -39,8 +39,8 @@ enum {
 };
 // Make sure your chip package uses the internal LDO, otherwise set PLL1_N = 200
 enum { PLL1_HSI = 64, PLL1_M = 32, PLL1_N = 250, PLL1_P = 2 };
-#define FLASH_LATENCY 0x25  // WRHIGHFREQ LATENCY
-#define CPU_FREQUENCY ((PLL1_HSI * PLL1_N / PLL1_M / PLL1_P / (BIT(HPRE - 7))) * 1000000)
+#define CPU_FREQUENCY \
+  ((PLL1_HSI * PLL1_N / PLL1_M / PLL1_P / (BIT(HPRE - 7))) * 1000000)
 #define AHB_FREQUENCY CPU_FREQUENCY
 #define APB2_FREQUENCY (AHB_FREQUENCY / (BIT(PPRE2 - 3)))
 #define APB1_FREQUENCY (AHB_FREQUENCY / (BIT(PPRE1 - 3)))
@@ -137,8 +137,8 @@ static inline uint8_t uart_read_byte(USART_TypeDef *uart) {
 
 static inline void rng_init(void) {
   RCC->CCIPR5 |= RCC_CCIPR5_RNGSEL_0;  // RNG clock source pll1_q_ck
-  RCC->AHB2ENR |= RCC_AHB2ENR_RNGEN;  // Enable RNG clock
-  RNG->CR |= RNG_CR_RNGEN;            // Enable RNG
+  RCC->AHB2ENR |= RCC_AHB2ENR_RNGEN;   // Enable RNG clock
+  RNG->CR |= RNG_CR_RNGEN;             // Enable RNG
 }
 static inline uint32_t rng_read(void) {
   while ((RNG->SR & RNG_SR_DRDY) == 0) spin(1);

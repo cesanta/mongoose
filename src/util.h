@@ -16,7 +16,8 @@ char *mg_random_str(char *buf, size_t len);
 uint16_t mg_ntohs(uint16_t net);
 uint32_t mg_ntohl(uint32_t net);
 uint32_t mg_crc32(uint32_t crc, const char *buf, size_t len);
-uint64_t mg_millis(void);
+uint64_t mg_millis(void);  // Return milliseconds since boot
+uint64_t mg_now(void);     // Return milliseconds since Epoch
 
 #define mg_htons(x) mg_ntohs(x)
 #define mg_htonl(x) mg_ntohl(x)

@@ -1,6 +1,7 @@
 PROG ?= ./example       # Program we are building
 PACK ?= ./pack          # Packing executable
 DELETE = rm -rf         # Command to remove files
+GZIP ?= gzip            # For compressing files in web_root/
 OUT ?= -o $(PROG)       # Compiler argument for output file
 SOURCES = main.c mongoose.c net.c packed_fs.c   # Source code files
 CFLAGS = -W -Wall -Wextra -g -I.                # Build options
@@ -14,6 +15,7 @@ ifeq ($(OS),Windows_NT)         # Windows settings. Assume MinGW compiler. To us
   CC = gcc                      # Use MinGW gcc compiler
   CFLAGS += -lws2_32            # Link against Winsock library
   DELETE = cmd /C del /Q /F /S  # Command prompt command to delete files
+  GZIP = echo                   # No gzip on Windows
 endif
 
 # Default target. Build and run program
@@ -34,8 +36,10 @@ web_root/main.css: web_root/index.html $(wildcard web_root/*.js)
 
 # Generate packed filesystem for serving Web UI
 packed_fs.c: $(wildcard web_root/*) $(wildcard certs/*) Makefile web_root/main.css web_root/bundle.js
+	$(GZIP) web_root/*
 	$(CC) ../../test/pack.c -o $(PACK)
-	$(PACK) $(wildcard web_root/*) $(wildcard certs/*) > $@
+	$(PACK) web_root/* certs/* > $@
+	$(GZIP) -d web_root/*
 
 mbedtls:
 	git clone --depth 1 -b v2.28.2 https://github.com/mbed-tls/mbedtls $@
