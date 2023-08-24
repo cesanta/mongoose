@@ -27,10 +27,23 @@
 
 #define LED LED2  // Use yellow LED for blinking
 
-// TODO(cpq): Using HSI clock, 64Mhz. Switch to PLL clock and maximum frequency
-#define CPU_FREQUENCY 64000000
-#define APB2_FREQUENCY CPU_FREQUENCY
-#define APB1_FREQUENCY CPU_FREQUENCY
+// System clock (11.4, Figure 48; 11.4.5, Figure 51; 11.4.8
+// CPU_FREQUENCY <= 250 MHz; (SYS_FREQUENCY / HPRE) ; hclk = CPU_FREQUENCY
+// APB clocks <= 250 MHz. Configure flash latency (WS) in accordance to hclk
+// freq (7.3.4, Table 37)
+enum {
+  HPRE = 7,   // register value, divisor value = BIT(value - 7) = / 1
+  PPRE1 = 4,  // register values, divisor value = BIT(value - 3) = / 2
+  PPRE2 = 4,
+  PPRE3 = 4,
+};
+// Make sure your chip package uses the internal LDO, otherwise set PLL1_N = 200
+enum { PLL1_HSI = 64, PLL1_M = 32, PLL1_N = 250, PLL1_P = 2 };
+#define FLASH_LATENCY 0x25  // WRHIGHFREQ LATENCY
+#define CPU_FREQUENCY ((PLL1_HSI * PLL1_N / PLL1_M / PLL1_P / (BIT(HPRE - 7))) * 1000000)
+#define AHB_FREQUENCY CPU_FREQUENCY
+#define APB2_FREQUENCY (AHB_FREQUENCY / (BIT(PPRE2 - 3)))
+#define APB1_FREQUENCY (AHB_FREQUENCY / (BIT(PPRE1 - 3)))
 
 static inline void spin(volatile uint32_t n) {
   while (n--) (void) 0;
@@ -123,13 +136,17 @@ static inline uint8_t uart_read_byte(USART_TypeDef *uart) {
 }
 
 static inline void rng_init(void) {
+  RCC->CCIPR5 |= RCC_CCIPR5_RNGSEL_0;  // RNG clock source pll1_q_ck
   RCC->AHB2ENR |= RCC_AHB2ENR_RNGEN;  // Enable RNG clock
   RNG->CR |= RNG_CR_RNGEN;            // Enable RNG
 }
 static inline uint32_t rng_read(void) {
-  // while ((RNG->SR & RNG_SR_DRDY) == 0) spin(1);
-  // return RNG->DR;
-  return rand();
+  while ((RNG->SR & RNG_SR_DRDY) == 0) spin(1);
+  return RNG->DR;
+}
+
+static inline bool ldo_is_on(void) {
+  return (PWR->SCCR & PWR_SCCR_LDOEN) == PWR_SCCR_LDOEN;
 }
 
 static inline void ethernet_init(void) {
@@ -147,9 +164,9 @@ static inline void ethernet_init(void) {
   RCC->AHB1ENR |= RCC_AHB1ENR_ETHEN | RCC_AHB1ENR_ETHRXEN | RCC_AHB1ENR_ETHTXEN;
 }
 
-#define UUID ((uint32_t *) UID_BASE)  // Unique 96-bit chip ID
+#define UUID ((uint32_t *) UID_BASE)  // Unique 96-bit chip ID. TRM 59.1
 
-// Helper macro for MAC generation
+// Helper macro for MAC generation, byte reads not allowed
 #define GENERATE_LOCALLY_ADMINISTERED_MAC()                         \
   {                                                                 \
     2, UUID[0] & 255, (UUID[0] >> 10) & 255, (UUID[0] >> 19) & 255, \

@@ -28,7 +28,6 @@ all build example: firmware.bin
 
 firmware.bin: firmware.elf
 	arm-none-eabi-objcopy -O binary $< $@
-	ls -l firmware.*
 
 firmware.elf: cmsis_core cmsis_h5 $(SOURCES) hal.h link.ld Makefile
 	arm-none-eabi-gcc $(SOURCES) $(CFLAGS) $(LDFLAGS) -o $@
