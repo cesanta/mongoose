@@ -4426,11 +4426,11 @@ static void read_conn(struct mg_connection *c, struct pkt *pkt) {
     uint8_t flags = TH_ACK;
     s->ack = (uint32_t) (mg_htonl(pkt->tcp->seq) + pkt->pay.len + 1);
     if (c->is_draining && s->ttype == MIP_TTYPE_FIN) {
-      if (s->seq == mg_htonl(pkt->tcp->ack))
-        // Checking for simultaneous closure
-        s->seq++;
-      else
-        s->seq = mg_htonl(pkt->tcp->ack);
+      if (s->seq == mg_htonl(pkt->tcp->ack)) {  // Simultaneous closure ?
+        s->seq++;                               // Yes. Increment our SEQ
+      } else {                                  // Otherwise,
+        s->seq = mg_htonl(pkt->tcp->ack);       // Set to peer's ACK
+      }
     } else {
       flags |= TH_FIN;
       c->is_draining = 1;
@@ -4645,7 +4645,7 @@ static void mg_tcpip_rx(struct mg_tcpip_if *ifp, void *buf, size_t len) {
     rx_ip(ifp, &pkt);
   } else {
     MG_DEBUG(("Unknown eth type %x", mg_htons(pkt.eth->type)));
-    //mg_hexdump(buf, len >= 32 ? 32 : len);
+    mg_hexdump(buf, len >= 32 ? 32 : len);
   }
 }
 
