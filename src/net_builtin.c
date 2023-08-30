@@ -45,6 +45,8 @@ struct ip {
   uint16_t len;   // Length
   uint16_t id;    // Unused
   uint16_t frag;  // Fragmentation
+#define IP_FRAG_OFFSET_MSK 0xFF1F
+#define IP_MORE_FRAGS_MSK 0x20
   uint8_t ttl;    // Time to live
   uint8_t proto;  // Upper level protocol
   uint16_t csum;  // Checksum
@@ -721,7 +723,13 @@ static void rx_tcp(struct mg_tcpip_if *ifp, struct pkt *pkt) {
 }
 
 static void rx_ip(struct mg_tcpip_if *ifp, struct pkt *pkt) {
-  if (pkt->ip->proto == 1) {
+  if (pkt->ip->frag & IP_MORE_FRAGS_MSK ||
+        pkt->ip->frag & IP_FRAG_OFFSET_MSK) {
+    if (pkt->ip->proto == 17) pkt->udp = (struct udp *) (pkt->ip + 1);
+    if (pkt->ip->proto == 6) pkt->tcp = (struct tcp *) (pkt->ip + 1);
+    struct mg_connection *c = getpeer(ifp->mgr, pkt, false);
+    if (c)  mg_error(c, "Received fragmented packet");
+  } else if (pkt->ip->proto == 1) {
     pkt->icmp = (struct icmp *) (pkt->ip + 1);
     if (pkt->pay.len < sizeof(*pkt->icmp)) return;
     mkpay(pkt, pkt->icmp + 1);
