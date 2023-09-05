@@ -1,6 +1,9 @@
 'use strict';
 import { h, render, useState, useEffect, useRef, html, Router } from  './bundle.js';
 
+// Helper function that returns a promise that resolves after delay
+const Delay = (ms, val) => new Promise(resolve => setTimeout(resolve, ms, val));
+
 export const Icons = {
   heart: props => html`<svg class=${props.class} xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z"></path></svg>`,
   downArrowBox: props => html`<svg class=${props.class} xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor"> <path stroke-linecap="round" stroke-linejoin="round" d="M9 8.25H7.5a2.25 2.25 0 00-2.25 2.25v9a2.25 2.25 0 002.25 2.25h9a2.25 2.25 0 002.25-2.25v-9a2.25 2.25 0 00-2.25-2.25H15M9 12l3 3m0 0l3-3m-3 3V2.25" /> </svg>`,
@@ -31,7 +34,9 @@ export const Icons = {
   arrowup: props => html`<svg class=${props.class} xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor"> <path stroke-linecap="round" stroke-linejoin="round" d="M12 19.5v-15m0 0l-6.75 6.75M12 4.5l6.75 6.75" /> </svg>`,
   warn: props => html`<svg class=${props.class} xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor"> <path stroke-linecap="round" stroke-linejoin="round" d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126zM12 15.75h.007v.008H12v-.008z" /> </svg>`,
   info: props => html`<svg class=${props.class} xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor"> <path stroke-linecap="round" stroke-linejoin="round" d="M11.25 11.25l.041-.02a.75.75 0 011.063.852l-.708 2.836a.75.75 0 001.063.853l.041-.021M21 12a9 9 0 11-18 0 9 9 0 0118 0zm-9-3.75h.008v.008H12V8.25z" /> </svg>`,
-  exclamationTriangle: props => html`<svg class=${props.class} xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor"> <path stroke-linecap="round" stroke-linejoin="round" d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126zM12 15.75h.007v.008H12v-.008z" /> </svg>`
+  exclamationTriangle: props => html`<svg class=${props.class} xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor"> <path stroke-linecap="round" stroke-linejoin="round" d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126zM12 15.75h.007v.008H12v-.008z" /> </svg>`,
+  thumbUp: props => html`<svg class=${props.class} xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor"> <path stroke-linecap="round" stroke-linejoin="round" d="M6.633 10.5c.806 0 1.533-.446 2.031-1.08a9.041 9.041 0 012.861-2.4c.723-.384 1.35-.956 1.653-1.715a4.498 4.498 0 00.322-1.672V3a.75.75 0 01.75-.75A2.25 2.25 0 0116.5 4.5c0 1.152-.26 2.243-.723 3.218-.266.558.107 1.282.725 1.282h3.126c1.026 0 1.945.694 2.054 1.715.045.422.068.85.068 1.285a11.95 11.95 0 01-2.649 7.521c-.388.482-.987.729-1.605.729H13.48c-.483 0-.964-.078-1.423-.23l-3.114-1.04a4.501 4.501 0 00-1.423-.23H5.904M14.25 9h2.25M5.904 18.75c.083.205.173.405.27.602.197.4-.078.898-.523.898h-.908c-.889 0-1.713-.518-1.972-1.368a12 12 0 01-.521-3.507c0-1.553.295-3.036.831-4.398C3.387 10.203 4.167 9.75 5 9.75h1.053c.472 0 .745.556.5.96a8.958 8.958 0 00-1.302 4.665c0 1.194.232 2.333.654 3.375z" /> </svg>`,
+  backward: props => html`<svg class=${props.class} xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor"> <path stroke-linecap="round" stroke-linejoin="round" d="M21 16.811c0 .864-.933 1.405-1.683.977l-7.108-4.062a1.125 1.125 0 010-1.953l7.108-4.062A1.125 1.125 0 0121 8.688v8.123zM11.25 16.811c0 .864-.933 1.405-1.683.977l-7.108-4.062a1.125 1.125 0 010-1.953L9.567 7.71a1.125 1.125 0 011.683.977v8.123z" /> </svg>`,
 };
 
 export const tipColors = {
@@ -51,7 +56,7 @@ export function Button({title, onclick, disabled, cls, icon, ref, colors, hoverc
   };
   if (!colors) colors = 'bg-blue-600 hover:bg-blue-500 disabled:bg-blue-400';
   return html`
-<button type="button" class="inline-flex justify-center items-center gap-1 rounded px-2.5 py-1.5 text-sm font-semibold text-white shadow-sm ${colors} ${cls}"
+<button type="button" class="inline-flex justify-center items-center gap-2 rounded px-2.5 py-1.5 text-sm font-semibold text-white shadow-sm ${colors} ${cls}"
   ref=${ref} onclick=${cb} disabled=${disabled || spin} >
   ${title}
   <${spin ? Icons.refresh : icon} class="w-4 ${spin ? 'animate-spin' : ''}" />
@@ -252,4 +257,75 @@ export function Pagination({ totalItems, itemsPerPage, currentPage, setPageFn })
         </div>
       </div>
     </div>`;
+};
+
+export function UploadFileButton(props) {
+  const [upload, setUpload] = useState(null);  // Upload promise
+  const [status, setStatus] = useState('');    // Current upload status
+  const btn = useRef(null);
+  const input = useRef(null);
+
+  // Send a large file chunk by chunk
+  const sendFileData = function(url, fileName, fileData, chunkSize) {
+    return new Promise(function(resolve, reject) {
+      const finish = ok => {
+        setUpload(null);
+        const res = props.onupload ? props.onupload(ok, fileName, fileData.length) : null;
+        if (res && typeof (res.catch) === 'function') {
+          res.catch(() => false).then(() => ok ? resolve() : reject());
+        } else {
+          ok ? resolve() : reject();
+        }
+      };
+      const sendChunk = function(offset) {
+        var chunk = fileData.subarray(offset, offset + chunkSize) || '';
+        var opts = {method: 'POST', body: chunk};
+        var fullUrl = url + '?offset=' + offset +
+          '&total=' + fileData.length  +
+          '&name=' + encodeURIComponent(fileName);
+        var ok;
+        setStatus('Uploading ' + fileName + ', bytes ' + offset + '..' +
+          (offset + chunk.length) + ' of ' + fileData.length);
+        fetch(fullUrl, opts)
+          .then(function(res) {
+            if (res.ok && chunk.length > 0) sendChunk(offset + chunk.length);
+            ok = res.ok;
+            return res.text();
+          })
+          .then(function(text) {
+            if (!ok) setStatus('Error: ' + text), finish(ok); // Fail
+            if (chunk.length > 0) return; // More chunks to send
+            setStatus(x => x + '. Done, resetting device...');
+            finish(ok); // All chunks sent
+          });
+      };
+      //setFailed(false);
+      sendChunk(0);
+    });
+  };
+
+  const onchange = function(ev) {
+    if (!ev.target.files[0]) return;
+    let r = new FileReader(), f = ev.target.files[0];
+    r.readAsArrayBuffer(f);
+    r.onload = function() {
+      setUpload(sendFileData(props.url, f.name, new Uint8Array(r.result), 2048));
+      ev.target.value = '';
+      ev.preventDefault();
+      btn && btn.current.base.click();
+    };
+  };
+
+  const onclick = function(ev) {
+    let fn; setUpload(x => fn = x);
+    if (!fn) input.current.click();  // No upload in progress, show file dialog
+    return fn;
+  };
+
+  return html`
+<div class="inline-flex flex-col ${props.class}">
+  <input class="hidden" type="file" ref=${input} onchange=${onchange} accept=${props.accept} />
+  <${Button} title=${props.title} icon=${Icons.download} onclick=${onclick} ref=${btn} />
+  <div class="py-2 text-sm text-slate-400 ${status || 'hidden'}">${status}<//>
+<//>`;
 };

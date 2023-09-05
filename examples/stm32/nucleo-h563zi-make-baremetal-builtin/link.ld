@@ -3,7 +3,7 @@ MEMORY {
   flash(rx) : ORIGIN = 0x08000000, LENGTH = 2048k
   sram(rwx) : ORIGIN = 0x20000000, LENGTH = 640k 
 }
-_estack     = ORIGIN(sram) + LENGTH(sram);    /* stack points to end of SRAM */
+_estack = ORIGIN(sram) + LENGTH(sram);    /* End of RAM. stack points here */
 
 SECTIONS {
   .vectors  : { KEEP(*(.isr_vector)) }  > flash
@@ -11,19 +11,20 @@ SECTIONS {
   .rodata   : { *(.rodata*) }           > flash
 
   .data : {
-    _sdata = .;   /* for init_ram() */
+    _sdata = .;
     *(.first_data)
+    *(.ram)
     *(.data SORT(.data.*))
-    _edata = .;  /* for init_ram() */
+    _edata = .;
   } > sram AT > flash
   _sidata = LOADADDR(.data);
 
   .bss : {
-    _sbss = .;              /* for init_ram() */
+    _sbss = .;
     *(.bss SORT(.bss.*) COMMON)
-    _ebss = .;              /* for init_ram() */
+    _ebss = .;
   } > sram
 
   . = ALIGN(8);
-  _end = .;     /* for cmsis_gcc.h and init_ram() */
+  _end = .;
 }

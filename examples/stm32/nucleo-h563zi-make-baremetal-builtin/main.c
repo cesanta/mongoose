@@ -35,7 +35,6 @@ static void timer_fn(void *arg) {
 int main(void) {
   gpio_output(LED);               // Setup green LED
   uart_init(UART_DEBUG, 115200);  // Initialise debug printf
-  ethernet_init();                // Initialise ethernet pins
 
   MG_INFO(("Starting, CPU freq %g MHz", (double) SystemCoreClock / 1000000));
   struct mg_mgr mgr;        // Initialise
@@ -43,6 +42,7 @@ int main(void) {
   mg_log_set(MG_LL_DEBUG);  // Set log level
 
   // Initialise Mongoose network stack
+  ethernet_init();  // Initialise ethernet pins
   struct mg_tcpip_driver_stm32h_data driver_data = {.mdc_cr = 4};
   struct mg_tcpip_if mif = {.mac = GENERATE_LOCALLY_ADMINISTERED_MAC(),
                             // Uncomment below for static configuration:
