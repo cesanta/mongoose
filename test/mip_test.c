@@ -7,6 +7,7 @@
 #include "driver_mock.c"
 
 static int s_num_tests = 0;
+static bool s_sent_fragment = 0;
 
 #define ASSERT(expr)                                            \
   do {                                                          \
@@ -31,6 +32,15 @@ static void test_statechange(void) {
 static void ph(struct mg_connection *c, int ev, void *ev_data, void *fn_data) {
   if (ev == MG_EV_POLL) ++(*(int *) fn_data);
   (void) c, (void) ev_data;
+}
+
+static void fn(struct mg_connection *c, int ev, void *ev_data, void *fn_data) {
+  if (ev == MG_EV_ERROR) {
+    if (s_sent_fragment) {
+      ASSERT(strcmp((char*) ev_data, "Received fragmented packet") == 0);
+    }
+  }
+  (void) c, (void) ev_data, (void) fn_data;
 }
 
 static void test_poll(void) {
@@ -101,16 +111,33 @@ static void create_tcp_pkt(struct eth *e, struct ip *ip, uint32_t seq,
                       + sizeof(struct tcp) + payload_len;
 }
 
+static void init_tcp_handshake(struct eth *e, struct ip *ip, struct tcp *tcp,
+                               struct mg_mgr *mgr) {
+  // SYN
+  create_tcp_pkt(e, ip, 1000, 0, TH_SYN | TH_ACK, 0);
+  mg_mgr_poll(mgr, 0);
+
+  // SYN-ACK
+  while(!received_response(&s_driver_data)) mg_mgr_poll(mgr, 0);
+  tcp = (struct tcp *) (s_driver_data.buf + sizeof(struct eth) +
+                      sizeof(struct ip));
+  ASSERT((tcp->flags == (TH_SYN | TH_ACK)));
+  ASSERT((tcp->ack == mg_htonl(1001)));
+
+  // ACK
+  create_tcp_pkt(e, ip, 1001, 1, TH_ACK, 0);
+  mg_mgr_poll(mgr, 0);
+}
+
 static void test_retransmit(void) {
   struct mg_mgr mgr;
   struct eth e;
   struct ip ip;
-  struct tcp *t;
+  struct tcp *t = NULL;
   uint64_t start, now;
   bool response_recv = true;
   struct mg_tcpip_driver driver;
   struct mg_tcpip_if mif;
-  struct mg_connection *c;
 
   mg_mgr_init(&mgr);
   memset(&mif, 0, sizeof(mif));
@@ -119,9 +146,8 @@ static void test_retransmit(void) {
   mif.driver = &driver;
   mif.driver_data = &s_driver_data;
   mg_tcpip_init(&mgr, &mif);
-  c = mg_alloc_conn(&mgr); // create dummy connection
-  LIST_ADD_HEAD(struct mg_connection, &mgr.conns, c);
-  c->is_listening = 1;
+  mg_http_listen(&mgr, "http://0.0.0.0:0", fn, NULL);
+  mgr.conns->pfn = NULL; // HTTP handler not needed
   mg_mgr_poll(&mgr, 0);
 
   // setting the Ethernet header
@@ -134,20 +160,7 @@ static void test_retransmit(void) {
   ip.ver = 4 << 4, ip.proto = 6;
   ip.len = mg_htons(sizeof(ip) + sizeof(struct tcp));
 
-  // SYN
-  create_tcp_pkt(&e, &ip, 1000, 0, TH_SYN | TH_ACK, 0);
-  mg_mgr_poll(&mgr, 0);
-
-  // SYN-ACK
-  while(!received_response(&s_driver_data)) mg_mgr_poll(&mgr, 0);
-  t = (struct tcp *) (s_driver_data.buf + sizeof(struct eth) +
-                      sizeof(struct ip));
-  ASSERT((t->flags == (TH_SYN | TH_ACK)));
-  ASSERT((t->ack == mg_htonl(1001)));
-
-  // ACK
-  create_tcp_pkt(&e, &ip, 1001, 1, TH_ACK, 0);
-  mg_mgr_poll(&mgr, 0);
+  init_tcp_handshake(&e, &ip, t, &mgr);
 
   // packet with seq_no = 1001
   ip.len =
@@ -204,10 +217,55 @@ static void test_retransmit(void) {
   mg_tcpip_free(&mif);
 }
 
+static void test_fragmentation(void) {
+  struct mg_mgr mgr;
+  struct eth e;
+  struct ip ip;
+  struct tcp *t = NULL;
+  struct mg_tcpip_driver driver;
+  struct mg_tcpip_if mif;
+
+  mg_mgr_init(&mgr);
+  memset(&mif, 0, sizeof(mif));
+  memset(&s_driver_data, 0, sizeof(struct driver_data));
+  driver.init = NULL, driver.tx = if_tx, driver.up = if_up, driver.rx = if_rx;
+  mif.driver = &driver;
+  mif.driver_data = &s_driver_data;
+  mg_tcpip_init(&mgr, &mif);
+  mg_http_listen(&mgr, "http://0.0.0.0:0", fn, NULL);
+  mgr.conns->pfn = NULL;
+  mg_mgr_poll(&mgr, 0);
+
+  // setting the Ethernet header
+  memset(&e, 0, sizeof(e));
+  memcpy(e.dst, mif.mac, 6 * sizeof(uint8_t));
+  e.type = mg_htons(0x800);
+
+  // setting the IP header
+  memset(&ip, 0, sizeof(ip));
+  ip.ver = 0x45, ip.proto = 6;
+  ip.len = mg_htons(sizeof(ip) + sizeof(struct tcp));
+
+  init_tcp_handshake(&e, &ip, t, &mgr);
+
+  // send fragmented TCP packet
+  ip.len =
+      mg_htons(sizeof(struct ip) + sizeof(struct tcp) + 1000);
+  ip.frag |= IP_MORE_FRAGS_MSK; // setting More Fragments bit to 1
+  create_tcp_pkt(&e, &ip, 1001, 1, TH_PUSH | TH_ACK, 1000);
+  s_sent_fragment = true;
+  mg_mgr_poll(&mgr, 0);
+
+  s_driver_data.len = 0;
+  mg_mgr_free(&mgr);
+  mg_tcpip_free(&mif);
+}
+
 int main(void) {
   test_statechange();
   test_poll();
   test_retransmit();
+  test_fragmentation();
   printf("SUCCESS. Total tests: %d\n", s_num_tests);
   return 0;
 }
