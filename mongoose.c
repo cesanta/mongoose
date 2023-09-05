@@ -1004,7 +1004,7 @@ static int p_stat(const char *path, size_t *size, time_t *mtime) {
     FILE *fp = _wfopen(tmp, L"rb");
     if (fp != NULL) {
       fseek(fp, 0, SEEK_END);
-      if (ftell(fp) > 0) st.st_size = ftell(fp); // Use _ftelli64 on win10+
+      if (ftell(fp) > 0) st.st_size = ftell(fp);  // Use _ftelli64 on win10+
       fclose(fp);
     }
   }
@@ -1144,7 +1144,7 @@ static void p_list(const char *dir, void (*fn)(const char *, void *),
 }
 
 static void *p_open(const char *path, int flags) {
-  const char *mode = flags == MG_FS_READ ? "rb" : "a+b";
+  const char *mode = flags == MG_FS_READ ? "rbe" : "a+be";  // e for CLOEXEC
 #if MG_ARCH == MG_ARCH_WIN32
   wchar_t b1[MG_PATH_MAX], b2[10];
   MultiByteToWideChar(CP_UTF8, 0, path, -1, b1, sizeof(b1) / sizeof(b1[0]));
@@ -3756,7 +3756,7 @@ struct mg_connection *mg_listen(struct mg_mgr *mgr, const char *url,
     c->fn = fn;
     c->fn_data = fn_data;
     mg_call(c, MG_EV_OPEN, NULL);
-    if (mg_url_is_ssl(url)) c->is_tls = 1; // Accepted connection must
+    if (mg_url_is_ssl(url)) c->is_tls = 1;  // Accepted connection must
     MG_DEBUG(("%lu %p %s", c->id, c->fd, url));
   }
   return c;
@@ -3806,7 +3806,8 @@ void mg_mgr_free(struct mg_mgr *mgr) {
 void mg_mgr_init(struct mg_mgr *mgr) {
   memset(mgr, 0, sizeof(*mgr));
 #if MG_ENABLE_EPOLL
-  if ((mgr->epoll_fd = epoll_create1(0)) < 0) MG_ERROR(("epoll: %d", errno));
+  if ((mgr->epoll_fd = epoll_create1(EPOLL_CLOEXEC)) < 0)
+    MG_ERROR(("epoll_create1 errno %d", errno));
 #else
   mgr->epoll_fd = -1;
 #endif

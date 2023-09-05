@@ -188,7 +188,7 @@ struct mg_connection *mg_listen(struct mg_mgr *mgr, const char *url,
     c->fn = fn;
     c->fn_data = fn_data;
     mg_call(c, MG_EV_OPEN, NULL);
-    if (mg_url_is_ssl(url)) c->is_tls = 1; // Accepted connection must
+    if (mg_url_is_ssl(url)) c->is_tls = 1;  // Accepted connection must
     MG_DEBUG(("%lu %p %s", c->id, c->fd, url));
   }
   return c;
@@ -238,7 +238,8 @@ void mg_mgr_free(struct mg_mgr *mgr) {
 void mg_mgr_init(struct mg_mgr *mgr) {
   memset(mgr, 0, sizeof(*mgr));
 #if MG_ENABLE_EPOLL
-  if ((mgr->epoll_fd = epoll_create1(0)) < 0) MG_ERROR(("epoll: %d", errno));
+  if ((mgr->epoll_fd = epoll_create1(EPOLL_CLOEXEC)) < 0)
+    MG_ERROR(("epoll_create1 errno %d", errno));
 #else
   mgr->epoll_fd = -1;
 #endif
