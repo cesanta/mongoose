@@ -52,7 +52,7 @@ int main(int argc, char *argv[]) {
   }
 
   mg_mgr_init(&mgr);                            // Initialise event manager
-  struct mg_tls_opts opts = {.client_ca = mg_str(CA_ALL)};
+  struct mg_tls_opts opts = {.client_ca = mg_unpacked("/certs/client_ca.pem")};
   mg_tls_ctx_init(&mgr, &opts);
   mg_http_connect(&mgr, argv[1], fn, argv[2]);  // Connect to the proxy
   for (;;) mg_mgr_poll(&mgr, 1000);             // Event loop

@@ -75,7 +75,7 @@ int main(void) {
   struct mg_mgr mgr;
   mg_mgr_init(&mgr);
 
-  struct mg_tls_opts opts = {.client_ca = mg_str(CA_GLOBALSIGN_RSA)};
+  struct mg_tls_opts opts = {.client_ca = mg_unpacked("/certs/client_ca.pem")};
   mg_tls_ctx_init(&mgr, &opts);
 
   mg_log_set(MG_LL_DEBUG);

@@ -74,7 +74,7 @@ int main(void) {
 
   mg_log_set(MG_LL_DEBUG);                       // Set log level
   mg_mgr_init(&mgr);                             // Initialise event manager
-  struct mg_tls_opts opts = {.client_ca = mg_str(CA_ALL)};
+  struct mg_tls_opts opts = {.client_ca = mg_unpacked("/certs/client_ca.pem")};
   mg_tls_ctx_init(&mgr, &opts);
   mg_http_listen(&mgr, s_listen_url, fn, NULL);  // Start proxy
   for (;;) mg_mgr_poll(&mgr, 1000);              // Event loop

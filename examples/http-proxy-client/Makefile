@@ -1,11 +1,11 @@
 PROG ?= example                   # Program we are building
 DELETE = rm -rf                   # Command to remove files
 OUT ?= -o $(PROG)                 # Compiler argument for output file
-SOURCES = main.c mongoose.c       # Source code files
+SOURCES = main.c mongoose.c  packed_fs.c      # Source code files, packed_fs.c contains ca.pem, which contains CA certs for TLS
 CFLAGS = -W -Wall -Wextra -g -I.  # Build options
 
 # Mongoose build options. See https://mongoose.ws/documentation/#build-options
-#CFLAGS_MONGOOSE += -DMG_ENABLE_LINES=1
+CFLAGS_MONGOOSE += -DMG_ENABLE_LINES=1 -DMG_ENABLE_PACKED_FS=1
 
 // see tutorial at https://mongoose.ws/tutorials/http-proxy-client/
 ARGS ?= 167.235.63.238:3128 http://info.cern.ch/	# default call arguments

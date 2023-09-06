@@ -101,7 +101,8 @@ int main(int argc, char *argv[]) {
   signal(SIGTERM, signal_handler);  // manager loop on SIGINT and SIGTERM
 
   mg_mgr_init(&mgr);
-  struct mg_tls_opts opts = {.client_ca = mg_str(CA_ALL)};
+
+  struct mg_tls_opts opts = {.client_ca = mg_unpacked("/certs/client_ca.pem")};
   mg_tls_ctx_init(&mgr, &opts);
   mg_timer_add(&mgr, 3000, MG_TIMER_REPEAT | MG_TIMER_RUN_NOW, timer_fn, &mgr);
   while (s_signo == 0) mg_mgr_poll(&mgr, 1000);  // Event loop, 1s timeout
