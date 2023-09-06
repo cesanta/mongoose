@@ -54,6 +54,10 @@ static void cfn(struct mg_connection *c, int ev, void *ev_data, void *fn_data) {
     MG_INFO(("CLIENT has been initialized"));
   } else if (ev == MG_EV_CONNECT) {
     MG_INFO(("CLIENT connected"));
+#if MG_TLS
+    struct mg_str host = mg_url_host(s_conn);
+    mg_tls_init(c, host);
+#endif
     *i = 1;  // do something
   } else if (ev == MG_EV_READ) {
     struct mg_iobuf *r = &c->recv;
@@ -85,6 +89,9 @@ static void sfn(struct mg_connection *c, int ev, void *ev_data, void *fn_data) {
     MG_INFO(("SERVER is listening"));
   } else if (ev == MG_EV_ACCEPT) {
     MG_INFO(("SERVER accepted a connection"));
+#if MG_TLS
+    mg_tls_init(c, mg_str(""));
+#endif
   } else if (ev == MG_EV_READ) {
     struct mg_iobuf *r = &c->recv;
     MG_INFO(("SERVER got data: %.*s", r->len, r->buf));
