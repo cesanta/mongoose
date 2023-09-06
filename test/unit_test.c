@@ -760,8 +760,8 @@ static int fetch(struct mg_mgr *mgr, char *buf, const char *url,
   va_list ap;
   if (mgr->tls_ctx == NULL) {
     struct mg_tls_opts opts;
-    memset(&opts, 0, sizeof(opts));
-    opts.client_ca = mg_str(CA_ISRG_ROOT_X1);
+    memset(&opts, 0, sizeof(opts)); // read CA from packed_fs
+    opts.client_ca = mg_unpacked("test/data/ca.pem");
     if (strstr(url, "127.0.0.1") != NULL) {
       // Local connection, use self-signed certificates
       opts.client_ca = mg_str(s_tls_ca);
@@ -1247,9 +1247,11 @@ static void test_http_client(void) {
   struct mg_mgr mgr;
   struct mg_connection *c = NULL;
   int i, ok = 0;
+  size_t size = 0;  // read CA certs from plain file
+  char *data = mg_file_read(&mg_fs_posix, "test/data/ca.pem", &size);
   memset(&opts, 0, sizeof(opts));
   mg_mgr_init(&mgr);
-  opts.client_ca = mg_str(CA_ISRG_ROOT_X2 CA_ISRG_ROOT_X1);
+  opts.client_ca = mg_str_n(data, size);
   mg_tls_ctx_init(&mgr, &opts);
   c = mg_http_connect(&mgr, "http://cesanta.com", f3, &ok);
   ASSERT(c != NULL);
@@ -1305,6 +1307,7 @@ static void test_http_client(void) {
 
   mg_mgr_free(&mgr);
   ASSERT(mgr.conns == NULL);
+  free(data);
 }
 
 static void f4(struct mg_connection *c, int ev, void *ev_data, void *fn_data) {

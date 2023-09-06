@@ -87,7 +87,7 @@ int main(void) {
   struct mg_mqtt_opts opts = {.clean = true};
   bool done = false;
   mg_mgr_init(&mgr);                               // Initialise event manager
-  struct mg_tls_opts topts = {.client_ca = mg_str(CA_ALL)};
+  struct mg_tls_opts topts = {.client_ca = mg_unpacked("/certs/client_ca.pem")};
 //TODO() 2-way auth and certificate loading
   mg_tls_ctx_init(&mgr, &topts);
   MG_INFO(("Connecting to %s", s_url));            // Inform that we're starting

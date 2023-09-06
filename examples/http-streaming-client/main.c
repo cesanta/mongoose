@@ -56,7 +56,7 @@ int main(int argc, char *argv[]) {
   mg_log_set(atoi(log_level));             // Set to 0 to disable debug log
   if (argc > 1) s_url = argv[1];           // Use URL from command line
 
-  struct mg_tls_opts opts = {.client_ca = mg_str(CA_ALL)};
+  struct mg_tls_opts opts = {.client_ca = mg_unpacked("/certs/client_ca.pem")};
   mg_tls_ctx_init(&mgr, &opts);
 
   mg_http_connect(&mgr, s_url, fn, &done);  // Create client connection

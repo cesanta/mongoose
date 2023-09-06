@@ -1,11 +1,11 @@
 PROG ?= example                   # Program we are building
 DELETE = rm -rf                   # Command to remove files
 OUT ?= -o $(PROG)                 # Compiler argument for output file
-SOURCES = main.c mongoose.c       # Source code files
+SOURCES = main.c mongoose.c  packed_fs.c      # Source code files, packed_fs.c contains ca.pem, which contains CA certs for TLS
 CFLAGS = -W -Wall -Wextra -g -I.  # Build options
 
 # Mongoose build options. See https://mongoose.ws/documentation/#build-options
-CFLAGS_MONGOOSE += -DMG_IO_SIZE=128 -DMG_ENABLE_LINES=1
+CFLAGS_MONGOOSE += -DMG_IO_SIZE=128 -DMG_ENABLE_LINES=1 -DMG_ENABLE_PACKED_FS=1
 
 ifeq ($(OS),Windows_NT)   # Windows settings. Assume MinGW compiler. To use VC: make CC=cl CFLAGS=/MD OUT=/Feprog.exe
   PROG ?= example.exe           # Use .exe suffix for the binary
