@@ -548,21 +548,43 @@ static struct mg_connection *accept_conn(struct mg_connection *lsn,
   return c;
 }
 
+static size_t trim_len(struct mg_connection *c, size_t len) {
+  struct mg_tcpip_if *ifp = (struct mg_tcpip_if *) c->mgr->priv;
+  size_t eth_h_len = 14, ip_max_h_len = 24, tcp_max_h_len = 60, udp_h_len = 8;
+  size_t max_headers_len = eth_h_len + ip_max_h_len +
+                          (c->is_udp ? udp_h_len : tcp_max_h_len);
+  size_t min_mtu = c->is_udp ? 68 /* RFC-791 */ : max_headers_len - eth_h_len;
+
+  // If the frame exceeds the available buffer, trim the length
+  if (len + max_headers_len > ifp->tx.len) {
+    len = ifp->tx.len - max_headers_len;
+  }
+  // Ensure the MTU isn't lower than the minimum allowed value
+  if (ifp->mtu < min_mtu) {
+    MG_ERROR(("MTU is lower than minimum possible value. Setting it to %d.",
+              min_mtu));
+    ifp->mtu = (uint16_t) min_mtu;
+  }
+  // If the total packet size exceeds the MTU, trim the length
+  if (len + max_headers_len - eth_h_len > ifp->mtu) {
+    len = ifp->mtu - max_headers_len + eth_h_len;
+    if (c->is_udp) {
+      MG_ERROR(("UDP datagram exceeds MTU. Truncating it."));
+    }
+  }
+
+  return len;
+}
+
 long mg_io_send(struct mg_connection *c, const void *buf, size_t len) {
   struct mg_tcpip_if *ifp = (struct mg_tcpip_if *) c->mgr->priv;
   struct connstate *s = (struct connstate *) (c + 1);
   uint32_t rem_ip;
   memcpy(&rem_ip, c->rem.ip, sizeof(uint32_t));
+  len = trim_len(c, len);
   if (c->is_udp) {
-    size_t max_headers_len = 14 + 24 /* max IP */ + 8 /* UDP */;
-    if (len + max_headers_len > ifp->tx.len) {
-      len = ifp->tx.len - max_headers_len;
-    }
     tx_udp(ifp, s->mac, ifp->ip, c->loc.port, rem_ip, c->rem.port, buf, len);
   } else {
-    size_t max_headers_len = 14 + 24 /* max IP */ + 60 /* max TCP */;
-    if (len + max_headers_len > ifp->tx.len)
-      len = ifp->tx.len - max_headers_len;
     if (tx_tcp(ifp, s->mac, rem_ip, TH_PUSH | TH_ACK, c->loc.port, c->rem.port,
                mg_htonl(s->seq), mg_htonl(s->ack), buf, len) > 0) {
       s->seq += (uint32_t) len;
@@ -941,6 +963,7 @@ void mg_tcpip_init(struct mg_mgr *mgr, struct mg_tcpip_if *ifp) {
     ifp->timer_1000ms = mg_millis();
     mgr->priv = ifp;
     ifp->mgr = mgr;
+    ifp->mtu = MG_TCPIP_MTU_DEFAULT;
     mgr->extraconnsize = sizeof(struct connstate);
     if (ifp->ip == 0) ifp->enable_dhcp_client = true;
     memset(ifp->gwmac, 255, sizeof(ifp->gwmac));  // Set to broadcast
@@ -1081,6 +1104,7 @@ bool mg_send(struct mg_connection *c, const void *buf, size_t len) {
     mg_error(c, "net down");
   } else if (c->is_udp) {
     struct connstate *s = (struct connstate *) (c + 1);
+    len = trim_len(c, len);   // Trimming length if necessary
     tx_udp(ifp, s->mac, ifp->ip, c->loc.port, rem_ip, c->rem.port, buf, len);
     res = true;
   } else {

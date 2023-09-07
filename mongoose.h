@@ -1711,6 +1711,8 @@ struct mg_tcpip_if {
   void *driver_data;               // Driver-specific data
   struct mg_mgr *mgr;              // Mongoose event manager
   struct mg_queue recv_queue;      // Receive queue
+  uint16_t mtu;                    // Interface MTU
+#define MG_TCPIP_MTU_DEFAULT 500
 
   // Internal state, user can use it but should not change it
   uint8_t gwmac[6];             // Router's MAC
