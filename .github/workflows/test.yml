@@ -15,7 +15,7 @@ jobs:
       matrix:
         cc: [gcc, clang, g++, clang++]
         target: [test, mip_test]
-        ssl: [MBEDTLS] #ssl: [MBEDTLS, OPENSSL]
+        ssl: [none, MBEDTLS] #ssl: [none, MBEDTLS, OPENSSL]
         select: ["-DMG_ENABLE_POLL=0 -DMG_ENABLE_EPOLL=0", "-DMG_ENABLE_POLL=1 -DMG_ENABLE_EPOLL=0", "-DMG_ENABLE_POLL=0 -DMG_ENABLE_EPOLL=1"]
     name: linux ${{ matrix.target }} CC=${{ matrix.cc }} SSL=${{ matrix.ssl }} TFLAGS=${{ matrix.select }}
     env:
@@ -58,7 +58,7 @@ jobs:
     runs-on: macos-latest
     strategy:
       matrix:
-        ssl: [MBEDTLS] #ssl: [MBEDTLS, OPENSSL]
+        ssl: [none] #ssl: [none, MBEDTLS, OPENSSL]
         select: ["-DMG_ENABLE_POLL=0 -DMG_ENABLE_EPOLL=0", "-DMG_ENABLE_POLL=1 -DMG_ENABLE_EPOLL=0", "-DMG_ENABLE_POLL=0 -DMG_ENABLE_EPOLL=1"]
     name: macos SSL=${{ matrix.ssl }} TFLAGS=${{ matrix.select }}
     env:
