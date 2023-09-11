@@ -50,7 +50,6 @@ static const char *s_tls_key =
     "wLoXAlzZ7bTU/yESmrRD9IlLaeRtK5Yf/AFNMFp5c3a6GUHMxRYrv3Qo\n"
     "-----END PRIVATE KEY-----\n";
 
-
 // Important: we use different port numbers for the Windows bug workaround. See
 // https://support.microsoft.com/en-ae/help/3039044/error-10013-wsaeacces-is-returned-when-a-second-bind-to-a-excluded-por
 
@@ -760,7 +759,7 @@ static int fetch(struct mg_mgr *mgr, char *buf, const char *url,
   va_list ap;
   if (mgr->tls_ctx == NULL) {
     struct mg_tls_opts opts;
-    memset(&opts, 0, sizeof(opts)); // read CA from packed_fs
+    memset(&opts, 0, sizeof(opts));  // read CA from packed_fs
     opts.client_ca = mg_unpacked("test/data/ca.pem");
     if (strstr(url, "127.0.0.1") != NULL) {
       // Local connection, use self-signed certificates
@@ -1261,39 +1260,27 @@ static void test_http_client(void) {
   mg_mgr_poll(&mgr, 0);
   ok = 0;
 #if MG_TLS
-  {
-    const char *url = "https://cesanta.com";
-    c = mg_http_connect(&mgr, url, f3, &ok);
-    ASSERT(c != NULL);
-    for (i = 0; i < 1500 && ok <= 0; i++) mg_mgr_poll(&mgr, 1000);
-    ASSERT(ok == 200);
-    c->is_closing = 1;
-    mg_mgr_poll(&mgr, 1);
-
+  c = mg_http_connect(&mgr, "https://cesanta.com", f3, &ok);
+  ASSERT(c != NULL);
+  for (i = 0; i < 1500 && ok <= 0; i++) mg_mgr_poll(&mgr, 1000);
+  ASSERT(ok == 200);
+  c->is_closing = 1;
+  mg_mgr_poll(&mgr, 1);
 #if 0
-    // Test failed host validation
-    ok = 0;
-    opts.srvname = mg_str("dummy");
-    c = mg_http_connect(&mgr, url, f3, &ok);
+  {
+    // TODO(): Test failed host validation, mg_tls_init() is called on mg_connect() if url is https,
+    // hence we fake it and manually call it later with a wrong host name
+    const char *furl = "http://cesanta.com:443";
+    struct mg_str srvname;
+    srvname = mg_str("dummy");
+    c = mg_http_connect(&mgr, furl, f3, &ok);
     ASSERT(c != NULL);
-    mg_tls_init(c, &opts);
+    mg_tls_init(c, srvname);
     for (i = 0; i < 500 && ok <= 0; i++) mg_mgr_poll(&mgr, 10);
     ASSERT(ok == 777);
     mg_mgr_poll(&mgr, 1);
-
-    // Test host validation only (no CA, no cert)
-    ok = 0;
-    opts.srvname = host;
-    opts.ca = NULL;
-    c = mg_http_connect(&mgr, url, f3, &ok);
-    ASSERT(c != NULL);
-    mg_tls_init(c, &opts);
-    for (i = 0; i < 1500 && ok <= 0; i++) mg_mgr_poll(&mgr, 10);
-    ASSERT(ok == 200);
-    c->is_closing = 1;
-    mg_mgr_poll(&mgr, 1);
-#endif
   }
+#endif
 #endif
 
 #if MG_ENABLE_IPV6
@@ -1308,6 +1295,31 @@ static void test_http_client(void) {
   mg_mgr_free(&mgr);
   ASSERT(mgr.conns == NULL);
   free(data);
+}
+
+// Test host validation only (no CA, no cert)
+static void test_host_validation(void) {
+#if MG_TLS
+  const char *url = "https://cesanta.com";
+  struct mg_tls_opts opts;
+  struct mg_mgr mgr;
+  struct mg_connection *c = NULL;
+  int i, ok = 0;
+  memset(&opts, 0, sizeof(opts));
+  mg_mgr_init(&mgr);
+  mg_tls_ctx_init(&mgr, &opts);
+
+  ok = 0;
+  c = mg_http_connect(&mgr, url, f3, &ok);
+  ASSERT(c != NULL);
+  for (i = 0; i < 1500 && ok <= 0; i++) mg_mgr_poll(&mgr, 10);
+  ASSERT(ok == 200);
+  c->is_closing = 1;
+  mg_mgr_poll(&mgr, 1);
+
+  mg_mgr_free(&mgr);
+  ASSERT(mgr.conns == NULL);
+#endif
 }
 
 static void f4(struct mg_connection *c, int ev, void *ev_data, void *fn_data) {
@@ -2032,7 +2044,7 @@ static void test_str(void) {
 
 static void fn1(struct mg_connection *c, int ev, void *ev_data, void *fn_data) {
   if (ev == MG_EV_ERROR) {
-    free(*(char **) fn_data); // See #2263
+    free(*(char **) fn_data);  // See #2263
     *(char **) fn_data = mg_mprintf("%s", (char *) ev_data);
   }
   (void) c;
@@ -3153,6 +3165,7 @@ int main(void) {
   test_ws();
   test_ws_fragmentation();
   test_http_client();
+  test_host_validation();
   test_http_server();
   test_http_404();
   test_http_no_content_length();
