@@ -16,10 +16,12 @@ jobs:
         cc: [gcc, clang, g++, clang++]
         target: [test, mip_test]
         ssl: [MBEDTLS] #ssl: [MBEDTLS, OPENSSL]
-    name: linux ${{ matrix.target }} CC=${{ matrix.cc }} SSL=${{ matrix.ssl }}
+        select: ["-DMG_ENABLE_POLL=0 -DMG_ENABLE_EPOLL=0", "-DMG_ENABLE_POLL=1 -DMG_ENABLE_EPOLL=0", "-DMG_ENABLE_POLL=0 -DMG_ENABLE_EPOLL=1"]
+    name: linux ${{ matrix.target }} CC=${{ matrix.cc }} SSL=${{ matrix.ssl }} TFLAGS=${{ matrix.select }}
     env:
       CC: ${{ matrix.cc }}
       SSL: ${{ matrix.ssl }}
+      TFLAGS: {{ matrix.select }}
     steps:
     - uses: actions/checkout@v3
       with: { fetch-depth: 2 }
@@ -54,7 +56,15 @@ jobs:
       run: make unamalgamated && make valgrind && make mg_prefix
   macos:
     runs-on: macos-latest
-    env: { HOMEBREW_NO_AUTO_UPDATE: 1 }
+    strategy:
+      matrix:
+        ssl: [MBEDTLS] #ssl: [MBEDTLS, OPENSSL]
+        select: ["-DMG_ENABLE_POLL=0 -DMG_ENABLE_EPOLL=0", "-DMG_ENABLE_POLL=1 -DMG_ENABLE_EPOLL=0", "-DMG_ENABLE_POLL=0 -DMG_ENABLE_EPOLL=1"]
+    name: macos SSL=${{ matrix.ssl }} TFLAGS=${{ matrix.select }}
+    env:
+      SSL: ${{ matrix.ssl }}
+      TFLAGS: {{ matrix.select }}
+      HOMEBREW_NO_AUTO_UPDATE: 1
     steps:
     - uses: actions/checkout@v3
       with: { fetch-depth: 2 }
@@ -69,12 +79,19 @@ jobs:
       run: make mg_prefix
   windows:
     runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        target: [vc98, vc17, vc22, mingw, mingw++]
+        select: ["-DMG_ENABLE_POLL=0 -DMG_ENABLE_EPOLL=0", "-DMG_ENABLE_POLL=1 -DMG_ENABLE_EPOLL=0", "-DMG_ENABLE_POLL=0 -DMG_ENABLE_EPOLL=1"]
+    name: windows ${{ matrix.target }} TFLAGS=${{ matrix.select }}
+    env:
+      TFLAGS: {{ matrix.select }}
     steps:
     - uses: actions/checkout@v3
       with: { fetch-depth: 2 }
     - run: if ./test/match_changed_files.sh '^test|^src/.*.[ch]' ; then echo GO=1 >> $GITHUB_ENV ; fi
     - if: ${{ env.GO == 1 }}
-      run: make vc98 vc17 vc22 mingw mingw++
+      run: make ${{ matrix.target }} 
   arm:
     runs-on: ubuntu-latest
     steps:
@@ -91,8 +108,8 @@ jobs:
     steps:
     - uses: actions/checkout@v3
     - run: sudo apt -y install libmbedtls-dev libpcap-dev
-    - run: make clean examples
-    - run: make clean test MG_ENABLE_POLL=1
+    - run: make examples
+    - run: make clean
   examples_win:
     runs-on: windows-latest
     steps:
