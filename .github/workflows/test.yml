@@ -15,8 +15,17 @@ jobs:
       matrix:
         cc: [gcc, clang, g++, clang++]
         target: [test, mip_test]
-        ssl: [none, MBEDTLS] #ssl: [none, MBEDTLS, OPENSSL]
+        ssl: ["", MBEDTLS] #ssl: ["", MBEDTLS, OPENSSL]
         select: ["-DMG_ENABLE_POLL=0 -DMG_ENABLE_EPOLL=0", "-DMG_ENABLE_POLL=1 -DMG_ENABLE_EPOLL=0", "-DMG_ENABLE_POLL=0 -DMG_ENABLE_EPOLL=1"]
+        exclude:
+        - ssl: MBEDTLS
+          select: "-DMG_ENABLE_POLL=0 -DMG_ENABLE_EPOLL=0"
+        - ssl: MBEDTLS
+          select: "-DMG_ENABLE_POLL=1 -DMG_ENABLE_EPOLL=0"
+        - ssl: OPENSSL
+          select: "-DMG_ENABLE_POLL=0 -DMG_ENABLE_EPOLL=0"
+        - ssl: OPENSSL
+          select: "-DMG_ENABLE_POLL=1 -DMG_ENABLE_EPOLL=0"
     name: linux ${{ matrix.target }} CC=${{ matrix.cc }} SSL=${{ matrix.ssl }} TFLAGS=${{ matrix.select }}
     env:
       CC: ${{ matrix.cc }}
@@ -57,13 +66,19 @@ jobs:
   macos:
     runs-on: macos-latest
     strategy:
+      fail-fast: false
       matrix:
-        ssl: [none] #ssl: [none, MBEDTLS, OPENSSL]
-        select: ["-DMG_ENABLE_POLL=0 -DMG_ENABLE_EPOLL=0", "-DMG_ENABLE_POLL=1 -DMG_ENABLE_EPOLL=0", "-DMG_ENABLE_POLL=0 -DMG_ENABLE_EPOLL=1"]
+        ssl: ["", MBEDTLS] #ssl: ["", MBEDTLS, OPENSSL]
+        select: [-DMG_ENABLE_POLL=0, -DMG_ENABLE_POLL=1]
+        exclude:
+        - ssl: MBEDTLS
+          select: -DMG_ENABLE_POLL=0
+        - ssl: OPENSSL
+          select: -DMG_ENABLE_POLL=0
     name: macos SSL=${{ matrix.ssl }} TFLAGS=${{ matrix.select }}
     env:
       SSL: ${{ matrix.ssl }}
-      TFLAGS: ${{ matrix.select }}
+      TFLAGS: ${{ matrix.select }} -DNO_SNTP_CHECK
       HOMEBREW_NO_AUTO_UPDATE: 1
     steps:
     - uses: actions/checkout@v3
@@ -71,18 +86,20 @@ jobs:
     - run: if ./test/match_changed_files.sh '^test|^src/.*.[ch]' ; then echo GO=1 >> $GITHUB_ENV ; fi
     - if: ${{ env.GO == 1 }}
       run: brew install jq mbedtls openssl
-    #- if: ${{ env.GO == 1 }}
-    #  run:  make test upload-coverage TFLAGS=-DNO_SNTP_CHECK SSL=OPENSSL ASAN_OPTIONS= OPENSSL=`echo /usr/local/Cellar/openssl*/*`
     - if: ${{ env.GO == 1 }}
-      run:  make test SSL=MBEDTLS TFLAGS=-DNO_SNTP_CHECK ASAN_OPTIONS= MBEDTLS=`echo /usr/local/Cellar/mbedtls*/*`
+      run:  make test ASAN_OPTIONS= MBEDTLS=`echo /usr/local/Cellar/mbedtls*/*` OPENSSL=`echo /usr/local/Cellar/openssl*/*`
     - if: ${{ env.GO == 1 }}
       run: make mg_prefix
   windows:
     runs-on: ubuntu-latest
     strategy:
+      fail-fast: false
       matrix:
         target: [vc98, vc17, vc22, mingw, mingw++]
-        select: ["-DMG_ENABLE_POLL=0 -DMG_ENABLE_EPOLL=0", "-DMG_ENABLE_POLL=1 -DMG_ENABLE_EPOLL=0", "-DMG_ENABLE_POLL=0 -DMG_ENABLE_EPOLL=1"]
+        select: [-DMG_ENABLE_POLL=0, -DMG_ENABLE_POLL=1]
+        exclude:
+        - target: vc98
+          select: -DMG_ENABLE_POLL=1
     name: windows ${{ matrix.target }} TFLAGS=${{ matrix.select }}
     env:
       TFLAGS: ${{ matrix.select }}
