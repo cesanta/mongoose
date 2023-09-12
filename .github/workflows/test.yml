@@ -69,7 +69,7 @@ jobs:
       fail-fast: false
       matrix:
         ssl: ["", MBEDTLS] #ssl: ["", MBEDTLS, OPENSSL]
-        select: [-DMG_ENABLE_POLL=0, -DMG_ENABLE_POLL=1]
+        select: ["-DMG_ENABLE_POLL=0 -DMG_ENABLE_EPOLL=1", -DMG_ENABLE_POLL=1]
         exclude:
         - ssl: MBEDTLS
           select: -DMG_ENABLE_POLL=0

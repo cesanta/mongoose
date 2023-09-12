@@ -1268,8 +1268,7 @@ static void test_http_client(void) {
   mg_mgr_poll(&mgr, 1);
 #if 0
   {
-    // TODO(): Test failed host validation, mg_tls_init() is called on
-    // mg_connect() if url is https,
+    // TODO(): Test failed host validation, mg_tls_init() is called on mg_connect() if url is https,
     // hence we fake it and manually call it later with a wrong host name
     const char *furl = "http://cesanta.com:443";
     struct mg_str srvname;
