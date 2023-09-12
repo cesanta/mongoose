@@ -21,7 +21,7 @@ jobs:
     env:
       CC: ${{ matrix.cc }}
       SSL: ${{ matrix.ssl }}
-      TFLAGS: {{ matrix.select }}
+      TFLAGS: ${{ matrix.select }}
     steps:
     - uses: actions/checkout@v3
       with: { fetch-depth: 2 }
@@ -63,7 +63,7 @@ jobs:
     name: macos SSL=${{ matrix.ssl }} TFLAGS=${{ matrix.select }}
     env:
       SSL: ${{ matrix.ssl }}
-      TFLAGS: {{ matrix.select }}
+      TFLAGS: ${{ matrix.select }}
       HOMEBREW_NO_AUTO_UPDATE: 1
     steps:
     - uses: actions/checkout@v3
@@ -85,7 +85,7 @@ jobs:
         select: ["-DMG_ENABLE_POLL=0 -DMG_ENABLE_EPOLL=0", "-DMG_ENABLE_POLL=1 -DMG_ENABLE_EPOLL=0", "-DMG_ENABLE_POLL=0 -DMG_ENABLE_EPOLL=1"]
     name: windows ${{ matrix.target }} TFLAGS=${{ matrix.select }}
     env:
-      TFLAGS: {{ matrix.select }}
+      TFLAGS: ${{ matrix.select }}
     steps:
     - uses: actions/checkout@v3
       with: { fetch-depth: 2 }
