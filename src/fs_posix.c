@@ -166,13 +166,14 @@ static void p_list(const char *dir, void (*fn)(const char *, void *),
 }
 
 static void *p_open(const char *path, int flags) {
-  const char *mode = flags == MG_FS_READ ? "rbe" : "a+be";  // e for CLOEXEC
 #if MG_ARCH == MG_ARCH_WIN32
+  const char *mode = flags == MG_FS_READ ? "rb" : "a+b";
   wchar_t b1[MG_PATH_MAX], b2[10];
   MultiByteToWideChar(CP_UTF8, 0, path, -1, b1, sizeof(b1) / sizeof(b1[0]));
   MultiByteToWideChar(CP_UTF8, 0, mode, -1, b2, sizeof(b2) / sizeof(b2[0]));
   return (void *) _wfopen(b1, b2);
 #else
+  const char *mode = flags == MG_FS_READ ? "rbe" : "a+be";  // e for CLOEXEC
   return (void *) fopen(path, mode);
 #endif
 }
