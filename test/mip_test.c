@@ -8,6 +8,7 @@
 
 static int s_num_tests = 0;
 static bool s_sent_fragment = 0;
+static int s_seg_sent = 0;
 
 #define ASSERT(expr)                                            \
   do {                                                          \
@@ -35,10 +36,29 @@ static void ph(struct mg_connection *c, int ev, void *ev_data, void *fn_data) {
 }
 
 static void fn(struct mg_connection *c, int ev, void *ev_data, void *fn_data) {
+  (void) c, (void) ev, (void) ev_data, (void) fn_data;
+}
+
+static void frag_recv_fn(struct mg_connection *c, int ev, void *ev_data, void *fn_data) {
   if (ev == MG_EV_ERROR) {
     if (s_sent_fragment) {
       ASSERT(strcmp((char*) ev_data, "Received fragmented packet") == 0);
     }
+  }
+  (void) c, (void) ev_data, (void) fn_data;
+}
+
+static void frag_send_fn(struct mg_connection *c, int ev, void *ev_data, void *fn_data) {
+  static bool s_sent;
+  static int s_seg_sizes[] = {416, 416, 368};
+  if (ev == MG_EV_POLL) {
+    if (!s_sent) {
+      c->send.len = 1200; // setting TCP payload size
+      s_sent = true;
+    }
+  } else if (ev == MG_EV_WRITE) {
+    // Checking TCP segment sizes (ev_data points to the TCP payload length)
+    ASSERT(*(int *) ev_data == s_seg_sizes[s_seg_sent++]);
   }
   (void) c, (void) ev_data, (void) fn_data;
 }
@@ -217,7 +237,7 @@ static void test_retransmit(void) {
   mg_tcpip_free(&mif);
 }
 
-static void test_fragmentation(void) {
+static void test_frag_recv_path(void) {
   struct mg_mgr mgr;
   struct eth e;
   struct ip ip;
@@ -232,7 +252,7 @@ static void test_fragmentation(void) {
   mif.driver = &driver;
   mif.driver_data = &s_driver_data;
   mg_tcpip_init(&mgr, &mif);
-  mg_http_listen(&mgr, "http://0.0.0.0:0", fn, NULL);
+  mg_http_listen(&mgr, "http://0.0.0.0:0", frag_recv_fn, NULL);
   mgr.conns->pfn = NULL;
   mg_mgr_poll(&mgr, 0);
 
@@ -259,6 +279,34 @@ static void test_fragmentation(void) {
   s_driver_data.len = 0;
   mg_mgr_free(&mgr);
   mg_tcpip_free(&mif);
+}
+
+static void test_frag_send_path(void) {
+  struct mg_mgr mgr;
+  struct mg_tcpip_driver driver;
+  struct mg_tcpip_if mif;
+
+  mg_mgr_init(&mgr);
+  memset(&mif, 0, sizeof(mif));
+  memset(&s_driver_data, 0, sizeof(struct driver_data));
+  driver.init = NULL, driver.tx = if_tx, driver.up = if_up, driver.rx = if_rx;
+  mif.driver = &driver;
+  mif.driver_data = &s_driver_data;
+  mg_tcpip_init(&mgr, &mif);
+  mif.mtu = 500;
+  mg_http_listen(&mgr, "http://0.0.0.0:0", frag_send_fn, NULL);
+  mgr.conns->pfn = NULL;
+  for (int i = 0; i < 10; i++)
+    mg_mgr_poll(&mgr, 0);
+  ASSERT(s_seg_sent == 3);
+  s_driver_data.len = 0;
+  mg_mgr_free(&mgr);
+  mg_tcpip_free(&mif);
+}
+
+static void test_fragmentation(void) {
+  test_frag_recv_path();
+  test_frag_send_path();
 }
 
 int main(void) {
