@@ -17,7 +17,7 @@ void mg_error(struct mg_connection *c, const char *fmt, ...) {
   va_start(ap, fmt);
   mg_vsnprintf(buf, sizeof(buf), fmt, &ap);
   va_end(ap);
-  MG_ERROR(("%lu %p %s", c->id, c->fd, buf));
+  MG_ERROR(("%lu %ld %s", c->id, c->fd, buf));
   c->is_closing = 1;             // Set is_closing before sending MG_EV_CALL
   mg_call(c, MG_EV_ERROR, buf);  // Let user handler to override it
 }

@@ -1176,7 +1176,6 @@ struct mg_mgr {
   unsigned long nextid;         // Next connection ID
   unsigned long timerid;        // Next timer ID
   void *userdata;               // Arbitrary user data pointer
-  void *tls_ctx;                // TLS context shared by all TLS sessions
   uint16_t mqtt_id;             // MQTT IDs for pub/sub
   void *active_dns_requests;    // DNS requests in progress
   struct mg_timer *timers;      // Active timers
@@ -1342,17 +1341,13 @@ void mg_http_serve_ssi(struct mg_connection *c, const char *root,
 
 
 struct mg_tls_opts {
-  struct mg_str client_ca;
-  struct mg_str server_ca;
-  struct mg_str server_cert;
-  struct mg_str server_key;
-  struct mg_str client_cert;
-  struct mg_str client_key;
+  struct mg_str ca;    // PEM or DER
+  struct mg_str cert;  // PEM or DER
+  struct mg_str key;   // PEM or DER
+  struct mg_str name;  // If not empty, enable host name verification
 };
 
-void mg_tls_ctx_init(struct mg_mgr *, const struct mg_tls_opts *);
-void mg_tls_ctx_free(struct mg_mgr *);
-void mg_tls_init(struct mg_connection *, struct mg_str hostname);
+void mg_tls_init(struct mg_connection *, const struct mg_tls_opts *opts);
 void mg_tls_free(struct mg_connection *);
 long mg_tls_send(struct mg_connection *, const void *buf, size_t len);
 long mg_tls_recv(struct mg_connection *, void *buf, size_t len);
@@ -1371,21 +1366,15 @@ void mg_tls_handshake(struct mg_connection *);
 #include <mbedtls/ssl.h>
 #include <mbedtls/ssl_ticket.h>
 
-struct mg_tls_ctx {
-  mbedtls_x509_crt server_ca;     // Parsed CA certificate
-  mbedtls_x509_crt client_ca;     // Parsed CA certificate
-  mbedtls_x509_crt server_cert;   // Parsed server certificate
-  mbedtls_pk_context server_key;  // Parsed server private key context
-  mbedtls_x509_crt client_cert;   // Parsed client certificate
-  mbedtls_pk_context client_key;  // Parsed client private key context
-#ifdef MBEDTLS_SSL_SESSION_TICKETS
-  mbedtls_ssl_ticket_context ticket_ctx;  // Session tickets context
-#endif
-};
-
 struct mg_tls {
+  mbedtls_x509_crt ca;      // Parsed CA certificate
+  mbedtls_x509_crt cert;    // Parsed certificate
+  mbedtls_pk_context pk;    // Private key context
   mbedtls_ssl_context ssl;  // SSL/TLS context
   mbedtls_ssl_config conf;  // SSL-TLS config
+#ifdef MBEDTLS_SSL_SESSION_TICKETS
+  mbedtls_ssl_ticket_context ticket;  // Session tickets context
+#endif
 };
 #endif
 
@@ -1394,15 +1383,6 @@ struct mg_tls {
 
 #include <openssl/err.h>
 #include <openssl/ssl.h>
-
-struct mg_tls_ctx {
-  X509 *server_cert;
-  EVP_PKEY *server_key;
-  STACK_OF(X509_INFO) *server_ca;
-  X509 *client_cert;
-  EVP_PKEY *client_key;
-  STACK_OF(X509_INFO) *client_ca;
-};
 
 struct mg_tls {
   SSL_CTX *ctx;

@@ -21,6 +21,13 @@ static void fn(struct mg_connection *c, int ev, void *ev_data, void *fn_data) {
   if (ev == MG_EV_CONNECT) {
     // Connected to server. Extract host name from URL
     struct mg_str host = mg_url_host(s_url);
+
+    if (mg_url_is_ssl(s_url)) {
+      struct mg_tls_opts opts = {.ca = mg_unpacked("/certs/ca.pem"),
+                                 .name = host};
+      mg_tls_init(c, &opts);
+    }
+
     // Send request
     mg_printf(c,
               "GET %s HTTP/1.1\r\n"
@@ -55,9 +62,6 @@ int main(int argc, char *argv[]) {
   if (log_level == NULL) log_level = "3";  // If not set, set to DEBUG
   mg_log_set(atoi(log_level));             // Set to 0 to disable debug log
   if (argc > 1) s_url = argv[1];           // Use URL from command line
-
-  struct mg_tls_opts opts = {.client_ca = mg_unpacked("/certs/client_ca.pem")};
-  mg_tls_ctx_init(&mgr, &opts);
 
   mg_http_connect(&mgr, s_url, fn, &done);  // Create client connection
   while (!done) mg_mgr_poll(&mgr, 1000);    // Infinite event loop

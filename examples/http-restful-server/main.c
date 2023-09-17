@@ -57,6 +57,15 @@ static const char *s_tls_key =
 // We use the same event handler function for HTTP and HTTPS connections
 // fn_data is NULL for plain HTTP, and non-NULL for HTTPS
 static void fn(struct mg_connection *c, int ev, void *ev_data, void *fn_data) {
+  if (ev == MG_EV_ACCEPT && fn_data != NULL) {
+    struct mg_tls_opts opts = {
+#ifdef TLS_TWOWAY
+        .ca = mg_str(s_tls_ca),
+#endif
+        .cert = mg_str(s_tls_cert),
+        .key = mg_str(s_tls_key)};
+    mg_tls_init(c, &opts);
+  }
   if (ev == MG_EV_HTTP_MSG) {
     struct mg_http_message *hm = (struct mg_http_message *) ev_data;
     if (mg_http_match_uri(hm, "/api/stats")) {
@@ -87,13 +96,6 @@ int main(void) {
   struct mg_mgr mgr;                            // Event manager
   mg_log_set(MG_LL_DEBUG);                      // Set log level
   mg_mgr_init(&mgr);                            // Initialise event manager
-  struct mg_tls_opts opts = {
-#ifdef TLS_TWOWAY
-                             .client_ca = mg_str(s_tls_ca),
-#endif
-                             .server_cert = mg_str(s_tls_cert),
-                             .server_key = mg_str(s_tls_key)};
-  mg_tls_ctx_init(&mgr, &opts);
   mg_http_listen(&mgr, s_http_addr, fn, NULL);  // Create HTTP listener
   mg_http_listen(&mgr, s_https_addr, fn, (void *) 1);  // HTTPS listener
   for (;;) mg_mgr_poll(&mgr, 1000);                    // Infinite event loop

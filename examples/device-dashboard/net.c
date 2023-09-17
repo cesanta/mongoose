@@ -261,7 +261,14 @@ static void handle_sys_reset(struct mg_connection *c) {
 
 // HTTP request handler function
 static void fn(struct mg_connection *c, int ev, void *ev_data, void *fn_data) {
-  if (ev == MG_EV_HTTP_MSG) {
+  if (ev == MG_EV_ACCEPT) {
+    if (fn_data != NULL) {  // TLS listener!
+      struct mg_tls_opts opts = {0};
+      opts.cert = mg_unpacked("/certs/server_cert.pem");
+      opts.key = mg_unpacked("/certs/server_key.pem");
+      mg_tls_init(c, &opts);
+    }
+  } else if (ev == MG_EV_HTTP_MSG) {
     struct mg_http_message *hm = (struct mg_http_message *) ev_data;
     struct user *u = authenticate(hm);
 
@@ -306,20 +313,12 @@ static void fn(struct mg_connection *c, int ev, void *ev_data, void *fn_data) {
               hm->method.ptr, (int) hm->uri.len, hm->uri.ptr, (int) 3,
               &c->send.buf[9]));
   }
-  (void) fn_data;
 }
 
 void web_init(struct mg_mgr *mgr) {
-  struct mg_tls_opts opts = {0};
-  opts.server_cert = mg_unpacked("/certs/server_cert.pem");
-  opts.server_key = mg_unpacked("/certs/server_key.pem");
-  mg_tls_ctx_init(mgr, &opts);
-
   s_settings.device_name = strdup("My Device");
-
   mg_http_listen(mgr, HTTP_URL, fn, NULL);
-  mg_http_listen(mgr, HTTPS_URL, fn, NULL);
-
+  mg_http_listen(mgr, HTTPS_URL, fn, (void *) 1);
   mg_timer_add(mgr, 3600 * 1000, MG_TIMER_RUN_NOW | MG_TIMER_REPEAT,
                timer_sntp_fn, mgr);
 }

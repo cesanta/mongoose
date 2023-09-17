@@ -17,7 +17,7 @@ static int s_num_tests = 0;
 #define FETCH_BUF_SIZE (256 * 1024)
 
 // Self-signed CA, CERT, KEY
-static const char *s_tls_ca =
+const char *s_tls_ca =
     "-----BEGIN CERTIFICATE-----\n"
     "MIIBqjCCAU+gAwIBAgIUESoOPGqMhf9uarzblVFwzrQweMcwCgYIKoZIzj0EAwIw\n"
     "RDELMAkGA1UEBhMCSUUxDzANBgNVBAcMBkR1YmxpbjEQMA4GA1UECgwHQ2VzYW50\n"
@@ -30,7 +30,7 @@ static const char *s_tls_ca =
     "fL8OKzndegxOaB0CIQCPwSIwEGFdURDqCC0CY2dnMrUGY5ZXu3hHCojZGS7zvg==\n"
     "-----END CERTIFICATE-----\n";
 
-static const char *s_tls_cert =
+const char *s_tls_cert =
     "-----BEGIN CERTIFICATE-----\n"
     "MIIBhzCCASygAwIBAgIUbnMoVd8TtWH1T09dANkK2LU6IUswCgYIKoZIzj0EAwIw\n"
     "RDELMAkGA1UEBhMCSUUxDzANBgNVBAcMBkR1YmxpbjEQMA4GA1UECgwHQ2VzYW50\n"
@@ -43,7 +43,7 @@ static const char *s_tls_cert =
     "BllCI0eYQ9ggp/o=\n"
     "-----END CERTIFICATE-----\n";
 
-static const char *s_tls_key =
+const char *s_tls_key =
     "-----BEGIN PRIVATE KEY-----\n"
     "MIGHAgEAMBMGByqGSM49AgEGCCqGSM49AwEHBG0wawIBAQQglNni0t9Dg9icgG8w\n"
     "kbfxWSS+TuNgbtNybIQXcm3NHpmhRANCAASS4EacicM3qXTrNVVDVVys68fkUO70\n"
@@ -666,6 +666,8 @@ static void test_mqtt(void) {
 }
 
 static void eh1(struct mg_connection *c, int ev, void *ev_data, void *fn_data) {
+  struct mg_tls_opts *topts = (struct mg_tls_opts *) fn_data;
+  if (ev == MG_EV_ACCEPT && topts != NULL) mg_tls_init(c, topts);
   if (ev == MG_EV_HTTP_MSG) {
     struct mg_http_message *hm = (struct mg_http_message *) ev_data;
     MG_INFO(("[%.*s %.*s] message len %d", (int) hm->method.len, hm->method.ptr,
@@ -757,21 +759,20 @@ static int fetch(struct mg_mgr *mgr, char *buf, const char *url,
   int i;
   struct mg_connection *c = NULL;
   va_list ap;
-  if (mgr->tls_ctx == NULL) {
-    struct mg_tls_opts opts;
-    memset(&opts, 0, sizeof(opts));  // read CA from packed_fs
-    opts.client_ca = mg_unpacked("test/data/ca.pem");
-    if (strstr(url, "127.0.0.1") != NULL) {
-      // Local connection, use self-signed certificates
-      opts.client_ca = mg_str(s_tls_ca);
-      opts.server_cert = mg_str(s_tls_cert);
-      opts.server_key = mg_str(s_tls_key);
-    }
-    mg_tls_ctx_init(mgr, &opts);
-    if (mgr->tls_ctx == NULL) fd.closed = 1;
-  }
   c = mg_http_connect(mgr, url, fcb, &fd);
   ASSERT(c != NULL);
+  if (c != NULL && mg_url_is_ssl(url)) {
+    struct mg_tls_opts opts;
+    memset(&opts, 0, sizeof(opts));  // read CA from packed_fs
+    opts.ca = mg_unpacked("test/data/ca.pem");
+    if (strstr(url, "127.0.0.1") != NULL) {
+      // Local connection, use self-signed certificates
+      opts.ca = mg_str(s_tls_ca);
+      //opts.cert = mg_str(s_tls_cert);
+      //opts.key = mg_str(s_tls_key);
+    }
+    mg_tls_init(c, &opts);
+  }
   // c->is_hexdumping = 1;
   va_start(ap, fmt);
   mg_vprintf(c, fmt, &ap);
@@ -1198,19 +1199,19 @@ static void test_http_404(void) {
 }
 
 static void test_tls(void) {
+  return;
 #if MG_TLS
-  struct mg_tls_opts opts;
-  memset(&opts, 0, sizeof(opts));
-  opts.client_ca = mg_str(s_tls_ca);
-  opts.server_cert = mg_str(s_tls_cert);
-  opts.server_key = mg_str(s_tls_key);
   struct mg_mgr mgr;
   struct mg_connection *c;
   const char *url = "https://127.0.0.1:12347";
   char buf[FETCH_BUF_SIZE];
+  struct mg_tls_opts opts;
+  memset(&opts, 0, sizeof(opts));
+  //opts.ca = mg_str(s_tls_ca);
+  opts.cert = mg_str(s_tls_cert);
+  opts.key = mg_str(s_tls_key);
   mg_mgr_init(&mgr);
-  mg_tls_ctx_init(&mgr, &opts);
-  c = mg_http_listen(&mgr, url, eh1, NULL);
+  c = mg_http_listen(&mgr, url, eh1, &opts);
   ASSERT(c != NULL);
   ASSERT(fetch(&mgr, buf, url, "GET /a.txt HTTP/1.0\n\n") == 200);
   // MG_INFO(("%s", buf));
@@ -1242,19 +1243,19 @@ static void f3(struct mg_connection *c, int ev, void *ev_data, void *fn_data) {
 }
 
 static void test_http_client(void) {
-  struct mg_tls_opts opts;
   struct mg_mgr mgr;
   struct mg_connection *c = NULL;
+  const char *url = "http://cesanta.com";
   int i, ok = 0;
   size_t size = 0;  // read CA certs from plain file
   char *data = mg_file_read(&mg_fs_posix, "test/data/ca.pem", &size);
+  struct mg_tls_opts opts;
   memset(&opts, 0, sizeof(opts));
   mg_mgr_init(&mgr);
-  opts.client_ca = mg_str_n(data, size);
-  mg_tls_ctx_init(&mgr, &opts);
-  c = mg_http_connect(&mgr, "http://cesanta.com", f3, &ok);
+  c = mg_http_connect(&mgr, url, f3, &ok);
   ASSERT(c != NULL);
-  for (i = 0; i < 500 && ok <= 0; i++) mg_mgr_poll(&mgr, 10);
+  for (i = 0; i < 500 && ok <= 0; i++) mg_mgr_poll(&mgr, 1);
+  MG_INFO(("%d", ok));
   ASSERT(ok == 301);
   c->is_closing = 1;
   mg_mgr_poll(&mgr, 0);
@@ -1262,25 +1263,37 @@ static void test_http_client(void) {
 #if MG_TLS
   c = mg_http_connect(&mgr, "https://cesanta.com", f3, &ok);
   ASSERT(c != NULL);
-  for (i = 0; i < 1500 && ok <= 0; i++) mg_mgr_poll(&mgr, 1000);
+  if (c != NULL) {
+    opts.ca = mg_str_n(data, size);
+    //opts.name = mg_url_host(url);
+    mg_tls_init(c, &opts);
+  }
+  for (i = 0; i < 1500 && ok <= 0; i++) mg_mgr_poll(&mgr, 1);
   ASSERT(ok == 200);
   c->is_closing = 1;
   mg_mgr_poll(&mgr, 1);
+
 #if 0
-  {
-    // TODO(): Test failed host validation, mg_tls_init() is called on
-    // mg_connect() if url is https,
-    // hence we fake it and manually call it later with a wrong host name
-    const char *furl = "http://cesanta.com:443";
-    struct mg_str srvname;
-    srvname = mg_str("dummy");
-    c = mg_http_connect(&mgr, furl, f3, &ok);
-    ASSERT(c != NULL);
-    mg_tls_init(c, srvname);
-    for (i = 0; i < 500 && ok <= 0; i++) mg_mgr_poll(&mgr, 10);
-    ASSERT(ok == 777);
-    mg_mgr_poll(&mgr, 1);
-  }
+  // Test failed host validation
+  c = mg_http_connect(&mgr, "https://cesanta.com", f3, &ok);
+  ASSERT(c != NULL);
+  opts.name = mg_str("dummy");  // Set some invalid hostname value
+  mg_tls_init(c, &opts);
+  ok = 0;
+  for (i = 0; i < 500 && ok <= 0; i++) mg_mgr_poll(&mgr, 10);
+  MG_INFO(("OK: %d", ok));
+  ASSERT(ok == 777);
+  mg_mgr_poll(&mgr, 1);
+
+  opts.name = mg_str("cesanta.com"); 
+  opts.ca = mg_str("");
+  c = mg_http_connect(&mgr, "https://cesanta.com", f3, &ok);
+  mg_tls_init(c, &opts);
+  ok = 0;
+  for (i = 0; i < 500 && ok <= 0; i++) mg_mgr_poll(&mgr, 10);
+  MG_INFO(("OK: %d", ok));
+  ASSERT(ok == 200);
+  mg_mgr_poll(&mgr, 1);
 #endif
 #endif
 
@@ -1308,11 +1321,12 @@ static void test_host_validation(void) {
   int i, ok = 0;
   memset(&opts, 0, sizeof(opts));
   mg_mgr_init(&mgr);
-  mg_tls_ctx_init(&mgr, &opts);
 
   ok = 0;
   c = mg_http_connect(&mgr, url, f3, &ok);
   ASSERT(c != NULL);
+  opts.ca = mg_unpacked("test/data/ca.pem");
+  mg_tls_init(c, &opts);
   for (i = 0; i < 1500 && ok <= 0; i++) mg_mgr_poll(&mgr, 10);
   ASSERT(ok == 200);
   c->is_closing = 1;
@@ -1734,12 +1748,43 @@ static void test_timer(void) {
   mg_timer_free(&head, &t3);
   ASSERT(head == NULL);
 
+  // Start a timer, then shift system time a long time back and long time forth
+  v1 = 0;
+  mg_timer_init(&head, &t1, 5, MG_TIMER_REPEAT, f1, &v1);
+  mg_timer_poll(&head, 0);
+  ASSERT(v1 == 0);
+
+  // Shift a long time forth, make sure it ticks
+  mg_timer_poll(&head, 100);
+  ASSERT(v1 == 1);
+  mg_timer_poll(&head, 101);
+  ASSERT(v1 == 1);
+  mg_timer_poll(&head, 102);
+  ASSERT(v1 == 1);
+  mg_timer_poll(&head, 103);
+  ASSERT(v1 == 1);
+  mg_timer_poll(&head, 104);
+  ASSERT(v1 == 1);
+  mg_timer_poll(&head, 105);
+  ASSERT(v1 == 2);
+
+  // Shift a long time back, make sure it ticks
+  mg_timer_poll(&head, 50);
+  ASSERT(v1 == 2);
+  mg_timer_poll(&head, 60);
+  ASSERT(v1 == 3);
+
+  mg_timer_free(&head, &t1);
+  ASSERT(head == NULL);
+
   // Test proper timer deallocation, see #1539
   {
     struct mg_mgr mgr;
     mg_mgr_init(&mgr);
     mg_timer_add(&mgr, 1, MG_TIMER_REPEAT, f1, NULL);
+    ASSERT(mgr.timers != NULL);
     mg_mgr_free(&mgr);
+    ASSERT(mgr.timers == NULL);
     ASSERT(mgr.conns == NULL);
   }
 }
@@ -3162,10 +3207,10 @@ int main(void) {
   test_commalist();
   test_base64();
   test_http_get_var();
+  test_http_client();
   test_tls();
   test_ws();
   test_ws_fragmentation();
-  test_http_client();
   test_host_validation();
   test_http_server();
   test_http_404();

@@ -113,9 +113,8 @@ uint64_t mg_millis(void) {
   return GetTickCount();
 #elif MG_ARCH == MG_ARCH_RP2040
   return time_us_64() / 1000;
-#elif MG_ARCH == MG_ARCH_ESP32
-  return esp_timer_get_time() / 1000;
-#elif MG_ARCH == MG_ARCH_ESP8266 || MG_ARCH == MG_ARCH_FREERTOS
+#elif MG_ARCH == MG_ARCH_ESP8266 || MG_ARCH == MG_ARCH_ESP32 || \
+    MG_ARCH == MG_ARCH_FREERTOS
   return xTaskGetTickCount() * portTICK_PERIOD_MS;
 #elif MG_ARCH == MG_ARCH_AZURERTOS
   return tx_time_get() * (1000 /* MS per SEC */ / TX_TIMER_TICKS_PER_SECOND);

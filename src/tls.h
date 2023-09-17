@@ -15,17 +15,13 @@
 #include "tls_openssl.h"
 
 struct mg_tls_opts {
-  struct mg_str client_ca;
-  struct mg_str server_ca;
-  struct mg_str server_cert;
-  struct mg_str server_key;
-  struct mg_str client_cert;
-  struct mg_str client_key;
+  struct mg_str ca;    // PEM or DER
+  struct mg_str cert;  // PEM or DER
+  struct mg_str key;   // PEM or DER
+  struct mg_str name;  // If not empty, enable host name verification
 };
 
-void mg_tls_ctx_init(struct mg_mgr *, const struct mg_tls_opts *);
-void mg_tls_ctx_free(struct mg_mgr *);
-void mg_tls_init(struct mg_connection *, struct mg_str hostname);
+void mg_tls_init(struct mg_connection *, const struct mg_tls_opts *opts);
 void mg_tls_free(struct mg_connection *);
 long mg_tls_send(struct mg_connection *, const void *buf, size_t len);
 long mg_tls_recv(struct mg_connection *, void *buf, size_t len);

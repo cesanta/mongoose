@@ -27,7 +27,6 @@ struct mg_mgr {
   unsigned long nextid;         // Next connection ID
   unsigned long timerid;        // Next timer ID
   void *userdata;               // Arbitrary user data pointer
-  void *tls_ctx;                // TLS context shared by all TLS sessions
   uint16_t mqtt_id;             // MQTT IDs for pub/sub
   void *active_dns_requests;    // DNS requests in progress
   struct mg_timer *timers;      // Active timers

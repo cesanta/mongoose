@@ -7,7 +7,7 @@ CFLAGS = -W -Wall -Wextra -g -I.  # Build options
 # Mongoose build options. See https://mongoose.ws/documentation/#build-options
 CFLAGS_MONGOOSE += -DMG_ENABLE_LINES=1 -DMG_ENABLE_PACKED_FS=1
 
-// see tutorial at https://mongoose.ws/tutorials/http-proxy-client/
+# See tutorial at https://mongoose.ws/tutorials/http-proxy-client/
 ARGS ?= 167.235.63.238:3128 http://info.cern.ch/	# default call arguments
 
 ifeq ($(OS),Windows_NT)   # Windows settings. Assume MinGW compiler. To use VC: make CC=cl CFLAGS=/MD OUT=/Feprog.exe

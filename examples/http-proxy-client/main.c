@@ -20,6 +20,13 @@ static void fn(struct mg_connection *c, int ev, void *ev_data, void *fn_data) {
   } else if (ev == MG_EV_CONNECT) {
     // Proxy TCP connection established. Send CONNECT request
     struct mg_str host = mg_url_host(url);
+
+    if (mg_url_is_ssl(url)) {
+      struct mg_tls_opts opts = {.ca = mg_unpacked("/certs/ca.pem"),
+                                 .name = host};
+      mg_tls_init(c, &opts);
+    }
+
     // c->is_hexdumping = 1;
     mg_printf(c, "CONNECT %.*s:%hu HTTP/1.1\r\nHost: %.*s:%hu\r\n\r\n",
               (int) host.len, host.ptr, mg_url_port(url), (int) host.len,
@@ -35,10 +42,11 @@ static void fn(struct mg_connection *c, int ev, void *ev_data, void *fn_data) {
           ("Connected to proxy, status: %.*s", (int) hm.uri.len, hm.uri.ptr));
       mg_iobuf_del(&c->recv, 0, n);
       // Send request to the target server
-      mg_printf(c, "GET %s HTTP/1.0\r\n"
-                   "Host: %.*s\r\n"
-                   "\r\n",
-                   mg_url_uri(url), (int) host.len, host.ptr);
+      mg_printf(c,
+                "GET %s HTTP/1.0\r\n"
+                "Host: %.*s\r\n"
+                "\r\n",
+                mg_url_uri(url), (int) host.len, host.ptr);
     }
   }
 }
@@ -52,8 +60,6 @@ int main(int argc, char *argv[]) {
   }
 
   mg_mgr_init(&mgr);                            // Initialise event manager
-  struct mg_tls_opts opts = {.client_ca = mg_unpacked("/certs/client_ca.pem")};
-  mg_tls_ctx_init(&mgr, &opts);
   mg_http_connect(&mgr, argv[1], fn, argv[2]);  // Connect to the proxy
   for (;;) mg_mgr_poll(&mgr, 1000);             // Event loop
   mg_mgr_free(&mgr);
