@@ -143,7 +143,7 @@ void mg_close_conn(struct mg_connection *c) {
   mg_tls_free(c);
   mg_iobuf_free(&c->recv);
   mg_iobuf_free(&c->send);
-  memset(c, 0, sizeof(*c));
+  mg_bzero((unsigned char *) c, sizeof(*c));
   free(c);
 }
 

@@ -1,5 +1,13 @@
 #include "util.h"
 
+// Not using memset for zeroing memory, cause it can be dropped by compiler
+// See https://github.com/cesanta/mongoose/pull/1265
+void mg_bzero(volatile unsigned char *buf, size_t len) {
+  if (buf != NULL) {
+    while (len--) *buf++ = 0;
+  }
+}
+
 #if MG_ENABLE_CUSTOM_RANDOM
 #else
 void mg_random(void *buf, size_t len) {
@@ -86,7 +94,7 @@ int mg_check_ip_acl(struct mg_str acl, struct mg_addr *remote_ip) {
   uint32_t remote_ip4;
   if (remote_ip->is_ip6) {
     return -1;  // TODO(): handle IPv6 ACL and addresses
-  } else {  // IPv4
+  } else {      // IPv4
     memcpy((void *) &remote_ip4, remote_ip->ip, sizeof(remote_ip4));
     while (mg_commalist(&acl, &k, &v)) {
       uint32_t net, mask;

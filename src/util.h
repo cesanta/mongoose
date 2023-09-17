@@ -11,6 +11,7 @@
 #define assert(x)
 #endif
 
+void mg_bzero(volatile unsigned char *buf, size_t len);
 void mg_random(void *buf, size_t len);
 char *mg_random_str(char *buf, size_t len);
 uint16_t mg_ntohs(uint16_t net);
