@@ -1,0 +1,1 @@
+cmsis_mcu/devices/MIMXRT1021/gcc/MIMXRT1021xxxxx_ram.ld
