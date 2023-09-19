@@ -37,7 +37,7 @@ static void forward_request(struct mg_http_message *hm,
 }
 
 static void fn2(struct mg_connection *c, int ev, void *ev_data, void *fn_data) {
-  struct mg_connection *c2 = (struct mg_connection *)fn_data;
+  struct mg_connection *c2 = (struct mg_connection *) fn_data;
   if (ev == MG_EV_READ) {
     // All incoming data from the backend, forward to the client
     if (c2 != NULL) mg_send(c2, c->recv.buf, c->recv.len);
@@ -58,9 +58,14 @@ static void fn(struct mg_connection *c, int ev, void *ev_data, void *fn_data) {
     if (c2 == NULL) {
       mg_error(c, "Cannot create backend connection");
     } else {
+      if (mg_url_is_ssl(s_backend_url)) {
+        struct mg_tls_opts opts = {.ca = mg_unpacked("/certs/ca.pem"),
+                                   .name = mg_url_host(s_backend_url)};
+        mg_tls_init(c2, &opts);
+      }
       c->fn_data = c2;
       forward_request(hm, c2);
-      c->is_resp = 0; // process further msgs in keep-alive connection
+      c->is_resp = 0;  // process further msgs in keep-alive connection
       c2->is_hexdumping = 1;
     }
   } else if (ev == MG_EV_CLOSE) {
@@ -74,8 +79,6 @@ int main(void) {
 
   mg_log_set(MG_LL_DEBUG);                       // Set log level
   mg_mgr_init(&mgr);                             // Initialise event manager
-  struct mg_tls_opts opts = {.client_ca = mg_unpacked("/certs/client_ca.pem")};
-  mg_tls_ctx_init(&mgr, &opts);
   mg_http_listen(&mgr, s_listen_url, fn, NULL);  // Start proxy
   for (;;) mg_mgr_poll(&mgr, 1000);              // Event loop
   mg_mgr_free(&mgr);

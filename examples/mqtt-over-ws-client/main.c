@@ -11,11 +11,11 @@
 
 #include "mongoose.h"
 
-static const char *s_url = 
+static const char *s_url =
 #if MG_TLS
-  "wss://broker.hivemq.com:8884/mqtt";
+    "wss://broker.hivemq.com:8884/mqtt";
 #else
-  "ws://broker.hivemq.com:8000/mqtt";
+    "ws://broker.hivemq.com:8000/mqtt";
 #endif
 
 static const char *s_topic = "mg/test";
@@ -24,12 +24,17 @@ static void fn(struct mg_connection *c, int ev, void *ev_data, void *fn_data) {
   if (ev == MG_EV_ERROR) {
     // On error, log error message
     MG_ERROR(("%p %s", c->fd, (char *) ev_data));
+  } else if (ev == MG_EV_CONNECT) {
+    if (mg_url_is_ssl(s_url)) {
+      struct mg_tls_opts opts = {.ca = mg_unpacked("/certs/ca.pem"),
+                                 .name = mg_url_host(s_url)};
+      mg_tls_init(c, &opts);
+    }
   } else if (ev == MG_EV_WS_OPEN) {
     // WS connection established. Perform MQTT login
     MG_INFO(("Connected to WS. Logging in to MQTT..."));
-    struct mg_mqtt_opts opts = {.qos = 1,
-                                .topic = mg_str(s_topic),
-                                .message = mg_str("goodbye")};
+    struct mg_mqtt_opts opts = {
+        .qos = 1, .topic = mg_str(s_topic), .message = mg_str("goodbye")};
     size_t len = c->send.len;
     mg_mqtt_login(c, &opts);
     mg_ws_wrap(c, c->send.len - len, WEBSOCKET_OP_BINARY);
@@ -92,8 +97,6 @@ int main(void) {
   struct mg_mgr mgr;        // Event manager
   bool done = false;        // Event handler flips it to true when done
   mg_mgr_init(&mgr);        // Initialise event manager
-  struct mg_tls_opts opts = {.client_ca = mg_unpacked("/certs/client_ca.pem")};
-  mg_tls_ctx_init(&mgr, &opts);
   mg_log_set(MG_LL_DEBUG);  // Set log level
   mg_ws_connect(&mgr, s_url, fn, &done, NULL);    // Create client connection
   while (done == false) mg_mgr_poll(&mgr, 1000);  // Event loop

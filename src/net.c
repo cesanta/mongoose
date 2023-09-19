@@ -138,7 +138,7 @@ void mg_close_conn(struct mg_connection *c) {
   // Order of operations is important. `MG_EV_CLOSE` event must be fired
   // before we deallocate received data, see #1331
   mg_call(c, MG_EV_CLOSE, NULL);
-  MG_DEBUG(("%lu %p closed", c->id, c->fd));
+  MG_DEBUG(("%lu %ld closed", c->id, c->fd));
 
   mg_tls_free(c);
   mg_iobuf_free(&c->recv);
@@ -161,13 +161,9 @@ struct mg_connection *mg_connect(struct mg_mgr *mgr, const char *url,
     c->fn = fn;
     c->is_client = true;
     c->fn_data = fn_data;
-    MG_DEBUG(("%lu %p %s", c->id, c->fd, url));
+    MG_DEBUG(("%lu %ld %s", c->id, c->fd, url));
     mg_call(c, MG_EV_OPEN, (void *) url);
     mg_resolve(c, url);
-    if (mg_url_is_ssl(url)) {
-      struct mg_str host = mg_url_host(url);
-      mg_tls_init(c, host);
-    }
   }
   return c;
 }
@@ -189,7 +185,7 @@ struct mg_connection *mg_listen(struct mg_mgr *mgr, const char *url,
     c->fn_data = fn_data;
     mg_call(c, MG_EV_OPEN, NULL);
     if (mg_url_is_ssl(url)) c->is_tls = 1;  // Accepted connection must
-    MG_DEBUG(("%lu %p %s", c->id, c->fd, url));
+    MG_DEBUG(("%lu %ld %s", c->id, c->fd, url));
   }
   return c;
 }
@@ -232,7 +228,6 @@ void mg_mgr_free(struct mg_mgr *mgr) {
 #if MG_ENABLE_EPOLL
   if (mgr->epoll_fd >= 0) close(mgr->epoll_fd), mgr->epoll_fd = -1;
 #endif
-  mg_tls_ctx_free(mgr);
 }
 
 void mg_mgr_init(struct mg_mgr *mgr) {

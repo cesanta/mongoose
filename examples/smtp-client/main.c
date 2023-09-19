@@ -28,8 +28,9 @@ static void fn(struct mg_connection *c, int ev, void *ev_data, void *fn_data) {
         mg_printf(c, "STARTTLS\r\n");
         *state = STARTTLS_WAIT;
       } else if (*state == STARTTLS_WAIT) {
-        struct mg_str host = mg_url_host(server);
-        mg_tls_init(c, host);
+        struct mg_tls_opts opts = {.ca = mg_unpacked("/certs/ca.pem"),
+                                   .name = mg_url_host(server)};
+        mg_tls_init(c, &opts);
         *state = AUTH;
       } else if (*state == AUTH) {
         char a[100], b[300] = "";
@@ -74,10 +75,6 @@ static void fn(struct mg_connection *c, int ev, void *ev_data, void *fn_data) {
 int main(void) {
   struct mg_mgr mgr;
   mg_mgr_init(&mgr);
-
-  struct mg_tls_opts opts = {.client_ca = mg_unpacked("/certs/client_ca.pem")};
-  mg_tls_ctx_init(&mgr, &opts);
-
   mg_log_set(MG_LL_DEBUG);
   mg_connect(&mgr, server, fn, NULL);
   while (s_quit == false) mg_mgr_poll(&mgr, 1000);

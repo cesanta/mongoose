@@ -54,10 +54,12 @@ static void cfn(struct mg_connection *c, int ev, void *ev_data, void *fn_data) {
     MG_INFO(("CLIENT has been initialized"));
   } else if (ev == MG_EV_CONNECT) {
     MG_INFO(("CLIENT connected"));
-#if MG_TLS
-    struct mg_str host = mg_url_host(s_conn);
-    mg_tls_init(c, host);
-#endif
+    if (mg_url_is_ssl(s_conn)) {
+      struct mg_tls_opts opts = {.ca = mg_str(s_tls_ca),
+                                 .cert = mg_str(s_tls_cert),
+                                 .key = mg_str(s_tls_key)};
+      mg_tls_init(c, &opts);
+    }
     *i = 1;  // do something
   } else if (ev == MG_EV_READ) {
     struct mg_iobuf *r = &c->recv;
@@ -89,9 +91,12 @@ static void sfn(struct mg_connection *c, int ev, void *ev_data, void *fn_data) {
     MG_INFO(("SERVER is listening"));
   } else if (ev == MG_EV_ACCEPT) {
     MG_INFO(("SERVER accepted a connection"));
-#if MG_TLS
-    mg_tls_init(c, mg_str(""));
-#endif
+    if (mg_url_is_ssl(s_lsn)) {
+      struct mg_tls_opts opts = {.ca = mg_str(s_tls_ca),
+                                 .cert = mg_str(s_tls_cert),
+                                 .key = mg_str(s_tls_key)};
+      mg_tls_init(c, &opts);
+    }
   } else if (ev == MG_EV_READ) {
     struct mg_iobuf *r = &c->recv;
     MG_INFO(("SERVER got data: %.*s", r->len, r->buf));
@@ -109,13 +114,9 @@ static void sfn(struct mg_connection *c, int ev, void *ev_data, void *fn_data) {
 static void timer_fn(void *arg) {
   struct mg_mgr *mgr = (struct mg_mgr *) arg;
   if (c_res.c == NULL) {
-    // connect
     c_res.i = 0;
     c_res.c = mg_connect(mgr, s_conn, cfn, &c_res);
-    if (c_res.c == NULL)
-      MG_INFO(("CLIENT cant' open a connection"));
-    else
-      MG_INFO(("CLIENT is connecting"));
+    MG_INFO(("CLIENT %s", c_res.c ? "connecting" : "failed"));
   }
 }
 
@@ -125,11 +126,6 @@ int main(void) {
 
   mg_log_set(MG_LL_INFO);  // Set log level
   mg_mgr_init(&mgr);       // Initialize event manager
-
-  struct mg_tls_opts opts = {.client_ca = mg_str(s_tls_ca),
-                             .server_cert = mg_str(s_tls_cert),
-                             .server_key = mg_str(s_tls_key)};
-  mg_tls_ctx_init(&mgr, &opts);
 
   mg_timer_add(&mgr, 15000, MG_TIMER_REPEAT | MG_TIMER_RUN_NOW, timer_fn, &mgr);
   c = mg_listen(&mgr, s_lsn, sfn, NULL);  // Create server connection

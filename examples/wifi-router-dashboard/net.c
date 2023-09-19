@@ -31,34 +31,29 @@ struct device {
   char *last_seen;
 };
 
-static struct device s_devices[] = {
-  { .dev_name = "espressif", 
-    .mac = "02:11:22:33:44:55", 
-    .ip_addr = "192.168.1.1/24",
-    .speed = 1000,
-    .connected_to = "Ethernet",
-    .lease_time_left = 1000,
-    .last_seen = "13h20m ago"
-  },
+static struct device s_devices[] = {{.dev_name = "espressif",
+                                     .mac = "02:11:22:33:44:55",
+                                     .ip_addr = "192.168.1.1/24",
+                                     .speed = 1000,
+                                     .connected_to = "Ethernet",
+                                     .lease_time_left = 1000,
+                                     .last_seen = "13h20m ago"},
 
-  { .dev_name = "windows11", 
-    .mac = "01:22:11:44:33:55", 
-    .ip_addr = "192.168.1.2/24",
-    .speed = 200,
-    .connected_to = "Wifi 2.4 GHz",
-    .lease_time_left = 4141,
-    .last_seen = "23s ago"
-  },
+                                    {.dev_name = "windows11",
+                                     .mac = "01:22:11:44:33:55",
+                                     .ip_addr = "192.168.1.2/24",
+                                     .speed = 200,
+                                     .connected_to = "Wifi 2.4 GHz",
+                                     .lease_time_left = 4141,
+                                     .last_seen = "23s ago"},
 
-  { .dev_name = "iRobot-2", 
-    .mac = "01:22:11:44:33:42", 
-    .ip_addr = "192.168.1.3/24",
-    .speed = 600,
-    .connected_to = "Wifi 5GHz",
-    .lease_time_left = 1141,
-    .last_seen = "20m ago"
-  }
-};
+                                    {.dev_name = "iRobot-2",
+                                     .mac = "01:22:11:44:33:42",
+                                     .ip_addr = "192.168.1.3/24",
+                                     .speed = 600,
+                                     .connected_to = "Wifi 5GHz",
+                                     .lease_time_left = 1141,
+                                     .last_seen = "20m ago"}};
 
 // DHCP configuration
 struct dhcp {
@@ -232,18 +227,19 @@ static void handle_devices_get(struct mg_connection *c) {
   for (int i = 0; i < nr_devs; i++) {
     size_t current_length = strlen(test_json);
 
-    mg_snprintf(test_json + current_length, sizeof(test_json) - current_length,
+    mg_snprintf(
+        test_json + current_length, sizeof(test_json) - current_length,
         "{%m:\"%s\",%m:\"%s\", %m:\"%s\", %m:%d,%m:\"%s\",%m:%d,%m:\"%s\"}",  //
-        MG_ESC("dev_name"), s_devices[i].dev_name,   //
-        MG_ESC("mac"), s_devices[i].mac,             //
-        MG_ESC("ip"), s_devices[i].ip_addr,          //
-        MG_ESC("speed"), s_devices[i].speed,         //
-        MG_ESC("connected_to"), s_devices[i].connected_to, //
-        MG_ESC("lease_time_left"), s_devices[i].lease_time_left, //
+        MG_ESC("dev_name"), s_devices[i].dev_name,                            //
+        MG_ESC("mac"), s_devices[i].mac,                                      //
+        MG_ESC("ip"), s_devices[i].ip_addr,                                   //
+        MG_ESC("speed"), s_devices[i].speed,                                  //
+        MG_ESC("connected_to"), s_devices[i].connected_to,                    //
+        MG_ESC("lease_time_left"), s_devices[i].lease_time_left,              //
         MG_ESC("last_seen"), s_devices[i].last_seen);
 
     if (i < nr_devs - 1) {
-        strncat(test_json, ",", sizeof(test_json) - strlen(test_json) - 1);
+      strncat(test_json, ",", sizeof(test_json) - strlen(test_json) - 1);
     }
   }
 
@@ -261,7 +257,7 @@ static void handle_dhcp_set(struct mg_connection *c, struct mg_str body) {
   s_dhcp = dhcp;  // Save to the device flash, too
   bool ok = true;
   mg_http_reply(c, 200, s_json_header,
-                "{%m:%s,%m:%m}",                           //
+                "{%m:%s,%m:%m}",                          //
                 MG_ESC("status"), ok ? "true" : "false",  //
                 MG_ESC("message"), MG_ESC(ok ? "Success" : "Failed"));
 }
@@ -276,7 +272,14 @@ static void handle_dhcp_get(struct mg_connection *c) {
 
 // HTTP request handler function
 static void fn(struct mg_connection *c, int ev, void *ev_data, void *fn_data) {
-  if (ev == MG_EV_HTTP_MSG) {
+  if (ev == MG_EV_ACCEPT) {
+    if (fn_data != NULL) {  // TLS
+      struct mg_tls_opts opts = {0};
+      opts.cert = mg_str(s_tls_cert);
+      opts.key = mg_str(s_tls_key);
+      mg_tls_init(c, &opts);
+    }
+  } else if (ev == MG_EV_HTTP_MSG) {
     struct mg_http_message *hm = (struct mg_http_message *) ev_data;
     struct user *u = authenticate(hm);
 
@@ -317,12 +320,8 @@ static void fn(struct mg_connection *c, int ev, void *ev_data, void *fn_data) {
 }
 
 void web_init(struct mg_mgr *mgr) {
-  struct mg_tls_opts opts = {0};
-  opts.server_cert = mg_str(s_tls_cert);
-  opts.server_key = mg_str(s_tls_key);
-  mg_tls_ctx_init(mgr, &opts);
   mg_http_listen(mgr, HTTP_URL, fn, NULL);
-  mg_http_listen(mgr, HTTPS_URL, fn, NULL);
+  mg_http_listen(mgr, HTTPS_URL, fn, (void *) 1);
 
   // mg_timer_add(c->mgr, 1000, MG_TIMER_REPEAT, timer_mqtt_fn, c->mgr);
   mg_timer_add(mgr, 3600 * 1000, MG_TIMER_RUN_NOW | MG_TIMER_REPEAT,

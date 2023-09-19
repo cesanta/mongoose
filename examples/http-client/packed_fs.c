@@ -2556,7 +2556,7 @@ static const struct packed_file {
   size_t size;
   time_t mtime;
 } packed_files[] = {
-  {"/certs/client_ca.pem", v1, sizeof(v1), 1694016785},
+  {"/certs/ca.pem", v1, sizeof(v1), 1694162397},
   {NULL, NULL, 0, 0}
 };
 
