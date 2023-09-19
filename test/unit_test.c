@@ -1199,7 +1199,7 @@ static void test_http_404(void) {
 }
 
 static void test_tls(void) {
-  return;
+//  return;
 #if MG_TLS
   struct mg_mgr mgr;
   struct mg_connection *c;
@@ -1273,7 +1273,7 @@ static void test_http_client(void) {
   c->is_closing = 1;
   mg_mgr_poll(&mgr, 1);
 
-#if 0
+#if 1
   // Test failed host validation
   c = mg_http_connect(&mgr, "https://cesanta.com", f3, &ok);
   ASSERT(c != NULL);

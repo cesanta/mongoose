@@ -15,7 +15,7 @@ jobs:
       matrix:
         cc: [gcc, clang, g++, clang++]
         target: [test, mip_test]
-        ssl: ["", MBEDTLS] #ssl: ["", MBEDTLS, OPENSSL]
+        ssl: ["", MBEDTLS, OPENSSL]
         select: ["-DMG_ENABLE_POLL=0 -DMG_ENABLE_EPOLL=0", "-DMG_ENABLE_POLL=1 -DMG_ENABLE_EPOLL=0", "-DMG_ENABLE_POLL=0 -DMG_ENABLE_EPOLL=1"]
         exclude:
         - ssl: MBEDTLS
@@ -68,7 +68,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        ssl: ["", MBEDTLS] #ssl: ["", MBEDTLS, OPENSSL]
+        ssl: ["", MBEDTLS, OPENSSL]
         select: [-DMG_ENABLE_POLL=0, -DMG_ENABLE_POLL=1]
         exclude:
         - ssl: MBEDTLS
