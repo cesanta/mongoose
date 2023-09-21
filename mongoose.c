@@ -6062,7 +6062,8 @@ bool mg_open_listener(struct mg_connection *c, const char *url) {
       // won't work! (setsockopt will return EINVAL)
       MG_ERROR(("setsockopt(SO_REUSEADDR): %d", MG_SOCK_ERR(rc)));
 #endif
-#if defined(IPV6_V6ONLY)
+#if MG_IPV6_V6ONLY
+      // Bind only to the V6 address, not V4 address on this port
     } else if (c->loc.is_ip6 &&
                (rc = setsockopt(fd, IPPROTO_IPV6, IPV6_V6ONLY, (char *) &on,
                                 sizeof(on))) != 0) {

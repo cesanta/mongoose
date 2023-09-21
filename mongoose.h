@@ -709,6 +709,10 @@ struct timeval {
 #define MG_ENABLE_IPV6 0
 #endif
 
+#ifndef MG_IPV6_V6ONLY
+#define MG_IPV6_V6ONLY 0  // IPv6 socket binds only to V6, not V4 address
+#endif
+
 #ifndef MG_ENABLE_MD5
 #define MG_ENABLE_MD5 1
 #endif
