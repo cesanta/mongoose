@@ -3793,6 +3793,7 @@ void mg_mgr_free(struct mg_mgr *mgr) {
 #if MG_ENABLE_EPOLL
   if (mgr->epoll_fd >= 0) close(mgr->epoll_fd), mgr->epoll_fd = -1;
 #endif
+  mg_tls_ctx_free(mgr);
 }
 
 void mg_mgr_init(struct mg_mgr *mgr) {
@@ -3817,6 +3818,7 @@ void mg_mgr_init(struct mg_mgr *mgr) {
   mgr->dnstimeout = 3000;
   mgr->dns4.url = "udp://8.8.8.8:53";
   mgr->dns6.url = "udp://[2001:4860:4860::8888]:53";
+  mg_tls_ctx_init(mgr);
 }
 
 #ifdef MG_ENABLE_LINES
@@ -6995,6 +6997,12 @@ size_t mg_tls_pending(struct mg_connection *c) {
   (void) c;
   return 0;
 }
+void mg_tls_ctx_init(struct mg_mgr *mgr) {
+  (void) mgr;
+}
+void mg_tls_ctx_free(struct mg_mgr *mgr) {
+  (void) mgr;
+}
 #endif
 
 #ifdef MG_ENABLE_LINES
@@ -7146,14 +7154,9 @@ void mg_tls_init(struct mg_connection *c, const struct mg_tls_opts *opts) {
   }
 
 #ifdef MBEDTLS_SSL_SESSION_TICKETS
-  mbedtls_ssl_ticket_init(&tls->ticket);
-  if ((rc = mbedtls_ssl_ticket_setup(&tls->ticket, mg_mbed_rng, NULL,
-                                     MBEDTLS_CIPHER_AES_128_GCM, 86400)) != 0) {
-    mg_error(c, " mbedtls_ssl_ticket_setup %#x", -rc);
-    goto fail;
-  }
-  mbedtls_ssl_conf_session_tickets_cb(&tls->conf, mbedtls_ssl_ticket_write,
-                                      mbedtls_ssl_ticket_parse, &tls->ticket);
+  mbedtls_ssl_conf_session_tickets_cb(
+      &tls->conf, mbedtls_ssl_ticket_write, mbedtls_ssl_ticket_parse,
+      &((struct mg_tls_ctx *) c->mgr->tls_ctx)->tickets);
 #endif
 
   if ((rc = mbedtls_ssl_setup(&tls->ssl, &tls->conf)) != 0) {
@@ -7192,6 +7195,35 @@ long mg_tls_send(struct mg_connection *c, const void *buf, size_t len) {
     return MG_IO_WAIT;
   if (n <= 0) return MG_IO_ERR;
   return n;
+}
+
+void mg_tls_ctx_init(struct mg_mgr *mgr) {
+  struct mg_tls_ctx *ctx = (struct mg_tls_ctx *) calloc(1, sizeof(*ctx));
+  if (ctx == NULL) {
+    MG_ERROR(("TLS context init OOM"));
+  } else {
+#ifdef MBEDTLS_SSL_SESSION_TICKETS
+    int rc;
+    mbedtls_ssl_ticket_init(&ctx->tickets);
+    if ((rc = mbedtls_ssl_ticket_setup(&ctx->tickets, mg_mbed_rng, NULL,
+                                       MBEDTLS_CIPHER_AES_128_GCM, 86400)) !=
+        0) {
+      MG_ERROR((" mbedtls_ssl_ticket_setup %#x", -rc));
+    }
+#endif
+    mgr->tls_ctx = ctx;
+  }
+}
+
+void mg_tls_ctx_free(struct mg_mgr *mgr) {
+  struct mg_tls_ctx *ctx = (struct mg_tls_ctx *) mgr->tls_ctx;
+  if (ctx != NULL) {
+#ifdef MBEDTLS_SSL_SESSION_TICKETS
+    mbedtls_ssl_ticket_free(&ctx->tickets);
+#endif
+    free(ctx);
+    mgr->tls_ctx = NULL;
+  }
 }
 #endif
 
@@ -7388,6 +7420,14 @@ long mg_tls_send(struct mg_connection *c, const void *buf, size_t len) {
   if (n < 0 && mg_tls_err(tls, n) == 0) return MG_IO_WAIT;
   if (n <= 0) return MG_IO_ERR;
   return n;
+}
+
+void mg_tls_ctx_init(struct mg_mgr *mgr) {
+  (void) mgr;
+}
+
+void mg_tls_ctx_free(struct mg_mgr *mgr) {
+  (void) mgr;
 }
 #endif
 

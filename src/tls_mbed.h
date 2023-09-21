@@ -11,6 +11,13 @@
 #include <mbedtls/ssl.h>
 #include <mbedtls/ssl_ticket.h>
 
+struct mg_tls_ctx {
+  int dummy;
+#ifdef MBEDTLS_SSL_SESSION_TICKETS
+  mbedtls_ssl_ticket_context tickets;
+#endif
+};
+
 struct mg_tls {
   mbedtls_x509_crt ca;      // Parsed CA certificate
   mbedtls_x509_crt cert;    // Parsed certificate
