@@ -27,3 +27,7 @@ long mg_tls_send(struct mg_connection *, const void *buf, size_t len);
 long mg_tls_recv(struct mg_connection *, void *buf, size_t len);
 size_t mg_tls_pending(struct mg_connection *);
 void mg_tls_handshake(struct mg_connection *);
+
+// Private
+void mg_tls_ctx_init(struct mg_mgr *);
+void mg_tls_ctx_free(struct mg_mgr *);

@@ -189,4 +189,12 @@ long mg_tls_send(struct mg_connection *c, const void *buf, size_t len) {
   if (n <= 0) return MG_IO_ERR;
   return n;
 }
+
+void mg_tls_ctx_init(struct mg_mgr *mgr) {
+  (void) mgr;
+}
+
+void mg_tls_ctx_free(struct mg_mgr *mgr) {
+  (void) mgr;
+}
 #endif

@@ -1180,6 +1180,7 @@ struct mg_mgr {
   unsigned long nextid;         // Next connection ID
   unsigned long timerid;        // Next timer ID
   void *userdata;               // Arbitrary user data pointer
+  void *tls_ctx;                // TLS context shared by all TLS sessions
   uint16_t mqtt_id;             // MQTT IDs for pub/sub
   void *active_dns_requests;    // DNS requests in progress
   struct mg_timer *timers;      // Active timers
@@ -1358,6 +1359,10 @@ long mg_tls_recv(struct mg_connection *, void *buf, size_t len);
 size_t mg_tls_pending(struct mg_connection *);
 void mg_tls_handshake(struct mg_connection *);
 
+// Private
+void mg_tls_ctx_init(struct mg_mgr *);
+void mg_tls_ctx_free(struct mg_mgr *);
+
 
 
 
@@ -1369,6 +1374,13 @@ void mg_tls_handshake(struct mg_connection *);
 #include <mbedtls/net_sockets.h>
 #include <mbedtls/ssl.h>
 #include <mbedtls/ssl_ticket.h>
+
+struct mg_tls_ctx {
+  int dummy;
+#ifdef MBEDTLS_SSL_SESSION_TICKETS
+  mbedtls_ssl_ticket_context tickets;
+#endif
+};
 
 struct mg_tls {
   mbedtls_x509_crt ca;      // Parsed CA certificate
