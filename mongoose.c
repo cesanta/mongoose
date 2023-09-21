@@ -133,17 +133,17 @@ struct dns_data {
 static void mg_sendnsreq(struct mg_connection *, struct mg_str *, int,
                          struct mg_dns *, bool);
 
-static void mg_dns_free(struct mg_connection *c, struct dns_data *d) {
-  LIST_DELETE(struct dns_data,
-              (struct dns_data **) &c->mgr->active_dns_requests, d);
+static void mg_dns_free(struct dns_data **head, struct dns_data *d) {
+  LIST_DELETE(struct dns_data, head, d);
   free(d);
 }
 
 void mg_resolve_cancel(struct mg_connection *c) {
-  struct dns_data *tmp, *d = (struct dns_data *) c->mgr->active_dns_requests;
-  for (; d != NULL; d = tmp) {
+  struct dns_data *tmp, *d;
+  struct dns_data **head = (struct dns_data **) &c->mgr->active_dns_requests;
+  for (d = *head; d != NULL; d = tmp) {
     tmp = d->next;
-    if (d->c == c) mg_dns_free(c, d);
+    if (d->c == c) mg_dns_free(head, d);
   }
 }
 
@@ -254,10 +254,10 @@ bool mg_dns_parse(const uint8_t *buf, size_t len, struct mg_dns_message *dm) {
 static void dns_cb(struct mg_connection *c, int ev, void *ev_data,
                    void *fn_data) {
   struct dns_data *d, *tmp;
+  struct dns_data **head = (struct dns_data **) &c->mgr->active_dns_requests;
   if (ev == MG_EV_POLL) {
     uint64_t now = *(uint64_t *) ev_data;
-    for (d = (struct dns_data *) c->mgr->active_dns_requests; d != NULL;
-         d = tmp) {
+    for (d = *head; d != NULL; d = tmp) {
       tmp = d->next;
       // MG_DEBUG ("%lu %lu dns poll", d->expire, now));
       if (now > d->expire) mg_error(d->c, "DNS timeout");
@@ -270,8 +270,7 @@ static void dns_cb(struct mg_connection *c, int ev, void *ev_data,
       mg_hexdump(c->recv.buf, c->recv.len);
     } else {
       // MG_VERBOSE(("%s %d", dm.name, dm.resolved));
-      for (d = (struct dns_data *) c->mgr->active_dns_requests; d != NULL;
-           d = tmp) {
+      for (d = *head; d != NULL; d = tmp) {
         tmp = d->next;
         // MG_INFO(("d %p %hu %hu", d, d->txnid, dm.txnid));
         if (dm.txnid != d->txnid) continue;
@@ -294,18 +293,17 @@ static void dns_cb(struct mg_connection *c, int ev, void *ev_data,
         } else {
           MG_ERROR(("%lu already resolved", d->c->id));
         }
-        mg_dns_free(c, d);
+        mg_dns_free(head, d);
         resolved = 1;
       }
     }
     if (!resolved) MG_ERROR(("stray DNS reply"));
     c->recv.len = 0;
   } else if (ev == MG_EV_CLOSE) {
-    for (d = (struct dns_data *) c->mgr->active_dns_requests; d != NULL;
-         d = tmp) {
+    for (d = *head; d != NULL; d = tmp) {
       tmp = d->next;
       mg_error(d->c, "DNS error");
-      mg_dns_free(c, d);
+      mg_dns_free(head, d);
     }
   }
   (void) fn_data;
