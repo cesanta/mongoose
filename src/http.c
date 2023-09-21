@@ -946,6 +946,11 @@ int mg_http_status(const struct mg_http_message *hm) {
   return atoi(hm->uri.ptr);
 }
 
+static bool is_hex_digit(int c) {
+  return (c >= '0' && c <= '9') || (c >= 'a' && c <= 'f') ||
+         (c >= 'A' && c <= 'F');
+}
+
 // If a server sends data to the client using chunked encoding, Mongoose strips
 // off the chunking prefix (hex length and \r\n) and suffix (\r\n), appends the
 // stripped data to the body, and fires the MG_EV_HTTP_CHUNK event.  When zero
@@ -960,7 +965,7 @@ int mg_http_status(const struct mg_http_message *hm) {
 // pointer: we store a size_t value there.
 static bool getchunk(struct mg_str s, size_t *prefixlen, size_t *datalen) {
   size_t i = 0, n;
-  while (i < s.len && s.ptr[i] != '\r' && s.ptr[i] != '\n') i++;
+  while (i < s.len && is_hex_digit(s.ptr[i])) i++;
   n = mg_unhexn(s.ptr, i);
   // MG_INFO(("%d %d", (int) (i + n + 4), (int) s.len));
   if (s.len < i + n + 4) return false;  // Chunk not yet fully buffered
