@@ -530,10 +530,9 @@ static void test_mqtt_ver(uint8_t mqtt_version) {
   struct mg_mqtt_prop properties[5];
   const char *url = "mqtt://broker.hivemq.com:1883";
   int i, retries;
-  mg_mgr_init(&mgr);
 
   // Connect with empty client ID, no options, ergo no MQTT != 3.1.1
-  if (mqtt_version != 4) goto connect_with_options;
+  mg_mgr_init(&mgr);
   c = mg_mqtt_connect(&mgr, url, NULL, mqtt_cb, &test_data);
   for (i = 0; i < 300 && mbuf[0] == 0; i++) mg_mgr_poll(&mgr, 10);
   if (mbuf[0] != 'X') MG_INFO(("[%s]", mbuf));
@@ -578,7 +577,6 @@ static void test_mqtt_ver(uint8_t mqtt_version) {
   mg_mgr_free(&mgr);
   ASSERT(mgr.conns == NULL);
 
-connect_with_options:
   // (Re-)connect with options: version, clean session, last will, keepalive
   // time. Don't set retain, some runners are not random
   test_data.flags = 0;
