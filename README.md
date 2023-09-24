@@ -26,11 +26,11 @@ robust, and easy. Features include:
 - Very easy to integrate: just copy `mongoose.c` and `mongoose.h` files to your source tree. See
   [exact steps](https://mongoose.ws/documentation/#2-minute-integration-guide)
 - Works with any network stack with socket API, like LwIP or FreeRTOS-Plus-TCP
-- Provides a built-in TCP/IP stack with drivers for bare metal or RTOS systems
-   - A complete Web device dashboard
-  [bare metal example on Nucleo-F429ZI](examples/stm32/nucleo-f429zi-baremetal)
-  is only 6 files
+- Built-in TCP/IP stack with drivers for bare metal or RTOS systems
+   - A complete Web device dashboard on bare metal
+  [Nucleo-F429ZI](examples/stm32/nucleo-f429zi-baremetal) is only 6 files
    - For comparison, a CubeIDE generated HTTP example is 400+ files
+- Built-in firmware updates for STM32H5, STM32H7, and more coming
 - Detailed [user guide, API reference and tons of tutorials](https://mongoose.ws/documentation/) available
 
 
