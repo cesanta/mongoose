@@ -815,6 +815,14 @@ struct timeval {
 #define MG_EPOLL_MOD(c, wr)
 #endif
 
+#ifndef MG_ENABLE_STM32H5
+#define MG_ENABLE_STM32H5 0
+#endif
+
+#ifndef MG_ENABLE_STM32H7
+#define MG_ENABLE_STM32H7 0
+#endif
+
 
 
 
@@ -1040,6 +1048,21 @@ uint64_t mg_now(void);     // Return milliseconds since Epoch
 #define MG_U8P(ADDR) ((uint8_t *) (ADDR))
 #define MG_IPADDR_PARTS(ADDR) \
   MG_U8P(ADDR)[0], MG_U8P(ADDR)[1], MG_U8P(ADDR)[2], MG_U8P(ADDR)[3]
+
+#define MG_REG(x) ((volatile uint32_t *) (x))[0]
+#define MG_BIT(x) (((uint32_t) 1U) << (x))
+#define MG_SET_BITS(R, CLRMASK, SETMASK) (R) = ((R) & ~(CLRMASK)) | (SETMASK)
+
+#define MG_ROUND_UP(x, a) ((a) == 0 ? (x) : ((((x) + (a) -1) / (a)) * (a)))
+#define MG_ROUND_DOWN(x, a) ((a) == 0 ? (x) : (((x) / (a)) * (a)))
+
+#ifdef __GNUC__
+#define MG_ARM_DISABLE_IRQ() asm volatile ("cpsid i" : : : "memory")
+#define MG_ARM_ENABLE_IRQ() asm volatile ("cpsie i" : : : "memory")
+#else
+#define MG_ARM_DISABLE_IRQ()
+#define MG_ARM_ENABLE_IRQ()
+#endif
 
 struct mg_addr;
 int mg_check_ip_acl(struct mg_str acl, struct mg_addr *remote_ip);
@@ -1652,10 +1675,8 @@ void mg_rpc_list(struct mg_rpc_req *r);
 
 
 #define MG_OTA_NONE 0      // No OTA support
-#define MG_OTA_STM32H5 1   // STM32 H5 series
+#define MG_OTA_FLASH 1     // OTA via an internal flash
 #define MG_OTA_CUSTOM 100  // Custom implementation
-
-#define MG_OTA_MAGIC 0xb07afeed
 
 #ifndef MG_OTA
 #define MG_OTA MG_OTA_NONE
@@ -1663,22 +1684,47 @@ void mg_rpc_list(struct mg_rpc_req *r);
 
 // Firmware update API
 bool mg_ota_begin(size_t new_firmware_size);     // Start writing
-bool mg_ota_write(const void *buf, size_t len);  // Write firmware chunk
+bool mg_ota_write(const void *buf, size_t len);  // Write chunk, aligned to 1k
 bool mg_ota_end(void);                           // Stop writing
-void mg_sys_reset(void);                         // Reboot device
 
-struct mg_ota_data {
-  uint32_t magic;   // Must be MG_OTA_MAGIC
-  uint32_t crc32;   // Checksum of the current firmware
-  uint32_t size;    // Firware size
-  uint32_t time;    // Flashing timestamp. Unix epoch, seconds since 1970
-  uint32_t booted;  // -1: not yet booted before, otherwise booted
-  uint32_t golden;  // -1: not yet comitted, otherwise clean, committed
+enum {
+  MG_OTA_UNAVAILABLE = 0,  // No OTA information is present
+  MG_OTA_FIRST_BOOT = 1,   // Device booting the first time after the OTA
+  MG_OTA_UNCOMMITTED = 2,  // Ditto, but marking us for the rollback
+  MG_OTA_COMMITTED = 3,    // The firmware is good
 };
+enum { MG_FIRMWARE_CURRENT = 0, MG_FIRMWARE_PREVIOUS = 1 };
 
-bool mg_ota_status(struct mg_ota_data[2]);  // Get status for curr and prev fw
-bool mg_ota_commit(void);                   // Commit current firmware
-bool mg_ota_rollback(void);                 // Rollback to prev firmware
+int mg_ota_status(int firmware);          // Return firmware status MG_OTA_*
+uint32_t mg_ota_crc32(int firmware);      // Return firmware checksum
+uint32_t mg_ota_timestamp(int firmware);  // Firmware timestamp, UNIX UTC epoch
+size_t mg_ota_size(int firmware);         // Firmware size
+
+bool mg_ota_commit(void);    // Commit current firmware
+bool mg_ota_rollback(void);  // Rollback to the previous firmware
+
+void mg_sys_reset(void);  // Reboot device immediately
+// Copyright (c) 2023 Cesanta Software Limited
+// All rights reserved
+
+
+
+// Flash information
+void *mg_flash_start(void);         // Return flash start address
+size_t mg_flash_size(void);         // Return flash size
+size_t mg_flash_sector_size(void);  // Return flash sector size
+size_t mg_flash_write_align(void);  // Return flash write align, minimum 4
+int mg_flash_bank(void);            // 0: not dual bank, 1: bank1, 2: bank2
+
+// Write, erase, swap bank
+bool mg_flash_write(void *addr, const void *buf, size_t len);
+bool mg_flash_erase(void *addr);  // Must be at sector boundary
+bool mg_flash_swap_bank(void);
+
+// Convenience functions to store data on a flash sector with wear levelling
+// If `sector` is NULL, then the last sector of flash is used
+bool mg_flash_load(void *sector, uint32_t key, void *buf, size_t len);
+bool mg_flash_save(void *sector, uint32_t key, const void *buf, size_t len);
 
 
 

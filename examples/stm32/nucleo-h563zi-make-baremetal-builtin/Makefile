@@ -2,17 +2,11 @@ CFLAGS  = -W -Wall -Wextra -Werror -Wundef -Wshadow -Wdouble-promotion
 CFLAGS += -Wformat-truncation -fno-common -Wconversion -Wno-sign-conversion
 CFLAGS += -g3 -Os -ffunction-sections -fdata-sections
 CFLAGS += -I. -Icmsis_core/CMSIS/Core/Include -Icmsis_h5/Include
-CFLAGS += -mcpu=cortex-m33 -mthumb -mfpu=fpv5-sp-d16 -mfloat-abi=hard
+CFLAGS += -mcpu=cortex-m33 -mthumb -mfpu=fpv5-sp-d16 -mfloat-abi=hard $(CFLAGS_EXTRA)
 LDFLAGS ?= -Tlink.ld -nostdlib -nostartfiles --specs nano.specs -lc -lgcc -Wl,--gc-sections -Wl,-Map=$@.map
 
-SOURCES = main.c syscalls.c sysinit.c
+SOURCES = main.c syscalls.c sysinit.c mongoose.c net.c packed_fs.c
 SOURCES += cmsis_h5/Source/Templates/gcc/startup_stm32h563xx.s # ST startup file. Compiler-dependent!
-
-# Mongoose-specific. See https://mongoose.ws/documentation/#build-options
-SOURCES += mongoose.c net.c packed_fs.c
-CFLAGS += -DMG_ENABLE_TCPIP=1 -DMG_ARCH=MG_ARCH_NEWLIB -DMG_ENABLE_CUSTOM_MILLIS=1
-CFLAGS += -DMG_ENABLE_CUSTOM_RANDOM=1 -DMG_ENABLE_PACKED_FS=1 
-CFLAGS += -DMG_ENABLE_DRIVER_STM32H=1 -DMG_OTA=MG_OTA_STM32H5 $(CFLAGS_EXTRA)
 
 # Example specific build options. See README.md
 CFLAGS += -DHTTP_URL=\"http://0.0.0.0/\" -DHTTPS_URL=\"https://0.0.0.0/\"
@@ -32,7 +26,7 @@ firmware.elf: cmsis_core cmsis_h5 $(SOURCES) hal.h link.ld Makefile
 	arm-none-eabi-gcc $(SOURCES) $(CFLAGS) $(LDFLAGS) -o $@
 
 flash: firmware.bin
-	st-flash --debug --freq=200 --reset write $< 0x8000000
+	st-flash --reset write $< 0x8000000
 
 cmsis_core:     # ARM CMSIS core headers
 	git clone --depth 1 -b 5.9.0 https://github.com/ARM-software/CMSIS_5 $@

@@ -2,17 +2,11 @@ CFLAGS  = -W -Wall -Wextra -Werror -Wundef -Wshadow -Wdouble-promotion
 CFLAGS += -Wformat-truncation -fno-common -Wconversion -Wno-sign-conversion
 CFLAGS += -g3 -Os -ffunction-sections -fdata-sections
 CFLAGS += -I. -Icmsis_core/CMSIS/Core/Include -Icmsis_h7/Include
-CFLAGS += -mcpu=cortex-m7 -mthumb -mfloat-abi=hard -mfpu=fpv5-d16
+CFLAGS += -mcpu=cortex-m7 -mthumb -mfloat-abi=hard -mfpu=fpv5-d16 $(CFLAGS_EXTRA)
 LDFLAGS ?= -Tlink.ld -nostdlib -nostartfiles --specs nano.specs -lc -lgcc -Wl,--gc-sections -Wl,-Map=$@.map
 
-SOURCES = main.c syscalls.c sysinit.c
+SOURCES = main.c syscalls.c sysinit.c mongoose.c net.c packed_fs.c
 SOURCES += cmsis_h7/Source/Templates/gcc/startup_stm32h743xx.s # ST startup file. Compiler-dependent!
-
-# Mongoose-specific. See https://mongoose.ws/documentation/#build-options
-SOURCES += mongoose.c net.c packed_fs.c
-CFLAGS += -DMG_ENABLE_TCPIP=1 -DMG_ARCH=MG_ARCH_NEWLIB -DMG_ENABLE_CUSTOM_MILLIS=1
-CFLAGS += -DMG_ENABLE_CUSTOM_RANDOM=1 -DMG_ENABLE_PACKED_FS=1 
-CFLAGS += -DMG_ENABLE_DRIVER_STM32H=1 $(CFLAGS_EXTRA)
 
 # Example specific build options. See README.md
 CFLAGS += -DHTTP_URL=\"http://0.0.0.0/\" -DHTTPS_URL=\"https://0.0.0.0/\"
@@ -56,7 +50,6 @@ test update: CFLAGS += -DUART_DEBUG=USART1
 test: update
 	curl --fail-with-body -su :$(VCON_API_KEY) $(DEVICE_URL)/tx?t=5 | tee /tmp/output.txt
 	grep 'READY, IP:' /tmp/output.txt       # Check for network init
-#	grep 'MQTT connected' /tmp/output.txt   # Check for MQTT connection success
 
 clean:
 	$(RM) firmware.* *.su cmsis_core cmsis_h7 mbedtls
