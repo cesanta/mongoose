@@ -1,6 +1,5 @@
-#include "arch.h"
 #include "log.h"
-#include "ota.h"
+#include "sys.h"
 
 #if MG_SYS == MG_SYS_STM32H7
 

@@ -3,6 +3,8 @@
 
 #pragma once
 
+#include "arch.h"
+
 #define MG_SYS_NONE 0      // Dummy system
 #define MG_SYS_STM32H5 1   // STM32 H5
 #define MG_SYS_STM32H7 2   // STM32 H7
