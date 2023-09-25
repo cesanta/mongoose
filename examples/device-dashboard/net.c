@@ -238,20 +238,16 @@ static void handle_firmware_rollback(struct mg_connection *c) {
 }
 
 static size_t print_status(void (*out)(char, void *), void *ptr, va_list *ap) {
-  struct mg_ota_data *os = va_arg(*ap, struct mg_ota_data *);
-  return mg_xprintf(
-      out, ptr, "{%m:%s,%m:%c%x%c,%m:%u,%m:%u,%m:%u,%m:%u,%m:%u}",
-      MG_ESC("valid"), os->magic == MG_OTA_MAGIC ? "true" : "false",
-      MG_ESC("magic"), '"', os->magic, '"', MG_ESC("crc32"), os->crc32,
-      MG_ESC("size"), os->size, MG_ESC("time"), os->time, MG_ESC("booted"),
-      os->booted, MG_ESC("golden"), os->golden);
+  int fw = va_arg(*ap, int);
+  return mg_xprintf(out, ptr, "{%m:%d,%m:%c%lx%c,%m:%u,%m:%u}",
+                    MG_ESC("status"), mg_ota_status(fw), MG_ESC("crc32"), '"',
+                    mg_ota_crc32(fw), '"', MG_ESC("size"), mg_ota_size(fw),
+                    MG_ESC("timestamp"), mg_ota_timestamp(fw));
 }
 
 static void handle_firmware_status(struct mg_connection *c) {
-  struct mg_ota_data od[2];
-  mg_ota_status(od);
-  mg_http_reply(c, 200, s_json_header, "[%M,%M]\n", print_status, &od[0],
-                print_status, &od[1]);
+  mg_http_reply(c, 200, s_json_header, "[%M,%M]\n", print_status,
+                MG_FIRMWARE_CURRENT, print_status, MG_FIRMWARE_PREVIOUS);
 }
 
 static void handle_sys_reset(struct mg_connection *c) {

@@ -186,16 +186,18 @@ function Main({}) {
 };
 
 function FirmwareStatus({title, info, children}) {
+  const state = ['UNAVAILABLE', 'FIRST_BOOT', 'NOT_COMMITTED', 'COMMITTED'][(info.status || 0) % 4];
+  const valid = info.status > 0;
   return html`
 <div class="bg-white py-1 divide-y border rounded">
   <div class="font-light uppercase flex items-center text-gray-600 px-4 py-2">
     ${title}
   <//>
   <div class="px-4 py-2 relative">
-    <div class="my-1">CRC32: ${info.valid ? info.crc32.toString(16) : 'n/a'}<//>
-    <div class="my-1">Size: ${info.valid ? info.size : 'n/a'}<//>
-    <div class="my-1">Flashed at: ${info.valid ? new Date(info.time * 1000).toLocaleString() : 'n/a'}<//>
-    <div class="my-1">State: ${info.valid ? (info.golden == 0 ? 'commtited' : 'NOT committed') : 'n/a'}<//>
+    <div class="my-1">Status: ${state}<//>
+    <div class="my-1">CRC32: ${valid ? info.crc32.toString(16) : 'n/a'}<//>
+    <div class="my-1">Size: ${valid ? info.size : 'n/a'}<//>
+    <div class="my-1">Flashed at: ${valid ? new Date(info.timestamp * 1000).toLocaleString() : 'n/a'}<//>
     ${children}
   <//>
 <//>`;
@@ -206,7 +208,6 @@ function FirmwareUpdate({}) {
   const [info, setInfo] = useState([{}, {}]);
   const refresh = () => fetch('api/firmware/status').then(r => r.json()).then(r => setInfo(r));
   useEffect(refresh, []);
-  const state = ['new', 'dirty', 'clean'][(info.state || 0) % 3];
   const oncommit = ev => fetch('api/firmware/commit')
     .then(r => r.json())
     .then(refresh);
@@ -223,12 +224,14 @@ function FirmwareUpdate({}) {
   return html`
 <div class="m-4 gap-4 grid grid-cols-1 lg:grid-cols-2">
   <${FirmwareStatus} title="Current firmware image" info=${info[0]}>
-    <${Button} cls="mr-2" title="Commit this firmware"
-      onclick=${oncommit} icon=${Icons.thumbUp} disabled=${clean} />
-    <${Button} title="Reboot device" onclick=${onreboot} icon=${Icons.refresh} clsx="absolute top-4 right-4" />
-    <${UploadFileButton} class="mt-2"
-      title="Upload new firmware: choose .bin file:" onupload=${onupload}
-    url="api/firmware/upload" accept=".bin,.uf2" />
+    <div class="flex flex-wrap gap-2">
+      <${Button} title="Commit this firmware"
+        onclick=${oncommit} icon=${Icons.thumbUp} disabled=${clean} />
+      <${Button} title="Reboot device" onclick=${onreboot} icon=${Icons.refresh} clsx="absolute top-4 right-4" />
+      <${UploadFileButton}
+        title="Upload new firmware: choose .bin file:" onupload=${onupload}
+      url="api/firmware/upload" accept=".bin,.uf2" />
+    <//>
   <//>
   <${FirmwareStatus} title="Previous firmware image" info=${info[1]}>
     <${Button} title="Rollback to this firmware" onclick=${onrollback}
@@ -238,10 +241,11 @@ function FirmwareUpdate({}) {
   <div class="bg-white border shadow-lg">
     <${DeveloperNote}>
       <div class="my-2">
-        When new firmware gets flashed, its status is unreliable, "not
-        committed". In order to become "committed" (verified), a firmware must
-        be committed.  If a firmware is not committed, then the next boot
-        reverts back to the previous firmware.
+        When a new firmware gets flashed, its status is marked as, "first_boot".
+        That is an unreliable (uncommitted) firmware. A user may choose
+        to revert back to the previous committed firmware on the subsequent
+        boots. Clicking on the "commit" button calls "mg_ota_commit()" function
+        which commits the firmware.
       <//>
       <div class="my-2">  
         This GUI loads a firmware file and sends it chunk by chunk to the
@@ -254,8 +258,8 @@ function FirmwareUpdate({}) {
   <div class="bg-white border shadow-lg">
     <${DeveloperNote}>
       <div>
-        Firmware udpdate mechanism defines 3 API functions that the
-        target device must implement: ota_begin(), ota_write() and ota_end()
+        Firmware update mechanism defines 3 API functions that the target
+        device must implement: mg_ota_begin(), mg_ota_write() and mg_ota_end()
       <//>
       <div class="my-2">  
         RESTful API handlers use ota_xxx() API to save firmware to flash.
@@ -264,7 +268,7 @@ function FirmwareUpdate({}) {
       <//>
       <div class="my-2">  
         <a class="link text-blue-600 underline" 
-          href="https://mongoose.ws/webinars/">Subscribe to our free webinar</a> to
+          href="https://mongoose.ws/webinars/">Join our free webinar</a> to
         get detailed explanations about possible firmware updates strategies
         and implementation demo
       <//>

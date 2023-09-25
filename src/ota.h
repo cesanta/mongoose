@@ -6,10 +6,8 @@
 #include "arch.h"
 
 #define MG_OTA_NONE 0      // No OTA support
-#define MG_OTA_STM32H5 1   // STM32 H5 series
+#define MG_OTA_FLASH 1     // OTA via an internal flash
 #define MG_OTA_CUSTOM 100  // Custom implementation
-
-#define MG_OTA_MAGIC 0xb07afeed
 
 #ifndef MG_OTA
 #define MG_OTA MG_OTA_NONE
@@ -17,19 +15,23 @@
 
 // Firmware update API
 bool mg_ota_begin(size_t new_firmware_size);     // Start writing
-bool mg_ota_write(const void *buf, size_t len);  // Write firmware chunk
+bool mg_ota_write(const void *buf, size_t len);  // Write chunk, aligned to 1k
 bool mg_ota_end(void);                           // Stop writing
-void mg_sys_reset(void);                         // Reboot device
 
-struct mg_ota_data {
-  uint32_t magic;   // Must be MG_OTA_MAGIC
-  uint32_t crc32;   // Checksum of the current firmware
-  uint32_t size;    // Firware size
-  uint32_t time;    // Flashing timestamp. Unix epoch, seconds since 1970
-  uint32_t booted;  // -1: not yet booted before, otherwise booted
-  uint32_t golden;  // -1: not yet comitted, otherwise clean, committed
+enum {
+  MG_OTA_UNAVAILABLE = 0,  // No OTA information is present
+  MG_OTA_FIRST_BOOT = 1,   // Device booting the first time after the OTA
+  MG_OTA_UNCOMMITTED = 2,  // Ditto, but marking us for the rollback
+  MG_OTA_COMMITTED = 3,    // The firmware is good
 };
+enum { MG_FIRMWARE_CURRENT = 0, MG_FIRMWARE_PREVIOUS = 1 };
 
-bool mg_ota_status(struct mg_ota_data[2]);  // Get status for curr and prev fw
-bool mg_ota_commit(void);                   // Commit current firmware
-bool mg_ota_rollback(void);                 // Rollback to prev firmware
+int mg_ota_status(int firmware);          // Return firmware status MG_OTA_*
+uint32_t mg_ota_crc32(int firmware);      // Return firmware checksum
+uint32_t mg_ota_timestamp(int firmware);  // Firmware timestamp, UNIX UTC epoch
+size_t mg_ota_size(int firmware);         // Firmware size
+
+bool mg_ota_commit(void);    // Commit current firmware
+bool mg_ota_rollback(void);  // Rollback to the previous firmware
+
+void mg_sys_reset(void);  // Reboot device immediately

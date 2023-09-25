@@ -4946,232 +4946,318 @@ bool mg_send(struct mg_connection *c, const void *buf, size_t len) {
 
 
 #if MG_OTA == MG_OTA_NONE
-static struct mg_ota_data s_od[2] = {
-    {MG_OTA_MAGIC, (uint32_t) -1, (uint32_t) -1, (uint32_t) -1, (uint32_t) -1,
-     (uint32_t) -1},
-    {MG_OTA_MAGIC, (uint32_t) -1, (uint32_t) -1, (uint32_t) -1, (uint32_t) -1,
-     (uint32_t) -1},
-};
 bool mg_ota_begin(size_t new_firmware_size) {
-  MG_DEBUG(("Starting firmware update, size %lu", new_firmware_size));
+  (void) new_firmware_size;
   return true;
 }
 bool mg_ota_write(const void *buf, size_t len) {
-  MG_DEBUG(("%p %lu", buf, len));
+  (void) buf, (void) len;
   return true;
 }
 bool mg_ota_end(void) {
   return true;
 }
-bool mg_ota_status(struct mg_ota_data od[2]) {
-  od[0] = s_od[0];
-  od[1] = s_od[1];
-  return true;
-}
 bool mg_ota_commit(void) {
-  s_od[0].golden = 0;
   return true;
 }
 bool mg_ota_rollback(void) {
   return true;
 }
+int mg_ota_status(int fw) {
+  (void) fw;
+  return 0;
+}
+uint32_t mg_ota_crc32(int fw) {
+  (void) fw;
+  return 0;
+}
+uint32_t mg_ota_timestamp(int fw) {
+  (void) fw;
+  return 0;
+}
+size_t mg_ota_size(int fw) {
+  (void) fw;
+  return 0;
+}
 void mg_sys_reset(void) {
-  MG_DEBUG(("Resetting device..."));
 }
 #endif
 
 #ifdef MG_ENABLE_LINES
-#line 1 "src/ota_stm32h5.c"
+#line 1 "src/ota_flash.c"
 #endif
 
 
 
 
-#if MG_OTA == MG_OTA_STM32H5
 
-#define FLASH_BANK1 0x08000000
-#define FLASH_SIZE1 0x00100000
-#define FLASH_BANK2 0x08100000
-#define FLASH_SIZE2 0x00100000
-#define FLASH_SSIZE 8192  // Sector (page) size, 8k
+// This OTA implementation uses the internal flash API outlined in sys.h
+// It splits flash into 2 equal partitions, and stores OTA status in the
+// last sector of the partition.
 
-// Keep OTA data at the beginning of the last sector of the flash bank
-#define FLASH_BANK1_OTA_DATA (FLASH_BANK1 + FLASH_SIZE1 - FLASH_SSIZE)
-#define FLASH_BANK2_OTA_DATA (FLASH_BANK2 + FLASH_SIZE2 - FLASH_SSIZE)
+#if MG_OTA == MG_OTA_FLASH
 
-#define FLASH_BASE 0x40022000          // Base address of the flash controller
-#define FLASH_KEYR (FLASH_BASE + 0x4)  // See RM0481 7.11
-#define FLASH_OPTKEYR (FLASH_BASE + 0xc)
-#define FLASH_OPTCR (FLASH_BASE + 0x1c)
-#define FLASH_NSSR (FLASH_BASE + 0x20)
-#define FLASH_NSCR (FLASH_BASE + 0x28)
-#define FLASH_NSCCR (FLASH_BASE + 0x30)
-#define FLASH_OPTSR_CUR (FLASH_BASE + 0x50)
-#define FLASH_OPTSR_PRG (FLASH_BASE + 0x54)
+#define MG_OTADATA_KEY 0xb07afed0
 
-#undef REG
-#define REG(x) ((volatile uint32_t *) (x))[0]
-#undef BIT
-#define BIT(x) (((uint32_t) 1U) << (x))
-#undef SETBITS
-#define SETBITS(R, CLEARMASK, SETMASK) (R) = ((R) & ~(CLEARMASK)) | (SETMASK)
-
-static uint32_t s_addr;   // Current address to write to
+static char *s_addr;      // Current address to write to
+static size_t s_size;     // Firmware size to flash. In-progress indicator
 static uint32_t s_crc32;  // Firmware checksum
 
-static void flash_unlock(void) {
-  static bool unlocked = false;
-  if (unlocked == false) {
-    REG(FLASH_KEYR) = 0x45670123;
-    REG(FLASH_KEYR) = 0Xcdef89ab;
-    REG(FLASH_OPTKEYR) = 0x08192a3b;
-    REG(FLASH_OPTKEYR) = 0x4c5d6e7f;
-    unlocked = true;
-  }
-}
-
-static int flash_page_start(volatile uint32_t *dst) {
-  uint32_t addr = (uint32_t) (uintptr_t) dst;
-  return (addr & (FLASH_SSIZE - 1)) == 0;
-}
-
-static bool flash_is_err(void) {
-  return REG(FLASH_NSSR) & ((BIT(8) - 1) << 17);  // RM0481 7.11.9
-}
-
-static void flash_wait(void) {
-  while ((REG(FLASH_NSSR) & BIT(0)) && (REG(FLASH_NSSR) & BIT(16)) == 0) {
-    (void) 0;
-  }
-}
-
-static void flash_prep(void) {
-  flash_wait();                              // Wait until ready
-  REG(FLASH_NSCR) = 0UL;                     // Clear control reg
-  REG(FLASH_NSCCR) = ((BIT(9) - 1) << 16U);  // Clear all errors
-}
-
-static bool flash_bank_is_swapped(void) {
-  return REG(FLASH_OPTCR) & BIT(31);  // RM0481 7.11.8
-}
-
-static void flash_erase(uint32_t sector) {
-  flash_prep();
-  if ((sector < 128 && flash_bank_is_swapped()) ||
-      (sector > 127 && !flash_bank_is_swapped())) {
-    REG(FLASH_NSCR) |= BIT(31);  // Set FLASH_CR_BKSEL
-  }
-  if (sector > 127) sector -= 128;
-  REG(FLASH_NSCR) |= BIT(2) | (sector << 6);  // SectorErase | sector_num
-  REG(FLASH_NSCR) |= BIT(5);                  // Start erasing
-  // MG_INFO(("ERASE %lu, CR %#lx SR %#lx", sector, REG(FLASH_NSCR),
-  // REG(FLASH_NSSR)));
-  flash_prep();
-}
-
-static bool flash_swap_bank(void) {
-  uint32_t desired = flash_bank_is_swapped() ? 0 : BIT(31);
-  flash_unlock();
-  flash_prep();
-  // printf("OPTSR_PRG 1 %#lx\n", FLASH->OPTSR_PRG);
-  SETBITS(REG(FLASH_OPTSR_PRG), BIT(31), desired);
-  // printf("OPTSR_PRG 2 %#lx\n", FLASH->OPTSR_PRG);
-  REG(FLASH_OPTCR) |= BIT(1);  // OPTSTART
-  while ((REG(FLASH_OPTSR_CUR) & BIT(31)) != desired) (void) 0;
-  return true;
-}
-
-static bool flash_write(uint32_t addr, const void *buf, size_t len) {
-  volatile uint32_t *dst = (uint32_t *) addr;
-  uint32_t *src = (uint32_t *) buf;
-  uint32_t *end = (uint32_t *) ((char *) buf + len);
-  bool success = true;
-  flash_unlock();
-  flash_prep();
-  while (success && src < end) {
-    uint32_t pageno = ((uint32_t) dst - FLASH_BANK1) / FLASH_SSIZE;
-    if (flash_page_start(dst)) flash_erase(pageno);
-    REG(FLASH_NSCR) = BIT(1);  // Set programming flag
-    do {
-      *dst++ = *src++;
-      flash_wait();
-    } while (src < end && !flash_page_start(dst) && !flash_is_err());
-#if 0
-    do {
-      *dst++ = *src++;
-      printf("WRITE %p, CR %#lx SR %#lx OCR %#lx %#lx %#lx\n", dst, FLASH->NSCR,
-             FLASH->NSSR, FLASH->OPTCR, src[-1], dst[-1]);
-    } while (src < end && !flash_page_start(dst));
-#endif
-    // if (FLASH->NSSR & FLASH_SR_WBNE) FLASH->NSCR |= FLASH_CR_FW;
-    if (REG(FLASH_NSSR) & BIT(1)) REG(FLASH_NSCR) |= BIT(4);
-    MG_INFO(("W %p, CR %#lx SR %#lx OCR %#lx %#lx %#lx", dst, REG(FLASH_NSCR),
-             REG(FLASH_NSSR), REG(FLASH_OPTCR), src[-1], dst[-1]));
-    flash_wait();
-    if (flash_is_err() || (src[-1] != dst[-1])) {
-      // printf("  E %lx CR %#lx SR %#lx, %#lx %#lx\n", (unsigned long) dst,
-      //        FLASH->NSCR, FLASH->NSSR, src[-1], dst[-1]);
-      success = false;
-    }
-  }
-  return success;
-}
-void mg_sys_reset(void) {
-  // SCB->AIRCR = ((0x5fa << SCB_AIRCR_VECTKEY_Pos)|SCB_AIRCR_SYSRESETREQ_Msk);
-  *(volatile unsigned long *) 0xe000ed0c = 0x5fa0004;
-}
+struct mg_otadata {
+  uint32_t crc32, size, timestamp, status;
+};
 
 bool mg_ota_begin(size_t new_firmware_size) {
-  s_crc32 = 0;
-  s_addr = FLASH_BANK2;
-  MG_DEBUG(("Firmware %lu bytes, max %lu", new_firmware_size, FLASH_SIZE2));
-  return new_firmware_size < FLASH_SIZE2;
+  bool ok = false;
+  if (s_size) {
+    MG_ERROR(("OTA already in progress. Call mg_ota_end()"));
+  } else {
+    size_t half = mg_flash_size() / 2, max = half - mg_flash_sector_size();
+    s_crc32 = 0;
+    s_addr = (char *) mg_flash_start() + half;
+    MG_DEBUG(("Firmware %lu bytes, max %lu", s_size, max));
+    if (new_firmware_size < max) {
+      ok = true;
+      s_size = new_firmware_size;
+      MG_INFO(("Starting OTA, firmware size %lu", s_size));
+    } else {
+      MG_ERROR(("Firmware %lu is too big to fit %lu", new_firmware_size, max));
+    }
+  }
+  return ok;
 }
 
 bool mg_ota_write(const void *buf, size_t len) {
-  bool ok = flash_write(s_addr, buf, len);         // Write chunk to flash
-  s_crc32 = mg_crc32(s_crc32, (char *) buf, len);  // Update CRC
-  MG_DEBUG(("%#x %p %lu -> %d", s_addr, buf, len, ok));
-  s_addr += len;
+  bool ok = false;
+  if (s_size == 0) {
+    MG_ERROR(("OTA is not started, call mg_ota_begin()"));
+  } else {
+    size_t align = mg_flash_write_align();
+    size_t len_aligned_down = MG_ROUND_DOWN(len, align);
+    if (len_aligned_down) ok = mg_flash_write(s_addr, buf, len_aligned_down);
+    if (len_aligned_down < len) {
+      size_t left = len - len_aligned_down;
+      char tmp[align];
+      memset(tmp, 0xff, sizeof(tmp));
+      memcpy(tmp, (char *) buf + len_aligned_down, left);
+      ok = mg_flash_write(s_addr + len_aligned_down, tmp, sizeof(tmp));
+    }
+    s_crc32 = mg_crc32(s_crc32, (char *) buf, len);  // Update CRC
+    MG_DEBUG(("%#x %p %lu -> %d", s_addr - len, buf, len, ok));
+    s_addr += len;
+  }
   return ok;
-}
-
-static bool w32(uint32_t addr, uint32_t value) {
-  return flash_write(addr, &value, sizeof(value));
 }
 
 bool mg_ota_end(void) {
+  char *base = (char *) mg_flash_start() + mg_flash_size() / 2;
   bool ok = false;
-  size_t size = s_addr - FLASH_BANK2;
-  uint32_t crc = mg_crc32(0, (char *) FLASH_BANK2, size);
-  if (crc == s_crc32) {
-    uint32_t now = (uint32_t) (mg_now() / 1000);
-    struct mg_ota_data od = {MG_OTA_MAGIC, crc, size, now, -1, -1};
-    ok = flash_write(FLASH_BANK2_OTA_DATA, &od, sizeof(od));
+  if (s_size) {
+    size_t size = s_addr - base;
+    uint32_t crc32 = mg_crc32(0, base, s_size);
+    if (size == s_size && crc32 == s_crc32) {
+      uint32_t now = (uint32_t) (mg_now() / 1000);
+      struct mg_otadata od = {crc32, size, now, MG_OTA_FIRST_BOOT};
+      uint32_t key = MG_OTADATA_KEY + (mg_flash_bank() == 2 ? 1 : 2);
+      ok = mg_flash_save(NULL, key, &od, sizeof(od));
+    }
+    MG_DEBUG(("CRC: %x/%x, size: %lu/%lu, status: %s", s_crc32, crc32, s_size,
+              size, ok ? "ok" : "fail"));
+    s_size = 0;
+    if (ok) ok = mg_flash_swap_bank();
   }
-  MG_DEBUG(("CRC check: %x %x", s_crc32, crc));
-  return ok && flash_swap_bank();
+  MG_INFO(("Finishing OTA: %s", ok ? "ok" : "fail"));
+  return ok;
 }
 
-bool mg_ota_status(struct mg_ota_data od[2]) {
-  od[0] = *(struct mg_ota_data *) FLASH_BANK1_OTA_DATA;
-  od[1] = *(struct mg_ota_data *) FLASH_BANK2_OTA_DATA;
-  return od[0].magic == MG_OTA_MAGIC;
+static struct mg_otadata mg_otadata(int fw) {
+  struct mg_otadata od = {};
+  int bank = mg_flash_bank();
+  uint32_t key = MG_OTADATA_KEY + 1;
+  if ((fw == MG_FIRMWARE_CURRENT && bank == 2)) key++;
+  if ((fw == MG_FIRMWARE_PREVIOUS && bank == 1)) key++;
+  mg_flash_load(NULL, key, &od, sizeof(od));
+  // MG_DEBUG(("Loaded OTA data. fw %d, bank %d, key %p", fw, bank, key));
+  // mg_hexdump(&od, sizeof(od));
+  return od;
+}
+
+int mg_ota_status(int fw) {
+  struct mg_otadata od = mg_otadata(fw);
+  return od.status;
+}
+uint32_t mg_ota_crc32(int fw) {
+  struct mg_otadata od = mg_otadata(fw);
+  return od.crc32;
+}
+uint32_t mg_ota_timestamp(int fw) {
+  struct mg_otadata od = mg_otadata(fw);
+  return od.timestamp;
+}
+size_t mg_ota_size(int fw) {
+  struct mg_otadata od = mg_otadata(fw);
+  return od.size;
 }
 
 bool mg_ota_commit(void) {
-  struct mg_ota_data *od = (struct mg_ota_data *) FLASH_BANK1_OTA_DATA;
+  struct mg_otadata od = mg_otadata(MG_FIRMWARE_CURRENT);
+  od.status = MG_OTA_COMMITTED;
+  uint32_t key = MG_OTADATA_KEY + mg_flash_bank();
+  return mg_flash_save(NULL, key, &od, sizeof(od));
+}
+
+bool mg_ota_rollback(void) {
+  MG_DEBUG(("Rolling firmware back"));
+  return mg_flash_swap_bank();
+}
+
+// Flash can be written only if it is erased. Erased flash is 0xff (all bits 1)
+// Writes must be mg_flash_write_align() - aligned. Thus if we want to save an
+// object, we pad it at the end for alignment.
+//
+// Objects in the flash sector are stored sequentially:
+// | 32-bit size | 32-bit KEY | ..data.. | ..pad.. | 32-bit size | ......
+//
+// In order to get to the next object, read its size, then align up.
+
+// Traverse the list of saved objects
+size_t mg_flash_next(char *p, char *end, uint32_t *key, size_t *size) {
+  size_t aligned_size = 0, align = mg_flash_write_align(), left = end - p;
+  uint32_t *p32 = (uint32_t *) p, min_size = sizeof(uint32_t) * 2;
+  if (p32[0] != 0xffffffff && left > MG_ROUND_UP(min_size, align)) {
+    if (size) *size = (size_t) p32[0];
+    if (key) *key = p32[1];
+    aligned_size = MG_ROUND_UP(p32[0] + sizeof(uint32_t) * 2, align);
+    if (left < aligned_size) aligned_size = 0;  // Out of bounds, fail
+  }
+  return aligned_size;
+}
+
+// Return the last sector of Bank 2
+static char *flash_last_sector(void) {
+  size_t ss = mg_flash_sector_size(), size = mg_flash_size();
+  char *base = (char *) mg_flash_start(), *last = base + size - ss;
+  if (mg_flash_bank() == 2) last -= size / 2;
+  return last;
+}
+
+// Find a saved object with a given key
+bool mg_flash_load(void *sector, uint32_t key, void *buf, size_t len) {
+  char *base = (char *) mg_flash_start(), *s = (char *) sector, *res = NULL;
+  size_t ss = mg_flash_sector_size(), ofs = 0, n, sz;
   bool ok = false;
-  if (od->magic == MG_OTA_MAGIC && od->golden == 0) {
-    ok = true;                             // Already clean, do nothing
-  } else if (od->magic == MG_OTA_MAGIC) {  // Dirty!
-    ok = w32((uint32_t) &od->golden, 0);
+  if (s == NULL) s = flash_last_sector();
+  if (s < base || s >= base + mg_flash_size()) {
+    MG_ERROR(("%p is outsize of flash", sector));
+  } else if (((s - base) % ss) != 0) {
+    MG_ERROR(("%p is not a sector boundary", sector));
+  } else {
+    uint32_t k, scanned = 0;
+    while ((n = mg_flash_next(s + ofs, s + ss, &k, &sz)) > 0) {
+      // MG_DEBUG((" > obj %lu, ofs %lu, key %x/%x", scanned, ofs, k, key));
+      // mg_hexdump(s + ofs, n);
+      if (k == key && sz == len) {
+        res = s + ofs + sizeof(uint32_t) * 2;
+        memcpy(buf, res, len);  // Copy object
+        ok = true;              // Keep scanning for the newer versions of it
+      }
+      ofs += n, scanned++;
+    }
+    MG_DEBUG(("Scanned %u objects, key %x is @ %p", scanned, key, res));
   }
   return ok;
 }
 
-bool mg_ota_rollback(void) {
-  return flash_swap_bank();
+static bool mg_flash_writev(char *location, struct mg_str *strings, size_t n) {
+  size_t align = mg_flash_write_align(), i, j, k = 0, nwritten = 0;
+  char buf[align];
+  bool ok = true;
+  for (i = 0; ok && i < n; i++) {
+    for (j = 0; ok && j < strings[i].len; j++) {
+      buf[k++] = strings[i].ptr[j];
+      if (k >= sizeof(buf)) {
+        ok = mg_flash_write(location + nwritten, buf, sizeof(buf));
+        k = 0, nwritten += sizeof(buf);
+      }
+    }
+  }
+  if (k > 0) {
+    while (k < sizeof(buf)) buf[k++] = 0xff;
+    ok = mg_flash_write(location + nwritten, buf, sizeof(buf));
+  }
+  return ok;
+}
+
+// For all saved objects in the sector, delete old versions of objects
+static void mg_flash_sector_cleanup(char *sector) {
+  // Buffer all saved objects into an IO buffer (backed by RAM)
+  // erase sector, and re-save them.
+  struct mg_iobuf io = {0, 0, 0, 2048};
+  size_t ss = mg_flash_sector_size();
+  size_t n, size, size2, ofs = 0, hs = sizeof(uint32_t) * 2;
+  uint32_t key;
+  // Traverse all objects
+  MG_DEBUG(("Cleaning up sector %p", sector));
+  while ((n = mg_flash_next(sector + ofs, sector + ss, &key, &size)) > 0) {
+    // Delete an old copy of this object in the cache
+    for (size_t o = 0; o < io.len; o += size2 + hs) { 
+      uint32_t k = *(uint32_t *) (io.buf + o + sizeof(uint32_t));
+      size2 = *(uint32_t *) (io.buf + o);
+      if (k == key) {
+        mg_iobuf_del(&io, o, size2 + hs);
+        break;
+      }
+    }
+    // And add the new copy
+    mg_iobuf_add(&io, io.len, sector + ofs, size + hs);  
+    ofs += n;
+  }
+  // All objects are cached in RAM now
+  if (mg_flash_erase(sector)) {  // Erase sector. If successful,
+    for (ofs = 0; ofs < io.len; ofs += size + hs) {  // Traverse cached objects
+      size = *(uint32_t *) (io.buf + ofs);
+      key = *(uint32_t *) (io.buf + ofs + sizeof(uint32_t));
+      mg_flash_save(sector, key, io.buf + ofs + hs, size);  // Save to flash
+    }
+  }
+  mg_iobuf_free(&io);
+}
+
+// Save an object with a given key - append to the end of an object list
+bool mg_flash_save(void *sector, uint32_t key, const void *buf, size_t len) {
+  char *base = (char *) mg_flash_start(), *s = (char *) sector;
+  size_t ss = mg_flash_sector_size(), ofs = 0, n;
+  bool ok = false;
+  if (s == NULL) s = flash_last_sector();
+  if (s < base || s >= base + mg_flash_size()) {
+    MG_ERROR(("%p is outsize of flash", sector));
+  } else if (((s - base) % ss) != 0) {
+    MG_ERROR(("%p is not a sector boundary", sector));
+  } else {
+    size_t needed = sizeof(uint32_t) * 2 + len;
+    size_t needed_aligned = MG_ROUND_UP(needed, mg_flash_write_align());
+    while ((n = mg_flash_next(s + ofs, s + ss, NULL, NULL)) > 0) ofs += n;
+
+    // If there is not enough space left, cleanup sector and re-eval ofs
+    if (ofs + needed_aligned > ss) {
+      mg_flash_sector_cleanup(s);
+      ofs = 0;
+      while ((n = mg_flash_next(s + ofs, s + ss, NULL, NULL)) > 0) ofs += n;
+    }
+
+    if (ofs + needed_aligned <= ss) {
+      // Enough space to save this object
+      uint32_t hdr[2] = {(uint32_t) len, key};
+      struct mg_str data[] = {mg_str_n((char *) hdr, sizeof(hdr)),
+                              mg_str_n(buf, len)};
+      ok = mg_flash_writev(s + ofs, data, 2);
+      MG_DEBUG(("Saving %lu bytes @ %p, key %x: %d", len, s + ofs, key, ok));
+      MG_DEBUG(("Sector space left: %lu bytes", ss - ofs - needed_aligned));
+    } else {
+      MG_ERROR(("Sector is full"));
+    }
+  }
+  return ok;
 }
 #endif
 
@@ -6757,6 +6843,306 @@ bool mg_path_is_sane(const char *path) {
   }
   return true;
 }
+
+#ifdef MG_ENABLE_LINES
+#line 1 "src/sys_stm32h5.c"
+#endif
+
+
+
+
+#if MG_ENABLE_STM32H5
+
+#define FLASH_BASE 0x40022000          // Base address of the flash controller
+#define FLASH_KEYR (FLASH_BASE + 0x4)  // See RM0481 7.11
+#define FLASH_OPTKEYR (FLASH_BASE + 0xc)
+#define FLASH_OPTCR (FLASH_BASE + 0x1c)
+#define FLASH_NSSR (FLASH_BASE + 0x20)
+#define FLASH_NSCR (FLASH_BASE + 0x28)
+#define FLASH_NSCCR (FLASH_BASE + 0x30)
+#define FLASH_OPTSR_CUR (FLASH_BASE + 0x50)
+#define FLASH_OPTSR_PRG (FLASH_BASE + 0x54)
+
+void *mg_flash_start(void) {
+  return (void *) 0x08000000;
+}
+size_t mg_flash_size(void) {
+  return 2 * 1024 * 1024;  // 2Mb
+}
+size_t mg_flash_sector_size(void) {
+  return 8 * 1024;  // 8k
+}
+size_t mg_flash_write_align(void) {
+  return 16;  // 128 bit
+}
+int mg_flash_bank(void) {
+  return MG_REG(FLASH_OPTCR) & MG_BIT(31) ? 2 : 1;
+}
+
+static void flash_unlock(void) {
+  static bool unlocked = false;
+  if (unlocked == false) {
+    MG_REG(FLASH_KEYR) = 0x45670123;
+    MG_REG(FLASH_KEYR) = 0Xcdef89ab;
+    MG_REG(FLASH_OPTKEYR) = 0x08192a3b;
+    MG_REG(FLASH_OPTKEYR) = 0x4c5d6e7f;
+    unlocked = true;
+  }
+}
+
+static int flash_page_start(volatile uint32_t *dst) {
+  char *base = (char *) mg_flash_start(), *end = base + mg_flash_size();
+  volatile char *p = (char *) dst;
+  return p >= base && p < end && ((p - base) % mg_flash_sector_size()) == 0;
+}
+
+static bool flash_is_err(void) {
+  return MG_REG(FLASH_NSSR) & ((MG_BIT(8) - 1) << 17);  // RM0481 7.11.9
+}
+
+static void flash_wait(void) {
+  while ((MG_REG(FLASH_NSSR) & MG_BIT(0)) &&
+         (MG_REG(FLASH_NSSR) & MG_BIT(16)) == 0) {
+    (void) 0;
+  }
+}
+
+static void flash_clear_err(void) {
+  flash_wait();                                    // Wait until ready
+  MG_REG(FLASH_NSCCR) = ((MG_BIT(9) - 1) << 16U);  // Clear all errors
+}
+
+static bool flash_bank_is_swapped(void) {
+  return MG_REG(FLASH_OPTCR) & MG_BIT(31);  // RM0481 7.11.8
+}
+
+bool mg_flash_erase(void *location) {
+  bool ok = false;
+  if (flash_page_start(location) == false) {
+    MG_ERROR(("%p is not on a sector boundary"));
+  } else {
+    uintptr_t diff = (char *) location - (char *) mg_flash_start();
+    uint32_t sector = diff / mg_flash_sector_size();
+    flash_unlock();
+    flash_clear_err();
+    MG_REG(FLASH_NSCR) = 0;
+    if ((sector < 128 && flash_bank_is_swapped()) ||
+        (sector > 127 && !flash_bank_is_swapped())) {
+      MG_REG(FLASH_NSCR) |= MG_BIT(31);  // Set FLASH_CR_BKSEL
+    }
+    if (sector > 127) sector -= 128;
+    MG_REG(FLASH_NSCR) |= MG_BIT(2) | (sector << 6);  // Erase | sector_num
+    MG_REG(FLASH_NSCR) |= MG_BIT(5);                  // Start erasing
+    flash_wait();
+    ok = !flash_is_err();
+    MG_DEBUG(("Erase sector %lu @ %p: %s. CR %#lx SR %#lx", sector, location,
+              ok ? "ok" : "fail", MG_REG(FLASH_NSCR), MG_REG(FLASH_NSSR)));
+    // mg_hexdump(location, 32);
+  }
+  return ok;
+}
+
+bool mg_flash_swap_bank(void) {
+  uint32_t desired = flash_bank_is_swapped() ? 0 : MG_BIT(31);
+  flash_unlock();
+  flash_clear_err();
+  // printf("OPTSR_PRG 1 %#lx\n", FLASH->OPTSR_PRG);
+  MG_SET_BITS(MG_REG(FLASH_OPTSR_PRG), MG_BIT(31), desired);
+  // printf("OPTSR_PRG 2 %#lx\n", FLASH->OPTSR_PRG);
+  MG_REG(FLASH_OPTCR) |= MG_BIT(1);  // OPTSTART
+  while ((MG_REG(FLASH_OPTSR_CUR) & MG_BIT(31)) != desired) (void) 0;
+  return true;
+}
+
+bool mg_flash_write(void *addr, const void *buf, size_t len) {
+  if ((len % mg_flash_write_align()) != 0) {
+    MG_ERROR(("%lu is not aligned to %lu", len, mg_flash_write_align()));
+    return false;
+  }
+  uint32_t *dst = (uint32_t *) addr;
+  uint32_t *src = (uint32_t *) buf;
+  uint32_t *end = (uint32_t *) ((char *) buf + len);
+  bool ok = true;
+  flash_unlock();
+  flash_clear_err();
+  MG_ARM_DISABLE_IRQ();
+  // MG_DEBUG(("Starting flash write %lu bytes @ %p", len, addr));
+  while (ok && src < end) {
+    if (flash_page_start(dst) && mg_flash_erase(dst) == false) break;
+    MG_REG(FLASH_NSCR) = MG_BIT(1);  // Set programming flag
+    *(volatile uint32_t *) dst++ = *src++;
+    flash_wait();
+    if (flash_is_err()) ok = false;
+  }
+  MG_DEBUG(("Flash write %lu bytes @ %p: %s. CR %#lx SR %#lx", len, dst,
+            flash_is_err() ? "fail" : "ok", MG_REG(FLASH_NSCR),
+            MG_REG(FLASH_NSSR)));
+  if (flash_is_err()) ok = false;
+  // mg_hexdump(addr, len > 32 ? 32 : len);
+  //  MG_REG(FLASH_NSCR) &= ~MG_BIT(1);  // Set programming flag
+  MG_REG(FLASH_NSCR) = 0;  // Clear flags
+  MG_ARM_ENABLE_IRQ();
+  return ok;
+}
+
+void mg_sys_reset(void) {
+  // SCB->AIRCR = ((0x5fa << SCB_AIRCR_VECTKEY_Pos)|SCB_AIRCR_SYSRESETREQ_Msk);
+  *(volatile unsigned long *) 0xe000ed0c = 0x5fa0004;
+}
+#endif
+
+#ifdef MG_ENABLE_LINES
+#line 1 "src/sys_stm32h7.c"
+#endif
+
+
+
+
+#if MG_ENABLE_STM32H7
+
+#define FLASH_BASE1 0x52002000  // Base address for bank1
+#define FLASH_BASE2 0x52002100  // Base address for bank2
+#define FLASH_KEYR 0x04         // See RM0433 4.9.2
+#define FLASH_OPTKEYR 0x08
+#define FLASH_OPTCR 0x18
+#define FLASH_SR 0x10
+#define FLASH_CR 0x0c
+#define FLASH_CCR 0x14
+#define FLASH_OPTSR_CUR 0x1c
+#define FLASH_OPTSR_PRG 0x20
+
+void *mg_flash_start(void) {
+  return (void *) 0x08000000;
+}
+size_t mg_flash_size(void) {
+  return 2 * 1024 * 1024;  // 2Mb
+}
+size_t mg_flash_sector_size(void) {
+  return 128 * 1024;  // 128k
+}
+size_t mg_flash_write_align(void) {
+  return 32;  // 256 bit
+}
+int mg_flash_bank(void) {
+  return MG_REG(FLASH_BASE1 + FLASH_OPTCR) & MG_BIT(31) ? 2 : 1;
+}
+
+static void flash_unlock(void) {
+  static bool unlocked = false;
+  if (unlocked == false) {
+    MG_REG(FLASH_BASE1 + FLASH_KEYR) = 0x45670123;
+    MG_REG(FLASH_BASE1 + FLASH_KEYR) = 0xcdef89ab;
+    MG_REG(FLASH_BASE2 + FLASH_KEYR) = 0x45670123;
+    MG_REG(FLASH_BASE2 + FLASH_KEYR) = 0xcdef89ab;
+    MG_REG(FLASH_BASE1 + FLASH_OPTKEYR) = 0x08192a3b;  // opt reg is "shared"
+    MG_REG(FLASH_BASE1 + FLASH_OPTKEYR) = 0x4c5d6e7f;  // thus unlock once
+    unlocked = true;
+  }
+}
+
+static bool flash_page_start(volatile uint32_t *dst) {
+  char *base = (char *) mg_flash_start(), *end = base + mg_flash_size();
+  volatile char *p = (char *) dst;
+  return p >= base && p < end && ((p - base) % mg_flash_sector_size()) == 0;
+}
+
+static bool flash_is_err(uint32_t bank) {
+  return MG_REG(bank + FLASH_SR) & ((MG_BIT(11) - 1) << 17);  // RM0433 4.9.5
+}
+
+static void flash_wait(uint32_t bank) {
+  while (MG_REG(bank + FLASH_SR) & (MG_BIT(0) | MG_BIT(2))) (void) 0;
+}
+
+static void flash_clear_err(uint32_t bank) {
+  flash_wait(bank);                                      // Wait until ready
+  MG_REG(bank + FLASH_CCR) = ((MG_BIT(11) - 1) << 16U);  // Clear all errors
+}
+
+static bool flash_bank_is_swapped(uint32_t bank) {
+  return MG_REG(bank + FLASH_OPTCR) & MG_BIT(31);  // RM0433 4.9.7
+}
+
+// Figure out flash bank based on the address
+static uint32_t flash_bank(void *addr) {
+  size_t ofs = (char *) addr - (char *) mg_flash_start();
+  return ofs < mg_flash_size() / 2 ? FLASH_BASE1 : FLASH_BASE2;
+}
+
+bool mg_flash_erase(void *addr) {
+  bool ok = false;
+  if (flash_page_start(addr) == false) {
+    MG_ERROR(("%p is not on a sector boundary", addr));
+  } else {
+    uintptr_t diff = (char *) addr - (char *) mg_flash_start();
+    uint32_t sector = diff / mg_flash_sector_size();
+    uint32_t bank = flash_bank(addr);
+
+    flash_unlock();
+    if (sector > 7) sector -= 8;
+    // MG_INFO(("Erasing @ %p, sector %lu, bank %#x", addr, sector, bank));
+
+    flash_clear_err(bank);
+    MG_REG(bank + FLASH_CR) |= (sector & 7U) << 8U;  // Sector to erase
+    MG_REG(bank + FLASH_CR) |= MG_BIT(2);            // Sector erase bit
+    MG_REG(bank + FLASH_CR) |= MG_BIT(7);            // Start erasing
+    ok = !flash_is_err(bank);
+    MG_DEBUG(("Erase sector %lu @ %p %s. CR %#lx SR %#lx", sector, addr,
+              ok ? "ok" : "fail", MG_REG(bank + FLASH_CR),
+              MG_REG(bank + FLASH_SR)));
+    // mg_hexdump(addr, 32);
+  }
+  return ok;
+}
+
+bool mg_flash_swap_bank() {
+  uint32_t bank = FLASH_BASE1;
+  uint32_t desired = flash_bank_is_swapped(bank) ? 0 : MG_BIT(31);
+  flash_unlock();
+  flash_clear_err(bank);
+  // printf("OPTSR_PRG 1 %#lx\n", FLASH->OPTSR_PRG);
+  MG_SET_BITS(MG_REG(bank + FLASH_OPTSR_PRG), MG_BIT(31), desired);
+  // printf("OPTSR_PRG 2 %#lx\n", FLASH->OPTSR_PRG);
+  MG_REG(bank + FLASH_OPTCR) |= MG_BIT(1);  // OPTSTART
+  while ((MG_REG(bank + FLASH_OPTSR_CUR) & MG_BIT(31)) != desired) (void) 0;
+  return true;
+}
+
+bool mg_flash_write(void *addr, const void *buf, size_t len) {
+  if ((len % mg_flash_write_align()) != 0) {
+    MG_ERROR(("%lu is not aligned to %lu", len, mg_flash_write_align()));
+    return false;
+  }
+  uint32_t bank = flash_bank(addr);
+  uint32_t *dst = (uint32_t *) addr;
+  uint32_t *src = (uint32_t *) buf;
+  uint32_t *end = (uint32_t *) ((char *) buf + len);
+  bool ok = true;
+  flash_unlock();
+  flash_clear_err(bank);
+  MG_ARM_DISABLE_IRQ();
+  MG_REG(bank + FLASH_CR) = MG_BIT(1);  // Set programming flag
+  // MG_INFO(("Writing flash @ %p, %lu bytes", addr, len));
+  while (ok && src < end) {
+    if (flash_page_start(dst) && mg_flash_erase(dst) == false) break;
+    *(volatile uint32_t *) dst++ = *src++;
+    flash_wait(bank);
+    if (flash_is_err(bank)) ok = false;
+  }
+  MG_DEBUG(("Flash write %lu bytes @ %p: %s. CR %#lx SR %#lx", len, dst,
+            ok ? "ok" : "fail", MG_REG(bank + FLASH_CR),
+            MG_REG(bank + FLASH_SR)));
+  // mg_hexdump(addr, len > 32 ? 32 : len);
+  MG_REG(bank + FLASH_CR) &= ~MG_BIT(1);  // Clear programming flag
+  MG_ARM_ENABLE_IRQ();
+  return ok;
+}
+
+void mg_sys_reset(void) {
+  // SCB->AIRCR = ((0x5fa << SCB_AIRCR_VECTKEY_Pos)|SCB_AIRCR_SYSRESETREQ_Msk);
+  *(volatile unsigned long *) 0xe000ed0c = 0x5fa0004;
+}
+#endif
 
 #ifdef MG_ENABLE_LINES
 #line 1 "src/timer.c"
