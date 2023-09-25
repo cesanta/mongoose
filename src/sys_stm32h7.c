@@ -2,7 +2,7 @@
 #include "log.h"
 #include "ota.h"
 
-#if MG_ENABLE_STM32H7
+#if MG_SYS == MG_SYS_STM32H7
 
 #define FLASH_BASE1 0x52002000  // Base address for bank1
 #define FLASH_BASE2 0x52002100  // Base address for bank2

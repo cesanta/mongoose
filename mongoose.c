@@ -4979,8 +4979,6 @@ size_t mg_ota_size(int fw) {
   (void) fw;
   return 0;
 }
-void mg_sys_reset(void) {
-}
 #endif
 
 #ifdef MG_ENABLE_LINES
@@ -6845,13 +6843,49 @@ bool mg_path_is_sane(const char *path) {
 }
 
 #ifdef MG_ENABLE_LINES
+#line 1 "src/sys_dummy.c"
+#endif
+
+
+#if MG_SYS == MG_SYS_NONE
+void *mg_flash_start(void) {
+  return NULL;
+}
+size_t mg_flash_size(void) {
+  return 0;
+}
+size_t mg_flash_sector_size(void) {
+  return 0;
+}
+size_t mg_flash_write_align(void) {
+  return 0;
+}
+int mg_flash_bank(void) {
+  return 0;
+}
+bool mg_flash_erase(void *location) {
+  (void) location;
+  return false;
+}
+bool mg_flash_swap_bank(void) {
+  return true;
+}
+bool mg_flash_write(void *addr, const void *buf, size_t len) {
+  (void) addr, (void) buf, (void) len;
+  return false;
+}
+void mg_sys_reset(void) {
+}
+#endif
+
+#ifdef MG_ENABLE_LINES
 #line 1 "src/sys_stm32h5.c"
 #endif
 
 
 
 
-#if MG_ENABLE_STM32H5
+#if MG_SYS == MG_SYS_STM32H5
 
 #define FLASH_BASE 0x40022000          // Base address of the flash controller
 #define FLASH_KEYR (FLASH_BASE + 0x4)  // See RM0481 7.11
@@ -6998,7 +7032,7 @@ void mg_sys_reset(void) {
 
 
 
-#if MG_ENABLE_STM32H7
+#if MG_SYS == MG_SYS_STM32H7
 
 #define FLASH_BASE1 0x52002000  // Base address for bank1
 #define FLASH_BASE2 0x52002100  // Base address for bank2

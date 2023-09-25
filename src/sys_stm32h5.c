@@ -2,7 +2,7 @@
 #include "log.h"
 #include "ota.h"
 
-#if MG_ENABLE_STM32H5
+#if MG_SYS == MG_SYS_STM32H5
 
 #define FLASH_BASE 0x40022000          // Base address of the flash controller
 #define FLASH_KEYR (FLASH_BASE + 0x4)  // See RM0481 7.11

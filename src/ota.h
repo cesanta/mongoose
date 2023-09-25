@@ -33,5 +33,3 @@ size_t mg_ota_size(int firmware);         // Firmware size
 
 bool mg_ota_commit(void);    // Commit current firmware
 bool mg_ota_rollback(void);  // Rollback to the previous firmware
-
-void mg_sys_reset(void);  // Reboot device immediately

@@ -815,14 +815,6 @@ struct timeval {
 #define MG_EPOLL_MOD(c, wr)
 #endif
 
-#ifndef MG_ENABLE_STM32H5
-#define MG_ENABLE_STM32H5 0
-#endif
-
-#ifndef MG_ENABLE_STM32H7
-#define MG_ENABLE_STM32H7 0
-#endif
-
 
 
 
@@ -1702,12 +1694,19 @@ size_t mg_ota_size(int firmware);         // Firmware size
 
 bool mg_ota_commit(void);    // Commit current firmware
 bool mg_ota_rollback(void);  // Rollback to the previous firmware
-
-void mg_sys_reset(void);  // Reboot device immediately
 // Copyright (c) 2023 Cesanta Software Limited
 // All rights reserved
 
 
+
+#define MG_SYS_NONE 0      // Dummy system
+#define MG_SYS_STM32H5 1   // STM32 H5
+#define MG_SYS_STM32H7 2   // STM32 H7
+#define MG_SYS_CUSTOM 100  // Custom implementation
+
+#ifndef MG_SYS
+#define MG_SYS MG_SYS_NONE
+#endif
 
 // Flash information
 void *mg_flash_start(void);         // Return flash start address
@@ -1725,6 +1724,8 @@ bool mg_flash_swap_bank(void);
 // If `sector` is NULL, then the last sector of flash is used
 bool mg_flash_load(void *sector, uint32_t key, void *buf, size_t len);
 bool mg_flash_save(void *sector, uint32_t key, const void *buf, size_t len);
+
+void mg_sys_reset(void);  // Reboot device immediately
 
 
 

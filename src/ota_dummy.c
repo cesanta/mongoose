@@ -35,6 +35,4 @@ size_t mg_ota_size(int fw) {
   (void) fw;
   return 0;
 }
-void mg_sys_reset(void) {
-}
 #endif

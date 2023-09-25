@@ -149,11 +149,3 @@
 #define MG_EPOLL_ADD(c)
 #define MG_EPOLL_MOD(c, wr)
 #endif
-
-#ifndef MG_ENABLE_STM32H5
-#define MG_ENABLE_STM32H5 0
-#endif
-
-#ifndef MG_ENABLE_STM32H7
-#define MG_ENABLE_STM32H7 0
-#endif
