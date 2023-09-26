@@ -1342,8 +1342,6 @@ static void f4(struct mg_connection *c, int ev, void *ev_data, void *fn_data) {
               "abcdef");
     strcat((char *) fn_data, "m");
     c->is_draining = 1;
-  } else if (ev == MG_EV_HTTP_CHUNK) {
-    strcat((char *) fn_data, "f");
   } else if (ev == MG_EV_CLOSE) {
     strcat((char *) fn_data, "c");
   }
@@ -1356,10 +1354,6 @@ static void f4c(struct mg_connection *c, int ev, void *ev_data, void *fn_data) {
     struct mg_http_message *hm = (struct mg_http_message *) ev_data;
     ASSERT(mg_strcmp(hm->body, mg_str("/foo/bar/abcdef")) == 0);
     strcat((char *) fn_data, "m");
-  } else if (ev == MG_EV_HTTP_CHUNK) {
-    struct mg_http_message *hm = (struct mg_http_message *) ev_data;
-    MG_INFO(("FS [%.*s]", (int) hm->chunk.len, hm->chunk.ptr));
-    strcat((char *) fn_data, "f");
   } else if (ev == MG_EV_CLOSE) {
     strcat((char *) fn_data, "c");
   }
@@ -1375,8 +1369,8 @@ static void test_http_no_content_length(void) {
   mg_http_connect(&mgr, url, f4c, (void *) buf2);
   for (i = 0; i < 1000 && strchr(buf2, 'c') == NULL; i++) mg_mgr_poll(&mgr, 10);
   MG_INFO(("[%s] [%s]", buf1, buf2));
-  ASSERT(strcmp(buf1, "fmc") == 0);
-  ASSERT(strcmp(buf2, "fcfm") == 0);  // See #1475
+  ASSERT(strcmp(buf1, "mc") == 0);
+  ASSERT(strcmp(buf2, "cm") == 0);  // See #1475
   mg_mgr_free(&mgr);
   ASSERT(mgr.conns == NULL);
 }
@@ -2290,20 +2284,8 @@ static void test_crc32(void) {
 }
 
 static void us(struct mg_connection *c, int ev, void *ev_data, void *fn_data) {
-  int del = *(int *) fn_data;
   struct mg_http_message *hm = (struct mg_http_message *) ev_data;
-  if (ev == MG_EV_HTTP_CHUNK && mg_http_match_uri(hm, "/upload")) {
-    MG_DEBUG(("Got chunk len %lu", (unsigned long) hm->chunk.len));
-    MG_DEBUG(("Query string: [%.*s]", (int) hm->query.len, hm->query.ptr));
-    // MG_DEBUG(("Chunk data:\n%.*s", (int) hm->chunk.len, hm->chunk.ptr));
-    if (del) {
-      mg_http_delete_chunk(c, hm);
-      if (hm->chunk.len == 0) {
-        MG_DEBUG(("Last chunk received, sending response"));
-        mg_http_reply(c, 200, "", "ok (chunked)\n");
-      }
-    }
-  } else if (ev == MG_EV_HTTP_MSG && mg_http_match_uri(hm, "/upload")) {
+  if (ev == MG_EV_HTTP_MSG && mg_http_match_uri(hm, "/upload")) {
     MG_DEBUG(("Got all %lu bytes!", (unsigned long) hm->body.len));
     MG_DEBUG(("Query string: [%.*s]", (int) hm->query.len, hm->query.ptr));
     // MG_DEBUG(("Body:\n%.*s", (int) hm->body.len, hm->body.ptr));
@@ -2318,7 +2300,7 @@ static void us(struct mg_connection *c, int ev, void *ev_data, void *fn_data) {
 static void uc(struct mg_connection *c, int ev, void *ev_data, void *fn_data) {
   const char **s = (const char **) fn_data;
   if (ev == MG_EV_OPEN) {
-    c->is_hexdumping = 1;
+    // c->is_hexdumping = 1;
   } else if (ev == MG_EV_CONNECT) {
     mg_printf(c,
               "POST /upload HTTP/1.0\r\n"
@@ -2328,6 +2310,7 @@ static void uc(struct mg_connection *c, int ev, void *ev_data, void *fn_data) {
     mg_http_printf_chunk(c, "");
   } else if (ev == MG_EV_HTTP_MSG) {
     struct mg_http_message *hm = (struct mg_http_message *) ev_data;
+    // MG_INFO(("---> [%s] [%.*s]", *s, hm->body.len, hm->body.ptr));
     ASSERT(mg_strcmp(hm->body, mg_str(*s)) == 0);
     *s = NULL;
   }
@@ -2337,22 +2320,14 @@ static void uc(struct mg_connection *c, int ev, void *ev_data, void *fn_data) {
 static void test_http_upload(void) {
   struct mg_mgr mgr;
   const char *url = "http://127.0.0.1:12352";
-  int i, del = 1;
-  const char *s1 = "ok (chunked)\n";
-  const char *s2 = "ok (8 foo\nbar\n)\n";
+  int i;
+  const char *s = "ok (8 foo\nbar\n)\n";
 
   mg_mgr_init(&mgr);
-  mg_http_listen(&mgr, url, us, (void *) &del);
-
-  mg_http_connect(&mgr, url, uc, (void *) &s1);
+  mg_http_listen(&mgr, url, us, NULL);
+  mg_http_connect(&mgr, url, uc, (void *) &s);
   for (i = 0; i < 20; i++) mg_mgr_poll(&mgr, 5);
-  ASSERT(s1 == NULL);
-
-  del = 0;
-  mg_http_connect(&mgr, url, uc, (void *) &s2);
-  for (i = 0; i < 20; i++) mg_mgr_poll(&mgr, 5);
-  ASSERT(s2 == NULL);
-
+  ASSERT(s == NULL);
   mg_mgr_free(&mgr);
   ASSERT(mgr.conns == NULL);
 }
@@ -2363,7 +2338,7 @@ static void eX(struct mg_connection *c, int ev, void *ev_data, void *fn_data) {
   if (ev == MG_EV_HTTP_MSG) {
     mg_printf(c, "HTTP/1.1 200 OK\r\nTransfer-Encoding: chunked\r\n\r\n");
     c->data[0] = 1;
-    c->is_hexdumping = 1;
+    // c->is_hexdumping = 1;
   } else if (ev == MG_EV_POLL && c->data[0] != 0) {
     c->data[0]++;
     if (c->data[0] == 10) mg_http_printf_chunk(c, "a");
@@ -2403,29 +2378,10 @@ static void eZ(struct mg_connection *c, int ev, void *ev_data, void *fn_data) {
 // Do not delete chunks as they arrive
 static void eh4(struct mg_connection *c, int ev, void *ev_data, void *fn_data) {
   uint32_t *crc = (uint32_t *) fn_data;
-  if (ev == MG_EV_HTTP_CHUNK) {
-    struct mg_http_message *hm = (struct mg_http_message *) ev_data;
-    *crc = mg_crc32(*crc, hm->chunk.ptr, hm->chunk.len);
-    *crc = mg_crc32(*crc, "x", 1);
-    MG_INFO(("%lu C [%.*s]", c->id, (int) hm->chunk.len, hm->chunk.ptr));
-  } else if (ev == MG_EV_HTTP_MSG) {
+  if (ev == MG_EV_HTTP_MSG) {
     struct mg_http_message *hm = (struct mg_http_message *) ev_data;
     *crc = mg_crc32(*crc, hm->body.ptr, hm->body.len);
     MG_INFO(("%lu M [%.*s]", c->id, (int) hm->body.len, hm->body.ptr));
-  }
-}
-
-// Streaming client event handler. Delete chunks as they arrive
-static void eh5(struct mg_connection *c, int ev, void *ev_data, void *fn_data) {
-  uint32_t *crc = (uint32_t *) fn_data;
-  if (ev == MG_EV_HTTP_CHUNK) {
-    struct mg_http_message *hm = (struct mg_http_message *) ev_data;
-    *crc = mg_crc32(*crc, hm->chunk.ptr, hm->chunk.len);
-    *crc = mg_crc32(*crc, "x", 1);
-    MG_INFO(("%lu DELC [%.*s]", c->id, (int) hm->chunk.len, hm->chunk.ptr));
-    mg_http_delete_chunk(c, hm);
-  } else if (ev == MG_EV_HTTP_MSG) {
-    ASSERT(0);  // Must not be here, MSG must not be fired: chunks deleted!
   }
 }
 
@@ -2446,6 +2402,7 @@ static void test_http_chunked_case(mg_event_handler_t s, mg_event_handler_t c,
   for (i = 0; i < 100 && crc != expected_crc; i++) {
     mg_mgr_poll(&mgr, 1);
   }
+  // MG_INFO(("-------- %d [%s]", i, expected));
   ASSERT(i < 100);
   ASSERT(crc == expected_crc);
   mg_mgr_free(&mgr);
@@ -2454,20 +2411,14 @@ static void test_http_chunked_case(mg_event_handler_t s, mg_event_handler_t c,
 
 static void test_http_chunked(void) {
   // Non-chunked encoding
-  test_http_chunked_case(eY, eh4, 1, "axbcxdxxabcd");  // Chunks not deleted
-  test_http_chunked_case(eY, eh4, 2, "axbcxdxxabcdaxbcxdxxabcd");
-  test_http_chunked_case(eY, eh5, 1, "axbcxdxx");  // Chunks deleted
-  test_http_chunked_case(eY, eh5, 2, "axbcxdxxaxbcxdxx");
-  test_http_chunked_case(eZ, eh4, 1, "abcdxxabcd");  // Not deleted
-  test_http_chunked_case(eZ, eh4, 2, "abcdxxabcdabcdxxabcd");
-  test_http_chunked_case(eZ, eh5, 1, "abcdxx");  // Deleted
-  test_http_chunked_case(eZ, eh5, 2, "abcdxxabcdxx");
+  test_http_chunked_case(eY, eh4, 1, "abcd");  // Chunks not deleted
+  test_http_chunked_case(eY, eh4, 2, "abcdabcd");
+  test_http_chunked_case(eZ, eh4, 1, "abcd");  // Not deleted
+  test_http_chunked_case(eZ, eh4, 2, "abcdabcd");
 
   // Chunked encoding
-  test_http_chunked_case(eX, eh4, 1, "axbxcxdxxabcd");  // Chunks not deleted
-  test_http_chunked_case(eX, eh5, 1, "axbxcxdxx");      // Chunks deleted
-  test_http_chunked_case(eX, eh4, 2, "axbxcxdxxabcdaxbxcxdxxabcd");
-  test_http_chunked_case(eX, eh5, 2, "axbxcxdxxaxbxcxdxx");
+  test_http_chunked_case(eX, eh4, 1, "abcd");  // Chunks not deleted
+  test_http_chunked_case(eX, eh4, 2, "abcdabcd");
 }
 
 static void test_invalid_listen_addr(void) {
