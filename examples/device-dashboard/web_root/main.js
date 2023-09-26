@@ -211,7 +211,7 @@ function FirmwareUpdate({}) {
   const oncommit = ev => fetch('api/firmware/commit')
     .then(r => r.json())
     .then(refresh);
-  const onreboot = ev => fetch('api/sys/reset')
+  const onreboot = ev => fetch('api/device/reset')
     .then(r => r.json())
     .then(r => new Promise(r => setTimeout(ev => { refresh(); r(); }, 3000)));
   const onrollback = ev => fetch('api/firmware/rollback')

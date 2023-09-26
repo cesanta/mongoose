@@ -5,13 +5,13 @@
 
 #include "arch.h"
 
-#define MG_SYS_NONE 0      // Dummy system
-#define MG_SYS_STM32H5 1   // STM32 H5
-#define MG_SYS_STM32H7 2   // STM32 H7
-#define MG_SYS_CUSTOM 100  // Custom implementation
+#define MG_DEVICE_NONE 0      // Dummy system
+#define MG_DEVICE_STM32H5 1   // STM32 H5
+#define MG_DEVICE_STM32H7 2   // STM32 H7
+#define MG_DEVICE_CUSTOM 100  // Custom implementation
 
-#ifndef MG_SYS
-#define MG_SYS MG_SYS_NONE
+#ifndef MG_DEVICE
+#define MG_DEVICE MG_DEVICE_NONE
 #endif
 
 // Flash information
@@ -31,4 +31,4 @@ bool mg_flash_swap_bank(void);
 bool mg_flash_load(void *sector, uint32_t key, void *buf, size_t len);
 bool mg_flash_save(void *sector, uint32_t key, const void *buf, size_t len);
 
-void mg_sys_reset(void);  // Reboot device immediately
+void mg_device_reset(void);  // Reboot device immediately

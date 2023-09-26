@@ -1,9 +1,9 @@
 #include "arch.h"
 #include "log.h"
 #include "ota.h"
-#include "sys.h"
+#include "device.h"
 
-// This OTA implementation uses the internal flash API outlined in sys.h
+// This OTA implementation uses the internal flash API outlined in device.h
 // It splits flash into 2 equal partitions, and stores OTA status in the
 // last sector of the partition.
 

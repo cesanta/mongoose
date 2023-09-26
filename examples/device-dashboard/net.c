@@ -222,7 +222,7 @@ static void handle_firmware_upload(struct mg_connection *c,
     mg_http_reply(c, 200, s_json_header, "true\n");
     if (data.len == 0) {
       // Successful mg_ota_end() called, schedule device reboot
-      mg_timer_add(c->mgr, 500, 0, (void (*)(void *)) mg_sys_reset, NULL);
+      mg_timer_add(c->mgr, 500, 0, (void (*)(void *)) mg_device_reset, NULL);
     }
   }
 }
@@ -250,9 +250,9 @@ static void handle_firmware_status(struct mg_connection *c) {
                 MG_FIRMWARE_CURRENT, print_status, MG_FIRMWARE_PREVIOUS);
 }
 
-static void handle_sys_reset(struct mg_connection *c) {
+static void handle_device_reset(struct mg_connection *c) {
   mg_http_reply(c, 200, s_json_header, "true\n");
-  mg_timer_add(c->mgr, 500, 0, (void (*)(void *)) mg_sys_reset, NULL);
+  mg_timer_add(c->mgr, 500, 0, (void (*)(void *)) mg_device_reset, NULL);
 }
 
 // HTTP request handler function
@@ -292,8 +292,8 @@ static void fn(struct mg_connection *c, int ev, void *ev_data, void *fn_data) {
       handle_firmware_rollback(c);
     } else if (mg_http_match_uri(hm, "/api/firmware/status")) {
       handle_firmware_status(c);
-    } else if (mg_http_match_uri(hm, "/api/sys/reset")) {
-      handle_sys_reset(c);
+    } else if (mg_http_match_uri(hm, "/api/device/reset")) {
+      handle_device_reset(c);
     } else {
       struct mg_http_serve_opts opts;
       memset(&opts, 0, sizeof(opts));

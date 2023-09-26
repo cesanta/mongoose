@@ -1,6 +1,6 @@
-#include "sys.h"
+#include "device.h"
 
-#if MG_SYS == MG_SYS_NONE
+#if MG_DEVICE == MG_DEVICE_NONE
 void *mg_flash_start(void) {
   return NULL;
 }
@@ -27,6 +27,6 @@ bool mg_flash_write(void *addr, const void *buf, size_t len) {
   (void) addr, (void) buf, (void) len;
   return false;
 }
-void mg_sys_reset(void) {
+void mg_device_reset(void) {
 }
 #endif
