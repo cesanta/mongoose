@@ -1,7 +1,7 @@
 #include "log.h"
-#include "sys.h"
+#include "device.h"
 
-#if MG_SYS == MG_SYS_STM32H5
+#if MG_DEVICE == MG_DEVICE_STM32H5
 
 #define FLASH_BASE 0x40022000          // Base address of the flash controller
 #define FLASH_KEYR (FLASH_BASE + 0x4)  // See RM0481 7.11
@@ -135,7 +135,7 @@ bool mg_flash_write(void *addr, const void *buf, size_t len) {
   return ok;
 }
 
-void mg_sys_reset(void) {
+void mg_device_reset(void) {
   // SCB->AIRCR = ((0x5fa << SCB_AIRCR_VECTKEY_Pos)|SCB_AIRCR_SYSRESETREQ_Msk);
   *(volatile unsigned long *) 0xe000ed0c = 0x5fa0004;
 }
