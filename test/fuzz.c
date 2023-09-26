@@ -2,7 +2,7 @@
 #define MG_ENABLE_LOG 0
 #define MG_ENABLE_LINES 1
 #define MG_ENABLE_TCPIP 1
-#define MG_IO_SIZE (4 * 1024 * 1024)  // 4M IO size, unless resize is too slow
+#define MG_IO_SIZE (32 * 1024 * 1024)  // Big IO size for fast resizes
 
 #include "mongoose.c"
 

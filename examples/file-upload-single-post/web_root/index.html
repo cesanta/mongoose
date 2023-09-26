@@ -19,12 +19,10 @@
         of RAM to buffer everything.
         <br><br>
         In order to upload large files to a memory-constrained system, use
-        <code>MG_EV_HTTP_CHUNK</code> on a server side. It fires when
-        a partial HTTP message has been received (or a chunk-encoded chunk).
-        Use <code>mg_http_delete_chunk()</code> to release chunk memory.
-        When 0-sized chunk is received, that's the end of the message.
-        Use <code>MG_MAX_RECV_SIZE</code> build constant to limit
-        maximum chunk size on a server side.
+        <code>MG_EV_READ</code> on a server side. It fires when
+        a partial HTTP message has been received. We discourage this method,
+        since the client can send chunked-encoded data. Instead, please
+        split the upload into smaller pieces and send sequentially.
         <br><br>
         In this example, JavaScript code uses "fetch()" browser API.
         Uploaded file is not saved, but rather printed by server side.
