@@ -4099,6 +4099,7 @@ static bool mg_v4mapped(struct mg_str str, struct mg_addr *addr) {
 
 static bool mg_aton6(struct mg_str str, struct mg_addr *addr) {
   size_t i, j = 0, n = 0, dc = 42;
+  addr->scope_id = 0;
   if (str.len > 2 && str.ptr[0] == '[') str.ptr++, str.len -= 2;
   if (mg_v4mapped(str, addr)) return true;
   for (i = 0; i < str.len; i++) {
@@ -4107,7 +4108,7 @@ static bool mg_aton6(struct mg_str str, struct mg_addr *addr) {
         (str.ptr[i] >= 'A' && str.ptr[i] <= 'F')) {
       unsigned long val;
       if (i > j + 3) return false;
-      // MG_DEBUG(("%zu %zu [%.*s]", i, j, (int) (i - j + 1), &str.ptr[j]));
+      // MG_DEBUG(("%lu %lu [%.*s]", i, j, (int) (i - j + 1), &str.ptr[j]));
       val = mg_unhexn(&str.ptr[j], i - j + 1);
       addr->ip[n] = (uint8_t) ((val >> 8) & 255);
       addr->ip[n + 1] = (uint8_t) (val & 255);
@@ -4121,6 +4122,11 @@ static bool mg_aton6(struct mg_str str, struct mg_addr *addr) {
       }
       if (n > 14) return false;
       addr->ip[n] = addr->ip[n + 1] = 0;  // For trailing ::
+    } else if (str.ptr[i] == '%') {       // Scope ID
+      for (i = i + 1; i < str.len; i++) {
+        if (str.ptr[i] < '0' || str.ptr[i] > '9') return false;
+        addr->scope_id *= 10, addr->scope_id += (uint8_t) (str.ptr[i] - '0');
+      }
     } else {
       return false;
     }
@@ -6309,6 +6315,7 @@ static socklen_t tousa(struct mg_addr *a, union usa *usa) {
   if (a->is_ip6) {
     usa->sin.sin_family = AF_INET6;
     usa->sin6.sin6_port = a->port;
+    usa->sin6.sin6_scope_id = a->scope_id;
     memcpy(&usa->sin6.sin6_addr, a->ip, sizeof(a->ip));
     len = sizeof(usa->sin6);
   }
@@ -6324,6 +6331,7 @@ static void tomgaddr(union usa *usa, struct mg_addr *a, bool is_ip6) {
   if (is_ip6) {
     memcpy(a->ip, &usa->sin6.sin6_addr, sizeof(a->ip));
     a->port = usa->sin6.sin6_port;
+    a->scope_id = (uint8_t) usa->sin6.sin6_scope_id;
   }
 #endif
 }

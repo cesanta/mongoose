@@ -62,6 +62,7 @@ static socklen_t tousa(struct mg_addr *a, union usa *usa) {
   if (a->is_ip6) {
     usa->sin.sin_family = AF_INET6;
     usa->sin6.sin6_port = a->port;
+    usa->sin6.sin6_scope_id = a->scope_id;
     memcpy(&usa->sin6.sin6_addr, a->ip, sizeof(a->ip));
     len = sizeof(usa->sin6);
   }
@@ -77,6 +78,7 @@ static void tomgaddr(union usa *usa, struct mg_addr *a, bool is_ip6) {
   if (is_ip6) {
     memcpy(a->ip, &usa->sin6.sin6_addr, sizeof(a->ip));
     a->port = usa->sin6.sin6_port;
+    a->scope_id = (uint8_t) usa->sin6.sin6_scope_id;
   }
 #endif
 }

@@ -77,6 +77,7 @@ static bool mg_v4mapped(struct mg_str str, struct mg_addr *addr) {
 
 static bool mg_aton6(struct mg_str str, struct mg_addr *addr) {
   size_t i, j = 0, n = 0, dc = 42;
+  addr->scope_id = 0;
   if (str.len > 2 && str.ptr[0] == '[') str.ptr++, str.len -= 2;
   if (mg_v4mapped(str, addr)) return true;
   for (i = 0; i < str.len; i++) {
@@ -85,7 +86,7 @@ static bool mg_aton6(struct mg_str str, struct mg_addr *addr) {
         (str.ptr[i] >= 'A' && str.ptr[i] <= 'F')) {
       unsigned long val;
       if (i > j + 3) return false;
-      // MG_DEBUG(("%zu %zu [%.*s]", i, j, (int) (i - j + 1), &str.ptr[j]));
+      // MG_DEBUG(("%lu %lu [%.*s]", i, j, (int) (i - j + 1), &str.ptr[j]));
       val = mg_unhexn(&str.ptr[j], i - j + 1);
       addr->ip[n] = (uint8_t) ((val >> 8) & 255);
       addr->ip[n + 1] = (uint8_t) (val & 255);
@@ -99,6 +100,11 @@ static bool mg_aton6(struct mg_str str, struct mg_addr *addr) {
       }
       if (n > 14) return false;
       addr->ip[n] = addr->ip[n + 1] = 0;  // For trailing ::
+    } else if (str.ptr[i] == '%') {       // Scope ID
+      for (i = i + 1; i < str.len; i++) {
+        if (str.ptr[i] < '0' || str.ptr[i] > '9') return false;
+        addr->scope_id *= 10, addr->scope_id += (uint8_t) (str.ptr[i] - '0');
+      }
     } else {
       return false;
     }
