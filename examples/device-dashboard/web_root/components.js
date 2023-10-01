@@ -45,9 +45,9 @@ export const Icons = {
 };
 
 export const tipColors = {
-  green: 'bg-green-100 text-green-900',
-  yellow: 'bg-yellow-100 text-yellow-900',
-  red: 'bg-red-100 text-red-900',
+  green: 'bg-green-100 text-green-900 ring-green-300',
+  yellow: 'bg-yellow-100 text-yellow-900 ring-yellow-300',
+  red: 'bg-red-100 text-red-900 ring-red-300',
 };
 
 export function Button({title, onclick, disabled, cls, icon, ref, colors, hovercolor, disabledcolor}) {
