@@ -45,7 +45,7 @@ function Sidebar({url, show}) {
     <//>
     <div class="flex flex-1 flex-col">
       <${NavLink} title="Dashboard" icon=${Icons.home} href="/" url=${url} />
-      <${NavLink} title="Settings" icon=${Icons.settings} href="/settings" url=${url} />
+      <${NavLink} title="Settings" icon=${Icons.cog} href="/settings" url=${url} />
       <${NavLink} title="Firmware Update" icon=${Icons.download} href="/update" url=${url} />
       <${NavLink} title="Events" icon=${Icons.alert} href="/events" url=${url} />
     <//>
