@@ -1005,16 +1005,16 @@ void mg_connect_resolved(struct mg_connection *c) {
   MG_DEBUG(("%lu %M -> %M", c->id, mg_print_ip_port, &c->loc, mg_print_ip_port,
             &c->rem));
   mg_call(c, MG_EV_RESOLVE, NULL);
-  if (((rem_ip & ifp->mask) == (ifp->ip & ifp->mask))) {
+  if (c->is_udp && (rem_ip == 0xffffffff || rem_ip == (ifp->ip | ~ifp->mask))) {
+    struct connstate *s = (struct connstate *) (c + 1);
+    memset(s->mac, 0xFF, sizeof(s->mac));  // global or local broadcast
+  } else if (((rem_ip & ifp->mask) == (ifp->ip & ifp->mask))) {
     // If we're in the same LAN, fire an ARP lookup.
     MG_DEBUG(("%lu ARP lookup...", c->id));
     arp_ask(ifp, rem_ip);
     settmout(c, MIP_TTYPE_ARP);
     c->is_arplooking = 1;
     c->is_connecting = 1;
-  } else if (rem_ip == (ifp->ip | ~ifp->mask)) {
-    struct connstate *s = (struct connstate *) (c + 1);
-    memset(s->mac, 0xFF, sizeof(s->mac));  // local broadcast
   } else if ((*((uint8_t *) &rem_ip) & 0xE0) == 0xE0) {
     struct connstate *s = (struct connstate *) (c + 1);  // 224 to 239, E0 to EF
     uint8_t mcastp[3] = {0x01, 0x00, 0x5E};              // multicast group
