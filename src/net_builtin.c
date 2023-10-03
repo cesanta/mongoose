@@ -885,7 +885,10 @@ static void mg_tcpip_poll(struct mg_tcpip_if *ifp, uint64_t uptime_ms) {
   if (ifp->driver->rx != NULL) {  // Polling driver. We must call it
     size_t len =
         ifp->driver->rx(ifp->recv_queue.buf, ifp->recv_queue.size, ifp);
-    if (len > 0) mg_tcpip_rx(ifp, ifp->recv_queue.buf, len);
+    if (len > 0) {
+      ifp->nrecv++;
+      mg_tcpip_rx(ifp, ifp->recv_queue.buf, len);
+    }
   } else {  // Interrupt-based driver. Fills recv queue itself
     char *buf;
     size_t len = mg_queue_next(&ifp->recv_queue, &buf);
