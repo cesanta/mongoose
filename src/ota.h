@@ -39,4 +39,5 @@ size_t mg_ota_size(int firmware);         // Firmware size
 
 bool mg_ota_commit(void);              // Commit current firmware
 bool mg_ota_rollback(void);            // Rollback to the previous firmware
+bool mg_ota_is_swapping(void);         // Swapping process is now
 void MG_IRAM mg_ota_bootloader(void);  // Bootloader function

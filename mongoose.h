@@ -718,7 +718,7 @@ struct timeval {
 #endif
 
 #ifndef MG_IRAM
-#define MG_IRAM ""
+#define MG_IRAM
 #endif
 
 #ifndef MG_ENABLE_MD5
@@ -1707,6 +1707,7 @@ size_t mg_ota_size(int firmware);         // Firmware size
 
 bool mg_ota_commit(void);              // Commit current firmware
 bool mg_ota_rollback(void);            // Rollback to the previous firmware
+bool mg_ota_is_swapping(void);         // Swapping process is now
 void MG_IRAM mg_ota_bootloader(void);  // Bootloader function
 // Copyright (c) 2023 Cesanta Software Limited
 // All rights reserved

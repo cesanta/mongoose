@@ -92,7 +92,9 @@ static uint32_t MG_IRAM flash_bank(void *addr) {
 bool MG_IRAM mg_flash_erase(void *addr) {
   bool ok = false;
   if (flash_page_start(addr) == false) {
+    if (!mg_ota_is_swapping()) {
     MG_ERROR(("%p is not on a sector boundary", addr));
+    }
   } else {
     uintptr_t diff = (char *) addr - (char *) mg_flash_start();
     uint32_t sector = diff / mg_flash_sector_size();
@@ -107,9 +109,11 @@ bool MG_IRAM mg_flash_erase(void *addr) {
     MG_REG(bank + FLASH_CR) |= MG_BIT(2);            // Sector erase bit
     MG_REG(bank + FLASH_CR) |= MG_BIT(7);            // Start erasing
     ok = !flash_is_err(bank);
+    if (!mg_ota_is_swapping()) {
     MG_DEBUG(("Erase sector %lu @ %p %s. CR %#lx SR %#lx", sector, addr,
               ok ? "ok" : "fail", MG_REG(bank + FLASH_CR),
               MG_REG(bank + FLASH_SR)));
+    }
     // mg_hexdump(addr, 32);
   }
   return ok;
@@ -151,9 +155,11 @@ bool MG_IRAM mg_flash_write(void *addr, const void *buf, size_t len) {
     flash_wait(bank);
     if (flash_is_err(bank)) ok = false;
   }
+  if (!mg_ota_is_swapping()) {
   MG_DEBUG(("Flash write %lu bytes @ %p: %s. CR %#lx SR %#lx", len, dst,
             ok ? "ok" : "fail", MG_REG(bank + FLASH_CR),
             MG_REG(bank + FLASH_SR)));
+  }
   // mg_hexdump(addr, len > 32 ? 32 : len);
   MG_REG(bank + FLASH_CR) &= ~MG_BIT(1);  // Clear programming flag
   MG_ARM_ENABLE_IRQ();

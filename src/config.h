@@ -53,7 +53,7 @@
 #endif
 
 #ifndef MG_IRAM
-#define MG_IRAM ""
+#define MG_IRAM
 #endif
 
 #ifndef MG_ENABLE_MD5

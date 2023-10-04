@@ -14,6 +14,7 @@
 static char *s_addr;      // Current address to write to
 static size_t s_size;     // Firmware size to flash. In-progress indicator
 static uint32_t s_crc32;  // Firmware checksum
+static bool s_is_swapping;  // Firmwares are currently in the swapping process
 
 struct mg_otadata {
   uint32_t crc32, size, timestamp, status;
@@ -27,7 +28,6 @@ bool mg_ota_begin(size_t new_firmware_size) {
     size_t half = mg_flash_size() / 2, max = half - mg_flash_sector_size();
     s_crc32 = 0;
     s_addr = (char *) mg_flash_start() + half;
-    MG_INFO(("Starting writing firmware from %p", s_addr));
     MG_DEBUG(("Firmware %lu bytes, max %lu", s_size, max));
     if (new_firmware_size < max) {
       ok = true;
@@ -170,6 +170,10 @@ static bool MG_IRAM mg_ota_swap_sectors(char *sector_1, char *sector_2,
   return ok;
 }
 
+bool MG_IRAM mg_ota_is_swapping(void) {
+  return s_is_swapping;
+}
+
 void MG_IRAM mg_ota_bootloader(void) {
   struct mg_otadata crnt_ot = mg_otadata(MG_FIRMWARE_CURRENT);
   struct mg_otadata prev_ot = mg_otadata(MG_FIRMWARE_PREVIOUS);
@@ -185,14 +189,14 @@ void MG_IRAM mg_ota_bootloader(void) {
     int sector_count_1 = crnt_ot.size / mg_flash_sector_size();
     if (crnt_ot.size % mg_flash_sector_size()) sector_count_1++;
     if (sector_count_1 > 3) {
-      MG_ERROR(("Firmware in the first partition exceeds size."));
+      MG_ERROR(("Firmware in the first partition exceeds maximum size."));
       return;
     }
 
     int sector_count_2 = prev_ot.size / mg_flash_sector_size();
     if (prev_ot.size % mg_flash_sector_size()) sector_count_2++;
     if (sector_count_2 > 3) {
-      MG_ERROR(("Firmware in the second partition exceeds size. Cannot swap"));
+      MG_ERROR(("Firmware in the second partition exceeds maximum size."));
       return;
     }
 
@@ -200,8 +204,7 @@ void MG_IRAM mg_ota_bootloader(void) {
     mg_flash_save(NULL, MG_OTADATA_KEY + 1, &prev_ot, sizeof(prev_ot));
     mg_flash_save(NULL, MG_OTADATA_KEY + 2, &crnt_ot, sizeof(crnt_ot));
 
-    mg_log_set(MG_LL_NONE);  // logging functions can no longer be called during
-                             // swapping
+    s_is_swapping = true;
     for (; crnt_sector_1 < sector_count_1 && crnt_sector_2 < sector_count_2;
          crnt_sector_1++, crnt_sector_2++) {
       size_t len_1, len_2;
