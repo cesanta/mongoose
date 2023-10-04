@@ -9,12 +9,12 @@ int _fstat(int fd, struct stat *st) {
 }
 
 void *_sbrk(int incr) {
-  extern char __end__;
+  extern char _end;
   static unsigned char *heap = NULL;
   unsigned char *prev_heap;
   unsigned char x = 0, *heap_end = (unsigned char *)((size_t) &x - 512);
   (void) x;
-  if (heap == NULL) heap = (unsigned char *) &__end__;
+  if (heap == NULL) heap = (unsigned char *) &_end;
   prev_heap = heap;
   if (heap + incr > heap_end) return (void *) -1;
   heap += incr;
