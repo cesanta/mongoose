@@ -4,6 +4,7 @@
 #pragma once
 
 #include "arch.h"
+#include "util.h"
 
 #define MG_OTA_NONE 0      // No OTA support
 #define MG_OTA_FLASH 1     // OTA via an internal flash
@@ -19,10 +20,10 @@ bool mg_ota_write(const void *buf, size_t len);  // Write chunk, aligned to 1k
 bool mg_ota_end(void);                           // Stop writing
 
 enum {
-  MG_OTA_UNAVAILABLE = 0,  // No OTA information is present
-  MG_OTA_FIRST_BOOT = 1,   // Device booting the first time after the OTA
-  MG_OTA_UNCOMMITTED = 2,  // Ditto, but marking us for the rollback
-  MG_OTA_COMMITTED = 3,    // The firmware is good
+  MG_OTA_UNAVAILABLE = 0,             // No OTA information is present
+  MG_OTA_FIRST_BOOT = MG_BIT(0),     // Device booting the first time after the OTA
+  MG_OTA_COMMITTED = MG_BIT(1),      // The firmware is good
+  MG_OTA_ROLLBACK = MG_BIT(2)        // Rolling back to this firmware
 };
 enum { MG_FIRMWARE_CURRENT = 0, MG_FIRMWARE_PREVIOUS = 1 };
 
@@ -33,3 +34,4 @@ size_t mg_ota_size(int firmware);         // Firmware size
 
 bool mg_ota_commit(void);    // Commit current firmware
 bool mg_ota_rollback(void);  // Rollback to the previous firmware
+void mg_ota_bootloader(void);

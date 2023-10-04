@@ -13,12 +13,13 @@
 #define FLASH_CCR 0x14
 #define FLASH_OPTSR_CUR 0x1c
 #define FLASH_OPTSR_PRG 0x20
+#define FLASH_SIZE_REG  0x1FF1E880
 
 void *mg_flash_start(void) {
   return (void *) 0x08000000;
 }
 size_t mg_flash_size(void) {
-  return 2 * 1024 * 1024;  // 2Mb
+  return MG_REG(FLASH_SIZE_REG) * 1024; // convert from KB to bytes
 }
 size_t mg_flash_sector_size(void) {
   return 128 * 1024;  // 128k
@@ -27,7 +28,11 @@ size_t mg_flash_write_align(void) {
   return 32;  // 256 bit
 }
 int mg_flash_bank(void) {
+#if MG_DEVICE_DUAL_BANK
   return MG_REG(FLASH_BASE1 + FLASH_OPTCR) & MG_BIT(31) ? 2 : 1;
+#else
+  return SCB->VTOR == (uint32_t) mg_flash_start() ? 1 : 2;
+#endif
 }
 
 static void flash_unlock(void) {
@@ -35,10 +40,12 @@ static void flash_unlock(void) {
   if (unlocked == false) {
     MG_REG(FLASH_BASE1 + FLASH_KEYR) = 0x45670123;
     MG_REG(FLASH_BASE1 + FLASH_KEYR) = 0xcdef89ab;
+#if MG_DEVICE_DUAL_BANK
     MG_REG(FLASH_BASE2 + FLASH_KEYR) = 0x45670123;
     MG_REG(FLASH_BASE2 + FLASH_KEYR) = 0xcdef89ab;
     MG_REG(FLASH_BASE1 + FLASH_OPTKEYR) = 0x08192a3b;  // opt reg is "shared"
     MG_REG(FLASH_BASE1 + FLASH_OPTKEYR) = 0x4c5d6e7f;  // thus unlock once
+#endif
     unlocked = true;
   }
 }
@@ -62,14 +69,21 @@ static void flash_clear_err(uint32_t bank) {
   MG_REG(bank + FLASH_CCR) = ((MG_BIT(11) - 1) << 16U);  // Clear all errors
 }
 
+#if MG_DEVICE_DUAL_BANK
 static bool flash_bank_is_swapped(uint32_t bank) {
   return MG_REG(bank + FLASH_OPTCR) & MG_BIT(31);  // RM0433 4.9.7
 }
+#endif
 
 // Figure out flash bank based on the address
 static uint32_t flash_bank(void *addr) {
+#if MG_DEVICE_DUAL_BANK
   size_t ofs = (char *) addr - (char *) mg_flash_start();
   return ofs < mg_flash_size() / 2 ? FLASH_BASE1 : FLASH_BASE2;
+#else
+  (void) addr;
+  return FLASH_BASE1;
+#endif
 }
 
 bool mg_flash_erase(void *addr) {
@@ -99,6 +113,7 @@ bool mg_flash_erase(void *addr) {
 }
 
 bool mg_flash_swap_bank() {
+#if MG_DEVICE_DUAL_BANK
   uint32_t bank = FLASH_BASE1;
   uint32_t desired = flash_bank_is_swapped(bank) ? 0 : MG_BIT(31);
   flash_unlock();
@@ -108,6 +123,7 @@ bool mg_flash_swap_bank() {
   // printf("OPTSR_PRG 2 %#lx\n", FLASH->OPTSR_PRG);
   MG_REG(bank + FLASH_OPTCR) |= MG_BIT(1);  // OPTSTART
   while ((MG_REG(bank + FLASH_OPTSR_CUR) & MG_BIT(31)) != desired) (void) 0;
+#endif
   return true;
 }
 

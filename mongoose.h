@@ -713,6 +713,10 @@ struct timeval {
 #define MG_IPV6_V6ONLY 0  // IPv6 socket binds only to V6, not V4 address
 #endif
 
+#ifndef MG_DEVICE_DUAL_BANK
+#define MG_DEVICE_DUAL_BANK 0
+#endif
+
 #ifndef MG_ENABLE_MD5
 #define MG_ENABLE_MD5 1
 #endif
@@ -1665,6 +1669,7 @@ void mg_rpc_list(struct mg_rpc_req *r);
 
 
 
+
 #define MG_OTA_NONE 0      // No OTA support
 #define MG_OTA_FLASH 1     // OTA via an internal flash
 #define MG_OTA_CUSTOM 100  // Custom implementation
@@ -1679,10 +1684,10 @@ bool mg_ota_write(const void *buf, size_t len);  // Write chunk, aligned to 1k
 bool mg_ota_end(void);                           // Stop writing
 
 enum {
-  MG_OTA_UNAVAILABLE = 0,  // No OTA information is present
-  MG_OTA_FIRST_BOOT = 1,   // Device booting the first time after the OTA
-  MG_OTA_UNCOMMITTED = 2,  // Ditto, but marking us for the rollback
-  MG_OTA_COMMITTED = 3,    // The firmware is good
+  MG_OTA_UNAVAILABLE = 0,             // No OTA information is present
+  MG_OTA_FIRST_BOOT = MG_BIT(0),     // Device booting the first time after the OTA
+  MG_OTA_COMMITTED = MG_BIT(1),      // The firmware is good
+  MG_OTA_ROLLBACK = MG_BIT(2)        // Rolling back to this firmware
 };
 enum { MG_FIRMWARE_CURRENT = 0, MG_FIRMWARE_PREVIOUS = 1 };
 
@@ -1693,6 +1698,7 @@ size_t mg_ota_size(int firmware);         // Firmware size
 
 bool mg_ota_commit(void);    // Commit current firmware
 bool mg_ota_rollback(void);  // Rollback to the previous firmware
+void mg_ota_bootloader(void);
 // Copyright (c) 2023 Cesanta Software Limited
 // All rights reserved
 
@@ -1707,6 +1713,25 @@ bool mg_ota_rollback(void);  // Rollback to the previous firmware
 
 #ifndef MG_DEVICE
 #define MG_DEVICE MG_DEVICE_NONE
+#endif
+
+#if defined(__GNUC__)
+#define MG_IRAM __attribute__((section(".iram")))
+#else
+#define MG_IRAM
+#endif
+
+#if MG_DEVICE == MG_DEVICE_STM32H7 || MG_DEVICE == MG_DEVICE_STM32H5
+struct scb_type {
+    volatile uint32_t CPUID, ICSR, VTOR, AIRCR, SCR, CCR;
+    volatile uint8_t  SHPR[12];
+    volatile uint32_t SHCSR, CFSR, HFSR, DFSR, MMFAR, BFAR, AFSR, ID_PFR[2],
+    ID_DFR, ID_AFR, ID_MFR[4], ID_ISAR[5], CLIDR, CTR, CCSIDR, CSSELR, CPACR,
+    STIR, MVFR0, MVFR1, MVFR2, ICIALLU, ICIMVAU, DCIMVAC, DCISW, DCCMVAU, DCCMVAC,
+    DCCSW, DCCIMVAC, DCCISW, BPIALL, ITCMCR, DTCMCR, AHBPCR, CACR, AHBSCR, ABFSR;
+};
+#undef SCB
+#define SCB ((struct scb_type *) (uintptr_t) 0xE000ED00)
 #endif
 
 // Flash information
