@@ -3,7 +3,7 @@
 
 #include "hal.h"
 #include "mongoose.h"
-// #include "net.h"
+#include "net.h"
 
 #define BLINK_PERIOD_MS 1000  // LED blinking period in millis
 
@@ -22,26 +22,17 @@ void mg_random(void *buf, size_t len) {  // Use on-board RNG
     memcpy((char *) buf + n, &r, n + sizeof(r) > len ? len - n : sizeof(r));
   }
 }
-
 static void timer_fn(void *arg) {
-  //gpio_toggle(LED);                                      // Blink LED
-  //struct mg_tcpip_if *ifp = arg;                         // And show
-  //const char *names[] = {"down", "up", "req", "ready"};  // network stats
-  //MG_INFO(("Ethernet: %s, IP: %M, rx:%u, tx:%u, dr:%u, er:%u",
-  //         names[ifp->state], mg_print_ip4, &ifp->ip, ifp->nrecv, ifp->nsent,
-  //         ifp->ndrop, ifp->nerr));
-  MG_INFO(("%p", arg));
+  gpio_toggle(LED);                                      // Blink LED
+  struct mg_tcpip_if *ifp = arg;                         // And show
+  const char *names[] = {"down", "up", "req", "ready"};  // network stats
+  MG_INFO(("Ethernet: %s, IP: %M, rx:%u, tx:%u, dr:%u, er:%u",
+           names[ifp->state], mg_print_ip4, &ifp->ip, ifp->nrecv, ifp->nsent,
+           ifp->ndrop, ifp->nerr));
 }
 
 int main(void) {
   gpio_output(LED);               // Setup blue LED
-
-  for (;;) {
-    gpio_toggle(LED);
-    spin(99999);
-  }
-
-
   uart_init(UART_DEBUG, 115200);  // Initialise debug printf
   ethernet_init();                // Initialise ethernet pins
   MG_INFO(("Starting, CPU freq %g MHz", (double) SystemCoreClock / 1000000));
@@ -49,17 +40,15 @@ int main(void) {
   struct mg_mgr mgr;        // Initialise
   mg_mgr_init(&mgr);        // Mongoose event manager
   mg_log_set(MG_LL_DEBUG);  // Set log level
-  mg_timer_add(&mgr, BLINK_PERIOD_MS, MG_TIMER_REPEAT, timer_fn, NULL);
 
-#if 0
   // Initialise Mongoose network stack
-  struct mg_tcpip_driver_stm32_data driver_data = {.mdc_cr = 4};
+  struct mg_tcpip_driver_imxrt1020_data driver_data = {.mdc_cr = 4};
   struct mg_tcpip_if mif = {.mac = GENERATE_LOCALLY_ADMINISTERED_MAC(),
                             // Uncomment below for static configuration:
                             // .ip = mg_htonl(MG_U32(192, 168, 0, 223)),
                             // .mask = mg_htonl(MG_U32(255, 255, 255, 0)),
                             // .gw = mg_htonl(MG_U32(192, 168, 0, 1)),
-                            .driver = &mg_tcpip_driver_stm32,
+                            .driver = &mg_tcpip_driver_imxrt1020,
                             .driver_data = &driver_data};
   mg_tcpip_init(&mgr, &mif);
   mg_timer_add(&mgr, BLINK_PERIOD_MS, MG_TIMER_REPEAT, timer_fn, &mif);
@@ -70,8 +59,7 @@ int main(void) {
   }
 
   MG_INFO(("Initialising application..."));
-  web_init(&mgr);
-#endif
+//  web_init(&mgr);
 
   MG_INFO(("Starting event loop"));
   for (;;) {

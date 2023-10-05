@@ -97,9 +97,9 @@ typedef struct enet_bd_struct_def
 } enet_bd_struct_t;
 
 // Descriptor and buffer globals, in non-cached area, 64 bits aligned.
-
-__attribute__((section("NonCacheable,\"aw\",%nobits @"))) enet_bd_struct_t rx_buffer_descriptor[(ENET_RXBD_NUM)] __attribute__((aligned((64U))));
-__attribute__((section("NonCacheable,\"aw\",%nobits @"))) enet_bd_struct_t tx_buffer_descriptor[(ENET_TXBD_NUM)] __attribute__((aligned((64U))));
+// TODO(): handle these in a portable compiler-independent CMSIS-friendly way
+/*__attribute__((section("NonCacheable,\"aw\",%nobits @")))*/ enet_bd_struct_t rx_buffer_descriptor[(ENET_RXBD_NUM)] __attribute__((aligned((64U))));
+/*__attribute__((section("NonCacheable,\"aw\",%nobits @")))*/ enet_bd_struct_t tx_buffer_descriptor[(ENET_TXBD_NUM)] __attribute__((aligned((64U))));
 
 uint8_t rx_data_buffer[(ENET_RXBD_NUM)][((unsigned int)(((ENET_RXBUFF_SIZE)) + (((64U))-1U)) & (unsigned int)(~(unsigned int)(((64U))-1U)))] __attribute__((aligned((64U))));
 uint8_t tx_data_buffer[(ENET_TXBD_NUM)][((unsigned int)(((ENET_TXBUFF_SIZE)) + (((64U))-1U)) & (unsigned int)(~(unsigned int)(((64U))-1U)))] __attribute__((aligned((64U))));
@@ -109,7 +109,7 @@ uint8_t tx_data_buffer[(ENET_TXBD_NUM)][((unsigned int)(((ENET_TXBUFF_SIZE)) + (
 // static bool mg_tcpip_driver_imxrt1020_init(uint8_t *mac, void *data) { // VO
 static bool mg_tcpip_driver_imxrt1020_init(struct mg_tcpip_if *ifp) {
 
-  struct mg_tcpip_driver_imxrt1020_data *d = (struct mg_tcpip_driver_imxrt1020_data *) ifp->driver_data;
+// TODO(scaprile):  struct mg_tcpip_driver_imxrt1020_data *d = (struct mg_tcpip_driver_imxrt1020_data *) ifp->driver_data;
   s_ifp = ifp;
 
   // ENET Reset, wait complete
@@ -140,6 +140,7 @@ static bool mg_tcpip_driver_imxrt1020_init(struct mg_tcpip_if *ifp) {
 
   // Configure ENET
   ENET->RCR = 0x05ee0104; // #CRCFWD=0 (CRC kept in frame) + RMII + MII Enable
+  //ENET->RCR |= BIT(3);                            // Receive all
   
   ENET->TCR = BIT(8) | BIT(2); // Addins (MAC address from PAUR+PALR) + Full duplex enable
   //ENET->TFWR = BIT(8); // Store And Forward Enable, 64 bytes (minimize tx latency)
