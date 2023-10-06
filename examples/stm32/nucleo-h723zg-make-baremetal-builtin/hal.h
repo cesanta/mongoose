@@ -1,13 +1,22 @@
 // Copyright (c) 2022-2023 Cesanta Software Limited
 // All rights reserved
 //
-// Datasheet: RM0433, devboard manual: UM2407
-// https://www.st.com/resource/en/reference_manual/rm0433-stm32h742-stm32h743753-and-stm32h750-value-line-advanced-armbased-32bit-mcus-stmicroelectronics.pdf
-// Alternate functions: https://www.st.com/resource/en/datasheet/stm32h743vi.pdf
+// Datasheet: RM0468, devboard manual: UM2840
+// https://www.st.com/resource/en/reference_manual/rm0468-stm32h723733-stm32h725735-and-stm32h730-value-line-advanced-armbased-32bit-mcus-stmicroelectronics.pdf
+// Alternate functions: https://www.st.com/resource/en/datasheet/stm32h723.pdf
 
 #pragma once
 
-#include <stm32h743xx.h>
+#define LED1 PIN('B', 0)   // On-board LED pin (green)
+#define LED2 PIN('E', 1)   // On-board LED pin (yellow)
+#define LED3 PIN('B', 14)  // On-board LED pin (red)
+#define LED LED2           // Use yellow LED for blinking
+
+#ifndef UART_DEBUG
+#define UART_DEBUG USART3
+#endif
+
+#include <stm32h723xx.h>
 
 #include <stdbool.h>
 #include <stdint.h>
@@ -20,32 +29,11 @@
 #define PINNO(pin) (pin & 255)
 #define PINBANK(pin) (pin >> 8)
 
-#define LED1 PIN('B', 0)   // On-board LED pin (green)
-#define LED2 PIN('E', 1)   // On-board LED pin (yellow)
-#define LED3 PIN('B', 14)  // On-board LED pin (red)
-
-#define LED LED2              // Use yellow LED for blinking
-
-// System clock (2.1, Figure 1; 8.5, Figure 45; 8.5.5, Figure 47; 8.5.6, Figure
-// 49) CPU_FREQUENCY <= 480 MHz; hclk = CPU_FREQUENCY / HPRE ; hclk <= 240 MHz;
-// APB clocks <= 120 MHz. D1 domain bus matrix (and so flash) runs at hclk
-// frequency. Configure flash latency (WS) in accordance to hclk freq (4.3.8,
-// Table 17) The Ethernet controller is in D2 domain and runs at hclk frequency
-enum {
-  D1CPRE = 1,  // actual divisor value
-  HPRE = 2,    // actual divisor value
-  D1PPRE = 4,  // register values, divisor value = BIT(value - 3) = / 2
-  D2PPRE1 = 4,
-  D2PPRE2 = 4,
-  D3PPRE = 4
-};
-// PLL1_P: odd division factors are not allowed (8.7.13) (according to Cube, '1'
-// is also an "odd division factor").
-// Make sure your chip is revision 'V', otherwise set PLL1_N = 400
+// TODO: these values are from H743. Adjust to H723, and bring clock to 550 Mhz
+enum { D1CPRE = 1, HPRE = 2, D1PPRE = 4, D2PPRE1 = 4, D2PPRE2 = 4, D3PPRE = 4 };
 enum { PLL1_HSI = 64, PLL1_M = 32, PLL1_N = 480, PLL1_P = 2 };
-#define FLASH_LATENCY 0x24  // WRHIGHFREQ LATENCY
+#define FLASH_LATENCY 0x24
 #define CPU_FREQUENCY ((PLL1_HSI * PLL1_N / PLL1_M / PLL1_P / D1CPRE) * 1000000)
-// #define CPU_FREQUENCY ((PLL1_HSI / D1CPRE) * 1000000)
 #define AHB_FREQUENCY (CPU_FREQUENCY / HPRE)
 #define APB2_FREQUENCY (AHB_FREQUENCY / (BIT(D2PPRE2 - 3)))
 #define APB1_FREQUENCY (AHB_FREQUENCY / (BIT(D2PPRE1 - 3)))
@@ -61,7 +49,9 @@ enum { GPIO_PULL_NONE, GPIO_PULL_UP, GPIO_PULL_DOWN };
 
 #define GPIO(N) ((GPIO_TypeDef *) (0x40000000 + 0x18020000UL + 0x400 * (N)))
 
-static GPIO_TypeDef *gpio_bank(uint16_t pin) { return GPIO(PINBANK(pin)); }
+static GPIO_TypeDef *gpio_bank(uint16_t pin) {
+  return GPIO(PINBANK(pin));
+}
 static inline void gpio_toggle(uint16_t pin) {
   GPIO_TypeDef *gpio = gpio_bank(pin);
   uint32_t mask = BIT(PINNO(pin));
@@ -94,10 +84,6 @@ static inline void gpio_output(uint16_t pin) {
   gpio_init(pin, GPIO_MODE_OUTPUT, GPIO_OTYPE_PUSH_PULL, GPIO_SPEED_HIGH,
             GPIO_PULL_NONE, 0);
 }
-
-#ifndef UART_DEBUG
-#define UART_DEBUG USART3
-#endif
 
 // D2 Kernel clock (8.7.21) USART1 defaults to pclk2 (APB2), while USART2,3
 // default to pclk1 (APB1). Even if using other kernel clocks, the APBx clocks
@@ -147,8 +133,14 @@ static inline void rng_init(void) {
   RNG->CR = RNG_CR_RNGEN;                  // Enable RNG
 }
 
+// FIXME: Make sure RNG does not spit errors, and remove i++ < max check
+// Currently, it errors because of "two slow clock", RNG->SR == 0x44
 static inline uint32_t rng_read(void) {
-  while ((RNG->SR & RNG_SR_DRDY) == 0) (void) 0;
+  volatile unsigned long i = 0, max = 99999;
+  while ((RNG->SR & RNG_SR_DRDY) == 0 && i++ < max) (void) 0;
+  if ((RNG->SR & RNG_SR_DRDY) == 0) {
+    printf("RNG ERROR: CR %#lx SR %#lx DR %#lx\n", RNG->CR, RNG->SR, RNG->DR);
+  }
   return RNG->DR;
 }
 

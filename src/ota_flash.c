@@ -1,7 +1,7 @@
 #include "arch.h"
+#include "device.h"
 #include "log.h"
 #include "ota.h"
-#include "device.h"
 
 // This OTA implementation uses the internal flash API outlined in device.h
 // It splits flash into 2 equal partitions, and stores OTA status in the
@@ -38,8 +38,8 @@ bool mg_ota_begin(size_t new_firmware_size) {
 #if MG_DEVICE_DUAL_BANK
     s_addr = (char *) mg_flash_start() + half;
 #else
-    s_addr = mg_flash_bank() == 1 ? (char *) mg_flash_start() + half :
-                                    (char *) mg_flash_start();
+    s_addr = mg_flash_bank() == 1 ? (char *) mg_flash_start() + half
+                                  : (char *) mg_flash_start();
 #endif
     MG_INFO(("Starting writing firmware from %p", s_addr));
     MG_DEBUG(("Firmware %lu bytes, max %lu", s_size, max));
@@ -80,9 +80,9 @@ bool mg_ota_end(void) {
 #if MG_DEVICE_DUAL_BANK
   char *base = (char *) mg_flash_start() + mg_flash_size() / 2;
 #else
-  char *base = mg_flash_bank() == 1 ? (char *) mg_flash_start() +
-                                              mg_flash_size() / 2 :
-                                      (char *) mg_flash_start();
+  char *base = mg_flash_bank() == 1
+                   ? (char *) mg_flash_start() + mg_flash_size() / 2
+                   : (char *) mg_flash_start();
 
 #endif
   bool ok = false;
@@ -158,48 +158,48 @@ bool mg_ota_rollback(void) {
 
 void MG_IRAM mg_ota_bootloader(void) {
   MG_DEBUG(("calling bootloader from address: %p", mg_ota_bootloader));
-  struct mg_otadata crt_ot = mg_otadata(MG_FIRMWARE_CURRENT);
-  uint32_t crt_key = mg_ota_key_current();
-  struct mg_otadata prv_ot = mg_otadata(MG_FIRMWARE_PREVIOUS);
-  uint32_t prv_key = mg_ota_key_previous();
+  struct mg_otadata previous = mg_otadata(MG_FIRMWARE_PREVIOUS);
 
   // On each reset, the firmware from the 1st bank will start, even if
   // we reset from the fw on bank 2. Thus, the bootloader can only jump
   // to the 2nd firmware, which is always marked with the ROLLBACK flag
   // in order to instruct the bootloader to jump to it.
   if (mg_flash_bank() == 1) {
-    if (crt_ot.status & (MG_OTA_FIRST_BOOT | MG_OTA_ROLLBACK)) {
-      bool boot_first_fw = crt_ot.status & MG_OTA_FIRST_BOOT ? true : false;
-      crt_ot.status &= ~(MG_OTA_FIRST_BOOT | MG_OTA_ROLLBACK);
-      if (crt_ot.status == 0)
-        crt_ot.status |= MG_BIT(31); // value of 0 is reserved for MG_OTA_UNAVAILABLE
-      mg_flash_save(NULL, crt_key, &crt_ot, sizeof(crt_ot));
+    struct mg_otadata current = mg_otadata(MG_FIRMWARE_CURRENT);
+    if (current.status & (MG_OTA_FIRST_BOOT | MG_OTA_ROLLBACK)) {
+      bool boot_first_fw = current.status & MG_OTA_FIRST_BOOT ? true : false;
+      current.status &= ~(MG_OTA_FIRST_BOOT | MG_OTA_ROLLBACK);
+      if (current.status == 0)
+        current.status |= MG_BIT(31);  // value of 0 is MG_OTA_UNAVAILABLE
+      mg_flash_save(NULL, mg_ota_key_current(), &current, sizeof(current));
 
       if (boot_first_fw) {
         // If there is a new firmware in the first bank, the bootloader
         // must launch this instead of the one in the 2nd bank
-        prv_ot.status &= ~MG_OTA_ROLLBACK;
-        mg_flash_save(NULL, prv_key, &prv_ot, sizeof(prv_ot));
+        previous.status &= ~MG_OTA_ROLLBACK;
+        mg_flash_save(NULL, mg_ota_key_previous(), &previous, sizeof(previous));
         return;
       }
     }
 
-    if (prv_ot.status & (MG_OTA_FIRST_BOOT | MG_OTA_ROLLBACK)) {
-      if (prv_ot.status & MG_OTA_FIRST_BOOT) {
+    if (previous.status & (MG_OTA_FIRST_BOOT | MG_OTA_ROLLBACK)) {
+      if (previous.status & MG_OTA_FIRST_BOOT) {
         // The 2nd firmware must stay marked with the Rollback flag in case
         // of a reset, to prevent the bootloader starting the 1st firmware
         // after that. Normally, after a reset, the firmware at the beginning
         // of the flash will start.
-        prv_ot.status &= ~MG_OTA_FIRST_BOOT;
-        prv_ot.status |= MG_OTA_ROLLBACK;
-        mg_flash_save(NULL, prv_key, &prv_ot, sizeof(prv_ot));
+        previous.status &= ~MG_OTA_FIRST_BOOT;
+        previous.status |= MG_OTA_ROLLBACK;
+        mg_flash_save(NULL, mg_ota_key_previous(), &previous, sizeof(previous));
       }
 
+#if 0
       SCB->VTOR = (uint32_t) mg_flash_start() + mg_flash_size() / 2;
-      void (*fw_reset_handler)(void) = (void (*)(void))
-                                      *((uint32_t*)(SCB->VTOR + 4));
+      void (*fw_reset_handler)(void) =
+          (void (*)(void)) * ((uint32_t *) (SCB->VTOR + 4));
       MG_DEBUG(("Jumping to reset handler: 0x%x", fw_reset_handler));
       fw_reset_handler();
+#endif
     }
   }
   return;

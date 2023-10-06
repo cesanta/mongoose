@@ -1678,16 +1678,22 @@ void mg_rpc_list(struct mg_rpc_req *r);
 #define MG_OTA MG_OTA_NONE
 #endif
 
+#if defined(__GNUC__) && !defined(__APPLE__)
+#define MG_IRAM __attribute__((section(".iram")))
+#else
+#define MG_IRAM
+#endif
+
 // Firmware update API
 bool mg_ota_begin(size_t new_firmware_size);     // Start writing
 bool mg_ota_write(const void *buf, size_t len);  // Write chunk, aligned to 1k
 bool mg_ota_end(void);                           // Stop writing
 
 enum {
-  MG_OTA_UNAVAILABLE = 0,             // No OTA information is present
-  MG_OTA_FIRST_BOOT = MG_BIT(0),     // Device booting the first time after the OTA
-  MG_OTA_COMMITTED = MG_BIT(1),      // The firmware is good
-  MG_OTA_ROLLBACK = MG_BIT(2)        // Rolling back to this firmware
+  MG_OTA_UNAVAILABLE = 0,         // No OTA information is present
+  MG_OTA_FIRST_BOOT = MG_BIT(0),  // Device booting the first time after the OTA
+  MG_OTA_COMMITTED = MG_BIT(1),   // The firmware is good
+  MG_OTA_ROLLBACK = MG_BIT(2)     // Rolling back to this firmware
 };
 enum { MG_FIRMWARE_CURRENT = 0, MG_FIRMWARE_PREVIOUS = 1 };
 
@@ -1696,9 +1702,9 @@ uint32_t mg_ota_crc32(int firmware);      // Return firmware checksum
 uint32_t mg_ota_timestamp(int firmware);  // Firmware timestamp, UNIX UTC epoch
 size_t mg_ota_size(int firmware);         // Firmware size
 
-bool mg_ota_commit(void);    // Commit current firmware
-bool mg_ota_rollback(void);  // Rollback to the previous firmware
-void mg_ota_bootloader(void);
+bool mg_ota_commit(void);              // Commit current firmware
+bool mg_ota_rollback(void);            // Rollback to the previous firmware
+void MG_IRAM mg_ota_bootloader(void);  // Bootloader function
 // Copyright (c) 2023 Cesanta Software Limited
 // All rights reserved
 
@@ -1713,25 +1719,6 @@ void mg_ota_bootloader(void);
 
 #ifndef MG_DEVICE
 #define MG_DEVICE MG_DEVICE_NONE
-#endif
-
-#if defined(__GNUC__)
-#define MG_IRAM __attribute__((section(".iram")))
-#else
-#define MG_IRAM
-#endif
-
-#if MG_DEVICE == MG_DEVICE_STM32H7 || MG_DEVICE == MG_DEVICE_STM32H5
-struct scb_type {
-    volatile uint32_t CPUID, ICSR, VTOR, AIRCR, SCR, CCR;
-    volatile uint8_t  SHPR[12];
-    volatile uint32_t SHCSR, CFSR, HFSR, DFSR, MMFAR, BFAR, AFSR, ID_PFR[2],
-    ID_DFR, ID_AFR, ID_MFR[4], ID_ISAR[5], CLIDR, CTR, CCSIDR, CSSELR, CPACR,
-    STIR, MVFR0, MVFR1, MVFR2, ICIALLU, ICIMVAU, DCIMVAC, DCISW, DCCMVAU, DCCMVAC,
-    DCCSW, DCCIMVAC, DCCISW, BPIALL, ITCMCR, DTCMCR, AHBPCR, CACR, AHBSCR, ABFSR;
-};
-#undef SCB
-#define SCB ((struct scb_type *) (uintptr_t) 0xE000ED00)
 #endif
 
 // Flash information

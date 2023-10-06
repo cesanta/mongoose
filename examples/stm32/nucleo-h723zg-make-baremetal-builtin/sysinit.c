@@ -31,12 +31,14 @@ void SystemInit(void) {  // Called automatically by startup code
   PWR->CR3 |= BIT(1);                          // select LDO (reset value)
   while ((PWR->CSR1 & BIT(13)) == 0) spin(1);  // ACTVOSRDY
   PWR->D3CR |= BIT(15) | BIT(14);              // Select VOS1
+#if 0
   uint32_t f = PWR->D3CR;  // fake read to wait for bus clocking
   while ((PWR->CSR1 & BIT(13)) == 0) spin(1);  // ACTVOSRDY
-  SYSCFG->PWRCR |= BIT(0);                     // ODEN
-  f = SYSCFG->PWRCR;
+  SYSCFG->PWRCTRL |= BIT(0);                     // ODEN
+  f = SYSCFG->PWRCTRL;
   while ((PWR->CSR1 & BIT(13)) == 0) spin(1);  // ACTVOSRDY
   (void) f;
+#endif
   SETBITS(
       RCC->D1CFGR, (0x0F << 8) | (7 << 4) | (0x0F << 0),
       (div2prescval(D1CPRE) << 8) | (D1PPRE << 4) | (div2prescval(HPRE) << 0));

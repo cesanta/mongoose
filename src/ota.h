@@ -14,16 +14,22 @@
 #define MG_OTA MG_OTA_NONE
 #endif
 
+#if defined(__GNUC__) && !defined(__APPLE__)
+#define MG_IRAM __attribute__((section(".iram")))
+#else
+#define MG_IRAM
+#endif
+
 // Firmware update API
 bool mg_ota_begin(size_t new_firmware_size);     // Start writing
 bool mg_ota_write(const void *buf, size_t len);  // Write chunk, aligned to 1k
 bool mg_ota_end(void);                           // Stop writing
 
 enum {
-  MG_OTA_UNAVAILABLE = 0,             // No OTA information is present
-  MG_OTA_FIRST_BOOT = MG_BIT(0),     // Device booting the first time after the OTA
-  MG_OTA_COMMITTED = MG_BIT(1),      // The firmware is good
-  MG_OTA_ROLLBACK = MG_BIT(2)        // Rolling back to this firmware
+  MG_OTA_UNAVAILABLE = 0,         // No OTA information is present
+  MG_OTA_FIRST_BOOT = MG_BIT(0),  // Device booting the first time after the OTA
+  MG_OTA_COMMITTED = MG_BIT(1),   // The firmware is good
+  MG_OTA_ROLLBACK = MG_BIT(2)     // Rolling back to this firmware
 };
 enum { MG_FIRMWARE_CURRENT = 0, MG_FIRMWARE_PREVIOUS = 1 };
 
@@ -32,6 +38,6 @@ uint32_t mg_ota_crc32(int firmware);      // Return firmware checksum
 uint32_t mg_ota_timestamp(int firmware);  // Firmware timestamp, UNIX UTC epoch
 size_t mg_ota_size(int firmware);         // Firmware size
 
-bool mg_ota_commit(void);    // Commit current firmware
-bool mg_ota_rollback(void);  // Rollback to the previous firmware
-void mg_ota_bootloader(void);
+bool mg_ota_commit(void);              // Commit current firmware
+bool mg_ota_rollback(void);            // Rollback to the previous firmware
+void MG_IRAM mg_ota_bootloader(void);  // Bootloader function

@@ -1,5 +1,5 @@
-#include "log.h"
 #include "device.h"
+#include "log.h"
 
 #if MG_DEVICE == MG_DEVICE_STM32H7
 
@@ -13,13 +13,15 @@
 #define FLASH_CCR 0x14
 #define FLASH_OPTSR_CUR 0x1c
 #define FLASH_OPTSR_PRG 0x20
-#define FLASH_SIZE_REG  0x1FF1E880
+#define FLASH_SIZE_REG 0x1FF1E880
+
+#define SCB_VTOR 0xe000ed08  // Register that holds IRQ vector table offset
 
 void *mg_flash_start(void) {
   return (void *) 0x08000000;
 }
 size_t mg_flash_size(void) {
-  return MG_REG(FLASH_SIZE_REG) * 1024; // convert from KB to bytes
+  return MG_REG(FLASH_SIZE_REG) * 1024;  // convert from KB to bytes
 }
 size_t mg_flash_sector_size(void) {
   return 128 * 1024;  // 128k
@@ -31,7 +33,7 @@ int mg_flash_bank(void) {
 #if MG_DEVICE_DUAL_BANK
   return MG_REG(FLASH_BASE1 + FLASH_OPTCR) & MG_BIT(31) ? 2 : 1;
 #else
-  return SCB->VTOR == (uint32_t) mg_flash_start() ? 1 : 2;
+  return MG_REG(SCB_VTOR) == (uint32_t) mg_flash_start() ? 1 : 2;
 #endif
 }
 

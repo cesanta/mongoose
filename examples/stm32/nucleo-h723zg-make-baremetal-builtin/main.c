@@ -54,9 +54,9 @@ int main(void) {
   struct mg_tcpip_driver_stm32h_data driver_data = {.mdc_cr = 4};
   struct mg_tcpip_if mif = {.mac = GENERATE_LOCALLY_ADMINISTERED_MAC(),
                             // Uncomment below for static configuration:
-                             .ip = mg_htonl(MG_U32(192, 168, 1, 106)),
-                             .mask = mg_htonl(MG_U32(255, 255, 255, 0)),
-                             .gw = mg_htonl(MG_U32(192, 168, 1, 1)),
+                            // .ip = mg_htonl(MG_U32(192, 168, 0, 223)),
+                            // .mask = mg_htonl(MG_U32(255, 255, 255, 0)),
+                            // .gw = mg_htonl(MG_U32(192, 168, 0, 1)),
                             .driver = &mg_tcpip_driver_stm32h,
                             .driver_data = &driver_data};
   mg_tcpip_init(&mgr, &mif);
