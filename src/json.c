@@ -74,6 +74,55 @@ static double mg_atod(const char *p, int len, int *numlen) {
   return d;
 }
 
+// Iterate over object or array elements
+size_t mg_json_next(struct mg_str obj, size_t ofs, struct mg_str *key,
+                    struct mg_str *val) {
+  if (ofs >= obj.len) {
+    ofs = 0;  // Out of boundaries, stop scanning
+  } else if (obj.len < 2 || (*obj.ptr != '{' && *obj.ptr != '[')) {
+    ofs = 0;  // Not an array or object, stop
+  } else {
+    struct mg_str sub = mg_str_n(obj.ptr + ofs, obj.len - ofs);
+    if (ofs == 0) ofs++, sub.ptr++, sub.len--;
+    if (*obj.ptr == '[') {  // Iterate over an array
+      int n = 0, o = mg_json_get(sub, "$", &n);
+      if (n < 0 || o < 0 || (size_t) (o + n) > sub.len) {
+        ofs = 0;  // Error parsing key, stop scanning
+      } else {
+        if (key) *key = mg_str_n(NULL, 0);
+        if (val) *val = mg_str_n(sub.ptr + o, (size_t) n);
+        ofs = (size_t) (&sub.ptr[o + n] - obj.ptr);
+      }
+    } else {  // Iterate over an object
+      int n = 0, o = mg_json_get(sub, "$", &n);
+      if (n < 0 || o < 0 || (size_t) (o + n) > sub.len) {
+        ofs = 0;  // Error parsing key, stop scanning
+      } else {
+        if (key) *key = mg_str_n(sub.ptr + o, (size_t) n);
+        sub.ptr += o + n, sub.len -= (size_t) (o + n);
+        while (sub.len > 0 && *sub.ptr != ':') sub.len--, sub.ptr++;
+        if (sub.len > 0 && *sub.ptr == ':') sub.len--, sub.ptr++;
+        n = 0, o = mg_json_get(sub, "$", &n);
+        if (n < 0 || o < 0 || (size_t) (o + n) > sub.len) {
+          ofs = 0;  // Error parsing value, stop scanning
+        } else {
+          if (val) *val = mg_str_n(sub.ptr + o, (size_t) n);
+          ofs = (size_t) (&sub.ptr[o + n] - obj.ptr);
+        }
+      }
+    }
+    //MG_INFO(("SUB ofs %u %.*s", ofs, sub.len, sub.ptr));
+    while (ofs && ofs < obj.len &&
+           (obj.ptr[ofs] == ' ' || obj.ptr[ofs] == '\t' ||
+            obj.ptr[ofs] == '\n' || obj.ptr[ofs] == '\r')) {
+      ofs++;
+    }
+    if (ofs && ofs < obj.len && obj.ptr[ofs] == ',') ofs++;
+    if (ofs > obj.len) ofs = 0;
+  }
+  return ofs;
+}
+
 int mg_json_get(struct mg_str json, const char *path, int *toklen) {
   const char *s = json.ptr;
   int len = (int) json.len;
@@ -169,8 +218,8 @@ int mg_json_get(struct mg_str json, const char *path, int *toklen) {
           // printf("K %s [%.*s] [%.*s] %d %d %d %d %d\n", path, pos, path, n,
           //        &s[i + 1], n, depth, ed, ci, ei);
           //  NOTE(cpq): in the check sequence below is important.
-          //  strncmp() must go first: it fails fast if the remaining length of
-          //  the path is smaller than `n`.
+          //  strncmp() must go first: it fails fast if the remaining length
+          //  of the path is smaller than `n`.
           if (depth == ed && path[pos - 1] == '.' &&
               strncmp(&s[i + 1], &path[pos], (size_t) n) == 0 &&
               (path[pos + n] == '\0' || path[pos + n] == '.' ||

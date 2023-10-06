@@ -2787,6 +2787,22 @@ static void test_get_header_var(void) {
   ASSERT(mg_strcmp(yy, mg_http_get_header_var(header, mg_str("x"))) == 0);
 }
 
+static void json_scan(struct mg_str json, int depth) {
+  int i, n = 0, o = mg_json_get(json, "$", &n);
+  for (i = 0; i < depth; i++) printf("  ");
+  printf("%.*s\n", n, json.ptr + o);
+  if (json.ptr[o] == '{' || json.ptr[o] == '[') {  // Iterate over elems
+    struct mg_str key, val, sub = mg_str_n(json.ptr + o, (size_t) n);
+    size_t ofs = 0;
+    while ((ofs = mg_json_next(sub, ofs, &key, &val)) > 0) {
+      for (i = 0; i < depth; i++) printf("  ");
+      printf("KEY: %.*s VAL: %.*s\n", (int) key.len, key.ptr, (int) val.len,
+             val.ptr);
+      if (*val.ptr == '[' || *val.ptr == '{') json_scan(val, depth + 1);
+    }
+  }
+}
+
 static void test_json(void) {
   const char *s1 = "{\"a\":{},\"b\":7,\"c\":[[],2]}";
   const char *s2 = "{\"a\":{\"b1\":{}},\"c\":7,\"d\":{\"b2\":{}}}";
@@ -2968,6 +2984,21 @@ static void test_json(void) {
   ASSERT(mg_json_get_long(json, "$[0].a", -1) == -1);
   ASSERT(mg_json_get_long(json, "$[1].a", -1) == 2);
   ASSERT(mg_json_get_long(json, "$[2].a", -1) == -1);
+
+  // mg_json_next()
+  json = mg_str("[1,true,{\"a\":[3],\"b\":42}]");
+  json_scan(json, 0);
+  {
+    struct mg_str k, v, sub = mg_str_n(json.ptr + 8, json.len - 8);
+    const char *a = "\"a\"", *b = "\"b\"";
+    ASSERT(mg_json_next(sub, 0, &k, &v) == 9);
+    ASSERT(mg_vcmp(&k, a) == 0);
+    ASSERT(mg_vcmp(&v, "[3]") == 0);
+    ASSERT(mg_json_next(sub, 9, &k, &v) == 15);
+    ASSERT(mg_vcmp(&k, b) == 0);
+    ASSERT(mg_vcmp(&v, "42") == 0);
+    ASSERT(mg_json_next(sub, 15, &k, &v) == 0);
+  }
 }
 
 static void resp_rpc(struct mg_rpc_req *r) {
