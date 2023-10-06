@@ -10,7 +10,7 @@ SOURCES += cmsis_mcu/devices/MIMXRT1021/gcc/startup_MIMXRT1021.S
 CFLAGS += -D__ATOLLIC__ -D__STARTUP_CLEAR_BSS	# Make startup code work as expected
 
 # Mongoose-specific. See https://mongoose.ws/documentation/#build-options
-SOURCES += mongoose.c #net.c packed_fs.c
+SOURCES += mongoose.c
 CFLAGS += -DMG_ENABLE_TCPIP=1 -DMG_ARCH=MG_ARCH_NEWLIB -DMG_ENABLE_CUSTOM_MILLIS=1
 CFLAGS += -DMG_ENABLE_CUSTOM_RANDOM=1 -DMG_ENABLE_PACKED_FS=1 -DMG_ENABLE_DRIVER_IMXRT1020=1
 
@@ -57,9 +57,9 @@ endif
 DEVICE_URL ?= https://dash.vcon.io/api/v3/devices/4
 update: firmware.bin
 	curl --fail-with-body -su :$(VCON_API_KEY) $(DEVICE_URL)/ota --data-binary @$<
-	curl -su :$(VCON_API_KEY) https://dash.vcon.io/api/v3/devices/4/rpc/swd.exec -d '{"req":"init"}'
-	curl -su :$(VCON_API_KEY) https://dash.vcon.io/api/v3/devices/4/rpc/swd.exec -d '{"req":"wm,e000edf0,a05f0003 wm,e000edfc,1 wm,e000ed0c,5fa0004"}'
-	curl -su :$(VCON_API_KEY) https://dash.vcon.io/api/v3/devices/4/rpc/swd.exec -d '{"req":"init"}'
+	curl -su :$(VCON_API_KEY) $(DEVICE_URL)/rpc/swd.exec -d '{"req":"init"}'
+	curl -su :$(VCON_API_KEY) $(DEVICE_URL)/rpc/swd.exec -d '{"req":"wm,e000edf0,a05f0003 wm,e000edfc,1 wm,e000ed0c,5fa0004"}'
+	curl -su :$(VCON_API_KEY) $(DEVICE_URL)/rpc/swd.exec -d '{"req":"init"}'
 	PC=`curl -su :$(VCON_API_KEY) $(DEVICE_URL)/rpc/swd.exec -d '{"req":"rm,4"}' | jq -r .resp[5:]` && \
 	SP=`curl -su :$(VCON_API_KEY) $(DEVICE_URL)/rpc/swd.exec -d '{"req":"rm,0"}' | jq -r .resp[5:]` && \
 	REQ="wm,e000ed08,0 wr,d,$$SP wr,f,$$PC" && \
