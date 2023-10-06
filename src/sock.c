@@ -383,7 +383,7 @@ static void accept_conn(struct mg_mgr *mgr, struct mg_connection *lsn) {
   socklen_t sa_len = sizeof(usa);
   MG_SOCKET_TYPE fd = raccept(FD(lsn), &usa, &sa_len);
   if (fd == MG_INVALID_SOCKET) {
-#if MG_ARCH == MG_ARCH_AZURERTOS
+#if MG_ARCH == MG_ARCH_AZURERTOS || defined(__ECOS)
     // AzureRTOS, in non-block socket mode can mark listening socket readable
     // even it is not. See comment for 'select' func implementation in
     // nx_bsd.c That's not an error, just should try later
