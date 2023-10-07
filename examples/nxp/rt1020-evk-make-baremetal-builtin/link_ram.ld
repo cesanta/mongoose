@@ -2,7 +2,7 @@ ENTRY(Reset_Handler);
 MEMORY {
   itcram(rx)       : ORIGIN = 0x00000000, LENGTH = 64k
   dtcram(rw)       : ORIGIN = 0x20000000, LENGTH = 64k
-  ocram(rw)        : ORIGIN = 0x20200000, LENGTH = 128k   # This is cached !
+  ocram(rw)        : ORIGIN = 0x20200000, LENGTH = 128k   /* This is cached */
 }
 __StackTop = ORIGIN(dtcram) + LENGTH(dtcram);
 
