@@ -219,6 +219,19 @@ jobs:
       run: sudo apt -y update; sudo apt -y install gcc-arm-none-eabi
     - if: ${{ env.GO == 1 }}
       run:  make -C examples/stm32/nucleo-h563zi-make-baremetal-builtin test VCON_API_KEY=${{secrets.VCON_API_KEY}}
+#    - if: ${{ env.GO == 1 }}
+# WIP      run:  make -C examples/stm32/nucleo-h563zi-make-freertos-builtin test VCON_API_KEY=${{secrets.VCON_API_KEY}}
+
+  test_rt1020:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v3
+      with: { fetch-depth: 3 }
+    - run: if ./test/match_changed_files.sh "^src|examples/nxp/rt1020.*-make-" ; then echo GO=1 >> $GITHUB_ENV ; fi
+    - if: ${{ env.GO == 1 }}
+      run: sudo apt -y update; sudo apt -y install gcc-arm-none-eabi
+    - if: ${{ env.GO == 1 }}
+      run:  make -C examples/nxp/rt1020-evk-make-baremetal-builtin test VCON_API_KEY=${{secrets.VCON_API_KEY}}
 
   test_tm4c:
     runs-on: ubuntu-latest
@@ -301,6 +314,7 @@ jobs:
           - path: nxp/nxp-lpcxpresso54608-lwip-freertos
           - path: nxp/nxp-lpcxpresso54618-lwip-freertos
           - path: nxp/nxp-lpcxpresso54628-lwip-freertos
+          - path: nxp/rt1020-evk-make-baremetal-builtin
           - path: nxp/nxp-twrk65f180m-lwip-freertos
           - path: nxp/nxp-twrkv58f220m-lwip-freertos
           - path: rp2040/pico-rmii
@@ -314,7 +328,9 @@ jobs:
           - path: stm32/nucleo-f746zg-make-freertos-builtin
           - path: stm32/nucleo-f746zg-make-freertos-tcp
           - path: stm32/nucleo-f746zg-make-baremetal-builtin-rndis
+          - path: stm32/nucleo-g031-make-baremetal-builtin
           - path: stm32/nucleo-h563zi-make-baremetal-builtin
+          - path: stm32/nucleo-h563zi-make-freertos-builtin
           - path: stm32/nucleo-h743zi-make-baremetal-builtin
           - path: stm32/nucleo-h743zi-make-freertos-builtin
           - path: ti/ti-ek-tm4c1294xl-http-server

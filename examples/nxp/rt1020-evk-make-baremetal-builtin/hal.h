@@ -281,8 +281,10 @@ static inline void ethernet_init(void) {
   NVIC_EnableIRQ(ENET_IRQn);  // Setup Ethernet IRQ handler
 }
 
-// Helper macro for MAC generation
-#define GENERATE_LOCALLY_ADMINISTERED_MAC() \
-  { 2, 0, 2, 5, 7, 91 }
-//    *((uint32_t *)(uintptr_t)&uid[0]) = OCOTP->CFG0;
-//    *((uint32_t *)(uintptr_t)&uid[4]) = OCOTP->CFG1;
+// Helper macro for MAC generation, byte reads not allowed
+#define GENERATE_LOCALLY_ADMINISTERED_MAC()                \
+  {                                                        \
+    2, OCOTP->CFG0 & 255, (OCOTP->CFG0 >> 10) & 255,       \
+        ((OCOTP->CFG0 >> 19) ^ (OCOTP->CFG1 >> 19)) & 255, \
+        (OCOTP->CFG1 >> 10) & 255, OCOTP->CFG1 & 255       \
+  }
