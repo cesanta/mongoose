@@ -4,6 +4,10 @@
 #define MG_ENABLE_LOG 1
 #endif
 
+#ifndef MG_ENABLE_CUSTOM_LOG
+#define MG_ENABLE_CUSTOM_LOG 0  // Let user define their own MG_LOG
+#endif
+
 #ifndef MG_ENABLE_TCPIP
 #define MG_ENABLE_TCPIP 0  // Mongoose built-in network stack
 #endif
