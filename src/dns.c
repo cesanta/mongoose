@@ -104,7 +104,7 @@ bool mg_dns_parse(const uint8_t *buf, size_t len, struct mg_dns_message *dm) {
 
   if (len < sizeof(*h)) return 0;                // Too small, headers dont fit
   if (mg_ntohs(h->num_questions) > 1) return 0;  // Sanity
-  if (mg_ntohs(h->num_answers) > 10) return 0;   // Sanity
+  if (mg_ntohs(h->num_answers) > 15) return 0;   // Sanity
   dm->txnid = mg_ntohs(h->txnid);
 
   for (i = 0; i < mg_ntohs(h->num_questions); i++) {
