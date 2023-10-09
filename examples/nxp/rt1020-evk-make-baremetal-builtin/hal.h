@@ -196,12 +196,25 @@ static inline uint8_t uart_read_byte(LPUART_Type *uart) {
   return (uint8_t) (uart->DATA & 255);
 }
 
-// TODO(NXP): get RNG usage specs
 static inline void rng_init(void) {
+  clock_periph(6, CCM_CCGR6_CG6_SHIFT, CLOCK_ON_RUN_WAIT);  // trng_clk
+  SETBITS(TRNG->MCTL,
+          TRNG_MCTL_PRGM_MASK | TRNG_MCTL_ERR_MASK | TRNG_MCTL_RST_DEF_MASK,
+          TRNG_MCTL_PRGM(1) | TRNG_MCTL_ERR(1) |
+              TRNG_MCTL_RST_DEF(1));  // reset to default values
+  SETBITS(TRNG->MCTL, TRNG_MCTL_PRGM_MASK | TRNG_MCTL_ERR_MASK,
+          TRNG_MCTL_PRGM(0));            // set to run mode
+  (void) TRNG->ENT[TRNG_ENT_COUNT - 1];  // start new entropy generation
+  (void) TRNG->ENT[0];                   // defect workaround
 }
-#include <stdlib.h>
 static inline uint32_t rng_read(void) {
-  return (uint32_t) rand();
+  static uint8_t idx = 0;
+  while ((TRNG->MCTL & TRNG_MCTL_ENT_VAL_MASK) == 0) (void) 0;
+  uint32_t data = TRNG->ENT[idx++];  // read data
+  idx %= TRNG_ENT_COUNT;             // stay within array limits
+  if (idx == 0)                      // we've just read TRNG_ENT_COUNT - 1
+    (void) TRNG->ENT[0];             // defect workaround
+  return data;
 }
 
 // - PHY has no xtal, XI driven from ENET_REF_CLK1 (labeled as ENET_TX_CLK
