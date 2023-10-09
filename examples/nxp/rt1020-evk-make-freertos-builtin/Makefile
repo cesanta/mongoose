@@ -9,15 +9,17 @@ SOURCES = main.c syscalls.c sysinit.c
 SOURCES += cmsis_mcu/devices/MIMXRT1021/gcc/startup_MIMXRT1021.S # NXP startup file. Compiler-dependent!
 CFLAGS += -D__ATOLLIC__ -D__STARTUP_CLEAR_BSS	# Make startup code work as expected
 
-# Mongoose-specific. See https://mongoose.ws/documentation/#build-options
-SOURCES += mongoose.c
-CFLAGS += -DMG_ENABLE_TCPIP=1 -DMG_ARCH=MG_ARCH_NEWLIB -DMG_ENABLE_CUSTOM_MILLIS=1
-CFLAGS += -DMG_ENABLE_CUSTOM_RANDOM=1 -DMG_ENABLE_PACKED_FS=1 -DMG_ENABLE_DRIVER_IMXRT1020=1
+# FreeRTOS. RT1020 has a Cortex-M7 r1p2 core, FreeRTOS recommends using CM4F port for non-r0p1 CM7 micros
+SOURCES += FreeRTOS-Kernel/portable/MemMang/heap_4.c
+SOURCES += FreeRTOS-Kernel/portable/GCC/ARM_CM4F/port.c
+CFLAGS += -IFreeRTOS-Kernel/include 
+CFLAGS += -IFreeRTOS-Kernel/portable/GCC/ARM_CM4F -Wno-conversion
 
-CFLAGS += $(CFLAGS_EXTRA)
+SOURCES += mongoose.c
+CFLAGS += $(CFLAGS_EXTRA)       # Mongoose options are defined in mongoose_custom.h
 
 # Example specific build options. See README.md
-CFLAGS += -DHTTP_URL=\"http://0.0.0.0/\" -DHTTPS_URL=\"https://0.0.0.0/\"
+CFLAGS += -DHTTP_URL=\"http://0.0.0.0/\"
 
 ifeq ($(OS),Windows_NT)
   RM = cmd /C del /Q /F /S
@@ -30,26 +32,19 @@ all build example: firmware.bin
 firmware.bin: firmware.elf
 	arm-none-eabi-objcopy -O binary $< $@
 
-firmware.elf: cmsis_core cmsis_mcu $(SOURCES) hal.h link_ram.ld Makefile
-	arm-none-eabi-gcc $(SOURCES) $(CFLAGS) $(LDFLAGS) -o $@
-	arm-none-eabi-size $@
+firmware.elf: FreeRTOS-Kernel cmsis_core cmsis_mcu $(SOURCES) hal.h link_ram.ld mongoose_custom.h
+	arm-none-eabi-gcc $(SOURCES) $(wildcard FreeRTOS-Kernel/*.c) $(CFLAGS) $(LDFLAGS) -o $@
 
 flash: firmware.bin
 	st-flash --reset write $< 0x8000000
 
-cmsis_core:     # ARM CMSIS core headers
-	git clone -q --depth 1 -b 5.9.0 https://github.com/ARM-software/CMSIS_5 $@
+cmsis_core:  # ARM CMSIS core headers
+	git clone --depth 1 -b 5.9.0 https://github.com/ARM-software/CMSIS_5 $@
 cmsis_mcu:
 	curl -sL https://mcuxpresso.nxp.com/cmsis_pack/repo/NXP.MIMXRT1021_DFP.17.0.0.pack -o $@.zip
 	mkdir $@ && cd $@ && unzip -q ../$@.zip
-mbedtls:        # mbedTLS library
-	git clone --depth 1 -b v2.28.2 https://github.com/mbed-tls/mbedtls $@
-
-ifeq ($(TLS), mbedtls)
-CFLAGS += -DMG_TLS=MG_TLS_MBED -Wno-conversion -Imbedtls/include
-CFLAGS += -DMBEDTLS_CONFIG_FILE=\"mbedtls_config.h\" mbedtls/library/*.c
-firmware.elf: mbedtls
-endif
+FreeRTOS-Kernel:  # FreeRTOS sources
+	git clone --depth 1 -b V10.5.0 https://github.com/FreeRTOS/FreeRTOS-Kernel $@
 
 # Automated remote test. Requires env variable VCON_API_KEY set. See https://vcon.io/automated-firmware-tests/
 DEVICE_URL ?= https://dash.vcon.io/api/v3/devices/4
@@ -68,6 +63,7 @@ test update: CFLAGS += -DUART_DEBUG=LPUART2
 test: update
 	curl --fail-with-body -su :$(VCON_API_KEY) $(DEVICE_URL)/tx?t=5 | tee /tmp/output.txt
 	grep 'READY, IP:' /tmp/output.txt       # Check for network init
+#	grep 'MQTT connected' /tmp/output.txt   # Check for MQTT connection success
 
 clean:
-	$(RM) firmware.* *.su cmsis_core cmsis_mcu mbedtls *.zip
+	$(RM) firmware.* *.su cmsis_core cmsis_mcu FreeRTOS-Kernel *.zip

@@ -232,6 +232,8 @@ jobs:
       run: sudo apt -y update; sudo apt -y install gcc-arm-none-eabi
     - if: ${{ env.GO == 1 }}
       run:  make -C examples/nxp/rt1020-evk-make-baremetal-builtin test VCON_API_KEY=${{secrets.VCON_API_KEY}}
+    - if: ${{ env.GO == 1 }}
+      run:  make -C examples/nxp/rt1020-evk-make-freertos-builtin test VCON_API_KEY=${{secrets.VCON_API_KEY}}
 
   test_tm4c:
     runs-on: ubuntu-latest
@@ -315,6 +317,7 @@ jobs:
           - path: nxp/nxp-lpcxpresso54618-lwip-freertos
           - path: nxp/nxp-lpcxpresso54628-lwip-freertos
           - path: nxp/rt1020-evk-make-baremetal-builtin
+          - path: nxp/rt1020-evk-make-freertos-builtin
           - path: nxp/nxp-twrk65f180m-lwip-freertos
           - path: nxp/nxp-twrkv58f220m-lwip-freertos
           - path: rp2040/pico-rmii
