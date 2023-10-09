@@ -27,6 +27,7 @@ robust, and easy. Features include:
   [exact steps](https://mongoose.ws/documentation/#2-minute-integration-guide)
 - Works with any network stack with socket API, like LwIP or FreeRTOS-Plus-TCP
 - Built-in TCP/IP stack with drivers for bare metal or RTOS systems
+   - Available drivers: STM32 F4, F7, H5, H7; NXP RT1020; TI TM4C; Microchip SAME54; Wiznet W5500
    - A complete Web device dashboard on bare metal
   [Nucleo-F429ZI](examples/stm32/nucleo-f429zi-baremetal) is only 6 files
    - For comparison, a CubeIDE generated HTTP example is 400+ files
