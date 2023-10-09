@@ -26,6 +26,9 @@ void mg_log_set(int log_level) {
   s_level = log_level;
 }
 
+#if MG_ENABLE_CUSTOM_LOG
+// Let user define their own mg_log_prefix() and mg_log()
+#else
 bool mg_log_prefix(int level, const char *file, int line, const char *fname) {
   if (level <= s_level) {
     const char *p = strrchr(file, '/');
@@ -50,6 +53,7 @@ void mg_log(const char *fmt, ...) {
   va_end(ap);
   logs("\r\n", 2);
 }
+#endif
 
 static unsigned char nibble(unsigned c) {
   return (unsigned char) (c < 10 ? c + '0' : c + 'W');
