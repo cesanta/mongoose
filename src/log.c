@@ -26,7 +26,8 @@ void mg_log_set(int log_level) {
   s_level = log_level;
 }
 
-bool mg_log_prefix(int level, const char *file, int line, const char *fname) {
+bool MG_IRAM mg_log_prefix(int level, const char *file, int line,
+                           const char *fname) {
   if (level <= s_level) {
     const char *p = strrchr(file, '/');
     char buf[41];

@@ -717,6 +717,10 @@ struct timeval {
 #define MG_DEVICE_DUAL_BANK 0
 #endif
 
+#ifndef MG_IRAM
+#define MG_IRAM ""
+#endif
+
 #ifndef MG_ENABLE_MD5
 #define MG_ENABLE_MD5 1
 #endif
@@ -1679,9 +1683,8 @@ void mg_rpc_list(struct mg_rpc_req *r);
 #endif
 
 #if defined(__GNUC__) && !defined(__APPLE__)
+#undef MG_IRAM
 #define MG_IRAM __attribute__((section(".iram")))
-#else
-#define MG_IRAM
 #endif
 
 // Firmware update API
@@ -1690,10 +1693,10 @@ bool mg_ota_write(const void *buf, size_t len);  // Write chunk, aligned to 1k
 bool mg_ota_end(void);                           // Stop writing
 
 enum {
-  MG_OTA_UNAVAILABLE = 0,         // No OTA information is present
-  MG_OTA_FIRST_BOOT = MG_BIT(0),  // Device booting the first time after the OTA
-  MG_OTA_COMMITTED = MG_BIT(1),   // The firmware is good
-  MG_OTA_ROLLBACK = MG_BIT(2)     // Rolling back to this firmware
+  MG_OTA_UNAVAILABLE = 0,  // No OTA information is present
+  MG_OTA_FIRST_BOOT = 1,   // Device booting the first time after the OTA
+  MG_OTA_UNCOMMITTED = 2,  // Ditto, but marking us for the rollback
+  MG_OTA_COMMITTED = 3,    // The firmware is good
 };
 enum { MG_FIRMWARE_CURRENT = 0, MG_FIRMWARE_PREVIOUS = 1 };
 

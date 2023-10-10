@@ -52,6 +52,10 @@
 #define MG_DEVICE_DUAL_BANK 0
 #endif
 
+#ifndef MG_IRAM
+#define MG_IRAM ""
+#endif
+
 #ifndef MG_ENABLE_MD5
 #define MG_ENABLE_MD5 1
 #endif

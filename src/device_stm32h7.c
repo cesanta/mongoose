@@ -15,58 +15,59 @@
 #define FLASH_OPTSR_PRG 0x20
 #define FLASH_SIZE_REG 0x1FF1E880
 
-#define SCB_VTOR 0xe000ed08  // Register that holds IRQ vector table offset
-
-void *mg_flash_start(void) {
+void *MG_IRAM mg_flash_start(void) {
   return (void *) 0x08000000;
 }
-size_t mg_flash_size(void) {
+size_t MG_IRAM mg_flash_size(void) {
   return MG_REG(FLASH_SIZE_REG) * 1024;  // convert from KB to bytes
 }
-size_t mg_flash_sector_size(void) {
+size_t MG_IRAM mg_flash_sector_size(void) {
   return 128 * 1024;  // 128k
 }
-size_t mg_flash_write_align(void) {
+size_t MG_IRAM mg_flash_write_align(void) {
   return 32;  // 256 bit
 }
-int mg_flash_bank(void) {
+int MG_IRAM mg_flash_bank(void) {
 #if MG_DEVICE_DUAL_BANK
   return MG_REG(FLASH_BASE1 + FLASH_OPTCR) & MG_BIT(31) ? 2 : 1;
 #else
-  return MG_REG(SCB_VTOR) == (uint32_t) mg_flash_start() ? 1 : 2;
+  return 1;
 #endif
 }
 
-static void flash_unlock(void) {
+static void MG_IRAM flash_unlock(void) {
   static bool unlocked = false;
+#if MG_DEVICE_DUAL_BANK == 0
+  if (mg_ota_status(MG_FIRMWARE_CURRENT) == MG_OTA_FIRST_BOOT) unlocked = true;
+#endif
   if (unlocked == false) {
     MG_REG(FLASH_BASE1 + FLASH_KEYR) = 0x45670123;
     MG_REG(FLASH_BASE1 + FLASH_KEYR) = 0xcdef89ab;
 #if MG_DEVICE_DUAL_BANK
     MG_REG(FLASH_BASE2 + FLASH_KEYR) = 0x45670123;
     MG_REG(FLASH_BASE2 + FLASH_KEYR) = 0xcdef89ab;
+#endif
     MG_REG(FLASH_BASE1 + FLASH_OPTKEYR) = 0x08192a3b;  // opt reg is "shared"
     MG_REG(FLASH_BASE1 + FLASH_OPTKEYR) = 0x4c5d6e7f;  // thus unlock once
-#endif
     unlocked = true;
   }
 }
 
-static bool flash_page_start(volatile uint32_t *dst) {
+static bool MG_IRAM flash_page_start(volatile uint32_t *dst) {
   char *base = (char *) mg_flash_start(), *end = base + mg_flash_size();
   volatile char *p = (char *) dst;
   return p >= base && p < end && ((p - base) % mg_flash_sector_size()) == 0;
 }
 
-static bool flash_is_err(uint32_t bank) {
+static bool MG_IRAM flash_is_err(uint32_t bank) {
   return MG_REG(bank + FLASH_SR) & ((MG_BIT(11) - 1) << 17);  // RM0433 4.9.5
 }
 
-static void flash_wait(uint32_t bank) {
+static void MG_IRAM flash_wait(uint32_t bank) {
   while (MG_REG(bank + FLASH_SR) & (MG_BIT(0) | MG_BIT(2))) (void) 0;
 }
 
-static void flash_clear_err(uint32_t bank) {
+static void MG_IRAM flash_clear_err(uint32_t bank) {
   flash_wait(bank);                                      // Wait until ready
   MG_REG(bank + FLASH_CCR) = ((MG_BIT(11) - 1) << 16U);  // Clear all errors
 }
@@ -78,7 +79,7 @@ static bool flash_bank_is_swapped(uint32_t bank) {
 #endif
 
 // Figure out flash bank based on the address
-static uint32_t flash_bank(void *addr) {
+static uint32_t MG_IRAM flash_bank(void *addr) {
 #if MG_DEVICE_DUAL_BANK
   size_t ofs = (char *) addr - (char *) mg_flash_start();
   return ofs < mg_flash_size() / 2 ? FLASH_BASE1 : FLASH_BASE2;
@@ -88,7 +89,7 @@ static uint32_t flash_bank(void *addr) {
 #endif
 }
 
-bool mg_flash_erase(void *addr) {
+bool MG_IRAM mg_flash_erase(void *addr) {
   bool ok = false;
   if (flash_page_start(addr) == false) {
     MG_ERROR(("%p is not on a sector boundary", addr));
@@ -129,7 +130,7 @@ bool mg_flash_swap_bank() {
   return true;
 }
 
-bool mg_flash_write(void *addr, const void *buf, size_t len) {
+bool MG_IRAM mg_flash_write(void *addr, const void *buf, size_t len) {
   if ((len % mg_flash_write_align()) != 0) {
     MG_ERROR(("%lu is not aligned to %lu", len, mg_flash_write_align()));
     return false;
