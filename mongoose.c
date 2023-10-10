@@ -5323,12 +5323,6 @@ void mg_tcpip_free(struct mg_tcpip_if *ifp) {
   free((char *) ifp->tx.ptr);
 }
 
-int mg_mkpipe(struct mg_mgr *m, mg_event_handler_t fn, void *d, bool udp) {
-  (void) m, (void) fn, (void) d, (void) udp;
-  MG_ERROR(("Not implemented"));
-  return -1;
-}
-
 static void send_syn(struct mg_connection *c) {
   struct connstate *s = (struct connstate *) (c + 1);
   uint32_t isn = mg_htonl((uint32_t) mg_ntohs(c->loc.port));
