@@ -180,7 +180,9 @@ size_t mg_flash_next(char *p, char *end, uint32_t *key, size_t *size) {
 static char *flash_last_sector(void) {
   size_t ss = mg_flash_sector_size(), size = mg_flash_size();
   char *base = (char *) mg_flash_start(), *last = base + size - ss;
+#if MG_DEVICE_DUAL_BANK
   if (mg_flash_bank() == 2) last -= size / 2;
+#endif
   return last;
 }
 
@@ -477,69 +479,89 @@ void mg_device_reset(void) {
 #define FLASH_CCR 0x14
 #define FLASH_OPTSR_CUR 0x1c
 #define FLASH_OPTSR_PRG 0x20
+#define FLASH_SIZE_REG 0x1FF1E880
 
-void *mg_flash_start(void) {
+void *MG_IRAM mg_flash_start(void) {
   return (void *) 0x08000000;
 }
-size_t mg_flash_size(void) {
-  return 2 * 1024 * 1024;  // 2Mb
+size_t MG_IRAM mg_flash_size(void) {
+  return MG_REG(FLASH_SIZE_REG) * 1024;  // convert from KB to bytes
 }
-size_t mg_flash_sector_size(void) {
+size_t MG_IRAM mg_flash_sector_size(void) {
   return 128 * 1024;  // 128k
 }
-size_t mg_flash_write_align(void) {
+size_t MG_IRAM mg_flash_write_align(void) {
   return 32;  // 256 bit
 }
-int mg_flash_bank(void) {
+int MG_IRAM mg_flash_bank(void) {
+#if MG_DEVICE_DUAL_BANK
   return MG_REG(FLASH_BASE1 + FLASH_OPTCR) & MG_BIT(31) ? 2 : 1;
+#else
+  return 1;
+#endif
 }
 
-static void flash_unlock(void) {
+static void MG_IRAM flash_unlock(void) {
   static bool unlocked = false;
+#if MG_DEVICE_DUAL_BANK == 0
+  if (mg_ota_status(MG_FIRMWARE_CURRENT) == MG_OTA_FIRST_BOOT ||
+      mg_ota_is_rollback(MG_FIRMWARE_CURRENT)) unlocked = true;
+#endif
   if (unlocked == false) {
     MG_REG(FLASH_BASE1 + FLASH_KEYR) = 0x45670123;
     MG_REG(FLASH_BASE1 + FLASH_KEYR) = 0xcdef89ab;
+#if MG_DEVICE_DUAL_BANK
     MG_REG(FLASH_BASE2 + FLASH_KEYR) = 0x45670123;
     MG_REG(FLASH_BASE2 + FLASH_KEYR) = 0xcdef89ab;
+#endif
     MG_REG(FLASH_BASE1 + FLASH_OPTKEYR) = 0x08192a3b;  // opt reg is "shared"
     MG_REG(FLASH_BASE1 + FLASH_OPTKEYR) = 0x4c5d6e7f;  // thus unlock once
     unlocked = true;
   }
 }
 
-static bool flash_page_start(volatile uint32_t *dst) {
+static bool MG_IRAM flash_page_start(volatile uint32_t *dst) {
   char *base = (char *) mg_flash_start(), *end = base + mg_flash_size();
   volatile char *p = (char *) dst;
   return p >= base && p < end && ((p - base) % mg_flash_sector_size()) == 0;
 }
 
-static bool flash_is_err(uint32_t bank) {
+static bool MG_IRAM flash_is_err(uint32_t bank) {
   return MG_REG(bank + FLASH_SR) & ((MG_BIT(11) - 1) << 17);  // RM0433 4.9.5
 }
 
-static void flash_wait(uint32_t bank) {
+static void MG_IRAM flash_wait(uint32_t bank) {
   while (MG_REG(bank + FLASH_SR) & (MG_BIT(0) | MG_BIT(2))) (void) 0;
 }
 
-static void flash_clear_err(uint32_t bank) {
+static void MG_IRAM flash_clear_err(uint32_t bank) {
   flash_wait(bank);                                      // Wait until ready
   MG_REG(bank + FLASH_CCR) = ((MG_BIT(11) - 1) << 16U);  // Clear all errors
 }
 
+#if MG_DEVICE_DUAL_BANK
 static bool flash_bank_is_swapped(uint32_t bank) {
   return MG_REG(bank + FLASH_OPTCR) & MG_BIT(31);  // RM0433 4.9.7
 }
+#endif
 
 // Figure out flash bank based on the address
-static uint32_t flash_bank(void *addr) {
+static uint32_t MG_IRAM flash_bank(void *addr) {
+#if MG_DEVICE_DUAL_BANK
   size_t ofs = (char *) addr - (char *) mg_flash_start();
   return ofs < mg_flash_size() / 2 ? FLASH_BASE1 : FLASH_BASE2;
+#else
+  (void) addr;
+  return FLASH_BASE1;
+#endif
 }
 
-bool mg_flash_erase(void *addr) {
+bool MG_IRAM mg_flash_erase(void *addr) {
   bool ok = false;
   if (flash_page_start(addr) == false) {
+    if (!mg_ota_is_swapping()) {
     MG_ERROR(("%p is not on a sector boundary", addr));
+    }
   } else {
     uintptr_t diff = (char *) addr - (char *) mg_flash_start();
     uint32_t sector = diff / mg_flash_sector_size();
@@ -554,15 +576,18 @@ bool mg_flash_erase(void *addr) {
     MG_REG(bank + FLASH_CR) |= MG_BIT(2);            // Sector erase bit
     MG_REG(bank + FLASH_CR) |= MG_BIT(7);            // Start erasing
     ok = !flash_is_err(bank);
+    if (!mg_ota_is_swapping()) {
     MG_DEBUG(("Erase sector %lu @ %p %s. CR %#lx SR %#lx", sector, addr,
               ok ? "ok" : "fail", MG_REG(bank + FLASH_CR),
               MG_REG(bank + FLASH_SR)));
+    }
     // mg_hexdump(addr, 32);
   }
   return ok;
 }
 
 bool mg_flash_swap_bank() {
+#if MG_DEVICE_DUAL_BANK
   uint32_t bank = FLASH_BASE1;
   uint32_t desired = flash_bank_is_swapped(bank) ? 0 : MG_BIT(31);
   flash_unlock();
@@ -572,10 +597,11 @@ bool mg_flash_swap_bank() {
   // printf("OPTSR_PRG 2 %#lx\n", FLASH->OPTSR_PRG);
   MG_REG(bank + FLASH_OPTCR) |= MG_BIT(1);  // OPTSTART
   while ((MG_REG(bank + FLASH_OPTSR_CUR) & MG_BIT(31)) != desired) (void) 0;
+#endif
   return true;
 }
 
-bool mg_flash_write(void *addr, const void *buf, size_t len) {
+bool MG_IRAM mg_flash_write(void *addr, const void *buf, size_t len) {
   if ((len % mg_flash_write_align()) != 0) {
     MG_ERROR(("%lu is not aligned to %lu", len, mg_flash_write_align()));
     return false;
@@ -596,9 +622,11 @@ bool mg_flash_write(void *addr, const void *buf, size_t len) {
     flash_wait(bank);
     if (flash_is_err(bank)) ok = false;
   }
+  if (!mg_ota_is_swapping()) {
   MG_DEBUG(("Flash write %lu bytes @ %p: %s. CR %#lx SR %#lx", len, dst,
             ok ? "ok" : "fail", MG_REG(bank + FLASH_CR),
             MG_REG(bank + FLASH_SR)));
+  }
   // mg_hexdump(addr, len > 32 ? 32 : len);
   MG_REG(bank + FLASH_CR) &= ~MG_BIT(1);  // Clear programming flag
   MG_ARM_ENABLE_IRQ();
@@ -3319,7 +3347,6 @@ void mg_hexdump(const void *buf, size_t len) {
   while (alen < 16) logs("   ", 3), ascii[alen++] = ' ';
   logs("  ", 2), logs((char *) ascii, 16), logc('\n');
 }
-
 #ifdef MG_ENABLE_LINES
 #line 1 "src/md5.c"
 #endif
@@ -5519,9 +5546,10 @@ size_t mg_ota_size(int fw) {
 static char *s_addr;      // Current address to write to
 static size_t s_size;     // Firmware size to flash. In-progress indicator
 static uint32_t s_crc32;  // Firmware checksum
+static bool s_is_swapping;  // Firmwares are currently in the swapping process
 
 struct mg_otadata {
-  uint32_t crc32, size, timestamp, status;
+  uint32_t crc32, size, timestamp, status, rollback;
 };
 
 bool mg_ota_begin(size_t new_firmware_size) {
@@ -5574,7 +5602,7 @@ bool mg_ota_end(void) {
     uint32_t crc32 = mg_crc32(0, base, s_size);
     if (size == s_size && crc32 == s_crc32) {
       uint32_t now = (uint32_t) (mg_now() / 1000);
-      struct mg_otadata od = {crc32, size, now, MG_OTA_FIRST_BOOT};
+      struct mg_otadata od = {crc32, size, now, MG_OTA_FIRST_BOOT, false};
       uint32_t key = MG_OTADATA_KEY + (mg_flash_bank() == 2 ? 1 : 2);
       ok = mg_flash_save(NULL, key, &od, sizeof(od));
     }
@@ -5588,6 +5616,7 @@ bool mg_ota_end(void) {
 }
 
 static struct mg_otadata mg_otadata(int fw) {
+#if MG_DEVICE_DUAL_BANK
   struct mg_otadata od = {};
   int bank = mg_flash_bank();
   uint32_t key = MG_OTADATA_KEY + 1;
@@ -5597,6 +5626,17 @@ static struct mg_otadata mg_otadata(int fw) {
   // MG_DEBUG(("Loaded OTA data. fw %d, bank %d, key %p", fw, bank, key));
   // mg_hexdump(&od, sizeof(od));
   return od;
+#else
+  struct mg_otadata od = {};
+  uint32_t key = 0;
+  if (fw == MG_FIRMWARE_CURRENT) {
+    key = MG_OTADATA_KEY + 1;
+  } else if (fw == MG_FIRMWARE_PREVIOUS) {
+    key = MG_OTADATA_KEY + 2;
+  }
+  mg_flash_load(NULL, key, &od, sizeof(od));
+  return od;
+#endif
 }
 
 int mg_ota_status(int fw) {
@@ -5616,6 +5656,11 @@ size_t mg_ota_size(int fw) {
   return od.size;
 }
 
+uint32_t mg_ota_is_rollback(int fw) {
+  struct mg_otadata od = mg_otadata(fw);
+  return od.rollback;
+}
+
 bool mg_ota_commit(void) {
   struct mg_otadata od = mg_otadata(MG_FIRMWARE_CURRENT);
   od.status = MG_OTA_COMMITTED;
@@ -5625,8 +5670,144 @@ bool mg_ota_commit(void) {
 
 bool mg_ota_rollback(void) {
   MG_DEBUG(("Rolling firmware back"));
+#if MG_DEVICE_DUAL_BANK == 0
+  struct mg_otadata od = mg_otadata(MG_FIRMWARE_PREVIOUS);
+  if (od.status == MG_OTA_UNAVAILABLE) return false;
+  od.rollback = true;
+  mg_flash_save(NULL, MG_OTADATA_KEY + 2, &od, sizeof(od));
+#endif
   return mg_flash_swap_bank();
 }
+
+static bool MG_IRAM mg_ota_copy_to_flash(char *dst, char *src, size_t len) {
+  size_t align = mg_flash_write_align();
+  size_t len_aligned_down = MG_ROUND_DOWN(len, align);
+  bool ok = false;
+  if (len_aligned_down) ok = mg_flash_write(dst, src, len_aligned_down);
+  if (!ok) return ok;
+  if (len_aligned_down < len) {
+    size_t left = len - len_aligned_down;
+    char tmp[align];
+    for (size_t i = 0; i < sizeof(tmp); i++) tmp[i] = 0xff;
+    for (size_t i = 0; i < left; i++) {
+      tmp[i] = src[len_aligned_down + i];
+    }
+    ok = mg_flash_write(dst + len_aligned_down, tmp, sizeof(tmp));
+  }
+
+  return ok;
+}
+
+static bool MG_IRAM mg_ota_swap_sectors(char *sector_1, char *sector_2,
+                                        size_t len_1, size_t len_2) {
+  if (len_1 > mg_flash_sector_size() || len_2 > mg_flash_sector_size())
+    return false;
+  
+  // copy from sector 1 to RAM
+  char ram_tmp[len_1];
+  char *c = ram_tmp;
+  for (uint32_t i = 0; i < len_1; i++) {
+    *c++ = sector_1[i];
+  }
+
+  bool ok = mg_ota_copy_to_flash(sector_1, sector_2, len_2);
+  if (!ok) return false;
+  ok = mg_ota_copy_to_flash(sector_2, ram_tmp, len_1);
+  return ok;
+}
+
+bool MG_IRAM mg_ota_is_swapping(void) {
+  return s_is_swapping;
+}
+
+void MG_IRAM mg_ota_bootloader(void) {
+  struct mg_otadata crnt_ot = mg_otadata(MG_FIRMWARE_CURRENT);
+  struct mg_otadata prev_ot = mg_otadata(MG_FIRMWARE_PREVIOUS);
+
+  if (crnt_ot.status == MG_OTA_FIRST_BOOT) {
+    crnt_ot.status = MG_OTA_UNCOMMITTED;
+    mg_flash_save(NULL, MG_OTADATA_KEY + 1, &crnt_ot, sizeof(crnt_ot));
+  } else if (crnt_ot.rollback) {
+    crnt_ot.rollback = false;
+    mg_flash_save(NULL, MG_OTADATA_KEY + 1, &crnt_ot, sizeof(crnt_ot));
+  } else if (prev_ot.status == MG_OTA_FIRST_BOOT || prev_ot.rollback) {
+    int crnt_sector_1 = 0, crnt_sector_2 = 0;
+    char *sector_1 = mg_flash_start();
+    char *sector_2 = mg_flash_start() + mg_flash_size() / 2;
+
+    if (crnt_ot.size == 0)
+      crnt_ot.size = mg_flash_sector_size();
+    int sector_count_1 = crnt_ot.size / mg_flash_sector_size();
+    if (crnt_ot.size % mg_flash_sector_size()) sector_count_1++;
+    if (sector_count_1 > 3) {
+      MG_ERROR(("Firmware in the first partition exceeds maximum size."));
+      return;
+    }
+
+    if (prev_ot.size == 0)
+      prev_ot.size = mg_flash_sector_size();
+    int sector_count_2 = prev_ot.size / mg_flash_sector_size();
+    if (prev_ot.size % mg_flash_sector_size()) sector_count_2++;
+    if (sector_count_2 > 3) {
+      MG_ERROR(("Firmware in the second partition exceeds maximum size."));
+      return;
+    }
+
+    MG_DEBUG(("Starting firmware swap\n"));
+    mg_flash_save(NULL, MG_OTADATA_KEY + 1, &prev_ot, sizeof(prev_ot));
+    mg_flash_save(NULL, MG_OTADATA_KEY + 2, &crnt_ot, sizeof(crnt_ot));
+
+    s_is_swapping = true;
+    for (; crnt_sector_1 < sector_count_1 && crnt_sector_2 < sector_count_2;
+         crnt_sector_1++, crnt_sector_2++) {
+      size_t len_1, len_2;
+      if (crnt_sector_1 == sector_count_1 - 1) {
+        len_1 = crnt_ot.size % mg_flash_sector_size();
+        if (len_1 == 0) len_1 = mg_flash_sector_size();
+      } else {
+        len_1 = mg_flash_sector_size();
+      }
+
+      if (crnt_sector_2 == sector_count_2 - 1) {
+        len_2 = prev_ot.size % mg_flash_sector_size();
+        if (len_2 == 0) len_2 = mg_flash_sector_size();
+      } else {
+        len_2 = mg_flash_sector_size();
+      }
+
+      mg_ota_swap_sectors(sector_1, sector_2, len_1, len_2);
+      sector_1 += mg_flash_sector_size();
+      sector_2 += mg_flash_sector_size();
+    }
+
+    while (crnt_sector_1 < sector_count_1) {
+      size_t len = mg_flash_sector_size();
+      if (crnt_sector_1 == sector_count_1 - 1)
+        len = crnt_ot.size % mg_flash_sector_size();
+
+      mg_ota_copy_to_flash(sector_2, sector_1, len);
+      sector_1 += mg_flash_sector_size();
+      sector_2 += mg_flash_sector_size();
+      crnt_sector_1++;
+    }
+
+    while (crnt_sector_2 < sector_count_2) {
+      size_t len = mg_flash_sector_size();
+      if (crnt_sector_2 == sector_count_2 - 1)
+        len = prev_ot.size % mg_flash_sector_size();
+
+      mg_ota_copy_to_flash(sector_1, sector_2, len);
+      sector_1 += mg_flash_sector_size();
+      sector_2 += mg_flash_sector_size();
+      crnt_sector_2++;
+    }
+
+    void (*firmware_reset_handler)(void) =
+        (void (*)(void)) * ((uint32_t *) (mg_flash_start() + 4));
+    firmware_reset_handler();
+  }
+}
+
 #endif
 
 #ifdef MG_ENABLE_LINES

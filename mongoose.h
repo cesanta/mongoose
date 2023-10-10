@@ -717,6 +717,14 @@ struct timeval {
 #define MG_IPV6_V6ONLY 0  // IPv6 socket binds only to V6, not V4 address
 #endif
 
+#ifndef MG_DEVICE_DUAL_BANK
+#define MG_DEVICE_DUAL_BANK 0
+#endif
+
+#ifndef MG_IRAM
+#define MG_IRAM
+#endif
+
 #ifndef MG_ENABLE_MD5
 #define MG_ENABLE_MD5 1
 #endif
@@ -1671,12 +1679,20 @@ void mg_rpc_list(struct mg_rpc_req *r);
 
 
 
+
 #define MG_OTA_NONE 0      // No OTA support
 #define MG_OTA_FLASH 1     // OTA via an internal flash
 #define MG_OTA_CUSTOM 100  // Custom implementation
 
 #ifndef MG_OTA
 #define MG_OTA MG_OTA_NONE
+#endif
+
+#if !MG_DEVICE_DUAL_BANK
+#if defined(__GNUC__) && !defined(__APPLE__)
+#undef MG_IRAM
+#define MG_IRAM __attribute__((section(".iram")))
+#endif
 #endif
 
 // Firmware update API
@@ -1692,13 +1708,16 @@ enum {
 };
 enum { MG_FIRMWARE_CURRENT = 0, MG_FIRMWARE_PREVIOUS = 1 };
 
-int mg_ota_status(int firmware);          // Return firmware status MG_OTA_*
-uint32_t mg_ota_crc32(int firmware);      // Return firmware checksum
-uint32_t mg_ota_timestamp(int firmware);  // Firmware timestamp, UNIX UTC epoch
-size_t mg_ota_size(int firmware);         // Firmware size
+int mg_ota_status(int firmware);              // Return firmware status MG_OTA_*
+uint32_t mg_ota_crc32(int firmware);          // Return firmware checksum
+uint32_t mg_ota_timestamp(int firmware);      // Firmware timestamp, UNIX UTC epoch
+size_t mg_ota_size(int firmware);             // Firmware size
+uint32_t mg_ota_is_rollback(int firmware);    // Firmware is marked for rollback
 
-bool mg_ota_commit(void);    // Commit current firmware
-bool mg_ota_rollback(void);  // Rollback to the previous firmware
+bool mg_ota_commit(void);              // Commit current firmware
+bool mg_ota_rollback(void);            // Rollback to the previous firmware
+bool mg_ota_is_swapping(void);         // Swapping process is now
+void MG_IRAM mg_ota_bootloader(void);  // Bootloader function
 // Copyright (c) 2023 Cesanta Software Limited
 // All rights reserved
 

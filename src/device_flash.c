@@ -27,7 +27,9 @@ size_t mg_flash_next(char *p, char *end, uint32_t *key, size_t *size) {
 static char *flash_last_sector(void) {
   size_t ss = mg_flash_sector_size(), size = mg_flash_size();
   char *base = (char *) mg_flash_start(), *last = base + size - ss;
+#if MG_DEVICE_DUAL_BANK
   if (mg_flash_bank() == 2) last -= size / 2;
+#endif
   return last;
 }
 

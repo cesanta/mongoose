@@ -52,6 +52,14 @@
 #define MG_IPV6_V6ONLY 0  // IPv6 socket binds only to V6, not V4 address
 #endif
 
+#ifndef MG_DEVICE_DUAL_BANK
+#define MG_DEVICE_DUAL_BANK 0
+#endif
+
+#ifndef MG_IRAM
+#define MG_IRAM
+#endif
+
 #ifndef MG_ENABLE_MD5
 #define MG_ENABLE_MD5 1
 #endif
