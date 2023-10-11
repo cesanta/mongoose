@@ -253,13 +253,13 @@ jobs:
     steps:
     - uses: actions/checkout@v3
       with: { fetch-depth: 2 }
-    - run: if ./test/match_changed_files.sh "^src|examples/device-dashboard|examples/microchip/same54" ; then echo GO=1 >> $GITHUB_ENV ; fi
+    - run: if ./test/match_changed_files.sh "^src|examples/device-dashboard|examples/microchip/same54-xpro" ; then echo GO=1 >> $GITHUB_ENV ; fi
     - if: ${{ env.GO == 1 }}
       run: sudo apt -y update; sudo apt -y install gcc-arm-none-eabi
     - if: ${{ env.GO == 1 }}
-      run:  make -C examples/microchip/same54/device-dashboard test VCON_API_KEY=${{secrets.VCON_API_KEY}}
+      run:  make -C examples/microchip/same54-xpro/device-dashboard test VCON_API_KEY=${{secrets.VCON_API_KEY}}
     - if: ${{ env.GO == 1 }}
-      run:  make -C examples/microchip/same54/mqtt-client test VCON_API_KEY=${{secrets.VCON_API_KEY}}
+      run:  make -C examples/microchip/same54-xpro/mqtt-client test VCON_API_KEY=${{secrets.VCON_API_KEY}}
 
   test_pico_w5500:
     runs-on: ubuntu-latest
@@ -296,8 +296,8 @@ jobs:
           - path: esp32/device-dashboard
           - path: esp32/uart-bridge
           - path: esp8266/http-client-server
-          - path: microchip/same54/device-dashboard
-          - path: microchip/same54/mqtt-client
+          - path: microchip/same54-xpro/device-dashboard
+          - path: microchip/same54-xpro/mqtt-client
           - path: infineon/infineon-xmc4700_4800-lwip-rtx-rtos
           - path: nxp/nxp-mimxrt1020-azurertos
           - path: nxp/nxp-frdmk66f-freertos
