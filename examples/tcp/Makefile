@@ -25,7 +25,7 @@ $(PROG): $(SOURCES)       # Build program from sources
 	$(CC) $(SOURCES) $(CFLAGS) $(CFLAGS_MONGOOSE) $(CFLAGS_EXTRA) $(OUT)
 
 clean:                    # Cleanup. Delete built program and all build artifacts
-	$(DELETE) $(PROG) *.o *.obj *.exe *.dSYM mbedtls
+	$(DELETE) $(PROG) *.o *.obj *.exe *.dSYM mbedtls $(PACK)
 
 # Generate packed filesystem for serving credentials
 packed_fs.c: $(wildcard certs/*) Makefile
