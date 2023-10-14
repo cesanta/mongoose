@@ -3174,6 +3174,56 @@ static void test_queue(void) {
   ASSERT(s_qcrc == crc);
 }
 
+static void test_md5_str(const char *string,
+                         const unsigned char *expected_hash) {
+  mg_md5_ctx ctx;
+  unsigned char digest[16];
+  mg_md5_init(&ctx);
+  mg_md5_update(&ctx, (unsigned char *) string, strlen(string));
+  mg_md5_final(&ctx, digest);
+  ASSERT((memcmp(digest, expected_hash, 16) == 0));
+}
+
+static void test_md5(void) {
+  const unsigned char expected_hash_1[] = {0xe5, 0x45, 0x14, 0x96, 0xe1, 0x1d,
+                                           0x7d, 0xa9, 0x62, 0x9f, 0xe0, 0x64,
+                                           0xcb, 0x3d, 0x2b, 0x54};
+  const unsigned char expected_hash_2[] = {0x99, 0x33, 0xf6, 0x4d, 0x7a, 0xb5,
+                                           0x0b, 0x0f, 0xf4, 0x35, 0xdc, 0x61,
+                                           0x1d, 0xef, 0x20, 0xff};
+  const unsigned char expected_hash_3[] = {0xf7, 0x94, 0xc3, 0xa4, 0x56, 0x6d,
+                                           0xc1, 0x10, 0x95, 0xfc, 0x56, 0x87,
+                                           0xf8, 0xb1, 0x69, 0xf2};
+  test_md5_str("#&*%$DHFH(0x12345)^&*(^!@$%^^&&*", expected_hash_1);
+  test_md5_str("1298**&^%DHKSHFLS)(*)&^^%$#!!!!", expected_hash_2);
+  test_md5_str(")_)+_)!&^*%$#>>>{}}}{{{][[[[]]]", expected_hash_3);
+}
+
+static void test_sha1_str(const char *string,
+                          const unsigned char *expected_hash) {
+  mg_sha1_ctx ctx;
+  unsigned char digest[20];
+  mg_sha1_init(&ctx);
+  mg_sha1_update(&ctx, (unsigned char *) string, strlen(string));
+  mg_sha1_final(digest, &ctx);
+  ASSERT((memcmp(digest, expected_hash, 20) == 0));
+}
+
+static void test_sha1(void) {
+  const unsigned char expected_hash_1[] = {
+      0x02, 0xaf, 0x27, 0x00, 0xf7, 0xba, 0xb5, 0xf5, 0xf3, 0x69,
+      0xd8, 0x80, 0x01, 0x0d, 0x6a, 0x28, 0x31, 0x63, 0x1f, 0x92};
+  const unsigned char expected_hash_2[] = {
+      0xaa, 0xe4, 0x39, 0xe8, 0xb4, 0x72, 0x47, 0xe5, 0x1a, 0x6d,
+      0x82, 0x25, 0x5e, 0x9f, 0x32, 0xd9, 0x93, 0x0a, 0x5f, 0xfb};
+  const unsigned char expected_hash_3[] = {
+      0xa0, 0xdd, 0xd2, 0xa1, 0x52, 0xdf, 0xa9, 0xb8, 0x7e, 0x73,
+      0x32, 0x6a, 0x31, 0x28, 0xe9, 0x6d, 0x3a, 0x90, 0x82, 0x58};
+  test_sha1_str("#&*%$DHFH(0x12345)^&*(^!@$%^^&&*", expected_hash_1);
+  test_sha1_str("1298**&^%DHKSHFLS)(*)&^^%$#!!!!", expected_hash_2);
+  test_sha1_str(")_)+_)!&^*%$#>>>{}}}{{{][[[[]]]", expected_hash_3);
+}
+
 int main(void) {
   const char *debug_level = getenv("V");
   if (debug_level == NULL) debug_level = "3";
@@ -3217,6 +3267,8 @@ int main(void) {
   test_sntp();
   test_mqtt();
   test_poll();
+  test_md5();
+  test_sha1();
   printf("SUCCESS. Total tests: %d\n", s_num_tests);
 
   return EXIT_SUCCESS;

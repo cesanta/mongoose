@@ -90,6 +90,7 @@ musl: CC = $(DOCKER) mdashnet/cc1 gcc
 musl: RUN = $(DOCKER) mdashnet/cc1
 
 # Make sure we can build from unamalgamated sources.
+unamalgamated: CFLAGS += -DMG_ENABLE_MD5=1
 unamalgamated: $(HDRS) Makefile test/packed_fs.c
 	$(CC) src/*.c test/packed_fs.c test/unit_test.c $(CFLAGS) $(LDFLAGS) -g -o unit_test
 
