@@ -1,8 +1,9 @@
 // Copyright (c) 2022-2023 Cesanta Software Limited
 // All rights reserved
 //
-// Datasheet: RM0468, devboard manual: UM2840
+// Datasheet: RM0468, devboard manual: UM2407
 // https://www.st.com/resource/en/reference_manual/rm0468-stm32h723733-stm32h725735-and-stm32h730-value-line-advanced-armbased-32bit-mcus-stmicroelectronics.pdf
+// https://www.st.com/resource/en/user_manual/um2407-stm32h7-nucleo144-boards-mb1364-stmicroelectronics.pdf
 // Alternate functions: https://www.st.com/resource/en/datasheet/stm32h723.pdf
 
 #pragma once
