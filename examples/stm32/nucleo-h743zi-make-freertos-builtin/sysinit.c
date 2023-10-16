@@ -53,7 +53,7 @@ void SystemInit(void) {  // Called automatically by startup code
   while ((RCC->CR & BIT(25)) == 0) spin(1);  // Wait until done
   RCC->CFGR |= (3 << 0);                     // Set clock source to PLL1
   while ((RCC->CFGR & (7 << 3)) != (3 << 3)) spin(1);  // Wait until done
-  FLASH->ACR |= FLASH_LATENCY;                         // default is larger
+  FLASH->ACR = FLASH_LATENCY;                         // default is larger
 #if 0
   // Enable SRAM block if you want to use it for ETH buffer (needs proper attributes in driver code)
   // RCC->AHB2ENR |= BIT(29) | BIT(30) | BIT(31);
