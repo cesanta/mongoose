@@ -96,7 +96,7 @@ static inline void gpio_output(uint16_t pin) {
 }
 
 #ifndef UART_DEBUG
-#define UART_DEBUG USART1
+#define UART_DEBUG USART3
 #endif
 
 // D2 Kernel clock (8.7.21) USART1 defaults to pclk2 (APB2), while USART2,3

@@ -7,15 +7,6 @@
 
 #define BLINK_PERIOD_MS 1000  // LED blinking period in millis
 
-static volatile uint64_t s_ticks;  // Milliseconds since boot
-void SysTick_Handler(void) {       // SyStick IRQ handler, triggered every 1ms
-  s_ticks++;
-}
-
-uint64_t mg_millis(void) {  // Let Mongoose use our uptime function
-  return s_ticks;           // Return number of milliseconds since boot
-}
-
 void mg_random(void *buf, size_t len) {  // Use on-board RNG
   for (size_t n = 0; n < len; n += sizeof(uint32_t)) {
     uint32_t r = rng_read();
@@ -24,7 +15,6 @@ void mg_random(void *buf, size_t len) {  // Use on-board RNG
 }
 
 static void timer_fn(void *arg) {
-  gpio_toggle(LED);                                      // Blink LED
   struct mg_tcpip_if *ifp = arg;                         // And show
   const char *names[] = {"down", "up", "req", "ready"};  // network stats
   MG_INFO(("Ethernet: %s, IP: %M, rx:%u, tx:%u, dr:%u, er:%u",
@@ -32,22 +22,13 @@ static void timer_fn(void *arg) {
            ifp->ndrop, ifp->nerr));
 }
 
-int main(void) {
-  gpio_output(LED);               // Setup green LED
-  uart_init(UART_DEBUG, 115200);  // Initialise debug printf
-  ethernet_init();                // Initialise ethernet pins
-
-  MG_INFO(("Starting, CPU freq %g MHz", (double) SystemCoreClock / 1000000));
-
-  struct mg_mgr mgr;        // Initialise
-  mg_mgr_init(&mgr);        // Mongoose event manager
+static void server(void *args) {
+  struct mg_mgr mgr;        // Initialise Mongoose event manager
+  mg_mgr_init(&mgr);        // and attach it to the interface
   mg_log_set(MG_LL_DEBUG);  // Set log level
 
-  // If we don't have any OTA info saved, e.g. we're pre-flashed, then
-  // call mg_ota_commit() to mark this firmware as reliable
-  if (mg_ota_status(MG_FIRMWARE_CURRENT) == MG_OTA_UNAVAILABLE) mg_ota_commit();
-
   // Initialise Mongoose network stack
+  ethernet_init();
   struct mg_tcpip_driver_stm32h_data driver_data = {.mdc_cr = 4};
   struct mg_tcpip_if mif = {.mac = GENERATE_LOCALLY_ADMINISTERED_MAC(),
                             // Uncomment below for static configuration:
@@ -68,9 +49,27 @@ int main(void) {
   web_init(&mgr);
 
   MG_INFO(("Starting event loop"));
-  for (;;) {
-    mg_mgr_poll(&mgr, 0);
-  }
+  for (;;) mg_mgr_poll(&mgr, 1);  // Infinite event loop
+  (void) args;
+}
 
+static void blinker(void *args) {
+  gpio_init(LED, GPIO_MODE_OUTPUT, GPIO_OTYPE_PUSH_PULL, GPIO_SPEED_MEDIUM,
+            GPIO_PULL_NONE, 0);
+  for (;;) {
+    gpio_toggle(LED);
+    vTaskDelay(pdMS_TO_TICKS(BLINK_PERIOD_MS));
+  }
+  (void) args;
+}
+
+int main(void) {
+  uart_init(UART_DEBUG, 115200);  // Initialise UART
+
+  // Start tasks. NOTE: stack sizes are in 32-bit words
+  xTaskCreate(blinker, "blinker", 128, ":)", configMAX_PRIORITIES - 1, NULL);
+  xTaskCreate(server, "server", 2048, 0, configMAX_PRIORITIES - 1, NULL);
+
+  vTaskStartScheduler();  // This blocks
   return 0;
 }

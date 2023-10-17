@@ -191,24 +191,37 @@ jobs:
     - if: ${{ env.GO == 1 }}
       run: make -C test/cube test PROJECTS=../../examples/stm32/nucleo-f429zi-cube-freertos-lwip VCON_API_KEY=${{secrets.VCON_API_KEY}} DEVICE=2
 
-  test_h7:
+  test_h743:
     runs-on: ubuntu-latest
     steps:
     - uses: actions/checkout@v3
       with: { fetch-depth: 3 }
-    - run: if ./test/match_changed_files.sh "^src|examples/device-dashboard|examples/stm32/nucleo-h7.*-make-" ; then echo GO=1 >> $GITHUB_ENV ; fi
+    - run: if ./test/match_changed_files.sh "^src|examples/device-dashboard|examples/stm32/nucleo-h74.*-make-" ; then echo GO=1 >> $GITHUB_ENV ; fi
     - if: ${{ env.GO == 1 }}
       run: sudo apt -y update; sudo apt -y install gcc-arm-none-eabi
     - if: ${{ env.GO == 1 }}
       run:  make -C examples/stm32/nucleo-h743zi-make-baremetal-builtin test VCON_API_KEY=${{secrets.VCON_API_KEY}}
     - if: ${{ env.GO == 1 }}
       run:  make -C examples/stm32/nucleo-h743zi-make-freertos-builtin test VCON_API_KEY=${{secrets.VCON_API_KEY}}
-    - run: echo GO=0 >> $GITHUB_ENV ; if ./test/match_changed_files.sh '^src|examples/device-dashboard|examples/stm32/nucleo-h7.*-cube-'; then echo GO=1 >> $GITHUB_ENV ; fi
+    - run: echo GO=0 >> $GITHUB_ENV ; if ./test/match_changed_files.sh '^src|examples/device-dashboard|examples/stm32/nucleo-h74.*-cube-'; then echo GO=1 >> $GITHUB_ENV ; fi
     - if: ${{ env.GO == 1 }}
       run: make -C test/cube test PROJECTS=../../examples/stm32/nucleo-h743zi-cube-baremetal-builtin VCON_API_KEY=${{secrets.VCON_API_KEY}} DEVICE=6
     - if: ${{ env.GO == 1 }}
       run: make -C test/cube test PROJECTS=../../examples/stm32/nucleo-h743zi-cube-freertos-builtin VCON_API_KEY=${{secrets.VCON_API_KEY}} DEVICE=6
 
+  test_h723:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v3
+      with: { fetch-depth: 3 }
+    - run: if ./test/match_changed_files.sh "^src|examples/device-dashboard|examples/stm32/nucleo-h72.*-make-" ; then echo GO=1 >> $GITHUB_ENV ; fi
+    - if: ${{ env.GO == 1 }}
+      run: sudo apt -y update; sudo apt -y install gcc-arm-none-eabi
+    - if: ${{ env.GO == 1 }}
+      run:  make -C examples/stm32/nucleo-h723zg-make-baremetal-builtin test VCON_API_KEY=${{secrets.VCON_API_KEY}}
+#    - if: ${{ env.GO == 1 }}
+# WIP      run:  make -C examples/stm32/nucleo-h723zg-make-freertos-builtin test VCON_API_KEY=${{secrets.VCON_API_KEY}}
+    
   test_h5:
     runs-on: ubuntu-latest
     steps:
@@ -334,6 +347,8 @@ jobs:
           - path: stm32/nucleo-g031-make-baremetal-builtin
           - path: stm32/nucleo-h563zi-make-baremetal-builtin
           - path: stm32/nucleo-h563zi-make-freertos-builtin
+          - path: stm32/nucleo-h723zg-make-baremetal-builtin
+          - path: stm32/nucleo-h723zg-make-freertos-builtin
           - path: stm32/nucleo-h743zi-make-baremetal-builtin
           - path: stm32/nucleo-h743zi-make-freertos-builtin
           - path: ti/ti-ek-tm4c1294xl-http-server
