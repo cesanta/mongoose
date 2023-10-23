@@ -9,8 +9,8 @@
   <license>License.txt</license>
   <repository type="git">https://github.com/cesanta/mongoose.git</repository>
   <releases>
-    <release version="7.11.0" date="2023-07-05" tag="7.11">
-      See https://github.com/cesanta/mongoose/releases/tag/7.11
+    <release version="7.12.0" date="2023-10-23" tag="7.12">
+      See https://github.com/cesanta/mongoose/releases/tag/7.12
     </release>
   </releases>
 
@@ -29,7 +29,7 @@
   </taxonomy>
 
   <components>
-    <component Cclass="Network Library" Cgroup="Mongoose" Cversion="7.11.0">
+    <component Cclass="Network Library" Cgroup="Mongoose" Cversion="7.12.0">
       <description>Mongoose HTTP/MQTT/Websocket Library</description>
       <files>
         <file category="header" name="Mongoose/mongoose.h"/>

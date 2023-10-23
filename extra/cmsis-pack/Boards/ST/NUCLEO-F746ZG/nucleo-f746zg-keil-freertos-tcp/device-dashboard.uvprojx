@@ -337,7 +337,7 @@
             <v6Rtti>0</v6Rtti>
             <VariousControls>
               <MiscControls>-W -Wall -Wextra -Wdouble-promotion -Wno-unused-parameter -Wconversion -Wno-sign-conversion -Wno-implicit-int-conversion -Wno-sign-compare -Wno-pragma-pack -Wno-uninitialized -fno-common -fdata-sections</MiscControls>
-              <Define>STM32F7xx=1</Define>
+              <Define>STM32F7xx=1 HTTP_URL=\"http://0.0.0.0/\"</Define>
               <Undefine></Undefine>
               <IncludePath>.</IncludePath>
             </VariousControls>
