@@ -499,8 +499,8 @@
           <targetInfo name="Target 1"/>
         </targetInfos>
       </component>
-      <component Cclass="Network Library" Cgroup="Mongoose" Cvendor="Cesanta" Cversion="7.10.0">
-        <package name="Mongoose" schemaVersion="1.7.2" url="https://mongoose.ws/downloads/armpack/" vendor="Cesanta" version="7.10.0"/>
+      <component Cclass="Network Library" Cgroup="Mongoose" Cvendor="Cesanta" Cversion="7.12.0">
+        <package name="Mongoose" schemaVersion="1.7.2" url="https://mongoose.ws/downloads/armpack/" vendor="Cesanta" version="7.12.0"/>
         <targetInfos>
           <targetInfo name="Target 1"/>
         </targetInfos>
@@ -671,8 +671,8 @@
       </file>
       <file attr="config" category="header" name="Mongoose\config\mongoose_custom.h" version="1.0.0">
         <instance index="0">RTE\Network_Library\mongoose_custom.h</instance>
-        <component Cclass="Network Library" Cgroup="Mongoose" Cvendor="Cesanta" Cversion="7.10.0"/>
-        <package name="Mongoose" schemaVersion="1.7.2" url="https://mongoose.ws/downloads/armpack/" vendor="Cesanta" version="7.10.0"/>
+        <component Cclass="Network Library" Cgroup="Mongoose" Cvendor="Cesanta" Cversion="7.12.0"/>
+        <package name="Mongoose" schemaVersion="1.7.2" url="https://mongoose.ws/downloads/armpack/" vendor="Cesanta" version="7.12.0"/>
         <targetInfos>
           <targetInfo name="Target 1"/>
         </targetInfos>
