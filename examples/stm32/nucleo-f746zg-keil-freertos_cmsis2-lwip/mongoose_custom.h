@@ -75,4 +75,4 @@
 
 
 // Add your customization below this comment
-#define MG_ENABLE_DRIVER_STM32 1
+
