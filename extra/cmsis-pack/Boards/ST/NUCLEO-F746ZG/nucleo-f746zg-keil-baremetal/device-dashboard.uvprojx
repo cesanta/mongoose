@@ -49,10 +49,10 @@
             <InvalidFlash>1</InvalidFlash>
           </TargetStatus>
           <OutputDirectory>.\Objects\</OutputDirectory>
-          <OutputName>firmware</OutputName>
+          <OutputName>device-dashboard</OutputName>
           <CreateExecutable>1</CreateExecutable>
           <CreateLib>0</CreateLib>
-          <CreateHexFile>1</CreateHexFile>
+          <CreateHexFile>0</CreateHexFile>
           <DebugInformation>1</DebugInformation>
           <BrowseInformation>1</BrowseInformation>
           <ListingPath>.\Listings\</ListingPath>
@@ -337,7 +337,7 @@
             <v6Rtti>0</v6Rtti>
             <VariousControls>
               <MiscControls>-W -Wall -Wextra -Wundef -Wshadow -Wdouble-promotion -Wno-unused-parameter -Wconversion -Wno-sign-conversion -fno-common -fdata-sections</MiscControls>
-              <Define></Define>
+              <Define>HTTP_URL=\"http://0.0.0.0/\"</Define>
               <Undefine></Undefine>
               <IncludePath></IncludePath>
             </VariousControls>
