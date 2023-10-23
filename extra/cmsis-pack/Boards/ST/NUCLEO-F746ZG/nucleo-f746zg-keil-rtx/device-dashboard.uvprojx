@@ -337,7 +337,7 @@
             <v6Rtti>0</v6Rtti>
             <VariousControls>
               <MiscControls>-W -Wall -Wextra -Wundef -Wshadow -Wdouble-promotion -Wno-unused-parameter -Wno-macro-redefined -Wconversion -Wno-sign-conversion -fno-common -fdata-sections</MiscControls>
-              <Define></Define>
+              <Define>HTTP_URL=\"http://0.0.0.0/\"</Define>
               <Undefine></Undefine>
               <IncludePath></IncludePath>
             </VariousControls>
