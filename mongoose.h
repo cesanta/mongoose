@@ -1789,7 +1789,7 @@ extern struct mg_tcpip_driver mg_tcpip_driver_stm32;
 extern struct mg_tcpip_driver mg_tcpip_driver_w5500;
 extern struct mg_tcpip_driver mg_tcpip_driver_tm4c;
 extern struct mg_tcpip_driver mg_tcpip_driver_stm32h;
-extern struct mg_tcpip_driver mg_tcpip_driver_imxrt1020;
+extern struct mg_tcpip_driver mg_tcpip_driver_rt1020;
 extern struct mg_tcpip_driver mg_tcpip_driver_same54;
 
 // Drivers that require SPI, can use this SPI abstraction
@@ -1802,7 +1802,7 @@ struct mg_tcpip_spi {
 #endif
 
 
-struct mg_tcpip_driver_imxrt1020_data {
+struct mg_tcpip_driver_rt1020_data {
   // MDC clock divider. MDC clock is derived from IPS Bus clock (ipg_clk),
   // must not exceed 2.5MHz. Configuration for clock range 2.36~2.50 MHz
   // 37.5.1.8.2, Table 37-46 : f = ipg_clk / (2(mdc_cr + 1))

@@ -8438,9 +8438,9 @@ size_t mg_ws_wrap(struct mg_connection *c, size_t len, int op) {
 #endif
 
 
-#if MG_ENABLE_TCPIP && defined(MG_ENABLE_DRIVER_IMXRT1020) && \
-    MG_ENABLE_DRIVER_IMXRT1020
-struct imx_rt1020_enet {
+#if MG_ENABLE_TCPIP && defined(MG_ENABLE_DRIVER_RT1020) && \
+    MG_ENABLE_DRIVER_RT1020
+struct rt1020_enet {
   volatile uint32_t RESERVED0, EIR, EIMR, RESERVED1, RDAR, TDAR, RESERVED2[3],
       ECR, RESERVED3[6], MMFR, MSCR, RESERVED4[7], MIBC, RESERVED5[7], RCR,
       RESERVED6[15], TCR, RESERVED7[7], PALR, PAUR, OPD, TXIC0, TXIC1, TXIC2,
@@ -8465,7 +8465,7 @@ struct imx_rt1020_enet {
 };
 
 #undef ENET
-#define ENET ((struct imx_rt1020_enet *) (uintptr_t) 0x402D8000u)
+#define ENET ((struct rt1020_enet *) (uintptr_t) 0x402D8000u)
 
 #undef BIT
 #define BIT(x) ((uint32_t) 1 << (x))
@@ -8509,9 +8509,9 @@ static void eth_write_phy(uint8_t addr, uint8_t reg, uint32_t val) {
 //  MDC clock is generated from IPS Bus clock (ipg_clk); as per 802.3,
 //  it must not exceed 2.5MHz
 // The PHY receives the PLL6-generated 50MHz clock
-static bool mg_tcpip_driver_imxrt1020_init(struct mg_tcpip_if *ifp) {
-  struct mg_tcpip_driver_imxrt1020_data *d =
-      (struct mg_tcpip_driver_imxrt1020_data *) ifp->driver_data;
+static bool mg_tcpip_driver_rt1020_init(struct mg_tcpip_if *ifp) {
+  struct mg_tcpip_driver_rt1020_data *d =
+      (struct mg_tcpip_driver_rt1020_data *) ifp->driver_data;
   s_ifp = ifp;
 
   // Init RX descriptors
@@ -8561,8 +8561,8 @@ static bool mg_tcpip_driver_imxrt1020_init(struct mg_tcpip_if *ifp) {
 // Transmit frame
 static uint32_t s_txno;
 
-static size_t mg_tcpip_driver_imxrt1020_tx(const void *buf, size_t len,
-                                           struct mg_tcpip_if *ifp) {
+static size_t mg_tcpip_driver_rt1020_tx(const void *buf, size_t len,
+                                        struct mg_tcpip_if *ifp) {
   if (len > sizeof(s_txbuf[ETH_DESC_CNT])) {
     MG_ERROR(("Frame too big, %ld", (long) len));
     len = 0;  // fail
@@ -8582,7 +8582,7 @@ static size_t mg_tcpip_driver_imxrt1020_tx(const void *buf, size_t len,
   return len;
 }
 
-static bool mg_tcpip_driver_imxrt1020_up(struct mg_tcpip_if *ifp) {
+static bool mg_tcpip_driver_rt1020_up(struct mg_tcpip_if *ifp) {
   uint32_t bsr = eth_read_phy(PHY_ADDR, PHY_BSR);
   bool up = bsr & BIT(2) ? 1 : 0;
   if ((ifp->state == MG_TCPIP_STATE_DOWN) && up) {  // link state just went up
@@ -8620,9 +8620,9 @@ void ENET_IRQHandler(void) {
   // If b24 == 0, descriptors were exhausted and probably frames were dropped
 }
 
-struct mg_tcpip_driver mg_tcpip_driver_imxrt1020 = {
-    mg_tcpip_driver_imxrt1020_init, mg_tcpip_driver_imxrt1020_tx, NULL,
-    mg_tcpip_driver_imxrt1020_up};
+struct mg_tcpip_driver mg_tcpip_driver_rt1020 = {
+    mg_tcpip_driver_rt1020_init, mg_tcpip_driver_rt1020_tx, NULL,
+    mg_tcpip_driver_rt1020_up};
 
 #endif
 
