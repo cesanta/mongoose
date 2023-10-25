@@ -7,7 +7,7 @@
     <license>License.txt</license>
     <supportContact>https://mongoose.ws/contact/</supportContact>
     <releases>
-        <release date="2023-08-10" version="7.11.1">See https://github.com/cesanta/mongoose/releases/tag/7.11</release>
+        <release date="2023-10-24" version="7.12.0">See https://github.com/cesanta/mongoose/releases/tag/7.12</release>
     </releases>
     <keywords>
         <keyword>CUBE_RULES_COMPLIANT</keyword>
@@ -22,7 +22,7 @@
         </condition>
     </conditions>
     <components>
-        <component Cclass="Network Library" Cgroup="Mongoose" Cversion="7.11.0" maxInstances="1">
+        <component Cclass="Network Library" Cgroup="Mongoose" Cversion="7.12.0" maxInstances="1">
             <description>Mongoose HTTP/MQTT/Websocket Library</description>
             <files>
                 <file category="source" name="Middlewares/Third_Party/Mongoose/mongoose.c"/>
@@ -31,12 +31,12 @@
         </component>
     </components>
     <examples>
-        <example doc="README.md" folder="Projects/NUCLEO-F746ZG/Examples/nucleo-f746zg-cube-baremetal" name="nucleo-f746zg-cube-baremetal" public="false" version="7.11.1">
+        <example doc="README.md" folder="Projects/NUCLEO-F746ZG/Examples/nucleo-f746zg-cube-baremetal" name="nucleo-f746zg-cube-baremetal" public="false" version="7.12.0">
             <description>Baremetal web device dashboard on NUCLEO-F746ZG, built on STM32CubeIDE</description>
             <board Dvendor="STMicroelectronics:13" name="NUCLEO-F746ZG" vendor="STMicroelectronics"/>
             <project>
-                <environment folder="nucleo-f746zg-cube-baremetal" load="nucleo-f746zg-cube-baremetal.ioc" name="stm32cubemx"/>
                 <environment folder="nucleo-f746zg-cube-baremetal" load=".cproject" name="stm32cubeide"/>
+                <environment folder="nucleo-f746zg-cube-baremetal" load="nucleo-f746zg-cube-baremetal.ioc" name="stm32cubemx"/>
             </project>
             <attributes>
                 <category>Getting started</category>
@@ -48,29 +48,29 @@
                 <keyword>network</keyword>
             </attributes>
         </example>
-        <example doc="README.md" folder="Projects/NUCLEO-F746ZG/Examples/nucleo-f746zg-cube-freertos" name="nucleo-f746zg-cube-freertos" public="false" version="7.11.1">
-            <description>Web device dashboard using Mongoose as a FreeRTOS task on a NUCLEO-F746ZG, built on STM32CubeIDE</description>
-            <board Dvendor="STMicroelectronics:13" name="NUCLEO-F746ZG" vendor="STMicroelectronics"/>
-            <project>
-                <environment folder="nucleo-f746zg-cube-freertos" load="nucleo-f746zg-cube-freertos.ioc" name="stm32cubemx"/>
-                <environment folder="nucleo-f746zg-cube-freertos" load=".cproject" name="stm32cubeide"/>
-            </project>
-            <attributes>
-                <category>Getting started</category>
-                <category>Networking</category>
-                <keyword>Web server</keyword>
-                <keyword>HTTP</keyword>
-                <keyword>MQTT</keyword>
-                <keyword>SNTP</keyword>
-                <keyword>network</keyword>
-            </attributes>
-        </example>
-        <example doc="README.md" folder="Projects/NUCLEO-F746ZG/Examples/nucleo-f746zg-cube-freertos-lwip" name="nucleo-f746zg-cube-freertos-lwip" public="false" version="7.11.1">
+        <example doc="README.md" folder="Projects/NUCLEO-F746ZG/Examples/nucleo-f746zg-cube-freertos-lwip" name="nucleo-f746zg-cube-freertos-lwip" public="false" version="7.12.0">
             <description>Web device dashboard using Mongoose over FreeRTOS + lwIP on a NUCLEO-F746ZG, built on STM32CubeIDE</description>
             <board Dvendor="STMicroelectronics:13" name="NUCLEO-F746ZG" vendor="STMicroelectronics"/>
             <project>
-                <environment folder="nucleo-f746zg-cube-freertos-lwip" load="nucleo-f746zg-cube-freertos-lwip.ioc" name="stm32cubemx"/>
                 <environment folder="nucleo-f746zg-cube-freertos-lwip" load=".cproject" name="stm32cubeide"/>
+                <environment folder="nucleo-f746zg-cube-freertos-lwip" load="nucleo-f746zg-cube-freertos-lwip.ioc" name="stm32cubemx"/>
+            </project>
+            <attributes>
+                <category>Getting started</category>
+                <category>Networking</category>
+                <keyword>Web server</keyword>
+                <keyword>HTTP</keyword>
+                <keyword>MQTT</keyword>
+                <keyword>SNTP</keyword>
+                <keyword>network</keyword>
+            </attributes>
+        </example>
+        <example doc="README.md" folder="Projects/NUCLEO-F746ZG/Examples/nucleo-f746zg-cube-freertos" name="nucleo-f746zg-cube-freertos" public="false" version="7.12.0">
+            <description>Web device dashboard using Mongoose as a FreeRTOS task on a NUCLEO-F746ZG, built on STM32CubeIDE</description>
+            <board Dvendor="STMicroelectronics:13" name="NUCLEO-F746ZG" vendor="STMicroelectronics"/>
+            <project>
+                <environment folder="nucleo-f746zg-cube-freertos" load=".cproject" name="stm32cubeide"/>
+                <environment folder="nucleo-f746zg-cube-freertos" load="nucleo-f746zg-cube-freertos.ioc" name="stm32cubemx"/>
             </project>
             <attributes>
                 <category>Getting started</category>
