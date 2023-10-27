@@ -248,6 +248,19 @@ jobs:
     - if: ${{ env.GO == 1 }}
       run:  make -C examples/nxp/rt1020-evk-make-freertos-builtin test VCON_API_KEY=${{secrets.VCON_API_KEY}}
 
+  test_rt1060:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v3
+      with: { fetch-depth: 3 }
+    - run: if ./test/match_changed_files.sh "^src|examples/nxp/rt1060.*-make-" ; then echo GO=1 >> $GITHUB_ENV ; fi
+    - if: ${{ env.GO == 1 }}
+      run: sudo apt -y update; sudo apt -y install gcc-arm-none-eabi
+    - if: ${{ env.GO == 1 }}
+      run:  make -C examples/nxp/rt1060-evk-make-baremetal-builtin test VCON_API_KEY=${{secrets.VCON_API_KEY}}
+    - if: ${{ env.GO == 1 }}
+      run:  make -C examples/nxp/rt1060-evk-make-freertos-builtin test VCON_API_KEY=${{secrets.VCON_API_KEY}}
+
   test_tm4c:
     runs-on: ubuntu-latest
     steps:
@@ -331,6 +344,8 @@ jobs:
           - path: nxp/nxp-lpcxpresso54628-lwip-freertos
           - path: nxp/rt1020-evk-make-baremetal-builtin
           - path: nxp/rt1020-evk-make-freertos-builtin
+          - path: nxp/rt1060-evk-make-baremetal-builtin
+          - path: nxp/rt1060-evk-make-freertos-builtin
           - path: nxp/nxp-twrk65f180m-lwip-freertos
           - path: nxp/nxp-twrkv58f220m-lwip-freertos
           - path: rp2040/pico-rmii
