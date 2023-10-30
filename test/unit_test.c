@@ -521,17 +521,16 @@ static void check_mqtt_message(struct mg_mqtt_opts *opts,
   }
 }
 
-static void test_mqtt_ver(uint8_t mqtt_version) {
-  char tbuf[16], mbuf[50] = {0}, client_id[16], topic[16];
+static void test_mqtt_basic(void) {
+  char tbuf[16], mbuf[50] = {0}, topic[16];
   struct mqtt_data test_data = {tbuf, mbuf, 16, 50, 0};
   struct mg_mgr mgr;
   struct mg_connection *c;
   struct mg_mqtt_opts opts;
-  struct mg_mqtt_prop properties[5];
   const char *url = "mqtt://broker.hivemq.com:1883";
   int i, retries;
 
-  // Connect with empty client ID, no options, ergo no MQTT != 3.1.1
+  // Connect with empty client ID, no options, ergo MQTT = 3.1.1
   mg_mgr_init(&mgr);
   c = mg_mqtt_connect(&mgr, url, NULL, mqtt_cb, &test_data);
   for (i = 0; i < 300 && mbuf[0] == 0; i++) mg_mgr_poll(&mgr, 10);
@@ -571,13 +570,24 @@ static void test_mqtt_ver(uint8_t mqtt_version) {
   memset(mbuf + 1, 0, sizeof(mbuf) - 1);
   test_data.flags = 0;
 
-  // Disconnect !
+  // Clean Disconnect !
   mg_mqtt_disconnect(c, NULL);
   for (i = 0; i < 10 && mbuf[0] != 0; i++) mg_mgr_poll(&mgr, 10);
   mg_mgr_free(&mgr);
   ASSERT(mgr.conns == NULL);
+}
 
-  // (Re-)connect with options: version, clean session, last will, keepalive
+static void test_mqtt_ver(uint8_t mqtt_version) {
+  char tbuf[16], mbuf[50] = {0}, client_id[16], topic[16];
+  struct mqtt_data test_data = {tbuf, mbuf, 16, 50, 0};
+  struct mg_mgr mgr;
+  struct mg_connection *c;
+  struct mg_mqtt_opts opts;
+  struct mg_mqtt_prop properties[5];
+  const char *url = "mqtt://broker.hivemq.com:1883";
+  int i, retries;
+
+  // Connect with options: version, clean session, last will, keepalive
   // time. Don't set retain, some runners are not random
   test_data.flags = 0;
   memset(mbuf, 0, sizeof(mbuf));
@@ -659,6 +669,7 @@ static void test_mqtt_ver(uint8_t mqtt_version) {
 
 static void test_mqtt(void) {
   test_mqtt_base();
+  test_mqtt_basic();
   test_mqtt_ver(4);
   test_mqtt_ver(5);
 }
