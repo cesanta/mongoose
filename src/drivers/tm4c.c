@@ -188,6 +188,7 @@ static size_t mg_tcpip_driver_tm4c_tx(const void *buf, size_t len,
     MG_ERROR(("Frame too big, %ld", (long) len));
     len = 0;  // fail
   } else if ((s_txdesc[s_txno][0] & BIT(31))) {
+    ifp->nerr++;
     MG_ERROR(("No descriptors available"));
     // printf("D0 %lx SR %lx\n", (long) s_txdesc[0][0], (long)
     // EMAC->EMACDMARIS);
