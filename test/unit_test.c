@@ -521,6 +521,13 @@ static void check_mqtt_message(struct mg_mqtt_opts *opts,
   }
 }
 
+// generate a random string ending in three digits taken from current time
+static struct mg_str genstring(char *t, unsigned int sz) {
+  mg_random_str(t, sz - 3);
+  snprintf(t + sz - 4, 4, "%03u", (unsigned int) mg_millis() % 1000);
+  return mg_str(t);
+}
+
 static void test_mqtt_basic(void) {
   char tbuf[16], mbuf[50] = {0}, topic[16];
   struct mqtt_data test_data = {tbuf, mbuf, 16, 50, 0};
@@ -539,7 +546,7 @@ static void test_mqtt_basic(void) {
   ASSERT(test_data.flags == 0);
 
   // Subscribe with QoS1
-  opts.topic = mg_str(mg_random_str(topic, sizeof(topic)));
+  opts.topic = genstring(topic, sizeof(topic));
   opts.qos = 1;
   mg_mqtt_sub(c, &opts);
   for (i = 0; i < 500 && test_data.flags == 0; i++) mg_mgr_poll(&mgr, 10);
@@ -596,9 +603,9 @@ static void test_mqtt_ver(uint8_t mqtt_version) {
 
   opts.clean = true, opts.qos = 1, opts.retain = false, opts.keepalive = 20;
   opts.version = mqtt_version;
-  opts.topic = mg_str(mg_random_str(topic, sizeof(topic)));
+  opts.topic = genstring(topic, sizeof(topic));
   opts.message = mg_str("mg_will_messsage");
-  opts.client_id = mg_str(mg_random_str(client_id, sizeof(client_id)));
+  opts.client_id = genstring(client_id, sizeof(client_id));
   c = mg_mqtt_connect(&mgr, url, &opts, mqtt_cb, &test_data);
   for (i = 0; i < 300 && mbuf[0] == 0; i++) mg_mgr_poll(&mgr, 10);
   if (mbuf[0] != 'X') MG_INFO(("[%s]", mbuf));
@@ -606,7 +613,7 @@ static void test_mqtt_ver(uint8_t mqtt_version) {
   ASSERT(test_data.flags == 0);
 
   // Subscribe with QoS2 (reception downgrades to published QoS)
-  opts.topic = mg_str(mg_random_str(topic, sizeof(topic)));
+  opts.topic = genstring(topic, sizeof(topic));
   opts.qos = 2;
   mg_mqtt_sub(c, &opts);
   for (i = 0; i < 500 && test_data.flags == 0; i++) mg_mgr_poll(&mgr, 10);
