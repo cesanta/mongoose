@@ -37,5 +37,5 @@ void SystemInit(void) {  // Called automatically by startup code
   while ((RCC->CFGR1 & (7 << 3)) != (3 << 3)) spin(1);  // Wait until done
 
   rng_init();                            // Initialise random number generator
-  SysTick_Config(CPU_FREQUENCY / 1000);  // Sys tick every 1ms
+  // let FreeRTOS initialize SysTick
 }
