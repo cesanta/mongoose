@@ -14,7 +14,7 @@ IPV6 ?= 1
 ASAN ?= -fsanitize=address,undefined,alignment -fno-sanitize-recover=all -fno-omit-frame-pointer -fno-common
 ASAN_OPTIONS ?= detect_leaks=1
 EXAMPLES := $(dir $(wildcard examples/*/Makefile))
-EXAMPLES_MAC := $(filter-out examples/mip-pcap/ examples/mip-tap/, $(EXAMPLES))
+EXAMPLES_MAC := $(filter-out examples/mip-pcap/ examples/mip-tap/ examples/micropython/, $(EXAMPLES))
 EXAMPLES_WIN := $(dir $(wildcard examples/device-dashboard/Makefile) $(wildcard examples/file-*/Makefile) $(wildcard examples/http-*/Makefile) $(wildcard examples/mqtt-*/Makefile) $(wildcard examples/websocket-*/Makefile) $(wildcard examples/webui-*/Makefile))
 EXAMPLES_EMBEDDED := $(filter-out $(wildcard examples/zephyr/*/), $(dir $(wildcard examples/*/*/Makefile)))
 PREFIX ?= /usr/local
