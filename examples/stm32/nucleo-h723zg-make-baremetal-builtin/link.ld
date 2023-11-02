@@ -16,19 +16,15 @@ SECTIONS {
   .rodata   : { *(.rodata*) }           > flash
 
   .data : {
-    _sdata = .;   /* for init_ram() */
+    _sdata = .;
     *(.first_data)
     *(.data SORT(.data.*))
-    _edata = .;  /* for init_ram() */
+    *(.iram .iram* .iram.*)
+    _edata = .;
   } > sram AT > flash
   _sidata = LOADADDR(.data);
 
-  .bss : {
-    _sbss = .;              /* for init_ram() */
-    *(.bss SORT(.bss.*) COMMON)
-    _ebss = .;              /* for init_ram() */
-  } > sram
-
+  .bss : { _sbss = .; *(.bss SORT(.bss.*) COMMON) _ebss = .; } > sram
   . = ALIGN(8);
-  _end = .;     /* for cmsis_gcc.h and init_ram() */
+  _end = .;
 }

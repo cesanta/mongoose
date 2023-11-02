@@ -58,26 +58,6 @@ bool mg_flash_load(void *sector, uint32_t key, void *buf, size_t len) {
   return ok;
 }
 
-static bool mg_flash_writev(char *location, struct mg_str *strings, size_t n) {
-  size_t align = mg_flash_write_align(), i, j, k = 0, nwritten = 0;
-  char buf[align];
-  bool ok = true;
-  for (i = 0; ok && i < n; i++) {
-    for (j = 0; ok && j < strings[i].len; j++) {
-      buf[k++] = strings[i].ptr[j];
-      if (k >= sizeof(buf)) {
-        ok = mg_flash_write(location + nwritten, buf, sizeof(buf));
-        k = 0, nwritten += sizeof(buf);
-      }
-    }
-  }
-  if (k > 0) {
-    while (k < sizeof(buf)) buf[k++] = 0xff;
-    ok = mg_flash_write(location + nwritten, buf, sizeof(buf));
-  }
-  return ok;
-}
-
 // For all saved objects in the sector, delete old versions of objects
 static void mg_flash_sector_cleanup(char *sector) {
   // Buffer all saved objects into an IO buffer (backed by RAM)
@@ -90,7 +70,7 @@ static void mg_flash_sector_cleanup(char *sector) {
   MG_DEBUG(("Cleaning up sector %p", sector));
   while ((n = mg_flash_next(sector + ofs, sector + ss, &key, &size)) > 0) {
     // Delete an old copy of this object in the cache
-    for (size_t o = 0; o < io.len; o += size2 + hs) { 
+    for (size_t o = 0; o < io.len; o += size2 + hs) {
       uint32_t k = *(uint32_t *) (io.buf + o + sizeof(uint32_t));
       size2 = *(uint32_t *) (io.buf + o);
       if (k == key) {
@@ -99,7 +79,7 @@ static void mg_flash_sector_cleanup(char *sector) {
       }
     }
     // And add the new copy
-    mg_iobuf_add(&io, io.len, sector + ofs, size + hs);  
+    mg_iobuf_add(&io, io.len, sector + ofs, size + hs);
     ofs += n;
   }
   // All objects are cached in RAM now
@@ -124,8 +104,10 @@ bool mg_flash_save(void *sector, uint32_t key, const void *buf, size_t len) {
   } else if (((s - base) % ss) != 0) {
     MG_ERROR(("%p is not a sector boundary", sector));
   } else {
-    size_t needed = sizeof(uint32_t) * 2 + len;
-    size_t needed_aligned = MG_ROUND_UP(needed, mg_flash_write_align());
+    char ab[mg_flash_write_align()];  // Aligned write block
+    uint32_t hdr[2] = {(uint32_t) len, key};
+    size_t needed = sizeof(hdr) + len;
+    size_t needed_aligned = MG_ROUND_UP(needed, sizeof(ab));
     while ((n = mg_flash_next(s + ofs, s + ss, NULL, NULL)) > 0) ofs += n;
 
     // If there is not enough space left, cleanup sector and re-eval ofs
@@ -137,11 +119,39 @@ bool mg_flash_save(void *sector, uint32_t key, const void *buf, size_t len) {
 
     if (ofs + needed_aligned <= ss) {
       // Enough space to save this object
-      uint32_t hdr[2] = {(uint32_t) len, key};
-      struct mg_str data[] = {mg_str_n((char *) hdr, sizeof(hdr)),
-                              mg_str_n(buf, len)};
-      ok = mg_flash_writev(s + ofs, data, 2);
-      MG_DEBUG(("Saving %lu bytes @ %p, key %x: %d", len, s + ofs, key, ok));
+      if (sizeof(ab) < sizeof(hdr)) {
+        // Flash write granularity is 32 bit or less, write with no buffering
+        ok = mg_flash_write(s + ofs, hdr, sizeof(hdr));
+        if (ok) mg_flash_write(s + ofs + sizeof(hdr), buf, len);
+      } else {
+        // Flash granularity is sizeof(hdr) or more. We need to save in
+        // 3 chunks: initial block, bulk, rest. This is because we have
+        // two memory chunks to write: hdr and buf, on aligned boundaries.
+        n = sizeof(ab) - sizeof(hdr);      // Initial chunk that we write
+        if (n > len) n = len;              // is
+        memset(ab, 0xff, sizeof(ab));      // initialized to all-one
+        memcpy(ab, hdr, sizeof(hdr));      // contains the header (key + size)
+        memcpy(ab + sizeof(hdr), buf, n);  // and an initial part of buf
+        MG_INFO(("saving initial block of %lu", sizeof(ab)));
+        ok = mg_flash_write(s + ofs, ab, sizeof(ab));
+        if (ok && len > n) {
+          size_t n2 = MG_ROUND_DOWN(len - n, sizeof(ab));
+          if (n2 > 0) {
+            MG_INFO(("saving bulk, %lu", n2));
+            ok = mg_flash_write(s + ofs + sizeof(ab), (char *) buf + n, n2);
+          }
+          if (ok && len > n) {
+            size_t n3 = len - n - n2;
+            if (n3 > sizeof(ab)) n3 = sizeof(ab);
+            memset(ab, 0xff, sizeof(ab));
+            memcpy(ab, (char *) buf + n + n2, n3);
+            MG_INFO(("saving rest, %lu", n3));
+            ok = mg_flash_write(s + ofs + sizeof(ab) + n2, ab, sizeof(ab));
+          }
+        }
+      }
+      MG_DEBUG(("Saved %lu/%lu bytes @ %p, key %x: %d", len, needed_aligned,
+                s + ofs, key, ok));
       MG_DEBUG(("Sector space left: %lu bytes", ss - ofs - needed_aligned));
     } else {
       MG_ERROR(("Sector is full"));

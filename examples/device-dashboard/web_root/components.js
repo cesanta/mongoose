@@ -42,6 +42,7 @@ export const Icons = {
   chip: props => html`<svg class=${props.class} xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor"> <path stroke-linecap="round" stroke-linejoin="round" d="M8.25 3v1.5M4.5 8.25H3m18 0h-1.5M4.5 12H3m18 0h-1.5m-15 3.75H3m18 0h-1.5M8.25 19.5V21M12 3v1.5m0 15V21m3.75-18v1.5m0 15V21m-9-1.5h10.5a2.25 2.25 0 002.25-2.25V6.75a2.25 2.25 0 00-2.25-2.25H6.75A2.25 2.25 0 004.5 6.75v10.5a2.25 2.25 0 002.25 2.25zm.75-12h9v9h-9v-9z" /> </svg>`,
   camera: props => html`<svg class=${props.class} xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor"> <path stroke-linecap="round" stroke-linejoin="round" d="M6.827 6.175A2.31 2.31 0 015.186 7.23c-.38.054-.757.112-1.134.175C2.999 7.58 2.25 8.507 2.25 9.574V18a2.25 2.25 0 002.25 2.25h15A2.25 2.25 0 0021.75 18V9.574c0-1.067-.75-1.994-1.802-2.169a47.865 47.865 0 00-1.134-.175 2.31 2.31 0 01-1.64-1.055l-.822-1.316a2.192 2.192 0 00-1.736-1.039 48.774 48.774 0 00-5.232 0 2.192 2.192 0 00-1.736 1.039l-.821 1.316z" /> <path stroke-linecap="round" stroke-linejoin="round" d="M16.5 12.75a4.5 4.5 0 11-9 0 4.5 4.5 0 019 0zM18.75 10.5h.008v.008h-.008V10.5z" /> </svg>`,
   arrows: props => html`<svg class=${props.class} xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor"> <path stroke-linecap="round" stroke-linejoin="round" d="M7.5 21L3 16.5m0 0L7.5 12M3 16.5h13.5m0-13.5L21 7.5m0 0L16.5 12M21 7.5H7.5" /> </svg>`,
+  doc: props => html`<svg class=${props.class} xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor"> <path stroke-linecap="round" stroke-linejoin="round" d="M19.5 14.25v-2.625a3.375 3.375 0 00-3.375-3.375h-1.5A1.125 1.125 0 0113.5 7.125v-1.5a3.375 3.375 0 00-3.375-3.375H8.25m2.25 0H5.625c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125V11.25a9 9 0 00-9-9z" /></svg>`,
 };
 
 export const tipColors = {
@@ -157,7 +158,7 @@ export function Colored({icon, text, colors}) {
 export function Stat({title, text, tipText, tipIcon, tipColors, colors}) {
   return html`
 <div class="flex flex-col bg-white border shadow-sm rounded-xl dark:bg-slate-900 dark:border-gray-800">
-  <div class="overflow-auto rounded-lg bg-white px-4 py-2 shadow">
+  <div class="overflow-auto rounded-lg bg-white px-4 py-2 ">
     <div class="flex items-center gap-x-2">
       <p class="text-sm truncate text-gray-500 font-medium"> ${title} </p>
     <//>
@@ -173,27 +174,34 @@ export function Stat({title, text, tipText, tipIcon, tipColors, colors}) {
 <//>`;
 };
 
-export function TextValue({value, setfn, disabled, placeholder, type, addonRight, addonLeft, attr, min, max, step}) {
+export function TextValue({value, setfn, disabled, placeholder, type, addonRight, addonLeft, attr, min, max, step, mult}) {
   const [bg, setBg] = useState('bg-white');
-  useEffect(() => { checkval(value); }, []);
-  const checkval = function(v) {
+  useEffect(() => { if (type == 'number') checkval(+min, +max, +value); }, []);
+  step ||= '1', mult ||= 1;
+  const checkval = function(min, max, v) {
     setBg('bg-white');
     if (min && v < min) setBg('bg-red-100 border-red-200');
     if (max && v > max) setBg('bg-red-100 border-red-200');
   };
-  const oninput = ev => {
+  const m = step.match(/^.+\.(.+)/);
+  const digits = m ? m[1].length : 0;
+  const onchange = ev => {
     let v = ev.target.value;
-    if (type == 'number') v = parseInt(v);
+    if (type == 'number') {
+      checkval(+min, +max, +v);
+      v = +(parseFloat(v) / mult).toFixed(digits);
+    }
     setfn(v);
-    checkval(v);
   };
+  if (type == 'number') value = +(value * mult).toFixed(digits);
   return html`
 <div class="flex w-full items-center rounded border shadow-sm ${bg}">
-  ${ addonLeft && html`<span class="inline-flex font-normal truncate py-1 border-r bg-slate-100 items-center border-gray-300 px-2 text-gray-500 text-xs">${addonLeft}<//>` }
-  <input type=${type || 'text'} disabled=${disabled} 
-    oninput=${oninput} ...${attr}
-    class="${bg} font-normal text-sm rounded w-full flex-1 py-0.5 px-2 text-gray-700 placeholder:text-gray-400 focus:outline-none disabled:cursor-not-allowed disabled:bg-gray-100 disabled:text-gray-500" placeholder=${placeholder} value=${value} />
-  ${ addonRight && html`<span class="inline-flex font-normal truncate py-1 border-l bg-slate-100 items-center border-gray-300 px-2 text-gray-500 text-xs overflow-scroll" style="min-width: 50%;">${addonRight}<//>` }
+  ${addonLeft && html`<span class="inline-flex font-normal truncate py-1 border-r bg-slate-100 items-center border-gray-300 px-2 text-gray-500 text-xs">${addonLeft}<//>` }
+  <input type=${type || 'text'} disabled=${disabled} value=${value}
+    step=${step} min=${min} max=${max} 
+    onchange=${onchange} ...${attr}
+    class="${bg} font-normal text-sm rounded w-full flex-1 py-0.5 px-2 text-gray-700 placeholder:text-gray-400 focus:outline-none disabled:cursor-not-allowed disabled:bg-gray-100 disabled:text-gray-500" placeholder=${placeholder} />
+  ${addonRight && html`<span class="inline-flex font-normal truncate py-1 border-l bg-slate-100 items-center border-gray-300 px-2 text-gray-500 text-xs overflow-scroll" style="min-width: 50%;">${addonRight}<//>` }
 <//>`;
 };
 
@@ -344,6 +352,6 @@ export function UploadFileButton(props) {
 <div class="inline-flex flex-col ${props.class}">
   <input class="hidden" type="file" ref=${input} onchange=${onchange} accept=${props.accept} />
   <${Button} title=${props.title} icon=${Icons.download} onclick=${onclick} ref=${btn} colors=${props.colors} />
-  <div class="py-2 text-sm text-slate-400 ${status || 'hidden'}">${status}<//>
+  <div class="pt-2 text-sm text-slate-400 ${status || 'hidden'}">${status}<//>
 <//>`;
 };

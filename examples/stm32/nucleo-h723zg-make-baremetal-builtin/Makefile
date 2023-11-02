@@ -24,6 +24,7 @@ firmware.bin: firmware.elf
 
 firmware.elf: cmsis_core cmsis_h7 $(SOURCES) hal.h link.ld Makefile
 	arm-none-eabi-gcc $(SOURCES) $(CFLAGS) $(LDFLAGS) -o $@
+	arm-none-eabi-size $@
 
 flash: firmware.bin
 	st-flash --reset write $< 0x8000000

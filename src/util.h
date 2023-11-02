@@ -40,8 +40,8 @@ uint64_t mg_now(void);     // Return milliseconds since Epoch
 #define MG_ROUND_DOWN(x, a) ((a) == 0 ? (x) : (((x) / (a)) * (a)))
 
 #ifdef __GNUC__
-#define MG_ARM_DISABLE_IRQ() asm volatile ("cpsid i" : : : "memory")
-#define MG_ARM_ENABLE_IRQ() asm volatile ("cpsie i" : : : "memory")
+#define MG_ARM_DISABLE_IRQ() asm volatile("cpsid i" : : : "memory")
+#define MG_ARM_ENABLE_IRQ() asm volatile("cpsie i" : : : "memory")
 #else
 #define MG_ARM_DISABLE_IRQ()
 #define MG_ARM_ENABLE_IRQ()

@@ -1,7 +1,7 @@
 #include "arch.h"
+#include "device.h"
 #include "log.h"
 #include "ota.h"
-#include "device.h"
 
 // This OTA implementation uses the internal flash API outlined in device.h
 // It splits flash into 2 equal partitions, and stores OTA status in the
@@ -27,7 +27,7 @@ bool mg_ota_begin(size_t new_firmware_size) {
     size_t half = mg_flash_size() / 2, max = half - mg_flash_sector_size();
     s_crc32 = 0;
     s_addr = (char *) mg_flash_start() + half;
-    MG_DEBUG(("Firmware %lu bytes, max %lu", s_size, max));
+    MG_DEBUG(("Firmware %lu bytes, max %lu", new_firmware_size, max));
     if (new_firmware_size < max) {
       ok = true;
       s_size = new_firmware_size;
@@ -61,6 +61,14 @@ bool mg_ota_write(const void *buf, size_t len) {
   return ok;
 }
 
+MG_IRAM static uint32_t mg_fwkey(int fw) {
+  uint32_t key = MG_OTADATA_KEY + fw;
+  int bank = mg_flash_bank();
+  if (bank == 2 && fw == MG_FIRMWARE_PREVIOUS) key--;
+  if (bank == 2 && fw == MG_FIRMWARE_CURRENT) key++;
+  return key;
+}
+
 bool mg_ota_end(void) {
   char *base = (char *) mg_flash_start() + mg_flash_size() / 2;
   bool ok = false;
@@ -70,7 +78,7 @@ bool mg_ota_end(void) {
     if (size == s_size && crc32 == s_crc32) {
       uint32_t now = (uint32_t) (mg_now() / 1000);
       struct mg_otadata od = {crc32, size, now, MG_OTA_FIRST_BOOT};
-      uint32_t key = MG_OTADATA_KEY + (mg_flash_bank() == 2 ? 1 : 2);
+      uint32_t key = mg_fwkey(MG_FIRMWARE_PREVIOUS);
       ok = mg_flash_save(NULL, key, &od, sizeof(od));
     }
     MG_DEBUG(("CRC: %x/%x, size: %lu/%lu, status: %s", s_crc32, crc32, s_size,
@@ -82,12 +90,10 @@ bool mg_ota_end(void) {
   return ok;
 }
 
-static struct mg_otadata mg_otadata(int fw) {
+MG_IRAM static struct mg_otadata mg_otadata(int fw) {
+  uint32_t key = mg_fwkey(fw);
   struct mg_otadata od = {};
-  int bank = mg_flash_bank();
-  uint32_t key = MG_OTADATA_KEY + 1;
-  if ((fw == MG_FIRMWARE_CURRENT && bank == 2)) key++;
-  if ((fw == MG_FIRMWARE_PREVIOUS && bank == 1)) key++;
+  MG_INFO(("Loading %s OTA data", fw == MG_FIRMWARE_CURRENT ? "curr" : "prev"));
   mg_flash_load(NULL, key, &od, sizeof(od));
   // MG_DEBUG(("Loaded OTA data. fw %d, bank %d, key %p", fw, bank, key));
   // mg_hexdump(&od, sizeof(od));
@@ -111,15 +117,79 @@ size_t mg_ota_size(int fw) {
   return od.size;
 }
 
-bool mg_ota_commit(void) {
+MG_IRAM bool mg_ota_commit(void) {
+  bool ok = true;
   struct mg_otadata od = mg_otadata(MG_FIRMWARE_CURRENT);
-  od.status = MG_OTA_COMMITTED;
-  uint32_t key = MG_OTADATA_KEY + mg_flash_bank();
-  return mg_flash_save(NULL, key, &od, sizeof(od));
+  if (od.status != MG_OTA_COMMITTED) {
+    od.status = MG_OTA_COMMITTED;
+    MG_INFO(("Committing current firmware, OD size %lu", sizeof(od)));
+    ok = mg_flash_save(NULL, mg_fwkey(MG_FIRMWARE_CURRENT), &od, sizeof(od));
+  }
+  return ok;
 }
 
 bool mg_ota_rollback(void) {
   MG_DEBUG(("Rolling firmware back"));
-  return mg_flash_swap_bank();
+  if (mg_flash_bank() == 0) {
+    // No dual bank support. Mark previous firmware as FIRST_BOOT
+    struct mg_otadata prev = mg_otadata(MG_FIRMWARE_PREVIOUS);
+    prev.status = MG_OTA_FIRST_BOOT;
+    return mg_flash_save(NULL, MG_OTADATA_KEY + MG_FIRMWARE_PREVIOUS, &prev,
+                         sizeof(prev));
+  } else {
+    return mg_flash_swap_bank();
+  }
+}
+
+MG_IRAM void mg_ota_boot(void) {
+  MG_INFO(("Booting. Flash bank: %d", mg_flash_bank()));
+  struct mg_otadata curr = mg_otadata(MG_FIRMWARE_CURRENT);
+  struct mg_otadata prev = mg_otadata(MG_FIRMWARE_PREVIOUS);
+
+  if (curr.status == MG_OTA_FIRST_BOOT) {
+    curr.status = MG_OTA_UNCOMMITTED;
+    MG_INFO(("First boot, setting status to UNCOMMITTED"));
+    mg_flash_save(NULL, MG_OTADATA_KEY + MG_FIRMWARE_CURRENT, &curr,
+                  sizeof(curr));
+  } else if (prev.status == MG_OTA_FIRST_BOOT && mg_flash_bank() == 0) {
+    // Swap paritions. Pray power does not disappear
+    size_t fs = mg_flash_size(), ss = mg_flash_sector_size();
+    char *partition1 = mg_flash_start();
+    char *partition2 = mg_flash_start() + fs / 2;
+    size_t ofs, max = fs / 2 - ss;  // Set swap size to the whole partition
+
+    if (curr.status != MG_OTA_UNAVAILABLE &&
+        prev.status != MG_OTA_UNAVAILABLE) {
+      // We know exact sizes of both firmwares.
+      // Shrink swap size to the MAX(firmware1, firmware2)
+      size_t sz = curr.size > prev.size ? curr.size : prev.size;
+      if (sz > 0 && sz < max) max = sz;
+    }
+
+    // MG_OTA_FIRST_BOOT -> MG_OTA_UNCOMMITTED
+    prev.status = MG_OTA_UNCOMMITTED;
+    mg_flash_save(NULL, MG_OTADATA_KEY + MG_FIRMWARE_CURRENT, &prev,
+                  sizeof(prev));
+    mg_flash_save(NULL, MG_OTADATA_KEY + MG_FIRMWARE_PREVIOUS, &curr,
+                  sizeof(curr));
+
+    MG_INFO(("Swapping partitions, size %u (%u sectors)", max, max / ss));
+    MG_INFO(("Do NOT power off..."));
+    mg_log_level = MG_LL_NONE;
+
+    // We use the last sector of partition2 for OTA data/config storage
+    // Therefore we can use last sector of partition1 for swapping
+    char *tmpsector = partition1 + fs / 2 - ss;  // Last sector of partition1
+    (void) tmpsector;
+    for (ofs = 0; ofs < max; ofs += ss) {
+      // mg_flash_erase(tmpsector);
+      mg_flash_write(tmpsector, partition1 + ofs, ss);
+      // mg_flash_erase(partition1 + ofs);
+      mg_flash_write(partition1 + ofs, partition2 + ofs, ss);
+      // mg_flash_erase(partition2 + ofs);
+      mg_flash_write(partition2 + ofs, tmpsector, ss);
+    }
+    mg_device_reset();
+  }
 }
 #endif

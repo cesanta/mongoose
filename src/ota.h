@@ -13,6 +13,12 @@
 #define MG_OTA MG_OTA_NONE
 #endif
 
+#if defined(__GNUC__) && !defined(__APPLE__)
+#define MG_IRAM __attribute__((section(".iram")))
+#else
+#define MG_IRAM
+#endif
+
 // Firmware update API
 bool mg_ota_begin(size_t new_firmware_size);     // Start writing
 bool mg_ota_write(const void *buf, size_t len);  // Write chunk, aligned to 1k
@@ -31,5 +37,6 @@ uint32_t mg_ota_crc32(int firmware);      // Return firmware checksum
 uint32_t mg_ota_timestamp(int firmware);  // Firmware timestamp, UNIX UTC epoch
 size_t mg_ota_size(int firmware);         // Firmware size
 
-bool mg_ota_commit(void);    // Commit current firmware
-bool mg_ota_rollback(void);  // Rollback to the previous firmware
+bool mg_ota_commit(void);        // Commit current firmware
+bool mg_ota_rollback(void);      // Rollback to the previous firmware
+MG_IRAM void mg_ota_boot(void);  // Bootloader function

@@ -1,5 +1,5 @@
-#include "log.h"
 #include "device.h"
+#include "log.h"
 
 #if MG_DEVICE == MG_DEVICE_STM32H7
 
@@ -13,66 +13,71 @@
 #define FLASH_CCR 0x14
 #define FLASH_OPTSR_CUR 0x1c
 #define FLASH_OPTSR_PRG 0x20
+#define FLASH_SIZE_REG 0x1ff1e880
 
-void *mg_flash_start(void) {
+MG_IRAM void *mg_flash_start(void) {
   return (void *) 0x08000000;
 }
-size_t mg_flash_size(void) {
-  return 2 * 1024 * 1024;  // 2Mb
+MG_IRAM size_t mg_flash_size(void) {
+  return MG_REG(FLASH_SIZE_REG) * 1024;
 }
-size_t mg_flash_sector_size(void) {
+MG_IRAM size_t mg_flash_sector_size(void) {
   return 128 * 1024;  // 128k
 }
-size_t mg_flash_write_align(void) {
+MG_IRAM size_t mg_flash_write_align(void) {
   return 32;  // 256 bit
 }
-int mg_flash_bank(void) {
+MG_IRAM int mg_flash_bank(void) {
+  if (mg_flash_size() < 2 * 1024 * 1024) return 0;  // No dual bank support
   return MG_REG(FLASH_BASE1 + FLASH_OPTCR) & MG_BIT(31) ? 2 : 1;
 }
 
-static void flash_unlock(void) {
+MG_IRAM static void flash_unlock(void) {
   static bool unlocked = false;
   if (unlocked == false) {
     MG_REG(FLASH_BASE1 + FLASH_KEYR) = 0x45670123;
     MG_REG(FLASH_BASE1 + FLASH_KEYR) = 0xcdef89ab;
-    MG_REG(FLASH_BASE2 + FLASH_KEYR) = 0x45670123;
-    MG_REG(FLASH_BASE2 + FLASH_KEYR) = 0xcdef89ab;
+    if (mg_flash_bank() > 0) {
+      MG_REG(FLASH_BASE2 + FLASH_KEYR) = 0x45670123;
+      MG_REG(FLASH_BASE2 + FLASH_KEYR) = 0xcdef89ab;
+    }
     MG_REG(FLASH_BASE1 + FLASH_OPTKEYR) = 0x08192a3b;  // opt reg is "shared"
     MG_REG(FLASH_BASE1 + FLASH_OPTKEYR) = 0x4c5d6e7f;  // thus unlock once
     unlocked = true;
   }
 }
 
-static bool flash_page_start(volatile uint32_t *dst) {
+MG_IRAM static bool flash_page_start(volatile uint32_t *dst) {
   char *base = (char *) mg_flash_start(), *end = base + mg_flash_size();
   volatile char *p = (char *) dst;
   return p >= base && p < end && ((p - base) % mg_flash_sector_size()) == 0;
 }
 
-static bool flash_is_err(uint32_t bank) {
+MG_IRAM static bool flash_is_err(uint32_t bank) {
   return MG_REG(bank + FLASH_SR) & ((MG_BIT(11) - 1) << 17);  // RM0433 4.9.5
 }
 
-static void flash_wait(uint32_t bank) {
+MG_IRAM static void flash_wait(uint32_t bank) {
   while (MG_REG(bank + FLASH_SR) & (MG_BIT(0) | MG_BIT(2))) (void) 0;
 }
 
-static void flash_clear_err(uint32_t bank) {
+MG_IRAM static void flash_clear_err(uint32_t bank) {
   flash_wait(bank);                                      // Wait until ready
   MG_REG(bank + FLASH_CCR) = ((MG_BIT(11) - 1) << 16U);  // Clear all errors
 }
 
-static bool flash_bank_is_swapped(uint32_t bank) {
+MG_IRAM static bool flash_bank_is_swapped(uint32_t bank) {
   return MG_REG(bank + FLASH_OPTCR) & MG_BIT(31);  // RM0433 4.9.7
 }
 
 // Figure out flash bank based on the address
-static uint32_t flash_bank(void *addr) {
+MG_IRAM static uint32_t flash_bank(void *addr) {
   size_t ofs = (char *) addr - (char *) mg_flash_start();
+  if (mg_flash_bank() == 0) return FLASH_BASE1;
   return ofs < mg_flash_size() / 2 ? FLASH_BASE1 : FLASH_BASE2;
 }
 
-bool mg_flash_erase(void *addr) {
+MG_IRAM bool mg_flash_erase(void *addr) {
   bool ok = false;
   if (flash_page_start(addr) == false) {
     MG_ERROR(("%p is not on a sector boundary", addr));
@@ -80,12 +85,13 @@ bool mg_flash_erase(void *addr) {
     uintptr_t diff = (char *) addr - (char *) mg_flash_start();
     uint32_t sector = diff / mg_flash_sector_size();
     uint32_t bank = flash_bank(addr);
+    uint32_t saved_cr = MG_REG(bank + FLASH_CR);  // Save CR value
 
     flash_unlock();
     if (sector > 7) sector -= 8;
-    // MG_INFO(("Erasing @ %p, sector %lu, bank %#x", addr, sector, bank));
 
     flash_clear_err(bank);
+    MG_REG(bank + FLASH_CR) = MG_BIT(5);             // 32-bit write parallelism
     MG_REG(bank + FLASH_CR) |= (sector & 7U) << 8U;  // Sector to erase
     MG_REG(bank + FLASH_CR) |= MG_BIT(2);            // Sector erase bit
     MG_REG(bank + FLASH_CR) |= MG_BIT(7);            // Start erasing
@@ -93,12 +99,13 @@ bool mg_flash_erase(void *addr) {
     MG_DEBUG(("Erase sector %lu @ %p %s. CR %#lx SR %#lx", sector, addr,
               ok ? "ok" : "fail", MG_REG(bank + FLASH_CR),
               MG_REG(bank + FLASH_SR)));
-    // mg_hexdump(addr, 32);
+    MG_REG(bank + FLASH_CR) = saved_cr;  // Restore CR
   }
   return ok;
 }
 
-bool mg_flash_swap_bank() {
+MG_IRAM bool mg_flash_swap_bank() {
+  if (mg_flash_bank() == 0) return true;
   uint32_t bank = FLASH_BASE1;
   uint32_t desired = flash_bank_is_swapped(bank) ? 0 : MG_BIT(31);
   flash_unlock();
@@ -111,7 +118,7 @@ bool mg_flash_swap_bank() {
   return true;
 }
 
-bool mg_flash_write(void *addr, const void *buf, size_t len) {
+MG_IRAM bool mg_flash_write(void *addr, const void *buf, size_t len) {
   if ((len % mg_flash_write_align()) != 0) {
     MG_ERROR(("%lu is not aligned to %lu", len, mg_flash_write_align()));
     return false;
@@ -123,25 +130,25 @@ bool mg_flash_write(void *addr, const void *buf, size_t len) {
   bool ok = true;
   flash_unlock();
   flash_clear_err(bank);
+  MG_REG(bank + FLASH_CR) = MG_BIT(1);   // Set programming flag
+  MG_REG(bank + FLASH_CR) |= MG_BIT(5);  // 32-bit write parallelism
+  MG_DEBUG(("Writing flash @ %p, %lu bytes", addr, len));
   MG_ARM_DISABLE_IRQ();
-  MG_REG(bank + FLASH_CR) = MG_BIT(1);  // Set programming flag
-  // MG_INFO(("Writing flash @ %p, %lu bytes", addr, len));
   while (ok && src < end) {
     if (flash_page_start(dst) && mg_flash_erase(dst) == false) break;
     *(volatile uint32_t *) dst++ = *src++;
     flash_wait(bank);
     if (flash_is_err(bank)) ok = false;
   }
+  MG_ARM_ENABLE_IRQ();
   MG_DEBUG(("Flash write %lu bytes @ %p: %s. CR %#lx SR %#lx", len, dst,
             ok ? "ok" : "fail", MG_REG(bank + FLASH_CR),
             MG_REG(bank + FLASH_SR)));
-  // mg_hexdump(addr, len > 32 ? 32 : len);
   MG_REG(bank + FLASH_CR) &= ~MG_BIT(1);  // Clear programming flag
-  MG_ARM_ENABLE_IRQ();
   return ok;
 }
 
-void mg_device_reset(void) {
+MG_IRAM void mg_device_reset(void) {
   // SCB->AIRCR = ((0x5fa << SCB_AIRCR_VECTKEY_Pos)|SCB_AIRCR_SYSRESETREQ_Msk);
   *(volatile unsigned long *) 0xe000ed0c = 0x5fa0004;
 }
