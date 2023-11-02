@@ -1806,6 +1806,7 @@ extern struct mg_tcpip_driver mg_tcpip_driver_tm4c;
 extern struct mg_tcpip_driver mg_tcpip_driver_stm32h;
 extern struct mg_tcpip_driver mg_tcpip_driver_rt1020;
 extern struct mg_tcpip_driver mg_tcpip_driver_same54;
+extern struct mg_tcpip_driver mg_tcpip_driver_cmsis;
 
 // Drivers that require SPI, can use this SPI abstraction
 struct mg_tcpip_spi {
@@ -1814,6 +1815,14 @@ struct mg_tcpip_spi {
   void (*end)(void *);              // SPI end: slave select high
   uint8_t (*txn)(void *, uint8_t);  // SPI transaction: write 1 byte, read reply
 };
+#endif
+
+
+#if MG_ENABLE_TCPIP && defined(MG_ENABLE_DRIVER_CMSIS) && MG_ENABLE_DRIVER_CMSIS
+
+#include "Driver_ETH_MAC.h"  // keep this include
+#include "Driver_ETH_PHY.h"  // keep this include
+
 #endif
 
 

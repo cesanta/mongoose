@@ -359,6 +359,7 @@ jobs:
           - path: stm32/nucleo-f746zg-make-freertos-builtin
           - path: stm32/nucleo-f746zg-make-freertos-tcp
           - path: stm32/nucleo-f746zg-make-baremetal-builtin-rndis
+          - path: stm32/nucleo-f746zg-make-baremetal-builtin-cmsis_driver
           - path: stm32/nucleo-g031-make-baremetal-builtin
           - path: stm32/nucleo-h563zi-make-baremetal-builtin
           - path: stm32/nucleo-h563zi-make-freertos-builtin
