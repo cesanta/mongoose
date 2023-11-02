@@ -255,6 +255,14 @@ static void handle_device_reset(struct mg_connection *c) {
   mg_timer_add(c->mgr, 500, 0, (void (*)(void *)) mg_device_reset, NULL);
 }
 
+static void handle_device_eraselast(struct mg_connection *c) {
+  size_t ss = mg_flash_sector_size(), size = mg_flash_size();
+  char *base = (char *) mg_flash_start(), *last = base + size - ss;
+  if (mg_flash_bank() == 2) last -= size / 2;
+  mg_flash_erase(last);
+  mg_http_reply(c, 200, s_json_header, "true\n");
+}
+
 // HTTP request handler function
 static void fn(struct mg_connection *c, int ev, void *ev_data, void *fn_data) {
   if (ev == MG_EV_ACCEPT) {
@@ -294,6 +302,8 @@ static void fn(struct mg_connection *c, int ev, void *ev_data, void *fn_data) {
       handle_firmware_status(c);
     } else if (mg_http_match_uri(hm, "/api/device/reset")) {
       handle_device_reset(c);
+    } else if (mg_http_match_uri(hm, "/api/device/eraselast")) {
+      handle_device_eraselast(c);
     } else {
       struct mg_http_serve_opts opts;
       memset(&opts, 0, sizeof(opts));

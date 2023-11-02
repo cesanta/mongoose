@@ -45,9 +45,22 @@ int main(void) {
   mg_mgr_init(&mgr);        // Mongoose event manager
   mg_log_set(MG_LL_DEBUG);  // Set log level
 
-  // If we don't have any OTA info saved, e.g. we're pre-flashed, then
-  // call mg_ota_commit() to mark this firmware as reliable
-  if (mg_ota_status(MG_FIRMWARE_CURRENT) == MG_OTA_UNAVAILABLE) mg_ota_commit();
+  mg_ota_boot();  // Call bootloader: continue to load, or boot another FW
+
+#if MG_OTA == MG_OTA_FLASH
+  // Demonstrate the use of mg_flash_{load/save} functions for keeping device
+  // configuration data on flash. Increment boot count on every boot.
+  struct deviceconfig {
+    uint32_t boot_count;
+    char some_other_data[40];
+  };
+  uint32_t key = 0x12345678;    // A unique key, one per data type
+  struct deviceconfig dc = {};  // Initialise to some default values
+  mg_flash_load(NULL, key, &dc, sizeof(dc));  // Load from flash
+  dc.boot_count++;                            // Increment boot count
+  mg_flash_save(NULL, key, &dc, sizeof(dc));  // And save back
+  MG_INFO(("Boot count: %u", dc.boot_count));
+#endif
 
   // Initialise Mongoose network stack
   struct mg_tcpip_driver_stm32h_data driver_data = {.mdc_cr = 4};

@@ -1,5 +1,5 @@
-#include "log.h"
 #include "device.h"
+#include "log.h"
 
 #if MG_DEVICE == MG_DEVICE_STM32H5
 
@@ -73,6 +73,7 @@ bool mg_flash_erase(void *location) {
   } else {
     uintptr_t diff = (char *) location - (char *) mg_flash_start();
     uint32_t sector = diff / mg_flash_sector_size();
+    uint32_t saved_cr = MG_REG(FLASH_NSCR); // Save CR value
     flash_unlock();
     flash_clear_err();
     MG_REG(FLASH_NSCR) = 0;
@@ -88,6 +89,7 @@ bool mg_flash_erase(void *location) {
     MG_DEBUG(("Erase sector %lu @ %p: %s. CR %#lx SR %#lx", sector, location,
               ok ? "ok" : "fail", MG_REG(FLASH_NSCR), MG_REG(FLASH_NSSR)));
     // mg_hexdump(location, 32);
+    MG_REG(FLASH_NSCR) = saved_cr; // Restore saved CR
   }
   return ok;
 }
@@ -117,21 +119,18 @@ bool mg_flash_write(void *addr, const void *buf, size_t len) {
   flash_clear_err();
   MG_ARM_DISABLE_IRQ();
   // MG_DEBUG(("Starting flash write %lu bytes @ %p", len, addr));
+  MG_REG(FLASH_NSCR) = MG_BIT(1);  // Set programming flag
   while (ok && src < end) {
     if (flash_page_start(dst) && mg_flash_erase(dst) == false) break;
-    MG_REG(FLASH_NSCR) = MG_BIT(1);  // Set programming flag
     *(volatile uint32_t *) dst++ = *src++;
     flash_wait();
     if (flash_is_err()) ok = false;
   }
+  MG_ARM_ENABLE_IRQ();
   MG_DEBUG(("Flash write %lu bytes @ %p: %s. CR %#lx SR %#lx", len, dst,
             flash_is_err() ? "fail" : "ok", MG_REG(FLASH_NSCR),
             MG_REG(FLASH_NSSR)));
-  if (flash_is_err()) ok = false;
-  // mg_hexdump(addr, len > 32 ? 32 : len);
-  //  MG_REG(FLASH_NSCR) &= ~MG_BIT(1);  // Set programming flag
   MG_REG(FLASH_NSCR) = 0;  // Clear flags
-  MG_ARM_ENABLE_IRQ();
   return ok;
 }
 

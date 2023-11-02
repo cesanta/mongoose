@@ -35,4 +35,6 @@ size_t mg_ota_size(int fw) {
   (void) fw;
   return 0;
 }
+MG_IRAM void mg_ota_boot(void) {
+}
 #endif

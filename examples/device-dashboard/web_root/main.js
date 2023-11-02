@@ -216,36 +216,49 @@ function FirmwareUpdate({}) {
     .then(r => new Promise(r => setTimeout(ev => { refresh(); r(); }, 3000)));
   const onrollback = ev => fetch('api/firmware/rollback')
     .then(onreboot);
+  const onerase = ev => fetch('api/device/eraselast').then(refresh);
   const onupload = function(ok, name, size) {
     if (!ok) return false;
     return new Promise(r => setTimeout(ev => { refresh(); r(); }, 3000));
   };
-  const clean = info[0].valid && info[0].golden == 0;
   return html`
-<div class="m-4 gap-4 grid grid-cols-1 lg:grid-cols-2">
+<div class="m-4 gap-4 grid grid-cols-1 lg:grid-cols-3">
   <${FirmwareStatus} title="Current firmware image" info=${info[0]}>
     <div class="flex flex-wrap gap-2">
-      <${Button} title="Commit this firmware"
-        onclick=${oncommit} icon=${Icons.thumbUp} disabled=${clean} />
-      <${Button} title="Reboot device" onclick=${onreboot} icon=${Icons.refresh} clsx="absolute top-4 right-4" />
-      <${UploadFileButton}
-        title="Upload new firmware: choose .bin file:" onupload=${onupload}
-      url="api/firmware/upload" accept=".bin,.uf2" />
+      <${Button} title="Commit this firmware" onclick=${oncommit}
+        icon=${Icons.thumbUp} disabled=${info[0].status == 3} cls="w-full" />
     <//>
   <//>
   <${FirmwareStatus} title="Previous firmware image" info=${info[1]}>
     <${Button} title="Rollback to this firmware" onclick=${onrollback}
-      icon=${Icons.backward} disabled=${info[1].valid == false} />
+      icon=${Icons.backward} disabled=${info[1].status == 0} cls="w-full" />
   <//>
+  <div class="bg-white xm-4 divide-y border rounded flex flex-col">
+    <div class="font-light uppercase flex items-center text-gray-600 px-4 py-2">
+      Device control
+    <//>
+    <div class="px-4 py-3 flex flex-col gap-2 grow">
+      <${UploadFileButton}
+        title="Upload new firmware .bin file" onupload=${onupload}
+      url="api/firmware/upload" accept=".bin,.uf2" />
+      <div class="grow"><//>
+      <${Button} title="Reboot device" onclick=${onreboot} icon=${Icons.refresh} cls="w-full" />
+      <${Button} title="Erase last sector" onclick=${onerase} icon=${Icons.doc} cls="w-full hidden" />
+    <//>
+  <//>
+<//>
 
+
+<div class="m-4 gap-4 grid grid-cols-1 lg:grid-cols-2">
   <div class="bg-white border shadow-lg">
     <${DeveloperNote}>
       <div class="my-2">
-        When a new firmware gets flashed, its status is marked as, "first_boot".
-        That is an unreliable (uncommitted) firmware. A user may choose
-        to revert back to the previous committed firmware on the subsequent
-        boots. Clicking on the "commit" button calls "mg_ota_commit()" function
-        which commits the firmware.
+        Firmware status and other information is stored in the last sector
+        of flash
+      <//>
+      <div class="my-2">
+        Firmware status can be FIRST_BOOT, UNCOMMITTED or COMMITTED. If no
+        information is available, it is UNAVAILABLE.
       <//>
       <div class="my-2">  
         This GUI loads a firmware file and sends it chunk by chunk to the

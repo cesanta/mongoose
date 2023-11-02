@@ -8,6 +8,16 @@
 
 #pragma once
 
+#define BTN PIN('C', 13)   // User push button
+#define LED1 PIN('B', 0)   // On-board LED pin (green)
+#define LED2 PIN('E', 1)   // On-board LED pin (yellow)
+#define LED3 PIN('B', 14)  // On-board LED pin (red)
+#define LED LED2           // Use yellow LED for blinking
+
+#ifndef UART_DEBUG
+#define UART_DEBUG USART3
+#endif
+
 #include <stm32h723xx.h>
 
 #include <stdbool.h>
@@ -20,12 +30,6 @@
 #define PIN(bank, num) ((((bank) - 'A') << 8) | (num))
 #define PINNO(pin) (pin & 255)
 #define PINBANK(pin) (pin >> 8)
-
-#define LED1 PIN('B', 0)   // On-board LED pin (green)
-#define LED2 PIN('E', 1)   // On-board LED pin (yellow)
-#define LED3 PIN('B', 14)  // On-board LED pin (red)
-
-#define LED LED2  // Use yellow LED for blinking
 
 // System clock (2.1, Figure 1; 8.5, Figure 45; 8.5.5, Figure 47; 8.5.6, Figure
 // 49; 8.5.8 Table 56; datasheet) CPU_FREQUENCY <= 550 MHz; hclk = CPU_FREQUENCY
@@ -95,10 +99,6 @@ static inline void gpio_output(uint16_t pin) {
   gpio_init(pin, GPIO_MODE_OUTPUT, GPIO_OTYPE_PUSH_PULL, GPIO_SPEED_HIGH,
             GPIO_PULL_NONE, 0);
 }
-
-#ifndef UART_DEBUG
-#define UART_DEBUG USART3
-#endif
 
 // D2 Kernel clock (8.7.21) USART1 defaults to pclk2 (APB2), while USART2,3
 // default to pclk1 (APB1). Even if using other kernel clocks, the APBx clocks

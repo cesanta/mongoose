@@ -23,7 +23,7 @@ int mg_flash_bank(void);            // 0: not dual bank, 1: bank1, 2: bank2
 
 // Write, erase, swap bank
 bool mg_flash_write(void *addr, const void *buf, size_t len);
-bool mg_flash_erase(void *addr);  // Must be at sector boundary
+bool mg_flash_erase(void *sector);
 bool mg_flash_swap_bank(void);
 
 // Convenience functions to store data on a flash sector with wear levelling

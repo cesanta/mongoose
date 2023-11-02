@@ -3,7 +3,7 @@
 #include "str.h"
 #include "util.h"
 
-static int s_level = MG_LL_INFO;
+int mg_log_level = MG_LL_INFO;
 static mg_pfn_t s_log_func = mg_pfn_stdout;
 static void *s_log_func_param = NULL;
 
@@ -21,29 +21,19 @@ static void logs(const char *buf, size_t len) {
   for (i = 0; i < len; i++) logc(((unsigned char *) buf)[i]);
 }
 
-void mg_log_set(int log_level) {
-  MG_DEBUG(("Setting log level to %d", log_level));
-  s_level = log_level;
-}
-
 #if MG_ENABLE_CUSTOM_LOG
 // Let user define their own mg_log_prefix() and mg_log()
 #else
-bool mg_log_prefix(int level, const char *file, int line, const char *fname) {
-  if (level <= s_level) {
-    const char *p = strrchr(file, '/');
-    char buf[41];
-    size_t n;
-    if (p == NULL) p = strrchr(file, '\\');
-    n = mg_snprintf(buf, sizeof(buf), "%-6llx %d %s:%d:%s", mg_millis(), level,
-                    p == NULL ? file : p + 1, line, fname);
-    if (n > sizeof(buf) - 2) n = sizeof(buf) - 2;
-    while (n < sizeof(buf)) buf[n++] = ' ';
-    logs(buf, n - 1);
-    return true;
-  } else {
-    return false;
-  }
+void mg_log_prefix(int level, const char *file, int line, const char *fname) {
+  const char *p = strrchr(file, '/');
+  char buf[41];
+  size_t n;
+  if (p == NULL) p = strrchr(file, '\\');
+  n = mg_snprintf(buf, sizeof(buf), "%-6llx %d %s:%d:%s", mg_millis(), level,
+                  p == NULL ? file : p + 1, line, fname);
+  if (n > sizeof(buf) - 2) n = sizeof(buf) - 2;
+  while (n < sizeof(buf)) buf[n++] = ' ';
+  logs(buf, n - 1);
 }
 
 void mg_log(const char *fmt, ...) {
