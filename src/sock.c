@@ -442,6 +442,7 @@ static void mg_iotest(struct mg_mgr *mgr, int ms) {
     if (can_read(c))
       FreeRTOS_FD_SET(c->fd, mgr->ss, eSELECT_READ | eSELECT_EXCEPT);
     if (can_write(c)) FreeRTOS_FD_SET(c->fd, mgr->ss, eSELECT_WRITE);
+    if (c->is_closing) ms = 1;
   }
   FreeRTOS_select(mgr->ss, pdMS_TO_TICKS(ms));
   for (c = mgr->conns; c != NULL; c = c->next) {
@@ -458,6 +459,7 @@ static void mg_iotest(struct mg_mgr *mgr, int ms) {
     c->is_readable = c->is_writable = 0;
     if (mg_tls_pending(c) > 0) ms = 1, c->is_readable = 1;
     if (can_write(c)) MG_EPOLL_MOD(c, 1);
+    if (c->is_closing) ms = 1;
     max++;
   }
   struct epoll_event *evs = (struct epoll_event *) alloca(max * sizeof(evs[0]));
@@ -490,6 +492,7 @@ static void mg_iotest(struct mg_mgr *mgr, int ms) {
       fds[n].fd = FD(c);
       if (can_read(c)) fds[n].events |= POLLIN;
       if (can_write(c)) fds[n].events |= POLLOUT;
+      if (c->is_closing) ms = 1;
       n++;
     }
   }
@@ -537,6 +540,7 @@ static void mg_iotest(struct mg_mgr *mgr, int ms) {
     if (can_write(c)) FD_SET(FD(c), &wset);
     if (mg_tls_pending(c) > 0) tvp = &tv_zero;
     if (FD(c) > maxfd) maxfd = FD(c);
+    if (c->is_closing) ms = 1;
   }
 
   if ((rc = select((int) maxfd + 1, &rset, &wset, &eset, tvp)) < 0) {
