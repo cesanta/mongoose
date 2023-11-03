@@ -7381,7 +7381,7 @@ static inline void add32(struct mg_iobuf *io, uint32_t data) {
   mg_iobuf_add(io, io->len, &data, sizeof(data));
 }
 
-void mg_tls_init(struct mg_connection *c, struct mg_str hostname) {
+void mg_tls_init(struct mg_connection *c, const struct mg_tls_opts *opts) {
   struct tls_data *tls = (struct tls_data *) calloc(1, sizeof(struct tls_data));
   if (tls != NULL) {
     tls->send.align = tls->recv.align = MG_IO_SIZE;
@@ -7390,7 +7390,7 @@ void mg_tls_init(struct mg_connection *c, struct mg_str hostname) {
   } else {
     mg_error(c, "tls oom");
   }
-  (void) hostname;
+  (void) opts;
 }
 void mg_tls_free(struct mg_connection *c) {
   struct tls_data *tls = c->tls;
@@ -7498,8 +7498,8 @@ void mg_tls_handshake(struct mg_connection *c) {
 void mg_tls_ctx_free(struct mg_mgr *mgr) {
   mgr->tls_ctx = NULL;
 }
-void mg_tls_ctx_init(struct mg_mgr *mgr, const struct mg_tls_opts *opts) {
-  (void) opts, (void) mgr;
+void mg_tls_ctx_init(struct mg_mgr *mgr) {
+  (void) mgr;
 }
 #endif
 
