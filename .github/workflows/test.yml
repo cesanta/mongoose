@@ -78,7 +78,7 @@ jobs:
     name: macos SSL=${{ matrix.ssl }} TFLAGS=${{ matrix.select }}
     env:
       SSL: ${{ matrix.ssl }}
-      TFLAGS: ${{ matrix.select }} -DNO_SNTP_CHECK
+      TFLAGS: ${{ matrix.select }} -DNO_SNTP_CHECK -Wno-sign-conversion" # Workaround for MbedTLS 3.5.0
       HOMEBREW_NO_AUTO_UPDATE: 1
     steps:
     - uses: actions/checkout@v3
