@@ -321,6 +321,7 @@ jobs:
         example:
           - path: esp32/device-dashboard
           - path: esp32/uart-bridge
+          - path: esp32/micropython
           - path: esp8266/http-client-server
           - path: microchip/same54-xpro/device-dashboard
           - path: microchip/same54-xpro/mqtt-client
