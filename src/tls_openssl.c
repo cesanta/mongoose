@@ -2,7 +2,13 @@
 #include "tls.h"
 
 #if MG_TLS == MG_TLS_OPENSSL
-static int mg_tls_err(struct mg_tls *tls, int res) {
+static int tls_err_cb(const char *s, size_t len, void *c) {
+  int n = (int) len - 1;
+  MG_ERROR(("%lu %.*s", ((struct mg_connection *) c)->id, n, s));
+  return 0; // undocumented
+}
+
+static int mg_tls_err(struct mg_connection *c, struct mg_tls *tls, int res) {
   int err = SSL_get_error(tls->ssl, res);
   // We've just fetched the last error from the queue.
   // Now we need to clear the error queue. If we do not, then the following
@@ -13,7 +19,7 @@ static int mg_tls_err(struct mg_tls *tls, int res) {
   //    Thus a single errored connection can close all the rest, unrelated ones.
   // Clearing the error keeps the shared SSL_CTX in an OK state.
 
-  if (err != 0) ERR_print_errors_fp(stderr);
+  if (err != 0) ERR_print_errors_cb(tls_err_cb, c);
   ERR_clear_error();
   if (err == SSL_ERROR_WANT_READ) return 0;
   if (err == SSL_ERROR_WANT_WRITE) return 0;
@@ -107,7 +113,7 @@ void mg_tls_init(struct mg_connection *c, const struct mg_tls_opts *opts) {
     rc = cert == NULL ? 0 : SSL_use_certificate(tls->ssl, cert);
     X509_free(cert);
     if (cert == NULL || rc != 1) {
-      mg_error(c, "CERT err %d", mg_tls_err(tls, rc));
+      mg_error(c, "CERT err %d", mg_tls_err(c, tls, rc));
       goto fail;
     }
   }
@@ -116,7 +122,7 @@ void mg_tls_init(struct mg_connection *c, const struct mg_tls_opts *opts) {
     rc = key == NULL ? 0 : SSL_use_PrivateKey(tls->ssl, key);
     EVP_PKEY_free(key);
     if (key == NULL || rc != 1) {
-      mg_error(c, "KEY err %d", mg_tls_err(tls, rc));
+      mg_error(c, "KEY err %d", mg_tls_err(c, tls, rc));
       goto fail;
     }
   }
@@ -155,7 +161,7 @@ void mg_tls_handshake(struct mg_connection *c) {
     c->is_tls_hs = 0;
     mg_call(c, MG_EV_TLS_HS, NULL);
   } else {
-    int code = mg_tls_err(tls, rc);
+    int code = mg_tls_err(c, tls, rc);
     if (code != 0) mg_error(c, "tls hs: rc %d, err %d", rc, code);
   }
 }
@@ -177,7 +183,7 @@ size_t mg_tls_pending(struct mg_connection *c) {
 long mg_tls_recv(struct mg_connection *c, void *buf, size_t len) {
   struct mg_tls *tls = (struct mg_tls *) c->tls;
   int n = SSL_read(tls->ssl, buf, (int) len);
-  if (n < 0 && mg_tls_err(tls, n) == 0) return MG_IO_WAIT;
+  if (n < 0 && mg_tls_err(c, tls, n) == 0) return MG_IO_WAIT;
   if (n <= 0) return MG_IO_ERR;
   return n;
 }
@@ -185,7 +191,7 @@ long mg_tls_recv(struct mg_connection *c, void *buf, size_t len) {
 long mg_tls_send(struct mg_connection *c, const void *buf, size_t len) {
   struct mg_tls *tls = (struct mg_tls *) c->tls;
   int n = SSL_write(tls->ssl, buf, (int) len);
-  if (n < 0 && mg_tls_err(tls, n) == 0) return MG_IO_WAIT;
+  if (n < 0 && mg_tls_err(c, tls, n) == 0) return MG_IO_WAIT;
   if (n <= 0) return MG_IO_ERR;
   return n;
 }
