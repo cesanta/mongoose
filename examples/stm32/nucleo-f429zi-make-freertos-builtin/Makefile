@@ -2,7 +2,7 @@ CFLAGS  = -W -Wall -Wextra -Werror -Wundef -Wshadow -Wdouble-promotion
 CFLAGS += -Wformat-truncation -fno-common -Wconversion -Wno-sign-conversion
 CFLAGS += -g3 -Os -ffunction-sections -fdata-sections
 CFLAGS += -I. -Icmsis_core/CMSIS/Core/Include -Icmsis_f4/Include
-CFLAGS += -mcpu=cortex-m4 -mthumb -mfloat-abi=hard -mfpu=fpv4-sp-d16
+CFLAGS += -mcpu=cortex-m4 -mthumb -mfloat-abi=hard -mfpu=fpv4-sp-d16 $(CFLAGS_EXTRA)
 LDFLAGS ?= -Tlink.ld -nostdlib -nostartfiles --specs nano.specs -lc -lgcc -Wl,--gc-sections -Wl,-Map=$@.map
 
 SOURCES = main.c syscalls.c sysinit.c
@@ -14,8 +14,8 @@ SOURCES += FreeRTOS-Kernel/portable/GCC/ARM_CM4F/port.c
 CFLAGS += -IFreeRTOS-Kernel/include 
 CFLAGS += -IFreeRTOS-Kernel/portable/GCC/ARM_CM4F -Wno-conversion
 
-SOURCES += mongoose.c  net.c packed_fs.c
-CFLAGS += -DMG_ENABLE_DRIVER_STM32=1 $(CFLAGS_EXTRA) # Mongoose options are defined in mongoose_custom.h
+# Mongoose options are defined in mongoose_custom.h
+SOURCES += mongoose.c net.c packed_fs.c
 
 # Example specific build options. See README.md
 CFLAGS += -DHTTP_URL=\"http://0.0.0.0/\"

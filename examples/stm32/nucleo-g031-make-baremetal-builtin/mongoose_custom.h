@@ -1,5 +1,6 @@
 #pragma once
 
+// See https://mongoose.ws/documentation/#build-options
 #define MG_ARCH MG_ARCH_NEWLIB
 
 #define MG_ENABLE_TCPIP 1
