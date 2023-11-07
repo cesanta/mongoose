@@ -5,9 +5,14 @@ CFLAGS += -I. -Icmsis_core/CMSIS/Core/Include -Icmsis_g0/Include
 CFLAGS += -mcpu=cortex-m0 -mthumb -mfloat-abi=soft $(CFLAGS_EXTRA)
 LDFLAGS ?= -Tlink.ld -nostdlib -nostartfiles --specs nano.specs -lc -lgcc -Wl,--gc-sections -Wl,-Map=$@.map
 
-SOURCES = main.c syscalls.c mongoose.c
+SOURCES = main.c syscalls.c
 SOURCES += cmsis_g0/Source/Templates/gcc/startup_stm32g031xx.s # ST startup file. Compiler-dependent!
-CFLAGS += -DHTTP_URL=\"http://0.0.0.0/\"  # Example-specifig flags
+
+# Mongoose options are defined in mongoose_custom.h
+SOURCES += mongoose.c
+
+# Example specific build options. See README.md
+CFLAGS += -DHTTP_URL=\"http://0.0.0.0/\"
 
 ifeq ($(OS),Windows_NT)
   RM = cmd /C del /Q /F /S

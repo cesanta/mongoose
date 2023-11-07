@@ -13,7 +13,7 @@ CFLAGS += -Icmsis_mcu/MDK/Templates/Inc/                        # pull stm32f7xx
 CFLAGS += -DRTE_DEVICE_HAL_ETH -DRTE_DEVICE_HAL_GPIO -DRTE_DEVICE_HAL_RCC # configure it
 CFLAGS += -DRTE_DEVICE_HAL_COMMON -DRTE_DEVICE_FRAMEWORK_CUBE_MX
 
-CFLAGS += -mcpu=cortex-m7 -mthumb -mfloat-abi=hard -mfpu=fpv5-sp-d16
+CFLAGS += -mcpu=cortex-m7 -mthumb -mfloat-abi=hard -mfpu=fpv5-sp-d16 $(CFLAGS_EXTRA)
 LDFLAGS ?= -Tlink.ld -nostdlib -nostartfiles --specs nano.specs -lc -lgcc -Wl,--gc-sections -Wl,-Map=$@.map
 
 SOURCES = main.c syscalls.c sysinit.c
@@ -25,11 +25,8 @@ SOURCES += cmsis_mcu/Drivers/STM32F7xx_HAL_Driver/Src/stm32f7xx_hal_eth.c # HAL 
 SOURCES += cmsis_mcu/Drivers/STM32F7xx_HAL_Driver/Src/stm32f7xx_hal_rcc.c 
 SOURCES += cmsis_mcu/Drivers/CMSIS/Device/ST/STM32F7xx/Source/Templates/gcc/startup_stm32f746xx.s # ST startup file. Compiler-dependent!
 
-# Mongoose-specific. See https://mongoose.ws/documentation/#build-options
+# Mongoose options are defined in mongoose_custom.h
 SOURCES += mongoose.c net.c packed_fs.c
-CFLAGS += -DMG_ENABLE_TCPIP=1 -DMG_ARCH=MG_ARCH_NEWLIB -DMG_ENABLE_CUSTOM_MILLIS=1
-CFLAGS += -DMG_ENABLE_CUSTOM_RANDOM=1 -DMG_ENABLE_PACKED_FS=1
-CFLAGS += -DMG_ENABLE_DRIVER_CMSIS=1 $(CFLAGS_EXTRA)
 
 # Example specific build options. See README.md
 CFLAGS += -DHTTP_URL=\"http://0.0.0.0/\" -DHTTPS_URL=\"https://0.0.0.0/\"

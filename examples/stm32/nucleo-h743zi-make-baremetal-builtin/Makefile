@@ -5,8 +5,11 @@ CFLAGS += -I. -Icmsis_core/CMSIS/Core/Include -Icmsis_h7/Include
 CFLAGS += -mcpu=cortex-m7 -mthumb -mfloat-abi=hard -mfpu=fpv5-d16 $(CFLAGS_EXTRA)
 LDFLAGS ?= -Tlink.ld -nostdlib -nostartfiles --specs nano.specs -lc -lgcc -Wl,--gc-sections -Wl,-Map=$@.map
 
-SOURCES = main.c syscalls.c sysinit.c mongoose.c net.c packed_fs.c
+SOURCES = main.c syscalls.c sysinit.c
 SOURCES += cmsis_h7/Source/Templates/gcc/startup_stm32h743xx.s # ST startup file. Compiler-dependent!
+
+# Mongoose options are defined in mongoose_custom.h
+SOURCES += mongoose.c net.c packed_fs.c
 
 # Example specific build options. See README.md
 CFLAGS += -DHTTP_URL=\"http://0.0.0.0/\" -DHTTPS_URL=\"https://0.0.0.0/\"
