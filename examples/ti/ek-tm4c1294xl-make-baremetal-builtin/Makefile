@@ -2,16 +2,14 @@ CFLAGS  = -W -Wall -Wextra -Werror -Wundef -Wshadow -Wdouble-promotion
 CFLAGS += -Wformat-truncation -fno-common -Wconversion -Wno-sign-conversion
 CFLAGS += -g3 -Os -ffunction-sections -fdata-sections
 CFLAGS += -I. -Icmsis_core/CMSIS/Core/Include -Icmsis_tm4c/Device/TI/TM4C/Include
-CFLAGS += -mcpu=cortex-m4 -mthumb -mfloat-abi=hard -mfpu=fpv4-sp-d16
+CFLAGS += -mcpu=cortex-m4 -mthumb -mfloat-abi=hard -mfpu=fpv4-sp-d16 $(CFLAGS_EXTRA)
 LDFLAGS ?= -Tlink.ld -nostdlib -nostartfiles --specs nano.specs -lc -lgcc -Wl,--gc-sections -Wl,-Map=$@.map
 
 SOURCES = main.c syscalls.c sysinit.c
 SOURCES += startup.c # startup file. Compiler-dependent!
 
-# Mongoose-specific source code files and build options. See https://mongoose.ws/documentation/#build-options
+# Mongoose options are defined in mongoose_custom.h
 SOURCES += mongoose.c net.c packed_fs.c
-CFLAGS += -DMG_ENABLE_TCPIP=1 -DMG_ARCH=MG_ARCH_NEWLIB -DMG_ENABLE_CUSTOM_MILLIS=1
-CFLAGS += -DMG_ENABLE_DRIVER_TM4C=1 -DMG_ENABLE_PACKED_FS=1 $(CFLAGS_EXTRA)
 
 # Example specific build options. See README.md
 CFLAGS += -DHTTP_URL=\"http://0.0.0.0/\"

@@ -2,7 +2,7 @@ CFLAGS  = -W -Wall -Wextra -Werror -Wundef -Wshadow -Wdouble-promotion
 CFLAGS += -Wformat-truncation -fno-common -Wconversion -Wno-sign-conversion
 CFLAGS += -g3 -Os -ffunction-sections -fdata-sections
 CFLAGS += -I. -Icmsis_core/CMSIS/Core/Include -Icmsis_tm4c/Device/TI/TM4C/Include
-CFLAGS += -mcpu=cortex-m4 -mthumb -mfloat-abi=hard -mfpu=fpv4-sp-d16
+CFLAGS += -mcpu=cortex-m4 -mthumb -mfloat-abi=hard -mfpu=fpv4-sp-d16 $(CFLAGS_EXTRA)
 LDFLAGS ?= -Tlink.ld -nostdlib -nostartfiles --specs nano.specs -lc -lgcc -Wl,--gc-sections -Wl,-Map=$@.map
 
 SOURCES = main.c syscalls.c sysinit.c
@@ -22,10 +22,8 @@ CFLAGS += -Itinyusb/src -Itinyusb/lib/networking
 CFLAGS += -DTM4C1294NCPDT
 CFLAGS += -Wno-conversion -Wno-sign-conversion
 
-# Mongoose-specific. See https://mongoose.ws/documentation/#build-options
+# Mongoose options are defined in mongoose_custom.h
 SOURCES += mongoose.c 
-CFLAGS += -DMG_ENABLE_TCPIP=1 -DMG_ARCH=MG_ARCH_NEWLIB -DMG_ENABLE_CUSTOM_MILLIS=1
-CFLAGS += -DMG_IO_SIZE=512 $(CFLAGS_EXTRA)
 
 ifeq ($(OS),Windows_NT)
   RM = cmd /C del /Q /F /S

@@ -266,13 +266,13 @@ jobs:
     steps:
     - uses: actions/checkout@v3
       with: { fetch-depth: 2 }
-    - run: if ./test/match_changed_files.sh "^src|examples/device-dashboard|examples/ti/ek-tm4c" ; then echo GO=1 >> $GITHUB_ENV ; fi
+    - run: if ./test/match_changed_files.sh "^src|examples/device-dashboard|examples/ti/ek-tm4c.*-make" ; then echo GO=1 >> $GITHUB_ENV ; fi
     - if: ${{ env.GO == 1 }}
       run: sudo apt -y update; sudo apt -y install gcc-arm-none-eabi
     - if: ${{ env.GO == 1 }}
-      run:  make -C examples/ti/ek-tm4c1294xl-baremetal test VCON_API_KEY=${{secrets.VCON_API_KEY}}
+      run:  make -C examples/ti/ek-tm4c1294xl-make-baremetal-builtin test VCON_API_KEY=${{secrets.VCON_API_KEY}}
     - if: ${{ env.GO == 1 }}
-      run:  make -C examples/ti/ek-tm4c1294xl-freertos test VCON_API_KEY=${{secrets.VCON_API_KEY}}
+      run:  make -C examples/ti/ek-tm4c1294xl-make-freertos-builtin test VCON_API_KEY=${{secrets.VCON_API_KEY}}
 
   test_same54:
     runs-on: ubuntu-latest
@@ -369,8 +369,8 @@ jobs:
           - path: stm32/nucleo-h743zi-make-baremetal-builtin
           - path: stm32/nucleo-h743zi-make-freertos-builtin
           - path: ti/ti-ek-tm4c1294xl-http-server
-          - path: ti/ek-tm4c1294xl-baremetal
-          - path: ti/ek-tm4c1294xl-freertos
+          - path: ti/ek-tm4c1294xl-make-baremetal-builtin
+          - path: ti/ek-tm4c1294xl-make-freertos-builtin
     name: ${{ matrix.example.path }}
     steps:
       - uses: actions/checkout@v3
