@@ -172,9 +172,6 @@ static void settmout(struct mg_connection *c, uint8_t type) {
 }
 
 static size_t ether_output(struct mg_tcpip_if *ifp, size_t len) {
-  // size_t min = 64;  // Pad short frames to 64 bytes (minimum Ethernet size)
-  // if (len < min) memset(ifp->tx.ptr + len, 0, min - len), len = min;
-  // mg_hexdump(ifp->tx.ptr, len);
   size_t n = ifp->driver->tx(ifp->tx.ptr, len, ifp);
   if (n == len) ifp->nsent++;
   return n;
@@ -550,8 +547,8 @@ static struct mg_connection *accept_conn(struct mg_connection *lsn,
 static size_t trim_len(struct mg_connection *c, size_t len) {
   struct mg_tcpip_if *ifp = (struct mg_tcpip_if *) c->mgr->priv;
   size_t eth_h_len = 14, ip_max_h_len = 24, tcp_max_h_len = 60, udp_h_len = 8;
-  size_t max_headers_len = eth_h_len + ip_max_h_len +
-                          (c->is_udp ? udp_h_len : tcp_max_h_len);
+  size_t max_headers_len =
+      eth_h_len + ip_max_h_len + (c->is_udp ? udp_h_len : tcp_max_h_len);
   size_t min_mtu = c->is_udp ? 68 /* RFC-791 */ : max_headers_len - eth_h_len;
 
   // If the frame exceeds the available buffer, trim the length
@@ -578,18 +575,21 @@ static size_t trim_len(struct mg_connection *c, size_t len) {
 long mg_io_send(struct mg_connection *c, const void *buf, size_t len) {
   struct mg_tcpip_if *ifp = (struct mg_tcpip_if *) c->mgr->priv;
   struct connstate *s = (struct connstate *) (c + 1);
-  uint32_t rem_ip;
-  memcpy(&rem_ip, c->rem.ip, sizeof(uint32_t));
+  uint32_t dst_ip = *(uint32_t *) c->rem.ip;
   len = trim_len(c, len);
   if (c->is_udp) {
-    tx_udp(ifp, s->mac, ifp->ip, c->loc.port, rem_ip, c->rem.port, buf, len);
+    tx_udp(ifp, s->mac, ifp->ip, c->loc.port, dst_ip, c->rem.port, buf, len);
   } else {
-    if (tx_tcp(ifp, s->mac, rem_ip, TH_PUSH | TH_ACK, c->loc.port, c->rem.port,
-               mg_htonl(s->seq), mg_htonl(s->ack), buf, len) > 0) {
+    size_t sent =
+        tx_tcp(ifp, s->mac, dst_ip, TH_PUSH | TH_ACK, c->loc.port, c->rem.port,
+               mg_htonl(s->seq), mg_htonl(s->ack), buf, len);
+    if (sent == 0) {
+      return MG_IO_WAIT;
+    } else if (sent == (size_t) -1) {
+      return MG_IO_ERR;
+    } else {
       s->seq += (uint32_t) len;
       if (s->ttype == MIP_TTYPE_ACK) settmout(c, MIP_TTYPE_KEEPALIVE);
-    } else {
-      return MG_IO_ERR;
     }
   }
   return (long) len;
@@ -744,12 +744,11 @@ static void rx_tcp(struct mg_tcpip_if *ifp, struct pkt *pkt) {
 }
 
 static void rx_ip(struct mg_tcpip_if *ifp, struct pkt *pkt) {
-  if (pkt->ip->frag & IP_MORE_FRAGS_MSK ||
-        pkt->ip->frag & IP_FRAG_OFFSET_MSK) {
+  if (pkt->ip->frag & IP_MORE_FRAGS_MSK || pkt->ip->frag & IP_FRAG_OFFSET_MSK) {
     if (pkt->ip->proto == 17) pkt->udp = (struct udp *) (pkt->ip + 1);
     if (pkt->ip->proto == 6) pkt->tcp = (struct tcp *) (pkt->ip + 1);
     struct mg_connection *c = getpeer(ifp->mgr, pkt, false);
-    if (c)  mg_error(c, "Received fragmented packet");
+    if (c) mg_error(c, "Received fragmented packet");
   } else if (pkt->ip->proto == 1) {
     pkt->icmp = (struct icmp *) (pkt->ip + 1);
     if (pkt->pay.len < sizeof(*pkt->icmp)) return;
@@ -1039,7 +1038,9 @@ bool mg_open_listener(struct mg_connection *c, const char *url) {
 static void write_conn(struct mg_connection *c) {
   long len = c->is_tls ? mg_tls_send(c, c->send.buf, c->send.len)
                        : mg_io_send(c, c->send.buf, c->send.len);
-  if (len > 0) {
+  if (len == MG_IO_ERR) {
+    mg_error(c, "tx err");
+  } else if (len > 0) {
     mg_iobuf_del(&c->send, 0, (size_t) len);
     mg_call(c, MG_EV_WRITE, &len);
   }
@@ -1100,7 +1101,7 @@ bool mg_send(struct mg_connection *c, const void *buf, size_t len) {
     mg_error(c, "net down");
   } else if (c->is_udp) {
     struct connstate *s = (struct connstate *) (c + 1);
-    len = trim_len(c, len);   // Trimming length if necessary
+    len = trim_len(c, len);  // Trimming length if necessary
     tx_udp(ifp, s->mac, ifp->ip, c->loc.port, rem_ip, c->rem.port, buf, len);
     res = true;
   } else {

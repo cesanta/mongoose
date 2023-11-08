@@ -65,7 +65,8 @@ int main(void) {
   mg_log_set(MG_LL_DEBUG);  // Set log level
 
   // Initialise Mongoose network stack
-  struct mg_tcpip_driver_rt1020_data driver_data = {.mdc_cr = 24};
+  struct mg_tcpip_driver_rt1020_data driver_data = {.mdc_cr = 24,
+                                                    .phy_addr = 2};
   struct mg_tcpip_if mif = {.mac = GENERATE_LOCALLY_ADMINISTERED_MAC(),
                             // Uncomment below for static configuration:
                             // .ip = mg_htonl(MG_U32(192, 168, 0, 223)),

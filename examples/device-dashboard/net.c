@@ -133,7 +133,7 @@ static size_t print_int_arr(void (*out)(char, void *), void *ptr, va_list *ap) {
 
 static void handle_stats_get(struct mg_connection *c) {
   int points[] = {21, 22, 22, 19, 18, 20, 23, 23, 22, 22, 22, 23, 22};
-  mg_http_reply(c, 200, s_json_header, "{%m:%d,%m:%d,%m:[%M]}",
+  mg_http_reply(c, 200, s_json_header, "{%m:%d,%m:%d,%m:[%M]}\n",
                 MG_ESC("temperature"), 21,  //
                 MG_ESC("humidity"), 67,     //
                 MG_ESC("points"), print_int_arr,
@@ -148,11 +148,11 @@ static size_t print_events(void (*out)(char, void *), void *ptr, va_list *ap) {
   int end = no + EVENTS_PER_PAGE;
 
   while ((no = ui_event_next(no, &ev)) != 0 && no <= end) {
-    len += mg_xprintf(out, ptr, "%s{%m:%lu,%m:%d,%m:%d,%m:%m}",  //
-                      len == 0 ? "" : ",",                       //
-                      MG_ESC("time"), ev.timestamp,              //
-                      MG_ESC("type"), ev.type,                   //
-                      MG_ESC("prio"), ev.prio,                   //
+    len += mg_xprintf(out, ptr, "%s{%m:%lu,%m:%d,%m:%d,%m:%m}\n",  //
+                      len == 0 ? "" : ",",                         //
+                      MG_ESC("time"), ev.timestamp,                //
+                      MG_ESC("type"), ev.type,                     //
+                      MG_ESC("prio"), ev.prio,                     //
                       MG_ESC("text"), MG_ESC(ev.text));
   }
 
@@ -162,7 +162,7 @@ static size_t print_events(void (*out)(char, void *), void *ptr, va_list *ap) {
 static void handle_events_get(struct mg_connection *c,
                               struct mg_http_message *hm) {
   int pageno = mg_json_get_long(hm->body, "$.page", 1);
-  mg_http_reply(c, 200, s_json_header, "{%m:[%M], %m:%d}", MG_ESC("arr"),
+  mg_http_reply(c, 200, s_json_header, "{%m:[%M], %m:%d}\n", MG_ESC("arr"),
                 print_events, pageno, MG_ESC("totalCount"), MAX_EVENTS_NO);
 }
 
@@ -190,7 +190,7 @@ static void handle_settings_set(struct mg_connection *c, struct mg_str body) {
 }
 
 static void handle_settings_get(struct mg_connection *c) {
-  mg_http_reply(c, 200, s_json_header, "{%m:%s,%m:%hhu,%m:%hhu,%m:%m}",  //
+  mg_http_reply(c, 200, s_json_header, "{%m:%s,%m:%hhu,%m:%hhu,%m:%m}\n",  //
                 MG_ESC("log_enabled"),
                 s_settings.log_enabled ? "true" : "false",    //
                 MG_ESC("log_level"), s_settings.log_level,    //
@@ -239,7 +239,7 @@ static void handle_firmware_rollback(struct mg_connection *c) {
 
 static size_t print_status(void (*out)(char, void *), void *ptr, va_list *ap) {
   int fw = va_arg(*ap, int);
-  return mg_xprintf(out, ptr, "{%m:%d,%m:%c%lx%c,%m:%u,%m:%u}",
+  return mg_xprintf(out, ptr, "{%m:%d,%m:%c%lx%c,%m:%u,%m:%u}\n",
                     MG_ESC("status"), mg_ota_status(fw), MG_ESC("crc32"), '"',
                     mg_ota_crc32(fw), '"', MG_ESC("size"), mg_ota_size(fw),
                     MG_ESC("timestamp"), mg_ota_timestamp(fw));

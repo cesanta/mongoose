@@ -4077,6 +4077,273 @@ struct mg_connection *mg_mqtt_listen(struct mg_mgr *mgr, const char *url,
 }
 
 #ifdef MG_ENABLE_LINES
+#line 1 "src/net.c"
+#endif
+
+
+
+
+
+
+
+
+size_t mg_vprintf(struct mg_connection *c, const char *fmt, va_list *ap) {
+  size_t old = c->send.len;
+  mg_vxprintf(mg_pfn_iobuf, &c->send, fmt, ap);
+  return c->send.len - old;
+}
+
+size_t mg_printf(struct mg_connection *c, const char *fmt, ...) {
+  size_t len = 0;
+  va_list ap;
+  va_start(ap, fmt);
+  len = mg_vprintf(c, fmt, &ap);
+  va_end(ap);
+  return len;
+}
+
+static bool mg_atonl(struct mg_str str, struct mg_addr *addr) {
+  uint32_t localhost = mg_htonl(0x7f000001);
+  if (mg_vcasecmp(&str, "localhost") != 0) return false;
+  memcpy(addr->ip, &localhost, sizeof(uint32_t));
+  addr->is_ip6 = false;
+  return true;
+}
+
+static bool mg_atone(struct mg_str str, struct mg_addr *addr) {
+  if (str.len > 0) return false;
+  memset(addr->ip, 0, sizeof(addr->ip));
+  addr->is_ip6 = false;
+  return true;
+}
+
+static bool mg_aton4(struct mg_str str, struct mg_addr *addr) {
+  uint8_t data[4] = {0, 0, 0, 0};
+  size_t i, num_dots = 0;
+  for (i = 0; i < str.len; i++) {
+    if (str.ptr[i] >= '0' && str.ptr[i] <= '9') {
+      int octet = data[num_dots] * 10 + (str.ptr[i] - '0');
+      if (octet > 255) return false;
+      data[num_dots] = (uint8_t) octet;
+    } else if (str.ptr[i] == '.') {
+      if (num_dots >= 3 || i == 0 || str.ptr[i - 1] == '.') return false;
+      num_dots++;
+    } else {
+      return false;
+    }
+  }
+  if (num_dots != 3 || str.ptr[i - 1] == '.') return false;
+  memcpy(&addr->ip, data, sizeof(data));
+  addr->is_ip6 = false;
+  return true;
+}
+
+static bool mg_v4mapped(struct mg_str str, struct mg_addr *addr) {
+  int i;
+  uint32_t ipv4;
+  if (str.len < 14) return false;
+  if (str.ptr[0] != ':' || str.ptr[1] != ':' || str.ptr[6] != ':') return false;
+  for (i = 2; i < 6; i++) {
+    if (str.ptr[i] != 'f' && str.ptr[i] != 'F') return false;
+  }
+  // struct mg_str s = mg_str_n(&str.ptr[7], str.len - 7);
+  if (!mg_aton4(mg_str_n(&str.ptr[7], str.len - 7), addr)) return false;
+  memcpy(&ipv4, addr->ip, sizeof(ipv4));
+  memset(addr->ip, 0, sizeof(addr->ip));
+  addr->ip[10] = addr->ip[11] = 255;
+  memcpy(&addr->ip[12], &ipv4, 4);
+  addr->is_ip6 = true;
+  return true;
+}
+
+static bool mg_aton6(struct mg_str str, struct mg_addr *addr) {
+  size_t i, j = 0, n = 0, dc = 42;
+  addr->scope_id = 0;
+  if (str.len > 2 && str.ptr[0] == '[') str.ptr++, str.len -= 2;
+  if (mg_v4mapped(str, addr)) return true;
+  for (i = 0; i < str.len; i++) {
+    if ((str.ptr[i] >= '0' && str.ptr[i] <= '9') ||
+        (str.ptr[i] >= 'a' && str.ptr[i] <= 'f') ||
+        (str.ptr[i] >= 'A' && str.ptr[i] <= 'F')) {
+      unsigned long val;
+      if (i > j + 3) return false;
+      // MG_DEBUG(("%lu %lu [%.*s]", i, j, (int) (i - j + 1), &str.ptr[j]));
+      val = mg_unhexn(&str.ptr[j], i - j + 1);
+      addr->ip[n] = (uint8_t) ((val >> 8) & 255);
+      addr->ip[n + 1] = (uint8_t) (val & 255);
+    } else if (str.ptr[i] == ':') {
+      j = i + 1;
+      if (i > 0 && str.ptr[i - 1] == ':') {
+        dc = n;  // Double colon
+        if (i > 1 && str.ptr[i - 2] == ':') return false;
+      } else if (i > 0) {
+        n += 2;
+      }
+      if (n > 14) return false;
+      addr->ip[n] = addr->ip[n + 1] = 0;  // For trailing ::
+    } else if (str.ptr[i] == '%') {       // Scope ID
+      for (i = i + 1; i < str.len; i++) {
+        if (str.ptr[i] < '0' || str.ptr[i] > '9') return false;
+        addr->scope_id *= 10, addr->scope_id += (uint8_t) (str.ptr[i] - '0');
+      }
+    } else {
+      return false;
+    }
+  }
+  if (n < 14 && dc == 42) return false;
+  if (n < 14) {
+    memmove(&addr->ip[dc + (14 - n)], &addr->ip[dc], n - dc + 2);
+    memset(&addr->ip[dc], 0, 14 - n);
+  }
+
+  addr->is_ip6 = true;
+  return true;
+}
+
+bool mg_aton(struct mg_str str, struct mg_addr *addr) {
+  // MG_INFO(("[%.*s]", (int) str.len, str.ptr));
+  return mg_atone(str, addr) || mg_atonl(str, addr) || mg_aton4(str, addr) ||
+         mg_aton6(str, addr);
+}
+
+struct mg_connection *mg_alloc_conn(struct mg_mgr *mgr) {
+  struct mg_connection *c =
+      (struct mg_connection *) calloc(1, sizeof(*c) + mgr->extraconnsize);
+  if (c != NULL) {
+    c->mgr = mgr;
+    c->send.align = c->recv.align = MG_IO_SIZE;
+    c->id = ++mgr->nextid;
+  }
+  return c;
+}
+
+void mg_close_conn(struct mg_connection *c) {
+  mg_resolve_cancel(c);  // Close any pending DNS query
+  LIST_DELETE(struct mg_connection, &c->mgr->conns, c);
+  if (c == c->mgr->dns4.c) c->mgr->dns4.c = NULL;
+  if (c == c->mgr->dns6.c) c->mgr->dns6.c = NULL;
+  // Order of operations is important. `MG_EV_CLOSE` event must be fired
+  // before we deallocate received data, see #1331
+  mg_call(c, MG_EV_CLOSE, NULL);
+  MG_DEBUG(("%lu %ld closed", c->id, c->fd));
+
+  mg_tls_free(c);
+  mg_iobuf_free(&c->recv);
+  mg_iobuf_free(&c->send);
+  mg_bzero((unsigned char *) c, sizeof(*c));
+  free(c);
+}
+
+struct mg_connection *mg_connect(struct mg_mgr *mgr, const char *url,
+                                 mg_event_handler_t fn, void *fn_data) {
+  struct mg_connection *c = NULL;
+  if (url == NULL || url[0] == '\0') {
+    MG_ERROR(("null url"));
+  } else if ((c = mg_alloc_conn(mgr)) == NULL) {
+    MG_ERROR(("OOM"));
+  } else {
+    LIST_ADD_HEAD(struct mg_connection, &mgr->conns, c);
+    c->is_udp = (strncmp(url, "udp:", 4) == 0);
+    c->fd = (void *) (size_t) MG_INVALID_SOCKET;
+    c->fn = fn;
+    c->is_client = true;
+    c->fn_data = fn_data;
+    MG_DEBUG(("%lu %ld %s", c->id, c->fd, url));
+    mg_call(c, MG_EV_OPEN, (void *) url);
+    mg_resolve(c, url);
+  }
+  return c;
+}
+
+struct mg_connection *mg_listen(struct mg_mgr *mgr, const char *url,
+                                mg_event_handler_t fn, void *fn_data) {
+  struct mg_connection *c = NULL;
+  if ((c = mg_alloc_conn(mgr)) == NULL) {
+    MG_ERROR(("OOM %s", url));
+  } else if (!mg_open_listener(c, url)) {
+    MG_ERROR(("Failed: %s, errno %d", url, errno));
+    free(c);
+    c = NULL;
+  } else {
+    c->is_listening = 1;
+    c->is_udp = strncmp(url, "udp:", 4) == 0;
+    LIST_ADD_HEAD(struct mg_connection, &mgr->conns, c);
+    c->fn = fn;
+    c->fn_data = fn_data;
+    mg_call(c, MG_EV_OPEN, NULL);
+    if (mg_url_is_ssl(url)) c->is_tls = 1;  // Accepted connection must
+    MG_DEBUG(("%lu %ld %s", c->id, c->fd, url));
+  }
+  return c;
+}
+
+struct mg_connection *mg_wrapfd(struct mg_mgr *mgr, int fd,
+                                mg_event_handler_t fn, void *fn_data) {
+  struct mg_connection *c = mg_alloc_conn(mgr);
+  if (c != NULL) {
+    c->fd = (void *) (size_t) fd;
+    c->fn = fn;
+    c->fn_data = fn_data;
+    MG_EPOLL_ADD(c);
+    mg_call(c, MG_EV_OPEN, NULL);
+    LIST_ADD_HEAD(struct mg_connection, &mgr->conns, c);
+  }
+  return c;
+}
+
+struct mg_timer *mg_timer_add(struct mg_mgr *mgr, uint64_t milliseconds,
+                              unsigned flags, void (*fn)(void *), void *arg) {
+  struct mg_timer *t = (struct mg_timer *) calloc(1, sizeof(*t));
+  if (t != NULL) {
+    mg_timer_init(&mgr->timers, t, milliseconds, flags, fn, arg);
+    t->id = mgr->timerid++;
+  }
+  return t;
+}
+
+void mg_mgr_free(struct mg_mgr *mgr) {
+  struct mg_connection *c;
+  struct mg_timer *tmp, *t = mgr->timers;
+  while (t != NULL) tmp = t->next, free(t), t = tmp;
+  mgr->timers = NULL;  // Important. Next call to poll won't touch timers
+  for (c = mgr->conns; c != NULL; c = c->next) c->is_closing = 1;
+  mg_mgr_poll(mgr, 0);
+#if MG_ENABLE_FREERTOS_TCP
+  FreeRTOS_DeleteSocketSet(mgr->ss);
+#endif
+  MG_DEBUG(("All connections closed"));
+#if MG_ENABLE_EPOLL
+  if (mgr->epoll_fd >= 0) close(mgr->epoll_fd), mgr->epoll_fd = -1;
+#endif
+  mg_tls_ctx_free(mgr);
+}
+
+void mg_mgr_init(struct mg_mgr *mgr) {
+  memset(mgr, 0, sizeof(*mgr));
+#if MG_ENABLE_EPOLL
+  if ((mgr->epoll_fd = epoll_create1(EPOLL_CLOEXEC)) < 0)
+    MG_ERROR(("epoll_create1 errno %d", errno));
+#else
+  mgr->epoll_fd = -1;
+#endif
+#if MG_ARCH == MG_ARCH_WIN32 && MG_ENABLE_WINSOCK
+  // clang-format off
+  { WSADATA data; WSAStartup(MAKEWORD(2, 2), &data); }
+  // clang-format on
+#elif MG_ENABLE_FREERTOS_TCP
+  mgr->ss = FreeRTOS_CreateSocketSet();
+#elif defined(__unix) || defined(__unix__) || defined(__APPLE__)
+  // Ignore SIGPIPE signal, so if client cancels the request, it
+  // won't kill the whole process.
+  signal(SIGPIPE, SIG_IGN);
+#endif
+  mgr->dnstimeout = 3000;
+  mgr->dns4.url = "udp://8.8.8.8:53";
+  mgr->dns6.url = "udp://[2001:4860:4860::8888]:53";
+  mg_tls_ctx_init(mgr);
+}
+
+#ifdef MG_ENABLE_LINES
 #line 1 "src/net_builtin.c"
 #endif
 
@@ -4253,9 +4520,6 @@ static void settmout(struct mg_connection *c, uint8_t type) {
 }
 
 static size_t ether_output(struct mg_tcpip_if *ifp, size_t len) {
-  // size_t min = 64;  // Pad short frames to 64 bytes (minimum Ethernet size)
-  // if (len < min) memset(ifp->tx.ptr + len, 0, min - len), len = min;
-  // mg_hexdump(ifp->tx.ptr, len);
   size_t n = ifp->driver->tx(ifp->tx.ptr, len, ifp);
   if (n == len) ifp->nsent++;
   return n;
@@ -4631,8 +4895,8 @@ static struct mg_connection *accept_conn(struct mg_connection *lsn,
 static size_t trim_len(struct mg_connection *c, size_t len) {
   struct mg_tcpip_if *ifp = (struct mg_tcpip_if *) c->mgr->priv;
   size_t eth_h_len = 14, ip_max_h_len = 24, tcp_max_h_len = 60, udp_h_len = 8;
-  size_t max_headers_len = eth_h_len + ip_max_h_len +
-                          (c->is_udp ? udp_h_len : tcp_max_h_len);
+  size_t max_headers_len =
+      eth_h_len + ip_max_h_len + (c->is_udp ? udp_h_len : tcp_max_h_len);
   size_t min_mtu = c->is_udp ? 68 /* RFC-791 */ : max_headers_len - eth_h_len;
 
   // If the frame exceeds the available buffer, trim the length
@@ -4659,18 +4923,21 @@ static size_t trim_len(struct mg_connection *c, size_t len) {
 long mg_io_send(struct mg_connection *c, const void *buf, size_t len) {
   struct mg_tcpip_if *ifp = (struct mg_tcpip_if *) c->mgr->priv;
   struct connstate *s = (struct connstate *) (c + 1);
-  uint32_t rem_ip;
-  memcpy(&rem_ip, c->rem.ip, sizeof(uint32_t));
+  uint32_t dst_ip = *(uint32_t *) c->rem.ip;
   len = trim_len(c, len);
   if (c->is_udp) {
-    tx_udp(ifp, s->mac, ifp->ip, c->loc.port, rem_ip, c->rem.port, buf, len);
+    tx_udp(ifp, s->mac, ifp->ip, c->loc.port, dst_ip, c->rem.port, buf, len);
   } else {
-    if (tx_tcp(ifp, s->mac, rem_ip, TH_PUSH | TH_ACK, c->loc.port, c->rem.port,
-               mg_htonl(s->seq), mg_htonl(s->ack), buf, len) > 0) {
+    size_t sent =
+        tx_tcp(ifp, s->mac, dst_ip, TH_PUSH | TH_ACK, c->loc.port, c->rem.port,
+               mg_htonl(s->seq), mg_htonl(s->ack), buf, len);
+    if (sent == 0) {
+      return MG_IO_WAIT;
+    } else if (sent == (size_t) -1) {
+      return MG_IO_ERR;
+    } else {
       s->seq += (uint32_t) len;
       if (s->ttype == MIP_TTYPE_ACK) settmout(c, MIP_TTYPE_KEEPALIVE);
-    } else {
-      return MG_IO_ERR;
     }
   }
   return (long) len;
@@ -4825,12 +5092,11 @@ static void rx_tcp(struct mg_tcpip_if *ifp, struct pkt *pkt) {
 }
 
 static void rx_ip(struct mg_tcpip_if *ifp, struct pkt *pkt) {
-  if (pkt->ip->frag & IP_MORE_FRAGS_MSK ||
-        pkt->ip->frag & IP_FRAG_OFFSET_MSK) {
+  if (pkt->ip->frag & IP_MORE_FRAGS_MSK || pkt->ip->frag & IP_FRAG_OFFSET_MSK) {
     if (pkt->ip->proto == 17) pkt->udp = (struct udp *) (pkt->ip + 1);
     if (pkt->ip->proto == 6) pkt->tcp = (struct tcp *) (pkt->ip + 1);
     struct mg_connection *c = getpeer(ifp->mgr, pkt, false);
-    if (c)  mg_error(c, "Received fragmented packet");
+    if (c) mg_error(c, "Received fragmented packet");
   } else if (pkt->ip->proto == 1) {
     pkt->icmp = (struct icmp *) (pkt->ip + 1);
     if (pkt->pay.len < sizeof(*pkt->icmp)) return;
@@ -5120,7 +5386,9 @@ bool mg_open_listener(struct mg_connection *c, const char *url) {
 static void write_conn(struct mg_connection *c) {
   long len = c->is_tls ? mg_tls_send(c, c->send.buf, c->send.len)
                        : mg_io_send(c, c->send.buf, c->send.len);
-  if (len > 0) {
+  if (len == MG_IO_ERR) {
+    mg_error(c, "tx err");
+  } else if (len > 0) {
     mg_iobuf_del(&c->send, 0, (size_t) len);
     mg_call(c, MG_EV_WRITE, &len);
   }
@@ -5181,7 +5449,7 @@ bool mg_send(struct mg_connection *c, const void *buf, size_t len) {
     mg_error(c, "net down");
   } else if (c->is_udp) {
     struct connstate *s = (struct connstate *) (c + 1);
-    len = trim_len(c, len);   // Trimming length if necessary
+    len = trim_len(c, len);  // Trimming length if necessary
     tx_udp(ifp, s->mac, ifp->ip, c->loc.port, rem_ip, c->rem.port, buf, len);
     res = true;
   } else {
@@ -5190,273 +5458,6 @@ bool mg_send(struct mg_connection *c, const void *buf, size_t len) {
   return res;
 }
 #endif  // MG_ENABLE_TCPIP
-
-#ifdef MG_ENABLE_LINES
-#line 1 "src/net.c"
-#endif
-
-
-
-
-
-
-
-
-size_t mg_vprintf(struct mg_connection *c, const char *fmt, va_list *ap) {
-  size_t old = c->send.len;
-  mg_vxprintf(mg_pfn_iobuf, &c->send, fmt, ap);
-  return c->send.len - old;
-}
-
-size_t mg_printf(struct mg_connection *c, const char *fmt, ...) {
-  size_t len = 0;
-  va_list ap;
-  va_start(ap, fmt);
-  len = mg_vprintf(c, fmt, &ap);
-  va_end(ap);
-  return len;
-}
-
-static bool mg_atonl(struct mg_str str, struct mg_addr *addr) {
-  uint32_t localhost = mg_htonl(0x7f000001);
-  if (mg_vcasecmp(&str, "localhost") != 0) return false;
-  memcpy(addr->ip, &localhost, sizeof(uint32_t));
-  addr->is_ip6 = false;
-  return true;
-}
-
-static bool mg_atone(struct mg_str str, struct mg_addr *addr) {
-  if (str.len > 0) return false;
-  memset(addr->ip, 0, sizeof(addr->ip));
-  addr->is_ip6 = false;
-  return true;
-}
-
-static bool mg_aton4(struct mg_str str, struct mg_addr *addr) {
-  uint8_t data[4] = {0, 0, 0, 0};
-  size_t i, num_dots = 0;
-  for (i = 0; i < str.len; i++) {
-    if (str.ptr[i] >= '0' && str.ptr[i] <= '9') {
-      int octet = data[num_dots] * 10 + (str.ptr[i] - '0');
-      if (octet > 255) return false;
-      data[num_dots] = (uint8_t) octet;
-    } else if (str.ptr[i] == '.') {
-      if (num_dots >= 3 || i == 0 || str.ptr[i - 1] == '.') return false;
-      num_dots++;
-    } else {
-      return false;
-    }
-  }
-  if (num_dots != 3 || str.ptr[i - 1] == '.') return false;
-  memcpy(&addr->ip, data, sizeof(data));
-  addr->is_ip6 = false;
-  return true;
-}
-
-static bool mg_v4mapped(struct mg_str str, struct mg_addr *addr) {
-  int i;
-  uint32_t ipv4;
-  if (str.len < 14) return false;
-  if (str.ptr[0] != ':' || str.ptr[1] != ':' || str.ptr[6] != ':') return false;
-  for (i = 2; i < 6; i++) {
-    if (str.ptr[i] != 'f' && str.ptr[i] != 'F') return false;
-  }
-  // struct mg_str s = mg_str_n(&str.ptr[7], str.len - 7);
-  if (!mg_aton4(mg_str_n(&str.ptr[7], str.len - 7), addr)) return false;
-  memcpy(&ipv4, addr->ip, sizeof(ipv4));
-  memset(addr->ip, 0, sizeof(addr->ip));
-  addr->ip[10] = addr->ip[11] = 255;
-  memcpy(&addr->ip[12], &ipv4, 4);
-  addr->is_ip6 = true;
-  return true;
-}
-
-static bool mg_aton6(struct mg_str str, struct mg_addr *addr) {
-  size_t i, j = 0, n = 0, dc = 42;
-  addr->scope_id = 0;
-  if (str.len > 2 && str.ptr[0] == '[') str.ptr++, str.len -= 2;
-  if (mg_v4mapped(str, addr)) return true;
-  for (i = 0; i < str.len; i++) {
-    if ((str.ptr[i] >= '0' && str.ptr[i] <= '9') ||
-        (str.ptr[i] >= 'a' && str.ptr[i] <= 'f') ||
-        (str.ptr[i] >= 'A' && str.ptr[i] <= 'F')) {
-      unsigned long val;
-      if (i > j + 3) return false;
-      // MG_DEBUG(("%lu %lu [%.*s]", i, j, (int) (i - j + 1), &str.ptr[j]));
-      val = mg_unhexn(&str.ptr[j], i - j + 1);
-      addr->ip[n] = (uint8_t) ((val >> 8) & 255);
-      addr->ip[n + 1] = (uint8_t) (val & 255);
-    } else if (str.ptr[i] == ':') {
-      j = i + 1;
-      if (i > 0 && str.ptr[i - 1] == ':') {
-        dc = n;  // Double colon
-        if (i > 1 && str.ptr[i - 2] == ':') return false;
-      } else if (i > 0) {
-        n += 2;
-      }
-      if (n > 14) return false;
-      addr->ip[n] = addr->ip[n + 1] = 0;  // For trailing ::
-    } else if (str.ptr[i] == '%') {       // Scope ID
-      for (i = i + 1; i < str.len; i++) {
-        if (str.ptr[i] < '0' || str.ptr[i] > '9') return false;
-        addr->scope_id *= 10, addr->scope_id += (uint8_t) (str.ptr[i] - '0');
-      }
-    } else {
-      return false;
-    }
-  }
-  if (n < 14 && dc == 42) return false;
-  if (n < 14) {
-    memmove(&addr->ip[dc + (14 - n)], &addr->ip[dc], n - dc + 2);
-    memset(&addr->ip[dc], 0, 14 - n);
-  }
-
-  addr->is_ip6 = true;
-  return true;
-}
-
-bool mg_aton(struct mg_str str, struct mg_addr *addr) {
-  // MG_INFO(("[%.*s]", (int) str.len, str.ptr));
-  return mg_atone(str, addr) || mg_atonl(str, addr) || mg_aton4(str, addr) ||
-         mg_aton6(str, addr);
-}
-
-struct mg_connection *mg_alloc_conn(struct mg_mgr *mgr) {
-  struct mg_connection *c =
-      (struct mg_connection *) calloc(1, sizeof(*c) + mgr->extraconnsize);
-  if (c != NULL) {
-    c->mgr = mgr;
-    c->send.align = c->recv.align = MG_IO_SIZE;
-    c->id = ++mgr->nextid;
-  }
-  return c;
-}
-
-void mg_close_conn(struct mg_connection *c) {
-  mg_resolve_cancel(c);  // Close any pending DNS query
-  LIST_DELETE(struct mg_connection, &c->mgr->conns, c);
-  if (c == c->mgr->dns4.c) c->mgr->dns4.c = NULL;
-  if (c == c->mgr->dns6.c) c->mgr->dns6.c = NULL;
-  // Order of operations is important. `MG_EV_CLOSE` event must be fired
-  // before we deallocate received data, see #1331
-  mg_call(c, MG_EV_CLOSE, NULL);
-  MG_DEBUG(("%lu %ld closed", c->id, c->fd));
-
-  mg_tls_free(c);
-  mg_iobuf_free(&c->recv);
-  mg_iobuf_free(&c->send);
-  mg_bzero((unsigned char *) c, sizeof(*c));
-  free(c);
-}
-
-struct mg_connection *mg_connect(struct mg_mgr *mgr, const char *url,
-                                 mg_event_handler_t fn, void *fn_data) {
-  struct mg_connection *c = NULL;
-  if (url == NULL || url[0] == '\0') {
-    MG_ERROR(("null url"));
-  } else if ((c = mg_alloc_conn(mgr)) == NULL) {
-    MG_ERROR(("OOM"));
-  } else {
-    LIST_ADD_HEAD(struct mg_connection, &mgr->conns, c);
-    c->is_udp = (strncmp(url, "udp:", 4) == 0);
-    c->fd = (void *) (size_t) MG_INVALID_SOCKET;
-    c->fn = fn;
-    c->is_client = true;
-    c->fn_data = fn_data;
-    MG_DEBUG(("%lu %ld %s", c->id, c->fd, url));
-    mg_call(c, MG_EV_OPEN, (void *) url);
-    mg_resolve(c, url);
-  }
-  return c;
-}
-
-struct mg_connection *mg_listen(struct mg_mgr *mgr, const char *url,
-                                mg_event_handler_t fn, void *fn_data) {
-  struct mg_connection *c = NULL;
-  if ((c = mg_alloc_conn(mgr)) == NULL) {
-    MG_ERROR(("OOM %s", url));
-  } else if (!mg_open_listener(c, url)) {
-    MG_ERROR(("Failed: %s, errno %d", url, errno));
-    free(c);
-    c = NULL;
-  } else {
-    c->is_listening = 1;
-    c->is_udp = strncmp(url, "udp:", 4) == 0;
-    LIST_ADD_HEAD(struct mg_connection, &mgr->conns, c);
-    c->fn = fn;
-    c->fn_data = fn_data;
-    mg_call(c, MG_EV_OPEN, NULL);
-    if (mg_url_is_ssl(url)) c->is_tls = 1;  // Accepted connection must
-    MG_DEBUG(("%lu %ld %s", c->id, c->fd, url));
-  }
-  return c;
-}
-
-struct mg_connection *mg_wrapfd(struct mg_mgr *mgr, int fd,
-                                mg_event_handler_t fn, void *fn_data) {
-  struct mg_connection *c = mg_alloc_conn(mgr);
-  if (c != NULL) {
-    c->fd = (void *) (size_t) fd;
-    c->fn = fn;
-    c->fn_data = fn_data;
-    MG_EPOLL_ADD(c);
-    mg_call(c, MG_EV_OPEN, NULL);
-    LIST_ADD_HEAD(struct mg_connection, &mgr->conns, c);
-  }
-  return c;
-}
-
-struct mg_timer *mg_timer_add(struct mg_mgr *mgr, uint64_t milliseconds,
-                              unsigned flags, void (*fn)(void *), void *arg) {
-  struct mg_timer *t = (struct mg_timer *) calloc(1, sizeof(*t));
-  if (t != NULL) {
-    mg_timer_init(&mgr->timers, t, milliseconds, flags, fn, arg);
-    t->id = mgr->timerid++;
-  }
-  return t;
-}
-
-void mg_mgr_free(struct mg_mgr *mgr) {
-  struct mg_connection *c;
-  struct mg_timer *tmp, *t = mgr->timers;
-  while (t != NULL) tmp = t->next, free(t), t = tmp;
-  mgr->timers = NULL;  // Important. Next call to poll won't touch timers
-  for (c = mgr->conns; c != NULL; c = c->next) c->is_closing = 1;
-  mg_mgr_poll(mgr, 0);
-#if MG_ENABLE_FREERTOS_TCP
-  FreeRTOS_DeleteSocketSet(mgr->ss);
-#endif
-  MG_DEBUG(("All connections closed"));
-#if MG_ENABLE_EPOLL
-  if (mgr->epoll_fd >= 0) close(mgr->epoll_fd), mgr->epoll_fd = -1;
-#endif
-  mg_tls_ctx_free(mgr);
-}
-
-void mg_mgr_init(struct mg_mgr *mgr) {
-  memset(mgr, 0, sizeof(*mgr));
-#if MG_ENABLE_EPOLL
-  if ((mgr->epoll_fd = epoll_create1(EPOLL_CLOEXEC)) < 0)
-    MG_ERROR(("epoll_create1 errno %d", errno));
-#else
-  mgr->epoll_fd = -1;
-#endif
-#if MG_ARCH == MG_ARCH_WIN32 && MG_ENABLE_WINSOCK
-  // clang-format off
-  { WSADATA data; WSAStartup(MAKEWORD(2, 2), &data); }
-  // clang-format on
-#elif MG_ENABLE_FREERTOS_TCP
-  mgr->ss = FreeRTOS_CreateSocketSet();
-#elif defined(__unix) || defined(__unix__) || defined(__APPLE__)
-  // Ignore SIGPIPE signal, so if client cancels the request, it
-  // won't kill the whole process.
-  signal(SIGPIPE, SIG_IGN);
-#endif
-  mgr->dnstimeout = 3000;
-  mgr->dns4.url = "udp://8.8.8.8:53";
-  mgr->dns6.url = "udp://[2001:4860:4860::8888]:53";
-  mg_tls_ctx_init(mgr);
-}
 
 #ifdef MG_ENABLE_LINES
 #line 1 "src/ota_dummy.c"
@@ -8665,14 +8666,10 @@ struct rt1020_enet {
 };
 
 #undef ENET
-#define ENET ((struct rt1020_enet *) (uintptr_t) 0x402D8000u)
+#define ENET ((struct rt1020_enet *) (uintptr_t) 0x402D8000U)
 
-#undef BIT
-#define BIT(x) ((uint32_t) 1 << (x))
-
-// Max frame size, every buffer must be 64-bit aligned (1536 = 0x600)
-#define ETH_PKT_SIZE 1536
-#define ETH_DESC_CNT 4  // Descriptors count
+#define ETH_PKT_SIZE 1536  // Max frame size, 64-bit aligned
+#define ETH_DESC_CNT 4     // Descriptors count
 
 typedef struct {
   uint16_t length;   // Data length
@@ -8681,29 +8678,30 @@ typedef struct {
 } enet_bd_t;
 
 // TODO(): handle these in a portable compiler-independent CMSIS-friendly way
-// Descriptors: in non-cached area (TODO(scaprile)), 64-bit aligned
-enet_bd_t s_rxdesc[ETH_DESC_CNT] __attribute__((aligned((64U))));
-enet_bd_t s_txdesc[ETH_DESC_CNT] __attribute__((aligned((64U))));
-// Buffers: 64-bit aligned
-uint8_t s_rxbuf[ETH_DESC_CNT][ETH_PKT_SIZE] __attribute__((aligned((64U))));
-uint8_t s_txbuf[ETH_DESC_CNT][ETH_PKT_SIZE] __attribute__((aligned((64U))));
+#define MG_A64 __attribute__((aligned((64U))))
 
+// Descriptors: in non-cached area (TODO(scaprile)), 64-bit aligned
+// Buffers: 64-bit aligned
+static volatile enet_bd_t s_rxdesc[ETH_DESC_CNT] MG_A64;
+static volatile enet_bd_t s_txdesc[ETH_DESC_CNT] MG_A64;
+static uint8_t s_rxbuf[ETH_DESC_CNT][ETH_PKT_SIZE] MG_A64;
+static uint8_t s_txbuf[ETH_DESC_CNT][ETH_PKT_SIZE] MG_A64;
 static struct mg_tcpip_if *s_ifp;  // MIP interface
 
-enum { PHY_ADDR = 2, PHY_BCR = 0, PHY_BSR = 1, PHY_PC1R = 30, PHY_PC2R = 31 };
+enum { PHY_BCR = 0, PHY_BSR = 1, PHY_ID1 = 2, PHY_ID2 = 3 };
 
-static uint32_t eth_read_phy(uint8_t addr, uint8_t reg) {
-  ENET->EIR |= BIT(23);  // MII interrupt clear
+static uint16_t rt10xx_phy_read(uint8_t addr, uint8_t reg) {
+  ENET->EIR |= MG_BIT(23);  // MII interrupt clear
   ENET->MMFR = (1 << 30) | (2 << 28) | (addr << 23) | (reg << 18) | (2 << 16);
-  while ((ENET->EIR & BIT(23)) == 0) (void) 0;
+  while ((ENET->EIR & MG_BIT(23)) == 0) (void) 0;
   return ENET->MMFR & 0xffff;
 }
 
-static void eth_write_phy(uint8_t addr, uint8_t reg, uint32_t val) {
-  ENET->EIR |= BIT(23);  // MII interrupt clear
+static void rt10xx_phy_write(uint8_t addr, uint8_t reg, uint16_t val) {
+  ENET->EIR |= MG_BIT(23);  // MII interrupt clear
   ENET->MMFR =
       (1 << 30) | (1 << 28) | (addr << 23) | (reg << 18) | (2 << 16) | val;
-  while ((ENET->EIR & BIT(23)) == 0) (void) 0;
+  while ((ENET->EIR & MG_BIT(23)) == 0) (void) 0;
 }
 
 //  MDC clock is generated from IPS Bus clock (ipg_clk); as per 802.3,
@@ -8716,34 +8714,51 @@ static bool mg_tcpip_driver_rt1020_init(struct mg_tcpip_if *ifp) {
 
   // Init RX descriptors
   for (int i = 0; i < ETH_DESC_CNT; i++) {
-    s_rxdesc[i].control = BIT(15);                 // Own (E)
+    s_rxdesc[i].control = MG_BIT(15);              // Own (E)
     s_rxdesc[i].buffer = (uint32_t *) s_rxbuf[i];  // Point to data buffer
   }
-  s_rxdesc[ETH_DESC_CNT - 1].control |= BIT(13);  // Wrap last descriptor
+  s_rxdesc[ETH_DESC_CNT - 1].control |= MG_BIT(13);  // Wrap last descriptor
 
   // Init TX descriptors
   for (int i = 0; i < ETH_DESC_CNT; i++) {
-    s_txdesc[i].control = BIT(10);  // Own (TC)
+    //s_txdesc[i].control = MG_BIT(10);  // Own (TC)
     s_txdesc[i].buffer = (uint32_t *) s_txbuf[i];
   }
-  s_txdesc[ETH_DESC_CNT - 1].control |= BIT(13);  // Wrap last descriptor
+  s_txdesc[ETH_DESC_CNT - 1].control |= MG_BIT(13);  // Wrap last descriptor
 
-  ENET->ECR = BIT(0);                     // Software reset, disable
-  while ((ENET->ECR & BIT(0))) (void) 0;  // Wait until done
+  ENET->ECR = MG_BIT(0);                     // Software reset, disable
+  while ((ENET->ECR & MG_BIT(0))) (void) 0;  // Wait until done
 
   // Set MDC clock divider. If user told us the value, use it.
   // TODO(): Otherwise, guess (currently assuming max freq)
   int cr = (d == NULL || d->mdc_cr < 0) ? 24 : d->mdc_cr;
   ENET->MSCR = (1 << 8) | ((cr & 0x3f) << 1);  // HOLDTIME 2 clks
 
-  eth_write_phy(PHY_ADDR, PHY_BCR, BIT(15));  // Reset PHY
-  eth_write_phy(PHY_ADDR, PHY_BCR, BIT(12));  // Set autonegotiation
+  rt10xx_phy_write(d->phy_addr, PHY_BCR, MG_BIT(15));  // Reset PHY
+  rt10xx_phy_write(d->phy_addr, PHY_BCR, MG_BIT(12));  // Set autonegotiation
+
   // PHY: Enable 50 MHz external ref clock at XI (preserve defaults)
-  eth_write_phy(PHY_ADDR, PHY_PC2R, BIT(15) | BIT(8) | BIT(7));
+  uint16_t phy_id2 = rt10xx_phy_read(d->phy_addr, PHY_ID1);
+  uint16_t phy_id3 = rt10xx_phy_read(d->phy_addr, PHY_ID2);
+  MG_INFO(("PHY ID: %#04x %#04x", phy_id2, phy_id3));
+  // 2000 a140 - TI DP83825I
+  // 0007 c0fx - LAN8720
+  // 0022 1561 - KSZ8081RNB
+
+  if (phy_id2 == 0x22) {  // KSZ8081RNB, like EVK-RTxxxx boards
+    rt10xx_phy_write(d->phy_addr, 31,
+                     MG_BIT(15) | MG_BIT(8) | MG_BIT(7));  // PC2R
+  } else if (phy_id2 == 0x2000) {              // DP83825I, like Teensy4.1
+    rt10xx_phy_write(d->phy_addr, 23, 0x81);   // 50Mhz clock input
+    rt10xx_phy_write(d->phy_addr, 24, 0x280);  // LED status, active high
+  } else {                                     // Default to LAN8720
+    MG_INFO(("Defauling to LAN8720 PHY..."));
+  }
+
   // Select RMII mode, 100M, keep CRC, set max rx length, disable loop
-  ENET->RCR = (1518 << 16) | BIT(8) | BIT(2);
-  // ENET->RCR |= BIT(3);     // Receive all
-  ENET->TCR = BIT(2);  // Full-duplex
+  ENET->RCR = (1518 << 16) | MG_BIT(8) | MG_BIT(2);
+  // ENET->RCR |= MG_BIT(3);     // Receive all
+  ENET->TCR = MG_BIT(2);  // Full-duplex
   ENET->RDSR = (uint32_t) (uintptr_t) s_rxdesc;
   ENET->TDSR = (uint32_t) (uintptr_t) s_txdesc;
   ENET->MRBR[0] = ETH_PKT_SIZE;  // Same size for RX/TX buffers
@@ -8752,9 +8767,9 @@ static bool mg_tcpip_driver_rt1020_init(struct mg_tcpip_if *ifp) {
   ENET->PALR = (uint32_t) (ifp->mac[0] << 24U) |
                ((uint32_t) ifp->mac[1] << 16U) |
                ((uint32_t) ifp->mac[2] << 8U) | ifp->mac[3];
-  ENET->ECR = BIT(8) | BIT(1);  // Little-endian CPU, Enable
-  ENET->EIMR = BIT(25);         // Set interrupt mask
-  ENET->RDAR = BIT(24);         // Receive Descriptors have changed
+  ENET->ECR = MG_BIT(8) | MG_BIT(1);  // Little-endian CPU, Enable
+  ENET->EIMR = MG_BIT(25);            // Set interrupt mask
+  ENET->RDAR = MG_BIT(24);            // Receive Descriptors have changed
   return true;
 }
 
@@ -8764,18 +8779,20 @@ static uint32_t s_txno;
 static size_t mg_tcpip_driver_rt1020_tx(const void *buf, size_t len,
                                         struct mg_tcpip_if *ifp) {
   if (len > sizeof(s_txbuf[ETH_DESC_CNT])) {
-    MG_ERROR(("Frame too big, %ld", (long) len));
-    len = 0;  // fail
-  } else if ((s_txdesc[s_txno].control & BIT(15))) {
     ifp->nerr++;
+    MG_ERROR(("Frame too big, %ld", (long) len));
+    len = (size_t) -1;  // fail
+  } else if ((s_txdesc[s_txno].control & MG_BIT(15))) {
     MG_ERROR(("No descriptors available"));
-    len = 0;  // fail
+    len = 0;  // retry later
   } else {
+    MG_DEBUG(("sending %lu bytes, desc %u", len, s_txno));
     memcpy(s_txbuf[s_txno], buf, len);         // Copy data
     s_txdesc[s_txno].length = (uint16_t) len;  // Set data len
     // Table 37-34, R, L, TC (Ready, last, transmit CRC after frame
-    s_txdesc[s_txno].control |= (uint16_t) (BIT(15) | BIT(11) | BIT(10));
-    ENET->TDAR = BIT(24);  // Descriptor ring updated
+    s_txdesc[s_txno].control |=
+        (uint16_t) (MG_BIT(15) | MG_BIT(11) | MG_BIT(10));
+    ENET->TDAR |= MG_BIT(24);  // Descriptor ring updated
     if (++s_txno >= ETH_DESC_CNT) s_txno = 0;
   }
   (void) ifp;
@@ -8783,18 +8800,22 @@ static size_t mg_tcpip_driver_rt1020_tx(const void *buf, size_t len,
 }
 
 static bool mg_tcpip_driver_rt1020_up(struct mg_tcpip_if *ifp) {
-  uint32_t bsr = eth_read_phy(PHY_ADDR, PHY_BSR);
-  bool up = bsr & BIT(2) ? 1 : 0;
+  struct mg_tcpip_driver_rt1020_data *d =
+      (struct mg_tcpip_driver_rt1020_data *) ifp->driver_data;
+  uint32_t bsr = rt10xx_phy_read(d->phy_addr, PHY_BSR);
+  bool up = bsr & MG_BIT(2) ? 1 : 0;
   if ((ifp->state == MG_TCPIP_STATE_DOWN) && up) {  // link state just went up
-    uint32_t pc1r = eth_read_phy(PHY_ADDR, PHY_PC1R);
-    uint32_t tcr = ENET->TCR |= BIT(2);        // Full-duplex
-    uint32_t rcr = ENET->RCR &= ~BIT(9);       // 100M
-    if ((pc1r & 3) == 1) rcr |= BIT(9);        // 10M
-    if ((pc1r & BIT(2)) == 0) tcr &= ~BIT(2);  // Half-duplex
+    uint32_t tcr = ENET->TCR |= MG_BIT(2);          // Full-duplex
+    uint32_t rcr = ENET->RCR &= ~MG_BIT(9);         // 100M
+    if (rt10xx_phy_read(d->phy_addr, PHY_ID1)) {    // KSZ8081RNB ?
+      uint32_t pc1r = rt10xx_phy_read(d->phy_addr, 30);  // Read PC2R
+      if ((pc1r & 3) == 1) rcr |= MG_BIT(9);             // 10M
+      if ((pc1r & MG_BIT(2)) == 0) tcr &= ~MG_BIT(2);    // Half-duplex
+    }
     ENET->TCR = tcr;  // IRQ handler does not fiddle with these registers
     ENET->RCR = rcr;
-    MG_DEBUG(("Link is %uM %s-duplex", rcr & BIT(9) ? 10 : 100,
-              tcr & BIT(2) ? "full" : "half"));
+    MG_DEBUG(("Link is %uM %s-duplex", rcr & MG_BIT(9) ? 10 : 100,
+              tcr & MG_BIT(2) ? "full" : "half"));
   }
   return up;
 }
@@ -8802,21 +8823,21 @@ static bool mg_tcpip_driver_rt1020_up(struct mg_tcpip_if *ifp) {
 void ENET_IRQHandler(void);
 static uint32_t s_rxno;
 void ENET_IRQHandler(void) {
-  ENET->EIR = BIT(25);  // Ack IRQ
+  ENET->EIR = MG_BIT(25);  // Ack IRQ
   // Frame received, loop
   for (uint32_t i = 0; i < 10; i++) {  // read as they arrive but not forever
-    if (s_rxdesc[s_rxno].control & BIT(15)) break;  // exit when done
+    if (s_rxdesc[s_rxno].control & MG_BIT(15)) break;  // exit when done
     // skip partial/errored frames (Table 37-32)
-    if ((s_rxdesc[s_rxno].control & BIT(11)) &&
+    if ((s_rxdesc[s_rxno].control & MG_BIT(11)) &&
         !(s_rxdesc[s_rxno].control &
-          (BIT(5) | BIT(4) | BIT(2) | BIT(1) | BIT(0)))) {
+          (MG_BIT(5) | MG_BIT(4) | MG_BIT(2) | MG_BIT(1) | MG_BIT(0)))) {
       uint32_t len = (s_rxdesc[s_rxno].length);
       mg_tcpip_qwrite(s_rxbuf[s_rxno], len > 4 ? len - 4 : len, s_ifp);
     }
-    s_rxdesc[s_rxno].control |= BIT(15);
+    s_rxdesc[s_rxno].control |= MG_BIT(15);
     if (++s_rxno >= ETH_DESC_CNT) s_rxno = 0;
   }
-  ENET->RDAR = BIT(24);  // Receive Descriptors have changed
+  ENET->RDAR = MG_BIT(24);  // Receive Descriptors have changed
   // If b24 == 0, descriptors were exhausted and probably frames were dropped
 }
 
@@ -9066,19 +9087,6 @@ struct stm32_eth {
 #undef ETH
 #define ETH ((struct stm32_eth *) (uintptr_t) 0x40028000)
 
-#undef DSB
-#if defined(__CC_ARM)
-#define DSB() __dsb(0xF)
-#elif defined(__ARMCC_VERSION)
-#define DSB() __builtin_arm_dsb(0xF)
-#elif defined(__GNUC__) && defined(__arm__) && defined(__thumb__)
-#define DSB() asm("DSB 0xF")
-#elif defined(__ICCARM__)
-#define DSB() __iar_builtin_DSB()
-#else
-#define DSB()
-#endif
-
 #undef BIT
 #define BIT(x) ((uint32_t) 1 << (x))
 #define ETH_PKT_SIZE 1540  // Max frame size
@@ -9226,13 +9234,13 @@ static size_t mg_tcpip_driver_stm32_tx(const void *buf, size_t len,
     // printf("D0 %lx SR %lx\n", (long) s_txdesc[0][0], (long) ETH->DMASR);
     len = 0;  // All descriptors are busy, fail
   } else {
-    memcpy(s_txbuf[s_txno], buf, len);     // Copy data
-    s_txdesc[s_txno][1] = (uint32_t) len;  // Set data len
+    memcpy(s_txbuf[s_txno], buf, len);                  // Copy data
+    s_txdesc[s_txno][1] = (uint32_t) len;               // Set data len
     s_txdesc[s_txno][0] = BIT(20) | BIT(28) | BIT(29);  // Chain,FS,LS
     s_txdesc[s_txno][0] |= BIT(31);  // Set OWN bit - let DMA take over
     if (++s_txno >= ETH_DESC_CNT) s_txno = 0;
   }
-  DSB();                         // ensure descriptors have been written
+  MG_DSB();                      // ensure descriptors have been written
   ETH->DMASR = BIT(2) | BIT(5);  // Clear any prior TBUS/TUS
   ETH->DMATPDR = 0;              // and resume
   return len;

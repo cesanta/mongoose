@@ -4,6 +4,10 @@
 
 #include "mongoose.h"
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 #if !defined(HTTP_URL)
 #define HTTP_URL "http://0.0.0.0:8000"
 #endif
@@ -25,3 +29,7 @@ struct ui_event {
 };
 
 void web_init(struct mg_mgr *mgr);
+
+#ifdef __cplusplus
+}
+#endif

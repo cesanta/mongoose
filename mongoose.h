@@ -1068,6 +1068,18 @@ uint64_t mg_now(void);     // Return milliseconds since Epoch
 #define MG_ARM_ENABLE_IRQ()
 #endif
 
+#if defined(__CC_ARM)
+#define MG_DSB() __dsb(0xf)
+#elif defined(__ARMCC_VERSION)
+#define MG_DSB() __builtin_arm_dsb(0xf)
+#elif defined(__GNUC__) && defined(__arm__) && defined(__thumb__)
+#define MG_DSB() asm("DSB 0xf")
+#elif defined(__ICCARM__)
+#define MG_DSB() __iar_builtin_DSB()
+#else
+#define MG_DSB()
+#endif
+
 struct mg_addr;
 int mg_check_ip_acl(struct mg_str acl, struct mg_addr *remote_ip);
 
@@ -1837,8 +1849,10 @@ struct mg_tcpip_driver_rt1020_data {
   //    33 MHz         6
   //    40 MHz         7
   //    50 MHz         9
-  //    66 MHz        13  
+  //    66 MHz        13
   int mdc_cr;  // Valid values: -1 to 63
+
+  uint8_t phy_addr;  // PHY address
 };
 
 
