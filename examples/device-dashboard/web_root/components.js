@@ -86,7 +86,7 @@ export function Notification({ok, text, close}) {
       <div class="p-4">
         <div class="flex items-start">
           <div class="flex-shrink-0">
-            <${ok ? Icons.ok : Icons.failed} class="h-6 w-6 ${ok ? 'text-green-400' : 'text-red-400'}" />
+            <${ok ? Icons.ok : Icons.fail} class="h-6 w-6 ${ok ? 'text-green-400' : 'text-red-400'}" />
           <//>
           <div class="ml-3 w-0 flex-1 pt-0.5">
             <p class="text-sm font-medium text-gray-900">${text}</p>
