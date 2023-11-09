@@ -2,19 +2,15 @@ CFLAGS  = -W -Wall -Wextra -Werror -Wundef -Wshadow -Wdouble-promotion
 CFLAGS += -Wformat-truncation -fno-common -Wconversion -Wno-sign-conversion
 CFLAGS += -g3 -Os -ffunction-sections -fdata-sections
 CFLAGS += -I. -Icmsis_core/CMSIS/Core/Include -Icmsis_mcu/devices/MIMXRT1062 #-DCPU_MIMXRT1062DVL6B
-CFLAGS += -mcpu=cortex-m7 -mthumb -mfloat-abi=hard -mfpu=fpv5-d16
+CFLAGS += -mcpu=cortex-m7 -mthumb -mfloat-abi=hard -mfpu=fpv5-d16 $(CFLAGS_EXTRA)
 LDFLAGS ?= -Tlink_ram.ld -nostdlib -nostartfiles --specs nano.specs -lc -lgcc -Wl,--gc-sections -Wl,-Map=$@.map 
 
 SOURCES = main.c syscalls.c sysinit.c
 SOURCES += cmsis_mcu/devices/MIMXRT1062/gcc/startup_MIMXRT1062.S # NXP startup file. Compiler-dependent!
 CFLAGS += -D__ATOLLIC__ -D__STARTUP_CLEAR_BSS	# Make startup code work as expected
 
-# Mongoose-specific. See https://mongoose.ws/documentation/#build-options
+# Mongoose options are defined in mongoose_custom.h
 SOURCES += mongoose.c net.c packed_fs.c
-CFLAGS += -DMG_ENABLE_TCPIP=1 -DMG_ARCH=MG_ARCH_NEWLIB -DMG_ENABLE_CUSTOM_MILLIS=1
-CFLAGS += -DMG_ENABLE_CUSTOM_RANDOM=1 -DMG_ENABLE_PACKED_FS=1 -DMG_ENABLE_DRIVER_RT1020=1
-
-CFLAGS += $(CFLAGS_EXTRA)
 
 # Example specific build options. See README.md
 CFLAGS += -DHTTP_URL=\"http://0.0.0.0/\" -DHTTPS_URL=\"https://0.0.0.0/\"
