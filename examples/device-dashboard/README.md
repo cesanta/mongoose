@@ -23,4 +23,4 @@ The main dashboard page shows the interactive console
 ![](screenshots/dashboard.webp)
 
 
-<!-- See a detailed tutorial at https://mongoose.ws/tutorials/device-dashboard/ -->
+See a detailed tutorial at https://mongoose.ws/tutorials/device-dashboard/
