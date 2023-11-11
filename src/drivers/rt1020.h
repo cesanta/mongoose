@@ -11,6 +11,8 @@ struct mg_tcpip_driver_rt1020_data {
   //    33 MHz         6
   //    40 MHz         7
   //    50 MHz         9
-  //    66 MHz        13  
+  //    66 MHz        13
   int mdc_cr;  // Valid values: -1 to 63
+
+  uint8_t phy_addr;  // PHY address
 };

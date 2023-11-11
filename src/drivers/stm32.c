@@ -17,19 +17,6 @@ struct stm32_eth {
 #undef ETH
 #define ETH ((struct stm32_eth *) (uintptr_t) 0x40028000)
 
-#undef DSB
-#if defined(__CC_ARM)
-#define DSB() __dsb(0xF)
-#elif defined(__ARMCC_VERSION)
-#define DSB() __builtin_arm_dsb(0xF)
-#elif defined(__GNUC__) && defined(__arm__) && defined(__thumb__)
-#define DSB() asm("DSB 0xF")
-#elif defined(__ICCARM__)
-#define DSB() __iar_builtin_DSB()
-#else
-#define DSB()
-#endif
-
 #undef BIT
 #define BIT(x) ((uint32_t) 1 << (x))
 #define ETH_PKT_SIZE 1540  // Max frame size
@@ -177,13 +164,13 @@ static size_t mg_tcpip_driver_stm32_tx(const void *buf, size_t len,
     // printf("D0 %lx SR %lx\n", (long) s_txdesc[0][0], (long) ETH->DMASR);
     len = 0;  // All descriptors are busy, fail
   } else {
-    memcpy(s_txbuf[s_txno], buf, len);     // Copy data
-    s_txdesc[s_txno][1] = (uint32_t) len;  // Set data len
+    memcpy(s_txbuf[s_txno], buf, len);                  // Copy data
+    s_txdesc[s_txno][1] = (uint32_t) len;               // Set data len
     s_txdesc[s_txno][0] = BIT(20) | BIT(28) | BIT(29);  // Chain,FS,LS
     s_txdesc[s_txno][0] |= BIT(31);  // Set OWN bit - let DMA take over
     if (++s_txno >= ETH_DESC_CNT) s_txno = 0;
   }
-  DSB();                         // ensure descriptors have been written
+  MG_DSB();                      // ensure descriptors have been written
   ETH->DMASR = BIT(2) | BIT(5);  // Clear any prior TBUS/TUS
   ETH->DMATPDR = 0;              // and resume
   return len;

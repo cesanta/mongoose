@@ -51,7 +51,8 @@ static void server(void *args) {
 
   // Initialise Mongoose network stack
   ethernet_init();
-  struct mg_tcpip_driver_rt1020_data driver_data = {.mdc_cr = 24};
+  struct mg_tcpip_driver_rt1020_data driver_data = {.mdc_cr = 24,
+                                                    .phy_addr = 2};
   struct mg_tcpip_if mif = {.mac = GENERATE_LOCALLY_ADMINISTERED_MAC(),
                             // Uncomment below for static configuration:
                             // .ip = mg_htonl(MG_U32(192, 168, 0, 223)),
@@ -76,7 +77,7 @@ static void server(void *args) {
 }
 
 static void blinker(void *args) {
-  gpio_output(LED);               // Setup blue LED
+  gpio_output(LED);  // Setup blue LED
   for (;;) {
     gpio_toggle(LED);
     vTaskDelay(pdMS_TO_TICKS(BLINK_PERIOD_MS));
