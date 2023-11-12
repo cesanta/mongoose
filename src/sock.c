@@ -292,6 +292,7 @@ static void close_conn(struct mg_connection *c) {
 #if MG_ENABLE_EPOLL
     epoll_ctl(c->mgr->epoll_fd, EPOLL_CTL_DEL, FD(c), NULL);
 #endif
+    shutdown(FD(c), SHUT_RDWR);
     closesocket(FD(c));
 #if MG_ENABLE_FREERTOS_TCP
     FreeRTOS_FD_CLR(c->fd, c->mgr->ss, eSELECT_ALL);
