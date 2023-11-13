@@ -148,8 +148,8 @@ static size_t mg_tcpip_driver_rt1020_tx(const void *buf, size_t len,
     MG_ERROR(("No descriptors available"));
     len = 0;  // retry later
   } else {
-    MG_DEBUG(("sending %4lu, d=%u, c=%#hx %#lx %#lx", len, s_txno,
-              s_txdesc[s_txno].control, ENET->EIR, ENET->ATSTMP));
+    //MG_DEBUG(("sending %4lu, d=%u, c=%#hx %#lx %#lx", len, s_txno,
+    //          s_txdesc[s_txno].control, ENET->EIR, ENET->ATSTMP));
     memcpy(s_txbuf[s_txno], buf, len);         // Copy data
     s_txdesc[s_txno].length = (uint16_t) len;  // Set data len
     // Table 37-34, R, L, TC (Ready, last, transmit CRC after frame
