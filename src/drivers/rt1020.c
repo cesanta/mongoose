@@ -32,21 +32,21 @@ struct rt1020_enet {
 #define ETH_PKT_SIZE 1536  // Max frame size, 64-bit aligned
 #define ETH_DESC_CNT 4     // Descriptors count
 
-typedef struct {
+struct rt10xx_desc {
   uint16_t length;   // Data length
   uint16_t control;  // Control and status
   uint32_t *buffer;  // Data ptr
-} enet_bd_t;
+};
 
 // TODO(): handle these in a portable compiler-independent CMSIS-friendly way
-#define MG_A64 __attribute__((aligned((64U))))
+#define MG_64BIT_ALIGNED __attribute__((aligned((64U))))
 
 // Descriptors: in non-cached area (TODO(scaprile)), 64-bit aligned
 // Buffers: 64-bit aligned
-static volatile enet_bd_t s_rxdesc[ETH_DESC_CNT] MG_A64;
-static volatile enet_bd_t s_txdesc[ETH_DESC_CNT] MG_A64;
-static uint8_t s_rxbuf[ETH_DESC_CNT][ETH_PKT_SIZE] MG_A64;
-static uint8_t s_txbuf[ETH_DESC_CNT][ETH_PKT_SIZE] MG_A64;
+static volatile struct rt10xx_desc s_rxdesc[ETH_DESC_CNT] MG_64BIT_ALIGNED;
+static volatile struct rt10xx_desc s_txdesc[ETH_DESC_CNT] MG_64BIT_ALIGNED;
+static uint8_t s_rxbuf[ETH_DESC_CNT][ETH_PKT_SIZE] MG_64BIT_ALIGNED;
+static uint8_t s_txbuf[ETH_DESC_CNT][ETH_PKT_SIZE] MG_64BIT_ALIGNED;
 static struct mg_tcpip_if *s_ifp;  // MIP interface
 
 enum { PHY_BCR = 0, PHY_BSR = 1, PHY_ID1 = 2, PHY_ID2 = 3 };
@@ -82,7 +82,7 @@ static bool mg_tcpip_driver_rt1020_init(struct mg_tcpip_if *ifp) {
 
   // Init TX descriptors
   for (int i = 0; i < ETH_DESC_CNT; i++) {
-    //s_txdesc[i].control = MG_BIT(10);  // Own (TC)
+    // s_txdesc[i].control = MG_BIT(10);  // Own (TC)
     s_txdesc[i].buffer = (uint32_t *) s_txbuf[i];
   }
   s_txdesc[ETH_DESC_CNT - 1].control |= MG_BIT(13);  // Wrap last descriptor
@@ -99,17 +99,17 @@ static bool mg_tcpip_driver_rt1020_init(struct mg_tcpip_if *ifp) {
   rt10xx_phy_write(d->phy_addr, PHY_BCR, MG_BIT(12));  // Set autonegotiation
 
   // PHY: Enable 50 MHz external ref clock at XI (preserve defaults)
-  uint16_t phy_id2 = rt10xx_phy_read(d->phy_addr, PHY_ID1);
-  uint16_t phy_id3 = rt10xx_phy_read(d->phy_addr, PHY_ID2);
-  MG_INFO(("PHY ID: %#04x %#04x", phy_id2, phy_id3));
+  uint16_t phy_id1 = rt10xx_phy_read(d->phy_addr, PHY_ID1);
+  uint16_t phy_id2 = rt10xx_phy_read(d->phy_addr, PHY_ID2);
+  MG_INFO(("PHY ID: %#04x %#04x", phy_id1, phy_id2));
   // 2000 a140 - TI DP83825I
   // 0007 c0fx - LAN8720
   // 0022 1561 - KSZ8081RNB
 
-  if (phy_id2 == 0x22) {  // KSZ8081RNB, like EVK-RTxxxx boards
+  if (phy_id1 == 0x22) {  // KSZ8081RNB, like EVK-RTxxxx boards
     rt10xx_phy_write(d->phy_addr, 31,
                      MG_BIT(15) | MG_BIT(8) | MG_BIT(7));  // PC2R
-  } else if (phy_id2 == 0x2000) {              // DP83825I, like Teensy4.1
+  } else if (phy_id1 == 0x2000) {              // DP83825I, like Teensy4.1
     rt10xx_phy_write(d->phy_addr, 23, 0x81);   // 50Mhz clock input
     rt10xx_phy_write(d->phy_addr, 24, 0x280);  // LED status, active high
   } else {                                     // Default to LAN8720
@@ -131,14 +131,15 @@ static bool mg_tcpip_driver_rt1020_init(struct mg_tcpip_if *ifp) {
   ENET->ECR = MG_BIT(8) | MG_BIT(1);  // Little-endian CPU, Enable
   ENET->EIMR = MG_BIT(25);            // Set interrupt mask
   ENET->RDAR = MG_BIT(24);            // Receive Descriptors have changed
+  ENET->TDAR = MG_BIT(24);            // Transmit Descriptors have changed
+  // ENET->OPD = 0x10014;
   return true;
 }
 
 // Transmit frame
-static uint32_t s_txno;
-
 static size_t mg_tcpip_driver_rt1020_tx(const void *buf, size_t len,
                                         struct mg_tcpip_if *ifp) {
+  static int s_txno;  // Current descriptor index
   if (len > sizeof(s_txbuf[ETH_DESC_CNT])) {
     ifp->nerr++;
     MG_ERROR(("Frame too big, %ld", (long) len));
@@ -147,14 +148,18 @@ static size_t mg_tcpip_driver_rt1020_tx(const void *buf, size_t len,
     MG_ERROR(("No descriptors available"));
     len = 0;  // retry later
   } else {
-    MG_DEBUG(("sending %lu bytes, desc %u", len, s_txno));
+    MG_DEBUG(("sending %4lu, d=%u, c=%#hx %#lx %#lx", len, s_txno,
+              s_txdesc[s_txno].control, ENET->EIR, ENET->ATSTMP));
     memcpy(s_txbuf[s_txno], buf, len);         // Copy data
     s_txdesc[s_txno].length = (uint16_t) len;  // Set data len
     // Table 37-34, R, L, TC (Ready, last, transmit CRC after frame
     s_txdesc[s_txno].control |=
         (uint16_t) (MG_BIT(15) | MG_BIT(11) | MG_BIT(10));
-    ENET->TDAR |= MG_BIT(24);  // Descriptor ring updated
+    ENET->TDAR = MG_BIT(24);  // Descriptor ring updated
     if (++s_txno >= ETH_DESC_CNT) s_txno = 0;
+
+    // Artificial delay. TODO(cpq): find a proper way to transmit reliably
+    for (volatile int i = 0; i < 99999; i++) (void) 0;
   }
   (void) ifp;
   return len;
@@ -187,12 +192,12 @@ void ENET_IRQHandler(void) {
   ENET->EIR = MG_BIT(25);  // Ack IRQ
   // Frame received, loop
   for (uint32_t i = 0; i < 10; i++) {  // read as they arrive but not forever
-    if (s_rxdesc[s_rxno].control & MG_BIT(15)) break;  // exit when done
+    uint32_t r = s_rxdesc[s_rxno].control;
+    if (r & MG_BIT(15)) break;  // exit when done
     // skip partial/errored frames (Table 37-32)
-    if ((s_rxdesc[s_rxno].control & MG_BIT(11)) &&
-        !(s_rxdesc[s_rxno].control &
-          (MG_BIT(5) | MG_BIT(4) | MG_BIT(2) | MG_BIT(1) | MG_BIT(0)))) {
-      uint32_t len = (s_rxdesc[s_rxno].length);
+    if ((r & MG_BIT(11)) &&
+        !(r & (MG_BIT(5) | MG_BIT(4) | MG_BIT(2) | MG_BIT(1) | MG_BIT(0)))) {
+      size_t len = s_rxdesc[s_rxno].length;
       mg_tcpip_qwrite(s_rxbuf[s_rxno], len > 4 ? len - 4 : len, s_ifp);
     }
     s_rxdesc[s_rxno].control |= MG_BIT(15);

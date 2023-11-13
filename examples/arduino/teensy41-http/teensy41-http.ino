@@ -22,14 +22,17 @@ uint64_t mg_millis(void) {  // Let Mongoose use our uptime function
   return millis();
 }
 
-static void fn(struct mg_connection *c, int ev, void *ev_data, void *fn_data) {
+// Simple HTTP server that prints "x" characters followed by newline.
+// 100 characters is a default. Example curl request to print 2000 characters:
+// curl IP:8000 -d '{"n":2000}'
+static void simple_http_listener(struct mg_connection *c, int ev, void *ev_data,
+                                 void *fn_data) {
   if (ev == MG_EV_HTTP_MSG) {
     struct mg_http_message *hm = (struct mg_http_message *) ev_data;
     long n = mg_json_get_long(hm->body, "$.n", 100);
-    mg_xprintf(mg_pfn_iobuf, &c->send,
-               "HTTP/1.1 200 OK\r\nContent-Length: %ld\r\n\r\n", n + 1);
-    for (long i = 0; i < n; i++) mg_iobuf_add(&c->send, c->send.len, "x", 1);
-    mg_iobuf_add(&c->send, c->send.len, "\n", 1);
+    mg_printf(c, "HTTP/1.1 200 OK\r\nContent-Length: %ld\r\n\r\n", n + 1);
+    for (long i = 0; i < n; i++) mg_printf(c, "x");
+    mg_printf(c, "\n");
     c->is_resp = 0;
   }
 }
@@ -50,10 +53,13 @@ void setup() {
   MG_INFO(("Waiting for IP..."));
   while (mif.state != MG_TCPIP_STATE_READY) mg_mgr_poll(&mgr, 1);
 
+  // We start two HTTP listeners: one is a simple one on port 8000,
+  // with event handler function defined above - simple_http_listener
   // See https://mongoose.ws/documentation/#2-minute-integration-guide
+  // Another listener is for a more sophisticated Web device dashboard
   MG_INFO(("Starting web dashboard"));
-  web_init(&mgr);
-  mg_http_listen(&mgr, "http://0.0.0.0:8000", fn, NULL);
+  mg_http_listen(&mgr, "http://0.0.0.0:8000", simple_http_listener, NULL);
+  web_init(&mgr);  // Sophisticated Web UI, see net.c :: fn()
 }
 
 void loop() {
@@ -65,10 +71,7 @@ void loop() {
   mg_mgr_poll(&mgr, 1);  // Process network events
 }
 
-extern "C" {
-extern void (*volatile _VectorsRam[176])(void);
-extern void ENET_IRQHandler(void);
-};
+extern "C" void ENET_IRQHandler(void);
 
 #define CLRSET(reg, clear, set) ((reg) = ((reg) & ~(clear)) | (set))
 #define RMII_PAD_INPUT_PULLDOWN 0x30E9
@@ -132,6 +135,6 @@ void ethernet_init(void) {
   delay(1);
 
   // Setup IRQ handler
-  _VectorsRam[16 + IRQ_ENET] = ENET_IRQHandler;
+  attachInterruptVector(IRQ_ENET, ENET_IRQHandler);
   NVIC_ENABLE_IRQ(IRQ_ENET);
 }

@@ -18,7 +18,7 @@ micropython:
 	$(DOCKER) git clone https://github.com/micropython/micropython.git
 
 clean:
-	$(DOCKER) rm -rf micropython
+	test -d micropython && $(DOCKER) rm -rf micropython || true
 
 flash:
 flash: DA = --device $(PORT)
