@@ -65,6 +65,12 @@ static void rt10xx_phy_write(uint8_t addr, uint8_t reg, uint16_t val) {
   while ((ENET->EIR & MG_BIT(23)) == 0) (void) 0;
 }
 
+static uint32_t rt10xx_phy_id(uint8_t addr) {
+  uint16_t phy_id1 = rt10xx_phy_read(addr, PHY_ID1);
+  uint16_t phy_id2 = rt10xx_phy_read(addr, PHY_ID2);
+  return (uint32_t) phy_id1 << 16 | phy_id2;
+}
+
 //  MDC clock is generated from IPS Bus clock (ipg_clk); as per 802.3,
 //  it must not exceed 2.5MHz
 // The PHY receives the PLL6-generated 50MHz clock
@@ -99,21 +105,20 @@ static bool mg_tcpip_driver_rt1020_init(struct mg_tcpip_if *ifp) {
   rt10xx_phy_write(d->phy_addr, PHY_BCR, MG_BIT(12));  // Set autonegotiation
 
   // PHY: Enable 50 MHz external ref clock at XI (preserve defaults)
-  uint16_t phy_id1 = rt10xx_phy_read(d->phy_addr, PHY_ID1);
-  uint16_t phy_id2 = rt10xx_phy_read(d->phy_addr, PHY_ID2);
-  MG_INFO(("PHY ID: %#04x %#04x", phy_id1, phy_id2));
+  uint32_t id = rt10xx_phy_id(d->phy_addr);
+  MG_INFO(("PHY ID: %#04x %#04x", (uint16_t) (id >> 16), (uint16_t) id));
   // 2000 a140 - TI DP83825I
   // 0007 c0fx - LAN8720
   // 0022 1561 - KSZ8081RNB
 
-  if (phy_id1 == 0x22) {  // KSZ8081RNB, like EVK-RTxxxx boards
+  if ((id & 0xffff0000) == 0x220000) {  // KSZ8081RNB, like EVK-RTxxxx boards
     rt10xx_phy_write(d->phy_addr, 31,
                      MG_BIT(15) | MG_BIT(8) | MG_BIT(7));  // PC2R
-  } else if (phy_id1 == 0x2000) {              // DP83825I, like Teensy4.1
-    rt10xx_phy_write(d->phy_addr, 23, 0x81);   // 50Mhz clock input
-    rt10xx_phy_write(d->phy_addr, 24, 0x280);  // LED status, active high
-  } else {                                     // Default to LAN8720
-    MG_INFO(("Defauling to LAN8720 PHY..."));
+  } else if ((id & 0xffff0000) == 0x20000000) {  // DP83825I, like Teensy4.1
+    rt10xx_phy_write(d->phy_addr, 23, 0x81);     // 50MHz clock input
+    rt10xx_phy_write(d->phy_addr, 24, 0x280);    // LED status, active high
+  } else {                                       // Default to LAN8720
+    MG_INFO(("Defaulting to LAN8720 PHY..."));   // TODO()
   }
 
   // Select RMII mode, 100M, keep CRC, set max rx length, disable loop
@@ -148,8 +153,6 @@ static size_t mg_tcpip_driver_rt1020_tx(const void *buf, size_t len,
     MG_ERROR(("No descriptors available"));
     len = 0;  // retry later
   } else {
-    //MG_DEBUG(("sending %4lu, d=%u, c=%#hx %#lx %#lx", len, s_txno,
-    //          s_txdesc[s_txno].control, ENET->EIR, ENET->ATSTMP));
     memcpy(s_txbuf[s_txno], buf, len);         // Copy data
     s_txdesc[s_txno].length = (uint16_t) len;  // Set data len
     // Table 37-34, R, L, TC (Ready, last, transmit CRC after frame
@@ -157,9 +160,6 @@ static size_t mg_tcpip_driver_rt1020_tx(const void *buf, size_t len,
         (uint16_t) (MG_BIT(15) | MG_BIT(11) | MG_BIT(10));
     ENET->TDAR = MG_BIT(24);  // Descriptor ring updated
     if (++s_txno >= ETH_DESC_CNT) s_txno = 0;
-
-    // Artificial delay. TODO(cpq): find a proper way to transmit reliably
-    for (volatile int i = 0; i < 99999; i++) (void) 0;
   }
   (void) ifp;
   return len;
@@ -173,10 +173,19 @@ static bool mg_tcpip_driver_rt1020_up(struct mg_tcpip_if *ifp) {
   if ((ifp->state == MG_TCPIP_STATE_DOWN) && up) {  // link state just went up
     uint32_t tcr = ENET->TCR |= MG_BIT(2);          // Full-duplex
     uint32_t rcr = ENET->RCR &= ~MG_BIT(9);         // 100M
-    if (rt10xx_phy_read(d->phy_addr, PHY_ID1)) {    // KSZ8081RNB ?
-      uint32_t pc1r = rt10xx_phy_read(d->phy_addr, 30);  // Read PC2R
-      if ((pc1r & 3) == 1) rcr |= MG_BIT(9);             // 10M
-      if ((pc1r & MG_BIT(2)) == 0) tcr &= ~MG_BIT(2);    // Half-duplex
+    uint32_t phy_id = rt10xx_phy_id(d->phy_addr);
+    if ((phy_id & 0xffff0000) == 0x220000) {               // KSZ8081RNB
+      uint16_t pc1r = rt10xx_phy_read(d->phy_addr, 30);    // Read PC1R
+      if ((pc1r & 3) == 1) rcr |= MG_BIT(9);               // 10M
+      if ((pc1r & MG_BIT(2)) == 0) tcr &= ~MG_BIT(2);      // Half-duplex
+    } else if ((phy_id & 0xffff0000) == 0x20000000) {      // DP83825I
+      uint16_t physts = rt10xx_phy_read(d->phy_addr, 16);  // Read PHYSTS
+      if (physts & 1) rcr |= MG_BIT(9);                    // 10M
+      if ((physts & MG_BIT(2)) == 0) tcr &= ~MG_BIT(2);    // Half-duplex
+    } else {                                               // Default to LAN8720
+      uint16_t scsr = rt10xx_phy_read(d->phy_addr, 31);    // Read CSCR
+      if ((scsr & MG_BIT(3)) == 0) rcr |= MG_BIT(9);       // 10M
+      if ((scsr & MG_BIT(4)) == 0) tcr &= ~MG_BIT(2);      // Half-duplex
     }
     ENET->TCR = tcr;  // IRQ handler does not fiddle with these registers
     ENET->RCR = rcr;
