@@ -8641,13 +8641,12 @@ static size_t cmsis_rx(void *buf, size_t buflen, struct mg_tcpip_if *ifp) {
 #endif
 
 #ifdef MG_ENABLE_LINES
-#line 1 "src/drivers/rt1020.c"
+#line 1 "src/drivers/imxrt.c"
 #endif
 
 
-#if MG_ENABLE_TCPIP && defined(MG_ENABLE_DRIVER_RT1020) && \
-    MG_ENABLE_DRIVER_RT1020
-struct rt1020_enet {
+#if MG_ENABLE_TCPIP && defined(MG_ENABLE_DRIVER_IMXRT) && MG_ENABLE_DRIVER_IMXRT
+struct imxrt_enet {
   volatile uint32_t RESERVED0, EIR, EIMR, RESERVED1, RDAR, TDAR, RESERVED2[3],
       ECR, RESERVED3[6], MMFR, MSCR, RESERVED4[7], MIBC, RESERVED5[7], RCR,
       RESERVED6[15], TCR, RESERVED7[7], PALR, PAUR, OPD, TXIC0, TXIC1, TXIC2,
@@ -8672,12 +8671,12 @@ struct rt1020_enet {
 };
 
 #undef ENET
-#define ENET ((struct rt1020_enet *) (uintptr_t) 0x402D8000U)
+#define ENET ((struct imxrt_enet *) (uintptr_t) 0x402D8000U)
 
 #define ETH_PKT_SIZE 1536  // Max frame size, 64-bit aligned
 #define ETH_DESC_CNT 4     // Descriptors count
 
-struct rt10xx_desc {
+struct enet_desc {
   uint16_t length;   // Data length
   uint16_t control;  // Control and status
   uint32_t *buffer;  // Data ptr
@@ -8688,40 +8687,40 @@ struct rt10xx_desc {
 
 // Descriptors: in non-cached area (TODO(scaprile)), 64-bit aligned
 // Buffers: 64-bit aligned
-static volatile struct rt10xx_desc s_rxdesc[ETH_DESC_CNT] MG_64BIT_ALIGNED;
-static volatile struct rt10xx_desc s_txdesc[ETH_DESC_CNT] MG_64BIT_ALIGNED;
+static volatile struct enet_desc s_rxdesc[ETH_DESC_CNT] MG_64BIT_ALIGNED;
+static volatile struct enet_desc s_txdesc[ETH_DESC_CNT] MG_64BIT_ALIGNED;
 static uint8_t s_rxbuf[ETH_DESC_CNT][ETH_PKT_SIZE] MG_64BIT_ALIGNED;
 static uint8_t s_txbuf[ETH_DESC_CNT][ETH_PKT_SIZE] MG_64BIT_ALIGNED;
 static struct mg_tcpip_if *s_ifp;  // MIP interface
 
 enum { PHY_BCR = 0, PHY_BSR = 1, PHY_ID1 = 2, PHY_ID2 = 3 };
 
-static uint16_t rt10xx_phy_read(uint8_t addr, uint8_t reg) {
+static uint16_t enet_phy_read(uint8_t addr, uint8_t reg) {
   ENET->EIR |= MG_BIT(23);  // MII interrupt clear
   ENET->MMFR = (1 << 30) | (2 << 28) | (addr << 23) | (reg << 18) | (2 << 16);
   while ((ENET->EIR & MG_BIT(23)) == 0) (void) 0;
   return ENET->MMFR & 0xffff;
 }
 
-static void rt10xx_phy_write(uint8_t addr, uint8_t reg, uint16_t val) {
+static void enet_phy_write(uint8_t addr, uint8_t reg, uint16_t val) {
   ENET->EIR |= MG_BIT(23);  // MII interrupt clear
   ENET->MMFR =
       (1 << 30) | (1 << 28) | (addr << 23) | (reg << 18) | (2 << 16) | val;
   while ((ENET->EIR & MG_BIT(23)) == 0) (void) 0;
 }
 
-static uint32_t rt10xx_phy_id(uint8_t addr) {
-  uint16_t phy_id1 = rt10xx_phy_read(addr, PHY_ID1);
-  uint16_t phy_id2 = rt10xx_phy_read(addr, PHY_ID2);
+static uint32_t enet_phy_id(uint8_t addr) {
+  uint16_t phy_id1 = enet_phy_read(addr, PHY_ID1);
+  uint16_t phy_id2 = enet_phy_read(addr, PHY_ID2);
   return (uint32_t) phy_id1 << 16 | phy_id2;
 }
 
 //  MDC clock is generated from IPS Bus clock (ipg_clk); as per 802.3,
 //  it must not exceed 2.5MHz
 // The PHY receives the PLL6-generated 50MHz clock
-static bool mg_tcpip_driver_rt1020_init(struct mg_tcpip_if *ifp) {
-  struct mg_tcpip_driver_rt1020_data *d =
-      (struct mg_tcpip_driver_rt1020_data *) ifp->driver_data;
+static bool mg_tcpip_driver_imxrt_init(struct mg_tcpip_if *ifp) {
+  struct mg_tcpip_driver_imxrt_data *d =
+      (struct mg_tcpip_driver_imxrt_data *) ifp->driver_data;
   s_ifp = ifp;
 
   // Init RX descriptors
@@ -8746,22 +8745,22 @@ static bool mg_tcpip_driver_rt1020_init(struct mg_tcpip_if *ifp) {
   int cr = (d == NULL || d->mdc_cr < 0) ? 24 : d->mdc_cr;
   ENET->MSCR = (1 << 8) | ((cr & 0x3f) << 1);  // HOLDTIME 2 clks
 
-  rt10xx_phy_write(d->phy_addr, PHY_BCR, MG_BIT(15));  // Reset PHY
-  rt10xx_phy_write(d->phy_addr, PHY_BCR, MG_BIT(12));  // Set autonegotiation
+  enet_phy_write(d->phy_addr, PHY_BCR, MG_BIT(15));  // Reset PHY
+  enet_phy_write(d->phy_addr, PHY_BCR, MG_BIT(12));  // Set autonegotiation
 
   // PHY: Enable 50 MHz external ref clock at XI (preserve defaults)
-  uint32_t id = rt10xx_phy_id(d->phy_addr);
+  uint32_t id = enet_phy_id(d->phy_addr);
   MG_INFO(("PHY ID: %#04x %#04x", (uint16_t) (id >> 16), (uint16_t) id));
   // 2000 a140 - TI DP83825I
   // 0007 c0fx - LAN8720
   // 0022 1561 - KSZ8081RNB
 
   if ((id & 0xffff0000) == 0x220000) {  // KSZ8081RNB, like EVK-RTxxxx boards
-    rt10xx_phy_write(d->phy_addr, 31,
-                     MG_BIT(15) | MG_BIT(8) | MG_BIT(7));  // PC2R
+    enet_phy_write(d->phy_addr, 31,
+                   MG_BIT(15) | MG_BIT(8) | MG_BIT(7));  // PC2R
   } else if ((id & 0xffff0000) == 0x20000000) {  // DP83825I, like Teensy4.1
-    rt10xx_phy_write(d->phy_addr, 23, 0x81);     // 50MHz clock input
-    rt10xx_phy_write(d->phy_addr, 24, 0x280);    // LED status, active high
+    enet_phy_write(d->phy_addr, 23, 0x81);       // 50MHz clock input
+    enet_phy_write(d->phy_addr, 24, 0x280);      // LED status, active high
   } else {                                       // Default to LAN8720
     MG_INFO(("Defaulting to LAN8720 PHY..."));   // TODO()
   }
@@ -8787,8 +8786,8 @@ static bool mg_tcpip_driver_rt1020_init(struct mg_tcpip_if *ifp) {
 }
 
 // Transmit frame
-static size_t mg_tcpip_driver_rt1020_tx(const void *buf, size_t len,
-                                        struct mg_tcpip_if *ifp) {
+static size_t mg_tcpip_driver_imxrt_tx(const void *buf, size_t len,
+                                       struct mg_tcpip_if *ifp) {
   static int s_txno;  // Current descriptor index
   if (len > sizeof(s_txbuf[ETH_DESC_CNT])) {
     ifp->nerr++;
@@ -8810,27 +8809,30 @@ static size_t mg_tcpip_driver_rt1020_tx(const void *buf, size_t len,
   return len;
 }
 
-static bool mg_tcpip_driver_rt1020_up(struct mg_tcpip_if *ifp) {
-  struct mg_tcpip_driver_rt1020_data *d =
-      (struct mg_tcpip_driver_rt1020_data *) ifp->driver_data;
-  uint32_t bsr = rt10xx_phy_read(d->phy_addr, PHY_BSR);
+static bool mg_tcpip_driver_imxrt_up(struct mg_tcpip_if *ifp) {
+  struct mg_tcpip_driver_imxrt_data *d =
+      (struct mg_tcpip_driver_imxrt_data *) ifp->driver_data;
+  uint32_t bsr = enet_phy_read(d->phy_addr, PHY_BSR);
   bool up = bsr & MG_BIT(2) ? 1 : 0;
   if ((ifp->state == MG_TCPIP_STATE_DOWN) && up) {  // link state just went up
-    uint32_t tcr = ENET->TCR | MG_BIT(2);           // Full-duplex
-    uint32_t rcr = ENET->RCR & ~MG_BIT(9);          // 100M
-    uint32_t phy_id = rt10xx_phy_id(d->phy_addr);
-    if ((phy_id & 0xffff0000) == 0x220000) {               // KSZ8081RNB
-      uint16_t pc1r = rt10xx_phy_read(d->phy_addr, 30);    // Read PC1R
-      if ((pc1r & 3) == 1) rcr |= MG_BIT(9);               // 10M
-      if ((pc1r & MG_BIT(2)) == 0) tcr &= ~MG_BIT(2);      // Half-duplex
-    } else if ((phy_id & 0xffff0000) == 0x20000000) {      // DP83825I
-      uint16_t physts = rt10xx_phy_read(d->phy_addr, 16);  // Read PHYSTS
-      if (physts & MG_BIT(1)) rcr |= MG_BIT(9);            // 10M
-      if ((physts & MG_BIT(2)) == 0) tcr &= ~MG_BIT(2);    // Half-duplex
-    } else {                                               // Default to LAN8720
-      uint16_t scsr = rt10xx_phy_read(d->phy_addr, 31);    // Read CSCR
-      if ((scsr & MG_BIT(3)) == 0) rcr |= MG_BIT(9);       // 10M
-      if ((scsr & MG_BIT(4)) == 0) tcr &= ~MG_BIT(2);      // Half-duplex
+    // tmp = reg with flags set to the most likely situation: 100M full-duplex
+    // if(link is slow or half) set flags otherwise
+    // reg = tmp
+    uint32_t tcr = ENET->TCR | MG_BIT(2);   // Full-duplex
+    uint32_t rcr = ENET->RCR & ~MG_BIT(9);  // 100M
+    uint32_t phy_id = enet_phy_id(d->phy_addr);
+    if ((phy_id & 0xffff0000) == 0x220000) {             // KSZ8081RNB
+      uint16_t pc1r = enet_phy_read(d->phy_addr, 30);    // Read PC1R
+      if ((pc1r & 3) == 1) rcr |= MG_BIT(9);             // 10M
+      if ((pc1r & MG_BIT(2)) == 0) tcr &= ~MG_BIT(2);    // Half-duplex
+    } else if ((phy_id & 0xffff0000) == 0x20000000) {    // DP83825I
+      uint16_t physts = enet_phy_read(d->phy_addr, 16);  // Read PHYSTS
+      if (physts & MG_BIT(1)) rcr |= MG_BIT(9);          // 10M
+      if ((physts & MG_BIT(2)) == 0) tcr &= ~MG_BIT(2);  // Half-duplex
+    } else {                                             // Default to LAN8720
+      uint16_t scsr = enet_phy_read(d->phy_addr, 31);    // Read CSCR
+      if ((scsr & MG_BIT(3)) == 0) rcr |= MG_BIT(9);     // 10M
+      if ((scsr & MG_BIT(4)) == 0) tcr &= ~MG_BIT(2);    // Half-duplex
     }
     ENET->TCR = tcr;  // IRQ handler does not fiddle with these registers
     ENET->RCR = rcr;
@@ -8861,9 +8863,9 @@ void ENET_IRQHandler(void) {
   // If b24 == 0, descriptors were exhausted and probably frames were dropped
 }
 
-struct mg_tcpip_driver mg_tcpip_driver_rt1020 = {
-    mg_tcpip_driver_rt1020_init, mg_tcpip_driver_rt1020_tx, NULL,
-    mg_tcpip_driver_rt1020_up};
+struct mg_tcpip_driver mg_tcpip_driver_imxrt = {mg_tcpip_driver_imxrt_init,
+                                                mg_tcpip_driver_imxrt_tx, NULL,
+                                                mg_tcpip_driver_imxrt_up};
 
 #endif
 
@@ -9273,6 +9275,9 @@ static bool mg_tcpip_driver_stm32_up(struct mg_tcpip_if *ifp) {
   bool up = bsr & BIT(2) ? 1 : 0;
   if ((ifp->state == MG_TCPIP_STATE_DOWN) && up) {  // link state just went up
     uint32_t scsr = eth_read_phy(PHY_ADDR, PHY_CSCR);
+    // tmp = reg with flags set to the most likely situation: 100M full-duplex
+    // if(link is slow or half) set flags otherwise
+    // reg = tmp
     uint32_t maccr = ETH->MACCR | BIT(14) | BIT(11);  // 100M, Full-duplex
     if ((scsr & BIT(3)) == 0) maccr &= ~BIT(14);      // 10M
     if ((scsr & BIT(4)) == 0) maccr &= ~BIT(11);      // Half-duplex
@@ -9550,6 +9555,9 @@ static bool mg_tcpip_driver_stm32h_up(struct mg_tcpip_if *ifp) {
   bool up = bsr & BIT(2) ? 1 : 0;
   if ((ifp->state == MG_TCPIP_STATE_DOWN) && up) {  // link state just went up
     uint32_t scsr = eth_read_phy(PHY_ADDR, PHY_CSCR);
+    // tmp = reg with flags set to the most likely situation: 100M full-duplex
+    // if(link is slow or half) set flags otherwise
+    // reg = tmp
     uint32_t maccr = ETH->MACCR | BIT(14) | BIT(13);  // 100M, Full-duplex
     if ((scsr & BIT(3)) == 0) maccr &= ~BIT(14);      // 10M
     if ((scsr & BIT(4)) == 0) maccr &= ~BIT(13);      // Half-duplex
@@ -9806,6 +9814,9 @@ static bool mg_tcpip_driver_tm4c_up(struct mg_tcpip_if *ifp) {
   bool up = (bmsr & BIT(2)) ? 1 : 0;
   if ((ifp->state == MG_TCPIP_STATE_DOWN) && up) {  // link state just went up
     uint32_t sts = emac_read_phy(EPHY_ADDR, EPHYSTS);
+    // tmp = reg with flags set to the most likely situation: 100M full-duplex
+    // if(link is slow or half) set flags otherwise
+    // reg = tmp
     uint32_t emaccfg = EMAC->EMACCFG | BIT(14) | BIT(11);  // 100M, Full-duplex
     if (sts & BIT(1)) emaccfg &= ~BIT(14);                 // 10M
     if ((sts & BIT(2)) == 0) emaccfg &= ~BIT(11);          // Half-duplex

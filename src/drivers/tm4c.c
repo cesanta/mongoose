@@ -212,6 +212,9 @@ static bool mg_tcpip_driver_tm4c_up(struct mg_tcpip_if *ifp) {
   bool up = (bmsr & BIT(2)) ? 1 : 0;
   if ((ifp->state == MG_TCPIP_STATE_DOWN) && up) {  // link state just went up
     uint32_t sts = emac_read_phy(EPHY_ADDR, EPHYSTS);
+    // tmp = reg with flags set to the most likely situation: 100M full-duplex
+    // if(link is slow or half) set flags otherwise
+    // reg = tmp
     uint32_t emaccfg = EMAC->EMACCFG | BIT(14) | BIT(11);  // 100M, Full-duplex
     if (sts & BIT(1)) emaccfg &= ~BIT(14);                 // 10M
     if ((sts & BIT(2)) == 0) emaccfg &= ~BIT(11);          // Half-duplex

@@ -175,7 +175,7 @@ static bool mg_tcpip_driver_same54_up(struct mg_tcpip_if *ifp) {
     bool fd = bcr & PHY_BCR_DUPLEX_MODE_Msk ? 1 : 0;
     bool spd = bcr & PHY_BCR_SPEED_Msk ? 1 : 0;
     GMAC_REGS->GMAC_NCFGR =
-        GMAC_REGS->GMAC_NCFGR & ~(GMAC_NCFGR_SPD_Msk | PHY_BCR_SPEED_Msk) |
+        (GMAC_REGS->GMAC_NCFGR & ~(GMAC_NCFGR_SPD_Msk | PHY_BCR_SPEED_Msk)) |
         GMAC_NCFGR_SPD(spd) | GMAC_NCFGR_FD(fd);
   }
 
