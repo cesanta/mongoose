@@ -8816,8 +8816,8 @@ static bool mg_tcpip_driver_rt1020_up(struct mg_tcpip_if *ifp) {
   uint32_t bsr = rt10xx_phy_read(d->phy_addr, PHY_BSR);
   bool up = bsr & MG_BIT(2) ? 1 : 0;
   if ((ifp->state == MG_TCPIP_STATE_DOWN) && up) {  // link state just went up
-    uint32_t tcr = ENET->TCR |= MG_BIT(2);          // Full-duplex
-    uint32_t rcr = ENET->RCR &= ~MG_BIT(9);         // 100M
+    uint32_t tcr = ENET->TCR | MG_BIT(2);           // Full-duplex
+    uint32_t rcr = ENET->RCR & ~MG_BIT(9);          // 100M
     uint32_t phy_id = rt10xx_phy_id(d->phy_addr);
     if ((phy_id & 0xffff0000) == 0x220000) {               // KSZ8081RNB
       uint16_t pc1r = rt10xx_phy_read(d->phy_addr, 30);    // Read PC1R
@@ -8825,7 +8825,7 @@ static bool mg_tcpip_driver_rt1020_up(struct mg_tcpip_if *ifp) {
       if ((pc1r & MG_BIT(2)) == 0) tcr &= ~MG_BIT(2);      // Half-duplex
     } else if ((phy_id & 0xffff0000) == 0x20000000) {      // DP83825I
       uint16_t physts = rt10xx_phy_read(d->phy_addr, 16);  // Read PHYSTS
-      if (physts & 1) rcr |= MG_BIT(9);                    // 10M
+      if (physts & MG_BIT(1)) rcr |= MG_BIT(9);            // 10M
       if ((physts & MG_BIT(2)) == 0) tcr &= ~MG_BIT(2);    // Half-duplex
     } else {                                               // Default to LAN8720
       uint16_t scsr = rt10xx_phy_read(d->phy_addr, 31);    // Read CSCR
