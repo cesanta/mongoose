@@ -16,11 +16,17 @@ CFLAGS += -DHTTP_URL=\"http://0.0.0.0/\" -DHTTPS_URL=\"https://0.0.0.0/\"
 
 ifeq ($(OS),Windows_NT)
   RM = cmd /C del /Q /F /S
+  SYMLINK = cmd /C mklink /H
 else
   RM = rm -rf
+  SYMLINK = ln -sf
 endif
 
 all build example: firmware.bin
+
+device_dashboard: clean_bin device_dashboard_net firmware.bin
+
+mqtt_dashboard: clean_bin mqtt_dashboard_net firmware.bin
 
 firmware.bin: firmware.elf
 	arm-none-eabi-objcopy -O binary $< $@
@@ -44,6 +50,17 @@ CFLAGS += -DMG_TLS=MG_TLS_MBED -Wno-conversion -Imbedtls/include
 CFLAGS += -DMBEDTLS_CONFIG_FILE=\"mbedtls_config.h\" mbedtls/library/*.c
 firmware.elf: mbedtls
 endif
+
+device_dashboard_net:
+	$(SYMLINK) ../../device-dashboard/net.c net.c
+	$(SYMLINK) ../../device-dashboard/net.h net.h
+
+mqtt_dashboard_net:
+	$(SYMLINK) ../../mqtt-dashboard/device/net.c net.c
+	$(SYMLINK) ../../mqtt-dashboard/device/net.h net.h
+
+clean_bin:
+	$(RM) firmware.elf firmware.bin
 
 # Automated remote test. Requires env variable VCON_API_KEY set. See https://vcon.io/automated-firmware-tests/
 DEVICE_URL ?= https://dash.vcon.io/api/v3/devices/10
