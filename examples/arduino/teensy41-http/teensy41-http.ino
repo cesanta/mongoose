@@ -22,18 +22,27 @@ uint64_t mg_millis(void) {  // Let Mongoose use our uptime function
   return millis();
 }
 
-// Simple HTTP server that prints "x" characters followed by newline.
-// 100 characters is a default. Example curl request to print 2000 characters:
-// curl IP:8000 -d '{"n":2000}'
-static void simple_http_listener(struct mg_connection *c, int ev, void *ev_data,
-                                 void *fn_data) {
+// Simple HTTP server that runs on port 8000
+// Mongoose event handler function, gets called by the mg_mgr_poll()
+// See https://mongoose.ws/documentation/#2-minute-integration-guide
+static void simple_http_listener(struct mg_connection *c, int ev, void *ev_data, void *fn_data) {
   if (ev == MG_EV_HTTP_MSG) {
+    // The MG_EV_HTTP_MSG event means HTTP request. `hm` holds parsed request,
+    // see https://mongoose.ws/documentation/#struct-mg_http_message
     struct mg_http_message *hm = (struct mg_http_message *) ev_data;
-    long n = mg_json_get_long(hm->body, "$.n", 100);
-    mg_printf(c, "HTTP/1.1 200 OK\r\nContent-Length: %ld\r\n\r\n", n + 1);
-    for (long i = 0; i < n; i++) mg_printf(c, "x");
-    mg_printf(c, "\n");
-    c->is_resp = 0;
+
+    // If the requested URI is "/api/hi", send a simple JSON response back
+    if (mg_http_match_uri(hm, "/api/hi")) {
+      // Use mg_http_reply() API function to generate JSON response. It adds a
+      // Content-Length header automatically. In the response, we show
+      // the requested URI and HTTP body:
+      mg_http_reply(c, 200, "", "{%m:%m,%m:%m}\n",  // See mg_snprintf doc
+                    MG_ESC("uri"), mg_print_esc, hm->uri.len, hm->uri.ptr,
+                    MG_ESC("body"), mg_print_esc, hm->body.len, hm->body.ptr);
+    } else {
+      // For all other URIs, serve some static content
+      mg_http_reply(c, 200, "", "<html>millis: %lu</html>", millis());
+    }
   }
 }
 
