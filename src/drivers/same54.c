@@ -81,7 +81,7 @@ int get_clock_rate(struct mg_tcpip_driver_same54_data *d) {
     }
 
     mclk /= div;
-    uint8_t crs[] = {0, 1, 2, 3, 4, 5};          // GMAC->NCFGR::CLK values
+    uint8_t crs[] = {0, 1, 2, 3, 4, 5};             // GMAC->NCFGR::CLK values
     uint8_t dividers[] = {8, 16, 32, 48, 64, 128};  // Respective CLK dividers
     for (int i = 0; i < 6; i++) {
       if (mclk / dividers[i] <= 2375000UL /* 2.5MHz - 5% */) {
@@ -101,8 +101,8 @@ static bool mg_tcpip_driver_same54_init(struct mg_tcpip_if *ifp) {
   MCLK_REGS->MCLK_APBCMASK |= MCLK_APBCMASK_GMAC_Msk;
   MCLK_REGS->MCLK_AHBMASK |= MCLK_AHBMASK_GMAC_Msk;
   GMAC_REGS->GMAC_NCFGR = GMAC_NCFGR_CLK(get_clock_rate(d));  // Set MDC divider
-  GMAC_REGS->GMAC_NCR = 0;                            // Disable RX & TX
-  GMAC_REGS->GMAC_NCR |= GMAC_NCR_MPE_Msk;            // Enable MDC & MDIO
+  GMAC_REGS->GMAC_NCR = 0;                                    // Disable RX & TX
+  GMAC_REGS->GMAC_NCR |= GMAC_NCR_MPE_Msk;  // Enable MDC & MDIO
 
   for (int i = 0; i < ETH_DESC_CNT; i++) {   // Init TX descriptors
     s_txdesc[i][0] = (uint32_t) s_txbuf[i];  // Point to data buffer
@@ -174,7 +174,9 @@ static bool mg_tcpip_driver_same54_up(struct mg_tcpip_if *ifp) {
     uint16_t bcr = eth_read_phy(PHY_ADDR, PHY_BCR);
     bool fd = bcr & PHY_BCR_DUPLEX_MODE_Msk ? 1 : 0;
     bool spd = bcr & PHY_BCR_SPEED_Msk ? 1 : 0;
-    GMAC_REGS->GMAC_NCFGR |= GMAC_NCFGR_SPD(spd) | GMAC_NCFGR_FD(fd);
+    GMAC_REGS->GMAC_NCFGR =
+        (GMAC_REGS->GMAC_NCFGR & ~(GMAC_NCFGR_SPD_Msk | PHY_BCR_SPEED_Msk)) |
+        GMAC_NCFGR_SPD(spd) | GMAC_NCFGR_FD(fd);
   }
 
   return up;

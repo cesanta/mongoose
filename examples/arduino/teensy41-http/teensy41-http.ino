@@ -3,7 +3,7 @@
 
 void ethernet_init(void);
 struct mg_mgr mgr;
-struct mg_tcpip_driver_rt1020_data data = {.mdc_cr = 24, .phy_addr = 0};
+struct mg_tcpip_driver_imxrt_data data = {.mdc_cr = 24, .phy_addr = 0};
 struct mg_tcpip_if mif = {
     // Construct MAC address from the unique chip ID
     .mac = {2, (uint8_t) (HW_OCOTP_CFG0 & 255),
@@ -15,7 +15,7 @@ struct mg_tcpip_if mif = {
     // .ip = mg_htonl(MG_U32(192, 168, 0, 223)),
     // .mask = mg_htonl(MG_U32(255, 255, 255, 0)),
     // .gw = mg_htonl(MG_U32(192, 168, 0, 1)),
-    .driver = &mg_tcpip_driver_rt1020,
+    .driver = &mg_tcpip_driver_imxrt,
     .driver_data = &data};
 
 uint64_t mg_millis(void) {  // Let Mongoose use our uptime function

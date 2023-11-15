@@ -181,6 +181,9 @@ static bool mg_tcpip_driver_stm32_up(struct mg_tcpip_if *ifp) {
   bool up = bsr & BIT(2) ? 1 : 0;
   if ((ifp->state == MG_TCPIP_STATE_DOWN) && up) {  // link state just went up
     uint32_t scsr = eth_read_phy(PHY_ADDR, PHY_CSCR);
+    // tmp = reg with flags set to the most likely situation: 100M full-duplex
+    // if(link is slow or half) set flags otherwise
+    // reg = tmp
     uint32_t maccr = ETH->MACCR | BIT(14) | BIT(11);  // 100M, Full-duplex
     if ((scsr & BIT(3)) == 0) maccr &= ~BIT(14);      // 10M
     if ((scsr & BIT(4)) == 0) maccr &= ~BIT(11);      // Half-duplex
