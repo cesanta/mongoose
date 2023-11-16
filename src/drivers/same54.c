@@ -5,8 +5,6 @@
 
 #include <sam.h>
 
-#undef BIT
-#define BIT(x) ((uint32_t) 1 << (x))
 #define ETH_PKT_SIZE 1536  // Max frame size
 #define ETH_DESC_CNT 4     // Descriptors count
 #define ETH_DS 2           // Descriptor size (words)
@@ -21,9 +19,9 @@ static uint8_t s_rxno;                           // Current RX descriptor
 static struct mg_tcpip_if *s_ifp;  // MIP interface
 enum { PHY_ADDR = 0, PHY_BCR = 0, PHY_BSR = 1 };
 
-#define PHY_BCR_DUPLEX_MODE_Msk BIT(8)
-#define PHY_BCR_SPEED_Msk BIT(13)
-#define PHY_BSR_LINK_STATUS_Msk BIT(2)
+#define PHY_BCR_DUPLEX_MODE_Msk MG_BIT(8)
+#define PHY_BCR_SPEED_Msk MG_BIT(13)
+#define PHY_BSR_LINK_STATUS_Msk MG_BIT(2)
 
 static uint16_t eth_read_phy(uint8_t addr, uint8_t reg) {
   GMAC_REGS->GMAC_MAN = GMAC_MAN_CLTTO_Msk |
@@ -106,16 +104,16 @@ static bool mg_tcpip_driver_same54_init(struct mg_tcpip_if *ifp) {
 
   for (int i = 0; i < ETH_DESC_CNT; i++) {   // Init TX descriptors
     s_txdesc[i][0] = (uint32_t) s_txbuf[i];  // Point to data buffer
-    s_txdesc[i][1] = BIT(31);                // OWN bit
+    s_txdesc[i][1] = MG_BIT(31);                // OWN bit
   }
-  s_txdesc[ETH_DESC_CNT - 1][1] |= BIT(30);  // Last tx descriptor - wrap
+  s_txdesc[ETH_DESC_CNT - 1][1] |= MG_BIT(30);  // Last tx descriptor - wrap
 
   GMAC_REGS->GMAC_DCFGR = GMAC_DCFGR_DRBS(0x18);  // DMA recv buf 1536
   for (int i = 0; i < ETH_DESC_CNT; i++) {        // Init RX descriptors
     s_rxdesc[i][0] = (uint32_t) s_rxbuf[i];       // Address of the data buffer
     s_rxdesc[i][1] = 0;                           // Clear status
   }
-  s_rxdesc[ETH_DESC_CNT - 1][0] |= BIT(1);  // Last rx descriptor - wrap
+  s_rxdesc[ETH_DESC_CNT - 1][0] |= MG_BIT(1);  // Last rx descriptor - wrap
 
   GMAC_REGS->GMAC_TBQB = (uint32_t) s_txdesc;  // about the descriptor addresses
   GMAC_REGS->GMAC_RBQB = (uint32_t) s_rxdesc;  // Let the controller know
@@ -149,13 +147,13 @@ static size_t mg_tcpip_driver_same54_tx(const void *buf, size_t len,
   if (len > sizeof(s_txbuf[s_txno])) {
     MG_ERROR(("Frame too big, %ld", (long) len));
     len = 0;  // Frame is too big
-  } else if ((s_txdesc[s_txno][1] & BIT(31)) == 0) {
+  } else if ((s_txdesc[s_txno][1] & MG_BIT(31)) == 0) {
     ifp->nerr++;
     MG_ERROR(("No free descriptors"));
     len = 0;  // All descriptors are busy, fail
   } else {
-    uint32_t status = len | BIT(15);  // Frame length, last chunk
-    if (s_txno == ETH_DESC_CNT - 1) status |= BIT(30);  // wrap
+    uint32_t status = len | MG_BIT(15);  // Frame length, last chunk
+    if (s_txno == ETH_DESC_CNT - 1) status |= MG_BIT(30);  // wrap
     memcpy(s_txbuf[s_txno], buf, len);                  // Copy data
     s_txdesc[s_txno][1] = status;
     if (++s_txno >= ETH_DESC_CNT) s_txno = 0;
@@ -190,10 +188,10 @@ void GMAC_Handler(void) {
   if (isr & GMAC_ISR_RCOMP_Msk) {
     if (rsr & GMAC_ISR_RCOMP_Msk) {
       for (uint8_t i = 0; i < ETH_DESC_CNT; i++) {
-        if ((s_rxdesc[s_rxno][0] & BIT(0)) == 0) break;
-        size_t len = s_rxdesc[s_rxno][1] & (BIT(13) - 1);
+        if ((s_rxdesc[s_rxno][0] & MG_BIT(0)) == 0) break;
+        size_t len = s_rxdesc[s_rxno][1] & (MG_BIT(13) - 1);
         mg_tcpip_qwrite(s_rxbuf[s_rxno], len, s_ifp);
-        s_rxdesc[s_rxno][0] &= ~BIT(0);  // Disown
+        s_rxdesc[s_rxno][0] &= ~MG_BIT(0);  // Disown
         if (++s_rxno >= ETH_DESC_CNT) s_rxno = 0;
       }
     }
@@ -203,7 +201,7 @@ void GMAC_Handler(void) {
               GMAC_TSR_TFC_Msk | GMAC_TSR_TXGO_Msk | GMAC_TSR_RLE_Msk |
               GMAC_TSR_COL_Msk | GMAC_TSR_UBR_Msk)) != 0) {
     // MG_INFO((" --> %#x %#x", s_txdesc[s_txno][1], tsr));
-    if (!(s_txdesc[s_txno][1] & BIT(31))) s_txdesc[s_txno][1] |= BIT(31);
+    if (!(s_txdesc[s_txno][1] & MG_BIT(31))) s_txdesc[s_txno][1] |= MG_BIT(31);
   }
 
   GMAC_REGS->GMAC_RSR = rsr;
