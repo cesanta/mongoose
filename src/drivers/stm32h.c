@@ -36,8 +36,6 @@ struct stm32h_eth {
 #define ETH \
   ((struct stm32h_eth *) (uintptr_t) (0x40000000UL + 0x00020000UL + 0x8000UL))
 
-#undef BIT
-#define BIT(x) ((uint32_t) 1 << (x))
 #define ETH_PKT_SIZE 1540  // Max frame size
 #define ETH_DESC_CNT 4     // Descriptors count
 #define ETH_DS 4           // Descriptor size (words)
@@ -57,8 +55,8 @@ enum {
 static uint32_t eth_read_phy(uint8_t addr, uint8_t reg) {
   ETH->MACMDIOAR &= (0xF << 8);
   ETH->MACMDIOAR |= ((uint32_t) addr << 21) | ((uint32_t) reg << 16) | 3 << 2;
-  ETH->MACMDIOAR |= BIT(0);
-  while (ETH->MACMDIOAR & BIT(0)) (void) 0;
+  ETH->MACMDIOAR |= MG_BIT(0);
+  while (ETH->MACMDIOAR & MG_BIT(0)) (void) 0;
   return ETH->MACMDIODR;
 }
 
@@ -66,8 +64,8 @@ static void eth_write_phy(uint8_t addr, uint8_t reg, uint32_t val) {
   ETH->MACMDIODR = val;
   ETH->MACMDIOAR &= (0xF << 8);
   ETH->MACMDIOAR |= ((uint32_t) addr << 21) | ((uint32_t) reg << 16) | 1 << 2;
-  ETH->MACMDIOAR |= BIT(0);
-  while (ETH->MACMDIOAR & BIT(0)) (void) 0;
+  ETH->MACMDIOAR |= MG_BIT(0);
+  while (ETH->MACMDIOAR & MG_BIT(0)) (void) 0;
 }
 
 static uint32_t get_hclk(void) {
@@ -96,7 +94,7 @@ static uint32_t get_hclk(void) {
     unsigned int src = (rcc->PLLCKSELR & (3 << 0)) >> 0;
     m = ((rcc->PLLCKSELR & (0x3F << 4)) >> 4);
     n = ((rcc->PLL1DIVR & (0x1FF << 0)) >> 0) + 1 +
-        ((rcc->PLLCFGR & BIT(0)) ? 1 : 0);  // round-up in fractional mode
+        ((rcc->PLLCFGR & MG_BIT(0)) ? 1 : 0);  // round-up in fractional mode
     p = ((rcc->PLL1DIVR & (0x7F << 9)) >> 9) + 1;
     if (src == 1) {
       clk = csi;
@@ -154,7 +152,7 @@ static bool mg_tcpip_driver_stm32h_init(struct mg_tcpip_if *ifp) {
   // Init RX descriptors
   for (int i = 0; i < ETH_DESC_CNT; i++) {
     s_rxdesc[i][0] = (uint32_t) (uintptr_t) s_rxbuf[i];  // Point to data buffer
-    s_rxdesc[i][3] = BIT(31) | BIT(30) | BIT(24);        // OWN, IOC, BUF1V
+    s_rxdesc[i][3] = MG_BIT(31) | MG_BIT(30) | MG_BIT(24);        // OWN, IOC, BUF1V
   }
 
   // Init TX descriptors
@@ -162,8 +160,8 @@ static bool mg_tcpip_driver_stm32h_init(struct mg_tcpip_if *ifp) {
     s_txdesc[i][0] = (uint32_t) (uintptr_t) s_txbuf[i];  // Buf pointer
   }
 
-  ETH->DMAMR |= BIT(0);                         // Software reset
-  while ((ETH->DMAMR & BIT(0)) != 0) (void) 0;  // Wait until done
+  ETH->DMAMR |= MG_BIT(0);                         // Software reset
+  while ((ETH->DMAMR & MG_BIT(0)) != 0) (void) 0;  // Wait until done
 
   // Set MDC clock divider. If user told us the value, use it. Otherwise, guess
   int cr = (d == NULL || d->mdc_cr < 0) ? guess_mdc_cr() : d->mdc_cr;
@@ -172,12 +170,12 @@ static bool mg_tcpip_driver_stm32h_init(struct mg_tcpip_if *ifp) {
   // NOTE(scaprile): We do not use timing facilities so the DMA engine does not
   // re-write buffer address
   ETH->DMAMR = 0 << 16;     // use interrupt mode 0 (58.8.1) (reset value)
-  ETH->DMASBMR |= BIT(12);  // AAL NOTE(scaprile): is this actually needed
+  ETH->DMASBMR |= MG_BIT(12);  // AAL NOTE(scaprile): is this actually needed
   ETH->MACIER = 0;        // Do not enable additional irq sources (reset value)
-  ETH->MACTFCR = BIT(7);  // Disable zero-quanta pause
-  // ETH->MACPFR = BIT(31);  // Receive all
-  eth_write_phy(PHY_ADDR, PHY_BCR, BIT(15));  // Reset PHY
-  eth_write_phy(PHY_ADDR, PHY_BCR, BIT(12));  // Set autonegotiation
+  ETH->MACTFCR = MG_BIT(7);  // Disable zero-quanta pause
+  // ETH->MACPFR = MG_BIT(31);  // Receive all
+  eth_write_phy(PHY_ADDR, PHY_BCR, MG_BIT(15));  // Reset PHY
+  eth_write_phy(PHY_ADDR, PHY_BCR, MG_BIT(12));  // Set autonegotiation
   ETH->DMACRDLAR =
       (uint32_t) (uintptr_t) s_rxdesc;  // RX descriptors start address
   ETH->DMACRDRLR = ETH_DESC_CNT - 1;    // ring length
@@ -190,13 +188,13 @@ static bool mg_tcpip_driver_stm32h_init(struct mg_tcpip_if *ifp) {
   ETH->DMACTDTPR =
       (uint32_t) (uintptr_t) s_txdesc;  // first available descriptor address
   ETH->DMACCR = 0;  // DSL = 0 (contiguous descriptor table) (reset value)
-  ETH->DMACIER = BIT(6) | BIT(15);  // RIE, NIE
-  ETH->MACCR = BIT(0) | BIT(1) | BIT(13) | BIT(14) |
-               BIT(15);     // RE, TE, Duplex, Fast, Reserved
-  ETH->MTLTQOMR |= BIT(1);  // TSF
-  ETH->MTLRQOMR |= BIT(5);  // RSF
-  ETH->DMACTCR |= BIT(0);   // ST
-  ETH->DMACRCR |= BIT(0);   // SR
+  ETH->DMACIER = MG_BIT(6) | MG_BIT(15);  // RIE, NIE
+  ETH->MACCR = MG_BIT(0) | MG_BIT(1) | MG_BIT(13) | MG_BIT(14) |
+               MG_BIT(15);     // RE, TE, Duplex, Fast, Reserved
+  ETH->MTLTQOMR |= MG_BIT(1);  // TSF
+  ETH->MTLRQOMR |= MG_BIT(5);  // RSF
+  ETH->DMACTCR |= MG_BIT(0);   // ST
+  ETH->DMACRCR |= MG_BIT(0);   // SR
 
   // MAC address filtering
   ETH->MACA0HR = ((uint32_t) ifp->mac[5] << 8U) | ifp->mac[4];
@@ -212,7 +210,7 @@ static size_t mg_tcpip_driver_stm32h_tx(const void *buf, size_t len,
   if (len > sizeof(s_txbuf[s_txno])) {
     MG_ERROR(("Frame too big, %ld", (long) len));
     len = 0;  // Frame is too big
-  } else if ((s_txdesc[s_txno][3] & BIT(31))) {
+  } else if ((s_txdesc[s_txno][3] & MG_BIT(31))) {
     ifp->nerr++;
     MG_ERROR(("No free descriptors: %u %08X %08X %08X", s_txno,
               s_txdesc[s_txno][3], ETH->DMACSR, ETH->DMACTCR));
@@ -221,11 +219,11 @@ static size_t mg_tcpip_driver_stm32h_tx(const void *buf, size_t len,
   } else {
     memcpy(s_txbuf[s_txno], buf, len);        // Copy data
     s_txdesc[s_txno][2] = (uint32_t) len;     // Set data len
-    s_txdesc[s_txno][3] = BIT(28) | BIT(29);  // FD, LD
-    s_txdesc[s_txno][3] |= BIT(31);           // Set OWN bit - let DMA take over
+    s_txdesc[s_txno][3] = MG_BIT(28) | MG_BIT(29);  // FD, LD
+    s_txdesc[s_txno][3] |= MG_BIT(31);           // Set OWN bit - let DMA take over
     if (++s_txno >= ETH_DESC_CNT) s_txno = 0;
   }
-  ETH->DMACSR |= BIT(2) | BIT(1);  // Clear any prior TBU, TPS
+  ETH->DMACSR |= MG_BIT(2) | MG_BIT(1);  // Clear any prior TBU, TPS
   ETH->DMACTDTPR = (uint32_t) (uintptr_t) &s_txdesc[s_txno];  // and resume
   return len;
   (void) ifp;
@@ -233,18 +231,18 @@ static size_t mg_tcpip_driver_stm32h_tx(const void *buf, size_t len,
 
 static bool mg_tcpip_driver_stm32h_up(struct mg_tcpip_if *ifp) {
   uint32_t bsr = eth_read_phy(PHY_ADDR, PHY_BSR);
-  bool up = bsr & BIT(2) ? 1 : 0;
+  bool up = bsr & MG_BIT(2) ? 1 : 0;
   if ((ifp->state == MG_TCPIP_STATE_DOWN) && up) {  // link state just went up
     uint32_t scsr = eth_read_phy(PHY_ADDR, PHY_CSCR);
     // tmp = reg with flags set to the most likely situation: 100M full-duplex
     // if(link is slow or half) set flags otherwise
     // reg = tmp
-    uint32_t maccr = ETH->MACCR | BIT(14) | BIT(13);  // 100M, Full-duplex
-    if ((scsr & BIT(3)) == 0) maccr &= ~BIT(14);      // 10M
-    if ((scsr & BIT(4)) == 0) maccr &= ~BIT(13);      // Half-duplex
+    uint32_t maccr = ETH->MACCR | MG_BIT(14) | MG_BIT(13);  // 100M, Full-duplex
+    if ((scsr & MG_BIT(3)) == 0) maccr &= ~MG_BIT(14);      // 10M
+    if ((scsr & MG_BIT(4)) == 0) maccr &= ~MG_BIT(13);      // Half-duplex
     ETH->MACCR = maccr;  // IRQ handler does not fiddle with this register
-    MG_DEBUG(("Link is %uM %s-duplex", maccr & BIT(14) ? 100 : 10,
-              maccr & BIT(13) ? "full" : "half"));
+    MG_DEBUG(("Link is %uM %s-duplex", maccr & MG_BIT(14) ? 100 : 10,
+              maccr & MG_BIT(13) ? "full" : "half"));
   }
   return up;
 }
@@ -252,23 +250,23 @@ static bool mg_tcpip_driver_stm32h_up(struct mg_tcpip_if *ifp) {
 void ETH_IRQHandler(void);
 static uint32_t s_rxno;
 void ETH_IRQHandler(void) {
-  if (ETH->DMACSR & BIT(6)) {            // Frame received, loop
-    ETH->DMACSR = BIT(15) | BIT(6);      // Clear flag
+  if (ETH->DMACSR & MG_BIT(6)) {            // Frame received, loop
+    ETH->DMACSR = MG_BIT(15) | MG_BIT(6);      // Clear flag
     for (uint32_t i = 0; i < 10; i++) {  // read as they arrive but not forever
-      if (s_rxdesc[s_rxno][3] & BIT(31)) break;  // exit when done
-      if (((s_rxdesc[s_rxno][3] & (BIT(28) | BIT(29))) ==
-           (BIT(28) | BIT(29))) &&
-          !(s_rxdesc[s_rxno][3] & BIT(15))) {  // skip partial/errored frames
-        uint32_t len = s_rxdesc[s_rxno][3] & (BIT(15) - 1);
+      if (s_rxdesc[s_rxno][3] & MG_BIT(31)) break;  // exit when done
+      if (((s_rxdesc[s_rxno][3] & (MG_BIT(28) | MG_BIT(29))) ==
+           (MG_BIT(28) | MG_BIT(29))) &&
+          !(s_rxdesc[s_rxno][3] & MG_BIT(15))) {  // skip partial/errored frames
+        uint32_t len = s_rxdesc[s_rxno][3] & (MG_BIT(15) - 1);
         // MG_DEBUG(("%lx %lu %lx %08lx", s_rxno, len, s_rxdesc[s_rxno][3],
         // ETH->DMACSR));
         mg_tcpip_qwrite(s_rxbuf[s_rxno], len > 4 ? len - 4 : len, s_ifp);
       }
-      s_rxdesc[s_rxno][3] = BIT(31) | BIT(30) | BIT(24);  // OWN, IOC, BUF1V
+      s_rxdesc[s_rxno][3] = MG_BIT(31) | MG_BIT(30) | MG_BIT(24);  // OWN, IOC, BUF1V
       if (++s_rxno >= ETH_DESC_CNT) s_rxno = 0;
     }
   }
-  ETH->DMACSR = BIT(7) | BIT(8);  // Clear possible RBU RPS while processing
+  ETH->DMACSR = MG_BIT(7) | MG_BIT(8);  // Clear possible RBU RPS while processing
   ETH->DMACRDTPR =
       (uint32_t) (uintptr_t) &s_rxdesc[ETH_DESC_CNT - 1];  // and resume RX
 }
