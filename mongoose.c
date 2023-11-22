@@ -9292,8 +9292,9 @@ __attribute__((interrupt()))  // For RISCV CH32V307, which share the same MAC
 #endif
 void ETH_IRQHandler(void);
 void ETH_IRQHandler(void) {
-  if (ETH->DMASR & MG_BIT(6)) {          // Frame received, loop
-    for (uint32_t i = 0; i < 10; i++) {  // read as they arrive but not forever
+  if (ETH->DMASR & MG_BIT(6)) {           // Frame received, loop
+    ETH->DMASR = MG_BIT(16) | MG_BIT(6);  // Clear flag
+    for (uint32_t i = 0; i < 10; i++) {   // read as they arrive but not forever
       if (s_rxdesc[s_rxno][0] & MG_BIT(31)) break;  // exit when done
       if (((s_rxdesc[s_rxno][0] & (MG_BIT(8) | MG_BIT(9))) ==
            (MG_BIT(8) | MG_BIT(9))) &&
@@ -9307,7 +9308,11 @@ void ETH_IRQHandler(void) {
       if (++s_rxno >= ETH_DESC_CNT) s_rxno = 0;
     }
   }
-  ETH->DMASR = ~0;   // Clear flags
+#ifdef __riscv
+  ETH->DMASR = ~0;   // TODO: do more fine-grained flag cleanup
+#else
+  ETH->DMASR = MG_BIT(7);  // Clear possible RBUS while processing
+#endif
   ETH->DMARPDR = 0;  // and resume RX
 }
 
