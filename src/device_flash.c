@@ -1,6 +1,7 @@
 #include "device.h"
 
-#if MG_DEVICE == MG_DEVICE_STM32H7 || MG_DEVICE == MG_DEVICE_STM32H5
+#if MG_DEVICE == MG_DEVICE_STM32H7 || MG_DEVICE == MG_DEVICE_STM32H5 || \
+    MG_DEVICE == MG_DEVICE_RT1020 || MG_DEVICE == MG_DEVICE_RT1060
 // Flash can be written only if it is erased. Erased flash is 0xff (all bits 1)
 // Writes must be mg_flash_write_align() - aligned. Thus if we want to save an
 // object, we pad it at the end for alignment.
@@ -111,7 +112,7 @@ bool mg_flash_save(void *sector, uint32_t key, const void *buf, size_t len) {
     while ((n = mg_flash_next(s + ofs, s + ss, NULL, NULL)) > 0) ofs += n;
 
     // If there is not enough space left, cleanup sector and re-eval ofs
-    if (ofs + needed_aligned > ss) {
+    if (ofs + needed_aligned >= ss) {
       mg_flash_sector_cleanup(s);
       ofs = 0;
       while ((n = mg_flash_next(s + ofs, s + ss, NULL, NULL)) > 0) ofs += n;
