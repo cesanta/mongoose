@@ -37,6 +37,14 @@ int main(void) {
   uart_init(UART_DEBUG, 115200);  // Initialise debug printf
   ethernet_init();                // Initialise ethernet pins
 
+  #ifdef MQTT_DASHBOARD
+    // User can customise the MQTT url, device ID or the root topic below
+  #define DEVICE_ID "H723ZG"
+    g_url = MQTT_SERVER_URL;
+    g_device_id = DEVICE_ID;
+    g_root_topic = DEFAULT_ROOT_TOPIC;
+  #endif
+
   MG_INFO(("Starting, CPU freq %g MHz", (double) SystemCoreClock / 1000000));
 
   struct mg_mgr mgr;        // Initialise
