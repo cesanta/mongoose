@@ -1482,8 +1482,8 @@ static void test_http_parse(void) {
   }
 
   // #2292: fail on stray \r inside the headers
-  ASSERT(mg_http_parse("a є\n\n", 6, &req) > 0);
-  ASSERT(mg_http_parse("a b\n\n", 5, &req) > 0);
+  ASSERT(mg_http_parse("a є\n\n", 6, &req) == 6);
+  ASSERT(mg_http_parse("a b\n\n", 5, &req) == 5);
   ASSERT(mg_http_parse("a b\na:\n\n", 8, &req) > 0);
   ASSERT(mg_http_parse("a b\na:\r\n\n", 9, &req) > 0);
   ASSERT(mg_http_parse("a b\n\ra:\r\n\n", 10, &req) == -1);
@@ -1602,6 +1602,12 @@ static void test_http_parse(void) {
     ASSERT(mg_http_parse(s, strlen(s), &hm) == (int) strlen(s));
     s = "a\nb:b\nc:c\n\n";
     ASSERT(mg_http_parse(s, strlen(s), &hm) < 0);
+    s = "a b\nc: \xc0\n\n"; // Invalid UTF in the header value: accept
+    ASSERT(mg_http_parse(s, strlen(s), &hm) == (int) strlen(s));
+    ASSERT((v = mg_http_get_header(&hm, "c")) != NULL);
+    ASSERT(mg_vcmp(v, "\xc0") == 0);
+    s = "a b\n\xc0: 2\n\n"; // Invalid UTF in the header name: do NOT accept
+    ASSERT(mg_http_parse(s, strlen(s), &hm) == -1);
   }
 }
 

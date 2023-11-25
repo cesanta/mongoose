@@ -1948,13 +1948,20 @@ struct mg_str *mg_http_get_header(struct mg_http_message *h, const char *name) {
   return NULL;
 }
 
-// Get character length. Used to parse method, URI, headers
-static size_t clen(const char *s) {
-  uint8_t c = *(uint8_t *) s;
+// Is it a valid utf-8 continuation byte
+static bool vcb(uint8_t c) {
+  return (c & 0xc0) == 0x80;
+}
+
+// Get character length (valid utf-8). Used to parse method, URI, headers
+static size_t clen(const char *s, const char *end) {
+  const unsigned char *u = (unsigned char *) s, c = *u;
+  long n = end - s;
   if (c > ' ' && c < '~') return 1;  // Usual ascii printed char
-  if ((c & 0xe0) == 0xc0) return 2;  // 2-byte UTF8
-  if ((c & 0xf0) == 0xe0) return 3;  // 3-byte UTF8
-  if ((c & 0xf8) == 0xf0) return 4;  // 4-byte UTF8
+  if ((c & 0xe0) == 0xc0 && n > 1 && vcb(u[1])) return 2;  // 2-byte UTF8
+  if ((c & 0xf0) == 0xe0 && n > 2 && vcb(u[1]) && vcb(u[2])) return 3;
+  if ((c & 0xf8) == 0xf0 && n > 3 && vcb(u[1]) && vcb(u[2]) && vcb(u[3]))
+    return 4;
   return 0;
 }
 
@@ -1976,10 +1983,12 @@ static bool mg_http_parse_headers(const char *s, const char *end,
     if (s >= end) return false;
     if (s[0] == '\n' || (s[0] == '\r' && s[1] == '\n')) break;
     k.ptr = s;
-    while (s < end && s[0] != ':' && (n = clen(s)) > 0) s += n, k.len += n;
-    if (k.len == 0) return false;               // Empty name
-    if (s >= end || *s++ != ':') return false;  // Invalid, not followed by :
-    while (s < end && s[0] == ' ') s++;         // Skip spaces
+    while (s < end && s[0] != ':' && (n = clen(s, end)) > 0) s += n, k.len += n;
+    if (k.len == 0) return false;                     // Empty name
+    if (s >= end || clen(s, end) == 0) return false;  // Invalid UTF-8
+    if (*s++ != ':') return false;  // Invalid, not followed by :
+    // if (clen(s, end) == 0) return false;        // Invalid UTF-8
+    while (s < end && s[0] == ' ') s++;  // Skip spaces
     if ((s = skiptorn(s, end, &v)) == NULL) return false;
     while (v.len > 0 && v.ptr[v.len - 1] == ' ') v.len--;  // Trim spaces
     // MG_INFO(("--HH [%.*s] [%.*s]", (int) k.len, k.ptr, (int) v.len, v.ptr));
@@ -2004,10 +2013,10 @@ int mg_http_parse(const char *s, size_t len, struct mg_http_message *hm) {
 
   // Parse request line
   hm->method.ptr = s;
-  while (s < end && (n = clen(s)) > 0) s += n, hm->method.len += n;
+  while (s < end && (n = clen(s, end)) > 0) s += n, hm->method.len += n;
   while (s < end && s[0] == ' ') s++;  // Skip spaces
   hm->uri.ptr = s;
-  while (s < end && (n = clen(s)) > 0) s += n, hm->uri.len += n;
+  while (s < end && (n = clen(s, end)) > 0) s += n, hm->uri.len += n;
   while (s < end && s[0] == ' ') s++;  // Skip spaces
   if ((s = skiptorn(s, end, &hm->proto)) == NULL) return false;
 
@@ -2764,7 +2773,7 @@ static void http_cb(struct mg_connection *c, int ev, void *evd, void *fnd) {
           if (dl == 0) break;
         }
         ofs += (size_t) (n + o);
-      } else { // Normal, non-chunked data
+      } else {  // Normal, non-chunked data
         size_t len = c->recv.len - ofs - (size_t) n;
         if (hm.body.len > len) break;  // Buffer more data
         ofs += (size_t) n + hm.body.len;
