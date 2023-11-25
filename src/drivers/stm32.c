@@ -216,12 +216,10 @@ void ETH_IRQHandler(void) {
       if (++s_rxno >= ETH_DESC_CNT) s_rxno = 0;
     }
   }
-#ifdef __riscv
-  ETH->DMASR = ~0;  // TODO: do more fine-grained flag cleanup
-#else
-  ETH->DMASR = MG_BIT(7);  // Clear possible RBUS while processing
-#endif
-  ETH->DMARPDR = 0;  // and resume RX
+  // Cleanup flags
+  ETH->DMASR = MG_BIT(16)    // NIS, normal interrupt summary
+               | MG_BIT(7);  // Clear possible RBUS while processing
+  ETH->DMARPDR = 0;          // and resume RX
 }
 
 struct mg_tcpip_driver mg_tcpip_driver_stm32 = {mg_tcpip_driver_stm32_init,
