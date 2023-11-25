@@ -1,8 +1,6 @@
 #include "tcpip.h"
 
-#if MG_ENABLE_TCPIP && defined(MG_ENABLE_DRIVER_SAME54) && \
-    MG_ENABLE_DRIVER_SAME54
-
+#if defined(MG_ENABLE_DRIVER_SAME54) && MG_ENABLE_DRIVER_SAME54
 #include <sam.h>
 
 #define ETH_PKT_SIZE 1536  // Max frame size
@@ -59,12 +57,8 @@ int get_clock_rate(struct mg_tcpip_driver_same54_data *d) {
       case GCLK_GENCTRL_SRC_XOSC1_Val:
         mclk = 32000000UL; /* 32MHz */
         break;
-      case GCLK_GENCTRL_SRC_OSCULP32K_Val:
-        mclk = 32000UL;
-        break;
-      case GCLK_GENCTRL_SRC_XOSC32K_Val:
-        mclk = 32000UL;
-        break;
+      case GCLK_GENCTRL_SRC_OSCULP32K_Val: mclk = 32000UL; break;
+      case GCLK_GENCTRL_SRC_XOSC32K_Val: mclk = 32000UL; break;
       case GCLK_GENCTRL_SRC_DFLL_Val:
         mclk = 48000000UL; /* 48MHz */
         break;
@@ -74,13 +68,12 @@ int get_clock_rate(struct mg_tcpip_driver_same54_data *d) {
       case GCLK_GENCTRL_SRC_DPLL1_Val:
         mclk = 200000000UL; /* 200MHz */
         break;
-      default:
-        mclk = 200000000UL; /* 200MHz */
+      default: mclk = 200000000UL; /* 200MHz */
     }
 
     mclk /= div;
-    uint8_t crs[] = {0, 1, 2, 3, 4, 5};             // GMAC->NCFGR::CLK values
-    uint8_t dividers[] = {8, 16, 32, 48, 64, 128};  // Respective CLK dividers
+    uint8_t crs[] = {0, 1, 2, 3, 4, 5};            // GMAC->NCFGR::CLK values
+    uint8_t dividers[] = {8, 16, 32, 48, 64, 96};  // Respective CLK dividers
     for (int i = 0; i < 6; i++) {
       if (mclk / dividers[i] <= 2375000UL /* 2.5MHz - 5% */) {
         return crs[i];
@@ -104,14 +97,16 @@ static bool mg_tcpip_driver_same54_init(struct mg_tcpip_if *ifp) {
 
   for (int i = 0; i < ETH_DESC_CNT; i++) {   // Init TX descriptors
     s_txdesc[i][0] = (uint32_t) s_txbuf[i];  // Point to data buffer
-    s_txdesc[i][1] = MG_BIT(31);                // OWN bit
+    s_txdesc[i][1] = MG_BIT(31);             // OWN bit
   }
   s_txdesc[ETH_DESC_CNT - 1][1] |= MG_BIT(30);  // Last tx descriptor - wrap
 
-  GMAC_REGS->GMAC_DCFGR = GMAC_DCFGR_DRBS(0x18);  // DMA recv buf 1536
-  for (int i = 0; i < ETH_DESC_CNT; i++) {        // Init RX descriptors
-    s_rxdesc[i][0] = (uint32_t) s_rxbuf[i];       // Address of the data buffer
-    s_rxdesc[i][1] = 0;                           // Clear status
+  GMAC_REGS->GMAC_DCFGR = GMAC_DCFGR_DRBS(0x18)  // DMA recv buf 1536
+                          | GMAC_DCFGR_RXBMS(GMAC_DCFGR_RXBMS_FULL_Val) |
+                          GMAC_DCFGR_TXPBMS(1);  // See #2487
+  for (int i = 0; i < ETH_DESC_CNT; i++) {       // Init RX descriptors
+    s_rxdesc[i][0] = (uint32_t) s_rxbuf[i];      // Address of the data buffer
+    s_rxdesc[i][1] = 0;                          // Clear status
   }
   s_rxdesc[ETH_DESC_CNT - 1][0] |= MG_BIT(1);  // Last rx descriptor - wrap
 
@@ -154,7 +149,7 @@ static size_t mg_tcpip_driver_same54_tx(const void *buf, size_t len,
   } else {
     uint32_t status = len | MG_BIT(15);  // Frame length, last chunk
     if (s_txno == ETH_DESC_CNT - 1) status |= MG_BIT(30);  // wrap
-    memcpy(s_txbuf[s_txno], buf, len);                  // Copy data
+    memcpy(s_txbuf[s_txno], buf, len);                     // Copy data
     s_txdesc[s_txno][1] = status;
     if (++s_txno >= ETH_DESC_CNT) s_txno = 0;
   }
