@@ -10,10 +10,17 @@
 
 #include "mongoose.h"
 
+#define LISTENING_ADDR "http://localhost:8000"
+
 struct thread_data {
   struct mg_queue queue;  // Worker -> Connection queue
   struct mg_str body;     // Copy of message body
 };
+
+// These two helper UDP connections are used to wake up mongoose thread
+static struct mg_connection *s_wakeup_server;
+static struct mg_connection *s_wakeup_client;
+#define WAKEUP_URL "udp://127.0.0.1:40111"
 
 static void start_thread(void *(*f)(void *), void *p) {
 #ifdef _WIN32
@@ -46,11 +53,21 @@ static void *worker_thread(void *param) {
     free((char *) d->body.ptr);
   }
 
+  // Wake up Mongoose thread by sending something to one of its connections
+  mg_send(s_wakeup_client, "hi", 2);
+
   // Wait until connection reads our message, then it is safe to quit
   while (d->queue.tail != d->queue.head) usleep(1000);
   MG_INFO(("done, cleaning up..."));
   free(d);
   return NULL;
+}
+
+static void wfn(struct mg_connection *c, int ev, void *ev_data, void *fn_data) {
+  if (ev == MG_EV_READ) {
+    c->recv.len = 0;  // Discard received data
+  }
+  (void) ev_data, (void) fn_data;
 }
 
 // HTTP request callback
@@ -82,8 +99,10 @@ int main(void) {
   struct mg_mgr mgr;
   mg_mgr_init(&mgr);
   mg_log_set(MG_LL_DEBUG);  // Set debug log level
-  mg_http_listen(&mgr, "http://localhost:8000", fn, NULL);  // Create listener
-  for (;;) mg_mgr_poll(&mgr, 10);  // Event loop. Use 10ms poll interval
-  mg_mgr_free(&mgr);               // Cleanup
+  mg_http_listen(&mgr, LISTENING_ADDR, fn, NULL);
+  s_wakeup_server = mg_listen(&mgr, WAKEUP_URL, wfn, NULL);
+  s_wakeup_client = mg_connect(&mgr, WAKEUP_URL, wfn, NULL);
+  for (;;) mg_mgr_poll(&mgr, 5000);  // Event loop. Use 5s poll interval
+  mg_mgr_free(&mgr);                 // Cleanup
   return 0;
 }
