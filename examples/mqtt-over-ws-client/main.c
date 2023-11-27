@@ -98,8 +98,9 @@ int main(void) {
   bool done = false;        // Event handler flips it to true when done
   mg_mgr_init(&mgr);        // Initialise event manager
   mg_log_set(MG_LL_DEBUG);  // Set log level
-  mg_ws_connect(&mgr, s_url, fn, &done, NULL);    // Create client connection
-  while (done == false) mg_mgr_poll(&mgr, 1000);  // Event loop
-  mg_mgr_free(&mgr);                              // Finished, cleanup
+  mg_ws_connect(&mgr, s_url, fn, &done, "%s",  // Create client connection
+                "Sec-Websocket-Protocol: mqtt\r\n");  // Request MQTT protocol
+  while (done == false) mg_mgr_poll(&mgr, 1000);      // Event loop
+  mg_mgr_free(&mgr);                                  // Finished, cleanup
   return 0;
 }
