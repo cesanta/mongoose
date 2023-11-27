@@ -2,6 +2,7 @@
 
 #include "hal.h"
 #include "mongoose.h"
+#include "net.h"
 
 #define BTN_PIN PIN('B', 3)    // On-board user button
 #define LED1_PIN PIN('A', 15)  // On-board red LED
@@ -105,7 +106,8 @@ int main(void) {
   }
 
   MG_INFO(("Initialising application..."));
-  mg_http_listen(&mgr, "http://0.0.0.0", fn, NULL);
+  mg_http_listen(&mgr, "http://0.0.0.0:8000", fn, NULL);
+  web_init(&mgr);
 
   MG_INFO(("Starting event loop"));
   for (;;) {
