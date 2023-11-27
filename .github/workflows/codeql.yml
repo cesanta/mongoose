@@ -47,8 +47,7 @@ jobs:
         upload: false
       id: step1
 
-    # Filter out rules with low severity or high false positve rate
-    # Also filter out warnings in third-party code
+    # Filter out rules with low severity or high false positive rate
     - name: Filter out unwanted errors and warnings
       uses: advanced-security/filter-sarif@v1
       with:
@@ -65,7 +64,6 @@ jobs:
           -**:cpp/suspicious-pointer-scaling
           -**:cpp/suspicious-pointer-scaling-void
           -**:cpp/unsigned-comparison-zero
-          -**/cmake*/Modules/**
         input: ${{ steps.step1.outputs.sarif-output }}/cpp.sarif
         output: ${{ steps.step1.outputs.sarif-output }}/cpp.sarif
 
