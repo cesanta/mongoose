@@ -20,8 +20,6 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
-      matrix:
-        language: [ 'cpp' ]
     permissions:
       security-events: write
       
@@ -33,7 +31,7 @@ jobs:
     - name: Initialize CodeQL
       uses: github/codeql-action/init@v2
       with:
-        languages: ${{ matrix.language }}
+        languages: cpp
         queries: security-and-quality
       
     - run: |
@@ -43,7 +41,7 @@ jobs:
     - name: Perform CodeQL Analysis
       uses: github/codeql-action/analyze@v2
       with:
-        category: "/language:${{matrix.language}}"
+        category: "/language:cpp"
         upload: false
       id: step1
 
@@ -71,7 +69,7 @@ jobs:
       uses: github/codeql-action/upload-sarif@v2
       with:
         sarif_file: ${{ steps.step1.outputs.sarif-output }}
-        category: "/language:${{matrix.language}}"
+        category: "/language:cpp"
 
     - name: Upload CodeQL results as an artifact
       if: success() || failure()
