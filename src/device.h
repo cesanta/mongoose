@@ -5,10 +5,11 @@
 
 #include "arch.h"
 
-#define MG_DEVICE_NONE 0      // Dummy system
-#define MG_DEVICE_STM32H5 1   // STM32 H5
-#define MG_DEVICE_STM32H7 2   // STM32 H7
-#define MG_DEVICE_CUSTOM 100  // Custom implementation
+#define MG_DEVICE_NONE 0        // Dummy system
+#define MG_DEVICE_STM32H5 1     // STM32 H5
+#define MG_DEVICE_STM32H7 2     // STM32 H7
+#define MG_DEVICE_CH32V307 100  // WCH CH32V307
+#define MG_DEVICE_CUSTOM 1000   // Custom implementation
 
 #ifndef MG_DEVICE
 #define MG_DEVICE MG_DEVICE_NONE

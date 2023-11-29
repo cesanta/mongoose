@@ -52,4 +52,4 @@ endif
 
 # Cleanup. Delete built program and all build artifacts
 clean:
-	$(DELETE) $(PROG) $(PACK) *.o *.obj *.exe *.dSYM mbedtls
+	$(DELETE) $(PROG) $(PACK) *.o *.obj *.exe *.bin *.dSYM mbedtls
