@@ -24,7 +24,7 @@ int main(int argc, char *argv[]) {
       mg_log_set(atoi(argv[++i]));
     } else {
       MG_ERROR(("Unknown option: %s. Usage:", argv[i]));
-      MG_ERROR(("%s [-u mqtts://SERVER:PORT] [-i DEVICE_ID] [-t TOPIC_NAME] [-v DEBUG_LEVEL]",
+      MG_ERROR(("%s [-u mqtt://SERVER:PORT] [-i DEVICE_ID] [-t TOPIC_NAME] [-v DEBUG_LEVEL]",
                 argv[0], argv[i]));
       return 1;
     }

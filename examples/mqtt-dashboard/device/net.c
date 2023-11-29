@@ -6,7 +6,7 @@
 char *g_url = MQTT_SERVER_URL;
 char *g_device_id;
 char *g_root_topic;
-static uint8_t s_qos = 1;                 // MQTT QoS
+static uint8_t s_qos = 1;             // MQTT QoS
 static struct mg_connection *s_conn;  // Client connection
 static struct mg_rpc *s_rpc_head = NULL;
 
@@ -41,35 +41,20 @@ static size_t print_fw_status(void (*out)(char, void *), void *ptr,
 }
 
 static void publish_status(struct mg_connection *c) {
-  int status_topic_len = 50;
-  char *status_topic = calloc(status_topic_len, sizeof(char));
-  if (!status_topic) {
-    MG_ERROR(("Out of memory"));
-    return;
-  }
-  mg_snprintf(status_topic, status_topic_len, "%s/%s/status", g_root_topic,
-              g_device_id);
+  char *status_topic = mg_mprintf("%s/%s/status", g_root_topic, g_device_id);
   struct mg_str pubt = mg_str(status_topic);
   struct mg_mqtt_opts pub_opts;
   memset(&pub_opts, 0, sizeof(pub_opts));
   pub_opts.topic = pubt;
-  int json_len = 400;
-  char *device_status_json;
-  device_status_json = calloc(json_len, sizeof(char));
-  if (!device_status_json) {
-    MG_ERROR(("Out of memory"));
-    return;
-  }
-  mg_snprintf(device_status_json, json_len,
-              "{%m:%m,%m:{%m:%m,%m:%s,%m:%hhu,%m:%hhu,%m:%hhu,%m:%M,%m:%M}}",
-              MG_ESC("method"), MG_ESC("status.notify"), MG_ESC("params"),
-              MG_ESC("status"), MG_ESC("online"), MG_ESC("led_status"),
-              s_device_config.led_status ? "true" : "false", MG_ESC("led_pin"),
-              s_device_config.led_pin, MG_ESC("brightness"),
-              s_device_config.brightness, MG_ESC(("log_level")),
-              s_device_config.log_level, MG_ESC(("crnt_fw")), print_fw_status,
-              MG_FIRMWARE_CURRENT, MG_ESC(("prev_fw")), print_fw_status,
-              MG_FIRMWARE_PREVIOUS);
+  char *device_status_json = mg_mprintf(
+      "{%m:%m,%m:{%m:%m,%m:%s,%m:%hhu,%m:%hhu,%m:%hhu,%m:%M,%m:%M}}",
+      MG_ESC("method"), MG_ESC("status.notify"), MG_ESC("params"),
+      MG_ESC("status"), MG_ESC("online"), MG_ESC("led_status"),
+      s_device_config.led_status ? "true" : "false", MG_ESC("led_pin"),
+      s_device_config.led_pin, MG_ESC("brightness"), s_device_config.brightness,
+      MG_ESC(("log_level")), s_device_config.log_level, MG_ESC(("crnt_fw")),
+      print_fw_status, MG_FIRMWARE_CURRENT, MG_ESC(("prev_fw")),
+      print_fw_status, MG_FIRMWARE_PREVIOUS);
   struct mg_str data = mg_str(device_status_json);
   pub_opts.message = data;
   pub_opts.qos = s_qos, pub_opts.retain = true;
@@ -81,13 +66,7 @@ static void publish_status(struct mg_connection *c) {
 }
 
 static void publish_response(struct mg_connection *c, char *buf, size_t len) {
-  int tx_topic_len = 50;
-  char *tx_topic = calloc(tx_topic_len, sizeof(char));
-  if (!tx_topic) {
-    MG_ERROR(("Out of memory"));
-    return;
-  }
-  mg_snprintf(tx_topic, tx_topic_len, "%s/%s/tx", g_root_topic, g_device_id);
+  char *tx_topic = mg_mprintf("%s/%s/tx", g_root_topic, g_device_id);
   struct mg_str pubt = mg_str(tx_topic);
   struct mg_mqtt_opts pub_opts;
   memset(&pub_opts, 0, sizeof(pub_opts));
@@ -102,13 +81,7 @@ static void publish_response(struct mg_connection *c, char *buf, size_t len) {
 }
 
 static void subscribe(struct mg_connection *c) {
-  int rx_topic_len = 50;
-  char *rx_topic = calloc(rx_topic_len, sizeof(char));
-  if (!rx_topic) {
-    MG_ERROR(("Out of memory"));
-    return;
-  }
-  mg_snprintf(rx_topic, rx_topic_len, "%s/%s/rx", g_root_topic, g_device_id);
+  char *rx_topic = mg_mprintf("%s/%s/rx", g_root_topic, g_device_id);
   struct mg_str subt = mg_str(rx_topic);
   struct mg_mqtt_opts sub_opts;
   memset(&sub_opts, 0, sizeof(sub_opts));
@@ -126,7 +99,8 @@ static void rpc_config_set(struct mg_rpc_req *r) {
   ok = mg_json_get_bool(r->frame, "$.params.led_status", &tmp_status);
   if (ok) s_device_config.led_status = tmp_status;
 
-  tmp_brightness = (int8_t) mg_json_get_long(r->frame, "$.params.brightness", -1);
+  tmp_brightness =
+      (int8_t) mg_json_get_long(r->frame, "$.params.brightness", -1);
   if (tmp_brightness >= 0) s_device_config.brightness = tmp_brightness;
 
   tmp_level = (int8_t) mg_json_get_long(r->frame, "$.params.log_level", -1);
@@ -197,7 +171,7 @@ static void fn(struct mg_connection *c, int ev, void *ev_data, void *fn_data) {
     MG_INFO(("%lu CREATED", c->id));
     // c->is_hexdumping = 1;
   } else if (ev == MG_EV_CONNECT) {
-    MG_INFO(("Device ID is connected %s", g_device_id));
+    MG_INFO(("Device %s is connected", g_device_id));
   } else if (ev == MG_EV_ERROR) {
     // On error, log error message
     MG_ERROR(("%lu ERROR %s", c->id, (char *) ev_data));
@@ -209,10 +183,9 @@ static void fn(struct mg_connection *c, int ev, void *ev_data, void *fn_data) {
   } else if (ev == MG_EV_MQTT_MSG) {
     // When we get echo response, print it
     struct mg_mqtt_message *mm = (struct mg_mqtt_message *) ev_data;
-    if (mm->data.len < 1024) {
+    if (mm->data.len < 1024)
       MG_INFO(("%lu RECEIVED %.*s <- %.*s", c->id, (int) mm->data.len,
                mm->data.ptr, (int) mm->topic.len, mm->topic.ptr));
-    }
     struct mg_iobuf io = {0, 0, 0, 512};
     struct mg_rpc_req r = {&s_rpc_head, 0, mg_pfn_iobuf, &io, 0, mm->data};
     mg_rpc_process(&r);
@@ -270,11 +243,10 @@ void web_init(struct mg_mgr *mgr) {
   mg_rpc_add(&s_rpc_head, mg_str("ota.upload"), rpc_ota_upload, NULL);
 
   mg_timer_add(mgr, 3000, MG_TIMER_REPEAT | MG_TIMER_RUN_NOW, timer_fn, mgr);
-  mg_timer_add(mgr, pingreq_interval_ms, MG_TIMER_REPEAT, timer_keepalive,
-               mgr);
+  mg_timer_add(mgr, pingreq_interval_ms, MG_TIMER_REPEAT, timer_keepalive, mgr);
 }
 
 void web_destroy() {
-  mg_rpc_del(&s_rpc_head, NULL);    // Deallocate RPC handlers
+  mg_rpc_del(&s_rpc_head, NULL);  // Deallocate RPC handlers
   free(g_device_id);
 }
