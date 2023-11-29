@@ -31,6 +31,7 @@ static void timer_fn(void *arg) {
            ifp->ndrop, ifp->nerr));
 }
 
+#ifndef RUNINFLASH
 static void fn(struct mg_connection *c, int ev, void *ev_data, void *fn_data) {
   struct mg_tcpip_if *ifp = (struct mg_tcpip_if *) fn_data;
   if (ev == MG_EV_HTTP_MSG) {
@@ -53,6 +54,7 @@ static void fn(struct mg_connection *c, int ev, void *ev_data, void *fn_data) {
     }
   }
 }
+#endif
 
 int main(void) {
   gpio_output(LED);               // Setup blue LED
@@ -82,7 +84,11 @@ int main(void) {
   }
 
   MG_INFO(("Initialising application..."));
+#ifdef RUNINFLASH
+  web_init(&mgr);
+#else
   mg_http_listen(&mgr, "http://0.0.0.0:80", fn, &mif);
+#endif
 
   MG_INFO(("Starting event loop"));
   for (;;) {
