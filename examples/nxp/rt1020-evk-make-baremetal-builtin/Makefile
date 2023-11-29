@@ -3,7 +3,8 @@ CFLAGS += -Wformat-truncation -fno-common -Wconversion -Wno-sign-conversion
 CFLAGS += -g3 -Os -ffunction-sections -fdata-sections
 CFLAGS += -I. -Icmsis_core/CMSIS/Core/Include -Icmsis_mcu/devices/MIMXRT1021 #-DCPU_MIMXRT1021DAG5A
 CFLAGS += -mcpu=cortex-m7 -mthumb -mfloat-abi=hard -mfpu=fpv5-d16 $(CFLAGS_EXTRA)
-LDFLAGS ?= -Tlink_ram.ld -nostdlib -nostartfiles --specs nano.specs -lc -lgcc -Wl,--gc-sections -Wl,-Map=$@.map 
+LDSCRIPT = link_ram.ld
+LDFLAGS ?= -T$(LDSCRIPT) -nostdlib -nostartfiles --specs nano.specs -lc -lgcc -Wl,--gc-sections -Wl,-Map=$@.map 
 
 SOURCES = main.c syscalls.c sysinit.c
 SOURCES += cmsis_mcu/devices/MIMXRT1021/gcc/startup_MIMXRT1021.S # NXP startup file. Compiler-dependent!
@@ -23,10 +24,15 @@ endif
 
 all build example: firmware.bin
 
+image: LDSCRIPT = link.ld
+image: SOURCES += flash_image.c net.c packed_fs.c # no room to run dashboard in RAM w/ default config
+image: CFLAGS += -DRUNINFLASH
+image: firmware.bin
+
 firmware.bin: firmware.elf
 	arm-none-eabi-objcopy -O binary $< $@
 
-firmware.elf: cmsis_core cmsis_mcu $(SOURCES) hal.h link_ram.ld Makefile
+firmware.elf: cmsis_core cmsis_mcu $(SOURCES) hal.h link_ram.ld link.ld Makefile
 	arm-none-eabi-gcc $(SOURCES) $(CFLAGS) $(LDFLAGS) -o $@
 	arm-none-eabi-size $@
 
@@ -60,10 +66,12 @@ update: firmware.bin
 	curl -su :$(VCON_API_KEY) $(DEVICE_URL)/rpc/swd.exec -d '{"req":"'"$$REQ"'"}'
 	curl -su :$(VCON_API_KEY) $(DEVICE_URL)/rpc/swd.exec -d '{"req":"wm,e000edf0,a05f0001"}'
 
-test update: CFLAGS += -DUART_DEBUG=LPUART2
+test update testimage: CFLAGS += -DUART_DEBUG=LPUART2
 test: update
 	curl --fail-with-body -su :$(VCON_API_KEY) $(DEVICE_URL)/tx?t=5 | tee /tmp/output.txt
 	grep 'READY, IP:' /tmp/output.txt       # Check for network init
+
+testimage: image
 
 clean:
 	$(RM) firmware.* *.su cmsis_core cmsis_mcu mbedtls *.zip

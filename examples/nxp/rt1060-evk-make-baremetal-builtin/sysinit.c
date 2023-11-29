@@ -55,12 +55,13 @@ void SystemInit(void) {  // Called automatically by startup code (ints masked)
       ~CCM_ANALOG_PLL_ARM_BYPASS_MASK;  // Disable Bypass (switch to PLL)
   // 14.5 Table 14-4: uart_clk_root
   // 14.4: uart_clk_root = PLL3/6 or OSC; CCM_CSCDR1 (14.7.9) defaults to
-  // PLL3/6/1
+  // PLL3/6/1; but ROM boot code fiddles with the divider (9.5.3 Table 9-7)
   CCM_ANALOG->PLL_USB1 |= CCM_ANALOG_PLL_USB1_POWER_MASK;  // Power PLL on
   while ((CCM_ANALOG->PLL_USB1 & CCM_ANALOG_PLL_USB1_LOCK_MASK) == 0)
     spin(1);  // wait until it is stable
   CCM_ANALOG->PLL_USB1 &=
       ~CCM_ANALOG_PLL_USB1_BYPASS_MASK;  // Disable Bypass (switch to PLL)
+  CCM->CSCDR1 &= ~(CCM_CSCDR1_UART_CLK_SEL_MASK | CCM_CSCDR1_UART_CLK_PODF_MASK);
   rng_init();  // Initialise random number generator
   // NXP startup code calls SystemInit BEFORE initializing RAM...
   SysTick_Config(SYS_FREQUENCY / 1000);  // Sys tick every 1ms
