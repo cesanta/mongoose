@@ -204,24 +204,23 @@ static void fn(struct mg_connection *c, int ev, void *ev_data, void *fn_data) {
 // Timer function - recreate client connection if it is closed
 static void timer_fn(void *arg) {
   struct mg_mgr *mgr = (struct mg_mgr *) arg;
-  char status_topic[50];
-  memset(status_topic, 0, sizeof(status_topic));
-  mg_snprintf(status_topic, sizeof(status_topic), "%s/%s/status", g_root_topic,
-              g_device_id);
-  char msg[200];
-  memset(msg, 0, sizeof(msg));
-  mg_snprintf(msg, sizeof(msg), "{%m:%m,%m:{%m:%m}}", MG_ESC("method"),
-              MG_ESC("status.notify"), MG_ESC("params"), MG_ESC("status"),
-              MG_ESC("offline"));
+  if (s_conn == NULL) {
+    char *status_topic = mg_mprintf("%s/%s/status", g_root_topic, g_device_id);
+    char *msg = mg_mprintf("{%m:%m,%m:{%m:%m}}", MG_ESC("method"),
+                           MG_ESC("status.notify"), MG_ESC("params"),
+                           MG_ESC("status"), MG_ESC("offline"));
 
-  struct mg_mqtt_opts opts = {.clean = true,
-                              .qos = s_qos,
-                              .topic = mg_str(status_topic),
-                              .version = 4,
-                              .keepalive = KEEP_ALIVE_INTERVAL,
-                              .retain = true,
-                              .message = mg_str(msg)};
-  if (s_conn == NULL) s_conn = mg_mqtt_connect(mgr, g_url, &opts, fn, NULL);
+    struct mg_mqtt_opts opts = {.clean = true,
+                                .qos = s_qos,
+                                .topic = mg_str(status_topic),
+                                .version = 4,
+                                .keepalive = KEEP_ALIVE_INTERVAL,
+                                .retain = true,
+                                .message = mg_str(msg)};
+    s_conn = mg_mqtt_connect(mgr, g_url, &opts, fn, NULL);
+    free(msg);
+    free(status_topic);
+  }
 }
 
 static void timer_keepalive(void *arg) {
