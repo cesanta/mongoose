@@ -151,25 +151,55 @@ jobs:
 
   test_f7:
     runs-on: ubuntu-latest
+    env:
+      GO: 0
     steps:
     - uses: actions/checkout@v3
       with: { fetch-depth: 2 }
-    - run: if ./test/match_changed_files.sh "^src|examples/device-dashboard|examples/stm32/nucleo-f7.*-make-" ; then echo GO=1 >> $GITHUB_ENV ; fi
+    - name: baremetal
+      run: |
+        if ./test/match_changed_files.sh "^src|examples/device-dashboard|examples/stm32/nucleo-f7.*-make-" ; then
+          echo GO=1 >> $GITHUB_ENV
+          sudo apt -y update; sudo apt -y install gcc-arm-none-eabi
+        fi
     - if: ${{ env.GO == 1 }}
-      run: sudo apt -y update; sudo apt -y install gcc-arm-none-eabi
+      run: |
+        if ./test/match_changed_files.sh '^src|examples/device-dashboard|examples/stm32/nucleo-f746zg-make-baremetal-builtin'; then
+          make -C examples/stm32/nucleo-f746zg-make-baremetal-builtin test VCON_API_KEY=${{secrets.VCON_API_KEY}}
+        fi
     - if: ${{ env.GO == 1 }}
-      run:  make -C examples/stm32/nucleo-f746zg-make-baremetal-builtin test VCON_API_KEY=${{secrets.VCON_API_KEY}}
+      run: |
+        if ./test/match_changed_files.sh '^src|examples/device-dashboard|examples/stm32/nucleo-f746zg-make-freertos-builtin'; then
+          make -C examples/stm32/nucleo-f746zg-make-freertos-builtin test VCON_API_KEY=${{secrets.VCON_API_KEY}}
+        fi
     - if: ${{ env.GO == 1 }}
-      run:  make -C examples/stm32/nucleo-f746zg-make-freertos-builtin test VCON_API_KEY=${{secrets.VCON_API_KEY}}
+      run: |
+        if ./test/match_changed_files.sh '^src|examples/device-dashboard|examples/stm32/nucleo-f746zg-make-freertos-tcp'; then
+          make -C examples/stm32/nucleo-f746zg-make-freertos-tcp test VCON_API_KEY=${{secrets.VCON_API_KEY}}
+        fi
+    - name: Cube
+      run: |
+        echo GO=0 >> $GITHUB_ENV
+        if ./test/match_changed_files.sh '^src|examples/device-dashboard|examples/stm32/nucleo-f7.*-cube-'; then
+          echo GO=1 >> $GITHUB_ENV
+          # nothing specific to install or do
+        fi
     - if: ${{ env.GO == 1 }}
-      run:  make -C examples/stm32/nucleo-f746zg-make-freertos-tcp test VCON_API_KEY=${{secrets.VCON_API_KEY}}
-    - run: echo GO=0 >> $GITHUB_ENV ; if ./test/match_changed_files.sh '^src|examples/device-dashboard|examples/stm32/nucleo-f7.*-cube-'; then echo GO=1 >> $GITHUB_ENV ; fi
+      run: |
+        if ./test/match_changed_files.sh '^src|examples/device-dashboard|examples/stm32/nucleo-f746zg-cube-baremetal-builtin'; then
+          make -C test/cube test PROJECTS=../../examples/stm32/nucleo-f746zg-cube-baremetal-builtin VCON_API_KEY=${{secrets.VCON_API_KEY}} DEVICE=5
+        fi
     - if: ${{ env.GO == 1 }}
-      run: make -C test/cube test PROJECTS=../../examples/stm32/nucleo-f746zg-cube-baremetal-builtin VCON_API_KEY=${{secrets.VCON_API_KEY}} DEVICE=5
+      run: |
+        if ./test/match_changed_files.sh '^src|examples/device-dashboard|examples/stm32/nucleo-f746zg-cube-freertos-builtin'; then
+          make -C test/cube test PROJECTS=../../examples/stm32/nucleo-f746zg-cube-freertos-builtin VCON_API_KEY=${{secrets.VCON_API_KEY}} DEVICE=5    
+        fi
     - if: ${{ env.GO == 1 }}
-      run: make -C test/cube test PROJECTS=../../examples/stm32/nucleo-f746zg-cube-freertos-builtin VCON_API_KEY=${{secrets.VCON_API_KEY}} DEVICE=5
-    - if: ${{ env.GO == 1 }}
-      run: make -C test/cube test PROJECTS=../../examples/stm32/nucleo-f746zg-cube-freertos-lwip VCON_API_KEY=${{secrets.VCON_API_KEY}} DEVICE=5
+      run: |
+        if ./test/match_changed_files.sh '^src|examples/device-dashboard|examples/stm32/nucleo-f746zg-cube-freertos-lwip'; then
+          make -C test/cube test PROJECTS=../../examples/stm32/nucleo-f746zg-cube-freertos-lwip VCON_API_KEY=${{secrets.VCON_API_KEY}} DEVICE=5
+        fi
+
 
   test_f4:
     runs-on: ubuntu-latest
