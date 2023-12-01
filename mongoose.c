@@ -2809,12 +2809,6 @@ static int skip_chunk(const char *buf, int len, int *pl, int *dl) {
   return i + 2 + n + 2;
 }
 
-static bool is_chunked(struct mg_http_message *hm) {
-  const char *needle = "chunked";
-  struct mg_str *te = mg_http_get_header(hm, "Transfer-Encoding");
-  return te != NULL && mg_vcasecmp(te, needle) == 0;
-}
-
 static void http_cb(struct mg_connection *c, int ev, void *evd, void *fnd) {
   if (ev == MG_EV_READ || ev == MG_EV_CLOSE) {
     struct mg_http_message hm;
@@ -2823,6 +2817,8 @@ static void http_cb(struct mg_connection *c, int ev, void *evd, void *fnd) {
     while (c->is_resp == 0 && ofs < c->recv.len) {
       const char *buf = (char *) c->recv.buf + ofs;
       int n = mg_http_parse(buf, c->recv.len - ofs, &hm);
+      struct mg_str *te;  // Transfer - encoding header
+      bool is_chunked = false;
       if (n < 0) {
         mg_error(c, "HTTP parse");
         return;
@@ -2832,8 +2828,16 @@ static void http_cb(struct mg_connection *c, int ev, void *evd, void *fnd) {
         hm.message.len = c->recv.len - ofs;  // and closes now, deliver MSG
         hm.body.len = hm.message.len - (size_t) (hm.body.ptr - hm.message.ptr);
       }
+      if ((te = mg_http_get_header(&hm, "Transfer-Encoding")) != NULL) {
+        if (mg_vcasecmp(te, "chunked") == 0) {
+          is_chunked = true;
+        } else {
+          mg_error(c, "Invalid Transfer-Encoding"); // See #2460
+          return;
+        }
+      }
 
-      if (is_chunked(&hm)) {
+      if (is_chunked) {
         // For chunked data, strip off prefixes and suffixes from chunks
         // and relocate them right after the headers, then report a message
         char *s = (char *) c->recv.buf + ofs + n;
