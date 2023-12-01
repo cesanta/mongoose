@@ -8,7 +8,6 @@
 #define LED1_PIN PIN('A', 15)  // On-board red LED
 #define LED2_PIN PIN('B', 4)   // On-board blue LED
 #define LED_PIN LED2_PIN
-#define UART_DEBUG USART1
 
 #define BLINK_PERIOD_MS 1000  // LED_PIN blinking period in millis
 
@@ -29,10 +28,24 @@ void mg_random(void *buf, size_t len) {  // Use on-board RNG
   }
 }
 
+// This flash space resides at after the 0-wait 320k area
+static char *s_flash_space = (char *) (0x8000000 + 320 * 1024);
+
+bool web_load_settings(void *buf, size_t len) {
+  if (*(uint32_t *) s_flash_space != SETTINGS_MAGIC) return false;
+  memcpy(buf, s_flash_space, len);
+  return true;
+}
+
+bool web_save_settings(void *buf, size_t len) {
+  return mg_flash_write(s_flash_space, buf, len);
+}
+
 static void timer_fn(void *arg) {
   gpio_toggle(LED_PIN);                                  // Blink LED_PIN
   struct mg_tcpip_if *ifp = arg;                         // And show
   const char *names[] = {"down", "up", "req", "ready"};  // network stats
+  return;
   MG_INFO(("Ethernet: %s, IP: %M, rx:%u, tx:%u, dr:%u, er:%u",
            names[ifp->state], mg_print_ip4, &ifp->ip, ifp->nrecv, ifp->nsent,
            ifp->ndrop, ifp->nerr));
@@ -53,21 +66,20 @@ static void mg_putchar(char ch, void *param) {
 // https://mongoose.ws/documentation/#2-minute-integration-guide
 static void fn(struct mg_connection *c, int ev, void *ev_data, void *fn_data) {
   if (ev == MG_EV_HTTP_MSG) {
-    // The MG_EV_HTTP_MSG event means HTTP request. `hm` holds parsed request,
-    // see https://mongoose.ws/documentation/#struct-mg_http_message
     struct mg_http_message *hm = (struct mg_http_message *) ev_data;
-
-    // If the requested URI is "/api/hi", send a simple JSON response back
-    if (mg_http_match_uri(hm, "/api/hi")) {
-      // Use mg_http_reply() API function to generate JSON response. It adds a
-      // Content-Length header automatically. In the response, we show
-      // the requested URI and HTTP body:
-      mg_http_reply(c, 200, "", "{%m:%m,%m:%m}\n",  // See mg_snprintf doc
-                    MG_ESC("uri"), mg_print_esc, hm->uri.len, hm->uri.ptr,
-                    MG_ESC("body"), mg_print_esc, hm->body.len, hm->body.ptr);
+    if (mg_http_match_uri(hm, "/api/ram")) {
+      // This endpoint allows to read RAM:
+      // curl IP:8000/api/ram -d '{"addr":"0x20", "len": 32}'
+      char *s = mg_json_get_str(hm->body, "$.addr");
+      void *buf = (void *) (uintptr_t) (s ? strtoul(s, NULL, 0) : 0);
+      size_t len = mg_json_get_long(hm->body, "$.len", 4);
+      mg_hexdump(buf, len);
+      mg_http_reply(c, 200, "", "{%m:%m}\n", MG_ESC("data"), mg_print_hex, len,
+                    buf);
+      free(s);
     } else {
       // For all other URIs, serve static content
-      mg_http_reply(c, 200, "", "hi tick %llu\n", s_ticks); // See mg_snprintf doc
+      mg_http_reply(c, 200, "", "hi tick %llu\n", s_ticks);
     }
   }
   (void) fn_data;
@@ -85,10 +97,19 @@ int main(void) {
   mg_log_set(MG_LL_DEBUG);  // Set log level
   mg_log_set_fn(mg_putchar, UART_DEBUG);
 
-  ethernet_init();  // Initialise ethernet pins
   MG_INFO(("Starting, CPU freq %g MHz", (double) SystemCoreClock / 1000000));
+  // MG_INFO(("RCC_RSTSCKR=%#lx", RCC->RSTSCKR));
+  extern char _end[], _heap_end[];
+  MG_INFO(("Heap size: %lu bytes", _heap_end - _end));
+
+  // Print chip RAM/Flash configuration, and set to 64/256
+  const char *sizes[] = {"128/192", "96/224", "64/256", "32/288"};
+  uint32_t mode = (FLASH->OBR >> 8) & 3U;
+  MG_INFO(("RAM/FLASH configuration: %s", sizes[mode]));
+  if (mode != 3) set_ram_size(3), mg_device_reset();
 
   // Initialise Mongoose network stack
+  ethernet_init();  // Initialise ethernet pins
   struct mg_tcpip_driver_stm32_data driver_data = {.mdc_cr = 1};
   struct mg_tcpip_if mif = {.mac = GENERATE_LOCALLY_ADMINISTERED_MAC(),
                             // Uncomment below for static configuration:
@@ -117,17 +138,12 @@ int main(void) {
   return 0;
 }
 
-// Newlib syscalls overrides. IO retargeting, and malloc
-int _write(int fd, char *ptr, int len) {
-  if (fd == 1 || fd == 2) uart_write_buf(UART_DEBUG, ptr, (size_t) len);
-  return len;
-}
-
+// Newlib syscall for malloc
 void *_sbrk(ptrdiff_t incr) {
-  extern char _end[];
-  extern char _heap_end[];
+  extern char _end[], _heap_end[];
   static char *curbrk = _end;
   if ((curbrk + incr < _end) || (curbrk + incr > _heap_end)) return NULL - 1;
+  //MG_INFO(("%p %ld", curbrk, incr));
   curbrk += incr;
   return curbrk - incr;
 }

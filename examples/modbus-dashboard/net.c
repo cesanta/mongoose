@@ -4,12 +4,13 @@
 #include "net.h"
 
 // Device settings
-struct settings {
+struct device_settings {
+  uint32_t magic;
   int log_level;
   bool mqtt_enabled;
-  char *mqtt_server_url;
-  char *mqtt_topic_tx;
-  char *mqtt_topic_rx;
+  char mqtt_server_url[64];
+  char mqtt_topic_tx[16];
+  char mqtt_topic_rx[16];
 };
 
 struct conndata {
@@ -17,12 +18,20 @@ struct conndata {
   unsigned long id;          // Connection ID waiting for the Modbus response
 };
 
-static struct settings s_settings = {3, false, NULL, NULL, NULL};
-
+static struct device_settings s_settings;
 static const char *s_json_header =
     "Content-Type: application/json\r\n"
     "Cache-Control: no-cache\r\n";
 static uint64_t s_boot_timestamp = 0;  // Updated by SNTP
+
+static void set_default_settings(struct device_settings *s) {
+  s->magic = SETTINGS_MAGIC;
+  s->log_level = MG_LL_DEBUG;
+  mg_snprintf(s->mqtt_server_url, sizeof(s->mqtt_server_url), "%s",
+              "mqtt://broker.hivemq.com:1883");
+  mg_snprintf(s->mqtt_topic_tx, sizeof(s->mqtt_topic_tx), "%s", "modbus1/tx");
+  mg_snprintf(s->mqtt_topic_rx, sizeof(s->mqtt_topic_rx), "%s", "modbus1/rx");
+}
 
 // This is for newlib and TLS (mbedTLS)
 uint64_t mg_now(void) {
@@ -50,25 +59,28 @@ static void timer_sntp_fn(void *param) {
   mg_sntp_connect(param, "udp://time.google.com:123", sfn, NULL);
 }
 
-static void setfromjson(struct mg_str json, const char *jsonpath, char **dst) {
+static void setfromjson(struct mg_str json, const char *jsonpath, char *buf,
+                        size_t len) {
   char *val = mg_json_get_str(json, jsonpath);
-  if (val != NULL) {
-    free(*dst);
-    *dst = val;
-  }
+  if (val != NULL) mg_snprintf(buf, len, "%s", val);
+  free(val);
 }
 
 static void handle_settings_set(struct mg_connection *c, struct mg_str body) {
-  struct settings settings;
+  struct device_settings settings;
   memset(&settings, 0, sizeof(settings));
+  set_default_settings(&settings);
   mg_json_get_bool(body, "$.mqtt_enabled", &settings.mqtt_enabled);
   settings.log_level = mg_json_get_long(body, "$.log_level", MG_LL_INFO);
-  setfromjson(body, "$.mqtt_server_url", &settings.mqtt_server_url);
-  setfromjson(body, "$.mqtt_topic_rx", &settings.mqtt_topic_rx);
-  setfromjson(body, "$.mqtt_topic_tx", &settings.mqtt_topic_tx);
+  setfromjson(body, "$.mqtt_server_url", settings.mqtt_server_url,
+              sizeof(settings.mqtt_server_url));
+  setfromjson(body, "$.mqtt_topic_rx", settings.mqtt_topic_rx,
+              sizeof(settings.mqtt_topic_rx));
+  setfromjson(body, "$.mqtt_topic_tx", settings.mqtt_topic_tx,
+              sizeof(settings.mqtt_topic_tx));
 
-  s_settings = settings;  // TODO: save to the device flash
-  bool ok = true;
+  s_settings = settings;
+  bool ok = web_save_settings(&s_settings, sizeof(s_settings));
   mg_http_reply(c, 200, s_json_header,
                 "{%m:%s,%m:%m}",                          //
                 MG_ESC("status"), ok ? "true" : "false",  //
@@ -146,7 +158,7 @@ static struct mg_connection *start_modbus_request(struct mg_mgr *mgr,
       send16(c, reg);    // Start register
       send16(c, nregs);  // Number of registers
 
-      if (func == 16) {       // Fill in register values to write
+      if (func == 16) {                   // Fill in register values to write
         send8(c, (uint8_t) (nregs * 2));  // Send number of bytes
         for (uint16_t i = 0; i < nregs; i++) {
           char path[20];
@@ -283,10 +295,8 @@ static void fn(struct mg_connection *c, int ev, void *ev_data, void *fn_data) {
 }
 
 void web_init(struct mg_mgr *mgr) {
-  // Init default settings
-  s_settings.mqtt_server_url = strdup("mqtt://broker.hivemq.com:1883");
-  s_settings.mqtt_topic_tx = strdup("modbus1/tx");
-  s_settings.mqtt_topic_rx = strdup("modbus1/rx");
+  set_default_settings(&s_settings);
+  web_load_settings(&s_settings, sizeof(s_settings));
 
   mg_http_listen(mgr, HTTP_URL, fn, NULL);
   mg_http_listen(mgr, HTTPS_URL, fn, (void *) 1);

@@ -298,13 +298,14 @@ function Settings({}) {
   return html`
 <div class="m-4 grid grid-cols-1 gap-4 md:grid-cols-2">
 
+  ${saveResult && html`<${Notification} ok=${saveResult.status}
+    text=${saveResult.message} close=${() => setSaveResult(null)} />`}
+
   <div class="py-1 divide-y border rounded bg-white flex flex-col">
     <div class="font-light uppercase flex items-center text-gray-600 px-4 py-2">
       MQTT Forwarding
     <//>
     <div class="py-2 px-5 flex-1 flex flex-col relative">
-      ${saveResult && html`<${Notification} ok=${saveResult.status}
-        text=${saveResult.message} close=${() => setSaveResult(null)} />`}
       <${Setting} title="Enable MQTT forwarding" value=${settings.mqtt_enabled} setfn=${mksetfn('mqtt_enabled')} type="switch" />
       <${Setting} title="MQTT Server URL" value=${settings.mqtt_server_url} setfn=${mksetfn('mqtt_server_url')} type="" disabled=${!settings.mqtt_enabled} />
       <${Setting} title="MQTT Topic RX" value=${settings.mqtt_topic_rx} setfn=${mksetfn('mqtt_topic_rx')} type="" disabled=${!settings.mqtt_enabled} />
@@ -335,8 +336,6 @@ function Settings({}) {
       Console Log
     <//>
     <div class="py-2 px-5 flex-1 flex flex-col relative">
-      ${saveResult && html`<${Notification} ok=${saveResult.status}
-        text=${saveResult.message} close=${() => setSaveResult(null)} />`}
       <${Setting} title="Log Level" value=${settings.log_level} setfn=${mksetfn('log_level')} type="select" addonLeft="0-3" options=${logOptions} />
       <div class="mb-1 mt-3 flex place-content-end"><${Button} icon=${Icons.save} onclick=${onsave} title="Save Settings" /><//>
     <//>

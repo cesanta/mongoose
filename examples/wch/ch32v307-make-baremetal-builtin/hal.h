@@ -3,6 +3,8 @@
 
 #pragma once
 
+#define UART_DEBUG USART1
+
 #include <ch32v30x.h>
 
 #include <stdbool.h>
@@ -58,7 +60,7 @@ static inline void gpio_init(uint16_t pin, uint8_t mode, uint8_t cfg) {
   }
   volatile uint32_t *r = &gpio->CFGLR;
   if (no > 7) r = &gpio->CFGHR, no -= 8;
-  uint8_t v = (mode & 3U) | ((cfg & 3U) << 2);
+  uint8_t v = (uint8_t) ((mode & 3U) | ((cfg & 3U) << 2));
   CLRSET(*r, 15U << (no * 4), v << (no * 4));
 }
 static inline void gpio_input(uint16_t pin) {
@@ -125,6 +127,23 @@ static inline void ethernet_init(void) {
   RCC->AHBPCENR |= BIT(14) | BIT(15) | BIT(16);  // Enable MAC, TX, RX
   NVIC_EnableIRQ(ETH_IRQn);
   // NVIC_SetPriority(ETH_IRQn, 0);
+}
+
+// opt: 0: 128/192, 1: 96/224, 2: 64/256, 3: 32/288
+static inline void set_ram_size(uint8_t opt) {
+  // Unlock flash option byte, RM 32.6.1
+  FLASH->KEYR = 0x45670123;
+  FLASH->KEYR = 0xcdef89ab;
+  FLASH->OBKEYR = 0x45670123;
+  FLASH->OBKEYR = 0xcdef89ab;
+  FLASH->CTLR |= 1U << 4;  // Enable options byte programming
+  unsigned val = *(uint16_t *) 0x1ffff802;
+  val &= ~(3U << 6);
+  val |= ((opt & 3U)) << 6;
+  FLASH->CTLR |= FLASH_CTLR_PG;               // Set programming bit
+  *(uint16_t *) 0x1ffff802 = (uint16_t) val;  // Write half-word
+  spin(9999);
+  FLASH->CTLR &= ~(1U << 4);
 }
 
 static inline void rng_init(void) {
