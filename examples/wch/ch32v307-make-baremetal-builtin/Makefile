@@ -34,5 +34,8 @@ flash: firmware.bin
 	wchisp flash $<
 #	@echo; echo "IMPORTANT: configure device to 96k RAM / 224k Flash"
 
+zip:
+	zip -r ch32v307.modbus.firmware.`+%Y-%m-%d`.zip  firmware.*
+
 clean:
-	$(RM) firmware.* *.su
+	$(RM) firmware.* *.zip
