@@ -35,7 +35,7 @@ flash: firmware.bin
 #	@echo; echo "IMPORTANT: configure device to 96k RAM / 224k Flash"
 
 zip: firmware.bin
-	zip -r ch32v307.modbus.firmware.`+%Y-%m-%d`.zip  firmware.*
+	zip -r ch32v307.modbus.firmware.`date +%Y-%m-%d`.zip  firmware.*
 
 clean:
 	$(RM) firmware.* *.zip
