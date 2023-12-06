@@ -46,6 +46,7 @@ static void publish_status(struct mg_connection *c) {
   struct mg_mqtt_opts pub_opts;
   memset(&pub_opts, 0, sizeof(pub_opts));
   pub_opts.topic = pubt;
+  s_device_config.led_status = gpio_read(s_device_config.led_pin);
   char *device_status_json = mg_mprintf(
       "{%m:%m,%m:{%m:%m,%m:%s,%m:%hhu,%m:%hhu,%m:%hhu,%m:%M,%m:%M}}",
       MG_ESC("method"), MG_ESC("status.notify"), MG_ESC("params"),
@@ -111,6 +112,10 @@ static void rpc_config_set(struct mg_rpc_req *r) {
 
   tmp_pin = (int8_t) mg_json_get_long(r->frame, "$.params.led_pin", -1);
   if (tmp_pin > 0) s_device_config.led_pin = tmp_pin;
+
+  if (tmp_pin > 0 && ok) {
+    gpio_write(s_device_config.led_pin, s_device_config.led_status);
+  }
 
   mg_rpc_ok(r, "%m", MG_ESC("ok"));
 }
