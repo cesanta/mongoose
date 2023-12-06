@@ -10,11 +10,11 @@ add_executable(firmware
 target_include_directories(firmware PUBLIC
   .)
 
-target_link_libraries(firmware pico_stdlib hardware_spi pico_rand pico_mbedtls)
+target_link_libraries(firmware pico_stdlib hardware_spi pico_rand)
 pico_add_extra_outputs(firmware)     # create map/bin/hex file etc.
 
-pico_enable_stdio_usb(firmware 0)    # Route stdio
-pico_enable_stdio_uart(firmware 1)   # to the UART
+pico_enable_stdio_usb(firmware 1)    # Route stdio
+pico_enable_stdio_uart(firmware 0)   # to the USB
 
 # Mongoose build flags
 add_definitions(-DMG_ENABLE_TCPIP=1)
