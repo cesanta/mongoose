@@ -266,6 +266,11 @@ function Config( {deviceData, setDeviceConfig, publishFn} ) {
     })
   };
 
+  const onLedToggle = function(ev) {
+    localConfig.led_status = !localConfig.led_status;
+    onSave();
+  };
+
   if (!deviceData || !localConfig) {
     return ``;
   }
@@ -285,7 +290,7 @@ function Config( {deviceData, setDeviceConfig, publishFn} ) {
           LED Settings
         <//>
         <div class="py-2 px-5 flex-1 flex flex-col relative">
-        <${Setting} title="LED status" value=${localConfig.led_status} setfn=${mksetfn('led_status')} type="switch" disabled=${!deviceData.online} />
+        <${Setting} title="LED status" value=${localConfig.led_status} setfn=${onLedToggle} type="switch" disabled=${!deviceData.online} />
         <${Setting} title="LED Pin" type="number" value=${localConfig.led_pin} setfn=${mksetfn('led_pin')} disabled=${!deviceData.online} />
         <//>
       </div>
