@@ -1,7 +1,30 @@
-# Device Dashboard via RNDIS on an RP2040
+# Remote MQTT Device on an RP2040
 
-Your headless Raspberry Pi Pico-based hardware can also have a device dashboard on a web browser when you connect it to your computer via USB
+Your headless Raspberry Pi Pico-based hardware can also be a remote gadget when you connect it to your computer via USB
 
-- See detailed tutorial at https://mongoose.ws/tutorials/rp2040/pico-rndis-dashboard/
+For the USB specifics, see this related tutorial at https://mongoose.ws/tutorials/rp2040/pico-rndis-dashboard/
 
-Note for Mac users: For this example to run on Mac, please set `DUAL_CONFIG=1` in `CMakeLists.txt` before building; this enables CDC-ECM. Please notice that Windows may not recognize the mass-storage device in that case.
+See this tutorial to control your device: https://mongoose.ws/tutorials/mqtt-dashboard/
+
+For this to work, you need your computer to act as a router (gateway) and NAT for your device.
+
+## Linux setup
+
+Enable "masquerading"; the quick and simple options are:
+
+``` bash
+sudo iptables --flush
+sudo iptables --table nat --flush
+sudo iptables --delete-chain
+sudo iptables --table nat --delete-chain
+
+# Do masquerading
+sudo iptables -t nat -A POSTROUTING -o yourifc -j MASQUERADE
+# enable routing
+sudo echo 1 > /proc/sys/net/ipv4/ip_forward
+```
+
+Where `yourifc` is the interface that is connected to your network
+
+## MacOS setup
+
