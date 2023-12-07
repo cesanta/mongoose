@@ -4,6 +4,8 @@
 
 #include "mongoose.h"
 
+#include "hal.h"
+
 #ifdef __cplusplus
 extern "C" {
 #endif
@@ -24,9 +26,6 @@ extern char *g_root_topic;
 
 void web_init(struct mg_mgr *mgr);
 void web_destroy();
-
-void gpio_write(int pin, bool status);
-bool gpio_read(int pin);
 
 #ifdef __cplusplus
 }
