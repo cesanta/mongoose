@@ -12,7 +12,7 @@ static struct mg_rpc *s_rpc_head = NULL;
 
 struct device_config {
   bool led_status;
-  uint8_t led_pin;
+  uint16_t led_pin;
   uint8_t brightness;
   uint8_t log_level;
 };
@@ -111,9 +111,9 @@ static void rpc_config_set(struct mg_rpc_req *r) {
   }
 
   tmp_pin = (int8_t) mg_json_get_long(r->frame, "$.params.led_pin", -1);
-  if (tmp_pin > 0) s_device_config.led_pin = tmp_pin;
+  if (tmp_pin >= 0) s_device_config.led_pin = tmp_pin;
 
-  if (tmp_pin > 0 && ok) {
+  if (tmp_pin >= 0 && ok) {
     gpio_write(s_device_config.led_pin, s_device_config.led_status);
   }
 
@@ -238,6 +238,7 @@ void web_init(struct mg_mgr *mgr) {
   if (!g_device_id) generate_device_id();
   if (!g_root_topic) g_root_topic = DEFAULT_ROOT_TOPIC;
   s_device_config.log_level = (uint8_t) mg_log_level;
+  s_device_config.led_pin = LED;
 
   // Configure JSON-RPC functions we're going to handle
   mg_rpc_add(&s_rpc_head, mg_str("config.set"), rpc_config_set, NULL);
