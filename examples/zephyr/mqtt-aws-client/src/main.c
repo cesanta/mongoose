@@ -24,7 +24,7 @@ static void fn(struct mg_connection *c, int ev, void *ev_data, void *fn_data) {
     MG_ERROR(("%p %s", c->fd, (char *) ev_data));
   } else if (ev == MG_EV_CONNECT) {
     // Set up 2-way TLS that is required by AWS IoT
-    struct mg_tls_opts opts = {.ca = s_ca, .cert = s_cert, .certkey = s_key};
+    struct mg_tls_opts opts = {.ca = s_ca, .cert = s_cert, .key = s_key};
     mg_tls_init(c, &opts);
   } else if (ev == MG_EV_MQTT_OPEN) {
     // MQTT connect is successful
