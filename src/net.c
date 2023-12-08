@@ -3,6 +3,7 @@
 #include "log.h"
 #include "net.h"
 #include "printf.h"
+#include "profile.h"
 #include "timer.h"
 #include "tls.h"
 
@@ -132,6 +133,7 @@ struct mg_connection *mg_alloc_conn(struct mg_mgr *mgr) {
     c->mgr = mgr;
     c->send.align = c->recv.align = MG_IO_SIZE;
     c->id = ++mgr->nextid;
+    MG_PROF_INIT(c);
   }
   return c;
 }
@@ -145,6 +147,8 @@ void mg_close_conn(struct mg_connection *c) {
   // before we deallocate received data, see #1331
   mg_call(c, MG_EV_CLOSE, NULL);
   MG_DEBUG(("%lu %ld closed", c->id, c->fd));
+  MG_PROF_DUMP(c);
+  MG_PROF_FREE(c);
 
   mg_tls_free(c);
   mg_iobuf_free(&c->recv);
@@ -181,6 +185,7 @@ struct mg_connection *mg_listen(struct mg_mgr *mgr, const char *url,
     MG_ERROR(("OOM %s", url));
   } else if (!mg_open_listener(c, url)) {
     MG_ERROR(("Failed: %s, errno %d", url, errno));
+    MG_PROF_FREE(c);
     free(c);
     c = NULL;
   } else {

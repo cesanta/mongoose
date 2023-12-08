@@ -46,7 +46,7 @@ static void publish_status(struct mg_connection *c) {
   struct mg_mqtt_opts pub_opts;
   memset(&pub_opts, 0, sizeof(pub_opts));
   pub_opts.topic = pubt;
-  s_device_config.led_status = gpio_read(s_device_config.led_pin);
+  s_device_config.led_status = hal_gpio_read(s_device_config.led_pin);
   char *device_status_json = mg_mprintf(
       "{%m:%m,%m:{%m:%m,%m:%s,%m:%hhu,%m:%hhu,%m:%hhu,%m:%M,%m:%M}}",
       MG_ESC("method"), MG_ESC("status.notify"), MG_ESC("params"),
@@ -114,7 +114,7 @@ static void rpc_config_set(struct mg_rpc_req *r) {
   if (tmp_pin > 0) s_device_config.led_pin = tmp_pin;
 
   if (tmp_pin > 0 && ok) {
-    gpio_write(s_device_config.led_pin, s_device_config.led_status);
+    hal_gpio_write(s_device_config.led_pin, s_device_config.led_status);
   }
 
   mg_rpc_ok(r, "%m", MG_ESC("ok"));
@@ -219,7 +219,7 @@ static void timer_fn(void *arg) {
                                 .qos = s_qos,
                                 .topic = mg_str(status_topic),
                                 .version = 4,
-                                .keepalive = KEEP_ALIVE_INTERVAL,
+                                .keepalive = MQTT_KEEP_ALIVE_INTERVAL,
                                 .retain = true,
                                 .message = mg_str(msg)};
     s_conn = mg_mqtt_connect(mgr, g_url, &opts, fn, NULL);
@@ -234,9 +234,9 @@ static void timer_keepalive(void *arg) {
 }
 
 void web_init(struct mg_mgr *mgr) {
-  int pingreq_interval_ms = KEEP_ALIVE_INTERVAL * 1000 - 500;
+  int pingreq_interval_ms = MQTT_KEEP_ALIVE_INTERVAL * 1000 - 500;
   if (!g_device_id) generate_device_id();
-  if (!g_root_topic) g_root_topic = DEFAULT_ROOT_TOPIC;
+  if (!g_root_topic) g_root_topic = MQTT_ROOT_TOPIC;
   s_device_config.log_level = (uint8_t) mg_log_level;
 
   // Configure JSON-RPC functions we're going to handle

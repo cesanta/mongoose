@@ -2,8 +2,20 @@
 #include "log.h"
 #include "net.h"
 #include "printf.h"
+#include "profile.h"
 
 void mg_call(struct mg_connection *c, int ev, void *ev_data) {
+#if MG_ENABLE_PROFILE
+  const char *names[] = {
+      "EV_ERROR",    "EV_OPEN",      "EV_POLL",      "EV_RESOLVE",
+      "EV_CONNECT",  "EV_ACCEPT",    "EV_TLS_HS",    "EV_READ",
+      "EV_WRITE",    "EV_CLOSE",     "EV_HTTP_MSG",  "EV_HTTP_CHUNK",
+      "EV_WS_OPEN",  "EV_WS_MSG",    "EV_WS_CTL",    "EV_MQTT_CMD",
+      "EV_MQTT_MSG", "EV_MQTT_OPEN", "EV_SNTP_TIME", "EV_USER"};
+  if (ev != MG_EV_POLL && ev < (int) (sizeof(names) / sizeof(names[0]))) {
+    MG_PROF_ADD(c, names[ev]);
+  }
+#endif
   // Run user-defined handler first, in order to give it an ability
   // to intercept processing (e.g. clean input buffer) before the
   // protocol handler kicks in

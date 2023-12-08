@@ -22,8 +22,15 @@
 #define strdup(s) ((char *) mg_strdup(mg_str(s)).ptr)
 #endif
 #define strerror(x) zsock_gai_strerror(x)
+
+#ifndef FD_CLOEXEC
 #define FD_CLOEXEC 0
+#endif
+
+#ifndef F_SETFD
 #define F_SETFD 0
+#endif
+
 #define MG_ENABLE_SSI 0
 
 int rand(void);
