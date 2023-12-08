@@ -450,7 +450,10 @@ static void rx_dhcp_server(struct mg_tcpip_if *ifp, struct pkt *pkt) {
     memcpy(&res.options, opts, sizeof(opts));
     res.magic = pkt->dhcp->magic;
     res.xid = pkt->dhcp->xid;
-    // memcpy(ifp->gwmac, pkt->eth->src, sizeof(ifp->gwmac));
+    if (ifp->enable_get_gateway) {
+      ifp->gw = res.yiaddr;
+      memcpy(ifp->gwmac, pkt->eth->src, sizeof(ifp->gwmac));
+    }
     tx_udp(ifp, pkt->eth->src, ifp->ip, mg_htons(67),
            op == 1 ? ~0U : res.yiaddr, mg_htons(68), &res, sizeof(res));
   }
