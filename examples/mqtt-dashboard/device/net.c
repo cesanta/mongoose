@@ -12,9 +12,9 @@ static struct mg_rpc *s_rpc_head = NULL;
 
 struct device_config {
   bool led_status;
-  uint8_t led_pin;
-  uint8_t brightness;
-  uint8_t log_level;
+  int led_pin;
+  int brightness;
+  int log_level;
 };
 
 static struct device_config s_device_config;
@@ -95,25 +95,24 @@ static void subscribe(struct mg_connection *c) {
 
 static void rpc_config_set(struct mg_rpc_req *r) {
   bool tmp_status, ok;
-  int8_t tmp_brightness, tmp_level, tmp_pin;
+  int tmp_brightness, tmp_level, tmp_pin;
 
   ok = mg_json_get_bool(r->frame, "$.params.led_status", &tmp_status);
   if (ok) s_device_config.led_status = tmp_status;
 
-  tmp_brightness =
-      (int8_t) mg_json_get_long(r->frame, "$.params.brightness", -1);
+  tmp_brightness = (int) mg_json_get_long(r->frame, "$.params.brightness", -1);
   if (tmp_brightness >= 0) s_device_config.brightness = tmp_brightness;
 
-  tmp_level = (int8_t) mg_json_get_long(r->frame, "$.params.log_level", -1);
+  tmp_level = (int) mg_json_get_long(r->frame, "$.params.log_level", -1);
   if (tmp_level >= 0) {
     s_device_config.log_level = tmp_level;
     mg_log_set(s_device_config.log_level);
   }
 
-  tmp_pin = (int8_t) mg_json_get_long(r->frame, "$.params.led_pin", -1);
-  if (tmp_pin >= 0) s_device_config.led_pin = tmp_pin;
+  tmp_pin = (int) mg_json_get_long(r->frame, "$.params.led_pin", -1);
+  if (tmp_pin != -1) s_device_config.led_pin = tmp_pin;
 
-  if (tmp_pin >= 0 && ok) {
+  if (tmp_pin != -1 && ok) {
     hal_gpio_write(s_device_config.led_pin, s_device_config.led_status);
   }
 
@@ -237,7 +236,8 @@ void web_init(struct mg_mgr *mgr) {
   int pingreq_interval_ms = MQTT_KEEP_ALIVE_INTERVAL * 1000 - 500;
   if (!g_device_id) generate_device_id();
   if (!g_root_topic) g_root_topic = MQTT_ROOT_TOPIC;
-  s_device_config.log_level = (uint8_t) mg_log_level;
+  s_device_config.log_level = (int) mg_log_level;
+  s_device_config.led_pin = hal_led_pin();
 
   // Configure JSON-RPC functions we're going to handle
   mg_rpc_add(&s_rpc_head, mg_str("config.set"), rpc_config_set, NULL);

@@ -24,6 +24,10 @@ bool hal_gpio_read(int pin) {
              : false;
 }
 
+int hal_led_pin(void) {
+  return 0;
+}
+
 int main(int argc, char *argv[]) {
   struct mg_mgr mgr;
 

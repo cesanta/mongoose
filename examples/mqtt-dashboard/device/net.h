@@ -26,6 +26,7 @@ void web_destroy();
 
 void hal_gpio_write(int pin, bool status);
 bool hal_gpio_read(int pin);
+int hal_led_pin(void);
 
 #ifdef __cplusplus
 }
