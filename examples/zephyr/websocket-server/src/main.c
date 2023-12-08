@@ -17,7 +17,7 @@ static void fn(struct mg_connection *c, int ev, void *ev_data, void *fn_data) {
   if (ev == MG_EV_OPEN) {
     c->is_hexdumping = 1;
   } else if (ev == MG_EV_ACCEPT && fn_data != NULL) {
-    struct mg_tls_opts opts = {.cert = s_ssl_cert, .certkey = s_ssl_key};
+    struct mg_tls_opts opts = {.cert = s_ssl_cert, .key = s_ssl_key};
     mg_tls_init(c, &opts);
   } else if (ev == MG_EV_HTTP_MSG) {
     struct mg_http_message *hm = (struct mg_http_message *) ev_data;
