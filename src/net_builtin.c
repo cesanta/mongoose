@@ -557,8 +557,7 @@ static size_t trim_len(struct mg_connection *c, size_t len) {
   }
   // Ensure the MTU isn't lower than the minimum allowed value
   if (ifp->mtu < min_mtu) {
-    MG_ERROR(("MTU is lower than minimum possible value. Setting it to %d.",
-              min_mtu));
+    MG_ERROR(("MTU is lower than minimum, capping to %lu", min_mtu));
     ifp->mtu = (uint16_t) min_mtu;
   }
   // If the total packet size exceeds the MTU, trim the length
@@ -669,7 +668,9 @@ static void read_conn(struct mg_connection *c, struct pkt *pkt) {
     if (s->ttype != MIP_TTYPE_ACK) settmout(c, MIP_TTYPE_ACK);
 #endif
 
-    if (c->is_tls) {
+    if (c->is_tls && c->is_tls_hs) {
+      mg_tls_handshake(c);
+    } else if (c->is_tls) {
       // TLS connection. Make room for decrypted data in c->recv
       io = &c->recv;
       if (io->size - io->len < pkt->pay.len &&
@@ -1083,7 +1084,6 @@ void mg_mgr_poll(struct mg_mgr *mgr, int ms) {
     MG_VERBOSE(("%lu .. %c%c%c%c%c", c->id, c->is_tls ? 'T' : 't',
                 c->is_connecting ? 'C' : 'c', c->is_tls_hs ? 'H' : 'h',
                 c->is_resolving ? 'R' : 'r', c->is_closing ? 'C' : 'c'));
-    if (c->is_tls_hs) mg_tls_handshake(c);
     if (can_write(c)) write_conn(c);
     if (c->is_draining && c->send.len == 0 && s->ttype != MIP_TTYPE_FIN)
       init_closure(c);
