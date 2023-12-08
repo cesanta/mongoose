@@ -111,9 +111,9 @@ static void rpc_config_set(struct mg_rpc_req *r) {
   }
 
   tmp_pin = (int8_t) mg_json_get_long(r->frame, "$.params.led_pin", -1);
-  if (tmp_pin > 0) s_device_config.led_pin = tmp_pin;
+  if (tmp_pin >= 0) s_device_config.led_pin = tmp_pin;
 
-  if (tmp_pin > 0 && ok) {
+  if (tmp_pin >= 0 && ok) {
     hal_gpio_write(s_device_config.led_pin, s_device_config.led_status);
   }
 
