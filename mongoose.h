@@ -2119,6 +2119,7 @@ enum {
   MG_EV_MQTT_MSG,   // MQTT PUBLISH received        struct mg_mqtt_message *
   MG_EV_MQTT_OPEN,  // MQTT CONNACK received        int *connack_status_code
   MG_EV_SNTP_TIME,  // SNTP time received           uint64_t *epoch_millis
+  MG_EV_WAKEUP,     // mg_wakeup() data received    struct mg_str *data
   MG_EV_USER        // Starting ID for user events
 };
 
@@ -2158,6 +2159,7 @@ struct mg_mgr {
   int epoll_fd;                 // Used when MG_EPOLL_ENABLE=1
   void *priv;                   // Used by the MIP stack
   size_t extraconnsize;         // Used by the MIP stack
+  MG_SOCKET_TYPE pipe;          // Socketpair end for mg_wakeup()
 #if MG_ENABLE_FREERTOS_TCP
   SocketSet_t ss;  // NOTE(lsm): referenced from socket struct
 #endif
@@ -2222,6 +2224,8 @@ void mg_close_conn(struct mg_connection *c);
 bool mg_open_listener(struct mg_connection *c, const char *url);
 
 // Utility functions
+bool mg_wakeup(struct mg_mgr *, unsigned long id, const void *buf, size_t len);
+bool mg_wakeup_init(struct mg_mgr *);
 struct mg_timer *mg_timer_add(struct mg_mgr *mgr, uint64_t milliseconds,
                               unsigned flags, void (*fn)(void *), void *arg);
 

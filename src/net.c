@@ -271,6 +271,7 @@ void mg_mgr_init(struct mg_mgr *mgr) {
   // won't kill the whole process.
   signal(SIGPIPE, SIG_IGN);
 #endif
+  mgr->pipe = MG_INVALID_SOCKET;
   mgr->dnstimeout = 3000;
   mgr->dns4.url = "udp://8.8.8.8:53";
   mgr->dns6.url = "udp://[2001:4860:4860::8888]:53";
