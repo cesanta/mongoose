@@ -594,20 +594,10 @@ long mg_io_send(struct mg_connection *c, const void *buf, size_t len) {
   return (long) len;
 }
 
-long mg_io_recv(struct mg_connection *c, void *buf, size_t len) {
-  struct connstate *s = (struct connstate *) (c + 1);
-  if (s->raw.len == 0) return MG_IO_WAIT;
-  if (len > s->raw.len) len = s->raw.len;
-  memcpy(buf, s->raw.buf, len);
-  mg_iobuf_del(&s->raw, 0, len);
-  return (long) len;
-}
-
 static void read_conn(struct mg_connection *c, struct pkt *pkt) {
   struct connstate *s = (struct connstate *) (c + 1);
-  struct mg_iobuf *io = c->is_tls ? &s->raw : &c->recv;
+  struct mg_iobuf *io = c->is_tls ? &c->rtls : &c->recv;
   uint32_t seq = mg_ntohl(pkt->tcp->seq);
-  s->raw.align = c->recv.align;
   uint32_t rem_ip;
   memcpy(&rem_ip, c->rem.ip, sizeof(uint32_t));
   if (pkt->tcp->flags & TH_FIN) {
@@ -647,9 +637,9 @@ static void read_conn(struct mg_connection *c, struct pkt *pkt) {
   } else {
     // Copy TCP payload into the IO buffer. If the connection is plain text,
     // we copy to c->recv. If the connection is TLS, this data is encrypted,
-    // therefore we copy that encrypted data to the s->raw iobuffer instead,
+    // therefore we copy that encrypted data to the c->rtls iobuffer instead,
     // and then call mg_tls_recv() to decrypt it. NOTE: mg_tls_recv() will
-    // call back mg_io_recv() which grabs raw data from s->raw
+    // call back mg_io_recv() which grabs raw data from c->rtls
     memcpy(&io->buf[io->len], pkt->pay.ptr, pkt->pay.len);
     io->len += pkt->pay.len;
 

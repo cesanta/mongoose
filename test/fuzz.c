@@ -23,7 +23,7 @@ static void fn(struct mg_connection *c, int ev, void *ev_data, void *fn_data) {
 }
 
 int LLVMFuzzerTestOneInput(const uint8_t *data, size_t size) {
-  mg_log_set(MG_LL_NONE);
+  mg_log_set(MG_LL_INFO);
 
   struct mg_dns_message dm;
   mg_dns_parse(data, size, &dm);

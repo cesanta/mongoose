@@ -3136,7 +3136,7 @@ static void producer(void *param) {
   size_t len, ofs = sizeof(tmp);
   for (s_out = 0; s_out < NMESSAGES; s_out++) {
     if (ofs >= sizeof(tmp)) mg_random(tmp, sizeof(tmp)), ofs = 0;
-    len = ((uint8_t *) tmp)[ofs] % 55 + 1;
+    len = ((uint8_t *) tmp)[ofs] % 55U + 1U;
     if (ofs + len > sizeof(tmp)) len = sizeof(tmp) - ofs;
     while ((mg_queue_book(q, &buf, len)) < len) (void) 0;
     memcpy(buf, &tmp[ofs], len);
