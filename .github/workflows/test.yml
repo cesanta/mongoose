@@ -539,6 +539,8 @@ jobs:
           - path: stm32/nucleo-h723zg-make-freertos-builtin
           - path: stm32/nucleo-h743zi-make-baremetal-builtin
           - path: stm32/nucleo-h743zi-make-freertos-builtin
+          - path: stm32/stm32h573i-dk-make-baremetal-builtin
+          - path: stm32/stm32h573i-dk-make-freertos-builtin
           - path: ti/ek-tm4c1294xl-make-baremetal-builtin
           - path: ti/ek-tm4c1294xl-make-freertos-builtin
     name: ${{ matrix.example.path }}
