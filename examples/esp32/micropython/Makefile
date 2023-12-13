@@ -2,7 +2,7 @@
 THISDIR = $(realpath $(CURDIR))
 ROOTDIR = $(realpath $(CURDIR)/../../..)
 PORT ?= /dev/ttyUSB0
-DOCKER ?= docker run --rm $(DA) -v $(ROOTDIR):$(ROOTDIR) -w $(THISDIR) espressif/idf:v5.0.2
+DOCKER ?= docker run --rm $(DA) -v $(ROOTDIR):$(ROOTDIR) -w $(THISDIR) espressif/idf:v5.0.4
 # Note that the esp32 port needs the extra .. for relative paths due to the location of its main CMakeLists.txt file
 CMD ?= bash -c '$(MAKE) -C micropython/ports/esp32 submodules && $(MAKE) -C micropython/ports/esp32 USER_C_MODULES=../../../../mongoose/micropython.cmake'
 
