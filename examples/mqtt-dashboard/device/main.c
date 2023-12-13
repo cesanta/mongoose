@@ -13,15 +13,19 @@ static void signal_handler(int signo) {
 static bool s_pins[100];
 
 void hal_gpio_write(int pin, bool status) {
-  if (pin >= 0 && pin <= (int) (sizeof(s_pins) / sizeof(s_pins[0]))) {
+  if (pin >= 0 && pin < (int) (sizeof(s_pins) / sizeof(s_pins[0]))) {
     s_pins[pin] = status;
   }
 }
 
 bool hal_gpio_read(int pin) {
-  return (pin >= 0 && pin <= (int) (sizeof(s_pins) / sizeof(s_pins[0])))
+  return (pin >= 0 && pin < (int) (sizeof(s_pins) / sizeof(s_pins[0])))
              ? s_pins[pin]
              : false;
+}
+
+int hal_led_pin(void) {
+  return 0;
 }
 
 int main(int argc, char *argv[]) {
