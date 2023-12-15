@@ -557,26 +557,26 @@ jobs:
       - if: ${{ env.GO == 1 }}
         run: make -C examples/${{ matrix.example.path }} build
 
-#  mqtt_dashboard_examples:
-#    runs-on: ubuntu-latest
-#    strategy:
-#      fail-fast: false
-#      matrix:
-#        example:
-#          - path: 
-#    name: ${{ matrix.example.path }}
-#    env:
-#      GO: 0
-#    steps:
-#      - uses: actions/checkout@v3
-#        with: { fetch-depth: 2 }
-#      - run: |
-#          if ./test/match_changed_files.sh '^src|examples/mqtt-dashboard/device|^examples/${{ matrix.example.path }}'; then
-#            echo GO=1 >> $GITHUB_ENV
-#            sudo apt -y update && sudo apt -y install gcc-arm-none-eabi
-#          fi
-#      - if: ${{ env.GO == 1 }}
-#        run: make -C examples/${{ matrix.example.path }} build
+  mqtt_dashboard_examples:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        example:
+          - path: rp2040/pico-rndis-device
+    name: ${{ matrix.example.path }}
+    env:
+      GO: 0
+    steps:
+      - uses: actions/checkout@v3
+        with: { fetch-depth: 2 }
+      - run: |
+          if ./test/match_changed_files.sh '^src|examples/mqtt-dashboard/device|^examples/${{ matrix.example.path }}'; then
+            echo GO=1 >> $GITHUB_ENV
+            sudo apt -y update && sudo apt -y install gcc-arm-none-eabi
+          fi
+      - if: ${{ env.GO == 1 }}
+        run: make -C examples/${{ matrix.example.path }} build
       
   dual_examples:
     runs-on: ubuntu-latest

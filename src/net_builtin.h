@@ -21,6 +21,7 @@ struct mg_tcpip_if {
   struct mg_str tx;                // Output (TX) buffer
   bool enable_dhcp_client;         // Enable DCHP client
   bool enable_dhcp_server;         // Enable DCHP server
+  bool enable_get_gateway;         // DCHP server sets client as gateway
   bool enable_crc32_check;         // Do a CRC check on RX frames and strip it
   bool enable_mac_check;           // Do a MAC check on RX frames
   struct mg_tcpip_driver *driver;  // Low level driver
