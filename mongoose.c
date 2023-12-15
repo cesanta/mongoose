@@ -5767,10 +5767,14 @@ MG_IRAM void mg_ota_boot(void) {
   struct mg_otadata prev = mg_otadata(MG_FIRMWARE_PREVIOUS);
 
   if (curr.status == MG_OTA_FIRST_BOOT) {
+    if (prev.status == MG_OTA_UNAVAILABLE) {
+      MG_INFO(("Setting previous firmware state to committed"));
+      prev.status = MG_OTA_COMMITTED;
+      mg_flash_save(NULL, mg_fwkey(MG_FIRMWARE_PREVIOUS), &prev, sizeof(prev));
+    }
     curr.status = MG_OTA_UNCOMMITTED;
     MG_INFO(("First boot, setting status to UNCOMMITTED"));
-    mg_flash_save(NULL, MG_OTADATA_KEY + MG_FIRMWARE_CURRENT, &curr,
-                  sizeof(curr));
+    mg_flash_save(NULL, mg_fwkey(MG_FIRMWARE_CURRENT), &curr, sizeof(curr));
   } else if (prev.status == MG_OTA_FIRST_BOOT && mg_flash_bank() == 0) {
     // Swap paritions. Pray power does not disappear
     size_t fs = mg_flash_size(), ss = mg_flash_sector_size();
