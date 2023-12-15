@@ -1,6 +1,6 @@
 #pragma once
 
-struct mg_tcpip_driver_stm32_data {
+struct mg_tcpip_driver_stm32f_data {
   // MDC clock divider. MDC clock is derived from HCLK, must not exceed 2.5MHz
   //    HCLK range    DIVIDER    mdc_cr VALUE
   //    -------------------------------------

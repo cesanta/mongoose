@@ -52,7 +52,7 @@ void mg_tcpip_init(struct mg_mgr *, struct mg_tcpip_if *);
 void mg_tcpip_free(struct mg_tcpip_if *);
 void mg_tcpip_qwrite(void *buf, size_t len, struct mg_tcpip_if *ifp);
 
-extern struct mg_tcpip_driver mg_tcpip_driver_stm32;
+extern struct mg_tcpip_driver mg_tcpip_driver_stm32f;
 extern struct mg_tcpip_driver mg_tcpip_driver_w5500;
 extern struct mg_tcpip_driver mg_tcpip_driver_tm4c;
 extern struct mg_tcpip_driver mg_tcpip_driver_stm32h;
