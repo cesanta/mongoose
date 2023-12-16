@@ -5,6 +5,7 @@ GZIP ?= gzip            # For compressing files in web_root/
 OUT ?= -o $(PROG)       # Compiler argument for output file
 SOURCES = main.c mongoose.c net.c packed_fs.c   # Source code files
 CFLAGS = -W -Wall -Wextra -g -I.                # Build options
+NPX ?= npx
 
 # Mongoose build options. See https://mongoose.ws/documentation/#build-options
 CFLAGS_MONGOOSE += -DMG_ENABLE_PACKED_FS=1
@@ -32,7 +33,7 @@ web_root/bundle.js:
 
 # Create optimised CSS. Prerequisite: npm -g i tailwindcss tailwindcss-font-inter
 web_root/main.css: web_root/index.html $(wildcard web_root/*.js)
-	npx tailwindcss -o $@ --minify
+	$(NPX) tailwindcss -o $@ --minify
 
 # Generate packed filesystem for serving Web UI
 packed_fs.c: $(wildcard web_root/*) $(wildcard certs/*) Makefile web_root/main.css web_root/bundle.js
