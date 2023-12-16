@@ -325,7 +325,6 @@ export function UploadFileButton(props) {
             finish(ok); // All chunks sent
           });
       };
-      //setFailed(false);
       sendChunk(0);
     });
   };
