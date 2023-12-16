@@ -230,7 +230,7 @@ export function Setting(props) {
   if (props.type == 'select') input = SelectValue;
   return html`
 <div class=${props.cls || 'grid grid-cols-2 gap-2 my-1'}>
-  <label class="flex items-center text-sm text-gray-700 mr-2 font-medium">${props.title}<//>
+  <label class="flex items-center text-sm text-gray-700 mr-2 font-medium ${props.title || 'hidden'}">${props.title}<//>
   <div class="flex items-center">${h(input, props)}<//>
 <//>`;
 };

@@ -10,29 +10,27 @@ static void signal_handler(int signo) {
 }
 
 // Mocked device pins
-static bool s_pins[100];
+static bool s_pins[NUM_PINS];
 
-void hal_gpio_write(int pin, bool status) {
-  if (pin >= 0 && pin < (int) (sizeof(s_pins) / sizeof(s_pins[0]))) {
+bool hal_gpio_write(int pin, bool status) {
+  bool ok = false;
+  if (pin >= 0 && pin < NUM_PINS) {
     s_pins[pin] = status;
+    ok = true;
   }
+  return ok;
 }
 
 bool hal_gpio_read(int pin) {
-  return (pin >= 0 && pin < (int) (sizeof(s_pins) / sizeof(s_pins[0])))
-             ? s_pins[pin]
-             : false;
-}
-
-int hal_led_pin(void) {
-  return 0;
+  return (pin >= 0 && pin < NUM_PINS) ? s_pins[pin] : false;
 }
 
 int main(int argc, char *argv[]) {
   struct mg_mgr mgr;
+  int i;
 
   // Parse command-line flags
-  for (int i = 1; i < argc; i++) {
+  for (i = 1; i < argc; i++) {
     if (strcmp(argv[i], "-u") == 0 && argv[i + 1] != NULL) {
       g_url = argv[++i];
     } else if (strcmp(argv[i], "-i") == 0 && argv[i + 1] != NULL) {
@@ -62,8 +60,8 @@ int main(int argc, char *argv[]) {
     mg_mgr_poll(&mgr, 50);
   }
 
+  web_free();
   mg_mgr_free(&mgr);
-  web_destroy();
   MG_INFO(("Exiting on signal %d", s_signo));
 
   return 0;

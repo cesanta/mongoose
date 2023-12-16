@@ -4,31 +4,50 @@
 #include "net.h"
 
 char *g_url = MQTT_SERVER_URL;
+char *g_root_topic = MQTT_ROOT_TOPIC;
 char *g_device_id;
-char *g_root_topic;
+
 static uint8_t s_qos = 1;             // MQTT QoS
-static struct mg_connection *s_conn;  // Client connection
-static struct mg_rpc *s_rpc_head = NULL;
+static struct mg_connection *s_conn;  // MQTT Client connection
+static struct mg_rpc *s_rpc = NULL;   // List of registered RPC methods
 
 struct device_config {
-  bool led_status;
-  int led_pin;
-  int brightness;
-  int log_level;
+  int pins[NUM_PINS];  // State of the GPIO pins
+  int log_level;       // Device logging level, 0-4
 };
 
 static struct device_config s_device_config;
 
-// This is for newlib and TLS (mbedTLS)
-uint64_t mg_now(void) {
-  return mg_millis();
-}
+// Device ID generation function. Create an ID that is unique
+// for a given device, and does not change between device restarts.
+static void set_device_id(void) {
+  char buf[15] = "";
 
-static void generate_device_id(void) {
-  char tmp[DEVICE_ID_LEN + 1];
-  tmp[DEVICE_ID_LEN] = '\0';
-  mg_random_str(tmp, DEVICE_ID_LEN);
-  g_device_id = strdup(tmp);
+#ifdef _WIN32
+  unsigned serial = 0;
+  if (GetVolumeInformationA("c:\\", NULL, 0, &serial, NULL, NULL, NULL, 0)) {
+    mg_snprintf(buf, sizeof(buf), "%lx", serial);
+  }
+#elif defined(__APPLE__)
+  FILE *fp = popen(
+      "ioreg -l | grep IOPlatformSerialNumber | cut -d'\"' -f4 | tr -d $'\n'",
+      "r");
+  if (fp != NULL) {
+    fread(buf, 1, sizeof(buf), fp);
+    fclose(fp);
+  }
+#elif defined(__linux__)
+  char *id = mg_file_read(&mg_fs_posix, "/etc/machine-id", NULL);
+  if (id != NULL) {
+    mg_snprintf(buf, sizeof(buf), "%s", id);
+    free(id);
+  }
+#endif
+
+  if (buf[0] == '\0') mg_snprintf(buf, sizeof(buf), "%s", "MyDeviceID");
+
+  buf[sizeof(buf) - 1] = '\0';
+  g_device_id = strdup(buf);
 }
 
 static size_t print_fw_status(void (*out)(char, void *), void *ptr,
@@ -40,45 +59,51 @@ static size_t print_fw_status(void (*out)(char, void *), void *ptr,
                     MG_ESC("timestamp"), mg_ota_timestamp(fw));
 }
 
+static size_t print_ints(void (*out)(char, void *), void *ptr, va_list *ap) {
+  int *array = va_arg(*ap, int *);
+  size_t i, len = 0, num_elems = va_arg(*ap, size_t);
+  for (i = 0; i < num_elems; i++) {
+    len += mg_xprintf(out, ptr, "%s%d", i ? "," : "", array[i]);
+  }
+  return len;
+}
+
 static void publish_status(struct mg_connection *c) {
-  char *status_topic = mg_mprintf("%s/%s/status", g_root_topic, g_device_id);
-  struct mg_str pubt = mg_str(status_topic);
+  char topic[100];
   struct mg_mqtt_opts pub_opts;
+  struct mg_iobuf io = {0, 0, 0, 512};
+
+  // Print JSON notification into the io buffer
+  mg_xprintf(mg_pfn_iobuf, &io,
+             "{%m:%m,%m:{%m:%m,%m:%d,%m:[%M],%m:%M,%m:%M}}",                //
+             MG_ESC("method"), MG_ESC("status.notify"), MG_ESC("params"),   //
+             MG_ESC("status"), MG_ESC("online"),                            //
+             MG_ESC(("log_level")), s_device_config.log_level,              //
+             MG_ESC(("pins")), print_ints, s_device_config.pins, NUM_PINS,  //
+             MG_ESC(("crnt_fw")), print_fw_status, MG_FIRMWARE_CURRENT,     //
+             MG_ESC(("prev_fw")), print_fw_status, MG_FIRMWARE_PREVIOUS);
+
   memset(&pub_opts, 0, sizeof(pub_opts));
-  pub_opts.topic = pubt;
-  s_device_config.led_status = hal_gpio_read(s_device_config.led_pin);
-  char *device_status_json = mg_mprintf(
-      "{%m:%m,%m:{%m:%m,%m:%s,%m:%hhu,%m:%hhu,%m:%hhu,%m:%M,%m:%M}}",
-      MG_ESC("method"), MG_ESC("status.notify"), MG_ESC("params"),
-      MG_ESC("status"), MG_ESC("online"), MG_ESC("led_status"),
-      s_device_config.led_status ? "true" : "false", MG_ESC("led_pin"),
-      s_device_config.led_pin, MG_ESC("brightness"), s_device_config.brightness,
-      MG_ESC(("log_level")), s_device_config.log_level, MG_ESC(("crnt_fw")),
-      print_fw_status, MG_FIRMWARE_CURRENT, MG_ESC(("prev_fw")),
-      print_fw_status, MG_FIRMWARE_PREVIOUS);
-  struct mg_str data = mg_str(device_status_json);
-  pub_opts.message = data;
-  pub_opts.qos = s_qos, pub_opts.retain = true;
+  mg_snprintf(topic, sizeof(topic), "%s/%s/status", g_root_topic, g_device_id);
+  pub_opts.topic = mg_str(topic);
+  pub_opts.message = mg_str_n((char *) io.buf, io.len);
+  pub_opts.qos = s_qos;
+  pub_opts.retain = true;
   mg_mqtt_pub(c, &pub_opts);
-  MG_INFO(("%lu PUBLISHED %.*s -> %.*s", c->id, (int) data.len, data.ptr,
-           (int) pubt.len, pubt.ptr));
-  free(device_status_json);
-  free(status_topic);
+  MG_INFO(("%lu PUBLISHED %s -> %.*s", c->id, topic, io.len, io.buf));
+  mg_iobuf_free(&io);
 }
 
 static void publish_response(struct mg_connection *c, char *buf, size_t len) {
-  char *tx_topic = mg_mprintf("%s/%s/tx", g_root_topic, g_device_id);
-  struct mg_str pubt = mg_str(tx_topic);
   struct mg_mqtt_opts pub_opts;
+  char topic[100];
+  mg_snprintf(topic, sizeof(topic), "%s/%s/tx", g_root_topic, g_device_id);
   memset(&pub_opts, 0, sizeof(pub_opts));
-  pub_opts.topic = pubt;
-  struct mg_str data = mg_str_n(buf, len);
-  pub_opts.message = data;
+  pub_opts.topic = mg_str(topic);
+  pub_opts.message = mg_str_n(buf, len);
   pub_opts.qos = s_qos;
   mg_mqtt_pub(c, &pub_opts);
-  MG_INFO(("%lu PUBLISHED %.*s -> %.*s", c->id, (int) data.len, data.ptr,
-           (int) pubt.len, pubt.ptr));
-  free(tx_topic);
+  MG_INFO(("%lu PUBLISHED %s -> %.*s", c->id, topic, len, buf));
 }
 
 static void subscribe(struct mg_connection *c) {
@@ -94,29 +119,26 @@ static void subscribe(struct mg_connection *c) {
 }
 
 static void rpc_config_set(struct mg_rpc_req *r) {
-  bool tmp_status, ok;
-  int tmp_brightness, tmp_level, tmp_pin;
+  struct device_config dc = s_device_config;
+  dc.log_level = (int) mg_json_get_long(r->frame, "$.params.log_level", -1);
 
-  ok = mg_json_get_bool(r->frame, "$.params.led_status", &tmp_status);
-  if (ok) s_device_config.led_status = tmp_status;
-
-  tmp_brightness = (int) mg_json_get_long(r->frame, "$.params.brightness", -1);
-  if (tmp_brightness >= 0) s_device_config.brightness = tmp_brightness;
-
-  tmp_level = (int) mg_json_get_long(r->frame, "$.params.log_level", -1);
-  if (tmp_level >= 0) {
-    s_device_config.log_level = tmp_level;
-    mg_log_set(s_device_config.log_level);
+  if (dc.log_level < 0 || dc.log_level > MG_LL_VERBOSE) {
+    mg_rpc_err(r, -32602, "Log level must be from 0 to 4");
+  } else {
+    int i, val;
+    for (i = 0; i < NUM_PINS; i++) {
+      char path[20];
+      mg_snprintf(path, sizeof(path), "$.params.pins[%lu]", i);
+      val = (int) mg_json_get_long(r->frame, path, -1);
+      if (val >= 0 && val != dc.pins[i]) {
+        dc.pins[i] = val;
+        hal_gpio_write((int) i, val);
+      }
+    }
+    mg_log_set(dc.log_level);
+    s_device_config = dc;
+    mg_rpc_ok(r, "true");
   }
-
-  tmp_pin = (int) mg_json_get_long(r->frame, "$.params.led_pin", -1);
-  if (tmp_pin != -1) s_device_config.led_pin = tmp_pin;
-
-  if (tmp_pin != -1 && ok) {
-    hal_gpio_write(s_device_config.led_pin, s_device_config.led_status);
-  }
-
-  mg_rpc_ok(r, "%m", MG_ESC("ok"));
 }
 
 static void rpc_ota_commit(struct mg_rpc_req *r) {
@@ -143,31 +165,29 @@ static void rpc_ota_rollback(struct mg_rpc_req *r) {
 static void rpc_ota_upload(struct mg_rpc_req *r) {
   long ofs = mg_json_get_long(r->frame, "$.params.offset", -1);
   long tot = mg_json_get_long(r->frame, "$.params.total", -1);
-  int len;
-  char *file_chunk = mg_json_get_b64(r->frame, "$.params.chunk", &len);
-  if (!file_chunk) {
+  int len = 0;
+  char *buf = mg_json_get_b64(r->frame, "$.params.chunk", &len);
+  if (buf == NULL) {
     mg_rpc_err(r, 1, "Error processing the binary chunk.");
-    return;
-  }
-  struct mg_str data = mg_str_n(file_chunk, len);
-  if (ofs < 0 || tot < 0) {
-    mg_rpc_err(r, 1, "offset and total not set");
-  } else if (ofs == 0 && mg_ota_begin((size_t) tot) == false) {
-    mg_rpc_err(r, 1, "mg_ota_begin(%ld) failed\n", tot);
-  } else if (data.len > 0 && mg_ota_write(data.ptr, data.len) == false) {
-    mg_rpc_err(r, 1, "mg_ota_write(%lu) @%ld failed\n", data.len, ofs);
-    mg_ota_end();
-  } else if (data.len == 0 && mg_ota_end() == false) {
-    mg_rpc_err(r, 1, "mg_ota_end() failed\n", tot);
   } else {
-    mg_rpc_ok(r, "%m", MG_ESC("ok"));
-    if (data.len == 0) {
-      // Successful mg_ota_end() called, schedule device reboot
-      mg_timer_add(s_conn->mgr, 500, 0, (void (*)(void *)) mg_device_reset,
-                   NULL);
+    if (ofs < 0 || tot < 0) {
+      mg_rpc_err(r, 1, "offset and total not set");
+    } else if (ofs == 0 && mg_ota_begin((size_t) tot) == false) {
+      mg_rpc_err(r, 1, "mg_ota_begin(%ld) failed\n", tot);
+    } else if (len > 0 && mg_ota_write(buf, len) == false) {
+      mg_rpc_err(r, 1, "mg_ota_write(%lu) @%ld failed\n", len, ofs);
+      mg_ota_end();
+    } else if (len == 0 && mg_ota_end() == false) {
+      mg_rpc_err(r, 1, "mg_ota_end() failed\n", tot);
+    } else {
+      mg_rpc_ok(r, "%m", MG_ESC("ok"));
+      if (len == 0) {  // Successful mg_ota_end() called, schedule device reboot
+        mg_timer_add(s_conn->mgr, 500, 0, (void (*)(void *)) mg_device_reset,
+                     NULL);
+      }
     }
+    free(buf);
   }
-  free(file_chunk);
 }
 
 static void fn(struct mg_connection *c, int ev, void *ev_data, void *fn_data) {
@@ -187,11 +207,12 @@ static void fn(struct mg_connection *c, int ev, void *ev_data, void *fn_data) {
   } else if (ev == MG_EV_MQTT_MSG) {
     // When we get echo response, print it
     struct mg_mqtt_message *mm = (struct mg_mqtt_message *) ev_data;
-    if (mm->data.len < 1024)
-      MG_INFO(("%lu RECEIVED %.*s <- %.*s", c->id, (int) mm->data.len,
-               mm->data.ptr, (int) mm->topic.len, mm->topic.ptr));
     struct mg_iobuf io = {0, 0, 0, 512};
-    struct mg_rpc_req r = {&s_rpc_head, 0, mg_pfn_iobuf, &io, 0, mm->data};
+    struct mg_rpc_req r = {&s_rpc, NULL, mg_pfn_iobuf,
+                           &io,    NULL, {mm->data.ptr, mm->data.len}};
+    size_t clipped_len = mm->data.len > 512 ? 512 : mm->data.len;
+    MG_INFO(("%lu RECEIVED %.*s <- %.*s", c->id, clipped_len, mm->data.ptr,
+             mm->topic.len, mm->topic.ptr));
     mg_rpc_process(&r);
     if (io.buf) {
       publish_response(c, (char *) io.buf, io.len);
@@ -206,51 +227,54 @@ static void fn(struct mg_connection *c, int ev, void *ev_data, void *fn_data) {
 }
 
 // Timer function - recreate client connection if it is closed
-static void timer_fn(void *arg) {
+static void timer_reconnect(void *arg) {
   struct mg_mgr *mgr = (struct mg_mgr *) arg;
   if (s_conn == NULL) {
-    char *status_topic = mg_mprintf("%s/%s/status", g_root_topic, g_device_id);
-    char *msg = mg_mprintf("{%m:%m,%m:{%m:%m}}", MG_ESC("method"),
-                           MG_ESC("status.notify"), MG_ESC("params"),
-                           MG_ESC("status"), MG_ESC("offline"));
-
-    struct mg_mqtt_opts opts = {.clean = true,
-                                .qos = s_qos,
-                                .topic = mg_str(status_topic),
-                                .version = 4,
-                                .keepalive = MQTT_KEEP_ALIVE_INTERVAL,
-                                .retain = true,
-                                .message = mg_str(msg)};
+    struct mg_mqtt_opts opts;
+    char topic[100], message[100];
+    mg_snprintf(topic, sizeof(topic), "%s/%s/status", g_root_topic,
+                g_device_id);
+    mg_snprintf(message, sizeof(message), "{%m:%m,%m:{%m:%m}}",
+                MG_ESC("method"), MG_ESC("status.notify"), MG_ESC("params"),
+                MG_ESC("status"), MG_ESC("offline"));
+    memset(&opts, 0, sizeof(opts));
+    opts.clean = true;
+    opts.qos = s_qos;
+    opts.topic = mg_str(topic);
+    opts.version = 4;
+    opts.keepalive = MQTT_KEEPALIVE_SEC;
+    opts.retain = true;
+    opts.message = mg_str(message);
     s_conn = mg_mqtt_connect(mgr, g_url, &opts, fn, NULL);
-    free(msg);
-    free(status_topic);
   }
 }
 
-static void timer_keepalive(void *arg) {
+static void timer_ping(void *arg) {
   mg_mqtt_send_header(s_conn, MQTT_CMD_PINGREQ, 0, 0);
   (void) arg;
 }
 
 void web_init(struct mg_mgr *mgr) {
-  int pingreq_interval_ms = MQTT_KEEP_ALIVE_INTERVAL * 1000 - 500;
-  if (!g_device_id) generate_device_id();
-  if (!g_root_topic) g_root_topic = MQTT_ROOT_TOPIC;
+  int i, ping_interval_ms = MQTT_KEEPALIVE_SEC * 1000 - 500;
+  set_device_id();
   s_device_config.log_level = (int) mg_log_level;
-  s_device_config.led_pin = hal_led_pin();
+  for (i = 0; i < NUM_PINS; i++) {
+    s_device_config.pins[i] = hal_gpio_read(i);
+  }
 
   // Configure JSON-RPC functions we're going to handle
-  mg_rpc_add(&s_rpc_head, mg_str("config.set"), rpc_config_set, NULL);
-  mg_rpc_add(&s_rpc_head, mg_str("ota.commit"), rpc_ota_commit, NULL);
-  mg_rpc_add(&s_rpc_head, mg_str("device.reset"), rpc_device_reset, NULL);
-  mg_rpc_add(&s_rpc_head, mg_str("ota.rollback"), rpc_ota_rollback, NULL);
-  mg_rpc_add(&s_rpc_head, mg_str("ota.upload"), rpc_ota_upload, NULL);
+  mg_rpc_add(&s_rpc, mg_str("config.set"), rpc_config_set, NULL);
+  mg_rpc_add(&s_rpc, mg_str("ota.commit"), rpc_ota_commit, NULL);
+  mg_rpc_add(&s_rpc, mg_str("ota.rollback"), rpc_ota_rollback, NULL);
+  mg_rpc_add(&s_rpc, mg_str("ota.upload"), rpc_ota_upload, NULL);
+  mg_rpc_add(&s_rpc, mg_str("device.reset"), rpc_device_reset, NULL);
 
-  mg_timer_add(mgr, 3000, MG_TIMER_REPEAT | MG_TIMER_RUN_NOW, timer_fn, mgr);
-  mg_timer_add(mgr, pingreq_interval_ms, MG_TIMER_REPEAT, timer_keepalive, mgr);
+  mg_timer_add(mgr, 3000, MG_TIMER_REPEAT | MG_TIMER_RUN_NOW, timer_reconnect,
+               mgr);
+  mg_timer_add(mgr, ping_interval_ms, MG_TIMER_REPEAT, timer_ping, mgr);
 }
 
-void web_destroy() {
-  mg_rpc_del(&s_rpc_head, NULL);  // Deallocate RPC handlers
+void web_free(void) {
+  mg_rpc_del(&s_rpc, NULL);  // Deallocate RPC handlers
   free(g_device_id);
 }
