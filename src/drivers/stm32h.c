@@ -1,4 +1,4 @@
-#include "tcpip.h"
+#include "net_builtin.h"
 
 #if MG_ENABLE_TCPIP && defined(MG_ENABLE_DRIVER_STM32H) && \
     MG_ENABLE_DRIVER_STM32H
@@ -152,7 +152,7 @@ static bool mg_tcpip_driver_stm32h_init(struct mg_tcpip_if *ifp) {
   // Init RX descriptors
   for (int i = 0; i < ETH_DESC_CNT; i++) {
     s_rxdesc[i][0] = (uint32_t) (uintptr_t) s_rxbuf[i];  // Point to data buffer
-    s_rxdesc[i][3] = MG_BIT(31) | MG_BIT(30) | MG_BIT(24);        // OWN, IOC, BUF1V
+    s_rxdesc[i][3] = MG_BIT(31) | MG_BIT(30) | MG_BIT(24);  // OWN, IOC, BUF1V
   }
 
   // Init TX descriptors
@@ -169,9 +169,9 @@ static bool mg_tcpip_driver_stm32h_init(struct mg_tcpip_if *ifp) {
 
   // NOTE(scaprile): We do not use timing facilities so the DMA engine does not
   // re-write buffer address
-  ETH->DMAMR = 0 << 16;     // use interrupt mode 0 (58.8.1) (reset value)
+  ETH->DMAMR = 0 << 16;        // use interrupt mode 0 (58.8.1) (reset value)
   ETH->DMASBMR |= MG_BIT(12);  // AAL NOTE(scaprile): is this actually needed
-  ETH->MACIER = 0;        // Do not enable additional irq sources (reset value)
+  ETH->MACIER = 0;  // Do not enable additional irq sources (reset value)
   ETH->MACTFCR = MG_BIT(7);  // Disable zero-quanta pause
   // ETH->MACPFR = MG_BIT(31);  // Receive all
   eth_write_phy(PHY_ADDR, PHY_BCR, MG_BIT(15));  // Reset PHY
@@ -217,10 +217,10 @@ static size_t mg_tcpip_driver_stm32h_tx(const void *buf, size_t len,
     for (int i = 0; i < ETH_DESC_CNT; i++) MG_ERROR(("%08X", s_txdesc[i][3]));
     len = 0;  // All descriptors are busy, fail
   } else {
-    memcpy(s_txbuf[s_txno], buf, len);        // Copy data
-    s_txdesc[s_txno][2] = (uint32_t) len;     // Set data len
+    memcpy(s_txbuf[s_txno], buf, len);              // Copy data
+    s_txdesc[s_txno][2] = (uint32_t) len;           // Set data len
     s_txdesc[s_txno][3] = MG_BIT(28) | MG_BIT(29);  // FD, LD
-    s_txdesc[s_txno][3] |= MG_BIT(31);           // Set OWN bit - let DMA take over
+    s_txdesc[s_txno][3] |= MG_BIT(31);  // Set OWN bit - let DMA take over
     if (++s_txno >= ETH_DESC_CNT) s_txno = 0;
   }
   ETH->DMACSR |= MG_BIT(2) | MG_BIT(1);  // Clear any prior TBU, TPS
@@ -250,8 +250,8 @@ static bool mg_tcpip_driver_stm32h_up(struct mg_tcpip_if *ifp) {
 void ETH_IRQHandler(void);
 static uint32_t s_rxno;
 void ETH_IRQHandler(void) {
-  if (ETH->DMACSR & MG_BIT(6)) {            // Frame received, loop
-    ETH->DMACSR = MG_BIT(15) | MG_BIT(6);      // Clear flag
+  if (ETH->DMACSR & MG_BIT(6)) {           // Frame received, loop
+    ETH->DMACSR = MG_BIT(15) | MG_BIT(6);  // Clear flag
     for (uint32_t i = 0; i < 10; i++) {  // read as they arrive but not forever
       if (s_rxdesc[s_rxno][3] & MG_BIT(31)) break;  // exit when done
       if (((s_rxdesc[s_rxno][3] & (MG_BIT(28) | MG_BIT(29))) ==
@@ -262,11 +262,13 @@ void ETH_IRQHandler(void) {
         // ETH->DMACSR));
         mg_tcpip_qwrite(s_rxbuf[s_rxno], len > 4 ? len - 4 : len, s_ifp);
       }
-      s_rxdesc[s_rxno][3] = MG_BIT(31) | MG_BIT(30) | MG_BIT(24);  // OWN, IOC, BUF1V
+      s_rxdesc[s_rxno][3] =
+          MG_BIT(31) | MG_BIT(30) | MG_BIT(24);  // OWN, IOC, BUF1V
       if (++s_rxno >= ETH_DESC_CNT) s_rxno = 0;
     }
   }
-  ETH->DMACSR = MG_BIT(7) | MG_BIT(8);  // Clear possible RBU RPS while processing
+  ETH->DMACSR =
+      MG_BIT(7) | MG_BIT(8);  // Clear possible RBU RPS while processing
   ETH->DMACRDTPR =
       (uint32_t) (uintptr_t) &s_rxdesc[ETH_DESC_CNT - 1];  // and resume RX
 }

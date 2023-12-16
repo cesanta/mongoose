@@ -1,7 +1,7 @@
-#include "tcpip.h"
+#include "net_builtin.h"
 
-#if MG_ENABLE_TCPIP && defined(MG_ENABLE_DRIVER_STM32) && MG_ENABLE_DRIVER_STM32
-struct stm32_eth {
+#if MG_ENABLE_TCPIP && defined(MG_ENABLE_DRIVER_STM32F) && MG_ENABLE_DRIVER_STM32F
+struct stm32f_eth {
   volatile uint32_t MACCR, MACFFR, MACHTHR, MACHTLR, MACMIIAR, MACMIIDR, MACFCR,
       MACVLANTR, RESERVED0[2], MACRWUFFR, MACPMTCSR, RESERVED1, MACDBGR, MACSR,
       MACIMR, MACA0HR, MACA0LR, MACA1HR, MACA1LR, MACA2HR, MACA2LR, MACA3HR,
@@ -15,7 +15,7 @@ struct stm32_eth {
       DMACHRBAR;
 };
 #undef ETH
-#define ETH ((struct stm32_eth *) (uintptr_t) 0x40028000)
+#define ETH ((struct stm32f_eth *) (uintptr_t) 0x40028000)
 
 #define ETH_PKT_SIZE 1540  // Max frame size
 #define ETH_DESC_CNT 4     // Descriptors count
@@ -101,9 +101,9 @@ static int guess_mdc_cr(void) {
   return result;
 }
 
-static bool mg_tcpip_driver_stm32_init(struct mg_tcpip_if *ifp) {
-  struct mg_tcpip_driver_stm32_data *d =
-      (struct mg_tcpip_driver_stm32_data *) ifp->driver_data;
+static bool mg_tcpip_driver_stm32f_init(struct mg_tcpip_if *ifp) {
+  struct mg_tcpip_driver_stm32f_data *d =
+      (struct mg_tcpip_driver_stm32f_data *) ifp->driver_data;
   s_ifp = ifp;
 
   // Init RX descriptors
@@ -154,7 +154,7 @@ static bool mg_tcpip_driver_stm32_init(struct mg_tcpip_if *ifp) {
   return true;
 }
 
-static size_t mg_tcpip_driver_stm32_tx(const void *buf, size_t len,
+static size_t mg_tcpip_driver_stm32f_tx(const void *buf, size_t len,
                                        struct mg_tcpip_if *ifp) {
   if (len > sizeof(s_txbuf[s_txno])) {
     MG_ERROR(("Frame too big, %ld", (long) len));
@@ -177,7 +177,7 @@ static size_t mg_tcpip_driver_stm32_tx(const void *buf, size_t len,
   return len;
 }
 
-static bool mg_tcpip_driver_stm32_up(struct mg_tcpip_if *ifp) {
+static bool mg_tcpip_driver_stm32f_up(struct mg_tcpip_if *ifp) {
   uint32_t bsr = eth_read_phy(PHY_ADDR, PHY_BSR);
   bool up = bsr & MG_BIT(2) ? 1 : 0;
   if ((ifp->state == MG_TCPIP_STATE_DOWN) && up) {  // link state just went up
@@ -222,7 +222,7 @@ void ETH_IRQHandler(void) {
   ETH->DMARPDR = 0;          // and resume RX
 }
 
-struct mg_tcpip_driver mg_tcpip_driver_stm32 = {mg_tcpip_driver_stm32_init,
-                                                mg_tcpip_driver_stm32_tx, NULL,
-                                                mg_tcpip_driver_stm32_up};
+struct mg_tcpip_driver mg_tcpip_driver_stm32f = {mg_tcpip_driver_stm32f_init,
+                                                mg_tcpip_driver_stm32f_tx, NULL,
+                                                mg_tcpip_driver_stm32f_up};
 #endif
