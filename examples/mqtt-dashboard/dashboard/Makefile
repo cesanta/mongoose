@@ -1,4 +1,5 @@
 PWD := $(shell pwd)
+NPX ?= npx
 
 all: bundle.js main.css
 	make -C ../../http-server ARGS="-d $(PWD)"
@@ -9,7 +10,7 @@ bundle.js:
 
 # Create optimised CSS. Prerequisite: npm -g i tailwindcss tailwindcss-font-inter
 main.css: index.html $(wildcard *.js)
-	npx tailwindcss -o $@ --minify
+	$(NPX) tailwindcss -o $@ --minify
 
 clean:
 	true
