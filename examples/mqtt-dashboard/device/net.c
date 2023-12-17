@@ -24,7 +24,7 @@ static void set_device_id(void) {
   char buf[15] = "";
 
 #ifdef _WIN32
-  unsigned serial = 0;
+  unsigned long serial = 0;
   if (GetVolumeInformationA("c:\\", NULL, 0, &serial, NULL, NULL, NULL, 0)) {
     mg_snprintf(buf, sizeof(buf), "%lx", serial);
   }
