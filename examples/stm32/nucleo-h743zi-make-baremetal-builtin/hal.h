@@ -24,7 +24,7 @@
 #define LED2 PIN('E', 1)   // On-board LED pin (yellow)
 #define LED3 PIN('B', 14)  // On-board LED pin (red)
 
-#define LED LED2              // Use yellow LED for blinking
+#define LED LED2  // Use yellow LED for blinking
 
 // System clock (2.1, Figure 1; 8.5, Figure 45; 8.5.5, Figure 47; 8.5.6, Figure
 // 49) CPU_FREQUENCY <= 480 MHz; hclk = CPU_FREQUENCY / HPRE ; hclk <= 240 MHz;
@@ -61,7 +61,9 @@ enum { GPIO_PULL_NONE, GPIO_PULL_UP, GPIO_PULL_DOWN };
 
 #define GPIO(N) ((GPIO_TypeDef *) (0x40000000 + 0x18020000UL + 0x400 * (N)))
 
-static GPIO_TypeDef *gpio_bank(uint16_t pin) { return GPIO(PINBANK(pin)); }
+static GPIO_TypeDef *gpio_bank(uint16_t pin) {
+  return GPIO(PINBANK(pin));
+}
 static inline void gpio_toggle(uint16_t pin) {
   GPIO_TypeDef *gpio = gpio_bank(pin);
   uint32_t mask = BIT(PINNO(pin));
@@ -159,6 +161,53 @@ static inline char chiprev(void) {
   return '?';
 }
 
+static inline unsigned int div2prescval(unsigned int div) {
+  // 0 --> /1; 8 --> /2 ... 11 --> /16;  12 --> /64 ... 15 --> /512
+  if (div == 1) return 0;
+  if (div > 16) div /= 2;
+  unsigned int val = 7;
+  while (div >>= 1) ++val;
+  return val;
+}
+
+static inline unsigned int pllrge(unsigned int f) {
+  unsigned int val = 0;
+  while (f >>= 1) ++val;
+  return val - 1;
+}
+
+static inline void clock_init(void) {
+  SCB->CPACR |= ((3UL << 10 * 2) | (3UL << 11 * 2));  // Enable FPU
+  __DSB();
+  __ISB();
+  PWR->CR3 |= BIT(1);                          // select LDO (reset value)
+  while ((PWR->CSR1 & BIT(13)) == 0) spin(1);  // ACTVOSRDY
+  PWR->D3CR |= BIT(15) | BIT(14);              // Select VOS1
+  uint32_t f = PWR->D3CR;  // fake read to wait for bus clocking
+  while ((PWR->CSR1 & BIT(13)) == 0) spin(1);  // ACTVOSRDY
+  SYSCFG->PWRCR |= BIT(0);                     // ODEN
+  f = SYSCFG->PWRCR;
+  while ((PWR->CSR1 & BIT(13)) == 0) spin(1);  // ACTVOSRDY
+  (void) f;
+  SETBITS(
+      RCC->D1CFGR, (0x0F << 8) | (7 << 4) | (0x0F << 0),
+      (div2prescval(D1CPRE) << 8) | (D1PPRE << 4) | (div2prescval(HPRE) << 0));
+  RCC->D2CFGR = (D2PPRE2 << 8) | (D2PPRE1 << 4);
+  RCC->D3CFGR = (D3PPRE << 4);
+  SETBITS(RCC->PLLCFGR, 3 << 2,
+          pllrge(PLL1_HSI / PLL1_M)
+              << 2);  // keep reset config (DIVP1EN, !PLL1VCOSEL), PLL1RGE
+  SETBITS(RCC->PLL1DIVR, (0x7F << 9) | (0x1FF << 0),
+          ((PLL1_P - 1) << 9) | ((PLL1_N - 1) << 0));  // Set PLL1_P PLL1_N
+  SETBITS(RCC->PLLCKSELR, 0x3F << 4,
+          PLL1_M << 4);  // Set PLL1_M (source defaults to HSI)
+  RCC->CR |= BIT(24);    // Enable PLL1
+  while ((RCC->CR & BIT(25)) == 0) spin(1);  // Wait until done
+  RCC->CFGR |= (3 << 0);                     // Set clock source to PLL1
+  while ((RCC->CFGR & (7 << 3)) != (3 << 3)) spin(1);  // Wait until done
+  FLASH->ACR = FLASH_LATENCY;                          // default is larger
+}
+
 static inline void ethernet_init(void) {
   // Initialise Ethernet. Enable MAC GPIO pins, see
   // https://www.st.com/resource/en/user_manual/um2407-stm32h7-nucleo144-boards-mb1364-stmicroelectronics.pdf
@@ -169,9 +218,10 @@ static inline void ethernet_init(void) {
     gpio_init(pins[i], GPIO_MODE_AF, GPIO_OTYPE_PUSH_PULL, GPIO_SPEED_INSANE,
               GPIO_PULL_NONE, 11);  // 11 is the Ethernet function
   }
-  NVIC_EnableIRQ(ETH_IRQn);                     // Setup Ethernet IRQ handler
+  RCC->APB4ENR |= RCC_APB4ENR_SYSCFGEN;         // Enable SYSCFG
   SETBITS(SYSCFG->PMCR, 7 << 21, 4 << 21);      // Use RMII (12.3.1)
   RCC->AHB1ENR |= BIT(15) | BIT(16) | BIT(17);  // Enable Ethernet clocks
+  NVIC_EnableIRQ(ETH_IRQn);                     // Setup Ethernet IRQ handler
 }
 
 #define UUID ((uint8_t *) UID_BASE)  // Unique 96-bit chip ID. TRM 61.1

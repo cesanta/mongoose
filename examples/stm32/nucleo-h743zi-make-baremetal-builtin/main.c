@@ -32,6 +32,8 @@ static void timer_fn(void *arg) {
            ifp->ndrop, ifp->nerr));
 }
 
+// Device initialisation flow is in startup_XXX.s, provided by device vendor.
+// It inits data/bss, IRQ table, then calls SystemInit(), then calls main()
 int main(void) {
   gpio_output(LED);               // Setup green LED
   uart_init(UART_DEBUG, 115200);  // Initialise debug printf
