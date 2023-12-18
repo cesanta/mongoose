@@ -24,8 +24,9 @@ void mg_random(void *buf, size_t len) {  // Use on-board RNG
 }
 
 #ifdef MQTT_DASHBOARD
-void hal_gpio_write(int pin, bool status) {  // For MQTT dashboard HAL
+bool hal_gpio_write(int pin, bool status) {  // For MQTT dashboard HAL
   gpio_write((uint16_t) pin, status);
+  return true;
 }
 
 bool hal_gpio_read(int pin) {  // For MQTT dashboard HAL

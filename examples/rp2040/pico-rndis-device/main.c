@@ -10,8 +10,13 @@ bool hal_gpio_read(int pin) {
   return (pin >= 0 && pin <= 29) ? gpio_get_out_level((uint) pin) : false;
 }
 
-void hal_gpio_write(int pin, bool val) {
-  if (pin >= 0 && pin <= 29) gpio_put((uint) pin, val);
+bool hal_gpio_write(int pin, bool val) {
+  if (pin >= 0 && pin <= 29) {
+    gpio_put((uint) pin, val);
+    return true;
+  } else {
+    return false;
+  }
 }
 
 int hal_led_pin(void) {
@@ -54,6 +59,10 @@ static bool usb_up(struct mg_tcpip_if *ifp) {
 
 static void fn(struct mg_connection *c, int ev, void *ev_data, void *fn_dta) {
   if (ev == MG_EV_HTTP_MSG) return mg_http_reply(c, 200, "", "ok\n");
+}
+
+uint64_t mg_now(void) {
+  return mg_millis();
 }
 
 int main(void) {

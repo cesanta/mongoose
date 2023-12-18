@@ -69,14 +69,15 @@ size_t mg_base64_encode(const unsigned char *p, size_t n, char *to, size_t dl) {
 size_t mg_base64_decode(const char *src, size_t n, char *dst, size_t dl) {
   const char *end = src == NULL ? NULL : src + n;  // Cannot add to NULL
   size_t len = 0;
-  if (dl > 0) dst[0] = '\0';
-  if (dl < n / 4 * 3 + 1) return 0;
+  if (dl < n / 4 * 3 + 1) goto fail;
   while (src != NULL && src + 3 < end) {
     int a = mg_base64_decode_single(src[0]),
         b = mg_base64_decode_single(src[1]),
         c = mg_base64_decode_single(src[2]),
         d = mg_base64_decode_single(src[3]);
-    if (a == 64 || a < 0 || b == 64 || b < 0 || c < 0 || d < 0) return 0;
+    if (a == 64 || a < 0 || b == 64 || b < 0 || c < 0 || d < 0) {
+      goto fail;
+    }
     dst[len++] = (char) ((a << 2) | (b >> 4));
     if (src[2] != '=') {
       dst[len++] = (char) ((b << 4) | (c >> 2));
@@ -86,4 +87,7 @@ size_t mg_base64_decode(const char *src, size_t n, char *dst, size_t dl) {
   }
   dst[len] = '\0';
   return len;
+fail:
+  if (dl > 0) dst[0] = '\0';
+  return 0;
 }

@@ -13,6 +13,7 @@ SOURCES += mongoose.c net.c packed_fs.c
 
 # Example specific build options. See README.md
 CFLAGS += -DHTTP_URL=\"http://0.0.0.0/\" -DHTTPS_URL=\"https://0.0.0.0/\"
+CFLAGS += -DMG_TLS=MG_TLS_BUILTIN
 
 ifeq ($(OS),Windows_NT)
   RM = cmd /C del /Q /F /S

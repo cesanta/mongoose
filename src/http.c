@@ -201,7 +201,7 @@ static bool vcb(uint8_t c) {
 // Get character length (valid utf-8). Used to parse method, URI, headers
 static size_t clen(const char *s, const char *end) {
   const unsigned char *u = (unsigned char *) s, c = *u;
-  long n = end - s;
+  long n = (long) (end - s);
   if (c > ' ' && c < '~') return 1;  // Usual ascii printed char
   if ((c & 0xe0) == 0xc0 && n > 1 && vcb(u[1])) return 2;  // 2-byte UTF8
   if ((c & 0xf0) == 0xe0 && n > 2 && vcb(u[1]) && vcb(u[2])) return 3;
@@ -983,7 +983,8 @@ static void http_cb(struct mg_connection *c, int ev, void *evd, void *fnd) {
       struct mg_str *te;  // Transfer - encoding header
       bool is_chunked = false;
       if (n < 0) {
-        mg_error(c, "HTTP parse");
+        mg_error(c, "HTTP parse, %lu bytes", c->recv.len);
+        mg_hexdump(c->recv.buf, c->recv.len > 16 ? 16 : c->recv.len);
         return;
       }
       if (n == 0) break;        // Request is not buffered yet
