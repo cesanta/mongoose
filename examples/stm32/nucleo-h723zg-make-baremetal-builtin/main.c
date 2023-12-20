@@ -36,6 +36,10 @@ bool hal_gpio_read(int pin) {  // For MQTT dashboard HAL
 int hal_led_pin(void) {
   return (int) LED1;
 }
+
+uint64_t mg_now(void) {
+  return mg_millis();
+}
 #endif
 
 static void timer_fn(void *arg) {
