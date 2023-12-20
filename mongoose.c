@@ -4189,288 +4189,6 @@ struct mg_connection *mg_mqtt_listen(struct mg_mgr *mgr, const char *url,
 }
 
 #ifdef MG_ENABLE_LINES
-#line 1 "src/net.c"
-#endif
-
-
-
-
-
-
-
-
-
-size_t mg_vprintf(struct mg_connection *c, const char *fmt, va_list *ap) {
-  size_t old = c->send.len;
-  mg_vxprintf(mg_pfn_iobuf, &c->send, fmt, ap);
-  return c->send.len - old;
-}
-
-size_t mg_printf(struct mg_connection *c, const char *fmt, ...) {
-  size_t len = 0;
-  va_list ap;
-  va_start(ap, fmt);
-  len = mg_vprintf(c, fmt, &ap);
-  va_end(ap);
-  return len;
-}
-
-static bool mg_atonl(struct mg_str str, struct mg_addr *addr) {
-  uint32_t localhost = mg_htonl(0x7f000001);
-  if (mg_vcasecmp(&str, "localhost") != 0) return false;
-  memcpy(addr->ip, &localhost, sizeof(uint32_t));
-  addr->is_ip6 = false;
-  return true;
-}
-
-static bool mg_atone(struct mg_str str, struct mg_addr *addr) {
-  if (str.len > 0) return false;
-  memset(addr->ip, 0, sizeof(addr->ip));
-  addr->is_ip6 = false;
-  return true;
-}
-
-static bool mg_aton4(struct mg_str str, struct mg_addr *addr) {
-  uint8_t data[4] = {0, 0, 0, 0};
-  size_t i, num_dots = 0;
-  for (i = 0; i < str.len; i++) {
-    if (str.ptr[i] >= '0' && str.ptr[i] <= '9') {
-      int octet = data[num_dots] * 10 + (str.ptr[i] - '0');
-      if (octet > 255) return false;
-      data[num_dots] = (uint8_t) octet;
-    } else if (str.ptr[i] == '.') {
-      if (num_dots >= 3 || i == 0 || str.ptr[i - 1] == '.') return false;
-      num_dots++;
-    } else {
-      return false;
-    }
-  }
-  if (num_dots != 3 || str.ptr[i - 1] == '.') return false;
-  memcpy(&addr->ip, data, sizeof(data));
-  addr->is_ip6 = false;
-  return true;
-}
-
-static bool mg_v4mapped(struct mg_str str, struct mg_addr *addr) {
-  int i;
-  uint32_t ipv4;
-  if (str.len < 14) return false;
-  if (str.ptr[0] != ':' || str.ptr[1] != ':' || str.ptr[6] != ':') return false;
-  for (i = 2; i < 6; i++) {
-    if (str.ptr[i] != 'f' && str.ptr[i] != 'F') return false;
-  }
-  // struct mg_str s = mg_str_n(&str.ptr[7], str.len - 7);
-  if (!mg_aton4(mg_str_n(&str.ptr[7], str.len - 7), addr)) return false;
-  memcpy(&ipv4, addr->ip, sizeof(ipv4));
-  memset(addr->ip, 0, sizeof(addr->ip));
-  addr->ip[10] = addr->ip[11] = 255;
-  memcpy(&addr->ip[12], &ipv4, 4);
-  addr->is_ip6 = true;
-  return true;
-}
-
-static bool mg_aton6(struct mg_str str, struct mg_addr *addr) {
-  size_t i, j = 0, n = 0, dc = 42;
-  addr->scope_id = 0;
-  if (str.len > 2 && str.ptr[0] == '[') str.ptr++, str.len -= 2;
-  if (mg_v4mapped(str, addr)) return true;
-  for (i = 0; i < str.len; i++) {
-    if ((str.ptr[i] >= '0' && str.ptr[i] <= '9') ||
-        (str.ptr[i] >= 'a' && str.ptr[i] <= 'f') ||
-        (str.ptr[i] >= 'A' && str.ptr[i] <= 'F')) {
-      unsigned long val;
-      if (i > j + 3) return false;
-      // MG_DEBUG(("%lu %lu [%.*s]", i, j, (int) (i - j + 1), &str.ptr[j]));
-      val = mg_unhexn(&str.ptr[j], i - j + 1);
-      addr->ip[n] = (uint8_t) ((val >> 8) & 255);
-      addr->ip[n + 1] = (uint8_t) (val & 255);
-    } else if (str.ptr[i] == ':') {
-      j = i + 1;
-      if (i > 0 && str.ptr[i - 1] == ':') {
-        dc = n;  // Double colon
-        if (i > 1 && str.ptr[i - 2] == ':') return false;
-      } else if (i > 0) {
-        n += 2;
-      }
-      if (n > 14) return false;
-      addr->ip[n] = addr->ip[n + 1] = 0;  // For trailing ::
-    } else if (str.ptr[i] == '%') {       // Scope ID
-      for (i = i + 1; i < str.len; i++) {
-        if (str.ptr[i] < '0' || str.ptr[i] > '9') return false;
-        addr->scope_id = (uint8_t) (addr->scope_id * 10);
-        addr->scope_id = (uint8_t) (addr->scope_id + (str.ptr[i] - '0'));
-      }
-    } else {
-      return false;
-    }
-  }
-  if (n < 14 && dc == 42) return false;
-  if (n < 14) {
-    memmove(&addr->ip[dc + (14 - n)], &addr->ip[dc], n - dc + 2);
-    memset(&addr->ip[dc], 0, 14 - n);
-  }
-
-  addr->is_ip6 = true;
-  return true;
-}
-
-bool mg_aton(struct mg_str str, struct mg_addr *addr) {
-  // MG_INFO(("[%.*s]", (int) str.len, str.ptr));
-  return mg_atone(str, addr) || mg_atonl(str, addr) || mg_aton4(str, addr) ||
-         mg_aton6(str, addr);
-}
-
-struct mg_connection *mg_alloc_conn(struct mg_mgr *mgr) {
-  struct mg_connection *c =
-      (struct mg_connection *) calloc(1, sizeof(*c) + mgr->extraconnsize);
-  if (c != NULL) {
-    c->mgr = mgr;
-    c->send.align = c->recv.align = c->rtls.align = MG_IO_SIZE;
-    c->id = ++mgr->nextid;
-    MG_PROF_INIT(c);
-  }
-  return c;
-}
-
-void mg_close_conn(struct mg_connection *c) {
-  mg_resolve_cancel(c);  // Close any pending DNS query
-  LIST_DELETE(struct mg_connection, &c->mgr->conns, c);
-  if (c == c->mgr->dns4.c) c->mgr->dns4.c = NULL;
-  if (c == c->mgr->dns6.c) c->mgr->dns6.c = NULL;
-  // Order of operations is important. `MG_EV_CLOSE` event must be fired
-  // before we deallocate received data, see #1331
-  mg_call(c, MG_EV_CLOSE, NULL);
-  MG_DEBUG(("%lu %ld closed", c->id, c->fd));
-  MG_PROF_DUMP(c);
-  MG_PROF_FREE(c);
-
-  mg_tls_free(c);
-  mg_iobuf_free(&c->recv);
-  mg_iobuf_free(&c->send);
-  mg_iobuf_free(&c->rtls);
-  mg_bzero((unsigned char *) c, sizeof(*c));
-  free(c);
-}
-
-struct mg_connection *mg_connect(struct mg_mgr *mgr, const char *url,
-                                 mg_event_handler_t fn, void *fn_data) {
-  struct mg_connection *c = NULL;
-  if (url == NULL || url[0] == '\0') {
-    MG_ERROR(("null url"));
-  } else if ((c = mg_alloc_conn(mgr)) == NULL) {
-    MG_ERROR(("OOM"));
-  } else {
-    LIST_ADD_HEAD(struct mg_connection, &mgr->conns, c);
-    c->is_udp = (strncmp(url, "udp:", 4) == 0);
-    c->fd = (void *) (size_t) MG_INVALID_SOCKET;
-    c->fn = fn;
-    c->is_client = true;
-    c->fn_data = fn_data;
-    MG_DEBUG(("%lu %ld %s", c->id, c->fd, url));
-    mg_call(c, MG_EV_OPEN, (void *) url);
-    mg_resolve(c, url);
-  }
-  return c;
-}
-
-struct mg_connection *mg_listen(struct mg_mgr *mgr, const char *url,
-                                mg_event_handler_t fn, void *fn_data) {
-  struct mg_connection *c = NULL;
-  if ((c = mg_alloc_conn(mgr)) == NULL) {
-    MG_ERROR(("OOM %s", url));
-  } else if (!mg_open_listener(c, url)) {
-    MG_ERROR(("Failed: %s, errno %d", url, errno));
-    MG_PROF_FREE(c);
-    free(c);
-    c = NULL;
-  } else {
-    c->is_listening = 1;
-    c->is_udp = strncmp(url, "udp:", 4) == 0;
-    LIST_ADD_HEAD(struct mg_connection, &mgr->conns, c);
-    c->fn = fn;
-    c->fn_data = fn_data;
-    mg_call(c, MG_EV_OPEN, NULL);
-    if (mg_url_is_ssl(url)) c->is_tls = 1;  // Accepted connection must
-    MG_DEBUG(("%lu %ld %s", c->id, c->fd, url));
-  }
-  return c;
-}
-
-struct mg_connection *mg_wrapfd(struct mg_mgr *mgr, int fd,
-                                mg_event_handler_t fn, void *fn_data) {
-  struct mg_connection *c = mg_alloc_conn(mgr);
-  if (c != NULL) {
-    c->fd = (void *) (size_t) fd;
-    c->fn = fn;
-    c->fn_data = fn_data;
-    MG_EPOLL_ADD(c);
-    mg_call(c, MG_EV_OPEN, NULL);
-    LIST_ADD_HEAD(struct mg_connection, &mgr->conns, c);
-  }
-  return c;
-}
-
-struct mg_timer *mg_timer_add(struct mg_mgr *mgr, uint64_t milliseconds,
-                              unsigned flags, void (*fn)(void *), void *arg) {
-  struct mg_timer *t = (struct mg_timer *) calloc(1, sizeof(*t));
-  if (t != NULL) {
-    mg_timer_init(&mgr->timers, t, milliseconds, flags, fn, arg);
-    t->id = mgr->timerid++;
-  }
-  return t;
-}
-
-long mg_io_recv(struct mg_connection *c, void *buf, size_t len) {
-  if (c->rtls.len == 0) return MG_IO_WAIT;
-  if (len > c->rtls.len) len = c->rtls.len;
-  memcpy(buf, c->rtls.buf, len);
-  mg_iobuf_del(&c->rtls, 0, len);
-  return (long) len;
-}
-
-void mg_mgr_free(struct mg_mgr *mgr) {
-  struct mg_connection *c;
-  struct mg_timer *tmp, *t = mgr->timers;
-  while (t != NULL) tmp = t->next, free(t), t = tmp;
-  mgr->timers = NULL;  // Important. Next call to poll won't touch timers
-  for (c = mgr->conns; c != NULL; c = c->next) c->is_closing = 1;
-  mg_mgr_poll(mgr, 0);
-#if MG_ENABLE_FREERTOS_TCP
-  FreeRTOS_DeleteSocketSet(mgr->ss);
-#endif
-  MG_DEBUG(("All connections closed"));
-#if MG_ENABLE_EPOLL
-  if (mgr->epoll_fd >= 0) close(mgr->epoll_fd), mgr->epoll_fd = -1;
-#endif
-  mg_tls_ctx_free(mgr);
-}
-
-void mg_mgr_init(struct mg_mgr *mgr) {
-  memset(mgr, 0, sizeof(*mgr));
-#if MG_ENABLE_EPOLL
-  if ((mgr->epoll_fd = epoll_create1(EPOLL_CLOEXEC)) < 0)
-    MG_ERROR(("epoll_create1 errno %d", errno));
-#else
-  mgr->epoll_fd = -1;
-#endif
-#if MG_ARCH == MG_ARCH_WIN32 && MG_ENABLE_WINSOCK
-  // clang-format off
-  { WSADATA data; WSAStartup(MAKEWORD(2, 2), &data); }
-  // clang-format on
-#elif MG_ENABLE_FREERTOS_TCP
-  mgr->ss = FreeRTOS_CreateSocketSet();
-#elif defined(__unix) || defined(__unix__) || defined(__APPLE__)
-  // Ignore SIGPIPE signal, so if client cancels the request, it
-  // won't kill the whole process.
-  signal(SIGPIPE, SIG_IGN);
-#endif
-  mgr->dnstimeout = 3000;
-  mgr->dns4.url = "udp://8.8.8.8:53";
-  mgr->dns6.url = "udp://[2001:4860:4860::8888]:53";
-  mg_tls_ctx_init(mgr);
-}
-
-#ifdef MG_ENABLE_LINES
 #line 1 "src/net_builtin.c"
 #endif
 
@@ -5578,6 +5296,288 @@ bool mg_send(struct mg_connection *c, const void *buf, size_t len) {
   return res;
 }
 #endif  // MG_ENABLE_TCPIP
+
+#ifdef MG_ENABLE_LINES
+#line 1 "src/net.c"
+#endif
+
+
+
+
+
+
+
+
+
+size_t mg_vprintf(struct mg_connection *c, const char *fmt, va_list *ap) {
+  size_t old = c->send.len;
+  mg_vxprintf(mg_pfn_iobuf, &c->send, fmt, ap);
+  return c->send.len - old;
+}
+
+size_t mg_printf(struct mg_connection *c, const char *fmt, ...) {
+  size_t len = 0;
+  va_list ap;
+  va_start(ap, fmt);
+  len = mg_vprintf(c, fmt, &ap);
+  va_end(ap);
+  return len;
+}
+
+static bool mg_atonl(struct mg_str str, struct mg_addr *addr) {
+  uint32_t localhost = mg_htonl(0x7f000001);
+  if (mg_vcasecmp(&str, "localhost") != 0) return false;
+  memcpy(addr->ip, &localhost, sizeof(uint32_t));
+  addr->is_ip6 = false;
+  return true;
+}
+
+static bool mg_atone(struct mg_str str, struct mg_addr *addr) {
+  if (str.len > 0) return false;
+  memset(addr->ip, 0, sizeof(addr->ip));
+  addr->is_ip6 = false;
+  return true;
+}
+
+static bool mg_aton4(struct mg_str str, struct mg_addr *addr) {
+  uint8_t data[4] = {0, 0, 0, 0};
+  size_t i, num_dots = 0;
+  for (i = 0; i < str.len; i++) {
+    if (str.ptr[i] >= '0' && str.ptr[i] <= '9') {
+      int octet = data[num_dots] * 10 + (str.ptr[i] - '0');
+      if (octet > 255) return false;
+      data[num_dots] = (uint8_t) octet;
+    } else if (str.ptr[i] == '.') {
+      if (num_dots >= 3 || i == 0 || str.ptr[i - 1] == '.') return false;
+      num_dots++;
+    } else {
+      return false;
+    }
+  }
+  if (num_dots != 3 || str.ptr[i - 1] == '.') return false;
+  memcpy(&addr->ip, data, sizeof(data));
+  addr->is_ip6 = false;
+  return true;
+}
+
+static bool mg_v4mapped(struct mg_str str, struct mg_addr *addr) {
+  int i;
+  uint32_t ipv4;
+  if (str.len < 14) return false;
+  if (str.ptr[0] != ':' || str.ptr[1] != ':' || str.ptr[6] != ':') return false;
+  for (i = 2; i < 6; i++) {
+    if (str.ptr[i] != 'f' && str.ptr[i] != 'F') return false;
+  }
+  // struct mg_str s = mg_str_n(&str.ptr[7], str.len - 7);
+  if (!mg_aton4(mg_str_n(&str.ptr[7], str.len - 7), addr)) return false;
+  memcpy(&ipv4, addr->ip, sizeof(ipv4));
+  memset(addr->ip, 0, sizeof(addr->ip));
+  addr->ip[10] = addr->ip[11] = 255;
+  memcpy(&addr->ip[12], &ipv4, 4);
+  addr->is_ip6 = true;
+  return true;
+}
+
+static bool mg_aton6(struct mg_str str, struct mg_addr *addr) {
+  size_t i, j = 0, n = 0, dc = 42;
+  addr->scope_id = 0;
+  if (str.len > 2 && str.ptr[0] == '[') str.ptr++, str.len -= 2;
+  if (mg_v4mapped(str, addr)) return true;
+  for (i = 0; i < str.len; i++) {
+    if ((str.ptr[i] >= '0' && str.ptr[i] <= '9') ||
+        (str.ptr[i] >= 'a' && str.ptr[i] <= 'f') ||
+        (str.ptr[i] >= 'A' && str.ptr[i] <= 'F')) {
+      unsigned long val;
+      if (i > j + 3) return false;
+      // MG_DEBUG(("%lu %lu [%.*s]", i, j, (int) (i - j + 1), &str.ptr[j]));
+      val = mg_unhexn(&str.ptr[j], i - j + 1);
+      addr->ip[n] = (uint8_t) ((val >> 8) & 255);
+      addr->ip[n + 1] = (uint8_t) (val & 255);
+    } else if (str.ptr[i] == ':') {
+      j = i + 1;
+      if (i > 0 && str.ptr[i - 1] == ':') {
+        dc = n;  // Double colon
+        if (i > 1 && str.ptr[i - 2] == ':') return false;
+      } else if (i > 0) {
+        n += 2;
+      }
+      if (n > 14) return false;
+      addr->ip[n] = addr->ip[n + 1] = 0;  // For trailing ::
+    } else if (str.ptr[i] == '%') {       // Scope ID
+      for (i = i + 1; i < str.len; i++) {
+        if (str.ptr[i] < '0' || str.ptr[i] > '9') return false;
+        addr->scope_id = (uint8_t) (addr->scope_id * 10);
+        addr->scope_id = (uint8_t) (addr->scope_id + (str.ptr[i] - '0'));
+      }
+    } else {
+      return false;
+    }
+  }
+  if (n < 14 && dc == 42) return false;
+  if (n < 14) {
+    memmove(&addr->ip[dc + (14 - n)], &addr->ip[dc], n - dc + 2);
+    memset(&addr->ip[dc], 0, 14 - n);
+  }
+
+  addr->is_ip6 = true;
+  return true;
+}
+
+bool mg_aton(struct mg_str str, struct mg_addr *addr) {
+  // MG_INFO(("[%.*s]", (int) str.len, str.ptr));
+  return mg_atone(str, addr) || mg_atonl(str, addr) || mg_aton4(str, addr) ||
+         mg_aton6(str, addr);
+}
+
+struct mg_connection *mg_alloc_conn(struct mg_mgr *mgr) {
+  struct mg_connection *c =
+      (struct mg_connection *) calloc(1, sizeof(*c) + mgr->extraconnsize);
+  if (c != NULL) {
+    c->mgr = mgr;
+    c->send.align = c->recv.align = c->rtls.align = MG_IO_SIZE;
+    c->id = ++mgr->nextid;
+    MG_PROF_INIT(c);
+  }
+  return c;
+}
+
+void mg_close_conn(struct mg_connection *c) {
+  mg_resolve_cancel(c);  // Close any pending DNS query
+  LIST_DELETE(struct mg_connection, &c->mgr->conns, c);
+  if (c == c->mgr->dns4.c) c->mgr->dns4.c = NULL;
+  if (c == c->mgr->dns6.c) c->mgr->dns6.c = NULL;
+  // Order of operations is important. `MG_EV_CLOSE` event must be fired
+  // before we deallocate received data, see #1331
+  mg_call(c, MG_EV_CLOSE, NULL);
+  MG_DEBUG(("%lu %ld closed", c->id, c->fd));
+  MG_PROF_DUMP(c);
+  MG_PROF_FREE(c);
+
+  mg_tls_free(c);
+  mg_iobuf_free(&c->recv);
+  mg_iobuf_free(&c->send);
+  mg_iobuf_free(&c->rtls);
+  mg_bzero((unsigned char *) c, sizeof(*c));
+  free(c);
+}
+
+struct mg_connection *mg_connect(struct mg_mgr *mgr, const char *url,
+                                 mg_event_handler_t fn, void *fn_data) {
+  struct mg_connection *c = NULL;
+  if (url == NULL || url[0] == '\0') {
+    MG_ERROR(("null url"));
+  } else if ((c = mg_alloc_conn(mgr)) == NULL) {
+    MG_ERROR(("OOM"));
+  } else {
+    LIST_ADD_HEAD(struct mg_connection, &mgr->conns, c);
+    c->is_udp = (strncmp(url, "udp:", 4) == 0);
+    c->fd = (void *) (size_t) MG_INVALID_SOCKET;
+    c->fn = fn;
+    c->is_client = true;
+    c->fn_data = fn_data;
+    MG_DEBUG(("%lu %ld %s", c->id, c->fd, url));
+    mg_call(c, MG_EV_OPEN, (void *) url);
+    mg_resolve(c, url);
+  }
+  return c;
+}
+
+struct mg_connection *mg_listen(struct mg_mgr *mgr, const char *url,
+                                mg_event_handler_t fn, void *fn_data) {
+  struct mg_connection *c = NULL;
+  if ((c = mg_alloc_conn(mgr)) == NULL) {
+    MG_ERROR(("OOM %s", url));
+  } else if (!mg_open_listener(c, url)) {
+    MG_ERROR(("Failed: %s, errno %d", url, errno));
+    MG_PROF_FREE(c);
+    free(c);
+    c = NULL;
+  } else {
+    c->is_listening = 1;
+    c->is_udp = strncmp(url, "udp:", 4) == 0;
+    LIST_ADD_HEAD(struct mg_connection, &mgr->conns, c);
+    c->fn = fn;
+    c->fn_data = fn_data;
+    mg_call(c, MG_EV_OPEN, NULL);
+    if (mg_url_is_ssl(url)) c->is_tls = 1;  // Accepted connection must
+    MG_DEBUG(("%lu %ld %s", c->id, c->fd, url));
+  }
+  return c;
+}
+
+struct mg_connection *mg_wrapfd(struct mg_mgr *mgr, int fd,
+                                mg_event_handler_t fn, void *fn_data) {
+  struct mg_connection *c = mg_alloc_conn(mgr);
+  if (c != NULL) {
+    c->fd = (void *) (size_t) fd;
+    c->fn = fn;
+    c->fn_data = fn_data;
+    MG_EPOLL_ADD(c);
+    mg_call(c, MG_EV_OPEN, NULL);
+    LIST_ADD_HEAD(struct mg_connection, &mgr->conns, c);
+  }
+  return c;
+}
+
+struct mg_timer *mg_timer_add(struct mg_mgr *mgr, uint64_t milliseconds,
+                              unsigned flags, void (*fn)(void *), void *arg) {
+  struct mg_timer *t = (struct mg_timer *) calloc(1, sizeof(*t));
+  if (t != NULL) {
+    mg_timer_init(&mgr->timers, t, milliseconds, flags, fn, arg);
+    t->id = mgr->timerid++;
+  }
+  return t;
+}
+
+long mg_io_recv(struct mg_connection *c, void *buf, size_t len) {
+  if (c->rtls.len == 0) return MG_IO_WAIT;
+  if (len > c->rtls.len) len = c->rtls.len;
+  memcpy(buf, c->rtls.buf, len);
+  mg_iobuf_del(&c->rtls, 0, len);
+  return (long) len;
+}
+
+void mg_mgr_free(struct mg_mgr *mgr) {
+  struct mg_connection *c;
+  struct mg_timer *tmp, *t = mgr->timers;
+  while (t != NULL) tmp = t->next, free(t), t = tmp;
+  mgr->timers = NULL;  // Important. Next call to poll won't touch timers
+  for (c = mgr->conns; c != NULL; c = c->next) c->is_closing = 1;
+  mg_mgr_poll(mgr, 0);
+#if MG_ENABLE_FREERTOS_TCP
+  FreeRTOS_DeleteSocketSet(mgr->ss);
+#endif
+  MG_DEBUG(("All connections closed"));
+#if MG_ENABLE_EPOLL
+  if (mgr->epoll_fd >= 0) close(mgr->epoll_fd), mgr->epoll_fd = -1;
+#endif
+  mg_tls_ctx_free(mgr);
+}
+
+void mg_mgr_init(struct mg_mgr *mgr) {
+  memset(mgr, 0, sizeof(*mgr));
+#if MG_ENABLE_EPOLL
+  if ((mgr->epoll_fd = epoll_create1(EPOLL_CLOEXEC)) < 0)
+    MG_ERROR(("epoll_create1 errno %d", errno));
+#else
+  mgr->epoll_fd = -1;
+#endif
+#if MG_ARCH == MG_ARCH_WIN32 && MG_ENABLE_WINSOCK
+  // clang-format off
+  { WSADATA data; WSAStartup(MAKEWORD(2, 2), &data); }
+  // clang-format on
+#elif MG_ENABLE_FREERTOS_TCP
+  mgr->ss = FreeRTOS_CreateSocketSet();
+#elif defined(__unix) || defined(__unix__) || defined(__APPLE__)
+  // Ignore SIGPIPE signal, so if client cancels the request, it
+  // won't kill the whole process.
+  signal(SIGPIPE, SIG_IGN);
+#endif
+  mgr->dnstimeout = 3000;
+  mgr->dns4.url = "udp://8.8.8.8:53";
+  mgr->dns6.url = "udp://[2001:4860:4860::8888]:53";
+  mg_tls_ctx_init(mgr);
+}
 
 #ifdef MG_ENABLE_LINES
 #line 1 "src/ota_dummy.c"
@@ -8651,6 +8651,7 @@ int aes_gcm_decrypt(unsigned char *output, const unsigned char *input,
   return (ret);
 }
 #endif
+// End of aes128 PD
 
 #ifdef MG_ENABLE_LINES
 #line 1 "src/tls_builtin.c"
@@ -8659,7 +8660,7 @@ int aes_gcm_decrypt(unsigned char *output, const unsigned char *input,
 
 #if MG_TLS == MG_TLS_BUILTIN
 
-/* handshake is re-entrant, so we need to keep track of its state */
+// handshake is re-entrant, so we need to keep track of its state
 enum mg_tls_hs_state {
   MG_TLS_HS_CLIENT_HELLO,  // first, wait for ClientHello
   MG_TLS_HS_SERVER_HELLO,  // then, send all server handshake data at once
@@ -8668,27 +8669,26 @@ enum mg_tls_hs_state {
   MG_TLS_HS_DONE,  // finish handshake, start application data flow
 };
 
-/* per-connection TLS data */
+// per-connection TLS data
 struct tls_data {
-  enum mg_tls_hs_state state; /* keep track of connection handshake progress */
+  enum mg_tls_hs_state state;  // keep track of connection handshake progress
 
   struct mg_iobuf send;
   struct mg_iobuf recv;
 
-  mg_sha256_ctx sha256; /* incremental SHA-256 hash for TLS handshake */
+  mg_sha256_ctx sha256;  // incremental SHA-256 hash for TLS handshake
 
-  uint32_t sseq; /* server sequence number, used in encryption */
-  uint32_t cseq; /* client sequence number, used in decryption */
+  uint32_t sseq;  // server sequence number, used in encryption
+  uint32_t cseq;  // client sequence number, used in decryption
 
-  uint8_t session_id[32]; /* client session ID between the handshake states */
-  uint8_t x25519_cli[32]; /* client X25519 key between the handshake states */
-  uint8_t x25519_sec[32]; /* x25519 secret between the handshake
-                             states */
+  uint8_t session_id[32];  // client session ID between the handshake states
+  uint8_t x25519_cli[32];  // client X25519 key between the handshake states
+  uint8_t x25519_sec[32];  // x25519 secret between the handshake states
 
-  struct mg_str server_cert_der; /* server certificate in DER format */
-  uint8_t server_key[32];        /* server EC private key */
+  struct mg_str server_cert_der;  // server certificate in DER format
+  uint8_t server_key[32];         // server EC private key
 
-  /* keys for AES encryption */
+  // keys for AES encryption
   uint8_t handshake_secret[32];
   uint8_t server_write_key[16];
   uint8_t server_write_iv[12];
@@ -8726,7 +8726,7 @@ static limb_t umaal(limb_t *carry, limb_t acc, limb_t mand, limb_t mier) {
   return (limb_t) tmp;
 }
 
-/* These functions are implemented in terms of umaal on ARM */
+// These functions are implemented in terms of umaal on ARM
 static limb_t adc(limb_t *carry, limb_t acc, limb_t mand) {
   dlimb_t total = (dlimb_t) *carry + acc + mand;
   *carry = (limb_t) (total >> X25519_WBITS);
@@ -8739,11 +8739,10 @@ static limb_t adc0(limb_t *carry, limb_t acc) {
   return (limb_t) total;
 }
 
-/* Precondition: carry is small.
- * Invariant: result of propagate is < 2^255 + 1 word
- * In particular, always less than 2p.
- * Also, output x >= min(x,19)
- */
+// - Precondition: carry is small.
+// - Invariant: result of propagate is < 2^255 + 1 word
+// - In particular, always less than 2p.
+// - Also, output x >= min(x,19)
 static void propagate(fe x, limb_t over) {
   unsigned i;
   limb_t carry;
@@ -8817,14 +8816,11 @@ static void condswap(limb_t a[2 * NLIMBS], limb_t b[2 * NLIMBS],
   }
 }
 
+// Canonicalize a field element x, reducing it to the least residue which is
+// congruent to it mod 2^255-19
+// - Precondition: x < 2^255 + 1 word
 static limb_t canon(fe x) {
-  /* Canonicalize a field element x, reducing it to the least residue
-   * which is congruent to it mod 2^255-19.
-   *
-   * Precondition: x < 2^255 + 1 word
-   */
-
-  /* First, add 19. */
+  // First, add 19.
   unsigned i;
   limb_t carry0 = 19;
   limb_t res;
@@ -8834,18 +8830,14 @@ static limb_t canon(fe x) {
   }
   propagate(x, carry0);
 
-  /* Here, 19 <= x2 < 2^255
-   *
-   * This is because we added 19, so before propagate it can't be less than 19.
-   * After propagate, it still can't be less than 19, because if propagate does
-   * anything it adds 19.
-   *
-   * We know that the high bit must be clear, because either the input was
-   * ~ 2^255 + one word + 19 (in which case it propagates to at most 2 words)
-   * or it was < 2^255.
-   *
-   * So now, if we subtract 19, we will get back to something in [0,2^255-19).
-   */
+  // Here, 19 <= x2 < 2^255
+  // - This is because we added 19, so before propagate it can't be less
+  // than 19. After propagate, it still can't be less than 19, because if
+  // propagate does anything it adds 19.
+  // - We know that the high bit must be clear, because either the input was ~
+  // 2^255 + one word + 19 (in which case it propagates to at most 2 words) or
+  // it was < 2^255. So now, if we subtract 19, we will get back to something in
+  // [0,2^255-19).
   carry = -19;
   res = 0;
   for (i = 0; i < NLIMBS; i++) {
@@ -8927,7 +8919,7 @@ static int x25519(uint8_t out[X25519_BYTES], const uint8_t scalar[X25519_BYTES],
                  {3, 1, 2},  {3, 1, 2},  {3, 1, 1}};
   x25519_core(xs, scalar, x1, clamp);
 
-  /* Precomputed inversion chain */
+  // Precomputed inversion chain
   x2 = xs[0];
   z2 = xs[1];
   z3 = xs[3];
@@ -8943,21 +8935,21 @@ static int x25519(uint8_t out[X25519_BYTES], const uint8_t scalar[X25519_BYTES],
     mul1(a, xs[steps[i].c]);
   }
 
-  /* Here prev = z3 */
-  /* x2 /= z2 */
+  // Here prev = z3
+  // x2 /= z2
   mul((limb_t *) out, x2, z3, NLIMBS);
   ret = (int) canon((limb_t *) out);
   if (!clamp) ret = 0;
   return ret;
 }
 
-/* a help to hexdump buffers inline */
+// helper to hexdump buffers inline
 static void mg_tls_hexdump(const char *msg, uint8_t *buf, size_t bufsz) {
   char p[2048];
   MG_INFO(("%s: %s", msg, mg_hex(buf, bufsz, p)));
 }
 
-/* TLS1.3 secret derivation based on the key label */
+// TLS1.3 secret derivation based on the key label
 static void mg_tls_derive_secret(const char *label, uint8_t *key, size_t keysz,
                                  uint8_t *data, size_t datasz, uint8_t *hash,
                                  size_t hashsz) {
@@ -8974,7 +8966,7 @@ static void mg_tls_derive_secret(const char *label, uint8_t *key, size_t keysz,
   memmove(hash, secret, hashsz);
 }
 
-/* receive as much data as we can, but at least one full TLS record */
+// receive as much data as we can, but at least one full TLS record
 static int mg_tls_recv_msg(struct mg_connection *c) {
   struct tls_data *tls = c->tls;
   struct mg_iobuf *rio = &tls->recv;
@@ -9011,7 +9003,7 @@ static void mg_tls_drop_packet(struct mg_iobuf *rio) {
   // rio->len = rio->len - n;
 }
 
-/* read and parse ClientHello record */
+// read and parse ClientHello record
 static int mg_tls_client_hello(struct mg_connection *c) {
   struct tls_data *tls = c->tls;
   struct mg_iobuf *rio = &tls->recv;
@@ -9066,7 +9058,7 @@ static int mg_tls_client_hello(struct mg_connection *c) {
   return -1;
 }
 
-/* put ServerHello record into wio buffer */
+// put ServerHello record into wio buffer
 static void mg_tls_server_hello(struct mg_connection *c) {
   struct tls_data *tls = c->tls;
   struct mg_iobuf *wio = &tls->send;
@@ -9117,8 +9109,8 @@ static void mg_tls_server_hello(struct mg_connection *c) {
   mg_iobuf_add(wio, wio->len, "\x14\x03\x03\x00\x01\x01", 6);
 }
 
-/* at this point we have x25519 shared secret, we can generate a
- * set of derived handshake encryption keys */
+// at this point we have x25519 shared secret, we can generate a set of derived
+// handshake encryption keys
 static void mg_tls_generate_handshake_keys(struct mg_connection *c) {
   struct tls_data *tls = c->tls;
 
@@ -9163,7 +9155,7 @@ static void mg_tls_generate_handshake_keys(struct mg_connection *c) {
                        tls->client_finished_key, 32);
 }
 
-/* AES GCM enctyption of the message + put encoded data into the write buffer */
+// AES GCM encryption of the message + put encoded data into the write buffer
 static void mg_tls_encrypt(struct mg_connection *c, const uint8_t *msg,
                            size_t msgsz, uint8_t msgtype) {
   struct tls_data *tls = c->tls;
@@ -9195,7 +9187,7 @@ static void mg_tls_encrypt(struct mg_connection *c, const uint8_t *msg,
   tls->sseq++;
 }
 
-/* read an encrypted message, decrypt it into read buffer (AES GCM) */
+// read an encrypted message, decrypt it into read buffer (AES GCM)
 static int mg_tls_recv_decrypt(struct mg_connection *c, void *buf,
                                size_t bufsz) {
   struct tls_data *tls = c->tls;
@@ -9210,7 +9202,7 @@ static int mg_tls_recv_decrypt(struct mg_connection *c, void *buf,
     if (rio->buf[0] == 0x17) {
       break;
     } else if (rio->buf[0] == 0x15) {
-      MG_INFO(("TLS ALERT packet received")); /* TODO: drop packet? */
+      MG_INFO(("TLS ALERT packet received"));  // TODO: drop packet?
     } else {
       mg_error(c, "unexpected packet");
       return -1;
@@ -9270,7 +9262,7 @@ static void mg_tls_server_cert(struct mg_connection *c) {
   mg_tls_encrypt(c, cert, 13 + n, 0x16);
 }
 
-/* type adapter between uECC hash context and our sha256 implementation */
+// type adapter between uECC hash context and our sha256 implementation
 typedef struct SHA256_HashContext {
   uECC_HashContext uECC;
   mg_sha256_ctx ctx;
@@ -9318,12 +9310,12 @@ static void mg_tls_server_verify_ecdsa(struct mg_connection *c) {
 
   neg1 = !!(sig[0] & 0x80);
   neg2 = !!(sig[32] & 0x80);
-  verify[8] = 0x30; /* ASN.1 SEQUENCE */
+  verify[8] = 0x30;  // ASN.1 SEQUENCE
   verify[9] = (uint8_t) (68 + neg1 + neg2);
-  verify[10] = 0x02; /* ASN.1 INTEGER */
+  verify[10] = 0x02;  // ASN.1 INTEGER
   verify[11] = (uint8_t) (32 + neg1);
   memmove(verify + 12 + neg1, sig, 32);
-  verify[12 + 32 + neg1] = 0x02; /* ASN.1 INTEGER */
+  verify[12 + 32 + neg1] = 0x02;  // ASN.1 INTEGER
   verify[13 + 32 + neg1] = (uint8_t) (32 + neg2);
   memmove(verify + 14 + 32 + neg1 + neg2, sig + 32, 32);
 
@@ -9451,7 +9443,9 @@ void mg_tls_handshake(struct mg_connection *c) {
       mg_tls_generate_application_keys(c);
       tls->state = MG_TLS_HS_DONE;
       // fallthrough
-    case MG_TLS_HS_DONE: c->is_tls_hs = 0; return;
+    case MG_TLS_HS_DONE:
+      c->is_tls_hs = 0;
+      return;
   }
 }
 
@@ -9495,7 +9489,7 @@ void mg_tls_init(struct mg_connection *c, const struct mg_tls_opts *opts) {
     mg_error(c, "tls oom");
     return;
   }
-  /* parse PEM or DER EC key */
+  // parse PEM or DER EC key
   if (opts->key.ptr == NULL ||
       mg_parse_pem(opts->key, mg_str_s("EC PRIVATE KEY"), &key) < 0) {
     MG_ERROR(("Failed to load EC private key"));
@@ -9505,8 +9499,8 @@ void mg_tls_init(struct mg_connection *c, const struct mg_tls_opts *opts) {
     MG_ERROR(("EC private key too short"));
     return;
   }
-  /* expect ASN.1 SEQUENCE=[INTEGER=1, BITSTRING of 32 bytes, ...] */
-  /* 30 nn 02 01 01 04 20 [key] ... */
+  // expect ASN.1 SEQUENCE=[INTEGER=1, BITSTRING of 32 bytes, ...]
+  // 30 nn 02 01 01 04 20 [key] ...
   if (key.ptr[0] != 0x30 || (key.ptr[1] & 0x80) != 0) {
     MG_ERROR(("EC private key: ASN.1 bad sequence"));
     return;
@@ -9517,7 +9511,7 @@ void mg_tls_init(struct mg_connection *c, const struct mg_tls_opts *opts) {
   memmove(tls->server_key, key.ptr + 7, 32);
   free((void *) key.ptr);
 
-  /* parse PEM or DER certificate */
+  // parse PEM or DER certificate
   if (mg_parse_pem(opts->cert, mg_str_s("CERTIFICATE"), &tls->server_cert_der) <
       0) {
     MG_ERROR(("Failed to load certificate"));
@@ -13256,6 +13250,7 @@ void uECC_point_mult(uECC_word_t *result, const uECC_word_t *point,
 
 #endif  /* uECC_ENABLE_VLI_API */
 #endif  // MG_TLS_BUILTIN
+// End of uecc BSD-2
 
 #ifdef MG_ENABLE_LINES
 #line 1 "src/url.c"

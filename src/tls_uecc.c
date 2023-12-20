@@ -3171,3 +3171,4 @@ void uECC_point_mult(uECC_word_t *result, const uECC_word_t *point,
 
 #endif  /* uECC_ENABLE_VLI_API */
 #endif  // MG_TLS_BUILTIN
+// End of uecc BSD-2
