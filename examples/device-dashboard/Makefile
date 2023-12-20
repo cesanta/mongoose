@@ -49,6 +49,8 @@ ifeq ($(TLS), mbedtls)
 CFLAGS += -DMG_TLS=MG_TLS_MBED -Wno-conversion -Imbedtls/include
 CFLAGS += -DMBEDTLS_CONFIG_FILE=\"mbedtls_config.h\" mbedtls/library/*.c
 $(PROG): mbedtls
+else
+CFLAGS += -DMG_TLS=MG_TLS_BUILTIN
 endif
 
 # Cleanup. Delete built program and all build artifacts

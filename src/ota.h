@@ -28,7 +28,7 @@ enum {
   MG_OTA_UNAVAILABLE = 0,  // No OTA information is present
   MG_OTA_FIRST_BOOT = 1,   // Device booting the first time after the OTA
   MG_OTA_UNCOMMITTED = 2,  // Ditto, but marking us for the rollback
-  MG_OTA_COMMITTED = 3,    // The firmware is good
+  MG_OTA_COMMITTED = 3     // The firmware is good
 };
 enum { MG_FIRMWARE_CURRENT = 0, MG_FIRMWARE_PREVIOUS = 1 };
 

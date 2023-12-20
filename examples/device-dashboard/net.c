@@ -123,9 +123,9 @@ static void handle_debug(struct mg_connection *c, struct mg_http_message *hm) {
 }
 
 static size_t print_int_arr(void (*out)(char, void *), void *ptr, va_list *ap) {
-  size_t len = 0, num = va_arg(*ap, size_t);  // Number of items in the array
+  size_t i, len = 0, num = va_arg(*ap, size_t);  // Number of items in the array
   int *arr = va_arg(*ap, int *);              // Array ptr
-  for (size_t i = 0; i < num; i++) {
+  for (i = 0; i < num; i++) {
     len += mg_xprintf(out, ptr, "%s%d", i == 0 ? "" : ",", arr[i]);
   }
   return len;
@@ -168,21 +168,19 @@ static void handle_events_get(struct mg_connection *c,
 
 static void handle_settings_set(struct mg_connection *c, struct mg_str body) {
   struct settings settings;
+  char *s = mg_json_get_str(body, "$.device_name");
+  bool ok = true;
   memset(&settings, 0, sizeof(settings));
   mg_json_get_bool(body, "$.log_enabled", &settings.log_enabled);
   settings.log_level = mg_json_get_long(body, "$.log_level", 0);
   settings.brightness = mg_json_get_long(body, "$.brightness", 0);
-  char *s = mg_json_get_str(body, "$.device_name");
   if (s && strlen(s) < MAX_DEVICE_NAME) {
     free(settings.device_name);
     settings.device_name = s;
   } else {
     free(s);
   }
-
-  // Save to the device flash
-  s_settings = settings;
-  bool ok = true;
+  s_settings = settings; // Save to the device flash
   mg_http_reply(c, 200, s_json_header,
                 "{%m:%s,%m:%m}",                          //
                 MG_ESC("status"), ok ? "true" : "false",  //
