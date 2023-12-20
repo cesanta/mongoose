@@ -636,3 +636,4 @@ typedef uint64_t uECC_word_t;
 #endif /* uECC_WORD_SIZE */
 
 #endif /* _UECC_TYPES_H_ */
+// End of uecc BSD-2

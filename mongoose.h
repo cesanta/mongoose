@@ -1452,6 +1452,7 @@ int aes_gcm_decrypt(unsigned char *output, const unsigned char *input,
 
 #endif
 
+// End of aes128 PD
 
 
 
@@ -2090,6 +2091,7 @@ typedef uint64_t uECC_word_t;
 #endif /* uECC_WORD_SIZE */
 
 #endif /* _UECC_TYPES_H_ */
+// End of uecc BSD-2
 
 
 struct mg_connection;

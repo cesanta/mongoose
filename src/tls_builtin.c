@@ -2,7 +2,7 @@
 
 #if MG_TLS == MG_TLS_BUILTIN
 
-/* handshake is re-entrant, so we need to keep track of its state */
+// handshake is re-entrant, so we need to keep track of its state
 enum mg_tls_hs_state {
   MG_TLS_HS_CLIENT_HELLO,  // first, wait for ClientHello
   MG_TLS_HS_SERVER_HELLO,  // then, send all server handshake data at once
@@ -11,27 +11,26 @@ enum mg_tls_hs_state {
   MG_TLS_HS_DONE,  // finish handshake, start application data flow
 };
 
-/* per-connection TLS data */
+// per-connection TLS data
 struct tls_data {
-  enum mg_tls_hs_state state; /* keep track of connection handshake progress */
+  enum mg_tls_hs_state state;  // keep track of connection handshake progress
 
   struct mg_iobuf send;
   struct mg_iobuf recv;
 
-  mg_sha256_ctx sha256; /* incremental SHA-256 hash for TLS handshake */
+  mg_sha256_ctx sha256;  // incremental SHA-256 hash for TLS handshake
 
-  uint32_t sseq; /* server sequence number, used in encryption */
-  uint32_t cseq; /* client sequence number, used in decryption */
+  uint32_t sseq;  // server sequence number, used in encryption
+  uint32_t cseq;  // client sequence number, used in decryption
 
-  uint8_t session_id[32]; /* client session ID between the handshake states */
-  uint8_t x25519_cli[32]; /* client X25519 key between the handshake states */
-  uint8_t x25519_sec[32]; /* x25519 secret between the handshake
-                             states */
+  uint8_t session_id[32];  // client session ID between the handshake states
+  uint8_t x25519_cli[32];  // client X25519 key between the handshake states
+  uint8_t x25519_sec[32];  // x25519 secret between the handshake states
 
-  struct mg_str server_cert_der; /* server certificate in DER format */
-  uint8_t server_key[32];        /* server EC private key */
+  struct mg_str server_cert_der;  // server certificate in DER format
+  uint8_t server_key[32];         // server EC private key
 
-  /* keys for AES encryption */
+  // keys for AES encryption
   uint8_t handshake_secret[32];
   uint8_t server_write_key[16];
   uint8_t server_write_iv[12];
@@ -69,7 +68,7 @@ static limb_t umaal(limb_t *carry, limb_t acc, limb_t mand, limb_t mier) {
   return (limb_t) tmp;
 }
 
-/* These functions are implemented in terms of umaal on ARM */
+// These functions are implemented in terms of umaal on ARM
 static limb_t adc(limb_t *carry, limb_t acc, limb_t mand) {
   dlimb_t total = (dlimb_t) *carry + acc + mand;
   *carry = (limb_t) (total >> X25519_WBITS);
@@ -82,11 +81,10 @@ static limb_t adc0(limb_t *carry, limb_t acc) {
   return (limb_t) total;
 }
 
-/* Precondition: carry is small.
- * Invariant: result of propagate is < 2^255 + 1 word
- * In particular, always less than 2p.
- * Also, output x >= min(x,19)
- */
+// - Precondition: carry is small.
+// - Invariant: result of propagate is < 2^255 + 1 word
+// - In particular, always less than 2p.
+// - Also, output x >= min(x,19)
 static void propagate(fe x, limb_t over) {
   unsigned i;
   limb_t carry;
@@ -160,14 +158,11 @@ static void condswap(limb_t a[2 * NLIMBS], limb_t b[2 * NLIMBS],
   }
 }
 
+// Canonicalize a field element x, reducing it to the least residue which is
+// congruent to it mod 2^255-19
+// - Precondition: x < 2^255 + 1 word
 static limb_t canon(fe x) {
-  /* Canonicalize a field element x, reducing it to the least residue
-   * which is congruent to it mod 2^255-19.
-   *
-   * Precondition: x < 2^255 + 1 word
-   */
-
-  /* First, add 19. */
+  // First, add 19.
   unsigned i;
   limb_t carry0 = 19;
   limb_t res;
@@ -177,18 +172,14 @@ static limb_t canon(fe x) {
   }
   propagate(x, carry0);
 
-  /* Here, 19 <= x2 < 2^255
-   *
-   * This is because we added 19, so before propagate it can't be less than 19.
-   * After propagate, it still can't be less than 19, because if propagate does
-   * anything it adds 19.
-   *
-   * We know that the high bit must be clear, because either the input was
-   * ~ 2^255 + one word + 19 (in which case it propagates to at most 2 words)
-   * or it was < 2^255.
-   *
-   * So now, if we subtract 19, we will get back to something in [0,2^255-19).
-   */
+  // Here, 19 <= x2 < 2^255
+  // - This is because we added 19, so before propagate it can't be less
+  // than 19. After propagate, it still can't be less than 19, because if
+  // propagate does anything it adds 19.
+  // - We know that the high bit must be clear, because either the input was ~
+  // 2^255 + one word + 19 (in which case it propagates to at most 2 words) or
+  // it was < 2^255. So now, if we subtract 19, we will get back to something in
+  // [0,2^255-19).
   carry = -19;
   res = 0;
   for (i = 0; i < NLIMBS; i++) {
@@ -270,7 +261,7 @@ static int x25519(uint8_t out[X25519_BYTES], const uint8_t scalar[X25519_BYTES],
                  {3, 1, 2},  {3, 1, 2},  {3, 1, 1}};
   x25519_core(xs, scalar, x1, clamp);
 
-  /* Precomputed inversion chain */
+  // Precomputed inversion chain
   x2 = xs[0];
   z2 = xs[1];
   z3 = xs[3];
@@ -286,21 +277,21 @@ static int x25519(uint8_t out[X25519_BYTES], const uint8_t scalar[X25519_BYTES],
     mul1(a, xs[steps[i].c]);
   }
 
-  /* Here prev = z3 */
-  /* x2 /= z2 */
+  // Here prev = z3
+  // x2 /= z2
   mul((limb_t *) out, x2, z3, NLIMBS);
   ret = (int) canon((limb_t *) out);
   if (!clamp) ret = 0;
   return ret;
 }
 
-/* a help to hexdump buffers inline */
+// helper to hexdump buffers inline
 static void mg_tls_hexdump(const char *msg, uint8_t *buf, size_t bufsz) {
   char p[2048];
   MG_INFO(("%s: %s", msg, mg_hex(buf, bufsz, p)));
 }
 
-/* TLS1.3 secret derivation based on the key label */
+// TLS1.3 secret derivation based on the key label
 static void mg_tls_derive_secret(const char *label, uint8_t *key, size_t keysz,
                                  uint8_t *data, size_t datasz, uint8_t *hash,
                                  size_t hashsz) {
@@ -317,7 +308,7 @@ static void mg_tls_derive_secret(const char *label, uint8_t *key, size_t keysz,
   memmove(hash, secret, hashsz);
 }
 
-/* receive as much data as we can, but at least one full TLS record */
+// receive as much data as we can, but at least one full TLS record
 static int mg_tls_recv_msg(struct mg_connection *c) {
   struct tls_data *tls = c->tls;
   struct mg_iobuf *rio = &tls->recv;
@@ -354,7 +345,7 @@ static void mg_tls_drop_packet(struct mg_iobuf *rio) {
   // rio->len = rio->len - n;
 }
 
-/* read and parse ClientHello record */
+// read and parse ClientHello record
 static int mg_tls_client_hello(struct mg_connection *c) {
   struct tls_data *tls = c->tls;
   struct mg_iobuf *rio = &tls->recv;
@@ -409,7 +400,7 @@ static int mg_tls_client_hello(struct mg_connection *c) {
   return -1;
 }
 
-/* put ServerHello record into wio buffer */
+// put ServerHello record into wio buffer
 static void mg_tls_server_hello(struct mg_connection *c) {
   struct tls_data *tls = c->tls;
   struct mg_iobuf *wio = &tls->send;
@@ -460,8 +451,8 @@ static void mg_tls_server_hello(struct mg_connection *c) {
   mg_iobuf_add(wio, wio->len, "\x14\x03\x03\x00\x01\x01", 6);
 }
 
-/* at this point we have x25519 shared secret, we can generate a
- * set of derived handshake encryption keys */
+// at this point we have x25519 shared secret, we can generate a set of derived
+// handshake encryption keys
 static void mg_tls_generate_handshake_keys(struct mg_connection *c) {
   struct tls_data *tls = c->tls;
 
@@ -506,7 +497,7 @@ static void mg_tls_generate_handshake_keys(struct mg_connection *c) {
                        tls->client_finished_key, 32);
 }
 
-/* AES GCM enctyption of the message + put encoded data into the write buffer */
+// AES GCM encryption of the message + put encoded data into the write buffer
 static void mg_tls_encrypt(struct mg_connection *c, const uint8_t *msg,
                            size_t msgsz, uint8_t msgtype) {
   struct tls_data *tls = c->tls;
@@ -538,7 +529,7 @@ static void mg_tls_encrypt(struct mg_connection *c, const uint8_t *msg,
   tls->sseq++;
 }
 
-/* read an encrypted message, decrypt it into read buffer (AES GCM) */
+// read an encrypted message, decrypt it into read buffer (AES GCM)
 static int mg_tls_recv_decrypt(struct mg_connection *c, void *buf,
                                size_t bufsz) {
   struct tls_data *tls = c->tls;
@@ -553,7 +544,7 @@ static int mg_tls_recv_decrypt(struct mg_connection *c, void *buf,
     if (rio->buf[0] == 0x17) {
       break;
     } else if (rio->buf[0] == 0x15) {
-      MG_INFO(("TLS ALERT packet received")); /* TODO: drop packet? */
+      MG_INFO(("TLS ALERT packet received"));  // TODO: drop packet?
     } else {
       mg_error(c, "unexpected packet");
       return -1;
@@ -613,7 +604,7 @@ static void mg_tls_server_cert(struct mg_connection *c) {
   mg_tls_encrypt(c, cert, 13 + n, 0x16);
 }
 
-/* type adapter between uECC hash context and our sha256 implementation */
+// type adapter between uECC hash context and our sha256 implementation
 typedef struct SHA256_HashContext {
   uECC_HashContext uECC;
   mg_sha256_ctx ctx;
@@ -661,12 +652,12 @@ static void mg_tls_server_verify_ecdsa(struct mg_connection *c) {
 
   neg1 = !!(sig[0] & 0x80);
   neg2 = !!(sig[32] & 0x80);
-  verify[8] = 0x30; /* ASN.1 SEQUENCE */
+  verify[8] = 0x30;  // ASN.1 SEQUENCE
   verify[9] = (uint8_t) (68 + neg1 + neg2);
-  verify[10] = 0x02; /* ASN.1 INTEGER */
+  verify[10] = 0x02;  // ASN.1 INTEGER
   verify[11] = (uint8_t) (32 + neg1);
   memmove(verify + 12 + neg1, sig, 32);
-  verify[12 + 32 + neg1] = 0x02; /* ASN.1 INTEGER */
+  verify[12 + 32 + neg1] = 0x02;  // ASN.1 INTEGER
   verify[13 + 32 + neg1] = (uint8_t) (32 + neg2);
   memmove(verify + 14 + 32 + neg1 + neg2, sig + 32, 32);
 
@@ -794,7 +785,9 @@ void mg_tls_handshake(struct mg_connection *c) {
       mg_tls_generate_application_keys(c);
       tls->state = MG_TLS_HS_DONE;
       // fallthrough
-    case MG_TLS_HS_DONE: c->is_tls_hs = 0; return;
+    case MG_TLS_HS_DONE:
+      c->is_tls_hs = 0;
+      return;
   }
 }
 
@@ -838,7 +831,7 @@ void mg_tls_init(struct mg_connection *c, const struct mg_tls_opts *opts) {
     mg_error(c, "tls oom");
     return;
   }
-  /* parse PEM or DER EC key */
+  // parse PEM or DER EC key
   if (opts->key.ptr == NULL ||
       mg_parse_pem(opts->key, mg_str_s("EC PRIVATE KEY"), &key) < 0) {
     MG_ERROR(("Failed to load EC private key"));
@@ -848,8 +841,8 @@ void mg_tls_init(struct mg_connection *c, const struct mg_tls_opts *opts) {
     MG_ERROR(("EC private key too short"));
     return;
   }
-  /* expect ASN.1 SEQUENCE=[INTEGER=1, BITSTRING of 32 bytes, ...] */
-  /* 30 nn 02 01 01 04 20 [key] ... */
+  // expect ASN.1 SEQUENCE=[INTEGER=1, BITSTRING of 32 bytes, ...]
+  // 30 nn 02 01 01 04 20 [key] ...
   if (key.ptr[0] != 0x30 || (key.ptr[1] & 0x80) != 0) {
     MG_ERROR(("EC private key: ASN.1 bad sequence"));
     return;
@@ -860,7 +853,7 @@ void mg_tls_init(struct mg_connection *c, const struct mg_tls_opts *opts) {
   memmove(tls->server_key, key.ptr + 7, 32);
   free((void *) key.ptr);
 
-  /* parse PEM or DER certificate */
+  // parse PEM or DER certificate
   if (mg_parse_pem(opts->cert, mg_str_s("CERTIFICATE"), &tls->server_cert_der) <
       0) {
     MG_ERROR(("Failed to load certificate"));
