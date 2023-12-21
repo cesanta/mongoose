@@ -51,6 +51,7 @@ typedef struct win32_dir {
   struct dirent result;
 } DIR;
 
+#if 0
 int gettimeofday(struct timeval *tv, void *tz) {
   FILETIME ft;
   unsigned __int64 tmpres = 0;
@@ -68,6 +69,7 @@ int gettimeofday(struct timeval *tv, void *tz) {
   (void) tz;
   return 0;
 }
+#endif
 
 static int to_wchar(const char *path, wchar_t *wbuf, size_t wbuf_len) {
   int ret;
