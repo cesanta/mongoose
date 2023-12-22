@@ -289,6 +289,8 @@ static void read_conn(struct mg_connection *c) {
         if (c->is_tls_hs) mg_tls_handshake(c);
         if (c->is_tls_hs) return;
         n = mg_tls_recv(c, buf, len);
+      } else if (n == MG_IO_WAIT) {
+        n = mg_tls_recv(c, buf, len);
       }
     } else {
       n = recv_raw(c, buf, len);
