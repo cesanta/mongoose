@@ -31,7 +31,7 @@ static void fn(struct mg_connection *c, int ev, void *ev_data, void *fn_data) {
       }
     } else {
       struct mg_http_serve_opts opts = {.root_dir = s_root_dir};
-      mg_http_serve_dir(c, ev_data, &opts);
+      mg_http_serve_dir(c, hm, &opts);
     }
   }
   (void) fn_data;
