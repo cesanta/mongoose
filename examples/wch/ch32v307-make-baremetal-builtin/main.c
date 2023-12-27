@@ -85,7 +85,7 @@ int main(void) {
   const char *sizes[] = {"128/192", "96/224", "64/256", "32/288"};
   uint32_t mode = (FLASH->OBR >> 8) & 3U;
   MG_INFO(("RAM/FLASH configuration: %s", sizes[mode]));
-  if (mode != 2) set_ram_size(2);
+  // if (mode != 2) set_ram_size(2);
 
   // Initialise Mongoose network stack
   ethernet_init();  // Initialise ethernet pins
