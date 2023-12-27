@@ -85,7 +85,7 @@ int main(void) {
   const char *sizes[] = {"128/192", "96/224", "64/256", "32/288"};
   uint32_t mode = (FLASH->OBR >> 8) & 3U;
   MG_INFO(("RAM/FLASH configuration: %s", sizes[mode]));
-  // if (mode != 3) set_ram_size(3), mg_device_reset();
+  if (mode != 2) set_ram_size(2);
 
   // Initialise Mongoose network stack
   ethernet_init();  // Initialise ethernet pins
@@ -107,7 +107,7 @@ int main(void) {
 
   MG_INFO(("Initialising application..."));
   mg_http_listen(&mgr, "http://0.0.0.0:8000", fn, NULL);
-  //web_init(&mgr);
+  web_init(&mgr);
 
   MG_INFO(("Starting event loop"));
   for (;;) {

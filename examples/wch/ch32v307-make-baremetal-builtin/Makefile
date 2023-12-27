@@ -23,7 +23,7 @@ firmware.bin: firmware.elf
 	$(PREFIX)-objcopy -O binary $< $@
 	$(PREFIX)-size --format=berkeley $<
 
-firmware.elf: $(SOURCES) link.ld hal.h mongoose_custom.h Makefile
+firmware.elf: $(SOURCES) hal.h mongoose_custom.h Makefile
 	$(PREFIX)-gcc $(SOURCES) $(CFLAGS) $(LDFLAGS) -o $@
 
 flash: firmware.bin
