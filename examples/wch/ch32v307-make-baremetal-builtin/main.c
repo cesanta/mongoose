@@ -45,7 +45,6 @@ static void timer_fn(void *arg) {
   gpio_toggle(LED_PIN);                                  // Blink LED_PIN
   struct mg_tcpip_if *ifp = arg;                         // And show
   const char *names[] = {"down", "up", "req", "ready"};  // network stats
-  return;
   MG_INFO(("Ethernet: %s, IP: %M, rx:%u, tx:%u, dr:%u, er:%u",
            names[ifp->state], mg_print_ip4, &ifp->ip, ifp->nrecv, ifp->nsent,
            ifp->ndrop, ifp->nerr));
@@ -59,30 +58,12 @@ void SysTick_Init(void) {
   NVIC_EnableIRQ(SysTicK_IRQn);
 }
 
-static void mg_putchar(char ch, void *param) {
-  uart_write_byte(param, ch);
-}
-
 // https://mongoose.ws/documentation/#2-minute-integration-guide
 static void fn(struct mg_connection *c, int ev, void *ev_data, void *fn_data) {
   if (ev == MG_EV_HTTP_MSG) {
     struct mg_http_message *hm = (struct mg_http_message *) ev_data;
-    if (mg_http_match_uri(hm, "/api/ram")) {
-      // This endpoint allows to read RAM:
-      // curl IP:8000/api/ram -d '{"addr":"0x20", "len": 32}'
-      char *s = mg_json_get_str(hm->body, "$.addr");
-      void *buf = (void *) (uintptr_t) (s ? strtoul(s, NULL, 0) : 0);
-      size_t len = mg_json_get_long(hm->body, "$.len", 4);
-      mg_hexdump(buf, len);
-      mg_http_reply(c, 200, "", "{%m:%m}\n", MG_ESC("data"), mg_print_hex, len,
-                    buf);
-      free(s);
-    } else {
-      // For all other URIs, serve static content
-      mg_http_reply(c, 200, "", "hi tick %llu\n", s_ticks);
-    }
+    mg_http_reply(c, 200, "", "ok %p %p\r\n", hm, fn_data);
   }
-  (void) fn_data;
 }
 
 int main(void) {
@@ -95,10 +76,8 @@ int main(void) {
   struct mg_mgr mgr;        // Initialise
   mg_mgr_init(&mgr);        // Mongoose event manager
   mg_log_set(MG_LL_DEBUG);  // Set log level
-  mg_log_set_fn(mg_putchar, UART_DEBUG);
 
   MG_INFO(("Starting, CPU freq %g MHz", (double) SystemCoreClock / 1000000));
-  // MG_INFO(("RCC_RSTSCKR=%#lx", RCC->RSTSCKR));
   extern char _end[], _heap_end[];
   MG_INFO(("Heap size: %lu bytes", _heap_end - _end));
 
@@ -106,12 +85,11 @@ int main(void) {
   const char *sizes[] = {"128/192", "96/224", "64/256", "32/288"};
   uint32_t mode = (FLASH->OBR >> 8) & 3U;
   MG_INFO(("RAM/FLASH configuration: %s", sizes[mode]));
-  if (mode != 3) set_ram_size(3), mg_device_reset();
+  // if (mode != 3) set_ram_size(3), mg_device_reset();
 
   // Initialise Mongoose network stack
   ethernet_init();  // Initialise ethernet pins
-  struct mg_tcpip_driver_stm32f_data
- driver_data = {.mdc_cr = 1};
+  struct mg_tcpip_driver_stm32f_data driver_data = {.mdc_cr = 1, .phy_addr = 1};
   struct mg_tcpip_if mif = {.mac = GENERATE_LOCALLY_ADMINISTERED_MAC(),
                             // Uncomment below for static configuration:
                             // .ip = mg_htonl(MG_U32(192, 168, 0, 223)),
@@ -129,7 +107,7 @@ int main(void) {
 
   MG_INFO(("Initialising application..."));
   mg_http_listen(&mgr, "http://0.0.0.0:8000", fn, NULL);
-  web_init(&mgr);
+  //web_init(&mgr);
 
   MG_INFO(("Starting event loop"));
   for (;;) {
@@ -139,12 +117,25 @@ int main(void) {
   return 0;
 }
 
-// Newlib syscall for malloc
+// Newlib syscalls
+int _write(int fd, char *buf, int len) {
+  if (fd == 1) uart_write_buf(USART1, buf, len);
+  return len;
+}
+
 void *_sbrk(ptrdiff_t incr) {
   extern char _end[], _heap_end[];
   static char *curbrk = _end;
-  if ((curbrk + incr < _end) || (curbrk + incr > _heap_end)) return NULL - 1;
-  //MG_INFO(("%p %ld", curbrk, incr));
+  if ((curbrk + incr < _end) || (curbrk + incr > _heap_end)) {
+    return NULL - 1;
+  }
+  // MG_INFO(("%p %ld", curbrk, incr));
   curbrk += incr;
   return curbrk - incr;
+}
+
+void _init(void) {
+}
+
+void _fini(void) {
 }

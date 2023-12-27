@@ -2889,6 +2889,8 @@ struct mg_tcpip_driver_stm32f_data {
   //    216-310 MHz   HCLK/124       5
   //    110, 111 Reserved
   int mdc_cr;  // Valid values: -1, 0, 1, 2, 3, 4, 5
+
+  uint8_t phy_addr;  // PHY address
 };
 
 

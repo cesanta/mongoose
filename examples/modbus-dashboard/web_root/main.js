@@ -307,9 +307,9 @@ function Settings({}) {
     <//>
     <div class="py-2 px-5 flex-1 flex flex-col relative">
       <${Setting} title="Enable MQTT forwarding" value=${settings.mqtt_enabled} setfn=${mksetfn('mqtt_enabled')} type="switch" />
-      <${Setting} title="MQTT Server URL" value=${settings.mqtt_server_url} setfn=${mksetfn('mqtt_server_url')} type="" disabled=${!settings.mqtt_enabled} />
-      <${Setting} title="MQTT Topic RX" value=${settings.mqtt_topic_rx} setfn=${mksetfn('mqtt_topic_rx')} type="" disabled=${!settings.mqtt_enabled} />
-      <${Setting} title="MQTT Topic TX" value=${settings.mqtt_topic_tx} setfn=${mksetfn('mqtt_topic_tx')} type="" disabled=${!settings.mqtt_enabled} />
+      <${Setting} title="MQTT Server URL" value=${settings.mqtt_server_url} setfn=${mksetfn('mqtt_server_url')} />
+      <${Setting} title="MQTT Topic RX" value=${settings.mqtt_topic_rx} setfn=${mksetfn('mqtt_topic_rx')} />
+      <${Setting} title="MQTT Topic TX" value=${settings.mqtt_topic_tx} setfn=${mksetfn('mqtt_topic_tx')} />
       <div class="mb-1 mt-3 flex place-content-end"><${Button} icon=${Icons.save} onclick=${onsave} title="Save Settings" /><//>
     <//>
   <//>

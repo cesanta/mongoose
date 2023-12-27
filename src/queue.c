@@ -1,7 +1,9 @@
 #include "queue.h"
 #include "util.h"
 
-#if defined(__GNUC__) || defined(__clang__)
+#if (defined(__GNUC__) && (__GNUC__ > 4) ||                                \
+     (defined(__GNUC_MINOR__) && __GNUC__ == 4 && __GNUC_MINOR__ >= 1)) || \
+    defined(__clang__)
 #define MG_MEMORY_BARRIER() __sync_synchronize()
 #elif defined(_MSC_VER) && _MSC_VER >= 1700
 #define MG_MEMORY_BARRIER() MemoryBarrier()

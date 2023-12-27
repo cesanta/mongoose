@@ -1,16 +1,12 @@
 ROOT ?= $(realpath $(PWD)/../../..)
 PREFIX ?= riscv-none-elf
-#PREFIX ?= docker run --platform linux/amd64 --rm -it -v$(ROOT):$(ROOT) -w $(PWD) mdashnet/riscv riscv64-unknown-elf
-
-CFLAGS = -W -Wall -Wextra -Wno-error -Wundef -Wshadow -Wdouble-promotion
-CFLAGS += -Wformat-truncation -fno-common -Wconversion -Wno-sign-conversion
-CFLAGS += -ffunction-sections -fdata-sections
-CFLAGS += -march=rv32imafc -mabi=ilp32f
-CFLAGS += -DSYSCLK_FREQ_144MHz_HSE -I. -Ivendor -g3 -Os $(CFLAGS_EXTRA)
-
-LDFLAGS = -T link.ld -nostartfiles --specs=nano.specs
-LDFLAGS += -lc -lgcc -Wl,--gc-sections #-Wl,-Map=$@.map
-
+#PREFIX ?= docker run --platform linux/amd64 --rm -it -v$(ROOT):$(ROOT) -w $(PWD) mdashnet/riscv riscv-none-elf
+CFLAGS = -W -Wall -Wextra -Wundef -Wshadow -Wdouble-promotion
+CFLAGS += -Wformat-truncation -Wconversion -Wno-sign-conversion
+CFLAGS += -ffunction-sections -fdata-sections -fno-common
+CFLAGS += -DSYSCLK_FREQ_144MHz_HSE -I. -Ivendor -g3 -Os
+CFLAGS += -march=rv32imafc -mabi=ilp32 $(CFLAGS_EXTRA)
+LDFLAGS = -T vendor/link.ld -nostartfiles --specs=nano.specs --specs=nosys.specs -Wl,--gc-sections
 SOURCES = main.c mongoose.c net.c packed_fs.c
 SOURCES += vendor/system_ch32v30x.c vendor/startup_ch32v30x_D8C.S
 CFLAGS += -DHTTP_URL=\"http://0.0.0.0/\" -DHTTPS_URL=\"https://0.0.0.0/\"
@@ -25,7 +21,7 @@ all: firmware.bin
 
 firmware.bin: firmware.elf
 	$(PREFIX)-objcopy -O binary $< $@
-	ls -l firmware.*
+	$(PREFIX)-size --format=berkeley $<
 
 firmware.elf: $(SOURCES) link.ld hal.h mongoose_custom.h Makefile
 	$(PREFIX)-gcc $(SOURCES) $(CFLAGS) $(LDFLAGS) -o $@

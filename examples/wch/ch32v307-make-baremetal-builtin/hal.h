@@ -34,7 +34,7 @@ enum {
 };
 enum { GPIO_OTYPE_PP, GPIO_OTYPE_OD, GPIO_OTYPE_AF_PP, GPIO_AF_OD };
 enum { GPIO_ITYPE_ANALOG, GPIO_ITYPE_FLOAT, GPIO_ITYPE_PUPD };
-#define GPIO(N) ((GPIO_TypeDef *) (GPIOA_BASE + 0x400 * (N)))
+#define GPIO(N) ((GPIO_TypeDef *) (size_t) (GPIOA_BASE + 0x400 * (N)))
 
 static GPIO_TypeDef *gpio_bank(uint16_t pin) {
   return GPIO(PINBANK(pin));
@@ -59,7 +59,10 @@ static inline void gpio_init(uint16_t pin, uint8_t mode, uint8_t cfg) {
     RCC->APB2PCENR |= BIT(0);  // Enable AFIO
   }
   volatile uint32_t *r = &gpio->CFGLR;
-  if (no > 7) r = &gpio->CFGHR, no -= 8;
+  if (no > 7) {
+    r = &gpio->CFGHR;
+    no = (uint8_t) (no - 8);
+  }
   uint8_t v = (uint8_t) ((mode & 3U) | ((cfg & 3U) << 2));
   CLRSET(*r, 15U << (no * 4), v << (no * 4));
 }
@@ -106,27 +109,13 @@ static inline uint8_t uart_read_byte(USART_TypeDef *uart) {
 }
 
 static inline void ethernet_init(void) {
-  // Set 60MHz ethernet clock
-  RCC->CTLR &= ~BIT(28);                     // PLL3 off
-  CLRSET(RCC->CFGR2, 15U << 4, 1U << 4);     // 3.4.12: PREDIV2 = 2
-  CLRSET(RCC->CFGR2, 15U << 12, 13U << 12);  // 3.4.12: PLL3MUL = 15
-  RCC->CTLR |= BIT(28);                      // PLL3 on
-
-  EXTEN->EXTEN_CTR |= EXTEN_ETH_10M_EN;  // Enable built-in 10M PHY
-#if 0
-  // RMII mode
-  // 27.1.3 : init pins
-  uint16_t pins[] = {PIN('A', 1),  PIN('A', 2),  PIN('A', 7),
-                     PIN('B', 11), PIN('B', 12), PIN('B', 13),
-                     PIN('C', 1),  PIN('C', 4),  PIN('C', 5)};
-  for (size_t i = 0; i < sizeof(pins) / sizeof(pins[0]); i++) {
-    gpio_init(pins[i], GPIO_MODE_OUTPUT_50M, GPIO_OTYPE_AF_PP);
-  }
-  AFIO->PCFR1 |= BIT(23);                        // Use RMII
-#endif
+  RCC->CTLR &= ~BIT(28);                         // PLL3 off
+  CLRSET(RCC->CFGR2, 15U << 4, 1U << 4);         // 3.4.12: PREDIV2 = 2
+  CLRSET(RCC->CFGR2, 15U << 12, 13U << 12);      // 3.4.12: PLL3MUL = 15
+  RCC->CTLR |= BIT(28);                          // PLL3 on
+  EXTEN->EXTEN_CTR |= EXTEN_ETH_10M_EN;          // Enable built-in 10M PHY
   RCC->AHBPCENR |= BIT(14) | BIT(15) | BIT(16);  // Enable MAC, TX, RX
-  NVIC_EnableIRQ(ETH_IRQn);
-  // NVIC_SetPriority(ETH_IRQn, 0);
+  NVIC_EnableIRQ(ETH_IRQn);                      // Enable Ethernet interrupt
 }
 
 // opt: 0: 128/192, 1: 96/224, 2: 64/256, 3: 32/288
