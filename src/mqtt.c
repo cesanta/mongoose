@@ -338,7 +338,7 @@ void mg_mqtt_pub(struct mg_connection *c, const struct mg_mqtt_opts *opts) {
 
   if (c->is_mqtt5) mg_send_mqtt_properties(c, opts->props, opts->num_props);
 
-  mg_send(c, opts->message.ptr, opts->message.len);
+  if(opts->message.len > 0) mg_send(c, opts->message.ptr, opts->message.len);
 }
 
 void mg_mqtt_sub(struct mg_connection *c, const struct mg_mqtt_opts *opts) {
