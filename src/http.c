@@ -963,10 +963,11 @@ static int skip_chunk(const char *buf, int len, int *pl, int *dl) {
   int i = 0, n = 0;
   if (len < 3) return 0;
   while (i < len && is_hex_digit(buf[i])) i++;
+  if (i > (int) sizeof(int) * 2) return -1;  // Chunk length is too big
   if (len < i + 1 || buf[i] != '\r' || buf[i + 1] != '\n') return -1;  // Error
-  n = (int) mg_unhexn(buf, (size_t) i);  // Decode hex length
+  n = (int) mg_unhexn(buf, (size_t) i);  // Decode chunk length
   if (n < 0) return -1;                  // Error
-  if (len < i + n + 4) return 0;         // Chunk not yet fully buffered
+  if (n > len - i - 4) return 0;         // Chunk not yet fully buffered
   if (buf[i + n + 2] != '\r' || buf[i + n + 3] != '\n') return -1;  // Error
   *pl = i + 2, *dl = n;
   return i + 2 + n + 2;
@@ -996,7 +997,7 @@ static void http_cb(struct mg_connection *c, int ev, void *evd, void *fnd) {
         if (mg_vcasecmp(te, "chunked") == 0) {
           is_chunked = true;
         } else {
-          mg_error(c, "Invalid Transfer-Encoding"); // See #2460
+          mg_error(c, "Invalid Transfer-Encoding");  // See #2460
           return;
         }
       }
