@@ -19,20 +19,22 @@ robust, and easy. Features include:
   - write code once - and it'll work everywhere
   - ideal for the unification of the network infrastructure code across company
 - Built-in protocols: plain TCP/UDP, SNTP, HTTP, MQTT, Websocket
-- SSL/TLS support: mbedTLS, OpenSSL or custom (via API)
+- SSL/TLS support for mbedTLS and OpenSSL
 - Asynchronous DNS resolver
 - Tiny static and run-time footprint
 - Source code is both ISO C and ISO C++ compliant
 - Very easy to integrate: just copy `mongoose.c` and `mongoose.h` files to your source tree. See
   [exact steps](https://mongoose.ws/documentation/#2-minute-integration-guide)
-- Works with any network stack with socket API, like LwIP or FreeRTOS-Plus-TCP
+- Works in any environment with socket API, like LwIP, Zephyr, Azure
 - Built-in TCP/IP stack with drivers for bare metal or RTOS systems
-   - Available drivers: STM32 F4, F7, H5, H7; NXP RT1020; TI TM4C; Microchip SAME54; Wiznet W5500
+   - Available drivers: STM32F, STM32H; NXP RT1xxx; TI TM4C; Microchip SAME54; Wiznet W5500
    - A complete Web device dashboard on bare metal
   [Nucleo-F429ZI](examples/stm32/nucleo-f429zi-baremetal) is only 6 files
    - For comparison, a CubeIDE generated HTTP example is 400+ files
+- Built-in TLS 1.3 server-side support
+- Does not depend on any other software to implement networking
 - Built-in firmware updates for STM32H5, STM32H7, and more coming
-- Detailed [user guide, API reference and tons of tutorials](https://mongoose.ws/documentation/) available
+- Detailed [user guide, API reference and tons of tutorials](https://mongoose.ws/documentation/)
 
 
 # Commercial use
