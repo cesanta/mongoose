@@ -377,12 +377,12 @@ jobs:
         fi
     - if: ${{ env.GO == 1 }}
       run: |
-        if ./test/match_changed_files.sh '^src|examples/nxp/rt1060-evk-make-baremetal-builtin'; then
+        if ./test/match_changed_files.sh '^src|examples/device-dashboard|examples/nxp/rt1060-evk-make-baremetal-builtin'; then
           make -C examples/nxp/rt1060-evk-make-baremetal-builtin test VCON_API_KEY=${{secrets.VCON_API_KEY}}
         fi
     - if: ${{ env.GO == 1 }}
       run: |
-        if ./test/match_changed_files.sh '^src|examples/nxp/rt1060-evk-make-freertos-builtin'; then
+        if ./test/match_changed_files.sh '^src|examples/device-dashboard|examples/nxp/rt1060-evk-make-freertos-builtin'; then
           make -C examples/nxp/rt1060-evk-make-freertos-builtin test VCON_API_KEY=${{secrets.VCON_API_KEY}}
         fi
 

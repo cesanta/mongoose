@@ -3,7 +3,7 @@ CFLAGS += -Wformat-truncation -fno-common -Wconversion -Wno-sign-conversion
 CFLAGS += -g3 -Os -ffunction-sections -fdata-sections
 CFLAGS += -I. -Icmsis_core/CMSIS/Core/Include -Icmsis_mcu/devices/MIMXRT1062 #-DCPU_MIMXRT1062DVL6B
 CFLAGS += -mcpu=cortex-m7 -mthumb -mfloat-abi=hard -mfpu=fpv5-d16 $(CFLAGS_EXTRA)
-LDSCRIPT = link_ram.ld
+LDSCRIPT = link.ld
 LDFLAGS ?= -T$(LDSCRIPT) -nostdlib -nostartfiles --specs nano.specs -lc -lgcc -Wl,--gc-sections -Wl,-Map=$@.map 
 
 SOURCES = main.c syscalls.c sysinit.c
@@ -22,11 +22,11 @@ else
   RM = rm -rf
 endif
 
+all build example update: SOURCES += flash_image.c
 all build example: firmware.bin
 
-image: LDSCRIPT = link.ld
-image: SOURCES += flash_image.c
-image: firmware.bin
+ram: LDSCRIPT = link_ram.ld
+ram: firmware.bin
 
 firmware.bin: firmware.elf
 	arm-none-eabi-objcopy -O binary $< $@
@@ -36,7 +36,7 @@ firmware.elf: cmsis_core cmsis_mcu $(SOURCES) hal.h link_ram.ld link.ld Makefile
 	arm-none-eabi-size $@
 
 flash: firmware.bin
-	st-flash --reset write $< 0x8000000
+# flash
 
 cmsis_core:     # ARM CMSIS core headers
 	git clone -q --depth 1 -b 5.9.0 https://github.com/ARM-software/CMSIS_5 $@
@@ -56,6 +56,16 @@ endif
 DEVICE_URL ?= https://dash.vcon.io/api/v3/devices/13
 update: firmware.bin
 	curl --fail-with-body -su :$(VCON_API_KEY) $(DEVICE_URL)/ota --data-binary @$<
+
+update updateram: CFLAGS += -DUART_DEBUG=LPUART3
+
+test: update
+	curl --fail-with-body -su :$(VCON_API_KEY) $(DEVICE_URL)/tx?t=5 | tee /tmp/output.txt
+	grep 'READY, IP:' /tmp/output.txt       # Check for network init
+
+
+updateram: ram
+	curl --fail-with-body -su :$(VCON_API_KEY) $(DEVICE_URL)/ota --data-binary @firmware.bin
 	curl -su :$(VCON_API_KEY) $(DEVICE_URL)/rpc/swd.exec -d '{"req":"init"}'
 	curl -su :$(VCON_API_KEY) $(DEVICE_URL)/rpc/swd.exec -d '{"req":"wm,e000edf0,a05f0003 wm,e000edfc,1 wm,e000ed0c,5fa0004"}'
 	curl -su :$(VCON_API_KEY) $(DEVICE_URL)/rpc/swd.exec -d '{"req":"init"}'
@@ -65,12 +75,10 @@ update: firmware.bin
 	curl -su :$(VCON_API_KEY) $(DEVICE_URL)/rpc/swd.exec -d '{"req":"'"$$REQ"'"}'
 	curl -su :$(VCON_API_KEY) $(DEVICE_URL)/rpc/swd.exec -d '{"req":"wm,e000edf0,a05f0001"}'
 
-test update testimage: CFLAGS += -DUART_DEBUG=LPUART3
-test: update
+testram: updateram
 	curl --fail-with-body -su :$(VCON_API_KEY) $(DEVICE_URL)/tx?t=5 | tee /tmp/output.txt
 	grep 'READY, IP:' /tmp/output.txt       # Check for network init
 
-testimage: image
 
 clean:
 	$(RM) firmware.* *.su cmsis_core cmsis_mcu mbedtls *.zip
