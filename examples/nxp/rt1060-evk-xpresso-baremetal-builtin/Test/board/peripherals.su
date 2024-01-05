@@ -1,0 +1,3 @@
+../board/peripherals.c:186:13:TRNG_init	8	static
+../board/peripherals.c:194:6:BOARD_InitPeripherals	8	static
+../board/peripherals.c:203:6:BOARD_InitBootPeripherals	8	static

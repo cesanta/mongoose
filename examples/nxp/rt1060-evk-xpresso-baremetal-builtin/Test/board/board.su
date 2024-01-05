@@ -1,0 +1,8 @@
+/root/Documents/MCUXpresso_11.8.1_1197/workspace/rt1060-evk-xpresso-baremetal-builtin/CMSIS/mpu_armv7.h:191:22:ARM_MPU_Enable	16	static
+/root/Documents/MCUXpresso_11.8.1_1197/workspace/rt1060-evk-xpresso-baremetal-builtin/CMSIS/mpu_armv7.h:204:22:ARM_MPU_Disable	4	static
+/root/Documents/MCUXpresso_11.8.1_1197/workspace/rt1060-evk-xpresso-baremetal-builtin/drivers/fsl_clock.h:1434:24:CLOCK_GetMux	16	static
+/root/Documents/MCUXpresso_11.8.1_1197/workspace/rt1060-evk-xpresso-baremetal-builtin/drivers/fsl_clock.h:1485:24:CLOCK_GetDiv	16	static
+/root/Documents/MCUXpresso_11.8.1_1197/workspace/rt1060-evk-xpresso-baremetal-builtin/drivers/fsl_clock.h:1546:24:CLOCK_GetOscFreq	4	static
+../board/board.c:24:10:BOARD_DebugConsoleSrcFreq	24	static
+../board/board.c:43:6:BOARD_InitDebugConsole	16	static
+../board/board.c:248:6:BOARD_ConfigMPU	48	static

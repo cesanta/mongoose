@@ -1,0 +1,3 @@
+../device/system_MIMXRT1062.c:81:6:SystemInit	8	static
+../device/system_MIMXRT1062.c:139:6:SystemCoreClockUpdate	48	static
+../device/system_MIMXRT1062.c:244:29:SystemInitHook	4	static

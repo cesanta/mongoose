@@ -1,0 +1,13 @@
+/root/Documents/MCUXpresso_11.8.1_1197/workspace/rt1060-evk-xpresso-baremetal-builtin/drivers/fsl_common_arm.h:210:20:_SDK_AtomicLocalClearAndSet4Byte	48	static
+/root/Documents/MCUXpresso_11.8.1_1197/workspace/rt1060-evk-xpresso-baremetal-builtin/drivers/fsl_clock.h:1408:20:CLOCK_SetMux	24	static
+/root/Documents/MCUXpresso_11.8.1_1197/workspace/rt1060-evk-xpresso-baremetal-builtin/drivers/fsl_clock.h:1460:20:CLOCK_SetDiv	24	static
+/root/Documents/MCUXpresso_11.8.1_1197/workspace/rt1060-evk-xpresso-baremetal-builtin/drivers/fsl_clock.h:1496:20:CLOCK_ControlGate	32	static
+/root/Documents/MCUXpresso_11.8.1_1197/workspace/rt1060-evk-xpresso-baremetal-builtin/drivers/fsl_clock.h:1523:20:CLOCK_DisableClock	16	static
+/root/Documents/MCUXpresso_11.8.1_1197/workspace/rt1060-evk-xpresso-baremetal-builtin/drivers/fsl_clock.h:1663:20:CLOCK_SetXtalFreq	16	static
+/root/Documents/MCUXpresso_11.8.1_1197/workspace/rt1060-evk-xpresso-baremetal-builtin/drivers/fsl_clock.h:1673:20:CLOCK_SetRtcXtalFreq	16	static
+/root/Documents/MCUXpresso_11.8.1_1197/workspace/rt1060-evk-xpresso-baremetal-builtin/drivers/fsl_clock.h:1730:20:CLOCK_SetPllBypass	24	static
+/root/Documents/MCUXpresso_11.8.1_1197/workspace/rt1060-evk-xpresso-baremetal-builtin/drivers/fsl_iomuxc.h:1363:20:IOMUXC_SetSaiMClkClockSource	24	static
+/root/Documents/MCUXpresso_11.8.1_1197/workspace/rt1060-evk-xpresso-baremetal-builtin/drivers/fsl_iomuxc.h:1423:20:IOMUXC_MQSConfig	24	static
+../board/clock_config.c:40:6:BOARD_InitBootClocks	8	static
+../board/clock_config.c:178:6:BOARD_BootClockRUN	16	static
+../board/clock_config.c:625:6:BOARD_BootClockRUN_528M	16	static
