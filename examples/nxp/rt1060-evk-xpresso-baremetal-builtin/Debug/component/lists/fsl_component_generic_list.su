@@ -1,0 +1,15 @@
+/root/Documents/MCUXpresso_11.8.1_1197/workspace/rt1060-evk-xpresso-baremetal-builtin/drivers/fsl_common_arm.h:732:24:DisableGlobalIRQ	16	static
+/root/Documents/MCUXpresso_11.8.1_1197/workspace/rt1060-evk-xpresso-baremetal-builtin/drivers/fsl_common_arm.h:758:20:EnableGlobalIRQ	24	static
+../component/lists/fsl_component_generic_list.c:32:22:LIST_Error_Check	24	static
+../component/lists/fsl_component_generic_list.c:80:6:LIST_Init	16	static
+../component/lists/fsl_component_generic_list.c:103:15:LIST_GetList	16	static
+../component/lists/fsl_component_generic_list.c:124:15:LIST_AddTail	24	static
+../component/lists/fsl_component_generic_list.c:170:15:LIST_AddHead	24	static
+../component/lists/fsl_component_generic_list.c:216:23:LIST_RemoveHead	24	static
+../component/lists/fsl_component_generic_list.c:264:23:LIST_GetHead	16	static
+../component/lists/fsl_component_generic_list.c:284:23:LIST_GetNext	16	static
+../component/lists/fsl_component_generic_list.c:304:23:LIST_GetPrev	16	static
+../component/lists/fsl_component_generic_list.c:328:15:LIST_RemoveElement	32	static
+../component/lists/fsl_component_generic_list.c:399:15:LIST_AddPrevElement	32	static
+../component/lists/fsl_component_generic_list.c:471:10:LIST_GetSize	16	static
+../component/lists/fsl_component_generic_list.c:490:10:LIST_GetAvailableSize	16	static

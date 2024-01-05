@@ -1,0 +1,15 @@
+/root/Documents/MCUXpresso_11.8.1_1197/workspace/rt1060-evk-xpresso-baremetal-builtin/drivers/fsl_common_arm.h:210:20:_SDK_AtomicLocalClearAndSet4Byte	48	static
+/root/Documents/MCUXpresso_11.8.1_1197/workspace/rt1060-evk-xpresso-baremetal-builtin/drivers/fsl_clock.h:1496:20:CLOCK_ControlGate	32	static
+/root/Documents/MCUXpresso_11.8.1_1197/workspace/rt1060-evk-xpresso-baremetal-builtin/drivers/fsl_clock.h:1513:20:CLOCK_EnableClock	16	static
+/root/Documents/MCUXpresso_11.8.1_1197/workspace/rt1060-evk-xpresso-baremetal-builtin/drivers/fsl_iomuxc.h:1288:20:IOMUXC_SetPinMux	24	static
+/root/Documents/MCUXpresso_11.8.1_1197/workspace/rt1060-evk-xpresso-baremetal-builtin/drivers/fsl_iomuxc.h:1320:20:IOMUXC_SetPinConfig	24	static
+../board/pin_mux.c:221:6:BOARD_InitBootPins	8	static
+../board/pin_mux.c:241:6:BOARD_InitPins	4	static
+../board/pin_mux.c:263:6:BOARD_InitDEBUG_UART	16	static
+../board/pin_mux.c:326:6:BOARD_InitSDRAM	16	static
+../board/pin_mux.c:402:6:BOARD_InitCSI	16	static
+../board/pin_mux.c:464:6:BOARD_InitLCD	16	static
+../board/pin_mux.c:532:6:BOARD_InitCAN	16	static
+../board/pin_mux.c:564:6:BOARD_InitENET	16	static
+../board/pin_mux.c:600:6:BOARD_InitUSDHC	16	static
+../board/pin_mux.c:638:6:BOARD_InitHyperFlash	16	static

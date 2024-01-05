@@ -1,0 +1,17 @@
+/root/Documents/MCUXpresso_11.8.1_1197/workspace/rt1060-evk-xpresso-baremetal-builtin/drivers/fsl_common_arm.h:732:24:DisableGlobalIRQ	16	static
+/root/Documents/MCUXpresso_11.8.1_1197/workspace/rt1060-evk-xpresso-baremetal-builtin/drivers/fsl_common_arm.h:758:20:EnableGlobalIRQ	24	static
+../component/serial_manager/fsl_component_serial_manager.c:422:32:SerialManager_StartWriting	32	static
+../component/serial_manager/fsl_component_serial_manager.c:484:32:SerialManager_StartReading	32	static
+../component/serial_manager/fsl_component_serial_manager.c:1233:32:SerialManager_Write	32	static
+../component/serial_manager/fsl_component_serial_manager.c:1250:32:SerialManager_Read	32	static
+../component/serial_manager/fsl_component_serial_manager.c:1268:25:SerialManager_Init	24	static
+../component/serial_manager/fsl_component_serial_manager.c:1473:25:SerialManager_Deinit	24	static
+../component/serial_manager/fsl_component_serial_manager.c:1552:25:SerialManager_OpenWriteHandle	32	static
+../component/serial_manager/fsl_component_serial_manager.c:1589:25:SerialManager_CloseWriteHandle	32	static
+../component/serial_manager/fsl_component_serial_manager.c:1620:25:SerialManager_OpenReadHandle	32	static
+../component/serial_manager/fsl_component_serial_manager.c:1660:25:SerialManager_CloseReadHandle	32	static
+../component/serial_manager/fsl_component_serial_manager.c:1689:25:SerialManager_WriteBlocking	24	static
+../component/serial_manager/fsl_component_serial_manager.c:1698:25:SerialManager_ReadBlocking	24	static
+../component/serial_manager/fsl_component_serial_manager.c:1945:25:SerialManager_EnterLowpower	24	static
+../component/serial_manager/fsl_component_serial_manager.c:2001:25:SerialManager_ExitLowpower	24	static
+../component/serial_manager/fsl_component_serial_manager.c:2065:6:SerialManager_SetLowpowerCriticalCb	16	static
