@@ -79,14 +79,13 @@ static void exchange(struct mg_connection *c) {
   }
 }
 
-static void fn2(struct mg_connection *c, int ev, void *ev_data, void *fn_data) {
+static void fn2(struct mg_connection *c, int ev, void *ev_data) {
   if (ev == MG_EV_READ) {
     exchange(c);
   } else if (ev == MG_EV_CLOSE) {
     disband(c);
   }
   (void) ev_data;
-  (void) fn_data;
 }
 
 //  Request, https://www.ietf.org/rfc/rfc1928.txt paragraph 4
@@ -149,7 +148,7 @@ static void request(struct mg_connection *c) {
   c->data[0] = STATE_ESTABLISHED;   // Mark ourselves as connected
 }
 
-static void fn(struct mg_connection *c, int ev, void *ev_data, void *fn_data) {
+static void fn(struct mg_connection *c, int ev, void *ev_data) {
   if (ev == MG_EV_READ) {
     // We use the first label byte as a state
     if (c->data[0] == STATE_HANDSHAKE) handshake(c);
@@ -158,7 +157,6 @@ static void fn(struct mg_connection *c, int ev, void *ev_data, void *fn_data) {
   } else if (ev == MG_EV_CLOSE) {
     disband(c);
   }
-  (void) fn_data;
   (void) ev_data;
 }
 

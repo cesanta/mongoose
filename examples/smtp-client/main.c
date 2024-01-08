@@ -13,7 +13,7 @@ static bool s_quit;
 
 enum { EHLO, STARTTLS, STARTTLS_WAIT, AUTH, FROM, TO, DATA, BODY, QUIT, END };
 
-static void fn(struct mg_connection *c, int ev, void *ev_data, void *fn_data) {
+static void fn(struct mg_connection *c, int ev, void *ev_data) {
   uint8_t *state = (uint8_t *) c->data;
   if (ev == MG_EV_OPEN) {
     // c->is_hexdumping = 1;
@@ -69,7 +69,7 @@ static void fn(struct mg_connection *c, int ev, void *ev_data, void *fn_data) {
     MG_INFO(("TLS handshake done! Sending EHLO again"));
     mg_printf(c, "EHLO myname\r\n");
   }
-  (void) fn_data, (void) ev_data;
+  (void) ev_data;
 }
 
 int main(void) {

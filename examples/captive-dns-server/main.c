@@ -20,7 +20,7 @@ uint8_t answer[] = {
     1,    2,    3, 4     // 4 bytes - IP address
 };
 
-static void fn(struct mg_connection *c, int ev, void *ev_data, void *fn_data) {
+static void fn(struct mg_connection *c, int ev, void *ev_data) {
   if (ev == MG_EV_OPEN) {
     c->is_hexdumping = 1;
   } else if (ev == MG_EV_READ) {
@@ -41,7 +41,6 @@ static void fn(struct mg_connection *c, int ev, void *ev_data, void *fn_data) {
     }
     mg_iobuf_del(&c->recv, 0, c->recv.len);
   }
-  (void) fn_data;
   (void) ev_data;
 }
 

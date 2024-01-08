@@ -38,7 +38,7 @@ static int s_qos = 1;
 
 #include "mongoose.h"
 
-static void fn(struct mg_connection *c, int ev, void *ev_data, void *fn_data) {
+static void fn(struct mg_connection *c, int ev, void *ev_data) {
   if (ev == MG_EV_OPEN) {
     // c->is_hexdumping = 1;
   } else if (ev == MG_EV_CONNECT) {
@@ -84,7 +84,7 @@ static void fn(struct mg_connection *c, int ev, void *ev_data, void *fn_data) {
 
   if (ev == MG_EV_ERROR || ev == MG_EV_CLOSE) {
     MG_INFO(("Got event %d, stopping...", ev));
-    *(bool *) fn_data = true;  // Signal that we're done
+    *(bool *) c->fn_data = true;  // Signal that we're done
   }
 }
 

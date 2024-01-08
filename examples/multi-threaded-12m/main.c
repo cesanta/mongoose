@@ -43,7 +43,7 @@ static void *thread_function(void *param) {
 }
 
 // HTTP request callback
-static void fn(struct mg_connection *c, int ev, void *ev_data, void *fn_data) {
+static void fn(struct mg_connection *c, int ev, void *ev_data) {
   if (ev == MG_EV_OPEN && c->is_listening) {
     // Start worker thread
     struct thread_data *data = calloc(1, sizeof(*data));  // Worker owns it
@@ -75,7 +75,6 @@ static void fn(struct mg_connection *c, int ev, void *ev_data, void *fn_data) {
         mg_ws_send(wc, data->ptr, data->len, WEBSOCKET_OP_TEXT);
     }
   }
-  (void) fn_data;
 }
 
 int main(void) {

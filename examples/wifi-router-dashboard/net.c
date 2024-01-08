@@ -109,7 +109,7 @@ static int event_next(int no, struct event *e) {
 
 // SNTP connection event handler. When we get a response from an SNTP server,
 // adjust s_boot_timestamp. We'll get a valid time from that point on
-static void sfn(struct mg_connection *c, int ev, void *ev_data, void *fn_data) {
+static void sfn(struct mg_connection *c, int ev, void *ev_data) {
   uint64_t *expiration_time = (uint64_t *) c->data;
   if (ev == MG_EV_OPEN) {
     *expiration_time = mg_millis() + 3000;  // Store expiration time in 3s
@@ -120,7 +120,6 @@ static void sfn(struct mg_connection *c, int ev, void *ev_data, void *fn_data) {
   } else if (ev == MG_EV_POLL) {
     if (mg_millis() > *expiration_time) c->is_closing = 1;
   }
-  (void) fn_data;
 }
 
 static void timer_sntp_fn(void *param) {  // SNTP timer function. Sync up time
@@ -271,9 +270,9 @@ static void handle_dhcp_get(struct mg_connection *c) {
 }
 
 // HTTP request handler function
-static void fn(struct mg_connection *c, int ev, void *ev_data, void *fn_data) {
+static void fn(struct mg_connection *c, int ev, void *ev_data) {
   if (ev == MG_EV_ACCEPT) {
-    if (fn_data != NULL) {  // TLS
+    if (c->fn_data != NULL) {  // TLS
       struct mg_tls_opts opts = {0};
       opts.cert = mg_str(s_tls_cert);
       opts.key = mg_str(s_tls_key);
@@ -316,7 +315,6 @@ static void fn(struct mg_connection *c, int ev, void *ev_data, void *fn_data) {
               hm->method.ptr, (int) hm->uri.len, hm->uri.ptr, (int) 3,
               &c->send.buf[9]));
   }
-  (void) fn_data;
 }
 
 void web_init(struct mg_mgr *mgr) {

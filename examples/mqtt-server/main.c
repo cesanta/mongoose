@@ -53,7 +53,7 @@ size_t mg_mqtt_next_unsub(struct mg_mqtt_message *msg, struct mg_str *topic,
 }
 
 // Event handler function
-static void fn(struct mg_connection *c, int ev, void *ev_data, void *fn_data) {
+static void fn(struct mg_connection *c, int ev, void *ev_data) {
   if (ev == MG_EV_MQTT_CMD) {
     struct mg_mqtt_message *mm = (struct mg_mqtt_message *) ev_data;
     MG_DEBUG(("cmd %d qos %d", mm->cmd, mm->qos));
@@ -131,7 +131,6 @@ static void fn(struct mg_connection *c, int ev, void *ev_data, void *fn_data) {
       LIST_DELETE(struct sub, &s_subs, sub);
     }
   }
-  (void) fn_data;
 }
 
 int main(void) {

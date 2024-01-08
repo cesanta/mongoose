@@ -4,7 +4,7 @@
 #include "mongoose.h"
 const char *s_listening_url = "http://0.0.0.0:8000";
 
-void uart_bridge_fn(struct mg_connection *, int, void *, void *);
+void uart_bridge_fn(struct mg_connection *, int, void *);
 
 int main(void) {
   struct mg_mgr mgr;

@@ -38,7 +38,7 @@ void setup() {
   // Setup HTTP listener. Respond "ok" on any HTTP request
   mg_http_listen(
       &mgr, "http://0.0.0.0",
-      [](struct mg_connection *c, int ev, void *ev_data, void *fn_data) {
+      [](struct mg_connection *c, int ev, void *ev_data) {
         if (ev == MG_EV_HTTP_MSG) mg_http_reply(c, 200, "", "ok\n");
       },
       &mgr);

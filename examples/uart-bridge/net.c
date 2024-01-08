@@ -64,24 +64,23 @@ void config_write(struct mg_str config) {
 #endif
 
 // Event handler for a connected Websocket client
-static void ws_fn(struct mg_connection *c, int ev, void *evd, void *fnd) {
+static void ws_fn(struct mg_connection *c, int ev, void *ev_data) {
   if (ev == MG_EV_HTTP_MSG) {
-    mg_ws_upgrade(c, evd, NULL);
+    mg_ws_upgrade(c, ev_data, NULL);
   } else if (ev == MG_EV_WS_OPEN) {
     // c->is_hexdumping = 1;
     c->data[0] = 'W';  // When WS handhake is done, mark us as WS client
   } else if (ev == MG_EV_WS_MSG) {
-    struct mg_ws_message *wm = (struct mg_ws_message *) evd;
+    struct mg_ws_message *wm = (struct mg_ws_message *) ev_data;
     uart_write(wm->data.ptr, wm->data.len);  // Send to UART
     c->recv.len = 0;                         // Discard received data
   } else if (ev == MG_EV_CLOSE) {
     if (c->is_listening) s_state.websocket.c = NULL;
   }
-  (void) fnd;
 }
 
 // Event handler for a connected TCP client
-static void tcp_fn(struct mg_connection *c, int ev, void *evd, void *fnd) {
+static void tcp_fn(struct mg_connection *c, int ev, void *ev_data) {
   if (ev == MG_EV_ACCEPT) {
     // c->is_hexdumping = 1;
     c->data[0] = 'T';  // When client is connected, mark us as TCP client
@@ -91,7 +90,7 @@ static void tcp_fn(struct mg_connection *c, int ev, void *evd, void *fnd) {
   } else if (ev == MG_EV_CLOSE) {
     if (c->is_listening) s_state.tcp.c = NULL;
   }
-  (void) fnd, (void) evd;
+  (void) ev_data;
 }
 
 // Extract topic name from the MQTT address
@@ -102,7 +101,7 @@ static struct mg_str mqtt_topic(const char *name, const char *dflt) {
 }
 
 // Event handler for MQTT connection
-static void mq_fn(struct mg_connection *c, int ev, void *evd, void *fnd) {
+static void mq_fn(struct mg_connection *c, int ev, void *ev_data) {
   if (ev == MG_EV_OPEN) {
     // c->is_hexdumping = 1;
   } else if (ev == MG_EV_MQTT_OPEN) {
@@ -113,12 +112,11 @@ static void mq_fn(struct mg_connection *c, int ev, void *evd, void *fnd) {
     sub_opts.qos = 1;
     mg_mqtt_sub(c, &sub_opts);  // Subscribe to RX topic
   } else if (ev == MG_EV_MQTT_MSG) {
-    struct mg_mqtt_message *mm = evd;        // MQTT message
+    struct mg_mqtt_message *mm = ev_data;    // MQTT message
     uart_write(mm->data.ptr, mm->data.len);  // Send to UART
   } else if (ev == MG_EV_CLOSE) {
     s_state.mqtt.c = NULL;
   }
-  (void) fnd, (void) evd;
 }
 
 // Software timer with a frequency close to the scheduling time slot

@@ -16,7 +16,7 @@
 //
 // Also, consider changing -DMG_IO_SIZE=SOME_BIG_VALUE to increase IO buffer
 // increment when reading data.
-static void cb(struct mg_connection *c, int ev, void *ev_data, void *fn_data) {
+static void cb(struct mg_connection *c, int ev, void *ev_data) {
   if (ev == MG_EV_HTTP_MSG) {
     struct mg_http_message *hm = (struct mg_http_message *) ev_data;
     MG_INFO(("New request to: [%.*s], body size: %lu", (int) hm->uri.len,
@@ -35,7 +35,6 @@ static void cb(struct mg_connection *c, int ev, void *ev_data, void *fn_data) {
       mg_http_serve_dir(c, ev_data, &opts);
     }
   }
-  (void) fn_data;
 }
 
 int main(void) {

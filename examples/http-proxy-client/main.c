@@ -10,8 +10,8 @@
 #include "mongoose.h"
 
 // Print HTTP response and signal that we're done
-static void fn(struct mg_connection *c, int ev, void *ev_data, void *fn_data) {
-  const char *url = fn_data;
+static void fn(struct mg_connection *c, int ev, void *ev_data) {
+  const char *url = c->fn_data;
   static bool connected;
   if (ev == MG_EV_HTTP_MSG) {
     struct mg_http_message *hm = (struct mg_http_message *) ev_data;

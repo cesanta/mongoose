@@ -41,7 +41,7 @@ static size_t printdata(mg_pfn_t out, void *ptr, va_list *ap) {
   return n;
 }
 
-static void fn(struct mg_connection *c, int ev, void *ev_data, void *fn_data) {
+static void fn(struct mg_connection *c, int ev, void *ev_data) {
   if (ev == MG_EV_HTTP_MSG) {
     struct mg_http_message *hm = ev_data;
     if (mg_http_match_uri(hm, "/api/data")) {
@@ -66,7 +66,6 @@ static void fn(struct mg_connection *c, int ev, void *ev_data, void *fn_data) {
       mg_http_serve_dir(c, hm, &opts);
     }
   }
-  (void) fn_data;
 }
 
 static void timer_fn(void *arg) {

@@ -26,7 +26,7 @@ static void rpc_mul(struct mg_rpc_req *r) {
 // This RESTful server implements the following endpoints:
 //   /websocket - upgrade to Websocket, and implement websocket echo server
 //   any other URI serves static files from s_web_root
-static void fn(struct mg_connection *c, int ev, void *ev_data, void *fn_data) {
+static void fn(struct mg_connection *c, int ev, void *ev_data) {
   if (ev == MG_EV_OPEN) {
     // c->is_hexdumping = 1;
   } else if (ev == MG_EV_WS_OPEN) {
@@ -51,7 +51,6 @@ static void fn(struct mg_connection *c, int ev, void *ev_data, void *fn_data) {
     if (io.buf) mg_ws_send(c, (char *) io.buf, io.len, WEBSOCKET_OP_TEXT);
     mg_iobuf_free(&io);
   }
-  (void) fn_data;
 }
 
 static void timer_fn(void *arg) {

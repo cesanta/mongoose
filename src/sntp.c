@@ -38,7 +38,7 @@ int64_t mg_sntp_parse(const unsigned char *buf, size_t len) {
   return res;
 }
 
-static void sntp_cb(struct mg_connection *c, int ev, void *evd, void *fnd) {
+static void sntp_cb(struct mg_connection *c, int ev, void *ev_data) {
   if (ev == MG_EV_READ) {
     int64_t milliseconds = mg_sntp_parse(c->recv.buf, c->recv.len);
     if (milliseconds > 0) {
@@ -52,8 +52,7 @@ static void sntp_cb(struct mg_connection *c, int ev, void *evd, void *fnd) {
     mg_sntp_request(c);
   } else if (ev == MG_EV_CLOSE) {
   }
-  (void) fnd;
-  (void) evd;
+  (void) ev_data;
 }
 
 void mg_sntp_request(struct mg_connection *c) {

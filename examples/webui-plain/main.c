@@ -29,7 +29,7 @@ static void update_config(struct mg_str json, const char *path, char **value) {
   }
 }
 
-static void fn(struct mg_connection *c, int ev, void *ev_data, void *fn_data) {
+static void fn(struct mg_connection *c, int ev, void *ev_data) {
   if (ev == MG_EV_OPEN && c->is_listening) {
     s_config.url = strdup(MQTT_SERVER);
     s_config.pub = strdup(MQTT_PUBLISH_TOPIC);
@@ -52,7 +52,6 @@ static void fn(struct mg_connection *c, int ev, void *ev_data, void *fn_data) {
       mg_http_serve_dir(c, ev_data, &opts);
     }
   }
-  (void) fn_data;
 }
 
 int main(void) {

@@ -8,9 +8,8 @@ static void t_fn(void *arg) {  // Tick periodically
   (void) arg;
 }
 
-static void fn(struct mg_connection *c, int ev, void *ev_data, void *fn_data) {
+static void fn(struct mg_connection *c, int ev, void *ev_data) {
   if (ev == MG_EV_HTTP_MSG) mg_http_reply(c, 200, "", "hi\n");
-  (void) fn_data;
   (void) ev_data;
 }
 

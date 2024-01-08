@@ -14,12 +14,11 @@ extern "C" int LLVMFuzzerTestOneInput(const uint8_t *, size_t);
 int LLVMFuzzerTestOneInput(const uint8_t *, size_t);
 #endif
 
-static void fn(struct mg_connection *c, int ev, void *ev_data, void *fn_data) {
+static void fn(struct mg_connection *c, int ev, void *ev_data) {
   struct mg_http_serve_opts opts = {.root_dir = "."};
   if (ev == MG_EV_HTTP_MSG) {
     mg_http_serve_dir(c, (struct mg_http_message *) ev_data, &opts);
   }
-  (void) fn_data;
 }
 
 int LLVMFuzzerTestOneInput(const uint8_t *data, size_t size) {
@@ -110,7 +109,7 @@ int LLVMFuzzerTestOneInput(const uint8_t *data, size_t size) {
     const char *url = "http://localhost:12345";
     struct mg_connection *c = mg_http_connect(&mgr, url, fn, NULL);
     mg_iobuf_add(&c->recv, 0, data, size);
-    c->pfn(c, MG_EV_READ, NULL, NULL);
+    c->pfn(c, MG_EV_READ, NULL); // manually invoke protocol event handler
 
     mg_mgr_free(&mgr);
     free(pkt);

@@ -134,8 +134,7 @@ bool mg_dns_parse(const uint8_t *buf, size_t len, struct mg_dns_message *dm) {
   return true;
 }
 
-static void dns_cb(struct mg_connection *c, int ev, void *ev_data,
-                   void *fn_data) {
+static void dns_cb(struct mg_connection *c, int ev, void *ev_data) {
   struct dns_data *d, *tmp;
   struct dns_data **head = (struct dns_data **) &c->mgr->active_dns_requests;
   if (ev == MG_EV_POLL) {
@@ -189,7 +188,6 @@ static void dns_cb(struct mg_connection *c, int ev, void *ev_data,
       mg_dns_free(head, d);
     }
   }
-  (void) fn_data;
 }
 
 static bool mg_dns_send(struct mg_connection *c, const struct mg_str *name,

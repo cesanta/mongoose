@@ -14,7 +14,7 @@ static int s_connected = 0;
 static bool done = false;
 
 // Print HTTP response and signal that we're done
-static void fn(struct mg_connection *c, int ev, void *ev_data, void *fn_data) {
+static void fn(struct mg_connection *c, int ev, void *ev_data) {
   if (ev == MG_EV_OPEN) {
     // Connection created. Store connect expiration time in c->data
     *(int64_t *) c->data = mg_millis() + s_timeout_ms;
@@ -49,9 +49,9 @@ static void fn(struct mg_connection *c, int ev, void *ev_data, void *fn_data) {
     struct mg_http_message *hm = (struct mg_http_message *) ev_data;
     MG_INFO(("%.*s", (int) hm->message.len, hm->message.ptr));
     c->is_draining = 1;        // Tell mongoose to close this connection
-    *(bool *) fn_data = true;  // Tell event loop to stop
+    *(bool *) c->fn_data = true;  // Tell event loop to stop
   } else if (ev == MG_EV_ERROR) {
-    *(bool *) fn_data = true;  // Error, tell event loop to stop
+    *(bool *) c->fn_data = true;  // Error, tell event loop to stop
   }
 }
 
@@ -63,7 +63,7 @@ time_t ourtime(time_t *tp) {
 }
 
 // SNTP callback. Modifies s_boot_timestamp, to make ourtime() correct
-static void sfn(struct mg_connection *c, int ev, void *ev_data, void *fn_data) {
+static void sfn(struct mg_connection *c, int ev, void *ev_data) {
   if (ev == MG_EV_SNTP_TIME) {
     int64_t t = *(int64_t *) ev_data;
     MG_INFO(("Got SNTP time: %lld ms from epoch", t));

@@ -7,7 +7,7 @@
 //   /api/log/static - returns contents of log.txt file
 //   /api/log/live - hangs forever, and returns live log messages
 //   all other URI - serves web_root/ directory
-static void cb(struct mg_connection *c, int ev, void *ev_data, void *fn_data) {
+static void cb(struct mg_connection *c, int ev, void *ev_data) {
   if (ev == MG_EV_HTTP_MSG) {
     struct mg_http_message *hm = (struct mg_http_message *) ev_data;
     if (mg_http_match_uri(hm, "/api/log/static")) {
@@ -21,7 +21,6 @@ static void cb(struct mg_connection *c, int ev, void *ev_data, void *fn_data) {
       mg_http_serve_dir(c, ev_data, &opts);
     }
   }
-  (void) fn_data;
 }
 
 static void log_message(const char *filename, const char *message) {

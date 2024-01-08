@@ -11,8 +11,8 @@ static time_t s_boot_timestamp = 0;
 static struct mg_connection *s_sntp_conn = NULL;
 
 // Event handler for the listening HTTP/HTTPS connection.
-static void wcb(struct mg_connection *c, int ev, void *ev_data, void *fn_data) {
-  if (ev == MG_EV_ACCEPT && fn_data != NULL) {
+static void wcb(struct mg_connection *c, int ev, void *ev_data) {
+  if (ev == MG_EV_ACCEPT && c->fn_data != NULL) {
     struct mg_tls_opts opts = {.cert = s_ssl_cert, .key = s_ssl_key};
     mg_tls_init(c, &opts);
   } else if (ev == MG_EV_HTTP_MSG) {
@@ -49,7 +49,7 @@ time_t ourtime(time_t *tp) {
 }
 
 // SNTP callback. Modifies s_boot_timestamp, to make ourtime() correct
-static void sfn(struct mg_connection *c, int ev, void *ev_data, void *fn_data) {
+static void sfn(struct mg_connection *c, int ev, void *ev_data) {
   if (ev == MG_EV_SNTP_TIME) {
     int64_t t = *(int64_t *) ev_data;
     MG_INFO(("Got SNTP time: %lld ms from epoch", t));

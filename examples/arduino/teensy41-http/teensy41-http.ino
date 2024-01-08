@@ -25,7 +25,7 @@ uint64_t mg_millis(void) {  // Let Mongoose use our uptime function
 // Simple HTTP server that runs on port 8000
 // Mongoose event handler function, gets called by the mg_mgr_poll()
 // See https://mongoose.ws/documentation/#2-minute-integration-guide
-static void simple_http_listener(struct mg_connection *c, int ev, void *ev_data, void *fn_data) {
+static void simple_http_listener(struct mg_connection *c, int ev, void *ev_data) {
   if (ev == MG_EV_HTTP_MSG) {
     // The MG_EV_HTTP_MSG event means HTTP request. `hm` holds parsed request,
     // see https://mongoose.ws/documentation/#struct-mg_http_message

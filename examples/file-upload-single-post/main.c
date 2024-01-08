@@ -11,7 +11,7 @@
 // HTTP request handler function. It implements the following endpoints:
 //   /upload - Saves the next file chunk
 //   all other URI - serves web_root/ directory
-static void cb(struct mg_connection *c, int ev, void *ev_data, void *fn_data) {
+static void cb(struct mg_connection *c, int ev, void *ev_data) {
   if (ev == MG_EV_READ) {
     // Parse the incoming data ourselves. If we can parse the request,
     // store two size_t variables in the c->data: expected len and recv len.
@@ -38,7 +38,7 @@ static void cb(struct mg_connection *c, int ev, void *ev_data, void *fn_data) {
       }
     }
   }
-  (void) fn_data, (void) ev_data;
+  (void) ev_data;
 }
 
 int main(void) {

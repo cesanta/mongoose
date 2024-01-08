@@ -39,7 +39,7 @@ static void *thread_function(void *param) {
 }
 
 // HTTP request callback
-static void fn(struct mg_connection *c, int ev, void *ev_data, void *fn_data) {
+static void fn(struct mg_connection *c, int ev, void *ev_data) {
   if (ev == MG_EV_HTTP_MSG) {
     struct mg_http_message *hm = (struct mg_http_message *) ev_data;
     if (mg_http_match_uri(hm, "/fast")) {
@@ -58,7 +58,6 @@ static void fn(struct mg_connection *c, int ev, void *ev_data, void *fn_data) {
     struct mg_str *data = (struct mg_str *) ev_data;
     mg_http_reply(c, 200, "", "Result: %.*s\n", data->len, data->ptr);
   }
-  (void) fn_data;
 }
 
 int main(void) {

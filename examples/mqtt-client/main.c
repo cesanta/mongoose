@@ -24,7 +24,7 @@ static void signal_handler(int signo) {
   s_signo = signo;
 }
 
-static void fn(struct mg_connection *c, int ev, void *ev_data, void *fn_data) {
+static void fn(struct mg_connection *c, int ev, void *ev_data) {
   if (ev == MG_EV_OPEN) {
     MG_INFO(("%lu CREATED", c->id));
     // c->is_hexdumping = 1;
@@ -65,7 +65,6 @@ static void fn(struct mg_connection *c, int ev, void *ev_data, void *fn_data) {
     MG_INFO(("%lu CLOSED", c->id));
     s_conn = NULL;  // Mark that we're closed
   }
-  (void) fn_data;
 }
 
 // Timer function - recreate client connection if it is closed

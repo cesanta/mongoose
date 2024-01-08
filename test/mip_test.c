@@ -30,25 +30,25 @@ static void test_statechange(void) {
   onstatechange(&iface);
 }
 
-static void ph(struct mg_connection *c, int ev, void *ev_data, void *fn_data) {
-  if (ev == MG_EV_POLL) ++(*(int *) fn_data);
+static void ph(struct mg_connection *c, int ev, void *ev_data) {
+  if (ev == MG_EV_POLL) ++(*(int *) c->fn_data);
   (void) c, (void) ev_data;
 }
 
-static void fn(struct mg_connection *c, int ev, void *ev_data, void *fn_data) {
-  (void) c, (void) ev, (void) ev_data, (void) fn_data;
+static void fn(struct mg_connection *c, int ev, void *ev_data) {
+  (void) c, (void) ev, (void) ev_data;
 }
 
-static void frag_recv_fn(struct mg_connection *c, int ev, void *ev_data, void *fn_data) {
+static void frag_recv_fn(struct mg_connection *c, int ev, void *ev_data) {
   if (ev == MG_EV_ERROR) {
     if (s_sent_fragment) {
       ASSERT(strcmp((char*) ev_data, "Received fragmented packet") == 0);
     }
   }
-  (void) c, (void) ev_data, (void) fn_data;
+  (void) c, (void) ev_data;
 }
 
-static void frag_send_fn(struct mg_connection *c, int ev, void *ev_data, void *fn_data) {
+static void frag_send_fn(struct mg_connection *c, int ev, void *ev_data) {
   static bool s_sent;
   static int s_seg_sizes[] = {416, 416, 368};
   if (ev == MG_EV_POLL) {
@@ -60,7 +60,7 @@ static void frag_send_fn(struct mg_connection *c, int ev, void *ev_data, void *f
     // Checking TCP segment sizes (ev_data points to the TCP payload length)
     ASSERT(*(int *) ev_data == s_seg_sizes[s_seg_sent++]);
   }
-  (void) c, (void) ev_data, (void) fn_data;
+  (void) c, (void) ev_data;
 }
 
 static void test_poll(void) {

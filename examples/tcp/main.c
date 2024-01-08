@@ -13,8 +13,8 @@ static struct c_res_s {
 } c_res;
 
 // CLIENT event handler
-static void cfn(struct mg_connection *c, int ev, void *ev_data, void *fn_data) {
-  int *i = &((struct c_res_s *) fn_data)->i;
+static void cfn(struct mg_connection *c, int ev, void *ev_data) {
+  int *i = &((struct c_res_s *) c->fn_data)->i;
   if (ev == MG_EV_OPEN) {
     MG_INFO(("CLIENT has been initialized"));
   } else if (ev == MG_EV_CONNECT) {
@@ -33,7 +33,7 @@ static void cfn(struct mg_connection *c, int ev, void *ev_data, void *fn_data) {
   } else if (ev == MG_EV_CLOSE) {
     MG_INFO(("CLIENT disconnected"));
     // signal we are done
-    ((struct c_res_s *) fn_data)->c = NULL;
+    ((struct c_res_s *) c->fn_data)->c = NULL;
   } else if (ev == MG_EV_ERROR) {
     MG_INFO(("CLIENT error: %s", (char *) ev_data));
   } else if (ev == MG_EV_POLL && *i != 0) {
@@ -51,7 +51,7 @@ static void cfn(struct mg_connection *c, int ev, void *ev_data, void *fn_data) {
 }
 
 // SERVER event handler
-static void sfn(struct mg_connection *c, int ev, void *ev_data, void *fn_data) {
+static void sfn(struct mg_connection *c, int ev, void *ev_data) {
   if (ev == MG_EV_OPEN && c->is_listening == 1) {
     MG_INFO(("SERVER is listening"));
   } else if (ev == MG_EV_ACCEPT) {
@@ -72,7 +72,6 @@ static void sfn(struct mg_connection *c, int ev, void *ev_data, void *fn_data) {
   } else if (ev == MG_EV_ERROR) {
     MG_INFO(("SERVER error: %s", (char *) ev_data));
   }
-  (void) fn_data;
 }
 
 // Timer function - recreate client connection if it is closed

@@ -15,7 +15,7 @@ static const char *s_post_data = NULL;      // POST data
 static const uint64_t s_timeout_ms = 1500;  // Connect timeout in milliseconds
 
 // Print HTTP response and signal that we're done
-static void fn(struct mg_connection *c, int ev, void *ev_data, void *fn_data) {
+static void fn(struct mg_connection *c, int ev, void *ev_data) {
   if (ev == MG_EV_OPEN) {
     // Connection created. Store connect expiration time in c->data
     *(uint64_t *) c->data = mg_millis() + s_timeout_ms;
@@ -50,9 +50,9 @@ static void fn(struct mg_connection *c, int ev, void *ev_data, void *fn_data) {
     struct mg_http_message *hm = (struct mg_http_message *) ev_data;
     printf("%.*s", (int) hm->message.len, hm->message.ptr);
     c->is_draining = 1;        // Tell mongoose to close this connection
-    *(bool *) fn_data = true;  // Tell event loop to stop
+    *(bool *) c->fn_data = true;  // Tell event loop to stop
   } else if (ev == MG_EV_ERROR) {
-    *(bool *) fn_data = true;  // Error, tell event loop to stop
+    *(bool *) c->fn_data = true;  // Error, tell event loop to stop
   }
 }
 

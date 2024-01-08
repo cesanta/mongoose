@@ -344,10 +344,10 @@ static void test_iobuf(void) {
   mg_iobuf_free(&io);
 }
 
-static void sntp_cb(struct mg_connection *c, int ev, void *evd, void *fnd) {
+static void sntp_cb(struct mg_connection *c, int ev, void *ev_data) {
   if (ev == MG_EV_SNTP_TIME) {
-    int64_t received = *(int64_t *) evd;
-    *(int64_t *) fnd = received;
+    int64_t received = *(int64_t *) ev_data;
+    *(int64_t *) c->fn_data = received;
     MG_DEBUG(("got time: %lld", received));
 #if MG_ARCH == MG_ARCH_UNIX
     struct timeval tv = {0, 0};
@@ -409,16 +409,16 @@ struct mqtt_data {
 #define flags_released (1 << 3)
 #define flags_completed (1 << 4)
 
-static void mqtt_cb(struct mg_connection *c, int ev, void *evd, void *fnd) {
-  struct mqtt_data *test_data = (struct mqtt_data *) fnd;
+static void mqtt_cb(struct mg_connection *c, int ev, void *ev_data) {
+  struct mqtt_data *test_data = (struct mqtt_data *) c->fn_data;
   char *buf = test_data->msg;
 
   if (ev == MG_EV_MQTT_OPEN) {
-    buf[0] = *(int *) evd == 0 ? 'X' : 'Y';
+    buf[0] = *(int *) ev_data == 0 ? 'X' : 'Y';
   } else if (ev == MG_EV_CLOSE) {
     buf[0] = 0;
   } else if (ev == MG_EV_MQTT_CMD) {
-    struct mg_mqtt_message *mm = (struct mg_mqtt_message *) evd;
+    struct mg_mqtt_message *mm = (struct mg_mqtt_message *) ev_data;
     if (mm->cmd == MQTT_CMD_SUBACK) {
       test_data->flags = flags_subscribed;
     } else if (mm->cmd == MQTT_CMD_PUBACK) {  // here we assume the broker
@@ -431,7 +431,7 @@ static void mqtt_cb(struct mg_connection *c, int ev, void *evd, void *fnd) {
       test_data->flags |= flags_completed;
     }
   } else if (ev == MG_EV_MQTT_MSG) {
-    struct mg_mqtt_message *mm = (struct mg_mqtt_message *) evd;
+    struct mg_mqtt_message *mm = (struct mg_mqtt_message *) ev_data;
     snprintf(test_data->topic, test_data->topicsize, "%.*s",
              (int) mm->topic.len, mm->topic.ptr);
     snprintf(buf + 1, test_data->msgsize - 2, "%.*s", (int) mm->data.len,
@@ -686,8 +686,8 @@ static void test_mqtt(void) {
   test_mqtt_ver(5);
 }
 
-static void eh1(struct mg_connection *c, int ev, void *ev_data, void *fn_data) {
-  struct mg_tls_opts *topts = (struct mg_tls_opts *) fn_data;
+static void eh1(struct mg_connection *c, int ev, void *ev_data) {
+  struct mg_tls_opts *topts = (struct mg_tls_opts *) c->fn_data;
   if (ev == MG_EV_ACCEPT && topts != NULL) mg_tls_init(c, topts);
   if (ev == MG_EV_HTTP_MSG) {
     struct mg_http_message *hm = (struct mg_http_message *) ev_data;
@@ -751,7 +751,6 @@ static void eh1(struct mg_connection *c, int ev, void *ev_data, void *fn_data) {
     struct mg_ws_message *wm = (struct mg_ws_message *) ev_data;
     mg_ws_send(c, wm->data.ptr, wm->data.len, WEBSOCKET_OP_BINARY);
   }
-  (void) fn_data;
 }
 
 struct fetch_data {
@@ -759,8 +758,8 @@ struct fetch_data {
   int code, closed;
 };
 
-static void fcb(struct mg_connection *c, int ev, void *ev_data, void *fn_data) {
-  struct fetch_data *fd = (struct fetch_data *) fn_data;
+static void fcb(struct mg_connection *c, int ev, void *ev_data) {
+  struct fetch_data *fd = (struct fetch_data *) c->fn_data;
   if (ev == MG_EV_HTTP_MSG) {
     struct mg_http_message *hm = (struct mg_http_message *) ev_data;
     snprintf(fd->buf, FETCH_BUF_SIZE, "%.*s", (int) hm->message.len,
@@ -827,8 +826,8 @@ static bool cmpheader(const char *buf, const char *name, const char *value) {
   return h != NULL && mg_strcmp(*h, mg_str(value)) == 0;
 }
 
-static void wcb(struct mg_connection *c, int ev, void *ev_data, void *fn_data) {
-  int *p = (int *) fn_data;
+static void wcb(struct mg_connection *c, int ev, void *ev_data) {
+  int *p = (int *) c->fn_data;
   if (ev == MG_EV_WS_OPEN) {
     struct mg_http_message *hm = (struct mg_http_message *) ev_data;
     struct mg_str *wsproto = mg_http_get_header(hm, "Sec-WebSocket-Protocol");
@@ -848,7 +847,7 @@ static void wcb(struct mg_connection *c, int ev, void *ev_data, void *fn_data) {
   }
 }
 
-static void ew2(struct mg_connection *c, int ev, void *ev_data, void *fn_data) {
+static void ew2(struct mg_connection *c, int ev, void *ev_data) {
   size_t size = 65 * 1024 + 737;
   if (ev == MG_EV_WS_OPEN) {
     char *msg = (char *) calloc(1, size + 1);
@@ -866,7 +865,7 @@ static void ew2(struct mg_connection *c, int ev, void *ev_data, void *fn_data) {
         if (wm->data.ptr[i] != 'A') ok = 0;
       }
       ASSERT(ok == 1);
-      *(int *) fn_data = 1;
+      *(int *) c->fn_data = 1;
     }
   }
 }
@@ -897,10 +896,10 @@ static void test_ws(void) {
   ASSERT(mgr.conns == NULL);
 }
 
-static void eh9(struct mg_connection *c, int ev, void *ev_data, void *fn_data) {
+static void eh9(struct mg_connection *c, int ev, void *ev_data) {
   if (ev == MG_EV_ERROR) {
     ASSERT(!strcmp((char *) ev_data, "socket error"));
-    *(int *) fn_data = 7;
+    *(int *) c->fn_data = 7;
   }
   (void) c;
 }
@@ -1166,7 +1165,7 @@ static void test_http_server(void) {
   ASSERT(mgr.conns == NULL);
 }
 
-static void h4(struct mg_connection *c, int ev, void *ev_data, void *fn_data) {
+static void h4(struct mg_connection *c, int ev, void *ev_data) {
   if (ev == MG_EV_HTTP_MSG) {
     struct mg_http_message *hm = (struct mg_http_message *) ev_data;
     MG_INFO(("[%.*s %.*s] message len %d", (int) hm->method.len, hm->method.ptr,
@@ -1190,7 +1189,6 @@ static void h4(struct mg_connection *c, int ev, void *ev_data, void *fn_data) {
       mg_http_serve_dir(c, hm, &opts);
     }
   }
-  (void) fn_data;
 }
 
 static void test_http_404(void) {
@@ -1242,8 +1240,8 @@ static void test_tls(void) {
 #endif
 }
 
-static void f3(struct mg_connection *c, int ev, void *ev_data, void *fn_data) {
-  int *ok = (int *) fn_data;
+static void f3(struct mg_connection *c, int ev, void *ev_data) {
+  int *ok = (int *) c->fn_data;
   // MG_INFO(("%d", ev));
   if (ev == MG_EV_CONNECT) {
     // c->is_hexdumping = 1;
@@ -1358,27 +1356,27 @@ static void test_host_validation(void) {
 #endif
 }
 
-static void f4(struct mg_connection *c, int ev, void *ev_data, void *fn_data) {
+static void f4(struct mg_connection *c, int ev, void *ev_data) {
   if (ev == MG_EV_HTTP_MSG) {
     struct mg_http_message *hm = (struct mg_http_message *) ev_data;
     mg_printf(c, "HTTP/1.0 200 OK\n\n%.*s/%s", (int) hm->uri.len, hm->uri.ptr,
               "abcdef");
-    strcat((char *) fn_data, "m");
+    strcat((char *) c->fn_data, "m");
     c->is_draining = 1;
   } else if (ev == MG_EV_CLOSE) {
-    strcat((char *) fn_data, "c");
+    strcat((char *) c->fn_data, "c");
   }
 }
 
-static void f4c(struct mg_connection *c, int ev, void *ev_data, void *fn_data) {
+static void f4c(struct mg_connection *c, int ev, void *ev_data) {
   if (ev == MG_EV_CONNECT) {
     mg_printf(c, "GET /foo/bar HTTP/1.0\n\n");
   } else if (ev == MG_EV_HTTP_MSG) {
     struct mg_http_message *hm = (struct mg_http_message *) ev_data;
     ASSERT(mg_strcmp(hm->body, mg_str("/foo/bar/abcdef")) == 0);
-    strcat((char *) fn_data, "m");
+    strcat((char *) c->fn_data, "m");
   } else if (ev == MG_EV_CLOSE) {
-    strcat((char *) fn_data, "c");
+    strcat((char *) c->fn_data, "c");
   }
 }
 
@@ -1398,11 +1396,11 @@ static void test_http_no_content_length(void) {
   ASSERT(mgr.conns == NULL);
 }
 
-static void f5(struct mg_connection *c, int ev, void *ev_data, void *fn_data) {
+static void f5(struct mg_connection *c, int ev, void *ev_data) {
   if (ev == MG_EV_HTTP_MSG) {
     struct mg_http_message *hm = (struct mg_http_message *) ev_data;
     mg_http_reply(c, 200, "", "%.*s", (int) hm->uri.len, hm->uri.ptr);
-    (*(int *) fn_data)++;
+    (*(int *) c->fn_data)++;
   }
 }
 
@@ -1616,7 +1614,7 @@ static void test_http_parse(void) {
   }
 }
 
-static void ehr(struct mg_connection *c, int ev, void *ev_data, void *fn_data) {
+static void ehr(struct mg_connection *c, int ev, void *ev_data) {
   if (ev == MG_EV_HTTP_MSG) {
     struct mg_http_message *hm = (struct mg_http_message *) ev_data;
     struct mg_http_serve_opts opts;
@@ -1624,7 +1622,6 @@ static void ehr(struct mg_connection *c, int ev, void *ev_data, void *fn_data) {
     opts.root_dir = "./test/data";
     mg_http_serve_dir(c, hm, &opts);
   }
-  (void) fn_data;
 }
 
 static void test_http_range(void) {
@@ -2109,10 +2106,10 @@ static void test_str(void) {
   }
 }
 
-static void fn1(struct mg_connection *c, int ev, void *ev_data, void *fn_data) {
+static void fn1(struct mg_connection *c, int ev, void *ev_data) {
   if (ev == MG_EV_ERROR) {
-    free(*(char **) fn_data);  // See #2263
-    *(char **) fn_data = mg_mprintf("%s", (char *) ev_data);
+    free(*(char **) c->fn_data);  // See #2263
+    *(char **) c->fn_data = mg_mprintf("%s", (char *) ev_data);
   }
   (void) c;
 }
@@ -2329,7 +2326,7 @@ static void test_crc32(void) {
   ASSERT(mg_crc32(mg_crc32(0, "ab", 2), "c", 1) == 891568578);
 }
 
-static void us(struct mg_connection *c, int ev, void *ev_data, void *fn_data) {
+static void us(struct mg_connection *c, int ev, void *ev_data) {
   struct mg_http_message *hm = (struct mg_http_message *) ev_data;
   if (ev == MG_EV_HTTP_MSG && mg_http_match_uri(hm, "/upload")) {
     MG_DEBUG(("Got all %lu bytes!", (unsigned long) hm->body.len));
@@ -2340,11 +2337,10 @@ static void us(struct mg_connection *c, int ev, void *ev_data, void *fn_data) {
   } else if (ev == MG_EV_HTTP_MSG) {
     mg_http_reply(c, 200, "", "ok\n");
   }
-  (void) fn_data;
 }
 
-static void uc(struct mg_connection *c, int ev, void *ev_data, void *fn_data) {
-  const char **s = (const char **) fn_data;
+static void uc(struct mg_connection *c, int ev, void *ev_data) {
+  const char **s = (const char **) c->fn_data;
   if (ev == MG_EV_OPEN) {
     // c->is_hexdumping = 1;
   } else if (ev == MG_EV_CONNECT) {
@@ -2360,7 +2356,6 @@ static void uc(struct mg_connection *c, int ev, void *ev_data, void *fn_data) {
     ASSERT(mg_strcmp(hm->body, mg_str(*s)) == 0);
     *s = NULL;
   }
-  (void) fn_data;
 }
 
 static void test_http_upload(void) {
@@ -2380,7 +2375,7 @@ static void test_http_upload(void) {
 
 #define LONG_CHUNK "chunk with length taking up more than two hex digits"
 
-static void eX(struct mg_connection *c, int ev, void *ev_data, void *fn_data) {
+static void eX(struct mg_connection *c, int ev, void *ev_data) {
   if (ev == MG_EV_HTTP_MSG) {
     mg_printf(c, "HTTP/1.1 200 OK\r\nTransfer-Encoding: chunked\r\n\r\n");
     c->data[0] = 1;
@@ -2398,10 +2393,10 @@ static void eX(struct mg_connection *c, int ev, void *ev_data, void *fn_data) {
       c->data[0] = 0;
     }
   }
-  (void) ev_data, (void) fn_data;
+  (void) ev_data;
 }
 
-static void eY(struct mg_connection *c, int ev, void *ev_data, void *fn_data) {
+static void eY(struct mg_connection *c, int ev, void *ev_data) {
   if (ev == MG_EV_HTTP_MSG) {
     mg_printf(c, "HTTP/1.1 200 OK\r\nContent-Length: 4\r\n\r\n");
     c->data[0] = 1;
@@ -2411,19 +2406,19 @@ static void eY(struct mg_connection *c, int ev, void *ev_data, void *fn_data) {
     if (c->data[0] == 12) mg_send(c, "bc", 2);
     if (c->data[0] == 30) mg_send(c, "d", 1), c->is_resp = 0, c->data[0] = 0;
   }
-  (void) ev_data, (void) fn_data;
+  (void) ev_data;
 }
 
-static void eZ(struct mg_connection *c, int ev, void *ev_data, void *fn_data) {
+static void eZ(struct mg_connection *c, int ev, void *ev_data) {
   if (ev == MG_EV_HTTP_MSG) {
     mg_http_reply(c, 200, "", "abcd");
   }
-  (void) ev_data, (void) fn_data;
+  (void) ev_data;
 }
 
 // Do not delete chunks as they arrive
-static void eh4(struct mg_connection *c, int ev, void *ev_data, void *fn_data) {
-  uint32_t *crc = (uint32_t *) fn_data;
+static void eh4(struct mg_connection *c, int ev, void *ev_data) {
+  uint32_t *crc = (uint32_t *) c->fn_data;
   if (ev == MG_EV_HTTP_MSG) {
     struct mg_http_message *hm = (struct mg_http_message *) ev_data;
     *crc = mg_crc32(*crc, hm->body.ptr, hm->body.len);
@@ -2486,8 +2481,8 @@ struct stream_status {
 };
 
 // Consume recv buffer after letting it reach MG_MAX_RECV_SIZE
-static void eh8(struct mg_connection *c, int ev, void *ev_data, void *fn_data) {
-  struct stream_status *status = (struct stream_status *) fn_data;
+static void eh8(struct mg_connection *c, int ev, void *ev_data) {
+  struct stream_status *status = (struct stream_status *) c->fn_data;
   if (c->is_listening) return;
 
   ASSERT(c->recv.len <= MG_MAX_RECV_SIZE);
@@ -2523,19 +2518,17 @@ static void eh8(struct mg_connection *c, int ev, void *ev_data, void *fn_data) {
 }
 
 // Toggle c->is_full to prevent max_recv_buf_size reached read errors
-static void eh10(struct mg_connection *c, int ev, void *ev_data,
-                 void *fn_data) {
+static void eh10(struct mg_connection *c, int ev, void *ev_data) {
   if (c->recv.len >= MG_MAX_RECV_SIZE && ev == MG_EV_READ) c->is_full = true;
 
-  eh8(c, ev, ev_data, fn_data);
+  eh8(c, ev, ev_data);
 
   if (c->recv.len < MG_MAX_RECV_SIZE && ev == MG_EV_POLL) c->is_full = false;
 }
 
 // Send buffer larger than MG_MAX_RECV_SIZE to server
-static void eh11(struct mg_connection *c, int ev, void *ev_data,
-                 void *fn_data) {
-  struct stream_status *status = (struct stream_status *) fn_data;
+static void eh11(struct mg_connection *c, int ev, void *ev_data) {
+  struct stream_status *status = (struct stream_status *) c->fn_data;
   if (ev == MG_EV_CONNECT) {
     size_t len = MG_MAX_RECV_SIZE * 2;
     struct mg_iobuf buf = {NULL, 0, 0, 0};
@@ -2548,7 +2541,6 @@ static void eh11(struct mg_connection *c, int ev, void *ev_data,
     mg_iobuf_free(&buf);
   }
   (void) ev_data;
-  (void) fn_data;
 }
 
 static void test_http_stream_buffer(void) {
@@ -2601,7 +2593,7 @@ static void test_multipart(void) {
   ASSERT(mg_http_next_multipart(mg_str(s), ofs, &part) == 0);
 }
 
-static void eh7(struct mg_connection *c, int ev, void *ev_data, void *fn_data) {
+static void eh7(struct mg_connection *c, int ev, void *ev_data) {
   if (ev == MG_EV_HTTP_MSG) {
     struct mg_http_message *hm = (struct mg_http_message *) ev_data;
     struct mg_http_serve_opts sopts;
@@ -2610,7 +2602,6 @@ static void eh7(struct mg_connection *c, int ev, void *ev_data, void *fn_data) {
     sopts.fs = &mg_fs_packed;
     mg_http_serve_dir(c, hm, &sopts);
   }
-  (void) fn_data;
 }
 
 static void test_packed(void) {
@@ -2655,14 +2646,14 @@ int send(int sock, const void *buf, size_t len, int flags) {
 }
 #endif
 
-static void u1(struct mg_connection *c, int ev, void *ev_data, void *fn_data) {
+static void u1(struct mg_connection *c, int ev, void *ev_data) {
   if (ev == MG_EV_CONNECT) {
-    ((int *) fn_data)[0] += 1;
+    ((int *) c->fn_data)[0] += 1;
     mg_send(c, "hi", 2);
   } else if (ev == MG_EV_WRITE) {
-    ((int *) fn_data)[0] += 100;
+    ((int *) c->fn_data)[0] += 100;
   } else if (ev == MG_EV_READ) {
-    ((int *) fn_data)[0] += 10;
+    ((int *) c->fn_data)[0] += 10;
     mg_iobuf_free(&c->recv);
   }
   (void) ev_data;
@@ -2698,7 +2689,7 @@ static void test_check_ip_acl(void) {
          -1);  // not yet supported
 }
 
-static void w3(struct mg_connection *c, int ev, void *ev_data, void *fn_data) {
+static void w3(struct mg_connection *c, int ev, void *ev_data) {
   // MG_INFO(("ev %d", ev));
   if (ev == MG_EV_WS_OPEN) {
     char buf[8192];
@@ -2711,20 +2702,20 @@ static void w3(struct mg_connection *c, int ev, void *ev_data, void *fn_data) {
   } else if (ev == MG_EV_WS_MSG) {
     struct mg_ws_message *wm = (struct mg_ws_message *) ev_data;
     ASSERT(mg_strcmp(wm->data, mg_str("lebowski")) == 0);
-    ((int *) fn_data)[0]++;
+    ((int *) c->fn_data)[0]++;
   } else if (ev == MG_EV_CLOSE) {
-    ((int *) fn_data)[0] += 10;
+    ((int *) c->fn_data)[0] += 10;
   }
 }
 
-static void w2(struct mg_connection *c, int ev, void *ev_data, void *fn_data) {
+static void w2(struct mg_connection *c, int ev, void *ev_data) {
   struct mg_str msg = mg_str_n("lebowski", 8);
   if (ev == MG_EV_HTTP_MSG) {
     mg_ws_upgrade(c, (struct mg_http_message *) ev_data, NULL);
   } else if (ev == MG_EV_WS_OPEN) {
     mg_ws_send(c, "x", 1, WEBSOCKET_OP_PONG);
   } else if (ev == MG_EV_POLL && c->is_websocket) {
-    size_t ofs, n = (size_t) fn_data;
+    size_t ofs, n = (size_t) c->fn_data;
     if (n < msg.len) {
       // Send "msg" char by char using fragmented frames
       // mg_ws_send() sets the FIN flag in the WS header. Clean it
@@ -2771,7 +2762,7 @@ static void test_ws_fragmentation(void) {
   ASSERT(mgr.conns == NULL);
 }
 
-static void h7(struct mg_connection *c, int ev, void *ev_data, void *fn_data) {
+static void h7(struct mg_connection *c, int ev, void *ev_data) {
   if (ev == MG_EV_HTTP_MSG) {
     struct mg_http_message *hm = (struct mg_http_message *) ev_data;
     struct mg_http_serve_opts opts;
@@ -2779,7 +2770,6 @@ static void h7(struct mg_connection *c, int ev, void *ev_data, void *fn_data) {
     opts.root_dir = "./test/data,/foo=./src";
     mg_http_serve_dir(c, hm, &opts);
   }
-  (void) fn_data;
 }
 
 static void test_rewrites(void) {
@@ -3111,8 +3101,8 @@ static void test_rpc(void) {
   ASSERT(head == NULL);
 }
 
-static void ph(struct mg_connection *c, int ev, void *ev_data, void *fn_data) {
-  if (ev == MG_EV_POLL) ++(*(int *) fn_data);
+static void ph(struct mg_connection *c, int ev, void *ev_data) {
+  if (ev == MG_EV_POLL) ++(*(int *) c->fn_data);
   (void) c, (void) ev_data;
 }
 
