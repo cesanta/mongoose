@@ -59,18 +59,16 @@ struct Post_reply {
 };
 
 char *fetch(struct mg_mgr *mgr, const char *url, const char *post_data);
-static void f_http_fetch_query(struct mg_connection *c, int ev, void *ev_data,
-                               void *fn_data);
+static void f_http_fetch_query(struct mg_connection *c, int ev, void *ev_data);
 int get_response_code(char *);  // Returns HTTP status code from full char* msg
 
-static void f_http_fetch_query(struct mg_connection *c, int ev, void *ev_data,
-                               void *fn_data) {
+static void f_http_fetch_query(struct mg_connection *c, int ev, void *ev_data) {
   static char *http_response = 0;
   static bool http_response_allocated =
       0;  // So that we will update out parameter
   unsigned int http_responses_received = 0;
   struct Post_reply *post_reply_l;
-  post_reply_l = (struct Post_reply *) fn_data;
+  post_reply_l = (struct Post_reply *) c->fn_data;
 
   if (ev == MG_EV_CONNECT) {
     mg_printf(c, post_reply_l->post);
@@ -159,8 +157,7 @@ static void test_http_fetch(struct mg_mgr *mgr) {
 static struct mg_connection *s_conn;
 static char s_topic[16];
 
-static void mqtt_fn(struct mg_connection *c, int ev, void *ev_data,
-                    void *fn_data) {
+static void mqtt_fn(struct mg_connection *c, int ev, void *ev_data) {
   if (ev == MG_EV_MQTT_OPEN) {
     // MQTT connect is successful
     struct mg_mqtt_opts sub_opts;
@@ -180,7 +177,7 @@ static void mqtt_fn(struct mg_connection *c, int ev, void *ev_data,
       ASSERT(0);
     if (mm->data.len != 2 || strcmp(mm->data.ptr, "hi")) ASSERT(0);
     mg_mqtt_disconnect(c, NULL);
-    *(bool *) fn_data = true;
+    *(bool *) c->fn_data = true;
   } else if (ev == MG_EV_CLOSE) {
     s_conn = NULL;
   }

@@ -12,7 +12,7 @@ static const char *s_web_root = ".";
 //   /websocket - upgrade to Websocket, and implement websocket echo server
 //   /rest - respond with JSON string {"result": 123}
 //   any other URI serves static files from s_web_root
-static void fn(struct mg_connection *c, int ev, void *ev_data, void *fn_data) {
+static void fn(struct mg_connection *c, int ev, void *ev_data) {
   if (ev == MG_EV_OPEN) {
     // c->is_hexdumping = 1;
   } else if (ev == MG_EV_HTTP_MSG) {
@@ -34,7 +34,6 @@ static void fn(struct mg_connection *c, int ev, void *ev_data, void *fn_data) {
     struct mg_ws_message *wm = (struct mg_ws_message *) ev_data;
     mg_ws_send(c, wm->data.ptr, wm->data.len, WEBSOCKET_OP_TEXT);
   }
-  (void) fn_data;
 }
 
 int main(void) {

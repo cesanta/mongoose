@@ -15,7 +15,7 @@
 static const char *s_url = "http://info.cern.ch";
 
 // Print HTTP response and signal that we're done
-static void fn(struct mg_connection *c, int ev, void *ev_data, void *fn_data) {
+static void fn(struct mg_connection *c, int ev, void *ev_data) {
   if (ev == MG_EV_CONNECT) {
     // Connected to server. Extract host name from URL
     struct mg_str host = mg_url_host(s_url);
@@ -40,7 +40,7 @@ static void fn(struct mg_connection *c, int ev, void *ev_data, void *fn_data) {
       data[1] += c->recv.len;
       fwrite(c->recv.buf, 1, c->recv.len, stdout);
       c->recv.len = 0;  // And cleanup the receive buffer. Streming!
-      if (data[1] >= data[0]) * (bool *) fn_data = true;
+      if (data[1] >= data[0]) * (bool *) c->fn_data = true;
     } else {
       struct mg_http_message hm;
       int n = mg_http_parse((char *) c->recv.buf, c->recv.len, &hm);
@@ -50,13 +50,13 @@ static void fn(struct mg_connection *c, int ev, void *ev_data, void *fn_data) {
         data[0] = n + hm.body.len;
         data[1] = c->recv.len;
         c->recv.len = 0;  // Cleanup receive buffer
-        if (data[1] >= data[0]) * (bool *) fn_data = true;
+        if (data[1] >= data[0]) * (bool *) c->fn_data = true;
       }
     }
   } else if (ev == MG_EV_CLOSE) {
-    *(bool *) fn_data = true;  // tell event loop to stop
+    *(bool *) c->fn_data = true;  // tell event loop to stop
   } else if (ev == MG_EV_ERROR) {
-    *(bool *) fn_data = true;  // Error, tell event loop to stop
+    *(bool *) c->fn_data = true;  // Error, tell event loop to stop
   }
   (void) ev_data;
 }

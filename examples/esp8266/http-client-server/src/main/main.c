@@ -9,8 +9,8 @@
 #define SERVER_URL "http://0.0.0.0:80"
 #define CLIENT_URL "http://info.cern.ch"
 
-// Event handler for an server (accepted) connection
-static void cb(struct mg_connection *c, int ev, void *ev_data, void *fn_data) {
+// Event handler for a server (accepted) connection
+static void cb(struct mg_connection *c, int ev, void *ev_data) {
   if (ev == MG_EV_HTTP_MSG) {
     mg_http_reply(c, 200, "", "Hello from ESP!\n");
   }
@@ -20,7 +20,7 @@ static void cb(struct mg_connection *c, int ev, void *ev_data, void *fn_data) {
 // To enable TLS for HTTP,
 //   1. Copy "ca.pem" file to the ESP8266 flash FS
 //   2. Add TLS init snippet for the connection, see examples/http-client
-static void cb2(struct mg_connection *c, int ev, void *ev_data, void *fn_data) {
+static void cb2(struct mg_connection *c, int ev, void *ev_data) {
   if (ev == MG_EV_CONNECT) {
     struct mg_str s = mg_url_host(CLIENT_URL);
     mg_printf(c, "GET / HTTP/1.0\r\nHost: %.*s\r\n\r\n", (int) s.len, s.ptr);

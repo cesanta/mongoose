@@ -16,7 +16,7 @@ static const char *s_tx_topic = "d/tx";
 static int s_qos = 1;
 static int s_connected = 0;
 
-static void fn(struct mg_connection *c, int ev, void *ev_data, void *fn_data) {
+static void fn(struct mg_connection *c, int ev, void *ev_data) {
   if (ev == MG_EV_OPEN) {
     // c->is_hexdumping = 1;
   } else if (ev == MG_EV_ERROR) {
@@ -67,7 +67,7 @@ time_t ourtime(time_t *tp) {
 }
 
 // SNTP callback. Modifies s_boot_timestamp, to make ourtime() correct
-static void sfn(struct mg_connection *c, int ev, void *ev_data, void *fn_data) {
+static void sfn(struct mg_connection *c, int ev, void *ev_data) {
   if (ev == MG_EV_SNTP_TIME) {
     int64_t t = *(int64_t *) ev_data;
     MG_INFO(("Got SNTP time: %lld ms from epoch", t));

@@ -11,7 +11,7 @@ static const char *s_listen_on = "http://localhost:8000";
 static const char *s_web_root = "web_root";
 
 // This RESTful server implements the following endpoints:
-static void fn(struct mg_connection *c, int ev, void *ev_data, void *fn_data) {
+static void fn(struct mg_connection *c, int ev, void *ev_data) {
   if (ev == MG_EV_HTTP_MSG) {
     struct mg_http_message *hm = (struct mg_http_message *) ev_data;
     if (mg_http_match_uri(hm, "/websocket")) {
@@ -28,7 +28,6 @@ static void fn(struct mg_connection *c, int ev, void *ev_data, void *fn_data) {
     mg_ws_send(c, wm->data.ptr, wm->data.len, WEBSOCKET_OP_TEXT);
     mg_iobuf_del(&c->recv, 0, c->recv.len);
   }
-  (void) fn_data;
 }
 
 static void timer_fn(void *arg) {

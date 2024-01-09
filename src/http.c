@@ -1,7 +1,7 @@
+#include "http.h"
 #include "arch.h"
 #include "base64.h"
 #include "fmt.h"
-#include "http.h"
 #include "json.h"
 #include "log.h"
 #include "net.h"
@@ -431,7 +431,7 @@ void mg_http_reply(struct mg_connection *c, int code, const char *headers,
   c->is_resp = 0;
 }
 
-static void http_cb(struct mg_connection *, int, void *, void *);
+static void http_cb(struct mg_connection *, int, void *);
 static void restore_http_cb(struct mg_connection *c) {
   mg_fs_close((struct mg_fd *) c->pfn_data);
   c->pfn_data = NULL;
@@ -445,10 +445,9 @@ char *mg_http_etag(char *buf, size_t len, size_t size, time_t mtime) {
   return buf;
 }
 
-static void static_cb(struct mg_connection *c, int ev, void *ev_data,
-                      void *fn_data) {
+static void static_cb(struct mg_connection *c, int ev, void *ev_data) {
   if (ev == MG_EV_WRITE || ev == MG_EV_POLL) {
-    struct mg_fd *fd = (struct mg_fd *) fn_data;
+    struct mg_fd *fd = (struct mg_fd *) c->pfn_data;
     // Read to send IO buffer directly, avoid extra on-stack buffer
     size_t n, max = MG_IO_SIZE, space;
     size_t *cl = (size_t *) &c->data[(sizeof(c->data) - sizeof(size_t)) /
@@ -973,7 +972,7 @@ static int skip_chunk(const char *buf, int len, int *pl, int *dl) {
   return i + 2 + n + 2;
 }
 
-static void http_cb(struct mg_connection *c, int ev, void *evd, void *fnd) {
+static void http_cb(struct mg_connection *c, int ev, void *ev_data) {
   if (ev == MG_EV_READ || ev == MG_EV_CLOSE) {
     struct mg_http_message hm;
     size_t ofs = 0;  // Parsing offset
@@ -1035,10 +1034,10 @@ static void http_cb(struct mg_connection *c, int ev, void *evd, void *fnd) {
     }
     if (ofs > 0) mg_iobuf_del(&c->recv, 0, ofs);  // Delete processed data
   }
-  (void) evd, (void) fnd;
+  (void) ev_data;
 }
 
-static void mg_hfn(struct mg_connection *c, int ev, void *ev_data, void *fnd) {
+static void mg_hfn(struct mg_connection *c, int ev, void *ev_data) {
   if (ev == MG_EV_HTTP_MSG) {
     struct mg_http_message *hm = (struct mg_http_message *) ev_data;
     if (mg_http_match_uri(hm, "/quit")) {
@@ -1053,7 +1052,7 @@ static void mg_hfn(struct mg_connection *c, int ev, void *ev_data, void *fnd) {
       mg_http_reply(c, 200, "", "hi\n");
     }
   } else if (ev == MG_EV_CLOSE) {
-    if (c->data[0] == 'X') *(bool *) fnd = true;
+    if (c->data[0] == 'X') *(bool *) c->fn_data = true;
   }
 }
 

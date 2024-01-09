@@ -21,8 +21,8 @@ static void timer_fn(void *arg) {
            ifp->ndrop, ifp->nerr));
 }
 
-static void fn(struct mg_connection *c, int ev, void *ev_data, void *fn_data) {
-  struct mg_tcpip_if *ifp = (struct mg_tcpip_if *) fn_data;
+static void fn(struct mg_connection *c, int ev, void *ev_data) {
+  struct mg_tcpip_if *ifp = (struct mg_tcpip_if *) c->fn_data;
   if (ev == MG_EV_HTTP_MSG) {
     struct mg_http_message *hm = (struct mg_http_message *) ev_data;
     if (mg_http_match_uri(hm, "/api/hello")) {  // Request to /api/hello

@@ -13,10 +13,10 @@ static struct mg_connection *s_sntp_conn = NULL;
 // This RESTful server implements the following endpoints:
 //   /websocket - upgrade to Websocket, and implement websocket echo server
 //   /api/rest - respond with JSON string {"result": 123}
-static void fn(struct mg_connection *c, int ev, void *ev_data, void *fn_data) {
+static void fn(struct mg_connection *c, int ev, void *ev_data) {
   if (ev == MG_EV_OPEN) {
     c->is_hexdumping = 1;
-  } else if (ev == MG_EV_ACCEPT && fn_data != NULL) {
+  } else if (ev == MG_EV_ACCEPT && c->fn_data != NULL) {
     struct mg_tls_opts opts = {.cert = s_ssl_cert, .key = s_ssl_key};
     mg_tls_init(c, &opts);
   } else if (ev == MG_EV_HTTP_MSG) {
@@ -35,7 +35,6 @@ static void fn(struct mg_connection *c, int ev, void *ev_data, void *fn_data) {
     MG_INFO(("Got wm: %p, data: %p, %d = %*.s", wm, wm->data.ptr, wm->data.len, wm->data.len, wm->data.ptr));
     mg_ws_send(c, wm->data.ptr, wm->data.len, WEBSOCKET_OP_TEXT);
   }
-  (void) fn_data;
 }
 
 // example system time()-like function
@@ -46,7 +45,7 @@ time_t ourtime(time_t *tp) {
 }
 
 // SNTP callback. Modifies s_boot_timestamp, to make ourtime() correct
-static void sfn(struct mg_connection *c, int ev, void *ev_data, void *fn_data) {
+static void sfn(struct mg_connection *c, int ev, void *ev_data) {
   if (ev == MG_EV_SNTP_TIME) {
     int64_t t = *(int64_t *) ev_data;
     MG_INFO(("Got SNTP time: %lld ms from epoch", t));

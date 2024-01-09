@@ -2,7 +2,7 @@
 
 struct mg_connection;
 typedef void (*mg_event_handler_t)(struct mg_connection *, int ev,
-                                   void *ev_data, void *fn_data);
+                                   void *ev_data);
 void mg_call(struct mg_connection *c, int ev, void *ev_data);
 void mg_error(struct mg_connection *c, const char *fmt, ...);
 

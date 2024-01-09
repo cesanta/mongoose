@@ -5,8 +5,8 @@
 
 static const char *s_ssdp_url = "udp://239.255.255.250:1900";
 
-static void fn(struct mg_connection *c, int ev, void *ev_data, void *fn_data) {
-  MG_DEBUG(("%p got event: %d %p %p", c, ev, ev_data, fn_data));
+static void fn(struct mg_connection *c, int ev, void *ev_data) {
+  MG_DEBUG(("%p got event: %d %p", c, ev, ev_data));
   if (ev == MG_EV_OPEN) {
     //    c->is_hexdumping = 1;
   } else if (ev == MG_EV_RESOLVE) {

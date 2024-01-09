@@ -40,7 +40,7 @@ uint64_t mg_now(void) {
 
 // SNTP connection event handler. When we get a response from an SNTP server,
 // adjust s_boot_timestamp. We'll get a valid time from that point on
-static void sfn(struct mg_connection *c, int ev, void *ev_data, void *fn_data) {
+static void sfn(struct mg_connection *c, int ev, void *ev_data) {
   uint64_t *expiration_time = (uint64_t *) c->data;
   if (ev == MG_EV_OPEN) {
     *expiration_time = mg_millis() + 3000;  // Store expiration time in 3s
@@ -51,7 +51,6 @@ static void sfn(struct mg_connection *c, int ev, void *ev_data, void *fn_data) {
   } else if (ev == MG_EV_POLL) {
     if (mg_millis() > *expiration_time) c->is_closing = 1;
   }
-  (void) fn_data;
 }
 
 // SNTP timer function. Sync up time
@@ -99,7 +98,7 @@ static void handle_settings_get(struct mg_connection *c) {
 }
 
 // Modbus handler function
-static void mfn(struct mg_connection *c, int ev, void *ev_data, void *fn_data) {
+static void mfn(struct mg_connection *c, int ev, void *ev_data) {
   struct conndata *cd = (struct conndata *) c->data;
   if (ev == MG_EV_READ) {
     MG_INFO(("%lu RECEIVED %lu", c->id, c->recv.len));
@@ -117,7 +116,7 @@ static void mfn(struct mg_connection *c, int ev, void *ev_data, void *fn_data) {
       c->is_closing = 1;
     }
   }
-  (void) ev_data, (void) fn_data;
+  (void) ev_data;
 }
 
 static void send8(struct mg_connection *c, uint8_t val) {
@@ -242,10 +241,10 @@ static size_t print_mb_resp(void (*out)(char, void *), void *ptr, va_list *ap) {
 }
 
 // HTTP request handler function
-static void fn(struct mg_connection *c, int ev, void *ev_data, void *fn_data) {
+static void fn(struct mg_connection *c, int ev, void *ev_data) {
   struct conndata *cd = (struct conndata *) c->data;
   if (ev == MG_EV_ACCEPT) {
-    if (fn_data != NULL) {  // TLS listener!
+    if (c->fn_data != NULL) {  // TLS listener!
       struct mg_tls_opts opts = {0};
       opts.cert = mg_unpacked("/certs/server_cert.pem");
       opts.key = mg_unpacked("/certs/server_key.pem");

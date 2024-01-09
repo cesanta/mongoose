@@ -23,7 +23,7 @@ time_t my_time(time_t *tp) {
 }
 
 // SNTP client callback
-static void sfn(struct mg_connection *c, int ev, void *ev_data, void *fn_data) {
+static void sfn(struct mg_connection *c, int ev, void *ev_data) {
   if (ev == MG_EV_SNTP_TIME) {
     int64_t t = *(int64_t *) ev_data;
     MG_INFO(("Got SNTP time: %lld ms from epoch", t));
@@ -31,7 +31,7 @@ static void sfn(struct mg_connection *c, int ev, void *ev_data, void *fn_data) {
   } else if (ev == MG_EV_CLOSE) {
     s_sntp_conn = NULL;
   }
-  (void) fn_data, (void) c;
+  (void) c;
 }
 
 // Called every 5 seconds. Increase that for production case.

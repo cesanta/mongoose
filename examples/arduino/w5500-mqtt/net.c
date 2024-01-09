@@ -15,7 +15,7 @@ void mqtt_publish(const char *message) {
   if (mqtt_connection) mg_mqtt_pub(mqtt_connection, &opts);
 }
 
-static void fn(struct mg_connection *c, int ev, void *ev_data, void *fn_data) {
+static void fn(struct mg_connection *c, int ev, void *ev_data) {
   if (ev == MG_EV_MQTT_OPEN) {
     MG_INFO(("%lu CONNECTED to %s", c->id, MQTT_SERVER));
     struct mg_mqtt_opts opts = {};

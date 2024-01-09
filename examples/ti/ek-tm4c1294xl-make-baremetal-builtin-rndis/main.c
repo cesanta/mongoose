@@ -61,7 +61,7 @@ static bool usb_up(struct mg_tcpip_if *ifp) {
   return tud_inited() && tud_ready() && tud_connected();
 }
 
-static void fn(struct mg_connection *c, int ev, void *ev_data, void *fn_data) {
+static void fn(struct mg_connection *c, int ev, void *ev_data) {
   if (ev == MG_EV_HTTP_MSG) {
     struct mg_http_message *hm = (struct mg_http_message *) ev_data;
     if (mg_http_match_uri(hm, "/api/debug")) {
@@ -72,7 +72,6 @@ static void fn(struct mg_connection *c, int ev, void *ev_data, void *fn_data) {
       mg_http_reply(c, 200, "", "hi\n");
     }
   }
-  (void) fn_data;
 }
 
 int main(void) {

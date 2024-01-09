@@ -36,8 +36,8 @@ static void forward_request(struct mg_http_message *hm,
             (int) hm->uri.len, hm->uri.ptr));
 }
 
-static void fn2(struct mg_connection *c, int ev, void *ev_data, void *fn_data) {
-  struct mg_connection *c2 = (struct mg_connection *) fn_data;
+static void fn2(struct mg_connection *c, int ev, void *ev_data) {
+  struct mg_connection *c2 = (struct mg_connection *) c->fn_data;
   if (ev == MG_EV_READ) {
     // All incoming data from the backend, forward to the client
     if (c2 != NULL) mg_send(c2, c->recv.buf, c->recv.len);
@@ -48,8 +48,8 @@ static void fn2(struct mg_connection *c, int ev, void *ev_data, void *fn_data) {
   (void) ev_data;
 }
 
-static void fn(struct mg_connection *c, int ev, void *ev_data, void *fn_data) {
-  struct mg_connection *c2 = fn_data;
+static void fn(struct mg_connection *c, int ev, void *ev_data) {
+  struct mg_connection *c2 = c->fn_data;
   if (ev == MG_EV_HTTP_MSG) {
     struct mg_http_message *hm = (struct mg_http_message *) ev_data;
     // Client request, create backend connection Note that we're passing

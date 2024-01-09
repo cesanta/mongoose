@@ -43,7 +43,7 @@ static struct user *getuser(struct mg_http_message *hm) {
   return NULL;
 }
 
-void fn(struct mg_connection *c, int ev, void *ev_data, void *fn_data) {
+void fn(struct mg_connection *c, int ev, void *ev_data) {
   if (ev == MG_EV_HTTP_MSG) {
     struct mg_http_message *hm = (struct mg_http_message *) ev_data;
     struct user *u = getuser(hm);
@@ -63,7 +63,6 @@ void fn(struct mg_connection *c, int ev, void *ev_data, void *fn_data) {
       mg_http_serve_dir(c, ev_data, &opts);
     }
   }
-  (void) fn_data;
 }
 
 int main(void) {

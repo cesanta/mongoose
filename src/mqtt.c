@@ -410,7 +410,8 @@ int mg_mqtt_parse(const uint8_t *buf, size_t len, uint8_t version,
       }
       if (p > end) return MQTT_MALFORMED;
       if (version == 5 && p + 2 < end) {
-        len_len = (uint32_t) decode_varint(p, (size_t) (end - p), &m->props_size);
+        len_len =
+            (uint32_t) decode_varint(p, (size_t) (end - p), &m->props_size);
         if (!len_len) return MQTT_MALFORMED;
         m->props_start = (size_t) (p + len_len - buf);
         p += len_len + m->props_size;
@@ -426,8 +427,7 @@ int mg_mqtt_parse(const uint8_t *buf, size_t len, uint8_t version,
   return MQTT_OK;
 }
 
-static void mqtt_cb(struct mg_connection *c, int ev, void *ev_data,
-                    void *fn_data) {
+static void mqtt_cb(struct mg_connection *c, int ev, void *ev_data) {
   if (ev == MG_EV_READ) {
     for (;;) {
       uint8_t version = c->is_mqtt5 ? 5 : 4;
@@ -495,7 +495,6 @@ static void mqtt_cb(struct mg_connection *c, int ev, void *ev_data,
     }
   }
   (void) ev_data;
-  (void) fn_data;
 }
 
 void mg_mqtt_ping(struct mg_connection *nc) {

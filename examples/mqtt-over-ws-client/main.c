@@ -20,7 +20,7 @@ static const char *s_url =
 
 static const char *s_topic = "mg/test";
 
-static void fn(struct mg_connection *c, int ev, void *ev_data, void *fn_data) {
+static void fn(struct mg_connection *c, int ev, void *ev_data) {
   if (ev == MG_EV_ERROR) {
     // On error, log error message
     MG_ERROR(("%p %s", c->fd, (char *) ev_data));
@@ -89,7 +89,7 @@ static void fn(struct mg_connection *c, int ev, void *ev_data, void *fn_data) {
   }
 
   if (ev == MG_EV_ERROR || ev == MG_EV_CLOSE) {
-    *(bool *) fn_data = true;  // Signal that we're done
+    *(bool *) c->fn_data = true;  // Signal that we're done
   }
 }
 

@@ -6,7 +6,7 @@
 const char *s_listening_url = "http://0.0.0.0:8000";
 
 // HTTP request handler function
-void fn(struct mg_connection *c, int ev, void *ev_data, void *fn_data) {
+void fn(struct mg_connection *c, int ev, void *ev_data) {
   if (ev == MG_EV_HTTP_MSG) {
     struct mg_http_serve_opts opts = {
         .root_dir = "/web_root",
@@ -14,7 +14,6 @@ void fn(struct mg_connection *c, int ev, void *ev_data, void *fn_data) {
       };
     mg_http_serve_dir(c, ev_data, &opts);
   }
-  (void) fn_data;
 }
 
 int main(void) {

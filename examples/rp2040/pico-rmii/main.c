@@ -10,7 +10,7 @@
 
 #define CLKREFPIN 20  // either 20 or 22
 
-static void fn(struct mg_connection *c, int ev, void *ev_data, void *fn_data) {
+static void fn(struct mg_connection *c, int ev, void *ev_data) {
   if (ev == MG_EV_HTTP_MSG) {
     mg_http_reply(c, 200, "", "ok\n");
   }

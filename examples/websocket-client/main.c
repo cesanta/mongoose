@@ -10,7 +10,7 @@
 static const char *s_url = "ws://localhost:8000/websocket";
 
 // Print websocket response and signal that we're done
-static void fn(struct mg_connection *c, int ev, void *ev_data, void *fn_data) {
+static void fn(struct mg_connection *c, int ev, void *ev_data) {
   if (ev == MG_EV_OPEN) {
     c->is_hexdumping = 1;
   } else if (ev == MG_EV_ERROR) {
@@ -26,7 +26,7 @@ static void fn(struct mg_connection *c, int ev, void *ev_data, void *fn_data) {
   }
 
   if (ev == MG_EV_ERROR || ev == MG_EV_CLOSE || ev == MG_EV_WS_MSG) {
-    *(bool *) fn_data = true;  // Signal that we're done
+    *(bool *) c->fn_data = true;  // Signal that we're done
   }
 }
 

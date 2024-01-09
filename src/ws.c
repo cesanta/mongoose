@@ -163,8 +163,7 @@ static bool mg_ws_client_handshake(struct mg_connection *c) {
   return false;  // Continue event handler
 }
 
-static void mg_ws_cb(struct mg_connection *c, int ev, void *ev_data,
-                     void *fn_data) {
+static void mg_ws_cb(struct mg_connection *c, int ev, void *ev_data) {
   struct ws_msg msg;
   size_t ofs = (size_t) c->pfn_data;
 
@@ -230,7 +229,6 @@ static void mg_ws_cb(struct mg_connection *c, int ev, void *ev_data,
       }
     }
   }
-  (void) fn_data;
   (void) ev_data;
 }
 

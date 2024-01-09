@@ -42,20 +42,20 @@ static size_t pcap_rx(void *buf, size_t len, struct mg_tcpip_if *ifp) {
   return received;
 }
 
-static void fn2(struct mg_connection *c, int ev, void *ev_data, void *fn_data) {
+static void fn2(struct mg_connection *c, int ev, void *ev_data) {
   if (ev == MG_EV_HTTP_MSG) {
     struct mg_http_message *hm = (struct mg_http_message *) ev_data;
     MG_DEBUG(("Got response (%d) %.*s...", (int) hm->message.len, 12,
               hm->message.ptr));
     c->is_draining = 1;
   } else if (ev == MG_EV_CONNECT) {
-    mg_printf(c, "GET %s HTTP/1.1\r\n\r\n", mg_url_uri((char *) fn_data));
+    mg_printf(c, "GET %s HTTP/1.1\r\n\r\n", mg_url_uri((char *) c->fn_data));
   } else if (ev == MG_EV_CLOSE) {
-    free(fn_data);
+    free(c->fn_data);
   }
 }
 
-static void fn(struct mg_connection *c, int ev, void *ev_data, void *fn_data) {
+static void fn(struct mg_connection *c, int ev, void *ev_data) {
   if (ev == MG_EV_HTTP_MSG) {
     struct mg_http_message *hm = (struct mg_http_message *) ev_data;
     if (mg_http_match_uri(hm, "/api/debug")) {
@@ -75,7 +75,7 @@ static void fn(struct mg_connection *c, int ev, void *ev_data, void *fn_data) {
                     hm->message.ptr);
     }
   }
-  (void) ev_data, (void) fn_data;
+  (void) ev_data;
 }
 
 int main(int argc, char *argv[]) {
