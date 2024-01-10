@@ -42,15 +42,16 @@ Create a simple web server that serves a directory. The behavior of the
 HTTP server is specified by its event handler function:
 
 ```c
+#include "mongoose.h"
+
 int main(void) {
-  ...
   struct mg_mgr mgr;  // Declare event manager
   mg_mgr_init(&mgr);  // Initialise event manager
   mg_http_listen(&mgr, "http://0.0.0.0:8000", fn, NULL);  // Setup listener
   for (;;) {
     mg_mgr_poll(&mgr, 1000);  // Run an infinite event loop
   }
-  ...
+  return 0;
 }
 
 // HTTP server event handler function
@@ -63,7 +64,7 @@ void fn(struct mg_connection *c, int ev, void *ev_data) {
 }
 ```
 
-This HTTP server implements a simple REST API that returns current time:
+HTTP server implements a REST API that returns current time. JSON formatting:
 ```c
 static void fn(struct mg_connection *c, int ev, void *ev_data) {
   if (ev == MG_EV_HTTP_MSG) {
@@ -77,8 +78,7 @@ static void fn(struct mg_connection *c, int ev, void *ev_data) {
 }
 ```
 
-This event handler is for the MQTT client that subscribes to a topic
-"aa/bb" and prints all messages that receives after that:
+MQTT client that subscribes to a topic `aa/bb` and prints all incoming messages:
 
 ```c
 static void fn(struct mg_connection *c, int ev, void *ev_data) {
