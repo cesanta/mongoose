@@ -36,8 +36,65 @@ robust, and easy. Features include:
 - Built-in firmware updates for STM32H5, STM32H7, and more coming
 - Detailed [user guide, API reference and tons of tutorials](https://mongoose.ws/documentation/)
 
+## Usage
 
-# Commercial use
+Create a simple web server that serves a directory. The behavior of the
+HTTP server is specified by its event handler function:
+
+```c
+int main(void) {
+  ...
+  struct mg_mgr mgr;  // Declare event manager
+  mg_mgr_init(&mgr);  // Initialise event manager
+  mg_http_listen(&mgr, "http://0.0.0.0:8000", fn, NULL);  // Setup listener
+  for (;;) {
+    mg_mgr_poll(&mgr, 1000);  // Run an infinite event loop
+  }
+  ...
+}
+
+// HTTP server event handler function
+void fn(struct mg_connection *c, int ev, void *ev_data) {
+  if (ev == MG_EV_HTTP_MSG) {
+    struct mg_http_message *hm = (struct mg_http_message *) ev_data;
+    struct mg_http_serve_opts opts = { .root_dir = "./web_root/" };
+    mg_http_serve_dir(c, hm, &opts);
+  }
+}
+```
+
+This HTTP server implements a simple REST API that returns current time:
+```c
+static void fn(struct mg_connection *c, int ev, void *ev_data) {
+  if (ev == MG_EV_HTTP_MSG) {
+    struct mg_http_message *hm = (struct mg_http_message *) ev_data;
+    if (mg_http_match_uri(hm, "/api/time/get")) {
+      mg_http_reply(c, 200, "", "{%m:%lu}\n", MG_ESC("time"), time(NULL));
+    } else {
+      mg_http_reply(c, 500, "", "{%m:%m}\n", MG_ESC("error"), MG_ESC("Unsupported URI")); 
+    }
+  }
+}
+```
+
+This event handler is for the MQTT client that subscribes to a topic
+"aa/bb" and prints all messages that receives after that:
+
+```c
+static void fn(struct mg_connection *c, int ev, void *ev_data) {
+  if (ev == MG_EV_MQTT_OPEN) {
+    struct mg_mqtt_opts opts = {.qos = 1, .topic = mg_str("aa/bb")};
+    mg_mqtt_sub(c, &opts);
+  } else if (ev == MG_EV_MQTT_MSG) {
+    struct mg_mqtt_message *mm = (struct mg_mqtt_message *) ev_data;
+    printf("Topic: %.*s, Message: %.*s",
+           mm->topic.len, mm->topic.ptr,
+           mm->data.len, mm->data.ptr);
+  }
+}
+```
+
+## Commercial use
 - Mongoose is used by hundreds of businesses, from Fortune500 giants like
   Siemens, Schneider Electric, Broadcom, Bosch, Google, Samsung, Qualcomm, Caterpillar to the small businesses
 - Used to solve a wide range of business needs, like implementing Web UI
@@ -51,7 +108,7 @@ robust, and easy. Features include:
   services](https://mongoose.ws/integration/) - don't hesitate to [contact us](https://mongoose.ws/contact/)
 
 
-# Security
+## Security
 
 We take security seriously:
 1. Mongoose repository runs a
@@ -77,7 +134,7 @@ We take security seriously:
   of which we get notified and in case of any issue, act similar to (3).
 
 
-# Contributions
+## Contributions
 
 Contributions are welcome! Please follow the guidelines below:
 
