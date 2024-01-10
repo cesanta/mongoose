@@ -318,6 +318,9 @@ static inline int mg_mkdir(const char *path, mode_t mode) {
     !defined MG_ENABLE_RL && (!defined(MG_ENABLE_LWIP) || !MG_ENABLE_LWIP) && \
     (!defined(MG_ENABLE_TCPIP) || !MG_ENABLE_TCPIP)
 #define MG_ENABLE_RL 1
+#ifndef MG_SOCK_LISTEN_BACKLOG_SIZE
+#define MG_SOCK_LISTEN_BACKLOG_SIZE 3
+#endif
 #endif
 
 #endif
@@ -783,7 +786,7 @@ struct timeval {
 #endif
 
 #ifndef MG_SOCK_LISTEN_BACKLOG_SIZE
-#define MG_SOCK_LISTEN_BACKLOG_SIZE 3
+#define MG_SOCK_LISTEN_BACKLOG_SIZE 128
 #endif
 
 #ifndef MG_DIRSEP
