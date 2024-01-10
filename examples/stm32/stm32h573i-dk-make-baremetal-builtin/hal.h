@@ -27,6 +27,10 @@
 
 #define LED LED2  // Use orange LED for blinking
 
+#ifndef UART_DEBUG
+#define UART_DEBUG USART1
+#endif
+
 // System clock (11.4, Figure 48; 11.4.5, Figure 51; 11.4.8
 // CPU_FREQUENCY <= 250 MHz; (SYS_FREQUENCY / HPRE) ; hclk = CPU_FREQUENCY
 // APB clocks <= 250 MHz. Configure flash latency (WS) in accordance to hclk
@@ -91,10 +95,6 @@ static inline void gpio_output(uint16_t pin) {
   gpio_init(pin, GPIO_MODE_OUTPUT, GPIO_OTYPE_PUSH_PULL, GPIO_SPEED_HIGH,
             GPIO_PULL_NONE, 0);
 }
-
-#ifndef UART_DEBUG
-#define UART_DEBUG USART3
-#endif
 
 static inline bool uart_init(USART_TypeDef *uart, unsigned long baud) {
   uint8_t af = 7;           // Alternate function

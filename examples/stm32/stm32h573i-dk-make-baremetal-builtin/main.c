@@ -77,7 +77,7 @@ int main(void) {
   }
 
   MG_INFO(("Initialising application..."));
-  //web_init(&mgr);
+  web_init(&mgr);
 
   MG_INFO(("Starting event loop"));
   for (;;) {
