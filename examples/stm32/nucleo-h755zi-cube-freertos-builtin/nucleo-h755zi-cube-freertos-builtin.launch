@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<launchConfiguration type="org.eclipse.debug.core.groups.GroupLaunchConfigurationType">
+    <stringAttribute key="org.eclipse.debug.core.launchGroup.0.action" value="NONE"/>
+    <booleanAttribute key="org.eclipse.debug.core.launchGroup.0.adoptIfRunning" value="false"/>
+    <booleanAttribute key="org.eclipse.debug.core.launchGroup.0.enabled" value="true"/>
+    <stringAttribute key="org.eclipse.debug.core.launchGroup.0.mode" value="inherit"/>
+    <stringAttribute key="org.eclipse.debug.core.launchGroup.0.name" value="nucleo-h755zi-cube-freertos-builtin_cm4"/>
+    <stringAttribute key="org.eclipse.debug.core.launchGroup.1.action" value="NONE"/>
+    <booleanAttribute key="org.eclipse.debug.core.launchGroup.1.adoptIfRunning" value="false"/>
+    <booleanAttribute key="org.eclipse.debug.core.launchGroup.1.enabled" value="true"/>
+    <stringAttribute key="org.eclipse.debug.core.launchGroup.1.mode" value="inherit"/>
+    <stringAttribute key="org.eclipse.debug.core.launchGroup.1.name" value="nucleo-h755zi-cube-freertos-builtin-cm7"/>
+</launchConfiguration>
