@@ -7,6 +7,14 @@
 
 #define BLINK_PERIOD_MS 1000  // LED blinking period in millis
 
+// workaround optimizer somehow causing SysTick to fire before FreeRTOS has
+// fully initialized
+extern void xPortSysTickHandler(void);
+void SysTick_Handler(void) {
+  if (xTaskGetSchedulerState() != taskSCHEDULER_NOT_STARTED)
+    xPortSysTickHandler();
+}
+
 void mg_random(void *buf, size_t len) {  // Use on-board RNG
   for (size_t n = 0; n < len; n += sizeof(uint32_t)) {
     uint32_t r = rng_read();

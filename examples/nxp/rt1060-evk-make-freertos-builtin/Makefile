@@ -3,7 +3,8 @@ CFLAGS += -Wformat-truncation -fno-common -Wconversion -Wno-sign-conversion
 CFLAGS += -g3 -Os -ffunction-sections -fdata-sections
 CFLAGS += -I. -Icmsis_core/CMSIS/Core/Include -Icmsis_mcu/devices/MIMXRT1062 #-DCPU_MIMXRT1062DVL6B
 CFLAGS += -mcpu=cortex-m7 -mthumb -mfloat-abi=hard -mfpu=fpv5-d16 $(CFLAGS_EXTRA)
-LDFLAGS ?= -Tlink_ram.ld -nostdlib -nostartfiles --specs nano.specs -lc -lgcc -Wl,--gc-sections -Wl,-Map=$@.map 
+LDSCRIPT = link.ld
+LDFLAGS ?= -T$(LDSCRIPT) -nostdlib -nostartfiles --specs nano.specs -lc -lgcc -Wl,--gc-sections -Wl,-Map=$@.map 
 
 SOURCES = main.c syscalls.c sysinit.c
 SOURCES += cmsis_mcu/devices/MIMXRT1062/gcc/startup_MIMXRT1062.S # NXP startup file. Compiler-dependent!
@@ -27,19 +28,23 @@ else
   RM = rm -rf
 endif
 
+all build example update: SOURCES += flash_image.c
 all build example: firmware.bin
+
+ram: LDSCRIPT = link_ram.ld
+ram: firmware.bin
 
 firmware.bin: firmware.elf
 	arm-none-eabi-objcopy -O binary $< $@
 
-firmware.elf: FreeRTOS-Kernel cmsis_core cmsis_mcu $(SOURCES) hal.h link_ram.ld mongoose_custom.h
+firmware.elf: FreeRTOS-Kernel cmsis_core cmsis_mcu $(SOURCES) hal.h link_ram.ld link.ld mongoose_custom.h
 	arm-none-eabi-gcc $(SOURCES) $(wildcard FreeRTOS-Kernel/*.c) $(CFLAGS) $(LDFLAGS) -o $@
 
 flash: firmware.bin
-	st-flash --reset write $< 0x8000000
+# flash
 
-cmsis_core:  # ARM CMSIS core headers
-	git clone --depth 1 -b 5.9.0 https://github.com/ARM-software/CMSIS_5 $@
+cmsis_core:     # ARM CMSIS core headers
+	git clone -q --depth 1 -b 5.9.0 https://github.com/ARM-software/CMSIS_5 $@
 cmsis_mcu:
 	curl -sL https://mcuxpresso.nxp.com/cmsis_pack/repo/NXP.MIMXRT1062_DFP.17.1.0.pack -o $@.zip
 	mkdir $@ && cd $@ && unzip -q ../$@.zip
@@ -50,6 +55,16 @@ FreeRTOS-Kernel:  # FreeRTOS sources
 DEVICE_URL ?= https://dash.vcon.io/api/v3/devices/13
 update: firmware.bin
 	curl --fail-with-body -su :$(VCON_API_KEY) $(DEVICE_URL)/ota --data-binary @$<
+
+update updateram: CFLAGS += -DUART_DEBUG=LPUART3
+
+test: update
+	curl --fail-with-body -su :$(VCON_API_KEY) $(DEVICE_URL)/tx?t=5 | tee /tmp/output.txt
+	grep 'READY, IP:' /tmp/output.txt       # Check for network init
+
+
+updateram: ram
+	curl --fail-with-body -su :$(VCON_API_KEY) $(DEVICE_URL)/ota --data-binary @firmware.bin
 	curl -su :$(VCON_API_KEY) $(DEVICE_URL)/rpc/swd.exec -d '{"req":"init"}'
 	curl -su :$(VCON_API_KEY) $(DEVICE_URL)/rpc/swd.exec -d '{"req":"wm,e000edf0,a05f0003 wm,e000edfc,1 wm,e000ed0c,5fa0004"}'
 	curl -su :$(VCON_API_KEY) $(DEVICE_URL)/rpc/swd.exec -d '{"req":"init"}'
@@ -59,11 +74,10 @@ update: firmware.bin
 	curl -su :$(VCON_API_KEY) $(DEVICE_URL)/rpc/swd.exec -d '{"req":"'"$$REQ"'"}'
 	curl -su :$(VCON_API_KEY) $(DEVICE_URL)/rpc/swd.exec -d '{"req":"wm,e000edf0,a05f0001"}'
 
-test update: CFLAGS += -DUART_DEBUG=LPUART3
-test: update
+testram: updateram
 	curl --fail-with-body -su :$(VCON_API_KEY) $(DEVICE_URL)/tx?t=5 | tee /tmp/output.txt
 	grep 'READY, IP:' /tmp/output.txt       # Check for network init
-#	grep 'MQTT connected' /tmp/output.txt   # Check for MQTT connection success
+
 
 clean:
 	$(RM) firmware.* *.su cmsis_core cmsis_mcu FreeRTOS-Kernel *.zip
