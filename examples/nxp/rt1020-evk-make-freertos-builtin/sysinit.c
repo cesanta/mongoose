@@ -69,38 +69,14 @@ void SystemInit(void) {  // Called automatically by startup code (ints masked)
           CCM_CBCMR_PRE_PERIPH_CLK_SEL(3));  // run from 500MHz clock
   // 14.5 Table 14-4: uart_clk_root
   // 14.4: uart_clk_root = PLL3/6 or OSC; CCM_CSCDR1 (14.7.9) defaults to
-  // PLL3/6/1
+  // PLL3/6/1; but ROM boot code fiddles with the divider (9.5.3 Table 9-7)
   CCM_ANALOG->PLL_USB1 |= CCM_ANALOG_PLL_USB1_POWER_MASK;  // Power PLL on
   while ((CCM_ANALOG->PLL_USB1 & CCM_ANALOG_PLL_USB1_LOCK_MASK) == 0)
     spin(1);  // wait until it is stable
   CCM_ANALOG->PLL_USB1 &=
       ~CCM_ANALOG_PLL_USB1_BYPASS_MASK;  // Disable Bypass (switch to PLL)
+  CCM->CSCDR1 &= ~(CCM_CSCDR1_UART_CLK_SEL_MASK | CCM_CSCDR1_UART_CLK_PODF_MASK);
   rng_init();                            // Initialise random number generator
   // NXP startup code calls SystemInit BEFORE initializing RAM...
   SysTick_Config(SYS_FREQUENCY / 1000);  // Sys tick every 1ms
 }
-
-#if 0
-__attribute__((section(".cfg"), used)) uint32_t __cfg[] = {0x1234abcd};
-
-extern uint32_t __isr_vector[];
-extern uint32_t __ivt_boot_data[];
-
-__attribute__((section(".ivt"), used)) uint32_t __ivt[8] = {
-    0x412000d1,                  // header: 41 - version, 2000 size, d1 tag
-    (uint32_t) __isr_vector,     // entry
-    0,                           // reserved
-    0,                           // dcd
-    (uint32_t) __ivt_boot_data,  // boot data
-    (uint32_t) __ivt,            // this is us - ivt absolute address
-    0,                           // csf absolute address
-    0,                           // reserved for HAB
-};
-
-__attribute__((section(".ivt"), used)) uint32_t __ivt_boot_data[] = {
-    0,          // boot start location
-    64 * 1024,  // size
-    0,          // Plugin flag
-    0Xffffffff  // empty - extra data word
-};
-#endif
