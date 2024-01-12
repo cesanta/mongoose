@@ -55,7 +55,4 @@ dkms.conf
 *.list
 *.o
 *.cyclo
-.settings
-.mxproject
-.project
 */Debug/*
