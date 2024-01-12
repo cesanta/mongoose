@@ -31,31 +31,6 @@ static void timer_fn(void *arg) {
            ifp->ndrop, ifp->nerr));
 }
 
-#ifndef RUNINFLASH
-static void fn(struct mg_connection *c, int ev, void *ev_data) {
-  struct mg_tcpip_if *ifp = (struct mg_tcpip_if *) c->fn_data;
-  if (ev == MG_EV_HTTP_MSG) {
-    struct mg_http_message *hm = (struct mg_http_message *) ev_data;
-    if (mg_http_match_uri(hm, "/api/hello")) {  // Request to /api/hello
-      mg_http_reply(c, 200, "", "{%m:%u,%m:%u,%m:%u,%m:%u,%m:%u}\n",
-                    MG_ESC("eth"), ifp->state, MG_ESC("frames_received"),
-                    ifp->nrecv, MG_ESC("frames_sent"), ifp->nsent,
-                    MG_ESC("frames_dropped"), ifp->ndrop,
-                    MG_ESC("interface_errors"), ifp->nerr);
-    } else if (mg_http_match_uri(hm, "/")) {  // Index page
-      mg_http_reply(
-          c, 200, "", "%s",
-          "<html><head><link rel='icon' href='data:;base64,='></head><body>"
-          "<h1>Welcome to Mongoose</h1>"
-          "See <a href=/api/hello>/api/hello</a> for REST example"
-          "</body></html>");
-    } else {  // All other URIs
-      mg_http_reply(c, 404, "", "Not Found\n");
-    }
-  }
-}
-#endif
-
 int main(void) {
   gpio_output(LED);               // Setup blue LED
   uart_init(UART_DEBUG, 115200);  // Initialise debug printf
@@ -84,11 +59,7 @@ int main(void) {
   }
 
   MG_INFO(("Initialising application..."));
-#ifdef RUNINFLASH
   web_init(&mgr);
-#else
-  mg_http_listen(&mgr, "http://0.0.0.0:80", fn, &mif);
-#endif
 
   MG_INFO(("Starting event loop"));
   for (;;) {

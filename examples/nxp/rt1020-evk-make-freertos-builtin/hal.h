@@ -301,3 +301,37 @@ static inline void ethernet_init(void) {
         ((OCOTP->CFG0 >> 19) ^ (OCOTP->CFG1 >> 19)) & 255, \
         (OCOTP->CFG1 >> 10) & 255, OCOTP->CFG1 & 255       \
   }
+
+static inline void flash_init(void) { // QSPI in FlexSPI
+  // set pins
+  clock_periph(4, CCM_CCGR4_CG1_SHIFT, CLOCK_ON_RUN_WAIT);  // iomuxc_ipg_clk_s
+  gpio_mux_config(kIOMUXC_SW_MUX_CTL_PAD_GPIO_SD_B1_05, 1);  // set for DQS
+  IOMUXC->SW_MUX_CTL_PAD[kIOMUXC_SW_MUX_CTL_PAD_GPIO_SD_B1_05] |= IOMUXC_SW_MUX_CTL_PAD_SION(1);  // loop signal back from pin
+  gpio_pad_config(kIOMUXC_SW_PAD_CTL_PAD_GPIO_SD_B1_05, GPIO_OTYPE_PUSH_PULL, GPIO_SPEED_HIGH, GPIO_PULL_NONE);
+  gpio_mux_config(kIOMUXC_SW_MUX_CTL_PAD_GPIO_SD_B1_11, 1);  // set for SS
+  IOMUXC->SW_MUX_CTL_PAD[kIOMUXC_SW_MUX_CTL_PAD_GPIO_SD_B1_11] |= IOMUXC_SW_MUX_CTL_PAD_SION(1);  // loop signal back from pin
+  gpio_pad_config(kIOMUXC_SW_PAD_CTL_PAD_GPIO_SD_B1_11, GPIO_OTYPE_PUSH_PULL, GPIO_SPEED_HIGH, GPIO_PULL_NONE);
+  gpio_mux_config(kIOMUXC_SW_MUX_CTL_PAD_GPIO_SD_B1_07, 1);  // set for SCLK
+  IOMUXC->SW_MUX_CTL_PAD[kIOMUXC_SW_MUX_CTL_PAD_GPIO_SD_B1_07] |= IOMUXC_SW_MUX_CTL_PAD_SION(1);  // loop signal back from pin
+  periph_mux_config(kIOMUXC_FLEXSPI_A_SCLK_SELECT_INPUT, 0);  // drive peripheral from B1_07
+  gpio_pad_config(kIOMUXC_SW_PAD_CTL_PAD_GPIO_SD_B1_07, GPIO_OTYPE_PUSH_PULL, GPIO_SPEED_HIGH, GPIO_PULL_NONE);
+  gpio_mux_config(kIOMUXC_SW_MUX_CTL_PAD_GPIO_SD_B1_08, 1);  // set for DATA0
+  IOMUXC->SW_MUX_CTL_PAD[kIOMUXC_SW_MUX_CTL_PAD_GPIO_SD_B1_08] |= IOMUXC_SW_MUX_CTL_PAD_SION(1);  // loop signal back from pin
+  periph_mux_config(kIOMUXC_FLEXSPI_A_DATA0_SELECT_INPUT, 0);  // drive peripheral from B1_08
+  gpio_pad_config(kIOMUXC_SW_PAD_CTL_PAD_GPIO_SD_B1_08, GPIO_OTYPE_PUSH_PULL, GPIO_SPEED_HIGH, GPIO_PULL_NONE);
+  gpio_mux_config(kIOMUXC_SW_MUX_CTL_PAD_GPIO_SD_B1_10, 1);  // set for DATA1
+  IOMUXC->SW_MUX_CTL_PAD[kIOMUXC_SW_MUX_CTL_PAD_GPIO_SD_B1_10] |= IOMUXC_SW_MUX_CTL_PAD_SION(1);  // loop signal back from pin
+  periph_mux_config(kIOMUXC_FLEXSPI_A_DATA1_SELECT_INPUT, 0);  // drive peripheral from B1_10
+  gpio_pad_config(kIOMUXC_SW_PAD_CTL_PAD_GPIO_SD_B1_10, GPIO_OTYPE_PUSH_PULL, GPIO_SPEED_HIGH, GPIO_PULL_NONE);
+  gpio_mux_config(kIOMUXC_SW_MUX_CTL_PAD_GPIO_SD_B1_09, 1);  // set for DATA2
+  IOMUXC->SW_MUX_CTL_PAD[kIOMUXC_SW_MUX_CTL_PAD_GPIO_SD_B1_09] |= IOMUXC_SW_MUX_CTL_PAD_SION(1);  // loop signal back from pin
+  periph_mux_config(kIOMUXC_FLEXSPI_A_DATA2_SELECT_INPUT, 0);  // drive peripheral from B1_09
+  gpio_pad_config(kIOMUXC_SW_PAD_CTL_PAD_GPIO_SD_B1_09, GPIO_OTYPE_PUSH_PULL, GPIO_SPEED_HIGH, GPIO_PULL_NONE);
+  gpio_mux_config(kIOMUXC_SW_MUX_CTL_PAD_GPIO_SD_B1_06, 1);  // set for DATA3
+  IOMUXC->SW_MUX_CTL_PAD[kIOMUXC_SW_MUX_CTL_PAD_GPIO_SD_B1_06] |= IOMUXC_SW_MUX_CTL_PAD_SION(1);  // loop signal back from pin
+  periph_mux_config(kIOMUXC_FLEXSPI_A_DATA3_SELECT_INPUT, 0);  // drive peripheral from B1_06
+  gpio_pad_config(kIOMUXC_SW_PAD_CTL_PAD_GPIO_SD_B1_06, GPIO_OTYPE_PUSH_PULL, GPIO_SPEED_HIGH, GPIO_PULL_NONE);
+  // set FlexSPI clock
+  SETBITS(CCM->CSCMR1, CCM_CSCMR1_FLEXSPI_CLK_SEL_MASK | CCM_CSCMR1_FLEXSPI_PODF_MASK, CCM_CSCMR1_FLEXSPI_CLK_SEL(3) | CCM_CSCMR1_FLEXSPI_PODF(3));  // select PLL3 PFD0 /4
+  clock_periph(6, CCM_CCGR6_CG5_SHIFT, CLOCK_ON_RUN_WAIT);  // enable
+}
