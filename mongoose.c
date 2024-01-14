@@ -9033,8 +9033,8 @@ static int x25519(uint8_t out[X25519_BYTES], const uint8_t scalar[X25519_BYTES],
 
 // helper to hexdump buffers inline
 static void mg_tls_hexdump(const char *msg, uint8_t *buf, size_t bufsz) {
-  char p[2048];
-  MG_INFO(("%s: %s", msg, mg_hex(buf, bufsz, p)));
+  char p[512];
+  MG_VERBOSE(("%s: %s", msg, mg_hex(buf, bufsz, p)));
 }
 
 // TLS1.3 secret derivation based on the key label
