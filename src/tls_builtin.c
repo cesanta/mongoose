@@ -309,8 +309,8 @@ static void mg_tls_derive_secret(const char *label, uint8_t *key, size_t keysz,
 
 // Did we receive a full TLS message in the c->rtls buffer?
 static bool mg_tls_got_msg(struct mg_connection *c) {
-  return c->rtls.len >= TLS_HDR_SIZE &&
-         c->rtls.len >= (TLS_HDR_SIZE + MG_LOAD_BE16(c->rtls.buf + 3));
+  return c->rtls.len >= (size_t) TLS_HDR_SIZE &&
+         c->rtls.len >= (size_t) (TLS_HDR_SIZE + MG_LOAD_BE16(c->rtls.buf + 3));
 }
 
 // Remove a single TLS record from the recv buffer
