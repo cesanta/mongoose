@@ -43,13 +43,13 @@ int main(void) {
   mg_log_set(MG_LL_DEBUG);  // Set log level
 
   // Initialise Mongoose network stack
-  struct mg_tcpip_driver_stm32_data driver_data = {.mdc_cr = 4};
+  struct mg_tcpip_driver_stm32f_data driver_data = {.mdc_cr = 4};
   struct mg_tcpip_if mif = {.mac = GENERATE_LOCALLY_ADMINISTERED_MAC(),
                             // Uncomment below for static configuration:
                             // .ip = mg_htonl(MG_U32(192, 168, 0, 223)),
                             // .mask = mg_htonl(MG_U32(255, 255, 255, 0)),
                             // .gw = mg_htonl(MG_U32(192, 168, 0, 1)),
-                            .driver = &mg_tcpip_driver_stm32,
+                            .driver = &mg_tcpip_driver_stm32f,
                             .driver_data = &driver_data};
   mg_tcpip_init(&mgr, &mif);
   mg_timer_add(&mgr, BLINK_PERIOD_MS, MG_TIMER_REPEAT, timer_fn, &mif);
