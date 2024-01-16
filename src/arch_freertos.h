@@ -16,6 +16,7 @@
 #if defined(__ARMCC_VERSION)
 #define mode_t size_t
 #include <time.h>
+#include <alloca.h>
 #else
 #include <sys/stat.h>
 #endif
