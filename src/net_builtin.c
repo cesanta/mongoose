@@ -398,7 +398,8 @@ static void rx_dhcp_client(struct mg_tcpip_if *ifp, struct pkt *pkt) {
     ifp->state = MG_TCPIP_STATE_UP, ifp->ip = 0;
   } else if (msgtype == 2 && ifp->state == MG_TCPIP_STATE_UP && ip && gw &&
              lease) {                                 // DHCPOFFER
-    tx_dhcp_request_sel(ifp, ip, pkt->dhcp->siaddr);  // select IP, (4.4.1)
+    // select IP, (4.4.1) (fallback to IP source addr on foul play)
+    tx_dhcp_request_sel(ifp, ip, pkt->dhcp->siaddr ? pkt->dhcp->siaddr : pkt->ip->src);
     ifp->state = MG_TCPIP_STATE_REQ;                  // REQUESTING state
   } else if (msgtype == 5) {                          // DHCPACK
     if (ifp->state == MG_TCPIP_STATE_REQ && ip && gw && lease) {  // got an IP
