@@ -61,16 +61,12 @@ extern "C" {
 #define MG_ARCH MG_ARCH_AZURERTOS
 #elif defined(PICO_TARGET_NAME)
 #define MG_ARCH MG_ARCH_RP2040
-#elif defined(__ARMCC_VERSION)
-#define MG_ARCH MG_ARCH_ARMCC
 #elif defined(__RTTHREAD__)
 #define MG_ARCH MG_ARCH_RTTHREAD
 #endif
 #endif  // !defined(MG_ARCH)
 
-// if the user did not specify an MG_ARCH, or specified a custom one, OR
-// we guessed a known IDE, pull the customized config (Configuration Wizard)
-#if !defined(MG_ARCH) || (MG_ARCH == MG_ARCH_CUSTOM) || MG_ARCH == MG_ARCH_ARMCC
+#if !defined(MG_ARCH) || (MG_ARCH == MG_ARCH_CUSTOM)
 #include "mongoose_custom.h"  // keep this include
 #endif
 
@@ -188,6 +184,7 @@ extern "C" {
 #if defined(__ARMCC_VERSION)
 #define mode_t size_t
 #include <time.h>
+#include <alloca.h>
 #else
 #include <sys/stat.h>
 #endif
@@ -293,6 +290,7 @@ int mkdir(const char *, mode_t);
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <alloca.h>
 #include <string.h>
 #include <time.h>
 #if MG_ARCH == MG_ARCH_CMSIS_RTOS1

@@ -11,6 +11,7 @@
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <alloca.h>
 #include <string.h>
 #include <time.h>
 #if MG_ARCH == MG_ARCH_CMSIS_RTOS1
