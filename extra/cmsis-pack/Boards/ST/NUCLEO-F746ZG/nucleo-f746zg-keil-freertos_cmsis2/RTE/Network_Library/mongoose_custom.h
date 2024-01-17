@@ -1,78 +1,53 @@
+// See https://mongoose.ws/documentation/#build-options
+#pragma once
 
 // <<< Use Configuration Wizard in Context Menu >>>
 
-// <o> System Architecture
-//   <0=> Bare metal
-//   <1=> FreeRTOS
-//   <2=> CMSIS-RTOS v1
-//   <3=> CMSIS-RTOS v2
-// <i> Select either bare metal operation or a supported RTOS
-// <i> "FreeRTOS" uses direct FreeRTOS calls
-// <i> "CMSIS-RTOS v1" supports only Keil RTX through API v1
-// <i> "CMSIS-RTOS v2" supports Keil RTX5 and FreeRTOS through API v2
+// <o MG_ARCH> Build environment
+//   <MG_ARCH_ARMCC=> Keil MDK
+//   <MG_ARCH_FREERTOS=> FreeRTOS
+//   <MG_ARCH_CMSIS_RTOS1=> CMSIS-RTOS v1
+//   <MG_ARCH_CMSIS_RTOS2=> CMSIS-RTOS v2
+//   <MG_ARCH_NEWLIB=> ARM GCC + Newlib
+#define MG_ARCH MG_ARCH_CMSIS_RTOS2
 
-#define MG_CMSISPACK_ARCH 3
+// <q> Enable builtin TCP/IP stack
+#define MG_ENABLE_TCPIP 1
 
+// <h> Network Drivers for builtin TCP/IP stack
+// <q> Enable STM23Fxx Ethernet driver
+#define MG_ENABLE_DRIVER_STM32F 1
 
-// <h> Networking support
-// <o> Networking stack
-//   <0=> Built-in
-//   <1=> lwIP
-//   <2=> FreeRTOS-Plus-TCP
-//   <3=> MDK (RL)
-// <i> Select the networking stack to use with Mongoose Library
-// <i> The built-in stack can run on bare metal or over any RTOS
-// <i> "lwIP" requires using an RTOS and BSD socket mode
-// <i> "MDK" requires using CMSIS-RTOS1 (RTX + RL) or CMSIS-RTOS2 (MDK Plus or Pro), and BSD socket mode
-#define MG_CMSISPACK_NET 0
+// <q> Enable STM32Hxx Ethernet driver
+#define MG_ENABLE_DRIVER_STM32H 0
 
-// <q> Use Mbed-TLS
-// <i> Mongoose will use Mbed-TLS calls for TLS-related functionality
-#define MG_ENABLE_MBEDTLS 0
+// <q> Enable IMXRT Ethernet driver
+#define MG_ENABLE_DRIVER_IMXRT 0
+
+// <q> Enable W5500 Ethernet driver
+#define MG_ENABLE_DRIVER_W5500 0
+
+// <q> Enable TI TM4C Ethernet driver
+#define MG_ENABLE_DRIVER_TM4C 0
+
 // </h>
 
+// <o MG_TLS> TLS support
+//   <MG_TLS_NONE=> None
+//   <MG_TLS_BUILTIN=> Built-in TLS 1.3 stack
+//   <MG_TLS_MBED=> MbedTLS
+#define MG_TLS MG_TLS_NONE
 
-// <c1> Enable custom mg_millis()
-// <i> Use a user-provided function to get uptime in milliseconds, otherwise Mongoose will default to using time(). Except for bare metal, Mongoose will use the time base for the configured architecture
-//#define MG_ENABLE_CUSTOM_MILLIS 1
-// </c>
+// <q> Enable custom mg_millis() 
+#define MG_ENABLE_CUSTOM_MILLIS 0
 
-
-// <c1> Enable custom mg_rand()
-// <i> Use a user-provided function to generate random numbers, otherwise Mongoose will default to using rand()
+// <q> Enable custom mg_random() 
 #define MG_ENABLE_CUSTOM_RANDOM 1
-// </c>
 
-
-// <h> Filesystem support
 // <q> Enable packed (embedded) filesystem
 #define MG_ENABLE_PACKED_FS 1
-// </h>
-
 
 // <<< end of configuration section >>>
 
-// Translate to Mongoose macros
-#if MG_CMSISPACK_ARCH == 1
-#undef MG_ARCH
-#define MG_ARCH MG_ARCH_FREERTOS
-#elif MG_CMSISPACK_ARCH == 2
-#undef MG_ARCH
-#define MG_ARCH MG_ARCH_CMSIS_RTOS1
-#elif MG_CMSISPACK_ARCH == 3
-#undef MG_ARCH
-#define MG_ARCH MG_ARCH_CMSIS_RTOS2
-#endif
-#if MG_CMSISPACK_NET == 0
-#define MG_ENABLE_TCPIP 1
-#elif MG_CMSISPACK_NET == 1
-#define MG_ENABLE_LWIP 1
-#elif MG_CMSISPACK_NET == 2
-#define MG_ENABLE_FREERTOS_TCP 1
-#elif MG_CMSISPACK_NET == 3
-#define MG_ENABLE_RL 1
-#endif
-
-
 // Add your customization below this comment
-#define MG_ENABLE_DRIVER_STM32 1
+
