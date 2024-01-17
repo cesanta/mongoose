@@ -4,29 +4,7 @@
 #include "mongoose.h"
 #include "net.h"
 
-#define BTN_PIN PIN('B', 3)    // On-board user button
-#define LED1_PIN PIN('A', 15)  // On-board red LED
-#define LED2_PIN PIN('B', 4)   // On-board blue LED
-#define LED_PIN LED2_PIN
-
 #define BLINK_PERIOD_MS 1000  // LED_PIN blinking period in millis
-
-static volatile uint64_t s_ticks;  // Milliseconds since boot
-__attribute__((interrupt())) void SysTick_Handler(void) {
-  s_ticks++;
-  SysTick->SR = 0;
-}
-
-uint64_t mg_millis(void) {  // Let Mongoose use our uptime function
-  return s_ticks;           // Return number of milliseconds since boot
-}
-
-void mg_random(void *buf, size_t len) {  // Use on-board RNG
-  for (size_t n = 0; n < len; n += sizeof(uint32_t)) {
-    uint32_t r = rng_read();
-    memcpy((char *) buf + n, &r, n + sizeof(r) > len ? len - n : sizeof(r));
-  }
-}
 
 // This flash space resides at after the 0-wait 320k area
 static char *s_flash_space = (char *) (0x8000000 + 320 * 1024);
@@ -45,41 +23,27 @@ static void timer_fn(void *arg) {
   gpio_toggle(LED_PIN);                                  // Blink LED_PIN
   struct mg_tcpip_if *ifp = arg;                         // And show
   const char *names[] = {"down", "up", "req", "ready"};  // network stats
-  MG_INFO(("Ethernet: %s, IP: %M, rx:%u, tx:%u, dr:%u, er:%u",
+  MG_INFO(("Ethernet: %s, IP: %M, rx:%u, tx:%u, dr:%u, er:%u RAM: %lu/%lu",
            names[ifp->state], mg_print_ip4, &ifp->ip, ifp->nrecv, ifp->nsent,
-           ifp->ndrop, ifp->nerr));
-}
-
-void SysTick_Init(void) {
-  SysTick->CMP = SystemCoreClock / 1000 - 1;
-  SysTick->CNT = 0;
-  SysTick->SR = 0;
-  SysTick->CTLR = BIT(0) | BIT(1) | BIT(2) | BIT(3);
-  NVIC_EnableIRQ(SysTicK_IRQn);
+           ifp->ndrop, ifp->nerr, hal_ram_used(), hal_ram_free()));
 }
 
 // https://mongoose.ws/documentation/#2-minute-integration-guide
 static void fn(struct mg_connection *c, int ev, void *ev_data) {
   if (ev == MG_EV_HTTP_MSG) {
     struct mg_http_message *hm = (struct mg_http_message *) ev_data;
-    mg_http_reply(c, 200, "", "ok %p %p\r\n", hm, fn_data);
+    mg_http_reply(c, 200, "", "ok %p\r\n", hm);
   }
 }
 
 int main(void) {
-  SystemCoreClockUpdate();
-  SysTick_Init();
+  struct mg_mgr mgr;
 
-  gpio_output(LED_PIN);           // Setup LED
-  uart_init(UART_DEBUG, 115200);  // Initialise debug printf
-
-  struct mg_mgr mgr;        // Initialise
-  mg_mgr_init(&mgr);        // Mongoose event manager
-  mg_log_set(MG_LL_DEBUG);  // Set log level
+  hal_init();
+  mg_mgr_init(&mgr);
+  mg_log_set(MG_LL_DEBUG);
 
   MG_INFO(("Starting, CPU freq %g MHz", (double) SystemCoreClock / 1000000));
-  extern char _end[], _heap_end[];
-  MG_INFO(("Heap size: %lu bytes", _heap_end - _end));
 
   // Print chip RAM/Flash configuration, and set to 64/256
   const char *sizes[] = {"128/192", "96/224", "64/256", "32/288"};
@@ -87,8 +51,11 @@ int main(void) {
   MG_INFO(("RAM/FLASH configuration: %s", sizes[mode]));
   // if (mode != 2) set_ram_size(2);
 
+  extern char _end[], _heap_end[];
+  MG_INFO(("Heap size: %lu bytes. RAM: used %lu, free %lu", _heap_end - _end,
+           hal_ram_used(), hal_ram_free()));
+
   // Initialise Mongoose network stack
-  ethernet_init();  // Initialise ethernet pins
   struct mg_tcpip_driver_stm32f_data driver_data = {.mdc_cr = 1, .phy_addr = 1};
   struct mg_tcpip_if mif = {.mac = GENERATE_LOCALLY_ADMINISTERED_MAC(),
                             // Uncomment below for static configuration:
@@ -115,27 +82,4 @@ int main(void) {
   }
 
   return 0;
-}
-
-// Newlib syscalls
-int _write(int fd, char *buf, int len) {
-  if (fd == 1) uart_write_buf(USART1, buf, len);
-  return len;
-}
-
-void *_sbrk(ptrdiff_t incr) {
-  extern char _end[], _heap_end[];
-  static char *curbrk = _end;
-  if ((curbrk + incr < _end) || (curbrk + incr > _heap_end)) {
-    return NULL - 1;
-  }
-  // MG_INFO(("%p %ld", curbrk, incr));
-  curbrk += incr;
-  return curbrk - incr;
-}
-
-void _init(void) {
-}
-
-void _fini(void) {
 }

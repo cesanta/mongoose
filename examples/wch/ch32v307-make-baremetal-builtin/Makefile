@@ -7,7 +7,7 @@ CFLAGS += -ffunction-sections -fdata-sections -fno-common
 CFLAGS += -DSYSCLK_FREQ_144MHz_HSE -I. -Ivendor -g3 -Os
 CFLAGS += -march=rv32imafc -mabi=ilp32 $(CFLAGS_EXTRA)
 LDFLAGS = -T vendor/link.ld -nostartfiles --specs=nano.specs --specs=nosys.specs -Wl,--gc-sections
-SOURCES = main.c mongoose.c net.c packed_fs.c
+SOURCES = hal.c main.c mongoose.c net.c packed_fs.c
 SOURCES += vendor/system_ch32v30x.c vendor/startup_ch32v30x_D8C.S
 CFLAGS += -DHTTP_URL=\"http://0.0.0.0/\" -DHTTPS_URL=\"https://0.0.0.0/\"
 

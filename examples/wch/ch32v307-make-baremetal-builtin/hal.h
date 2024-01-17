@@ -5,6 +5,11 @@
 
 #define UART_DEBUG USART1
 
+#define BTN_PIN PIN('B', 3)    // On-board user button
+#define LED1_PIN PIN('A', 15)  // On-board red LED
+#define LED2_PIN PIN('B', 4)   // On-board blue LED
+#define LED_PIN LED2_PIN
+
 #include <ch32v30x.h>
 
 #include <stdbool.h>
@@ -19,8 +24,10 @@
 #define PINBANK(pin) (pin >> 8)
 
 extern uint32_t SystemCoreClock;
-extern void SystemInit(void);
-extern void SystemCoreClockUpdate(void);
+
+void hal_init(void);
+size_t hal_ram_free(void);
+size_t hal_ram_used(void);
 
 static inline void spin(volatile uint32_t count) {
   while (count--) (void) 0;
