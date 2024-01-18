@@ -1,7 +1,8 @@
 CFLAGS  = -W -Wall -Wextra -Werror -Wundef -Wshadow -Wdouble-promotion
-CFLAGS += -Wformat-truncation -fno-common -Wconversion -Wno-sign-conversion
+CFLAGS += -Wformat-truncation -fno-common # -Wconversion is not SDK-friendly
 CFLAGS += -g3 -Os -ffunction-sections -fdata-sections
-CFLAGS += -I. -Icmsis_core/CMSIS/Core/Include -Icmsis_mcu/devices/MIMXRT1062 #-DCPU_MIMXRT1062DVL6B
+CFLAGS += -I. -Icmsis_core/CMSIS/Core/Include -Icmsis_mcu/devices/MIMXRT1062
+CFLAGS += -Icmsis_mcu/devices/MIMXRT1062/drivers -DCPU_MIMXRT1062DVL6B
 CFLAGS += -mcpu=cortex-m7 -mthumb -mfloat-abi=hard -mfpu=fpv5-d16 $(CFLAGS_EXTRA)
 LDSCRIPT = link.ld
 LDFLAGS ?= -T$(LDSCRIPT) -nostdlib -nostartfiles --specs nano.specs -lc -lgcc -Wl,--gc-sections -Wl,-Map=$@.map 
