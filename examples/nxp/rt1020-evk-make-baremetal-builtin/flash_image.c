@@ -1,5 +1,6 @@
-#include "dcd.h"      // pin settings for MIMXRT1020-EVK board
-#include "flexspi.h"  // peripheral structures
+#include "dcd.h"          // pin settings for MIMXRT1020-EVK board
+#include "fsl_flexspi.h"  // peripheral structures
+#include "fsl_romapi.h"   // peripheral structures
 #include "hal.h"
 
 extern uint32_t __isr_vector[];
@@ -26,6 +27,18 @@ __attribute__((section(".ivt"), used)) const uint32_t __ivt[8] = {
     0,                           // csf absolute address
     0,                           // reserved for HAB
 };
+
+#define __FLEXSPI_QSPI_LUT { \
+                    [0] = FLEXSPI_LUT_SEQ(CMD_SDR, FLEXSPI_1PAD, 0xEB, RADDR_SDR, FLEXSPI_4PAD, 0x18), \
+                    [1] = FLEXSPI_LUT_SEQ(DUMMY_SDR, FLEXSPI_4PAD, 0x06, READ_SDR, FLEXSPI_4PAD, 0x04),\
+                    [4 * 1 + 0] = FLEXSPI_LUT_SEQ(CMD_SDR, FLEXSPI_1PAD, 0x05, READ_SDR, FLEXSPI_1PAD, 0x04),\
+                    [4 * 3 + 0] = FLEXSPI_LUT_SEQ(CMD_SDR, FLEXSPI_1PAD, 0x06, STOP, FLEXSPI_1PAD, 0x0),\
+                    [4 * 5 + 0] = FLEXSPI_LUT_SEQ(CMD_SDR, FLEXSPI_1PAD, 0x20, RADDR_SDR, FLEXSPI_1PAD, 0x18),\
+                    [4 * 8 + 0] = FLEXSPI_LUT_SEQ(CMD_SDR, FLEXSPI_1PAD, 0xD8, RADDR_SDR, FLEXSPI_1PAD, 0x18),\
+                    [4 * 9 + 0] = FLEXSPI_LUT_SEQ(CMD_SDR, FLEXSPI_1PAD, 0x02, RADDR_SDR, FLEXSPI_1PAD, 0x18),\
+                    [4 * 9 + 1] = FLEXSPI_LUT_SEQ(WRITE_SDR, FLEXSPI_1PAD, 0x04, STOP, FLEXSPI_1PAD, 0x0),\
+                    [4 * 11 + 0] = FLEXSPI_LUT_SEQ(CMD_SDR, FLEXSPI_1PAD, 0x60, STOP, FLEXSPI_1PAD, 0x0),\
+}
 
 // MIMXRT1060-EVKB flash chip config: S25LP064A-JBLE
 __attribute__((section(".cfg"), used))

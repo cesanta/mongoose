@@ -1,1 +1,0 @@
-../rt1060-evk-make-baremetal-builtin/flexspi.h
