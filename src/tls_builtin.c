@@ -116,7 +116,9 @@ static void sub(fe out, const fe a, const fe b) {
   propagate(out, (limb_t) (1 + carry));
 }
 
-static void mul(fe out, const fe a, const fe b, unsigned nb) {
+// `b` can contain less than 8 limbs, thus we use `limb_t *` instead of `fe`
+// to avoid build warnings
+static void mul(fe out, const fe a, const limb_t *b, unsigned nb) {
   limb_t accum[2 * NLIMBS] = {0};
   unsigned i, j;
 
