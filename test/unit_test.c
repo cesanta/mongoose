@@ -1407,7 +1407,7 @@ static void test_http_no_content_length(void) {
   for (i = 0; i < 1000 && strchr(buf2, 'c') == NULL; i++) mg_mgr_poll(&mgr, 10);
   MG_INFO(("[%s] [%s]", buf1, buf2));
   ASSERT(strcmp(buf1, "mc") == 0);
-  ASSERT(strcmp(buf2, "cm") == 0);  // See #1475
+  ASSERT(strcmp(buf2, "mc") == 0);
   mg_mgr_free(&mgr);
   ASSERT(mgr.conns == NULL);
 }

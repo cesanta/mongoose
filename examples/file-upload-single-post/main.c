@@ -1,4 +1,4 @@
-// Copyright (c) 2020 Cesanta Software Limited
+// Copyright (c) 2020-2024 Cesanta Software Limited
 // All rights reserved
 //
 // Streaming upload example. Demonstrates how to use MG_EV_READ events
@@ -11,7 +11,7 @@
 // HTTP request handler function. It implements the following endpoints:
 //   /upload - Saves the next file chunk
 //   all other URI - serves web_root/ directory
-static void cb(struct mg_connection *c, int ev, void *ev_data) {
+static void fn(struct mg_connection *c, int ev, void *ev_data) {
   if (ev == MG_EV_READ) {
     // Parse the incoming data ourselves. If we can parse the request,
     // store two size_t variables in the c->data: expected len and recv len.
@@ -46,7 +46,7 @@ int main(void) {
 
   mg_mgr_init(&mgr);
   mg_log_set(MG_LL_DEBUG);  // Set debug log level
-  mg_http_listen(&mgr, "http://localhost:8000", cb, NULL);
+  mg_listen(&mgr, "http://localhost:8000", fn, NULL);
 
   for (;;) mg_mgr_poll(&mgr, 50);
   mg_mgr_free(&mgr);
