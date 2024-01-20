@@ -1,7 +1,7 @@
-#include "http.h"
 #include "arch.h"
 #include "base64.h"
 #include "fmt.h"
+#include "http.h"
 #include "json.h"
 #include "log.h"
 #include "net.h"
@@ -962,6 +962,7 @@ static int skip_chunk(const char *buf, int len, int *pl, int *dl) {
   int i = 0, n = 0;
   if (len < 3) return 0;
   while (i < len && is_hex_digit(buf[i])) i++;
+  if (i == 0) return -1;                     // Error, no length specified
   if (i > (int) sizeof(int) * 2) return -1;  // Chunk length is too big
   if (len < i + 1 || buf[i] != '\r' || buf[i + 1] != '\n') return -1;  // Error
   n = (int) mg_unhexn(buf, (size_t) i);  // Decode chunk length
