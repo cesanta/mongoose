@@ -3,9 +3,13 @@ __stack_size = 4096;
 PROVIDE( _stack_size = __stack_size );
 
 MEMORY {
-  /*  Possible configurations: 192/128, 224/96, 256/64, 288/32 */
-  FLASH (rx) : ORIGIN = 0x00000000, LENGTH = 288k
-  RAM (xrw) : ORIGIN = 0x20000000, LENGTH = 32k
+  /* 
+   * Possible configurations: 192/128, 224/96, 256/64, 288/32
+   * By default, we're building with 288/32 configuration
+   * To build with 256/64, add -Wl,--defsym=RAM_64K=1
+   */
+  FLASH (rx) : ORIGIN = 0x00000000, LENGTH = DEFINED(RAM_64K) ? 256k : 288k
+  RAM (xrw) : ORIGIN = 0x20000000, LENGTH = DEFINED(RAM_64K) ? 64k : 32k
 }
 
 SECTIONS {
