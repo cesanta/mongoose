@@ -15,11 +15,11 @@ static uint8_t s_txno;                           // Current TX descriptor
 static uint8_t s_rxno;                           // Current RX descriptor
 
 static struct mg_tcpip_if *s_ifp;  // MIP interface
-enum { PHY_ADDR = 0, PHY_BCR = 0, PHY_BSR = 1 };
+enum { MG_PHY_ADDR = 0, MG_PHYREG_BCR = 0, MG_PHYREG_BSR = 1 };
 
-#define PHY_BCR_DUPLEX_MODE_Msk MG_BIT(8)
-#define PHY_BCR_SPEED_Msk MG_BIT(13)
-#define PHY_BSR_LINK_STATUS_Msk MG_BIT(2)
+#define MG_PHYREGBIT_BCR_DUPLEX_MODE MG_BIT(8)
+#define MG_PHYREGBIT_BCR_SPEED MG_BIT(13)
+#define MG_PHYREGBIT_BSR_LINK_STATUS MG_BIT(2)
 
 static uint16_t eth_read_phy(uint8_t addr, uint8_t reg) {
   GMAC_REGS->GMAC_MAN = GMAC_MAN_CLTTO_Msk |
@@ -57,8 +57,12 @@ int get_clock_rate(struct mg_tcpip_driver_same54_data *d) {
       case GCLK_GENCTRL_SRC_XOSC1_Val:
         mclk = 32000000UL; /* 32MHz */
         break;
-      case GCLK_GENCTRL_SRC_OSCULP32K_Val: mclk = 32000UL; break;
-      case GCLK_GENCTRL_SRC_XOSC32K_Val: mclk = 32000UL; break;
+      case GCLK_GENCTRL_SRC_OSCULP32K_Val:
+        mclk = 32000UL;
+        break;
+      case GCLK_GENCTRL_SRC_XOSC32K_Val:
+        mclk = 32000UL;
+        break;
       case GCLK_GENCTRL_SRC_DFLL_Val:
         mclk = 48000000UL; /* 48MHz */
         break;
@@ -68,7 +72,8 @@ int get_clock_rate(struct mg_tcpip_driver_same54_data *d) {
       case GCLK_GENCTRL_SRC_DPLL1_Val:
         mclk = 200000000UL; /* 200MHz */
         break;
-      default: mclk = 200000000UL; /* 200MHz */
+      default:
+        mclk = 200000000UL; /* 200MHz */
     }
 
     mclk /= div;
@@ -159,17 +164,17 @@ static size_t mg_tcpip_driver_same54_tx(const void *buf, size_t len,
 }
 
 static bool mg_tcpip_driver_same54_up(struct mg_tcpip_if *ifp) {
-  uint16_t bsr = eth_read_phy(PHY_ADDR, PHY_BSR);
-  bool up = bsr & PHY_BSR_LINK_STATUS_Msk ? 1 : 0;
+  uint16_t bsr = eth_read_phy(MG_PHY_ADDR, MG_PHYREG_BSR);
+  bool up = bsr & MG_PHYREGBIT_BSR_LINK_STATUS ? 1 : 0;
 
   // If PHY is ready, update NCFGR accordingly
   if (ifp->state == MG_TCPIP_STATE_DOWN && up) {
-    uint16_t bcr = eth_read_phy(PHY_ADDR, PHY_BCR);
-    bool fd = bcr & PHY_BCR_DUPLEX_MODE_Msk ? 1 : 0;
-    bool spd = bcr & PHY_BCR_SPEED_Msk ? 1 : 0;
-    GMAC_REGS->GMAC_NCFGR =
-        (GMAC_REGS->GMAC_NCFGR & ~(GMAC_NCFGR_SPD_Msk | PHY_BCR_SPEED_Msk)) |
-        GMAC_NCFGR_SPD(spd) | GMAC_NCFGR_FD(fd);
+    uint16_t bcr = eth_read_phy(MG_PHY_ADDR, MG_PHYREG_BCR);
+    bool fd = bcr & MG_PHYREGBIT_BCR_DUPLEX_MODE ? 1 : 0;
+    bool spd = bcr & MG_PHYREGBIT_BCR_SPEED ? 1 : 0;
+    GMAC_REGS->GMAC_NCFGR = (GMAC_REGS->GMAC_NCFGR &
+                             ~(GMAC_NCFGR_SPD_Msk | MG_PHYREGBIT_BCR_SPEED)) |
+                            GMAC_NCFGR_SPD(spd) | GMAC_NCFGR_FD(fd);
   }
 
   return up;

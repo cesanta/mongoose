@@ -48,7 +48,12 @@ static uint8_t s_rxbuf[ETH_DESC_CNT][ETH_PKT_SIZE] MG_64BIT_ALIGNED;
 static uint8_t s_txbuf[ETH_DESC_CNT][ETH_PKT_SIZE] MG_64BIT_ALIGNED;
 static struct mg_tcpip_if *s_ifp;  // MIP interface
 
-enum { PHY_BCR = 0, PHY_BSR = 1, PHY_ID1 = 2, PHY_ID2 = 3 };
+enum {
+  MG_PHYREG_BCR = 0,
+  MG_PHYREG_BSR = 1,
+  MG_PHYREG_ID1 = 2,
+  MG_PHYREG_ID2 = 3
+};
 
 static uint16_t enet_phy_read(uint8_t addr, uint8_t reg) {
   ENET->EIR |= MG_BIT(23);  // MII interrupt clear
@@ -65,8 +70,8 @@ static void enet_phy_write(uint8_t addr, uint8_t reg, uint16_t val) {
 }
 
 static uint32_t enet_phy_id(uint8_t addr) {
-  uint16_t phy_id1 = enet_phy_read(addr, PHY_ID1);
-  uint16_t phy_id2 = enet_phy_read(addr, PHY_ID2);
+  uint16_t phy_id1 = enet_phy_read(addr, MG_PHYREG_ID1);
+  uint16_t phy_id2 = enet_phy_read(addr, MG_PHYREG_ID2);
   return (uint32_t) phy_id1 << 16 | phy_id2;
 }
 
@@ -100,8 +105,9 @@ static bool mg_tcpip_driver_imxrt_init(struct mg_tcpip_if *ifp) {
   int cr = (d == NULL || d->mdc_cr < 0) ? 24 : d->mdc_cr;
   ENET->MSCR = (1 << 8) | ((cr & 0x3f) << 1);  // HOLDTIME 2 clks
 
-  enet_phy_write(d->phy_addr, PHY_BCR, MG_BIT(15));  // Reset PHY
-  enet_phy_write(d->phy_addr, PHY_BCR, MG_BIT(12));  // Set autonegotiation
+  enet_phy_write(d->phy_addr, MG_PHYREG_BCR, MG_BIT(15));  // Reset PHY
+  enet_phy_write(d->phy_addr, MG_PHYREG_BCR,
+                 MG_BIT(12));  // Set autonegotiation
 
   // PHY: Enable 50 MHz external ref clock at XI (preserve defaults)
   uint32_t id = enet_phy_id(d->phy_addr);
@@ -167,7 +173,7 @@ static size_t mg_tcpip_driver_imxrt_tx(const void *buf, size_t len,
 static bool mg_tcpip_driver_imxrt_up(struct mg_tcpip_if *ifp) {
   struct mg_tcpip_driver_imxrt_data *d =
       (struct mg_tcpip_driver_imxrt_data *) ifp->driver_data;
-  uint32_t bsr = enet_phy_read(d->phy_addr, PHY_BSR);
+  uint32_t bsr = enet_phy_read(d->phy_addr, MG_PHYREG_BSR);
   bool up = bsr & MG_BIT(2) ? 1 : 0;
   if ((ifp->state == MG_TCPIP_STATE_DOWN) && up) {  // link state just went up
     // tmp = reg with flags set to the most likely situation: 100M full-duplex
