@@ -1161,6 +1161,22 @@ static void test_http_server(void) {
   }
 #endif
 
+  // #2552, reject chunks with no length
+  ASSERT(fetch(&mgr, buf, url,
+               "POST / HTTP/1.1\r\n"
+               "Transfer-Encoding: chunked\r\n\r\n"
+               "1\r\n"
+               "Z\r\n"
+               "?\r\n"
+               "\r\n") == 0);
+  ASSERT(fetch(&mgr, buf, url,
+               "POST / HTTP/1.1\r\n"
+               "Transfer-Encoding: chunked\r\n\r\n"
+               "1\r\n"
+               "Z\r\n"
+               "\r\n"
+               "\r\n") == 0);
+
   mg_mgr_free(&mgr);
   ASSERT(mgr.conns == NULL);
 }
@@ -1605,11 +1621,11 @@ static void test_http_parse(void) {
     ASSERT(mg_http_parse(s, strlen(s), &hm) == (int) strlen(s));
     s = "a\nb:b\nc:c\n\n";
     ASSERT(mg_http_parse(s, strlen(s), &hm) < 0);
-    s = "a b\nc: \xc0\n\n"; // Invalid UTF in the header value: accept
+    s = "a b\nc: \xc0\n\n";  // Invalid UTF in the header value: accept
     ASSERT(mg_http_parse(s, strlen(s), &hm) == (int) strlen(s));
     ASSERT((v = mg_http_get_header(&hm, "c")) != NULL);
     ASSERT(mg_vcmp(v, "\xc0") == 0);
-    s = "a b\n\xc0: 2\n\n"; // Invalid UTF in the header name: do NOT accept
+    s = "a b\n\xc0: 2\n\n";  // Invalid UTF in the header name: do NOT accept
     ASSERT(mg_http_parse(s, strlen(s), &hm) == -1);
   }
 }
