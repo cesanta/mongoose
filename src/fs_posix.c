@@ -1,6 +1,6 @@
 #include "fs.h"
 
-#if MG_ENABLE_FILE
+#if MG_ENABLE_POSIX_FS
 
 #ifndef MG_STAT_STRUCT
 #define MG_STAT_STRUCT stat

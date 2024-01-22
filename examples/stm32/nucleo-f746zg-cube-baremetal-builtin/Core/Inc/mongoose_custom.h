@@ -26,7 +26,7 @@
 #endif
 
 #if MG_ENABLE_PACKED_FS
-#define MG_ENABLE_FILE 0
+#define MG_ENABLE_POSIX_FS 0
 #endif
 
 // See https://mongoose.ws/documentation/#build-options
