@@ -7299,14 +7299,12 @@ static void read_conn(struct mg_connection *c) {
       n = recv_raw(c, (char *) &c->rtls.buf[c->rtls.len],
                    c->rtls.size - c->rtls.len);
       // MG_DEBUG(("%lu %ld", c->id, n));
-      if (n == MG_IO_ERR) {
+      if (n == MG_IO_ERR && mg_tls_pending(c) == 0 && c->rtls.len == 0) {
         c->is_closing = 1;
-      } else if (n > 0) {
-        c->rtls.len += (size_t) n;
+      } else {
+        if (n > 0) c->rtls.len += (size_t) n;
         if (c->is_tls_hs) mg_tls_handshake(c);
         if (c->is_tls_hs) return;
-        n = mg_tls_recv(c, buf, len);
-      } else if (n == MG_IO_WAIT) {
         n = mg_tls_recv(c, buf, len);
       }
     } else {
