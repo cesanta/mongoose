@@ -1,7 +1,10 @@
-name: original workflow, updated
+name: Build and test - essentials
 on:
-  workflow_dispatch:
-
+  push:
+    paths:
+      - "**Makefile"
+      - "**.c"
+      - "**.h"
 env:
   IPV6: 0
 jobs:
@@ -10,24 +13,13 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        cc: [gcc, clang, g++, clang++]
+        cc: [gcc, clang++]
         target: [test, mip_test]
-        ssl: ["", MBEDTLS, OPENSSL]
-        select: ["-DMG_ENABLE_POLL=0 -DMG_ENABLE_EPOLL=0", "-DMG_ENABLE_POLL=1 -DMG_ENABLE_EPOLL=0", "-DMG_ENABLE_POLL=0 -DMG_ENABLE_EPOLL=1"]
-        exclude:
-        - ssl: MBEDTLS
-          select: "-DMG_ENABLE_POLL=0 -DMG_ENABLE_EPOLL=0"
-        - ssl: MBEDTLS
-          select: "-DMG_ENABLE_POLL=1 -DMG_ENABLE_EPOLL=0"
-        - ssl: OPENSSL
-          select: "-DMG_ENABLE_POLL=0 -DMG_ENABLE_EPOLL=0"
-        - ssl: OPENSSL
-          select: "-DMG_ENABLE_POLL=1 -DMG_ENABLE_EPOLL=0"
-    name: linux ${{ matrix.target }} CC=${{ matrix.cc }} SSL=${{ matrix.ssl }} TFLAGS=${{ matrix.select }}
+        ssl: ["", MBEDTLS]
+    name: linux ${{ matrix.target }} CC=${{ matrix.cc }} SSL=${{ matrix.ssl }}}
     env:
       CC: ${{ matrix.cc }}
       SSL: ${{ matrix.ssl }}
-      TFLAGS: ${{ matrix.select }}
     steps:
     - uses: actions/checkout@v3
       with: { fetch-depth: 2 }
@@ -65,17 +57,11 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        ssl: ["", MBEDTLS, OPENSSL]
-        select: [-DMG_ENABLE_POLL=0, -DMG_ENABLE_POLL=1]
-        exclude:
-        - ssl: MBEDTLS
-          select: -DMG_ENABLE_POLL=0
-        - ssl: OPENSSL
-          select: -DMG_ENABLE_POLL=0
-    name: macos SSL=${{ matrix.ssl }} TFLAGS=${{ matrix.select }}
+        ssl: ["", MBEDTLS]
+    name: macos SSL=${{ matrix.ssl }}
     env:
       SSL: ${{ matrix.ssl }}
-      TFLAGS: ${{ matrix.select }} -DNO_SNTP_CHECK -Wno-sign-conversion # Workaround for MbedTLS 3.5.0
+      TFLAGS: -DNO_SNTP_CHECK -Wno-sign-conversion # Workaround for MbedTLS 3.5.0
       HOMEBREW_NO_AUTO_UPDATE: 1
     steps:
     - uses: actions/checkout@v3
@@ -92,14 +78,8 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        target: [vc98, vc17, vc22, mingw, mingw++]
-        select: [-DMG_ENABLE_POLL=0, -DMG_ENABLE_POLL=1]
-        exclude:
-        - target: vc98
-          select: -DMG_ENABLE_POLL=1
-    name: windows ${{ matrix.target }} TFLAGS=${{ matrix.select }}
-    env:
-      TFLAGS: ${{ matrix.select }}
+        target: [vc98, vc22, mingw++]
+    name: windows ${{ matrix.target }}
     steps:
     - uses: actions/checkout@v3
       with: { fetch-depth: 2 }
@@ -179,7 +159,6 @@ jobs:
       matrix:
         example:
           - path: esp32/uart-bridge
-          - path: esp32/micropython
           - path: esp8266/http-client-server
     name: ${{ matrix.example.path }}
     env:
@@ -200,33 +179,8 @@ jobs:
       fail-fast: false
       matrix:
         example:
-          - path: microchip/same54-xpro/mqtt-client
           - path: infineon/infineon-xmc4700_4800-lwip-rtx-rtos
-          - path: nxp/nxp-mimxrt1020-azurertos
-          - path: nxp/nxp-frdmk66f-freertos
-          - path: nxp/nxp-lpcxpresso54s018m-freertos
-          - path: nxp/nxp-mimxrt1020-freertos
-          - path: nxp/nxp-evkbimxrt1050-lwip-freertos
-          - path: nxp/nxp-evkmimxrt1020-lwip-freertos
-          - path: nxp/nxp-evkmimxrt1024-lwip-freertos
-          - path: nxp/nxp-evkmimxrt1060-lwip-freertos
-          - path: nxp/nxp-evkmimxrt1064-lwip-freertos
-          - path: nxp/nxp-evkmimxrt1160-cm7-lwip-freertos
-          - path: nxp/nxp-evkmimxrt1170-cm7-lwip-freertos
-          - path: nxp/nxp-frdmk64f-lwip-freertos
-          - path: nxp/nxp-frdmk66f-lwip-freertos
-          - path: nxp/nxp-lpcxpresso54018-lwip-freertos
-          - path: nxp/nxp-lpcxpresso54608-lwip-freertos
-          - path: nxp/nxp-lpcxpresso54618-lwip-freertos
-          - path: nxp/nxp-lpcxpresso54628-lwip-freertos
-          - path: nxp/nxp-twrk65f180m-lwip-freertos
-          - path: nxp/nxp-twrkv58f220m-lwip-freertos
-          - path: rp2040/pico-rmii
-          - path: stm32/nucleo-f429zi-make-baremetal-builtin-rndis
-          - path: stm32/nucleo-f746zg-make-baremetal-builtin-rndis
           - path: stm32/nucleo-g031-make-baremetal-builtin
-          - path: ti/ti-ek-tm4c1294xl-http-server
-          - path: ti/ek-tm4c1294xl-make-baremetal-builtin-rndis
     name: ${{ matrix.example.path }}
     env:
       GO: 0
@@ -418,38 +372,6 @@ jobs:
       - if: ${{ env.GO == 1 }}
         run: cd test/cube && make
 
-  zephyr_examples:
-    runs-on: ubuntu-latest
-    env:
-      GO: 0
-    steps:
-      - uses: actions/checkout@v3
-        with: { fetch-depth: 2 }
-      - run: |
-          if ./test/match_changed_files.sh '^src/.*.[ch]|^examples/zephyr'; then
-            echo GO=1 >> $GITHUB_ENV
-            sudo apt -y update && sudo apt -y install gcc-arm-none-eabi
-            fi
-      - if: ${{ env.GO == 1 }}
-        run: make -C examples/zephyr init
-      - name: minify manifest
-        if: ${{ env.GO == 1 }}
-        uses: mikefarah/yq@master
-        with:
-          cmd: yq -i eval '(.manifest.defaults, .manifest.remotes, .manifest.projects[] | select(.name == "cmsis" or .name == "hal_stm32" or .name == "mbedtls" or .name == "mcuboot" or .name == "picolibc" | del(.null) ), .manifest.self) as $i ireduce({};setpath($i | path; $i)) | del(.manifest.projects.[].null) | del(..|select(length==0))' examples/zephyr/zephyrproject/zephyr/west.yml
-      - if: ${{ env.GO == 1 }}
-        run: make -C examples/zephyr update
-      - if: ${{ env.GO == 1 }}
-        run: make -C examples/zephyr/device-dashboard build
-      - if: ${{ env.GO == 1 }}
-        run: make -C examples/zephyr/http-client build
-      - if: ${{ env.GO == 1 }}
-        run: make -C examples/zephyr/http-server build
-      - if: ${{ env.GO == 1 }}
-        run: make -C examples/zephyr/mqtt-aws-client build
-      - if: ${{ env.GO == 1 }}
-        run: make -C examples/zephyr/websocket-server build
-
   test_f7:
     runs-on: ubuntu-latest
     env:
@@ -459,10 +381,11 @@ jobs:
       with: { fetch-depth: 2 }
     - name: baremetal
       run: |
-        if ./test/match_changed_files.sh "^src|examples/device-dashboard|examples/stm32/nucleo-f7.*-make-" ; then
+        if ./test/match_changed_files.sh "^src|examples/device-dashboard|examples/stm32|examples/nxp|examples/ti|examples/microchip/same" ; then
           echo GO=1 >> $GITHUB_ENV
           sudo apt -y update && sudo apt -y install gcc-arm-none-eabi
         fi
+    # always run baremetal on core or dashboard or specific example changes; other examples only on specific example changes
     - if: ${{ env.GO == 1 }}
       run: |
         if ./test/match_changed_files.sh '^src|examples/device-dashboard|examples/stm32/nucleo-f746zg-make-baremetal-builtin'; then
@@ -470,34 +393,34 @@ jobs:
         fi
     - if: ${{ env.GO == 1 }}
       run: |
-        if ./test/match_changed_files.sh '^src|examples/device-dashboard|examples/stm32/nucleo-f746zg-make-freertos-builtin'; then
+        if ./test/match_changed_files.sh 'examples/stm32/nucleo-f746zg-make-freertos-builtin'; then
           make -C examples/stm32/nucleo-f746zg-make-freertos-builtin test VCON_API_KEY=${{secrets.VCON_API_KEY}}
         fi
     - if: ${{ env.GO == 1 }}
       run: |
-        if ./test/match_changed_files.sh '^src|examples/device-dashboard|examples/stm32/nucleo-f746zg-make-freertos-tcp'; then
+        if ./test/match_changed_files.sh 'examples/stm32/nucleo-f746zg-make-freertos-tcp'; then
           make -C examples/stm32/nucleo-f746zg-make-freertos-tcp test VCON_API_KEY=${{secrets.VCON_API_KEY}}
         fi
     - name: Cube
       run: |
         echo GO=0 >> $GITHUB_ENV
-        if ./test/match_changed_files.sh '^src|examples/device-dashboard|examples/stm32/nucleo-f7.*-cube-'; then
+        if ./test/match_changed_files.sh 'examples/stm32/nucleo-f7.*-cube-'; then
           echo GO=1 >> $GITHUB_ENV
           # nothing specific to install or do
         fi
     - if: ${{ env.GO == 1 }}
       run: |
-        if ./test/match_changed_files.sh '^src|examples/device-dashboard|examples/stm32/nucleo-f746zg-cube-baremetal-builtin'; then
+        if ./test/match_changed_files.sh 'examples/stm32/nucleo-f746zg-cube-baremetal-builtin'; then
           make -C test/cube test PROJECTS=../../examples/stm32/nucleo-f746zg-cube-baremetal-builtin VCON_API_KEY=${{secrets.VCON_API_KEY}} DEVICE=5
         fi
     - if: ${{ env.GO == 1 }}
       run: |
-        if ./test/match_changed_files.sh '^src|examples/device-dashboard|examples/stm32/nucleo-f746zg-cube-freertos-builtin'; then
+        if ./test/match_changed_files.sh 'examples/stm32/nucleo-f746zg-cube-freertos-builtin'; then
           make -C test/cube test PROJECTS=../../examples/stm32/nucleo-f746zg-cube-freertos-builtin VCON_API_KEY=${{secrets.VCON_API_KEY}} DEVICE=5    
         fi
     - if: ${{ env.GO == 1 }}
       run: |
-        if ./test/match_changed_files.sh '^src|examples/device-dashboard|examples/stm32/nucleo-f746zg-cube-freertos-lwip'; then
+        if ./test/match_changed_files.sh 'examples/stm32/nucleo-f746zg-cube-freertos-lwip'; then
           make -C test/cube test PROJECTS=../../examples/stm32/nucleo-f746zg-cube-freertos-lwip VCON_API_KEY=${{secrets.VCON_API_KEY}} DEVICE=5
         fi
 
@@ -522,29 +445,29 @@ jobs:
         fi
     - if: ${{ env.GO == 1 }}
       run: |
-        if ./test/match_changed_files.sh '^src|examples/device-dashboard|examples/stm32/nucleo-f429zi-make-freertos-builtin'; then
+        if ./test/match_changed_files.sh 'examples/stm32/nucleo-f429zi-make-freertos-builtin'; then
           make -C examples/stm32/nucleo-f429zi-make-freertos-builtin test VCON_API_KEY=${{secrets.VCON_API_KEY}}
         fi
     - name: Cube
       run: |
         echo GO=0 >> $GITHUB_ENV
-        if ./test/match_changed_files.sh '^src|examples/device-dashboard|examples/stm32/nucleo-f4.*-cube-'; then
+        if ./test/match_changed_files.sh 'examples/stm32/nucleo-f4.*-cube-'; then
           echo GO=1 >> $GITHUB_ENV
           # nothing specific to install or do
         fi
     - if: ${{ env.GO == 1 }}
       run: |
-        if ./test/match_changed_files.sh '^src|examples/device-dashboard|examples/stm32/nucleo-f429zi-cube-baremetal-builtin'; then
+        if ./test/match_changed_files.sh 'examples/stm32/nucleo-f429zi-cube-baremetal-builtin'; then
           make -C test/cube test PROJECTS=../../examples/stm32/nucleo-f429zi-cube-baremetal-builtin VCON_API_KEY=${{secrets.VCON_API_KEY}} DEVICE=2
         fi
     - if: ${{ env.GO == 1 }}
       run: |
-        if ./test/match_changed_files.sh '^src|examples/device-dashboard|examples/stm32/nucleo-f429zi-cube-freertos-builtin'; then
+        if ./test/match_changed_files.sh 'examples/stm32/nucleo-f429zi-cube-freertos-builtin'; then
           make -C test/cube test PROJECTS=../../examples/stm32/nucleo-f429zi-cube-freertos-builtin VCON_API_KEY=${{secrets.VCON_API_KEY}} DEVICE=2
         fi
     - if: ${{ env.GO == 1 }}
       run: |
-        if ./test/match_changed_files.sh '^src|examples/device-dashboard|examples/stm32/nucleo-f429zi-cube-freertos-lwip'; then
+        if ./test/match_changed_files.sh 'examples/stm32/nucleo-f429zi-cube-freertos-lwip'; then
           make -C test/cube test PROJECTS=../../examples/stm32/nucleo-f429zi-cube-freertos-lwip VCON_API_KEY=${{secrets.VCON_API_KEY}} DEVICE=2
         fi
 
@@ -568,24 +491,24 @@ jobs:
         fi
     - if: ${{ env.GO == 1 }}
       run: |
-        if ./test/match_changed_files.sh '^src|examples/device-dashboard|examples/stm32/nucleo-h743zi-make-freertos-builtin'; then
+        if ./test/match_changed_files.sh 'examples/stm32/nucleo-h743zi-make-freertos-builtin'; then
           make -C examples/stm32/nucleo-h743zi-make-freertos-builtin test VCON_API_KEY=${{secrets.VCON_API_KEY}}
         fi
     - name: Cube
       run: |
         echo GO=0 >> $GITHUB_ENV
-        if ./test/match_changed_files.sh '^src|examples/device-dashboard|examples/stm32/nucleo-h74.*-cube-'; then
+        if ./test/match_changed_files.sh 'examples/stm32/nucleo-h74.*-cube-'; then
           echo GO=1 >> $GITHUB_ENV
           # nothing specific to install or do
         fi
     - if: ${{ env.GO == 1 }}
       run: |
-        if ./test/match_changed_files.sh '^src|examples/device-dashboard|examples/stm32/nucleo-h743zi-cube-baremetal-builtin'; then
+        if ./test/match_changed_files.sh 'examples/stm32/nucleo-h743zi-cube-baremetal-builtin'; then
           make -C test/cube test PROJECTS=../../examples/stm32/nucleo-h743zi-cube-baremetal-builtin VCON_API_KEY=${{secrets.VCON_API_KEY}} DEVICE=6
         fi
     - if: ${{ env.GO == 1 }}
       run: |
-        if ./test/match_changed_files.sh '^src|examples/device-dashboard|examples/stm32/nucleo-h743zi-cube-freertos-builtin'; then
+        if ./test/match_changed_files.sh 'examples/stm32/nucleo-h743zi-cube-freertos-builtin'; then
           make -C test/cube test PROJECTS=../../examples/stm32/nucleo-h743zi-cube-freertos-builtin VCON_API_KEY=${{secrets.VCON_API_KEY}} DEVICE=6
         fi
 
@@ -609,7 +532,7 @@ jobs:
         fi
     - if: ${{ env.GO == 1 }}
       run: |
-        if ./test/match_changed_files.sh '^src|examples/device-dashboard|examples/stm32/nucleo-h723zg-make-freertos-builtin'; then
+        if ./test/match_changed_files.sh 'examples/stm32/nucleo-h723zg-make-freertos-builtin'; then
           make -C examples/stm32/nucleo-h723zg-make-freertos-builtin test VCON_API_KEY=${{secrets.VCON_API_KEY}}
         fi
     
@@ -633,7 +556,7 @@ jobs:
         fi
     - if: ${{ env.GO == 1 }}
       run: |
-        if ./test/match_changed_files.sh '^src|examples/device-dashboard|examples/stm32/nucleo-h563zi-make-freertos-builtin'; then
+        if ./test/match_changed_files.sh 'examples/stm32/nucleo-h563zi-make-freertos-builtin'; then
           make -C examples/stm32/nucleo-h563zi-make-freertos-builtin test VCON_API_KEY=${{secrets.VCON_API_KEY}}
         fi
 
@@ -652,14 +575,12 @@ jobs:
         fi
     - if: ${{ env.GO == 1 }}
       run: |
-        #if ./test/match_changed_files.sh '^src|examples/device-dashboard|examples/nxp/rt1020-evk-make-baremetal-builtin'; then
-        if ./test/match_changed_files.sh '^src|examples/nxp/rt1020-evk-make-baremetal-builtin'; then
+        if ./test/match_changed_files.sh '^src|examples/device-dashboard|examples/nxp/rt1020-evk-make-baremetal-builtin'; then
           make -C examples/nxp/rt1020-evk-make-baremetal-builtin test VCON_API_KEY=${{secrets.VCON_API_KEY}}
         fi
     - if: ${{ env.GO == 1 }}
       run: |
-        #if ./test/match_changed_files.sh '^src|examples/device-dashboard|examples/nxp/rt1020-evk-make-freertos-builtin'; then
-        if ./test/match_changed_files.sh '^src|examples/nxp/rt1020-evk-make-freertos-builtin'; then
+        if ./test/match_changed_files.sh 'examples/nxp/rt1020-evk-make-freertos-builtin'; then
           make -C examples/nxp/rt1020-evk-make-freertos-builtin test VCON_API_KEY=${{secrets.VCON_API_KEY}}
         fi
 
@@ -683,7 +604,7 @@ jobs:
         fi
     - if: ${{ env.GO == 1 }}
       run: |
-        if ./test/match_changed_files.sh '^src|examples/device-dashboard|examples/nxp/rt1060-evk-make-freertos-builtin'; then
+        if ./test/match_changed_files.sh 'examples/nxp/rt1060-evk-make-freertos-builtin'; then
           make -C examples/nxp/rt1060-evk-make-freertos-builtin test VCON_API_KEY=${{secrets.VCON_API_KEY}}
         fi
 
@@ -701,9 +622,15 @@ jobs:
           sudo apt -y update && sudo apt -y install gcc-arm-none-eabi
         fi
     - if: ${{ env.GO == 1 }}
-      run:  make -C examples/ti/ek-tm4c1294xl-make-baremetal-builtin test VCON_API_KEY=${{secrets.VCON_API_KEY}}
+      run: |
+        if ./test/match_changed_files.sh '^src|examples/device-dashboard|examples/ti/ek-tm4c1294xl-make-baremetal-builtin'; then
+          make -C examples/ti/ek-tm4c1294xl-make-baremetal-builtin test VCON_API_KEY=${{secrets.VCON_API_KEY}}
+        fi
     - if: ${{ env.GO == 1 }}
-      run:  make -C examples/ti/ek-tm4c1294xl-make-freertos-builtin test VCON_API_KEY=${{secrets.VCON_API_KEY}}
+      run: |
+        if ./test/match_changed_files.sh 'examples/ti/ek-tm4c1294xl-make-freertos-builtin'; then
+          make -C examples/ti/ek-tm4c1294xl-make-freertos-builtin test VCON_API_KEY=${{secrets.VCON_API_KEY}}
+        fi
 
   test_same54:
     runs-on: ubuntu-latest
@@ -719,9 +646,15 @@ jobs:
           sudo apt -y update && sudo apt -y install gcc-arm-none-eabi
         fi
     - if: ${{ env.GO == 1 }}
-      run:  make -C examples/microchip/same54-xpro/device-dashboard test VCON_API_KEY=${{secrets.VCON_API_KEY}}
+      run: |
+        if ./test/match_changed_files.sh '^src|examples/device-dashboard|examples/microchip/same54-xpro/device-dashboard'; then
+          make -C examples/microchip/same54-xpro/device-dashboard test VCON_API_KEY=${{secrets.VCON_API_KEY}}
+        fi
     - if: ${{ env.GO == 1 }}
-      run:  make -C examples/microchip/same54-xpro/mqtt-client test VCON_API_KEY=${{secrets.VCON_API_KEY}}
+      run: |
+        if ./test/match_changed_files.sh 'examples/microchip/same54-xpro/mqtt-client'; then
+          make -C examples/microchip/same54-xpro/mqtt-client test VCON_API_KEY=${{secrets.VCON_API_KEY}}
+        fi
 
   test_pico_w5500:
     runs-on: ubuntu-latest
