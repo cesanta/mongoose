@@ -2,13 +2,10 @@ name: "CodeQL Scanning"
 # https://github.com/github/codeql-action
 
 on:
-  push:
-    paths:
-      - "Makefile"
-      - "mongoose.c"
-      - "mongoose.h"
-      - test/unit-test
-      - test/mip-test
+  schedule:
+    - cron: '30 2 * * *' # run at 2:30 AM UTC
+  # Allow manual runs
+  workflow_dispatch:
 
 env:
   IPV6: 0

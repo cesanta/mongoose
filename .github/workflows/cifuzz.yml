@@ -1,9 +1,10 @@
 name: CIFuzz
 on:
-  pull_request:
-    paths:
-      - "mongoose.c"
-      - "mongoose.h"
+  schedule:
+    - cron: '0 2 * * *' # run at 2 AM UTC
+  # Allow manual runs
+  workflow_dispatch:
+
 jobs:
   Fuzzing:
     runs-on: ubuntu-latest

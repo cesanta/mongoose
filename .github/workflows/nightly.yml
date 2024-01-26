@@ -1,5 +1,8 @@
-name: original workflow, updated
+name: Full build and test
 on:
+  schedule:
+    - cron: '0 1 * * *' # run at 1 AM UTC
+  # Allow manual runs
   workflow_dispatch:
 
 env:
