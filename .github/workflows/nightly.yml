@@ -4,7 +4,6 @@ on:
     - cron: '0 1 * * *' # run at 1 AM UTC
   # Allow manual runs
   workflow_dispatch:
-
 env:
   IPV6: 0
 jobs:
@@ -445,8 +444,6 @@ jobs:
 
   test_pico_w5500:
     runs-on: ubuntu-latest
-    env:
-      GO: 0
     steps:
     - uses: actions/checkout@v3
       with: { fetch-depth: 2 }
