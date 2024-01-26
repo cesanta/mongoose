@@ -42,7 +42,7 @@ static void cb(struct mg_connection *c, int ev, void *ev_data) {
         mg_fs_close(fd);
         mg_http_reply(c, 200, "", "ok\n");
       }
-    } else if(c->is_resp == 0) {
+    } else if (c->is_resp == 0) {
       struct mg_http_message hm;
       int n = mg_http_parse((char *) c->recv.buf, c->recv.len, &hm);
       if (n < 0) mg_error(c, "Bad response");
@@ -71,9 +71,9 @@ static void cb(struct mg_connection *c, int ev, void *ev_data) {
             } else {
               MG_DEBUG(("Got request, chunk len %lu", c->recv.len - n));
               if ((fd = mg_fs_open(&mg_fs_posix, fpath, MG_FS_WRITE)) == NULL) {
-                mg_http_reply(c, 400, "", "open failed: %d", errno);
+                mg_http_reply(c, 400, "", "open failed: %d\n", errno);
                 c->is_draining = 1;  // Tell mongoose to close this connection
-            } else {
+              } else {
                 c->fn_data = fd;
                 c->recv.len -= n;  // remove headers
                 data[0] = hm.body.len;
@@ -88,7 +88,7 @@ static void cb(struct mg_connection *c, int ev, void *ev_data) {
               }
             }
           }
-          c->is_resp = 1;    // ignore the rest of the body
+          c->is_resp = 1;  // ignore the rest of the body
         } else {
           struct mg_http_serve_opts opts = {0};
           opts.root_dir = s_root_dir;
@@ -159,7 +159,9 @@ int main(int argc, char *argv[]) {
   signal(SIGTERM, signal_handler);
   mg_log_set(s_debug_level);
   mg_mgr_init(&mgr);
-  if (mg_http_listen(&mgr, s_listening_address, cb, NULL) == NULL) {
+  // use mg_listen instead of mg_http_listen to be able to override the parser
+  // and shape buffering
+  if (mg_listen(&mgr, s_listening_address, cb, NULL) == NULL) {
     MG_ERROR(("Cannot listen on %s.", s_listening_address));
     exit(EXIT_FAILURE);
   }

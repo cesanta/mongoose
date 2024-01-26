@@ -16,11 +16,9 @@ void mg_call(struct mg_connection *c, int ev, void *ev_data) {
     MG_PROF_ADD(c, names[ev]);
   }
 #endif
-  // Run user-defined handler first, in order to give it an ability
-  // to intercept processing (e.g. clean input buffer) before the
-  // protocol handler kicks in
-  if (c->fn != NULL) c->fn(c, ev, ev_data);
+  // Fire protocol handler first, user handler second. See #2559
   if (c->pfn != NULL) c->pfn(c, ev, ev_data);
+  if (c->fn != NULL) c->fn(c, ev, ev_data);
 }
 
 void mg_error(struct mg_connection *c, const char *fmt, ...) {
