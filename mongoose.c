@@ -1666,6 +1666,26 @@ bool mg_file_printf(struct mg_fs *fs, const char *path, const char *fmt, ...) {
   return result;
 }
 
+// This helper function allows to scan a filesystem in a sequential way,
+// without using callback function:
+//      char buf[100] = "";
+//      while (mg_fs_ls(&mg_fs_posix, "./", buf, sizeof(buf))) {
+//        ...
+static void mg_fs_ls_fn(const char *filename, void *param) {
+  struct mg_str *s = (struct mg_str *) param;
+  if (s->ptr[0] == '\0') {
+    mg_snprintf((char *) s->ptr, s->len, "%s", filename);
+  } else if (strcmp(s->ptr, filename) == 0) {
+    ((char *) s->ptr)[0] = '\0';  // Fetch next file
+  }
+}
+
+bool mg_fs_ls(struct mg_fs *fs, const char *path, char *buf, size_t len) {
+  struct mg_str s = {buf, len};
+  fs->ls(path, mg_fs_ls_fn, &s);
+  return buf[0] != '\0';
+}
+
 #ifdef MG_ENABLE_LINES
 #line 1 "src/fs_fat.c"
 #endif
