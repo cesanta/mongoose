@@ -2580,6 +2580,7 @@ size_t mg_dns_parse_rr(const uint8_t *buf, size_t len, size_t ofs,
 enum { MG_JSON_TOO_DEEP = -1, MG_JSON_INVALID = -2, MG_JSON_NOT_FOUND = -3 };
 int mg_json_get(struct mg_str json, const char *path, int *toklen);
 
+struct mg_str mg_json_get_tok(struct mg_str json, const char *path);
 bool mg_json_get_num(struct mg_str json, const char *path, double *v);
 bool mg_json_get_bool(struct mg_str json, const char *path, bool *v);
 long mg_json_get_long(struct mg_str json, const char *path, long dflt);
