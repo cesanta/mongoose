@@ -3259,11 +3259,28 @@ static void test_sha1(void) {
   test_sha1_str(")_)+_)!&^*%$#>>>{}}}{{{][[[[]]]", expected_hash_3);
 }
 
+
+static void test_split(void) {
+  struct mg_str k = mg_str_n("", 7), v = mg_str_n("", 8), s = mg_str("");
+  ASSERT(mg_split(&s, &k, NULL, '.') == false);
+  ASSERT(mg_split(&s, &k, &v, '.') == false);
+  s = mg_str("");
+  ASSERT(mg_split(&s, NULL, NULL, '.') == false);
+  s = mg_str("aa.bb");
+  k = mg_str_n("", 7);
+  ASSERT(mg_split(&s, &k, NULL, '.') == true);
+  ASSERT(mg_strcmp(k, mg_str("aa")) == 0);
+  ASSERT(mg_split(&s, &k, NULL, '.') == true);
+  ASSERT(mg_strcmp(k, mg_str("bb")) == 0);
+  ASSERT(mg_split(&s, &k, NULL, '.') == false);
+}
+
 int main(void) {
   const char *debug_level = getenv("V");
   if (debug_level == NULL) debug_level = "3";
   mg_log_set(atoi(debug_level));
 
+  test_split();
   test_json();
   test_queue();
   test_rpc();
