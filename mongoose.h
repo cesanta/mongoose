@@ -2761,6 +2761,7 @@ extern struct mg_tcpip_driver mg_tcpip_driver_stm32h;
 extern struct mg_tcpip_driver mg_tcpip_driver_imxrt;
 extern struct mg_tcpip_driver mg_tcpip_driver_same54;
 extern struct mg_tcpip_driver mg_tcpip_driver_cmsis;
+extern struct mg_tcpip_driver mg_tcpip_driver_ra;
 
 // Drivers that require SPI, can use this SPI abstraction
 struct mg_tcpip_spi {
@@ -2868,6 +2869,14 @@ struct mg_tcpip_driver_imxrt_data {
   //    66 MHz        13
   int mdc_cr;  // Valid values: -1 to 63
 
+  uint8_t phy_addr;  // PHY address
+};
+
+
+struct mg_tcpip_driver_ra_data {
+  // MDC clock "divider". MDC clock is software generated,
+  uint32_t clock;    // core clock frequency in Hz
+  uint16_t irqno;    // IRQn, R_ICU->IELSR[irqno]
   uint8_t phy_addr;  // PHY address
 };
 

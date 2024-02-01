@@ -38,14 +38,14 @@ struct enet_desc {
 };
 
 // TODO(): handle these in a portable compiler-independent CMSIS-friendly way
-#define MG_64BIT_ALIGNED __attribute__((aligned((64U))))
+#define MG_64BYTE_ALIGNED __attribute__((aligned((64U))))
 
-// Descriptors: in non-cached area (TODO(scaprile)), 64-bit aligned
-// Buffers: 64-bit aligned
-static volatile struct enet_desc s_rxdesc[ETH_DESC_CNT] MG_64BIT_ALIGNED;
-static volatile struct enet_desc s_txdesc[ETH_DESC_CNT] MG_64BIT_ALIGNED;
-static uint8_t s_rxbuf[ETH_DESC_CNT][ETH_PKT_SIZE] MG_64BIT_ALIGNED;
-static uint8_t s_txbuf[ETH_DESC_CNT][ETH_PKT_SIZE] MG_64BIT_ALIGNED;
+// Descriptors: in non-cached area (TODO(scaprile)), (37.5.1.22.2 37.5.1.23.2)
+// Buffers: 64-byte aligned (37.3.14)
+static volatile struct enet_desc s_rxdesc[ETH_DESC_CNT] MG_64BYTE_ALIGNED;
+static volatile struct enet_desc s_txdesc[ETH_DESC_CNT] MG_64BYTE_ALIGNED;
+static uint8_t s_rxbuf[ETH_DESC_CNT][ETH_PKT_SIZE] MG_64BYTE_ALIGNED;
+static uint8_t s_txbuf[ETH_DESC_CNT][ETH_PKT_SIZE] MG_64BYTE_ALIGNED;
 static struct mg_tcpip_if *s_ifp;  // MIP interface
 
 enum {
