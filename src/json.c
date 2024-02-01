@@ -111,7 +111,7 @@ size_t mg_json_next(struct mg_str obj, size_t ofs, struct mg_str *key,
         }
       }
     }
-    //MG_INFO(("SUB ofs %u %.*s", ofs, sub.len, sub.ptr));
+    // MG_INFO(("SUB ofs %u %.*s", ofs, sub.len, sub.ptr));
     while (ofs && ofs < obj.len &&
            (obj.ptr[ofs] == ' ' || obj.ptr[ofs] == '\t' ||
             obj.ptr[ofs] == '\n' || obj.ptr[ofs] == '\r')) {
@@ -264,6 +264,12 @@ int mg_json_get(struct mg_str json, const char *path, int *toklen) {
     }
   }
   return MG_JSON_NOT_FOUND;
+}
+
+struct mg_str mg_json_get_tok(struct mg_str json, const char *path) {
+  int len = 0, ofs = mg_json_get(json, path, &len);
+  return mg_str_n(ofs < 0 ? NULL : json.ptr + ofs,
+                  (size_t) (len < 0 ? 0 : len));
 }
 
 bool mg_json_get_num(struct mg_str json, const char *path, double *v) {
