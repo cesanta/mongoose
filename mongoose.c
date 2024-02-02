@@ -2329,9 +2329,10 @@ void mg_http_bauth(struct mg_connection *c, const char *user,
 }
 
 struct mg_str mg_http_var(struct mg_str buf, struct mg_str name) {
-  struct mg_str k, v, result = mg_str_n(NULL, 0);
-  while (mg_split(&buf, &k, &v, '&')) {
-    if (name.len == k.len && mg_ncasecmp(name.ptr, k.ptr, k.len) == 0) {
+  struct mg_str entry, k, v, result = mg_str_n(NULL, 0);
+  while (mg_span(buf, &entry, &buf, '&')) {
+    if (mg_span(entry, &k, &v, '=') && name.len == k.len &&
+        mg_ncasecmp(name.ptr, k.ptr, k.len) == 0) {
       result = v;
       break;
     }
@@ -2722,7 +2723,7 @@ static struct mg_str s_known_types[] = {
 // clang-format on
 
 static struct mg_str guess_content_type(struct mg_str path, const char *extra) {
-  struct mg_str k, v, s = mg_str(extra);
+  struct mg_str entry, k, v, s = mg_str(extra);
   size_t i = 0;
 
   // Shrink path to its extension only
@@ -2731,8 +2732,8 @@ static struct mg_str guess_content_type(struct mg_str path, const char *extra) {
   path.len = i;
 
   // Process user-provided mime type overrides, if any
-  while (mg_commalist(&s, &k, &v)) {
-    if (mg_strcmp(path, k) == 0) return v;
+  while (mg_span(s, &entry, &s, ',')) {
+    if (mg_span(entry, &k, &v, '=') && mg_strcmp(path, k) == 0) return v;
   }
 
   // Process built-in mime types
@@ -2748,7 +2749,7 @@ static int getrange(struct mg_str *s, size_t *a, size_t *b) {
   for (i = 0; i + 6 < s->len; i++) {
     struct mg_str k, v = mg_str_n(s->ptr + i + 6, s->len - i - 6);
     if (memcmp(&s->ptr[i], "bytes=", 6) != 0) continue;
-    if (mg_split(&v, &k, NULL, '-')) {
+    if (mg_span(v, &k, &v, '-')) {
       if (mg_to_size_t(k, a)) numparsed++;
       if (v.len > 0 && mg_to_size_t(v, b)) numparsed++;
     } else {
@@ -3028,8 +3029,9 @@ static int uri_to_path(struct mg_connection *c, struct mg_http_message *hm,
                        const struct mg_http_serve_opts *opts, char *path,
                        size_t path_size) {
   struct mg_fs *fs = opts->fs == NULL ? &mg_fs_posix : opts->fs;
-  struct mg_str k, v, s = mg_str(opts->root_dir), u = {0, 0}, p = {0, 0};
-  while (mg_commalist(&s, &k, &v)) {
+  struct mg_str k, v, part, s = mg_str(opts->root_dir), u = {NULL, 0}, p = u;
+  while (mg_span(s, &part, &s, ',')) {
+    if (!mg_span(part, &k, &v, '=')) k = part, v = mg_str_n(NULL, 0);
     if (v.len == 0) v = k, k = mg_str("/"), u = k, p = v;
     if (hm->uri.len < k.len) continue;
     if (mg_strcmp(k, mg_str_n(hm->uri.ptr, k.len)) != 0) continue;
@@ -7011,7 +7013,7 @@ static void sntp_cb(struct mg_connection *c, int ev, void *ev_data) {
   if (ev == MG_EV_READ) {
     int64_t milliseconds = mg_sntp_parse(c->recv.buf, c->recv.len);
     if (milliseconds > 0) {
-      MG_INFO(("%lu got time: %lld ms from epoch", c->id, milliseconds));
+      MG_DEBUG(("%lu got time: %lld ms from epoch", c->id, milliseconds));
       mg_call(c, MG_EV_SNTP_TIME, (uint64_t *) &milliseconds);
       MG_VERBOSE(("%u.%u", (unsigned) (milliseconds / 1000),
                   (unsigned) (milliseconds % 1000)));
@@ -8003,31 +8005,17 @@ bool mg_globmatch(const char *s1, size_t n1, const char *s2, size_t n2) {
   return mg_match(mg_str_n(s2, n2), mg_str_n(s1, n1), NULL);
 }
 
-static size_t mg_nce(const char *s, size_t n, size_t ofs, size_t *koff,
-                     size_t *klen, size_t *voff, size_t *vlen, char delim) {
-  size_t kvlen, kl;
-  for (kvlen = 0; ofs + kvlen < n && s[ofs + kvlen] != delim;) kvlen++;
-  for (kl = 0; kl < kvlen && s[ofs + kl] != '=';) kl++;
-  if (koff != NULL) *koff = ofs;
-  if (klen != NULL) *klen = kl;
-  if (voff != NULL) *voff = kl < kvlen ? ofs + kl + 1 : 0;
-  if (vlen != NULL) *vlen = kl < kvlen ? kvlen - kl - 1 : 0;
-  ofs += kvlen + 1;
-  return ofs > n ? n : ofs;
-}
-
-bool mg_split(struct mg_str *s, struct mg_str *k, struct mg_str *v, char sep) {
-  size_t koff = 0, klen = 0, voff = 0, vlen = 0, off = 0;
-  if (s->ptr == NULL || s->len == 0) return 0;
-  off = mg_nce(s->ptr, s->len, 0, &koff, &klen, &voff, &vlen, sep);
-  if (k != NULL) *k = mg_str_n(s->ptr + koff, klen);
-  if (v != NULL) *v = mg_str_n(s->ptr + voff, vlen);
-  *s = mg_str_n(s->ptr + off, s->len - off);
-  return off > 0;
-}
-
-bool mg_commalist(struct mg_str *s, struct mg_str *k, struct mg_str *v) {
-  return mg_split(s, k, v, ',');
+bool mg_span(struct mg_str s, struct mg_str *a, struct mg_str *b, char sep) {
+  if (s.len == 0 || s.ptr == NULL) {
+    return false;  // Empty string, nothing to span - fail
+  } else {
+    size_t len = 0;
+    while (len < s.len && s.ptr[len] != sep) len++;  // Find separator
+    if (a) *a = mg_str_n(s.ptr, len);                // Init a
+    if (b) *b = mg_str_n(s.ptr + len, s.len - len);  // Init b
+    if (b && len < s.len) b->ptr++, b->len--;        // Skip separator
+    return true;
+  }
 }
 
 char *mg_hex(const void *buf, size_t len, char *to) {
@@ -13880,18 +13868,18 @@ static int parse_net(const char *spec, uint32_t *net, uint32_t *mask) {
 }
 
 int mg_check_ip_acl(struct mg_str acl, struct mg_addr *remote_ip) {
-  struct mg_str k, v;
+  struct mg_str entry;
   int allowed = acl.len == 0 ? '+' : '-';  // If any ACL is set, deny by default
   uint32_t remote_ip4;
   if (remote_ip->is_ip6) {
     return -1;  // TODO(): handle IPv6 ACL and addresses
   } else {      // IPv4
     memcpy((void *) &remote_ip4, remote_ip->ip, sizeof(remote_ip4));
-    while (mg_commalist(&acl, &k, &v)) {
+    while (mg_span(acl, &entry, &acl, ',')) {
       uint32_t net, mask;
-      if (k.ptr[0] != '+' && k.ptr[0] != '-') return -1;
-      if (parse_net(&k.ptr[1], &net, &mask) == 0) return -2;
-      if ((mg_ntohl(remote_ip4) & mask) == net) allowed = k.ptr[0];
+      if (entry.ptr[0] != '+' && entry.ptr[0] != '-') return -1;
+      if (parse_net(&entry.ptr[1], &net, &mask) == 0) return -2;
+      if ((mg_ntohl(remote_ip4) & mask) == net) allowed = entry.ptr[0];
     }
   }
   return allowed == '+';
