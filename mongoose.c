@@ -1594,6 +1594,7 @@ size_t mg_vxprintf(void (*out)(char, void *), void *param, const char *fmt,
 
 
 
+
 struct mg_fd *mg_fs_open(struct mg_fs *fs, const char *path, int flags) {
   struct mg_fd *fd = (struct mg_fd *) calloc(1, sizeof(*fd));
   if (fd != NULL) {
@@ -2341,11 +2342,13 @@ struct mg_str mg_http_var(struct mg_str buf, struct mg_str name) {
 int mg_http_get_var(const struct mg_str *buf, const char *name, char *dst,
                     size_t dst_len) {
   int len;
+  if (dst != NULL && dst_len > 0) {
+    dst[0] = '\0'; // If destination buffer is valid, always nul-terminate it
+  }
   if (dst == NULL || dst_len == 0) {
     len = -2;  // Bad destination
   } else if (buf->ptr == NULL || name == NULL || buf->len == 0) {
     len = -1;  // Bad source
-    dst[0] = '\0';
   } else {
     struct mg_str v = mg_http_var(*buf, mg_str(name));
     if (v.ptr == NULL) {
@@ -3129,32 +3132,40 @@ bool mg_http_match_uri(const struct mg_http_message *hm, const char *glob) {
 }
 
 long mg_http_upload(struct mg_connection *c, struct mg_http_message *hm,
-                    struct mg_fs *fs, const char *path, size_t max_size) {
-  char buf[20] = "0";
+                    struct mg_fs *fs, const char *dir, size_t max_size) {
+  char buf[20] = "0", file[40], path[MG_PATH_MAX];
   long res = 0, offset;
   mg_http_get_var(&hm->query, "offset", buf, sizeof(buf));
+  mg_http_get_var(&hm->query, "file", file, sizeof(file));
   offset = strtol(buf, NULL, 0);
+  mg_snprintf(path, sizeof(path), "%s%c%s", dir, MG_DIRSEP, file);
   if (hm->body.len == 0) {
     mg_http_reply(c, 200, "", "%ld", res);  // Nothing to write
+  } else if (file[0] == '\0') {
+    mg_http_reply(c, 400, "", "file required");
+    res = -1;
+  } else if (mg_path_is_sane(file) == false) {
+    mg_http_reply(c, 400, "", "%s: invalid file", file);
+    res = -2;
+  } else if (offset < 0) {
+    mg_http_reply(c, 400, "", "offset required");
+    res = -3;
+  } else if ((size_t) offset + hm->body.len > max_size) {
+    mg_http_reply(c, 400, "", "%s: over max size of %lu", path,
+        (unsigned long) max_size);
+    res = -4;
   } else {
     struct mg_fd *fd;
     size_t current_size = 0;
-    MG_DEBUG(("%s -> %d bytes @ %ld", path, (int) hm->body.len, offset));
+    MG_DEBUG(("%s -> %lu bytes @ %ld", path, hm->body.len, offset));
     if (offset == 0) fs->rm(path);  // If offset if 0, truncate file
     fs->st(path, &current_size, NULL);
-    if (offset < 0) {
-      mg_http_reply(c, 400, "", "offset required");
-      res = -1;
-    } else if (offset > 0 && current_size != (size_t) offset) {
+    if (offset > 0 && current_size != (size_t) offset) {
       mg_http_reply(c, 400, "", "%s: offset mismatch", path);
-      res = -2;
-    } else if ((size_t) offset + hm->body.len > max_size) {
-      mg_http_reply(c, 400, "", "%s: over max size of %lu", path,
-                    (unsigned long) max_size);
-      res = -3;
+      res = -5;
     } else if ((fd = mg_fs_open(fs, path, MG_FS_WRITE)) == NULL) {
       mg_http_reply(c, 400, "", "open(%s): %d", path, errno);
-      res = -4;
+      res = -6;
     } else {
       res = offset + (long) fs->wr(fd->fd, hm->body.ptr, hm->body.len);
       mg_fs_close(fd);
@@ -8052,8 +8063,9 @@ void mg_unhex(const char *buf, size_t len, unsigned char *to) {
 
 bool mg_path_is_sane(const char *path) {
   const char *s = path;
+  if (path[0] == '.' && path[1] == '.') return false;  // Starts with ..
   for (; s[0] != '\0'; s++) {
-    if (s == path || s[0] == '/' || s[0] == '\\') {  // Subdir?
+    if (s[0] == '/' || s[0] == '\\') {               // Subdir?
       if (s[1] == '.' && s[2] == '.') return false;  // Starts with ..
     }
   }

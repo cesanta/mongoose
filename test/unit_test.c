@@ -713,17 +713,8 @@ static void eh1(struct mg_connection *c, int ev, void *ev_data) {
       mg_http_creds(hm, user, sizeof(user), pass, sizeof(pass));
       mg_http_reply(c, 200, "", "[%s]:[%s]", user, pass);
     } else if (mg_http_match_uri(hm, "/upload")) {
-      char path[80], name[64];
-      mg_http_get_var(&hm->query, "name", name, sizeof(name));
-      mg_snprintf(path, sizeof(path), "./%s", name);
-      if (name[0] == '\0') {
-        mg_http_reply(c, 400, "", "%s", "name required");
-      } else if (!mg_path_is_sane(path)) {
-        mg_http_reply(c, 400, "", "%s", "invalid path");
-      } else {
-        mg_http_upload(c, hm, &mg_fs_posix, path, 99999);
-        c->is_hexdumping = 1;
-      }
+      mg_http_upload(c, hm, &mg_fs_posix, ".", 99999);
+      c->is_hexdumping = 1;
     } else if (mg_http_match_uri(hm, "/test/")) {
       struct mg_http_serve_opts sopts;
       memset(&sopts, 0, sizeof(sopts));
@@ -1108,11 +1099,11 @@ static void test_http_server(void) {
                  "Content-Length: 1\n\nx") == 400);
 
     ASSERT(fetch(&mgr, buf, url,
-                 "POST /upload?name=uploaded.txt HTTP/1.0\r\n"
+                 "POST /upload?file=uploaded.txt HTTP/1.0\r\n"
                  "Content-Length: 5\r\n"
                  "\r\nhello") == 200);
     ASSERT(fetch(&mgr, buf, url,
-                 "POST /upload?name=uploaded.txt&offset=5 HTTP/1.0\r\n"
+                 "POST /upload?file=uploaded.txt&offset=5 HTTP/1.0\r\n"
                  "Content-Length: 6\r\n"
                  "\r\n\nworld") == 200);
     ASSERT((p = mg_file_read(&mg_fs_posix, "uploaded.txt", NULL)) != NULL);
@@ -1127,13 +1118,10 @@ static void test_http_server(void) {
     remove("uploaded.txt");
     ASSERT((p = mg_file_read(&mg_fs_posix, "uploaded.txt", NULL)) == NULL);
     ASSERT(fetch(&mgr, buf, url,
-                 "POST /upload?name=uploaded.txt HTTP/1.0\r\n"
+                 "POST /upload?file=../uploaded.txt HTTP/1.0\r\n"
                  "Content-Length: 5\r\n"
-                 "\r\nhello") == 200);
-    ASSERT((p = mg_file_read(&mg_fs_posix, "uploaded.txt", NULL)) != NULL);
-    ASSERT(strcmp(p, "hello") == 0);
-    free(p);
-    remove("uploaded.txt");
+                 "\r\nhello") == 400);
+    ASSERT((p = mg_file_read(&mg_fs_posix, "uploaded.txt", NULL)) == NULL);
   }
 
   // HEAD request
@@ -2120,6 +2108,21 @@ static void test_str(void) {
            26);
     ASSERT(strcmp(buf, "[164:2100:0:0:0:0:0:0]:3 7") == 0);
   }
+
+  ASSERT(mg_path_is_sane(".") == true);
+  ASSERT(mg_path_is_sane("") == true);
+  ASSERT(mg_path_is_sane("a.b") == true);
+  ASSERT(mg_path_is_sane("a..b") == true);
+  ASSERT(mg_path_is_sane(".a") == true);
+  ASSERT(mg_path_is_sane(".a.") == true);
+  ASSERT(mg_path_is_sane("./") == true);
+  ASSERT(mg_path_is_sane("a..") == true);
+  ASSERT(mg_path_is_sane("././a..") == true);
+  ASSERT(mg_path_is_sane("..") == false);
+  ASSERT(mg_path_is_sane("../") == false);
+  ASSERT(mg_path_is_sane("./..") == false);
+  ASSERT(mg_path_is_sane("a/../") == false);
+  ASSERT(mg_path_is_sane("a/../b") == false);
 }
 
 static void fn1(struct mg_connection *c, int ev, void *ev_data) {
