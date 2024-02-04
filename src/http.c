@@ -113,9 +113,10 @@ void mg_http_bauth(struct mg_connection *c, const char *user,
 }
 
 struct mg_str mg_http_var(struct mg_str buf, struct mg_str name) {
-  struct mg_str k, v, result = mg_str_n(NULL, 0);
-  while (mg_split(&buf, &k, &v, '&')) {
-    if (name.len == k.len && mg_ncasecmp(name.ptr, k.ptr, k.len) == 0) {
+  struct mg_str entry, k, v, result = mg_str_n(NULL, 0);
+  while (mg_span(buf, &entry, &buf, '&')) {
+    if (mg_span(entry, &k, &v, '=') && name.len == k.len &&
+        mg_ncasecmp(name.ptr, k.ptr, k.len) == 0) {
       result = v;
       break;
     }
@@ -506,7 +507,7 @@ static struct mg_str s_known_types[] = {
 // clang-format on
 
 static struct mg_str guess_content_type(struct mg_str path, const char *extra) {
-  struct mg_str k, v, s = mg_str(extra);
+  struct mg_str entry, k, v, s = mg_str(extra);
   size_t i = 0;
 
   // Shrink path to its extension only
@@ -515,8 +516,8 @@ static struct mg_str guess_content_type(struct mg_str path, const char *extra) {
   path.len = i;
 
   // Process user-provided mime type overrides, if any
-  while (mg_commalist(&s, &k, &v)) {
-    if (mg_strcmp(path, k) == 0) return v;
+  while (mg_span(s, &entry, &s, ',')) {
+    if (mg_span(entry, &k, &v, '=') && mg_strcmp(path, k) == 0) return v;
   }
 
   // Process built-in mime types
@@ -532,7 +533,7 @@ static int getrange(struct mg_str *s, size_t *a, size_t *b) {
   for (i = 0; i + 6 < s->len; i++) {
     struct mg_str k, v = mg_str_n(s->ptr + i + 6, s->len - i - 6);
     if (memcmp(&s->ptr[i], "bytes=", 6) != 0) continue;
-    if (mg_split(&v, &k, NULL, '-')) {
+    if (mg_span(v, &k, &v, '-')) {
       if (mg_to_size_t(k, a)) numparsed++;
       if (v.len > 0 && mg_to_size_t(v, b)) numparsed++;
     } else {
@@ -812,8 +813,9 @@ static int uri_to_path(struct mg_connection *c, struct mg_http_message *hm,
                        const struct mg_http_serve_opts *opts, char *path,
                        size_t path_size) {
   struct mg_fs *fs = opts->fs == NULL ? &mg_fs_posix : opts->fs;
-  struct mg_str k, v, s = mg_str(opts->root_dir), u = {0, 0}, p = {0, 0};
-  while (mg_commalist(&s, &k, &v)) {
+  struct mg_str k, v, part, s = mg_str(opts->root_dir), u = {NULL, 0}, p = u;
+  while (mg_span(s, &part, &s, ',')) {
+    if (!mg_span(part, &k, &v, '=')) k = part, v = mg_str_n(NULL, 0);
     if (v.len == 0) v = k, k = mg_str("/"), u = k, p = v;
     if (hm->uri.len < k.len) continue;
     if (mg_strcmp(k, mg_str_n(hm->uri.ptr, k.len)) != 0) continue;

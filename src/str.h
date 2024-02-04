@@ -7,9 +7,6 @@ struct mg_str {
   size_t len;       // String len
 };
 
-#define MG_NULL_STR \
-  { NULL, 0 }
-
 #define MG_C_STR(a) \
   { (a), sizeof(a) - 1 }
 
@@ -29,8 +26,7 @@ struct mg_str mg_strdup(const struct mg_str s);
 const char *mg_strstr(const struct mg_str haystack, const struct mg_str needle);
 bool mg_match(struct mg_str str, struct mg_str pattern, struct mg_str *caps);
 bool mg_globmatch(const char *pattern, size_t plen, const char *s, size_t n);
-bool mg_commalist(struct mg_str *s, struct mg_str *k, struct mg_str *v);
-bool mg_split(struct mg_str *s, struct mg_str *k, struct mg_str *v, char delim);
+bool mg_span(struct mg_str s, struct mg_str *a, struct mg_str *b, char delim);
 char *mg_hex(const void *buf, size_t len, char *dst);
 void mg_unhex(const char *buf, size_t len, unsigned char *to);
 unsigned long mg_unhexn(const char *s, size_t len);

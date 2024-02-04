@@ -89,18 +89,18 @@ static int parse_net(const char *spec, uint32_t *net, uint32_t *mask) {
 }
 
 int mg_check_ip_acl(struct mg_str acl, struct mg_addr *remote_ip) {
-  struct mg_str k, v;
+  struct mg_str entry;
   int allowed = acl.len == 0 ? '+' : '-';  // If any ACL is set, deny by default
   uint32_t remote_ip4;
   if (remote_ip->is_ip6) {
     return -1;  // TODO(): handle IPv6 ACL and addresses
   } else {      // IPv4
     memcpy((void *) &remote_ip4, remote_ip->ip, sizeof(remote_ip4));
-    while (mg_commalist(&acl, &k, &v)) {
+    while (mg_span(acl, &entry, &acl, ',')) {
       uint32_t net, mask;
-      if (k.ptr[0] != '+' && k.ptr[0] != '-') return -1;
-      if (parse_net(&k.ptr[1], &net, &mask) == 0) return -2;
-      if ((mg_ntohl(remote_ip4) & mask) == net) allowed = k.ptr[0];
+      if (entry.ptr[0] != '+' && entry.ptr[0] != '-') return -1;
+      if (parse_net(&entry.ptr[1], &net, &mask) == 0) return -2;
+      if ((mg_ntohl(remote_ip4) & mask) == net) allowed = entry.ptr[0];
     }
   }
   return allowed == '+';

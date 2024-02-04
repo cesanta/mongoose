@@ -128,38 +128,6 @@ static void test_globmatch(void) {
   }
 }
 
-static void test_commalist(void) {
-  struct mg_str k, v, s1 = mg_str(""), s2 = mg_str("a"), s3 = mg_str("a,b");
-  struct mg_str s4 = mg_str("a=123"), s5 = mg_str("a,b=123");
-  ASSERT(mg_commalist(&s1, &k, &v) == false);
-
-  v.len = k.len = 42;
-  ASSERT(mg_commalist(&s2, &k, &v) == true);
-  ASSERT(v.len == 0 && mg_vcmp(&k, "a") == 0);
-  ASSERT(mg_commalist(&s2, &k, &v) == false);
-
-  v.len = k.len = 42;
-  ASSERT(mg_commalist(&s3, &k, &v) == true);
-  ASSERT(v.len == 0 && mg_vcmp(&k, "a") == 0);
-  v.len = k.len = 42;
-  ASSERT(mg_commalist(&s3, &k, &v) == true);
-  ASSERT(v.len == 0 && mg_vcmp(&k, "b") == 0);
-  ASSERT(mg_commalist(&s3, &k, &v) == false);
-
-  v.len = k.len = 42;
-  ASSERT(mg_commalist(&s4, &k, &v) == true);
-  ASSERT(mg_vcmp(&k, "a") == 0 && mg_vcmp(&v, "123") == 0);
-  ASSERT(mg_commalist(&s4, &k, &v) == false);
-  ASSERT(mg_commalist(&s4, &k, &v) == false);
-
-  v.len = k.len = 42;
-  ASSERT(mg_commalist(&s5, &k, &v) == true);
-  ASSERT(v.len == 0 && mg_vcmp(&k, "a") == 0);
-  ASSERT(mg_commalist(&s5, &k, &v) == true);
-  ASSERT(mg_vcmp(&k, "b") == 0 && mg_vcmp(&v, "123") == 0);
-  ASSERT(mg_commalist(&s4, &k, &v) == false);
-}
-
 static void test_http_get_var(void) {
   char buf[256];
   struct mg_str body;
@@ -3262,20 +3230,55 @@ static void test_sha1(void) {
   test_sha1_str(")_)+_)!&^*%$#>>>{}}}{{{][[[[]]]", expected_hash_3);
 }
 
-
 static void test_split(void) {
-  struct mg_str k = mg_str_n("", 7), v = mg_str_n("", 8), s = mg_str("");
-  ASSERT(mg_split(&s, &k, NULL, '.') == false);
-  ASSERT(mg_split(&s, &k, &v, '.') == false);
+  struct mg_str a, b, s;
+
   s = mg_str("");
-  ASSERT(mg_split(&s, NULL, NULL, '.') == false);
-  s = mg_str("aa.bb");
-  k = mg_str_n("", 7);
-  ASSERT(mg_split(&s, &k, NULL, '.') == true);
-  ASSERT(mg_strcmp(k, mg_str("aa")) == 0);
-  ASSERT(mg_split(&s, &k, NULL, '.') == true);
-  ASSERT(mg_strcmp(k, mg_str("bb")) == 0);
-  ASSERT(mg_split(&s, &k, NULL, '.') == false);
+  ASSERT(mg_span(s, &a, &s, '.') == false);
+  ASSERT(mg_span(s, &a, NULL, '.') == false);
+  ASSERT(mg_span(s, NULL, &b, '.') == false);
+  ASSERT(mg_span(s, NULL, NULL, '.') == false);
+  ASSERT(mg_span(s, &a, &b, '.') == false);
+
+  s = mg_str("aa.bb.cc"), a = mg_str_n(NULL, 0), b = mg_str_n(NULL, 0);
+  ASSERT(mg_span(s, &a, &b, '.') == true);
+  ASSERT(mg_strcmp(a, mg_str("aa")) == 0);
+  ASSERT(mg_strcmp(b, mg_str("bb.cc")) == 0);
+  ASSERT(mg_strcmp(s, mg_str("aa.bb.cc")) == 0);
+
+  s = mg_str("aa.bb.cc"), a = mg_str_n(NULL, 0), b = mg_str_n(NULL, 0);
+  ASSERT(mg_span(s, &a, NULL, '.') == true);
+  ASSERT(mg_strcmp(a, mg_str("aa")) == 0);
+  ASSERT(mg_strcmp(s, mg_str("aa.bb.cc")) == 0);
+
+  s = mg_str("aa.bb.cc"), a = mg_str_n(NULL, 0), b = mg_str_n(NULL, 0);
+  ASSERT(mg_span(s, NULL, &b, '.') == true);
+  ASSERT(mg_strcmp(b, mg_str("bb.cc")) == 0);
+  ASSERT(mg_strcmp(s, mg_str("aa.bb.cc")) == 0);
+
+  s = mg_str("aa.bb.cc"), a = mg_str_n(NULL, 0), b = mg_str_n(NULL, 0);
+  ASSERT(mg_span(s, NULL, NULL, '.') == true);
+  ASSERT(mg_strcmp(s, mg_str("aa.bb.cc")) == 0);
+
+  s = mg_str("aa.bb.cc"), a = mg_str_n(NULL, 0), b = mg_str_n(NULL, 0);
+  ASSERT(mg_span(s, &a, &s, '.') == true);
+  ASSERT(mg_strcmp(a, mg_str("aa")) == 0);
+  ASSERT(mg_strcmp(s, mg_str("bb.cc")) == 0);
+
+  s = mg_str(".aa"), a = mg_str_n(NULL, 0), b = mg_str_n(NULL, 0);
+  ASSERT(mg_span(s, &a, &b, '.') == true);
+  ASSERT(mg_strcmp(a, mg_str("")) == 0);
+  ASSERT(mg_strcmp(b, mg_str("aa")) == 0);
+
+  s = mg_str("aa."), a = mg_str_n(NULL, 0), b = mg_str_n(NULL, 0);
+  ASSERT(mg_span(s, &a, &b, '.') == true);
+  ASSERT(mg_strcmp(a, mg_str("aa")) == 0);
+  ASSERT(mg_strcmp(b, mg_str("")) == 0);
+
+  s = mg_str("aa"), a = mg_str_n(NULL, 0), b = mg_str_n(NULL, 0);
+  ASSERT(mg_span(s, &a, &b, '.') == true);
+  ASSERT(mg_strcmp(a, mg_str("aa")) == 0);
+  ASSERT(mg_strcmp(b, mg_str("")) == 0);
 }
 
 int main(void) {
@@ -3306,7 +3309,6 @@ int main(void) {
   test_timer();
   test_url();
   test_iobuf();
-  test_commalist();
   test_base64();
   test_http_get_var();
   test_http_client();

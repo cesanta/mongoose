@@ -42,7 +42,7 @@ static void sntp_cb(struct mg_connection *c, int ev, void *ev_data) {
   if (ev == MG_EV_READ) {
     int64_t milliseconds = mg_sntp_parse(c->recv.buf, c->recv.len);
     if (milliseconds > 0) {
-      MG_INFO(("%lu got time: %lld ms from epoch", c->id, milliseconds));
+      MG_DEBUG(("%lu got time: %lld ms from epoch", c->id, milliseconds));
       mg_call(c, MG_EV_SNTP_TIME, (uint64_t *) &milliseconds);
       MG_VERBOSE(("%u.%u", (unsigned) (milliseconds / 1000),
                   (unsigned) (milliseconds % 1000)));

@@ -129,31 +129,17 @@ bool mg_globmatch(const char *s1, size_t n1, const char *s2, size_t n2) {
   return mg_match(mg_str_n(s2, n2), mg_str_n(s1, n1), NULL);
 }
 
-static size_t mg_nce(const char *s, size_t n, size_t ofs, size_t *koff,
-                     size_t *klen, size_t *voff, size_t *vlen, char delim) {
-  size_t kvlen, kl;
-  for (kvlen = 0; ofs + kvlen < n && s[ofs + kvlen] != delim;) kvlen++;
-  for (kl = 0; kl < kvlen && s[ofs + kl] != '=';) kl++;
-  if (koff != NULL) *koff = ofs;
-  if (klen != NULL) *klen = kl;
-  if (voff != NULL) *voff = kl < kvlen ? ofs + kl + 1 : 0;
-  if (vlen != NULL) *vlen = kl < kvlen ? kvlen - kl - 1 : 0;
-  ofs += kvlen + 1;
-  return ofs > n ? n : ofs;
-}
-
-bool mg_split(struct mg_str *s, struct mg_str *k, struct mg_str *v, char sep) {
-  size_t koff = 0, klen = 0, voff = 0, vlen = 0, off = 0;
-  if (s->ptr == NULL || s->len == 0) return 0;
-  off = mg_nce(s->ptr, s->len, 0, &koff, &klen, &voff, &vlen, sep);
-  if (k != NULL) *k = mg_str_n(s->ptr + koff, klen);
-  if (v != NULL) *v = mg_str_n(s->ptr + voff, vlen);
-  *s = mg_str_n(s->ptr + off, s->len - off);
-  return off > 0;
-}
-
-bool mg_commalist(struct mg_str *s, struct mg_str *k, struct mg_str *v) {
-  return mg_split(s, k, v, ',');
+bool mg_span(struct mg_str s, struct mg_str *a, struct mg_str *b, char sep) {
+  if (s.len == 0 || s.ptr == NULL) {
+    return false;  // Empty string, nothing to span - fail
+  } else {
+    size_t len = 0;
+    while (len < s.len && s.ptr[len] != sep) len++;  // Find separator
+    if (a) *a = mg_str_n(s.ptr, len);                // Init a
+    if (b) *b = mg_str_n(s.ptr + len, s.len - len);  // Init b
+    if (b && len < s.len) b->ptr++, b->len--;        // Skip separator
+    return true;
+  }
 }
 
 char *mg_hex(const void *buf, size_t len, char *to) {
