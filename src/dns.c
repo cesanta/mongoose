@@ -99,12 +99,16 @@ size_t mg_dns_parse_rr(const uint8_t *buf, size_t len, size_t ofs,
 bool mg_dns_parse(const uint8_t *buf, size_t len, struct mg_dns_message *dm) {
   const struct mg_dns_header *h = (struct mg_dns_header *) buf;
   struct mg_dns_rr rr;
-  size_t i, n, ofs = sizeof(*h);
+  size_t i, n, num_answers, ofs = sizeof(*h);
   memset(dm, 0, sizeof(*dm));
 
   if (len < sizeof(*h)) return 0;                // Too small, headers dont fit
   if (mg_ntohs(h->num_questions) > 1) return 0;  // Sanity
-  if (mg_ntohs(h->num_answers) > 15) return 0;   // Sanity
+  num_answers = mg_ntohs(h->num_answers);
+  if (num_answers > 10) {
+    MG_DEBUG(("Got %u answers, ignoring beyond 10th one", num_answers));
+    num_answers = 10;  // Sanity cap
+  }
   dm->txnid = mg_ntohs(h->txnid);
 
   for (i = 0; i < mg_ntohs(h->num_questions); i++) {
@@ -112,7 +116,7 @@ bool mg_dns_parse(const uint8_t *buf, size_t len, struct mg_dns_message *dm) {
     // MG_INFO(("Q %lu %lu %hu/%hu", ofs, n, rr.atype, rr.aclass));
     ofs += n;
   }
-  for (i = 0; i < mg_ntohs(h->num_answers); i++) {
+  for (i = 0; i < num_answers; i++) {
     if ((n = mg_dns_parse_rr(buf, len, ofs, false, &rr)) == 0) return false;
     // MG_INFO(("A -- %lu %lu %hu/%hu %s", ofs, n, rr.atype, rr.aclass,
     // dm->name));
