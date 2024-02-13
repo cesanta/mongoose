@@ -1376,18 +1376,33 @@ static void f5(struct mg_connection *c, int ev, void *ev_data) {
   }
 }
 
+static void f6(struct mg_connection *c, int ev, void *ev_data) {
+  if (ev == MG_EV_HTTP_MSG) {
+    (*(int *) c->fn_data)++;
+    (void) ev_data;
+  }
+}
+
 static void test_http_pipeline(void) {
   struct mg_mgr mgr;
   const char *url = "http://127.0.0.1:12377";
   struct mg_connection *c;
-  int i, ok = 0;
+  int i, ok = 0, ok2 = 0;
   mg_mgr_init(&mgr);
   mg_http_listen(&mgr, url, f5, (void *) &ok);
-  c = mg_http_connect(&mgr, url, NULL, NULL);
+  c = mg_http_connect(&mgr, url, f6, &ok2);
   mg_printf(c, "POST / HTTP/1.0\nContent-Length: 5\n\n12345GET / HTTP/1.0\n\n");
   for (i = 0; i < 20; i++) mg_mgr_poll(&mgr, 1);
-  // MG_INFO(("-----> [%d]", ok));
   ASSERT(ok == 2);
+  ASSERT(ok2 == 2);
+  // Fire a valid, then invalid request, see #2592. First one should serve
+  ok = ok2 = 0;
+  c = mg_http_connect(&mgr, url, f6, (void *) &ok2);
+  mg_printf(c, "GET / HTTP/1.1\n\nInvalid\n\n");
+  for (i = 0; i < 20; i++) mg_mgr_poll(&mgr, 1);
+  ASSERT(ok == 1);
+  ASSERT(ok2 == 1);
+  //MG_INFO(("-----> [%d] [%d]", ok, ok2));
   mg_mgr_free(&mgr);
   ASSERT(mgr.conns == NULL);
 }

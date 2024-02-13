@@ -2348,7 +2348,7 @@ int mg_http_get_var(const struct mg_str *buf, const char *name, char *dst,
                     size_t dst_len) {
   int len;
   if (dst != NULL && dst_len > 0) {
-    dst[0] = '\0'; // If destination buffer is valid, always nul-terminate it
+    dst[0] = '\0';  // If destination buffer is valid, always nul-terminate it
   }
   if (dst == NULL || dst_len == 0) {
     len = -2;  // Bad destination
@@ -3158,7 +3158,7 @@ long mg_http_upload(struct mg_connection *c, struct mg_http_message *hm,
     res = -3;
   } else if ((size_t) offset + hm->body.len > max_size) {
     mg_http_reply(c, 400, "", "%s: over max size of %lu", path,
-        (unsigned long) max_size);
+                  (unsigned long) max_size);
     res = -4;
   } else {
     struct mg_fd *fd;
@@ -3216,8 +3216,12 @@ static void http_cb(struct mg_connection *c, int ev, void *ev_data) {
       struct mg_str *te;  // Transfer - encoding header
       bool is_chunked = false;
       if (n < 0) {
-        mg_error(c, "HTTP parse, %lu bytes", c->recv.len);
-        mg_hexdump(c->recv.buf, c->recv.len > 16 ? 16 : c->recv.len);
+        // We don't use mg_error() here, to avoid closing pipelined requests
+        // prematurely, see #2592
+        MG_ERROR(("HTTP parse, %lu bytes", c->recv.len));
+        c->is_draining = 1;
+        mg_hexdump(buf, c->recv.len - ofs > 16 ? 16 : c->recv.len - ofs);
+        c->recv.len = 0;
         return;
       }
       if (n == 0) break;        // Request is not buffered yet
