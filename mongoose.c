@@ -7188,6 +7188,7 @@ long mg_io_send(struct mg_connection *c, const void *buf, size_t len) {
   } else {
     n = send(FD(c), (char *) buf, len, MSG_NONBLOCKING);
   }
+  MG_VERBOSE(("%lu %ld %d", c->id, n, MG_SOCK_ERR(n)));
   if (MG_SOCK_PENDING(n)) return MG_IO_WAIT;
   if (MG_SOCK_RESET(n)) return MG_IO_RESET;
   if (n <= 0) return MG_IO_ERR;
@@ -7309,6 +7310,7 @@ static long recv_raw(struct mg_connection *c, void *buf, size_t len) {
   } else {
     n = recv(FD(c), (char *) buf, len, MSG_NONBLOCKING);
   }
+  MG_VERBOSE(("%lu %ld %d", c->id, n, MG_SOCK_ERR(n)));
   if (MG_SOCK_PENDING(n)) return MG_IO_WAIT;
   if (MG_SOCK_RESET(n)) return MG_IO_RESET;
   if (n <= 0) return MG_IO_ERR;
@@ -7339,8 +7341,7 @@ static void read_conn(struct mg_connection *c) {
       if (!ioalloc(c, &c->rtls)) return;
       n = recv_raw(c, (char *) &c->rtls.buf[c->rtls.len],
                    c->rtls.size - c->rtls.len);
-      // MG_DEBUG(("%lu %ld", c->id, n));
-      if (n == MG_IO_ERR && mg_tls_pending(c) == 0 && c->rtls.len == 0) {
+      if (n == MG_IO_ERR && c->rtls.len == 0) {
         // Close only if we have fully drained both raw (rtls) and TLS buffers
         c->is_closing = 1;
       } else {
@@ -7539,7 +7540,7 @@ static void mg_iotest(struct mg_mgr *mgr, int ms) {
   size_t max = 1;
   for (struct mg_connection *c = mgr->conns; c != NULL; c = c->next) {
     c->is_readable = c->is_writable = 0;
-    if (mg_tls_pending(c) > 0) ms = 1, c->is_readable = 1;
+    if (c->rtls.len > 0) ms = 1, c->is_readable = 1;
     if (can_write(c)) MG_EPOLL_MOD(c, 1);
     if (c->is_closing) ms = 1;
     max++;
@@ -7555,6 +7556,7 @@ static void mg_iotest(struct mg_mgr *mgr, int ms) {
       bool wr = evs[i].events & EPOLLOUT;
       c->is_readable = can_read(c) && rd ? 1U : 0;
       c->is_writable = can_write(c) && wr ? 1U : 0;
+      if (c->rtls.len > 0) c->is_readable = 1;
     }
   }
   (void) skip_iotest;
@@ -7568,7 +7570,7 @@ static void mg_iotest(struct mg_mgr *mgr, int ms) {
     c->is_readable = c->is_writable = 0;
     if (skip_iotest(c)) {
       // Socket not valid, ignore
-    } else if (mg_tls_pending(c) > 0) {
+    } else if (c->rtls.len > 0) {
       ms = 1;  // Don't wait if TLS is ready
     } else {
       fds[n].fd = FD(c);
@@ -7590,7 +7592,7 @@ static void mg_iotest(struct mg_mgr *mgr, int ms) {
   for (struct mg_connection *c = mgr->conns; c != NULL; c = c->next) {
     if (skip_iotest(c)) {
       // Socket not valid, ignore
-    } else if (mg_tls_pending(c) > 0) {
+    } else if (c->rtls.len > 0) {
       c->is_readable = 1;
     } else {
       if (fds[n].revents & POLLERR) {
@@ -7599,6 +7601,7 @@ static void mg_iotest(struct mg_mgr *mgr, int ms) {
         c->is_readable =
             (unsigned) (fds[n].revents & (POLLIN | POLLHUP) ? 1 : 0);
         c->is_writable = (unsigned) (fds[n].revents & POLLOUT ? 1 : 0);
+        if (c->rtls.len > 0) c->is_readable = 1;
       }
       n++;
     }
@@ -7620,7 +7623,7 @@ static void mg_iotest(struct mg_mgr *mgr, int ms) {
     FD_SET(FD(c), &eset);
     if (can_read(c)) FD_SET(FD(c), &rset);
     if (can_write(c)) FD_SET(FD(c), &wset);
-    if (mg_tls_pending(c) > 0) tvp = &tv_zero;
+    if (c->rtls.len > 0) tvp = &tv_zero;
     if (FD(c) > maxfd) maxfd = FD(c);
     if (c->is_closing) ms = 1;
   }
@@ -7642,7 +7645,7 @@ static void mg_iotest(struct mg_mgr *mgr, int ms) {
     } else {
       c->is_readable = FD(c) != MG_INVALID_SOCKET && FD_ISSET(FD(c), &rset);
       c->is_writable = FD(c) != MG_INVALID_SOCKET && FD_ISSET(FD(c), &wset);
-      if (mg_tls_pending(c) > 0) c->is_readable = 1;
+      if (c->rtls.len > 0) c->is_readable = 1;
     }
   }
 #endif
@@ -7750,10 +7753,11 @@ void mg_mgr_poll(struct mg_mgr *mgr, int ms) {
       long n = 0;
       mg_call(c, MG_EV_READ, &n);
     }
-    MG_VERBOSE(("%lu %c%c %c%c%c%c%c", c->id, c->is_readable ? 'r' : '-',
+    MG_VERBOSE(("%lu %c%c %c%c%c%c%c %lu %lu", c->id, c->is_readable ? 'r' : '-',
                 c->is_writable ? 'w' : '-', c->is_tls ? 'T' : 't',
                 c->is_connecting ? 'C' : 'c', c->is_tls_hs ? 'H' : 'h',
-                c->is_resolving ? 'R' : 'r', c->is_closing ? 'C' : 'c'));
+                c->is_resolving ? 'R' : 'r', c->is_closing ? 'C' : 'c',
+                mg_tls_pending(c), c->rtls.len));
     if (c->is_resolving || c->is_closing) {
       // Do nothing
     } else if (c->is_listening && c->is_udp == 0) {
