@@ -3,7 +3,7 @@
 
 #include "net.h"
 
-char *g_url = MQTT_SERVER_URL;
+char *g_mqtt_server_url = MQTT_SERVER_URL;
 char *g_root_topic = MQTT_ROOT_TOPIC;
 char *g_device_id;
 
@@ -11,9 +11,12 @@ static uint8_t s_qos = 1;             // MQTT QoS
 static struct mg_connection *s_conn;  // MQTT Client connection
 static struct mg_rpc *s_rpc = NULL;   // List of registered RPC methods
 
+#define MAX_PINS 20
 struct device_config {
-  int pins[NUM_PINS];  // State of the GPIO pins
-  int log_level;       // Device logging level, 0-4
+  int log_level;               // Device logging level, 0-4
+  int pin_count;               // Number of pins to handle
+  uint16_t pin_map[MAX_PINS];  // Pins to handle
+  bool pin_state[MAX_PINS];    // State of the GPIO pins
 };
 
 static struct device_config s_device_config;
@@ -75,12 +78,16 @@ static void publish_status(struct mg_connection *c) {
 
   // Print JSON notification into the io buffer
   mg_xprintf(mg_pfn_iobuf, &io,
-             "{%m:%m,%m:{%m:%m,%m:%d,%m:[%M],%m:%M,%m:%M}}",                //
+             "{%m:%m,%m:{%m:%m,%m:%d,%m:%d,%m:[%M],%m:[%M],%m:%M,%m:%M}}",  //
              MG_ESC("method"), MG_ESC("status.notify"), MG_ESC("params"),   //
              MG_ESC("status"), MG_ESC("online"),                            //
              MG_ESC(("log_level")), s_device_config.log_level,              //
-             MG_ESC(("pins")), print_ints, s_device_config.pins, NUM_PINS,  //
-             MG_ESC(("crnt_fw")), print_fw_status, MG_FIRMWARE_CURRENT,     //
+             MG_ESC(("pin_count")), s_device_config.pin_count,              //
+             MG_ESC(("pin_map")), print_ints, s_device_config.pin_map,
+             s_device_config.pin_count,  //
+             MG_ESC(("pin_state")), print_ints, s_device_config.pin_state,
+             s_device_config.pin_count,                                  //
+             MG_ESC(("crnt_fw")), print_fw_status, MG_FIRMWARE_CURRENT,  //
              MG_ESC(("prev_fw")), print_fw_status, MG_FIRMWARE_PREVIOUS);
 
   memset(&pub_opts, 0, sizeof(pub_opts));
@@ -90,7 +97,6 @@ static void publish_status(struct mg_connection *c) {
   pub_opts.qos = s_qos;
   pub_opts.retain = true;
   mg_mqtt_pub(c, &pub_opts);
-  MG_INFO(("%lu PUBLISHED %s -> %.*s", c->id, topic, io.len, io.buf));
   mg_iobuf_free(&io);
 }
 
@@ -103,7 +109,6 @@ static void publish_response(struct mg_connection *c, char *buf, size_t len) {
   pub_opts.message = mg_str_n(buf, len);
   pub_opts.qos = s_qos;
   mg_mqtt_pub(c, &pub_opts);
-  MG_INFO(("%lu PUBLISHED %s -> %.*s", c->id, topic, len, buf));
 }
 
 static void subscribe(struct mg_connection *c) {
@@ -120,20 +125,25 @@ static void subscribe(struct mg_connection *c) {
 
 static void rpc_config_set(struct mg_rpc_req *r) {
   struct device_config dc = s_device_config;
+  dc.pin_count = (int) mg_json_get_long(r->frame, "$.params.pin_count", -1);
   dc.log_level = (int) mg_json_get_long(r->frame, "$.params.log_level", -1);
 
   if (dc.log_level < 0 || dc.log_level > MG_LL_VERBOSE) {
     mg_rpc_err(r, -32602, "Log level must be from 0 to 4");
+  } else if (dc.pin_count <= 0 || dc.pin_count > MAX_PINS) {
+    mg_rpc_err(r, -32602, "Pin count must be from 1 to %d", MAX_PINS);
   } else {
     int i, val;
-    for (i = 0; i < NUM_PINS; i++) {
-      char path[20];
-      mg_snprintf(path, sizeof(path), "$.params.pins[%lu]", i);
-      val = (int) mg_json_get_long(r->frame, path, -1);
-      if (val >= 0 && val != dc.pins[i]) {
-        dc.pins[i] = val;
-        hal_gpio_write((int) i, val);
+    for (i = 0; i < dc.pin_count; i++) {
+      char path[50];
+      mg_snprintf(path, sizeof(path), "$.params.pin_map[%d]", i);
+      dc.pin_map[i] = (uint16_t) mg_json_get_long(r->frame, path, 0);
+      mg_snprintf(path, sizeof(path), "$.params.pin_state[%d]", i);
+      if ((val = (int) mg_json_get_long(r->frame, path, -1)) >= 0) {
+        gpio_write(dc.pin_map[i], val);
       }
+      dc.pin_state[i] = gpio_read(dc.pin_map[i]);
+      // MG_INFO(("%d %d %d", i, dc.pin_map[i], dc.pin_state[i]));
     }
     mg_log_set(dc.log_level);
     s_device_config = dc;
@@ -201,7 +211,7 @@ static void fn(struct mg_connection *c, int ev, void *ev_data) {
     MG_ERROR(("%lu ERROR %s", c->id, (char *) ev_data));
   } else if (ev == MG_EV_MQTT_OPEN) {
     // MQTT connect is successful
-    MG_INFO(("%lu CONNECTED to %s", c->id, g_url));
+    MG_INFO(("%lu CONNECTED to %s", c->id, g_mqtt_server_url));
     subscribe(c);
     publish_status(c);
   } else if (ev == MG_EV_MQTT_MSG) {
@@ -244,7 +254,7 @@ static void timer_reconnect(void *arg) {
     opts.keepalive = MQTT_KEEPALIVE_SEC;
     opts.retain = true;
     opts.message = mg_str(message);
-    s_conn = mg_mqtt_connect(mgr, g_url, &opts, fn, NULL);
+    s_conn = mg_mqtt_connect(mgr, g_mqtt_server_url, &opts, fn, NULL);
   }
 }
 
@@ -257,8 +267,14 @@ void web_init(struct mg_mgr *mgr) {
   int i, ping_interval_ms = MQTT_KEEPALIVE_SEC * 1000 - 500;
   set_device_id();
   s_device_config.log_level = (int) mg_log_level;
-  for (i = 0; i < NUM_PINS; i++) {
-    s_device_config.pins[i] = hal_gpio_read(i);
+  s_device_config.pin_count = 5;
+  s_device_config.pin_map[0] = 10;
+  s_device_config.pin_map[1] = 11;
+  s_device_config.pin_map[2] = 12;
+  s_device_config.pin_map[3] = 13;
+  s_device_config.pin_map[4] = 25;
+  for (i = 0; i < s_device_config.pin_count; i++) {
+    s_device_config.pin_state[i] = gpio_read(s_device_config.pin_map[i]);
   }
 
   // Configure JSON-RPC functions we're going to handle

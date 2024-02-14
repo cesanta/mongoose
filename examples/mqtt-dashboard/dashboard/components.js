@@ -1,1 +1,0 @@
-../../device-dashboard/web_root/components.js
