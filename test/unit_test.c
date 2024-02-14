@@ -1249,6 +1249,7 @@ static void test_http_client(void) {
   MG_INFO(("%d", ok));
   ASSERT(ok == 301);
   c->is_closing = 1;
+  ASSERT((c->loc.ip[0] != 0));  // Make sure that c->loc address is populated
   mg_mgr_poll(&mgr, 0);
   ok = 0;
 #if MG_TLS
@@ -1402,7 +1403,7 @@ static void test_http_pipeline(void) {
   for (i = 0; i < 20; i++) mg_mgr_poll(&mgr, 1);
   ASSERT(ok == 1);
   ASSERT(ok2 == 1);
-  //MG_INFO(("-----> [%d] [%d]", ok, ok2));
+  // MG_INFO(("-----> [%d] [%d]", ok, ok2));
   mg_mgr_free(&mgr);
   ASSERT(mgr.conns == NULL);
 }

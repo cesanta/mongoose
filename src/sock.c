@@ -98,12 +98,8 @@ static void iolog(struct mg_connection *c, char *buf, long n, bool r) {
     c->is_closing = 1;  // Termination. Don't call mg_error(): #1529
   } else if (n > 0) {
     if (c->is_hexdumping) {
-      union usa usa;
-      socklen_t slen = sizeof(usa.sin);
-      if (getsockname(FD(c), &usa.sa, &slen) < 0) (void) 0;  // Ignore result
       MG_INFO(("\n-- %lu %M %s %M %ld", c->id, mg_print_ip_port, &c->loc,
                r ? "<-" : "->", mg_print_ip_port, &c->rem, n));
-
       mg_hexdump(buf, (size_t) n);
     }
     if (r) {
@@ -331,6 +327,7 @@ static void connect_conn(struct mg_connection *c) {
   // Use getpeername() to test whether we have connected
   if (getpeername(FD(c), &usa.sa, &n) == 0) {
     c->is_connecting = 0;
+    setlocaddr(FD(c), &c->loc);
     mg_call(c, MG_EV_CONNECT, NULL);
     MG_EPOLL_MOD(c, 0);
     if (c->is_tls_hs) mg_tls_handshake(c);
@@ -371,6 +368,7 @@ void mg_connect_resolved(struct mg_connection *c) {
     if ((rc = bind(c->fd, &usa.sa, slen)) != 0)
       MG_ERROR(("bind: %d", MG_SOCK_ERR(rc)));
 #endif
+    setlocaddr(FD(c), &c->loc);
     mg_call(c, MG_EV_RESOLVE, NULL);
     mg_call(c, MG_EV_CONNECT, NULL);
   } else {
@@ -382,8 +380,9 @@ void mg_connect_resolved(struct mg_connection *c) {
     mg_call(c, MG_EV_RESOLVE, NULL);
     rc = connect(FD(c), &usa.sa, slen);  // Attempt to connect
     if (rc == 0) {                       // Success
-      mg_call(c, MG_EV_CONNECT, NULL);   // Send MG_EV_CONNECT to the user
-    } else if (MG_SOCK_PENDING(rc)) {    // Need to wait for TCP handshake
+      setlocaddr(FD(c), &c->loc);
+      mg_call(c, MG_EV_CONNECT, NULL);  // Send MG_EV_CONNECT to the user
+    } else if (MG_SOCK_PENDING(rc)) {   // Need to wait for TCP handshake
       MG_DEBUG(("%lu %ld -> %M pend", c->id, c->fd, mg_print_ip_port, &c->rem));
       c->is_connecting = 1;
     } else {
@@ -695,11 +694,11 @@ void mg_mgr_poll(struct mg_mgr *mgr, int ms) {
       long n = 0;
       mg_call(c, MG_EV_READ, &n);
     }
-    MG_VERBOSE(("%lu %c%c %c%c%c%c%c %lu %lu", c->id, c->is_readable ? 'r' : '-',
-                c->is_writable ? 'w' : '-', c->is_tls ? 'T' : 't',
-                c->is_connecting ? 'C' : 'c', c->is_tls_hs ? 'H' : 'h',
-                c->is_resolving ? 'R' : 'r', c->is_closing ? 'C' : 'c',
-                mg_tls_pending(c), c->rtls.len));
+    MG_VERBOSE(("%lu %c%c %c%c%c%c%c %lu %lu", c->id,
+                c->is_readable ? 'r' : '-', c->is_writable ? 'w' : '-',
+                c->is_tls ? 'T' : 't', c->is_connecting ? 'C' : 'c',
+                c->is_tls_hs ? 'H' : 'h', c->is_resolving ? 'R' : 'r',
+                c->is_closing ? 'C' : 'c', mg_tls_pending(c), c->rtls.len));
     if (c->is_resolving || c->is_closing) {
       // Do nothing
     } else if (c->is_listening && c->is_udp == 0) {
