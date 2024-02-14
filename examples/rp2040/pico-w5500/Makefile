@@ -4,6 +4,7 @@ ifeq ($(OS),Windows_NT)
   RM = cmd /C del /Q /F /S
   MKBUILD = if not exist build mkdir build
 endif
+.PHONY: build
 
 all example:
 	true

@@ -1,8 +1,8 @@
-PROG ?= ./example                 # Program we are building
-DELETE ?= rm -rf                  # Command to remove files
-OUT ?= -o $(PROG)                 # Compiler argument for output file
-SOURCES = main.c net.c mongoose.c # Source code files
-CFLAGS ?= -W -Wall -Wextra -g -I. # Build options
+PROG ?= ./example     # Program we are building
+DELETE ?= rm -rf      # Command to remove files
+OUT ?= -o $(PROG)     # Compiler argument for output file
+SOURCES = main.c net.c hal.c mongoose.c # Source code files
+CFLAGS ?= -W -Wall -Wextra -g -I.       # Build options
 
 # Mongoose build options. See https://mongoose.ws/documentation/#build-options
 CFLAGS_MONGOOSE += -DMG_ENABLE_LINES=1

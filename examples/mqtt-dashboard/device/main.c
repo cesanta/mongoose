@@ -2,27 +2,12 @@
 // All rights reserved
 
 #include "net.h"
+#include "hal.h"
 
 // Handle interrupts, like Ctrl-C
 static int s_signo;
 static void signal_handler(int signo) {
   s_signo = signo;
-}
-
-// Mocked device pins
-static bool s_pins[NUM_PINS];
-
-bool hal_gpio_write(int pin, bool status) {
-  bool ok = false;
-  if (pin >= 0 && pin < NUM_PINS) {
-    s_pins[pin] = status;
-    ok = true;
-  }
-  return ok;
-}
-
-bool hal_gpio_read(int pin) {
-  return (pin >= 0 && pin < NUM_PINS) ? s_pins[pin] : false;
 }
 
 int main(int argc, char *argv[]) {
@@ -32,7 +17,7 @@ int main(int argc, char *argv[]) {
   // Parse command-line flags
   for (i = 1; i < argc; i++) {
     if (strcmp(argv[i], "-u") == 0 && argv[i + 1] != NULL) {
-      g_url = argv[++i];
+      g_mqtt_server_url = argv[++i];
     } else if (strcmp(argv[i], "-i") == 0 && argv[i + 1] != NULL) {
       g_device_id = strdup(argv[++i]);
     } else if (strcmp(argv[i], "-t") == 0 && argv[i + 1] != NULL) {

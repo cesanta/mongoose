@@ -1,1 +1,1 @@
-../../device-dashboard/net.c
+../../mqtt-dashboard/device/net.c
