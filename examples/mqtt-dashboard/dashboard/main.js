@@ -435,7 +435,7 @@ function DeviceControlPanel({device, config, setConfig, publishFn, connected}) {
   };
 
   const Pin = i =>  html`
-  <div class="inline-block mr-8 my-1 bg-gray-100 rounded px-2 w-32 py-1">
+  <div class="inline-block my-1 bg-gray-100 rounded px-1 py-1">
     <div class="flex align-center justify-between">
       <span class="${LabelClass}">Pin ${config.pin_map[i]}<//>
       <${Toggle} onclick=${ev => onclick(i)}
@@ -449,7 +449,7 @@ function DeviceControlPanel({device, config, setConfig, publishFn, connected}) {
   <div class="px-4 py-2 flex justify-between items-center font-light uppercase text-gray-600 rounded">
     <div class="flex gap-2 items-center">Pin Control Panel<//>
   <//>
-  <div class="p-4 gap-2">
+  <div class="p-4 grid grid-cols-2 lg:grid-cols-3 gap-2">
     ${(config.pin_map || []).map((_, i) => Pin(i))}
    <div><//>
   <//>

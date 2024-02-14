@@ -62,9 +62,18 @@ static size_t print_fw_status(void (*out)(char, void *), void *ptr,
                     MG_ESC("timestamp"), mg_ota_timestamp(fw));
 }
 
-static size_t print_ints(void (*out)(char, void *), void *ptr, va_list *ap) {
-  int *array = va_arg(*ap, int *);
-  size_t i, len = 0, num_elems = va_arg(*ap, size_t);
+static size_t print_shorts(void (*out)(char, void *), void *ptr, va_list *ap) {
+  uint16_t *array = va_arg(*ap, uint16_t *);
+  int i, len = 0, num_elems = va_arg(*ap, int);
+  for (i = 0; i < num_elems; i++) {
+    len += mg_xprintf(out, ptr, "%s%hu", i ? "," : "", array[i]);
+  }
+  return len;
+}
+
+static size_t print_bools(void (*out)(char, void *), void *ptr, va_list *ap) {
+  bool *array = va_arg(*ap, bool *);
+  int i, len = 0, num_elems = va_arg(*ap, int);
   for (i = 0; i < num_elems; i++) {
     len += mg_xprintf(out, ptr, "%s%d", i ? "," : "", array[i]);
   }
@@ -83,9 +92,9 @@ static void publish_status(struct mg_connection *c) {
              MG_ESC("status"), MG_ESC("online"),                            //
              MG_ESC(("log_level")), s_device_config.log_level,              //
              MG_ESC(("pin_count")), s_device_config.pin_count,              //
-             MG_ESC(("pin_map")), print_ints, s_device_config.pin_map,
+             MG_ESC(("pin_map")), print_shorts, s_device_config.pin_map,
              s_device_config.pin_count,  //
-             MG_ESC(("pin_state")), print_ints, s_device_config.pin_state,
+             MG_ESC(("pin_state")), print_bools, s_device_config.pin_state,
              s_device_config.pin_count,                                  //
              MG_ESC(("crnt_fw")), print_fw_status, MG_FIRMWARE_CURRENT,  //
              MG_ESC(("prev_fw")), print_fw_status, MG_FIRMWARE_PREVIOUS);
