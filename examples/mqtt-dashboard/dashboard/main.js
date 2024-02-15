@@ -184,7 +184,7 @@ function Sidebar({devices, onclick}) {
     <//>`;
 
   return html`
-    <div class="overflow-auto divide-y border-r xbasis-60 w-60 flex-none">
+    <div class="overflow-auto divide-y">
       <div class="font-light uppercase flex items-center text-gray-600 px-4 py-2 bg-stone-100">
         Devices
       <//>
@@ -468,7 +468,7 @@ function DeviceDashboard({device, setDeviceConfig, publishFn, connected}) {
   }
 
   return html`
-  <div class="bg-gray-200 p-3 grid grid-cols-3 gap-2">
+  <div class="p-3 grid grid-cols-3 gap-2">
     <${DeviceSettingsPanel} device=${device} config=${localConfig} setConfig=${setLocalConfig} publishFn=${publishFn} connected=${connected} />
     <${DeviceControlPanel} device=${device} config=${localConfig} setConfig=${setLocalConfig} publishFn=${publishFn} connected=${connected} />
     <${FirmwareUpdatePanel} deviceID=${device.id} publishFn=${publishFn}
@@ -669,11 +669,14 @@ const App = function() {
       setUrl=${setUrl} connected=${connected}
     />
     <div class="flex grow overflow-auto">
-      <${Sidebar} devices=${devices} onclick=${onDeviceClick} />
-      <${DeviceDashboard}
-        device=${getDeviceByID(currentDevID)} connected=${connected}
-        setDeviceConfig=${setDeviceConfig} publishFn=${handlePublish}
-      />
+      <div class="w-60 overflow-auto">
+        <${Sidebar} devices=${devices} onclick=${onDeviceClick} />
+      <//>
+      <div class="grow bg-gray-200">
+        <${DeviceDashboard}
+          device=${getDeviceByID(currentDevID)} connected=${connected}
+          setDeviceConfig=${setDeviceConfig} publishFn=${handlePublish} />
+      <//>
     <//>
   <//>`;
 };
