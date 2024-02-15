@@ -450,8 +450,8 @@ const App = function() {
         });
       };
 
-      subscribe(statusTopic)
-      subscribe(txTopic)
+      subscribe(statusTopic);
+      subscribe(txTopic);
     });
 
     MqttClient.on('message', (topic, message) => {
@@ -472,7 +472,8 @@ const App = function() {
           console.error('Invalid response');
           return;
         }
-        device.online = params.status === 'online'
+        device.online = params.status === 'online';
+        setConnected(device.online);
         if (device.online) {
           device.config = params;
           if (!device.config.pins) device.config.pins = [];
