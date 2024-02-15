@@ -114,7 +114,7 @@ function UploadFileButton({oncomplete, onprogress, onfileselect, url, title, col
   };
 
   const onclick = function(ev) {
-    if (!input.fn) input.current.click();  // No upload in progress, show file dialog
+    //if (!input.fn) input.current.click();  // No upload in progress, show file dialog
   };
 
   return html`
