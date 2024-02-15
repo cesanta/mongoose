@@ -12,6 +12,7 @@ const handleFetchError = r => r.ok || alert(`Error: ${r.statusText}`);
 const LabelClass = 'text-sm truncate text-gray-500 font-medium my-auto whitespace-nowrap';
 const BadgeClass = 'flex-inline text-sm rounded-md rounded px-2 py-0.5 ring-1 ring-inset';
 const InputClass = 'font-normal text-sm rounded w-full flex-1 py-0.5 px-2 text-gray-700 placeholder:text-gray-400 focus:outline-none disabled:cursor-not-allowed disabled:bg-gray-100 disabled:text-gray-500 rounded border';
+const TitleClass = 'font-semibold xuppercase xtext-gray-600';
 const Colors = {
   green: 'bg-green-100 text-green-900 ring-green-300',
   yellow: 'bg-yellow-100 text-yellow-900 ring-yellow-300',
@@ -185,8 +186,8 @@ function Sidebar({devices, onclick}) {
 
   return html`
     <div class="overflow-auto divide-y">
-      <div class="font-light uppercase flex items-center text-gray-600 px-4 py-2 bg-stone-100">
-        Devices
+      <div class="${TitleClass} flex items-center px-4 py-2 bg-stone-100">
+        Device List
       <//>
       ${(devices ? devices : []).map(d => h(Device, {d}))}
     <//>`;
@@ -199,7 +200,7 @@ function FirmwareStatus({title, info, children}) {
   const valid = info.status > 0;
   return html`
     <div class="bg-white divide-y border rounded">
-      <div class="font-light bg-white uppercase flex items-center text-gray-600 px-4 py-2">
+      <div class="${TitleClass} bg-white flex items-center px-4 py-2">
         ${title}
       <//>
       <div class="px-4 py-2 relative">
@@ -265,7 +266,7 @@ function FirmwareUpdatePanel({no, name, current, previous, updated_at, refresh})
   return html`
 <div class="divide-y border rounded bg-white">
   <div class="px-4 py-2 flex justify-between items-center rounded">
-    <span class="font-light uppercase text-gray-600 ">Firmware Update<//>
+    <span class="${TitleClass}">Firmware Update<//>
     <div class="flex gap-2"><span class=${LabelClass}>Status:</span><span class="${BadgeClass} ${color}">${otaStatus}<//><//>
   <//>
   <div class="p-4 flex flex-col gap-1">
@@ -293,81 +294,6 @@ function FirmwareUpdatePanel({no, name, current, previous, updated_at, refresh})
 <//>`;
 };
 
-/*
-function xFirmwareUpdatePanel({publishFn, disabled, info, deviceID}) {
-  const [clean, setClean] = useState(false)
-  const refresh = () => {};
-  useEffect(refresh, []);
-  const oncommit = ev => {
-    publishFn('ota.commit')
-  };
-  const onreboot = ev => {
-    publishFn('device.reset')
-  };
-  const onrollback = ev => {
-    publishFn('ota.rollback')
-  };
-  const onerase = ev => {};
-  const onupload = function(ok, name, size) {
-    if (!ok) return false;
-    return new Promise(r => setTimeout(ev => {
-                         refresh();
-                         r();
-                       }, 3000)).then(r => setClean(true));
-  };
-
-  const defaultInfo = {status: 0, crc32: 0, size: 0, timestamp: 0};
-
-  return html`
-<div class="divide-y border rounded bg-white">
-  <div class="px-4 py-2 flex justify-between items-center font-light uppercase text-gray-600 rounded">
-    <div class="flex gap-2 items-center"> Firmware Update <//>
-  <//>
-  <div class="p-4 gap-3">
-    boo!
-  <//>
-<//>`;
-
-  return html`
-  <div class="bg-slate-200 border rounded text-ellipsis overflow-auto mt-4">
-    <div class="bg-white px-4 py-2 flex items-center justify-between font-light uppercase text-gray-600">
-      Over-the-air firmware updates
-    </div>
-    <div class="gap-1 grid grid-cols-3 lg:grid-cols-3">
-      <${FirmwareStatus} title="Current firmware image"
-        info=${info[0] ? info[0] : defaultInfo}>
-        <div class="flex flex-wrap gap-2">
-          <${Button} title="Commit this firmware" onclick=${oncommit}
-            icon=${Icons.thumbUp} disabled=${disabled} cls="w-full" />
-        <//>
-      <//>
-      <${FirmwareStatus} title="Previous firmware image" info=${
-      info[1] ? info[1] : defaultInfo}>
-        <${Button} title="Rollback to this firmware" onclick=${onrollback}
-          icon=${Icons.backward} disabled=${disabled} cls="w-full" />
-      <//>
-      <div class="bg-white xm-4 divide-y border rounded flex flex-col">
-        <div class="font-light uppercase flex items-center text-gray-600 px-4 py-2">
-          Device control
-        <//>
-        <div class="px-4 py-3 flex flex-col gap-2 grow">
-          <${UploadFileButton}
-            title="Upload new firmware: choose .bin file:"
-              publishFn=${publishFn} onupload=${onupload} clean=${clean}
-              setCleanFn=${setClean} disabled=${disabled}
-              id=${deviceID} url="api/firmware/upload" accept=".bin,.uf2" />
-          <div class="grow"><//>
-          <${Button} title="Reboot device" onclick=${onreboot}
-            icon=${Icons.refresh} disabled=${disabled} cls="w-full" />
-          <${Button} title="Erase last sector" onclick=${onerase}
-            icon=${Icons.doc} disabled=${disabled} cls="w-full hidden" />
-        <//>
-      <//>
-    <//>
-  <//>`;
-};
-*/
-
 function DeviceSettingsPanel({device, publishFn, connected}) {
   const [config, setConfig] = useState(device.config);
   const logOptions = [[0, 'Disable'], [1, 'Error'], [2, 'Info'], [3, 'Debug']];
@@ -394,13 +320,17 @@ function DeviceSettingsPanel({device, publishFn, connected}) {
 
   return html`
 <div class="divide-y border rounded bg-white">
-  <div class="px-4 py-2 flex justify-between items-center font-light uppercase text-gray-600 rounded">
+  <div class="px-4 py-2 flex justify-between items-center rounded ${TitleClass}">
     <div class="flex gap-2 items-center"> Settings <//>
   <//>
   <div class="p-4 gap-3">
-    <div class="flex justify-between">
-      <span class=${LabelClass}>Device ${device.id}<//>
+    <div class="flex justify-between my-1">
+      <span class=${LabelClass}>Status<//>
       <span class="${BadgeClass} ${connected ? Colors.green : Colors.red}"> ${connected ? 'online' : 'offline'} <//>
+    <//>
+    <div class="flex justify-between my-1">
+      <span class=${LabelClass}>Device ID<//>
+      <span class="${LabelClass}">${device.id}<//>
     <//>
     <div class="grid grid-cols-2 my-1">
       <span class="${LabelClass}">Log Level<//>
@@ -446,7 +376,7 @@ function DeviceControlPanel({device, config, setConfig, publishFn, connected}) {
 
   return html`
 <div class="divide-y border rounded bg-white xbg-slate-100 my-y">
-  <div class="px-4 py-2 flex justify-between items-center font-light uppercase text-gray-600 rounded">
+  <div class="px-4 py-2 flex justify-between items-center rounded ${TitleClass}">
     <div class="flex gap-2 items-center">Pin Control Panel<//>
   <//>
   <div class="p-4 grid grid-cols-2 lg:grid-cols-3 gap-2">
