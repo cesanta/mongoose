@@ -743,7 +743,7 @@ static int fetch(struct mg_mgr *mgr, char *buf, const char *url,
   if (c != NULL && mg_url_is_ssl(url)) {
     struct mg_tls_opts opts;
     memset(&opts, 0, sizeof(opts));  // read CA from packed_fs
-    opts.ca = mg_unpacked("test/data/ca.pem");
+    opts.ca = mg_unpacked("/test/data/ca.pem");
     if (strstr(url, "127.0.0.1") != NULL) {
       // Local connection, use self-signed certificates
       opts.ca = mg_str(s_tls_ca);
@@ -998,10 +998,10 @@ static void test_http_server(void) {
   // ASSERT(cmpbody(buf, "Invalid web root [/BAAADDD!]\n") == 0);
 
   {
-    char *data = mg_file_read(&mg_fs_posix, "./test/data/ca.pem", NULL);
+    struct mg_str data = mg_file_read(&mg_fs_posix, "./test/data/ca.pem");
     ASSERT(fetch(&mgr, buf, url, "GET /ca.pem HTTP/1.0\r\n\n") == 200);
-    ASSERT(cmpbody(buf, data) == 0);
-    free(data);
+    ASSERT(cmpbody(buf, data.ptr) == 0);
+    free((void *) data.ptr);
   }
 
   {
@@ -1059,9 +1059,10 @@ static void test_http_server(void) {
 
   {
     // Test upload
-    char *p;
+    struct mg_str s;
     remove("uploaded.txt");
-    ASSERT((p = mg_file_read(&mg_fs_posix, "uploaded.txt", NULL)) == NULL);
+    s = mg_file_read(&mg_fs_posix, "uploaded.txt");
+    ASSERT(s.ptr == NULL);
     ASSERT(fetch(&mgr, buf, url,
                  "POST /upload HTTP/1.0\n"
                  "Content-Length: 1\n\nx") == 400);
@@ -1074,22 +1075,25 @@ static void test_http_server(void) {
                  "POST /upload?file=uploaded.txt&offset=5 HTTP/1.0\r\n"
                  "Content-Length: 6\r\n"
                  "\r\n\nworld") == 200);
-    ASSERT((p = mg_file_read(&mg_fs_posix, "uploaded.txt", NULL)) != NULL);
-    ASSERT(strcmp(p, "hello\nworld") == 0);
-    free(p);
+    s = mg_file_read(&mg_fs_posix, "uploaded.txt");
+    ASSERT(s.ptr != NULL);
+    ASSERT(strcmp(s.ptr, "hello\nworld") == 0);
+    free((void *) s.ptr);
     remove("uploaded.txt");
   }
 
   {
     // Test upload directory traversal
-    char *p;
+    struct mg_str s;
     remove("uploaded.txt");
-    ASSERT((p = mg_file_read(&mg_fs_posix, "uploaded.txt", NULL)) == NULL);
+    s = mg_file_read(&mg_fs_posix, "uploaded.txt");
+    ASSERT(s.ptr == NULL);
     ASSERT(fetch(&mgr, buf, url,
                  "POST /upload?file=../uploaded.txt HTTP/1.0\r\n"
                  "Content-Length: 5\r\n"
                  "\r\nhello") == 400);
-    ASSERT((p = mg_file_read(&mg_fs_posix, "uploaded.txt", NULL)) == NULL);
+    s = mg_file_read(&mg_fs_posix, "uploaded.txt");
+    ASSERT(s.ptr == NULL);
   }
 
   // HEAD request
@@ -1238,10 +1242,12 @@ static void test_http_client(void) {
   struct mg_connection *c = NULL;
   const char *url = "http://cesanta.com";
   int i, ok = 0;
-  size_t size = 0;  // read CA certs from plain file
-  char *data = mg_file_read(&mg_fs_posix, "test/data/ca.pem", &size);
   struct mg_tls_opts opts;
   memset(&opts, 0, sizeof(opts));
+  opts.ca = mg_unpacked("/test/data/ca.pem");
+  opts.name = mg_url_host(url);
+  ASSERT(opts.ca.len > 0);
+  ASSERT(opts.name.len > 0);
   mg_mgr_init(&mgr);
   c = mg_http_connect(&mgr, url, f3, &ok);
   ASSERT(c != NULL);
@@ -1255,17 +1261,12 @@ static void test_http_client(void) {
 #if MG_TLS
   c = mg_http_connect(&mgr, "https://cesanta.com", f3, &ok);
   ASSERT(c != NULL);
-  if (c != NULL) {
-    opts.ca = mg_str_n(data, size);
-    // opts.name = mg_url_host(url);
-    mg_tls_init(c, &opts);
-  }
+  mg_tls_init(c, &opts);
   for (i = 0; i < 1500 && ok <= 0; i++) mg_mgr_poll(&mgr, 1);
   ASSERT(ok == 200);
   c->is_closing = 1;
   mg_mgr_poll(&mgr, 1);
 
-#if 1
   // Test failed host validation
   c = mg_http_connect(&mgr, "https://cesanta.com", f3, &ok);
   ASSERT(c != NULL);
@@ -1287,7 +1288,6 @@ static void test_http_client(void) {
   ASSERT(ok == 200);
   mg_mgr_poll(&mgr, 1);
 #endif
-#endif
 
 #if MG_ENABLE_IPV6
   ok = 0;
@@ -1300,7 +1300,6 @@ static void test_http_client(void) {
 
   mg_mgr_free(&mgr);
   ASSERT(mgr.conns == NULL);
-  free(data);
 }
 
 // Test host validation only (no CA, no cert)
@@ -1317,7 +1316,7 @@ static void test_host_validation(void) {
   ok = 0;
   c = mg_http_connect(&mgr, url, f3, &ok);
   ASSERT(c != NULL);
-  opts.ca = mg_unpacked("test/data/ca.pem");
+  opts.ca = mg_unpacked("/test/data/ca.pem");
   mg_tls_init(c, &opts);
   for (i = 0; i < 1500 && ok <= 0; i++) mg_mgr_poll(&mgr, 10);
   ASSERT(ok == 200);
@@ -2188,15 +2187,17 @@ static void test_dns(void) {
 
 static void test_util(void) {
   const char *e;
-  char buf[100], *p, *s;
+  char buf[100], *s;
   struct mg_addr a;
   uint32_t ipv4;
+  struct mg_str data;
   memset(&a, 0xa5, sizeof(a));
   ASSERT(mg_file_printf(&mg_fs_posix, "data.txt", "%s", "hi") == true);
   // if (system("ls -l") != 0) (void) 0;
-  ASSERT((p = mg_file_read(&mg_fs_posix, "data.txt", NULL)) != NULL);
-  ASSERT(strcmp(p, "hi") == 0);
-  free(p);
+  data = mg_file_read(&mg_fs_posix, "data.txt");
+  ASSERT(data.ptr != NULL);
+  ASSERT(strcmp(data.ptr, "hi") == 0);
+  free((void *) data.ptr);
   remove("data.txt");
   ASSERT(mg_aton(mg_str("0"), &a) == false);
   ASSERT(mg_aton(mg_str("0.0.0."), &a) == false);
@@ -2610,8 +2611,8 @@ static void eh7(struct mg_connection *c, int ev, void *ev_data) {
 static void test_packed(void) {
   struct mg_mgr mgr;
   const char *url = "http://127.0.0.1:12351";
-  char buf[FETCH_BUF_SIZE],
-      *data = mg_file_read(&mg_fs_posix, "Makefile", NULL);
+  char buf[FETCH_BUF_SIZE];
+  struct mg_str data = mg_file_read(&mg_fs_posix, "Makefile");
   mg_mgr_init(&mgr);
   mg_http_listen(&mgr, url, eh7, NULL);
 
@@ -2619,14 +2620,14 @@ static void test_packed(void) {
   // fetch(&mgr, buf, url, "GET /Makefile HTTP/1.0\n\n");
   // printf("---> %s\n", buf);
   ASSERT(fetch(&mgr, buf, url, "GET /Makefile HTTP/1.0\n\n") == 200);
-  ASSERT(cmpbody(buf, data) == 0);
-  free(data);
+  ASSERT(cmpbody(buf, data.ptr) == 0);
+  free((void *) data.ptr);
 
   // Load file deeper in the FS tree directly
-  data = mg_file_read(&mg_fs_posix, "src/ssi.h", NULL);
+  data = mg_file_read(&mg_fs_posix, "src/ssi.h");
   ASSERT(fetch(&mgr, buf, url, "GET /src/ssi.h HTTP/1.0\n\n") == 200);
-  ASSERT(cmpbody(buf, data) == 0);
-  free(data);
+  ASSERT(cmpbody(buf, data.ptr) == 0);
+  free((void *) data.ptr);
 
   // List root dir
   ASSERT(fetch(&mgr, buf, url, "GET / HTTP/1.0\n\n") == 200);

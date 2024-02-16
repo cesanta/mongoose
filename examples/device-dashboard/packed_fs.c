@@ -652,7 +652,7 @@ static const unsigned char v1[] = {
    0, 0 // .
 };
 static const unsigned char v2[] = {
-  31, 139,   8,   8,  87, 102, 129, 101,   0,   3,  99, 111, // ....Wf.e..co
+  31, 139,   8,   8,   7, 115, 132, 101,   0,   3,  99, 111, // .....s.e..co
  109, 112, 111, 110, 101, 110, 116, 115,  46, 106, 115,   0, // mponents.js.
  237,  93, 235, 115, 219,  70, 146, 255, 238, 191,  98, 162, // .].s.F....b.
  242,  45, 169, 181,   0, 225,  77,  64, 182, 148, 114, 156, // .-....M@..r.
@@ -2127,7 +2127,7 @@ static const unsigned char v5[] = {
  237,  34,  77,   0,   0, 0 // ."M..
 };
 static const unsigned char v6[] = {
-  31, 139,   8,   8, 215, 103, 114, 101,   0,   3, 109,  97, // .....gre..ma
+  31, 139,   8,   8,  93, 214, 178, 101,   0,   3, 109,  97, // ....]..e..ma
  105, 110,  46, 106, 115,   0, 189,  91, 233, 114, 219,  72, // in.js..[.r.H
  146, 254, 239, 167, 168, 230, 184, 155, 164, 155,   0,   9, // ............
   82, 151, 105,  81,  29,  62, 219, 158, 112, 219,  14,  75, // R.iQ.>..p..K
@@ -2668,11 +2668,11 @@ static const struct packed_file {
   time_t mtime;
 } packed_files[] = {
   {"/web_root/bundle.js.gz", v1, sizeof(v1), 1695912421},
-  {"/web_root/components.js.gz", v2, sizeof(v2), 1702979159},
+  {"/web_root/components.js.gz", v2, sizeof(v2), 1703179015},
   {"/web_root/history.min.js.gz", v3, sizeof(v3), 1695912421},
   {"/web_root/index.html.gz", v4, sizeof(v4), 1693654553},
   {"/web_root/main.css.gz", v5, sizeof(v5), 1702757929},
-  {"/web_root/main.js.gz", v6, sizeof(v6), 1701996503},
+  {"/web_root/main.js.gz", v6, sizeof(v6), 1706219101},
   {"/certs/server_cert.pem", v7, sizeof(v7), 1692695603},
   {"/certs/server_key.pem", v8, sizeof(v8), 1692695603},
   {NULL, NULL, 0, 0}

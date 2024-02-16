@@ -1,3 +1,0 @@
-../source/packed_fs.c:2681:12:scmp	16	static
-../source/packed_fs.c:2685:13:mg_unlist	16	static
-../source/packed_fs.c:2688:13:mg_unpack	32	static
