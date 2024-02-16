@@ -11,7 +11,7 @@
 #define WIFI_FILE FS_ROOT "/wifi.json"
 #define UART_NO 1
 
-void uart_bridge_fn(struct mg_connection *, int, void *, void *);
+void uart_bridge_fn(struct mg_connection *, int, void *);
 int uart_read(void *buf, size_t len);
 bool wifi_init(const char *ssid, const char *pass);
 void cli(uint8_t ch);

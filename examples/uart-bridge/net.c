@@ -26,7 +26,6 @@ struct state {
 void uart_init(int tx, int rx, int baud);
 int uart_read(void *buf, size_t len);
 void uart_write(const void *buf, size_t len);
-char *config_read(void);
 void config_write(struct mg_str config);
 
 // Let users define their own UART API. If they don't, use a dummy one
@@ -52,10 +51,6 @@ int uart_read(void *buf, size_t len) {
 #else
   return read(0, buf, len);  // Read from stdin
 #endif
-}
-
-char *config_read(void) {
-  return mg_file_read(&mg_fs_posix, "config.json", NULL);
 }
 
 void config_write(struct mg_str config) {
@@ -185,12 +180,11 @@ static void config_apply(struct mg_str s) {
 }
 
 // HTTP request handler function
-void uart_bridge_fn(struct mg_connection *c, int ev, void *ev_data,
-                    void *fn_data) {
+void uart_bridge_fn(struct mg_connection *c, int ev, void *ev_data) {
   if (ev == MG_EV_OPEN && c->is_listening) {
-    char *config = config_read();
-    if (config != NULL) config_apply(mg_str(config));
-    free(config);
+    struct mg_str config = mg_file_read(&mg_fs_posix, "config.json");
+    if (config.ptr != NULL) config_apply(config);
+    free((char *) config.ptr);
     s_state.tcp.url = strdup(DEFAULT_TCP);
     s_state.websocket.url = strdup(DEFAULT_WEBSOCKET);
     s_state.mqtt.url = strdup(DEFAULT_MQTT);
@@ -232,5 +226,4 @@ void uart_bridge_fn(struct mg_connection *c, int ev, void *ev_data,
       mg_http_serve_dir(c, ev_data, &opts);
     }
   }
-  (void) fn_data;
 }

@@ -32,20 +32,19 @@ static void broadcast_mjpeg_frame(struct mg_mgr *mgr) {
   size_t nfiles = sizeof(files) / sizeof(files[0]);
   static size_t i;
   const char *path = files[i++ % nfiles];
-  size_t size = 0;
-  char *data = mg_file_read(&mg_fs_posix, path, &size);  // Read next file
+  struct mg_str data = mg_file_read(&mg_fs_posix, path);  // Read next file
   struct mg_connection *c;
   for (c = mgr->conns; c != NULL; c = c->next) {
-    if (c->data[0] != 'S') continue;         // Skip non-stream connections
-    if (data == NULL || size == 0) continue;  // Skip on file read error
+    if (c->data[0] != 'S') continue;  // Skip non-stream connections
+    if (data.ptr == NULL) continue;   // Skip on file read error
     mg_printf(c,
               "--foo\r\nContent-Type: image/jpeg\r\n"
               "Content-Length: %lu\r\n\r\n",
-              (unsigned long) size);
-    mg_send(c, data, size);
+              data.len);
+    mg_send(c, data.ptr, data.len);
     mg_send(c, "\r\n", 2);
   }
-  free(data);
+  free((void *) data.ptr);
 }
 
 static void timer_callback(void *arg) {

@@ -14,16 +14,15 @@ static void signal_handler(int sig_num) {
 
 bool web_load_settings(void *buf, size_t len) {
   bool ok = false;
-  size_t size = 0;
-  void *data = mg_file_read(&mg_fs_posix, CONFIG_FILE, &size);
-  if (data == NULL) {
+  struct mg_str data = mg_file_read(&mg_fs_posix, CONFIG_FILE);
+  if (data.ptr == NULL) {
     MG_ERROR(("Error reading %s", CONFIG_FILE));
-  } else if (size != len) {
+  } else if (data.len != len) {
     MG_ERROR(("%s size != %lu", CONFIG_FILE, len));
   } else {
-    memcpy(buf, data, len);
+    memcpy(buf, data.ptr, len);
   }
-  free(data);
+  free((void *) data.ptr);
   return ok;
 }
 

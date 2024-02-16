@@ -22,25 +22,21 @@ void mg_fs_close(struct mg_fd *fd) {
   }
 }
 
-char *mg_file_read(struct mg_fs *fs, const char *path, size_t *sizep) {
-  struct mg_fd *fd;
-  char *data = NULL;
-  size_t size = 0;
-  fs->st(path, &size, NULL);
-  if ((fd = mg_fs_open(fs, path, MG_FS_READ)) != NULL) {
-    data = (char *) calloc(1, size + 1);
-    if (data != NULL) {
-      if (fs->rd(fd->fd, data, size) != size) {
-        free(data);
-        data = NULL;
-      } else {
-        data[size] = '\0';
-        if (sizep != NULL) *sizep = size;
-      }
+struct mg_str mg_file_read(struct mg_fs *fs, const char *path) {
+  struct mg_str result = {NULL, 0};
+  void *fp;
+  fs->st(path, &result.len, NULL);
+  if ((fp = fs->op(path, MG_FS_READ)) != NULL) {
+    result.ptr = (char *) calloc(1, result.len + 1);
+    if (result.ptr != NULL &&
+        fs->rd(fp, (void *) result.ptr, result.len) != result.len) {
+      free((void *) result.ptr);
+      result.ptr = NULL;
     }
-    mg_fs_close(fd);
+    fs->cl(fp);
   }
-  return data;
+  if (result.ptr == NULL) result.len = 0;
+  return result;
 }
 
 bool mg_file_write(struct mg_fs *fs, const char *path, const void *buf,

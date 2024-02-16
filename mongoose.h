@@ -1022,7 +1022,7 @@ struct mg_fd {
 struct mg_fd *mg_fs_open(struct mg_fs *fs, const char *path, int flags);
 void mg_fs_close(struct mg_fd *fd);
 bool mg_fs_ls(struct mg_fs *fs, const char *path, char *buf, size_t len);
-char *mg_file_read(struct mg_fs *fs, const char *path, size_t *size);
+struct mg_str mg_file_read(struct mg_fs *fs, const char *path);
 bool mg_file_write(struct mg_fs *fs, const char *path, const void *, size_t);
 bool mg_file_printf(struct mg_fs *fs, const char *path, const char *fmt, ...);
 

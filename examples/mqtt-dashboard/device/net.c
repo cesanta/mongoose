@@ -40,10 +40,10 @@ static void set_device_id(void) {
     fclose(fp);
   }
 #elif defined(__linux__)
-  char *id = mg_file_read(&mg_fs_posix, "/etc/machine-id", NULL);
-  if (id != NULL) {
-    mg_snprintf(buf, sizeof(buf), "%s", id);
-    free(id);
+  struct mg_str id = mg_file_read(&mg_fs_posix, "/etc/machine-id");
+  if (id.ptr != NULL) {
+    mg_snprintf(buf, sizeof(buf), "%s", id.ptr);
+    free((void *) id.ptr);
   }
 #endif
 
