@@ -20,7 +20,7 @@
 #ifndef MONGOOSE_H
 #define MONGOOSE_H
 
-#define MG_VERSION "7.12"
+#define MG_VERSION "7.13"
 
 #ifdef __cplusplus
 extern "C" {
