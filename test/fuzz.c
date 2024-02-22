@@ -74,8 +74,8 @@ int LLVMFuzzerTestOneInput(const uint8_t *data, size_t size) {
 
   mg_globmatch((char *) data, size, (char *) data, size);
 
-  struct mg_str k, v, s = mg_str_n((char *) data, size);
-  while (mg_span(s, &k, &v, ',')) k.len = v.len = 0;
+  struct mg_str entry, s = mg_str_n((char *) data, size);
+  while (mg_span(s, &entry, &s, ',')) entry.len = 0;
 
   int n;
   mg_json_get(mg_str_n((char *) data, size), "$", &n);
