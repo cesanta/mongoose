@@ -104,7 +104,7 @@ MG_IRAM bool mg_flash_erase(void *addr) {
   return ok;
 }
 
-MG_IRAM bool mg_flash_swap_bank() {
+MG_IRAM bool mg_flash_swap_bank(void) {
   if (mg_flash_bank() == 0) return true;
   uint32_t bank = FLASH_BASE1;
   uint32_t desired = flash_bank_is_swapped(bank) ? 0 : MG_BIT(31);

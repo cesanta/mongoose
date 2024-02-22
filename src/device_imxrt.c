@@ -249,7 +249,7 @@ MG_IRAM bool mg_flash_erase(void *addr) {
   return ok;
 }
 
-MG_IRAM bool mg_flash_swap_bank() {
+MG_IRAM bool mg_flash_swap_bank(void) {
   return true;
 }
 
