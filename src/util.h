@@ -23,9 +23,9 @@ uint64_t mg_now(void);     // Return milliseconds since Epoch
 #define mg_htons(x) mg_ntohs(x)
 #define mg_htonl(x) mg_ntohl(x)
 
-#define MG_U32(a, b, c, d)                                         \
-  (((uint32_t) ((a) &255) << 24) | ((uint32_t) ((b) &255) << 16) | \
-   ((uint32_t) ((c) &255) << 8) | (uint32_t) ((d) &255))
+#define MG_U32(a, b, c, d)                                           \
+  (((uint32_t) ((a) & 255) << 24) | ((uint32_t) ((b) & 255) << 16) | \
+   ((uint32_t) ((c) & 255) << 8) | (uint32_t) ((d) & 255))
 
 // For printing IPv4 addresses: printf("%d.%d.%d.%d\n", MG_IPADDR_PARTS(&ip))
 #define MG_U8P(ADDR) ((uint8_t *) (ADDR))
@@ -39,9 +39,12 @@ uint64_t mg_now(void);     // Return milliseconds since Epoch
 #define MG_ROUND_UP(x, a) ((a) == 0 ? (x) : ((((x) + (a) -1) / (a)) * (a)))
 #define MG_ROUND_DOWN(x, a) ((a) == 0 ? (x) : (((x) / (a)) * (a)))
 
-#ifdef __GNUC__
+#if defined(__GNUC__)
 #define MG_ARM_DISABLE_IRQ() asm volatile("cpsid i" : : : "memory")
 #define MG_ARM_ENABLE_IRQ() asm volatile("cpsie i" : : : "memory")
+#elif defined(__CCRH__)
+#define MG_RH850_DISABLE_IRQ() __DI()
+#define MG_RH850_ENABLE_IRQ() __EI()
 #else
 #define MG_ARM_DISABLE_IRQ()
 #define MG_ARM_ENABLE_IRQ()

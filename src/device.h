@@ -11,6 +11,7 @@
 #define MG_DEVICE_RT1020 3      // IMXRT1020
 #define MG_DEVICE_RT1060 4      // IMXRT1060
 #define MG_DEVICE_CH32V307 100  // WCH CH32V307
+#define MG_DEVICE_U2A 200       // Renesas U2A16, U2A8, U2A6
 #define MG_DEVICE_CUSTOM 1000   // Custom implementation
 
 #ifndef MG_DEVICE
