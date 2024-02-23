@@ -1186,6 +1186,15 @@ static void test_http_404(void) {
   ASSERT(cmpbody(buf, "Not found\n") == 0);
   ASSERT(fetch(&mgr, buf, url, "GET /a/xx.txt HTTP/1.0\n\n") == 200);
   ASSERT(cmpbody(buf, "boo\n") == 0);
+  { // txt requested, existent 404 is html
+    struct mg_http_message hm;
+    struct mg_str *cl;
+    mg_http_parse(buf, strlen(buf), &hm);
+    cl = mg_http_get_header(&hm, "Content-Type");
+    ASSERT(cl != NULL);
+    if (cl->len > 9) cl->len = 9; // restrict to text/html len max
+    ASSERT(mg_strcmp(*cl, mg_str("text/html")) == 0);
+  }
   ASSERT(fetch(&mgr, buf, url, "GET /b/xx.txt HTTP/1.0\n\n") == 404);
   ASSERT(cmpbody(buf, "Not found\n") == 0);
 
