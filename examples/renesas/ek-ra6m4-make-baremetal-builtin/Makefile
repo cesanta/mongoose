@@ -4,14 +4,11 @@ CFLAGS += -g3 -Os -ffunction-sections -fdata-sections
 CFLAGS += -I. -Icmsis_core/CMSIS/Core/Include
 CFLAGS += -Icmsis_mcu/ra/fsp/src/bsp/cmsis/Device/RENESAS/Include
 CFLAGS += -Icmsis_mcu/ra/fsp/src/bsp/mcu/all
-#CFLAGS += -Icmsis_mcu/ra/fsp/inc
-#CFLAGS += -Icmsis_mcu/ra/fsp/inc/api
 CFLAGS += -mcpu=cortex-m33 -mthumb -mfpu=fpv5-sp-d16 -mfloat-abi=hard $(CFLAGS_EXTRA)
 LDFLAGS ?= -Tlink.ld -nostdlib -nostartfiles --specs nano.specs -lc -lgcc -Wl,--gc-sections -Wl,-Map=$@.map
 
 SOURCES = main.c hal.c mongoose.c net.c packed_fs.c
-#SOURCES += cmsis_mcu/Files/startup_RA.c
-#SOURCES += cmsis_mcu/Files/system_RA.c
+# CMSIS startup and system files are deeply tied to the BSP, and we don't use it. See hal.c
 
 # Example specific build options. See README.md
 CFLAGS += -DHTTP_URL=\"http://0.0.0.0/\" -DHTTPS_URL=\"https://0.0.0.0/\"
@@ -42,11 +39,11 @@ cmsis_mcu:
 
 
 # Automated remote test. Requires env variable VCON_API_KEY set. See https://vcon.io/automated-firmware-tests/
-DEVICE_URL ?= https://dash.vcon.io/api/v3/devices/13
+DEVICE_URL ?= https://dash.vcon.io/api/v3/devices/14
 update: firmware.bin
 	curl --fail-with-body -su :$(VCON_API_KEY) $(DEVICE_URL)/ota --data-binary @$<
 
-update: CFLAGS += -DUART_DEBUG=LPUART3
+update: CFLAGS += -DUART_DEBUG=R_SCI7
 
 test: update
 	curl --fail-with-body -su :$(VCON_API_KEY) $(DEVICE_URL)/tx?t=5 | tee /tmp/output.txt

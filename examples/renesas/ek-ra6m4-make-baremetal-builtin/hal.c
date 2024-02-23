@@ -13,11 +13,12 @@ static volatile uint64_t s_ticks;  // Milliseconds since boot
 extern void _estack(void);  // Defined in link.ld
 void Reset_Handler(void);
 void SysTick_Handler(void);
+extern void EDMAC_IRQHandler(void);
 
 // 16 ARM and 200 peripheral handlers
 __attribute__((section(".vectors"))) void (*const tab[16 + 10])(void) = {
-    _estack, Reset_Handler,  0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-    0,       SysTick_Handler};
+    _estack,         Reset_Handler,   0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+    SysTick_Handler, EDMAC_IRQHandler};
 
 void Reset_Handler(void) {
   extern long _sbss[], _ebss[], _sdata[], _edata[], _sidata[];
@@ -33,8 +34,11 @@ void Reset_Handler(void) {
 }
 
 void SystemInit(void) {  // Called automatically by startup code
-  clock_init();          // Set system clock to SYS_FREQUENCY
-  rng_init();            // Initialise random number generator
+  SCB->CPACR |= ((3UL << 10 * 2) | (3UL << 11 * 2));  // Enable FPU
+  __DSB();
+  __ISB();
+  clock_init();                            // Set system clock to SYS_FREQUENCY
+  rng_init();                              // Initialise random number generator
   SysTick_Config(SystemCoreClock / 1000);  // Sys tick every 1ms
 }
 
@@ -42,12 +46,14 @@ void SysTick_Handler(void) {  // SyStick IRQ handler, triggered every 1ms
   s_ticks++;
 }
 
+#if 0
 void mg_random(void *buf, size_t len) {  // Use on-board RNG
   for (size_t n = 0; n < len; n += sizeof(uint32_t)) {
     uint32_t r = rng_read();
     memcpy((char *) buf + n, &r, n + sizeof(r) > len ? len - n : sizeof(r));
   }
 }
+#endif
 
 uint64_t mg_millis(void) {  // Let Mongoose use our uptime function
   return s_ticks;           // Return number of milliseconds since boot
