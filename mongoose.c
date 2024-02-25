@@ -5004,8 +5004,9 @@ static void mkpay(struct pkt *pkt, void *p) {
 }
 
 static uint32_t csumup(uint32_t sum, const void *buf, size_t len) {
+  size_t i;
   const uint8_t *p = (const uint8_t *) buf;
-  for (size_t i = 0; i < len; i++) sum += i & 1 ? p[i] : (uint32_t) (p[i] << 8);
+  for (i = 0; i < len; i++) sum += i & 1 ? p[i] : (uint32_t) (p[i] << 8);
   return sum;
 }
 
@@ -5702,10 +5703,10 @@ static void mg_tcpip_rx(struct mg_tcpip_if *ifp, void *buf, size_t len) {
   }
 }
 
-static void mg_tcpip_poll(struct mg_tcpip_if *ifp, uint64_t uptime_ms) {
-  if (ifp == NULL || ifp->driver == NULL) return;
-  bool expired_1000ms = mg_timer_expired(&ifp->timer_1000ms, 1000, uptime_ms);
-  ifp->now = uptime_ms;
+static void mg_tcpip_poll(struct mg_tcpip_if *ifp, uint64_t now) {
+  struct mg_connection *c;
+  bool expired_1000ms = mg_timer_expired(&ifp->timer_1000ms, 1000, now);
+  ifp->now = now;
 
   // Handle physical interface up/down status
   if (expired_1000ms && ifp->driver->up) {
@@ -5718,6 +5719,7 @@ static void mg_tcpip_poll(struct mg_tcpip_if *ifp, uint64_t uptime_ms) {
       if (!up && ifp->enable_dhcp_client) ifp->ip = 0;
       onstatechange(ifp);
     }
+    if (ifp->state == MG_TCPIP_STATE_DOWN) MG_ERROR(("Network is down"));
   }
   if (ifp->state == MG_TCPIP_STATE_DOWN) return;
 
@@ -5754,12 +5756,12 @@ static void mg_tcpip_poll(struct mg_tcpip_if *ifp, uint64_t uptime_ms) {
   }
 
   // Process timeouts
-  for (struct mg_connection *c = ifp->mgr->conns; c != NULL; c = c->next) {
+  for (c = ifp->mgr->conns; c != NULL; c = c->next) {
     if (c->is_udp || c->is_listening || c->is_resolving) continue;
     struct connstate *s = (struct connstate *) (c + 1);
     uint32_t rem_ip;
     memcpy(&rem_ip, c->rem.ip, sizeof(uint32_t));
-    if (uptime_ms > s->timer) {
+    if (now > s->timer) {
       if (s->ttype == MIP_TTYPE_ACK) {
         MG_VERBOSE(("%lu ack %x %x", c->id, s->seq, s->ack));
         tx_tcp(ifp, s->mac, rem_ip, TH_ACK, c->loc.port, c->rem.port,
@@ -5928,9 +5930,10 @@ static bool can_write(struct mg_connection *c) {
 }
 
 void mg_mgr_poll(struct mg_mgr *mgr, int ms) {
+  struct mg_tcpip_if *ifp = (struct mg_tcpip_if *) mgr->priv;
   struct mg_connection *c, *tmp;
   uint64_t now = mg_millis();
-  mg_tcpip_poll((struct mg_tcpip_if *) mgr->priv, now);
+  if (ifp != NULL && ifp->driver != NULL) mg_tcpip_poll(ifp, now);
   mg_timer_poll(&mgr->timers, now);
   for (c = mgr->conns; c != NULL; c = tmp) {
     tmp = c->next;
@@ -15607,14 +15610,15 @@ struct mg_tcpip_driver mg_tcpip_driver_tm4c = {mg_tcpip_driver_tm4c_init,
 
 enum { W5500_CR = 0, W5500_S0 = 1, W5500_TX0 = 2, W5500_RX0 = 3 };
 
-static void w5500_txn(struct mg_tcpip_spi *s, uint8_t block, uint16_t addr, bool wr,
-                      void *buf, size_t len) {
+static void w5500_txn(struct mg_tcpip_spi *s, uint8_t block, uint16_t addr,
+                      bool wr, void *buf, size_t len) {
+  size_t i;
   uint8_t *p = (uint8_t *) buf;
   uint8_t cmd[] = {(uint8_t) (addr >> 8), (uint8_t) (addr & 255),
                    (uint8_t) ((block << 3) | (wr ? 4 : 0))};
   s->begin(s->spi);
-  for (size_t i = 0; i < sizeof(cmd); i++) s->txn(s->spi, cmd[i]);
-  for (size_t i = 0; i < len; i++) {
+  for (i = 0; i < sizeof(cmd); i++) s->txn(s->spi, cmd[i]);
+  for (i = 0; i < len; i++) {
     uint8_t r = s->txn(s->spi, p[i]);
     if (!wr) p[i] = r;
   }
@@ -15649,15 +15653,16 @@ static size_t w5500_rx(void *buf, size_t buflen, struct mg_tcpip_if *ifp) {
   return r;
 }
 
-static size_t w5500_tx(const void *buf, size_t buflen, struct mg_tcpip_if *ifp) {
+static size_t w5500_tx(const void *buf, size_t buflen,
+                       struct mg_tcpip_if *ifp) {
   struct mg_tcpip_spi *s = (struct mg_tcpip_spi *) ifp->driver_data;
-  uint16_t n = 0, len = (uint16_t) buflen;
+  uint16_t i, ptr, n = 0, len = (uint16_t) buflen;
   while (n < len) n = w5500_r2(s, W5500_S0, 0x20);      // Wait for space
-  uint16_t ptr = w5500_r2(s, W5500_S0, 0x24);           // Get write pointer
+  ptr = w5500_r2(s, W5500_S0, 0x24);                    // Get write pointer
   w5500_wn(s, W5500_TX0, ptr, (void *) buf, len);       // Write data
   w5500_w2(s, W5500_S0, 0x24, (uint16_t) (ptr + len));  // Advance write pointer
   w5500_w1(s, W5500_S0, 1, 0x20);                       // Sock0 CR -> SEND
-  for (int i = 0; i < 40; i++) {
+  for (i = 0; i < 40; i++) {
     uint8_t ir = w5500_r1(s, W5500_S0, 2);  // Read S0 IR
     if (ir == 0) continue;
     // printf("IR %d, len=%d, free=%d, ptr %d\n", ir, (int) len, (int) n, ptr);
@@ -15688,5 +15693,6 @@ static bool w5500_up(struct mg_tcpip_if *ifp) {
   return phycfgr & 1;  // Bit 0 of PHYCFGR is LNK (0 - down, 1 - up)
 }
 
-struct mg_tcpip_driver mg_tcpip_driver_w5500 = {w5500_init, w5500_tx, w5500_rx, w5500_up};
+struct mg_tcpip_driver mg_tcpip_driver_w5500 = {w5500_init, w5500_tx, w5500_rx,
+                                                w5500_up};
 #endif

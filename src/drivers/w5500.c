@@ -4,14 +4,15 @@
 
 enum { W5500_CR = 0, W5500_S0 = 1, W5500_TX0 = 2, W5500_RX0 = 3 };
 
-static void w5500_txn(struct mg_tcpip_spi *s, uint8_t block, uint16_t addr, bool wr,
-                      void *buf, size_t len) {
+static void w5500_txn(struct mg_tcpip_spi *s, uint8_t block, uint16_t addr,
+                      bool wr, void *buf, size_t len) {
+  size_t i;
   uint8_t *p = (uint8_t *) buf;
   uint8_t cmd[] = {(uint8_t) (addr >> 8), (uint8_t) (addr & 255),
                    (uint8_t) ((block << 3) | (wr ? 4 : 0))};
   s->begin(s->spi);
-  for (size_t i = 0; i < sizeof(cmd); i++) s->txn(s->spi, cmd[i]);
-  for (size_t i = 0; i < len; i++) {
+  for (i = 0; i < sizeof(cmd); i++) s->txn(s->spi, cmd[i]);
+  for (i = 0; i < len; i++) {
     uint8_t r = s->txn(s->spi, p[i]);
     if (!wr) p[i] = r;
   }
@@ -46,15 +47,16 @@ static size_t w5500_rx(void *buf, size_t buflen, struct mg_tcpip_if *ifp) {
   return r;
 }
 
-static size_t w5500_tx(const void *buf, size_t buflen, struct mg_tcpip_if *ifp) {
+static size_t w5500_tx(const void *buf, size_t buflen,
+                       struct mg_tcpip_if *ifp) {
   struct mg_tcpip_spi *s = (struct mg_tcpip_spi *) ifp->driver_data;
-  uint16_t n = 0, len = (uint16_t) buflen;
+  uint16_t i, ptr, n = 0, len = (uint16_t) buflen;
   while (n < len) n = w5500_r2(s, W5500_S0, 0x20);      // Wait for space
-  uint16_t ptr = w5500_r2(s, W5500_S0, 0x24);           // Get write pointer
+  ptr = w5500_r2(s, W5500_S0, 0x24);                    // Get write pointer
   w5500_wn(s, W5500_TX0, ptr, (void *) buf, len);       // Write data
   w5500_w2(s, W5500_S0, 0x24, (uint16_t) (ptr + len));  // Advance write pointer
   w5500_w1(s, W5500_S0, 1, 0x20);                       // Sock0 CR -> SEND
-  for (int i = 0; i < 40; i++) {
+  for (i = 0; i < 40; i++) {
     uint8_t ir = w5500_r1(s, W5500_S0, 2);  // Read S0 IR
     if (ir == 0) continue;
     // printf("IR %d, len=%d, free=%d, ptr %d\n", ir, (int) len, (int) n, ptr);
@@ -85,5 +87,6 @@ static bool w5500_up(struct mg_tcpip_if *ifp) {
   return phycfgr & 1;  // Bit 0 of PHYCFGR is LNK (0 - down, 1 - up)
 }
 
-struct mg_tcpip_driver mg_tcpip_driver_w5500 = {w5500_init, w5500_tx, w5500_rx, w5500_up};
+struct mg_tcpip_driver mg_tcpip_driver_w5500 = {w5500_init, w5500_tx, w5500_rx,
+                                                w5500_up};
 #endif

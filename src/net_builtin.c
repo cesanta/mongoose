@@ -143,8 +143,9 @@ static void mkpay(struct pkt *pkt, void *p) {
 }
 
 static uint32_t csumup(uint32_t sum, const void *buf, size_t len) {
+  size_t i;
   const uint8_t *p = (const uint8_t *) buf;
-  for (size_t i = 0; i < len; i++) sum += i & 1 ? p[i] : (uint32_t) (p[i] << 8);
+  for (i = 0; i < len; i++) sum += i & 1 ? p[i] : (uint32_t) (p[i] << 8);
   return sum;
 }
 
@@ -841,10 +842,10 @@ static void mg_tcpip_rx(struct mg_tcpip_if *ifp, void *buf, size_t len) {
   }
 }
 
-static void mg_tcpip_poll(struct mg_tcpip_if *ifp, uint64_t uptime_ms) {
-  if (ifp == NULL || ifp->driver == NULL) return;
-  bool expired_1000ms = mg_timer_expired(&ifp->timer_1000ms, 1000, uptime_ms);
-  ifp->now = uptime_ms;
+static void mg_tcpip_poll(struct mg_tcpip_if *ifp, uint64_t now) {
+  struct mg_connection *c;
+  bool expired_1000ms = mg_timer_expired(&ifp->timer_1000ms, 1000, now);
+  ifp->now = now;
 
   // Handle physical interface up/down status
   if (expired_1000ms && ifp->driver->up) {
@@ -857,6 +858,7 @@ static void mg_tcpip_poll(struct mg_tcpip_if *ifp, uint64_t uptime_ms) {
       if (!up && ifp->enable_dhcp_client) ifp->ip = 0;
       onstatechange(ifp);
     }
+    if (ifp->state == MG_TCPIP_STATE_DOWN) MG_ERROR(("Network is down"));
   }
   if (ifp->state == MG_TCPIP_STATE_DOWN) return;
 
@@ -893,12 +895,12 @@ static void mg_tcpip_poll(struct mg_tcpip_if *ifp, uint64_t uptime_ms) {
   }
 
   // Process timeouts
-  for (struct mg_connection *c = ifp->mgr->conns; c != NULL; c = c->next) {
+  for (c = ifp->mgr->conns; c != NULL; c = c->next) {
     if (c->is_udp || c->is_listening || c->is_resolving) continue;
     struct connstate *s = (struct connstate *) (c + 1);
     uint32_t rem_ip;
     memcpy(&rem_ip, c->rem.ip, sizeof(uint32_t));
-    if (uptime_ms > s->timer) {
+    if (now > s->timer) {
       if (s->ttype == MIP_TTYPE_ACK) {
         MG_VERBOSE(("%lu ack %x %x", c->id, s->seq, s->ack));
         tx_tcp(ifp, s->mac, rem_ip, TH_ACK, c->loc.port, c->rem.port,
@@ -1067,9 +1069,10 @@ static bool can_write(struct mg_connection *c) {
 }
 
 void mg_mgr_poll(struct mg_mgr *mgr, int ms) {
+  struct mg_tcpip_if *ifp = (struct mg_tcpip_if *) mgr->priv;
   struct mg_connection *c, *tmp;
   uint64_t now = mg_millis();
-  mg_tcpip_poll((struct mg_tcpip_if *) mgr->priv, now);
+  if (ifp != NULL && ifp->driver != NULL) mg_tcpip_poll(ifp, now);
   mg_timer_poll(&mgr->timers, now);
   for (c = mgr->conns; c != NULL; c = tmp) {
     tmp = c->next;
