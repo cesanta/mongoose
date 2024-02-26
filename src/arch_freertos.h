@@ -11,12 +11,13 @@
 #include <stddef.h>
 #include <stdint.h>
 #include <stdio.h>
-#include <stdlib.h> // rand(), strtol(), atoi()
+#include <stdlib.h>  // rand(), strtol(), atoi()
 #include <string.h>
 #if defined(__ARMCC_VERSION)
 #define mode_t size_t
-#include <time.h>
 #include <alloca.h>
+#include <time.h>
+#elif defined(__CCRH__)
 #else
 #include <sys/stat.h>
 #endif
