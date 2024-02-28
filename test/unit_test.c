@@ -1361,11 +1361,23 @@ static void f4c(struct mg_connection *c, int ev, void *ev_data) {
   }
 }
 
+static void f41(struct mg_connection *c, int ev, void *ev_data) {
+  if (ev == MG_EV_HTTP_MSG) {
+    struct mg_http_message *hm = (struct mg_http_message *) ev_data;
+    mg_printf(c, "HTTP/1.0 200 OK\n\n%.*s/%s", (int) hm->uri.len, hm->uri.ptr,
+              "abcdef");
+  }
+}
+
 static void test_http_no_content_length(void) {
   char buf1[10] = {0}, buf2[10] = {0};
+  char buf[100];
   struct mg_mgr mgr;
   const char *url = "http://127.0.0.1:12348";
   int i;
+  const char *post_req = "POST / HTTP/1.1\r\nContent-Type:"
+                  "b/a\r\nContent-Length: 15\r\n\r\n"
+                  "{\"key\": \"value\"}";
   mg_mgr_init(&mgr);
   mg_http_listen(&mgr, url, f4, (void *) buf1);
   mg_http_connect(&mgr, url, f4c, (void *) buf2);
@@ -1373,6 +1385,16 @@ static void test_http_no_content_length(void) {
   MG_INFO(("[%s] [%s]", buf1, buf2));
   ASSERT(strcmp(buf1, "mc") == 0);
   ASSERT(strcmp(buf2, "mc") == 0);
+  mg_mgr_free(&mgr);
+
+  mg_mgr_init(&mgr);
+  mg_http_listen(&mgr, url, f41, (void *) NULL);
+  ASSERT(fetch(&mgr, buf, url, "POST / HTTP/1.1\r\n\r\n") == 411);
+  ASSERT(fetch(&mgr, buf, url, "HTTP/1.1 200\r\n\r\n") == 411);
+  ASSERT(fetch(&mgr, buf, url, "HTTP/1.1 100\r\n\r\n") != 411);
+  ASSERT(fetch(&mgr, buf, url, "HTTP/1.1 304\r\n\r\n") != 411);
+  ASSERT(fetch(&mgr, buf, url, "HTTP/1.1 305\r\n\r\n") == 411);
+  ASSERT(fetch(&mgr, buf, url, post_req) != 411);
   mg_mgr_free(&mgr);
   ASSERT(mgr.conns == NULL);
 }
