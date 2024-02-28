@@ -16,7 +16,7 @@
         <TargetCommonOption>
           <Device>STM32F746ZGTx</Device>
           <Vendor>STMicroelectronics</Vendor>
-          <PackID>Keil.STM32F7xx_DFP.2.15.1</PackID>
+          <PackID>Keil.STM32F7xx_DFP.2.15.2</PackID>
           <PackURL>https://www.keil.com/pack/</PackURL>
           <Cpu>IRAM(0x20010000,0x40000) IRAM2(0x20000000,0x10000) IROM(0x08000000,0x100000) IROM2(0x00200000,0x100000) CPUTYPE("Cortex-M7") FPU3(SFPU) CLOCK(12000000) ELITTLE</Cpu>
           <FlashUtilSpec></FlashUtilSpec>
@@ -510,31 +510,31 @@
         </targetInfos>
       </component>
       <component Cclass="FreeRTOS" Cgroup="FreeRTOS+ TCP" Csub="Buffer Allocation" Cvariant="Buffer Allocation 2" Cvendor="AWS" Cversion="3.1.0" condition="freertos_plus_tcp_lts_buffer_allocation_2 Condition">
-        <package name="FreeRTOS-Plus-TCP" schemaVersion="1.7.2" url="https://freertos-cmsis-packs.s3.us-west-2.amazonaws.com/" vendor="AWS" version="5.0.0"/>
+        <package name="FreeRTOS-Plus-TCP" schemaVersion="1.7.2" url="https://d1pm0k3vkcievw.cloudfront.net/" vendor="AWS" version="5.0.1"/>
         <targetInfos>
           <targetInfo name="Target 1"/>
         </targetInfos>
       </component>
       <component Cclass="FreeRTOS" Cgroup="FreeRTOS+ TCP" Csub="Compiler Port" Cvariant="Keil" Cvendor="AWS" Cversion="3.1.0" condition="freertos_plus_tcp_lts_keil_compiler Condition">
-        <package name="FreeRTOS-Plus-TCP" schemaVersion="1.7.2" url="https://freertos-cmsis-packs.s3.us-west-2.amazonaws.com/" vendor="AWS" version="5.0.0"/>
+        <package name="FreeRTOS-Plus-TCP" schemaVersion="1.7.2" url="https://d1pm0k3vkcievw.cloudfront.net/" vendor="AWS" version="5.0.1"/>
         <targetInfos>
           <targetInfo name="Target 1"/>
         </targetInfos>
       </component>
       <component Cclass="FreeRTOS" Cgroup="FreeRTOS+ TCP" Csub="Core Library" Cvendor="AWS" Cversion="3.1.0" condition="freertos_plus_tcp_lts_library Condition">
-        <package name="FreeRTOS-Plus-TCP" schemaVersion="1.7.2" url="https://freertos-cmsis-packs.s3.us-west-2.amazonaws.com/" vendor="AWS" version="5.0.0"/>
+        <package name="FreeRTOS-Plus-TCP" schemaVersion="1.7.2" url="https://d1pm0k3vkcievw.cloudfront.net/" vendor="AWS" version="5.0.1"/>
         <targetInfos>
           <targetInfo name="Target 1"/>
         </targetInfos>
       </component>
       <component Cclass="FreeRTOS" Cgroup="FreeRTOS+ TCP" Csub="Network Interface" Cvariant="STM32Fxx" Cvendor="AWS" Cversion="3.1.0" condition="freertos_plus_tcp_lts_stm32fxx_network_interface_port Condition">
-        <package name="FreeRTOS-Plus-TCP" schemaVersion="1.7.2" url="https://freertos-cmsis-packs.s3.us-west-2.amazonaws.com/" vendor="AWS" version="5.0.0"/>
+        <package name="FreeRTOS-Plus-TCP" schemaVersion="1.7.2" url="https://d1pm0k3vkcievw.cloudfront.net/" vendor="AWS" version="5.0.1"/>
         <targetInfos>
           <targetInfo name="Target 1"/>
         </targetInfos>
       </component>
-      <component Cclass="Network Library" Cgroup="Mongoose" Cvendor="Cesanta" Cversion="7.12.0">
-        <package name="Mongoose" schemaVersion="1.7.2" url="https://mongoose.ws/downloads/armpack/" vendor="Cesanta" version="7.12.0"/>
+      <component Cclass="Network Library" Cgroup="Mongoose" Cvendor="Cesanta" Cversion="7.13.0">
+        <package name="Mongoose" schemaVersion="1.7.2" url="https://mongoose.ws/downloads/armpack/" vendor="Cesanta" version="7.13.0"/>
         <targetInfos>
           <targetInfo name="Target 1"/>
         </targetInfos>
@@ -546,55 +546,55 @@
         </targetInfos>
       </component>
       <component Cclass="Device" Cgroup="STM32Cube HAL" Csub="Common" Cvendor="Keil" Cversion="1.3.0" condition="STM32F7 HAL Common">
-        <package name="STM32F7xx_DFP" schemaVersion="1.7.7" url="https://www.keil.com/pack/" vendor="Keil" version="2.15.1"/>
+        <package name="STM32F7xx_DFP" schemaVersion="1.7.7" url="https://www.keil.com/pack/" vendor="Keil" version="2.15.2"/>
         <targetInfos>
           <targetInfo name="Target 1"/>
         </targetInfos>
       </component>
       <component Cclass="Device" Cgroup="STM32Cube HAL" Csub="Cortex" Cvendor="Keil" Cversion="1.3.0" condition="STM32F7 HAL">
-        <package name="STM32F7xx_DFP" schemaVersion="1.7.7" url="https://www.keil.com/pack/" vendor="Keil" version="2.15.1"/>
+        <package name="STM32F7xx_DFP" schemaVersion="1.7.7" url="https://www.keil.com/pack/" vendor="Keil" version="2.15.2"/>
         <targetInfos>
           <targetInfo name="Target 1"/>
         </targetInfos>
       </component>
       <component Cclass="Device" Cgroup="STM32Cube HAL" Csub="DMA" Cvendor="Keil" Cversion="1.3.0" condition="STM32F7 HAL">
-        <package name="STM32F7xx_DFP" schemaVersion="1.7.7" url="https://www.keil.com/pack/" vendor="Keil" version="2.15.1"/>
+        <package name="STM32F7xx_DFP" schemaVersion="1.7.7" url="https://www.keil.com/pack/" vendor="Keil" version="2.15.2"/>
         <targetInfos>
           <targetInfo name="Target 1"/>
         </targetInfos>
       </component>
       <component Cclass="Device" Cgroup="STM32Cube HAL" Csub="GPIO" Cvendor="Keil" Cversion="1.3.0" condition="STM32F7 HAL">
-        <package name="STM32F7xx_DFP" schemaVersion="1.7.7" url="https://www.keil.com/pack/" vendor="Keil" version="2.15.1"/>
+        <package name="STM32F7xx_DFP" schemaVersion="1.7.7" url="https://www.keil.com/pack/" vendor="Keil" version="2.15.2"/>
         <targetInfos>
           <targetInfo name="Target 1"/>
         </targetInfos>
       </component>
       <component Cclass="Device" Cgroup="STM32Cube HAL" Csub="PWR" Cvendor="Keil" Cversion="1.3.0" condition="STM32F7 HAL">
-        <package name="STM32F7xx_DFP" schemaVersion="1.7.7" url="https://www.keil.com/pack/" vendor="Keil" version="2.15.1"/>
+        <package name="STM32F7xx_DFP" schemaVersion="1.7.7" url="https://www.keil.com/pack/" vendor="Keil" version="2.15.2"/>
         <targetInfos>
           <targetInfo name="Target 1"/>
         </targetInfos>
       </component>
       <component Cclass="Device" Cgroup="STM32Cube HAL" Csub="RCC" Cvendor="Keil" Cversion="1.3.0" condition="STM32F7 HAL GPIO">
-        <package name="STM32F7xx_DFP" schemaVersion="1.7.7" url="https://www.keil.com/pack/" vendor="Keil" version="2.15.1"/>
+        <package name="STM32F7xx_DFP" schemaVersion="1.7.7" url="https://www.keil.com/pack/" vendor="Keil" version="2.15.2"/>
         <targetInfos>
           <targetInfo name="Target 1"/>
         </targetInfos>
       </component>
       <component Cclass="Device" Cgroup="STM32Cube HAL" Csub="RNG" Cvendor="Keil" Cversion="1.3.0" condition="STM32F7 HAL">
-        <package name="STM32F7xx_DFP" schemaVersion="1.7.7" url="https://www.keil.com/pack/" vendor="Keil" version="2.15.1"/>
+        <package name="STM32F7xx_DFP" schemaVersion="1.7.7" url="https://www.keil.com/pack/" vendor="Keil" version="2.15.2"/>
         <targetInfos>
           <targetInfo name="Target 1"/>
         </targetInfos>
       </component>
       <component Cclass="Device" Cgroup="STM32Cube HAL" Csub="UART" Cvendor="Keil" Cversion="1.3.0" condition="STM32F7 HAL DMA">
-        <package name="STM32F7xx_DFP" schemaVersion="1.7.7" url="https://www.keil.com/pack/" vendor="Keil" version="2.15.1"/>
+        <package name="STM32F7xx_DFP" schemaVersion="1.7.7" url="https://www.keil.com/pack/" vendor="Keil" version="2.15.2"/>
         <targetInfos>
           <targetInfo name="Target 1"/>
         </targetInfos>
       </component>
       <component Cclass="Device" Cgroup="Startup" Cvendor="Keil" Cversion="1.2.5" condition="STM32F7 CMSIS">
-        <package name="STM32F7xx_DFP" schemaVersion="1.7.7" url="https://www.keil.com/pack/" vendor="Keil" version="2.15.1"/>
+        <package name="STM32F7xx_DFP" schemaVersion="1.7.7" url="https://www.keil.com/pack/" vendor="Keil" version="2.15.2"/>
         <targetInfos>
           <targetInfo name="Target 1"/>
         </targetInfos>
@@ -604,7 +604,7 @@
       <file attr="config" category="source" condition="STM32F746_ARMCC" name="Drivers\CMSIS\Device\ST\STM32F7xx\Source\Templates\arm\startup_stm32f746xx.s" version="1.3.0">
         <instance index="0">RTE\Device\STM32F746ZGTx\startup_stm32f746xx.s</instance>
         <component Cclass="Device" Cgroup="Startup" Cvendor="Keil" Cversion="1.2.5" condition="STM32F7 CMSIS"/>
-        <package name="STM32F7xx_DFP" schemaVersion="1.7.7" url="https://www.keil.com/pack/" vendor="Keil" version="2.15.1"/>
+        <package name="STM32F7xx_DFP" schemaVersion="1.7.7" url="https://www.keil.com/pack/" vendor="Keil" version="2.15.2"/>
         <targetInfos>
           <targetInfo name="Target 1"/>
         </targetInfos>
@@ -612,15 +612,15 @@
       <file attr="config" category="source" name="Drivers\CMSIS\Device\ST\STM32F7xx\Source\Templates\system_stm32f7xx.c" version="1.3.0">
         <instance index="0">RTE\Device\STM32F746ZGTx\system_stm32f7xx.c</instance>
         <component Cclass="Device" Cgroup="Startup" Cvendor="Keil" Cversion="1.2.5" condition="STM32F7 CMSIS"/>
-        <package name="STM32F7xx_DFP" schemaVersion="1.7.7" url="https://www.keil.com/pack/" vendor="Keil" version="2.15.1"/>
+        <package name="STM32F7xx_DFP" schemaVersion="1.7.7" url="https://www.keil.com/pack/" vendor="Keil" version="2.15.2"/>
         <targetInfos>
           <targetInfo name="Target 1"/>
         </targetInfos>
       </file>
       <file attr="config" category="header" name="Mongoose\config\mongoose_custom.h" version="1.0.0">
         <instance index="0">RTE\Network_Library\mongoose_custom.h</instance>
-        <component Cclass="Network Library" Cgroup="Mongoose" Cvendor="Cesanta" Cversion="7.12.0"/>
-        <package name="Mongoose" schemaVersion="1.7.2" url="https://mongoose.ws/downloads/armpack/" vendor="Cesanta" version="7.12.0"/>
+        <component Cclass="Network Library" Cgroup="Mongoose" Cvendor="Cesanta" Cversion="7.13.0"/>
+        <package name="Mongoose" schemaVersion="1.7.2" url="https://mongoose.ws/downloads/armpack/" vendor="Cesanta" version="7.13.0"/>
         <targetInfos>
           <targetInfo name="Target 1"/>
         </targetInfos>
