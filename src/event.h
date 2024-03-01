@@ -17,7 +17,8 @@ enum {
   MG_EV_READ,       // Data received from socket    long *bytes_read
   MG_EV_WRITE,      // Data written to socket       long *bytes_written
   MG_EV_CLOSE,      // Connection closed            NULL
-  MG_EV_HTTP_MSG,   // HTTP request/response        struct mg_http_message *
+  MG_EV_HTTP_HDRS,  // HTTP headers                 struct mg_http_message *
+  MG_EV_HTTP_MSG,   // Full HTTP request/response   struct mg_http_message *
   MG_EV_WS_OPEN,    // Websocket handshake done     struct mg_http_message *
   MG_EV_WS_MSG,     // Websocket msg, text or bin   struct mg_ws_message *
   MG_EV_WS_CTL,     // Websocket control msg        struct mg_ws_message *

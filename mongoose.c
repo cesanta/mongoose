@@ -3219,8 +3219,9 @@ static void http_cb(struct mg_connection *c, int ev, void *ev_data) {
         c->recv.len = 0;
         return;
       }
-      if (n == 0) break;        // Request is not buffered yet
-      if (ev == MG_EV_CLOSE) {  // If client did not set Content-Length
+      if (n == 0) break;                 // Request is not buffered yet
+      mg_call(c, MG_EV_HTTP_HDRS, &hm);  // Got all HTTP headers
+      if (ev == MG_EV_CLOSE) {           // If client did not set Content-Length
         hm.message.len = c->recv.len - ofs;  // and closes now, deliver MSG
         hm.body.len = hm.message.len - (size_t) (hm.body.ptr - hm.message.ptr);
       }
@@ -3237,7 +3238,7 @@ static void http_cb(struct mg_connection *c, int ev, void *ev_data) {
         bool is_response = mg_ncasecmp(hm.method.ptr, "HTTP/", 5) == 0;
         bool require_content_len = false;
         if (!is_response && (mg_vcasecmp(&hm.method, "POST") == 0 ||
-            mg_vcasecmp(&hm.method, "PUT") == 0)) {
+                             mg_vcasecmp(&hm.method, "PUT") == 0)) {
           // POST and PUT should include an entity body. Therefore, they should
           // contain a Content-length header. Other requests can also contain a
           // body, but their content has no defined semantics (RFC 7231)
