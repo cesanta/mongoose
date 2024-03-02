@@ -4894,12 +4894,13 @@ void mg_mgr_init(struct mg_mgr *mgr) {
 #define MIP_TCP_ARP_MS 100    // Timeout for ARP response
 #define MIP_TCP_SYN_MS 15000  // Timeout for connection establishment
 #define MIP_TCP_FIN_MS 1000   // Timeout for closing connection
-#define MIP_TCP_WIN 16384     // TCP window size
+#define MIP_TCP_WIN 6000      // TCP window size
 
 struct connstate {
   uint32_t seq, ack;           // TCP seq/ack counters
   uint64_t timer;              // TCP keep-alive / ACK timer
-  size_t noack;                // Not ACK-ed received TCP bytes
+  uint32_t acked;              // Last ACK-ed number
+  size_t unacked;              // Not acked bytes
   uint8_t mac[6];              // Peer MAC address
   uint8_t ttype;               // Timer type. 0: ack, 1: keep-alive
 #define MIP_TTYPE_KEEPALIVE 0  // Connection is idle for long, send keepalive
@@ -5371,6 +5372,14 @@ static void rx_udp(struct mg_tcpip_if *ifp, struct pkt *pkt) {
 static size_t tx_tcp(struct mg_tcpip_if *ifp, uint8_t *dst_mac, uint32_t dst_ip,
                      uint8_t flags, uint16_t sport, uint16_t dport,
                      uint32_t seq, uint32_t ack, const void *buf, size_t len) {
+#if 0
+  uint8_t opts[] = {2, 4, 5, 0xb4, 4, 2, 0, 0};  // MSS = 1460, SACK permitted
+  if (flags & TH_SYN) {
+    // Handshake? Set MSS
+    buf = opts;
+    len = sizeof(opts);
+  }
+#endif
   struct ip *ip =
       tx_ip(ifp, dst_mac, 6, ifp->ip, dst_ip, sizeof(struct tcp) + len);
   struct tcp *tcp = (struct tcp *) (ip + 1);
@@ -5383,6 +5392,8 @@ static size_t tx_tcp(struct mg_tcpip_if *ifp, uint8_t *dst_mac, uint32_t dst_ip,
   tcp->flags = flags;
   tcp->win = mg_htons(MIP_TCP_WIN);
   tcp->off = (uint8_t) (sizeof(*tcp) / 4 << 4);
+  // if (flags & TH_SYN) tcp->off = 0x70;  // Handshake? header size 28 bytes
+
   uint32_t cs = 0;
   uint16_t n = (uint16_t) (sizeof(*tcp) + len);
   uint8_t pseudo[] = {0, ip->proto, (uint8_t) (n >> 8), (uint8_t) (n & 255)};
@@ -5393,7 +5404,7 @@ static size_t tx_tcp(struct mg_tcpip_if *ifp, uint8_t *dst_mac, uint32_t dst_ip,
   tcp->csum = csumfin(cs);
   MG_VERBOSE(("TCP %M:%hu -> %M:%hu fl %x len %u", mg_print_ip4, &ip->src,
               mg_ntohs(tcp->sport), mg_print_ip4, &ip->dst,
-              mg_ntohs(tcp->dport), tcp->flags, (int) len));
+              mg_ntohs(tcp->dport), tcp->flags, len));
   // mg_hexdump(ifp->tx.ptr, PDIFF(ifp->tx.ptr, tcp + 1) + len);
   return ether_output(ifp, PDIFF(ifp->tx.ptr, tcp + 1) + len);
 }
@@ -5536,14 +5547,17 @@ static void read_conn(struct mg_connection *c, struct pkt *pkt) {
     MG_VERBOSE(("%lu SEQ %x -> %x", c->id, mg_htonl(pkt->tcp->seq), s->ack));
     // Advance ACK counter
     s->ack = (uint32_t) (mg_htonl(pkt->tcp->seq) + pkt->pay.len);
-    s->noack += pkt->pay.len;
-    if (s->noack + 1500 >= MIP_TCP_WIN) {
+    s->unacked += pkt->pay.len;
+    // size_t diff = s->acked <= s->ack ? s->ack - s->acked : s->ack;
+    if (s->unacked > MIP_TCP_WIN / 2 && s->acked != s->ack) {
       // Send ACK immediately
-      MG_VERBOSE(("  imm ACK", c->id, mg_htonl(pkt->tcp->seq), s->ack));
+      MG_VERBOSE(("%lu imm ACK %lu", c->id, s->acked));
       tx_tcp((struct mg_tcpip_if *) c->mgr->priv, s->mac, rem_ip, TH_ACK,
-             c->loc.port, c->rem.port, mg_htonl(s->seq), mg_htonl(s->ack), "",
+             c->loc.port, c->rem.port, mg_htonl(s->seq), mg_htonl(s->ack), NULL,
              0);
-      s->noack = 0;
+      s->unacked = 0;
+      s->acked = s->ack;
+      if (s->ttype != MIP_TTYPE_KEEPALIVE) settmout(c, MIP_TTYPE_KEEPALIVE);
     } else {
       // if not already running, setup a timer to send an ACK later
       if (s->ttype != MIP_TTYPE_ACK) settmout(c, MIP_TTYPE_ACK);
@@ -5787,11 +5801,11 @@ static void mg_tcpip_poll(struct mg_tcpip_if *ifp, uint64_t now) {
     uint32_t rem_ip;
     memcpy(&rem_ip, c->rem.ip, sizeof(uint32_t));
     if (now > s->timer) {
-      if (s->ttype == MIP_TTYPE_ACK) {
+      if (s->ttype == MIP_TTYPE_ACK && s->acked != s->ack) {
         MG_VERBOSE(("%lu ack %x %x", c->id, s->seq, s->ack));
         tx_tcp(ifp, s->mac, rem_ip, TH_ACK, c->loc.port, c->rem.port,
-               mg_htonl(s->seq), mg_htonl(s->ack), "", 0);
-        s->noack = 0;
+               mg_htonl(s->seq), mg_htonl(s->ack), NULL, 0);
+        s->acked = s->ack;
       } else if (s->ttype == MIP_TTYPE_ARP) {
         mg_error(c, "ARP timeout");
       } else if (s->ttype == MIP_TTYPE_SYN) {
@@ -5805,7 +5819,7 @@ static void mg_tcpip_poll(struct mg_tcpip_if *ifp, uint64_t now) {
         } else {
           MG_VERBOSE(("%lu keepalive", c->id));
           tx_tcp(ifp, s->mac, rem_ip, TH_ACK, c->loc.port, c->rem.port,
-                 mg_htonl(s->seq - 1), mg_htonl(s->ack), "", 0);
+                 mg_htonl(s->seq - 1), mg_htonl(s->ack), NULL, 0);
         }
       }
 
