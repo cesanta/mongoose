@@ -12,10 +12,12 @@
 #define MIP_TCP_ARP_MS 100    // Timeout for ARP response
 #define MIP_TCP_SYN_MS 15000  // Timeout for connection establishment
 #define MIP_TCP_FIN_MS 1000   // Timeout for closing connection
+#define MIP_TCP_WIN 16384     // TCP window size
 
 struct connstate {
   uint32_t seq, ack;           // TCP seq/ack counters
   uint64_t timer;              // TCP keep-alive / ACK timer
+  size_t noack;                // Not ACK-ed received TCP bytes
   uint8_t mac[6];              // Peer MAC address
   uint8_t ttype;               // Timer type. 0: ack, 1: keep-alive
 #define MIP_TTYPE_KEEPALIVE 0  // Connection is idle for long, send keepalive
@@ -398,11 +400,12 @@ static void rx_dhcp_client(struct mg_tcpip_if *ifp, struct pkt *pkt) {
   if (msgtype == 6 && ifp->ip == ip) {  // DHCPNACK, release IP
     ifp->state = MG_TCPIP_STATE_UP, ifp->ip = 0;
   } else if (msgtype == 2 && ifp->state == MG_TCPIP_STATE_UP && ip && gw &&
-             lease) {                                 // DHCPOFFER
+             lease) {  // DHCPOFFER
     // select IP, (4.4.1) (fallback to IP source addr on foul play)
-    tx_dhcp_request_sel(ifp, ip, pkt->dhcp->siaddr ? pkt->dhcp->siaddr : pkt->ip->src);
-    ifp->state = MG_TCPIP_STATE_REQ;                  // REQUESTING state
-  } else if (msgtype == 5) {                          // DHCPACK
+    tx_dhcp_request_sel(ifp, ip,
+                        pkt->dhcp->siaddr ? pkt->dhcp->siaddr : pkt->ip->src);
+    ifp->state = MG_TCPIP_STATE_REQ;  // REQUESTING state
+  } else if (msgtype == 5) {          // DHCPACK
     if (ifp->state == MG_TCPIP_STATE_REQ && ip && gw && lease) {  // got an IP
       ifp->lease_expire = ifp->now + lease * 1000;
       MG_INFO(("Lease: %u sec (%lld)", lease, ifp->lease_expire / 1000));
@@ -496,7 +499,7 @@ static size_t tx_tcp(struct mg_tcpip_if *ifp, uint8_t *dst_mac, uint32_t dst_ip,
   tcp->seq = seq;
   tcp->ack = ack;
   tcp->flags = flags;
-  tcp->win = mg_htons(8192);
+  tcp->win = mg_htons(MIP_TCP_WIN);
   tcp->off = (uint8_t) (sizeof(*tcp) / 4 << 4);
   uint32_t cs = 0;
   uint16_t n = (uint16_t) (sizeof(*tcp) + len);
@@ -651,17 +654,18 @@ static void read_conn(struct mg_connection *c, struct pkt *pkt) {
     MG_VERBOSE(("%lu SEQ %x -> %x", c->id, mg_htonl(pkt->tcp->seq), s->ack));
     // Advance ACK counter
     s->ack = (uint32_t) (mg_htonl(pkt->tcp->seq) + pkt->pay.len);
-#if 0
-    // Send ACK immediately
-    uint32_t rem_ip;
-    memcpy(&rem_ip, c->rem.ip, sizeof(uint32_t));
-    MG_DEBUG(("  imm ACK", c->id, mg_htonl(pkt->tcp->seq), s->ack));
-    tx_tcp((struct mg_tcpip_if *) c->mgr->priv, s->mac, rem_ip, TH_ACK, c->loc.port,
-           c->rem.port, mg_htonl(s->seq), mg_htonl(s->ack), "", 0);
-#else
-    // if not already running, setup a timer to send an ACK later
-    if (s->ttype != MIP_TTYPE_ACK) settmout(c, MIP_TTYPE_ACK);
-#endif
+    s->noack += pkt->pay.len;
+    if (s->noack + 1500 >= MIP_TCP_WIN) {
+      // Send ACK immediately
+      MG_VERBOSE(("  imm ACK", c->id, mg_htonl(pkt->tcp->seq), s->ack));
+      tx_tcp((struct mg_tcpip_if *) c->mgr->priv, s->mac, rem_ip, TH_ACK,
+             c->loc.port, c->rem.port, mg_htonl(s->seq), mg_htonl(s->ack), "",
+             0);
+      s->noack = 0;
+    } else {
+      // if not already running, setup a timer to send an ACK later
+      if (s->ttype != MIP_TTYPE_ACK) settmout(c, MIP_TTYPE_ACK);
+    }
 
     if (c->is_tls && c->is_tls_hs) {
       mg_tls_handshake(c);
@@ -905,6 +909,7 @@ static void mg_tcpip_poll(struct mg_tcpip_if *ifp, uint64_t now) {
         MG_VERBOSE(("%lu ack %x %x", c->id, s->seq, s->ack));
         tx_tcp(ifp, s->mac, rem_ip, TH_ACK, c->loc.port, c->rem.port,
                mg_htonl(s->seq), mg_htonl(s->ack), "", 0);
+        s->noack = 0;
       } else if (s->ttype == MIP_TTYPE_ARP) {
         mg_error(c, "ARP timeout");
       } else if (s->ttype == MIP_TTYPE_SYN) {
