@@ -919,7 +919,7 @@ bool mg_http_match_uri(const struct mg_http_message *hm, const char *glob) {
 
 long mg_http_upload(struct mg_connection *c, struct mg_http_message *hm,
                     struct mg_fs *fs, const char *dir, size_t max_size) {
-  char buf[20] = "0", file[40], path[MG_PATH_MAX];
+  char buf[20] = "0", file[MG_PATH_MAX], path[MG_PATH_MAX];
   long res = 0, offset;
   mg_http_get_var(&hm->query, "offset", buf, sizeof(buf));
   mg_http_get_var(&hm->query, "file", file, sizeof(file));

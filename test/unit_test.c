@@ -3359,7 +3359,6 @@ int main(void) {
   test_iobuf();
   test_base64();
   test_http_get_var();
-  test_http_client();
   test_tls();
   test_ws();
   test_ws_fragmentation();
@@ -3369,8 +3368,13 @@ int main(void) {
   test_http_no_content_length();
   test_http_pipeline();
   test_http_range();
+#ifndef LOCALHOST_ONLY
   test_sntp();
   test_mqtt();
+  test_http_client();
+#else
+  (void) test_sntp, (void) test_mqtt, (void) test_http_client;
+#endif
   test_poll();
   test_md5();
   test_sha1();
