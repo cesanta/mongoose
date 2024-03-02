@@ -662,6 +662,8 @@ static void read_conn(struct mg_connection *c, struct pkt *pkt) {
              c->loc.port, c->rem.port, mg_htonl(s->seq), mg_htonl(s->ack), "",
              0);
       s->noack = 0;
+      // restart the ACK timer if already running
+      if (s->ttype == MIP_TTYPE_ACK) settmout(c, MIP_TTYPE_ACK);
     } else {
       // if not already running, setup a timer to send an ACK later
       if (s->ttype != MIP_TTYPE_ACK) settmout(c, MIP_TTYPE_ACK);
