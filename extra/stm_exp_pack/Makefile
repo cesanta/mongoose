@@ -1,18 +1,20 @@
 # make pre, run STM32PackCreator, make post
 
 pre:
-	find Examples/x/x/* -maxdepth 0 -exec mkdir -p {}"/Middlewares/Third_Party/Cesanta_Network Library/Mongoose/" \;
-	find Examples/x/x/* -maxdepth 0 -exec cp ../../mongoose.[ch] {}"/Middlewares/Third_Party/Cesanta_Network Library/Mongoose/" \;
+	#find Examples/x/x/* -maxdepth 0 -exec mkdir -p {}"/Middlewares/Third_Party/Cesanta_Network Library/Mongoose/" \;
+	#find Examples/x/x/* -maxdepth 0 -exec cp ../../mongoose.[ch] {}"/Middlewares/Third_Party/Cesanta_Network Library/Mongoose/" \;
 	grep -l net.h Examples/x/x/*/Core/Src/main.c | xargs -n 1 dirname | sed 's.$$./.' | xargs -n 1 cp ../../examples/device-dashboard/net.c
 	grep -l net.h Examples/x/x/*/Core/Src/main.c | xargs -n 1 dirname | sed 's.$$./.' | sed 's/Src/Inc/' | xargs -n 1 cp ../../examples/device-dashboard/net.h
 	grep -l net.h Examples/x/x/*/Core/Src/main.c | xargs -n 1 dirname | sed 's.$$./.' | xargs -n 1 cp ../../examples/device-dashboard/packed_fs.c
-	# examples can't be tested in place anymore because of that nasty relative firmware path
+	# examples can't be tested in place anymore because of that nasty relative firmware path and because of the magic needed to run them
 
 post:
-	rm -f Examples/x/x/*/Middlewares/Third_Party/Cesanta_Network\ Library/Mongoose/mongoose.[ch]
+	#rm -f Examples/x/x/*/Middlewares/Third_Party/Cesanta_Network\ Library/Mongoose/mongoose.[ch]
 	rm -f Examples/x/x/*/Core/Src/net.c
 	rm -f Examples/x/x/*/Core/Inc/net.h
 	rm -f Examples/x/x/*/Core/Src/packed_fs.c
+	sed -i -e 's@<file category="header" name="Middlewares/Third_Party/Mongoose/mongoose.h"/>@<file category="header" name="Middlewares/Third_Party/Mongoose/mongoose.h"/>\n                <file category="doc" name="Release_Notes.html"/>\n                <file category="doc" name="Documentation/GettingStarted.html"/>@' .project/Cesanta.I-CUBE-Mongoose.pdsc
+
 
 packcreator:
 	/opt/st/STM32CubeMX/jre/bin/java -jar /opt/st/STM32CubeMX/utilities/STM32PackCreator/STM32PackCreator.jar
