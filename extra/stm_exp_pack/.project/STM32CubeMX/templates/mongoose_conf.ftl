@@ -1,6 +1,5 @@
 [#ftl]
 
-// If we could guess an MG_ARCH so far, preserve it, otherwise try GCC-based
 #if defined(MG_ARCH)
 #define MG_STMPACK_ARCH MG_ARCH
 #undef MG_ARCH
@@ -29,7 +28,7 @@
 #endif
 
 #if MG_ENABLE_PACKED_FS
-#define MG_ENABLE_FILE 0
+#define MG_ENABLE_POSIX_FS 0
 #endif
 
 // See https://mongoose.ws/documentation/#build-options
