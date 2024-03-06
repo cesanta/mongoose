@@ -2861,7 +2861,7 @@ static void test_json(void) {
   const char *s1 = "{\"a\":{},\"b\":7,\"c\":[[],2]}";
   const char *s2 = "{\"a\":{\"b1\":{}},\"c\":7,\"d\":{\"b2\":{}}}";
   int n;
-  struct mg_str json;
+  struct mg_str json, val;
 
   ASSERT(mg_json_get(mg_str_n(" true ", 6), "", &n) == MG_JSON_INVALID);
   ASSERT(mg_json_get(mg_str_n(" true ", 6), "$", &n) == 1 && n == 4);
@@ -3053,6 +3053,10 @@ static void test_json(void) {
     ASSERT(mg_vcmp(&v, "42") == 0);
     ASSERT(mg_json_next(sub, 15, &k, &v) == 0);
   }
+
+  json = mg_str("{\"a\":\"b:c\"}");
+  val = mg_json_get_tok(json, "$.a");
+  ASSERT(mg_strcmp(val, mg_str("\"b:c\"")) == 0);
 }
 
 static void resp_rpc(struct mg_rpc_req *r) {
