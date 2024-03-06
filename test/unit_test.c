@@ -1186,13 +1186,13 @@ static void test_http_404(void) {
   ASSERT(cmpbody(buf, "Not found\n") == 0);
   ASSERT(fetch(&mgr, buf, url, "GET /a/xx.txt HTTP/1.0\n\n") == 200);
   ASSERT(cmpbody(buf, "boo\n") == 0);
-  { // txt requested, existent 404 is html
+  {  // txt requested, existent 404 is html
     struct mg_http_message hm;
     struct mg_str *cl;
     mg_http_parse(buf, strlen(buf), &hm);
     cl = mg_http_get_header(&hm, "Content-Type");
     ASSERT(cl != NULL);
-    if (cl->len > 9) cl->len = 9; // restrict to text/html len max
+    if (cl->len > 9) cl->len = 9;  // restrict to text/html len max
     ASSERT(mg_strcmp(*cl, mg_str("text/html")) == 0);
   }
   ASSERT(fetch(&mgr, buf, url, "GET /b/xx.txt HTTP/1.0\n\n") == 404);
@@ -1375,9 +1375,10 @@ static void test_http_no_content_length(void) {
   struct mg_mgr mgr;
   const char *url = "http://127.0.0.1:12348";
   int i;
-  const char *post_req = "POST / HTTP/1.1\r\nContent-Type:"
-                  "b/a\r\nContent-Length: 15\r\n\r\n"
-                  "{\"key\": \"value\"}";
+  const char *post_req =
+      "POST / HTTP/1.1\r\nContent-Type:"
+      "b/a\r\nContent-Length: 15\r\n\r\n"
+      "{\"key\": \"value\"}";
   mg_mgr_init(&mgr);
   mg_http_listen(&mgr, url, f4, (void *) buf1);
   mg_http_connect(&mgr, url, f4c, (void *) buf2);
@@ -2861,7 +2862,7 @@ static void test_json(void) {
   const char *s1 = "{\"a\":{},\"b\":7,\"c\":[[],2]}";
   const char *s2 = "{\"a\":{\"b1\":{}},\"c\":7,\"d\":{\"b2\":{}}}";
   int n;
-  struct mg_str json, val;
+  struct mg_str json;
 
   ASSERT(mg_json_get(mg_str_n(" true ", 6), "", &n) == MG_JSON_INVALID);
   ASSERT(mg_json_get(mg_str_n(" true ", 6), "$", &n) == 1 && n == 4);
@@ -3054,9 +3055,12 @@ static void test_json(void) {
     ASSERT(mg_json_next(sub, 15, &k, &v) == 0);
   }
 
-  json = mg_str("{\"a\":\"b:c\"}");
-  val = mg_json_get_tok(json, "$.a");
-  ASSERT(mg_strcmp(val, mg_str("\"b:c\"")) == 0);
+  {
+    struct mg_str expected = mg_str("\"b:c\""), val;
+    json = mg_str("{\"a\":\"b:c\"}");
+    val = mg_json_get_tok(json, "$.a");
+    ASSERT(mg_strcmp(val, expected) == 0);
+  }
 }
 
 static void resp_rpc(struct mg_rpc_req *r) {
