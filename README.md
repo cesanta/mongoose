@@ -1,4 +1,4 @@
-# Mongoose - Embedded Web Server / Embedded Networking Library
+# Mongoose - Embedded Web Server / Embedded Network Library
 
 [![License: GPLv2/Commercial](https://img.shields.io/badge/License-GPLv2%20or%20Commercial-green.svg)](https://opensource.org/licenses/gpl-2.0.php)
 [![Build Status]( https://github.com/cesanta/mongoose/workflows/build/badge.svg)](https://github.com/cesanta/mongoose/actions)
