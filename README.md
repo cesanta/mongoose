@@ -33,7 +33,10 @@ robust, and easy. Features include:
 
 See https://mongoose.ws/ for complete documentation, videos, case studies, etc.
 
-## Usage
+## Usage Examples
+
+Below are quick snippets that should give an idea how simple the API is and
+how easy it is to create applications with it.
 
 Create a simple web server that serves a directory. The behavior of the
 HTTP server is specified by its event handler function:
