@@ -21,8 +21,7 @@ robust, and easy. Features include:
 - Asynchronous DNS resolver
 - Tiny static and run-time footprint
 - Source code is both ISO C and ISO C++ compliant
-- Easy to integrate: just copy `mongoose.c` and `mongoose.h` files to your source tree. See
-  [exact steps](https://mongoose.ws/documentation/#2-minute-integration-guide)
+- Easy to integrate: just copy `mongoose.c` and `mongoose.h` files to your source tree
 - Built-in TCP/IP stack with drivers for bare metal or RTOS systems
    - Available drivers: STM32F, STM32H; NXP RT1xxx; TI TM4C; Microchip SAME54; Wiznet W5500
    - A complete Web device dashboard on bare metal ST Nucleo boards is only 6 files
@@ -31,9 +30,15 @@ robust, and easy. Features include:
 - Built-in TLS 1.3 stack. Aslo can use external TLS libraries - mbedTLS, OpenSSL, or other
 - Does not depend on any other software to implement networking
 - Built-in firmware updates for STM32 H5, STM32 H7
-- Detailed [user guide, API reference and tons of tutorials](https://mongoose.ws/documentation/)
+
+See https://mongoose.ws/ for more details.
 
 ## Usage
+
+See [2-minute integration guide](https://mongoose.ws/documentation/#2-minute-integration-guide)
+for complete instructions. Below there are quick snippets that should give
+an idea, how simple the API is, and how easy it is to create applications
+with it.
 
 Create a simple web server that serves a directory. The behavior of the
 HTTP server is specified by its event handler function:
