@@ -25,8 +25,7 @@ robust, and easy. Features include:
   [exact steps](https://mongoose.ws/documentation/#2-minute-integration-guide)
 - Built-in TCP/IP stack with drivers for bare metal or RTOS systems
    - Available drivers: STM32F, STM32H; NXP RT1xxx; TI TM4C; Microchip SAME54; Wiznet W5500
-   - A complete Web device dashboard on bare metal
-  [Nucleo-F429ZI](examples/stm32/nucleo-f429zi-baremetal) is only 6 files
+   - A complete Web device dashboard on bare metal ST Nucleo boards is only 6 files
    - For comparison, a CubeIDE generated HTTP example is 400+ files
 - Can run on top of an existing TCP/IP stack with BSD API, e.g. lwIP, Zephyr, Azure, etc
 - Built-in TLS 1.3 stack. Aslo can use external TLS libraries - mbedTLS, OpenSSL, or other
