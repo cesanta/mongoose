@@ -7,7 +7,7 @@ example: micropython
 	$(MAKE) -C micropython/ports/unix USER_C_MODULES=../../..
 
 micropython:
-	git clone https://github.com/micropython/micropython.git
+	git clone --depth 1 -b v1.22.2 https://github.com/micropython/micropython.git
 
 clean:
 	rm -rf micropython
