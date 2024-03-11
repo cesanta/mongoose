@@ -15,7 +15,7 @@ build: micropython
 	$(DOCKER) $(CMD)
 
 micropython:
-	$(DOCKER) git clone https://github.com/micropython/micropython.git
+	$(DOCKER) git clone --depth 1 -b v1.22.2 https://github.com/micropython/micropython.git
 
 clean:
 	test -d micropython && $(DOCKER) rm -rf micropython || true
