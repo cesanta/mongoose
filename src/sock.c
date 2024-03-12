@@ -136,8 +136,8 @@ long mg_io_send(struct mg_connection *c, const void *buf, size_t len) {
 bool mg_send(struct mg_connection *c, const void *buf, size_t len) {
   if (c->is_udp) {
     long n = mg_io_send(c, buf, len);
-    MG_DEBUG(("%lu %ld %d:%d %ld err %d", c->id, c->fd, (int) c->send.len,
-              (int) c->recv.len, n, MG_SOCK_ERR(n)));
+    MG_DEBUG(("%lu %ld %lu:%lu:%lu %ld err %d", c->id, c->fd, c->send.len,
+              c->recv.len, c->rtls.len, n, MG_SOCK_ERR(n)));
     iolog(c, (char *) buf, n, false);
     return n > 0;
   } else {
@@ -291,9 +291,8 @@ static void read_conn(struct mg_connection *c) {
     } else {
       n = recv_raw(c, buf, len);
     }
-    MG_DEBUG(("%lu %p snd %ld/%ld rcv %ld/%ld n=%ld err=%d", c->id, c->fd,
-              (long) c->send.len, (long) c->send.size, (long) c->recv.len,
-              (long) c->recv.size, n, MG_SOCK_ERR(n)));
+    MG_DEBUG(("%lu %ld %lu:%lu:%lu %ld err %d", c->id, c->fd, c->send.len,
+              c->recv.len, c->rtls.len, n, MG_SOCK_ERR(n)));
     iolog(c, buf, n, true);
   }
 }
@@ -481,7 +480,7 @@ static void mg_iotest(struct mg_mgr *mgr, int ms) {
   size_t max = 1;
   for (struct mg_connection *c = mgr->conns; c != NULL; c = c->next) {
     c->is_readable = c->is_writable = 0;
-    if (c->rtls.len > 0) ms = 1, c->is_readable = 1;
+    if (mg_tls_pending(c) > 0) ms = 1, c->is_readable = 1;
     if (can_write(c)) MG_EPOLL_MOD(c, 1);
     if (c->is_closing) ms = 1;
     max++;
@@ -497,7 +496,7 @@ static void mg_iotest(struct mg_mgr *mgr, int ms) {
       bool wr = evs[i].events & EPOLLOUT;
       c->is_readable = can_read(c) && rd ? 1U : 0;
       c->is_writable = can_write(c) && wr ? 1U : 0;
-      if (c->rtls.len > 0) c->is_readable = 1;
+      if (mg_tls_pending(c) > 0) c->is_readable = 1;
     }
   }
   (void) skip_iotest;
@@ -511,7 +510,7 @@ static void mg_iotest(struct mg_mgr *mgr, int ms) {
     c->is_readable = c->is_writable = 0;
     if (skip_iotest(c)) {
       // Socket not valid, ignore
-    } else if (c->rtls.len > 0) {
+    } else if (mg_tls_pending(c) > 0) {
       ms = 1;  // Don't wait if TLS is ready
     } else {
       fds[n].fd = FD(c);
@@ -533,7 +532,7 @@ static void mg_iotest(struct mg_mgr *mgr, int ms) {
   for (struct mg_connection *c = mgr->conns; c != NULL; c = c->next) {
     if (skip_iotest(c)) {
       // Socket not valid, ignore
-    } else if (c->rtls.len > 0) {
+    } else if (mg_tls_pending(c) > 0) {
       c->is_readable = 1;
     } else {
       if (fds[n].revents & POLLERR) {
@@ -542,7 +541,7 @@ static void mg_iotest(struct mg_mgr *mgr, int ms) {
         c->is_readable =
             (unsigned) (fds[n].revents & (POLLIN | POLLHUP) ? 1 : 0);
         c->is_writable = (unsigned) (fds[n].revents & POLLOUT ? 1 : 0);
-        if (c->rtls.len > 0) c->is_readable = 1;
+        if (mg_tls_pending(c) > 0) c->is_readable = 1;
       }
       n++;
     }
@@ -564,7 +563,7 @@ static void mg_iotest(struct mg_mgr *mgr, int ms) {
     FD_SET(FD(c), &eset);
     if (can_read(c)) FD_SET(FD(c), &rset);
     if (can_write(c)) FD_SET(FD(c), &wset);
-    if (c->rtls.len > 0) tvp = &tv_zero;
+    if (mg_tls_pending(c) > 0) tvp = &tv_zero;
     if (FD(c) > maxfd) maxfd = FD(c);
     if (c->is_closing) ms = 1;
   }
@@ -586,7 +585,7 @@ static void mg_iotest(struct mg_mgr *mgr, int ms) {
     } else {
       c->is_readable = FD(c) != MG_INVALID_SOCKET && FD_ISSET(FD(c), &rset);
       c->is_writable = FD(c) != MG_INVALID_SOCKET && FD_ISSET(FD(c), &wset);
-      if (c->rtls.len > 0) c->is_readable = 1;
+      if (mg_tls_pending(c) > 0) c->is_readable = 1;
     }
   }
 #endif

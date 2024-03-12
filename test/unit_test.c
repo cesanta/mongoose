@@ -1210,6 +1210,7 @@ static void test_tls(void) {
   const char *url = "https://127.0.0.1:12347";
   char buf[FETCH_BUF_SIZE];
   struct mg_tls_opts opts;
+  struct mg_str data = mg_unpacked("/Makefile");
   memset(&opts, 0, sizeof(opts));
   // opts.ca = mg_str(s_tls_ca);
   opts.cert = mg_str(s_tls_cert);
@@ -1220,6 +1221,13 @@ static void test_tls(void) {
   ASSERT(fetch(&mgr, buf, url, "GET /a.txt HTTP/1.0\n\n") == 200);
   // MG_INFO(("%s", buf));
   ASSERT(cmpbody(buf, "hello\n") == 0);
+  // POST a larger file, make sure we drain TLS buffers and read all, #2619
+  ASSERT(data.ptr != NULL && data.len > 0);
+  ASSERT(fetch(&mgr, buf, url,
+               "POST /foo/bar HTTP/1.0\n"
+               "Content-Length: %lu\n\n"
+               "%s",
+               data.len, data.ptr) == 200);
   mg_mgr_free(&mgr);
   ASSERT(mgr.conns == NULL);
 #endif
