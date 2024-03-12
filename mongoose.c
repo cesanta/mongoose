@@ -4166,6 +4166,11 @@ void mg_mgr_free(struct mg_mgr *mgr) {
 #endif
 }
 
+
+#if MG_ENABLE_TCPIP && MG_ENABLE_TCPIP_DRIVER_INIT
+void mg_tcpip_auto_init(struct mg_mgr *);
+#endif
+
 void mg_mgr_init(struct mg_mgr *mgr) {
   memset(mgr, 0, sizeof(*mgr));
 #if MG_ENABLE_EPOLL
