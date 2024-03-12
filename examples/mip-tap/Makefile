@@ -5,7 +5,7 @@ SOURCES = main.c mongoose.c net.c packed_fs.c      # Source code files
 CFLAGS = -W -Wall -Wextra -g -I.  # Build options
 
 # Mongoose build options. See https://mongoose.ws/documentation/#build-options
-CFLAGS_MONGOOSE += -DMG_ENABLE_LINES=1 -DMG_ENABLE_TCPIP=1 -DMG_ENABLE_SOCKET=0 -DMG_ENABLE_PACKED_FS=1
+CFLAGS_MONGOOSE += -DMG_ENABLE_LINES=1 -DMG_ENABLE_TCPIP=1 -DMG_ENABLE_SOCKET=0 -DMG_ENABLE_PACKED_FS=1 -DMG_ENABLE_TCPIP_DRIVER_INIT=0
 
 # Example specific build options. See README.md
 CFLAGS += -DHTTP_URL=\"http://0.0.0.0/\" -DHTTPS_URL=\"https://0.0.0.0/\"

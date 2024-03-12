@@ -1,6 +1,7 @@
-#include "tcpip.h"
+#include "net_builtin.h"
 
-#if defined(MG_ENABLE_DRIVER_SAME54) && MG_ENABLE_DRIVER_SAME54
+#if MG_ENABLE_TCPIP && defined(MG_ENABLE_DRIVER_SAME54) && MG_ENABLE_DRIVER_SAME54
+
 #include <sam.h>
 
 #define ETH_PKT_SIZE 1536  // Max frame size

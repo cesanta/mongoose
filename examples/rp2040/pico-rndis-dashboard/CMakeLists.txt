@@ -26,6 +26,7 @@ pico_enable_stdio_uart(firmware 1)   # to the UART
 # Mongoose build flags
 add_definitions(-DMG_ENABLE_TCPIP=1)
 add_definitions(-DMG_ENABLE_PACKED_FS=1)
+add_definitions(-DMG_ENABLE_TCPIP_DRIVER_INIT=0)
 add_definitions(-DMG_ENABLE_POSIX_FS=0)
 add_definitions(-DDISABLE_ROUTING=1)
 

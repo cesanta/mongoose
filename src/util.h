@@ -27,6 +27,8 @@ uint64_t mg_now(void);     // Return milliseconds since Epoch
   (((uint32_t) ((a) & 255) << 24) | ((uint32_t) ((b) & 255) << 16) | \
    ((uint32_t) ((c) & 255) << 8) | (uint32_t) ((d) & 255))
 
+#define MG_IPV4(a, b, c, d) mg_htonl(MG_U32(a, b, c, d))
+
 // For printing IPv4 addresses: printf("%d.%d.%d.%d\n", MG_IPADDR_PARTS(&ip))
 #define MG_U8P(ADDR) ((uint8_t *) (ADDR))
 #define MG_IPADDR_PARTS(ADDR) \

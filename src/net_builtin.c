@@ -865,6 +865,14 @@ static void mg_tcpip_poll(struct mg_tcpip_if *ifp, uint64_t now) {
   bool expired_1000ms = mg_timer_expired(&ifp->timer_1000ms, 1000, now);
   ifp->now = now;
 
+#if MG_ENABLE_TCPIP_PRINT_DEBUG_STATS
+  if (expired_1000ms) {
+    const char *names[] = {"down", "up", "req", "ready"};
+    MG_INFO(("Ethernet: %s, IP: %M, rx:%u, tx:%u, dr:%u, er:%u",
+             names[ifp->state], mg_print_ip4, &ifp->ip, ifp->nrecv, ifp->nsent,
+             ifp->ndrop, ifp->nerr));
+  }
+#endif
   // Handle physical interface up/down status
   if (expired_1000ms && ifp->driver->up) {
     bool up = ifp->driver->up(ifp);
@@ -1125,4 +1133,22 @@ bool mg_send(struct mg_connection *c, const void *buf, size_t len) {
   }
   return res;
 }
+
+#if MG_ENABLE_TCPIP_DRIVER_INIT && defined(MG_TCPIP_DRIVER_DATA)
+void mg_tcpip_auto_init(struct mg_mgr *mgr);
+void mg_tcpip_auto_init(struct mg_mgr *mgr) {
+  MG_TCPIP_DRIVER_DATA  // static ... driver_data
+      struct mg_tcpip_if i = {
+          // let the compiler solve the macros at run time
+          .mac = MG_MAC_ADDRESS,          .ip = MG_TCPIP_IP,
+          .mask = MG_TCPIP_MASK,          .gw = MG_TCPIP_GW,
+          .driver = MG_TCPIP_DRIVER_CODE, .driver_data = &driver_data,
+      };
+  static struct mg_tcpip_if mif;
+
+  mif = i;  // copy the initialized structure to a static to be exported
+  mg_tcpip_init(mgr, &mif);
+  MG_INFO(("Driver: " MG_TCPIP_DRIVER_NAME ", MAC: %M", mg_print_mac, mif.mac));
+}
+#endif
 #endif  // MG_ENABLE_TCPIP

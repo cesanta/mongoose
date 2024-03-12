@@ -1,6 +1,6 @@
-#include "tcpip.h"
+#include "net_builtin.h"
 
-#if MG_ENABLE_TCPIP
+#if MG_ENABLE_TCPIP && defined(MG_ENABLE_DRIVER_W5500) && MG_ENABLE_DRIVER_W5500
 
 enum { W5500_CR = 0, W5500_S0 = 1, W5500_TX0 = 2, W5500_RX0 = 3 };
 

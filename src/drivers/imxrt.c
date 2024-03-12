@@ -1,4 +1,4 @@
-#include "tcpip.h"
+#include "net_builtin.h"
 
 #if MG_ENABLE_TCPIP && defined(MG_ENABLE_DRIVER_IMXRT) && MG_ENABLE_DRIVER_IMXRT
 struct imxrt_enet {
