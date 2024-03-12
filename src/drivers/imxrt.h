@@ -1,5 +1,7 @@
 #pragma once
 
+#if MG_ENABLE_TCPIP && defined(MG_ENABLE_DRIVER_IMXRT) && MG_ENABLE_DRIVER_IMXRT
+
 struct mg_tcpip_driver_imxrt_data {
   // MDC clock divider. MDC clock is derived from IPS Bus clock (ipg_clk),
   // must not exceed 2.5MHz. Configuration for clock range 2.36~2.50 MHz
@@ -16,3 +18,26 @@ struct mg_tcpip_driver_imxrt_data {
 
   uint8_t phy_addr;  // PHY address
 };
+
+#ifndef MG_MAC_ADDRESS
+#define MG_MAC_ADDRESS MG_MAC_ADDRESS_RANDOM
+#endif
+
+#ifndef MG_TCPIP_PHY_ADDR
+#define MG_TCPIP_PHY_ADDR 2
+#endif
+
+#ifndef MG_DRIVER_MDC_CR
+#define MG_DRIVER_MDC_CR 24
+#endif
+
+#define MG_TCPIP_DRIVER_DATA                                \
+  static struct mg_tcpip_driver_imxrt_data driver_data = { \
+      .mdc_cr = MG_DRIVER_MDC_CR,                            \
+      .phy_addr = MG_TCPIP_PHY_ADDR,                        \
+  };
+
+#define MG_TCPIP_DRIVER_CODE &mg_tcpip_driver_imxrt
+#define MG_TCPIP_DRIVER_NAME "imxrt"
+
+#endif

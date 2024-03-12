@@ -252,6 +252,11 @@ void mg_mgr_free(struct mg_mgr *mgr) {
   mg_tls_ctx_free(mgr);
 }
 
+
+#if MG_ENABLE_TCPIP && MG_ENABLE_TCPIP_DRIVER_INIT
+void mg_tcpip_auto_init(struct mg_mgr *);
+#endif
+
 void mg_mgr_init(struct mg_mgr *mgr) {
   memset(mgr, 0, sizeof(*mgr));
 #if MG_ENABLE_EPOLL
@@ -270,6 +275,8 @@ void mg_mgr_init(struct mg_mgr *mgr) {
   // Ignore SIGPIPE signal, so if client cancels the request, it
   // won't kill the whole process.
   signal(SIGPIPE, SIG_IGN);
+#elif MG_ENABLE_TCPIP && MG_ENABLE_TCPIP_DRIVER_INIT
+  mg_tcpip_auto_init(mgr);
 #endif
   mgr->pipe = MG_INVALID_SOCKET;
   mgr->dnstimeout = 3000;

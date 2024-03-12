@@ -14,6 +14,7 @@ pico_enable_stdio_uart(firmware 1)   # to the UART, for remote testing
 
 # Mongoose build flags
 add_definitions(-DMG_ENABLE_TCPIP=1)
+add_definitions(-DMG_ENABLE_DRIVER_W5500=1)
 add_definitions(-DMG_ENABLE_PACKED_FS=1)
 add_definitions(-DMG_ENABLE_CUSTOM_RANDOM=1)
 add_definitions(-DMG_ENABLE_POSIX_FS=0)

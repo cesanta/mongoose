@@ -4851,6 +4851,11 @@ void mg_mgr_free(struct mg_mgr *mgr) {
   mg_tls_ctx_free(mgr);
 }
 
+
+#if MG_ENABLE_TCPIP && MG_ENABLE_TCPIP_DRIVER_INIT
+void mg_tcpip_auto_init(struct mg_mgr *);
+#endif
+
 void mg_mgr_init(struct mg_mgr *mgr) {
   memset(mgr, 0, sizeof(*mgr));
 #if MG_ENABLE_EPOLL
@@ -4869,6 +4874,8 @@ void mg_mgr_init(struct mg_mgr *mgr) {
   // Ignore SIGPIPE signal, so if client cancels the request, it
   // won't kill the whole process.
   signal(SIGPIPE, SIG_IGN);
+#elif MG_ENABLE_TCPIP && MG_ENABLE_TCPIP_DRIVER_INIT
+  mg_tcpip_auto_init(mgr);
 #endif
   mgr->pipe = MG_INVALID_SOCKET;
   mgr->dnstimeout = 3000;
@@ -5747,6 +5754,14 @@ static void mg_tcpip_poll(struct mg_tcpip_if *ifp, uint64_t now) {
   bool expired_1000ms = mg_timer_expired(&ifp->timer_1000ms, 1000, now);
   ifp->now = now;
 
+#if MG_ENABLE_TCPIP_PRINT_DEBUG_STATS
+  if (expired_1000ms) {
+    const char *names[] = {"down", "up", "req", "ready"};
+    MG_INFO(("Ethernet: %s, IP: %M, rx:%u, tx:%u, dr:%u, er:%u",
+             names[ifp->state], mg_print_ip4, &ifp->ip, ifp->nrecv, ifp->nsent,
+             ifp->ndrop, ifp->nerr));
+  }
+#endif
   // Handle physical interface up/down status
   if (expired_1000ms && ifp->driver->up) {
     bool up = ifp->driver->up(ifp);
@@ -6007,6 +6022,24 @@ bool mg_send(struct mg_connection *c, const void *buf, size_t len) {
   }
   return res;
 }
+
+#if MG_ENABLE_TCPIP_DRIVER_INIT && defined(MG_TCPIP_DRIVER_DATA)
+void mg_tcpip_auto_init(struct mg_mgr *mgr);
+void mg_tcpip_auto_init(struct mg_mgr *mgr) {
+  MG_TCPIP_DRIVER_DATA  // static ... driver_data
+      struct mg_tcpip_if i = {
+          // let the compiler solve the macros at run time
+          .mac = MG_MAC_ADDRESS,          .ip = MG_TCPIP_IP,
+          .mask = MG_TCPIP_MASK,          .gw = MG_TCPIP_GW,
+          .driver = MG_TCPIP_DRIVER_CODE, .driver_data = &driver_data,
+      };
+  static struct mg_tcpip_if mif;
+
+  mif = i;  // copy the initialized structure to a static to be exported
+  mg_tcpip_init(mgr, &mif);
+  MG_INFO(("Driver: " MG_TCPIP_DRIVER_NAME ", MAC: %M", mg_print_mac, mif.mac));
+}
+#endif
 #endif  // MG_ENABLE_TCPIP
 
 #ifdef MG_ENABLE_LINES
@@ -14938,7 +14971,8 @@ struct mg_tcpip_driver mg_tcpip_driver_ra = {mg_tcpip_driver_ra_init,
 #endif
 
 
-#if defined(MG_ENABLE_DRIVER_SAME54) && MG_ENABLE_DRIVER_SAME54
+#if MG_ENABLE_TCPIP && defined(MG_ENABLE_DRIVER_SAME54) && MG_ENABLE_DRIVER_SAME54
+
 #include <sam.h>
 
 #define ETH_PKT_SIZE 1536  // Max frame size
@@ -15941,7 +15975,7 @@ struct mg_tcpip_driver mg_tcpip_driver_tm4c = {mg_tcpip_driver_tm4c_init,
 #endif
 
 
-#if MG_ENABLE_TCPIP
+#if MG_ENABLE_TCPIP && defined(MG_ENABLE_DRIVER_W5500) && MG_ENABLE_DRIVER_W5500
 
 enum { W5500_CR = 0, W5500_S0 = 1, W5500_TX0 = 2, W5500_RX0 = 3 };
 
