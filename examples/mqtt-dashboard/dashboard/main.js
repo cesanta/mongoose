@@ -153,7 +153,7 @@ function Header({topic, setTopic, url, setUrl, connected}) {
     <div class="top-0 py-2 border-b-2 bg-stone-100">
       <div class="flex px-4">
         <div class="flex grow gap-4">
-          <h1 class="text-2xl font-semibold">Device Management Dashboard</h1>
+          <h1 class="text-2xl font-semibold">IoT Fleet Management Dashboard</h1>
         <//>
         <div class="flex gap-2 items-center">
           <div class="flex w-96 align-center justify-between gap-2">
@@ -295,7 +295,7 @@ function FirmwareUpdatePanel({no, name, current, previous, updated_at, refresh})
 };
 
 function DeviceSettingsPanel({device, publishFn, connected}) {
-  const [config, setConfig] = useState(device.config);
+  const [config, setConfig] = useState({});
   const logOptions = [[0, 'Disable'], [1, 'Error'], [2, 'Info'], [3, 'Debug']];
 
   const onSave = ev => publishFn('config.set', config).then(r => {
@@ -316,7 +316,9 @@ function DeviceSettingsPanel({device, publishFn, connected}) {
       pin_state:[]    // Remove pin_state from the request, as pin_map change can invalidate it
     }));
   }
-  //console.log(config);
+  //console.log('sp', device, config);
+
+  useEffect(() => setConfig(device.config) , [device]);
 
   return html`
 <div class="divide-y border rounded bg-white">
@@ -326,7 +328,7 @@ function DeviceSettingsPanel({device, publishFn, connected}) {
   <div class="p-4 gap-3">
     <div class="flex justify-between my-1">
       <span class=${LabelClass}>Status<//>
-      <span class="${BadgeClass} ${connected ? Colors.green : Colors.red}"> ${connected ? 'online' : 'offline'} <//>
+      <span class="${BadgeClass} ${device.online ? Colors.green : Colors.red}"> ${connected ? 'online' : 'offline'} <//>
     <//>
     <div class="flex justify-between my-1">
       <span class=${LabelClass}>Device ID<//>
@@ -390,6 +392,7 @@ function DeviceDashboard({device, setDeviceConfig, publishFn, connected}) {
   const cfg = device && device.config ? device.config : DefaultDeviceConfig;
   const [localConfig, setLocalConfig] = useState(cfg);
   useEffect(() => setLocalConfig(cfg), [device]);
+
   if (!device || !localConfig) {
     return html`
     <div class="flex grow text-gray-400 justify-center items-center text-xl">
@@ -473,7 +476,7 @@ const App = function() {
           return;
         }
         device.online = params.status === 'online';
-        setConnected(device.online);
+        //setConnected(device.online);
         if (device.online) {
           device.config = params;
           if (!device.config.pins) device.config.pins = [];
