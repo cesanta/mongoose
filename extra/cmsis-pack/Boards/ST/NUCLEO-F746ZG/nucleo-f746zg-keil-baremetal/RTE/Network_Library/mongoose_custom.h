@@ -13,6 +13,7 @@
 
 // <q> Enable builtin TCP/IP stack
 #define MG_ENABLE_TCPIP 1
+#define MG_ENABLE_TCPIP_DRIVER_INIT 0
 
 // <h> Network Drivers for builtin TCP/IP stack
 // <q> Enable STM23Fxx Ethernet driver
