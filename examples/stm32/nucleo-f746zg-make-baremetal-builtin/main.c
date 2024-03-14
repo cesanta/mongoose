@@ -24,12 +24,8 @@ void mg_random(void *buf, size_t len) {  // Use on-board RNG
 }
 
 static void timer_fn(void *arg) {
-  gpio_toggle(LED);                                      // Blink LED
-  struct mg_tcpip_if *ifp = arg;                         // And show
-  const char *names[] = {"down", "up", "req", "ready"};  // network stats
-  MG_INFO(("Ethernet: %s, IP: %M, rx:%u, tx:%u, dr:%u, er:%u",
-           names[ifp->state], mg_print_ip4, &ifp->ip, ifp->nrecv, ifp->nsent,
-           ifp->ndrop, ifp->nerr));
+  gpio_toggle(LED);  // Blink LED
+  (void) arg;
 }
 
 int main(void) {
@@ -41,23 +37,7 @@ int main(void) {
   struct mg_mgr mgr;        // Initialise
   mg_mgr_init(&mgr);        // Mongoose event manager
   mg_log_set(MG_LL_DEBUG);  // Set log level
-
-  // Initialise Mongoose network stack
-  struct mg_tcpip_driver_stm32f_data driver_data = {.mdc_cr = 4};
-  struct mg_tcpip_if mif = {.mac = GENERATE_LOCALLY_ADMINISTERED_MAC(),
-                            // Uncomment below for static configuration:
-                            // .ip = mg_htonl(MG_U32(192, 168, 0, 223)),
-                            // .mask = mg_htonl(MG_U32(255, 255, 255, 0)),
-                            // .gw = mg_htonl(MG_U32(192, 168, 0, 1)),
-                            .driver = &mg_tcpip_driver_stm32f,
-                            .driver_data = &driver_data};
-  mg_tcpip_init(&mgr, &mif);
-  mg_timer_add(&mgr, BLINK_PERIOD_MS, MG_TIMER_REPEAT, timer_fn, &mif);
-
-  MG_INFO(("MAC: %M. Waiting for IP...", mg_print_mac, mif.mac));
-  while (mif.state != MG_TCPIP_STATE_READY) {
-    mg_mgr_poll(&mgr, 0);
-  }
+  mg_timer_add(&mgr, BLINK_PERIOD_MS, MG_TIMER_REPEAT, timer_fn, NULL);
 
   MG_INFO(("Initialising application..."));
   web_init(&mgr);
