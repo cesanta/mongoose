@@ -142,7 +142,7 @@ static void send_syn(struct mg_connection *c);
 
 static void mkpay(struct pkt *pkt, void *p) {
   pkt->pay =
-      mg_str_n((char *) p, (size_t) (&pkt->raw.ptr[pkt->raw.len] - (char *) p));
+      mg_str_n((char *) p, (size_t) (&pkt->raw.buf[pkt->raw.len] - (char *) p));
 }
 
 static uint32_t csumup(uint32_t sum, const void *buf, size_t len) {
@@ -176,13 +176,13 @@ static void settmout(struct mg_connection *c, uint8_t type) {
 }
 
 static size_t ether_output(struct mg_tcpip_if *ifp, size_t len) {
-  size_t n = ifp->driver->tx(ifp->tx.ptr, len, ifp);
+  size_t n = ifp->driver->tx(ifp->tx.buf, len, ifp);
   if (n == len) ifp->nsent++;
   return n;
 }
 
 static void arp_ask(struct mg_tcpip_if *ifp, uint32_t ip) {
-  struct eth *eth = (struct eth *) ifp->tx.ptr;
+  struct eth *eth = (struct eth *) ifp->tx.buf;
   struct arp *arp = (struct arp *) (eth + 1);
   memset(eth->dst, 255, sizeof(eth->dst));
   memcpy(eth->src, ifp->mac, sizeof(eth->src));
@@ -212,7 +212,7 @@ static void onstatechange(struct mg_tcpip_if *ifp) {
 static struct ip *tx_ip(struct mg_tcpip_if *ifp, uint8_t *mac_dst,
                         uint8_t proto, uint32_t ip_src, uint32_t ip_dst,
                         size_t plen) {
-  struct eth *eth = (struct eth *) ifp->tx.ptr;
+  struct eth *eth = (struct eth *) ifp->tx.buf;
   struct ip *ip = (struct ip *) (eth + 1);
   memcpy(eth->dst, mac_dst, sizeof(eth->dst));
   memcpy(eth->src, ifp->mac, sizeof(eth->src));  // Use our MAC
@@ -325,7 +325,7 @@ static void rx_arp(struct mg_tcpip_if *ifp, struct pkt *pkt) {
     // ARP request. Make a response, then send
     // MG_DEBUG(("ARP op %d %M: %M", mg_ntohs(pkt->arp->op), mg_print_ip4,
     //          &pkt->arp->spa, mg_print_ip4, &pkt->arp->tpa));
-    struct eth *eth = (struct eth *) ifp->tx.ptr;
+    struct eth *eth = (struct eth *) ifp->tx.buf;
     struct arp *arp = (struct arp *) (eth + 1);
     memcpy(eth->dst, pkt->eth->src, sizeof(eth->dst));
     memcpy(eth->src, ifp->mac, sizeof(eth->src));
@@ -369,7 +369,7 @@ static void rx_icmp(struct mg_tcpip_if *ifp, struct pkt *pkt) {
                           sizeof(struct icmp) + plen);
     struct icmp *icmp = (struct icmp *) (ip + 1);
     memset(icmp, 0, sizeof(*icmp));        // Set csum to 0
-    memcpy(icmp + 1, pkt->pay.ptr, plen);  // Copy RX payload to TX
+    memcpy(icmp + 1, pkt->pay.buf, plen);  // Copy RX payload to TX
     icmp->csum = ipcsum(icmp, sizeof(*icmp) + plen);
     ether_output(ifp, hlen + plen);
   }
@@ -380,7 +380,7 @@ static void rx_dhcp_client(struct mg_tcpip_if *ifp, struct pkt *pkt) {
   uint8_t msgtype = 0, state = ifp->state;
   // perform size check first, then access fields
   uint8_t *p = pkt->dhcp->options,
-          *end = (uint8_t *) &pkt->raw.ptr[pkt->raw.len];
+          *end = (uint8_t *) &pkt->raw.buf[pkt->raw.len];
   if (end < (uint8_t *) (pkt->dhcp + 1)) return;
   if (memcmp(&pkt->dhcp->xid, ifp->mac + 2, sizeof(pkt->dhcp->xid))) return;
   while (p + 1 < end && p[0] != 255) {  // Parse options RFC-1533 #9
@@ -428,7 +428,7 @@ static void rx_dhcp_client(struct mg_tcpip_if *ifp, struct pkt *pkt) {
 // Simple DHCP server that assigns a next IP address: ifp->ip + 1
 static void rx_dhcp_server(struct mg_tcpip_if *ifp, struct pkt *pkt) {
   uint8_t op = 0, *p = pkt->dhcp->options,
-          *end = (uint8_t *) &pkt->raw.ptr[pkt->raw.len];
+          *end = (uint8_t *) &pkt->raw.buf[pkt->raw.len];
   if (end < (uint8_t *) (pkt->dhcp + 1)) return;
   // struct dhcp *req = pkt->dhcp;
   struct dhcp res = {2, 1, 6, 0, 0, 0, 0, 0, 0, 0, 0, {0}, 0, {0}};
@@ -480,7 +480,7 @@ static void rx_udp(struct mg_tcpip_if *ifp, struct pkt *pkt) {
                !mg_iobuf_resize(&c->recv, c->recv.len + pkt->pay.len)) {
       mg_error(c, "oom");
     } else {
-      memcpy(&c->recv.buf[c->recv.len], pkt->pay.ptr, pkt->pay.len);
+      memcpy(&c->recv.buf[c->recv.len], pkt->pay.buf, pkt->pay.len);
       c->recv.len += pkt->pay.len;
       mg_call(c, MG_EV_READ, &pkt->pay.len);
     }
@@ -523,8 +523,8 @@ static size_t tx_tcp(struct mg_tcpip_if *ifp, uint8_t *dst_mac, uint32_t dst_ip,
   MG_VERBOSE(("TCP %M:%hu -> %M:%hu fl %x len %u", mg_print_ip4, &ip->src,
               mg_ntohs(tcp->sport), mg_print_ip4, &ip->dst,
               mg_ntohs(tcp->dport), tcp->flags, len));
-  // mg_hexdump(ifp->tx.ptr, PDIFF(ifp->tx.ptr, tcp + 1) + len);
-  return ether_output(ifp, PDIFF(ifp->tx.ptr, tcp + 1) + len);
+  // mg_hexdump(ifp->tx.buf, PDIFF(ifp->tx.buf, tcp + 1) + len);
+  return ether_output(ifp, PDIFF(ifp->tx.buf, tcp + 1) + len);
 }
 
 static size_t tx_tcp_pkt(struct mg_tcpip_if *ifp, struct pkt *pkt,
@@ -659,7 +659,7 @@ static void read_conn(struct mg_connection *c, struct pkt *pkt) {
     // therefore we copy that encrypted data to the c->rtls iobuffer instead,
     // and then call mg_tls_recv() to decrypt it. NOTE: mg_tls_recv() will
     // call back mg_io_recv() which grabs raw data from c->rtls
-    memcpy(&io->buf[io->len], pkt->pay.ptr, pkt->pay.len);
+    memcpy(&io->buf[io->len], pkt->pay.buf, pkt->pay.len);
     io->len += pkt->pay.len;
 
     MG_VERBOSE(("%lu SEQ %x -> %x", c->id, mg_htonl(pkt->tcp->seq), s->ack));
@@ -721,7 +721,7 @@ static void rx_tcp(struct mg_tcpip_if *ifp, struct pkt *pkt) {
     settmout(c, MIP_TTYPE_KEEPALIVE);
     mg_call(c, MG_EV_CONNECT, NULL);  // Let user know
   } else if (c != NULL && c->is_connecting && pkt->tcp->flags != TH_ACK) {
-    // mg_hexdump(pkt->raw.ptr, pkt->raw.len);
+    // mg_hexdump(pkt->raw.buf, pkt->raw.len);
     tx_tcp_pkt(ifp, pkt, TH_RST | TH_ACK, pkt->tcp->ack, NULL, 0);
   } else if (c != NULL && pkt->tcp->flags & TH_RST) {
     mg_error(c, "peer RST");  // RFC-1122 4.2.2.13
@@ -730,7 +730,7 @@ static void rx_tcp(struct mg_tcpip_if *ifp, struct pkt *pkt) {
     MG_DEBUG(("%lu %d %M:%hu -> %M:%hu", c->id, (int) pkt->raw.len,
               mg_print_ip4, &pkt->ip->src, mg_ntohs(pkt->tcp->sport),
               mg_print_ip4, &pkt->ip->dst, mg_ntohs(pkt->tcp->dport)));
-    mg_hexdump(pkt->pay.ptr, pkt->pay.len);
+    mg_hexdump(pkt->pay.buf, pkt->pay.len);
 #endif
     s->tmiss = 0;                         // Reset missed keep-alive counter
     if (s->ttype == MIP_TTYPE_KEEPALIVE)  // Advance keep-alive timer
@@ -819,7 +819,7 @@ static void rx_ip6(struct mg_tcpip_if *ifp, struct pkt *pkt) {
 static void mg_tcpip_rx(struct mg_tcpip_if *ifp, void *buf, size_t len) {
   struct pkt pkt;
   memset(&pkt, 0, sizeof(pkt));
-  pkt.raw.ptr = (char *) buf;
+  pkt.raw.buf = (char *) buf;
   pkt.raw.len = len;
   pkt.eth = (struct eth *) buf;
   // mg_hexdump(buf, len > 16 ? 16: len);
@@ -981,7 +981,7 @@ void mg_tcpip_init(struct mg_mgr *mgr, struct mg_tcpip_if *ifp) {
     MG_ERROR(("driver init failed"));
   } else {
     size_t framesize = 1540;
-    ifp->tx.ptr = (char *) calloc(1, framesize), ifp->tx.len = framesize;
+    ifp->tx.buf = (char *) calloc(1, framesize), ifp->tx.len = framesize;
     if (ifp->recv_queue.size == 0)
       ifp->recv_queue.size = ifp->driver->rx ? framesize : 8192;
     ifp->recv_queue.buf = (char *) calloc(1, ifp->recv_queue.size);
@@ -995,13 +995,13 @@ void mg_tcpip_init(struct mg_mgr *mgr, struct mg_tcpip_if *ifp) {
     mg_random(&ifp->eport, sizeof(ifp->eport));   // Random from 0 to 65535
     ifp->eport |= MG_EPHEMERAL_PORT_BASE;         // Random from
                                            // MG_EPHEMERAL_PORT_BASE to 65535
-    if (ifp->tx.ptr == NULL || ifp->recv_queue.buf == NULL) MG_ERROR(("OOM"));
+    if (ifp->tx.buf == NULL || ifp->recv_queue.buf == NULL) MG_ERROR(("OOM"));
   }
 }
 
 void mg_tcpip_free(struct mg_tcpip_if *ifp) {
   free(ifp->recv_queue.buf);
-  free((char *) ifp->tx.ptr);
+  free(ifp->tx.buf);
 }
 
 static void send_syn(struct mg_connection *c) {

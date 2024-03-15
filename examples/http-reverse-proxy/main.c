@@ -23,17 +23,17 @@ static void forward_request(struct mg_http_message *hm,
   size_t i, max = sizeof(hm->headers) / sizeof(hm->headers[0]);
   struct mg_str host = mg_url_host(s_backend_url);
   mg_printf(c, "%.*s\r\n",
-            (int) (hm->proto.ptr + hm->proto.len - hm->message.ptr),
-            hm->message.ptr);
+            (int) (hm->proto.buf + hm->proto.len - hm->message.buf),
+            hm->message.buf);
   for (i = 0; i < max && hm->headers[i].name.len > 0; i++) {
     struct mg_str *k = &hm->headers[i].name, *v = &hm->headers[i].value;
     if (mg_strcmp(*k, mg_str("Host")) == 0) v = &host;
-    mg_printf(c, "%.*s: %.*s\r\n", (int) k->len, k->ptr, (int) v->len, v->ptr);
+    mg_printf(c, "%.*s: %.*s\r\n", (int) k->len, k->buf, (int) v->len, v->buf);
   }
   mg_send(c, "\r\n", 2);
-  mg_send(c, hm->body.ptr, hm->body.len);
-  MG_DEBUG(("FORWARDING: %.*s %.*s", (int) hm->method.len, hm->method.ptr,
-            (int) hm->uri.len, hm->uri.ptr));
+  mg_send(c, hm->body.buf, hm->body.len);
+  MG_DEBUG(("FORWARDING: %.*s %.*s", (int) hm->method.len, hm->method.buf,
+            (int) hm->uri.len, hm->uri.buf));
 }
 
 static void fn2(struct mg_connection *c, int ev, void *ev_data) {

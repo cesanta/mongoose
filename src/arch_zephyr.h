@@ -19,7 +19,7 @@
 
 #define MG_PUTCHAR(x) printk("%c", x)
 #ifndef strdup
-#define strdup(s) ((char *) mg_strdup(mg_str(s)).ptr)
+#define strdup(s) ((char *) mg_strdup(mg_str(s)).buf)
 #endif
 #define strerror(x) zsock_gai_strerror(x)
 

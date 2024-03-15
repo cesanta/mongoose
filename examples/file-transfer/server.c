@@ -64,7 +64,7 @@ static void cb(struct mg_connection *c, int ev, void *ev_data) {
           } else {
             char fpath[MG_PATH_MAX];
             snprintf(fpath, MG_PATH_MAX, "%s%c", s_upld_dir, MG_DIRSEP);
-            strncat(fpath, hm.uri.ptr + 8, hm.uri.len - 8);
+            strncat(fpath, hm.uri.buf + 8, hm.uri.len - 8);
             if (!mg_path_is_sane(fpath)) {
               mg_http_reply(c, 400, "", "Invalid path\n");
               c->is_draining = 1;  // Tell mongoose to close this connection

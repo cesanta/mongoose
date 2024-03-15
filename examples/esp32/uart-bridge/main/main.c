@@ -12,7 +12,7 @@ char *config_read(void) {
 #endif
 
 void config_write(struct mg_str config) {
-  mg_file_write(&mg_fs_posix, FS_ROOT "/config.json", config.ptr, config.len);
+  mg_file_write(&mg_fs_posix, FS_ROOT "/config.json", config.buf, config.len);
 }
 
 void app_main(void) {
@@ -24,13 +24,13 @@ void app_main(void) {
 
   // Try to connect to wifi by using saved WiFi credentials
   struct mg_str json = mg_file_read(&mg_fs_posix, WIFI_FILE);
-  if (json.ptr != NULL) {
+  if (json.buf != NULL) {
     char *ssid = mg_json_get_str(json, "$.ssid");
     char *pass = mg_json_get_str(json, "$.pass");
     while (!wifi_init(ssid, pass)) (void) 0;
     free(ssid);
     free(pass);
-    free((void *) json.ptr);
+    free((void *) json.buf);
   } else {
     // If WiFi is not configured, run CLI until configured
     MG_INFO(("WiFi is not configured, running CLI. Press enter"));

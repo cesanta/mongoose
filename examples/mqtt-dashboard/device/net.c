@@ -41,9 +41,9 @@ static void set_device_id(void) {
   }
 #elif defined(__linux__)
   struct mg_str id = mg_file_read(&mg_fs_posix, "/etc/machine-id");
-  if (id.ptr != NULL) {
-    mg_snprintf(buf, sizeof(buf), "%s", id.ptr);
-    free((void *) id.ptr);
+  if (id.buf != NULL) {
+    mg_snprintf(buf, sizeof(buf), "%s", id.buf);
+    free((void *) id.buf);
   }
 #endif
 
@@ -128,7 +128,7 @@ static void subscribe(struct mg_connection *c) {
   sub_opts.topic = subt;
   sub_opts.qos = s_qos;
   mg_mqtt_sub(c, &sub_opts);
-  MG_INFO(("%lu SUBSCRIBED to %.*s", c->id, (int) subt.len, subt.ptr));
+  MG_INFO(("%lu SUBSCRIBED to %.*s", c->id, (int) subt.len, subt.buf));
   free(rx_topic);
 }
 
@@ -228,10 +228,10 @@ static void fn(struct mg_connection *c, int ev, void *ev_data) {
     struct mg_mqtt_message *mm = (struct mg_mqtt_message *) ev_data;
     struct mg_iobuf io = {0, 0, 0, 512};
     struct mg_rpc_req r = {&s_rpc, NULL, mg_pfn_iobuf,
-                           &io,    NULL, {mm->data.ptr, mm->data.len}};
+                           &io,    NULL, {mm->data.buf, mm->data.len}};
     size_t clipped_len = mm->data.len > 512 ? 512 : mm->data.len;
-    MG_INFO(("%lu RECEIVED %.*s <- %.*s", c->id, clipped_len, mm->data.ptr,
-             mm->topic.len, mm->topic.ptr));
+    MG_INFO(("%lu RECEIVED %.*s <- %.*s", c->id, clipped_len, mm->data.buf,
+             mm->topic.len, mm->topic.buf));
     mg_rpc_process(&r);
     if (io.buf) {
       publish_response(c, (char *) io.buf, io.len);

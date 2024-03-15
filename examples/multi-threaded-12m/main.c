@@ -63,7 +63,7 @@ static void fn(struct mg_connection *c, int ev, void *ev_data) {
   } else if (ev == MG_EV_WS_MSG) {
     // Got websocket frame. Received data is wm->data. Echo it back!
     struct mg_ws_message *wm = (struct mg_ws_message *) ev_data;
-    mg_ws_send(c, wm->data.ptr, wm->data.len, WEBSOCKET_OP_TEXT);
+    mg_ws_send(c, wm->data.buf, wm->data.len, WEBSOCKET_OP_TEXT);
     mg_iobuf_del(&c->recv, 0, c->recv.len);
   } else if (ev == MG_EV_WAKEUP) {
     struct mg_str *data = (struct mg_str *) ev_data;
@@ -72,7 +72,7 @@ static void fn(struct mg_connection *c, int ev, void *ev_data) {
     for (struct mg_connection *wc = c->mgr->conns; wc != NULL; wc = wc->next) {
       // Send only to marked connections
       if (wc->data[0] == 'W')
-        mg_ws_send(wc, data->ptr, data->len, WEBSOCKET_OP_TEXT);
+        mg_ws_send(wc, data->buf, data->len, WEBSOCKET_OP_TEXT);
     }
   }
 }

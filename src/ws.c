@@ -40,7 +40,7 @@ static void ws_handshake(struct mg_connection *c, const struct mg_str *wskey,
 
   mg_sha1_ctx sha_ctx;
   mg_sha1_init(&sha_ctx);
-  mg_sha1_update(&sha_ctx, (unsigned char *) wskey->ptr, wskey->len);
+  mg_sha1_update(&sha_ctx, (unsigned char *) wskey->buf, wskey->len);
   mg_sha1_update(&sha_ctx, (unsigned char *) magic, 36);
   mg_sha1_final(sha, &sha_ctx);
   mg_base64_encode(sha, sizeof(sha), (char *) b64_sha, sizeof(b64_sha));
@@ -53,7 +53,7 @@ static void ws_handshake(struct mg_connection *c, const struct mg_str *wskey,
   if (fmt != NULL) mg_vxprintf(mg_pfn_iobuf, &c->send, fmt, ap);
   if (wsproto != NULL) {
     mg_printf(c, "Sec-WebSocket-Protocol: %.*s\r\n", (int) wsproto->len,
-              wsproto->ptr);
+              wsproto->buf);
   }
   mg_send(c, "\r\n", 2);
 }
@@ -177,7 +177,7 @@ static void mg_ws_cb(struct mg_connection *c, int ev, void *ev_data) {
       size_t len = msg.header_len + msg.data_len;
       uint8_t final = msg.flags & 128, op = msg.flags & 15;
       // MG_VERBOSE ("fin %d op %d len %d [%.*s]", final, op,
-      //                       (int) m.data.len, (int) m.data.len, m.data.ptr));
+      //                       (int) m.data.len, (int) m.data.len, m.data.buf));
       switch (op) {
         case WEBSOCKET_OP_CONTINUE:
           mg_call(c, MG_EV_WS_CTL, &m);
@@ -198,7 +198,7 @@ static void mg_ws_cb(struct mg_connection *c, int ev, void *ev_data) {
           MG_DEBUG(("%lu WS CLOSE", c->id));
           mg_call(c, MG_EV_WS_CTL, &m);
           // Echo the payload of the received CLOSE message back to the sender
-          mg_ws_send(c, m.data.ptr, m.data.len, WEBSOCKET_OP_CLOSE);
+          mg_ws_send(c, m.data.buf, m.data.len, WEBSOCKET_OP_CLOSE);
           c->is_draining = 1;
           break;
         default:
@@ -248,7 +248,7 @@ struct mg_connection *mg_ws_connect(struct mg_mgr *mgr, const char *url,
                "Connection: Upgrade\r\n"
                "Sec-WebSocket-Version: 13\r\n"
                "Sec-WebSocket-Key: %s\r\n",
-               mg_url_uri(url), (int) host.len, host.ptr, key);
+               mg_url_uri(url), (int) host.len, host.buf, key);
     if (fmt != NULL) {
       va_list ap;
       va_start(ap, fmt);

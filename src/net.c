@@ -41,18 +41,18 @@ static bool mg_aton4(struct mg_str str, struct mg_addr *addr) {
   uint8_t data[4] = {0, 0, 0, 0};
   size_t i, num_dots = 0;
   for (i = 0; i < str.len; i++) {
-    if (str.ptr[i] >= '0' && str.ptr[i] <= '9') {
-      int octet = data[num_dots] * 10 + (str.ptr[i] - '0');
+    if (str.buf[i] >= '0' && str.buf[i] <= '9') {
+      int octet = data[num_dots] * 10 + (str.buf[i] - '0');
       if (octet > 255) return false;
       data[num_dots] = (uint8_t) octet;
-    } else if (str.ptr[i] == '.') {
-      if (num_dots >= 3 || i == 0 || str.ptr[i - 1] == '.') return false;
+    } else if (str.buf[i] == '.') {
+      if (num_dots >= 3 || i == 0 || str.buf[i - 1] == '.') return false;
       num_dots++;
     } else {
       return false;
     }
   }
-  if (num_dots != 3 || str.ptr[i - 1] == '.') return false;
+  if (num_dots != 3 || str.buf[i - 1] == '.') return false;
   memcpy(&addr->ip, data, sizeof(data));
   addr->is_ip6 = false;
   return true;
@@ -62,12 +62,12 @@ static bool mg_v4mapped(struct mg_str str, struct mg_addr *addr) {
   int i;
   uint32_t ipv4;
   if (str.len < 14) return false;
-  if (str.ptr[0] != ':' || str.ptr[1] != ':' || str.ptr[6] != ':') return false;
+  if (str.buf[0] != ':' || str.buf[1] != ':' || str.buf[6] != ':') return false;
   for (i = 2; i < 6; i++) {
-    if (str.ptr[i] != 'f' && str.ptr[i] != 'F') return false;
+    if (str.buf[i] != 'f' && str.buf[i] != 'F') return false;
   }
-  // struct mg_str s = mg_str_n(&str.ptr[7], str.len - 7);
-  if (!mg_aton4(mg_str_n(&str.ptr[7], str.len - 7), addr)) return false;
+  // struct mg_str s = mg_str_n(&str.buf[7], str.len - 7);
+  if (!mg_aton4(mg_str_n(&str.buf[7], str.len - 7), addr)) return false;
   memcpy(&ipv4, addr->ip, sizeof(ipv4));
   memset(addr->ip, 0, sizeof(addr->ip));
   addr->ip[10] = addr->ip[11] = 255;
@@ -79,33 +79,33 @@ static bool mg_v4mapped(struct mg_str str, struct mg_addr *addr) {
 static bool mg_aton6(struct mg_str str, struct mg_addr *addr) {
   size_t i, j = 0, n = 0, dc = 42;
   addr->scope_id = 0;
-  if (str.len > 2 && str.ptr[0] == '[') str.ptr++, str.len -= 2;
+  if (str.len > 2 && str.buf[0] == '[') str.buf++, str.len -= 2;
   if (mg_v4mapped(str, addr)) return true;
   for (i = 0; i < str.len; i++) {
-    if ((str.ptr[i] >= '0' && str.ptr[i] <= '9') ||
-        (str.ptr[i] >= 'a' && str.ptr[i] <= 'f') ||
-        (str.ptr[i] >= 'A' && str.ptr[i] <= 'F')) {
+    if ((str.buf[i] >= '0' && str.buf[i] <= '9') ||
+        (str.buf[i] >= 'a' && str.buf[i] <= 'f') ||
+        (str.buf[i] >= 'A' && str.buf[i] <= 'F')) {
       unsigned long val;
       if (i > j + 3) return false;
-      // MG_DEBUG(("%lu %lu [%.*s]", i, j, (int) (i - j + 1), &str.ptr[j]));
-      val = mg_unhexn(&str.ptr[j], i - j + 1);
+      // MG_DEBUG(("%lu %lu [%.*s]", i, j, (int) (i - j + 1), &str.buf[j]));
+      val = mg_unhexn(&str.buf[j], i - j + 1);
       addr->ip[n] = (uint8_t) ((val >> 8) & 255);
       addr->ip[n + 1] = (uint8_t) (val & 255);
-    } else if (str.ptr[i] == ':') {
+    } else if (str.buf[i] == ':') {
       j = i + 1;
-      if (i > 0 && str.ptr[i - 1] == ':') {
+      if (i > 0 && str.buf[i - 1] == ':') {
         dc = n;  // Double colon
-        if (i > 1 && str.ptr[i - 2] == ':') return false;
+        if (i > 1 && str.buf[i - 2] == ':') return false;
       } else if (i > 0) {
         n += 2;
       }
       if (n > 14) return false;
       addr->ip[n] = addr->ip[n + 1] = 0;  // For trailing ::
-    } else if (str.ptr[i] == '%') {       // Scope ID
+    } else if (str.buf[i] == '%') {       // Scope ID
       for (i = i + 1; i < str.len; i++) {
-        if (str.ptr[i] < '0' || str.ptr[i] > '9') return false;
+        if (str.buf[i] < '0' || str.buf[i] > '9') return false;
         addr->scope_id = (uint8_t) (addr->scope_id * 10);
-        addr->scope_id = (uint8_t) (addr->scope_id + (str.ptr[i] - '0'));
+        addr->scope_id = (uint8_t) (addr->scope_id + (str.buf[i] - '0'));
       }
     } else {
       return false;
@@ -122,7 +122,7 @@ static bool mg_aton6(struct mg_str str, struct mg_addr *addr) {
 }
 
 bool mg_aton(struct mg_str str, struct mg_addr *addr) {
-  // MG_INFO(("[%.*s]", (int) str.len, str.ptr));
+  // MG_INFO(("[%.*s]", (int) str.len, str.buf));
   return mg_atone(str, addr) || mg_atonl(str, addr) || mg_aton4(str, addr) ||
          mg_aton6(str, addr);
 }

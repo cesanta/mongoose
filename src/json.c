@@ -79,52 +79,52 @@ size_t mg_json_next(struct mg_str obj, size_t ofs, struct mg_str *key,
                     struct mg_str *val) {
   if (ofs >= obj.len) {
     ofs = 0;  // Out of boundaries, stop scanning
-  } else if (obj.len < 2 || (*obj.ptr != '{' && *obj.ptr != '[')) {
+  } else if (obj.len < 2 || (*obj.buf != '{' && *obj.buf != '[')) {
     ofs = 0;  // Not an array or object, stop
   } else {
-    struct mg_str sub = mg_str_n(obj.ptr + ofs, obj.len - ofs);
-    if (ofs == 0) ofs++, sub.ptr++, sub.len--;
-    if (*obj.ptr == '[') {  // Iterate over an array
+    struct mg_str sub = mg_str_n(obj.buf + ofs, obj.len - ofs);
+    if (ofs == 0) ofs++, sub.buf++, sub.len--;
+    if (*obj.buf == '[') {  // Iterate over an array
       int n = 0, o = mg_json_get(sub, "$", &n);
       if (n < 0 || o < 0 || (size_t) (o + n) > sub.len) {
         ofs = 0;  // Error parsing key, stop scanning
       } else {
         if (key) *key = mg_str_n(NULL, 0);
-        if (val) *val = mg_str_n(sub.ptr + o, (size_t) n);
-        ofs = (size_t) (&sub.ptr[o + n] - obj.ptr);
+        if (val) *val = mg_str_n(sub.buf + o, (size_t) n);
+        ofs = (size_t) (&sub.buf[o + n] - obj.buf);
       }
     } else {  // Iterate over an object
       int n = 0, o = mg_json_get(sub, "$", &n);
       if (n < 0 || o < 0 || (size_t) (o + n) > sub.len) {
         ofs = 0;  // Error parsing key, stop scanning
       } else {
-        if (key) *key = mg_str_n(sub.ptr + o, (size_t) n);
-        sub.ptr += o + n, sub.len -= (size_t) (o + n);
-        while (sub.len > 0 && *sub.ptr != ':') sub.len--, sub.ptr++;
-        if (sub.len > 0 && *sub.ptr == ':') sub.len--, sub.ptr++;
+        if (key) *key = mg_str_n(sub.buf + o, (size_t) n);
+        sub.buf += o + n, sub.len -= (size_t) (o + n);
+        while (sub.len > 0 && *sub.buf != ':') sub.len--, sub.buf++;
+        if (sub.len > 0 && *sub.buf == ':') sub.len--, sub.buf++;
         n = 0, o = mg_json_get(sub, "$", &n);
         if (n < 0 || o < 0 || (size_t) (o + n) > sub.len) {
           ofs = 0;  // Error parsing value, stop scanning
         } else {
-          if (val) *val = mg_str_n(sub.ptr + o, (size_t) n);
-          ofs = (size_t) (&sub.ptr[o + n] - obj.ptr);
+          if (val) *val = mg_str_n(sub.buf + o, (size_t) n);
+          ofs = (size_t) (&sub.buf[o + n] - obj.buf);
         }
       }
     }
-    // MG_INFO(("SUB ofs %u %.*s", ofs, sub.len, sub.ptr));
+    // MG_INFO(("SUB ofs %u %.*s", ofs, sub.len, sub.buf));
     while (ofs && ofs < obj.len &&
-           (obj.ptr[ofs] == ' ' || obj.ptr[ofs] == '\t' ||
-            obj.ptr[ofs] == '\n' || obj.ptr[ofs] == '\r')) {
+           (obj.buf[ofs] == ' ' || obj.buf[ofs] == '\t' ||
+            obj.buf[ofs] == '\n' || obj.buf[ofs] == '\r')) {
       ofs++;
     }
-    if (ofs && ofs < obj.len && obj.ptr[ofs] == ',') ofs++;
+    if (ofs && ofs < obj.len && obj.buf[ofs] == ',') ofs++;
     if (ofs > obj.len) ofs = 0;
   }
   return ofs;
 }
 
 int mg_json_get(struct mg_str json, const char *path, int *toklen) {
-  const char *s = json.ptr;
+  const char *s = json.buf;
   int len = (int) json.len;
   enum { S_VALUE, S_KEY, S_COLON, S_COMMA_OR_EOO } expecting = S_VALUE;
   unsigned char nesting[MG_JSON_MAX_DEPTH];
@@ -268,15 +268,15 @@ int mg_json_get(struct mg_str json, const char *path, int *toklen) {
 
 struct mg_str mg_json_get_tok(struct mg_str json, const char *path) {
   int len = 0, ofs = mg_json_get(json, path, &len);
-  return mg_str_n(ofs < 0 ? NULL : json.ptr + ofs,
+  return mg_str_n(ofs < 0 ? NULL : json.buf + ofs,
                   (size_t) (len < 0 ? 0 : len));
 }
 
 bool mg_json_get_num(struct mg_str json, const char *path, double *v) {
   int n, toklen, found = 0;
   if ((n = mg_json_get(json, path, &toklen)) >= 0 &&
-      (json.ptr[n] == '-' || (json.ptr[n] >= '0' && json.ptr[n] <= '9'))) {
-    if (v != NULL) *v = mg_atod(json.ptr + n, toklen, NULL);
+      (json.buf[n] == '-' || (json.buf[n] >= '0' && json.buf[n] <= '9'))) {
+    if (v != NULL) *v = mg_atod(json.buf + n, toklen, NULL);
     found = 1;
   }
   return found;
@@ -284,8 +284,8 @@ bool mg_json_get_num(struct mg_str json, const char *path, double *v) {
 
 bool mg_json_get_bool(struct mg_str json, const char *path, bool *v) {
   int found = 0, off = mg_json_get(json, path, NULL);
-  if (off >= 0 && (json.ptr[off] == 't' || json.ptr[off] == 'f')) {
-    if (v != NULL) *v = json.ptr[off] == 't';
+  if (off >= 0 && (json.buf[off] == 't' || json.buf[off] == 'f')) {
+    if (v != NULL) *v = json.buf[off] == 't';
     found = 1;
   }
   return found;
@@ -294,21 +294,21 @@ bool mg_json_get_bool(struct mg_str json, const char *path, bool *v) {
 bool mg_json_unescape(struct mg_str s, char *to, size_t n) {
   size_t i, j;
   for (i = 0, j = 0; i < s.len && j < n; i++, j++) {
-    if (s.ptr[i] == '\\' && i + 5 < s.len && s.ptr[i + 1] == 'u') {
+    if (s.buf[i] == '\\' && i + 5 < s.len && s.buf[i + 1] == 'u') {
       //  \uXXXX escape. We could process a simple one-byte chars
       // \u00xx from the ASCII range. More complex chars would require
       // dragging in a UTF8 library, which is too much for us
-      if (s.ptr[i + 2] != '0' || s.ptr[i + 3] != '0') return false;  // Give up
-      ((unsigned char *) to)[j] = (unsigned char) mg_unhexn(s.ptr + i + 4, 2);
+      if (s.buf[i + 2] != '0' || s.buf[i + 3] != '0') return false;  // Give up
+      ((unsigned char *) to)[j] = (unsigned char) mg_unhexn(s.buf + i + 4, 2);
 
       i += 5;
-    } else if (s.ptr[i] == '\\' && i + 1 < s.len) {
-      char c = json_esc(s.ptr[i + 1], 0);
+    } else if (s.buf[i] == '\\' && i + 1 < s.len) {
+      char c = json_esc(s.buf[i + 1], 0);
       if (c == 0) return false;
       to[j] = c;
       i++;
     } else {
-      to[j] = s.ptr[i];
+      to[j] = s.buf[i];
     }
   }
   if (j >= n) return false;
@@ -319,9 +319,9 @@ bool mg_json_unescape(struct mg_str s, char *to, size_t n) {
 char *mg_json_get_str(struct mg_str json, const char *path) {
   char *result = NULL;
   int len = 0, off = mg_json_get(json, path, &len);
-  if (off >= 0 && len > 1 && json.ptr[off] == '"') {
+  if (off >= 0 && len > 1 && json.buf[off] == '"') {
     if ((result = (char *) calloc(1, (size_t) len)) != NULL &&
-        !mg_json_unescape(mg_str_n(json.ptr + off + 1, (size_t) (len - 2)),
+        !mg_json_unescape(mg_str_n(json.buf + off + 1, (size_t) (len - 2)),
                           result, (size_t) len)) {
       free(result);
       result = NULL;
@@ -333,9 +333,9 @@ char *mg_json_get_str(struct mg_str json, const char *path) {
 char *mg_json_get_b64(struct mg_str json, const char *path, int *slen) {
   char *result = NULL;
   int len = 0, off = mg_json_get(json, path, &len);
-  if (off >= 0 && json.ptr[off] == '"' && len > 1 &&
+  if (off >= 0 && json.buf[off] == '"' && len > 1 &&
       (result = (char *) calloc(1, (size_t) len)) != NULL) {
-    size_t k = mg_base64_decode(json.ptr + off + 1, (size_t) (len - 2), result,
+    size_t k = mg_base64_decode(json.buf + off + 1, (size_t) (len - 2), result,
                                 (size_t) len);
     if (slen != NULL) *slen = (int) k;
   }
@@ -345,9 +345,9 @@ char *mg_json_get_b64(struct mg_str json, const char *path, int *slen) {
 char *mg_json_get_hex(struct mg_str json, const char *path, int *slen) {
   char *result = NULL;
   int len = 0, off = mg_json_get(json, path, &len);
-  if (off >= 0 && json.ptr[off] == '"' && len > 1 &&
+  if (off >= 0 && json.buf[off] == '"' && len > 1 &&
       (result = (char *) calloc(1, (size_t) len / 2)) != NULL) {
-    mg_unhex(json.ptr + off + 1, (size_t) (len - 2), (uint8_t *) result);
+    mg_unhex(json.buf + off + 1, (size_t) (len - 2), (uint8_t *) result);
     result[len / 2 - 1] = '\0';
     if (slen != NULL) *slen = len / 2 - 1;
   }

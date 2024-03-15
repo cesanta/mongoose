@@ -22,7 +22,7 @@ static void fn(struct mg_connection *c, int ev, void *ev_data) {
   } else if (ev == MG_EV_WS_MSG) {
     // When we get echo response, print it
     struct mg_ws_message *wm = (struct mg_ws_message *) ev_data;
-    printf("GOT ECHO REPLY: [%.*s]\n", (int) wm->data.len, wm->data.ptr);
+    printf("GOT ECHO REPLY: [%.*s]\n", (int) wm->data.len, wm->data.buf);
   }
 
   if (ev == MG_EV_ERROR || ev == MG_EV_CLOSE || ev == MG_EV_WS_MSG) {

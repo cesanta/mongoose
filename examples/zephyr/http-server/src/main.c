@@ -17,8 +17,8 @@ static void wcb(struct mg_connection *c, int ev, void *ev_data) {
     mg_tls_init(c, &opts);
   } else if (ev == MG_EV_HTTP_MSG) {
     struct mg_http_message *hm = ev_data;
-    MG_INFO(("%.*s %.*s %ld", (int) hm->method.len, hm->method.ptr,
-             (int) hm->uri.len, hm->uri.ptr, (long) hm->body.len));
+    MG_INFO(("%.*s %.*s %ld", (int) hm->method.len, hm->method.buf,
+             (int) hm->uri.len, hm->uri.buf, (long) hm->body.len));
     if (mg_http_match_uri(hm, "/api/#")) {  // REST API requests
       // Print some statistics about currently established connections
       mg_printf(c, "HTTP/1.1 200 OK\r\nTransfer-Encoding: chunked\r\n\r\n");
