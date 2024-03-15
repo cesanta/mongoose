@@ -48,31 +48,18 @@ static uint8_t s_rxbuf[ETH_DESC_CNT][ETH_PKT_SIZE] MG_64BYTE_ALIGNED;
 static uint8_t s_txbuf[ETH_DESC_CNT][ETH_PKT_SIZE] MG_64BYTE_ALIGNED;
 static struct mg_tcpip_if *s_ifp;  // MIP interface
 
-enum {
-  MG_PHYREG_BCR = 0,
-  MG_PHYREG_BSR = 1,
-  MG_PHYREG_ID1 = 2,
-  MG_PHYREG_ID2 = 3
-};
-
-static uint16_t enet_phy_read(uint8_t addr, uint8_t reg) {
+static uint16_t enet_read_phy(uint8_t addr, uint8_t reg) {
   ENET->EIR |= MG_BIT(23);  // MII interrupt clear
   ENET->MMFR = (1 << 30) | (2 << 28) | (addr << 23) | (reg << 18) | (2 << 16);
   while ((ENET->EIR & MG_BIT(23)) == 0) (void) 0;
   return ENET->MMFR & 0xffff;
 }
 
-static void enet_phy_write(uint8_t addr, uint8_t reg, uint16_t val) {
+static void enet_write_phy(uint8_t addr, uint8_t reg, uint16_t val) {
   ENET->EIR |= MG_BIT(23);  // MII interrupt clear
   ENET->MMFR =
       (1 << 30) | (1 << 28) | (addr << 23) | (reg << 18) | (2 << 16) | val;
   while ((ENET->EIR & MG_BIT(23)) == 0) (void) 0;
-}
-
-static uint32_t enet_phy_id(uint8_t addr) {
-  uint16_t phy_id1 = enet_phy_read(addr, MG_PHYREG_ID1);
-  uint16_t phy_id2 = enet_phy_read(addr, MG_PHYREG_ID2);
-  return (uint32_t) phy_id1 << 16 | phy_id2;
 }
 
 //  MDC clock is generated from IPS Bus clock (ipg_clk); as per 802.3,
@@ -104,28 +91,8 @@ static bool mg_tcpip_driver_imxrt_init(struct mg_tcpip_if *ifp) {
   // TODO(): Otherwise, guess (currently assuming max freq)
   int cr = (d == NULL || d->mdc_cr < 0) ? 24 : d->mdc_cr;
   ENET->MSCR = (1 << 8) | ((cr & 0x3f) << 1);  // HOLDTIME 2 clks
-
-  enet_phy_write(d->phy_addr, MG_PHYREG_BCR, MG_BIT(15));  // Reset PHY
-  enet_phy_write(d->phy_addr, MG_PHYREG_BCR,
-                 MG_BIT(12));  // Set autonegotiation
-
-  // PHY: Enable 50 MHz external ref clock at XI (preserve defaults)
-  uint32_t id = enet_phy_id(d->phy_addr);
-  MG_INFO(("PHY ID: %#04x %#04x", (uint16_t) (id >> 16), (uint16_t) id));
-  // 2000 a140 - TI DP83825I
-  // 0007 c0fx - LAN8720
-  // 0022 1561 - KSZ8081RNB
-
-  if ((id & 0xffff0000) == 0x220000) {  // KSZ8081RNB, like EVK-RTxxxx boards
-    enet_phy_write(d->phy_addr, 31,
-                   MG_BIT(15) | MG_BIT(8) | MG_BIT(7));  // PC2R
-  } else if ((id & 0xffff0000) == 0x20000000) {  // DP83825I, like Teensy4.1
-    enet_phy_write(d->phy_addr, 23, 0x81);       // 50MHz clock input
-    enet_phy_write(d->phy_addr, 24, 0x280);      // LED status, active high
-  } else {                                       // Default to LAN8720
-    MG_INFO(("Defaulting to LAN8720 PHY..."));   // TODO()
-  }
-
+  struct mg_phy phy = {enet_read_phy, enet_write_phy};
+  mg_phy_init(&phy, d->phy_addr, MG_PHY_LEDS_ACTIVE_HIGH); // MAC clocks PHY
   // Select RMII mode, 100M, keep CRC, set max rx length, disable loop
   ENET->RCR = (1518 << 16) | MG_BIT(8) | MG_BIT(2);
   // ENET->RCR |= MG_BIT(3);     // Receive all
@@ -173,28 +140,18 @@ static size_t mg_tcpip_driver_imxrt_tx(const void *buf, size_t len,
 static bool mg_tcpip_driver_imxrt_up(struct mg_tcpip_if *ifp) {
   struct mg_tcpip_driver_imxrt_data *d =
       (struct mg_tcpip_driver_imxrt_data *) ifp->driver_data;
-  uint32_t bsr = enet_phy_read(d->phy_addr, MG_PHYREG_BSR);
-  bool up = bsr & MG_BIT(2) ? 1 : 0;
+  uint8_t speed = MG_PHY_SPEED_10M;
+  bool up = false, full_duplex = false;
+  struct mg_phy phy = {enet_read_phy, enet_write_phy};
+  up = mg_phy_up(&phy, d->phy_addr, &full_duplex, &speed);
   if ((ifp->state == MG_TCPIP_STATE_DOWN) && up) {  // link state just went up
     // tmp = reg with flags set to the most likely situation: 100M full-duplex
     // if(link is slow or half) set flags otherwise
     // reg = tmp
-    uint32_t tcr = ENET->TCR | MG_BIT(2);   // Full-duplex
-    uint32_t rcr = ENET->RCR & ~MG_BIT(9);  // 100M
-    uint32_t phy_id = enet_phy_id(d->phy_addr);
-    if ((phy_id & 0xffff0000) == 0x220000) {             // KSZ8081RNB
-      uint16_t pc1r = enet_phy_read(d->phy_addr, 30);    // Read PC1R
-      if ((pc1r & 3) == 1) rcr |= MG_BIT(9);             // 10M
-      if ((pc1r & MG_BIT(2)) == 0) tcr &= ~MG_BIT(2);    // Half-duplex
-    } else if ((phy_id & 0xffff0000) == 0x20000000) {    // DP83825I
-      uint16_t physts = enet_phy_read(d->phy_addr, 16);  // Read PHYSTS
-      if (physts & MG_BIT(1)) rcr |= MG_BIT(9);          // 10M
-      if ((physts & MG_BIT(2)) == 0) tcr &= ~MG_BIT(2);  // Half-duplex
-    } else {                                             // Default to LAN8720
-      uint16_t scsr = enet_phy_read(d->phy_addr, 31);    // Read CSCR
-      if ((scsr & MG_BIT(3)) == 0) rcr |= MG_BIT(9);     // 10M
-      if ((scsr & MG_BIT(4)) == 0) tcr &= ~MG_BIT(2);    // Half-duplex
-    }
+    uint32_t tcr = ENET->TCR | MG_BIT(2);             // Full-duplex
+    uint32_t rcr = ENET->RCR & ~MG_BIT(9);            // 100M
+    if (speed == MG_PHY_SPEED_10M) rcr |= MG_BIT(9);  // 10M
+    if (full_duplex == false) tcr &= ~MG_BIT(2);      // Half-duplex
     ENET->TCR = tcr;  // IRQ handler does not fiddle with these registers
     ENET->RCR = rcr;
     MG_DEBUG(("Link is %uM %s-duplex", rcr & MG_BIT(9) ? 10 : 100,
