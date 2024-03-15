@@ -45,22 +45,16 @@ static volatile uint32_t s_txdesc[ETH_DESC_CNT][ETH_DS];  // TX descriptors
 static uint8_t s_rxbuf[ETH_DESC_CNT][ETH_PKT_SIZE];       // RX ethernet buffers
 static uint8_t s_txbuf[ETH_DESC_CNT][ETH_PKT_SIZE];       // TX ethernet buffers
 static struct mg_tcpip_if *s_ifp;                         // MIP interface
-enum {
-  MG_PHY_ADDR = 0,
-  MG_PHYREG_BCR = 0,
-  MG_PHYREG_BSR = 1,
-  MG_PHYREG_CSCR = 31
-};  // PHY constants
 
-static uint32_t eth_read_phy(uint8_t addr, uint8_t reg) {
+static uint16_t eth_read_phy(uint8_t addr, uint8_t reg) {
   ETH->MACMDIOAR &= (0xF << 8);
   ETH->MACMDIOAR |= ((uint32_t) addr << 21) | ((uint32_t) reg << 16) | 3 << 2;
   ETH->MACMDIOAR |= MG_BIT(0);
   while (ETH->MACMDIOAR & MG_BIT(0)) (void) 0;
-  return ETH->MACMDIODR;
+  return (uint16_t) ETH->MACMDIODR;
 }
 
-static void eth_write_phy(uint8_t addr, uint8_t reg, uint32_t val) {
+static void eth_write_phy(uint8_t addr, uint8_t reg, uint16_t val) {
   ETH->MACMDIODR = val;
   ETH->MACMDIOAR &= (0xF << 8);
   ETH->MACMDIOAR |= ((uint32_t) addr << 21) | ((uint32_t) reg << 16) | 1 << 2;
@@ -148,6 +142,8 @@ static bool mg_tcpip_driver_stm32h_init(struct mg_tcpip_if *ifp) {
   struct mg_tcpip_driver_stm32h_data *d =
       (struct mg_tcpip_driver_stm32h_data *) ifp->driver_data;
   s_ifp = ifp;
+  uint8_t phy_addr = d == NULL ? 0 : d->phy_addr;
+  uint8_t phy_conf = d == NULL ? MG_PHY_CLOCKS_MAC : d->phy_conf;
 
   // Init RX descriptors
   for (int i = 0; i < ETH_DESC_CNT; i++) {
@@ -174,9 +170,8 @@ static bool mg_tcpip_driver_stm32h_init(struct mg_tcpip_if *ifp) {
   ETH->MACIER = 0;  // Do not enable additional irq sources (reset value)
   ETH->MACTFCR = MG_BIT(7);  // Disable zero-quanta pause
   // ETH->MACPFR = MG_BIT(31);  // Receive all
-  eth_write_phy(MG_PHY_ADDR, MG_PHYREG_BCR, MG_BIT(15));  // Reset PHY
-  eth_write_phy(MG_PHY_ADDR, MG_PHYREG_BCR,
-                MG_BIT(12));  // Set autonegotiation
+  struct mg_phy phy = {eth_read_phy, eth_write_phy};
+  mg_phy_init(&phy, phy_addr, phy_conf);
   ETH->DMACRDLAR =
       (uint32_t) (uintptr_t) s_rxdesc;  // RX descriptors start address
   ETH->DMACRDRLR = ETH_DESC_CNT - 1;    // ring length
@@ -231,16 +226,20 @@ static size_t mg_tcpip_driver_stm32h_tx(const void *buf, size_t len,
 }
 
 static bool mg_tcpip_driver_stm32h_up(struct mg_tcpip_if *ifp) {
-  uint32_t bsr = eth_read_phy(MG_PHY_ADDR, MG_PHYREG_BSR);
-  bool up = bsr & MG_BIT(2) ? 1 : 0;
+  struct mg_tcpip_driver_stm32h_data *d =
+      (struct mg_tcpip_driver_stm32h_data *) ifp->driver_data;
+  uint8_t phy_addr = d == NULL ? 0 : d->phy_addr;
+  uint8_t speed = MG_PHY_SPEED_10M;
+  bool up = false, full_duplex = false;
+  struct mg_phy phy = {eth_read_phy, eth_write_phy};
+  up = mg_phy_up(&phy, phy_addr, &full_duplex, &speed);
   if ((ifp->state == MG_TCPIP_STATE_DOWN) && up) {  // link state just went up
-    uint32_t scsr = eth_read_phy(MG_PHY_ADDR, MG_PHYREG_CSCR);
     // tmp = reg with flags set to the most likely situation: 100M full-duplex
     // if(link is slow or half) set flags otherwise
     // reg = tmp
     uint32_t maccr = ETH->MACCR | MG_BIT(14) | MG_BIT(13);  // 100M, Full-duplex
-    if ((scsr & MG_BIT(3)) == 0) maccr &= ~MG_BIT(14);      // 10M
-    if ((scsr & MG_BIT(4)) == 0) maccr &= ~MG_BIT(13);      // Half-duplex
+    if (speed == MG_PHY_SPEED_10M) maccr &= ~MG_BIT(14);    // 10M
+    if (full_duplex == false) maccr &= ~MG_BIT(13);         // Half-duplex
     ETH->MACCR = maccr;  // IRQ handler does not fiddle with this register
     MG_DEBUG(("Link is %uM %s-duplex", maccr & MG_BIT(14) ? 100 : 10,
               maccr & MG_BIT(13) ? "full" : "half"));

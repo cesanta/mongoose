@@ -34,7 +34,7 @@ struct mg_tcpip_driver_stm32f_data {
 
 #define MG_TCPIP_DRIVER_DATA                                \
   static struct mg_tcpip_driver_stm32f_data driver_data = { \
-      .mdc_cr = MG_DRIVER_MDC_CR,                            \
+      .mdc_cr = MG_DRIVER_MDC_CR,                           \
       .phy_addr = MG_TCPIP_PHY_ADDR,                        \
   };
 

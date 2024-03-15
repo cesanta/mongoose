@@ -14488,31 +14488,18 @@ static uint8_t s_rxbuf[ETH_DESC_CNT][ETH_PKT_SIZE] MG_64BYTE_ALIGNED;
 static uint8_t s_txbuf[ETH_DESC_CNT][ETH_PKT_SIZE] MG_64BYTE_ALIGNED;
 static struct mg_tcpip_if *s_ifp;  // MIP interface
 
-enum {
-  MG_PHYREG_BCR = 0,
-  MG_PHYREG_BSR = 1,
-  MG_PHYREG_ID1 = 2,
-  MG_PHYREG_ID2 = 3
-};
-
-static uint16_t enet_phy_read(uint8_t addr, uint8_t reg) {
+static uint16_t enet_read_phy(uint8_t addr, uint8_t reg) {
   ENET->EIR |= MG_BIT(23);  // MII interrupt clear
   ENET->MMFR = (1 << 30) | (2 << 28) | (addr << 23) | (reg << 18) | (2 << 16);
   while ((ENET->EIR & MG_BIT(23)) == 0) (void) 0;
   return ENET->MMFR & 0xffff;
 }
 
-static void enet_phy_write(uint8_t addr, uint8_t reg, uint16_t val) {
+static void enet_write_phy(uint8_t addr, uint8_t reg, uint16_t val) {
   ENET->EIR |= MG_BIT(23);  // MII interrupt clear
   ENET->MMFR =
       (1 << 30) | (1 << 28) | (addr << 23) | (reg << 18) | (2 << 16) | val;
   while ((ENET->EIR & MG_BIT(23)) == 0) (void) 0;
-}
-
-static uint32_t enet_phy_id(uint8_t addr) {
-  uint16_t phy_id1 = enet_phy_read(addr, MG_PHYREG_ID1);
-  uint16_t phy_id2 = enet_phy_read(addr, MG_PHYREG_ID2);
-  return (uint32_t) phy_id1 << 16 | phy_id2;
 }
 
 //  MDC clock is generated from IPS Bus clock (ipg_clk); as per 802.3,
@@ -14544,28 +14531,8 @@ static bool mg_tcpip_driver_imxrt_init(struct mg_tcpip_if *ifp) {
   // TODO(): Otherwise, guess (currently assuming max freq)
   int cr = (d == NULL || d->mdc_cr < 0) ? 24 : d->mdc_cr;
   ENET->MSCR = (1 << 8) | ((cr & 0x3f) << 1);  // HOLDTIME 2 clks
-
-  enet_phy_write(d->phy_addr, MG_PHYREG_BCR, MG_BIT(15));  // Reset PHY
-  enet_phy_write(d->phy_addr, MG_PHYREG_BCR,
-                 MG_BIT(12));  // Set autonegotiation
-
-  // PHY: Enable 50 MHz external ref clock at XI (preserve defaults)
-  uint32_t id = enet_phy_id(d->phy_addr);
-  MG_INFO(("PHY ID: %#04x %#04x", (uint16_t) (id >> 16), (uint16_t) id));
-  // 2000 a140 - TI DP83825I
-  // 0007 c0fx - LAN8720
-  // 0022 1561 - KSZ8081RNB
-
-  if ((id & 0xffff0000) == 0x220000) {  // KSZ8081RNB, like EVK-RTxxxx boards
-    enet_phy_write(d->phy_addr, 31,
-                   MG_BIT(15) | MG_BIT(8) | MG_BIT(7));  // PC2R
-  } else if ((id & 0xffff0000) == 0x20000000) {  // DP83825I, like Teensy4.1
-    enet_phy_write(d->phy_addr, 23, 0x81);       // 50MHz clock input
-    enet_phy_write(d->phy_addr, 24, 0x280);      // LED status, active high
-  } else {                                       // Default to LAN8720
-    MG_INFO(("Defaulting to LAN8720 PHY..."));   // TODO()
-  }
-
+  struct mg_phy phy = {enet_read_phy, enet_write_phy};
+  mg_phy_init(&phy, d->phy_addr, MG_PHY_LEDS_ACTIVE_HIGH); // MAC clocks PHY
   // Select RMII mode, 100M, keep CRC, set max rx length, disable loop
   ENET->RCR = (1518 << 16) | MG_BIT(8) | MG_BIT(2);
   // ENET->RCR |= MG_BIT(3);     // Receive all
@@ -14613,28 +14580,18 @@ static size_t mg_tcpip_driver_imxrt_tx(const void *buf, size_t len,
 static bool mg_tcpip_driver_imxrt_up(struct mg_tcpip_if *ifp) {
   struct mg_tcpip_driver_imxrt_data *d =
       (struct mg_tcpip_driver_imxrt_data *) ifp->driver_data;
-  uint32_t bsr = enet_phy_read(d->phy_addr, MG_PHYREG_BSR);
-  bool up = bsr & MG_BIT(2) ? 1 : 0;
+  uint8_t speed = MG_PHY_SPEED_10M;
+  bool up = false, full_duplex = false;
+  struct mg_phy phy = {enet_read_phy, enet_write_phy};
+  up = mg_phy_up(&phy, d->phy_addr, &full_duplex, &speed);
   if ((ifp->state == MG_TCPIP_STATE_DOWN) && up) {  // link state just went up
     // tmp = reg with flags set to the most likely situation: 100M full-duplex
     // if(link is slow or half) set flags otherwise
     // reg = tmp
-    uint32_t tcr = ENET->TCR | MG_BIT(2);   // Full-duplex
-    uint32_t rcr = ENET->RCR & ~MG_BIT(9);  // 100M
-    uint32_t phy_id = enet_phy_id(d->phy_addr);
-    if ((phy_id & 0xffff0000) == 0x220000) {             // KSZ8081RNB
-      uint16_t pc1r = enet_phy_read(d->phy_addr, 30);    // Read PC1R
-      if ((pc1r & 3) == 1) rcr |= MG_BIT(9);             // 10M
-      if ((pc1r & MG_BIT(2)) == 0) tcr &= ~MG_BIT(2);    // Half-duplex
-    } else if ((phy_id & 0xffff0000) == 0x20000000) {    // DP83825I
-      uint16_t physts = enet_phy_read(d->phy_addr, 16);  // Read PHYSTS
-      if (physts & MG_BIT(1)) rcr |= MG_BIT(9);          // 10M
-      if ((physts & MG_BIT(2)) == 0) tcr &= ~MG_BIT(2);  // Half-duplex
-    } else {                                             // Default to LAN8720
-      uint16_t scsr = enet_phy_read(d->phy_addr, 31);    // Read CSCR
-      if ((scsr & MG_BIT(3)) == 0) rcr |= MG_BIT(9);     // 10M
-      if ((scsr & MG_BIT(4)) == 0) tcr &= ~MG_BIT(2);    // Half-duplex
-    }
+    uint32_t tcr = ENET->TCR | MG_BIT(2);             // Full-duplex
+    uint32_t rcr = ENET->RCR & ~MG_BIT(9);            // 100M
+    if (speed == MG_PHY_SPEED_10M) rcr |= MG_BIT(9);  // 10M
+    if (full_duplex == false) tcr &= ~MG_BIT(2);      // Half-duplex
     ENET->TCR = tcr;  // IRQ handler does not fiddle with these registers
     ENET->RCR = rcr;
     MG_DEBUG(("Link is %uM %s-duplex", rcr & MG_BIT(9) ? 10 : 100,
@@ -14669,6 +14626,112 @@ struct mg_tcpip_driver mg_tcpip_driver_imxrt = {mg_tcpip_driver_imxrt_init,
                                                 mg_tcpip_driver_imxrt_up};
 
 #endif
+
+#ifdef MG_ENABLE_LINES
+#line 1 "src/drivers/phy.c"
+#endif
+
+
+enum {                    // ID1  ID2
+  MG_PHY_KSZ8x = 0x22,    // 0022 1561 - KSZ8081RNB
+  MG_PHY_DP83x = 0x2000,  // 2000 a140 - TI DP83825I
+  MG_PHY_LAN87x = 0x7,    // 0007 c0fx - LAN8720
+  MG_PHY_RTL8201 = 0x1C   // 001c c816 - RTL8201
+};
+
+enum {
+  MG_PHY_REG_BCR = 0,
+  MG_PHY_REG_BSR = 1,
+  MG_PHY_REG_ID1 = 2,
+  MG_PHY_REG_ID2 = 3,
+  MG_PHY_DP83x_REG_PHYSTS = 16,
+  MG_PHY_DP83x_REG_RCSR = 23,
+  MG_PHY_DP83x_REG_LEDCR = 24,
+  MG_PHY_KSZ8x_REG_PC1R = 30,
+  MG_PHY_KSZ8x_REG_PC2R = 31,
+  MG_PHY_LAN87x_REG_SCSR = 31,
+  MG_PHY_RTL8201_REG_RMSR = 16,  // in page 7
+  MG_PHY_RTL8201_REG_PAGESEL = 31,
+};
+
+static const char *mg_phy_id_to_str(uint16_t id1, uint16_t id2) {
+  switch (id1) {
+    case MG_PHY_DP83x:
+      return "DP83x";
+    case MG_PHY_KSZ8x:
+      return "KSZ8x";
+    case MG_PHY_LAN87x:
+      return "LAN87x";
+    case MG_PHY_RTL8201:
+      return "RTL8201";
+    default:
+      return "unknown";
+  }
+  (void) id2;
+}
+
+void mg_phy_init(struct mg_phy *phy, uint8_t phy_addr, uint8_t config) {
+  phy->write_reg(phy_addr, MG_PHY_REG_BCR, MG_BIT(15));  // Reset PHY
+  phy->write_reg(phy_addr, MG_PHY_REG_BCR, MG_BIT(12));  // Autonegotiation
+
+  uint16_t id1 = phy->read_reg(phy_addr, MG_PHY_REG_ID1);
+  uint16_t id2 = phy->read_reg(phy_addr, MG_PHY_REG_ID2);
+  MG_INFO(("PHY ID: %#04x %#04x (%s)", id1, id2, mg_phy_id_to_str(id1, id2)));
+
+  if (config & MG_PHY_CLOCKS_MAC) {
+    // Use PHY crystal oscillator (preserve defaults)
+    // nothing to do
+  } else  { // MAC clocks PHY, PHY has no xtal
+    // Enable 50 MHz external ref clock at XI (preserve defaults)
+    if (id1 == MG_PHY_DP83x) {
+      phy->write_reg(phy_addr, MG_PHY_DP83x_REG_RCSR, MG_BIT(7) | MG_BIT(0));
+    } else if (id1 == MG_PHY_KSZ8x) {
+      phy->write_reg(phy_addr, MG_PHY_KSZ8x_REG_PC2R,
+                     MG_BIT(15) | MG_BIT(8) | MG_BIT(7));
+    } else if (id1 == MG_PHY_LAN87x) {
+      // nothing to do
+    } else if (id1 == MG_PHY_RTL8201) {
+      phy->write_reg(phy_addr, MG_PHY_RTL8201_REG_PAGESEL, 7);  // Select page 7
+      phy->write_reg(phy_addr, MG_PHY_RTL8201_REG_RMSR, 0x7ffb);
+      phy->write_reg(phy_addr, MG_PHY_RTL8201_REG_PAGESEL, 0);  // Select page 0
+    }
+  }
+
+  if (config & MG_PHY_LEDS_ACTIVE_HIGH && id1 == MG_PHY_DP83x) {
+    phy->write_reg(phy_addr, MG_PHY_DP83x_REG_LEDCR,
+                   MG_BIT(9) | MG_BIT(7));  // LED status, active high
+  }  // Other PHYs do not support this feature
+}
+
+bool mg_phy_up(struct mg_phy *phy, uint8_t phy_addr, bool *full_duplex,
+               uint8_t *speed) {
+  uint16_t bsr = phy->read_reg(phy_addr, MG_PHY_REG_BSR);
+  if ((bsr & MG_BIT(5)) && !(bsr & MG_BIT(2)))  // some PHYs latch down events
+    bsr = phy->read_reg(phy_addr, MG_PHY_REG_BSR);  // read again
+  bool up = bsr & MG_BIT(2);
+  if (up && full_duplex != NULL && speed != NULL) {
+    uint16_t id1 = phy->read_reg(phy_addr, MG_PHY_REG_ID1);
+    if (id1 == MG_PHY_DP83x) {
+      uint16_t physts = phy->read_reg(phy_addr, MG_PHY_DP83x_REG_PHYSTS);
+      *full_duplex = physts & MG_BIT(2);
+      *speed = (physts & MG_BIT(1)) ? MG_PHY_SPEED_10M : MG_PHY_SPEED_100M;
+    } else if (id1 == MG_PHY_KSZ8x) {
+      uint16_t pc1r = phy->read_reg(phy_addr, MG_PHY_KSZ8x_REG_PC1R);
+      *full_duplex = pc1r & MG_BIT(2);
+      *speed = (pc1r & 3) == 1 ? MG_PHY_SPEED_10M : MG_PHY_SPEED_100M;
+    } else if (id1 == MG_PHY_LAN87x) {
+      uint16_t scsr = phy->read_reg(phy_addr, MG_PHY_LAN87x_REG_SCSR);
+      *full_duplex = scsr & MG_BIT(4);
+      *speed = (scsr & MG_BIT(3)) ? MG_PHY_SPEED_100M : MG_PHY_SPEED_10M;
+    } else if (id1 == MG_PHY_RTL8201) {
+      uint16_t bcr = phy->read_reg(phy_addr, MG_PHY_REG_BCR);
+      if (bcr & MG_BIT(15)) return 0;  // still resetting
+      *full_duplex = bcr & MG_BIT(8);
+      *speed = (bcr & MG_BIT(13)) ? MG_PHY_SPEED_100M : MG_PHY_SPEED_10M;
+    }
+  }
+  return up;
+}
 
 #ifdef MG_ENABLE_LINES
 #line 1 "src/drivers/ra.c"
@@ -14715,13 +14778,6 @@ static volatile uint32_t s_txdesc[ETH_DESC_CNT][4] MG_16BYTE_ALIGNED;
 static uint8_t s_rxbuf[ETH_DESC_CNT][ETH_PKT_SIZE] MG_32BYTE_ALIGNED;
 static uint8_t s_txbuf[ETH_DESC_CNT][ETH_PKT_SIZE] MG_32BYTE_ALIGNED;
 static struct mg_tcpip_if *s_ifp;  // MIP interface
-
-enum {
-  MG_PHYREG_BCR = 0,
-  MG_PHYREG_BSR = 1,
-  MG_PHYREG_ID1 = 2,
-  MG_PHYREG_ID2 = 3
-};
 
 // fastest is 3 cycles (SUB + BNE) on a 3-stage pipeline or equivalent
 static inline void raspin(volatile uint32_t count) {
@@ -14792,18 +14848,12 @@ static uint16_t smi_rd(uint16_t header) {
   return data;
 }
 
-static uint16_t raeth_phy_read(uint8_t addr, uint8_t reg) {
+static uint16_t raeth_read_phy(uint8_t addr, uint8_t reg) {
   return smi_rd((1 << 14) | (2 << 12) | (addr << 7) | (reg << 2) | (2 << 0));
 }
 
-static void raeth_phy_write(uint8_t addr, uint8_t reg, uint16_t val) {
+static void raeth_write_phy(uint8_t addr, uint8_t reg, uint16_t val) {
   smi_wr((1 << 14) | (1 << 12) | (addr << 7) | (reg << 2) | (2 << 0), val);
-}
-
-static uint32_t raeth_phy_id(uint8_t addr) {
-  uint16_t phy_id1 = raeth_phy_read(addr, MG_PHYREG_ID1);
-  uint16_t phy_id2 = raeth_phy_read(addr, MG_PHYREG_ID2);
-  return (uint32_t) phy_id1 << 16 | phy_id2;
 }
 
 // MDC clock is generated manually; as per 802.3, it must not exceed 2.5MHz
@@ -14839,27 +14889,8 @@ static bool mg_tcpip_driver_ra_init(struct mg_tcpip_if *ifp) {
   EDMAC->EDMR = MG_BIT(6);  // Initialize, little-endian (27.2.1)
 
   MG_DEBUG(("PHY addr: %d, smispin: %d", d->phy_addr, s_smispin));
-  raeth_phy_write(d->phy_addr, MG_PHYREG_BCR, MG_BIT(15));  // Reset PHY
-  raeth_phy_write(d->phy_addr, MG_PHYREG_BCR,
-                  MG_BIT(12));  // Set autonegotiation
-
-  // PHY: Enable ref clock (preserve defaults)
-  uint32_t id = raeth_phy_id(d->phy_addr);
-  MG_INFO(("PHY ID: %#04x %#04x", (uint16_t) (id >> 16), (uint16_t) id));
-  // 2000 a140 - TI DP83825I
-  // 0007 c0fx - LAN8720
-  // 0022 156x - KSZ8081RNB/KSZ8091RNB
-
-  if ((id & 0xffff0000) == 0x220000) {  // KSZ8091RNB, like EK-RA6Mx boards
-    // 25 MHz xtal at XI/XO (default)
-    raeth_phy_write(d->phy_addr, 31, MG_BIT(15) | MG_BIT(8));  // PC2R
-  } else if ((id & 0xffff0000) == 0x20000000) {  // DP83825I, like ???
-    // 50 MHz external at XI ???
-    raeth_phy_write(d->phy_addr, 23, 0x81);     // 50MHz clock input
-    raeth_phy_write(d->phy_addr, 24, 0x280);    // LED status, active high
-  } else {                                      // Default to LAN8720
-    MG_INFO(("Defaulting to LAN8720 PHY..."));  // TODO()
-  }
+  struct mg_phy phy = {raeth_read_phy, raeth_write_phy};
+  mg_phy_init(&phy, d->phy_addr, 0); // MAC clocks PHY
 
   // Select RMII mode,
   ETHERC->ECMR = MG_BIT(2) | MG_BIT(1);  // 100M, Full-duplex, CRC
@@ -14908,27 +14939,17 @@ static size_t mg_tcpip_driver_ra_tx(const void *buf, size_t len,
 static bool mg_tcpip_driver_ra_up(struct mg_tcpip_if *ifp) {
   struct mg_tcpip_driver_ra_data *d =
       (struct mg_tcpip_driver_ra_data *) ifp->driver_data;
-  uint32_t bsr = raeth_phy_read(d->phy_addr, MG_PHYREG_BSR);
-  bool up = bsr & MG_BIT(2) ? 1 : 0;
+  uint8_t speed = MG_PHY_SPEED_10M;
+  bool up = false, full_duplex = false;
+  struct mg_phy phy = {raeth_read_phy, raeth_write_phy};
+  up = mg_phy_up(&phy, d->phy_addr, &full_duplex, &speed);
   if ((ifp->state == MG_TCPIP_STATE_DOWN) && up) {  // link state just went up
     // tmp = reg with flags set to the most likely situation: 100M full-duplex
     // if(link is slow or half) set flags otherwise
     // reg = tmp
     uint32_t ecmr = ETHERC->ECMR | MG_BIT(2) | MG_BIT(1);  // 100M Full-duplex
-    uint32_t phy_id = raeth_phy_id(d->phy_addr);
-    if ((phy_id & 0xffff0000) == 0x220000) {              // KSZ8091RNB
-      uint16_t pc1r = raeth_phy_read(d->phy_addr, 30);    // Read PC1R
-      if ((pc1r & 3) == 1) ecmr &= ~MG_BIT(2);            // 10M
-      if ((pc1r & MG_BIT(2)) == 0) ecmr &= ~MG_BIT(1);    // Half-duplex
-    } else if ((phy_id & 0xffff0000) == 0x20000000) {     // DP83825I
-      uint16_t physts = raeth_phy_read(d->phy_addr, 16);  // Read PHYSTS
-      if (physts & MG_BIT(1)) ecmr &= ~MG_BIT(2);         // 10M
-      if ((physts & MG_BIT(2)) == 0) ecmr &= ~MG_BIT(1);  // Half-duplex
-    } else {                                              // Default to LAN8720
-      uint16_t scsr = raeth_phy_read(d->phy_addr, 31);    // Read CSCR
-      if ((scsr & MG_BIT(3)) == 0) ecmr &= ~MG_BIT(2);    // 10M
-      if ((scsr & MG_BIT(4)) == 0) ecmr &= ~MG_BIT(1);    // Half-duplex
-    }
+    if (speed == MG_PHY_SPEED_10M) ecmr &= ~MG_BIT(2);     // 10M
+    if (full_duplex == false) ecmr &= ~MG_BIT(1);          // Half-duplex
     ETHERC->ECMR = ecmr;  // IRQ handler does not fiddle with these registers
     MG_DEBUG(("Link is %uM %s-duplex", ecmr & MG_BIT(2) ? 100 : 10,
               ecmr & MG_BIT(1) ? "full" : "half"));
@@ -15220,23 +15241,16 @@ static uint8_t s_txno;                               // Current TX descriptor
 static uint8_t s_rxno;                               // Current RX descriptor
 
 static struct mg_tcpip_if *s_ifp;  // MIP interface
-enum {
-  MG_PHYREG_BCR = 0,
-  MG_PHYREG_BSR = 1,
-  MG_PHYREG_ID1 = 2,
-  MG_PHYREG_ID2 = 3,
-  MG_PHYREG_CSCR = 31
-};
 
-static uint32_t eth_read_phy(uint8_t addr, uint8_t reg) {
+static uint16_t eth_read_phy(uint8_t addr, uint8_t reg) {
   ETH->MACMIIAR &= (7 << 2);
   ETH->MACMIIAR |= ((uint32_t) addr << 11) | ((uint32_t) reg << 6);
   ETH->MACMIIAR |= MG_BIT(0);
   while (ETH->MACMIIAR & MG_BIT(0)) (void) 0;
-  return ETH->MACMIIDR;
+  return ETH->MACMIIDR & 0xffff;
 }
 
-static void eth_write_phy(uint8_t addr, uint8_t reg, uint32_t val) {
+static void eth_write_phy(uint8_t addr, uint8_t reg, uint16_t val) {
   ETH->MACMIIDR = val;
   ETH->MACMIIAR &= (7 << 2);
   ETH->MACMIIAR |= ((uint32_t) addr << 11) | ((uint32_t) reg << 6) | MG_BIT(1);
@@ -15334,18 +15348,15 @@ static bool mg_tcpip_driver_stm32f_init(struct mg_tcpip_if *ifp) {
   ETH->MACIMR = MG_BIT(3) | MG_BIT(9);  // Mask timestamp & PMT IT
   ETH->MACFCR = MG_BIT(7);              // Disable zero quarta pause
   // ETH->MACFFR = MG_BIT(31);                            // Receive all
-  eth_write_phy(phy_addr, MG_PHYREG_BCR, MG_BIT(15));  // Reset PHY
-  eth_write_phy(phy_addr, MG_PHYREG_BCR, MG_BIT(12));  // Set autonegotiation
-  ETH->DMARDLAR = (uint32_t) (uintptr_t) s_rxdesc;     // RX descriptors
-  ETH->DMATDLAR = (uint32_t) (uintptr_t) s_txdesc;     // RX descriptors
-  ETH->DMAIER = MG_BIT(6) | MG_BIT(16);                // RIE, NISE
+  struct mg_phy phy = {eth_read_phy, eth_write_phy};
+  mg_phy_init(&phy, phy_addr, MG_PHY_CLOCKS_MAC);
+  ETH->DMARDLAR = (uint32_t) (uintptr_t) s_rxdesc;  // RX descriptors
+  ETH->DMATDLAR = (uint32_t) (uintptr_t) s_txdesc;  // RX descriptors
+  ETH->DMAIER = MG_BIT(6) | MG_BIT(16);             // RIE, NISE
   ETH->MACCR =
       MG_BIT(2) | MG_BIT(3) | MG_BIT(11) | MG_BIT(14);  // RE, TE, Duplex, Fast
   ETH->DMAOMR =
       MG_BIT(1) | MG_BIT(13) | MG_BIT(21) | MG_BIT(25);  // SR, ST, TSF, RSF
-
-  MG_DEBUG(("PHY ID: %#04hx %#04hx", eth_read_phy(phy_addr, MG_PHYREG_ID1),
-            eth_read_phy(phy_addr, MG_PHYREG_ID2)));
 
   // MAC address filtering
   ETH->MACA0HR = ((uint32_t) ifp->mac[5] << 8U) | ifp->mac[4];
@@ -15382,16 +15393,17 @@ static bool mg_tcpip_driver_stm32f_up(struct mg_tcpip_if *ifp) {
   struct mg_tcpip_driver_stm32f_data *d =
       (struct mg_tcpip_driver_stm32f_data *) ifp->driver_data;
   uint8_t phy_addr = d == NULL ? 0 : d->phy_addr;
-  uint32_t bsr = eth_read_phy(phy_addr, MG_PHYREG_BSR);
-  bool up = bsr & MG_BIT(2) ? 1 : 0;
+  uint8_t speed = MG_PHY_SPEED_10M;
+  bool up = false, full_duplex = false;
+  struct mg_phy phy = {eth_read_phy, eth_write_phy};
+  up = mg_phy_up(&phy, phy_addr, &full_duplex, &speed);
   if ((ifp->state == MG_TCPIP_STATE_DOWN) && up) {  // link state just went up
-    uint32_t scsr = eth_read_phy(phy_addr, MG_PHYREG_CSCR);
     // tmp = reg with flags set to the most likely situation: 100M full-duplex
     // if(link is slow or half) set flags otherwise
     // reg = tmp
     uint32_t maccr = ETH->MACCR | MG_BIT(14) | MG_BIT(11);  // 100M, Full-duplex
-    if ((scsr & MG_BIT(3)) == 0) maccr &= ~MG_BIT(14);      // 10M
-    if ((scsr & MG_BIT(4)) == 0) maccr &= ~MG_BIT(11);      // Half-duplex
+    if (speed == MG_PHY_SPEED_10M) maccr &= ~MG_BIT(14);    // 10M
+    if (full_duplex == false) maccr &= ~MG_BIT(11);         // Half-duplex
     ETH->MACCR = maccr;  // IRQ handler does not fiddle with this register
     MG_DEBUG(("Link is %uM %s-duplex", maccr & MG_BIT(14) ? 100 : 10,
               maccr & MG_BIT(11) ? "full" : "half"));
@@ -15481,22 +15493,16 @@ static volatile uint32_t s_txdesc[ETH_DESC_CNT][ETH_DS];  // TX descriptors
 static uint8_t s_rxbuf[ETH_DESC_CNT][ETH_PKT_SIZE];       // RX ethernet buffers
 static uint8_t s_txbuf[ETH_DESC_CNT][ETH_PKT_SIZE];       // TX ethernet buffers
 static struct mg_tcpip_if *s_ifp;                         // MIP interface
-enum {
-  MG_PHY_ADDR = 0,
-  MG_PHYREG_BCR = 0,
-  MG_PHYREG_BSR = 1,
-  MG_PHYREG_CSCR = 31
-};  // PHY constants
 
-static uint32_t eth_read_phy(uint8_t addr, uint8_t reg) {
+static uint16_t eth_read_phy(uint8_t addr, uint8_t reg) {
   ETH->MACMDIOAR &= (0xF << 8);
   ETH->MACMDIOAR |= ((uint32_t) addr << 21) | ((uint32_t) reg << 16) | 3 << 2;
   ETH->MACMDIOAR |= MG_BIT(0);
   while (ETH->MACMDIOAR & MG_BIT(0)) (void) 0;
-  return ETH->MACMDIODR;
+  return (uint16_t) ETH->MACMDIODR;
 }
 
-static void eth_write_phy(uint8_t addr, uint8_t reg, uint32_t val) {
+static void eth_write_phy(uint8_t addr, uint8_t reg, uint16_t val) {
   ETH->MACMDIODR = val;
   ETH->MACMDIOAR &= (0xF << 8);
   ETH->MACMDIOAR |= ((uint32_t) addr << 21) | ((uint32_t) reg << 16) | 1 << 2;
@@ -15584,6 +15590,8 @@ static bool mg_tcpip_driver_stm32h_init(struct mg_tcpip_if *ifp) {
   struct mg_tcpip_driver_stm32h_data *d =
       (struct mg_tcpip_driver_stm32h_data *) ifp->driver_data;
   s_ifp = ifp;
+  uint8_t phy_addr = d == NULL ? 0 : d->phy_addr;
+  uint8_t phy_conf = d == NULL ? MG_PHY_CLOCKS_MAC : d->phy_conf;
 
   // Init RX descriptors
   for (int i = 0; i < ETH_DESC_CNT; i++) {
@@ -15610,9 +15618,8 @@ static bool mg_tcpip_driver_stm32h_init(struct mg_tcpip_if *ifp) {
   ETH->MACIER = 0;  // Do not enable additional irq sources (reset value)
   ETH->MACTFCR = MG_BIT(7);  // Disable zero-quanta pause
   // ETH->MACPFR = MG_BIT(31);  // Receive all
-  eth_write_phy(MG_PHY_ADDR, MG_PHYREG_BCR, MG_BIT(15));  // Reset PHY
-  eth_write_phy(MG_PHY_ADDR, MG_PHYREG_BCR,
-                MG_BIT(12));  // Set autonegotiation
+  struct mg_phy phy = {eth_read_phy, eth_write_phy};
+  mg_phy_init(&phy, phy_addr, phy_conf);
   ETH->DMACRDLAR =
       (uint32_t) (uintptr_t) s_rxdesc;  // RX descriptors start address
   ETH->DMACRDRLR = ETH_DESC_CNT - 1;    // ring length
@@ -15667,16 +15674,20 @@ static size_t mg_tcpip_driver_stm32h_tx(const void *buf, size_t len,
 }
 
 static bool mg_tcpip_driver_stm32h_up(struct mg_tcpip_if *ifp) {
-  uint32_t bsr = eth_read_phy(MG_PHY_ADDR, MG_PHYREG_BSR);
-  bool up = bsr & MG_BIT(2) ? 1 : 0;
+  struct mg_tcpip_driver_stm32h_data *d =
+      (struct mg_tcpip_driver_stm32h_data *) ifp->driver_data;
+  uint8_t phy_addr = d == NULL ? 0 : d->phy_addr;
+  uint8_t speed = MG_PHY_SPEED_10M;
+  bool up = false, full_duplex = false;
+  struct mg_phy phy = {eth_read_phy, eth_write_phy};
+  up = mg_phy_up(&phy, phy_addr, &full_duplex, &speed);
   if ((ifp->state == MG_TCPIP_STATE_DOWN) && up) {  // link state just went up
-    uint32_t scsr = eth_read_phy(MG_PHY_ADDR, MG_PHYREG_CSCR);
     // tmp = reg with flags set to the most likely situation: 100M full-duplex
     // if(link is slow or half) set flags otherwise
     // reg = tmp
     uint32_t maccr = ETH->MACCR | MG_BIT(14) | MG_BIT(13);  // 100M, Full-duplex
-    if ((scsr & MG_BIT(3)) == 0) maccr &= ~MG_BIT(14);      // 10M
-    if ((scsr & MG_BIT(4)) == 0) maccr &= ~MG_BIT(13);      // Half-duplex
+    if (speed == MG_PHY_SPEED_10M) maccr &= ~MG_BIT(14);    // 10M
+    if (full_duplex == false) maccr &= ~MG_BIT(13);         // Half-duplex
     ETH->MACCR = maccr;  // IRQ handler does not fiddle with this register
     MG_DEBUG(("Link is %uM %s-duplex", maccr & MG_BIT(14) ? 100 : 10,
               maccr & MG_BIT(13) ? "full" : "half"));

@@ -41,13 +41,6 @@ static uint8_t s_rxbuf[ETH_DESC_CNT][ETH_PKT_SIZE] MG_32BYTE_ALIGNED;
 static uint8_t s_txbuf[ETH_DESC_CNT][ETH_PKT_SIZE] MG_32BYTE_ALIGNED;
 static struct mg_tcpip_if *s_ifp;  // MIP interface
 
-enum {
-  MG_PHYREG_BCR = 0,
-  MG_PHYREG_BSR = 1,
-  MG_PHYREG_ID1 = 2,
-  MG_PHYREG_ID2 = 3
-};
-
 // fastest is 3 cycles (SUB + BNE) on a 3-stage pipeline or equivalent
 static inline void raspin(volatile uint32_t count) {
   while (count--) (void) 0;
@@ -117,18 +110,12 @@ static uint16_t smi_rd(uint16_t header) {
   return data;
 }
 
-static uint16_t raeth_phy_read(uint8_t addr, uint8_t reg) {
+static uint16_t raeth_read_phy(uint8_t addr, uint8_t reg) {
   return smi_rd((1 << 14) | (2 << 12) | (addr << 7) | (reg << 2) | (2 << 0));
 }
 
-static void raeth_phy_write(uint8_t addr, uint8_t reg, uint16_t val) {
+static void raeth_write_phy(uint8_t addr, uint8_t reg, uint16_t val) {
   smi_wr((1 << 14) | (1 << 12) | (addr << 7) | (reg << 2) | (2 << 0), val);
-}
-
-static uint32_t raeth_phy_id(uint8_t addr) {
-  uint16_t phy_id1 = raeth_phy_read(addr, MG_PHYREG_ID1);
-  uint16_t phy_id2 = raeth_phy_read(addr, MG_PHYREG_ID2);
-  return (uint32_t) phy_id1 << 16 | phy_id2;
 }
 
 // MDC clock is generated manually; as per 802.3, it must not exceed 2.5MHz
@@ -164,27 +151,8 @@ static bool mg_tcpip_driver_ra_init(struct mg_tcpip_if *ifp) {
   EDMAC->EDMR = MG_BIT(6);  // Initialize, little-endian (27.2.1)
 
   MG_DEBUG(("PHY addr: %d, smispin: %d", d->phy_addr, s_smispin));
-  raeth_phy_write(d->phy_addr, MG_PHYREG_BCR, MG_BIT(15));  // Reset PHY
-  raeth_phy_write(d->phy_addr, MG_PHYREG_BCR,
-                  MG_BIT(12));  // Set autonegotiation
-
-  // PHY: Enable ref clock (preserve defaults)
-  uint32_t id = raeth_phy_id(d->phy_addr);
-  MG_INFO(("PHY ID: %#04x %#04x", (uint16_t) (id >> 16), (uint16_t) id));
-  // 2000 a140 - TI DP83825I
-  // 0007 c0fx - LAN8720
-  // 0022 156x - KSZ8081RNB/KSZ8091RNB
-
-  if ((id & 0xffff0000) == 0x220000) {  // KSZ8091RNB, like EK-RA6Mx boards
-    // 25 MHz xtal at XI/XO (default)
-    raeth_phy_write(d->phy_addr, 31, MG_BIT(15) | MG_BIT(8));  // PC2R
-  } else if ((id & 0xffff0000) == 0x20000000) {  // DP83825I, like ???
-    // 50 MHz external at XI ???
-    raeth_phy_write(d->phy_addr, 23, 0x81);     // 50MHz clock input
-    raeth_phy_write(d->phy_addr, 24, 0x280);    // LED status, active high
-  } else {                                      // Default to LAN8720
-    MG_INFO(("Defaulting to LAN8720 PHY..."));  // TODO()
-  }
+  struct mg_phy phy = {raeth_read_phy, raeth_write_phy};
+  mg_phy_init(&phy, d->phy_addr, 0); // MAC clocks PHY
 
   // Select RMII mode,
   ETHERC->ECMR = MG_BIT(2) | MG_BIT(1);  // 100M, Full-duplex, CRC
@@ -233,27 +201,17 @@ static size_t mg_tcpip_driver_ra_tx(const void *buf, size_t len,
 static bool mg_tcpip_driver_ra_up(struct mg_tcpip_if *ifp) {
   struct mg_tcpip_driver_ra_data *d =
       (struct mg_tcpip_driver_ra_data *) ifp->driver_data;
-  uint32_t bsr = raeth_phy_read(d->phy_addr, MG_PHYREG_BSR);
-  bool up = bsr & MG_BIT(2) ? 1 : 0;
+  uint8_t speed = MG_PHY_SPEED_10M;
+  bool up = false, full_duplex = false;
+  struct mg_phy phy = {raeth_read_phy, raeth_write_phy};
+  up = mg_phy_up(&phy, d->phy_addr, &full_duplex, &speed);
   if ((ifp->state == MG_TCPIP_STATE_DOWN) && up) {  // link state just went up
     // tmp = reg with flags set to the most likely situation: 100M full-duplex
     // if(link is slow or half) set flags otherwise
     // reg = tmp
     uint32_t ecmr = ETHERC->ECMR | MG_BIT(2) | MG_BIT(1);  // 100M Full-duplex
-    uint32_t phy_id = raeth_phy_id(d->phy_addr);
-    if ((phy_id & 0xffff0000) == 0x220000) {              // KSZ8091RNB
-      uint16_t pc1r = raeth_phy_read(d->phy_addr, 30);    // Read PC1R
-      if ((pc1r & 3) == 1) ecmr &= ~MG_BIT(2);            // 10M
-      if ((pc1r & MG_BIT(2)) == 0) ecmr &= ~MG_BIT(1);    // Half-duplex
-    } else if ((phy_id & 0xffff0000) == 0x20000000) {     // DP83825I
-      uint16_t physts = raeth_phy_read(d->phy_addr, 16);  // Read PHYSTS
-      if (physts & MG_BIT(1)) ecmr &= ~MG_BIT(2);         // 10M
-      if ((physts & MG_BIT(2)) == 0) ecmr &= ~MG_BIT(1);  // Half-duplex
-    } else {                                              // Default to LAN8720
-      uint16_t scsr = raeth_phy_read(d->phy_addr, 31);    // Read CSCR
-      if ((scsr & MG_BIT(3)) == 0) ecmr &= ~MG_BIT(2);    // 10M
-      if ((scsr & MG_BIT(4)) == 0) ecmr &= ~MG_BIT(1);    // Half-duplex
-    }
+    if (speed == MG_PHY_SPEED_10M) ecmr &= ~MG_BIT(2);     // 10M
+    if (full_duplex == false) ecmr &= ~MG_BIT(1);          // Half-duplex
     ETHERC->ECMR = ecmr;  // IRQ handler does not fiddle with these registers
     MG_DEBUG(("Link is %uM %s-duplex", ecmr & MG_BIT(2) ? 100 : 10,
               ecmr & MG_BIT(1) ? "full" : "half"));
