@@ -15,7 +15,7 @@ static void fn(struct mg_connection *c, int ev, void *ev_data) {
   static bool connected;
   if (ev == MG_EV_HTTP_MSG) {
     struct mg_http_message *hm = (struct mg_http_message *) ev_data;
-    printf("%.*s", (int) hm->message.len, hm->message.ptr);
+    printf("%.*s", (int) hm->message.len, hm->message.buf);
     exit(EXIT_SUCCESS);
   } else if (ev == MG_EV_CONNECT) {
     // Proxy TCP connection established. Send CONNECT request
@@ -29,8 +29,8 @@ static void fn(struct mg_connection *c, int ev, void *ev_data) {
 
     // c->is_hexdumping = 1;
     mg_printf(c, "CONNECT %.*s:%hu HTTP/1.1\r\nHost: %.*s:%hu\r\n\r\n",
-              (int) host.len, host.ptr, mg_url_port(url), (int) host.len,
-              host.ptr, mg_url_port(url));
+              (int) host.len, host.buf, mg_url_port(url), (int) host.len,
+              host.buf, mg_url_port(url));
   } else if (!connected && ev == MG_EV_READ) {
     struct mg_http_message hm;
     int n = mg_http_parse((char *) c->recv.buf, c->recv.len, &hm);
@@ -39,14 +39,14 @@ static void fn(struct mg_connection *c, int ev, void *ev_data) {
       // CONNECT response - tunnel is established
       connected = true;
       MG_DEBUG(
-          ("Connected to proxy, status: %.*s", (int) hm.uri.len, hm.uri.ptr));
+          ("Connected to proxy, status: %.*s", (int) hm.uri.len, hm.uri.buf));
       mg_iobuf_del(&c->recv, 0, n);
       // Send request to the target server
       mg_printf(c,
                 "GET %s HTTP/1.0\r\n"
                 "Host: %.*s\r\n"
                 "\r\n",
-                mg_url_uri(url), (int) host.len, host.ptr);
+                mg_url_uri(url), (int) host.len, host.buf);
     }
   }
 }

@@ -23,10 +23,10 @@ static void cb(struct mg_connection *c, int ev, void *ev_data) {
 static void cb2(struct mg_connection *c, int ev, void *ev_data) {
   if (ev == MG_EV_CONNECT) {
     struct mg_str s = mg_url_host(CLIENT_URL);
-    mg_printf(c, "GET / HTTP/1.0\r\nHost: %.*s\r\n\r\n", (int) s.len, s.ptr);
+    mg_printf(c, "GET / HTTP/1.0\r\nHost: %.*s\r\n\r\n", (int) s.len, s.buf);
   } else if (ev == MG_EV_HTTP_MSG) {
     struct mg_http_message *hm = ev_data;  // Print HTTP response
-    MG_INFO(("Fetched:\n%.*s", (int) hm->message.len, hm->message.ptr));
+    MG_INFO(("Fetched:\n%.*s", (int) hm->message.len, hm->message.buf));
     c->is_draining = 1;
   }
 }

@@ -26,8 +26,8 @@ static void fn(struct mg_connection *c, int ev, void *ev_data) {
     // Received MQTT message
     struct mg_mqtt_message *mm = (struct mg_mqtt_message *) ev_data;
     MG_INFO(("%lu RECEIVED %.*s <- %.*s", c->id, (int) mm->data.len,
-             mm->data.ptr, (int) mm->topic.len, mm->topic.ptr));
-    exec_command(mm->data.ptr, mm->data.len);
+             mm->data.buf, (int) mm->topic.len, mm->topic.buf));
+    exec_command(mm->data.buf, mm->data.len);
   } else if (ev == MG_EV_CLOSE) {
     MG_INFO(("%lu CLOSED", c->id));
     mqtt_connection = NULL;

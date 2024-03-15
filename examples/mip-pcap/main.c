@@ -46,7 +46,7 @@ static void fn2(struct mg_connection *c, int ev, void *ev_data) {
   if (ev == MG_EV_HTTP_MSG) {
     struct mg_http_message *hm = (struct mg_http_message *) ev_data;
     MG_DEBUG(("Got response (%d) %.*s...", (int) hm->message.len, 12,
-              hm->message.ptr));
+              hm->message.buf));
     c->is_draining = 1;
   } else if (ev == MG_EV_CONNECT) {
     mg_printf(c, "GET %s HTTP/1.1\r\n\r\n", mg_url_uri((char *) c->fn_data));
@@ -72,7 +72,7 @@ static void fn(struct mg_connection *c, int ev, void *ev_data) {
       }
     } else {
       mg_http_reply(c, 200, NULL, "%.*s\r\n", (int) hm->message.len,
-                    hm->message.ptr);
+                    hm->message.buf);
     }
   }
   (void) ev_data;

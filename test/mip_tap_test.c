@@ -77,7 +77,7 @@ static void f_http_fetch_query(struct mg_connection *c, int ev, void *ev_data) {
     struct mg_http_message *hm = (struct mg_http_message *) ev_data;
     http_responses_received++;
     if (!http_response_allocated) {
-      http_response = (char *) mg_strdup(hm->message).ptr;
+      http_response = (char *) mg_strdup(hm->message).buf;
       http_response_allocated = 1;
     }
     if (http_responses_received > 0) {
@@ -174,9 +174,9 @@ static void mqtt_fn(struct mg_connection *c, int ev, void *ev_data) {
     mg_mqtt_pub(c, &pub_opts);
   } else if (ev == MG_EV_MQTT_MSG) {
     struct mg_mqtt_message *mm = (struct mg_mqtt_message *) ev_data;
-    if (mm->topic.len != strlen(s_topic) || strcmp(mm->topic.ptr, s_topic))
+    if (mm->topic.len != strlen(s_topic) || strcmp(mm->topic.buf, s_topic))
       ASSERT(0);
-    if (mm->data.len != 2 || strcmp(mm->data.ptr, "hi")) ASSERT(0);
+    if (mm->data.len != 2 || strcmp(mm->data.buf, "hi")) ASSERT(0);
     mg_mqtt_disconnect(c, NULL);
     *(bool *) c->fn_data = true;
   } else if (ev == MG_EV_CLOSE) {

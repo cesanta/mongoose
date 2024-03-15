@@ -29,12 +29,12 @@ static void signal_handler(int signo) {
 static size_t mg_mqtt_next_topic(struct mg_mqtt_message *msg,
                                  struct mg_str *topic, uint8_t *qos,
                                  size_t pos) {
-  unsigned char *buf = (unsigned char *) msg->dgram.ptr + pos;
+  unsigned char *buf = (unsigned char *) msg->dgram.buf + pos;
   size_t new_pos;
   if (pos >= msg->dgram.len) return 0;
 
   topic->len = (size_t) (((unsigned) buf[0]) << 8 | buf[1]);
-  topic->ptr = (char *) buf + 2;
+  topic->buf = (char *) buf + 2;
   new_pos = pos + 2 + topic->len + (qos == NULL ? 0 : 1);
   if ((size_t) new_pos > msg->dgram.len) return 0;
   if (qos != NULL) *qos = buf[2 + topic->len];
@@ -62,8 +62,8 @@ static void fn(struct mg_connection *c, int ev, void *ev_data) {
         // Client connects
         if (mm->dgram.len < 9) {
           mg_error(c, "Malformed MQTT frame");
-        } else if (mm->dgram.ptr[8] != 4) {
-          mg_error(c, "Unsupported MQTT version %d", mm->dgram.ptr[8]);
+        } else if (mm->dgram.buf[8] != 4) {
+          mg_error(c, "Unsupported MQTT version %d", mm->dgram.buf[8]);
         } else {
           uint8_t response[] = {0, 0};
           mg_mqtt_send_header(c, MQTT_CMD_CONNACK, 0, sizeof(response));
@@ -84,10 +84,10 @@ static void fn(struct mg_connection *c, int ev, void *ev_data) {
           sub->qos = qos;
           LIST_ADD_HEAD(struct sub, &s_subs, sub);
           MG_INFO(
-              ("SUB %p [%.*s]", c->fd, (int) sub->topic.len, sub->topic.ptr));
+              ("SUB %p [%.*s]", c->fd, (int) sub->topic.len, sub->topic.buf));
           // Change '+' to '*' for topic matching using mg_match
           for (size_t i = 0; i < sub->topic.len; i++) {
-            if (sub->topic.ptr[i] == '+') ((char *) sub->topic.ptr)[i] = '*';
+            if (sub->topic.buf[i] == '+') ((char *) sub->topic.buf)[i] = '*';
           }
           resp[num_topics++] = qos;
         }
@@ -100,7 +100,7 @@ static void fn(struct mg_connection *c, int ev, void *ev_data) {
       case MQTT_CMD_PUBLISH: {
         // Client published message. Push to all subscribed channels
         MG_INFO(("PUB %p [%.*s] -> [%.*s]", c->fd, (int) mm->data.len,
-                 mm->data.ptr, (int) mm->topic.len, mm->topic.ptr));
+                 mm->data.buf, (int) mm->topic.len, mm->topic.buf));
         for (struct sub *sub = s_subs; sub != NULL; sub = sub->next) {
           if (mg_match(mm->topic, sub->topic, NULL)) {
             struct mg_mqtt_opts pub_opts;
@@ -127,7 +127,7 @@ static void fn(struct mg_connection *c, int ev, void *ev_data) {
     for (struct sub *next, *sub = s_subs; sub != NULL; sub = next) {
       next = sub->next;
       if (c != sub->c) continue;
-      MG_INFO(("UNSUB %p [%.*s]", c->fd, (int) sub->topic.len, sub->topic.ptr));
+      MG_INFO(("UNSUB %p [%.*s]", c->fd, (int) sub->topic.len, sub->topic.buf));
       LIST_DELETE(struct sub, &s_subs, sub);
     }
   }

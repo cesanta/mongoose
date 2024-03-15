@@ -15,7 +15,7 @@ void mg_rpc_del(struct mg_rpc **head, void (*fn)(struct mg_rpc_req *)) {
   while ((r = *head) != NULL) {
     if (r->fn == fn || fn == NULL) {
       *head = r->next;
-      free((void *) r->method.ptr);
+      free((void *) r->method.buf);
       free(r);
     } else {
       head = &(*head)->next;
@@ -30,21 +30,21 @@ static void mg_rpc_call(struct mg_rpc_req *r, struct mg_str method) {
     r->rpc = h;
     h->fn(r);
   } else {
-    mg_rpc_err(r, -32601, "\"%.*s not found\"", (int) method.len, method.ptr);
+    mg_rpc_err(r, -32601, "\"%.*s not found\"", (int) method.len, method.buf);
   }
 }
 
 void mg_rpc_process(struct mg_rpc_req *r) {
   int len, off = mg_json_get(r->frame, "$.method", &len);
-  if (off > 0 && r->frame.ptr[off] == '"') {
-    struct mg_str method = mg_str_n(&r->frame.ptr[off + 1], (size_t) len - 2);
+  if (off > 0 && r->frame.buf[off] == '"') {
+    struct mg_str method = mg_str_n(&r->frame.buf[off + 1], (size_t) len - 2);
     mg_rpc_call(r, method);
   } else if ((off = mg_json_get(r->frame, "$.result", &len)) > 0 ||
              (off = mg_json_get(r->frame, "$.error", &len)) > 0) {
     mg_rpc_call(r, mg_str(""));  // JSON response! call "" method handler
   } else {
     mg_rpc_err(r, -32700, "%m", mg_print_esc, (int) r->frame.len,
-               r->frame.ptr);  // Invalid
+               r->frame.buf);  // Invalid
   }
 }
 
@@ -52,7 +52,7 @@ void mg_rpc_vok(struct mg_rpc_req *r, const char *fmt, va_list *ap) {
   int len, off = mg_json_get(r->frame, "$.id", &len);
   if (off > 0) {
     mg_xprintf(r->pfn, r->pfn_data, "{%m:%.*s,%m:", mg_print_esc, 0, "id", len,
-               &r->frame.ptr[off], mg_print_esc, 0, "result");
+               &r->frame.buf[off], mg_print_esc, 0, "result");
     mg_vxprintf(r->pfn, r->pfn_data, fmt == NULL ? "null" : fmt, ap);
     mg_xprintf(r->pfn, r->pfn_data, "}");
   }
@@ -70,7 +70,7 @@ void mg_rpc_verr(struct mg_rpc_req *r, int code, const char *fmt, va_list *ap) {
   mg_xprintf(r->pfn, r->pfn_data, "{");
   if (off > 0) {
     mg_xprintf(r->pfn, r->pfn_data, "%m:%.*s,", mg_print_esc, 0, "id", len,
-               &r->frame.ptr[off]);
+               &r->frame.buf[off]);
   }
   mg_xprintf(r->pfn, r->pfn_data, "%m:{%m:%d,%m:", mg_print_esc, 0, "error",
              mg_print_esc, 0, "code", code, mg_print_esc, 0, "message");
@@ -91,7 +91,7 @@ static size_t print_methods(mg_pfn_t pfn, void *pfn_data, va_list *ap) {
   for (h = *head; h != NULL; h = h->next) {
     if (h->method.len == 0) continue;  // Ignore response handler
     len += mg_xprintf(pfn, pfn_data, "%s%m", h == *head ? "" : ",",
-                      mg_print_esc, (int) h->method.len, h->method.ptr);
+                      mg_print_esc, (int) h->method.len, h->method.buf);
   }
   return len;
 }
