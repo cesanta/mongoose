@@ -4851,11 +4851,6 @@ void mg_mgr_free(struct mg_mgr *mgr) {
   mg_tls_ctx_free(mgr);
 }
 
-
-#if MG_ENABLE_TCPIP && MG_ENABLE_TCPIP_DRIVER_INIT
-void mg_tcpip_auto_init(struct mg_mgr *);
-#endif
-
 void mg_mgr_init(struct mg_mgr *mgr) {
   memset(mgr, 0, sizeof(*mgr));
 #if MG_ENABLE_EPOLL
@@ -4874,8 +4869,8 @@ void mg_mgr_init(struct mg_mgr *mgr) {
   // Ignore SIGPIPE signal, so if client cancels the request, it
   // won't kill the whole process.
   signal(SIGPIPE, SIG_IGN);
-#elif MG_ENABLE_TCPIP && MG_ENABLE_TCPIP_DRIVER_INIT
-  mg_tcpip_auto_init(mgr);
+#elif MG_ENABLE_TCPIP_DRIVER_INIT && defined(MG_TCPIP_DRIVER_INIT)
+  MG_TCPIP_DRIVER_INIT(mgr);
 #endif
   mgr->pipe = MG_INVALID_SOCKET;
   mgr->dnstimeout = 3000;
@@ -5757,7 +5752,7 @@ static void mg_tcpip_poll(struct mg_tcpip_if *ifp, uint64_t now) {
 #if MG_ENABLE_TCPIP_PRINT_DEBUG_STATS
   if (expired_1000ms) {
     const char *names[] = {"down", "up", "req", "ready"};
-    MG_INFO(("Ethernet: %s, IP: %M, rx:%u, tx:%u, dr:%u, er:%u",
+    MG_INFO(("Status: %s, IP: %M, rx:%u, tx:%u, dr:%u, er:%u",
              names[ifp->state], mg_print_ip4, &ifp->ip, ifp->nrecv, ifp->nsent,
              ifp->ndrop, ifp->nerr));
   }
@@ -5917,7 +5912,7 @@ void mg_connect_resolved(struct mg_connection *c) {
   if (c->is_udp && (rem_ip == 0xffffffff || rem_ip == (ifp->ip | ~ifp->mask))) {
     struct connstate *s = (struct connstate *) (c + 1);
     memset(s->mac, 0xFF, sizeof(s->mac));  // global or local broadcast
-  } else if (((rem_ip & ifp->mask) == (ifp->ip & ifp->mask))) {
+  } else if (ifp->ip && ((rem_ip & ifp->mask) == (ifp->ip & ifp->mask))) {
     // If we're in the same LAN, fire an ARP lookup.
     MG_DEBUG(("%lu ARP lookup...", c->id));
     arp_ask(ifp, rem_ip);
@@ -5988,8 +5983,9 @@ void mg_mgr_poll(struct mg_mgr *mgr, int ms) {
   struct mg_tcpip_if *ifp = (struct mg_tcpip_if *) mgr->priv;
   struct mg_connection *c, *tmp;
   uint64_t now = mg_millis();
-  if (ifp != NULL && ifp->driver != NULL) mg_tcpip_poll(ifp, now);
   mg_timer_poll(&mgr->timers, now);
+  if (ifp == NULL || ifp->driver == NULL) return;
+  mg_tcpip_poll(ifp, now);
   for (c = mgr->conns; c != NULL; c = tmp) {
     tmp = c->next;
     struct connstate *s = (struct connstate *) (c + 1);
@@ -6022,24 +6018,6 @@ bool mg_send(struct mg_connection *c, const void *buf, size_t len) {
   }
   return res;
 }
-
-#if MG_ENABLE_TCPIP_DRIVER_INIT && defined(MG_TCPIP_DRIVER_DATA)
-void mg_tcpip_auto_init(struct mg_mgr *mgr);
-void mg_tcpip_auto_init(struct mg_mgr *mgr) {
-  MG_TCPIP_DRIVER_DATA  // static ... driver_data
-      struct mg_tcpip_if i = {
-          // let the compiler solve the macros at run time
-          .mac = MG_MAC_ADDRESS,          .ip = MG_TCPIP_IP,
-          .mask = MG_TCPIP_MASK,          .gw = MG_TCPIP_GW,
-          .driver = MG_TCPIP_DRIVER_CODE, .driver_data = &driver_data,
-      };
-  static struct mg_tcpip_if mif;
-
-  mif = i;  // copy the initialized structure to a static to be exported
-  mg_tcpip_init(mgr, &mif);
-  MG_INFO(("Driver: " MG_TCPIP_DRIVER_NAME ", MAC: %M", mg_print_mac, mif.mac));
-}
-#endif
 #endif  // MG_ENABLE_TCPIP
 
 #ifdef MG_ENABLE_LINES
