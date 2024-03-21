@@ -522,7 +522,7 @@ typedef int socklen_t;
 
 #include <ctype.h>
 #include <errno.h>
-#include <fcntl.h>
+#include <zephyr/posix/fcntl.h>
 #include <zephyr/net/socket.h>
 #include <stdarg.h>
 #include <stdbool.h>
@@ -3077,6 +3077,14 @@ struct mg_tcpip_driver_tm4c_data {
 #ifndef MG_DRIVER_MDC_CR
 #define MG_DRIVER_MDC_CR 1
 #endif
+
+#endif
+
+
+#if MG_ENABLE_TCPIP && defined(MG_ENABLE_DRIVER_W5500) && MG_ENABLE_DRIVER_W5500
+
+#undef MG_ENABLE_TCPIP_DRIVER_INIT
+#define MG_ENABLE_TCPIP_DRIVER_INIT 0
 
 #endif
 
