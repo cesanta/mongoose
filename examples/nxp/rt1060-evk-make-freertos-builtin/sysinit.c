@@ -36,7 +36,7 @@ void SystemInit(void) {  // Called automatically by startup code (ints masked)
   SCB->CPACR |= ((3UL << 10 * 2) | (3UL << 11 * 2));  // Enable FPU
   asm("DSB");
   asm("ISB");
-  // 53.4.2: Disable watchdog after reset (unlocked)
+  // 58.4.2: Disable watchdog after reset (unlocked)
   RTWDOG->CS &= ~RTWDOG_CS_EN_MASK;
   RTWDOG->TOVAL = 0xFFFF;
   while (RTWDOG->CS & RTWDOG_CS_ULK_MASK) spin(1);  // wait for lock

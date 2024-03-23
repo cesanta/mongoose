@@ -59,9 +59,12 @@ void mg_phy_init(struct mg_phy *phy, uint8_t phy_addr, uint8_t config) {
     } else if (id1 == MG_PHY_LAN87x) {
       // nothing to do
     } else if (id1 == MG_PHY_RTL8201) {
+      // assume PHY has been hardware strapped properly
+#if 0
       phy->write_reg(phy_addr, MG_PHY_RTL8201_REG_PAGESEL, 7);  // Select page 7
-      phy->write_reg(phy_addr, MG_PHY_RTL8201_REG_RMSR, 0x7ffb);
+      phy->write_reg(phy_addr, MG_PHY_RTL8201_REG_RMSR, 0x1ffa);
       phy->write_reg(phy_addr, MG_PHY_RTL8201_REG_PAGESEL, 0);  // Select page 0
+#endif
     }
   }
 

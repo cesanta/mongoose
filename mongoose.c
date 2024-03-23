@@ -14444,10 +14444,15 @@ struct imxrt_enet {
 };
 
 #undef ENET
+#if defined(MG_DRIVER_IMXRT_RT11) && MG_DRIVER_IMXRT_RT11
+#define ENET ((struct imxrt_enet *) (uintptr_t) 0x40424000U)
+#define ETH_DESC_CNT 5     // Descriptors count
+#else
 #define ENET ((struct imxrt_enet *) (uintptr_t) 0x402D8000U)
+#define ETH_DESC_CNT 4     // Descriptors count
+#endif
 
 #define ETH_PKT_SIZE 1536  // Max frame size, 64-bit aligned
-#define ETH_DESC_CNT 4     // Descriptors count
 
 struct enet_desc {
   uint16_t length;   // Data length
@@ -14510,7 +14515,7 @@ static bool mg_tcpip_driver_imxrt_init(struct mg_tcpip_if *ifp) {
   int cr = (d == NULL || d->mdc_cr < 0) ? 24 : d->mdc_cr;
   ENET->MSCR = (1 << 8) | ((cr & 0x3f) << 1);  // HOLDTIME 2 clks
   struct mg_phy phy = {enet_read_phy, enet_write_phy};
-  mg_phy_init(&phy, d->phy_addr, MG_PHY_LEDS_ACTIVE_HIGH); // MAC clocks PHY
+  mg_phy_init(&phy, d->phy_addr, MG_PHY_LEDS_ACTIVE_HIGH); // MAC clocks PHY  
   // Select RMII mode, 100M, keep CRC, set max rx length, disable loop
   ENET->RCR = (1518 << 16) | MG_BIT(8) | MG_BIT(2);
   // ENET->RCR |= MG_BIT(3);     // Receive all
@@ -14536,10 +14541,10 @@ static size_t mg_tcpip_driver_imxrt_tx(const void *buf, size_t len,
                                        struct mg_tcpip_if *ifp) {
   static int s_txno;  // Current descriptor index
   if (len > sizeof(s_txbuf[ETH_DESC_CNT])) {
-    ifp->nerr++;
     MG_ERROR(("Frame too big, %ld", (long) len));
     len = (size_t) -1;  // fail
   } else if ((s_txdesc[s_txno].control & MG_BIT(15))) {
+    ifp->nerr++;
     MG_ERROR(("No descriptors available"));
     len = 0;  // retry later
   } else {
@@ -14669,9 +14674,12 @@ void mg_phy_init(struct mg_phy *phy, uint8_t phy_addr, uint8_t config) {
     } else if (id1 == MG_PHY_LAN87x) {
       // nothing to do
     } else if (id1 == MG_PHY_RTL8201) {
+      // assume PHY has been hardware strapped properly
+#if 0
       phy->write_reg(phy_addr, MG_PHY_RTL8201_REG_PAGESEL, 7);  // Select page 7
-      phy->write_reg(phy_addr, MG_PHY_RTL8201_REG_RMSR, 0x7ffb);
+      phy->write_reg(phy_addr, MG_PHY_RTL8201_REG_RMSR, 0x1ffa);
       phy->write_reg(phy_addr, MG_PHY_RTL8201_REG_PAGESEL, 0);  // Select page 0
+#endif
     }
   }
 
@@ -14898,10 +14906,10 @@ static size_t mg_tcpip_driver_ra_tx(const void *buf, size_t len,
                                     struct mg_tcpip_if *ifp) {
   static int s_txno;  // Current descriptor index
   if (len > sizeof(s_txbuf[ETH_DESC_CNT])) {
-    ifp->nerr++;
     MG_ERROR(("Frame too big, %ld", (long) len));
     len = (size_t) -1;  // fail
   } else if ((s_txdesc[s_txno][0] & MG_BIT(31))) {
+    ifp->nerr++;
     MG_ERROR(("No descriptors available"));
     len = 0;  // retry later
   } else {

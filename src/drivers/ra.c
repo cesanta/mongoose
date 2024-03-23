@@ -182,10 +182,10 @@ static size_t mg_tcpip_driver_ra_tx(const void *buf, size_t len,
                                     struct mg_tcpip_if *ifp) {
   static int s_txno;  // Current descriptor index
   if (len > sizeof(s_txbuf[ETH_DESC_CNT])) {
-    ifp->nerr++;
     MG_ERROR(("Frame too big, %ld", (long) len));
     len = (size_t) -1;  // fail
   } else if ((s_txdesc[s_txno][0] & MG_BIT(31))) {
+    ifp->nerr++;
     MG_ERROR(("No descriptors available"));
     len = 0;  // retry later
   } else {
