@@ -37,8 +37,8 @@ static void simple_http_listener(struct mg_connection *c, int ev, void *ev_data)
       // Content-Length header automatically. In the response, we show
       // the requested URI and HTTP body:
       mg_http_reply(c, 200, "", "{%m:%m,%m:%m}\n",  // See mg_snprintf doc
-                    MG_ESC("uri"), mg_print_esc, hm->uri.len, hm->uri.ptr,
-                    MG_ESC("body"), mg_print_esc, hm->body.len, hm->body.ptr);
+                    MG_ESC("uri"), mg_print_esc, hm->uri.len, hm->uri.buf,
+                    MG_ESC("body"), mg_print_esc, hm->body.len, hm->body.buf);
     } else {
       // For all other URIs, serve some static content
       mg_http_reply(c, 200, "", "<html>millis: %lu</html>", millis());

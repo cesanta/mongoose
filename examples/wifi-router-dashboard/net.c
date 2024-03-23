@@ -312,7 +312,7 @@ static void fn(struct mg_connection *c, int ev, void *ev_data) {
       mg_http_serve_dir(c, ev_data, &opts);
     }
     MG_DEBUG(("%lu %.*s %.*s -> %.*s", c->id, (int) hm->method.len,
-              hm->method.ptr, (int) hm->uri.len, hm->uri.ptr, (int) 3,
+              hm->method.buf, (int) hm->uri.len, hm->uri.buf, (int) 3,
               &c->send.buf[9]));
   }
 }

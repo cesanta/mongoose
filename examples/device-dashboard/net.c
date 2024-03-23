@@ -210,7 +210,7 @@ static void handle_firmware_upload(struct mg_connection *c,
     mg_http_reply(c, 500, "", "offset and total not set\n");
   } else if (ofs == 0 && mg_ota_begin((size_t) tot) == false) {
     mg_http_reply(c, 500, "", "mg_ota_begin(%ld) failed\n", tot);
-  } else if (data.len > 0 && mg_ota_write(data.ptr, data.len) == false) {
+  } else if (data.len > 0 && mg_ota_write(data.buf, data.len) == false) {
     mg_http_reply(c, 500, "", "mg_ota_write(%lu) @%ld failed\n", data.len, ofs);
     mg_ota_end();
   } else if (data.len == 0 && mg_ota_end() == false) {
@@ -313,7 +313,7 @@ static void fn(struct mg_connection *c, int ev, void *ev_data) {
       mg_http_serve_dir(c, ev_data, &opts);
     }
     MG_DEBUG(("%lu %.*s %.*s -> %.*s", c->id, (int) hm->method.len,
-              hm->method.ptr, (int) hm->uri.len, hm->uri.ptr, (int) 3,
+              hm->method.buf, (int) hm->uri.len, hm->uri.buf, (int) 3,
               &c->send.buf[9]));
   }
 }

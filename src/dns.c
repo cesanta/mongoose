@@ -206,9 +206,9 @@ static bool mg_dns_send(struct mg_connection *c, const struct mg_str *name,
   pkt.header.flags = mg_htons(0x100);
   pkt.header.num_questions = mg_htons(1);
   for (i = n = 0; i < sizeof(pkt.data) - 5; i++) {
-    if (name->ptr[i] == '.' || i >= name->len) {
+    if (name->buf[i] == '.' || i >= name->len) {
       pkt.data[n] = (uint8_t) (i - n);
-      memcpy(&pkt.data[n + 1], name->ptr + n, i - n);
+      memcpy(&pkt.data[n + 1], name->buf + n, i - n);
       n = i + 1;
     }
     if (i >= name->len) break;
@@ -246,7 +246,7 @@ static void mg_sendnsreq(struct mg_connection *c, struct mg_str *name, int ms,
     d->c = c;
     c->is_resolving = 1;
     MG_VERBOSE(("%lu resolving %.*s @ %s, txnid %hu", c->id, (int) name->len,
-                name->ptr, dnsc->url, d->txnid));
+                name->buf, dnsc->url, d->txnid));
     if (!mg_dns_send(dnsc->c, name, d->txnid, ipv6)) {
       mg_error(dnsc->c, "DNS send");
     }

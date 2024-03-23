@@ -27,7 +27,7 @@ static int mg_tls_err(struct mg_connection *c, struct mg_tls *tls, int res) {
 }
 
 static STACK_OF(X509_INFO) * load_ca_certs(struct mg_str ca) {
-  BIO *bio = BIO_new_mem_buf(ca.ptr, (int) ca.len);
+  BIO *bio = BIO_new_mem_buf(ca.buf, (int) ca.len);
   STACK_OF(X509_INFO) *certs =
       bio ? PEM_X509_INFO_read_bio(bio, NULL, NULL, NULL) : NULL;
   if (bio) BIO_free(bio);
@@ -45,16 +45,16 @@ static bool add_ca_certs(SSL_CTX *ctx, STACK_OF(X509_INFO) * certs) {
 }
 
 static EVP_PKEY *load_key(struct mg_str s) {
-  BIO *bio = BIO_new_mem_buf(s.ptr, (int) (long) s.len);
+  BIO *bio = BIO_new_mem_buf(s.buf, (int) (long) s.len);
   EVP_PKEY *key = bio ? PEM_read_bio_PrivateKey(bio, NULL, 0, NULL) : NULL;
   if (bio) BIO_free(bio);
   return key;
 }
 
 static X509 *load_cert(struct mg_str s) {
-  BIO *bio = BIO_new_mem_buf(s.ptr, (int) (long) s.len);
+  BIO *bio = BIO_new_mem_buf(s.buf, (int) (long) s.len);
   X509 *cert = bio == NULL ? NULL
-               : s.ptr[0] == '-'
+               : s.buf[0] == '-'
                    ? PEM_read_bio_X509(bio, NULL, NULL, NULL)  // PEM
                    : d2i_X509_bio(bio, NULL);                  // DER
   if (bio) BIO_free(bio);
@@ -128,7 +128,7 @@ void mg_tls_init(struct mg_connection *c, const struct mg_tls_opts *opts) {
   SSL_set_options(tls->ssl, SSL_OP_CIPHER_SERVER_PREFERENCE);
 #endif
 
-  if (opts->ca.ptr != NULL && opts->ca.ptr[0] != '\0') {
+  if (opts->ca.buf != NULL && opts->ca.buf[0] != '\0') {
     SSL_set_verify(tls->ssl, SSL_VERIFY_PEER | SSL_VERIFY_FAIL_IF_NO_PEER_CERT,
                    NULL);
     STACK_OF(X509_INFO) *certs = load_ca_certs(opts->ca);
@@ -139,7 +139,7 @@ void mg_tls_init(struct mg_connection *c, const struct mg_tls_opts *opts) {
       goto fail;
     }
   }
-  if (opts->cert.ptr != NULL && opts->cert.ptr[0] != '\0') {
+  if (opts->cert.buf != NULL && opts->cert.buf[0] != '\0') {
     X509 *cert = load_cert(opts->cert);
     rc = cert == NULL ? 0 : SSL_use_certificate(tls->ssl, cert);
     X509_free(cert);
@@ -148,7 +148,7 @@ void mg_tls_init(struct mg_connection *c, const struct mg_tls_opts *opts) {
       goto fail;
     }
   }
-  if (opts->key.ptr != NULL && opts->key.ptr[0] != '\0') {
+  if (opts->key.buf != NULL && opts->key.buf[0] != '\0') {
     EVP_PKEY *key = load_key(opts->key);
     rc = key == NULL ? 0 : SSL_use_PrivateKey(tls->ssl, key);
     EVP_PKEY_free(key);
@@ -164,7 +164,7 @@ void mg_tls_init(struct mg_connection *c, const struct mg_tls_opts *opts) {
 #endif
 #if OPENSSL_VERSION_NUMBER >= 0x10100000L
   if (opts->name.len > 0) {
-    char *s = mg_mprintf("%.*s", (int) opts->name.len, opts->name.ptr);
+    char *s = mg_mprintf("%.*s", (int) opts->name.len, opts->name.buf);
     SSL_set1_host(tls->ssl, s);
     SSL_set_tlsext_host_name(tls->ssl, s);
     free(s);

@@ -22,8 +22,8 @@ static void fn(struct mg_connection *c, int ev, void *ev_data) {
         struct mg_str *k = &hm.headers[i].name, *v = &hm.headers[i].value;
         if ((mg_vcasecmp(k, "SERVER") == 0) ||
             (mg_vcasecmp(k, "LOCATION") == 0)) {
-          printf("\t%.*s -> %.*s\n", (int) k->len, k->ptr, (int) v->len,
-                 v->ptr);
+          printf("\t%.*s -> %.*s\n", (int) k->len, k->buf, (int) v->len,
+                 v->buf);
         }
       }
       printf("\n");

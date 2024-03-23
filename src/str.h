@@ -2,9 +2,10 @@
 
 #include "arch.h"
 
+// Describes an arbitrary chunk of memory
 struct mg_str {
-  const char *ptr;  // Pointer to string data
-  size_t len;       // String len
+  char *buf;   // String data
+  size_t len;  // String length
 };
 
 #define MG_C_STR(a) \

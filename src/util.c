@@ -98,9 +98,9 @@ int mg_check_ip_acl(struct mg_str acl, struct mg_addr *remote_ip) {
     memcpy((void *) &remote_ip4, remote_ip->ip, sizeof(remote_ip4));
     while (mg_span(acl, &entry, &acl, ',')) {
       uint32_t net, mask;
-      if (entry.ptr[0] != '+' && entry.ptr[0] != '-') return -1;
-      if (parse_net(&entry.ptr[1], &net, &mask) == 0) return -2;
-      if ((mg_ntohl(remote_ip4) & mask) == net) allowed = entry.ptr[0];
+      if (entry.buf[0] != '+' && entry.buf[0] != '-') return -1;
+      if (parse_net(&entry.buf[1], &net, &mask) == 0) return -2;
+      if ((mg_ntohl(remote_ip4) & mask) == net) allowed = entry.buf[0];
     }
   }
   return allowed == '+';

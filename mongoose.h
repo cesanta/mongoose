@@ -200,7 +200,7 @@ extern "C" {
 #define calloc(a, b) mg_calloc(a, b)
 #define free(a) vPortFree(a)
 #define malloc(a) pvPortMalloc(a)
-#define strdup(s) ((char *) mg_strdup(mg_str(s)).ptr)
+#define strdup(s) ((char *) mg_strdup(mg_str(s)).buf)
 
 // Re-route calloc/free to the FreeRTOS's functions, don't use stdlib
 static inline void *mg_calloc(size_t cnt, size_t size) {
@@ -302,7 +302,7 @@ extern uint32_t rt_time_get(void);
 #include "cmsis_os2.h"  // keep this include
 #endif
 
-#define strdup(s) ((char *) mg_strdup(mg_str(s)).ptr)
+#define strdup(s) ((char *) mg_strdup(mg_str(s)).buf)
 
 #if defined(__ARMCC_VERSION)
 #define mode_t size_t
@@ -535,7 +535,7 @@ typedef int socklen_t;
 
 #define MG_PUTCHAR(x) printk("%c", x)
 #ifndef strdup
-#define strdup(s) ((char *) mg_strdup(mg_str(s)).ptr)
+#define strdup(s) ((char *) mg_strdup(mg_str(s)).buf)
 #endif
 #define strerror(x) zsock_gai_strerror(x)
 
@@ -860,9 +860,10 @@ struct timeval {
 
 
 
+// Describes an arbitrary chunk of memory
 struct mg_str {
-  const char *ptr;  // Pointer to string data
-  size_t len;       // String len
+  char *buf;   // String data
+  size_t len;  // String length
 };
 
 #define MG_C_STR(a) \
