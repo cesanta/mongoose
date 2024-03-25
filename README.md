@@ -27,7 +27,7 @@ robust, and easy. Features include:
    - A complete Web device dashboard on bare metal ST Nucleo boards is only 6 files
    - For comparison, a CubeIDE generated HTTP example is 400+ files
 - Can run on top of an existing TCP/IP stack with BSD API, e.g. lwIP, Zephyr, Azure, etc
-- Built-in TLS 1.3 stack. Aslo can use external TLS libraries - mbedTLS, OpenSSL, or other
+- Built-in TLS 1.3 ECC stack. Aslo can use external TLS libraries - mbedTLS, OpenSSL, or other
 - Does not depend on any other software to implement networking
 - Built-in firmware updates for STM32 H5, STM32 H7
 
@@ -42,31 +42,31 @@ Create a simple web server that serves a directory. The behavior of the
 HTTP server is specified by its event handler function:
 
 ```c
-#include "mongoose.h"
-
-int main(void) {
-  struct mg_mgr mgr;  // Declare event manager
-  mg_mgr_init(&mgr);  // Initialise event manager
-  mg_http_listen(&mgr, "http://0.0.0.0:8000", fn, NULL);  // Setup listener
-  for (;;) {
-    mg_mgr_poll(&mgr, 1000);  // Run an infinite event loop
-  }
-  return 0;
-}
+#include "mongoose.h"   // To build, run: cc main.c mongoose.c
 
 // HTTP server event handler function
-void fn(struct mg_connection *c, int ev, void *ev_data) {
+void ev_handler(struct mg_connection *c, int ev, void *ev_data) {
   if (ev == MG_EV_HTTP_MSG) {
     struct mg_http_message *hm = (struct mg_http_message *) ev_data;
     struct mg_http_serve_opts opts = { .root_dir = "./web_root/" };
     mg_http_serve_dir(c, hm, &opts);
   }
 }
+
+int main(void) {
+  struct mg_mgr mgr;  // Declare event manager
+  mg_mgr_init(&mgr);  // Initialise event manager
+  mg_http_listen(&mgr, "http://0.0.0.0:8000", ev_handler, NULL);  // Setup listener
+  for (;;) {          // Run an infinite event loop
+    mg_mgr_poll(&mgr, 1000);
+  }
+  return 0;
+}
 ```
 
 HTTP server implements a REST API that returns current time. JSON formatting:
 ```c
-static void fn(struct mg_connection *c, int ev, void *ev_data) {
+static void ev_handler(struct mg_connection *c, int ev, void *ev_data) {
   if (ev == MG_EV_HTTP_MSG) {
     struct mg_http_message *hm = (struct mg_http_message *) ev_data;
     if (mg_http_match_uri(hm, "/api/time/get")) {
@@ -81,7 +81,7 @@ static void fn(struct mg_connection *c, int ev, void *ev_data) {
 MQTT client that subscribes to a topic `aa/bb` and prints all incoming messages:
 
 ```c
-static void fn(struct mg_connection *c, int ev, void *ev_data) {
+static void ev_handler(struct mg_connection *c, int ev, void *ev_data) {
   if (ev == MG_EV_MQTT_OPEN) {
     struct mg_mqtt_opts opts = {.qos = 1, .topic = mg_str("aa/bb")};
     mg_mqtt_sub(c, &opts);
