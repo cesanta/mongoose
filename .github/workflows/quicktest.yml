@@ -15,7 +15,7 @@ jobs:
       matrix:
         cc: [gcc, clang++]
         target: [test, mip_test]
-        ssl: ["", MBEDTLS, BUILTIN]
+        ssl: ["", BUILTIN]
     name: linux ${{ matrix.target }} CC=${{ matrix.cc }} SSL=${{ matrix.ssl }}
     env:
       CC: ${{ matrix.cc }}
@@ -25,7 +25,7 @@ jobs:
       with: { fetch-depth: 2 }
     - run: if ./test/match_changed_files.sh '^test|^src/.*.[ch]' ; then echo GO=1 >> $GITHUB_ENV ; fi
     - if: ${{ env.GO == 1 }}
-      run: ./test/setup_ga_network.sh && sudo apt -y update ; sudo apt -y install libmbedtls-dev && make ${{ matrix.target }}
+      run: ./test/setup_ga_network.sh && make ${{ matrix.target }}
   s390:
     runs-on: ubuntu-latest
     steps:
@@ -57,20 +57,18 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        ssl: ["", MBEDTLS, BUILTIN]
+        ssl: ["", BUILTIN]
     name: macos SSL=${{ matrix.ssl }}
     env:
       SSL: ${{ matrix.ssl }}
-      TFLAGS: -DNO_SNTP_CHECK -Wno-sign-conversion # Workaround for MbedTLS 3.5.0
+      TFLAGS: -DNO_SNTP_CHECK
       HOMEBREW_NO_AUTO_UPDATE: 1
     steps:
     - uses: actions/checkout@v3
       with: { fetch-depth: 2 }
     - run: if ./test/match_changed_files.sh '^test|^src/.*.[ch]' ; then echo GO=1 >> $GITHUB_ENV ; fi
     - if: ${{ env.GO == 1 }}
-      run: brew install jq mbedtls openssl
-    - if: ${{ env.GO == 1 }}
-      run:  make test ASAN_OPTIONS= MBEDTLS=`echo /usr/local/Cellar/mbedtls*/*` OPENSSL=`echo /usr/local/Cellar/openssl*/*`
+      run:  make test ASAN_OPTIONS=
     - if: ${{ env.GO == 1 }}
       run: make mg_prefix
   windows:
@@ -101,7 +99,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
     - uses: actions/checkout@v3
-    - run: sudo apt -y install libmbedtls-dev libpcap-dev
+    - run: sudo apt -y install libpcap-dev
     - run: make examples
     - run: make clean
   examples_win:

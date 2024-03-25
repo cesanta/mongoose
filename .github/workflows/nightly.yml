@@ -14,7 +14,7 @@ jobs:
       matrix:
         cc: [gcc, clang, g++, clang++]
         target: [test, mip_test]
-        ssl: ["", MBEDTLS, OPENSSL]
+        ssl: ["", BUILTIN, MBEDTLS, OPENSSL]
         select: ["-DMG_ENABLE_POLL=0 -DMG_ENABLE_EPOLL=0", "-DMG_ENABLE_POLL=1 -DMG_ENABLE_EPOLL=0", "-DMG_ENABLE_POLL=0 -DMG_ENABLE_EPOLL=1"]
         exclude:
         - ssl: MBEDTLS
@@ -36,16 +36,26 @@ jobs:
     - run: ./test/setup_ga_network.sh && sudo apt -y update ; sudo apt -y install libmbedtls-dev && make ${{ matrix.target }}
   s390:
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        ssl: ["", BUILTIN]
+    name: S390 SSL=${{ matrix.ssl }}
     steps:
     - uses: actions/checkout@v3
       with: { fetch-depth: 2 }
-    - run: sudo apt -y update ; sudo apt -y install qemu binfmt-support qemu-user-static && docker run --rm --privileged multiarch/qemu-user-static --reset -p yes && make s390
+    - run: sudo apt -y update ; sudo apt -y install qemu binfmt-support qemu-user-static && docker run --rm --privileged multiarch/qemu-user-static --reset -p yes && make s390 SSL=${{ matrix.ssl }}
   armhf:
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        ssl: ["", BUILTIN]
+    name: ArmHF SSL=${{ matrix.ssl }}
     steps:
     - uses: actions/checkout@v3
       with: { fetch-depth: 2 }
-    - run: sudo apt -y update ; sudo apt -y install qemu binfmt-support qemu-user-static && docker run --rm --privileged multiarch/qemu-user-static --reset -p yes && make armhf
+    - run: sudo apt -y update ; sudo apt -y install qemu binfmt-support qemu-user-static && docker run --rm --privileged multiarch/qemu-user-static --reset -p yes && make armhf SSL=${{ matrix.ssl }}
   linux2:
     runs-on: ubuntu-latest
     steps:
@@ -58,7 +68,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        ssl: ["", MBEDTLS, OPENSSL]
+        ssl: ["", BUILTIN, MBEDTLS, OPENSSL]
         select: [-DMG_ENABLE_POLL=0, -DMG_ENABLE_POLL=1]
         exclude:
         - ssl: MBEDTLS
@@ -82,12 +92,14 @@ jobs:
       fail-fast: false
       matrix:
         target: [vc98, vc17, vc22, mingw, mingw++]
+        ssl: ["", BUILTIN]
         select: [-DMG_ENABLE_POLL=0, -DMG_ENABLE_POLL=1]
         exclude:
         - target: vc98
           select: -DMG_ENABLE_POLL=1
-    name: windows ${{ matrix.target }} TFLAGS=${{ matrix.select }}
+    name: windows ${{ matrix.target }} SSL=${{ matrix.ssl }} TFLAGS=${{ matrix.select }}
     env:
+      SSL: SSL=${{ matrix.ssl }}
       TFLAGS: ${{ matrix.select }}
     steps:
     - uses: actions/checkout@v3
@@ -95,14 +107,24 @@ jobs:
     - run: make ${{ matrix.target }} 
   arm:
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        ssl: ["", BUILTIN]
+    name: Arm SSL=${{ matrix.ssl }}
     steps:
     - uses: actions/checkout@v3
-    - run: make arm
+    - run: make arm SSL=${{ matrix.ssl }}
   riscv:
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        ssl: ["", BUILTIN]
+    name: RISC-V SSL=${{ matrix.ssl }}
     steps:
     - uses: actions/checkout@v3
-    - run: make riscv
+    - run: make riscv SSL=${{ matrix.ssl }}
 
   examples:
     runs-on: ubuntu-latest
