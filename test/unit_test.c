@@ -16,40 +16,6 @@ static int s_num_tests = 0;
 
 #define FETCH_BUF_SIZE (256 * 1024)
 
-// Self-signed CA, CERT, KEY
-const char *s_tls_ca =
-    "-----BEGIN CERTIFICATE-----\n"
-    "MIIBqjCCAU+gAwIBAgIUESoOPGqMhf9uarzblVFwzrQweMcwCgYIKoZIzj0EAwIw\n"
-    "RDELMAkGA1UEBhMCSUUxDzANBgNVBAcMBkR1YmxpbjEQMA4GA1UECgwHQ2VzYW50\n"
-    "YTESMBAGA1UEAwwJVGVzdCBSb290MCAXDTIwMDUwOTIxNTE0NFoYDzIwNTAwNTA5\n"
-    "MjE1MTQ0WjBEMQswCQYDVQQGEwJJRTEPMA0GA1UEBwwGRHVibGluMRAwDgYDVQQK\n"
-    "DAdDZXNhbnRhMRIwEAYDVQQDDAlUZXN0IFJvb3QwWTATBgcqhkjOPQIBBggqhkjO\n"
-    "PQMBBwNCAAQsq9ECZiSW1xI+CVBP8VDuUehVA166sR2YsnJ5J6gbMQ1dUCH/QvLa\n"
-    "dBdeU7JlQcH8hN5KEbmM9BnZxMor6ussox0wGzAMBgNVHRMEBTADAQH/MAsGA1Ud\n"
-    "DwQEAwIBrjAKBggqhkjOPQQDAgNJADBGAiEAnHFsAIwGQQyRL81B04dH6d86Iq0l\n"
-    "fL8OKzndegxOaB0CIQCPwSIwEGFdURDqCC0CY2dnMrUGY5ZXu3hHCojZGS7zvg==\n"
-    "-----END CERTIFICATE-----\n";
-
-const char *s_tls_cert =
-    "-----BEGIN CERTIFICATE-----\n"
-    "MIIBhzCCASygAwIBAgIUbnMoVd8TtWH1T09dANkK2LU6IUswCgYIKoZIzj0EAwIw\n"
-    "RDELMAkGA1UEBhMCSUUxDzANBgNVBAcMBkR1YmxpbjEQMA4GA1UECgwHQ2VzYW50\n"
-    "YTESMBAGA1UEAwwJVGVzdCBSb290MB4XDTIwMDUwOTIxNTE0OVoXDTMwMDUwOTIx\n"
-    "NTE0OVowETEPMA0GA1UEAwwGc2VydmVyMFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcD\n"
-    "QgAEkuBGnInDN6l06zVVQ1VcrOvH5FDu9MC6FwJc2e201P8hEpq0Q/SJS2nkbSuW\n"
-    "H/wBTTBaeXN2uhlBzMUWK790KKMvMC0wCQYDVR0TBAIwADALBgNVHQ8EBAMCA6gw\n"
-    "EwYDVR0lBAwwCgYIKwYBBQUHAwEwCgYIKoZIzj0EAwIDSQAwRgIhAPo6xx7LjCdZ\n"
-    "QY133XvLjAgVFrlucOZHONFVQuDXZsjwAiEAzHBNligA08c5U3SySYcnkhurGg50\n"
-    "BllCI0eYQ9ggp/o=\n"
-    "-----END CERTIFICATE-----\n";
-
-const char *s_tls_key =
-    "-----BEGIN PRIVATE KEY-----\n"
-    "MIGHAgEAMBMGByqGSM49AgEGCCqGSM49AwEHBG0wawIBAQQglNni0t9Dg9icgG8w\n"
-    "kbfxWSS+TuNgbtNybIQXcm3NHpmhRANCAASS4EacicM3qXTrNVVDVVys68fkUO70\n"
-    "wLoXAlzZ7bTU/yESmrRD9IlLaeRtK5Yf/AFNMFp5c3a6GUHMxRYrv3Qo\n"
-    "-----END PRIVATE KEY-----\n";
-
 // Important: we use different port numbers for the Windows bug workaround. See
 // https://support.microsoft.com/en-ae/help/3039044/error-10013-wsaeacces-is-returned-when-a-second-bind-to-a-excluded-por
 
@@ -743,10 +709,11 @@ static int fetch(struct mg_mgr *mgr, char *buf, const char *url,
   if (c != NULL && mg_url_is_ssl(url)) {
     struct mg_tls_opts opts;
     memset(&opts, 0, sizeof(opts));  // read CA from packed_fs
+    opts.name = mg_url_host(url);
     opts.ca = mg_unpacked("/test/data/ca.pem");
-    if (strstr(url, "127.0.0.1") != NULL) {
+    if (strstr(url, "localhost") != NULL) {
       // Local connection, use self-signed certificates
-      opts.ca = mg_str(s_tls_ca);
+      opts.ca = mg_unpacked("/test/certs/ca.crt");
       // opts.cert = mg_str(s_tls_cert);
       // opts.key = mg_str(s_tls_key);
     }
@@ -1207,14 +1174,14 @@ static void test_tls(void) {
 #if MG_TLS
   struct mg_mgr mgr;
   struct mg_connection *c;
-  const char *url = "https://127.0.0.1:12347";
+  const char *url = "https://localhost:12347";
   char buf[FETCH_BUF_SIZE];
   struct mg_tls_opts opts;
   struct mg_str data = mg_unpacked("/Makefile");
   memset(&opts, 0, sizeof(opts));
   // opts.ca = mg_str(s_tls_ca);
-  opts.cert = mg_str(s_tls_cert);
-  opts.key = mg_str(s_tls_key);
+  opts.cert = mg_unpacked("/test/certs/server.crt");
+  opts.key = mg_unpacked("/test/certs/server.key");
   mg_mgr_init(&mgr);
   c = mg_http_listen(&mgr, url, eh1, &opts);
   ASSERT(c != NULL);
@@ -1334,6 +1301,7 @@ static void test_host_validation(void) {
   c = mg_http_connect(&mgr, url, f3, &ok);
   ASSERT(c != NULL);
   opts.ca = mg_unpacked("/test/data/ca.pem");
+  opts.name = mg_url_host(url);
   mg_tls_init(c, &opts);
   for (i = 0; i < 1500 && ok <= 0; i++) mg_mgr_poll(&mgr, 10);
   ASSERT(ok == 200);

@@ -20,10 +20,177 @@
  *
  *******************************************************************************/
 
-#include "tls_aes128.h"
+/******************************************************************************/
+#define AES_DECRYPTION 1  // whether AES decryption is supported
+/******************************************************************************/
+
+#define MG_ENCRYPT 1  // specify whether we're encrypting
+#define MG_DECRYPT 0  // or decrypting
+
+#include "arch.h"
 #include "tls.h"
+#include "tls_aes128.h"
 
 #if MG_TLS == MG_TLS_BUILTIN
+/******************************************************************************
+ *  AES_INIT_KEYGEN_TABLES : MUST be called once before any AES use
+ ******************************************************************************/
+static void aes_init_keygen_tables(void);
+
+/******************************************************************************
+ *  AES_SETKEY : called to expand the key for encryption or decryption
+ ******************************************************************************/
+static int aes_setkey(aes_context *ctx,  // pointer to context
+                      int mode,          // 1 or 0 for Encrypt/Decrypt
+                      const uchar *key,  // AES input key
+                      uint keysize);  // size in bytes (must be 16, 24, 32 for
+                                      // 128, 192 or 256-bit keys respectively)
+                                      // returns 0 for success
+
+/******************************************************************************
+ *  AES_CIPHER : called to encrypt or decrypt ONE 128-bit block of data
+ ******************************************************************************/
+static int aes_cipher(aes_context *ctx,       // pointer to context
+                      const uchar input[16],  // 128-bit block to en/decipher
+                      uchar output[16]);      // 128-bit output result block
+                                              // returns 0 for success
+
+/******************************************************************************
+ *  GCM_CONTEXT : GCM context / holds keytables, instance data, and AES ctx
+ ******************************************************************************/
+typedef struct {
+  int mode;             // cipher direction: encrypt/decrypt
+  uint64_t len;         // cipher data length processed so far
+  uint64_t add_len;     // total add data length
+  uint64_t HL[16];      // precalculated lo-half HTable
+  uint64_t HH[16];      // precalculated hi-half HTable
+  uchar base_ectr[16];  // first counter-mode cipher output for tag
+  uchar y[16];          // the current cipher-input IV|Counter value
+  uchar buf[16];        // buf working value
+  aes_context aes_ctx;  // cipher context used
+} gcm_context;
+
+/******************************************************************************
+ *  GCM_SETKEY : sets the GCM (and AES) keying material for use
+ ******************************************************************************/
+static int gcm_setkey(
+    gcm_context *ctx,   // caller-provided context ptr
+    const uchar *key,   // pointer to cipher key
+    const uint keysize  // size in bytes (must be 16, 24, 32 for
+                        // 128, 192 or 256-bit keys respectively)
+);                      // returns 0 for success
+
+/******************************************************************************
+ *
+ *  GCM_CRYPT_AND_TAG
+ *
+ *  This either encrypts or decrypts the user-provided data and, either
+ *  way, generates an authentication tag of the requested length. It must be
+ *  called with a GCM context whose key has already been set with GCM_SETKEY.
+ *
+ *  The user would typically call this explicitly to ENCRYPT a buffer of data
+ *  and optional associated data, and produce its an authentication tag.
+ *
+ *  To reverse the process the user would typically call the companion
+ *  GCM_AUTH_DECRYPT function to decrypt data and verify a user-provided
+ *  authentication tag.  The GCM_AUTH_DECRYPT function calls this function
+ *  to perform its decryption and tag generation, which it then compares.
+ *
+ ******************************************************************************/
+static int gcm_crypt_and_tag(
+    gcm_context *ctx,    // gcm context with key already setup
+    int mode,            // cipher direction: MG_ENCRYPT (1) or MG_DECRYPT (0)
+    const uchar *iv,     // pointer to the 12-byte initialization vector
+    size_t iv_len,       // byte length if the IV. should always be 12
+    const uchar *add,    // pointer to the non-ciphered additional data
+    size_t add_len,      // byte length of the additional AEAD data
+    const uchar *input,  // pointer to the cipher data source
+    uchar *output,       // pointer to the cipher data destination
+    size_t length,       // byte length of the cipher data
+    uchar *tag,          // pointer to the tag to be generated
+    size_t tag_len);     // byte length of the tag to be generated
+
+/******************************************************************************
+ *
+ *  GCM_START
+ *
+ *  Given a user-provided GCM context, this initializes it, sets the encryption
+ *  mode, and preprocesses the initialization vector and additional AEAD data.
+ *
+ ******************************************************************************/
+static int gcm_start(
+    gcm_context *ctx,  // pointer to user-provided GCM context
+    int mode,          // MG_ENCRYPT (1) or MG_DECRYPT (0)
+    const uchar *iv,   // pointer to initialization vector
+    size_t iv_len,     // IV length in bytes (should == 12)
+    const uchar *add,  // pointer to additional AEAD data (NULL if none)
+    size_t add_len);   // length of additional AEAD data (bytes)
+
+/******************************************************************************
+ *
+ *  GCM_UPDATE
+ *
+ *  This is called once or more to process bulk plaintext or ciphertext data.
+ *  We give this some number of bytes of input and it returns the same number
+ *  of output bytes. If called multiple times (which is fine) all but the final
+ *  invocation MUST be called with length mod 16 == 0. (Only the final call can
+ *  have a partial block length of < 128 bits.)
+ *
+ ******************************************************************************/
+static int gcm_update(gcm_context *ctx,  // pointer to user-provided GCM context
+                      size_t length,     // length, in bytes, of data to process
+                      const uchar *input,  // pointer to source data
+                      uchar *output);      // pointer to destination data
+
+/******************************************************************************
+ *
+ *  GCM_FINISH
+ *
+ *  This is called once after all calls to GCM_UPDATE to finalize the GCM.
+ *  It performs the final GHASH to produce the resulting authentication TAG.
+ *
+ ******************************************************************************/
+static int gcm_finish(
+    gcm_context *ctx,  // pointer to user-provided GCM context
+    uchar *tag,        // ptr to tag buffer - NULL if tag_len = 0
+    size_t tag_len);   // length, in bytes, of the tag-receiving buf
+
+/******************************************************************************
+ *
+ *  GCM_ZERO_CTX
+ *
+ *  The GCM context contains both the GCM context and the AES context.
+ *  This includes keying and key-related material which is security-
+ *  sensitive, so it MUST be zeroed after use. This function does that.
+ *
+ ******************************************************************************/
+static void gcm_zero_ctx(gcm_context *ctx);
+
+/******************************************************************************
+ *
+ * THIS SOURCE CODE IS HEREBY PLACED INTO THE PUBLIC DOMAIN FOR THE GOOD OF ALL
+ *
+ * This is a simple and straightforward implementation of the AES Rijndael
+ * 128-bit block cipher designed by Vincent Rijmen and Joan Daemen. The focus
+ * of this work was correctness & accuracy.  It is written in 'C' without any
+ * particular focus upon optimization or speed. It should be endian (memory
+ * byte order) neutral since the few places that care are handled explicitly.
+ *
+ * This implementation of Rijndael was created by Steven M. Gibson of GRC.com.
+ *
+ * It is intended for general purpose use, but was written in support of GRC's
+ * reference implementation of the SQRL (Secure Quick Reliable Login) client.
+ *
+ * See:    http://csrc.nist.gov/archive/aes/rijndael/wsdindex.html
+ *
+ * NO COPYRIGHT IS CLAIMED IN THIS WORK, HOWEVER, NEITHER IS ANY WARRANTY MADE
+ * REGARDING ITS FITNESS FOR ANY PARTICULAR PURPOSE. USE IT AT YOUR OWN RISK.
+ *
+ *******************************************************************************/
+
+#include "tls.h"
+#include "tls_aes128.h"
+
 static int aes_tables_inited = 0;  // run-once flag for performing key
                                    // expasion table generation (see below)
 /*
@@ -77,34 +244,34 @@ static uint32_t RCON[10];  // AES round constants
 /*
  *  AES forward and reverse encryption round processing macros
  */
-#define AES_FROUND(X0, X1, X2, X3, Y0, Y1, Y2, Y3)         \
-  {                                                        \
-    X0 = *RK++ ^ FT0[(Y0) &0xFF] ^ FT1[(Y1 >> 8) & 0xFF] ^ \
-         FT2[(Y2 >> 16) & 0xFF] ^ FT3[(Y3 >> 24) & 0xFF];  \
-                                                           \
-    X1 = *RK++ ^ FT0[(Y1) &0xFF] ^ FT1[(Y2 >> 8) & 0xFF] ^ \
-         FT2[(Y3 >> 16) & 0xFF] ^ FT3[(Y0 >> 24) & 0xFF];  \
-                                                           \
-    X2 = *RK++ ^ FT0[(Y2) &0xFF] ^ FT1[(Y3 >> 8) & 0xFF] ^ \
-         FT2[(Y0 >> 16) & 0xFF] ^ FT3[(Y1 >> 24) & 0xFF];  \
-                                                           \
-    X3 = *RK++ ^ FT0[(Y3) &0xFF] ^ FT1[(Y0 >> 8) & 0xFF] ^ \
-         FT2[(Y1 >> 16) & 0xFF] ^ FT3[(Y2 >> 24) & 0xFF];  \
+#define AES_FROUND(X0, X1, X2, X3, Y0, Y1, Y2, Y3)          \
+  {                                                         \
+    X0 = *RK++ ^ FT0[(Y0) & 0xFF] ^ FT1[(Y1 >> 8) & 0xFF] ^ \
+         FT2[(Y2 >> 16) & 0xFF] ^ FT3[(Y3 >> 24) & 0xFF];   \
+                                                            \
+    X1 = *RK++ ^ FT0[(Y1) & 0xFF] ^ FT1[(Y2 >> 8) & 0xFF] ^ \
+         FT2[(Y3 >> 16) & 0xFF] ^ FT3[(Y0 >> 24) & 0xFF];   \
+                                                            \
+    X2 = *RK++ ^ FT0[(Y2) & 0xFF] ^ FT1[(Y3 >> 8) & 0xFF] ^ \
+         FT2[(Y0 >> 16) & 0xFF] ^ FT3[(Y1 >> 24) & 0xFF];   \
+                                                            \
+    X3 = *RK++ ^ FT0[(Y3) & 0xFF] ^ FT1[(Y0 >> 8) & 0xFF] ^ \
+         FT2[(Y1 >> 16) & 0xFF] ^ FT3[(Y2 >> 24) & 0xFF];   \
   }
 
-#define AES_RROUND(X0, X1, X2, X3, Y0, Y1, Y2, Y3)         \
-  {                                                        \
-    X0 = *RK++ ^ RT0[(Y0) &0xFF] ^ RT1[(Y3 >> 8) & 0xFF] ^ \
-         RT2[(Y2 >> 16) & 0xFF] ^ RT3[(Y1 >> 24) & 0xFF];  \
-                                                           \
-    X1 = *RK++ ^ RT0[(Y1) &0xFF] ^ RT1[(Y0 >> 8) & 0xFF] ^ \
-         RT2[(Y3 >> 16) & 0xFF] ^ RT3[(Y2 >> 24) & 0xFF];  \
-                                                           \
-    X2 = *RK++ ^ RT0[(Y2) &0xFF] ^ RT1[(Y1 >> 8) & 0xFF] ^ \
-         RT2[(Y0 >> 16) & 0xFF] ^ RT3[(Y3 >> 24) & 0xFF];  \
-                                                           \
-    X3 = *RK++ ^ RT0[(Y3) &0xFF] ^ RT1[(Y2 >> 8) & 0xFF] ^ \
-         RT2[(Y1 >> 16) & 0xFF] ^ RT3[(Y0 >> 24) & 0xFF];  \
+#define AES_RROUND(X0, X1, X2, X3, Y0, Y1, Y2, Y3)          \
+  {                                                         \
+    X0 = *RK++ ^ RT0[(Y0) & 0xFF] ^ RT1[(Y3 >> 8) & 0xFF] ^ \
+         RT2[(Y2 >> 16) & 0xFF] ^ RT3[(Y1 >> 24) & 0xFF];   \
+                                                            \
+    X1 = *RK++ ^ RT0[(Y1) & 0xFF] ^ RT1[(Y0 >> 8) & 0xFF] ^ \
+         RT2[(Y3 >> 16) & 0xFF] ^ RT3[(Y2 >> 24) & 0xFF];   \
+                                                            \
+    X2 = *RK++ ^ RT0[(Y2) & 0xFF] ^ RT1[(Y1 >> 8) & 0xFF] ^ \
+         RT2[(Y0 >> 16) & 0xFF] ^ RT3[(Y3 >> 24) & 0xFF];   \
+                                                            \
+    X3 = *RK++ ^ RT0[(Y3) & 0xFF] ^ RT1[(Y2 >> 8) & 0xFF] ^ \
+         RT2[(Y1 >> 16) & 0xFF] ^ RT3[(Y0 >> 24) & 0xFF];   \
   }
 
 /*
@@ -210,7 +377,8 @@ void aes_init_keygen_tables(void) {
  *  Valid lengths are: 16, 24 or 32 bytes (128, 192, 256 bits).
  *
  ******************************************************************************/
-static int aes_set_encryption_key(aes_context *ctx, const uchar *key, uint keysize) {
+static int aes_set_encryption_key(aes_context *ctx, const uchar *key,
+                                  uint keysize) {
   uint i;                  // general purpose iteration local
   uint32_t *RK = ctx->rk;  // initialize our RoundKey buffer pointer
 
@@ -287,7 +455,8 @@ static int aes_set_encryption_key(aes_context *ctx, const uchar *key, uint keysi
  *  length in bits. Valid lengths are: 128, 192, or 256 bits.
  *
  ******************************************************************************/
-static int aes_set_decryption_key(aes_context *ctx, const uchar *key, uint keysize) {
+static int aes_set_decryption_key(aes_context *ctx, const uchar *key,
+                                  uint keysize) {
   int i, j;
   aes_context cty;         // a calling aes context for set_encryption_key
   uint32_t *RK = ctx->rk;  // initialize our RoundKey buffer pointer
@@ -323,10 +492,10 @@ static int aes_set_decryption_key(aes_context *ctx, const uchar *key, uint keysi
  *  Invoked to establish the key schedule for subsequent encryption/decryption
  *
  ******************************************************************************/
-int aes_setkey(aes_context *ctx,  // AES context provided by our caller
-               int mode,          // ENCRYPT or DECRYPT flag
-               const uchar *key,  // pointer to the key
-               uint keysize)      // key length in bytes
+static int aes_setkey(aes_context *ctx,  // AES context provided by our caller
+                      int mode,          // ENCRYPT or DECRYPT flag
+                      const uchar *key,  // pointer to the key
+                      uint keysize)      // key length in bytes
 {
   // since table initialization is not thread safe, we could either add
   // system-specific mutexes and init the AES key generation tables on
@@ -369,7 +538,8 @@ int aes_setkey(aes_context *ctx,  // AES context provided by our caller
  *  and all keying information appropriate for the task.
  *
  ******************************************************************************/
-int aes_cipher(aes_context *ctx, const uchar input[16], uchar output[16]) {
+static int aes_cipher(aes_context *ctx, const uchar input[16],
+                      uchar output[16]) {
   int i;
   uint32_t *RK, X0, X1, X2, X3, Y0, Y1, Y2, Y3;  // general purpose locals
 
@@ -394,22 +564,22 @@ int aes_cipher(aes_context *ctx, const uchar input[16], uchar output[16]) {
 
     AES_RROUND(Y0, Y1, Y2, Y3, X0, X1, X2, X3);
 
-    X0 = *RK++ ^ ((uint32_t) RSb[(Y0) &0xFF]) ^
+    X0 = *RK++ ^ ((uint32_t) RSb[(Y0) & 0xFF]) ^
          ((uint32_t) RSb[(Y3 >> 8) & 0xFF] << 8) ^
          ((uint32_t) RSb[(Y2 >> 16) & 0xFF] << 16) ^
          ((uint32_t) RSb[(Y1 >> 24) & 0xFF] << 24);
 
-    X1 = *RK++ ^ ((uint32_t) RSb[(Y1) &0xFF]) ^
+    X1 = *RK++ ^ ((uint32_t) RSb[(Y1) & 0xFF]) ^
          ((uint32_t) RSb[(Y0 >> 8) & 0xFF] << 8) ^
          ((uint32_t) RSb[(Y3 >> 16) & 0xFF] << 16) ^
          ((uint32_t) RSb[(Y2 >> 24) & 0xFF] << 24);
 
-    X2 = *RK++ ^ ((uint32_t) RSb[(Y2) &0xFF]) ^
+    X2 = *RK++ ^ ((uint32_t) RSb[(Y2) & 0xFF]) ^
          ((uint32_t) RSb[(Y1 >> 8) & 0xFF] << 8) ^
          ((uint32_t) RSb[(Y0 >> 16) & 0xFF] << 16) ^
          ((uint32_t) RSb[(Y3 >> 24) & 0xFF] << 24);
 
-    X3 = *RK++ ^ ((uint32_t) RSb[(Y3) &0xFF]) ^
+    X3 = *RK++ ^ ((uint32_t) RSb[(Y3) & 0xFF]) ^
          ((uint32_t) RSb[(Y2 >> 8) & 0xFF] << 8) ^
          ((uint32_t) RSb[(Y1 >> 16) & 0xFF] << 16) ^
          ((uint32_t) RSb[(Y0 >> 24) & 0xFF] << 24);
@@ -424,22 +594,22 @@ int aes_cipher(aes_context *ctx, const uchar input[16], uchar output[16]) {
 
     AES_FROUND(Y0, Y1, Y2, Y3, X0, X1, X2, X3);
 
-    X0 = *RK++ ^ ((uint32_t) FSb[(Y0) &0xFF]) ^
+    X0 = *RK++ ^ ((uint32_t) FSb[(Y0) & 0xFF]) ^
          ((uint32_t) FSb[(Y1 >> 8) & 0xFF] << 8) ^
          ((uint32_t) FSb[(Y2 >> 16) & 0xFF] << 16) ^
          ((uint32_t) FSb[(Y3 >> 24) & 0xFF] << 24);
 
-    X1 = *RK++ ^ ((uint32_t) FSb[(Y1) &0xFF]) ^
+    X1 = *RK++ ^ ((uint32_t) FSb[(Y1) & 0xFF]) ^
          ((uint32_t) FSb[(Y2 >> 8) & 0xFF] << 8) ^
          ((uint32_t) FSb[(Y3 >> 16) & 0xFF] << 16) ^
          ((uint32_t) FSb[(Y0 >> 24) & 0xFF] << 24);
 
-    X2 = *RK++ ^ ((uint32_t) FSb[(Y2) &0xFF]) ^
+    X2 = *RK++ ^ ((uint32_t) FSb[(Y2) & 0xFF]) ^
          ((uint32_t) FSb[(Y3 >> 8) & 0xFF] << 8) ^
          ((uint32_t) FSb[(Y0 >> 16) & 0xFF] << 16) ^
          ((uint32_t) FSb[(Y1 >> 24) & 0xFF] << 24);
 
-    X3 = *RK++ ^ ((uint32_t) FSb[(Y3) &0xFF]) ^
+    X3 = *RK++ ^ ((uint32_t) FSb[(Y3) & 0xFF]) ^
          ((uint32_t) FSb[(Y0 >> 8) & 0xFF] << 8) ^
          ((uint32_t) FSb[(Y1 >> 16) & 0xFF] << 16) ^
          ((uint32_t) FSb[(Y2 >> 24) & 0xFF] << 24);
@@ -479,7 +649,6 @@ int aes_cipher(aes_context *ctx, const uchar input[16], uchar output[16]) {
  * REGARDING ITS FITNESS FOR ANY PARTICULAR PURPOSE. USE IT AT YOUR OWN RISK.
  *
  *******************************************************************************/
-
 
 /******************************************************************************
  *                      ==== IMPLEMENTATION WARNING ====
@@ -565,7 +734,7 @@ static const uint64_t last4[16] = {
  *  environment is running.
  *
  ******************************************************************************/
-int gcm_initialize(void) {
+int mg_gcm_initialize(void) {
   aes_init_keygen_tables();
   return (0);
 }
@@ -625,10 +794,11 @@ static void gcm_mult(gcm_context *ctx,   // pointer to established context
  *  and populates the gcm context's pre-calculated HTables.
  *
  ******************************************************************************/
-int gcm_setkey(gcm_context *ctx,    // pointer to caller-provided gcm context
-               const uchar *key,    // pointer to the AES encryption key
-               const uint keysize)  // size in bytes (must be 16, 24, 32 for
-                                    // 128, 192 or 256-bit keys respectively)
+static int gcm_setkey(
+    gcm_context *ctx,    // pointer to caller-provided gcm context
+    const uchar *key,    // pointer to the AES encryption key
+    const uint keysize)  // size in bytes (must be 16, 24, 32 for
+                         // 128, 192 or 256-bit keys respectively)
 {
   int ret, i, j;
   uint64_t hi, lo;
@@ -717,7 +887,7 @@ int gcm_start(gcm_context *ctx,  // pointer to user-provided GCM context
   ctx->len = 0;
   ctx->add_len = 0;
 
-  ctx->mode = mode;             // set the GCM encryption/decryption mode
+  ctx->mode = mode;                // set the GCM encryption/decryption mode
   ctx->aes_ctx.mode = MG_ENCRYPT;  // GCM *always* runs AES in ENCRYPTION mode
 
   if (iv_len == 12) {            // GCM natively uses a 12-byte, 96-bit IV
@@ -897,51 +1067,6 @@ int gcm_crypt_and_tag(
 
 /******************************************************************************
  *
- *  GCM_AUTH_DECRYPT
- *
- *  This DECRYPTS a user-provided data buffer with optional associated data.
- *  It then verifies a user-supplied authentication tag against the tag just
- *  re-created during decryption to verify that the data has not been altered.
- *
- *  This function calls GCM_CRYPT_AND_TAG (above) to perform the decryption
- *  and authentication tag generation.
- *
- ******************************************************************************/
-int gcm_auth_decrypt(
-    gcm_context *ctx,    // gcm context with key already setup
-    const uchar *iv,     // pointer to the 12-byte initialization vector
-    size_t iv_len,       // byte length if the IV. should always be 12
-    const uchar *add,    // pointer to the non-ciphered additional data
-    size_t add_len,      // byte length of the additional AEAD data
-    const uchar *input,  // pointer to the cipher data source
-    uchar *output,       // pointer to the cipher data destination
-    size_t length,       // byte length of the cipher data
-    const uchar *tag,    // pointer to the tag to be authenticated
-    size_t tag_len)      // byte length of the tag <= 16
-{
-  uchar check_tag[16];  // the tag generated and returned by decryption
-  int diff;             // an ORed flag to detect authentication errors
-  size_t i;             // our local iterator
-  /*
-     we use GCM_DECRYPT_AND_TAG (above) to perform our decryption
-     (which is an identical XORing to reverse the previous one)
-     and also to re-generate the matching authentication tag
-  */
-  gcm_crypt_and_tag(ctx, MG_DECRYPT, iv, iv_len, add, add_len, input, output,
-                    length, check_tag, tag_len);
-
-  // now we verify the authentication tag in 'constant time'
-  for (diff = 0, i = 0; i < tag_len; i++) diff |= tag[i] ^ check_tag[i];
-
-  if (diff != 0) {              // see whether any bits differed?
-    memset(output, 0, length);  // if so... wipe the output data
-    return (GCM_AUTH_FAILURE);  // return GCM_AUTH_FAILURE
-  }
-  return (0);
-}
-
-/******************************************************************************
- *
  *  GCM_ZERO_CTX
  *
  *  The GCM context contains both the GCM context and the AES context.
@@ -961,29 +1086,29 @@ void gcm_zero_ctx(gcm_context *ctx) {
 //
 //
 
-int aes_gcm_encrypt(unsigned char *output,  //
-                    const unsigned char *input, size_t input_length,
-                    const unsigned char *key, const size_t key_len,
-                    const unsigned char *iv, const size_t iv_len,
-                    unsigned char *aead, size_t aead_len, unsigned char *tag,
-                    const size_t tag_len) {
+int mg_aes_gcm_encrypt(unsigned char *output,  //
+                       const unsigned char *input, size_t input_length,
+                       const unsigned char *key, const size_t key_len,
+                       const unsigned char *iv, const size_t iv_len,
+                       unsigned char *aead, size_t aead_len, unsigned char *tag,
+                       const size_t tag_len) {
   int ret = 0;      // our return value
   gcm_context ctx;  // includes the AES context structure
 
   gcm_setkey(&ctx, key, (const uint) key_len);
 
-  ret = gcm_crypt_and_tag(&ctx, MG_ENCRYPT, iv, iv_len, aead, aead_len, input, output,
-                          input_length, tag, tag_len);
+  ret = gcm_crypt_and_tag(&ctx, MG_ENCRYPT, iv, iv_len, aead, aead_len, input,
+                          output, input_length, tag, tag_len);
 
   gcm_zero_ctx(&ctx);
 
   return (ret);
 }
 
-int aes_gcm_decrypt(unsigned char *output, const unsigned char *input,
-                    size_t input_length, const unsigned char *key,
-                    const size_t key_len, const unsigned char *iv,
-                    const size_t iv_len) {
+int mg_aes_gcm_decrypt(unsigned char *output, const unsigned char *input,
+                       size_t input_length, const unsigned char *key,
+                       const size_t key_len, const unsigned char *iv,
+                       const size_t iv_len) {
   int ret = 0;      // our return value
   gcm_context ctx;  // includes the AES context structure
 

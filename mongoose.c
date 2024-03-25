@@ -6863,6 +6863,12 @@ void mg_sha1_final(unsigned char digest[20], mg_sha1_ctx *context) {
 #ifdef MG_ENABLE_LINES
 #line 1 "src/sha256.c"
 #endif
+// https://github.com/B-Con/crypto-algorithms
+// Author:     Brad Conte (brad AT bradconte.com)
+// Disclaimer: This code is presented "as is" without any guarantees.
+// Details:    Defines the API for the corresponding SHA1 implementation.
+// Copyright:  public domain
+
 
 
 #define ror(x, n) (((x) >> (n)) | ((x) << (32 - (n))))
@@ -6904,8 +6910,10 @@ static void mg_sha256_chunk(mg_sha256_ctx *ctx) {
   uint32_t a, b, c, d, e, f, g, h;
   uint32_t m[64];
   for (i = 0, j = 0; i < 16; ++i, j += 4)
-    m[i] = (uint32_t) ((ctx->buffer[j] << 24) | (ctx->buffer[j + 1] << 16) |
-                       (ctx->buffer[j + 2] << 8) | (ctx->buffer[j + 3]));
+    m[i] = (uint32_t) (((uint32_t) ctx->buffer[j] << 24) |
+                       ((uint32_t) ctx->buffer[j + 1] << 16) |
+                       ((uint32_t) ctx->buffer[j + 2] << 8) |
+                       ((uint32_t) ctx->buffer[j + 3]));
   for (; i < 64; ++i)
     m[i] = sig1(m[i - 2]) + m[i - 7] + sig0(m[i - 15]) + m[i - 16];
 
@@ -7003,7 +7011,7 @@ void mg_hmac_sha256(uint8_t dst[32], uint8_t *key, size_t keysz, uint8_t *data,
   memset(i_pad, 0x36, sizeof(i_pad));
   memset(o_pad, 0x5c, sizeof(o_pad));
   if (keysz < 64) {
-    memmove(k, key, keysz);
+    if (keysz > 0) memmove(k, key, keysz);
   } else {
     mg_sha256_init(&ctx);
     mg_sha256_update(&ctx, key, keysz);
@@ -7022,7 +7030,6 @@ void mg_hmac_sha256(uint8_t dst[32], uint8_t *key, size_t keysz, uint8_t *data,
   mg_sha256_update(&ctx, dst, 32);
   mg_sha256_final(dst, &ctx);
 }
-
 
 #ifdef MG_ENABLE_LINES
 #line 1 "src/sntp.c"
@@ -8189,10 +8196,177 @@ void mg_timer_poll(struct mg_timer **head, uint64_t now_ms) {
  *
  *******************************************************************************/
 
+/******************************************************************************/
+#define AES_DECRYPTION 1  // whether AES decryption is supported
+/******************************************************************************/
+
+#define MG_ENCRYPT 1  // specify whether we're encrypting
+#define MG_DECRYPT 0  // or decrypting
+
+
 
 
 
 #if MG_TLS == MG_TLS_BUILTIN
+/******************************************************************************
+ *  AES_INIT_KEYGEN_TABLES : MUST be called once before any AES use
+ ******************************************************************************/
+static void aes_init_keygen_tables(void);
+
+/******************************************************************************
+ *  AES_SETKEY : called to expand the key for encryption or decryption
+ ******************************************************************************/
+static int aes_setkey(aes_context *ctx,  // pointer to context
+                      int mode,          // 1 or 0 for Encrypt/Decrypt
+                      const uchar *key,  // AES input key
+                      uint keysize);  // size in bytes (must be 16, 24, 32 for
+                                      // 128, 192 or 256-bit keys respectively)
+                                      // returns 0 for success
+
+/******************************************************************************
+ *  AES_CIPHER : called to encrypt or decrypt ONE 128-bit block of data
+ ******************************************************************************/
+static int aes_cipher(aes_context *ctx,       // pointer to context
+                      const uchar input[16],  // 128-bit block to en/decipher
+                      uchar output[16]);      // 128-bit output result block
+                                              // returns 0 for success
+
+/******************************************************************************
+ *  GCM_CONTEXT : GCM context / holds keytables, instance data, and AES ctx
+ ******************************************************************************/
+typedef struct {
+  int mode;             // cipher direction: encrypt/decrypt
+  uint64_t len;         // cipher data length processed so far
+  uint64_t add_len;     // total add data length
+  uint64_t HL[16];      // precalculated lo-half HTable
+  uint64_t HH[16];      // precalculated hi-half HTable
+  uchar base_ectr[16];  // first counter-mode cipher output for tag
+  uchar y[16];          // the current cipher-input IV|Counter value
+  uchar buf[16];        // buf working value
+  aes_context aes_ctx;  // cipher context used
+} gcm_context;
+
+/******************************************************************************
+ *  GCM_SETKEY : sets the GCM (and AES) keying material for use
+ ******************************************************************************/
+static int gcm_setkey(
+    gcm_context *ctx,   // caller-provided context ptr
+    const uchar *key,   // pointer to cipher key
+    const uint keysize  // size in bytes (must be 16, 24, 32 for
+                        // 128, 192 or 256-bit keys respectively)
+);                      // returns 0 for success
+
+/******************************************************************************
+ *
+ *  GCM_CRYPT_AND_TAG
+ *
+ *  This either encrypts or decrypts the user-provided data and, either
+ *  way, generates an authentication tag of the requested length. It must be
+ *  called with a GCM context whose key has already been set with GCM_SETKEY.
+ *
+ *  The user would typically call this explicitly to ENCRYPT a buffer of data
+ *  and optional associated data, and produce its an authentication tag.
+ *
+ *  To reverse the process the user would typically call the companion
+ *  GCM_AUTH_DECRYPT function to decrypt data and verify a user-provided
+ *  authentication tag.  The GCM_AUTH_DECRYPT function calls this function
+ *  to perform its decryption and tag generation, which it then compares.
+ *
+ ******************************************************************************/
+static int gcm_crypt_and_tag(
+    gcm_context *ctx,    // gcm context with key already setup
+    int mode,            // cipher direction: MG_ENCRYPT (1) or MG_DECRYPT (0)
+    const uchar *iv,     // pointer to the 12-byte initialization vector
+    size_t iv_len,       // byte length if the IV. should always be 12
+    const uchar *add,    // pointer to the non-ciphered additional data
+    size_t add_len,      // byte length of the additional AEAD data
+    const uchar *input,  // pointer to the cipher data source
+    uchar *output,       // pointer to the cipher data destination
+    size_t length,       // byte length of the cipher data
+    uchar *tag,          // pointer to the tag to be generated
+    size_t tag_len);     // byte length of the tag to be generated
+
+/******************************************************************************
+ *
+ *  GCM_START
+ *
+ *  Given a user-provided GCM context, this initializes it, sets the encryption
+ *  mode, and preprocesses the initialization vector and additional AEAD data.
+ *
+ ******************************************************************************/
+static int gcm_start(
+    gcm_context *ctx,  // pointer to user-provided GCM context
+    int mode,          // MG_ENCRYPT (1) or MG_DECRYPT (0)
+    const uchar *iv,   // pointer to initialization vector
+    size_t iv_len,     // IV length in bytes (should == 12)
+    const uchar *add,  // pointer to additional AEAD data (NULL if none)
+    size_t add_len);   // length of additional AEAD data (bytes)
+
+/******************************************************************************
+ *
+ *  GCM_UPDATE
+ *
+ *  This is called once or more to process bulk plaintext or ciphertext data.
+ *  We give this some number of bytes of input and it returns the same number
+ *  of output bytes. If called multiple times (which is fine) all but the final
+ *  invocation MUST be called with length mod 16 == 0. (Only the final call can
+ *  have a partial block length of < 128 bits.)
+ *
+ ******************************************************************************/
+static int gcm_update(gcm_context *ctx,  // pointer to user-provided GCM context
+                      size_t length,     // length, in bytes, of data to process
+                      const uchar *input,  // pointer to source data
+                      uchar *output);      // pointer to destination data
+
+/******************************************************************************
+ *
+ *  GCM_FINISH
+ *
+ *  This is called once after all calls to GCM_UPDATE to finalize the GCM.
+ *  It performs the final GHASH to produce the resulting authentication TAG.
+ *
+ ******************************************************************************/
+static int gcm_finish(
+    gcm_context *ctx,  // pointer to user-provided GCM context
+    uchar *tag,        // ptr to tag buffer - NULL if tag_len = 0
+    size_t tag_len);   // length, in bytes, of the tag-receiving buf
+
+/******************************************************************************
+ *
+ *  GCM_ZERO_CTX
+ *
+ *  The GCM context contains both the GCM context and the AES context.
+ *  This includes keying and key-related material which is security-
+ *  sensitive, so it MUST be zeroed after use. This function does that.
+ *
+ ******************************************************************************/
+static void gcm_zero_ctx(gcm_context *ctx);
+
+/******************************************************************************
+ *
+ * THIS SOURCE CODE IS HEREBY PLACED INTO THE PUBLIC DOMAIN FOR THE GOOD OF ALL
+ *
+ * This is a simple and straightforward implementation of the AES Rijndael
+ * 128-bit block cipher designed by Vincent Rijmen and Joan Daemen. The focus
+ * of this work was correctness & accuracy.  It is written in 'C' without any
+ * particular focus upon optimization or speed. It should be endian (memory
+ * byte order) neutral since the few places that care are handled explicitly.
+ *
+ * This implementation of Rijndael was created by Steven M. Gibson of GRC.com.
+ *
+ * It is intended for general purpose use, but was written in support of GRC's
+ * reference implementation of the SQRL (Secure Quick Reliable Login) client.
+ *
+ * See:    http://csrc.nist.gov/archive/aes/rijndael/wsdindex.html
+ *
+ * NO COPYRIGHT IS CLAIMED IN THIS WORK, HOWEVER, NEITHER IS ANY WARRANTY MADE
+ * REGARDING ITS FITNESS FOR ANY PARTICULAR PURPOSE. USE IT AT YOUR OWN RISK.
+ *
+ *******************************************************************************/
+
+
+
+
 static int aes_tables_inited = 0;  // run-once flag for performing key
                                    // expasion table generation (see below)
 /*
@@ -8246,34 +8420,34 @@ static uint32_t RCON[10];  // AES round constants
 /*
  *  AES forward and reverse encryption round processing macros
  */
-#define AES_FROUND(X0, X1, X2, X3, Y0, Y1, Y2, Y3)         \
-  {                                                        \
-    X0 = *RK++ ^ FT0[(Y0) &0xFF] ^ FT1[(Y1 >> 8) & 0xFF] ^ \
-         FT2[(Y2 >> 16) & 0xFF] ^ FT3[(Y3 >> 24) & 0xFF];  \
-                                                           \
-    X1 = *RK++ ^ FT0[(Y1) &0xFF] ^ FT1[(Y2 >> 8) & 0xFF] ^ \
-         FT2[(Y3 >> 16) & 0xFF] ^ FT3[(Y0 >> 24) & 0xFF];  \
-                                                           \
-    X2 = *RK++ ^ FT0[(Y2) &0xFF] ^ FT1[(Y3 >> 8) & 0xFF] ^ \
-         FT2[(Y0 >> 16) & 0xFF] ^ FT3[(Y1 >> 24) & 0xFF];  \
-                                                           \
-    X3 = *RK++ ^ FT0[(Y3) &0xFF] ^ FT1[(Y0 >> 8) & 0xFF] ^ \
-         FT2[(Y1 >> 16) & 0xFF] ^ FT3[(Y2 >> 24) & 0xFF];  \
+#define AES_FROUND(X0, X1, X2, X3, Y0, Y1, Y2, Y3)          \
+  {                                                         \
+    X0 = *RK++ ^ FT0[(Y0) & 0xFF] ^ FT1[(Y1 >> 8) & 0xFF] ^ \
+         FT2[(Y2 >> 16) & 0xFF] ^ FT3[(Y3 >> 24) & 0xFF];   \
+                                                            \
+    X1 = *RK++ ^ FT0[(Y1) & 0xFF] ^ FT1[(Y2 >> 8) & 0xFF] ^ \
+         FT2[(Y3 >> 16) & 0xFF] ^ FT3[(Y0 >> 24) & 0xFF];   \
+                                                            \
+    X2 = *RK++ ^ FT0[(Y2) & 0xFF] ^ FT1[(Y3 >> 8) & 0xFF] ^ \
+         FT2[(Y0 >> 16) & 0xFF] ^ FT3[(Y1 >> 24) & 0xFF];   \
+                                                            \
+    X3 = *RK++ ^ FT0[(Y3) & 0xFF] ^ FT1[(Y0 >> 8) & 0xFF] ^ \
+         FT2[(Y1 >> 16) & 0xFF] ^ FT3[(Y2 >> 24) & 0xFF];   \
   }
 
-#define AES_RROUND(X0, X1, X2, X3, Y0, Y1, Y2, Y3)         \
-  {                                                        \
-    X0 = *RK++ ^ RT0[(Y0) &0xFF] ^ RT1[(Y3 >> 8) & 0xFF] ^ \
-         RT2[(Y2 >> 16) & 0xFF] ^ RT3[(Y1 >> 24) & 0xFF];  \
-                                                           \
-    X1 = *RK++ ^ RT0[(Y1) &0xFF] ^ RT1[(Y0 >> 8) & 0xFF] ^ \
-         RT2[(Y3 >> 16) & 0xFF] ^ RT3[(Y2 >> 24) & 0xFF];  \
-                                                           \
-    X2 = *RK++ ^ RT0[(Y2) &0xFF] ^ RT1[(Y1 >> 8) & 0xFF] ^ \
-         RT2[(Y0 >> 16) & 0xFF] ^ RT3[(Y3 >> 24) & 0xFF];  \
-                                                           \
-    X3 = *RK++ ^ RT0[(Y3) &0xFF] ^ RT1[(Y2 >> 8) & 0xFF] ^ \
-         RT2[(Y1 >> 16) & 0xFF] ^ RT3[(Y0 >> 24) & 0xFF];  \
+#define AES_RROUND(X0, X1, X2, X3, Y0, Y1, Y2, Y3)          \
+  {                                                         \
+    X0 = *RK++ ^ RT0[(Y0) & 0xFF] ^ RT1[(Y3 >> 8) & 0xFF] ^ \
+         RT2[(Y2 >> 16) & 0xFF] ^ RT3[(Y1 >> 24) & 0xFF];   \
+                                                            \
+    X1 = *RK++ ^ RT0[(Y1) & 0xFF] ^ RT1[(Y0 >> 8) & 0xFF] ^ \
+         RT2[(Y3 >> 16) & 0xFF] ^ RT3[(Y2 >> 24) & 0xFF];   \
+                                                            \
+    X2 = *RK++ ^ RT0[(Y2) & 0xFF] ^ RT1[(Y1 >> 8) & 0xFF] ^ \
+         RT2[(Y0 >> 16) & 0xFF] ^ RT3[(Y3 >> 24) & 0xFF];   \
+                                                            \
+    X3 = *RK++ ^ RT0[(Y3) & 0xFF] ^ RT1[(Y2 >> 8) & 0xFF] ^ \
+         RT2[(Y1 >> 16) & 0xFF] ^ RT3[(Y0 >> 24) & 0xFF];   \
   }
 
 /*
@@ -8379,7 +8553,8 @@ void aes_init_keygen_tables(void) {
  *  Valid lengths are: 16, 24 or 32 bytes (128, 192, 256 bits).
  *
  ******************************************************************************/
-static int aes_set_encryption_key(aes_context *ctx, const uchar *key, uint keysize) {
+static int aes_set_encryption_key(aes_context *ctx, const uchar *key,
+                                  uint keysize) {
   uint i;                  // general purpose iteration local
   uint32_t *RK = ctx->rk;  // initialize our RoundKey buffer pointer
 
@@ -8456,7 +8631,8 @@ static int aes_set_encryption_key(aes_context *ctx, const uchar *key, uint keysi
  *  length in bits. Valid lengths are: 128, 192, or 256 bits.
  *
  ******************************************************************************/
-static int aes_set_decryption_key(aes_context *ctx, const uchar *key, uint keysize) {
+static int aes_set_decryption_key(aes_context *ctx, const uchar *key,
+                                  uint keysize) {
   int i, j;
   aes_context cty;         // a calling aes context for set_encryption_key
   uint32_t *RK = ctx->rk;  // initialize our RoundKey buffer pointer
@@ -8492,10 +8668,10 @@ static int aes_set_decryption_key(aes_context *ctx, const uchar *key, uint keysi
  *  Invoked to establish the key schedule for subsequent encryption/decryption
  *
  ******************************************************************************/
-int aes_setkey(aes_context *ctx,  // AES context provided by our caller
-               int mode,          // ENCRYPT or DECRYPT flag
-               const uchar *key,  // pointer to the key
-               uint keysize)      // key length in bytes
+static int aes_setkey(aes_context *ctx,  // AES context provided by our caller
+                      int mode,          // ENCRYPT or DECRYPT flag
+                      const uchar *key,  // pointer to the key
+                      uint keysize)      // key length in bytes
 {
   // since table initialization is not thread safe, we could either add
   // system-specific mutexes and init the AES key generation tables on
@@ -8538,7 +8714,8 @@ int aes_setkey(aes_context *ctx,  // AES context provided by our caller
  *  and all keying information appropriate for the task.
  *
  ******************************************************************************/
-int aes_cipher(aes_context *ctx, const uchar input[16], uchar output[16]) {
+static int aes_cipher(aes_context *ctx, const uchar input[16],
+                      uchar output[16]) {
   int i;
   uint32_t *RK, X0, X1, X2, X3, Y0, Y1, Y2, Y3;  // general purpose locals
 
@@ -8563,22 +8740,22 @@ int aes_cipher(aes_context *ctx, const uchar input[16], uchar output[16]) {
 
     AES_RROUND(Y0, Y1, Y2, Y3, X0, X1, X2, X3);
 
-    X0 = *RK++ ^ ((uint32_t) RSb[(Y0) &0xFF]) ^
+    X0 = *RK++ ^ ((uint32_t) RSb[(Y0) & 0xFF]) ^
          ((uint32_t) RSb[(Y3 >> 8) & 0xFF] << 8) ^
          ((uint32_t) RSb[(Y2 >> 16) & 0xFF] << 16) ^
          ((uint32_t) RSb[(Y1 >> 24) & 0xFF] << 24);
 
-    X1 = *RK++ ^ ((uint32_t) RSb[(Y1) &0xFF]) ^
+    X1 = *RK++ ^ ((uint32_t) RSb[(Y1) & 0xFF]) ^
          ((uint32_t) RSb[(Y0 >> 8) & 0xFF] << 8) ^
          ((uint32_t) RSb[(Y3 >> 16) & 0xFF] << 16) ^
          ((uint32_t) RSb[(Y2 >> 24) & 0xFF] << 24);
 
-    X2 = *RK++ ^ ((uint32_t) RSb[(Y2) &0xFF]) ^
+    X2 = *RK++ ^ ((uint32_t) RSb[(Y2) & 0xFF]) ^
          ((uint32_t) RSb[(Y1 >> 8) & 0xFF] << 8) ^
          ((uint32_t) RSb[(Y0 >> 16) & 0xFF] << 16) ^
          ((uint32_t) RSb[(Y3 >> 24) & 0xFF] << 24);
 
-    X3 = *RK++ ^ ((uint32_t) RSb[(Y3) &0xFF]) ^
+    X3 = *RK++ ^ ((uint32_t) RSb[(Y3) & 0xFF]) ^
          ((uint32_t) RSb[(Y2 >> 8) & 0xFF] << 8) ^
          ((uint32_t) RSb[(Y1 >> 16) & 0xFF] << 16) ^
          ((uint32_t) RSb[(Y0 >> 24) & 0xFF] << 24);
@@ -8593,22 +8770,22 @@ int aes_cipher(aes_context *ctx, const uchar input[16], uchar output[16]) {
 
     AES_FROUND(Y0, Y1, Y2, Y3, X0, X1, X2, X3);
 
-    X0 = *RK++ ^ ((uint32_t) FSb[(Y0) &0xFF]) ^
+    X0 = *RK++ ^ ((uint32_t) FSb[(Y0) & 0xFF]) ^
          ((uint32_t) FSb[(Y1 >> 8) & 0xFF] << 8) ^
          ((uint32_t) FSb[(Y2 >> 16) & 0xFF] << 16) ^
          ((uint32_t) FSb[(Y3 >> 24) & 0xFF] << 24);
 
-    X1 = *RK++ ^ ((uint32_t) FSb[(Y1) &0xFF]) ^
+    X1 = *RK++ ^ ((uint32_t) FSb[(Y1) & 0xFF]) ^
          ((uint32_t) FSb[(Y2 >> 8) & 0xFF] << 8) ^
          ((uint32_t) FSb[(Y3 >> 16) & 0xFF] << 16) ^
          ((uint32_t) FSb[(Y0 >> 24) & 0xFF] << 24);
 
-    X2 = *RK++ ^ ((uint32_t) FSb[(Y2) &0xFF]) ^
+    X2 = *RK++ ^ ((uint32_t) FSb[(Y2) & 0xFF]) ^
          ((uint32_t) FSb[(Y3 >> 8) & 0xFF] << 8) ^
          ((uint32_t) FSb[(Y0 >> 16) & 0xFF] << 16) ^
          ((uint32_t) FSb[(Y1 >> 24) & 0xFF] << 24);
 
-    X3 = *RK++ ^ ((uint32_t) FSb[(Y3) &0xFF]) ^
+    X3 = *RK++ ^ ((uint32_t) FSb[(Y3) & 0xFF]) ^
          ((uint32_t) FSb[(Y0 >> 8) & 0xFF] << 8) ^
          ((uint32_t) FSb[(Y1 >> 16) & 0xFF] << 16) ^
          ((uint32_t) FSb[(Y2 >> 24) & 0xFF] << 24);
@@ -8648,7 +8825,6 @@ int aes_cipher(aes_context *ctx, const uchar input[16], uchar output[16]) {
  * REGARDING ITS FITNESS FOR ANY PARTICULAR PURPOSE. USE IT AT YOUR OWN RISK.
  *
  *******************************************************************************/
-
 
 /******************************************************************************
  *                      ==== IMPLEMENTATION WARNING ====
@@ -8734,7 +8910,7 @@ static const uint64_t last4[16] = {
  *  environment is running.
  *
  ******************************************************************************/
-int gcm_initialize(void) {
+int mg_gcm_initialize(void) {
   aes_init_keygen_tables();
   return (0);
 }
@@ -8794,10 +8970,11 @@ static void gcm_mult(gcm_context *ctx,   // pointer to established context
  *  and populates the gcm context's pre-calculated HTables.
  *
  ******************************************************************************/
-int gcm_setkey(gcm_context *ctx,    // pointer to caller-provided gcm context
-               const uchar *key,    // pointer to the AES encryption key
-               const uint keysize)  // size in bytes (must be 16, 24, 32 for
-                                    // 128, 192 or 256-bit keys respectively)
+static int gcm_setkey(
+    gcm_context *ctx,    // pointer to caller-provided gcm context
+    const uchar *key,    // pointer to the AES encryption key
+    const uint keysize)  // size in bytes (must be 16, 24, 32 for
+                         // 128, 192 or 256-bit keys respectively)
 {
   int ret, i, j;
   uint64_t hi, lo;
@@ -8886,7 +9063,7 @@ int gcm_start(gcm_context *ctx,  // pointer to user-provided GCM context
   ctx->len = 0;
   ctx->add_len = 0;
 
-  ctx->mode = mode;             // set the GCM encryption/decryption mode
+  ctx->mode = mode;                // set the GCM encryption/decryption mode
   ctx->aes_ctx.mode = MG_ENCRYPT;  // GCM *always* runs AES in ENCRYPTION mode
 
   if (iv_len == 12) {            // GCM natively uses a 12-byte, 96-bit IV
@@ -9066,51 +9243,6 @@ int gcm_crypt_and_tag(
 
 /******************************************************************************
  *
- *  GCM_AUTH_DECRYPT
- *
- *  This DECRYPTS a user-provided data buffer with optional associated data.
- *  It then verifies a user-supplied authentication tag against the tag just
- *  re-created during decryption to verify that the data has not been altered.
- *
- *  This function calls GCM_CRYPT_AND_TAG (above) to perform the decryption
- *  and authentication tag generation.
- *
- ******************************************************************************/
-int gcm_auth_decrypt(
-    gcm_context *ctx,    // gcm context with key already setup
-    const uchar *iv,     // pointer to the 12-byte initialization vector
-    size_t iv_len,       // byte length if the IV. should always be 12
-    const uchar *add,    // pointer to the non-ciphered additional data
-    size_t add_len,      // byte length of the additional AEAD data
-    const uchar *input,  // pointer to the cipher data source
-    uchar *output,       // pointer to the cipher data destination
-    size_t length,       // byte length of the cipher data
-    const uchar *tag,    // pointer to the tag to be authenticated
-    size_t tag_len)      // byte length of the tag <= 16
-{
-  uchar check_tag[16];  // the tag generated and returned by decryption
-  int diff;             // an ORed flag to detect authentication errors
-  size_t i;             // our local iterator
-  /*
-     we use GCM_DECRYPT_AND_TAG (above) to perform our decryption
-     (which is an identical XORing to reverse the previous one)
-     and also to re-generate the matching authentication tag
-  */
-  gcm_crypt_and_tag(ctx, MG_DECRYPT, iv, iv_len, add, add_len, input, output,
-                    length, check_tag, tag_len);
-
-  // now we verify the authentication tag in 'constant time'
-  for (diff = 0, i = 0; i < tag_len; i++) diff |= tag[i] ^ check_tag[i];
-
-  if (diff != 0) {              // see whether any bits differed?
-    memset(output, 0, length);  // if so... wipe the output data
-    return (GCM_AUTH_FAILURE);  // return GCM_AUTH_FAILURE
-  }
-  return (0);
-}
-
-/******************************************************************************
- *
  *  GCM_ZERO_CTX
  *
  *  The GCM context contains both the GCM context and the AES context.
@@ -9130,29 +9262,29 @@ void gcm_zero_ctx(gcm_context *ctx) {
 //
 //
 
-int aes_gcm_encrypt(unsigned char *output,  //
-                    const unsigned char *input, size_t input_length,
-                    const unsigned char *key, const size_t key_len,
-                    const unsigned char *iv, const size_t iv_len,
-                    unsigned char *aead, size_t aead_len, unsigned char *tag,
-                    const size_t tag_len) {
+int mg_aes_gcm_encrypt(unsigned char *output,  //
+                       const unsigned char *input, size_t input_length,
+                       const unsigned char *key, const size_t key_len,
+                       const unsigned char *iv, const size_t iv_len,
+                       unsigned char *aead, size_t aead_len, unsigned char *tag,
+                       const size_t tag_len) {
   int ret = 0;      // our return value
   gcm_context ctx;  // includes the AES context structure
 
   gcm_setkey(&ctx, key, (const uint) key_len);
 
-  ret = gcm_crypt_and_tag(&ctx, MG_ENCRYPT, iv, iv_len, aead, aead_len, input, output,
-                          input_length, tag, tag_len);
+  ret = gcm_crypt_and_tag(&ctx, MG_ENCRYPT, iv, iv_len, aead, aead_len, input,
+                          output, input_length, tag, tag_len);
 
   gcm_zero_ctx(&ctx);
 
   return (ret);
 }
 
-int aes_gcm_decrypt(unsigned char *output, const unsigned char *input,
-                    size_t input_length, const unsigned char *key,
-                    const size_t key_len, const unsigned char *iv,
-                    const size_t iv_len) {
+int mg_aes_gcm_decrypt(unsigned char *output, const unsigned char *input,
+                       size_t input_length, const unsigned char *key,
+                       const size_t key_len, const unsigned char *iv,
+                       const size_t iv_len) {
   int ret = 0;      // our return value
   gcm_context ctx;  // includes the AES context structure
 
@@ -9176,34 +9308,72 @@ int aes_gcm_decrypt(unsigned char *output, const unsigned char *input,
 #endif
 
 
+
+
+#define mg_tls_random(x, n) memset(x, 0xab, n)
 #if MG_TLS == MG_TLS_BUILTIN
 
-// handshake is re-entrant, so we need to keep track of its state
+/* TLS 1.3 Record Content Type (RFC8446 B.1) */
+#define MG_TLS_CHANGE_CIPHER 20
+#define MG_TLS_ALERT 21
+#define MG_TLS_HANDSHAKE 22
+#define MG_TLS_APP_DATA 23
+#define MG_TLS_HEARTBEAT 24
+
+/* TLS 1.3 Handshake Message Type (RFC8446 B.3) */
+#define MG_TLS_CLIENT_HELLO 1
+#define MG_TLS_SERVER_HELLO 2
+#define MG_TLS_ENCRYPTED_EXTENSIONS 8
+#define MG_TLS_CERTIFICATE 11
+#define MG_TLS_CERTIFICATE_VERIFY 15
+#define MG_TLS_FINISHED 20
+
+// handshake is re-entrant, so we need to keep track of its state state names
+// refer to RFC8446#A.1
 enum mg_tls_hs_state {
-  MG_TLS_HS_CLIENT_HELLO,  // first, wait for ClientHello
-  MG_TLS_HS_SERVER_HELLO,  // then, send all server handshake data at once
-  MG_TLS_HS_CLIENT_CHANGE_CIPHER,  // finally wait for ClientChangeCipher
-  MG_TLS_HS_CLIENT_FINISH,         // and ClientFinish (encrypted)
-  MG_TLS_HS_DONE,  // finish handshake, start application data flow
+  // Client state machine:
+  MG_TLS_STATE_CLIENT_START,          // Send ClientHello
+  MG_TLS_STATE_CLIENT_WAIT_SH,        // Wait for ServerHello
+  MG_TLS_STATE_CLIENT_WAIT_EE,        // Wait for EncryptedExtensions
+  MG_TLS_STATE_CLIENT_WAIT_CERT,      // Wait for Certificate
+  MG_TLS_STATE_CLIENT_WAIT_CV,        // Wait for CertificateVerify
+  MG_TLS_STATE_CLIENT_WAIT_FINISHED,  // Wait for Finished
+  MG_TLS_STATE_CLIENT_CONNECTED,      // Done
+
+  // Server state machine:
+  MG_TLS_STATE_SERVER_START,       // Wait for ClientHello
+  MG_TLS_STATE_SERVER_NEGOTIATED,  // Wait for Finished
+  MG_TLS_STATE_SERVER_CONNECTED    // Done
 };
 
 // per-connection TLS data
 struct tls_data {
   enum mg_tls_hs_state state;  // keep track of connection handshake progress
 
-  struct mg_iobuf send; // For the receive path, we're reusing c->rtls
+  struct mg_iobuf send;  // For the receive path, we're reusing c->rtls
+  struct mg_iobuf recv;  // While c->rtls contains full records, recv reuses
+                         // the same underlying buffer but points at individual
+                         // decrypted messages
+  uint8_t content_type;  // Last received record content type
 
   mg_sha256_ctx sha256;  // incremental SHA-256 hash for TLS handshake
 
   uint32_t sseq;  // server sequence number, used in encryption
   uint32_t cseq;  // client sequence number, used in decryption
 
+  uint8_t random[32];      // client random from ClientHello
   uint8_t session_id[32];  // client session ID between the handshake states
   uint8_t x25519_cli[32];  // client X25519 key between the handshake states
   uint8_t x25519_sec[32];  // x25519 secret between the handshake states
 
+  int skip_verification;          // perform checks on server certificate?
   struct mg_str server_cert_der;  // server certificate in DER format
   uint8_t server_key[32];         // server EC private key
+  char hostname[254];             // server hostname (client extension)
+
+  uint8_t certhash[32];  // certificate message hash
+  uint8_t pubkey[64];    // server EC public key to verify cert
+  uint8_t sighash[32];   // server EC public key to verify cert
 
   // keys for AES encryption
   uint8_t handshake_secret[32];
@@ -9216,256 +9386,143 @@ struct tls_data {
 };
 
 #define MG_LOAD_BE16(p) ((uint16_t) ((MG_U8P(p)[0] << 8U) | MG_U8P(p)[1]))
-#define TLS_HDR_SIZE 5  // 1 byte type, 2 bytes version, 2 bytes len
+#define MG_LOAD_BE24(p) \
+  ((uint32_t) ((MG_U8P(p)[0] << 16U) | (MG_U8P(p)[1] << 8U) | MG_U8P(p)[2]))
+#define MG_STORE_BE16(p, n)           \
+  do {                                \
+    MG_U8P(p)[0] = ((n) >> 8U) & 255; \
+    MG_U8P(p)[1] = (n) & 255;         \
+  } while (0)
+
+#define TLS_RECHDR_SIZE 5  // 1 byte type, 2 bytes version, 2 bytes length
+#define TLS_MSGHDR_SIZE 4  // 1 byte type, 3 bytes length
+
+#if 1
+static void mg_ssl_key_log(const char *label, uint8_t client_random[32],
+                           uint8_t *secret, size_t secretsz) {
+  (void) label;
+  (void) client_random;
+  (void) secret;
+  (void) secretsz;
+}
+#else
+#include <stdio.h>
+static void mg_ssl_key_log(const char *label, uint8_t client_random[32],
+                           uint8_t *secret, size_t secretsz) {
+  char *keylogfile = getenv("SSLKEYLOGFILE");
+  if (keylogfile == NULL) {
+    return;
+  }
+  FILE *f = fopen(keylogfile, "a");
+  fprintf(f, "%s ", label);
+  for (int i = 0; i < 32; i++) {
+    fprintf(f, "%02x", client_random[i]);
+  }
+  fprintf(f, " ");
+  for (unsigned int i = 0; i < secretsz; i++) {
+    fprintf(f, "%02x", secret[i]);
+  }
+  fprintf(f, "\n");
+  fclose(f);
+}
+#endif
 
 // for derived tls keys we need SHA256([0]*32)
 static uint8_t zeros[32] = {0};
-static uint8_t zeros_sha256_digest[32] =
-    "\xe3\xb0\xc4\x42\x98\xfc\x1c\x14\x9a\xfb\xf4\xc8\x99\x6f\xb9\x24"
-    "\x27\xae\x41\xe4\x64\x9b\x93\x4c\xa4\x95\x99\x1b\x78\x52\xb8\x55";
-
-#define X25519_BYTES 32
-const uint8_t X25519_BASE_POINT[X25519_BYTES] = {9};
-
-#define X25519_WBITS 32
-
-typedef uint32_t limb_t;
-typedef uint64_t dlimb_t;
-typedef int64_t sdlimb_t;
-#define LIMB(x) (uint32_t)(x##ull), (uint32_t) ((x##ull) >> 32)
-
-#define NLIMBS (256 / X25519_WBITS)
-typedef limb_t fe[NLIMBS];
-
-static limb_t umaal(limb_t *carry, limb_t acc, limb_t mand, limb_t mier) {
-  dlimb_t tmp = (dlimb_t) mand * mier + acc + *carry;
-  *carry = (limb_t) (tmp >> X25519_WBITS);
-  return (limb_t) tmp;
-}
-
-// These functions are implemented in terms of umaal on ARM
-static limb_t adc(limb_t *carry, limb_t acc, limb_t mand) {
-  dlimb_t total = (dlimb_t) *carry + acc + mand;
-  *carry = (limb_t) (total >> X25519_WBITS);
-  return (limb_t) total;
-}
-
-static limb_t adc0(limb_t *carry, limb_t acc) {
-  dlimb_t total = (dlimb_t) *carry + acc;
-  *carry = (limb_t) (total >> X25519_WBITS);
-  return (limb_t) total;
-}
-
-// - Precondition: carry is small.
-// - Invariant: result of propagate is < 2^255 + 1 word
-// - In particular, always less than 2p.
-// - Also, output x >= min(x,19)
-static void propagate(fe x, limb_t over) {
-  unsigned i;
-  limb_t carry;
-  over = x[NLIMBS - 1] >> (X25519_WBITS - 1) | over << 1;
-  x[NLIMBS - 1] &= ~((limb_t) 1 << (X25519_WBITS - 1));
-
-  carry = over * 19;
-  for (i = 0; i < NLIMBS; i++) {
-    x[i] = adc0(&carry, x[i]);
-  }
-}
-
-static void add(fe out, const fe a, const fe b) {
-  unsigned i;
-  limb_t carry = 0;
-  for (i = 0; i < NLIMBS; i++) {
-    out[i] = adc(&carry, a[i], b[i]);
-  }
-  propagate(out, carry);
-}
-
-static void sub(fe out, const fe a, const fe b) {
-  unsigned i;
-  sdlimb_t carry = -38;
-  for (i = 0; i < NLIMBS; i++) {
-    carry = carry + a[i] - b[i];
-    out[i] = (limb_t) carry;
-    carry >>= X25519_WBITS;
-  }
-  propagate(out, (limb_t) (1 + carry));
-}
-
-// `b` can contain less than 8 limbs, thus we use `limb_t *` instead of `fe`
-// to avoid build warnings
-static void mul(fe out, const fe a, const limb_t *b, unsigned nb) {
-  limb_t accum[2 * NLIMBS] = {0};
-  unsigned i, j;
-
-  limb_t carry2;
-  for (i = 0; i < nb; i++) {
-    limb_t mand = b[i];
-    carry2 = 0;
-    for (j = 0; j < NLIMBS; j++) {
-      accum[i + j] = umaal(&carry2, accum[i + j], mand, a[j]);
-    }
-    accum[i + j] = carry2;
-  }
-
-  carry2 = 0;
-  for (j = 0; j < NLIMBS; j++) {
-    out[j] = umaal(&carry2, accum[j], 38, accum[j + NLIMBS]);
-  }
-  propagate(out, carry2);
-}
-
-static void sqr(fe out, const fe a) {
-  mul(out, a, a, NLIMBS);
-}
-static void mul1(fe out, const fe a) {
-  mul(out, a, out, NLIMBS);
-}
-static void sqr1(fe a) {
-  mul1(a, a);
-}
-
-static void condswap(limb_t a[2 * NLIMBS], limb_t b[2 * NLIMBS],
-                     limb_t doswap) {
-  unsigned i;
-  for (i = 0; i < 2 * NLIMBS; i++) {
-    limb_t xor = (a[i] ^ b[i]) & doswap;
-    a[i] ^= xor;
-    b[i] ^= xor;
-  }
-}
-
-// Canonicalize a field element x, reducing it to the least residue which is
-// congruent to it mod 2^255-19
-// - Precondition: x < 2^255 + 1 word
-static limb_t canon(fe x) {
-  // First, add 19.
-  unsigned i;
-  limb_t carry0 = 19;
-  limb_t res;
-  sdlimb_t carry;
-  for (i = 0; i < NLIMBS; i++) {
-    x[i] = adc0(&carry0, x[i]);
-  }
-  propagate(x, carry0);
-
-  // Here, 19 <= x2 < 2^255
-  // - This is because we added 19, so before propagate it can't be less
-  // than 19. After propagate, it still can't be less than 19, because if
-  // propagate does anything it adds 19.
-  // - We know that the high bit must be clear, because either the input was ~
-  // 2^255 + one word + 19 (in which case it propagates to at most 2 words) or
-  // it was < 2^255. So now, if we subtract 19, we will get back to something in
-  // [0,2^255-19).
-  carry = -19;
-  res = 0;
-  for (i = 0; i < NLIMBS; i++) {
-    carry += x[i];
-    res |= x[i] = (limb_t) carry;
-    carry >>= X25519_WBITS;
-  }
-  return (limb_t) (((dlimb_t) res - 1) >> X25519_WBITS);
-}
-
-static const limb_t a24[1] = {121665};
-
-static void ladder_part1(fe xs[5]) {
-  limb_t *x2 = xs[0], *z2 = xs[1], *x3 = xs[2], *z3 = xs[3], *t1 = xs[4];
-  add(t1, x2, z2);                                 // t1 = A
-  sub(z2, x2, z2);                                 // z2 = B
-  add(x2, x3, z3);                                 // x2 = C
-  sub(z3, x3, z3);                                 // z3 = D
-  mul1(z3, t1);                                    // z3 = DA
-  mul1(x2, z2);                                    // x3 = BC
-  add(x3, z3, x2);                                 // x3 = DA+CB
-  sub(z3, z3, x2);                                 // z3 = DA-CB
-  sqr1(t1);                                        // t1 = AA
-  sqr1(z2);                                        // z2 = BB
-  sub(x2, t1, z2);                                 // x2 = E = AA-BB
-  mul(z2, x2, a24, sizeof(a24) / sizeof(a24[0]));  // z2 = E*a24
-  add(z2, z2, t1);                                 // z2 = E*a24 + AA
-}
-
-static void ladder_part2(fe xs[5], const fe x1) {
-  limb_t *x2 = xs[0], *z2 = xs[1], *x3 = xs[2], *z3 = xs[3], *t1 = xs[4];
-  sqr1(z3);         // z3 = (DA-CB)^2
-  mul1(z3, x1);     // z3 = x1 * (DA-CB)^2
-  sqr1(x3);         // x3 = (DA+CB)^2
-  mul1(z2, x2);     // z2 = AA*(E*a24+AA)
-  sub(x2, t1, x2);  // x2 = BB again
-  mul1(x2, t1);     // x2 = AA*BB
-}
-
-static void x25519_core(fe xs[5], const uint8_t scalar[X25519_BYTES],
-                        const uint8_t *x1, int clamp) {
-  int i;
-  limb_t swap = 0;
-  limb_t *x2 = xs[0], *x3 = xs[2], *z3 = xs[3];
-  memset(xs, 0, 4 * sizeof(fe));
-  x2[0] = z3[0] = 1;
-  memcpy(x3, x1, sizeof(fe));
-
-  for (i = 255; i >= 0; i--) {
-    uint8_t bytei = scalar[i / 8];
-    limb_t doswap;
-    if (clamp) {
-      if (i / 8 == 0) {
-        bytei &= (uint8_t) ~7U;
-      } else if (i / 8 == X25519_BYTES - 1) {
-        bytei &= 0x7F;
-        bytei |= 0x40;
-      }
-    }
-    doswap = 0 - (limb_t) ((bytei >> (i % 8)) & 1);
-    condswap(x2, x3, swap ^ doswap);
-    swap = doswap;
-
-    ladder_part1(xs);
-    ladder_part2(xs, (const limb_t *) x1);
-  }
-  condswap(x2, x3, swap);
-}
-
-static int x25519(uint8_t out[X25519_BYTES], const uint8_t scalar[X25519_BYTES],
-                  const uint8_t x1[X25519_BYTES], int clamp) {
-  int i, ret;
-  fe xs[5];
-  limb_t *x2, *z2, *z3, *prev;
-  static const struct {
-    uint8_t a, c, n;
-  } steps[13] = {{2, 1, 1},  {2, 1, 1},  {4, 2, 3},  {2, 4, 6},  {3, 1, 1},
-                 {3, 2, 12}, {4, 3, 25}, {2, 3, 25}, {2, 4, 50}, {3, 2, 125},
-                 {3, 1, 2},  {3, 1, 2},  {3, 1, 1}};
-  x25519_core(xs, scalar, x1, clamp);
-
-  // Precomputed inversion chain
-  x2 = xs[0];
-  z2 = xs[1];
-  z3 = xs[3];
-
-  prev = z2;
-  for (i = 0; i < 13; i++) {
-    int j;
-    limb_t *a = xs[steps[i].a];
-    for (j = steps[i].n; j > 0; j--) {
-      sqr(a, prev);
-      prev = a;
-    }
-    mul1(a, xs[steps[i].c]);
-  }
-
-  // Here prev = z3
-  // x2 /= z2
-  mul((limb_t *) out, x2, z3, NLIMBS);
-  ret = (int) canon((limb_t *) out);
-  if (!clamp) ret = 0;
-  return ret;
-}
+static uint8_t zeros_sha256_digest[32] = {
+    0xe3, 0xb0, 0xc4, 0x42, 0x98, 0xfc, 0x1c, 0x14, 0x9a, 0xfb, 0xf4,
+    0xc8, 0x99, 0x6f, 0xb9, 0x24, 0x27, 0xae, 0x41, 0xe4, 0x64, 0x9b,
+    0x93, 0x4c, 0xa4, 0x95, 0x99, 0x1b, 0x78, 0x52, 0xb8, 0x55};
 
 // helper to hexdump buffers inline
 static void mg_tls_hexdump(const char *msg, uint8_t *buf, size_t bufsz) {
-  char p[512];
+  char p[8 * 4096];
   MG_VERBOSE(("%s: %s", msg, mg_hex(buf, bufsz, p)));
+}
+
+// helper utilities to parse ASN.1 DER
+struct mg_der_tlv {
+  uint8_t type;
+  uint32_t len;
+  uint8_t *value;
+};
+
+// parse DER into a TLV record
+static int mg_der_to_tlv(uint8_t *der, size_t dersz, struct mg_der_tlv *tlv) {
+  if (dersz < 2) {
+    return -1;
+  }
+  tlv->type = der[0];
+  tlv->len = der[1];
+  tlv->value = der + 2;
+  if (tlv->len > 0x7f) {
+    uint32_t i, n = tlv->len - 0x80;
+    tlv->len = 0;
+    for (i = 0; i < n; i++) {
+      tlv->len = (tlv->len << 8) | (der[2 + i]);
+    }
+    tlv->value = der + 2 + n;
+  }
+  if (der + dersz < tlv->value + tlv->len) {
+    return -1;
+  }
+  return 0;
+}
+
+static int mg_der_find(uint8_t *der, size_t dersz, uint8_t *oid, size_t oidsz,
+                       struct mg_der_tlv *tlv) {
+  uint8_t *p, *end;
+  struct mg_der_tlv child;
+  if (mg_der_to_tlv(der, dersz, tlv) < 0) {
+    return -1;                  // invalid DER
+  } else if (tlv->type == 6) {  // found OID, check value
+    return (tlv->len == oidsz && memcmp(tlv->value, oid, oidsz) == 0);
+  } else if ((tlv->type & 0x20) == 0) {
+    return 0;  // Primitive, but not OID: not found
+  }
+  // Constructed object: scan children
+  p = tlv->value;
+  end = tlv->value + tlv->len;
+  while (end > p) {
+    int r;
+    mg_der_to_tlv(p, (size_t) (end - p), &child);
+    r = mg_der_find(p, (size_t) (end - p), oid, oidsz, tlv);
+    if (r < 0) return -1;  // error
+    if (r > 0) return 1;   // found OID!
+    p = child.value + child.len;
+  }
+  return 0;  // not found
+}
+
+// Did we receive a full TLS record in the c->rtls buffer?
+static bool mg_tls_got_record(struct mg_connection *c) {
+  return c->rtls.len >= (size_t) TLS_RECHDR_SIZE &&
+         c->rtls.len >=
+             (size_t) (TLS_RECHDR_SIZE + MG_LOAD_BE16(c->rtls.buf + 3));
+}
+
+// Remove a single TLS record from the recv buffer
+static void mg_tls_drop_record(struct mg_connection *c) {
+  struct mg_iobuf *rio = &c->rtls;
+  uint16_t n = MG_LOAD_BE16(rio->buf + 3) + TLS_RECHDR_SIZE;
+  mg_iobuf_del(rio, 0, n);
+}
+
+// Remove a single TLS message from decrypted buffer, remove the wrapping
+// record if it was the last message within a record
+static void mg_tls_drop_message(struct mg_connection *c) {
+  uint32_t len;
+  struct tls_data *tls = (struct tls_data *) c->tls;
+  if (tls->recv.len == 0) {
+    return;
+  }
+  len = MG_LOAD_BE24(tls->recv.buf + 1);
+  mg_sha256_update(&tls->sha256, tls->recv.buf, len + TLS_MSGHDR_SIZE);
+  tls->recv.buf += len + TLS_MSGHDR_SIZE;
+  tls->recv.len -= len + TLS_MSGHDR_SIZE;
+  if (tls->recv.len == 0) {
+    mg_tls_drop_record(c);
+  }
 }
 
 // TLS1.3 secret derivation based on the key label
@@ -9476,136 +9533,19 @@ static void mg_tls_derive_secret(const char *label, uint8_t *key, size_t keysz,
   uint8_t secret[32];
   uint8_t packed[256] = {0, (uint8_t) hashsz, (uint8_t) labelsz};
   // TODO: assert lengths of label, key, data and hash
-  memmove(packed + 3, label, labelsz);
+  if (labelsz > 0) memmove(packed + 3, label, labelsz);
   packed[3 + labelsz] = (uint8_t) datasz;
-  memmove(packed + labelsz + 4, data, datasz);
+  if (datasz > 0) memmove(packed + labelsz + 4, data, datasz);
   packed[4 + labelsz + datasz] = 1;
 
   mg_hmac_sha256(secret, key, keysz, packed, 5 + labelsz + datasz);
   memmove(hash, secret, hashsz);
 }
 
-// Did we receive a full TLS message in the c->rtls buffer?
-static bool mg_tls_got_msg(struct mg_connection *c) {
-  return c->rtls.len >= (size_t) TLS_HDR_SIZE &&
-         c->rtls.len >= (size_t) (TLS_HDR_SIZE + MG_LOAD_BE16(c->rtls.buf + 3));
-}
-
-// Remove a single TLS record from the recv buffer
-static void mg_tls_drop_packet(struct mg_iobuf *rio) {
-  uint16_t n = MG_LOAD_BE16(rio->buf + 3) + TLS_HDR_SIZE;
-  mg_iobuf_del(rio, 0, n);
-}
-
-// read and parse ClientHello record
-static int mg_tls_client_hello(struct mg_connection *c) {
-  struct tls_data *tls = c->tls;
-  struct mg_iobuf *rio = &c->rtls;
-  uint8_t session_id_len;
-  uint16_t j;
-  uint16_t cipher_suites_len;
-  uint16_t ext_len;
-  uint8_t *ext;
-
-  if (!mg_tls_got_msg(c)) {
-    return MG_IO_WAIT;
-  }
-  if (rio->buf[0] != 0x16 || rio->buf[5] != 0x01) {
-    mg_error(c, "not a hello packet");
-    return -1;
-  }
-  mg_sha256_update(&tls->sha256, rio->buf + 5, rio->len - 5);
-  session_id_len = rio->buf[43];
-  if (session_id_len == sizeof(tls->session_id)) {
-    memmove(tls->session_id, rio->buf + 44, session_id_len);
-  } else if (session_id_len != 0) {
-    MG_INFO(("bad session id len"));
-  }
-  cipher_suites_len = MG_LOAD_BE16(rio->buf + 44 + session_id_len);
-  ext_len = MG_LOAD_BE16(rio->buf + 48 + session_id_len + cipher_suites_len);
-  ext = rio->buf + 50 + session_id_len + cipher_suites_len;
-  for (j = 0; j < ext_len;) {
-    uint16_t k;
-    uint16_t key_exchange_len;
-    uint8_t *key_exchange;
-    uint16_t n = MG_LOAD_BE16(ext + j + 2);
-    if (ext[j] != 0x00 ||
-        ext[j + 1] != 0x33) {  // not a key share extension, ignore
-      j += (uint16_t) (n + 4);
-      continue;
-    }
-    key_exchange_len = MG_LOAD_BE16(ext + j + 5);
-    key_exchange = ext + j + 6;
-    for (k = 0; k < key_exchange_len;) {
-      uint16_t m = MG_LOAD_BE16(key_exchange + k + 2);
-      if (m == 32 && key_exchange[k] == 0x00 && key_exchange[k + 1] == 0x1d) {
-        memmove(tls->x25519_cli, key_exchange + k + 4, m);
-        mg_tls_drop_packet(rio);
-        return 0;
-      }
-      k += (uint16_t) (m + 4);
-    }
-    j += (uint16_t) (n + 4);
-  }
-  mg_error(c, "bad client hello");
-  return -1;
-}
-
-// put ServerHello record into wio buffer
-static void mg_tls_server_hello(struct mg_connection *c) {
-  struct tls_data *tls = c->tls;
-  struct mg_iobuf *wio = &tls->send;
-
-  uint8_t msg_server_hello[122] =
-      // server hello, tls 1.2
-      "\x02\x00\x00\x76\x03\x03"
-      // random (32 bytes)
-      "\xfe\xfe\xfe\xfe\xfe\xfe\xfe\xfe\xfe\xfe\xfe\xfe\xfe\xfe\xfe\xfe"
-      "\xfe\xfe\xfe\xfe\xfe\xfe\xfe\xfe\xfe\xfe\xfe\xfe\xfe\xfe\xfe\xfe"
-      // session ID length + session ID (32 bytes)
-      "\x20"
-      "\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00"
-      "\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00"
-#if defined(CHACHA20) && CHACHA20
-      // TLS_CHACHA20_POLY1305_SHA256 + no compression
-      "\x13\x03\x00"
-#else
-      // TLS_AES_128_GCM_SHA256 + no compression
-      "\x13\x01\x00"
-#endif
-      // extensions + keyshare
-      "\x00\x2e\x00\x33\x00\x24\x00\x1d\x00\x20"
-      // x25519 keyshare
-      "\xab\xab\xab\xab\xab\xab\xab\xab\xab\xab\xab\xab\xab\xab\xab\xab"
-      "\xab\xab\xab\xab\xab\xab\xab\xab\xab\xab\xab\xab\xab\xab\xab\xab"
-      // supported versions (tls1.3 == 0x304)
-      "\x00\x2b\x00\x02\x03\x04";
-
-  // calculate keyshare
-  uint8_t x25519_pub[X25519_BYTES];
-  uint8_t x25519_prv[X25519_BYTES];
-  mg_random(x25519_prv, sizeof(x25519_prv));
-  x25519(x25519_pub, x25519_prv, X25519_BASE_POINT, 1);
-  x25519(tls->x25519_sec, x25519_prv, tls->x25519_cli, 1);
-  mg_tls_hexdump("x25519 sec", tls->x25519_sec, sizeof(tls->x25519_sec));
-
-  // fill in the gaps: session ID + keyshare
-  memmove(msg_server_hello + 39, tls->session_id, sizeof(tls->session_id));
-  memmove(msg_server_hello + 84, x25519_pub, sizeof(x25519_pub));
-
-  // server hello message
-  mg_iobuf_add(wio, wio->len, "\x16\x03\x03\x00\x7a", 5);
-  mg_iobuf_add(wio, wio->len, msg_server_hello, sizeof(msg_server_hello));
-  mg_sha256_update(&tls->sha256, msg_server_hello, sizeof(msg_server_hello));
-
-  // change cipher message
-  mg_iobuf_add(wio, wio->len, "\x14\x03\x03\x00\x01\x01", 6);
-}
-
 // at this point we have x25519 shared secret, we can generate a set of derived
 // handshake encryption keys
 static void mg_tls_generate_handshake_keys(struct mg_connection *c) {
-  struct tls_data *tls = c->tls;
+  struct tls_data *tls = (struct tls_data *) c->tls;
 
   mg_sha256_ctx sha256;
   uint8_t early_secret[32];
@@ -9627,6 +9567,7 @@ static void mg_tls_generate_handshake_keys(struct mg_connection *c) {
   memmove(&sha256, &tls->sha256, sizeof(mg_sha256_ctx));
   mg_sha256_final(hello_hash, &sha256);
 
+  mg_tls_hexdump("hello hash", hello_hash, 32);
   // derive keys needed for the rest of the handshake
   mg_tls_derive_secret("tls13 s hs traffic", tls->handshake_secret, 32,
                        hello_hash, 32, server_hs_secret, 32);
@@ -9636,7 +9577,6 @@ static void mg_tls_generate_handshake_keys(struct mg_connection *c) {
                        tls->server_write_iv, 12);
   mg_tls_derive_secret("tls13 finished", server_hs_secret, 32, NULL, 0,
                        tls->server_finished_key, 32);
-  mg_tls_hexdump("s hs traffic", server_hs_secret, 32);
 
   mg_tls_derive_secret("tls13 c hs traffic", tls->handshake_secret, 32,
                        hello_hash, 32, client_hs_secret, 32);
@@ -9646,238 +9586,24 @@ static void mg_tls_generate_handshake_keys(struct mg_connection *c) {
                        tls->client_write_iv, 12);
   mg_tls_derive_secret("tls13 finished", client_hs_secret, 32, NULL, 0,
                        tls->client_finished_key, 32);
-}
 
-// AES GCM encryption of the message + put encoded data into the write buffer
-static void mg_tls_encrypt(struct mg_connection *c, const uint8_t *msg,
-                           size_t msgsz, uint8_t msgtype) {
-  struct tls_data *tls = c->tls;
-  struct mg_iobuf *wio = &tls->send;
-  uint8_t *outmsg;
-  uint8_t *tag;
-  size_t encsz = msgsz + 16 + 1;
-  uint8_t hdr[5] = {0x17, 0x03, 0x03, (encsz >> 8) & 0xff, encsz & 0xff};
-  uint8_t associated_data[5] = {0x17, 0x03, 0x03, (encsz >> 8) & 0xff,
-                                encsz & 0xff};
-  uint8_t nonce[12];
-  memmove(nonce, tls->server_write_iv, sizeof(tls->server_write_iv));
-  nonce[8] ^= (uint8_t) ((tls->sseq >> 24) & 255U);
-  nonce[9] ^= (uint8_t) ((tls->sseq >> 16) & 255U);
-  nonce[10] ^= (uint8_t) ((tls->sseq >> 8) & 255U);
-  nonce[11] ^= (uint8_t) ((tls->sseq) & 255U);
+  mg_tls_hexdump("s hs traffic", server_hs_secret, 32);
+  mg_tls_hexdump("s key", tls->server_write_key, 16);
+  mg_tls_hexdump("s iv", tls->server_write_iv, 12);
+  mg_tls_hexdump("s finished", tls->server_finished_key, 32);
+  mg_tls_hexdump("c hs traffic", client_hs_secret, 32);
+  mg_tls_hexdump("c key", tls->client_write_key, 16);
+  mg_tls_hexdump("c iv", tls->client_write_iv, 16);
+  mg_tls_hexdump("c finished", tls->client_finished_key, 32);
 
-  gcm_initialize();
-  mg_iobuf_add(wio, wio->len, hdr, sizeof(hdr));
-  mg_iobuf_resize(wio, wio->len + encsz);
-  outmsg = wio->buf + wio->len;
-  tag = wio->buf + wio->len + msgsz + 1;
-  memmove(outmsg, msg, msgsz);
-  outmsg[msgsz] = msgtype;
-  aes_gcm_encrypt(outmsg, outmsg, msgsz + 1, tls->server_write_key,
-                  sizeof(tls->server_write_key), nonce, sizeof(nonce),
-                  associated_data, sizeof(associated_data), tag, 16);
-  wio->len += encsz;
-  tls->sseq++;
-}
-
-// read an encrypted message, decrypt it into read buffer (AES GCM)
-static int mg_tls_recv_decrypt(struct mg_connection *c, void *buf,
-                               size_t bufsz) {
-  struct tls_data *tls = c->tls;
-  struct mg_iobuf *rio = &c->rtls;
-  // struct mg_iobuf *rio = &tls->recv;
-  uint16_t msgsz;
-  uint8_t *msg;
-  uint8_t nonce[12];
-  int r;
-  for (;;) {
-    if (!mg_tls_got_msg(c)) {
-      return MG_IO_WAIT;
-    }
-    if (rio->buf[0] == 0x17) {
-      break;
-    } else if (rio->buf[0] == 0x15) {
-      MG_INFO(("TLS ALERT packet received"));  // TODO: drop packet?
-    } else {
-      mg_error(c, "unexpected packet");
-      return -1;
-    }
-  }
-  msgsz = MG_LOAD_BE16(rio->buf + 3);
-  msg = rio->buf + 5;
-  memmove(nonce, tls->client_write_iv, sizeof(tls->client_write_iv));
-  nonce[8] ^= (uint8_t) ((tls->cseq >> 24) & 255U);
-  nonce[9] ^= (uint8_t) ((tls->cseq >> 16) & 255U);
-  nonce[10] ^= (uint8_t) ((tls->cseq >> 8) & 255U);
-  nonce[11] ^= (uint8_t) ((tls->cseq) & 255U);
-  aes_gcm_decrypt(msg, msg, msgsz - 16, tls->client_write_key,
-                  sizeof(tls->client_write_key), nonce, sizeof(nonce));
-  r = msgsz - 16 - 1;
-  if (msg[r] == 0x17) {
-    if (bufsz > 0) {
-      memmove(buf, msg, msgsz - 16);
-    }
-  } else {
-    r = 0;
-  }
-  tls->cseq++;
-  mg_tls_drop_packet(rio);
-  return r;
-}
-
-static void mg_tls_server_extensions(struct mg_connection *c) {
-  struct tls_data *tls = c->tls;
-  // server extensions
-  uint8_t ext[6] = {0x08, 0, 0, 2, 0, 0};
-  mg_sha256_update(&tls->sha256, ext, sizeof(ext));
-  mg_tls_encrypt(c, ext, sizeof(ext), 0x16);
-}
-
-static void mg_tls_server_cert(struct mg_connection *c) {
-  struct tls_data *tls = c->tls;
-  // server DER certificate (empty)
-  size_t n = tls->server_cert_der.len;
-  uint8_t *cert = calloc(1, 13 + n);             // FIXME: free
-  cert[0] = 0x0b;                                // handshake header
-  cert[1] = (uint8_t) (((n + 9) >> 16) & 255U);  // 3 bytes: payload length
-  cert[2] = (uint8_t) (((n + 9) >> 8) & 255U);
-  cert[3] = (uint8_t) ((n + 9) & 255U);
-  cert[4] = 0;                                   // request context
-  cert[5] = (uint8_t) (((n + 5) >> 16) & 255U);  // 3 bytes: cert (s) length
-  cert[6] = (uint8_t) (((n + 5) >> 8) & 255U);
-  cert[7] = (uint8_t) ((n + 5) & 255U);
-  cert[8] =
-      (uint8_t) (((n) >> 16) & 255U);  // 3 bytes: first (and only) cert len
-  cert[9] = (uint8_t) (((n) >> 8) & 255U);
-  cert[10] = (uint8_t) (n & 255U);
-  // bytes 11+ are certificate in DER format
-  memmove(cert + 11, tls->server_cert_der.ptr, n);
-  cert[11 + n] = cert[12 + n] = 0;  // certificate extensions (none)
-  mg_sha256_update(&tls->sha256, cert, 13 + n);
-  mg_tls_encrypt(c, cert, 13 + n, 0x16);
-}
-
-// type adapter between uECC hash context and our sha256 implementation
-typedef struct SHA256_HashContext {
-  uECC_HashContext uECC;
-  mg_sha256_ctx ctx;
-} SHA256_HashContext;
-
-static void init_SHA256(const uECC_HashContext *base) {
-  SHA256_HashContext *c = (SHA256_HashContext *) base;
-  mg_sha256_init(&c->ctx);
-}
-
-static void update_SHA256(const uECC_HashContext *base, const uint8_t *message,
-                          unsigned message_size) {
-  SHA256_HashContext *c = (SHA256_HashContext *) base;
-  mg_sha256_update(&c->ctx, message, message_size);
-}
-static void finish_SHA256(const uECC_HashContext *base, uint8_t *hash_result) {
-  SHA256_HashContext *c = (SHA256_HashContext *) base;
-  mg_sha256_final(hash_result, &c->ctx);
-}
-
-static void mg_tls_server_verify_ecdsa(struct mg_connection *c) {
-  struct tls_data *tls = c->tls;
-  // server certificate verify packet
-  uint8_t verify[82] = {0x0f, 0x00, 0x00, 0x00, 0x04, 0x03, 0x00, 0x00};
-  size_t sigsz, verifysz = 0;
-  uint8_t hash[32] = {0}, tmp[2 * 32 + 64] = {0};
-  struct SHA256_HashContext ctx = {
-      {&init_SHA256, &update_SHA256, &finish_SHA256, 64, 32, tmp},
-      {{0}, 0, 0, {0}}};
-  int neg1, neg2;
-  uint8_t sig[64], sig_content[130] = {
-                       "                                "
-                       "                                "
-                       "TLS 1.3, server CertificateVerify\0"};
-  mg_sha256_ctx sha256;
-  memmove(&sha256, &tls->sha256, sizeof(mg_sha256_ctx));
-  mg_sha256_final(sig_content + 98, &sha256);
-
-  mg_sha256_init(&sha256);
-  mg_sha256_update(&sha256, sig_content, sizeof(sig_content));
-  mg_sha256_final(hash, &sha256);
-
-  uECC_sign_deterministic(tls->server_key, hash, sizeof(hash), &ctx.uECC, sig,
-                          uECC_secp256r1());
-
-  neg1 = !!(sig[0] & 0x80);
-  neg2 = !!(sig[32] & 0x80);
-  verify[8] = 0x30;  // ASN.1 SEQUENCE
-  verify[9] = (uint8_t) (68 + neg1 + neg2);
-  verify[10] = 0x02;  // ASN.1 INTEGER
-  verify[11] = (uint8_t) (32 + neg1);
-  memmove(verify + 12 + neg1, sig, 32);
-  verify[12 + 32 + neg1] = 0x02;  // ASN.1 INTEGER
-  verify[13 + 32 + neg1] = (uint8_t) (32 + neg2);
-  memmove(verify + 14 + 32 + neg1 + neg2, sig + 32, 32);
-
-  sigsz = (size_t) (70 + neg1 + neg2);
-  verifysz = 8U + sigsz;
-  verify[3] = (uint8_t) (sigsz + 4);
-  verify[7] = (uint8_t) sigsz;
-
-  mg_tls_hexdump("verify", verify, verifysz);
-
-  mg_sha256_update(&tls->sha256, verify, verifysz);
-  mg_tls_encrypt(c, verify, verifysz, 0x16);
-}
-
-static void mg_tls_server_finish(struct mg_connection *c) {
-  struct tls_data *tls = c->tls;
-  struct mg_iobuf *wio = &tls->send;
-  mg_sha256_ctx sha256;
-  uint8_t hash[32];
-  uint8_t finish[36] = {0x14, 0, 0, 32};
-  memmove(&sha256, &tls->sha256, sizeof(mg_sha256_ctx));
-  mg_sha256_final(hash, &sha256);
-  mg_hmac_sha256(finish + 4, tls->server_finished_key, 32, hash, 32);
-  mg_tls_hexdump("hash", hash, sizeof(hash));
-  mg_tls_hexdump("key", tls->server_finished_key,
-                 sizeof(tls->server_finished_key));
-  mg_tls_encrypt(c, finish, sizeof(finish), 0x16);
-  mg_io_send(c, wio->buf, wio->len);
-  wio->len = 0;
-
-  mg_sha256_update(&tls->sha256, finish, sizeof(finish));
-}
-
-static int mg_tls_client_change_cipher(struct mg_connection *c) {
-  // struct tls_data *tls = c->tls;
-  struct mg_iobuf *rio = &c->rtls;
-  for (;;) {
-    if (!mg_tls_got_msg(c)) {
-      return MG_IO_WAIT;
-    }
-    if (rio->buf[0] == 0x14) {  // got a ChangeCipher record
-      break;
-    } else if (rio->buf[0] == 0x15) {  // skip Alert records
-      MG_DEBUG(("TLS ALERT packet received"));
-      mg_tls_drop_packet(rio);
-    } else {
-      mg_error(c, "unexpected packet");
-      return MG_IO_ERR;
-    }
-  }
-  // consume ChangeCipher packet
-  mg_tls_drop_packet(rio);
-  return 0;
-}
-
-static int mg_tls_client_finish(struct mg_connection *c) {
-  uint8_t tmp[2048];
-  int n = mg_tls_recv_decrypt(c, tmp, sizeof(tmp));
-  if (n < 0) {
-    return -1;
-  }
-  // TODO: make sure it's a ClientFinish record
-  return 0;
+  mg_ssl_key_log("SERVER_HANDSHAKE_TRAFFIC_SECRET", tls->random,
+                 server_hs_secret, 32);
+  mg_ssl_key_log("CLIENT_HANDSHAKE_TRAFFIC_SECRET", tls->random,
+                 client_hs_secret, 32);
 }
 
 static void mg_tls_generate_application_keys(struct mg_connection *c) {
-  struct tls_data *tls = c->tls;
+  struct tls_data *tls = (struct tls_data *) c->tls;
   uint8_t hash[32];
   uint8_t premaster_secret[32];
   uint8_t master_secret[32];
@@ -9905,41 +9631,908 @@ static void mg_tls_generate_application_keys(struct mg_connection *c) {
   mg_tls_derive_secret("tls13 iv", client_secret, 32, NULL, 0,
                        tls->client_write_iv, 12);
 
+  mg_tls_hexdump("s ap traffic", server_secret, 32);
+  mg_tls_hexdump("s key", tls->server_write_key, 16);
+  mg_tls_hexdump("s iv", tls->server_write_iv, 12);
+  mg_tls_hexdump("s finished", tls->server_finished_key, 32);
+  mg_tls_hexdump("c ap traffic", client_secret, 32);
+  mg_tls_hexdump("c key", tls->client_write_key, 16);
+  mg_tls_hexdump("c iv", tls->client_write_iv, 16);
+  mg_tls_hexdump("c finished", tls->client_finished_key, 32);
   tls->sseq = tls->cseq = 0;
+
+  mg_ssl_key_log("SERVER_TRAFFIC_SECRET_0", tls->random, server_secret, 32);
+  mg_ssl_key_log("CLIENT_TRAFFIC_SECRET_0", tls->random, client_secret, 32);
 }
 
-void mg_tls_handshake(struct mg_connection *c) {
-  struct tls_data *tls = c->tls;
+// AES GCM encryption of the message + put encoded data into the write buffer
+static void mg_tls_encrypt(struct mg_connection *c, const uint8_t *msg,
+                           size_t msgsz, uint8_t msgtype) {
+  struct tls_data *tls = (struct tls_data *) c->tls;
+  struct mg_iobuf *wio = &tls->send;
+  uint8_t *outmsg;
+  uint8_t *tag;
+  size_t encsz = msgsz + 16 + 1;
+  uint8_t hdr[5] = {MG_TLS_APP_DATA, 0x03, 0x03,
+                    (uint8_t) ((encsz >> 8) & 0xff), (uint8_t) (encsz & 0xff)};
+  uint8_t associated_data[5] = {MG_TLS_APP_DATA, 0x03, 0x03,
+                                (uint8_t) ((encsz >> 8) & 0xff),
+                                (uint8_t) (encsz & 0xff)};
+  uint8_t nonce[12];
+
+  mg_gcm_initialize();
+
+  if (c->is_client) {
+    memmove(nonce, tls->client_write_iv, sizeof(tls->client_write_iv));
+    nonce[8] ^= (uint8_t) ((tls->cseq >> 24) & 255U);
+    nonce[9] ^= (uint8_t) ((tls->cseq >> 16) & 255U);
+    nonce[10] ^= (uint8_t) ((tls->cseq >> 8) & 255U);
+    nonce[11] ^= (uint8_t) ((tls->cseq) & 255U);
+  } else {
+    memmove(nonce, tls->server_write_iv, sizeof(tls->server_write_iv));
+    nonce[8] ^= (uint8_t) ((tls->sseq >> 24) & 255U);
+    nonce[9] ^= (uint8_t) ((tls->sseq >> 16) & 255U);
+    nonce[10] ^= (uint8_t) ((tls->sseq >> 8) & 255U);
+    nonce[11] ^= (uint8_t) ((tls->sseq) & 255U);
+  }
+
+  mg_iobuf_add(wio, wio->len, hdr, sizeof(hdr));
+  mg_iobuf_resize(wio, wio->len + encsz);
+  outmsg = wio->buf + wio->len;
+  tag = wio->buf + wio->len + msgsz + 1;
+  memmove(outmsg, msg, msgsz);
+  outmsg[msgsz] = msgtype;
+  if (c->is_client) {
+    mg_aes_gcm_encrypt(outmsg, outmsg, msgsz + 1, tls->client_write_key,
+                       sizeof(tls->client_write_key), nonce, sizeof(nonce),
+                       associated_data, sizeof(associated_data), tag, 16);
+    tls->cseq++;
+  } else {
+    mg_aes_gcm_encrypt(outmsg, outmsg, msgsz + 1, tls->server_write_key,
+                       sizeof(tls->server_write_key), nonce, sizeof(nonce),
+                       associated_data, sizeof(associated_data), tag, 16);
+    tls->sseq++;
+  }
+  wio->len += encsz;
+}
+
+// read an encrypted record, decrypt it in place
+static int mg_tls_recv_record(struct mg_connection *c) {
+  struct tls_data *tls = (struct tls_data *) c->tls;
+  struct mg_iobuf *rio = &c->rtls;
+  uint16_t msgsz;
+  uint8_t *msg;
+  uint8_t nonce[12];
+  int r;
+  if (tls->recv.len > 0) {
+    return 0; /* some data from previous record is still present */
+  }
+  for (;;) {
+    if (!mg_tls_got_record(c)) {
+      return MG_IO_WAIT;
+    }
+    if (rio->buf[0] == MG_TLS_APP_DATA) {
+      break;
+    } else if (rio->buf[0] ==
+               MG_TLS_CHANGE_CIPHER) {  // Skip ChangeCipher messages
+      mg_tls_drop_record(c);
+    } else if (rio->buf[0] == MG_TLS_ALERT) {  // Skip Alerts
+      MG_INFO(("TLS ALERT packet received"));
+      mg_tls_drop_record(c);
+    } else {
+      mg_error(c, "unexpected packet");
+      return -1;
+    }
+  }
+
+  mg_gcm_initialize();
+  msgsz = MG_LOAD_BE16(rio->buf + 3);
+  msg = rio->buf + 5;
+  if (c->is_client) {
+    memmove(nonce, tls->server_write_iv, sizeof(tls->server_write_iv));
+    nonce[8] ^= (uint8_t) ((tls->sseq >> 24) & 255U);
+    nonce[9] ^= (uint8_t) ((tls->sseq >> 16) & 255U);
+    nonce[10] ^= (uint8_t) ((tls->sseq >> 8) & 255U);
+    nonce[11] ^= (uint8_t) ((tls->sseq) & 255U);
+    mg_aes_gcm_decrypt(msg, msg, msgsz - 16, tls->server_write_key,
+                       sizeof(tls->server_write_key), nonce, sizeof(nonce));
+    tls->sseq++;
+  } else {
+    memmove(nonce, tls->client_write_iv, sizeof(tls->client_write_iv));
+    nonce[8] ^= (uint8_t) ((tls->cseq >> 24) & 255U);
+    nonce[9] ^= (uint8_t) ((tls->cseq >> 16) & 255U);
+    nonce[10] ^= (uint8_t) ((tls->cseq >> 8) & 255U);
+    nonce[11] ^= (uint8_t) ((tls->cseq) & 255U);
+    mg_aes_gcm_decrypt(msg, msg, msgsz - 16, tls->client_write_key,
+                       sizeof(tls->client_write_key), nonce, sizeof(nonce));
+    tls->cseq++;
+  }
+  r = msgsz - 16 - 1;
+  tls->content_type = msg[msgsz - 16 - 1];
+  tls->recv.buf = msg;
+  tls->recv.size = tls->recv.len = msgsz - 16 - 1;
+  return r;
+}
+
+static void mg_tls_calc_cert_verify_hash(struct mg_connection *c,
+                                         uint8_t hash[32]) {
+  struct tls_data *tls = (struct tls_data *) c->tls;
+  uint8_t sig_content[130] = {
+      "                                "
+      "                                "
+      "TLS 1.3, server CertificateVerify\0"};
+  mg_sha256_ctx sha256;
+  memmove(&sha256, &tls->sha256, sizeof(mg_sha256_ctx));
+  mg_sha256_final(sig_content + 98, &sha256);
+
+  mg_sha256_init(&sha256);
+  mg_sha256_update(&sha256, sig_content, sizeof(sig_content));
+  mg_sha256_final(hash, &sha256);
+}
+
+// read and parse ClientHello record
+static int mg_tls_server_recv_hello(struct mg_connection *c) {
+  struct tls_data *tls = (struct tls_data *) c->tls;
+  struct mg_iobuf *rio = &c->rtls;
+  uint8_t session_id_len;
+  uint16_t j;
+  uint16_t cipher_suites_len;
+  uint16_t ext_len;
+  uint8_t *ext;
+  uint16_t msgsz;
+
+  if (!mg_tls_got_record(c)) {
+    return MG_IO_WAIT;
+  }
+  if (rio->buf[0] != MG_TLS_HANDSHAKE || rio->buf[5] != MG_TLS_CLIENT_HELLO) {
+    mg_error(c, "not a client hello packet");
+    return -1;
+  }
+  msgsz = MG_LOAD_BE16(rio->buf + 3);
+  mg_sha256_update(&tls->sha256, rio->buf + 5, msgsz);
+  // store client random
+  memmove(tls->random, rio->buf + 11, sizeof(tls->random));
+  // store session_id
+  session_id_len = rio->buf[43];
+  if (session_id_len == sizeof(tls->session_id)) {
+    memmove(tls->session_id, rio->buf + 44, session_id_len);
+  } else if (session_id_len != 0) {
+    MG_INFO(("bad session id len"));
+  }
+  cipher_suites_len = MG_LOAD_BE16(rio->buf + 44 + session_id_len);
+  ext_len = MG_LOAD_BE16(rio->buf + 48 + session_id_len + cipher_suites_len);
+  ext = rio->buf + 50 + session_id_len + cipher_suites_len;
+  for (j = 0; j < ext_len;) {
+    uint16_t k;
+    uint16_t key_exchange_len;
+    uint8_t *key_exchange;
+    uint16_t n = MG_LOAD_BE16(ext + j + 2);
+    if (ext[j] != 0x00 ||
+        ext[j + 1] != 0x33) {  // not a key share extension, ignore
+      j += (uint16_t) (n + 4);
+      continue;
+    }
+    key_exchange_len = MG_LOAD_BE16(ext + j + 5);
+    key_exchange = ext + j + 6;
+    for (k = 0; k < key_exchange_len;) {
+      uint16_t m = MG_LOAD_BE16(key_exchange + k + 2);
+      if (m == 32 && key_exchange[k] == 0x00 && key_exchange[k + 1] == 0x1d) {
+        memmove(tls->x25519_cli, key_exchange + k + 4, m);
+        mg_tls_drop_record(c);
+        return 0;
+      }
+      k += (uint16_t) (m + 4);
+    }
+    j += (uint16_t) (n + 4);
+  }
+  mg_error(c, "bad client hello");
+  return -1;
+}
+
+#define PLACEHOLDER_8B 'X', 'X', 'X', 'X', 'X', 'X', 'X', 'X'
+#define PLACEHOLDER_16B PLACEHOLDER_8B, PLACEHOLDER_8B
+#define PLACEHOLDER_32B PLACEHOLDER_16B, PLACEHOLDER_16B
+
+// put ServerHello record into wio buffer
+static void mg_tls_server_send_hello(struct mg_connection *c) {
+  struct tls_data *tls = (struct tls_data *) c->tls;
+  struct mg_iobuf *wio = &tls->send;
+
+  uint8_t msg_server_hello[122] = {
+    // server hello, tls 1.2
+    0x02,
+    0x00,
+    0x00,
+    0x76,
+    0x03,
+    0x03,
+    // random (32 bytes)
+    PLACEHOLDER_32B,
+    // session ID length + session ID (32 bytes)
+    0x20,
+    PLACEHOLDER_32B,
+#if defined(CHACHA20) && CHACHA20
+    // TLS_CHACHA20_POLY1305_SHA256 + no compression
+    0x13,
+    0x03,
+    0x00,
+#else
+    // TLS_AES_128_GCM_SHA256 + no compression
+    0x13,
+    0x01,
+    0x00,
+#endif
+    // extensions + keyshare
+    0x00,
+    0x2e,
+    0x00,
+    0x33,
+    0x00,
+    0x24,
+    0x00,
+    0x1d,
+    0x00,
+    0x20,
+    // x25519 keyshare
+    PLACEHOLDER_32B,
+    // supported versions (tls1.3 == 0x304)
+    0x00,
+    0x2b,
+    0x00,
+    0x02,
+    0x03,
+    0x04
+  };
+
+  // calculate keyshare
+  uint8_t x25519_pub[X25519_BYTES];
+  uint8_t x25519_prv[X25519_BYTES];
+  mg_tls_random(x25519_prv, sizeof(x25519_prv));
+  mg_tls_x25519(x25519_pub, x25519_prv, X25519_BASE_POINT, 1);
+  mg_tls_x25519(tls->x25519_sec, x25519_prv, tls->x25519_cli, 1);
+  mg_tls_hexdump("s x25519 sec", tls->x25519_sec, sizeof(tls->x25519_sec));
+
+  // fill in the gaps: random + session ID + keyshare
+  memmove(msg_server_hello + 6, tls->random, sizeof(tls->random));
+  memmove(msg_server_hello + 39, tls->session_id, sizeof(tls->session_id));
+  memmove(msg_server_hello + 84, x25519_pub, sizeof(x25519_pub));
+
+  // server hello message
+  mg_iobuf_add(wio, wio->len, "\x16\x03\x03\x00\x7a", 5);
+  mg_iobuf_add(wio, wio->len, msg_server_hello, sizeof(msg_server_hello));
+  mg_sha256_update(&tls->sha256, msg_server_hello, sizeof(msg_server_hello));
+
+  // change cipher message
+  mg_iobuf_add(wio, wio->len, "\x14\x03\x03\x00\x01\x01", 6);
+}
+
+static void mg_tls_server_send_ext(struct mg_connection *c) {
+  struct tls_data *tls = (struct tls_data *) c->tls;
+  // server extensions
+  uint8_t ext[6] = {0x08, 0, 0, 2, 0, 0};
+  mg_sha256_update(&tls->sha256, ext, sizeof(ext));
+  mg_tls_encrypt(c, ext, sizeof(ext), MG_TLS_HANDSHAKE);
+}
+
+static void mg_tls_server_send_cert(struct mg_connection *c) {
+  struct tls_data *tls = (struct tls_data *) c->tls;
+  // server DER certificate (empty)
+  size_t n = tls->server_cert_der.len;
+  uint8_t *cert = (uint8_t *) calloc(1, 13 + n);
+  if (cert == NULL) {
+    mg_error(c, "tls cert oom");
+    return;
+  }
+  cert[0] = 0x0b;                                // handshake header
+  cert[1] = (uint8_t) (((n + 9) >> 16) & 255U);  // 3 bytes: payload length
+  cert[2] = (uint8_t) (((n + 9) >> 8) & 255U);
+  cert[3] = (uint8_t) ((n + 9) & 255U);
+  cert[4] = 0;                                   // request context
+  cert[5] = (uint8_t) (((n + 5) >> 16) & 255U);  // 3 bytes: cert (s) length
+  cert[6] = (uint8_t) (((n + 5) >> 8) & 255U);
+  cert[7] = (uint8_t) ((n + 5) & 255U);
+  cert[8] =
+      (uint8_t) (((n) >> 16) & 255U);  // 3 bytes: first (and only) cert len
+  cert[9] = (uint8_t) (((n) >> 8) & 255U);
+  cert[10] = (uint8_t) (n & 255U);
+  // bytes 11+ are certificate in DER format
+  memmove(cert + 11, tls->server_cert_der.ptr, n);
+  cert[11 + n] = cert[12 + n] = 0;  // certificate extensions (none)
+  mg_sha256_update(&tls->sha256, cert, 13 + n);
+  mg_tls_encrypt(c, cert, 13 + n, MG_TLS_HANDSHAKE);
+  free(cert);
+}
+
+// type adapter between uECC hash context and our sha256 implementation
+typedef struct SHA256_HashContext {
+  MG_UECC_HashContext uECC;
+  mg_sha256_ctx ctx;
+} SHA256_HashContext;
+
+static void init_SHA256(const MG_UECC_HashContext *base) {
+  SHA256_HashContext *c = (SHA256_HashContext *) base;
+  mg_sha256_init(&c->ctx);
+}
+
+static void update_SHA256(const MG_UECC_HashContext *base,
+                          const uint8_t *message, unsigned message_size) {
+  SHA256_HashContext *c = (SHA256_HashContext *) base;
+  mg_sha256_update(&c->ctx, message, message_size);
+}
+static void finish_SHA256(const MG_UECC_HashContext *base,
+                          uint8_t *hash_result) {
+  SHA256_HashContext *c = (SHA256_HashContext *) base;
+  mg_sha256_final(hash_result, &c->ctx);
+}
+
+static void mg_tls_server_send_cert_verify(struct mg_connection *c) {
+  struct tls_data *tls = (struct tls_data *) c->tls;
+  // server certificate verify packet
+  uint8_t verify[82] = {0x0f, 0x00, 0x00, 0x00, 0x04, 0x03, 0x00, 0x00};
+  size_t sigsz, verifysz = 0;
+  uint8_t hash[32] = {0}, tmp[2 * 32 + 64] = {0};
+  struct SHA256_HashContext ctx = {
+      {&init_SHA256, &update_SHA256, &finish_SHA256, 64, 32, tmp},
+      {{0}, 0, 0, {0}}};
+  int neg1, neg2;
+  uint8_t sig[64];
+
+  mg_tls_calc_cert_verify_hash(c, (uint8_t *) hash);
+
+  mg_uecc_sign_deterministic(tls->server_key, hash, sizeof(hash), &ctx.uECC,
+                             sig, mg_uecc_secp256r1());
+
+  neg1 = !!(sig[0] & 0x80);
+  neg2 = !!(sig[32] & 0x80);
+  verify[8] = 0x30;  // ASN.1 SEQUENCE
+  verify[9] = (uint8_t) (68 + neg1 + neg2);
+  verify[10] = 0x02;  // ASN.1 INTEGER
+  verify[11] = (uint8_t) (32 + neg1);
+  memmove(verify + 12 + neg1, sig, 32);
+  verify[12 + 32 + neg1] = 0x02;  // ASN.1 INTEGER
+  verify[13 + 32 + neg1] = (uint8_t) (32 + neg2);
+  memmove(verify + 14 + 32 + neg1 + neg2, sig + 32, 32);
+
+  sigsz = (size_t) (70 + neg1 + neg2);
+  verifysz = 8U + sigsz;
+  verify[3] = (uint8_t) (sigsz + 4);
+  verify[7] = (uint8_t) sigsz;
+
+  mg_sha256_update(&tls->sha256, verify, verifysz);
+  mg_tls_encrypt(c, verify, verifysz, MG_TLS_HANDSHAKE);
+}
+
+static void mg_tls_server_send_finish(struct mg_connection *c) {
+  struct tls_data *tls = (struct tls_data *) c->tls;
+  struct mg_iobuf *wio = &tls->send;
+  mg_sha256_ctx sha256;
+  uint8_t hash[32];
+  uint8_t finish[36] = {0x14, 0, 0, 32};
+  memmove(&sha256, &tls->sha256, sizeof(mg_sha256_ctx));
+  mg_sha256_final(hash, &sha256);
+  mg_hmac_sha256(finish + 4, tls->server_finished_key, 32, hash, 32);
+  mg_tls_encrypt(c, finish, sizeof(finish), MG_TLS_HANDSHAKE);
+  mg_io_send(c, wio->buf, wio->len);
+  wio->len = 0;
+
+  mg_sha256_update(&tls->sha256, finish, sizeof(finish));
+}
+
+static int mg_tls_server_recv_finish(struct mg_connection *c) {
+  struct tls_data *tls = (struct tls_data *) c->tls;
+  // we have to backup sha256 value to restore it later, since Finished record
+  // is exceptional and is not supposed to be added to the rolling hash
+  // calculation.
+  mg_sha256_ctx sha256 = tls->sha256;
+  if (mg_tls_recv_record(c) < 0) {
+    return -1;
+  }
+  if (tls->recv.buf[0] != MG_TLS_FINISHED) {
+    mg_error(c, "expected Finish but got msg 0x%02x", tls->recv.buf[0]);
+    return -1;
+  }
+  mg_tls_drop_message(c);
+
+  // restore hash
+  tls->sha256 = sha256;
+  return 0;
+}
+
+static void mg_tls_client_send_hello(struct mg_connection *c) {
+  struct tls_data *tls = (struct tls_data *) c->tls;
+  struct mg_iobuf *wio = &tls->send;
+
+  const char *hostname = tls->hostname;
+  size_t hostnamesz = strlen(tls->hostname);
+  uint8_t x25519_pub[X25519_BYTES];
+
+  uint8_t msg_client_hello[162 + 32] = {
+    // TLS Client Hello header reported as TLS1.2 (5)
+    0x16,
+    0x03,
+    0x01,
+    0x00,
+    0xfe,
+    // server hello, tls 1.2 (6)
+    0x01,
+    0x00,
+    0x00,
+    0x8c,
+    0x03,
+    0x03,
+    // random (32 bytes)
+    PLACEHOLDER_32B,
+    // session ID length + session ID (32 bytes)
+    0x20,
+    PLACEHOLDER_32B,
+#if defined(CHACHA20) && CHACHA20
+    // TLS_CHACHA20_POLY1305_SHA256 + no compression
+    0x13,
+    0x03,
+    0x00,
+#else
+    0x00,
+    0x02,  // size = 2 bytes
+    0x13,
+    0x01,  // TLS_AES_128_GCM_SHA256
+    0x01,
+    0x00,  // no compression
+#endif
+
+    // extensions + keyshare
+    0x00,
+    0xfe,
+    // x25519 keyshare
+    0x00,
+    0x33,
+    0x00,
+    0x26,
+    0x00,
+    0x24,
+    0x00,
+    0x1d,
+    0x00,
+    0x20,
+    PLACEHOLDER_32B,
+    // supported groups (x25519)
+    0x00,
+    0x0a,
+    0x00,
+    0x04,
+    0x00,
+    0x02,
+    0x00,
+    0x1d,
+    // supported versions (tls1.3 == 0x304)
+    0x00,
+    0x2b,
+    0x00,
+    0x03,
+    0x02,
+    0x03,
+    0x04,
+    // session ticket (none)
+    0x00,
+    0x23,
+    0x00,
+    0x00,
+    // signature algorithms (we don't care, so list all the common ones)
+    0x00,
+    0x0d,
+    0x00,
+    0x24,
+    0x00,
+    0x22,
+    0x04,
+    0x03,
+    0x05,
+    0x03,
+    0x06,
+    0x03,
+    0x08,
+    0x07,
+    0x08,
+    0x08,
+    0x08,
+    0x1a,
+    0x08,
+    0x1b,
+    0x08,
+    0x1c,
+    0x08,
+    0x09,
+    0x08,
+    0x0a,
+    0x08,
+    0x0b,
+    0x08,
+    0x04,
+    0x08,
+    0x05,
+    0x08,
+    0x06,
+    0x04,
+    0x01,
+    0x05,
+    0x01,
+    0x06,
+    0x01,
+    // server name
+    0x00,
+    0x00,
+    0x00,
+    0xfe,
+    0x00,
+    0xfe,
+    0x00,
+    0x00,
+    0xfe
+  };
+
+  // patch ClientHello with correct hostname length + offset:
+  MG_STORE_BE16(msg_client_hello + 3, hostnamesz + 189);
+  MG_STORE_BE16(msg_client_hello + 7, hostnamesz + 185);
+  MG_STORE_BE16(msg_client_hello + 82, hostnamesz + 110);
+  MG_STORE_BE16(msg_client_hello + 187, hostnamesz + 5);
+  MG_STORE_BE16(msg_client_hello + 189, hostnamesz + 3);
+  MG_STORE_BE16(msg_client_hello + 192, hostnamesz);
+
+  // calculate keyshare
+  mg_tls_random(tls->x25519_cli, sizeof(tls->x25519_cli));
+  mg_tls_x25519(x25519_pub, tls->x25519_cli, X25519_BASE_POINT, 1);
+
+  // fill in the gaps: random + session ID + keyshare
+  mg_tls_random(tls->session_id, sizeof(tls->session_id));
+  mg_tls_random(tls->random, sizeof(tls->random));
+  memmove(msg_client_hello + 11, tls->random, sizeof(tls->random));
+  memmove(msg_client_hello + 44, tls->session_id, sizeof(tls->session_id));
+  memmove(msg_client_hello + 94, x25519_pub, sizeof(x25519_pub));
+
+  // server hello message
+  mg_iobuf_add(wio, wio->len, msg_client_hello, sizeof(msg_client_hello));
+  mg_iobuf_add(wio, wio->len, hostname, strlen(hostname));
+  mg_sha256_update(&tls->sha256, msg_client_hello + 5,
+                   sizeof(msg_client_hello) - 5);
+  mg_sha256_update(&tls->sha256, (uint8_t *) hostname, strlen(hostname));
+
+  // change cipher message
+  mg_iobuf_add(wio, wio->len, (const char *) "\x14\x03\x03\x00\x01\x01", 6);
+  mg_io_send(c, wio->buf, wio->len);
+  wio->len = 0;
+}
+
+static int mg_tls_client_recv_hello(struct mg_connection *c) {
+  struct tls_data *tls = (struct tls_data *) c->tls;
+  struct mg_iobuf *rio = &c->rtls;
+  uint16_t msgsz;
+  uint8_t *ext;
+  uint16_t ext_len;
+  int j;
+
+  if (!mg_tls_got_record(c)) {
+    return MG_IO_WAIT;
+  }
+  if (rio->buf[0] != MG_TLS_HANDSHAKE || rio->buf[5] != MG_TLS_SERVER_HELLO) {
+    if (rio->buf[0] == MG_TLS_ALERT && rio->len >= 7) {
+      mg_error(c, "tls alert %d", rio->buf[6]);
+      return -1;
+    }
+    MG_INFO(("got packet type 0x%02x/0x%02x", rio->buf[0], rio->buf[5]));
+    mg_error(c, "not a server hello packet");
+    return -1;
+  }
+
+  msgsz = MG_LOAD_BE16(rio->buf + 3);
+  mg_sha256_update(&tls->sha256, rio->buf + 5, msgsz);
+
+  ext_len = MG_LOAD_BE16(rio->buf + 5 + 39 + 32 + 3);
+  ext = rio->buf + 5 + 39 + 32 + 3 + 2;
+
+  for (j = 0; j < ext_len;) {
+    uint16_t ext_type = MG_LOAD_BE16(ext + j);
+    uint16_t ext_len2 = MG_LOAD_BE16(ext + j + 2);
+    uint16_t group;
+    uint8_t *key_exchange;
+    uint16_t key_exchange_len;
+    if (ext_type != 0x0033) {  // not a key share extension, ignore
+      j += (uint16_t) (ext_len2 + 4);
+      continue;
+    }
+    group = MG_LOAD_BE16(ext + j + 4);
+    if (group != 0x001d) {
+      mg_error(c, "bad key exchange group");
+      return -1;
+    }
+    key_exchange_len = MG_LOAD_BE16(ext + j + 6);
+    key_exchange = ext + j + 8;
+    if (key_exchange_len != 32) {
+      mg_error(c, "bad key exchange length");
+      return -1;
+    }
+    mg_tls_x25519(tls->x25519_sec, tls->x25519_cli, key_exchange, 1);
+    mg_tls_hexdump("c x25519 sec", tls->x25519_sec, 32);
+    mg_tls_drop_record(c);
+    /* generate handshake keys */
+    mg_tls_generate_handshake_keys(c);
+    return 0;
+  }
+  mg_error(c, "bad client hello");
+  return -1;
+}
+
+static int mg_tls_client_recv_ext(struct mg_connection *c) {
+  struct tls_data *tls = (struct tls_data *) c->tls;
+  if (mg_tls_recv_record(c) < 0) {
+    return -1;
+  }
+  if (tls->recv.buf[0] != MG_TLS_ENCRYPTED_EXTENSIONS) {
+    mg_error(c, "expected server extensions but got msg 0x%02x",
+             tls->recv.buf[0]);
+    return -1;
+  }
+  mg_tls_drop_message(c);
+  return 0;
+}
+
+static int mg_tls_client_recv_cert(struct mg_connection *c) {
+  uint8_t *cert;
+  uint32_t certsz;
+  struct mg_der_tlv oid, pubkey, seq, subj;
+  int subj_match = 0;
+  struct tls_data *tls = (struct tls_data *) c->tls;
+  if (mg_tls_recv_record(c) < 0) {
+    return -1;
+  }
+  if (tls->recv.buf[0] != MG_TLS_CERTIFICATE) {
+    mg_error(c, "expected server certificate but got msg 0x%02x",
+             tls->recv.buf[0]);
+    return -1;
+  }
+  if (tls->skip_verification) {
+    mg_tls_drop_message(c);
+    return 0;
+  }
+
+  if (tls->recv.len < 11) {
+    mg_error(c, "certificate list too short");
+    return -1;
+  }
+
+  cert = tls->recv.buf + 11;
+  certsz = MG_LOAD_BE24(tls->recv.buf + 8);
+  if (certsz > tls->recv.len - 11) {
+    mg_error(c, "certificate too long: %d vs %d", certsz, tls->recv.len - 11);
+    return -1;
+  }
+
+  do {
+    // secp256r1 public key
+    if (mg_der_find(cert, certsz,
+                    (uint8_t *) "\x2A\x86\x48\xCE\x3D\x03\x01\x07", 8,
+                    &oid) < 0) {
+      mg_error(c, "certificate secp256r1 public key OID not found");
+      return -1;
+    }
+    if (mg_der_to_tlv(oid.value + oid.len,
+                      (size_t) (cert + certsz - oid.value - oid.len),
+                      &pubkey) < 0) {
+      mg_error(c, "certificate secp256r1 public key not found");
+      return -1;
+    }
+
+    // expect BIT STRING, unpadded, uncompressed: [0]+[4]+32+32 content bytes
+    if (pubkey.type != 3 || pubkey.len != 66 || pubkey.value[0] != 0 ||
+        pubkey.value[1] != 4) {
+      mg_error(c, "unsupported public key bitstring encoding");
+      return -1;
+    }
+    memmove(tls->pubkey, pubkey.value + 2, pubkey.len - 2);
+  } while (0);
+
+  // Subject Alternative Names
+  do {
+    if (mg_der_find(cert, certsz, (uint8_t *) "\x55\x1d\x11", 3, &oid) < 0) {
+      mg_error(c, "certificate does not contain subject alternative names");
+      return -1;
+    }
+    if (mg_der_to_tlv(oid.value + oid.len,
+                      (size_t) (cert + certsz - oid.value - oid.len),
+                      &seq) < 0) {
+      mg_error(c, "certificate subject alternative names not found");
+      return -1;
+    }
+    if (mg_der_to_tlv(seq.value, seq.len, &seq) < 0) {
+      mg_error(
+          c,
+          "certificate subject alternative names is not a constructed object");
+      return -1;
+    }
+    MG_VERBOSE(("verify hostname %s", tls->hostname));
+    while (seq.len > 0) {
+      if (mg_der_to_tlv(seq.value, seq.len, &subj) < 0) {
+        mg_error(c, "bad subject alternative name");
+        return -1;
+      }
+      MG_VERBOSE(("subj=%.*s", subj.len, subj.value));
+      if (mg_match(mg_str((const char *) tls->hostname),
+                   mg_str_n((const char *) subj.value, subj.len), NULL)) {
+        subj_match = 1;
+        break;
+      }
+      seq.len = (uint32_t) (seq.len - (subj.value + subj.len - seq.value));
+      seq.value = subj.value + subj.len;
+    }
+    if (!subj_match) {
+      mg_error(c, "certificate did not match the hostname");
+      return -1;
+    }
+  } while (0);
+
+  mg_tls_drop_message(c);
+  mg_tls_calc_cert_verify_hash(c, tls->sighash);
+  return 0;
+}
+
+static int mg_tls_client_recv_cert_verify(struct mg_connection *c) {
+  struct tls_data *tls = (struct tls_data *) c->tls;
+  if (mg_tls_recv_record(c) < 0) {
+    return -1;
+  }
+  if (tls->recv.buf[0] != MG_TLS_CERTIFICATE_VERIFY) {
+    mg_error(c, "expected server certificate verify but got msg 0x%02x",
+             tls->recv.buf[0]);
+    return -1;
+  }
+  // Ignore CertificateVerify is strict checks are not required
+  if (tls->skip_verification) {
+    mg_tls_drop_message(c);
+    return 0;
+  }
+
+  // Extract certificate signature and verify it using pubkey and sighash
+  do {
+    uint8_t sig[64];
+    struct mg_der_tlv seq, a, b;
+    if (mg_der_to_tlv(tls->recv.buf + 8, tls->recv.len - 8, &seq) < 0) {
+      mg_error(c, "verification message is not an ASN.1 DER sequence");
+      return -1;
+    }
+    if (mg_der_to_tlv(seq.value, seq.len, &a) < 0) {
+      mg_error(c, "missing first part of the signature");
+      return -1;
+    }
+    if (mg_der_to_tlv(a.value + a.len, seq.len - a.len, &b) < 0) {
+      mg_error(c, "missing second part of the signature");
+      return -1;
+    }
+    // Integers may be padded with zeroes
+    if (a.len > 32) {
+      a.value = a.value + (a.len - 32);
+      a.len = 32;
+    }
+    if (b.len > 32) {
+      b.value = b.value + (b.len - 32);
+      b.len = 32;
+    }
+
+    memmove(sig, a.value, a.len);
+    memmove(sig + 32, b.value, b.len);
+
+    if (mg_uecc_verify(tls->pubkey, tls->sighash, sizeof(tls->sighash), sig,
+                       mg_uecc_secp256r1()) != 1) {
+      mg_error(c, "failed to verify certificate");
+      return -1;
+    }
+  } while (0);
+
+  mg_tls_drop_message(c);
+  return 0;
+}
+
+static int mg_tls_client_recv_finish(struct mg_connection *c) {
+  struct tls_data *tls = (struct tls_data *) c->tls;
+  if (mg_tls_recv_record(c) < 0) {
+    return -1;
+  }
+  if (tls->recv.buf[0] != MG_TLS_FINISHED) {
+    mg_error(c, "expected server finished but got msg 0x%02x",
+             tls->recv.buf[0]);
+    return -1;
+  }
+  mg_tls_drop_message(c);
+  return 0;
+}
+
+static void mg_tls_client_send_finish(struct mg_connection *c) {
+  struct tls_data *tls = (struct tls_data *) c->tls;
+  struct mg_iobuf *wio = &tls->send;
+  mg_sha256_ctx sha256;
+  uint8_t hash[32];
+  uint8_t finish[36] = {0x14, 0, 0, 32};
+  memmove(&sha256, &tls->sha256, sizeof(mg_sha256_ctx));
+  mg_sha256_final(hash, &sha256);
+  mg_hmac_sha256(finish + 4, tls->client_finished_key, 32, hash, 32);
+  mg_tls_encrypt(c, finish, sizeof(finish), MG_TLS_HANDSHAKE);
+  mg_io_send(c, wio->buf, wio->len);
+  wio->len = 0;
+}
+
+static void mg_tls_client_handshake(struct mg_connection *c) {
+  struct tls_data *tls = (struct tls_data *) c->tls;
   switch (tls->state) {
-    case MG_TLS_HS_CLIENT_HELLO:
-      if (mg_tls_client_hello(c) < 0) {
+    case MG_TLS_STATE_CLIENT_START:
+      mg_tls_client_send_hello(c);
+      tls->state = MG_TLS_STATE_CLIENT_WAIT_SH;
+      // Fallthrough
+    case MG_TLS_STATE_CLIENT_WAIT_SH:
+      if (mg_tls_client_recv_hello(c) < 0) {
+        break;
+      }
+      tls->state = MG_TLS_STATE_CLIENT_WAIT_EE;
+      // Fallthrough
+    case MG_TLS_STATE_CLIENT_WAIT_EE:
+      if (mg_tls_client_recv_ext(c) < 0) {
+        break;
+      }
+      tls->state = MG_TLS_STATE_CLIENT_WAIT_CERT;
+      // Fallthrough
+    case MG_TLS_STATE_CLIENT_WAIT_CERT:
+      if (mg_tls_client_recv_cert(c) < 0) {
+        break;
+      }
+      tls->state = MG_TLS_STATE_CLIENT_WAIT_CV;
+      // Fallthrough
+    case MG_TLS_STATE_CLIENT_WAIT_CV:
+      if (mg_tls_client_recv_cert_verify(c) < 0) {
+        break;
+      }
+      tls->state = MG_TLS_STATE_CLIENT_WAIT_FINISHED;
+      // Fallthrough
+    case MG_TLS_STATE_CLIENT_WAIT_FINISHED:
+      if (mg_tls_client_recv_finish(c) < 0) {
+        break;
+      }
+      mg_tls_client_send_finish(c);
+      mg_tls_generate_application_keys(c);
+      tls->state = MG_TLS_STATE_CLIENT_CONNECTED;
+      c->is_tls_hs = 0;
+      break;
+    default: mg_error(c, "unexpected client state: %d", tls->state); break;
+  }
+}
+
+static void mg_tls_server_handshake(struct mg_connection *c) {
+  struct tls_data *tls = (struct tls_data *) c->tls;
+  switch (tls->state) {
+    case MG_TLS_STATE_SERVER_START:
+      if (mg_tls_server_recv_hello(c) < 0) {
         return;
       }
-      tls->state = MG_TLS_HS_SERVER_HELLO;
-      // fallthrough
-    case MG_TLS_HS_SERVER_HELLO:
-      mg_tls_server_hello(c);
+      mg_tls_server_send_hello(c);
       mg_tls_generate_handshake_keys(c);
-      mg_tls_server_extensions(c);
-      mg_tls_server_cert(c);
-      mg_tls_server_verify_ecdsa(c);
-      mg_tls_server_finish(c);
-      tls->state = MG_TLS_HS_CLIENT_CHANGE_CIPHER;
+      mg_tls_server_send_ext(c);
+      mg_tls_server_send_cert(c);
+      mg_tls_server_send_cert_verify(c);
+      mg_tls_server_send_finish(c);
+      tls->state = MG_TLS_STATE_SERVER_NEGOTIATED;
       // fallthrough
-    case MG_TLS_HS_CLIENT_CHANGE_CIPHER:
-      if (mg_tls_client_change_cipher(c) < 0) {
-        return;
-      }
-      tls->state = MG_TLS_HS_CLIENT_FINISH;
-      // fallthrough
-    case MG_TLS_HS_CLIENT_FINISH:
-      if (mg_tls_client_finish(c) < 0) {
+    case MG_TLS_STATE_SERVER_NEGOTIATED:
+      if (mg_tls_server_recv_finish(c) < 0) {
         return;
       }
       mg_tls_generate_application_keys(c);
-      tls->state = MG_TLS_HS_DONE;
-      // fallthrough
-    case MG_TLS_HS_DONE: c->is_tls_hs = 0; return;
+      tls->state = MG_TLS_STATE_SERVER_CONNECTED;
+      c->is_tls_hs = 0;
+      return;
+    default: mg_error(c, "unexpected server state: %d", tls->state); break;
+  }
+}
+
+void mg_tls_handshake(struct mg_connection *c) {
+  if (c->is_client) {
+    mg_tls_client_handshake(c);
+  } else {
+    mg_tls_server_handshake(c);
   }
 }
 
@@ -9956,7 +10549,7 @@ static int mg_parse_pem(const struct mg_str pem, const struct mg_str label,
   if (mg_strcmp(caps[1], label) != 0 || mg_strcmp(caps[3], label) != 0) {
     return -1;  // bad label
   }
-  if ((s = calloc(1, caps[2].len)) == NULL) {
+  if ((s = (char *) calloc(1, caps[2].len)) == NULL) {
     return -1;
   }
 
@@ -9983,27 +10576,30 @@ void mg_tls_init(struct mg_connection *c, const struct mg_tls_opts *opts) {
     mg_error(c, "tls oom");
     return;
   }
-  // parse PEM or DER EC key
-  if (opts->key.ptr == NULL ||
-      mg_parse_pem(opts->key, mg_str_s("EC PRIVATE KEY"), &key) < 0) {
-    MG_ERROR(("Failed to load EC private key"));
+
+  tls->state =
+      c->is_client ? MG_TLS_STATE_CLIENT_START : MG_TLS_STATE_SERVER_START;
+
+  tls->skip_verification = opts->skip_verification;
+  tls->send.align = MG_IO_SIZE;
+
+  c->tls = tls;
+  c->is_tls = c->is_tls_hs = 1;
+  mg_sha256_init(&tls->sha256);
+
+  // save hostname (client extension)
+  if (opts->name.len > 0) {
+    if (opts->name.len >= sizeof(tls->hostname) - 1) {
+      mg_error(c, "hostname too long");
+    }
+    strncpy((char *) tls->hostname, opts->name.ptr, sizeof(tls->hostname) - 1);
+    tls->hostname[opts->name.len] = 0;
+  }
+
+  if (c->is_client) {
+    tls->server_cert_der.ptr = NULL;
     return;
   }
-  if (key.len < 39) {
-    MG_ERROR(("EC private key too short"));
-    return;
-  }
-  // expect ASN.1 SEQUENCE=[INTEGER=1, BITSTRING of 32 bytes, ...]
-  // 30 nn 02 01 01 04 20 [key] ...
-  if (key.ptr[0] != 0x30 || (key.ptr[1] & 0x80) != 0) {
-    MG_ERROR(("EC private key: ASN.1 bad sequence"));
-    return;
-  }
-  if (memcmp(key.ptr + 2, "\x02\x01\x01\x04\x20", 5) != 0) {
-    MG_ERROR(("EC private key: ASN.1 bad data"));
-  }
-  memmove(tls->server_key, key.ptr + 7, 32);
-  free((void *) key.ptr);
 
   // parse PEM or DER certificate
   if (mg_parse_pem(opts->cert, mg_str_s("CERTIFICATE"), &tls->server_cert_der) <
@@ -10012,15 +10608,37 @@ void mg_tls_init(struct mg_connection *c, const struct mg_tls_opts *opts) {
     return;
   }
 
-  // tls->send.align = tls->recv.align = MG_IO_SIZE;
-  tls->send.align = MG_IO_SIZE;
-  c->tls = tls;
-  c->is_tls = c->is_tls_hs = 1;
-  mg_sha256_init(&tls->sha256);
+  // parse PEM or DER EC key
+  if (opts->key.ptr == NULL) {
+    mg_error(c, "certificate provided without a private key");
+    return;
+  }
+
+  if (mg_parse_pem(opts->key, mg_str_s("EC PRIVATE KEY"), &key) == 0) {
+    if (key.len < 39) {
+      MG_ERROR(("EC private key too short"));
+      return;
+    }
+    // expect ASN.1 SEQUENCE=[INTEGER=1, BITSTRING of 32 bytes, ...]
+    // 30 nn 02 01 01 04 20 [key] ...
+    if (key.ptr[0] != 0x30 || (key.ptr[1] & 0x80) != 0) {
+      MG_ERROR(("EC private key: ASN.1 bad sequence"));
+      return;
+    }
+    if (memcmp(key.ptr + 2, "\x02\x01\x01\x04\x20", 5) != 0) {
+      MG_ERROR(("EC private key: ASN.1 bad data"));
+    }
+    memmove(tls->server_key, key.ptr + 7, 32);
+    free((void *) key.ptr);
+  } else if (mg_parse_pem(opts->key, mg_str_s("PRIVATE KEY"), &key) == 0) {
+    mg_error(c, "PKCS8 private key format is not supported");
+  } else {
+    mg_error(c, "expected EC PRIVATE KEY or PRIVATE KEY");
+  }
 }
 
 void mg_tls_free(struct mg_connection *c) {
-  struct tls_data *tls = c->tls;
+  struct tls_data *tls = (struct tls_data *) c->tls;
   if (tls != NULL) {
     mg_iobuf_free(&tls->send);
     free((void *) tls->server_cert_der.ptr);
@@ -10030,10 +10648,10 @@ void mg_tls_free(struct mg_connection *c) {
 }
 
 long mg_tls_send(struct mg_connection *c, const void *buf, size_t len) {
-  struct tls_data *tls = c->tls;
+  struct tls_data *tls = (struct tls_data *) c->tls;
   long n = MG_IO_WAIT;
   if (len > MG_IO_SIZE) len = MG_IO_SIZE;
-  mg_tls_encrypt(c, buf, len, 0x17);
+  mg_tls_encrypt(c, (const uint8_t *) buf, len, MG_TLS_APP_DATA);
   while (tls->send.len > 0 &&
          (n = mg_io_send(c, tls->send.buf, tls->send.len)) > 0) {
     mg_iobuf_del(&tls->send, 0, (size_t) n);
@@ -10043,11 +10661,31 @@ long mg_tls_send(struct mg_connection *c, const void *buf, size_t len) {
 }
 
 long mg_tls_recv(struct mg_connection *c, void *buf, size_t len) {
-  return mg_tls_recv_decrypt(c, buf, len);
+  int r = 0;
+  struct tls_data *tls = (struct tls_data *) c->tls;
+  size_t minlen;
+
+  r = mg_tls_recv_record(c);
+  if (r < 0) {
+    return r;
+  }
+  if (tls->content_type != MG_TLS_APP_DATA) {
+    tls->recv.len = 0;
+    mg_tls_drop_record(c);
+    return MG_IO_WAIT;
+  }
+  minlen = len < tls->recv.len ? len : tls->recv.len;
+  memmove(buf, tls->recv.buf, minlen);
+  tls->recv.buf += minlen;
+  tls->recv.len -= minlen;
+  if (tls->recv.len == 0) {
+    mg_tls_drop_record(c);
+  }
+  return (long) minlen;
 }
 
 size_t mg_tls_pending(struct mg_connection *c) {
-  return mg_tls_got_msg(c) ? 1 : 0;
+  return mg_tls_got_record(c) ? 1 : 0;
 }
 
 void mg_tls_ctx_init(struct mg_mgr *mgr) {
@@ -10577,18 +11215,19 @@ void mg_tls_ctx_free(struct mg_mgr *mgr) {
 
 #if MG_TLS == MG_TLS_BUILTIN
 
-#ifndef uECC_RNG_MAX_TRIES
-#define uECC_RNG_MAX_TRIES 64
+#ifndef MG_UECC_RNG_MAX_TRIES
+#define MG_UECC_RNG_MAX_TRIES 64
 #endif
 
-#if uECC_ENABLE_VLI_API
-#define uECC_VLI_API
+#if MG_UECC_ENABLE_VLI_API
+#define MG_UECC_VLI_API
 #else
-#define uECC_VLI_API static
+#define MG_UECC_VLI_API static
 #endif
 
-#if (uECC_PLATFORM == uECC_avr) || (uECC_PLATFORM == uECC_arm) || \
-    (uECC_PLATFORM == uECC_arm_thumb) || (uECC_PLATFORM == uECC_arm_thumb2)
+#if (MG_UECC_PLATFORM == mg_uecc_avr) || (MG_UECC_PLATFORM == mg_uecc_arm) || \
+    (MG_UECC_PLATFORM == mg_uecc_arm_thumb) ||                                \
+    (MG_UECC_PLATFORM == mg_uecc_arm_thumb2)
 #define CONCATX(a, ...) a##__VA_ARGS__
 #define CONCAT(a, ...) CONCATX(a, __VA_ARGS__)
 
@@ -10659,83 +11298,84 @@ void mg_tls_ctx_free(struct mg_mgr *mgr) {
 #define REPEATM(N, macro) EVAL(REPEATM_SOME(N, macro))
 #endif
 
-//
+// 
 
-#if (uECC_WORD_SIZE == 1)
-#if uECC_SUPPORTS_secp160r1
-#define uECC_MAX_WORDS 21 /* Due to the size of curve_n. */
+#if (MG_UECC_WORD_SIZE == 1)
+#if MG_UECC_SUPPORTS_secp160r1
+#define MG_UECC_MAX_WORDS 21 /* Due to the size of curve_n. */
 #endif
-#if uECC_SUPPORTS_secp192r1
-#undef uECC_MAX_WORDS
-#define uECC_MAX_WORDS 24
+#if MG_UECC_SUPPORTS_secp192r1
+#undef MG_UECC_MAX_WORDS
+#define MG_UECC_MAX_WORDS 24
 #endif
-#if uECC_SUPPORTS_secp224r1
-#undef uECC_MAX_WORDS
-#define uECC_MAX_WORDS 28
+#if MG_UECC_SUPPORTS_secp224r1
+#undef MG_UECC_MAX_WORDS
+#define MG_UECC_MAX_WORDS 28
 #endif
-#if (uECC_SUPPORTS_secp256r1 || uECC_SUPPORTS_secp256k1)
-#undef uECC_MAX_WORDS
-#define uECC_MAX_WORDS 32
+#if (MG_UECC_SUPPORTS_secp256r1 || MG_UECC_SUPPORTS_secp256k1)
+#undef MG_UECC_MAX_WORDS
+#define MG_UECC_MAX_WORDS 32
 #endif
-#elif (uECC_WORD_SIZE == 4)
-#if uECC_SUPPORTS_secp160r1
-#define uECC_MAX_WORDS 6 /* Due to the size of curve_n. */
+#elif (MG_UECC_WORD_SIZE == 4)
+#if MG_UECC_SUPPORTS_secp160r1
+#define MG_UECC_MAX_WORDS 6 /* Due to the size of curve_n. */
 #endif
-#if uECC_SUPPORTS_secp192r1
-#undef uECC_MAX_WORDS
-#define uECC_MAX_WORDS 6
+#if MG_UECC_SUPPORTS_secp192r1
+#undef MG_UECC_MAX_WORDS
+#define MG_UECC_MAX_WORDS 6
 #endif
-#if uECC_SUPPORTS_secp224r1
-#undef uECC_MAX_WORDS
-#define uECC_MAX_WORDS 7
+#if MG_UECC_SUPPORTS_secp224r1
+#undef MG_UECC_MAX_WORDS
+#define MG_UECC_MAX_WORDS 7
 #endif
-#if (uECC_SUPPORTS_secp256r1 || uECC_SUPPORTS_secp256k1)
-#undef uECC_MAX_WORDS
-#define uECC_MAX_WORDS 8
+#if (MG_UECC_SUPPORTS_secp256r1 || MG_UECC_SUPPORTS_secp256k1)
+#undef MG_UECC_MAX_WORDS
+#define MG_UECC_MAX_WORDS 8
 #endif
-#elif (uECC_WORD_SIZE == 8)
-#if uECC_SUPPORTS_secp160r1
-#define uECC_MAX_WORDS 3
+#elif (MG_UECC_WORD_SIZE == 8)
+#if MG_UECC_SUPPORTS_secp160r1
+#define MG_UECC_MAX_WORDS 3
 #endif
-#if uECC_SUPPORTS_secp192r1
-#undef uECC_MAX_WORDS
-#define uECC_MAX_WORDS 3
+#if MG_UECC_SUPPORTS_secp192r1
+#undef MG_UECC_MAX_WORDS
+#define MG_UECC_MAX_WORDS 3
 #endif
-#if uECC_SUPPORTS_secp224r1
-#undef uECC_MAX_WORDS
-#define uECC_MAX_WORDS 4
+#if MG_UECC_SUPPORTS_secp224r1
+#undef MG_UECC_MAX_WORDS
+#define MG_UECC_MAX_WORDS 4
 #endif
-#if (uECC_SUPPORTS_secp256r1 || uECC_SUPPORTS_secp256k1)
-#undef uECC_MAX_WORDS
-#define uECC_MAX_WORDS 4
+#if (MG_UECC_SUPPORTS_secp256r1 || MG_UECC_SUPPORTS_secp256k1)
+#undef MG_UECC_MAX_WORDS
+#define MG_UECC_MAX_WORDS 4
 #endif
-#endif /* uECC_WORD_SIZE */
+#endif /* MG_UECC_WORD_SIZE */
 
-#define BITS_TO_WORDS(num_bits)                             \
-  ((wordcount_t) ((num_bits + ((uECC_WORD_SIZE * 8) - 1)) / \
-                  (uECC_WORD_SIZE * 8)))
+#define BITS_TO_WORDS(num_bits)                                \
+  ((wordcount_t) ((num_bits + ((MG_UECC_WORD_SIZE * 8) - 1)) / \
+                  (MG_UECC_WORD_SIZE * 8)))
 #define BITS_TO_BYTES(num_bits) ((num_bits + 7) / 8)
 
-struct uECC_Curve_t {
+struct MG_UECC_Curve_t {
   wordcount_t num_words;
   wordcount_t num_bytes;
   bitcount_t num_n_bits;
-  uECC_word_t p[uECC_MAX_WORDS];
-  uECC_word_t n[uECC_MAX_WORDS];
-  uECC_word_t G[uECC_MAX_WORDS * 2];
-  uECC_word_t b[uECC_MAX_WORDS];
-  void (*double_jacobian)(uECC_word_t *X1, uECC_word_t *Y1, uECC_word_t *Z1,
-                          uECC_Curve curve);
-#if uECC_SUPPORT_COMPRESSED_POINT
-  void (*mod_sqrt)(uECC_word_t *a, uECC_Curve curve);
+  mg_uecc_word_t p[MG_UECC_MAX_WORDS];
+  mg_uecc_word_t n[MG_UECC_MAX_WORDS];
+  mg_uecc_word_t G[MG_UECC_MAX_WORDS * 2];
+  mg_uecc_word_t b[MG_UECC_MAX_WORDS];
+  void (*double_jacobian)(mg_uecc_word_t *X1, mg_uecc_word_t *Y1,
+                          mg_uecc_word_t *Z1, MG_UECC_Curve curve);
+#if MG_UECC_SUPPORT_COMPRESSED_POINT
+  void (*mod_sqrt)(mg_uecc_word_t *a, MG_UECC_Curve curve);
 #endif
-  void (*x_side)(uECC_word_t *result, const uECC_word_t *x, uECC_Curve curve);
-#if (uECC_OPTIMIZATION_LEVEL > 0)
-  void (*mmod_fast)(uECC_word_t *result, uECC_word_t *product);
+  void (*x_side)(mg_uecc_word_t *result, const mg_uecc_word_t *x,
+                 MG_UECC_Curve curve);
+#if (MG_UECC_OPTIMIZATION_LEVEL > 0)
+  void (*mmod_fast)(mg_uecc_word_t *result, mg_uecc_word_t *product);
 #endif
 };
 
-#if uECC_VLI_NATIVE_LITTLE_ENDIAN
+#if MG_UECC_VLI_NATIVE_LITTLE_ENDIAN
 static void bcopy(uint8_t *dst, const uint8_t *src, unsigned num_bytes) {
   while (0 != num_bytes) {
     num_bytes--;
@@ -10744,16 +11384,17 @@ static void bcopy(uint8_t *dst, const uint8_t *src, unsigned num_bytes) {
 }
 #endif
 
-static cmpresult_t uECC_vli_cmp_unsafe(const uECC_word_t *left,
-                                       const uECC_word_t *right,
-                                       wordcount_t num_words);
+static cmpresult_t mg_uecc_vli_cmp_unsafe(const mg_uecc_word_t *left,
+                                          const mg_uecc_word_t *right,
+                                          wordcount_t num_words);
 
-#if (uECC_PLATFORM == uECC_arm || uECC_PLATFORM == uECC_arm_thumb || \
-     uECC_PLATFORM == uECC_arm_thumb2)
+#if (MG_UECC_PLATFORM == mg_uecc_arm ||       \
+     MG_UECC_PLATFORM == mg_uecc_arm_thumb || \
+     MG_UECC_PLATFORM == mg_uecc_arm_thumb2)
 
 #endif
 
-#if (uECC_PLATFORM == uECC_avr)
+#if (MG_UECC_PLATFORM == mg_uecc_avr)
 
 #endif
 
@@ -10780,29 +11421,30 @@ static cmpresult_t uECC_vli_cmp_unsafe(const uECC_word_t *left,
 #endif
 
 #if defined(default_RNG_defined) && default_RNG_defined
-static uECC_RNG_Function g_rng_function = &default_RNG;
+static MG_UECC_RNG_Function g_rng_function = &default_RNG;
 #else
-static uECC_RNG_Function g_rng_function = 0;
+static MG_UECC_RNG_Function g_rng_function = 0;
 #endif
 
-void uECC_set_rng(uECC_RNG_Function rng_function) {
+void mg_uecc_set_rng(MG_UECC_RNG_Function rng_function) {
   g_rng_function = rng_function;
 }
 
-uECC_RNG_Function uECC_get_rng(void) {
+MG_UECC_RNG_Function mg_uecc_get_rng(void) {
   return g_rng_function;
 }
 
-int uECC_curve_private_key_size(uECC_Curve curve) {
+int mg_uecc_curve_private_key_size(MG_UECC_Curve curve) {
   return BITS_TO_BYTES(curve->num_n_bits);
 }
 
-int uECC_curve_public_key_size(uECC_Curve curve) {
+int mg_uecc_curve_public_key_size(MG_UECC_Curve curve) {
   return 2 * curve->num_bytes;
 }
 
 #if !asm_clear
-uECC_VLI_API void uECC_vli_clear(uECC_word_t *vli, wordcount_t num_words) {
+MG_UECC_VLI_API void mg_uecc_vli_clear(mg_uecc_word_t *vli,
+                                       wordcount_t num_words) {
   wordcount_t i;
   for (i = 0; i < num_words; ++i) {
     vli[i] = 0;
@@ -10812,9 +11454,9 @@ uECC_VLI_API void uECC_vli_clear(uECC_word_t *vli, wordcount_t num_words) {
 
 /* Constant-time comparison to zero - secure way to compare long integers */
 /* Returns 1 if vli == 0, 0 otherwise. */
-uECC_VLI_API uECC_word_t uECC_vli_isZero(const uECC_word_t *vli,
-                                         wordcount_t num_words) {
-  uECC_word_t bits = 0;
+MG_UECC_VLI_API mg_uecc_word_t mg_uecc_vli_isZero(const mg_uecc_word_t *vli,
+                                                  wordcount_t num_words) {
+  mg_uecc_word_t bits = 0;
   wordcount_t i;
   for (i = 0; i < num_words; ++i) {
     bits |= vli[i];
@@ -10823,14 +11465,14 @@ uECC_VLI_API uECC_word_t uECC_vli_isZero(const uECC_word_t *vli,
 }
 
 /* Returns nonzero if bit 'bit' of vli is set. */
-uECC_VLI_API uECC_word_t uECC_vli_testBit(const uECC_word_t *vli,
-                                          bitcount_t bit) {
-  return (vli[bit >> uECC_WORD_BITS_SHIFT] &
-          ((uECC_word_t) 1 << (bit & uECC_WORD_BITS_MASK)));
+MG_UECC_VLI_API mg_uecc_word_t mg_uecc_vli_testBit(const mg_uecc_word_t *vli,
+                                                   bitcount_t bit) {
+  return (vli[bit >> MG_UECC_WORD_BITS_SHIFT] &
+          ((mg_uecc_word_t) 1 << (bit & MG_UECC_WORD_BITS_MASK)));
 }
 
 /* Counts the number of words in vli. */
-static wordcount_t vli_numDigits(const uECC_word_t *vli,
+static wordcount_t vli_numDigits(const mg_uecc_word_t *vli,
                                  const wordcount_t max_words) {
   wordcount_t i;
   /* Search from the end until we find a non-zero digit.
@@ -10842,10 +11484,10 @@ static wordcount_t vli_numDigits(const uECC_word_t *vli,
 }
 
 /* Counts the number of bits required to represent vli. */
-uECC_VLI_API bitcount_t uECC_vli_numBits(const uECC_word_t *vli,
-                                         const wordcount_t max_words) {
-  uECC_word_t i;
-  uECC_word_t digit;
+MG_UECC_VLI_API bitcount_t mg_uecc_vli_numBits(const mg_uecc_word_t *vli,
+                                               const wordcount_t max_words) {
+  mg_uecc_word_t i;
+  mg_uecc_word_t digit;
 
   wordcount_t num_digits = vli_numDigits(vli, max_words);
   if (num_digits == 0) {
@@ -10857,14 +11499,15 @@ uECC_VLI_API bitcount_t uECC_vli_numBits(const uECC_word_t *vli,
     digit >>= 1;
   }
 
-  return (((bitcount_t) ((num_digits - 1) << uECC_WORD_BITS_SHIFT)) +
+  return (((bitcount_t) ((num_digits - 1) << MG_UECC_WORD_BITS_SHIFT)) +
           (bitcount_t) i);
 }
 
 /* Sets dest = src. */
 #if !asm_set
-uECC_VLI_API void uECC_vli_set(uECC_word_t *dest, const uECC_word_t *src,
-                               wordcount_t num_words) {
+MG_UECC_VLI_API void mg_uecc_vli_set(mg_uecc_word_t *dest,
+                                     const mg_uecc_word_t *src,
+                                     wordcount_t num_words) {
   wordcount_t i;
   for (i = 0; i < num_words; ++i) {
     dest[i] = src[i];
@@ -10873,9 +11516,9 @@ uECC_VLI_API void uECC_vli_set(uECC_word_t *dest, const uECC_word_t *src,
 #endif /* !asm_set */
 
 /* Returns sign of left - right. */
-static cmpresult_t uECC_vli_cmp_unsafe(const uECC_word_t *left,
-                                       const uECC_word_t *right,
-                                       wordcount_t num_words) {
+static cmpresult_t mg_uecc_vli_cmp_unsafe(const mg_uecc_word_t *left,
+                                          const mg_uecc_word_t *right,
+                                          wordcount_t num_words) {
   wordcount_t i;
   for (i = num_words - 1; i >= 0; --i) {
     if (left[i] > right[i]) {
@@ -10889,10 +11532,10 @@ static cmpresult_t uECC_vli_cmp_unsafe(const uECC_word_t *left,
 
 /* Constant-time comparison function - secure way to compare long integers */
 /* Returns one if left == right, zero otherwise. */
-uECC_VLI_API uECC_word_t uECC_vli_equal(const uECC_word_t *left,
-                                        const uECC_word_t *right,
-                                        wordcount_t num_words) {
-  uECC_word_t diff = 0;
+MG_UECC_VLI_API mg_uecc_word_t mg_uecc_vli_equal(const mg_uecc_word_t *left,
+                                                 const mg_uecc_word_t *right,
+                                                 wordcount_t num_words) {
+  mg_uecc_word_t diff = 0;
   wordcount_t i;
   for (i = num_words - 1; i >= 0; --i) {
     diff |= (left[i] ^ right[i]);
@@ -10900,46 +11543,47 @@ uECC_VLI_API uECC_word_t uECC_vli_equal(const uECC_word_t *left,
   return (diff == 0);
 }
 
-uECC_VLI_API uECC_word_t uECC_vli_sub(uECC_word_t *result,
-                                      const uECC_word_t *left,
-                                      const uECC_word_t *right,
-                                      wordcount_t num_words);
+MG_UECC_VLI_API mg_uecc_word_t mg_uecc_vli_sub(mg_uecc_word_t *result,
+                                               const mg_uecc_word_t *left,
+                                               const mg_uecc_word_t *right,
+                                               wordcount_t num_words);
 
 /* Returns sign of left - right, in constant time. */
-uECC_VLI_API cmpresult_t uECC_vli_cmp(const uECC_word_t *left,
-                                      const uECC_word_t *right,
-                                      wordcount_t num_words) {
-  uECC_word_t tmp[uECC_MAX_WORDS];
-  uECC_word_t neg = !!uECC_vli_sub(tmp, left, right, num_words);
-  uECC_word_t equal = uECC_vli_isZero(tmp, num_words);
+MG_UECC_VLI_API cmpresult_t mg_uecc_vli_cmp(const mg_uecc_word_t *left,
+                                            const mg_uecc_word_t *right,
+                                            wordcount_t num_words) {
+  mg_uecc_word_t tmp[MG_UECC_MAX_WORDS];
+  mg_uecc_word_t neg = !!mg_uecc_vli_sub(tmp, left, right, num_words);
+  mg_uecc_word_t equal = mg_uecc_vli_isZero(tmp, num_words);
   return (cmpresult_t) (!equal - 2 * neg);
 }
 
 /* Computes vli = vli >> 1. */
 #if !asm_rshift1
-uECC_VLI_API void uECC_vli_rshift1(uECC_word_t *vli, wordcount_t num_words) {
-  uECC_word_t *end = vli;
-  uECC_word_t carry = 0;
+MG_UECC_VLI_API void mg_uecc_vli_rshift1(mg_uecc_word_t *vli,
+                                         wordcount_t num_words) {
+  mg_uecc_word_t *end = vli;
+  mg_uecc_word_t carry = 0;
 
   vli += num_words;
   while (vli-- > end) {
-    uECC_word_t temp = *vli;
+    mg_uecc_word_t temp = *vli;
     *vli = (temp >> 1) | carry;
-    carry = temp << (uECC_WORD_BITS - 1);
+    carry = temp << (MG_UECC_WORD_BITS - 1);
   }
 }
 #endif /* !asm_rshift1 */
 
 /* Computes result = left + right, returning carry. Can modify in place. */
 #if !asm_add
-uECC_VLI_API uECC_word_t uECC_vli_add(uECC_word_t *result,
-                                      const uECC_word_t *left,
-                                      const uECC_word_t *right,
-                                      wordcount_t num_words) {
-  uECC_word_t carry = 0;
+MG_UECC_VLI_API mg_uecc_word_t mg_uecc_vli_add(mg_uecc_word_t *result,
+                                               const mg_uecc_word_t *left,
+                                               const mg_uecc_word_t *right,
+                                               wordcount_t num_words) {
+  mg_uecc_word_t carry = 0;
   wordcount_t i;
   for (i = 0; i < num_words; ++i) {
-    uECC_word_t sum = left[i] + right[i] + carry;
+    mg_uecc_word_t sum = left[i] + right[i] + carry;
     if (sum != left[i]) {
       carry = (sum < left[i]);
     }
@@ -10951,14 +11595,14 @@ uECC_VLI_API uECC_word_t uECC_vli_add(uECC_word_t *result,
 
 /* Computes result = left - right, returning borrow. Can modify in place. */
 #if !asm_sub
-uECC_VLI_API uECC_word_t uECC_vli_sub(uECC_word_t *result,
-                                      const uECC_word_t *left,
-                                      const uECC_word_t *right,
-                                      wordcount_t num_words) {
-  uECC_word_t borrow = 0;
+MG_UECC_VLI_API mg_uecc_word_t mg_uecc_vli_sub(mg_uecc_word_t *result,
+                                               const mg_uecc_word_t *left,
+                                               const mg_uecc_word_t *right,
+                                               wordcount_t num_words) {
+  mg_uecc_word_t borrow = 0;
   wordcount_t i;
   for (i = 0; i < num_words; ++i) {
-    uECC_word_t diff = left[i] - right[i] - borrow;
+    mg_uecc_word_t diff = left[i] - right[i] - borrow;
     if (diff != left[i]) {
       borrow = (diff > left[i]);
     }
@@ -10968,12 +11612,12 @@ uECC_VLI_API uECC_word_t uECC_vli_sub(uECC_word_t *result,
 }
 #endif /* !asm_sub */
 
-#if !asm_mult || (uECC_SQUARE_FUNC && !asm_square) ||            \
-    (uECC_SUPPORTS_secp256k1 && (uECC_OPTIMIZATION_LEVEL > 0) && \
-     ((uECC_WORD_SIZE == 1) || (uECC_WORD_SIZE == 8)))
-static void muladd(uECC_word_t a, uECC_word_t b, uECC_word_t *r0,
-                   uECC_word_t *r1, uECC_word_t *r2) {
-#if uECC_WORD_SIZE == 8
+#if !asm_mult || (MG_UECC_SQUARE_FUNC && !asm_square) ||               \
+    (MG_UECC_SUPPORTS_secp256k1 && (MG_UECC_OPTIMIZATION_LEVEL > 0) && \
+     ((MG_UECC_WORD_SIZE == 1) || (MG_UECC_WORD_SIZE == 8)))
+static void muladd(mg_uecc_word_t a, mg_uecc_word_t b, mg_uecc_word_t *r0,
+                   mg_uecc_word_t *r1, mg_uecc_word_t *r2) {
+#if MG_UECC_WORD_SIZE == 8
   uint64_t a0 = a & 0xffffffff;
   uint64_t a1 = a >> 32;
   uint64_t b0 = b & 0xffffffff;
@@ -10999,23 +11643,24 @@ static void muladd(uECC_word_t a, uECC_word_t b, uECC_word_t *r0,
   *r1 += (p1 + (*r0 < p0));
   *r2 += ((*r1 < p1) || (*r1 == p1 && *r0 < p0));
 #else
-  uECC_dword_t p = (uECC_dword_t) a * b;
-  uECC_dword_t r01 = ((uECC_dword_t) (*r1) << uECC_WORD_BITS) | *r0;
+  mg_uecc_dword_t p = (mg_uecc_dword_t) a * b;
+  mg_uecc_dword_t r01 = ((mg_uecc_dword_t) (*r1) << MG_UECC_WORD_BITS) | *r0;
   r01 += p;
   *r2 += (r01 < p);
-  *r1 = (uECC_word_t) (r01 >> uECC_WORD_BITS);
-  *r0 = (uECC_word_t) r01;
+  *r1 = (mg_uecc_word_t) (r01 >> MG_UECC_WORD_BITS);
+  *r0 = (mg_uecc_word_t) r01;
 #endif
 }
 #endif /* muladd needed */
 
 #if !asm_mult
-uECC_VLI_API void uECC_vli_mult(uECC_word_t *result, const uECC_word_t *left,
-                                const uECC_word_t *right,
-                                wordcount_t num_words) {
-  uECC_word_t r0 = 0;
-  uECC_word_t r1 = 0;
-  uECC_word_t r2 = 0;
+MG_UECC_VLI_API void mg_uecc_vli_mult(mg_uecc_word_t *result,
+                                      const mg_uecc_word_t *left,
+                                      const mg_uecc_word_t *right,
+                                      wordcount_t num_words) {
+  mg_uecc_word_t r0 = 0;
+  mg_uecc_word_t r1 = 0;
+  mg_uecc_word_t r2 = 0;
   wordcount_t i, k;
 
   /* Compute each digit of result in sequence, maintaining the carries. */
@@ -11041,12 +11686,12 @@ uECC_VLI_API void uECC_vli_mult(uECC_word_t *result, const uECC_word_t *left,
 }
 #endif /* !asm_mult */
 
-#if uECC_SQUARE_FUNC
+#if MG_UECC_SQUARE_FUNC
 
 #if !asm_square
-static void mul2add(uECC_word_t a, uECC_word_t b, uECC_word_t *r0,
-                    uECC_word_t *r1, uECC_word_t *r2) {
-#if uECC_WORD_SIZE == 8
+static void mul2add(mg_uecc_word_t a, mg_uecc_word_t b, mg_uecc_word_t *r0,
+                    mg_uecc_word_t *r1, mg_uecc_word_t *r2) {
+#if MG_UECC_WORD_SIZE == 8
   uint64_t a0 = a & 0xffffffffull;
   uint64_t a1 = a >> 32;
   uint64_t b0 = b & 0xffffffffull;
@@ -11076,27 +11721,28 @@ static void mul2add(uECC_word_t a, uECC_word_t b, uECC_word_t *r0,
   *r1 += (p1 + (*r0 < p0));
   *r2 += ((*r1 < p1) || (*r1 == p1 && *r0 < p0));
 #else
-  uECC_dword_t p = (uECC_dword_t) a * b;
-  uECC_dword_t r01 = ((uECC_dword_t) (*r1) << uECC_WORD_BITS) | *r0;
-  *r2 += (p >> (uECC_WORD_BITS * 2 - 1));
+  mg_uecc_dword_t p = (mg_uecc_dword_t) a * b;
+  mg_uecc_dword_t r01 = ((mg_uecc_dword_t) (*r1) << MG_UECC_WORD_BITS) | *r0;
+  *r2 += (p >> (MG_UECC_WORD_BITS * 2 - 1));
   p *= 2;
   r01 += p;
   *r2 += (r01 < p);
-  *r1 = r01 >> uECC_WORD_BITS;
-  *r0 = (uECC_word_t) r01;
+  *r1 = r01 >> MG_UECC_WORD_BITS;
+  *r0 = (mg_uecc_word_t) r01;
 #endif
 }
 
-uECC_VLI_API void uECC_vli_square(uECC_word_t *result, const uECC_word_t *left,
-                                  wordcount_t num_words) {
-  uECC_word_t r0 = 0;
-  uECC_word_t r1 = 0;
-  uECC_word_t r2 = 0;
+MG_UECC_VLI_API void mg_uecc_vli_square(mg_uecc_word_t *result,
+                                        const mg_uecc_word_t *left,
+                                        wordcount_t num_words) {
+  mg_uecc_word_t r0 = 0;
+  mg_uecc_word_t r1 = 0;
+  mg_uecc_word_t r2 = 0;
 
   wordcount_t i, k;
 
   for (k = 0; k < num_words * 2 - 1; ++k) {
-    uECC_word_t min = (k < num_words ? 0 : (k + 1) - num_words);
+    mg_uecc_word_t min = (k < num_words ? 0 : (k + 1) - num_words);
     for (i = min; i <= k && i <= k - i; ++i) {
       if (i < k - i) {
         mul2add(left[i], left[k - i], &r0, &r1, &r2);
@@ -11114,168 +11760,174 @@ uECC_VLI_API void uECC_vli_square(uECC_word_t *result, const uECC_word_t *left,
 }
 #endif /* !asm_square */
 
-#else /* uECC_SQUARE_FUNC */
+#else /* MG_UECC_SQUARE_FUNC */
 
-#if uECC_ENABLE_VLI_API
-uECC_VLI_API void uECC_vli_square(uECC_word_t *result, const uECC_word_t *left,
-                                  wordcount_t num_words) {
-  uECC_vli_mult(result, left, left, num_words);
+#if MG_UECC_ENABLE_VLI_API
+MG_UECC_VLI_API void mg_uecc_vli_square(mg_uecc_word_t *result,
+                                        const mg_uecc_word_t *left,
+                                        wordcount_t num_words) {
+  mg_uecc_vli_mult(result, left, left, num_words);
 }
-#endif /* uECC_ENABLE_VLI_API */
+#endif /* MG_UECC_ENABLE_VLI_API */
 
-#endif /* uECC_SQUARE_FUNC */
+#endif /* MG_UECC_SQUARE_FUNC */
 
 /* Computes result = (left + right) % mod.
    Assumes that left < mod and right < mod, and that result does not overlap
    mod. */
-uECC_VLI_API void uECC_vli_modAdd(uECC_word_t *result, const uECC_word_t *left,
-                                  const uECC_word_t *right,
-                                  const uECC_word_t *mod,
-                                  wordcount_t num_words) {
-  uECC_word_t carry = uECC_vli_add(result, left, right, num_words);
-  if (carry || uECC_vli_cmp_unsafe(mod, result, num_words) != 1) {
+MG_UECC_VLI_API void mg_uecc_vli_modAdd(mg_uecc_word_t *result,
+                                        const mg_uecc_word_t *left,
+                                        const mg_uecc_word_t *right,
+                                        const mg_uecc_word_t *mod,
+                                        wordcount_t num_words) {
+  mg_uecc_word_t carry = mg_uecc_vli_add(result, left, right, num_words);
+  if (carry || mg_uecc_vli_cmp_unsafe(mod, result, num_words) != 1) {
     /* result > mod (result = mod + remainder), so subtract mod to get
      * remainder. */
-    uECC_vli_sub(result, result, mod, num_words);
+    mg_uecc_vli_sub(result, result, mod, num_words);
   }
 }
 
 /* Computes result = (left - right) % mod.
    Assumes that left < mod and right < mod, and that result does not overlap
    mod. */
-uECC_VLI_API void uECC_vli_modSub(uECC_word_t *result, const uECC_word_t *left,
-                                  const uECC_word_t *right,
-                                  const uECC_word_t *mod,
-                                  wordcount_t num_words) {
-  uECC_word_t l_borrow = uECC_vli_sub(result, left, right, num_words);
+MG_UECC_VLI_API void mg_uecc_vli_modSub(mg_uecc_word_t *result,
+                                        const mg_uecc_word_t *left,
+                                        const mg_uecc_word_t *right,
+                                        const mg_uecc_word_t *mod,
+                                        wordcount_t num_words) {
+  mg_uecc_word_t l_borrow = mg_uecc_vli_sub(result, left, right, num_words);
   if (l_borrow) {
     /* In this case, result == -diff == (max int) - diff. Since -x % d == d - x,
        we can get the correct result from result + mod (with overflow). */
-    uECC_vli_add(result, result, mod, num_words);
+    mg_uecc_vli_add(result, result, mod, num_words);
   }
 }
 
 /* Computes result = product % mod, where product is 2N words long. */
 /* Currently only designed to work for curve_p or curve_n. */
-uECC_VLI_API void uECC_vli_mmod(uECC_word_t *result, uECC_word_t *product,
-                                const uECC_word_t *mod, wordcount_t num_words) {
-  uECC_word_t mod_multiple[2 * uECC_MAX_WORDS];
-  uECC_word_t tmp[2 * uECC_MAX_WORDS];
-  uECC_word_t *v[2] = {tmp, product};
-  uECC_word_t index;
+MG_UECC_VLI_API void mg_uecc_vli_mmod(mg_uecc_word_t *result,
+                                      mg_uecc_word_t *product,
+                                      const mg_uecc_word_t *mod,
+                                      wordcount_t num_words) {
+  mg_uecc_word_t mod_multiple[2 * MG_UECC_MAX_WORDS];
+  mg_uecc_word_t tmp[2 * MG_UECC_MAX_WORDS];
+  mg_uecc_word_t *v[2] = {tmp, product};
+  mg_uecc_word_t index;
 
   /* Shift mod so its highest set bit is at the maximum position. */
-  bitcount_t shift = (bitcount_t) (
-      (num_words * 2 * uECC_WORD_BITS) - uECC_vli_numBits(mod, num_words));
-  wordcount_t word_shift = (wordcount_t) (shift / uECC_WORD_BITS);
-  wordcount_t bit_shift = (wordcount_t) (shift % uECC_WORD_BITS);
-  uECC_word_t carry = 0;
-  uECC_vli_clear(mod_multiple, word_shift);
+  bitcount_t shift = (bitcount_t) ((num_words * 2 * MG_UECC_WORD_BITS) -
+                                   mg_uecc_vli_numBits(mod, num_words));
+  wordcount_t word_shift = (wordcount_t) (shift / MG_UECC_WORD_BITS);
+  wordcount_t bit_shift = (wordcount_t) (shift % MG_UECC_WORD_BITS);
+  mg_uecc_word_t carry = 0;
+  mg_uecc_vli_clear(mod_multiple, word_shift);
   if (bit_shift > 0) {
-    for (index = 0; index < (uECC_word_t) num_words; ++index) {
-      mod_multiple[(uECC_word_t) word_shift + index] =
-          (uECC_word_t) (mod[index] << bit_shift) | carry;
-      carry = mod[index] >> (uECC_WORD_BITS - bit_shift);
+    for (index = 0; index < (mg_uecc_word_t) num_words; ++index) {
+      mod_multiple[(mg_uecc_word_t) word_shift + index] =
+          (mg_uecc_word_t) (mod[index] << bit_shift) | carry;
+      carry = mod[index] >> (MG_UECC_WORD_BITS - bit_shift);
     }
   } else {
-    uECC_vli_set(mod_multiple + word_shift, mod, num_words);
+    mg_uecc_vli_set(mod_multiple + word_shift, mod, num_words);
   }
 
   for (index = 1; shift >= 0; --shift) {
-    uECC_word_t borrow = 0;
+    mg_uecc_word_t borrow = 0;
     wordcount_t i;
     for (i = 0; i < num_words * 2; ++i) {
-      uECC_word_t diff = v[index][i] - mod_multiple[i] - borrow;
+      mg_uecc_word_t diff = v[index][i] - mod_multiple[i] - borrow;
       if (diff != v[index][i]) {
         borrow = (diff > v[index][i]);
       }
       v[1 - index][i] = diff;
     }
     index = !(index ^ borrow); /* Swap the index if there was no borrow */
-    uECC_vli_rshift1(mod_multiple, num_words);
+    mg_uecc_vli_rshift1(mod_multiple, num_words);
     mod_multiple[num_words - 1] |= mod_multiple[num_words]
-                                   << (uECC_WORD_BITS - 1);
-    uECC_vli_rshift1(mod_multiple + num_words, num_words);
+                                   << (MG_UECC_WORD_BITS - 1);
+    mg_uecc_vli_rshift1(mod_multiple + num_words, num_words);
   }
-  uECC_vli_set(result, v[index], num_words);
+  mg_uecc_vli_set(result, v[index], num_words);
 }
 
 /* Computes result = (left * right) % mod. */
-uECC_VLI_API void uECC_vli_modMult(uECC_word_t *result, const uECC_word_t *left,
-                                   const uECC_word_t *right,
-                                   const uECC_word_t *mod,
-                                   wordcount_t num_words) {
-  uECC_word_t product[2 * uECC_MAX_WORDS];
-  uECC_vli_mult(product, left, right, num_words);
-  uECC_vli_mmod(result, product, mod, num_words);
+MG_UECC_VLI_API void mg_uecc_vli_modMult(mg_uecc_word_t *result,
+                                         const mg_uecc_word_t *left,
+                                         const mg_uecc_word_t *right,
+                                         const mg_uecc_word_t *mod,
+                                         wordcount_t num_words) {
+  mg_uecc_word_t product[2 * MG_UECC_MAX_WORDS];
+  mg_uecc_vli_mult(product, left, right, num_words);
+  mg_uecc_vli_mmod(result, product, mod, num_words);
 }
 
-uECC_VLI_API void uECC_vli_modMult_fast(uECC_word_t *result,
-                                        const uECC_word_t *left,
-                                        const uECC_word_t *right,
-                                        uECC_Curve curve) {
-  uECC_word_t product[2 * uECC_MAX_WORDS];
-  uECC_vli_mult(product, left, right, curve->num_words);
-#if (uECC_OPTIMIZATION_LEVEL > 0)
+MG_UECC_VLI_API void mg_uecc_vli_modMult_fast(mg_uecc_word_t *result,
+                                              const mg_uecc_word_t *left,
+                                              const mg_uecc_word_t *right,
+                                              MG_UECC_Curve curve) {
+  mg_uecc_word_t product[2 * MG_UECC_MAX_WORDS];
+  mg_uecc_vli_mult(product, left, right, curve->num_words);
+#if (MG_UECC_OPTIMIZATION_LEVEL > 0)
   curve->mmod_fast(result, product);
 #else
-  uECC_vli_mmod(result, product, curve->p, curve->num_words);
+  mg_uecc_vli_mmod(result, product, curve->p, curve->num_words);
 #endif
 }
 
-#if uECC_SQUARE_FUNC
+#if MG_UECC_SQUARE_FUNC
 
-#if uECC_ENABLE_VLI_API
+#if MG_UECC_ENABLE_VLI_API
 /* Computes result = left^2 % mod. */
-uECC_VLI_API void uECC_vli_modSquare(uECC_word_t *result,
-                                     const uECC_word_t *left,
-                                     const uECC_word_t *mod,
-                                     wordcount_t num_words) {
-  uECC_word_t product[2 * uECC_MAX_WORDS];
-  uECC_vli_square(product, left, num_words);
-  uECC_vli_mmod(result, product, mod, num_words);
+MG_UECC_VLI_API void mg_uecc_vli_modSquare(mg_uecc_word_t *result,
+                                           const mg_uecc_word_t *left,
+                                           const mg_uecc_word_t *mod,
+                                           wordcount_t num_words) {
+  mg_uecc_word_t product[2 * MG_UECC_MAX_WORDS];
+  mg_uecc_vli_square(product, left, num_words);
+  mg_uecc_vli_mmod(result, product, mod, num_words);
 }
-#endif /* uECC_ENABLE_VLI_API */
+#endif /* MG_UECC_ENABLE_VLI_API */
 
-uECC_VLI_API void uECC_vli_modSquare_fast(uECC_word_t *result,
-                                          const uECC_word_t *left,
-                                          uECC_Curve curve) {
-  uECC_word_t product[2 * uECC_MAX_WORDS];
-  uECC_vli_square(product, left, curve->num_words);
-#if (uECC_OPTIMIZATION_LEVEL > 0)
+MG_UECC_VLI_API void mg_uecc_vli_modSquare_fast(mg_uecc_word_t *result,
+                                                const mg_uecc_word_t *left,
+                                                MG_UECC_Curve curve) {
+  mg_uecc_word_t product[2 * MG_UECC_MAX_WORDS];
+  mg_uecc_vli_square(product, left, curve->num_words);
+#if (MG_UECC_OPTIMIZATION_LEVEL > 0)
   curve->mmod_fast(result, product);
 #else
-  uECC_vli_mmod(result, product, curve->p, curve->num_words);
+  mg_uecc_vli_mmod(result, product, curve->p, curve->num_words);
 #endif
 }
 
-#else /* uECC_SQUARE_FUNC */
+#else /* MG_UECC_SQUARE_FUNC */
 
-#if uECC_ENABLE_VLI_API
-uECC_VLI_API void uECC_vli_modSquare(uECC_word_t *result,
-                                     const uECC_word_t *left,
-                                     const uECC_word_t *mod,
-                                     wordcount_t num_words) {
-  uECC_vli_modMult(result, left, left, mod, num_words);
+#if MG_UECC_ENABLE_VLI_API
+MG_UECC_VLI_API void mg_uecc_vli_modSquare(mg_uecc_word_t *result,
+                                           const mg_uecc_word_t *left,
+                                           const mg_uecc_word_t *mod,
+                                           wordcount_t num_words) {
+  mg_uecc_vli_modMult(result, left, left, mod, num_words);
 }
-#endif /* uECC_ENABLE_VLI_API */
+#endif /* MG_UECC_ENABLE_VLI_API */
 
-uECC_VLI_API void uECC_vli_modSquare_fast(uECC_word_t *result,
-                                          const uECC_word_t *left,
-                                          uECC_Curve curve) {
-  uECC_vli_modMult_fast(result, left, left, curve);
+MG_UECC_VLI_API void mg_uecc_vli_modSquare_fast(mg_uecc_word_t *result,
+                                                const mg_uecc_word_t *left,
+                                                MG_UECC_Curve curve) {
+  mg_uecc_vli_modMult_fast(result, left, left, curve);
 }
 
-#endif /* uECC_SQUARE_FUNC */
+#endif /* MG_UECC_SQUARE_FUNC */
 
 #define EVEN(vli) (!(vli[0] & 1))
-static void vli_modInv_update(uECC_word_t *uv, const uECC_word_t *mod,
+static void vli_modInv_update(mg_uecc_word_t *uv, const mg_uecc_word_t *mod,
                               wordcount_t num_words) {
-  uECC_word_t carry = 0;
+  mg_uecc_word_t carry = 0;
   if (!EVEN(uv)) {
-    carry = uECC_vli_add(uv, uv, mod, num_words);
+    carry = mg_uecc_vli_add(uv, uv, mod, num_words);
   }
-  uECC_vli_rshift1(uv, num_words);
+  mg_uecc_vli_rshift1(uv, num_words);
   if (carry) {
     uv[num_words - 1] |= HIGH_BIT_SET;
   }
@@ -11283,49 +11935,50 @@ static void vli_modInv_update(uECC_word_t *uv, const uECC_word_t *mod,
 
 /* Computes result = (1 / input) % mod. All VLIs are the same size.
    See "From Euclid's GCD to Montgomery Multiplication to the Great Divide" */
-uECC_VLI_API void uECC_vli_modInv(uECC_word_t *result, const uECC_word_t *input,
-                                  const uECC_word_t *mod,
-                                  wordcount_t num_words) {
-  uECC_word_t a[uECC_MAX_WORDS], b[uECC_MAX_WORDS], u[uECC_MAX_WORDS],
-      v[uECC_MAX_WORDS];
+MG_UECC_VLI_API void mg_uecc_vli_modInv(mg_uecc_word_t *result,
+                                        const mg_uecc_word_t *input,
+                                        const mg_uecc_word_t *mod,
+                                        wordcount_t num_words) {
+  mg_uecc_word_t a[MG_UECC_MAX_WORDS], b[MG_UECC_MAX_WORDS],
+      u[MG_UECC_MAX_WORDS], v[MG_UECC_MAX_WORDS];
   cmpresult_t cmpResult;
 
-  if (uECC_vli_isZero(input, num_words)) {
-    uECC_vli_clear(result, num_words);
+  if (mg_uecc_vli_isZero(input, num_words)) {
+    mg_uecc_vli_clear(result, num_words);
     return;
   }
 
-  uECC_vli_set(a, input, num_words);
-  uECC_vli_set(b, mod, num_words);
-  uECC_vli_clear(u, num_words);
+  mg_uecc_vli_set(a, input, num_words);
+  mg_uecc_vli_set(b, mod, num_words);
+  mg_uecc_vli_clear(u, num_words);
   u[0] = 1;
-  uECC_vli_clear(v, num_words);
-  while ((cmpResult = uECC_vli_cmp_unsafe(a, b, num_words)) != 0) {
+  mg_uecc_vli_clear(v, num_words);
+  while ((cmpResult = mg_uecc_vli_cmp_unsafe(a, b, num_words)) != 0) {
     if (EVEN(a)) {
-      uECC_vli_rshift1(a, num_words);
+      mg_uecc_vli_rshift1(a, num_words);
       vli_modInv_update(u, mod, num_words);
     } else if (EVEN(b)) {
-      uECC_vli_rshift1(b, num_words);
+      mg_uecc_vli_rshift1(b, num_words);
       vli_modInv_update(v, mod, num_words);
     } else if (cmpResult > 0) {
-      uECC_vli_sub(a, a, b, num_words);
-      uECC_vli_rshift1(a, num_words);
-      if (uECC_vli_cmp_unsafe(u, v, num_words) < 0) {
-        uECC_vli_add(u, u, mod, num_words);
+      mg_uecc_vli_sub(a, a, b, num_words);
+      mg_uecc_vli_rshift1(a, num_words);
+      if (mg_uecc_vli_cmp_unsafe(u, v, num_words) < 0) {
+        mg_uecc_vli_add(u, u, mod, num_words);
       }
-      uECC_vli_sub(u, u, v, num_words);
+      mg_uecc_vli_sub(u, u, v, num_words);
       vli_modInv_update(u, mod, num_words);
     } else {
-      uECC_vli_sub(b, b, a, num_words);
-      uECC_vli_rshift1(b, num_words);
-      if (uECC_vli_cmp_unsafe(v, u, num_words) < 0) {
-        uECC_vli_add(v, v, mod, num_words);
+      mg_uecc_vli_sub(b, b, a, num_words);
+      mg_uecc_vli_rshift1(b, num_words);
+      if (mg_uecc_vli_cmp_unsafe(v, u, num_words) < 0) {
+        mg_uecc_vli_add(v, v, mod, num_words);
       }
-      uECC_vli_sub(v, v, u, num_words);
+      mg_uecc_vli_sub(v, v, u, num_words);
       vli_modInv_update(v, mod, num_words);
     }
   }
-  uECC_vli_set(result, u, num_words);
+  mg_uecc_vli_set(result, u, num_words);
 }
 
 /* ------ Point operations ------ */
@@ -11341,7 +11994,7 @@ uECC_VLI_API void uECC_vli_modInv(uECC_word_t *result, const uECC_word_t *input,
 #define num_bytes_secp256r1 32
 #define num_bytes_secp256k1 32
 
-#if (uECC_WORD_SIZE == 1)
+#if (MG_UECC_WORD_SIZE == 1)
 
 #define num_words_secp160r1 20
 #define num_words_secp192r1 24
@@ -11353,7 +12006,7 @@ uECC_VLI_API void uECC_vli_modInv(uECC_word_t *result, const uECC_word_t *input,
   0x##a, 0x##b, 0x##c, 0x##d, 0x##e, 0x##f, 0x##g, 0x##h
 #define BYTES_TO_WORDS_4(a, b, c, d) 0x##a, 0x##b, 0x##c, 0x##d
 
-#elif (uECC_WORD_SIZE == 4)
+#elif (MG_UECC_WORD_SIZE == 4)
 
 #define num_words_secp160r1 5
 #define num_words_secp192r1 6
@@ -11364,7 +12017,7 @@ uECC_VLI_API void uECC_vli_modInv(uECC_word_t *result, const uECC_word_t *input,
 #define BYTES_TO_WORDS_8(a, b, c, d, e, f, g, h) 0x##d##c##b##a, 0x##h##g##f##e
 #define BYTES_TO_WORDS_4(a, b, c, d) 0x##d##c##b##a
 
-#elif (uECC_WORD_SIZE == 8)
+#elif (MG_UECC_WORD_SIZE == 8)
 
 #define num_words_secp160r1 3
 #define num_words_secp192r1 3
@@ -11375,101 +12028,104 @@ uECC_VLI_API void uECC_vli_modInv(uECC_word_t *result, const uECC_word_t *input,
 #define BYTES_TO_WORDS_8(a, b, c, d, e, f, g, h) 0x##h##g##f##e##d##c##b##a##U
 #define BYTES_TO_WORDS_4(a, b, c, d) 0x##d##c##b##a##U
 
-#endif /* uECC_WORD_SIZE */
+#endif /* MG_UECC_WORD_SIZE */
 
-#if uECC_SUPPORTS_secp160r1 || uECC_SUPPORTS_secp192r1 || \
-    uECC_SUPPORTS_secp224r1 || uECC_SUPPORTS_secp256r1
-static void double_jacobian_default(uECC_word_t *X1, uECC_word_t *Y1,
-                                    uECC_word_t *Z1, uECC_Curve curve) {
+#if MG_UECC_SUPPORTS_secp160r1 || MG_UECC_SUPPORTS_secp192r1 || \
+    MG_UECC_SUPPORTS_secp224r1 || MG_UECC_SUPPORTS_secp256r1
+static void double_jacobian_default(mg_uecc_word_t *X1, mg_uecc_word_t *Y1,
+                                    mg_uecc_word_t *Z1, MG_UECC_Curve curve) {
   /* t1 = X, t2 = Y, t3 = Z */
-  uECC_word_t t4[uECC_MAX_WORDS];
-  uECC_word_t t5[uECC_MAX_WORDS];
+  mg_uecc_word_t t4[MG_UECC_MAX_WORDS];
+  mg_uecc_word_t t5[MG_UECC_MAX_WORDS];
   wordcount_t num_words = curve->num_words;
 
-  if (uECC_vli_isZero(Z1, num_words)) {
+  if (mg_uecc_vli_isZero(Z1, num_words)) {
     return;
   }
 
-  uECC_vli_modSquare_fast(t4, Y1, curve);   /* t4 = y1^2 */
-  uECC_vli_modMult_fast(t5, X1, t4, curve); /* t5 = x1*y1^2 = A */
-  uECC_vli_modSquare_fast(t4, t4, curve);   /* t4 = y1^4 */
-  uECC_vli_modMult_fast(Y1, Y1, Z1, curve); /* t2 = y1*z1 = z3 */
-  uECC_vli_modSquare_fast(Z1, Z1, curve);   /* t3 = z1^2 */
+  mg_uecc_vli_modSquare_fast(t4, Y1, curve);   /* t4 = y1^2 */
+  mg_uecc_vli_modMult_fast(t5, X1, t4, curve); /* t5 = x1*y1^2 = A */
+  mg_uecc_vli_modSquare_fast(t4, t4, curve);   /* t4 = y1^4 */
+  mg_uecc_vli_modMult_fast(Y1, Y1, Z1, curve); /* t2 = y1*z1 = z3 */
+  mg_uecc_vli_modSquare_fast(Z1, Z1, curve);   /* t3 = z1^2 */
 
-  uECC_vli_modAdd(X1, X1, Z1, curve->p, num_words); /* t1 = x1 + z1^2 */
-  uECC_vli_modAdd(Z1, Z1, Z1, curve->p, num_words); /* t3 = 2*z1^2 */
-  uECC_vli_modSub(Z1, X1, Z1, curve->p, num_words); /* t3 = x1 - z1^2 */
-  uECC_vli_modMult_fast(X1, X1, Z1, curve);         /* t1 = x1^2 - z1^4 */
+  mg_uecc_vli_modAdd(X1, X1, Z1, curve->p, num_words); /* t1 = x1 + z1^2 */
+  mg_uecc_vli_modAdd(Z1, Z1, Z1, curve->p, num_words); /* t3 = 2*z1^2 */
+  mg_uecc_vli_modSub(Z1, X1, Z1, curve->p, num_words); /* t3 = x1 - z1^2 */
+  mg_uecc_vli_modMult_fast(X1, X1, Z1, curve);         /* t1 = x1^2 - z1^4 */
 
-  uECC_vli_modAdd(Z1, X1, X1, curve->p, num_words); /* t3 = 2*(x1^2 - z1^4) */
-  uECC_vli_modAdd(X1, X1, Z1, curve->p, num_words); /* t1 = 3*(x1^2 - z1^4) */
-  if (uECC_vli_testBit(X1, 0)) {
-    uECC_word_t l_carry = uECC_vli_add(X1, X1, curve->p, num_words);
-    uECC_vli_rshift1(X1, num_words);
-    X1[num_words - 1] |= l_carry << (uECC_WORD_BITS - 1);
+  mg_uecc_vli_modAdd(Z1, X1, X1, curve->p,
+                     num_words); /* t3 = 2*(x1^2 - z1^4) */
+  mg_uecc_vli_modAdd(X1, X1, Z1, curve->p,
+                     num_words); /* t1 = 3*(x1^2 - z1^4) */
+  if (mg_uecc_vli_testBit(X1, 0)) {
+    mg_uecc_word_t l_carry = mg_uecc_vli_add(X1, X1, curve->p, num_words);
+    mg_uecc_vli_rshift1(X1, num_words);
+    X1[num_words - 1] |= l_carry << (MG_UECC_WORD_BITS - 1);
   } else {
-    uECC_vli_rshift1(X1, num_words);
+    mg_uecc_vli_rshift1(X1, num_words);
   }
   /* t1 = 3/2*(x1^2 - z1^4) = B */
 
-  uECC_vli_modSquare_fast(Z1, X1, curve);           /* t3 = B^2 */
-  uECC_vli_modSub(Z1, Z1, t5, curve->p, num_words); /* t3 = B^2 - A */
-  uECC_vli_modSub(Z1, Z1, t5, curve->p, num_words); /* t3 = B^2 - 2A = x3 */
-  uECC_vli_modSub(t5, t5, Z1, curve->p, num_words); /* t5 = A - x3 */
-  uECC_vli_modMult_fast(X1, X1, t5, curve);         /* t1 = B * (A - x3) */
-  uECC_vli_modSub(t4, X1, t4, curve->p,
-                  num_words); /* t4 = B * (A - x3) - y1^4 = y3 */
+  mg_uecc_vli_modSquare_fast(Z1, X1, curve);           /* t3 = B^2 */
+  mg_uecc_vli_modSub(Z1, Z1, t5, curve->p, num_words); /* t3 = B^2 - A */
+  mg_uecc_vli_modSub(Z1, Z1, t5, curve->p, num_words); /* t3 = B^2 - 2A = x3 */
+  mg_uecc_vli_modSub(t5, t5, Z1, curve->p, num_words); /* t5 = A - x3 */
+  mg_uecc_vli_modMult_fast(X1, X1, t5, curve);         /* t1 = B * (A - x3) */
+  mg_uecc_vli_modSub(t4, X1, t4, curve->p,
+                     num_words); /* t4 = B * (A - x3) - y1^4 = y3 */
 
-  uECC_vli_set(X1, Z1, num_words);
-  uECC_vli_set(Z1, Y1, num_words);
-  uECC_vli_set(Y1, t4, num_words);
+  mg_uecc_vli_set(X1, Z1, num_words);
+  mg_uecc_vli_set(Z1, Y1, num_words);
+  mg_uecc_vli_set(Y1, t4, num_words);
 }
 
 /* Computes result = x^3 + ax + b. result must not overlap x. */
-static void x_side_default(uECC_word_t *result, const uECC_word_t *x,
-                           uECC_Curve curve) {
-  uECC_word_t _3[uECC_MAX_WORDS] = {3}; /* -a = 3 */
+static void x_side_default(mg_uecc_word_t *result, const mg_uecc_word_t *x,
+                           MG_UECC_Curve curve) {
+  mg_uecc_word_t _3[MG_UECC_MAX_WORDS] = {3}; /* -a = 3 */
   wordcount_t num_words = curve->num_words;
 
-  uECC_vli_modSquare_fast(result, x, curve);                /* r = x^2 */
-  uECC_vli_modSub(result, result, _3, curve->p, num_words); /* r = x^2 - 3 */
-  uECC_vli_modMult_fast(result, result, x, curve);          /* r = x^3 - 3x */
-  uECC_vli_modAdd(result, result, curve->b, curve->p,
-                  num_words); /* r = x^3 - 3x + b */
+  mg_uecc_vli_modSquare_fast(result, x, curve);                /* r = x^2 */
+  mg_uecc_vli_modSub(result, result, _3, curve->p, num_words); /* r = x^2 - 3 */
+  mg_uecc_vli_modMult_fast(result, result, x, curve); /* r = x^3 - 3x */
+  mg_uecc_vli_modAdd(result, result, curve->b, curve->p,
+                     num_words); /* r = x^3 - 3x + b */
 }
-#endif /* uECC_SUPPORTS_secp... */
+#endif /* MG_UECC_SUPPORTS_secp... */
 
-#if uECC_SUPPORT_COMPRESSED_POINT
-#if uECC_SUPPORTS_secp160r1 || uECC_SUPPORTS_secp192r1 || \
-    uECC_SUPPORTS_secp256r1 || uECC_SUPPORTS_secp256k1
+#if MG_UECC_SUPPORT_COMPRESSED_POINT
+#if MG_UECC_SUPPORTS_secp160r1 || MG_UECC_SUPPORTS_secp192r1 || \
+    MG_UECC_SUPPORTS_secp256r1 || MG_UECC_SUPPORTS_secp256k1
 /* Compute a = sqrt(a) (mod curve_p). */
-static void mod_sqrt_default(uECC_word_t *a, uECC_Curve curve) {
+static void mod_sqrt_default(mg_uecc_word_t *a, MG_UECC_Curve curve) {
   bitcount_t i;
-  uECC_word_t p1[uECC_MAX_WORDS] = {1};
-  uECC_word_t l_result[uECC_MAX_WORDS] = {1};
+  mg_uecc_word_t p1[MG_UECC_MAX_WORDS] = {1};
+  mg_uecc_word_t l_result[MG_UECC_MAX_WORDS] = {1};
   wordcount_t num_words = curve->num_words;
 
   /* When curve->p == 3 (mod 4), we can compute
      sqrt(a) = a^((curve->p + 1) / 4) (mod curve->p). */
-  uECC_vli_add(p1, curve->p, p1, num_words); /* p1 = curve_p + 1 */
-  for (i = uECC_vli_numBits(p1, num_words) - 1; i > 1; --i) {
-    uECC_vli_modSquare_fast(l_result, l_result, curve);
-    if (uECC_vli_testBit(p1, i)) {
-      uECC_vli_modMult_fast(l_result, l_result, a, curve);
+  mg_uecc_vli_add(p1, curve->p, p1, num_words); /* p1 = curve_p + 1 */
+  for (i = mg_uecc_vli_numBits(p1, num_words) - 1; i > 1; --i) {
+    mg_uecc_vli_modSquare_fast(l_result, l_result, curve);
+    if (mg_uecc_vli_testBit(p1, i)) {
+      mg_uecc_vli_modMult_fast(l_result, l_result, a, curve);
     }
   }
-  uECC_vli_set(a, l_result, num_words);
+  mg_uecc_vli_set(a, l_result, num_words);
 }
-#endif /* uECC_SUPPORTS_secp... */
-#endif /* uECC_SUPPORT_COMPRESSED_POINT */
+#endif /* MG_UECC_SUPPORTS_secp... */
+#endif /* MG_UECC_SUPPORT_COMPRESSED_POINT */
 
-#if uECC_SUPPORTS_secp160r1
+#if MG_UECC_SUPPORTS_secp160r1
 
-#if (uECC_OPTIMIZATION_LEVEL > 0)
-static void vli_mmod_fast_secp160r1(uECC_word_t *result, uECC_word_t *product);
+#if (MG_UECC_OPTIMIZATION_LEVEL > 0)
+static void vli_mmod_fast_secp160r1(mg_uecc_word_t *result,
+                                    mg_uecc_word_t *product);
 #endif
 
-static const struct uECC_Curve_t curve_secp160r1 = {
+static const struct MG_UECC_Curve_t curve_secp160r1 = {
     num_words_secp160r1,
     num_bytes_secp160r1,
     161, /* num_n_bits */
@@ -11490,32 +12146,34 @@ static const struct uECC_Curve_t curve_secp160r1 = {
      BYTES_TO_WORDS_8(9F, F8, AC, 65, 8B, 7A, BD, 54),
      BYTES_TO_WORDS_4(FC, BE, 97, 1C)},
     &double_jacobian_default,
-#if uECC_SUPPORT_COMPRESSED_POINT
+#if MG_UECC_SUPPORT_COMPRESSED_POINT
     &mod_sqrt_default,
 #endif
     &x_side_default,
-#if (uECC_OPTIMIZATION_LEVEL > 0)
+#if (MG_UECC_OPTIMIZATION_LEVEL > 0)
     &vli_mmod_fast_secp160r1
 #endif
 };
 
-uECC_Curve uECC_secp160r1(void) {
+MG_UECC_Curve mg_uecc_secp160r1(void) {
   return &curve_secp160r1;
 }
 
-#if (uECC_OPTIMIZATION_LEVEL > 0 && !asm_mmod_fast_secp160r1)
+#if (MG_UECC_OPTIMIZATION_LEVEL > 0 && !asm_mmod_fast_secp160r1)
 /* Computes result = product % curve_p
     see http://www.isys.uni-klu.ac.at/PDF/2001-0126-MT.pdf page 354
 
     Note that this only works if log2(omega) < log2(p) / 2 */
-static void omega_mult_secp160r1(uECC_word_t *result, const uECC_word_t *right);
-#if uECC_WORD_SIZE == 8
-static void vli_mmod_fast_secp160r1(uECC_word_t *result, uECC_word_t *product) {
-  uECC_word_t tmp[2 * num_words_secp160r1];
-  uECC_word_t copy;
+static void omega_mult_secp160r1(mg_uecc_word_t *result,
+                                 const mg_uecc_word_t *right);
+#if MG_UECC_WORD_SIZE == 8
+static void vli_mmod_fast_secp160r1(mg_uecc_word_t *result,
+                                    mg_uecc_word_t *product) {
+  mg_uecc_word_t tmp[2 * num_words_secp160r1];
+  mg_uecc_word_t copy;
 
-  uECC_vli_clear(tmp, num_words_secp160r1);
-  uECC_vli_clear(tmp + num_words_secp160r1, num_words_secp160r1);
+  mg_uecc_vli_clear(tmp, num_words_secp160r1);
+  mg_uecc_vli_clear(tmp + num_words_secp160r1, num_words_secp160r1);
 
   omega_mult_secp160r1(tmp,
                        product + num_words_secp160r1 - 1); /* (Rq, q) = q * c */
@@ -11523,16 +12181,17 @@ static void vli_mmod_fast_secp160r1(uECC_word_t *result, uECC_word_t *product) {
   product[num_words_secp160r1 - 1] &= 0xffffffff;
   copy = tmp[num_words_secp160r1 - 1];
   tmp[num_words_secp160r1 - 1] &= 0xffffffff;
-  uECC_vli_add(result, product, tmp, num_words_secp160r1); /* (C, r) = r + q */
-  uECC_vli_clear(product, num_words_secp160r1);
+  mg_uecc_vli_add(result, product, tmp,
+                  num_words_secp160r1); /* (C, r) = r + q */
+  mg_uecc_vli_clear(product, num_words_secp160r1);
   tmp[num_words_secp160r1 - 1] = copy;
   omega_mult_secp160r1(product, tmp + num_words_secp160r1 - 1); /* Rq*c */
-  uECC_vli_add(result, result, product,
-               num_words_secp160r1); /* (C1, r) = r + Rq*c */
+  mg_uecc_vli_add(result, result, product,
+                  num_words_secp160r1); /* (C1, r) = r + Rq*c */
 
-  while (uECC_vli_cmp_unsafe(result, curve_secp160r1.p, num_words_secp160r1) >
-         0) {
-    uECC_vli_sub(result, result, curve_secp160r1.p, num_words_secp160r1);
+  while (mg_uecc_vli_cmp_unsafe(result, curve_secp160r1.p,
+                                num_words_secp160r1) > 0) {
+    mg_uecc_vli_sub(result, result, curve_secp160r1.p, num_words_secp160r1);
   }
 }
 
@@ -11550,81 +12209,84 @@ static void omega_mult_secp160r1(uint64_t *result, const uint64_t *right) {
   result[i] = carry;
 }
 #else
-static void vli_mmod_fast_secp160r1(uECC_word_t *result, uECC_word_t *product) {
-  uECC_word_t tmp[2 * num_words_secp160r1];
-  uECC_word_t carry;
+static void vli_mmod_fast_secp160r1(mg_uecc_word_t *result,
+                                    mg_uecc_word_t *product) {
+  mg_uecc_word_t tmp[2 * num_words_secp160r1];
+  mg_uecc_word_t carry;
 
-  uECC_vli_clear(tmp, num_words_secp160r1);
-  uECC_vli_clear(tmp + num_words_secp160r1, num_words_secp160r1);
+  mg_uecc_vli_clear(tmp, num_words_secp160r1);
+  mg_uecc_vli_clear(tmp + num_words_secp160r1, num_words_secp160r1);
 
   omega_mult_secp160r1(tmp,
                        product + num_words_secp160r1); /* (Rq, q) = q * c */
 
-  carry = uECC_vli_add(result, product, tmp,
-                       num_words_secp160r1); /* (C, r) = r + q */
-  uECC_vli_clear(product, num_words_secp160r1);
+  carry = mg_uecc_vli_add(result, product, tmp,
+                          num_words_secp160r1); /* (C, r) = r + q */
+  mg_uecc_vli_clear(product, num_words_secp160r1);
   omega_mult_secp160r1(product, tmp + num_words_secp160r1); /* Rq*c */
-  carry += uECC_vli_add(result, result, product,
-                        num_words_secp160r1); /* (C1, r) = r + Rq*c */
+  carry += mg_uecc_vli_add(result, result, product,
+                           num_words_secp160r1); /* (C1, r) = r + Rq*c */
 
   while (carry > 0) {
     --carry;
-    uECC_vli_sub(result, result, curve_secp160r1.p, num_words_secp160r1);
+    mg_uecc_vli_sub(result, result, curve_secp160r1.p, num_words_secp160r1);
   }
-  if (uECC_vli_cmp_unsafe(result, curve_secp160r1.p, num_words_secp160r1) > 0) {
-    uECC_vli_sub(result, result, curve_secp160r1.p, num_words_secp160r1);
+  if (mg_uecc_vli_cmp_unsafe(result, curve_secp160r1.p, num_words_secp160r1) >
+      0) {
+    mg_uecc_vli_sub(result, result, curve_secp160r1.p, num_words_secp160r1);
   }
 }
 #endif
 
-#if uECC_WORD_SIZE == 1
+#if MG_UECC_WORD_SIZE == 1
 static void omega_mult_secp160r1(uint8_t *result, const uint8_t *right) {
   uint8_t carry;
   uint8_t i;
 
   /* Multiply by (2^31 + 1). */
-  uECC_vli_set(result + 4, right, num_words_secp160r1); /* 2^32 */
-  uECC_vli_rshift1(result + 4, num_words_secp160r1);    /* 2^31 */
+  mg_uecc_vli_set(result + 4, right, num_words_secp160r1); /* 2^32 */
+  mg_uecc_vli_rshift1(result + 4, num_words_secp160r1);    /* 2^31 */
   result[3] = right[0] << 7; /* get last bit from shift */
 
-  carry =
-      uECC_vli_add(result, result, right, num_words_secp160r1); /* 2^31 + 1 */
+  carry = mg_uecc_vli_add(result, result, right,
+                          num_words_secp160r1); /* 2^31 + 1 */
   for (i = num_words_secp160r1; carry; ++i) {
     uint16_t sum = (uint16_t) result[i] + carry;
     result[i] = (uint8_t) sum;
     carry = sum >> 8;
   }
 }
-#elif uECC_WORD_SIZE == 4
+#elif MG_UECC_WORD_SIZE == 4
 static void omega_mult_secp160r1(uint32_t *result, const uint32_t *right) {
   uint32_t carry;
   unsigned i;
 
   /* Multiply by (2^31 + 1). */
-  uECC_vli_set(result + 1, right, num_words_secp160r1); /* 2^32 */
-  uECC_vli_rshift1(result + 1, num_words_secp160r1);    /* 2^31 */
+  mg_uecc_vli_set(result + 1, right, num_words_secp160r1); /* 2^32 */
+  mg_uecc_vli_rshift1(result + 1, num_words_secp160r1);    /* 2^31 */
   result[0] = right[0] << 31; /* get last bit from shift */
 
-  carry =
-      uECC_vli_add(result, result, right, num_words_secp160r1); /* 2^31 + 1 */
+  carry = mg_uecc_vli_add(result, result, right,
+                          num_words_secp160r1); /* 2^31 + 1 */
   for (i = num_words_secp160r1; carry; ++i) {
     uint64_t sum = (uint64_t) result[i] + carry;
     result[i] = (uint32_t) sum;
     carry = sum >> 32;
   }
 }
-#endif /* uECC_WORD_SIZE */
-#endif /* (uECC_OPTIMIZATION_LEVEL > 0 && !asm_mmod_fast_secp160r1) */
+#endif /* MG_UECC_WORD_SIZE */
+#endif /* (MG_UECC_OPTIMIZATION_LEVEL > 0 && !asm_mmod_fast_secp160r1) */
 
-#endif /* uECC_SUPPORTS_secp160r1 */
+#endif /* MG_UECC_SUPPORTS_secp160r1 */
 
-#if uECC_SUPPORTS_secp192r1
+#if MG_UECC_SUPPORTS_secp192r1
 
-#if (uECC_OPTIMIZATION_LEVEL > 0)
-static void vli_mmod_fast_secp192r1(uECC_word_t *result, uECC_word_t *product);
+#if (MG_UECC_OPTIMIZATION_LEVEL > 0)
+static void vli_mmod_fast_secp192r1(mg_uecc_word_t *result,
+                                    mg_uecc_word_t *product);
 #endif
 
-static const struct uECC_Curve_t curve_secp192r1 = {
+static const struct MG_UECC_Curve_t curve_secp192r1 = {
     num_words_secp192r1,
     num_bytes_secp192r1,
     192, /* num_n_bits */
@@ -11645,32 +12307,32 @@ static const struct uECC_Curve_t curve_secp192r1 = {
      BYTES_TO_WORDS_8(49, 30, 24, 72, AB, E9, A7, 0F),
      BYTES_TO_WORDS_8(E7, 80, 9C, E5, 19, 05, 21, 64)},
     &double_jacobian_default,
-#if uECC_SUPPORT_COMPRESSED_POINT
+#if MG_UECC_SUPPORT_COMPRESSED_POINT
     &mod_sqrt_default,
 #endif
     &x_side_default,
-#if (uECC_OPTIMIZATION_LEVEL > 0)
+#if (MG_UECC_OPTIMIZATION_LEVEL > 0)
     &vli_mmod_fast_secp192r1
 #endif
 };
 
-uECC_Curve uECC_secp192r1(void) {
+MG_UECC_Curve mg_uecc_secp192r1(void) {
   return &curve_secp192r1;
 }
 
-#if (uECC_OPTIMIZATION_LEVEL > 0)
+#if (MG_UECC_OPTIMIZATION_LEVEL > 0)
 /* Computes result = product % curve_p.
    See algorithm 5 and 6 from http://www.isys.uni-klu.ac.at/PDF/2001-0126-MT.pdf
  */
-#if uECC_WORD_SIZE == 1
+#if MG_UECC_WORD_SIZE == 1
 static void vli_mmod_fast_secp192r1(uint8_t *result, uint8_t *product) {
   uint8_t tmp[num_words_secp192r1];
   uint8_t carry;
 
-  uECC_vli_set(result, product, num_words_secp192r1);
+  mg_uecc_vli_set(result, product, num_words_secp192r1);
 
-  uECC_vli_set(tmp, &product[24], num_words_secp192r1);
-  carry = uECC_vli_add(result, result, tmp, num_words_secp192r1);
+  mg_uecc_vli_set(tmp, &product[24], num_words_secp192r1);
+  carry = mg_uecc_vli_add(result, result, tmp, num_words_secp192r1);
 
   tmp[0] = tmp[1] = tmp[2] = tmp[3] = tmp[4] = tmp[5] = tmp[6] = tmp[7] = 0;
   tmp[8] = product[24];
@@ -11689,7 +12351,7 @@ static void vli_mmod_fast_secp192r1(uint8_t *result, uint8_t *product) {
   tmp[21] = product[37];
   tmp[22] = product[38];
   tmp[23] = product[39];
-  carry += uECC_vli_add(result, result, tmp, num_words_secp192r1);
+  carry += mg_uecc_vli_add(result, result, tmp, num_words_secp192r1);
 
   tmp[0] = tmp[8] = product[40];
   tmp[1] = tmp[9] = product[41];
@@ -11701,40 +12363,40 @@ static void vli_mmod_fast_secp192r1(uint8_t *result, uint8_t *product) {
   tmp[7] = tmp[15] = product[47];
   tmp[16] = tmp[17] = tmp[18] = tmp[19] = tmp[20] = tmp[21] = tmp[22] =
       tmp[23] = 0;
-  carry += uECC_vli_add(result, result, tmp, num_words_secp192r1);
+  carry += mg_uecc_vli_add(result, result, tmp, num_words_secp192r1);
 
-  while (carry || uECC_vli_cmp_unsafe(curve_secp192r1.p, result,
-                                      num_words_secp192r1) != 1) {
+  while (carry || mg_uecc_vli_cmp_unsafe(curve_secp192r1.p, result,
+                                         num_words_secp192r1) != 1) {
     carry -=
-        uECC_vli_sub(result, result, curve_secp192r1.p, num_words_secp192r1);
+        mg_uecc_vli_sub(result, result, curve_secp192r1.p, num_words_secp192r1);
   }
 }
-#elif uECC_WORD_SIZE == 4
+#elif MG_UECC_WORD_SIZE == 4
 static void vli_mmod_fast_secp192r1(uint32_t *result, uint32_t *product) {
   uint32_t tmp[num_words_secp192r1];
   int carry;
 
-  uECC_vli_set(result, product, num_words_secp192r1);
+  mg_uecc_vli_set(result, product, num_words_secp192r1);
 
-  uECC_vli_set(tmp, &product[6], num_words_secp192r1);
-  carry = uECC_vli_add(result, result, tmp, num_words_secp192r1);
+  mg_uecc_vli_set(tmp, &product[6], num_words_secp192r1);
+  carry = mg_uecc_vli_add(result, result, tmp, num_words_secp192r1);
 
   tmp[0] = tmp[1] = 0;
   tmp[2] = product[6];
   tmp[3] = product[7];
   tmp[4] = product[8];
   tmp[5] = product[9];
-  carry += uECC_vli_add(result, result, tmp, num_words_secp192r1);
+  carry += mg_uecc_vli_add(result, result, tmp, num_words_secp192r1);
 
   tmp[0] = tmp[2] = product[10];
   tmp[1] = tmp[3] = product[11];
   tmp[4] = tmp[5] = 0;
-  carry += uECC_vli_add(result, result, tmp, num_words_secp192r1);
+  carry += mg_uecc_vli_add(result, result, tmp, num_words_secp192r1);
 
-  while (carry || uECC_vli_cmp_unsafe(curve_secp192r1.p, result,
-                                      num_words_secp192r1) != 1) {
+  while (carry || mg_uecc_vli_cmp_unsafe(curve_secp192r1.p, result,
+                                         num_words_secp192r1) != 1) {
     carry -=
-        uECC_vli_sub(result, result, curve_secp192r1.p, num_words_secp192r1);
+        mg_uecc_vli_sub(result, result, curve_secp192r1.p, num_words_secp192r1);
   }
 }
 #else
@@ -11742,41 +12404,42 @@ static void vli_mmod_fast_secp192r1(uint64_t *result, uint64_t *product) {
   uint64_t tmp[num_words_secp192r1];
   int carry;
 
-  uECC_vli_set(result, product, num_words_secp192r1);
+  mg_uecc_vli_set(result, product, num_words_secp192r1);
 
-  uECC_vli_set(tmp, &product[3], num_words_secp192r1);
-  carry = (int) uECC_vli_add(result, result, tmp, num_words_secp192r1);
+  mg_uecc_vli_set(tmp, &product[3], num_words_secp192r1);
+  carry = (int) mg_uecc_vli_add(result, result, tmp, num_words_secp192r1);
 
   tmp[0] = 0;
   tmp[1] = product[3];
   tmp[2] = product[4];
-  carry += uECC_vli_add(result, result, tmp, num_words_secp192r1);
+  carry += mg_uecc_vli_add(result, result, tmp, num_words_secp192r1);
 
   tmp[0] = tmp[1] = product[5];
   tmp[2] = 0;
-  carry += uECC_vli_add(result, result, tmp, num_words_secp192r1);
+  carry += mg_uecc_vli_add(result, result, tmp, num_words_secp192r1);
 
-  while (carry || uECC_vli_cmp_unsafe(curve_secp192r1.p, result,
-                                      num_words_secp192r1) != 1) {
+  while (carry || mg_uecc_vli_cmp_unsafe(curve_secp192r1.p, result,
+                                         num_words_secp192r1) != 1) {
     carry -=
-        uECC_vli_sub(result, result, curve_secp192r1.p, num_words_secp192r1);
+        mg_uecc_vli_sub(result, result, curve_secp192r1.p, num_words_secp192r1);
   }
 }
-#endif /* uECC_WORD_SIZE */
-#endif /* (uECC_OPTIMIZATION_LEVEL > 0) */
+#endif /* MG_UECC_WORD_SIZE */
+#endif /* (MG_UECC_OPTIMIZATION_LEVEL > 0) */
 
-#endif /* uECC_SUPPORTS_secp192r1 */
+#endif /* MG_UECC_SUPPORTS_secp192r1 */
 
-#if uECC_SUPPORTS_secp224r1
+#if MG_UECC_SUPPORTS_secp224r1
 
-#if uECC_SUPPORT_COMPRESSED_POINT
-static void mod_sqrt_secp224r1(uECC_word_t *a, uECC_Curve curve);
+#if MG_UECC_SUPPORT_COMPRESSED_POINT
+static void mod_sqrt_secp224r1(mg_uecc_word_t *a, MG_UECC_Curve curve);
 #endif
-#if (uECC_OPTIMIZATION_LEVEL > 0)
-static void vli_mmod_fast_secp224r1(uECC_word_t *result, uECC_word_t *product);
+#if (MG_UECC_OPTIMIZATION_LEVEL > 0)
+static void vli_mmod_fast_secp224r1(mg_uecc_word_t *result,
+                                    mg_uecc_word_t *product);
 #endif
 
-static const struct uECC_Curve_t curve_secp224r1 = {
+static const struct MG_UECC_Curve_t curve_secp224r1 = {
     num_words_secp224r1,
     num_bytes_secp224r1,
     224, /* num_n_bits */
@@ -11802,106 +12465,108 @@ static const struct uECC_Curve_t curve_secp224r1 = {
      BYTES_TO_WORDS_8(56, 32, 41, F5, AB, B3, 04, 0C),
      BYTES_TO_WORDS_4(85, 0A, 05, B4)},
     &double_jacobian_default,
-#if uECC_SUPPORT_COMPRESSED_POINT
+#if MG_UECC_SUPPORT_COMPRESSED_POINT
     &mod_sqrt_secp224r1,
 #endif
     &x_side_default,
-#if (uECC_OPTIMIZATION_LEVEL > 0)
+#if (MG_UECC_OPTIMIZATION_LEVEL > 0)
     &vli_mmod_fast_secp224r1
 #endif
 };
 
-uECC_Curve uECC_secp224r1(void) {
+MG_UECC_Curve mg_uecc_secp224r1(void) {
   return &curve_secp224r1;
 }
 
-#if uECC_SUPPORT_COMPRESSED_POINT
+#if MG_UECC_SUPPORT_COMPRESSED_POINT
 /* Routine 3.2.4 RS;  from http://www.nsa.gov/ia/_files/nist-routines.pdf */
-static void mod_sqrt_secp224r1_rs(uECC_word_t *d1, uECC_word_t *e1,
-                                  uECC_word_t *f1, const uECC_word_t *d0,
-                                  const uECC_word_t *e0,
-                                  const uECC_word_t *f0) {
-  uECC_word_t t[num_words_secp224r1];
+static void mod_sqrt_secp224r1_rs(mg_uecc_word_t *d1, mg_uecc_word_t *e1,
+                                  mg_uecc_word_t *f1, const mg_uecc_word_t *d0,
+                                  const mg_uecc_word_t *e0,
+                                  const mg_uecc_word_t *f0) {
+  mg_uecc_word_t t[num_words_secp224r1];
 
-  uECC_vli_modSquare_fast(t, d0, &curve_secp224r1);    /* t <-- d0 ^ 2 */
-  uECC_vli_modMult_fast(e1, d0, e0, &curve_secp224r1); /* e1 <-- d0 * e0 */
-  uECC_vli_modAdd(d1, t, f0, curve_secp224r1.p,
-                  num_words_secp224r1); /* d1 <-- t  + f0 */
-  uECC_vli_modAdd(e1, e1, e1, curve_secp224r1.p,
-                  num_words_secp224r1);               /* e1 <-- e1 + e1 */
-  uECC_vli_modMult_fast(f1, t, f0, &curve_secp224r1); /* f1 <-- t  * f0 */
-  uECC_vli_modAdd(f1, f1, f1, curve_secp224r1.p,
-                  num_words_secp224r1); /* f1 <-- f1 + f1 */
-  uECC_vli_modAdd(f1, f1, f1, curve_secp224r1.p,
-                  num_words_secp224r1); /* f1 <-- f1 + f1 */
+  mg_uecc_vli_modSquare_fast(t, d0, &curve_secp224r1);    /* t <-- d0 ^ 2 */
+  mg_uecc_vli_modMult_fast(e1, d0, e0, &curve_secp224r1); /* e1 <-- d0 * e0 */
+  mg_uecc_vli_modAdd(d1, t, f0, curve_secp224r1.p,
+                     num_words_secp224r1); /* d1 <-- t  + f0 */
+  mg_uecc_vli_modAdd(e1, e1, e1, curve_secp224r1.p,
+                     num_words_secp224r1);               /* e1 <-- e1 + e1 */
+  mg_uecc_vli_modMult_fast(f1, t, f0, &curve_secp224r1); /* f1 <-- t  * f0 */
+  mg_uecc_vli_modAdd(f1, f1, f1, curve_secp224r1.p,
+                     num_words_secp224r1); /* f1 <-- f1 + f1 */
+  mg_uecc_vli_modAdd(f1, f1, f1, curve_secp224r1.p,
+                     num_words_secp224r1); /* f1 <-- f1 + f1 */
 }
 
 /* Routine 3.2.5 RSS;  from http://www.nsa.gov/ia/_files/nist-routines.pdf */
-static void mod_sqrt_secp224r1_rss(uECC_word_t *d1, uECC_word_t *e1,
-                                   uECC_word_t *f1, const uECC_word_t *d0,
-                                   const uECC_word_t *e0, const uECC_word_t *f0,
+static void mod_sqrt_secp224r1_rss(mg_uecc_word_t *d1, mg_uecc_word_t *e1,
+                                   mg_uecc_word_t *f1, const mg_uecc_word_t *d0,
+                                   const mg_uecc_word_t *e0,
+                                   const mg_uecc_word_t *f0,
                                    const bitcount_t j) {
   bitcount_t i;
 
-  uECC_vli_set(d1, d0, num_words_secp224r1); /* d1 <-- d0 */
-  uECC_vli_set(e1, e0, num_words_secp224r1); /* e1 <-- e0 */
-  uECC_vli_set(f1, f0, num_words_secp224r1); /* f1 <-- f0 */
+  mg_uecc_vli_set(d1, d0, num_words_secp224r1); /* d1 <-- d0 */
+  mg_uecc_vli_set(e1, e0, num_words_secp224r1); /* e1 <-- e0 */
+  mg_uecc_vli_set(f1, f0, num_words_secp224r1); /* f1 <-- f0 */
   for (i = 1; i <= j; i++) {
     mod_sqrt_secp224r1_rs(d1, e1, f1, d1, e1, f1); /* RS (d1,e1,f1,d1,e1,f1) */
   }
 }
 
 /* Routine 3.2.6 RM;  from http://www.nsa.gov/ia/_files/nist-routines.pdf */
-static void mod_sqrt_secp224r1_rm(uECC_word_t *d2, uECC_word_t *e2,
-                                  uECC_word_t *f2, const uECC_word_t *c,
-                                  const uECC_word_t *d0, const uECC_word_t *e0,
-                                  const uECC_word_t *d1,
-                                  const uECC_word_t *e1) {
-  uECC_word_t t1[num_words_secp224r1];
-  uECC_word_t t2[num_words_secp224r1];
+static void mod_sqrt_secp224r1_rm(mg_uecc_word_t *d2, mg_uecc_word_t *e2,
+                                  mg_uecc_word_t *f2, const mg_uecc_word_t *c,
+                                  const mg_uecc_word_t *d0,
+                                  const mg_uecc_word_t *e0,
+                                  const mg_uecc_word_t *d1,
+                                  const mg_uecc_word_t *e1) {
+  mg_uecc_word_t t1[num_words_secp224r1];
+  mg_uecc_word_t t2[num_words_secp224r1];
 
-  uECC_vli_modMult_fast(t1, e0, e1, &curve_secp224r1); /* t1 <-- e0 * e1 */
-  uECC_vli_modMult_fast(t1, t1, c, &curve_secp224r1);  /* t1 <-- t1 * c */
+  mg_uecc_vli_modMult_fast(t1, e0, e1, &curve_secp224r1); /* t1 <-- e0 * e1 */
+  mg_uecc_vli_modMult_fast(t1, t1, c, &curve_secp224r1);  /* t1 <-- t1 * c */
   /* t1 <-- p  - t1 */
-  uECC_vli_modSub(t1, curve_secp224r1.p, t1, curve_secp224r1.p,
-                  num_words_secp224r1);
-  uECC_vli_modMult_fast(t2, d0, d1, &curve_secp224r1); /* t2 <-- d0 * d1 */
-  uECC_vli_modAdd(t2, t2, t1, curve_secp224r1.p,
-                  num_words_secp224r1);                /* t2 <-- t2 + t1 */
-  uECC_vli_modMult_fast(t1, d0, e1, &curve_secp224r1); /* t1 <-- d0 * e1 */
-  uECC_vli_modMult_fast(e2, d1, e0, &curve_secp224r1); /* e2 <-- d1 * e0 */
-  uECC_vli_modAdd(e2, e2, t1, curve_secp224r1.p,
-                  num_words_secp224r1);               /* e2 <-- e2 + t1 */
-  uECC_vli_modSquare_fast(f2, e2, &curve_secp224r1);  /* f2 <-- e2^2 */
-  uECC_vli_modMult_fast(f2, f2, c, &curve_secp224r1); /* f2 <-- f2 * c */
+  mg_uecc_vli_modSub(t1, curve_secp224r1.p, t1, curve_secp224r1.p,
+                     num_words_secp224r1);
+  mg_uecc_vli_modMult_fast(t2, d0, d1, &curve_secp224r1); /* t2 <-- d0 * d1 */
+  mg_uecc_vli_modAdd(t2, t2, t1, curve_secp224r1.p,
+                     num_words_secp224r1);                /* t2 <-- t2 + t1 */
+  mg_uecc_vli_modMult_fast(t1, d0, e1, &curve_secp224r1); /* t1 <-- d0 * e1 */
+  mg_uecc_vli_modMult_fast(e2, d1, e0, &curve_secp224r1); /* e2 <-- d1 * e0 */
+  mg_uecc_vli_modAdd(e2, e2, t1, curve_secp224r1.p,
+                     num_words_secp224r1);               /* e2 <-- e2 + t1 */
+  mg_uecc_vli_modSquare_fast(f2, e2, &curve_secp224r1);  /* f2 <-- e2^2 */
+  mg_uecc_vli_modMult_fast(f2, f2, c, &curve_secp224r1); /* f2 <-- f2 * c */
   /* f2 <-- p  - f2 */
-  uECC_vli_modSub(f2, curve_secp224r1.p, f2, curve_secp224r1.p,
-                  num_words_secp224r1);
-  uECC_vli_set(d2, t2, num_words_secp224r1); /* d2 <-- t2 */
+  mg_uecc_vli_modSub(f2, curve_secp224r1.p, f2, curve_secp224r1.p,
+                     num_words_secp224r1);
+  mg_uecc_vli_set(d2, t2, num_words_secp224r1); /* d2 <-- t2 */
 }
 
 /* Routine 3.2.7 RP;  from http://www.nsa.gov/ia/_files/nist-routines.pdf */
-static void mod_sqrt_secp224r1_rp(uECC_word_t *d1, uECC_word_t *e1,
-                                  uECC_word_t *f1, const uECC_word_t *c,
-                                  const uECC_word_t *r) {
+static void mod_sqrt_secp224r1_rp(mg_uecc_word_t *d1, mg_uecc_word_t *e1,
+                                  mg_uecc_word_t *f1, const mg_uecc_word_t *c,
+                                  const mg_uecc_word_t *r) {
   wordcount_t i;
   wordcount_t pow2i = 1;
-  uECC_word_t d0[num_words_secp224r1];
-  uECC_word_t e0[num_words_secp224r1] = {1}; /* e0 <-- 1 */
-  uECC_word_t f0[num_words_secp224r1];
+  mg_uecc_word_t d0[num_words_secp224r1];
+  mg_uecc_word_t e0[num_words_secp224r1] = {1}; /* e0 <-- 1 */
+  mg_uecc_word_t f0[num_words_secp224r1];
 
-  uECC_vli_set(d0, r, num_words_secp224r1); /* d0 <-- r */
+  mg_uecc_vli_set(d0, r, num_words_secp224r1); /* d0 <-- r */
   /* f0 <-- p  - c */
-  uECC_vli_modSub(f0, curve_secp224r1.p, c, curve_secp224r1.p,
-                  num_words_secp224r1);
+  mg_uecc_vli_modSub(f0, curve_secp224r1.p, c, curve_secp224r1.p,
+                     num_words_secp224r1);
   for (i = 0; i <= 6; i++) {
     mod_sqrt_secp224r1_rss(d1, e1, f1, d0, e0, f0,
                            pow2i); /* RSS (d1,e1,f1,d0,e0,f0,2^i) */
     mod_sqrt_secp224r1_rm(d1, e1, f1, c, d1, e1, d0,
-                          e0);                 /* RM (d1,e1,f1,c,d1,e1,d0,e0) */
-    uECC_vli_set(d0, d1, num_words_secp224r1); /* d0 <-- d1 */
-    uECC_vli_set(e0, e1, num_words_secp224r1); /* e0 <-- e1 */
-    uECC_vli_set(f0, f1, num_words_secp224r1); /* f0 <-- f1 */
+                          e0); /* RM (d1,e1,f1,c,d1,e1,d0,e0) */
+    mg_uecc_vli_set(d0, d1, num_words_secp224r1); /* d0 <-- d1 */
+    mg_uecc_vli_set(e0, e1, num_words_secp224r1); /* e0 <-- e1 */
+    mg_uecc_vli_set(f0, f1, num_words_secp224r1); /* f0 <-- f1 */
     pow2i *= 2;
   }
 }
@@ -11909,46 +12574,46 @@ static void mod_sqrt_secp224r1_rp(uECC_word_t *d1, uECC_word_t *e1,
 /* Compute a = sqrt(a) (mod curve_p). */
 /* Routine 3.2.8 mp_mod_sqrt_224; from
  * http://www.nsa.gov/ia/_files/nist-routines.pdf */
-static void mod_sqrt_secp224r1(uECC_word_t *a, uECC_Curve curve) {
+static void mod_sqrt_secp224r1(mg_uecc_word_t *a, MG_UECC_Curve curve) {
   (void) curve;
   bitcount_t i;
-  uECC_word_t e1[num_words_secp224r1];
-  uECC_word_t f1[num_words_secp224r1];
-  uECC_word_t d0[num_words_secp224r1];
-  uECC_word_t e0[num_words_secp224r1];
-  uECC_word_t f0[num_words_secp224r1];
-  uECC_word_t d1[num_words_secp224r1];
+  mg_uecc_word_t e1[num_words_secp224r1];
+  mg_uecc_word_t f1[num_words_secp224r1];
+  mg_uecc_word_t d0[num_words_secp224r1];
+  mg_uecc_word_t e0[num_words_secp224r1];
+  mg_uecc_word_t f0[num_words_secp224r1];
+  mg_uecc_word_t d1[num_words_secp224r1];
 
   /* s = a; using constant instead of random value */
   mod_sqrt_secp224r1_rp(d0, e0, f0, a, a); /* RP (d0, e0, f0, c, s) */
   mod_sqrt_secp224r1_rs(d1, e1, f1, d0, e0,
                         f0); /* RS (d1, e1, f1, d0, e0, f0) */
   for (i = 1; i <= 95; i++) {
-    uECC_vli_set(d0, d1, num_words_secp224r1); /* d0 <-- d1 */
-    uECC_vli_set(e0, e1, num_words_secp224r1); /* e0 <-- e1 */
-    uECC_vli_set(f0, f1, num_words_secp224r1); /* f0 <-- f1 */
+    mg_uecc_vli_set(d0, d1, num_words_secp224r1); /* d0 <-- d1 */
+    mg_uecc_vli_set(e0, e1, num_words_secp224r1); /* e0 <-- e1 */
+    mg_uecc_vli_set(f0, f1, num_words_secp224r1); /* f0 <-- f1 */
     mod_sqrt_secp224r1_rs(d1, e1, f1, d0, e0,
                           f0); /* RS (d1, e1, f1, d0, e0, f0) */
-    if (uECC_vli_isZero(d1, num_words_secp224r1)) { /* if d1 == 0 */
+    if (mg_uecc_vli_isZero(d1, num_words_secp224r1)) { /* if d1 == 0 */
       break;
     }
   }
-  uECC_vli_modInv(f1, e0, curve_secp224r1.p,
-                  num_words_secp224r1);               /* f1 <-- 1 / e0 */
-  uECC_vli_modMult_fast(a, d0, f1, &curve_secp224r1); /* a  <-- d0 / e0 */
+  mg_uecc_vli_modInv(f1, e0, curve_secp224r1.p,
+                     num_words_secp224r1);               /* f1 <-- 1 / e0 */
+  mg_uecc_vli_modMult_fast(a, d0, f1, &curve_secp224r1); /* a  <-- d0 / e0 */
 }
-#endif /* uECC_SUPPORT_COMPRESSED_POINT */
+#endif /* MG_UECC_SUPPORT_COMPRESSED_POINT */
 
-#if (uECC_OPTIMIZATION_LEVEL > 0)
+#if (MG_UECC_OPTIMIZATION_LEVEL > 0)
 /* Computes result = product % curve_p
    from http://www.nsa.gov/ia/_files/nist-routines.pdf */
-#if uECC_WORD_SIZE == 1
+#if MG_UECC_WORD_SIZE == 1
 static void vli_mmod_fast_secp224r1(uint8_t *result, uint8_t *product) {
   uint8_t tmp[num_words_secp224r1];
   int8_t carry;
 
   /* t */
-  uECC_vli_set(result, product, num_words_secp224r1);
+  mg_uecc_vli_set(result, product, num_words_secp224r1);
 
   /* s1 */
   tmp[0] = tmp[1] = tmp[2] = tmp[3] = 0;
@@ -11970,7 +12635,7 @@ static void vli_mmod_fast_secp224r1(uint8_t *result, uint8_t *product) {
   tmp[25] = product[41];
   tmp[26] = product[42];
   tmp[27] = product[43];
-  carry = uECC_vli_add(result, result, tmp, num_words_secp224r1);
+  carry = mg_uecc_vli_add(result, result, tmp, num_words_secp224r1);
 
   /* s2 */
   tmp[12] = product[44];
@@ -11986,7 +12651,7 @@ static void vli_mmod_fast_secp224r1(uint8_t *result, uint8_t *product) {
   tmp[22] = product[54];
   tmp[23] = product[55];
   tmp[24] = tmp[25] = tmp[26] = tmp[27] = 0;
-  carry += uECC_vli_add(result, result, tmp, num_words_secp224r1);
+  carry += mg_uecc_vli_add(result, result, tmp, num_words_secp224r1);
 
   /* d1 */
   tmp[0] = product[28];
@@ -12017,7 +12682,7 @@ static void vli_mmod_fast_secp224r1(uint8_t *result, uint8_t *product) {
   tmp[25] = product[53];
   tmp[26] = product[54];
   tmp[27] = product[55];
-  carry -= uECC_vli_sub(result, result, tmp, num_words_secp224r1);
+  carry -= mg_uecc_vli_sub(result, result, tmp, num_words_secp224r1);
 
   /* d2 */
   tmp[0] = product[44];
@@ -12036,28 +12701,28 @@ static void vli_mmod_fast_secp224r1(uint8_t *result, uint8_t *product) {
   tmp[16] = tmp[17] = tmp[18] = tmp[19] = 0;
   tmp[20] = tmp[21] = tmp[22] = tmp[23] = 0;
   tmp[24] = tmp[25] = tmp[26] = tmp[27] = 0;
-  carry -= uECC_vli_sub(result, result, tmp, num_words_secp224r1);
+  carry -= mg_uecc_vli_sub(result, result, tmp, num_words_secp224r1);
 
   if (carry < 0) {
     do {
-      carry +=
-          uECC_vli_add(result, result, curve_secp224r1.p, num_words_secp224r1);
+      carry += mg_uecc_vli_add(result, result, curve_secp224r1.p,
+                               num_words_secp224r1);
     } while (carry < 0);
   } else {
-    while (carry || uECC_vli_cmp_unsafe(curve_secp224r1.p, result,
-                                        num_words_secp224r1) != 1) {
-      carry -=
-          uECC_vli_sub(result, result, curve_secp224r1.p, num_words_secp224r1);
+    while (carry || mg_uecc_vli_cmp_unsafe(curve_secp224r1.p, result,
+                                           num_words_secp224r1) != 1) {
+      carry -= mg_uecc_vli_sub(result, result, curve_secp224r1.p,
+                               num_words_secp224r1);
     }
   }
 }
-#elif uECC_WORD_SIZE == 4
+#elif MG_UECC_WORD_SIZE == 4
 static void vli_mmod_fast_secp224r1(uint32_t *result, uint32_t *product) {
   uint32_t tmp[num_words_secp224r1];
   int carry;
 
   /* t */
-  uECC_vli_set(result, product, num_words_secp224r1);
+  mg_uecc_vli_set(result, product, num_words_secp224r1);
 
   /* s1 */
   tmp[0] = tmp[1] = tmp[2] = 0;
@@ -12065,14 +12730,14 @@ static void vli_mmod_fast_secp224r1(uint32_t *result, uint32_t *product) {
   tmp[4] = product[8];
   tmp[5] = product[9];
   tmp[6] = product[10];
-  carry = uECC_vli_add(result, result, tmp, num_words_secp224r1);
+  carry = mg_uecc_vli_add(result, result, tmp, num_words_secp224r1);
 
   /* s2 */
   tmp[3] = product[11];
   tmp[4] = product[12];
   tmp[5] = product[13];
   tmp[6] = 0;
-  carry += uECC_vli_add(result, result, tmp, num_words_secp224r1);
+  carry += mg_uecc_vli_add(result, result, tmp, num_words_secp224r1);
 
   /* d1 */
   tmp[0] = product[7];
@@ -12082,25 +12747,25 @@ static void vli_mmod_fast_secp224r1(uint32_t *result, uint32_t *product) {
   tmp[4] = product[11];
   tmp[5] = product[12];
   tmp[6] = product[13];
-  carry -= uECC_vli_sub(result, result, tmp, num_words_secp224r1);
+  carry -= mg_uecc_vli_sub(result, result, tmp, num_words_secp224r1);
 
   /* d2 */
   tmp[0] = product[11];
   tmp[1] = product[12];
   tmp[2] = product[13];
   tmp[3] = tmp[4] = tmp[5] = tmp[6] = 0;
-  carry -= uECC_vli_sub(result, result, tmp, num_words_secp224r1);
+  carry -= mg_uecc_vli_sub(result, result, tmp, num_words_secp224r1);
 
   if (carry < 0) {
     do {
-      carry +=
-          uECC_vli_add(result, result, curve_secp224r1.p, num_words_secp224r1);
+      carry += mg_uecc_vli_add(result, result, curve_secp224r1.p,
+                               num_words_secp224r1);
     } while (carry < 0);
   } else {
-    while (carry || uECC_vli_cmp_unsafe(curve_secp224r1.p, result,
-                                        num_words_secp224r1) != 1) {
-      carry -=
-          uECC_vli_sub(result, result, curve_secp224r1.p, num_words_secp224r1);
+    while (carry || mg_uecc_vli_cmp_unsafe(curve_secp224r1.p, result,
+                                           num_words_secp224r1) != 1) {
+      carry -= mg_uecc_vli_sub(result, result, curve_secp224r1.p,
+                               num_words_secp224r1);
     }
   }
 }
@@ -12110,7 +12775,7 @@ static void vli_mmod_fast_secp224r1(uint64_t *result, uint64_t *product) {
   int carry = 0;
 
   /* t */
-  uECC_vli_set(result, product, num_words_secp224r1);
+  mg_uecc_vli_set(result, product, num_words_secp224r1);
   result[num_words_secp224r1 - 1] &= 0xffffffff;
 
   /* s1 */
@@ -12118,51 +12783,52 @@ static void vli_mmod_fast_secp224r1(uint64_t *result, uint64_t *product) {
   tmp[1] = product[3] & 0xffffffff00000000ull;
   tmp[2] = product[4];
   tmp[3] = product[5] & 0xffffffff;
-  uECC_vli_add(result, result, tmp, num_words_secp224r1);
+  mg_uecc_vli_add(result, result, tmp, num_words_secp224r1);
 
   /* s2 */
   tmp[1] = product[5] & 0xffffffff00000000ull;
   tmp[2] = product[6];
   tmp[3] = 0;
-  uECC_vli_add(result, result, tmp, num_words_secp224r1);
+  mg_uecc_vli_add(result, result, tmp, num_words_secp224r1);
 
   /* d1 */
   tmp[0] = (product[3] >> 32) | (product[4] << 32);
   tmp[1] = (product[4] >> 32) | (product[5] << 32);
   tmp[2] = (product[5] >> 32) | (product[6] << 32);
   tmp[3] = product[6] >> 32;
-  carry -= uECC_vli_sub(result, result, tmp, num_words_secp224r1);
+  carry -= mg_uecc_vli_sub(result, result, tmp, num_words_secp224r1);
 
   /* d2 */
   tmp[0] = (product[5] >> 32) | (product[6] << 32);
   tmp[1] = product[6] >> 32;
   tmp[2] = tmp[3] = 0;
-  carry -= uECC_vli_sub(result, result, tmp, num_words_secp224r1);
+  carry -= mg_uecc_vli_sub(result, result, tmp, num_words_secp224r1);
 
   if (carry < 0) {
     do {
-      carry +=
-          uECC_vli_add(result, result, curve_secp224r1.p, num_words_secp224r1);
+      carry += mg_uecc_vli_add(result, result, curve_secp224r1.p,
+                               num_words_secp224r1);
     } while (carry < 0);
   } else {
-    while (uECC_vli_cmp_unsafe(curve_secp224r1.p, result,
-                               num_words_secp224r1) != 1) {
-      uECC_vli_sub(result, result, curve_secp224r1.p, num_words_secp224r1);
+    while (mg_uecc_vli_cmp_unsafe(curve_secp224r1.p, result,
+                                  num_words_secp224r1) != 1) {
+      mg_uecc_vli_sub(result, result, curve_secp224r1.p, num_words_secp224r1);
     }
   }
 }
-#endif /* uECC_WORD_SIZE */
-#endif /* (uECC_OPTIMIZATION_LEVEL > 0) */
+#endif /* MG_UECC_WORD_SIZE */
+#endif /* (MG_UECC_OPTIMIZATION_LEVEL > 0) */
 
-#endif /* uECC_SUPPORTS_secp224r1 */
+#endif /* MG_UECC_SUPPORTS_secp224r1 */
 
-#if uECC_SUPPORTS_secp256r1
+#if MG_UECC_SUPPORTS_secp256r1
 
-#if (uECC_OPTIMIZATION_LEVEL > 0)
-static void vli_mmod_fast_secp256r1(uECC_word_t *result, uECC_word_t *product);
+#if (MG_UECC_OPTIMIZATION_LEVEL > 0)
+static void vli_mmod_fast_secp256r1(mg_uecc_word_t *result,
+                                    mg_uecc_word_t *product);
 #endif
 
-static const struct uECC_Curve_t curve_secp256r1 = {
+static const struct MG_UECC_Curve_t curve_secp256r1 = {
     num_words_secp256r1,
     num_bytes_secp256r1,
     256, /* num_n_bits */
@@ -12188,29 +12854,29 @@ static const struct uECC_Curve_t curve_secp256r1 = {
      BYTES_TO_WORDS_8(BC, 86, 98, 76, 55, BD, EB, B3),
      BYTES_TO_WORDS_8(E7, 93, 3A, AA, D8, 35, C6, 5A)},
     &double_jacobian_default,
-#if uECC_SUPPORT_COMPRESSED_POINT
+#if MG_UECC_SUPPORT_COMPRESSED_POINT
     &mod_sqrt_default,
 #endif
     &x_side_default,
-#if (uECC_OPTIMIZATION_LEVEL > 0)
+#if (MG_UECC_OPTIMIZATION_LEVEL > 0)
     &vli_mmod_fast_secp256r1
 #endif
 };
 
-uECC_Curve uECC_secp256r1(void) {
+MG_UECC_Curve mg_uecc_secp256r1(void) {
   return &curve_secp256r1;
 }
 
-#if (uECC_OPTIMIZATION_LEVEL > 0 && !asm_mmod_fast_secp256r1)
+#if (MG_UECC_OPTIMIZATION_LEVEL > 0 && !asm_mmod_fast_secp256r1)
 /* Computes result = product % curve_p
    from http://www.nsa.gov/ia/_files/nist-routines.pdf */
-#if uECC_WORD_SIZE == 1
+#if MG_UECC_WORD_SIZE == 1
 static void vli_mmod_fast_secp256r1(uint8_t *result, uint8_t *product) {
   uint8_t tmp[num_words_secp256r1];
   int8_t carry;
 
   /* t */
-  uECC_vli_set(result, product, num_words_secp256r1);
+  mg_uecc_vli_set(result, product, num_words_secp256r1);
 
   /* s1 */
   tmp[0] = tmp[1] = tmp[2] = tmp[3] = 0;
@@ -12236,8 +12902,8 @@ static void vli_mmod_fast_secp256r1(uint8_t *result, uint8_t *product) {
   tmp[29] = product[61];
   tmp[30] = product[62];
   tmp[31] = product[63];
-  carry = uECC_vli_add(tmp, tmp, tmp, num_words_secp256r1);
-  carry += uECC_vli_add(result, result, tmp, num_words_secp256r1);
+  carry = mg_uecc_vli_add(tmp, tmp, tmp, num_words_secp256r1);
+  carry += mg_uecc_vli_add(result, result, tmp, num_words_secp256r1);
 
   /* s2 */
   tmp[12] = product[48];
@@ -12257,8 +12923,8 @@ static void vli_mmod_fast_secp256r1(uint8_t *result, uint8_t *product) {
   tmp[26] = product[62];
   tmp[27] = product[63];
   tmp[28] = tmp[29] = tmp[30] = tmp[31] = 0;
-  carry += uECC_vli_add(tmp, tmp, tmp, num_words_secp256r1);
-  carry += uECC_vli_add(result, result, tmp, num_words_secp256r1);
+  carry += mg_uecc_vli_add(tmp, tmp, tmp, num_words_secp256r1);
+  carry += mg_uecc_vli_add(result, result, tmp, num_words_secp256r1);
 
   /* s3 */
   tmp[0] = product[32];
@@ -12284,7 +12950,7 @@ static void vli_mmod_fast_secp256r1(uint8_t *result, uint8_t *product) {
   tmp[29] = product[61];
   tmp[30] = product[62];
   tmp[31] = product[63];
-  carry += uECC_vli_add(result, result, tmp, num_words_secp256r1);
+  carry += mg_uecc_vli_add(result, result, tmp, num_words_secp256r1);
 
   /* s4 */
   tmp[0] = product[36];
@@ -12319,7 +12985,7 @@ static void vli_mmod_fast_secp256r1(uint8_t *result, uint8_t *product) {
   tmp[29] = product[33];
   tmp[30] = product[34];
   tmp[31] = product[35];
-  carry += uECC_vli_add(result, result, tmp, num_words_secp256r1);
+  carry += mg_uecc_vli_add(result, result, tmp, num_words_secp256r1);
 
   /* d1 */
   tmp[0] = product[44];
@@ -12345,7 +13011,7 @@ static void vli_mmod_fast_secp256r1(uint8_t *result, uint8_t *product) {
   tmp[29] = product[41];
   tmp[30] = product[42];
   tmp[31] = product[43];
-  carry -= uECC_vli_sub(result, result, tmp, num_words_secp256r1);
+  carry -= mg_uecc_vli_sub(result, result, tmp, num_words_secp256r1);
 
   /* d2 */
   tmp[0] = product[48];
@@ -12374,7 +13040,7 @@ static void vli_mmod_fast_secp256r1(uint8_t *result, uint8_t *product) {
   tmp[29] = product[45];
   tmp[30] = product[46];
   tmp[31] = product[47];
-  carry -= uECC_vli_sub(result, result, tmp, num_words_secp256r1);
+  carry -= mg_uecc_vli_sub(result, result, tmp, num_words_secp256r1);
 
   /* d3 */
   tmp[0] = product[52];
@@ -12406,7 +13072,7 @@ static void vli_mmod_fast_secp256r1(uint8_t *result, uint8_t *product) {
   tmp[29] = product[49];
   tmp[30] = product[50];
   tmp[31] = product[51];
-  carry -= uECC_vli_sub(result, result, tmp, num_words_secp256r1);
+  carry -= mg_uecc_vli_sub(result, result, tmp, num_words_secp256r1);
 
   /* d4 */
   tmp[0] = product[56];
@@ -12435,28 +13101,28 @@ static void vli_mmod_fast_secp256r1(uint8_t *result, uint8_t *product) {
   tmp[29] = product[53];
   tmp[30] = product[54];
   tmp[31] = product[55];
-  carry -= uECC_vli_sub(result, result, tmp, num_words_secp256r1);
+  carry -= mg_uecc_vli_sub(result, result, tmp, num_words_secp256r1);
 
   if (carry < 0) {
     do {
-      carry +=
-          uECC_vli_add(result, result, curve_secp256r1.p, num_words_secp256r1);
+      carry += mg_uecc_vli_add(result, result, curve_secp256r1.p,
+                               num_words_secp256r1);
     } while (carry < 0);
   } else {
-    while (carry || uECC_vli_cmp_unsafe(curve_secp256r1.p, result,
-                                        num_words_secp256r1) != 1) {
-      carry -=
-          uECC_vli_sub(result, result, curve_secp256r1.p, num_words_secp256r1);
+    while (carry || mg_uecc_vli_cmp_unsafe(curve_secp256r1.p, result,
+                                           num_words_secp256r1) != 1) {
+      carry -= mg_uecc_vli_sub(result, result, curve_secp256r1.p,
+                               num_words_secp256r1);
     }
   }
 }
-#elif uECC_WORD_SIZE == 4
+#elif MG_UECC_WORD_SIZE == 4
 static void vli_mmod_fast_secp256r1(uint32_t *result, uint32_t *product) {
   uint32_t tmp[num_words_secp256r1];
   int carry;
 
   /* t */
-  uECC_vli_set(result, product, num_words_secp256r1);
+  mg_uecc_vli_set(result, product, num_words_secp256r1);
 
   /* s1 */
   tmp[0] = tmp[1] = tmp[2] = 0;
@@ -12465,8 +13131,8 @@ static void vli_mmod_fast_secp256r1(uint32_t *result, uint32_t *product) {
   tmp[5] = product[13];
   tmp[6] = product[14];
   tmp[7] = product[15];
-  carry = (int) uECC_vli_add(tmp, tmp, tmp, num_words_secp256r1);
-  carry += (int) uECC_vli_add(result, result, tmp, num_words_secp256r1);
+  carry = (int) mg_uecc_vli_add(tmp, tmp, tmp, num_words_secp256r1);
+  carry += (int) mg_uecc_vli_add(result, result, tmp, num_words_secp256r1);
 
   /* s2 */
   tmp[3] = product[12];
@@ -12474,8 +13140,8 @@ static void vli_mmod_fast_secp256r1(uint32_t *result, uint32_t *product) {
   tmp[5] = product[14];
   tmp[6] = product[15];
   tmp[7] = 0;
-  carry += (int) uECC_vli_add(tmp, tmp, tmp, num_words_secp256r1);
-  carry += (int) uECC_vli_add(result, result, tmp, num_words_secp256r1);
+  carry += (int) mg_uecc_vli_add(tmp, tmp, tmp, num_words_secp256r1);
+  carry += (int) mg_uecc_vli_add(result, result, tmp, num_words_secp256r1);
 
   /* s3 */
   tmp[0] = product[8];
@@ -12484,7 +13150,7 @@ static void vli_mmod_fast_secp256r1(uint32_t *result, uint32_t *product) {
   tmp[3] = tmp[4] = tmp[5] = 0;
   tmp[6] = product[14];
   tmp[7] = product[15];
-  carry += (int) uECC_vli_add(result, result, tmp, num_words_secp256r1);
+  carry += (int) mg_uecc_vli_add(result, result, tmp, num_words_secp256r1);
 
   /* s4 */
   tmp[0] = product[9];
@@ -12495,7 +13161,7 @@ static void vli_mmod_fast_secp256r1(uint32_t *result, uint32_t *product) {
   tmp[5] = product[15];
   tmp[6] = product[13];
   tmp[7] = product[8];
-  carry += (int) uECC_vli_add(result, result, tmp, num_words_secp256r1);
+  carry += (int) mg_uecc_vli_add(result, result, tmp, num_words_secp256r1);
 
   /* d1 */
   tmp[0] = product[11];
@@ -12504,7 +13170,7 @@ static void vli_mmod_fast_secp256r1(uint32_t *result, uint32_t *product) {
   tmp[3] = tmp[4] = tmp[5] = 0;
   tmp[6] = product[8];
   tmp[7] = product[10];
-  carry -= (int) uECC_vli_sub(result, result, tmp, num_words_secp256r1);
+  carry -= (int) mg_uecc_vli_sub(result, result, tmp, num_words_secp256r1);
 
   /* d2 */
   tmp[0] = product[12];
@@ -12514,7 +13180,7 @@ static void vli_mmod_fast_secp256r1(uint32_t *result, uint32_t *product) {
   tmp[4] = tmp[5] = 0;
   tmp[6] = product[9];
   tmp[7] = product[11];
-  carry -= (int) uECC_vli_sub(result, result, tmp, num_words_secp256r1);
+  carry -= (int) mg_uecc_vli_sub(result, result, tmp, num_words_secp256r1);
 
   /* d3 */
   tmp[0] = product[13];
@@ -12525,7 +13191,7 @@ static void vli_mmod_fast_secp256r1(uint32_t *result, uint32_t *product) {
   tmp[5] = product[10];
   tmp[6] = 0;
   tmp[7] = product[12];
-  carry -= (int) uECC_vli_sub(result, result, tmp, num_words_secp256r1);
+  carry -= (int) mg_uecc_vli_sub(result, result, tmp, num_words_secp256r1);
 
   /* d4 */
   tmp[0] = product[14];
@@ -12536,18 +13202,18 @@ static void vli_mmod_fast_secp256r1(uint32_t *result, uint32_t *product) {
   tmp[5] = product[11];
   tmp[6] = 0;
   tmp[7] = product[13];
-  carry -= (int) uECC_vli_sub(result, result, tmp, num_words_secp256r1);
+  carry -= (int) mg_uecc_vli_sub(result, result, tmp, num_words_secp256r1);
 
   if (carry < 0) {
     do {
-      carry +=
-          (int) uECC_vli_add(result, result, curve_secp256r1.p, num_words_secp256r1);
+      carry += (int) mg_uecc_vli_add(result, result, curve_secp256r1.p,
+                                     num_words_secp256r1);
     } while (carry < 0);
   } else {
-    while (carry || uECC_vli_cmp_unsafe(curve_secp256r1.p, result,
-                                        num_words_secp256r1) != 1) {
-      carry -=
-          (int) uECC_vli_sub(result, result, curve_secp256r1.p, num_words_secp256r1);
+    while (carry || mg_uecc_vli_cmp_unsafe(curve_secp256r1.p, result,
+                                           num_words_secp256r1) != 1) {
+      carry -= (int) mg_uecc_vli_sub(result, result, curve_secp256r1.p,
+                                     num_words_secp256r1);
     }
   }
 }
@@ -12557,94 +13223,95 @@ static void vli_mmod_fast_secp256r1(uint64_t *result, uint64_t *product) {
   int carry;
 
   /* t */
-  uECC_vli_set(result, product, num_words_secp256r1);
+  mg_uecc_vli_set(result, product, num_words_secp256r1);
 
   /* s1 */
   tmp[0] = 0;
   tmp[1] = product[5] & 0xffffffff00000000U;
   tmp[2] = product[6];
   tmp[3] = product[7];
-  carry = (int) uECC_vli_add(tmp, tmp, tmp, num_words_secp256r1);
-  carry += (int) uECC_vli_add(result, result, tmp, num_words_secp256r1);
+  carry = (int) mg_uecc_vli_add(tmp, tmp, tmp, num_words_secp256r1);
+  carry += (int) mg_uecc_vli_add(result, result, tmp, num_words_secp256r1);
 
   /* s2 */
   tmp[1] = product[6] << 32;
   tmp[2] = (product[6] >> 32) | (product[7] << 32);
   tmp[3] = product[7] >> 32;
-  carry += (int) uECC_vli_add(tmp, tmp, tmp, num_words_secp256r1);
-  carry += (int) uECC_vli_add(result, result, tmp, num_words_secp256r1);
+  carry += (int) mg_uecc_vli_add(tmp, tmp, tmp, num_words_secp256r1);
+  carry += (int) mg_uecc_vli_add(result, result, tmp, num_words_secp256r1);
 
   /* s3 */
   tmp[0] = product[4];
   tmp[1] = product[5] & 0xffffffff;
   tmp[2] = 0;
   tmp[3] = product[7];
-  carry += (int) uECC_vli_add(result, result, tmp, num_words_secp256r1);
+  carry += (int) mg_uecc_vli_add(result, result, tmp, num_words_secp256r1);
 
   /* s4 */
   tmp[0] = (product[4] >> 32) | (product[5] << 32);
   tmp[1] = (product[5] >> 32) | (product[6] & 0xffffffff00000000U);
   tmp[2] = product[7];
   tmp[3] = (product[6] >> 32) | (product[4] << 32);
-  carry += (int) uECC_vli_add(result, result, tmp, num_words_secp256r1);
+  carry += (int) mg_uecc_vli_add(result, result, tmp, num_words_secp256r1);
 
   /* d1 */
   tmp[0] = (product[5] >> 32) | (product[6] << 32);
   tmp[1] = (product[6] >> 32);
   tmp[2] = 0;
   tmp[3] = (product[4] & 0xffffffff) | (product[5] << 32);
-  carry -= (int) uECC_vli_sub(result, result, tmp, num_words_secp256r1);
+  carry -= (int) mg_uecc_vli_sub(result, result, tmp, num_words_secp256r1);
 
   /* d2 */
   tmp[0] = product[6];
   tmp[1] = product[7];
   tmp[2] = 0;
   tmp[3] = (product[4] >> 32) | (product[5] & 0xffffffff00000000);
-  carry -= (int) uECC_vli_sub(result, result, tmp, num_words_secp256r1);
+  carry -= (int) mg_uecc_vli_sub(result, result, tmp, num_words_secp256r1);
 
   /* d3 */
   tmp[0] = (product[6] >> 32) | (product[7] << 32);
   tmp[1] = (product[7] >> 32) | (product[4] << 32);
   tmp[2] = (product[4] >> 32) | (product[5] << 32);
   tmp[3] = (product[6] << 32);
-  carry -= (int) uECC_vli_sub(result, result, tmp, num_words_secp256r1);
+  carry -= (int) mg_uecc_vli_sub(result, result, tmp, num_words_secp256r1);
 
   /* d4 */
   tmp[0] = product[7];
   tmp[1] = product[4] & 0xffffffff00000000U;
   tmp[2] = product[5];
   tmp[3] = product[6] & 0xffffffff00000000U;
-  carry -= (int) uECC_vli_sub(result, result, tmp, num_words_secp256r1);
+  carry -= (int) mg_uecc_vli_sub(result, result, tmp, num_words_secp256r1);
 
   if (carry < 0) {
     do {
-      carry +=
-          (int) uECC_vli_add(result, result, curve_secp256r1.p, num_words_secp256r1);
+      carry += (int) mg_uecc_vli_add(result, result, curve_secp256r1.p,
+                                     num_words_secp256r1);
     } while (carry < 0);
   } else {
-    while (carry || uECC_vli_cmp_unsafe(curve_secp256r1.p, result,
-                                        num_words_secp256r1) != 1) {
-      carry -=
-          (int) uECC_vli_sub(result, result, curve_secp256r1.p, num_words_secp256r1);
+    while (carry || mg_uecc_vli_cmp_unsafe(curve_secp256r1.p, result,
+                                           num_words_secp256r1) != 1) {
+      carry -= (int) mg_uecc_vli_sub(result, result, curve_secp256r1.p,
+                                     num_words_secp256r1);
     }
   }
 }
-#endif /* uECC_WORD_SIZE */
-#endif /* (uECC_OPTIMIZATION_LEVEL > 0 && !asm_mmod_fast_secp256r1) */
+#endif /* MG_UECC_WORD_SIZE */
+#endif /* (MG_UECC_OPTIMIZATION_LEVEL > 0 && !asm_mmod_fast_secp256r1) */
 
-#endif /* uECC_SUPPORTS_secp256r1 */
+#endif /* MG_UECC_SUPPORTS_secp256r1 */
 
-#if uECC_SUPPORTS_secp256k1
+#if MG_UECC_SUPPORTS_secp256k1
 
-static void double_jacobian_secp256k1(uECC_word_t *X1, uECC_word_t *Y1,
-                                      uECC_word_t *Z1, uECC_Curve curve);
-static void x_side_secp256k1(uECC_word_t *result, const uECC_word_t *x,
-                             uECC_Curve curve);
-#if (uECC_OPTIMIZATION_LEVEL > 0)
-static void vli_mmod_fast_secp256k1(uECC_word_t *result, uECC_word_t *product);
+static void double_jacobian_secp256k1(mg_uecc_word_t *X1, mg_uecc_word_t *Y1,
+                                      mg_uecc_word_t *Z1, MG_UECC_Curve curve);
+static void x_side_secp256k1(mg_uecc_word_t *result, const mg_uecc_word_t *x,
+                             MG_UECC_Curve curve);
+#if (MG_UECC_OPTIMIZATION_LEVEL > 0)
+static void vli_mmod_fast_secp256k1(mg_uecc_word_t *result,
+                                    mg_uecc_word_t *product);
 #endif
 
-static const struct uECC_Curve_t curve_secp256k1 = {
+static const struct MG_UECC_Curve_t curve_secp256k1 = {
     num_words_secp256k1,
     num_bytes_secp256k1,
     256, /* num_n_bits */
@@ -12670,101 +13337,109 @@ static const struct uECC_Curve_t curve_secp256k1 = {
      BYTES_TO_WORDS_8(00, 00, 00, 00, 00, 00, 00, 00),
      BYTES_TO_WORDS_8(00, 00, 00, 00, 00, 00, 00, 00)},
     &double_jacobian_secp256k1,
-#if uECC_SUPPORT_COMPRESSED_POINT
+#if MG_UECC_SUPPORT_COMPRESSED_POINT
     &mod_sqrt_default,
 #endif
     &x_side_secp256k1,
-#if (uECC_OPTIMIZATION_LEVEL > 0)
+#if (MG_UECC_OPTIMIZATION_LEVEL > 0)
     &vli_mmod_fast_secp256k1
 #endif
 };
 
-uECC_Curve uECC_secp256k1(void) {
+MG_UECC_Curve mg_uecc_secp256k1(void) {
   return &curve_secp256k1;
 }
 
 /* Double in place */
-static void double_jacobian_secp256k1(uECC_word_t *X1, uECC_word_t *Y1,
-                                      uECC_word_t *Z1, uECC_Curve curve) {
+static void double_jacobian_secp256k1(mg_uecc_word_t *X1, mg_uecc_word_t *Y1,
+                                      mg_uecc_word_t *Z1, MG_UECC_Curve curve) {
   /* t1 = X, t2 = Y, t3 = Z */
-  uECC_word_t t4[num_words_secp256k1];
-  uECC_word_t t5[num_words_secp256k1];
+  mg_uecc_word_t t4[num_words_secp256k1];
+  mg_uecc_word_t t5[num_words_secp256k1];
 
-  if (uECC_vli_isZero(Z1, num_words_secp256k1)) {
+  if (mg_uecc_vli_isZero(Z1, num_words_secp256k1)) {
     return;
   }
 
-  uECC_vli_modSquare_fast(t5, Y1, curve);   /* t5 = y1^2 */
-  uECC_vli_modMult_fast(t4, X1, t5, curve); /* t4 = x1*y1^2 = A */
-  uECC_vli_modSquare_fast(X1, X1, curve);   /* t1 = x1^2 */
-  uECC_vli_modSquare_fast(t5, t5, curve);   /* t5 = y1^4 */
-  uECC_vli_modMult_fast(Z1, Y1, Z1, curve); /* t3 = y1*z1 = z3 */
+  mg_uecc_vli_modSquare_fast(t5, Y1, curve);   /* t5 = y1^2 */
+  mg_uecc_vli_modMult_fast(t4, X1, t5, curve); /* t4 = x1*y1^2 = A */
+  mg_uecc_vli_modSquare_fast(X1, X1, curve);   /* t1 = x1^2 */
+  mg_uecc_vli_modSquare_fast(t5, t5, curve);   /* t5 = y1^4 */
+  mg_uecc_vli_modMult_fast(Z1, Y1, Z1, curve); /* t3 = y1*z1 = z3 */
 
-  uECC_vli_modAdd(Y1, X1, X1, curve->p, num_words_secp256k1); /* t2 = 2*x1^2 */
-  uECC_vli_modAdd(Y1, Y1, X1, curve->p, num_words_secp256k1); /* t2 = 3*x1^2 */
-  if (uECC_vli_testBit(Y1, 0)) {
-    uECC_word_t carry = uECC_vli_add(Y1, Y1, curve->p, num_words_secp256k1);
-    uECC_vli_rshift1(Y1, num_words_secp256k1);
-    Y1[num_words_secp256k1 - 1] |= carry << (uECC_WORD_BITS - 1);
+  mg_uecc_vli_modAdd(Y1, X1, X1, curve->p,
+                     num_words_secp256k1); /* t2 = 2*x1^2 */
+  mg_uecc_vli_modAdd(Y1, Y1, X1, curve->p,
+                     num_words_secp256k1); /* t2 = 3*x1^2 */
+  if (mg_uecc_vli_testBit(Y1, 0)) {
+    mg_uecc_word_t carry =
+        mg_uecc_vli_add(Y1, Y1, curve->p, num_words_secp256k1);
+    mg_uecc_vli_rshift1(Y1, num_words_secp256k1);
+    Y1[num_words_secp256k1 - 1] |= carry << (MG_UECC_WORD_BITS - 1);
   } else {
-    uECC_vli_rshift1(Y1, num_words_secp256k1);
+    mg_uecc_vli_rshift1(Y1, num_words_secp256k1);
   }
   /* t2 = 3/2*(x1^2) = B */
 
-  uECC_vli_modSquare_fast(X1, Y1, curve);                     /* t1 = B^2 */
-  uECC_vli_modSub(X1, X1, t4, curve->p, num_words_secp256k1); /* t1 = B^2 - A */
-  uECC_vli_modSub(X1, X1, t4, curve->p,
-                  num_words_secp256k1); /* t1 = B^2 - 2A = x3 */
+  mg_uecc_vli_modSquare_fast(X1, Y1, curve); /* t1 = B^2 */
+  mg_uecc_vli_modSub(X1, X1, t4, curve->p,
+                     num_words_secp256k1); /* t1 = B^2 - A */
+  mg_uecc_vli_modSub(X1, X1, t4, curve->p,
+                     num_words_secp256k1); /* t1 = B^2 - 2A = x3 */
 
-  uECC_vli_modSub(t4, t4, X1, curve->p, num_words_secp256k1); /* t4 = A - x3 */
-  uECC_vli_modMult_fast(Y1, Y1, t4, curve); /* t2 = B * (A - x3) */
-  uECC_vli_modSub(Y1, Y1, t5, curve->p,
-                  num_words_secp256k1); /* t2 = B * (A - x3) - y1^4 = y3 */
+  mg_uecc_vli_modSub(t4, t4, X1, curve->p,
+                     num_words_secp256k1);     /* t4 = A - x3 */
+  mg_uecc_vli_modMult_fast(Y1, Y1, t4, curve); /* t2 = B * (A - x3) */
+  mg_uecc_vli_modSub(Y1, Y1, t5, curve->p,
+                     num_words_secp256k1); /* t2 = B * (A - x3) - y1^4 = y3 */
 }
 
 /* Computes result = x^3 + b. result must not overlap x. */
-static void x_side_secp256k1(uECC_word_t *result, const uECC_word_t *x,
-                             uECC_Curve curve) {
-  uECC_vli_modSquare_fast(result, x, curve);       /* r = x^2 */
-  uECC_vli_modMult_fast(result, result, x, curve); /* r = x^3 */
-  uECC_vli_modAdd(result, result, curve->b, curve->p,
-                  num_words_secp256k1); /* r = x^3 + b */
+static void x_side_secp256k1(mg_uecc_word_t *result, const mg_uecc_word_t *x,
+                             MG_UECC_Curve curve) {
+  mg_uecc_vli_modSquare_fast(result, x, curve);       /* r = x^2 */
+  mg_uecc_vli_modMult_fast(result, result, x, curve); /* r = x^3 */
+  mg_uecc_vli_modAdd(result, result, curve->b, curve->p,
+                     num_words_secp256k1); /* r = x^3 + b */
 }
 
-#if (uECC_OPTIMIZATION_LEVEL > 0 && !asm_mmod_fast_secp256k1)
-static void omega_mult_secp256k1(uECC_word_t *result, const uECC_word_t *right);
-static void vli_mmod_fast_secp256k1(uECC_word_t *result, uECC_word_t *product) {
-  uECC_word_t tmp[2 * num_words_secp256k1];
-  uECC_word_t carry;
+#if (MG_UECC_OPTIMIZATION_LEVEL > 0 && !asm_mmod_fast_secp256k1)
+static void omega_mult_secp256k1(mg_uecc_word_t *result,
+                                 const mg_uecc_word_t *right);
+static void vli_mmod_fast_secp256k1(mg_uecc_word_t *result,
+                                    mg_uecc_word_t *product) {
+  mg_uecc_word_t tmp[2 * num_words_secp256k1];
+  mg_uecc_word_t carry;
 
-  uECC_vli_clear(tmp, num_words_secp256k1);
-  uECC_vli_clear(tmp + num_words_secp256k1, num_words_secp256k1);
+  mg_uecc_vli_clear(tmp, num_words_secp256k1);
+  mg_uecc_vli_clear(tmp + num_words_secp256k1, num_words_secp256k1);
 
   omega_mult_secp256k1(tmp,
                        product + num_words_secp256k1); /* (Rq, q) = q * c */
 
-  carry = uECC_vli_add(result, product, tmp,
-                       num_words_secp256k1); /* (C, r) = r + q       */
-  uECC_vli_clear(product, num_words_secp256k1);
+  carry = mg_uecc_vli_add(result, product, tmp,
+                          num_words_secp256k1); /* (C, r) = r + q       */
+  mg_uecc_vli_clear(product, num_words_secp256k1);
   omega_mult_secp256k1(product, tmp + num_words_secp256k1); /* Rq*c */
-  carry += uECC_vli_add(result, result, product,
-                        num_words_secp256k1); /* (C1, r) = r + Rq*c */
+  carry += mg_uecc_vli_add(result, result, product,
+                           num_words_secp256k1); /* (C1, r) = r + Rq*c */
 
   while (carry > 0) {
     --carry;
-    uECC_vli_sub(result, result, curve_secp256k1.p, num_words_secp256k1);
+    mg_uecc_vli_sub(result, result, curve_secp256k1.p, num_words_secp256k1);
   }
-  if (uECC_vli_cmp_unsafe(result, curve_secp256k1.p, num_words_secp256k1) > 0) {
-    uECC_vli_sub(result, result, curve_secp256k1.p, num_words_secp256k1);
+  if (mg_uecc_vli_cmp_unsafe(result, curve_secp256k1.p, num_words_secp256k1) >
+      0) {
+    mg_uecc_vli_sub(result, result, curve_secp256k1.p, num_words_secp256k1);
   }
 }
 
-#if uECC_WORD_SIZE == 1
+#if MG_UECC_WORD_SIZE == 1
 static void omega_mult_secp256k1(uint8_t *result, const uint8_t *right) {
   /* Multiply by (2^32 + 2^9 + 2^8 + 2^7 + 2^6 + 2^4 + 1). */
-  uECC_word_t r0 = 0;
-  uECC_word_t r1 = 0;
-  uECC_word_t r2 = 0;
+  mg_uecc_word_t r0 = 0;
+  mg_uecc_word_t r1 = 0;
+  mg_uecc_word_t r2 = 0;
   wordcount_t k;
 
   /* Multiply by (2^9 + 2^8 + 2^7 + 2^6 + 2^4 + 1). */
@@ -12787,9 +13462,9 @@ static void omega_mult_secp256k1(uint8_t *result, const uint8_t *right) {
   result[num_words_secp256k1 + 1] = r1;
   /* add the 2^32 multiple */
   result[4 + num_words_secp256k1] =
-      uECC_vli_add(result + 4, result + 4, right, num_words_secp256k1);
+      mg_uecc_vli_add(result + 4, result + 4, right, num_words_secp256k1);
 }
-#elif uECC_WORD_SIZE == 4
+#elif MG_UECC_WORD_SIZE == 4
 static void omega_mult_secp256k1(uint32_t *result, const uint32_t *right) {
   /* Multiply by (2^9 + 2^8 + 2^7 + 2^6 + 2^4 + 1). */
   uint32_t carry = 0;
@@ -12803,13 +13478,13 @@ static void omega_mult_secp256k1(uint32_t *result, const uint32_t *right) {
   result[num_words_secp256k1] = carry;
   /* add the 2^32 multiple */
   result[1 + num_words_secp256k1] =
-      uECC_vli_add(result + 1, result + 1, right, num_words_secp256k1);
+      mg_uecc_vli_add(result + 1, result + 1, right, num_words_secp256k1);
 }
 #else
 static void omega_mult_secp256k1(uint64_t *result, const uint64_t *right) {
-  uECC_word_t r0 = 0;
-  uECC_word_t r1 = 0;
-  uECC_word_t r2 = 0;
+  mg_uecc_word_t r0 = 0;
+  mg_uecc_word_t r1 = 0;
+  mg_uecc_word_t r2 = 0;
   wordcount_t k;
 
   /* Multiply by (2^32 + 2^9 + 2^8 + 2^7 + 2^6 + 2^4 + 1). */
@@ -12822,48 +13497,48 @@ static void omega_mult_secp256k1(uint64_t *result, const uint64_t *right) {
   }
   result[num_words_secp256k1] = r0;
 }
-#endif /* uECC_WORD_SIZE */
-#endif /* (uECC_OPTIMIZATION_LEVEL > 0 &&  && !asm_mmod_fast_secp256k1) */
+#endif /* MG_UECC_WORD_SIZE */
+#endif /* (MG_UECC_OPTIMIZATION_LEVEL > 0 &&  && !asm_mmod_fast_secp256k1) */
 
-#endif /* uECC_SUPPORTS_secp256k1 */
+#endif /* MG_UECC_SUPPORTS_secp256k1 */
 
 #endif /* _UECC_CURVE_SPECIFIC_H_ */
 
 /* Returns 1 if 'point' is the point at infinity, 0 otherwise. */
 #define EccPoint_isZero(point, curve) \
-  uECC_vli_isZero((point), (wordcount_t) ((curve)->num_words * 2))
+  mg_uecc_vli_isZero((point), (wordcount_t) ((curve)->num_words * 2))
 
 /* Point multiplication algorithm using Montgomery's ladder with co-Z
 coordinates. From http://eprint.iacr.org/2011/338.pdf
 */
 
 /* Modify (x1, y1) => (x1 * z^2, y1 * z^3) */
-static void apply_z(uECC_word_t *X1, uECC_word_t *Y1,
-                    const uECC_word_t *const Z, uECC_Curve curve) {
-  uECC_word_t t1[uECC_MAX_WORDS];
+static void apply_z(mg_uecc_word_t *X1, mg_uecc_word_t *Y1,
+                    const mg_uecc_word_t *const Z, MG_UECC_Curve curve) {
+  mg_uecc_word_t t1[MG_UECC_MAX_WORDS];
 
-  uECC_vli_modSquare_fast(t1, Z, curve);    /* z^2 */
-  uECC_vli_modMult_fast(X1, X1, t1, curve); /* x1 * z^2 */
-  uECC_vli_modMult_fast(t1, t1, Z, curve);  /* z^3 */
-  uECC_vli_modMult_fast(Y1, Y1, t1, curve); /* y1 * z^3 */
+  mg_uecc_vli_modSquare_fast(t1, Z, curve);    /* z^2 */
+  mg_uecc_vli_modMult_fast(X1, X1, t1, curve); /* x1 * z^2 */
+  mg_uecc_vli_modMult_fast(t1, t1, Z, curve);  /* z^3 */
+  mg_uecc_vli_modMult_fast(Y1, Y1, t1, curve); /* y1 * z^3 */
 }
 
 /* P = (x1, y1) => 2P, (x2, y2) => P' */
-static void XYcZ_initial_double(uECC_word_t *X1, uECC_word_t *Y1,
-                                uECC_word_t *X2, uECC_word_t *Y2,
-                                const uECC_word_t *const initial_Z,
-                                uECC_Curve curve) {
-  uECC_word_t z[uECC_MAX_WORDS];
+static void XYcZ_initial_double(mg_uecc_word_t *X1, mg_uecc_word_t *Y1,
+                                mg_uecc_word_t *X2, mg_uecc_word_t *Y2,
+                                const mg_uecc_word_t *const initial_Z,
+                                MG_UECC_Curve curve) {
+  mg_uecc_word_t z[MG_UECC_MAX_WORDS];
   wordcount_t num_words = curve->num_words;
   if (initial_Z) {
-    uECC_vli_set(z, initial_Z, num_words);
+    mg_uecc_vli_set(z, initial_Z, num_words);
   } else {
-    uECC_vli_clear(z, num_words);
+    mg_uecc_vli_clear(z, num_words);
     z[0] = 1;
   }
 
-  uECC_vli_set(X2, X1, num_words);
-  uECC_vli_set(Y2, Y1, num_words);
+  mg_uecc_vli_set(X2, X1, num_words);
+  mg_uecc_vli_set(Y2, Y1, num_words);
 
   apply_z(X1, Y1, z, curve);
   curve->double_jacobian(X1, Y1, z, curve);
@@ -12874,163 +13549,167 @@ static void XYcZ_initial_double(uECC_word_t *X1, uECC_word_t *Y1,
    Output P' = (x1', y1', Z3), P + Q = (x3, y3, Z3)
    or P => P', Q => P + Q
 */
-static void XYcZ_add(uECC_word_t *X1, uECC_word_t *Y1, uECC_word_t *X2,
-                     uECC_word_t *Y2, uECC_Curve curve) {
+static void XYcZ_add(mg_uecc_word_t *X1, mg_uecc_word_t *Y1, mg_uecc_word_t *X2,
+                     mg_uecc_word_t *Y2, MG_UECC_Curve curve) {
   /* t1 = X1, t2 = Y1, t3 = X2, t4 = Y2 */
-  uECC_word_t t5[uECC_MAX_WORDS] = {0};
+  mg_uecc_word_t t5[MG_UECC_MAX_WORDS] = {0};
   wordcount_t num_words = curve->num_words;
 
-  uECC_vli_modSub(t5, X2, X1, curve->p, num_words); /* t5 = x2 - x1 */
-  uECC_vli_modSquare_fast(t5, t5, curve);           /* t5 = (x2 - x1)^2 = A */
-  uECC_vli_modMult_fast(X1, X1, t5, curve);         /* t1 = x1*A = B */
-  uECC_vli_modMult_fast(X2, X2, t5, curve);         /* t3 = x2*A = C */
-  uECC_vli_modSub(Y2, Y2, Y1, curve->p, num_words); /* t4 = y2 - y1 */
-  uECC_vli_modSquare_fast(t5, Y2, curve);           /* t5 = (y2 - y1)^2 = D */
+  mg_uecc_vli_modSub(t5, X2, X1, curve->p, num_words); /* t5 = x2 - x1 */
+  mg_uecc_vli_modSquare_fast(t5, t5, curve);   /* t5 = (x2 - x1)^2 = A */
+  mg_uecc_vli_modMult_fast(X1, X1, t5, curve); /* t1 = x1*A = B */
+  mg_uecc_vli_modMult_fast(X2, X2, t5, curve); /* t3 = x2*A = C */
+  mg_uecc_vli_modSub(Y2, Y2, Y1, curve->p, num_words); /* t4 = y2 - y1 */
+  mg_uecc_vli_modSquare_fast(t5, Y2, curve); /* t5 = (y2 - y1)^2 = D */
 
-  uECC_vli_modSub(t5, t5, X1, curve->p, num_words); /* t5 = D - B */
-  uECC_vli_modSub(t5, t5, X2, curve->p, num_words); /* t5 = D - B - C = x3 */
-  uECC_vli_modSub(X2, X2, X1, curve->p, num_words); /* t3 = C - B */
-  uECC_vli_modMult_fast(Y1, Y1, X2, curve);         /* t2 = y1*(C - B) */
-  uECC_vli_modSub(X2, X1, t5, curve->p, num_words); /* t3 = B - x3 */
-  uECC_vli_modMult_fast(Y2, Y2, X2, curve); /* t4 = (y2 - y1)*(B - x3) */
-  uECC_vli_modSub(Y2, Y2, Y1, curve->p, num_words); /* t4 = y3 */
+  mg_uecc_vli_modSub(t5, t5, X1, curve->p, num_words); /* t5 = D - B */
+  mg_uecc_vli_modSub(t5, t5, X2, curve->p, num_words); /* t5 = D - B - C = x3 */
+  mg_uecc_vli_modSub(X2, X2, X1, curve->p, num_words); /* t3 = C - B */
+  mg_uecc_vli_modMult_fast(Y1, Y1, X2, curve);         /* t2 = y1*(C - B) */
+  mg_uecc_vli_modSub(X2, X1, t5, curve->p, num_words); /* t3 = B - x3 */
+  mg_uecc_vli_modMult_fast(Y2, Y2, X2, curve); /* t4 = (y2 - y1)*(B - x3) */
+  mg_uecc_vli_modSub(Y2, Y2, Y1, curve->p, num_words); /* t4 = y3 */
 
-  uECC_vli_set(X2, t5, num_words);
+  mg_uecc_vli_set(X2, t5, num_words);
 }
 
 /* Input P = (x1, y1, Z), Q = (x2, y2, Z)
    Output P + Q = (x3, y3, Z3), P - Q = (x3', y3', Z3)
    or P => P - Q, Q => P + Q
 */
-static void XYcZ_addC(uECC_word_t *X1, uECC_word_t *Y1, uECC_word_t *X2,
-                      uECC_word_t *Y2, uECC_Curve curve) {
+static void XYcZ_addC(mg_uecc_word_t *X1, mg_uecc_word_t *Y1,
+                      mg_uecc_word_t *X2, mg_uecc_word_t *Y2,
+                      MG_UECC_Curve curve) {
   /* t1 = X1, t2 = Y1, t3 = X2, t4 = Y2 */
-  uECC_word_t t5[uECC_MAX_WORDS] = {0};
-  uECC_word_t t6[uECC_MAX_WORDS];
-  uECC_word_t t7[uECC_MAX_WORDS];
+  mg_uecc_word_t t5[MG_UECC_MAX_WORDS] = {0};
+  mg_uecc_word_t t6[MG_UECC_MAX_WORDS];
+  mg_uecc_word_t t7[MG_UECC_MAX_WORDS];
   wordcount_t num_words = curve->num_words;
 
-  uECC_vli_modSub(t5, X2, X1, curve->p, num_words); /* t5 = x2 - x1 */
-  uECC_vli_modSquare_fast(t5, t5, curve);           /* t5 = (x2 - x1)^2 = A */
-  uECC_vli_modMult_fast(X1, X1, t5, curve);         /* t1 = x1*A = B */
-  uECC_vli_modMult_fast(X2, X2, t5, curve);         /* t3 = x2*A = C */
-  uECC_vli_modAdd(t5, Y2, Y1, curve->p, num_words); /* t5 = y2 + y1 */
-  uECC_vli_modSub(Y2, Y2, Y1, curve->p, num_words); /* t4 = y2 - y1 */
+  mg_uecc_vli_modSub(t5, X2, X1, curve->p, num_words); /* t5 = x2 - x1 */
+  mg_uecc_vli_modSquare_fast(t5, t5, curve);   /* t5 = (x2 - x1)^2 = A */
+  mg_uecc_vli_modMult_fast(X1, X1, t5, curve); /* t1 = x1*A = B */
+  mg_uecc_vli_modMult_fast(X2, X2, t5, curve); /* t3 = x2*A = C */
+  mg_uecc_vli_modAdd(t5, Y2, Y1, curve->p, num_words); /* t5 = y2 + y1 */
+  mg_uecc_vli_modSub(Y2, Y2, Y1, curve->p, num_words); /* t4 = y2 - y1 */
 
-  uECC_vli_modSub(t6, X2, X1, curve->p, num_words); /* t6 = C - B */
-  uECC_vli_modMult_fast(Y1, Y1, t6, curve);         /* t2 = y1 * (C - B) = E */
-  uECC_vli_modAdd(t6, X1, X2, curve->p, num_words); /* t6 = B + C */
-  uECC_vli_modSquare_fast(X2, Y2, curve);           /* t3 = (y2 - y1)^2 = D */
-  uECC_vli_modSub(X2, X2, t6, curve->p, num_words); /* t3 = D - (B + C) = x3 */
+  mg_uecc_vli_modSub(t6, X2, X1, curve->p, num_words); /* t6 = C - B */
+  mg_uecc_vli_modMult_fast(Y1, Y1, t6, curve); /* t2 = y1 * (C - B) = E */
+  mg_uecc_vli_modAdd(t6, X1, X2, curve->p, num_words); /* t6 = B + C */
+  mg_uecc_vli_modSquare_fast(X2, Y2, curve); /* t3 = (y2 - y1)^2 = D */
+  mg_uecc_vli_modSub(X2, X2, t6, curve->p,
+                     num_words); /* t3 = D - (B + C) = x3 */
 
-  uECC_vli_modSub(t7, X1, X2, curve->p, num_words); /* t7 = B - x3 */
-  uECC_vli_modMult_fast(Y2, Y2, t7, curve); /* t4 = (y2 - y1)*(B - x3) */
-  uECC_vli_modSub(Y2, Y2, Y1, curve->p,
-                  num_words); /* t4 = (y2 - y1)*(B - x3) - E = y3 */
+  mg_uecc_vli_modSub(t7, X1, X2, curve->p, num_words); /* t7 = B - x3 */
+  mg_uecc_vli_modMult_fast(Y2, Y2, t7, curve); /* t4 = (y2 - y1)*(B - x3) */
+  mg_uecc_vli_modSub(Y2, Y2, Y1, curve->p,
+                     num_words); /* t4 = (y2 - y1)*(B - x3) - E = y3 */
 
-  uECC_vli_modSquare_fast(t7, t5, curve);           /* t7 = (y2 + y1)^2 = F */
-  uECC_vli_modSub(t7, t7, t6, curve->p, num_words); /* t7 = F - (B + C) = x3' */
-  uECC_vli_modSub(t6, t7, X1, curve->p, num_words); /* t6 = x3' - B */
-  uECC_vli_modMult_fast(t6, t6, t5, curve);         /* t6 = (y2+y1)*(x3' - B) */
-  uECC_vli_modSub(Y1, t6, Y1, curve->p,
-                  num_words); /* t2 = (y2+y1)*(x3' - B) - E = y3' */
+  mg_uecc_vli_modSquare_fast(t7, t5, curve); /* t7 = (y2 + y1)^2 = F */
+  mg_uecc_vli_modSub(t7, t7, t6, curve->p,
+                     num_words); /* t7 = F - (B + C) = x3' */
+  mg_uecc_vli_modSub(t6, t7, X1, curve->p, num_words); /* t6 = x3' - B */
+  mg_uecc_vli_modMult_fast(t6, t6, t5, curve); /* t6 = (y2+y1)*(x3' - B) */
+  mg_uecc_vli_modSub(Y1, t6, Y1, curve->p,
+                     num_words); /* t2 = (y2+y1)*(x3' - B) - E = y3' */
 
-  uECC_vli_set(X1, t7, num_words);
+  mg_uecc_vli_set(X1, t7, num_words);
 }
 
 /* result may overlap point. */
-static void EccPoint_mult(uECC_word_t *result, const uECC_word_t *point,
-                          const uECC_word_t *scalar,
-                          const uECC_word_t *initial_Z, bitcount_t num_bits,
-                          uECC_Curve curve) {
+static void EccPoint_mult(mg_uecc_word_t *result, const mg_uecc_word_t *point,
+                          const mg_uecc_word_t *scalar,
+                          const mg_uecc_word_t *initial_Z, bitcount_t num_bits,
+                          MG_UECC_Curve curve) {
   /* R0 and R1 */
-  uECC_word_t Rx[2][uECC_MAX_WORDS];
-  uECC_word_t Ry[2][uECC_MAX_WORDS];
-  uECC_word_t z[uECC_MAX_WORDS];
+  mg_uecc_word_t Rx[2][MG_UECC_MAX_WORDS];
+  mg_uecc_word_t Ry[2][MG_UECC_MAX_WORDS];
+  mg_uecc_word_t z[MG_UECC_MAX_WORDS];
   bitcount_t i;
-  uECC_word_t nb;
+  mg_uecc_word_t nb;
   wordcount_t num_words = curve->num_words;
 
-  uECC_vli_set(Rx[1], point, num_words);
-  uECC_vli_set(Ry[1], point + num_words, num_words);
+  mg_uecc_vli_set(Rx[1], point, num_words);
+  mg_uecc_vli_set(Ry[1], point + num_words, num_words);
 
   XYcZ_initial_double(Rx[1], Ry[1], Rx[0], Ry[0], initial_Z, curve);
 
   for (i = num_bits - 2; i > 0; --i) {
-    nb = !uECC_vli_testBit(scalar, i);
+    nb = !mg_uecc_vli_testBit(scalar, i);
     XYcZ_addC(Rx[1 - nb], Ry[1 - nb], Rx[nb], Ry[nb], curve);
     XYcZ_add(Rx[nb], Ry[nb], Rx[1 - nb], Ry[1 - nb], curve);
   }
 
-  nb = !uECC_vli_testBit(scalar, 0);
+  nb = !mg_uecc_vli_testBit(scalar, 0);
   XYcZ_addC(Rx[1 - nb], Ry[1 - nb], Rx[nb], Ry[nb], curve);
 
   /* Find final 1/Z value. */
-  uECC_vli_modSub(z, Rx[1], Rx[0], curve->p, num_words); /* X1 - X0 */
-  uECC_vli_modMult_fast(z, z, Ry[1 - nb], curve);        /* Yb * (X1 - X0) */
-  uECC_vli_modMult_fast(z, z, point, curve);  /* xP * Yb * (X1 - X0) */
-  uECC_vli_modInv(z, z, curve->p, num_words); /* 1 / (xP * Yb * (X1 - X0)) */
+  mg_uecc_vli_modSub(z, Rx[1], Rx[0], curve->p, num_words); /* X1 - X0 */
+  mg_uecc_vli_modMult_fast(z, z, Ry[1 - nb], curve);        /* Yb * (X1 - X0) */
+  mg_uecc_vli_modMult_fast(z, z, point, curve);  /* xP * Yb * (X1 - X0) */
+  mg_uecc_vli_modInv(z, z, curve->p, num_words); /* 1 / (xP * Yb * (X1 - X0)) */
   /* yP / (xP * Yb * (X1 - X0)) */
-  uECC_vli_modMult_fast(z, z, point + num_words, curve);
-  uECC_vli_modMult_fast(z, z, Rx[1 - nb],
-                        curve); /* Xb * yP / (xP * Yb * (X1 - X0)) */
+  mg_uecc_vli_modMult_fast(z, z, point + num_words, curve);
+  mg_uecc_vli_modMult_fast(z, z, Rx[1 - nb],
+                           curve); /* Xb * yP / (xP * Yb * (X1 - X0)) */
   /* End 1/Z calculation */
 
   XYcZ_add(Rx[nb], Ry[nb], Rx[1 - nb], Ry[1 - nb], curve);
   apply_z(Rx[0], Ry[0], z, curve);
 
-  uECC_vli_set(result, Rx[0], num_words);
-  uECC_vli_set(result + num_words, Ry[0], num_words);
+  mg_uecc_vli_set(result, Rx[0], num_words);
+  mg_uecc_vli_set(result + num_words, Ry[0], num_words);
 }
 
-static uECC_word_t regularize_k(const uECC_word_t *const k, uECC_word_t *k0,
-                                uECC_word_t *k1, uECC_Curve curve) {
+static mg_uecc_word_t regularize_k(const mg_uecc_word_t *const k,
+                                   mg_uecc_word_t *k0, mg_uecc_word_t *k1,
+                                   MG_UECC_Curve curve) {
   wordcount_t num_n_words = BITS_TO_WORDS(curve->num_n_bits);
   bitcount_t num_n_bits = curve->num_n_bits;
-  uECC_word_t carry =
-      uECC_vli_add(k0, k, curve->n, num_n_words) ||
-      (num_n_bits < ((bitcount_t) num_n_words * uECC_WORD_SIZE * 8) &&
-       uECC_vli_testBit(k0, num_n_bits));
-  uECC_vli_add(k1, k0, curve->n, num_n_words);
+  mg_uecc_word_t carry =
+      mg_uecc_vli_add(k0, k, curve->n, num_n_words) ||
+      (num_n_bits < ((bitcount_t) num_n_words * MG_UECC_WORD_SIZE * 8) &&
+       mg_uecc_vli_testBit(k0, num_n_bits));
+  mg_uecc_vli_add(k1, k0, curve->n, num_n_words);
   return carry;
 }
 
 /* Generates a random integer in the range 0 < random < top.
    Both random and top have num_words words. */
-uECC_VLI_API int uECC_generate_random_int(uECC_word_t *random,
-                                          const uECC_word_t *top,
-                                          wordcount_t num_words) {
-  uECC_word_t mask = (uECC_word_t) -1;
-  uECC_word_t tries;
-  bitcount_t num_bits = uECC_vli_numBits(top, num_words);
+MG_UECC_VLI_API int mg_uecc_generate_random_int(mg_uecc_word_t *random,
+                                                const mg_uecc_word_t *top,
+                                                wordcount_t num_words) {
+  mg_uecc_word_t mask = (mg_uecc_word_t) -1;
+  mg_uecc_word_t tries;
+  bitcount_t num_bits = mg_uecc_vli_numBits(top, num_words);
 
   if (!g_rng_function) {
     return 0;
   }
 
-  for (tries = 0; tries < uECC_RNG_MAX_TRIES; ++tries) {
+  for (tries = 0; tries < MG_UECC_RNG_MAX_TRIES; ++tries) {
     if (!g_rng_function((uint8_t *) random,
-                        (unsigned int) (num_words * uECC_WORD_SIZE))) {
+                        (unsigned int) (num_words * MG_UECC_WORD_SIZE))) {
       return 0;
     }
     random[num_words - 1] &=
-        mask >> ((bitcount_t) (num_words * uECC_WORD_SIZE * 8 - num_bits));
-    if (!uECC_vli_isZero(random, num_words) &&
-        uECC_vli_cmp(top, random, num_words) == 1) {
+        mask >> ((bitcount_t) (num_words * MG_UECC_WORD_SIZE * 8 - num_bits));
+    if (!mg_uecc_vli_isZero(random, num_words) &&
+        mg_uecc_vli_cmp(top, random, num_words) == 1) {
       return 1;
     }
   }
   return 0;
 }
 
-static uECC_word_t EccPoint_compute_public_key(uECC_word_t *result,
-                                               uECC_word_t *private_key,
-                                               uECC_Curve curve) {
-  uECC_word_t tmp1[uECC_MAX_WORDS];
-  uECC_word_t tmp2[uECC_MAX_WORDS];
-  uECC_word_t *p2[2] = {tmp1, tmp2};
-  uECC_word_t *initial_Z = 0;
-  uECC_word_t carry;
+static mg_uecc_word_t EccPoint_compute_public_key(mg_uecc_word_t *result,
+                                                  mg_uecc_word_t *private_key,
+                                                  MG_UECC_Curve curve) {
+  mg_uecc_word_t tmp1[MG_UECC_MAX_WORDS];
+  mg_uecc_word_t tmp2[MG_UECC_MAX_WORDS];
+  mg_uecc_word_t *p2[2] = {tmp1, tmp2};
+  mg_uecc_word_t *initial_Z = 0;
+  mg_uecc_word_t carry;
 
   /* Regularize the bitcount for the private key so that attackers cannot use a
      side channel attack to learn the number of leading zeros. */
@@ -13039,7 +13718,7 @@ static uECC_word_t EccPoint_compute_public_key(uECC_word_t *result,
   /* If an RNG function was specified, try to get a random initial Z value to
      improve protection against side-channel attacks. */
   if (g_rng_function) {
-    if (!uECC_generate_random_int(p2[carry], curve->p, curve->num_words)) {
+    if (!mg_uecc_generate_random_int(p2[carry], curve->p, curve->num_words)) {
       return 0;
     }
     initial_Z = p2[carry];
@@ -13053,70 +13732,74 @@ static uECC_word_t EccPoint_compute_public_key(uECC_word_t *result,
   return 1;
 }
 
-#if uECC_WORD_SIZE == 1
+#if MG_UECC_WORD_SIZE == 1
 
-uECC_VLI_API void uECC_vli_nativeToBytes(uint8_t *bytes, int num_bytes,
-                                         const uint8_t *native) {
+MG_UECC_VLI_API void mg_uecc_vli_nativeToBytes(uint8_t *bytes, int num_bytes,
+                                               const uint8_t *native) {
   wordcount_t i;
   for (i = 0; i < num_bytes; ++i) {
     bytes[i] = native[(num_bytes - 1) - i];
   }
 }
 
-uECC_VLI_API void uECC_vli_bytesToNative(uint8_t *native, const uint8_t *bytes,
-                                         int num_bytes) {
-  uECC_vli_nativeToBytes(native, num_bytes, bytes);
+MG_UECC_VLI_API void mg_uecc_vli_bytesToNative(uint8_t *native,
+                                               const uint8_t *bytes,
+                                               int num_bytes) {
+  mg_uecc_vli_nativeToBytes(native, num_bytes, bytes);
 }
 
 #else
 
-uECC_VLI_API void uECC_vli_nativeToBytes(uint8_t *bytes, int num_bytes,
-                                         const uECC_word_t *native) {
+MG_UECC_VLI_API void mg_uecc_vli_nativeToBytes(uint8_t *bytes, int num_bytes,
+                                               const mg_uecc_word_t *native) {
   int i;
   for (i = 0; i < num_bytes; ++i) {
     unsigned b = (unsigned) (num_bytes - 1 - i);
-    bytes[i] =
-        (uint8_t) (native[b / uECC_WORD_SIZE] >> (8 * (b % uECC_WORD_SIZE)));
+    bytes[i] = (uint8_t) (native[b / MG_UECC_WORD_SIZE] >>
+                          (8 * (b % MG_UECC_WORD_SIZE)));
   }
 }
 
-uECC_VLI_API void uECC_vli_bytesToNative(uECC_word_t *native,
-                                         const uint8_t *bytes, int num_bytes) {
+MG_UECC_VLI_API void mg_uecc_vli_bytesToNative(mg_uecc_word_t *native,
+                                               const uint8_t *bytes,
+                                               int num_bytes) {
   int i;
-  uECC_vli_clear(native, (wordcount_t) ((num_bytes + (uECC_WORD_SIZE - 1)) /
-                                        uECC_WORD_SIZE));
+  mg_uecc_vli_clear(native,
+                    (wordcount_t) ((num_bytes + (MG_UECC_WORD_SIZE - 1)) /
+                                   MG_UECC_WORD_SIZE));
   for (i = 0; i < num_bytes; ++i) {
     unsigned b = (unsigned) (num_bytes - 1 - i);
-    native[b / uECC_WORD_SIZE] |= (uECC_word_t) bytes[i]
-                                  << (8 * (b % uECC_WORD_SIZE));
+    native[b / MG_UECC_WORD_SIZE] |= (mg_uecc_word_t) bytes[i]
+                                     << (8 * (b % MG_UECC_WORD_SIZE));
   }
 }
 
-#endif /* uECC_WORD_SIZE */
+#endif /* MG_UECC_WORD_SIZE */
 
-int uECC_make_key(uint8_t *public_key, uint8_t *private_key, uECC_Curve curve) {
-#if uECC_VLI_NATIVE_LITTLE_ENDIAN
-  uECC_word_t *_private = (uECC_word_t *) private_key;
-  uECC_word_t *_public = (uECC_word_t *) public_key;
+int mg_uecc_make_key(uint8_t *public_key, uint8_t *private_key,
+                     MG_UECC_Curve curve) {
+#if MG_UECC_VLI_NATIVE_LITTLE_ENDIAN
+  mg_uecc_word_t *_private = (mg_uecc_word_t *) private_key;
+  mg_uecc_word_t *_public = (mg_uecc_word_t *) public_key;
 #else
-  uECC_word_t _private[uECC_MAX_WORDS];
-  uECC_word_t _public[uECC_MAX_WORDS * 2];
+  mg_uecc_word_t _private[MG_UECC_MAX_WORDS];
+  mg_uecc_word_t _public[MG_UECC_MAX_WORDS * 2];
 #endif
-  uECC_word_t tries;
+  mg_uecc_word_t tries;
 
-  for (tries = 0; tries < uECC_RNG_MAX_TRIES; ++tries) {
-    if (!uECC_generate_random_int(_private, curve->n,
-                                  BITS_TO_WORDS(curve->num_n_bits))) {
+  for (tries = 0; tries < MG_UECC_RNG_MAX_TRIES; ++tries) {
+    if (!mg_uecc_generate_random_int(_private, curve->n,
+                                     BITS_TO_WORDS(curve->num_n_bits))) {
       return 0;
     }
 
     if (EccPoint_compute_public_key(_public, _private, curve)) {
-#if uECC_VLI_NATIVE_LITTLE_ENDIAN == 0
-      uECC_vli_nativeToBytes(private_key, BITS_TO_BYTES(curve->num_n_bits),
-                             _private);
-      uECC_vli_nativeToBytes(public_key, curve->num_bytes, _public);
-      uECC_vli_nativeToBytes(public_key + curve->num_bytes, curve->num_bytes,
-                             _public + curve->num_words);
+#if MG_UECC_VLI_NATIVE_LITTLE_ENDIAN == 0
+      mg_uecc_vli_nativeToBytes(private_key, BITS_TO_BYTES(curve->num_n_bits),
+                                _private);
+      mg_uecc_vli_nativeToBytes(public_key, curve->num_bytes, _public);
+      mg_uecc_vli_nativeToBytes(public_key + curve->num_bytes, curve->num_bytes,
+                                _public + curve->num_words);
 #endif
       return 1;
     }
@@ -13124,27 +13807,27 @@ int uECC_make_key(uint8_t *public_key, uint8_t *private_key, uECC_Curve curve) {
   return 0;
 }
 
-int uECC_shared_secret(const uint8_t *public_key, const uint8_t *private_key,
-                       uint8_t *secret, uECC_Curve curve) {
-  uECC_word_t _public[uECC_MAX_WORDS * 2];
-  uECC_word_t _private[uECC_MAX_WORDS];
+int mg_uecc_shared_secret(const uint8_t *public_key, const uint8_t *private_key,
+                          uint8_t *secret, MG_UECC_Curve curve) {
+  mg_uecc_word_t _public[MG_UECC_MAX_WORDS * 2];
+  mg_uecc_word_t _private[MG_UECC_MAX_WORDS];
 
-  uECC_word_t tmp[uECC_MAX_WORDS];
-  uECC_word_t *p2[2] = {_private, tmp};
-  uECC_word_t *initial_Z = 0;
-  uECC_word_t carry;
+  mg_uecc_word_t tmp[MG_UECC_MAX_WORDS];
+  mg_uecc_word_t *p2[2] = {_private, tmp};
+  mg_uecc_word_t *initial_Z = 0;
+  mg_uecc_word_t carry;
   wordcount_t num_words = curve->num_words;
   wordcount_t num_bytes = curve->num_bytes;
 
-#if uECC_VLI_NATIVE_LITTLE_ENDIAN
+#if MG_UECC_VLI_NATIVE_LITTLE_ENDIAN
   bcopy((uint8_t *) _private, private_key, num_bytes);
   bcopy((uint8_t *) _public, public_key, num_bytes * 2);
 #else
-  uECC_vli_bytesToNative(_private, private_key,
-                         BITS_TO_BYTES(curve->num_n_bits));
-  uECC_vli_bytesToNative(_public, public_key, num_bytes);
-  uECC_vli_bytesToNative(_public + num_words, public_key + num_bytes,
-                         num_bytes);
+  mg_uecc_vli_bytesToNative(_private, private_key,
+                            BITS_TO_BYTES(curve->num_n_bits));
+  mg_uecc_vli_bytesToNative(_public, public_key, num_bytes);
+  mg_uecc_vli_bytesToNative(_public + num_words, public_key + num_bytes,
+                            num_bytes);
 #endif
 
   /* Regularize the bitcount for the private key so that attackers cannot use a
@@ -13154,7 +13837,7 @@ int uECC_shared_secret(const uint8_t *public_key, const uint8_t *private_key,
   /* If an RNG function was specified, try to get a random initial Z value to
      improve protection against side-channel attacks. */
   if (g_rng_function) {
-    if (!uECC_generate_random_int(p2[carry], curve->p, num_words)) {
+    if (!mg_uecc_generate_random_int(p2[carry], curve->p, num_words)) {
       return 0;
     }
     initial_Z = p2[carry];
@@ -13162,58 +13845,59 @@ int uECC_shared_secret(const uint8_t *public_key, const uint8_t *private_key,
 
   EccPoint_mult(_public, _public, p2[!carry], initial_Z,
                 (bitcount_t) (curve->num_n_bits + 1), curve);
-#if uECC_VLI_NATIVE_LITTLE_ENDIAN
+#if MG_UECC_VLI_NATIVE_LITTLE_ENDIAN
   bcopy((uint8_t *) secret, (uint8_t *) _public, num_bytes);
 #else
-  uECC_vli_nativeToBytes(secret, num_bytes, _public);
+  mg_uecc_vli_nativeToBytes(secret, num_bytes, _public);
 #endif
   return !EccPoint_isZero(_public, curve);
 }
 
-#if uECC_SUPPORT_COMPRESSED_POINT
-void uECC_compress(const uint8_t *public_key, uint8_t *compressed,
-                   uECC_Curve curve) {
+#if MG_UECC_SUPPORT_COMPRESSED_POINT
+void mg_uecc_compress(const uint8_t *public_key, uint8_t *compressed,
+                      MG_UECC_Curve curve) {
   wordcount_t i;
   for (i = 0; i < curve->num_bytes; ++i) {
     compressed[i + 1] = public_key[i];
   }
-#if uECC_VLI_NATIVE_LITTLE_ENDIAN
+#if MG_UECC_VLI_NATIVE_LITTLE_ENDIAN
   compressed[0] = 2 + (public_key[curve->num_bytes] & 0x01);
 #else
   compressed[0] = 2 + (public_key[curve->num_bytes * 2 - 1] & 0x01);
 #endif
 }
 
-void uECC_decompress(const uint8_t *compressed, uint8_t *public_key,
-                     uECC_Curve curve) {
-#if uECC_VLI_NATIVE_LITTLE_ENDIAN
-  uECC_word_t *point = (uECC_word_t *) public_key;
+void mg_uecc_decompress(const uint8_t *compressed, uint8_t *public_key,
+                        MG_UECC_Curve curve) {
+#if MG_UECC_VLI_NATIVE_LITTLE_ENDIAN
+  mg_uecc_word_t *point = (mg_uecc_word_t *) public_key;
 #else
-  uECC_word_t point[uECC_MAX_WORDS * 2];
+  mg_uecc_word_t point[MG_UECC_MAX_WORDS * 2];
 #endif
-  uECC_word_t *y = point + curve->num_words;
-#if uECC_VLI_NATIVE_LITTLE_ENDIAN
+  mg_uecc_word_t *y = point + curve->num_words;
+#if MG_UECC_VLI_NATIVE_LITTLE_ENDIAN
   bcopy(public_key, compressed + 1, curve->num_bytes);
 #else
-  uECC_vli_bytesToNative(point, compressed + 1, curve->num_bytes);
+  mg_uecc_vli_bytesToNative(point, compressed + 1, curve->num_bytes);
 #endif
   curve->x_side(y, point, curve);
   curve->mod_sqrt(y, curve);
 
   if ((uint8_t) (y[0] & 0x01) != (compressed[0] & 0x01)) {
-    uECC_vli_sub(y, curve->p, y, curve->num_words);
+    mg_uecc_vli_sub(y, curve->p, y, curve->num_words);
   }
 
-#if uECC_VLI_NATIVE_LITTLE_ENDIAN == 0
-  uECC_vli_nativeToBytes(public_key, curve->num_bytes, point);
-  uECC_vli_nativeToBytes(public_key + curve->num_bytes, curve->num_bytes, y);
+#if MG_UECC_VLI_NATIVE_LITTLE_ENDIAN == 0
+  mg_uecc_vli_nativeToBytes(public_key, curve->num_bytes, point);
+  mg_uecc_vli_nativeToBytes(public_key + curve->num_bytes, curve->num_bytes, y);
 #endif
 }
-#endif /* uECC_SUPPORT_COMPRESSED_POINT */
+#endif /* MG_UECC_SUPPORT_COMPRESSED_POINT */
 
-uECC_VLI_API int uECC_valid_point(const uECC_word_t *point, uECC_Curve curve) {
-  uECC_word_t tmp1[uECC_MAX_WORDS];
-  uECC_word_t tmp2[uECC_MAX_WORDS];
+MG_UECC_VLI_API int mg_uecc_valid_point(const mg_uecc_word_t *point,
+                                        MG_UECC_Curve curve) {
+  mg_uecc_word_t tmp1[MG_UECC_MAX_WORDS];
+  mg_uecc_word_t tmp2[MG_UECC_MAX_WORDS];
   wordcount_t num_words = curve->num_words;
 
   /* The point at infinity is invalid. */
@@ -13222,54 +13906,55 @@ uECC_VLI_API int uECC_valid_point(const uECC_word_t *point, uECC_Curve curve) {
   }
 
   /* x and y must be smaller than p. */
-  if (uECC_vli_cmp_unsafe(curve->p, point, num_words) != 1 ||
-      uECC_vli_cmp_unsafe(curve->p, point + num_words, num_words) != 1) {
+  if (mg_uecc_vli_cmp_unsafe(curve->p, point, num_words) != 1 ||
+      mg_uecc_vli_cmp_unsafe(curve->p, point + num_words, num_words) != 1) {
     return 0;
   }
 
-  uECC_vli_modSquare_fast(tmp1, point + num_words, curve);
+  mg_uecc_vli_modSquare_fast(tmp1, point + num_words, curve);
   curve->x_side(tmp2, point, curve); /* tmp2 = x^3 + ax + b */
 
   /* Make sure that y^2 == x^3 + ax + b */
-  return (int) (uECC_vli_equal(tmp1, tmp2, num_words));
+  return (int) (mg_uecc_vli_equal(tmp1, tmp2, num_words));
 }
 
-int uECC_valid_public_key(const uint8_t *public_key, uECC_Curve curve) {
-#if uECC_VLI_NATIVE_LITTLE_ENDIAN
-  uECC_word_t *_public = (uECC_word_t *) public_key;
+int mg_uecc_valid_public_key(const uint8_t *public_key, MG_UECC_Curve curve) {
+#if MG_UECC_VLI_NATIVE_LITTLE_ENDIAN
+  mg_uecc_word_t *_public = (mg_uecc_word_t *) public_key;
 #else
-  uECC_word_t _public[uECC_MAX_WORDS * 2];
+  mg_uecc_word_t _public[MG_UECC_MAX_WORDS * 2];
 #endif
 
-#if uECC_VLI_NATIVE_LITTLE_ENDIAN == 0
-  uECC_vli_bytesToNative(_public, public_key, curve->num_bytes);
-  uECC_vli_bytesToNative(_public + curve->num_words,
-                         public_key + curve->num_bytes, curve->num_bytes);
+#if MG_UECC_VLI_NATIVE_LITTLE_ENDIAN == 0
+  mg_uecc_vli_bytesToNative(_public, public_key, curve->num_bytes);
+  mg_uecc_vli_bytesToNative(_public + curve->num_words,
+                            public_key + curve->num_bytes, curve->num_bytes);
 #endif
-  return uECC_valid_point(_public, curve);
+  return mg_uecc_valid_point(_public, curve);
 }
 
-int uECC_compute_public_key(const uint8_t *private_key, uint8_t *public_key,
-                            uECC_Curve curve) {
-#if uECC_VLI_NATIVE_LITTLE_ENDIAN
-  uECC_word_t *_private = (uECC_word_t *) private_key;
-  uECC_word_t *_public = (uECC_word_t *) public_key;
+int mg_uecc_compute_public_key(const uint8_t *private_key, uint8_t *public_key,
+                               MG_UECC_Curve curve) {
+#if MG_UECC_VLI_NATIVE_LITTLE_ENDIAN
+  mg_uecc_word_t *_private = (mg_uecc_word_t *) private_key;
+  mg_uecc_word_t *_public = (mg_uecc_word_t *) public_key;
 #else
-  uECC_word_t _private[uECC_MAX_WORDS];
-  uECC_word_t _public[uECC_MAX_WORDS * 2];
+  mg_uecc_word_t _private[MG_UECC_MAX_WORDS];
+  mg_uecc_word_t _public[MG_UECC_MAX_WORDS * 2];
 #endif
 
-#if uECC_VLI_NATIVE_LITTLE_ENDIAN == 0
-  uECC_vli_bytesToNative(_private, private_key,
-                         BITS_TO_BYTES(curve->num_n_bits));
+#if MG_UECC_VLI_NATIVE_LITTLE_ENDIAN == 0
+  mg_uecc_vli_bytesToNative(_private, private_key,
+                            BITS_TO_BYTES(curve->num_n_bits));
 #endif
 
   /* Make sure the private key is in the range [1, n-1]. */
-  if (uECC_vli_isZero(_private, BITS_TO_WORDS(curve->num_n_bits))) {
+  if (mg_uecc_vli_isZero(_private, BITS_TO_WORDS(curve->num_n_bits))) {
     return 0;
   }
 
-  if (uECC_vli_cmp(curve->n, _private, BITS_TO_WORDS(curve->num_n_bits)) != 1) {
+  if (mg_uecc_vli_cmp(curve->n, _private, BITS_TO_WORDS(curve->num_n_bits)) !=
+      1) {
     return 0;
   }
 
@@ -13278,33 +13963,33 @@ int uECC_compute_public_key(const uint8_t *private_key, uint8_t *public_key,
     return 0;
   }
 
-#if uECC_VLI_NATIVE_LITTLE_ENDIAN == 0
-  uECC_vli_nativeToBytes(public_key, curve->num_bytes, _public);
-  uECC_vli_nativeToBytes(public_key + curve->num_bytes, curve->num_bytes,
-                         _public + curve->num_words);
+#if MG_UECC_VLI_NATIVE_LITTLE_ENDIAN == 0
+  mg_uecc_vli_nativeToBytes(public_key, curve->num_bytes, _public);
+  mg_uecc_vli_nativeToBytes(public_key + curve->num_bytes, curve->num_bytes,
+                            _public + curve->num_words);
 #endif
   return 1;
 }
 
 /* -------- ECDSA code -------- */
 
-static void bits2int(uECC_word_t *native, const uint8_t *bits,
-                     unsigned bits_size, uECC_Curve curve) {
+static void bits2int(mg_uecc_word_t *native, const uint8_t *bits,
+                     unsigned bits_size, MG_UECC_Curve curve) {
   unsigned num_n_bytes = (unsigned) BITS_TO_BYTES(curve->num_n_bits);
   unsigned num_n_words = (unsigned) BITS_TO_WORDS(curve->num_n_bits);
   int shift;
-  uECC_word_t carry;
-  uECC_word_t *ptr;
+  mg_uecc_word_t carry;
+  mg_uecc_word_t *ptr;
 
   if (bits_size > num_n_bytes) {
     bits_size = num_n_bytes;
   }
 
-  uECC_vli_clear(native, (wordcount_t) num_n_words);
-#if uECC_VLI_NATIVE_LITTLE_ENDIAN
+  mg_uecc_vli_clear(native, (wordcount_t) num_n_words);
+#if MG_UECC_VLI_NATIVE_LITTLE_ENDIAN
   bcopy((uint8_t *) native, bits, bits_size);
 #else
-  uECC_vli_bytesToNative(native, bits, (int) bits_size);
+  mg_uecc_vli_bytesToNative(native, bits, (int) bits_size);
 #endif
   if (bits_size * 8 <= (unsigned) curve->num_n_bits) {
     return;
@@ -13313,38 +13998,40 @@ static void bits2int(uECC_word_t *native, const uint8_t *bits,
   carry = 0;
   ptr = native + num_n_words;
   while (ptr-- > native) {
-    uECC_word_t temp = *ptr;
+    mg_uecc_word_t temp = *ptr;
     *ptr = (temp >> shift) | carry;
-    carry = temp << (uECC_WORD_BITS - shift);
+    carry = temp << (MG_UECC_WORD_BITS - shift);
   }
 
   /* Reduce mod curve_n */
-  if (uECC_vli_cmp_unsafe(curve->n, native, (wordcount_t) num_n_words) != 1) {
-    uECC_vli_sub(native, native, curve->n, (wordcount_t) num_n_words);
+  if (mg_uecc_vli_cmp_unsafe(curve->n, native, (wordcount_t) num_n_words) !=
+      1) {
+    mg_uecc_vli_sub(native, native, curve->n, (wordcount_t) num_n_words);
   }
 }
 
-static int uECC_sign_with_k_internal(const uint8_t *private_key,
-                                     const uint8_t *message_hash,
-                                     unsigned hash_size, uECC_word_t *k,
-                                     uint8_t *signature, uECC_Curve curve) {
-  uECC_word_t tmp[uECC_MAX_WORDS];
-  uECC_word_t s[uECC_MAX_WORDS];
-  uECC_word_t *k2[2] = {tmp, s};
-  uECC_word_t *initial_Z = 0;
-#if uECC_VLI_NATIVE_LITTLE_ENDIAN
-  uECC_word_t *p = (uECC_word_t *) signature;
+static int mg_uecc_sign_with_k_internal(const uint8_t *private_key,
+                                        const uint8_t *message_hash,
+                                        unsigned hash_size, mg_uecc_word_t *k,
+                                        uint8_t *signature,
+                                        MG_UECC_Curve curve) {
+  mg_uecc_word_t tmp[MG_UECC_MAX_WORDS];
+  mg_uecc_word_t s[MG_UECC_MAX_WORDS];
+  mg_uecc_word_t *k2[2] = {tmp, s};
+  mg_uecc_word_t *initial_Z = 0;
+#if MG_UECC_VLI_NATIVE_LITTLE_ENDIAN
+  mg_uecc_word_t *p = (mg_uecc_word_t *) signature;
 #else
-  uECC_word_t p[uECC_MAX_WORDS * 2];
+  mg_uecc_word_t p[MG_UECC_MAX_WORDS * 2];
 #endif
-  uECC_word_t carry;
+  mg_uecc_word_t carry;
   wordcount_t num_words = curve->num_words;
   wordcount_t num_n_words = BITS_TO_WORDS(curve->num_n_bits);
   bitcount_t num_n_bits = curve->num_n_bits;
 
   /* Make sure 0 < k < curve_n */
-  if (uECC_vli_isZero(k, num_words) ||
-      uECC_vli_cmp(curve->n, k, num_n_words) != 1) {
+  if (mg_uecc_vli_isZero(k, num_words) ||
+      mg_uecc_vli_cmp(curve->n, k, num_n_words) != 1) {
     return 0;
   }
 
@@ -13352,87 +14039,87 @@ static int uECC_sign_with_k_internal(const uint8_t *private_key,
   /* If an RNG function was specified, try to get a random initial Z value to
      improve protection against side-channel attacks. */
   if (g_rng_function) {
-    if (!uECC_generate_random_int(k2[carry], curve->p, num_words)) {
+    if (!mg_uecc_generate_random_int(k2[carry], curve->p, num_words)) {
       return 0;
     }
     initial_Z = k2[carry];
   }
   EccPoint_mult(p, curve->G, k2[!carry], initial_Z,
                 (bitcount_t) (num_n_bits + 1), curve);
-  if (uECC_vli_isZero(p, num_words)) {
+  if (mg_uecc_vli_isZero(p, num_words)) {
     return 0;
   }
 
   /* If an RNG function was specified, get a random number
      to prevent side channel analysis of k. */
   if (!g_rng_function) {
-    uECC_vli_clear(tmp, num_n_words);
+    mg_uecc_vli_clear(tmp, num_n_words);
     tmp[0] = 1;
-  } else if (!uECC_generate_random_int(tmp, curve->n, num_n_words)) {
+  } else if (!mg_uecc_generate_random_int(tmp, curve->n, num_n_words)) {
     return 0;
   }
 
-  /* Prevent side channel analysis of uECC_vli_modInv() to determine
+  /* Prevent side channel analysis of mg_uecc_vli_modInv() to determine
      bits of k / the private key by premultiplying by a random number */
-  uECC_vli_modMult(k, k, tmp, curve->n, num_n_words); /* k' = rand * k */
-  uECC_vli_modInv(k, k, curve->n, num_n_words);       /* k = 1 / k' */
-  uECC_vli_modMult(k, k, tmp, curve->n, num_n_words); /* k = 1 / k */
+  mg_uecc_vli_modMult(k, k, tmp, curve->n, num_n_words); /* k' = rand * k */
+  mg_uecc_vli_modInv(k, k, curve->n, num_n_words);       /* k = 1 / k' */
+  mg_uecc_vli_modMult(k, k, tmp, curve->n, num_n_words); /* k = 1 / k */
 
-#if uECC_VLI_NATIVE_LITTLE_ENDIAN == 0
-  uECC_vli_nativeToBytes(signature, curve->num_bytes, p); /* store r */
+#if MG_UECC_VLI_NATIVE_LITTLE_ENDIAN == 0
+  mg_uecc_vli_nativeToBytes(signature, curve->num_bytes, p); /* store r */
 #endif
 
-#if uECC_VLI_NATIVE_LITTLE_ENDIAN
+#if MG_UECC_VLI_NATIVE_LITTLE_ENDIAN
   bcopy((uint8_t *) tmp, private_key, BITS_TO_BYTES(curve->num_n_bits));
 #else
-  uECC_vli_bytesToNative(tmp, private_key,
-                         BITS_TO_BYTES(curve->num_n_bits)); /* tmp = d */
+  mg_uecc_vli_bytesToNative(tmp, private_key,
+                            BITS_TO_BYTES(curve->num_n_bits)); /* tmp = d */
 #endif
 
   s[num_n_words - 1] = 0;
-  uECC_vli_set(s, p, num_words);
-  uECC_vli_modMult(s, tmp, s, curve->n, num_n_words); /* s = r*d */
+  mg_uecc_vli_set(s, p, num_words);
+  mg_uecc_vli_modMult(s, tmp, s, curve->n, num_n_words); /* s = r*d */
 
   bits2int(tmp, message_hash, hash_size, curve);
-  uECC_vli_modAdd(s, tmp, s, curve->n, num_n_words); /* s = e + r*d */
-  uECC_vli_modMult(s, s, k, curve->n, num_n_words);  /* s = (e + r*d) / k */
-  if (uECC_vli_numBits(s, num_n_words) > (bitcount_t) curve->num_bytes * 8) {
+  mg_uecc_vli_modAdd(s, tmp, s, curve->n, num_n_words); /* s = e + r*d */
+  mg_uecc_vli_modMult(s, s, k, curve->n, num_n_words);  /* s = (e + r*d) / k */
+  if (mg_uecc_vli_numBits(s, num_n_words) > (bitcount_t) curve->num_bytes * 8) {
     return 0;
   }
-#if uECC_VLI_NATIVE_LITTLE_ENDIAN
+#if MG_UECC_VLI_NATIVE_LITTLE_ENDIAN
   bcopy((uint8_t *) signature + curve->num_bytes, (uint8_t *) s,
         curve->num_bytes);
 #else
-  uECC_vli_nativeToBytes(signature + curve->num_bytes, curve->num_bytes, s);
+  mg_uecc_vli_nativeToBytes(signature + curve->num_bytes, curve->num_bytes, s);
 #endif
   return 1;
 }
 
 #if 0
 /* For testing - sign with an explicitly specified k value */
-int uECC_sign_with_k(const uint8_t *private_key, const uint8_t *message_hash,
+int mg_uecc_sign_with_k(const uint8_t *private_key, const uint8_t *message_hash,
                      unsigned hash_size, const uint8_t *k, uint8_t *signature,
-                     uECC_Curve curve) {
-  uECC_word_t k2[uECC_MAX_WORDS];
+                     MG_UECC_Curve curve) {
+  mg_uecc_word_t k2[MG_UECC_MAX_WORDS];
   bits2int(k2, k, (unsigned) BITS_TO_BYTES(curve->num_n_bits), curve);
-  return uECC_sign_with_k_internal(private_key, message_hash, hash_size, k2,
+  return mg_uecc_sign_with_k_internal(private_key, message_hash, hash_size, k2,
                                    signature, curve);
 }
 #endif
 
-int uECC_sign(const uint8_t *private_key, const uint8_t *message_hash,
-              unsigned hash_size, uint8_t *signature, uECC_Curve curve) {
-  uECC_word_t k[uECC_MAX_WORDS];
-  uECC_word_t tries;
+int mg_uecc_sign(const uint8_t *private_key, const uint8_t *message_hash,
+                 unsigned hash_size, uint8_t *signature, MG_UECC_Curve curve) {
+  mg_uecc_word_t k[MG_UECC_MAX_WORDS];
+  mg_uecc_word_t tries;
 
-  for (tries = 0; tries < uECC_RNG_MAX_TRIES; ++tries) {
-    if (!uECC_generate_random_int(k, curve->n,
-                                  BITS_TO_WORDS(curve->num_n_bits))) {
+  for (tries = 0; tries < MG_UECC_RNG_MAX_TRIES; ++tries) {
+    if (!mg_uecc_generate_random_int(k, curve->n,
+                                     BITS_TO_WORDS(curve->num_n_bits))) {
       return 0;
     }
 
-    if (uECC_sign_with_k_internal(private_key, message_hash, hash_size, k,
-                                  signature, curve)) {
+    if (mg_uecc_sign_with_k_internal(private_key, message_hash, hash_size, k,
+                                     signature, curve)) {
       return 1;
     }
   }
@@ -13441,7 +14128,8 @@ int uECC_sign(const uint8_t *private_key, const uint8_t *message_hash,
 
 /* Compute an HMAC using K as a key (as in RFC 6979). Note that K is always
    the same size as the hash result size. */
-static void HMAC_init(const uECC_HashContext *hash_context, const uint8_t *K) {
+static void HMAC_init(const MG_UECC_HashContext *hash_context,
+                      const uint8_t *K) {
   uint8_t *pad = hash_context->tmp + 2 * hash_context->result_size;
   unsigned i;
   for (i = 0; i < hash_context->result_size; ++i) pad[i] = K[i] ^ 0x36;
@@ -13451,13 +14139,13 @@ static void HMAC_init(const uECC_HashContext *hash_context, const uint8_t *K) {
   hash_context->update_hash(hash_context, pad, hash_context->block_size);
 }
 
-static void HMAC_update(const uECC_HashContext *hash_context,
+static void HMAC_update(const MG_UECC_HashContext *hash_context,
                         const uint8_t *message, unsigned message_size) {
   hash_context->update_hash(hash_context, message, message_size);
 }
 
-static void HMAC_finish(const uECC_HashContext *hash_context, const uint8_t *K,
-                        uint8_t *result) {
+static void HMAC_finish(const MG_UECC_HashContext *hash_context,
+                        const uint8_t *K, uint8_t *result) {
   uint8_t *pad = hash_context->tmp + 2 * hash_context->result_size;
   unsigned i;
   for (i = 0; i < hash_context->result_size; ++i) pad[i] = K[i] ^ 0x5c;
@@ -13472,7 +14160,7 @@ static void HMAC_finish(const uECC_HashContext *hash_context, const uint8_t *K,
 }
 
 /* V = HMAC_K(V) */
-static void update_V(const uECC_HashContext *hash_context, uint8_t *K,
+static void update_V(const MG_UECC_HashContext *hash_context, uint8_t *K,
                      uint8_t *V) {
   HMAC_init(hash_context, K);
   HMAC_update(hash_context, V, hash_context->result_size);
@@ -13487,16 +14175,16 @@ static void update_V(const uECC_HashContext *hash_context, uint8_t *K,
 
    Layout of hash_context->tmp: <K> | <V> | (1 byte overlapped 0x00 or 0x01) /
    <HMAC pad> */
-int uECC_sign_deterministic(const uint8_t *private_key,
-                            const uint8_t *message_hash, unsigned hash_size,
-                            const uECC_HashContext *hash_context,
-                            uint8_t *signature, uECC_Curve curve) {
+int mg_uecc_sign_deterministic(const uint8_t *private_key,
+                               const uint8_t *message_hash, unsigned hash_size,
+                               const MG_UECC_HashContext *hash_context,
+                               uint8_t *signature, MG_UECC_Curve curve) {
   uint8_t *K = hash_context->tmp;
   uint8_t *V = K + hash_context->result_size;
   wordcount_t num_bytes = curve->num_bytes;
   wordcount_t num_n_words = BITS_TO_WORDS(curve->num_n_bits);
   bitcount_t num_n_bits = curve->num_n_bits;
-  uECC_word_t tries;
+  mg_uecc_word_t tries;
   unsigned i;
   for (i = 0; i < hash_context->result_size; ++i) {
     V[i] = 0x01;
@@ -13523,29 +14211,29 @@ int uECC_sign_deterministic(const uint8_t *private_key,
 
   update_V(hash_context, K, V);
 
-  for (tries = 0; tries < uECC_RNG_MAX_TRIES; ++tries) {
-    uECC_word_t T[uECC_MAX_WORDS];
+  for (tries = 0; tries < MG_UECC_RNG_MAX_TRIES; ++tries) {
+    mg_uecc_word_t T[MG_UECC_MAX_WORDS];
     uint8_t *T_ptr = (uint8_t *) T;
     wordcount_t T_bytes = 0;
     for (;;) {
       update_V(hash_context, K, V);
       for (i = 0; i < hash_context->result_size; ++i) {
         T_ptr[T_bytes++] = V[i];
-        if (T_bytes >= num_n_words * uECC_WORD_SIZE) {
+        if (T_bytes >= num_n_words * MG_UECC_WORD_SIZE) {
           goto filled;
         }
       }
     }
   filled:
-    if ((bitcount_t) num_n_words * uECC_WORD_SIZE * 8 > num_n_bits) {
-      uECC_word_t mask = (uECC_word_t) -1;
+    if ((bitcount_t) num_n_words * MG_UECC_WORD_SIZE * 8 > num_n_bits) {
+      mg_uecc_word_t mask = (mg_uecc_word_t) -1;
       T[num_n_words - 1] &=
           mask >>
-          ((bitcount_t) (num_n_words * uECC_WORD_SIZE * 8 - num_n_bits));
+          ((bitcount_t) (num_n_words * MG_UECC_WORD_SIZE * 8 - num_n_bits));
     }
 
-    if (uECC_sign_with_k_internal(private_key, message_hash, hash_size, T,
-                                  signature, curve)) {
+    if (mg_uecc_sign_with_k_internal(private_key, message_hash, hash_size, T,
+                                     signature, curve)) {
       return 1;
     }
 
@@ -13564,27 +14252,27 @@ static bitcount_t smax(bitcount_t a, bitcount_t b) {
   return (a > b ? a : b);
 }
 
-int uECC_verify(const uint8_t *public_key, const uint8_t *message_hash,
-                unsigned hash_size, const uint8_t *signature,
-                uECC_Curve curve) {
-  uECC_word_t u1[uECC_MAX_WORDS], u2[uECC_MAX_WORDS];
-  uECC_word_t z[uECC_MAX_WORDS];
-  uECC_word_t sum[uECC_MAX_WORDS * 2];
-  uECC_word_t rx[uECC_MAX_WORDS];
-  uECC_word_t ry[uECC_MAX_WORDS];
-  uECC_word_t tx[uECC_MAX_WORDS];
-  uECC_word_t ty[uECC_MAX_WORDS];
-  uECC_word_t tz[uECC_MAX_WORDS];
-  const uECC_word_t *points[4];
-  const uECC_word_t *point;
+int mg_uecc_verify(const uint8_t *public_key, const uint8_t *message_hash,
+                   unsigned hash_size, const uint8_t *signature,
+                   MG_UECC_Curve curve) {
+  mg_uecc_word_t u1[MG_UECC_MAX_WORDS], u2[MG_UECC_MAX_WORDS];
+  mg_uecc_word_t z[MG_UECC_MAX_WORDS];
+  mg_uecc_word_t sum[MG_UECC_MAX_WORDS * 2];
+  mg_uecc_word_t rx[MG_UECC_MAX_WORDS];
+  mg_uecc_word_t ry[MG_UECC_MAX_WORDS];
+  mg_uecc_word_t tx[MG_UECC_MAX_WORDS];
+  mg_uecc_word_t ty[MG_UECC_MAX_WORDS];
+  mg_uecc_word_t tz[MG_UECC_MAX_WORDS];
+  const mg_uecc_word_t *points[4];
+  const mg_uecc_word_t *point;
   bitcount_t num_bits;
   bitcount_t i;
-#if uECC_VLI_NATIVE_LITTLE_ENDIAN
-  uECC_word_t *_public = (uECC_word_t *) public_key;
+#if MG_UECC_VLI_NATIVE_LITTLE_ENDIAN
+  mg_uecc_word_t *_public = (mg_uecc_word_t *) public_key;
 #else
-  uECC_word_t _public[uECC_MAX_WORDS * 2];
+  mg_uecc_word_t _public[MG_UECC_MAX_WORDS * 2];
 #endif
-  uECC_word_t r[uECC_MAX_WORDS], s[uECC_MAX_WORDS];
+  mg_uecc_word_t r[MG_UECC_MAX_WORDS], s[MG_UECC_MAX_WORDS];
   wordcount_t num_words = curve->num_words;
   wordcount_t num_n_words = BITS_TO_WORDS(curve->num_n_bits);
 
@@ -13592,43 +14280,43 @@ int uECC_verify(const uint8_t *public_key, const uint8_t *message_hash,
   r[num_n_words - 1] = 0;
   s[num_n_words - 1] = 0;
 
-#if uECC_VLI_NATIVE_LITTLE_ENDIAN
+#if MG_UECC_VLI_NATIVE_LITTLE_ENDIAN
   bcopy((uint8_t *) r, signature, curve->num_bytes);
   bcopy((uint8_t *) s, signature + curve->num_bytes, curve->num_bytes);
 #else
-  uECC_vli_bytesToNative(_public, public_key, curve->num_bytes);
-  uECC_vli_bytesToNative(_public + num_words, public_key + curve->num_bytes,
-                         curve->num_bytes);
-  uECC_vli_bytesToNative(r, signature, curve->num_bytes);
-  uECC_vli_bytesToNative(s, signature + curve->num_bytes, curve->num_bytes);
+  mg_uecc_vli_bytesToNative(_public, public_key, curve->num_bytes);
+  mg_uecc_vli_bytesToNative(_public + num_words, public_key + curve->num_bytes,
+                            curve->num_bytes);
+  mg_uecc_vli_bytesToNative(r, signature, curve->num_bytes);
+  mg_uecc_vli_bytesToNative(s, signature + curve->num_bytes, curve->num_bytes);
 #endif
 
   /* r, s must not be 0. */
-  if (uECC_vli_isZero(r, num_words) || uECC_vli_isZero(s, num_words)) {
+  if (mg_uecc_vli_isZero(r, num_words) || mg_uecc_vli_isZero(s, num_words)) {
     return 0;
   }
 
   /* r, s must be < n. */
-  if (uECC_vli_cmp_unsafe(curve->n, r, num_n_words) != 1 ||
-      uECC_vli_cmp_unsafe(curve->n, s, num_n_words) != 1) {
+  if (mg_uecc_vli_cmp_unsafe(curve->n, r, num_n_words) != 1 ||
+      mg_uecc_vli_cmp_unsafe(curve->n, s, num_n_words) != 1) {
     return 0;
   }
 
   /* Calculate u1 and u2. */
-  uECC_vli_modInv(z, s, curve->n, num_n_words); /* z = 1/s */
+  mg_uecc_vli_modInv(z, s, curve->n, num_n_words); /* z = 1/s */
   u1[num_n_words - 1] = 0;
   bits2int(u1, message_hash, hash_size, curve);
-  uECC_vli_modMult(u1, u1, z, curve->n, num_n_words); /* u1 = e/s */
-  uECC_vli_modMult(u2, r, z, curve->n, num_n_words);  /* u2 = r/s */
+  mg_uecc_vli_modMult(u1, u1, z, curve->n, num_n_words); /* u1 = e/s */
+  mg_uecc_vli_modMult(u2, r, z, curve->n, num_n_words);  /* u2 = r/s */
 
   /* Calculate sum = G + Q. */
-  uECC_vli_set(sum, _public, num_words);
-  uECC_vli_set(sum + num_words, _public + num_words, num_words);
-  uECC_vli_set(tx, curve->G, num_words);
-  uECC_vli_set(ty, curve->G + num_words, num_words);
-  uECC_vli_modSub(z, sum, tx, curve->p, num_words); /* z = x2 - x1 */
+  mg_uecc_vli_set(sum, _public, num_words);
+  mg_uecc_vli_set(sum + num_words, _public + num_words, num_words);
+  mg_uecc_vli_set(tx, curve->G, num_words);
+  mg_uecc_vli_set(ty, curve->G + num_words, num_words);
+  mg_uecc_vli_modSub(z, sum, tx, curve->p, num_words); /* z = x2 - x1 */
   XYcZ_add(tx, ty, sum, sum + num_words, curve);
-  uECC_vli_modInv(z, z, curve->p, num_words); /* z = 1/z */
+  mg_uecc_vli_modInv(z, z, curve->p, num_words); /* z = 1/z */
   apply_z(sum, sum + num_words, z, curve);
 
   /* Use Shamir's trick to calculate u1*G + u2*Q */
@@ -13636,114 +14324,365 @@ int uECC_verify(const uint8_t *public_key, const uint8_t *message_hash,
   points[1] = curve->G;
   points[2] = _public;
   points[3] = sum;
-  num_bits = smax(uECC_vli_numBits(u1, num_n_words),
-                  uECC_vli_numBits(u2, num_n_words));
-  point = points[(!!uECC_vli_testBit(u1, (bitcount_t) (num_bits - 1))) |
-                 ((!!uECC_vli_testBit(u2, (bitcount_t) (num_bits - 1))) << 1)];
-  uECC_vli_set(rx, point, num_words);
-  uECC_vli_set(ry, point + num_words, num_words);
-  uECC_vli_clear(z, num_words);
+  num_bits = smax(mg_uecc_vli_numBits(u1, num_n_words),
+                  mg_uecc_vli_numBits(u2, num_n_words));
+  point =
+      points[(!!mg_uecc_vli_testBit(u1, (bitcount_t) (num_bits - 1))) |
+             ((!!mg_uecc_vli_testBit(u2, (bitcount_t) (num_bits - 1))) << 1)];
+  mg_uecc_vli_set(rx, point, num_words);
+  mg_uecc_vli_set(ry, point + num_words, num_words);
+  mg_uecc_vli_clear(z, num_words);
   z[0] = 1;
 
   for (i = num_bits - 2; i >= 0; --i) {
-    uECC_word_t index;
+    mg_uecc_word_t index;
     curve->double_jacobian(rx, ry, z, curve);
 
-    index = (!!uECC_vli_testBit(u1, i)) |
-            (uECC_word_t) ((!!uECC_vli_testBit(u2, i)) << 1);
+    index = (!!mg_uecc_vli_testBit(u1, i)) |
+            (mg_uecc_word_t) ((!!mg_uecc_vli_testBit(u2, i)) << 1);
     point = points[index];
     if (point) {
-      uECC_vli_set(tx, point, num_words);
-      uECC_vli_set(ty, point + num_words, num_words);
+      mg_uecc_vli_set(tx, point, num_words);
+      mg_uecc_vli_set(ty, point + num_words, num_words);
       apply_z(tx, ty, z, curve);
-      uECC_vli_modSub(tz, rx, tx, curve->p, num_words); /* Z = x2 - x1 */
+      mg_uecc_vli_modSub(tz, rx, tx, curve->p, num_words); /* Z = x2 - x1 */
       XYcZ_add(tx, ty, rx, ry, curve);
-      uECC_vli_modMult_fast(z, z, tz, curve);
+      mg_uecc_vli_modMult_fast(z, z, tz, curve);
     }
   }
 
-  uECC_vli_modInv(z, z, curve->p, num_words); /* Z = 1/Z */
+  mg_uecc_vli_modInv(z, z, curve->p, num_words); /* Z = 1/Z */
   apply_z(rx, ry, z, curve);
 
   /* v = x1 (mod n) */
-  if (uECC_vli_cmp_unsafe(curve->n, rx, num_n_words) != 1) {
-    uECC_vli_sub(rx, rx, curve->n, num_n_words);
+  if (mg_uecc_vli_cmp_unsafe(curve->n, rx, num_n_words) != 1) {
+    mg_uecc_vli_sub(rx, rx, curve->n, num_n_words);
   }
 
   /* Accept only if v == r. */
-  return (int) (uECC_vli_equal(rx, r, num_words));
+  return (int) (mg_uecc_vli_equal(rx, r, num_words));
 }
 
-#if uECC_ENABLE_VLI_API
+#if MG_UECC_ENABLE_VLI_API
 
-unsigned uECC_curve_num_words(uECC_Curve curve) {
+unsigned mg_uecc_curve_num_words(MG_UECC_Curve curve) {
   return curve->num_words;
 }
 
-unsigned uECC_curve_num_bytes(uECC_Curve curve) {
+unsigned mg_uecc_curve_num_bytes(MG_UECC_Curve curve) {
   return curve->num_bytes;
 }
 
-unsigned uECC_curve_num_bits(uECC_Curve curve) {
+unsigned mg_uecc_curve_num_bits(MG_UECC_Curve curve) {
   return curve->num_bytes * 8;
 }
 
-unsigned uECC_curve_num_n_words(uECC_Curve curve) {
+unsigned mg_uecc_curve_num_n_words(MG_UECC_Curve curve) {
   return BITS_TO_WORDS(curve->num_n_bits);
 }
 
-unsigned uECC_curve_num_n_bytes(uECC_Curve curve) {
+unsigned mg_uecc_curve_num_n_bytes(MG_UECC_Curve curve) {
   return BITS_TO_BYTES(curve->num_n_bits);
 }
 
-unsigned uECC_curve_num_n_bits(uECC_Curve curve) {
+unsigned mg_uecc_curve_num_n_bits(MG_UECC_Curve curve) {
   return curve->num_n_bits;
 }
 
-const uECC_word_t *uECC_curve_p(uECC_Curve curve) {
+const mg_uecc_word_t *mg_uecc_curve_p(MG_UECC_Curve curve) {
   return curve->p;
 }
 
-const uECC_word_t *uECC_curve_n(uECC_Curve curve) {
+const mg_uecc_word_t *mg_uecc_curve_n(MG_UECC_Curve curve) {
   return curve->n;
 }
 
-const uECC_word_t *uECC_curve_G(uECC_Curve curve) {
+const mg_uecc_word_t *mg_uecc_curve_G(MG_UECC_Curve curve) {
   return curve->G;
 }
 
-const uECC_word_t *uECC_curve_b(uECC_Curve curve) {
+const mg_uecc_word_t *mg_uecc_curve_b(MG_UECC_Curve curve) {
   return curve->b;
 }
 
-#if uECC_SUPPORT_COMPRESSED_POINT
-void uECC_vli_mod_sqrt(uECC_word_t *a, uECC_Curve curve) {
+#if MG_UECC_SUPPORT_COMPRESSED_POINT
+void mg_uecc_vli_mod_sqrt(mg_uecc_word_t *a, MG_UECC_Curve curve) {
   curve->mod_sqrt(a, curve);
 }
 #endif
 
-void uECC_vli_mmod_fast(uECC_word_t *result, uECC_word_t *product,
-                        uECC_Curve curve) {
-#if (uECC_OPTIMIZATION_LEVEL > 0)
+void mg_uecc_vli_mmod_fast(mg_uecc_word_t *result, mg_uecc_word_t *product,
+                           MG_UECC_Curve curve) {
+#if (MG_UECC_OPTIMIZATION_LEVEL > 0)
   curve->mmod_fast(result, product);
 #else
-  uECC_vli_mmod(result, product, curve->p, curve->num_words);
+  mg_uecc_vli_mmod(result, product, curve->p, curve->num_words);
 #endif
 }
 
-void uECC_point_mult(uECC_word_t *result, const uECC_word_t *point,
-                     const uECC_word_t *scalar, uECC_Curve curve) {
-  uECC_word_t tmp1[uECC_MAX_WORDS];
-  uECC_word_t tmp2[uECC_MAX_WORDS];
-  uECC_word_t *p2[2] = {tmp1, tmp2};
-  uECC_word_t carry = regularize_k(scalar, tmp1, tmp2, curve);
+void mg_uecc_point_mult(mg_uecc_word_t *result, const mg_uecc_word_t *point,
+                        const mg_uecc_word_t *scalar, MG_UECC_Curve curve) {
+  mg_uecc_word_t tmp1[MG_UECC_MAX_WORDS];
+  mg_uecc_word_t tmp2[MG_UECC_MAX_WORDS];
+  mg_uecc_word_t *p2[2] = {tmp1, tmp2};
+  mg_uecc_word_t carry = regularize_k(scalar, tmp1, tmp2, curve);
 
   EccPoint_mult(result, point, p2[!carry], 0, curve->num_n_bits + 1, curve);
 }
 
-#endif  /* uECC_ENABLE_VLI_API */
+#endif  /* MG_UECC_ENABLE_VLI_API */
 #endif  // MG_TLS_BUILTIN
 // End of uecc BSD-2
+
+#ifdef MG_ENABLE_LINES
+#line 1 "src/tls_x25519.c"
+#endif
+/**
+ * Adapted from STROBE: https://strobe.sourceforge.io/
+ * Copyright (c) 2015-2016 Cryptography Research, Inc.
+ * Author: Mike Hamburg
+ * License: MIT License
+ */
+
+
+const uint8_t X25519_BASE_POINT[X25519_BYTES] = {9};
+
+#define X25519_WBITS 32
+
+typedef uint32_t limb_t;
+typedef uint64_t dlimb_t;
+typedef int64_t sdlimb_t;
+#define LIMB(x) (uint32_t)(x##ull), (uint32_t) ((x##ull) >> 32)
+
+#define NLIMBS (256 / X25519_WBITS)
+typedef limb_t fe[NLIMBS];
+
+static limb_t umaal(limb_t *carry, limb_t acc, limb_t mand, limb_t mier) {
+  dlimb_t tmp = (dlimb_t) mand * mier + acc + *carry;
+  *carry = (limb_t) (tmp >> X25519_WBITS);
+  return (limb_t) tmp;
+}
+
+// These functions are implemented in terms of umaal on ARM
+static limb_t adc(limb_t *carry, limb_t acc, limb_t mand) {
+  dlimb_t total = (dlimb_t) *carry + acc + mand;
+  *carry = (limb_t) (total >> X25519_WBITS);
+  return (limb_t) total;
+}
+
+static limb_t adc0(limb_t *carry, limb_t acc) {
+  dlimb_t total = (dlimb_t) *carry + acc;
+  *carry = (limb_t) (total >> X25519_WBITS);
+  return (limb_t) total;
+}
+
+// - Precondition: carry is small.
+// - Invariant: result of propagate is < 2^255 + 1 word
+// - In particular, always less than 2p.
+// - Also, output x >= min(x,19)
+static void propagate(fe x, limb_t over) {
+  unsigned i;
+  limb_t carry;
+  over = x[NLIMBS - 1] >> (X25519_WBITS - 1) | over << 1;
+  x[NLIMBS - 1] &= ~((limb_t) 1 << (X25519_WBITS - 1));
+
+  carry = over * 19;
+  for (i = 0; i < NLIMBS; i++) {
+    x[i] = adc0(&carry, x[i]);
+  }
+}
+
+static void add(fe out, const fe a, const fe b) {
+  unsigned i;
+  limb_t carry = 0;
+  for (i = 0; i < NLIMBS; i++) {
+    out[i] = adc(&carry, a[i], b[i]);
+  }
+  propagate(out, carry);
+}
+
+static void sub(fe out, const fe a, const fe b) {
+  unsigned i;
+  sdlimb_t carry = -38;
+  for (i = 0; i < NLIMBS; i++) {
+    carry = carry + a[i] - b[i];
+    out[i] = (limb_t) carry;
+    carry >>= X25519_WBITS;
+  }
+  propagate(out, (limb_t) (1 + carry));
+}
+
+// `b` can contain less than 8 limbs, thus we use `limb_t *` instead of `fe`
+// to avoid build warnings
+static void mul(fe out, const fe a, const limb_t *b, unsigned nb) {
+  limb_t accum[2 * NLIMBS] = {0};
+  unsigned i, j;
+
+  limb_t carry2;
+  for (i = 0; i < nb; i++) {
+    limb_t mand = b[i];
+    carry2 = 0;
+    for (j = 0; j < NLIMBS; j++) {
+      limb_t tmp;                        // "a" may be misaligned
+      memcpy(&tmp, &a[j], sizeof(tmp));  // So make an aligned copy
+      accum[i + j] = umaal(&carry2, accum[i + j], mand, tmp);
+    }
+    accum[i + j] = carry2;
+  }
+
+  carry2 = 0;
+  for (j = 0; j < NLIMBS; j++) {
+    out[j] = umaal(&carry2, accum[j], 38, accum[j + NLIMBS]);
+  }
+  propagate(out, carry2);
+}
+
+static void sqr(fe out, const fe a) {
+  mul(out, a, a, NLIMBS);
+}
+static void mul1(fe out, const fe a) {
+  mul(out, a, out, NLIMBS);
+}
+static void sqr1(fe a) {
+  mul1(a, a);
+}
+
+static void condswap(limb_t a[2 * NLIMBS], limb_t b[2 * NLIMBS],
+                     limb_t doswap) {
+  unsigned i;
+  for (i = 0; i < 2 * NLIMBS; i++) {
+    limb_t xor_ab = (a[i] ^ b[i]) & doswap;
+    a[i] ^= xor_ab;
+    b[i] ^= xor_ab;
+  }
+}
+
+// Canonicalize a field element x, reducing it to the least residue which is
+// congruent to it mod 2^255-19
+// - Precondition: x < 2^255 + 1 word
+static limb_t canon(fe x) {
+  // First, add 19.
+  unsigned i;
+  limb_t carry0 = 19;
+  limb_t res;
+  sdlimb_t carry;
+  for (i = 0; i < NLIMBS; i++) {
+    x[i] = adc0(&carry0, x[i]);
+  }
+  propagate(x, carry0);
+
+  // Here, 19 <= x2 < 2^255
+  // - This is because we added 19, so before propagate it can't be less
+  // than 19. After propagate, it still can't be less than 19, because if
+  // propagate does anything it adds 19.
+  // - We know that the high bit must be clear, because either the input was ~
+  // 2^255 + one word + 19 (in which case it propagates to at most 2 words) or
+  // it was < 2^255. So now, if we subtract 19, we will get back to something in
+  // [0,2^255-19).
+  carry = -19;
+  res = 0;
+  for (i = 0; i < NLIMBS; i++) {
+    carry += x[i];
+    res |= x[i] = (limb_t) carry;
+    carry >>= X25519_WBITS;
+  }
+  return (limb_t) (((dlimb_t) res - 1) >> X25519_WBITS);
+}
+
+static const limb_t a24[1] = {121665};
+
+static void ladder_part1(fe xs[5]) {
+  limb_t *x2 = xs[0], *z2 = xs[1], *x3 = xs[2], *z3 = xs[3], *t1 = xs[4];
+  add(t1, x2, z2);                                 // t1 = A
+  sub(z2, x2, z2);                                 // z2 = B
+  add(x2, x3, z3);                                 // x2 = C
+  sub(z3, x3, z3);                                 // z3 = D
+  mul1(z3, t1);                                    // z3 = DA
+  mul1(x2, z2);                                    // x3 = BC
+  add(x3, z3, x2);                                 // x3 = DA+CB
+  sub(z3, z3, x2);                                 // z3 = DA-CB
+  sqr1(t1);                                        // t1 = AA
+  sqr1(z2);                                        // z2 = BB
+  sub(x2, t1, z2);                                 // x2 = E = AA-BB
+  mul(z2, x2, a24, sizeof(a24) / sizeof(a24[0]));  // z2 = E*a24
+  add(z2, z2, t1);                                 // z2 = E*a24 + AA
+}
+
+static void ladder_part2(fe xs[5], const fe x1) {
+  limb_t *x2 = xs[0], *z2 = xs[1], *x3 = xs[2], *z3 = xs[3], *t1 = xs[4];
+  sqr1(z3);         // z3 = (DA-CB)^2
+  mul1(z3, x1);     // z3 = x1 * (DA-CB)^2
+  sqr1(x3);         // x3 = (DA+CB)^2
+  mul1(z2, x2);     // z2 = AA*(E*a24+AA)
+  sub(x2, t1, x2);  // x2 = BB again
+  mul1(x2, t1);     // x2 = AA*BB
+}
+
+static void x25519_core(fe xs[5], const uint8_t scalar[X25519_BYTES],
+                        const uint8_t *x1, int clamp) {
+  int i;
+  limb_t swap = 0;
+  limb_t *x2 = xs[0], *x3 = xs[2], *z3 = xs[3];
+  memset(xs, 0, 4 * sizeof(fe));
+  x2[0] = z3[0] = 1;
+  memcpy(x3, x1, sizeof(fe));
+
+  for (i = 255; i >= 0; i--) {
+    uint8_t bytei = scalar[i / 8];
+    limb_t doswap;
+    if (clamp) {
+      if (i / 8 == 0) {
+        bytei &= (uint8_t) ~7U;
+      } else if (i / 8 == X25519_BYTES - 1) {
+        bytei &= 0x7F;
+        bytei |= 0x40;
+      }
+    }
+    doswap = 0 - (limb_t) ((bytei >> (i % 8)) & 1);
+    condswap(x2, x3, swap ^ doswap);
+    swap = doswap;
+
+    ladder_part1(xs);
+    ladder_part2(xs, (const limb_t *) x1);
+  }
+  condswap(x2, x3, swap);
+}
+
+int mg_tls_x25519(uint8_t out[X25519_BYTES], const uint8_t scalar[X25519_BYTES],
+                  const uint8_t x1[X25519_BYTES], int clamp) {
+  int i, ret;
+  fe xs[5];
+  limb_t *x2, *z2, *z3, *prev;
+  static const struct {
+    uint8_t a, c, n;
+  } steps[13] = {{2, 1, 1},  {2, 1, 1},  {4, 2, 3},  {2, 4, 6},  {3, 1, 1},
+                 {3, 2, 12}, {4, 3, 25}, {2, 3, 25}, {2, 4, 50}, {3, 2, 125},
+                 {3, 1, 2},  {3, 1, 2},  {3, 1, 1}};
+  x25519_core(xs, scalar, x1, clamp);
+
+  // Precomputed inversion chain
+  x2 = xs[0];
+  z2 = xs[1];
+  z3 = xs[3];
+
+  prev = z2;
+  for (i = 0; i < 13; i++) {
+    int j;
+    limb_t *a = xs[steps[i].a];
+    for (j = steps[i].n; j > 0; j--) {
+      sqr(a, prev);
+      prev = a;
+    }
+    mul1(a, xs[steps[i].c]);
+  }
+
+  // Here prev = z3
+  // x2 /= z2
+  mul((limb_t *) out, x2, z3, NLIMBS);
+  ret = (int) canon((limb_t *) out);
+  if (!clamp) ret = 0;
+  return ret;
+}
 
 #ifdef MG_ENABLE_LINES
 #line 1 "src/url.c"
@@ -14634,7 +15573,7 @@ enum {
   MG_PHY_KSZ8x_REG_PC2R = 31,
   MG_PHY_LAN87x_REG_SCSR = 31,
   MG_PHY_RTL8201_REG_RMSR = 16,  // in page 7
-  MG_PHY_RTL8201_REG_PAGESEL = 31,
+  MG_PHY_RTL8201_REG_PAGESEL = 31
 };
 
 static const char *mg_phy_id_to_str(uint16_t id1, uint16_t id2) {
@@ -14654,11 +15593,12 @@ static const char *mg_phy_id_to_str(uint16_t id1, uint16_t id2) {
 }
 
 void mg_phy_init(struct mg_phy *phy, uint8_t phy_addr, uint8_t config) {
+  uint16_t id1, id2;
   phy->write_reg(phy_addr, MG_PHY_REG_BCR, MG_BIT(15));  // Reset PHY
   phy->write_reg(phy_addr, MG_PHY_REG_BCR, MG_BIT(12));  // Autonegotiation
 
-  uint16_t id1 = phy->read_reg(phy_addr, MG_PHY_REG_ID1);
-  uint16_t id2 = phy->read_reg(phy_addr, MG_PHY_REG_ID2);
+  id1 = phy->read_reg(phy_addr, MG_PHY_REG_ID1);
+  id2 = phy->read_reg(phy_addr, MG_PHY_REG_ID2);
   MG_INFO(("PHY ID: %#04x %#04x (%s)", id1, id2, mg_phy_id_to_str(id1, id2)));
 
   if (config & MG_PHY_CLOCKS_MAC) {
@@ -14691,10 +15631,11 @@ void mg_phy_init(struct mg_phy *phy, uint8_t phy_addr, uint8_t config) {
 
 bool mg_phy_up(struct mg_phy *phy, uint8_t phy_addr, bool *full_duplex,
                uint8_t *speed) {
+  bool up = false;
   uint16_t bsr = phy->read_reg(phy_addr, MG_PHY_REG_BSR);
   if ((bsr & MG_BIT(5)) && !(bsr & MG_BIT(2)))  // some PHYs latch down events
     bsr = phy->read_reg(phy_addr, MG_PHY_REG_BSR);  // read again
-  bool up = bsr & MG_BIT(2);
+  up = bsr & MG_BIT(2);
   if (up && full_duplex != NULL && speed != NULL) {
     uint16_t id1 = phy->read_reg(phy_addr, MG_PHY_REG_ID1);
     if (id1 == MG_PHY_DP83x) {

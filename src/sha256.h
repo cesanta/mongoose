@@ -1,3 +1,9 @@
+// https://github.com/B-Con/crypto-algorithms
+// Author:     Brad Conte (brad AT bradconte.com)
+// Disclaimer: This code is presented "as is" without any guarantees.
+// Details:    Defines the API for the corresponding SHA1 implementation.
+// Copyright:  public domain
+
 #pragma once
 
 #include "arch.h"
