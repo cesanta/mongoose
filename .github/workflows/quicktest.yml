@@ -225,6 +225,8 @@ jobs:
           - path: nxp/rt1020-evk-make-freertos-builtin
           - path: nxp/rt1060-evk-make-baremetal-builtin
           - path: nxp/rt1060-evk-make-freertos-builtin
+          - path: nxp/rt1170-evk-make-baremetal-builtin
+          - path: renesas/ek-ra6m4-make-baremetal-builtin
           - path: rp2040/pico-rndis-dashboard
           - path: rp2040/pico-w
           - path: rp2040/pico-w5500
