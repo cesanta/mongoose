@@ -101,7 +101,7 @@ static uint16_t smi_rd(uint16_t header) {
     pir = 0;  // read, mdc = 0
     ETHERC->PIR = pir;
     raspin(s_smispin / 2);  // 1/4 clock period, 300ns max access time
-    data |= ETHERC->PIR & MG_BIT(3) ? 1 : 0;  // read mdio
+    data |= (uint16_t)(ETHERC->PIR & MG_BIT(3) ? 1 : 0);  // read mdio
     raspin(s_smispin / 2);                    // 1/4 clock period
     pir |= MG_BIT(0);                         // mdc = 1
     ETHERC->PIR = pir;
@@ -111,11 +111,11 @@ static uint16_t smi_rd(uint16_t header) {
 }
 
 static uint16_t raeth_read_phy(uint8_t addr, uint8_t reg) {
-  return smi_rd((1 << 14) | (2 << 12) | (addr << 7) | (reg << 2) | (2 << 0));
+  return smi_rd((uint16_t)((1 << 14) | (2 << 12) | (addr << 7) | (reg << 2) | (2 << 0)));
 }
 
 static void raeth_write_phy(uint8_t addr, uint8_t reg, uint16_t val) {
-  smi_wr((1 << 14) | (1 << 12) | (addr << 7) | (reg << 2) | (2 << 0), val);
+  smi_wr((uint16_t)((1 << 14) | (1 << 12) | (addr << 7) | (reg << 2) | (2 << 0)), val);
 }
 
 // MDC clock is generated manually; as per 802.3, it must not exceed 2.5MHz
