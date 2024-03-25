@@ -15,10 +15,11 @@
 #include "tls_openssl.h"
 
 struct mg_tls_opts {
-  struct mg_str ca;    // PEM or DER
-  struct mg_str cert;  // PEM or DER
-  struct mg_str key;   // PEM or DER
-  struct mg_str name;  // If not empty, enable host name verification
+  struct mg_str ca;       // PEM or DER
+  struct mg_str cert;     // PEM or DER
+  struct mg_str key;      // PEM or DER
+  struct mg_str name;     // If not empty, enable host name verification
+  int skip_verification;  // Skip certificate and host name verification
 };
 
 void mg_tls_init(struct mg_connection *, const struct mg_tls_opts *opts);

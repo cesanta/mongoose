@@ -19,7 +19,7 @@ enum {
   MG_PHY_KSZ8x_REG_PC2R = 31,
   MG_PHY_LAN87x_REG_SCSR = 31,
   MG_PHY_RTL8201_REG_RMSR = 16,  // in page 7
-  MG_PHY_RTL8201_REG_PAGESEL = 31,
+  MG_PHY_RTL8201_REG_PAGESEL = 31
 };
 
 static const char *mg_phy_id_to_str(uint16_t id1, uint16_t id2) {
@@ -39,11 +39,12 @@ static const char *mg_phy_id_to_str(uint16_t id1, uint16_t id2) {
 }
 
 void mg_phy_init(struct mg_phy *phy, uint8_t phy_addr, uint8_t config) {
+  uint16_t id1, id2;
   phy->write_reg(phy_addr, MG_PHY_REG_BCR, MG_BIT(15));  // Reset PHY
   phy->write_reg(phy_addr, MG_PHY_REG_BCR, MG_BIT(12));  // Autonegotiation
 
-  uint16_t id1 = phy->read_reg(phy_addr, MG_PHY_REG_ID1);
-  uint16_t id2 = phy->read_reg(phy_addr, MG_PHY_REG_ID2);
+  id1 = phy->read_reg(phy_addr, MG_PHY_REG_ID1);
+  id2 = phy->read_reg(phy_addr, MG_PHY_REG_ID2);
   MG_INFO(("PHY ID: %#04x %#04x (%s)", id1, id2, mg_phy_id_to_str(id1, id2)));
 
   if (config & MG_PHY_CLOCKS_MAC) {
@@ -76,10 +77,11 @@ void mg_phy_init(struct mg_phy *phy, uint8_t phy_addr, uint8_t config) {
 
 bool mg_phy_up(struct mg_phy *phy, uint8_t phy_addr, bool *full_duplex,
                uint8_t *speed) {
+  bool up = false;
   uint16_t bsr = phy->read_reg(phy_addr, MG_PHY_REG_BSR);
   if ((bsr & MG_BIT(5)) && !(bsr & MG_BIT(2)))  // some PHYs latch down events
     bsr = phy->read_reg(phy_addr, MG_PHY_REG_BSR);  // read again
-  bool up = bsr & MG_BIT(2);
+  up = bsr & MG_BIT(2);
   if (up && full_duplex != NULL && speed != NULL) {
     uint16_t id1 = phy->read_reg(phy_addr, MG_PHY_REG_ID1);
     if (id1 == MG_PHY_DP83x) {

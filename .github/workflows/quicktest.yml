@@ -15,8 +15,8 @@ jobs:
       matrix:
         cc: [gcc, clang++]
         target: [test, mip_test]
-        ssl: ["", MBEDTLS]
-    name: linux ${{ matrix.target }} CC=${{ matrix.cc }} SSL=${{ matrix.ssl }}}
+        ssl: ["", MBEDTLS, BUILTIN]
+    name: linux ${{ matrix.target }} CC=${{ matrix.cc }} SSL=${{ matrix.ssl }}
     env:
       CC: ${{ matrix.cc }}
       SSL: ${{ matrix.ssl }}
@@ -57,7 +57,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        ssl: ["", MBEDTLS]
+        ssl: ["", MBEDTLS, BUILTIN]
     name: macos SSL=${{ matrix.ssl }}
     env:
       SSL: ${{ matrix.ssl }}
