@@ -163,7 +163,7 @@ static int mg_der_to_tlv(uint8_t *der, size_t dersz, struct mg_der_tlv *tlv) {
 static int mg_der_find(uint8_t *der, size_t dersz, uint8_t *oid, size_t oidsz,
                        struct mg_der_tlv *tlv) {
   uint8_t *p, *end;
-  struct mg_der_tlv child;
+  struct mg_der_tlv child = {0, 0, NULL};
   if (mg_der_to_tlv(der, dersz, tlv) < 0) {
     return -1;                  // invalid DER
   } else if (tlv->type == 6) {  // found OID, check value
@@ -666,7 +666,7 @@ static void mg_tls_server_send_cert_verify(struct mg_connection *c) {
       {&init_SHA256, &update_SHA256, &finish_SHA256, 64, 32, tmp},
       {{0}, 0, 0, {0}}};
   int neg1, neg2;
-  uint8_t sig[64];
+  uint8_t sig[64] = {0};
 
   mg_tls_calc_cert_verify_hash(c, (uint8_t *) hash);
 

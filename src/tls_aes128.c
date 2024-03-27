@@ -1095,7 +1095,7 @@ int mg_aes_gcm_encrypt(unsigned char *output,  //
   int ret = 0;      // our return value
   gcm_context ctx;  // includes the AES context structure
 
-  gcm_setkey(&ctx, key, (const uint) key_len);
+  gcm_setkey(&ctx, key, (uint) key_len);
 
   ret = gcm_crypt_and_tag(&ctx, MG_ENCRYPT, iv, iv_len, aead, aead_len, input,
                           output, input_length, tag, tag_len);
@@ -1115,7 +1115,7 @@ int mg_aes_gcm_decrypt(unsigned char *output, const unsigned char *input,
   size_t tag_len = 0;
   unsigned char *tag_buf = NULL;
 
-  gcm_setkey(&ctx, key, (const uint) key_len);
+  gcm_setkey(&ctx, key, (uint) key_len);
 
   ret = gcm_crypt_and_tag(&ctx, MG_DECRYPT, iv, iv_len, NULL, 0, input, output,
                           input_length, tag_buf, tag_len);
