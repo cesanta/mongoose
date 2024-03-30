@@ -8,3 +8,5 @@ component_compile_options(-DMG_ENABLE_PACKED_FS)
 component_compile_options(-DHTTP_URL="http://0.0.0.0:80")
 component_compile_options(-DHTTPS_URL="https://0.0.0.0:443")
 component_compile_options(-DMG_TLS=MG_TLS_NONE) # change to 'MG_TLS_MBED' to enable TLS
+component_compile_options(-DMG_OTA=MG_OTA_CUSTOM)
+component_compile_options(-DMG_DEVICE=MG_DEVICE_CUSTOM)
