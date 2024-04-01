@@ -7460,7 +7460,7 @@ typedef struct
   * @}
   */
 
-/** @brief  Macros to enable or disable the the RTC clock.
+/** @brief  Macros to enable or disable the RTC clock.
   * @note   These macros must be used only after the RTC clock source was selected.
   */
 #define __HAL_RCC_RTC_ENABLE()         SET_BIT(RCC->BDCR, RCC_BDCR_RTCEN)

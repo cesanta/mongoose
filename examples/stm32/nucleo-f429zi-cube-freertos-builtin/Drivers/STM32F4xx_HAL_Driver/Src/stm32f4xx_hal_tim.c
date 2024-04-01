@@ -5178,7 +5178,7 @@ HAL_StatusTypeDef HAL_TIM_ConfigOCrefClear(TIM_HandleTypeDef *htim,
   {
     case TIM_CLEARINPUTSOURCE_NONE:
     {
-      /* Clear the OCREF clear selection bit and the the ETR Bits */
+      /* Clear the OCREF clear selection bit and the ETR Bits */
       CLEAR_BIT(htim->Instance->SMCR, (TIM_SMCR_ETF | TIM_SMCR_ETPS | TIM_SMCR_ECE | TIM_SMCR_ETP));
       break;
     }

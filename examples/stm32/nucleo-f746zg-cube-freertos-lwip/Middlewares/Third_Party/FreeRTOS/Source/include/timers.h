@@ -446,7 +446,7 @@ BaseType_t xTimerIsTimerActive( TimerHandle_t xTimer ) PRIVILEGED_FUNCTION;
 /**
  * TaskHandle_t xTimerGetTimerDaemonTaskHandle( void );
  *
- * Simply returns the handle of the timer service/daemon task.  It it not valid
+ * Simply returns the handle of the timer service/daemon task.  It is not valid
  * to call xTimerGetTimerDaemonTaskHandle() before the scheduler has been started.
  */
 TaskHandle_t xTimerGetTimerDaemonTaskHandle( void ) PRIVILEGED_FUNCTION;

@@ -31813,7 +31813,7 @@ typedef struct {
 #define LPI2C_MCFGR0_RDMO_SHIFT                  (9U)
 /*! RDMO - Receive Data Match Only
  *  0b0..Received data is stored in the receive FIFO
- *  0b1..Received data is discarded unless the the Data Match Flag (MSR[DMF]) is set
+ *  0b1..Received data is discarded unless the Data Match Flag (MSR[DMF]) is set
  */
 #define LPI2C_MCFGR0_RDMO(x)                     (((uint32_t)(((uint32_t)(x)) << LPI2C_MCFGR0_RDMO_SHIFT)) & LPI2C_MCFGR0_RDMO_MASK)
 /*! @} */

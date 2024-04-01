@@ -63,7 +63,7 @@
  * are selected and the packet is transmitted on the link.
  *
  * For unicast addresses, ask the ND6 module what to do. It will either let us
- * send the the packet right away, or queue the packet for later itself, unless
+ * send the packet right away, or queue the packet for later itself, unless
  * an error occurs.
  *
  * @todo anycast addresses

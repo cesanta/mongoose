@@ -1812,7 +1812,7 @@ static void prvAddNewTaskToReadyList( TCB_t *pxNewTCB )
 			if( listIS_CONTAINED_WITHIN( &xPendingReadyList, &( pxTCB->xEventListItem ) ) == pdFALSE )
 			{
 				/* Is it in the suspended list because it is in the	Suspended
-				state, or because is is blocked with no timeout? */
+				state, or because it is blocked with no timeout? */
 				if( listIS_CONTAINED_WITHIN( NULL, &( pxTCB->xEventListItem ) ) != pdFALSE ) /*lint !e961.  The cast is only redundant when NULL is used. */
 				{
 					xReturn = pdTRUE;
