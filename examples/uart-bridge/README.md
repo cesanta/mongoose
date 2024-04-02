@@ -11,6 +11,4 @@ into an embedded device and provide a UART-to-Network bridge capability:
 - Live UART console allows to talk to the UART from the web page
 - Web UI is hardcoded into the binary and does not need a filesystem
 
-![](screenshots/dashboard.png)
-
 See a detailed tutorial at https://mongoose.ws/tutorials/uart-bridge/
