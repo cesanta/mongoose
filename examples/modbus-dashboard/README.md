@@ -10,17 +10,4 @@ following features:
   needing a filesystem to serve it; so being resilient to FS problems
 - All changes are propagated to all connected clients
 
-## Screenshots
-
-This is a login screen that prompts for user/password
-
-![](screenshots/login.webp)
-
-## Main dashboard
-
-The main dashboard page shows the interactive console
-
-![](screenshots/dashboard.webp)
-
-
 See a detailed tutorial at https://mongoose.ws/tutorials/device-dashboard/
