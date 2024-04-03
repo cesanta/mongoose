@@ -5,11 +5,9 @@
 
 const char *s_listening_url = "http://0.0.0.0:80";
 
-#if 0
-char *config_read(void) {
-  return mg_file_read(&mg_fs_posix, FS_ROOT "/config.json", NULL);
+struct mg_str config_read(void) {
+  return mg_file_read(&mg_fs_posix, FS_ROOT "/config.json");
 }
-#endif
 
 void config_write(struct mg_str config) {
   mg_file_write(&mg_fs_posix, FS_ROOT "/config.json", config.ptr, config.len);
