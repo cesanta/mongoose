@@ -27,7 +27,7 @@ robust, and easy. Features include:
    - A complete Web device dashboard on bare metal ST Nucleo boards is only 6 files
    - For comparison, a CubeIDE generated HTTP example is 400+ files
 - Can run on top of an existing TCP/IP stack with BSD API, e.g. lwIP, Zephyr, Azure, etc
-- Built-in TLS 1.3 ECC stack. Aslo can use external TLS libraries - mbedTLS, OpenSSL, or other
+- Built-in TLS 1.3 ECC stack. Also can use external TLS libraries - mbedTLS, OpenSSL, or other
 - Does not depend on any other software to implement networking
 - Built-in firmware updates for STM32 H5, STM32 H7
 
