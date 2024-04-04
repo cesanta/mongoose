@@ -6,8 +6,9 @@
 
 #include <ctype.h>
 #include <errno.h>
-#include <zephyr/posix/fcntl.h>
 #include <zephyr/net/socket.h>
+#include <zephyr/posix/fcntl.h>
+#include <zephyr/posix/sys/select.h>
 #include <stdarg.h>
 #include <stdbool.h>
 #include <stdint.h>
