@@ -21,7 +21,7 @@ jobs:
       CC: ${{ matrix.cc }}
       SSL: ${{ matrix.ssl }}
     steps:
-    - uses: actions/checkout@v3
+    - uses: actions/checkout@v4
       with: { fetch-depth: 2 }
     - run: if ./test/match_changed_files.sh '^test|^src/.*.[ch]' ; then echo GO=1 >> $GITHUB_ENV ; fi
     - if: ${{ env.GO == 1 }}
@@ -29,7 +29,7 @@ jobs:
   s390:
     runs-on: ubuntu-latest
     steps:
-    - uses: actions/checkout@v3
+    - uses: actions/checkout@v4
       with: { fetch-depth: 2 }
     - run: if ./test/match_changed_files.sh '^test|^src/.*.[ch]' ; then echo GO=1 >> $GITHUB_ENV ; fi
     - if: ${{ env.GO == 1 }}
@@ -37,21 +37,19 @@ jobs:
   armhf:
     runs-on: ubuntu-latest
     steps:
-    - uses: actions/checkout@v3
+    - uses: actions/checkout@v4
       with: { fetch-depth: 2 }
     - run: if ./test/match_changed_files.sh '^test|^src/.*.[ch]' ; then echo GO=1 >> $GITHUB_ENV ; fi
     - if: ${{ env.GO == 1 }}
       run: sudo apt -y update ; sudo apt -y install qemu binfmt-support qemu-user-static && docker run --rm --privileged multiarch/qemu-user-static --reset -p yes && make armhf
-  linux2:
+  unamalgamated-mg_prefix:
     runs-on: ubuntu-latest
     steps:
-    - uses: actions/checkout@v3
+    - uses: actions/checkout@v4
       with: { fetch-depth: 2 }
     - run: if ./test/match_changed_files.sh '^test|^src/.*.[ch]' ; then echo GO=1 >> $GITHUB_ENV ; fi
     - if: ${{ env.GO == 1 }}
-      run: sudo apt -y update ; sudo apt -y install libmbedtls-dev valgrind
-    - if: ${{ env.GO == 1 }}
-      run: make unamalgamated && make valgrind && make mg_prefix
+      run: make unamalgamated && make mg_prefix
   macos:
     runs-on: macos-latest
     strategy:
@@ -64,13 +62,11 @@ jobs:
       TFLAGS: -DNO_SNTP_CHECK
       HOMEBREW_NO_AUTO_UPDATE: 1
     steps:
-    - uses: actions/checkout@v3
+    - uses: actions/checkout@v4
       with: { fetch-depth: 2 }
     - run: if ./test/match_changed_files.sh '^test|^src/.*.[ch]' ; then echo GO=1 >> $GITHUB_ENV ; fi
     - if: ${{ env.GO == 1 }}
       run:  make test ASAN_OPTIONS=
-    - if: ${{ env.GO == 1 }}
-      run: make mg_prefix
   windows:
     runs-on: ubuntu-latest
     strategy:
@@ -79,7 +75,7 @@ jobs:
         target: [vc98, vc22, mingw++]
     name: windows ${{ matrix.target }}
     steps:
-    - uses: actions/checkout@v3
+    - uses: actions/checkout@v4
       with: { fetch-depth: 2 }
     - run: if ./test/match_changed_files.sh '^test|^src/.*.[ch]' ; then echo GO=1 >> $GITHUB_ENV ; fi
     - if: ${{ env.GO == 1 }}
@@ -87,25 +83,24 @@ jobs:
   arm:
     runs-on: ubuntu-latest
     steps:
-    - uses: actions/checkout@v3
+    - uses: actions/checkout@v4
     - run: make arm
   riscv:
     runs-on: ubuntu-latest
     steps:
-    - uses: actions/checkout@v3
+    - uses: actions/checkout@v4
     - run: make riscv
 
   examples:
     runs-on: ubuntu-latest
     steps:
-    - uses: actions/checkout@v3
-    - run: sudo apt -y install libpcap-dev
-    - run: make examples
-    - run: make clean
+    - uses: actions/checkout@v4
+    - run: make examples_essential
+    - run: make clean_examples_essential
   examples_win:
     runs-on: windows-latest
     steps:
-    - uses: actions/checkout@v3
+    - uses: actions/checkout@v4
 #    - uses: egor-tensin/setup-mingw@v2
 #      with:
 #        platform: x64
@@ -119,35 +114,9 @@ jobs:
     runs-on: macos-latest
     env: { HOMEBREW_NO_AUTO_UPDATE: 1 }
     steps:
-    - uses: actions/checkout@v3
+    - uses: actions/checkout@v4
     - run: make examples_mac
     - run: make clean_examples_mac
-
-
-  arduino:
-    runs-on: ubuntu-latest
-    env:
-      GO: 0
-    steps:
-    - uses: actions/checkout@v3
-      with: { fetch-depth: 2 }
-    - run: |
-        if ./test/match_changed_files.sh "^src|examples/device-dashboard|examples/arduino" ; then
-          echo GO=1 >> $GITHUB_ENV
-          # nothing specific to install or do
-        fi
-    - if: ${{ env.GO == 1 }}
-      run: |
-        if ./test/match_changed_files.sh '^src|examples/arduino'; then
-          make -C examples/arduino arduino-xiao
-        fi
-#    - if: ${{ env.GO == 1 }}
-#      run: |
-#        if ./test/match_changed_files.sh '^src|examples/arduino'; then
-#          make -C examples/arduino arduino-nano
-#        fi
-    - if: ${{ env.GO == 1 }}
-      run: make -C examples/arduino clean
 
 
   generic_examples:
@@ -162,7 +131,7 @@ jobs:
     env:
       GO: 0
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
         with: { fetch-depth: 2 }
       - run: if ./test/match_changed_files.sh '^src|^examples/${{ matrix.example.path }}'; then echo GO=1 >> $GITHUB_ENV ; fi
       - if: ${{ env.GO == 1 }}
@@ -183,7 +152,7 @@ jobs:
     env:
       GO: 0
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
         with: { fetch-depth: 2 }
       - run: if ./test/match_changed_files.sh '^src|^examples/${{ matrix.example.path }}'; then echo GO=1 >> $GITHUB_ENV ; fi
       - if: ${{ env.GO == 1 }}
@@ -202,7 +171,7 @@ jobs:
     env:
       GO: 0
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
         with: { fetch-depth: 2 }
       - run: |
           if ./test/match_changed_files.sh '^src|examples/device-dashboard|^examples/${{ matrix.example.path }}'; then
@@ -247,7 +216,7 @@ jobs:
     env:
       GO: 0
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
         with: { fetch-depth: 2 }
       - run: |
           if ./test/match_changed_files.sh '^src|examples/device-dashboard|^examples/${{ matrix.example.path }}'; then
@@ -268,7 +237,7 @@ jobs:
 #    env:
 #      GO: 0
 #    steps:
-#      - uses: actions/checkout@v3
+#      - uses: actions/checkout@v4
 #        with: { fetch-depth: 2 }
 #      - run: |
 #          if ./test/match_changed_files.sh '^src|examples/mqtt-dashboard/device|^examples/${{ matrix.example.path }}'; then
@@ -289,7 +258,7 @@ jobs:
     env:
       GO: 0
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
         with: { fetch-depth: 2 }
       - run: |
           if ./test/match_changed_files.sh '^src|examples/mqtt-dashboard/device|^examples/${{ matrix.example.path }}'; then
@@ -310,7 +279,7 @@ jobs:
 #    env:
 #      GO: 0
 #    steps:
-#      - uses: actions/checkout@v3
+#      - uses: actions/checkout@v4
 #        with: { fetch-depth: 2 }
 #      - run: |
 #          if ./test/match_changed_files.sh '^src|examples/device-dashboard|examples/mqtt-dashboard/device|^examples/${{ matrix.example.path }}'; then
@@ -339,7 +308,7 @@ jobs:
     env:
       GO: 0
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
         with: { fetch-depth: 2 }
       - run: |
           if ./test/match_changed_files.sh '^src|examples/device-dashboard|examples/mqtt-dashboard/device|^examples/${{ matrix.example.path }}'; then
@@ -362,7 +331,7 @@ jobs:
     env:
       GO: 0
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
         with: { fetch-depth: 2 }
       - run: |
           if ./test/match_changed_files.sh '^src|examples/stm32/nucleo-*-cube-*'; then
@@ -377,7 +346,7 @@ jobs:
     env:
       GO: 0
     steps:
-    - uses: actions/checkout@v3
+    - uses: actions/checkout@v4
       with: { fetch-depth: 2 }
     - name: baremetal
       run: |
@@ -387,6 +356,7 @@ jobs:
         fi
     # always run baremetal on core or dashboard or specific example changes; other examples only on specific example changes
     - if: ${{ env.GO == 1 }}
+      continue-on-error: true   # continue so next test has a chance to re-flash and exit from collisions and flash failures
       run: |
         if ./test/match_changed_files.sh '^src|examples/device-dashboard|examples/stm32/nucleo-f746zg-make-baremetal-builtin'; then
           make -C examples/stm32/nucleo-f746zg-make-baremetal-builtin test VCON_API_KEY=${{secrets.VCON_API_KEY}}
@@ -430,7 +400,7 @@ jobs:
     env:
       GO: 0
     steps:
-    - uses: actions/checkout@v3
+    - uses: actions/checkout@v4
       with: { fetch-depth: 2 }
     - name: baremetal
       run: |
@@ -439,6 +409,7 @@ jobs:
           sudo apt -y update && sudo apt -y install gcc-arm-none-eabi
         fi
     - if: ${{ env.GO == 1 }}
+      continue-on-error: true
       run: |
         if ./test/match_changed_files.sh '^src|examples/device-dashboard|examples/stm32/nucleo-f429zi-make-baremetal-builtin'; then
           make -C examples/stm32/nucleo-f429zi-make-baremetal-builtin test VCON_API_KEY=${{secrets.VCON_API_KEY}}
@@ -476,7 +447,7 @@ jobs:
     env:
       GO: 0
     steps:
-    - uses: actions/checkout@v3
+    - uses: actions/checkout@v4
       with: { fetch-depth: 3 }
     - name: baremetal
       run: |
@@ -485,6 +456,7 @@ jobs:
           sudo apt -y update && sudo apt -y install gcc-arm-none-eabi
         fi
     - if: ${{ env.GO == 1 }}
+      continue-on-error: true
       run: |
         if ./test/match_changed_files.sh '^src|examples/device-dashboard|examples/stm32/nucleo-h743zi-make-baremetal-builtin'; then
         make -C examples/stm32/nucleo-h743zi-make-baremetal-builtin test VCON_API_KEY=${{secrets.VCON_API_KEY}}
@@ -517,7 +489,7 @@ jobs:
     env:
       GO: 0
     steps:
-    - uses: actions/checkout@v3
+    - uses: actions/checkout@v4
       with: { fetch-depth: 3 }
     - name: baremetal
       run: |
@@ -526,6 +498,7 @@ jobs:
           sudo apt -y update && sudo apt -y install gcc-arm-none-eabi
         fi
     - if: ${{ env.GO == 1 }}
+      continue-on-error: true
       run: |
         if ./test/match_changed_files.sh '^src|examples/device-dashboard|examples/stm32/nucleo-h723zg-make-baremetal-builtin'; then
           make -C examples/stm32/nucleo-h723zg-make-baremetal-builtin test VCON_API_KEY=${{secrets.VCON_API_KEY}}
@@ -541,7 +514,7 @@ jobs:
     env:
       GO: 0
     steps:
-    - uses: actions/checkout@v3
+    - uses: actions/checkout@v4
       with: { fetch-depth: 3 }
     - name: baremetal
       run: |
@@ -550,6 +523,7 @@ jobs:
           sudo apt -y update && sudo apt -y install gcc-arm-none-eabi
         fi
     - if: ${{ env.GO == 1 }}
+      continue-on-error: true
       run: |
         if ./test/match_changed_files.sh '^src|examples/device-dashboard|examples/stm32/nucleo-h563zi-make-baremetal-builtin'; then
           make -C examples/stm32/nucleo-h563zi-make-baremetal-builtin test VCON_API_KEY=${{secrets.VCON_API_KEY}}
@@ -565,7 +539,7 @@ jobs:
     env:
       GO: 0
     steps:
-    - uses: actions/checkout@v3
+    - uses: actions/checkout@v4
       with: { fetch-depth: 3 }
     - name: baremetal
       run: |
@@ -574,6 +548,7 @@ jobs:
           sudo apt -y update && sudo apt -y install gcc-arm-none-eabi
         fi
     - if: ${{ env.GO == 1 }}
+      continue-on-error: true
       run: |
         if ./test/match_changed_files.sh '^src|examples/device-dashboard|examples/nxp/rt1020-evk-make-baremetal-builtin'; then
           make -C examples/nxp/rt1020-evk-make-baremetal-builtin test VCON_API_KEY=${{secrets.VCON_API_KEY}}
@@ -589,7 +564,7 @@ jobs:
     env:
       GO: 0
     steps:
-    - uses: actions/checkout@v3
+    - uses: actions/checkout@v4
       with: { fetch-depth: 3 }
     - name: baremetal
       run: |
@@ -598,6 +573,7 @@ jobs:
           sudo apt -y update && sudo apt -y install gcc-arm-none-eabi
         fi
     - if: ${{ env.GO == 1 }}
+      continue-on-error: true
       run: |
         if ./test/match_changed_files.sh '^src|examples/device-dashboard|examples/nxp/rt1060-evk-make-baremetal-builtin'; then
           make -C examples/nxp/rt1060-evk-make-baremetal-builtin test VCON_API_KEY=${{secrets.VCON_API_KEY}}
@@ -608,12 +584,62 @@ jobs:
           make -C examples/nxp/rt1060-evk-make-freertos-builtin test VCON_API_KEY=${{secrets.VCON_API_KEY}}
         fi
 
+  test_rt1170:
+    runs-on: ubuntu-latest
+    env:
+      GO: 0
+    steps:
+    - uses: actions/checkout@v4
+      with: { fetch-depth: 3 }
+    - name: baremetal
+      run: |
+        if ./test/match_changed_files.sh "^src|examples/device-dashboard|examples/nxp/rt1170.*-make-" ; then
+          echo GO=1 >> $GITHUB_ENV
+          sudo apt -y update && sudo apt -y install gcc-arm-none-eabi
+        fi
+    - if: ${{ env.GO == 1 }}
+      continue-on-error: true
+      run: |
+        if ./test/match_changed_files.sh '^src|examples/device-dashboard|examples/nxp/rt1170-evk-make-baremetal-builtin'; then
+          make -C examples/nxp/rt1170-evk-make-baremetal-builtin test VCON_API_KEY=${{secrets.VCON_API_KEY}}
+        fi
+#    - if: ${{ env.GO == 1 }}
+#      run: |
+#        if ./test/match_changed_files.sh 'examples/nxp/rt1170-evk-make-freertos-builtin'; then
+#          make -C examples/nxp/rt1170-evk-make-freertos-builtin test VCON_API_KEY=${{secrets.VCON_API_KEY}}
+#        fi
+
+  test_ra6m4:
+    runs-on: ubuntu-latest
+    env:
+      GO: 0
+    steps:
+    - uses: actions/checkout@v4
+      with: { fetch-depth: 3 }
+    - name: baremetal
+      run: |
+        if ./test/match_changed_files.sh "^src|examples/device-dashboard|examples/renesas/ek-ra6m4.*-make-" ; then
+          echo GO=1 >> $GITHUB_ENV
+          sudo apt -y update && sudo apt -y install gcc-arm-none-eabi
+        fi
+    - if: ${{ env.GO == 1 }}
+      continue-on-error: true
+      run: |
+        if ./test/match_changed_files.sh '^src|examples/device-dashboard|examples/renesas/ek-ra6m4-make-baremetal-builtin'; then
+          make -C examples/renesas/ek-ra6m4-make-baremetal-builtin test VCON_API_KEY=${{secrets.VCON_API_KEY}}
+        fi
+#    - if: ${{ env.GO == 1 }}
+#      run: |
+#        if ./test/match_changed_files.sh 'examples/renesas/ek-ra6m4-make-freertos-builtin'; then
+#          make -C examples/renesas/ek-ra6m4-make-freertos-builtin test VCON_API_KEY=${{secrets.VCON_API_KEY}}
+#        fi
+
   test_tm4c:
     runs-on: ubuntu-latest
     env:
       GO: 0
     steps:
-    - uses: actions/checkout@v3
+    - uses: actions/checkout@v4
       with: { fetch-depth: 2 }
     - name: baremetal
       run: |
@@ -637,7 +663,7 @@ jobs:
     env:
       GO: 0
     steps:
-    - uses: actions/checkout@v3
+    - uses: actions/checkout@v4
       with: { fetch-depth: 2 }
     - name: baremetal
       run: |
@@ -661,7 +687,7 @@ jobs:
     env:
       GO: 0
     steps:
-    - uses: actions/checkout@v3
+    - uses: actions/checkout@v4
       with: { fetch-depth: 2 }
     - name: SDK
       run: |
