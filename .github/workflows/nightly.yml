@@ -31,7 +31,7 @@ jobs:
       SSL: ${{ matrix.ssl }}
       TFLAGS: ${{ matrix.select }}
     steps:
-    - uses: actions/checkout@v3
+    - uses: actions/checkout@v4
       with: { fetch-depth: 2 }
     - run: ./test/setup_ga_network.sh && sudo apt -y update ; sudo apt -y install libmbedtls-dev && make ${{ matrix.target }}
   s390:
@@ -42,7 +42,7 @@ jobs:
         ssl: ["", BUILTIN]
     name: S390 SSL=${{ matrix.ssl }}
     steps:
-    - uses: actions/checkout@v3
+    - uses: actions/checkout@v4
       with: { fetch-depth: 2 }
     - run: sudo apt -y update ; sudo apt -y install qemu binfmt-support qemu-user-static && docker run --rm --privileged multiarch/qemu-user-static --reset -p yes && make s390 SSL=${{ matrix.ssl }}
   armhf:
@@ -53,16 +53,33 @@ jobs:
         ssl: ["", BUILTIN]
     name: ArmHF SSL=${{ matrix.ssl }}
     steps:
-    - uses: actions/checkout@v3
+    - uses: actions/checkout@v4
       with: { fetch-depth: 2 }
     - run: sudo apt -y update ; sudo apt -y install qemu binfmt-support qemu-user-static && docker run --rm --privileged multiarch/qemu-user-static --reset -p yes && make armhf SSL=${{ matrix.ssl }}
-  linux2:
+  unamalgamated-mg_prefix:
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        ssl: ["", BUILTIN, MBEDTLS, OPENSSL]
+    name: unamalgamated-mg_prefix SSL=${{ matrix.ssl }}
     steps:
-    - uses: actions/checkout@v3
+    - uses: actions/checkout@v4
       with: { fetch-depth: 2 }
-    - run: sudo apt -y update ; sudo apt -y install libmbedtls-dev valgrind
-    - run: make unamalgamated && make valgrind && make mg_prefix
+    - run: sudo apt -y update ; sudo apt -y install libmbedtls-dev
+    - run: make unamalgamated && make mg_prefix
+  valgrind:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        ssl: ["", BUILTIN, MBEDTLS, OPENSSL]
+    name: Valgrind SSL=${{ matrix.ssl }}
+    steps:
+    - uses: actions/checkout@v4
+      with: { fetch-depth: 2 }
+    - run: sudo apt -y update ; sudo apt -y install valgrind
+    - run: make valgrind SSL=${{ matrix.ssl }}
   macos:
     runs-on: macos-latest
     strategy:
@@ -81,15 +98,15 @@ jobs:
       TFLAGS: ${{ matrix.select }} -DNO_SNTP_CHECK -Wno-sign-conversion # Workaround for MbedTLS 3.5.0
       HOMEBREW_NO_AUTO_UPDATE: 1
     steps:
-    - uses: actions/checkout@v3
+    - uses: actions/checkout@v4
       with: { fetch-depth: 2 }
     - run: brew install jq mbedtls openssl
-    - run:  make test ASAN_OPTIONS= MBEDTLS=`echo /usr/local/Cellar/mbedtls*/*` OPENSSL=`echo /usr/local/Cellar/openssl*/*`
-    - run: make mg_prefix
+    - run: make test ASAN_OPTIONS= MBEDTLS=`echo /usr/local/Cellar/mbedtls*/*` OPENSSL=`echo /usr/local/Cellar/openssl*/*`
   windows:
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
+      max-parallel: 1   # no parallel runs, to minimize MQTT errors
       matrix:
         target: [vc98, vc17, vc22, mingw, mingw++]
         ssl: ["", BUILTIN]
@@ -102,7 +119,7 @@ jobs:
       SSL: SSL=${{ matrix.ssl }}
       TFLAGS: ${{ matrix.select }}
     steps:
-    - uses: actions/checkout@v3
+    - uses: actions/checkout@v4
       with: { fetch-depth: 2 }
     - run: make ${{ matrix.target }} 
   arm:
@@ -113,7 +130,7 @@ jobs:
         ssl: ["", BUILTIN]
     name: Arm SSL=${{ matrix.ssl }}
     steps:
-    - uses: actions/checkout@v3
+    - uses: actions/checkout@v4
     - run: make arm SSL=${{ matrix.ssl }}
   riscv:
     runs-on: ubuntu-latest
@@ -123,20 +140,20 @@ jobs:
         ssl: ["", BUILTIN]
     name: RISC-V SSL=${{ matrix.ssl }}
     steps:
-    - uses: actions/checkout@v3
+    - uses: actions/checkout@v4
     - run: make riscv SSL=${{ matrix.ssl }}
 
   examples:
     runs-on: ubuntu-latest
     steps:
-    - uses: actions/checkout@v3
+    - uses: actions/checkout@v4
     - run: sudo apt -y install libmbedtls-dev libpcap-dev
     - run: make examples
-    - run: make clean
+    - run: make clean_examples
   examples_win:
     runs-on: windows-latest
     steps:
-    - uses: actions/checkout@v3
+    - uses: actions/checkout@v4
 #    - uses: egor-tensin/setup-mingw@v2
 #      with:
 #        platform: x64
@@ -150,7 +167,7 @@ jobs:
     runs-on: macos-latest
     env: { HOMEBREW_NO_AUTO_UPDATE: 1 }
     steps:
-    - uses: actions/checkout@v3
+    - uses: actions/checkout@v4
     - run: make examples_mac
     - run: make clean_examples_mac
 
@@ -158,7 +175,7 @@ jobs:
   arduino:
     runs-on: ubuntu-latest
     steps:
-    - uses: actions/checkout@v3
+    - uses: actions/checkout@v4
       with: { fetch-depth: 2 }
     - run: echo # nothing specific to install or do
     - run: make -C examples/arduino arduino-xiao
@@ -179,7 +196,7 @@ jobs:
     env:
       GO: 0
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
         with: { fetch-depth: 2 }
       - run: if ./test/match_changed_files.sh '^src|^examples/${{ matrix.example.path }}'; then echo GO=1 >> $GITHUB_ENV ; fi
       - run: echo # nothing specific to install or do
@@ -220,7 +237,7 @@ jobs:
           - path: ti/ek-tm4c1294xl-make-baremetal-builtin-rndis
     name: ${{ matrix.example.path }}
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
         with: { fetch-depth: 2 }
       - run: sudo apt -y update && sudo apt -y install gcc-arm-none-eabi
       - run: make -C examples/${{ matrix.example.path }} build
@@ -234,7 +251,7 @@ jobs:
           - path: esp32/device-dashboard
     name: ${{ matrix.example.path }}
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
         with: { fetch-depth: 2 }
       - run: echo # nothing specific to install or do
       - run: make -C examples/${{ matrix.example.path }} build
@@ -272,7 +289,7 @@ jobs:
           - path: ti/ek-tm4c1294xl-make-freertos-builtin
     name: ${{ matrix.example.path }}
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
         with: { fetch-depth: 2 }
       - run: sudo apt -y update && sudo apt -y install gcc-arm-none-eabi
       - run: make -C examples/${{ matrix.example.path }} build
@@ -286,7 +303,7 @@ jobs:
 #          - path: 
 #    name: ${{ matrix.example.path }}
 #    steps:
-#      - uses: actions/checkout@v3
+#      - uses: actions/checkout@v4
 #        with: { fetch-depth: 2 }
 #      - run: echo # nothing specific to install or do
 #      - run: make -C examples/${{ matrix.example.path }} build
@@ -300,7 +317,7 @@ jobs:
           - path: rp2040/pico-rndis-device
     name: ${{ matrix.example.path }}
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
         with: { fetch-depth: 2 }
       - run: sudo apt -y update && sudo apt -y install gcc-arm-none-eabi
       - run: make -C examples/${{ matrix.example.path }} build
@@ -314,7 +331,7 @@ jobs:
 #          - path: 
 #    name: ${{ matrix.example.path }}
 #    steps:
-#      - uses: actions/checkout@v3
+#      - uses: actions/checkout@v4
 #        with: { fetch-depth: 2 }
 #      - run: echo # nothing specific to install or do
 #      - run: make -C examples/${{ matrix.example.path }} device_dashboard
@@ -329,7 +346,7 @@ jobs:
           - path: stm32/nucleo-h723zg-make-baremetal-builtin
     name: ${{ matrix.example.path }}
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
         with: { fetch-depth: 2 }
       - run: sudo apt -y update && sudo apt -y install gcc-arm-none-eabi
       - run: make -C examples/${{ matrix.example.path }} device_dashboard
@@ -338,7 +355,7 @@ jobs:
   cube_examples:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
         with: { fetch-depth: 2 }
       - run: echo # nothing specific to install or do
       - run: cd test/cube && make
@@ -346,7 +363,7 @@ jobs:
   zephyr_examples:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
         with: { fetch-depth: 2 }
       - run: sudo apt -y update && sudo apt -y install gcc-arm-none-eabi
       - run: make -C examples/zephyr init
@@ -364,7 +381,7 @@ jobs:
   test_f7:
     runs-on: ubuntu-latest
     steps:
-    - uses: actions/checkout@v3
+    - uses: actions/checkout@v4
       with: { fetch-depth: 2 }
     - name: baremetal
       run: sudo apt -y update && sudo apt -y install gcc-arm-none-eabi
@@ -380,7 +397,7 @@ jobs:
   test_f4:
     runs-on: ubuntu-latest
     steps:
-    - uses: actions/checkout@v3
+    - uses: actions/checkout@v4
       with: { fetch-depth: 2 }
     - name: baremetal
       run: sudo apt -y update && sudo apt -y install gcc-arm-none-eabi
@@ -395,7 +412,7 @@ jobs:
   test_h743:
     runs-on: ubuntu-latest
     steps:
-    - uses: actions/checkout@v3
+    - uses: actions/checkout@v4
       with: { fetch-depth: 3 }
     - name: baremetal
       run: sudo apt -y update && sudo apt -y install gcc-arm-none-eabi
@@ -409,7 +426,7 @@ jobs:
   test_h723:
     runs-on: ubuntu-latest
     steps:
-    - uses: actions/checkout@v3
+    - uses: actions/checkout@v4
       with: { fetch-depth: 3 }
     - name: baremetal
       run: sudo apt -y update && sudo apt -y install gcc-arm-none-eabi
@@ -419,7 +436,7 @@ jobs:
   test_h5:
     runs-on: ubuntu-latest
     steps:
-    - uses: actions/checkout@v3
+    - uses: actions/checkout@v4
       with: { fetch-depth: 3 }
     - name: baremetal
       run: sudo apt -y update && sudo apt -y install gcc-arm-none-eabi
@@ -429,7 +446,7 @@ jobs:
   test_rt1020:
     runs-on: ubuntu-latest
     steps:
-    - uses: actions/checkout@v3
+    - uses: actions/checkout@v4
       with: { fetch-depth: 3 }
     - name: baremetal
       run: sudo apt -y update && sudo apt -y install gcc-arm-none-eabi
@@ -439,17 +456,37 @@ jobs:
   test_rt1060:
     runs-on: ubuntu-latest
     steps:
-    - uses: actions/checkout@v3
+    - uses: actions/checkout@v4
       with: { fetch-depth: 3 }
     - name: baremetal
       run: sudo apt -y update && sudo apt -y install gcc-arm-none-eabi
     - run: make -C examples/nxp/rt1060-evk-make-baremetal-builtin test VCON_API_KEY=${{secrets.VCON_API_KEY}}
     - run: make -C examples/nxp/rt1060-evk-make-freertos-builtin test VCON_API_KEY=${{secrets.VCON_API_KEY}}
 
+  test_rt1170:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v4
+      with: { fetch-depth: 3 }
+    - name: baremetal
+      run: sudo apt -y update && sudo apt -y install gcc-arm-none-eabi
+    - run: make -C examples/nxp/rt1170-evk-make-baremetal-builtin test VCON_API_KEY=${{secrets.VCON_API_KEY}}
+#    - run: make -C examples/nxp/rt1170-evk-make-freertos-builtin test VCON_API_KEY=${{secrets.VCON_API_KEY}}
+
+  test_ra6m4:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v4
+      with: { fetch-depth: 3 }
+    - name: baremetal
+      run: sudo apt -y update && sudo apt -y install gcc-arm-none-eabi
+    - run: make -C examples/renesas/ek-ra6m4-make-baremetal-builtin test VCON_API_KEY=${{secrets.VCON_API_KEY}}
+#    - run: make -C examples/renesas/ek-ra6m4-make-freertos-builtin test VCON_API_KEY=${{secrets.VCON_API_KEY}}
+
   test_tm4c:
     runs-on: ubuntu-latest
     steps:
-    - uses: actions/checkout@v3
+    - uses: actions/checkout@v4
       with: { fetch-depth: 2 }
     - name: baremetal
       run: sudo apt -y update && sudo apt -y install gcc-arm-none-eabi
@@ -459,7 +496,7 @@ jobs:
   test_same54:
     runs-on: ubuntu-latest
     steps:
-    - uses: actions/checkout@v3
+    - uses: actions/checkout@v4
       with: { fetch-depth: 2 }
     - name: baremetal
       run: sudo apt -y update && sudo apt -y install gcc-arm-none-eabi
@@ -469,7 +506,7 @@ jobs:
   test_pico_w5500:
     runs-on: ubuntu-latest
     steps:
-    - uses: actions/checkout@v3
+    - uses: actions/checkout@v4
       with: { fetch-depth: 2 }
     - name: SDK
       run: sudo apt -y update && sudo apt -y install gcc-arm-none-eabi
