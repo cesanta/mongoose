@@ -504,10 +504,10 @@ static void test_mqtt_basic(void) {
 
   // Publish with QoS1 to subscribed topic and check reception
   // keep former opts.topic
-  opts.message = mg_str("hi1"), opts.qos = 1, opts.retain = false;
+  opts.message = mg_str("hi1"), opts.qos = 1, opts.retain = false, opts.retransmit_id = 0;
   retries = 0;  // don't do retries for test speed
   do {          // retry on failure after an expected timeout
-    mg_mqtt_pub(c, &opts);
+    opts.retransmit_id = mg_mqtt_pub(c, &opts);  // save id for possible resend
     for (i = 0; i < 500 && test_data.flags == 0; i++) mg_mgr_poll(&mgr, 10);
   } while (test_data.flags == 0 && retries--);
   ASSERT(test_data.flags == flags_published);
@@ -515,6 +515,7 @@ static void test_mqtt_basic(void) {
   check_mqtt_message(&opts, &test_data, true);
   memset(mbuf + 1, 0, sizeof(mbuf) - 1);
   test_data.flags = 0;
+  opts.retransmit_id = 0;
 
   // Clean Disconnect !
   mg_mqtt_disconnect(c, NULL);
@@ -569,7 +570,7 @@ static void test_mqtt_ver(uint8_t mqtt_version) {
   }
   retries = 0;  // don't do retries for test speed
   do {          // retry on failure after an expected timeout
-    mg_mqtt_pub(c, &opts);
+    opts.retransmit_id = mg_mqtt_pub(c, &opts);  // save id for possible resend
     for (i = 0; i < 500 && test_data.flags == 0; i++) mg_mgr_poll(&mgr, 10);
   } while (test_data.flags == 0 && retries--);
   ASSERT(test_data.flags == flags_published);
@@ -577,6 +578,7 @@ static void test_mqtt_ver(uint8_t mqtt_version) {
   check_mqtt_message(&opts, &test_data, true);
   memset(mbuf + 1, 0, sizeof(mbuf) - 1);
   test_data.flags = 0;
+  opts.retransmit_id = 0;
 
   // Publish with QoS2 to subscribed topic and check (simultaneous) reception
   // keep former opts.topic
@@ -588,13 +590,14 @@ static void test_mqtt_ver(uint8_t mqtt_version) {
   }
   retries = 0;  // don't do retries for test speed
   do {          // retry on failure after an expected timeout
-    mg_mqtt_pub(c, &opts);
+    opts.retransmit_id = mg_mqtt_pub(c, &opts);  // save id for possible resend
     for (i = 0; i < 500 && !(test_data.flags & flags_received); i++)
       mg_mgr_poll(&mgr, 10);
   } while (!(test_data.flags & flags_received) && retries--);
   ASSERT(test_data.flags & flags_received);
   test_data.flags &= ~flags_received;
-  // Mongoose sent PUBREL, wait for PUBCOMP
+  opts.retransmit_id = 0;
+// Mongoose sent PUBREL, wait for PUBCOMP
   for (i = 0; i < 500 && !(test_data.flags & flags_completed); i++)
     mg_mgr_poll(&mgr, 10);
   // TODO(): retry sending PUBREL on failure after an expected timeout

@@ -319,7 +319,8 @@ void mg_mqtt_login(struct mg_connection *c, const struct mg_mqtt_opts *opts) {
   }
 }
 
-void mg_mqtt_pub(struct mg_connection *c, const struct mg_mqtt_opts *opts) {
+uint16_t mg_mqtt_pub(struct mg_connection *c, const struct mg_mqtt_opts *opts) {
+  uint16_t id = opts->retransmit_id;
   uint8_t flags = (uint8_t) (((opts->qos & 3) << 1) | (opts->retain ? 1 : 0));
   size_t len = 2 + opts->topic.len + opts->message.len;
   MG_DEBUG(("%lu [%.*s] -> [%.*s]", c->id, (int) opts->topic.len,
@@ -328,17 +329,22 @@ void mg_mqtt_pub(struct mg_connection *c, const struct mg_mqtt_opts *opts) {
   if (opts->qos > 0) len += 2;
   if (c->is_mqtt5) len += get_props_size(opts->props, opts->num_props);
 
+  if (opts->qos > 0 && id != 0) flags |= 1 << 3;
   mg_mqtt_send_header(c, MQTT_CMD_PUBLISH, flags, (uint32_t) len);
   mg_send_u16(c, mg_htons((uint16_t) opts->topic.len));
   mg_send(c, opts->topic.buf, opts->topic.len);
-  if (opts->qos > 0) {
-    if (++c->mgr->mqtt_id == 0) ++c->mgr->mqtt_id;
-    mg_send_u16(c, mg_htons(c->mgr->mqtt_id));
+  if (opts->qos > 0) {    // need to send 'id' field
+    if (id == 0) {  // generate new one if not resending
+      if (++c->mgr->mqtt_id == 0) ++c->mgr->mqtt_id;
+      id = c->mgr->mqtt_id;
+    }
+    mg_send_u16(c, mg_htons(id));
   }
 
   if (c->is_mqtt5) mg_send_mqtt_properties(c, opts->props, opts->num_props);
 
   if (opts->message.len > 0) mg_send(c, opts->message.buf, opts->message.len);
+  return id;
 }
 
 void mg_mqtt_sub(struct mg_connection *c, const struct mg_mqtt_opts *opts) {
