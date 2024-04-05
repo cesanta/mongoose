@@ -126,7 +126,7 @@ coverage: test
 upload-coverage: coverage
 	curl -s https://codecov.io/bash | /bin/bash
 
-valgrind: Makefile mongoose.h mongoose.c
+valgrind: Makefile mongoose.h $(SRCS)
 	$(CC) $(SRCS) $(VALGRIND_CFLAGS) $(LDFLAGS) -g -o unit_test
 	$(VALGRIND_RUN) ./unit_test
 
