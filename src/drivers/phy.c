@@ -45,6 +45,20 @@ static const char *mg_phy_id_to_str(uint16_t id1, uint16_t id2) {
   (void) id2;
 }
 
+static void mg_phy_set_clk_out(struct mg_phy *phy, uint8_t phy_addr) {
+  uint16_t id1, id2;
+  id1 = phy->read_reg(phy_addr, MG_PHY_REG_ID1);
+  id2 = phy->read_reg(phy_addr, MG_PHY_REG_ID2);
+
+  if (id1 == MG_PHY_DP83x && id2 == MG_PHY_DP83867) {
+    // write 0x10d to IO_MUX_CFG (0x0170)
+    phy->write_reg(phy_addr, 0x0d, 0x1f);
+    phy->write_reg(phy_addr, 0x0e, 0x170);
+    phy->write_reg(phy_addr, 0x0d, 0x401f);
+    phy->write_reg(phy_addr, 0x0e, 0x10d);
+  }
+}
+
 void mg_phy_init(struct mg_phy *phy, uint8_t phy_addr, uint8_t config) {
   uint16_t id1, id2;
   phy->write_reg(phy_addr, MG_PHY_REG_BCR, MG_BIT(15));  // Reset PHY
@@ -53,6 +67,10 @@ void mg_phy_init(struct mg_phy *phy, uint8_t phy_addr, uint8_t config) {
   id1 = phy->read_reg(phy_addr, MG_PHY_REG_ID1);
   id2 = phy->read_reg(phy_addr, MG_PHY_REG_ID2);
   MG_INFO(("PHY ID: %#04x %#04x (%s)", id1, id2, mg_phy_id_to_str(id1, id2)));
+
+  if (id1 == MG_PHY_DP83x && id2 == MG_PHY_DP83867) {
+      mg_phy_set_clk_out(phy, phy_addr);
+  }
 
   if (config & MG_PHY_CLOCKS_MAC) {
     // Use PHY crystal oscillator (preserve defaults)
