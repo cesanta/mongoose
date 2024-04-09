@@ -78,7 +78,7 @@ jobs:
     steps:
     - uses: actions/checkout@v4
       with: { fetch-depth: 2 }
-    - run: sudo apt -y update ; sudo apt -y install valgrind
+    - run: sudo apt -y update ; sudo apt -y install libmbedtls-dev valgrind
     - run: make valgrind SSL=${{ matrix.ssl }}
   macos:
     runs-on: macos-latest
