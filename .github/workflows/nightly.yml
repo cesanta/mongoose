@@ -145,20 +145,30 @@ jobs:
 
   examples:
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        ssl: ["", -DMG_TLS=MG_TLS_BUILTIN]
+    name: examples ${{ matrix.ssl }}
     steps:
     - uses: actions/checkout@v4
     - run: sudo apt -y install libmbedtls-dev libpcap-dev
-    - run: make examples
+    - run: make examples CFLAGS_EXTRA="${{ matrix.ssl }}"
     - run: make clean_examples
   examples_win:
     runs-on: windows-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        ssl: ["", -DMG_TLS=MG_TLS_BUILTIN]
+    name: examples_win ${{ matrix.ssl }}
     steps:
     - uses: actions/checkout@v4
 #    - uses: egor-tensin/setup-mingw@v2
 #      with:
 #        platform: x64
     - name: test they build
-      run: make examples_win
+      run: make examples_win CFLAGS_EXTRA="${{ matrix.ssl }}"
       shell: cmd
     - name: test they clean
       run: make clean_examples_win
@@ -166,9 +176,14 @@ jobs:
   examples_mac:
     runs-on: macos-latest
     env: { HOMEBREW_NO_AUTO_UPDATE: 1 }
+    strategy:
+      fail-fast: false
+      matrix:
+        ssl: ["", -DMG_TLS=MG_TLS_BUILTIN]
+    name: examples_mac ${{ matrix.ssl }}
     steps:
     - uses: actions/checkout@v4
-    - run: make examples_mac
+    - run: make examples_mac CFLAGS_EXTRA="${{ matrix.ssl }}"
     - run: make clean_examples_mac
 
 
@@ -261,6 +276,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
+        ssl: ["", -DMG_TLS=MG_TLS_BUILTIN]
         example:
           - path: microchip/same54-xpro/device-dashboard
           - path: nxp/rt1020-evk-make-baremetal-builtin
@@ -287,12 +303,12 @@ jobs:
           - path: stm32/stm32h573i-dk-make-freertos-builtin
           - path: ti/ek-tm4c1294xl-make-baremetal-builtin
           - path: ti/ek-tm4c1294xl-make-freertos-builtin
-    name: ${{ matrix.example.path }}
+    name: ${{ matrix.example.path }} ${{ matrix.ssl }}
     steps:
       - uses: actions/checkout@v4
         with: { fetch-depth: 2 }
       - run: sudo apt -y update && sudo apt -y install gcc-arm-none-eabi
-      - run: make -C examples/${{ matrix.example.path }} build
+      - run: make -C examples/${{ matrix.example.path }} build CFLAGS_EXTRA="${{ matrix.ssl }}"
 
 #  mqtt_dashboard_examples:
 #    runs-on: ubuntu-latest
