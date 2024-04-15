@@ -1,10 +1,11 @@
 #include "phy.h"
 
-enum {                    // ID1  ID2
-  MG_PHY_KSZ8x = 0x22,    // 0022 1561 - KSZ8081RNB
-  MG_PHY_DP83x = 0x2000,  // 2000 a140 - TI DP83825I
-  MG_PHY_LAN87x = 0x7,    // 0007 c0fx - LAN8720
-  MG_PHY_RTL8201 = 0x1C   // 001c c816 - RTL8201
+enum {                      // ID1  ID2
+  MG_PHY_KSZ8x = 0x22,      // 0022 1561 - KSZ8081RNB
+  MG_PHY_DP83x = 0x2000,    // 2000 a140 - TI DP83825I
+  MG_PHY_DP83867 = 0xa231,  // 2000 a231 - TI DP83867I
+  MG_PHY_LAN87x = 0x7,      // 0007 c0fx - LAN8720
+  MG_PHY_RTL8201 = 0x1C     // 001c c816 - RTL8201
 };
 
 enum {
@@ -13,6 +14,7 @@ enum {
   MG_PHY_REG_ID1 = 2,
   MG_PHY_REG_ID2 = 3,
   MG_PHY_DP83x_REG_PHYSTS = 16,
+  MG_PHY_DP83867_REG_PHYSTS = 17,
   MG_PHY_DP83x_REG_RCSR = 23,
   MG_PHY_DP83x_REG_LEDCR = 24,
   MG_PHY_KSZ8x_REG_PC1R = 30,
@@ -25,7 +27,12 @@ enum {
 static const char *mg_phy_id_to_str(uint16_t id1, uint16_t id2) {
   switch (id1) {
     case MG_PHY_DP83x:
-      return "DP83x";
+      switch (id2) {
+        case MG_PHY_DP83867:
+          return "DP83867";
+        default:
+          return "DP83x";
+      }
     case MG_PHY_KSZ8x:
       return "KSZ8x";
     case MG_PHY_LAN87x:
@@ -50,9 +57,9 @@ void mg_phy_init(struct mg_phy *phy, uint8_t phy_addr, uint8_t config) {
   if (config & MG_PHY_CLOCKS_MAC) {
     // Use PHY crystal oscillator (preserve defaults)
     // nothing to do
-  } else  { // MAC clocks PHY, PHY has no xtal
+  } else {  // MAC clocks PHY, PHY has no xtal
     // Enable 50 MHz external ref clock at XI (preserve defaults)
-    if (id1 == MG_PHY_DP83x) {
+    if (id1 == MG_PHY_DP83x && id2 != MG_PHY_DP83867) {
       phy->write_reg(phy_addr, MG_PHY_DP83x_REG_RCSR, MG_BIT(7) | MG_BIT(0));
     } else if (id1 == MG_PHY_KSZ8x) {
       phy->write_reg(phy_addr, MG_PHY_KSZ8x_REG_PC2R,
@@ -85,9 +92,18 @@ bool mg_phy_up(struct mg_phy *phy, uint8_t phy_addr, bool *full_duplex,
   if (up && full_duplex != NULL && speed != NULL) {
     uint16_t id1 = phy->read_reg(phy_addr, MG_PHY_REG_ID1);
     if (id1 == MG_PHY_DP83x) {
-      uint16_t physts = phy->read_reg(phy_addr, MG_PHY_DP83x_REG_PHYSTS);
-      *full_duplex = physts & MG_BIT(2);
-      *speed = (physts & MG_BIT(1)) ? MG_PHY_SPEED_10M : MG_PHY_SPEED_100M;
+      uint16_t id2 = phy->read_reg(phy_addr, MG_PHY_REG_ID2);
+      if (id2 == MG_PHY_DP83867) {
+        uint16_t physts = phy->read_reg(phy_addr, MG_PHY_DP83867_REG_PHYSTS);
+        *full_duplex = physts & MG_BIT(13);
+        *speed = (physts & MG_BIT(15))   ? MG_PHY_SPEED_1000M
+                 : (physts & MG_BIT(14)) ? MG_PHY_SPEED_100M
+                                         : MG_PHY_SPEED_10M;
+      } else {
+        uint16_t physts = phy->read_reg(phy_addr, MG_PHY_DP83x_REG_PHYSTS);
+        *full_duplex = physts & MG_BIT(2);
+        *speed = (physts & MG_BIT(1)) ? MG_PHY_SPEED_10M : MG_PHY_SPEED_100M;
+      }
     } else if (id1 == MG_PHY_KSZ8x) {
       uint16_t pc1r = phy->read_reg(phy_addr, MG_PHY_KSZ8x_REG_PC1R);
       *full_duplex = pc1r & MG_BIT(2);
