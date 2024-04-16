@@ -44,7 +44,7 @@ static void fn(struct mg_connection *c, int ev, void *ev_data) {
     struct mg_ws_message *wm = (struct mg_ws_message *) ev_data;
     uint8_t version = c->is_mqtt5 ? 5 : 4;
     MG_INFO(("GOT %d bytes WS msg", (int) wm->data.len));
-    while ((mg_mqtt_parse((uint8_t *) wm->data.ptr, wm->data.len, version,
+    while ((mg_mqtt_parse((uint8_t *) wm->data.buf, wm->data.len, version,
                           &mm)) == MQTT_OK) {
       switch (mm.cmd) {
         case MQTT_CMD_CONNACK:
@@ -59,15 +59,15 @@ static void fn(struct mg_connection *c, int ev, void *ev_data) {
             sub_opts.qos = 1;
             mg_mqtt_sub(c, &sub_opts);
             len = mg_ws_wrap(c, c->send.len - len, WEBSOCKET_OP_BINARY);
-            MG_INFO(("SUBSCRIBED to %.*s", (int) topic.len, topic.ptr));
+            MG_INFO(("SUBSCRIBED to %.*s", (int) topic.len, topic.buf));
             struct mg_mqtt_opts pub_opts;
             memset(&pub_opts, 0, sizeof(pub_opts));
             pub_opts.topic = topic;
             pub_opts.message = data;
             pub_opts.qos = 1, pub_opts.retain = false;
             mg_mqtt_pub(c, &pub_opts);
-            MG_INFO(("PUBLISHED %.*s -> %.*s", (int) data.len, data.ptr,
-                     (int) topic.len, topic.ptr));
+            MG_INFO(("PUBLISHED %.*s -> %.*s", (int) data.len, data.buf,
+                     (int) topic.len, topic.buf));
             len = mg_ws_wrap(c, c->send.len - len, WEBSOCKET_OP_BINARY);
           } else {
             MG_ERROR(("%lu MQTT auth failed, code %d", c->id, mm.ack));
@@ -76,14 +76,14 @@ static void fn(struct mg_connection *c, int ev, void *ev_data) {
           break;
         case MQTT_CMD_PUBLISH: {
           MG_DEBUG(("%lu [%.*s] -> [%.*s]", c->id, (int) mm.topic.len,
-                    mm.topic.ptr, (int) mm.data.len, mm.data.ptr));
-          MG_INFO(("RECEIVED %.*s <- %.*s", (int) mm.data.len, mm.data.ptr,
-                   (int) mm.topic.len, mm.topic.ptr));
+                    mm.topic.buf, (int) mm.data.len, mm.data.buf));
+          MG_INFO(("RECEIVED %.*s <- %.*s", (int) mm.data.len, mm.data.buf,
+                   (int) mm.topic.len, mm.topic.buf));
           c->is_draining = 1;
           break;
         }
       }
-      wm->data.ptr += mm.dgram.len;
+      wm->data.buf += mm.dgram.len;
       wm->data.len -= mm.dgram.len;
     }
   }

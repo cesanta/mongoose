@@ -32,8 +32,8 @@ static void fn(struct mg_connection *c, int ev, void *ev_data) {
   } else if (ev == MG_EV_WS_MSG) {
     // Got websocket frame. Received data is wm->data. Echo it back!
     struct mg_ws_message *wm = (struct mg_ws_message *) ev_data;
-    MG_INFO(("Got wm: %p, data: %p, %d = %*.s", wm, wm->data.ptr, wm->data.len, wm->data.len, wm->data.ptr));
-    mg_ws_send(c, wm->data.ptr, wm->data.len, WEBSOCKET_OP_TEXT);
+    MG_INFO(("Got wm: %p, data: %p, %d = %*.s", wm, wm->data.buf, wm->data.len, wm->data.len, wm->data.buf));
+    mg_ws_send(c, wm->data.buf, wm->data.len, WEBSOCKET_OP_TEXT);
   }
 }
 

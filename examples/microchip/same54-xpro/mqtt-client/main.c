@@ -48,20 +48,20 @@ static void fn(struct mg_connection *c, int ev, void *ev_data) {
     sub_opts.topic = subt;
     sub_opts.qos = s_qos;
     mg_mqtt_sub(c, &sub_opts);
-    MG_INFO(("%lu SUBSCRIBED to %.*s", c->id, (int) subt.len, subt.ptr));
+    MG_INFO(("%lu SUBSCRIBED to %.*s", c->id, (int) subt.len, subt.buf));
     struct mg_mqtt_opts pub_opts;
     memset(&pub_opts, 0, sizeof(pub_opts));
     pub_opts.topic = pubt;
     pub_opts.message = data;
     pub_opts.qos = s_qos, pub_opts.retain = false;
     mg_mqtt_pub(c, &pub_opts);
-    MG_INFO(("%lu PUBLISHED %.*s -> %.*s", c->id, (int) data.len, data.ptr,
-             (int) pubt.len, pubt.ptr));
+    MG_INFO(("%lu PUBLISHED %.*s -> %.*s", c->id, (int) data.len, data.buf,
+             (int) pubt.len, pubt.buf));
   } else if (ev == MG_EV_MQTT_MSG) {
     // When we get echo response, print it
     struct mg_mqtt_message *mm = (struct mg_mqtt_message *) ev_data;
     MG_INFO(("%lu RECEIVED %.*s <- %.*s", c->id, (int) mm->data.len,
-             mm->data.ptr, (int) mm->topic.len, mm->topic.ptr));
+             mm->data.buf, (int) mm->topic.len, mm->topic.buf));
   } else if (ev == MG_EV_CLOSE) {
     MG_INFO(("%lu CLOSED", c->id));
     s_conn = NULL;  // Mark that we're closed

@@ -83,7 +83,7 @@ static void fn(struct mg_connection *c, int ev, void *ev_data) {
       mg_http_printf_chunk(c, "");  // Don't forget the last empty chunk
     } else if (mg_http_match_uri(hm, "/api/f2/*")) {
       mg_http_reply(c, 200, "", "{\"result\": \"%.*s\"}\n", (int) hm->uri.len,
-                    hm->uri.ptr);
+                    hm->uri.buf);
     } else {
       struct mg_http_serve_opts opts = {.root_dir = s_root_dir};
       mg_http_serve_dir(c, ev_data, &opts);

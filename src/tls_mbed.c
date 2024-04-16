@@ -17,9 +17,9 @@ static int mg_mbed_rng(void *ctx, unsigned char *buf, size_t len) {
 
 static bool mg_load_cert(struct mg_str str, mbedtls_x509_crt *p) {
   int rc;
-  if (str.ptr == NULL || str.ptr[0] == '\0' || str.ptr[0] == '*') return true;
-  if (str.ptr[0] == '-') str.len++;  // PEM, include trailing NUL
-  if ((rc = mbedtls_x509_crt_parse(p, (uint8_t *) str.ptr, str.len)) != 0) {
+  if (str.buf == NULL || str.buf[0] == '\0' || str.buf[0] == '*') return true;
+  if (str.buf[0] == '-') str.len++;  // PEM, include trailing NUL
+  if ((rc = mbedtls_x509_crt_parse(p, (uint8_t *) str.buf, str.len)) != 0) {
     MG_ERROR(("cert err %#x", -rc));
     return false;
   }
@@ -28,9 +28,9 @@ static bool mg_load_cert(struct mg_str str, mbedtls_x509_crt *p) {
 
 static bool mg_load_key(struct mg_str str, mbedtls_pk_context *p) {
   int rc;
-  if (str.ptr == NULL || str.ptr[0] == '\0' || str.ptr[0] == '*') return true;
-  if (str.ptr[0] == '-') str.len++;  // PEM, include trailing NUL
-  if ((rc = mbedtls_pk_parse_key(p, (uint8_t *) str.ptr, str.len, NULL,
+  if (str.buf == NULL || str.buf[0] == '\0' || str.buf[0] == '*') return true;
+  if (str.buf[0] == '-') str.len++;  // PEM, include trailing NUL
+  if ((rc = mbedtls_pk_parse_key(p, (uint8_t *) str.buf, str.len, NULL,
                                  0 MG_MBEDTLS_RNG_GET)) != 0) {
     MG_ERROR(("key err %#x", -rc));
     return false;
@@ -128,8 +128,8 @@ void mg_tls_init(struct mg_connection *c, const struct mg_tls_opts *opts) {
   } else {
     if (mg_load_cert(opts->ca, &tls->ca) == false) goto fail;
     mbedtls_ssl_conf_ca_chain(&tls->conf, &tls->ca, NULL);
-    if (c->is_client && opts->name.ptr != NULL && opts->name.ptr[0] != '\0') {
-      char *host = mg_mprintf("%.*s", opts->name.len, opts->name.ptr);
+    if (c->is_client && opts->name.buf != NULL && opts->name.buf[0] != '\0') {
+      char *host = mg_mprintf("%.*s", opts->name.len, opts->name.buf);
       mbedtls_ssl_set_hostname(&tls->ssl, host);
       MG_DEBUG(("%lu hostname verification: %s", c->id, host));
       free(host);

@@ -128,8 +128,8 @@ static void test_http_get_var(void) {
 }
 
 static int vcmp(struct mg_str s1, const char *s2) {
-  // MG_INFO(("->%.*s<->%s<- %d %d %d", (int) s1.len, s1.ptr, s2,
-  //(int) s1.len, strncmp(s1.ptr, s2, s1.len), mg_vcmp(&s1, s2)));
+  // MG_INFO(("->%.*s<->%s<- %d %d %d", (int) s1.len, s1.buf, s2,
+  //(int) s1.len, strncmp(s1.buf, s2, s1.len), mg_vcmp(&s1, s2)));
   return mg_vcmp(&s1, s2) == 0;
 }
 
@@ -367,9 +367,9 @@ static void mqtt_cb(struct mg_connection *c, int ev, void *ev_data) {
   } else if (ev == MG_EV_MQTT_MSG) {
     struct mg_mqtt_message *mm = (struct mg_mqtt_message *) ev_data;
     snprintf(test_data->topic, test_data->topicsize, "%.*s",
-             (int) mm->topic.len, mm->topic.ptr);
+             (int) mm->topic.len, mm->topic.buf);
     snprintf(buf + 1, test_data->msgsize - 2, "%.*s", (int) mm->data.len,
-             mm->data.ptr);
+             mm->data.buf);
 
     if (mm->cmd == MQTT_CMD_PUBLISH && c->is_mqtt5) {
       size_t pos = 0;
@@ -383,21 +383,21 @@ static void mqtt_cb(struct mg_connection *c, int ev, void *ev_data) {
 
       ASSERT((pos = mg_mqtt_next_prop(mm, &prop, pos)) > 0);
       ASSERT(prop.id == MQTT_PROP_CONTENT_TYPE);
-      ASSERT(strncmp(prop.val.ptr, "test_content_val_2", prop.val.len) == 0 &&
+      ASSERT(strncmp(prop.val.buf, "test_content_val_2", prop.val.len) == 0 &&
              prop.val.len == strlen("test_content_val_2"));
 
       ASSERT((pos = mg_mqtt_next_prop(mm, &prop, pos)) > 0);
       ASSERT(prop.id == MQTT_PROP_USER_PROPERTY);
-      ASSERT(strncmp(prop.key.ptr, "test_key_1", prop.key.len) == 0 &&
+      ASSERT(strncmp(prop.key.buf, "test_key_1", prop.key.len) == 0 &&
              prop.key.len == strlen("test_key_1"));
-      ASSERT(strncmp(prop.val.ptr, "test_value_1", prop.val.len) == 0 &&
+      ASSERT(strncmp(prop.val.buf, "test_value_1", prop.val.len) == 0 &&
              prop.val.len == strlen("test_value_1"));
 
       ASSERT((pos = mg_mqtt_next_prop(mm, &prop, pos)) > 0);
       ASSERT(prop.id == MQTT_PROP_USER_PROPERTY);
-      ASSERT(strncmp(prop.key.ptr, "test_key_2", prop.key.len) == 0 &&
+      ASSERT(strncmp(prop.key.buf, "test_key_2", prop.key.len) == 0 &&
              prop.key.len == strlen("test_key_2"));
-      ASSERT(strncmp(prop.val.ptr, "test_value_2", prop.val.len) == 0 &&
+      ASSERT(strncmp(prop.val.buf, "test_value_2", prop.val.len) == 0 &&
              prop.val.len == strlen("test_value_2"));
 
       ASSERT((pos = mg_mqtt_next_prop(mm, &prop, pos)) == 0);
@@ -449,12 +449,12 @@ static void test_mqtt_base(void) {
 static void check_mqtt_message(struct mg_mqtt_opts *opts,
                                struct mqtt_data *data, bool enforce) {
   if (opts->topic.len != strlen(data->topic) ||
-      strcmp(opts->topic.ptr, data->topic)) {
+      strcmp(opts->topic.buf, data->topic)) {
     MG_INFO(("TOPIC[%s]", data->topic));
     if (enforce) ASSERT(0);
   }
   if (*data->msg != 'X' || opts->message.len != (strlen(&data->msg[1])) ||
-      strcmp(opts->message.ptr, &data->msg[1])) {
+      strcmp(opts->message.buf, &data->msg[1])) {
     MG_INFO(("MSG[%s]", data->msg));
     if (enforce) ASSERT(0);
   }
@@ -625,14 +625,14 @@ static void eh1(struct mg_connection *c, int ev, void *ev_data) {
   if (ev == MG_EV_ACCEPT && topts != NULL) mg_tls_init(c, topts);
   if (ev == MG_EV_HTTP_MSG) {
     struct mg_http_message *hm = (struct mg_http_message *) ev_data;
-    MG_INFO(("[%.*s %.*s] message len %d", (int) hm->method.len, hm->method.ptr,
-             (int) hm->uri.len, hm->uri.ptr, (int) hm->message.len));
+    MG_INFO(("[%.*s %.*s] message len %d", (int) hm->method.len, hm->method.buf,
+             (int) hm->uri.len, hm->uri.buf, (int) hm->message.len));
     if (mg_http_match_uri(hm, "/foo/*")) {
-      mg_http_reply(c, 200, "", "uri: %.*s", hm->uri.len - 5, hm->uri.ptr + 5);
+      mg_http_reply(c, 200, "", "uri: %.*s", hm->uri.len - 5, hm->uri.buf + 5);
     } else if (mg_http_match_uri(hm, "/ws")) {
       mg_ws_upgrade(c, hm, NULL);
     } else if (mg_http_match_uri(hm, "/body")) {
-      mg_http_reply(c, 200, "", "%.*s", (int) hm->body.len, hm->body.ptr);
+      mg_http_reply(c, 200, "", "%.*s", (int) hm->body.len, hm->body.buf);
     } else if (mg_http_match_uri(hm, "/bar")) {
       mg_http_reply(c, 404, "", "not found");
     } else if (mg_http_match_uri(hm, "/no_reason")) {
@@ -674,7 +674,7 @@ static void eh1(struct mg_connection *c, int ev, void *ev_data) {
     mg_ws_send(c, "opened", 6, WEBSOCKET_OP_BINARY);
   } else if (ev == MG_EV_WS_MSG) {
     struct mg_ws_message *wm = (struct mg_ws_message *) ev_data;
-    mg_ws_send(c, wm->data.ptr, wm->data.len, WEBSOCKET_OP_BINARY);
+    mg_ws_send(c, wm->data.buf, wm->data.len, WEBSOCKET_OP_BINARY);
   }
 }
 
@@ -688,8 +688,8 @@ static void fcb(struct mg_connection *c, int ev, void *ev_data) {
   if (ev == MG_EV_HTTP_MSG) {
     struct mg_http_message *hm = (struct mg_http_message *) ev_data;
     snprintf(fd->buf, FETCH_BUF_SIZE, "%.*s", (int) hm->message.len,
-             hm->message.ptr);
-    fd->code = atoi(hm->uri.ptr);
+             hm->message.buf);
+    fd->code = atoi(hm->uri.buf);
     fd->closed = 1;
     c->is_closing = 1;
     (void) c;
@@ -742,7 +742,7 @@ static int cmpbody(const char *buf, const char *str) {
   struct mg_http_message hm = gethm(buf);
   size_t len = strlen(buf);
   // mg_http_parse(buf, len, &hm);
-  if (hm.body.len > len) hm.body.len = len - (size_t) (hm.body.ptr - buf);
+  if (hm.body.len > len) hm.body.len = len - (size_t) (hm.body.buf - buf);
   return mg_strcmp(hm.body, s);
 }
 
@@ -788,7 +788,7 @@ static void ew2(struct mg_connection *c, int ev, void *ev_data) {
       size_t ok = 1, i;
       ASSERT(wm->data.len == size);
       for (i = 0; i < size; i++) {
-        if (wm->data.ptr[i] != 'A') ok = 0;
+        if (wm->data.buf[i] != 'A') ok = 0;
       }
       ASSERT(ok == 1);
       *(int *) c->fn_data = 1;
@@ -967,8 +967,8 @@ static void test_http_server(void) {
   {
     struct mg_str data = mg_file_read(&mg_fs_posix, "./test/data/ca.pem");
     ASSERT(fetch(&mgr, buf, url, "GET /ca.pem HTTP/1.0\r\n\n") == 200);
-    ASSERT(cmpbody(buf, data.ptr) == 0);
-    free((void *) data.ptr);
+    ASSERT(cmpbody(buf, data.buf) == 0);
+    free((void *) data.buf);
   }
 
   {
@@ -1029,7 +1029,7 @@ static void test_http_server(void) {
     struct mg_str s;
     remove("uploaded.txt");
     s = mg_file_read(&mg_fs_posix, "uploaded.txt");
-    ASSERT(s.ptr == NULL);
+    ASSERT(s.buf == NULL);
     ASSERT(fetch(&mgr, buf, url,
                  "POST /upload HTTP/1.0\n"
                  "Content-Length: 1\n\nx") == 400);
@@ -1043,9 +1043,9 @@ static void test_http_server(void) {
                  "Content-Length: 6\r\n"
                  "\r\n\nworld") == 200);
     s = mg_file_read(&mg_fs_posix, "uploaded.txt");
-    ASSERT(s.ptr != NULL);
-    ASSERT(strcmp(s.ptr, "hello\nworld") == 0);
-    free((void *) s.ptr);
+    ASSERT(s.buf != NULL);
+    ASSERT(strcmp(s.buf, "hello\nworld") == 0);
+    free((void *) s.buf);
     remove("uploaded.txt");
   }
 
@@ -1054,13 +1054,13 @@ static void test_http_server(void) {
     struct mg_str s;
     remove("uploaded.txt");
     s = mg_file_read(&mg_fs_posix, "uploaded.txt");
-    ASSERT(s.ptr == NULL);
+    ASSERT(s.buf == NULL);
     ASSERT(fetch(&mgr, buf, url,
                  "POST /upload?file=../uploaded.txt HTTP/1.0\r\n"
                  "Content-Length: 5\r\n"
                  "\r\nhello") == 400);
     s = mg_file_read(&mg_fs_posix, "uploaded.txt");
-    ASSERT(s.ptr == NULL);
+    ASSERT(s.buf == NULL);
   }
 
   // HEAD request
@@ -1111,8 +1111,8 @@ static void test_http_server(void) {
 static void h4(struct mg_connection *c, int ev, void *ev_data) {
   if (ev == MG_EV_HTTP_MSG) {
     struct mg_http_message *hm = (struct mg_http_message *) ev_data;
-    MG_INFO(("[%.*s %.*s] message len %d", (int) hm->method.len, hm->method.ptr,
-             (int) hm->uri.len, hm->uri.ptr, (int) hm->message.len));
+    MG_INFO(("[%.*s %.*s] message len %d", (int) hm->method.len, hm->method.buf,
+             (int) hm->uri.len, hm->uri.buf, (int) hm->message.len));
     if (mg_http_match_uri(hm, "/a/#")) {
       struct mg_http_serve_opts opts;
       memset(&opts, 0, sizeof(opts));
@@ -1189,12 +1189,12 @@ static void test_tls(void) {
   // MG_INFO(("%s", buf));
   ASSERT(cmpbody(buf, "hello\n") == 0);
   // POST a larger file, make sure we drain TLS buffers and read all, #2619
-  ASSERT(data.ptr != NULL && data.len > 0);
+  ASSERT(data.buf != NULL && data.len > 0);
   ASSERT(fetch(&mgr, buf, url,
                "POST /foo/bar HTTP/1.0\n"
                "Content-Length: %lu\n\n"
                "%s",
-               data.len, data.ptr) == 200);
+               data.len, data.buf) == 200);
   mg_mgr_free(&mgr);
   ASSERT(mgr.conns == NULL);
 #endif
@@ -1210,7 +1210,7 @@ static void f3(struct mg_connection *c, int ev, void *ev_data) {
               c->rem.is_ip6 ? "ipv6.google.com" : "cesanta.com");
   } else if (ev == MG_EV_HTTP_MSG) {
     struct mg_http_message *hm = (struct mg_http_message *) ev_data;
-    // MG_INFO(("-->[%.*s]", (int) hm->message.len, hm->message.ptr));
+    // MG_INFO(("-->[%.*s]", (int) hm->message.len, hm->message.buf));
     // ASSERT(mg_vcmp(&hm->method, "HTTP/1.1") == 0);
     // ASSERT(mg_vcmp(&hm->uri, "301") == 0);
     *ok = mg_http_status(hm);
@@ -1316,7 +1316,7 @@ static void test_host_validation(void) {
 static void f4(struct mg_connection *c, int ev, void *ev_data) {
   if (ev == MG_EV_HTTP_MSG) {
     struct mg_http_message *hm = (struct mg_http_message *) ev_data;
-    mg_printf(c, "HTTP/1.0 200 OK\n\n%.*s/%s", (int) hm->uri.len, hm->uri.ptr,
+    mg_printf(c, "HTTP/1.0 200 OK\n\n%.*s/%s", (int) hm->uri.len, hm->uri.buf,
               "abcdef");
     strcat((char *) c->fn_data, "m");
     c->is_draining = 1;
@@ -1340,7 +1340,7 @@ static void f4c(struct mg_connection *c, int ev, void *ev_data) {
 static void f41(struct mg_connection *c, int ev, void *ev_data) {
   if (ev == MG_EV_HTTP_MSG) {
     struct mg_http_message *hm = (struct mg_http_message *) ev_data;
-    mg_printf(c, "HTTP/1.0 200 OK\n\n%.*s/%s", (int) hm->uri.len, hm->uri.ptr,
+    mg_printf(c, "HTTP/1.0 200 OK\n\n%.*s/%s", (int) hm->uri.len, hm->uri.buf,
               "abcdef");
   }
 }
@@ -1379,7 +1379,7 @@ static void test_http_no_content_length(void) {
 static void f5(struct mg_connection *c, int ev, void *ev_data) {
   if (ev == MG_EV_HTTP_MSG) {
     struct mg_http_message *hm = (struct mg_http_message *) ev_data;
-    mg_http_reply(c, 200, "", "%.*s", (int) hm->uri.len, hm->uri.ptr);
+    mg_http_reply(c, 200, "", "%.*s", (int) hm->uri.len, hm->uri.buf);
     (*(int *) c->fn_data)++;
   }
 }
@@ -1436,7 +1436,7 @@ static void test_http_parse(void) {
     ASSERT(mg_vcmp(&req.headers[0].name, "Foo") == 0);
     ASSERT(mg_vcmp(&req.headers[0].value, "bar") == 0);
     ASSERT(req.headers[1].name.len == 0);
-    ASSERT(req.headers[1].name.ptr == NULL);
+    ASSERT(req.headers[1].name.buf == NULL);
     ASSERT(req.query.len == 0);
     ASSERT(req.message.len == len);
     ASSERT(req.body.len == 0);
@@ -1851,7 +1851,7 @@ static void test_str(void) {
   {
     struct mg_str s = mg_strdup(mg_str("a"));
     ASSERT(mg_strcmp(s, mg_str("a")) == 0);
-    free((void *) s.ptr);
+    free((void *) s.buf);
   }
 
   {
@@ -1859,7 +1859,7 @@ static void test_str(void) {
     struct mg_str a = mg_str("hello"), b = mg_str("a"), c = mg_str(NULL);
     ASSERT((s = mg_strstr(a, b)) == NULL);
     ASSERT((s = mg_strstr(a, c)) != NULL);
-    ASSERT(s == a.ptr);
+    ASSERT(s == a.buf);
   }
 
   ASSERT(mg_strcmp(mg_str(""), mg_str(NULL)) == 0);
@@ -2203,9 +2203,9 @@ static void test_util(void) {
   ASSERT(mg_file_printf(&mg_fs_posix, "data.txt", "%s", "hi") == true);
   // if (system("ls -l") != 0) (void) 0;
   data = mg_file_read(&mg_fs_posix, "data.txt");
-  ASSERT(data.ptr != NULL);
-  ASSERT(strcmp(data.ptr, "hi") == 0);
-  free((void *) data.ptr);
+  ASSERT(data.buf != NULL);
+  ASSERT(strcmp(data.buf, "hi") == 0);
+  free((void *) data.buf);
   remove("data.txt");
   ASSERT(mg_aton(mg_str("0"), &a) == false);
   ASSERT(mg_aton(mg_str("0.0.0."), &a) == false);
@@ -2342,10 +2342,10 @@ static void us(struct mg_connection *c, int ev, void *ev_data) {
   struct mg_http_message *hm = (struct mg_http_message *) ev_data;
   if (ev == MG_EV_HTTP_MSG && mg_http_match_uri(hm, "/upload")) {
     MG_DEBUG(("Got all %lu bytes!", (unsigned long) hm->body.len));
-    MG_DEBUG(("Query string: [%.*s]", (int) hm->query.len, hm->query.ptr));
-    // MG_DEBUG(("Body:\n%.*s", (int) hm->body.len, hm->body.ptr));
+    MG_DEBUG(("Query string: [%.*s]", (int) hm->query.len, hm->query.buf));
+    // MG_DEBUG(("Body:\n%.*s", (int) hm->body.len, hm->body.buf));
     mg_http_reply(c, 200, "", "ok (%d %.*s)\n", (int) hm->body.len,
-                  (int) hm->body.len, hm->body.ptr);
+                  (int) hm->body.len, hm->body.buf);
   } else if (ev == MG_EV_HTTP_MSG) {
     mg_http_reply(c, 200, "", "ok\n");
   }
@@ -2364,7 +2364,7 @@ static void uc(struct mg_connection *c, int ev, void *ev_data) {
     mg_http_printf_chunk(c, "");
   } else if (ev == MG_EV_HTTP_MSG) {
     struct mg_http_message *hm = (struct mg_http_message *) ev_data;
-    // MG_INFO(("---> [%s] [%.*s]", *s, hm->body.len, hm->body.ptr));
+    // MG_INFO(("---> [%s] [%.*s]", *s, hm->body.len, hm->body.buf));
     ASSERT(mg_strcmp(hm->body, mg_str(*s)) == 0);
     *s = NULL;
   }
@@ -2433,8 +2433,8 @@ static void eh4(struct mg_connection *c, int ev, void *ev_data) {
   uint32_t *crc = (uint32_t *) c->fn_data;
   if (ev == MG_EV_HTTP_MSG) {
     struct mg_http_message *hm = (struct mg_http_message *) ev_data;
-    *crc = mg_crc32(*crc, hm->body.ptr, hm->body.len);
-    MG_INFO(("%lu M [%.*s]", c->id, (int) hm->body.len, hm->body.ptr));
+    *crc = mg_crc32(*crc, hm->body.buf, hm->body.len);
+    MG_INFO(("%lu M [%.*s]", c->id, (int) hm->body.len, hm->body.buf));
   }
 }
 
@@ -2594,12 +2594,12 @@ static void test_multipart(void) {
   ASSERT(mg_http_next_multipart(mg_str(""), 0, NULL) == 0);
   ASSERT((ofs = mg_http_next_multipart(mg_str(s), 0, &part)) > 0);
   ASSERT(mg_strcmp(part.name, mg_str("val")) == 0);
-  // MG_INFO(("--> [%.*s]", (int) part.body.len, part.body.ptr));
+  // MG_INFO(("--> [%.*s]", (int) part.body.len, part.body.buf));
   ASSERT(mg_strcmp(part.body, mg_str("abc\r\ndef")) == 0);
   ASSERT(part.filename.len == 0);
   ASSERT((ofs = mg_http_next_multipart(mg_str(s), ofs, &part)) > 0);
   ASSERT(mg_strcmp(part.name, mg_str("foo")) == 0);
-  // MG_INFO(("--> [%.*s]", (int) part.filename.len, part.filename.ptr));
+  // MG_INFO(("--> [%.*s]", (int) part.filename.len, part.filename.buf));
   ASSERT(mg_strcmp(part.filename, mg_str("a b.txt")) == 0);
   ASSERT(mg_strcmp(part.body, mg_str("hello world\r\n")) == 0);
   ASSERT(mg_http_next_multipart(mg_str(s), ofs, &part) == 0);
@@ -2628,14 +2628,14 @@ static void test_packed(void) {
   // fetch(&mgr, buf, url, "GET /Makefile HTTP/1.0\n\n");
   // printf("---> %s\n", buf);
   ASSERT(fetch(&mgr, buf, url, "GET /Makefile HTTP/1.0\n\n") == 200);
-  ASSERT(cmpbody(buf, data.ptr) == 0);
-  free((void *) data.ptr);
+  ASSERT(cmpbody(buf, data.buf) == 0);
+  free((void *) data.buf);
 
   // Load file deeper in the FS tree directly
   data = mg_file_read(&mg_fs_posix, "src/ssi.h");
   ASSERT(fetch(&mgr, buf, url, "GET /src/ssi.h HTTP/1.0\n\n") == 200);
-  ASSERT(cmpbody(buf, data.ptr) == 0);
-  free((void *) data.ptr);
+  ASSERT(cmpbody(buf, data.buf) == 0);
+  free((void *) data.buf);
 
   // List root dir
   ASSERT(fetch(&mgr, buf, url, "GET / HTTP/1.0\n\n") == 200);
@@ -2735,7 +2735,7 @@ static void w2(struct mg_connection *c, int ev, void *ev_data) {
       uint8_t op = n == 0 ? WEBSOCKET_OP_TEXT : WEBSOCKET_OP_CONTINUE;
       mg_ws_send(c, ":->", 3, WEBSOCKET_OP_PING);
       ofs = c->send.len;
-      mg_ws_send(c, &msg.ptr[n], 1, op);
+      mg_ws_send(c, &msg.buf[n], 1, op);
       if (n < msg.len - 1) c->send.buf[ofs] = op;  // Clear FIN flag
       c->fn_data = (void *) (n + 1);               // Point to the next char
     } else {
@@ -2744,7 +2744,7 @@ static void w2(struct mg_connection *c, int ev, void *ev_data) {
   } else if (ev == MG_EV_WS_MSG) {
     struct mg_ws_message *wm = (struct mg_ws_message *) ev_data;
     MG_INFO(("Got WS, %lu", wm->data.len));
-    // mg_hexdump(wm->data.ptr, wm->data.len);
+    // mg_hexdump(wm->data.buf, wm->data.len);
     if (wm->data.len == 9) {
       ASSERT(mg_strcmp(wm->data, mg_str("hi there!")) == 0);
     } else if (wm->data.len == 10) {
@@ -2821,15 +2821,15 @@ static void test_get_header_var(void) {
 static void json_scan(struct mg_str json, int depth) {
   int i, n = 0, o = mg_json_get(json, "$", &n);
   for (i = 0; i < depth; i++) printf("  ");
-  printf("%.*s\n", n, json.ptr + o);
-  if (json.ptr[o] == '{' || json.ptr[o] == '[') {  // Iterate over elems
-    struct mg_str key, val, sub = mg_str_n(json.ptr + o, (size_t) n);
+  printf("%.*s\n", n, json.buf + o);
+  if (json.buf[o] == '{' || json.buf[o] == '[') {  // Iterate over elems
+    struct mg_str key, val, sub = mg_str_n(json.buf + o, (size_t) n);
     size_t ofs = 0;
     while ((ofs = mg_json_next(sub, ofs, &key, &val)) > 0) {
       for (i = 0; i < depth; i++) printf("  ");
-      printf("KEY: %.*s VAL: %.*s\n", (int) key.len, key.ptr, (int) val.len,
-             val.ptr);
-      if (*val.ptr == '[' || *val.ptr == '{') json_scan(val, depth + 1);
+      printf("KEY: %.*s VAL: %.*s\n", (int) key.len, key.buf, (int) val.len,
+             val.buf);
+      if (*val.buf == '[' || *val.buf == '{') json_scan(val, depth + 1);
     }
   }
 }
@@ -3020,7 +3020,7 @@ static void test_json(void) {
   json = mg_str("[1,true,{\"a\":[3],\"b\":42}]");
   json_scan(json, 0);
   {
-    struct mg_str k, v, sub = mg_str_n(json.ptr + 8, json.len - 8);
+    struct mg_str k, v, sub = mg_str_n(json.buf + 8, json.len - 8);
     const char *a = "\"a\"", *b = "\"b\"";
     ASSERT(mg_json_next(sub, 0, &k, &v) == 9);
     ASSERT(mg_vcmp(&k, a) == 0);
@@ -3041,7 +3041,7 @@ static void test_json(void) {
 
 static void resp_rpc(struct mg_rpc_req *r) {
   int len = 0, off = mg_json_get(r->frame, "$.result", &len);
-  mg_xprintf(r->pfn, r->pfn_data, "%.*s", len, &r->frame.ptr[off]);
+  mg_xprintf(r->pfn, r->pfn_data, "%.*s", len, &r->frame.buf[off]);
 }
 
 static void test_rpc(void) {

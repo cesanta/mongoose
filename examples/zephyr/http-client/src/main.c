@@ -42,12 +42,12 @@ static void fn(struct mg_connection *c, int ev, void *ev_data) {
               "Content-Length: %d\r\n"
               "\r\n",
               s_post_data ? "POST" : "GET", mg_url_uri(s_url), (int) host.len,
-              host.ptr, content_length);
+              host.buf, content_length);
     mg_send(c, s_post_data, content_length);
   } else if (ev == MG_EV_HTTP_MSG) {
     // Response is received. Print it
     struct mg_http_message *hm = (struct mg_http_message *) ev_data;
-    MG_INFO(("%.*s", (int) hm->message.len, hm->message.ptr));
+    MG_INFO(("%.*s", (int) hm->message.len, hm->message.buf));
     c->is_draining = 1;        // Tell mongoose to close this connection
     *(bool *) c->fn_data = true;  // Tell event loop to stop
   } else if (ev == MG_EV_ERROR) {

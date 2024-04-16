@@ -33,12 +33,12 @@ static void cb(struct mg_connection *c, int ev, void *ev_data) {
         while ((pos = mg_http_next_multipart(hm->body, pos, &part)) > 0) {
           char path[MG_PATH_MAX];
           MG_INFO(("Chunk name: [%.*s] filename: [%.*s] length: %lu bytes",
-                   part.name.len, part.name.ptr, part.filename.len,
-                   part.filename.ptr, part.body.len));
+                   part.name.len, part.name.buf, part.filename.len,
+                   part.filename.buf, part.body.len));
           mg_snprintf(path, sizeof(path), "%s/%.*s", s_upload_dir,
-                      part.filename.len, part.filename.ptr);
+                      part.filename.len, part.filename.buf);
           if (mg_path_is_sane(path)) {
-            mg_file_write(&mg_fs_posix, path, part.body.ptr, part.body.len);
+            mg_file_write(&mg_fs_posix, path, part.body.buf, part.body.len);
             total_bytes += part.body.len;
             num_files++;
           } else {
@@ -57,8 +57,8 @@ static void cb(struct mg_connection *c, int ev, void *ev_data) {
     }
 
     // Log request
-    MG_INFO(("%.*s %.*s %lu -> %.*s %lu", hm->method.len, hm->method.ptr,
-             hm->uri.len, hm->uri.ptr, hm->body.len, 3, c->send.buf + 9,
+    MG_INFO(("%.*s %.*s %lu -> %.*s %lu", hm->method.len, hm->method.buf,
+             hm->uri.len, hm->uri.buf, hm->body.len, 3, c->send.buf + 9,
              c->send.len));
   }
 }

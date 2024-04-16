@@ -48,7 +48,7 @@ static void fn(struct mg_connection *c, int ev, void *ev_data) {
       const char *headers = "content-type: text/json\r\n";
       long start = getparam(hm, "$.start");
       long version = getparam(hm, "$.version");
-      MG_DEBUG(("%.*s", (int) hm->body.len, hm->body.ptr));
+      MG_DEBUG(("%.*s", (int) hm->body.len, hm->body.buf));
       if (version > 0 && version != s_version) {
         // Version mismatch: s_data has changed while client fetches it
         // Tell client to restart

@@ -36,15 +36,15 @@ static void broadcast_mjpeg_frame(struct mg_mgr *mgr) {
   struct mg_connection *c;
   for (c = mgr->conns; c != NULL; c = c->next) {
     if (c->data[0] != 'S') continue;  // Skip non-stream connections
-    if (data.ptr == NULL) continue;   // Skip on file read error
+    if (data.buf == NULL) continue;   // Skip on file read error
     mg_printf(c,
               "--foo\r\nContent-Type: image/jpeg\r\n"
               "Content-Length: %lu\r\n\r\n",
               data.len);
-    mg_send(c, data.ptr, data.len);
+    mg_send(c, data.buf, data.len);
     mg_send(c, "\r\n", 2);
   }
-  free((void *) data.ptr);
+  free((void *) data.buf);
 }
 
 static void timer_callback(void *arg) {

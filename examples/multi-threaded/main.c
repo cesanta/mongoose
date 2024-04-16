@@ -33,7 +33,7 @@ static void *thread_function(void *param) {
   struct thread_data *p = (struct thread_data *) param;
   sleep(2);                                 // Simulate long execution
   mg_wakeup(p->mgr, p->conn_id, "hi!", 3);  // Respond to parent
-  free((void *) p->message.ptr);            // Free all resources that were
+  free((void *) p->message.buf);            // Free all resources that were
   free(p);                                  // passed to us
   return NULL;
 }
@@ -56,7 +56,7 @@ static void fn(struct mg_connection *c, int ev, void *ev_data) {
     }
   } else if (ev == MG_EV_WAKEUP) {
     struct mg_str *data = (struct mg_str *) ev_data;
-    mg_http_reply(c, 200, "", "Result: %.*s\n", data->len, data->ptr);
+    mg_http_reply(c, 200, "", "Result: %.*s\n", data->len, data->buf);
   }
 }
 

@@ -627,7 +627,7 @@ static void mg_tls_server_send_cert(struct mg_connection *c) {
   cert[9] = (uint8_t) (((n) >> 8) & 255U);
   cert[10] = (uint8_t) (n & 255U);
   // bytes 11+ are certificate in DER format
-  memmove(cert + 11, tls->server_cert_der.ptr, n);
+  memmove(cert + 11, tls->server_cert_der.buf, n);
   cert[11 + n] = cert[12 + n] = 0;  // certificate extensions (none)
   mg_sha256_update(&tls->sha256, cert, 13 + n);
   mg_tls_encrypt(c, cert, 13 + n, MG_TLS_HANDSHAKE);
@@ -1244,7 +1244,7 @@ static int mg_parse_pem(const struct mg_str pem, const struct mg_str label,
     return -1;
   }
 
-  for (c = caps[2].ptr; c < caps[2].ptr + caps[2].len; c++) {
+  for (c = caps[2].buf; c < caps[2].buf + caps[2].len; c++) {
     if (*c == ' ' || *c == '\n' || *c == '\r' || *c == '\t') {
       continue;
     }
@@ -1255,7 +1255,7 @@ static int mg_parse_pem(const struct mg_str pem, const struct mg_str label,
     free(s);
     return -1;
   }
-  der->ptr = s;
+  der->buf = s;
   der->len = m;
   return 0;
 }
@@ -1283,12 +1283,12 @@ void mg_tls_init(struct mg_connection *c, const struct mg_tls_opts *opts) {
     if (opts->name.len >= sizeof(tls->hostname) - 1) {
       mg_error(c, "hostname too long");
     }
-    strncpy((char *) tls->hostname, opts->name.ptr, sizeof(tls->hostname) - 1);
+    strncpy((char *) tls->hostname, opts->name.buf, sizeof(tls->hostname) - 1);
     tls->hostname[opts->name.len] = 0;
   }
 
   if (c->is_client) {
-    tls->server_cert_der.ptr = NULL;
+    tls->server_cert_der.buf = NULL;
     return;
   }
 
@@ -1300,7 +1300,7 @@ void mg_tls_init(struct mg_connection *c, const struct mg_tls_opts *opts) {
   }
 
   // parse PEM or DER EC key
-  if (opts->key.ptr == NULL) {
+  if (opts->key.buf == NULL) {
     mg_error(c, "certificate provided without a private key");
     return;
   }
@@ -1312,15 +1312,15 @@ void mg_tls_init(struct mg_connection *c, const struct mg_tls_opts *opts) {
     }
     // expect ASN.1 SEQUENCE=[INTEGER=1, BITSTRING of 32 bytes, ...]
     // 30 nn 02 01 01 04 20 [key] ...
-    if (key.ptr[0] != 0x30 || (key.ptr[1] & 0x80) != 0) {
+    if (key.buf[0] != 0x30 || (key.buf[1] & 0x80) != 0) {
       MG_ERROR(("EC private key: ASN.1 bad sequence"));
       return;
     }
-    if (memcmp(key.ptr + 2, "\x02\x01\x01\x04\x20", 5) != 0) {
+    if (memcmp(key.buf + 2, "\x02\x01\x01\x04\x20", 5) != 0) {
       MG_ERROR(("EC private key: ASN.1 bad data"));
     }
-    memmove(tls->server_key, key.ptr + 7, 32);
-    free((void *) key.ptr);
+    memmove(tls->server_key, key.buf + 7, 32);
+    free((void *) key.buf);
   } else if (mg_parse_pem(opts->key, mg_str_s("PRIVATE KEY"), &key) == 0) {
     mg_error(c, "PKCS8 private key format is not supported");
   } else {
@@ -1332,7 +1332,7 @@ void mg_tls_free(struct mg_connection *c) {
   struct tls_data *tls = (struct tls_data *) c->tls;
   if (tls != NULL) {
     mg_iobuf_free(&tls->send);
-    free((void *) tls->server_cert_der.ptr);
+    free((void *) tls->server_cert_der.buf);
   }
   free(c->tls);
   c->tls = NULL;

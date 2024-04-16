@@ -28,7 +28,7 @@ static void handle_uploads(struct mg_connection *c, int ev, void *ev_data) {
     if (mg_match(hm->uri, mg_str("/upload/*"), NULL)) {
       char path[MG_PATH_MAX];
       mg_snprintf(path, sizeof(path), "%s/%.*s", UPLOAD_DIR, hm->uri.len - 8,
-                  hm->uri.ptr + 8);
+                  hm->uri.buf + 8);
       us->expected = hm->body.len;  // Store number of bytes we expect
       mg_iobuf_del(&c->recv, 0, hm->head.len);  // Delete HTTP headers
       c->pfn = NULL;  // Silence HTTP protocol handler, we'll use MG_EV_READ

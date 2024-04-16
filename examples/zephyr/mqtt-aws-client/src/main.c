@@ -40,8 +40,8 @@ static void fn(struct mg_connection *c, int ev, void *ev_data) {
   } else if (ev == MG_EV_MQTT_MSG) {
     // When we receive MQTT message, print it
     struct mg_mqtt_message *mm = (struct mg_mqtt_message *) ev_data;
-    MG_INFO(("Received on %.*s : %.*s", (int) mm->topic.len, mm->topic.ptr,
-             (int) mm->data.len, mm->data.ptr));
+    MG_INFO(("Received on %.*s : %.*s", mm->topic.len, mm->topic.buf,
+             mm->data.len, mm->data.buf));
   } else if (ev == MG_EV_POLL && c->data[0] == 'X') {
     static unsigned long prev_second;
     unsigned long now_second = (*(unsigned long *) ev_data) / 1000;

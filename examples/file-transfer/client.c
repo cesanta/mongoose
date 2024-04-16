@@ -38,7 +38,7 @@ static void fn(struct mg_connection *c, int ev, void *ev_data) {
               "Host: %.*s\r\n"
               "Content-Type: octet-stream\r\n"
               "Content-Length: %d\r\n",
-              mg_url_uri(s_url), (int) host.len, host.ptr, fsize);
+              mg_url_uri(s_url), (int) host.len, host.buf, fsize);
     mg_http_bauth(c, s_user, s_pass);  // Add Basic auth header
     mg_printf(c, "%s", "\r\n");        // End HTTP headers
   } else if (ev == MG_EV_WRITE && c->send.len < MG_IO_SIZE) {
@@ -53,7 +53,7 @@ static void fn(struct mg_connection *c, int ev, void *ev_data) {
     MG_DEBUG(("MSG"));
     // Response is received. Print it
     struct mg_http_message *hm = (struct mg_http_message *) ev_data;
-    printf("%.*s", (int) hm->body.len, hm->body.ptr);
+    printf("%.*s", (int) hm->body.len, hm->body.buf);
     c->is_draining = 1;  // Tell mongoose to close this connection
     mg_fs_close(fd);
     *(bool *) c->fn_data = true;  // Tell event loop to stop

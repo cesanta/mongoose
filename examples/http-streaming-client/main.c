@@ -30,7 +30,7 @@ static void fn(struct mg_connection *c, int ev, void *ev_data) {
               "Connection: close\r\n"
               "Host: %.*s\r\n"
               "\r\n",
-              mg_url_uri(s_url), (int) host.len, host.ptr);
+              mg_url_uri(s_url), (int) host.len, host.buf);
   } else if (ev == MG_EV_READ) {
     // c->data[0] holds a flag, whether we have parsed the request already
     if (c->data[0] == 0) {
