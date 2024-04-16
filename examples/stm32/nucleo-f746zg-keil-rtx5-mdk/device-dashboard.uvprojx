@@ -414,9 +414,9 @@
               <FilePath>.\mongoose.c</FilePath>
             </File>
             <File>
-              <FileName>mongoose_custom.h</FileName>
+              <FileName>mongoose_config.h</FileName>
               <FileType>5</FileType>
-              <FilePath>.\mongoose_custom.h</FilePath>
+              <FilePath>.\mongoose_config.h</FilePath>
             </File>
           </Files>
         </Group>
@@ -865,9 +865,9 @@
               <FilePath>.\mongoose.c</FilePath>
             </File>
             <File>
-              <FileName>mongoose_custom.h</FileName>
+              <FileName>mongoose_config.h</FileName>
               <FileType>5</FileType>
-              <FilePath>.\mongoose_custom.h</FilePath>
+              <FilePath>.\mongoose_config.h</FilePath>
             </File>
           </Files>
         </Group>

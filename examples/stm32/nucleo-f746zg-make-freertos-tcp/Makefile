@@ -28,7 +28,7 @@ CFLAGS += -DSTM32F7xx -Wno-unused-parameter
 # HAL
 CFLAGS += -DSTM32F746xx -Wno-sign-compare -Wno-undef -Wno-shadow -Wno-array-bounds -Wno-error
 
-# Mongoose options are defined in mongoose_custom.h
+# Mongoose options are defined in mongoose_config.h
 SOURCES += mongoose.c net.c packed_fs.c
 
 # Example specific build options. See README.md

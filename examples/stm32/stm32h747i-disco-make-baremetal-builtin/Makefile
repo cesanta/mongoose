@@ -8,7 +8,7 @@ LDFLAGS ?= -Tlink.ld -nostdlib -nostartfiles --specs nano.specs -lc -lgcc -Wl,--
 SOURCES = main.c syscalls.c sysinit.c
 SOURCES += cmsis_h7/Source/Templates/gcc/startup_stm32h747xx.s # ST startup file. Compiler-dependent!
 
-# Mongoose options are defined in mongoose_custom.h
+# Mongoose options are defined in mongoose_config.h
 SOURCES += mongoose.c net.c packed_fs.c
 
 # Example specific build options. See README.md

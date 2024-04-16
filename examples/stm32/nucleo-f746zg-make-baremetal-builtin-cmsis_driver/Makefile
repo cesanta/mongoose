@@ -25,7 +25,7 @@ SOURCES += cmsis_mcu/Drivers/STM32F7xx_HAL_Driver/Src/stm32f7xx_hal_eth.c # HAL 
 SOURCES += cmsis_mcu/Drivers/STM32F7xx_HAL_Driver/Src/stm32f7xx_hal_rcc.c 
 SOURCES += cmsis_mcu/Drivers/CMSIS/Device/ST/STM32F7xx/Source/Templates/gcc/startup_stm32f746xx.s # ST startup file. Compiler-dependent!
 
-# Mongoose options are defined in mongoose_custom.h
+# Mongoose options are defined in mongoose_config.h
 SOURCES += mongoose.c net.c packed_fs.c
 
 # Example specific build options. See README.md

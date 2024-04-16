@@ -521,8 +521,8 @@
       <tvExp>0</tvExp>
       <tvExpOptDlg>0</tvExpOptDlg>
       <bDave2>0</bDave2>
-      <PathWithFileName>.\mongoose_custom.h</PathWithFileName>
-      <FilenameWithoutPath>mongoose_custom.h</FilenameWithoutPath>
+      <PathWithFileName>.\mongoose_config.h</PathWithFileName>
+      <FilenameWithoutPath>mongoose_config.h</FilenameWithoutPath>
       <RteFlg>0</RteFlg>
       <bShared>0</bShared>
     </File>
