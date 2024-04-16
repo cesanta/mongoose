@@ -75,6 +75,7 @@ struct mg_mqtt_opts {
   uint8_t qos;                      // message quality of service
   uint8_t version;                  // Can be 4 (3.1.1), or 5. If 0, assume 4
   uint16_t keepalive;               // Keep-alive timer in seconds
+  uint16_t retransmit_id;           // For PUBLISH, init to 0
   bool retain;                      // Retain flag
   bool clean;                       // Clean session flag
   struct mg_mqtt_prop *props;       // MQTT5 props array
@@ -101,7 +102,7 @@ struct mg_connection *mg_mqtt_connect(struct mg_mgr *, const char *url,
 struct mg_connection *mg_mqtt_listen(struct mg_mgr *mgr, const char *url,
                                      mg_event_handler_t fn, void *fn_data);
 void mg_mqtt_login(struct mg_connection *c, const struct mg_mqtt_opts *opts);
-void mg_mqtt_pub(struct mg_connection *c, const struct mg_mqtt_opts *opts);
+uint16_t mg_mqtt_pub(struct mg_connection *c, const struct mg_mqtt_opts *opts);
 void mg_mqtt_sub(struct mg_connection *, const struct mg_mqtt_opts *opts);
 int mg_mqtt_parse(const uint8_t *, size_t, uint8_t, struct mg_mqtt_message *);
 void mg_mqtt_send_header(struct mg_connection *, uint8_t cmd, uint8_t flags,
