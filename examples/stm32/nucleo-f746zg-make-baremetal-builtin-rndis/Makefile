@@ -22,7 +22,7 @@ CFLAGS += -Itinyusb/src -Itinyusb/lib/networking
 CFLAGS += -DSTM32F746xx
 CFLAGS += -Wno-conversion -Wno-sign-conversion
 
-# Mongoose options are defined in mongoose_custom.h
+# Mongoose options are defined in mongoose_config.h
 SOURCES += mongoose.c 
 
 ifeq ($(OS),Windows_NT)

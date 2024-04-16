@@ -14,7 +14,7 @@ SOURCES += FreeRTOS-Kernel/portable/GCC/ARM_CM4F/port.c
 CFLAGS += -IFreeRTOS-Kernel/include 
 CFLAGS += -IFreeRTOS-Kernel/portable/GCC/ARM_CM4F -Wno-conversion
 
-# Mongoose options are defined in mongoose_custom.h
+# Mongoose options are defined in mongoose_config.h
 SOURCES += mongoose.c net.c packed_fs.c
 
 # Example specific build options. See README.md

@@ -8,7 +8,7 @@ LDFLAGS ?= -Tlink.ld -nostdlib -nostartfiles --specs nano.specs -lc -lgcc -Wl,--
 SOURCES = main.c syscalls.c
 SOURCES += cmsis_g0/Source/Templates/gcc/startup_stm32g031xx.s # ST startup file. Compiler-dependent!
 
-# Mongoose options are defined in mongoose_custom.h
+# Mongoose options are defined in mongoose_config.h
 SOURCES += mongoose.c
 
 # Example specific build options. See README.md
@@ -25,7 +25,7 @@ all build example: firmware.bin
 firmware.bin: firmware.elf
 	arm-none-eabi-objcopy -O binary $< $@
 
-firmware.elf: cmsis_core cmsis_g0 $(SOURCES) hal.h link.ld Makefile mongoose_custom.h
+firmware.elf: cmsis_core cmsis_g0 $(SOURCES) hal.h link.ld Makefile mongoose_config.h
 	arm-none-eabi-gcc $(SOURCES) $(CFLAGS) $(LDFLAGS) -o $@
 
 flash: firmware.bin

@@ -13,7 +13,7 @@ SOURCES += cmsis_mcu/devices/MIMXRT1176/gcc/startup_MIMXRT1176_cm7.S # NXP start
 SOURCES += cmsis_mcu/devices/MIMXRT1176/drivers/fsl_clock.c cmsis_mcu/devices/MIMXRT1176/drivers/fsl_anatop_ai.c cmsis_mcu/devices/MIMXRT1176/drivers/fsl_pmu.c cmsis_mcu/devices/MIMXRT1176/drivers/fsl_dcdc.c cmsis_mcu/devices/MIMXRT1176/drivers/fsl_common_arm.c # NXP support files
 CFLAGS += -D__ATOLLIC__ -D__STARTUP_CLEAR_BSS	# Make startup code work as expected
 
-# Mongoose options are defined in mongoose_custom.h
+# Mongoose options are defined in mongoose_config.h
 SOURCES += mongoose.c net.c packed_fs.c
 
 # Example specific build options. See README.md

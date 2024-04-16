@@ -14,7 +14,7 @@ SOURCES += FreeRTOS-Kernel/portable/GCC/ARM_CM4F/port.c
 CFLAGS += -IFreeRTOS-Kernel/include 
 CFLAGS += -IFreeRTOS-Kernel/portable/GCC/ARM_CM4F -Wno-conversion
 
-# Mongoose options are defined in mongoose_custom.h
+# Mongoose options are defined in mongoose_config.h
 SOURCES += mongoose.c net.c packed_fs.c
 
 # Example specific build options. See README.md
@@ -31,7 +31,7 @@ all build example: firmware.bin
 firmware.bin: firmware.elf
 	arm-none-eabi-objcopy -O binary $< $@
 
-firmware.elf: FreeRTOS-Kernel cmsis_core cmsis_h7 $(SOURCES) hal.h link.ld mongoose_custom.h
+firmware.elf: FreeRTOS-Kernel cmsis_core cmsis_h7 $(SOURCES) hal.h link.ld mongoose_config.h
 	arm-none-eabi-gcc $(SOURCES) $(wildcard FreeRTOS-Kernel/*.c) $(CFLAGS) $(LDFLAGS) -o $@
 
 flash: firmware.bin

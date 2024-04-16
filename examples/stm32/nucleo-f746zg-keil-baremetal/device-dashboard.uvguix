@@ -3641,7 +3641,7 @@
         <PaneID>0</PaneID>
       </Doc>
       <Doc>
-        <Name>C:\Users\scaprile\mongoose\examples\stm32\nucleo-f746zg-keil-baremetal\mongoose_custom.h</Name>
+        <Name>C:\Users\scaprile\mongoose\examples\stm32\nucleo-f746zg-keil-baremetal\mongoose_config.h</Name>
         <ColumnNumber>0</ColumnNumber>
         <TopLine>1</TopLine>
         <CurrentLine>15</CurrentLine>

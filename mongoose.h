@@ -27,7 +27,7 @@ extern "C" {
 #endif
 
 
-#define MG_ARCH_CUSTOM 0        // User creates its own mongoose_custom.h
+#define MG_ARCH_CUSTOM 0        // User creates its own mongoose_config.h
 #define MG_ARCH_UNIX 1          // Linux, BSD, Mac, ...
 #define MG_ARCH_WIN32 2         // Windows
 #define MG_ARCH_ESP32 3         // ESP32
@@ -67,7 +67,7 @@ extern "C" {
 #endif  // !defined(MG_ARCH)
 
 #if !defined(MG_ARCH) || (MG_ARCH == MG_ARCH_CUSTOM)
-#include "mongoose_custom.h"  // keep this include
+#include "mongoose_config.h"  // keep this include
 #endif
 
 #if !defined(MG_ARCH)
