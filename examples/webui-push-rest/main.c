@@ -40,7 +40,7 @@ static size_t printdata(mg_pfn_t out, void *ptr, va_list *ap) {
 static void fn(struct mg_connection *c, int ev, void *ev_data) {
   if (ev == MG_EV_HTTP_MSG) {
     struct mg_http_message *hm = ev_data;
-    if (mg_http_match_uri(hm, "/api/data")) {
+    if (mg_match(hm->uri, mg_str("/api/data"), NULL)) {
       long version = getparam(hm, "$.version");
       if (version > 0 && version == s_version) {
         // Version match: no changes

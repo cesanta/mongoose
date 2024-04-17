@@ -630,35 +630,35 @@ static void eh1(struct mg_connection *c, int ev, void *ev_data) {
     struct mg_http_message *hm = (struct mg_http_message *) ev_data;
     MG_INFO(("[%.*s %.*s] message len %d", (int) hm->method.len, hm->method.buf,
              (int) hm->uri.len, hm->uri.buf, (int) hm->message.len));
-    if (mg_http_match_uri(hm, "/foo/*")) {
+    if (mg_match(hm->uri, mg_str("/foo/*"), NULL)) {
       mg_http_reply(c, 200, "", "uri: %.*s", hm->uri.len - 5, hm->uri.buf + 5);
-    } else if (mg_http_match_uri(hm, "/ws")) {
+    } else if (mg_match(hm->uri, mg_str("/ws"), NULL)) {
       mg_ws_upgrade(c, hm, NULL);
-    } else if (mg_http_match_uri(hm, "/body")) {
+    } else if (mg_match(hm->uri, mg_str("/body"), NULL)) {
       mg_http_reply(c, 200, "", "%.*s", (int) hm->body.len, hm->body.buf);
-    } else if (mg_http_match_uri(hm, "/bar")) {
+    } else if (mg_match(hm->uri, mg_str("/bar"), NULL)) {
       mg_http_reply(c, 404, "", "not found");
-    } else if (mg_http_match_uri(hm, "/no_reason")) {
+    } else if (mg_match(hm->uri, mg_str("/no_reason"), NULL)) {
       mg_printf(c, "%s", "HTTP/1.0 200\r\nContent-Length: 2\r\n\r\nok");
-    } else if (mg_http_match_uri(hm, "/badroot")) {
+    } else if (mg_match(hm->uri, mg_str("/badroot"), NULL)) {
       struct mg_http_serve_opts sopts;
       memset(&sopts, 0, sizeof(sopts));
       sopts.root_dir = "/BAAADDD!";
       mg_http_serve_dir(c, hm, &sopts);
-    } else if (mg_http_match_uri(hm, "/creds")) {
+    } else if (mg_match(hm->uri, mg_str("/creds"), NULL)) {
       char user[100], pass[100];
       mg_http_creds(hm, user, sizeof(user), pass, sizeof(pass));
       mg_http_reply(c, 200, "", "[%s]:[%s]", user, pass);
-    } else if (mg_http_match_uri(hm, "/upload")) {
+    } else if (mg_match(hm->uri, mg_str("/upload"), NULL)) {
       mg_http_upload(c, hm, &mg_fs_posix, ".", 99999);
       c->is_hexdumping = 1;
-    } else if (mg_http_match_uri(hm, "/test/")) {
+    } else if (mg_match(hm->uri, mg_str("/test/"), NULL)) {
       struct mg_http_serve_opts sopts;
       memset(&sopts, 0, sizeof(sopts));
       sopts.root_dir = ".";
       sopts.extra_headers = "A: B\r\nC: D\r\n";
       mg_http_serve_dir(c, hm, &sopts);
-    } else if (mg_http_match_uri(hm, "/servefile")) {
+    } else if (mg_match(hm->uri, mg_str("/servefile"), NULL)) {
       struct mg_http_serve_opts sopts;
       memset(&sopts, 0, sizeof(sopts));
       sopts.mime_types = "foo=a/b,txt=c/d";
@@ -1116,13 +1116,13 @@ static void h4(struct mg_connection *c, int ev, void *ev_data) {
     struct mg_http_message *hm = (struct mg_http_message *) ev_data;
     MG_INFO(("[%.*s %.*s] message len %d", (int) hm->method.len, hm->method.buf,
              (int) hm->uri.len, hm->uri.buf, (int) hm->message.len));
-    if (mg_http_match_uri(hm, "/a/#")) {
+    if (mg_match(hm->uri, mg_str("/a/#"), NULL)) {
       struct mg_http_serve_opts opts;
       memset(&opts, 0, sizeof(opts));
       opts.root_dir = "/a=./test/data";
       opts.page404 = "./test/data/404.html";  // existing 404 page
       mg_http_serve_dir(c, hm, &opts);
-    } else if (mg_http_match_uri(hm, "/b/#")) {
+    } else if (mg_match(hm->uri, mg_str("/b/#"), NULL)) {
       struct mg_http_serve_opts opts;
       memset(&opts, 0, sizeof(opts));
       opts.root_dir = "/b=./test/data";
@@ -2343,7 +2343,7 @@ static void test_crc32(void) {
 
 static void us(struct mg_connection *c, int ev, void *ev_data) {
   struct mg_http_message *hm = (struct mg_http_message *) ev_data;
-  if (ev == MG_EV_HTTP_MSG && mg_http_match_uri(hm, "/upload")) {
+  if (ev == MG_EV_HTTP_MSG && mg_match(hm->uri, mg_str("/upload"), NULL)) {
     MG_DEBUG(("Got all %lu bytes!", (unsigned long) hm->body.len));
     MG_DEBUG(("Query string: [%.*s]", (int) hm->query.len, hm->query.buf));
     // MG_DEBUG(("Body:\n%.*s", (int) hm->body.len, hm->body.buf));

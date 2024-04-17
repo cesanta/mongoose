@@ -914,10 +914,6 @@ struct mg_str mg_http_get_header_var(struct mg_str s, struct mg_str v) {
   return mg_str_n(NULL, 0);
 }
 
-bool mg_http_match_uri(const struct mg_http_message *hm, const char *glob) {
-  return mg_match(hm->uri, mg_str(glob), NULL);
-}
-
 long mg_http_upload(struct mg_connection *c, struct mg_http_message *hm,
                     struct mg_fs *fs, const char *dir, size_t max_size) {
   char buf[20] = "0", file[MG_PATH_MAX], path[MG_PATH_MAX];
@@ -1079,11 +1075,11 @@ static void http_cb(struct mg_connection *c, int ev, void *ev_data) {
 static void mg_hfn(struct mg_connection *c, int ev, void *ev_data) {
   if (ev == MG_EV_HTTP_MSG) {
     struct mg_http_message *hm = (struct mg_http_message *) ev_data;
-    if (mg_http_match_uri(hm, "/quit")) {
+    if (mg_match(hm->uri, mg_str("/quit"), NULL)) {
       mg_http_reply(c, 200, "", "ok\n");
       c->is_draining = 1;
       c->data[0] = 'X';
-    } else if (mg_http_match_uri(hm, "/debug")) {
+    } else if (mg_match(hm->uri, mg_str("/debug"), NULL)) {
       int level = (int) mg_json_get_long(hm->body, "$.level", MG_LL_DEBUG);
       mg_log_set(level);
       mg_http_reply(c, 200, "", "Debug level set to %d\n", level);

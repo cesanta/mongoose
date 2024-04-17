@@ -282,23 +282,23 @@ static void fn(struct mg_connection *c, int ev, void *ev_data) {
     struct mg_http_message *hm = (struct mg_http_message *) ev_data;
     struct user *u = authenticate(hm);
 
-    if (mg_http_match_uri(hm, "/api/#") && u == NULL) {
+    if (mg_match(hm->uri, mg_str("/api/#"), NULL) && u == NULL) {
       mg_http_reply(c, 403, "", "Not Authorised\n");
-    } else if (mg_http_match_uri(hm, "/api/login")) {
+    } else if (mg_match(hm->uri, mg_str("/api/login"), NULL)) {
       handle_login(c, u);
-    } else if (mg_http_match_uri(hm, "/api/logout")) {
+    } else if (mg_match(hm->uri, mg_str("/api/logout"), NULL)) {
       handle_logout(c);
-    } else if (mg_http_match_uri(hm, "/api/debug")) {
+    } else if (mg_match(hm->uri, mg_str("/api/debug"), NULL)) {
       handle_debug(c, hm);
-    } else if (mg_http_match_uri(hm, "/api/stats/get")) {
+    } else if (mg_match(hm->uri, mg_str("/api/stats/get"), NULL)) {
       handle_stats_get(c);
-    } else if (mg_http_match_uri(hm, "/api/events/get")) {
+    } else if (mg_match(hm->uri, mg_str("/api/events/get"), NULL)) {
       handle_events_get(c);
-    } else if (mg_http_match_uri(hm, "/api/devices/get")) {
+    } else if (mg_match(hm->uri, mg_str("/api/devices/get"), NULL)) {
       handle_devices_get(c);
-    } else if (mg_http_match_uri(hm, "/api/dhcp/get")) {
+    } else if (mg_match(hm->uri, mg_str("/api/dhcp/get"), NULL)) {
       handle_dhcp_get(c);
-    } else if (mg_http_match_uri(hm, "/api/dhcp/set")) {
+    } else if (mg_match(hm->uri, mg_str("/api/dhcp/set"), NULL)) {
       handle_dhcp_set(c, hm->body);
     } else {
       struct mg_http_serve_opts opts;

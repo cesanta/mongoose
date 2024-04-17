@@ -47,14 +47,14 @@ void fn(struct mg_connection *c, int ev, void *ev_data) {
   if (ev == MG_EV_HTTP_MSG) {
     struct mg_http_message *hm = (struct mg_http_message *) ev_data;
     struct user *u = getuser(hm);
-    if (u == NULL && mg_http_match_uri(hm, "/api/#")) {
+    if (u == NULL && mg_match(hm->uri, mg_str("/api/#"), NULL)) {
       // All URIs starting with /api/ must be authenticated
       mg_http_reply(c, 403, "", "Denied\n");
-    } else if (mg_http_match_uri(hm, "/api/data")) {
+    } else if (mg_match(hm->uri, mg_str("/api/data"), NULL)) {
       mg_http_reply(c, 200, "Content-Type: application/json\r\n",
                     "{%m:%m,%m:%m}\n", MG_ESC("text"), MG_ESC("Hello!"),
                     MG_ESC("data"), MG_ESC("somedata"));
-    } else if (mg_http_match_uri(hm, "/api/login")) {
+    } else if (mg_match(hm->uri, mg_str("/api/login"), NULL)) {
       mg_http_reply(c, 200, "Content-Type: application/json\r\n",
                     "{%m:%m,%m:%m}\n", MG_ESC("user"), MG_ESC(u->name),
                     MG_ESC("token"), MG_ESC(u->token));

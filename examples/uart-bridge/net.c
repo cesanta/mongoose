@@ -198,13 +198,13 @@ void uart_bridge_fn(struct mg_connection *c, int ev, void *ev_data) {
     // mg_log_set(MG_LL_DEBUG);                  // Set log level
   } else if (ev == MG_EV_HTTP_MSG) {
     struct mg_http_message *hm = (struct mg_http_message *) ev_data;
-    if (mg_http_match_uri(hm, "/api/hi")) {
+    if (mg_match(hm->uri, mg_str("/api/hi"), NULL)) {
       mg_http_reply(c, 200, "", "hi\n");  // Testing endpoint
-    } else if (mg_http_match_uri(hm, "/api/config/set")) {
+    } else if (mg_match(hm->uri, mg_str("/api/config/set"), NULL)) {
       config_apply(hm->body);
       config_write(hm->body);
       mg_http_reply(c, 200, "", "true\n");
-    } else if (mg_http_match_uri(hm, "/api/config/get")) {
+    } else if (mg_match(hm->uri, mg_str("/api/config/get"), NULL)) {
       mg_http_reply(c, 200, "Content-Type: application/json\r\n",
                     "{%m:{%m:%m,%m:%s},%m:{%m:%m,%m:%s},%m:{%m:%m,%m:%s},"
                     "%m:%d,%m:%d,%m:%d}\n",

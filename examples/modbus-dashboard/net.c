@@ -253,15 +253,15 @@ static void fn(struct mg_connection *c, int ev, void *ev_data) {
   } else if (ev == MG_EV_HTTP_MSG) {
     struct mg_http_message *hm = (struct mg_http_message *) ev_data;
 
-    if (mg_http_match_uri(hm, "/api/settings/get")) {
+    if (mg_match(hm->uri, mg_str("/api/settings/get"), NULL)) {
       handle_settings_get(c);
-    } else if (mg_http_match_uri(hm, "/api/settings/set")) {
+    } else if (mg_match(hm->uri, mg_str("/api/settings/set"), NULL)) {
       handle_settings_set(c, hm->body);
-    } else if (mg_http_match_uri(hm, "/api/settings/set")) {
+    } else if (mg_match(hm->uri, mg_str("/api/settings/set"), NULL)) {
       handle_settings_set(c, hm->body);
-    } else if (mg_http_match_uri(hm, "/api/modbus/exec")) {
+    } else if (mg_match(hm->uri, mg_str("/api/modbus/exec"), NULL)) {
       handle_modbus_exec(c, hm->body);
-    } else if (mg_http_match_uri(hm, "/api/device/reset")) {
+    } else if (mg_match(hm->uri, mg_str("/api/device/reset"), NULL)) {
       mg_timer_add(c->mgr, 500, 0, (void (*)(void *)) mg_device_reset, NULL);
       mg_http_reply(c, 200, s_json_header, "true\n");
     } else {

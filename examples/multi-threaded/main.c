@@ -42,7 +42,7 @@ static void *thread_function(void *param) {
 static void fn(struct mg_connection *c, int ev, void *ev_data) {
   if (ev == MG_EV_HTTP_MSG) {
     struct mg_http_message *hm = (struct mg_http_message *) ev_data;
-    if (mg_http_match_uri(hm, "/fast")) {
+    if (mg_match(hm->uri, mg_str("/fast"), NULL)) {
       // Single-threaded code path, for performance comparison
       // The /fast URI responds immediately
       mg_http_reply(c, 200, "Host: foo.com\r\n", "hi\n");

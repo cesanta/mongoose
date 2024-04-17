@@ -32,7 +32,7 @@ static void simple_http_listener(struct mg_connection *c, int ev, void *ev_data)
     struct mg_http_message *hm = (struct mg_http_message *) ev_data;
 
     // If the requested URI is "/api/hi", send a simple JSON response back
-    if (mg_http_match_uri(hm, "/api/hi")) {
+    if (mg_match(hm->uri, mg_str("/api/hi"), NULL)) {
       // Use mg_http_reply() API function to generate JSON response. It adds a
       // Content-Length header automatically. In the response, we show
       // the requested URI and HTTP body:

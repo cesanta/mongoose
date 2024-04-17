@@ -33,7 +33,7 @@ static void fn(struct mg_connection *c, int ev, void *ev_data) {
     c->data[0] = 'W';  // Mark this connection as an established WS client
   } else if (ev == MG_EV_HTTP_MSG) {
     struct mg_http_message *hm = (struct mg_http_message *) ev_data;
-    if (mg_http_match_uri(hm, "/websocket")) {
+    if (mg_match(hm->uri, mg_str("/websocket"), NULL)) {
       // Upgrade to websocket. From now on, a connection is a full-duplex
       // Websocket connection, which will receive MG_EV_WS_MSG events.
       mg_ws_upgrade(c, hm, NULL);
