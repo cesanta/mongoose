@@ -10326,7 +10326,7 @@ static int mg_tls_client_recv_cert(struct mg_connection *c) {
       return -1;
     }
     if (mg_der_to_tlv(oid.value + oid.len,
-                      (size_t) (cert + certsz - oid.value - oid.len),
+                      (size_t) (cert + certsz - (oid.value + oid.len)),
                       &pubkey) < 0) {
       mg_error(c, "certificate secp256r1 public key not found");
       return -1;
@@ -10348,7 +10348,7 @@ static int mg_tls_client_recv_cert(struct mg_connection *c) {
       return -1;
     }
     if (mg_der_to_tlv(oid.value + oid.len,
-                      (size_t) (cert + certsz - oid.value - oid.len),
+                      (size_t) (cert + certsz - (oid.value + oid.len)),
                       &seq) < 0) {
       mg_error(c, "certificate subject alternative names not found");
       return -1;
@@ -10371,7 +10371,7 @@ static int mg_tls_client_recv_cert(struct mg_connection *c) {
         subj_match = 1;
         break;
       }
-      seq.len = (uint32_t) (seq.len - (subj.value + subj.len - seq.value));
+      seq.len = (uint32_t) (seq.value + seq.len - (subj.value + subj.len));
       seq.value = subj.value + subj.len;
     }
     if (!subj_match) {
