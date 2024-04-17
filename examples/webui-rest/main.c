@@ -16,10 +16,10 @@ static const char *s_root_dir = "web_root";
 static void fn(struct mg_connection *c, int ev, void *ev_data) {
   if (ev == MG_EV_HTTP_MSG) {
     struct mg_http_message *hm = (struct mg_http_message *) ev_data;
-    if (mg_http_match_uri(hm, "/api/f1")) {
+    if (mg_match(hm->uri, mg_str("/api/f1"), NULL)) {
       mg_http_reply(c, 200, "Content-Type: application/json\r\n", "{%m:%d}\n",
                     MG_ESC("result"), 123);
-    } else if (mg_http_match_uri(hm, "/api/sum")) {
+    } else if (mg_match(hm->uri, mg_str("/api/sum"), NULL)) {
       // Attempt to fetch a JSON array from the body, hm->body
       struct mg_str json = hm->body;
       double num1, num2;

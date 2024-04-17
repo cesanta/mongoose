@@ -46,13 +46,13 @@ static void fn(struct mg_connection *c, int ev, void *ev_data) {
   struct mg_tcpip_if *ifp = (struct mg_tcpip_if *) c->fn_data;
   if (ev == MG_EV_HTTP_MSG) {
     struct mg_http_message *hm = (struct mg_http_message *) ev_data;
-    if (mg_http_match_uri(hm, "/api/hello")) {  // Request to /api/hello
+    if (mg_match(hm->uri, mg_str("/api/hello"), NULL)) {  // Request to /api/hello
       mg_http_reply(c, 200, "", "{%m:%u,%m:%u,%m:%u,%m:%u,%m:%u}\n",
                     MG_ESC("eth"), ifp->state, MG_ESC("frames_received"),
                     ifp->nrecv, MG_ESC("frames_sent"), ifp->nsent,
                     MG_ESC("frames_dropped"), ifp->ndrop,
                     MG_ESC("interface_errors"), ifp->nerr);
-    } else if (mg_http_match_uri(hm, "/")) {  // Index page
+    } else if (mg_match(hm->uri, mg_str("/"), NULL)) {  // Index page
       mg_http_reply(
           c, 200, "", "%s",
           "<html><head><link rel='icon' href='data:;base64,='></head><body>"

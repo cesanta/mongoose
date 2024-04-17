@@ -9,7 +9,7 @@
 static void cb(struct mg_connection *c, int ev, void *ev_data) {
   if (ev == MG_EV_HTTP_MSG) {
     struct mg_http_message *hm = (struct mg_http_message *) ev_data;
-    if (mg_http_match_uri(hm, "/upload")) {
+    if (mg_match(hm->uri, mg_str("/upload"), NULL)) {
       mg_http_upload(c, hm, &mg_fs_posix, "/tmp", 99999);
     } else {
       struct mg_http_serve_opts opts = {.root_dir = "web_root"};

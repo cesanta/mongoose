@@ -64,7 +64,7 @@ static bool usb_up(struct mg_tcpip_if *ifp) {
 static void fn(struct mg_connection *c, int ev, void *ev_data) {
   if (ev == MG_EV_HTTP_MSG) {
     struct mg_http_message *hm = (struct mg_http_message *) ev_data;
-    if (mg_http_match_uri(hm, "/api/debug")) {
+    if (mg_match(hm->uri, mg_str("/api/debug"), NULL)) {
       int level = mg_json_get_long(hm->body, "$.level", MG_LL_DEBUG);
       mg_log_set(level);
       mg_http_reply(c, 200, "", "Debug level set to %d\n", level);

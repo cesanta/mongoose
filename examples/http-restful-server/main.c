@@ -68,7 +68,7 @@ static void fn(struct mg_connection *c, int ev, void *ev_data) {
   }
   if (ev == MG_EV_HTTP_MSG) {
     struct mg_http_message *hm = (struct mg_http_message *) ev_data;
-    if (mg_http_match_uri(hm, "/api/stats")) {
+    if (mg_match(hm->uri, mg_str("/api/stats"), NULL)) {
       // Print some statistics about currently established connections
       mg_printf(c, "HTTP/1.1 200 OK\r\nTransfer-Encoding: chunked\r\n\r\n");
       mg_http_printf_chunk(c, "ID PROTO TYPE      LOCAL           REMOTE\n");
@@ -81,7 +81,7 @@ static void fn(struct mg_connection *c, int ev, void *ev_data) {
                              mg_print_ip, &t->loc, mg_print_ip, &t->rem);
       }
       mg_http_printf_chunk(c, "");  // Don't forget the last empty chunk
-    } else if (mg_http_match_uri(hm, "/api/f2/*")) {
+    } else if (mg_match(hm->uri, mg_str("/api/f2/*"), NULL)) {
       mg_http_reply(c, 200, "", "{\"result\": \"%.*s\"}\n", (int) hm->uri.len,
                     hm->uri.buf);
     } else {

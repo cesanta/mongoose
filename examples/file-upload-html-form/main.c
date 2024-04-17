@@ -21,7 +21,7 @@ static void cb(struct mg_connection *c, int ev, void *ev_data) {
     struct mg_http_message *hm = (struct mg_http_message *) ev_data;
     MG_INFO(("New request to: [%.*s], body size: %lu", (int) hm->uri.len,
              hm->uri.buf, (unsigned long) hm->body.len));
-    if (mg_http_match_uri(hm, "/upload")) {
+    if (mg_match(hm->uri, mg_str("/upload"), NULL)) {
       struct mg_http_part part;
       size_t ofs = 0;
       while ((ofs = mg_http_next_multipart(hm->body, ofs, &part)) > 0) {

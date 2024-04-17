@@ -36,12 +36,12 @@ static void fn(struct mg_connection *c, int ev, void *ev_data) {
     s_config.sub = strdup(MQTT_SUBSCRIBE_TOPIC);
   } else if (ev == MG_EV_HTTP_MSG) {
     struct mg_http_message *hm = (struct mg_http_message *) ev_data;
-    if (mg_http_match_uri(hm, "/api/config/get")) {
+    if (mg_match(hm->uri, mg_str("/api/config/get"), NULL)) {
       mg_http_reply(c, 200, "Content-Type: application/json\r\n",
                     "{%m:%m,%m:%m,%m:%m}\n", MG_ESC("url"),
                     MG_ESC(s_config.url), MG_ESC("pub"), MG_ESC(s_config.pub),
                     MG_ESC("sub"), MG_ESC(s_config.sub));
-    } else if (mg_http_match_uri(hm, "/api/config/set")) {
+    } else if (mg_match(hm->uri, mg_str("/api/config/set"), NULL)) {
       struct mg_str json = hm->body;
       update_config(json, "$.url", &s_config.url);
       update_config(json, "$.pub", &s_config.pub);

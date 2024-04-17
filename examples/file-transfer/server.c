@@ -40,7 +40,7 @@ static void handle_uploads(struct mg_connection *c, int ev, void *ev_data) {
   // HTTP headers but not necessarily full HTTP body
   if (ev == MG_EV_HTTP_HDRS) {
     struct mg_http_message *hm = (struct mg_http_message *) ev_data;
-    if (mg_http_match_uri(hm, "/upload/#")) {
+    if (mg_match(hm->uri, mg_str("/upload/#"), NULL)) {
       c->pfn = NULL;  // Silence HTTP protocol handler, we'll take over
       if (!authuser(hm)) {
         mg_http_reply(c, 403, "", "Denied\n");
