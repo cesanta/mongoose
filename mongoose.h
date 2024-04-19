@@ -48,21 +48,6 @@ extern "C" {
 #define MG_ARCH MG_ARCH_UNIX
 #elif defined(_WIN32)
 #define MG_ARCH MG_ARCH_WIN32
-#elif defined(ICACHE_FLASH) || defined(ICACHE_RAM_ATTR)
-#define MG_ARCH MG_ARCH_ESP8266
-#elif defined(__ZEPHYR__)
-#define MG_ARCH MG_ARCH_ZEPHYR
-#elif defined(ESP_PLATFORM)
-#define MG_ARCH MG_ARCH_ESP32
-#elif defined(FREERTOS_IP_H)
-#define MG_ARCH MG_ARCH_FREERTOS
-#define MG_ENABLE_FREERTOS_TCP 1
-#elif defined(AZURE_RTOS_THREADX)
-#define MG_ARCH MG_ARCH_AZURERTOS
-#elif defined(PICO_TARGET_NAME)
-#define MG_ARCH MG_ARCH_RP2040
-#elif defined(__RTTHREAD__)
-#define MG_ARCH MG_ARCH_RTTHREAD
 #endif
 #endif  // !defined(MG_ARCH)
 
@@ -71,7 +56,7 @@ extern "C" {
 #endif
 
 #if !defined(MG_ARCH)
-#error "MG_ARCH is not specified and we couldn't guess it. Set -D MG_ARCH=..."
+#error "MG_ARCH is not specified and we couldn't guess it. Define MG_ARCH=... in your compiler"
 #endif
 
 // http://esr.ibiblio.org/?p=5095
