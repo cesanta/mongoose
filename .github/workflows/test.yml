@@ -1,4 +1,4 @@
-name: original workflow, updated
+name: original workflow, outdated # *** YES, OUTDATED *** kept for hystorical/reference purposes, attachment, etc.
 on:
   workflow_dispatch:
 env:

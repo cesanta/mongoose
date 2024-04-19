@@ -123,13 +123,12 @@ int LLVMFuzzerTestOneInput(const uint8_t *data, size_t size) {
 int main(int argc, char *argv[]) {
   int res = EXIT_FAILURE;
   if (argc > 1) {
-    size_t len = 0;
-    char *buf = mg_file_read(&mg_fs_posix, argv[1], &len);
-    if (buf != NULL) {
-      LLVMFuzzerTestOneInput((uint8_t *) buf, len);
+    struct mg_str data = mg_file_read(&mg_fs_posix, argv[1]);
+    if (data.buf != NULL) {
+      LLVMFuzzerTestOneInput((uint8_t *) data.buf, data.len);
       res = EXIT_SUCCESS;
     }
-    free(buf);
+    free(data.buf);
   }
   return res;
 }
