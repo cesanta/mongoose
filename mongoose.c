@@ -17217,7 +17217,6 @@ static bool mg_tcpip_driver_xmc_up(struct mg_tcpip_if *ifp) {
     MG_DEBUG(("Link is %uM %s-duplex", speed == MG_PHY_SPEED_10M ? 10 : 100,
               full_duplex ? "full" : "half"));
   }
-  (void) d;
   return up;
 }
 
