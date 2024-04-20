@@ -652,21 +652,21 @@ static void eh1(struct mg_connection *c, int ev, void *ev_data) {
     } else if (mg_match(hm->uri, mg_str("/upload"), NULL)) {
       mg_http_upload(c, hm, &mg_fs_posix, ".", 99999);
       c->is_hexdumping = 1;
-    } else if (mg_match(hm->uri, mg_str("/test/"), NULL)) {
+    } else if (mg_match(hm->uri, mg_str("/dirtest/"), NULL)) {
       struct mg_http_serve_opts sopts;
       memset(&sopts, 0, sizeof(sopts));
       sopts.root_dir = ".";
-      sopts.extra_headers = "A: B\r\nC: D\r\n";
+      sopts.extra_headers = "A: B\r\nE: F\r\n";
       mg_http_serve_dir(c, hm, &sopts);
     } else if (mg_match(hm->uri, mg_str("/servefile"), NULL)) {
       struct mg_http_serve_opts sopts;
       memset(&sopts, 0, sizeof(sopts));
       sopts.mime_types = "foo=a/b,txt=c/d";
-      mg_http_serve_file(c, hm, "test/data/a.txt", &sopts);
+      mg_http_serve_file(c, hm, "data/a.txt", &sopts);
     } else {
       struct mg_http_serve_opts sopts;
       memset(&sopts, 0, sizeof(sopts));
-      sopts.root_dir = "./test/data";
+      sopts.root_dir = "./data";
       sopts.ssi_pattern = "#.shtml";
       sopts.extra_headers = "C: D\r\n";
       mg_http_serve_dir(c, hm, &sopts);
@@ -713,10 +713,10 @@ static int fetch(struct mg_mgr *mgr, char *buf, const char *url,
     struct mg_tls_opts opts;
     memset(&opts, 0, sizeof(opts));  // read CA from packed_fs
     opts.name = mg_url_host(url);
-    opts.ca = mg_unpacked("/test/data/ca.pem");
+    opts.ca = mg_unpacked("/data/ca.pem");
     if (strstr(url, "localhost") != NULL) {
       // Local connection, use self-signed certificates
-      opts.ca = mg_unpacked("/test/certs/ca.crt");
+      opts.ca = mg_unpacked("/certs/ca.crt");
       // opts.cert = mg_str(s_tls_cert);
       // opts.key = mg_str(s_tls_key);
     }
@@ -843,6 +843,7 @@ static void test_http_server(void) {
 
   ASSERT(fetch(&mgr, buf, url, "GET /a.txt HTTP/1.0\n\n") == 200);
   ASSERT(cmpbody(buf, "hello\n") == 0);
+  ASSERT(cmpheader(buf, "C", "D"));
 
   // Invalid header: failure
   ASSERT(fetch(&mgr, buf, url, "GET /a.txt HTTP/1.0\nA B\n\n") == 0);
@@ -914,7 +915,7 @@ static void test_http_server(void) {
     char etag[100];
     size_t size = 0;
     time_t mtime = 0;
-    ASSERT(mg_fs_posix.st("./test/data/a.txt", &size, &mtime) != 0);
+    ASSERT(mg_fs_posix.st("./data/a.txt", &size, &mtime) != 0);
     ASSERT(mg_http_etag(etag, sizeof(etag), size, mtime) == etag);
     ASSERT(fetch(&mgr, buf, url, "GET /a.txt HTTP/1.0\nIf-None-Match: %s\n\n",
                  etag) == 304);
@@ -968,7 +969,7 @@ static void test_http_server(void) {
   // ASSERT(cmpbody(buf, "Invalid web root [/BAAADDD!]\n") == 0);
 
   {
-    struct mg_str data = mg_file_read(&mg_fs_posix, "./test/data/ca.pem");
+    struct mg_str data = mg_file_read(&mg_fs_posix, "./data/ca.pem");
     ASSERT(fetch(&mgr, buf, url, "GET /ca.pem HTTP/1.0\r\n\n") == 200);
     ASSERT(cmpbody(buf, data.buf) == 0);
     free((void *) data.buf);
@@ -995,10 +996,13 @@ static void test_http_server(void) {
   }
 
   // Directory listing
-  fetch(&mgr, buf, url, "GET /test/ HTTP/1.0\n\n");
-  ASSERT(fetch(&mgr, buf, url, "GET /test/ HTTP/1.0\n\n") == 200);
-  ASSERT(mg_strstr(mg_str(buf), mg_str(">Index of /test/<")) != NULL);
+  fetch(&mgr, buf, url, "GET /dirtest/ HTTP/1.0\n\n");
+  ASSERT(fetch(&mgr, buf, url, "GET /dirtest/ HTTP/1.0\n\n") == 200);
+  ASSERT(mg_strstr(mg_str(buf), mg_str(">Index of /dirtest/<")) != NULL);
   ASSERT(mg_strstr(mg_str(buf), mg_str(">fuzz.c<")) != NULL);
+  ASSERT(cmpheader(buf, "A", "B"));
+  ASSERT(!cmpheader(buf, "C", "D"));
+  ASSERT(cmpheader(buf, "E", "F"));
 
   {
     // Credentials
@@ -1119,19 +1123,19 @@ static void h4(struct mg_connection *c, int ev, void *ev_data) {
     if (mg_match(hm->uri, mg_str("/a/#"), NULL)) {
       struct mg_http_serve_opts opts;
       memset(&opts, 0, sizeof(opts));
-      opts.root_dir = "/a=./test/data";
-      opts.page404 = "./test/data/404.html";  // existing 404 page
+      opts.root_dir = "/a=./data";
+      opts.page404 = "./data/404.html";  // existing 404 page
       mg_http_serve_dir(c, hm, &opts);
     } else if (mg_match(hm->uri, mg_str("/b/#"), NULL)) {
       struct mg_http_serve_opts opts;
       memset(&opts, 0, sizeof(opts));
-      opts.root_dir = "/b=./test/data";
-      opts.page404 = "./test/data/nooooo.html";  // non-existing 404 page
+      opts.root_dir = "/b=./data";
+      opts.page404 = "./data/nooooo.html";  // non-existing 404 page
       mg_http_serve_dir(c, hm, &opts);
     } else {  // null 404 page
       struct mg_http_serve_opts opts;
       memset(&opts, 0, sizeof(opts));
-      opts.root_dir = "./test/data";
+      opts.root_dir = "./data";
       mg_http_serve_dir(c, hm, &opts);
     }
   }
@@ -1183,8 +1187,8 @@ static void test_tls(void) {
   struct mg_str data = mg_unpacked("/Makefile");
   memset(&opts, 0, sizeof(opts));
   // opts.ca = mg_str(s_tls_ca);
-  opts.cert = mg_unpacked("/test/certs/server.crt");
-  opts.key = mg_unpacked("/test/certs/server.key");
+  opts.cert = mg_unpacked("/certs/server.crt");
+  opts.key = mg_unpacked("/certs/server.key");
   mg_mgr_init(&mgr);
   c = mg_http_listen(&mgr, url, eh1, &opts);
   ASSERT(c != NULL);
@@ -1231,7 +1235,7 @@ static void test_http_client(void) {
   int i, ok = 0;
   struct mg_tls_opts opts;
   memset(&opts, 0, sizeof(opts));
-  opts.ca = mg_unpacked("/test/data/ca.pem");
+  opts.ca = mg_unpacked("/data/ca.pem");
   opts.name = mg_url_host(url);
   ASSERT(opts.ca.len > 0);
   ASSERT(opts.name.len > 0);
@@ -1303,7 +1307,7 @@ static void test_host_validation(void) {
   ok = 0;
   c = mg_http_connect(&mgr, url, f3, &ok);
   ASSERT(c != NULL);
-  opts.ca = mg_unpacked("/test/data/ca.pem");
+  opts.ca = mg_unpacked("/data/ca.pem");
   opts.name = mg_url_host(url);
   mg_tls_init(c, &opts);
   for (i = 0; i < 1500 && ok <= 0; i++) mg_mgr_poll(&mgr, 10);
@@ -1617,7 +1621,7 @@ static void ehr(struct mg_connection *c, int ev, void *ev_data) {
     struct mg_http_message *hm = (struct mg_http_message *) ev_data;
     struct mg_http_serve_opts opts;
     memset(&opts, 0, sizeof(opts));
-    opts.root_dir = "./test/data";
+    opts.root_dir = "./data";
     mg_http_serve_dir(c, hm, &opts);
   }
 }
@@ -2635,8 +2639,8 @@ static void test_packed(void) {
   free((void *) data.buf);
 
   // Load file deeper in the FS tree directly
-  data = mg_file_read(&mg_fs_posix, "src/ssi.h");
-  ASSERT(fetch(&mgr, buf, url, "GET /src/ssi.h HTTP/1.0\n\n") == 200);
+  data = mg_file_read(&mg_fs_posix, "data/ssi.h");
+  ASSERT(fetch(&mgr, buf, url, "GET /data/ssi.h HTTP/1.0\n\n") == 200);
   ASSERT(cmpbody(buf, data.buf) == 0);
   free((void *) data.buf);
 
@@ -2645,8 +2649,8 @@ static void test_packed(void) {
   // printf("--------\n%s\n", buf);
 
   // List nested dir
-  ASSERT(fetch(&mgr, buf, url, "GET /test HTTP/1.0\n\n") == 301);
-  ASSERT(fetch(&mgr, buf, url, "GET /test/ HTTP/1.0\n\n") == 200);
+  ASSERT(fetch(&mgr, buf, url, "GET /data HTTP/1.0\n\n") == 301);
+  ASSERT(fetch(&mgr, buf, url, "GET /data/ HTTP/1.0\n\n") == 200);
   // printf("--------\n%s\n", buf);
 
   mg_mgr_free(&mgr);
@@ -2782,7 +2786,7 @@ static void h7(struct mg_connection *c, int ev, void *ev_data) {
     struct mg_http_message *hm = (struct mg_http_message *) ev_data;
     struct mg_http_serve_opts opts;
     memset(&opts, 0, sizeof(opts));
-    opts.root_dir = "./test/data,/foo=./src";
+    opts.root_dir = "./data,/foo=./dirtest";
     mg_http_serve_dir(c, hm, &opts);
   }
 }

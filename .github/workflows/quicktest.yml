@@ -25,7 +25,7 @@ jobs:
       with: { fetch-depth: 2 }
     - run: if ./test/match_changed_files.sh '^test|^src/.*.[ch]' ; then echo GO=1 >> $GITHUB_ENV ; fi
     - if: ${{ env.GO == 1 }}
-      run: ./test/setup_ga_network.sh && make ${{ matrix.target }}
+      run: ./test/setup_ga_network.sh && make -C test ${{ matrix.target }}
   s390:
     runs-on: ubuntu-latest
     steps:
@@ -33,7 +33,7 @@ jobs:
       with: { fetch-depth: 2 }
     - run: if ./test/match_changed_files.sh '^test|^src/.*.[ch]' ; then echo GO=1 >> $GITHUB_ENV ; fi
     - if: ${{ env.GO == 1 }}
-      run: sudo apt -y update ; sudo apt -y install qemu binfmt-support qemu-user-static && docker run --rm --privileged multiarch/qemu-user-static --reset -p yes && make s390
+      run: sudo apt -y update ; sudo apt -y install qemu binfmt-support qemu-user-static && docker run --rm --privileged multiarch/qemu-user-static --reset -p yes && make -C test s390
   armhf:
     runs-on: ubuntu-latest
     steps:
@@ -41,7 +41,7 @@ jobs:
       with: { fetch-depth: 2 }
     - run: if ./test/match_changed_files.sh '^test|^src/.*.[ch]' ; then echo GO=1 >> $GITHUB_ENV ; fi
     - if: ${{ env.GO == 1 }}
-      run: sudo apt -y update ; sudo apt -y install qemu binfmt-support qemu-user-static && docker run --rm --privileged multiarch/qemu-user-static --reset -p yes && make armhf
+      run: sudo apt -y update ; sudo apt -y install qemu binfmt-support qemu-user-static && docker run --rm --privileged multiarch/qemu-user-static --reset -p yes && make -C test armhf
   unamalgamated-mg_prefix:
     runs-on: ubuntu-latest
     steps:
@@ -49,7 +49,7 @@ jobs:
       with: { fetch-depth: 2 }
     - run: if ./test/match_changed_files.sh '^test|^src/.*.[ch]' ; then echo GO=1 >> $GITHUB_ENV ; fi
     - if: ${{ env.GO == 1 }}
-      run: make unamalgamated && make mg_prefix
+      run: make -C test unamalgamated && make -C test mg_prefix
   macos:
     runs-on: macos-latest
     strategy:
@@ -66,7 +66,7 @@ jobs:
       with: { fetch-depth: 2 }
     - run: if ./test/match_changed_files.sh '^test|^src/.*.[ch]' ; then echo GO=1 >> $GITHUB_ENV ; fi
     - if: ${{ env.GO == 1 }}
-      run:  make test ASAN_OPTIONS=
+      run:  make -C test test ASAN_OPTIONS=
   windows:
     runs-on: ubuntu-latest
     strategy:
@@ -79,24 +79,24 @@ jobs:
       with: { fetch-depth: 2 }
     - run: if ./test/match_changed_files.sh '^test|^src/.*.[ch]' ; then echo GO=1 >> $GITHUB_ENV ; fi
     - if: ${{ env.GO == 1 }}
-      run: make ${{ matrix.target }} 
+      run: make -C test ${{ matrix.target }} 
   arm:
     runs-on: ubuntu-latest
     steps:
     - uses: actions/checkout@v4
-    - run: make arm
+    - run: make -C test arm
   riscv:
     runs-on: ubuntu-latest
     steps:
     - uses: actions/checkout@v4
-    - run: make riscv
+    - run: make -C test riscv
 
   examples:
     runs-on: ubuntu-latest
     steps:
     - uses: actions/checkout@v4
-    - run: make examples_essential
-    - run: make clean_examples_essential
+    - run: make -C test examples_essential
+    - run: make -C test clean_examples_essential
   examples_win:
     runs-on: windows-latest
     steps:
@@ -105,18 +105,18 @@ jobs:
 #      with:
 #        platform: x64
     - name: test they build
-      run: make examples_win
+      run: make -C test examples_win
       shell: cmd
     - name: test they clean
-      run: make clean_examples_win
+      run: make -C test clean_examples_win
       shell: cmd
   examples_mac:
     runs-on: macos-latest
     env: { HOMEBREW_NO_AUTO_UPDATE: 1 }
     steps:
     - uses: actions/checkout@v4
-    - run: make examples_mac
-    - run: make clean_examples_mac
+    - run: make -C test examples_mac
+    - run: make -C test clean_examples_mac
 
 
   generic_examples:

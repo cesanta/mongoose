@@ -33,7 +33,7 @@ jobs:
     steps:
     - uses: actions/checkout@v4
       with: { fetch-depth: 2 }
-    - run: ./test/setup_ga_network.sh && sudo apt -y update ; sudo apt -y install libmbedtls-dev && make ${{ matrix.target }}
+    - run: ./test/setup_ga_network.sh && sudo apt -y update ; sudo apt -y install libmbedtls-dev && make -C test ${{ matrix.target }}
   s390:
     runs-on: ubuntu-latest
     strategy:
@@ -44,7 +44,7 @@ jobs:
     steps:
     - uses: actions/checkout@v4
       with: { fetch-depth: 2 }
-    - run: sudo apt -y update ; sudo apt -y install qemu binfmt-support qemu-user-static && docker run --rm --privileged multiarch/qemu-user-static --reset -p yes && make s390 SSL=${{ matrix.ssl }}
+    - run: sudo apt -y update ; sudo apt -y install qemu binfmt-support qemu-user-static && docker run --rm --privileged multiarch/qemu-user-static --reset -p yes && make -C test s390 SSL=${{ matrix.ssl }}
   armhf:
     runs-on: ubuntu-latest
     strategy:
@@ -55,7 +55,7 @@ jobs:
     steps:
     - uses: actions/checkout@v4
       with: { fetch-depth: 2 }
-    - run: sudo apt -y update ; sudo apt -y install qemu binfmt-support qemu-user-static && docker run --rm --privileged multiarch/qemu-user-static --reset -p yes && make armhf SSL=${{ matrix.ssl }}
+    - run: sudo apt -y update ; sudo apt -y install qemu binfmt-support qemu-user-static && docker run --rm --privileged multiarch/qemu-user-static --reset -p yes && make -C test armhf SSL=${{ matrix.ssl }}
   unamalgamated-mg_prefix:
     runs-on: ubuntu-latest
     strategy:
@@ -67,7 +67,7 @@ jobs:
     - uses: actions/checkout@v4
       with: { fetch-depth: 2 }
     - run: sudo apt -y update ; sudo apt -y install libmbedtls-dev
-    - run: make unamalgamated && make mg_prefix
+    - run: make -C test unamalgamated && make -C test mg_prefix
   valgrind:
     runs-on: ubuntu-latest
     strategy:
@@ -79,7 +79,7 @@ jobs:
     - uses: actions/checkout@v4
       with: { fetch-depth: 2 }
     - run: sudo apt -y update ; sudo apt -y install libmbedtls-dev valgrind
-    - run: make valgrind SSL=${{ matrix.ssl }}
+    - run: make -C test valgrind SSL=${{ matrix.ssl }}
   macos:
     runs-on: macos-latest
     strategy:
@@ -101,7 +101,7 @@ jobs:
     - uses: actions/checkout@v4
       with: { fetch-depth: 2 }
     - run: brew install jq mbedtls openssl
-    - run: make test ASAN_OPTIONS= MBEDTLS=`echo /usr/local/Cellar/mbedtls*/*` OPENSSL=`echo /usr/local/Cellar/openssl*/*`
+    - run: make -C test test ASAN_OPTIONS= MBEDTLS=`echo /usr/local/Cellar/mbedtls*/*` OPENSSL=`echo /usr/local/Cellar/openssl*/*`
   windows:
     runs-on: ubuntu-latest
     strategy:
@@ -121,7 +121,7 @@ jobs:
     steps:
     - uses: actions/checkout@v4
       with: { fetch-depth: 2 }
-    - run: make ${{ matrix.target }} 
+    - run: make -C test ${{ matrix.target }} 
   arm:
     runs-on: ubuntu-latest
     strategy:
@@ -131,7 +131,7 @@ jobs:
     name: Arm SSL=${{ matrix.ssl }}
     steps:
     - uses: actions/checkout@v4
-    - run: make arm SSL=${{ matrix.ssl }}
+    - run: make -C test arm SSL=${{ matrix.ssl }}
   riscv:
     runs-on: ubuntu-latest
     strategy:
@@ -141,7 +141,7 @@ jobs:
     name: RISC-V SSL=${{ matrix.ssl }}
     steps:
     - uses: actions/checkout@v4
-    - run: make riscv SSL=${{ matrix.ssl }}
+    - run: make -C test riscv SSL=${{ matrix.ssl }}
 
   examples:
     runs-on: ubuntu-latest
@@ -153,8 +153,8 @@ jobs:
     steps:
     - uses: actions/checkout@v4
     - run: sudo apt -y install libmbedtls-dev libpcap-dev
-    - run: make examples CFLAGS_EXTRA="${{ matrix.ssl }}"
-    - run: make clean_examples
+    - run: make -C test examples CFLAGS_EXTRA="${{ matrix.ssl }}"
+    - run: make -C test clean_examples
   examples_win:
     runs-on: windows-latest
     strategy:
@@ -168,10 +168,10 @@ jobs:
 #      with:
 #        platform: x64
     - name: test they build
-      run: make examples_win CFLAGS_EXTRA="${{ matrix.ssl }}"
+      run: make -C test examples_win CFLAGS_EXTRA="${{ matrix.ssl }}"
       shell: cmd
     - name: test they clean
-      run: make clean_examples_win
+      run: make -C test clean_examples_win
       shell: cmd
   examples_mac:
     runs-on: macos-latest
@@ -183,8 +183,8 @@ jobs:
     name: examples_mac ${{ matrix.ssl }}
     steps:
     - uses: actions/checkout@v4
-    - run: make examples_mac CFLAGS_EXTRA="${{ matrix.ssl }}"
-    - run: make clean_examples_mac
+    - run: make -C test examples_mac CFLAGS_EXTRA="${{ matrix.ssl }}"
+    - run: make -C test clean_examples_mac
 
 
   arduino:
