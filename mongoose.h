@@ -872,7 +872,7 @@ bool mg_span(struct mg_str s, struct mg_str *a, struct mg_str *b, char delim);
 char *mg_hex(const void *buf, size_t len, char *dst);
 void mg_unhex(const char *buf, size_t len, unsigned char *to);
 unsigned long mg_unhexn(const char *s, size_t len);
-bool mg_path_is_sane(const char *path);
+bool mg_path_is_sane(const struct mg_str path);
 
 
 
@@ -2917,6 +2917,14 @@ struct mg_tcpip_driver_tm4c_data {
 #ifndef MG_DRIVER_MDC_CR
 #define MG_DRIVER_MDC_CR 1
 #endif
+
+#endif
+
+
+#if MG_ENABLE_TCPIP && defined(MG_ENABLE_DRIVER_W5500) && MG_ENABLE_DRIVER_W5500
+
+#undef MG_ENABLE_TCPIP_DRIVER_INIT
+#define MG_ENABLE_TCPIP_DRIVER_INIT 0
 
 #endif
 

@@ -32,7 +32,7 @@ static void handle_uploads(struct mg_connection *c, int ev, void *ev_data) {
       us->expected = hm->body.len;  // Store number of bytes we expect
       mg_iobuf_del(&c->recv, 0, hm->head.len);  // Delete HTTP headers
       c->pfn = NULL;  // Silence HTTP protocol handler, we'll use MG_EV_READ
-      if (mg_path_is_sane(path)) {
+      if (mg_path_is_sane(mg_str(path))) {
         fs->rm(path);                        // Delete file if it exists
         us->fp = fs->op(path, MG_FS_WRITE);  // Open file for writing
       }
