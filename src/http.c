@@ -769,7 +769,7 @@ static int uri_to_path2(struct mg_connection *c, struct mg_http_message *hm,
                   path_size - n, 0);
   }
   path[path_size - 1] = '\0';  // Double-check
-  if (!mg_path_is_sane(path)) {
+  if (!mg_path_is_sane(mg_str_n(path, path_size))) {
     mg_http_reply(c, 400, "", "Invalid path");
     return -1;
   }
@@ -927,7 +927,7 @@ long mg_http_upload(struct mg_connection *c, struct mg_http_message *hm,
   } else if (file[0] == '\0') {
     mg_http_reply(c, 400, "", "file required");
     res = -1;
-  } else if (mg_path_is_sane(file) == false) {
+  } else if (mg_path_is_sane(mg_str(file)) == false) {
     mg_http_reply(c, 400, "", "%s: invalid file", file);
     res = -2;
   } else if (offset < 0) {

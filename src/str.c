@@ -173,11 +173,12 @@ void mg_unhex(const char *buf, size_t len, unsigned char *to) {
   }
 }
 
-bool mg_path_is_sane(const char *path) {
-  const char *s = path;
-  if (path[0] == '.' && path[1] == '.') return false;  // Starts with ..
-  for (; s[0] != '\0'; s++) {
-    if (s[0] == '/' || s[0] == '\\') {               // Subdir?
+bool mg_path_is_sane(const struct mg_str path) {
+  const char *s = path.buf;
+  size_t n = path.len;
+  if (path.buf[0] == '.' && path.buf[1] == '.') return false;  // Starts with ..
+  for (; s[0] != '\0' && n > 0; s++, n--) {
+    if ((s[0] == '/' || s[0] == '\\') && n >= 2) {   // Subdir?
       if (s[1] == '.' && s[2] == '.') return false;  // Starts with ..
     }
   }

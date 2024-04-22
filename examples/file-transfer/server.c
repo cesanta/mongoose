@@ -59,7 +59,7 @@ static void handle_uploads(struct mg_connection *c, int ev, void *ev_data) {
         char fpath[MG_PATH_MAX];
         snprintf(fpath, MG_PATH_MAX, "%s%c", s_upld_dir, MG_DIRSEP);
         strncat(fpath, hm->uri.buf + 8, hm->uri.len - 8);
-        if (!mg_path_is_sane(fpath)) {
+        if (!mg_path_is_sane(mg_str(fpath))) {
           mg_http_reply(c, 400, "", "Invalid path\n");
           c->is_draining = 1;  // Tell mongoose to close this connection
         } else {

@@ -28,4 +28,4 @@ bool mg_span(struct mg_str s, struct mg_str *a, struct mg_str *b, char delim);
 char *mg_hex(const void *buf, size_t len, char *dst);
 void mg_unhex(const char *buf, size_t len, unsigned char *to);
 unsigned long mg_unhexn(const char *s, size_t len);
-bool mg_path_is_sane(const char *path);
+bool mg_path_is_sane(const struct mg_str path);

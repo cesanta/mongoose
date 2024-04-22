@@ -2985,7 +2985,7 @@ static int uri_to_path2(struct mg_connection *c, struct mg_http_message *hm,
                   path_size - n, 0);
   }
   path[path_size - 1] = '\0';  // Double-check
-  if (!mg_path_is_sane(path)) {
+  if (!mg_path_is_sane(mg_str_n(path, path_size))) {
     mg_http_reply(c, 400, "", "Invalid path");
     return -1;
   }
@@ -3143,7 +3143,7 @@ long mg_http_upload(struct mg_connection *c, struct mg_http_message *hm,
   } else if (file[0] == '\0') {
     mg_http_reply(c, 400, "", "file required");
     res = -1;
-  } else if (mg_path_is_sane(file) == false) {
+  } else if (mg_path_is_sane(mg_str(file)) == false) {
     mg_http_reply(c, 400, "", "%s: invalid file", file);
     res = -2;
   } else if (offset < 0) {
@@ -8125,11 +8125,12 @@ void mg_unhex(const char *buf, size_t len, unsigned char *to) {
   }
 }
 
-bool mg_path_is_sane(const char *path) {
-  const char *s = path;
-  if (path[0] == '.' && path[1] == '.') return false;  // Starts with ..
-  for (; s[0] != '\0'; s++) {
-    if (s[0] == '/' || s[0] == '\\') {               // Subdir?
+bool mg_path_is_sane(const struct mg_str path) {
+  const char *s = path.buf;
+  size_t n = path.len;
+  if (path.buf[0] == '.' && path.buf[1] == '.') return false;  // Starts with ..
+  for (; s[0] != '\0' && n > 0; s++, n--) {
+    if ((s[0] == '/' || s[0] == '\\') && n >= 2) {   // Subdir?
       if (s[1] == '.' && s[2] == '.') return false;  // Starts with ..
     }
   }

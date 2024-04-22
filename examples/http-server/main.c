@@ -37,7 +37,7 @@ static void cb(struct mg_connection *c, int ev, void *ev_data) {
                    part.filename.buf, part.body.len));
           mg_snprintf(path, sizeof(path), "%s/%.*s", s_upload_dir,
                       part.filename.len, part.filename.buf);
-          if (mg_path_is_sane(path)) {
+          if (mg_path_is_sane(mg_str(path))) {
             mg_file_write(&mg_fs_posix, path, part.body.buf, part.body.len);
             total_bytes += part.body.len;
             num_files++;
