@@ -174,9 +174,3 @@ static inline void clock_init(void) {
         UUID[6] ^ UUID[7] ^ UUID[8], UUID[9] ^ UUID[10] ^ UUID[11] \
   }
 
-#define MG_TCPIP_DRIVER_INIT(mgr)             \
-    struct mg_tcpip_driver_stm32f_data driver_data = {.mdc_cr = 4};           \
-    struct mg_tcpip_if mif = {.mac = GENERATE_MAC_ADDRESS(),                 \
-                              .driver = &mg_tcpip_driver_stm32f,               \
-                              .driver_data = &driver_data};                   \
-    mg_tcpip_init(&mgr, &mif);
