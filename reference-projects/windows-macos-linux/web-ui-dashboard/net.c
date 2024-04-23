@@ -211,7 +211,7 @@ static void handle_firmware_upload(struct mg_connection *c,
     mg_http_reply(c, 500, "", "offset and total not set\n");
   } else if (ofs == 0 && mg_ota_begin((size_t) tot) == false) {
     mg_http_reply(c, 500, "", "mg_ota_begin(%ld) failed\n", tot);
-  } else if (data.len > 0 && mg_ota_write(data.ptr, data.len) == false) {
+  } else if (data.len > 0 && mg_ota_write(data.buf, data.len) == false) {
     mg_http_reply(c, 500, "", "mg_ota_write(%lu) @%ld failed\n", data.len, ofs);
     mg_ota_end();
   } else if (data.len == 0 && mg_ota_end() == false) {
@@ -274,33 +274,33 @@ static void ev_handler(struct mg_connection *c, int ev, void *ev_data) {
     struct mg_http_message *hm = (struct mg_http_message *) ev_data;
     struct user *u = authenticate(hm);
 
-    if (mg_http_match_uri(hm, "/api/#") && u == NULL) {
+    if (mg_match(hm->uri, mg_str("/api/#"), NULL) && u == NULL) {
       mg_http_reply(c, 403, "", "Not Authorised\n");
-    } else if (mg_http_match_uri(hm, "/api/login")) {
+    } else if (mg_match(hm->uri, mg_str("/api/login"), NULL)) {
       handle_login(c, u);
-    } else if (mg_http_match_uri(hm, "/api/logout")) {
+    } else if (mg_match(hm->uri, mg_str("/api/logout"), NULL)) {
       handle_logout(c);
-    } else if (mg_http_match_uri(hm, "/api/debug")) {
+    } else if (mg_match(hm->uri, mg_str("/api/debug"), NULL)) {
       handle_debug(c, hm);
-    } else if (mg_http_match_uri(hm, "/api/stats/get")) {
+    } else if (mg_match(hm->uri, mg_str("/api/stats/get"), NULL)) {
       handle_stats_get(c);
-    } else if (mg_http_match_uri(hm, "/api/events/get")) {
+    } else if (mg_match(hm->uri, mg_str("/api/events/get"), NULL)) {
       handle_events_get(c, hm);
-    } else if (mg_http_match_uri(hm, "/api/settings/get")) {
+    } else if (mg_match(hm->uri, mg_str("/api/settings/get"), NULL)) {
       handle_settings_get(c);
-    } else if (mg_http_match_uri(hm, "/api/settings/set")) {
+    } else if (mg_match(hm->uri, mg_str("/api/settings/set"), NULL)) {
       handle_settings_set(c, hm->body);
-    } else if (mg_http_match_uri(hm, "/api/firmware/upload")) {
+    } else if (mg_match(hm->uri, mg_str("/api/firmware/upload"), NULL)) {
       handle_firmware_upload(c, hm);
-    } else if (mg_http_match_uri(hm, "/api/firmware/commit")) {
+    } else if (mg_match(hm->uri, mg_str("/api/firmware/commit"), NULL)) {
       handle_firmware_commit(c);
-    } else if (mg_http_match_uri(hm, "/api/firmware/rollback")) {
+    } else if (mg_match(hm->uri, mg_str("/api/firmware/rollback"), NULL)) {
       handle_firmware_rollback(c);
-    } else if (mg_http_match_uri(hm, "/api/firmware/status")) {
+    } else if (mg_match(hm->uri, mg_str("/api/firmware/status"), NULL)) {
       handle_firmware_status(c);
-    } else if (mg_http_match_uri(hm, "/api/device/reset")) {
+    } else if (mg_match(hm->uri, mg_str("/api/device/reset"), NULL)) {
       handle_device_reset(c);
-    } else if (mg_http_match_uri(hm, "/api/device/eraselast")) {
+    } else if (mg_match(hm->uri, mg_str("/api/device/eraselast"), NULL)) {
       handle_device_eraselast(c);
     } else {
       struct mg_http_serve_opts opts;
@@ -310,7 +310,7 @@ static void ev_handler(struct mg_connection *c, int ev, void *ev_data) {
       mg_http_serve_dir(c, ev_data, &opts);
     }
     MG_DEBUG(("%lu %.*s %.*s -> %.*s", c->id, (int) hm->method.len,
-              hm->method.ptr, (int) hm->uri.len, hm->uri.ptr, (int) 3,
+              hm->method.buf, (int) hm->uri.len, hm->uri.buf, (int) 3,
               &c->send.buf[9]));
   }
 }
