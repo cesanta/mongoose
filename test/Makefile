@@ -18,6 +18,11 @@ EXAMPLES_QUICK := $(filter-out ../examples/mip-pcap/ ../examples/micropython/, $
 EXAMPLES_MAC := $(filter-out ../examples/mip-pcap/ ../examples/mip-tap/ ../examples/micropython/, $(EXAMPLES))
 EXAMPLES_WIN := $(dir $(wildcard ../examples/device-dashboard/Makefile) $(wildcard ../examples/file-*/Makefile) $(wildcard ../examples/http-*/Makefile) $(wildcard ../examples/mqtt-*/Makefile) $(wildcard ../examples/websocket-*/Makefile) $(wildcard ../examples/webui-*/Makefile))
 EXAMPLES_EMBEDDED := $(filter-out $(wildcard ../examples/zephyr/*/), $(dir $(wildcard ../examples/*/*/Makefile)))
+REFPROJS := $(dir $(wildcard ../reference-projects/windows-macos-linux/*/Makefile))
+TUTORIALS := $(dir $(wildcard ../tutorials/*/*/Makefile))
+TUTORIALS_QUICK := $(filter-out ../tutorials/tcpip_stack/pcap/ , $(TUTORIALS))
+TUTORIALS_MAC := TUTORIALS
+TUTORIALS_WIN := $(dir $(wildcard ../tutorials/http/file-*/Makefile) $(wildcard ../tutorials/http/http-*/Makefile) $(wildcard ../tutorials/mqtt/mqtt-*/Makefile) $(wildcard ../tutorials/websocket/websocket-*/Makefile) $(wildcard ../tutorials/webui/webui-*/Makefile))
 PREFIX ?= /usr/local
 LIBDIR ?= $(PREFIX)/lib
 INCLUDEDIR ?= $(PREFIX)/include
@@ -64,26 +69,6 @@ mip_test: mip_test.c mongoose.c mongoose.h Makefile mip_tap_test
 mip_tap_test: mip_tap_test.c mongoose.c mongoose.h Makefile
 	$(CC) mip_tap_test.c $(INCS) $(WARN) $(OPTS) $(C_WARN) $(ASAN) -o $@
 	ASAN_OPTIONS=$(ASAN_OPTIONS) $(RUN) ./$@
-
-examples:
-	@for X in $(EXAMPLES); do test -f $$X/Makefile || continue; $(MAKE) -C $$X example || exit 1; done
-clean_examples:
-	for X in $(EXAMPLES); do test -f $$X/Makefile || continue; $(MAKE) -C $$X clean || exit 1; done
-
-examples_essential:
-	@for X in $(EXAMPLES_QUICK); do test -f $$X/Makefile || continue; $(MAKE) -C $$X example || exit 1; done
-clean_examples_essential:
-	for X in $(EXAMPLES_QUICK); do test -f $$X/Makefile || continue; $(MAKE) -C $$X clean || exit 1; done
-
-examples_mac:
-	for X in $(EXAMPLES_MAC); do test -f $$X/Makefile || continue; $(MAKE) -C $$X example || exit 1; done
-clean_examples_mac:
-	for X in $(EXAMPLES_MAC); do test -f $$X/Makefile || continue; $(MAKE) -C $$X clean || exit 1; done
-
-examples_win:
-	$(foreach X, $(EXAMPLES_WIN), $(MAKE) -C $(X) example &)
-clean_examples_win:
-	$(foreach X, $(EXAMPLES_WIN), $(MAKE) -C $(X) clean &)
 
 packed_fs.c: Makefile data/ssi.h fuzz.c data/a.txt data/ca.pem certs/ca.crt certs/server.crt certs/server.key
 	$(CC) $(CFLAGS) pack.c -o pack
@@ -197,9 +182,61 @@ mongoose.h: $(HDRS) Makefile
 	cd .. && (cat src/license.h; echo; echo '#ifndef MONGOOSE_H'; echo '#define MONGOOSE_H'; echo; cat src/version.h ; echo; echo '#ifdef __cplusplus'; echo 'extern "C" {'; echo '#endif'; cat src/arch.h src/arch_*.h src/net_ft.h src/net_lwip.h src/net_rl.h src/config.h src/str.h src/queue.h src/fmt.h src/printf.h src/log.h src/timer.h src/fs.h src/util.h src/url.h src/iobuf.h src/base64.h src/md5.h src/sha1.h src/sha256.h src/tls_x25519.h src/tls_aes128.h src/tls_uecc.h src/event.h src/net.h src/http.h src/ssi.h src/tls.h src/tls_mbed.h src/tls_openssl.h src/ws.h src/sntp.h src/mqtt.h src/dns.h src/json.h src/rpc.h src/ota.h src/device.h src/net_builtin.h src/profile.h src/drivers/*.h | sed -e '/keep/! s,#include ".*,,' -e 's,^#pragma once,,'; echo; echo '#ifdef __cplusplus'; echo '}'; echo '#endif'; echo '#endif  // MONGOOSE_H')> $@
 
 
-clean: clean_examples clean_examples_embedded
+clean: clean_examples clean_refprojs clean_tutorials clean_examples_embedded
 	rm -rf $(PROG) *.exe *.o *.dSYM *_test* ut fuzzer *.gcov *.gcno *.gcda *.obj *.exe *.ilk *.pdb slow-unit* _CL_* infer-out data.txt crash-* packed_fs.c pack
 	#find examples -maxdepth 3 -name zephyr -prune -o -name Makefile -print | xargs dirname | xargs -n1 make clean -C
+
+
+examples:
+	@for X in $(EXAMPLES); do test -f $$X/Makefile || continue; $(MAKE) -C $$X example || exit 1; done
+clean_examples:
+	for X in $(EXAMPLES); do test -f $$X/Makefile || continue; $(MAKE) -C $$X clean || exit 1; done
+
+examples_essential:
+	@for X in $(EXAMPLES_QUICK); do test -f $$X/Makefile || continue; $(MAKE) -C $$X example || exit 1; done
+clean_examples_essential:
+	for X in $(EXAMPLES_QUICK); do test -f $$X/Makefile || continue; $(MAKE) -C $$X clean || exit 1; done
+
+examples_mac:
+	for X in $(EXAMPLES_MAC); do test -f $$X/Makefile || continue; $(MAKE) -C $$X example || exit 1; done
+clean_examples_mac:
+	for X in $(EXAMPLES_MAC); do test -f $$X/Makefile || continue; $(MAKE) -C $$X clean || exit 1; done
+
+examples_win:
+	$(foreach X, $(EXAMPLES_WIN), $(MAKE) -C $(X) example &)
+clean_examples_win:
+	$(foreach X, $(EXAMPLES_WIN), $(MAKE) -C $(X) clean &)
+
+refprojs:
+	@for X in $(REFPROJS); do test -f $$X/Makefile || continue; $(MAKE) -C $$X example || exit 1; done
+clean_refprojs:
+	for X in $(REFPROJS); do test -f $$X/Makefile || continue; $(MAKE) -C $$X clean || exit 1; done
+
+refprojs_win:
+	$(foreach X, $(REFPROJS), $(MAKE) -C $(X) example.exe &)
+clean_refprojs_win:
+	$(foreach X, $(REFPROJS), $(MAKE) -C $(X) clean &)
+
+tutorials:
+	@for X in $(TUTORIALS); do test -f $$X/Makefile || continue; $(MAKE) -C $$X example || exit 1; done
+clean_tutorials:
+	for X in $(TUTORIALS); do test -f $$X/Makefile || continue; $(MAKE) -C $$X clean || exit 1; done
+
+tutorials_essential:
+	@for X in $(TUTORIALS_QUICK); do test -f $$X/Makefile || continue; $(MAKE) -C $$X example || exit 1; done
+clean_tutorials_essential:
+	for X in $(TUTORIALS_QUICK); do test -f $$X/Makefile || continue; $(MAKE) -C $$X clean || exit 1; done
+
+tutorials_mac:
+	@for X in $(TUTORIALS_MAC); do test -f $$X/Makefile || continue; $(MAKE) -C $$X example || exit 1; done
+clean_tutorials_mac:
+	for X in $(TUTORIALS_MAC); do test -f $$X/Makefile || continue; $(MAKE) -C $$X clean || exit 1; done
+
+tutorials_win:
+	$(foreach X, $(TUTORIALS_WIN), $(MAKE) -C $(X) example &)
+clean_tutorials_win:
+	$(foreach X, $(TUTORIALS_WIN), $(MAKE) -C $(X) clean &)
+
 
 examples_embedded:
 	@for X in $(EXAMPLES_EMBEDDED); do test -f $$X/Makefile || continue; $(MAKE) -C $$X build || exit 1; done

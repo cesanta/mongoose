@@ -186,6 +186,91 @@ jobs:
     - run: make -C test examples_mac CFLAGS_EXTRA="${{ matrix.ssl }}"
     - run: make -C test clean_examples_mac
 
+  refprojs:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        ssl: ["", -DMG_TLS=MG_TLS_BUILTIN]
+    name: reference-projects ${{ matrix.ssl }}
+    steps:
+    - uses: actions/checkout@v4
+    - run: make -C test refprojs CFLAGS_EXTRA="${{ matrix.ssl }}"
+    - run: make -C test clean_refprojs
+  refprojs_win:
+    runs-on: windows-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        ssl: ["", -DMG_TLS=MG_TLS_BUILTIN]
+    name: reference-projects_win ${{ matrix.ssl }}
+    steps:
+    - uses: actions/checkout@v4
+#    - uses: egor-tensin/setup-mingw@v2
+#      with:
+#        platform: x64
+    - name: test they build
+      run: make -C test refprojs CFLAGS_EXTRA="${{ matrix.ssl }}"
+      shell: cmd
+    - name: test they clean
+      run: make -C test clean_refprojs
+      shell: cmd
+  refprojs_mac:
+    runs-on: macos-latest
+    env: { HOMEBREW_NO_AUTO_UPDATE: 1 }
+    strategy:
+      fail-fast: false
+      matrix:
+        ssl: ["", -DMG_TLS=MG_TLS_BUILTIN]
+    name: reference-projects_mac ${{ matrix.ssl }}
+    steps:
+    - uses: actions/checkout@v4
+    - run: make -C test refprojs CFLAGS_EXTRA="${{ matrix.ssl }}"
+    - run: make -C test clean_refprojs
+
+  tutorials:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        ssl: ["", -DMG_TLS=MG_TLS_BUILTIN]
+    name: tutorials ${{ matrix.ssl }}
+    steps:
+    - uses: actions/checkout@v4
+    - run: sudo apt -y install libmbedtls-dev libpcap-dev
+    - run: make -C test tutorials CFLAGS_EXTRA="${{ matrix.ssl }}"
+    - run: make -C test clean_tutorials
+  tutorials_win:
+    runs-on: windows-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        ssl: ["", -DMG_TLS=MG_TLS_BUILTIN]
+    name: tutorials_win ${{ matrix.ssl }}
+    steps:
+    - uses: actions/checkout@v4
+#    - uses: egor-tensin/setup-mingw@v2
+#      with:
+#        platform: x64
+    - name: test they build
+      run: make -C test tutorials_win CFLAGS_EXTRA="${{ matrix.ssl }}"
+      shell: cmd
+    - name: test they clean
+      run: make -C test clean_tutorials_win
+      shell: cmd
+  tutorials_mac:
+    runs-on: macos-latest
+    env: { HOMEBREW_NO_AUTO_UPDATE: 1 }
+    strategy:
+      fail-fast: false
+      matrix:
+        ssl: ["", -DMG_TLS=MG_TLS_BUILTIN]
+    name: tutorials_mac ${{ matrix.ssl }}
+    steps:
+    - uses: actions/checkout@v4
+    - run: make -C test tutorials_mac CFLAGS_EXTRA="${{ matrix.ssl }}"
+    - run: make -C test clean_tutorials_mac
+
 
   arduino:
     runs-on: ubuntu-latest

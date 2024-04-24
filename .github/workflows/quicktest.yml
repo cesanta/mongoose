@@ -118,6 +118,60 @@ jobs:
     - run: make -C test examples_mac
     - run: make -C test clean_examples_mac
 
+  refprojs:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v4
+    - run: make -C test refprojs
+    - run: make -C test clean_refprojs
+  refprojs_win:
+    runs-on: windows-latest
+    steps:
+    - uses: actions/checkout@v4
+#    - uses: egor-tensin/setup-mingw@v2
+#      with:
+#        platform: x64
+    - name: test they build
+      run: make -C test refprojs
+      shell: cmd
+    - name: test they clean
+      run: make -C test clean_refprojs
+      shell: cmd
+  refprojs_mac:
+    runs-on: macos-latest
+    env: { HOMEBREW_NO_AUTO_UPDATE: 1 }
+    steps:
+    - uses: actions/checkout@v4
+    - run: make -C test refprojs
+    - run: make -C test clean_refprojs
+
+  tutorials:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v4
+    - run: make -C test tutorials_essential
+    - run: make -C test clean_tutorials_essential
+  tutorials_win:
+    runs-on: windows-latest
+    steps:
+    - uses: actions/checkout@v4
+#    - uses: egor-tensin/setup-mingw@v2
+#      with:
+#        platform: x64
+    - name: test they build
+      run: make -C test tutorials_win
+      shell: cmd
+    - name: test they clean
+      run: make -C test clean_tutorials_win
+      shell: cmd
+  tutorials_mac:
+    runs-on: macos-latest
+    env: { HOMEBREW_NO_AUTO_UPDATE: 1 }
+    steps:
+    - uses: actions/checkout@v4
+    - run: make -C test tutorials_mac
+    - run: make -C test clean_tutorials_mac
+
 
   generic_examples:
     runs-on: ubuntu-latest
