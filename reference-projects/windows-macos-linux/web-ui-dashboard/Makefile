@@ -1,7 +1,6 @@
 # Environment setup: https://mongoose.ws/documentation/tutorials/tools/
 
 PROG ?= ./example       # Program we are building
-PACK ?= ./pack          # Packing executable
 DELETE = rm -rf         # Command to remove files
 NPX ?= npx              # For generating optimised tailwind CSS
 OUT ?= -o $(PROG)       # Compiler argument for output file
@@ -16,7 +15,6 @@ CFLAGS_MONGOOSE += -DMG_ENABLE_PACKED_FS=1
 
 ifeq ($(OS),Windows_NT)         # Windows settings. Assume MinGW compiler. To use VC: make CC=cl CFLAGS=/MD OUT=/Feprog.exe
   PROG = example.exe            # Use .exe suffix for the binary
-  PACK = pack.exe               # Packing executable
   CC = gcc                      # Use MinGW gcc compiler
   CFLAGS += -lws2_32            # Link against Winsock library
   DELETE = cmd /C del /Q /F /S  # Command prompt command to delete files
@@ -48,4 +46,4 @@ packed_fs.c: $(wildcard web_root/*) $(wildcard certs/*) Makefile
 
 # Cleanup. Delete built program and all build artifacts
 clean:
-	$(DELETE) $(PROG) $(PACK) *.o *.obj *.exe *.dSYM mbedtls
+	$(DELETE) $(PROG) *.o *.obj *.exe *.dSYM mbedtls
