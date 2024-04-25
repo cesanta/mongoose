@@ -23,7 +23,7 @@ all: $(PROG)              # Default target. Build and run program
 	$(RUN) ./$(PROG) $(ARGS)
 
 $(PROG): $(SOURCES) $(FILES_TO_EMBED)       # Build program from sources
-	$(CC) ../../test/pack.c -o $(PACK)
+	$(CC) ../../../test/pack.c -o $(PACK)
 	$(PACK) $(FILES_TO_EMBED) > packed_fs.c
 	$(CC) $(SOURCES) $(CFLAGS) $(CFLAGS_MONGOOSE) $(CFLAGS_EXTRA) $(OUT)
 
