@@ -21,7 +21,8 @@ robust, and easy. Features include:
 - Asynchronous DNS resolver
 - Tiny static and run-time footprint
 - Source code is both ISO C and ISO C++ compliant
-- Easy to integrate: just copy `mongoose.c` and `mongoose.h` files to your source tree
+- Easy to integrate: just copy [mongoose.c](https://raw.githubusercontent.com/cesanta/mongoose/master/mongoose.c)
+  and [mongoose.h](https://raw.githubusercontent.com/cesanta/mongoose/master/mongoose.h) files to your source tree
 - Built-in TCP/IP stack with drivers for bare metal or RTOS systems
    - Available drivers: STM32F, STM32H; NXP RT1xxx; TI TM4C; Microchip SAME54; Wiznet W5500
    - A complete Web device dashboard on bare metal ST Nucleo boards is only 6 files
