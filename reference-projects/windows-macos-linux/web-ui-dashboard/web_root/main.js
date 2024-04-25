@@ -359,7 +359,7 @@ const App = function({}) {
     tipText="To login, use: admin/admin, user1/user1, user2/user2" />`; // If not logged in, show login screen
 
   return html`
-<div class="min-h-screen bg-slate-100">
+<div class="h-screen bg-slate-100">
   <${Sidebar} url=${url} show=${showSidebar} />
   <${Header} logout=${logout} user=${user} showSidebar=${showSidebar} setShowSidebar=${setShowSidebar} />
   <div class="${showSidebar && 'pl-72'} transition-all duration-300 transform">

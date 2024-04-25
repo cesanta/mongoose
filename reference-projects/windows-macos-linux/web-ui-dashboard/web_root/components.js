@@ -116,7 +116,7 @@ export function Login({loginFn, logoIcon, title, tipText}) {
     return fetch('api/login', {headers}).then(loginFn).finally(r => setPass(''));
   };
   return html`
-<div class="h-full flex items-center justify-center bg-slate-200">
+<div class="h-screen flex items-center justify-center bg-slate-200">
   <div class="border rounded bg-white w-96 p-5">
     <div class="my-5 py-2 flex items-center justify-center gap-x-4">
       <${logoIcon} class="h-12 stroke-cyan-600 stroke-1" />
