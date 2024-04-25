@@ -29,7 +29,7 @@ clean:                    # Cleanup. Delete built program and all build artifact
 
 # Generate packed filesystem for serving credentials
 packed_fs.c: $(wildcard certs/*) Makefile
-	$(CC) ../../test/pack.c -o $(PACK)
+	$(CC) ../../../test/pack.c -o $(PACK)
 	$(PACK) $(wildcard certs/*) > $@
 
 # see https://mongoose.ws/tutorials/tls/#how-to-build for TLS build options

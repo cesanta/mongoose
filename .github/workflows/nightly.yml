@@ -210,10 +210,10 @@ jobs:
 #      with:
 #        platform: x64
     - name: test they build
-      run: make -C test refprojs CFLAGS_EXTRA="${{ matrix.ssl }}"
+      run: make -C test refprojs_win CFLAGS_EXTRA="${{ matrix.ssl }}"
       shell: cmd
     - name: test they clean
-      run: make -C test clean_refprojs
+      run: make -C test clean_refprojs_win
       shell: cmd
   refprojs_mac:
     runs-on: macos-latest
