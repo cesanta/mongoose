@@ -132,10 +132,10 @@ jobs:
 #      with:
 #        platform: x64
     - name: test they build
-      run: make -C test refprojs
+      run: make -C test refprojs_win
       shell: cmd
     - name: test they clean
-      run: make -C test clean_refprojs
+      run: make -C test clean_refprojs_win
       shell: cmd
   refprojs_mac:
     runs-on: macos-latest
