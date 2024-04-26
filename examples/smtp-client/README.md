@@ -1,2 +1,0 @@
-- This example requires changing server name and user credentials on `main.c`
-- This example requires building with TLS support; before running, see detailed tutorial at https://mongoose.ws/tutorials/smtp-client/
