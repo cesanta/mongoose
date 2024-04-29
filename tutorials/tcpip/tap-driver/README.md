@@ -26,15 +26,15 @@ In this scenario, Mongoose is only reachable from the hosting machine, but you c
 - Start your DHCP server at that interface serving that subnet, or otherwise configure Mongoose to use a fixed address within that subnet.
 - Now start the example opening the very same TAP interface:
   ```sh
-  $ make -C examples/mip-tap/ clean all
+  $ make -C tutorials/tcpip/tap-driver/ clean all
   ```
   If you are using a different interface name than `tap0`, add `ARGS="-i ifcname"`, and use the proper interface name
 
 ```
   [DHCP server for 192.168.0.x]
-                 192.168.0.1                    192.168.0.x
+                 192.168.0.1                      192.168.0.x
                  ┌─────────┐                    
-                 │  tap0   ├────────────────────  mip-tap
+                 │  tap0   ├────────────────────  tap-driver
                  └─────────┘                       
 ```
 
@@ -69,7 +69,7 @@ We will attach one end of the virtual interface to a bridge, which will also be 
   ```
 - Now start the example
   ```sh
-  $ make -C examples/mip-tap/ clean all
+  $ make -C tutorials/tcpip/tap-driver/ clean all
   ```
   If you are using a different interface name than `tap0`, add `ARGS="-i ifcname"`, and use the proper interface name
 - Now if everything is fine, besides the example working, you'll see your interface state is UP:
@@ -86,9 +86,9 @@ We will attach one end of the virtual interface to a bridge, which will also be 
                                     virbr0
                                        │
                     ┌──────────────────┴──────────────────┐
-                    │                                     │         10.1.0.x
+                    │                                     │          10.1.0.x
                     │              ┌────────┐             │
-                    │              │  tap0  ├─────────────┼───────  mip-tap
+                    │              │  tap0  ├─────────────┼───────  tap-driver
                     │              └────────┘             │
                     │                                     │
                     │ ┌─────────┐ ┌─────────┐ ┌─────────┐ │
@@ -119,15 +119,15 @@ Once you have your virtual interface up and running with an IP address, you can 
   Remember to use the proper network interface name
 - Now start the example
   ```sh
-  $ make -C examples/mip-tap/ clean all
+  $ make -C tutorials/tcpip/tap-driver/ clean all
   ```
   If you are using a different interface name than `tap0`, add `ARGS="-i ifcname"`, and use the proper interface name
 
 ```
        [DHCP server for 192.168.0.x]
-      ┌────────────►  192.168.0.1                    192.168.0.x
+      ┌────────────►  192.168.0.1                      192.168.0.x
       │ forwarding    ┌─────────┐  
-      │ masquerading  │  tap0   ├────────────────────  mip-tap
+      │ masquerading  │  tap0   ├────────────────────  tap-driver
       │               └─────────┘
       ▼
    Your IP (LAN / Public)
@@ -154,7 +154,7 @@ You can also use this setup if your NIC is part of a bridge (for example: you ha
                                       [DHCP server for 192.168.0.x]
                       10.1.0.10    ◀──────────────►  192.168.0.1                    192.168.0.x
                        virbr0         forwarding     ┌─────────┐
-                          │          masquerading    │  tap0   ├────────────────────  mip-tap
+                          │          masquerading    │  tap0   ├────────────────────  tap-driver
                           │                          └─────────┘
        ┌──────────────────┴──────────────────┐
        │                                     │

@@ -41,10 +41,7 @@ $ sudo ifconfig bridge0 addm feth1
 We can start an example using the `feth0`:
 
 ```sh
-$ make -C examples/mip-pcap/ clean all ARGS="-i feth0" 
-...
-2386718 3 mip.c:279:arp_cache_add       ARP cache: added 0xc0a80201 @ 36:77:4d:be:e0:80
-2386718 2 mip.c:300:onstatechange       READY, IP: 192.168.2.17
+$ make -C tutorials/tcpip/pcap-driver/ clean all ARGS="-i feth0" 
 ```
 
 The diagram of the setup is below:
@@ -59,7 +56,7 @@ The diagram of the setup is below:
 ┌─────────┐          │              └─────────┘            │       └────┬────┘
 │   en0   │          │                                     │            │
 └────┬────┘          │ ┌─────────┐ ┌─────────┐ ┌─────────┐ │            │
-     │               │ │   en1   │ │   en2   │ │   en3   │ │         mip-pcap
+     │               │ │   en1   │ │   en2   │ │   en3   │ │        pcap-driver
                      │ └────┬────┘ └────┬────┘ └────┬────┘ │
     WiFi             │      │           │           │      │
                      └──────┼───────────┼───────────┼──────┘
@@ -97,11 +94,11 @@ This is similar to using the loopback device, Mongoose is only reachable from th
 - Start your DHCP server at that interface serving that subnet, or otherwise configure Mongoose to use a fixed address within that subnet.
 - Now start the example opening the other end of the virtual interface:
   ```sh
-  $ make -C examples/mip-pcap/ clean all ARGS="-i my0" 
+  $ make -C tutorials/tcpip/pcap-driver/ clean all ARGS="-i my0" 
   ```
   - In some systems, you will probably need superuser privileges to open the device:
     ```sh
-    $ sudo examples/mip-pcap/example -i my0
+    $ sudo tutorials/tcpip/pcap-driver/example -i my0
     ```
 
 ```
@@ -112,7 +109,7 @@ This is similar to using the loopback device, Mongoose is only reachable from th
                  └─────────┘                    └────┬────┘
                                                      │
                                                      │
-                                                  mip-pcap
+                                                 pcap-driver
 ```
 
 As you can't access any other host than your workstation, you need to add any required services (as DNS) there, and configure Mongoose appropriately. This is a foundation, you can expand it by choosing one of the solutions that follow.
@@ -144,11 +141,11 @@ We will attach one end of the virtual interface to a bridge, which will also be 
   ```
 - Now start the example opening the other end of the virtual interface:
   ```sh
-  $ make -C examples/mip-pcap/ clean all ARGS="-i my0" 
+  $ make -C tutorials/tcpip/pcap-driver/ clean all ARGS="-i my0" 
   ```
   - In some systems, you will probably need superuser privileges to open the device:
     ```sh
-    $ sudo examples/mip-pcap/example -i my0
+    $ sudo tutorials/tcpip/pcap-driver/example -i my0
     ```
 
 ```
@@ -162,7 +159,7 @@ We will attach one end of the virtual interface to a bridge, which will also be 
                      │              └─────────┘            │       └────┬────┘
                      │                                     │            │
                      │ ┌─────────┐ ┌─────────┐ ┌─────────┐ │            │
-                     │ │  vnet1  │ │ enp9s0  │ │  vnet2  │ │         mip-pcap
+                     │ │  vnet1  │ │ enp9s0  │ │  vnet2  │ │        pcap-driver
                      │ └────┬────┘ └────┬────┘ └────┬────┘ │
                      │      │           │           │      │
                      └──────┼───────────┼───────────┼──────┘
@@ -189,11 +186,11 @@ Once you have your virtual interface up and running with an IP address, you can 
   Remember to use the proper network interface name
 - Now start the example opening the other end of the virtual interface:
   ```sh
-  $ make -C examples/mip-pcap/ clean all ARGS="-i my0" 
+  $ make -C tutorials/tcpip/pcap-driver/ clean all ARGS="-i my0" 
   ```
   - In some systems, you will probably need superuser privileges to open the device:
     ```sh
-    $ sudo examples/mip-pcap/example -i my0
+    $ sudo tutorials/tcpip/pcap-driver/example -i my0
     ```
 
 ```
@@ -204,7 +201,7 @@ Once you have your virtual interface up and running with an IP address, you can 
       │               └─────────┘                    └────┬────┘
       ▼                                                   │
    Your IP (LAN / Public)                                 │
- ┌─────────┐                                           mip-pcap
+ ┌─────────┐                                          pcap-driver
  │ enp9s0  │ 
  └────┬────┘       
       │ 
@@ -231,7 +228,7 @@ You can also use this setup if your NIC is part of a bridge (for example: you ha
                           │                          └─────────┘                    └────┬────┘
        ┌──────────────────┴──────────────────┐	                                         │
        │                                     │                                           │
-       │ ┌─────────┐ ┌─────────┐ ┌─────────┐ │                                        mip-pcap
+       │ ┌─────────┐ ┌─────────┐ ┌─────────┐ │                                       pcap-driver
        │ │  vnet1  │ │ enp9s0  │ │  vnet2  │ │ 
        │ └────┬────┘ └────┬────┘ └────┬────┘ │
        │      │           │           │      │
