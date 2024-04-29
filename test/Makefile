@@ -14,14 +14,14 @@ IPV6 ?= 1
 ASAN ?= -fsanitize=address,undefined,alignment -fno-sanitize-recover=all -fno-omit-frame-pointer -fno-common
 ASAN_OPTIONS ?= detect_leaks=1
 EXAMPLES := $(dir $(wildcard ../examples/*/Makefile))
-EXAMPLES_QUICK := $(filter-out ../examples/mip-pcap/ ../examples/micropython/, $(EXAMPLES))
-EXAMPLES_MAC := $(filter-out ../examples/mip-pcap/ ../examples/mip-tap/ ../examples/micropython/, $(EXAMPLES))
+EXAMPLES_QUICK := $(filter-out ../examples/micropython/, $(EXAMPLES))
+EXAMPLES_MAC := $(filter-out ../examples/micropython/, $(EXAMPLES))
 EXAMPLES_WIN := $(dir $(wildcard ../examples/device-dashboard/Makefile) $(wildcard ../examples/file-*/Makefile) $(wildcard ../examples/http-*/Makefile) $(wildcard ../examples/mqtt-*/Makefile) $(wildcard ../examples/websocket-*/Makefile) $(wildcard ../examples/webui-*/Makefile))
 EXAMPLES_EMBEDDED := $(filter-out $(wildcard ../examples/zephyr/*/), $(dir $(wildcard ../examples/*/*/Makefile)))
 REFPROJS := $(dir $(wildcard ../reference-projects/windows-macos-linux/*/Makefile))
 TUTORIALS := $(dir $(wildcard ../tutorials/*/*/Makefile))
-TUTORIALS_QUICK := $(filter-out ../tutorials/tcpip_stack/pcap/ , $(TUTORIALS))
-TUTORIALS_MAC := TUTORIALS
+TUTORIALS_QUICK := $(filter-out ../tutorials/tcpip/pcap-driver/ , $(TUTORIALS))
+TUTORIALS_MAC := $(filter-out ../tutorials/tcpip/pcap-driver/ ../tutorials/tcpip/tap-driver/, $(TUTORIALS))
 TUTORIALS_WIN := $(dir $(wildcard ../tutorials/http/file-*/Makefile) $(wildcard ../tutorials/http/http-*/Makefile) $(wildcard ../tutorials/mqtt/mqtt-*/Makefile) $(wildcard ../tutorials/websocket/websocket-*/Makefile) $(wildcard ../tutorials/webui/webui-*/Makefile))
 PREFIX ?= /usr/local
 LIBDIR ?= $(PREFIX)/lib
