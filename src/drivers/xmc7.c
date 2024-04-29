@@ -98,11 +98,10 @@ static bool mg_tcpip_driver_xmc7_init(struct mg_tcpip_if *ifp) {
   ETH0->CTL = MG_BIT(31) | 2;
 
   uint32_t cr = get_clock_rate(d);
-  // set NSP change, ignore RX FCS, data bus width, clock rate, Gigabit mode,
+  // set NSP change, ignore RX FCS, data bus width, clock rate
   // frame length 1536, full duplex, speed
-  // TODO: enable Gigabit mode (bit 10) only if PHY uses Gigabit link
   ETH0->NETWORK_CONFIG = MG_BIT(29) | MG_BIT(26) | MG_BIT(21) |
-                         ((cr & 7) << 18) | MG_BIT(10) | MG_BIT(8) | MG_BIT(4) |
+                         ((cr & 7) << 18) | MG_BIT(8) | MG_BIT(4) |
                          MG_BIT(1) | MG_BIT(0);
 
   // config DMA settings: Force TX burst, Discard on Error, set RX buffer size
@@ -174,6 +173,7 @@ static size_t mg_tcpip_driver_xmc7_tx(const void *buf, size_t len,
 
   MG_DSB();
   ETH0->TRANSMIT_STATUS = ETH0->TRANSMIT_STATUS;
+  ETH0->NETWORK_CONTROL |= MG_BIT(9);  // enable transmission
 
   return len;
 }
@@ -186,6 +186,9 @@ static bool mg_tcpip_driver_xmc7_up(struct mg_tcpip_if *ifp) {
   struct mg_phy phy = {eth_read_phy, eth_write_phy};
   up = mg_phy_up(&phy, d->phy_addr, &full_duplex, &speed);
   if ((ifp->state == MG_TCPIP_STATE_DOWN) && up) {  // link state just went up
+    if (speed == MG_PHY_SPEED_1000M) {
+		  ETH0->NETWORK_CONFIG |= MG_BIT(10);
+	  }
     MG_DEBUG(("Link is %uM %s-duplex",
               speed == MG_PHY_SPEED_10M ? 10 : 
               (speed == MG_PHY_SPEED_100M ? 100 : 1000),
