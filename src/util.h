@@ -19,6 +19,7 @@ uint32_t mg_ntohl(uint32_t net);
 uint32_t mg_crc32(uint32_t crc, const char *buf, size_t len);
 uint64_t mg_millis(void);  // Return milliseconds since boot
 uint64_t mg_now(void);     // Return milliseconds since Epoch
+bool mg_path_is_sane(const struct mg_str path);
 
 #define mg_htons(x) mg_ntohs(x)
 #define mg_htonl(x) mg_ntohl(x)

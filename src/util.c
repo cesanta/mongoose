@@ -106,6 +106,18 @@ int mg_check_ip_acl(struct mg_str acl, struct mg_addr *remote_ip) {
   return allowed == '+';
 }
 
+bool mg_path_is_sane(const struct mg_str path) {
+  const char *s = path.buf;
+  size_t n = path.len;
+  if (path.buf[0] == '.' && path.buf[1] == '.') return false;  // Starts with ..
+  for (; s[0] != '\0' && n > 0; s++, n--) {
+    if ((s[0] == '/' || s[0] == '\\') && n >= 2) {   // Subdir?
+      if (s[1] == '.' && s[2] == '.') return false;  // Starts with ..
+    }
+  }
+  return true;
+}
+
 #if MG_ENABLE_CUSTOM_MILLIS
 #else
 uint64_t mg_millis(void) {

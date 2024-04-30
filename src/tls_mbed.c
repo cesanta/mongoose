@@ -123,7 +123,7 @@ void mg_tls_init(struct mg_connection *c, const struct mg_tls_opts *opts) {
   }
   mbedtls_ssl_conf_rng(&tls->conf, mg_mbed_rng, c);
 
-  if (opts->ca.len == 0 || mg_vcmp(&opts->ca, "*") == 0) {
+  if (opts->ca.len == 0 || mg_strcmp(opts->ca, mg_str("*")) == 0) {
     mbedtls_ssl_conf_authmode(&tls->conf, MBEDTLS_SSL_VERIFY_NONE);
   } else {
     if (mg_load_cert(opts->ca, &tls->ca) == false) goto fail;

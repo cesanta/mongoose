@@ -19,39 +19,39 @@ static int s_num_tests = 0;
 // Important: we use different port numbers for the Windows bug workaround. See
 // https://support.microsoft.com/en-ae/help/3039044/error-10013-wsaeacces-is-returned-when-a-second-bind-to-a-excluded-por
 
-static void test_globmatch(void) {
-  ASSERT(mg_globmatch("", 0, "", 0) == 1);
-  ASSERT(mg_globmatch("*", 1, "a", 1) == 1);
-  ASSERT(mg_globmatch("*", 1, "ab", 2) == 1);
-  ASSERT(mg_globmatch("", 0, "a", 1) == 0);
-  ASSERT(mg_globmatch("/", 1, "/foo", 4) == 0);
-  ASSERT(mg_globmatch("/*/foo", 6, "/x/bar", 6) == 0);
-  ASSERT(mg_globmatch("/*/foo", 6, "/x/foo", 6) == 1);
-  ASSERT(mg_globmatch("/*/foo", 6, "/x/foox", 7) == 0);
-  ASSERT(mg_globmatch("/*/foo*", 7, "/x/foox", 7) == 1);
-  ASSERT(mg_globmatch("/*", 2, "/abc", 4) == 1);
-  ASSERT(mg_globmatch("/*", 2, "/ab/", 4) == 0);
-  ASSERT(mg_globmatch("/*", 2, "/", 1) == 1);
-  ASSERT(mg_globmatch("/x/*", 4, "/x/2", 4) == 1);
-  ASSERT(mg_globmatch("/x/*", 4, "/x/2/foo", 8) == 0);
-  ASSERT(mg_globmatch("/x/*/*", 6, "/x/2/foo", 8) == 1);
-  ASSERT(mg_globmatch("#", 1, "///", 3) == 1);
-  ASSERT(mg_globmatch("/api/*", 6, "/api/foo", 8) == 1);
-  ASSERT(mg_globmatch("/api/*", 6, "/api/log/static", 15) == 0);
-  ASSERT(mg_globmatch("/api/#", 6, "/api/log/static", 15) == 1);
-  ASSERT(mg_globmatch("#.shtml", 7, "/ssi/index.shtml", 16) == 1);
-  ASSERT(mg_globmatch("#.c", 3, ".c", 2) == 1);
-  ASSERT(mg_globmatch("abc", 3, "ab", 2) == 0);
-  ASSERT(mg_globmatch("#.c", 3, "a.c", 3) == 1);
-  ASSERT(mg_globmatch("#.c", 3, "..c", 3) == 1);
-  ASSERT(mg_globmatch("#.c", 3, "/.c", 3) == 1);
-  ASSERT(mg_globmatch("#.c", 3, "//a.c", 5) == 1);
-  ASSERT(mg_globmatch("#.c", 3, "x/a.c", 5) == 1);
-  ASSERT(mg_globmatch("#.c", 3, "./a.c", 5) == 1);
-  ASSERT(mg_globmatch("#.shtml", 7, "./ssi/index.shtml", 17) == 1);
-  ASSERT(mg_globmatch("#aa#bb#", 7, "caabba", 6) == 1);
-  ASSERT(mg_globmatch("#aa#bb#", 7, "caabxa", 6) == 0);
-  ASSERT(mg_globmatch("a*b*c", 5, "a__b_c", 6) == 1);
+static void test_match(void) {
+  ASSERT(mg_match(mg_str_n("", 0), mg_str_n("", 0), NULL) == 1);
+  ASSERT(mg_match(mg_str_n("a", 1), mg_str_n("*", 1), NULL) == 1);
+  ASSERT(mg_match(mg_str_n("ab", 2), mg_str_n("*", 1), NULL) == 1);
+  ASSERT(mg_match(mg_str_n("a", 1), mg_str_n("", 0), NULL) == 0);
+  ASSERT(mg_match(mg_str_n("/foo", 4), mg_str_n("/", 1), NULL) == 0);
+  ASSERT(mg_match(mg_str_n("/x/bar", 6), mg_str_n("/*/foo", 6), NULL) == 0);
+  ASSERT(mg_match(mg_str_n("/x/foo", 6), mg_str_n("/*/foo", 6), NULL) == 1);
+  ASSERT(mg_match(mg_str_n("/x/foox", 7), mg_str_n("/*/foo", 6), NULL) == 0);
+  ASSERT(mg_match(mg_str_n("/x/foox", 7), mg_str_n("/*/foo*", 7), NULL) == 1);
+  ASSERT(mg_match(mg_str_n("/abc", 4), mg_str_n("/*", 2), NULL) == 1);
+  ASSERT(mg_match(mg_str_n("/ab/", 4), mg_str_n("/*", 2), NULL) == 0);
+  ASSERT(mg_match(mg_str_n("/", 1), mg_str_n("/*", 2), NULL) == 1);
+  ASSERT(mg_match(mg_str_n("/x/2", 4), mg_str_n("/x/*", 4), NULL) == 1);
+  ASSERT(mg_match(mg_str_n("/x/2/foo", 8), mg_str_n("/x/*", 4), NULL) == 0);
+  ASSERT(mg_match(mg_str_n("/x/2/foo", 8), mg_str_n("/x/*/*", 6), NULL) == 1);
+  ASSERT(mg_match(mg_str_n("///", 3), mg_str_n("#", 1), NULL) == 1);
+  ASSERT(mg_match(mg_str_n("/api/foo", 8), mg_str_n("/api/*", 6), NULL) == 1);
+  ASSERT(mg_match(mg_str_n("/api/log/static", 15), mg_str_n("/api/*", 6), NULL) == 0);
+  ASSERT(mg_match(mg_str_n("/api/log/static", 15), mg_str_n("/api/#", 6), NULL) == 1);
+  ASSERT(mg_match(mg_str_n("/ssi/index.shtml", 16), mg_str_n("#.shtml", 7), NULL) == 1);
+  ASSERT(mg_match(mg_str_n(".c", 2), mg_str_n("#.c", 3), NULL) == 1);
+  ASSERT(mg_match(mg_str_n("ab", 2), mg_str_n("abc", 3), NULL) == 0);
+  ASSERT(mg_match(mg_str_n("a.c", 3), mg_str_n("#.c", 3), NULL) == 1);
+  ASSERT(mg_match(mg_str_n("..c", 3), mg_str_n("#.c", 3), NULL) == 1);
+  ASSERT(mg_match(mg_str_n("/.c", 3), mg_str_n("#.c", 3), NULL) == 1);
+  ASSERT(mg_match(mg_str_n("//a.c", 5), mg_str_n("#.c", 3), NULL) == 1);
+  ASSERT(mg_match(mg_str_n("x/a.c", 5), mg_str_n("#.c", 3), NULL) == 1);
+  ASSERT(mg_match(mg_str_n("./a.c", 5), mg_str_n("#.c", 3), NULL) == 1);
+  ASSERT(mg_match(mg_str_n("./ssi/index.shtml", 17), mg_str_n("#.shtml", 7), NULL) == 1);
+  ASSERT(mg_match(mg_str_n("caabba", 6), mg_str_n("#aa#bb#", 7), NULL) == 1);
+  ASSERT(mg_match(mg_str_n("caabxa", 6), mg_str_n("#aa#bb#", 7), NULL) == 0);
+  ASSERT(mg_match(mg_str_n("a__b_c", 6), mg_str_n("a*b*c", 5), NULL) == 1);
 
   {
     struct mg_str caps[3];
@@ -128,10 +128,30 @@ static void test_http_get_var(void) {
 }
 
 static int vcmp(struct mg_str s1, const char *s2) {
-  // MG_INFO(("->%.*s<->%s<- %d %d %d", (int) s1.len, s1.buf, s2,
-  //(int) s1.len, strncmp(s1.buf, s2, s1.len), mg_vcmp(&s1, s2)));
-  return mg_vcmp(&s1, s2) == 0;
+  return mg_strcmp(s1, mg_str(s2)) == 0;
 }
+static bool is_space(int c) {
+  return c == ' ' || c == '\r' || c == '\n' || c == '\t';
+}
+static struct mg_str strstrip(struct mg_str s) {
+  while (s.len > 0 && is_space((int) *s.buf)) s.buf++, s.len--;
+  while (s.len > 0 && is_space((int) *(s.buf + s.len - 1))) s.len--;
+  return s;
+}
+static const char *mgstrstr(const struct mg_str haystack,
+                      const struct mg_str needle) {
+  size_t i;
+  if (needle.len > haystack.len) return NULL;
+  if (needle.len == 0) return haystack.buf;
+  for (i = 0; i <= haystack.len - needle.len; i++) {
+    if (memcmp(haystack.buf + i, needle.buf, needle.len) == 0) {
+      return haystack.buf + i;
+    }
+  }
+  return NULL;
+}
+
+
 
 static void test_url(void) {
   // Host
@@ -767,10 +787,10 @@ static void wcb(struct mg_connection *c, int ev, void *ev_data) {
     p[0] += 100;
   } else if (ev == MG_EV_WS_MSG) {
     struct mg_ws_message *wm = (struct mg_ws_message *) ev_data;
-    if (mg_strstr(wm->data, mg_str("foobar")))
+    if (mgstrstr(wm->data, mg_str("foobar")))
       mg_ws_send(c, "", 0, WEBSOCKET_OP_CLOSE);
-    if (mg_strstr(wm->data, mg_str("boo"))) p[0] += 2;
-    if (mg_strstr(wm->data, mg_str("foobar"))) p[0] += 3;
+    if (mgstrstr(wm->data, mg_str("boo"))) p[0] += 2;
+    if (mgstrstr(wm->data, mg_str("foobar"))) p[0] += 3;
   } else if (ev == MG_EV_CLOSE) {
     p[0] += 10;
   }
@@ -998,8 +1018,8 @@ static void test_http_server(void) {
   // Directory listing
   fetch(&mgr, buf, url, "GET /dirtest/ HTTP/1.0\n\n");
   ASSERT(fetch(&mgr, buf, url, "GET /dirtest/ HTTP/1.0\n\n") == 200);
-  ASSERT(mg_strstr(mg_str(buf), mg_str(">Index of /dirtest/<")) != NULL);
-  ASSERT(mg_strstr(mg_str(buf), mg_str(">fuzz.c<")) != NULL);
+  ASSERT(mgstrstr(mg_str(buf), mg_str(">Index of /dirtest/<")) != NULL);
+  ASSERT(mgstrstr(mg_str(buf), mg_str(">fuzz.c<")) != NULL);
   ASSERT(cmpheader(buf, "A", "B"));
   ASSERT(!cmpheader(buf, "C", "D"));
   ASSERT(cmpheader(buf, "E", "F"));
@@ -1218,8 +1238,8 @@ static void f3(struct mg_connection *c, int ev, void *ev_data) {
   } else if (ev == MG_EV_HTTP_MSG) {
     struct mg_http_message *hm = (struct mg_http_message *) ev_data;
     // MG_INFO(("-->[%.*s]", (int) hm->message.len, hm->message.buf));
-    // ASSERT(mg_vcmp(&hm->method, "HTTP/1.1") == 0);
-    // ASSERT(mg_vcmp(&hm->uri, "301") == 0);
+    // ASSERT(vcmp(hm->method, "HTTP/1.1"));
+    // ASSERT(vcmp(hm->uri, "301"));
     *ok = mg_http_status(hm);
   } else if (ev == MG_EV_CLOSE) {
     if (*ok == 0) *ok = 888;
@@ -1440,16 +1460,16 @@ static void test_http_parse(void) {
     const char *s = "GET /blah HTTP/1.0\r\nFoo:  bar  \r\n\r\n";
     size_t idx, len = strlen(s);
     ASSERT(mg_http_parse(s, strlen(s), &req) == (int) len);
-    ASSERT(mg_vcmp(&req.headers[0].name, "Foo") == 0);
-    ASSERT(mg_vcmp(&req.headers[0].value, "bar") == 0);
+    ASSERT(vcmp(req.headers[0].name, "Foo"));
+    ASSERT(vcmp(req.headers[0].value, "bar"));
     ASSERT(req.headers[1].name.len == 0);
     ASSERT(req.headers[1].name.buf == NULL);
     ASSERT(req.query.len == 0);
     ASSERT(req.message.len == len);
     ASSERT(req.body.len == 0);
-    ASSERT(mg_vcmp(&req.method, "GET") == 0);
-    ASSERT(mg_vcmp(&req.uri, "/blah") == 0);
-    ASSERT(mg_vcmp(&req.proto, "HTTP/1.0") == 0);
+    ASSERT(vcmp(req.method, "GET"));
+    ASSERT(vcmp(req.uri, "/blah"));
+    ASSERT(vcmp(req.proto, "HTTP/1.0"));
     for (idx = 0; idx < len; idx++) ASSERT(mg_http_parse(s, idx, &req) == 0);
   }
 
@@ -1477,12 +1497,12 @@ static void test_http_parse(void) {
     const char *s = "get b c\nz:  k \nb: t\nv:k\n\n xx";
     ASSERT(mg_http_parse(s, strlen(s), &req) == (int) strlen(s) - 3);
     ASSERT(req.headers[3].name.len == 0);
-    ASSERT(mg_vcmp(&req.headers[0].name, "z") == 0);
-    ASSERT(mg_vcmp(&req.headers[0].value, "k") == 0);
-    ASSERT(mg_vcmp(&req.headers[1].name, "b") == 0);
-    ASSERT(mg_vcmp(&req.headers[1].value, "t") == 0);
-    ASSERT(mg_vcmp(&req.headers[2].name, "v") == 0);
-    ASSERT(mg_vcmp(&req.headers[2].value, "k") == 0);
+    ASSERT(vcmp(req.headers[0].name, "z"));
+    ASSERT(vcmp(req.headers[0].value, "k"));
+    ASSERT(vcmp(req.headers[1].name, "b"));
+    ASSERT(vcmp(req.headers[1].value, "t"));
+    ASSERT(vcmp(req.headers[2].name, "v"));
+    ASSERT(vcmp(req.headers[2].value, "k"));
     ASSERT(req.body.len == 0);
   }
 
@@ -1502,12 +1522,12 @@ static void test_http_parse(void) {
     ASSERT(mg_http_parse(s, strlen(s), &req) == (int) strlen(s));
     ASSERT(req.body.len == 0);
     ASSERT(req.headers[1].name.len == 0);
-    ASSERT(mg_vcmp(&req.headers[0].name, "місто") == 0);
-    ASSERT(mg_vcmp(&req.headers[0].value, "кіїв") == 0);
+    ASSERT(vcmp(req.headers[0].name, "місто"));
+    ASSERT(vcmp(req.headers[0].value, "кіїв"));
     ASSERT((v = mg_http_get_header(&req, "місто")) != NULL);
-    ASSERT(mg_vcmp(&req.method, "ґєт") == 0);
-    ASSERT(mg_vcmp(&req.uri, "/слеш") == 0);
-    ASSERT(mg_vcmp(&req.proto, "вах вах") == 0);
+    ASSERT(vcmp(req.method, "ґєт"));
+    ASSERT(vcmp(req.uri, "/слеш"));
+    ASSERT(vcmp(req.proto, "вах вах"));
   }
 
   {
@@ -1517,16 +1537,16 @@ static void test_http_parse(void) {
     ASSERT(req.message.len == 21 - 3 + strlen(s));
     ASSERT(mg_http_get_header(&req, "foo") == NULL);
     ASSERT((v = mg_http_get_header(&req, "contENT-Length")) != NULL);
-    ASSERT(mg_vcmp(v, "21") == 0);
+    ASSERT(vcmp(*v, "21"));
     ASSERT((v = mg_http_get_header(&req, "B")) != NULL);
-    ASSERT(mg_vcmp(v, "t") == 0);
+    ASSERT(vcmp(*v, "t"));
   }
 
   {
     const char *s = "GET /foo?a=b&c=d HTTP/1.0\n\n";
     ASSERT(mg_http_parse(s, strlen(s), &req) == (int) strlen(s));
-    ASSERT(mg_vcmp(&req.uri, "/foo") == 0);
-    ASSERT(mg_vcmp(&req.query, "a=b&c=d") == 0);
+    ASSERT(vcmp(req.uri, "/foo"));
+    ASSERT(vcmp(req.query, "a=b&c=d"));
   }
 
   {
@@ -1544,9 +1564,9 @@ static void test_http_parse(void) {
   {
     const char *s = "HTTP/1.0 200 OK\n\n";
     ASSERT(mg_http_parse(s, strlen(s), &req) == (int) strlen(s));
-    ASSERT(mg_vcmp(&req.method, "HTTP/1.0") == 0);
-    ASSERT(mg_vcmp(&req.uri, "200") == 0);
-    ASSERT(mg_vcmp(&req.proto, "OK") == 0);
+    ASSERT(vcmp(req.method, "HTTP/1.0"));
+    ASSERT(vcmp(req.uri, "200"));
+    ASSERT(vcmp(req.proto, "OK"));
     ASSERT(req.body.len == (size_t) ~0);
   }
 
@@ -1561,20 +1581,20 @@ static void test_http_parse(void) {
         "45455\r\nRange:  0-1 \r\n\r\n";
     ASSERT(mg_http_parse(s, strlen(s), &req) == (int) strlen(s));
     ASSERT((v = mg_http_get_header(&req, "Host")) != NULL);
-    ASSERT(mg_vcmp(v, "127.0.0.1:18888") == 0);
+    ASSERT(vcmp(*v, "127.0.0.1:18888"));
     ASSERT((v = mg_http_get_header(&req, "Cookie")) != NULL);
     ASSERT(v->len == 0);
     ASSERT((v = mg_http_get_header(&req, "X-PlayID")) != NULL);
-    ASSERT(mg_vcmp(v, "45455") == 0);
+    ASSERT(vcmp(*v, "45455"));
     ASSERT((v = mg_http_get_header(&req, "Range")) != NULL);
-    ASSERT(mg_vcmp(v, "0-1") == 0);
+    ASSERT(vcmp(*v, "0-1"));
   }
 
   {
     static const char *s = "a b c\na:1\nb:2\nc:3\nd:4\ne:5\nf:6\ng:7\nh:8\n\n";
     ASSERT(mg_http_parse(s, strlen(s), &req) == (int) strlen(s));
     ASSERT((v = mg_http_get_header(&req, "e")) != NULL);
-    ASSERT(mg_vcmp(v, "5") == 0);
+    ASSERT(vcmp(*v, "5"));
     ASSERT((v = mg_http_get_header(&req, "h")) == NULL);
   }
 
@@ -1610,7 +1630,7 @@ static void test_http_parse(void) {
     s = "a b\nc: \xc0\n\n";  // Invalid UTF in the header value: accept
     ASSERT(mg_http_parse(s, strlen(s), &hm) == (int) strlen(s));
     ASSERT((v = mg_http_get_header(&hm, "c")) != NULL);
-    ASSERT(mg_vcmp(v, "\xc0") == 0);
+    ASSERT(vcmp(*v, "\xc0"));
     s = "a b\n\xc0: 2\n\n";  // Invalid UTF in the header name: do NOT accept
     ASSERT(mg_http_parse(s, strlen(s), &hm) == -1);
   }
@@ -1856,31 +1876,39 @@ static bool chkdbl(struct mg_str s, double val) {
 
 static void test_str(void) {
   {
-    struct mg_str s = mg_strdup(mg_str("a"));
-    ASSERT(mg_strcmp(s, mg_str("a")) == 0);
-    free((void *) s.buf);
-  }
-
-  {
     const char *s;
     struct mg_str a = mg_str("hello"), b = mg_str("a"), c = mg_str(NULL);
-    ASSERT((s = mg_strstr(a, b)) == NULL);
-    ASSERT((s = mg_strstr(a, c)) != NULL);
+    ASSERT((s = mgstrstr(a, b)) == NULL);
+    ASSERT((s = mgstrstr(a, c)) != NULL);
     ASSERT(s == a.buf);
   }
 
   ASSERT(mg_strcmp(mg_str(""), mg_str(NULL)) == 0);
   ASSERT(mg_strcmp(mg_str("a"), mg_str("b")) < 0);
   ASSERT(mg_strcmp(mg_str("b"), mg_str("a")) > 0);
-  ASSERT(mg_strstr(mg_str("abc"), mg_str("d")) == NULL);
-  ASSERT(mg_strstr(mg_str("abc"), mg_str("b")) != NULL);
-  ASSERT(mg_strcmp(mg_str("hi"), mg_strstrip(mg_str(" \thi\r\n"))) == 0);
+  ASSERT(mg_strcmp(mg_str("hi"), strstrip(mg_str(" \thi\r\n"))) == 0);
 
   ASSERT(sccmp("", "", 0));
   ASSERT(sccmp("", "1", -49));
   ASSERT(sccmp("a", "A", 0));
   ASSERT(sccmp("a1", "A", 49));
   ASSERT(sccmp("a", "A1", -49));
+
+  ASSERT(mg_strcasecmp(mg_str(""), mg_str(NULL)) == 0);
+  ASSERT(mg_strcasecmp(mg_str("a"), mg_str("B")) < 0);
+  ASSERT(mg_strcasecmp(mg_str("b"), mg_str("A")) > 0);
+  ASSERT(mg_strcasecmp(mg_str("hi"), mg_str("HI")) == 0);
+
+  ASSERT(mg_toi('0', 10) == 0);
+  ASSERT(mg_toi('9', 10) == 9);
+  ASSERT(mg_toi('A', 10) == (uint8_t) ~0);
+  ASSERT(mg_toi('0', 16) == 0);
+  ASSERT(mg_toi('9', 16) == 9);
+  ASSERT(mg_toi('A', 16) == 10);
+  ASSERT(mg_toi('a', 16) == 10);
+  ASSERT(mg_toi('f', 16) == 15);
+  ASSERT(mg_toi('F', 16) == 15);
+  ASSERT(mg_toi('G', 16) == (uint8_t) ~0);
 
   {
     ASSERT(chkdbl(mg_str_n("1.23", 3), 1.2));
@@ -2268,7 +2296,6 @@ static void test_util(void) {
   e = "\x20\x01\x48\x60\x48\x60\x00\x00\x00\x00\x00\x00\x00\x00\x88\x88";
   ASSERT(memcmp(a.ip, e, sizeof(a.ip)) == 0);
 
-  ASSERT(strcmp(mg_hex("abc", 3, buf), "616263") == 0);
   ASSERT(mg_url_decode("a=%", 3, buf, sizeof(buf), 0) < 0);
   ASSERT(mg_url_decode("&&&a=%", 6, buf, sizeof(buf), 0) < 0);
 
@@ -3032,11 +3059,11 @@ static void test_json(void) {
     struct mg_str k, v, sub = mg_str_n(json.buf + 8, json.len - 8);
     const char *a = "\"a\"", *b = "\"b\"";
     ASSERT(mg_json_next(sub, 0, &k, &v) == 9);
-    ASSERT(mg_vcmp(&k, a) == 0);
-    ASSERT(mg_vcmp(&v, "[3]") == 0);
+    ASSERT(vcmp(k, a));
+    ASSERT(vcmp(v, "[3]"));
     ASSERT(mg_json_next(sub, 9, &k, &v) == 15);
-    ASSERT(mg_vcmp(&k, b) == 0);
-    ASSERT(mg_vcmp(&v, "42") == 0);
+    ASSERT(vcmp(k, b));
+    ASSERT(vcmp(v, "42"));
     ASSERT(mg_json_next(sub, 15, &k, &v) == 0);
   }
 
@@ -3332,7 +3359,7 @@ int main(void) {
   test_queue();
   test_rpc();
   test_str();
-  test_globmatch();
+  test_match();
   test_get_header_var();
   test_http_parse();
   test_rewrites();

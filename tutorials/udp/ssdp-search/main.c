@@ -19,11 +19,11 @@ static void fn(struct mg_connection *c, int ev, void *ev_data) {
       size_t i, max = sizeof(hm.headers) / sizeof(hm.headers[0]);
       // Iterate over request headers
       for (i = 0; i < max && hm.headers[i].name.len > 0; i++) {
-        struct mg_str *k = &hm.headers[i].name, *v = &hm.headers[i].value;
-        if ((mg_vcasecmp(k, "SERVER") == 0) ||
-            (mg_vcasecmp(k, "LOCATION") == 0)) {
-          printf("\t%.*s -> %.*s\n", (int) k->len, k->buf, (int) v->len,
-                 v->buf);
+        struct mg_str k = hm.headers[i].name, v = hm.headers[i].value;
+        if ((mg_strcasecmp(k, mg_str("SERVER")) == 0) ||
+            (mg_strcasecmp(k, mg_str("LOCATION")) == 0)) {
+          printf("\t%.*s -> %.*s\n", (int) k.len, k.buf, (int) v.len,
+                 v.buf);
         }
       }
       printf("\n");
