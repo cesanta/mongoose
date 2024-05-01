@@ -58,7 +58,7 @@ CFLAGS  += -DMG_TLS=MG_TLS_BUILTIN
 endif
 
 all:
-	$(MAKE) -C ../examples/http-server
+	$(MAKE) -C ../tutorials/http/http-server
 
 tall: mg_prefix unamalgamated test mip_test arm examples vc98 vc17 vc22 mingw mingw++ fuzz
 
