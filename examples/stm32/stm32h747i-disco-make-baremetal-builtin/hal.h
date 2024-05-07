@@ -161,6 +161,7 @@ static inline char chiprev(void) {
   return '?';
 }
 
+// Hw pull-ups on PHY RXD0,1,DV to enable autonegotiation
 static inline void ethernet_init(void) {
   // Initialise Ethernet. Enable MAC GPIO pins, see UM2411
   uint16_t pins[] = {PIN('A', 1),  PIN('A', 2),  PIN('A', 7),

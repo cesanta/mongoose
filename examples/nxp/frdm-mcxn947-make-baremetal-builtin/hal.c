@@ -8,12 +8,14 @@ void SysTick_Handler(void) {       // SyStick IRQ handler, triggered every 1ms
   s_ticks++;
 }
 
+#if 0
 void mg_random(void *buf, size_t len) {  // Use on-board RNG
   for (size_t n = 0; n < len; n += sizeof(uint32_t)) {
     uint32_t r = rng_read();
     memcpy((char *) buf + n, &r, n + sizeof(r) > len ? len - n : sizeof(r));
   }
 }
+#endif
 
 uint64_t mg_millis(void) {  // Let Mongoose use our uptime function
   return s_ticks;           // Return number of milliseconds since boot
@@ -23,13 +25,16 @@ void hal_init(void) {
   clock_init();                            // Set system clock to SYS_FREQUENCY
   SystemCoreClock = SYS_FREQUENCY;         // Update SystemCoreClock global var
   SysTick_Config(SystemCoreClock / 1000);  // Sys tick every 1ms
-  rng_init();                              // Initialise random number generator
+  // rng_init();  // TRNG is part of ELS and there is no info on that
 
   uart_init(UART_DEBUG, 115200);  // Initialise UART
   gpio_output(LED1);              // Initialise LED1
-  gpio_output(LED2);              // Initialise LED2
-  gpio_output(LED3);              // Initialise LED3
-  ethernet_init();                // Initialise Ethernet pins
+  gpio_write(LED1, 1);
+  gpio_output(LED2);  // Initialise LED2
+  gpio_write(LED2, 1);
+  gpio_output(LED3);  // Initialise LED3
+  gpio_write(LED3, 1);
+  ethernet_init();  // Initialise Ethernet pins
 }
 
 #if defined(__ARMCC_VERSION)
@@ -46,15 +51,49 @@ int fputc(int c, FILE *stream) {
 //      the rest are just stubs
 #include <sys/stat.h>  // For _fstat()
 
+#if !defined(__MCUXPRESSO)
 uint32_t SystemCoreClock;
+// evaluate your use of Secure/non-Secure and modify accordingly
 void SystemInit(void) {  // Called automatically by startup code
+  SCB->CPACR |=
+#if 0
+      (3UL << 0 * 2) | (3UL << 1 * 2) |   // Enable PowerQuad (CPO/CP1)
+#endif
+      (3UL << 10 * 2) | (3UL << 11 * 2);  // Enable FPU
+  __DSB();
+  __ISB();
+  SYSCON->LPCAC_CTRL &= ~SYSCON_LPCAC_CTRL_DIS_LPCAC_MASK;  // enable LPCAC
+// Read TRM 36.1 and decide whether you really want to enable aGDET and dGDET
+#if 1
+  // Disable aGDET and dGDET
+  ITRC0->OUT_SEL[4][0] =
+      (ITRC0->OUT_SEL[4][0] & ~ITRC_OUTX_SEL_OUTX_SELY_OUT_SEL_IN9_SELn_MASK) |
+      (ITRC_OUTX_SEL_OUTX_SELY_OUT_SEL_IN9_SELn(0x2));
+  ITRC0->OUT_SEL[4][1] =
+      (ITRC0->OUT_SEL[4][1] & ~ITRC_OUTX_SEL_OUTX_SELY_OUT_SEL_IN9_SELn_MASK) |
+      (ITRC_OUTX_SEL_OUTX_SELY_OUT_SEL_IN9_SELn(0x2));
+  SPC0->ACTIVE_CFG |= SPC_ACTIVE_CFG_GLITCH_DETECT_DISABLE_MASK;
+  SPC0->GLITCH_DETECT_SC &= ~SPC_GLITCH_DETECT_SC_LOCK_MASK;
+  SPC0->GLITCH_DETECT_SC = 0x3C;
+  SPC0->GLITCH_DETECT_SC |= SPC_GLITCH_DETECT_SC_LOCK_MASK;
+  ITRC0->OUT_SEL[4][0] =
+      (ITRC0->OUT_SEL[4][0] & ~ITRC_OUTX_SEL_OUTX_SELY_OUT_SEL_IN0_SELn_MASK) |
+      (ITRC_OUTX_SEL_OUTX_SELY_OUT_SEL_IN0_SELn(0x2));
+  ITRC0->OUT_SEL[4][1] =
+      (ITRC0->OUT_SEL[4][1] & ~ITRC_OUTX_SEL_OUTX_SELY_OUT_SEL_IN0_SELn_MASK) |
+      (ITRC_OUTX_SEL_OUTX_SELY_OUT_SEL_IN0_SELn(0x2));
+  GDET0->GDET_ENABLE1 = 0;
+  GDET1->GDET_ENABLE1 = 0;
+#endif
 }
+#endif
 
 int _fstat(int fd, struct stat *st) {
   (void) fd, (void) st;
   return -1;
 }
 
+#if !defined(__MCUXPRESSO)
 extern unsigned char _end[];  // End of data section, start of heap. See link.ld
 static unsigned char *s_current_heap_end = _end;
 
@@ -76,6 +115,7 @@ void *_sbrk(int incr) {
   s_current_heap_end += incr;
   return prev_heap;
 }
+#endif
 
 int _open(const char *path) {
   (void) path;
@@ -143,4 +183,4 @@ int mkdir(const char *path, mode_t mode) {
 
 void _init(void) {
 }
-#endif                 // __GNUC__
+#endif  // __GNUC__

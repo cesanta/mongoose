@@ -161,6 +161,7 @@ static inline uint32_t rng_read(void) {
   return RNG->DR;
 }
 
+// Hw pull-ups on PHY RXD0,1,DV to enable autonegotiation
 static inline void ethernet_init(void) {
   // Initialise Ethernet. Enable MAC GPIO pins, see
   // https://www.st.com/resource/en/user_manual/um2407-stm32h7-nucleo144-boards-mb1364-stmicroelectronics.pdf

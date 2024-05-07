@@ -5,6 +5,7 @@ ENTRY(Reset_Handler)
 MEMORY
 {
     flash(RX) : ORIGIN = 0x0, LENGTH = 0x100000
+    flash2(RX) : ORIGIN = 0x100000, LENGTH = 0x100000
     sram(!RX) : ORIGIN = 0x20000000, LENGTH = 0x60000
 }
 

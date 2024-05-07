@@ -149,6 +149,7 @@ static inline bool ldo_is_on(void) {
   return (PWR->SCCR & PWR_SCCR_LDOEN) == PWR_SCCR_LDOEN;
 }
 
+// Hw pull-ups on PHY RXD0,1,DV to enable autonegotiation
 static inline void ethernet_init(void) {
   // Initialise Ethernet. Enable MAC GPIO pins, see UM3115 section 10.7
   uint16_t pins[] = {PIN('A', 1),  PIN('A', 2),  PIN('A', 7),

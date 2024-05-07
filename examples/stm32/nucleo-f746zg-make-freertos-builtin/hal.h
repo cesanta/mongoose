@@ -138,6 +138,7 @@ static inline uint32_t rng_read(void) {
   return RNG->DR;
 }
 
+// Hw pull-ups on PHY RXD0,1,DV to enable autonegotiation
 static inline void ethernet_init(void) {
   // Initialise Ethernet. Enable MAC GPIO pins, see
   // https://www.farnell.com/datasheets/2014265.pdf section 6.10
