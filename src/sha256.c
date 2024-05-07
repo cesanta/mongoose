@@ -126,14 +126,14 @@ void mg_sha256_final(unsigned char digest[32], mg_sha256_ctx *ctx) {
   mg_sha256_chunk(ctx);
 
   for (i = 0; i < 4; ++i) {
-    digest[i] = (ctx->state[0] >> (24 - i * 8)) & 0xff;
-    digest[i + 4] = (ctx->state[1] >> (24 - i * 8)) & 0xff;
-    digest[i + 8] = (ctx->state[2] >> (24 - i * 8)) & 0xff;
-    digest[i + 12] = (ctx->state[3] >> (24 - i * 8)) & 0xff;
-    digest[i + 16] = (ctx->state[4] >> (24 - i * 8)) & 0xff;
-    digest[i + 20] = (ctx->state[5] >> (24 - i * 8)) & 0xff;
-    digest[i + 24] = (ctx->state[6] >> (24 - i * 8)) & 0xff;
-    digest[i + 28] = (ctx->state[7] >> (24 - i * 8)) & 0xff;
+    digest[i] = (uint8_t) ((ctx->state[0] >> (24 - i * 8)) & 0xff);
+    digest[i + 4] = (uint8_t) ((ctx->state[1] >> (24 - i * 8)) & 0xff);
+    digest[i + 8] = (uint8_t) ((ctx->state[2] >> (24 - i * 8)) & 0xff);
+    digest[i + 12] = (uint8_t) ((ctx->state[3] >> (24 - i * 8)) & 0xff);
+    digest[i + 16] = (uint8_t) ((ctx->state[4] >> (24 - i * 8)) & 0xff);
+    digest[i + 20] = (uint8_t) ((ctx->state[5] >> (24 - i * 8)) & 0xff);
+    digest[i + 24] = (uint8_t) ((ctx->state[6] >> (24 - i * 8)) & 0xff);
+    digest[i + 28] = (uint8_t) ((ctx->state[7] >> (24 - i * 8)) & 0xff);
   }
 }
 
