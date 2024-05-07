@@ -101,7 +101,7 @@ jobs:
     - uses: actions/checkout@v4
       with: { fetch-depth: 2 }
     - run: brew install jq mbedtls openssl
-    - run: make -C test test ASAN_OPTIONS= MBEDTLS=`echo /usr/local/Cellar/mbedtls*/*` OPENSSL=`echo /usr/local/Cellar/openssl*/*`
+    - run: make -C test test ASAN_OPTIONS= MBEDTLS=$(echo $(brew --cellar)/mbedtls*/*) OPENSSL=$(echo $(brew --cellar)/openssl*/*)
   windows:
     runs-on: ubuntu-latest
     strategy:

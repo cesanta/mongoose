@@ -183,7 +183,7 @@ mongoose.h: $(HDRS) Makefile
 
 
 clean: clean_examples clean_refprojs clean_tutorials clean_examples_embedded
-	rm -rf $(PROG) *.exe *.o *.dSYM *_test* ut fuzzer *.gcov *.gcno *.gcda *.obj *.exe *.ilk *.pdb slow-unit* _CL_* infer-out data.txt crash-* packed_fs.c pack
+	rm -rf $(PROG) *.exe *.o *.dSYM *_test ut fuzzer *.gcov *.gcno *.gcda *.obj *.exe *.ilk *.pdb slow-unit* _CL_* infer-out data.txt crash-* packed_fs.c pack
 	#find examples -maxdepth 3 -name zephyr -prune -o -name Makefile -print | xargs dirname | xargs -n1 make clean -C
 
 
