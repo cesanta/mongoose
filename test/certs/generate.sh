@@ -18,15 +18,15 @@ openssl req -x509 -new -key ca.key -days 3650 -subj /CN=Mongoose -out ca.crt
 
 # Generate server cert
 openssl ecparam -noout -name prime256v1 -genkey -out server.key
-openssl req -new -sha256 -key server.key -days 3650 -subj /CN=s -out server.csr
+openssl req -new -sha256 -key server.key -days 3650 -subj /CN=server -out server.csr
 openssl x509 -req -sha256 -in server.csr -extensions SAN -extfile cnf \
-  -CAkey ca.key -CA ca.crt -CAcreateserial -out server.crt
+  -CAkey ca.key -CA ca.crt -CAcreateserial -days 3650 -out server.crt
 
 # Generate client cert
 openssl ecparam -noout -name prime256v1 -genkey -out client.key
-openssl req -new -sha256 -key client.key -days 3650 -subj /CN=c -out client.csr
+openssl req -new -sha256 -key client.key -days 3650 -subj /CN=client -out client.csr
 openssl x509 -req -sha256 -in client.csr -extensions SAN -extfile cnf \
-  -CAkey ca.key -CA ca.crt -CAcreateserial -out client.crt
+  -CAkey ca.key -CA ca.crt -CAcreateserial -days 3650 -out client.crt
 
 # Verify
 openssl verify -verbose -CAfile ca.crt server.crt
