@@ -120,7 +120,8 @@ extern "C" {
 #include <sys/types.h>
 #include <time.h>
 
-#include <esp_timer.h>
+#include <esp_ota_ops.h>  // Use angle brackets to avoid
+#include <esp_timer.h>    // amalgamation ditching them
 
 #define MG_PATH_MAX 128
 
@@ -2484,6 +2485,7 @@ void mg_rpc_list(struct mg_rpc_req *r);
 
 #define MG_OTA_NONE 0      // No OTA support
 #define MG_OTA_FLASH 1     // OTA via an internal flash
+#define MG_OTA_ESP32 2     // ESP32 OTA implementation
 #define MG_OTA_CUSTOM 100  // Custom implementation
 
 #ifndef MG_OTA
@@ -2524,13 +2526,14 @@ MG_IRAM void mg_ota_boot(void);  // Bootloader function
 
 
 
-#define MG_DEVICE_NONE 0        // Dummy system
+#define MG_DEVICE_NONE 0  // Dummy system
+
 #define MG_DEVICE_STM32H5 1     // STM32 H5
 #define MG_DEVICE_STM32H7 2     // STM32 H7
-#define MG_DEVICE_RT1020 3      // IMXRT1020
-#define MG_DEVICE_RT1060 4      // IMXRT1060
 #define MG_DEVICE_CH32V307 100  // WCH CH32V307
 #define MG_DEVICE_U2A 200       // Renesas U2A16, U2A8, U2A6
+#define MG_DEVICE_RT1020 300    // IMXRT1020
+#define MG_DEVICE_RT1060 301    // IMXRT1060
 #define MG_DEVICE_CUSTOM 1000   // Custom implementation
 
 #ifndef MG_DEVICE
@@ -2918,14 +2921,6 @@ struct mg_tcpip_driver_tm4c_data {
 #ifndef MG_DRIVER_MDC_CR
 #define MG_DRIVER_MDC_CR 1
 #endif
-
-#endif
-
-
-#if MG_ENABLE_TCPIP && defined(MG_ENABLE_DRIVER_W5500) && MG_ENABLE_DRIVER_W5500
-
-#undef MG_ENABLE_TCPIP_DRIVER_INIT
-#define MG_ENABLE_TCPIP_DRIVER_INIT 0
 
 #endif
 

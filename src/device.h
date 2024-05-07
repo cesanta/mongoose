@@ -5,13 +5,14 @@
 
 #include "arch.h"
 
-#define MG_DEVICE_NONE 0        // Dummy system
+#define MG_DEVICE_NONE 0  // Dummy system
+
 #define MG_DEVICE_STM32H5 1     // STM32 H5
 #define MG_DEVICE_STM32H7 2     // STM32 H7
-#define MG_DEVICE_RT1020 3      // IMXRT1020
-#define MG_DEVICE_RT1060 4      // IMXRT1060
 #define MG_DEVICE_CH32V307 100  // WCH CH32V307
 #define MG_DEVICE_U2A 200       // Renesas U2A16, U2A8, U2A6
+#define MG_DEVICE_RT1020 300    // IMXRT1020
+#define MG_DEVICE_RT1060 301    // IMXRT1060
 #define MG_DEVICE_CUSTOM 1000   // Custom implementation
 
 #ifndef MG_DEVICE
