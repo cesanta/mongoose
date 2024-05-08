@@ -20,6 +20,11 @@ struct device_config {
 };
 
 static struct device_config s_device_config;
+static uint64_t s_boot_timestamp = 0;  // Updated by SNTP
+
+uint64_t mg_now(void) {
+  return mg_millis() + s_boot_timestamp;
+}
 
 // Device ID generation function. Create an ID that is unique
 // for a given device, and does not change between device restarts.
@@ -272,6 +277,30 @@ static void timer_ping(void *arg) {
   (void) arg;
 }
 
+// SNTP connection event handler. When we get a response from an SNTP server,
+// adjust s_boot_timestamp. We'll get a valid time from that point on
+static void sntp_ev_handler(struct mg_connection *c, int ev, void *ev_data) {
+  uint64_t *expiration_time = (uint64_t *) c->data;
+  if (ev == MG_EV_OPEN) {
+    *expiration_time = mg_millis() + 3000;  // Store expiration time in 3s
+  } else if (ev == MG_EV_SNTP_TIME) {
+    uint64_t t = *(uint64_t *) ev_data;
+    s_boot_timestamp = t - mg_millis();
+    c->is_closing = 1;
+  } else if (ev == MG_EV_POLL) {
+    if (mg_millis() > *expiration_time) c->is_closing = 1;
+  }
+}
+
+static void timer_sntp(void *param) {  // SNTP timer function. Sync up time
+  static uint64_t hourly_timer = 0;
+  if (s_boot_timestamp == 0 ||
+      mg_timer_expired(&hourly_timer, 3600000, mg_millis())) {
+    mg_sntp_connect(param, "udp://time.google.com:123", sntp_ev_handler, NULL);
+  }
+}
+
+
 void web_init(struct mg_mgr *mgr) {
   int i, ping_interval_ms = MQTT_KEEPALIVE_SEC * 1000 - 500;
   set_device_id();
@@ -296,6 +325,7 @@ void web_init(struct mg_mgr *mgr) {
   mg_timer_add(mgr, 3000, MG_TIMER_REPEAT | MG_TIMER_RUN_NOW, timer_reconnect,
                mgr);
   mg_timer_add(mgr, ping_interval_ms, MG_TIMER_REPEAT, timer_ping, mgr);
+  mg_timer_add(mgr, 2000, MG_TIMER_REPEAT, timer_sntp, mgr);
 }
 
 void web_free(void) {
