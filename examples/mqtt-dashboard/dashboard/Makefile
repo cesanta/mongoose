@@ -2,7 +2,7 @@ PWD := $(shell pwd)
 NPX ?= npx
 
 all: bundle.js main.css
-	make -C ../../http-server ARGS="-d $(PWD)"
+	make -C ../../../tutorials/http/http-server ARGS="-d $(PWD)"
 
 # Bundle JS libraries (preact, preact-router, ...) into a single file
 bundle.js:
