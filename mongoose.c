@@ -9501,8 +9501,7 @@ static uint8_t zeros_sha256_digest[32] = {
 
 // helper to hexdump buffers inline
 static void mg_tls_hexdump(const char *msg, uint8_t *buf, size_t bufsz) {
-  char p[8 * 4096];
-  MG_VERBOSE(("%s: %s", msg, mg_hex(buf, bufsz, p)));
+  MG_VERBOSE(("%s: %M", msg, mg_print_hex, bufsz, buf));
 }
 
 // helper utilities to parse ASN.1 DER
