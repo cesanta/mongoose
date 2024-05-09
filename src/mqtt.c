@@ -254,14 +254,13 @@ size_t mg_mqtt_next_prop(struct mg_mqtt_message *msg, struct mg_mqtt_prop *prop,
 }
 
 void mg_mqtt_login(struct mg_connection *c, const struct mg_mqtt_opts *opts) {
-  char rnd[10], client_id[21];
+  char client_id[21];
   struct mg_str cid = opts->client_id;
   size_t total_len = 7 + 1 + 2 + 2;
   uint8_t hdr[8] = {0, 4, 'M', 'Q', 'T', 'T', opts->version, 0};
 
   if (cid.len == 0) {
-    mg_random(rnd, sizeof(rnd));
-    mg_hex(rnd, sizeof(rnd), client_id);
+    mg_random_str(client_id, sizeof(client_id) - 1);
     client_id[sizeof(client_id) - 1] = '\0';
     cid = mg_str(client_id);
   }

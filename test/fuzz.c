@@ -72,7 +72,7 @@ int LLVMFuzzerTestOneInput(const uint8_t *data, size_t size) {
   mg_base64_encode(data, size, buf, sizeof(buf));
   mg_base64_encode(NULL, 0, buf, sizeof(buf));
 
-  mg_globmatch((char *) data, size, (char *) data, size);
+  mg_match(mg_str_n((char *) data, size), mg_str_n((char *) data, size), NULL);
 
   struct mg_str entry, s = mg_str_n((char *) data, size);
   while (mg_span(s, &entry, &s, ',')) entry.len = 0;

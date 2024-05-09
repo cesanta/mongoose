@@ -77,7 +77,7 @@ static void f_http_fetch_query(struct mg_connection *c, int ev, void *ev_data) {
     struct mg_http_message *hm = (struct mg_http_message *) ev_data;
     http_responses_received++;
     if (!http_response_allocated) {
-      http_response = (char *) mg_strdup(hm->message).buf;
+      http_response = mg_mprintf("%.*s", hm->message.len, hm->message.buf);
       http_response_allocated = 1;
     }
     if (http_responses_received > 0) {

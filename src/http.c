@@ -1,7 +1,7 @@
+#include "http.h"
 #include "arch.h"
 #include "base64.h"
 #include "fmt.h"
-#include "http.h"
 #include "json.h"
 #include "log.h"
 #include "net.h"
@@ -10,6 +10,17 @@
 #include "util.h"
 #include "version.h"
 #include "ws.h"
+
+static int mg_ncasecmp(const char *s1, const char *s2, size_t len) {
+  int diff = 0;
+  if (len > 0) do {
+      char c = *s1++, d = *s2++;
+      if (c >= 'A' && c <= 'Z') c += 'a' - 'A';
+      if (d >= 'A' && d <= 'Z') d += 'a' - 'A';
+      diff = c - d;
+    } while (diff == 0 && s1[-1] != '\0' && --len > 0);
+  return diff;
+}
 
 bool mg_to_size_t(struct mg_str str, size_t *val);
 bool mg_to_size_t(struct mg_str str, size_t *val) {
@@ -301,15 +312,15 @@ int mg_http_parse(const char *s, size_t len, struct mg_http_message *hm) {
   // and method is not (PUT or POST) then reset body length to zero.
   is_response = mg_ncasecmp(hm->method.buf, "HTTP/", 5) == 0;
   if (hm->body.len == (size_t) ~0 && !is_response &&
-      mg_vcasecmp(&hm->method, "PUT") != 0 &&
-      mg_vcasecmp(&hm->method, "POST") != 0) {
+      mg_strcasecmp(hm->method, mg_str("PUT")) != 0 &&
+      mg_strcasecmp(hm->method, mg_str("POST")) != 0) {
     hm->body.len = 0;
     hm->message.len = (size_t) req_len;
   }
 
   // The 204 (No content) responses also have 0 body length
   if (hm->body.len == (size_t) ~0 && is_response &&
-      mg_vcasecmp(&hm->uri, "204") == 0) {
+      mg_strcasecmp(hm->uri, mg_str("204")) == 0) {
     hm->body.len = 0;
     hm->message.len = (size_t) req_len;
   }
@@ -560,10 +571,14 @@ void mg_http_serve_file(struct mg_connection *c, struct mg_http_message *hm,
   if (path != NULL) {
     // If a browser sends us "Accept-Encoding: gzip", try to open .gz first
     struct mg_str *ae = mg_http_get_header(hm, "Accept-Encoding");
-    if (ae != NULL && mg_strstr(*ae, mg_str("gzip")) != NULL) {
-      mg_snprintf(tmp, sizeof(tmp), "%s.gz", path);
-      fd = mg_fs_open(fs, tmp, MG_FS_READ);
-      if (fd != NULL) gzip = true, path = tmp;
+    if (ae != NULL) {
+      char *ae_ = mg_mprintf("%.*s", ae->len, ae->buf);
+      if (strstr(ae_, "gzip") != NULL) {
+        mg_snprintf(tmp, sizeof(tmp), "%s.gz", path);
+        fd = mg_fs_open(fs, tmp, MG_FS_READ);
+        if (fd != NULL) gzip = true, path = tmp;
+      }
+      free(ae_);
     }
     // No luck opening .gz? Open what we've told to open
     if (fd == NULL) fd = mg_fs_open(fs, path, MG_FS_READ);
@@ -582,7 +597,7 @@ void mg_http_serve_file(struct mg_connection *c, struct mg_http_message *hm,
     // NOTE: mg_http_etag() call should go first!
   } else if (mg_http_etag(etag, sizeof(etag), size, mtime) != NULL &&
              (inm = mg_http_get_header(hm, "If-None-Match")) != NULL &&
-             mg_vcasecmp(inm, etag) == 0) {
+             mg_strcasecmp(*inm, mg_str(etag)) == 0) {
     mg_fs_close(fd);
     mg_http_reply(c, 304, opts->extra_headers, "");
   } else {
@@ -619,7 +634,7 @@ void mg_http_serve_file(struct mg_connection *c, struct mg_http_message *hm,
               status, mg_http_status_code_str(status), (int) mime.len, mime.buf,
               etag, (uint64_t) cl, gzip ? "Content-Encoding: gzip\r\n" : "",
               range, opts->extra_headers ? opts->extra_headers : "");
-    if (mg_vcasecmp(&hm->method, "HEAD") == 0) {
+    if (mg_strcasecmp(hm->method, mg_str("HEAD")) == 0) {
       c->is_draining = 1;
       c->is_resp = 0;
       mg_fs_close(fd);
@@ -775,7 +790,8 @@ static int uri_to_path2(struct mg_connection *c, struct mg_http_message *hm,
   }
   n = strlen(path);
   while (n > 1 && path[n - 1] == '/') path[--n] = 0;  // Trim trailing slashes
-  flags = mg_vcmp(&hm->uri, "/") == 0 ? MG_FS_DIR : fs->st(path, NULL, NULL);
+  flags = mg_strcmp(hm->uri, mg_str("/")) == 0 ? MG_FS_DIR
+                                               : fs->st(path, NULL, NULL);
   MG_VERBOSE(("%lu %.*s -> %s %d", c->id, (int) hm->uri.len, hm->uri.buf, path,
               flags));
   if (flags == 0) {
@@ -838,8 +854,7 @@ void mg_http_serve_dir(struct mg_connection *c, struct mg_http_message *hm,
 #else
     mg_http_reply(c, 403, "", "Forbidden\n");
 #endif
-  } else if (flags && sp != NULL &&
-             mg_globmatch(sp, strlen(sp), path, strlen(path))) {
+  } else if (flags && sp != NULL && mg_match(mg_str(path), mg_str(sp), NULL)) {
     mg_http_serve_ssi(c, opts->root_dir, path);
   } else {
     mg_http_serve_file(c, hm, path, opts);
@@ -859,9 +874,8 @@ size_t mg_url_encode(const char *s, size_t sl, char *buf, size_t len) {
     if (mg_is_url_safe(c)) {
       buf[n++] = s[i];
     } else {
-      buf[n++] = '%';
-      mg_hex(&s[i], 1, &buf[n]);
-      n += 2;
+      mg_snprintf(&buf[n], 4, "%%%M", mg_print_hex, 1, &s[i]);
+      n += 3;
     }
   }
   if (len > 0 && n < len - 1) buf[n] = '\0';  // Null-terminate the destination
@@ -1007,7 +1021,7 @@ static void http_cb(struct mg_connection *c, int ev, void *ev_data) {
         hm.body.len = hm.message.len - (size_t) (hm.body.buf - hm.message.buf);
       }
       if ((te = mg_http_get_header(&hm, "Transfer-Encoding")) != NULL) {
-        if (mg_vcasecmp(te, "chunked") == 0) {
+        if (mg_strcasecmp(*te, mg_str("chunked")) == 0) {
           is_chunked = true;
         } else {
           mg_error(c, "Invalid Transfer-Encoding");  // See #2460
@@ -1018,8 +1032,8 @@ static void http_cb(struct mg_connection *c, int ev, void *ev_data) {
         // Content-length
         bool is_response = mg_ncasecmp(hm.method.buf, "HTTP/", 5) == 0;
         bool require_content_len = false;
-        if (!is_response && (mg_vcasecmp(&hm.method, "POST") == 0 ||
-                             mg_vcasecmp(&hm.method, "PUT") == 0)) {
+        if (!is_response && (mg_strcasecmp(hm.method, mg_str("POST")) == 0 ||
+                             mg_strcasecmp(hm.method, mg_str("PUT")) == 0)) {
           // POST and PUT should include an entity body. Therefore, they should
           // contain a Content-length header. Other requests can also contain a
           // body, but their content has no defined semantics (RFC 7231)

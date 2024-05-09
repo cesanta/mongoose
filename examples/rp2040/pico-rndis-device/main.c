@@ -61,10 +61,6 @@ static void fn(struct mg_connection *c, int ev, void *ev_data, void *fn_dta) {
   if (ev == MG_EV_HTTP_MSG) return mg_http_reply(c, 200, "", "ok\n");
 }
 
-uint64_t mg_now(void) {
-  return mg_millis();
-}
-
 int main(void) {
   gpio_init(PICO_DEFAULT_LED_PIN);
   gpio_set_dir(PICO_DEFAULT_LED_PIN, GPIO_OUT);

@@ -48,8 +48,10 @@ static void fn(struct mg_connection *c, int ev, void *ev_data) {
       mg_http_reply(c, 200, "Host: foo.com\r\n", "hi\n");
     } else {
       // Multithreading code path
-      struct thread_data *data = calloc(1, sizeof(*data));  // Worker owns it
-      data->message = mg_strdup(hm->message);               // Pass message
+      struct thread_data *data =
+          (struct thread_data *) calloc(1, sizeof(*data));  // Worker owns it
+      data->message.buf = mg_mprintf("%.*s", hm->message.len, hm->message.buf);
+      data->message.len = hm->message.len;  // Pass message
       data->conn_id = c->id;
       data->mgr = c->mgr;
       start_thread(thread_function, data);  // Start thread and pass data

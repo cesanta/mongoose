@@ -22,7 +22,7 @@ extern uint32_t rt_time_get(void);
 #include "cmsis_os2.h"  // keep this include
 #endif
 
-#define strdup(s) ((char *) mg_strdup(mg_str(s)).buf)
+#define strdup(s) mg_mprintf("%s", s)
 
 #if defined(__ARMCC_VERSION)
 #define mode_t size_t

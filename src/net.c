@@ -24,7 +24,7 @@ size_t mg_printf(struct mg_connection *c, const char *fmt, ...) {
 
 static bool mg_atonl(struct mg_str str, struct mg_addr *addr) {
   uint32_t localhost = mg_htonl(0x7f000001);
-  if (mg_vcasecmp(&str, "localhost") != 0) return false;
+  if (mg_strcasecmp(str, mg_str("localhost")) != 0) return false;
   memcpy(addr->ip, &localhost, sizeof(uint32_t));
   addr->is_ip6 = false;
   return true;
