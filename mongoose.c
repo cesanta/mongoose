@@ -2789,7 +2789,7 @@ void mg_http_serve_file(struct mg_connection *c, struct mg_http_message *hm,
     struct mg_str *ae = mg_http_get_header(hm, "Accept-Encoding");
     if (ae != NULL) {
       char *ae_ = mg_mprintf("%.*s", ae->len, ae->buf);
-      if (strstr(ae_, "gzip") != NULL) {
+      if (ae_ != NULL && strstr(ae_, "gzip") != NULL) {
         mg_snprintf(tmp, sizeof(tmp), "%s.gz", path);
         fd = mg_fs_open(fs, tmp, MG_FS_READ);
         if (fd != NULL) gzip = true, path = tmp;
