@@ -2385,7 +2385,7 @@ int mg_url_decode(const char *src, size_t src_len, char *dst, size_t dst_len,
     if (src[i] == '%') {
       // Use `i + 2 < src_len`, not `i < src_len - 2`, note small src_len
       if (i + 2 < src_len && isx(src[i + 1]) && isx(src[i + 2])) {
-        mg_unhex(src + i + 1, 2, (uint8_t *) &dst[j]);
+        mg_str_to_num(mg_str_n(src + i + 1, 2), 16, &dst[j], sizeof(uint8_t));
         i += 2;
       } else {
         return -1;
@@ -3204,9 +3204,10 @@ static int skip_chunk(const char *buf, int len, int *pl, int *dl) {
   if (i == 0) return -1;                     // Error, no length specified
   if (i > (int) sizeof(int) * 2) return -1;  // Chunk length is too big
   if (len < i + 1 || buf[i] != '\r' || buf[i + 1] != '\n') return -1;  // Error
-  n = (int) mg_unhexn(buf, (size_t) i);  // Decode chunk length
-  if (n < 0) return -1;                  // Error
-  if (n > len - i - 4) return 0;         // Chunk not yet fully buffered
+  if (mg_str_to_num(mg_str_n(buf, (size_t) i), 16, &n, sizeof(int)) == false)
+    return -1;                    // Decode chunk length, overflow
+  if (n < 0) return -1;           // Error. TODO(): some checks now redundant
+  if (n > len - i - 4) return 0;  // Chunk not yet fully buffered
   if (buf[i + n + 2] != '\r' || buf[i + n + 3] != '\n') return -1;  // Error
   *pl = i + 2, *dl = n;
   return i + 2 + n + 2;
@@ -3715,12 +3716,12 @@ bool mg_json_unescape(struct mg_str s, char *to, size_t n) {
   size_t i, j;
   for (i = 0, j = 0; i < s.len && j < n; i++, j++) {
     if (s.buf[i] == '\\' && i + 5 < s.len && s.buf[i + 1] == 'u') {
-      //  \uXXXX escape. We could process a simple one-byte chars
-      // \u00xx from the ASCII range. More complex chars would require
-      // dragging in a UTF8 library, which is too much for us
-      if (s.buf[i + 2] != '0' || s.buf[i + 3] != '0') return false;  // Give up
-      ((unsigned char *) to)[j] = (unsigned char) mg_unhexn(s.buf + i + 4, 2);
-
+      //  \uXXXX escape. We process simple one-byte chars \u00xx within ASCII
+      //  range. More complex chars would require dragging in a UTF8 library,
+      //  which is too much for us
+      if (mg_str_to_num(mg_str_n(s.buf + i + 2, 4), 16, &to[j],
+                        sizeof(uint8_t)) == false)
+        return false;
       i += 5;
     } else if (s.buf[i] == '\\' && i + 1 < s.len) {
       char c = json_esc(s.buf[i + 1], 0);
@@ -3767,7 +3768,11 @@ char *mg_json_get_hex(struct mg_str json, const char *path, int *slen) {
   int len = 0, off = mg_json_get(json, path, &len);
   if (off >= 0 && json.buf[off] == '"' && len > 1 &&
       (result = (char *) calloc(1, (size_t) len / 2)) != NULL) {
-    mg_unhex(json.buf + off + 1, (size_t) (len - 2), (uint8_t *) result);
+    int i;
+    for (i = 0; i < len - 2; i += 2) {
+      mg_str_to_num(mg_str_n(json.buf + off + 1 + i, 2), 16, &result[i >> 1],
+                    sizeof(uint8_t));
+    }
     result[len / 2 - 1] = '\0';
     if (slen != NULL) *slen = len / 2 - 1;
   }
@@ -4654,7 +4659,7 @@ static bool mg_atone(struct mg_str str, struct mg_addr *addr) {
 
 static bool mg_aton4(struct mg_str str, struct mg_addr *addr) {
   uint8_t data[4] = {0, 0, 0, 0};
-  size_t i, num_dots = 0;
+  size_t i, num_dots = 0; // TODO(): refactor to mg_span() + mg_str_num()
   for (i = 0; i < str.len; i++) {
     if (str.buf[i] >= '0' && str.buf[i] <= '9') {
       int octet = data[num_dots] * 10 + (str.buf[i] - '0');
@@ -4700,10 +4705,10 @@ static bool mg_aton6(struct mg_str str, struct mg_addr *addr) {
     if ((str.buf[i] >= '0' && str.buf[i] <= '9') ||
         (str.buf[i] >= 'a' && str.buf[i] <= 'f') ||
         (str.buf[i] >= 'A' && str.buf[i] <= 'F')) {
-      unsigned long val;
+      unsigned long val;  // TODO(): This loops, refactor
       if (i > j + 3) return false;
       // MG_DEBUG(("%lu %lu [%.*s]", i, j, (int) (i - j + 1), &str.buf[j]));
-      val = mg_unhexn(&str.buf[j], i - j + 1);
+      mg_str_to_num(mg_str_n(&str.buf[j], i - j + 1), 16, &val, sizeof(val));
       addr->ip[n] = (uint8_t) ((val >> 8) & 255);
       addr->ip[n + 1] = (uint8_t) (val & 255);
     } else if (str.buf[i] == ':') {
@@ -4716,12 +4721,9 @@ static bool mg_aton6(struct mg_str str, struct mg_addr *addr) {
       }
       if (n > 14) return false;
       addr->ip[n] = addr->ip[n + 1] = 0;  // For trailing ::
-    } else if (str.buf[i] == '%') {       // Scope ID
-      for (i = i + 1; i < str.len; i++) {
-        if (str.buf[i] < '0' || str.buf[i] > '9') return false;
-        addr->scope_id = (uint8_t) (addr->scope_id * 10);
-        addr->scope_id = (uint8_t) (addr->scope_id + (str.buf[i] - '0'));
-      }
+    } else if (str.buf[i] == '%') {       // Scope ID, last in string
+      return mg_str_to_num(mg_str_n(&str.buf[i + 1], str.len - i - 1), 10,
+                           &addr->scope_id, sizeof(uint8_t));
     } else {
       return false;
     }
@@ -8120,25 +8122,74 @@ bool mg_span(struct mg_str s, struct mg_str *a, struct mg_str *b, char sep) {
   }
 }
 
-uint8_t mg_toi(char c, int base) {
-  return (c >= '0' && c <= '9') ? (uint8_t) (c - '0')
-         : base == 16           ? (c >= 'A' && c <= 'F')   ? (uint8_t) (c - '7')
-                                  : (c >= 'a' && c <= 'f') ? (uint8_t) (c - 'W')
-                                                           : (uint8_t) ~0
-                                : (uint8_t) ~0;
-}
-
-unsigned long mg_unhexn(const char *s, size_t len) {
-  unsigned long i = 0, v = 0;
-  for (i = 0; i < len; i++) v <<= 4, v |= mg_toi(((char *) s)[i], 16);
-  return v;
-}
-
-void mg_unhex(const char *buf, size_t len, unsigned char *to) {
-  size_t i;
-  for (i = 0; i < len; i += 2) {
-    to[i >> 1] = (unsigned char) mg_unhexn(&buf[i], 2);
+bool mg_str_to_num(struct mg_str str, int base, void *val, size_t val_len) {
+  size_t i = 0, ndigits = 0;
+  uint64_t max = val_len == sizeof(uint8_t)   ? 0xFF
+                 : val_len == sizeof(uint16_t) ? 0xFFFF
+                 : val_len == sizeof(uint32_t) ? 0xFFFFFFFF
+                                : (uint64_t) ~0;
+  uint64_t result = 0;
+  if (max == (uint64_t) ~0 && val_len != sizeof(uint64_t)) return false;
+  if (base == 0 && str.len >= 2) {
+    if (str.buf[i] == '0') {
+      i++;
+      base = str.buf[i] == 'b' ? 2 : str.buf[i] == 'x' ? 16 : 10;
+      if (base != 10) ++i;
+    } else {
+      base = 10;
+    }
   }
+  switch (base) {
+    case 2:
+      while (i < str.len && (str.buf[i] == '0' || str.buf[i] == '1')) {
+        uint64_t digit = (uint64_t) (str.buf[i] - '0');
+        if (result > max/2) return false;  // Overflow
+        result *= 2;
+        if (result > max - digit) return false;  // Overflow
+        result += digit;
+        i++, ndigits++;
+      }
+      break;
+    case 10:
+      while (i < str.len && str.buf[i] >= '0' && str.buf[i] <= '9') {
+        uint64_t digit = (uint64_t) (str.buf[i] - '0');
+        if (result > max/10) return false;  // Overflow
+        result *= 10;
+        if (result > max - digit) return false;  // Overflow
+        result += digit;
+        i++, ndigits++;
+    }
+      break;
+    case 16:
+      while (i < str.len) {
+        char c = str.buf[i];
+        uint64_t digit = (c >= '0' && c <= '9')   ? (uint64_t) (c - '0')
+                         : (c >= 'A' && c <= 'F') ? (uint64_t) (c - '7')
+                         : (c >= 'a' && c <= 'f') ? (uint64_t) (c - 'W')
+                                                  : (uint64_t) ~0;
+        if (digit == (uint64_t) ~0) break;
+        if (result > max/16) return false;  // Overflow
+        result *= 16;
+        if (result > max - digit) return false;  // Overflow
+        result += digit;
+        i++, ndigits++;
+      }
+      break;
+    default:
+      return false;
+  }
+  if (ndigits == 0) return false;
+  if (i != str.len) return false;
+  if (val_len == 1) {
+    *((uint8_t *) val) = (uint8_t) result;
+  } else if (val_len == 2) {
+    *((uint16_t *) val) = (uint16_t) result;
+  } else if (val_len == 4) {
+    *((uint32_t *) val) = (uint32_t) result;
+  } else {
+    *((uint64_t *) val) = (uint64_t) result;
+  }
+  return true;
 }
 
 #ifdef MG_ENABLE_LINES
