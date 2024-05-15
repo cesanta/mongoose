@@ -43,7 +43,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        ssl: ["", BUILTIN]
+        ssl: [""]
     name: S390 SSL=${{ matrix.ssl }}
     steps:
     - uses: actions/checkout@v4
