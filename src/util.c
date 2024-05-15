@@ -63,9 +63,9 @@ uint32_t mg_crc32(uint32_t crc, const char *buf, size_t len) {
       0x9B64C2B0, 0x86D3D2D4, 0xA00AE278, 0xBDBDF21C};
   crc = ~crc;
   while (len--) {
-    uint8_t byte = *(uint8_t *) buf++;
-    crc = crclut[(crc ^ byte) & 0x0F] ^ (crc >> 4);
-    crc = crclut[(crc ^ (byte >> 4)) & 0x0F] ^ (crc >> 4);
+    uint8_t b = *(uint8_t *) buf++;
+    crc = crclut[(crc ^ b) & 0x0F] ^ (crc >> 4);
+    crc = crclut[(crc ^ (b >> 4)) & 0x0F] ^ (crc >> 4);
   }
   return ~crc;
 }

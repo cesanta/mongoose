@@ -4147,10 +4147,10 @@ static size_t encode_varint(uint8_t *buf, size_t value) {
   size_t len = 0;
 
   do {
-    uint8_t byte = (uint8_t) (value % 128);
+    uint8_t b = (uint8_t) (value % 128);
     value /= 128;
-    if (value > 0) byte |= 0x80;
-    buf[len++] = byte;
+    if (value > 0) b |= 0x80;
+    buf[len++] = b;
   } while (value > 0);
 
   return len;
@@ -11040,7 +11040,9 @@ static long mg_bio_ctrl(BIO *b, int cmd, long larg, void *pargs) {
   if (cmd == BIO_CTRL_PUSH) ret = 1;
   if (cmd == BIO_CTRL_POP) ret = 1;
   if (cmd == BIO_CTRL_FLUSH) ret = 1;
+#ifndef OPENSSL_IS_WOLFSSL
   if (cmd == BIO_C_SET_NBIO) ret = 1;
+#endif
   // MG_DEBUG(("%d -> %ld", cmd, ret));
   (void) b, (void) cmd, (void) larg, (void) pargs;
   return ret;
@@ -11132,7 +11134,7 @@ void mg_tls_init(struct mg_connection *c, const struct mg_tls_opts *opts) {
   }
 
   SSL_set_mode(tls->ssl, SSL_MODE_ACCEPT_MOVING_WRITE_BUFFER);
-#if OPENSSL_VERSION_NUMBER > 0x10002000L
+#if OPENSSL_VERSION_NUMBER > 0x10002000L && !defined(OPENSSL_IS_WOLFSSL)
   (void) SSL_set_ecdh_auto(tls->ssl, 1);
 #endif
 #if OPENSSL_VERSION_NUMBER >= 0x10100000L
@@ -11143,8 +11145,11 @@ void mg_tls_init(struct mg_connection *c, const struct mg_tls_opts *opts) {
     free(s);
   }
 #endif
-
+#ifndef OPENSSL_IS_WOLFSSL
   tls->bm = BIO_meth_new(BIO_get_new_index() | BIO_TYPE_SOURCE_SINK, "bio_mg");
+#else
+  tls->bm = BIO_meth_new(0, "bio_mg");
+#endif
   BIO_meth_set_write(tls->bm, mg_bio_write);
   BIO_meth_set_read(tls->bm, mg_bio_read);
   BIO_meth_set_ctrl(tls->bm, mg_bio_ctrl);
@@ -14468,7 +14473,7 @@ typedef uint64_t dlimb_t;
 typedef int64_t sdlimb_t;
 
 #define NLIMBS (256 / X25519_WBITS)
-typedef limb_t fe[NLIMBS];
+typedef limb_t mg_fe[NLIMBS];
 
 static limb_t umaal(limb_t *carry, limb_t acc, limb_t mand, limb_t mier) {
   dlimb_t tmp = (dlimb_t) mand * mier + acc + *carry;
@@ -14493,7 +14498,7 @@ static limb_t adc0(limb_t *carry, limb_t acc) {
 // - Invariant: result of propagate is < 2^255 + 1 word
 // - In particular, always less than 2p.
 // - Also, output x >= min(x,19)
-static void propagate(fe x, limb_t over) {
+static void propagate(mg_fe x, limb_t over) {
   unsigned i;
   limb_t carry;
   over = x[NLIMBS - 1] >> (X25519_WBITS - 1) | over << 1;
@@ -14505,7 +14510,7 @@ static void propagate(fe x, limb_t over) {
   }
 }
 
-static void add(fe out, const fe a, const fe b) {
+static void add(mg_fe out, const mg_fe a, const mg_fe b) {
   unsigned i;
   limb_t carry = 0;
   for (i = 0; i < NLIMBS; i++) {
@@ -14514,7 +14519,7 @@ static void add(fe out, const fe a, const fe b) {
   propagate(out, carry);
 }
 
-static void sub(fe out, const fe a, const fe b) {
+static void sub(mg_fe out, const mg_fe a, const mg_fe b) {
   unsigned i;
   sdlimb_t carry = -38;
   for (i = 0; i < NLIMBS; i++) {
@@ -14525,9 +14530,9 @@ static void sub(fe out, const fe a, const fe b) {
   propagate(out, (limb_t) (1 + carry));
 }
 
-// `b` can contain less than 8 limbs, thus we use `limb_t *` instead of `fe`
+// `b` can contain less than 8 limbs, thus we use `limb_t *` instead of `mg_fe`
 // to avoid build warnings
-static void mul(fe out, const fe a, const limb_t *b, unsigned nb) {
+static void mul(mg_fe out, const mg_fe a, const limb_t *b, unsigned nb) {
   limb_t accum[2 * NLIMBS] = {0};
   unsigned i, j;
 
@@ -14550,13 +14555,13 @@ static void mul(fe out, const fe a, const limb_t *b, unsigned nb) {
   propagate(out, carry2);
 }
 
-static void sqr(fe out, const fe a) {
+static void sqr(mg_fe out, const mg_fe a) {
   mul(out, a, a, NLIMBS);
 }
-static void mul1(fe out, const fe a) {
+static void mul1(mg_fe out, const mg_fe a) {
   mul(out, a, out, NLIMBS);
 }
-static void sqr1(fe a) {
+static void sqr1(mg_fe a) {
   mul1(a, a);
 }
 
@@ -14573,7 +14578,7 @@ static void condswap(limb_t a[2 * NLIMBS], limb_t b[2 * NLIMBS],
 // Canonicalize a field element x, reducing it to the least residue which is
 // congruent to it mod 2^255-19
 // - Precondition: x < 2^255 + 1 word
-static limb_t canon(fe x) {
+static limb_t canon(mg_fe x) {
   // First, add 19.
   unsigned i;
   limb_t carry0 = 19;
@@ -14604,7 +14609,7 @@ static limb_t canon(fe x) {
 
 static const limb_t a24[1] = {121665};
 
-static void ladder_part1(fe xs[5]) {
+static void ladder_part1(mg_fe xs[5]) {
   limb_t *x2 = xs[0], *z2 = xs[1], *x3 = xs[2], *z3 = xs[3], *t1 = xs[4];
   add(t1, x2, z2);                                 // t1 = A
   sub(z2, x2, z2);                                 // z2 = B
@@ -14621,7 +14626,7 @@ static void ladder_part1(fe xs[5]) {
   add(z2, z2, t1);                                 // z2 = E*a24 + AA
 }
 
-static void ladder_part2(fe xs[5], const fe x1) {
+static void ladder_part2(mg_fe xs[5], const mg_fe x1) {
   limb_t *x2 = xs[0], *z2 = xs[1], *x3 = xs[2], *z3 = xs[3], *t1 = xs[4];
   sqr1(z3);         // z3 = (DA-CB)^2
   mul1(z3, x1);     // z3 = x1 * (DA-CB)^2
@@ -14631,13 +14636,13 @@ static void ladder_part2(fe xs[5], const fe x1) {
   mul1(x2, t1);     // x2 = AA*BB
 }
 
-static void x25519_core(fe xs[5], const uint8_t scalar[X25519_BYTES],
+static void x25519_core(mg_fe xs[5], const uint8_t scalar[X25519_BYTES],
                         const uint8_t *x1, int clamp) {
   int i;
-  fe x1_limbs;
+  mg_fe x1_limbs;
   limb_t swap = 0;
   limb_t *x2 = xs[0], *x3 = xs[2], *z3 = xs[3];
-  memset(xs, 0, 4 * sizeof(fe));
+  memset(xs, 0, 4 * sizeof(mg_fe));
   x2[0] = z3[0] = 1;
   for (i = 0; i < NLIMBS; i++) {
     x3[i] = x1_limbs[i] =
@@ -14668,7 +14673,7 @@ static void x25519_core(fe xs[5], const uint8_t scalar[X25519_BYTES],
 int mg_tls_x25519(uint8_t out[X25519_BYTES], const uint8_t scalar[X25519_BYTES],
                   const uint8_t x1[X25519_BYTES], int clamp) {
   int i, ret;
-  fe xs[5], out_limbs;
+  mg_fe xs[5], out_limbs;
   limb_t *x2, *z2, *z3, *prev;
   static const struct {
     uint8_t a, c, n;
@@ -14865,9 +14870,9 @@ uint32_t mg_crc32(uint32_t crc, const char *buf, size_t len) {
       0x9B64C2B0, 0x86D3D2D4, 0xA00AE278, 0xBDBDF21C};
   crc = ~crc;
   while (len--) {
-    uint8_t byte = *(uint8_t *) buf++;
-    crc = crclut[(crc ^ byte) & 0x0F] ^ (crc >> 4);
-    crc = crclut[(crc ^ (byte >> 4)) & 0x0F] ^ (crc >> 4);
+    uint8_t b = *(uint8_t *) buf++;
+    crc = crclut[(crc ^ b) & 0x0F] ^ (crc >> 4);
+    crc = crclut[(crc ^ (b >> 4)) & 0x0F] ^ (crc >> 4);
   }
   return ~crc;
 }
