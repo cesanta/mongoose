@@ -3349,11 +3349,25 @@ static void test_split(void) {
   ASSERT(mg_strcmp(b, mg_str("")) == 0);
 }
 
+static void test_crypto(void) {
+  uint8_t key[X25519_BYTES];
+  uint8_t buf[X25519_BYTES];
+  char tmp[100];
+  size_t i;
+  for (i = 0; i < sizeof(key); i++) key[i] = (uint8_t) i;
+  for (i = 0; i < sizeof(buf); i++) buf[i] = 0;
+  mg_tls_x25519(buf, key, X25519_BASE_POINT, 1);
+  mg_snprintf(tmp, sizeof(tmp), "%M", mg_print_hex, sizeof(buf), buf);
+  MG_INFO(("%s", tmp));
+  ASSERT(mg_strcmp(mg_str("8f40c5adb6"), mg_str_n(tmp, 10)) == 0);
+}
+
 int main(void) {
   const char *debug_level = getenv("V");
   if (debug_level == NULL) debug_level = "3";
   mg_log_set(atoi(debug_level));
 
+  test_crypto();
   test_split();
   test_json();
   test_queue();
