@@ -37,9 +37,12 @@ static void test_match(void) {
   ASSERT(mg_match(mg_str_n("/x/2/foo", 8), mg_str_n("/x/*/*", 6), NULL) == 1);
   ASSERT(mg_match(mg_str_n("///", 3), mg_str_n("#", 1), NULL) == 1);
   ASSERT(mg_match(mg_str_n("/api/foo", 8), mg_str_n("/api/*", 6), NULL) == 1);
-  ASSERT(mg_match(mg_str_n("/api/log/static", 15), mg_str_n("/api/*", 6), NULL) == 0);
-  ASSERT(mg_match(mg_str_n("/api/log/static", 15), mg_str_n("/api/#", 6), NULL) == 1);
-  ASSERT(mg_match(mg_str_n("/ssi/index.shtml", 16), mg_str_n("#.shtml", 7), NULL) == 1);
+  ASSERT(mg_match(mg_str_n("/api/log/static", 15), mg_str_n("/api/*", 6),
+                  NULL) == 0);
+  ASSERT(mg_match(mg_str_n("/api/log/static", 15), mg_str_n("/api/#", 6),
+                  NULL) == 1);
+  ASSERT(mg_match(mg_str_n("/ssi/index.shtml", 16), mg_str_n("#.shtml", 7),
+                  NULL) == 1);
   ASSERT(mg_match(mg_str_n(".c", 2), mg_str_n("#.c", 3), NULL) == 1);
   ASSERT(mg_match(mg_str_n("ab", 2), mg_str_n("abc", 3), NULL) == 0);
   ASSERT(mg_match(mg_str_n("a.c", 3), mg_str_n("#.c", 3), NULL) == 1);
@@ -48,7 +51,8 @@ static void test_match(void) {
   ASSERT(mg_match(mg_str_n("//a.c", 5), mg_str_n("#.c", 3), NULL) == 1);
   ASSERT(mg_match(mg_str_n("x/a.c", 5), mg_str_n("#.c", 3), NULL) == 1);
   ASSERT(mg_match(mg_str_n("./a.c", 5), mg_str_n("#.c", 3), NULL) == 1);
-  ASSERT(mg_match(mg_str_n("./ssi/index.shtml", 17), mg_str_n("#.shtml", 7), NULL) == 1);
+  ASSERT(mg_match(mg_str_n("./ssi/index.shtml", 17), mg_str_n("#.shtml", 7),
+                  NULL) == 1);
   ASSERT(mg_match(mg_str_n("caabba", 6), mg_str_n("#aa#bb#", 7), NULL) == 1);
   ASSERT(mg_match(mg_str_n("caabxa", 6), mg_str_n("#aa#bb#", 7), NULL) == 0);
   ASSERT(mg_match(mg_str_n("a__b_c", 6), mg_str_n("a*b*c", 5), NULL) == 1);
@@ -139,7 +143,7 @@ static struct mg_str strstrip(struct mg_str s) {
   return s;
 }
 static const char *mgstrstr(const struct mg_str haystack,
-                      const struct mg_str needle) {
+                            const struct mg_str needle) {
   size_t i;
   if (needle.len > haystack.len) return NULL;
   if (needle.len == 0) return haystack.buf;
@@ -150,8 +154,6 @@ static const char *mgstrstr(const struct mg_str haystack,
   }
   return NULL;
 }
-
-
 
 static void test_url(void) {
   // Host
@@ -524,7 +526,8 @@ static void test_mqtt_basic(void) {
 
   // Publish with QoS1 to subscribed topic and check reception
   // keep former opts.topic
-  opts.message = mg_str("hi1"), opts.qos = 1, opts.retain = false, opts.retransmit_id = 0;
+  opts.message = mg_str("hi1"), opts.qos = 1, opts.retain = false,
+  opts.retransmit_id = 0;
   retries = 0;  // don't do retries for test speed
   do {          // retry on failure after an expected timeout
     opts.retransmit_id = mg_mqtt_pub(c, &opts);  // save id for possible resend
@@ -617,7 +620,7 @@ static void test_mqtt_ver(uint8_t mqtt_version) {
   ASSERT(test_data.flags & flags_received);
   test_data.flags &= ~flags_received;
   opts.retransmit_id = 0;
-// Mongoose sent PUBREL, wait for PUBCOMP
+  // Mongoose sent PUBREL, wait for PUBCOMP
   for (i = 0; i < 500 && !(test_data.flags & flags_completed); i++)
     mg_mgr_poll(&mgr, 10);
   // TODO(): retry sending PUBREL on failure after an expected timeout
@@ -1232,6 +1235,7 @@ static void f3(struct mg_connection *c, int ev, void *ev_data) {
   // MG_INFO(("%d", ev));
   if (ev == MG_EV_CONNECT) {
     // c->is_hexdumping = 1;
+    ASSERT((c->loc.ip[0] != 0));  // Make sure that c->loc address is populated
     mg_printf(c, "GET /%s HTTP/1.0\r\nHost: %s\r\n\r\n",
               c->rem.is_ip6 ? "" : "/robots.txt",
               c->rem.is_ip6 ? "ipv6.google.com" : "cesanta.com");
@@ -1241,6 +1245,7 @@ static void f3(struct mg_connection *c, int ev, void *ev_data) {
     // ASSERT(vcmp(hm->method, "HTTP/1.1"));
     // ASSERT(vcmp(hm->uri, "301"));
     *ok = mg_http_status(hm);
+    c->is_closing = 1;
   } else if (ev == MG_EV_CLOSE) {
     if (*ok == 0) *ok = 888;
   } else if (ev == MG_EV_ERROR) {
@@ -1265,8 +1270,6 @@ static void test_http_client(void) {
   for (i = 0; i < 500 && ok <= 0; i++) mg_mgr_poll(&mgr, 1);
   MG_INFO(("%d", ok));
   ASSERT(ok == 301);
-  c->is_closing = 1;
-  ASSERT((c->loc.ip[0] != 0));  // Make sure that c->loc address is populated
   mg_mgr_poll(&mgr, 0);
   ok = 0;
 #if MG_TLS
@@ -1275,7 +1278,6 @@ static void test_http_client(void) {
   mg_tls_init(c, &opts);
   for (i = 0; i < 1500 && ok <= 0; i++) mg_mgr_poll(&mgr, 1);
   ASSERT(ok == 200);
-  c->is_closing = 1;
   mg_mgr_poll(&mgr, 1);
 
   // Test failed host validation
@@ -1289,6 +1291,9 @@ static void test_http_client(void) {
   ASSERT(ok == 777);
   mg_mgr_poll(&mgr, 1);
 
+  // Test empty CA
+  // Disable mbedTLS: https://github.com/Mbed-TLS/mbedtls/issues/7075
+#if MG_TLS != MG_TLS_MBED
   opts.name = mg_str("cesanta.com");
   opts.ca = mg_str("");
   c = mg_http_connect(&mgr, "https://cesanta.com", f3, &ok);
@@ -1298,6 +1303,7 @@ static void test_http_client(void) {
   MG_INFO(("OK: %d", ok));
   ASSERT(ok == 200);
   mg_mgr_poll(&mgr, 1);
+#endif
 #endif
 
 #if MG_ENABLE_IPV6
@@ -1311,33 +1317,6 @@ static void test_http_client(void) {
 
   mg_mgr_free(&mgr);
   ASSERT(mgr.conns == NULL);
-}
-
-// Test host validation only (no CA, no cert)
-static void test_host_validation(void) {
-#if MG_TLS
-  const char *url = "https://cesanta.com";
-  struct mg_tls_opts opts;
-  struct mg_mgr mgr;
-  struct mg_connection *c = NULL;
-  int i, ok = 0;
-  memset(&opts, 0, sizeof(opts));
-  mg_mgr_init(&mgr);
-
-  ok = 0;
-  c = mg_http_connect(&mgr, url, f3, &ok);
-  ASSERT(c != NULL);
-  opts.ca = mg_unpacked("/data/ca.pem");
-  opts.name = mg_url_host(url);
-  mg_tls_init(c, &opts);
-  for (i = 0; i < 1500 && ok <= 0; i++) mg_mgr_poll(&mgr, 10);
-  ASSERT(ok == 200);
-  c->is_closing = 1;
-  mg_mgr_poll(&mgr, 1);
-
-  mg_mgr_free(&mgr);
-  ASSERT(mgr.conns == NULL);
-#endif
 }
 
 static void f4(struct mg_connection *c, int ev, void *ev_data) {
@@ -3396,7 +3375,6 @@ int main(void) {
   test_tls();
   test_ws();
   test_ws_fragmentation();
-  test_host_validation();
   test_http_server();
   test_http_404();
   test_http_no_content_length();
