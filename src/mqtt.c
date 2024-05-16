@@ -80,10 +80,10 @@ static size_t encode_varint(uint8_t *buf, size_t value) {
   size_t len = 0;
 
   do {
-    uint8_t byte = (uint8_t) (value % 128);
+    uint8_t b = (uint8_t) (value % 128);
     value /= 128;
-    if (value > 0) byte |= 0x80;
-    buf[len++] = byte;
+    if (value > 0) b |= 0x80;
+    buf[len++] = b;
   } while (value > 0);
 
   return len;

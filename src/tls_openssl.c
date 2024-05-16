@@ -67,7 +67,9 @@ static long mg_bio_ctrl(BIO *b, int cmd, long larg, void *pargs) {
   if (cmd == BIO_CTRL_PUSH) ret = 1;
   if (cmd == BIO_CTRL_POP) ret = 1;
   if (cmd == BIO_CTRL_FLUSH) ret = 1;
+#ifndef OPENSSL_IS_WOLFSSL
   if (cmd == BIO_C_SET_NBIO) ret = 1;
+#endif
   // MG_DEBUG(("%d -> %ld", cmd, ret));
   (void) b, (void) cmd, (void) larg, (void) pargs;
   return ret;
@@ -159,7 +161,7 @@ void mg_tls_init(struct mg_connection *c, const struct mg_tls_opts *opts) {
   }
 
   SSL_set_mode(tls->ssl, SSL_MODE_ACCEPT_MOVING_WRITE_BUFFER);
-#if OPENSSL_VERSION_NUMBER > 0x10002000L
+#if OPENSSL_VERSION_NUMBER > 0x10002000L && !defined(OPENSSL_IS_WOLFSSL)
   (void) SSL_set_ecdh_auto(tls->ssl, 1);
 #endif
 #if OPENSSL_VERSION_NUMBER >= 0x10100000L
@@ -170,8 +172,11 @@ void mg_tls_init(struct mg_connection *c, const struct mg_tls_opts *opts) {
     free(s);
   }
 #endif
-
+#ifndef OPENSSL_IS_WOLFSSL
   tls->bm = BIO_meth_new(BIO_get_new_index() | BIO_TYPE_SOURCE_SINK, "bio_mg");
+#else
+  tls->bm = BIO_meth_new(0, "bio_mg");
+#endif
   BIO_meth_set_write(tls->bm, mg_bio_write);
   BIO_meth_set_read(tls->bm, mg_bio_read);
   BIO_meth_set_ctrl(tls->bm, mg_bio_ctrl);

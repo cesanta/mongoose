@@ -53,6 +53,12 @@ CFLAGS  += -DMG_TLS=MG_TLS_OPENSSL -I$(OPENSSL)/include
 LDFLAGS += -L$(OPENSSL)/lib -lssl -lcrypto
 endif
 
+ifeq "$(SSL)" "WOLFSSL"
+WOLFSSL ?= /usr/local
+CFLAGS  += -DMG_TLS=MG_TLS_OPENSSL -I$(WOLFSSL)/include -I$(WOLFSSL)/include/wolfssl -DEXTERNAL_OPTS_OPENVPN
+LDFLAGS += -L$(WOLFSSL)/lib -lwolfssl
+endif
+
 ifeq "$(SSL)" "BUILTIN"
 CFLAGS  += -DMG_TLS=MG_TLS_BUILTIN
 endif
