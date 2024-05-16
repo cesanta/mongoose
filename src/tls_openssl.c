@@ -1,7 +1,8 @@
 #include "printf.h"
 #include "tls.h"
 
-#if MG_TLS == MG_TLS_OPENSSL
+#if MG_TLS == MG_TLS_OPENSSL || MG_TLS == MG_TLS_WOLFSSL
+
 static int tls_err_cb(const char *s, size_t len, void *c) {
   int n = (int) len - 1;
   MG_ERROR(("%lu %.*s", ((struct mg_connection *) c)->id, n, s));
@@ -61,13 +62,12 @@ static X509 *load_cert(struct mg_str s) {
   return cert;
 }
 
-
 static long mg_bio_ctrl(BIO *b, int cmd, long larg, void *pargs) {
   long ret = 0;
   if (cmd == BIO_CTRL_PUSH) ret = 1;
   if (cmd == BIO_CTRL_POP) ret = 1;
   if (cmd == BIO_CTRL_FLUSH) ret = 1;
-#ifndef OPENSSL_IS_WOLFSSL
+#if MG_TLS == MG_TLS_OPENSSL
   if (cmd == BIO_C_SET_NBIO) ret = 1;
 #endif
   // MG_DEBUG(("%d -> %ld", cmd, ret));
@@ -130,6 +130,13 @@ void mg_tls_init(struct mg_connection *c, const struct mg_tls_opts *opts) {
   SSL_set_options(tls->ssl, SSL_OP_CIPHER_SERVER_PREFERENCE);
 #endif
 
+#if MG_TLS == MG_TLS_WOLFSSL && !defined(OPENSSL_COMPATIBLE_DEFAULTS)
+  if (opts->ca.len == 0 || mg_strcmp(opts->ca, mg_str("*")) == 0) {
+    // Older versions require that either the CA is loaded or SSL_VERIFY_NONE
+    // explicitly set
+    SSL_set_verify(tls->ssl, SSL_VERIFY_NONE, NULL);
+  }
+#endif
   if (opts->ca.buf != NULL && opts->ca.buf[0] != '\0') {
     SSL_set_verify(tls->ssl, SSL_VERIFY_PEER | SSL_VERIFY_FAIL_IF_NO_PEER_CERT,
                    NULL);
@@ -161,21 +168,25 @@ void mg_tls_init(struct mg_connection *c, const struct mg_tls_opts *opts) {
   }
 
   SSL_set_mode(tls->ssl, SSL_MODE_ACCEPT_MOVING_WRITE_BUFFER);
-#if OPENSSL_VERSION_NUMBER > 0x10002000L && !defined(OPENSSL_IS_WOLFSSL)
+#if MG_TLS == MG_TLS_OPENSSL && OPENSSL_VERSION_NUMBER > 0x10002000L
   (void) SSL_set_ecdh_auto(tls->ssl, 1);
 #endif
 #if OPENSSL_VERSION_NUMBER >= 0x10100000L
   if (opts->name.len > 0) {
     char *s = mg_mprintf("%.*s", (int) opts->name.len, opts->name.buf);
+#if MG_TLS != MG_TLS_WOLFSSL || LIBWOLFSSL_VERSION_HEX >= 0x05005002
     SSL_set1_host(tls->ssl, s);
+#else
+    X509_VERIFY_PARAM_set1_host(SSL_get0_param(tls->ssl), s, 0);
+#endif
     SSL_set_tlsext_host_name(tls->ssl, s);
     free(s);
   }
 #endif
-#ifndef OPENSSL_IS_WOLFSSL
-  tls->bm = BIO_meth_new(BIO_get_new_index() | BIO_TYPE_SOURCE_SINK, "bio_mg");
-#else
+#if MG_TLS == MG_TLS_WOLFSSL
   tls->bm = BIO_meth_new(0, "bio_mg");
+#else
+  tls->bm = BIO_meth_new(BIO_get_new_index() | BIO_TYPE_SOURCE_SINK, "bio_mg");
 #endif
   BIO_meth_set_write(tls->bm, mg_bio_write);
   BIO_meth_set_read(tls->bm, mg_bio_read);

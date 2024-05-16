@@ -3,6 +3,7 @@
 #define MG_TLS_NONE 0     // No TLS support
 #define MG_TLS_MBED 1     // mbedTLS
 #define MG_TLS_OPENSSL 2  // OpenSSL
+#define MG_TLS_WOLFSSL 5  // WolfSSL (based on OpenSSL)
 #define MG_TLS_BUILTIN 3  // Built-in
 #define MG_TLS_CUSTOM 4   // Custom implementation
 
