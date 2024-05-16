@@ -1,7 +1,7 @@
+#include "net.h"
 #include "dns.h"
 #include "fmt.h"
 #include "log.h"
-#include "net.h"
 #include "printf.h"
 #include "profile.h"
 #include "timer.h"
@@ -85,10 +85,10 @@ static bool mg_aton6(struct mg_str str, struct mg_addr *addr) {
     if ((str.buf[i] >= '0' && str.buf[i] <= '9') ||
         (str.buf[i] >= 'a' && str.buf[i] <= 'f') ||
         (str.buf[i] >= 'A' && str.buf[i] <= 'F')) {
-      unsigned long val;
+      unsigned long val;  // TODO(): This loops on chars, refactor
       if (i > j + 3) return false;
       // MG_DEBUG(("%lu %lu [%.*s]", i, j, (int) (i - j + 1), &str.buf[j]));
-      val = mg_unhexn(&str.buf[j], i - j + 1);
+      mg_str_to_num(mg_str_n(&str.buf[j], i - j + 1), 16, &val, sizeof(val));
       addr->ip[n] = (uint8_t) ((val >> 8) & 255);
       addr->ip[n + 1] = (uint8_t) (val & 255);
     } else if (str.buf[i] == ':') {
@@ -101,12 +101,9 @@ static bool mg_aton6(struct mg_str str, struct mg_addr *addr) {
       }
       if (n > 14) return false;
       addr->ip[n] = addr->ip[n + 1] = 0;  // For trailing ::
-    } else if (str.buf[i] == '%') {       // Scope ID
-      for (i = i + 1; i < str.len; i++) {
-        if (str.buf[i] < '0' || str.buf[i] > '9') return false;
-        addr->scope_id = (uint8_t) (addr->scope_id * 10);
-        addr->scope_id = (uint8_t) (addr->scope_id + (str.buf[i] - '0'));
-      }
+    } else if (str.buf[i] == '%') {       // Scope ID, last in string
+      return mg_str_to_num(mg_str_n(&str.buf[i + 1], str.len - i - 1), 10,
+                           &addr->scope_id, sizeof(uint8_t));
     } else {
       return false;
     }

@@ -1,6 +1,6 @@
+#include "json.h"
 #include "base64.h"
 #include "fmt.h"
-#include "json.h"
 
 static const char *escapeseq(int esc) {
   return esc ? "\b\f\n\r\t\\\"" : "bfnrt\\\"";
@@ -295,12 +295,12 @@ bool mg_json_unescape(struct mg_str s, char *to, size_t n) {
   size_t i, j;
   for (i = 0, j = 0; i < s.len && j < n; i++, j++) {
     if (s.buf[i] == '\\' && i + 5 < s.len && s.buf[i + 1] == 'u') {
-      //  \uXXXX escape. We could process a simple one-byte chars
-      // \u00xx from the ASCII range. More complex chars would require
-      // dragging in a UTF8 library, which is too much for us
-      if (s.buf[i + 2] != '0' || s.buf[i + 3] != '0') return false;  // Give up
-      ((unsigned char *) to)[j] = (unsigned char) mg_unhexn(s.buf + i + 4, 2);
-
+      //  \uXXXX escape. We process simple one-byte chars \u00xx within ASCII
+      //  range. More complex chars would require dragging in a UTF8 library,
+      //  which is too much for us
+      if (mg_str_to_num(mg_str_n(s.buf + i + 2, 4), 16, &to[j],
+                        sizeof(uint8_t)) == false)
+        return false;
       i += 5;
     } else if (s.buf[i] == '\\' && i + 1 < s.len) {
       char c = json_esc(s.buf[i + 1], 0);
@@ -347,7 +347,11 @@ char *mg_json_get_hex(struct mg_str json, const char *path, int *slen) {
   int len = 0, off = mg_json_get(json, path, &len);
   if (off >= 0 && json.buf[off] == '"' && len > 1 &&
       (result = (char *) calloc(1, (size_t) len / 2)) != NULL) {
-    mg_unhex(json.buf + off + 1, (size_t) (len - 2), (uint8_t *) result);
+    int i;
+    for (i = 0; i < len - 2; i += 2) {
+      mg_str_to_num(mg_str_n(json.buf + off + 1 + i, 2), 16, &result[i >> 1],
+                    sizeof(uint8_t));
+    }
     result[len / 2 - 1] = '\0';
     if (slen != NULL) *slen = len / 2 - 1;
   }

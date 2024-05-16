@@ -169,7 +169,7 @@ int mg_url_decode(const char *src, size_t src_len, char *dst, size_t dst_len,
     if (src[i] == '%') {
       // Use `i + 2 < src_len`, not `i < src_len - 2`, note small src_len
       if (i + 2 < src_len && isx(src[i + 1]) && isx(src[i + 2])) {
-        mg_unhex(src + i + 1, 2, (uint8_t *) &dst[j]);
+        mg_str_to_num(mg_str_n(src + i + 1, 2), 16, &dst[j], sizeof(uint8_t));
         i += 2;
       } else {
         return -1;
@@ -988,9 +988,10 @@ static int skip_chunk(const char *buf, int len, int *pl, int *dl) {
   if (i == 0) return -1;                     // Error, no length specified
   if (i > (int) sizeof(int) * 2) return -1;  // Chunk length is too big
   if (len < i + 1 || buf[i] != '\r' || buf[i + 1] != '\n') return -1;  // Error
-  n = (int) mg_unhexn(buf, (size_t) i);  // Decode chunk length
-  if (n < 0) return -1;                  // Error
-  if (n > len - i - 4) return 0;         // Chunk not yet fully buffered
+  if (mg_str_to_num(mg_str_n(buf, (size_t) i), 16, &n, sizeof(int)) == false)
+    return -1;                    // Decode chunk length, overflow
+  if (n < 0) return -1;           // Error. TODO(): some checks now redundant
+  if (n > len - i - 4) return 0;  // Chunk not yet fully buffered
   if (buf[i + n + 2] != '\r' || buf[i + n + 3] != '\n') return -1;  // Error
   *pl = i + 2, *dl = n;
   return i + 2 + n + 2;
