@@ -105,8 +105,9 @@ void mg_tls_init(struct mg_connection *c, const struct mg_tls_opts *opts) {
   if (c->is_listening) goto fail;
   MG_DEBUG(("%lu Setting TLS", c->id));
   MG_PROF_ADD(c, "mbedtls_init_start");
-#if defined(MBEDTLS_PSA_CRYPTO_C)
-  psa_crypto_init();
+#if defined(MBEDTLS_VERSION_NUMBER) && MBEDTLS_VERSION_NUMBER >= 0x03000000 && \
+    defined(MBEDTLS_PSA_CRYPTO_C)
+  psa_crypto_init();  // https://github.com/Mbed-TLS/mbedtls/issues/9072#issuecomment-2084845711
 #endif
   mbedtls_ssl_init(&tls->ssl);
   mbedtls_ssl_config_init(&tls->conf);
