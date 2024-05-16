@@ -10,14 +10,14 @@ struct mg_str mg_str_n(const char *s, size_t n) {
   return str;
 }
 
-static char tolc(char c) {
+static int mg_tolc(char c) {
   return (c >= 'A' && c <= 'Z') ? c + 'a' - 'A' : c;
 }
 
 int mg_casecmp(const char *s1, const char *s2) {
   int diff = 0;
   do {
-    char c = tolc(*s1++), d = tolc(*s2++);
+    int c = mg_tolc(*s1++), d = mg_tolc(*s2++);
     diff = c - d;
   } while (diff == 0 && s1[-1] != '\0');
   return diff;
@@ -26,8 +26,8 @@ int mg_casecmp(const char *s1, const char *s2) {
 int mg_strcmp(const struct mg_str str1, const struct mg_str str2) {
   size_t i = 0;
   while (i < str1.len && i < str2.len) {
-    char c1 = str1.buf[i];
-    char c2 = str2.buf[i];
+    int c1 = str1.buf[i];
+    int c2 = str2.buf[i];
     if (c1 < c2) return -1;
     if (c1 > c2) return 1;
     i++;
@@ -40,8 +40,8 @@ int mg_strcmp(const struct mg_str str1, const struct mg_str str2) {
 int mg_strcasecmp(const struct mg_str str1, const struct mg_str str2) {
   size_t i = 0;
   while (i < str1.len && i < str2.len) {
-    char c1 = tolc(str1.buf[i]);
-    char c2 = tolc(str2.buf[i]);
+    int c1 = mg_tolc(str1.buf[i]);
+    int c2 = mg_tolc(str2.buf[i]);
     if (c1 < c2) return -1;
     if (c1 > c2) return 1;
     i++;

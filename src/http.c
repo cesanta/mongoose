@@ -14,7 +14,7 @@
 static int mg_ncasecmp(const char *s1, const char *s2, size_t len) {
   int diff = 0;
   if (len > 0) do {
-      char c = *s1++, d = *s2++;
+      int c = *s1++, d = *s2++;
       if (c >= 'A' && c <= 'Z') c += 'a' - 'A';
       if (d >= 'A' && d <= 'Z') d += 'a' - 'A';
       diff = c - d;
