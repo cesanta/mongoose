@@ -14,7 +14,7 @@ jobs:
       matrix:
         cc: [gcc, clang, g++, clang++]
         target: [test, mip_test]
-        ssl: ["", BUILTIN, MBEDTLS, OPENSSL] #, WOLFSSL]
+        ssl: ["", BUILTIN, MBEDTLS, OPENSSL, WOLFSSL]
         select: ["-DMG_ENABLE_POLL=0 -DMG_ENABLE_EPOLL=0", "-DMG_ENABLE_POLL=1 -DMG_ENABLE_EPOLL=0", "-DMG_ENABLE_POLL=0 -DMG_ENABLE_EPOLL=1"]
         exclude:
         - ssl: MBEDTLS
@@ -43,7 +43,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        ssl: [""]
+        ssl: ["", BUILTIN]
     name: S390 SSL=${{ matrix.ssl }}
     steps:
     - uses: actions/checkout@v4
@@ -65,7 +65,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        ssl: ["", BUILTIN, MBEDTLS, OPENSSL] #, WOLFSSL]
+        ssl: ["", BUILTIN, MBEDTLS, OPENSSL, WOLFSSL]
     name: unamalgamated-mg_prefix SSL=${{ matrix.ssl }}
     steps:
     - uses: actions/checkout@v4
@@ -77,7 +77,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        ssl: ["", BUILTIN, MBEDTLS, OPENSSL] #, WOLFSSL]
+        ssl: ["", BUILTIN, MBEDTLS, OPENSSL, WOLFSSL]
     name: Valgrind SSL=${{ matrix.ssl }}
     steps:
     - uses: actions/checkout@v4
@@ -89,7 +89,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        ssl: ["", BUILTIN, MBEDTLS, OPENSSL] #, WOLFSSL]
+        ssl: ["", BUILTIN, MBEDTLS, OPENSSL, WOLFSSL]
         select: [-DMG_ENABLE_POLL=0, -DMG_ENABLE_POLL=1]
         exclude:
         - ssl: MBEDTLS
@@ -106,7 +106,7 @@ jobs:
     steps:
     - uses: actions/checkout@v4
       with: { fetch-depth: 2 }
-    - run: brew install jq mbedtls openssl wolfssl
+    - run: brew install mbedtls wolfssl # jq openssl already pre-installed
     - run: make -C test test ASAN_OPTIONS= MBEDTLS=$(echo $(brew --cellar)/mbedtls*/*) OPENSSL=$(echo $(brew --cellar)/openssl*/*) WOLFSSL=$(echo $(brew --cellar)/wolfssl*/*)
   windows:
     runs-on: ubuntu-latest
@@ -158,7 +158,7 @@ jobs:
     name: examples ${{ matrix.ssl }}
     steps:
     - uses: actions/checkout@v4
-    - run: sudo apt -y install libmbedtls-dev libwolfssl-dev libpcap-dev
+    - run: sudo apt -y install libpcap-dev
     - run: make -C test examples CFLAGS_EXTRA="${{ matrix.ssl }}"
     - run: make -C test clean_examples
   examples_win:
@@ -243,7 +243,7 @@ jobs:
     name: tutorials ${{ matrix.ssl }}
     steps:
     - uses: actions/checkout@v4
-    - run: sudo apt -y install libmbedtls-dev libwolfssl-dev libpcap-dev
+    - run: sudo apt -y install libpcap-dev
     - run: make -C test tutorials CFLAGS_EXTRA="${{ matrix.ssl }}"
     - run: make -C test clean_tutorials
   tutorials_win:

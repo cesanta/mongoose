@@ -41,22 +41,39 @@ else
 C_WARN ?= -Wno-deprecated
 endif
 
-ifeq "$(SSL)" "MBEDTLS"
-MBEDTLS ?= /usr/local
-CFLAGS  += -DMG_TLS=MG_TLS_MBED -I$(MBEDTLS)/include -I/usr/include
-LDFLAGS += -L$(MBEDTLS)/lib -lmbedtls -lmbedcrypto -lmbedx509
-endif
-
 ifeq "$(SSL)" "OPENSSL"
-OPENSSL ?= /usr/local
+ifeq "$(OPENSSL)" ""
+CFLAGS  += -DMG_TLS=MG_TLS_OPENSSL $(shell pkg-config openssl --cflags)
+LDFLAGS += $(shell pkg-config openssl --libs)
+else
 CFLAGS  += -DMG_TLS=MG_TLS_OPENSSL -I$(OPENSSL)/include
 LDFLAGS += -L$(OPENSSL)/lib -lssl -lcrypto
 endif
+endif
+
+ifeq "$(SSL)" "MBEDTLS"
+ifeq "$(MBEDTLS)" ""
+# Ubuntu 22.04 does not provide 'pc' files for MbedTLS (others may)
+#CFLAGS  += -DMG_TLS=MG_TLS_MBED $(shell pkg-config mbedtls --cflags) $(shell pkg-config mbedcrypto --cflags) $(shell pkg-config mbedx509 --cflags)
+#LDFLAGS += $(shell pkg-config mbedtls --libs) $(shell pkg-config mbedcrypto --libs) $(shell pkg-config mbedx509 --libs)
+CFLAGS  += -DMG_TLS=MG_TLS_MBED -I/usr/include
+LDFLAGS += -lmbedtls -lmbedcrypto -lmbedx509
+else
+CFLAGS  += -DMG_TLS=MG_TLS_MBED -I$(MBEDTLS)/include -I/usr/include
+LDFLAGS += -L$(MBEDTLS)/lib -lmbedtls -lmbedcrypto -lmbedx509
+endif
+endif
 
 ifeq "$(SSL)" "WOLFSSL"
-WOLFSSL ?= /usr/local
-CFLAGS  += -DMG_TLS=MG_TLS_OPENSSL -I$(WOLFSSL)/include -I$(WOLFSSL)/include/wolfssl -DEXTERNAL_OPTS_OPENVPN
+# WolfSSL requires overriding the include path when used in OpenSSL compatibility mode (we do)
+#ifeq "$(WOLFSSL)" ""
+#CFLAGS  += -DMG_TLS=MG_TLS_WOLFSSL -DEXTERNAL_OPTS_OPENVPN $(shell pkg-config openssl --cflags)
+#LDFLAGS += $(shell pkg-config wolfssl --libs)
+#else
+WOLFSSL ?= $(shell pkg-config wolfssl --variable=prefix)
+CFLAGS  += -DMG_TLS=MG_TLS_WOLFSSL -DEXTERNAL_OPTS_OPENVPN -I$(WOLFSSL)/include -I$(WOLFSSL)/include/wolfssl
 LDFLAGS += -L$(WOLFSSL)/lib -lwolfssl
+#endif
 endif
 
 ifeq "$(SSL)" "BUILTIN"
