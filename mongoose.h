@@ -2570,7 +2570,7 @@ struct mg_tcpip_driver {
 // Network interface
 struct mg_tcpip_if {
   uint8_t mac[6];                  // MAC address. Must be set to a valid MAC
-  uint32_t ip, mask, gw;           // IP address, mask, default gateway
+  uint32_t ip, mask, gw, dns;      // IP address, mask, default gateway, dns
   struct mg_str tx;                // Output (TX) buffer
   bool enable_dhcp_client;         // Enable DCHP client
   bool enable_dhcp_server;         // Enable DCHP server

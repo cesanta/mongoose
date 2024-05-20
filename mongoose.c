@@ -5101,6 +5101,7 @@ static void onstatechange(struct mg_tcpip_if *ifp) {
   if (ifp->state == MG_TCPIP_STATE_READY) {
     MG_INFO(("READY, IP: %M", mg_print_ip4, &ifp->ip));
     MG_INFO(("       GW: %M", mg_print_ip4, &ifp->gw));
+    MG_INFO(("      DNS: %M", mg_print_ip4, &ifp->dns));
     MG_INFO(("      MAC: %M", mg_print_mac, &ifp->mac));
     arp_ask(ifp, ifp->gw);
   } else if (ifp->state == MG_TCPIP_STATE_UP) {
@@ -5174,14 +5175,14 @@ static void tx_dhcp_request_sel(struct mg_tcpip_if *ifp, uint32_t ip_req,
                                 uint32_t ip_srv) {
   uint8_t opts[] = {
       53, 1, 3,                 // Type: DHCP request
-      55, 2, 1,   3,            // GW and mask
+      55, 3, 1,   3,   6,       // GW, mask, DNS
       12, 3, 'm', 'i', 'p',     // Host name: "mip"
       54, 4, 0,   0,   0,   0,  // DHCP server ID
       50, 4, 0,   0,   0,   0,  // Requested IP
       255                       // End of options
   };
-  memcpy(opts + 14, &ip_srv, sizeof(ip_srv));
-  memcpy(opts + 20, &ip_req, sizeof(ip_req));
+  memcpy(opts + 15, &ip_srv, sizeof(ip_srv));
+  memcpy(opts + 21, &ip_req, sizeof(ip_req));
   tx_dhcp(ifp, (uint8_t *) broadcast, 0, 0xffffffff, opts, sizeof(opts), false);
   MG_DEBUG(("DHCP req sent"));
 }
@@ -5278,7 +5279,7 @@ static void rx_icmp(struct mg_tcpip_if *ifp, struct pkt *pkt) {
 }
 
 static void rx_dhcp_client(struct mg_tcpip_if *ifp, struct pkt *pkt) {
-  uint32_t ip = 0, gw = 0, mask = 0, lease = 0;
+  uint32_t ip = 0, gw = 0, mask = 0, dns = 0, lease = 0;
   uint8_t msgtype = 0, state = ifp->state;
   // perform size check first, then access fields
   uint8_t *p = pkt->dhcp->options,
@@ -5291,6 +5292,8 @@ static void rx_dhcp_client(struct mg_tcpip_if *ifp, struct pkt *pkt) {
     } else if (p[0] == 3 && p[1] == sizeof(ifp->gw) && p + 6 < end) {  // GW
       memcpy(&gw, p + 2, sizeof(gw));
       ip = pkt->dhcp->yiaddr;
+    } else if (p[0] == 6 && p[1] == sizeof(ifp->dns) && p + 6 < end) {  // DNS
+        memcpy(&dns, p + 2, sizeof(dns));
     } else if (p[0] == 51 && p[1] == 4 && p + 6 < end) {  // Lease
       memcpy(&lease, p + 2, sizeof(lease));
       lease = mg_ntohl(lease);
@@ -5314,7 +5317,7 @@ static void rx_dhcp_client(struct mg_tcpip_if *ifp, struct pkt *pkt) {
       MG_INFO(("Lease: %u sec (%lld)", lease, ifp->lease_expire / 1000));
       // assume DHCP server = router until ARP resolves
       memcpy(ifp->gwmac, pkt->eth->src, sizeof(ifp->gwmac));
-      ifp->ip = ip, ifp->gw = gw, ifp->mask = mask;
+      ifp->ip = ip, ifp->gw = gw, ifp->mask = mask; ifp->dns = dns;
       ifp->state = MG_TCPIP_STATE_READY;  // BOUND state
       uint64_t rand;
       mg_random(&rand, sizeof(rand));
