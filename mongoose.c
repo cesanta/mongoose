@@ -17,7 +17,10 @@
 //
 // SPDX-License-Identifier: GPL-2.0-only or commercial
 
+#include <alloca.h>
 #include "mongoose.h"
+
+#define sin_addr sin_address.ulIP_IPv4
 
 #ifdef MG_ENABLE_LINES
 #line 1 "src/base64.c"

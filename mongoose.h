@@ -549,7 +549,6 @@ int sscanf(const char *, const char *, ...);
 
 #include <FreeRTOS_IP.h>
 #include <FreeRTOS_Sockets.h>
-#include <FreeRTOS_errno_TCP.h>  // contents to be moved and file removed, some day
 
 #define MG_SOCKET_TYPE Socket_t
 #define MG_INVALID_SOCKET FREERTOS_INVALID_SOCKET
