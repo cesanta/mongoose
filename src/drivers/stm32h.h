@@ -1,7 +1,13 @@
 #pragma once
 
-#if MG_ENABLE_TCPIP && defined(MG_ENABLE_DRIVER_STM32H) && \
-    MG_ENABLE_DRIVER_STM32H
+#if MG_ENABLE_TCPIP
+#if !defined(MG_ENABLE_DRIVER_STM32H)
+#define MG_ENABLE_DRIVER_STM32H 0
+#endif
+#if !defined(MG_ENABLE_DRIVER_MCXN)
+#define MG_ENABLE_DRIVER_MCXN 0
+#endif
+#if MG_ENABLE_DRIVER_STM32H || MG_ENABLE_DRIVER_MCXN
 
 struct mg_tcpip_driver_stm32h_data {
   // MDC clock divider. MDC clock is derived from HCLK, must not exceed 2.5MHz
@@ -14,7 +20,8 @@ struct mg_tcpip_driver_stm32h_data {
   //    35-60 MHz     HCLK/26        3
   //    150-250 MHz   HCLK/102       4  <-- value for max speed HSI
   //    250-300 MHz   HCLK/124       5  <-- value for Nucleo-H* on CSI
-  //    110, 111 Reserved
+  //    300-500 MHz   HCLK/204       6
+  //    500-800 MHz   HCLK/324       7
   int mdc_cr;  // Valid values: -1, 0, 1, 2, 3, 4, 5
 
   uint8_t phy_addr;  // PHY address
@@ -45,4 +52,5 @@ struct mg_tcpip_driver_stm32h_data {
     MG_INFO(("Driver: stm32h, MAC: %M", mg_print_mac, mif_.mac)); \
   } while (0)
 
+#endif
 #endif
