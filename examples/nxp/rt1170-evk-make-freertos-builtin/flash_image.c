@@ -1,0 +1,1 @@
+../rt1170-evk-make-baremetal-builtin/flash_image.c
