@@ -128,13 +128,9 @@ stack.  FreeRTOS includes optional stack overflow detection, see:
 http://www.freertos.org/Stacks-and-stack-overflow-checking.html */
 #define ipconfigIP_TASK_STACK_SIZE_WORDS   ( configMINIMAL_STACK_SIZE * 5 )
 
-/* ipconfigRAND32() is called by the IP stack to generate random numbers for
-things such as a DHCP transaction number or initial sequence number.  Random
-number generation is performed via this macro to allow applications to use their
-own random number generation method.  For example, it might be possible to
-generate a random number by sampling noise on an analogue input. */
-extern UBaseType_t uxRand();
-#define ipconfigRAND32()    uxRand()
+/* ipconfigRAND32() is no longer valid. See xApplicationGetRandomNumber() instead
+https://www.freertos.org/FreeRTOS-Plus/FreeRTOS_Plus_TCP/API/xApplicationGetRandomNumber.html
+*/
 
 /* If ipconfigUSE_NETWORK_EVENT_HOOK is set to 1 then FreeRTOS+TCP will call the
 network event hook at the appropriate times.  If ipconfigUSE_NETWORK_EVENT_HOOK
@@ -165,6 +161,7 @@ set to 1 if a valid configuration cannot be obtained from a DHCP server for any
 reason.  The static configuration used is that passed into the stack by the
 FreeRTOS_IPInit() function call. */
 #define ipconfigUSE_DHCP     1
+#define ipconfigUSE_DHCP_HOOK   0
 
 /* When ipconfigUSE_DHCP is set to 1, DHCP requests will be sent out at
 increasing time intervals until either a reply is received from a DHCP server

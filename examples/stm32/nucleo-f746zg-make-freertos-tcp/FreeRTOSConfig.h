@@ -1,4 +1,5 @@
 #pragma once
+#define FREERTOS_CONFIG_H
 
 #include "hal.h"
 

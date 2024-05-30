@@ -70,12 +70,13 @@ static void blinker(void *args) {
   (void) args;
 }
 
-// https://www.freertos.org/FreeRTOS-Plus/FreeRTOS_Plus_TCP/TCP_Networking_Tutorial_Initialising_TCP.html
-void vApplicationIPNetworkEventHook(eIPCallbackEvent_t ev) {
+// https://www.freertos.org/FreeRTOS-Plus/FreeRTOS_Plus_TCP/TCP_Networking_Tutorial_Initialising_TCP.updated.html
+void vApplicationIPNetworkEventHook_Multi(eIPCallbackEvent_t ev, struct xNetworkEndPoint *ep) {
   static bool mongoose_started = false;
   MG_INFO(("FreeRTOS-Plus-TCP net event: %d", ev));
   if (ev == eNetworkUp && mongoose_started == false) {
-    uint32_t ip = FreeRTOS_GetIPAddress();
+    uint32_t ip;
+    FreeRTOS_GetEndPointConfiguration(&ip, NULL, NULL, NULL, ep);
     MG_INFO(("READY, IP: %M", mg_print_ip4, &ip));
     xTaskCreate(server, "server", 2048, 0, configMAX_PRIORITIES - 1, NULL);
     mongoose_started = true;
@@ -91,7 +92,16 @@ int main(void) {
   static const uint8_t netmask[4] = {255, 255, 255, 0};
   static const uint8_t dnsaddr[4] = {8, 8, 8, 8};
   static const uint8_t gwaddr[4] = {192, 168, 0, 1};
-  FreeRTOS_IPInit(ipaddr, netmask, gwaddr, dnsaddr, macaddr);
+  static NetworkInterface_t ifcs[1];
+  static NetworkEndPoint_t eps[1];
+  extern NetworkInterface_t *pxSTM32Fxx_FillInterfaceDescriptor(
+      BaseType_t, NetworkInterface_t *);
+
+  pxSTM32Fxx_FillInterfaceDescriptor(0, &(ifcs[0]));
+  FreeRTOS_FillEndPoint(&(ifcs[0]), &(eps[0]), ipaddr, netmask, gwaddr, dnsaddr,
+                        macaddr);
+  eps[0].bits.bWantDHCP = pdTRUE;
+  FreeRTOS_IPInit_Multi();
   MG_INFO(("MAC: %M. Waiting for IP...", mg_print_mac, macaddr));
 
   // Start tasks. NOTE: stack sizes are in 32-bit words
