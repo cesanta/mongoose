@@ -5824,12 +5824,16 @@ static void mg_tcpip_poll(struct mg_tcpip_if *ifp, uint64_t now) {
       mg_tcpip_rx(ifp, ifp->recv_queue.buf, len);
     }
   } else {  // Interrupt-based driver. Fills recv queue itself
-    char *buf;
-    size_t len = mg_queue_next(&ifp->recv_queue, &buf);
-    if (len > 0) {
-      mg_tcpip_rx(ifp, buf, len);
-      mg_queue_del(&ifp->recv_queue, len);
-    }
+    size_t len;
+    do
+    {
+        char *buf;
+        len = mg_queue_next(&ifp->recv_queue, &buf);
+        if (len > 0) {
+          mg_tcpip_rx(ifp, buf, len);
+          mg_queue_del(&ifp->recv_queue, len);
+        }
+    } while (len > 0);
   }
 
   // Process timeouts
