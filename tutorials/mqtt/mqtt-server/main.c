@@ -80,8 +80,7 @@ static void fn(struct mg_connection *c, int ev, void *ev_data) {
         while ((pos = mg_mqtt_next_sub(mm, &topic, &qos, pos)) > 0) {
           struct sub *sub = calloc(1, sizeof(*sub));
           sub->c = c;
-          sub->topic.buf = mg_mprintf("%.*s", topic.len, topic.buf);
-          sub->topic.len = topic.len;
+          sub->topic = mg_strdup(topic);
           sub->qos = qos;
           LIST_ADD_HEAD(struct sub, &s_subs, sub);
           MG_INFO(

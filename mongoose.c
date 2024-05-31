@@ -6633,8 +6633,7 @@ void mg_rpc_add(struct mg_rpc **head, struct mg_str method,
                 void (*fn)(struct mg_rpc_req *), void *fn_data) {
   struct mg_rpc *rpc = (struct mg_rpc *) calloc(1, sizeof(*rpc));
   if (rpc != NULL) {
-    rpc->method.buf = mg_mprintf("%.*s", method.len, method.buf);
-    rpc->method.len = method.len;
+    rpc->method = mg_strdup(method);
     rpc->fn = fn;
     rpc->fn_data = fn_data;
     rpc->next = *head, *head = rpc;
@@ -8046,6 +8045,20 @@ int mg_casecmp(const char *s1, const char *s2) {
     diff = c - d;
   } while (diff == 0 && s1[-1] != '\0');
   return diff;
+}
+
+struct mg_str mg_strdup(const struct mg_str s) {
+  struct mg_str r = {NULL, 0};
+  if (s.len > 0 && s.buf != NULL) {
+    char *sc = (char *) calloc(1, s.len + 1);
+    if (sc != NULL) {
+      memcpy(sc, s.buf, s.len);
+      sc[s.len] = '\0';
+      r.buf = sc;
+      r.len = s.len;
+    }
+  }
+  return r;
 }
 
 int mg_strcmp(const struct mg_str str1, const struct mg_str str2) {
@@ -10605,8 +10618,7 @@ static int mg_parse_pem(const struct mg_str pem, const struct mg_str label,
   const char *c;
   struct mg_str caps[5];
   if (!mg_match(pem, mg_str("#-----BEGIN #-----#-----END #-----#"), caps)) {
-    der->buf = mg_mprintf("%.*s", pem.len, pem.buf);
-    der->len = pem.len;
+    *der = mg_strdup(pem);
     return 0;
   }
   if (mg_strcmp(caps[1], label) != 0 || mg_strcmp(caps[3], label) != 0) {
