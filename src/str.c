@@ -23,6 +23,20 @@ int mg_casecmp(const char *s1, const char *s2) {
   return diff;
 }
 
+struct mg_str mg_strdup(const struct mg_str s) {
+  struct mg_str r = {NULL, 0};
+  if (s.len > 0 && s.buf != NULL) {
+    char *sc = (char *) calloc(1, s.len + 1);
+    if (sc != NULL) {
+      memcpy(sc, s.buf, s.len);
+      sc[s.len] = '\0';
+      r.buf = sc;
+      r.len = s.len;
+    }
+  }
+  return r;
+}
+
 int mg_strcmp(const struct mg_str str1, const struct mg_str str2) {
   size_t i = 0;
   while (i < str1.len && i < str2.len) {

@@ -1855,6 +1855,12 @@ static bool chkdbl(struct mg_str s, double val) {
 
 static void test_str(void) {
   {
+    struct mg_str s = mg_strdup(mg_str("a"));
+    ASSERT(mg_strcmp(s, mg_str("a")) == 0);
+    free((void *) s.buf);
+  }
+
+  {
     const char *s;
     struct mg_str a = mg_str("hello"), b = mg_str("a"), c = mg_str(NULL);
     ASSERT((s = mgstrstr(a, b)) == NULL);

@@ -186,7 +186,7 @@ extern "C" {
 #define calloc(a, b) mg_calloc(a, b)
 #define free(a) vPortFree(a)
 #define malloc(a) pvPortMalloc(a)
-#define strdup(s) mg_mprintf("%s", s)
+#define strdup(s) ((char *) mg_strdup(mg_str(s)).buf)
 
 // Re-route calloc/free to the FreeRTOS's functions, don't use stdlib
 static inline void *mg_calloc(size_t cnt, size_t size) {
@@ -288,7 +288,7 @@ extern uint32_t rt_time_get(void);
 #include "cmsis_os2.h"  // keep this include
 #endif
 
-#define strdup(s) mg_mprintf("%s", s)
+#define strdup(s) ((char *) mg_strdup(mg_str(s)).buf)
 
 #if defined(__ARMCC_VERSION)
 #define mode_t size_t
@@ -861,6 +861,7 @@ struct mg_str mg_str_n(const char *s, size_t n);
 int mg_casecmp(const char *s1, const char *s2);
 int mg_strcmp(const struct mg_str str1, const struct mg_str str2);
 int mg_strcasecmp(const struct mg_str str1, const struct mg_str str2);
+struct mg_str mg_strdup(const struct mg_str s);
 bool mg_match(struct mg_str str, struct mg_str pattern, struct mg_str *caps);
 bool mg_span(struct mg_str s, struct mg_str *a, struct mg_str *b, char delim);
 

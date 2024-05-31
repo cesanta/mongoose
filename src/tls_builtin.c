@@ -1233,8 +1233,7 @@ static int mg_parse_pem(const struct mg_str pem, const struct mg_str label,
   const char *c;
   struct mg_str caps[5];
   if (!mg_match(pem, mg_str("#-----BEGIN #-----#-----END #-----#"), caps)) {
-    der->buf = mg_mprintf("%.*s", pem.len, pem.buf);
-    der->len = pem.len;
+    *der = mg_strdup(pem);
     return 0;
   }
   if (mg_strcmp(caps[1], label) != 0 || mg_strcmp(caps[3], label) != 0) {
