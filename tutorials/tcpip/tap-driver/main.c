@@ -42,6 +42,23 @@ static size_t tap_rx(void *buf, size_t len, struct mg_tcpip_if *ifp) {
   return (size_t) received;
 }
 
+char *s_dns = NULL, *s_sntp = NULL;
+
+static void mif_fn(struct mg_tcpip_if *ifp, int ev, void *ev_data) {
+  if (ev == MG_TCPIP_EV_ST_CHG) {
+    MG_INFO(("State change: %u", *(uint8_t *) ev_data));
+  } else if (ev == MG_TCPIP_EV_DHCP_DNS) {
+    free(s_dns);
+    s_dns = mg_mprintf("udp://%M:53", mg_print_ip4, (uint32_t *) ev_data);
+    ifp->mgr->dns4.url = s_dns;
+    MG_INFO(("Set DNS to %s", ifp->mgr->dns4.url));
+  } else if (ev == MG_TCPIP_EV_DHCP_SNTP) {
+    free(s_sntp);
+    s_sntp = mg_mprintf("udp://%M:123", mg_print_ip4, (uint32_t *) ev_data);
+    MG_INFO(("Set SNTP to %s", s_sntp));
+  }
+}
+
 int main(int argc, char *argv[]) {
   const char *iface = "tap0";             // Network iface
   const char *mac = "02:00:01:02:03:77";  // MAC address
@@ -93,7 +110,11 @@ int main(int argc, char *argv[]) {
   mg_mgr_init(&mgr);  // Initialise event manager
 
   struct mg_tcpip_driver driver = {.tx = tap_tx, .up = tap_up, .rx = tap_rx};
-  struct mg_tcpip_if mif = {.driver = &driver, .driver_data = &fd};
+  struct mg_tcpip_if mif = {.driver = &driver,
+                            .driver_data = &fd,
+                            .enable_req_dns = true,
+                            .enable_req_sntp = true,
+                            .fn = mif_fn};
   sscanf(mac, "%hhx:%hhx:%hhx:%hhx:%hhx:%hhx", &mif.mac[0], &mif.mac[1],
          &mif.mac[2], &mif.mac[3], &mif.mac[4], &mif.mac[5]);
   mg_tcpip_init(&mgr, &mif);
@@ -107,6 +128,8 @@ int main(int argc, char *argv[]) {
   web_init(&mgr);
   while (s_signo == 0) mg_mgr_poll(&mgr, 100);  // Infinite event loop
 
+  free(s_dns);
+  free(s_sntp);
   mg_mgr_free(&mgr);
   close(fd);
   printf("Exiting on signal %d\n", s_signo);
