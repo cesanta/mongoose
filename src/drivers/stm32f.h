@@ -39,6 +39,7 @@ struct mg_tcpip_driver_stm32f_data {
     mif_.gw = MG_TCPIP_GW;                                        \
     mif_.driver = &mg_tcpip_driver_stm32f;                        \
     mif_.driver_data = &driver_data_;                             \
+    mif_.fn = MG_TCPIP_EV_HANDLER;                                \
     MG_SET_MAC_ADDRESS(mif_.mac);                                 \
     mg_tcpip_init(mgr, &mif_);                                    \
     MG_INFO(("Driver: stm32f, MAC: %M", mg_print_mac, mif_.mac)); \
