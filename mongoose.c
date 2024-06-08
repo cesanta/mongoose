@@ -7152,7 +7152,7 @@ static int64_t gettimestamp(const uint32_t *data) {
 }
 
 int64_t mg_sntp_parse(const unsigned char *buf, size_t len) {
-  int64_t res = -1;
+  int64_t epoch_milliseconds = -1;
   int mode = len > 0 ? buf[0] & 7 : 0;
   int version = len > 0 ? (buf[0] >> 3) & 7 : 0;
   if (len < 48) {
@@ -7163,17 +7163,17 @@ int64_t mg_sntp_parse(const unsigned char *buf, size_t len) {
     MG_ERROR(("%s", "server sent a kiss of death"));
   } else if (version == 4 || version == 3) {
     // int64_t ref = gettimestamp((uint32_t *) &buf[16]);
-    int64_t t0 = gettimestamp((uint32_t *) &buf[24]);
-    int64_t t1 = gettimestamp((uint32_t *) &buf[32]);
-    int64_t t2 = gettimestamp((uint32_t *) &buf[40]);
-    int64_t t3 = (int64_t) mg_millis();
-    int64_t delta = (t3 - t0) - (t2 - t1);
-    MG_VERBOSE(("%lld %lld %lld %lld delta:%lld", t0, t1, t2, t3, delta));
-    res = t2 + delta / 2;
+    int64_t origin_time = gettimestamp((uint32_t *) &buf[24]);
+    int64_t receive_time = gettimestamp((uint32_t *) &buf[32]);
+    int64_t transmit_time = gettimestamp((uint32_t *) &buf[40]);
+    int64_t now = (int64_t) mg_millis();
+    int64_t travel_time = (now - origin_time) - (transmit_time - receive_time);
+    MG_INFO(("%lld %lld", transmit_time, travel_time));
+    epoch_milliseconds = transmit_time + travel_time / 2;
   } else {
     MG_ERROR(("unexpected version: %d", version));
   }
-  return res;
+  return epoch_milliseconds;
 }
 
 static void sntp_cb(struct mg_connection *c, int ev, void *ev_data) {
