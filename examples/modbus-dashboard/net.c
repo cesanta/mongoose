@@ -22,7 +22,6 @@ static struct device_settings s_settings;
 static const char *s_json_header =
     "Content-Type: application/json\r\n"
     "Cache-Control: no-cache\r\n";
-static uint64_t s_boot_timestamp = 0;  // Updated by SNTP
 
 static void set_default_settings(struct device_settings *s) {
   s->magic = SETTINGS_MAGIC;
@@ -33,29 +32,9 @@ static void set_default_settings(struct device_settings *s) {
   mg_snprintf(s->mqtt_topic_rx, sizeof(s->mqtt_topic_rx), "%s", "modbus1/rx");
 }
 
-// This is for newlib and TLS (mbedTLS)
-uint64_t mg_now(void) {
-  return mg_millis() + s_boot_timestamp;
-}
-
-// SNTP connection event handler. When we get a response from an SNTP server,
-// adjust s_boot_timestamp. We'll get a valid time from that point on
-static void sfn(struct mg_connection *c, int ev, void *ev_data) {
-  uint64_t *expiration_time = (uint64_t *) c->data;
-  if (ev == MG_EV_OPEN) {
-    *expiration_time = mg_millis() + 3000;  // Store expiration time in 3s
-  } else if (ev == MG_EV_SNTP_TIME) {
-    uint64_t t = *(uint64_t *) ev_data;
-    s_boot_timestamp = t - mg_millis();
-    c->is_closing = 1;
-  } else if (ev == MG_EV_POLL) {
-    if (mg_millis() > *expiration_time) c->is_closing = 1;
-  }
-}
-
 // SNTP timer function. Sync up time
 static void timer_sntp_fn(void *param) {
-  mg_sntp_connect(param, "udp://time.google.com:123", sfn, NULL);
+  mg_sntp_connect(param, "udp://time.google.com:123", NULL, NULL);
 }
 
 static void setfromjson(struct mg_str json, const char *jsonpath, char *buf,
