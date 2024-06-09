@@ -2361,7 +2361,8 @@ static void test_util(void) {
   {
     uint32_t val, max = (uint32_t) -1;
     ASSERT(mg_str_to_num(mg_str("123"), 10, &val, sizeof(uint32_t)) && val == 123);
-    mg_snprintf(buf, sizeof(buf), "%lu", max);
+    mg_snprintf(buf, sizeof(buf), "%lu", (unsigned long) max);
+    ASSERT(strcmp(buf, "4294967295") == 0);
     ASSERT(mg_str_to_num(mg_str(buf), 10, &val, sizeof(uint32_t)) && val == max);
     ASSERT(mg_str_to_num(mg_str("01111011"), 2, &val, sizeof(uint32_t)) && val == 123);
     ASSERT(mg_str_to_num(mg_str("11111111111111111111111111111111"), 2, &val, sizeof(uint32_t)) && val == max);
