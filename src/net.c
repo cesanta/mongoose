@@ -85,7 +85,7 @@ static bool mg_aton6(struct mg_str str, struct mg_addr *addr) {
     if ((str.buf[i] >= '0' && str.buf[i] <= '9') ||
         (str.buf[i] >= 'a' && str.buf[i] <= 'f') ||
         (str.buf[i] >= 'A' && str.buf[i] <= 'F')) {
-      unsigned long val;  // TODO(): This loops on chars, refactor
+      unsigned long val = 0;  // TODO(): This loops on chars, refactor
       if (i > j + 3) return false;
       // MG_DEBUG(("%lu %lu [%.*s]", i, j, (int) (i - j + 1), &str.buf[j]));
       mg_str_to_num(mg_str_n(&str.buf[j], i - j + 1), 16, &val, sizeof(val));

@@ -93,6 +93,19 @@ static int mg_bio_write(BIO *bio, const char *buf, int len) {
   return len;
 }
 
+#ifdef MG_TLS_SSLKEYLOGFILE
+static void ssl_keylog_cb(const SSL *ssl, const char *line) {
+  char *keylogfile = getenv("SSLKEYLOGFILE");
+  if (keylogfile == NULL) {
+    return;
+  }
+  FILE *f = fopen(keylogfile, "a");
+  fprintf(f, "%s\n", line);
+  fflush(f);
+  fclose(f);
+}
+#endif
+
 void mg_tls_init(struct mg_connection *c, const struct mg_tls_opts *opts) {
   struct mg_tls *tls = (struct mg_tls *) calloc(1, sizeof(*tls));
   const char *id = "mongoose";
@@ -112,6 +125,9 @@ void mg_tls_init(struct mg_connection *c, const struct mg_tls_opts *opts) {
   MG_DEBUG(("%lu Setting TLS", c->id));
   tls->ctx = c->is_client ? SSL_CTX_new(SSLv23_client_method())
                           : SSL_CTX_new(SSLv23_server_method());
+#if MG_TLS_SSLKEYLOGFILE
+  SSL_CTX_set_keylog_callback(tls->ctx, ssl_keylog_cb);
+#endif
   if ((tls->ssl = SSL_new(tls->ctx)) == NULL) {
     mg_error(c, "SSL_new");
     goto fail;
