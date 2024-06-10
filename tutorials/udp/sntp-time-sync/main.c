@@ -17,6 +17,7 @@ static struct mg_connection *s_sntp_conn = NULL;
 
 // On embedded systems, rename to time()
 time_t my_time(time_t *tp) {
+  // you can just return mg_now() / 1000;
   time_t t = s_boot_timestamp + mg_millis() / 1000;
   if (tp != NULL) *tp = t;
   return t;
@@ -25,9 +26,15 @@ time_t my_time(time_t *tp) {
 // SNTP client callback
 static void sfn(struct mg_connection *c, int ev, void *ev_data) {
   if (ev == MG_EV_SNTP_TIME) {
-    int64_t t = *(int64_t *) ev_data;
-    MG_INFO(("Got SNTP time: %lld ms from epoch", t));
-    s_boot_timestamp = (time_t) ((t - mg_millis()) / 1000);
+    // Time received, the internal protocol handler updates what mg_now() returns
+    uint64_t curtime = mg_now();
+    MG_INFO(("SNTP-updated current time is: %llu ms from epoch", curtime));
+    // otherwise, you can process the server returned data yourself
+    {
+      uint64_t t = *(uint64_t *) ev_data;
+      s_boot_timestamp = (time_t) ((t - mg_millis()) / 1000);
+      MG_INFO(("Got SNTP time: %llu ms from epoch, ", t));
+    }
   } else if (ev == MG_EV_CLOSE) {
     s_sntp_conn = NULL;
   }
