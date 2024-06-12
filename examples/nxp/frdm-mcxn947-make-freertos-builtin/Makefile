@@ -16,9 +16,10 @@ SOURCES += cmsis_mcu/devices/MCXN947/drivers/fsl_clock.c cmsis_mcu/devices/MCXN9
 
 # FreeRTOS. MCXN947 has a Cortex-M33 (ARMv8) core, the CM4F port can be used if TrustZone and the MPU are not to be used
 SOURCES += FreeRTOS-Kernel/portable/MemMang/heap_4.c
-SOURCES += FreeRTOS-Kernel/portable/GCC/ARM_CM4F/port.c
+SOURCES += FreeRTOS-Kernel/portable/GCC/ARM_CM33_NTZ/non_secure/port.c
+SOURCES += FreeRTOS-Kernel/portable/GCC/ARM_CM33_NTZ/non_secure/portasm.c
 CFLAGS += -IFreeRTOS-Kernel/include 
-CFLAGS += -IFreeRTOS-Kernel/portable/GCC/ARM_CM4F -Wno-conversion
+CFLAGS += -IFreeRTOS-Kernel/portable/GCC/ARM_CM33_NTZ/non_secure -Wno-conversion -Wno-unused-parameter
 
 # Mongoose options are defined in mongoose_config.h
 SOURCES += mongoose.c net.c packed_fs.c

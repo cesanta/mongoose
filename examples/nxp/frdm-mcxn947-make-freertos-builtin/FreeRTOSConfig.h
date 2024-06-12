@@ -22,8 +22,8 @@
 #else
 #define configPRIO_BITS 3
 #endif
-#define configLIBRARY_LOWEST_INTERRUPT_PRIORITY 15
-#define configLIBRARY_MAX_SYSCALL_INTERRUPT_PRIORITY 5
+#define configLIBRARY_LOWEST_INTERRUPT_PRIORITY ((1U << (configPRIO_BITS)) - 1)
+#define configLIBRARY_MAX_SYSCALL_INTERRUPT_PRIORITY 3
 #define configKERNEL_INTERRUPT_PRIORITY \
   (configLIBRARY_LOWEST_INTERRUPT_PRIORITY << (8 - configPRIO_BITS))
 
@@ -33,6 +33,12 @@
 #define configASSERT(expr) \
   if (!(expr)) printf("FAILURE %s:%d: %s\n", __FILE__, __LINE__, #expr)
 
-#define vPortSVCHandler SVC_Handler
-#define xPortPendSVHandler PendSV_Handler
-#define xPortSysTickHandler SysTick_Handler
+// https://www.freertos.org/2020/04/using-freertos-on-armv8-m-microcontrollers.html
+#define configENABLE_FPU  1
+#define configENABLE_MPU  0
+#define configENABLE_TRUSTZONE  0
+#define configRUN_FREERTOS_SECURE_ONLY 1
+
+//#define vPortSVCHandler SVC_Handler
+//#define xPortPendSVHandler PendSV_Handler
+//#define xPortSysTickHandler SysTick_Handler
