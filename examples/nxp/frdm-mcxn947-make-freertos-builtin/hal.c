@@ -24,7 +24,7 @@ uint64_t mg_millis(void) {  // Let Mongoose use our uptime function
 void hal_init(void) {
   clock_init();                            // Set system clock to SYS_FREQUENCY
   SystemCoreClock = SYS_FREQUENCY;         // Update SystemCoreClock global var
-  SysTick_Config(SystemCoreClock / 1000);  // Sys tick every 1ms
+//  SysTick_Config(SystemCoreClock / 1000);  // Sys tick every 1ms
   // rng_init();  // TRNG is part of ELS and there is no info on that
 
   uart_init(UART_DEBUG, 115200);  // Initialise UART
