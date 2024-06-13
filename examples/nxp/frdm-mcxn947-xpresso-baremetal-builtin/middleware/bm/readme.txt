@@ -1,0 +1,1 @@
+Component middleware.baremetal has no real source. Its main purpose is to provide baremetal condition corresponding to RTOS condition.

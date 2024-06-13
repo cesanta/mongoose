@@ -1,0 +1,874 @@
+<?xml version="1.0" encoding= "UTF-8" ?>
+<configuration name="MCXN947" xsi:schemaLocation="http://mcuxpresso.nxp.com/XSD/mex_configuration_14 http://mcuxpresso.nxp.com/XSD/mex_configuration_14.xsd" uuid="d86c14f6-8d36-4bf9-b4f2-ef9ebffd62de" version="14" xmlns="http://mcuxpresso.nxp.com/XSD/mex_configuration_14" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
+   <common>
+      <processor>MCXN947</processor>
+      <package>MCXN947VDF</package>
+      <board>FRDM-MCXN947</board>
+      <mcu_data>ksdk2_0</mcu_data>
+      <cores selected="cm33_core0">
+         <core name="Cortex-M33 (Core #0)" id="cm33_core0" description=""/>
+         <core name="Cortex-M33 (Core #1)" id="cm33_core1" description=""/>
+      </cores>
+      <description>Configuration imported from frdm-mcxn947-xpresso-freertos-builtin</description>
+   </common>
+   <preferences>
+      <validate_boot_init_only>true</validate_boot_init_only>
+      <generate_extended_information>false</generate_extended_information>
+      <generate_code_modified_registers_only>false</generate_code_modified_registers_only>
+      <update_include_paths>true</update_include_paths>
+      <generate_registers_defines>false</generate_registers_defines>
+   </preferences>
+   <tools>
+      <pins name="Pins" version="14.0" enabled="true" update_project_code="true">
+         <pins_profile>
+            <processor_version>14.0.0</processor_version>
+            <pin_labels>
+               <pin_label pin_num="A1" pin_signal="PIO1_8/WUU0_IN10/LPTMR1_ALT3/TRACE_DATA0/FC4_P0/FC5_P4/CT_INP8/SCT0_OUT2/FLEXIO0_D16/PLU_OUT0/ENET0_TXD2/I3C1_SDA/TSI0_CH17/ADC1_A8" label="P1_8/J9[32]" identifier="DEBUG_UART_RX"/>
+               <pin_label pin_num="B1" pin_signal="PIO1_9/TRACE_DATA1/FC4_P1/FC5_P5/CT_INP9/SCT0_OUT3/FLEXIO0_D17/PLU_OUT1/ENET0_TXD3/I3C1_SCL/TSI0_CH18/ADC1_A9" label="P1_9/J9[30]" identifier="DEBUG_UART_TX"/>
+               <pin_label pin_num="D1" pin_signal="PIO1_13/TRIG_IN3/FC4_P5/FC3_P1/CT2_MAT3/SCT0_OUT5/FLEXIO0_D21/PLU_OUT3/ENET0_RXDV/CAN1_TXD/TSI0_CH22/ADC1_A13" label="P1_13/J9[27]"/>
+               <pin_label pin_num="F1" pin_signal="PIO1_30/TRIG_OUT3/CT_INP16/SCT0_OUT8/SAI0_MCLK/XTAL48M" label="P1_30/XTAL/Y1[1]"/>
+               <pin_label pin_num="H1" pin_signal="PIO2_1/TRACE_CLK/SDHC0_D4/SCT0_IN1/PWM1_B3/FLEXIO0_D9/FLEXSPI0_B_DQS/SINC0_MCLK_OUT0/SAI0_RX_FS" label="P2_1/TP27/J12[9]"/>
+               <pin_label pin_num="K1" pin_signal="PIO2_5/TRIG_OUT3/FC9_P2/SDHC0_CMD/SCT0_OUT3/PWM1_B1/FLEXIO0_D13/FLEXSPI0_B_DATA1/SINC0_MBIT1/SAI0_TXD1" label="P2_5/TP25/J12[3]/J3[9]/SJ6[3]"/>
+               <pin_label pin_num="M1" pin_signal="PIO2_9/TRACE_DATA1/SDHC0_D6/SCT0_IN3/PWM1_X1/FLEXIO0_D17/FLEXSPI0_B_DATA5/SINC0_MBIT3/SAI1_RXD0" label="P2_9/J8[14]"/>
+               <pin_label pin_num="P1" pin_signal="PIO4_0/WUU0_IN18/TRIG_IN6/FC2_P0/CT_INP16/PLU_IN0/SINC0_MCLK3" label="P4_0/J8[4]/SJ14[1]"/>
+               <pin_label pin_num="T1" pin_signal="PIO4_2/TRIG_IN6/FC2_P2/CT_INP12/PLU_IN2/SINC0_MBIT3/DAC0_OUT/ADC0_A4/ADC1_A4/CMP0_IN4N/CMP1_IN4N/CMP2_IN4N" label="P4_2/J1[4]"/>
+               <pin_label pin_num="U1" pin_signal="PIO4_3/WUU0_IN19/TRIG_IN7/FC2_P3/CT_INP13/PLU_IN3/DAC1_OUT/ADC0_B4/ADC1_B4/CMP0_IN5N/CMP1_IN5N/CMP2_IN5N" label="P4_3/J1[2]"/>
+               <pin_label pin_num="A2" pin_signal="PIO1_7/WUU0_IN9/TRIG_OUT2/FC5_P3/CT_INP7/SCT0_IN1/FLEXIO0_D15/PLU_CLK/ENET0_TXD1/SAI1_RX_FS/CAN1_RXD/TSI0_CH7/ADC0_A23" label="P1_7/J9[9]"/>
+               <pin_label pin_num="B2" pin_signal="PIO1_6/TRIG_IN2/FC3_P6/FC5_P2/CT_INP6/SCT0_IN0/FLEXIO0_D14/ENET0_TXD0/SAI1_RX_BCLK/CAN1_TXD/TSI0_CH6/ADC0_A22" label="P1_6/J9[10]"/>
+               <pin_label pin_num="D2" pin_signal="PIO1_12/WUU0_IN12/TRACE_CLK/FC4_P4/FC3_P0/CT2_MAT2/SCT0_OUT4/FLEXIO0_D20/PLU_OUT2/ENET0_RXER/CAN1_RXD/TSI0_CH21/ADC1_A12" label="P1_12/J2[11]/J9[28]"/>
+               <pin_label pin_num="F2" pin_signal="PIO1_31/TRIG_IN4/CT_INP17/SCT0_OUT9/EXTAL48M" label="P1_31/EXTAL/Y1[3]"/>
+               <pin_label pin_num="G2" pin_signal="VSS0" label="GND"/>
+               <pin_label pin_num="H2" pin_signal="PIO2_0/TRIG_IN5/FC9_P6/SDHC0_D5/SCT0_IN0/PWM1_A3/FLEXIO0_D8/FLEXSPI0_B_SS1_b/SAI0_RX_BCLK" label="P2_0/J3[1]/SJ8[3]"/>
+               <pin_label pin_num="K2" pin_signal="PIO2_6/TRIG_IN4/FC9_P4/SDHC0_D3/SCT0_OUT4/PWM1_A0/FLEXIO0_D14/FLEXSPI0_B_DATA2/SINC0_MCLK2/SAI0_TX_BCLK" label="P2_6/TP24/J12[2]/J3[15]/SJ1[3]"/>
+               <pin_label pin_num="L2" pin_signal="PIO2_7/TRIG_IN5/FC9_P5/SDHC0_D2/SCT0_OUT5/PWM1_B0/FLEXIO0_D15/FLEXSPI0_B_DATA3/SINC0_MBIT2/SAI0_TX_FS" label="P2_7/TP23/J12[1]/J3[13]/SJ3[3]"/>
+               <pin_label pin_num="M2" pin_signal="PIO2_8/TRACE_DATA0/SDHC0_D7/SCT0_IN2/PWM1_X0/FLEXIO0_D16/FLEXSPI0_B_DATA4/SINC0_MCLK3/SAI1_TXD0" label="P2_8/J8[13]"/>
+               <pin_label pin_num="P2" pin_signal="PIO4_1/TRIG_IN7/FC2_P1/CT_INP17/PLU_IN1" label="P4_1/J8[3]/SJ15[1]"/>
+               <pin_label pin_num="T2" pin_signal="ADC1_A0" label="ANA_4/ADC1_A0/J6[1]"/>
+               <pin_label pin_num="U2" pin_signal="DAC2_OUT/ADC0_A3/ADC1_A3" label="ANA_6/ADC0_A3/J3[2]"/>
+               <pin_label pin_num="B3" pin_signal="PIO1_5/FREQME_CLK_IN1/FC3_P5/FC5_P1/CT1_MAT3/SCT0_OUT1/FLEXIO0_D13/ENET0_TXEN/SAI0_RXD1/TSI0_CH5/ADC0_A21/CMP0_IN3" label="P1_5/J9[7]"/>
+               <pin_label pin_num="C3" pin_signal="PIO1_10/TRACE_DATA2/FC4_P2/FC5_P6/CT2_MAT0/SCT0_IN2/FLEXIO0_D18/PLU_IN0/ENET0_TXER/CAN0_TXD/TSI0_CH19/ADC1_A10" label="P1_10/SJ20[3]/SJ16[2]"/>
+               <pin_label pin_num="D3" pin_signal="PIO1_11/WUU0_IN11/TRACE_DATA3/FC4_P3/CT2_MAT1/SCT0_IN3/FLEXIO0_D19/PLU_IN1/ENET0_RX_CLK/I3C1_PUR/CAN0_RXD/TSI0_CH20/ADC1_A11" label="P1_11/SJ26[2]"/>
+               <pin_label pin_num="F3" pin_signal="RESET_B" label="RESET_B/J23[10]/D16[1]/SW1[3]/SW1[4]/J3[6]" identifier="SW1"/>
+               <pin_label pin_num="H3" pin_signal="PIO2_2/WUU0_IN16/CLKOUT/FC9_P3/SDHC0_D1/SCT0_OUT0/PWM1_A2/FLEXIO0_D10/FLEXSPI0_B_SS0_b/SINC0_MCLK0/SAI0_TXD0" label="P2_2/TP5/J12[8]/J3[7]/SJ7[3]"/>
+               <pin_label pin_num="J3" pin_signal="PIO2_3/FC9_P1/SDHC0_D0/SCT0_OUT1/PWM1_B2/FLEXIO0_D11/FLEXSPI0_B_SCLK/SINC0_MBIT0/SAI0_RXD0" label="P2_3/TP4/J12[7]/J3[5]/SJ4[3]"/>
+               <pin_label pin_num="K3" pin_signal="PIO2_4/WUU0_IN17/FC9_P0/SDHC0_CLK/SCT0_OUT2/PWM1_A1/FLEXIO0_D12/FLEXSPI0_B_DATA0/SINC0_MCLK1/SAI0_RXD1" label="P2_4/TP26/J12[5]/J3[11]/SJ5[3]"/>
+               <pin_label pin_num="M3" pin_signal="PIO2_10/TRACE_DATA2/SCT0_IN4/PWM1_X2/FLEXIO0_D18/FLEXSPI0_B_DATA6/SINC0_MCLK4/SAI1_RXD1" label="P2_10/J8[15]"/>
+               <pin_label pin_num="P3" pin_signal="ADC0_A0" label="ADC0_A0/ARD_A0/J4[2]"/>
+               <pin_label pin_num="R3" pin_signal="ADC0_B0" label="ADC0_B0/ARD_A1/J4[4]"/>
+               <pin_label pin_num="T3" pin_signal="ADC1_B0" label="ADC1_B0/MC_BEMF_A/J2[1]"/>
+               <pin_label pin_num="A4" pin_signal="PIO1_4/WUU0_IN8/FREQME_CLK_IN0/FC3_P4/FC5_P0/CT1_MAT2/SCT0_OUT0/FLEXIO0_D12/ENET0_TX_CLK/SAI0_TXD1/TSI0_CH4/ADC0_A20/CMP0_IN2" label="P1_4/SJ27[2]"/>
+               <pin_label pin_num="B4" pin_signal="PIO1_3/WUU0_IN7/TRIG_OUT1/FC3_P3/CT1_MAT1/SCT0_IN7/FLEXIO0_D11/ENET0_MDIO/SAI1_RXD0/CAN0_RXD/TSI0_CH3/ADC0_A19/CMP0_IN1" label="P1_3/J6[2]"/>
+               <pin_label pin_num="C4" pin_signal="PIO1_2/TRIG_OUT0/FC3_P2/FC4_P6/CT1_MAT0/SCT0_IN6/FLEXIO0_D10/ENET0_MDC/SAI1_TXD0/CAN0_TXD/TSI0_CH2/ADC0_A18/CMP2_IN0" label="P1_2/SJ4[1]" identifier="LED_BLUE"/>
+               <pin_label pin_num="D4" pin_signal="PIO1_14/FC4_P6/FC3_P2/CT_INP10/SCT0_IN4/FLEXIO0_D22/PLU_IN2/ENET0_RXD0/TSI0_CH23/ADC1_A14" label="P1_14/J9[2]"/>
+               <pin_label pin_num="E4" pin_signal="PIO1_15/WUU0_IN13/FC3_P3/CT_INP11/SCT0_IN5/FLEXIO0_D23/PLU_IN3/ENET0_RXD1/I3C1_PUR/TSI0_CH24/ADC1_A15" label="P1_15/J9[1]"/>
+               <pin_label pin_num="F4" pin_signal="PIO1_17/FC5_P1/FC3_P5/CT_INP13/SCT0_OUT7/FLEXIO0_D25/PLU_OUT5/ENET0_RXD3/I3C1_SCL/ADC1_A17" label="P1_17/SJ15[3]/J5[4]/J9[3]"/>
+               <pin_label pin_num="G4" pin_signal="PIO1_18/FREQME_CLK_IN0/FC5_P2/FC3_P6/CT3_MAT0/SCT0_IN6/FLEXIO0_D26/PLU_IN4/ENET0_COL/CAN0_TXD/ADC1_A18" label="P1_18/J9[6]"/>
+               <pin_label pin_num="J4" pin_signal="VSS1" label="GND"/>
+               <pin_label pin_num="L4" pin_signal="PIO1_22/TRIG_IN3/FC5_P6/FC4_P2/CT_INP14/SCT0_OUT4/FLEXIO0_D30/ADC1_A22" label="P1_22/J9[24]/J3[3]/SJ9[3]"/>
+               <pin_label pin_num="M4" pin_signal="PIO1_23/FC4_P3/CT_INP15/SCT0_OUT5/FLEXIO0_D31/ADC1_A23" label="P1_23/J9[23]/SJ1[1]"/>
+               <pin_label pin_num="N4" pin_signal="PIO2_11/TRACE_DATA3/SCT0_IN5/PWM1_X3/FLEXIO0_D19/FLEXSPI0_B_DATA7/SINC0_MBIT4/SAI1_TXD1" label="P2_11/J8[16]"/>
+               <pin_label pin_num="P4" pin_signal="VDD_P40" label="VDD_P4"/>
+               <pin_label pin_num="R4" pin_signal="VDD_ANA" label="VDD_ANA/J2[16]"/>
+               <pin_label pin_num="T4" pin_signal="PIO4_7/CT_INP19" label="P4_7/J8[7]"/>
+               <pin_label pin_num="U4" pin_signal="VREFO/ADC0_A7/ADC1_A7" label="VREFO/TP1"/>
+               <pin_label pin_num="C5" pin_signal="PIO1_1/TRIG_IN1/FC3_P1/FC4_P5/CT_INP5/SCT0_OUT7/FLEXIO0_D9/SAI1_TX_FS/TSI0_CH1/ADC0_A17/CMP1_IN0" label="P1_1/J5[5]/J2[15]"/>
+               <pin_label pin_num="E5" pin_signal="VSS3" label="GND"/>
+               <pin_label pin_num="G5" pin_signal="PIO1_19/WUU0_IN15/FREQME_CLK_IN1/FC5_P3/CT3_MAT1/SCT0_IN7/FLEXIO0_D27/PLU_IN5/ENET0_CRS/CAN0_RXD/ADC1_A19" label="P1_19/J9[5]"/>
+               <pin_label pin_num="H5" pin_signal="VSS2" label="GND"/>
+               <pin_label pin_num="K5" pin_signal="PIO1_20/TRIG_IN2/FC5_P4/FC4_P0/CT3_MAT2/SCT0_OUT8/FLEXIO0_D28/PLU_OUT6/ENET0_MDC/CAN1_TXD/ADC1_A20/CMP1_IN3" label="P1_20"/>
+               <pin_label pin_num="L5" pin_signal="PIO1_21/TRIG_OUT2/FC5_P5/FC4_P1/CT3_MAT3/SCT0_OUT9/FLEXIO0_D29/PLU_OUT7/ENET0_MDIO/SAI1_MCLK/CAN1_RXD/ADC1_A21/CMP2_IN3" label="P1_21/SJ3[1]/J1[7]"/>
+               <pin_label pin_num="N5" pin_signal="VDD_P41" label="VDD_P4"/>
+               <pin_label pin_num="R5" pin_signal="VREFH" label="VREFH"/>
+               <pin_label pin_num="A6" pin_signal="PIO0_25/FC1_P1/CT0_MAT1/ADC0_B17" label="P0_25/J2[12]"/>
+               <pin_label pin_num="B6" pin_signal="PIO0_24/FC1_P0/CT0_MAT0/ADC0_B16" label="P0_24/SJ7[1]"/>
+               <pin_label pin_num="C6" pin_signal="PIO1_0/WUU0_IN6/LPTMR0_ALT3/TRIG_IN0/FC3_P0/FC4_P4/CT_INP4/SCT0_OUT6/FLEXIO0_D8/SAI1_TX_BCLK/TSI0_CH0/ADC0_A16/CMP0_IN0" label="P1_0/J5[6]/J2[17]"/>
+               <pin_label pin_num="N13" pin_signal="VSS4" label="GND"/>
+               <pin_label pin_num="F6" pin_signal="PIO1_16/WUU0_IN14/FC5_P0/FC3_P4/CT_INP12/SCT0_OUT6/FLEXIO0_D24/PLU_OUT4/ENET0_RXD2/I3C1_SDA/ADC1_A16" label="P1_16/SJ14[3]/J5[3]/J9[4]"/>
+               <pin_label pin_num="H6" pin_signal="VDD1" label="VDD_P0/1"/>
+               <pin_label pin_num="K6" pin_signal="VDD_LDO_CORE" label="VDD_LDO_CORE_IN"/>
+               <pin_label pin_num="M6" pin_signal="PIO4_4/FC2_P4/CT_INP14/PLU_IN4/SINC0_MCLK4" label="P4_4/J9[26]"/>
+               <pin_label pin_num="P6" pin_signal="VSS_P41" label="GND"/>
+               <pin_label pin_num="R6" pin_signal="VREFL" label="AGND"/>
+               <pin_label pin_num="T6" pin_signal="PIO4_12/WUU0_IN20/USB0_VBUS_DET/FC2_P0/CT4_MAT0/FLEXIO0_D20/PLU_OUT0/SINC0_MCLK0/CAN0_RXD/OPAMP0_INP0/ADC0_A5/ADC1_A5" label="P4_12/SJ25[1]/J8[17]"/>
+               <pin_label pin_num="U6" pin_signal="OPAMP0_INN" label="OPAMP0_INN/RSHUNT_CURA_N/SJ24[1]"/>
+               <pin_label pin_num="B7" pin_signal="PIO0_23/WUU0_IN5/EWM0_OUT_b/FC1_P3/CT_INP3/FLEXIO0_D7/ADC0_A15/CMP2_IN2" label="P0_23/SJ9[1]/SW2[3]/SW2[4]" identifier="SW2"/>
+               <pin_label pin_num="D7" pin_signal="PIO0_31/CT_INP3/ADC0_B23" label="P0_31/J1[16]"/>
+               <pin_label pin_num="E7" pin_signal="PIO0_30/FC1_P6/FC0_P6/CT_INP2/ADC0_B22" label="P0_30/SJ2[1]"/>
+               <pin_label pin_num="G7" pin_signal="VDD0" label="VDD_P0/1"/>
+               <pin_label pin_num="L7" pin_signal="VDD_P20" label="VDD_P2"/>
+               <pin_label pin_num="N7" pin_signal="PIO4_6/TRIG_OUT4/FC2_P6/CT_INP18/PLU_CLK" label="P4_6/J8[5]"/>
+               <pin_label pin_num="P7" pin_signal="VSS_P42" label="GND"/>
+               <pin_label pin_num="T7" pin_signal="PIO4_13/TRIG_IN8/FC2_P1/USB1_ID/CT4_MAT1/FLEXIO0_D21/PLU_OUT1/SINC0_MBIT0/CAN0_TXD/OPAMP0_INP1/ADC0_B5/ADC1_B5" label="P4_13/SJ10[1]/SJ2[3]/J8[18]"/>
+               <pin_label pin_num="A8" pin_signal="PIO0_21/FC0_P5/FC1_P1/CT_INP1/FLEXIO0_D5/I3C0_SCL/TSI0_CH16/ADC0_A13" label="P0_21/SJ25[3]"/>
+               <pin_label pin_num="B8" pin_signal="PIO0_22/EWM0_IN/FC0_P6/FC1_P2/CT_INP2/FLEXIO0_D6/I3C0_PUR/ADC0_A14/CMP1_IN2" label="P0_22/J4[8]/SJ18[3]"/>
+               <pin_label pin_num="C8" pin_signal="PIO0_20/WUU0_IN4/FC0_P4/FC1_P0/CT_INP0/FLEXIO0_D4/I3C0_SDA/TSI0_CH15/ADC0_A12" label="P0_20/SJ24[3]/J7[2]"/>
+               <pin_label pin_num="E8" pin_signal="PIO0_28/FC1_P4/FC0_P4/CT_INP0/ADC0_B20" label="P0_28/J2[2]"/>
+               <pin_label pin_num="F8" pin_signal="PIO0_29/FC1_P5/FC0_P5/CT_INP1/ADC0_B21" label="P0_29/J1[6]"/>
+               <pin_label pin_num="H8" pin_signal="VDD2" label="VDD_P0/1"/>
+               <pin_label pin_num="H13" pin_signal="VSS10" label="GND"/>
+               <pin_label pin_num="K8" pin_signal="VDD_P21" label="VDD_P2"/>
+               <pin_label pin_num="M8" pin_signal="PIO4_5/FC2_P5/CT_INP15/PLU_IN5/SINC0_MBIT4" label="P4_5/SJ11[3]/J8[6]"/>
+               <pin_label pin_num="N8" pin_signal="PIO4_14/CT4_MAT2/FLEXIO0_D22/PLU_OUT2" label="P4_14/J8[19]"/>
+               <pin_label pin_num="R8" pin_signal="PIO4_16/FC2_P2/USB1_OTG_PWR/CT3_MAT0/FLEXIO0_D24/PLU_OUT4/SINC0_MCLK1/CAN1_TXD/OPAMP1_INP0/ADC0_A6" label="P4_16/SJ23[1]/J8[21]"/>
+               <pin_label pin_num="T8" pin_signal="PIO4_15/WUU0_IN21/TRIG_OUT4/USB1_VBUS_DIG/CT4_MAT3/FLEXIO0_D23/PLU_OUT3/SINC0_MCLK_OUT0/CAN1_RXD/OPAMP0_OUT/ADC0_A1/CMP0_IN4P" label="P4_15/J8[20]"/>
+               <pin_label pin_num="U8" pin_signal="OPAMP1_INN" label="OPAMP1_INN/RSHUNT_CURB_N/SJ22[1]"/>
+               <pin_label pin_num="C9" pin_signal="PIO0_19/WUU0_IN3/EWM0_OUT_b/FC0_P3/CT0_MAT3/FLEXIO0_D3/HSCMP1_OUT/TSI0_CH14/ADC0_A11" label="P0_19/J2[13]/J7[1]"/>
+               <pin_label pin_num="D6" pin_signal="VSS5" label="GND"/>
+               <pin_label pin_num="E13" pin_signal="VSS8" label="GND"/>
+               <pin_label pin_num="J14" pin_signal="VSS13" label="GND"/>
+               <pin_label pin_num="P9" pin_signal="VSS_P40" label="GND"/>
+               <pin_label pin_num="R9" pin_signal="PIO4_17/TRIG_IN9/FC2_P3/USB1_OTG_OC/CT3_MAT1/FLEXIO0_D25/PLU_OUT5/SINC0_MBIT1/OPAMP1_INP1/ADC0_B6" label="P4_17/J8[22]"/>
+               <pin_label pin_num="A10" pin_signal="PIO0_17/FC0_P1/CT0_MAT1/UTICK_CAP3/FLEXIO0_D1/PDM0_DATA0/I3C0_SCL/TSI0_CH12/ADC0_A9" label="P0_17/J7[7]"/>
+               <pin_label pin_num="B10" pin_signal="PIO0_16/WUU0_IN2/FC0_P0/CT0_MAT0/UTICK_CAP2/FLEXIO0_D0/PDM0_CLK/I3C0_SDA/TSI0_CH11/ADC0_A8" label="P0_16/J7[3]"/>
+               <pin_label pin_num="C10" pin_signal="PIO0_18/EWM0_IN/FC0_P2/CT0_MAT2/FLEXIO0_D2/HSCMP0_OUT/PDM0_DATA1/TSI0_CH13/ADC0_A10" label="P0_18/SJ23[3]/J7[5]"/>
+               <pin_label pin_num="E10" pin_signal="PIO0_27/FC1_P3/CT0_MAT3/ADC0_B19" label="P0_27/SJ6[1]" identifier="LED_GREEN"/>
+               <pin_label pin_num="F10" pin_signal="PIO0_26/FC1_P2/CT0_MAT2/ADC0_B18" label="P0_26/J2[10]"/>
+               <pin_label pin_num="H10" pin_signal="VDD_P31" label="VDD_P3"/>
+               <pin_label pin_num="J8" pin_signal="VSS11" label="GND"/>
+               <pin_label pin_num="K10" pin_signal="VDD_CORE/VOUT_CORE" label="VDD_CORE/L2[2]"/>
+               <pin_label pin_num="M10" pin_signal="PIO5_2/VBAT_WAKEUP_b/SPC_LPREQ/TAMPER0/ADC1_B10" label="P5_2/SJ19[1]"/>
+               <pin_label pin_num="N10" pin_signal="PIO4_18/CT3_MAT2/FLEXIO0_D26/PLU_OUT6" label="P4_18/J8[23]"/>
+               <pin_label pin_num="R10" pin_signal="PIO4_19/TRIG_OUT5/CT3_MAT3/FLEXIO0_D27/PLU_OUT7/SINC0_MCLK_OUT1/OPAMP1_OUT/ADC0_B1/CMP1_IN4P" label="P4_19/J8[24]"/>
+               <pin_label pin_num="T10" pin_signal="PIO4_20/TRIG_IN8/FC2_P4/CT2_MAT0/FLEXIO0_D28/SINC0_MCLK2/OPAMP2_INP0/ADC1_A6" label="P4_20/SJ21[1]/J8[25]"/>
+               <pin_label pin_num="U10" pin_signal="OPAMP2_INN" label="OPAMP2_INN/RSHUNT_CURC_N/SJ20[1]"/>
+               <pin_label pin_num="B11" pin_signal="PIO0_11/CT0_MAT1/FLEXIO0_D3/HSCMP2_OUT/ADC0_B11" label="P0_11/J9[18]"/>
+               <pin_label pin_num="D11" pin_signal="PIO0_12/FC1_P4/FC0_P0/CT0_MAT2/FLEXIO0_D4/ADC0_B12" label="P0_12/J8[9]"/>
+               <pin_label pin_num="E11" pin_signal="PIO0_14/FC1_P6/FC0_P2/CT_INP2/UTICK_CAP0/FLEXIO0_D6/ADC0_B14" label="P0_14/J4[6]/SJ19[3]"/>
+               <pin_label pin_num="G11" pin_signal="VDD_P30" label="VDD_P3"/>
+               <pin_label pin_num="L11" pin_signal="VDD_CORE" label="VDD_CORE/L2[2]"/>
+               <pin_label pin_num="N11" pin_signal="PIO5_3/TRIG_IN11/RTC_CLKOUT/TAMPER1/ADC1_B11" label="P5_3/SJ18[1]"/>
+               <pin_label pin_num="P11" pin_signal="USB1_ID" label="HS_USB_ID/Q1[2]"/>
+               <pin_label pin_num="T11" pin_signal="PIO4_21/TRIG_IN9/FC2_P5/CT2_MAT1/FLEXIO0_D29/SINC0_MBIT2/OPAMP2_INP1/ADC1_B6" label="P4_21/J8[26]"/>
+               <pin_label pin_num="A12" pin_signal="PIO0_9/FC0_P5/CT_INP1/FLEXIO0_D1/ADC0_B9" label="P0_9/J8[10]"/>
+               <pin_label pin_num="B12" pin_signal="PIO0_10/FC0_P6/CT0_MAT0/FLEXIO0_D2/ADC0_B10" label="P0_10/SJ5[1]" identifier="LED_RED"/>
+               <pin_label pin_num="C12" pin_signal="PIO0_8/FC0_P4/CT_INP0/FLEXIO0_D0/ADC0_B8" label="P0_8/J8[11]"/>
+               <pin_label pin_num="D9" pin_signal="VSS6" label="GND"/>
+               <pin_label pin_num="F12" pin_signal="PIO0_13/FC1_P5/FC0_P1/CT0_MAT3/FLEXIO0_D5/ADC0_B13" label="P0_13/J8[12]"/>
+               <pin_label pin_num="H12" pin_signal="VDD_P42" label="VDD_P3"/>
+               <pin_label pin_num="K12" pin_signal="PIO5_5/TRIG_IN10/LPTMR0_ALT2/TAMPER3/ADC1_B13" label="P5_5/SJ17[3]"/>
+               <pin_label pin_num="M12" pin_signal="PIO5_4/TRIG_OUT7/SPC_LPREQ/TAMPER2/ADC1_B12" label="P5_4/J2[7]"/>
+               <pin_label pin_num="P14" pin_signal="VDD3" label="GND"/>
+               <pin_label pin_num="R12" pin_signal="VDD_USB" label="VDD_USB"/>
+               <pin_label pin_num="T12" pin_signal="PIO4_22/CT2_MAT2/FLEXIO0_D30" label="P4_22/J8[27]"/>
+               <pin_label pin_num="U12" pin_signal="PIO4_23/TRIG_OUT5/FC2_P6/CT2_MAT3/FLEXIO0_D31/SINC0_MCLK_OUT2/OPAMP2_OUT/ADC0_A2/ADC0_B2/ADC1_B3/CMP2_IN4P" label="P4_23/J8[28]"/>
+               <pin_label pin_num="C13" pin_signal="PIO0_7/WUU0_IN1/FC0_P3/CT_INP3/CMP2_IN1" label="P0_7/J8[8]"/>
+               <pin_label pin_num="D12" pin_signal="VSS7" label="GND"/>
+               <pin_label pin_num="G13" pin_signal="PIO0_15/FC0_P3/CT_INP3/UTICK_CAP1/FLEXIO0_D7/ADC0_B15" label="P0_15/SJ8[1]"/>
+               <pin_label pin_num="H9" pin_signal="VSS9" label="GND"/>
+               <pin_label pin_num="K13" pin_signal="PIO5_6/TRIG_OUT6/LPTMR1_ALT2/TAMPER4/ADC1_B14" label="P5_6/SJ13[1]"/>
+               <pin_label pin_num="L13" pin_signal="PIO5_7/TRIG_IN11/TAMPER5/ADC1_B15" label="P5_7/J5[2]"/>
+               <pin_label pin_num="R13" pin_signal="USB1_DP" label="MCX_USB1_DP/L13[3]"/>
+               <pin_label pin_num="A14" pin_signal="PIO0_5/EWM0_OUT_b/FC0_P1/FC1_P5/CT0_MAT3/UTICK_CAP3/PDM0_DATA0/TSI0_CH9" label="P0_5/SJ13[3]/J9[15]/SJ21[3]"/>
+               <pin_label pin_num="B14" pin_signal="PIO0_4/WUU0_IN0/EWM0_IN/FC0_P0/FC1_P4/CT0_MAT2/UTICK_CAP2/HSCMP1_OUT/PDM0_CLK/TSI0_CH8" label="P0_4/SJ12[3]/J9[17]/SJ22[3]"/>
+               <pin_label pin_num="C14" pin_signal="PIO0_6/ISPMODE_N/FC0_P2/FC1_P6/CT_INP2/HSCMP2_OUT/PDM0_DATA1/CLKOUT/TSI0_CH10" label="P0_6/J23[7]/SW3[3]/SW3[4]" identifier="SW3"/>
+               <pin_label pin_num="D14" pin_signal="PIO3_7/FC6_P6/FC7_P1/CT4_MAT3/PWM0_B1/FLEXIO0_D15/FLEXSPI0_A_SCLK/SIM0_VCCEN/SAI0_MCLK" label="P3_7/TP18/U8[6]/U7[B2]"/>
+               <pin_label pin_num="E14" pin_signal="PIO3_8/WUU0_IN23/FC6_P4/FC7_P0/CT_INP4/PWM0_A2/FLEXIO0_D16/FLEXSPI0_A_DATA0/SIM0_PD/SAI0_TX_BCLK" label="P3_8/TP16/U8[5]/U7[D3]"/>
+               <pin_label pin_num="F14" pin_signal="PIO3_4/FC7_P2/CT_INP18/PWM0_X2/FLEXIO0_D12/SIM1_CLK" label="P3_4/J9[12]"/>
+               <pin_label pin_num="G14" pin_signal="PIO3_5/FC7_P3/CT_INP19/PWM0_X3/FLEXIO0_D13/SIM1_IO" label="P3_5/J9[11]"/>
+               <pin_label pin_num="J10" pin_signal="VSS12" label="GND"/>
+               <pin_label pin_num="L14" pin_signal="PIO5_8/TRIG_OUT7/TAMPER6/ADC1_B16" label="P5_8/U9[19]/J9[31]"/>
+               <pin_label pin_num="M14" pin_signal="PIO5_9/TAMPER7/ADC1_B17" label="P5_9/J9[29]"/>
+               <pin_label pin_num="N14" pin_signal="VDD_SYS" label="VDD_SYS"/>
+               <pin_label pin_num="T16" pin_signal="VDD4" label="GND"/>
+               <pin_label pin_num="R14" pin_signal="USB1_DM" label="MCX_USB1_DM/L13[2]"/>
+               <pin_label pin_num="T14" pin_signal="USB0_DM/WUU0_IN28" label="TP2"/>
+               <pin_label pin_num="U14" pin_signal="USB1_VBUS" label="MCX_USB1_VBUS"/>
+               <pin_label pin_num="B15" pin_signal="PIO0_3/TDI/FC1_P3/CT0_MAT1/UTICK_CAP1/HSCMP0_OUT/CMP1_IN1" label="P0_3/J23[8]/D16[3]/SJ17[1]"/>
+               <pin_label pin_num="C15" pin_signal="PIO3_1/TRIG_IN1/FC6_P0/FC7_P6/CT_INP17/PWM0_B0/FLEXIO0_D9/FLEXSPI0_A_SS1_b/FREQME_CLK_OUT0" label="P3_1/TP31"/>
+               <pin_label pin_num="D15" pin_signal="PIO3_2/FC7_P0/CT4_MAT0/PWM0_X0/FLEXIO0_D10/SIM1_PD" label="P3_2/J9[20]/J7[8]"/>
+               <pin_label pin_num="F15" pin_signal="PIO3_9/FC6_P5/FC7_P2/CT_INP5/PWM0_B2/FLEXIO0_D17/FLEXSPI0_A_DATA1/SIM0_RST/SAI0_TX_FS" label="P3_9/TP15/U8[2]/U7[D2]"/>
+               <pin_label pin_num="H15" pin_signal="PIO3_15/FC8_P1/CT_INP7/PWM1_B1/FLEXIO0_D23/FLEXSPI0_A_DATA7/SAI0_RX_FS" label="P3_15/TP9/U7[E1]"/>
+               <pin_label pin_num="J15" pin_signal="PIO3_16/FC8_P2/CT_INP8/PWM1_A2/FLEXIO0_D24/SIM0_CLK/SAI1_TX_BCLK" label="P3_16/SJ11[1]"/>
+               <pin_label pin_num="K15" pin_signal="PIO3_17/WUU0_IN26/FC8_P3/CT_INP9/PWM1_B2/FLEXIO0_D25/SIM0_IO/SAI1_TX_FS" label="P3_17/J1[11]/SJ10[3]"/>
+               <pin_label pin_num="M15" pin_signal="PIO3_23/FC6_P3/CT_INP11/PWM1_X3/FLEXIO0_D31/SAI1_TXD1" label="P3_23/J6[3]"/>
+               <pin_label pin_num="P15" pin_signal="VDD_LDO_SYS/VOUT_SYS" label="VDD_LDO_SYS_IN"/>
+               <pin_label pin_num="R15" pin_signal="VDD_DCDC" label="VDD_DCDC"/>
+               <pin_label pin_num="T15" pin_signal="USB0_DP/WUU0_IN29" label="TP3"/>
+               <pin_label pin_num="A16" pin_signal="PIO0_1/TCLK/SWCLK/FC1_P1/CT_INP1" label="P0_1/SWCLK/J23[4]/D16[5]/J22[2]" identifier="DEBUG_SWD_SWDCLK"/>
+               <pin_label pin_num="B16" pin_signal="PIO0_2/TDO/SWO/FC1_P2/CT0_MAT0/UTICK_CAP0/I3C0_PUR" label="P0_2/SWO/J23[6]/D16[4]" identifier="DEBUG_SWD_SWO"/>
+               <pin_label pin_num="D16" pin_signal="PIO3_3/FC7_P1/CT4_MAT1/PWM0_X1/FLEXIO0_D11/SIM1_RST" label="P3_3/J9[19]/SJ12[1]"/>
+               <pin_label pin_num="F16" pin_signal="PIO3_11/WUU0_IN24/FC6_P3/FC7_P5/CT1_MAT1/PWM0_B3/FLEXIO0_D19/FLEXSPI0_A_DATA3/SIM0_IO/SAI0_RXD0" label="P3_11/TP14/U8[7]/U7[D4]"/>
+               <pin_label pin_num="G16" pin_signal="PIO3_12/FC7_P4/FC6_P4/CT1_MAT2/PWM1_A0/FLEXIO0_D20/FLEXSPI0_A_DATA4/SAI0_RXD1" label="P3_12/TP17/U7[D5]"/>
+               <pin_label pin_num="H16" pin_signal="PIO3_13/FC7_P5/FC6_P5/CT1_MAT3/PWM1_B0/FLEXIO0_D21/FLEXSPI0_A_DATA5/SAI0_TXD1" label="P3_13/TP11/U7[E3]"/>
+               <pin_label pin_num="K16" pin_signal="PIO3_18/FC6_P6/CT2_MAT0/PWM1_X0/FLEXIO0_D26/SAI1_RX_BCLK" label="P3_18/J1[9]"/>
+               <pin_label pin_num="L16" pin_signal="PIO3_21/TRIG_OUT1/FC8_P5/FC6_P1/CT2_MAT3/PWM1_B3/FLEXIO0_D29/SIM0_RST/SAI1_RXD0" label="P3_21/J6[4]/J1[15]"/>
+               <pin_label pin_num="M16" pin_signal="PIO3_22/FC8_P6/FC6_P2/CT_INP10/PWM1_X2/FLEXIO0_D30/SIM0_VCCEN/SAI1_RXD1" label="P3_22/J6[5]"/>
+               <pin_label pin_num="P16" pin_signal="VSS_DCDC" label="GND"/>
+               <pin_label pin_num="U16" pin_signal="PIO5_0/TRIG_IN10/LPTMR0_ALT2/EXTAL32K/ADC1_B8" label="P5_0/EXTAL32K/Y2[2]"/>
+               <pin_label pin_num="A17" pin_signal="PIO0_0/TMS/SWDIO/FC1_P0/CT_INP0" label="P0_0/SWDIO/J23[2]/D16[6]" identifier="DEBUG_SWD_SWDIO"/>
+               <pin_label pin_num="B17" pin_signal="PIO3_0/WUU0_IN22/TRIG_IN0/FC7_P3/CT_INP16/PWM0_A0/FLEXIO0_D8/FLEXSPI0_A_SS0_b" label="P3_0/TP12/U8[1]/U7[C2]/U7[A3]"/>
+               <pin_label pin_num="D17" pin_signal="PIO3_6/CLKOUT/FC6_P1/CT4_MAT2/PWM0_A1/FLEXIO0_D14/FLEXSPI0_A_DQS/SIM1_VCCEN/SAI1_MCLK/FREQME_CLK_OUT1" label="P3_6/TP8/U7[C3]"/>
+               <pin_label pin_num="F17" pin_signal="PIO3_10/FC6_P2/FC7_P4/CT1_MAT0/PWM0_A3/FLEXIO0_D18/FLEXSPI0_A_DATA2/SIM0_CLK/SAI0_TXD0" label="P3_10/TP13/U8[3]/U7[C4]"/>
+               <pin_label pin_num="H17" pin_signal="PIO3_14/WUU0_IN25/FC8_P0/CT_INP6/PWM1_A1/FLEXIO0_D22/FLEXSPI0_A_DATA6/SAI0_RX_BCLK" label="P3_14/TP10/U7[E2]"/>
+               <pin_label pin_num="K17" pin_signal="PIO3_19/FC7_P6/CT2_MAT1/PWM1_X1/FLEXIO0_D27/SAI1_RX_FS" label="P3_19/J5[1]/J1[13]"/>
+               <pin_label pin_num="M17" pin_signal="PIO3_20/WUU0_IN27/TRIG_OUT0/FC8_P4/FC6_P0/CT2_MAT2/PWM1_A3/FLEXIO0_D28/SIM0_PD/SAI1_TXD0" label="P3_20/J6[6]/J1[5]"/>
+               <pin_label pin_num="P17" pin_signal="DCDC_LX" label="DCDC_LX"/>
+               <pin_label pin_num="T17" pin_signal="VDD_BAT" label="VDD_BAT/J27[2]"/>
+               <pin_label pin_num="U17" pin_signal="PIO5_1/TRIG_OUT6/LPTMR1_ALT2/XTAL32K/ADC1_B9" label="P5_1/XTAL32K/Y2[1]"/>
+            </pin_labels>
+            <expansion_headers>
+               <expansion_header id="micro_bus" name="mikroBUS(TM)">
+                  <connectors>
+                     <connector id="C1" name="J6">
+                        <pins>
+                           <pin id="1" pin_num="T2" pin_signal="ADC1_A0" name="AN"/>
+                           <pin id="2" pin_num="B4" pin_signal="PIO1_3/WUU0_IN7/TRIG_OUT1/FC3_P3/CT1_MAT1/SCT0_IN7/FLEXIO0_D11/ENET0_MDIO/SAI1_RXD0/CAN0_RXD/TSI0_CH3/ADC0_A19/CMP0_IN1" name="RST"/>
+                           <pin id="3" pin_num="M15" pin_signal="PIO3_23/FC6_P3/CT_INP11/PWM1_X3/FLEXIO0_D31/SAI1_TXD1" name="CS"/>
+                           <pin id="4" pin_num="L16" pin_signal="PIO3_21/TRIG_OUT1/FC8_P5/FC6_P1/CT2_MAT3/PWM1_B3/FLEXIO0_D29/SIM0_RST/SAI1_RXD0" name="SCK"/>
+                           <pin id="5" pin_num="M16" pin_signal="PIO3_22/FC8_P6/FC6_P2/CT_INP10/PWM1_X2/FLEXIO0_D30/SIM0_VCCEN/SAI1_RXD1" name="MISO"/>
+                           <pin id="6" pin_num="M17" pin_signal="PIO3_20/WUU0_IN27/TRIG_OUT0/FC8_P4/FC6_P0/CT2_MAT2/PWM1_A3/FLEXIO0_D28/SIM0_PD/SAI1_TXD0" name="MOSI"/>
+                        </pins>
+                     </connector>
+                     <connector id="C2" name="J5">
+                        <pins>
+                           <pin id="1" pin_num="K17" pin_signal="PIO3_19/FC7_P6/CT2_MAT1/PWM1_X1/FLEXIO0_D27/SAI1_RX_FS" name="PWM"/>
+                           <pin id="2" pin_num="L13" pin_signal="PIO5_7/TRIG_IN11/TAMPER5/ADC1_B15" name="INT"/>
+                           <pin id="3" pin_num="F6" pin_signal="PIO1_16/WUU0_IN14/FC5_P0/FC3_P4/CT_INP12/SCT0_OUT6/FLEXIO0_D24/PLU_OUT4/ENET0_RXD2/I3C1_SDA/ADC1_A16" name="RX"/>
+                           <pin id="4" pin_num="F4" pin_signal="PIO1_17/FC5_P1/FC3_P5/CT_INP13/SCT0_OUT7/FLEXIO0_D25/PLU_OUT5/ENET0_RXD3/I3C1_SCL/ADC1_A17" name="TX"/>
+                           <pin id="5" pin_num="C5" pin_signal="PIO1_1/TRIG_IN1/FC3_P1/FC4_P5/CT_INP5/SCT0_OUT7/FLEXIO0_D9/SAI1_TX_FS/TSI0_CH1/ADC0_A17/CMP1_IN0" name="SCL"/>
+                           <pin id="6" pin_num="C6" pin_signal="PIO1_0/WUU0_IN6/LPTMR0_ALT3/TRIG_IN0/FC3_P0/FC4_P4/CT_INP4/SCT0_OUT6/FLEXIO0_D8/SAI1_TX_BCLK/TSI0_CH0/ADC0_A16/CMP0_IN0" name="SDA"/>
+                        </pins>
+                     </connector>
+                  </connectors>
+               </expansion_header>
+               <expansion_header id="frdm_arduino" name="LPCXpresso V3 (Arduino compatible)">
+                  <connectors>
+                     <connector id="C1" name="J3">
+                        <pins>
+                           <pin id="1" pin_num="H2" pin_signal="PIO2_0/TRIG_IN5/FC9_P6/SDHC0_D5/SCT0_IN0/PWM1_A3/FLEXIO0_D8/FLEXSPI0_B_SS1_b/SAI0_RX_BCLK"/>
+                           <pin id="2" pin_num="U2" pin_signal="DAC2_OUT/ADC0_A3/ADC1_A3"/>
+                           <pin id="3" pin_num="L4" pin_signal="PIO1_22/TRIG_IN3/FC5_P6/FC4_P2/CT_INP14/SCT0_OUT4/FLEXIO0_D30/ADC1_A22"/>
+                           <pin id="5" pin_num="J3" pin_signal="PIO2_3/FC9_P1/SDHC0_D0/SCT0_OUT1/PWM1_B2/FLEXIO0_D11/FLEXSPI0_B_SCLK/SINC0_MBIT0/SAI0_RXD0"/>
+                           <pin id="6" pin_num="F3" pin_signal="RESET_B"/>
+                           <pin id="7" pin_num="H3" pin_signal="PIO2_2/WUU0_IN16/CLKOUT/FC9_P3/SDHC0_D1/SCT0_OUT0/PWM1_A2/FLEXIO0_D10/FLEXSPI0_B_SS0_b/SINC0_MCLK0/SAI0_TXD0"/>
+                           <pin id="9" pin_num="K1" pin_signal="PIO2_5/TRIG_OUT3/FC9_P2/SDHC0_CMD/SCT0_OUT3/PWM1_B1/FLEXIO0_D13/FLEXSPI0_B_DATA1/SINC0_MBIT1/SAI0_TXD1"/>
+                           <pin id="11" pin_num="K3" pin_signal="PIO2_4/WUU0_IN17/FC9_P0/SDHC0_CLK/SCT0_OUT2/PWM1_A1/FLEXIO0_D12/FLEXSPI0_B_DATA0/SINC0_MCLK1/SAI0_RXD1"/>
+                           <pin id="13" pin_num="L2" pin_signal="PIO2_7/TRIG_IN5/FC9_P5/SDHC0_D2/SCT0_OUT5/PWM1_B0/FLEXIO0_D15/FLEXSPI0_B_DATA3/SINC0_MBIT2/SAI0_TX_FS"/>
+                           <pin id="15" pin_num="K2" pin_signal="PIO2_6/TRIG_IN4/FC9_P4/SDHC0_D3/SCT0_OUT4/PWM1_A0/FLEXIO0_D14/FLEXSPI0_B_DATA2/SINC0_MCLK2/SAI0_TX_BCLK"/>
+                        </pins>
+                     </connector>
+                     <connector id="C2" name="J2">
+                        <pins>
+                           <pin id="1" pin_num="T3" pin_signal="ADC1_B0"/>
+                           <pin id="2" pin_num="E8" pin_signal="PIO0_28/FC1_P4/FC0_P4/CT_INP0/ADC0_B20"/>
+                           <pin id="3" pin_num="M10" pin_signal="PIO5_2/VBAT_WAKEUP_b/SPC_LPREQ/TAMPER0/ADC1_B10"/>
+                           <pin id="4" pin_num="B12" pin_signal="PIO0_10/FC0_P6/CT0_MAT0/FLEXIO0_D2/ADC0_B10"/>
+                           <pin id="5" pin_num="N11" pin_signal="PIO5_3/TRIG_IN11/RTC_CLKOUT/TAMPER1/ADC1_B11"/>
+                           <pin id="6" pin_num="E10" pin_signal="PIO0_27/FC1_P3/CT0_MAT3/ADC0_B19"/>
+                           <pin id="7" pin_num="M12" pin_signal="PIO5_4/TRIG_OUT7/SPC_LPREQ/TAMPER2/ADC1_B12"/>
+                           <pin id="8" pin_num="B6" pin_signal="PIO0_24/FC1_P0/CT0_MAT0/ADC0_B16"/>
+                           <pin id="9" pin_num="B15" pin_signal="PIO0_3/TDI/FC1_P3/CT0_MAT1/UTICK_CAP1/HSCMP0_OUT/CMP1_IN1"/>
+                           <pin id="10" pin_num="F10" pin_signal="PIO0_26/FC1_P2/CT0_MAT2/ADC0_B18"/>
+                           <pin id="11" pin_num="C10" pin_signal="PIO0_18/EWM0_IN/FC0_P2/CT0_MAT2/FLEXIO0_D2/HSCMP0_OUT/PDM0_DATA1/TSI0_CH13/ADC0_A10"/>
+                           <pin id="12" pin_num="A6" pin_signal="PIO0_25/FC1_P1/CT0_MAT1/ADC0_B17"/>
+                           <pin id="13" pin_num="C9" pin_signal="PIO0_19/WUU0_IN3/EWM0_OUT_b/FC0_P3/CT0_MAT3/FLEXIO0_D3/HSCMP1_OUT/TSI0_CH14/ADC0_A11"/>
+                           <pin id="15" pin_num="C5" pin_signal="PIO1_1/TRIG_IN1/FC3_P1/FC4_P5/CT_INP5/SCT0_OUT7/FLEXIO0_D9/SAI1_TX_FS/TSI0_CH1/ADC0_A17/CMP1_IN0"/>
+                           <pin id="17" pin_num="C6" pin_signal="PIO1_0/WUU0_IN6/LPTMR0_ALT3/TRIG_IN0/FC3_P0/FC4_P4/CT_INP4/SCT0_OUT6/FLEXIO0_D8/SAI1_TX_BCLK/TSI0_CH0/ADC0_A16/CMP0_IN0"/>
+                           <pin id="18" pin_num="P1" pin_signal="PIO4_0/WUU0_IN18/TRIG_IN6/FC2_P0/CT_INP16/PLU_IN0/SINC0_MCLK3"/>
+                           <pin id="20" pin_num="P2" pin_signal="PIO4_1/TRIG_IN7/FC2_P1/CT_INP17/PLU_IN1"/>
+                        </pins>
+                     </connector>
+                     <connector id="C3" name="J1">
+                        <pins>
+                           <pin id="1" pin_num="J15" pin_signal="PIO3_16/FC8_P2/CT_INP8/PWM1_A2/FLEXIO0_D24/SIM0_CLK/SAI1_TX_BCLK"/>
+                           <pin id="2" pin_num="U1" pin_signal="PIO4_3/WUU0_IN19/TRIG_IN7/FC2_P3/CT_INP13/PLU_IN3/DAC1_OUT/ADC0_B4/ADC1_B4/CMP0_IN5N/CMP1_IN5N/CMP2_IN5N"/>
+                           <pin id="3" pin_num="T7" pin_signal="PIO4_13/TRIG_IN8/FC2_P1/USB1_ID/CT4_MAT1/FLEXIO0_D21/PLU_OUT1/SINC0_MBIT0/CAN0_TXD/OPAMP0_INP1/ADC0_B5/ADC1_B5"/>
+                           <pin id="4" pin_num="T1" pin_signal="PIO4_2/TRIG_IN6/FC2_P2/CT_INP12/PLU_IN2/SINC0_MBIT3/DAC0_OUT/ADC0_A4/ADC1_A4/CMP0_IN4N/CMP1_IN4N/CMP2_IN4N"/>
+                           <pin id="5" pin_num="M17" pin_signal="PIO3_20/WUU0_IN27/TRIG_OUT0/FC8_P4/FC6_P0/CT2_MAT2/PWM1_A3/FLEXIO0_D28/SIM0_PD/SAI1_TXD0"/>
+                           <pin id="6" pin_num="F8" pin_signal="PIO0_29/FC1_P5/FC0_P5/CT_INP1/ADC0_B21"/>
+                           <pin id="7" pin_num="L5" pin_signal="PIO1_21/TRIG_OUT2/FC5_P5/FC4_P1/CT3_MAT3/SCT0_OUT9/FLEXIO0_D29/PLU_OUT7/ENET0_MDIO/SAI1_MCLK/CAN1_RXD/ADC1_A21/CMP2_IN3"/>
+                           <pin id="8" pin_num="M4" pin_signal="PIO1_23/FC4_P3/CT_INP15/SCT0_OUT5/FLEXIO0_D31/ADC1_A23"/>
+                           <pin id="9" pin_num="K16" pin_signal="PIO3_18/FC6_P6/CT2_MAT0/PWM1_X0/FLEXIO0_D26/SAI1_RX_BCLK"/>
+                           <pin id="10" pin_num="E7" pin_signal="PIO0_30/FC1_P6/FC0_P6/CT_INP2/ADC0_B22"/>
+                           <pin id="11" pin_num="K15" pin_signal="PIO3_17/WUU0_IN26/FC8_P3/CT_INP9/PWM1_B2/FLEXIO0_D25/SIM0_IO/SAI1_TX_FS"/>
+                           <pin id="12" pin_num="L5" pin_signal="PIO1_21/TRIG_OUT2/FC5_P5/FC4_P1/CT3_MAT3/SCT0_OUT9/FLEXIO0_D29/PLU_OUT7/ENET0_MDIO/SAI1_MCLK/CAN1_RXD/ADC1_A21/CMP2_IN3"/>
+                           <pin id="13" pin_num="K17" pin_signal="PIO3_19/FC7_P6/CT2_MAT1/PWM1_X1/FLEXIO0_D27/SAI1_RX_FS"/>
+                           <pin id="14" pin_num="C4" pin_signal="PIO1_2/TRIG_OUT0/FC3_P2/FC4_P6/CT1_MAT0/SCT0_IN6/FLEXIO0_D10/ENET0_MDC/SAI1_TXD0/CAN0_TXD/TSI0_CH2/ADC0_A18/CMP2_IN0"/>
+                           <pin id="15" pin_num="L16" pin_signal="PIO3_21/TRIG_OUT1/FC8_P5/FC6_P1/CT2_MAT3/PWM1_B3/FLEXIO0_D29/SIM0_RST/SAI1_RXD0"/>
+                           <pin id="16" pin_num="D7" pin_signal="PIO0_31/CT_INP3/ADC0_B23"/>
+                        </pins>
+                     </connector>
+                     <connector id="C4" name="J4">
+                        <pins>
+                           <pin id="1" pin_num="T6" pin_signal="PIO4_12/WUU0_IN20/USB0_VBUS_DET/FC2_P0/CT4_MAT0/FLEXIO0_D20/PLU_OUT0/SINC0_MCLK0/CAN0_RXD/OPAMP0_INP0/ADC0_A5/ADC1_A5"/>
+                           <pin id="2" pin_num="P3" pin_signal="ADC0_A0"/>
+                           <pin id="3" pin_num="U6" pin_signal="OPAMP0_INN"/>
+                           <pin id="4" pin_num="R3" pin_signal="ADC0_B0"/>
+                           <pin id="5" pin_num="R8" pin_signal="PIO4_16/FC2_P2/USB1_OTG_PWR/CT3_MAT0/FLEXIO0_D24/PLU_OUT4/SINC0_MCLK1/CAN1_TXD/OPAMP1_INP0/ADC0_A6"/>
+                           <pin id="6" pin_num="E11" pin_signal="PIO0_14/FC1_P6/FC0_P2/CT_INP2/UTICK_CAP0/FLEXIO0_D6/ADC0_B14"/>
+                           <pin id="7" pin_num="U8" pin_signal="OPAMP1_INN"/>
+                           <pin id="8" pin_num="B8" pin_signal="PIO0_22/EWM0_IN/FC0_P6/FC1_P2/CT_INP2/FLEXIO0_D6/I3C0_PUR/ADC0_A14/CMP1_IN2"/>
+                           <pin id="9" pin_num="T10" pin_signal="PIO4_20/TRIG_IN8/FC2_P4/CT2_MAT0/FLEXIO0_D28/SINC0_MCLK2/OPAMP2_INP0/ADC1_A6"/>
+                           <pin id="10" pin_num="G13" pin_signal="PIO0_15/FC0_P3/CT_INP3/UTICK_CAP1/FLEXIO0_D7/ADC0_B15"/>
+                           <pin id="11" pin_num="U10" pin_signal="OPAMP2_INN"/>
+                           <pin id="12" pin_num="B7" pin_signal="PIO0_23/WUU0_IN5/EWM0_OUT_b/FC1_P3/CT_INP3/FLEXIO0_D7/ADC0_A15/CMP2_IN2"/>
+                        </pins>
+                     </connector>
+                  </connectors>
+               </expansion_header>
+               <expansion_header id="frdm_arduino" name="LPCXpressoV2/V3 Expansion Header"/>
+               <expansion_header id="micro_bus" name="mikroBUS Click Header"/>
+            </expansion_headers>
+         </pins_profile>
+         <functions_list>
+            <function name="BOARD_InitDEBUG_UARTPins">
+               <description>Configures pin routing and optionally pin electrical features.</description>
+               <options>
+                  <callFromInitBoot>true</callFromInitBoot>
+                  <coreID>cm33_core0</coreID>
+                  <enableClock>true</enableClock>
+               </options>
+               <dependencies>
+                  <dependency resourceType="Peripheral" resourceId="LP_FLEXCOMM4" description="Peripheral LP_FLEXCOMM4 signals are routed in the Pins Tool, but the peripheral is not initialized in the Peripherals Tool." problem_level="1" source="Pins:BOARD_InitDEBUG_UARTPins">
+                     <feature name="initialized" evaluation="equal">
+                        <data>true</data>
+                     </feature>
+                  </dependency>
+                  <dependency resourceType="SWComponent" resourceId="platform.drivers.common" description="Pins initialization requires the COMMON Driver in the project." problem_level="2" source="Pins:BOARD_InitDEBUG_UARTPins">
+                     <feature name="enabled" evaluation="equal" configuration="cm33_core0">
+                        <data>true</data>
+                     </feature>
+                  </dependency>
+                  <dependency resourceType="SWComponent" resourceId="platform.drivers.port" description="Pins initialization requires the PORT Driver in the project." problem_level="2" source="Pins:BOARD_InitDEBUG_UARTPins">
+                     <feature name="enabled" evaluation="equal" configuration="cm33_core0">
+                        <data>true</data>
+                     </feature>
+                  </dependency>
+               </dependencies>
+               <pins>
+                  <pin peripheral="LP_FLEXCOMM4" signal="LPFLEXCOMM_P0" pin_num="A1" pin_signal="PIO1_8/WUU0_IN10/LPTMR1_ALT3/TRACE_DATA0/FC4_P0/FC5_P4/CT_INP8/SCT0_OUT2/FLEXIO0_D16/PLU_OUT0/ENET0_TXD2/I3C1_SDA/TSI0_CH17/ADC1_A8">
+                     <pin_features>
+                        <pin_feature name="slew_rate" value="fast"/>
+                        <pin_feature name="open_drain" value="disable"/>
+                        <pin_feature name="drive_strength" value="low"/>
+                        <pin_feature name="pull_select" value="down"/>
+                        <pin_feature name="pull_enable" value="disable"/>
+                        <pin_feature name="passive_filter" value="disable"/>
+                        <pin_feature name="pull_value" value="low"/>
+                        <pin_feature name="input_buffer" value="enable"/>
+                        <pin_feature name="invert_input" value="normal"/>
+                     </pin_features>
+                  </pin>
+                  <pin peripheral="LP_FLEXCOMM4" signal="LPFLEXCOMM_P1" pin_num="B1" pin_signal="PIO1_9/TRACE_DATA1/FC4_P1/FC5_P5/CT_INP9/SCT0_OUT3/FLEXIO0_D17/PLU_OUT1/ENET0_TXD3/I3C1_SCL/TSI0_CH18/ADC1_A9">
+                     <pin_features>
+                        <pin_feature name="slew_rate" value="fast"/>
+                        <pin_feature name="open_drain" value="disable"/>
+                        <pin_feature name="drive_strength" value="low"/>
+                        <pin_feature name="pull_select" value="down"/>
+                        <pin_feature name="pull_enable" value="disable"/>
+                        <pin_feature name="passive_filter" value="disable"/>
+                        <pin_feature name="input_buffer" value="enable"/>
+                        <pin_feature name="invert_input" value="normal"/>
+                     </pin_features>
+                  </pin>
+               </pins>
+            </function>
+            <function name="BOARD_InitSWD_DEBUGPins">
+               <description>Configures pin routing and optionally pin electrical features.</description>
+               <options>
+                  <callFromInitBoot>false</callFromInitBoot>
+                  <coreID>cm33_core0</coreID>
+                  <enableClock>true</enableClock>
+               </options>
+               <dependencies>
+                  <dependency resourceType="Peripheral" resourceId="SWD" description="Peripheral SWD signals are routed in the Pins Tool, but the peripheral is not initialized in the Peripherals Tool." problem_level="1" source="Pins:BOARD_InitSWD_DEBUGPins">
+                     <feature name="initialized" evaluation="equal">
+                        <data>true</data>
+                     </feature>
+                  </dependency>
+                  <dependency resourceType="SWComponent" resourceId="platform.drivers.common" description="Pins initialization requires the COMMON Driver in the project." problem_level="2" source="Pins:BOARD_InitSWD_DEBUGPins">
+                     <feature name="enabled" evaluation="equal" configuration="cm33_core0">
+                        <data>true</data>
+                     </feature>
+                  </dependency>
+                  <dependency resourceType="SWComponent" resourceId="platform.drivers.port" description="Pins initialization requires the PORT Driver in the project." problem_level="2" source="Pins:BOARD_InitSWD_DEBUGPins">
+                     <feature name="enabled" evaluation="equal" configuration="cm33_core0">
+                        <data>true</data>
+                     </feature>
+                  </dependency>
+               </dependencies>
+               <pins>
+                  <pin peripheral="SWD" signal="SWCLK" pin_num="A16" pin_signal="PIO0_1/TCLK/SWCLK/FC1_P1/CT_INP1">
+                     <pin_features>
+                        <pin_feature name="slew_rate" value="fast"/>
+                        <pin_feature name="open_drain" value="disable"/>
+                        <pin_feature name="drive_strength" value="low"/>
+                        <pin_feature name="pull_select" value="down"/>
+                        <pin_feature name="pull_enable" value="enable"/>
+                        <pin_feature name="input_buffer" value="enable"/>
+                        <pin_feature name="invert_input" value="normal"/>
+                     </pin_features>
+                  </pin>
+                  <pin peripheral="SWD" signal="SWDIO" pin_num="A17" pin_signal="PIO0_0/TMS/SWDIO/FC1_P0/CT_INP0">
+                     <pin_features>
+                        <pin_feature name="slew_rate" value="fast"/>
+                        <pin_feature name="open_drain" value="disable"/>
+                        <pin_feature name="drive_strength" value="high"/>
+                        <pin_feature name="pull_select" value="up"/>
+                        <pin_feature name="pull_enable" value="enable"/>
+                        <pin_feature name="input_buffer" value="enable"/>
+                        <pin_feature name="invert_input" value="normal"/>
+                     </pin_features>
+                  </pin>
+                  <pin peripheral="SWD" signal="SWO" pin_num="B16" pin_signal="PIO0_2/TDO/SWO/FC1_P2/CT0_MAT0/UTICK_CAP0/I3C0_PUR">
+                     <pin_features>
+                        <pin_feature name="slew_rate" value="fast"/>
+                        <pin_feature name="open_drain" value="disable"/>
+                        <pin_feature name="drive_strength" value="high"/>
+                        <pin_feature name="pull_select" value="down"/>
+                        <pin_feature name="pull_enable" value="disable"/>
+                        <pin_feature name="input_buffer" value="enable"/>
+                        <pin_feature name="invert_input" value="normal"/>
+                     </pin_features>
+                  </pin>
+               </pins>
+            </function>
+            <function name="BOARD_InitLEDsPins">
+               <description>Configures pin routing and optionally pin electrical features.</description>
+               <options>
+                  <callFromInitBoot>false</callFromInitBoot>
+                  <coreID>cm33_core0</coreID>
+                  <enableClock>true</enableClock>
+               </options>
+               <dependencies>
+                  <dependency resourceType="SWComponent" resourceId="platform.drivers.common" description="Pins initialization requires the COMMON Driver in the project." problem_level="2" source="Pins:BOARD_InitLEDsPins">
+                     <feature name="enabled" evaluation="equal" configuration="cm33_core0">
+                        <data>true</data>
+                     </feature>
+                  </dependency>
+                  <dependency resourceType="SWComponent" resourceId="platform.drivers.port" description="Pins initialization requires the PORT Driver in the project." problem_level="2" source="Pins:BOARD_InitLEDsPins">
+                     <feature name="enabled" evaluation="equal" configuration="cm33_core0">
+                        <data>true</data>
+                     </feature>
+                  </dependency>
+                  <dependency resourceType="SWComponent" resourceId="platform.drivers.gpio" description="Pins initialization requires the GPIO Driver in the project." problem_level="2" source="Pins:BOARD_InitLEDsPins">
+                     <feature name="enabled" evaluation="equal" configuration="cm33_core0">
+                        <data>true</data>
+                     </feature>
+                  </dependency>
+               </dependencies>
+               <pins>
+                  <pin peripheral="GPIO1" signal="GPIO, 2" pin_num="C4" pin_signal="PIO1_2/TRIG_OUT0/FC3_P2/FC4_P6/CT1_MAT0/SCT0_IN6/FLEXIO0_D10/ENET0_MDC/SAI1_TXD0/CAN0_TXD/TSI0_CH2/ADC0_A18/CMP2_IN0">
+                     <pin_features>
+                        <pin_feature name="direction" value="OUTPUT"/>
+                        <pin_feature name="slew_rate" value="fast"/>
+                        <pin_feature name="open_drain" value="disable"/>
+                        <pin_feature name="drive_strength" value="low"/>
+                        <pin_feature name="pull_select" value="down"/>
+                        <pin_feature name="pull_enable" value="disable"/>
+                        <pin_feature name="input_buffer" value="enable"/>
+                        <pin_feature name="invert_input" value="normal"/>
+                     </pin_features>
+                  </pin>
+                  <pin peripheral="GPIO0" signal="GPIO, 10" pin_num="B12" pin_signal="PIO0_10/FC0_P6/CT0_MAT0/FLEXIO0_D2/ADC0_B10">
+                     <pin_features>
+                        <pin_feature name="direction" value="OUTPUT"/>
+                        <pin_feature name="slew_rate" value="fast"/>
+                        <pin_feature name="open_drain" value="disable"/>
+                        <pin_feature name="drive_strength" value="low"/>
+                        <pin_feature name="pull_select" value="down"/>
+                        <pin_feature name="pull_enable" value="disable"/>
+                        <pin_feature name="input_buffer" value="enable"/>
+                        <pin_feature name="invert_input" value="normal"/>
+                     </pin_features>
+                  </pin>
+                  <pin peripheral="GPIO0" signal="GPIO, 27" pin_num="E10" pin_signal="PIO0_27/FC1_P3/CT0_MAT3/ADC0_B19">
+                     <pin_features>
+                        <pin_feature name="direction" value="OUTPUT"/>
+                        <pin_feature name="slew_rate" value="fast"/>
+                        <pin_feature name="open_drain" value="disable"/>
+                        <pin_feature name="drive_strength" value="low"/>
+                        <pin_feature name="pull_select" value="down"/>
+                        <pin_feature name="pull_enable" value="disable"/>
+                        <pin_feature name="input_buffer" value="enable"/>
+                        <pin_feature name="invert_input" value="normal"/>
+                     </pin_features>
+                  </pin>
+               </pins>
+            </function>
+            <function name="BOARD_InitBUTTONsPins">
+               <description>Configures pin routing and optionally pin electrical features.</description>
+               <options>
+                  <callFromInitBoot>false</callFromInitBoot>
+                  <coreID>cm33_core0</coreID>
+                  <enableClock>true</enableClock>
+               </options>
+               <dependencies>
+                  <dependency resourceType="SWComponent" resourceId="platform.drivers.common" description="Pins initialization requires the COMMON Driver in the project." problem_level="2" source="Pins:BOARD_InitBUTTONsPins">
+                     <feature name="enabled" evaluation="equal" configuration="cm33_core0">
+                        <data>true</data>
+                     </feature>
+                  </dependency>
+                  <dependency resourceType="SWComponent" resourceId="platform.drivers.port" description="Pins initialization requires the PORT Driver in the project." problem_level="2" source="Pins:BOARD_InitBUTTONsPins">
+                     <feature name="enabled" evaluation="equal" configuration="cm33_core0">
+                        <data>true</data>
+                     </feature>
+                  </dependency>
+                  <dependency resourceType="SWComponent" resourceId="platform.drivers.gpio" description="Pins initialization requires the GPIO Driver in the project." problem_level="2" source="Pins:BOARD_InitBUTTONsPins">
+                     <feature name="enabled" evaluation="equal" configuration="cm33_core0">
+                        <data>true</data>
+                     </feature>
+                  </dependency>
+               </dependencies>
+               <pins>
+                  <pin peripheral="GPIO0" signal="GPIO, 6" pin_num="C14" pin_signal="PIO0_6/ISPMODE_N/FC0_P2/FC1_P6/CT_INP2/HSCMP2_OUT/PDM0_DATA1/CLKOUT/TSI0_CH10">
+                     <pin_features>
+                        <pin_feature name="direction" value="INPUT"/>
+                        <pin_feature name="slew_rate" value="fast"/>
+                        <pin_feature name="open_drain" value="disable"/>
+                        <pin_feature name="drive_strength" value="low"/>
+                        <pin_feature name="pull_select" value="up"/>
+                        <pin_feature name="pull_enable" value="enable"/>
+                        <pin_feature name="input_buffer" value="enable"/>
+                        <pin_feature name="invert_input" value="normal"/>
+                     </pin_features>
+                  </pin>
+                  <pin peripheral="GPIO0" signal="GPIO, 23" pin_num="B7" pin_signal="PIO0_23/WUU0_IN5/EWM0_OUT_b/FC1_P3/CT_INP3/FLEXIO0_D7/ADC0_A15/CMP2_IN2">
+                     <pin_features>
+                        <pin_feature name="direction" value="INPUT"/>
+                        <pin_feature name="slew_rate" value="fast"/>
+                        <pin_feature name="open_drain" value="disable"/>
+                        <pin_feature name="drive_strength" value="low"/>
+                        <pin_feature name="pull_select" value="down"/>
+                        <pin_feature name="pull_enable" value="disable"/>
+                        <pin_feature name="input_buffer" value="enable"/>
+                        <pin_feature name="invert_input" value="normal"/>
+                     </pin_features>
+                  </pin>
+               </pins>
+            </function>
+         </functions_list>
+      </pins>
+      <clocks name="Clocks" version="12.0" enabled="true" update_project_code="true">
+         <clocks_profile>
+            <processor_version>14.0.0</processor_version>
+         </clocks_profile>
+         <clock_configurations>
+            <clock_configuration name="BOARD_BootClockFRO12M" id_prefix="" prefix_user_defined="false">
+               <description></description>
+               <options/>
+               <dependencies>
+                  <dependency resourceType="SWComponent" resourceId="platform.drivers.common" description="Clocks initialization requires the COMMON Driver in the project." problem_level="2" source="Clocks:BOARD_BootClockFRO12M">
+                     <feature name="enabled" evaluation="equal" configuration="cm33_core1">
+                        <data>true</data>
+                     </feature>
+                  </dependency>
+                  <dependency resourceType="SWComponent" resourceId="platform.drivers.common" description="Clocks initialization requires the COMMON Driver in the project." problem_level="2" source="Clocks:BOARD_BootClockFRO12M">
+                     <feature name="enabled" evaluation="equal" configuration="cm33_core0">
+                        <data>true</data>
+                     </feature>
+                  </dependency>
+                  <dependency resourceType="SWComponent" resourceId="platform.drivers.clock" description="Clocks initialization requires the CLOCK Driver in the project." problem_level="2" source="Clocks:BOARD_BootClockFRO12M">
+                     <feature name="enabled" evaluation="equal" configuration="cm33_core1">
+                        <data>true</data>
+                     </feature>
+                  </dependency>
+                  <dependency resourceType="SWComponent" resourceId="platform.drivers.clock" description="Clocks initialization requires the CLOCK Driver in the project." problem_level="2" source="Clocks:BOARD_BootClockFRO12M">
+                     <feature name="enabled" evaluation="equal" configuration="cm33_core0">
+                        <data>true</data>
+                     </feature>
+                  </dependency>
+                  <dependency resourceType="SWComponent" resourceId="platform.drivers.mcx_spc" description="Clocks initialization requires the MCX_SPC Driver in the project." problem_level="2" source="Clocks:BOARD_BootClockFRO12M">
+                     <feature name="enabled" evaluation="equal" configuration="cm33_core1">
+                        <data>true</data>
+                     </feature>
+                  </dependency>
+                  <dependency resourceType="SWComponent" resourceId="platform.drivers.mcx_spc" description="Clocks initialization requires the MCX_SPC Driver in the project." problem_level="2" source="Clocks:BOARD_BootClockFRO12M">
+                     <feature name="enabled" evaluation="equal" configuration="cm33_core0">
+                        <data>true</data>
+                     </feature>
+                  </dependency>
+               </dependencies>
+               <clock_sources/>
+               <clock_outputs>
+                  <clock_output id="CLK_144M_clock.outFreq" value="144 MHz" locked="false" accuracy=""/>
+                  <clock_output id="CLK_48M_clock.outFreq" value="48 MHz" locked="false" accuracy=""/>
+                  <clock_output id="FRO_12M_clock.outFreq" value="12 MHz" locked="false" accuracy=""/>
+                  <clock_output id="MAIN_clock.outFreq" value="12 MHz" locked="false" accuracy=""/>
+                  <clock_output id="Slow_clock.outFreq" value="3 MHz" locked="false" accuracy=""/>
+                  <clock_output id="System_clock.outFreq" value="12 MHz" locked="false" accuracy=""/>
+                  <clock_output id="gdet_clock.outFreq" value="48 MHz" locked="false" accuracy=""/>
+                  <clock_output id="trng_clock.outFreq" value="48 MHz" locked="false" accuracy=""/>
+               </clock_outputs>
+               <clock_settings>
+                  <setting id="RunPowerMode" value="OD" locked="false"/>
+                  <setting id="SCGMode" value="SIRC" locked="false"/>
+                  <setting id="SCG.SCSSEL.sel" value="SCG.SIRC" locked="false"/>
+                  <setting id="SCG_FIRCCSR_FIRCEN_CFG" value="Disabled" locked="false"/>
+                  <setting id="SYSCON.FREQMEREFCLKSEL.sel" value="SYSCON.evtg_out0a" locked="false"/>
+                  <setting id="SYSCON.FREQMETARGETCLKSEL.sel" value="SYSCON.evtg_out0a" locked="false"/>
+               </clock_settings>
+               <called_from_default_init>false</called_from_default_init>
+            </clock_configuration>
+            <clock_configuration name="BOARD_BootClockFROHF48M" id_prefix="" prefix_user_defined="false">
+               <description></description>
+               <options/>
+               <dependencies>
+                  <dependency resourceType="SWComponent" resourceId="platform.drivers.common" description="Clocks initialization requires the COMMON Driver in the project." problem_level="2" source="Clocks:BOARD_BootClockFROHF48M">
+                     <feature name="enabled" evaluation="equal" configuration="cm33_core1">
+                        <data>true</data>
+                     </feature>
+                  </dependency>
+                  <dependency resourceType="SWComponent" resourceId="platform.drivers.common" description="Clocks initialization requires the COMMON Driver in the project." problem_level="2" source="Clocks:BOARD_BootClockFROHF48M">
+                     <feature name="enabled" evaluation="equal" configuration="cm33_core0">
+                        <data>true</data>
+                     </feature>
+                  </dependency>
+                  <dependency resourceType="SWComponent" resourceId="platform.drivers.clock" description="Clocks initialization requires the CLOCK Driver in the project." problem_level="2" source="Clocks:BOARD_BootClockFROHF48M">
+                     <feature name="enabled" evaluation="equal" configuration="cm33_core1">
+                        <data>true</data>
+                     </feature>
+                  </dependency>
+                  <dependency resourceType="SWComponent" resourceId="platform.drivers.clock" description="Clocks initialization requires the CLOCK Driver in the project." problem_level="2" source="Clocks:BOARD_BootClockFROHF48M">
+                     <feature name="enabled" evaluation="equal" configuration="cm33_core0">
+                        <data>true</data>
+                     </feature>
+                  </dependency>
+                  <dependency resourceType="SWComponent" resourceId="platform.drivers.mcx_spc" description="Clocks initialization requires the MCX_SPC Driver in the project." problem_level="2" source="Clocks:BOARD_BootClockFROHF48M">
+                     <feature name="enabled" evaluation="equal" configuration="cm33_core1">
+                        <data>true</data>
+                     </feature>
+                  </dependency>
+                  <dependency resourceType="SWComponent" resourceId="platform.drivers.mcx_spc" description="Clocks initialization requires the MCX_SPC Driver in the project." problem_level="2" source="Clocks:BOARD_BootClockFROHF48M">
+                     <feature name="enabled" evaluation="equal" configuration="cm33_core0">
+                        <data>true</data>
+                     </feature>
+                  </dependency>
+               </dependencies>
+               <clock_sources/>
+               <clock_outputs>
+                  <clock_output id="CLK_144M_clock.outFreq" value="144 MHz" locked="false" accuracy=""/>
+                  <clock_output id="CLK_48M_clock.outFreq" value="48 MHz" locked="false" accuracy=""/>
+                  <clock_output id="FRO_12M_clock.outFreq" value="12 MHz" locked="false" accuracy=""/>
+                  <clock_output id="FRO_HF_clock.outFreq" value="48 MHz" locked="false" accuracy=""/>
+                  <clock_output id="MAIN_clock.outFreq" value="48 MHz" locked="false" accuracy=""/>
+                  <clock_output id="Slow_clock.outFreq" value="12 MHz" locked="false" accuracy=""/>
+                  <clock_output id="System_clock.outFreq" value="48 MHz" locked="false" accuracy=""/>
+                  <clock_output id="gdet_clock.outFreq" value="48 MHz" locked="false" accuracy=""/>
+                  <clock_output id="trng_clock.outFreq" value="48 MHz" locked="false" accuracy=""/>
+               </clock_outputs>
+               <clock_settings>
+                  <setting id="RunPowerMode" value="OD" locked="false"/>
+                  <setting id="SYSCON.FLEXSPICLKSEL.sel" value="NO_CLOCK" locked="false"/>
+                  <setting id="SYSCON.FREQMEREFCLKSEL.sel" value="SYSCON.evtg_out0a" locked="false"/>
+                  <setting id="SYSCON.FREQMETARGETCLKSEL.sel" value="SYSCON.evtg_out0a" locked="false"/>
+               </clock_settings>
+               <called_from_default_init>false</called_from_default_init>
+            </clock_configuration>
+            <clock_configuration name="BOARD_BootClockFROHF144M" id_prefix="" prefix_user_defined="false">
+               <description></description>
+               <options/>
+               <dependencies>
+                  <dependency resourceType="SWComponent" resourceId="platform.drivers.common" description="Clocks initialization requires the COMMON Driver in the project." problem_level="2" source="Clocks:BOARD_BootClockFROHF144M">
+                     <feature name="enabled" evaluation="equal" configuration="cm33_core1">
+                        <data>true</data>
+                     </feature>
+                  </dependency>
+                  <dependency resourceType="SWComponent" resourceId="platform.drivers.common" description="Clocks initialization requires the COMMON Driver in the project." problem_level="2" source="Clocks:BOARD_BootClockFROHF144M">
+                     <feature name="enabled" evaluation="equal" configuration="cm33_core0">
+                        <data>true</data>
+                     </feature>
+                  </dependency>
+                  <dependency resourceType="SWComponent" resourceId="platform.drivers.clock" description="Clocks initialization requires the CLOCK Driver in the project." problem_level="2" source="Clocks:BOARD_BootClockFROHF144M">
+                     <feature name="enabled" evaluation="equal" configuration="cm33_core1">
+                        <data>true</data>
+                     </feature>
+                  </dependency>
+                  <dependency resourceType="SWComponent" resourceId="platform.drivers.clock" description="Clocks initialization requires the CLOCK Driver in the project." problem_level="2" source="Clocks:BOARD_BootClockFROHF144M">
+                     <feature name="enabled" evaluation="equal" configuration="cm33_core0">
+                        <data>true</data>
+                     </feature>
+                  </dependency>
+                  <dependency resourceType="SWComponent" resourceId="platform.drivers.mcx_spc" description="Clocks initialization requires the MCX_SPC Driver in the project." problem_level="2" source="Clocks:BOARD_BootClockFROHF144M">
+                     <feature name="enabled" evaluation="equal" configuration="cm33_core1">
+                        <data>true</data>
+                     </feature>
+                  </dependency>
+                  <dependency resourceType="SWComponent" resourceId="platform.drivers.mcx_spc" description="Clocks initialization requires the MCX_SPC Driver in the project." problem_level="2" source="Clocks:BOARD_BootClockFROHF144M">
+                     <feature name="enabled" evaluation="equal" configuration="cm33_core0">
+                        <data>true</data>
+                     </feature>
+                  </dependency>
+               </dependencies>
+               <clock_sources>
+                  <clock_source id="SCG.FIRC.outFreq" value="144 MHz" locked="false" enabled="false"/>
+               </clock_sources>
+               <clock_outputs>
+                  <clock_output id="CLK_144M_clock.outFreq" value="144 MHz" locked="false" accuracy=""/>
+                  <clock_output id="CLK_48M_clock.outFreq" value="48 MHz" locked="false" accuracy=""/>
+                  <clock_output id="FRO_12M_clock.outFreq" value="12 MHz" locked="false" accuracy=""/>
+                  <clock_output id="FRO_HF_clock.outFreq" value="144 MHz" locked="false" accuracy=""/>
+                  <clock_output id="MAIN_clock.outFreq" value="144 MHz" locked="false" accuracy=""/>
+                  <clock_output id="Slow_clock.outFreq" value="36 MHz" locked="false" accuracy=""/>
+                  <clock_output id="System_clock.outFreq" value="144 MHz" locked="false" accuracy=""/>
+                  <clock_output id="gdet_clock.outFreq" value="48 MHz" locked="false" accuracy=""/>
+                  <clock_output id="trng_clock.outFreq" value="48 MHz" locked="false" accuracy=""/>
+               </clock_outputs>
+               <clock_settings>
+                  <setting id="RunPowerMode" value="OD" locked="false"/>
+                  <setting id="SYSCON.AHBCLKDIV.scale" value="1" locked="true"/>
+                  <setting id="SYSCON.FLEXSPICLKSEL.sel" value="NO_CLOCK" locked="false"/>
+                  <setting id="SYSCON.FREQMEREFCLKSEL.sel" value="SYSCON.evtg_out0a" locked="false"/>
+                  <setting id="SYSCON.FREQMETARGETCLKSEL.sel" value="SYSCON.evtg_out0a" locked="false"/>
+               </clock_settings>
+               <called_from_default_init>false</called_from_default_init>
+            </clock_configuration>
+            <clock_configuration name="BOARD_BootClockPLL150M" id_prefix="" prefix_user_defined="false">
+               <description></description>
+               <options/>
+               <dependencies>
+                  <dependency resourceType="SWComponent" resourceId="platform.drivers.common" description="Clocks initialization requires the COMMON Driver in the project." problem_level="2" source="Clocks:BOARD_BootClockPLL150M">
+                     <feature name="enabled" evaluation="equal" configuration="cm33_core1">
+                        <data>true</data>
+                     </feature>
+                  </dependency>
+                  <dependency resourceType="SWComponent" resourceId="platform.drivers.common" description="Clocks initialization requires the COMMON Driver in the project." problem_level="2" source="Clocks:BOARD_BootClockPLL150M">
+                     <feature name="enabled" evaluation="equal" configuration="cm33_core0">
+                        <data>true</data>
+                     </feature>
+                  </dependency>
+                  <dependency resourceType="SWComponent" resourceId="platform.drivers.clock" description="Clocks initialization requires the CLOCK Driver in the project." problem_level="2" source="Clocks:BOARD_BootClockPLL150M">
+                     <feature name="enabled" evaluation="equal" configuration="cm33_core1">
+                        <data>true</data>
+                     </feature>
+                  </dependency>
+                  <dependency resourceType="SWComponent" resourceId="platform.drivers.clock" description="Clocks initialization requires the CLOCK Driver in the project." problem_level="2" source="Clocks:BOARD_BootClockPLL150M">
+                     <feature name="enabled" evaluation="equal" configuration="cm33_core0">
+                        <data>true</data>
+                     </feature>
+                  </dependency>
+                  <dependency resourceType="SWComponent" resourceId="platform.drivers.mcx_spc" description="Clocks initialization requires the MCX_SPC Driver in the project." problem_level="2" source="Clocks:BOARD_BootClockPLL150M">
+                     <feature name="enabled" evaluation="equal" configuration="cm33_core1">
+                        <data>true</data>
+                     </feature>
+                  </dependency>
+                  <dependency resourceType="SWComponent" resourceId="platform.drivers.mcx_spc" description="Clocks initialization requires the MCX_SPC Driver in the project." problem_level="2" source="Clocks:BOARD_BootClockPLL150M">
+                     <feature name="enabled" evaluation="equal" configuration="cm33_core0">
+                        <data>true</data>
+                     </feature>
+                  </dependency>
+               </dependencies>
+               <clock_sources/>
+               <clock_outputs>
+                  <clock_output id="CLK_144M_clock.outFreq" value="144 MHz" locked="false" accuracy=""/>
+                  <clock_output id="CLK_48M_clock.outFreq" value="48 MHz" locked="false" accuracy=""/>
+                  <clock_output id="FRO_12M_clock.outFreq" value="12 MHz" locked="false" accuracy=""/>
+                  <clock_output id="FRO_HF_clock.outFreq" value="48 MHz" locked="false" accuracy=""/>
+                  <clock_output id="MAIN_clock.outFreq" value="150 MHz" locked="false" accuracy=""/>
+                  <clock_output id="PLL0_CLK_clock.outFreq" value="150 MHz" locked="false" accuracy=""/>
+                  <clock_output id="Slow_clock.outFreq" value="37.5 MHz" locked="false" accuracy=""/>
+                  <clock_output id="System_clock.outFreq" value="150 MHz" locked="false" accuracy=""/>
+                  <clock_output id="gdet_clock.outFreq" value="48 MHz" locked="false" accuracy=""/>
+                  <clock_output id="trng_clock.outFreq" value="48 MHz" locked="false" accuracy=""/>
+               </clock_outputs>
+               <clock_settings>
+                  <setting id="PLL0_Mode" value="Normal" locked="false"/>
+                  <setting id="RunPowerMode" value="OD" locked="false"/>
+                  <setting id="SCGMode" value="PLL0" locked="false"/>
+                  <setting id="SCG.PLL0M_MULT.scale" value="50" locked="true"/>
+                  <setting id="SCG.PLL0SRCSEL.sel" value="SCG.FIRC_48M" locked="false"/>
+                  <setting id="SCG.PLL0_NDIV.scale" value="8" locked="true"/>
+                  <setting id="SCG.SCSSEL.sel" value="SCG.PLL0_CLK" locked="false"/>
+                  <setting id="SYSCON.FLEXSPICLKSEL.sel" value="NO_CLOCK" locked="false"/>
+                  <setting id="SYSCON.FREQMEREFCLKSEL.sel" value="SYSCON.evtg_out0a" locked="false"/>
+                  <setting id="SYSCON.FREQMETARGETCLKSEL.sel" value="SYSCON.evtg_out0a" locked="false"/>
+               </clock_settings>
+               <called_from_default_init>true</called_from_default_init>
+            </clock_configuration>
+            <clock_configuration name="BOARD_BootClockPLL100M" id_prefix="" prefix_user_defined="false">
+               <description></description>
+               <options/>
+               <dependencies>
+                  <dependency resourceType="PeripheralUnifiedSignal" resourceId="SCG0.EXTAL" description="&apos;EXTAL&apos; (Pins tool id: SCG0.EXTAL, Clocks tool id: SCG.EXTAL) needs to be routed" problem_level="1" source="Clocks:BOARD_BootClockPLL100M">
+                     <feature name="routed" evaluation="">
+                        <data>true</data>
+                     </feature>
+                  </dependency>
+                  <dependency resourceType="PeripheralUnifiedSignal" resourceId="SCG0.EXTAL" description="&apos;EXTAL&apos; (Pins tool id: SCG0.EXTAL, Clocks tool id: SCG.EXTAL) needs to have &apos;INPUT&apos; direction" problem_level="1" source="Clocks:BOARD_BootClockPLL100M">
+                     <feature name="direction" evaluation="">
+                        <data>INPUT</data>
+                     </feature>
+                  </dependency>
+                  <dependency resourceType="SWComponent" resourceId="platform.drivers.common" description="Clocks initialization requires the COMMON Driver in the project." problem_level="2" source="Clocks:BOARD_BootClockPLL100M">
+                     <feature name="enabled" evaluation="equal" configuration="cm33_core1">
+                        <data>true</data>
+                     </feature>
+                  </dependency>
+                  <dependency resourceType="SWComponent" resourceId="platform.drivers.common" description="Clocks initialization requires the COMMON Driver in the project." problem_level="2" source="Clocks:BOARD_BootClockPLL100M">
+                     <feature name="enabled" evaluation="equal" configuration="cm33_core0">
+                        <data>true</data>
+                     </feature>
+                  </dependency>
+                  <dependency resourceType="SWComponent" resourceId="platform.drivers.clock" description="Clocks initialization requires the CLOCK Driver in the project." problem_level="2" source="Clocks:BOARD_BootClockPLL100M">
+                     <feature name="enabled" evaluation="equal" configuration="cm33_core1">
+                        <data>true</data>
+                     </feature>
+                  </dependency>
+                  <dependency resourceType="SWComponent" resourceId="platform.drivers.clock" description="Clocks initialization requires the CLOCK Driver in the project." problem_level="2" source="Clocks:BOARD_BootClockPLL100M">
+                     <feature name="enabled" evaluation="equal" configuration="cm33_core0">
+                        <data>true</data>
+                     </feature>
+                  </dependency>
+                  <dependency resourceType="SWComponent" resourceId="platform.drivers.mcx_spc" description="Clocks initialization requires the MCX_SPC Driver in the project." problem_level="2" source="Clocks:BOARD_BootClockPLL100M">
+                     <feature name="enabled" evaluation="equal" configuration="cm33_core1">
+                        <data>true</data>
+                     </feature>
+                  </dependency>
+                  <dependency resourceType="SWComponent" resourceId="platform.drivers.mcx_spc" description="Clocks initialization requires the MCX_SPC Driver in the project." problem_level="2" source="Clocks:BOARD_BootClockPLL100M">
+                     <feature name="enabled" evaluation="equal" configuration="cm33_core0">
+                        <data>true</data>
+                     </feature>
+                  </dependency>
+               </dependencies>
+               <clock_sources>
+                  <clock_source id="SCG.SOSC.outFreq" value="24 MHz" locked="false" enabled="true"/>
+               </clock_sources>
+               <clock_outputs>
+                  <clock_output id="CLK_144M_clock.outFreq" value="144 MHz" locked="false" accuracy=""/>
+                  <clock_output id="CLK_48M_clock.outFreq" value="48 MHz" locked="false" accuracy=""/>
+                  <clock_output id="CLK_IN_clock.outFreq" value="24 MHz" locked="false" accuracy=""/>
+                  <clock_output id="FRO_12M_clock.outFreq" value="12 MHz" locked="false" accuracy=""/>
+                  <clock_output id="MAIN_clock.outFreq" value="100 MHz" locked="false" accuracy=""/>
+                  <clock_output id="PLL1_CLK_clock.outFreq" value="100 MHz" locked="false" accuracy=""/>
+                  <clock_output id="Slow_clock.outFreq" value="25 MHz" locked="false" accuracy=""/>
+                  <clock_output id="System_clock.outFreq" value="100 MHz" locked="false" accuracy=""/>
+                  <clock_output id="gdet_clock.outFreq" value="48 MHz" locked="false" accuracy=""/>
+                  <clock_output id="trng_clock.outFreq" value="48 MHz" locked="false" accuracy=""/>
+               </clock_outputs>
+               <clock_settings>
+                  <setting id="PLL1_Mode" value="Normal" locked="false"/>
+                  <setting id="RunPowerMode" value="OD" locked="false"/>
+                  <setting id="SCGMode" value="PLL1" locked="false"/>
+                  <setting id="SCG.PLL1M_MULT.scale" value="100" locked="true"/>
+                  <setting id="SCG.PLL1_NDIV.scale" value="6" locked="true"/>
+                  <setting id="SCG.PLL1_PDIV.scale" value="4" locked="true"/>
+                  <setting id="SCG.SCSSEL.sel" value="SCG.PLL1_CLK" locked="false"/>
+                  <setting id="SCG_FIRCCSR_FIRCEN_CFG" value="Disabled" locked="false"/>
+                  <setting id="SCG_SOSCCSR_SOSCEN_CFG" value="Enabled" locked="false"/>
+                  <setting id="SYSCON.FREQMEREFCLKSEL.sel" value="SYSCON.evtg_out0a" locked="false"/>
+                  <setting id="SYSCON.FREQMETARGETCLKSEL.sel" value="SYSCON.evtg_out0a" locked="false"/>
+               </clock_settings>
+               <called_from_default_init>false</called_from_default_init>
+            </clock_configuration>
+         </clock_configurations>
+      </clocks>
+      <dcdx name="DCDx" version="3.0" enabled="false" update_project_code="true">
+         <dcdx_profile>
+            <processor_version>N/A</processor_version>
+         </dcdx_profile>
+         <dcdx_configurations/>
+      </dcdx>
+      <periphs name="Peripherals" version="13.0" enabled="false" update_project_code="true">
+         <peripherals_profile>
+            <processor_version>N/A</processor_version>
+         </peripherals_profile>
+         <functional_groups/>
+         <components/>
+      </periphs>
+      <tee name="TEE" version="5.0" enabled="false" update_project_code="true">
+         <tee_profile>
+            <processor_version>N/A</processor_version>
+         </tee_profile>
+      </tee>
+   </tools>
+</configuration>
