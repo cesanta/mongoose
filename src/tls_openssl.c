@@ -106,13 +106,23 @@ static void ssl_keylog_cb(const SSL *ssl, const char *line) {
 }
 #endif
 
+void mg_tls_free(struct mg_connection *c) {
+  struct mg_tls *tls = (struct mg_tls *) c->tls;
+  if (tls == NULL) return;
+  SSL_free(tls->ssl);
+  SSL_CTX_free(tls->ctx);
+  BIO_meth_free(tls->bm);
+  free(tls);
+  c->tls = NULL;
+}
+
 void mg_tls_init(struct mg_connection *c, const struct mg_tls_opts *opts) {
   struct mg_tls *tls = (struct mg_tls *) calloc(1, sizeof(*tls));
   const char *id = "mongoose";
   static unsigned char s_initialised = 0;
   BIO *bio = NULL;
   int rc;
-
+  c->tls = tls;
   if (tls == NULL) {
     mg_error(c, "TLS OOM");
     goto fail;
@@ -212,7 +222,6 @@ void mg_tls_init(struct mg_connection *c, const struct mg_tls_opts *opts) {
   BIO_set_data(bio, c);
   SSL_set_bio(tls->ssl, bio, bio);
 
-  c->tls = tls;
   c->is_tls = 1;
   c->is_tls_hs = 1;
   if (c->is_client && c->is_resolving == 0 && c->is_connecting == 0) {
@@ -221,7 +230,7 @@ void mg_tls_init(struct mg_connection *c, const struct mg_tls_opts *opts) {
   MG_DEBUG(("%lu SSL %s OK", c->id, c->is_accepted ? "accept" : "client"));
   return;
 fail:
-  free(tls);
+  mg_tls_free(c);
 }
 
 void mg_tls_handshake(struct mg_connection *c) {
@@ -235,16 +244,6 @@ void mg_tls_handshake(struct mg_connection *c) {
     int code = mg_tls_err(c, tls, rc);
     if (code != 0) mg_error(c, "tls hs: rc %d, err %d", rc, code);
   }
-}
-
-void mg_tls_free(struct mg_connection *c) {
-  struct mg_tls *tls = (struct mg_tls *) c->tls;
-  if (tls == NULL) return;
-  SSL_free(tls->ssl);
-  SSL_CTX_free(tls->ctx);
-  BIO_meth_free(tls->bm);
-  free(tls);
-  c->tls = NULL;
 }
 
 size_t mg_tls_pending(struct mg_connection *c) {
