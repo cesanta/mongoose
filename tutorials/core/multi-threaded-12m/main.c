@@ -25,32 +25,19 @@ static void start_thread(void *(*f)(void *), void *p) {
 #endif
 }
 
-struct thread_data {
-  struct mg_mgr *mgr;
-  unsigned long conn_id;  // Parent connection ID
-};
-
 static void *thread_function(void *param) {
-  struct thread_data *p = (struct thread_data *) param;
+  struct mg_mgr *mgr = (struct mg_mgr *) param;
   printf("THREAD STARTED\n");
   for (;;) {
     sleep(2);
-    mg_wakeup(p->mgr, p->conn_id, "hi!", 3);  // Send to parent
+    mg_wakeup(mgr, 0, "hi!", 3);  // Send to parent
   }
-  // Free all resources that were passed to us
-  free(p);
   return NULL;
 }
 
 // HTTP request callback
 static void fn(struct mg_connection *c, int ev, void *ev_data) {
-  if (ev == MG_EV_OPEN && c->is_listening) {
-    // Start worker thread
-    struct thread_data *data = calloc(1, sizeof(*data));  // Worker owns it
-    data->conn_id = c->id;
-    data->mgr = c->mgr;
-    start_thread(thread_function, data);  // Start thread and pass data
-  } else if (ev == MG_EV_HTTP_MSG) {
+  if (ev == MG_EV_HTTP_MSG) {
     struct mg_http_message *hm = (struct mg_http_message *) ev_data;
     if (mg_match(hm->uri, mg_str("/websocket"), NULL)) {
       mg_ws_upgrade(c, hm, NULL);  // Upgrade HTTP to Websocket
@@ -68,12 +55,8 @@ static void fn(struct mg_connection *c, int ev, void *ev_data) {
   } else if (ev == MG_EV_WAKEUP) {
     struct mg_str *data = (struct mg_str *) ev_data;
     // Broadcast message to all connected websocket clients.
-    // Traverse over all connections
-    for (struct mg_connection *wc = c->mgr->conns; wc != NULL; wc = wc->next) {
-      // Send only to marked connections
-      if (wc->data[0] == 'W')
-        mg_ws_send(wc, data->buf, data->len, WEBSOCKET_OP_TEXT);
-    }
+    if (c->data[0] == 'W')
+      mg_ws_send(c, data->buf, data->len, WEBSOCKET_OP_TEXT);
   }
 }
 
@@ -83,6 +66,7 @@ int main(void) {
   mg_log_set(MG_LL_DEBUG);  // Set debug log level
   mg_http_listen(&mgr, "http://localhost:8000", fn, NULL);  // Create listener
   mg_wakeup_init(&mgr);  // Initialise wakeup socket pair
+  start_thread(thread_function, &mgr);  // Start thread and pass mgr
   for (;;) {             // Event loop
     mg_mgr_poll(&mgr, 1000);
   }
