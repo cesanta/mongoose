@@ -185,7 +185,7 @@ int mg_url_decode(const char *src, size_t src_len, char *dst, size_t dst_len,
 }
 
 static bool isok(uint8_t c) {
-  return c == '\n' || c == '\r' || c >= ' ';
+  return c == '\n' || c == '\r' || c == '\t' || c >= ' ';
 }
 
 int mg_http_get_request_len(const unsigned char *buf, size_t buf_len) {
@@ -247,9 +247,11 @@ static bool mg_http_parse_headers(const char *s, const char *end,
     if (s >= end || clen(s, end) == 0) return false;  // Invalid UTF-8
     if (*s++ != ':') return false;  // Invalid, not followed by :
     // if (clen(s, end) == 0) return false;        // Invalid UTF-8
-    while (s < end && s[0] == ' ') s++;  // Skip spaces
+    while (s < end && (s[0] == ' ' || s[0] == '\t')) s++;  // Skip spaces
     if ((s = skiptorn(s, end, &v)) == NULL) return false;
-    while (v.len > 0 && v.buf[v.len - 1] == ' ') v.len--;  // Trim spaces
+    while (v.len > 0 && (v.buf[v.len - 1] == ' ' || v.buf[v.len - 1] == '\t')) {
+      v.len--;  // Trim spaces
+    }
     // MG_INFO(("--HH [%.*s] [%.*s]", (int) k.len, k.buf, (int) v.len, v.buf));
     h[i].name = k, h[i].value = v;  // Success. Assign values
   }

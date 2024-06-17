@@ -868,6 +868,10 @@ static void test_http_server(void) {
   ASSERT(cmpbody(buf, "hello\n") == 0);
   ASSERT(cmpheader(buf, "C", "D"));
 
+  ASSERT(fetch(&mgr, buf, url, "GET /a.txt HTTP/1.0\nA:\tB\n\n") == 200);
+  ASSERT(cmpbody(buf, "hello\n") == 0);
+  ASSERT(cmpheader(buf, "A", "B") == 0);
+
   // Invalid header: failure
   ASSERT(fetch(&mgr, buf, url, "GET /a.txt HTTP/1.0\nA B\n\n") == 0);
 
@@ -1612,6 +1616,22 @@ static void test_http_parse(void) {
     ASSERT(vcmp(*v, "\xc0"));
     s = "a b\n\xc0: 2\n\n";  // Invalid UTF in the header name: do NOT accept
     ASSERT(mg_http_parse(s, strlen(s), &hm) == -1);
+  }
+
+  {
+    struct mg_http_message hm;
+    const char *s;
+    s = "a b c\nd:e\n\n";
+    ASSERT(mg_http_parse(s, strlen(s), &hm) == (int) strlen(s));
+    s = "a b c\nd: e\n\n";
+    ASSERT(mg_http_parse(s, strlen(s), &hm) == (int) strlen(s));
+    s = "a b c\nd:\te\n\n";
+    ASSERT(mg_http_parse(s, strlen(s), &hm) == (int) strlen(s));
+    s = "a b c\nd:\t e\n\n";
+    ASSERT(mg_http_parse(s, strlen(s), &hm) == (int) strlen(s));
+    s = "a b c\nd: \te\t \n\n";
+    ASSERT(mg_http_parse(s, strlen(s), &hm) == (int) strlen(s));
+    ASSERT(mg_strcmp(hm.headers[0].value, mg_str("e")) == 0);
   }
 }
 
