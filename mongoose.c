@@ -10935,10 +10935,10 @@ static void core_block(const uint32_t *restrict start,
                        uint32_t *restrict output) {
 // instead of working on the output array,
 // we let the compiler allocate 16 local variables on the stack
-#define __LV(i) uint32_t __s##i = start[i];
+#define __LV(i) uint32_t __t##i = start[i];
   TIMES16(__LV)
 
-#define __Q(a, b, c, d) Qround(__s##a, __s##b, __s##c, __s##d)
+#define __Q(a, b, c, d) Qround(__t##a, __t##b, __t##c, __t##d)
 
   for (int i = 0; i < 10; i++) {
     __Q(0, 4, 8, 12);
@@ -10951,7 +10951,7 @@ static void core_block(const uint32_t *restrict start,
     __Q(3, 4, 9, 14);
   }
 
-#define __FIN(i) output[i] = start[i] + __s##i;
+#define __FIN(i) output[i] = start[i] + __t##i;
   TIMES16(__FIN)
 }
 
