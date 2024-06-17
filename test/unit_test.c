@@ -870,7 +870,7 @@ static void test_http_server(void) {
 
   ASSERT(fetch(&mgr, buf, url, "GET /a.txt HTTP/1.0\nA:\tB\n\n") == 200);
   ASSERT(cmpbody(buf, "hello\n") == 0);
-  ASSERT(cmpheader(buf, "C", "D"));
+  ASSERT(cmpheader(buf, "A", "B") == 0);
 
   // Invalid header: failure
   ASSERT(fetch(&mgr, buf, url, "GET /a.txt HTTP/1.0\nA B\n\n") == 0);
