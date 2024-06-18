@@ -3,6 +3,7 @@
 
 #include "certs.h"
 #include "mongoose.h"
+#include <zephyr/net/net_mgmt.h>
 
 static const char *s_web_dir = "/";
 static const char *s_http_addr = "http://0.0.0.0:8000";
@@ -13,7 +14,7 @@ static struct mg_connection *s_sntp_conn = NULL;
 // Event handler for the listening HTTP/HTTPS connection.
 static void wcb(struct mg_connection *c, int ev, void *ev_data) {
   if (ev == MG_EV_ACCEPT && c->fn_data != NULL) {
-    struct mg_tls_opts opts = {.cert = s_ssl_cert, .key = s_ssl_key};
+    struct mg_tls_opts opts = {.cert = (char *) s_ssl_cert, .key = (char *) s_ssl_key};
     mg_tls_init(c, &opts);
   } else if (ev == MG_EV_HTTP_MSG) {
     struct mg_http_message *hm = ev_data;
@@ -85,9 +86,8 @@ int main(int argc, char *argv[]) {
 
   struct mg_mgr mgr;
 
-  mg_log_set(MG_LL_DEBUG);
-
   mg_mgr_init(&mgr);
+  mg_log_set(MG_LL_DEBUG);
   mg_http_listen(&mgr, s_http_addr, wcb, NULL);
   mg_http_listen(&mgr, s_https_addr, wcb, &mgr);
 

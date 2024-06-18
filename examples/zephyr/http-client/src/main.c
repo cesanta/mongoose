@@ -3,6 +3,7 @@
 
 #include "certs.h"
 #include "mongoose.h"
+#include <zephyr/net/net_mgmt.h>
 
 static time_t s_boot_timestamp = 0;
 static struct mg_connection *s_sntp_conn = NULL;

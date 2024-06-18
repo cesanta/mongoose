@@ -3,6 +3,7 @@
 
 #include "mongoose.h"
 #include "net.h"
+#include <zephyr/net/net_mgmt.h>
 
 // Zephyr: Define a semaphore and network management callback to be able to wait
 // until our IP address is ready. The main function will start and block on this

@@ -3,13 +3,13 @@
 
 #include "certs.h"
 #include "mongoose.h"
+#include <zephyr/net/net_mgmt.h>
 
 struct mg_mgr mgr;
 
 static time_t s_boot_timestamp = 0;
 static struct mg_connection *s_sntp_conn = NULL;
-static const char *s_url =
-    "mqtts://a3nkain3cvvy7l-ats.iot.us-east-1.amazonaws.com";
+static const char *s_url = "mqtts://a3nkain3cvvy7l-ats.iot.us-east-1.amazonaws.com";
 
 static const char *s_rx_topic = "d/rx";
 static const char *s_tx_topic = "d/tx";
@@ -24,7 +24,7 @@ static void fn(struct mg_connection *c, int ev, void *ev_data) {
     MG_ERROR(("%p %s", c->fd, (char *) ev_data));
   } else if (ev == MG_EV_CONNECT) {
     // Set up 2-way TLS that is required by AWS IoT
-    struct mg_tls_opts opts = {.ca = s_ca, .cert = s_cert, .key = s_key};
+    struct mg_tls_opts opts = {.ca = (char *) s_ca, .cert = (char *) s_cert, .key = (char *) s_key};
     mg_tls_init(c, &opts);
   } else if (ev == MG_EV_MQTT_OPEN) {
     // MQTT connect is successful
