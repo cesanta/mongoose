@@ -3053,9 +3053,6 @@ struct mg_tcpip_driver_tm4c_data {
 
 #if MG_ENABLE_TCPIP && defined(MG_ENABLE_DRIVER_W5500) && MG_ENABLE_DRIVER_W5500
 
-#undef MG_ENABLE_TCPIP_DRIVER_INIT
-#define MG_ENABLE_TCPIP_DRIVER_INIT 0
-
 #endif
 
 
