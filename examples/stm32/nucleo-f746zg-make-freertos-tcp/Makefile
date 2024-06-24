@@ -56,9 +56,9 @@ cmsis_core:  # ARM CMSIS core headers
 cmsis_f7:       # ST CMSIS headers for STM32F7 series
 	git clone --depth 1 -b v1.2.8 https://github.com/STMicroelectronics/cmsis_device_f7 $@
 FreeRTOS-Kernel:  # FreeRTOS sources
-	git clone --depth 1 -b V10.5.0 https://github.com/FreeRTOS/FreeRTOS-Kernel $@
+	git clone --depth 1 -b V11.1.0 https://github.com/FreeRTOS/FreeRTOS-Kernel $@
 FreeRTOS-TCP:  # FreeRTOS-Plus-TCP sources
-	git clone --depth 1 -b V3.1.0 https://github.com/FreeRTOS/FreeRTOS-Plus-TCP $@
+	git clone --depth 1 -b V4.1.0 https://github.com/FreeRTOS/FreeRTOS-Plus-TCP $@
 
 # Automated remote test. Requires env variable VCON_API_KEY set. See https://vcon.io/automated-firmware-tests/
 DEVICE_URL ?= https://dash.vcon.io/api/v3/devices/5
