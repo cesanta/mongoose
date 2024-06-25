@@ -373,6 +373,8 @@ jobs:
           - path: microchip/same54-xpro/device-dashboard
           - path: nxp/rt1020-evk-make-baremetal-builtin
           - path: nxp/rt1020-evk-make-freertos-builtin
+          - path: nxp/frdm-mcxn947-make-baremetal-builtin
+          - path: nxp/frdm-mcxn947-make-freertos-builtin
           - path: nxp/rt1060-evk-make-baremetal-builtin
           - path: nxp/rt1060-evk-make-freertos-builtin
           - path: nxp/rt1170-evk-make-baremetal-builtin
