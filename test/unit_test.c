@@ -856,6 +856,51 @@ static void eh9(struct mg_connection *c, int ev, void *ev_data) {
   (void) c;
 }
 
+struct fpr_data {
+  char *buf;
+  int len, reqs, closed;
+};
+
+static void fprcb(struct mg_connection *c, int ev, void *ev_data) {
+  struct fpr_data *fd = (struct fpr_data *) c->fn_data;
+  if (ev == MG_EV_HTTP_MSG) {
+    struct mg_http_message *hm = (struct mg_http_message *) ev_data;
+    MG_INFO(("code: %d", atoi(hm->uri.buf)));
+    if (atoi(hm->uri.buf) == 200) {
+      snprintf(fd->buf + fd->len, FETCH_BUF_SIZE - (unsigned int) fd->len, "%.*s", (int) hm->message.len,
+               hm->message.buf);
+      fd->len += hm->message.len;
+      ++fd->reqs;
+      if(fd->reqs == 2) {
+        fd->closed = 1;
+        c->is_closing = 1;
+      }
+    }
+    MG_INFO(("%u %s", strlen(fd->buf), fd->buf));
+    (void) c;
+  } else if (ev == MG_EV_CLOSE) {
+    fd->closed = 1;
+  }
+}
+
+static int fpr(struct mg_mgr *mgr, char *buf, const char *url,
+                 const char *fmt, ...) {
+  struct fpr_data fd = {buf, 0, 0, 0};
+  int i;
+  struct mg_connection *c = NULL;
+  va_list ap;
+  c = mg_http_connect(mgr, url, fprcb, &fd);
+  ASSERT(c != NULL);
+  va_start(ap, fmt);
+  mg_vprintf(c, fmt, &ap);
+  va_end(ap);
+  buf[0] = '\0';
+  for (i = 0; i < 500 && !fd.closed; i++) mg_mgr_poll(mgr, 1);
+  if (!fd.closed) c->is_closing = 1;
+  mg_mgr_poll(mgr, 1);
+  return fd.reqs;
+}
+
 static void test_http_server(void) {
   struct mg_mgr mgr;
   const char *url = "http://127.0.0.1:12346";
@@ -872,11 +917,20 @@ static void test_http_server(void) {
   ASSERT(cmpbody(buf, "hello\n") == 0);
   ASSERT(cmpheader(buf, "A", "B") == 0);
 
+  ASSERT(fetch(&mgr, buf, url, "GET /%%61.txt HTTP/1.0\n\n") == 200);
+  ASSERT(cmpbody(buf, "hello\n") == 0);
+
   // Invalid header: failure
   ASSERT(fetch(&mgr, buf, url, "GET /a.txt HTTP/1.0\nA B\n\n") == 0);
 
-  ASSERT(fetch(&mgr, buf, url, "GET /%%61.txt HTTP/1.0\n\n") == 200);
-  ASSERT(cmpbody(buf, "hello\n") == 0);
+  // Pipelined requests
+  ASSERT(fpr(&mgr, buf, url, "GET /foo/bar HTTP/1.1\n\nGET /foo/foobar HTTP/1.1\n\n") == 2);
+  // Pipelined requests with files (see #2796)
+  //ASSERT(fpr(&mgr, buf, url, "GET /a.txt HTTP/1.1\n\nGET /a.txt HTTP/1.1\n\n") == 2);
+  //ASSERT(fpr(&mgr, buf, url, "HEAD /a.txt HTTP/1.1\n\nGET /a.txt HTTP/1.1\n\n") == 2);
+  // Connection: close
+  ASSERT(fpr(&mgr, buf, url, "GET /foo/bar HTTP/1.1\nConnection: close\n\nGET /foo/foobar HTTP/1.1\n\n") == 1);
+  ASSERT(cmpbody(buf, "uri: bar") == 0);
 
   // Responses with missing reason phrase must also work
   ASSERT(fetch(&mgr, buf, url, "GET /no_reason HTTP/1.0\n\n") == 200);
