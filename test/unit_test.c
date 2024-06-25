@@ -865,18 +865,16 @@ static void fprcb(struct mg_connection *c, int ev, void *ev_data) {
   struct fpr_data *fd = (struct fpr_data *) c->fn_data;
   if (ev == MG_EV_HTTP_MSG) {
     struct mg_http_message *hm = (struct mg_http_message *) ev_data;
-    MG_INFO(("code: %d", atoi(hm->uri.buf)));
     if (atoi(hm->uri.buf) == 200) {
       snprintf(fd->buf + fd->len, FETCH_BUF_SIZE - (unsigned int) fd->len, "%.*s", (int) hm->message.len,
                hm->message.buf);
-      fd->len += hm->message.len;
+      fd->len += (int) hm->message.len;
       ++fd->reqs;
       if(fd->reqs == 2) {
         fd->closed = 1;
         c->is_closing = 1;
       }
     }
-    MG_INFO(("%u %s", strlen(fd->buf), fd->buf));
     (void) c;
   } else if (ev == MG_EV_CLOSE) {
     fd->closed = 1;
