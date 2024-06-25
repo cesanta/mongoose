@@ -923,9 +923,9 @@ static void test_http_server(void) {
 
   // Pipelined requests
   ASSERT(fpr(&mgr, buf, url, "GET /foo/bar HTTP/1.1\n\nGET /foo/foobar HTTP/1.1\n\n") == 2);
-  // Pipelined requests with files (see #2796)
-  //ASSERT(fpr(&mgr, buf, url, "GET /a.txt HTTP/1.1\n\nGET /a.txt HTTP/1.1\n\n") == 2);
-  //ASSERT(fpr(&mgr, buf, url, "HEAD /a.txt HTTP/1.1\n\nGET /a.txt HTTP/1.1\n\n") == 2);
+  // Pipelined requests with file requests other than the last one (see #2796)
+  ASSERT(fpr(&mgr, buf, url, "GET /a.txt HTTP/1.1\n\nGET /a.txt HTTP/1.1\n\n") == 2);
+  ASSERT(fpr(&mgr, buf, url, "HEAD /a.txt HTTP/1.1\n\nGET /a.txt HTTP/1.1\n\n") == 2);
   // Connection: close
   ASSERT(fpr(&mgr, buf, url, "GET /foo/bar HTTP/1.1\nConnection: close\n\nGET /foo/foobar HTTP/1.1\n\n") == 1);
   ASSERT(cmpbody(buf, "uri: bar") == 0);
