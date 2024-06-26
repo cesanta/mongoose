@@ -2853,7 +2853,6 @@ void mg_http_serve_file(struct mg_connection *c, struct mg_http_message *hm,
               etag, (uint64_t) cl, gzip ? "Content-Encoding: gzip\r\n" : "",
               range, opts->extra_headers ? opts->extra_headers : "");
     if (mg_strcasecmp(hm->method, mg_str("HEAD")) == 0) {
-      c->is_draining = 1;
       c->is_resp = 0;
       mg_fs_close(fd);
     } else {
@@ -3216,7 +3215,9 @@ static int skip_chunk(const char *buf, int len, int *pl, int *dl) {
 }
 
 static void http_cb(struct mg_connection *c, int ev, void *ev_data) {
-  if (ev == MG_EV_READ || ev == MG_EV_CLOSE) {
+  if (ev == MG_EV_READ || ev == MG_EV_CLOSE ||
+      (ev == MG_EV_POLL && c->is_accepted && !c->is_draining &&
+       c->recv.len > 0)) {  // see #2796
     struct mg_http_message hm;
     size_t ofs = 0;  // Parsing offset
     while (c->is_resp == 0 && ofs < c->recv.len) {
