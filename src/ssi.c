@@ -23,7 +23,7 @@ static char *mg_ssi(const char *path, const char *root, int depth) {
       if (intag && ch == '>' && buf[len - 1] == '-' && buf[len - 2] == '-') {
         buf[len++] = (char) (ch & 0xff);
         buf[len] = '\0';
-        if (sscanf(buf, "<!--#include file=\"%[^\"]", arg)) {
+        if (sscanf(buf, "<!--#include file=\"%[^\"]", arg) > 0) {
           char tmp[MG_PATH_MAX + MG_SSI_BUFSIZ + 10],
               *p = (char *) path + strlen(path), *data;
           while (p > path && p[-1] != MG_DIRSEP && p[-1] != '/') p--;
@@ -35,7 +35,7 @@ static char *mg_ssi(const char *path, const char *root, int depth) {
           } else {
             MG_ERROR(("%s: file=%s error or too deep", path, arg));
           }
-        } else if (sscanf(buf, "<!--#include virtual=\"%[^\"]", arg)) {
+        } else if (sscanf(buf, "<!--#include virtual=\"%[^\"]", arg) > 0) {
           char tmp[MG_PATH_MAX + MG_SSI_BUFSIZ + 10], *data;
           mg_snprintf(tmp, sizeof(tmp), "%s%s", root, arg);
           if (depth < MG_MAX_SSI_DEPTH &&
