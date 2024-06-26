@@ -18,8 +18,8 @@
 #if (MG_UECC_PLATFORM == mg_uecc_avr) || (MG_UECC_PLATFORM == mg_uecc_arm) || \
     (MG_UECC_PLATFORM == mg_uecc_arm_thumb) ||                                \
     (MG_UECC_PLATFORM == mg_uecc_arm_thumb2)
-#define CONCATX(a, ...) a##__VA_ARGS__
-#define CONCAT(a, ...) CONCATX(a, __VA_ARGS__)
+#define MG_UECC_CONCATX(a, ...) a##__VA_ARGS__
+#define MG_UECC_CONCAT(a, ...) MG_UECC_CONCATX(a, __VA_ARGS__)
 
 #define STRX(a) #a
 #define STR(a) STRX(a)
@@ -63,28 +63,28 @@
 #define DEC_31 30
 #define DEC_32 31
 
-#define DEC(N) CONCAT(DEC_, N)
+#define DEC(N) MG_UECC_CONCAT(DEC_, N)
 
 #define SECOND_ARG(_, val, ...) val
 #define SOME_CHECK_0 ~, 0
 #define GET_SECOND_ARG(...) SECOND_ARG(__VA_ARGS__, SOME, )
-#define SOME_OR_0(N) GET_SECOND_ARG(CONCAT(SOME_CHECK_, N))
+#define SOME_OR_0(N) GET_SECOND_ARG(MG_UECC_CONCAT(SOME_CHECK_, N))
 
-#define EMPTY(...)
-#define DEFER(...) __VA_ARGS__ EMPTY()
+#define MG_UECC_EMPTY(...)
+#define DEFER(...) __VA_ARGS__ MG_UECC_EMPTY()
 
 #define REPEAT_NAME_0() REPEAT_0
 #define REPEAT_NAME_SOME() REPEAT_SOME
 #define REPEAT_0(...)
 #define REPEAT_SOME(N, stuff) \
-  DEFER(CONCAT(REPEAT_NAME_, SOME_OR_0(DEC(N))))()(DEC(N), stuff) stuff
+  DEFER(MG_UECC_CONCAT(REPEAT_NAME_, SOME_OR_0(DEC(N))))()(DEC(N), stuff) stuff
 #define REPEAT(N, stuff) EVAL(REPEAT_SOME(N, stuff))
 
 #define REPEATM_NAME_0() REPEATM_0
 #define REPEATM_NAME_SOME() REPEATM_SOME
 #define REPEATM_0(...)
 #define REPEATM_SOME(N, macro) \
-  macro(N) DEFER(CONCAT(REPEATM_NAME_, SOME_OR_0(DEC(N))))()(DEC(N), macro)
+  macro(N) DEFER(MG_UECC_CONCAT(REPEATM_NAME_, SOME_OR_0(DEC(N))))()(DEC(N), macro)
 #define REPEATM(N, macro) EVAL(REPEATM_SOME(N, macro))
 #endif
 
