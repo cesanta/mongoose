@@ -7522,17 +7522,21 @@ static void read_conn(struct mg_connection *c) {
     size_t len = c->recv.size - c->recv.len;
     long n = -1;
     if (c->is_tls) {
-      if (!ioalloc(c, &c->rtls)) return;
-      n = recv_raw(c, (char *) &c->rtls.buf[c->rtls.len],
-                   c->rtls.size - c->rtls.len);
-      if (n == MG_IO_ERR && c->rtls.len == 0) {
-        // Close only if we have fully drained both raw (rtls) and TLS buffers
-        c->is_closing = 1;
-      } else {
-        if (n > 0) c->rtls.len += (size_t) n;
-        if (c->is_tls_hs) mg_tls_handshake(c);
-        n = c->is_tls_hs ? (long) MG_IO_WAIT : mg_tls_recv(c, buf, len);
+      // Do not read to the raw TLS buffer if it already has enough.
+      // This is to prevent overflowing c->rtls if our reads are slow
+      if (c->rtls.len < 16 * 1024) {  // 16k is the max TLS message size
+        if (!ioalloc(c, &c->rtls)) return;
+        n = recv_raw(c, (char *) &c->rtls.buf[c->rtls.len],
+                     c->rtls.size - c->rtls.len);
+        if (n == MG_IO_ERR && c->rtls.len == 0) {
+          // Close only if we have fully drained both raw (rtls) and TLS buffers
+          c->is_closing = 1;
+        } else {
+          if (n > 0) c->rtls.len += (size_t) n;
+          if (c->is_tls_hs) mg_tls_handshake(c);
+        }
       }
+      n = c->is_tls_hs ? (long) MG_IO_WAIT : mg_tls_recv(c, buf, len);
     } else {
       n = recv_raw(c, buf, len);
     }
