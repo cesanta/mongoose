@@ -10,6 +10,24 @@
 
 #define UPLOAD_DIR "/tmp"
 
+static const char *s_tls_cert =
+    "-----BEGIN CERTIFICATE-----\n"
+    "MIIBMTCB2aADAgECAgkAluqkgeuV/zUwCgYIKoZIzj0EAwIwEzERMA8GA1UEAwwI\n"
+    "TW9uZ29vc2UwHhcNMjQwNTA3MTQzNzM2WhcNMzQwNTA1MTQzNzM2WjARMQ8wDQYD\n"
+    "VQQDDAZzZXJ2ZXIwWTATBgcqhkjOPQIBBggqhkjOPQMBBwNCAASo3oEiG+BuTt5y\n"
+    "ZRyfwNr0C+SP+4M0RG2pYkb2v+ivbpfi72NHkmXiF/kbHXtgmSrn/PeTqiA8M+mg\n"
+    "BhYjDX+zoxgwFjAUBgNVHREEDTALgglsb2NhbGhvc3QwCgYIKoZIzj0EAwIDRwAw\n"
+    "RAIgTXW9MITQSwzqbNTxUUdt9DcB+8pPUTbWZpiXcA26GMYCIBiYw+DSFMLHmkHF\n"
+    "+5U3NXW3gVCLN9ntD5DAx8LTG8sB\n"
+    "-----END CERTIFICATE-----\n";
+
+static const char *s_tls_key =
+    "-----BEGIN EC PRIVATE KEY-----\n"
+    "MHcCAQEEIAVdo8UAScxG7jiuNY2UZESNX/KPH8qJ0u0gOMMsAzYWoAoGCCqGSM49\n"
+    "AwEHoUQDQgAEqN6BIhvgbk7ecmUcn8Da9Avkj/uDNERtqWJG9r/or26X4u9jR5Jl\n"
+    "4hf5Gx17YJkq5/z3k6ogPDPpoAYWIw1/sw==\n"
+    "-----END EC PRIVATE KEY-----\n";
+
 struct upload_state {
   size_t expected;  // POST data length, bytes
   size_t received;  // Already received bytes
@@ -56,6 +74,12 @@ static void handle_uploads(struct mg_connection *c, int ev, void *ev_data) {
 }
 
 static void fn(struct mg_connection *c, int ev, void *ev_data) {
+  if (ev == MG_EV_ACCEPT && c->fn_data != NULL) {
+    struct mg_tls_opts opts = {.cert = mg_str(s_tls_cert),
+                               .key = mg_str(s_tls_key)};
+    mg_tls_init(c, &opts);
+  }
+
   handle_uploads(c, ev, ev_data);
 
   // Non-upload requests, we serve normally
@@ -72,6 +96,7 @@ int main(void) {
   mg_mgr_init(&mgr);
   mg_log_set(MG_LL_DEBUG);  // Set debug log level
   mg_http_listen(&mgr, "http://localhost:8000", fn, NULL);
+  mg_http_listen(&mgr, "https://0.0.0.0:8443", fn, "TLS!");
 
   for (;;) mg_mgr_poll(&mgr, 50);
   mg_mgr_free(&mgr);
