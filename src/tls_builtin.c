@@ -214,13 +214,15 @@ static void mg_tls_drop_record(struct mg_connection *c) {
 static void mg_tls_drop_message(struct mg_connection *c) {
   uint32_t len;
   struct tls_data *tls = (struct tls_data *) c->tls;
-  if (tls->recv.len == 0) {
+  if (tls->recv.len == 0) return;
+  len = MG_LOAD_BE24(tls->recv.buf + 1) + TLS_MSGHDR_SIZE;
+  if (tls->recv.len < len) {
+    mg_error(c, "wrong size");
     return;
   }
-  len = MG_LOAD_BE24(tls->recv.buf + 1);
-  mg_sha256_update(&tls->sha256, tls->recv.buf, len + TLS_MSGHDR_SIZE);
-  tls->recv.buf += len + TLS_MSGHDR_SIZE;
-  tls->recv.len -= len + TLS_MSGHDR_SIZE;
+  mg_sha256_update(&tls->sha256, tls->recv.buf, len);
+  tls->recv.buf += len;
+  tls->recv.len -= len;
   if (tls->recv.len == 0) {
     mg_tls_drop_record(c);
   }
@@ -481,6 +483,10 @@ static int mg_tls_recv_record(struct mg_connection *c) {
     free(dec);
   }
 #else
+  if (msgsz < 16) {
+    mg_error(c, "wrong size");
+    return -1;
+  }
   mg_aes_gcm_decrypt(msg, msg, msgsz - 16, key, 16, nonce, sizeof(nonce));
 #endif
   r = msgsz - 16 - 1;
@@ -544,8 +550,10 @@ static int mg_tls_server_recv_hello(struct mg_connection *c) {
     MG_INFO(("bad session id len"));
   }
   cipher_suites_len = MG_LOAD_BE16(rio->buf + 44 + session_id_len);
+  if (cipher_suites_len > (rio->len - 46 - session_id_len)) goto fail;
   ext_len = MG_LOAD_BE16(rio->buf + 48 + session_id_len + cipher_suites_len);
   ext = rio->buf + 50 + session_id_len + cipher_suites_len;
+  if (ext_len > (rio->len - 52 - session_id_len - cipher_suites_len)) goto fail;
   for (j = 0; j < ext_len;) {
     uint16_t k;
     uint16_t key_exchange_len;
@@ -556,10 +564,14 @@ static int mg_tls_server_recv_hello(struct mg_connection *c) {
       j += (uint16_t) (n + 4);
       continue;
     }
-    key_exchange_len = MG_LOAD_BE16(ext + j + 5);
+    key_exchange_len = MG_LOAD_BE16(ext + j + 4);
     key_exchange = ext + j + 6;
+    if (key_exchange_len >
+        rio->len - (uint16_t) ((size_t) key_exchange - (size_t) rio->buf) - 2)
+      goto fail;
     for (k = 0; k < key_exchange_len;) {
       uint16_t m = MG_LOAD_BE16(key_exchange + k + 2);
+      if (m > (key_exchange_len - k - 4)) goto fail;
       if (m == 32 && key_exchange[k] == 0x00 && key_exchange[k + 1] == 0x1d) {
         memmove(tls->x25519_cli, key_exchange + k + 4, m);
         mg_tls_drop_record(c);
@@ -569,6 +581,7 @@ static int mg_tls_server_recv_hello(struct mg_connection *c) {
     }
     j += (uint16_t) (n + 4);
   }
+fail:
   mg_error(c, "bad client hello");
   return -1;
 }
@@ -887,6 +900,7 @@ static int mg_tls_client_recv_hello(struct mg_connection *c) {
 
   ext_len = MG_LOAD_BE16(rio->buf + 5 + 39 + 32 + 3);
   ext = rio->buf + 5 + 39 + 32 + 3 + 2;
+  if (ext_len > (rio->len - (5 + 39 + 32 + 3 + 2))) goto fail;
 
   for (j = 0; j < ext_len;) {
     uint16_t ext_type = MG_LOAD_BE16(ext + j);
@@ -894,6 +908,7 @@ static int mg_tls_client_recv_hello(struct mg_connection *c) {
     uint16_t group;
     uint8_t *key_exchange;
     uint16_t key_exchange_len;
+    if (ext_len2 > (ext_len - j - 4)) goto fail;
     if (ext_type != 0x0033) {  // not a key share extension, ignore
       j += (uint16_t) (ext_len2 + 4);
       continue;
@@ -916,6 +931,7 @@ static int mg_tls_client_recv_hello(struct mg_connection *c) {
     mg_tls_generate_handshake_keys(c);
     return 0;
   }
+fail:
   mg_error(c, "bad client hello");
   return -1;
 }
@@ -1226,7 +1242,7 @@ static int mg_parse_pem(const struct mg_str pem, const struct mg_str label,
   size_t n = 0, m = 0;
   char *s;
   const char *c;
-  struct mg_str caps[5];
+  struct mg_str caps[6];  // number of wildcards + 1
   if (!mg_match(pem, mg_str("#-----BEGIN #-----#-----END #-----#"), caps)) {
     *der = mg_strdup(pem);
     return 0;
@@ -1276,6 +1292,7 @@ void mg_tls_init(struct mg_connection *c, const struct mg_tls_opts *opts) {
   if (opts->name.len > 0) {
     if (opts->name.len >= sizeof(tls->hostname) - 1) {
       mg_error(c, "hostname too long");
+      return;
     }
     strncpy((char *) tls->hostname, opts->name.buf, sizeof(tls->hostname) - 1);
     tls->hostname[opts->name.len] = 0;
