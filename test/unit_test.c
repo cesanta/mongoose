@@ -865,7 +865,8 @@ static void fprcb(struct mg_connection *c, int ev, void *ev_data) {
   struct fpr_data *fd = (struct fpr_data *) c->fn_data;
   if (ev == MG_EV_HTTP_MSG) {
     struct mg_http_message *hm = (struct mg_http_message *) ev_data;
-    if (atoi(hm->uri.buf) == 200) {
+    int code = atoi(hm->uri.buf);
+    if (code == 200) {
       snprintf(fd->buf + fd->len, FETCH_BUF_SIZE - (unsigned int) fd->len, "%.*s", (int) hm->message.len,
                hm->message.buf);
       fd->len += (int) hm->message.len;
@@ -874,6 +875,9 @@ static void fprcb(struct mg_connection *c, int ev, void *ev_data) {
         fd->closed = 1;
         c->is_closing = 1;
       }
+    } else { // allow testing for other codes and catching wrong responses
+      MG_INFO(("reqs: %d, code: %d", fd->reqs, code));
+      fd->reqs += code;
     }
     (void) c;
   } else if (ev == MG_EV_CLOSE) {
@@ -1434,6 +1438,8 @@ static void test_http_no_content_length(void) {
   ASSERT(fetch(&mgr, buf, url, "HTTP/1.1 304\r\n\r\n") != 411);
   ASSERT(fetch(&mgr, buf, url, "HTTP/1.1 305\r\n\r\n") == 411);
   ASSERT(fetch(&mgr, buf, url, post_req) != 411);
+  // Check it is processed only once (see #2811)
+  ASSERT(fpr(&mgr, buf, url, "POST / HTTP/1.1\r\n\r\n") == 411);
   mg_mgr_free(&mgr);
   ASSERT(mgr.conns == NULL);
 }

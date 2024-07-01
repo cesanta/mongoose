@@ -3258,6 +3258,7 @@ static void http_cb(struct mg_connection *c, int ev, void *ev_data) {
           // contain a Content-length header. Other requests can also contain a
           // body, but their content has no defined semantics (RFC 7231)
           require_content_len = true;
+          ofs += (size_t) n;  // this request has been processed
         } else if (is_response) {
           // HTTP spec 7.2 Entity body: All other responses must include a body
           // or Content-Length header field defined with a value of 0.
