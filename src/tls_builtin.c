@@ -469,10 +469,15 @@ static int mg_tls_recv_record(struct mg_connection *c) {
 #endif
   r = msgsz - 16 - 1;
   tls->content_type = msg[msgsz - 16 - 1];
-  tls->recv.buf = msg;
+  tls->recv.buf = msg;  // this is pointing into an iobuf that can be freed
   tls->recv.size = tls->recv.len = msgsz - 16 - 1;
   c->is_client ? tls->enc.sseq++ : tls->enc.cseq++;
   return r;
+}
+
+void mg_tls_ioremap(struct mg_connection *c, size_t offset) {
+  struct tls_data *tls = (struct tls_data *) c->tls;
+  if (tls->recv.buf != NULL) tls->recv.buf += offset;
 }
 
 static void mg_tls_calc_cert_verify_hash(struct mg_connection *c,

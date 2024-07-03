@@ -268,6 +268,18 @@ static bool ioalloc(struct mg_connection *c, struct mg_iobuf *io) {
   return res;
 }
 
+#if MG_TLS == MG_TLS_BUILTIN
+void mg_tls_ioremap(struct mg_connection *, size_t);
+static bool tlsioalloc(struct mg_connection *c, struct mg_iobuf *io){
+  unsigned char *old = io->buf;
+  if (!ioalloc(c, io)) return false;
+  mg_tls_ioremap(c, (size_t) (io->buf - old)); // remap current record buffer
+  return true;
+}
+#else
+#define tlsioalloc ioalloc
+#endif
+
 // NOTE(lsm): do only one iteration of reads, cause some systems
 // (e.g. FreeRTOS stack) return 0 instead of -1/EWOULDBLOCK when no data
 static void read_conn(struct mg_connection *c) {
@@ -279,7 +291,7 @@ static void read_conn(struct mg_connection *c) {
       // Do not read to the raw TLS buffer if it already has enough.
       // This is to prevent overflowing c->rtls if our reads are slow
       if (c->rtls.len < 16 * 1024 + 40) {  // TLS record, header, MAC, padding
-        if (!ioalloc(c, &c->rtls)) return;
+        if (!tlsioalloc(c, &c->rtls)) return;
         n = recv_raw(c, (char *) &c->rtls.buf[c->rtls.len],
                      c->rtls.size - c->rtls.len);
         if (n == MG_IO_ERR && c->rtls.len == 0) {
