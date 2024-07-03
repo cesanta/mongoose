@@ -456,9 +456,14 @@ static int mg_tls_recv_record(struct mg_connection *c) {
   nonce[10] ^= (uint8_t) ((seq >> 8) & 255U);
   nonce[11] ^= (uint8_t) ((seq) & 255U);
 #if CHACHA20
-  uint8_t dec[8192];
+  uint8_t *dec = (uint8_t *) malloc(msgsz);
+  if (dec == NULL) {
+    mg_error(c, "TLS OOM");
+    return -1;
+  }
   size_t n = mg_chacha20_poly1305_decrypt(dec, key, nonce, msg, msgsz);
   memmove(msg, dec, n);
+  free(dec);
 #else
   mg_aes_gcm_decrypt(msg, msg, msgsz - 16, key, 16, nonce, sizeof(nonce));
 #endif
