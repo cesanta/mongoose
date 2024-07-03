@@ -278,7 +278,7 @@ static void read_conn(struct mg_connection *c) {
     if (c->is_tls) {
       // Do not read to the raw TLS buffer if it already has enough.
       // This is to prevent overflowing c->rtls if our reads are slow
-      if (c->rtls.len < 16 * 1024) {  // 16k is the max TLS message size
+      if (c->rtls.len < 16 * 1024 + 40) {  // TLS record, header, MAC, padding
         if (!ioalloc(c, &c->rtls)) return;
         n = recv_raw(c, (char *) &c->rtls.buf[c->rtls.len],
                      c->rtls.size - c->rtls.len);
@@ -290,7 +290,9 @@ static void read_conn(struct mg_connection *c) {
           if (c->is_tls_hs) mg_tls_handshake(c);
         }
       }
-      n = c->is_tls_hs ? (long) MG_IO_WAIT : mg_tls_recv(c, buf, len);
+      n = c->is_tls_hs    ? (long) MG_IO_WAIT
+          : c->is_closing ? -1
+                          : mg_tls_recv(c, buf, len);
     } else {
       n = recv_raw(c, buf, len);
     }
