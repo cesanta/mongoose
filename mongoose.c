@@ -9925,7 +9925,10 @@ static int mg_tls_recv_record(struct mg_connection *c) {
 
 void mg_tls_ioremap(struct mg_connection *c, size_t offset) {
   struct tls_data *tls = (struct tls_data *) c->tls;
-  if (tls->recv.buf != NULL) tls->recv.buf += offset;
+  if (tls->recv.buf != NULL) {
+    size_t newptr = ((size_t) tls->recv.buf) + offset;
+    tls->recv.buf = (unsigned char *) newptr;
+  }
 }
 
 static void mg_tls_calc_cert_verify_hash(struct mg_connection *c,
