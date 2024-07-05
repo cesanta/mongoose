@@ -4,5 +4,5 @@ This example uses FreeRTOS native interface
 
 See https://mongoose.ws/tutorials/stm32/nucleo-f746zg-keil-freertos/
 
-Mongoose configuration is in mongoose_custom.h, inside Network_Library
+Mongoose configuration is in mongoose_config.h, inside Network_Library
 
