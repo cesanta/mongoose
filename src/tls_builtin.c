@@ -96,7 +96,7 @@ struct tls_data {
 #define MG_STORE_BE16(p, n)           \
   do {                                \
     MG_U8P(p)[0] = ((n) >> 8U) & 255; \
-    MG_U8P(p)[1] = (n) & 255;         \
+    MG_U8P(p)[1] = (n) &255;          \
   } while (0)
 
 #define TLS_RECHDR_SIZE 5  // 1 byte type, 2 bytes version, 2 bytes length
@@ -107,16 +107,17 @@ struct tls_data {
 static void mg_ssl_key_log(const char *label, uint8_t client_random[32],
                            uint8_t *secret, size_t secretsz) {
   char *keylogfile = getenv("SSLKEYLOGFILE");
+  size_t i;
   if (keylogfile == NULL) {
     return;
   }
   FILE *f = fopen(keylogfile, "a");
   fprintf(f, "%s ", label);
-  for (int i = 0; i < 32; i++) {
+  for (i = 0; i < 32; i++) {
     fprintf(f, "%02x", client_random[i]);
   }
   fprintf(f, " ");
-  for (unsigned int i = 0; i < secretsz; i++) {
+  for (i = 0; i < secretsz; i++) {
     fprintf(f, "%02x", secret[i]);
   }
   fprintf(f, "\n");
@@ -385,7 +386,7 @@ static void mg_tls_encrypt(struct mg_connection *c, const uint8_t *msg,
   nonce[8] ^= (uint8_t) ((seq >> 24) & 255U);
   nonce[9] ^= (uint8_t) ((seq >> 16) & 255U);
   nonce[10] ^= (uint8_t) ((seq >> 8) & 255U);
-  nonce[11] ^= (uint8_t) ((seq) & 255U);
+  nonce[11] ^= (uint8_t) ((seq) &255U);
 
   mg_iobuf_add(wio, wio->len, hdr, sizeof(hdr));
   mg_iobuf_resize(wio, wio->len + encsz);
@@ -395,11 +396,19 @@ static void mg_tls_encrypt(struct mg_connection *c, const uint8_t *msg,
   outmsg[msgsz] = msgtype;
 #if CHACHA20
   (void) tag;  // tag is only used in aes gcm
-  uint8_t enc[8192];
-  size_t n =
-      mg_chacha20_poly1305_encrypt(enc, key, nonce, associated_data,
-                                   sizeof(associated_data), outmsg, msgsz + 1);
-  memmove(outmsg, enc, n);
+  {
+    uint8_t *enc = malloc(8192);
+    if (enc == NULL) {
+      mg_error(c, "TLS OOM");
+      return;
+    } else {
+      size_t n = mg_chacha20_poly1305_encrypt(enc, key, nonce, associated_data,
+                                              sizeof(associated_data), outmsg,
+                                              msgsz + 1);
+      memmove(outmsg, enc, n);
+      free(enc);
+    }
+  }
 #else
   mg_aes_gcm_encrypt(outmsg, outmsg, msgsz + 1, key, 16, nonce, sizeof(nonce),
                      associated_data, sizeof(associated_data), tag, 16);
@@ -454,16 +463,19 @@ static int mg_tls_recv_record(struct mg_connection *c) {
   nonce[8] ^= (uint8_t) ((seq >> 24) & 255U);
   nonce[9] ^= (uint8_t) ((seq >> 16) & 255U);
   nonce[10] ^= (uint8_t) ((seq >> 8) & 255U);
-  nonce[11] ^= (uint8_t) ((seq) & 255U);
+  nonce[11] ^= (uint8_t) ((seq) &255U);
 #if CHACHA20
-  uint8_t *dec = (uint8_t *) malloc(msgsz);
-  if (dec == NULL) {
-    mg_error(c, "TLS OOM");
-    return -1;
+  {
+    uint8_t *dec = (uint8_t *) malloc(msgsz);
+    size_t n;
+    if (dec == NULL) {
+      mg_error(c, "TLS OOM");
+      return -1;
+    }
+    n = mg_chacha20_poly1305_decrypt(dec, key, nonce, msg, msgsz);
+    memmove(msg, dec, n);
+    free(dec);
   }
-  size_t n = mg_chacha20_poly1305_decrypt(dec, key, nonce, msg, msgsz);
-  memmove(msg, dec, n);
-  free(dec);
 #else
   mg_aes_gcm_decrypt(msg, msg, msgsz - 16, key, 16, nonce, sizeof(nonce));
 #endif
@@ -1162,7 +1174,9 @@ static void mg_tls_client_handshake(struct mg_connection *c) {
       tls->state = MG_TLS_STATE_CLIENT_CONNECTED;
       c->is_tls_hs = 0;
       break;
-    default: mg_error(c, "unexpected client state: %d", tls->state); break;
+    default:
+      mg_error(c, "unexpected client state: %d", tls->state);
+      break;
   }
 }
 
@@ -1189,7 +1203,9 @@ static void mg_tls_server_handshake(struct mg_connection *c) {
       tls->state = MG_TLS_STATE_SERVER_CONNECTED;
       c->is_tls_hs = 0;
       return;
-    default: mg_error(c, "unexpected server state: %d", tls->state); break;
+    default:
+      mg_error(c, "unexpected server state: %d", tls->state);
+      break;
   }
 }
 

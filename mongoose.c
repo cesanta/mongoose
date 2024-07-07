@@ -9532,7 +9532,7 @@ struct tls_data {
 #define MG_STORE_BE16(p, n)           \
   do {                                \
     MG_U8P(p)[0] = ((n) >> 8U) & 255; \
-    MG_U8P(p)[1] = (n) & 255;         \
+    MG_U8P(p)[1] = (n) &255;          \
   } while (0)
 
 #define TLS_RECHDR_SIZE 5  // 1 byte type, 2 bytes version, 2 bytes length
@@ -9543,16 +9543,17 @@ struct tls_data {
 static void mg_ssl_key_log(const char *label, uint8_t client_random[32],
                            uint8_t *secret, size_t secretsz) {
   char *keylogfile = getenv("SSLKEYLOGFILE");
+  size_t i;
   if (keylogfile == NULL) {
     return;
   }
   FILE *f = fopen(keylogfile, "a");
   fprintf(f, "%s ", label);
-  for (int i = 0; i < 32; i++) {
+  for (i = 0; i < 32; i++) {
     fprintf(f, "%02x", client_random[i]);
   }
   fprintf(f, " ");
-  for (unsigned int i = 0; i < secretsz; i++) {
+  for (i = 0; i < secretsz; i++) {
     fprintf(f, "%02x", secret[i]);
   }
   fprintf(f, "\n");
@@ -9821,7 +9822,7 @@ static void mg_tls_encrypt(struct mg_connection *c, const uint8_t *msg,
   nonce[8] ^= (uint8_t) ((seq >> 24) & 255U);
   nonce[9] ^= (uint8_t) ((seq >> 16) & 255U);
   nonce[10] ^= (uint8_t) ((seq >> 8) & 255U);
-  nonce[11] ^= (uint8_t) ((seq) & 255U);
+  nonce[11] ^= (uint8_t) ((seq) &255U);
 
   mg_iobuf_add(wio, wio->len, hdr, sizeof(hdr));
   mg_iobuf_resize(wio, wio->len + encsz);
@@ -9831,11 +9832,19 @@ static void mg_tls_encrypt(struct mg_connection *c, const uint8_t *msg,
   outmsg[msgsz] = msgtype;
 #if CHACHA20
   (void) tag;  // tag is only used in aes gcm
-  uint8_t enc[8192];
-  size_t n =
-      mg_chacha20_poly1305_encrypt(enc, key, nonce, associated_data,
-                                   sizeof(associated_data), outmsg, msgsz + 1);
-  memmove(outmsg, enc, n);
+  {
+    uint8_t *enc = malloc(8192);
+    if (enc == NULL) {
+      mg_error(c, "TLS OOM");
+      return;
+    } else {
+      size_t n = mg_chacha20_poly1305_encrypt(enc, key, nonce, associated_data,
+                                              sizeof(associated_data), outmsg,
+                                              msgsz + 1);
+      memmove(outmsg, enc, n);
+      free(enc);
+    }
+  }
 #else
   mg_aes_gcm_encrypt(outmsg, outmsg, msgsz + 1, key, 16, nonce, sizeof(nonce),
                      associated_data, sizeof(associated_data), tag, 16);
@@ -9890,16 +9899,19 @@ static int mg_tls_recv_record(struct mg_connection *c) {
   nonce[8] ^= (uint8_t) ((seq >> 24) & 255U);
   nonce[9] ^= (uint8_t) ((seq >> 16) & 255U);
   nonce[10] ^= (uint8_t) ((seq >> 8) & 255U);
-  nonce[11] ^= (uint8_t) ((seq) & 255U);
+  nonce[11] ^= (uint8_t) ((seq) &255U);
 #if CHACHA20
-  uint8_t *dec = (uint8_t *) malloc(msgsz);
-  if (dec == NULL) {
-    mg_error(c, "TLS OOM");
-    return -1;
+  {
+    uint8_t *dec = (uint8_t *) malloc(msgsz);
+    size_t n;
+    if (dec == NULL) {
+      mg_error(c, "TLS OOM");
+      return -1;
+    }
+    n = mg_chacha20_poly1305_decrypt(dec, key, nonce, msg, msgsz);
+    memmove(msg, dec, n);
+    free(dec);
   }
-  size_t n = mg_chacha20_poly1305_decrypt(dec, key, nonce, msg, msgsz);
-  memmove(msg, dec, n);
-  free(dec);
 #else
   mg_aes_gcm_decrypt(msg, msg, msgsz - 16, key, 16, nonce, sizeof(nonce));
 #endif
@@ -10598,7 +10610,9 @@ static void mg_tls_client_handshake(struct mg_connection *c) {
       tls->state = MG_TLS_STATE_CLIENT_CONNECTED;
       c->is_tls_hs = 0;
       break;
-    default: mg_error(c, "unexpected client state: %d", tls->state); break;
+    default:
+      mg_error(c, "unexpected client state: %d", tls->state);
+      break;
   }
 }
 
@@ -10625,7 +10639,9 @@ static void mg_tls_server_handshake(struct mg_connection *c) {
       tls->state = MG_TLS_STATE_SERVER_CONNECTED;
       c->is_tls_hs = 0;
       return;
-    default: mg_error(c, "unexpected server state: %d", tls->state); break;
+    default:
+      mg_error(c, "unexpected server state: %d", tls->state);
+      break;
   }
 }
 
@@ -10955,6 +10971,7 @@ static void initialize_state(uint32_t state[CHACHA20_STATE_WORDS],
 
 static void core_block(const uint32_t *restrict start,
                        uint32_t *restrict output) {
+  int i;
 // instead of working on the output array,
 // we let the compiler allocate 16 local variables on the stack
 #define __LV(i) uint32_t __t##i = start[i];
@@ -10962,7 +10979,7 @@ static void core_block(const uint32_t *restrict start,
 
 #define __Q(a, b, c, d) Qround(__t##a, __t##b, __t##c, __t##d)
 
-  for (int i = 0; i < 10; i++) {
+  for (i = 0; i < 10; i++) {
     __Q(0, 4, 8, 12);
     __Q(1, 5, 9, 13);
     __Q(2, 6, 10, 14);
@@ -10977,7 +10994,7 @@ static void core_block(const uint32_t *restrict start,
   TIMES16(__FIN)
 }
 
-#define U8(x) ((uint8_t) ((x) & 0xFF))
+#define U8(x) ((uint8_t) ((x) &0xFF))
 
 #ifdef FAST_PATH
 #define xor32_le(dst, src, pad)            \
@@ -10995,14 +11012,14 @@ static void core_block(const uint32_t *restrict start,
 
 #define index8_32(a, ix) ((a) + ((ix) * sizeof(uint32_t)))
 
-#define xor32_blocks(dest, source, pad, words)                          \
-  for (unsigned int __i = 0; __i < words; __i++) {                      \
-    xor32_le(index8_32(dest, __i), index8_32(source, __i), (pad) + __i) \
+#define xor32_blocks(dest, source, pad, words)                    \
+  for (i = 0; i < words; i++) {                                   \
+    xor32_le(index8_32(dest, i), index8_32(source, i), (pad) + i) \
   }
 
 static void xor_block(uint8_t *restrict dest, const uint8_t *restrict source,
                       const uint32_t *restrict pad, unsigned int chunk_size) {
-  unsigned int full_blocks = chunk_size / sizeof(uint32_t);
+  unsigned int i, full_blocks = chunk_size / sizeof(uint32_t);
   // have to be carefull, we are going back from uint32 to uint8, so endianess
   // matters again
   xor32_blocks(dest, source, pad, full_blocks)
@@ -11012,7 +11029,9 @@ static void xor_block(uint8_t *restrict dest, const uint8_t *restrict source,
   pad += full_blocks;
 
   switch (chunk_size % sizeof(uint32_t)) {
-    case 1: dest[0] = source[0] ^ U8(*pad); break;
+    case 1:
+      dest[0] = source[0] ^ U8(*pad);
+      break;
     case 2:
       dest[0] = source[0] ^ U8(*pad);
       dest[1] = source[1] ^ U8(*pad >> 8);
@@ -11031,21 +11050,20 @@ static void chacha20_xor_stream(uint8_t *restrict dest,
                                 const uint8_t nonce[CHACHA20_NONCE_SIZE],
                                 uint32_t counter) {
   uint32_t state[CHACHA20_STATE_WORDS];
-  initialize_state(state, key, nonce, counter);
-
   uint32_t pad[CHACHA20_STATE_WORDS];
-  size_t full_blocks = length / CHACHA20_BLOCK_SIZE;
-  for (size_t b = 0; b < full_blocks; b++) {
+  size_t i, b, last_block, full_blocks = length / CHACHA20_BLOCK_SIZE;
+  initialize_state(state, key, nonce, counter);
+  for (b = 0; b < full_blocks; b++) {
     core_block(state, pad);
     increment_counter(state);
     xor32_blocks(dest, source, pad, CHACHA20_STATE_WORDS) dest +=
         CHACHA20_BLOCK_SIZE;
     source += CHACHA20_BLOCK_SIZE;
   }
-  unsigned int last_block = (unsigned int) (length % CHACHA20_BLOCK_SIZE);
+  last_block = length % CHACHA20_BLOCK_SIZE;
   if (last_block > 0) {
     core_block(state, pad);
-    xor_block(dest, source, pad, last_block);
+    xor_block(dest, source, pad, (unsigned int) last_block);
   }
 }
 
@@ -11058,9 +11076,9 @@ static void chacha20_xor_stream(uint8_t *restrict dest,
   (target)[2] = U8(*(source) >> 16); \
   (target)[3] = U8(*(source) >> 24);
 
-#define serialize(poly_key, result)                          \
-  for (unsigned int i = 0; i < 32 / sizeof(uint32_t); i++) { \
-    store32_le(index8_32(poly_key, i), result + i);          \
+#define serialize(poly_key, result)                 \
+  for (i = 0; i < 32 / sizeof(uint32_t); i++) {     \
+    store32_le(index8_32(poly_key, i), result + i); \
   }
 #endif
 
@@ -11069,9 +11087,11 @@ static void rfc8439_keygen(uint8_t poly_key[32],
                            const uint8_t nonce[CHACHA20_NONCE_SIZE]) {
   uint32_t state[CHACHA20_STATE_WORDS];
   uint32_t result[CHACHA20_STATE_WORDS];
+  size_t i;
   initialize_state(state, key, nonce, 0);
   core_block(state, result);
   serialize(poly_key, result);
+  (void) i;
 }
 // ******* END: chacha-portable.c ********
 // ******* BEGIN: poly1305-donna.c ********
@@ -11096,7 +11116,9 @@ static void rfc8439_keygen(uint8_t poly_key[32],
         based on the public domain reference version in supercop by djb
 static */
 
-#if defined(_MSC_VER)
+#if defined(_MSC_VER) && _MSC_VER < 1700
+#define POLY1305_NOINLINE
+#elif defined(_MSC_VER)
 #define POLY1305_NOINLINE __declspec(noinline)
 #elif defined(__GNUC__)
 #define POLY1305_NOINLINE __attribute__((noinline))
@@ -11265,7 +11287,9 @@ static POLY1305_NOINLINE void poly1305_finish(poly1305_context *ctx,
         poly1305 implementation using 16 bit * 16 bit = 32 bit multiplication
 and 32 bit addition static */
 
-#if defined(_MSC_VER)
+#if defined(_MSC_VER) && _MSC_VER < 1700
+#define POLY1305_NOINLINE
+#elif defined(_MSC_VER)
 #define POLY1305_NOINLINE __declspec(noinline)
 #elif defined(__GNUC__)
 #define POLY1305_NOINLINE __attribute__((noinline))
@@ -11295,7 +11319,7 @@ static unsigned short U8TO16(const unsigned char *p) {
 /* store a 16 bit unsigned integer as two 8 bit unsigned integers in little
  * endian */
 static void U16TO8(unsigned char *p, unsigned short v) {
-  p[0] = (v) & 0xff;
+  p[0] = (v) &0xff;
   p[1] = (v >> 8) & 0xff;
 }
 
@@ -11306,7 +11330,7 @@ static void poly1305_init(poly1305_context *ctx, const unsigned char key[32]) {
 
   /* r &= 0xffffffc0ffffffc0ffffffc0fffffff */
   t0 = U8TO16(&key[0]);
-  st->r[0] = (t0) & 0x1fff;
+  st->r[0] = (t0) &0x1fff;
   t1 = U8TO16(&key[2]);
   st->r[1] = ((t0 >> 13) | (t1 << 3)) & 0x1fff;
   t2 = U8TO16(&key[4]);
@@ -11346,7 +11370,7 @@ static void poly1305_blocks(poly1305_state_internal_t *st,
 
     /* h += m[i] */
     t0 = U8TO16(&m[0]);
-    st->h[0] += (t0) & 0x1fff;
+    st->h[0] += (t0) &0x1fff;
     t1 = U8TO16(&m[2]);
     st->h[1] += ((t0 >> 13) | (t1 << 3)) & 0x1fff;
     t2 = U8TO16(&m[4]);
@@ -11474,7 +11498,9 @@ static POLY1305_NOINLINE void poly1305_finish(poly1305_context *ctx,
         poly1305 implementation using 32 bit * 32 bit = 64 bit multiplication
 and 64 bit addition static */
 
-#if defined(_MSC_VER)
+#if defined(_MSC_VER) && _MSC_VER < 1700
+#define POLY1305_NOINLINE
+#elif defined(_MSC_VER)
 #define POLY1305_NOINLINE __declspec(noinline)
 #elif defined(__GNUC__)
 #define POLY1305_NOINLINE __attribute__((noinline))
@@ -11506,7 +11532,7 @@ static unsigned long U8TO32(const unsigned char *p) {
 /* store a 32 bit unsigned integer as four 8 bit unsigned integers in little
  * endian */
 static void U32TO8(unsigned char *p, unsigned long v) {
-  p[0] = (unsigned char) ((v) & 0xff);
+  p[0] = (unsigned char) ((v) &0xff);
   p[1] = (unsigned char) ((v >> 8) & 0xff);
   p[2] = (unsigned char) ((v >> 16) & 0xff);
   p[3] = (unsigned char) ((v >> 24) & 0xff);
@@ -11545,7 +11571,7 @@ static void poly1305_blocks(poly1305_state_internal_t *st,
   unsigned long r0, r1, r2, r3, r4;
   unsigned long s1, s2, s3, s4;
   unsigned long h0, h1, h2, h3, h4;
-  unsigned long long d0, d1, d2, d3, d4;
+  uint64_t d0, d1, d2, d3, d4;
   unsigned long c;
 
   r0 = st->r[0];
@@ -11574,21 +11600,16 @@ static void poly1305_blocks(poly1305_state_internal_t *st,
     h4 += (U8TO32(m + 12) >> 8) | hibit;
 
     /* h *= r */
-    d0 = ((unsigned long long) h0 * r0) + ((unsigned long long) h1 * s4) +
-         ((unsigned long long) h2 * s3) + ((unsigned long long) h3 * s2) +
-         ((unsigned long long) h4 * s1);
-    d1 = ((unsigned long long) h0 * r1) + ((unsigned long long) h1 * r0) +
-         ((unsigned long long) h2 * s4) + ((unsigned long long) h3 * s3) +
-         ((unsigned long long) h4 * s2);
-    d2 = ((unsigned long long) h0 * r2) + ((unsigned long long) h1 * r1) +
-         ((unsigned long long) h2 * r0) + ((unsigned long long) h3 * s4) +
-         ((unsigned long long) h4 * s3);
-    d3 = ((unsigned long long) h0 * r3) + ((unsigned long long) h1 * r2) +
-         ((unsigned long long) h2 * r1) + ((unsigned long long) h3 * r0) +
-         ((unsigned long long) h4 * s4);
-    d4 = ((unsigned long long) h0 * r4) + ((unsigned long long) h1 * r3) +
-         ((unsigned long long) h2 * r2) + ((unsigned long long) h3 * r1) +
-         ((unsigned long long) h4 * r0);
+    d0 = ((uint64_t) h0 * r0) + ((uint64_t) h1 * s4) + ((uint64_t) h2 * s3) +
+         ((uint64_t) h3 * s2) + ((uint64_t) h4 * s1);
+    d1 = ((uint64_t) h0 * r1) + ((uint64_t) h1 * r0) + ((uint64_t) h2 * s4) +
+         ((uint64_t) h3 * s3) + ((uint64_t) h4 * s2);
+    d2 = ((uint64_t) h0 * r2) + ((uint64_t) h1 * r1) + ((uint64_t) h2 * r0) +
+         ((uint64_t) h3 * s4) + ((uint64_t) h4 * s3);
+    d3 = ((uint64_t) h0 * r3) + ((uint64_t) h1 * r2) + ((uint64_t) h2 * r1) +
+         ((uint64_t) h3 * r0) + ((uint64_t) h4 * s4);
+    d4 = ((uint64_t) h0 * r4) + ((uint64_t) h1 * r3) + ((uint64_t) h2 * r2) +
+         ((uint64_t) h3 * r1) + ((uint64_t) h4 * r0);
 
     /* (partial) h %= p */
     c = (unsigned long) (d0 >> 26);
@@ -11626,7 +11647,7 @@ static POLY1305_NOINLINE void poly1305_finish(poly1305_context *ctx,
   poly1305_state_internal_t *st = (poly1305_state_internal_t *) ctx;
   unsigned long h0, h1, h2, h3, h4, c;
   unsigned long g0, g1, g2, g3, g4;
-  unsigned long long f;
+  uint64_t f;
   unsigned long mask;
 
   /* process the remaining block */
@@ -11697,13 +11718,13 @@ static POLY1305_NOINLINE void poly1305_finish(poly1305_context *ctx,
   h3 = ((h3 >> 18) | (h4 << 8)) & 0xffffffff;
 
   /* mac = (h + pad) % (2^128) */
-  f = (unsigned long long) h0 + st->pad[0];
+  f = (uint64_t) h0 + st->pad[0];
   h0 = (unsigned long) f;
-  f = (unsigned long long) h1 + st->pad[1] + (f >> 32);
+  f = (uint64_t) h1 + st->pad[1] + (f >> 32);
   h1 = (unsigned long) f;
-  f = (unsigned long long) h2 + st->pad[2] + (f >> 32);
+  f = (uint64_t) h2 + st->pad[2] + (f >> 32);
   h2 = (unsigned long) f;
-  f = (unsigned long long) h3 + st->pad[3] + (f >> 32);
+  f = (uint64_t) h3 + st->pad[3] + (f >> 32);
   h3 = (unsigned long) f;
 
   U32TO8(mac + 0, h0);
@@ -11743,20 +11764,24 @@ typedef struct uint128_t {
 #define MUL128(out, x, y) out.lo = _umul128((x), (y), &out.hi)
 #define ADD(out, in)                \
   {                                 \
-    unsigned long long t = out.lo;  \
+    uint64_t t = out.lo;            \
     out.lo += in.lo;                \
     out.hi += (out.lo < t) + in.hi; \
   }
-#define ADDLO(out, in)             \
-  {                                \
-    unsigned long long t = out.lo; \
-    out.lo += in;                  \
-    out.hi += (out.lo < t);        \
+#define ADDLO(out, in)      \
+  {                         \
+    uint64_t t = out.lo;    \
+    out.lo += in;           \
+    out.hi += (out.lo < t); \
   }
 #define SHR(in, shift) (__shiftright128(in.lo, in.hi, (shift)))
 #define LO(in) (in.lo)
 
+#if defined(_MSC_VER) && _MSC_VER < 1700
+#define POLY1305_NOINLINE
+#else
 #define POLY1305_NOINLINE __declspec(noinline)
+#endif
 #elif defined(__GNUC__)
 #if defined(__SIZEOF_INT128__)
 // Get rid of GCC warning "ISO C does not support '__int128' types"
@@ -11771,19 +11796,19 @@ typedef unsigned uint128_t __attribute__((mode(TI)));
 #define MUL128(out, x, y) out = ((uint128_t) x * y)
 #define ADD(out, in) out += in
 #define ADDLO(out, in) out += in
-#define SHR(in, shift) (unsigned long long) (in >> (shift))
-#define LO(in) (unsigned long long) (in)
+#define SHR(in, shift) (uint64_t)(in >> (shift))
+#define LO(in) (uint64_t)(in)
 
 #define POLY1305_NOINLINE __attribute__((noinline))
 #endif
 
 #define poly1305_block_size 16
 
-/* 17 + sizeof(size_t) + 8*sizeof(unsigned long long) */
+/* 17 + sizeof(size_t) + 8*sizeof(uint64_t) */
 typedef struct poly1305_state_internal_t {
-  unsigned long long r[3];
-  unsigned long long h[3];
-  unsigned long long pad[2];
+  uint64_t r[3];
+  uint64_t h[3];
+  uint64_t pad[2];
   size_t leftover;
   unsigned char buffer[poly1305_block_size];
   unsigned char final;
@@ -11791,21 +11816,17 @@ typedef struct poly1305_state_internal_t {
 
 /* interpret eight 8 bit unsigned integers as a 64 bit unsigned integer in
  * little endian */
-static unsigned long long U8TO64(const unsigned char *p) {
-  return (((unsigned long long) (p[0] & 0xff)) |
-          ((unsigned long long) (p[1] & 0xff) << 8) |
-          ((unsigned long long) (p[2] & 0xff) << 16) |
-          ((unsigned long long) (p[3] & 0xff) << 24) |
-          ((unsigned long long) (p[4] & 0xff) << 32) |
-          ((unsigned long long) (p[5] & 0xff) << 40) |
-          ((unsigned long long) (p[6] & 0xff) << 48) |
-          ((unsigned long long) (p[7] & 0xff) << 56));
+static uint64_t U8TO64(const unsigned char *p) {
+  return (((uint64_t) (p[0] & 0xff)) | ((uint64_t) (p[1] & 0xff) << 8) |
+          ((uint64_t) (p[2] & 0xff) << 16) | ((uint64_t) (p[3] & 0xff) << 24) |
+          ((uint64_t) (p[4] & 0xff) << 32) | ((uint64_t) (p[5] & 0xff) << 40) |
+          ((uint64_t) (p[6] & 0xff) << 48) | ((uint64_t) (p[7] & 0xff) << 56));
 }
 
 /* store a 64 bit unsigned integer as eight 8 bit unsigned integers in little
  * endian */
-static void U64TO8(unsigned char *p, unsigned long long v) {
-  p[0] = (unsigned char) ((v) & 0xff);
+static void U64TO8(unsigned char *p, uint64_t v) {
+  p[0] = (unsigned char) ((v) &0xff);
   p[1] = (unsigned char) ((v >> 8) & 0xff);
   p[2] = (unsigned char) ((v >> 16) & 0xff);
   p[3] = (unsigned char) ((v >> 24) & 0xff);
@@ -11817,13 +11838,13 @@ static void U64TO8(unsigned char *p, unsigned long long v) {
 
 static void poly1305_init(poly1305_context *ctx, const unsigned char key[32]) {
   poly1305_state_internal_t *st = (poly1305_state_internal_t *) ctx;
-  unsigned long long t0, t1;
+  uint64_t t0, t1;
 
   /* r &= 0xffffffc0ffffffc0ffffffc0fffffff */
   t0 = U8TO64(&key[0]);
   t1 = U8TO64(&key[8]);
 
-  st->r[0] = (t0) & 0xffc0fffffff;
+  st->r[0] = (t0) &0xffc0fffffff;
   st->r[1] = ((t0 >> 44) | (t1 << 20)) & 0xfffffc0ffff;
   st->r[2] = ((t1 >> 24)) & 0x00ffffffc0f;
 
@@ -11842,12 +11863,11 @@ static void poly1305_init(poly1305_context *ctx, const unsigned char key[32]) {
 
 static void poly1305_blocks(poly1305_state_internal_t *st,
                             const unsigned char *m, size_t bytes) {
-  const unsigned long long hibit =
-      (st->final) ? 0 : ((unsigned long long) 1 << 40); /* 1 << 128 */
-  unsigned long long r0, r1, r2;
-  unsigned long long s1, s2;
-  unsigned long long h0, h1, h2;
-  unsigned long long c;
+  const uint64_t hibit = (st->final) ? 0 : ((uint64_t) 1 << 40); /* 1 << 128 */
+  uint64_t r0, r1, r2;
+  uint64_t s1, s2;
+  uint64_t h0, h1, h2;
+  uint64_t c;
   uint128_t d0, d1, d2, d;
 
   r0 = st->r[0];
@@ -11862,13 +11882,13 @@ static void poly1305_blocks(poly1305_state_internal_t *st,
   s2 = r2 * (5 << 2);
 
   while (bytes >= poly1305_block_size) {
-    unsigned long long t0, t1;
+    uint64_t t0, t1;
 
     /* h += m[i] */
     t0 = U8TO64(&m[0]);
     t1 = U8TO64(&m[8]);
 
-    h0 += ((t0) & 0xfffffffffff);
+    h0 += ((t0) &0xfffffffffff);
     h1 += (((t0 >> 44) | (t1 << 20)) & 0xfffffffffff);
     h2 += (((t1 >> 24)) & 0x3ffffffffff) | hibit;
 
@@ -11915,9 +11935,9 @@ static void poly1305_blocks(poly1305_state_internal_t *st,
 static POLY1305_NOINLINE void poly1305_finish(poly1305_context *ctx,
                                               unsigned char mac[16]) {
   poly1305_state_internal_t *st = (poly1305_state_internal_t *) ctx;
-  unsigned long long h0, h1, h2, c;
-  unsigned long long g0, g1, g2;
-  unsigned long long t0, t1;
+  uint64_t h0, h1, h2, c;
+  uint64_t g0, g1, g2;
+  uint64_t t0, t1;
 
   /* process the remaining block */
   if (st->leftover) {
@@ -11959,10 +11979,10 @@ static POLY1305_NOINLINE void poly1305_finish(poly1305_context *ctx,
   g1 = h1 + c;
   c = (g1 >> 44);
   g1 &= 0xfffffffffff;
-  g2 = h2 + c - ((unsigned long long) 1 << 42);
+  g2 = h2 + c - ((uint64_t) 1 << 42);
 
   /* select h if h < p, or h + -p if h >= p */
-  c = (g2 >> ((sizeof(unsigned long long) * 8) - 1)) - 1;
+  c = (g2 >> ((sizeof(uint64_t) * 8) - 1)) - 1;
   g0 &= c;
   g1 &= c;
   g2 &= c;
@@ -11975,7 +11995,7 @@ static POLY1305_NOINLINE void poly1305_finish(poly1305_context *ctx,
   t0 = st->pad[0];
   t1 = st->pad[1];
 
-  h0 += ((t0) & 0xfffffffffff);
+  h0 += ((t0) &0xfffffffffff);
   c = (h0 >> 44);
   h0 &= 0xfffffffffff;
   h1 += (((t0 >> 44) | (t1 << 20)) & 0xfffffffffff) + c;
@@ -12052,7 +12072,7 @@ static PORTABLE_8439_DECL void pad_if_needed(poly1305_context *ctx,
   }
 }
 
-#define __u8(v) ((uint8_t) ((v) & 0xFF))
+#define __u8(v) ((uint8_t) ((v) &0xFF))
 
 // TODO: make this depending on the unaligned/native read size possible
 static PORTABLE_8439_DECL void write_64bit_int(poly1305_context *ctx,
@@ -12076,9 +12096,9 @@ static PORTABLE_8439_DECL void poly1305_calculate_mac(
     size_t ad_size) {
   // init poly key (section 2.6)
   uint8_t poly_key[__POLY1305_KEY_SIZE] = {0};
+  poly1305_context poly_ctx;
   rfc8439_keygen(poly_key, key, nonce);
   // start poly1305 mac
-  poly1305_context poly_ctx;
   poly1305_init(&poly_ctx, poly_key);
 
   if (ad != NULL && ad_size > 0) {
@@ -12449,8 +12469,9 @@ static STACK_OF(X509_INFO) * load_ca_certs(struct mg_str ca) {
 }
 
 static bool add_ca_certs(SSL_CTX *ctx, STACK_OF(X509_INFO) * certs) {
+  int i;
   X509_STORE *cert_store = SSL_CTX_get_cert_store(ctx);
-  for (int i = 0; i < sk_X509_INFO_num(certs); i++) {
+  for (i = 0; i < sk_X509_INFO_num(certs); i++) {
     X509_INFO *cert_info = sk_X509_INFO_value(certs, i);
     if (cert_info->x509 && !X509_STORE_add_cert(cert_store, cert_info->x509))
       return false;
