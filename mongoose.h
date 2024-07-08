@@ -1965,11 +1965,11 @@ extern "C" {
  if possible, carefully pick your associated data.
 */
 
-// Make sure we are either nested in C++ or running in a C99+ compiler
+/* Make sure we are either nested in C++ or running in a C99+ compiler
 #if !defined(__cplusplus) && !defined(_MSC_VER) && \
     (!defined(__STDC_VERSION__) || __STDC_VERSION__ < 199901L)
 #error "C99 or newer required"
-#endif
+#endif */
 
 // #if CHAR_BIT > 8
 // #    error "Systems without native octals not suppoted"

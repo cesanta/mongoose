@@ -200,8 +200,8 @@ static void core_block(const uint32_t *restrict start,
 
 static void xor_block(uint8_t *restrict dest, const uint8_t *restrict source,
                       const uint32_t *restrict pad, unsigned int chunk_size) {
-  unsigned int i, full_blocks = chunk_size / sizeof(uint32_t);
-  // have to be carefull, we are going back from uint32 to uint8, so endianess
+  unsigned int i, full_blocks = chunk_size / (unsigned int) sizeof(uint32_t);
+  // have to be carefull, we are going back from uint32 to uint8, so endianness
   // matters again
   xor32_blocks(dest, source, pad, full_blocks)
 

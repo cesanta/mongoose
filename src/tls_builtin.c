@@ -397,7 +397,7 @@ static void mg_tls_encrypt(struct mg_connection *c, const uint8_t *msg,
 #if CHACHA20
   (void) tag;  // tag is only used in aes gcm
   {
-    uint8_t *enc = malloc(8192);
+    uint8_t *enc = (uint8_t *) malloc(8192);
     if (enc == NULL) {
       mg_error(c, "TLS OOM");
       return;

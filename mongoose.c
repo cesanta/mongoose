@@ -9833,7 +9833,7 @@ static void mg_tls_encrypt(struct mg_connection *c, const uint8_t *msg,
 #if CHACHA20
   (void) tag;  // tag is only used in aes gcm
   {
-    uint8_t *enc = malloc(8192);
+    uint8_t *enc = (uint8_t *) malloc(8192);
     if (enc == NULL) {
       mg_error(c, "TLS OOM");
       return;
@@ -11019,8 +11019,8 @@ static void core_block(const uint32_t *restrict start,
 
 static void xor_block(uint8_t *restrict dest, const uint8_t *restrict source,
                       const uint32_t *restrict pad, unsigned int chunk_size) {
-  unsigned int i, full_blocks = chunk_size / sizeof(uint32_t);
-  // have to be carefull, we are going back from uint32 to uint8, so endianess
+  unsigned int i, full_blocks = chunk_size / (unsigned int) sizeof(uint32_t);
+  // have to be carefull, we are going back from uint32 to uint8, so endianness
   // matters again
   xor32_blocks(dest, source, pad, full_blocks)
 
