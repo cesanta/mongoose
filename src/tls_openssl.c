@@ -134,8 +134,12 @@ void mg_tls_init(struct mg_connection *c, const struct mg_tls_opts *opts) {
     s_initialised++;
   }
   MG_DEBUG(("%lu Setting TLS", c->id));
-  tls->ctx = c->is_client ? SSL_CTX_new(SSLv23_client_method())
-                          : SSL_CTX_new(SSLv23_server_method());
+  tls->ctx = c->is_client ? SSL_CTX_new(TLS_client_method())
+                          : SSL_CTX_new(TLS_server_method());
+  if (tls->ctx == NULL) {
+    mg_error(c, "SSL_CTX_new");
+    goto fail;
+  }
 #ifdef MG_TLS_SSLKEYLOGFILE
   SSL_CTX_set_keylog_callback(tls->ctx, ssl_keylog_cb);
 #endif
