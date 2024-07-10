@@ -1666,6 +1666,111 @@ int mg_uecc_verify(const uint8_t *public_key, const uint8_t *message_hash,
 
 /* Copyright 2015, Kenneth MacKay. Licensed under the BSD 2-clause license. */
 
+#ifndef _UECC_TYPES_H_
+#define _UECC_TYPES_H_
+
+#ifndef MG_UECC_PLATFORM
+#if defined(__AVR__) && __AVR__
+#define MG_UECC_PLATFORM mg_uecc_avr
+#elif defined(__thumb2__) || \
+    defined(_M_ARMT) /* I think MSVC only supports Thumb-2 targets */
+#define MG_UECC_PLATFORM mg_uecc_arm_thumb2
+#elif defined(__thumb__)
+#define MG_UECC_PLATFORM mg_uecc_arm_thumb
+#elif defined(__arm__) || defined(_M_ARM)
+#define MG_UECC_PLATFORM mg_uecc_arm
+#elif defined(__aarch64__)
+#define MG_UECC_PLATFORM mg_uecc_arm64
+#elif defined(__i386__) || defined(_M_IX86) || defined(_X86_) || \
+    defined(__I86__)
+#define MG_UECC_PLATFORM mg_uecc_x86
+#elif defined(__amd64__) || defined(_M_X64)
+#define MG_UECC_PLATFORM mg_uecc_x86_64
+#else
+#define MG_UECC_PLATFORM mg_uecc_arch_other
+#endif
+#endif
+
+#ifndef MG_UECC_ARM_USE_UMAAL
+#if (MG_UECC_PLATFORM == mg_uecc_arm) && (__ARM_ARCH >= 6)
+#define MG_UECC_ARM_USE_UMAAL 1
+#elif (MG_UECC_PLATFORM == mg_uecc_arm_thumb2) && (__ARM_ARCH >= 6) && \
+    (!defined(__ARM_ARCH_7M__) || !__ARM_ARCH_7M__)
+#define MG_UECC_ARM_USE_UMAAL 1
+#else
+#define MG_UECC_ARM_USE_UMAAL 0
+#endif
+#endif
+
+#ifndef MG_UECC_WORD_SIZE
+#if MG_UECC_PLATFORM == mg_uecc_avr
+#define MG_UECC_WORD_SIZE 1
+#elif (MG_UECC_PLATFORM == mg_uecc_x86_64 || MG_UECC_PLATFORM == mg_uecc_arm64)
+#define MG_UECC_WORD_SIZE 8
+#else
+#define MG_UECC_WORD_SIZE 4
+#endif
+#endif
+
+#if (MG_UECC_WORD_SIZE != 1) && (MG_UECC_WORD_SIZE != 4) && \
+    (MG_UECC_WORD_SIZE != 8)
+#error "Unsupported value for MG_UECC_WORD_SIZE"
+#endif
+
+#if ((MG_UECC_PLATFORM == mg_uecc_avr) && (MG_UECC_WORD_SIZE != 1))
+#pragma message("MG_UECC_WORD_SIZE must be 1 for AVR")
+#undef MG_UECC_WORD_SIZE
+#define MG_UECC_WORD_SIZE 1
+#endif
+
+#if ((MG_UECC_PLATFORM == mg_uecc_arm ||         \
+      MG_UECC_PLATFORM == mg_uecc_arm_thumb ||   \
+      MG_UECC_PLATFORM == mg_uecc_arm_thumb2) && \
+     (MG_UECC_WORD_SIZE != 4))
+#pragma message("MG_UECC_WORD_SIZE must be 4 for ARM")
+#undef MG_UECC_WORD_SIZE
+#define MG_UECC_WORD_SIZE 4
+#endif
+
+typedef int8_t wordcount_t;
+typedef int16_t bitcount_t;
+typedef int8_t cmpresult_t;
+
+#if (MG_UECC_WORD_SIZE == 1)
+
+typedef uint8_t mg_uecc_word_t;
+typedef uint16_t mg_uecc_dword_t;
+
+#define HIGH_BIT_SET 0x80
+#define MG_UECC_WORD_BITS 8
+#define MG_UECC_WORD_BITS_SHIFT 3
+#define MG_UECC_WORD_BITS_MASK 0x07
+
+#elif (MG_UECC_WORD_SIZE == 4)
+
+typedef uint32_t mg_uecc_word_t;
+typedef uint64_t mg_uecc_dword_t;
+
+#define HIGH_BIT_SET 0x80000000
+#define MG_UECC_WORD_BITS 32
+#define MG_UECC_WORD_BITS_SHIFT 5
+#define MG_UECC_WORD_BITS_MASK 0x01F
+
+#elif (MG_UECC_WORD_SIZE == 8)
+
+typedef uint64_t mg_uecc_word_t;
+
+#define HIGH_BIT_SET 0x8000000000000000U
+#define MG_UECC_WORD_BITS 64
+#define MG_UECC_WORD_BITS_SHIFT 6
+#define MG_UECC_WORD_BITS_MASK 0x03F
+
+#endif /* MG_UECC_WORD_SIZE */
+
+#endif /* _UECC_TYPES_H_ */
+
+/* Copyright 2015, Kenneth MacKay. Licensed under the BSD 2-clause license. */
+
 #ifndef _UECC_VLI_H_
 #define _UECC_VLI_H_
 
@@ -1832,110 +1937,6 @@ int mg_uecc_generate_random_int(mg_uecc_word_t *random,
 
 #endif /* _UECC_VLI_H_ */
 
-/* Copyright 2015, Kenneth MacKay. Licensed under the BSD 2-clause license. */
-
-#ifndef _UECC_TYPES_H_
-#define _UECC_TYPES_H_
-
-#ifndef MG_UECC_PLATFORM
-#if defined(__AVR__) && __AVR__
-#define MG_UECC_PLATFORM mg_uecc_avr
-#elif defined(__thumb2__) || \
-    defined(_M_ARMT) /* I think MSVC only supports Thumb-2 targets */
-#define MG_UECC_PLATFORM mg_uecc_arm_thumb2
-#elif defined(__thumb__)
-#define MG_UECC_PLATFORM mg_uecc_arm_thumb
-#elif defined(__arm__) || defined(_M_ARM)
-#define MG_UECC_PLATFORM mg_uecc_arm
-#elif defined(__aarch64__)
-#define MG_UECC_PLATFORM mg_uecc_arm64
-#elif defined(__i386__) || defined(_M_IX86) || defined(_X86_) || \
-    defined(__I86__)
-#define MG_UECC_PLATFORM mg_uecc_x86
-#elif defined(__amd64__) || defined(_M_X64)
-#define MG_UECC_PLATFORM mg_uecc_x86_64
-#else
-#define MG_UECC_PLATFORM mg_uecc_arch_other
-#endif
-#endif
-
-#ifndef MG_UECC_ARM_USE_UMAAL
-#if (MG_UECC_PLATFORM == mg_uecc_arm) && (__ARM_ARCH >= 6)
-#define MG_UECC_ARM_USE_UMAAL 1
-#elif (MG_UECC_PLATFORM == mg_uecc_arm_thumb2) && (__ARM_ARCH >= 6) && \
-    (!defined(__ARM_ARCH_7M__) || !__ARM_ARCH_7M__)
-#define MG_UECC_ARM_USE_UMAAL 1
-#else
-#define MG_UECC_ARM_USE_UMAAL 0
-#endif
-#endif
-
-#ifndef MG_UECC_WORD_SIZE
-#if MG_UECC_PLATFORM == mg_uecc_avr
-#define MG_UECC_WORD_SIZE 1
-#elif (MG_UECC_PLATFORM == mg_uecc_x86_64 || MG_UECC_PLATFORM == mg_uecc_arm64)
-#define MG_UECC_WORD_SIZE 8
-#else
-#define MG_UECC_WORD_SIZE 4
-#endif
-#endif
-
-#if (MG_UECC_WORD_SIZE != 1) && (MG_UECC_WORD_SIZE != 4) && \
-    (MG_UECC_WORD_SIZE != 8)
-#error "Unsupported value for MG_UECC_WORD_SIZE"
-#endif
-
-#if ((MG_UECC_PLATFORM == mg_uecc_avr) && (MG_UECC_WORD_SIZE != 1))
-#pragma message("MG_UECC_WORD_SIZE must be 1 for AVR")
-#undef MG_UECC_WORD_SIZE
-#define MG_UECC_WORD_SIZE 1
-#endif
-
-#if ((MG_UECC_PLATFORM == mg_uecc_arm ||         \
-      MG_UECC_PLATFORM == mg_uecc_arm_thumb ||   \
-      MG_UECC_PLATFORM == mg_uecc_arm_thumb2) && \
-     (MG_UECC_WORD_SIZE != 4))
-#pragma message("MG_UECC_WORD_SIZE must be 4 for ARM")
-#undef MG_UECC_WORD_SIZE
-#define MG_UECC_WORD_SIZE 4
-#endif
-
-typedef int8_t wordcount_t;
-typedef int16_t bitcount_t;
-typedef int8_t cmpresult_t;
-
-#if (MG_UECC_WORD_SIZE == 1)
-
-typedef uint8_t mg_uecc_word_t;
-typedef uint16_t mg_uecc_dword_t;
-
-#define HIGH_BIT_SET 0x80
-#define MG_UECC_WORD_BITS 8
-#define MG_UECC_WORD_BITS_SHIFT 3
-#define MG_UECC_WORD_BITS_MASK 0x07
-
-#elif (MG_UECC_WORD_SIZE == 4)
-
-typedef uint32_t mg_uecc_word_t;
-typedef uint64_t mg_uecc_dword_t;
-
-#define HIGH_BIT_SET 0x80000000
-#define MG_UECC_WORD_BITS 32
-#define MG_UECC_WORD_BITS_SHIFT 5
-#define MG_UECC_WORD_BITS_MASK 0x01F
-
-#elif (MG_UECC_WORD_SIZE == 8)
-
-typedef uint64_t mg_uecc_word_t;
-
-#define HIGH_BIT_SET 0x8000000000000000U
-#define MG_UECC_WORD_BITS 64
-#define MG_UECC_WORD_BITS_SHIFT 6
-#define MG_UECC_WORD_BITS_MASK 0x03F
-
-#endif /* MG_UECC_WORD_SIZE */
-
-#endif /* _UECC_TYPES_H_ */
 // End of uecc BSD-2
 // portable8439 v1.0.1
 // Source: https://github.com/DavyLandman/portable8439
