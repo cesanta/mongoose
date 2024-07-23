@@ -84,12 +84,15 @@ static void eh1(struct mg_connection *c, int ev, void *ev_data) {
 }
 struct fetch_data {
   char *buf;
-  int code, closed;
+  int code, connected, closed;
 };
 
 static void fcb(struct mg_connection *c, int ev, void *ev_data) {
   struct fetch_data *fd = (struct fetch_data *) c->fn_data;
-  if (ev == MG_EV_HTTP_MSG) {
+  if (ev == MG_EV_CONNECT) {
+    MG_DEBUG(("CONNECT"));
+    fd->connected = 1;
+  } else if (ev == MG_EV_HTTP_MSG) {
     struct mg_http_message *hm = (struct mg_http_message *) ev_data;
     snprintf(fd->buf, FETCH_BUF_SIZE, "%.*s", (int) hm->message.len, hm->message.buf);
     fd->code = atoi(hm->uri.buf);
@@ -105,12 +108,17 @@ static void fcb(struct mg_connection *c, int ev, void *ev_data) {
 
 static int fetch(struct mg_mgr *mgr, char *buf, const char *url,
                  const char *fmt, ...) {
-  struct fetch_data fd = {buf, 0, 0};
+  struct fetch_data fd = {buf, 0, 0, 0};
   int i;
   struct mg_connection *c = NULL;
   va_list ap;
   c = mg_http_connect(mgr, url, fcb, &fd);
   ASSERT(c != NULL);
+  for (i = 0; i < 500 && !fd.connected && !fd.closed; i++) {
+    mg_mgr_poll(mgr, 0);
+    usleep(10000);  // 10 ms. Slow down poll loop to ensure packet transit
+  }
+  if (fd.closed) return 0;
   if (c != NULL && mg_url_is_ssl(url)) {
     struct mg_tls_opts opts;
     memset(&opts, 0, sizeof(opts));  // read CA from packed_fs
@@ -209,7 +217,7 @@ static void test_mqtt_connsubpub(struct mg_mgr *mgr) {
 static void *poll_thread(void *p) {
   struct mg_mgr *mgr = (struct mg_mgr *) p;
   int i;
-  for (i = 0; i < 500; i++) {
+  for (i = 0; i < 300; i++) {
     mg_mgr_poll(mgr, 0);
     usleep(10000);  // 10 ms. Slow down poll loop to ensure packet transit
   }
