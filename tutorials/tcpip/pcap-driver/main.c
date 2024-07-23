@@ -142,6 +142,13 @@ static void http_ev_handler(struct mg_connection *c, int ev, void *ev_data) {
       int level = mg_json_get_long(hm->body, "$.level", MG_LL_DEBUG);
       mg_log_set(level);
       mg_http_reply(c, 200, "", "Debug level set to %d\n", level);
+    } else if (mg_match(hm->uri, mg_str("/api/md5"), NULL)) {
+      uint8_t buf[16];
+      mg_md5_ctx ctx;
+      mg_md5_init(&ctx);
+      mg_md5_update(&ctx, (uint8_t *) hm->body.buf, hm->body.len);
+      mg_md5_final(&ctx, buf);
+      mg_http_reply(c, 200, NULL, "%M\r\n", mg_print_hex, sizeof(buf), buf);
     } else if (mg_match(hm->uri, mg_str("/api/url"), NULL)) {
       char *url = mg_json_get_str(hm->body, "$.url");
       if (url == NULL) {
