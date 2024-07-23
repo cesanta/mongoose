@@ -6,8 +6,84 @@
 #include <pcap.h>
 #include "mongoose.h"
 
-#define MQTT_URL "mqtt://broker.hivemq.com:1883"  // MQTT broker to connect to
-#define MQTT_TOPIC "t/123"                        // Topic to subscribe to
+#define MQTT_URL "mqtt://broker.emqx.io:1883"    // MQTT broker URL
+#define MQTTS_URL "mqtts://mongoose.ws:8883"  // HiveMQ does not TLS1.3
+#define MQTT_TOPIC "mg/rx"                       // Topic to subscribe to
+
+// // Taken from broker.emqx.io
+static const char *s_ca_cert =
+    "-----BEGIN CERTIFICATE-----\n"
+    "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\n"
+    "-----END CERTIFICATE-----\n";
+
+//     "-----BEGIN CERTIFICATE-----\n"
+//     "MIIDjjCCAnagAwIBAgIQAzrx5qcRqaC7KGSxHQn65TANBgkqhkiG9w0BAQsFADBh"
+//     "MQswCQYDVQQGEwJVUzEVMBMGA1UEChMMRGlnaUNlcnQgSW5jMRkwFwYDVQQLExB3\n"
+//     "d3cuZGlnaWNlcnQuY29tMSAwHgYDVQQDExdEaWdpQ2VydCBHbG9iYWwgUm9vdCBH\n"
+//     "MjAeFw0xMzA4MDExMjAwMDBaFw0zODAxMTUxMjAwMDBaMGExCzAJBgNVBAYTAlVT\n"
+//     "MRUwEwYDVQQKEwxEaWdpQ2VydCBJbmMxGTAXBgNVBAsTEHd3dy5kaWdpY2VydC5j\n"
+//     "b20xIDAeBgNVBAMTF0RpZ2lDZXJ0IEdsb2JhbCBSb290IEcyMIIBIjANBgkqhkiG\n"
+//     "9w0BAQEFAAOCAQ8AMIIBCgKCAQEAuzfNNNx7a8myaJCtSnX/RrohCgiN9RlUyfuI\n"
+//     "2/Ou8jqJkTx65qsGGmvPrC3oXgkkRLpimn7Wo6h+4FR1IAWsULecYxpsMNzaHxmx\n"
+//     "1x7e/dfgy5SDN67sH0NO3Xss0r0upS/kqbitOtSZpLYl6ZtrAGCSYP9PIUkY92eQ\n"
+//     "q2EGnI/yuum06ZIya7XzV+hdG82MHauVBJVJ8zUtluNJbd134/tJS7SsVQepj5Wz\n"
+//     "tCO7TG1F8PapspUwtP1MVYwnSlcUfIKdzXOS0xZKBgyMUNGPHgm+F6HmIcr9g+UQ\n"
+//     "vIOlCsRnKPZzFBQ9RnbDhxSJITRNrw9FDKZJobq7nMWxM4MphQIDAQABo0IwQDAP\n"
+//     "BgNVHRMBAf8EBTADAQH/MA4GA1UdDwEB/wQEAwIBhjAdBgNVHQ4EFgQUTiJUIBiV\n"
+//     "5uNu5g/6+rkS7QYXjzkwDQYJKoZIhvcNAQELBQADggEBAGBnKJRvDkhj6zHd6mcY\n"
+//     "1Yl9PMWLSn/pvtsrF9+wX3N3KjITOYFnQoQj8kVnNeyIv/iPsGEMNKSuIEyExtv4\n"
+//     "NeF22d+mQrvHRAiGfzZ0JFrabA0UWTW98kndth/Jsw1HKj2ZL7tcu7XUIOGZX1NG\n"
+//     "Fdtom/DzMNU+MeKNhJ7jitralj41E6Vf8PlwUHBHQRFXGU7Aj64GxJUTFy8bJZ91\n"
+//     "8rGOmaFvE7FBcf6IKshPECBV1/MUReXgRPTqh5Uykw7+U0b6LJ3/iyK5S9kJRaTe\n"
+//     "pLiaWN0bfVKfjllDiIGknibVb63dDcY3fe0Dkhvld1927jyNxF1WW6LZZm6zNTfl\n"
+//     "MrY=\n"
+//     "-----END CERTIFICATE-----\n";
+
+static const char *s_tls_cert =
+    "-----BEGIN CERTIFICATE-----\n"
+    "MIIBMTCB2aADAgECAgkAluqkgeuV/zUwCgYIKoZIzj0EAwIwEzERMA8GA1UEAwwI\n"
+    "TW9uZ29vc2UwHhcNMjQwNTA3MTQzNzM2WhcNMzQwNTA1MTQzNzM2WjARMQ8wDQYD\n"
+    "VQQDDAZzZXJ2ZXIwWTATBgcqhkjOPQIBBggqhkjOPQMBBwNCAASo3oEiG+BuTt5y\n"
+    "ZRyfwNr0C+SP+4M0RG2pYkb2v+ivbpfi72NHkmXiF/kbHXtgmSrn/PeTqiA8M+mg\n"
+    "BhYjDX+zoxgwFjAUBgNVHREEDTALgglsb2NhbGhvc3QwCgYIKoZIzj0EAwIDRwAw\n"
+    "RAIgTXW9MITQSwzqbNTxUUdt9DcB+8pPUTbWZpiXcA26GMYCIBiYw+DSFMLHmkHF\n"
+    "+5U3NXW3gVCLN9ntD5DAx8LTG8sB\n"
+    "-----END CERTIFICATE-----\n";
+
+static const char *s_tls_key =
+    "-----BEGIN EC PRIVATE KEY-----\n"
+    "MHcCAQEEIAVdo8UAScxG7jiuNY2UZESNX/KPH8qJ0u0gOMMsAzYWoAoGCCqGSM49\n"
+    "AwEHoUQDQgAEqN6BIhvgbk7ecmUcn8Da9Avkj/uDNERtqWJG9r/or26X4u9jR5Jl\n"
+    "4hf5Gx17YJkq5/z3k6ogPDPpoAYWIw1/sw==\n"
+    "-----END EC PRIVATE KEY-----\n";
 
 #if MG_ARCH == MG_ARCH_WIN32
 #define usleep(x) Sleep((x) / 1000)
@@ -55,8 +131,12 @@ static void fn2(struct mg_connection *c, int ev, void *ev_data) {
   }
 }
 
-static void fn(struct mg_connection *c, int ev, void *ev_data) {
-  if (ev == MG_EV_HTTP_MSG) {
+static void http_ev_handler(struct mg_connection *c, int ev, void *ev_data) {
+  if (ev == MG_EV_ACCEPT && c->fn_data != NULL) {
+    struct mg_tls_opts opts = {.cert = mg_str(s_tls_cert),
+                               .key = mg_str(s_tls_key)};
+    mg_tls_init(c, &opts);
+  } else if (ev == MG_EV_HTTP_MSG) {
     struct mg_http_message *hm = (struct mg_http_message *) ev_data;
     if (mg_match(hm->uri, mg_str("/api/debug"), NULL)) {
       int level = mg_json_get_long(hm->body, "$.level", MG_LL_DEBUG);
@@ -76,6 +156,33 @@ static void fn(struct mg_connection *c, int ev, void *ev_data) {
     }
   }
   (void) ev_data;
+}
+
+static void mqtt_ev_handler(struct mg_connection *c, int ev, void *ev_data) {
+  if (ev == MG_EV_OPEN) {
+    MG_INFO(("%lu CREATED", c->id));
+    // c->is_hexdumping = 1;
+  } else if (ev == MG_EV_CONNECT && c->fn_data != NULL) {
+    struct mg_tls_opts opts = {.ca = mg_str(s_ca_cert),
+                               .name = mg_url_host(MQTTS_URL)};
+    mg_tls_init(c, &opts);
+  } else if (ev == MG_EV_ERROR) {
+    // On error, log error message
+    MG_ERROR(("%lu ERROR %s", c->id, (char *) ev_data));
+  } else if (ev == MG_EV_MQTT_OPEN) {
+    // MQTT connect is successful
+    MG_INFO(("%lu CONNECTED", c->id));
+    struct mg_mqtt_opts opts = {.qos = 1, .topic = mg_str(MQTT_TOPIC)};
+    mg_mqtt_sub(c, &opts);
+    MG_INFO(("%lu SUBSCRIBED to %.*s", c->id, opts.topic.len, opts.topic.buf));
+  } else if (ev == MG_EV_MQTT_MSG) {
+    // When we get echo response, print it
+    struct mg_mqtt_message *mm = (struct mg_mqtt_message *) ev_data;
+    MG_INFO(("%lu RECEIVED %.*s <- %.*s", c->id, (int) mm->data.len,
+             mm->data.buf, (int) mm->topic.len, mm->topic.buf));
+  } else if (ev == MG_EV_CLOSE) {
+    MG_INFO(("%lu CLOSED", c->id));
+  }
 }
 
 int main(int argc, char *argv[]) {
@@ -137,10 +244,24 @@ int main(int argc, char *argv[]) {
   sscanf(mac, "%hhx:%hhx:%hhx:%hhx:%hhx:%hhx", &mif.mac[0], &mif.mac[1],
          &mif.mac[2], &mif.mac[3], &mif.mac[4], &mif.mac[5]);
   mg_tcpip_init(&mgr, &mif);
-  MG_INFO(("Init done, starting main loop"));
-  mg_http_listen(&mgr, "http://0.0.0.0:8000", fn, &mgr);
 
-  while (s_signo == 0) mg_mgr_poll(&mgr, 100);  // Infinite event loop
+  MG_INFO(("Init done, starting main loop"));
+  mg_http_listen(&mgr, "http://0.0.0.0:8000", http_ev_handler, NULL);
+  mg_http_listen(&mgr, "https://0.0.0.0:8443", http_ev_handler, "tls enabled");
+
+  bool got_ip = false;
+
+  while (s_signo == 0) {
+    mg_mgr_poll(&mgr, 100);
+
+    // Trigger MQTT connection when we receive IP address
+    if (mif.state == MG_TCPIP_STATE_READY && got_ip == false) {
+      struct mg_mqtt_opts opts = {.clean = true};
+      // mg_mqtt_connect(&mgr, MQTT_URL, &opts, mqtt_ev_handler, NULL);
+      mg_mqtt_connect(&mgr, MQTTS_URL, &opts, mqtt_ev_handler, "tls enabled");
+      got_ip = true;
+    }
+  }
 
   mg_mgr_free(&mgr);
   pcap_close(ph);

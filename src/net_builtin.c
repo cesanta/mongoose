@@ -744,6 +744,7 @@ static void rx_tcp(struct mg_tcpip_if *ifp, struct pkt *pkt) {
     c->is_connecting = 0;  // Client connected
     settmout(c, MIP_TTYPE_KEEPALIVE);
     mg_call(c, MG_EV_CONNECT, NULL);  // Let user know
+    if (c->is_tls_hs) mg_tls_handshake(c);
   } else if (c != NULL && c->is_connecting && pkt->tcp->flags != TH_ACK) {
     // mg_hexdump(pkt->raw.buf, pkt->raw.len);
     tx_tcp_pkt(ifp, pkt, TH_RST | TH_ACK, pkt->tcp->ack, NULL, 0);

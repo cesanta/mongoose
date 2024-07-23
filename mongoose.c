@@ -5657,6 +5657,7 @@ static void rx_tcp(struct mg_tcpip_if *ifp, struct pkt *pkt) {
     c->is_connecting = 0;  // Client connected
     settmout(c, MIP_TTYPE_KEEPALIVE);
     mg_call(c, MG_EV_CONNECT, NULL);  // Let user know
+    if (c->is_tls_hs) mg_tls_handshake(c);
   } else if (c != NULL && c->is_connecting && pkt->tcp->flags != TH_ACK) {
     // mg_hexdump(pkt->raw.buf, pkt->raw.len);
     tx_tcp_pkt(ifp, pkt, TH_RST | TH_ACK, pkt->tcp->ack, NULL, 0);
@@ -9544,20 +9545,24 @@ static void mg_ssl_key_log(const char *label, uint8_t client_random[32],
                            uint8_t *secret, size_t secretsz) {
   char *keylogfile = getenv("SSLKEYLOGFILE");
   size_t i;
-  if (keylogfile == NULL) {
-    return;
+  if (keylogfile != NULL) {
+    MG_DEBUG(("Dumping key log into %s", keylogfile));
+    FILE *f = fopen(keylogfile, "a");
+    if (f != NULL) {
+      fprintf(f, "%s ", label);
+      for (i = 0; i < 32; i++) {
+        fprintf(f, "%02x", client_random[i]);
+      }
+      fprintf(f, " ");
+      for (i = 0; i < secretsz; i++) {
+        fprintf(f, "%02x", secret[i]);
+      }
+      fprintf(f, "\n");
+      fclose(f);
+    } else {
+      MG_ERROR(("Cannot open %s", keylogfile));
+    }
   }
-  FILE *f = fopen(keylogfile, "a");
-  fprintf(f, "%s ", label);
-  for (i = 0; i < 32; i++) {
-    fprintf(f, "%02x", client_random[i]);
-  }
-  fprintf(f, " ");
-  for (i = 0; i < secretsz; i++) {
-    fprintf(f, "%02x", secret[i]);
-  }
-  fprintf(f, "\n");
-  fclose(f);
 }
 #endif
 

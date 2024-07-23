@@ -108,20 +108,24 @@ static void mg_ssl_key_log(const char *label, uint8_t client_random[32],
                            uint8_t *secret, size_t secretsz) {
   char *keylogfile = getenv("SSLKEYLOGFILE");
   size_t i;
-  if (keylogfile == NULL) {
-    return;
+  if (keylogfile != NULL) {
+    MG_DEBUG(("Dumping key log into %s", keylogfile));
+    FILE *f = fopen(keylogfile, "a");
+    if (f != NULL) {
+      fprintf(f, "%s ", label);
+      for (i = 0; i < 32; i++) {
+        fprintf(f, "%02x", client_random[i]);
+      }
+      fprintf(f, " ");
+      for (i = 0; i < secretsz; i++) {
+        fprintf(f, "%02x", secret[i]);
+      }
+      fprintf(f, "\n");
+      fclose(f);
+    } else {
+      MG_ERROR(("Cannot open %s", keylogfile));
+    }
   }
-  FILE *f = fopen(keylogfile, "a");
-  fprintf(f, "%s ", label);
-  for (i = 0; i < 32; i++) {
-    fprintf(f, "%02x", client_random[i]);
-  }
-  fprintf(f, " ");
-  for (i = 0; i < secretsz; i++) {
-    fprintf(f, "%02x", secret[i]);
-  }
-  fprintf(f, "\n");
-  fclose(f);
 }
 #endif
 
