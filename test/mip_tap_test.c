@@ -1,9 +1,10 @@
 #define MG_ENABLE_TCPIP 1
 #define MG_ENABLE_TCPIP_DRIVER_INIT 0
-#define MG_ENABLE_SOCKET 0
-#define MG_USING_DHCP 1
-#define MG_ENABLE_PACKED_FS 0
-#define MG_ENABLE_LINES 1
+
+#define MIPTAPTEST_USING_DHCP 1
+
+#define FETCH_BUF_SIZE (8 * 1024)
+
 
 #include <sys/socket.h>
 #ifndef __OpenBSD__
@@ -52,107 +53,110 @@ static bool tap_up(struct mg_tcpip_if *ifp) {
   return ifp->driver_data ? true : false;
 }
 
-// HTTP fetches IOs
-struct Post_reply {
-  char *post;                            // HTTP POST data
-  void *http_response;                   // Server response(s)
-  unsigned int http_responses_received;  // Number responses received
+
+static void eh1(struct mg_connection *c, int ev, void *ev_data) {
+  struct mg_tls_opts *topts = (struct mg_tls_opts *) c->fn_data;
+  if (ev == MG_EV_ACCEPT && topts != NULL) mg_tls_init(c, topts);
+  if (ev == MG_EV_HTTP_MSG) {
+    struct mg_http_message *hm = (struct mg_http_message *) ev_data;
+    MG_DEBUG(("[%.*s %.*s] message len %d", (int) hm->method.len, hm->method.buf,
+             (int) hm->uri.len, hm->uri.buf, (int) hm->message.len));
+    if (mg_match(hm->uri, mg_str("/foo/*"), NULL)) {
+      mg_http_reply(c, 200, "", "uri: %.*s", hm->uri.len - 5, hm->uri.buf + 5);
+    } else if (mg_match(hm->uri, mg_str("/ws"), NULL)) {
+      mg_ws_upgrade(c, hm, NULL);
+    } else if (mg_match(hm->uri, mg_str("/body"), NULL)) {
+      mg_http_reply(c, 200, "", "%.*s", (int) hm->body.len, hm->body.buf);
+    } else {
+      struct mg_http_serve_opts sopts;
+      memset(&sopts, 0, sizeof(sopts));
+      sopts.root_dir = "./data";
+      mg_http_serve_dir(c, hm, &sopts);
+    }
+  } else if (ev == MG_EV_WS_OPEN) {
+    struct mg_http_message *hm = (struct mg_http_message *) ev_data;
+    ASSERT(mg_strcmp(hm->uri, mg_str("/ws")) == 0);
+    mg_ws_send(c, "opened", 6, WEBSOCKET_OP_BINARY);
+  } else if (ev == MG_EV_WS_MSG) {
+    struct mg_ws_message *wm = (struct mg_ws_message *) ev_data;
+    mg_ws_send(c, wm->data.buf, wm->data.len, WEBSOCKET_OP_BINARY);
+  }
+}
+struct fetch_data {
+  char *buf;
+  int code, closed;
 };
 
-char *fetch(struct mg_mgr *mgr, const char *url, const char *post_data);
-static void f_http_fetch_query(struct mg_connection *c, int ev, void *ev_data);
-int get_response_code(char *);  // Returns HTTP status code from full char* msg
-
-static void f_http_fetch_query(struct mg_connection *c, int ev, void *ev_data) {
-  static char *http_response = 0;
-  static bool http_response_allocated =
-      0;  // So that we will update out parameter
-  unsigned int http_responses_received = 0;
-  struct Post_reply *post_reply_l;
-  post_reply_l = (struct Post_reply *) c->fn_data;
-
-  if (ev == MG_EV_CONNECT) {
-    mg_printf(c, post_reply_l->post);
-  } else if (ev == MG_EV_HTTP_MSG) {
+static void fcb(struct mg_connection *c, int ev, void *ev_data) {
+  struct fetch_data *fd = (struct fetch_data *) c->fn_data;
+  if (ev == MG_EV_HTTP_MSG) {
     struct mg_http_message *hm = (struct mg_http_message *) ev_data;
-    http_responses_received++;
-    if (!http_response_allocated) {
-      http_response = mg_mprintf("%.*s", hm->message.len, hm->message.buf);
-      http_response_allocated = 1;
-    }
-    if (http_responses_received > 0) {
-      post_reply_l->http_response = http_response;
-      post_reply_l->http_responses_received = http_responses_received;
-    }
+    snprintf(fd->buf, FETCH_BUF_SIZE, "%.*s", (int) hm->message.len, hm->message.buf);
+    fd->code = atoi(hm->uri.buf);
+    fd->closed = 1;
+    c->is_closing = 1;
+    MG_DEBUG(("CODE: %d, MSG: %.*s", fd->code, (int) hm->message.len, hm->message.buf));
+    (void) c;
+  } else if (ev == MG_EV_CLOSE) {
+    MG_DEBUG(("CLOSE"));
+    fd->closed = 1;
   }
 }
 
-// Fetch utility returns message from fetch(..., URL, POST)
-char *fetch(struct mg_mgr *mgr, const char *url, const char *fn_data) {
-  struct Post_reply post_reply;
-  {
-    post_reply.post = (char *) fn_data;
-    post_reply.http_response = 0;
-    post_reply.http_responses_received = 0;
+static int fetch(struct mg_mgr *mgr, char *buf, const char *url,
+                 const char *fmt, ...) {
+  struct fetch_data fd = {buf, 0, 0};
+  int i;
+  struct mg_connection *c = NULL;
+  va_list ap;
+  c = mg_http_connect(mgr, url, fcb, &fd);
+  ASSERT(c != NULL);
+  if (c != NULL && mg_url_is_ssl(url)) {
+    struct mg_tls_opts opts;
+    memset(&opts, 0, sizeof(opts));  // read CA from packed_fs
+    opts.name = mg_url_host(url);
+    opts.ca = mg_unpacked("/data/ca.pem");
+    if (strstr(url, "localhost") != NULL) {
+      // Local connection, use self-signed certificates
+      opts.ca = mg_unpacked("/certs/ca.crt");
+      // opts.cert = mg_str(s_tls_cert);
+      // opts.key = mg_str(s_tls_key);
+    }
+    mg_tls_init(c, &opts);
   }
-  struct mg_connection *conn;
-  conn = mg_http_connect(mgr, url, f_http_fetch_query, &post_reply);
-  ASSERT(conn != NULL);  // Assertion on initialisation
-  for (int i = 0; i < 500 && !post_reply.http_responses_received; i++) {
-    mg_mgr_poll(mgr, 100);
-    usleep(10000);  // 10 ms. Slow down poll loop to ensure packets transit
-  }
-
-  if (mgr->conns != 0) {
-    conn->is_closing = 1;
+  va_start(ap, fmt);
+  mg_vprintf(c, fmt, &ap);
+  va_end(ap);
+  buf[0] = '\0';
+  for (i = 0; i < 500 && buf[0] == '\0' && !fd.closed; i++) {
     mg_mgr_poll(mgr, 0);
+    usleep(10000);  // 10 ms. Slow down poll loop to ensure packet transit
   }
-
+  if (!fd.closed) c->is_closing = 1;
   mg_mgr_poll(mgr, 0);
-  if (!post_reply.http_responses_received) {
-    return 0;
-  } else {
-    return (char *) post_reply.http_response;
-  }
+  return fd.code;
 }
 
-// Returns server's HTTP response code
-int get_response_code(char *http_msg_raw) {
-  int http_status = 0;
-  struct mg_http_message http_msg_parsed;
-  if (mg_http_parse(http_msg_raw, strlen(http_msg_raw), &http_msg_parsed)) {
-    http_status = mg_http_status(&http_msg_parsed);
-  } else {
-    printf("Error: mg_http_parse()\n");
-    ASSERT(http_status != 0);  // Couldn't parse.
-  }
-  return http_status;
-}
-
-static void test_http_fetch(struct mg_mgr *mgr) {
-  char *http_feedback = (char *) "";
+static void test_http_client(struct mg_mgr *mgr) {
+  char buf[FETCH_BUF_SIZE];
+  int rc = 0;
   const bool ipv6 = 0;
+#if MG_TLS
   if (ipv6) {
-    http_feedback = fetch(mgr, "ipv6.google.com",
-                          "GET/ HTTP/1.0\r\nHost: ipv6.google.com\r\n\r\n");
+    rc = fetch(mgr, buf, "https://ipv6.google.com", "GET / HTTP/1.0\r\nHost: ipv6.google.com\r\n\r\n");
   } else {
-    http_feedback =
-        fetch(mgr, "http://cesanta.com",
-              "GET //robots.txt HTTP/1.0\r\nHost: cesanta.com\r\n\r\n");
+    rc = fetch(mgr, buf, "https://cesanta.com", "GET /robots.txt HTTP/1.0\r\nHost: cesanta.com\r\n\r\n");
   }
-
-  ASSERT(http_feedback != NULL &&
-         *http_feedback != '\0');  // HTTP response received ?
-
-  int http_status = get_response_code(http_feedback);
-  // printf("Server response HTTP status code: %d\n",http_status);
-  ASSERT(http_status != 0);
-  ASSERT(http_status == 301);  // OK: Permanently moved (HTTP->HTTPS redirect)
-
-  if (http_feedback) {
-    free(http_feedback);
-    http_feedback = 0;
+  ASSERT(rc == 200);  // OK
+#else
+  if (ipv6) {
+    rc = fetch(mgr, buf, "http://ipv6.google.com", "GET / HTTP/1.0\r\nHost: ipv6.google.com\r\n\r\n");
+  } else {
+    rc = fetch(mgr, buf, "http://cesanta.com", "GET /robots.txt HTTP/1.0\r\nHost: cesanta.com\r\n\r\n");
   }
+  ASSERT(rc == 301);  // OK: Permanently moved (HTTP->HTTPS redirect)
+
+#endif
 }
 
 static struct mg_connection *s_conn;
@@ -174,12 +178,13 @@ static void mqtt_fn(struct mg_connection *c, int ev, void *ev_data) {
     mg_mqtt_pub(c, &pub_opts);
   } else if (ev == MG_EV_MQTT_MSG) {
     struct mg_mqtt_message *mm = (struct mg_mqtt_message *) ev_data;
-    if (mm->topic.len != strlen(s_topic) || strcmp(mm->topic.buf, s_topic))
-      ASSERT(0);
-    if (mm->data.len != 2 || strcmp(mm->data.buf, "hi")) ASSERT(0);
+    MG_DEBUG(("TOPIC: %.*s, MSG: %.*s", (int) mm->topic.len, mm->topic.buf, (int) mm->data.len, mm->data.buf));
+    ASSERT(mm->topic.len == strlen(s_topic) && strcmp(mm->topic.buf, s_topic) == 0);
+    ASSERT(mm->data.len == 2 && strcmp(mm->data.buf, "hi") == 0);
     mg_mqtt_disconnect(c, NULL);
     *(bool *) c->fn_data = true;
   } else if (ev == MG_EV_CLOSE) {
+    MG_DEBUG(("CLOSE"));
     s_conn = NULL;
   }
 }
@@ -198,6 +203,43 @@ static void test_mqtt_connsubpub(struct mg_mgr *mgr) {
   }
   ASSERT(passed);
   mg_mgr_poll(mgr, 0);
+}
+
+#include <pthread.h>
+static void *poll_thread(void *p) {
+  struct mg_mgr *mgr = (struct mg_mgr *) p;
+  int i;
+  for (i = 0; i < 500; i++) {
+    mg_mgr_poll(mgr, 0);
+    usleep(10000);  // 10 ms. Slow down poll loop to ensure packet transit
+  }
+  return NULL;
+}
+
+static void test_http_server(struct mg_mgr *mgr, uint32_t ip) {
+  struct mg_connection *c;
+  char *cmd;
+  pthread_t thread_id = (pthread_t) 0;
+#if MG_TLS
+  struct mg_tls_opts opts;
+  memset(&opts, 0, sizeof(opts));
+  // opts.ca = mg_str(s_tls_ca);
+  opts.cert = mg_unpacked("/certs/server.crt");
+  opts.key = mg_unpacked("/certs/server.key");
+  c = mg_http_listen(mgr, "https://0.0.0.0:12347", eh1, &opts);
+  cmd = mg_mprintf("./mip_curl.sh --insecure https://%M:12347", mg_print_ip4, &ip);
+#else
+  c = mg_http_listen(mgr, "http://0.0.0.0:12347", eh1, NULL);
+  cmd = mg_mprintf("./mip_curl.sh http://%M:12347", mg_print_ip4, &ip);
+#endif
+  ASSERT(c != NULL);
+  pthread_create(&thread_id, NULL, poll_thread, mgr); // simpler this way, no concurrency anyway
+  MG_DEBUG(("CURL"));
+  ASSERT(system(cmd) == 0);       // wait for curl
+  MG_DEBUG(("MONGOOSE"));
+  pthread_join(thread_id, NULL);  // wait for Mongoose
+  MG_DEBUG(("DONE"));
+  free(cmd);
 }
 
 int main(void) {
@@ -232,6 +274,7 @@ int main(void) {
 
   // Events
   struct mg_mgr mgr;  // Event manager
+  mg_log_set(MG_LL_DEBUG);
   mg_mgr_init(&mgr);  // Initialise event manager
 
   // MIP driver
@@ -248,7 +291,7 @@ int main(void) {
   mif.driver = &driver;
   mif.driver_data = &fd;
 
-#if MG_USING_DHCP == 1
+#if MIPTAPTEST_USING_DHCP == 1
 #else
   mif.ip = mg_htonl(MG_U32(192, 168, 32, 2));  // Triggering a network failure
   mif.mask = mg_htonl(MG_U32(255, 255, 255, 0));
@@ -262,14 +305,14 @@ int main(void) {
   MG_INFO(("Init done, starting main loop"));
 
   // Stack initialization, Network configuration (DHCP lease, ...)
-#if MG_USING_DHCP == 0
+#if MIPTAPTEST_USING_DHCP == 0
   MG_INFO(("MIF configuration: Static IP"));
   ASSERT(mif.ip != 0);     // Check we have a satic IP assigned
   mg_mgr_poll(&mgr, 100);  // For initialisation
 #else
   MG_INFO(("MIF configuration: DHCP"));
   ASSERT(!mif.ip);  // Check we are set for DHCP
-  int pc = 500;     // Timout on DHCP lease 500 ~ approx 5s (typical delay <1s)
+  int pc = 500;     // Timeout on DHCP lease 500 ~ approx 5s (typical delay <1s)
   while (((pc--) > 0) && !mif.ip) {
     mg_mgr_poll(&mgr, 100);
     usleep(10000);  // 10 ms
@@ -279,8 +322,10 @@ int main(void) {
 #endif
 
   // RUN TESTS
-  test_http_fetch(&mgr);
+  test_http_server(&mgr, mif.ip);
+  test_http_client(&mgr);
   test_mqtt_connsubpub(&mgr);
+
   printf("SUCCESS. Total tests: %d\n", s_num_tests);
 
   // Clear

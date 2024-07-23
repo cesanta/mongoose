@@ -13,7 +13,7 @@ jobs:
       fail-fast: false
       matrix:
         cc: [gcc, clang, g++, clang++]
-        target: [test, mip_test]
+        target: [test]
         ssl: ["", BUILTIN, MBEDTLS, OPENSSL, WOLFSSL]
         select: ["-DMG_ENABLE_POLL=0 -DMG_ENABLE_EPOLL=0", "-DMG_ENABLE_POLL=1 -DMG_ENABLE_EPOLL=0", "-DMG_ENABLE_POLL=0 -DMG_ENABLE_EPOLL=1"]
         exclude:
@@ -37,7 +37,23 @@ jobs:
     steps:
     - uses: actions/checkout@v4
       with: { fetch-depth: 2 }
-    - run: ./test/setup_ga_network.sh && sudo apt -y update ; sudo apt -y install libmbedtls-dev libwolfssl-dev && make -C test ${{ matrix.target }}
+    - run: sudo apt -y update ; sudo apt -y install libmbedtls-dev libwolfssl-dev && make -C test ${{ matrix.target }}
+  mip:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        cc: [gcc, clang, g++, clang++]
+        target: [mip_test, mip_tap_test]
+        ssl: ["", BUILTIN, MBEDTLS, OPENSSL, WOLFSSL]
+    name: ${{ matrix.target }} CC=${{ matrix.cc }} SSL=${{ matrix.ssl }}
+    env:
+      CC: ${{ matrix.cc }}
+      SSL: ${{ matrix.ssl }}
+    steps:
+    - uses: actions/checkout@v4
+      with: { fetch-depth: 2 }
+    - run: if [ "${{ matrix.target }}" == "mip_tap_test" ]; then ./test/setup_ga_network.sh ; fi && sudo apt -y update ; sudo apt -y install libmbedtls-dev libwolfssl-dev && make -C test ${{ matrix.target }} IPV6=0
   s390:
     runs-on: ubuntu-latest
     strategy:

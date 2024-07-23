@@ -85,12 +85,12 @@ all:
 
 tall: mg_prefix unamalgamated test mip_test arm examples vc98 vc17 vc22 mingw mingw++ fuzz
 
-mip_test: mip_test.c mongoose.c mongoose.h Makefile mip_tap_test
-	$(CC) mip_test.c $(INCS) $(WARN) $(OPTS) $(C_WARN) $(ASAN) -o $@
+mip_test: mip_test.c mongoose.c mongoose.h packed_fs.c Makefile
+	$(CC) mip_test.c packed_fs.c $(CFLAGS) $(LDFLAGS) -o $@
 	ASAN_OPTIONS=$(ASAN_OPTIONS) $(RUN) ./$@
 
-mip_tap_test: mip_tap_test.c mongoose.c mongoose.h Makefile
-	$(CC) mip_tap_test.c $(INCS) $(WARN) $(OPTS) $(C_WARN) $(ASAN) -o $@
+mip_tap_test: mip_tap_test.c mongoose.c mongoose.h packed_fs.c Makefile
+	$(CC) mip_tap_test.c packed_fs.c $(CFLAGS) $(LDFLAGS) -o $@
 	ASAN_OPTIONS=$(ASAN_OPTIONS) $(RUN) ./$@
 
 packed_fs.c: Makefile data/ssi.h fuzz.c data/a.txt data/ca.pem certs/ca.crt certs/server.crt certs/server.key
