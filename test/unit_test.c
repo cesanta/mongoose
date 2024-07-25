@@ -95,6 +95,16 @@ static void test_match(void) {
     ASSERT(mg_strcmp(caps[0], mg_str("a")) == 0);
     ASSERT(mg_strcmp(caps[1], mg_str("bc")) == 0);
     ASSERT(mg_strcmp(caps[2], mg_str("")) == 0);
+
+    ASSERT(mg_match(mg_str("a#c"), mg_str("?#"), caps) == true);
+    ASSERT(mg_strcmp(caps[0], mg_str("a")) == 0);
+    ASSERT(mg_strcmp(caps[1], mg_str("#c")) == 0);
+    ASSERT(mg_strcmp(caps[2], mg_str("")) == 0);
+
+    ASSERT(mg_match(mg_str("a*c"), mg_str("?*"), caps) == true);
+    ASSERT(mg_strcmp(caps[0], mg_str("a")) == 0);
+    ASSERT(mg_strcmp(caps[1], mg_str("*c")) == 0);
+    ASSERT(mg_strcmp(caps[2], mg_str("")) == 0);
   }
 }
 

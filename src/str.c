@@ -69,7 +69,9 @@ bool mg_match(struct mg_str s, struct mg_str p, struct mg_str *caps) {
   size_t i = 0, j = 0, ni = 0, nj = 0;
   if (caps) caps->buf = NULL, caps->len = 0;
   while (i < p.len || j < s.len) {
-    if (i < p.len && j < s.len && (p.buf[i] == '?' || s.buf[j] == p.buf[i])) {
+    if (i < p.len && j < s.len &&
+        (p.buf[i] == '?' ||
+         (p.buf[i] != '*' && p.buf[i] != '#' && s.buf[j] == p.buf[i]))) {
       if (caps == NULL) {
       } else if (p.buf[i] == '?') {
         caps->buf = &s.buf[j], caps->len = 1;     // Finalize `?` cap
@@ -112,10 +114,10 @@ bool mg_span(struct mg_str s, struct mg_str *a, struct mg_str *b, char sep) {
 
 bool mg_str_to_num(struct mg_str str, int base, void *val, size_t val_len) {
   size_t i = 0, ndigits = 0;
-  uint64_t max = val_len == sizeof(uint8_t)   ? 0xFF
+  uint64_t max = val_len == sizeof(uint8_t)    ? 0xFF
                  : val_len == sizeof(uint16_t) ? 0xFFFF
                  : val_len == sizeof(uint32_t) ? 0xFFFFFFFF
-                                : (uint64_t) ~0;
+                                               : (uint64_t) ~0;
   uint64_t result = 0;
   if (max == (uint64_t) ~0 && val_len != sizeof(uint64_t)) return false;
   if (base == 0 && str.len >= 2) {
@@ -131,7 +133,7 @@ bool mg_str_to_num(struct mg_str str, int base, void *val, size_t val_len) {
     case 2:
       while (i < str.len && (str.buf[i] == '0' || str.buf[i] == '1')) {
         uint64_t digit = (uint64_t) (str.buf[i] - '0');
-        if (result > max/2) return false;  // Overflow
+        if (result > max / 2) return false;  // Overflow
         result *= 2;
         if (result > max - digit) return false;  // Overflow
         result += digit;
@@ -141,12 +143,12 @@ bool mg_str_to_num(struct mg_str str, int base, void *val, size_t val_len) {
     case 10:
       while (i < str.len && str.buf[i] >= '0' && str.buf[i] <= '9') {
         uint64_t digit = (uint64_t) (str.buf[i] - '0');
-        if (result > max/10) return false;  // Overflow
+        if (result > max / 10) return false;  // Overflow
         result *= 10;
         if (result > max - digit) return false;  // Overflow
         result += digit;
         i++, ndigits++;
-    }
+      }
       break;
     case 16:
       while (i < str.len) {
@@ -156,7 +158,7 @@ bool mg_str_to_num(struct mg_str str, int base, void *val, size_t val_len) {
                          : (c >= 'a' && c <= 'f') ? (uint64_t) (c - 'W')
                                                   : (uint64_t) ~0;
         if (digit == (uint64_t) ~0) break;
-        if (result > max/16) return false;  // Overflow
+        if (result > max / 16) return false;  // Overflow
         result *= 16;
         if (result > max - digit) return false;  // Overflow
         result += digit;
