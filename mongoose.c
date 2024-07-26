@@ -7529,7 +7529,7 @@ static void read_conn(struct mg_connection *c) {
         if (!ioalloc(c, &c->rtls)) return;
         n = recv_raw(c, (char *) &c->rtls.buf[c->rtls.len],
                      c->rtls.size - c->rtls.len);
-        if (n == MG_IO_ERR && c->rtls.len == 0) {
+        if (n == MG_IO_ERR && mg_tls_pending(c) == 0) {
           // Close only if we have fully drained both raw (rtls) and TLS buffers
           c->is_closing = 1;
         } else {
@@ -7760,15 +7760,15 @@ static void mg_iotest(struct mg_mgr *mgr, int ms) {
   n = 0;
   for (struct mg_connection *c = mgr->conns; c != NULL; c = c->next) {
     c->is_readable = c->is_writable = 0;
+    if (c->is_closing) ms = 1;
     if (skip_iotest(c)) {
       // Socket not valid, ignore
-    } else if (c->rtls.len > 0 || mg_tls_pending(c) > 0) {
-      ms = 1;  // Don't wait if TLS is ready
     } else {
+      // Don't wait if TLS is ready
+      if (c->rtls.len > 0 || mg_tls_pending(c) > 0) ms = 1;
       fds[n].fd = FD(c);
       if (can_read(c)) fds[n].events |= POLLIN;
       if (can_write(c)) fds[n].events |= POLLOUT;
-      if (c->is_closing) ms = 1;
       n++;
     }
   }
@@ -7784,8 +7784,6 @@ static void mg_iotest(struct mg_mgr *mgr, int ms) {
   for (struct mg_connection *c = mgr->conns; c != NULL; c = c->next) {
     if (skip_iotest(c)) {
       // Socket not valid, ignore
-    } else if (c->rtls.len > 0 || mg_tls_pending(c) > 0) {
-      c->is_readable = 1;
     } else {
       if (fds[n].revents & POLLERR) {
         mg_error(c, "socket error");
@@ -7817,7 +7815,7 @@ static void mg_iotest(struct mg_mgr *mgr, int ms) {
     if (can_write(c)) FD_SET(FD(c), &wset);
     if (c->rtls.len > 0 || mg_tls_pending(c) > 0) tvp = &tv_zero;
     if (FD(c) > maxfd) maxfd = FD(c);
-    if (c->is_closing) ms = 1;
+    if (c->is_closing) tvp = &tv_zero;
   }
 
   if ((rc = select((int) maxfd + 1, &rset, &wset, &eset, tvp)) < 0) {
