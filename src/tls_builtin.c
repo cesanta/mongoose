@@ -553,7 +553,7 @@ static int mg_tls_server_recv_hello(struct mg_connection *c) {
   if (cipher_suites_len > (rio->len - 46 - session_id_len)) goto fail;
   ext_len = MG_LOAD_BE16(rio->buf + 48 + session_id_len + cipher_suites_len);
   ext = rio->buf + 50 + session_id_len + cipher_suites_len;
-  if (ext_len > (rio->len - 52 - session_id_len - cipher_suites_len)) goto fail;
+  if (ext_len > (rio->len - 50 - session_id_len - cipher_suites_len)) goto fail;
   for (j = 0; j < ext_len;) {
     uint16_t k;
     uint16_t key_exchange_len;
