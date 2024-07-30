@@ -76,6 +76,7 @@ struct mg_connection {
   unsigned is_resp : 1;        // Response is still being generated
   unsigned is_readable : 1;    // Connection is ready to read
   unsigned is_writable : 1;    // Connection is ready to write
+  unsigned is_io_err : 1;      // Remember IO_ERR condition for later use
 };
 
 void mg_mgr_poll(struct mg_mgr *, int ms);

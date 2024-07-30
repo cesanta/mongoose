@@ -282,9 +282,13 @@ static void read_conn(struct mg_connection *c) {
         if (!ioalloc(c, &c->rtls)) return;
         n = recv_raw(c, (char *) &c->rtls.buf[c->rtls.len],
                      c->rtls.size - c->rtls.len);
-        if (n == MG_IO_ERR && mg_tls_pending(c) == 0) {
-          // Close only if we have fully drained both raw (rtls) and TLS buffers
-          c->is_closing = 1;
+        if (n == MG_IO_ERR) {
+          if (c->rtls.len == 0 || c->is_io_err) {
+            // Close only when we have fully drained both rtls and TLS buffers
+            c->is_closing = 1;  // or there's nothing we can do about it.
+          } else {  // TLS buffer is capped to max record size, mark and
+            c->is_io_err = 1;  // give TLS a chance to process that.
+          }
         } else {
           if (n > 0) c->rtls.len += (size_t) n;
           if (c->is_tls_hs) mg_tls_handshake(c);
