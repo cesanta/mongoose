@@ -17174,7 +17174,7 @@ void mg_phy_init(struct mg_phy *phy, uint8_t phy_addr, uint8_t config) {
   MG_INFO(("PHY ID: %#04x %#04x (%s)", id1, id2, mg_phy_id_to_str(id1, id2)));
 
   if (id1 == MG_PHY_DP83x && id2 == MG_PHY_DP83867) {
-    phy->write_reg(phy_addr, 0x0d, 0x1f);    // write 0x10d to IO_MUX_CFG (0x0170)
+    phy->write_reg(phy_addr, 0x0d, 0x1f);  // write 0x10d to IO_MUX_CFG (0x0170)
     phy->write_reg(phy_addr, 0x0e, 0x170);
     phy->write_reg(phy_addr, 0x0d, 0x401f);
     phy->write_reg(phy_addr, 0x0e, 0x10d);
@@ -17188,6 +17188,9 @@ void mg_phy_init(struct mg_phy *phy, uint8_t phy_addr, uint8_t config) {
     if (id1 == MG_PHY_DP83x && id2 != MG_PHY_DP83867) {
       phy->write_reg(phy_addr, MG_PHY_DP83x_REG_RCSR, MG_BIT(7) | MG_BIT(0));
     } else if (id1 == MG_PHY_KSZ8x) {
+      phy->write_reg(
+          phy_addr, MG_PHY_REG_BCR,  // Disable isolation (override hw)
+          phy->read_reg(phy_addr, MG_PHY_REG_BCR) & (uint16_t) ~MG_BIT(10));
       phy->write_reg(phy_addr, MG_PHY_KSZ8x_REG_PC2R,
                      MG_BIT(15) | MG_BIT(8) | MG_BIT(7));
     } else if (id1 == MG_PHY_LAN87x) {

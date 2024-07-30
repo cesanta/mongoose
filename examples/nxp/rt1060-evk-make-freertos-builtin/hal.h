@@ -285,7 +285,7 @@ static inline void ethernet_init(void) {
                   GPIO_SPEED_HIGH, GPIO_PULL_UP);
   gpio_mux_config(kIOMUXC_SW_MUX_CTL_PAD_GPIO_B1_11, 3);  // set for RXERR
   periph_mux_config(kIOMUXC_ENET_RXERR_SELECT_INPUT,
-                    1);  // drive peripheral from B0_12
+                    1);  // drive peripheral from B1_11
   gpio_pad_config(kIOMUXC_SW_PAD_CTL_PAD_GPIO_B1_11, GPIO_OTYPE_PUSH_PULL,
                   GPIO_SPEED_HIGH, GPIO_PULL_UP);
   gpio_mux_config(kIOMUXC_SW_MUX_CTL_PAD_GPIO_EMC_40, 4);  // set for MDC
