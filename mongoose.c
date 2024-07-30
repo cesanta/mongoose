@@ -7606,8 +7606,9 @@ static void setsockopts(struct mg_connection *c) {
 
 void mg_connect_resolved(struct mg_connection *c) {
   int type = c->is_udp ? SOCK_DGRAM : SOCK_STREAM;
+  int proto = type == SOCK_DGRAM ? IPPROTO_UDP : IPPROTO_TCP;
   int rc, af = c->rem.is_ip6 ? AF_INET6 : AF_INET;  // c->rem has resolved IP
-  c->fd = S2PTR(socket(af, type, 0));               // Create outbound socket
+  c->fd = S2PTR(socket(af, type, proto));           // Create outbound socket
   c->is_resolving = 0;                              // Clear resolving flag
   if (FD(c) == MG_INVALID_SOCKET) {
     mg_error(c, "socket(): %d", MG_SOCK_ERR(-1));
@@ -7851,8 +7852,8 @@ static bool mg_socketpair(MG_SOCKET_TYPE sp[2], union usa usa[2]) {
   *(uint32_t *) &usa->sin.sin_addr = mg_htonl(0x7f000001U);  // 127.0.0.1
   usa[1] = usa[0];
 
-  if ((sp[0] = socket(AF_INET, SOCK_DGRAM, 0)) != MG_INVALID_SOCKET &&
-      (sp[1] = socket(AF_INET, SOCK_DGRAM, 0)) != MG_INVALID_SOCKET &&
+  if ((sp[0] = socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP)) != MG_INVALID_SOCKET &&
+      (sp[1] = socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP)) != MG_INVALID_SOCKET &&
       bind(sp[0], &usa[0].sa, n) == 0 &&          //
       bind(sp[1], &usa[1].sa, n) == 0 &&          //
       getsockname(sp[0], &usa[0].sa, &n) == 0 &&  //
