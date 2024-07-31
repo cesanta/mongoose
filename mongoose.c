@@ -17192,10 +17192,11 @@ void mg_phy_init(struct mg_phy *phy, uint8_t phy_addr, uint8_t config) {
     if (id1 == MG_PHY_DP83x && id2 != MG_PHY_DP83867) {
       phy->write_reg(phy_addr, MG_PHY_DP83x_REG_RCSR, MG_BIT(7) | MG_BIT(0));
     } else if (id1 == MG_PHY_KSZ8x) {
-      phy->write_reg(
-          phy_addr, MG_PHY_REG_BCR,  // Disable isolation (override hw)
+      // Disable isolation (override hw, it doesn't make sense at this point)
+      phy->write_reg(  // #2848, some NXP boards set ISO, even though
+          phy_addr, MG_PHY_REG_BCR,  // docs say they don't
           phy->read_reg(phy_addr, MG_PHY_REG_BCR) & (uint16_t) ~MG_BIT(10));
-      phy->write_reg(phy_addr, MG_PHY_KSZ8x_REG_PC2R,
+      phy->write_reg(phy_addr, MG_PHY_KSZ8x_REG_PC2R,  // now do clock stuff
                      MG_BIT(15) | MG_BIT(8) | MG_BIT(7));
     } else if (id1 == MG_PHY_LAN87x) {
       // nothing to do
