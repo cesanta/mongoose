@@ -636,7 +636,7 @@ static void wufn(struct mg_connection *c, int ev, void *ev_data) {
     if (c->recv.len >= sizeof(*id)) {
       struct mg_connection *t;
       for (t = c->mgr->conns; t != NULL; t = t->next) {
-        if (t->id == *id) {
+        if (t->id == *id || 0 == *id) {
           struct mg_str data = mg_str_n((char *) c->recv.buf + sizeof(*id),
                                         c->recv.len - sizeof(*id));
           mg_call(t, MG_EV_WAKEUP, &data);
@@ -675,7 +675,7 @@ bool mg_wakeup_init(struct mg_mgr *mgr) {
 
 bool mg_wakeup(struct mg_mgr *mgr, unsigned long conn_id, const void *buf,
                size_t len) {
-  if (mgr->pipe != MG_INVALID_SOCKET && conn_id > 0) {
+  if (mgr->pipe != MG_INVALID_SOCKET) {
     char *extended_buf = (char *) alloca(len + sizeof(conn_id));
     memcpy(extended_buf, &conn_id, sizeof(conn_id));
     memcpy(extended_buf + sizeof(conn_id), buf, len);
