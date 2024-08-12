@@ -5117,7 +5117,7 @@ static void onstatechange(struct mg_tcpip_if *ifp) {
     MG_INFO(("READY, IP: %M", mg_print_ip4, &ifp->ip));
     MG_INFO(("       GW: %M", mg_print_ip4, &ifp->gw));
     MG_INFO(("      MAC: %M", mg_print_mac, &ifp->mac));
-    arp_ask(ifp, ifp->gw);
+    arp_ask(ifp, ifp->gw);  // unsolicited GW ARP request
   } else if (ifp->state == MG_TCPIP_STATE_UP) {
     MG_ERROR(("Link up"));
     srand((unsigned int) mg_millis());
@@ -5966,7 +5966,8 @@ void mg_connect_resolved(struct mg_connection *c) {
   if (c->is_udp && (rem_ip == 0xffffffff || rem_ip == (ifp->ip | ~ifp->mask))) {
     struct connstate *s = (struct connstate *) (c + 1);
     memset(s->mac, 0xFF, sizeof(s->mac));  // global or local broadcast
-  } else if (ifp->ip && ((rem_ip & ifp->mask) == (ifp->ip & ifp->mask))) {
+  } else if (ifp->ip && ((rem_ip & ifp->mask) == (ifp->ip & ifp->mask)) &&
+             rem_ip != ifp->gw) {  // skip if gw (onstatechange -> READY -> ARP)
     // If we're in the same LAN, fire an ARP lookup.
     MG_DEBUG(("%lu ARP lookup...", c->id));
     arp_ask(ifp, rem_ip);
