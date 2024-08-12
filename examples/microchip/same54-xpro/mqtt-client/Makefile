@@ -36,7 +36,7 @@ flash: firmware.bin
 cmsis_core:
 	git clone --depth 1 -b 5.9.0 https://github.com/ARM-software/CMSIS_5 $@
 cmsis_sam:
-	curl -sL https://packs.download.microchip.com/Microchip.SAME54_DFP.3.8.234.pack -o $@.zip
+	curl -sL https://packs.download.microchip.com/Microchip.SAME54_DFP.3.9.244.atpack -o $@.zip
 	mkdir $@ && cd $@ && unzip ../$@.zip
 
 # Automated test via https://vcon.io/automated-firmware-tests/. Set VCON_API_KEY and update DEVICE_URL
