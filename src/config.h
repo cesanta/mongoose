@@ -118,11 +118,7 @@
 #endif
 
 #ifndef MG_ENABLE_POSIX_FS
-#if defined(FOPEN_MAX)
-#define MG_ENABLE_POSIX_FS 1
-#else
 #define MG_ENABLE_POSIX_FS 0
-#endif
 #endif
 
 #ifndef MG_INVALID_SOCKET

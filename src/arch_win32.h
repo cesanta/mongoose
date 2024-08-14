@@ -110,4 +110,8 @@ typedef int socklen_t;
 #define SIGPIPE 0
 #endif
 
+#ifndef MG_ENABLE_POSIX_FS
+#define MG_ENABLE_POSIX_FS 1
+#endif
+
 #endif
