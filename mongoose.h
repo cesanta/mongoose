@@ -2739,6 +2739,8 @@ enum {
   MG_TCPIP_EV_ST_CHG,     // state change             uint8_t * (&ifp->state)
   MG_TCPIP_EV_DHCP_DNS,   // DHCP DNS assignment      uint32_t *ipaddr
   MG_TCPIP_EV_DHCP_SNTP,  // DHCP SNTP assignment     uint32_t *ipaddr
+  MG_TCPIP_EV_ARP,        // Got ARP packet           struct mg_str *
+  MG_TCPIP_EV_TIMER_1S,   // 1 second timer           NULL
   MG_TCPIP_EV_USER        // Starting ID for user events
 };
 
@@ -2782,6 +2784,7 @@ struct mg_tcpip_if {
 void mg_tcpip_init(struct mg_mgr *, struct mg_tcpip_if *);
 void mg_tcpip_free(struct mg_tcpip_if *);
 void mg_tcpip_qwrite(void *buf, size_t len, struct mg_tcpip_if *ifp);
+void mg_tcpip_arp_request(struct mg_tcpip_if *ifp, uint32_t ip, uint8_t *mac);
 
 extern struct mg_tcpip_driver mg_tcpip_driver_stm32f;
 extern struct mg_tcpip_driver mg_tcpip_driver_w5500;

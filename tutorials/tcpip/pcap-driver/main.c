@@ -6,9 +6,9 @@
 #include <pcap.h>
 #include "mongoose.h"
 
-#define MQTT_URL "mqtt://broker.emqx.io:1883"    // MQTT broker URL
-#define MQTTS_URL "mqtts://mongoose.ws:8883"  // HiveMQ does not TLS1.3
-#define MQTT_TOPIC "mg/rx"                       // Topic to subscribe to
+#define MQTT_URL "mqtt://broker.emqx.io:1883"  // MQTT broker URL
+#define MQTTS_URL "mqtts://mongoose.ws:8883"   // HiveMQ does not TLS1.3
+#define MQTT_TOPIC "mg/rx"                     // Topic to subscribe to
 
 // // Taken from broker.emqx.io
 static const char *s_ca_cert =
@@ -192,6 +192,35 @@ static void mqtt_ev_handler(struct mg_connection *c, int ev, void *ev_data) {
   }
 }
 
+static void if_ev_handler(struct mg_tcpip_if *ifp, int ev, void *ev_data) {
+  static uint32_t ip = 0;
+  static unsigned counter = 0;
+
+  // Set initial self-assigned IP
+  if (ip == 0) ip = MG_IPV4(169, 254, 2, 100);  
+
+  // Catch ARP packets. Parse them yourself, that's easy.
+  if (ev == MG_TCPIP_EV_ARP) {
+    struct mg_str *frame = ev_data;
+    MG_INFO(("Iface %p: Got ARP frame", ifp));
+    mg_hexdump(frame->buf, frame->len);
+    // TODO: check for conflict. On conflict, increment ip and reset counter
+  }
+
+  // Catch 1 second timer events
+  if (ev == MG_TCPIP_EV_TIMER_1S && ifp->ip == 0) {
+    MG_INFO(("Sending ARP probe"));
+    mg_tcpip_arp_request(ifp, ip, NULL);
+
+    // Seems to be no conflict. Assign us an IP
+    if (counter++ > 2) {
+      MG_INFO(("Assigning %M, sending ARP probe", mg_print_ip4, &ip));
+      ifp->ip = ip;
+      mg_tcpip_arp_request(ifp, ip, ifp->mac);
+    }
+  }
+}
+
 int main(int argc, char *argv[]) {
   const char *iface = "lo0";              // Network iface
   const char *mac = "02:00:01:02:03:77";  // MAC address
@@ -251,6 +280,10 @@ int main(int argc, char *argv[]) {
   sscanf(mac, "%hhx:%hhx:%hhx:%hhx:%hhx:%hhx", &mif.mac[0], &mif.mac[1],
          &mif.mac[2], &mif.mac[3], &mif.mac[4], &mif.mac[5]);
   mg_tcpip_init(&mgr, &mif);
+
+  // Call order is important: call after mg_tcpip_init()
+  mif.fn = if_ev_handler;
+  mif.enable_dhcp_client = false;
 
   MG_INFO(("Init done, starting main loop"));
   mg_http_listen(&mgr, "http://0.0.0.0:8000", http_ev_handler, NULL);

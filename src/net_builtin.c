@@ -185,7 +185,7 @@ static size_t ether_output(struct mg_tcpip_if *ifp, size_t len) {
   return n;
 }
 
-static void arp_ask(struct mg_tcpip_if *ifp, uint32_t ip) {
+void mg_tcpip_arp_request(struct mg_tcpip_if *ifp, uint32_t ip, uint8_t *mac) {
   struct eth *eth = (struct eth *) ifp->tx.buf;
   struct arp *arp = (struct arp *) (eth + 1);
   memset(eth->dst, 255, sizeof(eth->dst));
@@ -196,6 +196,7 @@ static void arp_ask(struct mg_tcpip_if *ifp, uint32_t ip) {
   arp->plen = 4;
   arp->op = mg_htons(1), arp->tpa = ip, arp->spa = ifp->ip;
   memcpy(arp->sha, ifp->mac, sizeof(arp->sha));
+  if (mac != NULL) memcpy(arp->tha, mac, sizeof(arp->tha));
   ether_output(ifp, PDIFF(eth, arp + 1));
 }
 
@@ -204,7 +205,7 @@ static void onstatechange(struct mg_tcpip_if *ifp) {
     MG_INFO(("READY, IP: %M", mg_print_ip4, &ifp->ip));
     MG_INFO(("       GW: %M", mg_print_ip4, &ifp->gw));
     MG_INFO(("      MAC: %M", mg_print_mac, &ifp->mac));
-    arp_ask(ifp, ifp->gw);  // unsolicited GW ARP request
+    mg_tcpip_arp_request(ifp, ifp->gw, NULL);  // unsolicited GW ARP request
   } else if (ifp->state == MG_TCPIP_STATE_UP) {
     MG_ERROR(("Link up"));
     srand((unsigned int) mg_millis());
@@ -863,6 +864,7 @@ static void mg_tcpip_rx(struct mg_tcpip_if *ifp, void *buf, size_t len) {
   if (pkt.eth->type == mg_htons(0x806)) {
     pkt.arp = (struct arp *) (pkt.eth + 1);
     if (sizeof(*pkt.eth) + sizeof(*pkt.arp) > pkt.raw.len) return;  // Truncated
+    mg_tcpip_call(ifp, MG_TCPIP_EV_ARP, &pkt.raw);
     rx_arp(ifp, &pkt);
   } else if (pkt.eth->type == mg_htons(0x86dd)) {
     pkt.ip6 = (struct ip6 *) (pkt.eth + 1);
@@ -912,6 +914,7 @@ static void mg_tcpip_poll(struct mg_tcpip_if *ifp, uint64_t now) {
       onstatechange(ifp);
     }
     if (ifp->state == MG_TCPIP_STATE_DOWN) MG_ERROR(("Network is down"));
+    mg_tcpip_call(ifp, MG_TCPIP_EV_TIMER_1S, NULL);
   }
   if (ifp->state == MG_TCPIP_STATE_DOWN) return;
 
@@ -1074,7 +1077,7 @@ void mg_connect_resolved(struct mg_connection *c) {
              rem_ip != ifp->gw) {  // skip if gw (onstatechange -> READY -> ARP)
     // If we're in the same LAN, fire an ARP lookup.
     MG_DEBUG(("%lu ARP lookup...", c->id));
-    arp_ask(ifp, rem_ip);
+    mg_tcpip_arp_request(ifp, rem_ip, NULL);
     settmout(c, MIP_TTYPE_ARP);
     c->is_arplooking = 1;
   } else if ((*((uint8_t *) &rem_ip) & 0xE0) == 0xE0) {
