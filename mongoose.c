@@ -9847,7 +9847,8 @@ static void mg_tls_encrypt(struct mg_connection *c, const uint8_t *msg,
 #if CHACHA20
   (void) tag;  // tag is only used in aes gcm
   {
-    uint8_t *enc = (uint8_t *) malloc(8192);
+    size_t maxlen = MG_IO_SIZE > 16384 ? 16384 : MG_IO_SIZE;
+    uint8_t *enc = (uint8_t *) calloc(1, maxlen + 256 + 1);
     if (enc == NULL) {
       mg_error(c, "TLS OOM");
       return;
@@ -9916,7 +9917,7 @@ static int mg_tls_recv_record(struct mg_connection *c) {
   nonce[11] ^= (uint8_t) ((seq) &255U);
 #if CHACHA20
   {
-    uint8_t *dec = (uint8_t *) malloc(msgsz);
+    uint8_t *dec = (uint8_t *) calloc(1, msgsz);
     size_t n;
     if (dec == NULL) {
       mg_error(c, "TLS OOM");
@@ -10732,7 +10733,7 @@ void mg_tls_init(struct mg_connection *c, const struct mg_tls_opts *opts) {
       c->is_client ? MG_TLS_STATE_CLIENT_START : MG_TLS_STATE_SERVER_START;
 
   tls->skip_verification = opts->skip_verification;
-  tls->send.align = MG_IO_SIZE;
+  //tls->send.align = MG_IO_SIZE;
 
   c->tls = tls;
   c->is_tls = c->is_tls_hs = 1;
@@ -10802,6 +10803,7 @@ long mg_tls_send(struct mg_connection *c, const void *buf, size_t len) {
   struct tls_data *tls = (struct tls_data *) c->tls;
   long n = MG_IO_WAIT;
   if (len > MG_IO_SIZE) len = MG_IO_SIZE;
+  if (len > 16384) len = 16384;
   mg_tls_encrypt(c, (const uint8_t *) buf, len, MG_TLS_APP_DATA);
   while (tls->send.len > 0 &&
          (n = mg_io_send(c, tls->send.buf, tls->send.len)) > 0) {

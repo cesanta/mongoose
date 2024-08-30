@@ -25,10 +25,6 @@
 #include <FreeRTOS.h>
 #include <task.h>
 
-#ifndef MG_IO_SIZE
-#define MG_IO_SIZE 512
-#endif
-
 #define calloc(a, b) mg_calloc(a, b)
 #define free(a) vPortFree(a)
 #define malloc(a) pvPortMalloc(a)
