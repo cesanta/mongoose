@@ -60,4 +60,8 @@
 #define MG_ENABLE_POSIX_FS 1
 #endif
 
+#ifndef MG_IO_SIZE
+#define MG_IO_SIZE 16384
+#endif
+
 #endif
