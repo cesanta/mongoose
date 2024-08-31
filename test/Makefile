@@ -6,9 +6,10 @@ OPTS ?= -O3 -g3
 INCS ?= -Isrc -I.
 SSL ?=
 CWD ?= $(realpath $(CURDIR))
+ROOT_DIR = $(realpath $(CWD)/..)
 ENV ?=  -e Tmp=. -e WINEDEBUG=-all
 DOCKER_BIN ?= docker
-DOCKER ?= $(DOCKER_BIN) run --platform linux/amd64 --rm $(ENV) -v $(CWD)/..:$(CWD)/.. -w $(CWD)
+DOCKER ?= $(DOCKER_BIN) run --platform linux/amd64 --rm $(ENV) -v $(ROOT_DIR):$(ROOT_DIR) -w $(CWD)
 VCFLAGS = /nologo /W3 /O2 /MD /I. $(DEFS) $(TFLAGS)
 IPV6 ?= 1
 ASAN ?= -fsanitize=address,undefined,alignment -fno-sanitize-recover=all -fno-omit-frame-pointer -fno-common
@@ -166,23 +167,23 @@ riscv: mongoose.h $(SRCS)
 	$(DOCKER) mdashnet/riscv riscv-none-elf-gcc -march=rv32imc -mabi=ilp32 $(SRCS) $(OPTS) $(WARN) $(INCS) $(DEFS) $(TFLAGS) -o unit_test
 
 vc98: Makefile mongoose.h $(SRCS)
-	$(DOCKER) mdashnet/vc98 wine cl $(SRCS) $(VCFLAGS) ws2_32.lib /Fe$@.exe
+	$(DOCKER) mdashnet/vc98 wine cl $(SRCS) $(VCFLAGS) /Fe$@.exe
 	$(DOCKER) mdashnet/vc98 wine $@.exe
 
 vc17: Makefile mongoose.h $(SRCS)
-	$(DOCKER) mdashnet/vc17 wine64 cl $(SRCS) $(VCFLAGS) ws2_32.lib /Fe$@.exe
+	$(DOCKER) mdashnet/vc17 wine64 cl $(SRCS) $(VCFLAGS) /Fe$@.exe
 	$(DOCKER) mdashnet/vc17 wine64 $@.exe
 
 vc22: Makefile mongoose.h $(SRCS)
-	$(DOCKER) mdashnet/vc22 wine64 cl $(SRCS) $(VCFLAGS) ws2_32.lib /Fe$@.exe
+	$(DOCKER) mdashnet/vc22 wine64 cl $(SRCS) $(VCFLAGS) /Fe$@.exe
 	$(DOCKER) mdashnet/vc22 wine64 $@.exe
 
 mingw: Makefile mongoose.h $(SRCS)
-	$(DOCKER) mdashnet/mingw x86_64-w64-mingw32-gcc $(SRCS) -W -Wall -Werror -I. $(DEFS) -lwsock32 -o $@.exe
+	$(DOCKER) mdashnet/mingw x86_64-w64-mingw32-gcc $(SRCS) -W -Wall -Werror -I. $(DEFS) -lwsock32 -lbcrypt -o $@.exe
 	$(DOCKER) mdashnet/mingw wine64 $@.exe
 
 mingw++: Makefile mongoose.h $(SRCS)
-	$(DOCKER) mdashnet/mingw x86_64-w64-mingw32-g++ $(SRCS) -W -Wall -Werror -I. $(DEFS) -lwsock32 -o $@.exe
+	$(DOCKER) mdashnet/mingw x86_64-w64-mingw32-g++ $(SRCS) -W -Wall -Werror -I. $(DEFS) -lwsock32 -lbcrypt -o $@.exe
 
 linux-libs: CFLAGS += -fPIC
 linux-libs: LDFLAGS += -Wl,-soname,libmongoose.so.$(VERSION)

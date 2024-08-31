@@ -16,18 +16,19 @@
 extern void xPortSysTickHandler(void);
 void SysTick_Handler (void) {
   HAL_IncTick();
-  // xPortSysTickHandler() must be called after vTaskStartScheduler() and mx_init() takes longer than 1ms 
+  // xPortSysTickHandler() must be called after vTaskStartScheduler() and mx_init() takes longer than 1ms
   if (xTaskGetSchedulerState() != taskSCHEDULER_NOT_STARTED)
     xPortSysTickHandler();
 }
 
-void mg_random(void *buf, size_t len) {  // Use on-board RNG
+bool mg_random(void *buf, size_t len) {  // Use on-board RNG
   extern RNG_HandleTypeDef hrng;
   for (size_t n = 0; n < len; n += sizeof(uint32_t)) {
     uint32_t r;
     HAL_RNG_GenerateRandomNumber(&hrng, &r);
     memcpy((char *) buf + n, &r, n + sizeof(r) > len ? len - n : sizeof(r));
   }
+  return true;
 }
 
 static void server(void *args) {
@@ -74,14 +75,14 @@ static void netw_init (struct netif *netif) {
 
 static struct netif s_netif;
 
-static void app_main (void *args) { 
+static void app_main (void *args) {
   netw_init(&s_netif);
   xTaskCreate(netw, "netw", 128, &s_netif, configMAX_PRIORITIES - 1, NULL);  // Create the Ethernet link/rx thread
   MG_INFO(("Waiting for IP..."));
   while(ip4_addr_isany_val(*netif_ip4_addr(&s_netif)))
     vTaskDelay(pdMS_TO_TICKS(200));
   MG_INFO(("READY, IP: %s", ip4addr_ntoa(netif_ip4_addr(&s_netif))));
-  
+
   xTaskCreate(server, "server", 2048, 0, configMAX_PRIORITIES - 1, NULL);
   vTaskDelete(NULL);
   (void)args;

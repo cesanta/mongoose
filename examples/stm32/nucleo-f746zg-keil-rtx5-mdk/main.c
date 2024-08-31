@@ -5,18 +5,19 @@
 #include "mongoose.h"
 #include "main.h"
 #include "net.h"
-#include "cmsis_os2.h" 
+#include "cmsis_os2.h"
 
 #define BLINK_PERIOD_MS 1000  // LED blinking period in millis
 
 
-void mg_random(void *buf, size_t len) {  // Use on-board RNG
+bool mg_random(void *buf, size_t len) {  // Use on-board RNG
   extern RNG_HandleTypeDef hrng;
   for (size_t n = 0; n < len; n += sizeof(uint32_t)) {
     uint32_t r;
     HAL_RNG_GenerateRandomNumber(&hrng, &r);
     memcpy((char *) buf + n, &r, n + sizeof(r) > len ? len - n : sizeof(r));
   }
+  return true;
 }
 
 static void server(void *args) {
@@ -48,7 +49,7 @@ void netDHCP_Notify (uint32_t if_num, uint8_t option, const uint8_t *val, uint32
   (void)if_num, (void)val, (void)len;
 }
 
-__NO_RETURN static void app_main (void *args) { 
+__NO_RETURN static void app_main (void *args) {
   uint8_t ipaddr[NET_ADDR_IP4_LEN];
   char ip[40];
 
@@ -80,7 +81,6 @@ int main(void) {
   osKernelInitialize();                 // Initialize CMSIS-RTOS
   osThreadNew(blinker, NULL, NULL);  // Create the blinker thread with a default stack size
   s_am = osThreadNew(app_main, NULL, NULL);  // Create the thread that will start networking, use a default stack size
-  osKernelStart();  // This blocks     
+  osKernelStart();  // This blocks
   return 0;
 }
-

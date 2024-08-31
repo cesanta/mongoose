@@ -10066,7 +10066,7 @@ static void mg_tls_server_send_hello(struct mg_connection *c) {
   // calculate keyshare
   uint8_t x25519_pub[X25519_BYTES];
   uint8_t x25519_prv[X25519_BYTES];
-  mg_random(x25519_prv, sizeof(x25519_prv));
+  if (!mg_random(x25519_prv, sizeof(x25519_prv))) mg_error(c, "RNG"); 
   mg_tls_x25519(x25519_pub, x25519_prv, X25519_BASE_POINT, 1);
   mg_tls_x25519(tls->x25519_sec, x25519_prv, tls->x25519_cli, 1);
   mg_tls_hexdump("s x25519 sec", tls->x25519_sec, sizeof(tls->x25519_sec));
@@ -10292,12 +10292,12 @@ static void mg_tls_client_send_hello(struct mg_connection *c) {
   }
 
   // calculate keyshare
-  mg_random(tls->x25519_cli, sizeof(tls->x25519_cli));
+  if (!mg_random(tls->x25519_cli, sizeof(tls->x25519_cli))) mg_error(c, "RNG");
   mg_tls_x25519(x25519_pub, tls->x25519_cli, X25519_BASE_POINT, 1);
 
   // fill in the gaps: random + session ID + keyshare
-  mg_random(tls->session_id, sizeof(tls->session_id));
-  mg_random(tls->random, sizeof(tls->random));
+  if (!mg_random(tls->session_id, sizeof(tls->session_id))) mg_error(c, "RNG");
+  if (!mg_random(tls->random, sizeof(tls->random))) mg_error(c, "RNG");
   memmove(msg_client_hello + 11, tls->random, sizeof(tls->random));
   memmove(msg_client_hello + 44, tls->session_id, sizeof(tls->session_id));
   memmove(msg_client_hello + 94, x25519_pub, sizeof(x25519_pub));
@@ -16337,6 +16337,7 @@ struct mg_str mg_url_pass(const char *url) {
 #endif
 
 
+
 // Not using memset for zeroing memory, cause it can be dropped by compiler
 // See https://github.com/cesanta/mongoose/pull/1265
 void mg_bzero(volatile unsigned char *buf, size_t len) {
@@ -16347,22 +16348,50 @@ void mg_bzero(volatile unsigned char *buf, size_t len) {
 
 #if MG_ENABLE_CUSTOM_RANDOM
 #else
-void mg_random(void *buf, size_t len) {
-  bool done = false;
+bool mg_random(void *buf, size_t len) {
+  bool success = false;
   unsigned char *p = (unsigned char *) buf;
 #if MG_ARCH == MG_ARCH_ESP32
   while (len--) *p++ = (unsigned char) (esp_random() & 255);
-  done = true;
+  success = true;
 #elif MG_ARCH == MG_ARCH_WIN32
+  static bool initialised = false;
+#if defined(_MSC_VER) && _MSC_VER < 1700
+  static HCRYPTPROV hProv;
+  // CryptGenRandom() implementation earlier than 2008 is weak, see
+  // https://en.wikipedia.org/wiki/CryptGenRandom
+  if (initialised == false) {
+    initialised = CryptAcquireContext(&hProv, NULL, NULL, PROV_RSA_FULL,
+                                      CRYPT_VERIFYCONTEXT);
+  }
+  if (initialised == true) {
+    success = CryptGenRandom(hProv, len, p);
+  }
+#else
+  // BCrypt is a "new generation" strong crypto API, so try it first
+  static BCRYPT_ALG_HANDLE hProv;
+  if (initialised == false &&
+      BCryptOpenAlgorithmProvider(&hProv, BCRYPT_RNG_ALGORITHM, NULL, 0) == 0) {
+    initialised = true;
+  }
+  if (initialised == true) {
+    success = BCryptGenRandom(hProv, p, (ULONG) len, 0) == 0;
+  }
+#endif
+
 #elif MG_ARCH == MG_ARCH_UNIX
   FILE *fp = fopen("/dev/urandom", "rb");
   if (fp != NULL) {
-    if (fread(buf, 1, len, fp) == len) done = true;
+    if (fread(buf, 1, len, fp) == len) success = true;
     fclose(fp);
   }
 #endif
   // If everything above did not work, fallback to a pseudo random generator
-  while (!done && len--) *p++ = (unsigned char) (rand() & 255);
+  if (success == false) {
+    MG_ERROR(("Weak RNG: using rand()"));
+    while (len--) *p++ = (unsigned char) (rand() & 255);
+  }
+  return success;
 }
 #endif
 

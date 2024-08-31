@@ -26,11 +26,12 @@ static uint8_t spi_txn(void *spi, uint8_t byte) {
   return result;
 }
 
-void mg_random(void *buf, size_t len) {
+bool mg_random(void *buf, size_t len) {
   for (size_t n = 0; n < len; n += sizeof(uint32_t)) {
     uint32_t r = get_rand_32();
     memcpy((char *) buf + n, &r, n + sizeof(r) > len ? len - n : sizeof(r));
   }
+  return true;
 }
 
 static void timer_fn(void *arg) {

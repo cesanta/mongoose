@@ -16,12 +16,14 @@ uint64_t mg_millis(void) {  // Let Mongoose use our uptime function
   return s_ticks;           // Return number of milliseconds since boot
 }
 
-void mg_random(void *buf, size_t len) {  // Use on-board RNG
+bool mg_random(void *buf, size_t len) {  // Use on-board RNG
   for (size_t n = 0; n < len; n += sizeof(uint32_t)) {
     uint32_t r = rng_read();
     memcpy((char *) buf + n, &r, n + sizeof(r) > len ? len - n : sizeof(r));
   }
+  return true;
 }
+
 static void timer_fn(void *arg) {
   gpio_toggle(LED);                                      // Blink LED
   struct mg_tcpip_if *ifp = arg;                         // And show

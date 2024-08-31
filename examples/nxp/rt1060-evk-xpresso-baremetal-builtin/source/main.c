@@ -33,8 +33,9 @@ uint64_t mg_millis(void) {  // Let Mongoose use our uptime function
   return s_ticks;           // Return number of milliseconds since boot
 }
 
-void mg_random(void *buf, size_t len) {  // Use on-board RNG
+bool mg_random(void *buf, size_t len) {  // Use on-board RNG
   TRNG_GetRandomData(TRNG, buf, len);  // Init by BOARD_InitBootPeripherals()
+  return true;
 }
 
 static void timer_fn(void *arg) {

@@ -22,11 +22,12 @@ uint64_t mg_millis(void) {  // Let Mongoose use our uptime function
   return s_ticks;           // Return number of milliseconds since boot
 }
 
-void mg_random(void *buf, size_t len) {  // Use on-board RNG
+bool mg_random(void *buf, size_t len) {  // Use on-board RNG
   for (size_t n = 0; n < len; n += sizeof(uint32_t)) {
     uint32_t r = rng_read();
     memcpy((char *) buf + n, &r, n + sizeof(r) > len ? len - n : sizeof(r));
   }
+  return true;
 }
 
 bool tud_network_recv_cb(const uint8_t *buf, uint16_t len) {
@@ -80,7 +81,7 @@ int main(void) {
   gpio_output(LED);               // Setup blue LED
   uart_init(UART_DEBUG, 115200);  // Initialise debug printf
 
-  struct mg_mgr mgr;        // Initialise 
+  struct mg_mgr mgr;        // Initialise
   mg_mgr_init(&mgr);        // Mongoose event manager
   mg_log_set(MG_LL_DEBUG);  // Set log level
 
