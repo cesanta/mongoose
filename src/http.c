@@ -521,14 +521,6 @@ static struct mg_str s_known_types[] = {
 // clang-format on
 
 static struct mg_str guess_content_type(struct mg_str path, const char *extra) {
-  // Force mime content type.
-  if(extra[0] == '\\') {
-    // empty override string is empty so just fall back to default
-    if(extra[1] == '\0') {
-      return mg_str("text/plain; charset=utf-8");
-    }
-    return mg_str(extra + 1);
-  }
   struct mg_str entry, k, v, s = mg_str(extra);
   size_t i = 0;
 
@@ -598,11 +590,7 @@ void mg_http_serve_file(struct mg_connection *c, struct mg_http_message *hm,
   if (fd == NULL && opts->page404 != NULL) {
     fd = mg_fs_open(fs, opts->page404, MG_FS_READ);
     path = opts->page404;
-    // Don't use over-ride mime type for 404.
-    mime = guess_content_type(
-      mg_str(path),
-      opts->mime_types[0] == '\\' ? "" : opts->mime_types
-    );
+    mime = guess_content_type(mg_str(path), opts->mime_types);
   }
 
   if (fd == NULL || fs->st(path, &size, &mtime) == 0) {
