@@ -5,7 +5,7 @@
 #include "mongoose.h"
 #include "main.h"
 #include "net.h"
-#include "cmsis_os2.h" 
+#include "cmsis_os2.h"
 #include "ethernetif.h"
 #include "lwip/dhcp.h"
 #include "lwip/netif.h"
@@ -14,13 +14,14 @@
 #define BLINK_PERIOD_MS 1000  // LED blinking period in millis
 
 
-void mg_random(void *buf, size_t len) {  // Use on-board RNG
+bool mg_random(void *buf, size_t len) {  // Use on-board RNG
   extern RNG_HandleTypeDef hrng;
   for (size_t n = 0; n < len; n += sizeof(uint32_t)) {
     uint32_t r;
     HAL_RNG_GenerateRandomNumber(&hrng, &r);
     memcpy((char *) buf + n, &r, n + sizeof(r) > len ? len - n : sizeof(r));
   }
+  return true;
 }
 
 static void server(void *args) {
@@ -67,14 +68,14 @@ static void netw_init (struct netif *netif) {
 
 static struct netif s_netif;
 
-__NO_RETURN static void app_main (void *args) { 
+__NO_RETURN static void app_main (void *args) {
   netw_init(&s_netif);
   osThreadNew(netw, &s_netif, NULL);  // Create the Ethernet link/rx thread with a default stack size
   MG_INFO(("Waiting for IP..."));
   while(ip4_addr_isany_val(*netif_ip4_addr(&s_netif)))
     osDelay((osKernelGetTickFreq() * 200U) / 1000U);
   MG_INFO(("READY, IP: %s", ip4addr_ntoa(netif_ip4_addr(&s_netif))));
-  
+
   const osThreadAttr_t server_attr = {
     .stack_size = 8192                            // Create the server thread with a stack size of 8KB
   };
@@ -95,7 +96,6 @@ int main(void) {
   osKernelInitialize();                 // Initialize CMSIS-RTOS
   osThreadNew(blinker, NULL, NULL);  // Create the blinker thread with a default stack size
   osThreadNew(app_main, NULL, NULL);  // Create the thread that will start networking, use a default stack size
-  osKernelStart();  // This blocks     
+  osKernelStart();  // This blocks
   return 0;
 }
-

@@ -623,7 +623,7 @@ static void mg_tls_server_send_hello(struct mg_connection *c) {
   // calculate keyshare
   uint8_t x25519_pub[X25519_BYTES];
   uint8_t x25519_prv[X25519_BYTES];
-  mg_random(x25519_prv, sizeof(x25519_prv));
+  if (!mg_random(x25519_prv, sizeof(x25519_prv))) mg_error(c, "RNG"); 
   mg_tls_x25519(x25519_pub, x25519_prv, X25519_BASE_POINT, 1);
   mg_tls_x25519(tls->x25519_sec, x25519_prv, tls->x25519_cli, 1);
   mg_tls_hexdump("s x25519 sec", tls->x25519_sec, sizeof(tls->x25519_sec));
@@ -849,12 +849,12 @@ static void mg_tls_client_send_hello(struct mg_connection *c) {
   }
 
   // calculate keyshare
-  mg_random(tls->x25519_cli, sizeof(tls->x25519_cli));
+  if (!mg_random(tls->x25519_cli, sizeof(tls->x25519_cli))) mg_error(c, "RNG");
   mg_tls_x25519(x25519_pub, tls->x25519_cli, X25519_BASE_POINT, 1);
 
   // fill in the gaps: random + session ID + keyshare
-  mg_random(tls->session_id, sizeof(tls->session_id));
-  mg_random(tls->random, sizeof(tls->random));
+  if (!mg_random(tls->session_id, sizeof(tls->session_id))) mg_error(c, "RNG");
+  if (!mg_random(tls->random, sizeof(tls->random))) mg_error(c, "RNG");
   memmove(msg_client_hello + 11, tls->random, sizeof(tls->random));
   memmove(msg_client_hello + 44, tls->session_id, sizeof(tls->session_id));
   memmove(msg_client_hello + 94, x25519_pub, sizeof(x25519_pub));

@@ -13,17 +13,18 @@ extern RNG_HandleTypeDef hrng;
 extern void xPortSysTickHandler(void);
 void SysTick_Handler (void) {
   HAL_IncTick();
-  // xPortSysTickHandler() must be called after vTaskStartScheduler() and mx_init() takes longer than 1ms 
+  // xPortSysTickHandler() must be called after vTaskStartScheduler() and mx_init() takes longer than 1ms
   if (xTaskGetSchedulerState() != taskSCHEDULER_NOT_STARTED)
     xPortSysTickHandler();
 }
 
-void mg_random(void *buf, size_t len) {  // Use on-board RNG
+bool mg_random(void *buf, size_t len) {  // Use on-board RNG
   for (size_t n = 0; n < len; n += sizeof(uint32_t)) {
     uint32_t r;
     HAL_RNG_GenerateRandomNumber(&hrng, &r);
     memcpy((char *) buf + n, &r, n + sizeof(r) > len ? len - n : sizeof(r));
   }
+  return true;
 }
 
 static void server(void *args) {
@@ -70,7 +71,7 @@ int main(void) {
 
   uint8_t macaddr[6] = GENERATE_LOCALLY_ADMINISTERED_MAC();
   // required for fallback if DHCP fails
-  static const uint8_t ipaddr[4] = {192, 168, 0, 77};	
+  static const uint8_t ipaddr[4] = {192, 168, 0, 77};
   static const uint8_t netmask[4] = {255, 255, 255, 0};
   static const uint8_t dnsaddr[4] = {8, 8, 8, 8};
   static const uint8_t gwaddr[4] = {192, 168, 0, 1};
@@ -98,7 +99,7 @@ void HAL_ETH_MspInit(ETH_HandleTypeDef *heth) {
 uint32_t ulApplicationGetNextSequenceNumber(uint32_t a, uint16_t b, uint32_t c,
                                             uint16_t d) {
   (void) a, (void) b, (void) c, (void) d;
-  uint32_t x;  
+  uint32_t x;
   HAL_RNG_GenerateRandomNumber(&hrng, &x);
   return x;
 }

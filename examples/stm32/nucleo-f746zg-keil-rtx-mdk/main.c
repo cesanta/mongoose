@@ -5,18 +5,19 @@
 #include "mongoose.h"
 #include "main.h"
 #include "net.h"
-#include "cmsis_os.h" 
+#include "cmsis_os.h"
 
 #define BLINK_PERIOD_MS 1000  // LED blinking period in millis
 
 
-void mg_random(void *buf, size_t len) {  // Use on-board RNG
+bool mg_random(void *buf, size_t len) {  // Use on-board RNG
   extern RNG_HandleTypeDef hrng;
   for (size_t n = 0; n < len; n += sizeof(uint32_t)) {
     uint32_t r;
     HAL_RNG_GenerateRandomNumber(&hrng, &r);
     memcpy((char *) buf + n, &r, n + sizeof(r) > len ? len - n : sizeof(r));
   }
+  return true;
 }
 
 static void server(const void *args) {
@@ -50,7 +51,7 @@ void netDHCP_Notify (uint32_t if_num, uint8_t option, const uint8_t *val, uint32
   (void)if_num, (void)val, (void)len;
 }
 
-static void app_main (const void *args) { 
+static void app_main (const void *args) {
   uint8_t ipaddr[NET_ADDR_IP4_LEN];
   char ip[40];
   netInitialize();
@@ -70,7 +71,7 @@ osThreadDef(blinker, osPriorityNormal, 1, 0); // Create the blinker thread with 
 osThreadDef(app_main, osPriorityNormal, 1, 1024); // Create the thread that will start networking with a stack size of 1KB
 
 extern void mx_init(void);
- 
+
 int main(void) {		// this is not actually baremetal main() but the "main" thread
   osKernelInitialize();                 // Stop kernel
   mx_init();                // Setup clock and all peripherals configured in CubeMX

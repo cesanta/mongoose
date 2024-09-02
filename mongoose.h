@@ -443,6 +443,20 @@ typedef enum { false = 0, true = 1 } bool;
 #include <winerror.h>
 #include <winsock2.h>
 
+// For mg_random()
+#if defined(_MSC_VER) && _MSC_VER < 1700
+#ifndef _WIN32_WINNT
+#define _WIN32_WINNT 0x400  // Let vc98 pick up wincrypt.h
+#endif
+#include <wincrypt.h>
+#pragma comment(lib, "advapi32.lib")
+#else
+#include <bcrypt.h>
+#if defined(_MSC_VER) 
+#pragma comment(lib, "bcrypt.lib")
+#endif
+#endif
+
 // Protect from calls like std::snprintf in app code
 // See https://github.com/cesanta/mongoose/issues/1047
 #ifndef __cplusplus
@@ -487,12 +501,12 @@ typedef int socklen_t;
   (((errcode) < 0) && (WSAGetLastError() == WSAECONNRESET))
 
 #define realpath(a, b) _fullpath((b), (a), MG_PATH_MAX)
-#define sleep(x) Sleep((x) *1000)
+#define sleep(x) Sleep((x) * 1000)
 #define mkdir(a, b) _mkdir(a)
 #define timegm(x) _mkgmtime(x)
 
 #ifndef S_ISDIR
-#define S_ISDIR(x) (((x) &_S_IFMT) == _S_IFDIR)
+#define S_ISDIR(x) (((x) & _S_IFMT) == _S_IFDIR)
 #endif
 
 #ifndef MG_ENABLE_DIRLIST
@@ -1056,7 +1070,7 @@ struct mg_str mg_unpacked(const char *path);  // Packed file as mg_str
 #endif
 
 void mg_bzero(volatile unsigned char *buf, size_t len);
-void mg_random(void *buf, size_t len);
+bool mg_random(void *buf, size_t len);
 char *mg_random_str(char *buf, size_t len);
 uint16_t mg_ntohs(uint16_t net);
 uint32_t mg_ntohl(uint32_t net);

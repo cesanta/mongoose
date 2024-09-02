@@ -1,3 +1,4 @@
+#include "log.h"
 #include "util.h"
 
 // Not using memset for zeroing memory, cause it can be dropped by compiler
@@ -10,22 +11,50 @@ void mg_bzero(volatile unsigned char *buf, size_t len) {
 
 #if MG_ENABLE_CUSTOM_RANDOM
 #else
-void mg_random(void *buf, size_t len) {
-  bool done = false;
+bool mg_random(void *buf, size_t len) {
+  bool success = false;
   unsigned char *p = (unsigned char *) buf;
 #if MG_ARCH == MG_ARCH_ESP32
   while (len--) *p++ = (unsigned char) (esp_random() & 255);
-  done = true;
+  success = true;
 #elif MG_ARCH == MG_ARCH_WIN32
+  static bool initialised = false;
+#if defined(_MSC_VER) && _MSC_VER < 1700
+  static HCRYPTPROV hProv;
+  // CryptGenRandom() implementation earlier than 2008 is weak, see
+  // https://en.wikipedia.org/wiki/CryptGenRandom
+  if (initialised == false) {
+    initialised = CryptAcquireContext(&hProv, NULL, NULL, PROV_RSA_FULL,
+                                      CRYPT_VERIFYCONTEXT);
+  }
+  if (initialised == true) {
+    success = CryptGenRandom(hProv, len, p);
+  }
+#else
+  // BCrypt is a "new generation" strong crypto API, so try it first
+  static BCRYPT_ALG_HANDLE hProv;
+  if (initialised == false &&
+      BCryptOpenAlgorithmProvider(&hProv, BCRYPT_RNG_ALGORITHM, NULL, 0) == 0) {
+    initialised = true;
+  }
+  if (initialised == true) {
+    success = BCryptGenRandom(hProv, p, (ULONG) len, 0) == 0;
+  }
+#endif
+
 #elif MG_ARCH == MG_ARCH_UNIX
   FILE *fp = fopen("/dev/urandom", "rb");
   if (fp != NULL) {
-    if (fread(buf, 1, len, fp) == len) done = true;
+    if (fread(buf, 1, len, fp) == len) success = true;
     fclose(fp);
   }
 #endif
   // If everything above did not work, fallback to a pseudo random generator
-  while (!done && len--) *p++ = (unsigned char) (rand() & 255);
+  if (success == false) {
+    MG_ERROR(("Weak RNG: using rand()"));
+    while (len--) *p++ = (unsigned char) (rand() & 255);
+  }
+  return success;
 }
 #endif
 
