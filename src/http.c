@@ -521,7 +521,8 @@ static struct mg_str s_known_types[] = {
 // clang-format on
 
 static struct mg_str guess_content_type(struct mg_str path, const char *extra) {
-  struct mg_str entry, k, v, s = mg_str(extra);
+  struct mg_str entry, k, v, w = { 0 }, s = mg_str(extra);
+  static const struct mg_str wild_check = { .buf = "*", .len = 1 };
   size_t i = 0;
 
   // Shrink path to its extension only
@@ -531,7 +532,23 @@ static struct mg_str guess_content_type(struct mg_str path, const char *extra) {
 
   // Process user-provided mime type overrides, if any
   while (mg_span(s, &entry, &s, ',')) {
-    if (mg_span(entry, &k, &v, '=') && mg_strcmp(path, k) == 0) return v;
+    bool result = mg_span(entry, &k, &v, '=');
+    if(!result) {
+      continue;
+    }
+    // Exact file extension match.
+    if(mg_strcmp(path, k) == 0) {
+      return v;
+    }
+    // check if w was set first so the first wild card
+    // is always used if no exact match exists.
+    if(w.buf == NULL && mg_strcmp(wild_check, k) == 0) {
+      w = v;
+    }
+  }
+  // There was a wild card, so use that mime_type
+  if(w.buf != NULL) {
+    return w;
   }
 
   // Process built-in mime types
