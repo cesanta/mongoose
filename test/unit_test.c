@@ -696,6 +696,11 @@ static void eh1(struct mg_connection *c, int ev, void *ev_data) {
       memset(&sopts, 0, sizeof(sopts));
       sopts.mime_types = "foo=a/b,txt=c/d";
       mg_http_serve_file(c, hm, "data/a.txt", &sopts);
+    } else if (mg_match(hm->uri, mg_str("/servefile2"), NULL)) {
+      struct mg_http_serve_opts sopts;
+      memset(&sopts, 0, sizeof(sopts));
+      sopts.mime_types = "*=a/b,txt=c/d";
+      mg_http_serve_file(c, hm, "data/a.txt", &sopts);
     } else {
       struct mg_http_serve_opts sopts;
       memset(&sopts, 0, sizeof(sopts));
@@ -1023,10 +1028,20 @@ static void test_http_server(void) {
   ASSERT(cmpbody(buf, "hello\n") == 0);
   {
     struct mg_http_message hm;
+    struct mg_str *s;
     mg_http_parse(buf, strlen(buf), &hm);
-    ASSERT(mg_http_get_header(&hm, "Content-Type") != NULL);
-    ASSERT(mg_strcmp(*mg_http_get_header(&hm, "Content-Type"), mg_str("c/d")) ==
-           0);
+    ASSERT((s = mg_http_get_header(&hm, "Content-Type")) != NULL);
+    ASSERT(mg_strcmp(*s, mg_str("c/d")) == 0);
+  }
+
+  ASSERT(fetch(&mgr, buf, url, "GET /servefile2 HTTP/1.0\n\n") == 200);
+  ASSERT(cmpbody(buf, "hello\n") == 0);
+  {
+    struct mg_http_message hm;
+    struct mg_str *s;
+    mg_http_parse(buf, strlen(buf), &hm);
+    ASSERT((s = mg_http_get_header(&hm, "Content-Type")) != NULL);
+    ASSERT(mg_strcmp(*s, mg_str("a/b")) == 0);
   }
 
   ASSERT(fetch(&mgr, buf, url, "GET /foo/1 HTTP/1.0\r\n\n") == 200);
