@@ -28,6 +28,10 @@ struct mg_tcpip_driver_stm32h_data {
   uint8_t phy_conf;  // PHY config
 };
 
+#ifndef MG_TCPIP_PHY_CONF
+#define MG_TCPIP_PHY_CONF MG_PHY_CLOCKS_MAC
+#endif
+
 #ifndef MG_TCPIP_PHY_ADDR
 #define MG_TCPIP_PHY_ADDR 0
 #endif
@@ -42,6 +46,7 @@ struct mg_tcpip_driver_stm32h_data {
     static struct mg_tcpip_if mif_;                               \
     driver_data_.mdc_cr = MG_DRIVER_MDC_CR;                       \
     driver_data_.phy_addr = MG_TCPIP_PHY_ADDR;                    \
+    driver_data_.phy_conf = MG_TCPIP_PHY_CONF;                    \
     mif_.ip = MG_TCPIP_IP;                                        \
     mif_.mask = MG_TCPIP_MASK;                                    \
     mif_.gw = MG_TCPIP_GW;                                        \
