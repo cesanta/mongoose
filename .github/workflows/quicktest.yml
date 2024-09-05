@@ -263,6 +263,7 @@ jobs:
           - path: stm32/nucleo-f746zg-make-baremetal-builtin-cmsis_driver
           - path: stm32/nucleo-h563zi-make-baremetal-builtin
           - path: stm32/nucleo-h563zi-make-freertos-builtin
+          - path: stm32/nucleo-h723zg-make-baremetal-builtin
           - path: stm32/nucleo-h723zg-make-freertos-builtin
           - path: stm32/nucleo-h743zi-make-baremetal-builtin
           - path: stm32/nucleo-h743zi-make-freertos-builtin
@@ -326,64 +327,6 @@ jobs:
       - if: ${{ env.GO == 1 }}
         run: make -C examples/${{ matrix.example.path }} build
       
-#  dual_examples:
-#    runs-on: ubuntu-latest
-#    strategy:
-#      fail-fast: false
-#      matrix:
-#        example:
-#          - path: 
-#    name: ${{ matrix.example.path }}
-#    env:
-#      GO: 0
-#    steps:
-#      - uses: actions/checkout@v4
-#        with: { fetch-depth: 2 }
-#      - run: |
-#          if ./test/match_changed_files.sh '^src|examples/device-dashboard|examples/mqtt-dashboard/device|^examples/${{ matrix.example.path }}'; then
-#            echo GO=1 >> $GITHUB_ENV
-#            # nothing specific to install or do
-#          fi
-#      - if: ${{ env.GO == 1 }}
-#        run: |
-#          if ./test/match_changed_files.sh '^src|examples/device-dashboard|^examples/${{ matrix.example.path }}'; then
-#            make -C examples/${{ matrix.example.path }} device_dashboard
-#          fi
-#      - if: ${{ env.GO == 1 }}
-#        run: |
-#          if ./test/match_changed_files.sh '^src|examples/mqtt-dashboard/device|^examples/${{ matrix.example.path }}'; then
-#            make -C examples/${{ matrix.example.path }} mqtt_dashboard
-#          fi
-
-  dual_examples_arm:
-    runs-on: ubuntu-latest
-    strategy:
-      fail-fast: false
-      matrix:
-        example:
-          - path: stm32/nucleo-h723zg-make-baremetal-builtin
-    name: ${{ matrix.example.path }}
-    env:
-      GO: 0
-    steps:
-      - uses: actions/checkout@v4
-        with: { fetch-depth: 2 }
-      - run: |
-          if ./test/match_changed_files.sh '^src|examples/device-dashboard|examples/mqtt-dashboard/device|^examples/${{ matrix.example.path }}'; then
-            echo GO=1 >> $GITHUB_ENV
-            sudo apt -y update && sudo apt -y install gcc-arm-none-eabi
-          fi
-      - if: ${{ env.GO == 1 }}
-        run: |
-          if ./test/match_changed_files.sh '^src|examples/device-dashboard|^examples/${{ matrix.example.path }}'; then
-            make -C examples/${{ matrix.example.path }} device_dashboard
-          fi
-      - if: ${{ env.GO == 1 }}
-        run: |
-          if ./test/match_changed_files.sh '^src|examples/mqtt-dashboard/device|^examples/${{ matrix.example.path }}'; then
-            make -C examples/${{ matrix.example.path }} mqtt_dashboard
-          fi
-
   cube_examples:
     runs-on: ubuntu-latest
     env:
