@@ -6,7 +6,8 @@ SOURCES = main.c mongoose.c  packed_fs.c      # Source code files, packed_fs.c c
 CFLAGS = -W -Wall -Wextra -g -I.  # Build options
 
 # Mongoose build options. See https://mongoose.ws/documentation/#build-options
-CFLAGS_MONGOOSE += -DMG_ENABLE_LINES=1 -DMG_ENABLE_PACKED_FS=1 -DMG_TLS=MG_TLS_BUILTIN
+CFLAGS_MONGOOSE += -DMG_ENABLE_LINES=1 -DMG_ENABLE_PACKED_FS=1
+CFLAGS_EXTRA ?= -DMG_TLS=MG_TLS_BUILTIN
 
 ifeq ($(OS),Windows_NT)   # Windows settings. Assume MinGW compiler. To use VC: make CC=cl CFLAGS=/MD OUT=/Feprog.exe
   PROG ?= example.exe           # Use .exe suffix for the binary
