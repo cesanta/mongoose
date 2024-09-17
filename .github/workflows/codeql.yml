@@ -17,11 +17,11 @@ jobs:
     permissions:
       security-events: write
     steps:
-    - uses: actions/checkout@v3
+    - uses: actions/checkout@v4
       with: { fetch-depth: 2 }
 
     - name: Initialize CodeQL
-      uses: github/codeql-action/init@v2
+      uses: github/codeql-action/init@v3
       with:
         languages: cpp
     - run: |
@@ -29,4 +29,4 @@ jobs:
         ./test/setup_ga_network.sh && make -C test mip_test CC=gcc ASAN= ASAN_OPTIONS=
 
     - name: Perform CodeQL Analysis
-      uses: github/codeql-action/analyze@v2
+      uses: github/codeql-action/analyze@v3
