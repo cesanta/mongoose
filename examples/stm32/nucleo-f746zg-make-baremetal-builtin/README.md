@@ -1,3 +1,1 @@
-# Baremetal web device dashboard on NUCLEO-F746ZG
-
-See https://mongoose.ws/tutorials/stm32/all-make-baremetal-builtin/
+See [Wizard](https://mongoose.ws/wizard/#/output?board=f746&ide=GCC+make&rtos=baremetal&file=README.md)
