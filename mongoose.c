@@ -3227,6 +3227,7 @@ static void http_cb(struct mg_connection *c, int ev, void *ev_data) {
       int n = mg_http_parse(buf, c->recv.len - ofs, &hm);
       struct mg_str *te;  // Transfer - encoding header
       bool is_chunked = false;
+      size_t old_len = c->recv.len;
       if (n < 0) {
         // We don't use mg_error() here, to avoid closing pipelined requests
         // prematurely, see #2592
@@ -3238,6 +3239,11 @@ static void http_cb(struct mg_connection *c, int ev, void *ev_data) {
       }
       if (n == 0) break;                 // Request is not buffered yet
       mg_call(c, MG_EV_HTTP_HDRS, &hm);  // Got all HTTP headers
+      if (c->recv.len != old_len) {
+        // User manipulated received data. Wash our hands
+        c->pfn = NULL;
+        return;
+      }
       if (ev == MG_EV_CLOSE) {           // If client did not set Content-Length
         hm.message.len = c->recv.len - ofs;  // and closes now, deliver MSG
         hm.body.len = hm.message.len - (size_t) (hm.body.buf - hm.message.buf);
