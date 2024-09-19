@@ -1,3 +1,1 @@
-# FreeRTOS web device dashboard on STMH573I-DK
-
-See https://mongoose.ws/tutorials/stm32/all-make-freertos-builtin/
+See [Wizard](https://mongoose.ws/wizard/#/output?board=h573&ide=GCC+make&rtos=FreeRTOS&file=README.md)
