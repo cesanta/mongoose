@@ -4931,7 +4931,7 @@ void mg_mgr_init(struct mg_mgr *mgr) {
 #endif
 
 #define MIP_TCP_ACK_MS 150    // Timeout for ACKing
-#define MIP_TCP_ARP_MS 100    // Timeout for ARP response
+#define MIP_ARP_RESP_MS 100   // Timeout for ARP response
 #define MIP_TCP_SYN_MS 15000  // Timeout for connection establishment
 #define MIP_TCP_FIN_MS 1000   // Timeout for closing connection
 #define MIP_TCP_WIN 6000      // TCP window size
@@ -5092,7 +5092,7 @@ static void settmout(struct mg_connection *c, uint8_t type) {
   struct mg_tcpip_if *ifp = (struct mg_tcpip_if *) c->mgr->priv;
   struct connstate *s = (struct connstate *) (c + 1);
   unsigned n = type == MIP_TTYPE_ACK   ? MIP_TCP_ACK_MS
-               : type == MIP_TTYPE_ARP ? MIP_TCP_ARP_MS
+               : type == MIP_TTYPE_ARP ? MIP_ARP_RESP_MS
                : type == MIP_TTYPE_SYN ? MIP_TCP_SYN_MS
                : type == MIP_TTYPE_FIN ? MIP_TCP_FIN_MS
                                        : MIP_TCP_KEEPALIVE_MS;
@@ -5252,6 +5252,8 @@ static struct mg_connection *getpeer(struct mg_mgr *mgr, struct pkt *pkt,
   return c;
 }
 
+static void mac_resolved(struct mg_connection *c);
+
 static void rx_arp(struct mg_tcpip_if *ifp, struct pkt *pkt) {
   if (pkt->arp->op == mg_htons(1) && pkt->arp->tpa == ifp->ip) {
     // ARP request. Make a response, then send
@@ -5284,8 +5286,7 @@ static void rx_arp(struct mg_tcpip_if *ifp, struct pkt *pkt) {
         MG_DEBUG(("%lu ARP resolved %M -> %M", c->id, mg_print_ip4, c->rem.ip,
                   mg_print_mac, s->mac));
         c->is_arplooking = 0;
-        send_syn(c);
-        settmout(c, MIP_TTYPE_SYN);
+        mac_resolved(c);
       }
     }
   }
@@ -5869,18 +5870,20 @@ static void mg_tcpip_poll(struct mg_tcpip_if *ifp, uint64_t now) {
 
   // Process timeouts
   for (c = ifp->mgr->conns; c != NULL; c = c->next) {
-    if (c->is_udp || c->is_listening || c->is_resolving) continue;
+    if ((c->is_udp && !c->is_arplooking) || c->is_listening || c->is_resolving) continue;
     struct connstate *s = (struct connstate *) (c + 1);
     uint32_t rem_ip;
     memcpy(&rem_ip, c->rem.ip, sizeof(uint32_t));
     if (now > s->timer) {
-      if (s->ttype == MIP_TTYPE_ACK && s->acked != s->ack) {
+      if (s->ttype == MIP_TTYPE_ARP) {
+        mg_error(c, "ARP timeout");
+      } else if (c->is_udp) {
+        continue;
+      } else if (s->ttype == MIP_TTYPE_ACK && s->acked != s->ack) {
         MG_VERBOSE(("%lu ack %x %x", c->id, s->seq, s->ack));
         tx_tcp(ifp, s->mac, rem_ip, TH_ACK, c->loc.port, c->rem.port,
                mg_htonl(s->seq), mg_htonl(s->ack), NULL, 0);
         s->acked = s->ack;
-      } else if (s->ttype == MIP_TTYPE_ARP) {
-        mg_error(c, "ARP timeout");
       } else if (s->ttype == MIP_TTYPE_SYN) {
         mg_error(c, "Connection timeout");
       } else if (s->ttype == MIP_TTYPE_FIN) {
@@ -5961,6 +5964,16 @@ static void send_syn(struct mg_connection *c) {
          0);
 }
 
+static void mac_resolved(struct mg_connection *c) {
+  if (c->is_udp) {
+    c->is_connecting = 0;
+    mg_call(c, MG_EV_CONNECT, NULL);
+  } else {
+    send_syn(c);
+    settmout(c, MIP_TTYPE_SYN);
+  }
+}
+
 void mg_connect_resolved(struct mg_connection *c) {
   struct mg_tcpip_if *ifp = (struct mg_tcpip_if *) c->mgr->priv;
   uint32_t rem_ip;
@@ -5972,9 +5985,11 @@ void mg_connect_resolved(struct mg_connection *c) {
   MG_DEBUG(("%lu %M -> %M", c->id, mg_print_ip_port, &c->loc, mg_print_ip_port,
             &c->rem));
   mg_call(c, MG_EV_RESOLVE, NULL);
+  c->is_connecting = 1;
   if (c->is_udp && (rem_ip == 0xffffffff || rem_ip == (ifp->ip | ~ifp->mask))) {
     struct connstate *s = (struct connstate *) (c + 1);
     memset(s->mac, 0xFF, sizeof(s->mac));  // global or local broadcast
+    mac_resolved(c);
   } else if (ifp->ip && ((rem_ip & ifp->mask) == (ifp->ip & ifp->mask)) &&
              rem_ip != ifp->gw) {  // skip if gw (onstatechange -> READY -> ARP)
     // If we're in the same LAN, fire an ARP lookup.
@@ -5982,23 +5997,17 @@ void mg_connect_resolved(struct mg_connection *c) {
     arp_ask(ifp, rem_ip);
     settmout(c, MIP_TTYPE_ARP);
     c->is_arplooking = 1;
-    c->is_connecting = 1;
   } else if ((*((uint8_t *) &rem_ip) & 0xE0) == 0xE0) {
     struct connstate *s = (struct connstate *) (c + 1);  // 224 to 239, E0 to EF
     uint8_t mcastp[3] = {0x01, 0x00, 0x5E};              // multicast group
     memcpy(s->mac, mcastp, 3);
     memcpy(s->mac + 3, ((uint8_t *) &rem_ip) + 1, 3);  // 23 LSb
     s->mac[3] &= 0x7F;
+    mac_resolved(c);
   } else {
     struct connstate *s = (struct connstate *) (c + 1);
     memcpy(s->mac, ifp->gwmac, sizeof(ifp->gwmac));
-    if (c->is_udp) {
-      mg_call(c, MG_EV_CONNECT, NULL);
-    } else {
-      send_syn(c);
-      settmout(c, MIP_TTYPE_SYN);
-      c->is_connecting = 1;
-    }
+    mac_resolved(c);
   }
 }
 
@@ -6074,6 +6083,9 @@ bool mg_send(struct mg_connection *c, const void *buf, size_t len) {
   memcpy(&rem_ip, c->rem.ip, sizeof(uint32_t));
   if (ifp->ip == 0 || ifp->state != MG_TCPIP_STATE_READY) {
     mg_error(c, "net down");
+  } else if (c->is_udp && (c->is_arplooking || c->is_resolving)) {
+    // Fail to send, no target MAC or IP
+    MG_VERBOSE(("still resolving..."));
   } else if (c->is_udp) {
     struct connstate *s = (struct connstate *) (c + 1);
     len = trim_len(c, len);  // Trimming length if necessary
