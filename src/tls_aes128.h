@@ -24,9 +24,6 @@
 #ifndef TLS_AES128_H
 #define TLS_AES128_H
 
-typedef unsigned char uchar;  // add some convienent shorter types
-typedef unsigned int uint;
-
 /******************************************************************************
  *  AES_CONTEXT : cipher context / holds inter-call data
  ******************************************************************************/
