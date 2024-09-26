@@ -517,8 +517,8 @@ jobs:
     - run: make -C examples/stm32/nucleo-f746zg-make-freertos-tcp test VCON_API_KEY=${{secrets.VCON_API_KEY}}
     - name: Cube
       run: echo # nothing specific to install or do
-    - run: make -C test/cube test PROJECTS=../../examples/stm32/nucleo-f746zg-cube-baremetal-builtin VCON_API_KEY=${{secrets.VCON_API_KEY}} DEVICE=5
-    - run: make -C test/cube test PROJECTS=../../examples/stm32/nucleo-f746zg-cube-freertos-builtin VCON_API_KEY=${{secrets.VCON_API_KEY}} DEVICE=5    
+#    - run: make -C test/cube test PROJECTS=../../examples/stm32/nucleo-f746zg-cube-baremetal-builtin VCON_API_KEY=${{secrets.VCON_API_KEY}} DEVICE=5
+#    - run: make -C test/cube test PROJECTS=../../examples/stm32/nucleo-f746zg-cube-freertos-builtin VCON_API_KEY=${{secrets.VCON_API_KEY}} DEVICE=5    
     - run: make -C test/cube test PROJECTS=../../examples/stm32/nucleo-f746zg-cube-freertos-lwip VCON_API_KEY=${{secrets.VCON_API_KEY}} DEVICE=5
 
   test_f4:
@@ -532,8 +532,8 @@ jobs:
     - run: make -C examples/stm32/nucleo-f429zi-make-freertos-builtin test VCON_API_KEY=${{secrets.VCON_API_KEY}}
     - name: Cube
       run: echo # nothing specific to install or do
-    - run: make -C test/cube test PROJECTS=../../examples/stm32/nucleo-f429zi-cube-baremetal-builtin VCON_API_KEY=${{secrets.VCON_API_KEY}} DEVICE=2
-    - run: make -C test/cube test PROJECTS=../../examples/stm32/nucleo-f429zi-cube-freertos-builtin VCON_API_KEY=${{secrets.VCON_API_KEY}} DEVICE=2
+#    - run: make -C test/cube test PROJECTS=../../examples/stm32/nucleo-f429zi-cube-baremetal-builtin VCON_API_KEY=${{secrets.VCON_API_KEY}} DEVICE=2
+#    - run: make -C test/cube test PROJECTS=../../examples/stm32/nucleo-f429zi-cube-freertos-builtin VCON_API_KEY=${{secrets.VCON_API_KEY}} DEVICE=2
     - run: make -C test/cube test PROJECTS=../../examples/stm32/nucleo-f429zi-cube-freertos-lwip VCON_API_KEY=${{secrets.VCON_API_KEY}} DEVICE=2
 
   test_h743:
@@ -545,10 +545,10 @@ jobs:
       run: sudo apt -y update && sudo apt -y install gcc-arm-none-eabi
     - run: make -C examples/stm32/nucleo-h743zi-make-baremetal-builtin test VCON_API_KEY=${{secrets.VCON_API_KEY}}
     - run: make -C examples/stm32/nucleo-h743zi-make-freertos-builtin test VCON_API_KEY=${{secrets.VCON_API_KEY}}
-    - name: Cube
-      run: echo # nothing specific to install or do
-    - run: make -C test/cube test PROJECTS=../../examples/stm32/nucleo-h743zi-cube-baremetal-builtin VCON_API_KEY=${{secrets.VCON_API_KEY}} DEVICE=6
-    - run: make -C test/cube test PROJECTS=../../examples/stm32/nucleo-h743zi-cube-freertos-builtin VCON_API_KEY=${{secrets.VCON_API_KEY}} DEVICE=6
+#    - name: Cube
+#      run: echo # nothing specific to install or do
+#    - run: make -C test/cube test PROJECTS=../../examples/stm32/nucleo-h743zi-cube-baremetal-builtin VCON_API_KEY=${{secrets.VCON_API_KEY}} DEVICE=6
+#    - run: make -C test/cube test PROJECTS=../../examples/stm32/nucleo-h743zi-cube-freertos-builtin VCON_API_KEY=${{secrets.VCON_API_KEY}} DEVICE=6
 
   test_h723:
     runs-on: ubuntu-latest

@@ -1,3 +1,1 @@
-# FreeRTOS web device dashboard on NUCLEO-F429ZI, built on STM32CubeIDE
-
-See https://mongoose.ws/tutorials/stm32/all-cube-freertos-builtin/
+See [Wizard](https://mongoose.ws/wizard/#/output?board=f429&ide=CubeIDE&rtos=FreeRTOS&file=README.md)
