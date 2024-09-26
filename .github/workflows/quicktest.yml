@@ -379,16 +379,16 @@ jobs:
           echo GO=1 >> $GITHUB_ENV
           # nothing specific to install or do
         fi
-    - if: ${{ env.GO == 1 }}
-      run: |
-        if ./test/match_changed_files.sh 'examples/stm32/nucleo-f746zg-cube-baremetal-builtin'; then
-          make -C test/cube test PROJECTS=../../examples/stm32/nucleo-f746zg-cube-baremetal-builtin VCON_API_KEY=${{secrets.VCON_API_KEY}} DEVICE=5
-        fi
-    - if: ${{ env.GO == 1 }}
-      run: |
-        if ./test/match_changed_files.sh 'examples/stm32/nucleo-f746zg-cube-freertos-builtin'; then
-          make -C test/cube test PROJECTS=../../examples/stm32/nucleo-f746zg-cube-freertos-builtin VCON_API_KEY=${{secrets.VCON_API_KEY}} DEVICE=5    
-        fi
+#    - if: ${{ env.GO == 1 }}
+#      run: |
+#        if ./test/match_changed_files.sh 'examples/stm32/nucleo-f746zg-cube-baremetal-builtin'; then
+#          make -C test/cube test PROJECTS=../../examples/stm32/nucleo-f746zg-cube-baremetal-builtin VCON_API_KEY=${{secrets.VCON_API_KEY}} DEVICE=5
+#        fi
+#    - if: ${{ env.GO == 1 }}
+#      run: |
+#        if ./test/match_changed_files.sh 'examples/stm32/nucleo-f746zg-cube-freertos-builtin'; then
+#          make -C test/cube test PROJECTS=../../examples/stm32/nucleo-f746zg-cube-freertos-builtin VCON_API_KEY=${{secrets.VCON_API_KEY}} DEVICE=5    
+#        fi
     - if: ${{ env.GO == 1 }}
       run: |
         if ./test/match_changed_files.sh 'examples/stm32/nucleo-f746zg-cube-freertos-lwip'; then
@@ -427,16 +427,16 @@ jobs:
           echo GO=1 >> $GITHUB_ENV
           # nothing specific to install or do
         fi
-    - if: ${{ env.GO == 1 }}
-      run: |
-        if ./test/match_changed_files.sh 'examples/stm32/nucleo-f429zi-cube-baremetal-builtin'; then
-          make -C test/cube test PROJECTS=../../examples/stm32/nucleo-f429zi-cube-baremetal-builtin VCON_API_KEY=${{secrets.VCON_API_KEY}} DEVICE=2
-        fi
-    - if: ${{ env.GO == 1 }}
-      run: |
-        if ./test/match_changed_files.sh 'examples/stm32/nucleo-f429zi-cube-freertos-builtin'; then
-          make -C test/cube test PROJECTS=../../examples/stm32/nucleo-f429zi-cube-freertos-builtin VCON_API_KEY=${{secrets.VCON_API_KEY}} DEVICE=2
-        fi
+#    - if: ${{ env.GO == 1 }}
+#      run: |
+#        if ./test/match_changed_files.sh 'examples/stm32/nucleo-f429zi-cube-baremetal-builtin'; then
+#          make -C test/cube test PROJECTS=../../examples/stm32/nucleo-f429zi-cube-baremetal-builtin VCON_API_KEY=${{secrets.VCON_API_KEY}} DEVICE=2
+#        fi
+#    - if: ${{ env.GO == 1 }}
+#      run: |
+#        if ./test/match_changed_files.sh 'examples/stm32/nucleo-f429zi-cube-freertos-builtin'; then
+#          make -C test/cube test PROJECTS=../../examples/stm32/nucleo-f429zi-cube-freertos-builtin VCON_API_KEY=${{secrets.VCON_API_KEY}} DEVICE=2
+#        fi
     - if: ${{ env.GO == 1 }}
       run: |
         if ./test/match_changed_files.sh 'examples/stm32/nucleo-f429zi-cube-freertos-lwip'; then
@@ -467,23 +467,23 @@ jobs:
         if ./test/match_changed_files.sh 'examples/stm32/nucleo-h743zi-make-freertos-builtin'; then
           make -C examples/stm32/nucleo-h743zi-make-freertos-builtin test VCON_API_KEY=${{secrets.VCON_API_KEY}}
         fi
-    - name: Cube
-      run: |
-        echo GO=0 >> $GITHUB_ENV
-        if ./test/match_changed_files.sh 'examples/stm32/nucleo-h74.*-cube-'; then
-          echo GO=1 >> $GITHUB_ENV
-          # nothing specific to install or do
-        fi
-    - if: ${{ env.GO == 1 }}
-      run: |
-        if ./test/match_changed_files.sh 'examples/stm32/nucleo-h743zi-cube-baremetal-builtin'; then
-          make -C test/cube test PROJECTS=../../examples/stm32/nucleo-h743zi-cube-baremetal-builtin VCON_API_KEY=${{secrets.VCON_API_KEY}} DEVICE=6
-        fi
-    - if: ${{ env.GO == 1 }}
-      run: |
-        if ./test/match_changed_files.sh 'examples/stm32/nucleo-h743zi-cube-freertos-builtin'; then
-          make -C test/cube test PROJECTS=../../examples/stm32/nucleo-h743zi-cube-freertos-builtin VCON_API_KEY=${{secrets.VCON_API_KEY}} DEVICE=6
-        fi
+#    - name: Cube
+#      run: |
+#        echo GO=0 >> $GITHUB_ENV
+#        if ./test/match_changed_files.sh 'examples/stm32/nucleo-h74.*-cube-'; then
+#          echo GO=1 >> $GITHUB_ENV
+#          # nothing specific to install or do
+#        fi
+#    - if: ${{ env.GO == 1 }}
+#      run: |
+#        if ./test/match_changed_files.sh 'examples/stm32/nucleo-h743zi-cube-baremetal-builtin'; then
+#          make -C test/cube test PROJECTS=../../examples/stm32/nucleo-h743zi-cube-baremetal-builtin VCON_API_KEY=${{secrets.VCON_API_KEY}} DEVICE=6
+#        fi
+#    - if: ${{ env.GO == 1 }}
+#      run: |
+#        if ./test/match_changed_files.sh 'examples/stm32/nucleo-h743zi-cube-freertos-builtin'; then
+#          make -C test/cube test PROJECTS=../../examples/stm32/nucleo-h743zi-cube-freertos-builtin VCON_API_KEY=${{secrets.VCON_API_KEY}} DEVICE=6
+#        fi
 
   test_h723:
     runs-on: ubuntu-latest

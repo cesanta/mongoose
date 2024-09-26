@@ -1,3 +1,1 @@
-# FreeRTOS Web device dashboard on NUCLEO-F746ZG, built on STM32CubeIDE
-
-See https://mongoose.ws/tutorials/stm32/all-cube-freertos-builtin/
+See [Wizard](https://mongoose.ws/wizard/#/output?board=f746&ide=CubeIDE&rtos=FreeRTOS&file=README.md)
