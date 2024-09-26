@@ -484,7 +484,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with: { fetch-depth: 2 }
-      - run: echo # nothing specific to install or do
+      - run: sudo pip install yq
       - run: cd test/cube && make
 
   zephyr_examples:

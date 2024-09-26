@@ -2,15 +2,14 @@ ROOT ?= $(realpath $(CURDIR)/../..)
 PROJECTS ?= $(wildcard ../../examples/stm32/nucleo-*-cube-*)
 TARGET ?= Debug
 DOCKER = docker run --rm -v $(ROOT):$(ROOT) -v $(CURDIR):/root -w $(CURDIR) 
-IMAGE ?= springrockconsulting/stm32cubeide:v1
-# image author did not set path, so a hardcoded reference to a variable name dir is needed
-PATHTO ?= /opt/st/stm32cubeide_1.12.0/
+IMAGE ?= scaprile/cubeozone
+# set PATHTO if image author did not set path
 
 all: $(PROJECTS)
 	$(DOCKER) $(IMAGE) $(PATHTO)headless-build.sh -data workspace -removeAll workspace
 
 $(PROJECTS): FORCE
-	$(DOCKER) $(IMAGE) $(PATHTO)headless-build.sh -data workspace -import $@ -cleanBuild $(@F)/$(TARGET)
+	(make -C $@ && sudo make -C $@ clean) || $(DOCKER) $(IMAGE) $(PATHTO)headless-build.sh -data workspace -import $@ -cleanBuild $(@F)/$(TARGET)
 
 FORCE:
 
