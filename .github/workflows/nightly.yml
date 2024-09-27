@@ -407,6 +407,7 @@ jobs:
           - path: stm32/nucleo-f746zg-make-baremetal-builtin-cmsis_driver
           - path: stm32/nucleo-h563zi-make-baremetal-builtin
           - path: stm32/nucleo-h563zi-make-freertos-builtin
+          - path: stm32/nucleo-h723zg-make-baremetal-builtin
           - path: stm32/nucleo-h723zg-make-freertos-builtin
           - path: stm32/nucleo-h743zi-make-baremetal-builtin
           - path: stm32/nucleo-h743zi-make-freertos-builtin
@@ -463,21 +464,6 @@ jobs:
 #      - run: echo # nothing specific to install or do
 #      - run: make -C examples/${{ matrix.example.path }} device_dashboard
 #      - run: make -C examples/${{ matrix.example.path }} mqtt_dashboard
-
-  dual_examples_arm:
-    runs-on: ubuntu-latest
-    strategy:
-      fail-fast: false
-      matrix:
-        example:
-          - path: stm32/nucleo-h723zg-make-baremetal-builtin
-    name: ${{ matrix.example.path }}
-    steps:
-      - uses: actions/checkout@v4
-        with: { fetch-depth: 2 }
-      - run: sudo apt -y update && sudo apt -y install gcc-arm-none-eabi
-      - run: make -C examples/${{ matrix.example.path }} device_dashboard
-      - run: make -C examples/${{ matrix.example.path }} mqtt_dashboard
 
   cube_examples:
     runs-on: ubuntu-latest
