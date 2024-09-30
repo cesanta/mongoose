@@ -7,6 +7,7 @@
 #include "tls_chacha20.h"
 #include "tls_uecc.h"
 #include "tls_x25519.h"
+#include "util.h"
 
 #if MG_TLS == MG_TLS_BUILTIN
 
@@ -89,15 +90,6 @@ struct tls_data {
 
   struct tls_enc enc;
 };
-
-#define MG_LOAD_BE16(p) ((uint16_t) ((MG_U8P(p)[0] << 8U) | MG_U8P(p)[1]))
-#define MG_LOAD_BE24(p) \
-  ((uint32_t) ((MG_U8P(p)[0] << 16U) | (MG_U8P(p)[1] << 8U) | MG_U8P(p)[2]))
-#define MG_STORE_BE16(p, n)           \
-  do {                                \
-    MG_U8P(p)[0] = ((n) >> 8U) & 255; \
-    MG_U8P(p)[1] = (n) &255;          \
-  } while (0)
 
 #define TLS_RECHDR_SIZE 5  // 1 byte type, 2 bytes version, 2 bytes length
 #define TLS_MSGHDR_SIZE 4  // 1 byte type, 3 bytes length
