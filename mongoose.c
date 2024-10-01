@@ -7547,25 +7547,28 @@ static void read_conn(struct mg_connection *c) {
     if (c->is_tls) {
       // Do not read to the raw TLS buffer if it already has enough.
       // This is to prevent overflowing c->rtls if our reads are slow
+      long m;
       if (c->rtls.len < 16 * 1024 + 40) {  // TLS record, header, MAC, padding
         if (!ioalloc(c, &c->rtls)) return;
         n = recv_raw(c, (char *) &c->rtls.buf[c->rtls.len],
                      c->rtls.size - c->rtls.len);
-        if (n == MG_IO_ERR) {
-          if (c->rtls.len == 0 || c->is_io_err) {
-            // Close only when we have fully drained both rtls and TLS buffers
-            c->is_closing = 1;  // or there's nothing we can do about it.
-          } else {  // TLS buffer is capped to max record size, mark and
-            c->is_io_err = 1;  // give TLS a chance to process that.
-          }
-        } else {
-          if (n > 0) c->rtls.len += (size_t) n;
-          if (c->is_tls_hs) mg_tls_handshake(c);
-        }
+        if (n > 0) c->rtls.len += (size_t) n;
       }
-      n = c->is_tls_hs    ? (long) MG_IO_WAIT
-          : c->is_closing ? -1
-                          : mg_tls_recv(c, buf, len);
+      // there can still be > 16K from last iteration, always mg_tls_recv()
+      m = c->is_tls_hs ? (long) MG_IO_WAIT : mg_tls_recv(c, buf, len);
+      if (n == MG_IO_ERR) {
+        if (c->rtls.len == 0 || m < 0) {
+          // Close only when we have fully drained both rtls and TLS buffers
+          c->is_closing = 1;  // or there's nothing we can do about it.
+          m = -1;
+        } else { // see #2885
+          // TLS buffer is capped to max record size, even though, there can
+          // be more than one record, give TLS a chance to process them.
+        }
+      } else if (c->is_tls_hs) {
+        mg_tls_handshake(c);
+      }
+      n = m;
     } else {
       n = recv_raw(c, buf, len);
     }
