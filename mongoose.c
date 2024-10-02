@@ -7560,7 +7560,7 @@ static void read_conn(struct mg_connection *c) {
         if (c->rtls.len == 0 || m < 0) {
           // Close only when we have fully drained both rtls and TLS buffers
           c->is_closing = 1;  // or there's nothing we can do about it.
-          m = -1;
+          m = MG_IO_ERR;
         } else { // see #2885
           // TLS buffer is capped to max record size, even though, there can
           // be more than one record, give TLS a chance to process them.
@@ -17180,8 +17180,10 @@ struct mg_tcpip_driver mg_tcpip_driver_imxrt = {mg_tcpip_driver_imxrt_init,
 
 enum {                      // ID1  ID2
   MG_PHY_KSZ8x = 0x22,      // 0022 1561 - KSZ8081RNB
-  MG_PHY_DP83x = 0x2000,    // 2000 a140 - TI DP83825I
+  MG_PHY_DP83x = 0x2000,
   MG_PHY_DP83867 = 0xa231,  // 2000 a231 - TI DP83867I
+  MG_PHY_DP83825 = 0xa140,  // 2000 a140 - TI DP83825I
+  MG_PHY_DP83848 = 0x5ca2,  // 2000 5ca2 - TI DP83848I
   MG_PHY_LAN87x = 0x7,      // 0007 c0fx - LAN8720
   MG_PHY_RTL8201 = 0x1C     // 001c c816 - RTL8201
 };
@@ -17208,6 +17210,10 @@ static const char *mg_phy_id_to_str(uint16_t id1, uint16_t id2) {
       switch (id2) {
         case MG_PHY_DP83867:
           return "DP83867";
+        case MG_PHY_DP83848:
+          return "DP83848";
+        case MG_PHY_DP83825:
+          return "DP83825";
         default:
           return "DP83x";
       }
@@ -17245,7 +17251,7 @@ void mg_phy_init(struct mg_phy *phy, uint8_t phy_addr, uint8_t config) {
     // nothing to do
   } else {  // MAC clocks PHY, PHY has no xtal
     // Enable 50 MHz external ref clock at XI (preserve defaults)
-    if (id1 == MG_PHY_DP83x && id2 != MG_PHY_DP83867) {
+    if (id1 == MG_PHY_DP83x && id2 != MG_PHY_DP83867 && id2 != MG_PHY_DP83848) {
       phy->write_reg(phy_addr, MG_PHY_DP83x_REG_RCSR, MG_BIT(7) | MG_BIT(0));
     } else if (id1 == MG_PHY_KSZ8x) {
       // Disable isolation (override hw, it doesn't make sense at this point)
