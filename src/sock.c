@@ -177,7 +177,11 @@ static void mg_set_non_blocking_mode(MG_SOCKET_TYPE fd) {
 }
 
 bool mg_open_listener(struct mg_connection *c, const char *url) {
-  MG_SOCKET_TYPE fd = MG_INVALID_SOCKET;
+  	return mg_open_listener_on_socket(c, url, MG_INVALID_SOCKET);
+}
+
+bool mg_open_listener_on_socket(struct mg_connection *c, const char *url, MG_SOCKET_TYPE fd) {
+  bool create_socket = (fd == MG_INVALID_SOCKET);
   bool success = false;
   c->loc.port = mg_htons(mg_url_port(url));
   if (!mg_aton(mg_url_host(url), &c->loc)) {
@@ -190,7 +194,7 @@ bool mg_open_listener(struct mg_connection *c, const char *url) {
     int proto = type == SOCK_DGRAM ? IPPROTO_UDP : IPPROTO_TCP;
     (void) on;
 
-    if ((fd = socket(af, type, proto)) == MG_INVALID_SOCKET) {
+    if (create_socket && ((fd = socket(af, type, proto)) == MG_INVALID_SOCKET)) {
       MG_ERROR(("socket: %d", MG_SOCK_ERR(-1)));
 #if defined(SO_EXCLUSIVEADDRUSE)
     } else if ((rc = setsockopt(fd, SOL_SOCKET, SO_EXCLUSIVEADDRUSE,
@@ -219,7 +223,7 @@ bool mg_open_listener(struct mg_connection *c, const char *url) {
       // See #2089. Allow to bind v4 and v6 sockets on the same port
       MG_ERROR(("setsockopt(IPV6_V6ONLY): %d", MG_SOCK_ERR(rc)));
 #endif
-    } else if ((rc = bind(fd, &usa.sa, slen)) != 0) {
+    } else if (create_socket && ((rc = bind(fd, &usa.sa, slen)) != 0)) {
       MG_ERROR(("bind: %d", MG_SOCK_ERR(rc)));
     } else if ((type == SOCK_STREAM &&
                 (rc = listen(fd, MG_SOCK_LISTEN_BACKLOG_SIZE)) != 0)) {

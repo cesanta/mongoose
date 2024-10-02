@@ -179,10 +179,15 @@ struct mg_connection *mg_connect(struct mg_mgr *mgr, const char *url,
 
 struct mg_connection *mg_listen(struct mg_mgr *mgr, const char *url,
                                 mg_event_handler_t fn, void *fn_data) {
+  return mg_listen_on_socket(mgr, url, MG_INVALID_SOCKET, fn, fn_data);
+}
+
+struct mg_connection *mg_listen_on_socket(struct mg_mgr *mgr, const char *url,
+		MG_SOCKET_TYPE fd, mg_event_handler_t fn, void *fn_data) {
   struct mg_connection *c = NULL;
   if ((c = mg_alloc_conn(mgr)) == NULL) {
     MG_ERROR(("OOM %s", url));
-  } else if (!mg_open_listener(c, url)) {
+  } else if (!mg_open_listener_on_socket(c, url, fd)) {
     MG_ERROR(("Failed: %s, errno %d", url, errno));
     MG_PROF_FREE(c);
     free(c);

@@ -85,6 +85,8 @@ void mg_mgr_free(struct mg_mgr *);
 
 struct mg_connection *mg_listen(struct mg_mgr *, const char *url,
                                 mg_event_handler_t fn, void *fn_data);
+struct mg_connection *mg_listen_on_socket(struct mg_mgr *mgr, const char *url,
+		          MG_SOCKET_TYPE fd, mg_event_handler_t fn, void *fn_data);
 struct mg_connection *mg_connect(struct mg_mgr *, const char *url,
                                  mg_event_handler_t fn, void *fn_data);
 struct mg_connection *mg_wrapfd(struct mg_mgr *mgr, int fd,
@@ -99,6 +101,8 @@ bool mg_aton(struct mg_str str, struct mg_addr *addr);
 struct mg_connection *mg_alloc_conn(struct mg_mgr *);
 void mg_close_conn(struct mg_connection *c);
 bool mg_open_listener(struct mg_connection *c, const char *url);
+bool mg_open_listener_on_socket(struct mg_connection *c, const char *url, 
+                                                    MG_SOCKET_TYPE fd);
 
 // Utility functions
 bool mg_wakeup(struct mg_mgr *, unsigned long id, const void *buf, size_t len);

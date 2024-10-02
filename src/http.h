@@ -43,6 +43,8 @@ void mg_http_write_chunk(struct mg_connection *c, const char *buf, size_t len);
 void mg_http_delete_chunk(struct mg_connection *c, struct mg_http_message *hm);
 struct mg_connection *mg_http_listen(struct mg_mgr *, const char *url,
                                      mg_event_handler_t fn, void *fn_data);
+struct mg_connection *mg_http_listen_on_socket(struct mg_mgr *mgr, 
+      const char *url, MG_SOCKET_TYPE fd, mg_event_handler_t fn, void *fn_data);
 struct mg_connection *mg_http_connect(struct mg_mgr *, const char *url,
                                       mg_event_handler_t fn, void *fn_data);
 void mg_http_serve_dir(struct mg_connection *, struct mg_http_message *hm,
