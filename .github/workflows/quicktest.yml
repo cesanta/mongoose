@@ -173,6 +173,67 @@ jobs:
     - run: make -C test clean_tutorials_mac
 
 
+#  wizard_examples:
+#    runs-on: ubuntu-latest
+#    strategy:
+#      fail-fast: false
+#      matrix:
+#        example:
+#          - path: esp32/esp32-idf
+#    name: ${{ matrix.example.path }}
+#    env:
+#      GO: 0
+#    steps:
+#      - uses: actions/checkout@v4
+#        with: { fetch-depth: 2 }
+#      - run: |
+#          if ./test/match_changed_files.sh '^src'; then
+#            echo GO=1 >> $GITHUB_ENV
+#            # nothing specific to install or do
+#          fi
+#      - if: ${{ env.GO == 1 }}
+#        run: make -C examples/${{ matrix.example.path }} build
+
+  wizard_examples_arm:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        example:
+          - path: nxp/frdm-mcxn947-make-baremetal-builtin
+          - path: nxp/frdm-mcxn947-make-freertos-builtin
+          - path: nxp/rt1020-evk-make-baremetal-builtin
+          - path: nxp/rt1060-evk-make-baremetal-builtin
+          - path: nxp/rt1170-evk-make-baremetal-builtin
+          - path: stm32/nucleo-f429zi-make-baremetal-builtin
+          - path: stm32/nucleo-f429zi-make-freertos-builtin
+          - path: stm32/nucleo-f746zg-make-baremetal-builtin
+          - path: stm32/nucleo-f746zg-make-freertos-builtin
+          - path: stm32/nucleo-h563zi-make-baremetal-builtin
+          - path: stm32/nucleo-h563zi-make-freertos-builtin
+          - path: stm32/nucleo-h723zg-make-baremetal-builtin
+          - path: stm32/nucleo-h723zg-make-freertos-builtin
+          - path: stm32/nucleo-h743zi-make-baremetal-builtin
+          - path: stm32/nucleo-h743zi-make-freertos-builtin
+          - path: stm32/stm32h573i-dk-make-baremetal-builtin
+          - path: stm32/stm32h573i-dk-make-freertos-builtin
+          - path: ti/ek-tm4c1294xl-make-baremetal-builtin
+          - path: ti/ek-tm4c1294xl-make-freertos-builtin
+    name: ${{ matrix.example.path }}
+    env:
+      GO: 0
+    steps:
+      - uses: actions/checkout@v4
+        with: { fetch-depth: 2 }
+      - run: |
+          if ./test/match_changed_files.sh '^src'; then
+            echo GO=1 >> $GITHUB_ENV
+            sudo apt -y update && sudo apt -y install gcc-arm-none-eabi
+          fi
+      - if: ${{ env.GO == 1 }}
+        run: make -C examples/${{ matrix.example.path }} build
+
+
   generic_examples:
     runs-on: ubuntu-latest
     strategy:
@@ -243,34 +304,15 @@ jobs:
         example:
           - path: infineon/infineon-xmc7200
           - path: microchip/same54-xpro/device-dashboard
-          - path: nxp/frdm-mcxn947-make-baremetal-builtin
-          - path: nxp/frdm-mcxn947-make-freertos-builtin
-          - path: nxp/rt1020-evk-make-baremetal-builtin
           - path: nxp/rt1020-evk-make-freertos-builtin
-          - path: nxp/rt1060-evk-make-baremetal-builtin
           - path: nxp/rt1060-evk-make-freertos-builtin
-          - path: nxp/rt1170-evk-make-baremetal-builtin
           - path: nxp/rt1170-evk-make-freertos-builtin
           - path: renesas/ek-ra6m4-make-baremetal-builtin
           - path: rp2040/pico-rndis-dashboard
           - path: rp2040/pico-w
           - path: rp2040/pico-w5500
-          - path: stm32/nucleo-f429zi-make-baremetal-builtin
-          - path: stm32/nucleo-f429zi-make-freertos-builtin
-          - path: stm32/nucleo-f746zg-make-baremetal-builtin
-          - path: stm32/nucleo-f746zg-make-freertos-builtin
           - path: stm32/nucleo-f746zg-make-freertos-tcp
           - path: stm32/nucleo-f746zg-make-baremetal-builtin-cmsis_driver
-          - path: stm32/nucleo-h563zi-make-baremetal-builtin
-          - path: stm32/nucleo-h563zi-make-freertos-builtin
-          - path: stm32/nucleo-h723zg-make-baremetal-builtin
-          - path: stm32/nucleo-h723zg-make-freertos-builtin
-          - path: stm32/nucleo-h743zi-make-baremetal-builtin
-          - path: stm32/nucleo-h743zi-make-freertos-builtin
-          - path: stm32/stm32h573i-dk-make-baremetal-builtin
-          - path: stm32/stm32h573i-dk-make-freertos-builtin
-          - path: ti/ek-tm4c1294xl-make-baremetal-builtin
-          - path: ti/ek-tm4c1294xl-make-freertos-builtin
     name: ${{ matrix.example.path }}
     env:
       GO: 0
