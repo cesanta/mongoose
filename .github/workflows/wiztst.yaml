@@ -1,0 +1,181 @@
+name: Wizard targets build and test
+on:
+  #schedule:
+  #  - cron: '0 3 * * *' # run at 3 AM UTC
+  # Allow manual runs
+  workflow_dispatch:
+
+jobs:
+  build_ST:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        board: ['f207', 'f429', 'f439', 'f746', 'f756', 'f767', 'h563', 'h573', 'h723', 'h735', 'h743', 'h745', 'h747', 'h753', 'h755']
+        ide: ['GCC+make', 'CubeIDE', 'Zephyr']
+        rtos: ['baremetal', 'FreeRTOS']
+        exclude:
+        - ide: 'Zephyr'
+          rtos: "FreeRTOS"
+        - ide: 'Zephyr'
+          board: "f439"
+        include:
+        - ide: 'Keil'
+          board: "f756"
+          rtos: 'baremetal'
+    name: ${{ matrix.board }} ${{ matrix.ide }} ${{ matrix.rtos }}
+    steps:
+      - name: Build and test
+        run: |
+          response=$(curl -s -X POST -H "Content-Type: application/json" -d '{"build":{"board":"${{ matrix.board }}","ide":"${{ matrix.ide }}","rtos":"${{ matrix.rtos }}"}}' https://mongoose.ws/wizard/api/hash)
+          hash=$(echo $response | jq -r '.hash')
+          files=$(echo $response | jq -r '.files')
+          if [ "${{ matrix.ide }}" == "GCC+make" ]; then
+            sudo apt -y update && sudo apt -y install gcc-arm-none-eabi
+            make -C back/builds/${{ matrix.board }}/${{ matrix.ide }}/${{ matrix.rtos }}/$hash/
+          else
+            test "$hash" != "" || exit 1
+            test "$files" != "" || exit 1
+            test -d back/builds/${{ matrix.board }}/${{ matrix.ide }}/${{ matrix.rtos }}/$hash/ || exit 1
+          fi
+
+  build_NXP:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        board: ['rt1020', 'rt1024', 'rt1040', 'rt1060', 'rt1064', 'rt1170', 'mcxn947']
+        ide: ['GCC+make'] #, 'MCUXpresso', 'Zephyr'
+        rtos: ['baremetal'] #, 'FreeRTOS']
+        include:
+        - ide: 'GCC+make'
+          board: "mcxn947"
+          rtos: 'FreeRTOS'
+        - ide: 'Zephyr'
+          board: "mcxn947"
+          rtos: 'baremetal'
+        - ide: 'MCUXpresso'
+          board: "mcxn947"
+          rtos: 'baremetal'
+        - ide: 'MCUXpresso'
+          board: "mcxn947"
+          rtos: 'FreeRTOS'
+    name: ${{ matrix.board }} ${{ matrix.ide }} ${{ matrix.rtos }}
+    steps:
+      - name: Build and test
+        run: |
+          response=$(curl -s -X POST -H "Content-Type: application/json" -d '{"build":{"board":"${{ matrix.board }}","ide":"${{ matrix.ide }}","rtos":"${{ matrix.rtos }}"}}' https://mongoose.ws/wizard/api/hash)
+          hash=$(echo $response | jq -r '.hash')
+          files=$(echo $response | jq -r '.files')
+          echo $hash
+          echo $files
+          if [ "${{ matrix.ide }}" == "GCC+make" ]; then
+            sudo apt -y update && sudo apt -y install gcc-arm-none-eabi
+            make -C back/builds/${{ matrix.board }}/${{ matrix.ide }}/${{ matrix.rtos }}/$hash/
+          else
+            test "$hash" != "" || exit 1
+            test "$files" != "" || exit 1
+            test -d back/builds/${{ matrix.board }}/${{ matrix.ide }}/${{ matrix.rtos }}/$hash/ || exit 1
+          fi
+
+  build_Infineon:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        board: ['xmc4400', 'xmc4700', 'xmc7200']
+        ide: ['GCC+make'] #, 'Modus']
+        rtos: ['baremetal'] #, 'FreeRTOS']
+        #include:
+        #- ide: 'Modus'
+        #  board: "xmc7200"
+        #  rtos: 'baremetal'
+    name: ${{ matrix.board }} ${{ matrix.ide }} ${{ matrix.rtos }}
+    steps:
+      - name: Build and test
+        run: |
+          response=$(curl -s -X POST -H "Content-Type: application/json" -d '{"build":{"board":"${{ matrix.board }}","ide":"${{ matrix.ide }}","rtos":"${{ matrix.rtos }}"}}' https://mongoose.ws/wizard/api/hash)
+          hash=$(echo $response | jq -r '.hash')
+          files=$(echo $response | jq -r '.files')
+          echo $hash
+          echo $files
+          if [ "${{ matrix.ide }}" == "GCC+make" ]; then
+            sudo apt -y update && sudo apt -y install gcc-arm-none-eabi
+            make -C back/builds/${{ matrix.board }}/${{ matrix.ide }}/${{ matrix.rtos }}/$hash/
+          else
+            test "$hash" != "" || exit 1
+            test "$files" != "" || exit 1
+            test -d back/builds/${{ matrix.board }}/${{ matrix.ide }}/${{ matrix.rtos }}/$hash/ || exit 1
+          fi
+
+  build_RP2040:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        board: ["evb-pico"]
+        ide: ["Pico-SDK", "Zephyr"]
+        rtos: ['baremetal']
+    name: ${{ matrix.board }} ${{ matrix.ide }} ${{ matrix.rtos }}
+    steps:
+      - name: Build and test
+        run: |
+          response=$(curl -s -X POST -H "Content-Type: application/json" -d '{"build":{"board":"${{ matrix.board }}","ide":"${{ matrix.ide }}","rtos":"${{ matrix.rtos }}"}}' https://mongoose.ws/wizard/api/hash)
+          hash=$(echo $response | jq -r '.hash')
+          files=$(echo $response | jq -r '.files')
+          echo $hash
+          echo $files
+          if [ "${{ matrix.ide }}" == "Pico-SDK" ]; then
+            sudo apt -y update && sudo apt -y install gcc-arm-none-eabi
+            make -C back/builds/${{ matrix.board }}/${{ matrix.ide }}/${{ matrix.rtos }}/$hash/
+          else
+            test "$hash" != "" || exit 1
+            test "$files" != "" || exit 1
+            test -d back/builds/${{ matrix.board }}/${{ matrix.ide }}/${{ matrix.rtos }}/$hash/ || exit 1
+          fi
+
+  build_ESP32:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        board: ["esp32"]
+        ide: ["ESP-IDF"] #, "Zephyr"
+    name: ${{ matrix.board }} ${{ matrix.ide }}
+    steps:
+      - name: Build and test
+        run: |
+          response=$(curl -s -X POST -H "Content-Type: application/json" -d '{"build":{"board":"${{ matrix.board }}","ide":"${{ matrix.ide }}","rtos":"baremetal"}}' https://mongoose.ws/wizard/api/hash)
+          hash=$(echo $response | jq -r '.hash')
+          files=$(echo $response | jq -r '.files')
+          echo $hash
+          echo $files
+          if [ "${{ matrix.ide }}" == "ESP-IDF" ]; then
+            test "$hash" != "" || exit 1
+            test "$files" != "" || exit 1
+            test -d back/builds/${{ matrix.board }}/${{ matrix.ide }}/baremetal/$hash/ || exit 1
+            # make -C back/builds/${{ matrix.board }}/${{ matrix.ide }}/baremetal/$hash/
+          else
+            test "$hash" != "" || exit 1
+            test "$files" != "" || exit 1
+            test -d back/builds/${{ matrix.board }}/${{ matrix.ide }}/baremetal/$hash/ || exit 1
+          fi
+
+  build_Arduino:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        board: ["teensy41"]
+    name: ${{ matrix.board }} Arduino
+    steps:
+      - name: Build and test
+        run: |
+          response=$(curl -s -X POST -H "Content-Type: application/json" -d '{"build":{"board":"${{ matrix.board }}","ide":"Arduino","rtos":"baremetal"}}' https://mongoose.ws/wizard/api/hash)
+          hash=$(echo $response | jq -r '.hash')
+          files=$(echo $response | jq -r '.files')
+          echo $hash
+          echo $files
+          test "$hash" != "" || exit 1
+          test "$files" != "" || exit 1
+          test -d back/builds/${{ matrix.board }}/Arduino/baremetal/$hash/ || exit 1
