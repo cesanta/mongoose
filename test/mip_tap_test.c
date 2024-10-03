@@ -66,13 +66,16 @@ static const char *s_ca_cert =
 
 static int s_num_tests = 0;
 
+#define ABORT()                                                 \
+      usleep(500000);  /* 500 ms, GH print reason */            \
+      abort();
+
 #define ASSERT(expr)                                            \
   do {                                                          \
     s_num_tests++;                                              \
     if (!(expr)) {                                              \
       printf("FAILURE %s:%d: %s\n", __FILE__, __LINE__, #expr); \
-      usleep(500000);  /* 500 ms, GH print reason */            \
-      abort();                                                  \
+      ABORT();                                                  \
     }                                                           \
   } while (0)
 
@@ -317,18 +320,19 @@ int main(void) {
   ifr.ifr_flags = IFF_TAP | IFF_NO_PI;
   if (ioctl(fd, TUNSETIFF, (void *) &ifr) < 0) {
     MG_ERROR(("Failed to setup TAP interface: %s", ifr.ifr_name));
-    abort();  // return EXIT_FAILURE;
+    ABORT();  // return EXIT_FAILURE;
   }
 #else
   ifr.ifr_flags = (short) (IFF_UP | IFF_BROADCAST | IFF_MULTICAST);
   if (ioctl(fd, TUNSIFMODE, (void *) &ifr) < 0) {
     MG_ERROR(("Failed to setup TAP interface: %s", ifr.ifr_name));
-    abort();  // return EXIT_FAILURE;
+    ABORT();  // return EXIT_FAILURE;
   }
 #endif
   fcntl(fd, F_SETFL, fcntl(fd, F_GETFL, 0) | O_NONBLOCK);  // Non-blocking mode
 
   MG_INFO(("Opened TAP interface: %s", iface));
+  usleep(200000);  // 200 ms
 
   // Events
   struct mg_mgr mgr;  // Event manager
@@ -361,6 +365,7 @@ int main(void) {
 
   mg_tcpip_init(&mgr, &mif);
   MG_INFO(("Init done, starting main loop"));
+  usleep(200000);  // 200 ms
 
   // Stack initialization, Network configuration (DHCP lease, ...)
 #if MIPTAPTEST_USING_DHCP == 0
