@@ -1,51 +1,29 @@
-CFLAGS  = -W -Wall -Wextra -Werror -Wundef -Wshadow -Wdouble-promotion
-CFLAGS += -Wformat-truncation -fno-common -Wconversion -Wno-sign-conversion
-CFLAGS += -g3 -Os -ffunction-sections -fdata-sections
-CFLAGS += -I. -Icmsis_core/CMSIS/Core/Include -Icmsis_tm4c/Device/TI/TM4C/Include
-CFLAGS += -mcpu=cortex-m4 -mthumb -mfloat-abi=hard -mfpu=fpv4-sp-d16 $(CFLAGS_EXTRA)
-LDFLAGS ?= -Tlink.ld -nostdlib -nostartfiles --specs nano.specs -lc -lgcc -Wl,--gc-sections -Wl,-Map=$@.map
-
-SOURCES = main.c syscalls.c sysinit.c
-SOURCES += startup.c # startup file. Compiler-dependent!
-
-# Mongoose options are defined in mongoose_config.h
-SOURCES += mongoose.c net.c packed_fs.c
-
-# Example specific build options. See README.md
-CFLAGS += -DHTTP_URL=\"http://0.0.0.0/\"
-
-ifeq ($(OS),Windows_NT)
-  RM = cmd /C del /Q /F /S
-else
-  RM = rm -rf
-endif
+BOARD = tm4c129
+IDE = GCC+make
+RTOS = baremetal
+WIZARD_URL ?= http://mongoose.ws/wizard
 
 all build example: firmware.bin
 
-firmware.bin: firmware.elf
-	arm-none-eabi-objcopy -O binary $< $@
+firmware.bin: wizard
+	make -C wizard CFLAGS_EXTRA=$(CFLAGS_EXTRA) && mv wizard/firmware.bin ./
 
-firmware.elf: cmsis_core cmsis_tm4c $(SOURCES) hal.h link.ld
-	arm-none-eabi-gcc $(SOURCES) $(CFLAGS) $(LDFLAGS) -o $@
+wizard:
+	hash=$$(curl -s -X POST -H "Content-Type: application/json" -d '{"build":{"board":"$(BOARD)","ide":"$(IDE)","rtos":"$(RTOS)"}}' $(WIZARD_URL)/api/hash | jq -r '.hash') \
+	&& curl -s $(WIZARD_URL)/api/zip/$(BOARD)/$(IDE)/$(RTOS)/$$hash -o wizard.zip
+	unzip wizard.zip
+	cd wizard ; rm mongoose.[ch] ; ln -s ../../../../mongoose.c ; ln -s ../../../../mongoose.h
 
-flash: firmware.bin
-	@echo "This requires Uniflash"
-
-cmsis_core:     # ARM CMSIS core headers
-	git clone --depth 1 -b 5.9.0 https://github.com/ARM-software/CMSIS_5 $@
-cmsis_tm4c:     # CMSIS headers for TM4C series
-	git clone --depth 1 --no-checkout https://github.com/speters/CMSIS $@ && cd $@ && git sparse-checkout set Device/TI/TM4C && git checkout
 
 # Automated remote test. Requires env variable VCON_API_KEY set. See https://vcon.io/automated-firmware-tests/
 DEVICE_URL ?= https://dash.vcon.io/api/v3/devices/1
 update: firmware.bin
 	curl --fail-with-body -su :$(VCON_API_KEY) $(DEVICE_URL)/ota --data-binary @$<
 
-test update: CFLAGS += -DUART_DEBUG=UART0
+test update: CFLAGS_EXTRA ="-DUART_DEBUG=UART0"
 test: update
-	curl --fail-with-body -su :$(VCON_API_KEY) $(DEVICE_URL)/tx?t=5 | tee /tmp/output.txt
+	curl --fail-with-body -su :$(VCON_API_KEY) $(DEVICE_URL)/tx?t=15 | tee /tmp/output.txt
 	grep 'READY, IP:' /tmp/output.txt       # Check for network init
-#	grep 'MQTT connected' /tmp/output.txt   # Check for MQTT connection success
 
 clean:
-	$(RM) firmware.* *.su cmsis_core cmsis_tm4c
+	rm -rf firmware.* wizard*

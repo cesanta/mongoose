@@ -1,1 +1,1 @@
-See detailed tutorial at https://mongoose.ws/tutorials/ti/ek-tm4c1294xl-baremetal/
+See [Wizard](https://mongoose.ws/wizard/#/output?board=tm4c129&ide=GCC+make&rtos=baremetal&file=README.md)
