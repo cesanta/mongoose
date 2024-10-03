@@ -328,6 +328,7 @@ jobs:
       fail-fast: false
       matrix:
         example:
+          - path: infineon/infineon-xmc7200
           - path: nxp/frdm-mcxn947-make-baremetal-builtin
           - path: nxp/frdm-mcxn947-make-freertos-builtin
           - path: nxp/rt1020-evk-make-baremetal-builtin
@@ -436,7 +437,6 @@ jobs:
       matrix:
         ssl: ["", -DMG_TLS=MG_TLS_BUILTIN]
         example:
-          - path: infineon/infineon-xmc7200
           - path: microchip/same54-xpro/device-dashboard
           - path: nxp/rt1020-evk-make-freertos-builtin
           - path: nxp/rt1060-evk-make-freertos-builtin
