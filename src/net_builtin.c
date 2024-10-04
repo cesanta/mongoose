@@ -48,8 +48,8 @@ struct ip {
   uint16_t len;   // Length
   uint16_t id;    // Unused
   uint16_t frag;  // Fragmentation
-#define IP_FRAG_OFFSET_MSK 0xFF1F
-#define IP_MORE_FRAGS_MSK 0x20
+#define IP_FRAG_OFFSET_MSK 0x1fff
+#define IP_MORE_FRAGS_MSK 0x2000
   uint8_t ttl;    // Time to live
   uint8_t proto;  // Upper level protocol
   uint16_t csum;  // Checksum
@@ -223,8 +223,8 @@ static struct ip *tx_ip(struct mg_tcpip_if *ifp, uint8_t *mac_dst,
   memcpy(eth->src, ifp->mac, sizeof(eth->src));  // Use our MAC
   eth->type = mg_htons(0x800);
   memset(ip, 0, sizeof(*ip));
-  ip->ver = 0x45;   // Version 4, header length 5 words
-  ip->frag = 0x40;  // Don't fragment
+  ip->ver = 0x45;               // Version 4, header length 5 words
+  ip->frag = mg_htons(0x4000);  // Don't fragment
   ip->len = mg_htons((uint16_t) (sizeof(*ip) + plen));
   ip->ttl = 64;
   ip->proto = proto;
@@ -784,7 +784,8 @@ static void rx_tcp(struct mg_tcpip_if *ifp, struct pkt *pkt) {
 }
 
 static void rx_ip(struct mg_tcpip_if *ifp, struct pkt *pkt) {
-  if (pkt->ip->frag & IP_MORE_FRAGS_MSK || pkt->ip->frag & IP_FRAG_OFFSET_MSK) {
+  uint16_t frag = mg_ntohs(pkt->ip->frag);
+  if (frag & IP_MORE_FRAGS_MSK || frag & IP_FRAG_OFFSET_MSK) {
     if (pkt->ip->proto == 17) pkt->udp = (struct udp *) (pkt->ip + 1);
     if (pkt->ip->proto == 6) pkt->tcp = (struct tcp *) (pkt->ip + 1);
     struct mg_connection *c = getpeer(ifp->mgr, pkt, false);
@@ -948,7 +949,8 @@ static void mg_tcpip_poll(struct mg_tcpip_if *ifp, uint64_t now) {
 
   // Process timeouts
   for (c = ifp->mgr->conns; c != NULL; c = c->next) {
-    if ((c->is_udp && !c->is_arplooking) || c->is_listening || c->is_resolving) continue;
+    if ((c->is_udp && !c->is_arplooking) || c->is_listening || c->is_resolving)
+      continue;
     struct connstate *s = (struct connstate *) (c + 1);
     uint32_t rem_ip;
     memcpy(&rem_ip, c->rem.ip, sizeof(uint32_t));
