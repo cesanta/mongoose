@@ -10,7 +10,15 @@ all: $(PROJECTS)
 
 $(PROJECTS): FORCE
 	(make -C $@ && make -C $@ clean) || ( \
-	PROJNAME=`xq -r .projectDescription.name $@/.project` && \
-	$(DOCKER) $(IMAGE) $(PATHTO)headless-build.sh -data workspace -import $@ -cleanBuild $$PROJNAME/$(TARGET) )
+	COREDIRS=`find $@ -maxdepth 1 -name 'CM*' -print` && ( \
+	(test "$$COREDIRS" == "" && \
+	  PROJNAME=`xq -r .projectDescription.name $@/.project` && \
+	  $(DOCKER) $(IMAGE) $(PATHTO)headless-build.sh -data workspace -import $@ -cleanBuild $$PROJNAME/$(TARGET) ) || ( \
+	(test "$$COREDIRS" != "" && \
+	  for core in $$COREDIRS; do \
+	    DIR=`basename $$core` \
+	    PROJNAME=`xq -r .projectDescription.name $@/$$DIR/.project` && \
+	    $(DOCKER) $(IMAGE) $(PATHTO)headless-build.sh -data workspace -import $@/$$DIR -cleanBuild $$PROJNAME/$(TARGET) || exit 1; \
+	  done ))))
 
 FORCE:
