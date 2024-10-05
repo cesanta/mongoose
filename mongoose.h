@@ -1292,9 +1292,6 @@ int mg_tls_x25519(uint8_t out[X25519_BYTES], const uint8_t scalar[X25519_BYTES],
 #ifndef TLS_AES128_H
 #define TLS_AES128_H
 
-typedef unsigned char uchar;  // add some convienent shorter types
-typedef unsigned int uint;
-
 /******************************************************************************
  *  AES_CONTEXT : cipher context / holds inter-call data
  ******************************************************************************/

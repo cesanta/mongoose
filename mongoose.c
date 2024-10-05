@@ -8379,8 +8379,8 @@ static void aes_init_keygen_tables(void);
  ******************************************************************************/
 static int aes_setkey(aes_context *ctx,  // pointer to context
                       int mode,          // 1 or 0 for Encrypt/Decrypt
-                      const uchar *key,  // AES input key
-                      uint keysize);  // size in bytes (must be 16, 24, 32 for
+                      const unsigned char *key,  // AES input key
+                      unsigned int keysize);  // size in bytes (must be 16, 24, 32 for
                                       // 128, 192 or 256-bit keys respectively)
                                       // returns 0 for success
 
@@ -8388,8 +8388,8 @@ static int aes_setkey(aes_context *ctx,  // pointer to context
  *  AES_CIPHER : called to encrypt or decrypt ONE 128-bit block of data
  ******************************************************************************/
 static int aes_cipher(aes_context *ctx,       // pointer to context
-                      const uchar input[16],  // 128-bit block to en/decipher
-                      uchar output[16]);      // 128-bit output result block
+                      const unsigned char input[16],  // 128-bit block to en/decipher
+                      unsigned char output[16]);      // 128-bit output result block
                                               // returns 0 for success
 
 /******************************************************************************
@@ -8401,9 +8401,9 @@ typedef struct {
   uint64_t add_len;     // total add data length
   uint64_t HL[16];      // precalculated lo-half HTable
   uint64_t HH[16];      // precalculated hi-half HTable
-  uchar base_ectr[16];  // first counter-mode cipher output for tag
-  uchar y[16];          // the current cipher-input IV|Counter value
-  uchar buf[16];        // buf working value
+  unsigned char base_ectr[16];  // first counter-mode cipher output for tag
+  unsigned char y[16];          // the current cipher-input IV|Counter value
+  unsigned char buf[16];        // buf working value
   aes_context aes_ctx;  // cipher context used
 } gcm_context;
 
@@ -8412,8 +8412,8 @@ typedef struct {
  ******************************************************************************/
 static int gcm_setkey(
     gcm_context *ctx,   // caller-provided context ptr
-    const uchar *key,   // pointer to cipher key
-    const uint keysize  // size in bytes (must be 16, 24, 32 for
+    const unsigned char *key,   // pointer to cipher key
+    const unsigned int keysize  // size in bytes (must be 16, 24, 32 for
                         // 128, 192 or 256-bit keys respectively)
 );                      // returns 0 for success
 
@@ -8437,14 +8437,14 @@ static int gcm_setkey(
 static int gcm_crypt_and_tag(
     gcm_context *ctx,    // gcm context with key already setup
     int mode,            // cipher direction: MG_ENCRYPT (1) or MG_DECRYPT (0)
-    const uchar *iv,     // pointer to the 12-byte initialization vector
+    const unsigned char *iv,     // pointer to the 12-byte initialization vector
     size_t iv_len,       // byte length if the IV. should always be 12
-    const uchar *add,    // pointer to the non-ciphered additional data
+    const unsigned char *add,    // pointer to the non-ciphered additional data
     size_t add_len,      // byte length of the additional AEAD data
-    const uchar *input,  // pointer to the cipher data source
-    uchar *output,       // pointer to the cipher data destination
+    const unsigned char *input,  // pointer to the cipher data source
+    unsigned char *output,       // pointer to the cipher data destination
     size_t length,       // byte length of the cipher data
-    uchar *tag,          // pointer to the tag to be generated
+    unsigned char *tag,          // pointer to the tag to be generated
     size_t tag_len);     // byte length of the tag to be generated
 
 /******************************************************************************
@@ -8458,9 +8458,9 @@ static int gcm_crypt_and_tag(
 static int gcm_start(
     gcm_context *ctx,  // pointer to user-provided GCM context
     int mode,          // MG_ENCRYPT (1) or MG_DECRYPT (0)
-    const uchar *iv,   // pointer to initialization vector
+    const unsigned char *iv,   // pointer to initialization vector
     size_t iv_len,     // IV length in bytes (should == 12)
-    const uchar *add,  // pointer to additional AEAD data (NULL if none)
+    const unsigned char *add,  // pointer to additional AEAD data (NULL if none)
     size_t add_len);   // length of additional AEAD data (bytes)
 
 /******************************************************************************
@@ -8476,8 +8476,8 @@ static int gcm_start(
  ******************************************************************************/
 static int gcm_update(gcm_context *ctx,  // pointer to user-provided GCM context
                       size_t length,     // length, in bytes, of data to process
-                      const uchar *input,  // pointer to source data
-                      uchar *output);      // pointer to destination data
+                      const unsigned char *input,  // pointer to source data
+                      unsigned char *output);      // pointer to destination data
 
 /******************************************************************************
  *
@@ -8489,7 +8489,7 @@ static int gcm_update(gcm_context *ctx,  // pointer to user-provided GCM context
  ******************************************************************************/
 static int gcm_finish(
     gcm_context *ctx,  // pointer to user-provided GCM context
-    uchar *tag,        // ptr to tag buffer - NULL if tag_len = 0
+    unsigned char *tag,        // ptr to tag buffer - NULL if tag_len = 0
     size_t tag_len);   // length, in bytes, of the tag-receiving buf
 
 /******************************************************************************
@@ -8544,14 +8544,14 @@ static int aes_tables_inited = 0;  // run-once flag for performing key
  *  decryption is typically disabled by setting AES_DECRYPTION to 0 in aes.h.
  */
 // We always need our forward tables
-static uchar FSb[256];     // Forward substitution box (FSb)
+static unsigned char FSb[256];     // Forward substitution box (FSb)
 static uint32_t FT0[256];  // Forward key schedule assembly tables
 static uint32_t FT1[256];
 static uint32_t FT2[256];
 static uint32_t FT3[256];
 
 #if AES_DECRYPTION         // We ONLY need reverse for decryption
-static uchar RSb[256];     // Reverse substitution box (RSb)
+static unsigned char RSb[256];     // Reverse substitution box (RSb)
 static uint32_t RT0[256];  // Reverse key schedule assembly tables
 static uint32_t RT1[256];
 static uint32_t RT2[256];
@@ -8572,10 +8572,10 @@ static uint32_t RCON[10];  // AES round constants
 
 #define PUT_UINT32_LE(n, b, i)          \
   {                                     \
-    (b)[(i)] = (uchar) ((n));           \
-    (b)[(i) + 1] = (uchar) ((n) >> 8);  \
-    (b)[(i) + 2] = (uchar) ((n) >> 16); \
-    (b)[(i) + 3] = (uchar) ((n) >> 24); \
+    (b)[(i)] = (unsigned char) ((n));           \
+    (b)[(i) + 1] = (unsigned char) ((n) >> 8);  \
+    (b)[(i) + 2] = (unsigned char) ((n) >> 16); \
+    (b)[(i) + 3] = (unsigned char) ((n) >> 24); \
   }
 
 /*
@@ -8672,9 +8672,9 @@ void aes_init_keygen_tables(void) {
     MIX(x, y);
     MIX(x, y);
     MIX(x, y);
-    FSb[i] = (uchar) (x ^= 0x63);
+    FSb[i] = (unsigned char) (x ^= 0x63);
 #if AES_DECRYPTION  // whether AES decryption is supported
-    RSb[x] = (uchar) i;
+    RSb[x] = (unsigned char) i;
 #endif /* AES_DECRYPTION */
   }
   // generate the forward and reverse key expansion tables
@@ -8714,9 +8714,9 @@ void aes_init_keygen_tables(void) {
  *  Valid lengths are: 16, 24 or 32 bytes (128, 192, 256 bits).
  *
  ******************************************************************************/
-static int aes_set_encryption_key(aes_context *ctx, const uchar *key,
-                                  uint keysize) {
-  uint i;                  // general purpose iteration local
+static int aes_set_encryption_key(aes_context *ctx, const unsigned char *key,
+                                  unsigned int keysize) {
+  unsigned int i;                  // general purpose iteration local
   uint32_t *RK = ctx->rk;  // initialize our RoundKey buffer pointer
 
   for (i = 0; i < (keysize >> 2); i++) {
@@ -8792,8 +8792,8 @@ static int aes_set_encryption_key(aes_context *ctx, const uchar *key,
  *  length in bits. Valid lengths are: 128, 192, or 256 bits.
  *
  ******************************************************************************/
-static int aes_set_decryption_key(aes_context *ctx, const uchar *key,
-                                  uint keysize) {
+static int aes_set_decryption_key(aes_context *ctx, const unsigned char *key,
+                                  unsigned int keysize) {
   int i, j;
   aes_context cty;         // a calling aes context for set_encryption_key
   uint32_t *RK = ctx->rk;  // initialize our RoundKey buffer pointer
@@ -8831,8 +8831,8 @@ static int aes_set_decryption_key(aes_context *ctx, const uchar *key,
  ******************************************************************************/
 static int aes_setkey(aes_context *ctx,  // AES context provided by our caller
                       int mode,          // ENCRYPT or DECRYPT flag
-                      const uchar *key,  // pointer to the key
-                      uint keysize)      // key length in bytes
+                      const unsigned char *key,  // pointer to the key
+                      unsigned int keysize)      // key length in bytes
 {
   // since table initialization is not thread safe, we could either add
   // system-specific mutexes and init the AES key generation tables on
@@ -8875,8 +8875,8 @@ static int aes_setkey(aes_context *ctx,  // AES context provided by our caller
  *  and all keying information appropriate for the task.
  *
  ******************************************************************************/
-static int aes_cipher(aes_context *ctx, const uchar input[16],
-                      uchar output[16]) {
+static int aes_cipher(aes_context *ctx, const unsigned char input[16],
+                      unsigned char output[16]) {
   int i;
   uint32_t *RK, X0, X1, X2, X3, Y0, Y1, Y2, Y3;  // general purpose locals
 
@@ -9053,10 +9053,10 @@ static const uint64_t last4[16] = {
 
 #define PUT_UINT32_BE(n, b, i)          \
   {                                     \
-    (b)[(i)] = (uchar) ((n) >> 24);     \
-    (b)[(i) + 1] = (uchar) ((n) >> 16); \
-    (b)[(i) + 2] = (uchar) ((n) >> 8);  \
-    (b)[(i) + 3] = (uchar) ((n));       \
+    (b)[(i)] = (unsigned char) ((n) >> 24);     \
+    (b)[(i) + 1] = (unsigned char) ((n) >> 16); \
+    (b)[(i) + 2] = (unsigned char) ((n) >> 8);  \
+    (b)[(i) + 3] = (unsigned char) ((n));       \
   }
 
 /******************************************************************************
@@ -9086,31 +9086,31 @@ int mg_gcm_initialize(void) {
  *
  ******************************************************************************/
 static void gcm_mult(gcm_context *ctx,   // pointer to established context
-                     const uchar x[16],  // pointer to 128-bit input vector
-                     uchar output[16])   // pointer to 128-bit output vector
+                     const unsigned char x[16],  // pointer to 128-bit input vector
+                     unsigned char output[16])   // pointer to 128-bit output vector
 {
   int i;
-  uchar lo, hi, rem;
+  unsigned char lo, hi, rem;
   uint64_t zh, zl;
 
-  lo = (uchar) (x[15] & 0x0f);
-  hi = (uchar) (x[15] >> 4);
+  lo = (unsigned char) (x[15] & 0x0f);
+  hi = (unsigned char) (x[15] >> 4);
   zh = ctx->HH[lo];
   zl = ctx->HL[lo];
 
   for (i = 15; i >= 0; i--) {
-    lo = (uchar) (x[i] & 0x0f);
-    hi = (uchar) (x[i] >> 4);
+    lo = (unsigned char) (x[i] & 0x0f);
+    hi = (unsigned char) (x[i] >> 4);
 
     if (i != 15) {
-      rem = (uchar) (zl & 0x0f);
+      rem = (unsigned char) (zl & 0x0f);
       zl = (zh << 60) | (zl >> 4);
       zh = (zh >> 4);
       zh ^= (uint64_t) last4[rem] << 48;
       zh ^= ctx->HH[lo];
       zl ^= ctx->HL[lo];
     }
-    rem = (uchar) (zl & 0x0f);
+    rem = (unsigned char) (zl & 0x0f);
     zl = (zh << 60) | (zl >> 4);
     zh = (zh >> 4);
     zh ^= (uint64_t) last4[rem] << 48;
@@ -9133,8 +9133,8 @@ static void gcm_mult(gcm_context *ctx,   // pointer to established context
  ******************************************************************************/
 static int gcm_setkey(
     gcm_context *ctx,    // pointer to caller-provided gcm context
-    const uchar *key,    // pointer to the AES encryption key
-    const uint keysize)  // size in bytes (must be 16, 24, 32 for
+    const unsigned char *key,    // pointer to the AES encryption key
+    const unsigned int keysize)  // size in bytes (must be 16, 24, 32 for
                          // 128, 192 or 256-bit keys respectively)
 {
   int ret, i, j;
@@ -9206,14 +9206,14 @@ static int gcm_setkey(
  ******************************************************************************/
 int gcm_start(gcm_context *ctx,  // pointer to user-provided GCM context
               int mode,          // GCM_ENCRYPT or GCM_DECRYPT
-              const uchar *iv,   // pointer to initialization vector
+              const unsigned char *iv,   // pointer to initialization vector
               size_t iv_len,     // IV length in bytes (should == 12)
-              const uchar *add,  // ptr to additional AEAD data (NULL if none)
+              const unsigned char *add,  // ptr to additional AEAD data (NULL if none)
               size_t add_len)    // length of additional AEAD data (bytes)
 {
   int ret;             // our error return if the AES encrypt fails
-  uchar work_buf[16];  // XOR source built from provided IV if len != 16
-  const uchar *p;      // general purpose array pointer
+  unsigned char work_buf[16];  // XOR source built from provided IV if len != 16
+  const unsigned char *p;      // general purpose array pointer
   size_t use_len;      // byte count to process, up to 16 bytes
   size_t i;            // local loop iterator
 
@@ -9274,11 +9274,11 @@ int gcm_start(gcm_context *ctx,  // pointer to user-provided GCM context
  ******************************************************************************/
 int gcm_update(gcm_context *ctx,    // pointer to user-provided GCM context
                size_t length,       // length, in bytes, of data to process
-               const uchar *input,  // pointer to source data
-               uchar *output)       // pointer to destination data
+               const unsigned char *input,  // pointer to source data
+               unsigned char *output)       // pointer to destination data
 {
   int ret;         // our error return if the AES encrypt fails
-  uchar ectr[16];  // counter-mode cipher output for XORing
+  unsigned char ectr[16];  // counter-mode cipher output for XORing
   size_t use_len;  // byte count to process, up to 16 bytes
   size_t i;        // local loop iterator
 
@@ -9299,7 +9299,7 @@ int gcm_update(gcm_context *ctx,    // pointer to user-provided GCM context
     if (ctx->mode == MG_ENCRYPT) {
       for (i = 0; i < use_len; i++) {
         // XOR the cipher's ouptut vector (ectr) with our input
-        output[i] = (uchar) (ectr[i] ^ input[i]);
+        output[i] = (unsigned char) (ectr[i] ^ input[i]);
         // now we mix in our data into the authentication hash.
         // if we're ENcrypting we XOR in the post-XOR (output)
         // results, but if we're DEcrypting we XOR in the input
@@ -9316,7 +9316,7 @@ int gcm_update(gcm_context *ctx,    // pointer to user-provided GCM context
         ctx->buf[i] ^= input[i];
 
         // XOR the cipher's ouptut vector (ectr) with our input
-        output[i] = (uchar) (ectr[i] ^ input[i]);
+        output[i] = (unsigned char) (ectr[i] ^ input[i]);
       }
     }
     gcm_mult(ctx, ctx->buf, ctx->buf);  // perform a GHASH operation
@@ -9337,10 +9337,10 @@ int gcm_update(gcm_context *ctx,    // pointer to user-provided GCM context
  *
  ******************************************************************************/
 int gcm_finish(gcm_context *ctx,  // pointer to user-provided GCM context
-               uchar *tag,        // pointer to buffer which receives the tag
+               unsigned char *tag,        // pointer to buffer which receives the tag
                size_t tag_len)    // length, in bytes, of the tag-receiving buf
 {
-  uchar work_buf[16];
+  unsigned char work_buf[16];
   uint64_t orig_len = ctx->len * 8;
   uint64_t orig_add_len = ctx->add_len * 8;
   size_t i;
@@ -9382,14 +9382,14 @@ int gcm_finish(gcm_context *ctx,  // pointer to user-provided GCM context
 int gcm_crypt_and_tag(
     gcm_context *ctx,    // gcm context with key already setup
     int mode,            // cipher direction: GCM_ENCRYPT or GCM_DECRYPT
-    const uchar *iv,     // pointer to the 12-byte initialization vector
+    const unsigned char *iv,     // pointer to the 12-byte initialization vector
     size_t iv_len,       // byte length if the IV. should always be 12
-    const uchar *add,    // pointer to the non-ciphered additional data
+    const unsigned char *add,    // pointer to the non-ciphered additional data
     size_t add_len,      // byte length of the additional AEAD data
-    const uchar *input,  // pointer to the cipher data source
-    uchar *output,       // pointer to the cipher data destination
+    const unsigned char *input,  // pointer to the cipher data source
+    unsigned char *output,       // pointer to the cipher data destination
     size_t length,       // byte length of the cipher data
-    uchar *tag,          // pointer to the tag to be generated
+    unsigned char *tag,          // pointer to the tag to be generated
     size_t tag_len)      // byte length of the tag to be generated
 {                        /*
                             assuming that the caller has already invoked gcm_setkey to
@@ -9432,7 +9432,7 @@ int mg_aes_gcm_encrypt(unsigned char *output,  //
   int ret = 0;      // our return value
   gcm_context ctx;  // includes the AES context structure
 
-  gcm_setkey(&ctx, key, (uint) key_len);
+  gcm_setkey(&ctx, key, (unsigned int) key_len);
 
   ret = gcm_crypt_and_tag(&ctx, MG_ENCRYPT, iv, iv_len, aead, aead_len, input,
                           output, input_length, tag, tag_len);
@@ -9452,7 +9452,7 @@ int mg_aes_gcm_decrypt(unsigned char *output, const unsigned char *input,
   size_t tag_len = 0;
   unsigned char *tag_buf = NULL;
 
-  gcm_setkey(&ctx, key, (uint) key_len);
+  gcm_setkey(&ctx, key, (unsigned int) key_len);
 
   ret = gcm_crypt_and_tag(&ctx, MG_DECRYPT, iv, iv_len, NULL, 0, input, output,
                           input_length, tag_buf, tag_len);
