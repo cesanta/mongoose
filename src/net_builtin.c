@@ -906,11 +906,16 @@ static void mg_tcpip_poll(struct mg_tcpip_if *ifp, uint64_t now) {
   if (expired_1000ms && ifp->driver->up) {
     bool up = ifp->driver->up(ifp);
     bool current = ifp->state != MG_TCPIP_STATE_DOWN;
-    if (up != current) {
-      ifp->state = up == false               ? MG_TCPIP_STATE_DOWN
-                   : ifp->enable_dhcp_client ? MG_TCPIP_STATE_UP
-                                             : MG_TCPIP_STATE_READY;
-      if (!up && ifp->enable_dhcp_client) ifp->ip = 0;
+    if (!up && ifp->enable_dhcp_client) ifp->ip = 0;
+    if (up != current) {  // link state has changed
+      ifp->state = up == false ? MG_TCPIP_STATE_DOWN
+                   : ifp->enable_dhcp_client || ifp->ip == 0
+                       ? MG_TCPIP_STATE_UP
+                       : MG_TCPIP_STATE_READY;
+      onstatechange(ifp);
+    } else if (!ifp->enable_dhcp_client && ifp->state == MG_TCPIP_STATE_UP &&
+               ifp->ip) {
+      ifp->state = MG_TCPIP_STATE_READY;  // ifp->fn has set an IP
       onstatechange(ifp);
     }
     if (ifp->state == MG_TCPIP_STATE_DOWN) MG_ERROR(("Network is down"));
@@ -919,18 +924,20 @@ static void mg_tcpip_poll(struct mg_tcpip_if *ifp, uint64_t now) {
   if (ifp->state == MG_TCPIP_STATE_DOWN) return;
 
   // DHCP RFC-2131 (4.4)
-  if (ifp->state == MG_TCPIP_STATE_UP && expired_1000ms) {
-    tx_dhcp_discover(ifp);  // INIT (4.4.1)
-  } else if (expired_1000ms && ifp->state == MG_TCPIP_STATE_READY &&
-             ifp->lease_expire > 0) {  // BOUND / RENEWING / REBINDING
-    if (ifp->now >= ifp->lease_expire) {
-      ifp->state = MG_TCPIP_STATE_UP, ifp->ip = 0;  // expired, release IP
-      onstatechange(ifp);
-    } else if (ifp->now + 30UL * 60UL * 1000UL > ifp->lease_expire &&
-               ((ifp->now / 1000) % 60) == 0) {
-      // hack: 30 min before deadline, try to rebind (4.3.6) every min
-      tx_dhcp_request_re(ifp, (uint8_t *) broadcast, ifp->ip, 0xffffffff);
-    }  // TODO(): Handle T1 (RENEWING) and T2 (REBINDING) (4.4.5)
+  if (ifp->enable_dhcp_client && expired_1000ms) {
+    if (ifp->state == MG_TCPIP_STATE_UP) {
+      tx_dhcp_discover(ifp);  // INIT (4.4.1)
+    } else if (ifp->state == MG_TCPIP_STATE_READY &&
+               ifp->lease_expire > 0) {  // BOUND / RENEWING / REBINDING
+      if (ifp->now >= ifp->lease_expire) {
+        ifp->state = MG_TCPIP_STATE_UP, ifp->ip = 0;  // expired, release IP
+        onstatechange(ifp);
+      } else if (ifp->now + 30UL * 60UL * 1000UL > ifp->lease_expire &&
+                 ((ifp->now / 1000) % 60) == 0) {
+        // hack: 30 min before deadline, try to rebind (4.3.6) every min
+        tx_dhcp_request_re(ifp, (uint8_t *) broadcast, ifp->ip, 0xffffffff);
+      }  // TODO(): Handle T1 (RENEWING) and T2 (REBINDING) (4.4.5)
+    }
   }
 
   // Read data from the network

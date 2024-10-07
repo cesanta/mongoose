@@ -165,6 +165,8 @@ static void http_ev_handler(struct mg_connection *c, int ev, void *ev_data) {
   (void) ev_data;
 }
 
+static struct mg_connection *mqtt_conn = NULL;
+
 static void mqtt_ev_handler(struct mg_connection *c, int ev, void *ev_data) {
   if (ev == MG_EV_OPEN) {
     MG_INFO(("%lu CREATED", c->id));
@@ -189,36 +191,58 @@ static void mqtt_ev_handler(struct mg_connection *c, int ev, void *ev_data) {
              mm->data.buf, (int) mm->topic.len, mm->topic.buf));
   } else if (ev == MG_EV_CLOSE) {
     MG_INFO(("%lu CLOSED", c->id));
+    mqtt_conn = NULL;  // Mark that we're closed
   }
 }
 
 static void if_ev_handler(struct mg_tcpip_if *ifp, int ev, void *ev_data) {
-  static uint32_t ip = 0;
-  static unsigned counter = 0;
-
-  // Set initial self-assigned IP
-  if (ip == 0) ip = MG_IPV4(169, 254, 2, 100);  
-
-  // Catch ARP packets. Parse them yourself, that's easy.
-  if (ev == MG_TCPIP_EV_ARP) {
-    struct mg_str *frame = ev_data;
-    MG_INFO(("Iface %p: Got ARP frame", ifp));
-    mg_hexdump(frame->buf, frame->len);
-    // TODO: check for conflict. On conflict, increment ip and reset counter
-  }
-
-  // Catch 1 second timer events
-  if (ev == MG_TCPIP_EV_TIMER_1S && ifp->ip == 0) {
-    MG_INFO(("Sending ARP probe"));
-    mg_tcpip_arp_request(ifp, ip, NULL);
-
-    // Seems to be no conflict. Assign us an IP
-    if (counter++ > 2) {
-      MG_INFO(("Assigning %M, sending ARP probe", mg_print_ip4, &ip));
-      ifp->ip = ip;
-      mg_tcpip_arp_request(ifp, ip, ifp->mac);
+  // Trigger MQTT connection when we have an IP address
+  if (ifp->state == MG_TCPIP_STATE_READY &&
+      (ev == MG_TCPIP_EV_ST_CHG || ev == MG_TCPIP_EV_TIMER_1S)) {
+    struct mg_mqtt_opts opts = {.clean = true};
+    if (mqtt_conn == NULL) {
+      // mqtt_conn = mg_mqtt_connect(ifp->mgr, MQTT_URL, &opts, mqtt_ev_handler,
+      // NULL);
+      mqtt_conn = mg_mqtt_connect(ifp->mgr, MQTTS_URL, &opts, mqtt_ev_handler,
+                                  "tls enabled");
     }
   }
+
+#if defined(DISABLE_DHCP)
+  {
+    static uint32_t ip = 0;
+    static unsigned counter = 0;
+    // Set initial self-assigned IP
+    if (ip == 0) ip = MG_IPV4(169, 254, 2, 100);
+
+    // restart process on link change
+    if (ev == MG_TCPIP_EV_ST_CHG && ifp->state == MG_TCPIP_STATE_DOWN)
+      ifp->ip = 0;
+
+    // Catch ARP packets. Parse them yourself, that's easy.
+    if (ev == MG_TCPIP_EV_ARP) {
+      struct mg_str *frame = ev_data;
+      MG_INFO(("Iface %p: Got ARP frame", ifp));
+      mg_hexdump(frame->buf, frame->len);
+      // TODO: check for conflict. On conflict, increment ip and reset counter
+    }
+
+    // Catch 1 second timer events
+    if (ev == MG_TCPIP_EV_TIMER_1S && ifp->state == MG_TCPIP_STATE_UP) {
+      MG_INFO(("Sending ARP probe"));
+      mg_tcpip_arp_request(ifp, ip, NULL);
+
+      // Seems to be no conflict. Assign us an IP
+      if (counter++ > 2) {
+        MG_INFO(("Assigning %M, sending ARP probe", mg_print_ip4, &ip));
+        ifp->ip = ip;  // state will change to MG_TCPIP_STATE_READY on next poll
+        mg_tcpip_arp_request(ifp, ip, ifp->mac);
+      }
+    }
+  }
+#else
+  (void) ev_data;
+#endif
 }
 
 int main(int argc, char *argv[]) {
@@ -276,31 +300,29 @@ int main(int argc, char *argv[]) {
   mg_log_set(MG_LL_DEBUG);  // Set log level
 
   struct mg_tcpip_driver driver = {.tx = pcap_tx, .up = pcap_up, .rx = pcap_rx};
-  struct mg_tcpip_if mif = {.driver = &driver, .driver_data = ph};
+  struct mg_tcpip_if mif = {.driver = &driver,
+                            .driver_data = ph,
+#if defined(DISABLE_DHCP)
+                            .mask = MG_IPV4(255, 255, 255, 0),
+                            .gw = MG_IPV4(169, 254, 2, 1)
+#endif
+};
   sscanf(mac, "%hhx:%hhx:%hhx:%hhx:%hhx:%hhx", &mif.mac[0], &mif.mac[1],
          &mif.mac[2], &mif.mac[3], &mif.mac[4], &mif.mac[5]);
   mg_tcpip_init(&mgr, &mif);
 
   // Call order is important: call after mg_tcpip_init()
   mif.fn = if_ev_handler;
+#if defined(DISABLE_DHCP)
   mif.enable_dhcp_client = false;
+#endif
 
   MG_INFO(("Init done, starting main loop"));
   mg_http_listen(&mgr, "http://0.0.0.0:8000", http_ev_handler, NULL);
   mg_http_listen(&mgr, "https://0.0.0.0:8443", http_ev_handler, "tls enabled");
 
-  bool got_ip = false;
-
   while (s_signo == 0) {
     mg_mgr_poll(&mgr, 100);
-
-    // Trigger MQTT connection when we receive IP address
-    if (mif.state == MG_TCPIP_STATE_READY && got_ip == false) {
-      struct mg_mqtt_opts opts = {.clean = true};
-      // mg_mqtt_connect(&mgr, MQTT_URL, &opts, mqtt_ev_handler, NULL);
-      mg_mqtt_connect(&mgr, MQTTS_URL, &opts, mqtt_ev_handler, "tls enabled");
-      got_ip = true;
-    }
   }
 
   mg_mgr_free(&mgr);
