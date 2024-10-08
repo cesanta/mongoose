@@ -30,6 +30,17 @@ bool mg_random(void *buf, size_t len) {
   if (initialised == true) {
     success = CryptGenRandom(hProv, len, p);
   }
+#elif defined(_CRT_RAND_S)
+  size_t i;
+  for (i = 0; i < len; i++) {
+    unsigned int rand_v;
+    if (rand_s(&rand_v) == 0) {
+      p[i] = (unsigned char)(rand_v & 255);
+    } else {
+      break;
+    }
+  }
+  success = (i == len);
 #else
   // BCrypt is a "new generation" strong crypto API, so try it first
   static BCRYPT_ALG_HANDLE hProv;
