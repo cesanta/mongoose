@@ -1,7 +1,8 @@
-// Copyright (c) 2022 Cesanta Software Limited
+// Copyright (c) 2022-24 Cesanta Software Limited
 // All rights reserved
 //
-// SNTP example using MIP and pcap driver
+// example using MIP and pcap driver
+// make CFLAGS_EXTRA="-DMG_TLS=MG_TLS_BUILTIN -DDISABLE_DHCP" for "auto-IP"
 
 #include <pcap.h>
 #include "mongoose.h"
@@ -10,7 +11,6 @@
 #define MQTTS_URL "mqtts://mongoose.ws:8883"   // HiveMQ does not TLS1.3
 #define MQTT_TOPIC "mg/rx"                     // Topic to subscribe to
 
-// // Taken from broker.emqx.io
 static const char *s_ca_cert =
     "-----BEGIN CERTIFICATE-----\n"
     "MIIFazCCA1OgAwIBAgIRAIIQz7DSQONZRGPgu2OCiwAwDQYJKoZIhvcNAQELBQAw\n"
@@ -43,29 +43,6 @@ static const char *s_ca_cert =
     "mRGunUHBcnWEvgJBQl9nJEiU0Zsnvgc/ubhPgXRR4Xq37Z0j4r7g1SgEEzwxA57d\n"
     "emyPxgcYxn/eR44/KJ4EBs+lVDR3veyJm+kXQ99b21/+jh5Xos1AnX5iItreGCc=\n"
     "-----END CERTIFICATE-----\n";
-
-//     "-----BEGIN CERTIFICATE-----\n"
-//     "MIIDjjCCAnagAwIBAgIQAzrx5qcRqaC7KGSxHQn65TANBgkqhkiG9w0BAQsFADBh"
-//     "MQswCQYDVQQGEwJVUzEVMBMGA1UEChMMRGlnaUNlcnQgSW5jMRkwFwYDVQQLExB3\n"
-//     "d3cuZGlnaWNlcnQuY29tMSAwHgYDVQQDExdEaWdpQ2VydCBHbG9iYWwgUm9vdCBH\n"
-//     "MjAeFw0xMzA4MDExMjAwMDBaFw0zODAxMTUxMjAwMDBaMGExCzAJBgNVBAYTAlVT\n"
-//     "MRUwEwYDVQQKEwxEaWdpQ2VydCBJbmMxGTAXBgNVBAsTEHd3dy5kaWdpY2VydC5j\n"
-//     "b20xIDAeBgNVBAMTF0RpZ2lDZXJ0IEdsb2JhbCBSb290IEcyMIIBIjANBgkqhkiG\n"
-//     "9w0BAQEFAAOCAQ8AMIIBCgKCAQEAuzfNNNx7a8myaJCtSnX/RrohCgiN9RlUyfuI\n"
-//     "2/Ou8jqJkTx65qsGGmvPrC3oXgkkRLpimn7Wo6h+4FR1IAWsULecYxpsMNzaHxmx\n"
-//     "1x7e/dfgy5SDN67sH0NO3Xss0r0upS/kqbitOtSZpLYl6ZtrAGCSYP9PIUkY92eQ\n"
-//     "q2EGnI/yuum06ZIya7XzV+hdG82MHauVBJVJ8zUtluNJbd134/tJS7SsVQepj5Wz\n"
-//     "tCO7TG1F8PapspUwtP1MVYwnSlcUfIKdzXOS0xZKBgyMUNGPHgm+F6HmIcr9g+UQ\n"
-//     "vIOlCsRnKPZzFBQ9RnbDhxSJITRNrw9FDKZJobq7nMWxM4MphQIDAQABo0IwQDAP\n"
-//     "BgNVHRMBAf8EBTADAQH/MA4GA1UdDwEB/wQEAwIBhjAdBgNVHQ4EFgQUTiJUIBiV\n"
-//     "5uNu5g/6+rkS7QYXjzkwDQYJKoZIhvcNAQELBQADggEBAGBnKJRvDkhj6zHd6mcY\n"
-//     "1Yl9PMWLSn/pvtsrF9+wX3N3KjITOYFnQoQj8kVnNeyIv/iPsGEMNKSuIEyExtv4\n"
-//     "NeF22d+mQrvHRAiGfzZ0JFrabA0UWTW98kndth/Jsw1HKj2ZL7tcu7XUIOGZX1NG\n"
-//     "Fdtom/DzMNU+MeKNhJ7jitralj41E6Vf8PlwUHBHQRFXGU7Aj64GxJUTFy8bJZ91\n"
-//     "8rGOmaFvE7FBcf6IKshPECBV1/MUReXgRPTqh5Uykw7+U0b6LJ3/iyK5S9kJRaTe\n"
-//     "pLiaWN0bfVKfjllDiIGknibVb63dDcY3fe0Dkhvld1927jyNxF1WW6LZZm6zNTfl\n"
-//     "MrY=\n"
-//     "-----END CERTIFICATE-----\n";
 
 static const char *s_tls_cert =
     "-----BEGIN CERTIFICATE-----\n"
@@ -165,8 +142,6 @@ static void http_ev_handler(struct mg_connection *c, int ev, void *ev_data) {
   (void) ev_data;
 }
 
-static struct mg_connection *mqtt_conn = NULL;
-
 static void mqtt_ev_handler(struct mg_connection *c, int ev, void *ev_data) {
   if (ev == MG_EV_OPEN) {
     MG_INFO(("%lu CREATED", c->id));
@@ -191,21 +166,15 @@ static void mqtt_ev_handler(struct mg_connection *c, int ev, void *ev_data) {
              mm->data.buf, (int) mm->topic.len, mm->topic.buf));
   } else if (ev == MG_EV_CLOSE) {
     MG_INFO(("%lu CLOSED", c->id));
-    mqtt_conn = NULL;  // Mark that we're closed
   }
 }
 
 static void if_ev_handler(struct mg_tcpip_if *ifp, int ev, void *ev_data) {
   // Trigger MQTT connection when we have an IP address
-  if (ifp->state == MG_TCPIP_STATE_READY &&
-      (ev == MG_TCPIP_EV_ST_CHG || ev == MG_TCPIP_EV_TIMER_1S)) {
+  if (ifp->state == MG_TCPIP_STATE_READY && ev == MG_TCPIP_EV_ST_CHG) {
     struct mg_mqtt_opts opts = {.clean = true};
-    if (mqtt_conn == NULL) {
-      // mqtt_conn = mg_mqtt_connect(ifp->mgr, MQTT_URL, &opts, mqtt_ev_handler,
-      // NULL);
-      mqtt_conn = mg_mqtt_connect(ifp->mgr, MQTTS_URL, &opts, mqtt_ev_handler,
-                                  "tls enabled");
-    }
+    // mg_mqtt_connect(ifp->mgr, MQTT_URL, &opts, mqtt_ev_handler, NULL);
+    mg_mqtt_connect(ifp->mgr, MQTTS_URL, &opts, mqtt_ev_handler, "tls enabled");
   }
 
 #if defined(DISABLE_DHCP)
@@ -216,27 +185,31 @@ static void if_ev_handler(struct mg_tcpip_if *ifp, int ev, void *ev_data) {
     if (ip == 0) ip = MG_IPV4(169, 254, 2, 100);
 
     // restart process on link change
-    if (ev == MG_TCPIP_EV_ST_CHG && ifp->state == MG_TCPIP_STATE_DOWN)
+    if (ev == MG_TCPIP_EV_ST_CHG && ifp->state == MG_TCPIP_STATE_DOWN) {
       ifp->ip = 0;
-
-    // Catch ARP packets. Parse them yourself, that's easy.
-    if (ev == MG_TCPIP_EV_ARP) {
-      struct mg_str *frame = ev_data;
-      MG_INFO(("Iface %p: Got ARP frame", ifp));
-      mg_hexdump(frame->buf, frame->len);
-      // TODO: check for conflict. On conflict, increment ip and reset counter
+      counter = 0;
     }
 
-    // Catch 1 second timer events
-    if (ev == MG_TCPIP_EV_TIMER_1S && ifp->state == MG_TCPIP_STATE_UP) {
-      MG_INFO(("Sending ARP probe"));
-      mg_tcpip_arp_request(ifp, ip, NULL);
+    if (ifp->state == MG_TCPIP_STATE_UP) {
+      // Catch ARP packets. Parse them yourself, that's easy.
+      if (ev == MG_TCPIP_EV_ARP) {
+        struct mg_str *frame = ev_data;
+        MG_INFO(("Iface %p: Got ARP frame", ifp));
+        mg_hexdump(frame->buf, frame->len);
+        // TODO: check for conflict. On conflict, increment ip and reset counter
+      }
 
-      // Seems to be no conflict. Assign us an IP
-      if (counter++ > 2) {
-        MG_INFO(("Assigning %M, sending ARP probe", mg_print_ip4, &ip));
-        ifp->ip = ip;  // state will change to MG_TCPIP_STATE_READY on next poll
-        mg_tcpip_arp_request(ifp, ip, ifp->mac);
+      // Catch 1 second timer events
+      if (ev == MG_TCPIP_EV_TIMER_1S) {
+        if (++counter <= 3) {
+          MG_INFO(("Sending ARP probe"));
+          mg_tcpip_arp_request(ifp, ip, NULL);
+        } else {
+          // Seems to be no conflict. Assign us an IP
+          MG_INFO(("Assigning %M, sending gratuitous ARP", mg_print_ip4, &ip));
+          ifp->ip = ip;  // state will change to MG_TCPIP_STATE_IP on next poll
+          mg_tcpip_arp_request(ifp, ip, ifp->mac);
+        }
       }
     }
   }
@@ -302,17 +275,17 @@ int main(int argc, char *argv[]) {
   struct mg_tcpip_driver driver = {.tx = pcap_tx, .up = pcap_up, .rx = pcap_rx};
   struct mg_tcpip_if mif = {.driver = &driver,
                             .driver_data = ph,
+                            .enable_mac_check = true,
 #if defined(DISABLE_DHCP)
                             .mask = MG_IPV4(255, 255, 255, 0),
-                            .gw = MG_IPV4(169, 254, 2, 1)
+                            .gw = MG_IPV4(169, 254, 2, 1),
 #endif
-};
+                            .fn = if_ev_handler};
   sscanf(mac, "%hhx:%hhx:%hhx:%hhx:%hhx:%hhx", &mif.mac[0], &mif.mac[1],
          &mif.mac[2], &mif.mac[3], &mif.mac[4], &mif.mac[5]);
   mg_tcpip_init(&mgr, &mif);
 
-  // Call order is important: call after mg_tcpip_init()
-  mif.fn = if_ev_handler;
+  // order is important: set after calling mg_tcpip_init()
 #if defined(DISABLE_DHCP)
   mif.enable_dhcp_client = false;
 #endif

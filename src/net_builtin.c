@@ -205,6 +205,8 @@ static void onstatechange(struct mg_tcpip_if *ifp) {
     MG_INFO(("READY, IP: %M", mg_print_ip4, &ifp->ip));
     MG_INFO(("       GW: %M", mg_print_ip4, &ifp->gw));
     MG_INFO(("      MAC: %M", mg_print_mac, &ifp->mac));
+  } else if (ifp->state == MG_TCPIP_STATE_IP) {
+    MG_ERROR(("Got IP"));
     mg_tcpip_arp_request(ifp, ifp->gw, NULL);  // unsolicited GW ARP request
   } else if (ifp->state == MG_TCPIP_STATE_UP) {
     MG_ERROR(("Link up"));
@@ -355,8 +357,12 @@ static void rx_arp(struct mg_tcpip_if *ifp, struct pkt *pkt) {
   } else if (pkt->arp->op == mg_htons(2)) {
     if (memcmp(pkt->arp->tha, ifp->mac, sizeof(pkt->arp->tha)) != 0) return;
     if (pkt->arp->spa == ifp->gw) {
-      // Got response for the GW ARP request. Set ifp->gwmac
+      // Got response for the GW ARP request. Set ifp->gwmac and IP -> READY
       memcpy(ifp->gwmac, pkt->arp->sha, sizeof(ifp->gwmac));
+      if (ifp->state == MG_TCPIP_STATE_IP) {
+        ifp->state = MG_TCPIP_STATE_READY;
+        onstatechange(ifp);
+      }
     } else {
       struct mg_connection *c = getpeer(ifp->mgr, pkt, false);
       if (c != NULL && c->is_arplooking) {
@@ -431,7 +437,7 @@ static void rx_dhcp_client(struct mg_tcpip_if *ifp, struct pkt *pkt) {
       // assume DHCP server = router until ARP resolves
       memcpy(ifp->gwmac, pkt->eth->src, sizeof(ifp->gwmac));
       ifp->ip = ip, ifp->gw = gw, ifp->mask = mask;
-      ifp->state = MG_TCPIP_STATE_READY;  // BOUND state
+      ifp->state = MG_TCPIP_STATE_IP;  // BOUND state
       uint64_t rand;
       mg_random(&rand, sizeof(rand));
       srand((unsigned int) (rand + mg_millis()));
@@ -479,7 +485,7 @@ static void rx_dhcp_server(struct mg_tcpip_if *ifp, struct pkt *pkt) {
     res.magic = pkt->dhcp->magic;
     res.xid = pkt->dhcp->xid;
     if (ifp->enable_get_gateway) {
-      ifp->gw = res.yiaddr;
+      ifp->gw = res.yiaddr;  // set gw IP, best-effort gwmac as DHCP server's
       memcpy(ifp->gwmac, pkt->eth->src, sizeof(ifp->gwmac));
     }
     tx_udp(ifp, pkt->eth->src, ifp->ip, mg_htons(67),
@@ -896,12 +902,17 @@ static void mg_tcpip_poll(struct mg_tcpip_if *ifp, uint64_t now) {
 
 #if MG_ENABLE_TCPIP_PRINT_DEBUG_STATS
   if (expired_1000ms) {
-    const char *names[] = {"down", "up", "req", "ready"};
+    const char *names[] = {"down", "up", "req", "ip", "ready"};
     MG_INFO(("Status: %s, IP: %M, rx:%u, tx:%u, dr:%u, er:%u",
              names[ifp->state], mg_print_ip4, &ifp->ip, ifp->nrecv, ifp->nsent,
              ifp->ndrop, ifp->nerr));
   }
 #endif
+  // Handle gw ARP request timeout, order is important
+  if (expired_1000ms && ifp->state == MG_TCPIP_STATE_IP) {
+    ifp->state = MG_TCPIP_STATE_READY; // keep best-effort MAC
+    onstatechange(ifp);
+  }
   // Handle physical interface up/down status
   if (expired_1000ms && ifp->driver->up) {
     bool up = ifp->driver->up(ifp);
@@ -911,11 +922,11 @@ static void mg_tcpip_poll(struct mg_tcpip_if *ifp, uint64_t now) {
       ifp->state = up == false ? MG_TCPIP_STATE_DOWN
                    : ifp->enable_dhcp_client || ifp->ip == 0
                        ? MG_TCPIP_STATE_UP
-                       : MG_TCPIP_STATE_READY;
+                       : MG_TCPIP_STATE_IP;
       onstatechange(ifp);
     } else if (!ifp->enable_dhcp_client && ifp->state == MG_TCPIP_STATE_UP &&
                ifp->ip) {
-      ifp->state = MG_TCPIP_STATE_READY;  // ifp->fn has set an IP
+      ifp->state = MG_TCPIP_STATE_IP;  // ifp->fn has set an IP
       onstatechange(ifp);
     }
     if (ifp->state == MG_TCPIP_STATE_DOWN) MG_ERROR(("Network is down"));
@@ -1031,7 +1042,7 @@ void mg_tcpip_init(struct mg_mgr *mgr, struct mg_tcpip_if *ifp) {
     ifp->mtu = MG_TCPIP_MTU_DEFAULT;
     mgr->extraconnsize = sizeof(struct connstate);
     if (ifp->ip == 0) ifp->enable_dhcp_client = true;
-    memset(ifp->gwmac, 255, sizeof(ifp->gwmac));  // Set to broadcast
+    memset(ifp->gwmac, 255, sizeof(ifp->gwmac));  // Set best-effort to bcast
     mg_random(&ifp->eport, sizeof(ifp->eport));   // Random from 0 to 65535
     ifp->eport |= MG_EPHEMERAL_PORT_BASE;         // Random from
                                            // MG_EPHEMERAL_PORT_BASE to 65535
