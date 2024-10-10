@@ -78,14 +78,15 @@ for board in $ESP; do
 	dotest $board "ESP-IDF" "baremetal"
 done
 
-
-ZEPHYR="f207 f429 f746 f756 f767 h563 h573 h723 h735 h743 h745 h747 h753 h755 mcxn947 rt1060 rt1064 evb-pico"
+# h755 not supported in 3.7.0 branch; master branch currently not building
+# other ST boards (PHY address != 0) might build and not work
+ZEPHYR="f207 f429 f746 f756 f767 h563 h573 h723 h735 h743 h745 h747 h753 mcxn947 rt1060 rt1064 evb-pico"
 for board in $ZEPHYR; do
-	echo dotest $board "Zephyr" "baremetal"
+	dotest $board "Zephyr" "baremetal"
 done
 
 
 ARDUINO="teensy41"
 
-rm -rf workspace pico-sdk
+rm -rf workspace pico-sdk mcuxpresso .cache .eclipse .p2 build
 cd -

@@ -511,7 +511,7 @@ jobs:
       - uses: actions/checkout@v4
         with: { fetch-depth: 2 }
       - run: sudo apt -y update && sudo apt -y install gcc-arm-none-eabi
-      - run: make -C examples/zephyr init
+      - run: make -C examples/zephyr init REPO=zephyrprojectrtos/ci:v.0.26.14 # "no space left on device" with newers
       - name: minify manifest
         uses: mikefarah/yq@master
         with:

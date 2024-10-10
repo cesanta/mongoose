@@ -7,6 +7,7 @@ DOCKER_ZEPHYR_PATH = $(DOCKER_PROJECT_DIR)/$(ZEPHYR_DIR)
 
 DOCKER ?= docker run --rm -v $(PROJECT_PATH):$(DOCKER_PROJECT_PATH) -v $(ZEPHYR_PATH):$(DOCKER_ZEPHYR_PATH)
 REPO ?= zephyrprojectrtos/ci
+REVNO ?= --mr v3.7-branch
 
 YQ ?= yq
 
@@ -18,7 +19,7 @@ clean:
 init:
 ifeq ($(wildcard $(ZEPHYR_PATH)/.*),)
 	mkdir $(ZEPHYR_PATH)
-	$(DOCKER) $(REPO) /bin/sh -c 'cd $(DOCKER_PROJECT_DIR) && west init ./$(ZEPHYR_DIR)'
+	$(DOCKER) $(REPO) /bin/sh -c 'cd $(DOCKER_PROJECT_DIR) && west init $(REVNO) ./$(ZEPHYR_DIR)'
 endif
 
 update:
