@@ -54,21 +54,18 @@ function Sidebar({url, show}) {
 };
 
 function Events({}) {
+  const initialPage = JSON.parse(localStorage.getItem('page')) || 1;
   const [events, setEvents] = useState([]);
-  const [page, setPage] = useState(1);
-
+  const [page, setPage] = useState(initialPage);  
+  
   const refresh = () =>
     fetch('api/events/get', {
-        method: 'POST', body: JSON.stringify({page: page}),
-      }).then(r => r.json())
-        .then(r => setEvents(r));
-
-  useEffect(refresh, [page]);
-
-  useEffect(() => {
-    setPage(JSON.parse(localStorage.getItem('page')));
-      }, []);
-
+      method: 'POST', 
+      body: JSON.stringify({ page: page }),
+    }).then(r => r.json())
+      .then(r => setEvents(r));  
+  useEffect(refresh, [page]);  
+  
   useEffect(() => {
     localStorage.setItem('page', page.toString());
   }, [page]);
