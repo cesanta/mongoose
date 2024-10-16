@@ -2153,7 +2153,11 @@ static void test_str(void) {
     TESTDOUBLE("%.*f", DBLWIDTH(1, 0.14), "0.1");
     TESTDOUBLE("%.*f", DBLWIDTH(1, 0.19), "0.2");
     TESTDOUBLE("%.*f", DBLWIDTH(1, 0.16), "0.2");
-    // TESTDOUBLE("%.*f", DBLWIDTH(1, 0.15), "0.1");
+    //TESTDOUBLE("%.1f", 0.15, "0.1");
+    //TESTDOUBLE("%.3f", 123.123456789, "123.123");
+    //TESTDOUBLE("%.4f", 123.123456789, "123.1235");
+    //TESTDOUBLE("%.5f", 123.1234567, "123.12346");
+    //TESTDOUBLE("%.*f", DBLWIDTH(1, 0.15), "0.1");
 
 #ifndef _WIN32
     TESTDOUBLE("%g", (double) INFINITY, "inf");
