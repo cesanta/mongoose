@@ -20,7 +20,8 @@ bool mg_flash_erase(void *location) {
   (void) location;
   return false;
 }
-bool mg_flash_swap_bank(void) {
+bool mg_flash_swap_bank(size_t size) {
+  (void) size;
   return true;
 }
 bool mg_flash_write(void *addr, const void *buf, size_t len) {

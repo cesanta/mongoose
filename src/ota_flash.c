@@ -69,6 +69,8 @@ MG_IRAM static uint32_t mg_fwkey(int fw) {
   return key;
 }
 
+static size_t swap_size(void);
+
 bool mg_ota_end(void) {
   char *base = (char *) mg_flash_start() + mg_flash_size() / 2;
   bool ok = false;
@@ -84,7 +86,14 @@ bool mg_ota_end(void) {
     MG_DEBUG(("CRC: %x/%x, size: %lu/%lu, status: %s", s_crc32, crc32, s_size,
               size, ok ? "ok" : "fail"));
     s_size = 0;
-    if (ok) ok = mg_flash_swap_bank();
+    if (ok) {
+      size_t sz = 0;
+      if (mg_flash_bank() == 0) {
+        // No dual bank support.
+        sz = swap_size();
+      }
+      ok = mg_flash_swap_bank(sz);
+    }
   }
   MG_INFO(("Finishing OTA: %s", ok ? "ok" : "fail"));
   return ok;
@@ -98,6 +107,17 @@ MG_IRAM static struct mg_otadata mg_otadata(int fw) {
   // MG_DEBUG(("Loaded OTA data. fw %d, bank %d, key %p", fw, bank, key));
   // mg_hexdump(&od, sizeof(od));
   return od;
+}
+
+static size_t swap_size(void) {
+  struct mg_otadata curr = mg_otadata(MG_FIRMWARE_CURRENT);
+  struct mg_otadata prev = mg_otadata(MG_FIRMWARE_PREVIOUS);
+  size_t sz = 0;
+  if (curr.status != MG_OTA_UNAVAILABLE && prev.status != MG_OTA_UNAVAILABLE) {
+    // We know exact sizes of both firmwares, use MAX(firmware1, firmware2)
+    sz = (size_t) (curr.size > prev.size ? curr.size : prev.size);
+  }
+  return sz;
 }
 
 int mg_ota_status(int fw) {
@@ -130,15 +150,12 @@ MG_IRAM bool mg_ota_commit(void) {
 
 bool mg_ota_rollback(void) {
   MG_DEBUG(("Rolling firmware back"));
+  size_t sz = 0;
   if (mg_flash_bank() == 0) {
-    // No dual bank support. Mark previous firmware as FIRST_BOOT
-    struct mg_otadata prev = mg_otadata(MG_FIRMWARE_PREVIOUS);
-    prev.status = MG_OTA_FIRST_BOOT;
-    return mg_flash_save(NULL, MG_OTADATA_KEY + MG_FIRMWARE_PREVIOUS, &prev,
-                         sizeof(prev));
-  } else {
-    return mg_flash_swap_bank();
+    // No dual bank support.
+    sz = swap_size();
   }
+  return mg_flash_swap_bank(sz);
 }
 
 MG_IRAM void mg_ota_boot(void) {
@@ -155,6 +172,7 @@ MG_IRAM void mg_ota_boot(void) {
     curr.status = MG_OTA_UNCOMMITTED;
     MG_INFO(("First boot, setting status to UNCOMMITTED"));
     mg_flash_save(NULL, mg_fwkey(MG_FIRMWARE_CURRENT), &curr, sizeof(curr));
+#if 0
   } else if (prev.status == MG_OTA_FIRST_BOOT && mg_flash_bank() == 0) {
     // Swap paritions. Pray power does not disappear
     size_t fs = mg_flash_size(), ss = mg_flash_sector_size();
@@ -194,6 +212,7 @@ MG_IRAM void mg_ota_boot(void) {
       mg_flash_write(partition2 + ofs, tmpsector, ss);
     }
     mg_device_reset();
+#endif
   }
 }
 #endif
