@@ -104,7 +104,7 @@ MG_IRAM bool mg_flash_erase(void *addr) {
   return ok;
 }
 
-MG_IRAM bool mg_flash_swap_bank(void) {
+MG_IRAM bool mg_flash_swap_bank(size_t size) {
   if (mg_flash_bank() == 0) return true;
   uint32_t bank = FLASH_BASE1;
   uint32_t desired = flash_bank_is_swapped(bank) ? 0 : MG_BIT(31);
@@ -115,6 +115,7 @@ MG_IRAM bool mg_flash_swap_bank(void) {
   // printf("OPTSR_PRG 2 %#lx\n", FLASH->OPTSR_PRG);
   MG_REG(bank + FLASH_OPTCR) |= MG_BIT(1);  // OPTSTART
   while ((MG_REG(bank + FLASH_OPTSR_CUR) & MG_BIT(31)) != desired) (void) 0;
+  (void) size;
   return true;
 }
 
@@ -135,7 +136,10 @@ MG_IRAM bool mg_flash_write(void *addr, const void *buf, size_t len) {
   MG_DEBUG(("Writing flash @ %p, %lu bytes", addr, len));
   MG_ARM_DISABLE_IRQ();
   while (ok && src < end) {
-    if (flash_page_start(dst) && mg_flash_erase(dst) == false) break;
+    if (flash_page_start(dst) && mg_flash_erase(dst) == false) {
+      ok = false;
+      break;
+    }
     *(volatile uint32_t *) dst++ = *src++;
     flash_wait(bank);
     if (flash_is_err(bank)) ok = false;

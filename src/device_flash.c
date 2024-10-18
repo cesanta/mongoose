@@ -1,7 +1,6 @@
 #include "device.h"
 
-#if MG_DEVICE == MG_DEVICE_STM32H7 || MG_DEVICE == MG_DEVICE_STM32H5 || \
-    MG_DEVICE == MG_DEVICE_RT1020 || MG_DEVICE == MG_DEVICE_RT1060
+#if MG_DEVICE != MG_DEVICE_NONE && MG_DEVICE != MG_DEVICE_CUSTOM
 // Flash can be written only if it is erased. Erased flash is 0xff (all bits 1)
 // Writes must be mg_flash_write_align() - aligned. Thus if we want to save an
 // object, we pad it at the end for alignment.

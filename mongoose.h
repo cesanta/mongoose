@@ -2691,6 +2691,7 @@ MG_IRAM void mg_ota_boot(void);  // Bootloader function
 #define MG_DEVICE_U2A 200       // Renesas U2A16, U2A8, U2A6
 #define MG_DEVICE_RT1020 300    // IMXRT1020
 #define MG_DEVICE_RT1060 301    // IMXRT1060
+#define MG_DEVICE_MCXN 310 	// MCXN947
 #define MG_DEVICE_CUSTOM 1000   // Custom implementation
 
 #ifndef MG_DEVICE
@@ -2707,7 +2708,7 @@ int mg_flash_bank(void);            // 0: not dual bank, 1: bank1, 2: bank2
 // Write, erase, swap bank
 bool mg_flash_write(void *addr, const void *buf, size_t len);
 bool mg_flash_erase(void *sector);
-bool mg_flash_swap_bank(void);
+bool mg_flash_swap_bank(size_t size);
 
 // Convenience functions to store data on a flash sector with wear levelling
 // If `sector` is NULL, then the last sector of flash is used

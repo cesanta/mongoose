@@ -249,7 +249,8 @@ MG_IRAM bool mg_flash_erase(void *addr) {
   return ok;
 }
 
-MG_IRAM bool mg_flash_swap_bank(void) {
+MG_IRAM bool mg_flash_swap_bank(size_t size) {
+  (void) size;
   return true;
 }
 
@@ -296,6 +297,7 @@ MG_IRAM bool mg_flash_write(void *addr, const void *buf, size_t len) {
 
   while (ok && src < end) {
     if (flash_page_start(dst) && mg_flash_erase(dst) == false) {
+      ok = false;
       break;
     }
     uint32_t status;
