@@ -470,6 +470,7 @@ typedef enum { false = 0, true = 1 } bool;
 #endif
 #include <wincrypt.h>
 #pragma comment(lib, "advapi32.lib")
+#elif defined(_CRT_RAND_S)
 #else
 #include <bcrypt.h>
 #if defined(_MSC_VER)
