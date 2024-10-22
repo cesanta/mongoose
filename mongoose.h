@@ -2643,6 +2643,7 @@ void mg_rpc_list(struct mg_rpc_req *r);
 #define MG_OTA_NONE 0      // No OTA support
 #define MG_OTA_FLASH 1     // OTA via an internal flash
 #define MG_OTA_ESP32 2     // ESP32 OTA implementation
+#define MG_OTA_STM32H5 3   // STM32H5 OTA implementation
 #define MG_OTA_CUSTOM 100  // Custom implementation
 
 #ifndef MG_OTA
@@ -2676,6 +2677,19 @@ size_t mg_ota_size(int firmware);         // Firmware size
 bool mg_ota_commit(void);        // Commit current firmware
 bool mg_ota_rollback(void);      // Rollback to the previous firmware
 MG_IRAM void mg_ota_boot(void);  // Bootloader function
+
+
+struct mg_flash {
+  void *start;   // Address at which flash starts
+  size_t size;   // Flash size
+  size_t align;  // Write alignment
+  bool (*write_fn)(void *, const void *, size_t);  // Write function
+  bool (*swap_fn)(void);                           // Swap partitions
+};
+
+bool mg_ota_flash_begin(size_t new_firmware_size, struct mg_flash *flash);
+bool mg_ota_flash_write(const void *buf, size_t len, struct mg_flash *flash);
+bool mg_ota_flash_end(struct mg_flash *flash);
 // Copyright (c) 2023 Cesanta Software Limited
 // All rights reserved
 
