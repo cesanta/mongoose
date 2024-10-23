@@ -3,6 +3,8 @@
 #include "log.h"
 #include "ota.h"
 
+#if MG_OTA != MG_OTA_NONE && MG_OTA != MG_OTA_CUSTOM
+
 static char *s_addr;      // Current address to write to
 static size_t s_size;     // Firmware size to flash. In-progress indicator
 static uint32_t s_crc32;  // Firmware checksum
@@ -63,3 +65,5 @@ bool mg_ota_flash_end(struct mg_flash *flash) {
   MG_INFO(("Finishing OTA: %s", ok ? "ok" : "fail"));
   return ok;
 }
+
+#endif

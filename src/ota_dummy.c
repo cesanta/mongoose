@@ -13,28 +13,4 @@ bool mg_ota_write(const void *buf, size_t len) {
 bool mg_ota_end(void) {
   return true;
 }
-bool mg_ota_commit(void) {
-  return true;
-}
-bool mg_ota_rollback(void) {
-  return true;
-}
-int mg_ota_status(int fw) {
-  (void) fw;
-  return 0;
-}
-uint32_t mg_ota_crc32(int fw) {
-  (void) fw;
-  return 0;
-}
-uint32_t mg_ota_timestamp(int fw) {
-  (void) fw;
-  return 0;
-}
-size_t mg_ota_size(int fw) {
-  (void) fw;
-  return 0;
-}
-MG_IRAM void mg_ota_boot(void) {
-}
 #endif

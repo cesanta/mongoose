@@ -27,7 +27,15 @@ void app_main(void) {
   for (;;) mg_mgr_poll(&mgr, 1000);  // Infinite event loop
 }
 
-#if MG_DEVICE == MG_DEVICE_CUSTOM
+#if MG_OTA == MG_OTA_CUSTOM
+enum {
+  MG_OTA_UNAVAILABLE = 0,  // No OTA information is present
+  MG_OTA_FIRST_BOOT = 1,   // Device booting the first time after the OTA
+  MG_OTA_UNCOMMITTED = 2,  // Ditto, but marking us for the rollback
+  MG_OTA_COMMITTED = 3     // The firmware is good
+};
+enum { MG_FIRMWARE_CURRENT = 0, MG_FIRMWARE_PREVIOUS = 1 };
+
 void *mg_flash_start(void) {
   return NULL;
 }
@@ -57,9 +65,7 @@ bool mg_flash_write(void *addr, const void *buf, size_t len) {
 void mg_device_reset(void) {
   esp_restart();
 }
-#endif
 
-#if MG_OTA == MG_OTA_CUSTOM
 #include "esp_app_format.h"
 #include "esp_ota_ops.h"
 
@@ -119,6 +125,14 @@ bool check_fw_header(const void* buf, size_t len) {
   }
 
   return true;
+}
+
+size_t mg_ota_size(int fw) {
+  const esp_partition_t *p = get_partition_from_fw(fw);
+  if (NULL == p) {
+    return 0;
+  }
+  return p->size;
 }
 
 bool mg_ota_begin(size_t new_firmware_size) {
@@ -255,11 +269,4 @@ uint32_t mg_ota_timestamp(int fw) {
   return mktime(&datetime);
 }
 
-size_t mg_ota_size(int fw) {
-  const esp_partition_t *p = get_partition_from_fw(fw);
-  if (NULL == p) {
-    return 0;
-  }
-  return p->size;
-}
 #endif
