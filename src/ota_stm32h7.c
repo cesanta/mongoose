@@ -1,7 +1,27 @@
-#include "device.h"
+#include "flash.h"
 #include "log.h"
+#include "ota.h"
 
-#if MG_DEVICE == MG_DEVICE_STM32H7
+#if MG_OTA == MG_OTA_STM32H7
+
+// - H723/735 RM 4.3.3: Note: The application can simultaneously request a read
+// and a write operation through the AXI interface.
+//   - We only need IRAM for partition swapping in the H723, however, all
+//   related functions must reside in IRAM for this to be possible.
+// - Linker files for other devices won't define a .iram section so there's no
+// associated penalty
+
+static bool mg_stm32h7_write(void *, const void *, size_t);
+static bool mg_stm32h7_swap(void);
+
+static struct mg_flash s_mg_flash_stm32h7 = {
+    (void *) 0x08000000,  // Start
+    0,                    // Size, FLASH_SIZE_REG
+    128 * 1024,           // Sector size, 128k
+    32,                   // Align, 256 bit
+    mg_stm32h7_write,
+    mg_stm32h7_swap,
+};
 
 #define FLASH_BASE1 0x52002000  // Base address for bank1
 #define FLASH_BASE2 0x52002100  // Base address for bank2
@@ -15,21 +35,8 @@
 #define FLASH_OPTSR_PRG 0x20
 #define FLASH_SIZE_REG 0x1ff1e880
 
-MG_IRAM void *mg_flash_start(void) {
-  return (void *) 0x08000000;
-}
-MG_IRAM size_t mg_flash_size(void) {
-  return MG_REG(FLASH_SIZE_REG) * 1024;
-}
-MG_IRAM size_t mg_flash_sector_size(void) {
-  return 128 * 1024;  // 128k
-}
-MG_IRAM size_t mg_flash_write_align(void) {
-  return 32;  // 256 bit
-}
-MG_IRAM int mg_flash_bank(void) {
-  if (mg_flash_size() < 2 * 1024 * 1024) return 0;  // No dual bank support
-  return MG_REG(FLASH_BASE1 + FLASH_OPTCR) & MG_BIT(31) ? 2 : 1;
+MG_IRAM static bool is_dualbank(void) {
+  return (s_mg_flash_stm32h7.size < 2 * 1024 * 1024) ? false : true;
 }
 
 MG_IRAM static void flash_unlock(void) {
@@ -37,7 +44,7 @@ MG_IRAM static void flash_unlock(void) {
   if (unlocked == false) {
     MG_REG(FLASH_BASE1 + FLASH_KEYR) = 0x45670123;
     MG_REG(FLASH_BASE1 + FLASH_KEYR) = 0xcdef89ab;
-    if (mg_flash_bank() > 0) {
+    if (is_dualbank()) {
       MG_REG(FLASH_BASE2 + FLASH_KEYR) = 0x45670123;
       MG_REG(FLASH_BASE2 + FLASH_KEYR) = 0xcdef89ab;
     }
@@ -48,9 +55,10 @@ MG_IRAM static void flash_unlock(void) {
 }
 
 MG_IRAM static bool flash_page_start(volatile uint32_t *dst) {
-  char *base = (char *) mg_flash_start(), *end = base + mg_flash_size();
+  char *base = (char *) s_mg_flash_stm32h7.start,
+       *end = base + s_mg_flash_stm32h7.size;
   volatile char *p = (char *) dst;
-  return p >= base && p < end && ((p - base) % mg_flash_sector_size()) == 0;
+  return p >= base && p < end && ((p - base) % s_mg_flash_stm32h7.secsz) == 0;
 }
 
 MG_IRAM static bool flash_is_err(uint32_t bank) {
@@ -72,18 +80,19 @@ MG_IRAM static bool flash_bank_is_swapped(uint32_t bank) {
 
 // Figure out flash bank based on the address
 MG_IRAM static uint32_t flash_bank(void *addr) {
-  size_t ofs = (char *) addr - (char *) mg_flash_start();
-  if (mg_flash_bank() == 0) return FLASH_BASE1;
-  return ofs < mg_flash_size() / 2 ? FLASH_BASE1 : FLASH_BASE2;
+  size_t ofs = (char *) addr - (char *) s_mg_flash_stm32h7.start;
+  if (!is_dualbank()) return FLASH_BASE1;
+  return ofs < s_mg_flash_stm32h7.size / 2 ? FLASH_BASE1 : FLASH_BASE2;
 }
 
-MG_IRAM bool mg_flash_erase(void *addr) {
+// read-while-write, no need to disable IRQs for standalone usage
+MG_IRAM static bool mg_stm32h7_erase(void *addr) {
   bool ok = false;
   if (flash_page_start(addr) == false) {
     MG_ERROR(("%p is not on a sector boundary", addr));
   } else {
-    uintptr_t diff = (char *) addr - (char *) mg_flash_start();
-    uint32_t sector = diff / mg_flash_sector_size();
+    uintptr_t diff = (char *) addr - (char *) s_mg_flash_stm32h7.start;
+    uint32_t sector = diff / s_mg_flash_stm32h7.secsz;
     uint32_t bank = flash_bank(addr);
     uint32_t saved_cr = MG_REG(bank + FLASH_CR);  // Save CR value
 
@@ -104,8 +113,8 @@ MG_IRAM bool mg_flash_erase(void *addr) {
   return ok;
 }
 
-MG_IRAM bool mg_flash_swap_bank(void) {
-  if (mg_flash_bank() == 0) return true;
+MG_IRAM static bool mg_stm32h7_swap(void) {
+  if (!is_dualbank()) return true;
   uint32_t bank = FLASH_BASE1;
   uint32_t desired = flash_bank_is_swapped(bank) ? 0 : MG_BIT(31);
   flash_unlock();
@@ -118,9 +127,11 @@ MG_IRAM bool mg_flash_swap_bank(void) {
   return true;
 }
 
-MG_IRAM bool mg_flash_write(void *addr, const void *buf, size_t len) {
-  if ((len % mg_flash_write_align()) != 0) {
-    MG_ERROR(("%lu is not aligned to %lu", len, mg_flash_write_align()));
+static bool s_flash_irq_disabled;
+
+MG_IRAM static bool mg_stm32h7_write(void *addr, const void *buf, size_t len) {
+  if ((len % s_mg_flash_stm32h7.align) != 0) {
+    MG_ERROR(("%lu is not aligned to %lu", len, s_mg_flash_stm32h7.align));
     return false;
   }
   uint32_t bank = flash_bank(addr);
@@ -128,19 +139,21 @@ MG_IRAM bool mg_flash_write(void *addr, const void *buf, size_t len) {
   uint32_t *src = (uint32_t *) buf;
   uint32_t *end = (uint32_t *) ((char *) buf + len);
   bool ok = true;
+  MG_ARM_DISABLE_IRQ();
   flash_unlock();
   flash_clear_err(bank);
   MG_REG(bank + FLASH_CR) = MG_BIT(1);   // Set programming flag
   MG_REG(bank + FLASH_CR) |= MG_BIT(5);  // 32-bit write parallelism
-  MG_DEBUG(("Writing flash @ %p, %lu bytes", addr, len));
-  MG_ARM_DISABLE_IRQ();
   while (ok && src < end) {
-    if (flash_page_start(dst) && mg_flash_erase(dst) == false) break;
+    if (flash_page_start(dst) && mg_stm32h7_erase(dst) == false) {
+      ok = false;
+      break;
+    }
     *(volatile uint32_t *) dst++ = *src++;
     flash_wait(bank);
     if (flash_is_err(bank)) ok = false;
   }
-  MG_ARM_ENABLE_IRQ();
+  if (!s_flash_irq_disabled) MG_ARM_ENABLE_IRQ();
   MG_DEBUG(("Flash write %lu bytes @ %p: %s. CR %#lx SR %#lx", len, dst,
             ok ? "ok" : "fail", MG_REG(bank + FLASH_CR),
             MG_REG(bank + FLASH_SR)));
@@ -148,8 +161,44 @@ MG_IRAM bool mg_flash_write(void *addr, const void *buf, size_t len) {
   return ok;
 }
 
-MG_IRAM void mg_device_reset(void) {
-  // SCB->AIRCR = ((0x5fa << SCB_AIRCR_VECTKEY_Pos)|SCB_AIRCR_SYSRESETREQ_Msk);
+// just overwrite instead of swap
+MG_IRAM static void single_bank_swap(char *p1, char *p2, size_t s, size_t ss) {
+  // no stdlib calls here
+  for (size_t ofs = 0; ofs < s; ofs += ss) {
+    mg_stm32h7_write(p1 + ofs, p2 + ofs, ss);
+  }
   *(volatile unsigned long *) 0xe000ed0c = 0x5fa0004;
+}
+
+bool mg_ota_begin(size_t new_firmware_size) {
+  s_mg_flash_stm32h7.size = MG_REG(FLASH_SIZE_REG) * 1024;
+  return mg_ota_flash_begin(new_firmware_size, &s_mg_flash_stm32h7);
+}
+
+bool mg_ota_write(const void *buf, size_t len) {
+  return mg_ota_flash_write(buf, len, &s_mg_flash_stm32h7);
+}
+
+bool mg_ota_end(void) {
+  if (mg_ota_flash_end(&s_mg_flash_stm32h7)) {
+    if (is_dualbank()) {
+      // Bank swap is deferred until reset, been executing in flash, reset
+      *(volatile unsigned long *) 0xe000ed0c = 0x5fa0004;
+    } else {
+      // Swap partitions. Pray power does not go away
+      MG_INFO(("Swapping partitions, size %u (%u sectors)",
+               s_mg_flash_stm32h7.size,
+               s_mg_flash_stm32h7.size / s_mg_flash_stm32h7.secsz));
+      MG_INFO(("Do NOT power off..."));
+      mg_log_level = MG_LL_NONE;
+      s_flash_irq_disabled = true;
+      // Runs in RAM, will reset when finished
+      single_bank_swap(
+          (char *) s_mg_flash_stm32h7.start,
+          (char *) s_mg_flash_stm32h7.start + s_mg_flash_stm32h7.size / 2,
+          s_mg_flash_stm32h7.size / 2, s_mg_flash_stm32h7.secsz);
+    }
+  }
+  return false;
 }
 #endif

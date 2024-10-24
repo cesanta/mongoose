@@ -197,47 +197,7 @@ static void handle_firmware_upload(struct mg_connection *c,
     mg_http_reply(c, 500, "", "mg_ota_end() failed\n", tot);
   } else {
     mg_http_reply(c, 200, s_json_header, "true\n");
-    if (data.len == 0) {
-      // Successful mg_ota_end() called, schedule device reboot
-      mg_timer_add(c->mgr, 500, 0, (void (*)(void *)) mg_device_reset, NULL);
-    }
   }
-}
-
-static void handle_firmware_commit(struct mg_connection *c) {
-  mg_http_reply(c, 200, s_json_header, "%s\n",
-                mg_ota_commit() ? "true" : "false");
-}
-
-static void handle_firmware_rollback(struct mg_connection *c) {
-  mg_http_reply(c, 200, s_json_header, "%s\n",
-                mg_ota_rollback() ? "true" : "false");
-}
-
-static size_t print_status(void (*out)(char, void *), void *ptr, va_list *ap) {
-  int fw = va_arg(*ap, int);
-  return mg_xprintf(out, ptr, "{%m:%d,%m:%c%lx%c,%m:%u,%m:%u}\n",
-                    MG_ESC("status"), mg_ota_status(fw), MG_ESC("crc32"), '"',
-                    mg_ota_crc32(fw), '"', MG_ESC("size"), mg_ota_size(fw),
-                    MG_ESC("timestamp"), mg_ota_timestamp(fw));
-}
-
-static void handle_firmware_status(struct mg_connection *c) {
-  mg_http_reply(c, 200, s_json_header, "[%M,%M]\n", print_status,
-                MG_FIRMWARE_CURRENT, print_status, MG_FIRMWARE_PREVIOUS);
-}
-
-static void handle_device_reset(struct mg_connection *c) {
-  mg_http_reply(c, 200, s_json_header, "true\n");
-  mg_timer_add(c->mgr, 500, 0, (void (*)(void *)) mg_device_reset, NULL);
-}
-
-static void handle_device_eraselast(struct mg_connection *c) {
-  size_t ss = mg_flash_sector_size(), size = mg_flash_size();
-  char *base = (char *) mg_flash_start(), *last = base + size - ss;
-  if (mg_flash_bank() == 2) last -= size / 2;
-  mg_flash_erase(last);
-  mg_http_reply(c, 200, s_json_header, "true\n");
 }
 
 // HTTP request handler function
@@ -271,16 +231,6 @@ static void ev_handler(struct mg_connection *c, int ev, void *ev_data) {
       handle_settings_set(c, hm->body);
     } else if (mg_match(hm->uri, mg_str("/api/firmware/upload"), NULL)) {
       handle_firmware_upload(c, hm);
-    } else if (mg_match(hm->uri, mg_str("/api/firmware/commit"), NULL)) {
-      handle_firmware_commit(c);
-    } else if (mg_match(hm->uri, mg_str("/api/firmware/rollback"), NULL)) {
-      handle_firmware_rollback(c);
-    } else if (mg_match(hm->uri, mg_str("/api/firmware/status"), NULL)) {
-      handle_firmware_status(c);
-    } else if (mg_match(hm->uri, mg_str("/api/device/reset"), NULL)) {
-      handle_device_reset(c);
-    } else if (mg_match(hm->uri, mg_str("/api/device/eraselast"), NULL)) {
-      handle_device_eraselast(c);
     } else {
       struct mg_http_serve_opts opts;
       memset(&opts, 0, sizeof(opts));

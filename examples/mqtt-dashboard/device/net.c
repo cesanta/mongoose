@@ -53,15 +53,6 @@ static void set_device_id(void) {
   g_device_id = strdup(buf);
 }
 
-static size_t print_fw_status(void (*out)(char, void *), void *ptr,
-                              va_list *ap) {
-  int fw = va_arg(*ap, int);
-  return mg_xprintf(out, ptr, "{%m:%d,%m:%c%lx%c,%m:%u,%m:%u}",
-                    MG_ESC("status"), mg_ota_status(fw), MG_ESC("crc32"), '"',
-                    mg_ota_crc32(fw), '"', MG_ESC("size"), mg_ota_size(fw),
-                    MG_ESC("timestamp"), mg_ota_timestamp(fw));
-}
-
 static size_t print_shorts(void (*out)(char, void *), void *ptr, va_list *ap) {
   uint16_t *array = va_arg(*ap, uint16_t *);
   int i, len = 0, num_elems = va_arg(*ap, int);
@@ -87,7 +78,7 @@ static void publish_status(struct mg_connection *c) {
 
   // Print JSON notification into the io buffer
   mg_xprintf(mg_pfn_iobuf, &io,
-             "{%m:%m,%m:{%m:%m,%m:%d,%m:%d,%m:[%M],%m:[%M],%m:%M,%m:%M}}",  //
+             "{%m:%m,%m:{%m:%m,%m:%d,%m:%d,%m:[%M],%m:[%M]}}",  //
              MG_ESC("method"), MG_ESC("status.notify"), MG_ESC("params"),   //
              MG_ESC("status"), MG_ESC("online"),                            //
              MG_ESC(("log_level")), s_device_config.log_level,              //
@@ -95,9 +86,7 @@ static void publish_status(struct mg_connection *c) {
              MG_ESC(("pin_map")), print_shorts, s_device_config.pin_map,
              s_device_config.pin_count,  //
              MG_ESC(("pin_state")), print_bools, s_device_config.pin_state,
-             s_device_config.pin_count,                                  //
-             MG_ESC(("crnt_fw")), print_fw_status, MG_FIRMWARE_CURRENT,  //
-             MG_ESC(("prev_fw")), print_fw_status, MG_FIRMWARE_PREVIOUS);
+             s_device_config.pin_count);
 
   memset(&pub_opts, 0, sizeof(pub_opts));
   mg_snprintf(topic, sizeof(topic), "%s/%s/status", g_root_topic, g_device_id);
@@ -160,27 +149,6 @@ static void rpc_config_set(struct mg_rpc_req *r) {
   }
 }
 
-static void rpc_ota_commit(struct mg_rpc_req *r) {
-  if (mg_ota_commit()) {
-    mg_rpc_ok(r, "%m", MG_ESC("ok"));
-  } else {
-    mg_rpc_err(r, 1, "Failed to commit the firmware");
-  }
-}
-
-static void rpc_device_reset(struct mg_rpc_req *r) {
-  mg_rpc_ok(r, "%m", MG_ESC("ok"));
-  mg_timer_add(s_conn->mgr, 500, 0, (void (*)(void *)) mg_device_reset, NULL);
-}
-
-static void rpc_ota_rollback(struct mg_rpc_req *r) {
-  if (mg_ota_rollback()) {
-    mg_rpc_ok(r, "%m", MG_ESC("ok"));
-  } else {
-    mg_rpc_err(r, 1, "Failed to rollback to the previous firmware");
-  }
-}
-
 static void rpc_ota_upload(struct mg_rpc_req *r) {
   long ofs = mg_json_get_long(r->frame, "$.params.offset", -1);
   long tot = mg_json_get_long(r->frame, "$.params.total", -1);
@@ -200,10 +168,6 @@ static void rpc_ota_upload(struct mg_rpc_req *r) {
       mg_rpc_err(r, 1, "mg_ota_end() failed\n", tot);
     } else {
       mg_rpc_ok(r, "%m", MG_ESC("ok"));
-      if (len == 0) {  // Successful mg_ota_end() called, schedule device reboot
-        mg_timer_add(s_conn->mgr, 500, 0, (void (*)(void *)) mg_device_reset,
-                     NULL);
-      }
     }
     free(buf);
   }
@@ -297,11 +261,8 @@ void web_init(struct mg_mgr *mgr) {
 
   // Configure JSON-RPC functions we're going to handle
   mg_rpc_add(&s_rpc, mg_str("config.set"), rpc_config_set, NULL);
-  mg_rpc_add(&s_rpc, mg_str("ota.commit"), rpc_ota_commit, NULL);
-  mg_rpc_add(&s_rpc, mg_str("ota.rollback"), rpc_ota_rollback, NULL);
   mg_rpc_add(&s_rpc, mg_str("ota.upload"), rpc_ota_upload, NULL);
-  mg_rpc_add(&s_rpc, mg_str("device.reset"), rpc_device_reset, NULL);
-
+  
   mg_timer_add(mgr, 3000, MG_TIMER_REPEAT | MG_TIMER_RUN_NOW, timer_reconnect,
                mgr);
   mg_timer_add(mgr, ping_interval_ms, MG_TIMER_REPEAT, timer_ping, mgr);
