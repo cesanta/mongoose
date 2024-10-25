@@ -5,39 +5,31 @@
 
 #include "arch.h"
 
-#define MG_OTA_NONE 0      // No OTA support
-#define MG_OTA_FLASH 1     // OTA via an internal flash
-#define MG_OTA_ESP32 2     // ESP32 OTA implementation
-#define MG_OTA_CUSTOM 100  // Custom implementation
+#define MG_OTA_NONE 0       // No OTA support
+#define MG_OTA_STM32H5 1    // STM32 H5
+#define MG_OTA_STM32H7 2    // STM32 H7
+#define MG_OTA_CH32V307 100 // WCH CH32V307
+#define MG_OTA_U2A 200      // Renesas U2A16, U2A8, U2A6
+#define MG_OTA_RT1020 300   // IMXRT1020
+#define MG_OTA_RT1060 301   // IMXRT1060
+#define MG_OTA_MCXN 310 	  // MCXN947
+#define MG_OTA_FLASH 900    // OTA via an internal flash
+#define MG_OTA_ESP32 910    // ESP32 OTA implementation
+#define MG_OTA_CUSTOM 1000  // Custom implementation
 
 #ifndef MG_OTA
 #define MG_OTA MG_OTA_NONE
-#endif
-
-#if defined(__GNUC__) && !defined(__APPLE__)
+#else
+#ifndef MG_IRAM
+#if defined(__GNUC__)
 #define MG_IRAM __attribute__((section(".iram")))
 #else
 #define MG_IRAM
-#endif
+#endif // compiler
+#endif // IRAM
+#endif // OTA
 
 // Firmware update API
 bool mg_ota_begin(size_t new_firmware_size);     // Start writing
 bool mg_ota_write(const void *buf, size_t len);  // Write chunk, aligned to 1k
 bool mg_ota_end(void);                           // Stop writing
-
-enum {
-  MG_OTA_UNAVAILABLE = 0,  // No OTA information is present
-  MG_OTA_FIRST_BOOT = 1,   // Device booting the first time after the OTA
-  MG_OTA_UNCOMMITTED = 2,  // Ditto, but marking us for the rollback
-  MG_OTA_COMMITTED = 3     // The firmware is good
-};
-enum { MG_FIRMWARE_CURRENT = 0, MG_FIRMWARE_PREVIOUS = 1 };
-
-int mg_ota_status(int firmware);          // Return firmware status MG_OTA_*
-uint32_t mg_ota_crc32(int firmware);      // Return firmware checksum
-uint32_t mg_ota_timestamp(int firmware);  // Firmware timestamp, UNIX UTC epoch
-size_t mg_ota_size(int firmware);         // Firmware size
-
-bool mg_ota_commit(void);        // Commit current firmware
-bool mg_ota_rollback(void);      // Rollback to the previous firmware
-MG_IRAM void mg_ota_boot(void);  // Bootloader function

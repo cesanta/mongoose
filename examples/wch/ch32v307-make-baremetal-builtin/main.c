@@ -7,16 +7,16 @@
 #define BLINK_PERIOD_MS 1000  // LED_PIN blinking period in millis
 
 // This flash space resides at after the 0-wait 320k area
-static char *s_flash_space = (char *) (0x8000000 + 320 * 1024);
+// static char *s_flash_space = (char *) (0x8000000 + 320 * 1024);
 
 bool web_load_settings(void *buf, size_t len) {
-  if (*(uint32_t *) s_flash_space != SETTINGS_MAGIC) return false;
-  memcpy(buf, s_flash_space, len);
-  return true;
+  (void) buf, (void) len;
+  return false;
 }
 
 bool web_save_settings(void *buf, size_t len) {
-  return mg_flash_write(s_flash_space, buf, len);
+  (void) buf, (void) len;
+  return true;
 }
 
 static void timer_fn(void *arg) {

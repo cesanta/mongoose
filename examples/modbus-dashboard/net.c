@@ -241,7 +241,6 @@ static void fn(struct mg_connection *c, int ev, void *ev_data) {
     } else if (mg_match(hm->uri, mg_str("/api/modbus/exec"), NULL)) {
       handle_modbus_exec(c, hm->body);
     } else if (mg_match(hm->uri, mg_str("/api/device/reset"), NULL)) {
-      mg_timer_add(c->mgr, 500, 0, (void (*)(void *)) mg_device_reset, NULL);
       mg_http_reply(c, 200, s_json_header, "true\n");
     } else {
       struct mg_http_serve_opts opts;
