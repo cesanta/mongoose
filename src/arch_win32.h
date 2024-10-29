@@ -2,6 +2,10 @@
 
 #if MG_ARCH == MG_ARCH_WIN32
 
+#ifndef _CRT_RAND_S
+#define _CRT_RAND_S
+#endif
+
 #ifndef WIN32_LEAN_AND_MEAN
 #define WIN32_LEAN_AND_MEAN
 #endif
@@ -57,12 +61,6 @@ typedef enum { false = 0, true = 1 } bool;
 #endif
 #include <wincrypt.h>
 #pragma comment(lib, "advapi32.lib")
-#elif defined(_CRT_RAND_S)
-#else
-#include <bcrypt.h>
-#if defined(_MSC_VER)
-#pragma comment(lib, "bcrypt.lib")
-#endif
 #endif
 
 // Protect from calls like std::snprintf in app code

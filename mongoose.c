@@ -16385,7 +16385,7 @@ bool mg_random(void *buf, size_t len) {
   if (initialised == true) {
     success = CryptGenRandom(hProv, len, p);
   }
-#elif defined(_CRT_RAND_S)
+#else
   size_t i;
   for (i = 0; i < len; i++) {
     unsigned int rand_v;
@@ -16396,16 +16396,6 @@ bool mg_random(void *buf, size_t len) {
     }
   }
   success = (i == len);
-#else
-  // BCrypt is a "new generation" strong crypto API, so try it first
-  static BCRYPT_ALG_HANDLE hProv;
-  if (initialised == false &&
-      BCryptOpenAlgorithmProvider(&hProv, BCRYPT_RNG_ALGORITHM, NULL, 0) == 0) {
-    initialised = true;
-  }
-  if (initialised == true) {
-    success = BCryptGenRandom(hProv, p, (ULONG) len, 0) == 0;
-  }
 #endif
 
 #elif MG_ARCH == MG_ARCH_UNIX
