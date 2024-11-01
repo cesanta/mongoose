@@ -255,6 +255,14 @@ static inline int mg_mkdir(const char *path, mode_t mode) {
 
 #include <pico/stdlib.h>
 int mkdir(const char *, mode_t);
+
+#if MG_OTA == MG_OTA_PICOSDK
+#include <hardware/flash.h>
+#if PICO_RP2040
+#include <pico/bootrom.h>
+#endif
+#endif
+
 #endif
 
 
@@ -2650,6 +2658,7 @@ void mg_rpc_list(struct mg_rpc_req *r);
 #define MG_OTA_MCXN 310 	  // MCXN947
 #define MG_OTA_FLASH 900    // OTA via an internal flash
 #define MG_OTA_ESP32 910    // ESP32 OTA implementation
+#define MG_OTA_PICOSDK 920  // RP2040/2350 using Pico-SDK hardware_flash
 #define MG_OTA_CUSTOM 1000  // Custom implementation
 
 #ifndef MG_OTA

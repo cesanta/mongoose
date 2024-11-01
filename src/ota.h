@@ -16,6 +16,7 @@
 #define MG_OTA_MCXN 310 	  // MCXN947
 #define MG_OTA_FLASH 900    // OTA via an internal flash
 #define MG_OTA_ESP32 910    // ESP32 OTA implementation
+#define MG_OTA_PICOSDK 920  // RP2040/2350 using Pico-SDK hardware_flash
 #define MG_OTA_CUSTOM 1000  // Custom implementation
 
 #ifndef MG_OTA
