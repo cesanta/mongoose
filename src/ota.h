@@ -23,7 +23,7 @@
 #else
 #ifndef MG_IRAM
 #if defined(__GNUC__)
-#define MG_IRAM __attribute__((section(".iram")))
+#define MG_IRAM __attribute__((noinline, section(".iram")))
 #else
 #define MG_IRAM
 #endif // compiler
