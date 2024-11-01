@@ -120,7 +120,7 @@ MG_IRAM static void flash_clear_err(void) {
   MG_REG(MG_FLASH_BASE + MG_FLASH_SR) = 0xf2;  // Clear all errors
 }
 
-__attribute__((noinline)) MG_IRAM static bool mg_stm32f_erase(void *addr) {
+MG_IRAM static bool mg_stm32f_erase(void *addr) {
   bool ok = false;
   if (flash_page_start(addr) == false) {
     MG_ERROR(("%p is not on a sector boundary", addr));
@@ -161,7 +161,7 @@ MG_IRAM static bool mg_stm32f_swap(void) {
 
 static bool s_flash_irq_disabled;
 
-__attribute__((noinline)) MG_IRAM static bool mg_stm32f_write(void *addr,
+MG_IRAM static bool mg_stm32f_write(void *addr,
                                                               const void *buf,
                                                               size_t len) {
   if ((len % s_mg_flash_stm32f.align) != 0) {
@@ -194,7 +194,7 @@ __attribute__((noinline)) MG_IRAM static bool mg_stm32f_write(void *addr,
 }
 
 // just overwrite instead of swap
-__attribute__((noinline)) MG_IRAM void single_bank_swap(char *p1, char *p2,
+MG_IRAM void single_bank_swap(char *p1, char *p2,
                                                         size_t size) {
   // no stdlib calls here
   mg_stm32f_write(p1, p2, size);
