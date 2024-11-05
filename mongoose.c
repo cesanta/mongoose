@@ -5643,37 +5643,38 @@ MG_IRAM static bool flash_page_start(volatile uint32_t *dst) {
 
 // Note: the get_config function below works both for RT1020 and 1060
 #if MG_OTA == MG_OTA_RT1020
+// must reside in RAM, as flash will be erased
+static struct mg_flexspi_nor_config default_config = {
+  .memConfig = {.tag = MG_FLEXSPI_CFG_BLK_TAG,
+                .version = MG_FLEXSPI_CFG_BLK_VERSION,
+                .readSampleClkSrc = 1,  // ReadSampleClk_LoopbackFromDqsPad
+                .csHoldTime = 3,
+                .csSetupTime = 3,
+                .controllerMiscOption = MG_BIT(4),
+                .deviceType = 1,  // serial NOR
+                .sflashPadType = 4,
+                .serialClkFreq = 7,  // 133MHz
+                .sflashA1Size = 8 * 1024 * 1024,
+                .lookupTable = MG_FLEXSPI_QSPI_LUT},
+  .pageSize = 256,
+  .sectorSize = 4 * 1024,
+  .ipcmdSerialClkFreq = 1,
+  .blockSize = 64 * 1024,
+  .isUniformBlockSize = false
+};
 MG_IRAM static int flexspi_nor_get_config(
-    struct mg_flexspi_nor_config *config) {
-  struct mg_flexspi_nor_config default_config = {
-      .memConfig = {.tag = MG_FLEXSPI_CFG_BLK_TAG,
-                    .version = MG_FLEXSPI_CFG_BLK_VERSION,
-                    .readSampleClkSrc = 1,  // ReadSampleClk_LoopbackFromDqsPad
-                    .csHoldTime = 3,
-                    .csSetupTime = 3,
-                    .controllerMiscOption = MG_BIT(4),
-                    .deviceType = 1,  // serial NOR
-                    .sflashPadType = 4,
-                    .serialClkFreq = 7,  // 133MHz
-                    .sflashA1Size = 8 * 1024 * 1024,
-                    .lookupTable = MG_FLEXSPI_QSPI_LUT},
-      .pageSize = 256,
-      .sectorSize = 4 * 1024,
-      .ipcmdSerialClkFreq = 1,
-      .blockSize = 64 * 1024,
-      .isUniformBlockSize = false};
-
-  *config = default_config;
+  struct mg_flexspi_nor_config **config) {
+  *config = &default_config;
   return 0;
 }
 #else
 MG_IRAM static int flexspi_nor_get_config(
-    struct mg_flexspi_nor_config *config) {
+    struct mg_flexspi_nor_config **config) {
   uint32_t options[] = {0xc0000000, 0x00};
 
   MG_ARM_DISABLE_IRQ();
   uint32_t status =
-      flexspi_nor->get_config(FLEXSPI_NOR_INSTANCE, config, options);
+      flexspi_nor->get_config(FLEXSPI_NOR_INSTANCE, *config, options);
   if (!s_flash_irq_disabled) {
     MG_ARM_ENABLE_IRQ();
   }
@@ -5683,6 +5684,15 @@ MG_IRAM static int flexspi_nor_get_config(
   return status;
 }
 #endif
+
+MG_IRAM static void mg_spin(volatile uint32_t count) {
+  while (count--) (void) 0;
+}
+
+MG_IRAM static void flash_wait(void) {
+  while ((*((volatile uint32_t *) (0x402A8000 + 0xE0)) & MG_BIT(1)) == 0)
+    mg_spin(1);
+}
 
 MG_IRAM static bool flash_erase(struct mg_flexspi_nor_config *config,
                                 void *addr) {
@@ -5702,12 +5712,12 @@ MG_IRAM static bool flash_erase(struct mg_flexspi_nor_config *config,
 #if 0
 // standalone erase call
 MG_IRAM static bool mg_imxrt_erase(void *addr) {
-  struct mg_flexspi_nor_config config;
+  struct mg_flexspi_nor_config config, *config_ptr = &config;
   bool ret;
   // Interrupts must be disabled before calls to ROM API in RT1020 and 1060
   MG_ARM_DISABLE_IRQ();
-  ret = (flexspi_nor_get_config(&config) == 0);
-  if (ret) ret = flash_erase(&config, addr);
+  ret = (flexspi_nor_get_config(&config_ptr) == 0);
+  if (ret) ret = flash_erase(config_ptr, addr);
   MG_ARM_ENABLE_IRQ();
   return ret;
 }
@@ -5717,21 +5727,12 @@ MG_IRAM bool mg_imxrt_swap(void) {
   return true;
 }
 
-static inline void spin(volatile uint32_t count) {
-  while (count--) (void) 0;
-}
-
-static inline void flash_wait(void) {
-  while ((*((volatile uint32_t *) (0x402A8000 + 0xE0)) & MG_BIT(1)) == 0)
-    spin(1);
-}
-
 MG_IRAM static bool mg_imxrt_write(void *addr, const void *buf, size_t len) {
-  struct mg_flexspi_nor_config config;
+  struct mg_flexspi_nor_config config, *config_ptr = &config;
   bool ok = false;
   // Interrupts must be disabled before calls to ROM API in RT1020 and 1060
   MG_ARM_DISABLE_IRQ();
-  if (flexspi_nor_get_config(&config) != 0) goto fwxit;
+  if (flexspi_nor_get_config(&config_ptr) != 0) goto fwxit;
   if ((len % s_mg_flash_imxrt.align) != 0) {
     MG_ERROR(("%lu is not aligned to %lu", len, s_mg_flash_imxrt.align));
     goto fwxit;
@@ -5747,7 +5748,7 @@ MG_IRAM static bool mg_imxrt_write(void *addr, const void *buf, size_t len) {
   ok = true;
 
   while (ok && src < end) {
-    if (flash_page_start(dst) && flash_erase(&config, dst) == false) {
+    if (flash_page_start(dst) && flash_erase(config_ptr, dst) == false) {
       ok = false;
       break;
     }
@@ -5763,10 +5764,10 @@ MG_IRAM static bool mg_imxrt_write(void *addr, const void *buf, size_t len) {
         flash_wait();
         tmp[i] = src[i];
       }
-      status = flexspi_nor->program(FLEXSPI_NOR_INSTANCE, &config,
+      status = flexspi_nor->program(FLEXSPI_NOR_INSTANCE, config_ptr,
                                     (uint32_t) dst_ofs, tmp);
     } else {
-      status = flexspi_nor->program(FLEXSPI_NOR_INSTANCE, &config,
+      status = flexspi_nor->program(FLEXSPI_NOR_INSTANCE, config_ptr,
                                     (uint32_t) dst_ofs, src);
     }
     src = (uint32_t *) ((char *) src + s_mg_flash_imxrt.align);
@@ -5805,12 +5806,6 @@ bool mg_ota_end(void) {
       *(volatile unsigned long *) 0xe000ed0c = 0x5fa0004;
     } else {
       // Swap partitions. Pray power does not go away
-      char *tmpsector = malloc(s_mg_flash_imxrt.secsz);
-      bool ramtmp = (tmpsector != NULL);
-      if (!ramtmp) {
-        MG_ERROR(("OOM"));
-        return false;
-      }
       MG_INFO(("Swapping partitions, size %u (%u sectors)",
                s_mg_flash_imxrt.size,
                s_mg_flash_imxrt.size / s_mg_flash_imxrt.secsz));
