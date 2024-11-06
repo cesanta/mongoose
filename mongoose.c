@@ -16775,6 +16775,9 @@ bool mg_random(void *buf, size_t len) {
 #if MG_ARCH == MG_ARCH_ESP32
   while (len--) *p++ = (unsigned char) (esp_random() & 255);
   success = true;
+#elif MG_ARCH == MG_ARCH_RP2040
+  while (len--) *p++ = (unsigned char) (get_rand_32() & 255);
+  success = true;
 #elif MG_ARCH == MG_ARCH_WIN32
   static bool initialised = false;
 #if defined(_MSC_VER) && _MSC_VER < 1700

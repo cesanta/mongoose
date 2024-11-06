@@ -15,7 +15,7 @@ target_include_directories(firmware PUBLIC
   .
   pico-sdk/lib/tinyusb/lib/networking)
 
-target_link_libraries(firmware pico_stdlib hardware_spi tinyusb_device)
+target_link_libraries(firmware pico_stdlib pico_rand hardware_spi tinyusb_device)
 pico_add_extra_outputs(firmware)     # create map/bin/hex file etc.
 
 pico_enable_stdio_usb(firmware 0)    # Route stdio
