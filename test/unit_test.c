@@ -2144,8 +2144,18 @@ static void test_str(void) {
     TESTDOUBLE("%g", 10000.0, "10000");
     TESTDOUBLE("%g", 100000.0, "100000");
     TESTDOUBLE("%g", 1000000.0, "1e+06");
+    TESTDOUBLE("%f", 1000000.0, "1000000.000000");
     TESTDOUBLE("%g", 10000000.0, "1e+07");
+    TESTDOUBLE("%f", 10000000.0, "10000000.000000");
     TESTDOUBLE("%g", 100000001.0, "1e+08");
+    TESTDOUBLE("%g", 0.1, "0.1");
+    TESTDOUBLE("%g", 0.01, "0.01");
+    TESTDOUBLE("%g", 0.001, "0.001");
+    TESTDOUBLE("%g", 0.0001, "0.0001");
+    TESTDOUBLE_NOHOSTCHECK("%g", 0.00001, "0.00001"); // "1e-05"
+    TESTDOUBLE("%g", 0.000001, "1e-06");
+    TESTDOUBLE("%g", -0.0001, "-0.0001");
+    TESTDOUBLE_NOHOSTCHECK("%g", -0.00001, "-0.00001"); // "-1e-05"
     TESTDOUBLE("%g", 10.5454, "10.5454");
     TESTDOUBLE("%g", 999999.0, "999999");
     TESTDOUBLE("%g", 9999999.0, "1e+07");
@@ -2167,6 +2177,7 @@ static void test_str(void) {
     TESTDOUBLE("%.*f", DBLWIDTH(4, 0.14), "0.1400");
     TESTDOUBLE("%.*f", DBLWIDTH(3, 0.14), "0.140");
     TESTDOUBLE("%.*f", DBLWIDTH(2, 0.14), "0.14");
+    TESTDOUBLE("%.*f", DBLWIDTH(2, 25.14), "25.14");
     TESTDOUBLE("%.*f", DBLWIDTH(1, 0.14), "0.1");
     TESTDOUBLE("%.*f", DBLWIDTH(1, 0.19), "0.2");
     TESTDOUBLE("%.*f", DBLWIDTH(1, 0.16), "0.2");
@@ -2175,6 +2186,9 @@ static void test_str(void) {
     TESTDOUBLE("%.4f", 123.123456789, "123.1235");
     TESTDOUBLE("%.5f", 123.1234567, "123.12346");
     TESTDOUBLE_NOHOSTCHECK("%.*f", DBLWIDTH(1, 0.15), "0.2");
+    TESTDOUBLE("%.5f", 123.12345, "123.12345");
+    TESTDOUBLE("%.4f", 789.01234, "789.0123");
+    TESTDOUBLE("%2.3f", 1.23, "1.230");
 
     TESTDOUBLE("%.1f", 1.5, "1.5");
 
