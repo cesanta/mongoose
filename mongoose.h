@@ -2657,6 +2657,7 @@ void mg_rpc_list(struct mg_rpc_req *r);
 #define MG_OTA_RT1020 300   // IMXRT1020
 #define MG_OTA_RT1060 301   // IMXRT1060
 #define MG_OTA_RT1064 302   // IMXRT1064
+#define MG_OTA_RT1170 303   // IMXRT1170
 #define MG_OTA_MCXN 310 	  // MCXN947
 #define MG_OTA_FLASH 900    // OTA via an internal flash
 #define MG_OTA_ESP32 910    // ESP32 OTA implementation
