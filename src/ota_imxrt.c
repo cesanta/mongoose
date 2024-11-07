@@ -2,17 +2,20 @@
 #include "log.h"
 #include "ota.h"
 
-#if MG_OTA >= MG_OTA_RT1020 && MG_OTA <= MG_OTA_RT1064
+#if MG_OTA >= MG_OTA_RT1020 && MG_OTA <= MG_OTA_RT1170
 
 static bool mg_imxrt_write(void *, const void *, size_t);
 static bool mg_imxrt_swap(void);
 
-#if MG_OTA == MG_OTA_RT1064
-#define MG_IMXRT_FLASH_START 0x70000000
-#define FLEXSPI_NOR_INSTANCE 1
-#else
+#if MG_OTA <= MG_OTA_RT1060
 #define MG_IMXRT_FLASH_START 0x60000000
 #define FLEXSPI_NOR_INSTANCE 0
+#elif MG_OTA == MG_OTA_RT1064
+#define MG_IMXRT_FLASH_START 0x70000000
+#define FLEXSPI_NOR_INSTANCE 1
+#else // RT1170
+#define MG_IMXRT_FLASH_START 0x30000000
+#define FLEXSPI_NOR_INSTANCE 1
 #endif
 
 // TODO(): fill at init, support more devices in a dynamic way
@@ -166,7 +169,7 @@ struct mg_flexspi_nor_driver_interface {
   int (*xfer)(uint32_t instance, char *xfer);
   void (*clear_cache)(uint32_t instance);
 };
-#else
+#elif MG_OTA <= MG_OTA_RT1064
 // RT104x and RT106x support ROM API version 1.5
 struct mg_flexspi_nor_driver_interface {
   uint32_t version;
@@ -185,11 +188,48 @@ struct mg_flexspi_nor_driver_interface {
   int (*get_config)(uint32_t instance, struct mg_flexspi_nor_config *config,
                     uint32_t *option);
 };
+#else
+// RT117x support ROM API version 1.7
+struct mg_flexspi_nor_driver_interface {
+  uint32_t version;
+  int (*init)(uint32_t instance, struct mg_flexspi_nor_config *config);
+  int (*program)(uint32_t instance, struct mg_flexspi_nor_config *config,
+                 uint32_t dst_addr, const uint32_t *src);
+  int (*erase_all)(uint32_t instance, struct mg_flexspi_nor_config *config);
+  int (*erase)(uint32_t instance, struct mg_flexspi_nor_config *config,
+               uint32_t start, uint32_t lengthInBytes);
+  int (*read)(uint32_t instance, struct mg_flexspi_nor_config *config,
+              uint32_t *dst, uint32_t addr, uint32_t lengthInBytes);
+  uint32_t reserved;
+  int (*xfer)(uint32_t instance, char *xfer);
+  int (*update_lut)(uint32_t instance, uint32_t seqIndex,
+                    const uint32_t *lutBase, uint32_t seqNumber);
+  int (*get_config)(uint32_t instance, struct mg_flexspi_nor_config *config,
+                    uint32_t *option);
+  int (*erase_sector)(uint32_t instance, struct mg_flexspi_nor_config *config,
+                      uint32_t address);
+  int (*erase_block)(uint32_t instance, struct mg_flexspi_nor_config *config,
+                     uint32_t address);
+  void (*hw_reset)(uint32_t instance, uint32_t resetLogic);
+  int (*wait_busy)(uint32_t instance, struct mg_flexspi_nor_config *config,
+                  bool isParallelMode, uint32_t address);
+  int (*set_clock_source)(uint32_t instance, uint32_t clockSrc);
+  void (*config_clock)(uint32_t instance, uint32_t freqOption,
+                  uint32_t sampleClkMode);
+};
 #endif
 
+#if MG_OTA <= MG_OTA_RT1064
+#define MG_FLEXSPI_BASE 0x402A8000
 #define flexspi_nor                                                          \
   (*((struct mg_flexspi_nor_driver_interface **) (*(uint32_t *) 0x0020001c + \
                                                   16)))
+#else
+#define MG_FLEXSPI_BASE 0x400CC000
+#define flexspi_nor                                                          \
+  (*((struct mg_flexspi_nor_driver_interface **) (*(uint32_t *) 0x0021001c + \
+                                                  12)))
+#endif
 
 static bool s_flash_irq_disabled;
 
@@ -249,7 +289,7 @@ MG_IRAM static void mg_spin(volatile uint32_t count) {
 }
 
 MG_IRAM static void flash_wait(void) {
-  while ((*((volatile uint32_t *) (0x402A8000 + 0xE0)) & MG_BIT(1)) == 0)
+  while ((*((volatile uint32_t *) (MG_FLEXSPI_BASE + 0xE0)) & MG_BIT(1)) == 0)
     mg_spin(1);
 }
 
