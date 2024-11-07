@@ -254,6 +254,7 @@ static inline int mg_mkdir(const char *path, mode_t mode) {
 #include <time.h>
 
 #include <pico/stdlib.h>
+#include <pico/rand.h>
 int mkdir(const char *, mode_t);
 
 #if MG_OTA == MG_OTA_PICOSDK
