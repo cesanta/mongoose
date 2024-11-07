@@ -5452,18 +5452,26 @@ bool mg_ota_end(void) {
 
 
 
-#if MG_OTA == MG_OTA_RT1020 || MG_OTA == MG_OTA_RT1060
+#if MG_OTA >= MG_OTA_RT1020 && MG_OTA <= MG_OTA_RT1064
 
 static bool mg_imxrt_write(void *, const void *, size_t);
 static bool mg_imxrt_swap(void);
 
+#if MG_OTA == MG_OTA_RT1064
+#define MG_IMXRT_FLASH_START 0x70000000
+#define FLEXSPI_NOR_INSTANCE 1
+#else
+#define MG_IMXRT_FLASH_START 0x60000000
+#define FLEXSPI_NOR_INSTANCE 0
+#endif
+
 // TODO(): fill at init, support more devices in a dynamic way
 // TODO(): then, check alignment is <= 256, see Wizard's #251
 static struct mg_flash s_mg_flash_imxrt = {
-    (void *) 0x60000000,  // Start,
-    8 * 1024 * 1024,      // Size, 8mb
-    4 * 1024,             // Sector size, 4k
-    256,                  // Align,
+    (void *) MG_IMXRT_FLASH_START,  // Start,
+    4 * 1024 * 1024,                // Size, 4mb
+    4 * 1024,                       // Sector size, 4k
+    256,                            // Align,
     mg_imxrt_write,
     mg_imxrt_swap,
 };
@@ -5592,9 +5600,8 @@ struct mg_flexspi_nor_config {
 #define MG_FLEXSPI_LUT_OPCODE1(x) \
   (((uint32_t) (((uint32_t) (x)) << 26U)) & 0xFC000000U)
 
-#define FLEXSPI_NOR_INSTANCE 0
-
 #if MG_OTA == MG_OTA_RT1020
+// RT102X boards support ROM API version 1.4
 struct mg_flexspi_nor_driver_interface {
   uint32_t version;
   int (*init)(uint32_t instance, struct mg_flexspi_nor_config *config);
@@ -5609,7 +5616,8 @@ struct mg_flexspi_nor_driver_interface {
   int (*xfer)(uint32_t instance, char *xfer);
   void (*clear_cache)(uint32_t instance);
 };
-#elif MG_OTA == MG_OTA_RT1060
+#else
+// RT104x and RT106x support ROM API version 1.5
 struct mg_flexspi_nor_driver_interface {
   uint32_t version;
   int (*init)(uint32_t instance, struct mg_flexspi_nor_config *config);
@@ -5642,7 +5650,6 @@ MG_IRAM static bool flash_page_start(volatile uint32_t *dst) {
 }
 
 // Note: the get_config function below works both for RT1020 and 1060
-#if MG_OTA == MG_OTA_RT1020
 // must reside in RAM, as flash will be erased
 static struct mg_flexspi_nor_config default_config = {
   .memConfig = {.tag = MG_FLEXSPI_CFG_BLK_TAG,
@@ -5667,7 +5674,9 @@ MG_IRAM static int flexspi_nor_get_config(
   *config = &default_config;
   return 0;
 }
-#else
+
+#if 0
+// ROM API get_config call (ROM version >= 1.5)
 MG_IRAM static int flexspi_nor_get_config(
     struct mg_flexspi_nor_config **config) {
   uint32_t options[] = {0xc0000000, 0x00};
