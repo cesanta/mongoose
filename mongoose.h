@@ -38,7 +38,7 @@ extern "C" {
 #define MG_ARCH_NEWLIB 8        // Bare metal ARM
 #define MG_ARCH_CMSIS_RTOS1 9   // CMSIS-RTOS API v1 (Keil RTX)
 #define MG_ARCH_TIRTOS 10       // Texas Semi TI-RTOS
-#define MG_ARCH_RP2040 11       // Raspberry Pi RP2040
+#define MG_ARCH_PICOSDK 11      // Raspberry Pi Pico-SDK (RP2040, RP2350)
 #define MG_ARCH_ARMCC 12        // Keil MDK-Core with Configuration Wizard
 #define MG_ARCH_CMSIS_RTOS2 13  // CMSIS-RTOS API v2 (Keil RTX5, FreeRTOS)
 #define MG_ARCH_RTTHREAD 14     // RT-Thread RTOS
@@ -243,7 +243,7 @@ static inline int mg_mkdir(const char *path, mode_t mode) {
 #endif
 
 
-#if MG_ARCH == MG_ARCH_RP2040
+#if MG_ARCH == MG_ARCH_PICOSDK
 #include <errno.h>
 #include <stdarg.h>
 #include <stdbool.h>

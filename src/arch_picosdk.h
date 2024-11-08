@@ -1,6 +1,6 @@
 #pragma once
 
-#if MG_ARCH == MG_ARCH_RP2040
+#if MG_ARCH == MG_ARCH_PICOSDK
 #include <errno.h>
 #include <stdarg.h>
 #include <stdbool.h>

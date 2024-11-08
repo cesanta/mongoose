@@ -17,7 +17,7 @@ bool mg_random(void *buf, size_t len) {
 #if MG_ARCH == MG_ARCH_ESP32
   while (len--) *p++ = (unsigned char) (esp_random() & 255);
   success = true;
-#elif MG_ARCH == MG_ARCH_RP2040
+#elif MG_ARCH == MG_ARCH_PICOSDK
   while (len--) *p++ = (unsigned char) (get_rand_32() & 255);
   success = true;
 #elif MG_ARCH == MG_ARCH_WIN32
@@ -156,7 +156,7 @@ bool mg_path_is_sane(const struct mg_str path) {
 uint64_t mg_millis(void) {
 #if MG_ARCH == MG_ARCH_WIN32
   return GetTickCount();
-#elif MG_ARCH == MG_ARCH_RP2040
+#elif MG_ARCH == MG_ARCH_PICOSDK
   return time_us_64() / 1000;
 #elif MG_ARCH == MG_ARCH_ESP8266 || MG_ARCH == MG_ARCH_ESP32 || \
     MG_ARCH == MG_ARCH_FREERTOS
