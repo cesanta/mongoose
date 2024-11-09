@@ -95,7 +95,7 @@ const [, , ...args] = process.argv;
 const files = args.map(f => ({
   path: f,
   data: fs.readFileSync(f, 'utf8'),
-  zip: true,
+  zip: !!f.match(/web_root\/.+/),
 }));
 
 (async () => {
