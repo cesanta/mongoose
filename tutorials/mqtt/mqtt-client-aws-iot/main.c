@@ -6,32 +6,29 @@
 //    2. When connected, subscribes to the topic `s_rx_topic`
 //    3. Publishes message `hello` to the `s_tx_topic` periodically
 //
-// This example requires TLS support. By default, it is built with mbedTLS,
-// therefore make sure mbedTLS is installed. To build with OpenSSL, execute:
-//    make clean all CFLAGS="-W -Wall -DMG_ENABLE_OPENSSL=1 -lssl"
 
-// In order to get MQTT URL, login to AWS IoT, click on "Settings" on the left
-// bar, copy the "Endpoint" URL.
-static const char *s_url =
-    "mqtts://a1pjwh2bop1ojt-ats.iot.eu-west-1.amazonaws.com";
-
-// To create certificates:
-// 1. Click Policies -> Create, fill fields:
-//               Name        : Policy1
+// How to build and run this example:
+// 1. Login to AWS IoT
+// 2. Click "Settings" on the left bar, copy the domain, change s_url below
+// 3. Click Security -> Policies -> Create Policy, fill fields:
+//               Name        : PolicyAllow
 //               Action      : iot:*
 //               Resource ARN: *
 //               Effect      : allow
 //        then, click "Create"
-// 2. Click Manage -> Things -> Create things -> Create single thing -> Next
-//      Thing name: t1, no shadow, Next
-//      Auto-generate new certificate, Next
-//      Select policy Policy1, Create thing
-// 3. From the dialog box that appears, download:
-//      xxx-certificate.pem.crt as cert.pem to the example directory
-//      xxx-private.pem.key as key.pem to the example directory
-// static const char *s_cert = "cert.pem";
-// static const char *s_key = "key.pem";
+// 4. Create EC private key file and CSR (Certificate Signing Request)
+//      type "make csr", see Makefile
+// 5. Click Security -> Certificates -> Add Certificate -> Create Certificate
+//      Choose "Create certificate with certificate signing request (CSR)"
+//      Choose "crt.csr" created on a previous step
+//      Choose "Active" to activate certificate
+//      Click Create
+//      Downoad AmazonRootCA1.pem as ca.pem and generated certificate as crt.pem
+//      Select certificate, attach PolicyAllow to it
+// 6. Type "make" to build and run the example
 
+static const char *s_url =
+    "mqtts://a1pjwh2bop1ojt-ats.iot.eu-west-1.amazonaws.com";
 static const char *s_rx_topic = "d/rx";
 static const char *s_tx_topic = "d/tx";
 static int s_qos = 1;
@@ -43,7 +40,9 @@ static void fn(struct mg_connection *c, int ev, void *ev_data) {
     // c->is_hexdumping = 1;
   } else if (ev == MG_EV_CONNECT) {
     if (mg_url_is_ssl(s_url)) {
-      struct mg_tls_opts opts = {.ca = mg_unpacked("/certs/ca.pem"),
+      struct mg_tls_opts opts = {.ca = mg_unpacked("/ca.pem"),
+                                 .cert = mg_unpacked("/crt.pem"),
+                                 .key = mg_unpacked("/key.pem"),
                                  .name = mg_url_host(s_url)};
       mg_tls_init(c, &opts);
     }
@@ -92,6 +91,7 @@ int main(void) {
   struct mg_mgr mgr;
   struct mg_mqtt_opts opts = {.clean = true};
   bool done = false;
+  mg_log_set(MG_LL_DEBUG);
   mg_mgr_init(&mgr);                               // Initialise event manager
   MG_INFO(("Connecting to %s", s_url));            // Inform that we're starting
   mg_mqtt_connect(&mgr, s_url, &opts, fn, &done);  // Create client connection

@@ -1,11 +1,14 @@
 PROG ?= example                   # Program we are building
 DELETE = rm -rf                   # Command to remove files
 OUT ?= -o $(PROG)                 # Compiler argument for output file
-SOURCES = main.c mongoose.c  packed_fs.c      # Source code files, packed_fs.c contains ca.pem, which contains CA certs for TLS
 CFLAGS = -W -Wall -Wextra -g -I.  # Build options
+SOURCES = main.c mongoose.c  mongoose_fs.c
 
 # Mongoose build options. See https://mongoose.ws/documentation/#build-options
-CFLAGS_MONGOOSE += -DMG_ENABLE_LINES=1 -DMG_ENABLE_PACKED_FS=1
+CFLAGS_MONGOOSE += -DMG_ENABLE_PACKED_FS=1
+#CFLAGS_MONGOOSE += -DMG_TLS=MG_TLS_BUILTIN
+CFLAGS_MONGOOSE +=  -DMG_TLS=MG_TLS_OPENSSL -lssl -lcrypto -I/opt/homebrew/opt/openssl@3.4/include/ -L/opt/homebrew/opt/openssl@3.4/lib
+#CFLAGS_MONGOOSE +=  -DMG_TLS=MG_TLS_MBED -lmbedtls -lmbedcrypto -lmbedx509 -I/opt/homebrew/opt/mbedtls/include/ -L/opt/homebrew/opt/mbedtls/lib
 
 ifeq ($(OS),Windows_NT)   # Windows settings. Assume MinGW compiler. To use VC: make CC=cl CFLAGS=/MD OUT=/Feprog.exe
   PROG ?= example.exe           # Use .exe suffix for the binary
@@ -16,17 +19,18 @@ ifeq ($(OS),Windows_NT)   # Windows settings. Assume MinGW compiler. To use VC: 
   MAKE += WINDOWS=1 CC=$(CC)
 endif
 
-all: $(PROG)              # Default target. Build and run program
+all: $(PROG)
 	$(RUN) ./$(PROG) $(ARGS)
 
-$(PROG): $(SOURCES)       # Build program from sources
+$(PROG): $(SOURCES) Makefile
 	$(CC) $(SOURCES) $(CFLAGS) $(CFLAGS_MONGOOSE) $(CFLAGS_EXTRA) $(OUT)
 
-clean:                    # Cleanup. Delete built program and all build artifacts
+csr:
+	openssl ecparam -noout -name prime256v1 -genkey -out key.pem
+	openssl req -new -key key.pem -subj /CN=Mongoose -out crt.csr
+
+mongoose_fs.c: ca.pem crt.pem key.pem
+	node ../../../test/pack.js ca.pem crt.pem key.pem > $@
+
+clean:
 	$(DELETE) $(PROG) *.o *.obj *.exe *.dSYM mbedtls
-
-# see https://mongoose.ws/tutorials/tls/#how-to-build for TLS build options
-
-mbedtls:                  # Pull and build mbedTLS library
-	git clone --depth 1 -b v2.28.2 https://github.com/mbed-tls/mbedtls $@
-	$(MAKE) -C mbedtls/library
