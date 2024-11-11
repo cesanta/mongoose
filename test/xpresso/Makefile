@@ -13,4 +13,5 @@ $(PROJECTS): FORCE
 	PROJNAME=`xq -r .projectDescription.name $@/.project` && \
 	($(DOCKER) $(IMAGE) $(HEADLESS_BUILD) -data workspace -import wizard -cleanBuild $$PROJNAME/$(TARGET) || true) && \
 	test -f $(@F)/$(TARGET)/$$PROJNAME.axf )
+
 FORCE:

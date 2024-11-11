@@ -15,7 +15,7 @@ ifeq "$(IDE)" "Keil"
 BUILD = true
 endif
 ifeq "$(IDE)" "Pico-SDK"
-BUILD = $(MAKE) -f ../pico-sdk/Makefile PROJECTS=wizard
+BUILD = $(MAKE) -f ../pico-sdk/Makefile PROJECTS=wizard BOARD=$(BOARD)
 endif
 ifeq "$(IDE)" "ESP-IDF"
 BUILD = $(MAKE) -f ../esp-idf/Makefile PROJECTS=wizard
