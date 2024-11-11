@@ -308,9 +308,10 @@ jobs:
           - path: nxp/rt1060-evk-make-freertos-builtin
           - path: nxp/rt1170-evk-make-freertos-builtin
           - path: renesas/ek-ra6m4-make-baremetal-builtin
-          - path: rp2040/pico-rndis-dashboard
-          - path: rp2040/pico-w
-          - path: rp2040/pico-w5500
+          - path: pico-sdk/pico-rndis-dashboard
+          - path: pico-sdk/pico-w
+          - path: pico-sdk/w5500-evb-pico-picosdk-baremetal-builtin
+          - path: pico-sdk/w5500-evb-pico2-picosdk-baremetal-builtin
           - path: stm32/nucleo-f746zg-make-freertos-tcp
           - path: stm32/nucleo-f746zg-make-baremetal-builtin-cmsis_driver
     name: ${{ matrix.example.path }}
@@ -354,7 +355,7 @@ jobs:
       fail-fast: false
       matrix:
         example:
-          - path: rp2040/pico-rndis-device
+          - path: pico-sdk/pico-rndis-device
     name: ${{ matrix.example.path }}
     env:
       GO: 0
@@ -734,10 +735,10 @@ jobs:
       with: { fetch-depth: 2 }
     - name: SDK
       run: |
-        if ./test/match_changed_files.sh "^src|examples/device-dashboard|examples/rp2040/pico-w5500" ; then
+        if ./test/match_changed_files.sh "^src|examples/device-dashboard|examples/pico-sdk/w5500-evb-pico-picosdk-baremetal-builtin" ; then
           echo GO=1 >> $GITHUB_ENV
           sudo apt -y update && sudo apt -y install gcc-arm-none-eabi
         fi
     - if: ${{ env.GO == 1 }}
-      run:  make -C examples/rp2040/pico-w5500 test VCON_API_KEY=${{secrets.VCON_API_KEY}}
+      run:  make -C examples/pico-sdk/w5500-evb-pico-picosdk-baremetal-builtin test VCON_API_KEY=${{secrets.VCON_API_KEY}}
 

@@ -1,18 +1,27 @@
-PROJECTS ?= $(wildcard ../../examples/rp2040/*-sdk-*)
+PROJECTS ?= $(wildcard ../../examples/pico-sdk/*-picosdk-*)
+SDK_PATH ?= $(realpath $(PWD))/pico-sdk
+SDK_VERSION ?= 2.0.0
 
 all: $(PROJECTS)
 	echo 
 
-$(PROJECTS): pico-sdk
-	(make -C $@ build && make -C $@ clean) || ( \
-	ln -s $(PWD)/pico-sdk $@/pico-sdk && \
+$(PROJECTS): pico-sdk FORCE
+	(make -C $@ build SDK_PATH=$(SDK_PATH) && make -C $@ clean) || ( \
+	ln -s $(SDK_PATH) $@/pico-sdk && \
 	cd $@ && rm -rf build && mkdir -p build && \
-	cd build && cmake -G "Unix Makefiles" .. && make && \
-	rm -rf build pico-sdk )
+	cd build && cmake -DPICO_BOARD=$(SDKBNAME) -G "Unix Makefiles" .. && make && \
+	cd .. && rm -rf build pico-sdk )
+
+FORCE:
 
 pico-sdk:
-	git clone --depth 1 -b 1.5.1 https://github.com/raspberrypi/pico-sdk $@
-	cd $@ && git submodule update --init
+	test -d $(SDK_PATH) || ( git clone --depth 1 -b $(SDK_VERSION) https://github.com/raspberrypi/pico-sdk $@ && \
+	cd $@ && git submodule update --init )
 
 clean:
-	rm -rf pico-sdk
+	rm -rf $(SDK_PATH)
+
+# Wizard-style board name --> Pico-SDK board name; SDKBNAME = table[BOARD]
+SDK_evb-pico  := pico
+SDK_evb-pico2 := pico2
+SDKBNAME = $(SDK_$(BOARD))

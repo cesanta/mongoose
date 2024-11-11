@@ -1,0 +1,35 @@
+RM = rm -rf
+MKBUILD = test -d build || mkdir build
+ifeq ($(OS),Windows_NT)
+  RM = cmd /C del /Q /F /S
+  MKBUILD = if not exist build mkdir build
+endif
+.PHONY: build
+
+all example:
+	true
+
+build build/firmware.uf2: pico-sdk main.c net.c
+	$(MKBUILD)
+	cd build && cmake -DPICO_BOARD=pico2 -G "Unix Makefiles" .. && make
+
+pico-sdk:
+	git clone --depth 1 -b 2.0.0 https://github.com/raspberrypi/pico-sdk $@
+	cd $@ && git submodule update --init
+
+flash: build/firmware.uf2
+	picotool load $< -f
+
+# Automated remote test. Requires env variable VCON_API_KEY set. See https://vcon.io/automated-firmware-tests/
+DEVICE_URL ?= https://dash.vcon.io/api/v3/devices/??
+# stdio has to be changed from USB to UART in CMakeLists.txt
+update: build/firmware.uf2
+	curl --fail-with-body -su :$(VCON_API_KEY) $(DEVICE_URL)/ota?uf2=1 --data-binary @$<
+
+test: update
+	curl --fail-with-body -su :$(VCON_API_KEY) $(DEVICE_URL)/tx?t=5 | tee /tmp/output.txt
+	grep 'READY, IP:' /tmp/output.txt       # Check for network init
+#	grep 'MQTT connected' /tmp/output.txt   # Check for MQTT connection success
+
+clean:
+	$(RM) pico-sdk build
