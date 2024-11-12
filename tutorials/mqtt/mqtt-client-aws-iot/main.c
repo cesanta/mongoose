@@ -23,6 +23,7 @@
 //      Choose "crt.csr" created on a previous step
 //      Choose "Active" to activate certificate
 //      Click Create
+//      Attach PolicyAllow policy to the created certificate
 //      Downoad AmazonRootCA1.pem as ca.pem and generated certificate as crt.pem
 //      Select certificate, attach PolicyAllow to it
 // 6. Type "make" to build and run the example
