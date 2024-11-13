@@ -4,6 +4,8 @@ OUT ?= -o $(PROG)                 # Compiler argument for output file
 CFLAGS = -W -Wall -Wextra -g -I.  # Build options
 SOURCES = main.c mongoose.c  mongoose_fs.c
 
+CFLAGS_EXTRA ?= -DMG_TLS=MG_TLS_BUILTIN
+
 # Mongoose build options. See https://mongoose.ws/documentation/#build-options
 CFLAGS_MONGOOSE += -DMG_ENABLE_PACKED_FS=1
 
