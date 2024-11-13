@@ -6127,13 +6127,14 @@ bool mg_ota_end(void) {
 
 // Both RP2040 and RP2350 have no flash, low-level flash access support in
 // bootrom, and high-level support in Pico-SDK (2.0+ for the RP2350)
-// - The RP2350 in RISC-V mode is not yet (fully) supported (nor tested)
+// - The RP2350 in RISC-V mode is not tested
+// NOTE(): See OTA design notes
 
 static bool mg_picosdk_write(void *, const void *, size_t);
 static bool mg_picosdk_swap(void);
 
 static struct mg_flash s_mg_flash_picosdk = {
-    (void *) 0x10000000,  // Start, not used here; functions handle offset
+    (void *) 0x10000000,  // Start; functions handle offset
 #ifdef PICO_FLASH_SIZE_BYTES
     PICO_FLASH_SIZE_BYTES,  // Size, from board definitions
 #else
@@ -6227,10 +6228,10 @@ static void __no_inline_not_in_flash_func(single_bank_swap)(char *p1, char *p2,
   void *dst = (void *) ((char *) p1 - (char *) s_mg_flash_picosdk.start);
   size_t count = MG_ROUND_UP(s, ss);
   // use SDK function calls to get BootROM function pointers
-  rom_connect_internal_flash_fn connect = (rom_connect_internal_flash_fn) rom_func_lookup_inline(ROM_FUNC_CONNECT_INTERNAL_FLASH);
-  rom_flash_exit_xip_fn xit = (rom_flash_exit_xip_fn) rom_func_lookup_inline(ROM_FUNC_FLASH_EXIT_XIP);
-  rom_flash_range_program_fn program = (rom_flash_range_program_fn) rom_func_lookup_inline(ROM_FUNC_FLASH_RANGE_PROGRAM);
-  rom_flash_flush_cache_fn flush = (rom_flash_flush_cache_fn) rom_func_lookup_inline(ROM_FUNC_FLASH_FLUSH_CACHE);
+  rom_connect_internal_flash_fn connect = (rom_connect_internal_flash_fn) rom_func_lookup(ROM_FUNC_CONNECT_INTERNAL_FLASH);
+  rom_flash_exit_xip_fn xit = (rom_flash_exit_xip_fn) rom_func_lookup(ROM_FUNC_FLASH_EXIT_XIP);
+  rom_flash_range_program_fn program = (rom_flash_range_program_fn) rom_func_lookup(ROM_FUNC_FLASH_RANGE_PROGRAM);
+  rom_flash_flush_cache_fn flush = (rom_flash_flush_cache_fn) rom_func_lookup(ROM_FUNC_FLASH_FLUSH_CACHE);
   // no stdlib calls here.
   MG_ARM_DISABLE_IRQ();
   // 2nd bootloader (XIP) is in flash, SDK functions copy it to RAM on entry
@@ -6249,17 +6250,14 @@ static void __no_inline_not_in_flash_func(single_bank_swap)(char *p1, char *p2,
   }
   *(volatile unsigned long *) 0xe000ed0c = 0x5fa0004;  // AIRCR = SYSRESETREQ
 #else
-  // RP2350 has bootram and copies second bootloader there, SDK uses that copy,
+  // RP2350 has BootRAM and copies second bootloader there, SDK uses that copy,
   // It might also be able to take advantage of partition swapping
+  rom_reboot_fn reboot = (rom_reboot_fn) rom_func_lookup(ROM_FUNC_REBOOT);
   for (size_t ofs = 0; ofs < s; ofs += ss) {
     for (size_t i = 0; i < ss; i++) tmp[i] = p2[ofs + i];
     mg_picosdk_write(p1 + ofs, tmp, ss);
   }
-#ifndef __riscv
-  *(volatile unsigned long *) 0xe000ed0c = 0x5fa0004;  // AIRCR = SYSRESETREQ
-#else
-  // TODO(): find a way to do a system reset, like block resets and watchdog
-#endif
+  reboot(BOOT_TYPE_NORMAL | 0x100, 1, 0, 0); // 0x100: NO_RETURN_ON_SUCCESS
 #endif
 }
 

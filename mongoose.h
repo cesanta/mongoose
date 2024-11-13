@@ -261,9 +261,7 @@ int mkdir(const char *, mode_t);
 
 #if MG_OTA == MG_OTA_PICOSDK
 #include <hardware/flash.h>
-#if PICO_RP2040
 #include <pico/bootrom.h>
-#endif
 #endif
 
 #endif
