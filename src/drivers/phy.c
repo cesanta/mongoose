@@ -1,7 +1,7 @@
 #include "phy.h"
 
-enum {                      // ID1  ID2
-  MG_PHY_KSZ8x = 0x22,      // 0022 1561 - KSZ8081RNB
+enum {                  // ID1  ID2
+  MG_PHY_KSZ8x = 0x22,  // 0022 1561 - KSZ8081RNB
   MG_PHY_DP83x = 0x2000,
   MG_PHY_DP83867 = 0xa231,  // 2000 a231 - TI DP83867I
   MG_PHY_DP83825 = 0xa140,  // 2000 a140 - TI DP83825I
@@ -30,23 +30,15 @@ static const char *mg_phy_id_to_str(uint16_t id1, uint16_t id2) {
   switch (id1) {
     case MG_PHY_DP83x:
       switch (id2) {
-        case MG_PHY_DP83867:
-          return "DP83867";
-        case MG_PHY_DP83848:
-          return "DP83848";
-        case MG_PHY_DP83825:
-          return "DP83825";
-        default:
-          return "DP83x";
+        case MG_PHY_DP83867: return "DP83867";
+        case MG_PHY_DP83848: return "DP83848";
+        case MG_PHY_DP83825: return "DP83825";
+        default: return "DP83x";
       }
-    case MG_PHY_KSZ8x:
-      return "KSZ8x";
-    case MG_PHY_LAN87x:
-      return "LAN87x";
-    case MG_PHY_RTL8201:
-      return "RTL8201";
-    default:
-      return "unknown";
+    case MG_PHY_KSZ8x: return "KSZ8x";
+    case MG_PHY_LAN87x: return "LAN87x";
+    case MG_PHY_RTL8201: return "RTL8201";
+    default: return "unknown";
   }
   (void) id2;
 }
@@ -60,6 +52,13 @@ void mg_phy_init(struct mg_phy *phy, uint8_t phy_addr, uint8_t config) {
   id1 = phy->read_reg(phy_addr, MG_PHY_REG_ID1);
   id2 = phy->read_reg(phy_addr, MG_PHY_REG_ID2);
   MG_INFO(("PHY ID: %#04x %#04x (%s)", id1, id2, mg_phy_id_to_str(id1, id2)));
+
+  if (config & MG_PHY_DISABLE_AUTONEG) {
+    uint16_t val = phy->read_reg(phy_addr, MG_PHY_REG_BCR);
+    phy->write_reg(phy_addr, MG_PHY_REG_BCR, val & (uint16_t) ~MG_BIT(12));
+    val = phy->read_reg(phy_addr, MG_PHY_REG_BCR);
+    phy->write_reg(phy_addr, MG_PHY_REG_BCR, (uint16_t) MG_BIT(9));
+  }
 
   if (id1 == MG_PHY_DP83x && id2 == MG_PHY_DP83867) {
     phy->write_reg(phy_addr, 0x0d, 0x1f);  // write 0x10d to IO_MUX_CFG (0x0170)

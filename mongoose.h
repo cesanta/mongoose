@@ -2928,13 +2928,10 @@ struct mg_phy {
   void (*write_reg)(uint8_t addr, uint8_t reg, uint16_t value);
 };
 
-// PHY configuration settings, bitmask
-enum {
-  // Set if PHY LEDs are connected to ground
-  MG_PHY_LEDS_ACTIVE_HIGH = (1 << 0),
-  // Set when PHY clocks MAC. Otherwise, MAC clocks PHY
-  MG_PHY_CLOCKS_MAC = (1 << 1),
-};
+// MG_TCPIP_PHY_CONF configuration settings, bitmask of the following:
+#define MG_PHY_LEDS_ACTIVE_HIGH 1  // PHY LEDs are connected to ground
+#define MG_PHY_CLOCKS_MAC 2        // PHY clocks MAC. Otherwise, MAC clocks PHY
+#define MG_PHY_DISABLE_AUTONEG 4   // Disable autonegotiation
 
 enum { MG_PHY_SPEED_10M, MG_PHY_SPEED_100M, MG_PHY_SPEED_1000M };
 
