@@ -8,7 +8,8 @@
 #define MG_OTA_NONE 0       // No OTA support
 #define MG_OTA_STM32H5 1    // STM32 H5
 #define MG_OTA_STM32H7 2    // STM32 H7
-#define MG_OTA_STM32F  3    // STM32 F7/F4/F2
+#define MG_OTA_STM32H7_DUAL_CORE 3 // STM32 H7 dual core
+#define MG_OTA_STM32F  4    // STM32 F7/F4/F2
 #define MG_OTA_CH32V307 100 // WCH CH32V307
 #define MG_OTA_U2A 200      // Renesas U2A16, U2A8, U2A6
 #define MG_OTA_RT1020 300   // IMXRT1020

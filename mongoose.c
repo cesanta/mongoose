@@ -6654,7 +6654,7 @@ bool mg_ota_end(void) {
 
 
 
-#if MG_OTA == MG_OTA_STM32H7
+#if MG_OTA == MG_OTA_STM32H7 || MG_OTA == MG_OTA_STM32H7_DUAL_CORE
 
 // - H723/735 RM 4.3.3: Note: The application can simultaneously request a read
 // and a write operation through the AXI interface.
@@ -6687,7 +6687,15 @@ static struct mg_flash s_mg_flash_stm32h7 = {
 #define FLASH_OPTSR_PRG 0x20
 #define FLASH_SIZE_REG 0x1ff1e880
 
+#define IS_DUALCORE() (MG_OTA == MG_OTA_STM32H7_DUAL_CORE)
+
 MG_IRAM static bool is_dualbank(void) {
+  if (IS_DUALCORE()) {
+    // H745/H755 and H747/H757 are running on dual core.
+    // Using only the 1st bank (mapped to CM7), in order not to interfere
+    // with the 2nd bank (CM4), possibly causing CM4 to boot unexpectedly.
+    return false;
+  }
   return (s_mg_flash_stm32h7.size < 2 * 1024 * 1024) ? false : true;
 }
 
@@ -6824,6 +6832,10 @@ MG_IRAM static void single_bank_swap(char *p1, char *p2, size_t s, size_t ss) {
 
 bool mg_ota_begin(size_t new_firmware_size) {
   s_mg_flash_stm32h7.size = MG_REG(FLASH_SIZE_REG) * 1024;
+  if (IS_DUALCORE()) {
+    // Using only the 1st bank (mapped to CM7)
+    s_mg_flash_stm32h7.size /= 2;
+  }
   return mg_ota_flash_begin(new_firmware_size, &s_mg_flash_stm32h7);
 }
 
