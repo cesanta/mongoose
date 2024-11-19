@@ -882,15 +882,15 @@ static void fprcb(struct mg_connection *c, int ev, void *ev_data) {
     struct mg_http_message *hm = (struct mg_http_message *) ev_data;
     int code = atoi(hm->uri.buf);
     if (code == 200) {
-      snprintf(fd->buf + fd->len, FETCH_BUF_SIZE - (unsigned int) fd->len, "%.*s", (int) hm->message.len,
-               hm->message.buf);
+      snprintf(fd->buf + fd->len, FETCH_BUF_SIZE - (unsigned int) fd->len,
+               "%.*s", (int) hm->message.len, hm->message.buf);
       fd->len += (int) hm->message.len;
       ++fd->reqs;
-      if(fd->reqs == 2) {
+      if (fd->reqs == 2) {
         fd->closed = 1;
         c->is_closing = 1;
       }
-    } else { // allow testing for other codes and catching wrong responses
+    } else {  // allow testing for other codes and catching wrong responses
       MG_INFO(("reqs: %d, code: %d", fd->reqs, code));
       fd->reqs += code;
     }
@@ -900,8 +900,8 @@ static void fprcb(struct mg_connection *c, int ev, void *ev_data) {
   }
 }
 
-static int fpr(struct mg_mgr *mgr, char *buf, const char *url,
-                 const char *fmt, ...) {
+static int fpr(struct mg_mgr *mgr, char *buf, const char *url, const char *fmt,
+               ...) {
   struct fpr_data fd = {buf, 0, 0, 0};
   int i;
   struct mg_connection *c = NULL;
@@ -941,12 +941,17 @@ static void test_http_server(void) {
   ASSERT(fetch(&mgr, buf, url, "GET /a.txt HTTP/1.0\nA B\n\n") == 0);
 
   // Pipelined requests
-  ASSERT(fpr(&mgr, buf, url, "GET /foo/bar HTTP/1.1\n\nGET /foo/foobar HTTP/1.1\n\n") == 2);
+  ASSERT(fpr(&mgr, buf, url,
+             "GET /foo/bar HTTP/1.1\n\nGET /foo/foobar HTTP/1.1\n\n") == 2);
   // Pipelined requests with file requests other than the last one (see #2796)
-  ASSERT(fpr(&mgr, buf, url, "GET /a.txt HTTP/1.1\n\nGET /a.txt HTTP/1.1\n\n") == 2);
-  ASSERT(fpr(&mgr, buf, url, "HEAD /a.txt HTTP/1.1\n\nGET /a.txt HTTP/1.1\n\n") == 2);
+  ASSERT(fpr(&mgr, buf, url,
+             "GET /a.txt HTTP/1.1\n\nGET /a.txt HTTP/1.1\n\n") == 2);
+  ASSERT(fpr(&mgr, buf, url,
+             "HEAD /a.txt HTTP/1.1\n\nGET /a.txt HTTP/1.1\n\n") == 2);
   // Connection: close
-  ASSERT(fpr(&mgr, buf, url, "GET /foo/bar HTTP/1.1\nConnection: close\n\nGET /foo/foobar HTTP/1.1\n\n") == 1);
+  ASSERT(fpr(&mgr, buf, url,
+             "GET /foo/bar HTTP/1.1\nConnection: close\n\nGET /foo/foobar "
+             "HTTP/1.1\n\n") == 1);
   ASSERT(cmpbody(buf, "uri: bar") == 0);
 
   // Responses with missing reason phrase must also work
@@ -1661,7 +1666,9 @@ static void test_http_parse(void) {
     ASSERT(mg_http_parse(s, strlen(s), &req) == (int) strlen(s));
     ASSERT((v = mg_http_get_header(&req, "e")) != NULL);
     ASSERT(vcmp(*v, "5"));
-    ASSERT((v = mg_http_get_header(&req, "h")) == NULL);
+    ASSERT((v = mg_http_get_header(&req, "g")) != NULL);
+    ASSERT(vcmp(*v, "7"));
+    ASSERT((v = mg_http_get_header(&req, "h")) == NULL);  // MG_MAX_HTTP_HEADERS
   }
 
   {
@@ -2108,6 +2115,16 @@ static void test_str(void) {
     if (!is_windows) ASSERT(strcmp(t1, t2) == 0);                \
   } while (0)
 
+#define TESTDOUBLE_NOHOSTCHECK(fmt_, num_, res_)                 \
+  do {                                                           \
+    char t1[40] = "", t2[40] = "";                               \
+    const char *N = #num_;                                       \
+    mg_snprintf(t1, sizeof(t1), fmt_, num_);                     \
+    snprintf(t2, sizeof(t2), fmt_, num_);                        \
+    printf("[%s,%s] : [%s] [%s] [%s]\n", fmt_, N, res_, t2, t1); \
+    ASSERT(strcmp(t1, res_) == 0);                               \
+  } while (0)
+
     TESTDOUBLE("%g", 0.0, "0");
     TESTDOUBLE("%g", 0.123, "0.123");
     TESTDOUBLE("%g", 0.00123, "0.00123");
@@ -2127,8 +2144,18 @@ static void test_str(void) {
     TESTDOUBLE("%g", 10000.0, "10000");
     TESTDOUBLE("%g", 100000.0, "100000");
     TESTDOUBLE("%g", 1000000.0, "1e+06");
+    TESTDOUBLE("%f", 1000000.0, "1000000.000000");
     TESTDOUBLE("%g", 10000000.0, "1e+07");
+    TESTDOUBLE("%f", 10000000.0, "10000000.000000");
     TESTDOUBLE("%g", 100000001.0, "1e+08");
+    TESTDOUBLE("%g", 0.1, "0.1");
+    TESTDOUBLE("%g", 0.01, "0.01");
+    TESTDOUBLE("%g", 0.001, "0.001");
+    TESTDOUBLE("%g", 0.0001, "0.0001");
+    TESTDOUBLE_NOHOSTCHECK("%g", 0.00001, "0.00001"); // "1e-05"
+    TESTDOUBLE("%g", 0.000001, "1e-06");
+    TESTDOUBLE("%g", -0.0001, "-0.0001");
+    TESTDOUBLE_NOHOSTCHECK("%g", -0.00001, "-0.00001"); // "-1e-05"
     TESTDOUBLE("%g", 10.5454, "10.5454");
     TESTDOUBLE("%g", 999999.0, "999999");
     TESTDOUBLE("%g", 9999999.0, "1e+07");
@@ -2150,14 +2177,35 @@ static void test_str(void) {
     TESTDOUBLE("%.*f", DBLWIDTH(4, 0.14), "0.1400");
     TESTDOUBLE("%.*f", DBLWIDTH(3, 0.14), "0.140");
     TESTDOUBLE("%.*f", DBLWIDTH(2, 0.14), "0.14");
+    TESTDOUBLE("%.*f", DBLWIDTH(2, 25.14), "25.14");
     TESTDOUBLE("%.*f", DBLWIDTH(1, 0.14), "0.1");
     TESTDOUBLE("%.*f", DBLWIDTH(1, 0.19), "0.2");
     TESTDOUBLE("%.*f", DBLWIDTH(1, 0.16), "0.2");
-    //TESTDOUBLE("%.1f", 0.15, "0.1");
-    //TESTDOUBLE("%.3f", 123.123456789, "123.123");
-    //TESTDOUBLE("%.4f", 123.123456789, "123.1235");
-    //TESTDOUBLE("%.5f", 123.1234567, "123.12346");
-    //TESTDOUBLE("%.*f", DBLWIDTH(1, 0.15), "0.1");
+    TESTDOUBLE_NOHOSTCHECK("%.1f", 0.15, "0.2");
+    TESTDOUBLE("%.3f", 123.123456789, "123.123");
+    TESTDOUBLE("%.4f", 123.123456789, "123.1235");
+    TESTDOUBLE("%.5f", 123.1234567, "123.12346");
+    TESTDOUBLE_NOHOSTCHECK("%.*f", DBLWIDTH(1, 0.15), "0.2");
+    TESTDOUBLE("%.5f", 123.12345, "123.12345");
+    TESTDOUBLE("%.4f", 789.01234, "789.0123");
+    TESTDOUBLE("%2.3f", 1.23, "1.230");
+
+    TESTDOUBLE("%.1f", 1.5, "1.5");
+
+    TESTDOUBLE("%.3f", 500.0, "500.000");
+    TESTDOUBLE("%.1f", 1.15, "1.1");
+    TESTDOUBLE("%.1f", 0.155, "0.2");
+    TESTDOUBLE("%.1f", 1.155, "1.2");
+    TESTDOUBLE("%.1f", 0.155, "0.2");
+    TESTDOUBLE("%.2f", 0.015, "0.01");
+    TESTDOUBLE("%.2f", 0.0015, "0.00");
+    TESTDOUBLE("%.1f", 0.155, "0.2");
+
+    TESTDOUBLE("%.3f", 13.12505, "13.125");
+    TESTDOUBLE("%.3f", 15.1255, "15.126");
+    TESTDOUBLE("%.3f", 19.1255, "19.125");
+    TESTDOUBLE("%.4f", 100.15, "100.1500");
+    TESTDOUBLE("%.2f", 5.55, "5.55");
 
 #ifndef _WIN32
     TESTDOUBLE("%g", (double) INFINITY, "inf");
@@ -2381,7 +2429,8 @@ static void test_util(void) {
   ASSERT(mg_url_decode("&&&a=%", 6, buf, sizeof(buf), 0) < 0);
   ASSERT(mg_url_decode("a=%1", 4, buf, sizeof(buf), 0) < 0);
   ASSERT(mg_url_decode("a=%12", 5, buf, sizeof(buf), 0) == 3 && buf[2] == 0x12);
-  ASSERT(mg_url_decode("a=%123", 6, buf, sizeof(buf), 0) == 4 && buf[2] == 0x12 && buf[3] == '3');
+  ASSERT(mg_url_decode("a=%123", 6, buf, sizeof(buf), 0) == 4 &&
+         buf[2] == 0x12 && buf[3] == '3');
 
   memset(a.ip, 0xaa, sizeof(a.ip));
   ASSERT(mg_aton(mg_str("::1%1"), &a) == true);
@@ -2439,64 +2488,94 @@ static void test_util(void) {
   {
     uint64_t val, max = (uint64_t) -1;
     ASSERT(mg_str_to_num(mg_str("0"), 10, &val, sizeof(uint64_t)) && val == 0);
-    ASSERT(mg_str_to_num(mg_str("123"), 10, &val, sizeof(uint64_t)) && val == 123);
+    ASSERT(mg_str_to_num(mg_str("123"), 10, &val, sizeof(uint64_t)) &&
+           val == 123);
     ASSERT(mg_str_to_num(mg_str(" 123"), 10, &val, sizeof(uint64_t)) == false);
     ASSERT(mg_str_to_num(mg_str("123 "), 10, &val, sizeof(uint64_t)) == false);
     ASSERT(mg_str_to_num(mg_str(""), 10, &val, sizeof(uint64_t)) == false);
     ASSERT(mg_str_to_num(mg_str(" 123x"), 10, &val, sizeof(uint64_t)) == false);
     ASSERT(mg_str_to_num(mg_str("-"), 10, &val, sizeof(uint64_t)) == false);
     mg_snprintf(buf, sizeof(buf), "%llu", max);
-    ASSERT(mg_str_to_num(mg_str(buf), 10, &val, sizeof(uint64_t)) && val == max);
+    ASSERT(mg_str_to_num(mg_str(buf), 10, &val, sizeof(uint64_t)) &&
+           val == max);
     ASSERT(mg_str_to_num(mg_str("0"), 2, &val, sizeof(uint64_t)) && val == 0);
     ASSERT(mg_str_to_num(mg_str("1"), 2, &val, sizeof(uint64_t)) && val == 1);
     ASSERT(mg_str_to_num(mg_str("0123"), 2, &val, sizeof(uint64_t)) == false);
     ASSERT(mg_str_to_num(mg_str("123"), 2, &val, sizeof(uint64_t)) == false);
-    ASSERT(mg_str_to_num(mg_str("01111011"), 2, &val, sizeof(uint64_t)) && val == 123);
-    ASSERT(mg_str_to_num(mg_str("1111111111111111111111111111111111111111111111111111111111111111"), 2, &val, sizeof(uint64_t)) && val == max);
+    ASSERT(mg_str_to_num(mg_str("01111011"), 2, &val, sizeof(uint64_t)) &&
+           val == 123);
+    ASSERT(mg_str_to_num(mg_str("1111111111111111111111111111111111111111111111"
+                                "111111111111111111"),
+                         2, &val, sizeof(uint64_t)) &&
+           val == max);
     ASSERT(mg_str_to_num(mg_str("0"), 16, &val, sizeof(uint64_t)) && val == 0);
-    ASSERT(mg_str_to_num(mg_str("123"), 16, &val, sizeof(uint64_t)) && val == 0x123);
-    ASSERT(mg_str_to_num(mg_str("def"), 16, &val, sizeof(uint64_t)) && val == 0xdef);
+    ASSERT(mg_str_to_num(mg_str("123"), 16, &val, sizeof(uint64_t)) &&
+           val == 0x123);
+    ASSERT(mg_str_to_num(mg_str("def"), 16, &val, sizeof(uint64_t)) &&
+           val == 0xdef);
     ASSERT(mg_str_to_num(mg_str("defg"), 16, &val, sizeof(uint64_t)) == false);
     mg_snprintf(buf, sizeof(buf), "%llx", max);
-    ASSERT(mg_str_to_num(mg_str(buf), 16, &val, sizeof(uint64_t)) && val == max);
-    ASSERT(mg_str_to_num(mg_str("0x123"), 0, &val, sizeof(uint64_t)) && val == 0x123);
+    ASSERT(mg_str_to_num(mg_str(buf), 16, &val, sizeof(uint64_t)) &&
+           val == max);
+    ASSERT(mg_str_to_num(mg_str("0x123"), 0, &val, sizeof(uint64_t)) &&
+           val == 0x123);
     ASSERT(mg_str_to_num(mg_str("0b123"), 0, &val, sizeof(uint64_t)) == false);
     ASSERT(mg_str_to_num(mg_str("0c123"), 0, &val, sizeof(uint64_t)) == false);
-    ASSERT(mg_str_to_num(mg_str("0b101"), 0, &val, sizeof(uint64_t)) && val == 5);
-    ASSERT(mg_str_to_num(mg_str("0123"), 0, &val, sizeof(uint64_t)) && val == 123);
+    ASSERT(mg_str_to_num(mg_str("0b101"), 0, &val, sizeof(uint64_t)) &&
+           val == 5);
+    ASSERT(mg_str_to_num(mg_str("0123"), 0, &val, sizeof(uint64_t)) &&
+           val == 123);
   }
   {
     uint32_t val, max = (uint32_t) -1;
-    ASSERT(mg_str_to_num(mg_str("123"), 10, &val, sizeof(uint32_t)) && val == 123);
+    ASSERT(mg_str_to_num(mg_str("123"), 10, &val, sizeof(uint32_t)) &&
+           val == 123);
     mg_snprintf(buf, sizeof(buf), "%lu", (unsigned long) max);
     ASSERT(strcmp(buf, "4294967295") == 0);
-    ASSERT(mg_str_to_num(mg_str(buf), 10, &val, sizeof(uint32_t)) && val == max);
-    ASSERT(mg_str_to_num(mg_str("01111011"), 2, &val, sizeof(uint32_t)) && val == 123);
-    ASSERT(mg_str_to_num(mg_str("11111111111111111111111111111111"), 2, &val, sizeof(uint32_t)) && val == max);
+    ASSERT(mg_str_to_num(mg_str(buf), 10, &val, sizeof(uint32_t)) &&
+           val == max);
+    ASSERT(mg_str_to_num(mg_str("01111011"), 2, &val, sizeof(uint32_t)) &&
+           val == 123);
+    ASSERT(mg_str_to_num(mg_str("11111111111111111111111111111111"), 2, &val,
+                         sizeof(uint32_t)) &&
+           val == max);
     ASSERT(mg_str_to_num(mg_str("0"), 16, &val, sizeof(uint32_t)) && val == 0);
-    ASSERT(mg_str_to_num(mg_str("123"), 16, &val, sizeof(uint32_t)) && val == 0x123);
+    ASSERT(mg_str_to_num(mg_str("123"), 16, &val, sizeof(uint32_t)) &&
+           val == 0x123);
     mg_snprintf(buf, sizeof(buf), "%lx", max);
-    ASSERT(mg_str_to_num(mg_str(buf), 16, &val, sizeof(uint32_t)) && val == max);
+    ASSERT(mg_str_to_num(mg_str(buf), 16, &val, sizeof(uint32_t)) &&
+           val == max);
   }
   {
     uint16_t val, max = (uint16_t) -1;
-    ASSERT(mg_str_to_num(mg_str("123"), 10, &val, sizeof(uint16_t)) && val == 123);
+    ASSERT(mg_str_to_num(mg_str("123"), 10, &val, sizeof(uint16_t)) &&
+           val == 123);
     mg_snprintf(buf, sizeof(buf), "%u", max);
-    ASSERT(mg_str_to_num(mg_str(buf), 10, &val, sizeof(uint16_t)) && val == max);
-    ASSERT(mg_str_to_num(mg_str("01111011"), 2, &val, sizeof(uint16_t)) && val == 123);
-    ASSERT(mg_str_to_num(mg_str("1111111111111111"), 2, &val, sizeof(uint16_t)) && val == max);
-    ASSERT(mg_str_to_num(mg_str("123"), 16, &val, sizeof(uint16_t)) && val == 0x123);
+    ASSERT(mg_str_to_num(mg_str(buf), 10, &val, sizeof(uint16_t)) &&
+           val == max);
+    ASSERT(mg_str_to_num(mg_str("01111011"), 2, &val, sizeof(uint16_t)) &&
+           val == 123);
+    ASSERT(
+        mg_str_to_num(mg_str("1111111111111111"), 2, &val, sizeof(uint16_t)) &&
+        val == max);
+    ASSERT(mg_str_to_num(mg_str("123"), 16, &val, sizeof(uint16_t)) &&
+           val == 0x123);
     mg_snprintf(buf, sizeof(buf), "%x", max);
-    ASSERT(mg_str_to_num(mg_str(buf), 16, &val, sizeof(uint16_t)) && val == max);
+    ASSERT(mg_str_to_num(mg_str(buf), 16, &val, sizeof(uint16_t)) &&
+           val == max);
   }
   {
     uint8_t val, max = (uint8_t) -1;
-    ASSERT(mg_str_to_num(mg_str("123"), 10, &val, sizeof(uint8_t)) && val == 123);
+    ASSERT(mg_str_to_num(mg_str("123"), 10, &val, sizeof(uint8_t)) &&
+           val == 123);
     mg_snprintf(buf, sizeof(buf), "%u", max);
     ASSERT(mg_str_to_num(mg_str(buf), 10, &val, sizeof(uint8_t)) && val == max);
-    ASSERT(mg_str_to_num(mg_str("01111011"), 2, &val, sizeof(uint8_t)) && val == 123);
-    ASSERT(mg_str_to_num(mg_str("11111111"), 2, &val, sizeof(uint8_t)) && val == max);
-    ASSERT(mg_str_to_num(mg_str("12"), 16, &val, sizeof(uint8_t)) && val == 0x12);
+    ASSERT(mg_str_to_num(mg_str("01111011"), 2, &val, sizeof(uint8_t)) &&
+           val == 123);
+    ASSERT(mg_str_to_num(mg_str("11111111"), 2, &val, sizeof(uint8_t)) &&
+           val == max);
+    ASSERT(mg_str_to_num(mg_str("12"), 16, &val, sizeof(uint8_t)) &&
+           val == 0x12);
     mg_snprintf(buf, sizeof(buf), "%x", max);
     ASSERT(mg_str_to_num(mg_str(buf), 16, &val, sizeof(uint8_t)) && val == max);
   }
@@ -3098,12 +3177,14 @@ static void test_json(void) {
   ASSERT(mg_json_get(json, "$.c", &n) == 19 && n == 1);
 
   {
-    char to[4], expect[4] = {0,0,0,0};
+    char to[4], expect[4] = {0, 0, 0, 0};
     memset(to, 0, sizeof(to));
-    ASSERT(mg_json_unescape(mg_str("\\u0000"), to, 4) && memcmp(to, expect, 4) == 0);
+    ASSERT(mg_json_unescape(mg_str("\\u0000"), to, 4) &&
+           memcmp(to, expect, 4) == 0);
     to[0] = 0;
     expect[0] = (char) 0xff;
-    ASSERT(mg_json_unescape(mg_str("\\u00ff"), to, 4) && memcmp(to, expect, 4) == 0);
+    ASSERT(mg_json_unescape(mg_str("\\u00ff"), to, 4) &&
+           memcmp(to, expect, 4) == 0);
     ASSERT(!mg_json_unescape(mg_str("\\u0100"), to, 4));
     ASSERT(!mg_json_unescape(mg_str("\\u1000"), to, 4));
   }

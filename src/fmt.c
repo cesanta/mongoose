@@ -48,28 +48,36 @@ static size_t mg_dtoa(char *dst, size_t dstlen, double d, int width, bool tz) {
 
   // Round
   saved = d;
-  mul = 1.0;
-  while (d >= 10.0 && d / mul >= 10.0) mul *= 10.0;
+  if (tz) {
+    mul = 1.0;
+    while (d >= 10.0 && d / mul >= 10.0) mul *= 10.0;
+  } else {
+    mul = 0.1;
+  }
+
   while (d <= 1.0 && d / mul <= 1.0) mul /= 10.0;
   for (i = 0, t = mul * 5; i < width; i++) t /= 10.0;
+
   d += t;
+
   // Calculate exponent, and 'mul' for scientific representation
   mul = 1.0;
   while (d >= 10.0 && d / mul >= 10.0) mul *= 10.0, e++;
   while (d < 1.0 && d / mul < 1.0) mul /= 10.0, e--;
   // printf(" --> %g %d %g %g\n", saved, e, t, mul);
 
-  if (e >= width && width > 1) {
+  if (tz && e >= width && width > 1) {
     n = (int) mg_dtoa(buf, sizeof(buf), saved / mul, width, tz);
     // printf(" --> %.*g %d [%.*s]\n", 10, d / t, e, n, buf);
     n += addexp(buf + s + n, e, '+');
     return mg_snprintf(dst, dstlen, "%.*s", n, buf);
-  } else if (e <= -width && width > 1) {
+  } else if (tz && e <= -width && width > 1) {
     n = (int) mg_dtoa(buf, sizeof(buf), saved / mul, width, tz);
     // printf(" --> %.*g %d [%.*s]\n", 10, d / mul, e, n, buf);
     n += addexp(buf + s + n, -e, '-');
     return mg_snprintf(dst, dstlen, "%.*s", n, buf);
   } else {
+    int targ_width = width;
     for (i = 0, t = mul; t >= 1.0 && s + n < (int) sizeof(buf); i++) {
       int ch = (int) (d / t);
       if (n > 0 || ch > 0) buf[s + n++] = (char) (ch + '0');
@@ -81,15 +89,17 @@ static size_t mg_dtoa(char *dst, size_t dstlen, double d, int width, bool tz) {
     while (t >= 1.0 && n + s < (int) sizeof(buf)) buf[n++] = '0', t /= 10.0;
     if (s + n < (int) sizeof(buf)) buf[n + s++] = '.';
     // printf(" 1--> [%g] -> [%.*s]\n", saved, s + n, buf);
-    for (i = 0, t = 0.1; s + n < (int) sizeof(buf) && n < width; i++) {
+    if (!tz && n > 0) targ_width = width + n;
+    for (i = 0, t = 0.1; s + n < (int) sizeof(buf) && n < targ_width; i++) {
       int ch = (int) (d / t);
       buf[s + n++] = (char) (ch + '0');
       d -= ch * t;
       t /= 10.0;
     }
   }
+
   while (tz && n > 0 && buf[s + n - 1] == '0') n--;  // Trim trailing zeroes
-  if (n > 0 && buf[s + n - 1] == '.') n--;           // Trim trailing dot
+  if (tz && n > 0 && buf[s + n - 1] == '.') n--;           // Trim trailing dot
   n += s;
   if (n >= (int) sizeof(buf)) n = (int) sizeof(buf) - 1;
   buf[n] = '\0';
