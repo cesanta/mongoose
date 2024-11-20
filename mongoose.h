@@ -1351,8 +1351,6 @@ void mg_delayms(unsigned int ms);
 
 #define MG_IPV4(a, b, c, d) mg_htonl(MG_U32(a, b, c, d))
 
-#define MG_IPV4(a, b, c, d) mg_htonl(MG_U32(a, b, c, d))
-
 // For printing IPv4 addresses: printf("%d.%d.%d.%d\n", MG_IPADDR_PARTS(&ip))
 #define MG_U8P(ADDR) ((uint8_t *) (ADDR))
 #define MG_IPADDR_PARTS(ADDR) \
@@ -3147,15 +3145,6 @@ struct mg_tcpip_spi {
 
 #include "Driver_ETH_MAC.h"  // keep this include
 #include "Driver_ETH_PHY.h"  // keep this include
-
-#ifndef MG_MAC_ADDRESS
-#define MG_MAC_ADDRESS MG_MAC_ADDRESS_RANDOM
-#endif
-
-#define MG_TCPIP_DRIVER_DATA int driver_data;
-
-#define MG_TCPIP_DRIVER_CODE &mg_tcpip_driver_cmsis
-#define MG_TCPIP_DRIVER_NAME "cmsis"
 
 #endif
 
