@@ -2417,8 +2417,8 @@ static void http_cb(struct mg_connection *c, int ev, void *ev_data) {
           require_content_len = status >= 200 && status != 204 && status != 304;
         }
         if (require_content_len) {
-          mg_http_reply(c, 411, "", "");
-          MG_ERROR(("%s", "Content length missing from request"));
+          if (!c->is_client) mg_http_reply(c, 411, "", "");
+          MG_ERROR(("Content length missing from %s", is_response ? "response" : "request"));
         }
       }
 
