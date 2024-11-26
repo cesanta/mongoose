@@ -16,15 +16,15 @@ static struct mg_flash s_mg_flash_stm32h5 = {
     mg_stm32h5_swap,
 };
 
-#define FLASH_BASE 0x40022000          // Base address of the flash controller
-#define FLASH_KEYR (FLASH_BASE + 0x4)  // See RM0481 7.11
-#define FLASH_OPTKEYR (FLASH_BASE + 0xc)
-#define FLASH_OPTCR (FLASH_BASE + 0x1c)
-#define FLASH_NSSR (FLASH_BASE + 0x20)
-#define FLASH_NSCR (FLASH_BASE + 0x28)
-#define FLASH_NSCCR (FLASH_BASE + 0x30)
-#define FLASH_OPTSR_CUR (FLASH_BASE + 0x50)
-#define FLASH_OPTSR_PRG (FLASH_BASE + 0x54)
+#define MG_FLASH_BASE 0x40022000          // Base address of the flash controller
+#define FLASH_KEYR (MG_FLASH_BASE + 0x4)  // See RM0481 7.11
+#define FLASH_OPTKEYR (MG_FLASH_BASE + 0xc)
+#define FLASH_OPTCR (MG_FLASH_BASE + 0x1c)
+#define FLASH_NSSR (MG_FLASH_BASE + 0x20)
+#define FLASH_NSCR (MG_FLASH_BASE + 0x28)
+#define FLASH_NSCCR (MG_FLASH_BASE + 0x30)
+#define FLASH_OPTSR_CUR (MG_FLASH_BASE + 0x50)
+#define FLASH_OPTSR_PRG (MG_FLASH_BASE + 0x54)
 
 static void flash_unlock(void) {
   static bool unlocked = false;
