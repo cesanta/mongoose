@@ -1,7 +1,7 @@
 #include <SPI.h>
 #include "mongoose.h"
 
-#define SS_PIN 3    // Slave select pin
+#define SS_PIN 17    // Slave select pin
 struct mg_mgr mgr;  // Mongoose event manager
 struct mg_tcpip_spi spi = {
     NULL,                                               // SPI data
@@ -13,15 +13,18 @@ struct mg_tcpip_if mif = {.mac = {2, 0, 1, 2, 3, 5}};  // network interface
 
 void setup() {
   Serial.begin(115200);
+  mg_log_set_fn([](char ch, void *) { Serial.print(ch); }, NULL);
+  mg_log_set(MG_LL_DEBUG);
+  while (!Serial) (void) 0;
+
   pinMode(SS_PIN, OUTPUT);
   SPI.begin();
 
-  // Set logging function to a serial print
-  mg_log_set_fn([](char ch, void *) { Serial.print(ch); }, NULL);
   mg_mgr_init(&mgr);
-
-  delay(3000);
+  // delay(3000);
   MG_INFO(("Starting TCP/IP stack..."));
+  SPI.transfer(0);
+  MG_INFO(("--->..."));
 
   mif.driver = &mg_tcpip_driver_w5500;
   mif.driver_data = &spi;

@@ -1,51 +1,88 @@
 #include <SPI.h>
-#include "net.h"
+#include "mongoose.h"
 
-#define SS_PIN 17   // Slave select pin
+#define MQTT_SERVER "mqtt://broker.hivemq.com:1883"
+#define MQTT_SUB_TOPIC "mg/rx"  // Subscribe to this topic
+#define MQTT_PUB_TOPIC "mg/tx"  // Publish to this topic
+#define SS_PIN 2                // Slave select pin
+#define LED_PIN 21              // LED pin
+
+struct mg_connection *mqtt_connection;
 struct mg_tcpip_spi spi = {
-    NULL,                                               // SPI data
-    [](void *) { digitalWrite(SS_PIN, LOW); },          // Begin transaction
-    [](void *) { digitalWrite(SS_PIN, HIGH); },         // End transaction
-    [](void *, uint8_t c) { return SPI.transfer(c); },  // Execute transaction
+    NULL,  // SPI metadata
+    [](void *) { digitalWrite(SS_PIN, LOW); SPI.beginTransaction(SPISettings()); },
+    [](void *) { digitalWrite(SS_PIN, HIGH); SPI.endTransaction(); },
+    [](void *, uint8_t c) { return SPI.transfer(c); }, // Execute transaction
 };
+struct mg_mgr mgr;                                     // Mongoose event manager
+struct mg_tcpip_if mif = {.mac = {2, 0, 1, 2, 3, 5}};  // Network interface
 
-void exec_command(const char *req, size_t req_len) {
-  char res[100];
-  if (req_len == 2 && strncmp(req, "on", req_len) == 0) {
-    digitalWrite(LED_BUILTIN, true);
-    snprintf(res, sizeof(res), "LED on");
-  } else if (req_len == 3 && strncmp(req, "off", req_len) == 0) {
-    digitalWrite(LED_BUILTIN, false);
-    snprintf(res, sizeof(res), "LED off");
-  } else {
-    snprintf(res, sizeof(res), "Unknown command: [%.*s]", (int) req_len, req);
-  }
-  Serial.println(res);
-  mqtt_publish(res);
+uint64_t mg_millis(void) {
+  return millis();
 }
 
-static void process_input(char c) {
-  static char buf[100];
-  static size_t len = 0;
-  char response[100];
-  if (c != '\n' && c != '\0') buf[len++] = c;  // Append to the buffer
-  if (len >= sizeof(buf)) len = 0;             // On overflow, reset
-  if (c == '\n' && len > 0) {
-    exec_command(buf, len);
-    len = 0;
+void mqtt_publish(const char *message) {
+  struct mg_mqtt_opts opts = {};
+  opts.topic = mg_str(MQTT_PUB_TOPIC);
+  opts.message = mg_str(message);
+  if (mqtt_connection) mg_mqtt_pub(mqtt_connection, &opts);
+}
+
+void handle_command(struct mg_str msg) {
+  if (msg.len == 3 && memcmp(msg.buf, "off", 3) == 0) {
+    digitalWrite(LED_PIN, LOW);
+    mqtt_publish("done - off");
+  } else if (msg.len == 2 && memcmp(msg.buf, "on", 2) == 0) {
+    digitalWrite(LED_PIN, HIGH);
+    mqtt_publish("done - on");
+  }
+}
+
+static void mqtt_ev_handler(struct mg_connection *c, int ev, void *ev_data) {
+  if (ev == MG_EV_MQTT_OPEN) {
+    MG_INFO(("%lu CONNECTED to %s", c->id, MQTT_SERVER));
+    struct mg_mqtt_opts opts = {};
+    opts.topic = mg_str(MQTT_SUB_TOPIC);
+    mg_mqtt_sub(c, &opts);
+    MG_INFO(("%lu SUBSCRIBED to %s", c->id, MQTT_SUB_TOPIC));
+  } else if (ev == MG_EV_MQTT_MSG) {
+    // Received MQTT message
+    struct mg_mqtt_message *mm = (struct mg_mqtt_message *) ev_data;
+    MG_INFO(("%lu RECEIVED %.*s <- %.*s", c->id, (int) mm->data.len,
+             mm->data.buf, (int) mm->topic.len, mm->topic.buf));
+    handle_command(mm->data);
+  } else if (ev == MG_EV_CLOSE) {
+    MG_INFO(("%lu CLOSED", c->id));
+    mqtt_connection = NULL;
+  }
+}
+
+void reconnect_if_not_connected(void) {
+  if (mif.state == MG_TCPIP_STATE_READY && mqtt_connection == NULL) {
+    struct mg_mqtt_opts opts = {};
+    opts.clean = true;
+    mqtt_connection =
+        mg_mqtt_connect(&mgr, MQTT_SERVER, &opts, mqtt_ev_handler, NULL);
   }
 }
 
 void setup() {
-  Serial.begin(115200);
-  SPI.begin();
-  pinMode(SS_PIN, OUTPUT);
-  pinMode(LED_BUILTIN, OUTPUT);
-  mg_log_set_fn([](char ch, void *) { Serial.print(ch); }, NULL);
-  net_init();
+  Serial.begin(115200);       // Initialise serial
+  while (!Serial) delay(50);  // for debug output
+
+  SPI.begin();                   // Iniitialise SPI
+  pinMode(SS_PIN, OUTPUT);       // to communicate with W5500 Ethernet module
+  pinMode(LED_PIN, OUTPUT);  // Initialise LED
+
+  mg_mgr_init(&mgr);        // Initialise Mongoose event manager
+  mg_log_set(MG_LL_DEBUG);  // Set debug log level
+  mg_log_set_fn([](char ch, void *) { Serial.print(ch); }, NULL);  // Log serial
+  mif.driver = &mg_tcpip_driver_w5500;  // Use W5500 built-in driver
+  mif.driver_data = &spi;               // Pass SPI interface to W5500 driver
+  mg_tcpip_init(&mgr, &mif);            // Initialise built-in TCP/IP stack
 }
 
 void loop() {
-  if (Serial.available()) process_input(Serial.read());
-  mg_mgr_poll(&mgr, 1);
+  mg_mgr_poll(&mgr, 1);          // Process network events
+  reconnect_if_not_connected();  // Reconnect to MQTT server if needed
 }
