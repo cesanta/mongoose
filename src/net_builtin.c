@@ -910,7 +910,7 @@ static void mg_tcpip_poll(struct mg_tcpip_if *ifp, uint64_t now) {
 #endif
   // Handle gw ARP request timeout, order is important
   if (expired_1000ms && ifp->state == MG_TCPIP_STATE_IP) {
-    ifp->state = MG_TCPIP_STATE_READY; // keep best-effort MAC
+    ifp->state = MG_TCPIP_STATE_READY;  // keep best-effort MAC
     onstatechange(ifp);
   }
   // Handle physical interface up/down status
