@@ -1,7 +1,7 @@
 #include <SoftwareSerial.h>
 #include "mongoose.h"
 
-#define MQTT_SERVER "mqtts://broker.hivemq.com:8883"
+#define MQTT_SERVER "mqtt://broker.hivemq.com:8883"
 #define MQTT_SUB_TOPIC "mg/rx"  // Subscribe to this topic
 #define MQTT_PUB_TOPIC "mg/tx"  // Publish to this topic
 
