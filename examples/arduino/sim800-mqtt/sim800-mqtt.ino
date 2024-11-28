@@ -1,7 +1,7 @@
 #include <SoftwareSerial.h>
 #include "mongoose.h"
 
-#define MQTT_SERVER "mqtt://broker.hivemq.com:1883"
+#define MQTT_SERVER "mqtts://broker.hivemq.com:8883"
 #define MQTT_SUB_TOPIC "mg/rx"  // Subscribe to this topic
 #define MQTT_PUB_TOPIC "mg/tx"  // Publish to this topic
 
@@ -14,6 +14,10 @@ static const char *script[] = {
   "AT+CGDATA=\"PPP\",1\r\n", "*CONNECT\r\n",
   NULL,
 };
+
+// Visit https://mongoose.ws/tls/ and copy-paste CA certificate for your server
+#define TLS_CA \
+  ""
 
 // We use Serial1 or software serial to communicate with the modem
 #define LED_PIN LED_BUILTIN
@@ -30,6 +34,11 @@ struct mg_tcpip_if mif = {.mac = {2, 0, 1, 2, 3, 5}};  // Network interface
 
 uint64_t mg_millis(void) {
   return millis();
+}
+bool mg_random(void *buf, size_t len) {  // For TLS
+  uint8_t *p = (uint8_t *) buf;
+  while (len--) *p++ = (unsigned char) (rand() & 255);
+  return true;
 }
 
 void mqtt_publish(const char *message) {
@@ -50,6 +59,11 @@ void handle_command(struct mg_str msg) {
 }
 
 static void mqtt_ev_handler(struct mg_connection *c, int ev, void *ev_data) {
+  if (ev == MG_EV_CONNECT && mg_url_is_ssl(MQTT_SERVER)) {
+    struct mg_tls_opts opts = {};
+    opts.ca = mg_str(TLS_CA);
+    mg_tls_init(c, &opts);
+  }
   if (ev == MG_EV_MQTT_OPEN) {
     MG_INFO(("%lu CONNECTED to %s", c->id, MQTT_SERVER));
     struct mg_mqtt_opts opts = {};

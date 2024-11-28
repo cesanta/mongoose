@@ -18095,7 +18095,7 @@ static size_t mg_ppp_rx(void *ethbuf, size_t ethlen, struct mg_tcpip_if *ifp) {
     case MG_PPP_PROTO_LCP: mg_ppp_handle_lcp(ifp, buf + 4, bufsz - 4); break;
     case MG_PPP_PROTO_IPCP: mg_ppp_handle_ipcp(ifp, buf + 4, bufsz - 4); break;
     case MG_PPP_PROTO_IP:
-      MG_DEBUG(("got IP packet of %d bytes", bufsz - 4));
+      MG_VERBOSE(("got IP packet of %d bytes", bufsz - 4));
       memmove(eth + 14, buf + 4, bufsz - 4);
       memmove(eth, ifp->mac, 6);
       memmove(eth + 6, "\xff\xff\xff\xff\xff\xff", 6);
