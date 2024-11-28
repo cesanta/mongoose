@@ -12,14 +12,16 @@ static const char *script[] = {
   "AT+CNMI=0,0,0,0,0\r\n", "*OK\r\n",
   "AT+CGDCONT=1,\"IP\",\"iot.1nce.net\"\r\n", "*OK\r\n",
   "AT+CGDATA=\"PPP\",1\r\n", "*CONNECT\r\n",
-  NULL
+  NULL,
 };
 
-// We use software serial to communicate with the modem
+// We use Serial1 or software serial to communicate with the modem
 #define LED_PIN LED_BUILTIN
-#define RX_PIN 9
-#define TX_PIN 8
-SoftwareSerial SSerial(RX_PIN, TX_PIN);
+#define RST_PIN 10
+#define ModemSerial Serial1
+//#define RX_PIN 9
+//#define TX_PIN 8
+//SoftwareSerial ModemSerial(RX_PIN, TX_PIN);
 
 struct mg_connection *mqtt_connection;
 struct mg_tcpip_driver_ppp_data driver_data;
@@ -76,23 +78,26 @@ void reconnect_if_not_connected(void) {
 }
 
 void setup() {
-  Serial.begin(115200);       // Initialise serial
+  Serial.begin(115200);       // Initialise serial for logs
   while (!Serial) delay(50);  // for debug output
 
-  pinMode(LED_PIN, OUTPUT);  // Initialise LED
-  pinMode(RX_PIN, INPUT);
-  pinMode(TX_PIN, OUTPUT);
-  SSerial.begin(19200);
+  pinMode(LED_PIN, OUTPUT);  // Initialise pins
+  pinMode(RST_PIN, OUTPUT);
+  digitalWrite(RST_PIN, HIGH);
+  //pinMode(RX_PIN, INPUT);   // Only required for
+  //pinMode(TX_PIN, OUTPUT);  // software serial
+  ModemSerial.begin(115200);  // Serial for modem communication
 
   mg_mgr_init(&mgr);        // Initialise Mongoose event manager
   mg_log_set(MG_LL_DEBUG);  // Set debug log level
-  mg_log_set_fn([](char ch, void *) { Serial.print(ch); }, NULL);  // Log serial
+  mg_log_set_fn([](char c, void *) { Serial.print(c); }, NULL);  // Log serial
 
   mif.driver = &mg_tcpip_driver_ppp;  // Initialise built-in TCP/IP stack
   mif.driver_data = &driver_data;     // with the cellular driver
   driver_data.script = script;
-  driver_data.tx = [](void *, uint8_t c) { SSerial.write(c); },
-  driver_data.rx = [](void *) { return SSerial.available() ? SSerial.read() : -1; },
+  driver_data.reset = [](void *) { digitalWrite(RST_PIN, LOW); delay(1); digitalWrite(RST_PIN, HIGH); },
+  driver_data.tx = [](void *, uint8_t c) { ModemSerial.write(c); },
+  driver_data.rx = [](void *) { return ModemSerial.available() ? ModemSerial.read() : -1; },
   mg_tcpip_init(&mgr, &mif);
   mif.enable_dhcp_client = false;
 }

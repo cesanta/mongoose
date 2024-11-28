@@ -900,14 +900,14 @@ static void mg_tcpip_poll(struct mg_tcpip_if *ifp, uint64_t now) {
   bool expired_1000ms = mg_timer_expired(&ifp->timer_1000ms, 1000, now);
   ifp->now = now;
 
-#if MG_ENABLE_TCPIP_PRINT_DEBUG_STATS
   if (expired_1000ms) {
+#if MG_ENABLE_TCPIP_PRINT_DEBUG_STATS
     const char *names[] = {"down", "up", "req", "ip", "ready"};
     MG_INFO(("Status: %s, IP: %M, rx:%u, tx:%u, dr:%u, er:%u",
              names[ifp->state], mg_print_ip4, &ifp->ip, ifp->nrecv, ifp->nsent,
              ifp->ndrop, ifp->nerr));
-  }
 #endif
+  }
   // Handle gw ARP request timeout, order is important
   if (expired_1000ms && ifp->state == MG_TCPIP_STATE_IP) {
     ifp->state = MG_TCPIP_STATE_READY;  // keep best-effort MAC

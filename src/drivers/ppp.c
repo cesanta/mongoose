@@ -31,6 +31,12 @@ static size_t print_atcmd(void (*out)(char, void *), void *arg, va_list *ap) {
   return s.len;
 }
 
+static void mg_ppp_reset(struct mg_tcpip_driver_ppp_data *dd) {
+  dd->script_index = 0;
+  dd->deadline = 0;
+  if (dd->reset) dd->reset(dd->uart);
+}
+
 static bool mg_ppp_atcmd_handle(struct mg_tcpip_if *ifp) {
   struct mg_tcpip_driver_ppp_data *dd =
       (struct mg_tcpip_driver_ppp_data *) ifp->driver_data;
@@ -53,9 +59,7 @@ static bool mg_ppp_atcmd_handle(struct mg_tcpip_if *ifp) {
         if (is_timeout || is_overflow) {
           MG_ERROR(("AT error: %s, retrying...",
                     is_timeout ? "timeout" : "overflow"));
-          dd->script_index = 0;
-          dd->deadline = mg_millis() + MG_PPP_AT_TIMEOUT;
-          if (dd->reset) dd->reset(dd->uart);
+          mg_ppp_reset(dd);
           return false;  // FAIL: timeout
         }
         if ((c = dd->rx(dd->uart)) < 0) return false;  // no data
@@ -230,7 +234,8 @@ static void mg_ppp_handle_lcp(struct mg_tcpip_if *ifp, uint8_t *lcp,
       uint8_t ack[4] = {MG_PPP_LCP_CFG_TERM_ACK, id, 0, 4};
       MG_DEBUG(("LCP termination request, acknowledging..."));
       mg_ppp_tx_frame(dd, MG_PPP_PROTO_LCP, ack, sizeof(ack));
-      ifp->state = MG_TCPIP_STATE_DOWN;
+      mg_ppp_reset(dd);
+      ifp->state = MG_TCPIP_STATE_UP;
       if (dd->reset) dd->reset(dd->uart);
     } break;
   }
@@ -252,7 +257,7 @@ static void mg_ppp_handle_ipcp(struct mg_tcpip_if *ifp, uint8_t *ipcp,
       MG_DEBUG(("got IPCP config request, acknowledging..."));
       if (len >= 10 && ipcp[4] == MG_PPP_IPCP_IPADDR) {
         uint8_t *ip = ipcp + 6;
-        MG_INFO(("host ip: %d.%d.%d.%d\n", ip[0], ip[1], ip[2], ip[3]));
+        MG_DEBUG(("host ip: %d.%d.%d.%d", ip[0], ip[1], ip[2], ip[3]));
       }
       ipcp[0] = MG_PPP_IPCP_ACK;
       mg_ppp_tx_frame(dd, MG_PPP_PROTO_IPCP, ipcp, len);
@@ -270,10 +275,11 @@ static void mg_ppp_handle_ipcp(struct mg_tcpip_if *ifp, uint8_t *ipcp,
       // NACK contains our "suggested" IP address, use it
       if (len >= 10 && ipcp[4] == MG_PPP_IPCP_IPADDR) {
         uint8_t *ip = ipcp + 6;
-        MG_INFO(("ipcp ack, ip: %d.%d.%d.%d", ip[0], ip[1], ip[2], ip[3]));
+        MG_DEBUG(("ipcp ack, ip: %d.%d.%d.%d", ip[0], ip[1], ip[2], ip[3]));
         ipcp[0] = MG_PPP_IPCP_REQ;
         mg_ppp_tx_frame(dd, MG_PPP_PROTO_IPCP, ipcp, len);
         ifp->ip = ifp->mask = MG_IPV4(ip[0], ip[1], ip[2], ip[3]);
+        ifp->state = MG_TCPIP_STATE_READY;
       }
       break;
   }
