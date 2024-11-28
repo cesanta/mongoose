@@ -20,6 +20,11 @@ struct mg_tcpip_if mif = {.mac = {2, 0, 1, 2, 3, 5}};  // Network interface
 uint64_t mg_millis(void) {
   return millis();
 }
+bool mg_random(void *buf, size_t len) {  // For TLS
+  uint8_t *p = (uint8_t *) buf;
+  while (len--) *p++ = (unsigned char) (rand() & 255);
+  return true;
+}
 
 void mqtt_publish(const char *message) {
   struct mg_mqtt_opts opts = {};
@@ -28,6 +33,15 @@ void mqtt_publish(const char *message) {
   if (mqtt_connection) mg_mqtt_pub(mqtt_connection, &opts);
 }
 
+// Crude function to get available RAM, for quick profiling
+size_t getFreeRAM(void) {
+  size_t size = 0, increment = 100;
+  void *p;
+  while ((p = malloc(size)) != NULL) free(p), size += increment;
+  return size;
+}
+
+// Implement LED control over MQTT: "on" and "off" commands
 void handle_command(struct mg_str msg) {
   if (msg.len == 3 && memcmp(msg.buf, "off", 3) == 0) {
     digitalWrite(LED_PIN, LOW);
@@ -36,6 +50,7 @@ void handle_command(struct mg_str msg) {
     digitalWrite(LED_PIN, HIGH);
     mqtt_publish("done - on");
   }
+  MG_INFO(("Free RAM: %u bytes", getFreeRAM()));
 }
 
 static void mqtt_ev_handler(struct mg_connection *c, int ev, void *ev_data) {
