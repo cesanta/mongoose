@@ -1,8 +1,8 @@
 #include <SPI.h>
 #include "mongoose.h"
 
-#define LED_PIN 21  // Slave select pin
-#define SS_PIN 17   // Slave select pin
+#define LED_PIN LED_BUILTIN  // LED pin - can be LED_BUILTIN
+#define SS_PIN 17    // Slave select pin
 
 struct mg_tcpip_spi spi = {
     NULL,  // SPI metadata
@@ -15,6 +15,20 @@ struct mg_tcpip_if mif = {.mac = {2, 0, 1, 2, 3, 5}};  // Network interface
 
 uint64_t mg_millis(void) {
   return millis();
+}
+
+bool mg_random(void *buf, size_t len) {  // For TLS
+  uint8_t *p = (uint8_t *) buf;
+  while (len--) *p++ = (unsigned char) (rand() & 255);
+  return true;
+}
+
+// Crude function to get available RAM, for quick profiling
+size_t getFreeRAM(void) {
+  size_t size = 0, increment = 100;
+  void *p;
+  while ((p = malloc(size)) != NULL) free(p), size += increment;
+  return size;
 }
 
 void setup() {
@@ -36,7 +50,18 @@ void setup() {
   mg_http_listen(
       &mgr, "http://0.0.0.0",
       [](struct mg_connection *c, int ev, void *ev_data) {
-        if (ev == MG_EV_HTTP_MSG) mg_http_reply(c, 200, "", "ok\n");
+        if (ev == MG_EV_HTTP_MSG) {
+          struct mg_http_message *hm = (struct mg_http_message *) ev_data;
+          if (mg_match(hm->uri, mg_str("/api/led/on"), NULL)) {
+            digitalWrite(LED_PIN, HIGH);
+            mg_http_reply(c, 200, "", "{%m: %d}\n", MG_ESC("led"), digitalRead(LED_PIN));
+          } else if (mg_match(hm->uri, mg_str("/api/led/off"), NULL)) {
+            digitalWrite(LED_PIN, LOW);
+            mg_http_reply(c, 200, "", "{%m: %d}\n", MG_ESC("led"), digitalRead(LED_PIN));
+          } else {
+            mg_http_reply(c, 200, "", "ok, free RAM: %u\n", getFreeRAM());
+          }
+        }
       },
       &mgr);
 }

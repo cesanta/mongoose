@@ -8,15 +8,11 @@
 #include <time.h>
 
 #define MG_ARCH MG_ARCH_CUSTOM
-#define MG_ENABLE_SOCKET 0
 #define MG_ENABLE_TCPIP 1
 #define MG_ENABLE_DRIVER_W5500 1
 #define MG_ENABLE_TCPIP_DRIVER_INIT 0
-#define mkdir(a, b) (-1)
 #define MG_ENABLE_TCPIP_PRINT_DEBUG_STATS 0
 #define MG_ENABLE_CUSTOM_MILLIS 1
-#define MG_IO_SIZE 128
-
-// Enable TLS
+#define MG_ENABLE_CUSTOM_RANDOM 1
 // #define MG_TLS MG_TLS_BUILTIN
-// #define MG_ENABLE_CUSTOM_RANDOM 1
+#define MG_IO_SIZE 128
