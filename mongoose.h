@@ -896,6 +896,10 @@ struct timeval {
 #define MG_ENABLE_TCPIP_PRINT_DEBUG_STATS 0
 #endif
 
+#ifndef MG_IRAM_SECTION_NAME
+#define MG_IRAM_SECTION_NAME ".iram"
+#endif
+
 
 
 
@@ -2669,7 +2673,7 @@ void mg_rpc_list(struct mg_rpc_req *r);
 #else
 #ifndef MG_IRAM
 #if defined(__GNUC__)
-#define MG_IRAM __attribute__((noinline, section(".iram")))
+#define MG_IRAM __attribute__((noinline, section(MG_IRAM_SECTION_NAME)))
 #else
 #define MG_IRAM
 #endif // compiler
