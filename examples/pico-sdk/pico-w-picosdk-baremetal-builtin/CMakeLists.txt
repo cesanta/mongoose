@@ -16,7 +16,7 @@ target_include_directories(firmware PUBLIC
   .
 )
 
-target_link_libraries(firmware hardware_pio hardware_dma pico_stdlib pico_rand cyw43_driver_picow)
+target_link_libraries(firmware pico_stdlib pico_rand pico_cyw43_driver pico_cyw43_arch_none)
 pico_add_extra_outputs(firmware)     # create map/bin/hex file etc.
 
 pico_enable_stdio_usb(firmware 1)    # Route stdio
