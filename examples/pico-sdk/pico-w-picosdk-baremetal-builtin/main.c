@@ -43,7 +43,6 @@ int main(void) {
 
   MG_INFO(("Starting event loop"));
   for (;;) {
-    driver_pico_w_poll();
     mg_mgr_poll(&mgr, 0);
   }
 
