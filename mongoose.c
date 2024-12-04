@@ -1621,6 +1621,7 @@ int mg_http_parse(const char *s, size_t len, struct mg_http_message *hm) {
   const char *end = s == NULL ? NULL : s + req_len, *qs;  // Cannot add to NULL
   const struct mg_str *cl;
   size_t n;
+  bool version_prefix_valid;
 
   memset(hm, 0, sizeof(*hm));
   if (req_len <= 0) return req_len;
@@ -1637,7 +1638,19 @@ int mg_http_parse(const char *s, size_t len, struct mg_http_message *hm) {
   hm->uri.buf = (char *) s;
   while (s < end && (n = clen(s, end)) > 0) s += n, hm->uri.len += n;
   while (s < end && s[0] == ' ') s++;  // Skip spaces
+  is_response = hm->method.len > 5 &&
+                (mg_ncasecmp(hm->method.buf, "HTTP/", 5) == 0);
   if ((s = skiptorn(s, end, &hm->proto)) == NULL) return false;
+  // If we're given a version, check that it is HTTP/x.x
+  version_prefix_valid = hm->proto.len > 5 &&
+                         (mg_ncasecmp(hm->proto.buf, "HTTP/", 5) == 0);
+  if (!is_response && hm->proto.len > 0 &&
+    (!version_prefix_valid || hm->proto.len != 8 ||
+    (hm->proto.buf[5] < '0' || hm->proto.buf[5] > '9') ||
+    (hm->proto.buf[6] != '.') ||
+    (hm->proto.buf[7] < '0' || hm->proto.buf[7] > '9'))) {
+    return -1;
+  }
 
   // If URI contains '?' character, setup query string
   if ((qs = (const char *) memchr(hm->uri.buf, '?', hm->uri.len)) != NULL) {
@@ -1670,7 +1683,6 @@ int mg_http_parse(const char *s, size_t len, struct mg_http_message *hm) {
   //
   // So, if it is HTTP request, and Content-Length is not set,
   // and method is not (PUT or POST) then reset body length to zero.
-  is_response = mg_ncasecmp(hm->method.buf, "HTTP/", 5) == 0;
   if (hm->body.len == (size_t) ~0 && !is_response &&
       mg_strcasecmp(hm->method, mg_str("PUT")) != 0 &&
       mg_strcasecmp(hm->method, mg_str("POST")) != 0) {
