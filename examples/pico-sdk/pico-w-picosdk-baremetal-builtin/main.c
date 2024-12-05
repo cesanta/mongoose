@@ -1,12 +1,9 @@
 // Copyright (c) 2024 Cesanta Software Limited
 // All rights reserved
 
-#include "pico/stdlib.h"
-
 #include "mongoose.h"
 #include "net.h"
 
-#include "driver_pico-w.h"
 
 #define WIFI_SSID "yourWiFiSSID"
 #define WIFI_PASS "yourWiFiPassword"

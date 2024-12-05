@@ -5,7 +5,6 @@ project(firmware)
 pico_sdk_init()
 
 add_executable(firmware
-	driver_pico-w.c
 	main.c
 	mongoose.c
 	net.c

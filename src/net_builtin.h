@@ -82,6 +82,7 @@ extern struct mg_tcpip_driver mg_tcpip_driver_ra;
 extern struct mg_tcpip_driver mg_tcpip_driver_xmc;
 extern struct mg_tcpip_driver mg_tcpip_driver_xmc7;
 extern struct mg_tcpip_driver mg_tcpip_driver_ppp;
+extern struct mg_tcpip_driver mg_tcpip_driver_pico_w;
 
 // Drivers that require SPI, can use this SPI abstraction
 struct mg_tcpip_spi {
