@@ -2785,6 +2785,7 @@ extern struct mg_tcpip_driver mg_tcpip_driver_ra;
 extern struct mg_tcpip_driver mg_tcpip_driver_xmc;
 extern struct mg_tcpip_driver mg_tcpip_driver_xmc7;
 extern struct mg_tcpip_driver mg_tcpip_driver_ppp;
+extern struct mg_tcpip_driver mg_tcpip_driver_pico_w;
 
 // Drivers that require SPI, can use this SPI abstraction
 struct mg_tcpip_spi {
@@ -2946,6 +2947,19 @@ void mg_phy_init(struct mg_phy *, uint8_t addr, uint8_t config);
 bool mg_phy_up(struct mg_phy *, uint8_t addr, bool *full_duplex,
                uint8_t *speed);
 
+#if MG_ENABLE_TCPIP && MG_ARCH == MG_ARCH_PICOSDK && \
+    defined(MG_ENABLE_DRIVER_PICO_W) && MG_ENABLE_DRIVER_PICO_W
+
+#include "cyw43.h"              // keep this include
+#include "pico/cyw43_arch.h"    // keep this include
+#include "pico/unique_id.h"     // keep this include
+
+struct mg_tcpip_driver_pico_w_data {
+  char *ssid;
+  char *pass;
+};
+
+#endif
 
 struct mg_tcpip_driver_ppp_data {
   void *uart;                   // Opaque UART bus descriptor
