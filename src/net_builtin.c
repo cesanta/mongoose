@@ -641,14 +641,21 @@ long mg_io_send(struct mg_connection *c, const void *buf, size_t len) {
   return (long) len;
 }
 
-static void handle_tls_recv(struct mg_connection *c, struct mg_iobuf *io) {
-  long n = mg_tls_recv(c, &io->buf[io->len], io->size - io->len);
-  if (n == MG_IO_ERR) {
-    mg_error(c, "TLS recv error");
-  } else if (n > 0) {
-    // Decrypted successfully - trigger MG_EV_READ
-    io->len += (size_t) n;
-    mg_call(c, MG_EV_READ, &n);
+static void handle_tls_recv(struct mg_connection *c) {
+  size_t min = 512;
+  struct mg_iobuf *io = &c->recv;
+  if (io->size - io->len < min && !mg_iobuf_resize(io, io->len + min)) {
+    mg_error(c, "oom");
+  } else {
+    // Decrypt data directly into c->recv
+    long n = mg_tls_recv(c, &io->buf[io->len], io->size - io->len);
+    if (n == MG_IO_ERR) {
+      mg_error(c, "TLS recv error");
+    } else if (n > 0) {
+      // Decrypted successfully - trigger MG_EV_READ
+      io->len += (size_t) n;
+      mg_call(c, MG_EV_READ, &n);
+    }
   }
 }
 
@@ -723,18 +730,9 @@ static void read_conn(struct mg_connection *c, struct pkt *pkt) {
     if (c->is_tls && c->is_tls_hs) {
       mg_tls_handshake(c);
     } else if (c->is_tls) {
-      // TLS connection. Make room for decrypted data in c->recv
-      io = &c->recv;
-      if (io->size - io->len < pkt->pay.len &&
-          !mg_iobuf_resize(io, io->len + pkt->pay.len)) {
-        mg_error(c, "oom");
-      } else {
-        // Decrypt data directly into c->recv
-        handle_tls_recv(c, io);
-      }
+      handle_tls_recv(c);
     } else {
-      // Plain text connection, data is already in c->recv, trigger
-      // MG_EV_READ
+      // Plain text connection, data is already in c->recv, trigger MG_EV_READ
       mg_call(c, MG_EV_READ, &pkt->pay.len);
     }
   }
@@ -1167,8 +1165,7 @@ void mg_mgr_poll(struct mg_mgr *mgr, int ms) {
     MG_VERBOSE(("%lu .. %c%c%c%c%c", c->id, c->is_tls ? 'T' : 't',
                 c->is_connecting ? 'C' : 'c', c->is_tls_hs ? 'H' : 'h',
                 c->is_resolving ? 'R' : 'r', c->is_closing ? 'C' : 'c'));
-    if (c->is_tls && mg_tls_pending(c) > 0)
-      handle_tls_recv(c, (struct mg_iobuf *) &c->rtls);
+    if (c->is_tls && mg_tls_pending(c) > 0) handle_tls_recv(c);
     if (can_write(c)) write_conn(c);
     if (c->is_draining && c->send.len == 0 && s->ttype != MIP_TTYPE_FIN)
       init_closure(c);

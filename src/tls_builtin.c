@@ -453,17 +453,19 @@ static int mg_tls_recv_record(struct mg_connection *c) {
     }
   }
 
-#if !CHACHA20
-  mg_gcm_initialize();
-#endif
-
   msgsz = MG_LOAD_BE16(rio->buf + 3);
   msg = rio->buf + 5;
+  if (msgsz < 16) {
+    mg_error(c, "wrong size");
+    return -1;
+  }
+
   memmove(nonce, iv, sizeof(nonce));
   nonce[8] ^= (uint8_t) ((seq >> 24) & 255U);
   nonce[9] ^= (uint8_t) ((seq >> 16) & 255U);
   nonce[10] ^= (uint8_t) ((seq >> 8) & 255U);
   nonce[11] ^= (uint8_t) ((seq) &255U);
+
 #if CHACHA20
   {
     uint8_t *dec = (uint8_t *) calloc(1, msgsz);
@@ -477,12 +479,10 @@ static int mg_tls_recv_record(struct mg_connection *c) {
     free(dec);
   }
 #else
-  if (msgsz < 16) {
-    mg_error(c, "wrong size");
-    return -1;
-  }
+  mg_gcm_initialize();
   mg_aes_gcm_decrypt(msg, msg, msgsz - 16, key, 16, nonce, sizeof(nonce));
 #endif
+
   r = msgsz - 16 - 1;
   tls->content_type = msg[msgsz - 16 - 1];
   tls->recv_offset = (size_t) msg - (size_t) rio->buf;
