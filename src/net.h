@@ -4,6 +4,7 @@
 #include "config.h"
 #include "event.h"
 #include "iobuf.h"
+#include "net_builtin.h"
 #include "str.h"
 #include "timer.h"
 
@@ -33,8 +34,8 @@ struct mg_mgr {
   void *active_dns_requests;    // DNS requests in progress
   struct mg_timer *timers;      // Active timers
   int epoll_fd;                 // Used when MG_EPOLL_ENABLE=1
-  void *priv;                   // Used by the MIP stack
-  size_t extraconnsize;         // Used by the MIP stack
+  struct mg_tcpip_if *ifp;      // Builtin TCP/IP stack only. Interface pointer
+  size_t extraconnsize;         // Builtin TCP/IP stack only. Extra space
   MG_SOCKET_TYPE pipe;          // Socketpair end for mg_wakeup()
 #if MG_ENABLE_FREERTOS_TCP
   SocketSet_t ss;  // NOTE(lsm): referenced from socket struct

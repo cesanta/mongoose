@@ -4243,7 +4243,7 @@ static uint16_t ipcsum(const void *buf, size_t len) {
 }
 
 static void settmout(struct mg_connection *c, uint8_t type) {
-  struct mg_tcpip_if *ifp = (struct mg_tcpip_if *) c->mgr->priv;
+  struct mg_tcpip_if *ifp = c->mgr->ifp;
   struct connstate *s = (struct connstate *) (c + 1);
   unsigned n = type == MIP_TTYPE_ACK   ? MIP_TCP_ACK_MS
                : type == MIP_TTYPE_ARP ? MIP_ARP_RESP_MS
@@ -4668,7 +4668,7 @@ static struct mg_connection *accept_conn(struct mg_connection *lsn,
 }
 
 static size_t trim_len(struct mg_connection *c, size_t len) {
-  struct mg_tcpip_if *ifp = (struct mg_tcpip_if *) c->mgr->priv;
+  struct mg_tcpip_if *ifp = c->mgr->ifp;
   size_t eth_h_len = 14, ip_max_h_len = 24, tcp_max_h_len = 60, udp_h_len = 8;
   size_t max_headers_len =
       eth_h_len + ip_max_h_len + (c->is_udp ? udp_h_len : tcp_max_h_len);
@@ -4695,7 +4695,7 @@ static size_t trim_len(struct mg_connection *c, size_t len) {
 }
 
 long mg_io_send(struct mg_connection *c, const void *buf, size_t len) {
-  struct mg_tcpip_if *ifp = (struct mg_tcpip_if *) c->mgr->priv;
+  struct mg_tcpip_if *ifp = c->mgr->ifp;
   struct connstate *s = (struct connstate *) (c + 1);
   uint32_t dst_ip = *(uint32_t *) c->rem.ip;
   len = trim_len(c, len);
@@ -4758,8 +4758,8 @@ static void read_conn(struct mg_connection *c, struct pkt *pkt) {
       c->is_draining = 1;
       settmout(c, MIP_TTYPE_FIN);
     }
-    tx_tcp((struct mg_tcpip_if *) c->mgr->priv, s->mac, rem_ip, flags,
-           c->loc.port, c->rem.port, mg_htonl(s->seq), mg_htonl(s->ack), "", 0);
+    tx_tcp(c->mgr->ifp, s->mac, rem_ip, flags, c->loc.port, c->rem.port,
+           mg_htonl(s->seq), mg_htonl(s->ack), "", 0);
   } else if (pkt->pay.len == 0) {
     // TODO(cpq): handle this peer's ACK
   } else if (seq != s->ack) {
@@ -4768,9 +4768,8 @@ static void read_conn(struct mg_connection *c, struct pkt *pkt) {
       MG_VERBOSE(("ignoring duplicate pkt"));
     } else {
       MG_VERBOSE(("SEQ != ACK: %x %x %x", seq, s->ack, ack));
-      tx_tcp((struct mg_tcpip_if *) c->mgr->priv, s->mac, rem_ip, TH_ACK,
-             c->loc.port, c->rem.port, mg_htonl(s->seq), mg_htonl(s->ack), "",
-             0);
+      tx_tcp(c->mgr->ifp, s->mac, rem_ip, TH_ACK, c->loc.port, c->rem.port,
+             mg_htonl(s->seq), mg_htonl(s->ack), "", 0);
     }
   } else if (io->size - io->len < pkt->pay.len &&
              !mg_iobuf_resize(io, io->len + pkt->pay.len)) {
@@ -4792,9 +4791,8 @@ static void read_conn(struct mg_connection *c, struct pkt *pkt) {
     if (s->unacked > MIP_TCP_WIN / 2 && s->acked != s->ack) {
       // Send ACK immediately
       MG_VERBOSE(("%lu imm ACK %lu", c->id, s->acked));
-      tx_tcp((struct mg_tcpip_if *) c->mgr->priv, s->mac, rem_ip, TH_ACK,
-             c->loc.port, c->rem.port, mg_htonl(s->seq), mg_htonl(s->ack), NULL,
-             0);
+      tx_tcp(c->mgr->ifp, s->mac, rem_ip, TH_ACK, c->loc.port, c->rem.port,
+             mg_htonl(s->seq), mg_htonl(s->ack), NULL, 0);
       s->unacked = 0;
       s->acked = s->ack;
       if (s->ttype != MIP_TTYPE_KEEPALIVE) settmout(c, MIP_TTYPE_KEEPALIVE);
@@ -5111,7 +5109,7 @@ void mg_tcpip_init(struct mg_mgr *mgr, struct mg_tcpip_if *ifp) {
       ifp->recv_queue.size = ifp->driver->rx ? framesize : 8192;
     ifp->recv_queue.buf = (char *) calloc(1, ifp->recv_queue.size);
     ifp->timer_1000ms = mg_millis();
-    mgr->priv = ifp;
+    mgr->ifp = ifp;
     ifp->mgr = mgr;
     ifp->mtu = MG_TCPIP_MTU_DEFAULT;
     mgr->extraconnsize = sizeof(struct connstate);
@@ -5132,11 +5130,10 @@ void mg_tcpip_free(struct mg_tcpip_if *ifp) {
 static void send_syn(struct mg_connection *c) {
   struct connstate *s = (struct connstate *) (c + 1);
   uint32_t isn = mg_htonl((uint32_t) mg_ntohs(c->loc.port));
-  struct mg_tcpip_if *ifp = (struct mg_tcpip_if *) c->mgr->priv;
   uint32_t rem_ip;
   memcpy(&rem_ip, c->rem.ip, sizeof(uint32_t));
-  tx_tcp(ifp, s->mac, rem_ip, TH_SYN, c->loc.port, c->rem.port, isn, 0, NULL,
-         0);
+  tx_tcp(c->mgr->ifp, s->mac, rem_ip, TH_SYN, c->loc.port, c->rem.port, isn, 0,
+         NULL, 0);
 }
 
 static void mac_resolved(struct mg_connection *c) {
@@ -5150,7 +5147,7 @@ static void mac_resolved(struct mg_connection *c) {
 }
 
 void mg_connect_resolved(struct mg_connection *c) {
-  struct mg_tcpip_if *ifp = (struct mg_tcpip_if *) c->mgr->priv;
+  struct mg_tcpip_if *ifp = c->mgr->ifp;
   uint32_t rem_ip;
   memcpy(&rem_ip, c->rem.ip, sizeof(uint32_t));
   c->is_resolving = 0;
@@ -5206,12 +5203,10 @@ static void init_closure(struct mg_connection *c) {
   struct connstate *s = (struct connstate *) (c + 1);
   if (c->is_udp == false && c->is_listening == false &&
       c->is_connecting == false) {  // For TCP conns,
-    struct mg_tcpip_if *ifp =
-        (struct mg_tcpip_if *) c->mgr->priv;  // send TCP FIN
     uint32_t rem_ip;
     memcpy(&rem_ip, c->rem.ip, sizeof(uint32_t));
-    tx_tcp(ifp, s->mac, rem_ip, TH_FIN | TH_ACK, c->loc.port, c->rem.port,
-           mg_htonl(s->seq), mg_htonl(s->ack), NULL, 0);
+    tx_tcp(c->mgr->ifp, s->mac, rem_ip, TH_FIN | TH_ACK, c->loc.port,
+           c->rem.port, mg_htonl(s->seq), mg_htonl(s->ack), NULL, 0);
     settmout(c, MIP_TTYPE_FIN);
   }
 }
@@ -5228,12 +5223,11 @@ static bool can_write(struct mg_connection *c) {
 }
 
 void mg_mgr_poll(struct mg_mgr *mgr, int ms) {
-  struct mg_tcpip_if *ifp = (struct mg_tcpip_if *) mgr->priv;
   struct mg_connection *c, *tmp;
   uint64_t now = mg_millis();
   mg_timer_poll(&mgr->timers, now);
-  if (ifp == NULL || ifp->driver == NULL) return;
-  mg_tcpip_poll(ifp, now);
+  if (mgr->ifp == NULL || mgr->ifp->driver == NULL) return;
+  mg_tcpip_poll(mgr->ifp, now);
   for (c = mgr->conns; c != NULL; c = tmp) {
     tmp = c->next;
     struct connstate *s = (struct connstate *) (c + 1);
@@ -5251,7 +5245,7 @@ void mg_mgr_poll(struct mg_mgr *mgr, int ms) {
 }
 
 bool mg_send(struct mg_connection *c, const void *buf, size_t len) {
-  struct mg_tcpip_if *ifp = (struct mg_tcpip_if *) c->mgr->priv;
+  struct mg_tcpip_if *ifp = c->mgr->ifp;
   bool res = false;
   uint32_t rem_ip;
   memcpy(&rem_ip, c->rem.ip, sizeof(uint32_t));

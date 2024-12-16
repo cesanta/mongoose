@@ -2150,6 +2150,7 @@ enum {
 
 
 
+
 struct mg_dns {
   const char *url;          // DNS server URL
   struct mg_connection *c;  // DNS server connection
@@ -2176,8 +2177,8 @@ struct mg_mgr {
   void *active_dns_requests;    // DNS requests in progress
   struct mg_timer *timers;      // Active timers
   int epoll_fd;                 // Used when MG_EPOLL_ENABLE=1
-  void *priv;                   // Used by the MIP stack
-  size_t extraconnsize;         // Used by the MIP stack
+  struct mg_tcpip_if *ifp;      // Builtin TCP/IP stack only. Interface pointer
+  size_t extraconnsize;         // Builtin TCP/IP stack only. Extra space
   MG_SOCKET_TYPE pipe;          // Socketpair end for mg_wakeup()
 #if MG_ENABLE_FREERTOS_TCP
   SocketSet_t ss;  // NOTE(lsm): referenced from socket struct
@@ -2711,9 +2712,7 @@ bool mg_ota_flash_end(struct mg_flash *flash);
 
 
 
-#if defined(MG_ENABLE_TCPIP) && MG_ENABLE_TCPIP
 struct mg_tcpip_if;  // Mongoose TCP/IP network interface
-#define MG_TCPIP_IFACE(mgr_) ((struct mg_tcpip_if *) (mgr_)->priv)
 
 struct mg_tcpip_driver {
   bool (*init)(struct mg_tcpip_if *);                         // Init driver
@@ -2798,8 +2797,6 @@ struct mg_tcpip_spi {
   void (*end)(void *);              // SPI end: slave select high
   uint8_t (*txn)(void *, uint8_t);  // SPI transaction: write 1 byte, read reply
 };
-
-#endif
 
 
 
