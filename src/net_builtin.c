@@ -642,7 +642,8 @@ long mg_io_send(struct mg_connection *c, const void *buf, size_t len) {
 }
 
 static void handle_tls_recv(struct mg_connection *c) {
-  size_t min = 512;
+  size_t avail = mg_tls_pending(c); 
+  size_t min = avail > MG_MAX_RECV_SIZE ? MG_MAX_RECV_SIZE : avail;
   struct mg_iobuf *io = &c->recv;
   if (io->size - io->len < min && !mg_iobuf_resize(io, io->len + min)) {
     mg_error(c, "oom");
@@ -655,7 +656,7 @@ static void handle_tls_recv(struct mg_connection *c) {
       // Decrypted successfully - trigger MG_EV_READ
       io->len += (size_t) n;
       mg_call(c, MG_EV_READ, &n);
-    }
+    } // else n < 0: outstanding data to be moved to c->recv
   }
 }
 

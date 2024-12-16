@@ -4718,7 +4718,8 @@ long mg_io_send(struct mg_connection *c, const void *buf, size_t len) {
 }
 
 static void handle_tls_recv(struct mg_connection *c) {
-  size_t min = 512;
+  size_t avail = mg_tls_pending(c); 
+  size_t min = avail > MG_MAX_RECV_SIZE ? MG_MAX_RECV_SIZE : avail;
   struct mg_iobuf *io = &c->recv;
   if (io->size - io->len < min && !mg_iobuf_resize(io, io->len + min)) {
     mg_error(c, "oom");
@@ -4731,7 +4732,7 @@ static void handle_tls_recv(struct mg_connection *c) {
       // Decrypted successfully - trigger MG_EV_READ
       io->len += (size_t) n;
       mg_call(c, MG_EV_READ, &n);
-    }
+    } // else n < 0: outstanding data to be moved to c->recv
   }
 }
 
@@ -6439,9 +6440,7 @@ MG_IRAM static bool mg_stm32f_swap(void) {
 
 static bool s_flash_irq_disabled;
 
-MG_IRAM static bool mg_stm32f_write(void *addr,
-                                                              const void *buf,
-                                                              size_t len) {
+MG_IRAM static bool mg_stm32f_write(void *addr, const void *buf, size_t len) {
   if ((len % s_mg_flash_stm32f.align) != 0) {
     MG_ERROR(("%lu is not aligned to %lu", len, s_mg_flash_stm32f.align));
     return false;
@@ -6472,8 +6471,7 @@ MG_IRAM static bool mg_stm32f_write(void *addr,
 }
 
 // just overwrite instead of swap
-MG_IRAM void single_bank_swap(char *p1, char *p2,
-                                                        size_t size) {
+MG_IRAM void single_bank_swap(char *p1, char *p2, size_t size) {
   // no stdlib calls here
   mg_stm32f_write(p1, p2, size);
   *(volatile unsigned long *) 0xe000ed0c = 0x5fa0004;
@@ -6505,6 +6503,7 @@ bool mg_ota_end(void) {
   return false;
 }
 #endif
+
 #ifdef MG_ENABLE_LINES
 #line 1 "src/ota_stm32h5.c"
 #endif
@@ -11336,7 +11335,8 @@ long mg_tls_recv(struct mg_connection *c, void *buf, size_t len) {
 }
 
 size_t mg_tls_pending(struct mg_connection *c) {
-  return mg_tls_got_record(c) ? 1 : 0;
+  struct tls_data *tls = (struct tls_data *) c->tls;
+  return tls != NULL ? tls->recv_len : 0;
 }
 
 void mg_tls_ctx_init(struct mg_mgr *mgr) {
