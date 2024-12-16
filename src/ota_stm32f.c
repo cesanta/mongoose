@@ -161,9 +161,7 @@ MG_IRAM static bool mg_stm32f_swap(void) {
 
 static bool s_flash_irq_disabled;
 
-MG_IRAM static bool mg_stm32f_write(void *addr,
-                                                              const void *buf,
-                                                              size_t len) {
+MG_IRAM static bool mg_stm32f_write(void *addr, const void *buf, size_t len) {
   if ((len % s_mg_flash_stm32f.align) != 0) {
     MG_ERROR(("%lu is not aligned to %lu", len, s_mg_flash_stm32f.align));
     return false;
@@ -194,8 +192,7 @@ MG_IRAM static bool mg_stm32f_write(void *addr,
 }
 
 // just overwrite instead of swap
-MG_IRAM void single_bank_swap(char *p1, char *p2,
-                                                        size_t size) {
+MG_IRAM void single_bank_swap(char *p1, char *p2, size_t size) {
   // no stdlib calls here
   mg_stm32f_write(p1, p2, size);
   *(volatile unsigned long *) 0xe000ed0c = 0x5fa0004;
