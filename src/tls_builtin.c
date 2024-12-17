@@ -1390,7 +1390,8 @@ long mg_tls_recv(struct mg_connection *c, void *buf, size_t len) {
 }
 
 size_t mg_tls_pending(struct mg_connection *c) {
-  return mg_tls_got_record(c) ? 1 : 0;
+  struct tls_data *tls = (struct tls_data *) c->tls;
+  return tls != NULL ? tls->recv_len : 0;
 }
 
 void mg_tls_ctx_init(struct mg_mgr *mgr) {
