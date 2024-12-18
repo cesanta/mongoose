@@ -977,7 +977,8 @@ struct packed_file {
 #if MG_ENABLE_PACKED_FS
 #else
 const char *mg_unpack(const char *path, size_t *size, time_t *mtime) {
-  *size = 0, *mtime = 0;
+  if (size != NULL) *size = 0;
+  if (mtime != NULL) *mtime = 0;
   (void) path;
   return NULL;
 }
