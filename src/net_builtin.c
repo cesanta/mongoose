@@ -207,6 +207,22 @@ static void onstatechange(struct mg_tcpip_if *ifp) {
     MG_INFO(("      MAC: %M", mg_print_mac, &ifp->mac));
   } else if (ifp->state == MG_TCPIP_STATE_IP) {
     MG_ERROR(("Got IP"));
+
+    // Gratuitous ARP to announce our presence
+    struct eth *eth = (struct eth *) ifp->tx.buf;
+    struct arp *arp = (struct arp *) (eth + 1);
+    memset(eth->dst, 0xFF, sizeof(eth->dst));
+    memcpy(eth->src, ifp->mac, sizeof(eth->src));
+    eth->type = mg_htons(0x806);
+    memset(arp, 0, sizeof(*arp));
+    arp->fmt = mg_htons(1), arp->pro = mg_htons(0x800), arp->hlen = 6,
+    arp->plen = 4;
+    arp->op = mg_htons(2);
+    memset(arp->tha, 0xFF, sizeof(arp->tha));
+    memcpy(arp->sha, ifp->mac, sizeof(arp->sha));
+    arp->tpa = arp->spa = ifp->ip;
+    ether_output(ifp, PDIFF(eth, arp + 1));
+
     mg_tcpip_arp_request(ifp, ifp->gw, NULL);  // unsolicited GW ARP request
   } else if (ifp->state == MG_TCPIP_STATE_UP) {
     MG_ERROR(("Link up"));
