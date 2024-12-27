@@ -1,6 +1,6 @@
 PROJECTS ?= $(wildcard ../../examples/pico-sdk/*-picosdk-*)
 SDK_PATH ?= $(realpath $(PWD))/pico-sdk
-SDK_VERSION ?= 2.0.0
+SDK_VERSION ?= 2.1.0
 
 all: $(PROJECTS)
 	echo 
@@ -24,4 +24,7 @@ clean:
 # Wizard-style board name --> Pico-SDK board name; SDKBNAME = table[BOARD]
 SDK_evb-pico  := pico
 SDK_evb-pico2 := pico2
+SDK_evb-pico2-w5100 := pico2
+SDK_pico-w   := pico_w
+SDK_pico2-w  := pico2_w
 SDKBNAME = $(SDK_$(BOARD))
