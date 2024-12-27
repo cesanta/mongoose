@@ -445,6 +445,8 @@ jobs:
           - path: pico-sdk/pico-rndis-dashboard
           - path: pico-sdk/pico-w-picosdk-baremetal-builtin
           - path: pico-sdk/pico-w-picosdk-freertos-lwip
+          - path: pico-sdk/pico-2-w-picosdk-baremetal-builtin
+          - path: pico-sdk/pico-2-w-picosdk-freertos-lwip
           - path: pico-sdk/w5500-evb-pico-picosdk-baremetal-builtin
           - path: pico-sdk/w5500-evb-pico2-picosdk-baremetal-builtin
           - path: stm32/nucleo-f746zg-make-freertos-tcp

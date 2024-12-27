@@ -16854,24 +16854,22 @@ bool mg_random(void *buf, size_t len) {
   while (len--) *p++ = (unsigned char) (get_rand_32() & 255);
   success = true;
 #elif MG_ARCH == MG_ARCH_WIN32
-  static bool initialised = false;
 #if defined(_MSC_VER) && _MSC_VER < 1700
+  static bool initialised = false;
   static HCRYPTPROV hProv;
   // CryptGenRandom() implementation earlier than 2008 is weak, see
   // https://en.wikipedia.org/wiki/CryptGenRandom
-  if (initialised == false) {
+  if (!initialised) {
     initialised = CryptAcquireContext(&hProv, NULL, NULL, PROV_RSA_FULL,
                                       CRYPT_VERIFYCONTEXT);
   }
-  if (initialised == true) {
-    success = CryptGenRandom(hProv, len, p);
-  }
+  if (initialised) success = CryptGenRandom(hProv, len, p);
 #else
   size_t i;
   for (i = 0; i < len; i++) {
     unsigned int rand_v;
     if (rand_s(&rand_v) == 0) {
-      p[i] = (unsigned char)(rand_v & 255);
+      p[i] = (unsigned char) (rand_v & 255);
     } else {
       break;
     }

@@ -9,9 +9,9 @@ all: $(PROJECTS)
 	$(DOCKER) $(IMAGE) $(PATHTO)headless-build.sh -data workspace -removeAll workspace
 
 $(PROJECTS): FORCE
-	(make -C $@ && make -C $@ clean) || ( \
+	(make -C $@ && sudo make -C $@ clean) || ( \
 	COREDIRS=`find $@ -maxdepth 1 -name 'CM*' -print` && ( \
-	(test "$$COREDIRS" == "" && \
+	(test "$$COREDIRS" = "" && \
 	  PROJNAME=`xq -r .projectDescription.name $@/.project` && \
 	  $(DOCKER) $(IMAGE) $(PATHTO)headless-build.sh -data workspace -import $@ -cleanBuild $$PROJNAME/$(TARGET) ) || ( \
 	(test "$$COREDIRS" != "" && \
