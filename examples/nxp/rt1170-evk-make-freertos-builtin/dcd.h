@@ -1,1 +1,0 @@
-../rt1170-evk-make-baremetal-builtin/dcd.h
