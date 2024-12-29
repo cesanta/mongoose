@@ -12654,14 +12654,14 @@ static PORTABLE_8439_DECL void poly1305_calculate_mac(
   poly1305_finish(&poly_ctx, mac);
 }
 
-#define PM(p) ((size_t) (p))
+#define MG_PM(p) ((size_t) (p))
 
 // pointers overlap if the smaller either ahead of the end,
 // or its end is before the start of the other
 //
 // s_size should be smaller or equal to b_size
-#define OVERLAPPING(s, s_size, b, b_size) \
-  (PM(s) < PM((b) + (b_size))) && (PM(b) < PM((s) + (s_size)))
+#define MG_OVERLAPPING(s, s_size, b, b_size) \
+  (MG_PM(s) < MG_PM((b) + (b_size))) && (MG_PM(b) < MG_PM((s) + (s_size)))
 
 PORTABLE_8439_DECL size_t mg_chacha20_poly1305_encrypt(
     uint8_t *restrict cipher_text, const uint8_t key[RFC_8439_KEY_SIZE],
@@ -12669,7 +12669,7 @@ PORTABLE_8439_DECL size_t mg_chacha20_poly1305_encrypt(
     size_t ad_size, const uint8_t *restrict plain_text,
     size_t plain_text_size) {
   size_t new_size = plain_text_size + RFC_8439_TAG_SIZE;
-  if (OVERLAPPING(plain_text, plain_text_size, cipher_text, new_size)) {
+  if (MG_OVERLAPPING(plain_text, plain_text_size, cipher_text, new_size)) {
     return (size_t) -1;
   }
   chacha20_xor_stream(cipher_text, plain_text, plain_text_size, key, nonce, 1);
@@ -12684,7 +12684,7 @@ PORTABLE_8439_DECL size_t mg_chacha20_poly1305_decrypt(
     const uint8_t *restrict cipher_text, size_t cipher_text_size) {
   // first we calculate the mac and see if it lines up, only then do we decrypt
   size_t actual_size = cipher_text_size - RFC_8439_TAG_SIZE;
-  if (OVERLAPPING(plain_text, actual_size, cipher_text, cipher_text_size)) {
+  if (MG_OVERLAPPING(plain_text, actual_size, cipher_text, cipher_text_size)) {
     return (size_t) -1;
   }
 
