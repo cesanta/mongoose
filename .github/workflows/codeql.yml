@@ -3,7 +3,7 @@ name: "CodeQL Scanning"
 
 on:
   schedule:
-    - cron: '30 2 * * *' # run at 2:30 AM UTC
+    - cron: '30 23 * * *' # run at 11:30 PM UTC
   # Allow manual runs
   workflow_dispatch:
 

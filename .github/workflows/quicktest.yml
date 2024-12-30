@@ -59,7 +59,7 @@ jobs:
     name: macos SSL=${{ matrix.ssl }}
     env:
       SSL: ${{ matrix.ssl }}
-      TFLAGS: -DNO_SNTP_CHECK
+      #TFLAGS: -DNO_SNTP_CHECK
       HOMEBREW_NO_AUTO_UPDATE: 1
     steps:
     - uses: actions/checkout@v4

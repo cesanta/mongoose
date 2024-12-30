@@ -1,7 +1,7 @@
 name: Full build and test
 on:
   schedule:
-    - cron: '0 1 * * *' # run at 1 AM UTC
+    - cron: '0 22 * * *' # run at 10 PM UTC
   # Allow manual runs
   workflow_dispatch:
 env:
@@ -117,7 +117,7 @@ jobs:
     name: macos SSL=${{ matrix.ssl }} TFLAGS=${{ matrix.select }}
     env:
       SSL: ${{ matrix.ssl }}
-      TFLAGS: ${{ matrix.select }} -DNO_SNTP_CHECK -Wno-sign-conversion # Workaround for MbedTLS 3.5.0
+      TFLAGS: ${{ matrix.select }} -Wno-sign-conversion # Workaround for MbedTLS 3.5.0
       HOMEBREW_NO_AUTO_UPDATE: 1
     steps:
     - uses: actions/checkout@v4

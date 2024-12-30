@@ -3523,7 +3523,7 @@ void mg_mqtt_login(struct mg_connection *c, const struct mg_mqtt_opts *opts) {
     total_len += 2 + (uint32_t) opts->pass.len;
     hdr[7] |= MQTT_HAS_PASSWORD;
   }
-  if (opts->topic.len > 0) { // allow zero-length msgs, message.len is size_t
+  if (opts->topic.len > 0) {  // allow zero-length msgs, message.len is size_t
     total_len += 4 + (uint32_t) opts->topic.len + (uint32_t) opts->message.len;
     hdr[7] |= MQTT_HAS_WILL;
   }
@@ -3569,9 +3569,10 @@ uint16_t mg_mqtt_pub(struct mg_connection *c, const struct mg_mqtt_opts *opts) {
   uint16_t id = opts->retransmit_id;
   uint8_t flags = (uint8_t) (((opts->qos & 3) << 1) | (opts->retain ? 1 : 0));
   size_t len = 2 + opts->topic.len + opts->message.len;
-  MG_DEBUG(("%lu [%.*s] -> [%.*s]", c->id, (int) opts->topic.len,
-            (char *) opts->topic.buf, (int) opts->message.len,
-            (char *) opts->message.buf));
+  MG_DEBUG(("%lu [%.*s] <- [%.*s%c", c->id, (int) opts->topic.len,
+            (char *) opts->topic.buf,
+            (int) (opts->message.len <= 10 ? opts->message.len : 10),
+            (char *) opts->message.buf, opts->message.len <= 10 ? ']' : ' '));
   if (opts->qos > 0) len += 2;
   if (c->is_mqtt5) len += get_props_size(opts->props, opts->num_props);
 
@@ -3579,8 +3580,8 @@ uint16_t mg_mqtt_pub(struct mg_connection *c, const struct mg_mqtt_opts *opts) {
   mg_mqtt_send_header(c, MQTT_CMD_PUBLISH, flags, (uint32_t) len);
   mg_send_u16(c, mg_htons((uint16_t) opts->topic.len));
   mg_send(c, opts->topic.buf, opts->topic.len);
-  if (opts->qos > 0) {    // need to send 'id' field
-    if (id == 0) {  // generate new one if not resending
+  if (opts->qos > 0) {  // need to send 'id' field
+    if (id == 0) {      // generate new one if not resending
       if (++c->mgr->mqtt_id == 0) ++c->mgr->mqtt_id;
       id = c->mgr->mqtt_id;
     }
@@ -3703,8 +3704,10 @@ static void mqtt_cb(struct mg_connection *c, int ev, void *ev_data) {
             }
             break;
           case MQTT_CMD_PUBLISH: {
-            /*MG_DEBUG(("%lu [%.*s] -> [%.*s]", c->id, (int) mm.topic.len,
-                      mm.topic.buf, (int) mm.data.len, mm.data.buf));*/
+            MG_DEBUG(("%lu [%.*s] -> [%.*s%c", c->id, (int) mm.topic.len,
+                      mm.topic.buf,
+                      (int) (mm.data.len <= 10 ? mm.data.len : 10), mm.data.buf,
+                      mm.data.len <= 10 ? ']' : ' '));
             if (mm.qos > 0) {
               uint16_t id = mg_ntohs(mm.id);
               uint32_t remaining_len = sizeof(id);
