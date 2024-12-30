@@ -5,12 +5,20 @@
 
 static int s_num_tests = 0;
 
+#ifdef NO_SLEEP_ABORT
+#define ABORT() abort()
+#else
+#define ABORT()                                                 \
+      sleep(2);  /* 2s, GH print reason */                      \
+      abort();
+#endif
+
 #define ASSERT(expr)                                            \
   do {                                                          \
     s_num_tests++;                                              \
     if (!(expr)) {                                              \
       printf("FAILURE %s:%d: %s\n", __FILE__, __LINE__, #expr); \
-      abort();                                                  \
+      ABORT();                                                  \
     }                                                           \
   } while (0)
 
@@ -329,7 +337,7 @@ static void sntp_cb(struct mg_connection *c, int ev, void *ev_data) {
   (void) c;
 }
 
-static void test_sntp_server(const char *url) {
+static bool test_sntp_server(const char *url) {
   int64_t ms = 0;
   struct mg_mgr mgr;
   struct mg_connection *c = NULL;
@@ -341,13 +349,12 @@ static void test_sntp_server(const char *url) {
   ASSERT(c->is_udp == 1);
   for (i = 0; i < 60 && ms == 0; i++) mg_mgr_poll(&mgr, 50);
   MG_DEBUG(("server: %s, ms: %lld", url ? url : "(default)", ms));
-#if !defined(NO_SNTP_CHECK)
-  ASSERT(ms > 0);
-#endif
   mg_mgr_free(&mgr);
+  return ms > 0;
 }
 
 static void test_sntp(void) {
+  bool result;
   const unsigned char bad[] =
       "\x55\x02\x00\xeb\x00\x00\x00\x1e\x00\x00\x07\xb6\x3e\xc9\xd6\xa2"
       "\xdb\xde\xea\x30\x91\x86\xb7\x10\xdb\xde\xed\x98\x00\x00\x00\xde"
@@ -355,11 +362,16 @@ static void test_sntp(void) {
 
   ASSERT(mg_sntp_parse(bad, sizeof(bad)) < 0);
   ASSERT(mg_sntp_parse(NULL, 0) == -1);
-  // NOTE(cpq): temporarily disabled until Github Actions fix their NTP
-  // port blockage issue, https://github.com/actions/runner-images/issues/5615
-  // test_sntp_server("udp://time.apple.com:123");
-  test_sntp_server("udp://time.windows.com:123");
+  // NOTE(): historical NTP port blockage issue; expect at least one to be
+  // reachable and work. https://github.com/actions/runner-images/issues/5615
+  result = test_sntp_server("udp://time.apple.com:123") ||
+  test_sntp_server("udp://time.windows.com:123") ||
   test_sntp_server(NULL);
+#if defined(NO_SNTP_CHECK)
+  (void) result;
+#else
+  ASSERT(result);
+#endif
 }
 
 struct mqtt_data {
@@ -567,6 +579,7 @@ static void test_mqtt_ver(uint8_t mqtt_version) {
   const char *url = "mqtt://broker.hivemq.com:1883";
   int i, retries;
 
+  MG_DEBUG(("ver: %u", mqtt_version));
   // Connect with options: version, clean session, last will, keepalive
   // time. Don't set retain, some runners are not random
   test_data.flags = 0;

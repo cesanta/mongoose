@@ -8,12 +8,20 @@ static int s_num_tests = 0;
 static bool s_sent_fragment = 0;
 static int s_seg_sent = 0;
 
+#ifdef NO_SLEEP_ABORT
+#define ABORT() abort()
+#else
+#define ABORT()                                                 \
+      sleep(2);  /* 2s, GH print reason */                      \
+      abort();
+#endif
+
 #define ASSERT(expr)                                            \
   do {                                                          \
     s_num_tests++;                                              \
     if (!(expr)) {                                              \
       printf("FAILURE %s:%d: %s\n", __FILE__, __LINE__, #expr); \
-      abort();                                                  \
+      ABORT();                                                  \
     }                                                           \
   } while (0)
 
