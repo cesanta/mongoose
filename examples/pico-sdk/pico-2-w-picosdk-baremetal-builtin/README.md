@@ -1,4 +1,1 @@
-
-# Mongoose on PICO 2 W
-
-
+See [Wizard](https://mongoose.ws/wizard/#/output?board=pico2-w&ide=Pico-SDK&rtos=baremetal&file=README.md)
