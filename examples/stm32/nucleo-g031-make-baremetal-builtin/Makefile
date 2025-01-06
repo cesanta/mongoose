@@ -32,9 +32,9 @@ flash: firmware.bin
 	st-flash --reset write $< 0x8000000
 
 cmsis_core:     # ARM CMSIS core headers
-	git clone --depth 1 -b 5.9.0 https://github.com/ARM-software/CMSIS_5 $@
+	git clone -c advice.detachedHead=false -q --depth 1 -b 5.9.0 https://github.com/ARM-software/CMSIS_5 $@
 cmsis_g0:       # ST CMSIS headers for STM32H5 series
-	git clone --depth 1 -b v1.4.3 https://github.com/STMicroelectronics/cmsis_device_g0 $@
+	git clone -c advice.detachedHead=false -q --depth 1 -b v1.4.3 https://github.com/STMicroelectronics/cmsis_device_g0 $@
 
 # Automated remote test. Requires env variable VCON_API_KEY set. See https://vcon.io/automated-firmware-tests/
 DEVICE_URL ?= https://dash.vcon.io/api/v3/devices/10
