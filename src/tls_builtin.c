@@ -486,7 +486,7 @@ static int mg_tls_recv_record(struct mg_connection *c) {
   r = msgsz - 16 - 1;
   tls->content_type = msg[msgsz - 16 - 1];
   tls->recv_offset = (size_t) msg - (size_t) rio->buf;
-  tls->recv_len = msgsz - 16 - 1;
+  tls->recv_len = (size_t) msgsz - 16 - 1;
   c->is_client ? tls->enc.sseq++ : tls->enc.cseq++;
   return r;
 }

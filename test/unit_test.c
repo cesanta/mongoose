@@ -795,7 +795,6 @@ static int cmpbody(const char *buf, const char *str) {
   struct mg_str s = mg_str(str);
   struct mg_http_message hm = gethm(buf);
   size_t len = strlen(buf);
-  // mg_http_parse(buf, len, &hm);
   if (hm.body.len > len) hm.body.len = len - (size_t) (hm.body.buf - buf);
   return mg_strcmp(hm.body, s);
 }
@@ -1321,13 +1320,21 @@ static void test_tls(void) {
   ASSERT(fetch(&mgr, buf, url, "GET /a.txt HTTP/1.0\n\n") == 200);
   // MG_INFO(("%s", buf));
   ASSERT(cmpbody(buf, "hello\n") == 0);
-  // POST a larger file, make sure we drain TLS buffers and read all, #2619
+  // POST a large file, make sure we drain TLS buffers and read all, #2619
   ASSERT(data.buf != NULL && data.len > 0);
   ASSERT(fetch(&mgr, buf, url,
                "POST /foo/bar HTTP/1.0\n"
                "Content-Length: %lu\n\n"
                "%s",
                data.len, data.buf) == 200);
+// fire patched server, test multiple TLS records per TCP segment handling
+  {
+    ASSERT(system("tls_multirec/server -d tls_multirec &") == 0);
+    sleep(1);
+    ASSERT(fetch(&mgr, buf, "https://localhost:8443", "GET /thefile HTTP/1.0\n\n") == 200);
+    ASSERT(cmpbody(buf, data.buf) == 0); // "thefile" links to Makefile
+    ASSERT(system("killall tls_multirec/server") == 0);
+  }
   mg_mgr_free(&mgr);
   ASSERT(mgr.conns == NULL);
 #endif

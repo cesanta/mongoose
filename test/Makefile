@@ -90,7 +90,7 @@ mip_test: mip_test.c mongoose.c mongoose.h packed_fs.c Makefile
 	$(CC) mip_test.c packed_fs.c $(CFLAGS) $(LDFLAGS) -o $@
 	ASAN_OPTIONS=$(ASAN_OPTIONS) $(RUN) ./$@
 
-mip_tap_test: mip_tap_test.c mongoose.c mongoose.h packed_fs.c Makefile
+mip_tap_test: mip_tap_test.c mongoose.c mongoose.h packed_fs.c Makefile tls_multirec/server
 	$(CC) mip_tap_test.c packed_fs.c $(CFLAGS) $(LDFLAGS) -o $@
 	ASAN_OPTIONS=$(ASAN_OPTIONS) $(RUN) ./$@
 
@@ -123,9 +123,15 @@ fuzz2: mongoose.c mongoose.h Makefile fuzz.c
 	$(CC) fuzz.c -DMAIN $(OPTS) $(WARN) $(ASAN) $(INCS) -o fuzzer
 	$(RUN) ./fuzzer $(FUZZDATA)
 
-test: Makefile mongoose.h $(SRCS)
+test: Makefile mongoose.h $(SRCS) tls_multirec/server
 	$(CC) $(SRCS) $(CFLAGS) $(LDFLAGS) -o unit_test
 	ASAN_OPTIONS=$(ASAN_OPTIONS) $(RUN) ./unit_test
+
+tls_multirec/server: FORCE
+	$(MAKE) -C tls_multirec CC=gcc
+
+FORCE:
+	true
 
 coverage: CFLAGS += -coverage
 coverage: test
