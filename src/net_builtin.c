@@ -28,6 +28,8 @@ struct connstate {
 #define MIP_TTYPE_FIN 4  // FIN sent, waiting until terminating the connection
   uint8_t tmiss;         // Number of keep-alive misses
   struct mg_iobuf raw;   // For TLS only. Incoming raw data
+  bool fin_rcvd;         // We have received FIN from the peer
+  bool twclosure;        // 3-way closure done
 };
 
 #pragma pack(push, 1)
@@ -642,7 +644,7 @@ long mg_io_send(struct mg_connection *c, const void *buf, size_t len) {
 }
 
 static void handle_tls_recv(struct mg_connection *c) {
-  size_t avail = mg_tls_pending(c); 
+  size_t avail = mg_tls_pending(c);
   size_t min = avail > MG_MAX_RECV_SIZE ? MG_MAX_RECV_SIZE : avail;
   struct mg_iobuf *io = &c->recv;
   if (io->size - io->len < min && !mg_iobuf_resize(io, io->len + min)) {
@@ -656,7 +658,7 @@ static void handle_tls_recv(struct mg_connection *c) {
       // Decrypted successfully - trigger MG_EV_READ
       io->len += (size_t) n;
       mg_call(c, MG_EV_READ, &n);
-    } // else n < 0: outstanding data to be moved to c->recv
+    }  // else n < 0: outstanding data to be moved to c->recv
   }
 }
 
@@ -672,12 +674,14 @@ static void read_conn(struct mg_connection *c, struct pkt *pkt) {
     // closure process
     uint8_t flags = TH_ACK;
     s->ack = (uint32_t) (mg_htonl(pkt->tcp->seq) + pkt->pay.len + 1);
+    s->fin_rcvd = true;
     if (c->is_draining && s->ttype == MIP_TTYPE_FIN) {
       if (s->seq == mg_htonl(pkt->tcp->ack)) {  // Simultaneous closure ?
         s->seq++;                               // Yes. Increment our SEQ
       } else {                                  // Otherwise,
         s->seq = mg_htonl(pkt->tcp->ack);       // Set to peer's ACK
       }
+      s->twclosure = true;
     } else {
       flags |= TH_FIN;
       c->is_draining = 1;
@@ -685,8 +689,9 @@ static void read_conn(struct mg_connection *c, struct pkt *pkt) {
     }
     tx_tcp(c->mgr->ifp, s->mac, rem_ip, flags, c->loc.port, c->rem.port,
            mg_htonl(s->seq), mg_htonl(s->ack), "", 0);
-  } else if (pkt->pay.len == 0) {
-    // TODO(cpq): handle this peer's ACK
+  } else if (pkt->pay.len == 0) { // this is an ACK
+    if (s->fin_rcvd && s->ttype == MIP_TTYPE_FIN)
+      s->twclosure = true;
   } else if (seq != s->ack) {
     uint32_t ack = (uint32_t) (mg_htonl(pkt->tcp->seq) + pkt->pay.len);
     if (s->ack == ack) {
@@ -972,7 +977,7 @@ static void mg_tcpip_poll(struct mg_tcpip_if *ifp, uint64_t now) {
     struct connstate *s = (struct connstate *) (c + 1);
     uint32_t rem_ip;
     memcpy(&rem_ip, c->rem.ip, sizeof(uint32_t));
-    if (now > s->timer) {
+    if (ifp->now > s->timer) {
       if (s->ttype == MIP_TTYPE_ARP) {
         mg_error(c, "ARP timeout");
       } else if (c->is_udp) {
@@ -1160,10 +1165,15 @@ void mg_mgr_poll(struct mg_mgr *mgr, int ms) {
     MG_VERBOSE(("%lu .. %c%c%c%c%c", c->id, c->is_tls ? 'T' : 't',
                 c->is_connecting ? 'C' : 'c', c->is_tls_hs ? 'H' : 'h',
                 c->is_resolving ? 'R' : 'r', c->is_closing ? 'C' : 'c'));
+    // order is important, TLS conn close with > 1 record in buffer
     if (c->is_tls && mg_tls_pending(c) > 0) handle_tls_recv(c);
     if (can_write(c)) write_conn(c);
     if (c->is_draining && c->send.len == 0 && s->ttype != MIP_TTYPE_FIN)
       init_closure(c);
+    // For non-TLS, close immediately upon completing the 3-way closure
+    // For TLS, process any pending data until MIP_TTYPE_FIN timeout expires
+    if (s->twclosure && (!c->is_tls || mg_tls_pending(c) == 0))
+      c->is_closing = 1;
     if (c->is_closing) close_conn(c);
   }
   (void) ms;
