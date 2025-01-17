@@ -3,7 +3,7 @@
 
 #define MIPTAPTEST_USING_DHCP 1
 
-#define FETCH_BUF_SIZE (8 * 1024)
+#define FETCH_BUF_SIZE (16 * 1024)
 
 
 #include <sys/socket.h>
@@ -64,6 +64,8 @@ static const char *s_ca_cert =
 #endif
 
 
+static char *host_ip;
+
 static int s_num_tests = 0;
 
 #define ABORT()                                                 \
@@ -78,6 +80,22 @@ static int s_num_tests = 0;
       ABORT();                                                  \
     }                                                           \
   } while (0)
+
+static struct mg_http_message gethm(const char *buf) {
+  struct mg_http_message hm;
+  memset(&hm, 0, sizeof(hm));
+  mg_http_parse(buf, strlen(buf), &hm);
+  return hm;
+}
+
+static int cmpbody(const char *buf, const char *str) {
+  struct mg_str s = mg_str(str);
+  struct mg_http_message hm = gethm(buf);
+  size_t len = strlen(buf);
+  if (hm.body.len > len) hm.body.len = len - (size_t) (hm.body.buf - buf);
+  return mg_strcmp(hm.body, s);
+}
+
 
 // MIP TUNTAP driver
 static size_t tap_rx(void *buf, size_t len, struct mg_tcpip_if *ifp) {
@@ -144,6 +162,11 @@ static void fcb(struct mg_connection *c, int ev, void *ev_data) {
       memset(&opts, 0, sizeof(opts));  // read CA from packed_fs
       opts.name = mg_url_host(fd->url);
       opts.ca = mg_unpacked("/data/ca.pem");
+      if (host_ip != NULL && strstr(fd->url, host_ip) != NULL) {
+        MG_DEBUG(("Local connection, using self-signed certificates"));
+        opts.name = mg_str_s("localhost");
+        opts.ca = mg_unpacked("/certs/ca.crt");
+      }
       mg_tls_init(c, &opts);
     }
   } else if (ev == MG_EV_HTTP_MSG) {
@@ -277,7 +300,7 @@ static void *poll_thread(void *p) {
   return NULL;
 }
 
-static void test_http_server(struct mg_mgr *mgr, uint32_t ip) {
+static void test_http_server(struct mg_mgr *mgr) {
   struct mg_connection *c;
   char *cmd;
   pthread_t thread_id = (pthread_t) 0;
@@ -288,10 +311,10 @@ static void test_http_server(struct mg_mgr *mgr, uint32_t ip) {
   opts.cert = mg_unpacked("/certs/server.crt");
   opts.key = mg_unpacked("/certs/server.key");
   c = mg_http_listen(mgr, "https://0.0.0.0:12347", eh1, &opts);
-  cmd = mg_mprintf("./mip_curl.sh --insecure https://%M:12347", mg_print_ip4, &ip);
+  cmd = mg_mprintf("./mip_curl.sh --insecure https://%M:12347", mg_print_ip4, &mgr->ifp->ip);
 #else
   c = mg_http_listen(mgr, "http://0.0.0.0:12347", eh1, NULL);
-  cmd = mg_mprintf("./mip_curl.sh http://%M:12347", mg_print_ip4, &ip);
+  cmd = mg_mprintf("./mip_curl.sh http://%M:12347", mg_print_ip4, &mgr->ifp->ip);
 #endif
   ASSERT(c != NULL);
   pthread_create(&thread_id, NULL, poll_thread, mgr); // simpler this way, no concurrency anyway
@@ -303,10 +326,36 @@ static void test_http_server(struct mg_mgr *mgr, uint32_t ip) {
   free(cmd);
 }
 
+static void test_tls(struct mg_mgr *mgr) {
+#if MG_TLS
+  char *url;
+  char buf[FETCH_BUF_SIZE]; // make sure it can hold Makefile
+  struct mg_str data = mg_unpacked("/Makefile");
+  if (host_ip == NULL) { 
+    MG_INFO(("No HOST_IP provided, skipping tests"));
+    return;
+  }
+  MG_DEBUG(("HOST_IP: %s", host_ip));
+  // - POST a large file, make sure we drain TLS buffers and read all: done at server test, using curl as POSTing client
+  // - Fire patched server, test multiple TLS records per TCP segment handling
+  url = mg_mprintf("https://%s:8443", host_ip); // for historic reasons
+  ASSERT(system("tls_multirec/server -d tls_multirec &") == 0);
+  sleep(1);
+  ASSERT(fetch(mgr, buf, url, "GET /thefile HTTP/1.0\n\n") == 200);
+  ASSERT(cmpbody(buf, data.buf) == 0); // "thefile" links to Makefile
+  system("killall tls_multirec/server");
+  free(url);
+#else
+  (void) mgr;
+  (void) ip;
+#endif
+}
+
 int main(void) {
+  const char *debug_level = getenv("V");
   // Setup interface
   const char *iface = "tap0";             // Network iface
-  const char *mac = "00:00:01:02:03:78";  // MAC address
+  const char *mac = "02:00:01:02:03:78";  // MAC address
 #ifndef __OpenBSD__
   const char *tuntap_device = "/dev/net/tun";
 #else
@@ -333,6 +382,11 @@ int main(void) {
 
   MG_INFO(("Opened TAP interface: %s", iface));
   usleep(200000);  // 200 ms
+
+  if (debug_level == NULL) debug_level = "3";
+  mg_log_set(atoi(debug_level));
+
+  host_ip = getenv("HOST_IP");
 
   // Events
   struct mg_mgr mgr;  // Event manager
@@ -383,12 +437,18 @@ int main(void) {
   if (!mif.ip) MG_ERROR(("No ip assigned (DHCP lease may have failed).\n"));
   ASSERT(mif.ip);  // We have an IP (lease or static)
 #endif
+  while (mif.state != MG_TCPIP_STATE_READY) {
+    mg_mgr_poll(&mgr, 100);
+    usleep(10000);  // 10 ms
+  }
 
   // RUN TESTS
   usleep(500000);  // 500 ms
   test_http_client(&mgr);
   usleep(500000);  // 500 ms
-  test_http_server(&mgr, mif.ip);
+  test_http_server(&mgr);
+  usleep(500000);  // 500 ms
+  test_tls(&mgr);
   usleep(500000);  // 500 ms
   test_mqtt_connsubpub(&mgr);
   usleep(500000);  // 500 ms

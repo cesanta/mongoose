@@ -10435,7 +10435,7 @@ static int mg_tls_recv_record(struct mg_connection *c) {
   r = msgsz - 16 - 1;
   tls->content_type = msg[msgsz - 16 - 1];
   tls->recv_offset = (size_t) msg - (size_t) rio->buf;
-  tls->recv_len = (size_t) msgsz - 16 - 1;
+  tls->recv_len = msgsz - 16 - 1;
   c->is_client ? tls->enc.sseq++ : tls->enc.cseq++;
   return r;
 }
@@ -11300,9 +11300,16 @@ void mg_tls_free(struct mg_connection *c) {
 long mg_tls_send(struct mg_connection *c, const void *buf, size_t len) {
   struct tls_data *tls = (struct tls_data *) c->tls;
   long n = MG_IO_WAIT;
+  size_t maxsize = 1024, encrypted = 0;
   if (len > MG_IO_SIZE) len = MG_IO_SIZE;
   if (len > 16384) len = 16384;
-  mg_tls_encrypt(c, (const uint8_t *) buf, len, MG_TLS_APP_DATA);
+  while (encrypted < len) {
+    const uint8_t *chunk = (const uint8_t *) buf + encrypted;
+    size_t chunksize = len - encrypted;
+    if (chunksize > maxsize) chunksize = maxsize;
+    mg_tls_encrypt(c, chunk, chunksize, MG_TLS_APP_DATA);
+    encrypted += chunksize;
+  }
   while (tls->send.len > 0 &&
          (n = mg_io_send(c, tls->send.buf, tls->send.len)) > 0) {
     mg_iobuf_del(&tls->send, 0, (size_t) n);
