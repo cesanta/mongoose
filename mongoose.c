@@ -4725,7 +4725,6 @@ static void handle_tls_recv(struct mg_connection *c) {
   size_t avail = mg_tls_pending(c); 
   size_t min = avail > MG_MAX_RECV_SIZE ? MG_MAX_RECV_SIZE : avail;
   struct mg_iobuf *io = &c->recv;
-  if (avail == 0) return;
   if (io->size - io->len < min && !mg_iobuf_resize(io, io->len + min)) {
     mg_error(c, "oom");
   } else {
