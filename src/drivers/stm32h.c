@@ -168,7 +168,8 @@ static size_t mg_tcpip_driver_stm32h_tx(const void *buf, size_t len,
   (void) ifp;
 }
 
-static bool mg_tcpip_driver_stm32h_up(struct mg_tcpip_if *ifp) {
+static bool mg_tcpip_driver_stm32h_poll(struct mg_tcpip_if *ifp, bool s1) {
+  if (!s1) return false;
   struct mg_tcpip_driver_stm32h_data *d =
       (struct mg_tcpip_driver_stm32h_data *) ifp->driver_data;
   uint8_t phy_addr = d == NULL ? 0 : d->phy_addr;
@@ -223,5 +224,5 @@ void ETH_IRQHandler(void) {
 
 struct mg_tcpip_driver mg_tcpip_driver_stm32h = {
     mg_tcpip_driver_stm32h_init, mg_tcpip_driver_stm32h_tx, NULL,
-    mg_tcpip_driver_stm32h_up};
+    mg_tcpip_driver_stm32h_poll};
 #endif

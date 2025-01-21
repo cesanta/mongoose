@@ -79,8 +79,8 @@ static size_t pcap_tx(const void *buf, size_t len, struct mg_tcpip_if *ifp) {
   return res == PCAP_ERROR ? 0 : len;
 }
 
-static bool pcap_up(struct mg_tcpip_if *ifp) {
-  return ifp->driver_data ? true : false;
+static bool pcap_poll(struct mg_tcpip_if *ifp, bool s1) {
+  return s1 && ifp->driver_data ? true : false;
 }
 
 static size_t pcap_rx(void *buf, size_t len, struct mg_tcpip_if *ifp) {
@@ -272,7 +272,7 @@ int main(int argc, char *argv[]) {
   mg_mgr_init(&mgr);        // Initialise event manager
   mg_log_set(MG_LL_DEBUG);  // Set log level
 
-  struct mg_tcpip_driver driver = {.tx = pcap_tx, .up = pcap_up, .rx = pcap_rx};
+  struct mg_tcpip_driver driver = {.tx = pcap_tx, .poll = pcap_poll, .rx = pcap_rx};
   struct mg_tcpip_if mif = {.driver = &driver,
                             .driver_data = ph,
                             .enable_mac_check = true,
