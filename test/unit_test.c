@@ -8,9 +8,9 @@ static int s_num_tests = 0;
 #ifdef NO_SLEEP_ABORT
 #define ABORT() abort()
 #else
-#define ABORT()                                                 \
-      sleep(2);  /* 2s, GH print reason */                      \
-      abort();
+#define ABORT()                       \
+  sleep(2); /* 2s, GH print reason */ \
+  abort();
 #endif
 
 #define ASSERT(expr)                                            \
@@ -365,8 +365,8 @@ static void test_sntp(void) {
   // NOTE(): historical NTP port blockage issue; expect at least one to be
   // reachable and work. https://github.com/actions/runner-images/issues/5615
   result = test_sntp_server("udp://time.apple.com:123") ||
-  test_sntp_server("udp://time.windows.com:123") ||
-  test_sntp_server(NULL);
+           test_sntp_server("udp://time.windows.com:123") ||
+           test_sntp_server(NULL);
 #if defined(NO_SNTP_CHECK)
   (void) result;
 #else
@@ -778,7 +778,7 @@ static int fetch(struct mg_mgr *mgr, char *buf, const char *url,
   mg_vprintf(c, fmt, &ap);
   va_end(ap);
   buf[0] = '\0';
-  for (i = 0; i < 50 && buf[0] == '\0'; i++) mg_mgr_poll(mgr, 1);
+  for (i = 0; i < 100 && buf[0] == '\0'; i++) mg_mgr_poll(mgr, 1);
   if (!fd.closed) c->is_closing = 1;
   mg_mgr_poll(mgr, 1);
   return fd.code;
@@ -1327,12 +1327,15 @@ static void test_tls(void) {
                "Content-Length: %lu\n\n"
                "%s",
                data.len, data.buf) == 200);
-// fire patched server, test multiple TLS records per TCP segment handling
+  // fire patched server, test multiple TLS records per TCP segment handling
   {
     ASSERT(system("tls_multirec/server -d tls_multirec &") == 0);
     sleep(1);
-    ASSERT(fetch(&mgr, buf, "https://localhost:8443", "GET /thefile HTTP/1.0\n\n") == 200);
-    ASSERT(cmpbody(buf, data.buf) == 0); // "thefile" links to Makefile
+    // fetch() needs to loop enough times in order to process all TLS records;
+    // otherwise it will end with 200 and shorter file contents
+    ASSERT(fetch(&mgr, buf, "https://localhost:8443",
+                 "GET /thefile HTTP/1.0\n\n") == 200);
+    ASSERT(cmpbody(buf, data.buf) == 0);  // "thefile" links to Makefile
     ASSERT(system("killall tls_multirec/server") == 0);
   }
   mg_mgr_free(&mgr);
@@ -1632,7 +1635,8 @@ static void test_http_parse(void) {
   }
 
   {
-    const char *s = "a b HTTP/1.0\r\nContent-Length: 21 \r\nb: t\r\nv:v\r\n\r\nabc";
+    const char *s =
+        "a b HTTP/1.0\r\nContent-Length: 21 \r\nb: t\r\nv:v\r\n\r\nabc";
     ASSERT(mg_http_parse(s, strlen(s), &req) == (int) strlen(s) - 3);
     ASSERT(req.body.len == 21);
     ASSERT(req.message.len == 21 - 3 + strlen(s));
@@ -1692,7 +1696,8 @@ static void test_http_parse(void) {
   }
 
   {
-    static const char *s = "a b HTTP/1.0\na:1\nb:2\nc:3\nd:4\ne:5\nf:6\ng:7\nh:8\n\n";
+    static const char *s =
+        "a b HTTP/1.0\na:1\nb:2\nc:3\nd:4\ne:5\nf:6\ng:7\nh:8\n\n";
     ASSERT(mg_http_parse(s, strlen(s), &req) == (int) strlen(s));
     ASSERT((v = mg_http_get_header(&req, "e")) != NULL);
     ASSERT(vcmp(*v, "5"));
@@ -2182,10 +2187,10 @@ static void test_str(void) {
     TESTDOUBLE("%g", 0.01, "0.01");
     TESTDOUBLE("%g", 0.001, "0.001");
     TESTDOUBLE("%g", 0.0001, "0.0001");
-    TESTDOUBLE_NOHOSTCHECK("%g", 0.00001, "0.00001"); // "1e-05"
+    TESTDOUBLE_NOHOSTCHECK("%g", 0.00001, "0.00001");  // "1e-05"
     TESTDOUBLE("%g", 0.000001, "1e-06");
     TESTDOUBLE("%g", -0.0001, "-0.0001");
-    TESTDOUBLE_NOHOSTCHECK("%g", -0.00001, "-0.00001"); // "-1e-05"
+    TESTDOUBLE_NOHOSTCHECK("%g", -0.00001, "-0.00001");  // "-1e-05"
     TESTDOUBLE("%g", 10.5454, "10.5454");
     TESTDOUBLE("%g", 999999.0, "999999");
     TESTDOUBLE("%g", 9999999.0, "1e+07");
@@ -2233,7 +2238,7 @@ static void test_str(void) {
 
     TESTDOUBLE("%.3f", 13.12505, "13.125");
 #if MG_ARCH == MG_ARCH_WIN32 && defined(_MSC_VER) && _MSC_VER < 1700
-  // TODO(): for some reason we round down in VC98; skip
+    // TODO(): for some reason we round down in VC98; skip
 #else
     TESTDOUBLE("%.3f", 15.1255, "15.126");
     TESTDOUBLE("%.3f", 19.1255, "19.125");
