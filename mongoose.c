@@ -4769,9 +4769,8 @@ static void read_conn(struct mg_connection *c, struct pkt *pkt) {
     }
     tx_tcp(c->mgr->ifp, s->mac, rem_ip, flags, c->loc.port, c->rem.port,
            mg_htonl(s->seq), mg_htonl(s->ack), "", 0);
-  } else if (pkt->pay.len == 0) { // this is an ACK
-    if (s->fin_rcvd && s->ttype == MIP_TTYPE_FIN)
-      s->twclosure = true;
+  } else if (pkt->pay.len == 0) {  // this is an ACK
+    if (s->fin_rcvd && s->ttype == MIP_TTYPE_FIN) s->twclosure = true;
   } else if (seq != s->ack) {
     uint32_t ack = (uint32_t) (mg_htonl(pkt->tcp->seq) + pkt->pay.len);
     if (s->ack == ack) {
@@ -5242,17 +5241,20 @@ void mg_mgr_poll(struct mg_mgr *mgr, int ms) {
     tmp = c->next;
     struct connstate *s = (struct connstate *) (c + 1);
     mg_call(c, MG_EV_POLL, &now);
-    MG_VERBOSE(("%lu .. %c%c%c%c%c", c->id, c->is_tls ? 'T' : 't',
+    MG_VERBOSE(("%lu .. %c%c%c%c%c %lu %lu", c->id, c->is_tls ? 'T' : 't',
                 c->is_connecting ? 'C' : 'c', c->is_tls_hs ? 'H' : 'h',
-                c->is_resolving ? 'R' : 'r', c->is_closing ? 'C' : 'c'));
-    // order is important, TLS conn close with > 1 record in buffer
-    if (c->is_tls && mg_tls_pending(c) > 0) handle_tls_recv(c);
+                c->is_resolving ? 'R' : 'r', c->is_closing ? 'C' : 'c',
+                mg_tls_pending(c), c->rtls.len));
+    // order is important, TLS conn close with > 1 record in buffer (below)
+    if (c->is_tls && (c->rtls.len > 0 || mg_tls_pending(c) > 0))
+      handle_tls_recv(c);
     if (can_write(c)) write_conn(c);
     if (c->is_draining && c->send.len == 0 && s->ttype != MIP_TTYPE_FIN)
       init_closure(c);
     // For non-TLS, close immediately upon completing the 3-way closure
-    // For TLS, process any pending data until MIP_TTYPE_FIN timeout expires
-    if (s->twclosure && (!c->is_tls || mg_tls_pending(c) == 0))
+    // For TLS, handle any pending data (above) until MIP_TTYPE_FIN expires
+    if (s->twclosure &&
+        (!c->is_tls || (c->rtls.len == 0 && mg_tls_pending(c) == 0)))
       c->is_closing = 1;
     if (c->is_closing) close_conn(c);
   }

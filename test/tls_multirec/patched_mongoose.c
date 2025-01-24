@@ -11300,7 +11300,7 @@ void mg_tls_free(struct mg_connection *c) {
 long mg_tls_send(struct mg_connection *c, const void *buf, size_t len) {
   struct tls_data *tls = (struct tls_data *) c->tls;
   long n = MG_IO_WAIT;
-  size_t maxsize = 1024, encrypted = 0;
+  size_t maxsize = 256, encrypted = 0;
   if (len > MG_IO_SIZE) len = MG_IO_SIZE;
   if (len > 16384) len = 16384;
   while (encrypted < len) {

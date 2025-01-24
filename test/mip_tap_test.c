@@ -198,6 +198,8 @@ static int fetch(struct mg_mgr *mgr, char *buf, const char *url,
   mg_vprintf(c, fmt, &ap);
   va_end(ap);
   buf[0] = '\0';
+  // - TLS: multiple (small) records: allow enough loops so mg_mgr_poll can
+  // process buffered records when no more frames are coming in
   for (i = 0; i < 500 && buf[0] == '\0' && !fd.closed; i++) {
     mg_mgr_poll(mgr, 0);
     usleep(5000);  // 5 ms. Slow down poll loop to ensure packet transit, but
@@ -403,7 +405,6 @@ int main(void) {
 
   // Events
   struct mg_mgr mgr;  // Event manager
-  mg_log_set(MG_LL_DEBUG);
   mg_mgr_init(&mgr);  // Initialise event manager
 
   // MIP driver
