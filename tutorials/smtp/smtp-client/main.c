@@ -31,6 +31,7 @@ static void fn(struct mg_connection *c, int ev, void *ev_data) {
         struct mg_tls_opts opts = {.ca = mg_unpacked("/certs/ca.pem"),
                                    .name = mg_url_host(server)};
         mg_tls_init(c, &opts);
+        mg_tls_handshake(c);  // speed up, not strictly necessary
         *state = AUTH;
       } else if (*state == AUTH) {
         char a[100], b[300] = "";

@@ -164,9 +164,6 @@ void mg_tls_init(struct mg_connection *c, const struct mg_tls_opts *opts) {
   c->is_tls_hs = 1;
   mbedtls_ssl_set_bio(&tls->ssl, c, mg_net_send, mg_net_recv, 0);
   MG_PROF_ADD(c, "mbedtls_init_end");
-  if (c->is_client && c->is_resolving == 0 && c->is_connecting == 0) {
-    mg_tls_handshake(c);
-  }
   return;
 fail:
   mg_tls_free(c);

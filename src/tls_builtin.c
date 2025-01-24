@@ -1193,6 +1193,7 @@ static void mg_tls_client_handshake(struct mg_connection *c) {
       }
       tls->state = MG_TLS_STATE_CLIENT_CONNECTED;
       c->is_tls_hs = 0;
+      mg_call(c, MG_EV_TLS_HS, NULL);
       break;
     default:
       mg_error(c, "unexpected client state: %d", tls->state);

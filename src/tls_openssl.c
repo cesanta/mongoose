@@ -229,9 +229,6 @@ void mg_tls_init(struct mg_connection *c, const struct mg_tls_opts *opts) {
 
   c->is_tls = 1;
   c->is_tls_hs = 1;
-  if (c->is_client && c->is_resolving == 0 && c->is_connecting == 0) {
-    mg_tls_handshake(c);
-  }
   MG_DEBUG(("%lu SSL %s OK", c->id, c->is_accepted ? "accept" : "client"));
   return;
 fail:
