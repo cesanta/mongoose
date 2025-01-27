@@ -13,7 +13,7 @@ build: pico-sdk
 	cd build && cmake -G "Unix Makefiles" .. && make
 
 pico-sdk:
-	git clone --depth 1 -b 1.4.0 https://github.com/raspberrypi/pico-sdk $@
+	git clone --depth 1 -b 2.1.0 https://github.com/raspberrypi/pico-sdk $@
 	cd $@ && git submodule update --init
 
 clean:

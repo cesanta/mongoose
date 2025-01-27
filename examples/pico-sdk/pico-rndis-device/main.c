@@ -25,7 +25,7 @@ int hal_led_pin(void) {
 
 static struct mg_tcpip_if *s_ifp;
 
-const uint8_t tud_network_mac_address[6] = {2, 2, 0x84, 0x6A, 0x96, 0};
+uint8_t tud_network_mac_address[6] = {2, 2, 0x84, 0x6A, 0x96, 0};
 
 bool tud_network_recv_cb(const uint8_t *buf, uint16_t len) {
   mg_tcpip_qwrite((void *) buf, len, s_ifp);

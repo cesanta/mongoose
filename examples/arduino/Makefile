@@ -14,12 +14,25 @@ arduino-xiao-board:
 	./arduino/arduino --install-boards Seeeduino:samd
 
 arduino-xiao: arduino arduino-xiao-board
+	cd sim800-mqtt && ../arduino/arduino --verbose --verify --board Seeeduino:samd:seeed_XIAO_m0 sim800-mqtt.ino
 	cd w5500-http && ../arduino/arduino --verbose --verify --board Seeeduino:samd:seeed_XIAO_m0 w5500-http.ino
 	cd w5500-mqtt && ../arduino/arduino --verbose --verify --board Seeeduino:samd:seeed_XIAO_m0 w5500-mqtt.ino
 
 arduino-nano: arduino
 	cd w5500-http && ../arduino/arduino --pref compiler.cpp.extra_flags=-DMG_ENABLE_LOG=0 --verbose --verify --board arduino:avr:nano w5500-http.ino
 	cd w5500-mqtt && ../arduino/arduino --pref compiler.cpp.extra_flags=-DMG_ENABLE_LOG=0 --verbose --verify --board arduino:avr:nano w5500-mqtt.ino
+
+arduino-esp32: arduino
+#	cd esp32-http && ../arduino/arduino --verbose --verify --board  esp32-http.ino
+# 	esp32-mqtt
+
+arduino-teensy41: arduino
+#	cd teensy41-http && ../arduino/arduino --verbose --verify --board  teensy41-http.ino
+
+
+
+
+
 
 clean:
 	rm -rf arduino 

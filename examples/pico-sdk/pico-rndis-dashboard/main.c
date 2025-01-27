@@ -8,7 +8,7 @@
 
 static struct mg_tcpip_if *s_ifp;
 
-const uint8_t tud_network_mac_address[6] = {2, 2, 0x84, 0x6A, 0x96, 0};
+uint8_t tud_network_mac_address[6] = {2, 2, 0x84, 0x6A, 0x96, 0};
 
 static void blink_cb(void *arg) {  // Blink periodically
   gpio_put(PICO_DEFAULT_LED_PIN, !gpio_get_out_level(PICO_DEFAULT_LED_PIN));
