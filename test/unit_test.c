@@ -1469,6 +1469,7 @@ static void test_http_no_content_length(void) {
   char buf[100];
   struct mg_mgr mgr;
   const char *url = "http://127.0.0.1:12348";
+  const char *url2 = "http://127.0.0.1:12349";
   int i;
   const char *post_req =
       "POST / HTTP/1.1\r\nContent-Type:"
@@ -1482,17 +1483,17 @@ static void test_http_no_content_length(void) {
   ASSERT(strcmp(buf1, "mc") == 0);
   ASSERT(strcmp(buf2, "mc") == 0);
   mg_mgr_free(&mgr);
-
+  // 12348 is in TIME_WAIT, use another port
   mg_mgr_init(&mgr);
-  mg_http_listen(&mgr, url, f41, (void *) NULL);
-  ASSERT(fetch(&mgr, buf, url, "POST / HTTP/1.1\r\n\r\n") == 411);
-  ASSERT(fetch(&mgr, buf, url, "HTTP/1.1 200\r\n\r\n") == 411);
-  ASSERT(fetch(&mgr, buf, url, "HTTP/1.1 100\r\n\r\n") != 411);
-  ASSERT(fetch(&mgr, buf, url, "HTTP/1.1 304\r\n\r\n") != 411);
-  ASSERT(fetch(&mgr, buf, url, "HTTP/1.1 305\r\n\r\n") == 411);
-  ASSERT(fetch(&mgr, buf, url, post_req) != 411);
+  mg_http_listen(&mgr, url2, f41, (void *) NULL);
+  ASSERT(fetch(&mgr, buf, url2, "POST / HTTP/1.1\r\n\r\n") == 411);
+  ASSERT(fetch(&mgr, buf, url2, "HTTP/1.1 200\r\n\r\n") == 411);
+  ASSERT(fetch(&mgr, buf, url2, "HTTP/1.1 100\r\n\r\n") != 411);
+  ASSERT(fetch(&mgr, buf, url2, "HTTP/1.1 304\r\n\r\n") != 411);
+  ASSERT(fetch(&mgr, buf, url2, "HTTP/1.1 305\r\n\r\n") == 411);
+  ASSERT(fetch(&mgr, buf, url2, post_req) != 411);
   // Check it is processed only once (see #2811)
-  ASSERT(fpr(&mgr, buf, url, "POST / HTTP/1.1\r\n\r\n") == 411);
+  ASSERT(fpr(&mgr, buf, url2, "POST / HTTP/1.1\r\n\r\n") == 411);
   mg_mgr_free(&mgr);
   ASSERT(mgr.conns == NULL);
 }
@@ -1772,7 +1773,7 @@ static void ehr(struct mg_connection *c, int ev, void *ev_data) {
 
 static void test_http_range(void) {
   struct mg_mgr mgr;
-  const char *url = "http://127.0.0.1:12349";
+  const char *url = "http://127.0.0.1:12350";
   struct mg_http_message hm;
   char buf[FETCH_BUF_SIZE];
 
