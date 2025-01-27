@@ -358,11 +358,11 @@ static void test_tls(struct mg_mgr *mgr) {
   sleep(1);
   ASSERT(fetch(mgr, buf, url, "GET /thefile HTTP/1.0\n\n") == 200);
   ASSERT(cmpbody(buf, data.buf) == 0);  // "thefile" links to Makefile
-  system("killall tls_multirec/server");
+  ASSERT(system("killall tls_multirec/server"));
   free(url);
 #else
+  (void) cmpbody("", "");
   (void) mgr;
-  (void) ip;
 #endif
 }
 
