@@ -1380,6 +1380,7 @@ long mg_tls_recv(struct mg_connection *c, void *buf, size_t len) {
     mg_tls_drop_record(c);
     return MG_IO_WAIT;
   }
+  if (buf == NULL || len == 0) return 0L;
   minlen = len < tls->recv_len ? len : tls->recv_len;
   memmove(buf, recv_buf, minlen);
   tls->recv_offset += minlen;
