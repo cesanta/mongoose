@@ -1327,7 +1327,9 @@ static void test_tls(void) {
                "Content-Length: %lu\n\n"
                "%s",
                data.len, data.buf) == 200);
+#if MG_TLS == MG_TLS_BUILTIN
   // fire patched server, test multiple TLS records per TCP segment handling
+  // skip other TLS stacks to avoid "bad client hello", we are 1.3 only
   {
     ASSERT(system("tls_multirec/server -d tls_multirec &") == 0);
     sleep(1);
@@ -1338,6 +1340,12 @@ static void test_tls(void) {
     ASSERT(cmpbody(buf, data.buf) == 0);  // "thefile" links to Makefile
     ASSERT(system("killall tls_multirec/server") == 0);
   }
+#else
+  printf(
+      "\n Skipping multiple TLS records per TCP segment handling test, server "
+      "is 1.3 only; re-enable when other stacks can be easily configured for "
+      "1.3\n");
+#endif
   mg_mgr_free(&mgr);
   ASSERT(mgr.conns == NULL);
 #endif
