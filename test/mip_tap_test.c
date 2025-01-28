@@ -346,10 +346,10 @@ static void test_tls(struct mg_mgr *mgr) {
   char buf[FETCH_BUF_SIZE];  // make sure it can hold Makefile
   struct mg_str data = mg_unpacked("/Makefile");
   if (host_ip == NULL) {
-    MG_INFO(("No HOST_IP provided, skipping tests"));
+    printf("\nNo HOST_IP provided, skipping TLS tests\n");
     return;
   }
-  MG_DEBUG(("HOST_IP: %s", host_ip));
+  printf("HOST_IP: %s\n", host_ip);
   // - POST a large file, make sure we drain TLS buffers and read all: done at
   // server test, using curl as POSTing client
   // - Fire patched server, test multiple TLS records per TCP segment handling
@@ -358,7 +358,7 @@ static void test_tls(struct mg_mgr *mgr) {
   sleep(1);
   ASSERT(fetch(mgr, buf, url, "GET /thefile HTTP/1.0\n\n") == 200);
   ASSERT(cmpbody(buf, data.buf) == 0);  // "thefile" links to Makefile
-  ASSERT(system("killall tls_multirec/server"));
+  ASSERT(system("killall tls_multirec/server") == 0);
   free(url);
 #else
   (void) cmpbody("", "");
