@@ -10889,7 +10889,7 @@ static int mg_tls_client_recv_hello(struct mg_connection *c) {
     return 0;
   }
 fail:
-  mg_error(c, "bad client hello");
+  mg_error(c, "bad server hello");
   return -1;
 }
 
