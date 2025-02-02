@@ -1,3 +1,11 @@
+---
+name: Issue template
+about: Please fill this issue template for reporting Mongoose issues
+#title: 
+#labels: 
+#assignees: 
+---
+
 - My goal is: _describe_
 - My actions were: _describe_
 - My expectation was: _describe_
