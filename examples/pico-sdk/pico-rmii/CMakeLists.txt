@@ -17,3 +17,6 @@ pico_add_extra_outputs(firmware)     # create map/bin/hex file etc.
 
 pico_enable_stdio_usb(firmware 1)    # Route stdio
 pico_enable_stdio_uart(firmware 0)   # to USB
+
+# Prevent extreme optimization from breaking OTA
+target_compile_options(firmware PRIVATE -fno-tree-loop-distribute-patterns)

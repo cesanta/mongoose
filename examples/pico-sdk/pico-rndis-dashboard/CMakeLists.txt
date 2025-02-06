@@ -30,3 +30,6 @@ add_definitions(-DHTTP_URL="http://0.0.0.0/")
 
 # Extra build flags (enable if needed)
 add_definitions(-DDUAL_CONFIG=0)
+
+# Prevent extreme optimization from breaking OTA
+target_compile_options(firmware PRIVATE -fno-tree-loop-distribute-patterns)
