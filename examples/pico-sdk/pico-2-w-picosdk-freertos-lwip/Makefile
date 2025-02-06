@@ -15,8 +15,11 @@ build/firmware.uf2:
 	cd build && cmake -DPICO_BOARD="pico2_w" -G "Unix Makefiles" .. && make
 
 pico-sdk:
-	git clone --depth 1 -b 2.1.0 https://github.com/raspberrypi/pico-sdk $@
-	cd $@ && git submodule update --init
+	#git clone --depth 1 -b 2.1.1 https://github.com/raspberrypi/pico-sdk $@
+	#cd $@ && git submodule update --init
+	# Temporary fix until 2.1.1 is released, see #3027
+	git clone -b develop https://github.com/raspberrypi/pico-sdk $@
+	cd $@ && git reset --hard --quiet b51fa1b && git submodule update --quiet --init
 FreeRTOS-Kernel:  # FreeRTOS sources
 	git clone --depth 1 -b main https://github.com/raspberrypi/FreeRTOS-Kernel $@
 
