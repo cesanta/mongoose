@@ -104,10 +104,12 @@ static void initialize_state(uint32_t state[CHACHA20_STATE_WORDS],
                              const uint8_t key[CHACHA20_KEY_SIZE],
                              const uint8_t nonce[CHACHA20_NONCE_SIZE],
                              uint32_t counter) {
+#if 0
 #ifdef static_assert
   static_assert(sizeof(uint32_t) == 4,
                 "We don't support systems that do not conform to standard of "
                 "uint32_t being exact 32bit wide");
+#endif
 #endif
   state[0] = 0x61707865;
   state[1] = 0x3320646e;

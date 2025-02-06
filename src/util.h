@@ -42,6 +42,12 @@ bool mg_path_is_sane(const struct mg_str path);
     MG_U8P(p)[0] = ((n) >> 8U) & 255; \
     MG_U8P(p)[1] = (n) &255;          \
   } while (0)
+#define MG_STORE_BE24(p, n)            \
+  do {                                 \
+    MG_U8P(p)[0] = ((n) >> 16U) & 255; \
+    MG_U8P(p)[1] = ((n) >> 8U) & 255;  \
+    MG_U8P(p)[2] = (n) &255;           \
+  } while (0)
 
 #define MG_REG(x) ((volatile uint32_t *) (x))[0]
 #define MG_BIT(x) (((uint32_t) 1U) << (x))
