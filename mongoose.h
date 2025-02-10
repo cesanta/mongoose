@@ -1132,6 +1132,12 @@ bool mg_path_is_sane(const struct mg_str path);
     MG_U8P(p)[0] = ((n) >> 8U) & 255; \
     MG_U8P(p)[1] = (n) &255;          \
   } while (0)
+#define MG_STORE_BE24(p, n)            \
+  do {                                 \
+    MG_U8P(p)[0] = ((n) >> 16U) & 255; \
+    MG_U8P(p)[1] = ((n) >> 8U) & 255;  \
+    MG_U8P(p)[2] = (n) &255;           \
+  } while (0)
 
 #define MG_REG(x) ((volatile uint32_t *) (x))[0]
 #define MG_BIT(x) (((uint32_t) 1U) << (x))
@@ -1260,11 +1266,25 @@ typedef struct {
   unsigned char buffer[64];
 } mg_sha256_ctx;
 
+
 void mg_sha256_init(mg_sha256_ctx *);
 void mg_sha256_update(mg_sha256_ctx *, const unsigned char *data, size_t len);
 void mg_sha256_final(unsigned char digest[32], mg_sha256_ctx *);
+void mg_sha256(uint8_t dst[32], uint8_t *data, size_t datasz);
 void mg_hmac_sha256(uint8_t dst[32], uint8_t *key, size_t keysz, uint8_t *data,
                     size_t datasz);
+
+typedef struct {
+    uint64_t state[8];
+    uint8_t buffer[128];
+    uint64_t bitlen[2];
+    uint32_t datalen;
+} mg_sha384_ctx;
+void mg_sha384_init(mg_sha384_ctx *ctx);
+void mg_sha384_update(mg_sha384_ctx *ctx, const uint8_t *data, size_t len);
+void mg_sha384_final(uint8_t digest[48], mg_sha384_ctx *ctx);
+void mg_sha384(uint8_t dst[48], uint8_t *data, size_t datasz);
+
 #ifndef TLS_X15519_H
 #define TLS_X15519_H
 
@@ -2108,6 +2128,13 @@ PORTABLE_8439_DECL size_t mg_chacha20_poly1305_decrypt(
 }
 #endif
 #endif
+#ifndef TLS_RSA_H
+#define TLS_RSA_H
+
+
+int mg_rsa_mod_pow(const uint8_t *mod, size_t modsz, const uint8_t *exp, size_t expsz, const uint8_t *msg, size_t msgsz, uint8_t *out, size_t outsz);
+
+#endif // TLS_RSA_H
 
 
 struct mg_connection;
@@ -2938,7 +2965,7 @@ enum {
   // Set if PHY LEDs are connected to ground
   MG_PHY_LEDS_ACTIVE_HIGH = (1 << 0),
   // Set when PHY clocks MAC. Otherwise, MAC clocks PHY
-  MG_PHY_CLOCKS_MAC = (1 << 1),
+  MG_PHY_CLOCKS_MAC = (1 << 1)
 };
 
 enum { MG_PHY_SPEED_10M, MG_PHY_SPEED_100M, MG_PHY_SPEED_1000M };
@@ -3193,46 +3220,6 @@ struct mg_tcpip_driver_tms570_data {
 
 
 
-#if MG_ENABLE_TCPIP && defined(MG_ENABLE_DRIVER_W5500) && MG_ENABLE_DRIVER_W5500
-
-#endif
-
-
-#if MG_ENABLE_TCPIP && defined(MG_ENABLE_DRIVER_XMC7) && MG_ENABLE_DRIVER_XMC7
-
-struct mg_tcpip_driver_xmc7_data {
-  int mdc_cr;  // Valid values: -1, 0, 1, 2, 3, 4, 5
-  uint8_t phy_addr;
-};
-
-#ifndef MG_TCPIP_PHY_ADDR
-#define MG_TCPIP_PHY_ADDR 0
-#endif
-
-#ifndef MG_DRIVER_MDC_CR
-#define MG_DRIVER_MDC_CR 3
-#endif
-
-#define MG_TCPIP_DRIVER_INIT(mgr)                                 \
-  do {                                                            \
-    static struct mg_tcpip_driver_xmc7_data driver_data_;       \
-    static struct mg_tcpip_if mif_;                               \
-    driver_data_.mdc_cr = MG_DRIVER_MDC_CR;                       \
-    driver_data_.phy_addr = MG_TCPIP_PHY_ADDR;                    \
-    mif_.ip = MG_TCPIP_IP;                                        \
-    mif_.mask = MG_TCPIP_MASK;                                    \
-    mif_.gw = MG_TCPIP_GW;                                        \
-    mif_.driver = &mg_tcpip_driver_xmc7;                        \
-    mif_.driver_data = &driver_data_;                             \
-    MG_SET_MAC_ADDRESS(mif_.mac);                                 \
-    mg_tcpip_init(mgr, &mif_);                                    \
-    MG_INFO(("Driver: xmc7, MAC: %M", mg_print_mac, mif_.mac)); \
-  } while (0)
-
-#endif
-
-
-
 #if MG_ENABLE_TCPIP && defined(MG_ENABLE_DRIVER_XMC) && MG_ENABLE_DRIVER_XMC
 
 struct mg_tcpip_driver_xmc_data {
@@ -3278,6 +3265,41 @@ struct mg_tcpip_driver_xmc_data {
   } while (0)
 
 #endif
+
+
+#if MG_ENABLE_TCPIP && defined(MG_ENABLE_DRIVER_XMC7) && MG_ENABLE_DRIVER_XMC7
+
+struct mg_tcpip_driver_xmc7_data {
+  int mdc_cr;  // Valid values: -1, 0, 1, 2, 3, 4, 5
+  uint8_t phy_addr;
+};
+
+#ifndef MG_TCPIP_PHY_ADDR
+#define MG_TCPIP_PHY_ADDR 0
+#endif
+
+#ifndef MG_DRIVER_MDC_CR
+#define MG_DRIVER_MDC_CR 3
+#endif
+
+#define MG_TCPIP_DRIVER_INIT(mgr)                                 \
+  do {                                                            \
+    static struct mg_tcpip_driver_xmc7_data driver_data_;       \
+    static struct mg_tcpip_if mif_;                               \
+    driver_data_.mdc_cr = MG_DRIVER_MDC_CR;                       \
+    driver_data_.phy_addr = MG_TCPIP_PHY_ADDR;                    \
+    mif_.ip = MG_TCPIP_IP;                                        \
+    mif_.mask = MG_TCPIP_MASK;                                    \
+    mif_.gw = MG_TCPIP_GW;                                        \
+    mif_.driver = &mg_tcpip_driver_xmc7;                        \
+    mif_.driver_data = &driver_data_;                             \
+    MG_SET_MAC_ADDRESS(mif_.mac);                                 \
+    mg_tcpip_init(mgr, &mif_);                                    \
+    MG_INFO(("Driver: xmc7, MAC: %M", mg_print_mac, mif_.mac)); \
+  } while (0)
+
+#endif
+
 
 #ifdef __cplusplus
 }

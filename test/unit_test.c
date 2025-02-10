@@ -1327,7 +1327,7 @@ static void test_tls(void) {
                "Content-Length: %lu\n\n"
                "%s",
                data.len, data.buf) == 200);
-#if MG_TLS == MG_TLS_BUILTIN
+#if MG_TLS == MG_TLS_BUILTIN && defined(__linux__)
   // fire patched server, test multiple TLS records per TCP segment handling
   // skip other TLS stacks to avoid "bad client hello", we are 1.3 only
   {
