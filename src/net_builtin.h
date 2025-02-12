@@ -25,25 +25,8 @@ enum {
   MG_TCPIP_EV_TIMER_1S,         // 1 second timer                 NULL
   MG_TCPIP_EV_WIFI_SCAN_RESULT, // Wi-Fi scan results             struct mg_wifi_scan_bss_data *
   MG_TCPIP_EV_WIFI_SCAN_END,    // Wi-Fi scan has finished        NULL
-  MG_TCPIP_EV_WIFI_CONNECT_ERR, // Wi-Fi connect has failed       chip specific
+  MG_TCPIP_EV_WIFI_CONNECT_ERR, // Wi-Fi connect has failed       driver and chip specific
   MG_TCPIP_EV_USER              // Starting ID for user events
-};
-
-struct mg_wifi_scan_bss_data {
-    struct mg_str SSID;
-    char *BSSID;
-    int16_t RSSI;
-    uint8_t security;
-#define MG_WIFI_SECURITY_OPEN 0
-#define MG_WIFI_SECURITY_WEP  MG_BIT(0)
-#define MG_WIFI_SECURITY_WPA  MG_BIT(1)
-#define MG_WIFI_SECURITY_WPA2 MG_BIT(2)
-#define MG_WIFI_SECURITY_WPA3 MG_BIT(3)
-    uint8_t channel;
-    unsigned band :2;
-#define MG_WIFI_BAND_2G 0
-#define MG_WIFI_BAND_5G 1
-    unsigned has_n :1;
 };
 
 
