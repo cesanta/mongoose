@@ -31,8 +31,11 @@ bool mg_random(void *buf, size_t len) {  // Use on-board RNG
   return true;
 }
 
-uint64_t mg_millis(void) {  // Let Mongoose use our uptime function
-  return s_ticks;           // Return number of milliseconds since boot
+// Return number of milliseconds since boot
+uint64_t mg_millis(void) {             // Let Mongoose use our uptime function
+  uint64_t ticks = s_ticks;            // first read
+  if (ticks == s_ticks) return ticks;  // second read, same value => OK
+  return s_ticks;                      // changed while reading, read again
 }
 
 static void timer_fn(void *arg) {
@@ -47,7 +50,8 @@ static void fn(struct mg_connection *c, int ev, void *ev_data) {
   struct mg_tcpip_if *ifp = (struct mg_tcpip_if *) c->fn_data;
   if (ev == MG_EV_HTTP_MSG) {
     struct mg_http_message *hm = (struct mg_http_message *) ev_data;
-    if (mg_match(hm->uri, mg_str("/api/hello"), NULL)) {  // Request to /api/hello
+    if (mg_match(hm->uri, mg_str("/api/hello"),
+                 NULL)) {  // Request to /api/hello
       mg_http_reply(c, 200, "", "{%m:%u,%m:%u,%m:%u,%m:%u,%m:%u}\n",
                     MG_ESC("eth"), ifp->state, MG_ESC("frames_received"),
                     ifp->nrecv, MG_ESC("frames_sent"), ifp->nsent,
