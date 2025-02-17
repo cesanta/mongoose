@@ -142,7 +142,8 @@ static size_t mg_tcpip_driver_imxrt_tx(const void *buf, size_t len,
   return len;
 }
 
-static bool mg_tcpip_driver_imxrt_up(struct mg_tcpip_if *ifp) {
+static bool mg_tcpip_driver_imxrt_poll(struct mg_tcpip_if *ifp, bool s1) {
+  if (!s1) return false;
   struct mg_tcpip_driver_imxrt_data *d =
       (struct mg_tcpip_driver_imxrt_data *) ifp->driver_data;
   uint8_t speed = MG_PHY_SPEED_10M;
@@ -188,6 +189,6 @@ void ENET_IRQHandler(void) {
 
 struct mg_tcpip_driver mg_tcpip_driver_imxrt = {mg_tcpip_driver_imxrt_init,
                                                 mg_tcpip_driver_imxrt_tx, NULL,
-                                                mg_tcpip_driver_imxrt_up};
+                                                mg_tcpip_driver_imxrt_poll};
 
 #endif
