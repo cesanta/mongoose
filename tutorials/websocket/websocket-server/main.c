@@ -7,6 +7,9 @@
 
 static const char *s_listen_on = "ws://localhost:8000";
 static const char *s_web_root = ".";
+static const char *s_ca_path = "ca.pem";
+static const char *s_cert_path = "cert.pem";
+static const char *s_key_path = "key.pem";
 
 // This RESTful server implements the following endpoints:
 //   /websocket - upgrade to Websocket, and implement websocket echo server
@@ -15,6 +18,12 @@ static const char *s_web_root = ".";
 static void fn(struct mg_connection *c, int ev, void *ev_data) {
   if (ev == MG_EV_OPEN) {
     // c->is_hexdumping = 1;
+  } else if(ev == MG_EV_ACCEPT && mg_url_is_ssl(s_listen_on)) {
+    struct mg_str ca = mg_file_read(&mg_fs_posix, s_ca_path);
+    struct mg_str cert = mg_file_read(&mg_fs_posix, s_cert_path);
+    struct mg_str key = mg_file_read(&mg_fs_posix, s_key_path);
+    struct mg_tls_opts opts = {.ca = ca, .cert = cert, .key = key};
+    mg_tls_init(c, &opts);
   } else if (ev == MG_EV_HTTP_MSG) {
     struct mg_http_message *hm = (struct mg_http_message *) ev_data;
     if (mg_match(hm->uri, mg_str("/websocket"), NULL)) {
@@ -36,8 +45,32 @@ static void fn(struct mg_connection *c, int ev, void *ev_data) {
   }
 }
 
-int main(void) {
+int main(int argc, char *argv[]) {
   struct mg_mgr mgr;  // Event manager
+  int i;
+
+  // Parse command-line flags
+  for (i = 1; i < argc; i++) {
+    if (strcmp(argv[i], "-url") == 0 && argv[i + 1] != NULL) {
+      s_listen_on = argv[++i];
+    } else if (strcmp(argv[i], "-ca") == 0 && argv[i + 1] != NULL) {
+      s_ca_path = argv[++i];
+    } else if (strcmp(argv[i], "-cert") == 0 && argv[i + 1] != NULL) {
+      s_cert_path = argv[++i];
+    } else if (strcmp(argv[i], "-key") == 0 && argv[i + 1] != NULL) {
+      s_key_path = argv[++i];
+    } else {
+      printf(
+          "Usage: %s OPTIONS\n"
+          "  -ca PATH  - Path to the CA file, default: '%s'\n"
+          "  -cert PATH  - Path to the CERT file, default: '%s'\n"
+          "  -key PATH  - Path to the KEY file, default: '%s'\n"
+          "  -url URL  - Listen on URL, default: '%s'\n",
+          argv[0], s_ca_path, s_cert_path, s_key_path, s_listen_on);
+      return 1;
+    }
+  }
+
   mg_mgr_init(&mgr);  // Initialise event manager
   printf("Starting WS listener on %s/websocket\n", s_listen_on);
   mg_http_listen(&mgr, s_listen_on, fn, NULL);  // Create HTTP listener
