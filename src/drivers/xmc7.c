@@ -219,13 +219,12 @@ static bool mg_tcpip_driver_xmc7_up(struct mg_tcpip_if *ifp) {
 void ETH_IRQHandler(void) {
   uint32_t irq_status = ETH0->INT_STATUS;
   if (irq_status & MG_BIT(1)) {
-    for (uint8_t i = 0; i < ETH_DESC_CNT; i++) {
-      if (s_rxdesc[s_rxno][0] & MG_BIT(0)) {
-        size_t len = s_rxdesc[s_rxno][1] & (MG_BIT(13) - 1);
-        mg_tcpip_qwrite(s_rxbuf[s_rxno], len, s_ifp);
-        s_rxdesc[s_rxno][0] &= ~MG_BIT(0);  // OWN bit: handle control to DMA
-        if (++s_rxno >= ETH_DESC_CNT) s_rxno = 0;
-      }
+    for (uint8_t i = 0; i < 10; i++) { // read as they arrive, but not forever
+      if ((s_rxdesc[s_rxno][0] & MG_BIT(0)) == 0) break;
+      size_t len = s_rxdesc[s_rxno][1] & (MG_BIT(13) - 1);
+      mg_tcpip_qwrite(s_rxbuf[s_rxno], len, s_ifp);
+      s_rxdesc[s_rxno][0] &= ~MG_BIT(0);  // OWN bit: handle control to DMA
+      if (++s_rxno >= ETH_DESC_CNT) s_rxno = 0;
     }
   }
 

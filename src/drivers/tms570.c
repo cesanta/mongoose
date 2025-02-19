@@ -206,19 +206,18 @@ void EMAC_RX_IRQHandler(void) {
     uint32_t i;
     //MG_INFO(("RX interrupt"));
     for (i = 0; i < 10; i++) {   // read as they arrive but not forever
-      if ((s_rxdesc[s_rxno][3] & SWAP32(MG_BIT(29))) == 0) {
-        uint32_t len = SWAP32(s_rxdesc[s_rxno][3]) & 0xffff;
-        //MG_INFO(("recv len: %d", len));
-        //mg_hexdump(s_rxbuf[s_rxno], len);
-        mg_tcpip_qwrite(s_rxbuf[s_rxno], len > 4 ? len - 4 : len, s_ifp);
-        uint32_t flags = s_rxdesc[s_rxno][3];
-        s_rxdesc[s_rxno][3] = SWAP32(MG_BIT(29));
-        s_rxdesc[s_rxno][2] = SWAP32(ETH_PKT_SIZE);
-        EMAC->RXCP[0] = (uint32_t) &s_rxdesc[s_rxno][0];
-        if (flags & SWAP32(MG_BIT(28))) {
-          //MG_INFO(("EOQ detected"));
-          EMAC->RXHDP[0] = (uint32_t) &s_rxdesc[0][0];
-        }
+      if (s_rxdesc[s_rxno][3] & SWAP32(MG_BIT(29))) break;
+      uint32_t len = SWAP32(s_rxdesc[s_rxno][3]) & 0xffff;
+      //MG_INFO(("recv len: %d", len));
+      //mg_hexdump(s_rxbuf[s_rxno], len);
+      mg_tcpip_qwrite(s_rxbuf[s_rxno], len > 4 ? len - 4 : len, s_ifp);
+      uint32_t flags = s_rxdesc[s_rxno][3];
+      s_rxdesc[s_rxno][3] = SWAP32(MG_BIT(29));
+      s_rxdesc[s_rxno][2] = SWAP32(ETH_PKT_SIZE);
+      EMAC->RXCP[0] = (uint32_t) &s_rxdesc[s_rxno][0];
+      if (flags & SWAP32(MG_BIT(28))) {
+        //MG_INFO(("EOQ detected"));
+        EMAC->RXHDP[0] = (uint32_t) &s_rxdesc[0][0];
       }
       if (++s_rxno >= ETH_DESC_CNT) s_rxno = 0;
     }

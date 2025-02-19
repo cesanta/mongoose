@@ -199,16 +199,15 @@ void ETH0_0_IRQHandler(void) {
 
   // check if a frame was received
   if (irq_status & MG_BIT(6)) {
-    for (uint8_t i = 0; i < ETH_DESC_CNT; i++) {
-      if ((s_rxdesc[s_rxno][0] & MG_BIT(31)) == 0) {
-        size_t len = (s_rxdesc[s_rxno][0] & 0x3fff0000) >> 16;
-        mg_tcpip_qwrite(s_rxbuf[s_rxno], len, s_ifp);
-        s_rxdesc[s_rxno][0] = MG_BIT(31);   // OWN bit: handle control to DMA
-        // Resume processing
-        ETH0->STATUS = MG_BIT(7) | MG_BIT(6); // clear RU and RI
-        ETH0->RECEIVE_POLL_DEMAND = 0;
-        if (++s_rxno >= ETH_DESC_CNT) s_rxno = 0;
-      }
+    for (uint8_t i = 0; i < 10; i++) { // read as they arrive, but not forever
+      if (s_rxdesc[s_rxno][0] & MG_BIT(31)) break;
+      size_t len = (s_rxdesc[s_rxno][0] & 0x3fff0000) >> 16;
+      mg_tcpip_qwrite(s_rxbuf[s_rxno], len, s_ifp);
+      s_rxdesc[s_rxno][0] = MG_BIT(31);   // OWN bit: handle control to DMA
+      // Resume processing
+      ETH0->STATUS = MG_BIT(7) | MG_BIT(6); // clear RU and RI
+      ETH0->RECEIVE_POLL_DEMAND = 0;
+      if (++s_rxno >= ETH_DESC_CNT) s_rxno = 0;
     }
     ETH0->STATUS = MG_BIT(6);
   }
