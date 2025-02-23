@@ -651,7 +651,7 @@ static void handle_tls_recv(struct mg_connection *c) {
     mg_error(c, "oom");
   } else {
     // Decrypt data directly into c->recv
-    long n = mg_tls_recv(c, &io->buf[io->len], io->size - io->len);
+    long n = mg_tls_recv(c, io->buf != NULL ? &io->buf[io->len] : io->buf, io->size - io->len);
     if (n == MG_IO_ERR) {
       mg_error(c, "TLS recv error");
     } else if (n > 0) {
