@@ -300,11 +300,8 @@ jobs:
     - uses: actions/checkout@v4
       with: { fetch-depth: 2 }
     - run: echo # nothing specific to install or do
-    - run: make -C examples/arduino arduino-xiao
-# TODO():    - run: make -C examples/arduino arduino-esp32
-# TODO():    - run: make -C examples/arduino arduino-teensy41
-#   - run: make -C examples/arduino arduino-nano
-    - run: make -C examples/arduino clean
+    - run: make -C test/arduino
+    - run: make -C test/arduino cleanall
 
 
 #  wizard_examples:
