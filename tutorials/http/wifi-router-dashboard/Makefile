@@ -28,7 +28,7 @@ web_root/main.css: web_root/index.html web_root/main.js
 	npx tailwindcss -o $@ --minify
 
 packed_fs.c: $(wildcard web_root/*) Makefile web_root/main.css web_root/bundle.js
-	$(CC) ../../test/pack.c -o $(PACK)
+	$(CC) ../../../test/pack.c -o $(PACK)
 	$(PACK) $(wildcard web_root/*) > $@
 
 $(PROG): $(SOURCES)       # Build program from sources

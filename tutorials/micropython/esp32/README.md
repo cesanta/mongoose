@@ -18,6 +18,4 @@ while True:
 
 ```
 
-Check [_thread](https://docs.micropython.org/en/latest/library/_thread.html) support for more advanced usage
-
-https://docs.micropython.org/en/latest/develop/cmodules.html
+[Please check the Linux example for more information and useful links](../README.md)

@@ -1,1 +1,0 @@
-../../../micropython/mongoose/micropython.cmake
