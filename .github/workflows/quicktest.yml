@@ -286,7 +286,7 @@ jobs:
       fail-fast: false
       matrix:
         example:
-          - path: esp32/device-dashboard
+          - path: esp32
     name: ${{ matrix.example.path }}
     env:
       GO: 0
@@ -294,12 +294,12 @@ jobs:
       - uses: actions/checkout@v4
         with: { fetch-depth: 2 }
       - run: |
-          if ./test/match_changed_files.sh '^src|examples/device-dashboard|^examples/${{ matrix.example.path }}'; then
+          if ./test/match_changed_files.sh '^src|tutorials/http/device-dashboard'; then
             echo GO=1 >> $GITHUB_ENV
             # nothing specific to install or do
           fi
       - if: ${{ env.GO == 1 }}
-        run: make -C examples/${{ matrix.example.path }} build
+        run: make -C tutorials/http/device-dashboard/${{ matrix.example.path }} build
 
   device_dashboard_examples_arm:
     runs-on: ubuntu-latest
