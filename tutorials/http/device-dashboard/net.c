@@ -98,14 +98,14 @@ static void handle_logout(struct mg_connection *c) {
 }
 
 static void handle_debug(struct mg_connection *c, struct mg_http_message *hm) {
-  int level = mg_json_get_long(hm->body, "$.level", MG_LL_DEBUG);
+  int level = (int) mg_json_get_long(hm->body, "$.level", MG_LL_DEBUG);
   mg_log_set(level);
   mg_http_reply(c, 200, "", "Debug level set to %d\n", level);
 }
 
 static size_t print_int_arr(void (*out)(char, void *), void *ptr, va_list *ap) {
   size_t i, len = 0, num = va_arg(*ap, size_t);  // Number of items in the array
-  int *arr = va_arg(*ap, int *);              // Array ptr
+  int *arr = va_arg(*ap, int *);                 // Array ptr
   for (i = 0; i < num; i++) {
     len += mg_xprintf(out, ptr, "%s%d", i == 0 ? "" : ",", arr[i]);
   }
@@ -142,7 +142,7 @@ static size_t print_events(void (*out)(char, void *), void *ptr, va_list *ap) {
 
 static void handle_events_get(struct mg_connection *c,
                               struct mg_http_message *hm) {
-  int pageno = mg_json_get_long(hm->body, "$.page", 1);
+  int pageno = (int) mg_json_get_long(hm->body, "$.page", 1);
   mg_http_reply(c, 200, s_json_header, "{%m:[%M], %m:%d}\n", MG_ESC("arr"),
                 print_events, pageno, MG_ESC("totalCount"), MAX_EVENTS_NO);
 }
@@ -153,7 +153,7 @@ static void handle_settings_set(struct mg_connection *c, struct mg_str body) {
   bool ok = true;
   memset(&settings, 0, sizeof(settings));
   mg_json_get_bool(body, "$.log_enabled", &settings.log_enabled);
-  settings.log_level = mg_json_get_long(body, "$.log_level", 0);
+  settings.log_level = (int) mg_json_get_long(body, "$.log_level", 0);
   settings.brightness = mg_json_get_long(body, "$.brightness", 0);
   if (s && strlen(s) < MAX_DEVICE_NAME) {
     free(settings.device_name);
@@ -161,7 +161,7 @@ static void handle_settings_set(struct mg_connection *c, struct mg_str body) {
   } else {
     free(s);
   }
-  s_settings = settings; // Save to the device flash
+  s_settings = settings;  // Save to the device flash
   mg_http_reply(c, 200, s_json_header,
                 "{%m:%s,%m:%m}",                          //
                 MG_ESC("status"), ok ? "true" : "false",  //
