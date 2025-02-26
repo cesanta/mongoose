@@ -1,5 +1,5 @@
 CWD = $(realpath $(CURDIR))
-MNT = $(realpath $(CURDIR)/../../..)
+MNT = $(realpath $(CURDIR)/../../../..)
 PORT ?= /dev/ttyUSB0
 CMD ?= build
 

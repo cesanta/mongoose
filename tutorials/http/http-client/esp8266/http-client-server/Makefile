@@ -1,5 +1,5 @@
 THISDIR = $(realpath $(CURDIR))
-ROOTDIR = $(realpath $(CURDIR)/../../..)
+ROOTDIR = $(realpath $(CURDIR)/../../../../..)
 DOCKER ?= docker run --rm $(DA) -v $(ROOTDIR):$(ROOTDIR) -w $(THISDIR) docker.io/mdashnet/8266
 CMD ?= make -C src defconfig app
 PORT ?= /dev/ttyUSB0

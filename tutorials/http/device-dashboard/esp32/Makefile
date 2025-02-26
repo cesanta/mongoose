@@ -1,5 +1,5 @@
 THISDIR = $(realpath $(CURDIR))
-ROOTDIR = $(realpath $(CURDIR)/../../..)
+ROOTDIR = $(realpath $(CURDIR)/../../../..)
 DOCKER ?= docker run --rm $(DA) -v $(ROOTDIR):$(ROOTDIR) -w $(THISDIR) espressif/idf
 CMD ?= idf.py build
 PORT ?= /dev/ttyUSB0
