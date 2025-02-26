@@ -1,5 +1,5 @@
 all:
-	make -C ../../../tutorials/http/http-server ARGS="-d $(CURDIR)"
+	make -C ../../../http/http-server ARGS="-d $(CURDIR)"
 
 # Bundle JS libraries (preact, preact-router, ...) into a single file
 bundle.js:

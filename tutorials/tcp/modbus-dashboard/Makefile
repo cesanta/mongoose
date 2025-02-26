@@ -37,7 +37,7 @@ web_root/main.css: web_root/index.html $(wildcard web_root/*.js)
 # Generate packed filesystem for serving Web UI
 packed_fs.c: $(wildcard web_root/*) $(wildcard certs/*) Makefile web_root/main.css web_root/bundle.js
 	$(GZIP) web_root/*
-	$(CC) ../../test/pack.c -o $(PACK)
+	$(CC) ../../../test/pack.c -o $(PACK)
 	$(PACK) web_root/* certs/* > $@
 	$(GZIP) -d web_root/*
 

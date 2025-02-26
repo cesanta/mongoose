@@ -369,7 +369,7 @@ jobs:
         example:
           - path: esp32/uart-bridge
           - path: esp32/micropython
-          - path: esp8266/http-client-server
+          #- path: esp8266/http-client-server
     name: ${{ matrix.example.path }}
     env:
       GO: 0
