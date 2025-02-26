@@ -367,9 +367,9 @@ jobs:
       fail-fast: false
       matrix:
         example:
-          - path: esp32/uart-bridge
-          - path: esp32/micropython
-          #- path: esp8266/http-client-server
+          - path: micropython/esp32
+          - path: http/uart-bridge/esp32
+          - path: http/http-client/esp8266/http-client-server
     name: ${{ matrix.example.path }}
     env:
       GO: 0
@@ -377,7 +377,7 @@ jobs:
       - uses: actions/checkout@v4
         with: { fetch-depth: 2 }
       - run: echo # nothing specific to install or do
-      - run: make -C examples/${{ matrix.example.path }} build
+      - run: make -C tutorials/${{ matrix.example.path }} build
   
   generic_examples_arm:
     runs-on: ubuntu-latest

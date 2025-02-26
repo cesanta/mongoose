@@ -245,20 +245,20 @@ jobs:
       fail-fast: false
       matrix:
         example:
-          - path: esp32/uart-bridge
-          #- path: esp8266/http-client-server
+          - path: http/uart-bridge/esp32
+          - path: http/http-client/esp8266/http-client-server
     name: ${{ matrix.example.path }}
     env:
       GO: 0
     steps:
       - uses: actions/checkout@v4
         with: { fetch-depth: 2 }
-      - run: if ./test/match_changed_files.sh '^src|^examples/${{ matrix.example.path }}'; then echo GO=1 >> $GITHUB_ENV ; fi
+      - run: if ./test/match_changed_files.sh '^src|^tutorials/http/uart-bridge|^tutorials/${{ matrix.example.path }}'; then echo GO=1 >> $GITHUB_ENV ; fi
       - if: ${{ env.GO == 1 }}
         run: |
           # nothing specific to install or do
       - if: ${{ env.GO == 1 }}
-        run: make -C examples/${{ matrix.example.path }} build
+        run: make -C tutorials/${{ matrix.example.path }} build
   
   generic_examples_arm:
     runs-on: ubuntu-latest

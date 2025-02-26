@@ -23,7 +23,7 @@ ifneq ($(OS),Windows_NT)
 packed_fs.c: $(shell find web_root -type f) Makefile
 	rm -rf tmp/web_root && mkdir tmp && cp -r web_root tmp/
 	find tmp -type f | xargs -n1 gzip
-	$(CC) ../../test/pack.c -o pack
+	$(CC) ../../../test/pack.c -o pack
 	cd tmp && ../pack `find web_root -type f` > ../$@
 endif
 

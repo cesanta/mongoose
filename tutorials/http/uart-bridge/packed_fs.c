@@ -2,8 +2,17 @@
 #include <string.h>
 #include <time.h>
 
+#if defined(__cplusplus)
+extern "C" {
+#endif
+const char *mg_unlist(size_t no);
+const char *mg_unpack(const char *, size_t *, time_t *);
+#if defined(__cplusplus)
+}
+#endif
+
 static const unsigned char v1[] = {
-  31, 139,   8,   8,  29, 105, 247,  99,   0,   3, 105, 110, // .....i.c..in
+  31, 139,   8,   8,   6,  78, 191, 103,   0,   3, 105, 110, // .....N.g..in
  100, 101, 120,  46, 104, 116, 109, 108,   0,  93, 144, 177, // dex.html.]..
   78, 196,  48,  12, 134, 247, 123, 138, 144, 153, 180, 176, // N.0...{.....
   49,  36, 149, 208, 245,   6,  38,  24,  64, 130,  49,  77, // 1$....&.@.1M
@@ -28,7 +37,7 @@ static const unsigned char v1[] = {
  130, 117,   1,   0,   0, 0 // .u...
 };
 static const unsigned char v2[] = {
-  31, 139,   8,   8,  29, 105, 247,  99,   0,   3, 109,  97, // .....i.c..ma
+  31, 139,   8,   8,   6,  78, 191, 103,   0,   3, 109,  97, // .....N.g..ma
  105, 110,  46, 106, 115,   0, 181,  88, 109, 111, 219,  70, // in.js..Xmo.F
   18, 254, 174,  95,  49,  80, 125,  37, 121, 165,  72,  43, // ..._1P}%y.H+
  113, 225, 131,  44, 235, 144,   6,  45, 112, 135,  38, 233, // q..,...-p.&.
@@ -195,7 +204,7 @@ static const unsigned char v2[] = {
  154, 248,  11, 218, 252, 214, 171,  12,  23,   0,   0, 0 // ...........
 };
 static const unsigned char v3[] = {
-  31, 139,   8,   8,  29, 105, 247,  99,   0,   3, 112, 114, // .....i.c..pr
+  31, 139,   8,   8,   6,  78, 191, 103,   0,   3, 112, 114, // .....N.g..pr
  101,  97,  99, 116,  46, 109, 105, 110,  46, 106, 115,   0, // eact.min.js.
  157,  91, 123, 119, 219, 182, 146, 255, 127,  63,  69, 164, // .[{w.....?E.
  211, 163,  18,  43,  68, 177, 147, 182, 187,  75,   5, 213, // ...+D....K..
@@ -641,7 +650,7 @@ static const unsigned char v3[] = {
  138,  51,   0,   0, 0 // .3..
 };
 static const unsigned char v4[] = {
-  31, 139,   8,   8,  29, 105, 247,  99,   0,   3, 115, 116, // .....i.c..st
+  31, 139,   8,   8,   6,  78, 191, 103,   0,   3, 115, 116, // .....N.g..st
  121, 108, 101,  46,  99, 115, 115,   0, 149,  85, 193, 142, // yle.css..U..
  155,  48,  16, 189, 231,  43,  92, 173,  42, 181, 171, 192, // .0...+..*...
  134,  16,  96,  33, 151, 222, 250,  17,  85,  15,   6, 155, // ..`!....U...
@@ -718,10 +727,10 @@ static const struct packed_file {
   size_t size;
   time_t mtime;
 } packed_files[] = {
-  {"/web_root/index.html.gz", v1, sizeof(v1), 1677158685},
-  {"/web_root/main.js.gz", v2, sizeof(v2), 1677158685},
-  {"/web_root/preact.min.js.gz", v3, sizeof(v3), 1677158685},
-  {"/web_root/style.css.gz", v4, sizeof(v4), 1677158685},
+  {"/web_root/index.html.gz", v1, sizeof(v1), 1740590598},
+  {"/web_root/main.js.gz", v2, sizeof(v2), 1740590598},
+  {"/web_root/preact.min.js.gz", v3, sizeof(v3), 1740590598},
+  {"/web_root/style.css.gz", v4, sizeof(v4), 1740590598},
   {NULL, NULL, 0, 0}
 };
 
@@ -729,11 +738,9 @@ static int scmp(const char *a, const char *b) {
   while (*a && (*a == *b)) a++, b++;
   return *(const unsigned char *) a - *(const unsigned char *) b;
 }
-const char *mg_unlist(size_t no);
 const char *mg_unlist(size_t no) {
   return packed_files[no].name;
 }
-const char *mg_unpack(const char *path, size_t *size, time_t *mtime);
 const char *mg_unpack(const char *name, size_t *size, time_t *mtime) {
   const struct packed_file *p;
   for (p = packed_files; p->name != NULL; p++) {
