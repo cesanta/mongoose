@@ -319,7 +319,7 @@ jobs:
 #        with: { fetch-depth: 2 }
 #      - run: echo # nothing specific to install or do
 #          fi
-#      - run: make -C examples/${{ matrix.example.path }} build
+#      - run: make -C tutorials/${{ matrix.example.path }} build
 
   wizard_examples_arm:
     runs-on: ubuntu-latest
@@ -327,7 +327,9 @@ jobs:
       fail-fast: false
       matrix:
         example:
-          - path: infineon/infineon-xmc7200
+          - path: infineon/xmc47_relax-make-baremetal-builtin
+          - path: infineon/xmc_plt2go_4400-make-baremetal-builtin
+          - path: infineon/xmc72_evk-make-baremetal-builtin
           - path: nxp/frdm-mcxn947-make-baremetal-builtin
           - path: nxp/frdm-mcxn947-make-freertos-builtin
           - path: nxp/rt1020-evk-make-baremetal-builtin
@@ -358,7 +360,7 @@ jobs:
       - uses: actions/checkout@v4
         with: { fetch-depth: 2 }
       - run: sudo apt -y update && sudo apt -y install gcc-arm-none-eabi
-      - run: make -C examples/${{ matrix.example.path }} build
+      - run: make -C tutorials/${{ matrix.example.path }} build
 
 
   generic_examples:
@@ -385,8 +387,7 @@ jobs:
       fail-fast: false
       matrix:
         example:
-          - path: microchip/same54-xpro/mqtt-client
-          - path: infineon/infineon-xmc4700_4800-lwip-rtx-rtos
+          - path: mqtt/mqtt-client/microchip/same54-xpro
           - path: nxp/nxp-mimxrt1020-azurertos
           - path: nxp/nxp-frdmk66f-freertos
           - path: nxp/nxp-lpcxpresso54s018m-freertos
@@ -417,7 +418,7 @@ jobs:
       - uses: actions/checkout@v4
         with: { fetch-depth: 2 }
       - run: sudo apt -y update && sudo apt -y install gcc-arm-none-eabi
-      - run: make -C examples/${{ matrix.example.path }} build
+      - run: make -C tutorials/${{ matrix.example.path }} build
 
   device_dashboard_examples:
     runs-on: ubuntu-latest
@@ -441,7 +442,7 @@ jobs:
       matrix:
         ssl: ["", -DMG_TLS=MG_TLS_BUILTIN]
         example:
-          - path: microchip/same54-xpro/device-dashboard
+          - path: tutorials/http/device-dashboard/microchip/same54-xpro
           - path: nxp/rt1020-evk-make-freertos-builtin
           - path: nxp/rt1060-evk-make-freertos-builtin
           - path: nxp/rt1170-evk-make-freertos-builtin
@@ -456,7 +457,7 @@ jobs:
       - uses: actions/checkout@v4
         with: { fetch-depth: 2 }
       - run: sudo apt -y update && sudo apt -y install gcc-arm-none-eabi
-      - run: make -C examples/${{ matrix.example.path }} build CFLAGS_EXTRA="${{ matrix.ssl }}"
+      - run: make -C tutorials/${{ matrix.example.path }} build CFLAGS_EXTRA="${{ matrix.ssl }}"
 
 #  mqtt_dashboard_examples:
 #    runs-on: ubuntu-latest
@@ -470,7 +471,7 @@ jobs:
 #      - uses: actions/checkout@v4
 #        with: { fetch-depth: 2 }
 #      - run: echo # nothing specific to install or do
-#      - run: make -C examples/${{ matrix.example.path }} build
+#      - run: make -C tutorials/${{ matrix.example.path }} build
       
   mqtt_dashboard_examples_arm:
     runs-on: ubuntu-latest
@@ -484,7 +485,7 @@ jobs:
       - uses: actions/checkout@v4
         with: { fetch-depth: 2 }
       - run: sudo apt -y update && sudo apt -y install gcc-arm-none-eabi
-      - run: make -C examples/${{ matrix.example.path }} build
+      - run: make -C tutorials/${{ matrix.example.path }} build
       
 #  dual_examples:
 #    runs-on: ubuntu-latest
@@ -498,8 +499,8 @@ jobs:
 #      - uses: actions/checkout@v4
 #        with: { fetch-depth: 2 }
 #      - run: echo # nothing specific to install or do
-#      - run: make -C examples/${{ matrix.example.path }} device_dashboard
-#      - run: make -C examples/${{ matrix.example.path }} mqtt_dashboard
+#      - run: make -C tutorials/${{ matrix.example.path }} device_dashboard
+#      - run: make -C tutorials/${{ matrix.example.path }} mqtt_dashboard
 
   cube_examples:
     runs-on: ubuntu-latest
@@ -519,7 +520,7 @@ jobs:
       - name: minify manifest
         uses: mikefarah/yq@master
         with:
-          cmd: yq -i eval '(.manifest.defaults, .manifest.remotes, .manifest.projects[] | select(.name == "cmsis" or .name == "hal_stm32" or .name == "mbedtls" or .name == "mcuboot" or .name == "picolibc" | del(.null) ), .manifest.self) as $i ireduce({};setpath($i | path; $i)) | del(.manifest.projects.[].null) | del(..|select(length==0))' examples/zephyr/zephyrproject/zephyr/west.yml
+          cmd: yq -i eval '(.manifest.defaults, .manifest.remotes, .manifest.projects[] | select(.name == "cmsis" or .name == "hal_stm32" or .name == "mbedtls" or .name == "mcuboot" or .name == "picolibc" | del(.null) ), .manifest.self) as $i ireduce({};setpath($i | path; $i)) | del(.manifest.projects.[].null) | del(..|select(length==0))' tutorials/zephyr/zephyrproject/zephyr/west.yml
       - run: make -C tutorials/zephyr update
       - run: make -C tutorials/zephyr/device-dashboard build
       - run: make -C tutorials/zephyr/http-client build
@@ -534,14 +535,14 @@ jobs:
       with: { fetch-depth: 2 }
     - name: baremetal
       run: sudo apt -y update && sudo apt -y install gcc-arm-none-eabi
-    - run: make -C examples/stm32/nucleo-f746zg-make-baremetal-builtin test VCON_API_KEY=${{secrets.VCON_API_KEY}}
-    - run: make -C examples/stm32/nucleo-f746zg-make-freertos-builtin test VCON_API_KEY=${{secrets.VCON_API_KEY}}
-    - run: make -C examples/stm32/nucleo-f746zg-make-freertos-tcp test VCON_API_KEY=${{secrets.VCON_API_KEY}}
+    - run: make -C tutorials/stm32/nucleo-f746zg-make-baremetal-builtin test VCON_API_KEY=${{secrets.VCON_API_KEY}}
+    - run: make -C tutorials/stm32/nucleo-f746zg-make-freertos-builtin test VCON_API_KEY=${{secrets.VCON_API_KEY}}
+    - run: make -C tutorials/stm32/nucleo-f746zg-make-freertos-tcp test VCON_API_KEY=${{secrets.VCON_API_KEY}}
     - name: Cube
       run: echo # nothing specific to install or do
-#    - run: make -C test/cube test PROJECTS=../../examples/stm32/nucleo-f746zg-cube-baremetal-builtin VCON_API_KEY=${{secrets.VCON_API_KEY}} DEVICE=5
-#    - run: make -C test/cube test PROJECTS=../../examples/stm32/nucleo-f746zg-cube-freertos-builtin VCON_API_KEY=${{secrets.VCON_API_KEY}} DEVICE=5    
-    - run: make -C test/cube test PROJECTS=../../examples/stm32/nucleo-f746zg-cube-freertos-lwip VCON_API_KEY=${{secrets.VCON_API_KEY}} DEVICE=5
+#    - run: make -C test/cube test PROJECTS=../../tutorials/stm32/nucleo-f746zg-cube-baremetal-builtin VCON_API_KEY=${{secrets.VCON_API_KEY}} DEVICE=5
+#    - run: make -C test/cube test PROJECTS=../../tutorials/stm32/nucleo-f746zg-cube-freertos-builtin VCON_API_KEY=${{secrets.VCON_API_KEY}} DEVICE=5    
+    - run: make -C test/cube test PROJECTS=../../tutorials/stm32/nucleo-f746zg-cube-freertos-lwip VCON_API_KEY=${{secrets.VCON_API_KEY}} DEVICE=5
 
   test_f4:
     runs-on: ubuntu-latest
@@ -550,13 +551,13 @@ jobs:
       with: { fetch-depth: 2 }
     - name: baremetal
       run: sudo apt -y update && sudo apt -y install gcc-arm-none-eabi
-    - run: make -C examples/stm32/nucleo-f429zi-make-baremetal-builtin test VCON_API_KEY=${{secrets.VCON_API_KEY}}
-    - run: make -C examples/stm32/nucleo-f429zi-make-freertos-builtin test VCON_API_KEY=${{secrets.VCON_API_KEY}}
+    - run: make -C tutorials/stm32/nucleo-f429zi-make-baremetal-builtin test VCON_API_KEY=${{secrets.VCON_API_KEY}}
+    - run: make -C tutorials/stm32/nucleo-f429zi-make-freertos-builtin test VCON_API_KEY=${{secrets.VCON_API_KEY}}
     - name: Cube
       run: echo # nothing specific to install or do
-#    - run: make -C test/cube test PROJECTS=../../examples/stm32/nucleo-f429zi-cube-baremetal-builtin VCON_API_KEY=${{secrets.VCON_API_KEY}} DEVICE=2
-#    - run: make -C test/cube test PROJECTS=../../examples/stm32/nucleo-f429zi-cube-freertos-builtin VCON_API_KEY=${{secrets.VCON_API_KEY}} DEVICE=2
-    - run: make -C test/cube test PROJECTS=../../examples/stm32/nucleo-f429zi-cube-freertos-lwip VCON_API_KEY=${{secrets.VCON_API_KEY}} DEVICE=2
+#    - run: make -C test/cube test PROJECTS=../../tutorials/stm32/nucleo-f429zi-cube-baremetal-builtin VCON_API_KEY=${{secrets.VCON_API_KEY}} DEVICE=2
+#    - run: make -C test/cube test PROJECTS=../../tutorials/stm32/nucleo-f429zi-cube-freertos-builtin VCON_API_KEY=${{secrets.VCON_API_KEY}} DEVICE=2
+    - run: make -C test/cube test PROJECTS=../../tutorials/stm32/nucleo-f429zi-cube-freertos-lwip VCON_API_KEY=${{secrets.VCON_API_KEY}} DEVICE=2
 
   test_h743:
     runs-on: ubuntu-latest
@@ -565,12 +566,12 @@ jobs:
       with: { fetch-depth: 3 }
     - name: baremetal
       run: sudo apt -y update && sudo apt -y install gcc-arm-none-eabi
-    - run: make -C examples/stm32/nucleo-h743zi-make-baremetal-builtin test VCON_API_KEY=${{secrets.VCON_API_KEY}}
-    - run: make -C examples/stm32/nucleo-h743zi-make-freertos-builtin test VCON_API_KEY=${{secrets.VCON_API_KEY}}
+    - run: make -C tutorials/stm32/nucleo-h743zi-make-baremetal-builtin test VCON_API_KEY=${{secrets.VCON_API_KEY}}
+    - run: make -C tutorials/stm32/nucleo-h743zi-make-freertos-builtin test VCON_API_KEY=${{secrets.VCON_API_KEY}}
 #    - name: Cube
 #      run: echo # nothing specific to install or do
-#    - run: make -C test/cube test PROJECTS=../../examples/stm32/nucleo-h743zi-cube-baremetal-builtin VCON_API_KEY=${{secrets.VCON_API_KEY}} DEVICE=6
-#    - run: make -C test/cube test PROJECTS=../../examples/stm32/nucleo-h743zi-cube-freertos-builtin VCON_API_KEY=${{secrets.VCON_API_KEY}} DEVICE=6
+#    - run: make -C test/cube test PROJECTS=../../tutorials/stm32/nucleo-h743zi-cube-baremetal-builtin VCON_API_KEY=${{secrets.VCON_API_KEY}} DEVICE=6
+#    - run: make -C test/cube test PROJECTS=../../tutorials/stm32/nucleo-h743zi-cube-freertos-builtin VCON_API_KEY=${{secrets.VCON_API_KEY}} DEVICE=6
 
   test_h723:
     runs-on: ubuntu-latest
@@ -579,8 +580,8 @@ jobs:
       with: { fetch-depth: 3 }
     - name: baremetal
       run: sudo apt -y update && sudo apt -y install gcc-arm-none-eabi
-    - run: make -C examples/stm32/nucleo-h723zg-make-baremetal-builtin test VCON_API_KEY=${{secrets.VCON_API_KEY}}
-    - run: make -C examples/stm32/nucleo-h723zg-make-freertos-builtin test VCON_API_KEY=${{secrets.VCON_API_KEY}}
+    - run: make -C tutorials/stm32/nucleo-h723zg-make-baremetal-builtin test VCON_API_KEY=${{secrets.VCON_API_KEY}}
+    - run: make -C tutorials/stm32/nucleo-h723zg-make-freertos-builtin test VCON_API_KEY=${{secrets.VCON_API_KEY}}
     
   test_h5:
     runs-on: ubuntu-latest
@@ -589,8 +590,8 @@ jobs:
       with: { fetch-depth: 3 }
     - name: baremetal
       run: sudo apt -y update && sudo apt -y install gcc-arm-none-eabi
-    - run: make -C examples/stm32/nucleo-h563zi-make-baremetal-builtin test VCON_API_KEY=${{secrets.VCON_API_KEY}}
-    - run: make -C examples/stm32/nucleo-h563zi-make-freertos-builtin test VCON_API_KEY=${{secrets.VCON_API_KEY}}
+    - run: make -C tutorials/stm32/nucleo-h563zi-make-baremetal-builtin test VCON_API_KEY=${{secrets.VCON_API_KEY}}
+    - run: make -C tutorials/stm32/nucleo-h563zi-make-freertos-builtin test VCON_API_KEY=${{secrets.VCON_API_KEY}}
 
   test_rt1020:
     runs-on: ubuntu-latest
@@ -599,8 +600,8 @@ jobs:
       with: { fetch-depth: 3 }
     - name: baremetal
       run: sudo apt -y update && sudo apt -y install gcc-arm-none-eabi
-    - run: make -C examples/nxp/rt1020-evk-make-baremetal-builtin test VCON_API_KEY=${{secrets.VCON_API_KEY}}
-    - run: make -C examples/nxp/rt1020-evk-make-freertos-builtin test VCON_API_KEY=${{secrets.VCON_API_KEY}}
+    - run: make -C tutorials/nxp/rt1020-evk-make-baremetal-builtin test VCON_API_KEY=${{secrets.VCON_API_KEY}}
+    - run: make -C tutorials/nxp/rt1020-evk-make-freertos-builtin test VCON_API_KEY=${{secrets.VCON_API_KEY}}
 
   test_rt1060:
     runs-on: ubuntu-latest
@@ -609,8 +610,8 @@ jobs:
       with: { fetch-depth: 3 }
     - name: baremetal
       run: sudo apt -y update && sudo apt -y install gcc-arm-none-eabi
-    - run: make -C examples/nxp/rt1060-evk-make-baremetal-builtin test VCON_API_KEY=${{secrets.VCON_API_KEY}}
-    - run: make -C examples/nxp/rt1060-evk-make-freertos-builtin test VCON_API_KEY=${{secrets.VCON_API_KEY}}
+    - run: make -C tutorials/nxp/rt1060-evk-make-baremetal-builtin test VCON_API_KEY=${{secrets.VCON_API_KEY}}
+    - run: make -C tutorials/nxp/rt1060-evk-make-freertos-builtin test VCON_API_KEY=${{secrets.VCON_API_KEY}}
 
   test_rt1170:
     runs-on: ubuntu-latest
@@ -619,8 +620,8 @@ jobs:
       with: { fetch-depth: 3 }
     - name: baremetal
       run: sudo apt -y update && sudo apt -y install gcc-arm-none-eabi
-    - run: make -C examples/nxp/rt1170-evk-make-baremetal-builtin test VCON_API_KEY=${{secrets.VCON_API_KEY}}
-    - run: make -C examples/nxp/rt1170-evk-make-freertos-builtin test VCON_API_KEY=${{secrets.VCON_API_KEY}}
+    - run: make -C tutorials/nxp/rt1170-evk-make-baremetal-builtin test VCON_API_KEY=${{secrets.VCON_API_KEY}}
+    - run: make -C tutorials/nxp/rt1170-evk-make-freertos-builtin test VCON_API_KEY=${{secrets.VCON_API_KEY}}
 
   test_ra6m4:
     runs-on: ubuntu-latest
@@ -629,8 +630,8 @@ jobs:
       with: { fetch-depth: 3 }
     - name: baremetal
       run: sudo apt -y update && sudo apt -y install gcc-arm-none-eabi
-    - run: make -C examples/renesas/ek-ra6m4-make-baremetal-builtin test VCON_API_KEY=${{secrets.VCON_API_KEY}}
-#    - run: make -C examples/renesas/ek-ra6m4-make-freertos-builtin test VCON_API_KEY=${{secrets.VCON_API_KEY}}
+    - run: make -C tutorials/renesas/ek-ra6m4-make-baremetal-builtin test VCON_API_KEY=${{secrets.VCON_API_KEY}}
+#    - run: make -C tutorials/renesas/ek-ra6m4-make-freertos-builtin test VCON_API_KEY=${{secrets.VCON_API_KEY}}
 
   test_tm4c:
     runs-on: ubuntu-latest
@@ -639,8 +640,8 @@ jobs:
       with: { fetch-depth: 2 }
     - name: baremetal
       run: sudo apt -y update && sudo apt -y install gcc-arm-none-eabi
-    - run:  make -C examples/ti/ek-tm4c1294xl-make-baremetal-builtin test VCON_API_KEY=${{secrets.VCON_API_KEY}}
-    - run:  make -C examples/ti/ek-tm4c1294xl-make-freertos-builtin test VCON_API_KEY=${{secrets.VCON_API_KEY}}
+    - run:  make -C tutorials/ti/ek-tm4c1294xl-make-baremetal-builtin test VCON_API_KEY=${{secrets.VCON_API_KEY}}
+    - run:  make -C tutorials/ti/ek-tm4c1294xl-make-freertos-builtin test VCON_API_KEY=${{secrets.VCON_API_KEY}}
 
   test_same54:
     runs-on: ubuntu-latest
@@ -649,8 +650,8 @@ jobs:
       with: { fetch-depth: 2 }
     - name: baremetal
       run: sudo apt -y update && sudo apt -y install gcc-arm-none-eabi
-    - run:  make -C examples/microchip/same54-xpro/device-dashboard test VCON_API_KEY=${{secrets.VCON_API_KEY}}
-    - run:  make -C examples/microchip/same54-xpro/mqtt-client test VCON_API_KEY=${{secrets.VCON_API_KEY}}
+    - run:  make -C tutorials/http/device-dashboard/microchip/same54-xpro test VCON_API_KEY=${{secrets.VCON_API_KEY}}
+    - run:  make -C tutorials/mqtt/mqtt-client/microchip/same54-xpro test VCON_API_KEY=${{secrets.VCON_API_KEY}}
 
   test_pico_w5500:
     runs-on: ubuntu-latest
@@ -659,5 +660,5 @@ jobs:
       with: { fetch-depth: 2 }
     - name: SDK
       run: sudo apt -y update && sudo apt -y install gcc-arm-none-eabi
-    - run:  make -C examples/pico-sdk/w5500-evb-pico-picosdk-baremetal-builtin test VCON_API_KEY=${{secrets.VCON_API_KEY}}
+    - run:  make -C tutorials/pico-sdk/w5500-evb-pico-picosdk-baremetal-builtin test VCON_API_KEY=${{secrets.VCON_API_KEY}}
 
