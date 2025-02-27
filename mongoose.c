@@ -1861,6 +1861,7 @@ static struct mg_str s_known_types[] = {
     MG_C_STR("htm"), MG_C_STR("text/html; charset=utf-8"),
     MG_C_STR("css"), MG_C_STR("text/css; charset=utf-8"),
     MG_C_STR("js"), MG_C_STR("text/javascript; charset=utf-8"),
+    MG_C_STR("mjs"), MG_C_STR("text/javascript; charset=utf-8"),
     MG_C_STR("gif"), MG_C_STR("image/gif"),
     MG_C_STR("png"), MG_C_STR("image/png"),
     MG_C_STR("jpg"), MG_C_STR("image/jpeg"),
