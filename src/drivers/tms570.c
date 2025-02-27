@@ -172,12 +172,13 @@ static size_t mg_tcpip_driver_tms570_tx(const void *buf, size_t len,
   return len;
   (void) ifp;
 }
-static bool mg_tcpip_driver_tms570_up(struct mg_tcpip_if *ifp) {
+static bool mg_tcpip_driver_tms570_poll(struct mg_tcpip_if *ifp, bool s1) {
   struct mg_tcpip_driver_tms570_data *d =
       (struct mg_tcpip_driver_tms570_data *) ifp->driver_data;
   uint8_t speed = MG_PHY_SPEED_10M;
   bool up = false, full_duplex = false;
   struct mg_phy phy = {emac_read_phy, emac_write_phy};
+  if (!s1) return false;
   up = mg_phy_up(&phy, d->phy_addr, &full_duplex, &speed);
   if ((ifp->state == MG_TCPIP_STATE_DOWN) && up) {
     // link state just went up
@@ -227,6 +228,6 @@ void EMAC_RX_IRQHandler(void) {
 }
 struct mg_tcpip_driver mg_tcpip_driver_tms570 = {mg_tcpip_driver_tms570_init,
                                                mg_tcpip_driver_tms570_tx, NULL,
-                                               mg_tcpip_driver_tms570_up};
+                                               mg_tcpip_driver_tms570_poll};
 #endif
 
