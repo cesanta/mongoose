@@ -515,17 +515,17 @@ jobs:
       - uses: actions/checkout@v4
         with: { fetch-depth: 2 }
       - run: sudo apt -y update && sudo apt -y install gcc-arm-none-eabi
-      - run: make -C examples/zephyr init REPO=zephyrprojectrtos/ci:v0.26.14 # "no space left on device" with newers
+      - run: make -C tutorials/zephyr init REPO=zephyrprojectrtos/ci:v0.26.14 # "no space left on device" with newers
       - name: minify manifest
         uses: mikefarah/yq@master
         with:
           cmd: yq -i eval '(.manifest.defaults, .manifest.remotes, .manifest.projects[] | select(.name == "cmsis" or .name == "hal_stm32" or .name == "mbedtls" or .name == "mcuboot" or .name == "picolibc" | del(.null) ), .manifest.self) as $i ireduce({};setpath($i | path; $i)) | del(.manifest.projects.[].null) | del(..|select(length==0))' examples/zephyr/zephyrproject/zephyr/west.yml
-      - run: make -C examples/zephyr update
-      - run: make -C examples/zephyr/device-dashboard build
-      - run: make -C examples/zephyr/http-client build
-      - run: make -C examples/zephyr/http-server build
-      - run: make -C examples/zephyr/mqtt-aws-client build
-      - run: make -C examples/zephyr/websocket-server build
+      - run: make -C tutorials/zephyr update
+      - run: make -C tutorials/zephyr/device-dashboard build
+      - run: make -C tutorials/zephyr/http-client build
+      - run: make -C tutorials/zephyr/http-server build
+      - run: make -C tutorials/zephyr/mqtt-aws-client build
+      - run: make -C tutorials/zephyr/websocket-server build
 
   test_f7:
     runs-on: ubuntu-latest
