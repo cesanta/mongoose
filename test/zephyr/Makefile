@@ -1,5 +1,5 @@
 ROOT ?= $(realpath $(CURDIR)/../..)
-ZEPHYR_DIR ?= $(ROOT)/examples/zephyr/zephyrproject
+ZEPHYR_DIR ?= $(ROOT)/tutorials/zephyr/zephyrproject
 DOCKER ?= docker run --rm -v $(ROOT):$(ROOT) -w $(CURDIR)/wizard
 IMAGE ?= zephyrprojectrtos/ci
 REVNO ?= --mr v3.7-branch

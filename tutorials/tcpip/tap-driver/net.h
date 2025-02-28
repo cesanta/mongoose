@@ -1,1 +1,1 @@
-../../../examples/device-dashboard/net.h
+../../http/device-dashboard/net.h

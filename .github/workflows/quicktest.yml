@@ -91,60 +91,6 @@ jobs:
     - uses: actions/checkout@v4
     - run: make -C test riscv
 
-  examples:
-    runs-on: ubuntu-latest
-    steps:
-    - uses: actions/checkout@v4
-    - run: make -C test examples_essential
-    - run: make -C test clean_examples_essential
-  examples_win:
-    runs-on: windows-latest
-    steps:
-    - uses: actions/checkout@v4
-#    - uses: egor-tensin/setup-mingw@v2
-#      with:
-#        platform: x64
-    - name: test they build
-      run: make -C test examples_win
-      shell: cmd
-    - name: test they clean
-      run: make -C test clean_examples_win
-      shell: cmd
-  examples_mac:
-    runs-on: macos-latest
-    env: { HOMEBREW_NO_AUTO_UPDATE: 1 }
-    steps:
-    - uses: actions/checkout@v4
-    - run: make -C test examples_mac
-    - run: make -C test clean_examples_mac
-
-  refprojs:
-    runs-on: ubuntu-latest
-    steps:
-    - uses: actions/checkout@v4
-    - run: make -C test refprojs
-    - run: make -C test clean_refprojs
-  refprojs_win:
-    runs-on: windows-latest
-    steps:
-    - uses: actions/checkout@v4
-#    - uses: egor-tensin/setup-mingw@v2
-#      with:
-#        platform: x64
-    - name: test they build
-      run: make -C test refprojs_win
-      shell: cmd
-    - name: test they clean
-      run: make -C test clean_refprojs_win
-      shell: cmd
-  refprojs_mac:
-    runs-on: macos-latest
-    env: { HOMEBREW_NO_AUTO_UPDATE: 1 }
-    steps:
-    - uses: actions/checkout@v4
-    - run: make -C test refprojs
-    - run: make -C test clean_refprojs
-
   tutorials:
     runs-on: ubuntu-latest
     steps:
@@ -398,7 +344,7 @@ jobs:
       with: { fetch-depth: 2 }
     - name: baremetal
       run: |
-        if ./test/match_changed_files.sh "^src|tutorials/http/device-dashboard|tutorials/stm32" ; then
+        if ./test/match_changed_files.sh "^src|tutorials/http/device-dashboard|tutorials/stm32/nucleo-f7.*-make-" ; then
           echo GO=1 >> $GITHUB_ENV
           sudo apt -y update && sudo apt -y install gcc-arm-none-eabi
         fi

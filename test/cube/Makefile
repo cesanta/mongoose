@@ -1,5 +1,5 @@
 ROOT ?= $(realpath $(CURDIR)/../..)
-PROJECTS ?= $(wildcard ../../examples/stm32/nucleo-*-cube-*)
+PROJECTS ?= $(wildcard ../../tutorials/stm32/nucleo-*-cube-*)
 TARGET ?= Debug
 DOCKER = docker run --rm -v $(ROOT):$(ROOT) -v $(CURDIR):/root -w $(CURDIR) 
 IMAGE ?= scaprile/cubeozone
