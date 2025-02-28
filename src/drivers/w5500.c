@@ -81,12 +81,12 @@ static bool w5500_init(struct mg_tcpip_if *ifp) {
   return w5500_r1(s, W5500_S0, 3) == 0x42;  // Sock0 SR == MACRAW
 }
 
-static bool w5500_up(struct mg_tcpip_if *ifp) {
+static bool w5500_poll(struct mg_tcpip_if *ifp, bool s1) {
   struct mg_tcpip_spi *spi = (struct mg_tcpip_spi *) ifp->driver_data;
-  uint8_t phycfgr = w5500_r1(spi, W5500_CR, 0x2e);
-  return phycfgr & 1;  // Bit 0 of PHYCFGR is LNK (0 - down, 1 - up)
+  return s1 ? w5500_r1(spi, W5500_CR, 0x2e /* PHYCFGR */) & 1
+            : false;  // Bit 0 of PHYCFGR is LNK (0 - down, 1 - up)
 }
 
 struct mg_tcpip_driver mg_tcpip_driver_w5500 = {w5500_init, w5500_tx, w5500_rx,
-                                                w5500_up};
+                                                w5500_poll};
 #endif

@@ -320,7 +320,8 @@ static void rx_irq(void) {
   s_rxno = rxno;
 }
 
-static bool mg_tcpip_driver_rp2040_rmii_up(struct mg_tcpip_if *ifp) {
+static bool mg_tcpip_driver_rp2040_rmii_poll(struct mg_tcpip_if *ifp, bool s1) {
+  if (!s1) return false;
   struct mg_tcpip_driver_rp2040_rmii_data *d =
       (struct mg_tcpip_driver_rp2040_rmii_data *) ifp->driver_data;
   uint32_t bsr =
@@ -332,5 +333,5 @@ struct mg_tcpip_driver mg_tcpip_driver_rp2040_rmii = {
     mg_tcpip_driver_rp2040_rmii_init,
     mg_tcpip_driver_rp2040_rmii_tx,
     NULL,
-    mg_tcpip_driver_rp2040_rmii_up,
+    mg_tcpip_driver_rp2040_rmii_poll,
 };
