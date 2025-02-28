@@ -1,4 +1,4 @@
-PROJECTS ?= $(wildcard ../../examples/*/*-make-*)
+PROJECTS ?= $(wildcard ../../tutorials/*/*-make-*)
 
 all: $(PROJECTS)
 	echo

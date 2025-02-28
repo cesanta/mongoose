@@ -6,7 +6,7 @@
 // timestamp in milliseconds since connection init time.
 //
 // Test (run in two separate terminals):
-//   make -C examples/http-server/ CFLAGS_EXTRA=-DMG_ENABLE_PROFILE=1
+//   make -C tutorials/http/http-server/ CFLAGS_EXTRA=-DMG_ENABLE_PROFILE=1
 //   curl localhost:8000
 // Output:
 //   1ea1f1e7 2 net.c:150:mg_close_conn      3 profile:                                                            

@@ -1,5 +1,5 @@
 ROOT ?= $(realpath $(CURDIR)/../..)
-PROJECTS ?= $(wildcard ../../examples/nxp/*-xpresso-*)
+PROJECTS ?= $(wildcard ../../tutorials/nxp/*-xpresso-*)
 TARGET ?= Debug
 DOCKER = docker run --rm -v $(ROOT):$(ROOT) -v $(CURDIR):/root -w $(CURDIR) 
 IMAGE ?= scaprile/xpresso

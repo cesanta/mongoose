@@ -1,1 +1,1 @@
-../../../examples/device-dashboard/packed_fs.c
+../../http/device-dashboard/packed_fs.c

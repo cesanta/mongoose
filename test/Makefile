@@ -14,15 +14,12 @@ VCFLAGS = /nologo /W3 /O2 /MD /I. $(DEFS) $(TFLAGS)
 IPV6 ?= 1
 ASAN ?= -fsanitize=address,undefined,alignment -fno-sanitize-recover=all -fno-omit-frame-pointer -fno-common
 ASAN_OPTIONS ?= detect_leaks=1
-EXAMPLES := $(dir $(wildcard ../examples/*/Makefile))
-EXAMPLES_QUICK := $(filter-out ../examples/micropython/, $(EXAMPLES))
-EXAMPLES_MAC := $(filter-out ../examples/micropython/, $(EXAMPLES))
-EXAMPLES_WIN := $(dir $(wildcard ../examples/device-dashboard/Makefile) $(wildcard ../examples/file-*/Makefile) $(wildcard ../examples/http-*/Makefile) $(wildcard ../examples/mqtt-*/Makefile) $(wildcard ../examples/websocket-*/Makefile) $(wildcard ../examples/webui-*/Makefile))
-EXAMPLES_EMBEDDED := $(filter-out $(wildcard ../examples/zephyr/*/), $(dir $(wildcard ../examples/*/*/Makefile)))
 REFPROJS := $(dir $(wildcard ../reference-projects/windows-macos-linux/*/Makefile))
-TUTORIALS := $(dir $(wildcard ../tutorials/*/*/Makefile))
-TUTORIALS_QUICK := $(filter-out ../tutorials/tcpip/pcap-driver/, $(TUTORIALS))
-TUTORIALS_MAC := $(filter-out ../tutorials/tcpip/pcap-driver/ ../tutorials/tcpip/tap-driver/, $(TUTORIALS))
+# This does not include ESP32, ESP8266, Microchip; all examples that are directly placed under an OS tutorial. Also, it is needed that way...
+TUTORIALS_EMBEDDED := $(dir $(wildcard ../tutorials/infineon/*/Makefile)) $(dir $(wildcard ../tutorials/nxp/*/Makefile)) $(dir $(wildcard ../tutorials/pico-sdk/*/Makefile)) $(dir $(wildcard ../tutorials/renesas/*/Makefile)) $(dir $(wildcard ../tutorials/stm32/*/Makefile)) $(dir $(wildcard ../tutorials/ti/*/Makefile)) $(dir $(wildcard ../tutorials/wch/*/Makefile))
+TUTORIALS := ../tutorials/micropython/ $(filter-out $(TUTORIALS_EMBEDDED), $(dir $(wildcard ../tutorials/*/*/Makefile)))
+TUTORIALS_QUICK := $(filter-out ../tutorials/micropython/ ../tutorials/tcpip/pcap-driver/, $(TUTORIALS))
+TUTORIALS_MAC := $(filter-out ../tutorials/micropython/ ../tutorials/tcpip/pcap-driver/ ../tutorials/tcpip/tap-driver/, $(TUTORIALS))
 TUTORIALS_WIN := $(dir $(wildcard ../tutorials/http/file-*/Makefile) $(wildcard ../tutorials/http/http-*/Makefile) $(wildcard ../tutorials/mqtt/*/Makefile) $(wildcard ../tutorials/websocket/*/Makefile) $(wildcard ../tutorials/webui/*/Makefile))
 PREFIX ?= /usr/local
 LIBDIR ?= $(PREFIX)/lib
@@ -32,7 +29,7 @@ COMMON_CFLAGS ?= $(C_WARN) $(WARN) $(INCS) $(DEFS) -DMG_ENABLE_IPV6=$(IPV6) $(TF
 CFLAGS ?= $(OPTS) $(ASAN) $(COMMON_CFLAGS)
 VALGRIND_CFLAGS ?= $(OPTS) $(COMMON_CFLAGS)
 VALGRIND_RUN ?= valgrind --tool=memcheck --gen-suppressions=all --leak-check=full --show-leak-kinds=all --leak-resolution=high --track-origins=yes --error-exitcode=1 --exit-on-first-error=yes --fair-sched=yes
-.PHONY: clean_examples examples mip_test test valgrind
+.PHONY: clean_tutorials tutorials mip_test test valgrind
 
 ifeq "$(findstring ++,$(CC))" ""
 # $(CC) does not end with ++, i.e. we're using C. Apply C flags
@@ -84,7 +81,7 @@ endif
 all:
 	$(MAKE) -C ../tutorials/http/http-server
 
-tall: mg_prefix unamalgamated test mip_test arm examples vc98 vc17 vc22 mingw mingw++ fuzz
+tall: mg_prefix unamalgamated test mip_test arm tutorials vc98 vc17 vc22 mingw mingw++ fuzz
 
 mip_test: mip_test.c mongoose.c mongoose.h packed_fs.c Makefile
 	$(CC) mip_test.c packed_fs.c $(CFLAGS) $(LDFLAGS) -o $@
@@ -212,40 +209,10 @@ mongoose.h: $(HDRS) Makefile
 	cd .. && (cat src/license.h; echo; echo '#ifndef MONGOOSE_H'; echo '#define MONGOOSE_H'; echo; cat src/version.h ; echo; echo '#ifdef __cplusplus'; echo 'extern "C" {'; echo '#endif'; cat src/arch.h src/arch_*.h src/net_ft.h src/net_lwip.h src/net_rl.h src/config.h src/str.h src/queue.h src/fmt.h src/printf.h src/log.h src/timer.h src/fs.h src/util.h src/url.h src/iobuf.h src/base64.h src/md5.h src/sha1.h src/sha256.h src/tls_x25519.h src/tls_aes128.h src/tls_uecc.h src/tls_chacha20.h src/tls_rsa.h src/event.h src/net.h src/http.h src/ssi.h src/tls.h src/tls_mbed.h src/tls_openssl.h src/ws.h src/sntp.h src/mqtt.h src/dns.h src/json.h src/rpc.h src/ota.h src/flash.h src/net_builtin.h src/profile.h src/drivers/*.h | sed -e '/keep/! s,#include ".*,,' -e 's,^#pragma once,,'; echo; echo '#ifdef __cplusplus'; echo '}'; echo '#endif'; echo '#endif  // MONGOOSE_H')> $@
 
 
-clean: clean_examples clean_refprojs clean_tutorials clean_examples_embedded
+clean: clean_tutorials clean_tutorials_embedded
 	rm -rf $(PROG) *.exe *.o *.dSYM *_test ut fuzzer *.gcov *.gcno *.gcda *.obj *.exe *.ilk *.pdb slow-unit* _CL_* infer-out data.txt crash-* packed_fs.c pack
-	#find examples -maxdepth 3 -name zephyr -prune -o -name Makefile -print | xargs dirname | xargs -n1 make clean -C
+	#find tutorials -maxdepth 3 -name zephyr -prune -o -name Makefile -print | xargs dirname | xargs -n1 make clean -C
 
-
-examples:
-	@for X in $(EXAMPLES); do test -f $$X/Makefile || continue; $(MAKE) -C $$X example || exit 1; done
-clean_examples:
-	for X in $(EXAMPLES); do test -f $$X/Makefile || continue; $(MAKE) -C $$X clean || exit 1; done
-
-examples_essential:
-	@for X in $(EXAMPLES_QUICK); do test -f $$X/Makefile || continue; $(MAKE) -C $$X example || exit 1; done
-clean_examples_essential:
-	for X in $(EXAMPLES_QUICK); do test -f $$X/Makefile || continue; $(MAKE) -C $$X clean || exit 1; done
-
-examples_mac:
-	for X in $(EXAMPLES_MAC); do test -f $$X/Makefile || continue; $(MAKE) -C $$X example || exit 1; done
-clean_examples_mac:
-	for X in $(EXAMPLES_MAC); do test -f $$X/Makefile || continue; $(MAKE) -C $$X clean || exit 1; done
-
-examples_win:
-	$(foreach X, $(EXAMPLES_WIN), $(MAKE) -C $(X) example &)
-clean_examples_win:
-	$(foreach X, $(EXAMPLES_WIN), $(MAKE) -C $(X) clean &)
-
-refprojs:
-	@for X in $(REFPROJS); do test -f $$X/Makefile || continue; $(MAKE) -C $$X example || exit 1; done
-clean_refprojs:
-	for X in $(REFPROJS); do test -f $$X/Makefile || continue; $(MAKE) -C $$X clean || exit 1; done
-
-refprojs_win:
-	$(foreach X, $(REFPROJS), $(MAKE) -C $(X) example.exe &)
-clean_refprojs_win:
-	$(foreach X, $(REFPROJS), $(MAKE) -C $(X) clean &)
 
 tutorials:
 	@for X in $(TUTORIALS); do test -f $$X/Makefile || continue; $(MAKE) -C $$X example || exit 1; done
@@ -268,8 +235,8 @@ clean_tutorials_win:
 	$(foreach X, $(TUTORIALS_WIN), $(MAKE) -C $(X) clean &)
 
 
-examples_embedded:
-	@for X in $(EXAMPLES_EMBEDDED); do test -f $$X/Makefile || continue; $(MAKE) -C $$X build || exit 1; done
-clean_examples_embedded:
-	for X in $(EXAMPLES_EMBEDDED); do test -f $$X/Makefile || continue; $(MAKE) -C $$X clean || exit 1; done
+tutorials_embedded:
+	@for X in $(TUTORIALS_EMBEDDED); do test -f $$X/Makefile || continue; $(MAKE) -C $$X build || exit 1; done
+clean_tutorials_embedded:
+	for X in $(TUTORIALS_EMBEDDED); do test -f $$X/Makefile || continue; $(MAKE) -C $$X clean || exit 1; done
 

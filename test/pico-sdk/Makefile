@@ -1,4 +1,4 @@
-PROJECTS ?= $(wildcard ../../examples/pico-sdk/*-picosdk-*)
+PROJECTS ?= $(wildcard ../../tutorials/pico-sdk/*-picosdk-*)
 SDK_PATH ?= $(realpath $(PWD))/pico-sdk
 SDK_VERSION ?= 2.1.0
 
