@@ -13,9 +13,10 @@
 #define MG_OTA_CH32V307 100 // WCH CH32V307
 #define MG_OTA_U2A 200      // Renesas U2A16, U2A8, U2A6
 #define MG_OTA_RT1020 300   // IMXRT1020
-#define MG_OTA_RT1060 301   // IMXRT1060
-#define MG_OTA_RT1064 302   // IMXRT1064
-#define MG_OTA_RT1170 303   // IMXRT1170
+#define MG_OTA_RT1050 301   // IMXRT1050
+#define MG_OTA_RT1060 302   // IMXRT1060
+#define MG_OTA_RT1064 303   // IMXRT1064
+#define MG_OTA_RT1170 304   // IMXRT1170
 #define MG_OTA_MCXN 310 	  // MCXN947
 #define MG_OTA_FLASH 900    // OTA via an internal flash
 #define MG_OTA_ESP32 910    // ESP32 OTA implementation

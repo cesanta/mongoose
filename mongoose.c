@@ -5493,9 +5493,17 @@ static bool mg_imxrt_swap(void);
 #elif MG_OTA == MG_OTA_RT1064
 #define MG_IMXRT_FLASH_START 0x70000000
 #define FLEXSPI_NOR_INSTANCE 1
-#else // RT1170
+#else  // RT1170
 #define MG_IMXRT_FLASH_START 0x30000000
 #define FLEXSPI_NOR_INSTANCE 1
+#endif
+
+#if MG_OTA == MG_OTA_RT1050
+#define MG_IMXRT_SECTOR_SIZE (256 * 1024)
+#define MG_IMXRT_PAGE_SIZE 512
+#else
+#define MG_IMXRT_SECTOR_SIZE (4 * 1024)
+#define MG_IMXRT_PAGE_SIZE 256
 #endif
 
 // TODO(): fill at init, support more devices in a dynamic way
@@ -5503,8 +5511,8 @@ static bool mg_imxrt_swap(void);
 static struct mg_flash s_mg_flash_imxrt = {
     (void *) MG_IMXRT_FLASH_START,  // Start,
     4 * 1024 * 1024,                // Size, 4mb
-    4 * 1024,                       // Sector size, 4k
-    256,                            // Align,
+    MG_IMXRT_SECTOR_SIZE,           // Sector size
+    MG_IMXRT_PAGE_SIZE,             // Align
     mg_imxrt_write,
     mg_imxrt_swap,
 };
@@ -5586,8 +5594,10 @@ struct mg_flexspi_nor_config {
 #define MG_CMD_DDR 0x21
 #define MG_DUMMY_SDR 0x0C
 #define MG_DUMMY_DDR 0x2C
+#define MG_DUMMY_RWDS_DDR 0x2D
 #define MG_RADDR_SDR 0x02
 #define MG_RADDR_DDR 0x22
+#define MG_CADDR_DDR 0x23
 #define MG_READ_SDR 0x09
 #define MG_READ_DDR 0x29
 #define MG_WRITE_SDR 0x08
@@ -5621,6 +5631,131 @@ struct mg_flexspi_nor_config {
                                       MG_STOP, MG_FLEXSPI_1PAD, 0x0),          \
   }
 
+#define MG_FLEXSPI_HYPER_LUT                                                  \
+  {                                                                           \
+    [0] = MG_FLEXSPI_LUT_SEQ(MG_CMD_DDR, MG_FLEXSPI_8PAD, 0xA0, MG_RADDR_DDR, \
+                             MG_FLEXSPI_8PAD, 0x18),                          \
+    [1] = MG_FLEXSPI_LUT_SEQ(MG_CADDR_DDR, MG_FLEXSPI_8PAD, 0x10,             \
+                             MG_DUMMY_DDR, MG_FLEXSPI_8PAD, 0x0C),            \
+    [2] = MG_FLEXSPI_LUT_SEQ(MG_READ_DDR, MG_FLEXSPI_8PAD, 0x04, MG_STOP,     \
+                             MG_FLEXSPI_1PAD, 0x0),                           \
+    [4 * 1 + 0] = MG_FLEXSPI_LUT_SEQ(MG_CMD_DDR, MG_FLEXSPI_8PAD, 0x0,        \
+                                     MG_CMD_DDR, MG_FLEXSPI_8PAD, 0x0),       \
+    [4 * 1 + 1] = MG_FLEXSPI_LUT_SEQ(MG_CMD_DDR, MG_FLEXSPI_8PAD, 0x0,        \
+                                     MG_CMD_DDR, MG_FLEXSPI_8PAD, 0xAA),      \
+    [4 * 1 + 2] = MG_FLEXSPI_LUT_SEQ(MG_CMD_DDR, MG_FLEXSPI_8PAD, 0x0,        \
+                                     MG_CMD_DDR, MG_FLEXSPI_8PAD, 0x05),      \
+    [4 * 1 + 3] = MG_FLEXSPI_LUT_SEQ(MG_CMD_DDR, MG_FLEXSPI_8PAD, 0x0,        \
+                                     MG_CMD_DDR, MG_FLEXSPI_8PAD, 0x70),      \
+    [4 * 2 + 0] = MG_FLEXSPI_LUT_SEQ(MG_CMD_DDR, MG_FLEXSPI_8PAD, 0xA0,       \
+                                     MG_RADDR_DDR, MG_FLEXSPI_8PAD, 0x18),    \
+    [4 * 2 + 1] =                                                             \
+        MG_FLEXSPI_LUT_SEQ(MG_CADDR_DDR, MG_FLEXSPI_8PAD, 0x10,               \
+                           MG_DUMMY_RWDS_DDR, MG_FLEXSPI_8PAD, 0x0B),         \
+    [4 * 2 + 2] = MG_FLEXSPI_LUT_SEQ(MG_READ_DDR, MG_FLEXSPI_8PAD, 0x4,       \
+                                     MG_STOP, MG_FLEXSPI_1PAD, 0x0),          \
+    [4 * 3 + 0] = MG_FLEXSPI_LUT_SEQ(MG_CMD_DDR, MG_FLEXSPI_8PAD, 0x0,        \
+                                     MG_CMD_DDR, MG_FLEXSPI_8PAD, 0x0),       \
+    [4 * 3 + 1] = MG_FLEXSPI_LUT_SEQ(MG_CMD_DDR, MG_FLEXSPI_8PAD, 0x0,        \
+                                     MG_CMD_DDR, MG_FLEXSPI_8PAD, 0xAA),      \
+    [4 * 3 + 2] = MG_FLEXSPI_LUT_SEQ(MG_CMD_DDR, MG_FLEXSPI_8PAD, 0x0,        \
+                                     MG_CMD_DDR, MG_FLEXSPI_8PAD, 0x05),      \
+    [4 * 3 + 3] = MG_FLEXSPI_LUT_SEQ(MG_CMD_DDR, MG_FLEXSPI_8PAD, 0x0,        \
+                                     MG_CMD_DDR, MG_FLEXSPI_8PAD, 0xAA),      \
+    [4 * 4 + 0] = MG_FLEXSPI_LUT_SEQ(MG_CMD_DDR, MG_FLEXSPI_8PAD, 0x0,        \
+                                     MG_CMD_DDR, MG_FLEXSPI_8PAD, 0x0),       \
+    [4 * 4 + 1] = MG_FLEXSPI_LUT_SEQ(MG_CMD_DDR, MG_FLEXSPI_8PAD, 0x0,        \
+                                     MG_CMD_DDR, MG_FLEXSPI_8PAD, 0x55),      \
+    [4 * 4 + 2] = MG_FLEXSPI_LUT_SEQ(MG_CMD_DDR, MG_FLEXSPI_8PAD, 0x0,        \
+                                     MG_CMD_DDR, MG_FLEXSPI_8PAD, 0x02),      \
+    [4 * 4 + 3] = MG_FLEXSPI_LUT_SEQ(MG_CMD_DDR, MG_FLEXSPI_8PAD, 0x0,        \
+                                     MG_CMD_DDR, MG_FLEXSPI_8PAD, 0x55),      \
+    [4 * 5 + 0] = MG_FLEXSPI_LUT_SEQ(MG_CMD_DDR, MG_FLEXSPI_8PAD, 0x0,        \
+                                     MG_CMD_DDR, MG_FLEXSPI_8PAD, 0x0),       \
+    [4 * 5 + 1] = MG_FLEXSPI_LUT_SEQ(MG_CMD_DDR, MG_FLEXSPI_8PAD, 0x0,        \
+                                     MG_CMD_DDR, MG_FLEXSPI_8PAD, 0xAA),      \
+    [4 * 5 + 2] = MG_FLEXSPI_LUT_SEQ(MG_CMD_DDR, MG_FLEXSPI_8PAD, 0x0,        \
+                                     MG_CMD_DDR, MG_FLEXSPI_8PAD, 0x05),      \
+    [4 * 5 + 3] = MG_FLEXSPI_LUT_SEQ(MG_CMD_DDR, MG_FLEXSPI_8PAD, 0x0,        \
+                                     MG_CMD_DDR, MG_FLEXSPI_8PAD, 0x80),      \
+    [4 * 6 + 0] = MG_FLEXSPI_LUT_SEQ(MG_CMD_DDR, MG_FLEXSPI_8PAD, 0x0,        \
+                                     MG_CMD_DDR, MG_FLEXSPI_8PAD, 0x0),       \
+    [4 * 6 + 1] = MG_FLEXSPI_LUT_SEQ(MG_CMD_DDR, MG_FLEXSPI_8PAD, 0x0,        \
+                                     MG_CMD_DDR, MG_FLEXSPI_8PAD, 0xAA),      \
+    [4 * 6 + 2] = MG_FLEXSPI_LUT_SEQ(MG_CMD_DDR, MG_FLEXSPI_8PAD, 0x0,        \
+                                     MG_CMD_DDR, MG_FLEXSPI_8PAD, 0x05),      \
+    [4 * 6 + 3] = MG_FLEXSPI_LUT_SEQ(MG_CMD_DDR, MG_FLEXSPI_8PAD, 0x0,        \
+                                     MG_CMD_DDR, MG_FLEXSPI_8PAD, 0xAA),      \
+    [4 * 7 + 0] = MG_FLEXSPI_LUT_SEQ(MG_CMD_DDR, MG_FLEXSPI_8PAD, 0x0,        \
+                                     MG_CMD_DDR, MG_FLEXSPI_8PAD, 0x0),       \
+    [4 * 7 + 1] = MG_FLEXSPI_LUT_SEQ(MG_CMD_DDR, MG_FLEXSPI_8PAD, 0x0,        \
+                                     MG_CMD_DDR, MG_FLEXSPI_8PAD, 0x55),      \
+    [4 * 7 + 2] = MG_FLEXSPI_LUT_SEQ(MG_CMD_DDR, MG_FLEXSPI_8PAD, 0x0,        \
+                                     MG_CMD_DDR, MG_FLEXSPI_8PAD, 0x02),      \
+    [4 * 7 + 3] = MG_FLEXSPI_LUT_SEQ(MG_CMD_DDR, MG_FLEXSPI_8PAD, 0x0,        \
+                                     MG_CMD_DDR, MG_FLEXSPI_8PAD, 0x55),      \
+    [4 * 8 + 0] = MG_FLEXSPI_LUT_SEQ(MG_CMD_DDR, MG_FLEXSPI_8PAD, 0x0,        \
+                                     MG_RADDR_DDR, MG_FLEXSPI_8PAD, 0x18),    \
+    [4 * 8 + 1] = MG_FLEXSPI_LUT_SEQ(MG_CADDR_DDR, MG_FLEXSPI_8PAD, 0x10,     \
+                                     MG_CMD_DDR, MG_FLEXSPI_8PAD, 0x0),       \
+    [4 * 8 + 2] = MG_FLEXSPI_LUT_SEQ(MG_CMD_DDR, MG_FLEXSPI_8PAD, 0x30,       \
+                                     MG_STOP, MG_FLEXSPI_1PAD, 0x0),          \
+    [4 * 9 + 0] = MG_FLEXSPI_LUT_SEQ(MG_CMD_DDR, MG_FLEXSPI_8PAD, 0x0,        \
+                                     MG_CMD_DDR, MG_FLEXSPI_8PAD, 0x0),       \
+    [4 * 9 + 1] = MG_FLEXSPI_LUT_SEQ(MG_CMD_DDR, MG_FLEXSPI_8PAD, 0x0,        \
+                                     MG_CMD_DDR, MG_FLEXSPI_8PAD, 0xAA),      \
+    [4 * 9 + 2] = MG_FLEXSPI_LUT_SEQ(MG_CMD_DDR, MG_FLEXSPI_8PAD, 0x0,        \
+                                     MG_CMD_DDR, MG_FLEXSPI_8PAD, 0x05),      \
+    [4 * 9 + 3] = MG_FLEXSPI_LUT_SEQ(MG_CMD_DDR, MG_FLEXSPI_8PAD, 0x0,        \
+                                     MG_CMD_DDR, MG_FLEXSPI_8PAD, 0xA0),      \
+    [4 * 10 + 0] = MG_FLEXSPI_LUT_SEQ(MG_CMD_DDR, MG_FLEXSPI_8PAD, 0x0,       \
+                                      MG_RADDR_DDR, MG_FLEXSPI_8PAD, 0x18),   \
+    [4 * 10 + 1] = MG_FLEXSPI_LUT_SEQ(MG_CADDR_DDR, MG_FLEXSPI_8PAD, 0x10,    \
+                                      MG_WRITE_DDR, MG_FLEXSPI_8PAD, 0x80),   \
+    [4 * 11 + 0] = MG_FLEXSPI_LUT_SEQ(MG_CMD_DDR, MG_FLEXSPI_8PAD, 0x0,       \
+                                      MG_CMD_DDR, MG_FLEXSPI_8PAD, 0x0),      \
+    [4 * 11 + 1] = MG_FLEXSPI_LUT_SEQ(MG_CMD_DDR, MG_FLEXSPI_8PAD, 0x0,       \
+                                      MG_CMD_DDR, MG_FLEXSPI_8PAD, 0xAA),     \
+    [4 * 11 + 2] = MG_FLEXSPI_LUT_SEQ(MG_CMD_DDR, MG_FLEXSPI_8PAD, 0x0,       \
+                                      MG_CMD_DDR, MG_FLEXSPI_8PAD, 0x05),     \
+    [4 * 11 + 3] = MG_FLEXSPI_LUT_SEQ(MG_CMD_DDR, MG_FLEXSPI_8PAD, 0x0,       \
+                                      MG_CMD_DDR, MG_FLEXSPI_8PAD, 0x80),     \
+    [4 * 12 + 0] = MG_FLEXSPI_LUT_SEQ(MG_CMD_DDR, MG_FLEXSPI_8PAD, 0x0,       \
+                                      MG_CMD_DDR, MG_FLEXSPI_8PAD, 0x0),      \
+    [4 * 12 + 1] = MG_FLEXSPI_LUT_SEQ(MG_CMD_DDR, MG_FLEXSPI_8PAD, 0x0,       \
+                                      MG_CMD_DDR, MG_FLEXSPI_8PAD, 0xAA),     \
+    [4 * 12 + 2] = MG_FLEXSPI_LUT_SEQ(MG_CMD_DDR, MG_FLEXSPI_8PAD, 0x0,       \
+                                      MG_CMD_DDR, MG_FLEXSPI_8PAD, 0x05),     \
+    [4 * 12 + 3] = MG_FLEXSPI_LUT_SEQ(MG_CMD_DDR, MG_FLEXSPI_8PAD, 0x0,       \
+                                      MG_CMD_DDR, MG_FLEXSPI_8PAD, 0xAA),     \
+    [4 * 13 + 0] = MG_FLEXSPI_LUT_SEQ(MG_CMD_DDR, MG_FLEXSPI_8PAD, 0x0,       \
+                                      MG_CMD_DDR, MG_FLEXSPI_8PAD, 0x0),      \
+    [4 * 13 + 1] = MG_FLEXSPI_LUT_SEQ(MG_CMD_DDR, MG_FLEXSPI_8PAD, 0x0,       \
+                                      MG_CMD_DDR, MG_FLEXSPI_8PAD, 0x55),     \
+    [4 * 13 + 2] = MG_FLEXSPI_LUT_SEQ(MG_CMD_DDR, MG_FLEXSPI_8PAD, 0x0,       \
+                                      MG_CMD_DDR, MG_FLEXSPI_8PAD, 0x02),     \
+    [4 * 13 + 3] = MG_FLEXSPI_LUT_SEQ(MG_CMD_DDR, MG_FLEXSPI_8PAD, 0x0,       \
+                                      MG_CMD_DDR, MG_FLEXSPI_8PAD, 0x55),     \
+    [4 * 14 + 0] = MG_FLEXSPI_LUT_SEQ(MG_CMD_DDR, MG_FLEXSPI_8PAD, 0x0,       \
+                                      MG_CMD_DDR, MG_FLEXSPI_8PAD, 0x0),      \
+    [4 * 14 + 1] = MG_FLEXSPI_LUT_SEQ(MG_CMD_DDR, MG_FLEXSPI_8PAD, 0x0,       \
+                                      MG_CMD_DDR, MG_FLEXSPI_8PAD, 0xAA),     \
+    [4 * 14 + 2] = MG_FLEXSPI_LUT_SEQ(MG_CMD_DDR, MG_FLEXSPI_8PAD, 0x0,       \
+                                      MG_CMD_DDR, MG_FLEXSPI_8PAD, 0x05),     \
+    [4 * 14 + 3] = MG_FLEXSPI_LUT_SEQ(MG_CMD_DDR, MG_FLEXSPI_8PAD, 0x0,       \
+                                      MG_CMD_DDR, MG_FLEXSPI_8PAD, 0x10),     \
+  }
+
+#define MG_LUT_CUSTOM_SEQ                          \
+  {                                                \
+    {.seqNum = 0, .seqId = 0, .reserved = 0},      \
+        {.seqNum = 2, .seqId = 1, .reserved = 0},  \
+        {.seqNum = 2, .seqId = 3, .reserved = 0},  \
+        {.seqNum = 4, .seqId = 5, .reserved = 0},  \
+        {.seqNum = 2, .seqId = 9, .reserved = 0},  \
+        {.seqNum = 4, .seqId = 11, .reserved = 0}, \
+  }
+
 #define MG_FLEXSPI_LUT_OPERAND0(x) (((uint32_t) (((uint32_t) (x)))) & 0xFFU)
 #define MG_FLEXSPI_LUT_NUM_PADS0(x) \
   (((uint32_t) (((uint32_t) (x)) << 8U)) & 0x300U)
@@ -5633,8 +5768,8 @@ struct mg_flexspi_nor_config {
 #define MG_FLEXSPI_LUT_OPCODE1(x) \
   (((uint32_t) (((uint32_t) (x)) << 26U)) & 0xFC000000U)
 
-#if MG_OTA == MG_OTA_RT1020
-// RT102X boards support ROM API version 1.4
+#if MG_OTA == MG_OTA_RT1020 || MG_OTA == MG_OTA_RT1050
+// RT102X and RT105x boards support ROM API version 1.4
 struct mg_flexspi_nor_driver_interface {
   uint32_t version;
   int (*init)(uint32_t instance, struct mg_flexspi_nor_config *config);
@@ -5692,10 +5827,10 @@ struct mg_flexspi_nor_driver_interface {
                      uint32_t address);
   void (*hw_reset)(uint32_t instance, uint32_t resetLogic);
   int (*wait_busy)(uint32_t instance, struct mg_flexspi_nor_config *config,
-                  bool isParallelMode, uint32_t address);
+                   bool isParallelMode, uint32_t address);
   int (*set_clock_source)(uint32_t instance, uint32_t clockSrc);
   void (*config_clock)(uint32_t instance, uint32_t freqOption,
-                  uint32_t sampleClkMode);
+                       uint32_t sampleClkMode);
 };
 #endif
 
@@ -5714,33 +5849,67 @@ struct mg_flexspi_nor_driver_interface {
 static bool s_flash_irq_disabled;
 
 MG_IRAM static bool flash_page_start(volatile uint32_t *dst) {
-  char *base = (char *) s_mg_flash_imxrt.start, *end = base + s_mg_flash_imxrt.size;
+  char *base = (char *) s_mg_flash_imxrt.start,
+       *end = base + s_mg_flash_imxrt.size;
   volatile char *p = (char *) dst;
   return p >= base && p < end && ((p - base) % s_mg_flash_imxrt.secsz) == 0;
 }
 
-// Note: the get_config function below works both for RT1020 and 1060
-// must reside in RAM, as flash will be erased
+#if MG_OTA == MG_OTA_RT1050
+// Configuration for Hyper flash memory
 static struct mg_flexspi_nor_config default_config = {
-  .memConfig = {.tag = MG_FLEXSPI_CFG_BLK_TAG,
-                .version = MG_FLEXSPI_CFG_BLK_VERSION,
-                .readSampleClkSrc = 1,  // ReadSampleClk_LoopbackFromDqsPad
-                .csHoldTime = 3,
-                .csSetupTime = 3,
-                .controllerMiscOption = MG_BIT(4),
-                .deviceType = 1,  // serial NOR
-                .sflashPadType = 4,
-                .serialClkFreq = 7,  // 133MHz
-                .sflashA1Size = 8 * 1024 * 1024,
-                .lookupTable = MG_FLEXSPI_QSPI_LUT},
-  .pageSize = 256,
-  .sectorSize = 4 * 1024,
-  .ipcmdSerialClkFreq = 1,
-  .blockSize = 64 * 1024,
-  .isUniformBlockSize = false
-};
+    .memConfig =
+        {
+            .tag = MG_FLEXSPI_CFG_BLK_TAG,
+            .version = MG_FLEXSPI_CFG_BLK_VERSION,
+            .readSampleClkSrc = 3,  // ReadSampleClk_LoopbackFromDqsPad
+            .csHoldTime = 3,
+            .csSetupTime = 3,
+            .columnAddressWidth = 3u,
+            .controllerMiscOption =
+                MG_BIT(6) | MG_BIT(4) | MG_BIT(3) | MG_BIT(0),
+            .deviceType = 1,  // serial NOR
+            .sflashPadType = 8,
+            .serialClkFreq = 7,  // 133MHz
+            .sflashA1Size = 64 * 1024 * 1024,
+            .dataValidTime = {15, 0},
+            .busyOffset = 15,
+            .busyBitPolarity = 1,
+            .lutCustomSeqEnable = 0x1,
+            .lookupTable = MG_FLEXSPI_HYPER_LUT,
+            .lutCustomSeq = MG_LUT_CUSTOM_SEQ,
+        },
+    .pageSize = 512,
+    .sectorSize = 256 * 1024,
+    .ipcmdSerialClkFreq = 1,
+    .serialNorType = 1u,
+    .blockSize = 256 * 1024,
+    .isUniformBlockSize = true};
+#else
+// Note: this QSPI configuration works for RTs supporting QSPI
+// Configuration for QSPI memory
+static struct mg_flexspi_nor_config default_config = {
+    .memConfig = {.tag = MG_FLEXSPI_CFG_BLK_TAG,
+                  .version = MG_FLEXSPI_CFG_BLK_VERSION,
+                  .readSampleClkSrc = 1,  // ReadSampleClk_LoopbackFromDqsPad
+                  .csHoldTime = 3,
+                  .csSetupTime = 3,
+                  .controllerMiscOption = MG_BIT(4),
+                  .deviceType = 1,  // serial NOR
+                  .sflashPadType = 4,
+                  .serialClkFreq = 7,  // 133MHz
+                  .sflashA1Size = 8 * 1024 * 1024,
+                  .lookupTable = MG_FLEXSPI_QSPI_LUT},
+    .pageSize = 256,
+    .sectorSize = 4 * 1024,
+    .ipcmdSerialClkFreq = 1,
+    .blockSize = 64 * 1024,
+    .isUniformBlockSize = false};
+#endif
+
+// must reside in RAM, as flash will be erased
 MG_IRAM static int flexspi_nor_get_config(
-  struct mg_flexspi_nor_config **config) {
+    struct mg_flexspi_nor_config **config) {
   *config = &default_config;
   return 0;
 }
