@@ -173,15 +173,11 @@ void mg_hmac_sha256(uint8_t dst[32], uint8_t *key, size_t keysz, uint8_t *data,
   mg_sha256_final(dst, &ctx);
 }
 
-//=====================================
-// TODO: rename macros
-#define ROTR64(x, n) (((x) >> (n)) | ((x) << (64 - (n))))
-#define CH(x, y, z) (((x) & (y)) ^ (~(x) & (z)))
-#define MAJ(x, y, z) (((x) & (y)) ^ ((x) & (z)) ^ ((y) & (z)))
-#define EP0(x) (ROTR64(x, 28) ^ ROTR64(x, 34) ^ ROTR64(x, 39))
-#define EP1(x) (ROTR64(x, 14) ^ ROTR64(x, 18) ^ ROTR64(x, 41))
-#define SIG0(x) (ROTR64(x, 1) ^ ROTR64(x, 8) ^ ((x) >> 7))
-#define SIG1(x) (ROTR64(x, 19) ^ ROTR64(x, 61) ^ ((x) >> 6))
+#define rotr64(x, n) (((x) >> (n)) | ((x) << (64 - (n))))
+#define ep064(x) (rotr64(x, 28) ^ rotr64(x, 34) ^ rotr64(x, 39))
+#define ep164(x) (rotr64(x, 14) ^ rotr64(x, 18) ^ rotr64(x, 41))
+#define sig064(x) (rotr64(x, 1) ^ rotr64(x, 8) ^ ((x) >> 7))
+#define sig164(x) (rotr64(x, 19) ^ rotr64(x, 61) ^ ((x) >> 6))
 
 static const uint64_t mg_sha256_k2[80] = {
     0x428a2f98d728ae22, 0x7137449123ef65cd, 0xb5c0fbcfec4d3b2f,
@@ -223,7 +219,7 @@ static void mg_sha384_transform(mg_sha384_ctx *ctx, const uint8_t data[]) {
            ((uint64_t) data[j + 4] << 24) | ((uint64_t) data[j + 5] << 16) |
            ((uint64_t) data[j + 6] << 8) | ((uint64_t) data[j + 7]);
   for (; i < 80; ++i)
-    m[i] = SIG1(m[i - 2]) + m[i - 7] + SIG0(m[i - 15]) + m[i - 16];
+    m[i] = sig164(m[i - 2]) + m[i - 7] + sig064(m[i - 15]) + m[i - 16];
 
   a = ctx->state[0];
   b = ctx->state[1];
@@ -235,8 +231,8 @@ static void mg_sha384_transform(mg_sha384_ctx *ctx, const uint8_t data[]) {
   h = ctx->state[7];
 
   for (i = 0; i < 80; ++i) {
-    uint64_t t1 = h + EP1(e) + CH(e, f, g) + mg_sha256_k2[i] + m[i];
-    uint64_t t2 = EP0(a) + MAJ(a, b, c);
+    uint64_t t1 = h + ep164(e) + ch(e, f, g) + mg_sha256_k2[i] + m[i];
+    uint64_t t2 = ep064(a) + maj(a, b, c);
     h = g;
     g = f;
     f = e;

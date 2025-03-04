@@ -188,9 +188,6 @@ static void gcm_zero_ctx(gcm_context *ctx);
  *
  *******************************************************************************/
 
-#include "tls.h"
-#include "tls_aes128.h"
-
 static int aes_tables_inited = 0;  // run-once flag for performing key
                                    // expasion table generation (see below)
 /*

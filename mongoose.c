@@ -7836,15 +7836,11 @@ void mg_hmac_sha256(uint8_t dst[32], uint8_t *key, size_t keysz, uint8_t *data,
   mg_sha256_final(dst, &ctx);
 }
 
-//=====================================
-// TODO: rename macros
-#define ROTR64(x, n) (((x) >> (n)) | ((x) << (64 - (n))))
-#define CH(x, y, z) (((x) & (y)) ^ (~(x) & (z)))
-#define MAJ(x, y, z) (((x) & (y)) ^ ((x) & (z)) ^ ((y) & (z)))
-#define EP0(x) (ROTR64(x, 28) ^ ROTR64(x, 34) ^ ROTR64(x, 39))
-#define EP1(x) (ROTR64(x, 14) ^ ROTR64(x, 18) ^ ROTR64(x, 41))
-#define SIG0(x) (ROTR64(x, 1) ^ ROTR64(x, 8) ^ ((x) >> 7))
-#define SIG1(x) (ROTR64(x, 19) ^ ROTR64(x, 61) ^ ((x) >> 6))
+#define rotr64(x, n) (((x) >> (n)) | ((x) << (64 - (n))))
+#define ep064(x) (rotr64(x, 28) ^ rotr64(x, 34) ^ rotr64(x, 39))
+#define ep164(x) (rotr64(x, 14) ^ rotr64(x, 18) ^ rotr64(x, 41))
+#define sig064(x) (rotr64(x, 1) ^ rotr64(x, 8) ^ ((x) >> 7))
+#define sig164(x) (rotr64(x, 19) ^ rotr64(x, 61) ^ ((x) >> 6))
 
 static const uint64_t mg_sha256_k2[80] = {
     0x428a2f98d728ae22, 0x7137449123ef65cd, 0xb5c0fbcfec4d3b2f,
@@ -7886,7 +7882,7 @@ static void mg_sha384_transform(mg_sha384_ctx *ctx, const uint8_t data[]) {
            ((uint64_t) data[j + 4] << 24) | ((uint64_t) data[j + 5] << 16) |
            ((uint64_t) data[j + 6] << 8) | ((uint64_t) data[j + 7]);
   for (; i < 80; ++i)
-    m[i] = SIG1(m[i - 2]) + m[i - 7] + SIG0(m[i - 15]) + m[i - 16];
+    m[i] = sig164(m[i - 2]) + m[i - 7] + sig064(m[i - 15]) + m[i - 16];
 
   a = ctx->state[0];
   b = ctx->state[1];
@@ -7898,8 +7894,8 @@ static void mg_sha384_transform(mg_sha384_ctx *ctx, const uint8_t data[]) {
   h = ctx->state[7];
 
   for (i = 0; i < 80; ++i) {
-    uint64_t t1 = h + EP1(e) + CH(e, f, g) + mg_sha256_k2[i] + m[i];
-    uint64_t t2 = EP0(a) + MAJ(a, b, c);
+    uint64_t t1 = h + ep164(e) + ch(e, f, g) + mg_sha256_k2[i] + m[i];
+    uint64_t t2 = ep064(a) + maj(a, b, c);
     h = g;
     g = f;
     f = e;
@@ -9355,9 +9351,6 @@ static void gcm_zero_ctx(gcm_context *ctx);
  * REGARDING ITS FITNESS FOR ANY PARTICULAR PURPOSE. USE IT AT YOUR OWN RISK.
  *
  *******************************************************************************/
-
-
-
 
 static int aes_tables_inited = 0;  // run-once flag for performing key
                                    // expasion table generation (see below)
@@ -13937,7 +13930,8 @@ void mg_tls_ctx_free(struct mg_mgr *mgr) {
 #endif
 
 
-#if defined(MG_TLS) && MG_TLS == MG_TLS_BUILTIN
+
+#if MG_TLS == MG_TLS_BUILTIN
 
 #define NS_INTERNAL static
 typedef struct _bigint bigint; /**< An alias for _bigint */
@@ -15583,7 +15577,7 @@ int mg_rsa_mod_pow(const uint8_t *mod, size_t modsz, const uint8_t *exp, size_t 
 #define DEC_31 30
 #define DEC_32 31
 
-#define DEC(N) MG_UECC_CONCAT(DEC_, N)
+#define DEC_(N) MG_UECC_CONCAT(DEC_, N)
 
 #define SECOND_ARG(_, val, ...) val
 #define SOME_CHECK_0 ~, 0
@@ -15597,14 +15591,14 @@ int mg_rsa_mod_pow(const uint8_t *mod, size_t modsz, const uint8_t *exp, size_t 
 #define REPEAT_NAME_SOME() REPEAT_SOME
 #define REPEAT_0(...)
 #define REPEAT_SOME(N, stuff) \
-  DEFER(MG_UECC_CONCAT(REPEAT_NAME_, SOME_OR_0(DEC(N))))()(DEC(N), stuff) stuff
+  DEFER(MG_UECC_CONCAT(REPEAT_NAME_, SOME_OR_0(DEC_(N))))()(DEC_(N), stuff) stuff
 #define REPEAT(N, stuff) EVAL(REPEAT_SOME(N, stuff))
 
 #define REPEATM_NAME_0() REPEATM_0
 #define REPEATM_NAME_SOME() REPEATM_SOME
 #define REPEATM_0(...)
 #define REPEATM_SOME(N, macro) \
-  macro(N) DEFER(MG_UECC_CONCAT(REPEATM_NAME_, SOME_OR_0(DEC(N))))()(DEC(N), macro)
+  macro(N) DEFER(MG_UECC_CONCAT(REPEATM_NAME_, SOME_OR_0(DEC_(N))))()(DEC_(N), macro)
 #define REPEATM(N, macro) EVAL(REPEATM_SOME(N, macro))
 #endif
 
@@ -18756,6 +18750,9 @@ void mg_uecc_point_mult(mg_uecc_word_t *result, const mg_uecc_word_t *point,
 
 
 
+
+#if MG_TLS == MG_TLS_BUILTIN
+
 const uint8_t X25519_BASE_POINT[X25519_BYTES] = {9};
 
 #define X25519_WBITS 32
@@ -19004,6 +19001,8 @@ int mg_tls_x25519(uint8_t out[X25519_BYTES], const uint8_t scalar[X25519_BYTES],
   }
   return ret;
 }
+
+#endif
 
 #ifdef MG_ENABLE_LINES
 #line 1 "src/url.c"

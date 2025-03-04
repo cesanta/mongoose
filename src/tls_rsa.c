@@ -1,6 +1,7 @@
+#include "tls.h"
 #include "tls_rsa.h"
 
-#if defined(MG_TLS) && MG_TLS == MG_TLS_BUILTIN
+#if MG_TLS == MG_TLS_BUILTIN
 
 #define NS_INTERNAL static
 typedef struct _bigint bigint; /**< An alias for _bigint */

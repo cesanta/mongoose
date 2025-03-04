@@ -4,8 +4,11 @@
  * Author: Mike Hamburg
  * License: MIT License
  */
+#include "tls.h"
 #include "tls_x25519.h"
 #include "util.h"
+
+#if MG_TLS == MG_TLS_BUILTIN
 
 const uint8_t X25519_BASE_POINT[X25519_BYTES] = {9};
 
@@ -255,3 +258,5 @@ int mg_tls_x25519(uint8_t out[X25519_BYTES], const uint8_t scalar[X25519_BYTES],
   }
   return ret;
 }
+
+#endif
