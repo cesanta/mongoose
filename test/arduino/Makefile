@@ -1,4 +1,4 @@
-PROJECTS ?= arduino-xiao arduino-nano #arduino-esp32 arduino-teensy41
+PROJECTS ?= arduino-xiao #arduino-nano #arduino-esp32 arduino-teensy41
 ROOT ?= $(realpath $(CURDIR)/../..)
 ARD ?= $(realpath $(CURDIR))
 
@@ -24,20 +24,20 @@ arduino-xiao-board:
 #	./arduino/arduino --install-boards teensy:avr
 
 arduino-xiao: arduino arduino-xiao-board
-	cd $(ROOT)/tutorials/mqtt/mqtt-client/arduino/sim800 && $(ARD)/arduino/arduino --verbose --verify --board Seeeduino:samd:seeed_XIAO_m0 sim800-mqtt.ino
-	cd $(ROOT)/tutorials/http/http-server/arduino/w5500 &&  $(ARD)/arduino/arduino --verbose --verify --board Seeeduino:samd:seeed_XIAO_m0 w5500-http.ino
-	cd $(ROOT)/tutorials/mqtt/mqtt-client/arduino/w5500 &&  $(ARD)/arduino/arduino --verbose --verify --board Seeeduino:samd:seeed_XIAO_m0 w5500-mqtt.ino
+	cd $(ROOT)/tutorials/mqtt/mqtt-client/arduino/sim800-mqtt && $(ARD)/arduino/arduino --verbose --verify --board Seeeduino:samd:seeed_XIAO_m0 sim800-mqtt.ino
+	cd $(ROOT)/tutorials/http/http-server/arduino/w5500-http &&  $(ARD)/arduino/arduino --verbose --verify --board Seeeduino:samd:seeed_XIAO_m0 w5500-http.ino
+	cd $(ROOT)/tutorials/mqtt/mqtt-client/arduino/w5500-mqtt &&  $(ARD)/arduino/arduino --verbose --verify --board Seeeduino:samd:seeed_XIAO_m0 w5500-mqtt.ino
 
 arduino-nano: arduino
-	cd $(ROOT)/tutorials/http/http-server/arduino/w5500 && $(ARD)/arduino/arduino --pref compiler.cpp.extra_flags=-DMG_ENABLE_LOG=0 --verbose --verify --board arduino:avr:nano w5500-http.ino
-	cd $(ROOT)/tutorials/mqtt/mqtt-client/arduino/w5500 && $(ARD)/arduino/arduino --pref compiler.cpp.extra_flags=-DMG_ENABLE_LOG=0 --verbose --verify --board arduino:avr:nano w5500-mqtt.ino
+	cd $(ROOT)/tutorials/http/http-server/arduino/w5500-http && $(ARD)/arduino/arduino --pref compiler.cpp.extra_flags=-DMG_ENABLE_LOG=0 --verbose --verify --board arduino:avr:nano w5500-http.ino
+	cd $(ROOT)/tutorials/mqtt/mqtt-client/arduino/w5500-mqtt && $(ARD)/arduino/arduino --pref compiler.cpp.extra_flags=-DMG_ENABLE_LOG=0 --verbose --verify --board arduino:avr:nano w5500-mqtt.ino
 
 #arduino-esp32: arduino esp32-board
-#	cd $(ROOT)/tutorials/http/http-server/arduino/esp32 && $(ARD)/arduino/arduino --verbose --verify --board esp32-http.ino
-#	cd $(ROOT)/tutorials/mqtt/mqtt-client/arduino/esp32 && $(ARD)/arduino/arduino --verbose --verify --board esp32-mqtt.ino
+#	cd $(ROOT)/tutorials/http/http-server/arduino/esp32-http && $(ARD)/arduino/arduino --verbose --verify --board esp32-http.ino
+#	cd $(ROOT)/tutorials/mqtt/mqtt-client/arduino/esp32-mqtt && $(ARD)/arduino/arduino --verbose --verify --board esp32-mqtt.ino
 #
 #arduino-teensy41: arduino teensy-board
-#	cd $(ROOT)/tutorials/http/http-server/arduino/teensy41 && $(ARD)/arduino/arduino --verbose --verify --board teensy41-http.ino
+#	cd $(ROOT)/tutorials/http/http-server/arduino/teensy41-http && $(ARD)/arduino/arduino --verbose --verify --board teensy41-http.ino
 
 
 
