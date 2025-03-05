@@ -2412,6 +2412,7 @@ static void test_util(void) {
   char buf[100], *s;
   struct mg_addr a;
   uint32_t ipv4;
+  uint16_t port;
   struct mg_str data;
   memset(&a, 0xa5, sizeof(a));
   ASSERT(mg_file_printf(&mg_fs_posix, "data.txt", "%s", "hi") == true);
@@ -2429,6 +2430,18 @@ static void test_util(void) {
   ASSERT(a.is_ip6 == false);
   memcpy(&ipv4, a.ip, sizeof(ipv4));
   ASSERT(ipv4 == mg_htonl(0x7f000001));
+  ASSERT(mg_ntohl(ipv4) == 0x7f000001);
+  MG_STORE_BE32(&ipv4, 0x5678abcd);
+  ASSERT(((uint8_t *)&ipv4)[0] == 0x56 && ((uint8_t *)&ipv4)[1] == 0x78 && ((uint8_t *)&ipv4)[2] == 0xab && ((uint8_t *)&ipv4)[3] == 0xcd);
+  ASSERT(MG_LOAD_BE32(&ipv4) == 0x5678abcd);
+  MG_STORE_BE16(&port, 0x1234);
+  ASSERT(((uint8_t *)&port)[0] == 0x12 && ((uint8_t *)&port)[1] == 0x34);
+  ASSERT(MG_LOAD_BE16(&port) == 0x1234);
+  ASSERT(port == mg_htons(0x1234));
+  ASSERT(mg_ntohs(port) == 0x1234);
+  MG_STORE_BE24(&ipv4, 0xef2345);
+  ASSERT(((uint8_t *)&ipv4)[0] == 0xef && ((uint8_t *)&ipv4)[1] == 0x23 && ((uint8_t *)&ipv4)[2] == 0x45);
+  ASSERT(MG_LOAD_BE24(&ipv4) == 0xef2345);
 
   memset(a.ip, 0xa5, sizeof(a.ip));
   ASSERT(mg_aton(mg_str("1:2:3:4:5:6:7:8"), &a) == true);

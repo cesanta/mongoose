@@ -19171,19 +19171,6 @@ char *mg_random_str(char *buf, size_t len) {
   return buf;
 }
 
-uint32_t mg_ntohl(uint32_t net) {
-  uint8_t data[4] = {0, 0, 0, 0};
-  memcpy(&data, &net, sizeof(data));
-  return (((uint32_t) data[3]) << 0) | (((uint32_t) data[2]) << 8) |
-         (((uint32_t) data[1]) << 16) | (((uint32_t) data[0]) << 24);
-}
-
-uint16_t mg_ntohs(uint16_t net) {
-  uint8_t data[2] = {0, 0};
-  memcpy(&data, &net, sizeof(data));
-  return (uint16_t) ((uint16_t) data[1] | (((uint16_t) data[0]) << 8));
-}
-
 uint32_t mg_crc32(uint32_t crc, const char *buf, size_t len) {
   static const uint32_t crclut[16] = {
       // table for polynomial 0xEDB88320 (reflected)

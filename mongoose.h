@@ -1104,18 +1104,13 @@ struct mg_str mg_unpacked(const char *path);  // Packed file as mg_str
 void mg_bzero(volatile unsigned char *buf, size_t len);
 bool mg_random(void *buf, size_t len);
 char *mg_random_str(char *buf, size_t len);
-uint16_t mg_ntohs(uint16_t net);
-uint32_t mg_ntohl(uint32_t net);
 uint32_t mg_crc32(uint32_t crc, const char *buf, size_t len);
 uint64_t mg_millis(void);  // Return milliseconds since boot
 bool mg_path_is_sane(const struct mg_str path);
 
-#define mg_htons(x) mg_ntohs(x)
-#define mg_htonl(x) mg_ntohl(x)
-
-#define MG_U32(a, b, c, d)                                           \
-  (((uint32_t) ((a) & 255) << 24) | ((uint32_t) ((b) & 255) << 16) | \
-   ((uint32_t) ((c) & 255) << 8) | (uint32_t) ((d) & 255))
+#define MG_U32(a, b, c, d)                                         \
+  (((uint32_t) ((a) &255) << 24) | ((uint32_t) ((b) &255) << 16) | \
+   ((uint32_t) ((c) &255) << 8) | (uint32_t) ((d) &255))
 
 #define MG_IPV4(a, b, c, d) mg_htonl(MG_U32(a, b, c, d))
 
@@ -1124,9 +1119,15 @@ bool mg_path_is_sane(const struct mg_str path);
 #define MG_IPADDR_PARTS(ADDR) \
   MG_U8P(ADDR)[0], MG_U8P(ADDR)[1], MG_U8P(ADDR)[2], MG_U8P(ADDR)[3]
 
-#define MG_LOAD_BE16(p) ((uint16_t) ((MG_U8P(p)[0] << 8U) | MG_U8P(p)[1]))
-#define MG_LOAD_BE24(p) \
-  ((uint32_t) ((MG_U8P(p)[0] << 16U) | (MG_U8P(p)[1] << 8U) | MG_U8P(p)[2]))
+#define MG_LOAD_BE16(p) \
+  ((uint16_t) (((uint16_t) MG_U8P(p)[0] << 8U) | MG_U8P(p)[1]))
+#define MG_LOAD_BE24(p)                           \
+  ((uint32_t) (((uint32_t) MG_U8P(p)[0] << 16U) | \
+               ((uint32_t) MG_U8P(p)[1] << 8U) | MG_U8P(p)[2]))
+#define MG_LOAD_BE32(p)                           \
+  ((uint32_t) (((uint32_t) MG_U8P(p)[0] << 24U) | \
+               ((uint32_t) MG_U8P(p)[1] << 16U) | \
+               ((uint32_t) MG_U8P(p)[2] << 8U) | MG_U8P(p)[3]))
 #define MG_STORE_BE16(p, n)           \
   do {                                \
     MG_U8P(p)[0] = ((n) >> 8U) & 255; \
@@ -1138,6 +1139,23 @@ bool mg_path_is_sane(const struct mg_str path);
     MG_U8P(p)[1] = ((n) >> 8U) & 255;  \
     MG_U8P(p)[2] = (n) &255;           \
   } while (0)
+#define MG_STORE_BE32(p, n)            \
+  do {                                 \
+    MG_U8P(p)[0] = ((n) >> 24U) & 255; \
+    MG_U8P(p)[1] = ((n) >> 16U) & 255; \
+    MG_U8P(p)[2] = ((n) >> 8U) & 255;  \
+    MG_U8P(p)[3] = (n) &255;           \
+  } while (0)
+
+// network format equates big endian order
+static inline uint16_t mg_ntohs(uint16_t net) {
+  return MG_LOAD_BE16(&net);
+}
+static inline uint32_t mg_ntohl(uint32_t net) {
+  return MG_LOAD_BE32(&net);
+}
+#define mg_htons(x) mg_ntohs(x)
+#define mg_htonl(x) mg_ntohl(x)
 
 #define MG_REG(x) ((volatile uint32_t *) (x))[0]
 #define MG_BIT(x) (((uint32_t) 1U) << (x))
