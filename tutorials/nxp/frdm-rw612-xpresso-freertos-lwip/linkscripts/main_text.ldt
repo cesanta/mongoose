@@ -1,0 +1,1 @@
+        *(EXCLUDE_FILE(*port.o *portasm.o *queue.o *timers.o *tasks.o *inet_chksum.o *ip4.o *pbuf.o *sys_arch.o *tcp_out.o *tcp_in.o *mlan_11n_rxreorder.o *mlan_wmm.o *wifi.o *wifi-imu.o *fsl_adapter_rfimu.o *fsl_cache.o *fsl_os_abstraction_free_rtos.o *fsl_memcpy.o *etharp.o *ethernet.o *wifi_netif.o) .text*)
