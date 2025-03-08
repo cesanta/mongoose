@@ -205,7 +205,8 @@ static size_t mg_tcpip_driver_tm4c_tx(const void *buf, size_t len,
   (void) ifp;
 }
 
-static bool mg_tcpip_driver_tm4c_up(struct mg_tcpip_if *ifp) {
+static bool mg_tcpip_driver_tm4c_poll(struct mg_tcpip_if *ifp, bool s1) {
+  if (!s1) return false;
   uint32_t bmsr = emac_read_phy(EPHY_ADDR, EPHYBMSR);
   bool up = (bmsr & MG_BIT(2)) ? 1 : 0;
   if ((ifp->state == MG_TCPIP_STATE_DOWN) && up) {  // link state just went up
@@ -247,5 +248,5 @@ void EMAC0_IRQHandler(void) {
 
 struct mg_tcpip_driver mg_tcpip_driver_tm4c = {mg_tcpip_driver_tm4c_init,
                                                mg_tcpip_driver_tm4c_tx, NULL,
-                                               mg_tcpip_driver_tm4c_up};
+                                               mg_tcpip_driver_tm4c_poll};
 #endif

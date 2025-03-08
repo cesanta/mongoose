@@ -13,12 +13,12 @@ static struct mg_tcpip_if *s_ifp;
 
 static void mac_cb(uint32_t);
 static bool cmsis_init(struct mg_tcpip_if *);
-static bool cmsis_up(struct mg_tcpip_if *);
+static bool cmsis_poll(struct mg_tcpip_if *, bool);
 static size_t cmsis_tx(const void *, size_t, struct mg_tcpip_if *);
 static size_t cmsis_rx(void *, size_t, struct mg_tcpip_if *);
 
 struct mg_tcpip_driver mg_tcpip_driver_cmsis = {cmsis_init, cmsis_tx, NULL,
-                                                cmsis_up};
+                                                cmsis_poll};
 
 static bool cmsis_init(struct mg_tcpip_if *ifp) {
   ARM_ETH_MAC_ADDR addr;
@@ -56,7 +56,8 @@ static size_t cmsis_tx(const void *buf, size_t len, struct mg_tcpip_if *ifp) {
   return len;
 }
 
-static bool cmsis_up(struct mg_tcpip_if *ifp) {
+static bool cmsis_poll(struct mg_tcpip_if *ifp, bool s1) {
+  if (!s1) return false;
   ARM_DRIVER_ETH_PHY *phy = &Driver_ETH_PHY0;
   ARM_DRIVER_ETH_MAC *mac = &Driver_ETH_MAC0;
   bool up = (phy->GetLinkState() == ARM_ETH_LINK_UP) ? 1 : 0;  // link state

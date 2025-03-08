@@ -56,9 +56,10 @@ static size_t usb_tx(const void *buf, size_t len, struct mg_tcpip_if *ifp) {
   return len;
 }
 
-static bool usb_up(struct mg_tcpip_if *ifp) {
+static bool usb_poll(struct mg_tcpip_if *ifp, bool s1) {
   (void) ifp;
-  return tud_inited() && tud_ready() && tud_connected();
+  tud_task();
+  return s1 ? tud_inited() && tud_ready() && tud_connected() : false;
 }
 
 static void fn(struct mg_connection *c, int ev, void *ev_data) {
@@ -83,7 +84,7 @@ int main(void) {
   mg_log_set(MG_LL_DEBUG);  // Set log level
 
   MG_INFO(("Init TCP/IP stack ..."));
-  struct mg_tcpip_driver driver = {.tx = usb_tx, .up = usb_up};
+  struct mg_tcpip_driver driver = {.tx = usb_tx, .poll = usb_poll};
   struct mg_tcpip_if mif = {.mac = {2, 0, 1, 2, 3, 0x77},
                             .ip = mg_htonl(MG_U32(192, 168, 3, 1)),
                             .mask = mg_htonl(MG_U32(255, 255, 255, 0)),
@@ -121,7 +122,6 @@ int main(void) {
   MG_INFO(("Init done, starting main loop ..."));
   for (;;) {
     mg_mgr_poll(&mgr, 0);
-    tud_task();
   }
 
   return 0;

@@ -13,9 +13,9 @@ static size_t mock_rx(void *buf, size_t len, struct mg_tcpip_if *ifp) {
   return 0;
 }
 
-static bool mock_up(struct mg_tcpip_if *ifp) {
+static bool mock_poll(struct mg_tcpip_if *ifp, bool s1) {
   (void) ifp;
-  return true;
+  return s1;
 }
 
-struct mg_tcpip_driver mg_tcpip_driver_mock = {mock_init, mock_tx, mock_rx, mock_up};
+struct mg_tcpip_driver mg_tcpip_driver_mock = {mock_init, mock_tx, mock_rx, mock_poll};

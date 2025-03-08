@@ -110,8 +110,8 @@ static size_t tap_tx(const void *buf, size_t len, struct mg_tcpip_if *ifp) {
   return (size_t) res;
 }
 
-static bool tap_up(struct mg_tcpip_if *ifp) {
-  return ifp->driver_data ? true : false;
+static bool tap_poll(struct mg_tcpip_if *ifp, bool s1) {
+  return s1 && ifp->driver_data ? true : false;
 }
 
 static void eh1(struct mg_connection *c, int ev, void *ev_data) {
@@ -412,7 +412,7 @@ int main(void) {
   memset(&driver, 0, sizeof(driver));
 
   driver.tx = tap_tx;
-  driver.up = tap_up;
+  driver.poll = tap_poll;
   driver.rx = tap_rx;
 
   struct mg_tcpip_if mif;

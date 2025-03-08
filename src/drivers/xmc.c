@@ -179,7 +179,8 @@ static size_t mg_tcpip_driver_xmc_tx(const void *buf, size_t len,
   return len;
 }
 
-static bool mg_tcpip_driver_xmc_up(struct mg_tcpip_if *ifp) {
+static bool mg_tcpip_driver_xmc_poll(struct mg_tcpip_if *ifp, bool s1) {
+  if (!s1) return false;
   struct mg_tcpip_driver_xmc_data *d =
       (struct mg_tcpip_driver_xmc_data *) ifp->driver_data;
   uint8_t speed = MG_PHY_SPEED_10M;
@@ -225,5 +226,5 @@ void ETH0_0_IRQHandler(void) {
 
 struct mg_tcpip_driver mg_tcpip_driver_xmc = {
     mg_tcpip_driver_xmc_init, mg_tcpip_driver_xmc_tx, NULL,
-    mg_tcpip_driver_xmc_up};
+    mg_tcpip_driver_xmc_poll};
 #endif

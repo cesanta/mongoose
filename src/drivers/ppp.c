@@ -96,7 +96,8 @@ static uint32_t fcs_do(uint32_t fcs, uint8_t x) {
   return fcs;
 }
 
-static bool mg_ppp_up(struct mg_tcpip_if *ifp) {
+static bool mg_ppp_poll(struct mg_tcpip_if *ifp, bool s1) {
+  (void) s1;
   return ifp->driver_data != NULL;
 }
 

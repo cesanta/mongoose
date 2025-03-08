@@ -2,8 +2,8 @@
 
 #if MG_ENABLE_TCPIP && defined(MG_ENABLE_DRIVER_W5100) && MG_ENABLE_DRIVER_W5100
 
-static void w5100_txn(struct mg_tcpip_spi *s, uint16_t addr,
-                      bool wr, void *buf, size_t len) {
+static void w5100_txn(struct mg_tcpip_spi *s, uint16_t addr, bool wr, void *buf,
+                      size_t len) {
   size_t i;
   uint8_t *p = (uint8_t *) buf;
   uint8_t control = wr ? 0xF0 : 0x0F;
@@ -28,8 +28,8 @@ static  uint16_t w5100_r2(struct mg_tcpip_spi *s, uint16_t addr) { uint8_t buf[2
 
 static size_t w5100_rx(void *buf, size_t buflen, struct mg_tcpip_if *ifp) {
   struct mg_tcpip_spi *s = (struct mg_tcpip_spi *) ifp->driver_data;
-  uint16_t r = 0, n = 0, len = (uint16_t) buflen, n2;     // Read recv len
-  while ((n2 = w5100_r2(s, 0x426)) > n) n = n2;  // Until it is stable
+  uint16_t r = 0, n = 0, len = (uint16_t) buflen, n2;  // Read recv len
+  while ((n2 = w5100_r2(s, 0x426)) > n) n = n2;        // Until it is stable
   if (n > 0) {
     uint16_t ptr = w5100_r2(s, 0x428);  // Get read pointer
     if (n <= len + 2 && n > 1) {
@@ -46,7 +46,7 @@ static size_t w5100_rx(void *buf, size_t buflen, struct mg_tcpip_if *ifp) {
       w5100_rn(s, rxbuf_addr, buf + remaining_len, n - remaining_len);
     }
     w5100_w2(s, 0x428, (uint16_t) (ptr + n));
-    w5100_w1(s, 0x401, 0x40);                     // Sock0 CR -> RECV
+    w5100_w1(s, 0x401, 0x40);  // Sock0 CR -> RECV
   }
   return r;
 }
@@ -55,27 +55,27 @@ static size_t w5100_tx(const void *buf, size_t buflen,
                        struct mg_tcpip_if *ifp) {
   struct mg_tcpip_spi *s = (struct mg_tcpip_spi *) ifp->driver_data;
   uint16_t i, n = 0, ptr = 0, len = (uint16_t) buflen;
-  while (n < len) n = w5100_r2(s, 0x420);      // Wait for space
-  ptr = w5100_r2(s, 0x424);                    // Get write pointer
+  while (n < len) n = w5100_r2(s, 0x420);  // Wait for space
+  ptr = w5100_r2(s, 0x424);                // Get write pointer
   uint16_t txbuf_size = (1 << (w5100_r1(s, 0x1b) & 3)) * 1024;
   uint16_t ptr_ofs = ptr & (txbuf_size - 1);
   uint16_t txbuf_addr = 0x4000;
   if (ptr_ofs + len > txbuf_size) {
     uint16_t size = txbuf_size - ptr_ofs;
-    w5100_wn(s, txbuf_addr + ptr_ofs, (char*) buf, size);
-    w5100_wn(s, txbuf_addr, (char*) buf + size, len - size);
+    w5100_wn(s, txbuf_addr + ptr_ofs, (char *) buf, size);
+    w5100_wn(s, txbuf_addr, (char *) buf + size, len - size);
   } else {
-    w5100_wn(s, txbuf_addr + ptr_ofs, (char*) buf, len);
+    w5100_wn(s, txbuf_addr + ptr_ofs, (char *) buf, len);
   }
   w5100_w2(s, 0x424, (uint16_t) (ptr + len));  // Advance write pointer
-  w5100_w1(s, 0x401, 0x20);                       // Sock0 CR -> SEND
+  w5100_w1(s, 0x401, 0x20);                    // Sock0 CR -> SEND
   for (i = 0; i < 40; i++) {
     uint8_t ir = w5100_r1(s, 0x402);  // Read S0 IR
     if (ir == 0) continue;
     // printf("IR %d, len=%d, free=%d, ptr %d\n", ir, (int) len, (int) n, ptr);
-    w5100_w1(s, 0x402, ir);  // Write S0 IR: clear it!
-    if (ir & 8) len = 0;           // Timeout. Report error
-    if (ir & (16 | 8)) break;      // Stop on SEND_OK or timeout
+    w5100_w1(s, 0x402, ir);    // Write S0 IR: clear it!
+    if (ir & 8) len = 0;       // Timeout. Report error
+    if (ir & (16 | 8)) break;  // Stop on SEND_OK or timeout
   }
   return len;
 }
@@ -83,24 +83,24 @@ static size_t w5100_tx(const void *buf, size_t buflen,
 static bool w5100_init(struct mg_tcpip_if *ifp) {
   struct mg_tcpip_spi *s = (struct mg_tcpip_spi *) ifp->driver_data;
   s->end(s->spi);
-  w5100_w1(s, 0, 0x80);     // Reset chip: CR -> 0x80
-  w5100_w1(s, 0x72, 0x53);  // CR PHYLCKR -> unlock PHY
-  w5100_w1(s, 0x46, 0);     // CR PHYCR0 -> autonegotiation
-  w5100_w1(s, 0x47, 0);     // CR PHYCR1 -> reset
-  w5100_w1(s, 0x72, 0x00);  // CR PHYLCKR -> lock PHY
-  w5100_w1(s, 0x1a, 6);          // Sock0 RX buf size - 4KB
-  w5100_w1(s, 0x1b, 6);          // Sock0 TX buf size - 4KB
+  w5100_w1(s, 0, 0x80);               // Reset chip: CR -> 0x80
+  w5100_w1(s, 0x72, 0x53);            // CR PHYLCKR -> unlock PHY
+  w5100_w1(s, 0x46, 0);               // CR PHYCR0 -> autonegotiation
+  w5100_w1(s, 0x47, 0);               // CR PHYCR1 -> reset
+  w5100_w1(s, 0x72, 0x00);            // CR PHYLCKR -> lock PHY
+  w5100_w1(s, 0x1a, 6);               // Sock0 RX buf size - 4KB
+  w5100_w1(s, 0x1b, 6);               // Sock0 TX buf size - 4KB
   w5100_w1(s, 0x400, 4);              // Sock0 MR -> MACRAW
   w5100_w1(s, 0x401, 1);              // Sock0 CR -> OPEN
   return w5100_r1(s, 0x403) == 0x42;  // Sock0 SR == MACRAW
 }
 
-static bool w5100_up(struct mg_tcpip_if *ifp) {
+static bool w5100_poll(struct mg_tcpip_if *ifp, bool s1) {
   struct mg_tcpip_spi *spi = (struct mg_tcpip_spi *) ifp->driver_data;
-  uint8_t physr0 = w5100_r1(spi, 0x3c);
-  return physr0 & 1;  // Bit 0 of PHYSR is LNK (0 - down, 1 - up)
+  return s1 ? w5100_r1(spi, 0x3c /* PHYSR */) & 1
+            : false;  // Bit 0 of PHYSR is LNK (0 - down, 1 - up)
 }
 
 struct mg_tcpip_driver mg_tcpip_driver_w5100 = {w5100_init, w5100_tx, w5100_rx,
-                                                w5100_up};
+                                                w5100_poll};
 #endif

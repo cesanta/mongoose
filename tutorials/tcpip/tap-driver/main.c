@@ -31,8 +31,8 @@ static size_t tap_tx(const void *buf, size_t len, struct mg_tcpip_if *ifp) {
   return (size_t) res;
 }
 
-static bool tap_up(struct mg_tcpip_if *ifp) {
-  return ifp->driver_data ? true : false;
+static bool tap_poll(struct mg_tcpip_if *ifp, bool s1) {
+  return s1 && ifp->driver_data ? true : false;
 }
 
 static size_t tap_rx(void *buf, size_t len, struct mg_tcpip_if *ifp) {
@@ -109,7 +109,7 @@ int main(int argc, char *argv[]) {
   struct mg_mgr mgr;  // Event manager
   mg_mgr_init(&mgr);  // Initialise event manager
 
-  struct mg_tcpip_driver driver = {.tx = tap_tx, .up = tap_up, .rx = tap_rx};
+  struct mg_tcpip_driver driver = {.tx = tap_tx, .poll = tap_poll, .rx = tap_rx};
   struct mg_tcpip_if mif = {.driver = &driver,
                             .driver_data = &fd,
                             .enable_req_dns = true,

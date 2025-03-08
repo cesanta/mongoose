@@ -1,6 +1,7 @@
 #include "net_builtin.h"
 
-#if MG_ENABLE_TCPIP && defined(MG_ENABLE_DRIVER_SAME54) && MG_ENABLE_DRIVER_SAME54
+#if MG_ENABLE_TCPIP && defined(MG_ENABLE_DRIVER_SAME54) && \
+    MG_ENABLE_DRIVER_SAME54
 
 #include <sam.h>
 
@@ -164,21 +165,22 @@ static size_t mg_tcpip_driver_same54_tx(const void *buf, size_t len,
   return len;
 }
 
-static bool mg_tcpip_driver_same54_up(struct mg_tcpip_if *ifp) {
-  uint16_t bsr = eth_read_phy(MG_PHY_ADDR, MG_PHYREG_BSR);
-  bool up = bsr & MG_PHYREGBIT_BSR_LINK_STATUS ? 1 : 0;
+static bool mg_tcpip_driver_same54_poll(struct mg_tcpip_if *ifp, bool s1) {
+  if (s1) {
+    uint16_t bsr = eth_read_phy(MG_PHY_ADDR, MG_PHYREG_BSR);
+    bool up = bsr & MG_PHYREGBIT_BSR_LINK_STATUS ? 1 : 0;
 
-  // If PHY is ready, update NCFGR accordingly
-  if (ifp->state == MG_TCPIP_STATE_DOWN && up) {
-    uint16_t bcr = eth_read_phy(MG_PHY_ADDR, MG_PHYREG_BCR);
-    bool fd = bcr & MG_PHYREGBIT_BCR_DUPLEX_MODE ? 1 : 0;
-    bool spd = bcr & MG_PHYREGBIT_BCR_SPEED ? 1 : 0;
-    GMAC_REGS->GMAC_NCFGR = (GMAC_REGS->GMAC_NCFGR &
-                             ~(GMAC_NCFGR_SPD_Msk | MG_PHYREGBIT_BCR_SPEED)) |
-                            GMAC_NCFGR_SPD(spd) | GMAC_NCFGR_FD(fd);
+    // If PHY is ready, update NCFGR accordingly
+    if (ifp->state == MG_TCPIP_STATE_DOWN && up) {
+      uint16_t bcr = eth_read_phy(MG_PHY_ADDR, MG_PHYREG_BCR);
+      bool fd = bcr & MG_PHYREGBIT_BCR_DUPLEX_MODE ? 1 : 0;
+      bool spd = bcr & MG_PHYREGBIT_BCR_SPEED ? 1 : 0;
+      GMAC_REGS->GMAC_NCFGR = (GMAC_REGS->GMAC_NCFGR &
+                               ~(GMAC_NCFGR_SPD_Msk | MG_PHYREGBIT_BCR_SPEED)) |
+                              GMAC_NCFGR_SPD(spd) | GMAC_NCFGR_FD(fd);
+    }
   }
-
-  return up;
+  return false;
 }
 
 void GMAC_Handler(void);
@@ -211,5 +213,5 @@ void GMAC_Handler(void) {
 
 struct mg_tcpip_driver mg_tcpip_driver_same54 = {
     mg_tcpip_driver_same54_init, mg_tcpip_driver_same54_tx, NULL,
-    mg_tcpip_driver_same54_up};
+    mg_tcpip_driver_same54_poll};
 #endif

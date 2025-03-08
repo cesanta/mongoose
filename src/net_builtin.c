@@ -914,24 +914,27 @@ static void mg_tcpip_poll(struct mg_tcpip_if *ifp, uint64_t now) {
     ifp->state = MG_TCPIP_STATE_READY;  // keep best-effort MAC
     onstatechange(ifp);
   }
-  // Handle physical interface up/down status
-  if (expired_1000ms && ifp->driver->up) {
-    bool up = ifp->driver->up(ifp);
-    bool current = ifp->state != MG_TCPIP_STATE_DOWN;
-    if (!up && ifp->enable_dhcp_client) ifp->ip = 0;
-    if (up != current) {  // link state has changed
-      ifp->state = up == false ? MG_TCPIP_STATE_DOWN
-                   : ifp->enable_dhcp_client || ifp->ip == 0
-                       ? MG_TCPIP_STATE_UP
-                       : MG_TCPIP_STATE_IP;
-      onstatechange(ifp);
-    } else if (!ifp->enable_dhcp_client && ifp->state == MG_TCPIP_STATE_UP &&
-               ifp->ip) {
-      ifp->state = MG_TCPIP_STATE_IP;  // ifp->fn has set an IP
-      onstatechange(ifp);
+  // poll driver
+  if (ifp->driver->poll) {
+    bool up = ifp->driver->poll(ifp, expired_1000ms);
+    // Handle physical interface up/down status
+    if (expired_1000ms) {
+      bool current = ifp->state != MG_TCPIP_STATE_DOWN;
+      if (!up && ifp->enable_dhcp_client) ifp->ip = 0;
+      if (up != current) {  // link state has changed
+        ifp->state = up == false ? MG_TCPIP_STATE_DOWN
+                     : ifp->enable_dhcp_client || ifp->ip == 0
+                         ? MG_TCPIP_STATE_UP
+                         : MG_TCPIP_STATE_IP;
+        onstatechange(ifp);
+      } else if (!ifp->enable_dhcp_client && ifp->state == MG_TCPIP_STATE_UP &&
+                 ifp->ip) {
+        ifp->state = MG_TCPIP_STATE_IP;  // ifp->fn has set an IP
+        onstatechange(ifp);
+      }
+      if (ifp->state == MG_TCPIP_STATE_DOWN) MG_ERROR(("Network is down"));
+      mg_tcpip_call(ifp, MG_TCPIP_EV_TIMER_1S, NULL);
     }
-    if (ifp->state == MG_TCPIP_STATE_DOWN) MG_ERROR(("Network is down"));
-    mg_tcpip_call(ifp, MG_TCPIP_EV_TIMER_1S, NULL);
   }
   if (ifp->state == MG_TCPIP_STATE_DOWN) return;
 
@@ -953,14 +956,14 @@ static void mg_tcpip_poll(struct mg_tcpip_if *ifp, uint64_t now) {
   }
 
   // Read data from the network
-  if (ifp->driver->rx != NULL) {  // Polling driver. We must call it
+  if (ifp->driver->rx != NULL) {  // Simple polling driver, returns one frame
     size_t len =
         ifp->driver->rx(ifp->recv_queue.buf, ifp->recv_queue.size, ifp);
     if (len > 0) {
       ifp->nrecv++;
       mg_tcpip_rx(ifp, ifp->recv_queue.buf, len);
     }
-  } else {  // Interrupt-based driver. Fills recv queue itself
+  } else {  // Complex poll / Interrupt-based driver. Queues recvd frames
     char *buf;
     size_t len = mg_queue_next(&ifp->recv_queue, &buf);
     if (len > 0) {
