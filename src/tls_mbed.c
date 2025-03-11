@@ -190,9 +190,16 @@ long mg_tls_recv(struct mg_connection *c, void *buf, size_t len) {
 
 long mg_tls_send(struct mg_connection *c, const void *buf, size_t len) {
   struct mg_tls *tls = (struct mg_tls *) c->tls;
-  long n = mbedtls_ssl_write(&tls->ssl, (unsigned char *) buf, len);
-  if (n == MBEDTLS_ERR_SSL_WANT_READ || n == MBEDTLS_ERR_SSL_WANT_WRITE)
-    return MG_IO_WAIT;
+  long n;
+  bool was_throttled = c->is_tls_throttled;  // see #3074
+  n = was_throttled ? mbedtls_ssl_write(&tls->ssl, tls->throttled_buf,
+                                        tls->throttled_len) /* flush old data */
+                    : mbedtls_ssl_write(&tls->ssl, (unsigned char *) buf,
+                                        len);  // encrypt current data
+  c->is_tls_throttled =
+      (n == MBEDTLS_ERR_SSL_WANT_READ || n == MBEDTLS_ERR_SSL_WANT_WRITE);
+  if (was_throttled) return MG_IO_WAIT;  // flushed throttled data instead
+  if (c->is_tls_throttled) return len;  // already encripted that when throttled
   if (n <= 0) return MG_IO_ERR;
   return n;
 }

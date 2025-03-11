@@ -10720,7 +10720,7 @@ static void mg_tls_encrypt(struct mg_connection *c, const uint8_t *msg,
   nonce[8] ^= (uint8_t) ((seq >> 24) & 255U);
   nonce[9] ^= (uint8_t) ((seq >> 16) & 255U);
   nonce[10] ^= (uint8_t) ((seq >> 8) & 255U);
-  nonce[11] ^= (uint8_t) ((seq) & 255U);
+  nonce[11] ^= (uint8_t) ((seq) &255U);
 
   mg_iobuf_add(wio, wio->len, hdr, sizeof(hdr));
   mg_iobuf_resize(wio, wio->len + encsz);
@@ -10799,7 +10799,7 @@ static int mg_tls_recv_record(struct mg_connection *c) {
   nonce[8] ^= (uint8_t) ((seq >> 24) & 255U);
   nonce[9] ^= (uint8_t) ((seq >> 16) & 255U);
   nonce[10] ^= (uint8_t) ((seq >> 8) & 255U);
-  nonce[11] ^= (uint8_t) ((seq) & 255U);
+  nonce[11] ^= (uint8_t) ((seq) &255U);
 #if CHACHA20
   {
     uint8_t *dec = (uint8_t *) calloc(1, msgsz);
@@ -11557,7 +11557,7 @@ static int mg_tls_client_recv_cert(struct mg_connection *c) {
   struct mg_tls_cert certs[8];
   int certnum = 0;
   uint8_t *p = recv_buf + 8;
-  //uint8_t *endp = recv_buf + tls->recv_len;
+  // uint8_t *endp = recv_buf + tls->recv_len;
   uint8_t *endp = recv_buf + cert_chain_len;
 
   int found_ca = 0;
@@ -11666,7 +11666,8 @@ static int mg_tls_client_recv_cert_verify(struct mg_connection *c) {
              tls->recv_len - 8);
     return -1;
   }
-  MG_VERBOSE(("certificate verification, algo=%04x, siglen=%d", sigalg, siglen));
+  MG_VERBOSE(
+      ("certificate verification, algo=%04x, siglen=%d", sigalg, siglen));
 
   if (sigalg == 0x0804) {  // rsa_pss_rsae_sha256
     uint8_t sig2[512];     // 2048 or 4096 bits
@@ -11819,7 +11820,9 @@ static void mg_tls_client_handshake(struct mg_connection *c) {
       c->is_tls_hs = 0;
       mg_call(c, MG_EV_TLS_HS, NULL);
       break;
-    default: mg_error(c, "unexpected client state: %d", tls->state); break;
+    default:
+      mg_error(c, "unexpected client state: %d", tls->state);
+      break;
   }
 }
 
@@ -11846,7 +11849,9 @@ static void mg_tls_server_handshake(struct mg_connection *c) {
       tls->state = MG_TLS_STATE_SERVER_CONNECTED;
       c->is_tls_hs = 0;
       return;
-    default: mg_error(c, "unexpected server state: %d", tls->state); break;
+    default:
+      mg_error(c, "unexpected server state: %d", tls->state);
+      break;
   }
 }
 
@@ -11980,15 +11985,22 @@ void mg_tls_free(struct mg_connection *c) {
 long mg_tls_send(struct mg_connection *c, const void *buf, size_t len) {
   struct tls_data *tls = (struct tls_data *) c->tls;
   long n = MG_IO_WAIT;
-  if (len > MG_IO_SIZE) len = MG_IO_SIZE;
-  if (len > 16384) len = 16384;
-  mg_tls_encrypt(c, (const uint8_t *) buf, len, MG_TLS_APP_DATA);
+  bool was_throttled = c->is_tls_throttled;  // see #3074
+  if (!was_throttled) {                      // encrypt new data
+    if (len > MG_IO_SIZE) len = MG_IO_SIZE;
+    if (len > 16384) len = 16384;
+    mg_tls_encrypt(c, (const uint8_t *) buf, len, MG_TLS_APP_DATA);
+  }  // else, resend outstanding encrypted data in tls->send
   while (tls->send.len > 0 &&
          (n = mg_io_send(c, tls->send.buf, tls->send.len)) > 0) {
     mg_iobuf_del(&tls->send, 0, (size_t) n);
   }
-  if (n == MG_IO_ERR || n == MG_IO_WAIT) return n;
-  return (long) len;
+  c->is_tls_throttled = (tls->send.len > 0 && n == MG_IO_WAIT);
+  MG_VERBOSE(("%lu %ld %ld %ld %c %c", c->id, (long) len, (long) tls->send.len,
+              n, was_throttled ? 'T' : 't', c->is_tls_throttled ? 'T' : 't'));
+  if (n == MG_IO_ERR) return MG_IO_ERR;
+  if (was_throttled) return MG_IO_WAIT;  // sent throttled data instead
+  return (long) len;  // return len even when throttled, already encripted that
 }
 
 long mg_tls_recv(struct mg_connection *c, void *buf, size_t len) {
@@ -13609,9 +13621,16 @@ long mg_tls_recv(struct mg_connection *c, void *buf, size_t len) {
 
 long mg_tls_send(struct mg_connection *c, const void *buf, size_t len) {
   struct mg_tls *tls = (struct mg_tls *) c->tls;
-  long n = mbedtls_ssl_write(&tls->ssl, (unsigned char *) buf, len);
-  if (n == MBEDTLS_ERR_SSL_WANT_READ || n == MBEDTLS_ERR_SSL_WANT_WRITE)
-    return MG_IO_WAIT;
+  long n;
+  bool was_throttled = c->is_tls_throttled;  // see #3074
+  n = was_throttled ? mbedtls_ssl_write(&tls->ssl, tls->throttled_buf,
+                                        tls->throttled_len) /* flush old data */
+                    : mbedtls_ssl_write(&tls->ssl, (unsigned char *) buf,
+                                        len);  // encrypt current data
+  c->is_tls_throttled =
+      (n == MBEDTLS_ERR_SSL_WANT_READ || n == MBEDTLS_ERR_SSL_WANT_WRITE);
+  if (was_throttled) return MG_IO_WAIT;  // flushed throttled data instead
+  if (c->is_tls_throttled) return len;  // already encripted that when throttled
   if (n <= 0) return MG_IO_ERR;
   return n;
 }
