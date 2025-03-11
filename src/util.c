@@ -184,3 +184,12 @@ uint64_t mg_millis(void) {
 #endif
 }
 #endif
+
+// network format equates big endian order
+uint16_t mg_ntohs(uint16_t net) {
+  return MG_LOAD_BE16(&net);
+}
+
+uint32_t mg_ntohl(uint32_t net) {
+  return MG_LOAD_BE32(&net);
+}

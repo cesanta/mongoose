@@ -1147,13 +1147,8 @@ bool mg_path_is_sane(const struct mg_str path);
     MG_U8P(p)[3] = (n) &255;           \
   } while (0)
 
-// network format equates big endian order
-static inline uint16_t mg_ntohs(uint16_t net) {
-  return MG_LOAD_BE16(&net);
-}
-static inline uint32_t mg_ntohl(uint32_t net) {
-  return MG_LOAD_BE32(&net);
-}
+uint16_t mg_ntohs(uint16_t net);
+uint32_t mg_ntohl(uint32_t net);
 #define mg_htons(x) mg_ntohs(x)
 #define mg_htonl(x) mg_ntohl(x)
 
