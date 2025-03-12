@@ -20,8 +20,7 @@ wizard:
 	hash=$$(curl -s -X POST -H "Content-Type: application/json" -d '{"build":{"board":"$(BOARD)","ide":"$(IDE)","rtos":"$(RTOS)"}}' $(WIZARD_URL)/api/hash | jq -r '.hash') \
 	&& curl -s $(WIZARD_URL)/api/zip/$(BOARD)/$(IDE)/$(RTOS)/$$hash -o wizard.zip
 	unzip wizard.zip
-	cd wizard/Core/Src ; rm mongoose.c ; cp -rL ../../../../../../mongoose.c .
-	cd wizard/Core/Inc ; rm mongoose.h ; cp -rL ../../../../../../mongoose.h .
+	cd wizard/mongoose ; rm mongoose.[ch] ; cp -L ../../../../../mongoose.c . ; cp -L ../../../../../mongoose.h .
 
 
 clean:
