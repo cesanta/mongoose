@@ -200,7 +200,11 @@ long mg_tls_send(struct mg_connection *c, const void *buf, size_t len) {
   c->is_tls_throttled =
       (n == MBEDTLS_ERR_SSL_WANT_READ || n == MBEDTLS_ERR_SSL_WANT_WRITE);
   if (was_throttled) return MG_IO_WAIT;  // flushed throttled data instead
-  if (c->is_tls_throttled) return len;  // already encripted that when throttled
+  if (c->is_tls_throttled) {
+    tls->throttled_buf = (unsigned char *)buf; // MbedTLS code actually ignores
+    tls->throttled_len = len; //  these, but let's play API rules
+    return (long) len;  // already encripted that when throttled
+  }
   if (n <= 0) return MG_IO_ERR;
   return n;
 }

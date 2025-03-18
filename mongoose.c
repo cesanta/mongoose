@@ -8404,7 +8404,7 @@ static void read_conn(struct mg_connection *c) {
         if (c->rtls.len == 0 || m < 0) {
           // Close only when we have fully drained both rtls and TLS buffers
           c->is_closing = 1;  // or there's nothing we can do about it.
-          m = MG_IO_ERR;
+          if (m < 0) m = MG_IO_ERR; // but return last record data, see #3104
         } else { // see #2885
           // TLS buffer is capped to max record size, even though, there can
           // be more than one record, give TLS a chance to process them.
@@ -13647,7 +13647,11 @@ long mg_tls_send(struct mg_connection *c, const void *buf, size_t len) {
   c->is_tls_throttled =
       (n == MBEDTLS_ERR_SSL_WANT_READ || n == MBEDTLS_ERR_SSL_WANT_WRITE);
   if (was_throttled) return MG_IO_WAIT;  // flushed throttled data instead
-  if (c->is_tls_throttled) return len;  // already encripted that when throttled
+  if (c->is_tls_throttled) {
+    tls->throttled_buf = (unsigned char *)buf; // MbedTLS code actually ignores
+    tls->throttled_len = len; //  these, but let's play API rules
+    return (long) len;  // already encripted that when throttled
+  }
   if (n <= 0) return MG_IO_ERR;
   return n;
 }
