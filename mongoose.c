@@ -13561,6 +13561,12 @@ void mg_tls_init(struct mg_connection *c, const struct mg_tls_opts *opts) {
   if (opts->ca.len == 0 || mg_strcmp(opts->ca, mg_str("*")) == 0) {
     // NOTE: MBEDTLS_SSL_VERIFY_NONE is not supported for TLS1.3 on client side
     // See https://github.com/Mbed-TLS/mbedtls/issues/7075
+    if(opts->name.buf != NULL && opts->name.buf[0] != '\0') {
+      char *host = mg_mprintf("%.*s", opts->name.len, opts->name.buf);
+      mbedtls_ssl_set_hostname(&tls->ssl, host);
+      MG_DEBUG(("%lu hostname verification: %s", c->id, host));
+      free(host);
+    }
     mbedtls_ssl_conf_authmode(&tls->conf, MBEDTLS_SSL_VERIFY_NONE);
   } else {
     if (mg_load_cert(opts->ca, &tls->ca) == false) goto fail;
