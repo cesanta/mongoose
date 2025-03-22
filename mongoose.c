@@ -4202,7 +4202,7 @@ struct dhcp {
   uint32_t ciaddr, yiaddr, siaddr, giaddr;
   uint8_t hwaddr[208];
   uint32_t magic;
-  uint8_t options[32];
+  uint8_t options[30 + sizeof(((struct mg_tcpip_if *) 0)->dhcp_name)];
 };
 
 #pragma pack(pop)
@@ -4361,22 +4361,21 @@ static const uint8_t broadcast[] = {255, 255, 255, 255, 255, 255};
 // RFC-2131 #4.3.6, #4.4.1; RFC-2132 #9.8
 static void tx_dhcp_request_sel(struct mg_tcpip_if *ifp, uint32_t ip_req,
                                 uint32_t ip_srv) {
-  uint8_t opts[] = {
-      53, 1, 3,                   // Type: DHCP request
-      12, 3, 'm', 'i', 'p',       // Host name: "mip"
-      54, 4, 0,   0,   0,   0,    // DHCP server ID
-      50, 4, 0,   0,   0,   0,    // Requested IP
-      55, 2, 1,   3,   255, 255,  // GW, mask [DNS] [SNTP]
-      255                         // End of options
-  };
-  uint8_t addopts = 0;
-  memcpy(opts + 10, &ip_srv, sizeof(ip_srv));
-  memcpy(opts + 16, &ip_req, sizeof(ip_req));
-  if (ifp->enable_req_dns) opts[24 + addopts++] = 6;    // DNS
-  if (ifp->enable_req_sntp) opts[24 + addopts++] = 42;  // SNTP
-  opts[21] += addopts;
-  tx_dhcp(ifp, (uint8_t *) broadcast, 0, 0xffffffff, opts,
-          sizeof(opts) + addopts - 2, false);
+  uint8_t extra = (ifp->enable_req_dns ? 1 : 0) + (ifp->enable_req_sntp ? 1 : 0);
+  size_t len = strlen(ifp->dhcp_name);
+  size_t olen = 21 + len + extra + 2 + 1;  // Total length of options
+  uint8_t *opts = alloca(olen), *p = opts;  // Allocate options
+  *p++ = 53, *p++ = 1, *p++ = 3;                       // Type: DHCP request
+  *p++ = 54, *p++ = 4, memcpy(p, &ip_srv, 4), p += 4;  // DHCP server ID
+  *p++ = 50, *p++ = 4, memcpy(p, &ip_req, 4), p += 4;  // Requested IP
+  *p++ = 12, *p++ = (uint8_t) (len & 255);             // DHCP host
+  memcpy(p, ifp->dhcp_name, len), p += len;            // name
+  *p++ = 55, *p++ = 2 + extra, *p++ = 1, *p++ = 3;     // GW, MASK
+  if (ifp->enable_req_dns) *p++ = 6;                   // DNS
+  if (ifp->enable_req_sntp) *p++ = 42;                 // SNTP
+  *p++ = 255;                                          // End of options
+  assert((size_t) (p - opts) < olen);
+  tx_dhcp(ifp, (uint8_t *) broadcast, 0, 0xffffffff, opts, olen, 0);
   MG_DEBUG(("DHCP req sent"));
 }
 
@@ -4732,7 +4731,8 @@ static void handle_tls_recv(struct mg_connection *c) {
     mg_error(c, "oom");
   } else {
     // Decrypt data directly into c->recv
-    long n = mg_tls_recv(c, io->buf != NULL ? &io->buf[io->len] : io->buf, io->size - io->len);
+    long n = mg_tls_recv(c, io->buf != NULL ? &io->buf[io->len] : io->buf,
+                         io->size - io->len);
     if (n == MG_IO_ERR) {
       mg_error(c, "TLS recv error");
     } else if (n > 0) {
@@ -5112,6 +5112,12 @@ void mg_tcpip_init(struct mg_mgr *mgr, struct mg_tcpip_if *ifp) {
     mg_random(&ifp->mac[1], sizeof(ifp->mac) - 1);
     MG_INFO(("MAC not set. Generated random: %M", mg_print_mac, ifp->mac));
   }
+
+  // Uf DHCP name is not set, use "mip"
+  if (ifp->dhcp_name[0] == '\0') {
+    memcpy(ifp->dhcp_name, "mip", 4);
+  }
+  ifp->dhcp_name[sizeof(ifp->dhcp_name) - 1] = '\0';  // Just in case
 
   if (ifp->driver->init && !ifp->driver->init(ifp)) {
     MG_ERROR(("driver init failed"));

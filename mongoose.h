@@ -2751,6 +2751,10 @@ bool mg_ota_flash_end(struct mg_flash *flash);
 #endif
 
 
+
+
+
+
 struct mg_wifi_scan_bss_data {
     struct mg_str SSID;
     char *BSSID;
@@ -2823,6 +2827,7 @@ struct mg_tcpip_if {
   mg_tcpip_event_handler_t fn;     // User-specified event handler function
   struct mg_mgr *mgr;              // Mongoose event manager
   struct mg_queue recv_queue;      // Receive queue
+  char dhcp_name[12];              // Name reported to DHCP, "mip" if unset
   uint16_t mtu;                    // Interface MTU
 #define MG_TCPIP_MTU_DEFAULT 1500
 
