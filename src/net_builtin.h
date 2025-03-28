@@ -26,6 +26,7 @@ enum {
   MG_TCPIP_EV_WIFI_SCAN_RESULT, // Wi-Fi scan results             struct mg_wifi_scan_bss_data *
   MG_TCPIP_EV_WIFI_SCAN_END,    // Wi-Fi scan has finished        NULL
   MG_TCPIP_EV_WIFI_CONNECT_ERR, // Wi-Fi connect has failed       driver and chip specific
+  MG_TCPIP_EV_DRIVER,           // Driver event                   driver specific
   MG_TCPIP_EV_USER              // Starting ID for user events
 };
 
@@ -89,6 +90,7 @@ extern struct mg_tcpip_driver mg_tcpip_driver_xmc7;
 extern struct mg_tcpip_driver mg_tcpip_driver_ppp;
 extern struct mg_tcpip_driver mg_tcpip_driver_pico_w;
 extern struct mg_tcpip_driver mg_tcpip_driver_rw612;
+extern struct mg_tcpip_driver mg_tcpip_driver_cyw;
 
 // Drivers that require SPI, can use this SPI abstraction
 struct mg_tcpip_spi {

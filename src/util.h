@@ -17,6 +17,7 @@ char *mg_random_str(char *buf, size_t len);
 uint32_t mg_crc32(uint32_t crc, const char *buf, size_t len);
 uint64_t mg_millis(void);  // Return milliseconds since boot
 bool mg_path_is_sane(const struct mg_str path);
+void mg_delayms(unsigned int ms);
 
 #define MG_U32(a, b, c, d)                                         \
   (((uint32_t) ((a) &255) << 24) | ((uint32_t) ((b) &255) << 16) | \
