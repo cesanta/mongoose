@@ -11,11 +11,11 @@ struct mg_tcpip_spi_ {
 };
 
 struct mg_tcpip_driver_cyw_firmware {
-  const uint8_t * code_addr;
+  const uint8_t *code_addr;
   size_t code_len;
-  const uint8_t * nvram_addr;
+  const uint8_t *nvram_addr;
   size_t nvram_len;
-  const uint8_t * clm_addr;
+  const uint8_t *clm_addr;
   size_t clm_len;
 };
 
@@ -30,6 +30,7 @@ struct mg_tcpip_driver_cyw_data {
   uint8_t apsecurity; // TBD
   uint8_t apchannel;
   bool apmode;      // start in AP mode; 'false' starts connection to 'ssid' if not NULL
+  bool hs;          // use chip "high-speed" mode; otherwise SPI CPOL0 CPHA0 (DS 4.2.3 Table 6)
 };
 
 //#define MG_TCPIP_DRIVER_INIT(mgr)                                 \

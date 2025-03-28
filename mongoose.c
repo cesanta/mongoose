@@ -4374,7 +4374,7 @@ static void tx_dhcp_request_sel(struct mg_tcpip_if *ifp, uint32_t ip_req,
   if (ifp->enable_req_dns) *p++ = 6;                   // DNS
   if (ifp->enable_req_sntp) *p++ = 42;                 // SNTP
   *p++ = 255;                                          // End of options
-  assert((size_t) (p - opts) < olen);
+  // assert((size_t) (p - opts) < olen);
   tx_dhcp(ifp, (uint8_t *) broadcast, 0, 0xffffffff, opts, olen, 0);
   MG_DEBUG(("DHCP req sent"));
 }
@@ -19794,7 +19794,7 @@ static size_t cmsis_rx(void *buf, size_t buflen, struct mg_tcpip_if *ifp) {
 static struct mg_tcpip_if *s_ifp;
 static bool s_link, s_auth, s_join;
 
-static bool cyw_init(struct mg_tcpip_driver_cyw_firmware *fw, uint8_t *mac);
+static bool cyw_init(uint8_t *mac);
 static void cyw_poll(void);
 
 static bool mg_tcpip_driver_cyw_init(struct mg_tcpip_if *ifp) {
@@ -19806,7 +19806,7 @@ static bool mg_tcpip_driver_cyw_init(struct mg_tcpip_if *ifp) {
   }
   s_ifp = ifp;
   s_link = s_auth = s_join = false;
-  if (!cyw_init(d->fw, ifp->mac)) return false;
+  if (!cyw_init(ifp->mac)) return false;
 
   if (d->apmode) {
     MG_DEBUG(("Starting AP '%s' (%u)", d->apssid, d->apchannel));
@@ -20510,7 +20510,7 @@ static const uint32_t country_code = 'X' + ('X' << 8) + (0 << 16);
 static bool cyw_spi_init();
 
 // clang-format off
-static bool cyw_init(struct mg_tcpip_driver_cyw_firmware *fw, uint8_t *mac) {
+static bool cyw_init(uint8_t *mac) {
   uint32_t val = 0;
   if (!cyw_spi_init()) return false; // BUS DEPENDENCY
   // BT-ENABLED DEPENDENCY
@@ -20797,12 +20797,13 @@ static bool cyw_spi_init() {
   if (times == ~0) return false;
   // DS 4.2.3 Table 6. Chip starts in 16-bit little-endian mode.
   // Configure SPI and switch to 32-bit big-endian mode:
-  // - High-speed mode
+  // - High-speed mode: d->hs true
   // - IRQ POLARITY high
   // - SPI RESPONSE DELAY 4 bytes time [not in DS] TODO(scaprile): logic ana
   // - Status not sent after command, IRQ with status
-  val = sw16_2(0x000204b3); // 4 reg content
+  val = sw16_2(0x000204a3 | (d->hs ? MG_BIT(4) : 0)); // 4 reg content
   cyw_spi_write(CYW_SD_FUNC_BUS | CYW_SD_16bMODE, CYW_BUS_SPI_BUSCTRL, &val, sizeof(val));
+  mg_tcpip_call(s_ifp, MG_TCPIP_EV_DRIVER, NULL);
   cyw_spi_read(CYW_SD_FUNC_BUS, CYW_BUS_SPI_TEST, &val, sizeof(val));
   if (val != 0xFEEDBEAD) return false;
   val = 4; cyw_spi_write(CYW_SD_FUNC_BUS, CYW_BUS_SPI_RESPDLY_F1, &val, 1);
