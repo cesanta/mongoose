@@ -280,11 +280,12 @@ static const uint8_t broadcast[] = {255, 255, 255, 255, 255, 255};
 // RFC-2131 #4.3.6, #4.4.1; RFC-2132 #9.8
 static void tx_dhcp_request_sel(struct mg_tcpip_if *ifp, uint32_t ip_req,
                                 uint32_t ip_srv) {
-  uint8_t extra = (ifp->enable_req_dns ? 1 : 0) + (ifp->enable_req_sntp ? 1 : 0);
+  uint8_t extra = (uint8_t) ((ifp->enable_req_dns ? 1 : 0) +
+                             (ifp->enable_req_sntp ? 1 : 0));
   size_t len = strlen(ifp->dhcp_name);
-  size_t olen = 21 + len + extra + 2 + 1;  // Total length of options
+  size_t olen = 21 + len + extra + 2 + 1;   // Total length of options
   uint8_t *opts = alloca(olen), *p = opts;  // Allocate options
-  *p++ = 53, *p++ = 1, *p++ = 3;                       // Type: DHCP request
+  *p++ = 53, *p++ = 1, *p++ = 3;            // Type: DHCP request
   *p++ = 54, *p++ = 4, memcpy(p, &ip_srv, 4), p += 4;  // DHCP server ID
   *p++ = 50, *p++ = 4, memcpy(p, &ip_req, 4), p += 4;  // Requested IP
   *p++ = 12, *p++ = (uint8_t) (len & 255);             // DHCP host
