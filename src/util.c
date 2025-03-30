@@ -193,3 +193,8 @@ uint16_t mg_ntohs(uint16_t net) {
 uint32_t mg_ntohl(uint32_t net) {
   return MG_LOAD_BE32(&net);
 }
+
+void mg_delayms(unsigned int ms) {
+  uint64_t to = mg_millis() + ms + 1;
+  while (mg_millis() < to) (void) 0;
+}
