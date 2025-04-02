@@ -88,9 +88,10 @@ static bool w5100_init(struct mg_tcpip_if *ifp) {
   w5100_w1(s, 0x46, 0);               // CR PHYCR0 -> autonegotiation
   w5100_w1(s, 0x47, 0);               // CR PHYCR1 -> reset
   w5100_w1(s, 0x72, 0x00);            // CR PHYLCKR -> lock PHY
+  w5100_wn(s, 0x09, ifp->mac, 6);     // SHAR
   w5100_w1(s, 0x1a, 6);               // Sock0 RX buf size - 4KB
   w5100_w1(s, 0x1b, 6);               // Sock0 TX buf size - 4KB
-  w5100_w1(s, 0x400, 4);              // Sock0 MR -> MACRAW
+  w5100_w1(s, 0x400, 0x44);           // Sock0 MR -> MACRAW, MAC filter
   w5100_w1(s, 0x401, 1);              // Sock0 CR -> OPEN
   return w5100_r1(s, 0x403) == 0x42;  // Sock0 SR == MACRAW
 }

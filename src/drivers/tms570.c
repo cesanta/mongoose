@@ -105,10 +105,6 @@ static bool mg_tcpip_driver_tms570_init(struct mg_tcpip_if *ifp) {
   while (delay-- != 0) (void) 0;
   struct mg_phy phy = {emac_read_phy, emac_write_phy};
   mg_phy_init(&phy, d->phy_addr, MG_PHY_CLOCKS_MAC);
-  // set the mac address
-  EMAC->MACSRCADDRHI = ifp->mac[0] | (ifp->mac[1] << 8) | (ifp->mac[2] << 16) |
-                       (ifp->mac[3] << 24);
-  EMAC->MACSRCADDRLO = ifp->mac[4] | (ifp->mac[5] << 8);
   uint32_t channel;
   for (channel = 0; channel < 8; channel++) {
     EMAC->MACINDEX = channel;
@@ -118,8 +114,17 @@ static bool mg_tcpip_driver_tms570_init(struct mg_tcpip_if *ifp) {
                       MG_BIT(19) | (channel << 16);
   }
   EMAC->RXUNICASTSET = 1; // accept unicast frames;
-  EMAC->RXMBPENABLE = MG_BIT(30) | MG_BIT(13); // CRC, broadcast;
-  
+
+#if MG_TCPIP_MCAST
+  // Setting Hash Index for 01:00:5e:00:00:fb (multicast)
+  // using TMS570 XOR method (32.5.37).
+  // computed hash is 55, which means bit 23 (55 - 32) in
+  // HASH2 register must be set
+  EMAC->MACHASH2 = MG_BIT(23);
+  EMAC->RXMBPENABLE = MG_BIT(5); // enable hash filtering
+#endif
+  EMAC->RXMBPENABLE |= MG_BIT(30) | MG_BIT(13); // CRC, broadcast
+
   // Initialize the descriptors
   for (i = 0; i < ETH_DESC_CNT; i++) {
     if (i < ETH_DESC_CNT - 1) {

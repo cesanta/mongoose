@@ -784,6 +784,10 @@ static bool cyw_init(uint8_t *mac) {
       MG_ERROR(("read MAC failed"));
     }
   }
+#if MG_TCPIP_MCAST
+  val = 1; if (!cyw_ioctl_iovar_set2_(0, "mcast_list", (uint8_t *)&val, sizeof(val), (uint8_t *)mcast_addr, sizeof(mcast_addr))) return false;
+  mg_delayms(50);
+#endif
   return true;
 }
 // clang-format on

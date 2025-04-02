@@ -128,7 +128,7 @@ long mg_io_send(struct mg_connection *c, const void *buf, size_t len) {
   }
   MG_VERBOSE(("%lu %ld %d", c->id, n, MG_SOCK_ERR(n)));
   if (MG_SOCK_PENDING(n)) return MG_IO_WAIT;
-  if (MG_SOCK_RESET(n)) return MG_IO_RESET; // MbedTLS, see #1507
+  if (MG_SOCK_RESET(n)) return MG_IO_RESET;  // MbedTLS, see #1507
   if (n <= 0) return MG_IO_ERR;
   return n;
 }
@@ -175,6 +175,22 @@ static void mg_set_non_blocking_mode(MG_SOCKET_TYPE fd) {
   fcntl(fd, F_SETFD, FD_CLOEXEC);                          // Set close-on-exec
 #endif
 }
+
+#if MG_ENABLE_MDNS
+void mg_mcast_add(char *ip, MG_SOCKET_TYPE fd) {
+#if MG_ENABLE_RL
+#error UNSUPPORTED
+#elif MG_ENABLE_FREERTOS_TCP
+  // TODO(): prvAllowIPPacketIPv4()
+#else
+  // lwIP, Unix, Windows, Zephyr(, AzureRTOS ?)
+  struct ip_mreq mreq;
+  mreq.imr_multiaddr.s_addr = inet_addr(ip);
+  mreq.imr_interface.s_addr = mg_htonl(INADDR_ANY);
+  setsockopt(fd, IPPROTO_IP, IP_ADD_MEMBERSHIP, (char *) &mreq, sizeof(mreq));
+#endif
+}
+#endif
 
 bool mg_open_listener(struct mg_connection *c, const char *url) {
   MG_SOCKET_TYPE fd = MG_INVALID_SOCKET;
@@ -250,7 +266,7 @@ static long recv_raw(struct mg_connection *c, void *buf, size_t len) {
   }
   MG_VERBOSE(("%lu %ld %d", c->id, n, MG_SOCK_ERR(n)));
   if (MG_SOCK_PENDING(n)) return MG_IO_WAIT;
-  if (MG_SOCK_RESET(n)) return MG_IO_RESET; // MbedTLS, see #1507
+  if (MG_SOCK_RESET(n)) return MG_IO_RESET;  // MbedTLS, see #1507
   if (n <= 0) return MG_IO_ERR;
   return n;
 }
@@ -287,7 +303,7 @@ static void read_conn(struct mg_connection *c) {
       }
       // there can still be > 16K from last iteration, always mg_tls_recv()
       m = c->is_tls_hs ? (long) MG_IO_WAIT : mg_tls_recv(c, buf, len);
-      if (n == MG_IO_ERR || n == MG_IO_RESET) { // Windows, see #3031
+      if (n == MG_IO_ERR || n == MG_IO_RESET) {  // Windows, see #3031
         if (c->rtls.len == 0 || m < 0) {
           // Close only when we have fully drained both rtls and TLS buffers
           c->is_closing = 1;  // or there's nothing we can do about it.
