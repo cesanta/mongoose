@@ -182,3 +182,16 @@
 #ifndef MG_ENABLE_TCPIP_PRINT_DEBUG_STATS
 #define MG_ENABLE_TCPIP_PRINT_DEBUG_STATS 0
 #endif
+
+#ifndef MG_ENABLE_MDNS
+#define MG_ENABLE_MDNS 0
+#endif
+
+#if MG_ENABLE_TCPIP
+#if MG_ENABLE_MDNS
+#undef MG_TCPIP_MCAST
+#define MG_TCPIP_MCAST 1
+#elif !defined(MG_TCPIP_MCAST)
+#define MG_TCPIP_MCAST 0
+#endif
+#endif

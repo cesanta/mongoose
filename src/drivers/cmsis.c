@@ -40,6 +40,10 @@ static bool cmsis_init(struct mg_tcpip_if *ifp) {
     memcpy(&addr, ifp->mac, sizeof(addr));
     mac->SetMacAddress(&addr);
   }
+#if MG_TCPIP_MCAST
+  memcpy(&addr, mcast_addr, sizeof(addr));
+  mac->SetAddressFilter(&addr, 1);
+#endif
   phy->PowerControl(ARM_POWER_FULL);
   phy->SetInterface(cap.media_interface);
   phy->SetMode(ARM_ETH_PHY_AUTO_NEGOTIATE);

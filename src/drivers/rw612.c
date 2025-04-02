@@ -89,6 +89,15 @@ static bool mg_tcpip_driver_rw612_init(struct mg_tcpip_if *ifp) {
   ENET->PALR =
       ifp->mac[0] << 24 | ifp->mac[1] << 16 | ifp->mac[2] << 8 | ifp->mac[3];
   ENET->PAUR |= (ifp->mac[4] << 24 | ifp->mac[5] << 16);
+  ENET->IALR = 0;
+  ENET->IAUR = 0;
+  ENET->GALR = 0;
+#if MG_TCPIP_MCAST
+  ENET->GAUR = MG_BIT(1); // see imxrt, it reduces to this for mDNS
+#else
+  ENET->GAUR = 0;
+#endif
+
   ENET->MSCR = ((d->mdc_cr & 0x3f) << 1) | ((d->mdc_holdtime & 7) << 8);
   ENET->EIMR = MG_BIT(25);             // Enable RX interrupt
   ENET->ECR |= MG_BIT(8) | MG_BIT(1);  // DBSWP, Enable
@@ -157,7 +166,7 @@ static bool mg_tcpip_driver_rw612_up(struct mg_tcpip_if *ifp) {
 
 void ENET_IRQHandler(void) {
   if (ENET->EIR & MG_BIT(25)) {
-    ENET->EIR = MG_BIT(25); // Ack RX
+    ENET->EIR = MG_BIT(25);              // Ack RX
     for (uint32_t i = 0; i < 10; i++) {  // read as they arrive but not forever
       if ((s_rxdesc[s_rxno][0] & MG_BIT(31)) != 0) break;  // exit when done
       // skip partial/errored frames
