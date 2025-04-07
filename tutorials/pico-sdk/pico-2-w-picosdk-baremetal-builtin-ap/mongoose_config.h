@@ -17,10 +17,13 @@
 
 // MAC address is read from OTP by the driver
 
-// Set your Wi-Fi credentials
-// Using a build-time constant:
-// #define MG_SET_WIFI_CREDS(ssid, pass) do { *ssid = "this"; *pass = "that"; } while (0)
-//
+// Set your Wi-Fi configuration
+/* Using a build-time constant:
+#define MG_SET_WIFI_CONFIG(data) do { 					                \
+        ((struct mg_tcpip_driver_pico_w_data *)data)->ssid = "this"; 	\
+        ((struct mg_tcpip_driver_pico_w_data *)data)->pass = "that"; 	\
+        } while (0)
+*/
 // Using a custom function:
-extern void main_setcreds(char **ssid, char **pass);
-#define MG_SET_WIFI_CREDS(ssid, pass) main_setcreds(ssid, pass)
+extern void main_setconfig(void *data);
+#define MG_SET_WIFI_CONFIG(data) main_setconfig(data)

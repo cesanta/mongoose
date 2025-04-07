@@ -174,8 +174,8 @@
 #define MG_SET_MAC_ADDRESS(mac)
 #endif
 
-#ifndef MG_SET_WIFI_CREDS
-#define MG_SET_WIFI_CREDS(ssid, pass)
+#ifndef MG_SET_WIFI_CONFIG
+#define MG_SET_WIFI_CONFIG(data)
 #endif
 
 #ifndef MG_ENABLE_TCPIP_PRINT_DEBUG_STATS
