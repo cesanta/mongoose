@@ -171,6 +171,12 @@ We take security seriously:
   of which we get notified and in case of any issue, act similar to (3).
 
 
+## Articles
+
+Technical guides and deep dives into embedded web servers, WebUI integration and embedded networking technologies:
+- [Embedded Web Server: A Comprehensive Guide for Modern Connected Devices](https://mongoose.ws/articles/embedded-web-server-a-comprehensive-guide-for-modern-connected-devices/)
+
+
 ## Contributions
 
 Contributions are welcome! Please follow the guidelines below:
