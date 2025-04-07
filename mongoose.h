@@ -892,8 +892,8 @@ struct timeval {
 #define MG_SET_MAC_ADDRESS(mac)
 #endif
 
-#ifndef MG_SET_WIFI_CREDS
-#define MG_SET_WIFI_CREDS(ssid, pass)
+#ifndef MG_SET_WIFI_CONFIG
+#define MG_SET_WIFI_CONFIG(data)
 #endif
 
 #ifndef MG_ENABLE_TCPIP_PRINT_DEBUG_STATS
@@ -2995,21 +2995,23 @@ struct mg_tcpip_driver_cyw_data {
   bool apmode;      // start in AP mode; 'false' starts connection to 'ssid' if not NULL
 };
 
-//#define MG_TCPIP_DRIVER_INIT(mgr)                                 \
-//  do {                                                            \
-//    static struct mg_tcpip_driver_cyw_data driver_data_;          \
-//    static struct mg_tcpip_if mif_;                               \
-//    MG_SET_WIFI_CONFIG(&driver_data_);                            \
-//    mif_.ip = MG_TCPIP_IP;                                        \
-//    mif_.mask = MG_TCPIP_MASK;                                    \
-//    mif_.gw = MG_TCPIP_GW;                                        \
-//    mif_.driver = &mg_tcpip_driver_pico_w;                        \
-//    mif_.driver_data = &driver_data_;                             \
-//    mif_.recv_queue.size = 8192;                                  \
-//    mif_.mac[0] = 2; /* MAC read from OTP at driver init */       \
-//    mg_tcpip_init(mgr, &mif_);                                    \
-//    MG_INFO(("Driver: cyw, MAC: %M", mg_print_mac, mif_.mac)); \
-//  } while (0)
+#if 0
+#define MG_TCPIP_DRIVER_INIT(mgr)                                 \
+  do {                                                            \
+    static struct mg_tcpip_driver_cyw_data driver_data_;          \
+    static struct mg_tcpip_if mif_;                               \
+    MG_SET_WIFI_CONFIG(&driver_data_);                            \
+    mif_.ip = MG_TCPIP_IP;                                        \
+    mif_.mask = MG_TCPIP_MASK;                                    \
+    mif_.gw = MG_TCPIP_GW;                                        \
+    mif_.driver = &mg_tcpip_driver_pico_w;                        \
+    mif_.driver_data = &driver_data_;                             \
+    mif_.recv_queue.size = 8192;                                  \
+    mif_.mac[0] = 2; /* MAC read from OTP at driver init */       \
+    mg_tcpip_init(mgr, &mif_);                                    \
+    MG_INFO(("Driver: cyw, MAC: %M", mg_print_mac, mif_.mac)); \
+  } while (0)
+#endif
 
 #endif
 
