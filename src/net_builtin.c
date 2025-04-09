@@ -284,8 +284,8 @@ static void tx_dhcp_request_sel(struct mg_tcpip_if *ifp, uint32_t ip_req,
                              (ifp->enable_req_sntp ? 1 : 0));
   size_t len = strlen(ifp->dhcp_name);
   size_t olen = 21 + len + extra + 2 + 1;   // Total length of options
-  uint8_t opts_maxlen = 21 + sizeof(ifp->dhcp_name) + 2 + 2 + 1;
-  uint8_t opts[opts_maxlen]; // Allocate options (max size possible)
+  #define OPTS_MAXLEN (21 + sizeof(ifp->dhcp_name) + 2 + 2 + 1)
+  uint8_t opts[OPTS_MAXLEN]; // Allocate options (max size possible)
   uint8_t *p = opts;
   assert(olen <= sizeof(opts));
   memset(opts, 0, sizeof(opts));
