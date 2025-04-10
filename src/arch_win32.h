@@ -66,12 +66,12 @@ typedef enum { false = 0, true = 1 } bool;
 
 #include <process.h>
 #include <winerror.h>
+#include <winsock2.h>       // fix missing macros and types
 
 // For mg_random()
 #if defined(_MSC_VER) && _MSC_VER < 1700
 #ifndef _WIN32_WINNT
 #define _WIN32_WINNT 0x400  // Let vc98 pick up wincrypt.h
-#include <winsock2.h>       // and fix missing macros
 #endif
 #include <wincrypt.h>
 #pragma comment(lib, "advapi32.lib")
@@ -104,7 +104,6 @@ typedef unsigned long nfds_t;
 #endif
 
 #if MG_ENABLE_WINSOCK
-#include <winsock2.h>
 
 #define MG_INVALID_SOCKET INVALID_SOCKET
 #define MG_SOCKET_TYPE SOCKET
