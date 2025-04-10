@@ -56,7 +56,8 @@
 #define MG_ENABLE_MD5 1
 #endif
 
-// Set MG_ENABLE_WINSOCK=0 for Win32 builds with external IP stack (like LWIP)
+// Set MG_ENABLE_WINSOCK=0 for Win32 builds with other external IP stack not
+// mentioned in arch_win32.h
 #ifndef MG_ENABLE_WINSOCK
 #define MG_ENABLE_WINSOCK 1
 #endif
