@@ -176,8 +176,7 @@ static void mg_set_non_blocking_mode(MG_SOCKET_TYPE fd) {
 #endif
 }
 
-#if MG_ENABLE_MDNS
-void mg_mcast_add(char *ip, MG_SOCKET_TYPE fd) {
+void mg_multicast_add(struct mg_connection *c, char *ip) {
 #if MG_ENABLE_RL
 #error UNSUPPORTED
 #elif MG_ENABLE_FREERTOS_TCP
@@ -187,10 +186,9 @@ void mg_mcast_add(char *ip, MG_SOCKET_TYPE fd) {
   struct ip_mreq mreq;
   mreq.imr_multiaddr.s_addr = inet_addr(ip);
   mreq.imr_interface.s_addr = mg_htonl(INADDR_ANY);
-  setsockopt(fd, IPPROTO_IP, IP_ADD_MEMBERSHIP, (char *) &mreq, sizeof(mreq));
+  setsockopt(FD(c), IPPROTO_IP, IP_ADD_MEMBERSHIP, (char *) &mreq, sizeof(mreq));
 #endif
 }
-#endif
 
 bool mg_open_listener(struct mg_connection *c, const char *url) {
   MG_SOCKET_TYPE fd = MG_INVALID_SOCKET;
