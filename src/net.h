@@ -27,7 +27,6 @@ struct mg_mgr {
   int dnstimeout;               // DNS resolve timeout in milliseconds
   bool use_dns6;                // Use DNS6 server by default, see #1532
   unsigned long nextid;         // Next connection ID
-  unsigned long timerid;        // Next timer ID
   void *userdata;               // Arbitrary user data pointer
   void *tls_ctx;                // TLS context shared by all TLS sessions
   uint16_t mqtt_id;             // MQTT IDs for pub/sub

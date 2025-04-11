@@ -1960,6 +1960,22 @@ static void test_timer(void) {
     ASSERT(mgr.timers == NULL);
     ASSERT(mgr.conns == NULL);
   }
+
+  // Test that non-repeating called timers are deleted, see #2768
+  {
+    struct mg_mgr mgr;
+    int arg = 0;
+    mg_mgr_init(&mgr);
+    mg_timer_add(&mgr, 0, MG_TIMER_ONCE, f1, &arg);
+    ASSERT(mgr.timers != NULL);
+    mg_mgr_poll(&mgr, 10);
+    ASSERT(arg == 1);
+    ASSERT(mgr.timers == NULL);
+    mg_mgr_free(&mgr);
+    ASSERT(mgr.timers == NULL);
+    ASSERT(mgr.conns == NULL);
+  }
+
 }
 
 static bool sn(const char *fmt, ...) {
