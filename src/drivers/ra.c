@@ -101,9 +101,9 @@ static uint16_t smi_rd(uint16_t header) {
     pir = 0;  // read, mdc = 0
     ETHERC->PIR = pir;
     raspin(s_smispin / 2);  // 1/4 clock period, 300ns max access time
-    data |= (uint16_t)(ETHERC->PIR & MG_BIT(3) ? 1 : 0);  // read mdio
-    raspin(s_smispin / 2);                    // 1/4 clock period
-    pir |= MG_BIT(0);                         // mdc = 1
+    data |= (uint16_t) (ETHERC->PIR & MG_BIT(3) ? 1 : 0);  // read mdio
+    raspin(s_smispin / 2);                                 // 1/4 clock period
+    pir |= MG_BIT(0);                                      // mdc = 1
     ETHERC->PIR = pir;
     raspin(s_smispin);
   }
@@ -111,11 +111,14 @@ static uint16_t smi_rd(uint16_t header) {
 }
 
 static uint16_t raeth_read_phy(uint8_t addr, uint8_t reg) {
-  return smi_rd((uint16_t)((1 << 14) | (2 << 12) | (addr << 7) | (reg << 2) | (2 << 0)));
+  return smi_rd(
+      (uint16_t) ((1 << 14) | (2 << 12) | (addr << 7) | (reg << 2) | (2 << 0)));
 }
 
 static void raeth_write_phy(uint8_t addr, uint8_t reg, uint16_t val) {
-  smi_wr((uint16_t)((1 << 14) | (1 << 12) | (addr << 7) | (reg << 2) | (2 << 0)), val);
+  smi_wr(
+      (uint16_t) ((1 << 14) | (1 << 12) | (addr << 7) | (reg << 2) | (2 << 0)),
+      val);
 }
 
 // MDC clock is generated manually; as per 802.3, it must not exceed 2.5MHz
@@ -152,7 +155,7 @@ static bool mg_tcpip_driver_ra_init(struct mg_tcpip_if *ifp) {
 
   MG_DEBUG(("PHY addr: %d, smispin: %d", d->phy_addr, s_smispin));
   struct mg_phy phy = {raeth_read_phy, raeth_write_phy};
-  mg_phy_init(&phy, d->phy_addr, 0); // MAC clocks PHY
+  mg_phy_init(&phy, d->phy_addr, 0);  // MAC clocks PHY
 
   // Select RMII mode,
   ETHERC->ECMR = MG_BIT(2) | MG_BIT(1);  // 100M, Full-duplex, CRC
@@ -171,9 +174,13 @@ static bool mg_tcpip_driver_ra_init(struct mg_tcpip_if *ifp) {
   EDMAC->FDR = 0x070f;                    // (27.2.11)
   EDMAC->RMCR = MG_BIT(0);                // (27.2.12)
   ETHERC->ECMR |= MG_BIT(6) | MG_BIT(5);  // TE RE
-  EDMAC->EESIPR = MG_BIT(18);             // Enable Rx IRQ
-  EDMAC->EDRRR = MG_BIT(0);               // Receive Descriptors have changed
-  EDMAC->EDTRR = MG_BIT(0);               // Transmit Descriptors have changed
+#if MG_TCPIP_MCAST
+  EDMAC->EESIPR = MG_BIT(18) | MG_BIT(7);  // FR, RMAF: Frame and mcast IRQ
+#else
+  EDMAC->EESIPR = MG_BIT(18);  // FR: Enable Rx (frame) IRQ
+#endif
+  EDMAC->EDRRR = MG_BIT(0);  // Receive Descriptors have changed
+  EDMAC->EDTRR = MG_BIT(0);  // Transmit Descriptors have changed
   return true;
 }
 
@@ -225,7 +232,11 @@ static uint32_t s_rxno;
 void EDMAC_IRQHandler(void) {
   struct mg_tcpip_driver_ra_data *d =
       (struct mg_tcpip_driver_ra_data *) s_ifp->driver_data;
-  EDMAC->EESR = MG_BIT(18);            // Ack IRQ in EDMAC 1st
+#if MG_TCPIP_MCAST
+  EDMAC->EESR = MG_BIT(18) | MG_BIT(7);  // Ack IRQ in EDMAC 1st
+#else
+  EDMAC->EESR = MG_BIT(18);    // Ack IRQ in EDMAC 1st
+#endif
   ICU_IELSR[d->irqno] &= ~MG_BIT(16);  // Ack IRQ in ICU last
   // Frame received, loop
   for (uint32_t i = 0; i < 10; i++) {  // read as they arrive but not forever

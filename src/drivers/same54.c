@@ -124,6 +124,15 @@ static bool mg_tcpip_driver_same54_init(struct mg_tcpip_if *ifp) {
       MG_U32(ifp->mac[3], ifp->mac[2], ifp->mac[1], ifp->mac[0]);
   GMAC_REGS->SA[0].GMAC_SAT = MG_U32(0, 0, ifp->mac[5], ifp->mac[4]);
 
+#if MG_TCPIP_MCAST
+  // Setting Hash Index for 01:00:5e:00:00:fb (multicast)
+  // 24.6.9 Hash addressing
+  // computed hash is 55, which means bit 23 (55 - 32) in
+  // HRT register must be set
+  GMAC_REGS->GMAC_HRT = MG_BIT(23);
+  GMAC_REGS->GMAC_NCFGR |= MG_BIT(6); // enable multicast hash filtering
+#endif
+
   GMAC_REGS->GMAC_UR &= ~GMAC_UR_MII_Msk;  // Disable MII, use RMII
   GMAC_REGS->GMAC_NCFGR |= GMAC_NCFGR_MAXFS_Msk | GMAC_NCFGR_MTIHEN_Msk |
                            GMAC_NCFGR_EFRHD_Msk | GMAC_NCFGR_CAF_Msk;

@@ -1184,4 +1184,9 @@ bool mg_wifi_ap_stop(void) {
   return cyw_wifi_ap_stop();
 }
 
+void mg_tcpip_driver_multicast_add(const uint8_t mcast_addr) {
+  val = 1; cyw_ioctl_iovar_set2_(0, "mcast_list", (uint8_t *)&val, sizeof(val), (uint8_t *)mcast_addr, sizeof(mcast_addr));
+  //mg_delayms(50);
+}
+
 #endif

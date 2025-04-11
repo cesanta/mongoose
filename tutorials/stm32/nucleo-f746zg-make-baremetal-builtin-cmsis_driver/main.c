@@ -60,6 +60,7 @@ int main(void) {
 
   MG_INFO(("Initialising application..."));
   web_init(&mgr);
+  mg_mdns_listen(&mgr, "Mongoose");  // Start mDNS server
 
   MG_INFO(("Starting event loop"));
   for (;;) {

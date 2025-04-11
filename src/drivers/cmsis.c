@@ -56,7 +56,20 @@ static size_t cmsis_tx(const void *buf, size_t len, struct mg_tcpip_if *ifp) {
   return len;
 }
 
+static void cmsis_update_hash_table(struct mg_tcpip_if *ifp) {
+  // TODO(): read database, rebuild hash table
+  ARM_DRIVER_ETH_MAC *mac = &Driver_ETH_MAC0;
+  ARM_ETH_MAC_ADDR addr;
+  memcpy(&addr, mcast_addr, sizeof(addr));
+  mac->SetAddressFilter(&addr, 1);
+  (void) ifp;
+}
+
 static bool cmsis_poll(struct mg_tcpip_if *ifp, bool s1) {
+  if (ifp->update_mac_hash_table) {
+    cmsis_update_hash_table(ifp);
+    ifp->update_mac_hash_table = false;
+  }
   if (!s1) return false;
   ARM_DRIVER_ETH_PHY *phy = &Driver_ETH_PHY0;
   ARM_DRIVER_ETH_MAC *mac = &Driver_ETH_MAC0;
