@@ -277,7 +277,6 @@ void mg_resolve(struct mg_connection *c, const char *url) {
   }
 }
 
-#if MG_ENABLE_MDNS
 static const uint8_t mdns_answer[] = {
     0, 1,          // 2 bytes - record type, A
     0, 1,          // 2 bytes - address class, INET
@@ -339,11 +338,10 @@ static void mdns_cb(struct mg_connection *c, int ev, void *ev_data) {
   (void) ev_data;
 }
 
-void mg_mcast_add(char *ip, MG_SOCKET_TYPE fd);
+void mg_multicast_add(struct mg_connection *c, char *ip);
 struct mg_connection *mg_mdns_listen(struct mg_mgr *mgr, char *name) {
   struct mg_connection *c =
       mg_listen(mgr, "udp://224.0.0.251:5353", mdns_cb, name);
-  if (c != NULL) mg_mcast_add("224.0.0.251", (MG_SOCKET_TYPE) (size_t) c->fd);
+  if (c != NULL) mg_multicast_add(c, "224.0.0.251");
   return c;
 }
-#endif
