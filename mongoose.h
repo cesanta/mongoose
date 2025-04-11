@@ -2830,6 +2830,7 @@ enum {
   MG_TCPIP_EV_WIFI_SCAN_RESULT, // Wi-Fi scan results             struct mg_wifi_scan_bss_data *
   MG_TCPIP_EV_WIFI_SCAN_END,    // Wi-Fi scan has finished        NULL
   MG_TCPIP_EV_WIFI_CONNECT_ERR, // Wi-Fi connect has failed       driver and chip specific
+  MG_TCPIP_EV_DRIVER,           // Driver event                   driver specific
   MG_TCPIP_EV_USER              // Starting ID for user events
 };
 
@@ -2997,11 +2998,11 @@ struct mg_tcpip_spi_ {
 };
 
 struct mg_tcpip_driver_cyw_firmware {
-  const uint8_t * code_addr;
+  const uint8_t *code_addr;
   size_t code_len;
-  const uint8_t * nvram_addr;
+  const uint8_t *nvram_addr;
   size_t nvram_len;
-  const uint8_t * clm_addr;
+  const uint8_t *clm_addr;
   size_t clm_len;
 };
 
@@ -3016,6 +3017,7 @@ struct mg_tcpip_driver_cyw_data {
   uint8_t apsecurity; // TBD
   uint8_t apchannel;
   bool apmode;      // start in AP mode; 'false' starts connection to 'ssid' if not NULL
+  bool hs;          // use chip "high-speed" mode; otherwise SPI CPOL0 CPHA0 (DS 4.2.3 Table 6)
 };
 
 #if 0
