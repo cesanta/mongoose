@@ -398,7 +398,6 @@ void mg_resolve(struct mg_connection *c, const char *url) {
   }
 }
 
-#if MG_ENABLE_MDNS
 static const uint8_t mdns_answer[] = {
     0, 1,          // 2 bytes - record type, A
     0, 1,          // 2 bytes - address class, INET
@@ -460,14 +459,13 @@ static void mdns_cb(struct mg_connection *c, int ev, void *ev_data) {
   (void) ev_data;
 }
 
-void mg_mcast_add(char *ip, MG_SOCKET_TYPE fd);
+void mg_multicast_add(struct mg_connection *c, char *ip);
 struct mg_connection *mg_mdns_listen(struct mg_mgr *mgr, char *name) {
   struct mg_connection *c =
       mg_listen(mgr, "udp://224.0.0.251:5353", mdns_cb, name);
-  if (c != NULL) mg_mcast_add("224.0.0.251", (MG_SOCKET_TYPE) (size_t) c->fd);
+  if (c != NULL) mg_multicast_add(c, "224.0.0.251");
   return c;
 }
-#endif
 
 #ifdef MG_ENABLE_LINES
 #line 1 "src/event.c"
@@ -4446,13 +4444,13 @@ static void tx_dhcp_request_sel(struct mg_tcpip_if *ifp, uint32_t ip_req,
   uint8_t extra = (uint8_t) ((ifp->enable_req_dns ? 1 : 0) +
                              (ifp->enable_req_sntp ? 1 : 0));
   size_t len = strlen(ifp->dhcp_name);
-  size_t olen = 21 + len + extra + 2 + 1;   // Total length of options
-  #define OPTS_MAXLEN (21 + sizeof(ifp->dhcp_name) + 2 + 2 + 1)
-  uint8_t opts[OPTS_MAXLEN]; // Allocate options (max size possible)
+  size_t olen = 21 + len + extra + 2 + 1;  // Total length of options
+#define OPTS_MAXLEN (21 + sizeof(ifp->dhcp_name) + 2 + 2 + 1)
+  uint8_t opts[OPTS_MAXLEN];  // Allocate options (max size possible)
   uint8_t *p = opts;
   assert(olen <= sizeof(opts));
   memset(opts, 0, sizeof(opts));
-  *p++ = 53, *p++ = 1, *p++ = 3;            // Type: DHCP request
+  *p++ = 53, *p++ = 1, *p++ = 3;                       // Type: DHCP request
   *p++ = 54, *p++ = 4, memcpy(p, &ip_srv, 4), p += 4;  // DHCP server ID
   *p++ = 50, *p++ = 4, memcpy(p, &ip_req, 4), p += 4;  // Requested IP
   *p++ = 12, *p++ = (uint8_t) (len & 255);             // DHCP host
@@ -5253,6 +5251,13 @@ static void mac_resolved(struct mg_connection *c) {
   }
 }
 
+static void ip4_mcastmac(uint8_t *mac, uint32_t *ip) {
+  uint8_t mcastp[3] = {0x01, 0x00, 0x5E};  // multicast group MAC
+  memcpy(mac, mcastp, 3);
+  memcpy(mac + 3, ((uint8_t *) ip) + 1, 3);  // 23 LSb
+  mac[3] &= 0x7F;
+}
+
 void mg_connect_resolved(struct mg_connection *c) {
   struct mg_tcpip_if *ifp = c->mgr->ifp;
   uint32_t rem_ip;
@@ -5278,10 +5283,7 @@ void mg_connect_resolved(struct mg_connection *c) {
     c->is_arplooking = 1;
   } else if ((*((uint8_t *) &rem_ip) & 0xE0) == 0xE0) {
     struct connstate *s = (struct connstate *) (c + 1);  // 224 to 239, E0 to EF
-    uint8_t mcastp[3] = {0x01, 0x00, 0x5E};              // multicast group
-    memcpy(s->mac, mcastp, 3);
-    memcpy(s->mac + 3, ((uint8_t *) &rem_ip) + 1, 3);  // 23 LSb
-    s->mac[3] &= 0x7F;
+    ip4_mcastmac(s->mac, &rem_ip);                       // multicast group
     mac_resolved(c);
   } else {
     struct connstate *s = (struct connstate *) (c + 1);
@@ -5384,11 +5386,12 @@ bool mg_send(struct mg_connection *c, const void *buf, size_t len) {
   return res;
 }
 
-void mg_mcast_add(char *ip, MG_SOCKET_TYPE fd) { (void) ip; (void) fd; }
-
-#if MG_TCPIP_MCAST
-const uint8_t mcast_addr[6] = {0x01, 0x00, 0x5e, 0x00, 0x00, 0xfb};
-#endif
+uint8_t mcast_addr[6] = {0x01, 0x00, 0x5e, 0x00, 0x00, 0xfb};
+void mg_multicast_add(struct mg_connection *c, char *ip) {
+  (void) ip; // ip4_mcastmac(mcast_mac, &ip);
+  // TODO(): actual IP -> MAC; check database, update
+  c->mgr->ifp->update_mac_hash_table = true;  // mark dirty
+}
 
 #endif  // MG_ENABLE_TCPIP
 
@@ -8382,8 +8385,7 @@ static void mg_set_non_blocking_mode(MG_SOCKET_TYPE fd) {
 #endif
 }
 
-#if MG_ENABLE_MDNS
-void mg_mcast_add(char *ip, MG_SOCKET_TYPE fd) {
+void mg_multicast_add(struct mg_connection *c, char *ip) {
 #if MG_ENABLE_RL
 #error UNSUPPORTED
 #elif MG_ENABLE_FREERTOS_TCP
@@ -8393,10 +8395,9 @@ void mg_mcast_add(char *ip, MG_SOCKET_TYPE fd) {
   struct ip_mreq mreq;
   mreq.imr_multiaddr.s_addr = inet_addr(ip);
   mreq.imr_interface.s_addr = mg_htonl(INADDR_ANY);
-  setsockopt(fd, IPPROTO_IP, IP_ADD_MEMBERSHIP, (char *) &mreq, sizeof(mreq));
+  setsockopt(FD(c), IPPROTO_IP, IP_ADD_MEMBERSHIP, (char *) &mreq, sizeof(mreq));
 #endif
 }
-#endif
 
 bool mg_open_listener(struct mg_connection *c, const char *url) {
   MG_SOCKET_TYPE fd = MG_INVALID_SOCKET;
@@ -19833,10 +19834,6 @@ static bool cmsis_init(struct mg_tcpip_if *ifp) {
     memcpy(&addr, ifp->mac, sizeof(addr));
     mac->SetMacAddress(&addr);
   }
-#if MG_TCPIP_MCAST
-  memcpy(&addr, mcast_addr, sizeof(addr));
-  mac->SetAddressFilter(&addr, 1);
-#endif
   phy->PowerControl(ARM_POWER_FULL);
   phy->SetInterface(cap.media_interface);
   phy->SetMode(ARM_ETH_PHY_AUTO_NEGOTIATE);
@@ -19853,7 +19850,20 @@ static size_t cmsis_tx(const void *buf, size_t len, struct mg_tcpip_if *ifp) {
   return len;
 }
 
+static void cmsis_update_hash_table(struct mg_tcpip_if *ifp) {
+  // TODO(): read database, rebuild hash table
+  ARM_DRIVER_ETH_MAC *mac = &Driver_ETH_MAC0;
+  ARM_ETH_MAC_ADDR addr;
+  memcpy(&addr, mcast_addr, sizeof(addr));
+  mac->SetAddressFilter(&addr, 1);
+  (void) ifp;
+}
+
 static bool cmsis_poll(struct mg_tcpip_if *ifp, bool s1) {
+  if (ifp->update_mac_hash_table) {
+    cmsis_update_hash_table(ifp);
+    ifp->update_mac_hash_table = false;
+  }
   if (!s1) return false;
   ARM_DRIVER_ETH_PHY *phy = &Driver_ETH_PHY0;
   ARM_DRIVER_ETH_MAC *mac = &Driver_ETH_MAC0;
@@ -20700,10 +20710,6 @@ static bool cyw_init(uint8_t *mac) {
       MG_ERROR(("read MAC failed"));
     }
   }
-#if MG_TCPIP_MCAST
-  val = 1; if (!cyw_ioctl_iovar_set2_(0, "mcast_list", (uint8_t *)&val, sizeof(val), (uint8_t *)mcast_addr, sizeof(mcast_addr))) return false;
-  mg_delayms(50);
-#endif
   return true;
 }
 // clang-format on
@@ -21102,6 +21108,11 @@ bool mg_wifi_ap_start(char *ssid, char *pass, unsigned int channel) {
 
 bool mg_wifi_ap_stop(void) {
   return cyw_wifi_ap_stop();
+}
+
+void mg_tcpip_driver_multicast_add(const uint8_t mcast_addr) {
+  val = 1; cyw_ioctl_iovar_set2_(0, "mcast_list", (uint8_t *)&val, sizeof(val), (uint8_t *)mcast_addr, sizeof(mcast_addr));
+  //mg_delayms(50);
 }
 
 #endif
@@ -22806,7 +22817,7 @@ static bool mg_tcpip_driver_stm32f_init(struct mg_tcpip_if *ifp) {
   ETH->MACA0LR = (uint32_t) (ifp->mac[3] << 24) |
                  ((uint32_t) ifp->mac[2] << 16) |
                  ((uint32_t) ifp->mac[1] << 8) | ifp->mac[0];
-#if MG_TCPIP_MCAST
+#if 0 //MG_TCPIP_MCAST
   // enable multicast
   ETH->MACA1LR = (uint32_t) mcast_addr[3] << 24 |
                  (uint32_t) mcast_addr[2] << 16 |

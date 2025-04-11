@@ -9,5 +9,4 @@
 #define MG_ENABLE_PACKED_FS 1 
 #define MG_ENABLE_DRIVER_CMSIS 1
 #define MG_ENABLE_LINES 1
-#define MG_ENABLE_MDNS 1
 
