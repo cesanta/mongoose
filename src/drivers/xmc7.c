@@ -141,13 +141,6 @@ static bool mg_tcpip_driver_xmc7_init(struct mg_tcpip_if *ifp) {
       ifp->mac[3] << 24 | ifp->mac[2] << 16 | ifp->mac[1] << 8 | ifp->mac[0];
   ETH0->SPEC_ADD1_TOP = ifp->mac[5] << 8 | ifp->mac[4];
 
-#if MG_TCPIP_MCAST
-  // set multicast MAC address
-  ETH0->SPEC_ADD2_BOTTOM = mcast_addr[3] << 24 | mcast_addr[2] << 16 |
-                           mcast_addr[1] << 8 | mcast_addr[0];
-  ETH0->SPEC_ADD2_TOP = mcast_addr[5] << 8 | mcast_addr[4];
-#endif
-
   // enable MDIO, TX, RX
   ETH0->NETWORK_CONTROL = MG_BIT(4) | MG_BIT(3) | MG_BIT(2);
 
@@ -187,7 +180,19 @@ static size_t mg_tcpip_driver_xmc7_tx(const void *buf, size_t len,
   return len;
 }
 
+static mg_tcpip_driver_xmc7_update_hash_table(struct mg_tcpip_if *ifp) {
+  // TODO(): read database, rebuild hash table
+  // set multicast MAC address
+  ETH0->SPEC_ADD2_BOTTOM = mcast_addr[3] << 24 | mcast_addr[2] << 16 |
+                           mcast_addr[1] << 8 | mcast_addr[0];
+  ETH0->SPEC_ADD2_TOP = mcast_addr[5] << 8 | mcast_addr[4];
+}
+
 static bool mg_tcpip_driver_xmc7_poll(struct mg_tcpip_if *ifp, bool s1) {
+  if (ifp->update_mac_hash_table) {
+    mg_tcpip_driver_xmc7_update_hash_table(ifp);
+    ifp->update_mac_hash_table = false;
+  }
   if (!s1) return false;
   struct mg_tcpip_driver_xmc7_data *d =
       (struct mg_tcpip_driver_xmc7_data *) ifp->driver_data;

@@ -92,12 +92,7 @@ static bool mg_tcpip_driver_rw612_init(struct mg_tcpip_if *ifp) {
   ENET->IALR = 0;
   ENET->IAUR = 0;
   ENET->GALR = 0;
-#if MG_TCPIP_MCAST
-  ENET->GAUR = MG_BIT(1); // see imxrt, it reduces to this for mDNS
-#else
   ENET->GAUR = 0;
-#endif
-
   ENET->MSCR = ((d->mdc_cr & 0x3f) << 1) | ((d->mdc_holdtime & 7) << 8);
   ENET->EIMR = MG_BIT(25);             // Enable RX interrupt
   ENET->ECR |= MG_BIT(8) | MG_BIT(1);  // DBSWP, Enable
@@ -130,7 +125,18 @@ static size_t mg_tcpip_driver_rw612_tx(const void *buf, size_t len,
   return len;
 }
 
-static bool mg_tcpip_driver_rw612_up(struct mg_tcpip_if *ifp) {
+
+static mg_tcpip_driver_rw612_update_hash_table(struct mg_tcpip_if *ifp) {
+  // TODO(): read database, rebuild hash table
+  ENET->GAUR = MG_BIT(1); // see imxrt, it reduces to this for mDNS
+}
+
+static bool mg_tcpip_driver_rw612_poll(struct mg_tcpip_if *ifp, bool s1) {
+  if (ifp->update_mac_hash_table) {
+    mg_tcpip_driver_rw612_update_hash_table(ifp);
+    ifp->update_mac_hash_table = false;
+  }
+  if (!s1) return false;
   struct mg_tcpip_driver_rw612_data *d =
       (struct mg_tcpip_driver_rw612_data *) ifp->driver_data;
   uint8_t speed = MG_PHY_SPEED_10M;
@@ -186,5 +192,5 @@ void ENET_IRQHandler(void) {
 
 struct mg_tcpip_driver mg_tcpip_driver_rw612 = {mg_tcpip_driver_rw612_init,
                                                 mg_tcpip_driver_rw612_tx, NULL,
-                                                mg_tcpip_driver_rw612_up};
+                                                mg_tcpip_driver_rw612_poll};
 #endif

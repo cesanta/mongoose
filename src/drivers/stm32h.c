@@ -142,18 +142,6 @@ static bool mg_tcpip_driver_stm32h_init(struct mg_tcpip_if *ifp) {
   ETH->MACA0LR = (uint32_t) (ifp->mac[3] << 24) |
                  ((uint32_t) ifp->mac[2] << 16) |
                  ((uint32_t) ifp->mac[1] << 8) | ifp->mac[0];
-#if MG_TCPIP_MCAST
-#if MG_ENABLE_DRIVER_MCXN
-  ETH->MACPFR = MG_BIT(4);  // Pass Multicast (pass all multicast frames)
-#else
-  // add mDNS / DNS-SD multicast address
-  ETH->MACA1LR = (uint32_t) mcast_addr[3] << 24 |
-                 (uint32_t) mcast_addr[2] << 16 |
-                 (uint32_t) mcast_addr[1] << 8 | (uint32_t) mcast_addr[0];
-  ETH->MACA1HR = (uint32_t) mcast_addr[5] << 8 | (uint32_t) mcast_addr[4];
-  ETH->MACA1HR |= MG_BIT(31);  // AE
-#endif
-#endif
   return true;
 }
 
@@ -182,7 +170,25 @@ static size_t mg_tcpip_driver_stm32h_tx(const void *buf, size_t len,
   (void) ifp;
 }
 
+static mg_tcpip_driver_stm32h_update_hash_table(struct mg_tcpip_if *ifp) {
+#if MG_ENABLE_DRIVER_MCXN
+  ETH->MACPFR = MG_BIT(4);  // Pass Multicast (pass all multicast frames)
+#else
+  // TODO(): read database, rebuild hash table
+  // add mDNS / DNS-SD multicast address
+  ETH->MACA1LR = (uint32_t) mcast_addr[3] << 24 |
+                 (uint32_t) mcast_addr[2] << 16 |
+                 (uint32_t) mcast_addr[1] << 8 | (uint32_t) mcast_addr[0];
+  ETH->MACA1HR = (uint32_t) mcast_addr[5] << 8 | (uint32_t) mcast_addr[4];
+  ETH->MACA1HR |= MG_BIT(31);  // AE
+#endif
+}
+
 static bool mg_tcpip_driver_stm32h_poll(struct mg_tcpip_if *ifp, bool s1) {
+  if (ifp->update_mac_hash_table) {
+    mg_tcpip_driver_stm32h_update_hash_table(ifp);
+    ifp->update_mac_hash_table = false;
+  }
   if (!s1) return false;
   struct mg_tcpip_driver_stm32h_data *d =
       (struct mg_tcpip_driver_stm32h_data *) ifp->driver_data;

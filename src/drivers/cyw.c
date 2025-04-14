@@ -140,12 +140,18 @@ static void cyw_handle_bdc(struct bdc_hdr *bdc, size_t len);
 static void cyw_handle_bdc_evnt(struct bdc_hdr *bdc, size_t len);
 
 static size_t cyw_spi_poll(uint8_t *dest);
+static void cyw_update_hash_table(void);
 
 // High-level comm stuff
 
 static void cyw_poll(void) {
   struct sdpcm_hdr *sdpcm = (struct sdpcm_hdr *) resp;
   unsigned int channel;
+  if (s_ifp->update_mac_hash_table) {
+    // first call to _poll() is after _init(), so this is safe
+    cyw_update_hash_table();
+    s_ifp->update_mac_hash_table = false;
+  }
   if (cyw_spi_poll((uint8_t *) resp) == 0) return;  // BUS DEPENDENCY
   if ((sdpcm->len ^ sdpcm->_len) != 0xffff || sdpcm->len < sizeof(*sdpcm) ||
       sdpcm->len > 2048 - sizeof(*sdpcm))
@@ -822,6 +828,13 @@ static bool cyw_load_clm(struct mg_tcpip_driver_cyw_firmware *fw) {
   return cyw_load_clmll((void *) fw->clm_addr, fw->clm_len);
 }
 
+static void cyw_update_hash_table(void) {
+  // TODO(): read database, rebuild hash table
+  uint32_t val = 0;
+  val = 1; cyw_ioctl_iovar_set2_(0, "mcast_list", (uint8_t *)&val, sizeof(val), (uint8_t *)mcast_addr, sizeof(mcast_addr));
+  mg_delayms(50);
+}
+
 // CYW43 chip backplane specifics. All values read and written are in little
 // endian format
 
@@ -1182,11 +1195,6 @@ bool mg_wifi_ap_start(char *ssid, char *pass, unsigned int channel) {
 
 bool mg_wifi_ap_stop(void) {
   return cyw_wifi_ap_stop();
-}
-
-void mg_tcpip_driver_multicast_add(const uint8_t mcast_addr) {
-  val = 1; cyw_ioctl_iovar_set2_(0, "mcast_list", (uint8_t *)&val, sizeof(val), (uint8_t *)mcast_addr, sizeof(mcast_addr));
-  //mg_delayms(50);
 }
 
 #endif

@@ -101,14 +101,6 @@ static bool mg_tcpip_driver_xmc_init(struct mg_tcpip_if *ifp) {
   ETH0->MAC_ADDRESS0_LOW =
       MG_U32(ifp->mac[3], ifp->mac[2], ifp->mac[1], ifp->mac[0]);
 
-#if MG_TCPIP_MCAST
-  // set the multicast address filter
-  ETH0->MAC_ADDRESS1_HIGH =
-      MG_U32(0, 0, mcast_addr[5], mcast_addr[4]) | MG_BIT(31);
-  ETH0->MAC_ADDRESS1_LOW =
-      MG_U32(mcast_addr[3], mcast_addr[2], mcast_addr[1], mcast_addr[0]);
-#endif
-
   // Configure the receive filter
   ETH0->MAC_FRAME_FILTER = MG_BIT(10);  // Perfect filter
   // Disable flow control
@@ -187,7 +179,20 @@ static size_t mg_tcpip_driver_xmc_tx(const void *buf, size_t len,
   return len;
 }
 
+static mg_tcpip_driver_xmc_update_hash_table(struct mg_tcpip_if *ifp) {
+  // TODO(): read database, rebuild hash table
+  // set the multicast address filter
+  ETH0->MAC_ADDRESS1_HIGH =
+      MG_U32(0, 0, mcast_addr[5], mcast_addr[4]) | MG_BIT(31);
+  ETH0->MAC_ADDRESS1_LOW =
+      MG_U32(mcast_addr[3], mcast_addr[2], mcast_addr[1], mcast_addr[0]);
+}
+
 static bool mg_tcpip_driver_xmc_poll(struct mg_tcpip_if *ifp, bool s1) {
+  if (ifp->update_mac_hash_table) {
+    mg_tcpip_driver_xmc_update_hash_table(ifp);
+    ifp->update_mac_hash_table = false;
+  }
   if (!s1) return false;
   struct mg_tcpip_driver_xmc_data *d =
       (struct mg_tcpip_driver_xmc_data *) ifp->driver_data;

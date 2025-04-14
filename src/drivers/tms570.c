@@ -115,14 +115,6 @@ static bool mg_tcpip_driver_tms570_init(struct mg_tcpip_if *ifp) {
   }
   EMAC->RXUNICASTSET = 1; // accept unicast frames;
 
-#if MG_TCPIP_MCAST
-  // Setting Hash Index for 01:00:5e:00:00:fb (multicast)
-  // using TMS570 XOR method (32.5.37).
-  // computed hash is 55, which means bit 23 (55 - 32) in
-  // HASH2 register must be set
-  EMAC->MACHASH2 = MG_BIT(23);
-  EMAC->RXMBPENABLE = MG_BIT(5); // enable hash filtering
-#endif
   EMAC->RXMBPENABLE |= MG_BIT(30) | MG_BIT(13); // CRC, broadcast
 
   // Initialize the descriptors
@@ -177,7 +169,23 @@ static size_t mg_tcpip_driver_tms570_tx(const void *buf, size_t len,
   return len;
   (void) ifp;
 }
+
+static mg_tcpip_driver_tms570_update_hash_table(struct mg_tcpip_if *ifp) {
+  // TODO(): read database, rebuild hash table
+  // Setting Hash Index for 01:00:5e:00:00:fb (multicast)
+  // using TMS570 XOR method (32.5.37).
+  // computed hash is 55, which means bit 23 (55 - 32) in
+  // HASH2 register must be set
+  EMAC->MACHASH2 = MG_BIT(23);
+  EMAC->RXMBPENABLE = MG_BIT(5); // enable hash filtering
+}
+
 static bool mg_tcpip_driver_tms570_poll(struct mg_tcpip_if *ifp, bool s1) {
+  if (ifp->update_mac_hash_table) {
+    mg_tcpip_driver_tms570_update_hash_table(ifp);
+    ifp->update_mac_hash_table = false;
+  }
+  if (!s1) return false;
   struct mg_tcpip_driver_tms570_data *d =
       (struct mg_tcpip_driver_tms570_data *) ifp->driver_data;
   uint8_t speed = MG_PHY_SPEED_10M;
@@ -192,6 +200,7 @@ static bool mg_tcpip_driver_tms570_poll(struct mg_tcpip_if *ifp, bool s1) {
   }
   return up;
 }
+
 #pragma CODE_STATE(EMAC_TX_IRQHandler, 32)
 #pragma INTERRUPT(EMAC_TX_IRQHandler, IRQ)
 void EMAC_TX_IRQHandler(void) {
