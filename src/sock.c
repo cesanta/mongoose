@@ -176,6 +176,7 @@ static void mg_set_non_blocking_mode(MG_SOCKET_TYPE fd) {
 #endif
 }
 
+void mg_multicast_add(struct mg_connection *c, char *ip);
 void mg_multicast_add(struct mg_connection *c, char *ip) {
 #if MG_ENABLE_RL
 #error UNSUPPORTED

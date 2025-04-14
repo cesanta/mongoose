@@ -295,10 +295,10 @@ static void mdns_cb(struct mg_connection *c, int ev, void *ev_data) {
       if (n > 0) {
         // RFC-6762 Appendix C, RFC2181 11: m(n + 1-63), max 255 + 0x0
         // buf and h declared here to ease future expansion to DNS-SD
-        char buf[sizeof(struct mg_dns_header) + 256 + sizeof(mdns_answer) + 4];
+        uint8_t buf[sizeof(struct mg_dns_header) + 256 + sizeof(mdns_answer) + 4];
         struct mg_dns_header *h = (struct mg_dns_header *) buf;
         char local_name[63 + 7];  // name label + '.' + local label + '\0'
-        uint8_t name_len = (uint8_t) strlen(c->fn_data);
+        uint8_t name_len = (uint8_t) strlen((char *)c->fn_data);
         struct mg_dns_message dm;
         bool unicast = (rr.aclass & MG_BIT(15)) != 0;  // QU
         // uint16_t q = mg_ntohs(qh->num_questions);
@@ -310,7 +310,7 @@ static void mdns_cb(struct mg_connection *c, int ev, void *ev_data) {
         memcpy(local_name, c->fn_data, name_len);
         strcpy(local_name + name_len, ".local");  // ensure proper name.local\0
         if (strcmp(local_name, dm.name) == 0) {
-          char *p = &buf[sizeof(*h)];
+          uint8_t *p = &buf[sizeof(*h)];
           memset(h, 0, sizeof(*h));            // clear header
           h->txnid = unicast ? qh->txnid : 0;  // RFC-6762 18.1
           // RFC-6762 6: 0 questions, 1 Answer, 0 Auth, 0 Additional RRs
@@ -328,7 +328,7 @@ static void mdns_cb(struct mg_connection *c, int ev, void *ev_data) {
           memcpy(p, c->data, 4), p += 4;
 #endif
           if (!unicast) memcpy(&c->rem, &c->loc, sizeof(c->rem));
-          mg_send(c, buf, p - buf);  // And send it!
+          mg_send(c, buf, (size_t)(p - buf));  // And send it!
           MG_DEBUG(("mDNS %c response sent", unicast ? 'U' : 'M'));
         }
       }
@@ -342,6 +342,6 @@ void mg_multicast_add(struct mg_connection *c, char *ip);
 struct mg_connection *mg_mdns_listen(struct mg_mgr *mgr, char *name) {
   struct mg_connection *c =
       mg_listen(mgr, "udp://224.0.0.251:5353", mdns_cb, name);
-  if (c != NULL) mg_multicast_add(c, "224.0.0.251");
+  if (c != NULL) mg_multicast_add(c, (char *)"224.0.0.251");
   return c;
 }

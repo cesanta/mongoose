@@ -17,15 +17,9 @@ static bool mg_tcpip_driver_pico_w_init(struct mg_tcpip_if *ifp) {
     MG_DEBUG(("Starting AP '%s' (%u)", d->apssid, d->apchannel));
     if (!mg_wifi_ap_start(d->apssid, d->appass, d->apchannel)) return false;
     cyw43_wifi_get_mac(&cyw43_state, CYW43_ITF_STA, ifp->mac);  // same MAC
-#if MG_TCPIP_MCAST
-    cyw43_wifi_update_multicast_filter(&cyw43_state, (uint8_t *)mcast_addr, true);
-#endif
   } else {
     cyw43_arch_enable_sta_mode();
     cyw43_wifi_get_mac(&cyw43_state, CYW43_ITF_STA, ifp->mac);
-#if MG_TCPIP_MCAST
-    cyw43_wifi_update_multicast_filter(&cyw43_state, (uint8_t *)mcast_addr, true);
-#endif
     if (d->ssid != NULL) {
       MG_DEBUG(("Connecting to '%s'", d->ssid));
       return mg_wifi_connect(d->ssid, d->pass);
@@ -56,6 +50,11 @@ static bool mg_tcpip_driver_pico_w_poll(struct mg_tcpip_if *ifp, bool s1) {
     MG_VERBOSE(("scan complete"));
     s_scanning = 0;
     mg_tcpip_call(s_ifp, MG_TCPIP_EV_WIFI_SCAN_END, NULL);
+  }
+  if (ifp->update_mac_hash_table) {
+    // first call to _poll() is after _init(), so this is safe
+    cyw43_wifi_update_multicast_filter(&cyw43_state, (uint8_t *)mcast_addr, true);
+    ifp->update_mac_hash_table = false;
   }
   if (!s1) return false;
   struct mg_tcpip_driver_pico_w_data *d =

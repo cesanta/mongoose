@@ -416,10 +416,10 @@ static void mdns_cb(struct mg_connection *c, int ev, void *ev_data) {
       if (n > 0) {
         // RFC-6762 Appendix C, RFC2181 11: m(n + 1-63), max 255 + 0x0
         // buf and h declared here to ease future expansion to DNS-SD
-        char buf[sizeof(struct mg_dns_header) + 256 + sizeof(mdns_answer) + 4];
+        uint8_t buf[sizeof(struct mg_dns_header) + 256 + sizeof(mdns_answer) + 4];
         struct mg_dns_header *h = (struct mg_dns_header *) buf;
         char local_name[63 + 7];  // name label + '.' + local label + '\0'
-        uint8_t name_len = (uint8_t) strlen(c->fn_data);
+        uint8_t name_len = (uint8_t) strlen((char *)c->fn_data);
         struct mg_dns_message dm;
         bool unicast = (rr.aclass & MG_BIT(15)) != 0;  // QU
         // uint16_t q = mg_ntohs(qh->num_questions);
@@ -431,7 +431,7 @@ static void mdns_cb(struct mg_connection *c, int ev, void *ev_data) {
         memcpy(local_name, c->fn_data, name_len);
         strcpy(local_name + name_len, ".local");  // ensure proper name.local\0
         if (strcmp(local_name, dm.name) == 0) {
-          char *p = &buf[sizeof(*h)];
+          uint8_t *p = &buf[sizeof(*h)];
           memset(h, 0, sizeof(*h));            // clear header
           h->txnid = unicast ? qh->txnid : 0;  // RFC-6762 18.1
           // RFC-6762 6: 0 questions, 1 Answer, 0 Auth, 0 Additional RRs
@@ -449,7 +449,7 @@ static void mdns_cb(struct mg_connection *c, int ev, void *ev_data) {
           memcpy(p, c->data, 4), p += 4;
 #endif
           if (!unicast) memcpy(&c->rem, &c->loc, sizeof(c->rem));
-          mg_send(c, buf, p - buf);  // And send it!
+          mg_send(c, buf, (size_t)(p - buf));  // And send it!
           MG_DEBUG(("mDNS %c response sent", unicast ? 'U' : 'M'));
         }
       }
@@ -463,7 +463,7 @@ void mg_multicast_add(struct mg_connection *c, char *ip);
 struct mg_connection *mg_mdns_listen(struct mg_mgr *mgr, char *name) {
   struct mg_connection *c =
       mg_listen(mgr, "udp://224.0.0.251:5353", mdns_cb, name);
-  if (c != NULL) mg_multicast_add(c, "224.0.0.251");
+  if (c != NULL) mg_multicast_add(c, (char *)"224.0.0.251");
   return c;
 }
 
@@ -8385,6 +8385,7 @@ static void mg_set_non_blocking_mode(MG_SOCKET_TYPE fd) {
 #endif
 }
 
+void mg_multicast_add(struct mg_connection *c, char *ip);
 void mg_multicast_add(struct mg_connection *c, char *ip) {
 #if MG_ENABLE_RL
 #error UNSUPPORTED
@@ -20066,12 +20067,18 @@ static void cyw_handle_bdc(struct bdc_hdr *bdc, size_t len);
 static void cyw_handle_bdc_evnt(struct bdc_hdr *bdc, size_t len);
 
 static size_t cyw_spi_poll(uint8_t *dest);
+static void cyw_update_hash_table(void);
 
 // High-level comm stuff
 
 static void cyw_poll(void) {
   struct sdpcm_hdr *sdpcm = (struct sdpcm_hdr *) resp;
   unsigned int channel;
+  if (s_ifp->update_mac_hash_table) {
+    // first call to _poll() is after _init(), so this is safe
+    cyw_update_hash_table();
+    s_ifp->update_mac_hash_table = false;
+  }
   if (cyw_spi_poll((uint8_t *) resp) == 0) return;  // BUS DEPENDENCY
   if ((sdpcm->len ^ sdpcm->_len) != 0xffff || sdpcm->len < sizeof(*sdpcm) ||
       sdpcm->len > 2048 - sizeof(*sdpcm))
@@ -20748,6 +20755,13 @@ static bool cyw_load_clm(struct mg_tcpip_driver_cyw_firmware *fw) {
   return cyw_load_clmll((void *) fw->clm_addr, fw->clm_len);
 }
 
+static void cyw_update_hash_table(void) {
+  // TODO(): read database, rebuild hash table
+  uint32_t val = 0;
+  val = 1; cyw_ioctl_iovar_set2_(0, "mcast_list", (uint8_t *)&val, sizeof(val), (uint8_t *)mcast_addr, sizeof(mcast_addr));
+  mg_delayms(50);
+}
+
 // CYW43 chip backplane specifics. All values read and written are in little
 // endian format
 
@@ -21110,11 +21124,6 @@ bool mg_wifi_ap_stop(void) {
   return cyw_wifi_ap_stop();
 }
 
-void mg_tcpip_driver_multicast_add(const uint8_t mcast_addr) {
-  val = 1; cyw_ioctl_iovar_set2_(0, "mcast_list", (uint8_t *)&val, sizeof(val), (uint8_t *)mcast_addr, sizeof(mcast_addr));
-  //mg_delayms(50);
-}
-
 #endif
 
 #ifdef MG_ENABLE_LINES
@@ -21237,17 +21246,10 @@ static bool mg_tcpip_driver_imxrt_init(struct mg_tcpip_if *ifp) {
   ENET->RDAR = MG_BIT(24);            // Receive Descriptors have changed
   ENET->TDAR = MG_BIT(24);            // Transmit Descriptors have changed
   // ENET->OPD = 0x10014;
-  uint32_t hash_table[2] = {0, 0};
-  ENET->IAUR = hash_table[1];
-  ENET->IALR = hash_table[0];
-#if MG_TCPIP_MCAST
-  // RM 37.3.4.3.2
-  // uint8_t hash64 = ((~mg_crc32(0, mcast_addr, 6)) >> 26) & 0x3f;
-  // hash_table[((uint8_t)hash64) >> 5] |= (1 << (hash64 & 0x1f));
-  hash_table[1] = MG_BIT(1); // above reduces to this for mDNS addr
-#endif
-  ENET->GAUR = hash_table[1];
-  ENET->GALR = hash_table[0];
+  ENET->IAUR = 0;
+  ENET->IALR = 0;
+  ENET->GAUR = 0;
+  ENET->GALR = 0;
   return true;
 }
 
@@ -21276,7 +21278,22 @@ static size_t mg_tcpip_driver_imxrt_tx(const void *buf, size_t len,
   return len;
 }
 
+static mg_tcpip_driver_imxrt_update_hash_table(struct mg_tcpip_if *ifp) {
+  // TODO(): read database, rebuild hash table
+  // RM 37.3.4.3.2
+  uint32_t hash_table[2] = {0, 0};
+  // uint8_t hash64 = ((~mg_crc32(0, mcast_addr, 6)) >> 26) & 0x3f;
+  // hash_table[((uint8_t)hash64) >> 5] |= (1 << (hash64 & 0x1f));
+  hash_table[1] = MG_BIT(1); // above reduces to this for mDNS addr
+  ENET->GAUR = hash_table[1];
+  ENET->GALR = hash_table[0];
+}
+
 static bool mg_tcpip_driver_imxrt_poll(struct mg_tcpip_if *ifp, bool s1) {
+  if (ifp->update_mac_hash_table) {
+    mg_tcpip_driver_imxrt_update_hash_table(ifp);
+    ifp->update_mac_hash_table = false;
+  }
   if (!s1) return false;
   struct mg_tcpip_driver_imxrt_data *d =
       (struct mg_tcpip_driver_imxrt_data *) ifp->driver_data;
@@ -21493,15 +21510,9 @@ static bool mg_tcpip_driver_pico_w_init(struct mg_tcpip_if *ifp) {
     MG_DEBUG(("Starting AP '%s' (%u)", d->apssid, d->apchannel));
     if (!mg_wifi_ap_start(d->apssid, d->appass, d->apchannel)) return false;
     cyw43_wifi_get_mac(&cyw43_state, CYW43_ITF_STA, ifp->mac);  // same MAC
-#if MG_TCPIP_MCAST
-    cyw43_wifi_update_multicast_filter(&cyw43_state, (uint8_t *)mcast_addr, true);
-#endif
   } else {
     cyw43_arch_enable_sta_mode();
     cyw43_wifi_get_mac(&cyw43_state, CYW43_ITF_STA, ifp->mac);
-#if MG_TCPIP_MCAST
-    cyw43_wifi_update_multicast_filter(&cyw43_state, (uint8_t *)mcast_addr, true);
-#endif
     if (d->ssid != NULL) {
       MG_DEBUG(("Connecting to '%s'", d->ssid));
       return mg_wifi_connect(d->ssid, d->pass);
@@ -21532,6 +21543,11 @@ static bool mg_tcpip_driver_pico_w_poll(struct mg_tcpip_if *ifp, bool s1) {
     MG_VERBOSE(("scan complete"));
     s_scanning = 0;
     mg_tcpip_call(s_ifp, MG_TCPIP_EV_WIFI_SCAN_END, NULL);
+  }
+  if (ifp->update_mac_hash_table) {
+    // first call to _poll() is after _init(), so this is safe
+    cyw43_wifi_update_multicast_filter(&cyw43_state, (uint8_t *)mcast_addr, true);
+    ifp->update_mac_hash_table = false;
   }
   if (!s1) return false;
   struct mg_tcpip_driver_pico_w_data *d =
@@ -22149,11 +22165,7 @@ static bool mg_tcpip_driver_ra_init(struct mg_tcpip_if *ifp) {
   EDMAC->FDR = 0x070f;                    // (27.2.11)
   EDMAC->RMCR = MG_BIT(0);                // (27.2.12)
   ETHERC->ECMR |= MG_BIT(6) | MG_BIT(5);  // TE RE
-#if MG_TCPIP_MCAST
-  EDMAC->EESIPR = MG_BIT(18) | MG_BIT(7);  // FR, RMAF: Frame and mcast IRQ
-#else
   EDMAC->EESIPR = MG_BIT(18);  // FR: Enable Rx (frame) IRQ
-#endif
   EDMAC->EDRRR = MG_BIT(0);  // Receive Descriptors have changed
   EDMAC->EDTRR = MG_BIT(0);  // Transmit Descriptors have changed
   return true;
@@ -22181,6 +22193,10 @@ static size_t mg_tcpip_driver_ra_tx(const void *buf, size_t len,
 }
 
 static bool mg_tcpip_driver_ra_poll(struct mg_tcpip_if *ifp, bool s1) {
+  if (ifp->update_mac_hash_table) {
+    EDMAC->EESIPR = MG_BIT(18) | MG_BIT(7);  // FR, RMAF: Frame and mcast IRQ
+    ifp->update_mac_hash_table = false;
+  }
   if (!s1) return false;
   struct mg_tcpip_driver_ra_data *d =
       (struct mg_tcpip_driver_ra_data *) ifp->driver_data;
@@ -22207,11 +22223,7 @@ static uint32_t s_rxno;
 void EDMAC_IRQHandler(void) {
   struct mg_tcpip_driver_ra_data *d =
       (struct mg_tcpip_driver_ra_data *) s_ifp->driver_data;
-#if MG_TCPIP_MCAST
   EDMAC->EESR = MG_BIT(18) | MG_BIT(7);  // Ack IRQ in EDMAC 1st
-#else
-  EDMAC->EESR = MG_BIT(18);    // Ack IRQ in EDMAC 1st
-#endif
   ICU_IELSR[d->irqno] &= ~MG_BIT(16);  // Ack IRQ in ICU last
   // Frame received, loop
   for (uint32_t i = 0; i < 10; i++) {  // read as they arrive but not forever
@@ -22333,12 +22345,7 @@ static bool mg_tcpip_driver_rw612_init(struct mg_tcpip_if *ifp) {
   ENET->IALR = 0;
   ENET->IAUR = 0;
   ENET->GALR = 0;
-#if MG_TCPIP_MCAST
-  ENET->GAUR = MG_BIT(1); // see imxrt, it reduces to this for mDNS
-#else
   ENET->GAUR = 0;
-#endif
-
   ENET->MSCR = ((d->mdc_cr & 0x3f) << 1) | ((d->mdc_holdtime & 7) << 8);
   ENET->EIMR = MG_BIT(25);             // Enable RX interrupt
   ENET->ECR |= MG_BIT(8) | MG_BIT(1);  // DBSWP, Enable
@@ -22371,7 +22378,18 @@ static size_t mg_tcpip_driver_rw612_tx(const void *buf, size_t len,
   return len;
 }
 
-static bool mg_tcpip_driver_rw612_up(struct mg_tcpip_if *ifp) {
+
+static mg_tcpip_driver_rw612_update_hash_table(struct mg_tcpip_if *ifp) {
+  // TODO(): read database, rebuild hash table
+  ENET->GAUR = MG_BIT(1); // see imxrt, it reduces to this for mDNS
+}
+
+static bool mg_tcpip_driver_rw612_poll(struct mg_tcpip_if *ifp, bool s1) {
+  if (ifp->update_mac_hash_table) {
+    mg_tcpip_driver_rw612_update_hash_table(ifp);
+    ifp->update_mac_hash_table = false;
+  }
+  if (!s1) return false;
   struct mg_tcpip_driver_rw612_data *d =
       (struct mg_tcpip_driver_rw612_data *) ifp->driver_data;
   uint8_t speed = MG_PHY_SPEED_10M;
@@ -22427,7 +22445,7 @@ void ENET_IRQHandler(void) {
 
 struct mg_tcpip_driver mg_tcpip_driver_rw612 = {mg_tcpip_driver_rw612_init,
                                                 mg_tcpip_driver_rw612_tx, NULL,
-                                                mg_tcpip_driver_rw612_up};
+                                                mg_tcpip_driver_rw612_poll};
 #endif
 
 #ifdef MG_ENABLE_LINES
@@ -22559,15 +22577,6 @@ static bool mg_tcpip_driver_same54_init(struct mg_tcpip_if *ifp) {
       MG_U32(ifp->mac[3], ifp->mac[2], ifp->mac[1], ifp->mac[0]);
   GMAC_REGS->SA[0].GMAC_SAT = MG_U32(0, 0, ifp->mac[5], ifp->mac[4]);
 
-#if MG_TCPIP_MCAST
-  // Setting Hash Index for 01:00:5e:00:00:fb (multicast)
-  // 24.6.9 Hash addressing
-  // computed hash is 55, which means bit 23 (55 - 32) in
-  // HRT register must be set
-  GMAC_REGS->GMAC_HRT = MG_BIT(23);
-  GMAC_REGS->GMAC_NCFGR |= MG_BIT(6); // enable multicast hash filtering
-#endif
-
   GMAC_REGS->GMAC_UR &= ~GMAC_UR_MII_Msk;  // Disable MII, use RMII
   GMAC_REGS->GMAC_NCFGR |= GMAC_NCFGR_MAXFS_Msk | GMAC_NCFGR_MTIHEN_Msk |
                            GMAC_NCFGR_EFRHD_Msk | GMAC_NCFGR_CAF_Msk;
@@ -22609,7 +22618,21 @@ static size_t mg_tcpip_driver_same54_tx(const void *buf, size_t len,
   return len;
 }
 
+static mg_tcpip_driver_same54_update_hash_table(struct mg_tcpip_if *ifp) {
+  // TODO(): read database, rebuild hash table
+  // Setting Hash Index for 01:00:5e:00:00:fb (multicast)
+  // 24.6.9 Hash addressing
+  // computed hash is 55, which means bit 23 (55 - 32) in
+  // HRT register must be set
+  GMAC_REGS->GMAC_HRT = MG_BIT(23);
+  GMAC_REGS->GMAC_NCFGR |= MG_BIT(6); // enable multicast hash filtering
+}
+
 static bool mg_tcpip_driver_same54_poll(struct mg_tcpip_if *ifp, bool s1) {
+  if (ifp->update_mac_hash_table) {
+    mg_tcpip_driver_same54_update_hash_table(ifp);
+    ifp->update_mac_hash_table = false;
+  }
   if (s1) {
     uint16_t bsr = eth_read_phy(MG_PHY_ADDR, MG_PHYREG_BSR);
     bool up = bsr & MG_PHYREGBIT_BSR_LINK_STATUS ? 1 : 0;
@@ -22817,14 +22840,6 @@ static bool mg_tcpip_driver_stm32f_init(struct mg_tcpip_if *ifp) {
   ETH->MACA0LR = (uint32_t) (ifp->mac[3] << 24) |
                  ((uint32_t) ifp->mac[2] << 16) |
                  ((uint32_t) ifp->mac[1] << 8) | ifp->mac[0];
-#if 0 //MG_TCPIP_MCAST
-  // enable multicast
-  ETH->MACA1LR = (uint32_t) mcast_addr[3] << 24 |
-                 (uint32_t) mcast_addr[2] << 16 |
-                 (uint32_t) mcast_addr[1] << 8 | (uint32_t) mcast_addr[0];
-  ETH->MACA1HR = (uint32_t) mcast_addr[5] << 8 | (uint32_t) mcast_addr[4];
-  ETH->MACA1HR |= MG_BIT(31);  // AE
-#endif
   return true;
 }
 
@@ -22851,7 +22866,20 @@ static size_t mg_tcpip_driver_stm32f_tx(const void *buf, size_t len,
   return len;
 }
 
+static mg_tcpip_driver_stm32f_update_hash_table(struct mg_tcpip_if *ifp) {
+  // TODO(): read database, rebuild hash table
+  ETH->MACA1LR = (uint32_t) mcast_addr[3] << 24 |
+                 (uint32_t) mcast_addr[2] << 16 |
+                 (uint32_t) mcast_addr[1] << 8 | (uint32_t) mcast_addr[0];
+  ETH->MACA1HR = (uint32_t) mcast_addr[5] << 8 | (uint32_t) mcast_addr[4];
+  ETH->MACA1HR |= MG_BIT(31);  // AE
+}
+
 static bool mg_tcpip_driver_stm32f_poll(struct mg_tcpip_if *ifp, bool s1) {
+  if (ifp->update_mac_hash_table) {
+    mg_tcpip_driver_stm32f_update_hash_table(ifp);
+    ifp->update_mac_hash_table = false;
+  }
   if (!s1) return false;
   struct mg_tcpip_driver_stm32f_data *d =
       (struct mg_tcpip_driver_stm32f_data *) ifp->driver_data;
@@ -23053,18 +23081,6 @@ static bool mg_tcpip_driver_stm32h_init(struct mg_tcpip_if *ifp) {
   ETH->MACA0LR = (uint32_t) (ifp->mac[3] << 24) |
                  ((uint32_t) ifp->mac[2] << 16) |
                  ((uint32_t) ifp->mac[1] << 8) | ifp->mac[0];
-#if MG_TCPIP_MCAST
-#if MG_ENABLE_DRIVER_MCXN
-  ETH->MACPFR = MG_BIT(4);  // Pass Multicast (pass all multicast frames)
-#else
-  // add mDNS / DNS-SD multicast address
-  ETH->MACA1LR = (uint32_t) mcast_addr[3] << 24 |
-                 (uint32_t) mcast_addr[2] << 16 |
-                 (uint32_t) mcast_addr[1] << 8 | (uint32_t) mcast_addr[0];
-  ETH->MACA1HR = (uint32_t) mcast_addr[5] << 8 | (uint32_t) mcast_addr[4];
-  ETH->MACA1HR |= MG_BIT(31);  // AE
-#endif
-#endif
   return true;
 }
 
@@ -23093,7 +23109,25 @@ static size_t mg_tcpip_driver_stm32h_tx(const void *buf, size_t len,
   (void) ifp;
 }
 
+static mg_tcpip_driver_stm32h_update_hash_table(struct mg_tcpip_if *ifp) {
+#if MG_ENABLE_DRIVER_MCXN
+  ETH->MACPFR = MG_BIT(4);  // Pass Multicast (pass all multicast frames)
+#else
+  // TODO(): read database, rebuild hash table
+  // add mDNS / DNS-SD multicast address
+  ETH->MACA1LR = (uint32_t) mcast_addr[3] << 24 |
+                 (uint32_t) mcast_addr[2] << 16 |
+                 (uint32_t) mcast_addr[1] << 8 | (uint32_t) mcast_addr[0];
+  ETH->MACA1HR = (uint32_t) mcast_addr[5] << 8 | (uint32_t) mcast_addr[4];
+  ETH->MACA1HR |= MG_BIT(31);  // AE
+#endif
+}
+
 static bool mg_tcpip_driver_stm32h_poll(struct mg_tcpip_if *ifp, bool s1) {
+  if (ifp->update_mac_hash_table) {
+    mg_tcpip_driver_stm32h_update_hash_table(ifp);
+    ifp->update_mac_hash_table = false;
+  }
   if (!s1) return false;
   struct mg_tcpip_driver_stm32h_data *d =
       (struct mg_tcpip_driver_stm32h_data *) ifp->driver_data;
@@ -23212,7 +23246,8 @@ static uint32_t emac_read_phy(uint8_t addr, uint8_t reg) {
 static void emac_write_phy(uint8_t addr, uint8_t reg, uint32_t val) {
   EMAC->EMACMIIDATA = val;
   EMAC->EMACMIIADDR &= (0xf << 2);
-  EMAC->EMACMIIADDR |= ((uint32_t) addr << 11) | ((uint32_t) reg << 6) | MG_BIT(1);
+  EMAC->EMACMIIADDR |=
+      ((uint32_t) addr << 11) | ((uint32_t) reg << 6) | MG_BIT(1);
   EMAC->EMACMIIADDR |= MG_BIT(0);
   while (EMAC->EMACMIIADDR & MG_BIT(0)) tm4cspin(1);
 }
@@ -23290,8 +23325,8 @@ static bool mg_tcpip_driver_tm4c_init(struct mg_tcpip_if *ifp) {
 
   // Init RX descriptors
   for (int i = 0; i < ETH_DESC_CNT; i++) {
-    s_rxdesc[i][0] = MG_BIT(31);                            // Own
-    s_rxdesc[i][1] = sizeof(s_rxbuf[i]) | MG_BIT(14);       // 2nd address chained
+    s_rxdesc[i][0] = MG_BIT(31);                         // Own
+    s_rxdesc[i][1] = sizeof(s_rxbuf[i]) | MG_BIT(14);    // 2nd address chained
     s_rxdesc[i][2] = (uint32_t) (uintptr_t) s_rxbuf[i];  // Point to data buffer
     s_rxdesc[i][3] =
         (uint32_t) (uintptr_t) s_rxdesc[(i + 1) % ETH_DESC_CNT];  // Chain
@@ -23305,8 +23340,9 @@ static bool mg_tcpip_driver_tm4c_init(struct mg_tcpip_if *ifp) {
         (uint32_t) (uintptr_t) s_txdesc[(i + 1) % ETH_DESC_CNT];  // Chain
   }
 
-  EMAC->EMACDMABUSMOD |= MG_BIT(0);                            // Software reset
-  while ((EMAC->EMACDMABUSMOD & MG_BIT(0)) != 0) tm4cspin(1);  // Wait until done
+  EMAC->EMACDMABUSMOD |= MG_BIT(0);  // Software reset
+  while ((EMAC->EMACDMABUSMOD & MG_BIT(0)) != 0)
+    tm4cspin(1);  // Wait until done
 
   // Set MDC clock divider. If user told us the value, use it. Otherwise, guess
   int cr = (d == NULL || d->mdc_cr < 0) ? guess_mdc_cr() : d->mdc_cr;
@@ -23314,31 +23350,25 @@ static bool mg_tcpip_driver_tm4c_init(struct mg_tcpip_if *ifp) {
 
   // NOTE(cpq): we do not use extended descriptor bit 7, and do not use
   // hardware checksum. Therefore, descriptor size is 4, not 8
-  // EMAC->EMACDMABUSMOD = MG_BIT(13) | MG_BIT(16) | MG_BIT(22) | MG_BIT(23) | MG_BIT(25);
+  // EMAC->EMACDMABUSMOD = MG_BIT(13) | MG_BIT(16) | MG_BIT(22) | MG_BIT(23) |
+  // MG_BIT(25);
   EMAC->EMACIM = MG_BIT(3) | MG_BIT(9);  // Mask timestamp & PMT IT
-  EMAC->EMACFLOWCTL = MG_BIT(7);      // Disable zero-quanta pause
-  EMAC->EMACFRAMEFLTR = MG_BIT(10);   // Perfect filtering
+  EMAC->EMACFLOWCTL = MG_BIT(7);         // Disable zero-quanta pause
+  EMAC->EMACFRAMEFLTR = MG_BIT(10);      // Perfect filtering
   // EMAC->EMACPC defaults to internal PHY (EPHY) in MMI mode
   emac_write_phy(EPHY_ADDR, EPHYBMCR, MG_BIT(15));  // Reset internal PHY (EPHY)
   emac_write_phy(EPHY_ADDR, EPHYBMCR, MG_BIT(12));  // Set autonegotiation
   EMAC->EMACRXDLADDR = (uint32_t) (uintptr_t) s_rxdesc;  // RX descriptors
   EMAC->EMACTXDLADDR = (uint32_t) (uintptr_t) s_txdesc;  // TX descriptors
-  EMAC->EMACDMAIM = MG_BIT(6) | MG_BIT(16);                    // RIE, NIE
-  EMAC->EMACCFG = MG_BIT(2) | MG_BIT(3) | MG_BIT(11) | MG_BIT(14);   // RE, TE, Duplex, Fast
+  EMAC->EMACDMAIM = MG_BIT(6) | MG_BIT(16);              // RIE, NIE
+  EMAC->EMACCFG =
+      MG_BIT(2) | MG_BIT(3) | MG_BIT(11) | MG_BIT(14);  // RE, TE, Duplex, Fast
   EMAC->EMACDMAOPMODE =
       MG_BIT(1) | MG_BIT(13) | MG_BIT(21) | MG_BIT(25);  // SR, ST, TSF, RSF
   EMAC->EMACADDR0H = ((uint32_t) ifp->mac[5] << 8U) | ifp->mac[4];
   EMAC->EMACADDR0L = (uint32_t) (ifp->mac[3] << 24) |
                      ((uint32_t) ifp->mac[2] << 16) |
                      ((uint32_t) ifp->mac[1] << 8) | ifp->mac[0];
-#if MG_TCPIP_MCAST
-  // add mDNS / DNS-SD multicast address
-  EMAC->EMACADDR1L = (uint32_t) mcast_addr[3] << 24 |
-                     (uint32_t) mcast_addr[2] << 16 |
-                     (uint32_t) mcast_addr[1] << 8 | (uint32_t) mcast_addr[0];
-  EMAC->EMACADDR1H = (uint32_t) mcast_addr[5] << 8 | (uint32_t) mcast_addr[4];
-  EMAC->EMACADDR1H |= MG_BIT(31);  // AE
-#endif
   return true;
 }
 
@@ -23363,12 +23393,26 @@ static size_t mg_tcpip_driver_tm4c_tx(const void *buf, size_t len,
     if (++s_txno >= ETH_DESC_CNT) s_txno = 0;
   }
   EMAC->EMACDMARIS = MG_BIT(2) | MG_BIT(5);  // Clear any prior TU/UNF
-  EMAC->EMACTXPOLLD = 0;               // and resume
+  EMAC->EMACTXPOLLD = 0;                     // and resume
   return len;
   (void) ifp;
 }
 
+static mg_tcpip_driver_tm4c_update_hash_table(struct mg_tcpip_if *ifp) {
+  // TODO(): read database, rebuild hash table
+  // add mDNS / DNS-SD multicast address
+  EMAC->EMACADDR1L = (uint32_t) mcast_addr[3] << 24 |
+                     (uint32_t) mcast_addr[2] << 16 |
+                     (uint32_t) mcast_addr[1] << 8 | (uint32_t) mcast_addr[0];
+  EMAC->EMACADDR1H = (uint32_t) mcast_addr[5] << 8 | (uint32_t) mcast_addr[4];
+  EMAC->EMACADDR1H |= MG_BIT(31);  // AE
+}
+
 static bool mg_tcpip_driver_tm4c_poll(struct mg_tcpip_if *ifp, bool s1) {
+  if (ifp->update_mac_hash_table) {
+    mg_tcpip_driver_tm4c_update_hash_table(ifp);
+    ifp->update_mac_hash_table = false;
+  }
   if (!s1) return false;
   uint32_t bmsr = emac_read_phy(EPHY_ADDR, EPHYBMSR);
   bool up = (bmsr & MG_BIT(2)) ? 1 : 0;
@@ -23377,9 +23421,10 @@ static bool mg_tcpip_driver_tm4c_poll(struct mg_tcpip_if *ifp, bool s1) {
     // tmp = reg with flags set to the most likely situation: 100M full-duplex
     // if(link is slow or half) set flags otherwise
     // reg = tmp
-    uint32_t emaccfg = EMAC->EMACCFG | MG_BIT(14) | MG_BIT(11);  // 100M, Full-duplex
-    if (sts & MG_BIT(1)) emaccfg &= ~MG_BIT(14);                 // 10M
-    if ((sts & MG_BIT(2)) == 0) emaccfg &= ~MG_BIT(11);          // Half-duplex
+    uint32_t emaccfg =
+        EMAC->EMACCFG | MG_BIT(14) | MG_BIT(11);         // 100M, Full-duplex
+    if (sts & MG_BIT(1)) emaccfg &= ~MG_BIT(14);         // 10M
+    if ((sts & MG_BIT(2)) == 0) emaccfg &= ~MG_BIT(11);  // Half-duplex
     EMAC->EMACCFG = emaccfg;  // IRQ handler does not fiddle with this register
     MG_DEBUG(("Link is %uM %s-duplex", emaccfg & MG_BIT(14) ? 100 : 10,
               emaccfg & MG_BIT(11) ? "full" : "half"));
@@ -23390,11 +23435,12 @@ static bool mg_tcpip_driver_tm4c_poll(struct mg_tcpip_if *ifp, bool s1) {
 void EMAC0_IRQHandler(void);
 static uint32_t s_rxno;
 void EMAC0_IRQHandler(void) {
-  if (EMAC->EMACDMARIS & MG_BIT(6)) {        // Frame received, loop
+  if (EMAC->EMACDMARIS & MG_BIT(6)) {           // Frame received, loop
     EMAC->EMACDMARIS = MG_BIT(16) | MG_BIT(6);  // Clear flag
-    for (uint32_t i = 0; i < 10; i++) {   // read as they arrive but not forever
+    for (uint32_t i = 0; i < 10; i++) {  // read as they arrive but not forever
       if (s_rxdesc[s_rxno][0] & MG_BIT(31)) break;  // exit when done
-      if (((s_rxdesc[s_rxno][0] & (MG_BIT(8) | MG_BIT(9))) == (MG_BIT(8) | MG_BIT(9))) &&
+      if (((s_rxdesc[s_rxno][0] & (MG_BIT(8) | MG_BIT(9))) ==
+           (MG_BIT(8) | MG_BIT(9))) &&
           !(s_rxdesc[s_rxno][0] & MG_BIT(15))) {  // skip partial/errored frames
         uint32_t len = ((s_rxdesc[s_rxno][0] >> 16) & (MG_BIT(14) - 1));
         //  printf("%lx %lu %lx %.8lx\n", s_rxno, len, s_rxdesc[s_rxno][0],
@@ -23406,7 +23452,7 @@ void EMAC0_IRQHandler(void) {
     }
   }
   EMAC->EMACDMARIS = MG_BIT(7);  // Clear possible RU while processing
-  EMAC->EMACRXPOLLD = 0;      // and resume RX
+  EMAC->EMACRXPOLLD = 0;         // and resume RX
 }
 
 struct mg_tcpip_driver mg_tcpip_driver_tm4c = {mg_tcpip_driver_tm4c_init,
@@ -23534,14 +23580,6 @@ static bool mg_tcpip_driver_tms570_init(struct mg_tcpip_if *ifp) {
   }
   EMAC->RXUNICASTSET = 1; // accept unicast frames;
 
-#if MG_TCPIP_MCAST
-  // Setting Hash Index for 01:00:5e:00:00:fb (multicast)
-  // using TMS570 XOR method (32.5.37).
-  // computed hash is 55, which means bit 23 (55 - 32) in
-  // HASH2 register must be set
-  EMAC->MACHASH2 = MG_BIT(23);
-  EMAC->RXMBPENABLE = MG_BIT(5); // enable hash filtering
-#endif
   EMAC->RXMBPENABLE |= MG_BIT(30) | MG_BIT(13); // CRC, broadcast
 
   // Initialize the descriptors
@@ -23596,7 +23634,23 @@ static size_t mg_tcpip_driver_tms570_tx(const void *buf, size_t len,
   return len;
   (void) ifp;
 }
+
+static mg_tcpip_driver_tms570_update_hash_table(struct mg_tcpip_if *ifp) {
+  // TODO(): read database, rebuild hash table
+  // Setting Hash Index for 01:00:5e:00:00:fb (multicast)
+  // using TMS570 XOR method (32.5.37).
+  // computed hash is 55, which means bit 23 (55 - 32) in
+  // HASH2 register must be set
+  EMAC->MACHASH2 = MG_BIT(23);
+  EMAC->RXMBPENABLE = MG_BIT(5); // enable hash filtering
+}
+
 static bool mg_tcpip_driver_tms570_poll(struct mg_tcpip_if *ifp, bool s1) {
+  if (ifp->update_mac_hash_table) {
+    mg_tcpip_driver_tms570_update_hash_table(ifp);
+    ifp->update_mac_hash_table = false;
+  }
+  if (!s1) return false;
   struct mg_tcpip_driver_tms570_data *d =
       (struct mg_tcpip_driver_tms570_data *) ifp->driver_data;
   uint8_t speed = MG_PHY_SPEED_10M;
@@ -23611,6 +23665,7 @@ static bool mg_tcpip_driver_tms570_poll(struct mg_tcpip_if *ifp, bool s1) {
   }
   return up;
 }
+
 #pragma CODE_STATE(EMAC_TX_IRQHandler, 32)
 #pragma INTERRUPT(EMAC_TX_IRQHandler, IRQ)
 void EMAC_TX_IRQHandler(void) {
@@ -23969,14 +24024,6 @@ static bool mg_tcpip_driver_xmc_init(struct mg_tcpip_if *ifp) {
   ETH0->MAC_ADDRESS0_LOW =
       MG_U32(ifp->mac[3], ifp->mac[2], ifp->mac[1], ifp->mac[0]);
 
-#if MG_TCPIP_MCAST
-  // set the multicast address filter
-  ETH0->MAC_ADDRESS1_HIGH =
-      MG_U32(0, 0, mcast_addr[5], mcast_addr[4]) | MG_BIT(31);
-  ETH0->MAC_ADDRESS1_LOW =
-      MG_U32(mcast_addr[3], mcast_addr[2], mcast_addr[1], mcast_addr[0]);
-#endif
-
   // Configure the receive filter
   ETH0->MAC_FRAME_FILTER = MG_BIT(10);  // Perfect filter
   // Disable flow control
@@ -24055,7 +24102,20 @@ static size_t mg_tcpip_driver_xmc_tx(const void *buf, size_t len,
   return len;
 }
 
+static mg_tcpip_driver_xmc_update_hash_table(struct mg_tcpip_if *ifp) {
+  // TODO(): read database, rebuild hash table
+  // set the multicast address filter
+  ETH0->MAC_ADDRESS1_HIGH =
+      MG_U32(0, 0, mcast_addr[5], mcast_addr[4]) | MG_BIT(31);
+  ETH0->MAC_ADDRESS1_LOW =
+      MG_U32(mcast_addr[3], mcast_addr[2], mcast_addr[1], mcast_addr[0]);
+}
+
 static bool mg_tcpip_driver_xmc_poll(struct mg_tcpip_if *ifp, bool s1) {
+  if (ifp->update_mac_hash_table) {
+    mg_tcpip_driver_xmc_update_hash_table(ifp);
+    ifp->update_mac_hash_table = false;
+  }
   if (!s1) return false;
   struct mg_tcpip_driver_xmc_data *d =
       (struct mg_tcpip_driver_xmc_data *) ifp->driver_data;
@@ -24251,13 +24311,6 @@ static bool mg_tcpip_driver_xmc7_init(struct mg_tcpip_if *ifp) {
       ifp->mac[3] << 24 | ifp->mac[2] << 16 | ifp->mac[1] << 8 | ifp->mac[0];
   ETH0->SPEC_ADD1_TOP = ifp->mac[5] << 8 | ifp->mac[4];
 
-#if MG_TCPIP_MCAST
-  // set multicast MAC address
-  ETH0->SPEC_ADD2_BOTTOM = mcast_addr[3] << 24 | mcast_addr[2] << 16 |
-                           mcast_addr[1] << 8 | mcast_addr[0];
-  ETH0->SPEC_ADD2_TOP = mcast_addr[5] << 8 | mcast_addr[4];
-#endif
-
   // enable MDIO, TX, RX
   ETH0->NETWORK_CONTROL = MG_BIT(4) | MG_BIT(3) | MG_BIT(2);
 
@@ -24297,7 +24350,19 @@ static size_t mg_tcpip_driver_xmc7_tx(const void *buf, size_t len,
   return len;
 }
 
+static mg_tcpip_driver_xmc7_update_hash_table(struct mg_tcpip_if *ifp) {
+  // TODO(): read database, rebuild hash table
+  // set multicast MAC address
+  ETH0->SPEC_ADD2_BOTTOM = mcast_addr[3] << 24 | mcast_addr[2] << 16 |
+                           mcast_addr[1] << 8 | mcast_addr[0];
+  ETH0->SPEC_ADD2_TOP = mcast_addr[5] << 8 | mcast_addr[4];
+}
+
 static bool mg_tcpip_driver_xmc7_poll(struct mg_tcpip_if *ifp, bool s1) {
+  if (ifp->update_mac_hash_table) {
+    mg_tcpip_driver_xmc7_update_hash_table(ifp);
+    ifp->update_mac_hash_table = false;
+  }
   if (!s1) return false;
   struct mg_tcpip_driver_xmc7_data *d =
       (struct mg_tcpip_driver_xmc7_data *) ifp->driver_data;

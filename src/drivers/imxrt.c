@@ -115,17 +115,10 @@ static bool mg_tcpip_driver_imxrt_init(struct mg_tcpip_if *ifp) {
   ENET->RDAR = MG_BIT(24);            // Receive Descriptors have changed
   ENET->TDAR = MG_BIT(24);            // Transmit Descriptors have changed
   // ENET->OPD = 0x10014;
-  uint32_t hash_table[2] = {0, 0};
-  ENET->IAUR = hash_table[1];
-  ENET->IALR = hash_table[0];
-#if MG_TCPIP_MCAST
-  // RM 37.3.4.3.2
-  // uint8_t hash64 = ((~mg_crc32(0, mcast_addr, 6)) >> 26) & 0x3f;
-  // hash_table[((uint8_t)hash64) >> 5] |= (1 << (hash64 & 0x1f));
-  hash_table[1] = MG_BIT(1); // above reduces to this for mDNS addr
-#endif
-  ENET->GAUR = hash_table[1];
-  ENET->GALR = hash_table[0];
+  ENET->IAUR = 0;
+  ENET->IALR = 0;
+  ENET->GAUR = 0;
+  ENET->GALR = 0;
   return true;
 }
 
@@ -154,7 +147,22 @@ static size_t mg_tcpip_driver_imxrt_tx(const void *buf, size_t len,
   return len;
 }
 
+static mg_tcpip_driver_imxrt_update_hash_table(struct mg_tcpip_if *ifp) {
+  // TODO(): read database, rebuild hash table
+  // RM 37.3.4.3.2
+  uint32_t hash_table[2] = {0, 0};
+  // uint8_t hash64 = ((~mg_crc32(0, mcast_addr, 6)) >> 26) & 0x3f;
+  // hash_table[((uint8_t)hash64) >> 5] |= (1 << (hash64 & 0x1f));
+  hash_table[1] = MG_BIT(1); // above reduces to this for mDNS addr
+  ENET->GAUR = hash_table[1];
+  ENET->GALR = hash_table[0];
+}
+
 static bool mg_tcpip_driver_imxrt_poll(struct mg_tcpip_if *ifp, bool s1) {
+  if (ifp->update_mac_hash_table) {
+    mg_tcpip_driver_imxrt_update_hash_table(ifp);
+    ifp->update_mac_hash_table = false;
+  }
   if (!s1) return false;
   struct mg_tcpip_driver_imxrt_data *d =
       (struct mg_tcpip_driver_imxrt_data *) ifp->driver_data;
