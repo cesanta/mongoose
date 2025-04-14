@@ -694,8 +694,10 @@ static void read_conn(struct mg_connection *c, struct pkt *pkt) {
     }
     tx_tcp(c->mgr->ifp, s->mac, rem_ip, flags, c->loc.port, c->rem.port,
            mg_htonl(s->seq), mg_htonl(s->ack), "", 0);
+    if (pkt->pay.len == 0) return; // if no data, we're done
   } else if (pkt->pay.len == 0) {  // this is an ACK
     if (s->fin_rcvd && s->ttype == MIP_TTYPE_FIN) s->twclosure = true;
+    return; // no data to process
   } else if (seq != s->ack) {
     uint32_t ack = (uint32_t) (mg_htonl(pkt->tcp->seq) + pkt->pay.len);
     if (s->ack == ack) {
@@ -705,44 +707,43 @@ static void read_conn(struct mg_connection *c, struct pkt *pkt) {
       tx_tcp(c->mgr->ifp, s->mac, rem_ip, TH_ACK, c->loc.port, c->rem.port,
              mg_htonl(s->seq), mg_htonl(s->ack), "", 0);
     }
+    return; // drop it
   } else if (io->size - io->len < pkt->pay.len &&
              !mg_iobuf_resize(io, io->len + pkt->pay.len)) {
     mg_error(c, "oom");
+    return; // drop it
+  }
+  // Copy TCP payload into the IO buffer. If the connection is plain text,
+  // we copy to c->recv. If the connection is TLS, this data is encrypted,
+  // therefore we copy that encrypted data to the c->rtls iobuffer instead,
+  // and then call mg_tls_recv() to decrypt it. NOTE: mg_tls_recv() will
+  // call back mg_io_recv() which grabs raw data from c->rtls
+  memcpy(&io->buf[io->len], pkt->pay.buf, pkt->pay.len);
+  io->len += pkt->pay.len;
+  MG_VERBOSE(("%lu SEQ %x -> %x", c->id, mg_htonl(pkt->tcp->seq), s->ack));
+  // Advance ACK counter
+  s->ack = (uint32_t) (mg_htonl(pkt->tcp->seq) + pkt->pay.len);
+  s->unacked += pkt->pay.len;
+  // size_t diff = s->acked <= s->ack ? s->ack - s->acked : s->ack;
+  if (s->unacked > MIP_TCP_WIN / 2 && s->acked != s->ack) {
+    // Send ACK immediately
+    MG_VERBOSE(("%lu imm ACK %lu", c->id, s->acked));
+    tx_tcp(c->mgr->ifp, s->mac, rem_ip, TH_ACK, c->loc.port, c->rem.port,
+           mg_htonl(s->seq), mg_htonl(s->ack), NULL, 0);
+    s->unacked = 0;
+    s->acked = s->ack;
+    if (s->ttype != MIP_TTYPE_KEEPALIVE) settmout(c, MIP_TTYPE_KEEPALIVE);
   } else {
-    // Copy TCP payload into the IO buffer. If the connection is plain text,
-    // we copy to c->recv. If the connection is TLS, this data is encrypted,
-    // therefore we copy that encrypted data to the c->rtls iobuffer instead,
-    // and then call mg_tls_recv() to decrypt it. NOTE: mg_tls_recv() will
-    // call back mg_io_recv() which grabs raw data from c->rtls
-    memcpy(&io->buf[io->len], pkt->pay.buf, pkt->pay.len);
-    io->len += pkt->pay.len;
-
-    MG_VERBOSE(("%lu SEQ %x -> %x", c->id, mg_htonl(pkt->tcp->seq), s->ack));
-    // Advance ACK counter
-    s->ack = (uint32_t) (mg_htonl(pkt->tcp->seq) + pkt->pay.len);
-    s->unacked += pkt->pay.len;
-    // size_t diff = s->acked <= s->ack ? s->ack - s->acked : s->ack;
-    if (s->unacked > MIP_TCP_WIN / 2 && s->acked != s->ack) {
-      // Send ACK immediately
-      MG_VERBOSE(("%lu imm ACK %lu", c->id, s->acked));
-      tx_tcp(c->mgr->ifp, s->mac, rem_ip, TH_ACK, c->loc.port, c->rem.port,
-             mg_htonl(s->seq), mg_htonl(s->ack), NULL, 0);
-      s->unacked = 0;
-      s->acked = s->ack;
-      if (s->ttype != MIP_TTYPE_KEEPALIVE) settmout(c, MIP_TTYPE_KEEPALIVE);
-    } else {
-      // if not already running, setup a timer to send an ACK later
-      if (s->ttype != MIP_TTYPE_ACK) settmout(c, MIP_TTYPE_ACK);
-    }
-
-    if (c->is_tls && c->is_tls_hs) {
-      mg_tls_handshake(c);
-    } else if (c->is_tls) {
-      handle_tls_recv(c);
-    } else {
-      // Plain text connection, data is already in c->recv, trigger MG_EV_READ
-      mg_call(c, MG_EV_READ, &pkt->pay.len);
-    }
+    // if not already running, setup a timer to send an ACK later
+    if (s->ttype != MIP_TTYPE_ACK) settmout(c, MIP_TTYPE_ACK);
+  }
+  if (c->is_tls && c->is_tls_hs) {
+    mg_tls_handshake(c);
+  } else if (c->is_tls) {
+    handle_tls_recv(c);
+  } else {
+    // Plain text connection, data is already in c->recv, trigger MG_EV_READ
+    mg_call(c, MG_EV_READ, &pkt->pay.len);
   }
 }
 
