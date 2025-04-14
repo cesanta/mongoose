@@ -51,6 +51,11 @@ static bool mg_tcpip_driver_pico_w_poll(struct mg_tcpip_if *ifp, bool s1) {
     s_scanning = 0;
     mg_tcpip_call(s_ifp, MG_TCPIP_EV_WIFI_SCAN_END, NULL);
   }
+  if (ifp->update_mac_hash_table) {
+    // first call to _poll() is after _init(), so this is safe
+    cyw43_wifi_update_multicast_filter(&cyw43_state, (uint8_t *)mcast_addr, true);
+    ifp->update_mac_hash_table = false;
+  }
   if (!s1) return false;
   struct mg_tcpip_driver_pico_w_data *d =
       (struct mg_tcpip_driver_pico_w_data *) ifp->driver_data;

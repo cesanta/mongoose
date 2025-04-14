@@ -2418,6 +2418,26 @@ static void test_dns(void) {
     ASSERT(strcmp(dm.name, "new-fp-shed.wg1.b.yahoo.com") == 0);
   }
 
+  {
+    // DNS Query for domain abc.local
+    // 0000   00 00 00 00 00 01 00 00 00 00 00 00 03 61 62 63   .............abc
+    // 0010   05 6c 6f 63 61 6c 00 00 01 00 01                  .local.....
+    uint8_t d[] = {
+      0x00, 0x00, // txid: 0
+      0x00, 0x00, // flags: 0 (Query flag = 0)
+      0x00, 0x01, // numQuestions: 1
+      0x00, 0x00, // numAnswers: 1
+      0x00, 0x00, 0x00, 0x00, // additional RRs
+      0x03, 0x61, 0x62, 0x63, // "abc"
+      0x05, 0x6c, 0x6f, 0x63, 0x61, 0x6c, // "local"
+      0x00, 0x00, 0x01, 0x00, 0x01 // domain end, type, class
+    };
+    memset(&dm, 0, sizeof(dm));
+    ASSERT(mg_dns_parse(d, sizeof(d), &dm) == 1);
+    ASSERT(dm.resolved == false);
+    ASSERT(strcmp(dm.name, "abc.local") == 0);
+  }
+
   test_dns_error("udp://127.0.0.1:12345", "DNS timeout");
   test_dns_error("", "resolver");
   test_dns_error("tcp://0.0.0.0:0", "DNS error");

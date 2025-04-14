@@ -89,6 +89,10 @@ static bool mg_tcpip_driver_rw612_init(struct mg_tcpip_if *ifp) {
   ENET->PALR =
       ifp->mac[0] << 24 | ifp->mac[1] << 16 | ifp->mac[2] << 8 | ifp->mac[3];
   ENET->PAUR |= (ifp->mac[4] << 24 | ifp->mac[5] << 16);
+  ENET->IALR = 0;
+  ENET->IAUR = 0;
+  ENET->GALR = 0;
+  ENET->GAUR = 0;
   ENET->MSCR = ((d->mdc_cr & 0x3f) << 1) | ((d->mdc_holdtime & 7) << 8);
   ENET->EIMR = MG_BIT(25);             // Enable RX interrupt
   ENET->ECR |= MG_BIT(8) | MG_BIT(1);  // DBSWP, Enable
@@ -121,7 +125,18 @@ static size_t mg_tcpip_driver_rw612_tx(const void *buf, size_t len,
   return len;
 }
 
-static bool mg_tcpip_driver_rw612_up(struct mg_tcpip_if *ifp) {
+
+static mg_tcpip_driver_rw612_update_hash_table(struct mg_tcpip_if *ifp) {
+  // TODO(): read database, rebuild hash table
+  ENET->GAUR = MG_BIT(1); // see imxrt, it reduces to this for mDNS
+}
+
+static bool mg_tcpip_driver_rw612_poll(struct mg_tcpip_if *ifp, bool s1) {
+  if (ifp->update_mac_hash_table) {
+    mg_tcpip_driver_rw612_update_hash_table(ifp);
+    ifp->update_mac_hash_table = false;
+  }
+  if (!s1) return false;
   struct mg_tcpip_driver_rw612_data *d =
       (struct mg_tcpip_driver_rw612_data *) ifp->driver_data;
   uint8_t speed = MG_PHY_SPEED_10M;
@@ -157,7 +172,7 @@ static bool mg_tcpip_driver_rw612_up(struct mg_tcpip_if *ifp) {
 
 void ENET_IRQHandler(void) {
   if (ENET->EIR & MG_BIT(25)) {
-    ENET->EIR = MG_BIT(25); // Ack RX
+    ENET->EIR = MG_BIT(25);              // Ack RX
     for (uint32_t i = 0; i < 10; i++) {  // read as they arrive but not forever
       if ((s_rxdesc[s_rxno][0] & MG_BIT(31)) != 0) break;  // exit when done
       // skip partial/errored frames
@@ -177,5 +192,5 @@ void ENET_IRQHandler(void) {
 
 struct mg_tcpip_driver mg_tcpip_driver_rw612 = {mg_tcpip_driver_rw612_init,
                                                 mg_tcpip_driver_rw612_tx, NULL,
-                                                mg_tcpip_driver_rw612_up};
+                                                mg_tcpip_driver_rw612_poll};
 #endif
