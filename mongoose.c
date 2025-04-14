@@ -4017,8 +4017,8 @@ struct mg_timer *mg_timer_add(struct mg_mgr *mgr, uint64_t milliseconds,
                               unsigned flags, void (*fn)(void *), void *arg) {
   struct mg_timer *t = (struct mg_timer *) calloc(1, sizeof(*t));
   if (t != NULL) {
+    flags |= MG_TIMER_AUTODELETE;  // We have calloc-ed it, so autodelete
     mg_timer_init(&mgr->timers, t, milliseconds, flags, fn, arg);
-    t->id = mgr->timerid++;
   }
   return t;
 }
@@ -9135,11 +9135,9 @@ bool mg_str_to_num(struct mg_str str, int base, void *val, size_t val_len) {
 
 
 
-#define MG_TIMER_CALLED 4
-
 void mg_timer_init(struct mg_timer **head, struct mg_timer *t, uint64_t ms,
                    unsigned flags, void (*fn)(void *), void *arg) {
-  t->id = 0, t->period_ms = ms, t->expire = 0;
+  t->period_ms = ms, t->expire = 0;
   t->flags = flags, t->fn = fn, t->arg = arg, t->next = *head;
   *head = t;
 }
@@ -9170,6 +9168,12 @@ void mg_timer_poll(struct mg_timer **head, uint64_t now_ms) {
       t->fn(t->arg);
     }
     t->flags |= MG_TIMER_CALLED;
+
+    // If this timer is not repeating and marked AUTODELETE, remove it
+    if (!(t->flags & MG_TIMER_REPEAT) && (t->flags & MG_TIMER_AUTODELETE)) {
+      mg_timer_free(head, t);
+      free(t);
+    }
   }
 }
 
