@@ -1,8 +1,16 @@
 #include "cyw.h"
 #include "net.h"
 
-#if MG_ENABLE_TCPIP && defined(MG_ENABLE_DRIVER_CYW) && MG_ENABLE_DRIVER_CYW
+#if MG_ENABLE_TCPIP &&                                          \
+    ((defined(MG_ENABLE_DRIVER_CYW) && MG_ENABLE_DRIVER_CYW) || \
+     (defined(MG_ENABLE_DRIVER_CYW_SDIO) && MG_ENABLE_DRIVER_CYW_SDIO))
 
+#ifndef MG_ENABLE_DRIVER_CYW
+#define MG_ENABLE_DRIVER_CYW 0
+#endif
+#ifndef MG_ENABLE_DRIVER_CYW_SDIO
+#define MG_ENABLE_DRIVER_CYW_SDIO 0
+#endif
 
 static struct mg_tcpip_if *s_ifp;
 static bool s_link, s_auth, s_join;
@@ -68,10 +76,12 @@ struct mg_tcpip_driver mg_tcpip_driver_cyw = {mg_tcpip_driver_cyw_init,
 //    SPI   |  SDIO    <-- padded to 32-bit | 64-bytes
 //
 // - SDPCM has 3 channels (control, data, and asynchronous data)
-// - SPI (and SDIO) has 4 "functions", F0 to F3, to access different
-// blocks in the chip, like the SPI/SDIO controller, chip backplane, and 2 DMA
-// I/Os; these are usually handled by SDPCM but we need to explicitly access
-// the I/O controller and chip backplane during initialization
+// - SPI has 4 "functions", F0 to F3, to access different blocks in the chip,
+// like the SPI/SDIO controller, chip backplane, and 2 DMA I/Os; these are
+// usually handled by SDPCM but we need to explicitly access the I/O controller
+// and chip backplane during initialization
+// - SDIO has 3 functions (proper SDIO terminology), F0 to F2, coincident with
+// those for SPI, accessed through standard SDIO practices. There is no F3.
 
 // Processor core firmware is loaded to TCM RAM, along with module-dependent
 // (hardware design) NVRAM data, via the chip backplane access through the bus
@@ -121,10 +131,15 @@ struct data_hdr {
   struct bdc_hdr bdc;
 };
 
-// gSPI, DS 4.2.1 Fig.12, 2-bit field
-#define CYW_SD_FUNC_BUS 0   // F0
-#define CYW_SD_FUNC_CHIP 1  // F1
-#define CYW_SD_FUNC_WLAN 2  // F2
+// gSPI, CYW43439 DS 4.2.1 Fig.12, 2-bit field
+#define CYW_SPID_FUNC_BUS 0   // F0
+#define CYW_SPID_FUNC_CHIP 1  // F1
+#define CYW_SPID_FUNC_WLAN 2  // F2
+
+// SDIO functions, 3-bit field; CYW4343W and CYW43439 DS 4.1
+#define CYW_SDIO_FUNC_BUS 0   // F0
+#define CYW_SDIO_FUNC_CHIP 1  // F1
+#define CYW_SDIO_FUNC_WLAN 2  // F2
 
 #define CYW_SDPCM_CTRL_HDR 0
 #define CYW_SDPCM_ASYNC_HDR 1
@@ -139,7 +154,7 @@ static void cyw_handle_cdc(struct cdc_hdr *cdc, size_t len);
 static void cyw_handle_bdc(struct bdc_hdr *bdc, size_t len);
 static void cyw_handle_bdc_evnt(struct bdc_hdr *bdc, size_t len);
 
-static size_t cyw_spi_poll(uint8_t *dest);
+static size_t cyw_bus_specific_poll(uint32_t *dest);
 static void cyw_update_hash_table(void);
 
 // High-level comm stuff
@@ -152,7 +167,7 @@ static void cyw_poll(void) {
     cyw_update_hash_table();
     s_ifp->update_mac_hash_table = false;
   }
-  if (cyw_spi_poll((uint8_t *) resp) == 0) return;  // BUS DEPENDENCY
+  if (cyw_bus_specific_poll(resp) == 0) return;
   if ((sdpcm->len ^ sdpcm->_len) != 0xffff || sdpcm->len < sizeof(*sdpcm) ||
       sdpcm->len > 2048 - sizeof(*sdpcm))
     return;
@@ -185,7 +200,7 @@ static void cyw_handle_bdc(struct bdc_hdr *bdc, size_t len) {
   mg_tcpip_qwrite(payload, len - (payload - (uint8_t *) bdc), s_ifp);
 }
 
-static size_t cyw_bus_tx(uint32_t *data, uint16_t len);
+static size_t cyw_bus_specific_tx(uint32_t *data, uint16_t len);
 
 // WLAN frame transmission
 static size_t mg_cyw_tx(unsigned int ifc, void *data, size_t len) {
@@ -194,15 +209,15 @@ static size_t mg_cyw_tx(unsigned int ifc, void *data, size_t len) {
   memset(txdata, 0, sizeof(*hdr));
   memcpy((uint8_t *) txdata + sizeof(*hdr), data, len);
   // TODO(): hdr->bdc.priority = map IP to TOS if supporting QoS/ToS
-  hdr->bdc.flags = 2 << 4;  // BDC version 2
-  hdr->bdc.flags2 = ifc;    // 0 -> STA, 1 -> AP
+  hdr->bdc.flags = 2 << 4;          // BDC version 2
+  hdr->bdc.flags2 = (uint8_t) ifc;  // 0 -> STA, 1 -> AP
   // hdr->bdc.data_offset = 0; // actually zeroed above
   hdr->sdpcm.len = txlen;
   hdr->sdpcm._len = (uint16_t) ~txlen;
   hdr->sdpcm.sw_hdr.sequence = ++s_tx_seqno;
   hdr->sdpcm.sw_hdr.channel_and_flags = CYW_SDPCM_DATA_HDR,
   hdr->sdpcm.sw_hdr.header_length = offsetof(struct data_hdr, bdc);
-  return cyw_bus_tx(txdata, txlen);
+  return cyw_bus_specific_tx(txdata, txlen);
 }
 
 // WLAN event handling
@@ -250,6 +265,7 @@ struct scan_result;
 static void cyw_handle_scan_result(uint32_t status, struct scan_result *data,
                                    size_t len);
 
+// Do not call any IOCTL functions here, otherwise revise cyw_ioctl_wait()
 static void cyw_handle_bdc_evnt(struct bdc_hdr *bdc, size_t len) {
   struct evnt_msg *msg = (struct evnt_msg *) &bdc[bdc->data_offset + 1];
   MG_VERBOSE(("%u bytes event", len));
@@ -313,7 +329,7 @@ static bool cyw_ioctl_iovar_set_(unsigned int ifc, char *var, void *data,
                                  size_t len);
 // clang-format off
 // convenience: ioctl funcs on default ifc (0), as only AP needs ifc 1
-static bool cyw_ioctl_get(unsigned int cmd, void *data, size_t len) { return cyw_ioctl_get_(0, cmd, data, len); }
+__attribute__((unused)) static bool cyw_ioctl_get(unsigned int cmd, void *data, size_t len) { return cyw_ioctl_get_(0, cmd, data, len); }
 static bool cyw_ioctl_set(unsigned int cmd, void *data, size_t len) { return cyw_ioctl_set_(0, cmd, data, len); }
 static bool cyw_ioctl_iovar_get(char *var, void *data, size_t len) { return cyw_ioctl_iovar_get_(0, var, data, len); }
 static bool cyw_ioctl_iovar_set(char *var, void *data, size_t len) { return cyw_ioctl_iovar_set_(0, var, data, len); }
@@ -324,9 +340,10 @@ static bool cyw_ioctl_iovar_set(char *var, void *data, size_t len) { return cyw_
 // clang-format off
 static bool cyw_wifi_connect(char *ssid, char *pass) {
   uint32_t sup_wpa[2] = {0, 1}; // bss index 0 = STA, not open
-  static const uint32_t const eapver[2] = {0, (uint32_t) -1}, // accept AP version
+  static const uint32_t eapver[2] = {0, (uint32_t) -1}, // accept AP version
                               tmo[2] = {0, 2500};
   uint32_t data[64/4 + 1]; // max pass length: 64 for WPA, 128 for WPA3 SAE
+  uint16_t *da = (uint16_t *) data;
   unsigned int len;
   uint32_t val; 
   val = 4; // security type: 0 for none, 2 for WPA, 4 for WPA2/WPA3, 6 for mixed WPA/WPA2
@@ -340,8 +357,8 @@ static bool cyw_wifi_connect(char *ssid, char *pass) {
   // skip if not using auth
   memset(data, 0, sizeof(data));
   len = strlen(pass);
-  ((uint16_t *)data)[0] = (uint16_t) len;
-  ((uint16_t *)data)[1] = 1; // indicates wireless security key, skip for WPA3 SAE
+  da[0] = (uint16_t) len;
+  da[1] = 1; // indicates wireless security key, skip for WPA3 SAE
   memcpy((uint8_t *)data + 2 * sizeof(uint16_t), pass, len); // skip for WPA3 SAE
   if (!cyw_ioctl_set(268 /* SET_WSEC_PMK */, data, sizeof(data))) return false; // skip for WPA3 SAE, sizeof/2 if supporting SAE but using WPA
   // for WPA3 SAE: memcpy((uint8_t *)data + sizeof(uint16_t), pass, len); cyw_ioctl_iovar_set("sae_password", data, sizeof(data));
@@ -368,6 +385,7 @@ static bool cyw_wifi_disconnect(void) {
 
 static bool cyw_wifi_ap_start(char *ssid, char *pass, unsigned int channel) {
   uint32_t data[64/4 + 2]; // max pass length: 64 for WPA, 128 for WPA3 SAE
+  uint16_t *da = (uint16_t *) data;
   unsigned int len;
   uint32_t val; 
   // CHIP DEPENDENCY
@@ -394,8 +412,8 @@ static bool cyw_wifi_ap_start(char *ssid, char *pass, unsigned int channel) {
   // NOTE(): WHD does not set SAE password for shared WPA2/WPA3, same do we
   memset(data, 0, sizeof(data));
   len = strlen(pass);
-  ((uint16_t *)data)[0] = (uint16_t) len; // skip for WPA3 SAE
-  ((uint16_t *)data)[1] = 1; // indicates wireless security key, skip for WPA3 SAE
+  da[0] = (uint16_t) len; // skip for WPA3 SAE (43430 does NOT support WPA3 in AP)
+  da[1] = 1; // indicates wireless security key, skip for WPA3 SAE
   memcpy((uint8_t *)data + 2 * sizeof(uint16_t), pass, len); // skip for WPA3 SAE
   if (!cyw_ioctl_set_(1, 268 /* SET_WSEC_PMK */, data, sizeof(data))) return false; // skip for WPA3 SAE, sizeof/2 if supporting SAE but using WPA
   /* for WPA3 SAE: 
@@ -539,8 +557,8 @@ static void cyw_handle_scan_result(uint32_t status, struct scan_result *data, si
     if (sbss->length > len - offsetof(struct scan_result, bss) || sbss->SSID_len > sizeof(sbss->SSID) || sbss->ie_offset < sizeof(*sbss) || sbss->ie_offset > (sizeof(*sbss) + sbss->ie_length) || sbss->ie_offset + sbss->ie_length > sbss->length)
       return; // silently discard malformed data
     if (!(sbss->flags & MG_BIT(2))) return; // RSSI_ONCHANNEL, ignore off-channel results
-    bss.SSID = mg_str_n(sbss->SSID, sbss->SSID_len);
-    bss.BSSID = sbss->BSSID;
+    bss.SSID = mg_str_n((char *)sbss->SSID, sbss->SSID_len);
+    bss.BSSID = (char *)sbss->BSSID;
     bss.RSSI = (int8_t)sbss->RSSI;
     bss.has_n = sbss->n_cap != 0;
     bss.channel = bss.has_n ? sbss->ctl_ch : (uint8_t)(sbss->chanspec & 0xff); // n 40MHz vs a/b/g and 20MHz
@@ -575,7 +593,7 @@ static uint8_t *s_ioctl_resp;
 static bool s_ioctl_err;
 
 static void cyw_handle_cdc(struct cdc_hdr *cdc, size_t len) {
-  uint8_t *resp = (uint8_t *) cdc + sizeof(*cdc);
+  uint8_t *r = (uint8_t *) cdc + sizeof(*cdc);
   MG_VERBOSE(("%u bytes CDC frame", len));
   if ((cdc->flags >> 16) != s_ioctl_reqid) return;
   if (cdc->flags & 1) {
@@ -584,9 +602,8 @@ static void cyw_handle_cdc(struct cdc_hdr *cdc, size_t len) {
     return;
   }
   if (mg_log_level >= MG_LL_VERBOSE) mg_hexdump((void *) cdc, len);
-  MG_DEBUG(("IOCTL result: %02x %02x %02x %02x ...", resp[0], resp[1], resp[2],
-            resp[3]));
-  s_ioctl_resp = resp;
+  MG_DEBUG(("IOCTL result: %02x %02x %02x %02x ...", r[0], r[1], r[2], r[3]));
+  s_ioctl_resp = r;
 }
 // NOTE(): alt no loop handler dispatching IOCTL response to current handler:
 // static void *s_ioctl_hnd; *s_ioctl_hnd(ioctl, len);
@@ -618,7 +635,7 @@ static void cyw_ioctl_send_cmd(unsigned int ifc, unsigned int cmd, bool set,
   hdr->sdpcm.sw_hdr.sequence = ++s_tx_seqno;
   hdr->sdpcm.sw_hdr.channel_and_flags = CYW_SDPCM_CTRL_HDR;
   hdr->sdpcm.sw_hdr.header_length = offsetof(struct ctrl_hdr, cdc);
-  cyw_bus_tx(txdata, txlen);
+  cyw_bus_specific_tx(txdata, txlen);
 }
 
 // just send respective commands, response handled via CDC handler
@@ -652,20 +669,29 @@ static void cyw_ioctl_send_iovar_set2(unsigned int ifc, char *var, void *data1,
   cyw_ioctl_send_cmd(ifc, 263, true, txlen);  // cmd = SET IOVAR
 }
 
-static void cyw_ioctl_send_iovar_set(unsigned int ifc, char *var, void *data,
-                                     size_t len) {
+__attribute__((unused)) static void cyw_ioctl_send_iovar_set(unsigned int ifc,
+                                                             char *var,
+                                                             void *data,
+                                                             size_t len) {
   cyw_ioctl_send_iovar_set2(ifc, var, data, len, NULL, 0);
+}
+
+static inline bool delayms(unsigned int ms) {
+  mg_delayms(ms);
+  return true;
 }
 
 // wait for a response, meanwhile delivering received frames and events
 static bool cyw_ioctl_wait(void) {
-  unsigned int times = 6000;
+  unsigned int times = 100;
   s_ioctl_resp = NULL;
   s_ioctl_err = false;
-  while (s_ioctl_resp == NULL && !s_ioctl_err && times-- > 0)
-    cyw_poll();  // TODO(scaprile): review wait/sleep strategy (this loop is executed only when initializing/acting on the chip)
-  MG_DEBUG(("resp: %lp, err: %c, times: %d", s_ioctl_resp,
-            s_ioctl_err ? '1' : '0', (int) times));
+  do {  // IOCTL response processing does not call any other IOCTL function
+    cyw_poll();  // otherwise we can't allow them to pile up here
+    // network frames will be pushed to the queue so that is safe
+  } while (s_ioctl_resp == NULL && !s_ioctl_err && times-- > 0 && delayms(1));
+  MG_VERBOSE(("resp: %lp, err: %c, times: %d", s_ioctl_resp,
+              s_ioctl_err ? '1' : '0', (int) times));
   return s_ioctl_resp != NULL;
 }
 
@@ -723,15 +749,22 @@ struct clm_hdr {
 
 #pragma pack(pop)
 
-// worlwide rev0, try rev 17 for 4343W
+// worlwide rev0, TODO(): try rev 17 for 4343W
 static const uint32_t country_code = 'X' + ('X' << 8) + (0 << 16);
 
-static bool cyw_spi_init();
+static bool cyw_bus_specific_init();
+static bool cyw_load_clmll(void *data, size_t len);
+
+static bool cyw_load_clm(struct mg_tcpip_driver_cyw_firmware *fw) {
+  return cyw_load_clmll((void *) fw->clm_addr, fw->clm_len);
+}
 
 // clang-format off
 static bool cyw_init(uint8_t *mac) {
+  struct mg_tcpip_driver_cyw_data *d = (struct mg_tcpip_driver_cyw_data *) s_ifp->driver_data;
   uint32_t val = 0;
-  if (!cyw_spi_init()) return false; // BUS DEPENDENCY
+  if (!cyw_bus_specific_init()) return false;
+  if (!cyw_load_clm(d->fw)) return false;  // Load CLM blob
   // BT-ENABLED DEPENDENCY
   // set Wi-Fi up
   val = 0 /* disable */; cyw_ioctl_iovar_set("bus:txglom", (uint8_t *)&val, sizeof(val));
@@ -759,7 +792,7 @@ static bool cyw_init(uint8_t *mac) {
     unsigned int times = 100;
     while (times --)
       if (cyw_ioctl_iovar_set("bsscfg:event_msgs", (uint8_t *)data, sizeof(data))) break;
-    if (times == ~0) return false;
+    if (times == (unsigned int) ~0) return false;
   }
   val = 0; if (!cyw_ioctl_set(64 /* SET_ANTDIV */, (uint8_t *)&val, sizeof(val))) return false;
   if (!cyw_ioctl_set(2 /* UP, interface up */, NULL, 0)) return false;
@@ -818,20 +851,18 @@ static bool cyw_load_clmll(void *data, size_t len) {
       break;
     sent += bytes;
     offset += bytes;
-    hdr.flag &= ~MG_BIT(1);  // DL_BEGIN
+    hdr.flag &= (uint16_t)~MG_BIT(1);  // DL_BEGIN
   }
   return sent >= len;
 }
 // clang-format on
 
-static bool cyw_load_clm(struct mg_tcpip_driver_cyw_firmware *fw) {
-  return cyw_load_clmll((void *) fw->clm_addr, fw->clm_len);
-}
-
 static void cyw_update_hash_table(void) {
   // TODO(): read database, rebuild hash table
   uint32_t val = 0;
-  val = 1; cyw_ioctl_iovar_set2_(0, "mcast_list", (uint8_t *)&val, sizeof(val), (uint8_t *)mcast_addr, sizeof(mcast_addr));
+  val = 1;
+  cyw_ioctl_iovar_set2_(0, "mcast_list", (uint8_t *) &val, sizeof(val),
+                        (uint8_t *) mcast_addr, sizeof(mcast_addr));
   mg_delayms(50);
 }
 
@@ -848,8 +879,16 @@ static void cyw_update_hash_table(void) {
 #define CYW_CHIP_BCKPLN_ADDRMSK 0x7fff
 #define CYW_CHIP_BCKPLN_ACCSS4B MG_BIT(15)
 #define CYW_CHIP_BCKPLN_WRAPPOFF 0x100000
+// BUS DEPENDENCY: max bus to backplane transfer size, bus function id
 #define CYW_CHIP_BCKPLN_SPIMAX 64
 #define CYW_CHIP_BCKPLN_SDIOMAX 1536
+#if MG_ENABLE_DRIVER_CYW_SDIO
+#define CYW_CHIP_BCKPLN_BUSMAX CYW_CHIP_BCKPLN_SDIOMAX
+#define CYW_BUS_FUNC_CHIP CYW_SDIO_FUNC_CHIP
+#else
+#define CYW_CHIP_BCKPLN_BUSMAX CYW_CHIP_BCKPLN_SPIMAX
+#define CYW_BUS_FUNC_CHIP CYW_SPID_FUNC_CHIP
+#endif
 
 // CHIP DEPENDENCY
 #define CYW_CHIP_ARMCORE_BASE (CYW_CHIP_CHIPCOMMON + 0x3000)
@@ -874,9 +913,9 @@ static void cyw_update_hash_table(void) {
 #define CYW_CHIP_AI_IOCTRL 0x408
 #define CYW_CHIP_AI_RESETCTRL 0x800
 
-static bool cyw_spi_write(unsigned int f, uint32_t addr, void *data,
+static bool cyw_bus_write(unsigned int f, uint32_t addr, void *data,
                           uint16_t len);
-static void cyw_spi_read(unsigned int f, uint32_t addr, void *data,
+static bool cyw_bus_read(unsigned int f, uint32_t addr, void *data,
                          uint16_t len);
 
 // clang-format off
@@ -884,9 +923,9 @@ static void cyw_spi_read(unsigned int f, uint32_t addr, void *data,
 static void cyw_set_backplane_window(uint32_t addr) {
   uint32_t val;
   addr &= ~CYW_CHIP_BCKPLN_ADDRMSK;
-  val = (addr >> 24) & 0xff; cyw_spi_write(CYW_SD_FUNC_CHIP, CYW_CHIP_ADDRHIGH, &val, 1);
-  val = (addr >> 16) & 0xff; cyw_spi_write(CYW_SD_FUNC_CHIP, CYW_CHIP_ADDRMID, &val, 1);
-  val = (addr >> 8) & 0xff; cyw_spi_write(CYW_SD_FUNC_CHIP, CYW_CHIP_ADDRLOW, &val, 1);
+  val = (addr >> 24) & 0xff; cyw_bus_write(CYW_BUS_FUNC_CHIP, CYW_CHIP_ADDRHIGH, &val, 1);
+  val = (addr >> 16) & 0xff; cyw_bus_write(CYW_BUS_FUNC_CHIP, CYW_CHIP_ADDRMID, &val, 1);
+  val = (addr >> 8) & 0xff; cyw_bus_write(CYW_BUS_FUNC_CHIP, CYW_CHIP_ADDRLOW, &val, 1);
 }
 
 static bool cyw_core_reset(uint32_t core_base, bool check) {
@@ -894,21 +933,21 @@ static bool cyw_core_reset(uint32_t core_base, bool check) {
   // core disabled after chip reset
   cyw_set_backplane_window(core_base); // set backplane window for requested area; we do know offsets fall within that window
   // possible CHIP DEPENDENCY: AI_RESETSTATUS check and wait (instead of these cool reads) to ensure backplane operations end
-  cyw_spi_read(CYW_SD_FUNC_CHIP, (core_base + CYW_CHIP_AI_IOCTRL) & CYW_CHIP_BCKPLN_ADDRMSK, &val, 1); // ensure backplane operations end
-  val = MG_BIT(1) | MG_BIT(0) /* SICF_FGC | SICF_CLOCK_EN */; cyw_spi_write(CYW_SD_FUNC_CHIP, (core_base + CYW_CHIP_AI_IOCTRL) & CYW_CHIP_BCKPLN_ADDRMSK, &val, 1); // reset
-  cyw_spi_read(CYW_SD_FUNC_CHIP, (core_base + CYW_CHIP_AI_IOCTRL) & CYW_CHIP_BCKPLN_ADDRMSK, &val, 1); // ensure backplane operations end
-  val = 0x00; cyw_spi_write(CYW_SD_FUNC_CHIP, (core_base + CYW_CHIP_AI_RESETCTRL) & CYW_CHIP_BCKPLN_ADDRMSK, &val, 1); // release reset
+  cyw_bus_read(CYW_BUS_FUNC_CHIP, (core_base + CYW_CHIP_AI_IOCTRL) & CYW_CHIP_BCKPLN_ADDRMSK, &val, 1); // ensure backplane operations end
+  val = MG_BIT(1) | MG_BIT(0) /* SICF_FGC | SICF_CLOCK_EN */; cyw_bus_write(CYW_BUS_FUNC_CHIP, (core_base + CYW_CHIP_AI_IOCTRL) & CYW_CHIP_BCKPLN_ADDRMSK, &val, 1); // reset
+  cyw_bus_read(CYW_BUS_FUNC_CHIP, (core_base + CYW_CHIP_AI_IOCTRL) & CYW_CHIP_BCKPLN_ADDRMSK, &val, 1); // ensure backplane operations end
+  val = 0x00; cyw_bus_write(CYW_BUS_FUNC_CHIP, (core_base + CYW_CHIP_AI_RESETCTRL) & CYW_CHIP_BCKPLN_ADDRMSK, &val, 1); // release reset
   mg_delayms(1);
-  val = MG_BIT(0) /* SICF_CLOCK_EN */; cyw_spi_write(CYW_SD_FUNC_CHIP, (core_base + CYW_CHIP_AI_IOCTRL) & CYW_CHIP_BCKPLN_ADDRMSK, &val, 1);
-  cyw_spi_read(CYW_SD_FUNC_CHIP, (core_base + CYW_CHIP_AI_IOCTRL) & CYW_CHIP_BCKPLN_ADDRMSK, &val, 1); // ensure backplane operations end
+  val = MG_BIT(0) /* SICF_CLOCK_EN */; cyw_bus_write(CYW_BUS_FUNC_CHIP, (core_base + CYW_CHIP_AI_IOCTRL) & CYW_CHIP_BCKPLN_ADDRMSK, &val, 1);
+  cyw_bus_read(CYW_BUS_FUNC_CHIP, (core_base + CYW_CHIP_AI_IOCTRL) & CYW_CHIP_BCKPLN_ADDRMSK, &val, 1); // ensure backplane operations end
   mg_delayms(1);
 
   if (check) {
     // Verify only clock is enabled
-    cyw_spi_read(CYW_SD_FUNC_CHIP, (core_base + CYW_CHIP_AI_IOCTRL) & CYW_CHIP_BCKPLN_ADDRMSK, &val, 1);
+    cyw_bus_read(CYW_BUS_FUNC_CHIP, (core_base + CYW_CHIP_AI_IOCTRL) & CYW_CHIP_BCKPLN_ADDRMSK, &val, 1);
     if ((val & (MG_BIT(1) | MG_BIT(0)) /* SICF_FGC | SICF_CLOCK_EN) */) != MG_BIT(0)) return false;
     // Verify it is not in reset state
-    cyw_spi_read(CYW_SD_FUNC_CHIP, (core_base + CYW_CHIP_AI_RESETCTRL) & CYW_CHIP_BCKPLN_ADDRMSK, &val, 1);
+    cyw_bus_read(CYW_BUS_FUNC_CHIP, (core_base + CYW_CHIP_AI_RESETCTRL) & CYW_CHIP_BCKPLN_ADDRMSK, &val, 1);
     if (val & MG_BIT(0)) return false; // AIRC_RESET
   }
   return true;
@@ -916,29 +955,28 @@ static bool cyw_core_reset(uint32_t core_base, bool check) {
 
 static void cyw_socram_init(void) {
   uint32_t val;
-  // CHIP DEPENDENCY: disable remap for SRAM_3
+  // CHIP DEPENDENCY: disable remap for SRAM_3: 43430 and 43439 only
   cyw_set_backplane_window(CYW_CHIP_SOCSRAM_BASE); // set backplane window for requested area; we do know offsets fall within that window
-  val = 0x03; cyw_spi_write(CYW_SD_FUNC_CHIP, ((CYW_CHIP_SOCSRAM_BASE + CYW_CHIP_SOCSRAM_BANKXIDX) & CYW_CHIP_BCKPLN_ADDRMSK) | CYW_CHIP_BCKPLN_ACCSS4B, &val, sizeof(val));
-  val = 0x00; cyw_spi_write(CYW_SD_FUNC_CHIP, ((CYW_CHIP_SOCSRAM_BASE + CYW_CHIP_SOCSRAM_BANKXPDA) & CYW_CHIP_BCKPLN_ADDRMSK) | CYW_CHIP_BCKPLN_ACCSS4B, &val, sizeof(val));
+  val = 0x03; cyw_bus_write(CYW_BUS_FUNC_CHIP, ((CYW_CHIP_SOCSRAM_BASE + CYW_CHIP_SOCSRAM_BANKXIDX) & CYW_CHIP_BCKPLN_ADDRMSK), &val, sizeof(val));
+  val = 0x00; cyw_bus_write(CYW_BUS_FUNC_CHIP, ((CYW_CHIP_SOCSRAM_BASE + CYW_CHIP_SOCSRAM_BANKXPDA) & CYW_CHIP_BCKPLN_ADDRMSK), &val, sizeof(val));
 }
 
 // transfer is fractioned in bus-to-backplane-size units within backplane windows
 static void cyw_load_data(uint32_t dest, void *data, size_t len) {
   size_t sent = 0, offset = 0;
-  uint32_t last_addr = ~0;
+  uint32_t last_addr = (uint32_t) ~0;
   while (sent < len)  {
     size_t bytes = len - sent, avail;
     uint32_t addr = dest + offset;
-    if (addr - last_addr >= CYW_CHIP_BCKPLN_WINSZ || last_addr == ~0) {
+    if (addr - last_addr >= CYW_CHIP_BCKPLN_WINSZ || last_addr == (uint32_t) ~0) {
       cyw_set_backplane_window(addr); // set backplane window for requested area
       last_addr = addr & ~CYW_CHIP_BCKPLN_ADDRMSK;
     }
     addr &= CYW_CHIP_BCKPLN_ADDRMSK;
-    avail = CYW_CHIP_BCKPLN_WINSZ - (unsigned int) addr;
+    avail = CYW_CHIP_BCKPLN_WINSZ - (unsigned int) addr; // internal backplane limit
     if (bytes > avail) bytes = avail;
-    // BUS DEPENDENCY: max bus to backplane transfer size
-    if (bytes > CYW_CHIP_BCKPLN_SPIMAX) bytes = CYW_CHIP_BCKPLN_SPIMAX;
-    cyw_spi_write(CYW_SD_FUNC_CHIP, addr | CYW_CHIP_BCKPLN_ACCSS4B, (uint8_t *)data + offset, bytes);
+    if (bytes > CYW_CHIP_BCKPLN_BUSMAX) bytes = CYW_CHIP_BCKPLN_BUSMAX; // bus to backplane transfer limit
+    cyw_bus_write(CYW_BUS_FUNC_CHIP, addr, (uint8_t *)data + offset, (uint16_t) bytes);
     sent += bytes;
     offset += bytes;
   }
@@ -950,19 +988,21 @@ static bool cyw_load_fwll(void *fwdata, size_t fwlen, void *nvramdata, size_t nv
   cyw_core_reset(CYW_CHIP_SOCSRAM, false);  // cores were disabled at chip reset
   cyw_socram_init();
   cyw_load_data(CYW_CHIP_ATCMRAM_BASE, fwdata, fwlen);
-  mg_delayms(5); // ************ CHECK IF THIS IS ACTUALLY NEEDED
+  mg_delayms(5); // TODO(scaprile): CHECK IF THIS IS ACTUALLY NEEDED
   // Load NVRAM and place 'length ~length' at the end; end of chip RAM
   { 
     const uint32_t start = CYW_CHIP_RAM_SIZE - 4 - nvramlen;
     cyw_load_data(start, nvramdata, nvramlen); // nvramlen must be a multiple of 4
     // RAM_SIZE is a multiple of WINSZ, so the place for len ~len will be at the end of the window
-    cyw_spi_write(CYW_SD_FUNC_CHIP, (CYW_CHIP_BCKPLN_WINSZ - 4) | CYW_CHIP_BCKPLN_ACCSS4B, &val, sizeof(val));
+    cyw_bus_write(CYW_BUS_FUNC_CHIP, (CYW_CHIP_BCKPLN_WINSZ - 4), &val, sizeof(val));
   }
   // Reset ARM core and check it starts
   if (!cyw_core_reset(CYW_CHIP_ARMCORE, true)) return false;
   return true;
 }
 // clang-format on
+
+#if !MG_ENABLE_DRIVER_CYW_SDIO
 
 // CYW43 SPI bus specifics
 
@@ -975,29 +1015,33 @@ static bool cyw_load_fwll(void *fwdata, size_t fwlen, void *nvramdata, size_t nv
 
 #define CYW_BUS_STS_LEN(x) ((x >> 9) & 0x7ff)
 
+static bool cyw_spi_write(unsigned int f, uint32_t addr, void *data,
+                          uint16_t len);
+static void cyw_spi_read(unsigned int f, uint32_t addr, void *data,
+                         uint16_t len);
+
 // clang-format off
 static size_t cyw_spi_poll(uint8_t *response) {
   size_t len;
   uint32_t res;
   // SPI poll
-  cyw_spi_read(CYW_SD_FUNC_BUS, CYW_BUS_SPI_STATUS, &res, sizeof(res));
-  if (res == ~0 || !(res & MG_BIT(8) /* packet available */ )) return 0;
+  cyw_spi_read(CYW_SPID_FUNC_BUS, CYW_BUS_SPI_STATUS, &res, sizeof(res));
+  if (res == (uint32_t) ~0 || !(res & MG_BIT(8) /* packet available */ )) return 0;
   len = CYW_BUS_STS_LEN(res);
   if (len == 0) { // just ack IRQ
     uint16_t val = 1;
-    cyw_spi_write(CYW_SD_FUNC_CHIP, CYW_CHIP_SPIFRCTRL, &val, 1);
-    cyw_spi_read(CYW_SD_FUNC_BUS, CYW_BUS_SPI_INT, &val, sizeof(val));
-    cyw_spi_write(CYW_SD_FUNC_BUS, CYW_BUS_SPI_INT, &val, sizeof(val));
+    cyw_spi_write(CYW_SPID_FUNC_CHIP, CYW_CHIP_SPIFRCTRL, &val, 1);
+    cyw_spi_read(CYW_SPID_FUNC_BUS, CYW_BUS_SPI_INT, &val, sizeof(val));
+    cyw_spi_write(CYW_SPID_FUNC_BUS, CYW_BUS_SPI_INT, &val, sizeof(val));
     return 0;
   }
-  cyw_spi_read(CYW_SD_FUNC_WLAN, 0,  response, len);
+  cyw_spi_read(CYW_SPID_FUNC_WLAN, 0,  response, len);
   return len;
 }
 
-// BUS DEPENDENCY: name is generic but function is bus dependent
-static size_t cyw_bus_tx(uint32_t *data, uint16_t len) {
-  while (len & 3) data[len++] = 0; // SPI 32-bit padding (SDIO->64-byte)
-  return cyw_spi_write(CYW_SD_FUNC_WLAN, 0, data, len) ? len: 0;
+static size_t cyw_spi_tx(uint32_t *data, uint16_t len) {
+  while (len & 3) data[len++] = 0; // SPI 32-bit padding
+  return cyw_spi_write(CYW_SPID_FUNC_WLAN, 0, data, len) ? len: 0;
 }
 
 // this can be integrated in lowest level SPI read/write _driver_ functions
@@ -1007,20 +1051,19 @@ uint32_t sw16_2(uint32_t data) {
 }
 
 // DS 4.2.2 Table 6: signal we're working in 16-bit mode
-#define CYW_SD_16bMODE MG_BIT(2) // arbitrary bit out of the FUNC space
+#define CYW_SPI_16bMODE MG_BIT(2) // arbitrary bit out of the FUNC space
 
 static bool cyw_spi_init() {
-  struct mg_tcpip_driver_cyw_data *d =
-      (struct mg_tcpip_driver_cyw_data *) s_ifp->driver_data;
+  struct mg_tcpip_driver_cyw_data *d = (struct mg_tcpip_driver_cyw_data *) s_ifp->driver_data;
   uint32_t val = 0;
   // DS 4.2.3 Boot-Up Sequence; WHD: other chips might require more effort
   unsigned int times = 51;
   while (times--) {
-    cyw_spi_read(CYW_SD_FUNC_BUS | CYW_SD_16bMODE, CYW_BUS_SPI_TEST, &val, sizeof(val));
+    cyw_spi_read(CYW_SPID_FUNC_BUS | CYW_SPI_16bMODE, CYW_BUS_SPI_TEST, &val, sizeof(val));
     if (sw16_2(val) == 0xFEEDBEAD) break;
     mg_delayms(1);
   }
-  if (times == ~0) return false;
+  if (times == (unsigned int) ~0) return false;
   // DS 4.2.3 Table 6. Chip starts in 16-bit little-endian mode.
   // Configure SPI and switch to 32-bit big-endian mode:
   // - High-speed mode: d->hs true
@@ -1028,33 +1071,34 @@ static bool cyw_spi_init() {
   // - SPI RESPONSE DELAY 4 bytes time [not in DS] TODO(scaprile): logic ana
   // - Status not sent after command, IRQ with status
   val = sw16_2(0x000204a3 | (d->hs ? MG_BIT(4) : 0)); // 4 reg content
-  cyw_spi_write(CYW_SD_FUNC_BUS | CYW_SD_16bMODE, CYW_BUS_SPI_BUSCTRL, &val, sizeof(val));
+  cyw_spi_write(CYW_SPID_FUNC_BUS | CYW_SPI_16bMODE, CYW_BUS_SPI_BUSCTRL, &val, sizeof(val));
   mg_tcpip_call(s_ifp, MG_TCPIP_EV_DRIVER, NULL);
-  cyw_spi_read(CYW_SD_FUNC_BUS, CYW_BUS_SPI_TEST, &val, sizeof(val));
+  cyw_spi_read(CYW_SPID_FUNC_BUS, CYW_BUS_SPI_TEST, &val, sizeof(val));
   if (val != 0xFEEDBEAD) return false;
-  val = 4; cyw_spi_write(CYW_SD_FUNC_BUS, CYW_BUS_SPI_RESPDLY_F1, &val, 1);
+  val = 4; cyw_spi_write(CYW_SPID_FUNC_BUS, CYW_BUS_SPI_RESPDLY_F1, &val, 1);
   val = 0x99; // clear error bits DATA_UNAVAILABLE, COMMAND_ERROR, DATA_ERROR, F1_OVERFLOW
-  cyw_spi_write(CYW_SD_FUNC_BUS, CYW_BUS_SPI_INT, &val, 1);
+  cyw_spi_write(CYW_SPID_FUNC_BUS, CYW_BUS_SPI_INT, &val, 1);
   val = 0x00be; // Enable IRQs F2_F3_FIFO_RD_UNDERFLOW, F2_F3_FIFO_WR_OVERFLOW, COMMAND_ERROR, DATA_ERROR, F2_PACKET_AVAILABLE, F1_OVERFLOW
   // BT-ENABLED DEPENDENCY: add F1_INTR (bit 13)
-  cyw_spi_write(CYW_SD_FUNC_BUS, CYW_BUS_SPI_INTEN, &val, sizeof(uint16_t));
+  cyw_spi_write(CYW_SPID_FUNC_BUS, CYW_BUS_SPI_INTEN, &val, sizeof(uint16_t));
 
   // chip backplane is ready, initialize it
   // request ALP (Active Low Power) clock
-  val = MG_BIT(3) /* ALP_REQ */; cyw_spi_write(CYW_SD_FUNC_CHIP, CYW_CHIP_CLOCKCSR, &val, 1);
+  val = MG_BIT(3) /* ALP_REQ */; cyw_spi_write(CYW_SPID_FUNC_CHIP, CYW_CHIP_CLOCKCSR, &val, 1);
   // BT-ENABLED DEPENDENCY
   times = 10;
   while (times--) {
-    cyw_spi_read(CYW_SD_FUNC_CHIP, CYW_CHIP_CLOCKCSR, &val, 1);
+    cyw_spi_read(CYW_SPID_FUNC_CHIP, CYW_CHIP_CLOCKCSR, &val, 1);
     if (val & MG_BIT(6)) break; // ALP_AVAIL
     mg_delayms(1);
   }
-  if (times == ~0) return false;
+  if (times == (unsigned int) ~0) return false;
   // clear request
-  val = 0; cyw_spi_write(CYW_SD_FUNC_CHIP, CYW_CHIP_CLOCKCSR, &val, 1);
+  val = 0; cyw_spi_write(CYW_SPID_FUNC_CHIP, CYW_CHIP_CLOCKCSR, &val, 1);
   cyw_set_backplane_window(CYW_CHIP_CHIPCOMMON); // set backplane window to start of CHIPCOMMON area
-  cyw_spi_read(CYW_SD_FUNC_CHIP, (CYW_CHIP_CHIPCOMMON + 0x00) & CYW_CHIP_BCKPLN_ADDRMSK, &val, 2);
-  MG_INFO(("WLAN chip is CYW%u", *((uint16_t *)&val)));
+  cyw_spi_read(CYW_SPID_FUNC_CHIP, (CYW_CHIP_CHIPCOMMON + 0x00) & CYW_CHIP_BCKPLN_ADDRMSK, &val, 2);
+  if (val == 43430) val = 4343;
+  MG_INFO(("WLAN chip is CYW%u%c", val), val == 4343 ? 'W' : ' '));
 
   // Load firmware (code and NVRAM)
   if (!cyw_load_firmware(d->fw)) return false;
@@ -1062,77 +1106,74 @@ static bool cyw_spi_init() {
   // Wait for High Throughput (HT) clock ready
   times = 50;
   while (times--) {
-    cyw_spi_read(CYW_SD_FUNC_CHIP, CYW_CHIP_CLOCKCSR, &val, 1);
+    cyw_spi_read(CYW_SPID_FUNC_CHIP, CYW_CHIP_CLOCKCSR, &val, 1);
     if (val & MG_BIT(7)) break; // HT_AVAIL
     mg_delayms(1);
   }
-  if (times == ~0) return false;
+  if (times == (unsigned int) ~0) return false;
   // Wait for backplane ready
   times = 1000;
   while (times--) {
-    cyw_spi_read(CYW_SD_FUNC_BUS, CYW_BUS_SPI_STATUS, &val, sizeof(val));
+    cyw_spi_read(CYW_SPID_FUNC_BUS, CYW_BUS_SPI_STATUS, &val, sizeof(val));
     if (val & MG_BIT(5)) break; // F2_RX_READY
     mg_delayms(1);
   }
-  if (times == ~0) return false;
+  if (times == (unsigned int) ~0) return false;
 
   // CHIP DEPENDENCY
   // Enable save / restore
   // Configure WakeupCtrl, set HT_AVAIL in CLOCK_CSR
-  cyw_spi_read(CYW_SD_FUNC_CHIP, CYW_CHIP_WAKEUPCTL, &val, 1);
-  val |= MG_BIT(1) /* WAKE_TILL_HT_AVAIL */; cyw_spi_write(CYW_SD_FUNC_CHIP, CYW_CHIP_WAKEUPCTL, &val, 1);
+  cyw_spi_read(CYW_SPID_FUNC_CHIP, CYW_CHIP_WAKEUPCTL, &val, 1);
+  val |= MG_BIT(1) /* WAKE_TILL_HT_AVAIL */; cyw_spi_write(CYW_SPID_FUNC_CHIP, CYW_CHIP_WAKEUPCTL, &val, 1);
 #if 0
   // Set BRCM_CARDCAP to CMD_NODEC. NOTE(): This is probably only necessary for SDIO, not SPI
-  val = MG_BIT(3); cyw_spi_write(CYW_SD_FUNC_BUS, 0xf0 /* SDIOD_CCCR_BRCM_CARDCAP */, &val, 1);
+  val = MG_BIT(3); cyw_spi_write(CYW_SPID_FUNC_BUS, 0xf0 /* SDIOD_CCCR_BRCM_CARDCAP */, &val, 1);
 #endif
   // Force HT request to chip backplane
-  val = MG_BIT(1) /* FORCE_HT */; cyw_spi_write(CYW_SD_FUNC_CHIP, CYW_CHIP_CLOCKCSR, &val, 1);
+  val = MG_BIT(1) /* FORCE_HT */; cyw_spi_write(CYW_SPID_FUNC_CHIP, CYW_CHIP_CLOCKCSR, &val, 1);
   // Enable Keep SDIO On (KSO)
-  cyw_spi_read(CYW_SD_FUNC_CHIP, CYW_CHIP_SLEEPCSR, &val, 1);
+  cyw_spi_read(CYW_SPID_FUNC_CHIP, CYW_CHIP_SLEEPCSR, &val, 1);
   if (!(val & MG_BIT(0))) {
-      val |= MG_BIT(0); cyw_spi_write(CYW_SD_FUNC_CHIP, CYW_CHIP_SLEEPCSR, &val, 1);
+      val |= MG_BIT(0); cyw_spi_write(CYW_SPID_FUNC_CHIP, CYW_CHIP_SLEEPCSR, &val, 1);
   }
   // The SPI bus can be configured for sleep (KSO controls wlan block sleep)
-  cyw_spi_read(CYW_SD_FUNC_BUS, CYW_BUS_SPI_BUSCTRL, &val, sizeof(val));
-  val &= ~MG_BIT(7) /* WAKE_UP */; cyw_spi_write(CYW_SD_FUNC_BUS, CYW_BUS_SPI_BUSCTRL, &val, sizeof(val));
+  cyw_spi_read(CYW_SPID_FUNC_BUS, CYW_BUS_SPI_BUSCTRL, &val, sizeof(val));
+  val &= ~MG_BIT(7) /* WAKE_UP */; cyw_spi_write(CYW_SPID_FUNC_BUS, CYW_BUS_SPI_BUSCTRL, &val, sizeof(val));
   // Set SPI bus sleep
-  val = 0x0f; cyw_spi_write(CYW_SD_FUNC_CHIP, CYW_CHIP_PULLUP, &val, 1);
+  val = 0x0f; cyw_spi_write(CYW_SPID_FUNC_CHIP, CYW_CHIP_PULLUP, &val, 1);
 
   // Clear pullups. NOTE(): ?
-  val = 0x00; cyw_spi_write(CYW_SD_FUNC_CHIP, CYW_CHIP_PULLUP, &val, 1);
-  cyw_spi_read(CYW_SD_FUNC_CHIP, CYW_CHIP_PULLUP, &val, 1);
+  val = 0x00; cyw_spi_write(CYW_SPID_FUNC_CHIP, CYW_CHIP_PULLUP, &val, 1);
+  cyw_spi_read(CYW_SPID_FUNC_CHIP, CYW_CHIP_PULLUP, &val, 1);
   // Clear possible data unavailable error
-  cyw_spi_read(CYW_SD_FUNC_BUS, CYW_BUS_SPI_INTEN, &val, sizeof(uint16_t));
-  if (val & MG_BIT(0)) cyw_spi_write(CYW_SD_FUNC_BUS, CYW_BUS_SPI_INTEN, &val, sizeof(uint16_t));
-
-  // Load CLM blob
-  if (!cyw_load_clm(d->fw)) return false;
+  cyw_spi_read(CYW_SPID_FUNC_BUS, CYW_BUS_SPI_INTEN, &val, sizeof(uint16_t));
+  if (val & MG_BIT(0)) cyw_spi_write(CYW_SPID_FUNC_BUS, CYW_BUS_SPI_INTEN, &val, sizeof(uint16_t));
 
   return true;
 }
 // clang-format on
 
-// gSPI, DS 4.2.1 Fig.12
-#define CYW_SD_LEN(x) ((x) &0x7FF)             // bits 0-10
-#define CYW_SD_ADDR(x) (((x) &0x1FFFF) << 11)  // bits 11-27,
-#define CYW_SD_FUNC(x) (((x) &3) << 28)        // bits 28-29
-#define CYW_SD_INC MG_BIT(30)
-#define CYW_SD_WR MG_BIT(31)
+// gSPI, CYW43439 DS 4.2.1 Fig.12
+#define CYW_SPID_LEN(x) ((x) &0x7FF)             // bits 0-10
+#define CYW_SPID_ADDR(x) (((x) &0x1FFFF) << 11)  // bits 11-27,
+#define CYW_SPID_FUNC(x) (((x) &3) << 28)        // bits 28-29
+#define CYW_SPID_INC MG_BIT(30)
+#define CYW_SPID_WR MG_BIT(31)
 
 static bool cyw_spi_write(unsigned int f, uint32_t addr, void *data,
                           uint16_t len) {
   struct mg_tcpip_driver_cyw_data *d =
       (struct mg_tcpip_driver_cyw_data *) s_ifp->driver_data;
-  struct mg_tcpip_spi_ *s = (struct mg_tcpip_spi_ *) d->spi;
-  uint32_t hdr = CYW_SD_WR | CYW_SD_INC | CYW_SD_FUNC(f) | CYW_SD_ADDR(addr) |
-                 CYW_SD_LEN(len);  // gSPI header
+  struct mg_tcpip_spi_ *s = (struct mg_tcpip_spi_ *) d->bus;
+  uint32_t hdr = CYW_SPID_WR | CYW_SPID_INC | CYW_SPID_FUNC(f) |
+                 CYW_SPID_ADDR(addr) | CYW_SPID_LEN(len);  // gSPI header
   // TODO(scaprile): check spin in between and timeout values, return false
-  if (f == CYW_SD_FUNC_WLAN) {
+  if (f == CYW_SPID_FUNC_WLAN) {
     uint32_t val = 0;
     while ((val & MG_BIT(5)) != MG_BIT(5))  // F2 rx ready (FIFO ready)
-      cyw_spi_read(CYW_SD_FUNC_BUS, CYW_BUS_SPI_STATUS, &val, sizeof(val));
+      cyw_spi_read(CYW_SPID_FUNC_BUS, CYW_BUS_SPI_STATUS, &val, sizeof(val));
   }
-  if (f & CYW_SD_16bMODE)
+  if (f & CYW_SPI_16bMODE)
     hdr = sw16_2(hdr);  // swap half-words in 16-bit little-endian mode
 
   s->begin(NULL);
@@ -1148,32 +1189,186 @@ static bool cyw_spi_write(unsigned int f, uint32_t addr, void *data,
   return true;
 }
 
-// will write 32-bit aligned quantities to data if f == CYW_SD_FUNC_WLAN
+// will write 32-bit aligned quantities to data if f == CYW_SPID_FUNC_WLAN
 static void cyw_spi_read(unsigned int f, uint32_t addr, void *data,
                          uint16_t len) {
   struct mg_tcpip_driver_cyw_data *d =
       (struct mg_tcpip_driver_cyw_data *) s_ifp->driver_data;
-  struct mg_tcpip_spi_ *s = (struct mg_tcpip_spi_ *) d->spi;
+  struct mg_tcpip_spi_ *s = (struct mg_tcpip_spi_ *) d->bus;
   uint32_t padding =
-      f == CYW_SD_FUNC_CHIP
+      f == CYW_SPID_FUNC_CHIP
           ? 4
           : 0;  // add padding to chip backplane reads as a response delay
-  uint32_t hdr = CYW_SD_INC | CYW_SD_FUNC(f) | CYW_SD_ADDR(addr) |
-                 CYW_SD_LEN(len + padding);  // gSPI header
-  if (f == CYW_SD_FUNC_WLAN && (len & 3))
+  uint32_t hdr = CYW_SPID_INC | CYW_SPID_FUNC(f) | CYW_SPID_ADDR(addr) |
+                 CYW_SPID_LEN(len + padding);  // gSPI header
+  if (f == CYW_SPID_FUNC_WLAN && (len & 3))
     len = (len + 4) & ~3;  // align WLAN transfers to 32-bit
-  if (f & CYW_SD_16bMODE)
+  if (f & CYW_SPI_16bMODE)
     hdr = sw16_2(hdr);  // swap half-words in 16-bit little-endian mode
 
   s->begin(NULL);
   s->txn(NULL, (uint8_t *) &hdr, NULL, sizeof(hdr));
-  if (f == CYW_SD_FUNC_CHIP) {
+  if (f == CYW_SPID_FUNC_CHIP) {
     uint32_t pad;
     s->txn(NULL, NULL, (uint8_t *) &pad, 4);  // read padding back and discard
   }
   s->txn(NULL, NULL, (uint8_t *) data, len);
   s->end(NULL);
 }
+
+static bool cyw_bus_specific_init(void) {
+  return cyw_spi_init();
+}
+static size_t cyw_bus_specific_poll(uint32_t *response) {
+  return cyw_spi_poll((uint8_t *) response);
+}
+static size_t cyw_bus_specific_tx(uint32_t *data, uint16_t len) {
+  return cyw_spi_tx(data, len);
+}
+static bool cyw_bus_write(unsigned int f, uint32_t addr, void *data,
+                          uint16_t len) {
+  if (f == CYW_SPID_FUNC_CHIP && len >= 4) addr |= CYW_CHIP_BCKPLN_ACCSS4B;
+  return cyw_spi_write(f, addr, data, len);
+}
+static bool cyw_bus_read(unsigned int f, uint32_t addr, void *data,
+                         uint16_t len) {
+  cyw_spi_read(f, addr, data, len);
+  return true;
+}
+
+#else  // MG_ENABLE_DRIVER_CYW_SDIO
+
+#include "sdio.h"
+
+// CYW43 SDIO bus specifics
+
+// CYW4343W and CYW43439 DS 4.1 SDIO v2.0:
+//- F0: max block size is  32 bytes
+//- F1: max block size is  64 bytes
+//- F2: max block size is 512 bytes
+
+// clang-format off
+static bool cyw_sdio_transfer(bool write, unsigned int f, uint32_t addr, void *data, uint32_t len) {
+  struct mg_tcpip_driver_cyw_data *d = (struct mg_tcpip_driver_cyw_data *) s_ifp->driver_data;
+  struct mg_tcpip_sdio *s = (struct mg_tcpip_sdio *) d->bus;
+  uint32_t *ptr = (uint32_t *) data; // assume 32-bit aligned data (all except firmware)
+  if (write && (size_t) data & 3) {  // missed, source data is not 32-bit aligned
+    memcpy(txdata, data, len);       // copy to an aligned buffer, we know it fits
+    ptr = txdata;
+  } // all possible read destinations are 32-bit aligned
+  // mg_sdio_transfer requires 32-bit alignment for > 1 byte transfers
+  return mg_sdio_transfer(s, write, f, addr, ptr, len);
+}
+
+static size_t cyw_sdio_poll(uint32_t *response) {
+  uint32_t res;
+  uint16_t *len = (uint16_t *)&res;
+  // WHD: internal docs, "tag" hinting a possible packet.
+  // This is actually the len / ~len field of a possible struct sdpcm_hdr, if there is a packet available, or 0 if there is none.
+  cyw_sdio_transfer(false, CYW_SDIO_FUNC_WLAN, 0, &res, sizeof(res)); // read "the tag"
+  if ((len[0] | len[1]) == 0 || (len[0] ^ len[1]) != 0xffff || *len <= 4) return 0;
+  response[0] = res; // copy what we already read, then read the rest
+  cyw_sdio_transfer(false, CYW_SDIO_FUNC_WLAN, 0, response + 1, *len - sizeof(res));
+  return (size_t)*len;
+}
+
+static size_t cyw_sdio_tx(uint32_t *data, uint16_t len) {
+  return cyw_sdio_transfer(true, CYW_SDIO_FUNC_WLAN, 0, data, len) ? len: 0;
+}
+
+static bool cyw_sdio_init() {
+  struct mg_tcpip_driver_cyw_data *d = (struct mg_tcpip_driver_cyw_data *) s_ifp->driver_data;
+  struct mg_tcpip_sdio *s = (struct mg_tcpip_sdio *) d->bus;
+  uint32_t val = 0;
+  if (!mg_sdio_init(s)) return false;
+  // no block transfers on F0. if (!mg_sdio_set_blksz(s, CYW_SDIO_FUNC_BUS, 32)) return false; 
+  if (!mg_sdio_set_blksz(s, CYW_SDIO_FUNC_CHIP, 64)) return false;
+  if (!mg_sdio_set_blksz(s, CYW_SDIO_FUNC_WLAN, 64)) return false;
+  // TODO(scaprile): we don't handle SDIO interrupts, study CCCR INTEN and SDIO support (SDIO 6.3, 8)
+  // Enable chip backplane (F1)
+  if (!mg_sdio_enable_f(s, CYW_SDIO_FUNC_CHIP)) return false;
+  // Wait for F1 to be ready
+  if (!mg_sdio_waitready_f(s, CYW_SDIO_FUNC_CHIP)) return false;
+  // chip backplane is ready, initialize it
+  // request ALP (Active Low Power) clock
+  val = MG_BIT(5) | MG_BIT(3) | MG_BIT(0); // HW_CLKREQ_OFF ALP_REQ FORCE_ALP
+  cyw_sdio_transfer(true, CYW_SDIO_FUNC_CHIP, CYW_CHIP_CLOCKCSR, &val, 1);
+  // BT-ENABLED DEPENDENCY
+  unsigned int times = 10;
+  while (times--) {
+    if(!cyw_sdio_transfer(false, CYW_SDIO_FUNC_CHIP, CYW_CHIP_CLOCKCSR, &val, 1)) return false;
+    if (val & MG_BIT(6)) break; // ALP_AVAIL
+    mg_delayms(1);
+  }
+  if (times == (unsigned int) ~0) return false;
+  // clear request
+  val = 0; cyw_sdio_transfer(true, CYW_SDIO_FUNC_CHIP, CYW_CHIP_CLOCKCSR, &val, 1);
+  // Enable WLAN (F2)
+  if (!mg_sdio_enable_f(s, CYW_SDIO_FUNC_WLAN)) return false;
+  // Clear pullups. NOTE(): ?
+  val = 0x00; cyw_sdio_transfer(true, CYW_SDIO_FUNC_CHIP, CYW_CHIP_PULLUP, &val, 1);
+  // we don't handle wake nor OOB interrupts; SEP_INT_CTL is a vendor specific SDIO register
+  // SDIO interrupts: enable F2 interrupt only
+
+  cyw_set_backplane_window(CYW_CHIP_CHIPCOMMON); // set backplane window to start of CHIPCOMMON area
+  cyw_sdio_transfer(false, CYW_SDIO_FUNC_CHIP, (CYW_CHIP_CHIPCOMMON + 0x00) & CYW_CHIP_BCKPLN_ADDRMSK, &val, 2);
+  if (val == 43430) val = 4343;
+  MG_INFO(("WLAN chip is CYW%u%c", val, val == 4343 ? 'W' : ' '));
+  // Load firmware (code and NVRAM)
+  if (!cyw_load_firmware(d->fw)) return false;
+
+  // Wait for High Throughput (HT) clock ready
+  times = 50;
+  while (times--) {
+    if(!cyw_sdio_transfer(false, CYW_SDIO_FUNC_CHIP, CYW_CHIP_CLOCKCSR, &val, 1)) return false;
+    if (val & MG_BIT(7)) break; // HT_AVAIL
+    mg_delayms(1);
+  }
+  if (times == (unsigned int) ~0) return false;
+  // Wait for WLAN ready
+  if (!mg_sdio_waitready_f(s, CYW_SDIO_FUNC_WLAN)) return false;
+
+  // CHIP DEPENDENCY
+  // Enable save / restore
+  // Configure WakeupCtrl, set HT_AVAIL in CLOCK_CSR
+  if(!cyw_sdio_transfer(false, CYW_SDIO_FUNC_CHIP, CYW_CHIP_WAKEUPCTL, &val, 1)) return false;
+  val |= MG_BIT(1) /* WAKE_TILL_HT_AVAIL */; cyw_sdio_transfer(true, CYW_SDIO_FUNC_CHIP, CYW_CHIP_WAKEUPCTL, &val, 1);
+#if 0 // TODO(scaprile): Check if this is actually necessary
+  // Set BRCM_CARDCAP to CMD_NODEC. This is a vendor specific SDIO register
+  val = MG_BIT(3); cyw_sdio_transfer(true, CYW_SDIO_FUNC_BUS, 0xf0 /* SDIOD_CCCR_BRCM_CARDCAP */, &val, 1);
+#endif
+  // Force HT request to chip backplane
+  val = MG_BIT(1) /* FORCE_HT */; if(!cyw_sdio_transfer(true, CYW_SDIO_FUNC_CHIP, CYW_CHIP_CLOCKCSR, &val, 1)) return false;
+  // Enable Keep SDIO On (KSO)
+  cyw_sdio_transfer(false, CYW_SDIO_FUNC_CHIP, CYW_CHIP_SLEEPCSR, &val, 1);
+  if (!(val & MG_BIT(0))) {
+      val |= MG_BIT(0); cyw_sdio_transfer(true, CYW_SDIO_FUNC_CHIP, CYW_CHIP_SLEEPCSR, &val, 1);
+  }
+  return true;
+}
+
+// clang-format on
+
+static bool cyw_bus_specific_init(void) {
+  return cyw_sdio_init();
+}
+static size_t cyw_bus_specific_poll(uint32_t *response) {
+  return cyw_sdio_poll(response);
+}
+static size_t cyw_bus_specific_tx(uint32_t *data, uint16_t len) {
+  return cyw_sdio_tx(data, len);
+}
+static bool cyw_bus_write(unsigned int f, uint32_t addr, void *data,
+                          uint16_t len) {
+  if (f == CYW_SDIO_FUNC_CHIP && len == 4) addr |= CYW_CHIP_BCKPLN_ACCSS4B;
+  return cyw_sdio_transfer(true, f, addr, data, (uint32_t) len);
+}
+static bool cyw_bus_read(unsigned int f, uint32_t addr, void *data,
+                         uint16_t len) {
+  return cyw_sdio_transfer(false, f, addr, data, (uint32_t) len);
+}
+
+#endif
 
 // Mongoose Wi-Fi API functions
 
