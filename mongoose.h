@@ -2820,12 +2820,12 @@ bool mg_wifi_ap_start(char *ssid, char *pass, unsigned int channel);
 bool mg_wifi_ap_stop(void);
 
 
+
+
+
+
+
 #if MG_ENABLE_TCPIP
-
-
-
-
-
 
 struct mg_tcpip_if;  // Mongoose TCP/IP network interface
 
@@ -2851,6 +2851,7 @@ enum {
   MG_TCPIP_EV_DRIVER,           // Driver event                   driver specific
   MG_TCPIP_EV_USER              // Starting ID for user events
 };
+
 
 // Network interface
 struct mg_tcpip_if {
@@ -3007,7 +3008,9 @@ struct mg_profitem {
 #endif
 
 
-#if MG_ENABLE_TCPIP && defined(MG_ENABLE_DRIVER_CYW) && MG_ENABLE_DRIVER_CYW
+#if MG_ENABLE_TCPIP &&                                          \
+    ((defined(MG_ENABLE_DRIVER_CYW) && MG_ENABLE_DRIVER_CYW) || \
+     (defined(MG_ENABLE_DRIVER_CYW_SDIO) && MG_ENABLE_DRIVER_CYW_SDIO))
 
 struct mg_tcpip_spi_ {
   void *spi;              // Opaque SPI bus descriptor
@@ -3027,7 +3030,7 @@ struct mg_tcpip_driver_cyw_firmware {
 };
 
 struct mg_tcpip_driver_cyw_data {
-  struct mg_tcpip_spi_ *spi;
+  void *bus;
   struct mg_tcpip_driver_cyw_firmware *fw;
   char *ssid;
   char *pass;
@@ -3248,6 +3251,30 @@ struct mg_tcpip_driver_same54_data {
 #endif
 
 
+#if MG_ENABLE_TCPIP && \
+    (defined(MG_ENABLE_DRIVER_CYW_SDIO) && MG_ENABLE_DRIVER_CYW_SDIO)
+
+struct mg_tcpip_sdio {
+  void *sdio;                    // Opaque SDIO bus descriptor
+  void (*cfg)(void *, uint8_t);  // select operating parameters
+  // SDIO transaction: send cmd with a possible 1-byte read or write
+  bool (*txn)(void *, uint8_t cmd, uint32_t arg, uint32_t *r);
+  // SDIO extended transaction: write or read len bytes, using blksz blocks
+  bool (*xfr)(void *, bool write, uint32_t arg, uint16_t blksz, uint32_t *,
+              uint32_t len, uint32_t *r);
+};
+
+bool mg_sdio_transfer(struct mg_tcpip_sdio *sdio, bool write, unsigned int f,
+                      uint32_t addr, void *data, uint32_t len);
+bool mg_sdio_set_blksz(struct mg_tcpip_sdio *sdio, unsigned int f,
+                       uint16_t blksz);
+bool mg_sdio_enable_f(struct mg_tcpip_sdio *sdio, unsigned int f);
+bool mg_sdio_waitready_f(struct mg_tcpip_sdio *sdio, unsigned int f);
+bool mg_sdio_init(struct mg_tcpip_sdio *sdio);
+
+#endif
+
+
 #if MG_ENABLE_TCPIP && defined(MG_ENABLE_DRIVER_STM32F) && \
     MG_ENABLE_DRIVER_STM32F
 
@@ -3426,6 +3453,41 @@ struct mg_tcpip_driver_tms570_data {
 
 
 
+#if MG_ENABLE_TCPIP && defined(MG_ENABLE_DRIVER_XMC7) && MG_ENABLE_DRIVER_XMC7
+
+struct mg_tcpip_driver_xmc7_data {
+  int mdc_cr;  // Valid values: -1, 0, 1, 2, 3, 4, 5
+  uint8_t phy_addr;
+};
+
+#ifndef MG_TCPIP_PHY_ADDR
+#define MG_TCPIP_PHY_ADDR 0
+#endif
+
+#ifndef MG_DRIVER_MDC_CR
+#define MG_DRIVER_MDC_CR 3
+#endif
+
+#define MG_TCPIP_DRIVER_INIT(mgr)                                 \
+  do {                                                            \
+    static struct mg_tcpip_driver_xmc7_data driver_data_;       \
+    static struct mg_tcpip_if mif_;                               \
+    driver_data_.mdc_cr = MG_DRIVER_MDC_CR;                       \
+    driver_data_.phy_addr = MG_TCPIP_PHY_ADDR;                    \
+    mif_.ip = MG_TCPIP_IP;                                        \
+    mif_.mask = MG_TCPIP_MASK;                                    \
+    mif_.gw = MG_TCPIP_GW;                                        \
+    mif_.driver = &mg_tcpip_driver_xmc7;                        \
+    mif_.driver_data = &driver_data_;                             \
+    MG_SET_MAC_ADDRESS(mif_.mac);                                 \
+    mg_tcpip_init(mgr, &mif_);                                    \
+    MG_INFO(("Driver: xmc7, MAC: %M", mg_print_mac, mif_.mac)); \
+  } while (0)
+
+#endif
+
+
+
 #if MG_ENABLE_TCPIP && defined(MG_ENABLE_DRIVER_XMC) && MG_ENABLE_DRIVER_XMC
 
 struct mg_tcpip_driver_xmc_data {
@@ -3471,41 +3533,6 @@ struct mg_tcpip_driver_xmc_data {
   } while (0)
 
 #endif
-
-
-#if MG_ENABLE_TCPIP && defined(MG_ENABLE_DRIVER_XMC7) && MG_ENABLE_DRIVER_XMC7
-
-struct mg_tcpip_driver_xmc7_data {
-  int mdc_cr;  // Valid values: -1, 0, 1, 2, 3, 4, 5
-  uint8_t phy_addr;
-};
-
-#ifndef MG_TCPIP_PHY_ADDR
-#define MG_TCPIP_PHY_ADDR 0
-#endif
-
-#ifndef MG_DRIVER_MDC_CR
-#define MG_DRIVER_MDC_CR 3
-#endif
-
-#define MG_TCPIP_DRIVER_INIT(mgr)                                 \
-  do {                                                            \
-    static struct mg_tcpip_driver_xmc7_data driver_data_;         \
-    static struct mg_tcpip_if mif_;                               \
-    driver_data_.mdc_cr = MG_DRIVER_MDC_CR;                       \
-    driver_data_.phy_addr = MG_TCPIP_PHY_ADDR;                    \
-    mif_.ip = MG_TCPIP_IP;                                        \
-    mif_.mask = MG_TCPIP_MASK;                                    \
-    mif_.gw = MG_TCPIP_GW;                                        \
-    mif_.driver = &mg_tcpip_driver_xmc7;                          \
-    mif_.driver_data = &driver_data_;                             \
-    MG_SET_MAC_ADDRESS(mif_.mac);                                 \
-    mg_tcpip_init(mgr, &mif_);                                    \
-    MG_INFO(("Driver: xmc7, MAC: %M", mg_print_mac, mif_.mac));   \
-  } while (0)
-
-#endif
-
 
 #ifdef __cplusplus
 }
