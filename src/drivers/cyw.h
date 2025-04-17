@@ -1,6 +1,8 @@
 #pragma once
 
-#if MG_ENABLE_TCPIP && defined(MG_ENABLE_DRIVER_CYW) && MG_ENABLE_DRIVER_CYW
+#if MG_ENABLE_TCPIP &&                                          \
+    ((defined(MG_ENABLE_DRIVER_CYW) && MG_ENABLE_DRIVER_CYW) || \
+     (defined(MG_ENABLE_DRIVER_CYW_SDIO) && MG_ENABLE_DRIVER_CYW_SDIO))
 
 struct mg_tcpip_spi_ {
   void *spi;              // Opaque SPI bus descriptor
@@ -20,7 +22,7 @@ struct mg_tcpip_driver_cyw_firmware {
 };
 
 struct mg_tcpip_driver_cyw_data {
-  struct mg_tcpip_spi_ *spi;
+  void *bus;
   struct mg_tcpip_driver_cyw_firmware *fw;
   char *ssid;
   char *pass;
