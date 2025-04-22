@@ -66,8 +66,8 @@ static uint8_t s_rxbuf[ETH_DESC_CNT][ETH_PKT_SIZE];
 static uint8_t s_txbuf[ETH_DESC_CNT][ETH_PKT_SIZE];
 static uint32_t s_rxdesc[ETH_DESC_CNT][ETH_DS] MG_8BYTE_ALIGNED;
 static uint32_t s_txdesc[ETH_DESC_CNT][ETH_DS] MG_8BYTE_ALIGNED;
-static uint8_t s_txno MG_8BYTE_ALIGNED;     // Current TX descriptor
-static uint8_t s_rxno MG_8BYTE_ALIGNED;     // Current RX descriptor
+static uint8_t s_txno MG_8BYTE_ALIGNED;  // Current TX descriptor
+static uint8_t s_rxno MG_8BYTE_ALIGNED;  // Current RX descriptor
 
 static struct mg_tcpip_if *s_ifp;  // MIP interface
 enum { MG_PHY_ADDR = 0, MG_PHYREG_BCR = 0, MG_PHYREG_BSR = 1 };
@@ -104,8 +104,7 @@ static bool mg_tcpip_driver_xmc7_init(struct mg_tcpip_if *ifp) {
   // set NSP change, ignore RX FCS, data bus width, clock rate
   // frame length 1536, full duplex, speed
   ETH0->NETWORK_CONFIG = MG_BIT(29) | MG_BIT(26) | MG_BIT(21) |
-                         ((cr & 7) << 18) | MG_BIT(8) | MG_BIT(4) | MG_BIT(1) |
-                         MG_BIT(0);
+                         ((cr & 7) << 18) | MG_BIT(8) | MG_BIT(1) | MG_BIT(0);
 
   // config DMA settings: Force TX burst, Discard on Error, set RX buffer size
   // to 1536, TX_PBUF_SIZE, RX_PBUF_SIZE, AMBA_BURST_LENGTH
@@ -181,7 +180,19 @@ static size_t mg_tcpip_driver_xmc7_tx(const void *buf, size_t len,
   return len;
 }
 
+static mg_tcpip_driver_xmc7_update_hash_table(struct mg_tcpip_if *ifp) {
+  // TODO(): read database, rebuild hash table
+  // set multicast MAC address
+  ETH0->SPEC_ADD2_BOTTOM = mcast_addr[3] << 24 | mcast_addr[2] << 16 |
+                           mcast_addr[1] << 8 | mcast_addr[0];
+  ETH0->SPEC_ADD2_TOP = mcast_addr[5] << 8 | mcast_addr[4];
+}
+
 static bool mg_tcpip_driver_xmc7_poll(struct mg_tcpip_if *ifp, bool s1) {
+  if (ifp->update_mac_hash_table) {
+    mg_tcpip_driver_xmc7_update_hash_table(ifp);
+    ifp->update_mac_hash_table = false;
+  }
   if (!s1) return false;
   struct mg_tcpip_driver_xmc7_data *d =
       (struct mg_tcpip_driver_xmc7_data *) ifp->driver_data;
@@ -220,7 +231,7 @@ static bool mg_tcpip_driver_xmc7_poll(struct mg_tcpip_if *ifp, bool s1) {
 void ETH_IRQHandler(void) {
   uint32_t irq_status = ETH0->INT_STATUS;
   if (irq_status & MG_BIT(1)) {
-    for (uint8_t i = 0; i < 10; i++) { // read as they arrive, but not forever
+    for (uint8_t i = 0; i < 10; i++) {  // read as they arrive, but not forever
       if ((s_rxdesc[s_rxno][0] & MG_BIT(0)) == 0) break;
       size_t len = s_rxdesc[s_rxno][1] & (MG_BIT(13) - 1);
       mg_tcpip_qwrite(s_rxbuf[s_rxno], len, s_ifp);

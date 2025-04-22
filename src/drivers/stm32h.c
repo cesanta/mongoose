@@ -2,7 +2,7 @@
 
 #if MG_ENABLE_TCPIP && (MG_ENABLE_DRIVER_STM32H || MG_ENABLE_DRIVER_MCXN)
 // STM32H: vendor modded single-queue Synopsys v4.2
-// MCXNx4x: dual-queue Synopsys v5.2
+// MCXNx4x: dual-queue Synopsys v5.2 with no hash table option
 // RT1170 ENET_QOS: quad-queue Synopsys v5.1
 struct synopsys_enet_qos {
   volatile uint32_t MACCR, MACECR, MACPFR, MACWTR, MACHT0R, MACHT1R,
@@ -102,7 +102,9 @@ static bool mg_tcpip_driver_stm32h_init(struct mg_tcpip_if *ifp) {
   ETH->DMASBMR |= MG_BIT(12);  // AAL NOTE(scaprile): is this actually needed
   ETH->MACIER = 0;  // Do not enable additional irq sources (reset value)
   ETH->MACTFCR = MG_BIT(7);  // Disable zero-quanta pause
-  // ETH->MACPFR = MG_BIT(31);  // Receive all
+#if !MG_ENABLE_DRIVER_MCXN
+  ETH->MACPFR = MG_BIT(10);  // Perfect filtering
+#endif
   struct mg_phy phy = {eth_read_phy, eth_write_phy};
   mg_phy_init(&phy, phy_addr, phy_conf);
   ETH->DMACRDLAR =
@@ -168,7 +170,25 @@ static size_t mg_tcpip_driver_stm32h_tx(const void *buf, size_t len,
   (void) ifp;
 }
 
+static mg_tcpip_driver_stm32h_update_hash_table(struct mg_tcpip_if *ifp) {
+#if MG_ENABLE_DRIVER_MCXN
+  ETH->MACPFR = MG_BIT(4);  // Pass Multicast (pass all multicast frames)
+#else
+  // TODO(): read database, rebuild hash table
+  // add mDNS / DNS-SD multicast address
+  ETH->MACA1LR = (uint32_t) mcast_addr[3] << 24 |
+                 (uint32_t) mcast_addr[2] << 16 |
+                 (uint32_t) mcast_addr[1] << 8 | (uint32_t) mcast_addr[0];
+  ETH->MACA1HR = (uint32_t) mcast_addr[5] << 8 | (uint32_t) mcast_addr[4];
+  ETH->MACA1HR |= MG_BIT(31);  // AE
+#endif
+}
+
 static bool mg_tcpip_driver_stm32h_poll(struct mg_tcpip_if *ifp, bool s1) {
+  if (ifp->update_mac_hash_table) {
+    mg_tcpip_driver_stm32h_update_hash_table(ifp);
+    ifp->update_mac_hash_table = false;
+  }
   if (!s1) return false;
   struct mg_tcpip_driver_stm32h_data *d =
       (struct mg_tcpip_driver_stm32h_data *) ifp->driver_data;

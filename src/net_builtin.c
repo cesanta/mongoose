@@ -283,13 +283,13 @@ static void tx_dhcp_request_sel(struct mg_tcpip_if *ifp, uint32_t ip_req,
   uint8_t extra = (uint8_t) ((ifp->enable_req_dns ? 1 : 0) +
                              (ifp->enable_req_sntp ? 1 : 0));
   size_t len = strlen(ifp->dhcp_name);
-  size_t olen = 21 + len + extra + 2 + 1;   // Total length of options
-  #define OPTS_MAXLEN (21 + sizeof(ifp->dhcp_name) + 2 + 2 + 1)
-  uint8_t opts[OPTS_MAXLEN]; // Allocate options (max size possible)
+  size_t olen = 21 + len + extra + 2 + 1;  // Total length of options
+#define OPTS_MAXLEN (21 + sizeof(ifp->dhcp_name) + 2 + 2 + 1)
+  uint8_t opts[OPTS_MAXLEN];  // Allocate options (max size possible)
   uint8_t *p = opts;
   assert(olen <= sizeof(opts));
   memset(opts, 0, sizeof(opts));
-  *p++ = 53, *p++ = 1, *p++ = 3;            // Type: DHCP request
+  *p++ = 53, *p++ = 1, *p++ = 3;                       // Type: DHCP request
   *p++ = 54, *p++ = 4, memcpy(p, &ip_srv, 4), p += 4;  // DHCP server ID
   *p++ = 50, *p++ = 4, memcpy(p, &ip_req, 4), p += 4;  // Requested IP
   *p++ = 12, *p++ = (uint8_t) (len & 255);             // DHCP host
@@ -1090,6 +1090,13 @@ static void mac_resolved(struct mg_connection *c) {
   }
 }
 
+static void ip4_mcastmac(uint8_t *mac, uint32_t *ip) {
+  uint8_t mcastp[3] = {0x01, 0x00, 0x5E};  // multicast group MAC
+  memcpy(mac, mcastp, 3);
+  memcpy(mac + 3, ((uint8_t *) ip) + 1, 3);  // 23 LSb
+  mac[3] &= 0x7F;
+}
+
 void mg_connect_resolved(struct mg_connection *c) {
   struct mg_tcpip_if *ifp = c->mgr->ifp;
   uint32_t rem_ip;
@@ -1115,10 +1122,7 @@ void mg_connect_resolved(struct mg_connection *c) {
     c->is_arplooking = 1;
   } else if ((*((uint8_t *) &rem_ip) & 0xE0) == 0xE0) {
     struct connstate *s = (struct connstate *) (c + 1);  // 224 to 239, E0 to EF
-    uint8_t mcastp[3] = {0x01, 0x00, 0x5E};              // multicast group
-    memcpy(s->mac, mcastp, 3);
-    memcpy(s->mac + 3, ((uint8_t *) &rem_ip) + 1, 3);  // 23 LSb
-    s->mac[3] &= 0x7F;
+    ip4_mcastmac(s->mac, &rem_ip);                       // multicast group
     mac_resolved(c);
   } else {
     struct connstate *s = (struct connstate *) (c + 1);
@@ -1129,6 +1133,10 @@ void mg_connect_resolved(struct mg_connection *c) {
 
 bool mg_open_listener(struct mg_connection *c, const char *url) {
   c->loc.port = mg_htons(mg_url_port(url));
+  if (!mg_aton(mg_url_host(url), &c->loc)) {
+    MG_ERROR(("invalid listening URL: %s", url));
+    return false;
+  }
   return true;
 }
 
@@ -1216,4 +1224,12 @@ bool mg_send(struct mg_connection *c, const void *buf, size_t len) {
   }
   return res;
 }
+
+uint8_t mcast_addr[6] = {0x01, 0x00, 0x5e, 0x00, 0x00, 0xfb};
+void mg_multicast_add(struct mg_connection *c, char *ip) {
+  (void) ip; // ip4_mcastmac(mcast_mac, &ip);
+  // TODO(): actual IP -> MAC; check database, update
+  c->mgr->ifp->update_mac_hash_table = true;  // mark dirty
+}
+
 #endif  // MG_ENABLE_TCPIP

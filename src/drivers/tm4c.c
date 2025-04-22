@@ -55,7 +55,8 @@ static uint32_t emac_read_phy(uint8_t addr, uint8_t reg) {
 static void emac_write_phy(uint8_t addr, uint8_t reg, uint32_t val) {
   EMAC->EMACMIIDATA = val;
   EMAC->EMACMIIADDR &= (0xf << 2);
-  EMAC->EMACMIIADDR |= ((uint32_t) addr << 11) | ((uint32_t) reg << 6) | MG_BIT(1);
+  EMAC->EMACMIIADDR |=
+      ((uint32_t) addr << 11) | ((uint32_t) reg << 6) | MG_BIT(1);
   EMAC->EMACMIIADDR |= MG_BIT(0);
   while (EMAC->EMACMIIADDR & MG_BIT(0)) tm4cspin(1);
 }
@@ -133,8 +134,8 @@ static bool mg_tcpip_driver_tm4c_init(struct mg_tcpip_if *ifp) {
 
   // Init RX descriptors
   for (int i = 0; i < ETH_DESC_CNT; i++) {
-    s_rxdesc[i][0] = MG_BIT(31);                            // Own
-    s_rxdesc[i][1] = sizeof(s_rxbuf[i]) | MG_BIT(14);       // 2nd address chained
+    s_rxdesc[i][0] = MG_BIT(31);                         // Own
+    s_rxdesc[i][1] = sizeof(s_rxbuf[i]) | MG_BIT(14);    // 2nd address chained
     s_rxdesc[i][2] = (uint32_t) (uintptr_t) s_rxbuf[i];  // Point to data buffer
     s_rxdesc[i][3] =
         (uint32_t) (uintptr_t) s_rxdesc[(i + 1) % ETH_DESC_CNT];  // Chain
@@ -148,8 +149,9 @@ static bool mg_tcpip_driver_tm4c_init(struct mg_tcpip_if *ifp) {
         (uint32_t) (uintptr_t) s_txdesc[(i + 1) % ETH_DESC_CNT];  // Chain
   }
 
-  EMAC->EMACDMABUSMOD |= MG_BIT(0);                            // Software reset
-  while ((EMAC->EMACDMABUSMOD & MG_BIT(0)) != 0) tm4cspin(1);  // Wait until done
+  EMAC->EMACDMABUSMOD |= MG_BIT(0);  // Software reset
+  while ((EMAC->EMACDMABUSMOD & MG_BIT(0)) != 0)
+    tm4cspin(1);  // Wait until done
 
   // Set MDC clock divider. If user told us the value, use it. Otherwise, guess
   int cr = (d == NULL || d->mdc_cr < 0) ? guess_mdc_cr() : d->mdc_cr;
@@ -157,25 +159,25 @@ static bool mg_tcpip_driver_tm4c_init(struct mg_tcpip_if *ifp) {
 
   // NOTE(cpq): we do not use extended descriptor bit 7, and do not use
   // hardware checksum. Therefore, descriptor size is 4, not 8
-  // EMAC->EMACDMABUSMOD = MG_BIT(13) | MG_BIT(16) | MG_BIT(22) | MG_BIT(23) | MG_BIT(25);
+  // EMAC->EMACDMABUSMOD = MG_BIT(13) | MG_BIT(16) | MG_BIT(22) | MG_BIT(23) |
+  // MG_BIT(25);
   EMAC->EMACIM = MG_BIT(3) | MG_BIT(9);  // Mask timestamp & PMT IT
-  EMAC->EMACFLOWCTL = MG_BIT(7);      // Disable zero-quanta pause
-  // EMAC->EMACFRAMEFLTR = MG_BIT(31);   // Receive all
+  EMAC->EMACFLOWCTL = MG_BIT(7);         // Disable zero-quanta pause
+  EMAC->EMACFRAMEFLTR = MG_BIT(10);      // Perfect filtering
   // EMAC->EMACPC defaults to internal PHY (EPHY) in MMI mode
   emac_write_phy(EPHY_ADDR, EPHYBMCR, MG_BIT(15));  // Reset internal PHY (EPHY)
   emac_write_phy(EPHY_ADDR, EPHYBMCR, MG_BIT(12));  // Set autonegotiation
   EMAC->EMACRXDLADDR = (uint32_t) (uintptr_t) s_rxdesc;  // RX descriptors
   EMAC->EMACTXDLADDR = (uint32_t) (uintptr_t) s_txdesc;  // TX descriptors
-  EMAC->EMACDMAIM = MG_BIT(6) | MG_BIT(16);                    // RIE, NIE
-  EMAC->EMACCFG = MG_BIT(2) | MG_BIT(3) | MG_BIT(11) | MG_BIT(14);   // RE, TE, Duplex, Fast
+  EMAC->EMACDMAIM = MG_BIT(6) | MG_BIT(16);              // RIE, NIE
+  EMAC->EMACCFG =
+      MG_BIT(2) | MG_BIT(3) | MG_BIT(11) | MG_BIT(14);  // RE, TE, Duplex, Fast
   EMAC->EMACDMAOPMODE =
       MG_BIT(1) | MG_BIT(13) | MG_BIT(21) | MG_BIT(25);  // SR, ST, TSF, RSF
   EMAC->EMACADDR0H = ((uint32_t) ifp->mac[5] << 8U) | ifp->mac[4];
   EMAC->EMACADDR0L = (uint32_t) (ifp->mac[3] << 24) |
                      ((uint32_t) ifp->mac[2] << 16) |
                      ((uint32_t) ifp->mac[1] << 8) | ifp->mac[0];
-  // NOTE(scaprile) There are 3 additional slots for filtering, disabled by
-  // default. This also applies to the STM32 driver (at least for F7)
   return true;
 }
 
@@ -200,12 +202,26 @@ static size_t mg_tcpip_driver_tm4c_tx(const void *buf, size_t len,
     if (++s_txno >= ETH_DESC_CNT) s_txno = 0;
   }
   EMAC->EMACDMARIS = MG_BIT(2) | MG_BIT(5);  // Clear any prior TU/UNF
-  EMAC->EMACTXPOLLD = 0;               // and resume
+  EMAC->EMACTXPOLLD = 0;                     // and resume
   return len;
   (void) ifp;
 }
 
+static mg_tcpip_driver_tm4c_update_hash_table(struct mg_tcpip_if *ifp) {
+  // TODO(): read database, rebuild hash table
+  // add mDNS / DNS-SD multicast address
+  EMAC->EMACADDR1L = (uint32_t) mcast_addr[3] << 24 |
+                     (uint32_t) mcast_addr[2] << 16 |
+                     (uint32_t) mcast_addr[1] << 8 | (uint32_t) mcast_addr[0];
+  EMAC->EMACADDR1H = (uint32_t) mcast_addr[5] << 8 | (uint32_t) mcast_addr[4];
+  EMAC->EMACADDR1H |= MG_BIT(31);  // AE
+}
+
 static bool mg_tcpip_driver_tm4c_poll(struct mg_tcpip_if *ifp, bool s1) {
+  if (ifp->update_mac_hash_table) {
+    mg_tcpip_driver_tm4c_update_hash_table(ifp);
+    ifp->update_mac_hash_table = false;
+  }
   if (!s1) return false;
   uint32_t bmsr = emac_read_phy(EPHY_ADDR, EPHYBMSR);
   bool up = (bmsr & MG_BIT(2)) ? 1 : 0;
@@ -214,9 +230,10 @@ static bool mg_tcpip_driver_tm4c_poll(struct mg_tcpip_if *ifp, bool s1) {
     // tmp = reg with flags set to the most likely situation: 100M full-duplex
     // if(link is slow or half) set flags otherwise
     // reg = tmp
-    uint32_t emaccfg = EMAC->EMACCFG | MG_BIT(14) | MG_BIT(11);  // 100M, Full-duplex
-    if (sts & MG_BIT(1)) emaccfg &= ~MG_BIT(14);                 // 10M
-    if ((sts & MG_BIT(2)) == 0) emaccfg &= ~MG_BIT(11);          // Half-duplex
+    uint32_t emaccfg =
+        EMAC->EMACCFG | MG_BIT(14) | MG_BIT(11);         // 100M, Full-duplex
+    if (sts & MG_BIT(1)) emaccfg &= ~MG_BIT(14);         // 10M
+    if ((sts & MG_BIT(2)) == 0) emaccfg &= ~MG_BIT(11);  // Half-duplex
     EMAC->EMACCFG = emaccfg;  // IRQ handler does not fiddle with this register
     MG_DEBUG(("Link is %uM %s-duplex", emaccfg & MG_BIT(14) ? 100 : 10,
               emaccfg & MG_BIT(11) ? "full" : "half"));
@@ -227,11 +244,12 @@ static bool mg_tcpip_driver_tm4c_poll(struct mg_tcpip_if *ifp, bool s1) {
 void EMAC0_IRQHandler(void);
 static uint32_t s_rxno;
 void EMAC0_IRQHandler(void) {
-  if (EMAC->EMACDMARIS & MG_BIT(6)) {        // Frame received, loop
+  if (EMAC->EMACDMARIS & MG_BIT(6)) {           // Frame received, loop
     EMAC->EMACDMARIS = MG_BIT(16) | MG_BIT(6);  // Clear flag
-    for (uint32_t i = 0; i < 10; i++) {   // read as they arrive but not forever
+    for (uint32_t i = 0; i < 10; i++) {  // read as they arrive but not forever
       if (s_rxdesc[s_rxno][0] & MG_BIT(31)) break;  // exit when done
-      if (((s_rxdesc[s_rxno][0] & (MG_BIT(8) | MG_BIT(9))) == (MG_BIT(8) | MG_BIT(9))) &&
+      if (((s_rxdesc[s_rxno][0] & (MG_BIT(8) | MG_BIT(9))) ==
+           (MG_BIT(8) | MG_BIT(9))) &&
           !(s_rxdesc[s_rxno][0] & MG_BIT(15))) {  // skip partial/errored frames
         uint32_t len = ((s_rxdesc[s_rxno][0] >> 16) & (MG_BIT(14) - 1));
         //  printf("%lx %lu %lx %.8lx\n", s_rxno, len, s_rxdesc[s_rxno][0],
@@ -243,7 +261,7 @@ void EMAC0_IRQHandler(void) {
     }
   }
   EMAC->EMACDMARIS = MG_BIT(7);  // Clear possible RU while processing
-  EMAC->EMACRXPOLLD = 0;      // and resume RX
+  EMAC->EMACRXPOLLD = 0;         // and resume RX
 }
 
 struct mg_tcpip_driver mg_tcpip_driver_tm4c = {mg_tcpip_driver_tm4c_init,

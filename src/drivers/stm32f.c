@@ -136,7 +136,7 @@ static bool mg_tcpip_driver_stm32f_init(struct mg_tcpip_if *ifp) {
   // MG_BIT(25);
   ETH->MACIMR = MG_BIT(3) | MG_BIT(9);  // Mask timestamp & PMT IT
   ETH->MACFCR = MG_BIT(7);              // Disable zero quarta pause
-  // ETH->MACFFR = MG_BIT(31);                            // Receive all
+  ETH->MACFFR = MG_BIT(10);             // Perfect filtering
   struct mg_phy phy = {eth_read_phy, eth_write_phy};
   mg_phy_init(&phy, phy_addr, MG_PHY_CLOCKS_MAC);
   ETH->DMARDLAR = (uint32_t) (uintptr_t) s_rxdesc;  // RX descriptors
@@ -178,7 +178,20 @@ static size_t mg_tcpip_driver_stm32f_tx(const void *buf, size_t len,
   return len;
 }
 
+static mg_tcpip_driver_stm32f_update_hash_table(struct mg_tcpip_if *ifp) {
+  // TODO(): read database, rebuild hash table
+  ETH->MACA1LR = (uint32_t) mcast_addr[3] << 24 |
+                 (uint32_t) mcast_addr[2] << 16 |
+                 (uint32_t) mcast_addr[1] << 8 | (uint32_t) mcast_addr[0];
+  ETH->MACA1HR = (uint32_t) mcast_addr[5] << 8 | (uint32_t) mcast_addr[4];
+  ETH->MACA1HR |= MG_BIT(31);  // AE
+}
+
 static bool mg_tcpip_driver_stm32f_poll(struct mg_tcpip_if *ifp, bool s1) {
+  if (ifp->update_mac_hash_table) {
+    mg_tcpip_driver_stm32f_update_hash_table(ifp);
+    ifp->update_mac_hash_table = false;
+  }
   if (!s1) return false;
   struct mg_tcpip_driver_stm32f_data *d =
       (struct mg_tcpip_driver_stm32f_data *) ifp->driver_data;

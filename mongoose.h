@@ -499,6 +499,20 @@ typedef enum { false = 0, true = 1 } bool;
 #pragma comment(lib, "advapi32.lib")
 #endif
 
+#if defined(_MSC_VER) && _MSC_VER <= 1200
+  #ifndef IPPROTO_IP
+    #define IPPROTO_IP 0
+  #endif
+
+  #ifndef IP_ADD_MEMBERSHIP
+    struct ip_mreq {
+        struct in_addr imr_multiaddr;
+        struct in_addr imr_interface;
+    };
+    #define IP_ADD_MEMBERSHIP  12
+  #endif
+#endif
+
 // Protect from calls like std::snprintf in app code
 // See https://github.com/cesanta/mongoose/issues/1047
 #ifndef __cplusplus
@@ -2655,6 +2669,8 @@ void mg_resolve_cancel(struct mg_connection *);
 bool mg_dns_parse(const uint8_t *buf, size_t len, struct mg_dns_message *);
 size_t mg_dns_parse_rr(const uint8_t *buf, size_t len, size_t ofs,
                        bool is_question, struct mg_dns_rr *);
+                       
+struct mg_connection *mg_mdns_listen(struct mg_mgr *mgr, char *name);
 
 
 
@@ -2803,6 +2819,8 @@ bool mg_wifi_ap_start(char *ssid, char *pass, unsigned int channel);
 bool mg_wifi_ap_stop(void);
 
 
+#if MG_ENABLE_TCPIP
+
 
 
 
@@ -2833,7 +2851,6 @@ enum {
   MG_TCPIP_EV_USER              // Starting ID for user events
 };
 
-
 // Network interface
 struct mg_tcpip_if {
   uint8_t mac[6];                  // MAC address. Must be set to a valid MAC
@@ -2846,6 +2863,7 @@ struct mg_tcpip_if {
   bool enable_req_sntp;            // DCHP client requests SNTP server
   bool enable_crc32_check;         // Do a CRC check on RX frames and strip it
   bool enable_mac_check;           // Do a MAC check on RX frames
+  bool update_mac_hash_table;      // Signal drivers to update MAC controller
   struct mg_tcpip_driver *driver;  // Low level driver
   void *driver_data;               // Driver-specific data
   mg_tcpip_event_handler_t fn;     // User-specified event handler function
@@ -2902,6 +2920,8 @@ struct mg_tcpip_spi {
   void (*end)(void *);              // SPI end: slave select high
   uint8_t (*txn)(void *, uint8_t);  // SPI transaction: write 1 byte, read reply
 };
+
+#endif
 
 
 

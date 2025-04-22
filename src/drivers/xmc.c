@@ -4,34 +4,34 @@
 
 struct ETH_GLOBAL_TypeDef {
   volatile uint32_t MAC_CONFIGURATION, MAC_FRAME_FILTER, HASH_TABLE_HIGH,
-  HASH_TABLE_LOW, GMII_ADDRESS, GMII_DATA, FLOW_CONTROL, VLAN_TAG, VERSION,
-  DEBUG, REMOTE_WAKE_UP_FRAME_FILTER, PMT_CONTROL_STATUS, RESERVED[2],
-  INTERRUPT_STATUS, INTERRUPT_MASK, MAC_ADDRESS0_HIGH, MAC_ADDRESS0_LOW,
-  MAC_ADDRESS1_HIGH, MAC_ADDRESS1_LOW, MAC_ADDRESS2_HIGH, MAC_ADDRESS2_LOW,
-  MAC_ADDRESS3_HIGH, MAC_ADDRESS3_LOW, RESERVED1[40], MMC_CONTROL,
-  MMC_RECEIVE_INTERRUPT, MMC_TRANSMIT_INTERRUPT, MMC_RECEIVE_INTERRUPT_MASK,
-  MMC_TRANSMIT_INTERRUPT_MASK, TX_STATISTICS[26], RESERVED2,
-  RX_STATISTICS_1[26], RESERVED3[6], MMC_IPC_RECEIVE_INTERRUPT_MASK,
-  RESERVED4, MMC_IPC_RECEIVE_INTERRUPT, RESERVED5, RX_STATISTICS_2[30],
-  RESERVED7[286], TIMESTAMP_CONTROL, SUB_SECOND_INCREMENT,
-  SYSTEM_TIME_SECONDS, SYSTEM_TIME_NANOSECONDS,
-  SYSTEM_TIME_SECONDS_UPDATE, SYSTEM_TIME_NANOSECONDS_UPDATE,
-  TIMESTAMP_ADDEND, TARGET_TIME_SECONDS, TARGET_TIME_NANOSECONDS,
-  SYSTEM_TIME_HIGHER_WORD_SECONDS, TIMESTAMP_STATUS,
-  PPS_CONTROL, RESERVED8[564], BUS_MODE, TRANSMIT_POLL_DEMAND,
-  RECEIVE_POLL_DEMAND, RECEIVE_DESCRIPTOR_LIST_ADDRESS,
-  TRANSMIT_DESCRIPTOR_LIST_ADDRESS, STATUS, OPERATION_MODE,
-  INTERRUPT_ENABLE, MISSED_FRAME_AND_BUFFER_OVERFLOW_COUNTER,
-  RECEIVE_INTERRUPT_WATCHDOG_TIMER, RESERVED9, AHB_STATUS,
-  RESERVED10[6], CURRENT_HOST_TRANSMIT_DESCRIPTOR,
-  CURRENT_HOST_RECEIVE_DESCRIPTOR, CURRENT_HOST_TRANSMIT_BUFFER_ADDRESS,
-  CURRENT_HOST_RECEIVE_BUFFER_ADDRESS, HW_FEATURE;
+      HASH_TABLE_LOW, GMII_ADDRESS, GMII_DATA, FLOW_CONTROL, VLAN_TAG, VERSION,
+      DEBUG, REMOTE_WAKE_UP_FRAME_FILTER, PMT_CONTROL_STATUS, RESERVED[2],
+      INTERRUPT_STATUS, INTERRUPT_MASK, MAC_ADDRESS0_HIGH, MAC_ADDRESS0_LOW,
+      MAC_ADDRESS1_HIGH, MAC_ADDRESS1_LOW, MAC_ADDRESS2_HIGH, MAC_ADDRESS2_LOW,
+      MAC_ADDRESS3_HIGH, MAC_ADDRESS3_LOW, RESERVED1[40], MMC_CONTROL,
+      MMC_RECEIVE_INTERRUPT, MMC_TRANSMIT_INTERRUPT, MMC_RECEIVE_INTERRUPT_MASK,
+      MMC_TRANSMIT_INTERRUPT_MASK, TX_STATISTICS[26], RESERVED2,
+      RX_STATISTICS_1[26], RESERVED3[6], MMC_IPC_RECEIVE_INTERRUPT_MASK,
+      RESERVED4, MMC_IPC_RECEIVE_INTERRUPT, RESERVED5, RX_STATISTICS_2[30],
+      RESERVED7[286], TIMESTAMP_CONTROL, SUB_SECOND_INCREMENT,
+      SYSTEM_TIME_SECONDS, SYSTEM_TIME_NANOSECONDS, SYSTEM_TIME_SECONDS_UPDATE,
+      SYSTEM_TIME_NANOSECONDS_UPDATE, TIMESTAMP_ADDEND, TARGET_TIME_SECONDS,
+      TARGET_TIME_NANOSECONDS, SYSTEM_TIME_HIGHER_WORD_SECONDS,
+      TIMESTAMP_STATUS, PPS_CONTROL, RESERVED8[564], BUS_MODE,
+      TRANSMIT_POLL_DEMAND, RECEIVE_POLL_DEMAND,
+      RECEIVE_DESCRIPTOR_LIST_ADDRESS, TRANSMIT_DESCRIPTOR_LIST_ADDRESS, STATUS,
+      OPERATION_MODE, INTERRUPT_ENABLE,
+      MISSED_FRAME_AND_BUFFER_OVERFLOW_COUNTER,
+      RECEIVE_INTERRUPT_WATCHDOG_TIMER, RESERVED9, AHB_STATUS, RESERVED10[6],
+      CURRENT_HOST_TRANSMIT_DESCRIPTOR, CURRENT_HOST_RECEIVE_DESCRIPTOR,
+      CURRENT_HOST_TRANSMIT_BUFFER_ADDRESS, CURRENT_HOST_RECEIVE_BUFFER_ADDRESS,
+      HW_FEATURE;
 };
 
 #undef ETH0
-#define ETH0  ((struct ETH_GLOBAL_TypeDef*) 0x5000C000UL)
+#define ETH0 ((struct ETH_GLOBAL_TypeDef *) 0x5000C000UL)
 
-#define ETH_PKT_SIZE 1536 // Max frame size
+#define ETH_PKT_SIZE 1536  // Max frame size
 #define ETH_DESC_CNT 4     // Descriptors count
 #define ETH_DS 4           // Descriptor size (words)
 
@@ -43,27 +43,27 @@ struct ETH_GLOBAL_TypeDef {
 
 static uint8_t s_rxbuf[ETH_DESC_CNT][ETH_PKT_SIZE] ETH_RAM_SECTION;
 static uint8_t s_txbuf[ETH_DESC_CNT][ETH_PKT_SIZE] ETH_RAM_SECTION;
-static uint32_t s_rxdesc[ETH_DESC_CNT][ETH_DS] ETH_RAM_SECTION;  // RX descriptors
-static uint32_t s_txdesc[ETH_DESC_CNT][ETH_DS] ETH_RAM_SECTION;  // TX descriptors
-static uint8_t s_txno;                           // Current TX descriptor
-static uint8_t s_rxno;                           // Current RX descriptor
+static uint32_t s_rxdesc[ETH_DESC_CNT]
+                        [ETH_DS] ETH_RAM_SECTION;  // RX descriptors
+static uint32_t s_txdesc[ETH_DESC_CNT]
+                        [ETH_DS] ETH_RAM_SECTION;  // TX descriptors
+static uint8_t s_txno;                             // Current TX descriptor
+static uint8_t s_rxno;                             // Current RX descriptor
 
 static struct mg_tcpip_if *s_ifp;  // MIP interface
 enum { MG_PHY_ADDR = 0, MG_PHYREG_BCR = 0, MG_PHYREG_BSR = 1 };
 
 static uint16_t eth_read_phy(uint8_t addr, uint8_t reg) {
-  ETH0->GMII_ADDRESS = (ETH0->GMII_ADDRESS & 0x3c) |
-                        ((uint32_t)addr << 11) |
-                        ((uint32_t)reg << 6) | 1;
+  ETH0->GMII_ADDRESS = (ETH0->GMII_ADDRESS & 0x3c) | ((uint32_t) addr << 11) |
+                       ((uint32_t) reg << 6) | 1;
   while ((ETH0->GMII_ADDRESS & 1) != 0) (void) 0;
-  return (uint16_t)(ETH0->GMII_DATA & 0xffff);
+  return (uint16_t) (ETH0->GMII_DATA & 0xffff);
 }
 
 static void eth_write_phy(uint8_t addr, uint8_t reg, uint16_t val) {
-  ETH0->GMII_DATA  = val;
-  ETH0->GMII_ADDRESS = (ETH0->GMII_ADDRESS & 0x3c) |
-                        ((uint32_t)addr << 11) |
-                        ((uint32_t)reg << 6) | 3;
+  ETH0->GMII_DATA = val;
+  ETH0->GMII_ADDRESS = (ETH0->GMII_ADDRESS & 0x3c) | ((uint32_t) addr << 11) |
+                       ((uint32_t) reg << 6) | 3;
   while ((ETH0->GMII_ADDRESS & 1) != 0) (void) 0;
 }
 
@@ -98,22 +98,22 @@ static bool mg_tcpip_driver_xmc_init(struct mg_tcpip_if *ifp) {
 
   // set the MAC address
   ETH0->MAC_ADDRESS0_HIGH = MG_U32(0, 0, ifp->mac[5], ifp->mac[4]);
-  ETH0->MAC_ADDRESS0_LOW = 
-        MG_U32(ifp->mac[3], ifp->mac[2], ifp->mac[1], ifp->mac[0]);
+  ETH0->MAC_ADDRESS0_LOW =
+      MG_U32(ifp->mac[3], ifp->mac[2], ifp->mac[1], ifp->mac[0]);
 
   // Configure the receive filter
-  ETH0->MAC_FRAME_FILTER = MG_BIT(10) | MG_BIT(2); // HFP, HMC
+  ETH0->MAC_FRAME_FILTER = MG_BIT(10);  // Perfect filter
   // Disable flow control
   ETH0->FLOW_CONTROL = 0;
   // Enable store and forward mode
-  ETH0->OPERATION_MODE = MG_BIT(25) | MG_BIT(21); // RSF, TSF
+  ETH0->OPERATION_MODE = MG_BIT(25) | MG_BIT(21);  // RSF, TSF
 
   // Configure DMA bus mode (AAL, USP, RPBL, PBL)
-  ETH0->BUS_MODE = MG_BIT(25) | MG_BIT(23) | (32 << 17) |  (32 << 8);
+  ETH0->BUS_MODE = MG_BIT(25) | MG_BIT(23) | (32 << 17) | (32 << 8);
 
   // init RX descriptors
   for (int i = 0; i < ETH_DESC_CNT; i++) {
-    s_rxdesc[i][0] = MG_BIT(31); // OWN descriptor
+    s_rxdesc[i][0] = MG_BIT(31);  // OWN descriptor
     s_rxdesc[i][1] = MG_BIT(14) | ETH_PKT_SIZE;
     s_rxdesc[i][2] = (uint32_t) s_rxbuf[i];
     if (i == ETH_DESC_CNT - 1) {
@@ -143,9 +143,9 @@ static bool mg_tcpip_driver_xmc_init(struct mg_tcpip_if *ifp) {
   ETH0->MMC_TRANSMIT_INTERRUPT_MASK = 0xFFFFFFFF;
   ETH0->MMC_RECEIVE_INTERRUPT_MASK = 0xFFFFFFFF;
   ETH0->MMC_IPC_RECEIVE_INTERRUPT_MASK = 0xFFFFFFFF;
-  ETH0->INTERRUPT_MASK = MG_BIT(9) | MG_BIT(3); // TSIM, PMTIM
+  ETH0->INTERRUPT_MASK = MG_BIT(9) | MG_BIT(3);  // TSIM, PMTIM
 
-  //Enable interrupts (NIE, RIE, TIE)
+  // Enable interrupts (NIE, RIE, TIE)
   ETH0->INTERRUPT_ENABLE = MG_BIT(16) | MG_BIT(6) | MG_BIT(0);
 
   // Enable MAC transmission and reception (TE, RE)
@@ -156,7 +156,7 @@ static bool mg_tcpip_driver_xmc_init(struct mg_tcpip_if *ifp) {
 }
 
 static size_t mg_tcpip_driver_xmc_tx(const void *buf, size_t len,
-                                        struct mg_tcpip_if *ifp) {
+                                     struct mg_tcpip_if *ifp) {
   if (len > sizeof(s_txbuf[s_txno])) {
     MG_ERROR(("Frame too big, %ld", (long) len));
     len = 0;  // Frame is too big
@@ -174,12 +174,25 @@ static size_t mg_tcpip_driver_xmc_tx(const void *buf, size_t len,
   }
 
   // Resume processing
-  ETH0->STATUS = MG_BIT(2); // clear Transmit unavailable
+  ETH0->STATUS = MG_BIT(2);  // clear Transmit unavailable
   ETH0->TRANSMIT_POLL_DEMAND = 0;
   return len;
 }
 
+static mg_tcpip_driver_xmc_update_hash_table(struct mg_tcpip_if *ifp) {
+  // TODO(): read database, rebuild hash table
+  // set the multicast address filter
+  ETH0->MAC_ADDRESS1_HIGH =
+      MG_U32(0, 0, mcast_addr[5], mcast_addr[4]) | MG_BIT(31);
+  ETH0->MAC_ADDRESS1_LOW =
+      MG_U32(mcast_addr[3], mcast_addr[2], mcast_addr[1], mcast_addr[0]);
+}
+
 static bool mg_tcpip_driver_xmc_poll(struct mg_tcpip_if *ifp, bool s1) {
+  if (ifp->update_mac_hash_table) {
+    mg_tcpip_driver_xmc_update_hash_table(ifp);
+    ifp->update_mac_hash_table = false;
+  }
   if (!s1) return false;
   struct mg_tcpip_driver_xmc_data *d =
       (struct mg_tcpip_driver_xmc_data *) ifp->driver_data;
@@ -200,13 +213,13 @@ void ETH0_0_IRQHandler(void) {
 
   // check if a frame was received
   if (irq_status & MG_BIT(6)) {
-    for (uint8_t i = 0; i < 10; i++) { // read as they arrive, but not forever
+    for (uint8_t i = 0; i < 10; i++) {  // read as they arrive, but not forever
       if (s_rxdesc[s_rxno][0] & MG_BIT(31)) break;
       size_t len = (s_rxdesc[s_rxno][0] & 0x3fff0000) >> 16;
       mg_tcpip_qwrite(s_rxbuf[s_rxno], len, s_ifp);
-      s_rxdesc[s_rxno][0] = MG_BIT(31);   // OWN bit: handle control to DMA
+      s_rxdesc[s_rxno][0] = MG_BIT(31);  // OWN bit: handle control to DMA
       // Resume processing
-      ETH0->STATUS = MG_BIT(7) | MG_BIT(6); // clear RU and RI
+      ETH0->STATUS = MG_BIT(7) | MG_BIT(6);  // clear RU and RI
       ETH0->RECEIVE_POLL_DEMAND = 0;
       if (++s_rxno >= ETH_DESC_CNT) s_rxno = 0;
     }
@@ -224,7 +237,7 @@ void ETH0_0_IRQHandler(void) {
   }
 }
 
-struct mg_tcpip_driver mg_tcpip_driver_xmc = {
-    mg_tcpip_driver_xmc_init, mg_tcpip_driver_xmc_tx, NULL,
-    mg_tcpip_driver_xmc_poll};
+struct mg_tcpip_driver mg_tcpip_driver_xmc = {mg_tcpip_driver_xmc_init,
+                                              mg_tcpip_driver_xmc_tx, NULL,
+                                              mg_tcpip_driver_xmc_poll};
 #endif
