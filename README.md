@@ -175,6 +175,7 @@ We take security seriously:
 
 Technical guides and deep dives into embedded web servers, WebUI integration and embedded networking technologies:
 - [Embedded Web Server: A Comprehensive Guide for Modern Connected Devices](https://mongoose.ws/articles/embedded-web-server-a-comprehensive-guide-for-modern-connected-devices/)
+- [Building Embedded Web Device Dashboards](https://mongoose.ws/articles/building-embedded-web-device-dashboard/)
 
 
 ## Contributions
