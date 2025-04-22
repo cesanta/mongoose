@@ -291,7 +291,7 @@ static void read_conn(struct mg_connection *c) {
         if (c->rtls.len == 0 || m < 0) {
           // Close only when we have fully drained both rtls and TLS buffers
           c->is_closing = 1;  // or there's nothing we can do about it.
-          m = MG_IO_ERR;
+          if (m < 0) m = MG_IO_ERR; // but return last record data, see #3104
         } else { // see #2885
           // TLS buffer is capped to max record size, even though, there can
           // be more than one record, give TLS a chance to process them.
