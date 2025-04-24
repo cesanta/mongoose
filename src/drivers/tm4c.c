@@ -207,7 +207,7 @@ static size_t mg_tcpip_driver_tm4c_tx(const void *buf, size_t len,
   (void) ifp;
 }
 
-static mg_tcpip_driver_tm4c_update_hash_table(struct mg_tcpip_if *ifp) {
+static void mg_tcpip_driver_tm4c_update_hash_table(struct mg_tcpip_if *ifp) {
   // TODO(): read database, rebuild hash table
   // add mDNS / DNS-SD multicast address
   EMAC->EMACADDR1L = (uint32_t) mcast_addr[3] << 24 |
@@ -215,6 +215,7 @@ static mg_tcpip_driver_tm4c_update_hash_table(struct mg_tcpip_if *ifp) {
                      (uint32_t) mcast_addr[1] << 8 | (uint32_t) mcast_addr[0];
   EMAC->EMACADDR1H = (uint32_t) mcast_addr[5] << 8 | (uint32_t) mcast_addr[4];
   EMAC->EMACADDR1H |= MG_BIT(31);  // AE
+  (void) ifp;
 }
 
 static bool mg_tcpip_driver_tm4c_poll(struct mg_tcpip_if *ifp, bool s1) {

@@ -179,13 +179,14 @@ static size_t mg_tcpip_driver_xmc_tx(const void *buf, size_t len,
   return len;
 }
 
-static mg_tcpip_driver_xmc_update_hash_table(struct mg_tcpip_if *ifp) {
+static void mg_tcpip_driver_xmc_update_hash_table(struct mg_tcpip_if *ifp) {
   // TODO(): read database, rebuild hash table
   // set the multicast address filter
   ETH0->MAC_ADDRESS1_HIGH =
       MG_U32(0, 0, mcast_addr[5], mcast_addr[4]) | MG_BIT(31);
   ETH0->MAC_ADDRESS1_LOW =
       MG_U32(mcast_addr[3], mcast_addr[2], mcast_addr[1], mcast_addr[0]);
+  (void) ifp;
 }
 
 static bool mg_tcpip_driver_xmc_poll(struct mg_tcpip_if *ifp, bool s1) {

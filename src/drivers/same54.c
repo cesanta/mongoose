@@ -165,7 +165,7 @@ static size_t mg_tcpip_driver_same54_tx(const void *buf, size_t len,
   return len;
 }
 
-static mg_tcpip_driver_same54_update_hash_table(struct mg_tcpip_if *ifp) {
+static void mg_tcpip_driver_same54_update_hash_table(struct mg_tcpip_if *ifp) {
   // TODO(): read database, rebuild hash table
   // Setting Hash Index for 01:00:5e:00:00:fb (multicast)
   // 24.6.9 Hash addressing
@@ -173,6 +173,7 @@ static mg_tcpip_driver_same54_update_hash_table(struct mg_tcpip_if *ifp) {
   // HRT register must be set
   GMAC_REGS->GMAC_HRT = MG_BIT(23);
   GMAC_REGS->GMAC_NCFGR |= MG_BIT(6); // enable multicast hash filtering
+  (void) ifp;
 }
 
 static bool mg_tcpip_driver_same54_poll(struct mg_tcpip_if *ifp, bool s1) {

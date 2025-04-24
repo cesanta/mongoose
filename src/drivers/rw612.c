@@ -126,9 +126,10 @@ static size_t mg_tcpip_driver_rw612_tx(const void *buf, size_t len,
 }
 
 
-static mg_tcpip_driver_rw612_update_hash_table(struct mg_tcpip_if *ifp) {
+static void mg_tcpip_driver_rw612_update_hash_table(struct mg_tcpip_if *ifp) {
   // TODO(): read database, rebuild hash table
   ENET->GAUR = MG_BIT(1); // see imxrt, it reduces to this for mDNS
+  (void) ifp;
 }
 
 static bool mg_tcpip_driver_rw612_poll(struct mg_tcpip_if *ifp, bool s1) {

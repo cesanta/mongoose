@@ -147,7 +147,7 @@ static size_t mg_tcpip_driver_imxrt_tx(const void *buf, size_t len,
   return len;
 }
 
-static mg_tcpip_driver_imxrt_update_hash_table(struct mg_tcpip_if *ifp) {
+static void mg_tcpip_driver_imxrt_update_hash_table(struct mg_tcpip_if *ifp) {
   // TODO(): read database, rebuild hash table
   // RM 37.3.4.3.2
   uint32_t hash_table[2] = {0, 0};
@@ -156,6 +156,7 @@ static mg_tcpip_driver_imxrt_update_hash_table(struct mg_tcpip_if *ifp) {
   hash_table[1] = MG_BIT(1); // above reduces to this for mDNS addr
   ENET->GAUR = hash_table[1];
   ENET->GALR = hash_table[0];
+  (void) ifp;
 }
 
 static bool mg_tcpip_driver_imxrt_poll(struct mg_tcpip_if *ifp, bool s1) {

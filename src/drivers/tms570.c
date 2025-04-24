@@ -170,7 +170,7 @@ static size_t mg_tcpip_driver_tms570_tx(const void *buf, size_t len,
   (void) ifp;
 }
 
-static mg_tcpip_driver_tms570_update_hash_table(struct mg_tcpip_if *ifp) {
+static void mg_tcpip_driver_tms570_update_hash_table(struct mg_tcpip_if *ifp) {
   // TODO(): read database, rebuild hash table
   // Setting Hash Index for 01:00:5e:00:00:fb (multicast)
   // using TMS570 XOR method (32.5.37).
@@ -178,6 +178,7 @@ static mg_tcpip_driver_tms570_update_hash_table(struct mg_tcpip_if *ifp) {
   // HASH2 register must be set
   EMAC->MACHASH2 = MG_BIT(23);
   EMAC->RXMBPENABLE = MG_BIT(5); // enable hash filtering
+  (void) ifp;
 }
 
 static bool mg_tcpip_driver_tms570_poll(struct mg_tcpip_if *ifp, bool s1) {

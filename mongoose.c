@@ -21278,7 +21278,7 @@ static size_t mg_tcpip_driver_imxrt_tx(const void *buf, size_t len,
   return len;
 }
 
-static mg_tcpip_driver_imxrt_update_hash_table(struct mg_tcpip_if *ifp) {
+static void mg_tcpip_driver_imxrt_update_hash_table(struct mg_tcpip_if *ifp) {
   // TODO(): read database, rebuild hash table
   // RM 37.3.4.3.2
   uint32_t hash_table[2] = {0, 0};
@@ -21287,6 +21287,7 @@ static mg_tcpip_driver_imxrt_update_hash_table(struct mg_tcpip_if *ifp) {
   hash_table[1] = MG_BIT(1); // above reduces to this for mDNS addr
   ENET->GAUR = hash_table[1];
   ENET->GALR = hash_table[0];
+  (void) ifp;
 }
 
 static bool mg_tcpip_driver_imxrt_poll(struct mg_tcpip_if *ifp, bool s1) {
@@ -22379,9 +22380,10 @@ static size_t mg_tcpip_driver_rw612_tx(const void *buf, size_t len,
 }
 
 
-static mg_tcpip_driver_rw612_update_hash_table(struct mg_tcpip_if *ifp) {
+static void mg_tcpip_driver_rw612_update_hash_table(struct mg_tcpip_if *ifp) {
   // TODO(): read database, rebuild hash table
   ENET->GAUR = MG_BIT(1); // see imxrt, it reduces to this for mDNS
+  (void) ifp;
 }
 
 static bool mg_tcpip_driver_rw612_poll(struct mg_tcpip_if *ifp, bool s1) {
@@ -22618,7 +22620,7 @@ static size_t mg_tcpip_driver_same54_tx(const void *buf, size_t len,
   return len;
 }
 
-static mg_tcpip_driver_same54_update_hash_table(struct mg_tcpip_if *ifp) {
+static void mg_tcpip_driver_same54_update_hash_table(struct mg_tcpip_if *ifp) {
   // TODO(): read database, rebuild hash table
   // Setting Hash Index for 01:00:5e:00:00:fb (multicast)
   // 24.6.9 Hash addressing
@@ -22626,6 +22628,7 @@ static mg_tcpip_driver_same54_update_hash_table(struct mg_tcpip_if *ifp) {
   // HRT register must be set
   GMAC_REGS->GMAC_HRT = MG_BIT(23);
   GMAC_REGS->GMAC_NCFGR |= MG_BIT(6); // enable multicast hash filtering
+  (void) ifp;
 }
 
 static bool mg_tcpip_driver_same54_poll(struct mg_tcpip_if *ifp, bool s1) {
@@ -22866,13 +22869,14 @@ static size_t mg_tcpip_driver_stm32f_tx(const void *buf, size_t len,
   return len;
 }
 
-static mg_tcpip_driver_stm32f_update_hash_table(struct mg_tcpip_if *ifp) {
+static void mg_tcpip_driver_stm32f_update_hash_table(struct mg_tcpip_if *ifp) {
   // TODO(): read database, rebuild hash table
   ETH->MACA1LR = (uint32_t) mcast_addr[3] << 24 |
                  (uint32_t) mcast_addr[2] << 16 |
                  (uint32_t) mcast_addr[1] << 8 | (uint32_t) mcast_addr[0];
   ETH->MACA1HR = (uint32_t) mcast_addr[5] << 8 | (uint32_t) mcast_addr[4];
   ETH->MACA1HR |= MG_BIT(31);  // AE
+  (void) ifp;
 }
 
 static bool mg_tcpip_driver_stm32f_poll(struct mg_tcpip_if *ifp, bool s1) {
@@ -23109,7 +23113,7 @@ static size_t mg_tcpip_driver_stm32h_tx(const void *buf, size_t len,
   (void) ifp;
 }
 
-static mg_tcpip_driver_stm32h_update_hash_table(struct mg_tcpip_if *ifp) {
+static void mg_tcpip_driver_stm32h_update_hash_table(struct mg_tcpip_if *ifp) {
 #if MG_ENABLE_DRIVER_MCXN
   ETH->MACPFR = MG_BIT(4);  // Pass Multicast (pass all multicast frames)
 #else
@@ -23121,6 +23125,7 @@ static mg_tcpip_driver_stm32h_update_hash_table(struct mg_tcpip_if *ifp) {
   ETH->MACA1HR = (uint32_t) mcast_addr[5] << 8 | (uint32_t) mcast_addr[4];
   ETH->MACA1HR |= MG_BIT(31);  // AE
 #endif
+(void) ifp;
 }
 
 static bool mg_tcpip_driver_stm32h_poll(struct mg_tcpip_if *ifp, bool s1) {
@@ -23398,7 +23403,7 @@ static size_t mg_tcpip_driver_tm4c_tx(const void *buf, size_t len,
   (void) ifp;
 }
 
-static mg_tcpip_driver_tm4c_update_hash_table(struct mg_tcpip_if *ifp) {
+static void mg_tcpip_driver_tm4c_update_hash_table(struct mg_tcpip_if *ifp) {
   // TODO(): read database, rebuild hash table
   // add mDNS / DNS-SD multicast address
   EMAC->EMACADDR1L = (uint32_t) mcast_addr[3] << 24 |
@@ -23406,6 +23411,7 @@ static mg_tcpip_driver_tm4c_update_hash_table(struct mg_tcpip_if *ifp) {
                      (uint32_t) mcast_addr[1] << 8 | (uint32_t) mcast_addr[0];
   EMAC->EMACADDR1H = (uint32_t) mcast_addr[5] << 8 | (uint32_t) mcast_addr[4];
   EMAC->EMACADDR1H |= MG_BIT(31);  // AE
+  (void) ifp;
 }
 
 static bool mg_tcpip_driver_tm4c_poll(struct mg_tcpip_if *ifp, bool s1) {
@@ -23635,7 +23641,7 @@ static size_t mg_tcpip_driver_tms570_tx(const void *buf, size_t len,
   (void) ifp;
 }
 
-static mg_tcpip_driver_tms570_update_hash_table(struct mg_tcpip_if *ifp) {
+static void mg_tcpip_driver_tms570_update_hash_table(struct mg_tcpip_if *ifp) {
   // TODO(): read database, rebuild hash table
   // Setting Hash Index for 01:00:5e:00:00:fb (multicast)
   // using TMS570 XOR method (32.5.37).
@@ -23643,6 +23649,7 @@ static mg_tcpip_driver_tms570_update_hash_table(struct mg_tcpip_if *ifp) {
   // HASH2 register must be set
   EMAC->MACHASH2 = MG_BIT(23);
   EMAC->RXMBPENABLE = MG_BIT(5); // enable hash filtering
+  (void) ifp;
 }
 
 static bool mg_tcpip_driver_tms570_poll(struct mg_tcpip_if *ifp, bool s1) {
@@ -24102,13 +24109,14 @@ static size_t mg_tcpip_driver_xmc_tx(const void *buf, size_t len,
   return len;
 }
 
-static mg_tcpip_driver_xmc_update_hash_table(struct mg_tcpip_if *ifp) {
+static void mg_tcpip_driver_xmc_update_hash_table(struct mg_tcpip_if *ifp) {
   // TODO(): read database, rebuild hash table
   // set the multicast address filter
   ETH0->MAC_ADDRESS1_HIGH =
       MG_U32(0, 0, mcast_addr[5], mcast_addr[4]) | MG_BIT(31);
   ETH0->MAC_ADDRESS1_LOW =
       MG_U32(mcast_addr[3], mcast_addr[2], mcast_addr[1], mcast_addr[0]);
+  (void) ifp;
 }
 
 static bool mg_tcpip_driver_xmc_poll(struct mg_tcpip_if *ifp, bool s1) {
@@ -24350,12 +24358,13 @@ static size_t mg_tcpip_driver_xmc7_tx(const void *buf, size_t len,
   return len;
 }
 
-static mg_tcpip_driver_xmc7_update_hash_table(struct mg_tcpip_if *ifp) {
+static void mg_tcpip_driver_xmc7_update_hash_table(struct mg_tcpip_if *ifp) {
   // TODO(): read database, rebuild hash table
   // set multicast MAC address
   ETH0->SPEC_ADD2_BOTTOM = mcast_addr[3] << 24 | mcast_addr[2] << 16 |
                            mcast_addr[1] << 8 | mcast_addr[0];
   ETH0->SPEC_ADD2_TOP = mcast_addr[5] << 8 | mcast_addr[4];
+  (void) ifp;
 }
 
 static bool mg_tcpip_driver_xmc7_poll(struct mg_tcpip_if *ifp, bool s1) {

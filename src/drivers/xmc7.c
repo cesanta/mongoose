@@ -180,12 +180,13 @@ static size_t mg_tcpip_driver_xmc7_tx(const void *buf, size_t len,
   return len;
 }
 
-static mg_tcpip_driver_xmc7_update_hash_table(struct mg_tcpip_if *ifp) {
+static void mg_tcpip_driver_xmc7_update_hash_table(struct mg_tcpip_if *ifp) {
   // TODO(): read database, rebuild hash table
   // set multicast MAC address
   ETH0->SPEC_ADD2_BOTTOM = mcast_addr[3] << 24 | mcast_addr[2] << 16 |
                            mcast_addr[1] << 8 | mcast_addr[0];
   ETH0->SPEC_ADD2_TOP = mcast_addr[5] << 8 | mcast_addr[4];
+  (void) ifp;
 }
 
 static bool mg_tcpip_driver_xmc7_poll(struct mg_tcpip_if *ifp, bool s1) {

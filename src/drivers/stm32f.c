@@ -178,13 +178,14 @@ static size_t mg_tcpip_driver_stm32f_tx(const void *buf, size_t len,
   return len;
 }
 
-static mg_tcpip_driver_stm32f_update_hash_table(struct mg_tcpip_if *ifp) {
+static void mg_tcpip_driver_stm32f_update_hash_table(struct mg_tcpip_if *ifp) {
   // TODO(): read database, rebuild hash table
   ETH->MACA1LR = (uint32_t) mcast_addr[3] << 24 |
                  (uint32_t) mcast_addr[2] << 16 |
                  (uint32_t) mcast_addr[1] << 8 | (uint32_t) mcast_addr[0];
   ETH->MACA1HR = (uint32_t) mcast_addr[5] << 8 | (uint32_t) mcast_addr[4];
   ETH->MACA1HR |= MG_BIT(31);  // AE
+  (void) ifp;
 }
 
 static bool mg_tcpip_driver_stm32f_poll(struct mg_tcpip_if *ifp, bool s1) {
