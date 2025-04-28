@@ -57,7 +57,8 @@ void mg_hexdump(const void *buf, size_t len) {
   for (i = 0; i < len; i++) {
     if ((i % 16) == 0) {
       // Print buffered ascii chars
-      if (i > 0) logs("  ", 2), logs((char *) ascii, 16), logc('\n'), alen = 0;
+      if (i > 0)
+        logs("  ", 2), logs((char *) ascii, 16), logs("\r\n", 2), alen = 0;
       // Print hex address, then \t
       logc(nibble((i >> 12) & 15)), logc(nibble((i >> 8) & 15)),
           logc(nibble((i >> 4) & 15)), logc('0'), logs("   ", 3);
@@ -67,5 +68,5 @@ void mg_hexdump(const void *buf, size_t len) {
     ascii[alen++] = ISPRINT(p[i]) ? p[i] : '.';        // Add to the ascii buf
   }
   while (alen < 16) logs("   ", 3), ascii[alen++] = ' ';
-  logs("  ", 2), logs((char *) ascii, 16), logc('\n');
+  logs("  ", 2), logs((char *) ascii, 16), logs("\r\n", 2);
 }
