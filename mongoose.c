@@ -8394,10 +8394,14 @@ void mg_multicast_add(struct mg_connection *c, char *ip) {
   // TODO(): prvAllowIPPacketIPv4()
 #else
   // lwIP, Unix, Windows, Zephyr(, AzureRTOS ?)
+#if MG_ENABLE_LWIP && !LWIP_IGMP
+  MG_ERROR(("LWIP_IGMP not defined, no multicast support"));
+#else
   struct ip_mreq mreq;
   mreq.imr_multiaddr.s_addr = inet_addr(ip);
   mreq.imr_interface.s_addr = mg_htonl(INADDR_ANY);
   setsockopt(FD(c), IPPROTO_IP, IP_ADD_MEMBERSHIP, (char *) &mreq, sizeof(mreq));
+#endif
 #endif
 }
 
