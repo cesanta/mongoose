@@ -1199,6 +1199,7 @@ void mg_mgr_poll(struct mg_mgr *mgr, int ms) {
     if (s->twclosure &&
         (!c->is_tls || (c->rtls.len == 0 && mg_tls_pending(c) == 0)))
       c->is_closing = 1;
+    if (c->is_draining && c->send.len == 0) c->is_closing = 1;
     if (c->is_closing) close_conn(c);
   }
   (void) ms;
