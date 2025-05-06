@@ -340,8 +340,13 @@ static void mdns_cb(struct mg_connection *c, int ev, void *ev_data) {
 
 void mg_multicast_add(struct mg_connection *c, char *ip);
 struct mg_connection *mg_mdns_listen(struct mg_mgr *mgr, char *name) {
+#if MG_ARCH == MG_ARCH_WIN32
+  const char *mcast_url = "udp://0.0.0.0:5353";
+#else
+  const char *mcast_url = "udp://224.0.0.251:5353";
+#endif
   struct mg_connection *c =
-      mg_listen(mgr, "udp://224.0.0.251:5353", mdns_cb, name);
+      mg_listen(mgr, mcast_url, mdns_cb, name);
   if (c != NULL) mg_multicast_add(c, (char *)"224.0.0.251");
   return c;
 }

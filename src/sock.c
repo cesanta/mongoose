@@ -207,27 +207,33 @@ bool mg_open_listener(struct mg_connection *c, const char *url) {
     int rc, on = 1, af = c->loc.is_ip6 ? AF_INET6 : AF_INET;
     int type = strncmp(url, "udp:", 4) == 0 ? SOCK_DGRAM : SOCK_STREAM;
     int proto = type == SOCK_DGRAM ? IPPROTO_UDP : IPPROTO_TCP;
+    int sockopt = -1;
     (void) on;
+
+#if defined(SO_EXCLUSIVEADDRUSE)
+    // Using SO_REUSEADDR for UDP sockets on Windows (issue #3125)
+    sockopt = proto == IPPROTO_UDP ? SO_REUSEADDR : SO_EXCLUSIVEADDRUSE;
+    // "Using SO_REUSEADDR and SO_EXCLUSIVEADDRUSE"
+#elif defined(SO_REUSEADDR) && (!defined(LWIP_SOCKET) || SO_REUSE)
+    sockopt = SO_REUSEADDR;
+    // 1. SO_REUSEADDR semantics on UNIX and Windows is different.  On
+    // Windows, SO_REUSEADDR allows to bind a socket to a port without error
+    // even if the port is already open by another program. This is not the
+    // behavior SO_REUSEADDR was designed for, and leads to hard-to-track
+    // failure scenarios.
+    //
+    // 2. For LWIP, SO_REUSEADDR should be explicitly enabled by defining
+    // SO_REUSE = 1 in lwipopts.h, otherwise the code below will compile but
+    // won't work! (setsockopt will return EINVAL)
+#endif
 
     if ((fd = socket(af, type, proto)) == MG_INVALID_SOCKET) {
       MG_ERROR(("socket: %d", MG_SOCK_ERR(-1)));
-#if defined(SO_EXCLUSIVEADDRUSE)
-    } else if ((rc = setsockopt(fd, SOL_SOCKET, SO_EXCLUSIVEADDRUSE,
+    } else if ((sockopt != -1) && (rc = setsockopt(fd, SOL_SOCKET, sockopt,
                                 (char *) &on, sizeof(on))) != 0) {
-      // "Using SO_REUSEADDR and SO_EXCLUSIVEADDRUSE"
+#if defined(SO_EXCLUSIVEADDRUSE)
       MG_ERROR(("setsockopt(SO_EXCLUSIVEADDRUSE): %d %d", on, MG_SOCK_ERR(rc)));
-#elif defined(SO_REUSEADDR) && (!defined(LWIP_SOCKET) || SO_REUSE)
-    } else if ((rc = setsockopt(fd, SOL_SOCKET, SO_REUSEADDR, (char *) &on,
-                                sizeof(on))) != 0) {
-      // 1. SO_REUSEADDR semantics on UNIX and Windows is different.  On
-      // Windows, SO_REUSEADDR allows to bind a socket to a port without error
-      // even if the port is already open by another program. This is not the
-      // behavior SO_REUSEADDR was designed for, and leads to hard-to-track
-      // failure scenarios.
-      //
-      // 2. For LWIP, SO_REUSEADDR should be explicitly enabled by defining
-      // SO_REUSE = 1 in lwipopts.h, otherwise the code below will compile but
-      // won't work! (setsockopt will return EINVAL)
+#else
       MG_ERROR(("setsockopt(SO_REUSEADDR): %d", MG_SOCK_ERR(rc)));
 #endif
 #if MG_IPV6_V6ONLY
