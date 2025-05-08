@@ -176,6 +176,7 @@ static void settmout(struct mg_connection *c, uint8_t type) {
                : type == MIP_TTYPE_SYN ? MIP_TCP_SYN_MS
                : type == MIP_TTYPE_FIN ? MIP_TCP_FIN_MS
                                        : MIP_TCP_KEEPALIVE_MS;
+  if (s->ttype == MIP_TTYPE_FIN) return; // skip if 3-way closing
   s->timer = ifp->now + n;
   s->ttype = type;
   MG_VERBOSE(("%lu %d -> %llx", c->id, type, s->timer));
@@ -1199,7 +1200,6 @@ void mg_mgr_poll(struct mg_mgr *mgr, int ms) {
     if (s->twclosure &&
         (!c->is_tls || (c->rtls.len == 0 && mg_tls_pending(c) == 0)))
       c->is_closing = 1;
-    if (c->is_draining && c->send.len == 0) c->is_closing = 1;
     if (c->is_closing) close_conn(c);
   }
   (void) ms;
