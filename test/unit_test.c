@@ -811,6 +811,7 @@ static void wcb(struct mg_connection *c, int ev, void *ev_data) {
     struct mg_http_message *hm = (struct mg_http_message *) ev_data;
     struct mg_str *wsproto = mg_http_get_header(hm, "Sec-WebSocket-Protocol");
     ASSERT(wsproto != NULL);
+    mg_ws_send(c, "hello", 0, 0);
     mg_ws_printf(c, WEBSOCKET_OP_BINARY, "%.3s", "boo!!!!");
     mg_ws_printf(c, WEBSOCKET_OP_BINARY, "%s", "foobar");
     mg_ws_send(c, "", 0, WEBSOCKET_OP_PING);

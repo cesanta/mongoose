@@ -219,7 +219,7 @@ static void mg_ws_cb(struct mg_connection *c, int ev, void *ev_data) {
       // Remove non-fragmented frame
       if (final && op) mg_iobuf_del(&c->recv, ofs, len);
       // Last chunk of the fragmented frame
-      if (final && !op) {
+      if (final && !op && (ofs > 0)) {
         m.flags = c->recv.buf[0];
         m.data = mg_str_n((char *) &c->recv.buf[1], (size_t) (ofs - 1));
         mg_call(c, MG_EV_WS_MSG, &m);
