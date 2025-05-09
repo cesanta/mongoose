@@ -10999,7 +10999,9 @@ static int mg_tls_server_recv_hello(struct mg_connection *c) {
     mg_error(c, "not a client hello packet");
     return -1;
   }
+  if (rio->len < 50) goto fail;
   msgsz = MG_LOAD_BE16(rio->buf + 3);
+  if (((uint32_t) msgsz + 4) > rio->len) goto fail;
   mg_sha256_update(&tls->sha256, rio->buf + 5, msgsz);
   // store client random
   memmove(tls->random, rio->buf + 11, sizeof(tls->random));
@@ -11011,10 +11013,11 @@ static int mg_tls_server_recv_hello(struct mg_connection *c) {
     MG_INFO(("bad session id len"));
   }
   cipher_suites_len = MG_LOAD_BE16(rio->buf + 44 + session_id_len);
-  if (cipher_suites_len > (rio->len - 46 - session_id_len)) goto fail;
+  if (((uint32_t) cipher_suites_len + 46 + session_id_len) > rio->len)
+    goto fail;
   ext_len = MG_LOAD_BE16(rio->buf + 48 + session_id_len + cipher_suites_len);
   ext = rio->buf + 50 + session_id_len + cipher_suites_len;
-  if (ext_len > (rio->len - 50 - session_id_len - cipher_suites_len)) goto fail;
+  if (((unsigned char *) ext + ext_len) > (rio->buf + rio->len)) goto fail;
   for (j = 0; j < ext_len;) {
     uint16_t k;
     uint16_t key_exchange_len;
@@ -11026,12 +11029,12 @@ static int mg_tls_server_recv_hello(struct mg_connection *c) {
     }
     key_exchange_len = MG_LOAD_BE16(ext + j + 4);
     key_exchange = ext + j + 6;
-    if (key_exchange_len >
-        rio->len - (uint16_t) ((size_t) key_exchange - (size_t) rio->buf))
+    if (((size_t) key_exchange_len +
+         ((size_t) key_exchange - (size_t) rio->buf)) > rio->len)
       goto fail;
     for (k = 0; k < key_exchange_len;) {
       uint16_t m = MG_LOAD_BE16(key_exchange + k + 2);
-      if (m > (key_exchange_len - k - 4)) goto fail;
+      if (((uint32_t) m + k + 4) > key_exchange_len) goto fail;
       if (m == 32 && key_exchange[k] == 0x00 && key_exchange[k + 1] == 0x1d) {
         memmove(tls->x25519_cli, key_exchange + k + 4, m);
         mg_tls_drop_record(c);
