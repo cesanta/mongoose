@@ -18,6 +18,7 @@
 #define MG_OTA_RT1064 303   // IMXRT1064
 #define MG_OTA_RT1170 304   // IMXRT1170
 #define MG_OTA_MCXN 310 	  // MCXN947
+#define MG_OTA_FRDM 320    // FRDM-RW612
 #define MG_OTA_FLASH 900    // OTA via an internal flash
 #define MG_OTA_ESP32 910    // ESP32 OTA implementation
 #define MG_OTA_PICOSDK 920  // RP2040/2350 using Pico-SDK hardware_flash
