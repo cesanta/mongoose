@@ -120,6 +120,13 @@ fuzz2: mongoose.c mongoose.h Makefile fuzz.c
 	$(CC) fuzz.c -DMAIN $(OPTS) $(WARN) $(ASAN) $(INCS) -o fuzzer
 	$(RUN) ./fuzzer $(FUZZDATA)
 
+fuzz_tls: ASAN = -fsanitize=fuzzer,signed-integer-overflow,address,undefined
+fuzz_tls: mongoose.c mongoose.h Makefile fuzz_tls.c
+	$(CC) fuzz_tls.c $(OPTS) $(WARN) $(INCS) $(TFLAGS) $(ASAN) -o fuzzer_tls
+	$(RUN) ./fuzzer_tls -max_len=17000
+
+
+
 test: Makefile mongoose.h $(SRCS) tls_multirec/server
 	$(CC) $(SRCS) $(CFLAGS) $(LDFLAGS) -o unit_test
 	ASAN_OPTIONS=$(ASAN_OPTIONS) $(RUN) ./unit_test

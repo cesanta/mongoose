@@ -82,6 +82,7 @@ int LLVMFuzzerTestOneInput(const uint8_t *data, size_t size) {
   mg_json_get(mg_str_n((char *) data, size), "$.a.b", &n);
   mg_json_get(mg_str_n((char *) data, size), "$[0]", &n);
 
+  // Test built-in TCP/IP stack
   if (size > 0) {
     struct mg_tcpip_if mif = {.ip = 0x01020304,
                               .mask = 255,
@@ -97,15 +98,48 @@ int LLVMFuzzerTestOneInput(const uint8_t *data, size_t size) {
     memcpy(pkt, data, size);
     if (size > sizeof(*eth)) {
       static size_t i;
-      uint16_t eth_types[] = {0x800, 0x800, 0x806, 0x86dd};
+      uint16_t eth_types[] = {0x800, 0x806, 0x86dd}; // IPv4, ARP, IPv6
       memcpy(eth->dst, mif.mac, 6);  // Set valid destination MAC
-      eth->type = mg_htons(eth_types[i++]);
-      if (i >= sizeof(eth_types) / sizeof(eth_types[0])) i = 0;
+      // send all handled eth types, then 2 random ones
+      if (i >= (sizeof(eth_types) / sizeof(eth_types[0]) + 2)) i = 0;
+      if (i < (sizeof(eth_types) / sizeof(eth_types[0]))) eth->type = (eth_types[i++]);
+      // build proper layer-3 datagrams, to be able to exercise layers above
+      if (eth->type == mg_htons(0x800) && size > (sizeof(*eth) + sizeof(struct ip))) {             // IPv4
+        static size_t j;
+        uint8_t ip_protos[] = {1, 6, 17}; // ICMP, TCP, UDP
+        struct ip *ip4 = (struct ip *) (eth + 1);
+        ip4->ver = (ip4->ver & ~0xf0) | (4 << 4);
+        // send all handled ip protos, then 2 random ones
+        if (j >= (sizeof(ip_protos) / sizeof(ip_protos[0]) + 2)) j = 0;
+        if (j < (sizeof(ip_protos) / sizeof(ip_protos[0]))) ip4->proto = (ip_protos[j++]);
+        if (ip4->proto == 1) { // ICMP
+        } else if (ip4->proto == 6) { // TCP
+        } else if (ip4->proto == 17 && size > (sizeof(*eth) + sizeof(struct ip) + sizeof(struct udp))) { // UDP
+          static size_t k;
+          uint16_t udp_ports[] = {67, 68}; // DHCP server and client
+          struct udp *udp = (struct udp *) (ip4 + 1);
+          // send all handled udp ports, then 2 random ones
+          if (k >= (sizeof(udp_ports) / sizeof(udp_ports[0]) + 2)) k = 0;
+          if (k < (sizeof(udp_ports) / sizeof(udp_ports[0]))) udp->dport = mg_htons(udp_ports[k++]);
+        }
+      } else if (eth->type == mg_htons(0x806)) {      // ARP
+      } else if (eth->type == mg_htons(0x86dd) && size > (sizeof(*eth) + sizeof(struct ip6))) {     // IPv6
+        static size_t j;
+        uint8_t ip6_protos[] = {6, 17}; // TCP, UDP
+        struct ip6 *ip6 = (struct ip6 *) (eth + 1);
+        ip6->ver = (ip6->ver & ~0xf0) | (6 << 4);
+        // send all handled ip6 "next headers", then 2 random ones
+        if (j >= (sizeof(ip6_protos) / sizeof(ip6_protos[0]) + 2)) j = 0;
+        if (j < (sizeof(ip6_protos) / sizeof(ip6_protos[0]))) ip6->proto = (ip6_protos[j++]);
+        if (ip6->proto == 6) { // TCP
+        } else if (ip6->proto == 17) { // UDP
+        }    
+      }
     }
 
     mg_tcpip_rx(&mif, pkt, size);
 
-    // Test HTTP serving
+    // Test HTTP serving (via our built-in TCP/IP stack)
     const char *url = "http://localhost:12345";
     struct mg_connection *c = mg_http_connect(&mgr, url, fn, NULL);
     mg_iobuf_add(&c->recv, 0, data, size);
