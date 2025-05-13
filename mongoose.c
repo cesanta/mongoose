@@ -4178,11 +4178,12 @@ void mg_mgr_init(struct mg_mgr *mgr) {
 
 struct connstate {
   uint32_t seq, ack;           // TCP seq/ack counters
-  uint64_t timer;              // TCP keep-alive / ACK timer
+  uint64_t timer;              // TCP timer (see 'ttype' below)
   uint32_t acked;              // Last ACK-ed number
   size_t unacked;              // Not acked bytes
+  uint16_t dmss;               // destination MSS (from TCP opts)
   uint8_t mac[6];              // Peer MAC address
-  uint8_t ttype;               // Timer type. 0: ack, 1: keep-alive
+  uint8_t ttype;               // Timer type:
 #define MIP_TTYPE_KEEPALIVE 0  // Connection is idle for long, send keepalive
 #define MIP_TTYPE_ACK 1        // Peer sent us data, we have to ack it soon
 #define MIP_TTYPE_ARP 2        // ARP resolve sent, waiting for response
@@ -4686,17 +4687,17 @@ static void rx_udp(struct mg_tcpip_if *ifp, struct pkt *pkt) {
 static size_t tx_tcp(struct mg_tcpip_if *ifp, uint8_t *dst_mac, uint32_t dst_ip,
                      uint8_t flags, uint16_t sport, uint16_t dport,
                      uint32_t seq, uint32_t ack, const void *buf, size_t len) {
-#if 0
-  uint8_t opts[] = {2, 4, 5, 0xb4, 4, 2, 0, 0};  // MSS = 1460, SACK permitted
-  if (flags & TH_SYN) {
-    // Handshake? Set MSS
+  struct ip *ip;
+  struct tcp *tcp;
+  uint16_t opts[4 / 2];
+  if (flags & TH_SYN) {                 // Send MSS, RFC-9293 3.7.1
+    opts[0] = mg_htons(0x0204);         // RFC-9293 3.2
+    opts[1] = mg_htons(ifp->mtu - 40);  // RFC-6691
     buf = opts;
     len = sizeof(opts);
   }
-#endif
-  struct ip *ip =
-      tx_ip(ifp, dst_mac, 6, ifp->ip, dst_ip, sizeof(struct tcp) + len);
-  struct tcp *tcp = (struct tcp *) (ip + 1);
+  ip = tx_ip(ifp, dst_mac, 6, ifp->ip, dst_ip, sizeof(struct tcp) + len);
+  tcp = (struct tcp *) (ip + 1);
   memset(tcp, 0, sizeof(*tcp));
   if (buf != NULL && len) memmove(tcp + 1, buf, len);
   tcp->sport = sport;
@@ -4706,7 +4707,7 @@ static size_t tx_tcp(struct mg_tcpip_if *ifp, uint8_t *dst_mac, uint32_t dst_ip,
   tcp->flags = flags;
   tcp->win = mg_htons(MIP_TCP_WIN);
   tcp->off = (uint8_t) (sizeof(*tcp) / 4 << 4);
-  // if (flags & TH_SYN) tcp->off = 0x70;  // Handshake? header size 28 bytes
+  if (flags & TH_SYN) tcp->off += (uint8_t) (sizeof(opts) / 4 << 4);
 
   uint32_t cs = 0;
   uint16_t n = (uint16_t) (sizeof(*tcp) + len);
@@ -4740,6 +4741,7 @@ static struct mg_connection *accept_conn(struct mg_connection *lsn,
     return NULL;
   }
   struct connstate *s = (struct connstate *) (c + 1);
+  s->dmss = 536;     // assume default, RFC-9293 3.7.1
   s->seq = mg_ntohl(pkt->tcp->ack), s->ack = mg_ntohl(pkt->tcp->seq);
   memcpy(s->mac, pkt->eth->src, sizeof(s->mac));
   settmout(c, MIP_TTYPE_KEEPALIVE);
@@ -4793,10 +4795,11 @@ long mg_io_send(struct mg_connection *c, const void *buf, size_t len) {
   len = trim_len(c, len);
   if (c->is_udp) {
     tx_udp(ifp, s->mac, ifp->ip, c->loc.port, dst_ip, c->rem.port, buf, len);
-  } else {
-    size_t sent =
-        tx_tcp(ifp, s->mac, dst_ip, TH_PUSH | TH_ACK, c->loc.port, c->rem.port,
-               mg_htonl(s->seq), mg_htonl(s->ack), buf, len);
+  } else {  // TCP, cap to peer's MSS
+    size_t sent;
+    if (len > s->dmss) len = s->dmss;  // RFC-6691: reduce if sending opts
+    sent = tx_tcp(ifp, s->mac, dst_ip, TH_PUSH | TH_ACK, c->loc.port,
+                  c->rem.port, mg_htonl(s->seq), mg_htonl(s->ack), buf, len);
     if (sent == 0) {
       return MG_IO_WAIT;
     } else if (sent == (size_t) -1) {
@@ -4856,10 +4859,10 @@ static void read_conn(struct mg_connection *c, struct pkt *pkt) {
     }
     tx_tcp(c->mgr->ifp, s->mac, rem_ip, flags, c->loc.port, c->rem.port,
            mg_htonl(s->seq), mg_htonl(s->ack), "", 0);
-    if (pkt->pay.len == 0) return; // if no data, we're done
-  } else if (pkt->pay.len == 0) {  // this is an ACK
+    if (pkt->pay.len == 0) return;  // if no data, we're done
+  } else if (pkt->pay.len == 0) {   // this is an ACK
     if (s->fin_rcvd && s->ttype == MIP_TTYPE_FIN) s->twclosure = true;
-    return; // no data to process
+    return;  // no data to process
   } else if (seq != s->ack) {
     uint32_t ack = (uint32_t) (mg_htonl(pkt->tcp->seq) + pkt->pay.len);
     if (s->ack == ack) {
@@ -4869,11 +4872,11 @@ static void read_conn(struct mg_connection *c, struct pkt *pkt) {
       tx_tcp(c->mgr->ifp, s->mac, rem_ip, TH_ACK, c->loc.port, c->rem.port,
              mg_htonl(s->seq), mg_htonl(s->ack), "", 0);
     }
-    return; // drop it
+    return;  // drop it
   } else if (io->size - io->len < pkt->pay.len &&
              !mg_iobuf_resize(io, io->len + pkt->pay.len)) {
     mg_error(c, "oom");
-    return; // drop it
+    return;  // drop it
   }
   // Copy TCP payload into the IO buffer. If the connection is plain text,
   // we copy to c->recv. If the connection is TLS, this data is encrypted,
@@ -4909,6 +4912,25 @@ static void read_conn(struct mg_connection *c, struct pkt *pkt) {
   }
 }
 
+// process options (MSS)
+static void handle_opt(struct connstate *s, struct tcp *tcp) {
+  uint8_t *opts = (uint8_t *) (tcp + 1);
+  int len = 4 * ((int) (tcp->off >> 4) - (sizeof(*tcp) / 4));
+  s->dmss = 536;     // assume default, RFC-9293 3.7.1
+  while (len > 0) {  // RFC-9293 3.1 3.2
+    uint8_t kind = opts[0], optlen = 1;
+    if (kind != 1) {         // No-Operation
+      if (kind == 0) break;  // End of Option List
+      optlen = opts[1];
+      if (kind == 2 && optlen == 4)  // set received MSS
+        s->dmss = (uint16_t) (((uint16_t) opts[2] << 8) + opts[3]);
+    }
+    MG_INFO(("kind: %u, optlen: %u, len: %d\n", kind, optlen, len));
+    opts += optlen;
+    len -= optlen;
+  }
+}
+
 static void rx_tcp(struct mg_tcpip_if *ifp, struct pkt *pkt) {
   struct mg_connection *c = getpeer(ifp->mgr, pkt, false);
   struct connstate *s = c == NULL ? NULL : (struct connstate *) (c + 1);
@@ -4916,6 +4938,7 @@ static void rx_tcp(struct mg_tcpip_if *ifp, struct pkt *pkt) {
   MG_INFO(("%lu %hhu %d", c ? c->id : 0, pkt->tcp->flags, (int) pkt->pay.len));
 #endif
   if (c != NULL && c->is_connecting && pkt->tcp->flags == (TH_SYN | TH_ACK)) {
+    handle_opt(s, pkt->tcp);  // process options (MSS)
     s->seq = mg_ntohl(pkt->tcp->ack), s->ack = mg_ntohl(pkt->tcp->seq) + 1;
     tx_tcp_pkt(ifp, pkt, TH_ACK, pkt->tcp->ack, NULL, 0);
     c->is_connecting = 0;  // Client connected
@@ -4945,6 +4968,8 @@ static void rx_tcp(struct mg_tcpip_if *ifp, struct pkt *pkt) {
     if (c->is_accepted) mg_error(c, "peer RST");  // RFC-1122 4.2.2.13
     // ignore RST if not connected
   } else if (pkt->tcp->flags & TH_SYN) {
+    // TODO(): handle_opt(s, pkt->tcp);  // process options (MSS)
+    // At this point, s = NULL, there is no connection.
     // Use peer's source port as ISN, in order to recognise the handshake
     uint32_t isn = mg_htonl((uint32_t) mg_ntohs(pkt->tcp->sport));
     tx_tcp_pkt(ifp, pkt, TH_SYN | TH_ACK, isn, NULL, 0);
@@ -5200,7 +5225,7 @@ void mg_tcpip_init(struct mg_mgr *mgr, struct mg_tcpip_if *ifp) {
     MG_INFO(("MAC not set. Generated random: %M", mg_print_mac, ifp->mac));
   }
 
-  // Uf DHCP name is not set, use "mip"
+  // If DHCP name is not set, use "mip"
   if (ifp->dhcp_name[0] == '\0') {
     memcpy(ifp->dhcp_name, "mip", 4);
   }
@@ -5390,7 +5415,7 @@ bool mg_send(struct mg_connection *c, const void *buf, size_t len) {
 
 uint8_t mcast_addr[6] = {0x01, 0x00, 0x5e, 0x00, 0x00, 0xfb};
 void mg_multicast_add(struct mg_connection *c, char *ip) {
-  (void) ip; // ip4_mcastmac(mcast_mac, &ip);
+  (void) ip;  // ip4_mcastmac(mcast_mac, &ip);
   // TODO(): actual IP -> MAC; check database, update
   c->mgr->ifp->update_mac_hash_table = true;  // mark dirty
 }
