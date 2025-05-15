@@ -4916,7 +4916,7 @@ static void read_conn(struct mg_connection *c, struct pkt *pkt) {
 // process options (MSS)
 static void handle_opt(struct connstate *s, struct tcp *tcp) {
   uint8_t *opts = (uint8_t *) (tcp + 1);
-  int len = 4 * ((int) (tcp->off >> 4) - (sizeof(*tcp) / 4));
+  int len = 4 * ((int) (tcp->off >> 4) - ((int) sizeof(*tcp) / 4));
   s->dmss = 536;     // assume default, RFC-9293 3.7.1
   while (len > 0) {  // RFC-9293 3.1 3.2
     uint8_t kind = opts[0], optlen = 1;
