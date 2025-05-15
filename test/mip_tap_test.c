@@ -471,7 +471,6 @@ int main(void) {
 
   // Clear
   mg_mgr_free(&mgr);
-  mg_tcpip_free(&mif);        // Release after mg_mgr
   ASSERT(mgr.conns == NULL);  // Deconstruction OK
   close(fd);
   return 0;

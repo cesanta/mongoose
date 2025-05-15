@@ -247,6 +247,9 @@ void mg_mgr_free(struct mg_mgr *mgr) {
   if (mgr->epoll_fd >= 0) close(mgr->epoll_fd), mgr->epoll_fd = -1;
 #endif
   mg_tls_ctx_free(mgr);
+#if MG_ENABLE_TCPIP
+  if (mgr->ifp) mg_tcpip_free(mgr->ifp);
+#endif
 }
 
 void mg_mgr_init(struct mg_mgr *mgr) {
