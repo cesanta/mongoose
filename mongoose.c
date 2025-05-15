@@ -4926,7 +4926,7 @@ static void handle_opt(struct connstate *s, struct tcp *tcp) {
       if (kind == 2 && optlen == 4)  // set received MSS
         s->dmss = (uint16_t) (((uint16_t) opts[2] << 8) + opts[3]);
     }
-    MG_INFO(("kind: %u, optlen: %u, len: %d\n", kind, optlen, len));
+    MG_VERBOSE(("kind: %u, optlen: %u, len: %d\n", kind, optlen, len));
     opts += optlen;
     len -= optlen;
   }
