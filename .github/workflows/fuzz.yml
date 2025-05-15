@@ -4,6 +4,8 @@ on:
     - cron: '0 21 * * *' # run at 9 PM UTC
   # Allow manual runs
   workflow_dispatch:
+env:
+  CC: clang
 jobs:
   fuzz:
     runs-on: ubuntu-latest
