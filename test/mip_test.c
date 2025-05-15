@@ -80,7 +80,6 @@ static void test_poll(void) {
   mg_http_listen(&mgr, "http://127.0.0.1:12346", ph, &count);
   for (i = 0; i < 10; i++) mg_mgr_poll(&mgr, 0);
   ASSERT(count == 10);
-  mg_tcpip_free(&mif);
   mg_mgr_free(&mgr);
 }
 
@@ -240,7 +239,6 @@ static void test_retransmit(void) {
 
   s_driver_data.len = 0;
   mg_mgr_free(&mgr);
-  mg_tcpip_free(&mif);
 }
 
 static void test_frag_recv_path(void) {
@@ -284,7 +282,6 @@ static void test_frag_recv_path(void) {
 
   s_driver_data.len = 0;
   mg_mgr_free(&mgr);
-  mg_tcpip_free(&mif);
 }
 
 static void test_frag_send_path(void) {
@@ -307,7 +304,6 @@ static void test_frag_send_path(void) {
   ASSERT(s_seg_sent == 3);
   s_driver_data.len = 0;
   mg_mgr_free(&mgr);
-  mg_tcpip_free(&mif);
 }
 
 static void test_fragmentation(void) {

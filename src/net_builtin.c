@@ -1,6 +1,6 @@
 #include "net_builtin.h"
 
-#if defined(MG_ENABLE_TCPIP) && MG_ENABLE_TCPIP
+#if MG_ENABLE_TCPIP
 #define MG_EPHEMERAL_PORT_BASE 32768
 #define PDIFF(a, b) ((size_t) (((char *) (b)) - ((char *) (a))))
 
