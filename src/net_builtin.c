@@ -580,7 +580,7 @@ static struct mg_connection *accept_conn(struct mg_connection *lsn,
     return NULL;
   }
   struct connstate *s = (struct connstate *) (c + 1);
-  s->dmss = 536;     // assume default, RFC-9293 3.7.1
+  s->dmss = 1460; // TODO(scaprile): 536;     // assume default, RFC-9293 3.7.1
   s->seq = mg_ntohl(pkt->tcp->ack), s->ack = mg_ntohl(pkt->tcp->seq);
   memcpy(s->mac, pkt->eth->src, sizeof(s->mac));
   settmout(c, MIP_TTYPE_KEEPALIVE);
