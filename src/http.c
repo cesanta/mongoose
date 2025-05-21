@@ -216,7 +216,7 @@ static bool vcb(uint8_t c) {
 static size_t clen(const char *s, const char *end) {
   const unsigned char *u = (unsigned char *) s, c = *u;
   long n = (long) (end - s);
-  if (c > ' ' && c < '~') return 1;  // Usual ascii printed char
+  if (c > ' ' && c <= '~') return 1;  // Usual ascii printed char
   if ((c & 0xe0) == 0xc0 && n > 1 && vcb(u[1])) return 2;  // 2-byte UTF8
   if ((c & 0xf0) == 0xe0 && n > 2 && vcb(u[1]) && vcb(u[2])) return 3;
   if ((c & 0xf8) == 0xf0 && n > 3 && vcb(u[1]) && vcb(u[2]) && vcb(u[3]))

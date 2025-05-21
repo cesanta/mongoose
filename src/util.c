@@ -127,6 +127,7 @@ int mg_check_ip_acl(struct mg_str acl, struct mg_addr *remote_ip) {
 bool mg_path_is_sane(const struct mg_str path) {
   const char *s = path.buf;
   size_t n = path.len;
+  if (path.buf[0] == '~') return false;  // Starts with ~
   if (path.buf[0] == '.' && path.buf[1] == '.') return false;  // Starts with ..
   for (; s[0] != '\0' && n > 0; s++, n--) {
     if ((s[0] == '/' || s[0] == '\\') && n >= 2) {   // Subdir?
