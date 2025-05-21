@@ -20,7 +20,7 @@
 #ifndef MONGOOSE_H
 #define MONGOOSE_H
 
-#define MG_VERSION "7.17"
+#define MG_VERSION "7.18"
 
 #ifdef __cplusplus
 extern "C" {
@@ -2820,12 +2820,12 @@ bool mg_wifi_ap_start(char *ssid, char *pass, unsigned int channel);
 bool mg_wifi_ap_stop(void);
 
 
+
+
+
+
+
 #if MG_ENABLE_TCPIP
-
-
-
-
-
 
 struct mg_tcpip_if;  // Mongoose TCP/IP network interface
 
@@ -2851,6 +2851,7 @@ enum {
   MG_TCPIP_EV_DRIVER,           // Driver event                   driver specific
   MG_TCPIP_EV_USER              // Starting ID for user events
 };
+
 
 // Network interface
 struct mg_tcpip_if {
