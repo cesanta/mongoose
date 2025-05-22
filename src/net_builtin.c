@@ -1218,6 +1218,7 @@ void mg_mgr_poll(struct mg_mgr *mgr, int ms) {
     if (c->is_tls && (c->rtls.len > 0 || mg_tls_pending(c) > 0))
       handle_tls_recv(c);
     if (can_write(c)) write_conn(c);
+    if (!c->is_listening && c->is_tls && !c->is_tls_hs && c->send.len == 0) mg_tls_flush(c);
     if (c->is_draining && c->send.len == 0 && s->ttype != MIP_TTYPE_FIN)
       init_closure(c);
     // For non-TLS, close immediately upon completing the 3-way closure

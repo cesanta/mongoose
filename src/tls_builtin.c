@@ -1557,6 +1557,7 @@ void mg_tls_handshake(struct mg_connection *c) {
   struct tls_data *tls = (struct tls_data *) c->tls;
   long n;
   if (c->is_client) {
+    // will clear is_hs when sending last chunk
     mg_tls_client_handshake(c);
   } else {
     mg_tls_server_handshake(c);
@@ -1564,7 +1565,8 @@ void mg_tls_handshake(struct mg_connection *c) {
   while (tls->send.len > 0 &&
          (n = mg_io_send(c, tls->send.buf, tls->send.len)) > 0) {
     mg_iobuf_del(&tls->send, 0, (size_t) n);
-  }
+  } // if last chunk fails to be sent, it will be sent with first app data,
+    // otherwise, it needs to be flushed
 }
 
 static int mg_parse_pem(const struct mg_str pem, const struct mg_str label,
@@ -1698,7 +1700,7 @@ long mg_tls_send(struct mg_connection *c, const void *buf, size_t len) {
   while (tls->send.len > 0 &&
          (n = mg_io_send(c, tls->send.buf, tls->send.len)) > 0) {
     mg_iobuf_del(&tls->send, 0, (size_t) n);
-  }
+  } // if last chunk fails to be sent, it needs to be flushed
   c->is_tls_throttled = (tls->send.len > 0 && n == MG_IO_WAIT);
   MG_VERBOSE(("%lu %ld %ld %ld %c %c", c->id, (long) len, (long) tls->send.len,
               n, was_throttled ? 'T' : 't', c->is_tls_throttled ? 'T' : 't'));
@@ -1738,6 +1740,15 @@ long mg_tls_recv(struct mg_connection *c, void *buf, size_t len) {
 size_t mg_tls_pending(struct mg_connection *c) {
   struct tls_data *tls = (struct tls_data *) c->tls;
   return tls != NULL ? tls->recv_len : 0;
+}
+
+void mg_tls_flush(struct mg_connection *c) {
+  struct tls_data *tls = (struct tls_data *) c->tls;
+  long n;
+  while (tls->send.len > 0 &&
+         (n = mg_io_send(c, tls->send.buf, tls->send.len)) > 0) {
+    mg_iobuf_del(&tls->send, 0, (size_t) n);
+  }
 }
 
 void mg_tls_ctx_init(struct mg_mgr *mgr) {
