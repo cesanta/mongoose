@@ -18,13 +18,20 @@ struct ra_edmac {
 };
 
 #undef ETHERC
-#define ETHERC ((struct ra_etherc *) (uintptr_t) 0x40114100U)
 #undef EDMAC
-#define EDMAC ((struct ra_edmac *) (uintptr_t) 0x40114000U)
 #undef RASYSC
-#define RASYSC ((uint32_t *) (uintptr_t) 0x4001E000U)
 #undef ICU_IELSR
+#if defined(MG_DRIVER_RA8) && MG_DRIVER_RA8
+#define ETHERC ((struct ra_etherc *) (uintptr_t) 0x40354100U)
+#define EDMAC ((struct ra_edmac *) (uintptr_t) 0x40354000U)
+#define RASYSC ((uint32_t *) (uintptr_t) 0x4001E000U)
+#define ICU_IELSR ((uint32_t *) (uintptr_t) 0x4000C300U)
+#else
+#define ETHERC ((struct ra_etherc *) (uintptr_t) 0x40114100U)
+#define EDMAC ((struct ra_edmac *) (uintptr_t) 0x40114000U)
+#define RASYSC ((uint32_t *) (uintptr_t) 0x4001E000U)
 #define ICU_IELSR ((uint32_t *) (uintptr_t) 0x40006300U)
+#endif
 
 #define ETH_PKT_SIZE 1536  // Max frame size, multiple of 32
 #define ETH_DESC_CNT 4     // Descriptors count
