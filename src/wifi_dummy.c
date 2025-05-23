@@ -1,7 +1,9 @@
 #include "wifi.h"
 
 #if (!defined(MG_ENABLE_DRIVER_PICO_W) || !MG_ENABLE_DRIVER_PICO_W) && \
-    (!defined(MG_ENABLE_DRIVER_CYW) || !MG_ENABLE_DRIVER_CYW)
+    (!defined(MG_ENABLE_DRIVER_CYW) || !MG_ENABLE_DRIVER_CYW) && \
+    (!defined(MG_ENABLE_DRIVER_CYW_SDIO) || !MG_ENABLE_DRIVER_CYW_SDIO)
+
 
 bool mg_wifi_scan(void) {
   MG_ERROR(("No Wi-Fi driver enabled"));
