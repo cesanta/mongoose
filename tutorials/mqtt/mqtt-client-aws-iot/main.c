@@ -40,7 +40,7 @@ static void fn(struct mg_connection *c, int ev, void *ev_data) {
   if (ev == MG_EV_OPEN) {
     // c->is_hexdumping = 1;
   } else if (ev == MG_EV_CONNECT) {
-    if (mg_url_is_ssl(s_url)) {
+    if (c->is_tls) {
       struct mg_tls_opts opts = {.ca = mg_unpacked("/ca.pem"),
                                  .cert = mg_unpacked("/crt.pem"),
                                  .key = mg_unpacked("/key.pem"),

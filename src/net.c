@@ -170,8 +170,9 @@ struct mg_connection *mg_connect(struct mg_mgr *mgr, const char *url,
     c->fn = fn;
     c->is_client = true;
     c->fn_data = fn_data;
-    MG_DEBUG(("%lu %ld %s", c->id, c->fd, url));
+    c->is_tls = (mg_url_is_ssl(url) != 0);
     mg_call(c, MG_EV_OPEN, (void *) url);
+    MG_DEBUG(("%lu %ld %s", c->id, c->fd, url));
     mg_resolve(c, url);
   }
   return c;
@@ -193,8 +194,8 @@ struct mg_connection *mg_listen(struct mg_mgr *mgr, const char *url,
     LIST_ADD_HEAD(struct mg_connection, &mgr->conns, c);
     c->fn = fn;
     c->fn_data = fn_data;
+    c->is_tls = (mg_url_is_ssl(url) != 0);
     mg_call(c, MG_EV_OPEN, NULL);
-    if (mg_url_is_ssl(url)) c->is_tls = 1;  // Accepted connection must
     MG_DEBUG(("%lu %ld %s", c->id, c->fd, url));
   }
   return c;
