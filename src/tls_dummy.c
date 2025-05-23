@@ -21,6 +21,9 @@ size_t mg_tls_pending(struct mg_connection *c) {
   (void) c;
   return 0;
 }
+void mg_tls_flush(struct mg_connection *c) {
+  (void) c;
+}
 void mg_tls_ctx_init(struct mg_mgr *mgr) {
   (void) mgr;
 }

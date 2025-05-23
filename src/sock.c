@@ -734,11 +734,10 @@ void mg_mgr_poll(struct mg_mgr *mgr, int ms) {
       if (c->is_readable) accept_conn(mgr, c);
     } else if (c->is_connecting) {
       if (c->is_readable || c->is_writable) connect_conn(c);
-      //} else if (c->is_tls_hs) {
-      //  if ((c->is_readable || c->is_writable)) mg_tls_handshake(c);
     } else {
       if (c->is_readable) read_conn(c);
       if (c->is_writable) write_conn(c);
+      if (c->is_tls && !c->is_tls_hs && c->send.len == 0) mg_tls_flush(c);
     }
 
     if (c->is_draining && c->send.len == 0) c->is_closing = 1;
