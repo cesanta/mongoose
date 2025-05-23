@@ -53,7 +53,7 @@ static void http_ev_handler(struct mg_connection *c, int ev, void *ev_data) {
     }
   }
   // Initialise TLS if we're a TLS listener
-  if (ev == MG_EV_ACCEPT && c->fn_data != NULL) {
+  if (c->is_tls && ev == MG_EV_ACCEPT) {
     struct mg_tls_opts opts;
     memset(&opts, 0, sizeof(opts));
 
@@ -102,7 +102,7 @@ void setup() {
 
   // Setup HTTP & HTTPS listeners. Respond "ok" on any HTTP request
   mg_http_listen(&mgr, "http://0.0.0.0:80", http_ev_handler, NULL);
-  mg_http_listen(&mgr, "https://0.0.0.0:443", http_ev_handler, (void *) 1);
+  mg_http_listen(&mgr, "https://0.0.0.0:443", http_ev_handler, NULL);
 }
 
 void loop() {

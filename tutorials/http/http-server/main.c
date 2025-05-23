@@ -52,7 +52,7 @@ static void signal_handler(int signo) {
 // Event handler for the listening connection.
 // Simply serve static files from `s_root_dir`
 static void cb(struct mg_connection *c, int ev, void *ev_data) {
-  if (ev == MG_EV_ACCEPT && c->fn_data != NULL) {
+  if (ev == MG_EV_ACCEPT && c->is_tls) {
     struct mg_tls_opts opts;
     memset(&opts, 0, sizeof(opts));
 #ifdef TLS_TWOWAY
@@ -164,8 +164,8 @@ int main(int argc, char *argv[]) {
               s_addr1));
     exit(EXIT_FAILURE);
   }
-  if ((c = mg_http_listen(&mgr, s_addr2, cb, (void *) 1)) == NULL) {
-    MG_ERROR(("Cannot listen on %s. Use http://ADDR:PORT or :PORT",
+  if ((c = mg_http_listen(&mgr, s_addr2, cb, NULL)) == NULL) {
+    MG_ERROR(("Cannot listen on %s. Use https://ADDR:PORT",
               s_addr2));
     exit(EXIT_FAILURE);
   }

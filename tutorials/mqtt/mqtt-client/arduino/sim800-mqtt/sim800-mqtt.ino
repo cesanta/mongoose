@@ -59,7 +59,7 @@ void handle_command(struct mg_str msg) {
 }
 
 static void mqtt_ev_handler(struct mg_connection *c, int ev, void *ev_data) {
-  if (ev == MG_EV_CONNECT && mg_url_is_ssl(MQTT_SERVER)) {
+  if (c->is_tls && ev == MG_EV_CONNECT) {
     struct mg_tls_opts opts = {};
     opts.ca = mg_str(TLS_CA);
     mg_tls_init(c, &opts);

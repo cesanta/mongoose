@@ -109,7 +109,7 @@ static void fn2(struct mg_connection *c, int ev, void *ev_data) {
 }
 
 static void http_ev_handler(struct mg_connection *c, int ev, void *ev_data) {
-  if (ev == MG_EV_ACCEPT && c->fn_data != NULL) {
+  if (ev == MG_EV_ACCEPT && c->is_tls) {
     struct mg_tls_opts opts = {.cert = mg_str(s_tls_cert),
                                .key = mg_str(s_tls_key)};
     mg_tls_init(c, &opts);
@@ -146,7 +146,7 @@ static void mqtt_ev_handler(struct mg_connection *c, int ev, void *ev_data) {
   if (ev == MG_EV_OPEN) {
     MG_INFO(("%lu CREATED", c->id));
     // c->is_hexdumping = 1;
-  } else if (ev == MG_EV_CONNECT && c->fn_data != NULL) {
+  } else if (ev == MG_EV_CONNECT && c->is_tls) {
     struct mg_tls_opts opts = {.ca = mg_str(s_ca_cert),
                                .name = mg_url_host(MQTTS_URL)};
     mg_tls_init(c, &opts);
@@ -292,7 +292,7 @@ int main(int argc, char *argv[]) {
 
   MG_INFO(("Init done, starting main loop"));
   mg_http_listen(&mgr, "http://0.0.0.0:8000", http_ev_handler, NULL);
-  mg_http_listen(&mgr, "https://0.0.0.0:8443", http_ev_handler, "tls enabled");
+  mg_http_listen(&mgr, "https://0.0.0.0:8443", http_ev_handler, NULL);
 
   while (s_signo == 0) {
     mg_mgr_poll(&mgr, 100);

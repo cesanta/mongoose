@@ -58,7 +58,7 @@ static void fn(struct mg_connection *c, int ev, void *ev_data) {
     if (c2 == NULL) {
       mg_error(c, "Cannot create backend connection");
     } else {
-      if (mg_url_is_ssl(s_backend_url)) {
+      if (c->is_tls) {
         struct mg_tls_opts opts = {.ca = mg_unpacked("/certs/ca.pem"),
                                    .name = mg_url_host(s_backend_url)};
         mg_tls_init(c2, &opts);

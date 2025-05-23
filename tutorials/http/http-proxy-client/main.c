@@ -21,7 +21,7 @@ static void fn(struct mg_connection *c, int ev, void *ev_data) {
     // Proxy TCP connection established. Send CONNECT request
     struct mg_str host = mg_url_host(url);
 
-    if (mg_url_is_ssl(url)) {
+    if (c->is_tls) {
       struct mg_tls_opts opts = {.ca = mg_unpacked("/certs/ca.pem"),
                                  .name = host};
       mg_tls_init(c, &opts);

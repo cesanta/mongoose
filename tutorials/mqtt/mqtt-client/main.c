@@ -29,7 +29,7 @@ static void fn(struct mg_connection *c, int ev, void *ev_data) {
     MG_INFO(("%lu CREATED", c->id));
     // c->is_hexdumping = 1;
   } else if (ev == MG_EV_CONNECT) {
-    if (mg_url_is_ssl(s_url)) {
+    if (c->is_tls) {
       struct mg_tls_opts opts = {.ca = mg_unpacked("/certs/ca.pem"),
                                  .name = mg_url_host(s_url)};
       mg_tls_init(c, &opts);
