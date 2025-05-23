@@ -7,7 +7,9 @@ enum {                      // ID1  ID2
   MG_PHY_DP83825 = 0xa140,  // 2000 a140 - TI DP83825I
   MG_PHY_DP83848 = 0x5ca2,  // 2000 5ca2 - TI DP83848I
   MG_PHY_LAN87x = 0x7,      // 0007 c0fx - LAN8720
-  MG_PHY_RTL8201 = 0x1C     // 001c c816 - RTL8201
+  MG_PHY_RTL8201 = 0x1C,    // 001c c816 - RTL8201,
+  MG_PHY_ICS1894x = 0x15,
+  MG_PHY_ICS189432 = 0xf450 // 0015 f450 - ICS1894
 };
 
 enum {
@@ -23,7 +25,8 @@ enum {
   MG_PHY_KSZ8x_REG_PC2R = 31,
   MG_PHY_LAN87x_REG_SCSR = 31,
   MG_PHY_RTL8201_REG_RMSR = 16,  // in page 7
-  MG_PHY_RTL8201_REG_PAGESEL = 31
+  MG_PHY_RTL8201_REG_PAGESEL = 31,
+  MG_PHY_ICS189432_REG_POLL = 17
 };
 
 static const char *mg_phy_id_to_str(uint16_t id1, uint16_t id2) {
@@ -45,6 +48,8 @@ static const char *mg_phy_id_to_str(uint16_t id1, uint16_t id2) {
       return "LAN87x";
     case MG_PHY_RTL8201:
       return "RTL8201";
+    case MG_PHY_ICS1894x:
+      return "ICS1894x";
     default:
       return "unknown";
   }
@@ -134,6 +139,10 @@ bool mg_phy_up(struct mg_phy *phy, uint8_t phy_addr, bool *full_duplex,
       uint16_t bcr = phy->read_reg(phy_addr, MG_PHY_REG_BCR);
       *full_duplex = bcr & MG_BIT(8);
       *speed = (bcr & MG_BIT(13)) ? MG_PHY_SPEED_100M : MG_PHY_SPEED_10M;
+    } else if (id1 == MG_PHY_ICS1894x) {
+      uint16_t poll_reg = phy->read_reg(phy_addr, MG_PHY_ICS189432_REG_POLL);
+      *full_duplex = poll_reg & MG_BIT(14);
+      *speed = (poll_reg & MG_BIT(15)) ? MG_PHY_SPEED_100M : MG_PHY_SPEED_10M;
     }
   }
   return up;
