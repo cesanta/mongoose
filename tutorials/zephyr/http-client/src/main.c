@@ -28,8 +28,8 @@ static void fn(struct mg_connection *c, int ev, void *ev_data) {
     // Connected to server. Extract host name from URL
     struct mg_str host = mg_url_host(s_url);
 
-    // If s_url is https://, tell client connection to use TLS
-    if (mg_url_is_ssl(s_url)) {
+    // If s_url is https://, init TLS client connection
+    if (c->is_tls) {
       struct mg_tls_opts opts = {.ca = s_ca, .name = host};
       mg_tls_init(c, &opts);
     }

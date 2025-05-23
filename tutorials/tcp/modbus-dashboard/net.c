@@ -223,7 +223,7 @@ static size_t print_mb_resp(void (*out)(char, void *), void *ptr, va_list *ap) {
 static void fn(struct mg_connection *c, int ev, void *ev_data) {
   struct conndata *cd = (struct conndata *) c->data;
   if (ev == MG_EV_ACCEPT) {
-    if (c->fn_data != NULL) {  // TLS listener!
+    if (c->is_tls) {  // TLS listener!
       struct mg_tls_opts opts = {0};
       opts.cert = mg_unpacked("/certs/server_cert.pem");
       opts.key = mg_unpacked("/certs/server_key.pem");

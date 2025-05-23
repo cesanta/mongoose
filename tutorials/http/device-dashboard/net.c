@@ -205,7 +205,7 @@ static void handle_firmware_upload(struct mg_connection *c,
 // HTTP request handler function
 static void fn(struct mg_connection *c, int ev, void *ev_data) {
   if (ev == MG_EV_ACCEPT) {
-    if (c->fn_data != NULL) {  // TLS listener!
+    if (c->is_tls) {  // TLS listener!
       struct mg_tls_opts opts = {0};
       opts.cert = mg_unpacked("/certs/server_cert.pem");
       opts.key = mg_unpacked("/certs/server_key.pem");
@@ -253,7 +253,7 @@ static void fn(struct mg_connection *c, int ev, void *ev_data) {
 void web_init(struct mg_mgr *mgr) {
   s_settings.device_name = strdup("My Device");
   mg_http_listen(mgr, HTTP_URL, fn, NULL);
-  mg_http_listen(mgr, HTTPS_URL, fn, (void *) 1);
+  mg_http_listen(mgr, HTTPS_URL, fn, NULL);
   mg_timer_add(mgr, 3600 * 1000, MG_TIMER_RUN_NOW | MG_TIMER_REPEAT,
                timer_sntp_fn, mgr);
 }
