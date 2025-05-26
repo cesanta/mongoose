@@ -74,7 +74,7 @@ static void handle_uploads(struct mg_connection *c, int ev, void *ev_data) {
 }
 
 static void fn(struct mg_connection *c, int ev, void *ev_data) {
-  if (ev == MG_EV_ACCEPT && c->fn_data != NULL) {
+  if (ev == MG_EV_ACCEPT && c->is_tls) {
     struct mg_tls_opts opts = {.cert = mg_str(s_tls_cert),
                                .key = mg_str(s_tls_key)};
     mg_tls_init(c, &opts);

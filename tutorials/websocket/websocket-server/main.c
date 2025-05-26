@@ -18,7 +18,7 @@ static const char *s_key_path = "key.pem";
 static void fn(struct mg_connection *c, int ev, void *ev_data) {
   if (ev == MG_EV_OPEN) {
     // c->is_hexdumping = 1;
-  } else if(ev == MG_EV_ACCEPT && mg_url_is_ssl(s_listen_on)) {
+  } else if(c->is_tls && ev == MG_EV_ACCEPT) {
     struct mg_str ca = mg_file_read(&mg_fs_posix, s_ca_path);
     struct mg_str cert = mg_file_read(&mg_fs_posix, s_cert_path);
     struct mg_str key = mg_file_read(&mg_fs_posix, s_key_path);

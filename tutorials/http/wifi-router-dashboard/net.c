@@ -276,7 +276,7 @@ static void handle_dhcp_get(struct mg_connection *c) {
 // HTTP request handler function
 static void fn(struct mg_connection *c, int ev, void *ev_data) {
   if (ev == MG_EV_ACCEPT) {
-    if (c->fn_data != NULL) {  // TLS
+    if (c->is_tls) {
       struct mg_tls_opts opts = {0};
       opts.cert = mg_str(s_tls_cert);
       opts.key = mg_str(s_tls_key);
@@ -323,7 +323,7 @@ static void fn(struct mg_connection *c, int ev, void *ev_data) {
 
 void web_init(struct mg_mgr *mgr) {
   mg_http_listen(mgr, HTTP_URL, fn, NULL);
-  mg_http_listen(mgr, HTTPS_URL, fn, (void *) 1);
+  mg_http_listen(mgr, HTTPS_URL, fn, NULL);
 
   // mg_timer_add(c->mgr, 1000, MG_TIMER_REPEAT, timer_mqtt_fn, c->mgr);
   mg_timer_add(mgr, 3600 * 1000, MG_TIMER_RUN_NOW | MG_TIMER_REPEAT,

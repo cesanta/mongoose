@@ -25,7 +25,7 @@ static void fn(struct mg_connection *c, int ev, void *ev_data) {
     // On error, log error message
     MG_ERROR(("%p %s", c->fd, (char *) ev_data));
   } else if (ev == MG_EV_CONNECT) {
-    if (mg_url_is_ssl(s_url)) {
+    if (c->is_tls) {
       struct mg_tls_opts opts = {.ca = mg_unpacked("/certs/ca.pem"),
                                  .name = mg_url_host(s_url)};
       mg_tls_init(c, &opts);
