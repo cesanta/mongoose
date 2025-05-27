@@ -211,6 +211,7 @@ static inline unsigned int pllrge(unsigned int f) {
   return val - 1;
 }
 
+// HSE: 25MHz in PH0; LSE: in PC14; both unused
 static inline void clock_init(void) {
   // Set flash latency. RM section 4.9.1, section 4.3.8 table 16
   CLRSET(FLASH->ACR, (FLASH_ACR_WRHIGHFREQ_Msk | FLASH_ACR_LATENCY_Msk),
