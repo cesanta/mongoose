@@ -1,7 +1,7 @@
 # Mongoose - Embedded Web Server / Embedded Network Library
 
 [![License: GPLv2/Commercial](https://img.shields.io/badge/License-GPLv2%20or%20Commercial-green.svg)](https://opensource.org/licenses/gpl-2.0.php)
-[![Build Status]( https://github.com/cesanta/mongoose/workflows/build/badge.svg)](https://github.com/cesanta/mongoose/actions)
+[![Build Status]( https://github.com/cesanta/mongoose/actions/workflows/build/badge.svg)](https://github.com/cesanta/mongoose/actions)
 [![Code Coverage](https://codecov.io/gh/cesanta/mongoose/branch/master/graph/badge.svg)](https://codecov.io/gh/cesanta/mongoose)
 [![Fuzzing Status](https://oss-fuzz-build-logs.storage.googleapis.com/badges/mongoose.svg)](https://bugs.chromium.org/p/oss-fuzz/issues/list?sort=-opened&can=1&q=proj:mongoose)
 [![Gurubase](https://img.shields.io/badge/Gurubase-Ask%20Mongoose%20Guru-006BFF)](https://gurubase.io/g/mongoose)
