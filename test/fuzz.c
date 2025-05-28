@@ -146,6 +146,7 @@ int LLVMFuzzerTestOneInput(const uint8_t *data, size_t size) {
     c->pfn(c, MG_EV_READ, NULL); // manually invoke protocol event handler
 
     free(pkt);
+    mg_mgr_free(&mgr);
   }
 
   return 0;
