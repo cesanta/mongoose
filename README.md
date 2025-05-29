@@ -178,6 +178,7 @@ Technical guides and deep dives into embedded web servers, WebUI integration and
 - [Building Embedded Web Device Dashboards](https://mongoose.ws/articles/building-embedded-web-device-dashboard/)
 - [ESP32 Device Dashboard: A Step-by-Step Guide for Developers](https://mongoose.ws/articles/esp32-device-dashboard/)
 - [How to build an STM32 Web Dashboard](https://mongoose.ws/articles/stm32-device-dashboard/)
+- [STM32 WebSocket Guide](https://mongoose.ws/articles/stm32-websocket-guide/)
 
 
 ## Contributions
