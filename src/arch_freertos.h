@@ -37,10 +37,13 @@ static inline void *mg_calloc(size_t cnt, size_t size) {
   return p;
 }
 
+#if MG_ENABLE_POSIX_FS
+#else
 #define mkdir(a, b) mg_mkdir(a, b)
 static inline int mg_mkdir(const char *path, mode_t mode) {
   (void) path, (void) mode;
   return -1;
 }
+#endif
 
 #endif  // MG_ARCH == MG_ARCH_FREERTOS

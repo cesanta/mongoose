@@ -112,7 +112,7 @@ int main(int argc, char *argv[]) {
   struct mg_tcpip_driver driver = {.tx = tap_tx, .poll = tap_poll, .rx = tap_rx};
   struct mg_tcpip_if mif = {.driver = &driver,
                             .driver_data = &fd,
-                            .enable_req_dns = true,
+                            .enable_req_dns = false,
                             .enable_req_sntp = true,
                             .fn = mif_fn};
   sscanf(mac, "%hhx:%hhx:%hhx:%hhx:%hhx:%hhx", &mif.mac[0], &mif.mac[1],
