@@ -1212,8 +1212,8 @@ void mg_mgr_poll(struct mg_mgr *mgr, int ms) {
   for (c = mgr->conns; c != NULL; c = tmp) {
     tmp = c->next;
     struct connstate *s = (struct connstate *) (c + 1);
-    bool is_tls = !c->is_resolving && !c->is_arplooking && !c->is_listening &&
-                  !c->is_connecting;
+    bool is_tls = c->is_tls && !c->is_resolving && !c->is_arplooking &&
+                  !c->is_listening && !c->is_connecting;
     mg_call(c, MG_EV_POLL, &now);
     MG_VERBOSE(("%lu .. %c%c%c%c%c %lu %lu", c->id, c->is_tls ? 'T' : 't',
                 c->is_connecting ? 'C' : 'c', c->is_tls_hs ? 'H' : 'h',
