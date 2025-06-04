@@ -14194,6 +14194,7 @@ long mg_tls_send(struct mg_connection *c, const void *buf, size_t len) {
 }
 
 void mg_tls_flush(struct mg_connection *c) {
+  struct mg_tls *tls = (struct mg_tls *) c->tls;
   if (c->is_tls_throttled) {
     long n = mbedtls_ssl_write(&tls->ssl, tls->throttled_buf, tls->throttled_len);
     c->is_tls_throttled = (n == MBEDTLS_ERR_SSL_WANT_READ || n == MBEDTLS_ERR_SSL_WANT_WRITE);

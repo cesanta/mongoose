@@ -254,6 +254,6 @@ void web_init(struct mg_mgr *mgr) {
   s_settings.device_name = strdup("My Device");
   mg_http_listen(mgr, HTTP_URL, fn, NULL);
   mg_http_listen(mgr, HTTPS_URL, fn, NULL);
-  mg_timer_add(mgr, 10 * 1000, MG_TIMER_RUN_NOW | MG_TIMER_REPEAT,
+  mg_timer_add(mgr, 3600 * 1000, MG_TIMER_RUN_NOW | MG_TIMER_REPEAT,
                timer_sntp_fn, mgr);
 }
