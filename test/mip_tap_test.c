@@ -267,12 +267,32 @@ static void mqtt_fn(struct mg_connection *c, int ev, void *ev_data) {
   } else if (ev == MG_EV_MQTT_MSG) {
     struct mg_mqtt_message *mm = (struct mg_mqtt_message *) ev_data;
     MG_DEBUG(("TOPIC: %.*s, MSG: %.*s", (int) mm->topic.len, mm->topic.buf,
-              (int) mm->data.len, mm->data.buf));
+              mm->data.len > 10 ? 10 : (int) mm->data.len, mm->data.buf));
     ASSERT(mm->topic.len == strlen(s_topic) &&
-           strcmp(mm->topic.buf, s_topic) == 0);
-    ASSERT(mm->data.len == 2 && strcmp(mm->data.buf, "hi") == 0);
-    mg_mqtt_disconnect(c, NULL);
-    *(bool *) c->fn_data = true;
+           strncmp(mm->topic.buf, s_topic, mm->topic.len) == 0);
+    if (mm->data.len == 2 && strncmp(mm->data.buf, "hi", 2) == 0) {
+      struct mg_mqtt_opts pub_opts;
+      memset(&pub_opts, 0, sizeof(pub_opts));
+      pub_opts.topic = mm->topic;
+      // send more than 1 record, content is not relevant
+      pub_opts.message = mg_str_n((char *)(size_t) mqtt_fn, 21098);
+      pub_opts.qos = 1, pub_opts.retain = false;
+      mg_mqtt_pub(c, &pub_opts);
+    } else if (mm->data.len == 8 && strncmp(mm->data.buf, "farewell", 8) == 0) {
+      // close on farewell
+      MG_INFO(("%lu CLOSING", c->id));
+      mg_mqtt_disconnect(c, NULL);
+      *(bool *) c->fn_data = true;
+    } else if (mm->data.len == 21098) {
+      struct mg_mqtt_opts pub_opts;
+      ASSERT(memcmp((const char *) mqtt_fn, mm->data.buf, 21098) == 0);
+      // send farewell after receiving big data
+      memset(&pub_opts, 0, sizeof(pub_opts));
+      pub_opts.topic = mm->topic;
+      pub_opts.message = mg_str("farewell");
+      pub_opts.qos = 1, pub_opts.retain = false;
+      mg_mqtt_pub(c, &pub_opts);
+    }
   } else if (ev == MG_EV_CLOSE) {
     MG_DEBUG(("CLOSE"));
     s_conn = NULL;
@@ -292,7 +312,7 @@ static void test_mqtt_connsubpub(struct mg_mgr *mgr) {
   s_conn = mg_mqtt_connect(mgr, MQTT_URL, &opts, mqtt_fn, &passed);
 #endif
   ASSERT(s_conn != NULL);
-  for (int i = 0; i < 500 && s_conn != NULL && !s_conn->is_closing; i++) {
+  for (int i = 0; i < 1000 && s_conn != NULL && !s_conn->is_closing; i++) {
     mg_mgr_poll(mgr, 0);
     usleep(10000);  // 10 ms. Slow down poll loop to ensure packets transit
   }

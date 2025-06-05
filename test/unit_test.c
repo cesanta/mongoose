@@ -374,6 +374,47 @@ static void test_sntp(void) {
 #endif
 }
 
+#define MQTT_URL "mqtt://broker.hivemq.com:1883"  // MQTT broker URL
+#if MG_TLS == MG_TLS_BUILTIN
+#define MQTTS_URL "mqtts://mongoose.ws:8883"  // HiveMQ does not do TLS1.3
+#define MQTTS_CA mg_str(s_ca_cert)
+static const char *s_ca_cert =
+    "-----BEGIN CERTIFICATE-----\n"
+    "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\n"
+    "-----END CERTIFICATE-----\n";
+#elif MG_TLS
+#define MQTTS_URL "mqtts://broker.hivemq.com:8883"  // MQTT broker URL
+#define MQTTS_CA mg_unpacked("/data/ca.pem")
+#endif
+
 struct mqtt_data {
   char *topic;
   char *msg;
@@ -391,6 +432,16 @@ static void mqtt_cb(struct mg_connection *c, int ev, void *ev_data) {
   struct mqtt_data *test_data = (struct mqtt_data *) c->fn_data;
   char *buf = test_data->msg;
 
+#if MG_TLS
+  if (c->is_tls && ev == MG_EV_CONNECT) {
+    struct mg_tls_opts opts;
+    memset(&opts, 0, sizeof(opts));
+    opts.ca = MQTTS_CA;
+    opts.name = mg_url_host(MQTTS_URL);
+
+    mg_tls_init(c, &opts);
+  } else 
+#endif
   if (ev == MG_EV_MQTT_OPEN) {
     buf[0] = *(int *) ev_data == 0 ? 'X' : 'Y';
   } else if (ev == MG_EV_CLOSE) {
@@ -517,7 +568,11 @@ static void test_mqtt_basic(void) {
   struct mg_mgr mgr;
   struct mg_connection *c;
   struct mg_mqtt_opts opts;
+#if MG_TLS
+  const char *url = MQTTS_URL;
+#else 
   const char *url = "mqtt://broker.hivemq.com:1883";
+#endif
   int i, retries;
 
   // Connect with empty client ID, no options, ergo MQTT = 3.1.1
@@ -561,6 +616,21 @@ static void test_mqtt_basic(void) {
   memset(mbuf + 1, 0, sizeof(mbuf) - 1);
   test_data.flags = 0;
   opts.retransmit_id = 0;
+
+#if MG_TLS
+  // send more than 1 record, content is not relevant
+  opts.message = mg_str_n((char *)(size_t) test_mqtt_basic, 21098);
+  opts.qos = 1, opts.retain = false, opts.retransmit_id = 0;
+  mg_mqtt_pub(c, &opts);
+  tbuf[0] = 0;
+  for (i = 0; i < 1000 && test_data.flags == 0; i++) mg_mgr_poll(&mgr, 10);
+  ASSERT(test_data.flags == flags_published);
+  for (i = 0; i < 1000 && tbuf[0] == 0; i++) mg_mgr_poll(&mgr, 10);
+  ASSERT(tbuf[0] != 0); // just check we were able to send and receive
+  memset(mbuf + 1, 0, sizeof(mbuf) - 1);
+  test_data.flags = 0;
+  opts.retransmit_id = 0;
+#endif
 
   // Clean Disconnect !
   mg_mqtt_disconnect(c, NULL);
@@ -1311,6 +1381,9 @@ static void test_tls(void) {
   char buf[FETCH_BUF_SIZE];
   struct mg_tls_opts opts;
   struct mg_str data = mg_unpacked("/Makefile");
+  char bigdata[FETCH_BUF_SIZE - 256];  // leave extra room
+  struct mg_str bd;
+  ASSERT(data.buf != NULL && data.len > 0);
   memset(&opts, 0, sizeof(opts));
   // opts.ca = mg_str(s_tls_ca);
   opts.cert = mg_unpacked("/certs/server.crt");
@@ -1321,13 +1394,25 @@ static void test_tls(void) {
   ASSERT(fetch(&mgr, buf, url, "GET /a.txt HTTP/1.0\n\n") == 200);
   // MG_INFO(("%s", buf));
   ASSERT(cmpbody(buf, "hello\n") == 0);
-  // POST a large file, make sure we drain TLS buffers and read all, #2619
-  ASSERT(data.buf != NULL && data.len > 0);
+  // POST a large file, several MSS but less than max TLS record length
+  // make sure we drain TLS buffers and read all, #2619
+  ASSERT(data.len > 3100 && data.len < 16384);  // pick another file on failure
   ASSERT(fetch(&mgr, buf, url,
-               "POST /foo/bar HTTP/1.0\n"
+               "POST /body HTTP/1.0\n"
                "Content-Length: %lu\n\n"
                "%s",
                data.len, data.buf) == 200);
+  // /body returns data back, so verify contents (both server and client send
+  // and receive the whole file
+  ASSERT(cmpbody(buf, data.buf) == 0);
+  // repeat with a really large "file", several times max TLS record length
+  bd = genstring(bigdata, sizeof(bigdata));
+  ASSERT(fetch(&mgr, buf, url,
+               "POST /body HTTP/1.0\n"
+               "Content-Length: %lu\n\n"
+               "%s",
+               bd.len, bd.buf) == 200);
+  ASSERT(cmpbody(buf, bd.buf) == 0);
 #if MG_TLS == MG_TLS_BUILTIN && defined(__linux__)
   // fire patched server, test multiple TLS records per TCP segment handling
   // skip other TLS stacks to avoid "bad client hello", we are 1.3 only
@@ -1976,7 +2061,6 @@ static void test_timer(void) {
     ASSERT(mgr.timers == NULL);
     ASSERT(mgr.conns == NULL);
   }
-
 }
 
 static bool sn(const char *fmt, ...) {
@@ -2424,14 +2508,14 @@ static void test_dns(void) {
     // 0000   00 00 00 00 00 01 00 00 00 00 00 00 03 61 62 63   .............abc
     // 0010   05 6c 6f 63 61 6c 00 00 01 00 01                  .local.....
     uint8_t d[] = {
-      0x00, 0x00, // txid: 0
-      0x00, 0x00, // flags: 0 (Query flag = 0)
-      0x00, 0x01, // numQuestions: 1
-      0x00, 0x00, // numAnswers: 1
-      0x00, 0x00, 0x00, 0x00, // additional RRs
-      0x03, 0x61, 0x62, 0x63, // "abc"
-      0x05, 0x6c, 0x6f, 0x63, 0x61, 0x6c, // "local"
-      0x00, 0x00, 0x01, 0x00, 0x01 // domain end, type, class
+        0x00, 0x00,                          // txid: 0
+        0x00, 0x00,                          // flags: 0 (Query flag = 0)
+        0x00, 0x01,                          // numQuestions: 1
+        0x00, 0x00,                          // numAnswers: 1
+        0x00, 0x00, 0x00, 0x00,              // additional RRs
+        0x03, 0x61, 0x62, 0x63,              // "abc"
+        0x05, 0x6c, 0x6f, 0x63, 0x61, 0x6c,  // "local"
+        0x00, 0x00, 0x01, 0x00, 0x01         // domain end, type, class
     };
     memset(&dm, 0, sizeof(dm));
     ASSERT(mg_dns_parse(d, sizeof(d), &dm) == 1);
@@ -2469,15 +2553,17 @@ static void test_util(void) {
   ASSERT(ipv4 == mg_htonl(0x7f000001));
   ASSERT(mg_ntohl(ipv4) == 0x7f000001);
   MG_STORE_BE32(&ipv4, 0x5678abcd);
-  ASSERT(((uint8_t *)&ipv4)[0] == 0x56 && ((uint8_t *)&ipv4)[1] == 0x78 && ((uint8_t *)&ipv4)[2] == 0xab && ((uint8_t *)&ipv4)[3] == 0xcd);
+  ASSERT(((uint8_t *) &ipv4)[0] == 0x56 && ((uint8_t *) &ipv4)[1] == 0x78 &&
+         ((uint8_t *) &ipv4)[2] == 0xab && ((uint8_t *) &ipv4)[3] == 0xcd);
   ASSERT(MG_LOAD_BE32(&ipv4) == 0x5678abcd);
   MG_STORE_BE16(&port, 0x1234);
-  ASSERT(((uint8_t *)&port)[0] == 0x12 && ((uint8_t *)&port)[1] == 0x34);
+  ASSERT(((uint8_t *) &port)[0] == 0x12 && ((uint8_t *) &port)[1] == 0x34);
   ASSERT(MG_LOAD_BE16(&port) == 0x1234);
   ASSERT(port == mg_htons(0x1234));
   ASSERT(mg_ntohs(port) == 0x1234);
   MG_STORE_BE24(&ipv4, 0xef2345);
-  ASSERT(((uint8_t *)&ipv4)[0] == 0xef && ((uint8_t *)&ipv4)[1] == 0x23 && ((uint8_t *)&ipv4)[2] == 0x45);
+  ASSERT(((uint8_t *) &ipv4)[0] == 0xef && ((uint8_t *) &ipv4)[1] == 0x23 &&
+         ((uint8_t *) &ipv4)[2] == 0x45);
   ASSERT(MG_LOAD_BE24(&ipv4) == 0xef2345);
 
   memset(a.ip, 0xa5, sizeof(a.ip));
