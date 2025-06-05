@@ -104,6 +104,7 @@ static void ssl_keylog_cb(const SSL *ssl, const char *line) {
   fprintf(f, "%s\n", line);
   fflush(f);
   fclose(f);
+  (void) ssl;
 }
 #endif
 
