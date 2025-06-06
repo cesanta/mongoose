@@ -1,0 +1,4 @@
+       *(.rodata)
+       *(EXCLUDE_FILE(*mflash_drv.o *fsl_flexspi.o).rodata.*)
+       *(.constdata .constdata.*)
+       . = ALIGN(${text_align});
