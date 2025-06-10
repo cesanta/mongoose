@@ -6,7 +6,7 @@
 #define MG_ARCH_ESP32 3         // ESP32
 #define MG_ARCH_ESP8266 4       // ESP8266
 #define MG_ARCH_FREERTOS 5      // FreeRTOS
-#define MG_ARCH_AZURERTOS 6     // MS Azure RTOS
+#define MG_ARCH_THREADX 6       // Eclipse ThreadX (former MS Azure RTOS)
 #define MG_ARCH_ZEPHYR 7        // Zephyr RTOS
 #define MG_ARCH_NEWLIB 8        // Bare metal ARM
 #define MG_ARCH_CMSIS_RTOS1 9   // CMSIS-RTOS API v1 (Keil RTX)
@@ -30,7 +30,7 @@
 #endif
 
 #if !defined(MG_ARCH)
-#error "MG_ARCH is not specified and we couldn't guess it. Define MG_ARCH=... in your compiler"
+#error "MG_ARCH is not specified and we couldn't guess it. Define MG_ARCH=... in mongoose_config.h"
 #endif
 
 // http://esr.ibiblio.org/?p=5095
@@ -44,6 +44,7 @@
 #include "arch_unix.h"
 #include "arch_win32.h"
 #include "arch_zephyr.h"
+#include "arch_threadx.h"
 
 #include "net_ft.h"
 #include "net_lwip.h"
