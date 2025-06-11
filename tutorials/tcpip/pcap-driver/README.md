@@ -81,7 +81,7 @@ $ sudo ip link set my0 up
 $ sudo ip link set my1 up
 ```
 
-In some systems, like for example RHEL7, _name_ is mandatory; in others you might need not to add it, that is why we represented it here using square brackets.
+In some systems, like for example RHEL7, _name_ is mandatory; in others you might not need to add it, that is why we represented it here using square brackets.
 
 ### Use a virtual interface
 
@@ -165,7 +165,7 @@ We will attach one end of the virtual interface to a bridge, which will also be 
                      └──────┼───────────┼───────────┼──────┘
                             │           │           │
                                         │
-                                     Ethernet [WiFi]     
+                                     Ethernet
                                         │    Local LAN 10.1.0.x
                                         │    DHCP server, router
                                         ▼	
@@ -173,6 +173,8 @@ We will attach one end of the virtual interface to a bridge, which will also be 
 ```
 
 If you have _Docker_ running, it may introduce firewall rules that will disrupt your bridging.
+
+Bridging usually does not work for Wi-Fi, see [this](../tap-driver/README.md#appendix-wi-fi)
 
 ### Forward/Masquerade
 
@@ -206,7 +208,7 @@ Once you have your virtual interface up and running with an IP address, you can 
  └────┬────┘       
       │ 
       │ 
-   Ethernet
+   Ethernet [Wi-Fi]
       │ 
       ▼
    Internet
@@ -235,9 +237,11 @@ You can also use this setup if your NIC is part of a bridge (for example: you ha
        └──────┼───────────┼───────────┼──────┘
               │           │           │
                           │
-                       Ethernet [WiFi]     
+                       Ethernet
                           │    Local LAN 10.1.0.x
                           │    DHCP server, router
                           ▼	
                        Internet
 ```
+
+Bridging usually does not work for Wi-Fi, see [this](../tap-driver/README.md#appendix-wi-fi)

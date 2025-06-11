@@ -48,7 +48,7 @@ We will attach one end of the virtual interface to a bridge, which will also be 
 
 - If you don't already have a virtual bridge interface, as mentioned above, you'll have to create it and attach your network interface (NIC) to it. Your IP address has to be assigned to the bridge, instead of the NIC. If you are using DHCP, the client must run on the bridge interface instead of the NIC.
   ```sh
-  $ ip link add virbr0 type bridge
+  $ sudo ip link add virbr0 type bridge
   $ sudo ip link set virbr0 up
   $ sudo ip addr del 10.1.0.10/24 dev enp9s0
   $ sudo ip link set enp9s0 master virbr0
@@ -98,7 +98,7 @@ We will attach one end of the virtual interface to a bridge, which will also be 
                     └──────┼───────────┼───────────┼──────┘
                            │           │           │
                                        │
-                                    Ethernet [WiFi]     
+                                    Ethernet
                                        │    Local LAN 10.1.0.x
                                        │    DHCP server, router
                                        ▼	
@@ -106,6 +106,8 @@ We will attach one end of the virtual interface to a bridge, which will also be 
 ```
 
 If you have _Docker_ running, it may introduce firewall rules that will disrupt your bridging.
+
+Bridging usually does not work for Wi-Fi, see [Appendix](#appendix-wi-fi) below
 
 ### Forward/Masquerade
 
@@ -136,7 +138,7 @@ Once you have your virtual interface up and running with an IP address, you can 
  └────┬────┘       
       │ 
       │ 
-   Ethernet
+   Ethernet [WiFi]
       │ 
       ▼
    Internet
@@ -165,9 +167,20 @@ You can also use this setup if your NIC is part of a bridge (for example: you ha
        └──────┼───────────┼───────────┼──────┘
               │           │           │
                           │
-                       Ethernet [WiFi]     
+                       Ethernet
                           │    Local LAN 10.1.0.x
                           │    DHCP server, router
                           ▼	
                        Internet
 ```
+
+Bridging usually does not work for Wi-Fi, see [Appendix](#appendix-wi-fi) below
+
+## Appendix: Wi-Fi
+
+Due to the way the wireless standard works, bridging might require having knowledgeable access to the Access Point / Wireless Router (AP).
+In addition to the Sender Address (SA) and Destination Address (DA) found in Ethernet frames, Wi-Fi requires the Transmitter Address (TA) and Receiver Address (RA) fields to work; a total of 4 MAC addresses. Usually, the common case, is: TA = SA for station (STA) to AP frames and DA = RA for AP to STA; that means usually only 3 addresses are in use.
+
+Bridging at an AP just changes SA for AP to STA frames and DA for STA to AP frames, so there's still 3 addresses in use and this will usually work with no issues.
+
+Bridging at a STA means: for STA to AP frames, SA and TA are no longer equal; for AP to STA frames, DA and RA are also different. We need to use all 4 addresses and usually both STA and AP are not configured for this mode. At the station, a configuration tool may allow to enable `4addr' mode, while at the AP, the scenario is similar to that of bridging two LANs, a Wireless Distribution System (WDS), so we need to enable this. Unfortunately, there can be incompatibilities in the way this is implemented by vendors, so even in those cases when we actually can access and reconfigure the AP, there's no guarantee it will work.
