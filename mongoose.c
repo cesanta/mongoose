@@ -4869,6 +4869,11 @@ static void read_conn(struct mg_connection *c, struct pkt *pkt) {
     if (pkt->pay.len == 0) return;  // if no data, we're done
   } else if (pkt->pay.len == 0) {   // this is an ACK
     if (s->fin_rcvd && s->ttype == MIP_TTYPE_FIN) s->twclosure = true;
+    if (mg_ntohl(pkt->tcp->seq) == s->ack - 1) { // this is a keepalive probe
+      MG_VERBOSE(("%lu keepalive ACK", c->id));
+      tx_tcp(c->mgr->ifp, s->mac, rem_ip, TH_ACK, c->loc.port, c->rem.port,
+             mg_htonl(s->seq), mg_htonl(s->ack), NULL, 0);
+    }
     return;  // no data to process
   } else if (seq != s->ack) {
     uint32_t ack = (uint32_t) (mg_htonl(pkt->tcp->seq) + pkt->pay.len);
