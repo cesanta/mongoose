@@ -43,6 +43,7 @@ extern "C" {
 #define MG_ARCH_CMSIS_RTOS2 13  // CMSIS-RTOS API v2 (Keil RTX5, FreeRTOS)
 #define MG_ARCH_RTTHREAD 14     // RT-Thread RTOS
 #define MG_ARCH_ARMCGT 15       // Texas Semi ARM-CGT
+#define MG_ARCH_THREADX 16      // Eclipse ThreadX
 
 #if !defined(MG_ARCH)
 #if defined(__unix__) || defined(__APPLE__)
@@ -62,6 +63,7 @@ extern "C" {
 
 // http://esr.ibiblio.org/?p=5095
 #define MG_BIG_ENDIAN (*(uint16_t *) "\0\xff" < 0x100)
+
 
 
 
@@ -345,6 +347,52 @@ static inline int mg_mkdir(const char *path, mode_t mode) {
 #endif
 
 #endif
+
+#if MG_ARCH == MG_ARCH_THREADX
+
+#include <stdarg.h>
+#include <stdbool.h>
+#include <stdint.h>
+#include <string.h>
+
+#include <nxd_bsd.h>
+
+#ifndef MG_ENABLE_PACKED_FS
+#define MG_ENABLE_PACKED_FS 1
+#endif
+
+#ifndef MG_ENABLE_IPV6
+#define MG_ENABLE_IPV6 0
+#endif
+
+#ifndef MG_ENABLE_CUSTOM_MILLIS
+#define MG_ENABLE_CUSTOM_MILLIS 1
+#endif
+
+#ifndef MG_SOCK_LISTEN_BACKLOG_SIZE
+#define MG_SOCK_LISTEN_BACKLOG_SIZE 3
+#endif
+
+#ifndef MG_PATH_MAX
+#define MG_PATH_MAX 32
+#endif
+
+#define MG_CUSTOM_NONBLOCK(fd) fcntl(fd, F_SETFL, O_NONBLOCK)
+#define closesocket(x) soc_close(x)
+
+// Do not include time.h and stdlib.h, since they conflict with nxd_bsd.h
+extern time_t time(time_t *);
+
+// In order to enable BSD support in NetxDuo, do the following (assuming Cube):
+// 1. Add nxd_bsd.h and nxd_bsd.c to the repo:
+//     https://github.com/eclipse-threadx/netxduo/blob/v6.1.12_rel/addons/BSD/nxd_bsd.c
+//     https://github.com/eclipse-threadx/netxduo/blob/v6.1.12_rel/addons/BSD/nxd_bsd.h
+// 2. Add to tx_user.h
+//     #define TX_THREAD_USER_EXTENSION int bsd_errno;
+// 3. Add to nx_user.h
+//     #define NX_ENABLE_EXTENDED_NOTIFY_SUPPORT
+
+#endif  // MG_ARCH == MG_ARCH_THREADX
 
 
 #if MG_ARCH == MG_ARCH_TIRTOS

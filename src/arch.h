@@ -16,6 +16,7 @@
 #define MG_ARCH_CMSIS_RTOS2 13  // CMSIS-RTOS API v2 (Keil RTX5, FreeRTOS)
 #define MG_ARCH_RTTHREAD 14     // RT-Thread RTOS
 #define MG_ARCH_ARMCGT 15       // Texas Semi ARM-CGT
+#define MG_ARCH_THREADX 16      // Eclipse ThreadX
 
 #if !defined(MG_ARCH)
 #if defined(__unix__) || defined(__APPLE__)
@@ -44,6 +45,7 @@
 #include "arch_unix.h"
 #include "arch_win32.h"
 #include "arch_zephyr.h"
+#include "arch_threadx.h"
 
 #include "net_ft.h"
 #include "net_lwip.h"
