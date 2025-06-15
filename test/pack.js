@@ -2,9 +2,7 @@
 
 const Pack = async function(files) {
   let out = `// DO NOT EDIT. This file is generated
-#include <stddef.h>
-#include <string.h>
-#include <time.h>
+#include "mongoose.h"
 
 #if defined(__cplusplus)
 extern "C" {
