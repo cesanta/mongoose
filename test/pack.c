@@ -47,9 +47,7 @@ int main(int argc, char *argv[]) {
   int i, j, ch;
   const char *strip_prefix = "";
 
-  printf("%s", "#include <stddef.h>\n");
-  printf("%s", "#include <string.h>\n");
-  printf("%s", "#include <time.h>\n");
+  printf("%s", "#include \"mongoose.h\"\n");
   printf("%s", "\n");
   printf("%s", "#if defined(__cplusplus)\nextern \"C\" {\n#endif\n");
   printf("%s", "const char *mg_unlist(size_t no);\n");

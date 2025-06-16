@@ -33,7 +33,7 @@ extern "C" {
 #define MG_ARCH_ESP32 3         // ESP32
 #define MG_ARCH_ESP8266 4       // ESP8266
 #define MG_ARCH_FREERTOS 5      // FreeRTOS
-#define MG_ARCH_AZURERTOS 6     // MS Azure RTOS
+#define MG_ARCH_THREADX 6       // Eclipse ThreadX (former MS Azure RTOS)
 #define MG_ARCH_ZEPHYR 7        // Zephyr RTOS
 #define MG_ARCH_NEWLIB 8        // Bare metal ARM
 #define MG_ARCH_CMSIS_RTOS1 9   // CMSIS-RTOS API v1 (Keil RTX)
@@ -57,11 +57,12 @@ extern "C" {
 #endif
 
 #if !defined(MG_ARCH)
-#error "MG_ARCH is not specified and we couldn't guess it. Define MG_ARCH=... in your compiler"
+#error "MG_ARCH is not specified and we couldn't guess it. Define MG_ARCH=... in mongoose_config.h"
 #endif
 
 // http://esr.ibiblio.org/?p=5095
 #define MG_BIG_ENDIAN (*(uint16_t *) "\0\xff" < 0x100)
+
 
 
 
@@ -92,33 +93,6 @@ extern "C" {
 #define MG_PATH_MAX 100
 #define MG_ENABLE_SOCKET 0
 #define MG_ENABLE_DIRLIST 0
-
-#endif
-
-
-#if MG_ARCH == MG_ARCH_AZURERTOS
-
-#include <stdarg.h>
-#include <stdbool.h>
-#include <stdint.h>
-#include <stdio.h>
-#include <time.h>
-
-#include <fx_api.h>
-#include <tx_api.h>
-
-#include <nx_api.h>
-#include <nx_bsd.h>
-#include <nx_port.h>
-#include <tx_port.h>
-
-#define PATH_MAX FX_MAXIMUM_PATH
-#define MG_DIRSEP '\\'
-
-#define socklen_t int
-#define closesocket(x) soc_close(x)
-
-#undef FOPEN_MAX
 
 #endif
 
@@ -343,6 +317,49 @@ static inline int mg_mkdir(const char *path, mode_t mode) {
 #define MG_SOCK_LISTEN_BACKLOG_SIZE 3
 #endif
 #endif
+
+#endif
+
+
+#if MG_ARCH == MG_ARCH_THREADX
+
+#include <stdarg.h>
+#include <stdbool.h>
+#include <stdint.h>
+#include <string.h>
+
+// Do not include time.h and stdlib.h, since they conflict with nxd_bsd.h
+// extern time_t time(time_t *);
+#include <nxd_bsd.h>
+
+#define MG_DIRSEP '\\'
+#undef FOPEN_MAX
+
+#ifndef MG_PATH_MAX
+#define MG_PATH_MAX 32
+#endif
+
+#ifndef MG_SOCK_LISTEN_BACKLOG_SIZE
+#define MG_SOCK_LISTEN_BACKLOG_SIZE 3
+#endif
+
+#ifndef MG_ENABLE_IPV6
+#define MG_ENABLE_IPV6 0
+#endif
+
+#define socklen_t int
+#define closesocket(x) soc_close(x)
+
+// In order to enable BSD support in NetxDuo, do the following (assuming Cube):
+// 1. Add nxd_bsd.h and nxd_bsd.c to the repo:
+//     https://github.com/eclipse-threadx/netxduo/blob/v6.1.12_rel/addons/BSD/nxd_bsd.c
+//     https://github.com/eclipse-threadx/netxduo/blob/v6.1.12_rel/addons/BSD/nxd_bsd.h
+// 2. Add to tx_user.h
+//     #define TX_THREAD_USER_EXTENSION int bsd_errno;
+// 3. Add to nx_user.h
+//     #define NX_ENABLE_EXTENDED_NOTIFY_SUPPORT
+// 4. Add __CCRX__ build preprocessor constant
+//   Project -> Properties -> C/C++ -> Settings -> MCU Compiler -> Preprocessor
 
 #endif
 
