@@ -87,7 +87,7 @@ jobs:
     - uses: actions/checkout@v4
       with: { fetch-depth: 2 }
     - run: sudo apt -y update ; sudo apt -y install libmbedtls-dev libwolfssl-dev
-    - run: make -C test unamalgamated && make -C test mg_prefix
+    - run: make -C test unamalgamated SSL=${{ matrix.ssl }} && make -C test mg_prefix
   valgrind:
     runs-on: ubuntu-latest
     strategy:

@@ -6,7 +6,9 @@
 
 #include "arch.h"
 #include "config.h"
+#include "tls.h"
 
+#if MG_TLS == MG_TLS_BUILTIN
 #ifndef __PORTABLE_8439_H
 #define __PORTABLE_8439_H
 #if defined(__cplusplus)
@@ -106,5 +108,6 @@ PORTABLE_8439_DECL size_t mg_chacha20_poly1305_decrypt(
     const uint8_t *restrict cipher_text, size_t cipher_text_size);
 #if defined(__cplusplus)
 }
+#endif
 #endif
 #endif

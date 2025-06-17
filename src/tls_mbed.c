@@ -1,4 +1,6 @@
 #include "log.h"
+#include "printf.h"
+#include "profile.h"
 #include "tls.h"
 
 #if MG_TLS == MG_TLS_MBED
