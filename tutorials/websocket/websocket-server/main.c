@@ -10,6 +10,7 @@ static const char *s_web_root = ".";
 static const char *s_ca_path = "ca.pem";
 static const char *s_cert_path = "cert.pem";
 static const char *s_key_path = "key.pem";
+struct mg_str s_ca, s_cert, s_key;
 
 // This RESTful server implements the following endpoints:
 //   /websocket - upgrade to Websocket, and implement websocket echo server
@@ -19,15 +20,15 @@ static void fn(struct mg_connection *c, int ev, void *ev_data) {
   if (ev == MG_EV_OPEN) {
     // c->is_hexdumping = 1;
   } else if(c->is_tls && ev == MG_EV_ACCEPT) {
-    struct mg_str ca = mg_file_read(&mg_fs_posix, s_ca_path);
-    struct mg_str cert = mg_file_read(&mg_fs_posix, s_cert_path);
-    struct mg_str key = mg_file_read(&mg_fs_posix, s_key_path);
-    struct mg_tls_opts opts = {.ca = ca, .cert = cert, .key = key};
+    s_ca = mg_file_read(&mg_fs_posix, s_ca_path);
+    s_cert = mg_file_read(&mg_fs_posix, s_cert_path);
+    s_key = mg_file_read(&mg_fs_posix, s_key_path);
+    struct mg_tls_opts opts = {.ca = s_ca, .cert = s_cert, .key = s_key};
     mg_tls_init(c, &opts);
   } else if (ev == MG_EV_HTTP_MSG) {
     struct mg_http_message *hm = (struct mg_http_message *) ev_data;
     if (mg_match(hm->uri, mg_str("/websocket"), NULL)) {
-      // Upgrade to websocket. From now on, a connection is a full-duplex
+      // Upgrade to websocket. From now on, connection is full-duplex
       // Websocket connection, which will receive MG_EV_WS_MSG events.
       mg_ws_upgrade(c, hm, NULL);
     } else if (mg_match(hm->uri, mg_str("/rest"), NULL)) {
@@ -42,6 +43,10 @@ static void fn(struct mg_connection *c, int ev, void *ev_data) {
     // Got websocket frame. Received data is wm->data. Echo it back!
     struct mg_ws_message *wm = (struct mg_ws_message *) ev_data;
     mg_ws_send(c, wm->data.buf, wm->data.len, WEBSOCKET_OP_TEXT);
+  } else if (ev == MG_EV_CLOSE && c->is_tls) {
+    mg_free(s_ca.buf);
+    mg_free(s_cert.buf);
+    mg_free(s_key.buf);
   }
 }
 

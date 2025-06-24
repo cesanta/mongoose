@@ -9,14 +9,15 @@
 
 static const char *s_url = "ws://localhost:8000/websocket";
 static const char *s_ca_path = "ca.pem";
+static struct mg_str s_ca;
 
 // Print websocket response and signal that we're done
 static void fn(struct mg_connection *c, int ev, void *ev_data) {
   if (ev == MG_EV_OPEN) {
     c->is_hexdumping = 1;
   } else if (c->is_tls && ev == MG_EV_CONNECT) {
-    struct mg_str ca = mg_file_read(&mg_fs_posix, s_ca_path);
-    struct mg_tls_opts opts = {.ca = ca, .name = mg_url_host(s_url)};
+    s_ca = mg_file_read(&mg_fs_posix, s_ca_path);
+    struct mg_tls_opts opts = {.ca = s_ca, .name = mg_url_host(s_url)};
     mg_tls_init(c, &opts);
   } else if (ev == MG_EV_ERROR) {
     // On error, log error message
@@ -32,6 +33,10 @@ static void fn(struct mg_connection *c, int ev, void *ev_data) {
 
   if (ev == MG_EV_ERROR || ev == MG_EV_CLOSE || ev == MG_EV_WS_MSG) {
     *(bool *) c->fn_data = true;  // Signal that we're done
+    if (c->is_tls) {
+      mg_free(s_ca.buf);
+      s_ca.buf = NULL;
+    }
   }
 }
 

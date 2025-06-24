@@ -10,7 +10,7 @@ struct mg_timer {
 #define MG_TIMER_REPEAT 1      // Call function periodically
 #define MG_TIMER_RUN_NOW 2     // Call immediately when timer is set
 #define MG_TIMER_CALLED 4      // Timer function was called at least once
-#define MG_TIMER_AUTODELETE 8  // free() timer when done
+#define MG_TIMER_AUTODELETE 8  // mg_free() timer when done
   void (*fn)(void *);          // Function to call
   void *arg;                   // Function argument
   struct mg_timer *next;       // Linkage

@@ -1,4 +1,5 @@
 #include "str.h"
+#include "util.h"
 
 struct mg_str mg_str_s(const char *s) {
   struct mg_str str = {(char *) s, s == NULL ? 0 : strlen(s)};
@@ -26,7 +27,7 @@ int mg_casecmp(const char *s1, const char *s2) {
 struct mg_str mg_strdup(const struct mg_str s) {
   struct mg_str r = {NULL, 0};
   if (s.len > 0 && s.buf != NULL) {
-    char *sc = (char *) calloc(1, s.len + 1);
+    char *sc = (char *) mg_calloc(1, s.len + 1);
     if (sc != NULL) {
       memcpy(sc, s.buf, s.len);
       sc[s.len] = '\0';

@@ -139,7 +139,7 @@ static void mg_sendnsreq(struct mg_connection *, struct mg_str *, int,
 
 static void mg_dns_free(struct dns_data **head, struct dns_data *d) {
   LIST_DELETE(struct dns_data, head, d);
-  free(d);
+  mg_free(d);
 }
 
 void mg_resolve_cancel(struct mg_connection *c) {
@@ -367,7 +367,7 @@ static void mg_sendnsreq(struct mg_connection *c, struct mg_str *name, int ms,
   }
   if (dnsc->c == NULL) {
     mg_error(c, "resolver");
-  } else if ((d = (struct dns_data *) calloc(1, sizeof(*d))) == NULL) {
+  } else if ((d = (struct dns_data *) mg_calloc(1, sizeof(*d))) == NULL) {
     mg_error(c, "resolve OOM");
   } else {
     struct dns_data *reqs = (struct dns_data *) c->mgr->active_dns_requests;
@@ -821,13 +821,14 @@ size_t mg_vxprintf(void (*out)(char, void *), void *param, const char *fmt,
 
 
 
+
 struct mg_fd *mg_fs_open(struct mg_fs *fs, const char *path, int flags) {
-  struct mg_fd *fd = (struct mg_fd *) calloc(1, sizeof(*fd));
+  struct mg_fd *fd = (struct mg_fd *) mg_calloc(1, sizeof(*fd));
   if (fd != NULL) {
     fd->fd = fs->op(path, flags);
     fd->fs = fs;
     if (fd->fd == NULL) {
-      free(fd);
+      mg_free(fd);
       fd = NULL;
     }
   }
@@ -837,7 +838,7 @@ struct mg_fd *mg_fs_open(struct mg_fs *fs, const char *path, int flags) {
 void mg_fs_close(struct mg_fd *fd) {
   if (fd != NULL) {
     fd->fs->cl(fd->fd);
-    free(fd);
+    mg_free(fd);
   }
 }
 
@@ -846,10 +847,10 @@ struct mg_str mg_file_read(struct mg_fs *fs, const char *path) {
   void *fp;
   fs->st(path, &result.len, NULL);
   if ((fp = fs->op(path, MG_FS_READ)) != NULL) {
-    result.buf = (char *) calloc(1, result.len + 1);
+    result.buf = (char *) mg_calloc(1, result.len + 1);
     if (result.buf != NULL &&
         fs->rd(fp, (void *) result.buf, result.len) != result.len) {
-      free((void *) result.buf);
+      mg_free((void *) result.buf);
       result.buf = NULL;
     }
     fs->cl(fp);
@@ -885,7 +886,7 @@ bool mg_file_printf(struct mg_fs *fs, const char *path, const char *fmt, ...) {
   data = mg_vmprintf(fmt, &ap);
   va_end(ap);
   result = mg_file_write(fs, path, data, strlen(data));
-  free(data);
+  mg_free(data);
   return result;
 }
 
@@ -988,7 +989,7 @@ static void *ff_open(const char *path, int flags) {
   if (flags & MG_FS_WRITE) mode |= FA_WRITE | FA_OPEN_ALWAYS | FA_OPEN_APPEND;
   if (f_open(&f, path, mode) == 0) {
     FIL *fp;
-    if ((fp = calloc(1, sizeof(*fp))) != NULL) {
+    if ((fp = mg_calloc(1, sizeof(*fp))) != NULL) {
       memcpy(fp, &f, sizeof(*fp));
       return fp;
     }
@@ -999,7 +1000,7 @@ static void *ff_open(const char *path, int flags) {
 static void ff_close(void *fp) {
   if (fp != NULL) {
     f_close((FIL *) fp);
-    free(fp);
+    mg_free(fp);
   }
 }
 
@@ -1044,6 +1045,7 @@ struct mg_fs mg_fs_fat = {ff_stat,  ff_list, ff_open,   ff_close,  ff_read,
 #ifdef MG_ENABLE_LINES
 #line 1 "src/fs_packed.c"
 #endif
+
 
 
 
@@ -1118,7 +1120,7 @@ static void *packed_open(const char *path, int flags) {
   struct packed_file *fp = NULL;
   if (data == NULL) return NULL;
   if (flags & MG_FS_WRITE) return NULL;
-  if ((fp = (struct packed_file *) calloc(1, sizeof(*fp))) != NULL) {
+  if ((fp = (struct packed_file *) mg_calloc(1, sizeof(*fp))) != NULL) {
     fp->size = size;
     fp->data = data;
   }
@@ -1126,7 +1128,7 @@ static void *packed_open(const char *path, int flags) {
 }
 
 static void packed_close(void *fp) {
-  if (fp != NULL) free(fp);
+  if (fp != NULL) mg_free(fp);
 }
 
 static size_t packed_read(void *fd, void *buf, size_t len) {
@@ -1272,7 +1274,7 @@ DIR *opendir(const char *name) {
 
   if (name == NULL) {
     SetLastError(ERROR_BAD_ARGUMENTS);
-  } else if ((d = (DIR *) calloc(1, sizeof(*d))) == NULL) {
+  } else if ((d = (DIR *) mg_calloc(1, sizeof(*d))) == NULL) {
     SetLastError(ERROR_NOT_ENOUGH_MEMORY);
   } else {
     to_wchar(name, wpath, sizeof(wpath) / sizeof(wpath[0]));
@@ -1282,7 +1284,7 @@ DIR *opendir(const char *name) {
       d->handle = FindFirstFileW(wpath, &d->info);
       d->result.d_name[0] = '\0';
     } else {
-      free(d);
+      mg_free(d);
       d = NULL;
     }
   }
@@ -1294,7 +1296,7 @@ int closedir(DIR *d) {
   if (d != NULL) {
     if (d->handle != INVALID_HANDLE_VALUE)
       result = FindClose(d->handle) ? 0 : -1;
-    free(d);
+    mg_free(d);
   } else {
     result = -1;
     SetLastError(ERROR_BAD_ARGUMENTS);
@@ -2616,18 +2618,17 @@ int mg_iobuf_resize(struct mg_iobuf *io, size_t new_size) {
   new_size = roundup(new_size, io->align);
   if (new_size == 0) {
     mg_bzero(io->buf, io->size);
-    free(io->buf);
+    mg_free(io->buf);
     io->buf = NULL;
     io->len = io->size = 0;
   } else if (new_size != io->size) {
-    // NOTE(lsm): do not use realloc here. Use calloc/free only, to ease the
-    // porting to some obscure platforms like FreeRTOS
-    void *p = calloc(1, new_size);
+    // NOTE(lsm): do not use realloc here. Use mg_calloc/mg_free only
+    void *p = mg_calloc(1, new_size);
     if (p != NULL) {
       size_t len = new_size < io->len ? new_size : io->len;
       if (len > 0 && io->buf != NULL) memmove(p, io->buf, len);
       mg_bzero(io->buf, io->size);
-      free(io->buf);
+      mg_free(io->buf);
       io->buf = (unsigned char *) p;
       io->size = new_size;
     } else {
@@ -2673,6 +2674,7 @@ void mg_iobuf_free(struct mg_iobuf *io) {
 #ifdef MG_ENABLE_LINES
 #line 1 "src/json.c"
 #endif
+
 
 
 
@@ -2995,10 +2997,10 @@ char *mg_json_get_str(struct mg_str json, const char *path) {
   char *result = NULL;
   int len = 0, off = mg_json_get(json, path, &len);
   if (off >= 0 && len > 1 && json.buf[off] == '"') {
-    if ((result = (char *) calloc(1, (size_t) len)) != NULL &&
+    if ((result = (char *) mg_calloc(1, (size_t) len)) != NULL &&
         !mg_json_unescape(mg_str_n(json.buf + off + 1, (size_t) (len - 2)),
                           result, (size_t) len)) {
-      free(result);
+      mg_free(result);
       result = NULL;
     }
   }
@@ -3009,7 +3011,7 @@ char *mg_json_get_b64(struct mg_str json, const char *path, int *slen) {
   char *result = NULL;
   int len = 0, off = mg_json_get(json, path, &len);
   if (off >= 0 && json.buf[off] == '"' && len > 1 &&
-      (result = (char *) calloc(1, (size_t) len)) != NULL) {
+      (result = (char *) mg_calloc(1, (size_t) len)) != NULL) {
     size_t k = mg_base64_decode(json.buf + off + 1, (size_t) (len - 2), result,
                                 (size_t) len);
     if (slen != NULL) *slen = (int) k;
@@ -3021,7 +3023,7 @@ char *mg_json_get_hex(struct mg_str json, const char *path, int *slen) {
   char *result = NULL;
   int len = 0, off = mg_json_get(json, path, &len);
   if (off >= 0 && json.buf[off] == '"' && len > 1 &&
-      (result = (char *) calloc(1, (size_t) len / 2)) != NULL) {
+      (result = (char *) mg_calloc(1, (size_t) len / 2)) != NULL) {
     int i;
     for (i = 0; i < len - 2; i += 2) {
       mg_str_to_num(mg_str_n(json.buf + off + 1 + i, 2), 16, &result[i >> 1],
@@ -4004,7 +4006,7 @@ bool mg_aton(struct mg_str str, struct mg_addr *addr) {
 
 struct mg_connection *mg_alloc_conn(struct mg_mgr *mgr) {
   struct mg_connection *c =
-      (struct mg_connection *) calloc(1, sizeof(*c) + mgr->extraconnsize);
+      (struct mg_connection *) mg_calloc(1, sizeof(*c) + mgr->extraconnsize);
   if (c != NULL) {
     c->mgr = mgr;
     c->send.align = c->recv.align = c->rtls.align = MG_IO_SIZE;
@@ -4031,7 +4033,7 @@ void mg_close_conn(struct mg_connection *c) {
   mg_iobuf_free(&c->send);
   mg_iobuf_free(&c->rtls);
   mg_bzero((unsigned char *) c, sizeof(*c));
-  free(c);
+  mg_free(c);
 }
 
 struct mg_connection *mg_connect(struct mg_mgr *mgr, const char *url,
@@ -4064,7 +4066,7 @@ struct mg_connection *mg_listen(struct mg_mgr *mgr, const char *url,
   } else if (!mg_open_listener(c, url)) {
     MG_ERROR(("Failed: %s", url));
     MG_PROF_FREE(c);
-    free(c);
+    mg_free(c);
     c = NULL;
   } else {
     c->is_listening = 1;
@@ -4095,9 +4097,9 @@ struct mg_connection *mg_wrapfd(struct mg_mgr *mgr, int fd,
 
 struct mg_timer *mg_timer_add(struct mg_mgr *mgr, uint64_t milliseconds,
                               unsigned flags, void (*fn)(void *), void *arg) {
-  struct mg_timer *t = (struct mg_timer *) calloc(1, sizeof(*t));
+  struct mg_timer *t = (struct mg_timer *) mg_calloc(1, sizeof(*t));
   if (t != NULL) {
-    flags |= MG_TIMER_AUTODELETE;  // We have calloc-ed it, so autodelete
+    flags |= MG_TIMER_AUTODELETE;  // We have alloc'ed it, so autodelete
     mg_timer_init(&mgr->timers, t, milliseconds, flags, fn, arg);
   }
   return t;
@@ -4114,7 +4116,7 @@ long mg_io_recv(struct mg_connection *c, void *buf, size_t len) {
 void mg_mgr_free(struct mg_mgr *mgr) {
   struct mg_connection *c;
   struct mg_timer *tmp, *t = mgr->timers;
-  while (t != NULL) tmp = t->next, free(t), t = tmp;
+  while (t != NULL) tmp = t->next, mg_free(t), t = tmp;
   mgr->timers = NULL;  // Important. Next call to poll won't touch timers
   for (c = mgr->conns; c != NULL; c = c->next) c->is_closing = 1;
   mg_mgr_poll(mgr, 0);
@@ -5247,10 +5249,10 @@ void mg_tcpip_init(struct mg_mgr *mgr, struct mg_tcpip_if *ifp) {
     MG_ERROR(("driver init failed"));
   } else {
     size_t framesize = 1540;
-    ifp->tx.buf = (char *) calloc(1, framesize), ifp->tx.len = framesize;
+    ifp->tx.buf = (char *) mg_calloc(1, framesize), ifp->tx.len = framesize;
     if (ifp->recv_queue.size == 0)
       ifp->recv_queue.size = ifp->driver->rx ? framesize : 8192;
-    ifp->recv_queue.buf = (char *) calloc(1, ifp->recv_queue.size);
+    ifp->recv_queue.buf = (char *) mg_calloc(1, ifp->recv_queue.size);
     ifp->timer_1000ms = mg_millis();
     mgr->ifp = ifp;
     ifp->mgr = mgr;
@@ -5266,8 +5268,8 @@ void mg_tcpip_init(struct mg_mgr *mgr, struct mg_tcpip_if *ifp) {
 }
 
 void mg_tcpip_free(struct mg_tcpip_if *ifp) {
-  free(ifp->recv_queue.buf);
-  free(ifp->tx.buf);
+  mg_free(ifp->recv_queue.buf);
+  mg_free(ifp->tx.buf);
 }
 
 static void send_syn(struct mg_connection *c) {
@@ -6748,7 +6750,7 @@ fwxit:
 
 // try to swap (honor dual image), otherwise just overwrite
 MG_IRAM static void single_bank_swap(char *p1, char *p2, size_t s, size_t ss) {
-  char *tmp = malloc(ss);
+  char *tmp = mg_calloc(1, ss);
   // no stdlib calls here
   for (size_t ofs = 0; ofs < s; ofs += ss) {
     if (tmp != NULL)
@@ -6911,7 +6913,7 @@ static bool __no_inline_not_in_flash_func(mg_picosdk_write)(void *addr,
 static void __no_inline_not_in_flash_func(single_bank_swap)(char *p1, char *p2,
                                                             size_t s,
                                                             size_t ss) {
-  char *tmp = malloc(ss);
+  char *tmp = mg_calloc(1, ss);
   if (tmp == NULL) return;
 #if PICO_RP2040
   uint32_t xip[256 / sizeof(uint32_t)];
@@ -7865,9 +7867,10 @@ void mg_queue_del(struct mg_queue *q, size_t len) {
 
 
 
+
 void mg_rpc_add(struct mg_rpc **head, struct mg_str method,
                 void (*fn)(struct mg_rpc_req *), void *fn_data) {
-  struct mg_rpc *rpc = (struct mg_rpc *) calloc(1, sizeof(*rpc));
+  struct mg_rpc *rpc = (struct mg_rpc *) mg_calloc(1, sizeof(*rpc));
   if (rpc != NULL) {
     rpc->method = mg_strdup(method);
     rpc->fn = fn;
@@ -7881,8 +7884,8 @@ void mg_rpc_del(struct mg_rpc **head, void (*fn)(struct mg_rpc_req *)) {
   while ((r = *head) != NULL) {
     if (r->fn == fn || fn == NULL) {
       *head = r->next;
-      free((void *) r->method.buf);
-      free(r);
+      mg_free((void *) r->method.buf);
+      mg_free(r);
     } else {
       head = &(*head)->next;
     }
@@ -9382,6 +9385,7 @@ void mg_mgr_poll(struct mg_mgr *mgr, int ms) {
 
 
 
+
 #ifndef MG_MAX_SSI_DEPTH
 #define MG_MAX_SSI_DEPTH 5
 #endif
@@ -9411,7 +9415,7 @@ static char *mg_ssi(const char *path, const char *root, int depth) {
           if (depth < MG_MAX_SSI_DEPTH &&
               (data = mg_ssi(tmp, root, depth + 1)) != NULL) {
             mg_iobuf_add(&b, b.len, data, strlen(data));
-            free(data);
+            mg_free(data);
           } else {
             MG_ERROR(("%s: file=%s error or too deep", path, arg));
           }
@@ -9421,7 +9425,7 @@ static char *mg_ssi(const char *path, const char *root, int depth) {
           if (depth < MG_MAX_SSI_DEPTH &&
               (data = mg_ssi(tmp, root, depth + 1)) != NULL) {
             mg_iobuf_add(&b, b.len, data, strlen(data));
-            free(data);
+            mg_free(data);
           } else {
             MG_ERROR(("%s: virtual=%s error or too deep", path, arg));
           }
@@ -9467,7 +9471,7 @@ void mg_http_serve_ssi(struct mg_connection *c, const char *root,
   const char *headers = "Content-Type: text/html; charset=utf-8\r\n";
   char *data = mg_ssi(fullpath, root, 0);
   mg_http_reply(c, 200, headers, "%s", data == NULL ? "" : data);
-  free(data);
+  mg_free(data);
 }
 #else
 void mg_http_serve_ssi(struct mg_connection *c, const char *root,
@@ -9480,6 +9484,7 @@ void mg_http_serve_ssi(struct mg_connection *c, const char *root,
 #ifdef MG_ENABLE_LINES
 #line 1 "src/str.c"
 #endif
+
 
 
 struct mg_str mg_str_s(const char *s) {
@@ -9508,7 +9513,7 @@ int mg_casecmp(const char *s1, const char *s2) {
 struct mg_str mg_strdup(const struct mg_str s) {
   struct mg_str r = {NULL, 0};
   if (s.len > 0 && s.buf != NULL) {
-    char *sc = (char *) calloc(1, s.len + 1);
+    char *sc = (char *) mg_calloc(1, s.len + 1);
     if (sc != NULL) {
       memcpy(sc, s.buf, s.len);
       sc[s.len] = '\0';
@@ -9670,6 +9675,7 @@ bool mg_str_to_num(struct mg_str str, int base, void *val, size_t val_len) {
 
 
 
+
 void mg_timer_init(struct mg_timer **head, struct mg_timer *t, uint64_t ms,
                    unsigned flags, void (*fn)(void *), void *arg) {
   t->period_ms = ms, t->expire = 0;
@@ -9707,7 +9713,7 @@ void mg_timer_poll(struct mg_timer **head, uint64_t now_ms) {
     // If this timer is not repeating and marked AUTODELETE, remove it
     if (!(t->flags & MG_TIMER_REPEAT) && (t->flags & MG_TIMER_AUTODELETE)) {
       mg_timer_free(head, t);
-      free(t);
+      mg_free(t);
     }
   }
 }
@@ -10880,13 +10886,13 @@ int mg_aes_gcm_decrypt(unsigned char *output, const unsigned char *input,
 // refer to RFC8446#A.1
 enum mg_tls_hs_state {
   // Client state machine:
-  MG_TLS_STATE_CLIENT_START,          // Send ClientHello
-  MG_TLS_STATE_CLIENT_WAIT_SH,        // Wait for ServerHello
-  MG_TLS_STATE_CLIENT_WAIT_EE,        // Wait for EncryptedExtensions
-  MG_TLS_STATE_CLIENT_WAIT_CERT,      // Wait for Certificate
-  MG_TLS_STATE_CLIENT_WAIT_CV,        // Wait for CertificateVerify
-  MG_TLS_STATE_CLIENT_WAIT_FINISH,    // Wait for Finish
-  MG_TLS_STATE_CLIENT_CONNECTED,      // Done
+  MG_TLS_STATE_CLIENT_START,        // Send ClientHello
+  MG_TLS_STATE_CLIENT_WAIT_SH,      // Wait for ServerHello
+  MG_TLS_STATE_CLIENT_WAIT_EE,      // Wait for EncryptedExtensions
+  MG_TLS_STATE_CLIENT_WAIT_CERT,    // Wait for Certificate
+  MG_TLS_STATE_CLIENT_WAIT_CV,      // Wait for CertificateVerify
+  MG_TLS_STATE_CLIENT_WAIT_FINISH,  // Wait for Finish
+  MG_TLS_STATE_CLIENT_CONNECTED,    // Done
 
   // Server state machine:
   MG_TLS_STATE_SERVER_START,       // Wait for ClientHello
@@ -11270,7 +11276,7 @@ static void mg_tls_encrypt(struct mg_connection *c, const uint8_t *msg,
   nonce[8] ^= (uint8_t) ((seq >> 24) & 255U);
   nonce[9] ^= (uint8_t) ((seq >> 16) & 255U);
   nonce[10] ^= (uint8_t) ((seq >> 8) & 255U);
-  nonce[11] ^= (uint8_t) ((seq) &255U);
+  nonce[11] ^= (uint8_t) ((seq) & 255U);
 
   mg_iobuf_add(wio, wio->len, hdr, sizeof(hdr));
   mg_iobuf_resize(wio, wio->len + encsz);
@@ -11282,7 +11288,7 @@ static void mg_tls_encrypt(struct mg_connection *c, const uint8_t *msg,
   (void) tag;  // tag is only used in aes gcm
   {
     size_t maxlen = MG_IO_SIZE > 16384 ? 16384 : MG_IO_SIZE;
-    uint8_t *enc = (uint8_t *) calloc(1, maxlen + 256 + 1);
+    uint8_t *enc = (uint8_t *) mg_calloc(1, maxlen + 256 + 1);
     if (enc == NULL) {
       mg_error(c, "TLS OOM");
       return;
@@ -11291,7 +11297,7 @@ static void mg_tls_encrypt(struct mg_connection *c, const uint8_t *msg,
                                               sizeof(associated_data), outmsg,
                                               msgsz + 1);
       memmove(outmsg, enc, n);
-      free(enc);
+      mg_free(enc);
     }
   }
 #else
@@ -11349,10 +11355,10 @@ static int mg_tls_recv_record(struct mg_connection *c) {
   nonce[8] ^= (uint8_t) ((seq >> 24) & 255U);
   nonce[9] ^= (uint8_t) ((seq >> 16) & 255U);
   nonce[10] ^= (uint8_t) ((seq >> 8) & 255U);
-  nonce[11] ^= (uint8_t) ((seq) &255U);
+  nonce[11] ^= (uint8_t) ((seq) & 255U);
 #if CHACHA20
   {
-    uint8_t *dec = (uint8_t *) calloc(1, msgsz);
+    uint8_t *dec = (uint8_t *) mg_calloc(1, msgsz);
     size_t n;
     if (dec == NULL) {
       mg_error(c, "TLS OOM");
@@ -11360,7 +11366,7 @@ static int mg_tls_recv_record(struct mg_connection *c) {
     }
     n = mg_chacha20_poly1305_decrypt(dec, key, nonce, msg, msgsz);
     memmove(msg, dec, n);
-    free(dec);
+    mg_free(dec);
   }
 #else
   mg_gcm_initialize();
@@ -11533,7 +11539,7 @@ static void mg_tls_server_send_cert(struct mg_connection *c) {
   int send_ca = !c->is_client && tls->ca_der.len > 0;
   // server DER certificate + CA (optional)
   size_t n = tls->cert_der.len + (send_ca ? tls->ca_der.len + 5 : 0);
-  uint8_t *cert = (uint8_t *) calloc(1, 13 + n);
+  uint8_t *cert = (uint8_t *) mg_calloc(1, 13 + n);
   if (cert == NULL) {
     mg_error(c, "tls cert oom");
     return;
@@ -11556,7 +11562,7 @@ static void mg_tls_server_send_cert(struct mg_connection *c) {
   }
   mg_sha256_update(&tls->sha256, cert, 13 + n);
   mg_tls_encrypt(c, cert, 13 + n, MG_TLS_HANDSHAKE);
-  free(cert);
+  mg_free(cert);
 }
 
 // type adapter between uECC hash context and our sha256 implementation
@@ -12369,9 +12375,7 @@ static void mg_tls_client_handshake(struct mg_connection *c) {
       c->is_tls_hs = 0;
       mg_call(c, MG_EV_TLS_HS, NULL);
       break;
-    default:
-      mg_error(c, "unexpected client state: %d", tls->state);
-      break;
+    default: mg_error(c, "unexpected client state: %d", tls->state); break;
   }
 }
 
@@ -12398,9 +12402,7 @@ static void mg_tls_server_handshake(struct mg_connection *c) {
       tls->state = MG_TLS_STATE_SERVER_CONNECTED;
       c->is_tls_hs = 0;
       return;
-    default:
-      mg_error(c, "unexpected server state: %d", tls->state);
-      break;
+    default: mg_error(c, "unexpected server state: %d", tls->state); break;
   }
 }
 
@@ -12416,8 +12418,8 @@ void mg_tls_handshake(struct mg_connection *c) {
   while (tls->send.len > 0 &&
          (n = mg_io_send(c, tls->send.buf, tls->send.len)) > 0) {
     mg_iobuf_del(&tls->send, 0, (size_t) n);
-  } // if last chunk fails to be sent, it will be sent with first app data,
-    // otherwise, it needs to be flushed
+  }  // if last chunk fails to be sent, it will be sent with first app data,
+     // otherwise, it needs to be flushed
 }
 
 static int mg_parse_pem(const struct mg_str pem, const struct mg_str label,
@@ -12433,7 +12435,7 @@ static int mg_parse_pem(const struct mg_str pem, const struct mg_str label,
   if (mg_strcmp(caps[1], label) != 0 || mg_strcmp(caps[3], label) != 0) {
     return -1;  // bad label
   }
-  if ((s = (char *) calloc(1, caps[2].len)) == NULL) {
+  if ((s = (char *) mg_calloc(1, caps[2].len)) == NULL) {
     return -1;
   }
 
@@ -12445,7 +12447,7 @@ static int mg_parse_pem(const struct mg_str pem, const struct mg_str label,
   }
   m = mg_base64_decode(s, n, s, n);
   if (m == 0) {
-    free(s);
+    mg_free(s);
     return -1;
   }
   der->buf = s;
@@ -12455,7 +12457,8 @@ static int mg_parse_pem(const struct mg_str pem, const struct mg_str label,
 
 void mg_tls_init(struct mg_connection *c, const struct mg_tls_opts *opts) {
   struct mg_str key;
-  struct tls_data *tls = (struct tls_data *) calloc(1, sizeof(struct tls_data));
+  struct tls_data *tls =
+      (struct tls_data *) mg_calloc(1, sizeof(struct tls_data));
   if (tls == NULL) {
     mg_error(c, "tls oom");
     return;
@@ -12520,7 +12523,7 @@ void mg_tls_init(struct mg_connection *c, const struct mg_tls_opts *opts) {
       MG_ERROR(("EC private key: ASN.1 bad data"));
     }
     memmove(tls->ec_key, key.buf + 7, 32);
-    free((void *) key.buf);
+    mg_free((void *) key.buf);
   } else if (mg_parse_pem(opts->key, mg_str_s("PRIVATE KEY"), &key) == 0) {
     mg_error(c, "PKCS8 private key format is not supported");
   } else {
@@ -12532,10 +12535,10 @@ void mg_tls_free(struct mg_connection *c) {
   struct tls_data *tls = (struct tls_data *) c->tls;
   if (tls != NULL) {
     mg_iobuf_free(&tls->send);
-    free((void *) tls->cert_der.buf);
-    free((void *) tls->ca_der.buf);
+    mg_free((void *) tls->cert_der.buf);
+    mg_free((void *) tls->ca_der.buf);
   }
-  free(c->tls);
+  mg_free(c->tls);
   c->tls = NULL;
 }
 
@@ -12551,7 +12554,7 @@ long mg_tls_send(struct mg_connection *c, const void *buf, size_t len) {
   while (tls->send.len > 0 &&
          (n = mg_io_send(c, tls->send.buf, tls->send.len)) > 0) {
     mg_iobuf_del(&tls->send, 0, (size_t) n);
-  } // if last chunk fails to be sent, it needs to be flushed
+  }  // if last chunk fails to be sent, it needs to be flushed
   c->is_tls_throttled = (tls->send.len > 0 && n == MG_IO_WAIT);
   MG_VERBOSE(("%lu %ld %ld %ld %c %c", c->id, (long) len, (long) tls->send.len,
               n, was_throttled ? 'T' : 't', c->is_tls_throttled ? 'T' : 't'));
@@ -14003,6 +14006,7 @@ void mg_tls_ctx_free(struct mg_mgr *mgr) {
 
 
 
+
 #if MG_TLS == MG_TLS_MBED
 
 #if defined(MBEDTLS_VERSION_NUMBER) && MBEDTLS_VERSION_NUMBER >= 0x03000000
@@ -14051,7 +14055,7 @@ void mg_tls_free(struct mg_connection *c) {
 #ifdef MBEDTLS_SSL_SESSION_TICKETS
     mbedtls_ssl_ticket_free(&tls->ticket);
 #endif
-    free(tls);
+    mg_free(tls);
     c->tls = NULL;
   }
 }
@@ -14097,7 +14101,7 @@ static void debug_cb(void *c, int lev, const char *s, int n, const char *s2) {
 }
 
 void mg_tls_init(struct mg_connection *c, const struct mg_tls_opts *opts) {
-  struct mg_tls *tls = (struct mg_tls *) calloc(1, sizeof(*tls));
+  struct mg_tls *tls = (struct mg_tls *) mg_calloc(1, sizeof(*tls));
   int rc = 0;
   c->tls = tls;
   if (c->tls == NULL) {
@@ -14140,7 +14144,7 @@ void mg_tls_init(struct mg_connection *c, const struct mg_tls_opts *opts) {
       char *host = mg_mprintf("%.*s", opts->name.len, opts->name.buf);
       mbedtls_ssl_set_hostname(&tls->ssl, host);
       MG_DEBUG(("%lu hostname verification: %s", c->id, host));
-      free(host);
+      mg_free(host);
     }
     mbedtls_ssl_conf_authmode(&tls->conf, MBEDTLS_SSL_VERIFY_REQUIRED);
   }
@@ -14220,7 +14224,7 @@ void mg_tls_flush(struct mg_connection *c) {
 }
 
 void mg_tls_ctx_init(struct mg_mgr *mgr) {
-  struct mg_tls_ctx *ctx = (struct mg_tls_ctx *) calloc(1, sizeof(*ctx));
+  struct mg_tls_ctx *ctx = (struct mg_tls_ctx *) mg_calloc(1, sizeof(*ctx));
   if (ctx == NULL) {
     MG_ERROR(("TLS context init OOM"));
   } else {
@@ -14243,7 +14247,7 @@ void mg_tls_ctx_free(struct mg_mgr *mgr) {
 #ifdef MBEDTLS_SSL_SESSION_TICKETS
     mbedtls_ssl_ticket_free(&ctx->tickets);
 #endif
-    free(ctx);
+    mg_free(ctx);
     mgr->tls_ctx = NULL;
   }
 }
@@ -14252,6 +14256,7 @@ void mg_tls_ctx_free(struct mg_mgr *mgr) {
 #ifdef MG_ENABLE_LINES
 #line 1 "src/tls_openssl.c"
 #endif
+
 
 
 
@@ -14368,12 +14373,12 @@ void mg_tls_free(struct mg_connection *c) {
   SSL_free(tls->ssl);
   SSL_CTX_free(tls->ctx);
   BIO_meth_free(tls->bm);
-  free(tls);
+  mg_free(tls);
   c->tls = NULL;
 }
 
 void mg_tls_init(struct mg_connection *c, const struct mg_tls_opts *opts) {
-  struct mg_tls *tls = (struct mg_tls *) calloc(1, sizeof(*tls));
+  struct mg_tls *tls = (struct mg_tls *) mg_calloc(1, sizeof(*tls));
   const char *id = "mongoose";
   static unsigned char s_initialised = 0;
   BIO *bio = NULL;
@@ -14466,7 +14471,7 @@ void mg_tls_init(struct mg_connection *c, const struct mg_tls_opts *opts) {
     X509_VERIFY_PARAM_set1_host(SSL_get0_param(tls->ssl), s, 0);
 #endif
     SSL_set_tlsext_host_name(tls->ssl, s);
-    free(s);
+    mg_free(s);
   }
 #endif
 #if MG_TLS == MG_TLS_WOLFSSL
@@ -14541,6 +14546,7 @@ void mg_tls_ctx_free(struct mg_mgr *mgr) {
 #ifdef MG_ENABLE_LINES
 #line 1 "src/tls_rsa.c"
 #endif
+
 
 
 
@@ -14852,8 +14858,8 @@ static void check(const bigint *bi);
  * @return A bigint context.
  */
 NS_INTERNAL BI_CTX *bi_initialize(void) {
-  /* calloc() sets everything to zero */
-  BI_CTX *ctx = (BI_CTX *) calloc(1, sizeof(BI_CTX));
+  /* mg_calloc() sets everything to zero */
+  BI_CTX *ctx = (BI_CTX *) mg_calloc(1, sizeof(BI_CTX));
 
   /* the radix */
   ctx->bi_radix = alloc(ctx, 2);
@@ -14883,7 +14889,7 @@ NS_INTERNAL void bi_terminate(BI_CTX *ctx) {
   }
 
   bi_clear_cache(ctx);
-  free(ctx);
+  mg_free(ctx);
 }
 
 /**
@@ -14896,8 +14902,8 @@ NS_INTERNAL void bi_clear_cache(BI_CTX *ctx) {
 
   for (p = ctx->free_list; p != NULL; p = pn) {
     pn = p->next;
-    free(p->comps);
-    free(p);
+    mg_free(p->comps);
+    mg_free(p);
   }
 
   ctx->free_count = 0;
@@ -15735,9 +15741,9 @@ NS_INTERNAL int bi_compare(bigint *bia, bigint *bib) {
 static void more_comps(bigint *bi, int n) {
   if (n > bi->max_comps) {
     int max = MAX(bi->max_comps * 2, n);
-    void *p = calloc(1, (size_t) max * COMP_BYTE_SIZE);
+    void *p = mg_calloc(1, (size_t) max * COMP_BYTE_SIZE);
     if (p != NULL && bi->size > 0) memcpy(p, bi->comps, (size_t) bi->max_comps * COMP_BYTE_SIZE);
-    free(bi->comps);
+    mg_free(bi->comps);
     bi->max_comps = (short) max;
     bi->comps = (comp *) p;
   }
@@ -15772,8 +15778,8 @@ static bigint *alloc(BI_CTX *ctx, int size) {
     more_comps(biR, size);
   } else {
     /* No free bigints available - create a new one. */
-    biR = (bigint *) calloc(1, sizeof(bigint));
-    biR->comps = (comp *) calloc(1, (size_t) size * COMP_BYTE_SIZE);
+    biR = (bigint *) mg_calloc(1, sizeof(bigint));
+    biR->comps = (comp *) mg_calloc(1, (size_t) size * COMP_BYTE_SIZE);
     biR->max_comps = (short) size; /* give some space to spare */
   }
 
@@ -15962,7 +15968,7 @@ static void precompute_slide_window(BI_CTX *ctx, int window, bigint *g1) {
     k <<= 1;
   }
 
-  ctx->g = (bigint **) calloc(1, k * sizeof(bigint *));
+  ctx->g = (bigint **) mg_calloc(1, k * sizeof(bigint *));
   ctx->g[0] = bi_clone(ctx, g1);
   bi_permanent(ctx->g[0]);
   g2 = bi_residue(ctx, bi_square(ctx, ctx->g[0])); /* g^2 */
@@ -16013,7 +16019,7 @@ NS_INTERNAL bigint *bi_mod_power(BI_CTX *ctx, bigint *bi, bigint *biexp) {
   /* work out the slide constants */
   precompute_slide_window(ctx, window_size, bi);
 #else /* just one constant */
-  ctx->g = (bigint **) calloc(1, sizeof(bigint *));
+  ctx->g = (bigint **) mg_calloc(1, sizeof(bigint *));
   ctx->g[0] = bi_clone(ctx, bi);
   ctx->window = 1;
   bi_permanent(ctx->g[0]);
@@ -16056,7 +16062,7 @@ NS_INTERNAL bigint *bi_mod_power(BI_CTX *ctx, bigint *bi, bigint *biexp) {
     bi_free(ctx, ctx->g[i]);
   }
 
-  free(ctx->g);
+  mg_free(ctx->g);
   bi_free(ctx, bi);
   bi_free(ctx, biexp);
 #if defined CONFIG_BIGINT_MONTGOMERY
@@ -19910,6 +19916,18 @@ void mg_delayms(unsigned int ms) {
   uint64_t to = mg_millis() + ms + 1;
   while (mg_millis() < to) (void) 0;
 }
+
+
+#if MG_ENABLE_CUSTOM_CALLOC
+#else
+void *mg_calloc(size_t count, size_t size) {
+  return calloc(count, size);
+}
+
+void mg_free(void *ptr) {
+  free(ptr);
+}
+#endif
 
 #ifdef MG_ENABLE_LINES
 #line 1 "src/wifi_dummy.c"

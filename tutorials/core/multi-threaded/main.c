@@ -33,7 +33,7 @@ static void *thread_function(void *param) {
   struct thread_data *p = (struct thread_data *) param;
   sleep(2);                                 // Simulate long execution
   mg_wakeup(p->mgr, p->conn_id, "hi!", 3);  // Respond to parent
-  free((void *) p->message.buf);            // Free all resources that were
+  mg_free((void *) p->message.buf);         // Free all resources that were
   free(p);                                  // passed to us
   return NULL;
 }

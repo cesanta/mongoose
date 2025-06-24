@@ -43,7 +43,7 @@ static void set_device_id(void) {
   struct mg_str id = mg_file_read(&mg_fs_posix, "/etc/machine-id");
   if (id.buf != NULL) {
     mg_snprintf(buf, sizeof(buf), "%s", id.buf);
-    free((void *) id.buf);
+    mg_free((void *) id.buf);
   }
 #endif
 
@@ -118,7 +118,7 @@ static void subscribe(struct mg_connection *c) {
   sub_opts.qos = s_qos;
   mg_mqtt_sub(c, &sub_opts);
   MG_INFO(("%lu SUBSCRIBED to %.*s", c->id, (int) subt.len, subt.buf));
-  free(rx_topic);
+  mg_free(rx_topic);
 }
 
 static void rpc_config_set(struct mg_rpc_req *r) {
@@ -169,7 +169,7 @@ static void rpc_ota_upload(struct mg_rpc_req *r) {
     } else {
       mg_rpc_ok(r, "%m", MG_ESC("ok"));
     }
-    free(buf);
+    mg_free(buf);
   }
 }
 

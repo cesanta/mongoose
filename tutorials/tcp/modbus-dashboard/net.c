@@ -41,7 +41,7 @@ static void setfromjson(struct mg_str json, const char *jsonpath, char *buf,
                         size_t len) {
   char *val = mg_json_get_str(json, jsonpath);
   if (val != NULL) mg_snprintf(buf, len, "%s", val);
-  free(val);
+  mg_free(val);
 }
 
 static void handle_settings_set(struct mg_connection *c, struct mg_str body) {
@@ -159,7 +159,7 @@ static struct mg_connection *start_modbus_request(struct mg_mgr *mgr,
     cd->id = cid;  // Store parent connection ID
     cd->expiration_time = mg_millis() + timeout;
   }
-  free(url);
+  mg_free(url);
   return c;
 }
 

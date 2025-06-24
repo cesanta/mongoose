@@ -11,6 +11,8 @@
 #define assert(x)
 #endif
 
+void *mg_calloc(size_t count, size_t size);
+void mg_free(void *ptr);
 void mg_bzero(volatile unsigned char *buf, size_t len);
 bool mg_random(void *buf, size_t len);
 char *mg_random_str(char *buf, size_t len);

@@ -22,7 +22,7 @@ bool web_load_settings(void *buf, size_t len) {
   } else {
     memcpy(buf, data.buf, len);
   }
-  free((void *) data.buf);
+  mg_free((void *) data.buf);
   return ok;
 }
 
