@@ -51,7 +51,7 @@ void mg_tls_free(struct mg_connection *c) {
 #ifdef MBEDTLS_SSL_SESSION_TICKETS
     mbedtls_ssl_ticket_free(&tls->ticket);
 #endif
-    free(tls);
+    mg_free(tls);
     c->tls = NULL;
   }
 }
@@ -97,7 +97,7 @@ static void debug_cb(void *c, int lev, const char *s, int n, const char *s2) {
 }
 
 void mg_tls_init(struct mg_connection *c, const struct mg_tls_opts *opts) {
-  struct mg_tls *tls = (struct mg_tls *) calloc(1, sizeof(*tls));
+  struct mg_tls *tls = (struct mg_tls *) mg_calloc(1, sizeof(*tls));
   int rc = 0;
   c->tls = tls;
   if (c->tls == NULL) {
@@ -140,7 +140,7 @@ void mg_tls_init(struct mg_connection *c, const struct mg_tls_opts *opts) {
       char *host = mg_mprintf("%.*s", opts->name.len, opts->name.buf);
       mbedtls_ssl_set_hostname(&tls->ssl, host);
       MG_DEBUG(("%lu hostname verification: %s", c->id, host));
-      free(host);
+      mg_free(host);
     }
     mbedtls_ssl_conf_authmode(&tls->conf, MBEDTLS_SSL_VERIFY_REQUIRED);
   }
@@ -220,7 +220,7 @@ void mg_tls_flush(struct mg_connection *c) {
 }
 
 void mg_tls_ctx_init(struct mg_mgr *mgr) {
-  struct mg_tls_ctx *ctx = (struct mg_tls_ctx *) calloc(1, sizeof(*ctx));
+  struct mg_tls_ctx *ctx = (struct mg_tls_ctx *) mg_calloc(1, sizeof(*ctx));
   if (ctx == NULL) {
     MG_ERROR(("TLS context init OOM"));
   } else {
@@ -243,7 +243,7 @@ void mg_tls_ctx_free(struct mg_mgr *mgr) {
 #ifdef MBEDTLS_SSL_SESSION_TICKETS
     mbedtls_ssl_ticket_free(&ctx->tickets);
 #endif
-    free(ctx);
+    mg_free(ctx);
     mgr->tls_ctx = NULL;
   }
 }

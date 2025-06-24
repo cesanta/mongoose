@@ -38,7 +38,7 @@ void mg_timer_poll(struct mg_timer **head, uint64_t now_ms) {
     // If this timer is not repeating and marked AUTODELETE, remove it
     if (!(t->flags & MG_TIMER_REPEAT) && (t->flags & MG_TIMER_AUTODELETE)) {
       mg_timer_free(head, t);
-      free(t);
+      mg_free(t);
     }
   }
 }

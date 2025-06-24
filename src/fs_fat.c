@@ -74,7 +74,7 @@ static void *ff_open(const char *path, int flags) {
   if (flags & MG_FS_WRITE) mode |= FA_WRITE | FA_OPEN_ALWAYS | FA_OPEN_APPEND;
   if (f_open(&f, path, mode) == 0) {
     FIL *fp;
-    if ((fp = calloc(1, sizeof(*fp))) != NULL) {
+    if ((fp = mg_calloc(1, sizeof(*fp))) != NULL) {
       memcpy(fp, &f, sizeof(*fp));
       return fp;
     }
@@ -85,7 +85,7 @@ static void *ff_open(const char *path, int flags) {
 static void ff_close(void *fp) {
   if (fp != NULL) {
     f_close((FIL *) fp);
-    free(fp);
+    mg_free(fp);
   }
 }
 

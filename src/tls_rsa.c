@@ -309,8 +309,8 @@ static void check(const bigint *bi);
  * @return A bigint context.
  */
 NS_INTERNAL BI_CTX *bi_initialize(void) {
-  /* calloc() sets everything to zero */
-  BI_CTX *ctx = (BI_CTX *) calloc(1, sizeof(BI_CTX));
+  /* mg_calloc() sets everything to zero */
+  BI_CTX *ctx = (BI_CTX *) mg_calloc(1, sizeof(BI_CTX));
 
   /* the radix */
   ctx->bi_radix = alloc(ctx, 2);
@@ -319,48 +319,6 @@ NS_INTERNAL BI_CTX *bi_initialize(void) {
   bi_permanent(ctx->bi_radix);
   return ctx;
 }
-
-#if 0
-/**
- * @brief Close the bigint context and free any resources.
- *
- * Free up any used memory - a check is done if all objects were not
- * properly freed.
- * @param ctx [in]   The bigint session context.
- */
-NS_INTERNAL void bi_terminate(BI_CTX *ctx) {
-  bi_depermanent(ctx->bi_radix);
-  bi_free(ctx, ctx->bi_radix);
-
-  if (ctx->active_count != 0) {
-#ifdef CONFIG_SSL_FULL_MODE
-    printf("bi_terminate: there were %d un-freed bigints\n", ctx->active_count);
-#endif
-    abort();
-  }
-
-  bi_clear_cache(ctx);
-  free(ctx);
-}
-
-/**
- *@brief Clear the memory cache.
- */
-NS_INTERNAL void bi_clear_cache(BI_CTX *ctx) {
-  bigint *p, *pn;
-
-  if (ctx->free_list == NULL) return;
-
-  for (p = ctx->free_list; p != NULL; p = pn) {
-    pn = p->next;
-    free(p->comps);
-    free(p);
-  }
-
-  ctx->free_count = 0;
-  ctx->free_list = NULL;
-}
-#endif
 
 /**
  * @brief Increment the number of references to this object.
@@ -1192,9 +1150,9 @@ NS_INTERNAL int bi_compare(bigint *bia, bigint *bib) {
 static void more_comps(bigint *bi, int n) {
   if (n > bi->max_comps) {
     int max = MAX(bi->max_comps * 2, n);
-    void *p = calloc(1, (size_t) max * COMP_BYTE_SIZE);
+    void *p = mg_calloc(1, (size_t) max * COMP_BYTE_SIZE);
     if (p != NULL && bi->size > 0) memcpy(p, bi->comps, (size_t) bi->max_comps * COMP_BYTE_SIZE);
-    free(bi->comps);
+    mg_free(bi->comps);
     bi->max_comps = (short) max;
     bi->comps = (comp *) p;
   }
@@ -1229,8 +1187,8 @@ static bigint *alloc(BI_CTX *ctx, int size) {
     more_comps(biR, size);
   } else {
     /* No free bigints available - create a new one. */
-    biR = (bigint *) calloc(1, sizeof(bigint));
-    biR->comps = (comp *) calloc(1, (size_t) size * COMP_BYTE_SIZE);
+    biR = (bigint *) mg_calloc(1, sizeof(bigint));
+    biR->comps = (comp *) mg_calloc(1, (size_t) size * COMP_BYTE_SIZE);
     biR->max_comps = (short) size; /* give some space to spare */
   }
 
@@ -1419,7 +1377,7 @@ static void precompute_slide_window(BI_CTX *ctx, int window, bigint *g1) {
     k <<= 1;
   }
 
-  ctx->g = (bigint **) calloc(1, k * sizeof(bigint *));
+  ctx->g = (bigint **) mg_calloc(1, k * sizeof(bigint *));
   ctx->g[0] = bi_clone(ctx, g1);
   bi_permanent(ctx->g[0]);
   g2 = bi_residue(ctx, bi_square(ctx, ctx->g[0])); /* g^2 */
@@ -1470,7 +1428,7 @@ NS_INTERNAL bigint *bi_mod_power(BI_CTX *ctx, bigint *bi, bigint *biexp) {
   /* work out the slide constants */
   precompute_slide_window(ctx, window_size, bi);
 #else /* just one constant */
-  ctx->g = (bigint **) calloc(1, sizeof(bigint *));
+  ctx->g = (bigint **) mg_calloc(1, sizeof(bigint *));
   ctx->g[0] = bi_clone(ctx, bi);
   ctx->window = 1;
   bi_permanent(ctx->g[0]);
@@ -1513,7 +1471,7 @@ NS_INTERNAL bigint *bi_mod_power(BI_CTX *ctx, bigint *bi, bigint *biexp) {
     bi_free(ctx, ctx->g[i]);
   }
 
-  free(ctx->g);
+  mg_free(ctx->g);
   bi_free(ctx, bi);
   bi_free(ctx, biexp);
 #if defined CONFIG_BIGINT_MONTGOMERY

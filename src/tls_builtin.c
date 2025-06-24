@@ -34,13 +34,13 @@
 // refer to RFC8446#A.1
 enum mg_tls_hs_state {
   // Client state machine:
-  MG_TLS_STATE_CLIENT_START,          // Send ClientHello
-  MG_TLS_STATE_CLIENT_WAIT_SH,        // Wait for ServerHello
-  MG_TLS_STATE_CLIENT_WAIT_EE,        // Wait for EncryptedExtensions
-  MG_TLS_STATE_CLIENT_WAIT_CERT,      // Wait for Certificate
-  MG_TLS_STATE_CLIENT_WAIT_CV,        // Wait for CertificateVerify
-  MG_TLS_STATE_CLIENT_WAIT_FINISH,    // Wait for Finish
-  MG_TLS_STATE_CLIENT_CONNECTED,      // Done
+  MG_TLS_STATE_CLIENT_START,        // Send ClientHello
+  MG_TLS_STATE_CLIENT_WAIT_SH,      // Wait for ServerHello
+  MG_TLS_STATE_CLIENT_WAIT_EE,      // Wait for EncryptedExtensions
+  MG_TLS_STATE_CLIENT_WAIT_CERT,    // Wait for Certificate
+  MG_TLS_STATE_CLIENT_WAIT_CV,      // Wait for CertificateVerify
+  MG_TLS_STATE_CLIENT_WAIT_FINISH,  // Wait for Finish
+  MG_TLS_STATE_CLIENT_CONNECTED,    // Done
 
   // Server state machine:
   MG_TLS_STATE_SERVER_START,       // Wait for ClientHello
@@ -424,7 +424,7 @@ static void mg_tls_encrypt(struct mg_connection *c, const uint8_t *msg,
   nonce[8] ^= (uint8_t) ((seq >> 24) & 255U);
   nonce[9] ^= (uint8_t) ((seq >> 16) & 255U);
   nonce[10] ^= (uint8_t) ((seq >> 8) & 255U);
-  nonce[11] ^= (uint8_t) ((seq) &255U);
+  nonce[11] ^= (uint8_t) ((seq) & 255U);
 
   mg_iobuf_add(wio, wio->len, hdr, sizeof(hdr));
   mg_iobuf_resize(wio, wio->len + encsz);
@@ -436,7 +436,7 @@ static void mg_tls_encrypt(struct mg_connection *c, const uint8_t *msg,
   (void) tag;  // tag is only used in aes gcm
   {
     size_t maxlen = MG_IO_SIZE > 16384 ? 16384 : MG_IO_SIZE;
-    uint8_t *enc = (uint8_t *) calloc(1, maxlen + 256 + 1);
+    uint8_t *enc = (uint8_t *) mg_calloc(1, maxlen + 256 + 1);
     if (enc == NULL) {
       mg_error(c, "TLS OOM");
       return;
@@ -445,7 +445,7 @@ static void mg_tls_encrypt(struct mg_connection *c, const uint8_t *msg,
                                               sizeof(associated_data), outmsg,
                                               msgsz + 1);
       memmove(outmsg, enc, n);
-      free(enc);
+      mg_free(enc);
     }
   }
 #else
@@ -503,10 +503,10 @@ static int mg_tls_recv_record(struct mg_connection *c) {
   nonce[8] ^= (uint8_t) ((seq >> 24) & 255U);
   nonce[9] ^= (uint8_t) ((seq >> 16) & 255U);
   nonce[10] ^= (uint8_t) ((seq >> 8) & 255U);
-  nonce[11] ^= (uint8_t) ((seq) &255U);
+  nonce[11] ^= (uint8_t) ((seq) & 255U);
 #if CHACHA20
   {
-    uint8_t *dec = (uint8_t *) calloc(1, msgsz);
+    uint8_t *dec = (uint8_t *) mg_calloc(1, msgsz);
     size_t n;
     if (dec == NULL) {
       mg_error(c, "TLS OOM");
@@ -514,7 +514,7 @@ static int mg_tls_recv_record(struct mg_connection *c) {
     }
     n = mg_chacha20_poly1305_decrypt(dec, key, nonce, msg, msgsz);
     memmove(msg, dec, n);
-    free(dec);
+    mg_free(dec);
   }
 #else
   mg_gcm_initialize();
@@ -687,7 +687,7 @@ static void mg_tls_server_send_cert(struct mg_connection *c) {
   int send_ca = !c->is_client && tls->ca_der.len > 0;
   // server DER certificate + CA (optional)
   size_t n = tls->cert_der.len + (send_ca ? tls->ca_der.len + 5 : 0);
-  uint8_t *cert = (uint8_t *) calloc(1, 13 + n);
+  uint8_t *cert = (uint8_t *) mg_calloc(1, 13 + n);
   if (cert == NULL) {
     mg_error(c, "tls cert oom");
     return;
@@ -710,7 +710,7 @@ static void mg_tls_server_send_cert(struct mg_connection *c) {
   }
   mg_sha256_update(&tls->sha256, cert, 13 + n);
   mg_tls_encrypt(c, cert, 13 + n, MG_TLS_HANDSHAKE);
-  free(cert);
+  mg_free(cert);
 }
 
 // type adapter between uECC hash context and our sha256 implementation
@@ -1523,9 +1523,7 @@ static void mg_tls_client_handshake(struct mg_connection *c) {
       c->is_tls_hs = 0;
       mg_call(c, MG_EV_TLS_HS, NULL);
       break;
-    default:
-      mg_error(c, "unexpected client state: %d", tls->state);
-      break;
+    default: mg_error(c, "unexpected client state: %d", tls->state); break;
   }
 }
 
@@ -1552,9 +1550,7 @@ static void mg_tls_server_handshake(struct mg_connection *c) {
       tls->state = MG_TLS_STATE_SERVER_CONNECTED;
       c->is_tls_hs = 0;
       return;
-    default:
-      mg_error(c, "unexpected server state: %d", tls->state);
-      break;
+    default: mg_error(c, "unexpected server state: %d", tls->state); break;
   }
 }
 
@@ -1570,8 +1566,8 @@ void mg_tls_handshake(struct mg_connection *c) {
   while (tls->send.len > 0 &&
          (n = mg_io_send(c, tls->send.buf, tls->send.len)) > 0) {
     mg_iobuf_del(&tls->send, 0, (size_t) n);
-  } // if last chunk fails to be sent, it will be sent with first app data,
-    // otherwise, it needs to be flushed
+  }  // if last chunk fails to be sent, it will be sent with first app data,
+     // otherwise, it needs to be flushed
 }
 
 static int mg_parse_pem(const struct mg_str pem, const struct mg_str label,
@@ -1587,7 +1583,7 @@ static int mg_parse_pem(const struct mg_str pem, const struct mg_str label,
   if (mg_strcmp(caps[1], label) != 0 || mg_strcmp(caps[3], label) != 0) {
     return -1;  // bad label
   }
-  if ((s = (char *) calloc(1, caps[2].len)) == NULL) {
+  if ((s = (char *) mg_calloc(1, caps[2].len)) == NULL) {
     return -1;
   }
 
@@ -1599,7 +1595,7 @@ static int mg_parse_pem(const struct mg_str pem, const struct mg_str label,
   }
   m = mg_base64_decode(s, n, s, n);
   if (m == 0) {
-    free(s);
+    mg_free(s);
     return -1;
   }
   der->buf = s;
@@ -1609,7 +1605,8 @@ static int mg_parse_pem(const struct mg_str pem, const struct mg_str label,
 
 void mg_tls_init(struct mg_connection *c, const struct mg_tls_opts *opts) {
   struct mg_str key;
-  struct tls_data *tls = (struct tls_data *) calloc(1, sizeof(struct tls_data));
+  struct tls_data *tls =
+      (struct tls_data *) mg_calloc(1, sizeof(struct tls_data));
   if (tls == NULL) {
     mg_error(c, "tls oom");
     return;
@@ -1674,7 +1671,7 @@ void mg_tls_init(struct mg_connection *c, const struct mg_tls_opts *opts) {
       MG_ERROR(("EC private key: ASN.1 bad data"));
     }
     memmove(tls->ec_key, key.buf + 7, 32);
-    free((void *) key.buf);
+    mg_free((void *) key.buf);
   } else if (mg_parse_pem(opts->key, mg_str_s("PRIVATE KEY"), &key) == 0) {
     mg_error(c, "PKCS8 private key format is not supported");
   } else {
@@ -1686,10 +1683,10 @@ void mg_tls_free(struct mg_connection *c) {
   struct tls_data *tls = (struct tls_data *) c->tls;
   if (tls != NULL) {
     mg_iobuf_free(&tls->send);
-    free((void *) tls->cert_der.buf);
-    free((void *) tls->ca_der.buf);
+    mg_free((void *) tls->cert_der.buf);
+    mg_free((void *) tls->ca_der.buf);
   }
-  free(c->tls);
+  mg_free(c->tls);
   c->tls = NULL;
 }
 
@@ -1705,7 +1702,7 @@ long mg_tls_send(struct mg_connection *c, const void *buf, size_t len) {
   while (tls->send.len > 0 &&
          (n = mg_io_send(c, tls->send.buf, tls->send.len)) > 0) {
     mg_iobuf_del(&tls->send, 0, (size_t) n);
-  } // if last chunk fails to be sent, it needs to be flushed
+  }  // if last chunk fails to be sent, it needs to be flushed
   c->is_tls_throttled = (tls->send.len > 0 && n == MG_IO_WAIT);
   MG_VERBOSE(("%lu %ld %ld %ld %c %c", c->id, (long) len, (long) tls->send.len,
               n, was_throttled ? 'T' : 't', c->is_tls_throttled ? 'T' : 't'));

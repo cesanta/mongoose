@@ -31,7 +31,7 @@ static char *mg_ssi(const char *path, const char *root, int depth) {
           if (depth < MG_MAX_SSI_DEPTH &&
               (data = mg_ssi(tmp, root, depth + 1)) != NULL) {
             mg_iobuf_add(&b, b.len, data, strlen(data));
-            free(data);
+            mg_free(data);
           } else {
             MG_ERROR(("%s: file=%s error or too deep", path, arg));
           }
@@ -41,7 +41,7 @@ static char *mg_ssi(const char *path, const char *root, int depth) {
           if (depth < MG_MAX_SSI_DEPTH &&
               (data = mg_ssi(tmp, root, depth + 1)) != NULL) {
             mg_iobuf_add(&b, b.len, data, strlen(data));
-            free(data);
+            mg_free(data);
           } else {
             MG_ERROR(("%s: virtual=%s error or too deep", path, arg));
           }
@@ -87,7 +87,7 @@ void mg_http_serve_ssi(struct mg_connection *c, const char *root,
   const char *headers = "Content-Type: text/html; charset=utf-8\r\n";
   char *data = mg_ssi(fullpath, root, 0);
   mg_http_reply(c, 200, headers, "%s", data == NULL ? "" : data);
-  free(data);
+  mg_free(data);
 }
 #else
 void mg_http_serve_ssi(struct mg_connection *c, const char *root,

@@ -1083,10 +1083,10 @@ void mg_tcpip_init(struct mg_mgr *mgr, struct mg_tcpip_if *ifp) {
     MG_ERROR(("driver init failed"));
   } else {
     size_t framesize = 1540;
-    ifp->tx.buf = (char *) calloc(1, framesize), ifp->tx.len = framesize;
+    ifp->tx.buf = (char *) mg_calloc(1, framesize), ifp->tx.len = framesize;
     if (ifp->recv_queue.size == 0)
       ifp->recv_queue.size = ifp->driver->rx ? framesize : 8192;
-    ifp->recv_queue.buf = (char *) calloc(1, ifp->recv_queue.size);
+    ifp->recv_queue.buf = (char *) mg_calloc(1, ifp->recv_queue.size);
     ifp->timer_1000ms = mg_millis();
     mgr->ifp = ifp;
     ifp->mgr = mgr;
@@ -1102,8 +1102,8 @@ void mg_tcpip_init(struct mg_mgr *mgr, struct mg_tcpip_if *ifp) {
 }
 
 void mg_tcpip_free(struct mg_tcpip_if *ifp) {
-  free(ifp->recv_queue.buf);
-  free(ifp->tx.buf);
+  mg_free(ifp->recv_queue.buf);
+  mg_free(ifp->tx.buf);
 }
 
 static void send_syn(struct mg_connection *c) {

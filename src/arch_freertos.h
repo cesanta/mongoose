@@ -25,10 +25,11 @@
 #include <FreeRTOS.h>
 #include <task.h>
 
-#define calloc(a, b) mg_calloc(a, b)
-#define free(a) vPortFree(a)
-#define malloc(a) pvPortMalloc(a)
-#define strdup(s) ((char *) mg_strdup(mg_str(s)).buf)
+#define MG_ENABLE_CUSTOM_CALLOC 1
+
+static inline void mg_free(void *ptr) {
+  vPortFree(ptr);
+}
 
 // Re-route calloc/free to the FreeRTOS's functions, don't use stdlib
 static inline void *mg_calloc(size_t cnt, size_t size) {

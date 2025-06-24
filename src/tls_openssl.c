@@ -114,12 +114,12 @@ void mg_tls_free(struct mg_connection *c) {
   SSL_free(tls->ssl);
   SSL_CTX_free(tls->ctx);
   BIO_meth_free(tls->bm);
-  free(tls);
+  mg_free(tls);
   c->tls = NULL;
 }
 
 void mg_tls_init(struct mg_connection *c, const struct mg_tls_opts *opts) {
-  struct mg_tls *tls = (struct mg_tls *) calloc(1, sizeof(*tls));
+  struct mg_tls *tls = (struct mg_tls *) mg_calloc(1, sizeof(*tls));
   const char *id = "mongoose";
   static unsigned char s_initialised = 0;
   BIO *bio = NULL;
@@ -212,7 +212,7 @@ void mg_tls_init(struct mg_connection *c, const struct mg_tls_opts *opts) {
     X509_VERIFY_PARAM_set1_host(SSL_get0_param(tls->ssl), s, 0);
 #endif
     SSL_set_tlsext_host_name(tls->ssl, s);
-    free(s);
+    mg_free(s);
   }
 #endif
 #if MG_TLS == MG_TLS_WOLFSSL

@@ -72,7 +72,7 @@ static void *packed_open(const char *path, int flags) {
   struct packed_file *fp = NULL;
   if (data == NULL) return NULL;
   if (flags & MG_FS_WRITE) return NULL;
-  if ((fp = (struct packed_file *) calloc(1, sizeof(*fp))) != NULL) {
+  if ((fp = (struct packed_file *) mg_calloc(1, sizeof(*fp))) != NULL) {
     fp->size = size;
     fp->data = data;
   }
@@ -80,7 +80,7 @@ static void *packed_open(const char *path, int flags) {
 }
 
 static void packed_close(void *fp) {
-  if (fp != NULL) free(fp);
+  if (fp != NULL) mg_free(fp);
 }
 
 static size_t packed_read(void *fd, void *buf, size_t len) {
