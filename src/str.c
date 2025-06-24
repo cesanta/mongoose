@@ -1,4 +1,5 @@
 #include "str.h"
+#include "util.h"
 
 struct mg_str mg_str_s(const char *s) {
   struct mg_str str = {(char *) s, s == NULL ? 0 : strlen(s)};

@@ -1,5 +1,6 @@
 #include "arch.h"
 #include "timer.h"
+#include "util.h"
 
 void mg_timer_init(struct mg_timer **head, struct mg_timer *t, uint64_t ms,
                    unsigned flags, void (*fn)(void *), void *arg) {

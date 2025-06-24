@@ -26,9 +26,9 @@ void app_main(void) {
     char *ssid = mg_json_get_str(json, "$.ssid");
     char *pass = mg_json_get_str(json, "$.pass");
     while (!wifi_init(ssid, pass)) (void) 0;
-    free(ssid);
-    free(pass);
-    free((void *) json.buf);
+    mg_free(ssid);
+    mg_free(pass);
+    mg_free((void *) json.buf);
   } else {
     // If WiFi is not configured, run CLI until configured
     MG_INFO(("WiFi is not configured, running CLI. Press enter"));

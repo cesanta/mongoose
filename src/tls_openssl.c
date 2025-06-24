@@ -1,5 +1,6 @@
 #include "printf.h"
 #include "tls.h"
+#include "util.h"
 
 #if MG_TLS == MG_TLS_OPENSSL || MG_TLS == MG_TLS_WOLFSSL
 

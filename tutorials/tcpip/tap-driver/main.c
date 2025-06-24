@@ -48,12 +48,12 @@ static void mif_fn(struct mg_tcpip_if *ifp, int ev, void *ev_data) {
   if (ev == MG_TCPIP_EV_ST_CHG) {
     MG_INFO(("State change: %u", *(uint8_t *) ev_data));
   } else if (ev == MG_TCPIP_EV_DHCP_DNS) {
-    free(s_dns);
+    mg_free(s_dns);
     s_dns = mg_mprintf("udp://%M:53", mg_print_ip4, (uint32_t *) ev_data);
     ifp->mgr->dns4.url = s_dns;
     MG_INFO(("Set DNS to %s", ifp->mgr->dns4.url));
   } else if (ev == MG_TCPIP_EV_DHCP_SNTP) {
-    free(s_sntp);
+    mg_free(s_sntp);
     s_sntp = mg_mprintf("udp://%M:123", mg_print_ip4, (uint32_t *) ev_data);
     MG_INFO(("Set SNTP to %s", s_sntp));
   }
@@ -128,8 +128,8 @@ int main(int argc, char *argv[]) {
   web_init(&mgr);
   while (s_signo == 0) mg_mgr_poll(&mgr, 100);  // Infinite event loop
 
-  free(s_dns);
-  free(s_sntp);
+  mg_free(s_dns);
+  mg_free(s_sntp);
   mg_mgr_free(&mgr);
   close(fd);
   printf("Exiting on signal %d\n", s_signo);

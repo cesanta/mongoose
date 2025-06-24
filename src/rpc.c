@@ -1,5 +1,6 @@
 #include "rpc.h"
 #include "printf.h"
+#include "util.h"
 
 void mg_rpc_add(struct mg_rpc **head, struct mg_str method,
                 void (*fn)(struct mg_rpc_req *), void *fn_data) {

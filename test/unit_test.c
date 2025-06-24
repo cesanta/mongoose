@@ -1168,7 +1168,7 @@ static void test_http_server(void) {
     struct mg_str data = mg_file_read(&mg_fs_posix, "./data/ca.pem");
     ASSERT(fetch(&mgr, buf, url, "GET /ca.pem HTTP/1.0\r\n\n") == 200);
     ASSERT(cmpbody(buf, data.buf) == 0);
-    free((void *) data.buf);
+    mg_free((void *) data.buf);
   }
 
   {
@@ -1248,7 +1248,7 @@ static void test_http_server(void) {
     s = mg_file_read(&mg_fs_posix, "uploaded.txt");
     ASSERT(s.buf != NULL);
     ASSERT(strcmp(s.buf, "hello\nworld") == 0);
-    free((void *) s.buf);
+    mg_free((void *) s.buf);
     remove("uploaded.txt");
   }
 
@@ -2112,7 +2112,7 @@ static void test_str(void) {
   {
     struct mg_str s = mg_strdup(mg_str("a"));
     ASSERT(mg_strcmp(s, mg_str("a")) == 0);
-    free((void *) s.buf);
+    mg_free((void *) s.buf);
   }
 
   {
@@ -2228,11 +2228,11 @@ static void test_str(void) {
 
     p = mg_mprintf("[%s,%M,%s]", "null", pf1, 2, 3, "hi");
     ASSERT(strcmp(p, "[null,5,hi]") == 0);
-    free(p);
+    mg_free(p);
 
     p = mg_mprintf("[%M,%d]", pf2, 10, 7);
     ASSERT(strcmp(p, "[9876543210,7]") == 0);
-    free(p);
+    mg_free(p);
 
     mg_xprintf(mg_pfn_iobuf, &io, "[%M", pf2, 10);
     mg_xprintf(mg_pfn_iobuf, &io, ",");
@@ -2433,7 +2433,7 @@ static void test_str(void) {
 
 static void fn1(struct mg_connection *c, int ev, void *ev_data) {
   if (ev == MG_EV_ERROR) {
-    free(*(char **) c->fn_data);  // See #2263
+    mg_free(*(char **) c->fn_data);  // See #2263
     *(char **) c->fn_data = mg_mprintf("%s", (char *) ev_data);
   }
   (void) c;
@@ -2454,7 +2454,7 @@ static void test_dns_error(const char *dns_server_url, const char *errstr) {
   mg_mgr_free(&mgr);
   // MG_DEBUG(("buf: [%s] [%s]", buf, errstr));
   ASSERT(buf != NULL && strcmp(buf, errstr) == 0);
-  free(buf);
+  mg_free(buf);
 }
 
 static void test_dns(void) {
@@ -2541,7 +2541,7 @@ static void test_util(void) {
   data = mg_file_read(&mg_fs_posix, "data.txt");
   ASSERT(data.buf != NULL);
   ASSERT(strcmp(data.buf, "hi") == 0);
-  free((void *) data.buf);
+  mg_free((void *) data.buf);
   remove("data.txt");
   ASSERT(mg_aton(mg_str("0"), &a) == false);
   ASSERT(mg_aton(mg_str("0.0.0."), &a) == false);
@@ -2653,7 +2653,7 @@ static void test_util(void) {
   {
     s = mg_mprintf("%3d", 123);
     ASSERT(strcmp(s, "123") == 0);
-    free(s);
+    mg_free(s);
   }
 
   {
@@ -3077,13 +3077,13 @@ static void test_packed(void) {
   // printf("---> %s\n", buf);
   ASSERT(fetch(&mgr, buf, url, "GET /Makefile HTTP/1.0\n\n") == 200);
   ASSERT(cmpbody(buf, data.buf) == 0);
-  free((void *) data.buf);
+  mg_free((void *) data.buf);
 
   // Load file deeper in the FS tree directly
   data = mg_file_read(&mg_fs_posix, "data/ssi.h");
   ASSERT(fetch(&mgr, buf, url, "GET /data/ssi.h HTTP/1.0\n\n") == 200);
   ASSERT(cmpbody(buf, data.buf) == 0);
-  free((void *) data.buf);
+  mg_free((void *) data.buf);
 
   // List root dir
   ASSERT(fetch(&mgr, buf, url, "GET / HTTP/1.0\n\n") == 200);
@@ -3384,14 +3384,14 @@ static void test_json(void) {
     ASSERT(str != NULL);
     // printf("---> [%s]\n", str);
     ASSERT(strcmp(str, "b") == 0);
-    free(str);
+    mg_free(str);
 
     json = mg_str("{\"a\": \"hi\\nthere\",\"b\": [12345, true]}");
     str = mg_json_get_str(json, "$.a");
 
     ASSERT(str != NULL);
     ASSERT(strcmp(str, "hi\nthere") == 0);
-    free(str);
+    mg_free(str);
 
     ASSERT(mg_json_get_long(json, "$.foo", -42) == -42);
     ASSERT(mg_json_get_long(json, "$.b[0]", -42) == 12345);
@@ -3410,10 +3410,10 @@ static void test_json(void) {
     json = mg_str("[\"YWJj\", \"0100026869\"]");
     ASSERT((str = mg_json_get_b64(json, "$[0]", &len)) != NULL);
     ASSERT(len == 3 && memcmp(str, "abc", (size_t) len) == 0);
-    free(str);
+    mg_free(str);
     ASSERT((str = mg_json_get_hex(json, "$[1]", &len)) != NULL);
     ASSERT(len == 5 && memcmp(str, "\x01\x00\x02hi", (size_t) len) == 0);
-    free(str);
+    mg_free(str);
 
     json = mg_str("{\"a\":[1,2,3], \"ab\": 2}");
     ASSERT(mg_json_get_long(json, "$.a[0]", -42) == 1);

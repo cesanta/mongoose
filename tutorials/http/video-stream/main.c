@@ -44,7 +44,7 @@ static void broadcast_mjpeg_frame(struct mg_mgr *mgr) {
     mg_send(c, data.buf, data.len);
     mg_send(c, "\r\n", 2);
   }
-  free((void *) data.buf);
+  mg_free((void *) data.buf);
 }
 
 static void timer_callback(void *arg) {

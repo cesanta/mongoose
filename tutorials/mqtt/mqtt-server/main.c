@@ -78,7 +78,7 @@ static void fn(struct mg_connection *c, int ev, void *ev_data) {
         struct mg_str topic;
         int num_topics = 0;
         while ((pos = mg_mqtt_next_sub(mm, &topic, &qos, pos)) > 0) {
-          struct sub *sub = calloc(1, sizeof(*sub));
+          struct sub *sub = (struct sub *)calloc(1, sizeof(*sub));
           sub->c = c;
           sub->topic = mg_strdup(topic);
           sub->qos = qos;
@@ -128,7 +128,9 @@ static void fn(struct mg_connection *c, int ev, void *ev_data) {
       next = sub->next;
       if (c != sub->c) continue;
       MG_INFO(("UNSUB %p [%.*s]", c->fd, (int) sub->topic.len, sub->topic.buf));
+      mg_free(sub->topic.buf);
       LIST_DELETE(struct sub, &s_subs, sub);
+      free(sub);
     }
   }
 }

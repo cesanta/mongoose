@@ -24,8 +24,8 @@ static struct config {
 static void update_config(struct mg_str json, const char *path, char **value) {
   char *jval;
   if ((jval = mg_json_get_str(json, path)) != NULL) {
-    free(*value);
-    *value = strdup(jval);
+    mg_free(*value);
+    *value = jval;
   }
 }
 
@@ -61,5 +61,8 @@ int main(void) {
   mg_http_listen(&mgr, s_http_addr, fn, NULL);  // Create HTTP listener
   for (;;) mg_mgr_poll(&mgr, 1000);             // Infinite event loop
   mg_mgr_free(&mgr);
+  mg_free(s_config.url);
+  mg_free(s_config.pub);
+  mg_free(s_config.sub);
   return 0;
 }

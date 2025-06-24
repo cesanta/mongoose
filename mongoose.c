@@ -821,6 +821,7 @@ size_t mg_vxprintf(void (*out)(char, void *), void *param, const char *fmt,
 
 
 
+
 struct mg_fd *mg_fs_open(struct mg_fs *fs, const char *path, int flags) {
   struct mg_fd *fd = (struct mg_fd *) mg_calloc(1, sizeof(*fd));
   if (fd != NULL) {
@@ -1044,6 +1045,7 @@ struct mg_fs mg_fs_fat = {ff_stat,  ff_list, ff_open,   ff_close,  ff_read,
 #ifdef MG_ENABLE_LINES
 #line 1 "src/fs_packed.c"
 #endif
+
 
 
 
@@ -2676,6 +2678,7 @@ void mg_iobuf_free(struct mg_iobuf *io) {
 
 
 
+
 static const char *escapeseq(int esc) {
   return esc ? "\b\f\n\r\t\\\"" : "bfnrt\\\"";
 }
@@ -4096,7 +4099,7 @@ struct mg_timer *mg_timer_add(struct mg_mgr *mgr, uint64_t milliseconds,
                               unsigned flags, void (*fn)(void *), void *arg) {
   struct mg_timer *t = (struct mg_timer *) mg_calloc(1, sizeof(*t));
   if (t != NULL) {
-    flags |= MG_TIMER_AUTODELETE;  // We have mg_calloc-ed it, so autodelete
+    flags |= MG_TIMER_AUTODELETE;  // We have alloc'ed it, so autodelete
     mg_timer_init(&mgr->timers, t, milliseconds, flags, fn, arg);
   }
   return t;
@@ -7864,6 +7867,7 @@ void mg_queue_del(struct mg_queue *q, size_t len) {
 
 
 
+
 void mg_rpc_add(struct mg_rpc **head, struct mg_str method,
                 void (*fn)(struct mg_rpc_req *), void *fn_data) {
   struct mg_rpc *rpc = (struct mg_rpc *) mg_calloc(1, sizeof(*rpc));
@@ -9381,6 +9385,7 @@ void mg_mgr_poll(struct mg_mgr *mgr, int ms) {
 
 
 
+
 #ifndef MG_MAX_SSI_DEPTH
 #define MG_MAX_SSI_DEPTH 5
 #endif
@@ -9479,6 +9484,7 @@ void mg_http_serve_ssi(struct mg_connection *c, const char *root,
 #ifdef MG_ENABLE_LINES
 #line 1 "src/str.c"
 #endif
+
 
 
 struct mg_str mg_str_s(const char *s) {
@@ -9666,6 +9672,7 @@ bool mg_str_to_num(struct mg_str str, int base, void *val, size_t val_len) {
 #ifdef MG_ENABLE_LINES
 #line 1 "src/timer.c"
 #endif
+
 
 
 
@@ -13999,6 +14006,7 @@ void mg_tls_ctx_free(struct mg_mgr *mgr) {
 
 
 
+
 #if MG_TLS == MG_TLS_MBED
 
 #if defined(MBEDTLS_VERSION_NUMBER) && MBEDTLS_VERSION_NUMBER >= 0x03000000
@@ -14248,6 +14256,7 @@ void mg_tls_ctx_free(struct mg_mgr *mgr) {
 #ifdef MG_ENABLE_LINES
 #line 1 "src/tls_openssl.c"
 #endif
+
 
 
 
@@ -14537,6 +14546,7 @@ void mg_tls_ctx_free(struct mg_mgr *mgr) {
 #ifdef MG_ENABLE_LINES
 #line 1 "src/tls_rsa.c"
 #endif
+
 
 
 
@@ -14858,6 +14868,48 @@ NS_INTERNAL BI_CTX *bi_initialize(void) {
   bi_permanent(ctx->bi_radix);
   return ctx;
 }
+
+#if 0
+/**
+ * @brief Close the bigint context and free any resources.
+ *
+ * Free up any used memory - a check is done if all objects were not
+ * properly freed.
+ * @param ctx [in]   The bigint session context.
+ */
+NS_INTERNAL void bi_terminate(BI_CTX *ctx) {
+  bi_depermanent(ctx->bi_radix);
+  bi_free(ctx, ctx->bi_radix);
+
+  if (ctx->active_count != 0) {
+#ifdef CONFIG_SSL_FULL_MODE
+    printf("bi_terminate: there were %d un-freed bigints\n", ctx->active_count);
+#endif
+    abort();
+  }
+
+  bi_clear_cache(ctx);
+  mg_free(ctx);
+}
+
+/**
+ *@brief Clear the memory cache.
+ */
+NS_INTERNAL void bi_clear_cache(BI_CTX *ctx) {
+  bigint *p, *pn;
+
+  if (ctx->free_list == NULL) return;
+
+  for (p = ctx->free_list; p != NULL; p = pn) {
+    pn = p->next;
+    mg_free(p->comps);
+    mg_free(p);
+  }
+
+  ctx->free_count = 0;
+  ctx->free_list = NULL;
+}
+#endif
 
 /**
  * @brief Increment the number of references to this object.

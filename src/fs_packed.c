@@ -1,6 +1,7 @@
 #include "fs.h"
 #include "printf.h"
 #include "str.h"
+#include "util.h"
 
 struct packed_file {
   const char *data;

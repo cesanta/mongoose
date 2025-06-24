@@ -156,10 +156,10 @@ static void handle_settings_set(struct mg_connection *c, struct mg_str body) {
   settings.log_level = (int) mg_json_get_long(body, "$.log_level", 0);
   settings.brightness = mg_json_get_long(body, "$.brightness", 0);
   if (s && strlen(s) < MAX_DEVICE_NAME) {
-    free(settings.device_name);
+    mg_free(settings.device_name);
     settings.device_name = s;
   } else {
-    free(s);
+    mg_free(s);
   }
   s_settings = settings;  // Save to the device flash
   mg_http_reply(c, 200, s_json_header,

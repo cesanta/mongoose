@@ -104,7 +104,7 @@ static void fn2(struct mg_connection *c, int ev, void *ev_data) {
   } else if (ev == MG_EV_CONNECT) {
     mg_printf(c, "GET %s HTTP/1.1\r\n\r\n", mg_url_uri((char *) c->fn_data));
   } else if (ev == MG_EV_CLOSE) {
-    free(c->fn_data);
+    mg_free(c->fn_data);
   }
 }
 

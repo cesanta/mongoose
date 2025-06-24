@@ -2,6 +2,7 @@
 #include "printf.h"
 #include "profile.h"
 #include "tls.h"
+#include "util.h"
 
 #if MG_TLS == MG_TLS_MBED
 

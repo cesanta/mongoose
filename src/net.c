@@ -219,7 +219,7 @@ struct mg_timer *mg_timer_add(struct mg_mgr *mgr, uint64_t milliseconds,
                               unsigned flags, void (*fn)(void *), void *arg) {
   struct mg_timer *t = (struct mg_timer *) mg_calloc(1, sizeof(*t));
   if (t != NULL) {
-    flags |= MG_TIMER_AUTODELETE;  // We have mg_calloc-ed it, so autodelete
+    flags |= MG_TIMER_AUTODELETE;  // We have alloc'ed it, so autodelete
     mg_timer_init(&mgr->timers, t, milliseconds, flags, fn, arg);
   }
   return t;

@@ -157,7 +157,7 @@ static void timer_fn(void *param) {
 static void update_string(struct mg_str json, const char *path, char **value) {
   char *jval;
   if ((jval = mg_json_get_str(json, path)) != NULL) {
-    free(*value);
+    mg_free(*value);
     *value = strdup(jval);
   }
 }
@@ -189,7 +189,7 @@ void uart_bridge_fn(struct mg_connection *c, int ev, void *ev_data) {
   if (ev == MG_EV_OPEN && c->is_listening) {
     struct mg_str config = mg_file_read(&mg_fs_posix, "config.json");
     if (config.buf != NULL) config_apply(config);
-    free(config.buf);
+    mg_free(config.buf);
     s_state.tcp.url = strdup(DEFAULT_TCP);
     s_state.websocket.url = strdup(DEFAULT_WEBSOCKET);
     s_state.mqtt.url = strdup(DEFAULT_MQTT);

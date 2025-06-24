@@ -1,5 +1,6 @@
 #include "tls.h"
 #include "tls_rsa.h"
+#include "util.h"
 
 #if MG_TLS == MG_TLS_BUILTIN
 
@@ -319,6 +320,48 @@ NS_INTERNAL BI_CTX *bi_initialize(void) {
   bi_permanent(ctx->bi_radix);
   return ctx;
 }
+
+#if 0
+/**
+ * @brief Close the bigint context and free any resources.
+ *
+ * Free up any used memory - a check is done if all objects were not
+ * properly freed.
+ * @param ctx [in]   The bigint session context.
+ */
+NS_INTERNAL void bi_terminate(BI_CTX *ctx) {
+  bi_depermanent(ctx->bi_radix);
+  bi_free(ctx, ctx->bi_radix);
+
+  if (ctx->active_count != 0) {
+#ifdef CONFIG_SSL_FULL_MODE
+    printf("bi_terminate: there were %d un-freed bigints\n", ctx->active_count);
+#endif
+    abort();
+  }
+
+  bi_clear_cache(ctx);
+  mg_free(ctx);
+}
+
+/**
+ *@brief Clear the memory cache.
+ */
+NS_INTERNAL void bi_clear_cache(BI_CTX *ctx) {
+  bigint *p, *pn;
+
+  if (ctx->free_list == NULL) return;
+
+  for (p = ctx->free_list; p != NULL; p = pn) {
+    pn = p->next;
+    mg_free(p->comps);
+    mg_free(p);
+  }
+
+  ctx->free_count = 0;
+  ctx->free_list = NULL;
+}
+#endif
 
 /**
  * @brief Increment the number of references to this object.
