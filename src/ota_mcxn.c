@@ -150,7 +150,7 @@ fwxit:
 
 // try to swap (honor dual image), otherwise just overwrite
 MG_IRAM static void single_bank_swap(char *p1, char *p2, size_t s, size_t ss) {
-  char *tmp = malloc(ss);
+  char *tmp = calloc(1, ss);
   // no stdlib calls here
   for (size_t ofs = 0; ofs < s; ofs += ss) {
     if (tmp != NULL)
