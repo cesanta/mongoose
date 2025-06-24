@@ -6,8 +6,7 @@
 
 static int s_debug_level = MG_LL_INFO;
 static const char *s_root_dir = ".";
-static const char *s_addr1 = "http://0.0.0.0:8000";
-static const char *s_addr2 = "https://0.0.0.0:8443";
+static const char *s_listening_addr = "http://0.0.0.0:8000";
 static const char *s_enable_hexdump = "no";
 static const char *s_ssi_pattern = "#.html";
 static const char *s_upload_dir = NULL;  // File uploads disabled by default
@@ -112,11 +111,11 @@ static void usage(const char *prog) {
           "  -H yes|no - enable traffic hexdump, default: '%s'\n"
           "  -S PAT    - SSI filename pattern, default: '%s'\n"
           "  -d DIR    - directory to serve, default: '%s'\n"
-          "  -l ADDR   - listening address, default: '%s'\n"
+          "  -l ADDR   - listening HTTP address, default: '%s'\n"
           "  -u DIR    - file upload directory, default: unset\n"
           "  -v LEVEL  - debug level, from 0 to 4, default: %d\n",
           MG_VERSION, prog, s_enable_hexdump, s_ssi_pattern, s_root_dir,
-          s_addr1, s_debug_level);
+          s_listening_addr, s_debug_level);
   exit(EXIT_FAILURE);
 }
 
@@ -135,9 +134,7 @@ int main(int argc, char *argv[]) {
     } else if (strcmp(argv[i], "-S") == 0) {
       s_ssi_pattern = argv[++i];
     } else if (strcmp(argv[i], "-l") == 0) {
-      s_addr1 = argv[++i];
-    } else if (strcmp(argv[i], "-l2") == 0) {
-      s_addr2 = argv[++i];
+      s_listening_addr = argv[++i];
     } else if (strcmp(argv[i], "-u") == 0) {
       s_upload_dir = argv[++i];
     } else if (strcmp(argv[i], "-v") == 0) {
@@ -159,25 +156,21 @@ int main(int argc, char *argv[]) {
   signal(SIGTERM, signal_handler);
   mg_log_set(s_debug_level);
   mg_mgr_init(&mgr);
-  if ((c = mg_http_listen(&mgr, s_addr1, cb, NULL)) == NULL) {
+  if ((c = mg_http_listen(&mgr, s_listening_addr, cb, NULL)) == NULL) {
     MG_ERROR(("Cannot listen on %s. Use http://ADDR:PORT or :PORT",
-              s_addr1));
-    exit(EXIT_FAILURE);
-  }
-  if ((c = mg_http_listen(&mgr, s_addr2, cb, NULL)) == NULL) {
-    MG_ERROR(("Cannot listen on %s. Use https://ADDR:PORT",
-              s_addr2));
+              s_listening_addr));
     exit(EXIT_FAILURE);
   }
   if (mg_casecmp(s_enable_hexdump, "yes") == 0) c->is_hexdumping = 1;
 
   // Start infinite event loop
   MG_INFO(("Mongoose version : v%s", MG_VERSION));
-  MG_INFO(("HTTP listener    : %s", s_addr1));
-  MG_INFO(("HTTPS listener   : %s", s_addr2));
-  MG_INFO(("Web root         : [%s]", s_root_dir));
-  MG_INFO(("Upload dir       : [%s]", s_upload_dir ? s_upload_dir : "unset"));
-  while (s_signo == 0) mg_mgr_poll(&mgr, 1000);
+  MG_INFO(("Listening on     : %s", s_listening_addr));
+  MG_INFO(("Web root         : %s", s_root_dir));
+  MG_INFO(("Upload dir       : %s", s_upload_dir ? s_upload_dir : "(unset)"));
+  while (s_signo == 0) {
+    mg_mgr_poll(&mgr, 1000);
+  }
   mg_mgr_free(&mgr);
   MG_INFO(("Exiting on signal %d", s_signo));
   return 0;
