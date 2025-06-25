@@ -17,11 +17,6 @@ static uint8_t s_txno;                           // Current TX descriptor
 static uint8_t s_rxno;                           // Current RX descriptor
 
 static struct mg_tcpip_if *s_ifp;  // MIP interface
-enum { MG_PHY_ADDR = 0, MG_PHYREG_BCR = 0, MG_PHYREG_BSR = 1 };
-
-#define MG_PHYREGBIT_BCR_DUPLEX_MODE MG_BIT(8)
-#define MG_PHYREGBIT_BCR_SPEED MG_BIT(13)
-#define MG_PHYREGBIT_BSR_LINK_STATUS MG_BIT(2)
 
 static uint16_t eth_read_phy(uint8_t addr, uint8_t reg) {
   GMAC_REGS->GMAC_MAN = GMAC_MAN_CLTTO_Msk |
@@ -32,14 +27,12 @@ static uint16_t eth_read_phy(uint8_t addr, uint8_t reg) {
   return GMAC_REGS->GMAC_MAN & GMAC_MAN_DATA_Msk;  // Getting the read value
 }
 
-#if 0
 static void eth_write_phy(uint8_t addr, uint8_t reg, uint16_t val) {
   GMAC_REGS->GMAC_MAN = GMAC_MAN_CLTTO_Msk | GMAC_MAN_OP(1) |   // Setting the write operation
                         GMAC_MAN_WTN(2) | GMAC_MAN_PHYA(addr) | // PHY address
                         GMAC_MAN_REGA(reg) | GMAC_MAN_DATA(val);  // Setting the register
   while (!(GMAC_REGS->GMAC_NSR & GMAC_NSR_IDLE_Msk)); // Waiting until the write op is complete
 }
-#endif
 
 int get_clock_rate(struct mg_tcpip_driver_same54_data *d) {
   if (d && d->mdc_cr >= 0 && d->mdc_cr <= 5) {
@@ -101,6 +94,9 @@ static bool mg_tcpip_driver_same54_init(struct mg_tcpip_if *ifp) {
   GMAC_REGS->GMAC_NCFGR = GMAC_NCFGR_CLK(get_clock_rate(d));  // Set MDC divider
   GMAC_REGS->GMAC_NCR = 0;                                    // Disable RX & TX
   GMAC_REGS->GMAC_NCR |= GMAC_NCR_MPE_Msk;  // Enable MDC & MDIO
+
+  struct mg_phy phy = {eth_read_phy, eth_write_phy};
+  mg_phy_init(&phy, d->phy_addr, 0);
 
   for (int i = 0; i < ETH_DESC_CNT; i++) {   // Init TX descriptors
     s_txdesc[i][0] = (uint32_t) s_txbuf[i];  // Point to data buffer
@@ -181,21 +177,22 @@ static bool mg_tcpip_driver_same54_poll(struct mg_tcpip_if *ifp, bool s1) {
     mg_tcpip_driver_same54_update_hash_table(ifp);
     ifp->update_mac_hash_table = false;
   }
+
+  bool up = false;
   if (s1) {
-    uint16_t bsr = eth_read_phy(MG_PHY_ADDR, MG_PHYREG_BSR);
-    bool up = bsr & MG_PHYREGBIT_BSR_LINK_STATUS ? 1 : 0;
+    uint8_t speed = MG_PHY_SPEED_10M;
+    bool full_duplex = false;
+    struct mg_phy phy = {eth_read_phy, eth_write_phy};
+    up = mg_phy_up(&phy, 0, &full_duplex, &speed);
 
     // If PHY is ready, update NCFGR accordingly
     if (ifp->state == MG_TCPIP_STATE_DOWN && up) {
-      uint16_t bcr = eth_read_phy(MG_PHY_ADDR, MG_PHYREG_BCR);
-      bool fd = bcr & MG_PHYREGBIT_BCR_DUPLEX_MODE ? 1 : 0;
-      bool spd = bcr & MG_PHYREGBIT_BCR_SPEED ? 1 : 0;
       GMAC_REGS->GMAC_NCFGR = (GMAC_REGS->GMAC_NCFGR &
-                               ~(GMAC_NCFGR_SPD_Msk | MG_PHYREGBIT_BCR_SPEED)) |
-                              GMAC_NCFGR_SPD(spd) | GMAC_NCFGR_FD(fd);
+                               ~(GMAC_NCFGR_SPD_Msk | GMAC_NCFGR_FD_Msk)) |
+                              GMAC_NCFGR_SPD(speed) | GMAC_NCFGR_FD(full_duplex);
     }
   }
-  return false;
+  return up;
 }
 
 void GMAC_Handler(void);
