@@ -41,10 +41,10 @@ Mongoose can work on top of any TCP/IP stack that supports BSD sockets API.
 Platforms supported by the 3rd party TCP/IP stacks:
 
 | TCP/IP stack    | Notes |
-| --------------- | -------- |
-| **lwIP**            | All devices running lwIP, for example ESP32, ESP32S3, ESP32C3, ESP32C6, etc |
-| **Zephyr**          | All devices supported by Zephyr |
-| **Other**           | Any other TCP/IP stack that supports BSD socket API, for example Amazon FreeRTOS-TCP |
+| :-------------- | :------- |
+| **lwIP**        | All devices running lwIP, for example ESP32, ESP32S3, ESP32C3, ESP32C6, etc |
+| **Zephyr**      | All devices supported by Zephyr |
+| **Other**       | Any other TCP/IP stack that supports BSD socket API, for example Amazon FreeRTOS-TCP |
 | **Linux, Mac, Windows**   | Workstations, server, single board computers, embedded Linux devices running on MPUs or FPGAs |
 
 Optionally, Mongoose provides its own built-in TCP/IP stack, eliminating the
@@ -52,17 +52,17 @@ need for additional software to implement networking functionality. The
 built-in stack supports operation in both bare-metal and RTOS environments.
 Platforms supported by the Mongoose built-in TCP/IP stack:
 
-| Hardware    | Notes |
-| ----------- | -------- |
-| **STM32** | All STM32 MCUs with built-in Ethernet: STM32Fxx, STM32H5xx, STM32H7xx |
-| **NXP**  |  All NXP MCUs with built-in Ethernet: IMXRT102x, IMXRT104x, IMXRT105x, IMXRT106x, IMXRT117x, RW612, MCXN94x   |
+| Hardware       | Notes |
+| :------------- | :------- |
+| **STM32**      | All STM32 MCUs with built-in Ethernet: STM32Fxx, STM32H5xx, STM32H7xx |
+| **NXP**        |  All NXP MCUs with built-in Ethernet: IMXRT102x, IMXRT104x, IMXRT105x, IMXRT106x, IMXRT117x, RW612, MCXN94x   |
 | **Microchip**  | ATSAME54 MCUs with built-int Ethernet  |
-| **Renesas** | RA5M, RA6M, RA8M MCUs with built-in Ethernet    |
-| **Infineon**  | XMC4, XMC7 MCUs with built-in Ethernet    |
+| **Renesas**    | RA5M, RA6M, RA8M MCUs with built-in Ethernet    |
+| **Infineon**   | XMC4, XMC7 MCUs with built-in Ethernet    |
 | **Texas Instruments**  |  TM4C, TMS570 MCUs with built-in Ethernet   |
 | **Cypress WiFi**  | Any MCU with CY43xx WiFi chips, like RP2040 Pico-W, RP2350 Pico2-W, Arduino Portenta    |
 | **Wiznet Ethernet**  | Any MCU that use Wiznet W5500 or Wiznet 5100 MAC+PHY chips    |
-| **Cellular**  | NRF9160, SIM800    |
+| **Cellular**   | NRF9160, SIM800    |
 
 ## Usage Examples
 
