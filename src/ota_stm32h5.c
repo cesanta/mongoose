@@ -135,6 +135,10 @@ static bool mg_stm32h5_write(void *addr, const void *buf, size_t len) {
 }
 
 bool mg_ota_begin(size_t new_firmware_size) {
+#ifdef __ZEPHYR__
+  *((uint32_t *)0xE000ED94) = 0;
+  MG_DEBUG(("Jailbreak %s", *((uint32_t *)0xE000ED94) == 0 ? "successful" : "failed"));
+#endif
   return mg_ota_flash_begin(new_firmware_size, &s_mg_flash_stm32h5);
 }
 

@@ -184,6 +184,10 @@ bool mg_ota_begin(size_t new_firmware_size) {
     // Using only the 1st bank (mapped to CM7)
     s_mg_flash_stm32h7.size /= 2;
   }
+#ifdef __ZEPHYR__
+  *((uint32_t *)0xE000ED94) = 0;
+  MG_DEBUG(("Jailbreak %s", *((uint32_t *)0xE000ED94) == 0 ? "successful" : "failed"));
+#endif
   return mg_ota_flash_begin(new_firmware_size, &s_mg_flash_stm32h7);
 }
 

@@ -622,6 +622,7 @@ typedef int socklen_t;
 
 #if MG_ARCH == MG_ARCH_ZEPHYR
 
+#include <zephyr/version.h>
 #include <zephyr/kernel.h>
 
 #include <ctype.h>
@@ -1306,9 +1307,14 @@ uint32_t mg_ntohl(uint32_t net);
 #define MG_ROUND_UP(x, a) ((a) == 0 ? (x) : ((((x) + (a) -1) / (a)) * (a)))
 #define MG_ROUND_DOWN(x, a) ((a) == 0 ? (x) : (((x) / (a)) * (a)))
 
-#if defined(__GNUC__)
+#if defined(__GNUC__) && defined(__arm__)
+#ifdef __ZEPHYR__
+#define MG_ARM_DISABLE_IRQ() __asm__ __volatile__("cpsid i" : : : "memory")
+#define MG_ARM_ENABLE_IRQ() __asm__ __volatile__("cpsie i" : : : "memory")
+#else
 #define MG_ARM_DISABLE_IRQ() asm volatile("cpsid i" : : : "memory")
 #define MG_ARM_ENABLE_IRQ() asm volatile("cpsie i" : : : "memory")
+#endif // !ZEPHYR
 #elif defined(__CCRH__)
 #define MG_RH850_DISABLE_IRQ() __DI()
 #define MG_RH850_ENABLE_IRQ() __EI()
@@ -1322,7 +1328,11 @@ uint32_t mg_ntohl(uint32_t net);
 #elif defined(__ARMCC_VERSION)
 #define MG_DSB() __builtin_arm_dsb(0xf)
 #elif defined(__GNUC__) && defined(__arm__) && defined(__thumb__)
+#ifdef __ZEPHYR__
+#define MG_DSB() __asm__("DSB 0xf")
+#else
 #define MG_DSB() asm("DSB 0xf")
+#endif // !ZEPHYR
 #elif defined(__ICCARM__)
 #define MG_DSB() __iar_builtin_DSB()
 #else

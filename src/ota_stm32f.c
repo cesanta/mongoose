@@ -200,6 +200,10 @@ MG_IRAM void single_bank_swap(char *p1, char *p2, size_t size) {
 
 bool mg_ota_begin(size_t new_firmware_size) {
   s_mg_flash_stm32f.size = flash_size();
+#ifdef __ZEPHYR__
+  *((uint32_t *)0xE000ED94) = 0;
+  MG_DEBUG(("Jailbreak %s", *((uint32_t *)0xE000ED94) == 0 ? "successful" : "failed"));
+#endif
   return mg_ota_flash_begin(new_firmware_size, &s_mg_flash_stm32f);
 }
 
