@@ -185,15 +185,19 @@ void mg_multicast_add(struct mg_connection *c, char *ip) {
 #elif MG_ENABLE_FREERTOS_TCP
   // TODO(): prvAllowIPPacketIPv4()
 #else
-  // lwIP, Unix, Windows, Zephyr(, AzureRTOS ?)
+  // lwIP, Unix, Windows, Zephyr 4+(, AzureRTOS ?)
 #if MG_ENABLE_LWIP && !LWIP_IGMP
   MG_ERROR(("LWIP_IGMP not defined, no multicast support"));
+#else
+#if defined(__ZEPHYR__) && ZEPHYR_VERSION_CODE < 0x40000
+  MG_ERROR(("struct ip_mreq not defined"));
 #else
   struct ip_mreq mreq;
   mreq.imr_multiaddr.s_addr = inet_addr(ip);
   mreq.imr_interface.s_addr = mg_htonl(INADDR_ANY);
   setsockopt(FD(c), IPPROTO_IP, IP_ADD_MEMBERSHIP, (char *) &mreq, sizeof(mreq));
-#endif
+#endif // !Zephyr
+#endif // !lwIP
 #endif
 }
 

@@ -7185,6 +7185,10 @@ MG_IRAM void single_bank_swap(char *p1, char *p2, size_t size) {
 
 bool mg_ota_begin(size_t new_firmware_size) {
   s_mg_flash_stm32f.size = flash_size();
+#ifdef __ZEPHYR__
+  *((uint32_t *)0xE000ED94) = 0;
+  MG_DEBUG(("Jailbreak %s", *((uint32_t *)0xE000ED94) == 0 ? "successful" : "failed"));
+#endif
   return mg_ota_flash_begin(new_firmware_size, &s_mg_flash_stm32f);
 }
 
@@ -7350,6 +7354,10 @@ static bool mg_stm32h5_write(void *addr, const void *buf, size_t len) {
 }
 
 bool mg_ota_begin(size_t new_firmware_size) {
+#ifdef __ZEPHYR__
+  *((uint32_t *)0xE000ED94) = 0;
+  MG_DEBUG(("Jailbreak %s", *((uint32_t *)0xE000ED94) == 0 ? "successful" : "failed"));
+#endif
   return mg_ota_flash_begin(new_firmware_size, &s_mg_flash_stm32h5);
 }
 
@@ -7554,6 +7562,10 @@ bool mg_ota_begin(size_t new_firmware_size) {
     // Using only the 1st bank (mapped to CM7)
     s_mg_flash_stm32h7.size /= 2;
   }
+#ifdef __ZEPHYR__
+  *((uint32_t *)0xE000ED94) = 0;
+  MG_DEBUG(("Jailbreak %s", *((uint32_t *)0xE000ED94) == 0 ? "successful" : "failed"));
+#endif
   return mg_ota_flash_begin(new_firmware_size, &s_mg_flash_stm32h7);
 }
 
@@ -8806,15 +8818,19 @@ void mg_multicast_add(struct mg_connection *c, char *ip) {
 #elif MG_ENABLE_FREERTOS_TCP
   // TODO(): prvAllowIPPacketIPv4()
 #else
-  // lwIP, Unix, Windows, Zephyr(, AzureRTOS ?)
+  // lwIP, Unix, Windows, Zephyr 4+(, AzureRTOS ?)
 #if MG_ENABLE_LWIP && !LWIP_IGMP
   MG_ERROR(("LWIP_IGMP not defined, no multicast support"));
+#else
+#if defined(__ZEPHYR__) && ZEPHYR_VERSION_CODE < 0x40000
+  MG_ERROR(("struct ip_mreq not defined"));
 #else
   struct ip_mreq mreq;
   mreq.imr_multiaddr.s_addr = inet_addr(ip);
   mreq.imr_interface.s_addr = mg_htonl(INADDR_ANY);
   setsockopt(FD(c), IPPROTO_IP, IP_ADD_MEMBERSHIP, (char *) &mreq, sizeof(mreq));
-#endif
+#endif // !Zephyr
+#endif // !lwIP
 #endif
 }
 
