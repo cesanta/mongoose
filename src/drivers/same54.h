@@ -12,7 +12,7 @@
 
 struct mg_tcpip_driver_same54_data {
     int mdc_cr;
-    int phy_addr;
+    uint8_t phy_addr;
 };
 
 #define MG_TCPIP_DRIVER_INIT(mgr)                                \
@@ -20,7 +20,7 @@ struct mg_tcpip_driver_same54_data {
     static struct mg_tcpip_driver_same54_data driver_data_;       \
     static struct mg_tcpip_if mif_;                              \
     driver_data_.mdc_cr = MG_DRIVER_MDC_CR;                      \
-    driver_data_.phy_addr = MH_DRIVER_PHY_ADDR;                  \
+    driver_data_.phy_addr = MG_DRIVER_PHY_ADDR;                  \
     mif_.ip = MG_TCPIP_IP;                                       \
     mif_.mask = MG_TCPIP_MASK;                                   \
     mif_.gw = MG_TCPIP_GW;                                       \
