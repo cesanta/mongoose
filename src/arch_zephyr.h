@@ -3,6 +3,7 @@
 #if MG_ARCH == MG_ARCH_ZEPHYR
 
 #include <zephyr/kernel.h>
+#include <zephyr/version.h>
 
 #include <ctype.h>
 #include <errno.h>
