@@ -159,10 +159,10 @@ typedef struct _BI_CTX BI_CTX;
  */
 
 NS_INTERNAL BI_CTX *bi_initialize(void);
-//NS_INTERNAL void bi_terminate(BI_CTX *ctx);
+NS_INTERNAL void bi_terminate(BI_CTX *ctx);
 NS_INTERNAL void bi_permanent(bigint *bi);
 NS_INTERNAL void bi_depermanent(bigint *bi);
-//NS_INTERNAL void bi_clear_cache(BI_CTX *ctx);
+NS_INTERNAL void bi_clear_cache(BI_CTX *ctx);
 NS_INTERNAL void bi_free(BI_CTX *ctx, bigint *bi);
 NS_INTERNAL bigint *bi_copy(bigint *bi);
 NS_INTERNAL bigint *bi_clone(BI_CTX *ctx, const bigint *bi);
@@ -184,7 +184,7 @@ NS_INTERNAL bigint *bi_mod_power2(BI_CTX *ctx, bigint *bi,
 #endif
 NS_INTERNAL int bi_compare(bigint *bia, bigint *bib);
 NS_INTERNAL void bi_set_mod(BI_CTX *ctx, bigint *bim, int mod_offset);
-//NS_INTERNAL void bi_free_mod(BI_CTX *ctx, int mod_offset);
+NS_INTERNAL void bi_free_mod(BI_CTX *ctx, int mod_offset);
 
 #ifdef CONFIG_SSL_FULL_MODE
 NS_INTERNAL void bi_print(const char *label, bigint *bi);
@@ -321,7 +321,6 @@ NS_INTERNAL BI_CTX *bi_initialize(void) {
   return ctx;
 }
 
-#if 0
 /**
  * @brief Close the bigint context and free any resources.
  *
@@ -361,7 +360,6 @@ NS_INTERNAL void bi_clear_cache(BI_CTX *ctx) {
   ctx->free_count = 0;
   ctx->free_list = NULL;
 }
-#endif
 
 /**
  * @brief Increment the number of references to this object.
@@ -931,7 +929,6 @@ NS_INTERNAL void bi_set_mod(BI_CTX *ctx, bigint *bim, int mod_offset) {
 #endif
 }
 
-#if 0
 /**
  * @brief Used when cleaning various bigints at the end of a session.
  * @param ctx [in]  The bigint session context.
@@ -953,7 +950,6 @@ void bi_free_mod(BI_CTX *ctx, int mod_offset) {
   bi_depermanent(ctx->bi_normalised_mod[mod_offset]);
   bi_free(ctx, ctx->bi_normalised_mod[mod_offset]);
 }
-#endif
 
 /**
  * Perform a standard multiplication between two bigints.
@@ -1563,6 +1559,21 @@ NS_INTERNAL bigint *bi_crt(BI_CTX *ctx, bigint *bi, bigint *dP, bigint *dQ,
 }
 #endif
 
+
+// Proper lib usage:
+// - BI_CTX *c = bi_initialize()
+// - allocate bigints (e.g.: calling bi_import(), int_to_bi(), ...)
+// - function calls, allocate bigints, etc.
+// - bigint *n = bi_import(c, indata, insize)
+//   - bi_set_mod(c, n, x)
+//   - mod function calls
+//   - bigint *nn = bi_mod_pwr(c, m, e) <-- frees m, e
+//   - bi_free_mod(c, x)                <-- frees n
+// - bi_export(c, nn, outdata, outsize) <-- frees nn
+// - function calls
+// - free bigints calling bi_free()
+// - bi_terminate(c)                    <-- frees c
+
 int mg_rsa_mod_pow(const uint8_t *mod, size_t modsz, const uint8_t *exp, size_t expsz, const uint8_t *msg, size_t msgsz, uint8_t *out, size_t outsz) {
 	BI_CTX *bi_ctx = bi_initialize();
 	bigint *n = bi_import(bi_ctx, mod, (int) modsz);
@@ -1570,11 +1581,9 @@ int mg_rsa_mod_pow(const uint8_t *mod, size_t modsz, const uint8_t *exp, size_t 
 	bigint *h = bi_import(bi_ctx, msg, (int) msgsz);
 	bi_set_mod(bi_ctx, n, 0);
 	bigint *m1 = bi_mod_power(bi_ctx, h, e);
+	bi_free_mod(bi_ctx, 0);
 	bi_export(bi_ctx, m1, out, (int) outsz);
-	bi_free(bi_ctx, n);
-	bi_free(bi_ctx, e);
-	bi_free(bi_ctx, h);
-	bi_free(bi_ctx, m1);
+	bi_terminate(bi_ctx);
 	return 0;
 }
 
