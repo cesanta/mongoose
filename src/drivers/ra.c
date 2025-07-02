@@ -1,6 +1,8 @@
 #include "net_builtin.h"
 
-#if MG_ENABLE_TCPIP && defined(MG_ENABLE_DRIVER_RA) && MG_ENABLE_DRIVER_RA
+#if MG_ENABLE_TCPIP && \
+  (defined(MG_ENABLE_DRIVER_RA6) && MG_ENABLE_DRIVER_RA6) || \
+  (defined(MG_ENABLE_DRIVER_RA8) && MG_ENABLE_DRIVER_RA8)
 struct ra_etherc {
   volatile uint32_t ECMR, RESERVED, RFLR, RESERVED1, ECSR, RESERVED2, ECSIPR,
       RESERVED3, PIR, RESERVED4, PSR, RESERVED5[5], RDMLR, RESERVED6[3], IPGR,
@@ -21,7 +23,7 @@ struct ra_edmac {
 #undef EDMAC
 #undef RASYSC
 #undef ICU_IELSR
-#if defined(MG_DRIVER_RA8) && MG_DRIVER_RA8
+#if defined(MG_ENABLE_DRIVER_RA8) && MG_ENABLE_DRIVER_RA8
 #define ETHERC ((struct ra_etherc *) (uintptr_t) 0x40354100U)
 #define EDMAC ((struct ra_edmac *) (uintptr_t) 0x40354000U)
 #define RASYSC ((uint32_t *) (uintptr_t) 0x4001E000U)

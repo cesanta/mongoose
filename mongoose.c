@@ -21820,7 +21820,9 @@ bool mg_wifi_ap_stop(void) {
 #endif
 
 
-#if MG_ENABLE_TCPIP && defined(MG_ENABLE_DRIVER_IMXRT) && MG_ENABLE_DRIVER_IMXRT
+#if MG_ENABLE_TCPIP && \
+  (defined(MG_ENABLE_DRIVER_IMXRT10) && MG_ENABLE_DRIVER_IMXRT10) || \
+  (defined(MG_ENABLE_DRIVER_IMXRT11) && MG_ENABLE_DRIVER_IMXRT11)
 struct imxrt_enet {
   volatile uint32_t RESERVED0, EIR, EIMR, RESERVED1, RDAR, TDAR, RESERVED2[3],
       ECR, RESERVED3[6], MMFR, MSCR, RESERVED4[7], MIBC, RESERVED5[7], RCR,
@@ -21846,7 +21848,7 @@ struct imxrt_enet {
 };
 
 #undef ENET
-#if defined(MG_DRIVER_IMXRT_RT11) && MG_DRIVER_IMXRT_RT11
+#if defined(MG_ENABLE_DRIVER_IMXRT11) && MG_ENABLE_DRIVER_IMXRT11
 #define ENET ((struct imxrt_enet *) (uintptr_t) 0x40424000U)
 #define ETH_DESC_CNT 5     // Descriptors count
 #else
@@ -22690,7 +22692,9 @@ struct mg_tcpip_driver mg_tcpip_driver_ppp = {mg_ppp_init, mg_ppp_tx, mg_ppp_rx,
 #endif
 
 
-#if MG_ENABLE_TCPIP && defined(MG_ENABLE_DRIVER_RA) && MG_ENABLE_DRIVER_RA
+#if MG_ENABLE_TCPIP && \
+  (defined(MG_ENABLE_DRIVER_RA6) && MG_ENABLE_DRIVER_RA6) || \
+  (defined(MG_ENABLE_DRIVER_RA8) && MG_ENABLE_DRIVER_RA8)
 struct ra_etherc {
   volatile uint32_t ECMR, RESERVED, RFLR, RESERVED1, ECSR, RESERVED2, ECSIPR,
       RESERVED3, PIR, RESERVED4, PSR, RESERVED5[5], RDMLR, RESERVED6[3], IPGR,
@@ -22711,7 +22715,7 @@ struct ra_edmac {
 #undef EDMAC
 #undef RASYSC
 #undef ICU_IELSR
-#if defined(MG_DRIVER_RA8) && MG_DRIVER_RA8
+#if defined(MG_ENABLE_DRIVER_RA8) && MG_ENABLE_DRIVER_RA8
 #define ETHERC ((struct ra_etherc *) (uintptr_t) 0x40354100U)
 #define EDMAC ((struct ra_edmac *) (uintptr_t) 0x40354000U)
 #define RASYSC ((uint32_t *) (uintptr_t) 0x4001E000U)

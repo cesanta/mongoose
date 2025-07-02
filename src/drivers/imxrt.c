@@ -1,6 +1,8 @@
 #include "net_builtin.h"
 
-#if MG_ENABLE_TCPIP && defined(MG_ENABLE_DRIVER_IMXRT) && MG_ENABLE_DRIVER_IMXRT
+#if MG_ENABLE_TCPIP && \
+  (defined(MG_ENABLE_DRIVER_IMXRT10) && MG_ENABLE_DRIVER_IMXRT10) || \
+  (defined(MG_ENABLE_DRIVER_IMXRT11) && MG_ENABLE_DRIVER_IMXRT11)
 struct imxrt_enet {
   volatile uint32_t RESERVED0, EIR, EIMR, RESERVED1, RDAR, TDAR, RESERVED2[3],
       ECR, RESERVED3[6], MMFR, MSCR, RESERVED4[7], MIBC, RESERVED5[7], RCR,
@@ -26,7 +28,7 @@ struct imxrt_enet {
 };
 
 #undef ENET
-#if defined(MG_DRIVER_IMXRT_RT11) && MG_DRIVER_IMXRT_RT11
+#if defined(MG_ENABLE_DRIVER_IMXRT11) && MG_ENABLE_DRIVER_IMXRT11
 #define ENET ((struct imxrt_enet *) (uintptr_t) 0x40424000U)
 #define ETH_DESC_CNT 5     // Descriptors count
 #else
