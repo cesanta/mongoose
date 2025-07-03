@@ -10,7 +10,6 @@ ROOT_DIR = $(realpath $(CWD)/..)
 ENV ?=  -e Tmp=. -e WINEDEBUG=-all
 DOCKER_BIN ?= docker
 DOCKER ?= $(DOCKER_BIN) run --platform linux/amd64 --rm $(ENV) -v $(ROOT_DIR):$(ROOT_DIR) -w $(CWD)
-VCFLAGS = /nologo /W3 /O2 /MD /I. $(DEFS) $(TFLAGS)
 IPV6 ?= 1
 ASAN ?= -fsanitize=address,undefined,alignment -fno-sanitize-recover=all -fno-omit-frame-pointer -fno-common
 ASAN_OPTIONS ?= detect_leaks=1
@@ -75,7 +74,7 @@ LDFLAGS += -L$(WOLFSSL)/lib -lwolfssl
 endif
 
 ifeq "$(SSL)" "BUILTIN"
-CFLAGS  += -DMG_TLS=MG_TLS_BUILTIN
+DEFS += -DMG_TLS=MG_TLS_BUILTIN
 endif
 
 all:
@@ -132,7 +131,12 @@ test: Makefile mongoose.h $(SRCS) tls_multirec/server
 	ASAN_OPTIONS=$(ASAN_OPTIONS) $(RUN) ./unit_test
 
 tls_multirec/server: FORCE
+ifneq "$(SSL)" ""
+ifeq "$(MULTIREC)" ""
 	$(MAKE) -C tls_multirec CC=gcc
+endif
+endif
+	true
 
 FORCE:
 	true
@@ -164,6 +168,7 @@ armhf: test
 
 s390: ASAN=
 s390: IPV6=0
+s390: CFLAGS += -Wno-stringop-overflow
 s390: CC = $(DOCKER) mdashnet/s390 cc
 s390: RUN = $(DOCKER) mdashnet/s390
 s390: test
@@ -176,14 +181,17 @@ riscv: DEFS += -DMG_ENABLE_POSIX_FS=0 -DMG_ENABLE_TCPIP=1 -DMG_ENABLE_TCPIP_DRIV
 riscv: mongoose.h $(SRCS)
 	$(DOCKER) mdashnet/riscv riscv-none-elf-gcc -march=rv32imc -mabi=ilp32 $(SRCS) $(OPTS) $(WARN) $(INCS) $(DEFS) $(TFLAGS) -o unit_test
 
+vc98: VCFLAGS = /nologo /W3 /O2 /MD /I. $(DEFS) $(TFLAGS)
 vc98: Makefile mongoose.h $(SRCS)
 	$(DOCKER) mdashnet/vc98 wine cl $(SRCS) $(VCFLAGS) /Fe$@.exe
 	$(DOCKER) mdashnet/vc98 wine $@.exe
 
+vc17: VCFLAGS = /nologo /W3 /O2 /MD /I. $(DEFS) $(TFLAGS)
 vc17: Makefile mongoose.h $(SRCS)
 	$(DOCKER) mdashnet/vc17 wine64 cl $(SRCS) $(VCFLAGS) /Fe$@.exe
 	$(DOCKER) mdashnet/vc17 wine64 $@.exe
 
+vc22: VCFLAGS = /nologo /W3 /O2 /MD /I. $(DEFS) $(TFLAGS)
 vc22: Makefile mongoose.h $(SRCS)
 	$(DOCKER) mdashnet/vc22 wine64 cl $(SRCS) $(VCFLAGS) /Fe$@.exe
 	$(DOCKER) mdashnet/vc22 wine64 $@.exe

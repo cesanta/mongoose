@@ -20,6 +20,9 @@
  *
  *******************************************************************************/
 
+#include "arch.h"
+#include "tls.h"
+#if MG_TLS == MG_TLS_BUILTIN
 /******************************************************************************/
 #define AES_DECRYPTION 1  // whether AES decryption is supported
 /******************************************************************************/
@@ -27,11 +30,8 @@
 #define MG_ENCRYPT 1  // specify whether we're encrypting
 #define MG_DECRYPT 0  // or decrypting
 
-#include "arch.h"
-#include "tls.h"
 #include "tls_aes128.h"
 
-#if MG_TLS == MG_TLS_BUILTIN
 /******************************************************************************
  *  AES_INIT_KEYGEN_TABLES : MUST be called once before any AES use
  ******************************************************************************/

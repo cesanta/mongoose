@@ -9763,6 +9763,9 @@ void mg_timer_poll(struct mg_timer **head, uint64_t now_ms) {
  *
  *******************************************************************************/
 
+
+
+#if MG_TLS == MG_TLS_BUILTIN
 /******************************************************************************/
 #define AES_DECRYPTION 1  // whether AES decryption is supported
 /******************************************************************************/
@@ -9772,9 +9775,6 @@ void mg_timer_poll(struct mg_timer **head, uint64_t now_ms) {
 
 
 
-
-
-#if MG_TLS == MG_TLS_BUILTIN
 /******************************************************************************
  *  AES_INIT_KEYGEN_TABLES : MUST be called once before any AES use
  ******************************************************************************/
