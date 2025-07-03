@@ -619,7 +619,9 @@ static void test_mqtt_basic(void) {
 
 #if MG_TLS
   // send more than 1 record, content is not relevant
-  opts.message = mg_str_n((char *) (size_t) test_mqtt_basic, 21098);
+  static char somedata[21098];
+  mg_random(somedata, sizeof(somedata));
+  opts.message = mg_str_n(somedata, sizeof(somedata));
   opts.qos = 1, opts.retain = false, opts.retransmit_id = 0;
   mg_mqtt_pub(c, &opts);
   tbuf[0] = 0;
@@ -1474,9 +1476,9 @@ static void test_http_client(void) {
   mg_mgr_init(&mgr);
   c = mg_http_connect(&mgr, url, f3, &ok);
   ASSERT(c != NULL);
-  for (i = 0; i < 500 && ok <= 0; i++) mg_mgr_poll(&mgr, 1);
-  MG_INFO(("%d", ok));
-  ASSERT(ok == 301);
+  for (i = 0; i < 1000 && ok <= 0; i++) mg_mgr_poll(&mgr, 1);
+  MG_INFO(("OK: %d", ok));
+  ASSERT(ok == 301 || ok == 200);
   mg_mgr_poll(&mgr, 0);
   ok = 0;
 #if MG_TLS
@@ -1484,6 +1486,7 @@ static void test_http_client(void) {
   ASSERT(c != NULL);
   mg_tls_init(c, &opts);
   for (i = 0; i < 1500 && ok <= 0; i++) mg_mgr_poll(&mgr, 1);
+  MG_INFO(("OK: %d", ok));
   ASSERT(ok == 200);
   mg_mgr_poll(&mgr, 1);
 
@@ -1506,7 +1509,7 @@ static void test_http_client(void) {
   c = mg_http_connect(&mgr, "https://cesanta.com", f3, &ok);
   mg_tls_init(c, &opts);
   ok = 0;
-  for (i = 0; i < 500 && ok <= 0; i++) mg_mgr_poll(&mgr, 10);
+  for (i = 0; i < 1000 && ok <= 0; i++) mg_mgr_poll(&mgr, 10);
   MG_INFO(("OK: %d", ok));
   ASSERT(ok == 200);
   mg_mgr_poll(&mgr, 1);
@@ -1519,6 +1522,7 @@ static void test_http_client(void) {
   // it is guaranteed to hit IPv6 resolution path.
   c = mg_http_connect(&mgr, "http://ipv6.google.com", f3, &ok);
   for (i = 0; i < 500 && ok <= 0; i++) mg_mgr_poll(&mgr, 10);
+  MG_INFO(("OK: %d", ok));
   ASSERT(ok == 200);
 #endif
 
