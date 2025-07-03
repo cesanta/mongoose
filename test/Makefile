@@ -10,7 +10,6 @@ ROOT_DIR = $(realpath $(CWD)/..)
 ENV ?=  -e Tmp=. -e WINEDEBUG=-all
 DOCKER_BIN ?= docker
 DOCKER ?= $(DOCKER_BIN) run --platform linux/amd64 --rm $(ENV) -v $(ROOT_DIR):$(ROOT_DIR) -w $(CWD)
-VCFLAGS ?= /nologo /W3 /O2 /MD /I.
 IPV6 ?= 1
 ASAN ?= -fsanitize=address,undefined,alignment -fno-sanitize-recover=all -fno-omit-frame-pointer -fno-common
 ASAN_OPTIONS ?= detect_leaks=1
@@ -186,14 +185,17 @@ riscv: DEFS += -DMG_ENABLE_POSIX_FS=0 -DMG_ENABLE_TCPIP=1 -DMG_ENABLE_TCPIP_DRIV
 riscv: mongoose.h $(SRCS)
 	$(DOCKER) mdashnet/riscv riscv-none-elf-gcc -march=rv32imc -mabi=ilp32 $(SRCS) $(OPTS) $(WARN) $(INCS) $(DEFS) $(TFLAGS) -o unit_test
 
+vc98: VCFLAGS = /nologo /W3 /O2 /MD /I. $(DEFS) $(TFLAGS)
 vc98: Makefile mongoose.h $(SRCS)
 	$(DOCKER) mdashnet/vc98 wine cl $(SRCS) $(VCFLAGS) $(DEFS) $(TFLAGS) /Fe$@.exe
 	$(DOCKER) mdashnet/vc98 wine $@.exe
 
+vc17: VCFLAGS = /nologo /W3 /O2 /MD /I. $(DEFS) $(TFLAGS)
 vc17: Makefile mongoose.h $(SRCS)
 	$(DOCKER) mdashnet/vc17 wine64 cl $(SRCS) $(VCFLAGS) $(DEFS) $(TFLAGS) /Fe$@.exe
 	$(DOCKER) mdashnet/vc17 wine64 $@.exe
 
+vc22: VCFLAGS = /nologo /W3 /O2 /MD /I. $(DEFS) $(TFLAGS)
 vc22: Makefile mongoose.h $(SRCS)
 	$(DOCKER) mdashnet/vc22 wine64 cl $(SRCS) $(VCFLAGS) $(DEFS) $(TFLAGS) /Fe$@.exe
 	$(DOCKER) mdashnet/vc22 wine64 $@.exe
