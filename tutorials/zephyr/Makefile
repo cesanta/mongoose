@@ -9,7 +9,8 @@ DOCKER ?= docker run --rm -v $(PROJECT_PATH):$(DOCKER_PROJECT_PATH) -v $(ZEPHYR_
 REPO ?= zephyrprojectrtos/ci
 REVNO ?= --mr v3.7-branch
 
-YQ ?= yq
+# https://github.com/mikefarah/yq
+YQ ?= $(DOCKER) --user="root" mikefarah/yq
 
 example:
 	true

@@ -1418,7 +1418,7 @@ static void test_tls(void) {
 #if MG_TLS == MG_TLS_BUILTIN && defined(__linux__)
   // fire patched server, test multiple TLS records per TCP segment handling
   // skip other TLS stacks to avoid "bad client hello", we are 1.3 only
-  {
+  if (access("tls_multirec/server", X_OK) == 0) {
     ASSERT(system("tls_multirec/server -d tls_multirec &") == 0);
     sleep(1);
     // fetch() needs to loop enough times in order to process all TLS records;
@@ -1427,6 +1427,8 @@ static void test_tls(void) {
                  "GET /thefile HTTP/1.0\n\n") == 200);
     ASSERT(cmpbody(buf, data.buf) == 0);  // "thefile" links to Makefile
     ASSERT(system("killall tls_multirec/server") == 0);
+  } else {
+    MG_ERROR(("SKIPPED TLS MULTIPLE RECORDS TEST, tls_multirec/server NOT PRESENT"));
   }
 #else
   printf(
