@@ -64,7 +64,7 @@ jobs:
     steps:
     - uses: actions/checkout@v4
       with: { fetch-depth: 2 }
-    - run: sudo apt -y update ; sudo apt -y install binfmt-support qemu-user-static && docker run --rm --privileged multiarch/qemu-user-static --reset -p yes && make -C test s390 SSL=${{ matrix.ssl }}
+    - run: sudo apt -y update ; sudo apt -y install binfmt-support qemu-user-static && docker run --rm --privileged multiarch/qemu-user-static --reset -p yes && make -C test s390 SSL=${{ matrix.ssl }} MULTIREC=NO
   armhf:
     runs-on: ubuntu-latest
     strategy:
@@ -75,7 +75,7 @@ jobs:
     steps:
     - uses: actions/checkout@v4
       with: { fetch-depth: 2 }
-    - run: sudo apt -y update ; sudo apt -y install binfmt-support qemu-user-static && docker run --rm --privileged multiarch/qemu-user-static --reset -p yes && make -C test armhf SSL=${{ matrix.ssl }}
+    - run: sudo apt -y update ; sudo apt -y install binfmt-support qemu-user-static && docker run --rm --privileged multiarch/qemu-user-static --reset -p yes && make -C test armhf SSL=${{ matrix.ssl }} MULTIREC=NO
   unamalgamated-mg_prefix:
     runs-on: ubuntu-latest
     strategy:
@@ -138,7 +138,7 @@ jobs:
           select: -DMG_ENABLE_POLL=1
     name: windows ${{ matrix.target }} SSL=${{ matrix.ssl }} TFLAGS=${{ matrix.select }}
     env:
-      SSL: SSL=${{ matrix.ssl }}
+      SSL: ${{ matrix.ssl }}
       TFLAGS: ${{ matrix.select }}
     steps:
     - uses: actions/checkout@v4
@@ -357,7 +357,7 @@ jobs:
       matrix:
         ssl: ["", -DMG_TLS=MG_TLS_BUILTIN]
         example:
-          - path: tutorials/http/device-dashboard/microchip/same54-xpro
+          - path: http/device-dashboard/microchip/same54-xpro
           - path: nxp/rt1020-evk-make-freertos-builtin
           - path: nxp/rt1060-evk-make-freertos-builtin
           - path: nxp/rt1170-evk-make-freertos-builtin
