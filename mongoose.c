@@ -11022,10 +11022,10 @@ static int mg_der_parse(uint8_t *der, size_t dersz, struct mg_der_tlv *tlv) {
   if (dersz < 2) return -1;  // Invalid DER
   tlv->type = der[0];
   if (len > 0x7F) {  // long-form length
-    uint8_t len_bytes = len & 0x7F;
+    uint8_t len_bytes = len & 0x7F, i;
     if (dersz < (size_t) (2 + len_bytes)) return -1;
     len = 0;
-    for (uint8_t i = 0; i < len_bytes; i++) {
+    for (i = 0; i < len_bytes; i++) {
       len = (len << 8) | der[2 + i];
     }
     header_len += len_bytes;
@@ -11037,8 +11037,9 @@ static int mg_der_parse(uint8_t *der, size_t dersz, struct mg_der_tlv *tlv) {
 }
 
 static int mg_der_next(struct mg_der_tlv *parent, struct mg_der_tlv *child) {
+  int consumed;
   if (parent->len == 0) return 0;
-  int consumed = mg_der_parse(parent->value, parent->len, child);
+  consumed = mg_der_parse(parent->value, parent->len, child);
   if (consumed < 0) return -1;
   parent->value += consumed;
   parent->len -= (uint32_t) consumed;
@@ -11296,7 +11297,7 @@ static void mg_tls_encrypt(struct mg_connection *c, const uint8_t *msg,
   nonce[8] ^= (uint8_t) ((seq >> 24) & 255U);
   nonce[9] ^= (uint8_t) ((seq >> 16) & 255U);
   nonce[10] ^= (uint8_t) ((seq >> 8) & 255U);
-  nonce[11] ^= (uint8_t) ((seq) & 255U);
+  nonce[11] ^= (uint8_t) ((seq) &255U);
 
   mg_iobuf_add(wio, wio->len, hdr, sizeof(hdr));
   mg_iobuf_resize(wio, wio->len + encsz);
@@ -11375,7 +11376,7 @@ static int mg_tls_recv_record(struct mg_connection *c) {
   nonce[8] ^= (uint8_t) ((seq >> 24) & 255U);
   nonce[9] ^= (uint8_t) ((seq >> 16) & 255U);
   nonce[10] ^= (uint8_t) ((seq >> 8) & 255U);
-  nonce[11] ^= (uint8_t) ((seq) & 255U);
+  nonce[11] ^= (uint8_t) ((seq) &255U);
 #if CHACHA20
   {
     uint8_t *dec = (uint8_t *) mg_calloc(1, msgsz);
@@ -12122,91 +12123,91 @@ static int mg_tls_client_recv_cert(struct mg_connection *c) {
     return -1;
   }
 
-  uint32_t full_cert_chain_len = MG_LOAD_BE24(recv_buf + 1);
-  uint32_t cert_chain_len = MG_LOAD_BE24(recv_buf + 5);
-  if (cert_chain_len != full_cert_chain_len - 4) {
-    MG_ERROR(("full chain length: %d, chain length: %d", full_cert_chain_len,
-              cert_chain_len));
-    mg_error(c, "certificate chain length mismatch");
-    return -1;
-  }
+  {
+    // Normally, there are 2-3 certs in a chain
+    struct mg_tls_cert certs[8];
+    int certnum = 0;
+    uint32_t full_cert_chain_len = MG_LOAD_BE24(recv_buf + 1);
+    uint32_t cert_chain_len = MG_LOAD_BE24(recv_buf + 5);
+    uint8_t *p = recv_buf + 8;
+    uint8_t *endp = recv_buf + cert_chain_len;
+    bool found_ca = false;
+    struct mg_tls_cert ca;
 
-  // Normally, there are 2-3 certs in a chain
-  struct mg_tls_cert certs[8];
-  int certnum = 0;
-  uint8_t *p = recv_buf + 8;
-  // uint8_t *endp = recv_buf + tls->recv_len;
-  uint8_t *endp = recv_buf + cert_chain_len;
-
-  int found_ca = 0;
-  struct mg_tls_cert ca;
-
-  memset(certs, 0, sizeof(certs));
-  memset(&ca, 0, sizeof(ca));
-
-  if (tls->ca_der.len > 0) {
-    if (mg_tls_parse_cert_der(tls->ca_der.buf, tls->ca_der.len, &ca) < 0) {
-      mg_error(c, "failed to parse CA certificate");
-      return -1;
-    }
-    MG_VERBOSE(("CA serial: %M", mg_print_hex, ca.sn.len, ca.sn.buf));
-  }
-
-  while (p < endp) {
-    struct mg_tls_cert *ci = &certs[certnum++];
-    uint32_t certsz = MG_LOAD_BE24(p);
-    uint8_t *cert = p + 3;
-    uint16_t certext = MG_LOAD_BE16(cert + certsz);
-    if (certext != 0) {
-      mg_error(c, "certificate extensions are not supported");
-      return -1;
-    }
-    p = cert + certsz + 2;
-
-    if (mg_tls_parse_cert_der(cert, certsz, ci) < 0) {
-      mg_error(c, "failed to parse certificate");
+    if (cert_chain_len != full_cert_chain_len - 4) {
+      MG_ERROR(("full chain length: %d, chain length: %d", full_cert_chain_len,
+                cert_chain_len));
+      mg_error(c, "certificate chain length mismatch");
       return -1;
     }
 
-    if (ci == certs) {
-      // First certificate in the chain is peer cert, check SAN and store
-      // public key for further CertVerify step
-      if (mg_tls_verify_cert_san(cert, certsz, tls->hostname) <= 0) {
-        mg_error(c, "failed to verify hostname");
+    memset(certs, 0, sizeof(certs));
+    memset(&ca, 0, sizeof(ca));
+
+    if (tls->ca_der.len > 0) {
+      if (mg_tls_parse_cert_der(tls->ca_der.buf, tls->ca_der.len, &ca) < 0) {
+        mg_error(c, "failed to parse CA certificate");
         return -1;
       }
-      memmove(tls->pubkey, ci->pubkey.buf, ci->pubkey.len);
-      tls->pubkeysz = ci->pubkey.len;
-    } else {
-      if (!mg_tls_verify_cert_signature(ci - 1, ci)) {
-        mg_error(c, "failed to verify certificate chain");
+      MG_VERBOSE(("CA serial: %M", mg_print_hex, ca.sn.len, ca.sn.buf));
+    }
+
+    while (p < endp) {
+      struct mg_tls_cert *ci = &certs[certnum++];
+      uint32_t certsz = MG_LOAD_BE24(p);
+      uint8_t *cert = p + 3;
+      uint16_t certext = MG_LOAD_BE16(cert + certsz);
+      if (certext != 0) {
+        mg_error(c, "certificate extensions are not supported");
+        return -1;
+      }
+      p = cert + certsz + 2;
+
+      if (mg_tls_parse_cert_der(cert, certsz, ci) < 0) {
+        mg_error(c, "failed to parse certificate");
+        return -1;
+      }
+
+      if (ci == certs) {
+        // First certificate in the chain is peer cert, check SAN and store
+        // public key for further CertVerify step
+        if (mg_tls_verify_cert_san(cert, certsz, tls->hostname) <= 0) {
+          mg_error(c, "failed to verify hostname");
+          return -1;
+        }
+        memmove(tls->pubkey, ci->pubkey.buf, ci->pubkey.len);
+        tls->pubkeysz = ci->pubkey.len;
+      } else {
+        if (!mg_tls_verify_cert_signature(ci - 1, ci)) {
+          mg_error(c, "failed to verify certificate chain");
+          return -1;
+        }
+      }
+
+      if (ca.pubkey.len == ci->pubkey.len &&
+          memcmp(ca.pubkey.buf, ci->pubkey.buf, ca.pubkey.len) == 0) {
+        found_ca = true;
+        break;
+      }
+
+      if (certnum == sizeof(certs) / sizeof(certs[0]) - 1) {
+        mg_error(c, "too many certificates in the chain");
         return -1;
       }
     }
 
-    if (ca.pubkey.len == ci->pubkey.len &&
-        memcmp(ca.pubkey.buf, ci->pubkey.buf, ca.pubkey.len) == 0) {
-      found_ca = 1;
-      break;
-    }
-
-    if (certnum == sizeof(certs) / sizeof(certs[0]) - 1) {
-      mg_error(c, "too many certificates in the chain");
-      return -1;
-    }
-  }
-
-  if (!found_ca && tls->ca_der.len > 0) {
-    if (certnum < 1 ||
-        !mg_tls_verify_cert_signature(&certs[certnum - 1], &ca)) {
-      mg_error(c, "failed to verify CA");
-      return -1;
-    } else {
-      MG_VERBOSE(
-          ("CA was not in the chain, but verification with builtin CA passed"));
+    if (!found_ca && tls->ca_der.len > 0) {
+      if (certnum < 1 ||
+          !mg_tls_verify_cert_signature(&certs[certnum - 1], &ca)) {
+        mg_error(c, "failed to verify CA");
+        return -1;
+      } else {
+        MG_VERBOSE(
+            ("CA was not in the chain, but verification with builtin CA "
+             "passed"));
+      }
     }
   }
-
   mg_tls_drop_message(c);
   mg_tls_calc_cert_verify_hash(c, tls->sighash, 0);
   return 0;
@@ -12236,78 +12237,80 @@ static int mg_tls_client_recv_cert_verify(struct mg_connection *c) {
     return 0;
   }
 
-  uint16_t sigalg = MG_LOAD_BE16(recv_buf + 4);
-  uint16_t siglen = MG_LOAD_BE16(recv_buf + 6);
-  uint8_t *sigbuf = recv_buf + 8;
-  if (siglen > tls->recv_len - 8) {
-    mg_error(c, "invalid certverify signature length: %d, expected %d", siglen,
-             tls->recv_len - 8);
-    return -1;
-  }
-  MG_VERBOSE(
-      ("certificate verification, algo=%04x, siglen=%d", sigalg, siglen));
-
-  if (sigalg == 0x0804) {  // rsa_pss_rsae_sha256
-    uint8_t sig2[512];     // 2048 or 4096 bits
-    struct mg_der_tlv seq, modulus, exponent;
-
-    if (mg_der_parse(tls->pubkey, tls->pubkeysz, &seq) <= 0 ||
-        mg_der_next(&seq, &modulus) <= 0 || modulus.type != 2 ||
-        mg_der_next(&seq, &exponent) <= 0 || exponent.type != 2) {
-      mg_error(c, "invalid public key");
+  {
+    uint16_t sigalg = MG_LOAD_BE16(recv_buf + 4);
+    uint16_t siglen = MG_LOAD_BE16(recv_buf + 6);
+    uint8_t *sigbuf = recv_buf + 8;
+    if (siglen > tls->recv_len - 8) {
+      mg_error(c, "invalid certverify signature length: %d, expected %d",
+               siglen, tls->recv_len - 8);
       return -1;
     }
+    MG_VERBOSE(
+        ("certificate verification, algo=%04x, siglen=%d", sigalg, siglen));
 
-    mg_rsa_mod_pow(modulus.value, modulus.len, exponent.value, exponent.len,
-                   sigbuf, siglen, sig2, sizeof(sig2));
+    if (sigalg == 0x0804) {  // rsa_pss_rsae_sha256
+      uint8_t sig2[512];     // 2048 or 4096 bits
+      struct mg_der_tlv seq, modulus, exponent;
 
-    if (sig2[sizeof(sig2) - 1] != 0xbc) {
-      mg_error(c, "failed to verify RSA certificate (certverify)");
-      return -1;
-    }
-    MG_DEBUG(("certificate verification successful (RSA)"));
-  } else if (sigalg == 0x0403) {  // ecdsa_secp256r1_sha256
-    // Extract certificate signature and verify it using pubkey and sighash
-    uint8_t sig[64];
-    struct mg_der_tlv seq, r, s;
-    if (mg_der_to_tlv(sigbuf, siglen, &seq) < 0) {
-      mg_error(c, "verification message is not an ASN.1 DER sequence");
-      return -1;
-    }
-    if (mg_der_to_tlv(seq.value, seq.len, &r) < 0) {
-      mg_error(c, "missing first part of the signature");
-      return -1;
-    }
-    if (mg_der_to_tlv(r.value + r.len, seq.len - r.len, &s) < 0) {
-      mg_error(c, "missing second part of the signature");
-      return -1;
-    }
-    // Integers may be padded with zeroes
-    if (r.len > 32) r.value = r.value + (r.len - 32), r.len = 32;
-    if (s.len > 32) s.value = s.value + (s.len - 32), s.len = 32;
+      if (mg_der_parse(tls->pubkey, tls->pubkeysz, &seq) <= 0 ||
+          mg_der_next(&seq, &modulus) <= 0 || modulus.type != 2 ||
+          mg_der_next(&seq, &exponent) <= 0 || exponent.type != 2) {
+        mg_error(c, "invalid public key");
+        return -1;
+      }
 
-    memmove(sig, r.value, r.len);
-    memmove(sig + 32, s.value, s.len);
+      mg_rsa_mod_pow(modulus.value, modulus.len, exponent.value, exponent.len,
+                     sigbuf, siglen, sig2, sizeof(sig2));
 
-    if (mg_uecc_verify(tls->pubkey, tls->sighash, sizeof(tls->sighash), sig,
-                       mg_uecc_secp256r1()) != 1) {
-      mg_error(c, "failed to verify EC certificate (certverify)");
+      if (sig2[sizeof(sig2) - 1] != 0xbc) {
+        mg_error(c, "failed to verify RSA certificate (certverify)");
+        return -1;
+      }
+      MG_DEBUG(("certificate verification successful (RSA)"));
+    } else if (sigalg == 0x0403) {  // ecdsa_secp256r1_sha256
+      // Extract certificate signature and verify it using pubkey and sighash
+      uint8_t sig[64];
+      struct mg_der_tlv seq, r, s;
+      if (mg_der_to_tlv(sigbuf, siglen, &seq) < 0) {
+        mg_error(c, "verification message is not an ASN.1 DER sequence");
+        return -1;
+      }
+      if (mg_der_to_tlv(seq.value, seq.len, &r) < 0) {
+        mg_error(c, "missing first part of the signature");
+        return -1;
+      }
+      if (mg_der_to_tlv(r.value + r.len, seq.len - r.len, &s) < 0) {
+        mg_error(c, "missing second part of the signature");
+        return -1;
+      }
+      // Integers may be padded with zeroes
+      if (r.len > 32) r.value = r.value + (r.len - 32), r.len = 32;
+      if (s.len > 32) s.value = s.value + (s.len - 32), s.len = 32;
+
+      memmove(sig, r.value, r.len);
+      memmove(sig + 32, s.value, s.len);
+
+      if (mg_uecc_verify(tls->pubkey, tls->sighash, sizeof(tls->sighash), sig,
+                         mg_uecc_secp256r1()) != 1) {
+        mg_error(c, "failed to verify EC certificate (certverify)");
+        return -1;
+      }
+      MG_DEBUG(("certificate verification successful (EC)"));
+    } else {
+      // From
+      // https://www.iana.org/assignments/tls-parameters/tls-parameters.xhtml:
+      //   0805 = rsa_pss_rsae_sha384
+      //   0806 = rsa_pss_rsae_sha512
+      //   0807 = ed25519
+      //   0808 = ed448
+      //   0809 = rsa_pss_pss_sha256
+      //   080A = rsa_pss_pss_sha384
+      //   080B = rsa_pss_pss_sha512
+      MG_ERROR(("unsupported certverify signature scheme: %x of %d bytes",
+                sigalg, siglen));
       return -1;
     }
-    MG_DEBUG(("certificate verification successful (EC)"));
-  } else {
-    // From
-    // https://www.iana.org/assignments/tls-parameters/tls-parameters.xhtml:
-    //   0805 = rsa_pss_rsae_sha384
-    //   0806 = rsa_pss_rsae_sha512
-    //   0807 = ed25519
-    //   0808 = ed448
-    //   0809 = rsa_pss_pss_sha256
-    //   080A = rsa_pss_pss_sha384
-    //   080B = rsa_pss_pss_sha512
-    MG_ERROR(("unsupported certverify signature scheme: %x of %d bytes", sigalg,
-              siglen));
-    return -1;
   }
   mg_tls_drop_message(c);
   return 0;
@@ -12395,7 +12398,9 @@ static void mg_tls_client_handshake(struct mg_connection *c) {
       c->is_tls_hs = 0;
       mg_call(c, MG_EV_TLS_HS, NULL);
       break;
-    default: mg_error(c, "unexpected client state: %d", tls->state); break;
+    default:
+      mg_error(c, "unexpected client state: %d", tls->state);
+      break;
   }
 }
 
@@ -12422,7 +12427,9 @@ static void mg_tls_server_handshake(struct mg_connection *c) {
       tls->state = MG_TLS_STATE_SERVER_CONNECTED;
       c->is_tls_hs = 0;
       return;
-    default: mg_error(c, "unexpected server state: %d", tls->state); break;
+    default:
+      mg_error(c, "unexpected server state: %d", tls->state);
+      break;
   }
 }
 
@@ -16144,11 +16151,12 @@ NS_INTERNAL bigint *bi_crt(BI_CTX *ctx, bigint *bi, bigint *dP, bigint *dQ,
 
 int mg_rsa_mod_pow(const uint8_t *mod, size_t modsz, const uint8_t *exp, size_t expsz, const uint8_t *msg, size_t msgsz, uint8_t *out, size_t outsz) {
 	BI_CTX *bi_ctx = bi_initialize();
+  bigint *m1;
 	bigint *n = bi_import(bi_ctx, mod, (int) modsz);
 	bigint *e = bi_import(bi_ctx, exp, (int) expsz);
 	bigint *h = bi_import(bi_ctx, msg, (int) msgsz);
 	bi_set_mod(bi_ctx, n, 0);
-	bigint *m1 = bi_mod_power(bi_ctx, h, e);
+	m1 = bi_mod_power(bi_ctx, h, e);
 	bi_free_mod(bi_ctx, 0);
 	bi_export(bi_ctx, m1, out, (int) outsz);
 	bi_terminate(bi_ctx);

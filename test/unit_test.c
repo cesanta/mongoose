@@ -619,9 +619,11 @@ static void test_mqtt_basic(void) {
 
 #if MG_TLS
   // send more than 1 record, content is not relevant
-  static char somedata[21098];
-  mg_random(somedata, sizeof(somedata));
-  opts.message = mg_str_n(somedata, sizeof(somedata));
+  {
+    static char somedata[21098];
+    mg_random(somedata, sizeof(somedata));
+    opts.message = mg_str_n(somedata, sizeof(somedata));
+  }
   opts.qos = 1, opts.retain = false, opts.retransmit_id = 0;
   mg_mqtt_pub(c, &opts);
   tbuf[0] = 0;
