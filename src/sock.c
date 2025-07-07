@@ -587,7 +587,7 @@ static void mg_iotest(struct mg_mgr *mgr, int ms) {
     }
   }
 #else
-  struct timeval tv = {ms / 1000, (ms % 1000) * 1000}, tv_zero = {0, 0}, *tvp;
+  struct timeval tv = {ms / 1000, (ms % 1000) * 1000}, tv_1ms = {0, 1000}, *tvp;
   struct mg_connection *c;
   fd_set rset, wset, eset;
   MG_SOCKET_TYPE maxfd = 0;
@@ -603,9 +603,9 @@ static void mg_iotest(struct mg_mgr *mgr, int ms) {
     FD_SET(FD(c), &eset);
     if (can_read(c)) FD_SET(FD(c), &rset);
     if (can_write(c)) FD_SET(FD(c), &wset);
-    if (c->rtls.len > 0 || mg_tls_pending(c) > 0) tvp = &tv_zero;
+    if (c->rtls.len > 0 || mg_tls_pending(c) > 0) tvp = &tv_1ms;
     if (FD(c) > maxfd) maxfd = FD(c);
-    if (c->is_closing) tvp = &tv_zero;
+    if (c->is_closing) tvp = &tv_1ms;
   }
 
   if ((rc = select((int) maxfd + 1, &rset, &wset, &eset, tvp)) <= 0) {
