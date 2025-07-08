@@ -1,7 +1,7 @@
 #include "phy.h"
 
-enum {                      // ID1  ID2
-  MG_PHY_KSZ8x = 0x22,      // 0022 1561 - KSZ8081RNB
+enum {                  // ID1  ID2
+  MG_PHY_KSZ8x = 0x22,  // 0022 1561 - KSZ8081RNB
   MG_PHY_DP83x = 0x2000,
   MG_PHY_DP83867 = 0xa231,  // 2000 a231 - TI DP83867I
   MG_PHY_DP83825 = 0xa140,  // 2000 a140 - TI DP83825I
@@ -9,7 +9,7 @@ enum {                      // ID1  ID2
   MG_PHY_LAN87x = 0x7,      // 0007 c0fx - LAN8720
   MG_PHY_RTL8201 = 0x1C,    // 001c c816 - RTL8201,
   MG_PHY_ICS1894x = 0x15,
-  MG_PHY_ICS189432 = 0xf450 // 0015 f450 - ICS1894
+  MG_PHY_ICS189432 = 0xf450  // 0015 f450 - ICS1894
 };
 
 enum {
@@ -82,11 +82,13 @@ void mg_phy_init(struct mg_phy *phy, uint8_t phy_addr, uint8_t config) {
       phy->write_reg(phy_addr, MG_PHY_DP83x_REG_RCSR, MG_BIT(7) | MG_BIT(0));
     } else if (id1 == MG_PHY_KSZ8x) {
       // Disable isolation (override hw, it doesn't make sense at this point)
-      phy->write_reg(  // #2848, some NXP boards set ISO, even though
-          phy_addr, MG_PHY_REG_BCR,  // docs say they don't
-          phy->read_reg(phy_addr, MG_PHY_REG_BCR) & (uint16_t) ~MG_BIT(10));
-      phy->write_reg(phy_addr, MG_PHY_KSZ8x_REG_PC2R,  // now do clock stuff
-                     MG_BIT(15) | MG_BIT(8) | MG_BIT(7));
+      // - #2848, some NXP boards set ISO, even though docs say they don't
+      phy->write_reg(phy_addr, MG_PHY_REG_BCR,
+                     (uint16_t) (phy->read_reg(phy_addr, MG_PHY_REG_BCR) &
+                                 (uint16_t) ~MG_BIT(10)));
+      // now do clock stuff
+      phy->write_reg(phy_addr, MG_PHY_KSZ8x_REG_PC2R,
+                     (uint16_t) (MG_BIT(15) | MG_BIT(8) | MG_BIT(7)));
     } else if (id1 == MG_PHY_LAN87x) {
       // nothing to do
     } else if (id1 == MG_PHY_RTL8201) {

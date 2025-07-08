@@ -4327,7 +4327,7 @@ static uint32_t csumup(uint32_t sum, const void *buf, size_t len) {
 
 static uint16_t csumfin(uint32_t sum) {
   while (sum >> 16) sum = (sum & 0xffff) + (sum >> 16);
-  return mg_htons(~sum & 0xffff);
+  return mg_htons((uint16_t) ((uint16_t) ~sum & 0xffff));
 }
 
 static uint16_t ipcsum(const void *buf, size_t len) {
@@ -4414,12 +4414,13 @@ static bool tx_udp(struct mg_tcpip_if *ifp, uint8_t *mac_dst, uint32_t ip_src,
       tx_ip(ifp, mac_dst, 17, ip_src, ip_dst, len + sizeof(struct udp));
   struct udp *udp = (struct udp *) (ip + 1);
   size_t eth_len;
+  uint32_t cs;
   // MG_DEBUG(("UDP XX LEN %d %d", (int) len, (int) ifp->tx.len));
   udp->sport = sport;
   udp->dport = dport;
   udp->len = mg_htons((uint16_t) (sizeof(*udp) + len));
   udp->csum = 0;
-  uint32_t cs = csumup(0, udp, sizeof(*udp));
+  cs = csumup(0, udp, sizeof(*udp));
   cs = csumup(cs, buf, len);
   cs = csumup(cs, &ip->src, sizeof(ip->src));
   cs = csumup(cs, &ip->dst, sizeof(ip->dst));
@@ -4503,7 +4504,8 @@ static struct mg_connection *getpeer(struct mg_mgr *mgr, struct pkt *pkt,
       break;
     if (c->is_udp && pkt->udp && c->loc.port == pkt->udp->dport) break;
     if (!c->is_udp && pkt->tcp && c->loc.port == pkt->tcp->dport &&
-        lsn == c->is_listening && (lsn || c->rem.port == pkt->tcp->sport))
+        lsn == (bool) c->is_listening &&
+        (lsn || c->rem.port == pkt->tcp->sport))
       break;
   }
   return c;
@@ -4558,10 +4560,12 @@ static void rx_icmp(struct mg_tcpip_if *ifp, struct pkt *pkt) {
   if (pkt->icmp->type == 8 && pkt->ip != NULL && pkt->ip->dst == ifp->ip) {
     size_t hlen = sizeof(struct eth) + sizeof(struct ip) + sizeof(struct icmp);
     size_t space = ifp->tx.len - hlen, plen = pkt->pay.len;
+    struct ip *ip;
+    struct icmp *icmp;
     if (plen > space) plen = space;
-    struct ip *ip = tx_ip(ifp, pkt->eth->src, 1, ifp->ip, pkt->ip->src,
-                          sizeof(struct icmp) + plen);
-    struct icmp *icmp = (struct icmp *) (ip + 1);
+    ip = tx_ip(ifp, pkt->eth->src, 1, ifp->ip, pkt->ip->src,
+               sizeof(*icmp) + plen);
+    icmp = (struct icmp *) (ip + 1);
     memset(icmp, 0, sizeof(*icmp));        // Set csum to 0
     memcpy(icmp + 1, pkt->pay.buf, plen);  // Copy RX payload to TX
     icmp->csum = ipcsum(icmp, sizeof(*icmp) + plen);
@@ -4608,13 +4612,13 @@ static void rx_dhcp_client(struct mg_tcpip_if *ifp, struct pkt *pkt) {
     ifp->state = MG_TCPIP_STATE_REQ;  // REQUESTING state
   } else if (msgtype == 5) {          // DHCPACK
     if (ifp->state == MG_TCPIP_STATE_REQ && ip && gw && lease) {  // got an IP
+      uint64_t rand;
       ifp->lease_expire = ifp->now + lease * 1000;
       MG_INFO(("Lease: %u sec (%lld)", lease, ifp->lease_expire / 1000));
       // assume DHCP server = router until ARP resolves
       memcpy(ifp->gwmac, pkt->eth->src, sizeof(ifp->gwmac));
       ifp->ip = ip, ifp->gw = gw, ifp->mask = mask;
       ifp->state = MG_TCPIP_STATE_IP;  // BOUND state
-      uint64_t rand;
       mg_random(&rand, sizeof(rand));
       srand((unsigned int) (rand + mg_millis()));
       if (ifp->enable_req_dns && dns != 0)
@@ -4633,9 +4637,9 @@ static void rx_dhcp_client(struct mg_tcpip_if *ifp, struct pkt *pkt) {
 static void rx_dhcp_server(struct mg_tcpip_if *ifp, struct pkt *pkt) {
   uint8_t op = 0, *p = pkt->dhcp->options,
           *end = (uint8_t *) &pkt->raw.buf[pkt->raw.len];
-  if (end < (uint8_t *) (pkt->dhcp + 1)) return;
   // struct dhcp *req = pkt->dhcp;
   struct dhcp res = {2, 1, 6, 0, 0, 0, 0, 0, 0, 0, 0, {0}, 0, {0}};
+  if (end < (uint8_t *) (pkt->dhcp + 1)) return;
   res.yiaddr = ifp->ip;
   ((uint8_t *) (&res.yiaddr))[3]++;                // Offer our IP + 1
   while (p + 1 < end && p[0] != 255) {             // Parse options
@@ -4674,9 +4678,9 @@ static void rx_udp(struct mg_tcpip_if *ifp, struct pkt *pkt) {
   if (c == NULL) {
     // No UDP listener on this port. Should send ICMP, but keep silent.
   } else {
+    struct connstate *s = (struct connstate *) (c + 1);
     c->rem.port = pkt->udp->sport;
     memcpy(c->rem.ip, &pkt->ip->src, sizeof(uint32_t));
-    struct connstate *s = (struct connstate *) (c + 1);
     memcpy(s->mac, pkt->eth->src, sizeof(s->mac));
     if (c->recv.len >= MG_MAX_RECV_SIZE) {
       mg_error(c, "max_recv_buf_size reached");
@@ -4697,9 +4701,9 @@ static size_t tx_tcp(struct mg_tcpip_if *ifp, uint8_t *dst_mac, uint32_t dst_ip,
   struct ip *ip;
   struct tcp *tcp;
   uint16_t opts[4 / 2];
-  if (flags & TH_SYN) {                 // Send MSS, RFC-9293 3.7.1
-    opts[0] = mg_htons(0x0204);         // RFC-9293 3.2
-    opts[1] = mg_htons(ifp->mtu - 40);  // RFC-6691
+  if (flags & TH_SYN) {                              // Send MSS, RFC-9293 3.7.1
+    opts[0] = mg_htons(0x0204);                      // RFC-9293 3.2
+    opts[1] = mg_htons((uint16_t) (ifp->mtu - 40));  // RFC-6691
     buf = opts;
     len = sizeof(opts);
   }
@@ -4715,15 +4719,16 @@ static size_t tx_tcp(struct mg_tcpip_if *ifp, uint8_t *dst_mac, uint32_t dst_ip,
   tcp->win = mg_htons(MIP_TCP_WIN);
   tcp->off = (uint8_t) (sizeof(*tcp) / 4 << 4);
   if (flags & TH_SYN) tcp->off += (uint8_t) (sizeof(opts) / 4 << 4);
-
-  uint32_t cs = 0;
-  uint16_t n = (uint16_t) (sizeof(*tcp) + len);
-  uint8_t pseudo[] = {0, ip->proto, (uint8_t) (n >> 8), (uint8_t) (n & 255)};
-  cs = csumup(cs, tcp, n);
-  cs = csumup(cs, &ip->src, sizeof(ip->src));
-  cs = csumup(cs, &ip->dst, sizeof(ip->dst));
-  cs = csumup(cs, pseudo, sizeof(pseudo));
-  tcp->csum = csumfin(cs);
+  {
+    uint32_t cs = 0;
+    uint16_t n = (uint16_t) (sizeof(*tcp) + len);
+    uint8_t pseudo[] = {0, ip->proto, (uint8_t) (n >> 8), (uint8_t) (n & 255)};
+    cs = csumup(cs, tcp, n);
+    cs = csumup(cs, &ip->src, sizeof(ip->src));
+    cs = csumup(cs, &ip->dst, sizeof(ip->dst));
+    cs = csumup(cs, pseudo, sizeof(pseudo));
+    tcp->csum = csumfin(cs);
+  }
   MG_VERBOSE(("TCP %M:%hu -> %M:%hu fl %x len %u", mg_print_ip4, &ip->src,
               mg_ntohs(tcp->sport), mg_print_ip4, &ip->dst,
               mg_ntohs(tcp->dport), tcp->flags, len));
@@ -4743,11 +4748,12 @@ static size_t tx_tcp_pkt(struct mg_tcpip_if *ifp, struct pkt *pkt,
 static struct mg_connection *accept_conn(struct mg_connection *lsn,
                                          struct pkt *pkt) {
   struct mg_connection *c = mg_alloc_conn(lsn->mgr);
+  struct connstate *s;
   if (c == NULL) {
     MG_ERROR(("OOM"));
     return NULL;
   }
-  struct connstate *s = (struct connstate *) (c + 1);
+  s = (struct connstate *) (c + 1);
   s->dmss = 536;  // assume default, RFC-9293 3.7.1
   s->seq = mg_ntohl(pkt->tcp->ack), s->ack = mg_ntohl(pkt->tcp->seq);
   memcpy(s->mac, pkt->eth->src, sizeof(s->mac));
@@ -5005,9 +5011,10 @@ static void rx_tcp(struct mg_tcpip_if *ifp, struct pkt *pkt) {
 static void rx_ip(struct mg_tcpip_if *ifp, struct pkt *pkt) {
   uint16_t frag = mg_ntohs(pkt->ip->frag);
   if (frag & IP_MORE_FRAGS_MSK || frag & IP_FRAG_OFFSET_MSK) {
+    struct mg_connection *c;
     if (pkt->ip->proto == 17) pkt->udp = (struct udp *) (pkt->ip + 1);
     if (pkt->ip->proto == 6) pkt->tcp = (struct tcp *) (pkt->ip + 1);
-    struct mg_connection *c = getpeer(ifp->mgr, pkt, false);
+    c = getpeer(ifp->mgr, pkt, false);
     if (c) mg_error(c, "Received fragmented packet");
   } else if (pkt->ip->proto == 1) {
     pkt->icmp = (struct icmp *) (pkt->ip + 1);
@@ -5033,11 +5040,12 @@ static void rx_ip(struct mg_tcpip_if *ifp, struct pkt *pkt) {
       rx_udp(ifp, pkt);
     }
   } else if (pkt->ip->proto == 6) {
+    uint16_t iplen, off;
     pkt->tcp = (struct tcp *) (pkt->ip + 1);
     if (pkt->pay.len < sizeof(*pkt->tcp)) return;
     mkpay(pkt, pkt->tcp + 1);
-    uint16_t iplen = mg_ntohs(pkt->ip->len);
-    uint16_t off = (uint16_t) (sizeof(*pkt->ip) + ((pkt->tcp->off >> 4) * 4U));
+    iplen = mg_ntohs(pkt->ip->len);
+    off = (uint16_t) (sizeof(*pkt->ip) + ((pkt->tcp->off >> 4) * 4U));
     if (iplen >= off) pkt->pay.len = (size_t) (iplen - off);
     MG_VERBOSE(("TCP %M:%hu -> %M:%hu len %u", mg_print_ip4, &pkt->ip->src,
                 mg_ntohs(pkt->tcp->sport), mg_print_ip4, &pkt->ip->dst,
@@ -5075,8 +5083,9 @@ static void mg_tcpip_rx(struct mg_tcpip_if *ifp, void *buf, size_t len) {
       memcmp(pkt.eth->dst, broadcast, sizeof(pkt.eth->dst)) != 0)
     return;
   if (ifp->enable_crc32_check && len > 4) {
+    uint32_t crc;
     len -= 4;  // TODO(scaprile): check on bigendian
-    uint32_t crc = mg_crc32(0, (const char *) buf, len);
+    crc = mg_crc32(0, (const char *) buf, len);
     if (memcmp((void *) ((size_t) buf + len), &crc, sizeof(crc))) return;
   }
   if (pkt.eth->type == mg_htons(0x806)) {
@@ -5185,10 +5194,10 @@ static void mg_tcpip_poll(struct mg_tcpip_if *ifp, uint64_t now) {
 
   // Process timeouts
   for (c = ifp->mgr->conns; c != NULL; c = c->next) {
-    if ((c->is_udp && !c->is_arplooking) || c->is_listening || c->is_resolving)
-      continue;
     struct connstate *s = (struct connstate *) (c + 1);
     uint32_t rem_ip;
+    if ((c->is_udp && !c->is_arplooking) || c->is_listening || c->is_resolving)
+      continue;
     memcpy(&rem_ip, c->rem.ip, sizeof(uint32_t));
     if (ifp->now > s->timer) {
       if (s->ttype == MIP_TTYPE_ARP) {
@@ -5386,10 +5395,10 @@ void mg_mgr_poll(struct mg_mgr *mgr, int ms) {
   if (mgr->ifp == NULL || mgr->ifp->driver == NULL) return;
   mg_tcpip_poll(mgr->ifp, now);
   for (c = mgr->conns; c != NULL; c = tmp) {
-    tmp = c->next;
     struct connstate *s = (struct connstate *) (c + 1);
     bool is_tls = c->is_tls && !c->is_resolving && !c->is_arplooking &&
                   !c->is_listening && !c->is_connecting;
+    tmp = c->next;
     mg_call(c, MG_EV_POLL, &now);
     MG_VERBOSE(("%lu .. %c%c%c%c%c %lu %lu", c->id, c->is_tls ? 'T' : 't',
                 c->is_connecting ? 'C' : 'c', c->is_tls_hs ? 'H' : 'h',
@@ -11022,10 +11031,10 @@ static int mg_der_parse(uint8_t *der, size_t dersz, struct mg_der_tlv *tlv) {
   if (dersz < 2) return -1;  // Invalid DER
   tlv->type = der[0];
   if (len > 0x7F) {  // long-form length
-    uint8_t len_bytes = len & 0x7F;
+    uint8_t len_bytes = len & 0x7F, i;
     if (dersz < (size_t) (2 + len_bytes)) return -1;
     len = 0;
-    for (uint8_t i = 0; i < len_bytes; i++) {
+    for (i = 0; i < len_bytes; i++) {
       len = (len << 8) | der[2 + i];
     }
     header_len += len_bytes;
@@ -11037,8 +11046,9 @@ static int mg_der_parse(uint8_t *der, size_t dersz, struct mg_der_tlv *tlv) {
 }
 
 static int mg_der_next(struct mg_der_tlv *parent, struct mg_der_tlv *child) {
+  int consumed;
   if (parent->len == 0) return 0;
-  int consumed = mg_der_parse(parent->value, parent->len, child);
+  consumed = mg_der_parse(parent->value, parent->len, child);
   if (consumed < 0) return -1;
   parent->value += consumed;
   parent->len -= (uint32_t) consumed;
@@ -11296,7 +11306,7 @@ static void mg_tls_encrypt(struct mg_connection *c, const uint8_t *msg,
   nonce[8] ^= (uint8_t) ((seq >> 24) & 255U);
   nonce[9] ^= (uint8_t) ((seq >> 16) & 255U);
   nonce[10] ^= (uint8_t) ((seq >> 8) & 255U);
-  nonce[11] ^= (uint8_t) ((seq) & 255U);
+  nonce[11] ^= (uint8_t) ((seq) &255U);
 
   mg_iobuf_add(wio, wio->len, hdr, sizeof(hdr));
   mg_iobuf_resize(wio, wio->len + encsz);
@@ -11375,7 +11385,7 @@ static int mg_tls_recv_record(struct mg_connection *c) {
   nonce[8] ^= (uint8_t) ((seq >> 24) & 255U);
   nonce[9] ^= (uint8_t) ((seq >> 16) & 255U);
   nonce[10] ^= (uint8_t) ((seq >> 8) & 255U);
-  nonce[11] ^= (uint8_t) ((seq) & 255U);
+  nonce[11] ^= (uint8_t) ((seq) &255U);
 #if CHACHA20
   {
     uint8_t *dec = (uint8_t *) mg_calloc(1, msgsz);
@@ -12122,91 +12132,91 @@ static int mg_tls_client_recv_cert(struct mg_connection *c) {
     return -1;
   }
 
-  uint32_t full_cert_chain_len = MG_LOAD_BE24(recv_buf + 1);
-  uint32_t cert_chain_len = MG_LOAD_BE24(recv_buf + 5);
-  if (cert_chain_len != full_cert_chain_len - 4) {
-    MG_ERROR(("full chain length: %d, chain length: %d", full_cert_chain_len,
-              cert_chain_len));
-    mg_error(c, "certificate chain length mismatch");
-    return -1;
-  }
+  {
+    // Normally, there are 2-3 certs in a chain
+    struct mg_tls_cert certs[8];
+    int certnum = 0;
+    uint32_t full_cert_chain_len = MG_LOAD_BE24(recv_buf + 1);
+    uint32_t cert_chain_len = MG_LOAD_BE24(recv_buf + 5);
+    uint8_t *p = recv_buf + 8;
+    uint8_t *endp = recv_buf + cert_chain_len;
+    bool found_ca = false;
+    struct mg_tls_cert ca;
 
-  // Normally, there are 2-3 certs in a chain
-  struct mg_tls_cert certs[8];
-  int certnum = 0;
-  uint8_t *p = recv_buf + 8;
-  // uint8_t *endp = recv_buf + tls->recv_len;
-  uint8_t *endp = recv_buf + cert_chain_len;
-
-  int found_ca = 0;
-  struct mg_tls_cert ca;
-
-  memset(certs, 0, sizeof(certs));
-  memset(&ca, 0, sizeof(ca));
-
-  if (tls->ca_der.len > 0) {
-    if (mg_tls_parse_cert_der(tls->ca_der.buf, tls->ca_der.len, &ca) < 0) {
-      mg_error(c, "failed to parse CA certificate");
-      return -1;
-    }
-    MG_VERBOSE(("CA serial: %M", mg_print_hex, ca.sn.len, ca.sn.buf));
-  }
-
-  while (p < endp) {
-    struct mg_tls_cert *ci = &certs[certnum++];
-    uint32_t certsz = MG_LOAD_BE24(p);
-    uint8_t *cert = p + 3;
-    uint16_t certext = MG_LOAD_BE16(cert + certsz);
-    if (certext != 0) {
-      mg_error(c, "certificate extensions are not supported");
-      return -1;
-    }
-    p = cert + certsz + 2;
-
-    if (mg_tls_parse_cert_der(cert, certsz, ci) < 0) {
-      mg_error(c, "failed to parse certificate");
+    if (cert_chain_len != full_cert_chain_len - 4) {
+      MG_ERROR(("full chain length: %d, chain length: %d", full_cert_chain_len,
+                cert_chain_len));
+      mg_error(c, "certificate chain length mismatch");
       return -1;
     }
 
-    if (ci == certs) {
-      // First certificate in the chain is peer cert, check SAN and store
-      // public key for further CertVerify step
-      if (mg_tls_verify_cert_san(cert, certsz, tls->hostname) <= 0) {
-        mg_error(c, "failed to verify hostname");
+    memset(certs, 0, sizeof(certs));
+    memset(&ca, 0, sizeof(ca));
+
+    if (tls->ca_der.len > 0) {
+      if (mg_tls_parse_cert_der(tls->ca_der.buf, tls->ca_der.len, &ca) < 0) {
+        mg_error(c, "failed to parse CA certificate");
         return -1;
       }
-      memmove(tls->pubkey, ci->pubkey.buf, ci->pubkey.len);
-      tls->pubkeysz = ci->pubkey.len;
-    } else {
-      if (!mg_tls_verify_cert_signature(ci - 1, ci)) {
-        mg_error(c, "failed to verify certificate chain");
+      MG_VERBOSE(("CA serial: %M", mg_print_hex, ca.sn.len, ca.sn.buf));
+    }
+
+    while (p < endp) {
+      struct mg_tls_cert *ci = &certs[certnum++];
+      uint32_t certsz = MG_LOAD_BE24(p);
+      uint8_t *cert = p + 3;
+      uint16_t certext = MG_LOAD_BE16(cert + certsz);
+      if (certext != 0) {
+        mg_error(c, "certificate extensions are not supported");
+        return -1;
+      }
+      p = cert + certsz + 2;
+
+      if (mg_tls_parse_cert_der(cert, certsz, ci) < 0) {
+        mg_error(c, "failed to parse certificate");
+        return -1;
+      }
+
+      if (ci == certs) {
+        // First certificate in the chain is peer cert, check SAN and store
+        // public key for further CertVerify step
+        if (mg_tls_verify_cert_san(cert, certsz, tls->hostname) <= 0) {
+          mg_error(c, "failed to verify hostname");
+          return -1;
+        }
+        memmove(tls->pubkey, ci->pubkey.buf, ci->pubkey.len);
+        tls->pubkeysz = ci->pubkey.len;
+      } else {
+        if (!mg_tls_verify_cert_signature(ci - 1, ci)) {
+          mg_error(c, "failed to verify certificate chain");
+          return -1;
+        }
+      }
+
+      if (ca.pubkey.len == ci->pubkey.len &&
+          memcmp(ca.pubkey.buf, ci->pubkey.buf, ca.pubkey.len) == 0) {
+        found_ca = true;
+        break;
+      }
+
+      if (certnum == sizeof(certs) / sizeof(certs[0]) - 1) {
+        mg_error(c, "too many certificates in the chain");
         return -1;
       }
     }
 
-    if (ca.pubkey.len == ci->pubkey.len &&
-        memcmp(ca.pubkey.buf, ci->pubkey.buf, ca.pubkey.len) == 0) {
-      found_ca = 1;
-      break;
-    }
-
-    if (certnum == sizeof(certs) / sizeof(certs[0]) - 1) {
-      mg_error(c, "too many certificates in the chain");
-      return -1;
-    }
-  }
-
-  if (!found_ca && tls->ca_der.len > 0) {
-    if (certnum < 1 ||
-        !mg_tls_verify_cert_signature(&certs[certnum - 1], &ca)) {
-      mg_error(c, "failed to verify CA");
-      return -1;
-    } else {
-      MG_VERBOSE(
-          ("CA was not in the chain, but verification with builtin CA passed"));
+    if (!found_ca && tls->ca_der.len > 0) {
+      if (certnum < 1 ||
+          !mg_tls_verify_cert_signature(&certs[certnum - 1], &ca)) {
+        mg_error(c, "failed to verify CA");
+        return -1;
+      } else {
+        MG_VERBOSE(
+            ("CA was not in the chain, but verification with builtin CA "
+             "passed"));
+      }
     }
   }
-
   mg_tls_drop_message(c);
   mg_tls_calc_cert_verify_hash(c, tls->sighash, 0);
   return 0;
@@ -12236,78 +12246,80 @@ static int mg_tls_client_recv_cert_verify(struct mg_connection *c) {
     return 0;
   }
 
-  uint16_t sigalg = MG_LOAD_BE16(recv_buf + 4);
-  uint16_t siglen = MG_LOAD_BE16(recv_buf + 6);
-  uint8_t *sigbuf = recv_buf + 8;
-  if (siglen > tls->recv_len - 8) {
-    mg_error(c, "invalid certverify signature length: %d, expected %d", siglen,
-             tls->recv_len - 8);
-    return -1;
-  }
-  MG_VERBOSE(
-      ("certificate verification, algo=%04x, siglen=%d", sigalg, siglen));
-
-  if (sigalg == 0x0804) {  // rsa_pss_rsae_sha256
-    uint8_t sig2[512];     // 2048 or 4096 bits
-    struct mg_der_tlv seq, modulus, exponent;
-
-    if (mg_der_parse(tls->pubkey, tls->pubkeysz, &seq) <= 0 ||
-        mg_der_next(&seq, &modulus) <= 0 || modulus.type != 2 ||
-        mg_der_next(&seq, &exponent) <= 0 || exponent.type != 2) {
-      mg_error(c, "invalid public key");
+  {
+    uint16_t sigalg = MG_LOAD_BE16(recv_buf + 4);
+    uint16_t siglen = MG_LOAD_BE16(recv_buf + 6);
+    uint8_t *sigbuf = recv_buf + 8;
+    if (siglen > tls->recv_len - 8) {
+      mg_error(c, "invalid certverify signature length: %d, expected %d",
+               siglen, tls->recv_len - 8);
       return -1;
     }
+    MG_VERBOSE(
+        ("certificate verification, algo=%04x, siglen=%d", sigalg, siglen));
 
-    mg_rsa_mod_pow(modulus.value, modulus.len, exponent.value, exponent.len,
-                   sigbuf, siglen, sig2, sizeof(sig2));
+    if (sigalg == 0x0804) {  // rsa_pss_rsae_sha256
+      uint8_t sig2[512];     // 2048 or 4096 bits
+      struct mg_der_tlv seq, modulus, exponent;
 
-    if (sig2[sizeof(sig2) - 1] != 0xbc) {
-      mg_error(c, "failed to verify RSA certificate (certverify)");
-      return -1;
-    }
-    MG_DEBUG(("certificate verification successful (RSA)"));
-  } else if (sigalg == 0x0403) {  // ecdsa_secp256r1_sha256
-    // Extract certificate signature and verify it using pubkey and sighash
-    uint8_t sig[64];
-    struct mg_der_tlv seq, r, s;
-    if (mg_der_to_tlv(sigbuf, siglen, &seq) < 0) {
-      mg_error(c, "verification message is not an ASN.1 DER sequence");
-      return -1;
-    }
-    if (mg_der_to_tlv(seq.value, seq.len, &r) < 0) {
-      mg_error(c, "missing first part of the signature");
-      return -1;
-    }
-    if (mg_der_to_tlv(r.value + r.len, seq.len - r.len, &s) < 0) {
-      mg_error(c, "missing second part of the signature");
-      return -1;
-    }
-    // Integers may be padded with zeroes
-    if (r.len > 32) r.value = r.value + (r.len - 32), r.len = 32;
-    if (s.len > 32) s.value = s.value + (s.len - 32), s.len = 32;
+      if (mg_der_parse(tls->pubkey, tls->pubkeysz, &seq) <= 0 ||
+          mg_der_next(&seq, &modulus) <= 0 || modulus.type != 2 ||
+          mg_der_next(&seq, &exponent) <= 0 || exponent.type != 2) {
+        mg_error(c, "invalid public key");
+        return -1;
+      }
 
-    memmove(sig, r.value, r.len);
-    memmove(sig + 32, s.value, s.len);
+      mg_rsa_mod_pow(modulus.value, modulus.len, exponent.value, exponent.len,
+                     sigbuf, siglen, sig2, sizeof(sig2));
 
-    if (mg_uecc_verify(tls->pubkey, tls->sighash, sizeof(tls->sighash), sig,
-                       mg_uecc_secp256r1()) != 1) {
-      mg_error(c, "failed to verify EC certificate (certverify)");
+      if (sig2[sizeof(sig2) - 1] != 0xbc) {
+        mg_error(c, "failed to verify RSA certificate (certverify)");
+        return -1;
+      }
+      MG_DEBUG(("certificate verification successful (RSA)"));
+    } else if (sigalg == 0x0403) {  // ecdsa_secp256r1_sha256
+      // Extract certificate signature and verify it using pubkey and sighash
+      uint8_t sig[64];
+      struct mg_der_tlv seq, r, s;
+      if (mg_der_to_tlv(sigbuf, siglen, &seq) < 0) {
+        mg_error(c, "verification message is not an ASN.1 DER sequence");
+        return -1;
+      }
+      if (mg_der_to_tlv(seq.value, seq.len, &r) < 0) {
+        mg_error(c, "missing first part of the signature");
+        return -1;
+      }
+      if (mg_der_to_tlv(r.value + r.len, seq.len - r.len, &s) < 0) {
+        mg_error(c, "missing second part of the signature");
+        return -1;
+      }
+      // Integers may be padded with zeroes
+      if (r.len > 32) r.value = r.value + (r.len - 32), r.len = 32;
+      if (s.len > 32) s.value = s.value + (s.len - 32), s.len = 32;
+
+      memmove(sig, r.value, r.len);
+      memmove(sig + 32, s.value, s.len);
+
+      if (mg_uecc_verify(tls->pubkey, tls->sighash, sizeof(tls->sighash), sig,
+                         mg_uecc_secp256r1()) != 1) {
+        mg_error(c, "failed to verify EC certificate (certverify)");
+        return -1;
+      }
+      MG_DEBUG(("certificate verification successful (EC)"));
+    } else {
+      // From
+      // https://www.iana.org/assignments/tls-parameters/tls-parameters.xhtml:
+      //   0805 = rsa_pss_rsae_sha384
+      //   0806 = rsa_pss_rsae_sha512
+      //   0807 = ed25519
+      //   0808 = ed448
+      //   0809 = rsa_pss_pss_sha256
+      //   080A = rsa_pss_pss_sha384
+      //   080B = rsa_pss_pss_sha512
+      MG_ERROR(("unsupported certverify signature scheme: %x of %d bytes",
+                sigalg, siglen));
       return -1;
     }
-    MG_DEBUG(("certificate verification successful (EC)"));
-  } else {
-    // From
-    // https://www.iana.org/assignments/tls-parameters/tls-parameters.xhtml:
-    //   0805 = rsa_pss_rsae_sha384
-    //   0806 = rsa_pss_rsae_sha512
-    //   0807 = ed25519
-    //   0808 = ed448
-    //   0809 = rsa_pss_pss_sha256
-    //   080A = rsa_pss_pss_sha384
-    //   080B = rsa_pss_pss_sha512
-    MG_ERROR(("unsupported certverify signature scheme: %x of %d bytes", sigalg,
-              siglen));
-    return -1;
   }
   mg_tls_drop_message(c);
   return 0;
@@ -12395,7 +12407,9 @@ static void mg_tls_client_handshake(struct mg_connection *c) {
       c->is_tls_hs = 0;
       mg_call(c, MG_EV_TLS_HS, NULL);
       break;
-    default: mg_error(c, "unexpected client state: %d", tls->state); break;
+    default:
+      mg_error(c, "unexpected client state: %d", tls->state);
+      break;
   }
 }
 
@@ -12422,7 +12436,9 @@ static void mg_tls_server_handshake(struct mg_connection *c) {
       tls->state = MG_TLS_STATE_SERVER_CONNECTED;
       c->is_tls_hs = 0;
       return;
-    default: mg_error(c, "unexpected server state: %d", tls->state); break;
+    default:
+      mg_error(c, "unexpected server state: %d", tls->state);
+      break;
   }
 }
 
@@ -16144,11 +16160,12 @@ NS_INTERNAL bigint *bi_crt(BI_CTX *ctx, bigint *bi, bigint *dP, bigint *dQ,
 
 int mg_rsa_mod_pow(const uint8_t *mod, size_t modsz, const uint8_t *exp, size_t expsz, const uint8_t *msg, size_t msgsz, uint8_t *out, size_t outsz) {
 	BI_CTX *bi_ctx = bi_initialize();
+	bigint *m1;
 	bigint *n = bi_import(bi_ctx, mod, (int) modsz);
 	bigint *e = bi_import(bi_ctx, exp, (int) expsz);
 	bigint *h = bi_import(bi_ctx, msg, (int) msgsz);
 	bi_set_mod(bi_ctx, n, 0);
-	bigint *m1 = bi_mod_power(bi_ctx, h, e);
+	m1 = bi_mod_power(bi_ctx, h, e);
 	bi_free_mod(bi_ctx, 0);
 	bi_export(bi_ctx, m1, out, (int) outsz);
 	bi_terminate(bi_ctx);
@@ -22054,8 +22071,8 @@ struct mg_tcpip_driver mg_tcpip_driver_imxrt = {mg_tcpip_driver_imxrt_init,
 #endif
 
 
-enum {                      // ID1  ID2
-  MG_PHY_KSZ8x = 0x22,      // 0022 1561 - KSZ8081RNB
+enum {                  // ID1  ID2
+  MG_PHY_KSZ8x = 0x22,  // 0022 1561 - KSZ8081RNB
   MG_PHY_DP83x = 0x2000,
   MG_PHY_DP83867 = 0xa231,  // 2000 a231 - TI DP83867I
   MG_PHY_DP83825 = 0xa140,  // 2000 a140 - TI DP83825I
@@ -22063,7 +22080,7 @@ enum {                      // ID1  ID2
   MG_PHY_LAN87x = 0x7,      // 0007 c0fx - LAN8720
   MG_PHY_RTL8201 = 0x1C,    // 001c c816 - RTL8201,
   MG_PHY_ICS1894x = 0x15,
-  MG_PHY_ICS189432 = 0xf450 // 0015 f450 - ICS1894
+  MG_PHY_ICS189432 = 0xf450  // 0015 f450 - ICS1894
 };
 
 enum {
@@ -22136,11 +22153,13 @@ void mg_phy_init(struct mg_phy *phy, uint8_t phy_addr, uint8_t config) {
       phy->write_reg(phy_addr, MG_PHY_DP83x_REG_RCSR, MG_BIT(7) | MG_BIT(0));
     } else if (id1 == MG_PHY_KSZ8x) {
       // Disable isolation (override hw, it doesn't make sense at this point)
-      phy->write_reg(  // #2848, some NXP boards set ISO, even though
-          phy_addr, MG_PHY_REG_BCR,  // docs say they don't
-          phy->read_reg(phy_addr, MG_PHY_REG_BCR) & (uint16_t) ~MG_BIT(10));
-      phy->write_reg(phy_addr, MG_PHY_KSZ8x_REG_PC2R,  // now do clock stuff
-                     MG_BIT(15) | MG_BIT(8) | MG_BIT(7));
+      // - #2848, some NXP boards set ISO, even though docs say they don't
+      phy->write_reg(phy_addr, MG_PHY_REG_BCR,
+                     (uint16_t) (phy->read_reg(phy_addr, MG_PHY_REG_BCR) &
+                                 (uint16_t) ~MG_BIT(10)));
+      // now do clock stuff
+      phy->write_reg(phy_addr, MG_PHY_KSZ8x_REG_PC2R,
+                     (uint16_t) (MG_BIT(15) | MG_BIT(8) | MG_BIT(7)));
     } else if (id1 == MG_PHY_LAN87x) {
       // nothing to do
     } else if (id1 == MG_PHY_RTL8201) {
