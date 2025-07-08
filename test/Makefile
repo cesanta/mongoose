@@ -91,6 +91,10 @@ mip_tap_test: mip_tap_test.c mongoose.c mongoose.h packed_fs.c Makefile tls_mult
 	$(CC) mip_tap_test.c packed_fs.c $(CFLAGS) $(LDFLAGS) -o $@
 	ASAN_OPTIONS=$(ASAN_OPTIONS) $(RUN) ./$@
 
+mip_vc98: mip_test.c mongoose.c mongoose.h packed_fs.c Makefile
+	$(DOCKER) mdashnet/vc98 wine cl mip_test.c packed_fs.c $(VCFLAGS) $(DEFS) $(TFLAGS) /Fe$@.exe
+	$(DOCKER) mdashnet/vc98 wine $@.exe
+
 packed_fs.c: Makefile data/ssi.h fuzz.c data/a.txt data/ca.pem certs/ca.crt certs/server.crt certs/server.key
 	$(CC) $(CFLAGS) pack.c -o pack
 	$(RUN) ./pack Makefile data/ssi.h fuzz.c data/a.txt data/range.txt data/ca.pem certs/ca.crt certs/server.crt certs/server.key certs/client.key certs/client.crt > $@

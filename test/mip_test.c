@@ -74,9 +74,9 @@ static void frag_send_fn(struct mg_connection *c, int ev, void *ev_data) {
 
 static void test_poll(void) {
   int count = 0, i;
+  struct mg_tcpip_if mif;
   struct mg_mgr mgr;
   mg_mgr_init(&mgr);
-  struct mg_tcpip_if mif;
   memset(&mif, 0, sizeof(mif));
   mif.driver = &mg_tcpip_driver_mock;
   mg_tcpip_init(&mgr, &mif);
@@ -295,6 +295,7 @@ static void test_frag_send_path(void) {
   struct mg_mgr mgr;
   struct mg_tcpip_driver driver;
   struct mg_tcpip_if mif;
+  unsigned int i;
 
   mg_mgr_init(&mgr);
   memset(&mif, 0, sizeof(mif));
@@ -307,7 +308,7 @@ static void test_frag_send_path(void) {
   mif.mtu = 500;  // force ad hoc small MTU to fragment IP
   mg_http_listen(&mgr, "http://0.0.0.0:0", frag_send_fn, NULL);
   mgr.conns->pfn = NULL;
-  for (int i = 0; i < 10; i++) mg_mgr_poll(&mgr, 0);
+  for (i = 0; i < 10; i++) mg_mgr_poll(&mgr, 0);
   ASSERT(s_seg_sent == 3);
   s_driver_data.len = 0;
   mg_mgr_free(&mgr);

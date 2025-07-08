@@ -54,6 +54,18 @@ jobs:
     - uses: actions/checkout@v4
       with: { fetch-depth: 2 }
     - run: if [ "${{ matrix.target }}" == "mip_tap_test" ]; then ./test/setup_ga_network.sh ; fi && sudo apt -y update ; sudo apt -y install libmbedtls-dev libwolfssl-dev && make -C test ${{ matrix.target }} IPV6=0
+  mip89:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      max-parallel: 1   # no parallel runs, to minimize MQTT errors
+      matrix:
+        target: [mip_vc98]
+    name: mip89 ${{ matrix.target }}
+    steps:
+    - uses: actions/checkout@v4
+      with: { fetch-depth: 2 }
+    - run: make -C test ${{ matrix.target }} 
   s390:
     runs-on: ubuntu-latest
     strategy:
