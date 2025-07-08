@@ -5,6 +5,7 @@
 #include "hal.h"
 
 // Handle interrupts, like Ctrl-C
+char *g_firmware_version = "1.0.0";
 static int s_signo;
 static void signal_handler(int signo) {
   s_signo = signo;
@@ -22,13 +23,15 @@ int main(int argc, char *argv[]) {
       g_device_id = strdup(argv[++i]);
     } else if (strcmp(argv[i], "-t") == 0 && argv[i + 1] != NULL) {
       g_root_topic = argv[++i];
+    } else if (strcmp(argv[i], "-f") == 0 && argv[i + 1] != NULL) {
+      g_firmware_version = argv[++i];
     } else if (strcmp(argv[i], "-v") == 0 && argv[i + 1] != NULL) {
       mg_log_set(atoi(argv[++i]));
     } else {
       MG_ERROR(("Unknown option: %s. Usage:", argv[i]));
       MG_ERROR(
           ("%s [-u mqtt://SERVER:PORT] [-i DEVICE_ID] [-t TOPIC_NAME] [-v "
-           "DEBUG_LEVEL]",
+           "DEBUG_LEVEL] [-f FIRMWARE_VERSION]",
            argv[0], argv[i]));
       return 1;
     }

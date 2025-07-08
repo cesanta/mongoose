@@ -2,6 +2,8 @@
 // All rights reserved
 
 #include "net.h"
+#include <string.h>
+#include "mongoose.h"
 
 char *g_mqtt_server_url = MQTT_SERVER_URL;
 char *g_root_topic = MQTT_ROOT_TOPIC;
@@ -11,15 +13,12 @@ static uint8_t s_qos = 1;             // MQTT QoS
 static struct mg_connection *s_conn;  // MQTT Client connection
 static struct mg_rpc *s_rpc = NULL;   // List of registered RPC methods
 
-#define MAX_PINS 20
-struct device_config {
-  int log_level;               // Device logging level, 0-4
-  int pin_count;               // Number of pins to handle
-  uint16_t pin_map[MAX_PINS];  // Pins to handle
-  bool pin_state[MAX_PINS];    // State of the GPIO pins
+struct device_state {
+  bool led_status;
+  char firmware_version[20];
 };
 
-static struct device_config s_device_config;
+static struct device_state s_device_state;
 
 // Device ID generation function. Create an ID that is unique
 // for a given device, and does not change between device restarts.
@@ -53,40 +52,19 @@ static void set_device_id(void) {
   g_device_id = strdup(buf);
 }
 
-static size_t print_shorts(void (*out)(char, void *), void *ptr, va_list *ap) {
-  uint16_t *array = va_arg(*ap, uint16_t *);
-  int i, len = 0, num_elems = va_arg(*ap, int);
-  for (i = 0; i < num_elems; i++) {
-    len += mg_xprintf(out, ptr, "%s%hu", i ? "," : "", array[i]);
-  }
-  return len;
-}
-
-static size_t print_bools(void (*out)(char, void *), void *ptr, va_list *ap) {
-  bool *array = va_arg(*ap, bool *);
-  int i, len = 0, num_elems = va_arg(*ap, int);
-  for (i = 0; i < num_elems; i++) {
-    len += mg_xprintf(out, ptr, "%s%d", i ? "," : "", array[i]);
-  }
-  return len;
-}
-
 static void publish_status(struct mg_connection *c) {
   char topic[100];
   struct mg_mqtt_opts pub_opts;
   struct mg_iobuf io = {0, 0, 0, 512};
 
   // Print JSON notification into the io buffer
-  mg_xprintf(mg_pfn_iobuf, &io,
-             "{%m:%m,%m:{%m:%m,%m:%d,%m:%d,%m:[%M],%m:[%M]}}",  //
-             MG_ESC("method"), MG_ESC("status.notify"), MG_ESC("params"),   //
-             MG_ESC("status"), MG_ESC("online"),                            //
-             MG_ESC(("log_level")), s_device_config.log_level,              //
-             MG_ESC(("pin_count")), s_device_config.pin_count,              //
-             MG_ESC(("pin_map")), print_shorts, s_device_config.pin_map,
-             s_device_config.pin_count,  //
-             MG_ESC(("pin_state")), print_bools, s_device_config.pin_state,
-             s_device_config.pin_count);
+  mg_xprintf(
+      mg_pfn_iobuf, &io,
+      "{%m:%m,%m:{%m:%m,%m:%s,%m:%m}}",                                    //
+      MG_ESC("method"), MG_ESC("status.notify"), MG_ESC("params"),         //
+      MG_ESC("status"), MG_ESC("online"),                                  //
+      MG_ESC("led_status"), s_device_state.led_status ? "true" : "false",  //
+      MG_ESC("firmware_version"), MG_ESC(s_device_state.firmware_version));
 
   memset(&pub_opts, 0, sizeof(pub_opts));
   mg_snprintf(topic, sizeof(topic), "%s/%s/status", g_root_topic, g_device_id);
@@ -121,32 +99,9 @@ static void subscribe(struct mg_connection *c) {
   mg_free(rx_topic);
 }
 
-static void rpc_config_set(struct mg_rpc_req *r) {
-  struct device_config dc = s_device_config;
-  dc.pin_count = (int) mg_json_get_long(r->frame, "$.params.pin_count", -1);
-  dc.log_level = (int) mg_json_get_long(r->frame, "$.params.log_level", -1);
-
-  if (dc.log_level < 0 || dc.log_level > MG_LL_VERBOSE) {
-    mg_rpc_err(r, -32602, "Log level must be from 0 to 4");
-  } else if (dc.pin_count <= 0 || dc.pin_count > MAX_PINS) {
-    mg_rpc_err(r, -32602, "Pin count must be from 1 to %d", MAX_PINS);
-  } else {
-    int i, val;
-    for (i = 0; i < dc.pin_count; i++) {
-      char path[50];
-      mg_snprintf(path, sizeof(path), "$.params.pin_map[%d]", i);
-      dc.pin_map[i] = (uint16_t) mg_json_get_long(r->frame, path, 0);
-      mg_snprintf(path, sizeof(path), "$.params.pin_state[%d]", i);
-      if ((val = (int) mg_json_get_long(r->frame, path, -1)) >= 0) {
-        gpio_write(dc.pin_map[i], val);
-      }
-      dc.pin_state[i] = gpio_read(dc.pin_map[i]);
-      // MG_INFO(("%d %d %d", i, dc.pin_map[i], dc.pin_state[i]));
-    }
-    mg_log_set(dc.log_level);
-    s_device_config = dc;
-    mg_rpc_ok(r, "true");
-  }
+static void rpc_state_set(struct mg_rpc_req *r) {
+  mg_json_get_bool(r->frame, "$.params.led_status", &s_device_state.led_status);
+  mg_rpc_ok(r, "true");
 }
 
 static void rpc_ota_upload(struct mg_rpc_req *r) {
@@ -244,29 +199,24 @@ static void timer_sntp(void *param) {  // SNTP timer function. Sync up time
   }
 }
 
-
 void web_init(struct mg_mgr *mgr) {
-  int i, ping_interval_ms = MQTT_KEEPALIVE_SEC * 1000 - 500;
+  int ping_interval_ms = MQTT_KEEPALIVE_SEC * 1000 - 500;
+  int flags = MG_TIMER_REPEAT;
   set_device_id();
-  s_device_config.log_level = (int) mg_log_level;
-  s_device_config.pin_count = 5;
-  s_device_config.pin_map[0] = 10;
-  s_device_config.pin_map[1] = 11;
-  s_device_config.pin_map[2] = 12;
-  s_device_config.pin_map[3] = 13;
-  s_device_config.pin_map[4] = 25;
-  for (i = 0; i < s_device_config.pin_count; i++) {
-    s_device_config.pin_state[i] = gpio_read(s_device_config.pin_map[i]);
-  }
+
+  // Initialize device state
+  s_device_state.led_status = false;
+  mg_snprintf(s_device_state.firmware_version,
+              sizeof(s_device_state.firmware_version), "%s",
+              g_firmware_version);
 
   // Configure JSON-RPC functions we're going to handle
-  mg_rpc_add(&s_rpc, mg_str("config.set"), rpc_config_set, NULL);
+  mg_rpc_add(&s_rpc, mg_str("state.set"), rpc_state_set, NULL);
   mg_rpc_add(&s_rpc, mg_str("ota.upload"), rpc_ota_upload, NULL);
-  
-  mg_timer_add(mgr, 3000, MG_TIMER_REPEAT | MG_TIMER_RUN_NOW, timer_reconnect,
-               mgr);
-  mg_timer_add(mgr, ping_interval_ms, MG_TIMER_REPEAT, timer_ping, mgr);
-  mg_timer_add(mgr, 2000, MG_TIMER_REPEAT, timer_sntp, mgr);
+
+  mg_timer_add(mgr, 3000, flags | MG_TIMER_RUN_NOW, timer_reconnect, mgr);
+  mg_timer_add(mgr, ping_interval_ms, flags, timer_ping, mgr);
+  mg_timer_add(mgr, 2000, flags, timer_sntp, mgr);
 }
 
 void web_free(void) {

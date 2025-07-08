@@ -17,6 +17,7 @@ extern "C" {
 extern char *g_mqtt_server_url;
 extern char *g_device_id;
 extern char *g_root_topic;
+extern char *g_firmware_version;
 
 void web_init(struct mg_mgr *mgr);
 void web_free(void);
