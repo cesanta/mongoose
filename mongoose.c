@@ -4327,7 +4327,7 @@ static uint32_t csumup(uint32_t sum, const void *buf, size_t len) {
 
 static uint16_t csumfin(uint32_t sum) {
   while (sum >> 16) sum = (sum & 0xffff) + (sum >> 16);
-  return mg_htons((uint16_t) (~sum & 0xffff));
+  return mg_htons((uint16_t) ((uint16_t) ~sum & 0xffff));
 }
 
 static uint16_t ipcsum(const void *buf, size_t len) {
@@ -5011,10 +5011,11 @@ static void rx_tcp(struct mg_tcpip_if *ifp, struct pkt *pkt) {
 static void rx_ip(struct mg_tcpip_if *ifp, struct pkt *pkt) {
   uint16_t frag = mg_ntohs(pkt->ip->frag);
   if (frag & IP_MORE_FRAGS_MSK || frag & IP_FRAG_OFFSET_MSK) {
-    struct mg_connection *c = getpeer(ifp->mgr, pkt, false);
-    if (c) mg_error(c, "Received fragmented packet");
+    struct mg_connection *c;
     if (pkt->ip->proto == 17) pkt->udp = (struct udp *) (pkt->ip + 1);
     if (pkt->ip->proto == 6) pkt->tcp = (struct tcp *) (pkt->ip + 1);
+    c = getpeer(ifp->mgr, pkt, false);
+    if (c) mg_error(c, "Received fragmented packet");
   } else if (pkt->ip->proto == 1) {
     pkt->icmp = (struct icmp *) (pkt->ip + 1);
     if (pkt->pay.len < sizeof(*pkt->icmp)) return;
@@ -16159,7 +16160,7 @@ NS_INTERNAL bigint *bi_crt(BI_CTX *ctx, bigint *bi, bigint *dP, bigint *dQ,
 
 int mg_rsa_mod_pow(const uint8_t *mod, size_t modsz, const uint8_t *exp, size_t expsz, const uint8_t *msg, size_t msgsz, uint8_t *out, size_t outsz) {
 	BI_CTX *bi_ctx = bi_initialize();
-  bigint *m1;
+	bigint *m1;
 	bigint *n = bi_import(bi_ctx, mod, (int) modsz);
 	bigint *e = bi_import(bi_ctx, exp, (int) expsz);
 	bigint *h = bi_import(bi_ctx, msg, (int) msgsz);

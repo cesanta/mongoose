@@ -845,10 +845,11 @@ static void rx_tcp(struct mg_tcpip_if *ifp, struct pkt *pkt) {
 static void rx_ip(struct mg_tcpip_if *ifp, struct pkt *pkt) {
   uint16_t frag = mg_ntohs(pkt->ip->frag);
   if (frag & IP_MORE_FRAGS_MSK || frag & IP_FRAG_OFFSET_MSK) {
-    struct mg_connection *c = getpeer(ifp->mgr, pkt, false);
-    if (c) mg_error(c, "Received fragmented packet");
+    struct mg_connection *c;
     if (pkt->ip->proto == 17) pkt->udp = (struct udp *) (pkt->ip + 1);
     if (pkt->ip->proto == 6) pkt->tcp = (struct tcp *) (pkt->ip + 1);
+    c = getpeer(ifp->mgr, pkt, false);
+    if (c) mg_error(c, "Received fragmented packet");
   } else if (pkt->ip->proto == 1) {
     pkt->icmp = (struct icmp *) (pkt->ip + 1);
     if (pkt->pay.len < sizeof(*pkt->icmp)) return;

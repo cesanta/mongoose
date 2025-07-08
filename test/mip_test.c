@@ -1,11 +1,11 @@
 #define MG_ENABLE_TCPIP 1
 #define MG_ENABLE_TCPIP_DRIVER_INIT 0
 
-#include "mongoose.c" // order is important, this one first
+#include "mongoose.c"  // order is important, this one first
 #include "driver_mock.c"
 
 static int s_num_tests = 0;
-static bool s_sent_fragment = 0;
+static int s_sent_fragment = 0;
 static int s_seg_sent = 0;
 
 #ifdef NO_SLEEP_ABORT
@@ -24,6 +24,13 @@ static int s_seg_sent = 0;
       ABORT();                                                  \
     }                                                           \
   } while (0)
+
+static void test_csum(void) {
+  uint8_t ip[20] = {0x45, 0x00, 0x00, 0x1c, 0x00, 0x00, 0x00, 0x00, 0x28, 0x11,
+                    0x94, 0xcf, 0x7f, 0x00, 0x00, 0x01, 0x7f, 0x00, 0x00, 0x01};
+  ASSERT(ipcsum(ip, 20) == 0);
+  // UDP and TCP checksum calc funcions use the same basic calls as ipcsum()
+}
 
 static void test_statechange(void) {
   char tx[1540];
@@ -47,8 +54,10 @@ static void fn(struct mg_connection *c, int ev, void *ev_data) {
 
 static void frag_recv_fn(struct mg_connection *c, int ev, void *ev_data) {
   if (ev == MG_EV_ERROR) {
-    if (s_sent_fragment) {
+    if (s_sent_fragment > 0) {
+      ASSERT(s_sent_fragment == 1);
       ASSERT(strcmp((char *) ev_data, "Received fragmented packet") == 0);
+      s_sent_fragment = 2;
     }
   }
   (void) c, (void) ev_data;
@@ -57,11 +66,11 @@ static void frag_recv_fn(struct mg_connection *c, int ev, void *ev_data) {
 // mock send to a non-existent peer using the listener connection
 static void frag_send_fn(struct mg_connection *c, int ev, void *ev_data) {
   static bool s_sent;
-  static int s_seg_sizes[] = {416, 416, 368}; // based on len=1200 and MTU=500
+  static int s_seg_sizes[] = {416, 416, 368};  // based on len=1200 and MTU=500
   if (ev == MG_EV_POLL) {
     if (!s_sent) {
       struct connstate *s = (struct connstate *) (c + 1);
-      s->dmss = 1500;  // mock set some destination MSS way larger
+      s->dmss = 1500;      // mock set some destination MSS way larger
       c->send.len = 1200;  // setting TCP payload size
       s_sent = true;
     }
@@ -284,8 +293,9 @@ static void test_frag_recv_path(void) {
   ip.len = mg_htons(sizeof(struct ip) + sizeof(struct tcp) + 1000);
   ip.frag |= IP_MORE_FRAGS_MSK;  // setting More Fragments bit to 1
   create_tcp_pkt(&e, &ip, 1001, 1, TH_PUSH | TH_ACK, 1000);
-  s_sent_fragment = true;
-  mg_mgr_poll(&mgr, 0);
+  s_sent_fragment = 1;           // "enable" fn
+  mg_mgr_poll(&mgr, 0);          // call it (process fake frag IP)
+  ASSERT(s_sent_fragment == 2);  // check it followed the right path
 
   s_driver_data.len = 0;
   mg_mgr_free(&mgr);
@@ -320,6 +330,7 @@ static void test_fragmentation(void) {
 }
 
 int main(void) {
+  test_csum();
   test_statechange();
   test_poll();
   test_retransmit();

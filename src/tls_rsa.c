@@ -1576,7 +1576,7 @@ NS_INTERNAL bigint *bi_crt(BI_CTX *ctx, bigint *bi, bigint *dP, bigint *dQ,
 
 int mg_rsa_mod_pow(const uint8_t *mod, size_t modsz, const uint8_t *exp, size_t expsz, const uint8_t *msg, size_t msgsz, uint8_t *out, size_t outsz) {
 	BI_CTX *bi_ctx = bi_initialize();
-  bigint *m1;
+	bigint *m1;
 	bigint *n = bi_import(bi_ctx, mod, (int) modsz);
 	bigint *e = bi_import(bi_ctx, exp, (int) expsz);
 	bigint *h = bi_import(bi_ctx, msg, (int) msgsz);
