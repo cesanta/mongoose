@@ -6,7 +6,7 @@ const DefaultUrl = location.protocol == 'https:'
   ? 'wss://broker.hivemq.com:8884/mqtt'
   : 'ws://broker.hivemq.com:8000/mqtt';
 // const Delay = (ms, val) => new Promise(resolve => setTimeout(resolve, ms, val));
-const handleFetchError = r => r.ok || alert(`Error: ${r.statusText}`);
+// const handleFetchError = r => r.ok || alert(`Error: ${r.statusText}`);
 const LabelClass = 'text-sm truncate font-medium my-auto whitespace-nowrap';
 const BadgeClass = 'flex-inline text-sm rounded-md rounded px-2 py-0.5 ring-1 ring-inset';
 const InputClass = 'font-normal text-sm rounded w-full flex-1 py-0.5 px-2 text-gray-700 placeholder:text-gray-400 focus:outline-none disabled:cursor-not-allowed disabled:bg-gray-100 disabled:text-gray-500 rounded border';
@@ -21,21 +21,23 @@ const Colors = {
 let MqttClient;
 
 const Help = () => html`
-<div class="p-2 w-96 text-slate-600 bg-slate-50 overflow-auto text-sm">
-  <div>This is a simple demonstration of the functional device dashboard
+<div class="p-2 w-96 text-slate-600 bg-amber-100 overflow-auto text-sm">
+  <div class="py-2">This is a simple demonstration of the functional device dashboard
     that manages a fleet of devices via an MQTT server. Source code
-    is <a class="text-blue-600" href="https://github.com/cesanta/mongoose/tree/master/tutorials/mqtt/mqtt-dashboard">available on GitHub<//>.<//>
-  <div class="py-1">
+    is <a class="text-blue-600" href="https://github.com/cesanta/mongoose/tree/master/tutorials/mqtt/mqtt-dashboard">available on GitHub<//>.
+  <//>
+  <div class="py-2">
   For the sake of simplicity, this dashboard does not implement authentication.
   No external storage is used either to keep device list: for that, retained
   MQTT messages are utilised. When a device goes online, it publishes its
   state to the {root_topic}/{device_id}/status topic
   - LED status and firmware version.
   <//>
-  <div class="py-1">
+  <div class="py-2">
   The last will message triggers
   the "offline" message to the same topic. This is how this web page
   is able to track online/offline status of devices.
+  <img src="mqtt.svg" alt="diagram" />
   <//>
   <div class="py-1">
   See developer console for the list of MQTT messages exchanged with
