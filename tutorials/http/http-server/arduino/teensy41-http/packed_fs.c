@@ -1,1 +1,1 @@
-../../device-dashboard/packed_fs.c
+../../../device-dashboard/packed_fs.c
