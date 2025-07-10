@@ -6,12 +6,15 @@ ifeq "$(IDE)" "GCC+make"
 BUILD = $(MAKE) -f ../gcc+make/Makefile PROJECTS=wizard
 endif
 ifeq "$(IDE)" "CubeIDE"
-BUILD = $(MAKE) -f ../cube/Makefile PROJECTS=wizard && rm -rf workspace
+BUILD = mkdir -p workspace && $(MAKE) -f ../cube/Makefile PROJECTS=wizard && rmdir workspace
 endif
 ifeq "$(IDE)" "MCUXpresso"
-BUILD = $(MAKE) -f ../xpresso/Makefile PROJECTS=wizard && rm -rf workspace
+BUILD = mkdir -p workspace && $(MAKE) -f ../xpresso/Makefile PROJECTS=wizard && rmdir workspace
 endif
-ifeq "$(IDE)" "Keil"
+ifeq "$(IDE)" "ModusIDE"
+BUILD = true
+endif
+ifeq "$(IDE)" "e2studio"
 BUILD = true
 endif
 ifeq "$(IDE)" "Pico-SDK"
@@ -19,6 +22,9 @@ BUILD = $(MAKE) -f ../pico-sdk/Makefile PROJECTS=wizard BOARD=$(BOARD)
 endif
 ifeq "$(IDE)" "ESP-IDF"
 BUILD = $(MAKE) -f ../esp-idf/Makefile PROJECTS=wizard
+endif
+ifeq "$(IDE)" "Keil"
+BUILD = true
 endif
 ifeq "$(IDE)" "Arduino"
 BUILD = true
@@ -32,6 +38,7 @@ endif
 
 
 firmware.bin: wizard
+	(test "$(BUILD)" == "true" && echo "NOT TESTING $(BOARD) $(IDE) $(RTOS): don't know how to test $(IDE) projects" >> test.log) || true
 	$(BUILD) && rm -rf wizard*
 
 wizard: FORCE

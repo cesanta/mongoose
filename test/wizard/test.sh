@@ -29,7 +29,7 @@ done
 dotest h7s3l8 GCC+make baremetal
 
 
-NXP="mcxn947"
+NXP="rt1020 rt1024 rt1040 rt1060 rt1064 rt1170 mcxn947"
 NXPIDES="GCC+make MCUXpresso"
 for board in $NXP; do
 	for ide in $NXPIDES; do
@@ -38,16 +38,9 @@ for board in $NXP; do
 		done
 	done
 done
-NXP="rt1020 rt1024 rt1040 rt1060 rt1064 rt1170"
+NXP="rw612"
 for board in $NXP; do
-	dotest $board "GCC+make" "baremetal"
-done
-
-
-INFINEON="xmc4400 xmc4700 xmc7200"
-INFINEONIDES="GCC+make"
-for board in $INFINEON; do
-	for ide in $INFINEONIDES; do
+	for ide in $NXPIDES; do
 		for rtos in "baremetal"; do
 			dotest $board $ide $rtos
 		done
@@ -67,10 +60,13 @@ done
 dotest "tms570" "CGT+make" "baremetal"
 
 
-PICO="evb-pico evb-pico2 evb-pico2-w5100 pico-w pico2-w"
-for board in $PICO; do
-	for rtos in "baremetal"; do
-		dotest $board "Pico-SDK" $rtos
+INFINEON="xmc4400 xmc4700 xmc7200"
+INFINEONIDES="GCC+make ModusIDE"
+for board in $INFINEON; do
+	for ide in $INFINEONIDES; do
+		for rtos in "baremetal"; do
+			dotest $board $ide $rtos
+		done
 	done
 done
 
@@ -80,10 +76,32 @@ for board in $ESP; do
 	dotest $board "ESP-IDF" "baremetal"
 done
 
+
+PICO="evb-pico evb-pico2 evb-pico2-w5100 pico-w pico2-w"
+for board in $PICO; do
+	for rtos in "baremetal"; do
+		dotest $board "Pico-SDK" $rtos
+	done
+done
+
+
+#NORDIC
+
+RENESAS="ra6 ra8m1"
+RENESASIDES="GCC+make e2studio"
+for board in $RENESAS; do
+	for ide in $RENESASIDES; do
+		for rtos in "baremetal"; do
+			dotest $board $ide $rtos
+		done
+	done
+done
+
+
 # f439 not supported
 # h755 not supported in 3.7.0 branch; master branch currently not building
 # other ST boards (PHY address != 0) might build and not work
-ZEPHYR="zephyr zephyr-w5500 f207 f429 f746 f756 f767 h563 h573 h723 h735 h743 h745 h747 h753 mcxn947 rt1060 rt1064 evb-pico"
+ZEPHYR="zephyr zephyr-w5500 f207 f429 f746 f756 f767 h563 h573 h723 h735 h743 h745 h747 h753 mcxn947 rt1060 rt1064 evb-pico nrf91"
 for board in $ZEPHYR; do
 	dotest $board "Zephyr" "baremetal"
 done

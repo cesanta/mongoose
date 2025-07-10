@@ -11,6 +11,6 @@ all: $(PROJECTS)
 $(PROJECTS): FORCE
 	(make -C $@ build && make -C $@ clean) || ( \
 	$(DOCKER) $(IMAGE) /bin/bash -c 'cd $@ && idf.py build' && \
-	rm -rf build sdkconfig )
+	$(DOCKER) $(IMAGE) /bin/bash -c 'rm -rf .cache && cd $@ && rm -rf build sdkconfig')
 
 FORCE:	
