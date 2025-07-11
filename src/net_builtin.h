@@ -57,6 +57,7 @@ struct mg_tcpip_if {
 
   // Internal state, user can use it but should not change it
   uint8_t gwmac[6];             // Router's MAC
+  char *dns4_url;               // DNS server URL
   uint64_t now;                 // Current time
   uint64_t timer_1000ms;        // 1000 ms timer: for DHCP and link state
   uint64_t lease_expire;        // Lease expiration time, in ms
