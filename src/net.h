@@ -105,3 +105,6 @@ bool mg_wakeup(struct mg_mgr *, unsigned long id, const void *buf, size_t len);
 bool mg_wakeup_init(struct mg_mgr *);
 struct mg_timer *mg_timer_add(struct mg_mgr *mgr, uint64_t milliseconds,
                               unsigned flags, void (*fn)(void *), void *arg);
+struct mg_connection *mg_connect_svc(struct mg_mgr *mgr, const char *url,
+                                     mg_event_handler_t fn, void *fn_data,
+                                     mg_event_handler_t pfn, void *pfn_data);

@@ -44,8 +44,11 @@ static void sfn(struct mg_connection *c, int ev, void *ev_data) {
 // Called every 5 seconds. Increase that for production case.
 static void timer_fn(void *arg) {
   struct mg_mgr *mgr = (struct mg_mgr *) arg;
-  if (s_sntp_conn == NULL) s_sntp_conn = mg_sntp_connect(mgr, NULL, sfn, NULL);
-  if (s_sntp_conn != NULL) mg_sntp_request(s_sntp_conn);
+  if (s_sntp_conn == NULL) { // connection issues a request
+    s_sntp_conn = mg_sntp_connect(mgr, NULL, sfn, NULL);
+  } else {
+    mg_sntp_request(s_sntp_conn);
+  }
 }
 
 int main(void) {
