@@ -156,8 +156,8 @@ void mg_close_conn(struct mg_connection *c) {
   mg_free(c);
 }
 
-struct mg_connection *mg_connect(struct mg_mgr *mgr, const char *url,
-                                 mg_event_handler_t fn, void *fn_data) {
+struct mg_connection *mg_connect_svc(struct mg_mgr *mgr, const char *url,
+                                 mg_event_handler_t fn, void *fn_data, mg_event_handler_t pfn, void *pfn_data) {
   struct mg_connection *c = NULL;
   if (url == NULL || url[0] == '\0') {
     MG_ERROR(("null url"));
@@ -171,11 +171,18 @@ struct mg_connection *mg_connect(struct mg_mgr *mgr, const char *url,
     c->is_client = true;
     c->fn_data = fn_data;
     c->is_tls = (mg_url_is_ssl(url) != 0);
+    c->pfn = pfn;
+    c->pfn_data = pfn_data;
     mg_call(c, MG_EV_OPEN, (void *) url);
     MG_DEBUG(("%lu %ld %s", c->id, c->fd, url));
     mg_resolve(c, url);
   }
   return c;
+}
+
+struct mg_connection *mg_connect(struct mg_mgr *mgr, const char *url,
+                                 mg_event_handler_t fn, void *fn_data) {
+  return mg_connect_svc(mgr, url, fn, fn_data, NULL, NULL);
 }
 
 struct mg_connection *mg_listen(struct mg_mgr *mgr, const char *url,

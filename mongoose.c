@@ -2589,9 +2589,7 @@ void mg_hello(const char *url) {
 
 struct mg_connection *mg_http_connect(struct mg_mgr *mgr, const char *url,
                                       mg_event_handler_t fn, void *fn_data) {
-  struct mg_connection *c = mg_connect(mgr, url, fn, fn_data);
-  if (c != NULL) c->pfn = http_cb;
-  return c;
+  return mg_connect_svc(mgr, url, fn, fn_data, http_cb, NULL);
 }
 
 struct mg_connection *mg_http_listen(struct mg_mgr *mgr, const char *url,
@@ -3858,12 +3856,11 @@ void mg_mqtt_disconnect(struct mg_connection *c,
 struct mg_connection *mg_mqtt_connect(struct mg_mgr *mgr, const char *url,
                                       const struct mg_mqtt_opts *opts,
                                       mg_event_handler_t fn, void *fn_data) {
-  struct mg_connection *c = mg_connect(mgr, url, fn, fn_data);
+  struct mg_connection *c = mg_connect_svc(mgr, url, fn, fn_data, mqtt_cb, NULL);
   if (c != NULL) {
     struct mg_mqtt_opts empty;
     memset(&empty, 0, sizeof(empty));
     mg_mqtt_login(c, opts == NULL ? &empty : opts);
-    c->pfn = mqtt_cb;
   }
   return c;
 }
@@ -4036,8 +4033,8 @@ void mg_close_conn(struct mg_connection *c) {
   mg_free(c);
 }
 
-struct mg_connection *mg_connect(struct mg_mgr *mgr, const char *url,
-                                 mg_event_handler_t fn, void *fn_data) {
+struct mg_connection *mg_connect_svc(struct mg_mgr *mgr, const char *url,
+                                 mg_event_handler_t fn, void *fn_data, mg_event_handler_t pfn, void *pfn_data) {
   struct mg_connection *c = NULL;
   if (url == NULL || url[0] == '\0') {
     MG_ERROR(("null url"));
@@ -4051,11 +4048,18 @@ struct mg_connection *mg_connect(struct mg_mgr *mgr, const char *url,
     c->is_client = true;
     c->fn_data = fn_data;
     c->is_tls = (mg_url_is_ssl(url) != 0);
+    c->pfn = pfn;
+    c->pfn_data = pfn_data;
     mg_call(c, MG_EV_OPEN, (void *) url);
     MG_DEBUG(("%lu %ld %s", c->id, c->fd, url));
     mg_resolve(c, url);
   }
   return c;
+}
+
+struct mg_connection *mg_connect(struct mg_mgr *mgr, const char *url,
+                                 mg_event_handler_t fn, void *fn_data) {
+  return mg_connect_svc(mgr, url, fn, fn_data, NULL, NULL);
 }
 
 struct mg_connection *mg_listen(struct mg_mgr *mgr, const char *url,
@@ -8596,8 +8600,10 @@ int64_t mg_sntp_parse(const unsigned char *buf, size_t len) {
 static void sntp_cb(struct mg_connection *c, int ev, void *ev_data) {
   uint64_t *expiration_time = (uint64_t *) c->data;
   if (ev == MG_EV_OPEN) {
+    MG_INFO(("%lu PFN OPEN", c->id));
     *expiration_time = mg_millis() + 3000;  // Store expiration time in 3s
   } else if (ev == MG_EV_CONNECT) {
+    MG_INFO(("%lu PFN CONNECT, sending request", c->id));
     mg_sntp_request(c);
   } else if (ev == MG_EV_READ) {
     int64_t milliseconds = mg_sntp_parse(c->recv.buf, c->recv.len);
@@ -8631,14 +8637,9 @@ void mg_sntp_request(struct mg_connection *c) {
 }
 
 struct mg_connection *mg_sntp_connect(struct mg_mgr *mgr, const char *url,
-                                      mg_event_handler_t fn, void *fnd) {
-  struct mg_connection *c = NULL;
+                                      mg_event_handler_t fn, void *fn_data) {
   if (url == NULL) url = "udp://time.google.com:123";
-  if ((c = mg_connect(mgr, url, fn, fnd)) != NULL) {
-    c->pfn = sntp_cb;
-    sntp_cb(c, MG_EV_OPEN, (void *) url);
-  }
-  return c;
+  return mg_connect_svc(mgr, url, fn, fn_data, sntp_cb, NULL);
 }
 
 #ifdef MG_ENABLE_LINES
