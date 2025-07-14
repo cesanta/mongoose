@@ -35,7 +35,7 @@ extern "C" {
 #define MG_ARCH_FREERTOS 5      // FreeRTOS
 #define MG_ARCH_AZURERTOS 6     // MS Azure RTOS
 #define MG_ARCH_ZEPHYR 7        // Zephyr RTOS
-#define MG_ARCH_NEWLIB 8        // Bare metal ARM
+#define MG_ARCH_ARMGCC 8        // Bare metal ARM
 #define MG_ARCH_CMSIS_RTOS1 9   // CMSIS-RTOS API v1 (Keil RTX)
 #define MG_ARCH_TIRTOS 10       // Texas Semi TI-RTOS
 #define MG_ARCH_PICOSDK 11      // Raspberry Pi Pico-SDK (RP2040, RP2350)
@@ -220,7 +220,7 @@ static inline int mg_mkdir(const char *path, mode_t mode) {
 #endif  // MG_ARCH == MG_ARCH_FREERTOS
 
 
-#if MG_ARCH == MG_ARCH_NEWLIB
+#if MG_ARCH == MG_ARCH_ARMGCC
 #define _POSIX_TIMERS
 
 #include <ctype.h>

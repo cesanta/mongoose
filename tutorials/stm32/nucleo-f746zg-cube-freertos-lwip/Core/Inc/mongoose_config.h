@@ -4,7 +4,7 @@
 #define MG_STMPACK_ARCH MG_ARCH
 #undef MG_ARCH
 #elif defined(__GNUC__)
-#define MG_STMPACK_ARCH MG_ARCH_NEWLIB
+#define MG_STMPACK_ARCH MG_ARCH_ARMGCC
 #endif
 
 #define MG_ENABLE_PACKED_FS  1

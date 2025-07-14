@@ -1,7 +1,7 @@
 #pragma once
 
 // See https://mongoose.ws/documentation/#build-options
-#define MG_ARCH MG_ARCH_NEWLIB
+#define MG_ARCH MG_ARCH_ARMGCC
 #define MG_OTA MG_OTA_CH32V307
 
 #define MG_ENABLE_TCPIP 1

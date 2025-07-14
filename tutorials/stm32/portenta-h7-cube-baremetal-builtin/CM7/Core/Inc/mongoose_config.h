@@ -1,7 +1,7 @@
 #pragma once
 
 // See https://mongoose.ws/documentation/#build-options
-#define MG_ARCH MG_ARCH_NEWLIB
+#define MG_ARCH MG_ARCH_ARMGCC
 #define MG_TLS MG_TLS_BUILTIN
 #define MG_OTA MG_OTA_STM32H7_DUAL_CORE
 #define MG_IRAM __attribute__((section(".RamFunc")))

@@ -1,7 +1,7 @@
 #pragma once
 
 // Full list of options is at https://mongoose.ws/documentation/#build-options
-#define MG_ARCH MG_ARCH_NEWLIB  // Build env: ARM GCC + Newlib C library
+#define MG_ARCH MG_ARCH_ARMGCC  // Build env: ARM GCC + Newlib C library
 #define MG_TLS MG_TLS_BUILTIN   // MG_TLS_NONE, MG_TLS_MBED, MG_TLS_OPENSSL, MG_TLS_CUSTOM
 #define MG_ENABLE_TCPIP 1       // Enable built-in TCP/IP stack
 
