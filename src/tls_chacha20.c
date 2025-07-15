@@ -20,8 +20,8 @@
 
 #if defined(_MSC_VER) || defined(__cplusplus)
 // add restrict support
-#if (defined(_MSC_VER) && _MSC_VER >= 1900) || defined(__clang__) || \
-    defined(__GNUC__)
+#if ((defined(_MSC_VER) && _MSC_VER >= 1900) && !defined(__cplusplus)) || \
+    defined(__clang__) || defined(__GNUC__)
 #define restrict __restrict
 #else
 #define restrict
