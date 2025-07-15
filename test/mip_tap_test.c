@@ -285,7 +285,7 @@ static void mqtt_fn(struct mg_connection *c, int ev, void *ev_data) {
       *(bool *) c->fn_data = true;
     } else if (mm->data.len == 21098) {
       struct mg_mqtt_opts pub_opts;
-      ASSERT(memcmp((const char *) mqtt_fn, mm->data.buf, 21098) == 0);
+      ASSERT(memcmp((const char *) (size_t) mqtt_fn, mm->data.buf, 21098) == 0);
       // send farewell after receiving big data
       memset(&pub_opts, 0, sizeof(pub_opts));
       pub_opts.topic = mm->topic;

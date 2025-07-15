@@ -14,7 +14,6 @@ VCFLAGS ?= /nologo /W3 /O2 /MD /I.
 IPV6 ?= 1
 ASAN ?= -fsanitize=address,undefined,alignment -fno-sanitize-recover=all -fno-omit-frame-pointer -fno-common
 ASAN_OPTIONS ?= detect_leaks=1
-REFPROJS := $(dir $(wildcard ../reference-projects/windows-macos-linux/*/Makefile))
 # This does not include ESP32, ESP8266, Microchip; all examples that are directly placed under an OS tutorial. Also, it is needed that way...
 TUTORIALS_EMBEDDED := $(dir $(wildcard ../tutorials/infineon/*/Makefile)) $(dir $(wildcard ../tutorials/nxp/*/Makefile)) $(dir $(wildcard ../tutorials/pico-sdk/*/Makefile)) $(dir $(wildcard ../tutorials/renesas/*/Makefile)) $(dir $(wildcard ../tutorials/stm32/*/Makefile)) $(dir $(wildcard ../tutorials/ti/*/Makefile)) $(dir $(wildcard ../tutorials/wch/*/Makefile))
 TUTORIALS := ../tutorials/micropython/ $(filter-out $(TUTORIALS_EMBEDDED), $(dir $(wildcard ../tutorials/*/*/Makefile)))
@@ -81,7 +80,7 @@ endif
 all:
 	$(MAKE) -C ../tutorials/http/http-server
 
-tall: mg_prefix unamalgamated test mip_test arm tutorials vc98 vc17 vc22 mingw mingw++ fuzz
+tall: mg_prefix unamalgamated test valgrind fuzz fuzz_tls vc98 vc17 vc22 mingw mingw++ arm armhf riscv s390 tutorials tutorials_win tutorials_embedded mip_test mip_vc98
 
 mip_test: mip_test.c mongoose.c mongoose.h packed_fs.c Makefile
 	$(CC) mip_test.c packed_fs.c $(CFLAGS) $(LDFLAGS) -o $@
