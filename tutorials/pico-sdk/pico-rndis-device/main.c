@@ -6,6 +6,8 @@
 #include "pico/stdlib.h"
 #include "tusb.h"
 
+char *g_firmware_version = "1.0.0";
+
 bool hal_gpio_read(int pin) {
   return (pin >= 0 && pin <= 29) ? gpio_get_out_level((uint) pin) : false;
 }
