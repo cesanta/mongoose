@@ -1,6 +1,6 @@
 #pragma once
 
-#if MG_ARCH == MG_ARCH_NEWLIB
+#if MG_ARCH == MG_ARCH_ARMGCC
 #define _POSIX_TIMERS
 
 #include <ctype.h>

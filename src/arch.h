@@ -8,7 +8,7 @@
 #define MG_ARCH_FREERTOS 5      // FreeRTOS
 #define MG_ARCH_THREADX 6       // Eclipse ThreadX (former MS Azure RTOS)
 #define MG_ARCH_ZEPHYR 7        // Zephyr RTOS
-#define MG_ARCH_NEWLIB 8        // Bare metal ARM
+#define MG_ARCH_ARMGCC 8        // Plain ARM GCC
 #define MG_ARCH_CMSIS_RTOS1 9   // CMSIS-RTOS API v1 (Keil RTX)
 #define MG_ARCH_TIRTOS 10       // Texas Semi TI-RTOS
 #define MG_ARCH_PICOSDK 11      // Raspberry Pi Pico-SDK (RP2040, RP2350)
@@ -16,6 +16,8 @@
 #define MG_ARCH_CMSIS_RTOS2 13  // CMSIS-RTOS API v2 (Keil RTX5, FreeRTOS)
 #define MG_ARCH_RTTHREAD 14     // RT-Thread RTOS
 #define MG_ARCH_ARMCGT 15       // Texas Semi ARM-CGT
+
+#define MG_ARCH_NEWLIB MG_ARCH_ARMGCC  // Alias, deprecate in 2025
 
 #if !defined(MG_ARCH)
 #if defined(__unix__) || defined(__APPLE__)
@@ -39,7 +41,7 @@
 #include "arch_esp32.h"
 #include "arch_esp8266.h"
 #include "arch_freertos.h"
-#include "arch_newlib.h"
+#include "arch_armgcc.h"
 #include "arch_rtx.h"
 #include "arch_unix.h"
 #include "arch_win32.h"

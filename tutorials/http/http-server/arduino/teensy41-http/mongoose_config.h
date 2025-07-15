@@ -1,6 +1,6 @@
 #pragma once
 
-#define MG_ARCH MG_ARCH_NEWLIB     // Use ARM toolchain
+#define MG_ARCH MG_ARCH_ARMGCC     // Use ARM toolchain
 #define MG_ENABLE_TCPIP 1          // Enable built-in network stack
 #define MG_ENABLE_DRIVER_IMXRT10 1   // Enable RTxx driver
 #define MG_ENABLE_CUSTOM_MILLIS 1  // Let user implement mg_millis()

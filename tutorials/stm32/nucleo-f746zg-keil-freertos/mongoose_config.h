@@ -8,7 +8,7 @@
 //   <MG_ARCH_FREERTOS=> FreeRTOS
 //   <MG_ARCH_CMSIS_RTOS1=> CMSIS-RTOS v1
 //   <MG_ARCH_CMSIS_RTOS2=> CMSIS-RTOS v2
-//   <MG_ARCH_NEWLIB=> ARM GCC + Newlib
+//   <MG_ARCH_ARMGCC=> ARM GCC + Newlib
 #define MG_ARCH MG_ARCH_FREERTOS
 
 // <q> Enable builtin TCP/IP stack

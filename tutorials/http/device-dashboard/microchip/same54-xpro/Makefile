@@ -10,7 +10,7 @@ SOURCES = main.c syscalls.c startup.c
 
 # Mongoose-specific source code files and build options. See https://mongoose.ws/documentation/#build-options
 SOURCES += mongoose.c net.c packed_fs.c
-CFLAGS += -DMG_ENABLE_TCPIP=1 -DMG_ARCH=MG_ARCH_NEWLIB -DMG_ENABLE_CUSTOM_MILLIS=1 -DMG_ENABLE_LINES=1
+CFLAGS += -DMG_ENABLE_TCPIP=1 -DMG_ARCH=MG_ARCH_ARMGCC -DMG_ENABLE_CUSTOM_MILLIS=1 -DMG_ENABLE_LINES=1
 CFLAGS += -DMG_ENABLE_DRIVER_SAME54=1 -DMG_ENABLE_CUSTOM_RANDOM=1 -DMG_ENABLE_PACKED_FS=1 $(CFLAGS_EXTRA)
 
 # Example specific build options. See README.md
