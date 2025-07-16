@@ -3,9 +3,9 @@
 pre:
 	#find Examples/x/x/* -maxdepth 0 -exec mkdir -p {}"/Middlewares/Third_Party/Cesanta_Network Library/Mongoose/" \;
 	#find Examples/x/x/* -maxdepth 0 -exec cp ../../mongoose.[ch] {}"/Middlewares/Third_Party/Cesanta_Network Library/Mongoose/" \;
-	grep -l net.h Examples/x/x/*/Core/Src/main.c | xargs -n 1 dirname | sed 's.$$./.' | xargs -n 1 cp ../../examples/device-dashboard/net.c
-	grep -l net.h Examples/x/x/*/Core/Src/main.c | xargs -n 1 dirname | sed 's.$$./.' | sed 's/Src/Inc/' | xargs -n 1 cp ../../examples/device-dashboard/net.h
-	grep -l net.h Examples/x/x/*/Core/Src/main.c | xargs -n 1 dirname | sed 's.$$./.' | xargs -n 1 cp ../../examples/device-dashboard/packed_fs.c
+	grep -l net.h Examples/x/x/*/Core/Src/main.c | xargs -n 1 dirname | sed 's.$$./.' | xargs -n 1 cp ../../tutorials/http/device-dashboard/net.c
+	grep -l net.h Examples/x/x/*/Core/Src/main.c | xargs -n 1 dirname | sed 's.$$./.' | sed 's/Src/Inc/' | xargs -n 1 cp ../../tutorials/http/device-dashboard/net.h
+	grep -l net.h Examples/x/x/*/Core/Src/main.c | xargs -n 1 dirname | sed 's.$$./.' | xargs -n 1 cp ../../tutorials/http/device-dashboard/packed_fs.c
 	# examples can't be tested in place anymore because of that nasty relative firmware path and because of the magic needed to run them
 
 post:
