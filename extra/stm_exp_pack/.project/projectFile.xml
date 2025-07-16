@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="UTF-8" standalone="no"?>
-<package schemaVersion="1.7.2" xmlns:xs="http://www.w3.org/2001/XMLSchema-instance" xs:noNamespaceSchemaLocation="PACK.xsd">
+<package schemaVersion="1.7.40" xmlns:xs="http://www.w3.org/2001/XMLSchema-instance" xs:noNamespaceSchemaLocation="PACK.xsd">
     <vendor>Cesanta</vendor>
     <name>I-CUBE-Mongoose::FROM_SCRATCH_GENERATED::CUBE_RULES</name>
     <description>Mongoose Embedded Web server, HTTP/MQTT/Websocket library</description>
@@ -7,6 +7,7 @@
     <license>../../LICENSE::License.txt</license>
     <supportContact>https://mongoose.ws/contact/</supportContact>
     <releases>
+        <release date="2025-07-16" version="7.18.1">See https://github.com/cesanta/mongoose/releases/tag/7.18</release>
         <release date="2024-03-01" version="7.13.0">See https://github.com/cesanta/mongoose/releases/tag/7.13</release>
     </releases>
     <keywords>
@@ -22,7 +23,7 @@
         </condition>
     </conditions>
     <components>
-        <component Cclass="Network Library" Cgroup="Mongoose" Cversion="7.13.0" maxInstances="1">
+        <component Cclass="Network Library" Cgroup="Mongoose" Cversion="7.18.1" maxInstances="1">
             <description>Mongoose HTTP/MQTT/Websocket Library</description>
             <files>
                 <file category="source" name="../../mongoose.c::Middlewares/Third_Party/Mongoose/mongoose.c"/>
@@ -31,7 +32,7 @@
         </component>
     </components>
     <examples>
-        <example doc="README.md" folder="Examples/x/x/nucleo-f746zg-cube-baremetal::Projects/NUCLEO-F746ZG/Examples/nucleo-f746zg-cube-baremetal" name="nucleo-f746zg-cube-baremetal" public="false" version="7.13.0">
+        <example doc="README.md" folder="Examples/x/x/nucleo-f746zg-cube-baremetal::Projects/NUCLEO-F746ZG/Examples/nucleo-f746zg-cube-baremetal" name="nucleo-f746zg-cube-baremetal" public="false" version="7.18.1">
             <description>Baremetal web device dashboard on NUCLEO-F746ZG, built on STM32CubeIDE</description>
             <board Dvendor="STMicroelectronics:13" name="NUCLEO-F746ZG" vendor="STMicroelectronics"/>
             <project>
@@ -48,7 +49,7 @@
                 <keyword>network</keyword>
             </attributes>
         </example>
-        <example doc="README.md" folder="Examples/x/x/nucleo-f746zg-cube-freertos-lwip::Projects/NUCLEO-F746ZG/Examples/nucleo-f746zg-cube-freertos-lwip" name="nucleo-f746zg-cube-freertos-lwip" public="false" version="7.13.0">
+        <example doc="README.md" folder="Examples/x/x/nucleo-f746zg-cube-freertos-lwip::Projects/NUCLEO-F746ZG/Examples/nucleo-f746zg-cube-freertos-lwip" name="nucleo-f746zg-cube-freertos-lwip" public="false" version="7.18.1">
             <description>Web device dashboard using Mongoose over FreeRTOS + lwIP on a NUCLEO-F746ZG, built on STM32CubeIDE</description>
             <board Dvendor="STMicroelectronics:13" name="NUCLEO-F746ZG" vendor="STMicroelectronics"/>
             <project>
@@ -65,7 +66,7 @@
                 <keyword>network</keyword>
             </attributes>
         </example>
-        <example doc="README.md" folder="Examples/x/x/nucleo-f746zg-cube-freertos::Projects/NUCLEO-F746ZG/Examples/nucleo-f746zg-cube-freertos" name="nucleo-f746zg-cube-freertos" public="false" version="7.13.0">
+        <example doc="README.md" folder="Examples/x/x/nucleo-f746zg-cube-freertos::Projects/NUCLEO-F746ZG/Examples/nucleo-f746zg-cube-freertos" name="nucleo-f746zg-cube-freertos" public="false" version="7.18.1">
             <description>Web device dashboard using Mongoose as a FreeRTOS task on a NUCLEO-F746ZG, built on STM32CubeIDE</description>
             <board Dvendor="STMicroelectronics:13" name="NUCLEO-F746ZG" vendor="STMicroelectronics"/>
             <project>
