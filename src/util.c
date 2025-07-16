@@ -180,6 +180,10 @@ uint64_t mg_millis(void) {
   return ((uint64_t) ts.tv_sec * 1000 + (uint64_t) ts.tv_nsec / 1000000);
 #elif defined(ARDUINO)
   return (uint64_t) millis();
+#elif defined(__STM32H5xx_HAL_H) || defined(__STM32H7xx_HAL_H) || \
+      defined(__STM32F7xx_HAL_H) || defined(__STM32F4xx_HAL_H) || \
+      defined(__STM32F2xx_HAL_H) || defined(__STM32F1xx_HAL_H)
+  return (uint64_t) HAL_GetTick();  // Using STM32 HAL
 #else
   return (uint64_t) (time(NULL) * 1000);
 #endif

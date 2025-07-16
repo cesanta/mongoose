@@ -8600,10 +8600,8 @@ int64_t mg_sntp_parse(const unsigned char *buf, size_t len) {
 static void sntp_cb(struct mg_connection *c, int ev, void *ev_data) {
   uint64_t *expiration_time = (uint64_t *) c->data;
   if (ev == MG_EV_OPEN) {
-    MG_INFO(("%lu PFN OPEN", c->id));
     *expiration_time = mg_millis() + 3000;  // Store expiration time in 3s
   } else if (ev == MG_EV_CONNECT) {
-    MG_INFO(("%lu PFN CONNECT, sending request", c->id));
     mg_sntp_request(c);
   } else if (ev == MG_EV_READ) {
     int64_t milliseconds = mg_sntp_parse(c->recv.buf, c->recv.len);
@@ -12676,8 +12674,8 @@ void mg_tls_ctx_free(struct mg_mgr *mgr) {
 
 #if defined(_MSC_VER) || defined(__cplusplus)
 // add restrict support
-#if (defined(_MSC_VER) && _MSC_VER >= 1900) || defined(__clang__) || \
-    defined(__GNUC__)
+#if ((defined(_MSC_VER) && _MSC_VER >= 1900) && !defined(__cplusplus)) || \
+    defined(__clang__) || defined(__GNUC__)
 #define restrict __restrict
 #else
 #define restrict
@@ -19944,6 +19942,10 @@ uint64_t mg_millis(void) {
   return ((uint64_t) ts.tv_sec * 1000 + (uint64_t) ts.tv_nsec / 1000000);
 #elif defined(ARDUINO)
   return (uint64_t) millis();
+#elif defined(__STM32H5xx_HAL_H) || defined(__STM32H7xx_HAL_H) || \
+      defined(__STM32F7xx_HAL_H) || defined(__STM32F4xx_HAL_H) || \
+      defined(__STM32F2xx_HAL_H) || defined(__STM32F1xx_HAL_H)
+  return (uint64_t) HAL_GetTick();  // Using STM32 HAL
 #else
   return (uint64_t) (time(NULL) * 1000);
 #endif
