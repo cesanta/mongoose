@@ -54,6 +54,7 @@ struct mg_tcpip_driver_stm32h_data {
     mif_.driver_data = &driver_data_;                             \
     MG_SET_MAC_ADDRESS(mif_.mac);                                 \
     mg_tcpip_init(mgr, &mif_);                                    \
+    NVIC_EnableIRQ(ETH_IRQn);                                     \
     MG_INFO(("Driver: stm32h, MAC: %M", mg_print_mac, mif_.mac)); \
   } while (0)
 

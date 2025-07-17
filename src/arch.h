@@ -38,15 +38,16 @@
 // http://esr.ibiblio.org/?p=5095
 #define MG_BIG_ENDIAN (*(uint16_t *) "\0\xff" < 0x100)
 
+#include "arch_armgcc.h"
+#include "arch_cube.h"
 #include "arch_esp32.h"
 #include "arch_esp8266.h"
 #include "arch_freertos.h"
-#include "arch_armgcc.h"
 #include "arch_rtx.h"
+#include "arch_threadx.h"
 #include "arch_unix.h"
 #include "arch_win32.h"
 #include "arch_zephyr.h"
-#include "arch_threadx.h"
 
 #include "net_ft.h"
 #include "net_lwip.h"
