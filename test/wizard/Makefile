@@ -6,10 +6,10 @@ ifeq "$(IDE)" "GCC+make"
 BUILD = $(MAKE) -f ../gcc+make/Makefile PROJECTS=wizard
 endif
 ifeq "$(IDE)" "CubeIDE"
-BUILD = mkdir -p workspace && $(MAKE) -f ../cube/Makefile PROJECTS=wizard && rmdir workspace
+BUILD = mkdir -p workspace && $(MAKE) -k -f ../cube/Makefile PROJECTS=wizard && rmdir workspace
 endif
 ifeq "$(IDE)" "MCUXpresso"
-BUILD = mkdir -p workspace && $(MAKE) -f ../xpresso/Makefile PROJECTS=wizard && rmdir workspace
+BUILD = mkdir -p workspace && $(MAKE) -k -f ../xpresso/Makefile PROJECTS=wizard && rmdir workspace
 endif
 ifeq "$(IDE)" "ModusIDE"
 BUILD = true
