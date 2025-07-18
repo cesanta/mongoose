@@ -45,6 +45,10 @@
 #endif
 #endif
 
+#ifndef MG_TLS
+#define MG_TLS MG_TLS_BUILTIN
+#endif
+
 #if !defined(MG_OTA) && defined(STM32F1) || defined(STM32F2) || defined(STM32F4) || defined(STM32F7)
 #define MG_OTA MG_OTA_STM32F
 #elif !defined(MG_OTA) && defined(STM32H5)
@@ -52,6 +56,8 @@
 #elif !defined(MG_OTA) && defined(STM32H7)
 #define MG_OTA MG_OTA_STM32H7
 #endif
+// use HAL-defined execute-in-ram section
+#define MG_IRAM __attribute__((section(".RamFunc")))
 
 #ifndef STM32H5
 #define HAL_ICACHE_IsEnabled() 0

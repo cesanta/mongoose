@@ -28,6 +28,12 @@ struct mg_tcpip_driver_stm32f_data {
 #define MG_DRIVER_MDC_CR 4
 #endif
 
+#if MG_ARCH == MG_ARCH_CUBE
+#define MG_NEIRQ NVIC_EnableIRQ(ETH_IRQn)
+#else 
+#define MG_NEIRQ
+#endif
+
 #define MG_TCPIP_DRIVER_INIT(mgr)                                 \
   do {                                                            \
     static struct mg_tcpip_driver_stm32f_data driver_data_;       \
@@ -40,8 +46,8 @@ struct mg_tcpip_driver_stm32f_data {
     mif_.driver = &mg_tcpip_driver_stm32f;                        \
     mif_.driver_data = &driver_data_;                             \
     MG_SET_MAC_ADDRESS(mif_.mac);                                 \
+    MG_NEIRQ;                                                     \
     mg_tcpip_init(mgr, &mif_);                                    \
-    NVIC_EnableIRQ(ETH_IRQn);                                     \
     MG_INFO(("Driver: stm32f, MAC: %M", mg_print_mac, mif_.mac)); \
   } while (0)
 

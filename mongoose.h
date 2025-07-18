@@ -168,6 +168,10 @@ extern "C" {
 #endif
 #endif
 
+#ifndef MG_TLS
+#define MG_TLS MG_TLS_BUILTIN
+#endif
+
 #if !defined(MG_OTA) && defined(STM32F1) || defined(STM32F2) || defined(STM32F4) || defined(STM32F7)
 #define MG_OTA MG_OTA_STM32F
 #elif !defined(MG_OTA) && defined(STM32H5)
@@ -175,6 +179,8 @@ extern "C" {
 #elif !defined(MG_OTA) && defined(STM32H7)
 #define MG_OTA MG_OTA_STM32H7
 #endif
+// use HAL-defined execute-in-ram section
+#define MG_IRAM __attribute__((section(".RamFunc")))
 
 #ifndef STM32H5
 #define HAL_ICACHE_IsEnabled() 0
@@ -3486,6 +3492,12 @@ struct mg_tcpip_driver_stm32f_data {
 #define MG_DRIVER_MDC_CR 4
 #endif
 
+#if MG_ARCH == MG_ARCH_CUBE
+#define MG_NEIRQ NVIC_EnableIRQ(ETH_IRQn)
+#else 
+#define MG_NEIRQ
+#endif
+
 #define MG_TCPIP_DRIVER_INIT(mgr)                                 \
   do {                                                            \
     static struct mg_tcpip_driver_stm32f_data driver_data_;       \
@@ -3498,8 +3510,8 @@ struct mg_tcpip_driver_stm32f_data {
     mif_.driver = &mg_tcpip_driver_stm32f;                        \
     mif_.driver_data = &driver_data_;                             \
     MG_SET_MAC_ADDRESS(mif_.mac);                                 \
+    MG_NEIRQ;                                                     \
     mg_tcpip_init(mgr, &mif_);                                    \
-    NVIC_EnableIRQ(ETH_IRQn);                                     \
     MG_INFO(("Driver: stm32f, MAC: %M", mg_print_mac, mif_.mac)); \
   } while (0)
 
@@ -3546,6 +3558,12 @@ struct mg_tcpip_driver_stm32h_data {
 #define MG_DRIVER_MDC_CR 4
 #endif
 
+#if MG_ENABLE_DRIVER_STM32H && MG_ARCH == MG_ARCH_CUBE
+#define MG_NEIRQ NVIC_EnableIRQ(ETH_IRQn)
+#else 
+#define MG_NEIRQ
+#endif
+
 #define MG_TCPIP_DRIVER_INIT(mgr)                                 \
   do {                                                            \
     static struct mg_tcpip_driver_stm32h_data driver_data_;       \
@@ -3560,7 +3578,7 @@ struct mg_tcpip_driver_stm32h_data {
     mif_.driver_data = &driver_data_;                             \
     MG_SET_MAC_ADDRESS(mif_.mac);                                 \
     mg_tcpip_init(mgr, &mif_);                                    \
-    NVIC_EnableIRQ(ETH_IRQn);                                     \
+    MG_NEIRQ;                                                     \
     MG_INFO(("Driver: stm32h, MAC: %M", mg_print_mac, mif_.mac)); \
   } while (0)
 
