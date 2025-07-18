@@ -3048,7 +3048,7 @@ long mg_json_get_long(struct mg_str json, const char *path, long dflt) {
 
 
 
-int mg_log_level = MG_LL_INFO;
+int mg_log_level = MG_LL_DEBUG;
 static mg_pfn_t s_log_func = mg_pfn_stdout;
 static void *s_log_func_param = NULL;
 
@@ -19779,6 +19779,13 @@ bool mg_random(void *buf, size_t len) {
 #if MG_ARCH == MG_ARCH_ESP32
   while (len--) *p++ = (unsigned char) (esp_random() & 255);
   success = true;
+#elif MG_ARCH == MG_ARCH_CUBE && defined(HAL_RNG_MODULE_ENABLED)
+  extern RNG_HandleTypeDef hrng;
+  for (size_t n = 0; n < len; n += sizeof(uint32_t)) {
+    uint32_t r = HAL_RNG_ReadLastRandomNumber(&hrng);
+    memcpy((char *) buf + n, &r, n + sizeof(r) > len ? len - n : sizeof(r));
+  }
+  success = true;
 #elif MG_ARCH == MG_ARCH_PICOSDK
   while (len--) *p++ = (unsigned char) (get_rand_32() & 255);
   success = true;
@@ -19909,6 +19916,8 @@ uint64_t mg_millis(void) {
 #elif MG_ARCH == MG_ARCH_ESP8266 || MG_ARCH == MG_ARCH_ESP32 || \
     MG_ARCH == MG_ARCH_FREERTOS
   return xTaskGetTickCount() * portTICK_PERIOD_MS;
+#elif MG_ARCH == MG_ARCH_CUBE
+  return (uint64_t) HAL_GetTick();
 #elif MG_ARCH == MG_ARCH_THREADX
   return tx_time_get() * (1000 /* MS per SEC */ / TX_TIMER_TICKS_PER_SECOND);
 #elif MG_ARCH == MG_ARCH_TIRTOS
@@ -19942,10 +19951,6 @@ uint64_t mg_millis(void) {
   return ((uint64_t) ts.tv_sec * 1000 + (uint64_t) ts.tv_nsec / 1000000);
 #elif defined(ARDUINO)
   return (uint64_t) millis();
-#elif defined(__STM32H5xx_HAL_H) || defined(__STM32H7xx_HAL_H) || \
-      defined(__STM32F7xx_HAL_H) || defined(__STM32F4xx_HAL_H) || \
-      defined(__STM32F2xx_HAL_H) || defined(__STM32F1xx_HAL_H)
-  return (uint64_t) HAL_GetTick();  // Using STM32 HAL
 #else
   return (uint64_t) (time(NULL) * 1000);
 #endif

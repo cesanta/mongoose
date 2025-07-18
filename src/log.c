@@ -3,7 +3,7 @@
 #include "str.h"
 #include "util.h"
 
-int mg_log_level = MG_LL_INFO;
+int mg_log_level = MG_LL_DEBUG;
 static mg_pfn_t s_log_func = mg_pfn_stdout;
 static void *s_log_func_param = NULL;
 
