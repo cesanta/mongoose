@@ -407,6 +407,8 @@ static void rx_icmp(struct mg_tcpip_if *ifp, struct pkt *pkt) {
   }
 }
 
+static void setdns4(struct mg_tcpip_if *ifp, uint32_t *ip);
+
 static void rx_dhcp_client(struct mg_tcpip_if *ifp, struct pkt *pkt) {
   uint32_t ip = 0, gw = 0, mask = 0, lease = 0, dns = 0, sntp = 0;
   uint8_t msgtype = 0, state = ifp->state;
@@ -455,8 +457,10 @@ static void rx_dhcp_client(struct mg_tcpip_if *ifp, struct pkt *pkt) {
       ifp->state = MG_TCPIP_STATE_IP;  // BOUND state
       mg_random(&rand, sizeof(rand));
       srand((unsigned int) (rand + mg_millis()));
-      if (ifp->enable_req_dns && dns != 0)
+      if (ifp->enable_req_dns && dns != 0) {
+        setdns4(ifp, &dns);
         mg_tcpip_call(ifp, MG_TCPIP_EV_DHCP_DNS, &dns);
+      }
       if (ifp->enable_req_sntp && sntp != 0)
         mg_tcpip_call(ifp, MG_TCPIP_EV_DHCP_SNTP, &sntp);
     } else if (ifp->state == MG_TCPIP_STATE_READY && ifp->ip == ip) {  // renew
@@ -1117,6 +1121,7 @@ void mg_tcpip_init(struct mg_mgr *mgr, struct mg_tcpip_if *ifp) {
 void mg_tcpip_free(struct mg_tcpip_if *ifp) {
   mg_free(ifp->recv_queue.buf);
   mg_free(ifp->tx.buf);
+  mg_free(ifp->dns4_url);
 }
 
 static void send_syn(struct mg_connection *c) {
@@ -1281,6 +1286,21 @@ void mg_multicast_add(struct mg_connection *c, char *ip) {
   (void) ip;  // ip4_mcastmac(mcast_mac, &ip);
   // TODO(): actual IP -> MAC; check database, update
   c->mgr->ifp->update_mac_hash_table = true;  // mark dirty
+}
+
+bool mg_dnsc_init(struct mg_mgr *mgr, struct mg_dns *dnsc);
+
+static void setdns4(struct mg_tcpip_if *ifp, uint32_t *ip) {
+  struct mg_dns *dnsc;
+  mg_free(ifp->dns4_url);
+  ifp->dns4_url = mg_mprintf("udp://%M:53", mg_print_ip4, ip);
+  dnsc = &ifp->mgr->dns4;
+  dnsc->url = (const char *) ifp->dns4_url;
+  MG_DEBUG(("Set DNS URL to %s", dnsc->url));
+  if (ifp->mgr->use_dns6) return;
+  if (dnsc->c != NULL) mg_close_conn(dnsc->c);
+  if (!mg_dnsc_init(ifp->mgr, dnsc)) // create DNS connection
+    MG_ERROR(("DNS connection creation failed"));
 }
 
 #endif  // MG_ENABLE_TCPIP
