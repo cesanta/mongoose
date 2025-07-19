@@ -183,7 +183,7 @@ extern "C" {
 // use HAL-defined execute-in-ram section
 #define MG_IRAM __attribute__((section(".RamFunc")))
 
-#ifndef STM32H5
+#ifndef HAL_ICACHE_MODULE_ENABLED
 #define HAL_ICACHE_IsEnabled() 0
 #define HAL_ICACHE_Enable() (void) 0
 #define HAL_ICACHE_Disable() (void) 0
@@ -3494,9 +3494,9 @@ struct mg_tcpip_driver_stm32f_data {
 #endif
 
 #if MG_ARCH == MG_ARCH_CUBE
-#define MG_NEIRQ NVIC_EnableIRQ(ETH_IRQn)
-#else 
-#define MG_NEIRQ
+#define MG_ENABLE_ETH_IRQ() NVIC_EnableIRQ(ETH_IRQn)
+#else
+#define MG_ENABLE_ETH_IRQ()
 #endif
 
 #define MG_TCPIP_DRIVER_INIT(mgr)                                 \
@@ -3511,7 +3511,7 @@ struct mg_tcpip_driver_stm32f_data {
     mif_.driver = &mg_tcpip_driver_stm32f;                        \
     mif_.driver_data = &driver_data_;                             \
     MG_SET_MAC_ADDRESS(mif_.mac);                                 \
-    MG_NEIRQ;                                                     \
+    MG_ENABLE_ETH_IRQ();                                          \
     mg_tcpip_init(mgr, &mif_);                                    \
     MG_INFO(("Driver: stm32f, MAC: %M", mg_print_mac, mif_.mac)); \
   } while (0)
@@ -3560,9 +3560,9 @@ struct mg_tcpip_driver_stm32h_data {
 #endif
 
 #if MG_ENABLE_DRIVER_STM32H && MG_ARCH == MG_ARCH_CUBE
-#define MG_NEIRQ NVIC_EnableIRQ(ETH_IRQn)
-#else 
-#define MG_NEIRQ
+#define MG_ENABLE_ETH_IRQ() NVIC_EnableIRQ(ETH_IRQn)
+#else
+#define MG_ENABLE_ETH_IRQ()
 #endif
 
 #define MG_TCPIP_DRIVER_INIT(mgr)                                 \
@@ -3579,7 +3579,7 @@ struct mg_tcpip_driver_stm32h_data {
     mif_.driver_data = &driver_data_;                             \
     MG_SET_MAC_ADDRESS(mif_.mac);                                 \
     mg_tcpip_init(mgr, &mif_);                                    \
-    MG_NEIRQ;                                                     \
+    MG_ENABLE_ETH_IRQ();                                          \
     MG_INFO(("Driver: stm32h, MAC: %M", mg_print_mac, mif_.mac)); \
   } while (0)
 

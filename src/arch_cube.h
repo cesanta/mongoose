@@ -59,7 +59,7 @@
 // use HAL-defined execute-in-ram section
 #define MG_IRAM __attribute__((section(".RamFunc")))
 
-#ifndef STM32H5
+#ifndef HAL_ICACHE_MODULE_ENABLED
 #define HAL_ICACHE_IsEnabled() 0
 #define HAL_ICACHE_Enable() (void) 0
 #define HAL_ICACHE_Disable() (void) 0
