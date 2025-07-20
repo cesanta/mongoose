@@ -280,17 +280,17 @@ int mg_http_parse(const char *s, size_t len, struct mg_http_message *hm) {
   hm->uri.buf = (char *) s;
   while (s < end && (n = clen(s, end)) > 0) s += n, hm->uri.len += n;
   while (s < end && s[0] == ' ') s++;  // Skip spaces
-  is_response = hm->method.len > 5 &&
-                (mg_ncasecmp(hm->method.buf, "HTTP/", 5) == 0);
+  is_response =
+      hm->method.len > 5 && (mg_ncasecmp(hm->method.buf, "HTTP/", 5) == 0);
   if ((s = skiptorn(s, end, &hm->proto)) == NULL) return false;
   // If we're given a version, check that it is HTTP/x.x
-  version_prefix_valid = hm->proto.len > 5 &&
-                         (mg_ncasecmp(hm->proto.buf, "HTTP/", 5) == 0);
+  version_prefix_valid =
+      hm->proto.len > 5 && (mg_ncasecmp(hm->proto.buf, "HTTP/", 5) == 0);
   if (!is_response && hm->proto.len > 0 &&
-    (!version_prefix_valid || hm->proto.len != 8 ||
-    (hm->proto.buf[5] < '0' || hm->proto.buf[5] > '9') ||
-    (hm->proto.buf[6] != '.') ||
-    (hm->proto.buf[7] < '0' || hm->proto.buf[7] > '9'))) {
+      (!version_prefix_valid || hm->proto.len != 8 ||
+       (hm->proto.buf[5] < '0' || hm->proto.buf[5] > '9') ||
+       (hm->proto.buf[6] != '.') ||
+       (hm->proto.buf[7] < '0' || hm->proto.buf[7] > '9'))) {
     return -1;
   }
 
@@ -1040,7 +1040,7 @@ static void http_cb(struct mg_connection *c, int ev, void *ev_data) {
         c->pfn = NULL;
         return;
       }
-      if (ev == MG_EV_CLOSE) {           // If client did not set Content-Length
+      if (ev == MG_EV_CLOSE) {  // If client did not set Content-Length
         hm.message.len = c->recv.len - ofs;  // and closes now, deliver MSG
         hm.body.len = hm.message.len - (size_t) (hm.body.buf - hm.message.buf);
       }
@@ -1071,7 +1071,8 @@ static void http_cb(struct mg_connection *c, int ev, void *ev_data) {
         }
         if (require_content_len) {
           if (!c->is_client) mg_http_reply(c, 411, "", "");
-          MG_ERROR(("Content length missing from %s", is_response ? "response" : "request"));
+          MG_ERROR(("Content length missing from %s",
+                    is_response ? "response" : "request"));
         }
       }
 
@@ -1118,26 +1119,58 @@ static void http_cb(struct mg_connection *c, int ev, void *ev_data) {
   (void) ev_data;
 }
 
+// Helper function for mg_hfn, see below
+static void mg_hfn_push_data(struct mg_connection *c) {
+  size_t left = *(size_t *) c->data;  // Bytes left to send
+  if (left > 0 && c->send.len < MG_IO_SIZE) {
+    const char chunk[] = "abcdefghijklmnopqrstubwxyz0123456789\n";
+    size_t cs = sizeof(chunk) - 1;
+    while (left > cs && c->send.len < MG_IO_SIZE * 2) {
+      mg_send(c, chunk, cs);
+      left -= cs;
+    }
+    if (left < cs) {
+      if (left > 0) mg_send(c, chunk, left - 1);
+      if (left > 0) mg_send(c, "\n", 1);
+      left = 0;
+    }
+    *(size_t *) c->data = left;
+    if (left == 0) c->is_resp = 0;
+  }
+}
+
+// Implement a simple server with the following endpoints:
+//    URI       POST data        Description
+//    /debug    {"level": 0}     Set server debug level, from 0 to 4
+//    /quit     n/a              Return from mg_http_run_simple_server()
+//    /?SIZE    n/a              Send a text response, default size is 256
 static void mg_hfn(struct mg_connection *c, int ev, void *ev_data) {
   if (ev == MG_EV_HTTP_MSG) {
     struct mg_http_message *hm = (struct mg_http_message *) ev_data;
     if (mg_match(hm->uri, mg_str("/quit"), NULL)) {
       mg_http_reply(c, 200, "", "ok\n");
       c->is_draining = 1;
-      c->data[0] = 'X';
+      c->data[sizeof(size_t)] = 'X';
     } else if (mg_match(hm->uri, mg_str("/debug"), NULL)) {
       int level = (int) mg_json_get_long(hm->body, "$.level", MG_LL_DEBUG);
       mg_log_set(level);
       mg_http_reply(c, 200, "", "Debug level set to %d\n", level);
     } else {
-      mg_http_reply(c, 200, "", "hi\n");
+      size_t size = (size_t) mg_json_get_long(hm->query, "$", 256);
+      if (size == 0) size = 256;
+      *(size_t *) c->data = size;
+      c->is_resp = 1;
+      mg_printf(c, "HTTP/1.1 200 OK\nContent-Length: %lu\n\n", size);
+      mg_hfn_push_data(c);
     }
+  } else if (ev == MG_EV_WRITE) {
+    mg_hfn_push_data(c);
   } else if (ev == MG_EV_CLOSE) {
-    if (c->data[0] == 'X') *(bool *) c->fn_data = true;
+    if (c->data[sizeof(size_t)] == 'X') *(bool *) c->fn_data = true;
   }
 }
 
-void mg_hello(const char *url) {
+void mg_http_run_simple_server(const char *url) {
   struct mg_mgr mgr;
   bool done = false;
   mg_mgr_init(&mgr);
