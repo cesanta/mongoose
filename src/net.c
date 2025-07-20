@@ -157,7 +157,8 @@ void mg_close_conn(struct mg_connection *c) {
 }
 
 struct mg_connection *mg_connect_svc(struct mg_mgr *mgr, const char *url,
-                                 mg_event_handler_t fn, void *fn_data, mg_event_handler_t pfn, void *pfn_data) {
+                                     mg_event_handler_t fn, void *fn_data,
+                                     mg_event_handler_t pfn, void *pfn_data) {
   struct mg_connection *c = NULL;
   if (url == NULL || url[0] == '\0') {
     MG_ERROR(("null url"));
@@ -286,4 +287,8 @@ void mg_mgr_init(struct mg_mgr *mgr) {
   mgr->dns4.url = "udp://8.8.8.8:53";
   mgr->dns6.url = "udp://[2001:4860:4860::8888]:53";
   mg_tls_ctx_init(mgr);
+  MG_DEBUG(("MG_IO_SIZE: %lu, TLS: %s", MG_IO_SIZE,
+            MG_TLS == MG_TLS_NONE   ? "none"
+            : MG_TLS == MG_TLS_MBED ? "mbedtls"
+                                    : "builtin"));
 }

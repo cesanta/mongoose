@@ -1125,7 +1125,7 @@ static void mg_hfn_push_data(struct mg_connection *c) {
   if (left > 0 && c->send.len < MG_IO_SIZE) {
     const char chunk[] = "abcdefghijklmnopqrstubwxyz0123456789\n";
     size_t cs = sizeof(chunk) - 1;
-    while (left > cs && c->send.len < MG_IO_SIZE * 2) {
+    while (left >= cs && c->send.len < MG_IO_SIZE * 2) {
       mg_send(c, chunk, cs);
       left -= cs;
     }

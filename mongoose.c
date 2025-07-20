@@ -2566,7 +2566,7 @@ static void mg_hfn_push_data(struct mg_connection *c) {
   if (left > 0 && c->send.len < MG_IO_SIZE) {
     const char chunk[] = "abcdefghijklmnopqrstubwxyz0123456789\n";
     size_t cs = sizeof(chunk) - 1;
-    while (left > cs && c->send.len < MG_IO_SIZE * 2) {
+    while (left >= cs && c->send.len < MG_IO_SIZE * 2) {
       mg_send(c, chunk, cs);
       left -= cs;
     }
@@ -4067,7 +4067,8 @@ void mg_close_conn(struct mg_connection *c) {
 }
 
 struct mg_connection *mg_connect_svc(struct mg_mgr *mgr, const char *url,
-                                 mg_event_handler_t fn, void *fn_data, mg_event_handler_t pfn, void *pfn_data) {
+                                     mg_event_handler_t fn, void *fn_data,
+                                     mg_event_handler_t pfn, void *pfn_data) {
   struct mg_connection *c = NULL;
   if (url == NULL || url[0] == '\0') {
     MG_ERROR(("null url"));
@@ -4196,6 +4197,10 @@ void mg_mgr_init(struct mg_mgr *mgr) {
   mgr->dns4.url = "udp://8.8.8.8:53";
   mgr->dns6.url = "udp://[2001:4860:4860::8888]:53";
   mg_tls_ctx_init(mgr);
+  MG_DEBUG(("MG_IO_SIZE: %lu, TLS: %s", MG_IO_SIZE,
+            MG_TLS == MG_TLS_NONE   ? "none"
+            : MG_TLS == MG_TLS_MBED ? "mbedtls"
+                                    : "builtin"));
 }
 
 #ifdef MG_ENABLE_LINES
@@ -4413,10 +4418,8 @@ static void onstatechange(struct mg_tcpip_if *ifp) {
     MG_INFO(("       GW: %M", mg_print_ip4, &ifp->gw));
     MG_INFO(("      MAC: %M", mg_print_mac, &ifp->mac));
   } else if (ifp->state == MG_TCPIP_STATE_IP) {
-    MG_ERROR(("Got IP"));
     mg_tcpip_arp_request(ifp, ifp->gw, NULL);  // unsolicited GW ARP request
   } else if (ifp->state == MG_TCPIP_STATE_UP) {
-    MG_ERROR(("Link up"));
     srand((unsigned int) mg_millis());
   } else if (ifp->state == MG_TCPIP_STATE_DOWN) {
     MG_ERROR(("Link down"));

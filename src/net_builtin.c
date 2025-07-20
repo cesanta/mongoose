@@ -210,10 +210,8 @@ static void onstatechange(struct mg_tcpip_if *ifp) {
     MG_INFO(("       GW: %M", mg_print_ip4, &ifp->gw));
     MG_INFO(("      MAC: %M", mg_print_mac, &ifp->mac));
   } else if (ifp->state == MG_TCPIP_STATE_IP) {
-    MG_ERROR(("Got IP"));
     mg_tcpip_arp_request(ifp, ifp->gw, NULL);  // unsolicited GW ARP request
   } else if (ifp->state == MG_TCPIP_STATE_UP) {
-    MG_ERROR(("Link up"));
     srand((unsigned int) mg_millis());
   } else if (ifp->state == MG_TCPIP_STATE_DOWN) {
     MG_ERROR(("Link down"));
