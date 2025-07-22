@@ -49,7 +49,8 @@ echo
 # Setup DHCP server
 echo "Network configuration script: DHCP server"
 echo "Serving from $BRIDGE_IP"
-export HOST_IP = $BRIDGE_IP
+HOST_IP=$BRIDGE_IP
+export HOST_IP
 echo "dhcpd.conf:"
 cat test/dhcpd.conf
 echo
