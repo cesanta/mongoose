@@ -38,7 +38,7 @@ static void publish(struct mg_connection *c, const char *topic,
   MG_INFO(("%lu PUBLISHED %s -> %s", c->id, topic, message));
 }
 
-static void fn(struct mg_connection *c, int ev, void *ev_data) {
+static void mqtt_ev_handler(struct mg_connection *c, int ev, void *ev_data) {
   if (ev == MG_EV_OPEN) {
     MG_INFO(("%lu CREATED", c->id));
     // c->is_hexdumping = 1;
@@ -81,7 +81,7 @@ static void timer_fn(void *arg) {
                               .version = 4,
                               .message = mg_str("bye")};
   if (s_mqtt_conn == NULL) {
-    s_mqtt_conn = mg_mqtt_connect(mgr, s_url, &opts, fn, NULL);
+    s_mqtt_conn = mg_mqtt_connect(mgr, s_url, &opts, mqtt_ev_handler, NULL);
   } else {
     mg_mqtt_ping(s_mqtt_conn);
   }
