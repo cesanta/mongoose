@@ -3,7 +3,7 @@
 <package schemaVersion="1.7.2" xmlns:xs="http://www.w3.org/2001/XMLSchema-instance" xs:noNamespaceSchemaLocation="https://raw.githubusercontent.com/Open-CMSIS-Pack/Open-CMSIS-Pack-Spec/v1.7.7/schema/PACK.xsd">
   <vendor>Cesanta</vendor>
   <name>Mongoose</name>
-  <description>Mongoose Embedded Web server, HTTP/MQTT/Websocket library</description>
+  <description>A premium, all-in-one TCP/IP + TLS stack with embedded web server and HTTP/MQTT/Websocket API. Works in both RTOS and bare metal environment. Ideal for implementing device Web UI dashboards and cloud MQTT clients, see https://mongoose.ws</description>
   <url>https://mongoose.ws/downloads/armpack/</url>
   <supportContact>https://mongoose.ws/contact/</supportContact>
   <license>License.txt</license>
