@@ -16,7 +16,7 @@ static const char *s_url = "mqtt://broker.hivemq.com:1883";
 static const char *s_sub_topic = "mg/123/rx";  // Subscribe topic
 static const char *s_pub_topic = "mg/123/tx";  // Publish topic
 static int s_qos = 1;                          // MQTT QoS
-static struct mg_connection *s_conn;           // Client connection
+static struct mg_connection *s_mqtt_conn;      // Client connection
 
 static void subscribe(struct mg_connection *c, const char *topic) {
   struct mg_mqtt_opts opts = {};
@@ -67,7 +67,7 @@ static void fn(struct mg_connection *c, int ev, void *ev_data) {
     if (mm->cmd == MQTT_CMD_PINGREQ) mg_mqtt_pong(c);
   } else if (ev == MG_EV_CLOSE) {
     MG_INFO(("%lu CLOSED", c->id));
-    s_conn = NULL;  // Mark that we're closed
+    s_mqtt_conn = NULL;  // Mark that we're closed
   }
 }
 
@@ -80,10 +80,10 @@ static void timer_fn(void *arg) {
                               .keepalive = 5,
                               .version = 4,
                               .message = mg_str("bye")};
-  if (s_conn == NULL) {
-    s_conn = mg_mqtt_connect(mgr, s_url, &opts, fn, NULL);
+  if (s_mqtt_conn == NULL) {
+    s_mqtt_conn = mg_mqtt_connect(mgr, s_url, &opts, fn, NULL);
   } else {
-    mg_mqtt_ping(s_conn);
+    mg_mqtt_ping(s_mqtt_conn);
   }
 }
 
