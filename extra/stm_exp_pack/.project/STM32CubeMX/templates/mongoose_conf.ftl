@@ -1,11 +1,8 @@
 [#ftl]
 
-#if defined(MG_ARCH)
-#define MG_STMPACK_ARCH MG_ARCH
-#undef MG_ARCH
-#elif defined(__GNUC__)
-#define MG_STMPACK_ARCH MG_ARCH_NEWLIB
-#endif
+#define MG_ARCH MG_ARCH_CUBE
+
+#define MG_ENABLE_TCPIP 1
 
 [#list SWIPdatas as SWIP]  
   [#if SWIP.defines??]
@@ -17,18 +14,15 @@
 [/#list]
 
 // Translate to Mongoose macros
-#if MG_STMPACK_NET == 0
-#define MG_ENABLE_TCPIP 1
-#elif MG_STMPACK_NET == 1
-#define MG_ENABLE_LWIP 1
-#elif MG_STMPACK_NET == 2
-#define MG_ENABLE_FREERTOS_TCP 1
-#elif MG_STMPACK_NET == 3
-#define MG_ENABLE_RL 1
+#if MG_STMPACK_TLS == 0
+#define MG_TLS MG_TLS_NONE
+#elif MG_STMPACK_TLS == 1
+#define MG_TLS MG_TLS_BUILTIN
+#elif MG_STMPACK_TLS == 2
+#define MG_TLS MG_TLS_MBEDTLS
+#elif MG_STMPACK_TLS == 3
+#define MG_TLS MG_TLS_WOLFSSL
 #endif
 
-#if MG_ENABLE_PACKED_FS
-#define MG_ENABLE_POSIX_FS 0
-#endif
 
 // See https://mongoose.ws/documentation/#build-options
