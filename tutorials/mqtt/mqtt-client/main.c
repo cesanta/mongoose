@@ -1,27 +1,41 @@
-// Copyright (c) 2023 Cesanta Software Limited
+// Copyright (c) 2023-2025 Cesanta Software Limited
 // All rights reserved
 //
 // Example MQTT client. It performs the following steps:
 //    1. Connects to the MQTT server specified by `s_url` variable
 //    2. When connected, subscribes to the topic `s_sub_topic`
-//    3. Publishes message `hello` to the `s_pub_topic`
-//    4. Receives that message back from the subscribed topic and closes
-//    5. Timer-based reconnection logic revives the connection when it is down
+//    3. When it receives a message, echoes it back to `s_pub_topic`
+//    4. Timer-based reconnection logic revives the connection when it is down
+//    5. Ping server periodically. When disconnected, a last will is published
 //
 // To enable SSL/TLS, see https://mongoose.ws/tutorials/tls/#how-to-build
 
 #include "mongoose.h"
 
 static const char *s_url = "mqtt://broker.hivemq.com:1883";
-static const char *s_sub_topic = "mg/+/test";     // Subscribe topic
-static const char *s_pub_topic = "mg/clnt/test";  // Publish topic
-static int s_qos = 1;                             // MQTT QoS
-static struct mg_connection *s_conn;              // Client connection
+static const char *s_sub_topic = "mg/123/rx";  // Subscribe topic
+static const char *s_pub_topic = "mg/123/tx";  // Publish topic
+static int s_qos = 1;                          // MQTT QoS
+static struct mg_connection *s_conn;           // Client connection
 
-// Handle interrupts, like Ctrl-C
-static int s_signo;
-static void signal_handler(int signo) {
-  s_signo = signo;
+static void subscribe(struct mg_connection *c, const char *topic) {
+  struct mg_mqtt_opts opts = {};
+  memset(&opts, 0, sizeof(opts));
+  opts.topic = mg_str(topic);
+  opts.qos = s_qos;
+  mg_mqtt_sub(c, &opts);
+  MG_INFO(("%lu SUBSCRIBED to %s", c->id, topic));
+}
+
+static void publish(struct mg_connection *c, const char *topic,
+                    const char *message) {
+  struct mg_mqtt_opts opts = {};
+  memset(&opts, 0, sizeof(opts));
+  opts.topic = mg_str(topic);
+  opts.message = mg_str(message);
+  opts.qos = s_qos;
+  mg_mqtt_pub(c, &opts);
+  MG_INFO(("%lu PUBLISHED %s -> %s", c->id, topic, message));
 }
 
 static void fn(struct mg_connection *c, int ev, void *ev_data) {
@@ -39,28 +53,18 @@ static void fn(struct mg_connection *c, int ev, void *ev_data) {
     MG_ERROR(("%lu ERROR %s", c->id, (char *) ev_data));
   } else if (ev == MG_EV_MQTT_OPEN) {
     // MQTT connect is successful
-    struct mg_str subt = mg_str(s_sub_topic);
-    struct mg_str pubt = mg_str(s_pub_topic), data = mg_str("hello");
     MG_INFO(("%lu CONNECTED to %s", c->id, s_url));
-    struct mg_mqtt_opts sub_opts;
-    memset(&sub_opts, 0, sizeof(sub_opts));
-    sub_opts.topic = subt;
-    sub_opts.qos = s_qos;
-    mg_mqtt_sub(c, &sub_opts);
-    MG_INFO(("%lu SUBSCRIBED to %.*s", c->id, (int) subt.len, subt.buf));
-    struct mg_mqtt_opts pub_opts;
-    memset(&pub_opts, 0, sizeof(pub_opts));
-    pub_opts.topic = pubt;
-    pub_opts.message = data;
-    pub_opts.qos = s_qos, pub_opts.retain = false;
-    mg_mqtt_pub(c, &pub_opts);
-    MG_INFO(("%lu PUBLISHED %.*s -> %.*s", c->id, (int) data.len, data.buf,
-             (int) pubt.len, pubt.buf));
+    subscribe(c, s_sub_topic);
   } else if (ev == MG_EV_MQTT_MSG) {
     // When we get echo response, print it
+    char response[100];
     struct mg_mqtt_message *mm = (struct mg_mqtt_message *) ev_data;
-    MG_INFO(("%lu RECEIVED %.*s <- %.*s", c->id, (int) mm->data.len,
-             mm->data.buf, (int) mm->topic.len, mm->topic.buf));
+    mg_snprintf(response, sizeof(response), "Got %.*s -> %.*s", mm->topic.len,
+                mm->topic.buf, mm->data.len, mm->data.buf);
+    publish(c, s_pub_topic, response);
+  } else if (ev == MG_EV_MQTT_CMD) {
+    struct mg_mqtt_message *mm = (struct mg_mqtt_message *) ev_data;
+    if (mm->cmd == MQTT_CMD_PINGREQ) mg_mqtt_pong(c);
   } else if (ev == MG_EV_CLOSE) {
     MG_INFO(("%lu CLOSED", c->id));
     s_conn = NULL;  // Mark that we're closed
@@ -73,9 +77,14 @@ static void timer_fn(void *arg) {
   struct mg_mqtt_opts opts = {.clean = true,
                               .qos = s_qos,
                               .topic = mg_str(s_pub_topic),
+                              .keepalive = 5,
                               .version = 4,
                               .message = mg_str("bye")};
-  if (s_conn == NULL) s_conn = mg_mqtt_connect(mgr, s_url, &opts, fn, NULL);
+  if (s_conn == NULL) {
+    s_conn = mg_mqtt_connect(mgr, s_url, &opts, fn, NULL);
+  } else {
+    mg_mqtt_ping(s_conn);
+  }
 }
 
 int main(int argc, char *argv[]) {
@@ -102,13 +111,12 @@ int main(int argc, char *argv[]) {
     }
   }
 
-  signal(SIGINT, signal_handler);   // Setup signal handlers - exist event
-  signal(SIGTERM, signal_handler);  // manager loop on SIGINT and SIGTERM
-
   mg_mgr_init(&mgr);
   mg_timer_add(&mgr, 3000, MG_TIMER_REPEAT | MG_TIMER_RUN_NOW, timer_fn, &mgr);
-  while (s_signo == 0) mg_mgr_poll(&mgr, 1000);  // Event loop, 1s timeout
-  mg_mgr_free(&mgr);                             // Finished, cleanup
+  for (;;) {
+    mg_mgr_poll(&mgr, 1000);
+  }
+  mg_mgr_free(&mgr);
 
   return 0;
 }
