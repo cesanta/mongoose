@@ -65,15 +65,20 @@ static char *host_ip;
 
 static int s_num_tests = 0;
 
-#define ABORT()                                 \
-  usleep(500000); /* 500 ms, GH print reason */ \
+#ifdef NO_SLEEP_ABORT
+#define ABORT() abort()
+#else
+#define ABORT()                       \
+  sleep(2); /* 2s, GH print reason */ \
   abort();
+#endif
 
 #define ASSERT(expr)                                            \
   do {                                                          \
     s_num_tests++;                                              \
     if (!(expr)) {                                              \
       printf("FAILURE %s:%d: %s\n", __FILE__, __LINE__, #expr); \
+      fflush(stdout);                                           \
       ABORT();                                                  \
     }                                                           \
   } while (0)

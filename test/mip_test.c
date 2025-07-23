@@ -21,6 +21,7 @@ static int s_seg_sent = 0;
     s_num_tests++;                                              \
     if (!(expr)) {                                              \
       printf("FAILURE %s:%d: %s\n", __FILE__, __LINE__, #expr); \
+      fflush(stdout);                                           \
       ABORT();                                                  \
     }                                                           \
   } while (0)
