@@ -120,7 +120,7 @@ static bool if_poll(struct mg_tcpip_if *ifp, bool s1) {
 
 static size_t if_rx(void *buf, size_t len, struct mg_tcpip_if *ifp) {
   struct driver_data *driver_data = (struct driver_data *) ifp->driver_data;
-  if (!driver_data->len) return 0;
+  if (driver_data->len == 0) return 0;
   if (len > driver_data->len) len = driver_data->len;
   memcpy(buf, driver_data->buf, len);
   driver_data->len = 0;  // cleaning up the buffer
@@ -142,10 +142,10 @@ static void create_tcp_pkt(struct eth *e, struct ip *ip, uint32_t seq,
   t.ack = mg_htonl(ack);
   t.off = 5 << 4;
   memcpy(s_driver_data.buf, e, sizeof(*e));
+  ip->len = mg_htons((uint16_t)(sizeof(*ip) + sizeof(struct tcp) + payload_len));
   memcpy(s_driver_data.buf + sizeof(*e), ip, sizeof(*ip));
-  memcpy(s_driver_data.buf + sizeof(*e) + sizeof(*ip), &t, sizeof(struct tcp));
-  s_driver_data.len =
-      sizeof(*e) + sizeof(*ip) + sizeof(struct tcp) + payload_len;
+  memcpy(s_driver_data.buf + sizeof(*e) + sizeof(*ip), &t, sizeof(t));
+  s_driver_data.len = sizeof(*e) + sizeof(*ip) + sizeof(t) + payload_len;
 }
 
 static void init_tcp_handshake(struct eth *e, struct ip *ip, struct tcp *tcp,
@@ -199,13 +199,10 @@ static void test_retransmit(void) {
   // setting the IP header
   memset(&ip, 0, sizeof(ip));
   ip.ver = 4 << 4, ip.proto = 6;
-  ip.len = mg_htons(sizeof(ip) + sizeof(struct tcp));
 
   init_tcp_handshake(&e, &ip, t, &mgr);
 
   // packet with seq_no = 1001
-  ip.len =
-      mg_htons(sizeof(struct ip) + sizeof(struct tcp) + /* TCP Payload */ 2);
   create_tcp_pkt(&e, &ip, 1001, 1, TH_PUSH | TH_ACK, 2);
   mg_mgr_poll(&mgr, 0);
   while (!received_response(&s_driver_data)) mg_mgr_poll(&mgr, 0);
@@ -253,6 +250,39 @@ static void test_retransmit(void) {
   ASSERT((t->flags == TH_ACK));
   ASSERT((t->ack == mg_htonl(1005)));  // OK
 
+  // packet with seq_no = 1005 got delayed, send FIN with seq_no = 1007
+  create_tcp_pkt(&e, &ip, 1007, 1, TH_FIN, 0);
+  mg_mgr_poll(&mgr, 0);
+  start = mg_millis();
+  while (!received_response(&s_driver_data)) {
+    mg_mgr_poll(&mgr, 0);
+    now = mg_millis() - start;
+    if (now > 2 * MIP_TCP_ACK_MS)
+      ASSERT(0);  // response should have been received by now
+  }
+  t = (struct tcp *) (s_driver_data.buf + sizeof(struct eth) +
+                      sizeof(struct ip));
+  ASSERT((t->flags == TH_ACK));
+  ASSERT((t->ack == mg_htonl(1005)));  // dup ACK
+
+  // retransmitting packet with seq_no = 1005
+  create_tcp_pkt(&e, &ip, 1005, 1, TH_PUSH | TH_ACK, 2);
+  mg_mgr_poll(&mgr, 0);
+  while (!received_response(&s_driver_data)) mg_mgr_poll(&mgr, 0);
+  t = (struct tcp *) (s_driver_data.buf + sizeof(struct eth) +
+                      sizeof(struct ip));
+  ASSERT((t->flags == TH_ACK));
+  ASSERT((t->ack == mg_htonl(1007)));  // OK
+
+  // retransmitting FIN packet with seq_no = 1007
+  create_tcp_pkt(&e, &ip, 1007, 1, TH_FIN | TH_ACK, 0);
+  mg_mgr_poll(&mgr, 0);
+  while (!received_response(&s_driver_data)) mg_mgr_poll(&mgr, 0);
+  t = (struct tcp *) (s_driver_data.buf + sizeof(struct eth) +
+                      sizeof(struct ip));
+  ASSERT((t->flags == (TH_FIN | TH_ACK)));  // check we respond with FIN ACK
+  ASSERT((t->ack == mg_htonl(1008)));  // OK
+
   s_driver_data.len = 0;
   mg_mgr_free(&mgr);
 }
@@ -285,12 +315,10 @@ static void test_frag_recv_path(void) {
   // setting the IP header
   memset(&ip, 0, sizeof(ip));
   ip.ver = 0x45, ip.proto = 6;
-  ip.len = mg_htons(sizeof(ip) + sizeof(struct tcp));
 
   init_tcp_handshake(&e, &ip, t, &mgr);
 
   // send fragmented TCP packet
-  ip.len = mg_htons(sizeof(struct ip) + sizeof(struct tcp) + 1000);
   ip.frag |= IP_MORE_FRAGS_MSK;  // setting More Fragments bit to 1
   create_tcp_pkt(&e, &ip, 1001, 1, TH_PUSH | TH_ACK, 1000);
   s_sent_fragment = 1;           // "enable" fn

@@ -4836,10 +4836,16 @@ static void read_conn(struct mg_connection *c, struct pkt *pkt) {
   uint32_t rem_ip;
   memcpy(&rem_ip, c->rem.ip, sizeof(uint32_t));
   if (pkt->tcp->flags & TH_FIN) {
+    uint8_t flags = TH_ACK;
+    if (mg_ntohl(pkt->tcp->seq) != s->ack) {
+      MG_VERBOSE(("ignoring FIN, SEQ != ACK: %x %x", mg_ntohl(pkt->tcp->seq), s->ack));
+      tx_tcp(c->mgr->ifp, s->mac, rem_ip, TH_ACK, c->loc.port, c->rem.port,
+             mg_htonl(s->seq), mg_htonl(s->ack), "", 0);
+      return;
+    }
     // If we initiated the closure, we reply with ACK upon receiving FIN
     // If we didn't initiate it, we reply with FIN as part of the normal TCP
     // closure process
-    uint8_t flags = TH_ACK;
     s->ack = (uint32_t) (mg_htonl(pkt->tcp->seq) + pkt->pay.len + 1);
     s->fin_rcvd = true;
     if (c->is_draining && s->ttype == MIP_TTYPE_FIN) {
