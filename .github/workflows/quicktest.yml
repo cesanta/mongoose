@@ -335,360 +335,360 @@ jobs:
       - if: ${{ env.GO == 1 }}
         run: cd test/cube && make
 
-  test_f7:
-    runs-on: ubuntu-latest
-    env:
-      GO: 0
-    steps:
-    - uses: actions/checkout@v4
-      with: { fetch-depth: 2 }
-    - name: baremetal
-      run: |
-        if ./test/match_changed_files.sh "^src|tutorials/http/device-dashboard|tutorials/stm32/nucleo-f7.*-make-" ; then
-          echo GO=1 >> $GITHUB_ENV
-          sudo apt -y update && sudo apt -y install gcc-arm-none-eabi
-        fi
-    # always run baremetal on core or dashboard or specific example changes; other examples only on specific example changes
-    - if: ${{ env.GO == 1 }}
-      continue-on-error: true   # continue so next test has a chance to re-flash and exit from collisions and flash failures
-      run: |
-        if ./test/match_changed_files.sh '^src|tutorials/http/device-dashboard|tutorials/stm32/nucleo-f746zg-make-baremetal-builtin'; then
-          make -C tutorials/stm32/nucleo-f746zg-make-baremetal-builtin test VCON_API_KEY=${{secrets.VCON_API_KEY}}
-        fi
-    - if: ${{ env.GO == 1 }}
-      run: |
-        if ./test/match_changed_files.sh 'tutorials/stm32/nucleo-f746zg-make-freertos-builtin'; then
-          make -C tutorials/stm32/nucleo-f746zg-make-freertos-builtin test VCON_API_KEY=${{secrets.VCON_API_KEY}}
-        fi
-    - if: ${{ env.GO == 1 }}
-      run: |
-        if ./test/match_changed_files.sh 'tutorials/stm32/nucleo-f746zg-make-freertos-tcp'; then
-          make -C tutorials/stm32/nucleo-f746zg-make-freertos-tcp test VCON_API_KEY=${{secrets.VCON_API_KEY}}
-        fi
-    - name: Cube
-      run: |
-        echo GO=0 >> $GITHUB_ENV
-        if ./test/match_changed_files.sh 'tutorials/stm32/nucleo-f7.*-cube-'; then
-          echo GO=1 >> $GITHUB_ENV
-          # nothing specific to install or do
-        fi
-#    - if: ${{ env.GO == 1 }}
+#  test_f7:
+#    runs-on: ubuntu-latest
+#    env:
+#      GO: 0
+#    steps:
+#    - uses: actions/checkout@v4
+#      with: { fetch-depth: 2 }
+#    - name: baremetal
 #      run: |
-#        if ./test/match_changed_files.sh 'tutorials/stm32/nucleo-f746zg-cube-baremetal-builtin'; then
-#          make -C test/cube test PROJECTS=../../tutorials/stm32/nucleo-f746zg-cube-baremetal-builtin VCON_API_KEY=${{secrets.VCON_API_KEY}} DEVICE=5
+#        if ./test/match_changed_files.sh "^src|tutorials/http/device-dashboard|tutorials/stm32/nucleo-f7.*-make-" ; then
+#          echo GO=1 >> $GITHUB_ENV
+#          sudo apt -y update && sudo apt -y install gcc-arm-none-eabi
+#        fi
+#    # always run baremetal on core or dashboard or specific example changes; other examples only on specific example changes
+#    - if: ${{ env.GO == 1 }}
+#      continue-on-error: true   # continue so next test has a chance to re-flash and exit from collisions and flash failures
+#      run: |
+#        if ./test/match_changed_files.sh '^src|tutorials/http/device-dashboard|tutorials/stm32/nucleo-f746zg-make-baremetal-builtin'; then
+#          make -C tutorials/stm32/nucleo-f746zg-make-baremetal-builtin test VCON_API_KEY=${{secrets.VCON_API_KEY}}
 #        fi
 #    - if: ${{ env.GO == 1 }}
 #      run: |
-#        if ./test/match_changed_files.sh 'tutorials/stm32/nucleo-f746zg-cube-freertos-builtin'; then
-#          make -C test/cube test PROJECTS=../../tutorials/stm32/nucleo-f746zg-cube-freertos-builtin VCON_API_KEY=${{secrets.VCON_API_KEY}} DEVICE=5    
-#        fi
-    - if: ${{ env.GO == 1 }}
-      run: |
-        if ./test/match_changed_files.sh 'tutorials/stm32/nucleo-f746zg-cube-freertos-lwip'; then
-          make -C test/cube test PROJECTS=../../tutorials/stm32/nucleo-f746zg-cube-freertos-lwip VCON_API_KEY=${{secrets.VCON_API_KEY}} DEVICE=5
-        fi
-
-
-  test_f4:
-    runs-on: ubuntu-latest
-    env:
-      GO: 0
-    steps:
-    - uses: actions/checkout@v4
-      with: { fetch-depth: 2 }
-    - name: baremetal
-      run: |
-        if ./test/match_changed_files.sh "^src|tutorials/http/device-dashboard|tutorials/stm32/nucleo-f4.*-make-" ; then
-          echo GO=1 >> $GITHUB_ENV
-          sudo apt -y update && sudo apt -y install gcc-arm-none-eabi
-        fi
-    - if: ${{ env.GO == 1 }}
-      continue-on-error: true
-      run: |
-        if ./test/match_changed_files.sh '^src|tutorials/http/device-dashboard|tutorials/stm32/nucleo-f429zi-make-baremetal-builtin'; then
-          make -C tutorials/stm32/nucleo-f429zi-make-baremetal-builtin test VCON_API_KEY=${{secrets.VCON_API_KEY}}
-        fi
-    - if: ${{ env.GO == 1 }}
-      run: |
-        if ./test/match_changed_files.sh 'tutorials/stm32/nucleo-f429zi-make-freertos-builtin'; then
-          make -C tutorials/stm32/nucleo-f429zi-make-freertos-builtin test VCON_API_KEY=${{secrets.VCON_API_KEY}}
-        fi
-    - name: Cube
-      run: |
-        echo GO=0 >> $GITHUB_ENV
-        if ./test/match_changed_files.sh 'tutorials/stm32/nucleo-f4.*-cube-'; then
-          echo GO=1 >> $GITHUB_ENV
-          # nothing specific to install or do
-        fi
-#    - if: ${{ env.GO == 1 }}
-#      run: |
-#        if ./test/match_changed_files.sh 'tutorials/stm32/nucleo-f429zi-cube-baremetal-builtin'; then
-#          make -C test/cube test PROJECTS=../../tutorials/stm32/nucleo-f429zi-cube-baremetal-builtin VCON_API_KEY=${{secrets.VCON_API_KEY}} DEVICE=2
+#        if ./test/match_changed_files.sh 'tutorials/stm32/nucleo-f746zg-make-freertos-builtin'; then
+#          make -C tutorials/stm32/nucleo-f746zg-make-freertos-builtin test VCON_API_KEY=${{secrets.VCON_API_KEY}}
 #        fi
 #    - if: ${{ env.GO == 1 }}
 #      run: |
-#        if ./test/match_changed_files.sh 'tutorials/stm32/nucleo-f429zi-cube-freertos-builtin'; then
-#          make -C test/cube test PROJECTS=../../tutorials/stm32/nucleo-f429zi-cube-freertos-builtin VCON_API_KEY=${{secrets.VCON_API_KEY}} DEVICE=2
+#        if ./test/match_changed_files.sh 'tutorials/stm32/nucleo-f746zg-make-freertos-tcp'; then
+#          make -C tutorials/stm32/nucleo-f746zg-make-freertos-tcp test VCON_API_KEY=${{secrets.VCON_API_KEY}}
 #        fi
-    - if: ${{ env.GO == 1 }}
-      run: |
-        if ./test/match_changed_files.sh 'tutorials/stm32/nucleo-f429zi-cube-freertos-lwip'; then
-          make -C test/cube test PROJECTS=../../tutorials/stm32/nucleo-f429zi-cube-freertos-lwip VCON_API_KEY=${{secrets.VCON_API_KEY}} DEVICE=2
-        fi
-
-  test_h743:
-    runs-on: ubuntu-latest
-    env:
-      GO: 0
-    steps:
-    - uses: actions/checkout@v4
-      with: { fetch-depth: 3 }
-    - name: baremetal
-      run: |
-        if ./test/match_changed_files.sh "^src|tutorials/http/device-dashboard|tutorials/stm32/nucleo-h74.*-make-" ; then
-          echo GO=1 >> $GITHUB_ENV
-          sudo apt -y update && sudo apt -y install gcc-arm-none-eabi
-        fi
-    - if: ${{ env.GO == 1 }}
-      continue-on-error: true
-      run: |
-        if ./test/match_changed_files.sh '^src|tutorials/http/device-dashboard|tutorials/stm32/nucleo-h743zi-make-baremetal-builtin'; then
-        make -C tutorials/stm32/nucleo-h743zi-make-baremetal-builtin test VCON_API_KEY=${{secrets.VCON_API_KEY}}
-        fi
-    - if: ${{ env.GO == 1 }}
-      run: |
-        if ./test/match_changed_files.sh 'tutorials/stm32/nucleo-h743zi-make-freertos-builtin'; then
-          make -C tutorials/stm32/nucleo-h743zi-make-freertos-builtin test VCON_API_KEY=${{secrets.VCON_API_KEY}}
-        fi
 #    - name: Cube
 #      run: |
 #        echo GO=0 >> $GITHUB_ENV
-#        if ./test/match_changed_files.sh 'tutorials/stm32/nucleo-h74.*-cube-'; then
+#        if ./test/match_changed_files.sh 'tutorials/stm32/nucleo-f7.*-cube-'; then
 #          echo GO=1 >> $GITHUB_ENV
 #          # nothing specific to install or do
 #        fi
+##    - if: ${{ env.GO == 1 }}
+##      run: |
+##        if ./test/match_changed_files.sh 'tutorials/stm32/nucleo-f746zg-cube-baremetal-builtin'; then
+##          make -C test/cube test PROJECTS=../../tutorials/stm32/nucleo-f746zg-cube-baremetal-builtin VCON_API_KEY=${{secrets.VCON_API_KEY}} DEVICE=5
+##        fi
+##    - if: ${{ env.GO == 1 }}
+##      run: |
+##        if ./test/match_changed_files.sh 'tutorials/stm32/nucleo-f746zg-cube-freertos-builtin'; then
+##          make -C test/cube test PROJECTS=../../tutorials/stm32/nucleo-f746zg-cube-freertos-builtin VCON_API_KEY=${{secrets.VCON_API_KEY}} DEVICE=5    
+##        fi
 #    - if: ${{ env.GO == 1 }}
 #      run: |
-#        if ./test/match_changed_files.sh 'tutorials/stm32/nucleo-h743zi-cube-baremetal-builtin'; then
-#          make -C test/cube test PROJECTS=../../tutorials/stm32/nucleo-h743zi-cube-baremetal-builtin VCON_API_KEY=${{secrets.VCON_API_KEY}} DEVICE=6
+#        if ./test/match_changed_files.sh 'tutorials/stm32/nucleo-f746zg-cube-freertos-lwip'; then
+#          make -C test/cube test PROJECTS=../../tutorials/stm32/nucleo-f746zg-cube-freertos-lwip VCON_API_KEY=${{secrets.VCON_API_KEY}} DEVICE=5
+#        fi
+#
+#
+#  test_f4:
+#    runs-on: ubuntu-latest
+#    env:
+#      GO: 0
+#    steps:
+#    - uses: actions/checkout@v4
+#      with: { fetch-depth: 2 }
+#    - name: baremetal
+#      run: |
+#        if ./test/match_changed_files.sh "^src|tutorials/http/device-dashboard|tutorials/stm32/nucleo-f4.*-make-" ; then
+#          echo GO=1 >> $GITHUB_ENV
+#          sudo apt -y update && sudo apt -y install gcc-arm-none-eabi
+#        fi
+#    - if: ${{ env.GO == 1 }}
+#      continue-on-error: true
+#      run: |
+#        if ./test/match_changed_files.sh '^src|tutorials/http/device-dashboard|tutorials/stm32/nucleo-f429zi-make-baremetal-builtin'; then
+#          make -C tutorials/stm32/nucleo-f429zi-make-baremetal-builtin test VCON_API_KEY=${{secrets.VCON_API_KEY}}
 #        fi
 #    - if: ${{ env.GO == 1 }}
 #      run: |
-#        if ./test/match_changed_files.sh 'tutorials/stm32/nucleo-h743zi-cube-freertos-builtin'; then
-#          make -C test/cube test PROJECTS=../../tutorials/stm32/nucleo-h743zi-cube-freertos-builtin VCON_API_KEY=${{secrets.VCON_API_KEY}} DEVICE=6
+#        if ./test/match_changed_files.sh 'tutorials/stm32/nucleo-f429zi-make-freertos-builtin'; then
+#          make -C tutorials/stm32/nucleo-f429zi-make-freertos-builtin test VCON_API_KEY=${{secrets.VCON_API_KEY}}
 #        fi
-
-  test_h723:
-    runs-on: ubuntu-latest
-    env:
-      GO: 0
-    steps:
-    - uses: actions/checkout@v4
-      with: { fetch-depth: 3 }
-    - name: baremetal
-      run: |
-        if ./test/match_changed_files.sh "^src|tutorials/http/device-dashboard|tutorials/stm32/nucleo-h72.*-make-" ; then
-          echo GO=1 >> $GITHUB_ENV
-          sudo apt -y update && sudo apt -y install gcc-arm-none-eabi
-        fi
-    - if: ${{ env.GO == 1 }}
-      continue-on-error: true
-      run: |
-        if ./test/match_changed_files.sh '^src|tutorials/http/device-dashboard|tutorials/stm32/nucleo-h723zg-make-baremetal-builtin'; then
-          make -C tutorials/stm32/nucleo-h723zg-make-baremetal-builtin test VCON_API_KEY=${{secrets.VCON_API_KEY}}
-        fi
-    - if: ${{ env.GO == 1 }}
-      run: |
-        if ./test/match_changed_files.sh 'tutorials/stm32/nucleo-h723zg-make-freertos-builtin'; then
-          make -C tutorials/stm32/nucleo-h723zg-make-freertos-builtin test VCON_API_KEY=${{secrets.VCON_API_KEY}}
-        fi
-    
-  test_h5:
-    runs-on: ubuntu-latest
-    env:
-      GO: 0
-    steps:
-    - uses: actions/checkout@v4
-      with: { fetch-depth: 3 }
-    - name: baremetal
-      run: |
-        if ./test/match_changed_files.sh "^src|tutorials/http/device-dashboard|tutorials/stm32/nucleo-h5.*-make-" ; then
-          echo GO=1 >> $GITHUB_ENV
-          sudo apt -y update && sudo apt -y install gcc-arm-none-eabi
-        fi
-    - if: ${{ env.GO == 1 }}
-      continue-on-error: true
-      run: |
-        if ./test/match_changed_files.sh '^src|tutorials/http/device-dashboard|tutorials/stm32/nucleo-h563zi-make-baremetal-builtin'; then
-          make -C tutorials/stm32/nucleo-h563zi-make-baremetal-builtin test VCON_API_KEY=${{secrets.VCON_API_KEY}}
-        fi
-    - if: ${{ env.GO == 1 }}
-      run: |
-        if ./test/match_changed_files.sh 'tutorials/stm32/nucleo-h563zi-make-freertos-builtin'; then
-          make -C tutorials/stm32/nucleo-h563zi-make-freertos-builtin test VCON_API_KEY=${{secrets.VCON_API_KEY}}
-        fi
-
-  test_rt1020:
-    runs-on: ubuntu-latest
-    env:
-      GO: 0
-    steps:
-    - uses: actions/checkout@v4
-      with: { fetch-depth: 3 }
-    - name: baremetal
-      run: |
-        if ./test/match_changed_files.sh "^src|tutorials/http/device-dashboard|tutorials/nxp/rt1020.*-make-" ; then
-          echo GO=1 >> $GITHUB_ENV
-          sudo apt -y update && sudo apt -y install gcc-arm-none-eabi
-        fi
-    - if: ${{ env.GO == 1 }}
-      continue-on-error: true
-      run: |
-        if ./test/match_changed_files.sh '^src|tutorials/http/device-dashboard|tutorials/nxp/rt1020-evk-make-baremetal-builtin'; then
-          make -C tutorials/nxp/rt1020-evk-make-baremetal-builtin test VCON_API_KEY=${{secrets.VCON_API_KEY}}
-        fi
-    - if: ${{ env.GO == 1 }}
-      run: |
-        if ./test/match_changed_files.sh 'tutorials/nxp/rt1020-evk-make-freertos-builtin'; then
-          make -C tutorials/nxp/rt1020-evk-make-freertos-builtin test VCON_API_KEY=${{secrets.VCON_API_KEY}}
-        fi
-
-  test_rt1060:
-    runs-on: ubuntu-latest
-    env:
-      GO: 0
-    steps:
-    - uses: actions/checkout@v4
-      with: { fetch-depth: 3 }
-    - name: baremetal
-      run: |
-        if ./test/match_changed_files.sh "^src|tutorials/http/device-dashboard|tutorials/nxp/rt1060.*-make-" ; then
-          echo GO=1 >> $GITHUB_ENV
-          sudo apt -y update && sudo apt -y install gcc-arm-none-eabi
-        fi
-    - if: ${{ env.GO == 1 }}
-      continue-on-error: true
-      run: |
-        if ./test/match_changed_files.sh '^src|tutorials/http/device-dashboard|tutorials/nxp/rt1060-evk-make-baremetal-builtin'; then
-          make -C tutorials/nxp/rt1060-evk-make-baremetal-builtin test VCON_API_KEY=${{secrets.VCON_API_KEY}}
-        fi
-    - if: ${{ env.GO == 1 }}
-      run: |
-        if ./test/match_changed_files.sh 'tutorials/nxp/rt1060-evk-make-freertos-builtin'; then
-          make -C tutorials/nxp/rt1060-evk-make-freertos-builtin test VCON_API_KEY=${{secrets.VCON_API_KEY}}
-        fi
-
-  test_rt1170:
-    runs-on: ubuntu-latest
-    env:
-      GO: 0
-    steps:
-    - uses: actions/checkout@v4
-      with: { fetch-depth: 3 }
-    - name: baremetal
-      run: |
-        if ./test/match_changed_files.sh "^src|tutorials/http/device-dashboard|tutorials/nxp/rt1170.*-make-" ; then
-          echo GO=1 >> $GITHUB_ENV
-          sudo apt -y update && sudo apt -y install gcc-arm-none-eabi
-        fi
-    - if: ${{ env.GO == 1 }}
-      continue-on-error: true
-      run: |
-        if ./test/match_changed_files.sh '^src|tutorials/http/device-dashboard|tutorials/nxp/rt1170-evk-make-baremetal-builtin'; then
-          make -C tutorials/nxp/rt1170-evk-make-baremetal-builtin test VCON_API_KEY=${{secrets.VCON_API_KEY}}
-        fi
-    - if: ${{ env.GO == 1 }}
-      run: |
-        if ./test/match_changed_files.sh 'tutorials/nxp/rt1170-evk-make-freertos-builtin'; then
-          make -C tutorials/nxp/rt1170-evk-make-freertos-builtin test VCON_API_KEY=${{secrets.VCON_API_KEY}}
-        fi
-
-  test_ra6m4:
-    runs-on: ubuntu-latest
-    env:
-      GO: 0
-    steps:
-    - uses: actions/checkout@v4
-      with: { fetch-depth: 3 }
-    - name: baremetal
-      run: |
-        if ./test/match_changed_files.sh "^src|tutorials/http/device-dashboard|tutorials/renesas/ek-ra6m4.*-make-" ; then
-          echo GO=1 >> $GITHUB_ENV
-          sudo apt -y update && sudo apt -y install gcc-arm-none-eabi
-        fi
-    - if: ${{ env.GO == 1 }}
-      continue-on-error: true
-      run: |
-        if ./test/match_changed_files.sh '^src|tutorials/http/device-dashboard|tutorials/renesas/ek-ra6m4-make-baremetal-builtin'; then
-          make -C tutorials/renesas/ek-ra6m4-make-baremetal-builtin test VCON_API_KEY=${{secrets.VCON_API_KEY}}
-        fi
+#    - name: Cube
+#      run: |
+#        echo GO=0 >> $GITHUB_ENV
+#        if ./test/match_changed_files.sh 'tutorials/stm32/nucleo-f4.*-cube-'; then
+#          echo GO=1 >> $GITHUB_ENV
+#          # nothing specific to install or do
+#        fi
+##    - if: ${{ env.GO == 1 }}
+##      run: |
+##        if ./test/match_changed_files.sh 'tutorials/stm32/nucleo-f429zi-cube-baremetal-builtin'; then
+##          make -C test/cube test PROJECTS=../../tutorials/stm32/nucleo-f429zi-cube-baremetal-builtin VCON_API_KEY=${{secrets.VCON_API_KEY}} DEVICE=2
+##        fi
+##    - if: ${{ env.GO == 1 }}
+##      run: |
+##        if ./test/match_changed_files.sh 'tutorials/stm32/nucleo-f429zi-cube-freertos-builtin'; then
+##          make -C test/cube test PROJECTS=../../tutorials/stm32/nucleo-f429zi-cube-freertos-builtin VCON_API_KEY=${{secrets.VCON_API_KEY}} DEVICE=2
+##        fi
 #    - if: ${{ env.GO == 1 }}
 #      run: |
-#        if ./test/match_changed_files.sh 'tutorials/renesas/ek-ra6m4-make-freertos-builtin'; then
-#          make -C tutorials/renesas/ek-ra6m4-make-freertos-builtin test VCON_API_KEY=${{secrets.VCON_API_KEY}}
+#        if ./test/match_changed_files.sh 'tutorials/stm32/nucleo-f429zi-cube-freertos-lwip'; then
+#          make -C test/cube test PROJECTS=../../tutorials/stm32/nucleo-f429zi-cube-freertos-lwip VCON_API_KEY=${{secrets.VCON_API_KEY}} DEVICE=2
 #        fi
-
-  test_tm4c:
-    runs-on: ubuntu-latest
-    env:
-      GO: 0
-    steps:
-    - uses: actions/checkout@v4
-      with: { fetch-depth: 2 }
-    - name: baremetal
-      run: |
-        if ./test/match_changed_files.sh "^src|tutorials/http/device-dashboard|tutorials/ti/ek-tm4c.*-make-" ; then
-          echo GO=1 >> $GITHUB_ENV
-          sudo apt -y update && sudo apt -y install gcc-arm-none-eabi
-        fi
-    - if: ${{ env.GO == 1 }}
-      run: |
-        if ./test/match_changed_files.sh '^src|tutorials/http/device-dashboard|tutorials/ti/ek-tm4c1294xl-make-baremetal-builtin'; then
-          make -C tutorials/ti/ek-tm4c1294xl-make-baremetal-builtin test VCON_API_KEY=${{secrets.VCON_API_KEY}}
-        fi
-    - if: ${{ env.GO == 1 }}
-      run: |
-        if ./test/match_changed_files.sh 'tutorials/ti/ek-tm4c1294xl-make-freertos-builtin'; then
-          make -C tutorials/ti/ek-tm4c1294xl-make-freertos-builtin test VCON_API_KEY=${{secrets.VCON_API_KEY}}
-        fi
-
-  test_same54:
-    runs-on: ubuntu-latest
-    env:
-      GO: 0
-    steps:
-    - uses: actions/checkout@v4
-      with: { fetch-depth: 2 }
-    - name: baremetal
-      run: |
-        if ./test/match_changed_files.sh "^src|tutorials/http/device-dashboard|tutorials/mqtt/mqtt-client" ; then
-          echo GO=1 >> $GITHUB_ENV
-          sudo apt -y update && sudo apt -y install gcc-arm-none-eabi
-        fi
-    - if: ${{ env.GO == 1 }}
-      run: |
-        if ./test/match_changed_files.sh '^src|tutorials/http/device-dashboard'; then
-          make -C tutorials/http/device-dashboard/microchip/same54-xpro test VCON_API_KEY=${{secrets.VCON_API_KEY}}
-        fi
-    - if: ${{ env.GO == 1 }}
-      run: |
-        if ./test/match_changed_files.sh '^src|tutorials/mqtt/mqtt-client'; then
-          make -C tutorials/mqtt/mqtt-client/microchip/same54-xpro test VCON_API_KEY=${{secrets.VCON_API_KEY}}
-        fi
-
-  test_pico_w5500:
-    runs-on: ubuntu-latest
-    env:
-      GO: 0
-    steps:
-    - uses: actions/checkout@v4
-      with: { fetch-depth: 2 }
-    - name: SDK
-      run: |
-        if ./test/match_changed_files.sh "^src" ; then
-          echo GO=1 >> $GITHUB_ENV
-          sudo apt -y update && sudo apt -y install gcc-arm-none-eabi
-        fi
-    - if: ${{ env.GO == 1 }}
-      run:  make -C tutorials/pico-sdk/w5500-evb-pico-picosdk-baremetal-builtin test VCON_API_KEY=${{secrets.VCON_API_KEY}}
+#
+#  test_h743:
+#    runs-on: ubuntu-latest
+#    env:
+#      GO: 0
+#    steps:
+#    - uses: actions/checkout@v4
+#      with: { fetch-depth: 3 }
+#    - name: baremetal
+#      run: |
+#        if ./test/match_changed_files.sh "^src|tutorials/http/device-dashboard|tutorials/stm32/nucleo-h74.*-make-" ; then
+#          echo GO=1 >> $GITHUB_ENV
+#          sudo apt -y update && sudo apt -y install gcc-arm-none-eabi
+#        fi
+#    - if: ${{ env.GO == 1 }}
+#      continue-on-error: true
+#      run: |
+#        if ./test/match_changed_files.sh '^src|tutorials/http/device-dashboard|tutorials/stm32/nucleo-h743zi-make-baremetal-builtin'; then
+#        make -C tutorials/stm32/nucleo-h743zi-make-baremetal-builtin test VCON_API_KEY=${{secrets.VCON_API_KEY}}
+#        fi
+#    - if: ${{ env.GO == 1 }}
+#      run: |
+#        if ./test/match_changed_files.sh 'tutorials/stm32/nucleo-h743zi-make-freertos-builtin'; then
+#          make -C tutorials/stm32/nucleo-h743zi-make-freertos-builtin test VCON_API_KEY=${{secrets.VCON_API_KEY}}
+#        fi
+##    - name: Cube
+##      run: |
+##        echo GO=0 >> $GITHUB_ENV
+##        if ./test/match_changed_files.sh 'tutorials/stm32/nucleo-h74.*-cube-'; then
+##          echo GO=1 >> $GITHUB_ENV
+##          # nothing specific to install or do
+##        fi
+##    - if: ${{ env.GO == 1 }}
+##      run: |
+##        if ./test/match_changed_files.sh 'tutorials/stm32/nucleo-h743zi-cube-baremetal-builtin'; then
+##          make -C test/cube test PROJECTS=../../tutorials/stm32/nucleo-h743zi-cube-baremetal-builtin VCON_API_KEY=${{secrets.VCON_API_KEY}} DEVICE=6
+##        fi
+##    - if: ${{ env.GO == 1 }}
+##      run: |
+##        if ./test/match_changed_files.sh 'tutorials/stm32/nucleo-h743zi-cube-freertos-builtin'; then
+##          make -C test/cube test PROJECTS=../../tutorials/stm32/nucleo-h743zi-cube-freertos-builtin VCON_API_KEY=${{secrets.VCON_API_KEY}} DEVICE=6
+##        fi
+#
+#  test_h723:
+#    runs-on: ubuntu-latest
+#    env:
+#      GO: 0
+#    steps:
+#    - uses: actions/checkout@v4
+#      with: { fetch-depth: 3 }
+#    - name: baremetal
+#      run: |
+#        if ./test/match_changed_files.sh "^src|tutorials/http/device-dashboard|tutorials/stm32/nucleo-h72.*-make-" ; then
+#          echo GO=1 >> $GITHUB_ENV
+#          sudo apt -y update && sudo apt -y install gcc-arm-none-eabi
+#        fi
+#    - if: ${{ env.GO == 1 }}
+#      continue-on-error: true
+#      run: |
+#        if ./test/match_changed_files.sh '^src|tutorials/http/device-dashboard|tutorials/stm32/nucleo-h723zg-make-baremetal-builtin'; then
+#          make -C tutorials/stm32/nucleo-h723zg-make-baremetal-builtin test VCON_API_KEY=${{secrets.VCON_API_KEY}}
+#        fi
+#    - if: ${{ env.GO == 1 }}
+#      run: |
+#        if ./test/match_changed_files.sh 'tutorials/stm32/nucleo-h723zg-make-freertos-builtin'; then
+#          make -C tutorials/stm32/nucleo-h723zg-make-freertos-builtin test VCON_API_KEY=${{secrets.VCON_API_KEY}}
+#        fi
+#    
+#  test_h5:
+#    runs-on: ubuntu-latest
+#    env:
+#      GO: 0
+#    steps:
+#    - uses: actions/checkout@v4
+#      with: { fetch-depth: 3 }
+#    - name: baremetal
+#      run: |
+#        if ./test/match_changed_files.sh "^src|tutorials/http/device-dashboard|tutorials/stm32/nucleo-h5.*-make-" ; then
+#          echo GO=1 >> $GITHUB_ENV
+#          sudo apt -y update && sudo apt -y install gcc-arm-none-eabi
+#        fi
+#    - if: ${{ env.GO == 1 }}
+#      continue-on-error: true
+#      run: |
+#        if ./test/match_changed_files.sh '^src|tutorials/http/device-dashboard|tutorials/stm32/nucleo-h563zi-make-baremetal-builtin'; then
+#          make -C tutorials/stm32/nucleo-h563zi-make-baremetal-builtin test VCON_API_KEY=${{secrets.VCON_API_KEY}}
+#        fi
+#    - if: ${{ env.GO == 1 }}
+#      run: |
+#        if ./test/match_changed_files.sh 'tutorials/stm32/nucleo-h563zi-make-freertos-builtin'; then
+#          make -C tutorials/stm32/nucleo-h563zi-make-freertos-builtin test VCON_API_KEY=${{secrets.VCON_API_KEY}}
+#        fi
+#
+#  test_rt1020:
+#    runs-on: ubuntu-latest
+#    env:
+#      GO: 0
+#    steps:
+#    - uses: actions/checkout@v4
+#      with: { fetch-depth: 3 }
+#    - name: baremetal
+#      run: |
+#        if ./test/match_changed_files.sh "^src|tutorials/http/device-dashboard|tutorials/nxp/rt1020.*-make-" ; then
+#          echo GO=1 >> $GITHUB_ENV
+#          sudo apt -y update && sudo apt -y install gcc-arm-none-eabi
+#        fi
+#    - if: ${{ env.GO == 1 }}
+#      continue-on-error: true
+#      run: |
+#        if ./test/match_changed_files.sh '^src|tutorials/http/device-dashboard|tutorials/nxp/rt1020-evk-make-baremetal-builtin'; then
+#          make -C tutorials/nxp/rt1020-evk-make-baremetal-builtin test VCON_API_KEY=${{secrets.VCON_API_KEY}}
+#        fi
+#    - if: ${{ env.GO == 1 }}
+#      run: |
+#        if ./test/match_changed_files.sh 'tutorials/nxp/rt1020-evk-make-freertos-builtin'; then
+#          make -C tutorials/nxp/rt1020-evk-make-freertos-builtin test VCON_API_KEY=${{secrets.VCON_API_KEY}}
+#        fi
+#
+#  test_rt1060:
+#    runs-on: ubuntu-latest
+#    env:
+#      GO: 0
+#    steps:
+#    - uses: actions/checkout@v4
+#      with: { fetch-depth: 3 }
+#    - name: baremetal
+#      run: |
+#        if ./test/match_changed_files.sh "^src|tutorials/http/device-dashboard|tutorials/nxp/rt1060.*-make-" ; then
+#          echo GO=1 >> $GITHUB_ENV
+#          sudo apt -y update && sudo apt -y install gcc-arm-none-eabi
+#        fi
+#    - if: ${{ env.GO == 1 }}
+#      continue-on-error: true
+#      run: |
+#        if ./test/match_changed_files.sh '^src|tutorials/http/device-dashboard|tutorials/nxp/rt1060-evk-make-baremetal-builtin'; then
+#          make -C tutorials/nxp/rt1060-evk-make-baremetal-builtin test VCON_API_KEY=${{secrets.VCON_API_KEY}}
+#        fi
+#    - if: ${{ env.GO == 1 }}
+#      run: |
+#        if ./test/match_changed_files.sh 'tutorials/nxp/rt1060-evk-make-freertos-builtin'; then
+#          make -C tutorials/nxp/rt1060-evk-make-freertos-builtin test VCON_API_KEY=${{secrets.VCON_API_KEY}}
+#        fi
+#
+#  test_rt1170:
+#    runs-on: ubuntu-latest
+#    env:
+#      GO: 0
+#    steps:
+#    - uses: actions/checkout@v4
+#      with: { fetch-depth: 3 }
+#    - name: baremetal
+#      run: |
+#        if ./test/match_changed_files.sh "^src|tutorials/http/device-dashboard|tutorials/nxp/rt1170.*-make-" ; then
+#          echo GO=1 >> $GITHUB_ENV
+#          sudo apt -y update && sudo apt -y install gcc-arm-none-eabi
+#        fi
+#    - if: ${{ env.GO == 1 }}
+#      continue-on-error: true
+#      run: |
+#        if ./test/match_changed_files.sh '^src|tutorials/http/device-dashboard|tutorials/nxp/rt1170-evk-make-baremetal-builtin'; then
+#          make -C tutorials/nxp/rt1170-evk-make-baremetal-builtin test VCON_API_KEY=${{secrets.VCON_API_KEY}}
+#        fi
+#    - if: ${{ env.GO == 1 }}
+#      run: |
+#        if ./test/match_changed_files.sh 'tutorials/nxp/rt1170-evk-make-freertos-builtin'; then
+#          make -C tutorials/nxp/rt1170-evk-make-freertos-builtin test VCON_API_KEY=${{secrets.VCON_API_KEY}}
+#        fi
+#
+#  test_ra6m4:
+#    runs-on: ubuntu-latest
+#    env:
+#      GO: 0
+#    steps:
+#    - uses: actions/checkout@v4
+#      with: { fetch-depth: 3 }
+#    - name: baremetal
+#      run: |
+#        if ./test/match_changed_files.sh "^src|tutorials/http/device-dashboard|tutorials/renesas/ek-ra6m4.*-make-" ; then
+#          echo GO=1 >> $GITHUB_ENV
+#          sudo apt -y update && sudo apt -y install gcc-arm-none-eabi
+#        fi
+#    - if: ${{ env.GO == 1 }}
+#      continue-on-error: true
+#      run: |
+#        if ./test/match_changed_files.sh '^src|tutorials/http/device-dashboard|tutorials/renesas/ek-ra6m4-make-baremetal-builtin'; then
+#          make -C tutorials/renesas/ek-ra6m4-make-baremetal-builtin test VCON_API_KEY=${{secrets.VCON_API_KEY}}
+#        fi
+##    - if: ${{ env.GO == 1 }}
+##      run: |
+##        if ./test/match_changed_files.sh 'tutorials/renesas/ek-ra6m4-make-freertos-builtin'; then
+##          make -C tutorials/renesas/ek-ra6m4-make-freertos-builtin test VCON_API_KEY=${{secrets.VCON_API_KEY}}
+##        fi
+#
+#  test_tm4c:
+#    runs-on: ubuntu-latest
+#    env:
+#      GO: 0
+#    steps:
+#    - uses: actions/checkout@v4
+#      with: { fetch-depth: 2 }
+#    - name: baremetal
+#      run: |
+#        if ./test/match_changed_files.sh "^src|tutorials/http/device-dashboard|tutorials/ti/ek-tm4c.*-make-" ; then
+#          echo GO=1 >> $GITHUB_ENV
+#          sudo apt -y update && sudo apt -y install gcc-arm-none-eabi
+#        fi
+#    - if: ${{ env.GO == 1 }}
+#      run: |
+#        if ./test/match_changed_files.sh '^src|tutorials/http/device-dashboard|tutorials/ti/ek-tm4c1294xl-make-baremetal-builtin'; then
+#          make -C tutorials/ti/ek-tm4c1294xl-make-baremetal-builtin test VCON_API_KEY=${{secrets.VCON_API_KEY}}
+#        fi
+#    - if: ${{ env.GO == 1 }}
+#      run: |
+#        if ./test/match_changed_files.sh 'tutorials/ti/ek-tm4c1294xl-make-freertos-builtin'; then
+#          make -C tutorials/ti/ek-tm4c1294xl-make-freertos-builtin test VCON_API_KEY=${{secrets.VCON_API_KEY}}
+#        fi
+#
+#  test_same54:
+#    runs-on: ubuntu-latest
+#    env:
+#      GO: 0
+#    steps:
+#    - uses: actions/checkout@v4
+#      with: { fetch-depth: 2 }
+#    - name: baremetal
+#      run: |
+#        if ./test/match_changed_files.sh "^src|tutorials/http/device-dashboard|tutorials/mqtt/mqtt-client" ; then
+#          echo GO=1 >> $GITHUB_ENV
+#          sudo apt -y update && sudo apt -y install gcc-arm-none-eabi
+#        fi
+#    - if: ${{ env.GO == 1 }}
+#      run: |
+#        if ./test/match_changed_files.sh '^src|tutorials/http/device-dashboard'; then
+#          make -C tutorials/http/device-dashboard/microchip/same54-xpro test VCON_API_KEY=${{secrets.VCON_API_KEY}}
+#        fi
+#    - if: ${{ env.GO == 1 }}
+#      run: |
+#        if ./test/match_changed_files.sh '^src|tutorials/mqtt/mqtt-client'; then
+#          make -C tutorials/mqtt/mqtt-client/microchip/same54-xpro test VCON_API_KEY=${{secrets.VCON_API_KEY}}
+#        fi
+#
+#  test_pico_w5500:
+#    runs-on: ubuntu-latest
+#    env:
+#      GO: 0
+#    steps:
+#    - uses: actions/checkout@v4
+#      with: { fetch-depth: 2 }
+#    - name: SDK
+#      run: |
+#        if ./test/match_changed_files.sh "^src" ; then
+#          echo GO=1 >> $GITHUB_ENV
+#          sudo apt -y update && sudo apt -y install gcc-arm-none-eabi
+#        fi
+#    - if: ${{ env.GO == 1 }}
+#      run:  make -C tutorials/pico-sdk/w5500-evb-pico-picosdk-baremetal-builtin test VCON_API_KEY=${{secrets.VCON_API_KEY}}
 
