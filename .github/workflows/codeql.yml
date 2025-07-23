@@ -2,8 +2,8 @@ name: "CodeQL Scanning"
 # https://github.com/github/codeql-action
 
 on:
-  schedule:
-    - cron: '30 23 * * *' # run at 11:30 PM UTC
+  #schedule:
+  #  - cron: '30 23 * * *' # run at 11:30 PM UTC
   # Allow manual runs
   workflow_dispatch:
 
