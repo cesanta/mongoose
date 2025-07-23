@@ -42,21 +42,20 @@ static size_t tap_rx(void *buf, size_t len, struct mg_tcpip_if *ifp) {
   return (size_t) received;
 }
 
-char *s_dns = NULL, *s_sntp = NULL;
+char *s_sntp = NULL;
 
 static void mif_fn(struct mg_tcpip_if *ifp, int ev, void *ev_data) {
   if (ev == MG_TCPIP_EV_ST_CHG) {
     MG_INFO(("State change: %u", *(uint8_t *) ev_data));
   } else if (ev == MG_TCPIP_EV_DHCP_DNS) {
-    mg_free(s_dns);
-    s_dns = mg_mprintf("udp://%M:53", mg_print_ip4, (uint32_t *) ev_data);
-    ifp->mgr->dns4.url = s_dns;
-    MG_INFO(("Set DNS to %s", ifp->mgr->dns4.url));
+    MG_INFO(("Got DNS from DHCP: %M", mg_print_ip4, (uint32_t *) ev_data));
   } else if (ev == MG_TCPIP_EV_DHCP_SNTP) {
+    MG_INFO(("Got SNTP from DHCP: %M", mg_print_ip4, (uint32_t *) ev_data));
     mg_free(s_sntp);
     s_sntp = mg_mprintf("udp://%M:123", mg_print_ip4, (uint32_t *) ev_data);
-    MG_INFO(("Set SNTP to %s", s_sntp));
+    MG_INFO(("Set SNTP server to %s", s_sntp)); // though net.c may not use it.
   }
+  (void) ifp;
 }
 
 int main(int argc, char *argv[]) {
@@ -128,7 +127,6 @@ int main(int argc, char *argv[]) {
   web_init(&mgr);
   while (s_signo == 0) mg_mgr_poll(&mgr, 100);  // Infinite event loop
 
-  mg_free(s_dns);
   mg_free(s_sntp);
   mg_mgr_free(&mgr);
   close(fd);
