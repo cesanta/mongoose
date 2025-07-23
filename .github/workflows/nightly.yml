@@ -33,11 +33,11 @@ jobs:
     env:
       CC: ${{ matrix.cc }}
       SSL: ${{ matrix.ssl }}
-      TFLAGS: ${{ matrix.select }}
+      TFLAGS: ${{ matrix.select }} -DMQTT_LOCALHOST
     steps:
     - uses: actions/checkout@v4
       with: { fetch-depth: 2 }
-    - run: sudo apt -y update ; sudo apt -y install libmbedtls-dev libwolfssl-dev && make -C test ${{ matrix.target }}
+    - run: sudo apt -y update ; sudo apt -y install libmbedtls-dev libwolfssl-dev && test/setup_mqtt_server.sh && make -C test ${{ matrix.target }}
   mip:
     runs-on: ubuntu-latest
     strategy:
@@ -50,6 +50,7 @@ jobs:
     env:
       CC: ${{ matrix.cc }}
       SSL: ${{ matrix.ssl }}
+      TFLAGS: -DMQTT_LOCALHOST
     steps:
     - uses: actions/checkout@v4
       with: { fetch-depth: 2 }
@@ -73,10 +74,12 @@ jobs:
       matrix:
         ssl: ["", BUILTIN]
     name: S390 SSL=${{ matrix.ssl }}
+    env:
+      TFLAGS: -DMQTT_LOCALHOST
     steps:
     - uses: actions/checkout@v4
       with: { fetch-depth: 2 }
-    - run: sudo apt -y update ; sudo apt -y install binfmt-support qemu-user-static && docker run --rm --privileged multiarch/qemu-user-static --reset -p yes && make -C test s390 SSL=${{ matrix.ssl }} MULTIREC=NO
+    - run: sudo apt -y update ; sudo apt -y install binfmt-support qemu-user-static && ./test/setup_mqtt_server.sh && docker run --rm --privileged multiarch/qemu-user-static --reset -p yes && make -C test s390 SSL=${{ matrix.ssl }} MULTIREC=NO
   armhf:
     runs-on: ubuntu-latest
     strategy:
@@ -84,10 +87,12 @@ jobs:
       matrix:
         ssl: ["", BUILTIN]
     name: ArmHF SSL=${{ matrix.ssl }}
+    env:
+      TFLAGS: -DMQTT_LOCALHOST
     steps:
     - uses: actions/checkout@v4
       with: { fetch-depth: 2 }
-    - run: sudo apt -y update ; sudo apt -y install binfmt-support qemu-user-static && docker run --rm --privileged multiarch/qemu-user-static --reset -p yes && make -C test armhf SSL=${{ matrix.ssl }} MULTIREC=NO
+    - run: sudo apt -y update ; sudo apt -y install binfmt-support qemu-user-static && ./test/setup_mqtt_server.sh && docker run --rm --privileged multiarch/qemu-user-static --reset -p yes && make -C test armhf SSL=${{ matrix.ssl }} MULTIREC=NO
   unamalgamated-mg_prefix:
     runs-on: ubuntu-latest
     strategy:
@@ -107,11 +112,13 @@ jobs:
       matrix:
         ssl: ["", BUILTIN, MBEDTLS, OPENSSL, WOLFSSL]
     name: Valgrind SSL=${{ matrix.ssl }}
+    env:
+      TFLAGS: -DMQTT_LOCALHOST
     steps:
     - uses: actions/checkout@v4
       with: { fetch-depth: 2 }
     - run: sudo apt -y update ; sudo apt -y install libmbedtls-dev libwolfssl-dev valgrind
-    - run: make -C test valgrind SSL=${{ matrix.ssl }}
+    - run: ./test/setup_mqtt_server.sh && make -C test valgrind SSL=${{ matrix.ssl }}
   macos:
     runs-on: macos-latest
     strategy:
@@ -129,12 +136,13 @@ jobs:
     name: macos SSL=${{ matrix.ssl }} TFLAGS=${{ matrix.select }}
     env:
       SSL: ${{ matrix.ssl }}
-      TFLAGS: ${{ matrix.select }} -Wno-sign-conversion # Workaround for MbedTLS 3.5.0
+      TFLAGS: ${{ matrix.select }} -DMQTT_LOCALHOST -Wno-sign-conversion # Workaround for MbedTLS 3.5.0
       HOMEBREW_NO_AUTO_UPDATE: 1
     steps:
     - uses: actions/checkout@v4
       with: { fetch-depth: 2 }
-    - run: brew install mbedtls wolfssl # jq openssl already pre-installed
+    - run: brew install mbedtls wolfssl mosquitto # jq openssl already pre-installed
+    - run: /opt/homebrew/opt/mosquitto/sbin/mosquitto -c /Users/runner/work/mongoose/mongoose/test/mosquitto.conf.macos &
     - run: make -C test test ASAN_OPTIONS= MBEDTLS=$(echo $(brew --cellar)/mbedtls*/*) OPENSSL=$(echo $(brew --cellar)/openssl*/*) WOLFSSL=$(echo $(brew --cellar)/wolfssl*/*)
   windows:
     runs-on: ubuntu-latest
@@ -151,11 +159,11 @@ jobs:
     name: windows ${{ matrix.target }} SSL=${{ matrix.ssl }} TFLAGS=${{ matrix.select }}
     env:
       SSL: ${{ matrix.ssl }}
-      TFLAGS: ${{ matrix.select }}
+      TFLAGS: ${{ matrix.select }} -DMQTT_LOCALHOST
     steps:
     - uses: actions/checkout@v4
       with: { fetch-depth: 2 }
-    - run: make -C test ${{ matrix.target }} 
+    - run: ./test/setup_mqtt_server.sh && make -C test ${{ matrix.target }} 
   arm:
     runs-on: ubuntu-latest
     strategy:
@@ -186,7 +194,7 @@ jobs:
     name: tutorials ${{ matrix.ssl }}
     steps:
     - uses: actions/checkout@v4
-    - run: sudo apt -y install libpcap-dev
+    - run: sudo apt -y install libpcap-dev && npm -g i tailwindcss tailwindcss-font-inter
     - run: make -C test tutorials CFLAGS_EXTRA="${{ matrix.ssl }}"
     - run: make -C test clean_tutorials
   tutorials_win:

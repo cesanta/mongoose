@@ -20,9 +20,13 @@
 
 #include "driver_mock.c"
 
-#define MQTT_URL "mqtt://broker.hivemq.com:1883"  // MQTT broker URL
+#ifdef MQTT_LOCALHOST
+#define MQTT_URL "mqtt://127.0.0.1:1883"
+#else
+#define MQTT_URL "mqtt://broker.hivemq.com:1883"
+#endif
 #if MG_TLS == MG_TLS_BUILTIN
-#define MQTTS_URL "mqtts://mongoose.ws:8883"  // HiveMQ does not do TLS1.3
+#define MQTTS_URL "mqtts://mongoose.ws:8883"  // test requires TLS 1.3
 #define MQTTS_CA mg_str(s_ca_cert)
 static const char *s_ca_cert =
     "-----BEGIN CERTIFICATE-----\n"
@@ -57,8 +61,22 @@ static const char *s_ca_cert =
     "emyPxgcYxn/eR44/KJ4EBs+lVDR3veyJm+kXQ99b21/+jh5Xos1AnX5iItreGCc=\n"
     "-----END CERTIFICATE-----\n";
 #elif MG_TLS
-#define MQTTS_URL "mqtts://broker.hivemq.com:8883"  // MQTT broker URL
+#ifdef MQTT_LOCALHOST
+#define MQTTS_URL "mqtts://127.0.0.1:8883"
+#define MQTTS_CA mg_str(s_ca_cert)
+static const char *s_ca_cert =
+    "-----BEGIN CERTIFICATE-----\n"
+    "MIIBFTCBvAIJAMNTFtpfcq8NMAoGCCqGSM49BAMCMBMxETAPBgNVBAMMCE1vbmdv\n"
+    "b3NlMB4XDTI0MDUwNzE0MzczNloXDTM0MDUwNTE0MzczNlowEzERMA8GA1UEAwwI\n"
+    "TW9uZ29vc2UwWTATBgcqhkjOPQIBBggqhkjOPQMBBwNCAASuP+86T/rOWnGpEVhl\n"
+    "fxYZ+pjMbCmDZ+vdnP0rjoxudwRMRQCv5slRlDK7Lxue761sdvqxWr0Ma6TFGTNg\n"
+    "epsRMAoGCCqGSM49BAMCA0gAMEUCIQCwb2CxuAKm51s81S6BIoy1IcandXSohnqs\n"
+    "us64BAA7QgIgGGtUrpkgFSS0oPBlCUG6YPHFVw42vTfpTC0ySwAS0M4=\n"
+    "-----END CERTIFICATE-----\n";
+#else
+#define MQTTS_URL "mqtts://broker.hivemq.com:8883"
 #define MQTTS_CA mg_unpacked("/data/ca.pem")
+#endif // MQTT_LOCALHOST
 #endif
 
 static char *host_ip;

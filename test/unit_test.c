@@ -375,9 +375,13 @@ static void test_sntp(void) {
 #endif
 }
 
-#define MQTT_URL "mqtt://broker.hivemq.com:1883"  // MQTT broker URL
+#ifdef MQTT_LOCALHOST
+#define MQTT_URL "mqtt://127.0.0.1:1883"
+#else
+#define MQTT_URL "mqtt://broker.hivemq.com:1883"
+#endif
 #if MG_TLS == MG_TLS_BUILTIN
-#define MQTTS_URL "mqtts://mongoose.ws:8883"  // HiveMQ does not do TLS1.3
+#define MQTTS_URL "mqtts://mongoose.ws:8883"  // test requires TLS 1.3
 #define MQTTS_CA mg_str(s_ca_cert)
 static const char *s_ca_cert =
     "-----BEGIN CERTIFICATE-----\n"
@@ -412,8 +416,22 @@ static const char *s_ca_cert =
     "emyPxgcYxn/eR44/KJ4EBs+lVDR3veyJm+kXQ99b21/+jh5Xos1AnX5iItreGCc=\n"
     "-----END CERTIFICATE-----\n";
 #elif MG_TLS
-#define MQTTS_URL "mqtts://broker.hivemq.com:8883"  // MQTT broker URL
+#ifdef MQTT_LOCALHOST
+#define MQTTS_URL "mqtts://127.0.0.1:8883"
+#define MQTTS_CA mg_str(s_ca_cert)
+static const char *s_ca_cert =
+    "-----BEGIN CERTIFICATE-----\n"
+    "MIIBFTCBvAIJAMNTFtpfcq8NMAoGCCqGSM49BAMCMBMxETAPBgNVBAMMCE1vbmdv\n"
+    "b3NlMB4XDTI0MDUwNzE0MzczNloXDTM0MDUwNTE0MzczNlowEzERMA8GA1UEAwwI\n"
+    "TW9uZ29vc2UwWTATBgcqhkjOPQIBBggqhkjOPQMBBwNCAASuP+86T/rOWnGpEVhl\n"
+    "fxYZ+pjMbCmDZ+vdnP0rjoxudwRMRQCv5slRlDK7Lxue761sdvqxWr0Ma6TFGTNg\n"
+    "epsRMAoGCCqGSM49BAMCA0gAMEUCIQCwb2CxuAKm51s81S6BIoy1IcandXSohnqs\n"
+    "us64BAA7QgIgGGtUrpkgFSS0oPBlCUG6YPHFVw42vTfpTC0ySwAS0M4=\n"
+    "-----END CERTIFICATE-----\n";
+#else
+#define MQTTS_URL "mqtts://broker.hivemq.com:8883"
 #define MQTTS_CA mg_unpacked("/data/ca.pem")
+#endif // MQTT_LOCALHOST
 #endif
 
 struct mqtt_data {
@@ -438,8 +456,11 @@ static void mqtt_cb(struct mg_connection *c, int ev, void *ev_data) {
     struct mg_tls_opts opts;
     memset(&opts, 0, sizeof(opts));
     opts.ca = MQTTS_CA;
+#if defined( MQTT_LOCALHOST) && MG_TLS != MG_TLS_BUILTIN
+    MG_ERROR(("Hostname not tested"));
+#else
     opts.name = mg_url_host(MQTTS_URL);
-
+#endif
     mg_tls_init(c, &opts);
   } else
 #endif
@@ -468,35 +489,34 @@ static void mqtt_cb(struct mg_connection *c, int ev, void *ev_data) {
              mm->data.buf);
 
     if (mm->cmd == MQTT_CMD_PUBLISH && c->is_mqtt5) {
-      size_t pos = 0;
+      size_t pos = 0, i = 0, j = 0;
       struct mg_mqtt_prop prop;
 
-      ASSERT((pos = mg_mqtt_next_prop(mm, &prop, pos)) > 0);
-      ASSERT(prop.iv == 10 && prop.id == MQTT_PROP_MESSAGE_EXPIRY_INTERVAL);
-
-      ASSERT((pos = mg_mqtt_next_prop(mm, &prop, pos)) > 0);
-      ASSERT(prop.id == MQTT_PROP_PAYLOAD_FORMAT_INDICATOR);
-
-      ASSERT((pos = mg_mqtt_next_prop(mm, &prop, pos)) > 0);
-      ASSERT(prop.id == MQTT_PROP_CONTENT_TYPE);
-      ASSERT(strncmp(prop.val.buf, "test_content_val_2", prop.val.len) == 0 &&
-             prop.val.len == strlen("test_content_val_2"));
-
-      ASSERT((pos = mg_mqtt_next_prop(mm, &prop, pos)) > 0);
-      ASSERT(prop.id == MQTT_PROP_USER_PROPERTY);
-      ASSERT(strncmp(prop.key.buf, "test_key_1", prop.key.len) == 0 &&
-             prop.key.len == strlen("test_key_1"));
-      ASSERT(strncmp(prop.val.buf, "test_value_1", prop.val.len) == 0 &&
-             prop.val.len == strlen("test_value_1"));
-
-      ASSERT((pos = mg_mqtt_next_prop(mm, &prop, pos)) > 0);
-      ASSERT(prop.id == MQTT_PROP_USER_PROPERTY);
-      ASSERT(strncmp(prop.key.buf, "test_key_2", prop.key.len) == 0 &&
-             prop.key.len == strlen("test_key_2"));
-      ASSERT(strncmp(prop.val.buf, "test_value_2", prop.val.len) == 0 &&
-             prop.val.len == strlen("test_value_2"));
-
+      for (i = 0; i < 5 ; i++) {
+        ASSERT((pos = mg_mqtt_next_prop(mm, &prop, pos)) > 0);
+        if (prop.id == MQTT_PROP_MESSAGE_EXPIRY_INTERVAL) {
+          ASSERT(prop.iv == 10);
+          j += 1;
+        } else if (prop.id == MQTT_PROP_PAYLOAD_FORMAT_INDICATOR) {
+          j += 2;
+          continue;
+        } else if (prop.id == MQTT_PROP_CONTENT_TYPE) {
+          ASSERT(strncmp(prop.val.buf, "test_content_val_2", prop.val.len) == 0 && prop.val.len == strlen("test_content_val_2"));
+          j += 4;
+        } else if (prop.id == MQTT_PROP_USER_PROPERTY) {
+          if (strncmp(prop.key.buf, "test_key_1", prop.key.len) == 0 && prop.key.len == strlen("test_key_1")) {
+            ASSERT(strncmp(prop.val.buf, "test_value_1", prop.val.len) == 0 && prop.val.len == strlen("test_value_1"));
+            j += 8;
+          } else if (strncmp(prop.key.buf, "test_key_2", prop.key.len) == 0 && prop.key.len == strlen("test_key_2")) {
+            ASSERT(strncmp(prop.val.buf, "test_value_2", prop.val.len) == 0 && prop.val.len == strlen("test_value_2"));
+            j += 16;
+          } else {
+            ASSERT(0);
+          }
+        }
+      }
       ASSERT((pos = mg_mqtt_next_prop(mm, &prop, pos)) == 0);
+      ASSERT(j == 31);
     }
   }
   (void) c;
@@ -527,7 +547,7 @@ static void test_mqtt_base(void) {
   struct mqtt_data test_data = {buf, buf, 10, 10, 0};
   struct mg_mgr mgr;
   struct mg_connection *c;
-  const char *url = "mqtt://broker.hivemq.com:1883";
+  const char *url = MQTT_URL;
   int i;
   mg_mgr_init(&mgr);
 
@@ -572,7 +592,7 @@ static void test_mqtt_basic(void) {
 #if MG_TLS
   const char *url = MQTTS_URL;
 #else
-  const char *url = "mqtt://broker.hivemq.com:1883";
+  const char *url = MQTT_URL;
 #endif
   int i, retries;
 
@@ -651,7 +671,7 @@ static void test_mqtt_ver(uint8_t mqtt_version) {
   struct mg_connection *c;
   struct mg_mqtt_opts opts;
   struct mg_mqtt_prop properties[5];
-  const char *url = "mqtt://broker.hivemq.com:1883";
+  const char *url = MQTT_URL;
   int i, retries;
 
   MG_DEBUG(("ver: %u", mqtt_version));

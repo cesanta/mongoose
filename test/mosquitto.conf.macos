@@ -1,0 +1,7 @@
+allow_anonymous true
+listener 8883 127.0.0.1
+cafile /Users/runner/work/mongoose/mongoose/test/certs/ca.crt
+certfile /Users/runner/work/mongoose/mongoose/test/certs/server.crt
+keyfile /Users/runner/work/mongoose/mongoose/test/certs/server.key
+#
+listener 1883 127.0.0.1
