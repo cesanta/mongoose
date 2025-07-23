@@ -5,6 +5,8 @@ on:
       - "**Makefile"
       - "**.c"
       - "**.h"
+  # Allow manual runs
+  workflow_dispatch:
 env:
   IPV6: 0
 jobs:
