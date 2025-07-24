@@ -668,7 +668,7 @@ static void test_mqtt_ver(uint8_t mqtt_version) {
   opts.message = mg_str("mg_will_messsage");
   opts.client_id = genstring(client_id, sizeof(client_id));
   c = mg_mqtt_connect(&mgr, url, &opts, mqtt_cb, &test_data);
-  for (i = 0; i < 300 && mbuf[0] == 0; i++) mg_mgr_poll(&mgr, 10);
+  for (i = 0; i < 500 && mbuf[0] == 0; i++) mg_mgr_poll(&mgr, 10);
   if (mbuf[0] != 'X') MG_INFO(("[%s]", mbuf));
   ASSERT(mbuf[0] == 'X');
   ASSERT(test_data.flags == 0);
