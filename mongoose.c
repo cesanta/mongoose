@@ -4138,9 +4138,12 @@ void mg_mgr_init(struct mg_mgr *mgr) {
   mgr->dns6.url = "udp://[2001:4860:4860::8888]:53";
   mg_tls_ctx_init(mgr);
   MG_DEBUG(("MG_IO_SIZE: %lu, TLS: %s", MG_IO_SIZE,
-            MG_TLS == MG_TLS_NONE   ? "none"
-            : MG_TLS == MG_TLS_MBED ? "mbedtls"
-                                    : "builtin"));
+            MG_TLS == MG_TLS_NONE      ? "none"
+            : MG_TLS == MG_TLS_MBED    ? "MbedTLS"
+            : MG_TLS == MG_TLS_OPENSSL ? "OpenSSL"
+            : MG_TLS == MG_TLS_BUILTIN ? "builtin"
+            : MG_TLS == MG_TLS_WOLFSSL ? "WolfSSL"
+                                       : "custom"));
 }
 
 #ifdef MG_ENABLE_LINES
