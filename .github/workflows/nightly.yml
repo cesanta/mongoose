@@ -315,7 +315,6 @@ jobs:
       matrix:
         example:
           - path: mqtt/mqtt-client/microchip/same54-xpro
-          - path: nxp/nxp-mimxrt1020-azurertos
           - path: nxp/nxp-frdmk66f-freertos
           - path: nxp/nxp-lpcxpresso54s018m-freertos
           - path: nxp/nxp-mimxrt1020-freertos
