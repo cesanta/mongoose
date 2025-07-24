@@ -9,7 +9,8 @@ CWD ?= $(realpath $(CURDIR))
 ROOT_DIR = $(realpath $(CWD)/..)
 ENV ?=  -e Tmp=. -e WINEDEBUG=-all
 DOCKER_BIN ?= docker
-DOCKER ?= $(DOCKER_BIN) run --platform linux/amd64 --rm $(ENV) -v $(ROOT_DIR):$(ROOT_DIR) -w $(CWD)
+# use net=host so all tests have the same network and can access localhost and ad hoc services
+DOCKER ?= $(DOCKER_BIN) run --platform linux/amd64 --net=host --rm $(ENV) -v $(ROOT_DIR):$(ROOT_DIR) -w $(CWD)
 VCFLAGS ?= /nologo /W3 /O2 /MD /I.
 IPV6 ?= 1
 ASAN ?= -fsanitize=address,undefined,alignment -fno-sanitize-recover=all -fno-omit-frame-pointer -fno-common
@@ -164,17 +165,18 @@ misra:
 	cppcheck --addon=misra --clang -DMG_ENABLE_LINES=1 -DMG_ENABLE_SSI=1 mongoose.c  >>/tmp/x 2>&1
 	less /tmp/x
 
+# https://ddanilov.me/how-signals-are-handled-in-a-docker-container
 armhf: ASAN=
 armhf: IPV6=0
 armhf: CC = $(DOCKER) mdashnet/armhf cc
-armhf: RUN = $(DOCKER) mdashnet/armhf
+armhf: RUN = $(DOCKER) --init mdashnet/armhf
 armhf: test
 
 s390: ASAN=
 s390: IPV6=0
 s390: CFLAGS += -Wno-stringop-overflow
 s390: CC = $(DOCKER) mdashnet/s390 cc
-s390: RUN = $(DOCKER) mdashnet/s390
+s390: RUN = $(DOCKER) --init mdashnet/s390
 s390: test
 
 arm: DEFS += -DMG_ENABLE_POSIX_FS=0 -DMG_ENABLE_TCPIP=1 -DMG_ENABLE_TCPIP_DRIVER_INIT=0 -DMG_ARCH=MG_ARCH_ARMGCC -DNO_SLEEP_ABORT
