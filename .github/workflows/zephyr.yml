@@ -1,0 +1,26 @@
+name: Full build and test
+on:
+  schedule:
+    - cron: '0 0 * * *' # run at 12 AM UTC
+  # Allow manual runs
+  workflow_dispatch:
+jobs:
+  zephyr_examples:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        revno: ["--mr v3.7-branch"] # ["--mr v3.7-branch", "--mr v4.2.0"] # LTS, latest stable
+    name: Zephyr ${{ matrix.revno }}
+    steps:
+      - uses: actions/checkout@v4
+        with: { fetch-depth: 2 }
+      - run: sudo apt -y update && sudo apt -y install gcc-arm-none-eabi
+      - run: make -C tutorials/zephyr init REPO=zephyrprojectrtos/ci REVNO=${{ matrix.revno }}
+      - run: make -C tutorials/zephyr minify REVNO=${{ matrix.revno }}
+      - run: make -C tutorials/zephyr update
+      - run: make -C tutorials/zephyr/device-dashboard build
+      - run: make -C tutorials/zephyr/http-client build
+      - run: make -C tutorials/zephyr/http-server build
+      - run: make -C tutorials/zephyr/mqtt-aws-client build
+      - run: make -C tutorials/zephyr/websocket-server build

@@ -7,7 +7,6 @@ DOCKER_ZEPHYR_PATH = $(DOCKER_PROJECT_DIR)/$(ZEPHYR_DIR)
 
 DOCKER ?= docker run --rm -v $(PROJECT_PATH):$(DOCKER_PROJECT_PATH) -v $(ZEPHYR_PATH):$(DOCKER_ZEPHYR_PATH)
 REPO ?= zephyrprojectrtos/ci
-REVNO ?= --mr v3.7-branch
 
 # https://github.com/mikefarah/yq
 YQ ?= $(DOCKER) --user="root" mikefarah/yq
