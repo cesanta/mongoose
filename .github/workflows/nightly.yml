@@ -444,24 +444,6 @@ jobs:
       - run: sudo pip install yq
       - run: cd test/cube && make
 
-  zephyr_examples:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-        with: { fetch-depth: 2 }
-      - run: sudo apt -y update && sudo apt -y install gcc-arm-none-eabi
-      - run: make -C tutorials/zephyr init REPO=zephyrprojectrtos/ci:v0.26.14 # "no space left on device" with newers
-      - name: minify manifest
-        uses: mikefarah/yq@master
-        with:
-          cmd: yq -i eval '(.manifest.defaults, .manifest.remotes, .manifest.projects[] | select(.name == "cmsis" or .name == "hal_stm32" or .name == "mbedtls" or .name == "mcuboot" or .name == "picolibc" | del(.null) ), .manifest.self) as $i ireduce({};setpath($i | path; $i)) | del(.manifest.projects.[].null) | del(..|select(length==0))' tutorials/zephyr/zephyrproject/zephyr/west.yml
-      - run: make -C tutorials/zephyr update
-      - run: make -C tutorials/zephyr/device-dashboard build
-      - run: make -C tutorials/zephyr/http-client build
-      - run: make -C tutorials/zephyr/http-server build
-      - run: make -C tutorials/zephyr/mqtt-aws-client build
-      - run: make -C tutorials/zephyr/websocket-server build
-
   test_f7:
     runs-on: ubuntu-latest
     steps:

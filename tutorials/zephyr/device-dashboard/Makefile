@@ -17,8 +17,8 @@ zephyr:
 
 build:
 	cp $(TOP_DIR)/mongoose.[ch] src/
-	cp $(TOP_DIR)/examples/device-dashboard/net.[ch] src/
-	cp $(TOP_DIR)/examples/device-dashboard/packed_fs.c src/
+	cp $(TOP_DIR)/tutorials/http/device-dashboard/net.[ch] src/
+	cp $(TOP_DIR)/tutorials/http/device-dashboard/packed_fs.c src/
 	$(DOCKER) west build $(BUILD_ARGS) -p auto $(realpath $(CURDIR)) $(OVERLAY)
 
 run: DOCKER_ARGS ?= --cap-add=NET_ADMIN --device /dev/net/tun --net=host -it
