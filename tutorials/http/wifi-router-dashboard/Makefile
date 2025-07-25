@@ -23,11 +23,7 @@ all: $(PROG)              # Default target. Build and run program
 web_root/bundle.js:
 	curl -s https://npm.reversehttp.com/preact,preact/hooks,htm/preact,preact-router -o $@
 
-# npm -g i tailwindcss tailwindcss-font-inter
-web_root/main.css: web_root/index.html web_root/main.js
-	npx tailwindcss -o $@ --minify
-
-packed_fs.c: $(wildcard web_root/*) Makefile web_root/main.css web_root/bundle.js
+packed_fs.c: $(wildcard web_root/*) Makefile web_root/bundle.js
 	$(CC) ../../../test/pack.c -o $(PACK)
 	$(PACK) $(wildcard web_root/*) > $@
 

@@ -107,7 +107,6 @@ jobs:
     runs-on: ubuntu-latest
     steps:
     - uses: actions/checkout@v4
-    - run: npm -g i tailwindcss tailwindcss-font-inter
     - run: make -C test tutorials_essential
     - run: make -C test clean_tutorials_essential
   tutorials_win:
@@ -128,7 +127,6 @@ jobs:
     env: { HOMEBREW_NO_AUTO_UPDATE: 1 }
     steps:
     - uses: actions/checkout@v4
-    - run: npm -g i tailwindcss tailwindcss-font-inter
     - run: make -C test tutorials_mac
     - run: make -C test clean_tutorials_mac
 
