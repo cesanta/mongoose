@@ -24,7 +24,7 @@ run:
 	$(DOCKER) west build -t run
 
 clean:
-	-$(DOCKER) west build -t clean
+	-test -d $(CURDIR)/build && $(DOCKER) west build -t clean
 
 pristine:
 	-$(DOCKER) west build -t pristine

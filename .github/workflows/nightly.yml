@@ -194,7 +194,7 @@ jobs:
     name: tutorials ${{ matrix.ssl }}
     steps:
     - uses: actions/checkout@v4
-    - run: sudo apt -y install libpcap-dev && npm -g i tailwindcss tailwindcss-font-inter
+    - run: sudo apt -y install libpcap-dev
     - run: make -C test tutorials CFLAGS_EXTRA="${{ matrix.ssl }}"
     - run: make -C test clean_tutorials
   tutorials_win:
