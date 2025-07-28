@@ -92,7 +92,12 @@ static void timer_fn(void *arg) {
 // semaphore until this event handler releases it when the network is ready
 K_SEM_DEFINE(run, 0, 1);
 
-static void zeh(struct net_mgmt_event_callback *cb, uint32_t mgmt_event,
+static void zeh(struct net_mgmt_event_callback *cb,
+#if ZEPHYR_VERSION_CODE < 0x40000
+                uint32_t mgmt_event,
+#else
+                uint64_t mgmt_event,
+#endif
                 struct net_if *iface) {
   if (mgmt_event == NET_EVENT_L4_CONNECTED) k_sem_give(&run);
 }
