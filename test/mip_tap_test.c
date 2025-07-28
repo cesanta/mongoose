@@ -62,7 +62,7 @@ static const char *s_ca_cert =
     "-----END CERTIFICATE-----\n";
 #elif MG_TLS
 #ifdef MQTT_LOCALHOST
-#define MQTTS_URL "mqtts://127.0.0.1:8883"
+// we'll generate MQTTS_URL
 #define MQTTS_CA mg_str(s_ca_cert)
 static const char *s_ca_cert =
     "-----BEGIN CERTIFICATE-----\n"
@@ -264,14 +264,20 @@ static void test_http_client(struct mg_mgr *mgr) {
 static struct mg_connection *s_conn;
 static char s_topic[16];
 
+struct mqtt_data {
+  char *url;
+  bool passed;
+};
+
 static void mqtt_fn(struct mg_connection *c, int ev, void *ev_data) {
+  struct mqtt_data *data = (struct mqtt_data *) c->fn_data;
   if (ev == MG_EV_CONNECT) {
     MG_DEBUG(("CONNECT"));
 #if MG_TLS
     struct mg_tls_opts opts;
     memset(&opts, 0, sizeof(opts));
     opts.ca = MQTTS_CA;
-    opts.name = mg_url_host(MQTTS_URL);
+    opts.name = mg_url_host(data->url);
     mg_tls_init(c, &opts);
 #endif
   } else if (ev == MG_EV_MQTT_OPEN) {
@@ -305,7 +311,7 @@ static void mqtt_fn(struct mg_connection *c, int ev, void *ev_data) {
       // close on farewell
       MG_INFO(("%lu CLOSING", c->id));
       mg_mqtt_disconnect(c, NULL);
-      *(bool *) c->fn_data = true;
+      data->passed = true;
     } else if (mm->data.len == 21098) {
       struct mg_mqtt_opts pub_opts;
       ASSERT(memcmp((const char *) (size_t) mqtt_fn, mm->data.buf, 21098) == 0);
@@ -325,22 +331,40 @@ static void mqtt_fn(struct mg_connection *c, int ev, void *ev_data) {
 }
 
 static void test_mqtt_connsubpub(struct mg_mgr *mgr) {
-  bool passed = false;
+  struct mqtt_data data;
   struct mg_mqtt_opts opts;
   memset(&opts, 0, sizeof(opts));
   opts.clean = true, opts.version = 4;
-#if MG_TLS
-  s_conn = mg_mqtt_connect(mgr, MQTTS_URL, &opts, mqtt_fn, &passed);
-#else
-  s_conn = mg_mqtt_connect(mgr, MQTT_URL, &opts, mqtt_fn, &passed);
+  data.passed = false;
+#if defined(MQTT_LOCALHOST) && MG_TLS != MG_TLS_BUILTIN
+  if (host_ip == NULL) {
+    printf("\nMQTT_LOCALHOST defined but no HOST_IP provided, skipping MQTTS tests\n");
+    return;
+  }
+  printf("HOST_IP: %s\n", host_ip);
 #endif
+#if MG_TLS
+#if defined(MQTT_LOCALHOST) && MG_TLS != MG_TLS_BUILTIN
+  data.url = mg_mprintf("mqtts://%s:8883", host_ip);
+#else
+  data.url = strdup(MQTTS_URL);
+#endif
+#else
+#ifdef MQTT_LOCALHOST
+  data.url = mg_mprintf("mqtt://%s:1883", host_ip);
+#else
+  data.url = strdup(MQTT_URL);
+#endif
+#endif
+  s_conn = mg_mqtt_connect(mgr, data.url, &opts, mqtt_fn, &data);
   ASSERT(s_conn != NULL);
   for (int i = 0; i < 1000 && s_conn != NULL && !s_conn->is_closing; i++) {
     mg_mgr_poll(mgr, 0);
     usleep(10000);  // 10 ms. Slow down poll loop to ensure packets transit
   }
-  ASSERT(passed);
+  ASSERT(data.passed);
   mg_mgr_poll(mgr, 0);
+  free(data.url);
 }
 
 #include <pthread.h>
