@@ -2657,6 +2657,7 @@ int mg_rsa_mod_pow(const uint8_t *mod, size_t modsz, const uint8_t *exp, size_t 
 
 #if MG_TLS == MG_TLS_MBED
 #include <mbedtls/debug.h>
+#include <mbedtls/error.h>
 #include <mbedtls/net_sockets.h>
 #include <mbedtls/ssl.h>
 #include <mbedtls/ssl_ticket.h>

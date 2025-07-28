@@ -12,6 +12,13 @@
 #define MG_MBEDTLS_RNG_GET
 #endif
 
+static int mg_tls_err(struct mg_connection *c, int rc) {
+  char s[80];
+  mbedtls_strerror(rc, s, sizeof(s));
+  MG_ERROR(("%lu %s", ((struct mg_connection *) c)->id, s));
+  return rc;
+}
+
 static int mg_mbed_rng(void *ctx, unsigned char *buf, size_t len) {
   mg_random(buf, len);
   (void) ctx;
@@ -87,7 +94,7 @@ void mg_tls_handshake(struct mg_connection *c) {
     MG_VERBOSE(("%lu pending, %d%d %d (-%#x)", c->id, c->is_connecting,
                 c->is_tls_hs, rc, -rc));
   } else {
-    mg_error(c, "TLS handshake: -%#x", -rc);  // Error
+    mg_error(c, "TLS handshake: -%#x", -mg_tls_err(c, rc));  // Error
   }
 }
 
@@ -125,7 +132,7 @@ void mg_tls_init(struct mg_connection *c, const struct mg_tls_opts *opts) {
            &tls->conf,
            c->is_client ? MBEDTLS_SSL_IS_CLIENT : MBEDTLS_SSL_IS_SERVER,
            MBEDTLS_SSL_TRANSPORT_STREAM, MBEDTLS_SSL_PRESET_DEFAULT)) != 0) {
-    mg_error(c, "tls defaults %#x", -rc);
+    mg_error(c, "tls defaults %#x", -mg_tls_err(c, rc));
     goto fail;
   }
   mbedtls_ssl_conf_rng(&tls->conf, mg_mbed_rng, c);
@@ -149,7 +156,7 @@ void mg_tls_init(struct mg_connection *c, const struct mg_tls_opts *opts) {
   if (!mg_load_key(opts->key, &tls->pk)) goto fail;
   if (tls->cert.version &&
       (rc = mbedtls_ssl_conf_own_cert(&tls->conf, &tls->cert, &tls->pk)) != 0) {
-    mg_error(c, "own cert %#x", -rc);
+    mg_error(c, "own cert %#x", -mg_tls_err(c, rc));
     goto fail;
   }
 
@@ -160,7 +167,7 @@ void mg_tls_init(struct mg_connection *c, const struct mg_tls_opts *opts) {
 #endif
 
   if ((rc = mbedtls_ssl_setup(&tls->ssl, &tls->conf)) != 0) {
-    mg_error(c, "setup err %#x", -rc);
+    mg_error(c, "setup err %#x", -mg_tls_err(c, rc));
     goto fail;
   }
   c->is_tls = 1;

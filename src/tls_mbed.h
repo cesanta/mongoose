@@ -7,6 +7,7 @@
 
 #if MG_TLS == MG_TLS_MBED
 #include <mbedtls/debug.h>
+#include <mbedtls/error.h>
 #include <mbedtls/net_sockets.h>
 #include <mbedtls/ssl.h>
 #include <mbedtls/ssl_ticket.h>
