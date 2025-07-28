@@ -26,6 +26,11 @@ update:
 	$(DOCKER) $(REPO) /bin/sh -c 'cd $(DOCKER_ZEPHYR_PATH) && west update'
 
 minify:
+ifeq ("$(REVNO)","--mr v3.7-branch")
 	$(YQ) -i eval '(.manifest.defaults, .manifest.remotes, .manifest.projects[] | select(.name == "cmsis" or .name == "hal_stm32" or .name == "mbedtls" or .name == "mcuboot" or .name == "picolibc" | del(.null) ), .manifest.self) as $$i ireduce({};setpath($$i | path; $$i)) | del(.manifest.projects.[].null) | del(..|select(length==0))' zephyrproject/zephyr/west.yml
+endif
+#ifneq ("$(REVNO)","--mr v3.7-branch")
+#	$(YQ) -i eval '(.manifest.defaults, .manifest.remotes, .manifest.group-filter, .manifest.projects[] | select(.name == "cmsis" or .name == "hal_stm32" or .name == "mbedtls" or .name == "mcuboot" or .name == "picolibc" | del(.null) ), .manifest.self) as $$i ireduce({};setpath($$i | path; $$i)) | del(.manifest.projects.[].null) | del(..|select(length==0))' zephyrproject/zephyr/west.yml
+#endif
 
 zephyr: init minify update
