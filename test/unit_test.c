@@ -450,7 +450,6 @@ struct mqtt_data {
 static void mqtt_cb(struct mg_connection *c, int ev, void *ev_data) {
   struct mqtt_data *test_data = (struct mqtt_data *) c->fn_data;
   char *buf = test_data->msg;
-
 #if MG_TLS
   if (c->is_tls && ev == MG_EV_CONNECT) {
     struct mg_tls_opts opts;
@@ -759,9 +758,14 @@ static void test_mqtt_ver(uint8_t mqtt_version) {
 
 static void test_mqtt(void) {
   test_mqtt_base();
+#ifdef NO_MQTT_TESTS
+  MG_ERROR(("MQTT tests skipped on request"));
+  (void) test_mqtt_basic, (void) test_mqtt_ver;
+#else
   test_mqtt_basic();
   test_mqtt_ver(4);
   test_mqtt_ver(5);
+#endif
 }
 
 static void eh1(struct mg_connection *c, int ev, void *ev_data) {
@@ -3981,7 +3985,7 @@ int main(void) {
   test_http_range();
 #ifndef LOCALHOST_ONLY
   test_sntp();
-  test_mqtt();
+  test_mqtt();  // sorry, MQTT_LOCALHOST is also skipped 
   test_http_client();
 #else
   (void) test_sntp, (void) test_mqtt, (void) test_http_client;
