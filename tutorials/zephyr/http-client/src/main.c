@@ -93,7 +93,8 @@ static void timer_fn(void *arg) {
 K_SEM_DEFINE(run, 0, 1);
 
 static void zeh(struct net_mgmt_event_callback *cb,
-#if ZEPHYR_VERSION_CODE < 0x40000
+// https://docs.zephyrproject.org/latest/releases/migration-guide-4.2.html#networking
+#if ZEPHYR_VERSION_CODE < 0x40200
                 uint32_t mgmt_event,
 #else
                 uint64_t mgmt_event,
