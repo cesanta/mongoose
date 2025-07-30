@@ -46,6 +46,10 @@ jobs:
         cc: [gcc, clang, g++, clang++]
         target: [mip_test, mip_tap_test]
         ssl: ["", BUILTIN, MBEDTLS, OPENSSL, WOLFSSL]
+        # #3226: built-in TCP is currently not working with WolfSSL (builds fine)
+        exclude:
+        - ssl: WOLFSSL
+          target: mip_tap_test
     name: ${{ matrix.target }} CC=${{ matrix.cc }} SSL=${{ matrix.ssl }}
     env:
       CC: ${{ matrix.cc }}
