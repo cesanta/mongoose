@@ -12,7 +12,9 @@
 
 #if MG_TLS == MG_TLS_BUILTIN
 
+#ifndef CHACHA20
 #define CHACHA20 1
+#endif
 
 /* TLS 1.3 Record Content Type (RFC8446 B.1) */
 #define MG_TLS_CHANGE_CIPHER 20
