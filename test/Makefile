@@ -117,7 +117,7 @@ unamalgamated: $(HDRS) Makefile packed_fs.c
 fuzz: ASAN = -fsanitize=fuzzer,signed-integer-overflow,address,undefined
 fuzz: mongoose.c mongoose.h Makefile fuzz.c
 	$(CC) fuzz.c $(OPTS) $(WARN) $(INCS) $(TFLAGS) $(ASAN) -o fuzzer
-	$(RUN) ./fuzzer
+	$(RUN) ./fuzzer $(ARGS)
 
 FUZZDATA ?= /tmp/fuzzdata
 fuzz2: mongoose.c mongoose.h Makefile fuzz.c
@@ -127,7 +127,11 @@ fuzz2: mongoose.c mongoose.h Makefile fuzz.c
 fuzz_tls: ASAN = -fsanitize=fuzzer,signed-integer-overflow,address,undefined
 fuzz_tls: mongoose.c mongoose.h Makefile fuzz_tls.c
 	$(CC) fuzz_tls.c $(OPTS) $(WARN) $(INCS) $(TFLAGS) $(ASAN) -o fuzzer_tls
-	$(RUN) ./fuzzer_tls -max_len=17000
+	$(RUN) ./fuzzer_tls -max_len=17000 $(ARGS)
+
+fuzz_tls2: mongoose.c mongoose.h Makefile fuzz_tls.c
+	$(CC) fuzz_tls.c -DMAIN $(OPTS) $(WARN) $(ASAN) $(INCS) -o fuzzer_tls
+	$(RUN) ./fuzzer_tls $(FUZZDATA)
 
 
 

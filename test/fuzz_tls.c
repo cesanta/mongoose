@@ -1,3 +1,5 @@
+// https://llvm.org/docs/LibFuzzer.html
+
 #define MG_ENABLE_SOCKET 1
 #define MG_ENABLE_LOG 0
 #define MG_ENABLE_LINES 1
@@ -12,28 +14,40 @@ extern "C" int LLVMFuzzerTestOneInput(const uint8_t *, size_t);
 #else
 int LLVMFuzzerTestOneInput(const uint8_t *, size_t);
 #endif
-typedef int (*f)(struct mg_connection *);
 
-f f_[] = {
-  mg_tls_server_recv_hello,
-#if 0
-  mg_tls_client_recv_hello,
-  mg_tls_client_recv_ext, 
-  mg_tls_client_recv_cert,
-  mg_tls_client_recv_cert_verify
-#endif
+// Preprocessor magic, just add/remove functions here and leave the rest alone
+#define TABLE(_) \
+_(mg_tls_server_recv_hello) \
+//_(mg_tls_client_recv_hello) \
+//_(mg_tls_client_recv_ext ) \
+//_(mg_tls_client_recv_cert) \
+//_(mg_tls_client_recv_cert_verify) \
+// ... 
+
+struct f {
+  int (*f)(struct mg_connection *);
+  const char *name;
 };
 
+struct f f_[] = {
+#define ENTRY(func) { func, #func },
+TABLE(ENTRY)
+#undef ENTRY
+};
+// end of preprocessor magic
+
+
+
 int LLVMFuzzerTestOneInput(const uint8_t *data, size_t size) {
-  struct mg_connection c_[sizeof(f_)/sizeof(f)], *c = &c_[0];
-  struct tls_data tls_[sizeof(f_)/sizeof(f)];
+  struct mg_connection c_[sizeof(f_)/sizeof(struct f)], *c = &c_[0];
+  struct tls_data tls_[sizeof(f_)/sizeof(struct f)];
   int i;
   if (size == 0) return 0;
   mg_log_set(MG_LL_INFO);
   memset(c, 0, sizeof(*c));
   c->send.align = c->recv.align = c->rtls.align = MG_IO_SIZE;  
   c->is_tls = c->is_tls_hs = 1;
-  for (i = 0; i < (int)(sizeof(f_)/sizeof(f)); i++) {
+  for (i = 0; i < (int)(sizeof(f_)/sizeof(struct f)); i++) {
     struct mg_iobuf *io;
     c = &c_[i];
     io = &c->rtls;
@@ -47,7 +61,10 @@ int LLVMFuzzerTestOneInput(const uint8_t *data, size_t size) {
     memcpy(&io->buf[io->len], data, size);
     io->len += size;
     c->tls = &tls_[i];
-    f_[i](&c[i]);
+#ifdef PRINT_FUNCNAME
+    printf("CALLING %s\n", f_[i].name);
+#endif
+    f_[i].f(&c[i]);
     mg_iobuf_free(io);
   }
   

@@ -597,6 +597,7 @@ static int mg_tls_server_recv_hello(struct mg_connection *c) {
     uint16_t key_exchange_len;
     uint8_t *key_exchange;
     uint16_t n = MG_LOAD_BE16(ext + j + 2);
+    if (((uint32_t) n + j + 4) > ext_len) goto fail;
     if (MG_LOAD_BE16(ext + j) != 0x0033) {  // not a key share extension, ignore
       j += (uint16_t) (n + 4);
       continue;
