@@ -1,3 +1,5 @@
+// https://llvm.org/docs/LibFuzzer.html
+
 #define MG_ENABLE_SOCKET 0
 #define MG_ENABLE_LOG 0
 #define MG_ENABLE_LINES 1
