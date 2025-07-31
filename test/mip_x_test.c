@@ -196,6 +196,7 @@ static int fetch(struct mg_mgr *mgr, char *buf, const char *url,
   va_list ap;
   mg_mgr_poll(mgr, 0);  // update ifp->now to avoid ARP lookup using an old
                         // timestamp (from an ancient call in other test)
+  mg_mgr_poll(mgr, 0);  // (prior idling collects lots of frames)
   c = mg_http_connect(mgr, url, fcb, &fd);
   ASSERT(c != NULL);
   va_start(ap, fmt);
@@ -355,12 +356,13 @@ static void test_mqtt_connsubpub(struct mg_mgr *mgr) {
   data.url = strdup(MQTT_URL);
 #endif
 #endif // MG_TLS
-  mg_mgr_poll(mgr, 0); // update interface timing
+  mg_mgr_poll(mgr, 0); // update interface timing (*)
+  mg_mgr_poll(mgr, 0);
   s_conn = mg_mqtt_connect(mgr, data.url, &opts, mqtt_fn, &data);
   ASSERT(s_conn != NULL);
   for (int i = 0; i < 1000 && s_conn != NULL && !s_conn->is_closing; i++) {
     mg_mgr_poll(mgr, 0);
-    usleep(10000);  // 10 ms. Slow down poll loop to ensure packets transit
+    usleep(5000);  // 5 ms (*) See fetch() above for reasons
   }
   ASSERT(data.passed);
   mg_mgr_poll(mgr, 0);
@@ -400,11 +402,13 @@ static void test_mqtt_connsubpub(struct mg_mgr *mgr) {
 #endif
 #endif // MG_TLS
   data.passed = false;
+  mg_mgr_poll(mgr, 0); // update interface timing (*)
+  mg_mgr_poll(mgr, 0);
   s_conn = mg_mqtt_connect(mgr, data.url, &opts, mqtt_fn, &data);
   ASSERT(s_conn != NULL);
   for (int i = 0; i < 1000 && s_conn != NULL && !s_conn->is_closing; i++) {
     mg_mgr_poll(mgr, 0);
-    usleep(10000);  // 10 ms. Slow down poll loop to ensure packets transit
+    usleep(5000);  // 5 ms (*) See fetch() above for reasons
   }
   ASSERT(data.passed);
   mg_mgr_poll(mgr, 0);
