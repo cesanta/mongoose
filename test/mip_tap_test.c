@@ -179,14 +179,22 @@ static void fcb(struct mg_connection *c, int ev, void *ev_data) {
     if (mg_url_is_ssl(fd->url)) {
       struct mg_tls_opts opts;
       memset(&opts, 0, sizeof(opts));  // read CA from packed_fs
-      opts.name = mg_url_host(fd->url);
-      opts.ca = mg_unpacked("/data/ca.pem");
       if (host_ip != NULL && strstr(fd->url, host_ip) != NULL) {
         MG_DEBUG(("Local connection, using self-signed certificates"));
         opts.name = mg_str_s("localhost");
         opts.ca = mg_unpacked("/certs/ca.crt");
+      } else {
+        opts.name = mg_url_host(fd->url);
+        opts.ca = mg_unpacked("/data/ca.pem");
+#if MG_TLS == MG_TLS_BUILTIN
+        // our TLS does not search for the proper CA in a bundle
+        opts.ca = mg_file_read(&mg_fs_posix, "data/e5.crt");
+#endif
       }
       mg_tls_init(c, &opts);
+#if MG_TLS == MG_TLS_BUILTIN
+      mg_free((void *) opts.ca.buf);
+#endif
     }
   } else if (ev == MG_EV_HTTP_MSG) {
     struct mg_http_message *hm = (struct mg_http_message *) ev_data;
