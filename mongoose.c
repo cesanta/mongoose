@@ -11315,7 +11315,7 @@ static void mg_tls_encrypt(struct mg_connection *c, const uint8_t *msg,
   nonce[8] ^= (uint8_t) ((seq >> 24) & 255U);
   nonce[9] ^= (uint8_t) ((seq >> 16) & 255U);
   nonce[10] ^= (uint8_t) ((seq >> 8) & 255U);
-  nonce[11] ^= (uint8_t) ((seq) &255U);
+  nonce[11] ^= (uint8_t) ((seq) & 255U);
 
   mg_iobuf_add(wio, wio->len, hdr, sizeof(hdr));
   mg_iobuf_resize(wio, wio->len + encsz);
@@ -11394,7 +11394,7 @@ static int mg_tls_recv_record(struct mg_connection *c) {
   nonce[8] ^= (uint8_t) ((seq >> 24) & 255U);
   nonce[9] ^= (uint8_t) ((seq >> 16) & 255U);
   nonce[10] ^= (uint8_t) ((seq >> 8) & 255U);
-  nonce[11] ^= (uint8_t) ((seq) &255U);
+  nonce[11] ^= (uint8_t) ((seq) & 255U);
 #if MG_ENABLE_CHACHA20
   {
     uint8_t *dec = (uint8_t *) mg_calloc(1, msgsz);
@@ -11880,6 +11880,7 @@ struct mg_tls_cert {
   int is_ec_pubkey;
   struct mg_str sn;
   struct mg_str pubkey;
+  struct mg_der_tlv subj;
   struct mg_str sig;    // signature
   uint8_t tbshash[48];  // 32b for sha256/secp256, 48b for sha384/secp384
   size_t tbshashsz;     // actual TBS hash size
@@ -11985,6 +11986,7 @@ static int mg_tls_parse_cert_der(void *buf, size_t dersz,
 
   // subject
   if (mg_der_next(&tbs_cert, &field) <= 0 || field.type != 0x30) return -1;
+  cert->subj = field;
   mg_der_debug_cert_name("subject", &field);
 
   // subject public key info
@@ -12045,19 +12047,22 @@ static int mg_tls_parse_cert_der(void *buf, size_t dersz,
 static int mg_tls_verify_cert_san(const uint8_t *der, size_t dersz,
                                   const char *server_name) {
   struct mg_der_tlv root, field, name;
-  if (mg_der_parse((uint8_t *) der, dersz, &root) < 0 ||
-      mg_der_find_oid(&root, (uint8_t *) "\x55\x1d\x11", 3, &field) < 0) {
-    MG_ERROR(("failed to parse certificate to extract SAN"));
+  if (mg_der_parse((uint8_t *) der, dersz, &root) < 0) {
+    MG_ERROR(("failed to parse certificate"));
+    return -1;
+  }
+  if (mg_der_find_oid(&root, (uint8_t *) "\x55\x1d\x11", 3, &field) <= 0) {
+    MG_ERROR(("failed to extract SAN"));
     return -1;
   }
   if (mg_der_parse(field.value, field.len, &field) < 0) {
-    MG_ERROR(
-        ("certificate subject alternative names is not a constructed object"));
+    MG_ERROR(("SAN is not a constructed object"));
     return -1;
   }
   while (mg_der_next(&field, &name) > 0) {
-    if (mg_match(mg_str(server_name),
-                 mg_str_n((const char *) name.value, name.len), NULL)) {
+    MG_DEBUG(("Found SAN: %.*s", name.len, name.value));
+    if (mg_match(mg_str(server_name), mg_str_n((char *) name.value, name.len),
+                 NULL)) {
       // Found SAN that matches the host name
       return 1;
     }
@@ -12113,11 +12118,19 @@ static int mg_tls_verify_cert_signature(const struct mg_tls_cert *cert,
   }
 }
 
+static int mg_tls_verify_cert_cn(struct mg_der_tlv *subj, const char *host) {
+  struct mg_der_tlv v;
+  int matched = 0;
+  if (mg_der_find_oid(subj, (uint8_t *) "\x55\x04\x03", 3, &v) > 0) {
+    MG_DEBUG(("using CN: %.*s <-> %s", v.len, v.value, host));
+    matched = mg_match(mg_str(host), mg_str_n((char *) v.value, v.len), NULL);
+  }
+  return matched;
+}
+
 static int mg_tls_client_recv_cert(struct mg_connection *c) {
-  int subj_match = 0;
   struct tls_data *tls = (struct tls_data *) c->tls;
   unsigned char *recv_buf;
-  (void) subj_match;
 
   if (mg_tls_recv_record(c) < 0) {
     return -1;
@@ -12190,7 +12203,8 @@ static int mg_tls_client_recv_cert(struct mg_connection *c) {
       if (ci == certs) {
         // First certificate in the chain is peer cert, check SAN and store
         // public key for further CertVerify step
-        if (mg_tls_verify_cert_san(cert, certsz, tls->hostname) <= 0) {
+        if (mg_tls_verify_cert_san(cert, certsz, tls->hostname) <= 0 &&
+            mg_tls_verify_cert_cn(&ci->subj, tls->hostname) <= 0) {
           mg_error(c, "failed to verify hostname");
           return -1;
         }
@@ -12417,9 +12431,7 @@ static void mg_tls_client_handshake(struct mg_connection *c) {
       c->is_tls_hs = 0;
       mg_call(c, MG_EV_TLS_HS, NULL);
       break;
-    default:
-      mg_error(c, "unexpected client state: %d", tls->state);
-      break;
+    default: mg_error(c, "unexpected client state: %d", tls->state); break;
   }
 }
 
@@ -12446,9 +12458,7 @@ static void mg_tls_server_handshake(struct mg_connection *c) {
       tls->state = MG_TLS_STATE_SERVER_CONNECTED;
       c->is_tls_hs = 0;
       return;
-    default:
-      mg_error(c, "unexpected server state: %d", tls->state);
-      break;
+    default: mg_error(c, "unexpected server state: %d", tls->state); break;
   }
 }
 
