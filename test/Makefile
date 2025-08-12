@@ -179,7 +179,7 @@ armhf: test
 s390: ASAN=
 s390: IPV6=0
 s390: CFLAGS += -Wno-stringop-overflow
-s390: DEFS += -DCHACHA20=0
+s390: DEFS += -DMG_ENABLE_CHACHA20=0
 s390: CC = $(DOCKER) mdashnet/s390 cc
 s390: RUN = $(DOCKER) --init mdashnet/s390
 s390: test
