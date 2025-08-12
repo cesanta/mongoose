@@ -186,3 +186,7 @@
 #ifndef MG_ENABLE_TCPIP_PRINT_DEBUG_STATS
 #define MG_ENABLE_TCPIP_PRINT_DEBUG_STATS 0
 #endif
+
+#ifndef MG_ENABLE_CHACHA20
+#define MG_ENABLE_CHACHA20 1  // When set to 0, GCM is used. For MG_TLS_BUILTIN
+#endif
