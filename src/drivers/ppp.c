@@ -323,6 +323,6 @@ static size_t mg_ppp_rx(void *ethbuf, size_t ethlen, struct mg_tcpip_if *ifp) {
 }
 
 struct mg_tcpip_driver mg_tcpip_driver_ppp = {mg_ppp_init, mg_ppp_tx, mg_ppp_rx,
-                                              mg_ppp_up};
+                                              mg_ppp_poll};
 
 #endif
