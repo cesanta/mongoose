@@ -1511,7 +1511,13 @@ static void test_http_client(void) {
   mg_mgr_poll(&mgr, 0);
   ok = 0;
 #if MG_TLS
-  c = mg_http_connect(&mgr, "https://cesanta.com", f3, &ok);
+  url = "https://cesanta.com";
+  opts.name = mg_url_host(url);
+#if MG_TLS == MG_TLS_BUILTIN
+  // our TLS does not search for the proper CA in a bundle
+  opts.ca = mg_file_read(&mg_fs_posix, "data/e5.crt");
+#endif
+  c = mg_http_connect(&mgr, url, f3, &ok);
   ASSERT(c != NULL);
   mg_tls_init(c, &opts);
   for (i = 0; i < 1500 && ok <= 0; i++) mg_mgr_poll(&mgr, 1);
@@ -1519,8 +1525,8 @@ static void test_http_client(void) {
   ASSERT(ok == 200);
   mg_mgr_poll(&mgr, 1);
 
-  // Test failed host validation
-  c = mg_http_connect(&mgr, "https://cesanta.com", f3, &ok);
+  // Make host validationfail
+  c = mg_http_connect(&mgr, url, f3, &ok);
   ASSERT(c != NULL);
   opts.name = mg_str("dummy");  // Set some invalid hostname value
   mg_tls_init(c, &opts);
@@ -1529,13 +1535,16 @@ static void test_http_client(void) {
   MG_INFO(("OK: %d", ok));
   ASSERT(ok == 777);
   mg_mgr_poll(&mgr, 1);
+  opts.name = mg_url_host(url);
+#if MG_TLS == MG_TLS_BUILTIN
+  mg_free((void *) opts.ca.buf);
+#endif
 
   // Test empty CA
   // Disable mbedTLS: https://github.com/Mbed-TLS/mbedtls/issues/7075
 #if MG_TLS != MG_TLS_MBED
-  opts.name = mg_str("cesanta.com");
   opts.ca = mg_str("");
-  c = mg_http_connect(&mgr, "https://cesanta.com", f3, &ok);
+  c = mg_http_connect(&mgr, url, f3, &ok);
   mg_tls_init(c, &opts);
   ok = 0;
   for (i = 0; i < 1000 && ok <= 0; i++) mg_mgr_poll(&mgr, 10);
