@@ -205,11 +205,11 @@ vc22: Makefile mongoose.h $(SRCS)
 	$(DOCKER) mdashnet/vc22 wine64 $@.exe
 
 mingw: Makefile mongoose.h $(SRCS)
-	$(DOCKER) mdashnet/mingw x86_64-w64-mingw32-gcc $(SRCS) -W -Wall -Werror -I. $(DEFS) $(TFLAGS) -lwsock32 -lbcrypt -o $@.exe
+	$(DOCKER) mdashnet/mingw x86_64-w64-mingw32-gcc $(SRCS) -W -Wall -Werror -I. $(DEFS) $(TFLAGS) -lws2_32 -lbcrypt -o $@.exe
 	$(DOCKER) mdashnet/mingw wine64 $@.exe
 
 mingw++: Makefile mongoose.h $(SRCS)
-	$(DOCKER) mdashnet/mingw x86_64-w64-mingw32-g++ $(SRCS) -W -Wall -Werror -I. $(DEFS) $(TFLAGS) -lwsock32 -lbcrypt -o $@.exe
+	$(DOCKER) mdashnet/mingw x86_64-w64-mingw32-g++ $(SRCS) -W -Wall -Werror -I. $(DEFS) $(TFLAGS) -lws2_32 -lbcrypt -o $@.exe
 	@echo "NOT RUNNING"
 
 linux-libs: CFLAGS += -fPIC
