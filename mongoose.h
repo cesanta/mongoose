@@ -558,6 +558,17 @@ static inline int mg_mkdir(const char *path, mode_t mode) {
 #define _CRT_RAND_S
 #endif
 
+#ifndef _WIN32_WINNT
+#if defined(_MSC_VER) && _MSC_VER < 1700
+#define _WIN32_WINNT 0x0400 // Let vc98 pick up wincrypt.h
+#else
+#define _WIN32_WINNT 0x0600
+#endif
+#endif
+#ifndef WINVER
+#define WINVER _WIN32_WINNT
+#endif
+
 #ifndef WIN32_LEAN_AND_MEAN
 #define WIN32_LEAN_AND_MEAN
 #endif
@@ -585,6 +596,8 @@ static inline int mg_mkdir(const char *path, mode_t mode) {
 #include <sys/types.h>
 #include <time.h>
 
+#include <winsock2.h>       // fix missing macros and types
+
 #if defined(_MSC_VER) && _MSC_VER < 1700
 #define __func__ ""
 typedef __int64 int64_t;
@@ -606,13 +619,9 @@ typedef enum { false = 0, true = 1 } bool;
 
 #include <process.h>
 #include <winerror.h>
-#include <winsock2.h>       // fix missing macros and types
 
 // For mg_random()
 #if defined(_MSC_VER) && _MSC_VER < 1700
-#ifndef _WIN32_WINNT
-#define _WIN32_WINNT 0x400  // Let vc98 pick up wincrypt.h
-#endif
 #include <wincrypt.h>
 #pragma comment(lib, "advapi32.lib")
 #endif
