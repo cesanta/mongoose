@@ -30,8 +30,7 @@ static void fn(struct mg_connection *c, int ev, void *ev_data) {
     struct mg_str host = mg_url_host(s_url);
 
     if (c->is_tls) {
-      struct mg_tls_opts opts = {.ca = s_ca_pem,
-                                 .name = mg_url_host(s_url)};
+      struct mg_tls_opts opts = {.ca = s_ca_pem, .name = mg_url_host(s_url)};
       mg_tls_init(c, &opts);
     }
 
@@ -50,7 +49,7 @@ static void fn(struct mg_connection *c, int ev, void *ev_data) {
     // Response is received. Print it
     struct mg_http_message *hm = (struct mg_http_message *) ev_data;
     printf("%.*s", (int) hm->message.len, hm->message.buf);
-    c->is_closing = 1;            // Tell mongoose to close this connection
+    c->is_draining = 1;           // Tell mongoose to close this connection
     *(bool *) c->fn_data = true;  // Tell event loop to stop
   } else if (ev == MG_EV_ERROR) {
     *(bool *) c->fn_data = true;  // Error, tell event loop to stop
