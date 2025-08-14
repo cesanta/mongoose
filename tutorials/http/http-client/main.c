@@ -11,6 +11,7 @@
 
 // The very first web page in history. You can replace it from command line
 static const char *s_url = "http://info.cern.ch/";
+static struct mg_str s_ca_pem;              // CA PEM file
 static const char *s_post_data = NULL;      // POST data
 static const uint64_t s_timeout_ms = 1500;  // Connect timeout in milliseconds
 
@@ -29,8 +30,7 @@ static void fn(struct mg_connection *c, int ev, void *ev_data) {
     struct mg_str host = mg_url_host(s_url);
 
     if (c->is_tls) {
-      struct mg_tls_opts opts = {.ca = mg_unpacked("/certs/ca.pem"),
-                                 .name = mg_url_host(s_url)};
+      struct mg_tls_opts opts = {.ca = s_ca_pem, .name = mg_url_host(s_url)};
       mg_tls_init(c, &opts);
     }
 
@@ -49,7 +49,7 @@ static void fn(struct mg_connection *c, int ev, void *ev_data) {
     // Response is received. Print it
     struct mg_http_message *hm = (struct mg_http_message *) ev_data;
     printf("%.*s", (int) hm->message.len, hm->message.buf);
-    c->is_draining = 1;        // Tell mongoose to close this connection
+    c->is_draining = 1;           // Tell mongoose to close this connection
     *(bool *) c->fn_data = true;  // Tell event loop to stop
   } else if (ev == MG_EV_ERROR) {
     *(bool *) c->fn_data = true;  // Error, tell event loop to stop
@@ -57,16 +57,37 @@ static void fn(struct mg_connection *c, int ev, void *ev_data) {
 }
 
 int main(int argc, char *argv[]) {
-  const char *log_level = getenv("LOG_LEVEL");  // Allow user to set log level
-  if (log_level == NULL) log_level = "4";       // Default is verbose
+  struct mg_mgr mgr;  // Event manager
+  bool done = false;  // Event handler flips it to true
+  int i, log_level = MG_LL_DEBUG;
 
-  struct mg_mgr mgr;              // Event manager
-  bool done = false;              // Event handler flips it to true
-  if (argc > 1) s_url = argv[1];  // Use URL provided in the command line
-  mg_log_set(atoi(log_level));    // Set to 0 to disable debug
-  mg_mgr_init(&mgr);              // Initialise event manager
+  // Parse command-line flags
+  for (i = 1; i + 1 < argc; i++) {
+    if (strcmp(argv[i], "-ca") == 0) {
+      s_ca_pem = mg_file_read(&mg_fs_posix, argv[++i]);
+    } else if (strcmp(argv[i], "-post") == 0) {
+      s_post_data = argv[++i];
+    } else if (strcmp(argv[i], "-url") == 0) {
+      s_url = argv[++i];
+    } else if (strcmp(argv[i], "-v") == 0) {
+      log_level = atoi(argv[++i]);
+    } else {
+      fprintf(stderr,
+              "Usage: %s OPTIONS\n"
+              "  -ca PEM     - TLS CA PEM file path, default: not set\n"
+              "  -post DATA  - data to POST, default: not set\n"
+              "  -url URL    - URL to fetch, default: %s\n"
+              "  -v LEVEL    - debug level, from 0 to 4, default: %d\n",
+              argv[0], s_url, log_level);
+      exit(EXIT_FAILURE);
+    }
+  }
+
+  mg_mgr_init(&mgr);                        // Initialise event manager
+  mg_log_set(log_level);                    // Set log level
   mg_http_connect(&mgr, s_url, fn, &done);  // Create client connection
   while (!done) mg_mgr_poll(&mgr, 50);      // Event manager loops until 'done'
   mg_mgr_free(&mgr);                        // Free resources
+
   return 0;
 }
