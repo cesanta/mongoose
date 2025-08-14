@@ -2950,6 +2950,19 @@ struct mg_dns_rr {
   uint16_t alen;    // Address length
 };
 
+// DNS-SD service record
+struct mg_dnssd_record {
+  char *srvcproto;  // service.proto, service name
+  char *txt;        // TXT record contents
+  uint16_t port;    // SRV record port
+};
+
+// DNS-SD service database
+struct mg_dnssd_db {
+  struct mg_dnssd_record *srvcs;  // service record data
+  uint8_t num;                    // number of records in db
+};
+
 void mg_resolve(struct mg_connection *, const char *url);
 void mg_resolve_cancel(struct mg_connection *);
 bool mg_dns_parse(const uint8_t *buf, size_t len, struct mg_dns_message *);
