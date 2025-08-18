@@ -48,6 +48,7 @@ struct mg_tcpip_if {
   bool update_mac_hash_table;      // Signal drivers to update MAC controller
   struct mg_tcpip_driver *driver;  // Low level driver
   void *driver_data;               // Driver-specific data
+  mg_tcpip_event_handler_t pfn;    // Driver-specific event handler function
   mg_tcpip_event_handler_t fn;     // User-specified event handler function
   struct mg_mgr *mgr;              // Mongoose event manager
   struct mg_queue recv_queue;      // Receive queue

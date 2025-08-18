@@ -22,16 +22,9 @@ struct mg_tcpip_driver_cyw_firmware {
 };
 
 struct mg_tcpip_driver_cyw_data {
+  struct mg_wifi_data wifi;
   void *bus;
   struct mg_tcpip_driver_cyw_firmware *fw;
-  char *ssid;
-  char *pass;
-  char *apssid;
-  char *appass;
-  uint8_t security; // TBD
-  uint8_t apsecurity; // TBD
-  uint8_t apchannel;
-  bool apmode;      // start in AP mode; 'false' starts connection to 'ssid' if not NULL
   bool hs;          // use chip "high-speed" mode; otherwise SPI CPOL0 CPHA0 (DS 4.2.3 Table 6)
 };
 
