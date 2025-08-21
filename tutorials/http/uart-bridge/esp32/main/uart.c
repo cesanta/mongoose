@@ -1,4 +1,5 @@
 #include "main.h"
+#include "esp_idf_version.h"  // < 3.3 not supported, sadly
 
 int uart_close(int no) {
   return uart_driver_delete(no);
@@ -18,7 +19,11 @@ int uart_open(int no, int rx, int tx, int cts, int rts, int baud) {
   int e1 = uart_param_config(no, &uart_config);
   int e2 = uart_set_pin(no, tx, rx, rts, cts);
   int e3 =
+#if ESP_IDF_VERSION >= ESP_IDF_VERSION_VAL(5, 2, 5)
+      uart_driver_install(no, UART_HW_FIFO_LEN(no) * 2, UART_HW_FIFO_LEN(no) * 2, 0, NULL, 0);
+#else
       uart_driver_install(no, UART_FIFO_LEN * 2, UART_FIFO_LEN * 2, 0, NULL, 0);
+#endif
   MG_INFO(("%d: %d/%d/%d, %d %d %d", no, rx, tx, baud, e1, e2, e3));
   if (e1 != ESP_OK || e2 != ESP_OK || e3 != ESP_OK) return -1;
   return no;
