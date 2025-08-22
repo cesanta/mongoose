@@ -54,6 +54,17 @@ static void fn(struct mg_connection *c, int ev, void *ev_data) {
   (void) c, (void) ev, (void) ev_data;
 }
 
+static void tcpclosure_fn(struct mg_connection *c, int ev, void *ev_data) {
+  if (ev == MG_EV_ACCEPT) c->is_draining = 1;
+  (void) c, (void) ev_data;
+}
+
+static void client_fn(struct mg_connection *c, int ev, void *ev_data) {
+  if (ev == MG_EV_ERROR || ev == MG_EV_CONNECT)
+    (*(int *) c->fn_data) = ev;
+  (void) c, (void) ev_data;
+}
+
 static void frag_recv_fn(struct mg_connection *c, int ev, void *ev_data) {
   if (ev == MG_EV_ERROR) {
     if (s_sent_fragment > 0) {
@@ -82,6 +93,7 @@ static void frag_send_fn(struct mg_connection *c, int ev, void *ev_data) {
   }
   (void) c, (void) ev_data;
 }
+
 
 static void test_poll(void) {
   int count = 0, i;
@@ -194,47 +206,118 @@ static void init_tcp_handshake(struct eth *e, struct ip *ip,
   struct tcp *t = (struct tcp *)(s_driver_data.buf + sizeof(*e) + sizeof(*ip));
 
   // SYN
-  create_tcp_simpleseg(e, ip, 1000, 0, TH_SYN | TH_ACK, 0);
+  create_tcp_simpleseg(e, ip, 1000, 0, TH_SYN, 0);
+  MG_VERBOSE(("SYN     -->"));
   mg_mgr_poll(mgr, 0); // make sure we clean former stuff in buffer
 
   // SYN-ACK
   while (!received_response(&s_driver_data)) mg_mgr_poll(mgr, 0);
   ASSERT((t->flags == (TH_SYN | TH_ACK)));
   ASSERT((t->ack == mg_htonl(1001)));
+  MG_VERBOSE(("SYN+ACK <--"));
 
   // ACK
   create_tcp_simpleseg(e, ip, 1001, 2, TH_ACK, 0);
-  mg_mgr_poll(mgr, 0);
+  MG_VERBOSE(("ACK     -->"));
+  mg_mgr_poll(mgr, 0);  // this may have data on return !
 }
 
-
+// DHCP discovery works as a 1 second timeout, we take advantage of it
+// (something is received within 1s) and we mask it when doing longer waits
+// (verify received data is TCP by checking IP's protocol field)
 static void test_tcp_basics(void) {
   struct mg_mgr mgr;
   struct eth e;
   struct ip ip;
   struct tcp *t = (struct tcp *) (s_driver_data.buf + sizeof(e) + sizeof(ip));
-  // uint64_t start, now;
-  // bool response_recv = true;
+  struct ip *i = (struct ip *) (s_driver_data.buf + sizeof(e));
+  uint64_t start, now;
   struct mg_tcpip_driver driver;
   struct mg_tcpip_if mif;
 
   init_tcp_tests(&mgr, &e, &ip, &driver, &mif, fn);
 
-  // send SYN to a non-used port, expect RST + ACK
-  create_tcp_seg(&e, &ip, 1234, 1, TH_SYN, 0, 69, 0, NULL, 0);
+// https://datatracker.ietf.org/doc/html/rfc9293#section-3.5.2	Reset Generation
+  // non-used port. Group 1 in RFC
+  // send SYN, expect RST + ACK
+  create_tcp_seg(&e, &ip, 1234, 4321, TH_SYN, 1, 69, 0, NULL, 0);
   mg_mgr_poll(&mgr, 0); // make sure we clean former stuff in buffer
   while (!received_response(&s_driver_data)) mg_mgr_poll(&mgr, 0);
-  ASSERT((t->flags == (TH_RST | TH_ACK)));
-  ASSERT((t->ack == mg_htonl(1235)));
+  ASSERT(t->flags == (TH_RST | TH_ACK));
+  ASSERT(t->seq == mg_htonl(0));
+  ASSERT(t->ack == mg_htonl(1235));
 
-  // send data to a non-used port, expect a RST + ACK
-  create_tcp_seg(&e, &ip, 1234, 1, TH_PUSH, 0, 69, 0, NULL, 0);
+  // send SYN+ACK, expect RST
+  create_tcp_seg(&e, &ip, 1234, 4321, TH_SYN | TH_ACK, 1, 69, 0, NULL, 0);
+  mg_mgr_poll(&mgr, 0); // make sure we clean former stuff in buffer
+  while (!received_response(&s_driver_data)) mg_mgr_poll(&mgr, 0);
+  ASSERT(t->flags == TH_RST);
+  ASSERT(t->seq == mg_htonl(4321));
+  // send data, expect RST + ACK
+  create_tcp_seg(&e, &ip, 1234, 4321, TH_PUSH, 1, 69, 2, NULL, 0);
   mg_mgr_poll(&mgr, 0);
   while (!received_response(&s_driver_data)) mg_mgr_poll(&mgr, 0);
-  ASSERT((t->flags == (TH_RST | TH_ACK)));
-  ASSERT((t->ack == mg_htonl(1234)));
+  ASSERT(t->flags == (TH_RST | TH_ACK));
+  ASSERT(t->seq == mg_htonl(0));
+  ASSERT(t->ack == mg_htonl(1236));
 
-  
+  // send ACK, expect RST
+  create_tcp_seg(&e, &ip, 1234, 4321, TH_ACK, 1, 69, 0, NULL, 0);
+  mg_mgr_poll(&mgr, 0);
+  while (!received_response(&s_driver_data)) mg_mgr_poll(&mgr, 0);
+  ASSERT(t->flags == TH_RST);
+  ASSERT(t->seq == mg_htonl(4321));
+
+  // send FIN, expect RST + ACK
+  create_tcp_seg(&e, &ip, 1234, 4321, TH_FIN, 1, 69, 0, NULL, 0);
+  mg_mgr_poll(&mgr, 0); // make sure we clean former stuff in buffer
+  while (!received_response(&s_driver_data)) mg_mgr_poll(&mgr, 0);
+  ASSERT(t->flags == (TH_RST | TH_ACK)); // Linux answers RST only
+  ASSERT(t->seq == mg_htonl(0));
+  ASSERT(t->ack == mg_htonl(1235));
+
+  // send FIN+ACK, expect RST
+  create_tcp_seg(&e, &ip, 1234, 4321, TH_FIN | TH_ACK, 1, 69, 0, NULL, 0);
+  mg_mgr_poll(&mgr, 0); // make sure we clean former stuff in buffer
+  while (!received_response(&s_driver_data)) mg_mgr_poll(&mgr, 0);
+  ASSERT(t->flags == TH_RST);
+  ASSERT(t->seq == mg_htonl(4321));
+
+  // listening, non-connected port. Group 2 in RFC
+  // send data, expect no response
+  create_tcp_seg(&e, &ip, 1234, 4321, TH_PUSH, 1, 80, 2, NULL, 0);
+  mg_mgr_poll(&mgr, 0);
+  ASSERT(!received_response(&s_driver_data));
+
+  // send ACK, expect RST
+  create_tcp_seg(&e, &ip, 1234, 4321, TH_ACK, 1, 80, 0, NULL, 0);
+  mg_mgr_poll(&mgr, 0);
+  while (!received_response(&s_driver_data)) mg_mgr_poll(&mgr, 0);
+  ASSERT(t->flags == TH_RST);
+  ASSERT(t->seq == mg_htonl(4321));
+
+  // send SYN+ACK, expect RST
+  create_tcp_seg(&e, &ip, 1234, 4321, TH_SYN | TH_ACK, 1, 80, 0, NULL, 0);
+  mg_mgr_poll(&mgr, 0); // make sure we clean former stuff in buffer
+  while (!received_response(&s_driver_data)) mg_mgr_poll(&mgr, 0);
+  ASSERT(t->flags == TH_RST);
+  ASSERT(t->seq == mg_htonl(4321));
+
+  // send FIN, expect no response
+  create_tcp_seg(&e, &ip, 1234, 4321, TH_FIN, 1, 80, 0, NULL, 0);
+  mg_mgr_poll(&mgr, 0);
+  ASSERT(!received_response(&s_driver_data));
+
+  // send FIN+ACK, expect RST
+  create_tcp_seg(&e, &ip, 1234, 4321, TH_FIN | TH_ACK, 1, 80, 0, NULL, 0);
+  mg_mgr_poll(&mgr, 0); // make sure we clean former stuff in buffer
+  while (!received_response(&s_driver_data)) mg_mgr_poll(&mgr, 0);
+  ASSERT(t->flags == TH_RST);
+  ASSERT(t->seq == mg_htonl(4321));
+
+
+  // we currently don't validate checksum, no silently discarded segment test
+
 
   init_tcp_handshake(&e, &ip, &mgr);   // starts with seq_no=1000, ackno=2
 
@@ -255,7 +338,238 @@ static void test_tcp_basics(void) {
   ASSERT((t->flags == TH_ACK));
   ASSERT((t->ack == mg_htonl(1001)));  // expecting 1001, dude
 
-  // we currently don't validate checksum, no silently discarded segment test
+  // Initiate closure, send FIN (test client-initiated closure)
+  // https://datatracker.ietf.org/doc/html/rfc9293#section-3.6 
+  // We are case 1, Mongoose is case 2
+  create_tcp_simpleseg(&e, &ip, 1001, 2, TH_FIN, 0);
+  mg_mgr_poll(&mgr, 0); // make sure we clean former stuff in buffer
+  while (!received_response(&s_driver_data)) mg_mgr_poll(&mgr, 0);
+  // Mongoose does a fast reduced ("3-way instead of 4-way" closure)
+  ASSERT((t->flags == (TH_FIN | TH_ACK))); // Mongoose ACKs our FIN, sends FIN
+  ASSERT((t->seq == mg_htonl(2)));
+  ASSERT((t->ack == mg_htonl(1002)));
+  // make sure it is still open
+  ASSERT(mgr.conns->next != NULL);  // more than one connection: the listener + us
+  create_tcp_simpleseg(&e, &ip, 1002, 3, TH_ACK, 0); // ACK Mongoose FIN
+  mg_mgr_poll(&mgr, 0);
+  ASSERT(!received_response(&s_driver_data));
+  // make sure it is closed
+  ASSERT(mgr.conns->next == NULL);  // only one connection: the listener
+
+  s_driver_data.len = 0;
+  mg_mgr_free(&mgr);
+
+  // Test client-initiated closure timeout, do not ACK
+  init_tcp_tests(&mgr, &e, &ip, &driver, &mif, fn);
+  init_tcp_handshake(&e, &ip, &mgr);   // starts with seq_no=1000, ackno=2
+  create_tcp_simpleseg(&e, &ip, 1001, 2, TH_FIN, 0);
+  mg_mgr_poll(&mgr, 0); // make sure we clean former stuff in buffer
+  while (!received_response(&s_driver_data)) mg_mgr_poll(&mgr, 0);
+  // Mongoose does a fast reduced ("3-way instead of 4-way" closure)
+  ASSERT((t->flags == (TH_FIN | TH_ACK))); // Mongoose ACKs our FIN, sends FIN
+  ASSERT((t->seq == mg_htonl(2)));
+  ASSERT((t->ack == mg_htonl(1002)));
+  // make sure it is still open
+  ASSERT(mgr.conns->next != NULL);  // more than one connection: the listener + us
+  s_driver_data.len = 0; // avoid Mongoose "receiving itself"
+  start = mg_millis();
+  now = 0;
+  do {
+    mg_mgr_poll(&mgr, 0);
+    if (received_response(&s_driver_data) && i->proto == 6) break; // check first
+    now = mg_millis() - start;
+  } while (now < (12 * MIP_TCP_FIN_MS)/10);
+  ASSERT(now > MIP_TCP_FIN_MS);
+  // make sure it is closed
+  ASSERT(mgr.conns->next == NULL);  // only one connection: the listener
+
+  s_driver_data.len = 0;
+  mg_mgr_free(&mgr);
+
+  // Test server-initiated closure, abbreviated 3-way: respond FIN+ACK
+  // https://datatracker.ietf.org/doc/html/rfc9293#section-3.6
+  // We are case 2, Mongoose is case 1
+  init_tcp_tests(&mgr, &e, &ip, &driver, &mif, tcpclosure_fn);
+  init_tcp_handshake(&e, &ip, &mgr);   // starts with seq_no=1000, ackno=2
+  // we should have already received the FIN due to the call above
+  start = mg_millis();
+  while (!received_response(&s_driver_data)) {
+    mg_mgr_poll(&mgr, 0);
+    now = mg_millis() - start;
+    if (now > 2 * MIP_TCP_ACK_MS)
+      ASSERT(0);  // response should have been received by now
+  }
+  ASSERT((t->seq == mg_htonl(2)));
+  ASSERT((t->ack == mg_htonl(1001)));
+  ASSERT(t->flags == (TH_FIN | TH_ACK)); // Mongoose ACKs last data, sends FIN
+  // send FIN + ACK
+  create_tcp_simpleseg(&e, &ip, 1001, 3, TH_FIN | TH_ACK, 0); // ACK FIN, send FIN
+  mg_mgr_poll(&mgr, 0); // make sure we clean former stuff in buffer
+  while (!received_response(&s_driver_data)) mg_mgr_poll(&mgr, 0);
+  ASSERT((t->flags == TH_ACK)); // Mongoose ACKs our FIN
+  ASSERT((t->seq == mg_htonl(3)));
+  ASSERT((t->ack == mg_htonl(1002)));
+  // make sure it is closed
+  ASSERT(mgr.conns->next == NULL);  // only one connection: the listener
+
+  s_driver_data.len = 0;
+  mg_mgr_free(&mgr);
+
+  // Test server-initiated closure, long 4-way closure: respond ACK
+  init_tcp_tests(&mgr, &e, &ip, &driver, &mif, tcpclosure_fn);
+  init_tcp_handshake(&e, &ip, &mgr);   // starts with seq_no=1000, ackno=2
+  // we should have already received the FIN, tested in above tst
+  while (!received_response(&s_driver_data)) mg_mgr_poll(&mgr, 0);
+  ASSERT((t->seq == mg_htonl(2)));
+  ASSERT((t->ack == mg_htonl(1001)));
+  ASSERT(t->flags == (TH_FIN | TH_ACK)); // Mongoose ACKs last data, sends FIN
+  // ACK Mongoose FIN, do *not* send FIN yet
+  create_tcp_simpleseg(&e, &ip, 1001, 3, TH_ACK, 0); // ACK FIN
+  mg_mgr_poll(&mgr, 0); // make sure we clean former stuff in buffer
+  start = mg_millis();
+  now = 0;
+  do {
+    if (received_response(&s_driver_data)) break; // check first
+    mg_mgr_poll(&mgr, 0);
+    now = mg_millis() - start;
+  } while (now < 2 * MIP_TCP_ACK_MS); // keep timeout below 1s (DHCP discover)
+  ASSERT(now >= 2 * MIP_TCP_ACK_MS);
+  // make sure it is still open
+  ASSERT(mgr.conns->next != NULL);  // more than one connection: the listener + us
+  create_tcp_simpleseg(&e, &ip, 1001, 3, TH_FIN, 0); // send FIN
+  mg_mgr_poll(&mgr, 0); // make sure we clean former stuff in buffer
+  while (!received_response(&s_driver_data)) mg_mgr_poll(&mgr, 0);
+  ASSERT((t->flags == TH_ACK)); // Mongoose ACKs our FIN
+  ASSERT((t->seq == mg_htonl(3)));
+  ASSERT((t->ack == mg_htonl(1002)));
+  // make sure it is closed
+  ASSERT(mgr.conns->next == NULL);  // only one connection: the listener
+
+  s_driver_data.len = 0;
+  mg_mgr_free(&mgr);
+
+  // Test server-initiated closure, FIN retransmission: do not ACK FIN
+  // Actual data retransmission is tested on another unit test
+  init_tcp_tests(&mgr, &e, &ip, &driver, &mif, tcpclosure_fn);
+  init_tcp_handshake(&e, &ip, &mgr);   // starts with seq_no=1000, ackno=2
+  // we should have already received the FIN, tested in some tst above
+  while (!received_response(&s_driver_data)) mg_mgr_poll(&mgr, 0);
+  ASSERT((t->seq == mg_htonl(2)));
+  ASSERT((t->ack == mg_htonl(1001)));
+  ASSERT(t->flags == (TH_FIN | TH_ACK)); // Mongoose ACKs last data, sends FIN
+  s_driver_data.len = 0; // avoid Mongoose "receiving itself"
+  start = mg_millis();
+  now = 0;
+  do {
+    if (received_response(&s_driver_data)) break; // check first
+    mg_mgr_poll(&mgr, 0);
+    now = mg_millis() - start;
+  } while (now < 2 * MIP_TCP_ACK_MS); // keep timeout below 1s (DHCP discover)
+//  ASSERT(now < 2 * MIP_TCP_ACK_MS); ******** WE FAIL THIS, Mongoose does not retransmit, FIN is not an additional element in the stream
+//  ASSERT((t->seq == mg_htonl(2)));
+//  ASSERT((t->ack == mg_htonl(1001)));
+//  ASSERT(t->flags == (TH_FIN | TH_ACK)); // Mongoose retransmits FIN
+  // send FIN + ACK
+  create_tcp_simpleseg(&e, &ip, 1001, 3, TH_FIN | TH_ACK, 0); // ACK FIN, send FIN
+  mg_mgr_poll(&mgr, 0); // make sure we clean former stuff in buffer
+  while (!received_response(&s_driver_data)) mg_mgr_poll(&mgr, 0);
+  ASSERT((t->flags == TH_ACK)); // Mongoose ACKs our FIN
+  ASSERT((t->seq == mg_htonl(3)));
+  ASSERT((t->ack == mg_htonl(1002)));
+  // make sure it is closed
+  ASSERT(mgr.conns->next == NULL);  // only one connection: the listener
+
+  s_driver_data.len = 0;
+  mg_mgr_free(&mgr);
+
+  // Test simultaneous closure
+  // https://datatracker.ietf.org/doc/html/rfc9293#section-3.6 case 3
+  init_tcp_tests(&mgr, &e, &ip, &driver, &mif, tcpclosure_fn);
+  init_tcp_handshake(&e, &ip, &mgr);   // starts with seq_no=1000, ackno=2
+  // we should have already received the FIN due to the call above
+  start = mg_millis();
+  while (!received_response(&s_driver_data)) {
+    mg_mgr_poll(&mgr, 0);
+    now = mg_millis() - start;
+    if (now > 2 * MIP_TCP_ACK_MS)
+      ASSERT(0);  // response should have been received by now
+  }
+  ASSERT((t->seq == mg_htonl(2)));
+  ASSERT((t->ack == mg_htonl(1001)));
+  ASSERT(t->flags == (TH_FIN | TH_ACK)); // Mongoose ACKs last data, sends FIN
+  // Also initiate closure, send FIN, do *not* ACK Mongoose FIN
+  create_tcp_simpleseg(&e, &ip, 1001, 2, TH_FIN, 0); 
+  mg_mgr_poll(&mgr, 0); // make sure we clean former stuff in buffer
+  while (!received_response(&s_driver_data)) mg_mgr_poll(&mgr, 0);
+  ASSERT((t->flags == TH_ACK)); // Mongoose ACKs our FIN
+  ASSERT((t->seq == mg_htonl(3)));
+  ASSERT((t->ack == mg_htonl(1002)));
+  // make sure it is still open   ******** WE FAIL THIS, Mongoose closes immediately, does not wait to retransmit its ACK nor to get the other end ACK
+//  ASSERT(mgr.conns->next != NULL);  // more than one connection: the listener + us
+//  create_tcp_simpleseg(&e, &ip, 1002, 3, TH_ACK, 0); // ACK FIN
+//  mg_mgr_poll(&mgr, 0);
+  // make sure it is closed
+  ASSERT(mgr.conns->next == NULL);  // only one connection: the listener
+
+  s_driver_data.len = 0;
+  mg_mgr_free(&mgr);
+
+  // Test responses to a connecting client
+  // https://datatracker.ietf.org/doc/html/rfc9293#section-3.5 
+  // NOTE: Mongoose ignores any data until connection is actually established
+  // NOTE: Mongoose does not support the concept of "simultaneous open", Mongoose is either client or server
+  {
+  struct mg_connection *c;
+  int event = 255;
+  uint32_t ackno;
+  // this creates a listener we won't use
+  init_tcp_tests(&mgr, &e, &ip, &driver, &mif, tcpclosure_fn);
+
+  c = mg_connect(&mgr, "tcp://1.2.3.4:1234/", client_fn, &event);
+  ASSERT(c!=NULL);
+  ASSERT(received_response(&s_driver_data));
+  ASSERT((t->flags == TH_SYN));
+  ASSERT(event == 255);
+  // invalid SYN + ACK to connecting client (after SYN...), send ACK out of seq
+  ackno = mg_ntohl(t->seq) + 1000;
+//  create_tcp_seg(&e, &ip, 4321, ackno, TH_SYN | TH_ACK, 1234, mg_ntohs(c->loc.port), 0, NULL, 0);
+//  mg_mgr_poll(&mgr, 0); // make sure we clean former stuff in buffer
+//  while (!received_response(&s_driver_data)) mg_mgr_poll(&mgr, 0);
+//  ASSERT((t->flags == (TH_RST | TH_ACK)));  // ***************** WHAT DOES LINUX DO HERE ????
+// ******** WE FAIL THIS, Mongoose does not validate the ACK number
+//  ASSERT((t->seq == mg_htonl(ackno)));
+//  ASSERT((t->ack == mg_htonl(4322)));
+
+  // connect
+  ackno = mg_ntohl(t->seq) + 1;
+  create_tcp_seg(&e, &ip, 4321, ackno, TH_SYN | TH_ACK, 1234, mg_ntohs(c->loc.port), 0, NULL, 0);
+  mg_mgr_poll(&mgr, 0); // make sure we clean former stuff in buffer
+  while (!received_response(&s_driver_data)) mg_mgr_poll(&mgr, 0);
+  ASSERT(t->flags == TH_ACK);
+  ASSERT(t->seq == mg_htonl(ackno));
+  ASSERT((t->ack == mg_htonl(4322)));
+  ASSERT(event == MG_EV_CONNECT);
+
+  event = 255;
+  s_driver_data.len = 0;
+  mg_mgr_free(&mgr);
+
+  // test connection failure, send RST+ACK
+  // this creates a listener we won't use
+  init_tcp_tests(&mgr, &e, &ip, &driver, &mif, tcpclosure_fn);
+  c = mg_connect(&mgr, "tcp://1.2.3.4:1234/", client_fn, &event);
+  received_response(&s_driver_data); // get the SYN
+  ackno = mg_ntohl(t->seq) + 1;
+  create_tcp_seg(&e, &ip, 4321, ackno, TH_RST + TH_ACK, 1234, mg_ntohs(c->loc.port), 0, NULL, 0);
+  mg_mgr_poll(&mgr, 0);
+  MG_DEBUG(("event: %d", event));
+  ASSERT(event == MG_EV_ERROR);
+  ASSERT(!received_response(&s_driver_data));
+  }
+
+// TODO(): RST handling
+// https://datatracker.ietf.org/doc/html/rfc9293#section-3.5.3
+// all reset (RST) segments are validated by checking their SEQ fields. A reset is valid if its sequence number is in the window; otherwise, it is silently discarded
 
   s_driver_data.len = 0;
   mg_mgr_free(&mgr);
@@ -405,7 +719,6 @@ static void test_tcp_backlog(void) {
   struct tcp *t = (struct tcp *) (s_driver_data.buf + sizeof(e) + sizeof(ip));
   struct ip *i = (struct ip *) (s_driver_data.buf + sizeof(e));
   uint64_t start, now;
-  //bool response_recv = true;
   struct mg_tcpip_driver driver;
   struct mg_tcpip_if mif;
   uint16_t opts[4 / 2];                            // Send MSS, RFC-9293 3.7.1
@@ -421,18 +734,22 @@ static void test_tcp_backlog(void) {
   mg_mgr_poll(&mgr, 0); // make sure we clean former stuff in buffer
   while (!received_response(&s_driver_data)) mg_mgr_poll(&mgr, 0);
   ASSERT(t->flags == (TH_SYN | TH_ACK));
-  // delay ACK so it is removed from the backlog
+  // delay ACK so conn attempt is removed from the backlog
+  s_driver_data.len = 0; // avoid Mongoose "receiving itself"
   start = mg_millis();
   do {
     mg_mgr_poll(&mgr, 0);
     now = mg_millis() - start;
   } while (now < 2100);
-  // Mongoose may have retransmitted SYN + ACK, so
-  create_tcp_simpleseg(&e, &ip, 1235, 2, TH_ACK, 0);
-  mg_mgr_poll(&mgr, 0); // make sure we clean former stuff in buffer
-  while (!received_response(&s_driver_data) || i->proto != 6) mg_mgr_poll(&mgr, 0);
-  ASSERT(t->flags == (TH_RST | TH_ACK));
-
+  // check backlog is empty
+  c = mgr.conns;
+  ASSERT(c->next == NULL);
+  for (j = 0; j < LOGSZ; j++) {
+    struct mg_backlog *b = (struct mg_backlog *)(c->data) + j;
+    ASSERT(b->port == 0);
+  }
+  // Mongoose may have retransmitted SYN + ACK, and DHCP sent discover
+  received_response(&s_driver_data);  // make sure we clean buffer
 
   opts[0] = mg_htons(0x0204); // RFC-9293 3.2
   // fill the backlog

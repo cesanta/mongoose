@@ -572,13 +572,17 @@ static size_t tx_tcp(struct mg_tcpip_if *ifp, uint8_t *dst_mac, uint32_t dst_ip,
   return ether_output(ifp, PDIFF(ifp->tx.buf, tcp + 1) + len);
 }
 
-static size_t tx_tcp_pkt(struct mg_tcpip_if *ifp, struct pkt *pkt,
-                         uint8_t flags, uint32_t seq, const void *buf,
-                         size_t len) {
-  uint32_t delta = (pkt->tcp->flags & (TH_SYN | TH_FIN)) ? 1 : 0;
+static size_t tx_tcp_ctrlresp(struct mg_tcpip_if *ifp, struct pkt *pkt,
+                              uint8_t flags, uint32_t seqno) {
+  uint32_t ackno = mg_htonl(mg_ntohl(pkt->tcp->seq) + (uint32_t) pkt->pay.len +
+                            ((pkt->tcp->flags & (TH_SYN | TH_FIN)) ? 1 : 0));
   return tx_tcp(ifp, pkt->eth->src, pkt->ip->src, flags, pkt->tcp->dport,
-                pkt->tcp->sport, seq, mg_htonl(mg_ntohl(pkt->tcp->seq) + delta),
-                buf, len);
+                pkt->tcp->sport, seqno, ackno, NULL, 0);
+}
+
+static size_t tx_tcp_rst(struct mg_tcpip_if *ifp, struct pkt *pkt, bool toack) {
+  return tx_tcp_ctrlresp(ifp, pkt, toack ? TH_RST : (TH_RST | TH_ACK),
+                         toack ? pkt->tcp->ack : 0);
 }
 
 static struct mg_connection *accept_conn(struct mg_connection *lsn,
@@ -777,10 +781,9 @@ static void read_conn(struct mg_connection *c, struct pkt *pkt) {
   }
 }
 
-
 // TCP backlog
 struct mg_backlog {
-  uint16_t port, mss; // use port=0 for available entries
+  uint16_t port, mss;  // use port=0 for available entries
   uint8_t age;
 };
 
@@ -790,7 +793,7 @@ static int backlog_insert(struct mg_connection *c, uint16_t port,
   size_t i;
   for (i = 0; i < sizeof(c->data) / sizeof(*p); i++) {
     if (p[i].port != 0) continue;
-    p[i].age = 2; // remove after two calls, average 1.5 call rate
+    p[i].age = 2;  // remove after two calls, average 1.5 call rate
     p[i].port = port, p[i].mss = mss;
     return (int) i;
   }
@@ -813,7 +816,7 @@ static void backlog_remove(struct mg_connection *c, uint16_t key) {
 
 static void backlog_maintain(struct mg_connection *c) {
   struct mg_backlog *p = (struct mg_backlog *) c->data;
-  size_t i; // dec age and remove those where it reaches 0
+  size_t i;  // dec age and remove those where it reaches 0
   for (i = 0; i < sizeof(c->data) / sizeof(*p); i++) {
     if (p[i].port == 0) continue;
     if (p[i].age != 0) --p[i].age;
@@ -850,70 +853,74 @@ static void handle_opt(struct connstate *s, struct tcp *tcp) {
 static void rx_tcp(struct mg_tcpip_if *ifp, struct pkt *pkt) {
   struct mg_connection *c = getpeer(ifp->mgr, pkt, false);
   struct connstate *s = c == NULL ? NULL : (struct connstate *) (c + 1);
-#if 0
-  MG_INFO(("%lu %hhu %d", c ? c->id : 0, pkt->tcp->flags, (int) pkt->pay.len));
-#endif
+  // Order is VERY important; RFC-9293 3.5.2
+  // - check clients (Group 1) and established connections (Group 3)
   if (c != NULL && c->is_connecting && pkt->tcp->flags == (TH_SYN | TH_ACK)) {
+    // client got a server connection accept
     handle_opt(s, pkt->tcp);  // process options (MSS)
     s->seq = mg_ntohl(pkt->tcp->ack), s->ack = mg_ntohl(pkt->tcp->seq) + 1;
-    tx_tcp_pkt(ifp, pkt, TH_ACK, pkt->tcp->ack, NULL, 0);
+    tx_tcp_ctrlresp(ifp, pkt, TH_ACK, pkt->tcp->ack);
     c->is_connecting = 0;  // Client connected
     settmout(c, MIP_TTYPE_KEEPALIVE);
     mg_call(c, MG_EV_CONNECT, NULL);  // Let user know
     if (c->is_tls_hs) mg_tls_handshake(c);
     if (!c->is_tls_hs) c->is_tls = 0;  // user did not call mg_tls_init()
   } else if (c != NULL && c->is_connecting && pkt->tcp->flags != TH_ACK) {
-    // mg_hexdump(pkt->raw.buf, pkt->raw.len);
-    tx_tcp_pkt(ifp, pkt, TH_RST | TH_ACK, pkt->tcp->ack, NULL, 0);
+    mg_error(c, "connection refused");
   } else if (c != NULL && pkt->tcp->flags & TH_RST) {
+    // TODO(): validate RST is within window (and optional with proper ACK)
     mg_error(c, "peer RST");  // RFC-1122 4.2.2.13
   } else if (c != NULL) {
-#if 0
-    MG_DEBUG(("%lu %d %M:%hu -> %M:%hu", c->id, (int) pkt->raw.len,
-              mg_print_ip4, &pkt->ip->src, mg_ntohs(pkt->tcp->sport),
-              mg_print_ip4, &pkt->ip->dst, mg_ntohs(pkt->tcp->dport)));
-    mg_hexdump(pkt->pay.buf, pkt->pay.len);
-#endif
+    // process segment
     s->tmiss = 0;                         // Reset missed keep-alive counter
     if (s->ttype == MIP_TTYPE_KEEPALIVE)  // Advance keep-alive timer
       settmout(c,
                MIP_TTYPE_KEEPALIVE);  // unless a former ACK timeout is pending
     read_conn(c, pkt);  // Override timer with ACK timeout if needed
-  } else if ((c = getpeer(ifp->mgr, pkt, true)) == NULL) {
-    tx_tcp_pkt(ifp, pkt, TH_RST | TH_ACK, pkt->tcp->ack, NULL, 0);
-  } else if (pkt->tcp->flags & TH_RST) {
-    if (c->is_accepted) mg_error(c, "peer RST");  // RFC-1122 4.2.2.13
-    // ignore RST if not connected
-  } else if (pkt->tcp->flags & TH_SYN) {
-    struct connstate cs;  // At this point, s = NULL, there is no connection
-    int key;
-    uint32_t isn;
-    if (pkt->tcp->sport != 0) {
-      handle_opt(&cs, pkt->tcp);                          // process options (MSS)
-      key = backlog_insert(c, pkt->tcp->sport, cs.dmss);  // backlog options (MSS)
-      if (key < 0) return;  // no room in backlog, discard SYN, client retries
-      // Use peer's src port and bl key as ISN, to later identify the handshake
-      isn = (mg_htonl(((uint32_t)key << 16) | mg_ntohs(pkt->tcp->sport)));
-      tx_tcp_pkt(ifp, pkt, TH_SYN | TH_ACK, isn, NULL, 0);
-    } // what should we do when port=0 ? Linux takes port 0 as any other port
-  } else if (pkt->tcp->flags & TH_FIN) {
-    tx_tcp_pkt(ifp, pkt, TH_FIN | TH_ACK, pkt->tcp->ack, NULL, 0);
-  } else if ((uint16_t) (mg_htonl(pkt->tcp->ack) - 1) ==
-             mg_htons(pkt->tcp->sport)) {
-    uint16_t key = (uint16_t) ((mg_htonl(pkt->tcp->ack) - 1) >> 16);
-    struct mg_backlog *b = backlog_retrieve(c, key, pkt->tcp->sport);
-    if (b != NULL) {
-      accept_conn(c, pkt, b->mss);  // pass options
-      backlog_remove(c, key);
-    } else if (!c->is_accepted) {         // not an actual match, reset
-      tx_tcp_pkt(ifp, pkt, TH_RST | TH_ACK, pkt->tcp->ack, NULL, 0);
-      // TODO(scaprile): revisit this and below, weird scenarios
-    }
-  } else if (!c->is_accepted) {  // no peer
-    tx_tcp_pkt(ifp, pkt, TH_RST | TH_ACK, pkt->tcp->ack, NULL, 0);
-  } else {
-    // MG_VERBOSE(("dropped silently.."));
-  }
+  } else
+    // - we don't listen on that port; RFC-9293 3.5.2 Group 1
+    // - check listening connections; RFC-9293 3.5.2 Group 2
+    if ((c = getpeer(ifp->mgr, pkt, true)) == NULL) {
+      // not listening on that port
+      if (!(pkt->tcp->flags & TH_RST)) {
+        tx_tcp_rst(ifp, pkt, pkt->tcp->flags & TH_ACK);
+      }  // else silently discard
+    } else if (pkt->tcp->flags == TH_SYN) {
+      // listener receives a connection request
+      struct connstate cs;  // At this point, s = NULL, there is no connection
+      int key;
+      uint32_t isn;
+      if (pkt->tcp->sport != 0) {
+        handle_opt(&cs, pkt->tcp);  // process options (MSS)
+        key = backlog_insert(c, pkt->tcp->sport,
+                             cs.dmss);  // backlog options (MSS)
+        if (key < 0) return;  // no room in backlog, discard SYN, client retries
+        // Use peer's src port and bl key as ISN, to later identify the
+        // handshake
+        isn = (mg_htonl(((uint32_t) key << 16) | mg_ntohs(pkt->tcp->sport)));
+        tx_tcp_ctrlresp(ifp, pkt, TH_SYN | TH_ACK, isn);
+      }  // what should we do when port=0 ? Linux takes port 0 as any other
+         // port
+    } else if (pkt->tcp->flags == TH_ACK) {
+      // listener receives an ACK
+      struct mg_backlog *b = NULL;
+      if ((uint16_t) (mg_htonl(pkt->tcp->ack) - 1) ==
+          mg_htons(pkt->tcp->sport)) {
+        uint16_t key = (uint16_t) ((mg_htonl(pkt->tcp->ack) - 1) >> 16);
+        b = backlog_retrieve(c, key, pkt->tcp->sport);
+        if (b != NULL) {                // ACK is a response to a SYN+ACK
+          accept_conn(c, pkt, b->mss);  // pass options
+          backlog_remove(c, key);
+        }  // else not an actual match, reset
+      }
+      if (b == NULL) tx_tcp_rst(ifp, pkt, true);
+    } else if (pkt->tcp->flags & TH_RST) {
+      // silently discard
+    } else if (pkt->tcp->flags & TH_ACK) {  // ACK + something else != RST
+      tx_tcp_rst(ifp, pkt, true);
+    } else if (pkt->tcp->flags & TH_SYN) {  // SYN + something else != ACK
+      tx_tcp_rst(ifp, pkt, false);
+    }  // else  silently discard
 }
 
 static void rx_ip(struct mg_tcpip_if *ifp, struct pkt *pkt) {
@@ -933,6 +940,7 @@ static void rx_ip(struct mg_tcpip_if *ifp, struct pkt *pkt) {
     pkt->udp = (struct udp *) (pkt->ip + 1);
     if (pkt->pay.len < sizeof(*pkt->udp)) return;
     mkpay(pkt, pkt->udp + 1);
+    if (pkt->udp->len < pkt->pay.len) pkt->pay.len = pkt->udp->len;
     MG_VERBOSE(("UDP %M:%hu -> %M:%hu len %u", mg_print_ip4, &pkt->ip->src,
                 mg_ntohs(pkt->udp->sport), mg_print_ip4, &pkt->ip->dst,
                 mg_ntohs(pkt->udp->dport), (int) pkt->pay.len));
@@ -951,7 +959,7 @@ static void rx_ip(struct mg_tcpip_if *ifp, struct pkt *pkt) {
     uint16_t iplen, off;
     pkt->tcp = (struct tcp *) (pkt->ip + 1);
     if (pkt->pay.len < sizeof(*pkt->tcp)) return;
-    mkpay(pkt, pkt->tcp + 1);
+    mkpay(pkt, (uint32_t *) pkt->tcp + (pkt->tcp->off >> 4)); // may have opts
     iplen = mg_ntohs(pkt->ip->len);
     off = (uint16_t) (sizeof(*pkt->ip) + ((pkt->tcp->off >> 4) * 4U));
     if (iplen >= off) pkt->pay.len = (size_t) (iplen - off);
