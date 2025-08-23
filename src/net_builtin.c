@@ -582,7 +582,7 @@ static size_t tx_tcp_pkt(struct mg_tcpip_if *ifp, struct pkt *pkt,
 }
 
 static struct mg_connection *accept_conn(struct mg_connection *lsn,
-                                         struct pkt *pkt) {
+                                         struct pkt *pkt, uint16_t mss) {
   struct mg_connection *c = mg_alloc_conn(lsn->mgr);
   struct connstate *s;
   if (c == NULL) {
@@ -590,7 +590,7 @@ static struct mg_connection *accept_conn(struct mg_connection *lsn,
     return NULL;
   }
   s = (struct connstate *) (c + 1);
-  s->dmss = 536;  // assume default, RFC-9293 3.7.1
+  s->dmss = mss;  // from options in client SYN
   s->seq = mg_ntohl(pkt->tcp->ack), s->ack = mg_ntohl(pkt->tcp->seq);
   memcpy(s->mac, pkt->eth->src, sizeof(s->mac));
   settmout(c, MIP_TTYPE_KEEPALIVE);
@@ -694,7 +694,7 @@ static void read_conn(struct mg_connection *c, struct pkt *pkt) {
   if (pkt->tcp->flags & TH_FIN) {
     uint8_t flags = TH_ACK;
     if (mg_ntohl(pkt->tcp->seq) != s->ack) {
-      MG_VERBOSE(("ignoring FIN, SEQ != ACK: %x %x", mg_ntohl(pkt->tcp->seq), s->ack));
+      MG_VERBOSE(("ignoring FIN, %x != %x", mg_ntohl(pkt->tcp->seq), s->ack));
       tx_tcp(c->mgr->ifp, s->mac, rem_ip, TH_ACK, c->loc.port, c->rem.port,
              mg_htonl(s->seq), mg_htonl(s->ack), "", 0);
       return;
@@ -777,6 +777,57 @@ static void read_conn(struct mg_connection *c, struct pkt *pkt) {
   }
 }
 
+
+// TCP backlog
+struct mg_backlog {
+  uint16_t port, mss; // use port=0 for available entries
+  uint8_t age;
+};
+
+static int backlog_insert(struct mg_connection *c, uint16_t port,
+                          uint16_t mss) {
+  struct mg_backlog *p = (struct mg_backlog *) c->data;
+  size_t i;
+  for (i = 0; i < sizeof(c->data) / sizeof(*p); i++) {
+    if (p[i].port != 0) continue;
+    p[i].age = 2; // remove after two calls, average 1.5 call rate
+    p[i].port = port, p[i].mss = mss;
+    return (int) i;
+  }
+  return -1;
+}
+
+static struct mg_backlog *backlog_retrieve(struct mg_connection *c,
+                                           uint16_t key, uint16_t port) {
+  struct mg_backlog *p = (struct mg_backlog *) c->data;
+  if (key >= sizeof(c->data) / sizeof(*p)) return NULL;
+  if (p[key].port != port) return NULL;
+  p += key;
+  return p;
+}
+
+static void backlog_remove(struct mg_connection *c, uint16_t key) {
+  struct mg_backlog *p = (struct mg_backlog *) c->data;
+  p[key].port = 0;
+}
+
+static void backlog_maintain(struct mg_connection *c) {
+  struct mg_backlog *p = (struct mg_backlog *) c->data;
+  size_t i; // dec age and remove those where it reaches 0
+  for (i = 0; i < sizeof(c->data) / sizeof(*p); i++) {
+    if (p[i].port == 0) continue;
+    if (p[i].age != 0) --p[i].age;
+    if (p[i].age == 0) p[i].port = 0;
+  }
+}
+
+static void backlog_poll(struct mg_mgr *mgr) {
+  struct mg_connection *c = NULL;
+  for (c = mgr->conns; c != NULL; c = c->next) {
+    if (!c->is_udp && c->is_listening) backlog_maintain(c);
+  }
+}
+
 // process options (MSS)
 static void handle_opt(struct connstate *s, struct tcp *tcp) {
   uint8_t *opts = (uint8_t *) (tcp + 1);
@@ -834,15 +885,30 @@ static void rx_tcp(struct mg_tcpip_if *ifp, struct pkt *pkt) {
     if (c->is_accepted) mg_error(c, "peer RST");  // RFC-1122 4.2.2.13
     // ignore RST if not connected
   } else if (pkt->tcp->flags & TH_SYN) {
-    // TODO(): handle_opt(s, pkt->tcp);  // process options (MSS)
-    // At this point, s = NULL, there is no connection.
-    // Use peer's source port as ISN, in order to recognise the handshake
-    uint32_t isn = mg_htonl((uint32_t) mg_ntohs(pkt->tcp->sport));
-    tx_tcp_pkt(ifp, pkt, TH_SYN | TH_ACK, isn, NULL, 0);
+    struct connstate cs;  // At this point, s = NULL, there is no connection
+    int key;
+    uint32_t isn;
+    if (pkt->tcp->sport != 0) {
+      handle_opt(&cs, pkt->tcp);                          // process options (MSS)
+      key = backlog_insert(c, pkt->tcp->sport, cs.dmss);  // backlog options (MSS)
+      if (key < 0) return;  // no room in backlog, discard SYN, client retries
+      // Use peer's src port and bl key as ISN, to later identify the handshake
+      isn = (mg_htonl(((uint32_t)key << 16) | mg_ntohs(pkt->tcp->sport)));
+      tx_tcp_pkt(ifp, pkt, TH_SYN | TH_ACK, isn, NULL, 0);
+    } // what should we do when port=0 ? Linux takes port 0 as any other port
   } else if (pkt->tcp->flags & TH_FIN) {
     tx_tcp_pkt(ifp, pkt, TH_FIN | TH_ACK, pkt->tcp->ack, NULL, 0);
-  } else if (mg_htonl(pkt->tcp->ack) == mg_htons(pkt->tcp->sport) + 1U) {
-    accept_conn(c, pkt);
+  } else if ((uint16_t) (mg_htonl(pkt->tcp->ack) - 1) ==
+             mg_htons(pkt->tcp->sport)) {
+    uint16_t key = (uint16_t) ((mg_htonl(pkt->tcp->ack) - 1) >> 16);
+    struct mg_backlog *b = backlog_retrieve(c, key, pkt->tcp->sport);
+    if (b != NULL) {
+      accept_conn(c, pkt, b->mss);  // pass options
+      backlog_remove(c, key);
+    } else if (!c->is_accepted) {         // not an actual match, reset
+      tx_tcp_pkt(ifp, pkt, TH_RST | TH_ACK, pkt->tcp->ack, NULL, 0);
+      // TODO(scaprile): revisit this and below, weird scenarios
+    }
   } else if (!c->is_accepted) {  // no peer
     tx_tcp_pkt(ifp, pkt, TH_RST | TH_ACK, pkt->tcp->ack, NULL, 0);
   } else {
@@ -970,6 +1036,7 @@ static void mg_tcpip_poll(struct mg_tcpip_if *ifp, uint64_t now) {
              names[ifp->state], mg_print_ip4, &ifp->ip, ifp->nrecv, ifp->nsent,
              ifp->ndrop, ifp->nerr));
 #endif
+    backlog_poll(ifp->mgr);
   }
   // Handle gw ARP request timeout, order is important
   if (expired_1000ms && ifp->state == MG_TCPIP_STATE_IP) {
@@ -1303,7 +1370,7 @@ static void setdns4(struct mg_tcpip_if *ifp, uint32_t *ip) {
   MG_DEBUG(("Set DNS URL to %s", dnsc->url));
   if (ifp->mgr->use_dns6) return;
   if (dnsc->c != NULL) mg_close_conn(dnsc->c);
-  if (!mg_dnsc_init(ifp->mgr, dnsc)) // create DNS connection
+  if (!mg_dnsc_init(ifp->mgr, dnsc))  // create DNS connection
     MG_ERROR(("DNS connection creation failed"));
 }
 
