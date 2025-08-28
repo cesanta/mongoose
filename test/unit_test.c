@@ -4,13 +4,19 @@
 #include "math.h"
 
 static int s_num_tests = 0;
+static bool s_error = false;
 
+#ifdef NO_ABORT
+static int s_abort = 0;
+#define ABORT() ++s_abort, s_error = true
+#else
 #ifdef NO_SLEEP_ABORT
 #define ABORT() abort()
 #else
 #define ABORT()                       \
   sleep(2); /* 2s, GH print reason */ \
   abort();
+#endif
 #endif
 
 #define ASSERT(expr)                                            \
@@ -3953,54 +3959,124 @@ static void test_crypto(void) {
   test_rsa();
 }
 
+
+#define DASHBOARD(x)  printf("HEALTH_DASHBOARD\t\"%s\": %s,\n", x, s_error ? "false":"true");
+
 int main(void) {
   const char *debug_level = getenv("V");
   if (debug_level == NULL) debug_level = "3";
   mg_log_set(atoi(debug_level));
 
+  s_error = false;
   test_crypto();
+  DASHBOARD("crypto");
+
+  s_error = false;
   test_split();
-  test_json();
-  test_queue();
-  test_rpc();
+  test_util();
   test_str();
   test_match();
+  test_crc32();
+  DASHBOARD("misc");
+
+  s_error = false;
+  test_json();
+  DASHBOARD("json");
+
+  s_error = false;
+  test_queue();
+  DASHBOARD("queue");
+
+  s_error = false;
+  test_rpc();
+  DASHBOARD("rpc");
+
+  s_error = false;
+  test_check_ip_acl();
+  DASHBOARD("ip_acl");
+
+  s_error = false;
+  test_udp();
+  DASHBOARD("udp");
+
+  s_error = false;
   test_get_header_var();
+  test_http_get_var();
   test_http_parse();
   test_rewrites();
-  test_check_ip_acl();
-  test_udp();
-  test_packed();
-  test_crc32();
   test_multipart();
   test_invalid_listen_addr();
   test_http_chunked();
-  test_http_upload();
-  test_http_stream_buffer();
-  test_util();
+  DASHBOARD("http_support");
+
+  s_error = false;
+  test_packed();
+  DASHBOARD("packed_fs");
+
+  s_error = false;
   test_dns();
+  DASHBOARD("dns");
+
+  s_error = false;
   test_timer();
+  DASHBOARD("timers");
+
+  s_error = false;
   test_url();
+  DASHBOARD("url");
+
+  s_error = false;
   test_iobuf();
+  DASHBOARD("iobuf");
+
+  s_error = false;
   test_base64();
-  test_http_get_var();
+  DASHBOARD("base64");
+
+  s_error = false;
   test_tls();
+  DASHBOARD("tls");
+
+  s_error = false;
   test_ws();
   test_ws_fragmentation();
+  DASHBOARD("ws");
+
+  s_error = false;
+  test_http_upload();
+  test_http_stream_buffer();
   test_http_server();
   test_http_404();
   test_http_no_content_length();
   test_http_pipeline();
   test_http_range();
+  DASHBOARD("http_server");
+
 #ifndef LOCALHOST_ONLY
+  s_error = false;
   test_sntp();
+  DASHBOARD("sntp");
+
+  s_error = false;
   test_mqtt();  // sorry, MQTT_LOCALHOST is also skipped 
+  DASHBOARD("mqtt");
+
+  s_error = false;
   test_http_client();
+  DASHBOARD("http_client");
+
 #else
   (void) test_sntp, (void) test_mqtt, (void) test_http_client;
 #endif
+  s_error = false;
   test_poll();
-  printf("SUCCESS. Total tests: %d\n", s_num_tests);
+  printf("HEALTH_DASHBOARD\t\"poll\": %s\n", s_error ? "false":"true");
+ // last entry with no comma
 
+#ifdef NO_ABORT
+  if (s_abort != 0) return EXIT_FAILURE;
+#endif
+
+  printf("SUCCESS. Total tests: %d\n", s_num_tests);
   return EXIT_SUCCESS;
 }
