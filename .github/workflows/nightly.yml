@@ -33,11 +33,16 @@ jobs:
     env:
       CC: ${{ matrix.cc }}
       SSL: ${{ matrix.ssl }}
-      TFLAGS: ${{ matrix.select }} -DMQTT_LOCALHOST
+      TFLAGS: ${{ matrix.select }} -DMQTT_LOCALHOST -DNO_ABORT
     steps:
     - uses: actions/checkout@v4
       with: { fetch-depth: 2 }
-    - run: sudo apt -y update ; sudo apt -y install libmbedtls-dev libwolfssl-dev && test/setup_mqtt_server.sh && make -C test ${{ matrix.target }}
+    - uses: webfactory/ssh-agent@v0.9.1
+      with:
+            ssh-private-key: ${{ secrets.HEALTH_TESTS_SSH_KEY }}
+    - run: sudo apt -y update ; sudo apt -y install libmbedtls-dev libwolfssl-dev && test/setup_mqtt_server.sh && make -C test ${{ matrix.target }} > log
+    - run: test/health.awk < log > json
+    - run: scp -o "StrictHostKeyChecking=no" json "root@176.9.217.245:/data/downloads/linux_${{ matrix.target }}_${{ matrix.cc }}_${{ matrix.ssl }}_${{ matrix.select }}_$(date +"%Y%m%d").json"
   mip:
     runs-on: ubuntu-latest
     strategy:
