@@ -82,13 +82,19 @@ static const char *s_ca_cert =
 static char *host_ip;
 
 static int s_num_tests = 0;
+static bool s_error = false;
 
+#ifdef NO_ABORT
+static int s_abort = 0;
+#define ABORT() ++s_abort, s_error = true
+#else
 #ifdef NO_SLEEP_ABORT
 #define ABORT() abort()
 #else
 #define ABORT()                       \
   sleep(2); /* 2s, GH print reason */ \
   abort();
+#endif
 #endif
 
 #define ASSERT(expr)                                            \
@@ -100,6 +106,7 @@ static int s_num_tests = 0;
       ABORT();                                                  \
     }                                                           \
   } while (0)
+
 
 static struct mg_http_message gethm(const char *buf) {
   struct mg_http_message hm;
@@ -531,22 +538,41 @@ int main(void) {
     usleep(10000);  // 10 ms
   }
 
+#define DASHBOARD(x)  printf("HEALTH_DASHBOARD\t\"%s\": %s,\n", x, s_error ? "false":"true");
+
   // RUN TESTS
   usleep(500000);  // 500 ms
+  s_error = false;
   test_http_client(&mgr);
-  usleep(500000);  // 500 ms
-  test_http_server(&mgr);
-  usleep(500000);  // 500 ms
-  test_tls(&mgr);
-  usleep(500000);  // 500 ms
-  test_mqtt_connsubpub(&mgr);
-  usleep(500000);  // 500 ms
+  DASHBOARD("http_client");
 
-  printf("SUCCESS. Total tests: %d\n", s_num_tests);
+  usleep(500000);  // 500 ms
+  s_error = false;
+  test_http_server(&mgr);
+  DASHBOARD("http_server");
+
+  usleep(500000);  // 500 ms
+  s_error = false;
+  test_tls(&mgr);
+  DASHBOARD("tls");
+
+  usleep(500000);  // 500 ms
+  s_error = false;
+  test_mqtt_connsubpub(&mgr);
+  DASHBOARD("mqtt");
 
   // Clear
+  s_error = false;
   mg_mgr_free(&mgr);
   ASSERT(mgr.conns == NULL);  // Deconstruction OK
   close(fd);
-  return 0;
+  printf("HEALTH_DASHBOARD\t\"cleanup\": %s\n", s_error ? "false":"true");
+ // last entry with no comma
+
+#ifdef NO_ABORT
+  if (s_abort != 0) return EXIT_FAILURE;
+#endif
+
+  printf("SUCCESS. Total tests: %d\n", s_num_tests);
+  return EXIT_SUCCESS;
 }

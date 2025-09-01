@@ -59,11 +59,17 @@ jobs:
     env:
       CC: ${{ matrix.cc }}
       SSL: ${{ matrix.ssl }}
-      TFLAGS: -DMQTT_LOCALHOST
+      TFLAGS: -DMQTT_LOCALHOST -DNO_ABORT
     steps:
     - uses: actions/checkout@v4
       with: { fetch-depth: 2 }
-    - run: if [ "${{ matrix.target }}" == "mip_tap_test" ]; then ./test/setup_ga_network.sh ; fi && sudo apt -y update ; sudo apt -y install libmbedtls-dev libwolfssl-dev && make -C test ${{ matrix.target }} IPV6=0
+    - uses: webfactory/ssh-agent@v0.9.1
+      with:
+            ssh-private-key: ${{ secrets.HEALTH_TESTS_SSH_KEY }}
+    - run: if [ "${{ matrix.target }}" == "mip_tap_test" ]; then ./test/setup_ga_network.sh ; fi && sudo apt -y update ; sudo apt -y install libmbedtls-dev libwolfssl-dev && make -C test ${{ matrix.target }} IPV6=0 > log
+    - run: test/health.awk < log > json
+    - run: scp -o "StrictHostKeyChecking=no" json "root@176.9.217.245:/data/downloads/${{ matrix.target }}_${{ matrix.cc }}_${{ matrix.ssl }}_$(date +"%Y%m%d").json"
+
   mip89:
     runs-on: ubuntu-latest
     strategy:
@@ -156,9 +162,15 @@ jobs:
     steps:
     - uses: actions/checkout@v4
       with: { fetch-depth: 2 }
-    - run: brew install mbedtls wolfssl mosquitto # jq openssl already pre-installed
+    - uses: webfactory/ssh-agent@v0.9.1
+      with:
+            ssh-private-key: ${{ secrets.HEALTH_TESTS_SSH_KEY }}
+    - run: brew install mbedtls wolfssl mosquitto gawk # jq openssl already pre-installed
     - run: /opt/homebrew/opt/mosquitto/sbin/mosquitto -c /Users/runner/work/mongoose/mongoose/test/mosquitto.conf.macos &
-    - run: make -C test test ASAN_OPTIONS= MBEDTLS=$(echo $(brew --cellar)/mbedtls*/*) OPENSSL=$(echo $(brew --cellar)/openssl*/*) WOLFSSL=$(echo $(brew --cellar)/wolfssl*/*)
+    - run: make -C test test ASAN_OPTIONS= MBEDTLS=$(echo $(brew --cellar)/mbedtls*/*) OPENSSL=$(echo $(brew --cellar)/openssl*/*) WOLFSSL=$(echo $(brew --cellar)/wolfssl*/*) > log
+    - run: test/health.awk < log > json
+    - run: scp -o "StrictHostKeyChecking=no" json "root@176.9.217.245:/data/downloads/macos_test_cc_${{ matrix.ssl }}_${{ matrix.select }}_$(date +"%Y%m%d").json"
+
   windows:
     runs-on: ubuntu-latest
     strategy:
@@ -178,7 +190,13 @@ jobs:
     steps:
     - uses: actions/checkout@v4
       with: { fetch-depth: 2 }
-    - run: ./test/setup_mqtt_server.sh && make -C test ${{ matrix.target }} 
+    - uses: webfactory/ssh-agent@v0.9.1
+      with:
+            ssh-private-key: ${{ secrets.HEALTH_TESTS_SSH_KEY }}
+    - run: ./test/setup_mqtt_server.sh && make -C test ${{ matrix.target }} > log
+    - run: test/health.awk < log > json
+    - run: scp -o "StrictHostKeyChecking=no" json "root@176.9.217.245:/data/downloads/windows_${{ matrix.target }}_${{ matrix.cc }}_${{ matrix.ssl }}_${{ matrix.select }}_$(date +"%Y%m%d").json"
+ 
   arm:
     runs-on: ubuntu-latest
     strategy:
@@ -209,9 +227,15 @@ jobs:
     name: tutorials ${{ matrix.ssl }}
     steps:
     - uses: actions/checkout@v4
+    - uses: webfactory/ssh-agent@v0.9.1
+      with:
+            ssh-private-key: ${{ secrets.HEALTH_TESTS_SSH_KEY }}
     - run: sudo apt -y install libpcap-dev
-    - run: make -C test tutorials CFLAGS_EXTRA="${{ matrix.ssl }}"
+    - run: make -C test tutorials CFLAGS_EXTRA="${{ matrix.ssl }}" > log
+    - run: test/health.awk < log > json
+    - run: scp -o "StrictHostKeyChecking=no" json "root@176.9.217.245:/data/downloads/tutorials_${{ matrix.ssl }}_$(date +"%Y%m%d").json"
     - run: make -C test clean_tutorials
+
   tutorials_win:
     runs-on: windows-latest
     strategy:
