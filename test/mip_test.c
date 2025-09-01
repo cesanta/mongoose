@@ -6,15 +6,21 @@
 #include "driver_mock.c"
 
 static int s_num_tests = 0;
+static bool s_error = false;
 static int s_sent_fragment = 0;
 static int s_seg_sent = 0;
 
+#ifdef NO_ABORT
+static int s_abort = 0;
+#define ABORT() ++s_abort, s_error = true
+#else
 #ifdef NO_SLEEP_ABORT
 #define ABORT() abort()
 #else
 #define ABORT()                       \
   sleep(2); /* 2s, GH print reason */ \
   abort();
+#endif
 #endif
 
 #define ASSERT(expr)                                            \
@@ -26,6 +32,7 @@ static int s_seg_sent = 0;
       ABORT();                                                  \
     }                                                           \
   } while (0)
+
 
 static void test_csum(void) {
   uint8_t ip[20] = {0x45, 0x00, 0x00, 0x1c, 0x00, 0x00, 0x00, 0x00, 0x28, 0x11,
@@ -811,12 +818,35 @@ static void test_tcp(void) {
   test_tcp_retransmit();
 }
 
+
+#define DASHBOARD(x)  printf("HEALTH_DASHBOARD\t\"%s\": %s,\n", x, s_error ? "false":"true");
+
 int main(void) {
+  s_error = false;
   test_csum();
+  DASHBOARD("checksum");
+
+  s_error = false;
   test_statechange();
+  DASHBOARD("statechange");
+
+  s_error = false;
   test_poll();
+  DASHBOARD("poll");
+
+  s_error = false;
   test_tcp();
+  DASHBOARD("tcp");
+
+  s_error = false;
   test_fragmentation();
+  printf("HEALTH_DASHBOARD\t\"ipfrag\": %s\n", s_error ? "false":"true");
+ // last entry with no comma
+
+#ifdef NO_ABORT
+  if (s_abort != 0) return EXIT_FAILURE;
+#endif
+
   printf("SUCCESS. Total tests: %d\n", s_num_tests);
-  return 0;
+  return EXIT_SUCCESS;
 }
