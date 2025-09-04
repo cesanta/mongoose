@@ -7,7 +7,7 @@
     <license>../../LICENSE::License.txt</license>
     <supportContact>https://mongoose.ws/contact/</supportContact>
     <releases>
-        <release date="2025-07-21" version="7.18.2">See https://github.com/cesanta/mongoose/releases/tag/7.18</release>
+        <release date="2025-09-04" version="7.19.0">See https://github.com/cesanta/mongoose/releases/tag/7.19</release>
         <release date="2024-03-01" version="7.13.0">See https://github.com/cesanta/mongoose/releases/tag/7.13</release>
     </releases>
     <keywords>
@@ -23,14 +23,14 @@
         </condition>
     </conditions>
     <components>
-        <component Cclass="Network Library" Cgroup="Mongoose" Cversion="7.18.2" maxInstances="1">
+        <component Cclass="Network Library" Cgroup="Mongoose" Cversion="7.19.0" maxInstances="1">
             <description>Mongoose HTTP/MQTT/Websocket Library</description>
             <files>
                 <file category="source" name="../../mongoose.c::Middlewares/Third_Party/Mongoose/mongoose.c"/>
                 <file category="header" name="../../mongoose.h::Middlewares/Third_Party/Mongoose/mongoose.h"/>
             </files>
         </component>
-        <component Cclass="Network Library" Cgroup="Minimal" Cversion="7.18.2" maxInstances="1">
+        <component Cclass="Network Library" Cgroup="Minimal" Cversion="7.19.0" maxInstances="1">
             <description>Add the simplest basic functionality, as described in Mongoose User Guide
 https://mongoose.ws/documentation/#user-guide</description>
             <files>
@@ -39,7 +39,7 @@ https://mongoose.ws/documentation/#user-guide</description>
         </component>
     </components>
     <examples>
-        <example doc="README.md" folder="Examples/x/x/nucleo-f746zg-cube-baremetal::Projects/NUCLEO-F746ZG/Examples/nucleo-f746zg-cube-baremetal" name="nucleo-f746zg-cube-baremetal" public="false" version="7.18.2">
+        <example doc="README.md" folder="Examples/x/x/nucleo-f746zg-cube-baremetal::Projects/NUCLEO-F746ZG/Examples/nucleo-f746zg-cube-baremetal" name="nucleo-f746zg-cube-baremetal" public="false" version="7.19.0">
             <description>Baremetal web device dashboard on NUCLEO-F746ZG, built on STM32CubeIDE</description>
             <board Dvendor="STMicroelectronics:13" name="NUCLEO-F746ZG" vendor="STMicroelectronics"/>
             <project>
@@ -56,7 +56,7 @@ https://mongoose.ws/documentation/#user-guide</description>
                 <keyword>network</keyword>
             </attributes>
         </example>
-        <example doc="README.md" folder="Examples/x/x/nucleo-f746zg-cube-freertos-lwip::Projects/NUCLEO-F746ZG/Examples/nucleo-f746zg-cube-freertos-lwip" name="nucleo-f746zg-cube-freertos-lwip" public="false" version="7.18.2">
+        <example doc="README.md" folder="Examples/x/x/nucleo-f746zg-cube-freertos-lwip::Projects/NUCLEO-F746ZG/Examples/nucleo-f746zg-cube-freertos-lwip" name="nucleo-f746zg-cube-freertos-lwip" public="false" version="7.19.0">
             <description>Web device dashboard using Mongoose over FreeRTOS + lwIP on a NUCLEO-F746ZG, built on STM32CubeIDE</description>
             <board Dvendor="STMicroelectronics:13" name="NUCLEO-F746ZG" vendor="STMicroelectronics"/>
             <project>
@@ -73,7 +73,7 @@ https://mongoose.ws/documentation/#user-guide</description>
                 <keyword>network</keyword>
             </attributes>
         </example>
-        <example doc="README.md" folder="Examples/x/x/nucleo-f746zg-cube-freertos::Projects/NUCLEO-F746ZG/Examples/nucleo-f746zg-cube-freertos" name="nucleo-f746zg-cube-freertos" public="false" version="7.18.2">
+        <example doc="README.md" folder="Examples/x/x/nucleo-f746zg-cube-freertos::Projects/NUCLEO-F746ZG/Examples/nucleo-f746zg-cube-freertos" name="nucleo-f746zg-cube-freertos" public="false" version="7.19.0">
             <description>Web device dashboard using Mongoose as a FreeRTOS task on a NUCLEO-F746ZG, built on STM32CubeIDE</description>
             <board Dvendor="STMicroelectronics:13" name="NUCLEO-F746ZG" vendor="STMicroelectronics"/>
             <project>
