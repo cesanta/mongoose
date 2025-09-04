@@ -9,8 +9,8 @@ all:
 	cp ../../LICENSE License.txt
 	cp ../../README.md .
 	cp ../../mongoose.[ch] Mongoose/
-	grep -l net.h Boards/*/*/*/main.c | xargs -n 1 dirname | sed 's.$$./.' | xargs -n 1 cp ../../examples/device-dashboard/net.[ch]
-	grep -l net.h Boards/*/*/*/main.c | xargs -n 1 dirname | sed 's.$$./.' | xargs -n 1 cp ../../examples/device-dashboard/packed_fs.c
+	grep -l net.h Boards/*/*/*/main.c | xargs -n 1 dirname | sed 's.$$./.' | xargs -n 1 cp ../../tutorials/http/device-dashboard/net.[ch]
+	grep -l net.h Boards/*/*/*/main.c | xargs -n 1 dirname | sed 's.$$./.' | xargs -n 1 cp ../../tutorials/http/device-dashboard/packed_fs.c
 	$(GENPACK)
 	rm License.txt README.md Mongoose/mongoose.[ch]
 	rm -f Boards/*/*/*/net.[ch]
@@ -43,9 +43,9 @@ keilexamples: $(KEILDIRS)
 	$(MAKE) -f ../../test/keil/Clean "PROJECTS=$(KEILPROJECTS)"
 
 $(KEILDIRS): FORCE  # copy anyway, even if not needed
-	copy /Y ..\..\examples\device-dashboard\net.c $(subst /,\,$@)
-	copy /Y ..\..\examples\device-dashboard\net.h $(subst /,\,$@)
-	copy /Y ..\..\examples\device-dashboard\packed_fs.c $(subst /,\,$@)
+	copy /Y ..\..\tutorials\http\device-dashboard\net.c $(subst /,\,$@)
+	copy /Y ..\..\tutorials\http\device-dashboard\net.h $(subst /,\,$@)
+	copy /Y ..\..\tutorials\http\device-dashboard\packed_fs.c $(subst /,\,$@)
 # not removed
 
 FORCE:
