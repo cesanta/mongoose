@@ -8912,7 +8912,7 @@ static void mg_set_non_blocking_mode(MG_SOCKET_TYPE fd) {
 void mg_multicast_add(struct mg_connection *c, char *ip);
 void mg_multicast_add(struct mg_connection *c, char *ip) {
 #if MG_ENABLE_RL
-#error UNSUPPORTED
+  MG_ERROR(("unsupported"));
 #elif MG_ENABLE_FREERTOS_TCP
   // TODO(): prvAllowIPPacketIPv4()
 #else

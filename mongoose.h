@@ -285,6 +285,7 @@ extern "C" {
 #define mode_t size_t
 #include <alloca.h>
 #include <time.h>
+#define strdup(s) ((char *) mg_strdup(mg_str(s)).buf)
 #elif defined(__CCRH__)
 #else
 #include <sys/stat.h>
