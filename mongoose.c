@@ -4205,7 +4205,7 @@ struct eth {
 struct ip {
   uint8_t ver;    // Version
   uint8_t tos;    // Unused
-  uint16_t len;   // Length
+  uint16_t len;   // Datagram length
   uint16_t id;    // Unused
   uint16_t frag;  // Fragmentation
 #define IP_FRAG_OFFSET_MSK 0x1fff
@@ -4218,16 +4218,22 @@ struct ip {
 };
 
 struct ip6 {
-  uint8_t ver;      // Version
-  uint8_t opts[3];  // Options
-  uint16_t len;     // Length
-  uint8_t proto;    // Upper level protocol
-  uint8_t ttl;      // Time to live
-  uint8_t src[16];  // Source IP
-  uint8_t dst[16];  // Destination IP
+  uint8_t ver;       // Version
+  uint8_t label[3];  // Flow label
+  uint16_t plen;     // Payload length
+  uint8_t next;      // Upper level protocol
+  uint8_t hops;      // Hop limit
+  uint8_t src[16];   // Source IP
+  uint8_t dst[16];   // Destination IP
 };
 
 struct icmp {
+  uint8_t type;
+  uint8_t code;
+  uint16_t csum;
+};
+
+struct icmp6 {
   uint8_t type;
   uint8_t code;
   uint16_t csum;
@@ -4282,6 +4288,14 @@ struct dhcp {
   uint8_t options[30 + sizeof(((struct mg_tcpip_if *) 0)->dhcp_name)];
 };
 
+struct dhcp6 {
+  union {
+    uint8_t type;
+    uint32_t xid;
+  };
+  uint8_t options[30 + sizeof(((struct mg_tcpip_if *) 0)->dhcp_name)];
+};
+
 #pragma pack(pop)
 
 struct pkt {
@@ -4293,9 +4307,11 @@ struct pkt {
   struct ip *ip;
   struct ip6 *ip6;
   struct icmp *icmp;
+  struct icmp6 *icmp6;
   struct tcp *tcp;
   struct udp *udp;
   struct dhcp *dhcp;
+  struct dhcp6 *dhcp6;
 };
 
 static void mg_tcpip_call(struct mg_tcpip_if *ifp, int ev, void *ev_data) {
@@ -4306,7 +4322,7 @@ static void send_syn(struct mg_connection *c);
 
 static void mkpay(struct pkt *pkt, void *p) {
   pkt->pay =
-      mg_str_n((char *) p, (size_t) (&pkt->raw.buf[pkt->raw.len] - (char *) p));
+      mg_str_n((char *) p, (size_t) (&pkt->pay.buf[pkt->pay.len] - (char *) p));
 }
 
 static uint32_t csumup(uint32_t sum, const void *buf, size_t len) {
@@ -4569,7 +4585,7 @@ static void rx_dhcp_client(struct mg_tcpip_if *ifp, struct pkt *pkt) {
   uint8_t msgtype = 0, state = ifp->state;
   // perform size check first, then access fields
   uint8_t *p = pkt->dhcp->options,
-          *end = (uint8_t *) &pkt->raw.buf[pkt->raw.len];
+          *end = (uint8_t *) &pkt->pay.buf[pkt->pay.len];
   if (end < (uint8_t *) (pkt->dhcp + 1)) return;
   if (memcmp(&pkt->dhcp->xid, ifp->mac + 2, sizeof(pkt->dhcp->xid))) return;
   while (p + 1 < end && p[0] != 255) {  // Parse options RFC-1533 #9
@@ -4629,7 +4645,7 @@ static void rx_dhcp_client(struct mg_tcpip_if *ifp, struct pkt *pkt) {
 // Simple DHCP server that assigns a next IP address: ifp->ip + 1
 static void rx_dhcp_server(struct mg_tcpip_if *ifp, struct pkt *pkt) {
   uint8_t op = 0, *p = pkt->dhcp->options,
-          *end = (uint8_t *) &pkt->raw.buf[pkt->raw.len];
+          *end = (uint8_t *) &pkt->pay.buf[pkt->pay.len];
   // struct dhcp *req = pkt->dhcp;
   struct dhcp res = {2, 1, 6, 0, 0, 0, 0, 0, 0, 0, 0, {0}, 0, {0}};
   if (end < (uint8_t *) (pkt->dhcp + 1)) return;
@@ -4666,26 +4682,25 @@ static void rx_dhcp_server(struct mg_tcpip_if *ifp, struct pkt *pkt) {
   }
 }
 
-static void rx_udp(struct mg_tcpip_if *ifp, struct pkt *pkt) {
+static bool rx_udp(struct mg_tcpip_if *ifp, struct pkt *pkt) {
   struct mg_connection *c = getpeer(ifp->mgr, pkt, true);
-  if (c == NULL) {
-    // No UDP listener on this port. Should send ICMP, but keep silent.
+  struct connstate *s;
+  if (c == NULL) return false;  // No UDP listener on this port
+  s = (struct connstate *) (c + 1);
+  c->rem.port = pkt->udp->sport;
+  memcpy(c->rem.ip, &pkt->ip->src, sizeof(uint32_t));
+  memcpy(s->mac, pkt->eth->src, sizeof(s->mac));
+  if (c->recv.len >= MG_MAX_RECV_SIZE) {
+    mg_error(c, "max_recv_buf_size reached");
+  } else if (c->recv.size - c->recv.len < pkt->pay.len &&
+             !mg_iobuf_resize(&c->recv, c->recv.len + pkt->pay.len)) {
+    mg_error(c, "oom");
   } else {
-    struct connstate *s = (struct connstate *) (c + 1);
-    c->rem.port = pkt->udp->sport;
-    memcpy(c->rem.ip, &pkt->ip->src, sizeof(uint32_t));
-    memcpy(s->mac, pkt->eth->src, sizeof(s->mac));
-    if (c->recv.len >= MG_MAX_RECV_SIZE) {
-      mg_error(c, "max_recv_buf_size reached");
-    } else if (c->recv.size - c->recv.len < pkt->pay.len &&
-               !mg_iobuf_resize(&c->recv, c->recv.len + pkt->pay.len)) {
-      mg_error(c, "oom");
-    } else {
-      memcpy(&c->recv.buf[c->recv.len], pkt->pay.buf, pkt->pay.len);
-      c->recv.len += pkt->pay.len;
-      mg_call(c, MG_EV_READ, &pkt->pay.len);
-    }
+    memcpy(&c->recv.buf[c->recv.len], pkt->pay.buf, pkt->pay.len);
+    c->recv.len += pkt->pay.len;
+    mg_call(c, MG_EV_READ, &pkt->pay.len);
   }
+  return true;
 }
 
 static size_t tx_tcp(struct mg_tcpip_if *ifp, uint8_t *dst_mac, uint32_t dst_ip,
@@ -4725,7 +4740,6 @@ static size_t tx_tcp(struct mg_tcpip_if *ifp, uint8_t *dst_mac, uint32_t dst_ip,
   MG_VERBOSE(("TCP %M:%hu -> %M:%hu fl %x len %u", mg_print_ip4, &ip->src,
               mg_ntohs(tcp->sport), mg_print_ip4, &ip->dst,
               mg_ntohs(tcp->dport), tcp->flags, len));
-  // mg_hexdump(ifp->tx.buf, PDIFF(ifp->tx.buf, tcp + 1) + len);
   return ether_output(ifp, PDIFF(ifp->tx.buf, tcp + 1) + len);
 }
 
@@ -5081,23 +5095,38 @@ static void rx_tcp(struct mg_tcpip_if *ifp, struct pkt *pkt) {
 }
 
 static void rx_ip(struct mg_tcpip_if *ifp, struct pkt *pkt) {
-  uint16_t frag = mg_ntohs(pkt->ip->frag);
+  uint8_t ihl;
+  uint16_t frag, len;
+  if (pkt->pay.len < sizeof(*pkt->ip)) return;  // Truncated
+  if ((pkt->ip->ver >> 4) != 4) return;         // Not IP
+  ihl = pkt->ip->ver & 0x0F;
+  if (ihl < 5) return;                     // bad IHL
+  if (pkt->pay.len < (ihl * 4)) return;    // Truncated / malformed
+  // There can be link padding, take length from IP header
+  len = mg_ntohs(pkt->ip->len); // IP datagram length
+  if (len < (ihl * 4) || len > pkt->pay.len) return; // malformed
+  pkt->pay.len = len; // strip padding
+  mkpay(pkt, (uint32_t *) pkt->ip + ihl);  // account for opts
+  frag = mg_ntohs(pkt->ip->frag);
   if (frag & IP_MORE_FRAGS_MSK || frag & IP_FRAG_OFFSET_MSK) {
     struct mg_connection *c;
-    if (pkt->ip->proto == 17) pkt->udp = (struct udp *) (pkt->ip + 1);
-    if (pkt->ip->proto == 6) pkt->tcp = (struct tcp *) (pkt->ip + 1);
+    if (pkt->ip->proto == 17) pkt->udp = (struct udp *) (pkt->pay.buf);
+    if (pkt->ip->proto == 6) pkt->tcp = (struct tcp *) (pkt->pay.buf);
     c = getpeer(ifp->mgr, pkt, false);
     if (c) mg_error(c, "Received fragmented packet");
   } else if (pkt->ip->proto == 1) {
-    pkt->icmp = (struct icmp *) (pkt->ip + 1);
+    pkt->icmp = (struct icmp *) (pkt->pay.buf);
     if (pkt->pay.len < sizeof(*pkt->icmp)) return;
     mkpay(pkt, pkt->icmp + 1);
     rx_icmp(ifp, pkt);
   } else if (pkt->ip->proto == 17) {
-    pkt->udp = (struct udp *) (pkt->ip + 1);
-    if (pkt->pay.len < sizeof(*pkt->udp)) return;
+    pkt->udp = (struct udp *) (pkt->pay.buf);
+    if (pkt->pay.len < sizeof(*pkt->udp)) return; // truncated
+    // Take length from UDP header
+    len = mg_ntohs(pkt->udp->len); // UDP datagram length
+    if (len < sizeof(*pkt->udp) || len > pkt->pay.len) return; // malformed
+    pkt->pay.len = len; // strip excess data
     mkpay(pkt, pkt->udp + 1);
-    if (pkt->udp->len < pkt->pay.len) pkt->pay.len = pkt->udp->len;
     MG_VERBOSE(("UDP %M:%hu -> %M:%hu len %u", mg_print_ip4, &pkt->ip->src,
                 mg_ntohs(pkt->udp->sport), mg_print_ip4, &pkt->ip->dst,
                 mg_ntohs(pkt->udp->dport), (int) pkt->pay.len));
@@ -5109,47 +5138,108 @@ static void rx_ip(struct mg_tcpip_if *ifp, struct pkt *pkt) {
       pkt->dhcp = (struct dhcp *) (pkt->udp + 1);
       mkpay(pkt, pkt->dhcp + 1);
       rx_dhcp_server(ifp, pkt);
-    } else {
-      rx_udp(ifp, pkt);
+    } else if (!rx_udp(ifp, pkt)) {
+      // Should send ICMP Destination Unreachable for unicasts, but keep silent
     }
   } else if (pkt->ip->proto == 6) {
-    uint16_t iplen, off;
-    pkt->tcp = (struct tcp *) (pkt->ip + 1);
+    uint8_t off;
+    pkt->tcp = (struct tcp *) (pkt->pay.buf);
     if (pkt->pay.len < sizeof(*pkt->tcp)) return;
-    mkpay(pkt, (uint32_t *) pkt->tcp + (pkt->tcp->off >> 4)); // may have opts
-    iplen = mg_ntohs(pkt->ip->len);
-    off = (uint16_t) (sizeof(*pkt->ip) + ((pkt->tcp->off >> 4) * 4U));
-    if (iplen >= off) pkt->pay.len = (size_t) (iplen - off);
+    off = pkt->tcp->off >> 4;  // account for opts
+    if (pkt->pay.len < (4 * off)) return;
+    mkpay(pkt, (uint32_t *) pkt->tcp + off);
     MG_VERBOSE(("TCP %M:%hu -> %M:%hu len %u", mg_print_ip4, &pkt->ip->src,
                 mg_ntohs(pkt->tcp->sport), mg_print_ip4, &pkt->ip->dst,
                 mg_ntohs(pkt->tcp->dport), (int) pkt->pay.len));
     rx_tcp(ifp, pkt);
+  } else {
+    MG_DEBUG(("Unknown IP proto %x", mg_htons(pkt->ip->proto)));
+    if (mg_log_level >= MG_LL_VERBOSE) mg_hexdump(pkt->ip, pkt->pay.len >= 32 ? 32 : pkt->pay.len);
   }
 }
 
+static bool ip6_handle_opt(struct ip6 *h) {
+  switch(h->next) {
+  case 0:
+  case 43:
+  case 44:
+  case 50:
+  case 51:
+  case 60:
+  case 135:
+  case 139:
+  case 140:
+  case 253:
+  case 254:
+    MG_INFO(("IPv6 extension header %d", (int) h->next));
+    break;
+  default:
+    return false;
+  }
+  return true;
+}
+
 static void rx_ip6(struct mg_tcpip_if *ifp, struct pkt *pkt) {
-  // MG_DEBUG(("IP %d", (int) len));
-  if (pkt->ip6->proto == 1 || pkt->ip6->proto == 58) {
-    pkt->icmp = (struct icmp *) (pkt->ip6 + 1);
-    if (pkt->pay.len < sizeof(*pkt->icmp)) return;
-    mkpay(pkt, pkt->icmp + 1);
-    rx_icmp(ifp, pkt);
-  } else if (pkt->ip6->proto == 17) {
-    pkt->udp = (struct udp *) (pkt->ip6 + 1);
+  struct ip6 *hdr;
+  uint16_t len;
+  if (pkt->pay.len < sizeof(*pkt->ip6)) return;  // Truncated
+  if ((pkt->ip6->ver >> 4) != 0x6) return;       // Not IPv6
+  hdr = pkt->ip6;
+  while (ip6_handle_opt(hdr)) ++hdr;
+  // There can be link padding, take payload length from IPv6 last header
+  len = mg_ntohs(hdr->plen); // IPv6 datagram reported payload length
+  if ((len + (size_t) hdr - (size_t) pkt->ip6) > pkt->pay.len) return;
+  pkt->pay.buf = (char *)(hdr + 1);
+  pkt->pay.len = len; // strip padding
+  if (hdr->next == 58) {
+    pkt->icmp6 = (struct icmp6 *) (pkt->pay.buf);
+    if (pkt->pay.len < sizeof(*pkt->icmp6)) return;
+    mkpay(pkt, pkt->icmp6 + 1);
+    MG_DEBUG(("ICMPv6 %M -> %M len %u", mg_print_ip6, &pkt->ip6->src,
+                mg_print_ip6, &pkt->ip6->dst,
+                (int) pkt->pay.len));
+    // rx_icmp6(ifp, pkt);
+  } else if (hdr->next == 17) {
+    pkt->udp = (struct udp *) (pkt->pay.buf);
     if (pkt->pay.len < sizeof(*pkt->udp)) return;
-    // MG_DEBUG(("  UDP %u %u -> %u", len, mg_htons(udp->sport),
-    // mg_htons(udp->dport)));
     mkpay(pkt, pkt->udp + 1);
+    MG_DEBUG(("UDP %M:%hu -> %M:%hu len %u", mg_print_ip6, &pkt->ip6->src,
+                mg_ntohs(pkt->udp->sport), mg_print_ip6, &pkt->ip6->dst,
+                mg_ntohs(pkt->udp->dport), (int) pkt->pay.len));
+    if (ifp->enable_dhcp_client && pkt->udp->dport == mg_htons(546)) {
+      pkt->dhcp6 = (struct dhcp6 *) (pkt->udp + 1);
+      mkpay(pkt, pkt->dhcp6 + 1);
+      // rx_dhcp6_client(ifp, pkt);
+    } else if (ifp->enable_dhcp_server && pkt->udp->dport == mg_htons(547)) {
+      pkt->dhcp6 = (struct dhcp6 *) (pkt->udp + 1);
+      mkpay(pkt, pkt->dhcp6 + 1);
+      // rx_dhcp6_server(ifp, pkt);
+    } else if (!rx_udp(ifp, pkt)) {
+      // Should send ICMPv6 Destination Unreachable for unicasts, keep silent
+    }
+  } else if (hdr->next == 6) {
+    uint8_t off;
+    pkt->tcp = (struct tcp *) (pkt->pay.buf);
+    if (pkt->pay.len < sizeof(*pkt->tcp)) return;
+    off = pkt->tcp->off >> 4;  // account for opts
+    if (pkt->pay.len < sizeof(*pkt->tcp) + 4 * off) return;
+    mkpay(pkt, (uint32_t *) pkt->tcp + off);
+    MG_DEBUG(("TCP %M:%hu -> %M:%hu len %u", mg_print_ip6, &pkt->ip6->src,
+                mg_ntohs(pkt->tcp->sport), mg_print_ip6, &pkt->ip6->dst,
+                mg_ntohs(pkt->tcp->dport), (int) pkt->pay.len));
+    rx_tcp(ifp, pkt);
+  } else {
+    MG_DEBUG(("Unknown IPv6 next hdr %x", mg_htons(hdr->next)));
+    if (mg_log_level >= MG_LL_VERBOSE) mg_hexdump(pkt->ip6, pkt->pay.len >= 32 ? 32 : pkt->pay.len);
   }
 }
 
 static void mg_tcpip_rx(struct mg_tcpip_if *ifp, void *buf, size_t len) {
   struct pkt pkt;
   memset(&pkt, 0, sizeof(pkt));
-  pkt.raw.buf = (char *) buf;
-  pkt.raw.len = len;
-  pkt.eth = (struct eth *) buf;
-  // mg_hexdump(buf, len > 16 ? 16: len);
+  pkt.pay.buf = pkt.raw.buf = (char *) buf;
+  pkt.pay.len = pkt.raw.len = len; // payload = raw
+  pkt.eth = (struct eth *) buf;   // Ethernet = raw
   if (pkt.raw.len < sizeof(*pkt.eth)) return;  // Truncated - runt?
   if (ifp->enable_mac_check &&
       memcmp(pkt.eth->dst, ifp->mac, sizeof(pkt.eth->dst)) != 0 &&
@@ -5160,28 +5250,19 @@ static void mg_tcpip_rx(struct mg_tcpip_if *ifp, void *buf, size_t len) {
     len -= 4;  // TODO(scaprile): check on bigendian
     crc = mg_crc32(0, (const char *) buf, len);
     if (memcmp((void *) ((size_t) buf + len), &crc, sizeof(crc))) return;
+    pkt.pay.len = len;
   }
+  mkpay(&pkt, pkt.eth + 1);
   if (pkt.eth->type == mg_htons(0x806)) {
-    pkt.arp = (struct arp *) (pkt.eth + 1);
-    if (sizeof(*pkt.eth) + sizeof(*pkt.arp) > pkt.raw.len) return;  // Truncated
+    pkt.arp = (struct arp *) (pkt.pay.buf);
+    if (sizeof(*pkt.eth) + sizeof(*pkt.arp) > pkt.pay.len) return; // Truncated
     mg_tcpip_call(ifp, MG_TCPIP_EV_ARP, &pkt.raw);
     rx_arp(ifp, &pkt);
   } else if (pkt.eth->type == mg_htons(0x86dd)) {
-    pkt.ip6 = (struct ip6 *) (pkt.eth + 1);
-    if (pkt.raw.len < sizeof(*pkt.eth) + sizeof(*pkt.ip6)) return;  // Truncated
-    if ((pkt.ip6->ver >> 4) != 0x6) return;                         // Not IP
-    mkpay(&pkt, pkt.ip6 + 1);
+    pkt.ip6 = (struct ip6 *) (pkt.pay.buf);
     rx_ip6(ifp, &pkt);
   } else if (pkt.eth->type == mg_htons(0x800)) {
-    pkt.ip = (struct ip *) (pkt.eth + 1);
-    if (pkt.raw.len < sizeof(*pkt.eth) + sizeof(*pkt.ip)) return;  // Truncated
-    // Truncate frame to what IP header tells us
-    if ((size_t) mg_ntohs(pkt.ip->len) + sizeof(struct eth) < pkt.raw.len) {
-      pkt.raw.len = (size_t) mg_ntohs(pkt.ip->len) + sizeof(struct eth);
-    }
-    if (pkt.raw.len < sizeof(*pkt.eth) + sizeof(*pkt.ip)) return;  // Truncated
-    if ((pkt.ip->ver >> 4) != 4) return;                           // Not IP
-    mkpay(&pkt, pkt.ip + 1);
+    pkt.ip = (struct ip *) (pkt.pay.buf);
     rx_ip(ifp, &pkt);
   } else {
     MG_DEBUG(("Unknown eth type %x", mg_htons(pkt.eth->type)));

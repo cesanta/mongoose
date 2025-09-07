@@ -164,15 +164,16 @@ static void create_tcp_seg(struct eth *e, struct ip *ip, uint32_t seq,
   t.ack = mg_htonl(ack);
   t.sport = mg_htons(sport);
   t.dport = mg_htons(dport);
-  t.off = (uint8_t) (sizeof(t) / 4 << 4) + (uint8_t) (opts_len / 4 << 4);
+  t.off = (uint8_t) ((sizeof(t) / 4) << 4) + (uint8_t) ((opts_len / 4) << 4);
   memcpy(s_driver_data.buf, e, sizeof(*e));
   ip->len =
-      mg_htons((uint16_t) (sizeof(*ip) + sizeof(struct tcp) + payload_len));
+      mg_htons((uint16_t) (sizeof(*ip) + 4 * (t.off >> 4) + payload_len));
   memcpy(s_driver_data.buf + sizeof(*e), ip, sizeof(*ip));
   memcpy(s_driver_data.buf + sizeof(*e) + sizeof(*ip), &t, sizeof(t));
   if (opts != NULL && opts_len)
     memcpy(s_driver_data.buf + sizeof(*e) + sizeof(*ip) + sizeof(t), opts, opts_len);
   s_driver_data.len = sizeof(*e) + sizeof(*ip) + sizeof(t) + payload_len + opts_len;
+  if (s_driver_data.len < 64) s_driver_data.len = 64; // add padding when needed
 }
 
 static void create_tcp_simpleseg(struct eth *e, struct ip *ip, uint32_t seq,
@@ -182,9 +183,9 @@ static void create_tcp_simpleseg(struct eth *e, struct ip *ip, uint32_t seq,
   create_tcp_seg(e, ip, seq, ack, flags, 1, 80, payload_len, NULL, 0);
 }
 
-static void init_tcp_tests(struct mg_mgr *mgr, struct eth *e, struct ip *ip,
+static void init_tests(struct mg_mgr *mgr, struct eth *e, struct ip *ip,
                            struct mg_tcpip_driver *driver,
-                           struct mg_tcpip_if *mif, mg_event_handler_t f) {
+                           struct mg_tcpip_if *mif, uint8_t proto) {
   mg_mgr_init(mgr);
   memset(mif, 0, sizeof(*mif));
   memset(&s_driver_data, 0, sizeof(struct driver_data));
@@ -193,9 +194,6 @@ static void init_tcp_tests(struct mg_mgr *mgr, struct eth *e, struct ip *ip,
   mif->driver = driver;
   mif->driver_data = &s_driver_data;
   mg_tcpip_init(mgr, mif);
-  mg_http_listen(mgr, "http://0.0.0.0:80", f, NULL);
-  mgr->conns->pfn = NULL;  // HTTP handler not needed
-  mg_mgr_poll(mgr, 0);
 
   // setting the Ethernet header
   memset(e, 0, sizeof(*e));
@@ -204,8 +202,18 @@ static void init_tcp_tests(struct mg_mgr *mgr, struct eth *e, struct ip *ip,
 
   // setting the IP header
   memset(ip, 0, sizeof(*ip));
-  ip->ver = 4 << 4 | 5;
-  ip->proto = 6;
+  ip->ver = (4 << 4) | 5;
+  ip->proto = proto;
+}
+
+static void init_tcp_tests(struct mg_mgr *mgr, struct eth *e, struct ip *ip,
+                           struct mg_tcpip_driver *driver,
+                           struct mg_tcpip_if *mif, mg_event_handler_t f) {
+
+  init_tests(mgr, e, ip, driver, mif, 6); // 6 -> TCP                            
+  mg_http_listen(mgr, "http://0.0.0.0:80", f, NULL);
+  mgr->conns->pfn = NULL;  // HTTP handler not needed
+  mg_mgr_poll(mgr, 0);
 }
 
 static void init_tcp_handshake(struct eth *e, struct ip *ip,
@@ -574,10 +582,6 @@ static void test_tcp_basics(void) {
   ASSERT(!received_response(&s_driver_data));
   }
 
-// TODO(): RST handling
-// https://datatracker.ietf.org/doc/html/rfc9293#section-3.5.3
-// all reset (RST) segments are validated by checking their SEQ fields. A reset is valid if its sequence number is in the window; otherwise, it is silently discarded
-
   s_driver_data.len = 0;
   mg_mgr_free(&mgr);
 }
@@ -819,6 +823,69 @@ static void test_tcp(void) {
 }
 
 
+static void udp_fn(struct mg_connection *c, int ev, void *ev_data) {
+  if (ev == MG_EV_READ && c->recv.len == 2 && c->recv.buf[0] == 'p')
+    mg_send(c, "P90", 3);
+  (void) ev_data;
+}
+
+static void create_udp_dat(struct eth *e, struct ip *ip, uint16_t sport, uint16_t dport, size_t payload_len) {
+  struct udp u;
+  memset(&u, 0, sizeof(struct udp));
+  u.sport = mg_htons(sport);
+  u.dport = mg_htons(dport);
+  u.len = mg_htons((uint16_t) (sizeof(u) + payload_len));
+  memcpy(s_driver_data.buf, e, sizeof(*e));
+  ip->len = mg_htons((uint16_t) (sizeof(*ip) + sizeof(u) + payload_len));
+  memcpy(s_driver_data.buf + sizeof(*e), ip, sizeof(*ip));
+  memcpy(s_driver_data.buf + sizeof(*e) + sizeof(*ip), &u, sizeof(u));
+  *(s_driver_data.buf + sizeof(*e) + sizeof(*ip) + sizeof(u)) = 'p';
+  s_driver_data.len = sizeof(*e) + sizeof(*ip) + sizeof(u) + payload_len;
+  if (s_driver_data.len < 64) s_driver_data.len = 64; // add padding when needed
+}
+
+static void init_udp_tests(struct mg_mgr *mgr, struct eth *e, struct ip *ip,
+                           struct mg_tcpip_driver *driver,
+                           struct mg_tcpip_if *mif, mg_event_handler_t f) {
+
+  init_tests(mgr, e, ip, driver, mif, 17); // 17 -> UDP
+  mif->ip = 1;
+  mif->state = MG_TCPIP_STATE_READY; // so mg_send() works and DHCP stops
+  mg_listen(mgr, "udp://0.0.0.0:888", f, NULL);
+  mg_mgr_poll(mgr, 0);
+}
+
+static void test_udp(void) {
+  struct mg_mgr mgr;
+  struct eth e;
+  struct ip ip;
+  struct udp *u = (struct udp *) (s_driver_data.buf + sizeof(e) + sizeof(ip));
+  // struct ip *i = (struct ip *) (s_driver_data.buf + sizeof(e));
+  struct mg_tcpip_driver driver;
+  struct mg_tcpip_if mif;
+
+  init_udp_tests(&mgr, &e, &ip, &driver, &mif, udp_fn);
+  received_response(&s_driver_data);
+  s_driver_data.len = 0;
+
+  // send data to a non-open port, expect no response (we don't send Destination Unreachable)
+  create_udp_dat(&e, &ip, 1, 800, 2);
+  mg_mgr_poll(&mgr, 0);
+  ASSERT(!received_response(&s_driver_data));
+
+  // send data to an open port, expect response
+  create_udp_dat(&e, &ip, 1, 888, 2);
+  mg_mgr_poll(&mgr, 0);
+  ASSERT(received_response(&s_driver_data));
+  ASSERT(u->sport == mg_htons(888));
+  ASSERT(u->len == mg_htons(sizeof(u) + 3));
+  ASSERT(*((char *)(u + 1)) == 'P');
+
+  s_driver_data.len = 0;
+  mg_mgr_free(&mgr);
+}
+
+
 #define DASHBOARD(x)  printf("HEALTH_DASHBOARD\t\"%s\": %s,\n", x, s_error ? "false":"true");
 
 int main(void) {
@@ -837,6 +904,10 @@ int main(void) {
   s_error = false;
   test_tcp();
   DASHBOARD("tcp");
+
+  s_error = false;
+  test_udp();
+  DASHBOARD("udp");
 
   s_error = false;
   test_fragmentation();
