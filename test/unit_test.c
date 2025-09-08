@@ -3182,7 +3182,7 @@ static void test_udp(void) {
 }
 
 static void test_check_ip_acl(void) {
-  struct mg_addr ip = {{1, 2, 3, 4}, 0, 0, false};  // 1.2.3.4
+  struct mg_addr ip = {{{1, 2, 3, 4}}, 0, 0, false};  // 1.2.3.4
   ASSERT(mg_check_ip_acl(mg_str(NULL), &ip) == 1);
   ASSERT(mg_check_ip_acl(mg_str(""), &ip) == 1);
   ASSERT(mg_check_ip_acl(mg_str("invalid"), &ip) == -1);

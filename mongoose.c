@@ -4817,7 +4817,7 @@ static size_t trim_len(struct mg_connection *c, size_t len) {
 long mg_io_send(struct mg_connection *c, const void *buf, size_t len) {
   struct mg_tcpip_if *ifp = c->mgr->ifp;
   struct connstate *s = (struct connstate *) (c + 1);
-  uint32_t dst_ip = *(uint32_t *) c->rem.ip;
+  uint32_t dst_ip = c->rem.ip4;
   len = trim_len(c, len);
   if (c->is_udp) {
     if (!tx_udp(ifp, s->mac, ifp->ip, c->loc.port, dst_ip, c->rem.port, buf,
@@ -4864,8 +4864,7 @@ static void read_conn(struct mg_connection *c, struct pkt *pkt) {
   struct connstate *s = (struct connstate *) (c + 1);
   struct mg_iobuf *io = c->is_tls ? &c->rtls : &c->recv;
   uint32_t seq = mg_ntohl(pkt->tcp->seq);
-  uint32_t rem_ip;
-  memcpy(&rem_ip, c->rem.ip, sizeof(uint32_t));
+  uint32_t rem_ip = c->rem.ip4;
   if (pkt->tcp->flags & TH_FIN) {
     uint8_t flags = TH_ACK;
     if (mg_ntohl(pkt->tcp->seq) != s->ack) {
@@ -5353,7 +5352,7 @@ static void mg_tcpip_poll(struct mg_tcpip_if *ifp, uint64_t now) {
     uint32_t rem_ip;
     if ((c->is_udp && !c->is_arplooking) || c->is_listening || c->is_resolving)
       continue;
-    memcpy(&rem_ip, c->rem.ip, sizeof(uint32_t));
+    rem_ip = c->rem.ip4;
     if (ifp->now > s->timer) {
       if (s->ttype == MIP_TTYPE_ARP) {
         mg_error(c, "ARP timeout");
@@ -5444,8 +5443,7 @@ void mg_tcpip_free(struct mg_tcpip_if *ifp) {
 static void send_syn(struct mg_connection *c) {
   struct connstate *s = (struct connstate *) (c + 1);
   uint32_t isn = mg_htonl((uint32_t) mg_ntohs(c->loc.port));
-  uint32_t rem_ip;
-  memcpy(&rem_ip, c->rem.ip, sizeof(uint32_t));
+  uint32_t rem_ip = c->rem.ip4;
   tx_tcp(c->mgr->ifp, s->mac, rem_ip, TH_SYN, c->loc.port, c->rem.port, isn, 0,
          NULL, 0);
 }
@@ -5469,11 +5467,10 @@ static void ip4_mcastmac(uint8_t *mac, uint32_t *ip) {
 
 void mg_connect_resolved(struct mg_connection *c) {
   struct mg_tcpip_if *ifp = c->mgr->ifp;
-  uint32_t rem_ip;
-  memcpy(&rem_ip, c->rem.ip, sizeof(uint32_t));
+  uint32_t rem_ip = c->rem.ip4;
   c->is_resolving = 0;
   if (ifp->eport < MG_EPHEMERAL_PORT_BASE) ifp->eport = MG_EPHEMERAL_PORT_BASE;
-  memcpy(c->loc.ip, &ifp->ip, sizeof(uint32_t));
+  c->loc.ip4 = ifp->ip;
   c->loc.port = mg_htons(ifp->eport++);
   MG_DEBUG(("%lu %M -> %M", c->id, mg_print_ip_port, &c->loc, mg_print_ip_port,
             &c->rem));
@@ -5525,8 +5522,7 @@ static void init_closure(struct mg_connection *c) {
   struct connstate *s = (struct connstate *) (c + 1);
   if (c->is_udp == false && c->is_listening == false &&
       c->is_connecting == false) {  // For TCP conns,
-    uint32_t rem_ip;
-    memcpy(&rem_ip, c->rem.ip, sizeof(uint32_t));
+  uint32_t rem_ip = c->rem.ip4;
     tx_tcp(c->mgr->ifp, s->mac, rem_ip, TH_FIN | TH_ACK, c->loc.port,
            c->rem.port, mg_htonl(s->seq), mg_htonl(s->ack), NULL, 0);
     settmout(c, MIP_TTYPE_FIN);
@@ -5580,8 +5576,7 @@ void mg_mgr_poll(struct mg_mgr *mgr, int ms) {
 bool mg_send(struct mg_connection *c, const void *buf, size_t len) {
   struct mg_tcpip_if *ifp = c->mgr->ifp;
   bool res = false;
-  uint32_t rem_ip;
-  memcpy(&rem_ip, c->rem.ip, sizeof(uint32_t));
+  uint32_t rem_ip = c->rem.ip4;
   if (ifp->ip == 0 || ifp->state != MG_TCPIP_STATE_READY) {
     mg_error(c, "net down");
   } else if (c->is_udp && (c->is_arplooking || c->is_resolving)) {
