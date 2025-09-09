@@ -1,4 +1,5 @@
 #include "net_builtin.h"
+#include "profile.h"
 
 #if MG_ENABLE_TCPIP
 #define MG_EPHEMERAL_PORT_BASE 32768
@@ -158,6 +159,25 @@ struct pkt {
 };
 
 static void mg_tcpip_call(struct mg_tcpip_if *ifp, int ev, void *ev_data) {
+#if MG_ENABLE_PROFILE
+  const char *names[] = {
+  "TCPIP_EV_ST_CHG",
+  "TCPIP_EV_DHCP_DNS",
+  "TCPIP_EV_DHCP_SNTP",
+  "TCPIP_EV_ARP",
+  "TCPIP_EV_TIMER_1S",
+  "TCPIP_EV_WIFI_SCAN_RESULT",
+  "TCPIP_EV_WIFI_SCAN_END",
+  "TCPIP_EV_WIFI_CONNECT_ERR",
+  "TCPIP_EV_DRIVER",
+  "TCPIP_EV_USER" 
+  };
+  if (ev != MG_TCPIP_EV_POLL && ev < (int) (sizeof(names) / sizeof(names[0]))) {
+    MG_PROF_ADD(c, names[ev]);
+  }
+#endif
+  // Fire protocol handler first, user handler second. See #2559
+  if (ifp->pfn != NULL) ifp->pfn(ifp, ev, ev_data);
   if (ifp->fn != NULL) ifp->fn(ifp, ev, ev_data);
 }
 

@@ -6,23 +6,43 @@
 #include "pico/stdlib.h"
 
 static struct mg_tcpip_if *s_ifp;
+static uint32_t s_ip, s_mask;
+static bool s_aplink = false, s_scanning = false;
+static bool s_stalink = false, s_connecting = false;
+
+static void wifi_cb(struct mg_tcpip_if *ifp, int ev, void *ev_data) {
+  struct mg_wifi_data *wifi =
+      &((struct mg_tcpip_driver_pico_w_data *) ifp->driver_data)->wifi;
+  if (wifi->apmode && ev == MG_TCPIP_EV_ST_CHG &&
+      *(uint8_t *) ev_data == MG_TCPIP_STATE_UP) {
+    MG_DEBUG(("Access Point started"));
+    s_ip = ifp->ip, ifp->ip = wifi->apip;
+    s_mask = ifp->mask, ifp->mask = wifi->apmask;
+    ifp->enable_dhcp_client = false;
+    ifp->enable_dhcp_server = true;
+  }
+}
 
 static bool mg_tcpip_driver_pico_w_init(struct mg_tcpip_if *ifp) {
   struct mg_tcpip_driver_pico_w_data *d =
       (struct mg_tcpip_driver_pico_w_data *) ifp->driver_data;
+  struct mg_wifi_data *wifi = &d->wifi;
   s_ifp = ifp;
+  s_ip = ifp->ip;
+  s_mask = ifp->mask;
+  ifp->pfn = wifi_cb;
   if (cyw43_arch_init() != 0)
     return false;  // initialize async_context and WiFi chip
-  if (d->apmode && d->apssid != NULL) {
-    MG_DEBUG(("Starting AP '%s' (%u)", d->apssid, d->apchannel));
-    if (!mg_wifi_ap_start(d->apssid, d->appass, d->apchannel)) return false;
+  if (wifi->apmode && wifi->apssid != NULL) {
+    MG_DEBUG(("Starting AP '%s' (%u)", wifi->apssid, wifi->apchannel));
+    if (!mg_wifi_ap_start(wifi)) return false;
     cyw43_wifi_get_mac(&cyw43_state, CYW43_ITF_STA, ifp->mac);  // same MAC
   } else {
     cyw43_arch_enable_sta_mode();
     cyw43_wifi_get_mac(&cyw43_state, CYW43_ITF_STA, ifp->mac);
-    if (d->ssid != NULL) {
-      MG_DEBUG(("Connecting to '%s'", d->ssid));
-      return mg_wifi_connect(d->ssid, d->pass);
+    if (wifi->ssid != NULL) {
+      MG_DEBUG(("Connecting to '%s'", wifi->ssid));
+      return mg_wifi_connect(wifi);
     } else {
       cyw43_arch_disable_sta_mode();
     }
@@ -35,35 +55,33 @@ static size_t mg_tcpip_driver_pico_w_tx(const void *buf, size_t len,
   struct mg_tcpip_driver_pico_w_data *d =
       (struct mg_tcpip_driver_pico_w_data *) ifp->driver_data;
   return cyw43_send_ethernet(&cyw43_state,
-                             d->apmode ? CYW43_ITF_AP : CYW43_ITF_STA, len, buf,
-                             false) == 0
+                             d->wifi.apmode ? CYW43_ITF_AP : CYW43_ITF_STA, len,
+                             buf, false) == 0
              ? len
              : 0;
 }
-
-static bool s_aplink = false, s_scanning = false;
-static bool s_stalink = false, s_connecting = false;
 
 static bool mg_tcpip_driver_pico_w_poll(struct mg_tcpip_if *ifp, bool s1) {
   cyw43_arch_poll();  // not necessary, except when IRQs are disabled (OTA)
   if (s_scanning && !cyw43_wifi_scan_active(&cyw43_state)) {
     MG_VERBOSE(("scan complete"));
     s_scanning = 0;
-    mg_tcpip_call(s_ifp, MG_TCPIP_EV_WIFI_SCAN_END, NULL);
+    mg_tcpip_call(ifp, MG_TCPIP_EV_WIFI_SCAN_END, NULL);
   }
   if (ifp->update_mac_hash_table) {
     // first call to _poll() is after _init(), so this is safe
-    cyw43_wifi_update_multicast_filter(&cyw43_state, (uint8_t *)mcast_addr, true);
+    cyw43_wifi_update_multicast_filter(&cyw43_state, (uint8_t *) mcast_addr,
+                                       true);
     ifp->update_mac_hash_table = false;
   }
   if (!s1) return false;
   struct mg_tcpip_driver_pico_w_data *d =
       (struct mg_tcpip_driver_pico_w_data *) ifp->driver_data;
-  if (d->apmode) return s_aplink;
+  if (d->wifi.apmode) return s_aplink;
   int sdkstate = cyw43_wifi_link_status(&cyw43_state, CYW43_ITF_STA);
   MG_VERBOSE(("conn: %c state: %d", s_connecting ? '1' : '0', sdkstate));
   if (sdkstate < 0 && s_connecting) {
-    mg_tcpip_call(s_ifp, MG_TCPIP_EV_WIFI_CONNECT_ERR, &sdkstate);
+    mg_tcpip_call(ifp, MG_TCPIP_EV_WIFI_CONNECT_ERR, &sdkstate);
     s_connecting = false;
   }
   return s_stalink;
@@ -94,7 +112,7 @@ void cyw43_cb_tcpip_set_link_up(cyw43_t *self, int itf) {
 }
 void cyw43_cb_tcpip_set_link_down(cyw43_t *self, int itf) {
   if (itf == CYW43_ITF_AP) {
-     s_aplink = false;
+    s_aplink = false;
   } else {
     s_stalink = false;
     // SDK calls this before we check status, don't clear s_connecting here
@@ -134,9 +152,15 @@ bool mg_wifi_scan(void) {
   return res;
 }
 
-bool mg_wifi_connect(char *ssid, char *pass) {
+bool mg_wifi_connect(struct mg_wifi_data *wifi) {
+  s_ifp->ip = s_ip;
+  s_ifp->mask = s_mask;
+  if (s_ifp->ip == 0) s_ifp->enable_dhcp_client = true;
+  s_ifp->enable_dhcp_server = false;
   cyw43_arch_enable_sta_mode();
-  int res = cyw43_arch_wifi_connect_async(ssid, pass, CYW43_AUTH_WPA2_AES_PSK);
+  MG_DEBUG(("Connecting to %s", wifi->ssid));
+  int res = cyw43_arch_wifi_connect_async(wifi->ssid, wifi->pass,
+                                          CYW43_AUTH_WPA2_AES_PSK);
   MG_VERBOSE(("res: %d", res));
   if (res == 0) s_connecting = true;
   return (res == 0);
@@ -148,9 +172,10 @@ bool mg_wifi_disconnect(void) {
   return true;
 }
 
-bool mg_wifi_ap_start(char *ssid, char *pass, unsigned int channel) {
-  cyw43_wifi_ap_set_channel(&cyw43_state, channel);
-  cyw43_arch_enable_ap_mode(ssid, pass, CYW43_AUTH_WPA2_AES_PSK);
+bool mg_wifi_ap_start(struct mg_wifi_data *wifi) {
+  cyw43_wifi_ap_set_channel(&cyw43_state, wifi->apchannel);
+  cyw43_arch_enable_ap_mode(wifi->apssid, wifi->appass,
+                            CYW43_AUTH_WPA2_AES_PSK);
   return true;
 }
 

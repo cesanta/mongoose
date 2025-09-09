@@ -13,7 +13,19 @@
 #endif
 
 static struct mg_tcpip_if *s_ifp;
+static uint32_t s_ip, s_mask;
 static bool s_link, s_auth, s_join;
+
+static void wifi_cb(struct mg_tcpip_if *ifp, int ev, void *ev_data) {
+  struct mg_wifi_data *wifi = &((struct mg_tcpip_driver_cyw_data *) ifp->driver_data)->wifi;
+  if (wifi->apmode && ev == MG_TCPIP_EV_ST_CHG && *(uint8_t *) ev_data == MG_TCPIP_STATE_UP) {
+    MG_DEBUG(("Access Point started"));
+    s_ip = ifp->ip, ifp->ip = wifi->apip;
+    s_mask = ifp->mask, ifp->mask = wifi->apmask;
+    ifp->enable_dhcp_client = false;
+    ifp->enable_dhcp_server = true;
+  }
+}
 
 static bool cyw_init(uint8_t *mac);
 static void cyw_poll(void);
@@ -21,20 +33,24 @@ static void cyw_poll(void);
 static bool mg_tcpip_driver_cyw_init(struct mg_tcpip_if *ifp) {
   struct mg_tcpip_driver_cyw_data *d =
       (struct mg_tcpip_driver_cyw_data *) ifp->driver_data;
+  struct mg_wifi_data *wifi = &d->wifi;
   if (MG_BIG_ENDIAN) {
     MG_ERROR(("Big-endian host"));
     return false;
   }
   s_ifp = ifp;
+  s_ip = ifp->ip;
+  s_mask = ifp->mask;
   s_link = s_auth = s_join = false;
+  ifp->pfn = wifi_cb;
   if (!cyw_init(ifp->mac)) return false;
 
-  if (d->apmode) {
-    MG_DEBUG(("Starting AP '%s' (%u)", d->apssid, d->apchannel));
-    return mg_wifi_ap_start(d->apssid, d->appass, d->apchannel);
-  } else if (d->ssid != NULL && d->pass != NULL) {
-    MG_DEBUG(("Connecting to '%s'", d->ssid));
-    return mg_wifi_connect(d->ssid, d->pass);
+  if (wifi->apmode) {
+    MG_DEBUG(("Starting AP '%s' (%u)", wifi->apssid, wifi->apchannel));
+    return mg_wifi_ap_start(wifi);
+  } else if (wifi->ssid != NULL && wifi->pass != NULL) {
+    MG_DEBUG(("Connecting to '%s'", wifi->ssid));
+    return mg_wifi_connect(wifi);
   }
   return true;
 }
@@ -44,7 +60,7 @@ size_t mg_tcpip_driver_cyw_output(const void *buf, size_t len,
                                   struct mg_tcpip_if *ifp) {
   struct mg_tcpip_driver_cyw_data *d =
       (struct mg_tcpip_driver_cyw_data *) ifp->driver_data;
-  return mg_cyw_tx(d->apmode ? 1 : 0, (void *) buf, len) >= len ? len : 0;
+  return mg_cyw_tx(d->wifi.apmode ? 1 : 0, (void *) buf, len) >= len ? len : 0;
 }
 
 static bool mg_tcpip_driver_cyw_poll(struct mg_tcpip_if *ifp, bool s1) {
@@ -52,7 +68,7 @@ static bool mg_tcpip_driver_cyw_poll(struct mg_tcpip_if *ifp, bool s1) {
   if (!s1) return false;
   struct mg_tcpip_driver_cyw_data *d =
       (struct mg_tcpip_driver_cyw_data *) ifp->driver_data;
-  return d->apmode ? s_link : s_link && s_auth && s_join;
+  return d->wifi.apmode ? s_link : s_link && s_auth && s_join;
 }
 
 struct mg_tcpip_driver mg_tcpip_driver_cyw = {mg_tcpip_driver_cyw_init,
@@ -1035,7 +1051,7 @@ static size_t cyw_spi_poll(uint8_t *response) {
     cyw_spi_write(CYW_SPID_FUNC_BUS, CYW_BUS_SPI_INT, &val, sizeof(val));
     return 0;
   }
-  cyw_spi_read(CYW_SPID_FUNC_WLAN, 0,  response, len);
+  cyw_spi_read(CYW_SPID_FUNC_WLAN, 0,  response, (uint16_t)len);
   return len;
 }
 
@@ -1098,7 +1114,7 @@ static bool cyw_spi_init() {
   cyw_set_backplane_window(CYW_CHIP_CHIPCOMMON); // set backplane window to start of CHIPCOMMON area
   cyw_spi_read(CYW_SPID_FUNC_CHIP, (CYW_CHIP_CHIPCOMMON + 0x00) & CYW_CHIP_BCKPLN_ADDRMSK, &val, 2);
   if (val == 43430) val = 4343;
-  MG_INFO(("WLAN chip is CYW%u%c", val), val == 4343 ? 'W' : ' '));
+  MG_INFO(("WLAN chip is CYW%u%c", val, val == 4343 ? 'W' : ' '));
 
   // Load firmware (code and NVRAM)
   if (!cyw_load_firmware(d->fw)) return false;
@@ -1376,16 +1392,21 @@ bool mg_wifi_scan(void) {
   return cyw_wifi_scan();
 }
 
-bool mg_wifi_connect(char *ssid, char *pass) {
-  return cyw_wifi_connect(ssid, pass);
+bool mg_wifi_connect(struct mg_wifi_data *wifi) {
+  s_ifp->ip = s_ip;
+  s_ifp->mask = s_mask;
+  if (s_ifp->ip == 0) s_ifp->enable_dhcp_client = true;
+  s_ifp->enable_dhcp_server = false;
+  MG_DEBUG(("Connecting to %s", wifi->ssid));
+  return cyw_wifi_connect(wifi->ssid, wifi->pass);
 }
 
 bool mg_wifi_disconnect(void) {
   return cyw_wifi_disconnect();
 }
 
-bool mg_wifi_ap_start(char *ssid, char *pass, unsigned int channel) {
-  return cyw_wifi_ap_start(ssid, pass, channel);
+bool mg_wifi_ap_start(struct mg_wifi_data *wifi) {
+  return cyw_wifi_ap_start(wifi->apssid, wifi->appass, wifi->apchannel);
 }
 
 bool mg_wifi_ap_stop(void) {

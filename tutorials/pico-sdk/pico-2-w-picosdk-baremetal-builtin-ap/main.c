@@ -7,7 +7,6 @@
 #define WIFI_SSID "YOUR_WIFI_NETWORK_NAME"  // SET THIS!
 #define WIFI_PASS "YOUR_WIFI_PASSWORD"      // SET THIS!
 
-static uint32_t s_ip, s_mask;
 
 
 // mif user states
@@ -21,13 +20,7 @@ static void mif_fn(struct mg_tcpip_if *ifp, int ev, void *ev_data) {
   }
   switch(state) {
     case AP: // we are in AP mode, wait for a user connection to trigger a scan or a connection to a network
-      if (ev == MG_TCPIP_EV_ST_CHG && *(uint8_t *) ev_data == MG_TCPIP_STATE_UP) {
-        MG_INFO(("Access Point started"));
-        s_ip = ifp->ip, ifp->ip = MG_IPV4(192, 168, 169, 1);
-        s_mask = ifp->mask, ifp->mask = MG_IPV4(255, 255, 255, 0);
-        ifp->enable_dhcp_client = false;
-        ifp->enable_dhcp_server = true;
-      } else if (ev == MG_TCPIP_EV_ST_CHG && *(uint8_t *) ev_data == MG_TCPIP_STATE_READY) {
+      if (ev == MG_TCPIP_EV_ST_CHG && *(uint8_t *) ev_data == MG_TCPIP_STATE_READY) {
         MG_INFO(("Access Point READY !"));
 
         // simulate user request to scan for networks
@@ -53,18 +46,14 @@ static void mif_fn(struct mg_tcpip_if *ifp, int ev, void *ev_data) {
       break;
     case STOPPING_AP:
       if (ev == MG_TCPIP_EV_ST_CHG && *(uint8_t *) ev_data == MG_TCPIP_STATE_DOWN) {
-        struct mg_tcpip_driver_pico_w_data *d = (struct mg_tcpip_driver_pico_w_data *) ifp->driver_data;
-        d->apmode = false;
+        struct mg_wifi_data *wifi = &((struct mg_tcpip_driver_pico_w_data *) ifp->driver_data)->wifi;
+        wifi->apmode = false;
 
         // simulate user selection of a network (2/2: actual connect)
-        bool res = mg_wifi_connect(d->ssid, d->pass);
+        bool res = mg_wifi_connect(wifi);
         MG_INFO(("Manually connecting: %s", res ? "OK":"FAIL"));
         if (res) {
           state = CONNECTING;
-          ifp->ip = s_ip;
-          ifp->mask = s_mask;
-          if (ifp->ip == 0) ifp->enable_dhcp_client = true;
-          ifp->enable_dhcp_server = false;
         } // else manually start AP as below
       }
       break;
@@ -84,13 +73,13 @@ static void mif_fn(struct mg_tcpip_if *ifp, int ev, void *ev_data) {
     case READY:
       // go back to AP mode after a disconnection (simulation 2/2), you could retry
       if (ev == MG_TCPIP_EV_ST_CHG && *(uint8_t *) ev_data == MG_TCPIP_STATE_DOWN) {
-        struct mg_tcpip_driver_pico_w_data *d = (struct mg_tcpip_driver_pico_w_data *) ifp->driver_data;
-        bool res = mg_wifi_ap_start(d->apssid, d->appass, d->apchannel);
+        struct mg_wifi_data *wifi = &((struct mg_tcpip_driver_pico_w_data *) ifp->driver_data)->wifi;
+        bool res = mg_wifi_ap_start(wifi);
         MG_INFO(("Disconnected"));
         MG_INFO(("Manually starting AP: %s", res ? "OK":"FAIL"));
         if (res) {
           state = AP;
-          d->apmode = true;
+          wifi->apmode = true;
         }
       }
       break;
@@ -108,17 +97,19 @@ int main(void) {
 
   // Initialise WiFi creds
   struct mg_tcpip_driver_pico_w_data driver_data = {
-    .ssid = WIFI_SSID,
-    .pass = WIFI_PASS,
-    .apssid = "mongoose",
-    .appass = "eightchars",
-    .security = 0,
-    .apsecurity = 0,
-    .apchannel = 10,
-    .apmode = true
+    .wifi.ssid = WIFI_SSID,
+    .wifi.pass = WIFI_PASS,
+    .wifi.apssid = "mongoose",
+    .wifi.appass = "eightchars",
+    .wifi.apip = MG_IPV4(192, 168, 169, 1),
+    .wifi.apmask = MG_IPV4(255, 255, 255, 0),
+    .wifi.security = 0,
+    .wifi.apsecurity = 0,
+    .wifi.apchannel = 10,
+    .wifi.apmode = true
   };
 
-  state = driver_data.apmode ? AP : CONNECTING;
+  state = driver_data.wifi.apmode ? AP : CONNECTING;
 
   // Initialise Mongoose network stack
   // Either set use_dhcp or enter a static config.
