@@ -1605,7 +1605,11 @@ struct mg_dns {
 };
 
 struct mg_addr {
-  uint8_t ip[16];    // Holds IPv4 or IPv6 address, in network byte order
+  union {    // Holds IPv4 or IPv6 address, in network byte order
+    uint8_t ip[16];
+    uint32_t ip4;
+    uint64_t ip6[2];
+  };
   uint16_t port;     // TCP or UDP port in network byte order
   uint8_t scope_id;  // IPv6 scope ID
   bool is_ip6;       // True when address is IPv6 address
