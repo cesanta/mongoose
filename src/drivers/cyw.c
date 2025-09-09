@@ -46,10 +46,8 @@ static bool mg_tcpip_driver_cyw_init(struct mg_tcpip_if *ifp) {
   if (!cyw_init(ifp->mac)) return false;
 
   if (wifi->apmode) {
-    MG_DEBUG(("Starting AP '%s' (%u)", wifi->apssid, wifi->apchannel));
     return mg_wifi_ap_start(wifi);
   } else if (wifi->ssid != NULL && wifi->pass != NULL) {
-    MG_DEBUG(("Connecting to '%s'", wifi->ssid));
     return mg_wifi_connect(wifi);
   }
   return true;
@@ -1397,7 +1395,7 @@ bool mg_wifi_connect(struct mg_wifi_data *wifi) {
   s_ifp->mask = s_mask;
   if (s_ifp->ip == 0) s_ifp->enable_dhcp_client = true;
   s_ifp->enable_dhcp_server = false;
-  MG_DEBUG(("Connecting to %s", wifi->ssid));
+  MG_DEBUG(("Connecting to '%s'", wifi->ssid));
   return cyw_wifi_connect(wifi->ssid, wifi->pass);
 }
 
@@ -1406,6 +1404,7 @@ bool mg_wifi_disconnect(void) {
 }
 
 bool mg_wifi_ap_start(struct mg_wifi_data *wifi) {
+  MG_DEBUG(("Starting AP '%s' (%u)", wifi->apssid, wifi->apchannel));
   return cyw_wifi_ap_start(wifi->apssid, wifi->appass, wifi->apchannel);
 }
 
