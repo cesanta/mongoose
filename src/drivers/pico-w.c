@@ -34,14 +34,12 @@ static bool mg_tcpip_driver_pico_w_init(struct mg_tcpip_if *ifp) {
   if (cyw43_arch_init() != 0)
     return false;  // initialize async_context and WiFi chip
   if (wifi->apmode && wifi->apssid != NULL) {
-    MG_DEBUG(("Starting AP '%s' (%u)", wifi->apssid, wifi->apchannel));
     if (!mg_wifi_ap_start(wifi)) return false;
     cyw43_wifi_get_mac(&cyw43_state, CYW43_ITF_STA, ifp->mac);  // same MAC
   } else {
     cyw43_arch_enable_sta_mode();
     cyw43_wifi_get_mac(&cyw43_state, CYW43_ITF_STA, ifp->mac);
     if (wifi->ssid != NULL) {
-      MG_DEBUG(("Connecting to '%s'", wifi->ssid));
       return mg_wifi_connect(wifi);
     } else {
       cyw43_arch_disable_sta_mode();
@@ -158,7 +156,7 @@ bool mg_wifi_connect(struct mg_wifi_data *wifi) {
   if (s_ifp->ip == 0) s_ifp->enable_dhcp_client = true;
   s_ifp->enable_dhcp_server = false;
   cyw43_arch_enable_sta_mode();
-  MG_DEBUG(("Connecting to %s", wifi->ssid));
+  MG_DEBUG(("Connecting to '%s'", wifi->ssid));
   int res = cyw43_arch_wifi_connect_async(wifi->ssid, wifi->pass,
                                           CYW43_AUTH_WPA2_AES_PSK);
   MG_VERBOSE(("res: %d", res));
@@ -173,6 +171,7 @@ bool mg_wifi_disconnect(void) {
 }
 
 bool mg_wifi_ap_start(struct mg_wifi_data *wifi) {
+  MG_DEBUG(("Starting AP '%s' (%u)", wifi->apssid, wifi->apchannel));
   cyw43_wifi_ap_set_channel(&cyw43_state, wifi->apchannel);
   cyw43_arch_enable_ap_mode(wifi->apssid, wifi->appass,
                             CYW43_AUTH_WPA2_AES_PSK);
