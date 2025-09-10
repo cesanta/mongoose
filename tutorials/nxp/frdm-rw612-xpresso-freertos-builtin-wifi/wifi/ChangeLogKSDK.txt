@@ -1,0 +1,1061 @@
+/*!
+@page middleware_log Middleware Change Log
+
+@section wifi NXP WiFi
+
+Version 1.3.r47.p16
+ - Updates:
+  - Updated FC's f/w version to 2.p66.155.
+  - Updated CA2 and RB3+ f/w version to 21.p124.
+  - Fine tuning of GTK rekey offload feature.
+
+Version 1.3.r47.p15
+ - Bug Fix:
+  - DUT fails to connect to Ex-AP configured with wpa2 Enterprise security (Auth method Fast-mschapv2).
+  - Incorrect AKM types PSK(2), PSK(SHA-256) are seen in beacon after configuring APUT in wpa2-psk security mode.
+  - Link lost seen after wlan-scan when DUT is connected in wpa2 ft-psk security in 2.4Ghz band.
+
+Version 1.3.r47.p12
+ - Bug Fix:
+  - Throughput numbers for TCP-Rx traffic on APUT are dropping to 0mbps in HE20/VHT20 mode.
+
+Version 1.3.r47.p11
+ - Bug Fix:
+  - Failed to connect STAUT configured in WPA2+PMF required security to Ex-AP configured in WPA2/WPA3 mixed mode+PMF capable security.
+  - STAUT is waking up with Broadcast traffic while running MEF AUTO PING ALLOW and WAKE HOST & MEF AUTO PING DISCARD and WAKE HOST.
+  - Cannot connec to AP with security wpa3_sb_192_eap_tls.
+  - Cannot out band independent reset successfully.
+
+Version 1.3.r47.p10
+ - Bug Fix:
+  - Auto reconnect - link lost reported when ap shut down.
+  - STAUT failed to roam from Ex-AP1 to Ex-AP2 with WPA3 security mode while running UDP-Tx traffic.
+  - STAUT is not waking up from suspend state while running Host-sleep test even after running Unicast/Broadcast traffic from Ex-AP to STAUT.
+  - STAUT is waking up with Unicast data and without unicast data as well before running Broadcast data traffic from AP backend to STAUT.
+  - While running WPS connection with Ex-AP, DUT gets deauthenticated after M4 packet, WPS_NACK is recvd. M1 packet does not have WPS PBC or keypad specific bit set
+  - "Network not found" is seen on the STAUT after disconnection and reconnection of the same profile in UNII4 channels (169,173,177).
+  - When Dut reported Link lost, After configured time interval, DUT reconnects to AP but fails to ping to AP_BACKEND after reconnection.
+  - Coverity Fixes.
+
+Version 1.3.r47.p9
+ - Bug Fix:
+  - APUT is advertising channel width information for 40Mhz in HE-phy capabilities instead of 20Mhz bandwidth in Assoc response frame.
+  - STAUT failed to roam from Ex-AP1 to Ex-AP2 with WPA3 security mode with same channel same band and different channel same band scenario.
+  - 15-20% Throughput degradation observed in TCP-TX and UDP-TX of HE[40Mhz/80MHz], VHT[40Mhz/80Mhz] compared to previous release[R45.p12].
+  - "WLAN: Network not found" is observed while connecting STAUT configured in wpa2 security PMF capable to Ex-AP in wpa2 security with PMF required.
+  - Coverity Fixes.
+
+Version 1.3.r47.p8
+ - Bug Fix:
+  - "WLAN: network not found & Warn: Scan temporary failure" is observed after disconnecting from one network and Re-connecting to same network after renaming SSID of Ex-AP.
+  - "Network not found" is seen on the STAUT after disconnection and reconnection of the same profile in UNII4 channels (169,173,177).
+  - Beacons not stopping in the older channel, after uAP switching the channel according to the Ex-AP in simultaneous mode.
+  - Incorrect return value on error.
+
+Version 1.3.r47.p7
+ - Bug Fix:
+  - STA STRESS | Independent Reset, DUT went to hang state after 134 iterations of independent reset with status "ASSERT: wlan_process_hang: 982 Assert failed: Panic"!
+  - Error message "'is_mef' undeclared(first use in this function)" is observed while the time of compilation of binary after enabling macro for the host-sleep.
+  - DUT not able to roam from AP1 to AP2 in different channel (DFS) and same Band on reducing the RSSI of AP1.
+  - STAUT failed to roam from Ex-AP1 to Ex-AP2 with WPA3 security mode while running UDP-Tx traffic.
+  - MEF, DUT fails to wakeup with mef conditions ping 1,3 and arp 1 & 3.
+
+Version 1.3.r47.p6
+ - Features
+  - Add GTK rekey offload support.
+  - Independent Reset via In-band
+  - Independent Reset via Out-of-Band
+ - Updates:
+  - Updated FC's f/w version to 2.p66.14.
+ - Bug Fix:
+  - Power save/host sleep support improvements.
+  - Messy log output after in band independent reset(17 in 31)
+  - Association_Req content corrupted when Dut config as WPA/WPA2 mix mode and connecting to AP WPA+TKIP
+  - Cannot connect to AP with security wpa3_sb_192_eap_tls.
+  - Command "wlan-add-packet-filter 1" is not available for setting MEF filter configuration in Host-sleep.
+  - WPA3 Enterprise support (Host based - Remaining set of authentication methods)
+  - STAUT failed to roam from Ex-AP1 to Ex-AP2 with WPA3 security mode while running UDP-Tx traffic.
+  - No Link lost is observed while switching from 11n[2.4G | 20Mhz] to legacy[2.4G] mode.
+  - The introduction of new features does not follow the scope limitations of modules and apps
+  - STAUT 11r, DUT unable to roam to particular BSSID after 10 to 15 iterations of roam, showing "Roaming already in progress Started FT roaming"
+  - STAUT | After DUT wake up from Hostsleep condition 0x10 (WAKE_ON_ARP_BROADCAST) Ping failed from AP_Backend to DUT and Delayed ping from DUT to AP_Backend
+  - Error: ignoring scan request in invalid state
+  - Fix COVERITY Issue for midware_wifi
+
+Version 1.3.r47.p5
+ - Updates:
+  - Updated FC's f/w version to 2.p66.11.
+ - Bug Fix:
+  - AKM checks are wrong for UAP PMF MANDATORY WPA2 PSK STA PMF MANDATORY WPA2 PSK for 11AN[20Mhz] as well as BGN[20Mhz] mode.
+  - STAUT is not waking up in any scenarios after giving Host-sleep commands with default power save enabled mode.
+
+Version 1.3.r47.p4
+ - Features
+  - Added support for Doxygen.
+ - Bug Fix:
+  - AKM checks are wrong for UAP PMF MANDATORY WPA2 PSK STA PMF MANDATORY WPA2 PSK for 11AN[20Mhz] as well as BGN[20Mhz] mode.
+  - On DUT manually configured parameters of 11axcfg, not getting reset to default after "wlan-reset" command execution.
+  - 2G to 5G and 5G to 2G FTOA roaming fails , link lost observed with permanent disconnect
+  - Change of bandwidth from 80Mhz to 40 MHz is observed after uAP (APUT) is stopped and started again, in HE/VHT band.
+  - STAUT unable to scan Ex-AP in UNII4 channels (169,173,177) with any Band/security.
+  - "Command response timed out. command 0x107" observed after 945 iterations in Scan-Connect-Disconnect Test without any traffic [Idle Test].
+  - RT Console hangs after enabling WLAN/BT Independent Download.
+  - Cannot get full iperf summary.
+  - While running UDP Bi-directional traffic, QOS data packets are not going from APUT/STAUT.
+
+Version 1.3.r47.p3
+ - Updates:
+  - Updated FC's f/w version to 2.p66.6.
+  - Updated CA2 and RB3+ f/w version to 21.221.
+ - Features
+  - Added FW (Parallel) Download support.
+ - Bug Fix:
+  - WiFi hang up with memory alloc buffer error during perform WiFi-scan along with WiFi independent reset loop test(OT already form the NTW)
+  - TCP-Keep-Alive packets are not seen in sniffer after successfully setting configuration commands for cloud keep alive and STAUT is not waking up after putting in suspend state.
+  - STAUT is not waking up from suspend state while running Host-sleep test even after running Unicast/Broadcast traffic from Ex-AP to STAUT.
+  - AKM checks are wrong for UAP PMF MANDATORY WPA2 PSK STA PMF MANDATORY WPA2 PSK for 11AN[20Mhz] as well as BGN[20Mhz] mode.
+  - Ex-STA (Kestrel, Firecrest RT1060-EVKC) Failed to associate in WPA2 PMF disabled mode to APUT configured in WPA2/WPA3 mixed security mode.
+  - STAUT, failed to Associate in WPA2 security with PMF disabled to Ex-AP configured in WPA2/WPA3 mixed security mode.
+
+Version 1.3.r47.p2
+ - Bug Fix:
+  - Fail to disable IEEE Power save mode, while giving command to disable it.
+  - NXP devices Kestrel/KF2-RD(STA) unable to connect to DUT as MMH-AP but connecting with Mobile, Four way Handshake Timeout is observed with NXP Devices
+  - Ex-STA(Kestrel, KF2) Assoc-reject is observed with uAP configured in OWE security mode.
+  - Cannot connect to 5g external AP.
+
+Version 1.3.r47.p1
+ - Updates:
+  - Updated CA2 and RB3+ f/w version to 21.p109
+  - Updated 8801 f/w version to 36_186
+  - Updated Firecrest firmware version to p66.5.
+ - Features
+  - Added EVKC board support for all SoCs.
+  - Added WPA2/3 Enterprise support for EAP-SIM/EAP-AKA/EAP-AKA-PRIME for STA and uAP.
+  - Added CSI support.
+  - Added Auto Reconnect support.
+  - Added CA2 and RB3+ Parallel FW Download support.
+  - Added CA2 and RB3+ Independent Reset via In-band support.
+  - Added CA2 and RB3+ Independent Reset via Out-of-Band support.
+  - Added CA2 and RB3+ Boot sleep patch support.
+
+Version 1.3.r46.p7
+ - Updates:
+  - Updated Falcon to p185, CA2 and RB3+ f/w version to 21.p91.5
+ - Bug Fix:
+  - uAP reassociation not working
+  - Traffic stops wen moving from auto rate to mcs0
+  - DUT not sending TCP-KEEP-ALIVE in suspend state
+  - DUT not able to roam from WPA-R1 enabled AP to WPA3-R3 enabled AP
+  - Ex-AP1 to Ex-AP2 roaming not working in wpa3
+  - STAUT is nto following BSS transition correctly
+  - RF test mode commands crash issue
+  - Ping is not working when uAP configured with wpa3-sb-192 bit EAP-TLS/EAP-TTLS/EAP-PEAP enterprise security.
+  - DUT shows network not found, even when connected to Ex-AP
+  - Stress test fixes
+
+Version 1.3.r46.p5
+ - Updates:
+  - Updated CA2 and RB3+ f/w version to 21.p91.5
+ - Bug Fix:
+  - Wifi random crash issue when DUT set to sleep
+  - Enable 11D for uAP by default
+  - STA doesnt get IP address when ieee-ps and deep sleep are enabled
+  - Coverity fixes
+  - BT/BLE fix for PTS test case
+
+Version 1.3.r46.p4
+ - Updates:
+  - Updated CA2 and RB3+ f/w version to 21.p91.4
+ - Bug Fix:
+  - Fixed: pre-cert: 20/40 BSS coexistence management is not supported in association request.
+  - Fixed: pre-cert: STAUT is not correctly following the MU EDCA parameters advertised by the AP.
+  - Fixed: Fail to connect to external AP with security wpa3.
+  - Fixed: uAP with wpa3 security is not connectable.
+  - Fixed: DUT not able to connect to Ex-AP in WPA2 security when PMF required is set.
+  - Fixed: Remove BAND_B rates from Supported rates for 5G channels during scan.
+  - Fixed: pre-cert STAUT is not including operating class 81 and 115 under Alternate Operating Classes in assoc request.
+  - Fixed: Cannot connect to external AP successfully.
+  - Fixed: 5Ghz channel are configured acceptable in 2.4Ghz band
+  - Fixed: wlan_set_rf_tx_power is not consistent with tx-frame power output
+  - Fixed: Getting compilation errors while compiling the binary after defining "CONFIG_UNII4_BAND_SUPPORT" macro in wifi_config.h file.
+  - Fixed: uAP Beacons advertise 3 AKM suites (PSK & PSK SHA256 & SAE SHA256) in RSNIE when WPA2+WPA3 mixed mode is set on AP with mfpc 1 and mfpr 0.
+  - Fixed: STAUT configured with WPA3-SAE associates to WPA2 configured AP.
+  - Fixed: DUT unable to roam from Ex-AP1 to Ex-AP2 on lowering the RSSI of Ex-AP1.
+  - Fixed: pre-cert STAUT is not correctly following the MU EDCA parameters advertised by the AP.
+  - Fixed: DUT-STA is unable to associate with WPA/WPA2 Mixed mode AP when DUT-STA is configure WPA security.
+  - Fixed: pre-cert STAUT fails to roam from WPA3 configured AP1 to WPA2-PSK configured AP2.
+  - Removed IEEE_MGMT_ACTION_CATEGORY_PUBLIC enum.
+  - Fixed logic for consecutive connect for both embedded and wpa supplicant.
+  - Fixed all compilation errors and warnings seen on dapeng.
+  - Resolved MISRA and coverity defects.
+
+Version 1.3.r46.p3
+ - Updates:
+  - Updated CA2 and RB3+ f/w version to 21.p91.2
+ - Bug Fix:
+  - Fixed: TCP and UDP TX traffic stream not working with ex-sta
+  - Fixed: pre-cert: STAUT is not following BSS transition correctly
+  - Fixed: Extend wlan-get-antcfg to print current antenna
+  - Fixed: DUT able to configure MFPR 0 in WPA3 security.
+  - Fixed: DUT MCS rates are not updating to default after stopping/removing previous profile with MCS set to fixed number via fixed rate command.
+  - Fixed: DUT-uAP unable to start with ACS configuration.
+  - Fixed: While running WPS connection with Ex-AP, DUT gets deauthenticated after M4 packet, WPS_NACK is recvd. M1 packet does not have WPS PBC or keypad specific bit set.
+  - Fixed: Fail to create ipv6 iperf client.
+  - Fixed: uAP beacons contain incorrect bit, UAPSD bit is set in WME QoS Info even though it is not supported.
+  - Fixed: uAP beacons contain incorrect bits, SU/MU Beamformer bits are set in HE Phy capabilities and UAPSD bit is set in WME QoS Info even though it is not supported.
+  - Fixed: Data path blocks once we initiate wlan-scan on DUT and change Ex-AP channel at the same time.
+  - Fixed: MISRA defects.
+
+Version 1.3.r46.p2
+ - Updates:
+  - Updated CA2 and RB3+ f/w version to 21.p91
+ - Bug Fix:
+  - Fixed BT connection issue on RB3+
+
+Version 1.3.r46.p1
+ - Updates:
+  - Updated CA2 and RB3+ f/w version to 21.p90
+  - Updated 8801 f/w version to 36_181
+  - CA2 Fixed FIPS GCMP support
+  - Added all changes as part of r45.p3 as applicable for CA2 and RB3+
+  - Added information for BSD3 license.
+  - Updated WLCMGR and Wi-Fi driver to support WPA supplicant and hostapd.
+  - Deepsleep feature in BLE peripheral role
+  - Deep Sleep and wakeup feature is enabled for CA2 and RB3+
+
+ - Features
+  - Added WPA supplicant and hostapd support.
+  - Added WPS 2.0 support for STA and uAP.
+  - Added WPA2 enterprise support for STA and uAP.
+  - Added WPA3 enterprise support with suite b and suite b 192 bit mode for STA and uAP.
+
+ - Bug Fixes:
+  - Fixed: APUT goes into hang state after every disassociation of STA.
+  - Fixed: (pre-cert)AMSDU Rx test fails as STAUT returns the throughput received as 0.
+  - Fixed: Country Information IE with default country code (WW) is seen in beacon even after changing the regions from WW to US/EU/CA/CN.
+  - Fixed: DUT should show "Network not found" message in cli, when Configure SSID is not present in network area.
+  - Fixed: DUT not able to connect to Ex-AP in WPA3R3 security.
+  - Fixed: DUT not able to roam from Ex-AP1 to Ex-AP2.
+  - Fixed: Hostsleep/MEF test condition failures are seen.
+  - Fixed: uAP not coming up in WPA2/WPA3 mixed mode security., getting "WPA initialization failed" on DUT console.
+  - Fixed: DUT shows wrong channel number in wlan-scan-opt and wlan-info command results.
+  - Fixed: DUT sending QoS data packets with LDPC coding when LDPC coding is disabled on Ex-STA.
+  - Fixed: Country Information IE is not seen in uAP Beacon.
+  - Fixed: DUT is going into hang state while running Connect/Disconnect Stress Test
+  - Fixed: Supported MCS and NSS rates are not properly set under HE capabilities IE in beacon frame when CAPA enabled binary is flashed on DUT.
+  - Fixed: Channel Bandwidth is setting to 80Mhz when uAP is configured in 11AX-40Mhz/20Mhz.
+  - Fixed: Beacon frame includes HE IE when uAP is configured in 11AC using Capa command.
+  - Fixed: DUT is not connecting in WPA2/WPA3 Enterprise security.
+  - Fixed: DUT is not getting ipv4 address after Roaming to Ex-AP2.
+  - Fixed: DUT is not roaming from AP1 to Ex-AP2 after running wlan-ft-roam command in 5Ghz.
+  - Fixed: DUT is not following BSS transition Correctly.
+  - Fixed: DUT is not responding Beacon Report Action frame after sending the Beacon request from Ex-AP to DUT.
+  - Fixed: Automatic Channel Selection is not working when DUT configured in MMH mode.
+  - Fixed: DUT is going for Reassociation with the same Ex-AP after running "wlan-host-11k-neighbour-req" command.
+  - Fixed: uAP Beacons does not include SHA256 in RSNIE when PMF mandatory is set on AP in WPA2-PSK security.
+  - Fixed: Low Throughput seen in 11AX, 11AC, 11N (80MHz, 40MHz & 20MHz) TCP-RX/TX, UDP-TX/RX in 2.4Ghz & 5Ghz.
+  - Fixed: DUT is not using "FT using PSK" AKM suite when 802.11R is enabled.
+  - Fixed: DUT not able to connect to Ex-AP in WPA2 security when PMF required is set.
+  - Fixed: Need to reset DUT every time for every new connection to happen.
+  - Fixed: Incorrect VHT IE "RX/TX MCS Map" is seen in uAP beacons.
+  - Fixed: uAP Beacons is advertising 4 Pairwise Cipher Suites [CCMP (256), GCMP (256), AES (CCM), GCMP (128)] in RSNIE with WPA2/WPA3 security.
+  - Fixed: uAP not coming up in 2.4GHz channel 11, getting "uAP start failed, giving up" on DUT console.
+  - Fixed: DUT is going in hang state after Stop/Remove/Start network in wpa2 and wpa3 security, when configured in MMH mode.
+  - Fixed: HE IE is not reflecting in beacons, when DUT is configured in default mode without capa in MMH.
+  - Fixed: DUT is not connecting in WPA3 security, shows "Error: Init of random number generator failed."
+
+Version 1.3.r45.p12
+ - Updates:
+  - Uodated tx pwr limit files for murata 2el module.
+  - Added config macro for RU Tx power.
+  - Updated WPA2/3 Enterprise support to handle pre-cert tests.
+
+ - Bug Fixes:
+  - Fixed: uAP not starting up in channel 14 showing start failed when uAP country code is set to JP.
+
+Version 1.3.r45.p11
+ - Updates:
+  - Added integrate tx pwr limit files for murata 2el module.
+  - Added support for legacy mode of RU Tx power.
+  - Updated WPA2/3 Enterprise support to handle pre-cert tests.
+
+ - Bug Fixes:
+  - Fixed: Bi-directional traffic converts to uni-directional traffic.
+  - Fixed: The support for "wlan-multi-mef" command to configure MEF
+  parameters on cli is not available.
+  - Fixed: Country Information IE with default country code (WW) is seen in
+  uAP beacon even after changing the regions from WW to US/EU/CA/CN.
+  - Fixed: Failed to wakeup card after turned on IEEE Power Save mode.
+  - Fixed: Bi-directional iperf traffic is not running getting dropped to
+  0.000 bits/sec.
+  - Fixed: Macbook not connecting with DUT-AP in channel 48 and BW 80MHz.
+  - Fixed: [pre-cert] DUT fails to connect to Ex-AP configured with wpa/wpa2
+  enterprise security (AES Encryption) and the radius server configured with
+  hostapd, unsupported certificate error.
+  - Fixed: Not connecting to AP in WPA-TKIP and WPA-AES, M2 is not being
+  initiated by STA.
+
+Version 1.3.r45.p10
+ - Updates:
+  - Updated firmware version to 2.p7.19 and added TP signed FW(with VDLL) too.
+  - Changed the init and command flow for uart_wifi_bridge app.
+
+ - Bug Fixes:
+  - Fixed: [pre-cert] DUT not correctly receiving AMPDU+AMSDU , AMSDU bit is not set to 1 in QOS data frame.
+  - Fixed: uAP not starting up in channel 14 showing start failed when uAP country code is set to JP.
+  - Fixed: Data path blocks once we initiate wlan-scan on DUT and change Ex-AP channel at the same time.
+  - Fixed: App will block/output error log when trying to set rf tx frame.
+
+Version 1.3.r45.p9
+ - Updates:
+  - Updated firmware version to 2.p7.17 and added TP signed FW(with VDLL) too.
+  - Added support for channel based RU Tx power.
+  - Added support of reassociate command on STAUT to test reassociate feature.
+
+ - Bug Fixes:
+  - Fixed: Ex-STA(Kestrel) not able to connect to uAP with "reassociate" command in first attempt, getting deauthentication and again connection is initiated with Association Request and connection happens, in wpa3 security.
+  - Fixed: [pre-cert] STAUT is sending incomplete beacon report response to AP's beacon report request.
+  - Fixed: Messy log output when trying to turn off deep sleep mode.
+  - Fixed: Unable to set TX-OMI on uAP using command "wlan-set-tx-omi".
+  - Fixed: DUT is not re-connecting when bandwidth/mode changed on Ex-AP.
+
+Version 1.3.r45.p7
+ - Updates:
+  - Updated firmware version to 2.p7.15 and added TP signed FW(with VDLL) too.
+ - Bug Fixes:
+  - Fixed: STAUT is not following BSS transition correctly.
+  - Fixed: DUT is not sending TCP-KEEP-ALIVE packets in suspend state, when TCP connection is established via Cloud keep alive command.
+  - Fixed: DUT not able to roam from Ex-AP1 to Ex-AP2 on lowering the RSSI of Ex-AP1 in wpa3 security.
+  - Fixed: STAUT's probe request does not contain MBO-OCE IE
+  - Fixed: Ping is not working when uAP configured with wpa3-sb-192 bit EAP-TLS/EAP-TTLS/EAP-PEAP enterprise security.
+  - Fixed: STAUT's probe request does not contain MBO-OCE IE.
+  - Fixed: Throughput enhancement for STA and uAP mode for various TCP/UDP and Tx-Rx modes for embedded and wpa supplicant.
+  - Fixed: "TCP_ABORTED_LOCAL" message seen on DUT console instead of "TCP_DONE" when running iperf traffic
+  - Fixed: [pre-cert] STAUT is not dropping TP when AP is increasing MPDU spacing factor from 0 to 3.
+
+Version 1.3.r45.p6
+ - Updates:
+  - Updated firmware version to 2.p7.11 and added TP signed FW(with VDLL) too.
+  - uart_wifi_bridge added and errors fixed for RT1170-EVKB.
+ - Bug Fixes:
+  - Fixed: Traffic stops after moving from auto rate to fixed mcs0. Command is triggered on the fly.
+  - Fixed: DUT not able to roam from WPA3R1 enabled AP to WPA3R3 enabled AP showing network not found.
+
+Version 1.3.r45.p5
+ - Updates:
+  - Updated firmware version to 2.p7.10 and added TP signed FW(with VDLL) too.
+
+ - Bug Fixes:
+  - Fixed: Data path blocks once we initiate wlan-scan on DUT and change Ex-AP channel at the same time.
+  - Fixed: uAP beacons contain incorrect bits, SU/MU Beamformer bits are set in HE Phy capabilities and UAPSD bit is set in WME QoS Info even though it is not supported.
+  - Fixed: uAP beacons contain incorrect bit, UAPSD bit is set in WME QoS Info even though it is not supported.
+  - Fixed: [pre-cert] STAUT is not correctly following the MU EDCA parameters advertised by the AP
+  - Fixed: [pre-cert] 20/40 BSS coexistence management is not supported in association request.
+  - Fixed: Fail to connect to external AP with security wpa3.
+  - Fixed: uAP with wpa3 security is not connectable.
+  - Fixed: DUT not able to connect to Ex-AP in WPA2 security when PMF required is set.
+  - Fixed: Remove BAND_B rates from Supported rates for 5G channels during scan.
+  - Fixed: Fix wifi_cli_prov example hang when connect if enable ieee power save and deep sleep.
+  - Fixed: RFTM: 5Ghz channel are configured acceptable in 2.4Ghz band.
+  - Fixed: RFTM: wlan_set_rf_tx_power is not consistent with tx-frame power output.
+  - Fixed: DUT not able to roam from AP1 to AP2 in different channel (DFS) and same Band on reducing the RSSI of AP1.
+  - Fixed: uAP Beacons advertise 3 AKM suites (PSK & PSK SHA256 & SAE SHA256) in RSNIE when WPA2+WPA3 mixed mode is set on AP with mfpc 1 and mfpr 0.
+  - Fixed: DUT unable to roam from Ex-AP1 to Ex-AP2 on lowering the RSSI of Ex-AP1.
+  - Fixed: Fixed build errors and warnings for matter, MISRA, coverity and other compilers.
+
+Version 1.3.r45.p4
+ - Updates:
+  - Updated firmware version to 2.p7.4 and added TP signed FW(with VDLL) too.
+
+ - Bug Fixes:
+  - Fixed: Fail to create ipv6 iperf client.
+  - Fixed: DUT MCS rates are not updating to default after stopping/removing previous profile with MCS set to fixed number via fixed rate command.
+  - Fixed: MISRA Defect fixed.
+  - Fixed: IEEE PS event not getting triggered.
+  - Fixed: While running WPS connection with Ex-AP, DUT gets deauthenticated after M4 packet, WPS_NACK is recvd. M1 packet does not have WPS PBC or keypad specific bit set.
+  - Fixed: Fail to create ipv6 iperf client.
+  - Fixed: Hang issue seen when assoc reject event received.
+
+Version 1.3.r45.p3
+ - Updates:
+  - Enabled h/w acceleration APIs via mbedtls.
+  - VDLL support added.
+
+ - Bug Fixes:
+  - Fixed: (pre-cert)Need support to set UL MU Disable/Data Disable element through TX-OMI command.
+  - Fixed: iTCP and UDP TX traffic stream not working with ex-sta.
+  - Fixed: STA not able to connect to APUT when APUT is configured in OWE security.
+  - Fixed: DUT is going on hang state after running "wlan-reset" command.
+  - Fixed: "TCP_ABORTED_REMOTE" message seen on DUT console when running UDP traffic.
+  - Fixed: (pre-cert)STAUT is not scanning Non Transmitted SSID in MBSSID test.
+  - Fixed: 6+ ms of traffic burst is seen which is failing cert criteria of max cot as 6ms.
+  - Fixed: DUT not getting IP address(DHCP) when "WMM_ENH" Macro is defined in "wifi_config.h" file for TWT feature.
+  - Fixed: For Tx Frame & tx-continuous, the Measured tx-power value is 2dBm irrespective of configured Tx-power(10/12/15/20dBm)
+  - Fixed: Data path blocks once we initiate wlan-scan on DUT and change Ex-AP channel at the same time.
+  - Fixed: DUT not able to scan and connect to DFS channels when Broadcast SSID is disabled.
+  - Fixed: Aggregation is broken when TCP/UDP TX Data is going with TID 6-7 (Voice), and TID 3 (Best Effort).
+  - Fixed: uAP not beaconing in 40MHz when uAP configured in channel 12/13-40MHz in MMH mode
+  - Fixed: STA Ping is not working once it roams to Ex-AP2.
+  - Fixed: Wi-Fi lwip port does not protect correctly concurrent accesses to lwip stack.
+  - Fixed: Beacon frame does not include RSN XE IE when uAP configured in WPA3R3 security.
+  - Fixed: Beacon frame includes HT IE when uAP configured in 11A mode using capa legacy command.
+  - Fixed: DUT not connecting to Ex-AP when PMF is configured using "wlan-set-pmfcfg" command.
+  - Resolved IAR, MCUX and MDK build errors.
+
+Version 1.3.r45.p2
+ - Updates:
+  - Updated firmware version to 2.p7.1 and added TP signed FW too.
+  - Added RFTM commands missing CLI commands related to OFDMA feature.
+  - Added support for EVKB board.
+
+ - Bug Fixes:
+  - Fixed: uAP not coming up in channel 14 when country code is set to JP.
+  - Fixed: DUT not able to connect with 32-character SSID when Ex-AP configured in open/wpa2/wpa3 security.
+  - Fixed: QoS Data packets not seen on air when we run "wlan-set-tx-omi 0x48 0xff 16" command on DUT.
+  - Fixed: [pre-cert] Not able to set non-preferred channel in MBO through wpa_cli on RTOS.
+  - Fixed: Automatic Channel Selection is not working when DUT configured in MMH mode.
+  - Fixed: STA not able to connect to APUT when APUT is configured in OWE security.
+  - Fixed: Wi-Fi lwip port does not protect correctly concurrent accesses to lwip stack.
+  - Fixed: DUT is going on hang state after running "wlan-reset" command.
+  - Resolved IAR, MCUX and MDK build errors.
+
+Version 1.3.r43.p9
+ - Updates:
+  - Added support for RF test mode.
+
+ - Bug Fixes:
+  - Fixed: (pre-cert)Updated help message for TX-OMI command.
+  - Fixed: (pre-cert)STAUT is not scanning Non Transmitted SSID in MBSSID test.
+  - Fixed: (pre-cert)STAUT is not governing OBSS Narrow Bandwidth RU in UL OFDMA Tolerance Support.
+  - Fixed compilation errors and warnings after branch merge.
+
+Version 1.3.r44.p3
+ - Bug fixes:
+  - Added RSNX IE for WPA3-R3 for uAP
+
+Version 1.3.r44.p2
+ - Updates:
+  - Updated CA2, RB3+ firmware to p82
+  - Bug fixes:
+   - Fixes for 11KR
+   - Fixes for WPA3-R3 STA
+   - Added extra event for Connected notification in case of uAP
+
+Version 1.3.r44.p1
+ - Updates:
+  - Updated CA2, RB3+ firmware to p79
+  - Updated 8801 firmware to p180
+
+ - Features:
+  - Added 11KVR support for CA2 and RB3+
+
+ - Bug fixes:
+  - Fixed: Association Request does not include Group Management Cipher Suite IE in RSNIE when PMF mandatory is set on STA in WPA2-PSK/WPA3/OWE security.
+  - Fixed: Sending of deauth codes in all scenarios
+  - Fixed: Command timeout issues for wlan-eu-crypto
+  - Added Coverity fixes
+  - Fixed command timeout seen during simultaneous AP + STA mode, with high
+  traffic on 8801
+  - Set proper value for Edmac value updated to support Murata 2DS Module
+  - Fixed Channel switch announcement is not seen in beacon in AP+STA mode,
+  when AP changes channel on 8801
+  - Added few BT Sig qualification fixes
+
+Version 1.3.r43.p8
+ - Updates:
+  - Updated firmware version to p182.1 and added TP signed secure FW too.
+
+ - Bug Fixes:
+  - Fixed: (pre-cert)APUT beacons does not have RSNXE when configured in H2E mode.
+
+Version 1.3.r43.p7
+ - Updates:
+  - Updated firmware version to p182.
+  - Added TP signed secure FW.
+  - Added support for 2EL M2 module for Firecrest.
+  - Added wifi capability configuration support.
+  - Added FIPS validation feature.
+  - Added wifi rf test mode example.
+  - Unified all wifi examples in wifi_cli.
+  - 11R is not surrpoted for FC.
+
+ - Bug Fixes:
+  - Modified the method to load RU tx power limit with RT.
+  - Modified txrate config design for 11AC and 11AX features.
+  - Added support for roaming and neighbor request processing.
+  - Fixed: "Error in sending Background traffic" messages seen on DUT while running Background TX-Traffic.
+  - Fixed: STAUT is not associating in WPA3 Hash-to-Element only mode.
+  - Fixed: Not able to change HE MAC Capabilities or HE PHY Capabilities in Association Request using 11axcfg command.
+  - Fixed: DUT not waking up from suspend state when we start multicast traffic after 30sec-1 minute.
+  - Fixed: STAUT hangs after scanning AP in scenario K of SI-5.2.2 test case.
+  - Fixed: STAUT is not including operating class 81 and 115 under Alternate Operating Classes in assoc request.
+  - Fixed: STAUT fails to roam from WPA3 cionfigured AP1 to WPA2-PSK configured AP2.
+  - Fixed: DUT goes for DHCP DORA Process after roaming to AP2 from AP1.
+  - Fixed build errors and warnings.
+  - Corrected description related to num_dat_pkts parameter of tx-omi command.
+
+Version 1.3.r43.p6
+ - Updates:
+  - Updated firmware version to p174 and added latest signed FW bins as well.
+
+ - Bug Fixes:
+  - Fixed: Command timeout issues observed for various offload commands.
+  - Fixed: TWT requester bit not set in Extended Capabilities IE (127) in Association Request and Probe Request of STAUT.
+  - Fixed: Not able to scan and connect Firecrest-STA to Firecrest-uAP configured in UNII-4 band channels 173 and 177.
+  - Fixed: Multiple error messages are seen on DUT while running the stress "RX ping on STA, Start-stop uAP" in loop.
+  - Added 11AX macro so that nss settings can be available for 11AC as well as 11AX based configurations.
+  - Fixed various warning for IAR, MDK, armgcc and mcuXpresso compilers.
+
+Version 1.3.r43.p5
+ - Updates:
+  - Updated firmware version to p168(however signed firmware is not updated in this release and has version p164).
+
+ - Bug Fixes:
+  - Fixed: DUT not able to connect to AP configured in WPA2/WPA3 mixed mode security.
+  - Fixed: Association Request does not include Group Management Cipher Suite IE in RSNIE when PMF mandatory is set on STA in WPA2-PSK/WPA3/OWE security.
+  - Fixed: uAP Beacons does not include SHA256 in RSNIE when PMF mandatory is set on AP in WPA2-PSK security.
+  - Fixed: Device getting hanged while setting txpwrlimit by CMD 'wlan-set-txpwrlimit'.
+  - Fixed: Not able to load RU tx power limit with RT.
+  - Fixed: Not able to change HE parameters in HE MAC Capabilities or HE PHY Capabilities using 11axcfg command.
+
+Version 1.3.r43.p4
+ - Updates:
+  - None.
+
+ - Bug Fixes:
+  - Updated helper message for owe_only cli.
+  - Fixed: Observed bi-directional data traffic on air while running uni-directional TCP-RX traffic.
+  - Fixed: UDP-TX traffic going without using aggregation.
+  - Throughput values will now be displayed on DUT while running iperf Tx and Rx traffic.
+
+Version 1.3.r43.p3
+ - Updates:
+  - Updated firmware version to p164.
+
+ - Bug Fixes:
+  - Added ed mac config support for uAP.
+  - Modified process_rsn_ie function on driver side to provide support for Group Management Cipher suite.
+  - Added conditional logic related to handling of region code.
+
+Version 1.3.r43.p2
+ - Bug Fixes:
+  - Added delay in uart_wifi_bridge application to correctly read calibration data for RB3P board.
+
+Version 1.3.r43.p1
+ - Updates:
+  - Updated firmware version to p162.
+  - Added MBO feature support.
+  - Added OWE feature support.
+
+ - Bug Fixes:
+  - uAP Beacons contains MFPC & MFPR bits set to 1 in WPA2-PSK security after removing the previous WPA3 security profile.
+  - Added new cli parameters for wlan-set-tx-omi command to send OMI using QoS Null Packet or QoS Data Packet according to input provided.
+  - Corrected 11R configuration macro in allMacros_iw61x.txt file and removed the same from ignoreMacros_iw61x.txt file.
+  - Coverity fix: Changed all WM_FAIL to -WM_FAIL.
+
+Version 1.3.r42.p4
+  -New Additions:
+   - CA2 and RB3+ f/w updated to v16_xx.21.p64.1
+
+Version 1.3.r42.p3
+  -New Additions:
+   - 8801 f/w update
+  -Bug Fixes:
+   - Fixed Misra issues.
+
+Version 1.3.r42.p2
+  -Bug Fixes:
+   - Fixed Misra issues.
+
+Version 1.3.r42.p1
+  -New Additions:
+   - RTOS abstraction improvement
+   - Added support for FIPS for CA2 and RB3+
+   - Added uAP 11AC support
+   - Deprecated support for 88W8977 Wi-Fi SoC
+   - Added 8978 SoC firmware p64.
+   - Added 8987 SoC firmware p64.
+   - Added mlanutl equivalent utility on RT to create wifi fw compatible command arrays.
+
+  -Bug Fixes:
+   - Fixed Misra issues.
+
+Version 1.3.r41.p2
+  -New Additions:
+   - Updated license header as a github friendly license.
+   - Added 8801 SoC firmware p177 with get Coex Statistics support.
+   - Added 8987 SoC firmware p32.2 with Bluetooth related fixes. Added fix for automatic ble disconnect issue.
+
+  -Bug Fixes:
+   - Fixed Unable to start/stop 11n rx reorder timer(50%).
+   - Fixed Getting Improper Channel Number in "wlan-get-uap-channel" command.
+   - Fixed DUT fails to start DHCP intermittently.
+   - Fixed wrong wlan-list output.
+   - Fixed station connect issue after host sleep is enabled and disabled.
+   - Fixed Misra and coverity issues.
+   - Fixed automatic ble disconnect issue after 30 seconds of connection establishment.
+
+Version 1.3.r41.p1
+  -Bug Fixes:
+   - Updated 8801 SoC firmware to toggle GRANT Pin with WLAN/BT time on HIGH Request with Low Priority.
+   - Added coverity fixes.
+
+Version 1.3.r40.p5
+  -Bug Fixes:
+   - Fixed issue of DUT not entering Powersave mode on all SoCs.
+
+Version 1.3.r40.p4
+  -Bug Fixes:
+   - Default bandwidth set to 20 MHz for uAP on 8977.
+   - Fixed an issue in static IPv4 address assignment.
+   - Fixed warning and errors for IAR, MDK and gn + ninja + armgcc toolchains.
+
+Version 1.3.r40.p3
+  -Bug Fixes:
+   - Added wlan_uap_set_httxcfg API to set 40 MHz support in 2.4 GHz.
+   - Fix for build issue seen for wifi_setup 1020
+
+Version 1.3.r40.p2
+  -Bug Fixes:
+   - Fixed IPv6 address and state updates as per the networking stack configuration.
+   - Removed errors shown in channel validation and in setting custom CFP tables
+   - Added API to support selection of 20 and 40 MHz bandwidth
+   - Added -b(bandwidth) option in wifi_cli iperf command
+   - DHCP client doesn't report the failure of obtaining IP address
+   - Remove dependency for wifi_config_internal.h
+   - Remove warnings reported for channel list variables
+   - Fix STA not sending data in 40M bandwidth for BGN 40 in 2.4G
+
+
+Version 1.3.r38.p2
+  - New Additions:
+   - Added Support for IPv6.
+   - Added support for Hostsleep and packet filters.
+   - Updated Firecrest Firmware version to p50.5.
+   - Updated CA2 Firmware version to p21.22.
+
+  -Bug Fixes:
+   - Fixed an issue where DUT not able to start UAP Network in 2G MMH Mode.
+   - Fixed an issue where Command 0xb2 timeout is seen when stopped uAP while running DL traffic.
+
+Version 1.3.r37.p4
+  - New Additions:
+   - Added support for new API for HostCmd in RT Platform.
+   - Added provision to set tx rates for HE mode in wlan_set_txratecfg API.
+   - Added support for new command to set tx OMI.
+   - Added WPA3 R3 support for 8801, RB3, RB3+ and CA2.
+   - Updated Firecrest firmware version to p50.2.
+   - Updated CA2 firmware version to p235.2
+   - Updated RB3+ firmware version to p11.3.
+   - Updated 8801 firmware version to p191.2
+   - Updated RB3 firmware version to p186.2.
+
+  - Bug Fixes:
+   - Fixed an issue where default netif was not set to STA after closing uAP.
+   - Fixed an issue where 30% low RX throughput was seen with 11AN 40Mhz.
+   - Fixed wlan_start and wlan_stop API working.
+   - Fixed High ping latency when DUT is put in IEEEPS mode.
+   - Fixed an issue where wlan_get_dtim_period API was not returning any value.
+   - Fixed SVD vulnerability issue on RB3+.
+   - Fixed MISRA/Coverity issues.
+   - Fixed SVD vulnerability issue on 8977, 8801 and CA2.
+   - Fixed an issue in Firecrest where STAUT is disconnecting immediately after ieeeps command is fired.
+   - Fixed an issue where UDP traffic was not working on uAP mode.
+   - Country code not being displayed in 11d is being fixed
+
+Version 1.3.r35.p2
+  - New Additions:
+   - Added support for 11ax for Firecrest.
+   - Updated Firecrest firmware version to p27.
+
+  - Bug Fixes:
+   - Fixed an issue for CA2 where tcp/udp Rx traffic was not seen with Linksys AP.
+   - Fixed tx power limit issue for Firecrest.
+   - Fixed an issue for Firecrest where Ping stops working after TCP traffic is started from DUT.
+   - Changed WLAN_PSK_MAX_LENGTH to 64 from 65.
+   - Fixed an issue where mfpc was not set properly.
+
+Version 1.3.r34.p2
+  - New Additions:
+   - Updated CA2(8987) SoC firmware to p235.1.
+
+  - Bug Fixes:
+   - Fixed WPA3 Authentication failure for CA2.
+   - Fixed SPP connection issue.
+
+version 1.3.r34.p1
+  - New Additions:
+   - Updated CA2(8987) SoC firmware to p235.
+   - Added Separation of fw download from Wi-Fi initialization.
+   - Added support for Multicast group creation
+   - Updated license content in the wlan src for Murata or Generic customer.
+   - Added support for new firmware version display.
+   - Added config Macro for disabling Rx SDIO aggregation. This is enabled by default.
+
+  - Bug Fixes:
+   - Fixed CH 144 connection issue.
+
+version 1.3.r33.p2
+  - New Additions:
+   - Updated RB3+(8978) SoC firmware to p214.
+   - Updated CA2(8987) SoC firmware to p200.
+
+  - Bug Fixes:
+  - Fixed an issue where, wifi connection was failing during BLE activity.
+  - Fixed an issue where a2dp profile app could not find a2dp sink device.
+
+
+version 1.3.r32.p5
+  - New Additions:
+   - Updated RB3+(8978) SoC firmware to p198.
+   - Updated CA2(8987) SoC firmware to p199.
+
+  - Bug Fixes:
+   - Fixed an issue where BT pairing auth failure was observed between two 8987
+   or two IW416 devices due to same DH Public Key being generated.
+
+version 1.3.r32.p4
+  - New Additions:
+   - Updated RB3+(8978) SoC firmware to p197.
+
+  - Bug Fixes:
+   - Fixed an issue where, in presence of WLAN, BT A2DP SNK scenario can observe continuous glitches because
+   of BT utilizing the WLAN overlapping channels.
+   - Fixed an issue where, in presence of BT A2DP SRC scenario and WLAN traffic, both will share air-time.
+   WLAN Rx TP can drop to 15-20% of its baseline because of A2DP occupying more air-time duty cycle.
+
+version 1.3.r32.p3
+  - New Additions:
+   - Updated RB3+(8978) SoC firmware to p196.
+   - Updated CA2(8987) SoC firmware to p162.
+   - Updated RB3(8977) SoC firmware to p186.
+   - Updated Falcon(8801) SoC firmware to p191.
+
+  - Bug Fixes:
+   - Fixed an issue where STAUT was not advertising extended capabilities in assoc request
+   - Fixed an issue where cal data download API is not setting the cal data
+   correctly.
+   - Fixed an issue where Ping of 10000 bytes is not workingfor WMM case with 11n/11ac pre-cert WFA testbed AP's.
+   - VU FFD(vulnerability) fixes have been made for CA2(8987)/RB3+(8978)/RB3(8977)/Falcon(8801).
+
+version 1.3.r31.p1
+  - New Additions:
+   - Updated RB3+(8978) SoC firmware to p152.
+   - Updated CA2(8987) SoC firmware to p152.
+   - Added WMM feature for 8987 SoC
+  -Updates
+   - Enabled wifi deep sleep and IEEEPS modes as part of CLI initialisation.
+   - Updated module macro for CA2 from WIFI_BOARD_AW_CM358MA to WIFI_BOARD_AW_CM358.
+  - Bug Fixes:
+   - Fixed deepsleep error when called immediately after disconnection
+   - Fixed an issue where uAP was not turned on when country is specified using wlan_set_country API.
+
+version 1.3.r30.p2
+  - New Additions:
+   - Updated 8978 SoC firmware to p185.
+   - Updated 8987 SoC firmware to p185.
+  - Bug Fixes:
+   - Fixed a regression issue in WiFi FW where Ex-client is not able to associate with uAP on 8978 and 8987 SoC.
+
+version 1.3.r30.p1
+  - New Additions:
+   - Updated RB3+(8978) SoC firmware to p145.
+   - Updated CA2(8987) SoC firmware to p145.
+  - Bug Fixes:
+   - Fixed MISRA C-2012 Rule 14.4 issues.
+   - Updated TX Power configuration table for uAP.
+   - Fixed an issue where in MFG mode measured TX power value for 2.4GHz is 10.97dBm
+     and for 5GHz is 12.03dBm always irrespective of TX-power values configured in CA2.
+   - Fixed an issue where in control frames measured TX power is less than configured
+     Tx power by 3dBm for 5Ghz 40Mhz BW and ~7dBm for 5Ghz 80Mhz BW in CA2.
+
+version 1.3.r29.p2
+  - New Additions:
+   - Updated 8987 SoC firmware to p142.
+   - Updated 8978 SoC firmware to p142.
+  - Bug Fixes:
+   - Fixed MISRA C-2012 Directive 4.7, Directive 4.10, Rule 15.7 and Rule 14.4 issues
+   - Fixed wlan_get_sta_tx_power() API implementation for retrieving station tx power level.
+   - Fixed wlan-set/get-txpwrlimit CLI command for setting/getting TX power
+   limit for 11AC modulation groups in 8987.
+   - Fixed an issue where in MFG mode(rf_test_mode=1) after disabling
+   wlan_set_rf_cont_mode(CMD18_CW=1) command response timeout is seen in 8987.
+
+version 1.3.r29.p1
+  - New Additions:
+   - Added support for 8987 SoC with p141 firmware version.
+   - Updated 8978 SoC firmware to p141.
+  - Bug Fixes:
+   - Fixed Misra C-2012 required category issues for Rule 17.7.
+   - Fixes for BCA-TDM in Co-Ex for 8978 SoC.
+   - Fixed A2DP glitches in BT when WLAN connected for 8978 SoC.
+
+version 1.3.r27.p2
+  - New Additions:
+   - Updated FW versions to p130 for 8978.
+
+version 1.3.r27.p1
+
+  - Bug Fixes:
+   - Fixed PMF pre-cert issue where STAUT is not associating to PSK-SHA-256 enabled AP.
+   - Fixed 11N pre-cert issue where 11N-5.2.47 STAUT AMPDU TX test case is failing.
+
+version 1.3.r26.p2
+
+  - New Additions:
+   - Updated FW versions to p184 for 8977 and p122 FW for 8978.
+   - Added wifi_cert application under wifi_examples.
+
+  - Bug Fixes:
+   - Fixed an issue where connection problem is seen with uAP in wifi_webconfig after removing stored credentials.
+   - Fixed RF Test Mode issue for setting data rate in uAP mode.
+   - Fixed Coverity and MISRA issues in WiFi Driver.
+   - Fixed WPA3 SAE pre-cert requirement where there was requirement of Auth confirm to be initiated by either STA or Ex-AP.
+   - Removed following API's from WiFi driver as they were not supported:
+     - wifi_auto_reconnect_enable()
+     - wifi_auto_reconnect_disable()
+     - wifi_get_auto_reconnect_config()
+     - wifi_get_tbtt_offset()
+     - wifi_set_packet_filters()
+     - wifi_set_auto_arp()
+     - wifi_tcp_keep_alive()
+     - wifi_nat_keep_alive()
+
+version 1.3.r23.p2
+
+  - New Additions:
+   - Minor update to wifi_test_mode CLIs for better usability.
+   - Added bug fixes in WiFi FW and updated FW versions to p155 for 8801, p182 for 8977 and p106 for 8978.
+   - Added new wlan_uap_set_htcapinfo() API for setting HT Capability field for uAP.
+
+  - Bug Fixes:
+   - Fixed RF Test Mode issues for SD8801 and SD8977 reported by QA.
+   - Fixed WiFi 802.11n WPA3 SAE pre-cert test failures for SD8978.
+   - Fixed stack overflow issue with WLCMGR thread during wlan-connect.
+   - Fixed memory corruption issue cause by scan list overflow when using 11D.
+
+version 1.3.r21.p1
+
+  - New Additions:
+   - Added support for SD8978.
+   - Added Test Mode support for 8801, 8977 and 8978.
+   - Added new FW binaries for 8801, 8977 and 8978.
+   - Added OTP Force Region support in WiFi Driver.
+   - Added support for DHCP Server CLI to print IP addresses of connected clients to uAP.
+   - Added support to set HT Capability field for uAP.
+   - Added wlan_get_chanlist API and CLI.
+   - Added WiFi Driver task priority configurability option.
+   - Reduced WiFi Driver SRAM footprint.
+   - Added support in Wi-Fi driver to print debug events from WLAN FW.
+   - Added support for FW Dump generation using a micro-USB mass storage device.
+
+  - Bug Fixes:
+   - Fixed an issue where a redundant Link Loss disconnect timer was defined in the wifi_iperf app.
+   - Fixed an issue where sometimes the wlan_disconnect call did not abort an ongoing re-association.
+   - Fixed an issue where station connection to an Open security Ext-AP fails after connection to a WPA3-SAE Ext-AP.
+   - Fixed an issue where uAP did not start with WPA3-SAE security type.
+
+  - Known Issues
+   - Wi-Fi sample apps do not work with Rev-C (2018) version of RT685 board
+
+version 1.3.r20.p1
+
+  - New Additions:
+   - Added new FW for 8801.
+
+  - Bug Fixes:
+   - Fixed an issue where STAUT went to hang state when doing a disconnect in the wifi_iperf app.
+   - Fixed an issue where STAUT failed to reassociate with an Ext-AP after band switch.
+   - Fixed an issue where Scan command timeout was observed after changing the ssid of Ext-AP to which STAUT is connected.
+
+  - Known Issues
+   - Wi-Fi sample apps do not work with Rev-C (2018) version of RT685 board
+
+version 1.3.r19.p1
+
+  - New Additions:
+   - Added new FW for 8801.
+   - Updated WiFi API reference manual.
+
+  - Bug Fixes:
+   - Fixed an issue where STAUT attempted to connect with Ext-AP continuously even when an Auth Failure occured due to incorect passphrase.
+   - Fixed an issue where SDIO write error occured sometimes for some packet sizes during Tx.
+   - Fixed an issue where packet leakage was noticed on SD8801 when noise was applied.
+   - Fixed an issue to supress Association Failed warning generated during a connection attempt.
+
+  - Known Issues
+   - Wi-Fi sample apps do not work with Rev-C (2018) version of RT685 board
+
+version 1.3.r18.p1
+
+  - New Additions:
+   - Added new FW for 8977.
+
+  - Bug Fixes:
+   - Fixed an issue where STAUT fails to scan after Channel Switch and STAUT moves to new channel after eCSA IE.
+   - Fixed IAR, MDK build compilation warnings.
+
+  - Known Issues
+   - Wi-Fi sample apps do not work with Rev-C (2018) version of RT685 board
+
+version 1.3.r17.p1
+
+  - New Additions:
+   - Added new FW for 8977.
+   - Added CLI command to get a list of stations connected to uAP.
+
+  - Bug Fixes:
+   - Fixed an issue where Scan was temporarily aborted due to noise but correct status was not being returned to the host.
+   - Fixed an issue where STAUT failed to connect with an AP with hidden SSID.
+   - Fixed IAR, MDK build compilation warnings.
+   - Fixed an issue where TCP bi-directional throughput stops abruptly for SD8801 and STAUT is disconnected.
+   - Fixed an issue where UDP Dual Mode throughput stops abruptly and disconnection is seen.
+   - Fixed an issue where Tx got stuck after removal of interference noise.
+
+  - Known Issues
+   - Wi-Fi sample apps do not work with Rev-C (2018) version of RT685 board
+
+version 1.3.r16.p1
+
+  - New Additions:
+   - Added PMF Configuration for uAP.
+   - Updated WLAN Versioning.
+   - Updated WLAN CLIs.
+
+  - Bug Fixes:
+   - Fixed an issue where the STAUT sometimes did not send aggregated packets during Tx.
+   - Fixed an issue External Client could not associate with the UAP in WPA3-SAE mode.
+   - Fixed IAR build compilation warnings.
+   - Fixed an issue where the STAUT failed to associate with an AP with hidden SSID.
+   - Fixed an issue where active scan probe requests were sent for DFS channels.
+   - Fixed an issue where 2.4GHz-HT40 power values were exposed via CLI configuration.
+   - Fixed an issue where the STAUT will be continuously in re-association mode after link-loss.
+
+  - Known Issues
+   - Wi-Fi sample apps do not work with Rev-C (2018) version of RT685 board
+
+version 1.3.r15.p1
+
+  - New Additions
+   - Added support for Tx Power Limit configuration.
+   - Added support for Channel List configuration.
+   - Added support for CW MODE.
+   - Added support for sysinfo CLI to get threads information, network stats, wlan stats and heap stats.
+   - Added -d and -r options to iperf CLI for dual and trade-off mode.
+   - Added support for antenna configuration for 8801.
+   - Added support for band configuration.
+   - Added new FW for 8977
+
+  - Bug Fixes:
+   - Fixed an issue where UDP Rx data rate was low in iperf dual mode operation.
+   - Fixed an issue where STAUT traffic was getting halted when there is traffic in overlapping BSS on the extension channel.
+   - Fixed an issue where STAUT was not able to transmit above MCS 4.
+   - Fixed an issue where association with uAP failed with WPA2 security mode.
+   - Fixed an issue where STAUT failed to connect to WPA3 AP due to PMF config mismatch.
+   - Fixed an issue where ping loss was observed for packets of size greater than 10000 bytes.
+   - Fixed an issue in CLI where CR and LF characters where not handled properly.
+   - Fixed an issue where TCP-Tx traffic abruptly stops when parallel traffic is ongoing on another device using the same AP.
+   - Fixed an issue where DUT goes into hang state when iperf run is aborted.
+   - Fixed an issue where the STATU was not sending aggregated packets to the AP.
+   - Fixed an issue where UAP did not start with WPA2 security mode when ACS is configured.
+   - Fixed an issue where ED MAC was not enabled by default.
+
+  - Known Issues
+   - WiFi sample apps do not work with Rev-C (2018) version of RT685 board
+
+version 1.3.r14.p1
+
+  - New Additions
+   - Added support for Panasonic PAN9026 module.
+   - Added -t option in iperf CLI for setting traffic running time.
+   - Added -B option for supporting Tx/Rx Multicast packets during iperf runs.
+   - Added World Wide Safe Mode configurability to the WiFi Driver.
+   - Added ED MAC support for 8977.
+   - Added support for PMF APIs and CLIs.
+   - Added new FW for 8977 and 8801.
+
+  - Bug Fixes:
+   - Fixed Coverity and mandatory MISRA issues reported on v1.3.r13.p1 release.
+   - Fixed an isuue where DUT console was getting stuck after intiating connection with an AP which has different RSN values than expected.
+   - Fixed an issue where DUT was not able to roam from SAE-PSK to PSK configured AP.
+   - Fixed an issue where the app became unresponsive after Soft AP is stopped.
+   - Removed unnecessary files after Blackduck scan.
+
+  - Known Issues
+   - WiFi sample apps do not work with Rev-C (2018) version of RT685 board
+
+version 1.3.r1r3.p1
+
+  - New Additions
+    - Updated WiFi Driver to be independednt of the LwIP stack. Only the WLAN Connection Manager now uses LwIP.
+    - Added WiFi Roaming feature.
+    - Added CLI support for iperf in wifi_cli app.
+    - Added support for CSA handling from wlan station side.
+    - Added WLAN APIs for wlan-set-txratecfg, wlan-get-txratecfg, wlan-get-data-rate, wlan-set-reg and wlan-get-reg.
+    - Updated External AP SSID required for wifi_iperf app.
+  - Bug Fixes:
+    - Fixed Coverity issues reported on v1.3.r12.p1 release.
+    - Added a fix for ping loss observed during ping test.
+    - Added a fix where the console became unresponsive after wlan-start-network+wlan-stop-network commands are executed in loop.
+    - Added a fix for HT IE missing from beacon for both 2.4GHz and 5GHZ bands.
+    - Fixed warnings reported for IAR.
+    - Added a fix for increasing DHCP leave time to 24 hrs for long duration stress tests.
+  - Known Issues
+    - WiFi sample apps do not work with Rev-C (2018) version of RT685 board
+
+version 1.3.r12.p1
+
+  - New Additions
+    - Added support for ping utility.
+  - Bug Fixes
+    - Restart of SoftAP fails once SoftAP is stopped.
+    - HT IE is missing from beacon for both 2.4GHz and 5GHZ bands.
+    - Low TCP-Rx and UDP-Rx throughput observed for 5GHz-HT40 band.
+    - uAP couldn't be started after STA is associated to Ex-AP.
+    - Stopping SoftAP results in disconnection of In-STA from Ex-AP.
+    - DHCP server is not started for BSS created using "wlan-add" command.
+  - Known Issues
+    - N.A
+
+version 1.3.r11.p2
+
+  - New Additions
+    - Updated SDK version for RT1060 to 2.7.1 RFP RC2.
+    - Added FP91 based WiFi FW for SD8801, SD8977, SD8978, and SD8987.
+    - SD8801, SD8977, SD8978 and SD8987 WiFi Fw have embedded WPA3 SAE support
+      from version v1.3.r11.p1 onwards.
+    - Added WLAN CLI support. Added new wifi_cli for CLI demo.
+  - Enhancements
+    - License and Copyright Updates.
+    - Formated code base with clang-format 10.0.0 standards.
+    - Integrated PICK utility for WiFi Driver code scrubbing.
+  - Bug Fixes
+    - Removed unnecessary prints LwIP stats display.
+    - Fixed an issue where uAP did not start on 5GHz band.
+    - Fixed an issue where loww TCP/UDP-Rx throughput was observed for 5GHz-HT40Mhz.
+  - Known Issues
+    - N.A
+
+version 1.3.r10.p1
+
+  - New Additions
+    - Moved to using LwIP provided IPerf App.
+    - Added SDIO Rx Aggregation support to improve throughput.
+    - Added support for 11ac configuration API.
+    - Updated License and Copyright information on all WiFi driver files and sample apps.
+    - Moved MCUXpresso SDK base for RT1060 platform from 2.6.2 to 2.7.0 rc3.
+  - Known Issues
+    - N.A
+
+version 1.3.r9.p1
+
+  - New Additions
+    - Achieved additional TP improvements by updating LwIP parameters.
+  - Bug Fixes
+    - Fixed the issue of low throughput for both TCP and UDP (Tx/Rx) by updating LwIP parameters.
+    - TCP Throughput was observed to be lower than UDP throughput by 70%-80%. Fixed this issue by updating TCP related LwIP configurations.
+  - Known Issues
+    - N.A
+
+*/
