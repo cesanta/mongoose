@@ -5172,59 +5172,65 @@ static void rx_ip(struct mg_tcpip_if *ifp, struct pkt *pkt) {
                 mg_ntohs(pkt->tcp->dport), (int) pkt->pay.len));
     rx_tcp(ifp, pkt);
   } else {
-    MG_DEBUG(("Unknown IP proto %x", mg_htons(pkt->ip->proto)));
-    if (mg_log_level >= MG_LL_VERBOSE) mg_hexdump(pkt->ip, pkt->pay.len >= 32 ? 32 : pkt->pay.len);
+    MG_DEBUG(("Unknown IP proto %x", (int) pkt->ip->proto));
+    if (mg_log_level >= MG_LL_VERBOSE)
+      mg_hexdump(pkt->ip, pkt->pay.len >= 32 ? 32 : pkt->pay.len);
   }
-}
-
-static bool ip6_handle_opt(struct ip6 *h) {
-  switch(h->next) {
-  case 0:
-  case 43:
-  case 44:
-  case 50:
-  case 51:
-  case 60:
-  case 135:
-  case 139:
-  case 140:
-  case 253:
-  case 254:
-    MG_INFO(("IPv6 extension header %d", (int) h->next));
-    break;
-  default:
-    return false;
-  }
-  return true;
 }
 
 static void rx_ip6(struct mg_tcpip_if *ifp, struct pkt *pkt) {
-  struct ip6 *hdr;
-  uint16_t len;
+  uint16_t len = 0;
+  uint8_t next, *nhdr;
+  bool loop = true;
   if (pkt->pay.len < sizeof(*pkt->ip6)) return;  // Truncated
   if ((pkt->ip6->ver >> 4) != 0x6) return;       // Not IPv6
-  hdr = pkt->ip6;
-  while (ip6_handle_opt(hdr)) ++hdr;
-  // There can be link padding, take payload length from IPv6 last header
-  len = mg_ntohs(hdr->plen); // IPv6 datagram reported payload length
-  if ((len + (size_t) hdr - (size_t) pkt->ip6) > pkt->pay.len) return;
-  pkt->pay.buf = (char *)(hdr + 1);
-  pkt->pay.len = len; // strip padding
-  if (hdr->next == 58) {
+  next = pkt->ip6->next;
+  nhdr = (uint8_t *) (pkt->ip6 + 1);
+  while (loop) {
+    switch (next) {
+      case 0:   // Hop-by-Hop 4.3
+      case 43:  // Routing 4.4
+      case 60:  // Destination Options 4.6
+      case 51:  // Authentication RFC-4302
+        MG_INFO(("IPv6 extension header %d", (int) next));
+        next = nhdr[0];
+        len += 8 * (nhdr[1] + 1);
+        nhdr += 8 * (nhdr[1] + 1);
+        break;
+      case 44:  // Fragment 4.5
+      {
+        struct mg_connection *c;
+        if (nhdr[0] == 17) pkt->udp = (struct udp *) (pkt->pay.buf);
+        if (nhdr[0] == 6) pkt->tcp = (struct tcp *) (pkt->pay.buf);
+        c = getpeer(ifp->mgr, pkt, false);
+        if (c) mg_error(c, "Received fragmented packet");
+      }
+        return;
+      case 59:  // No Next Header 4.7
+        return;
+      case 50:  // IPsec ESP RFC-4303, unsupported
+      default:
+        loop = false;
+        break;
+    }
+  }
+  // There can be link padding, take payload length from IPv6 header - options
+  pkt->pay.buf = nhdr;
+  pkt->pay.len = mg_ntohs(pkt->ip6->plen) - len;
+  if (next == 58) {
     pkt->icmp6 = (struct icmp6 *) (pkt->pay.buf);
     if (pkt->pay.len < sizeof(*pkt->icmp6)) return;
     mkpay(pkt, pkt->icmp6 + 1);
     MG_DEBUG(("ICMPv6 %M -> %M len %u", mg_print_ip6, &pkt->ip6->src,
-                mg_print_ip6, &pkt->ip6->dst,
-                (int) pkt->pay.len));
+              mg_print_ip6, &pkt->ip6->dst, (int) pkt->pay.len));
     // rx_icmp6(ifp, pkt);
-  } else if (hdr->next == 17) {
+  } else if (next == 17) {
     pkt->udp = (struct udp *) (pkt->pay.buf);
     if (pkt->pay.len < sizeof(*pkt->udp)) return;
     mkpay(pkt, pkt->udp + 1);
     MG_DEBUG(("UDP %M:%hu -> %M:%hu len %u", mg_print_ip6, &pkt->ip6->src,
-                mg_ntohs(pkt->udp->sport), mg_print_ip6, &pkt->ip6->dst,
-                mg_ntohs(pkt->udp->dport), (int) pkt->pay.len));
+              mg_ntohs(pkt->udp->sport), mg_print_ip6, &pkt->ip6->dst,
+              mg_ntohs(pkt->udp->dport), (int) pkt->pay.len));
     if (ifp->enable_dhcp_client && pkt->udp->dport == mg_htons(546)) {
       pkt->dhcp6 = (struct dhcp6 *) (pkt->udp + 1);
       mkpay(pkt, pkt->dhcp6 + 1);
@@ -5236,7 +5242,7 @@ static void rx_ip6(struct mg_tcpip_if *ifp, struct pkt *pkt) {
     } else if (!rx_udp(ifp, pkt)) {
       // Should send ICMPv6 Destination Unreachable for unicasts, keep silent
     }
-  } else if (hdr->next == 6) {
+  } else if (next == 6) {
     uint8_t off;
     pkt->tcp = (struct tcp *) (pkt->pay.buf);
     if (pkt->pay.len < sizeof(*pkt->tcp)) return;
@@ -5244,12 +5250,13 @@ static void rx_ip6(struct mg_tcpip_if *ifp, struct pkt *pkt) {
     if (pkt->pay.len < sizeof(*pkt->tcp) + 4 * off) return;
     mkpay(pkt, (uint32_t *) pkt->tcp + off);
     MG_DEBUG(("TCP %M:%hu -> %M:%hu len %u", mg_print_ip6, &pkt->ip6->src,
-                mg_ntohs(pkt->tcp->sport), mg_print_ip6, &pkt->ip6->dst,
-                mg_ntohs(pkt->tcp->dport), (int) pkt->pay.len));
+              mg_ntohs(pkt->tcp->sport), mg_print_ip6, &pkt->ip6->dst,
+              mg_ntohs(pkt->tcp->dport), (int) pkt->pay.len));
     rx_tcp(ifp, pkt);
   } else {
-    MG_DEBUG(("Unknown IPv6 next hdr %x", mg_htons(hdr->next)));
-    if (mg_log_level >= MG_LL_VERBOSE) mg_hexdump(pkt->ip6, pkt->pay.len >= 32 ? 32 : pkt->pay.len);
+    MG_DEBUG(("Unknown IPv6 next hdr %x", (int) next));
+    if (mg_log_level >= MG_LL_VERBOSE)
+      mg_hexdump(pkt->ip6, pkt->pay.len >= 32 ? 32 : pkt->pay.len);
   }
 }
 
