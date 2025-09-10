@@ -5194,7 +5194,7 @@ static void rx_ip6(struct mg_tcpip_if *ifp, struct pkt *pkt) {
       case 51:  // Authentication RFC-4302
         MG_INFO(("IPv6 extension header %d", (int) next));
         next = nhdr[0];
-        len += 8 * (nhdr[1] + 1);
+        len += (uint16_t)(8 * (nhdr[1] + 1));
         nhdr += 8 * (nhdr[1] + 1);
         break;
       case 44:  // Fragment 4.5
@@ -5215,7 +5215,7 @@ static void rx_ip6(struct mg_tcpip_if *ifp, struct pkt *pkt) {
     }
   }
   // There can be link padding, take payload length from IPv6 header - options
-  pkt->pay.buf = nhdr;
+  pkt->pay.buf = (char *) nhdr;
   pkt->pay.len = mg_ntohs(pkt->ip6->plen) - len;
   if (next == 58) {
     pkt->icmp6 = (struct icmp6 *) (pkt->pay.buf);
