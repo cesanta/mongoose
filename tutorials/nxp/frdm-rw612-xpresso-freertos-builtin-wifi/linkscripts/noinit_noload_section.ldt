@@ -1,0 +1,44 @@
+    /* DEFAULT NOINIT SECTION */
+    .noinit (NOLOAD): ALIGN(4)
+    {
+        _noinit = .;
+        PROVIDE(__start_noinit_RAM = .) ;
+        PROVIDE(__start_noinit_SRAM = .) ;
+        *(.noinit*)
+        . = ALIGN(4) ;
+        _end_noinit = .;
+        PROVIDE(__end_noinit_RAM = .) ;
+        PROVIDE(__end_noinit_SRAM = .) ;
+    } > SRAM AT> SRAM
+
+    .smu_cpu13_mbox (NOLOAD) :
+    {
+        . = ALIGN(4);
+        *(.smu_cpu13_mbox)
+        KEEP (*(.smu_cpu13_mbox))
+        . = ALIGN(4);
+    } > MBOX1 AT> MBOX1
+
+    .smu_cpu31_txq (NOLOAD) :
+    {
+        . = ALIGN(4);
+        *(.smu_cpu31_txq)
+        KEEP (*(.smu_cpu31_txq))
+        . = ALIGN(4);
+    } > TXQ1 AT> TXQ1
+
+    .smu_cpu23_mbox (NOLOAD) :
+    {
+        . = ALIGN(4);
+        *(.smu_cpu23_mbox)
+        KEEP (*(.smu_cpu23_mbox))
+        . = ALIGN(4);
+    } > MBOX2 AT> MBOX2
+
+    .smu_cpu32_txq (NOLOAD) :
+    {
+        . = ALIGN(4);
+        *(.smu_cpu32_txq)
+        KEEP (*(.smu_cpu32_txq))
+        . = ALIGN(4);
+    } > TXQ32 AT> TXQ32
