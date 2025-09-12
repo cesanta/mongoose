@@ -1124,7 +1124,7 @@ static void mg_tcpip_rx(struct mg_tcpip_if *ifp, void *buf, size_t len) {
   mkpay(&pkt, pkt.eth + 1);
   if (pkt.eth->type == mg_htons(0x806)) {
     pkt.arp = (struct arp *) (pkt.pay.buf);
-    if (sizeof(*pkt.eth) + sizeof(*pkt.arp) > pkt.pay.len) return; // Truncated
+    if (pkt.pay.len < sizeof(*pkt.arp)) return; // Truncated
     mg_tcpip_call(ifp, MG_TCPIP_EV_ARP, &pkt.raw);
     rx_arp(ifp, &pkt);
   } else if (pkt.eth->type == mg_htons(0x86dd)) {
