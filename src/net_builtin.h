@@ -20,18 +20,19 @@ typedef void (*mg_tcpip_event_handler_t)(struct mg_tcpip_if *ifp, int ev,
                                          void *ev_data);
 
 enum {
-  MG_TCPIP_EV_ST_CHG,           // state change                   uint8_t * (&ifp->state)
-  MG_TCPIP_EV_DHCP_DNS,         // DHCP DNS assignment            uint32_t *ipaddr
-  MG_TCPIP_EV_DHCP_SNTP,        // DHCP SNTP assignment           uint32_t *ipaddr
-  MG_TCPIP_EV_ARP,              // Got ARP packet                 struct mg_str *
-  MG_TCPIP_EV_TIMER_1S,         // 1 second timer                 NULL
-  MG_TCPIP_EV_WIFI_SCAN_RESULT, // Wi-Fi scan results             struct mg_wifi_scan_bss_data *
-  MG_TCPIP_EV_WIFI_SCAN_END,    // Wi-Fi scan has finished        NULL
-  MG_TCPIP_EV_WIFI_CONNECT_ERR, // Wi-Fi connect has failed       driver and chip specific
-  MG_TCPIP_EV_DRIVER,           // Driver event                   driver specific
-  MG_TCPIP_EV_USER              // Starting ID for user events
+  MG_TCPIP_EV_ST_CHG,  // state change                   uint8_t * (&ifp->state)
+  MG_TCPIP_EV_DHCP_DNS,   // DHCP DNS assignment            uint32_t *ipaddr
+  MG_TCPIP_EV_DHCP_SNTP,  // DHCP SNTP assignment           uint32_t *ipaddr
+  MG_TCPIP_EV_ARP,        // Got ARP packet                 struct mg_str *
+  MG_TCPIP_EV_TIMER_1S,   // 1 second timer                 NULL
+  MG_TCPIP_EV_WIFI_SCAN_RESULT,  // Wi-Fi scan results             struct
+                                 // mg_wifi_scan_bss_data *
+  MG_TCPIP_EV_WIFI_SCAN_END,     // Wi-Fi scan has finished        NULL
+  MG_TCPIP_EV_WIFI_CONNECT_ERR,  // Wi-Fi connect has failed       driver and
+                                 // chip specific
+  MG_TCPIP_EV_DRIVER,  // Driver event                   driver specific
+  MG_TCPIP_EV_USER     // Starting ID for user events
 };
-
 
 // Network interface
 struct mg_tcpip_if {
@@ -52,8 +53,8 @@ struct mg_tcpip_if {
   mg_tcpip_event_handler_t fn;     // User-specified event handler function
   struct mg_mgr *mgr;              // Mongoose event manager
   struct mg_queue recv_queue;      // Receive queue
-  char dhcp_name[12];              // Name reported to DHCP, "mip" if unset
-  uint16_t mtu;                    // Interface MTU
+  char dhcp_name[MG_TCPIP_DHCPNAME_SIZE];  // Name for DHCP, "mip" if unset
+  uint16_t mtu;                            // Interface MTU
 #define MG_TCPIP_MTU_DEFAULT 1500
 
   // Internal state, user can use it but should not change it
@@ -105,6 +106,5 @@ struct mg_tcpip_spi {
   void (*end)(void *);              // SPI end: slave select high
   uint8_t (*txn)(void *, uint8_t);  // SPI transaction: write 1 byte, read reply
 };
-
 
 #endif

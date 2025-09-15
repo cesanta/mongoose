@@ -179,6 +179,10 @@
 #define MG_SET_MAC_ADDRESS(mac)
 #endif
 
+#ifndef MG_TCPIP_DHCPNAME_SIZE
+#define MG_TCPIP_DHCPNAME_SIZE 18  // struct mg_tcpip_if :: dhcp_name size
+#endif
+
 #ifndef MG_SET_WIFI_CONFIG
 #define MG_SET_WIFI_CONFIG(data)
 #endif
