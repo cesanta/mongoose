@@ -4507,12 +4507,12 @@ static struct ip6 *tx_ip6(struct mg_tcpip_if *ifp, uint8_t *mac_dst,
 static bool tx_udp(struct mg_tcpip_if *ifp, uint8_t *mac_dst,
                    struct mg_addr *ip_src, struct mg_addr *ip_dst,
                    const void *buf, size_t len) {
-  struct ip *ip;
+  struct ip *ip = NULL;
   struct udp *udp;
   size_t eth_len;
   uint32_t cs;
 #if MG_ENABLE_IPV6
-  struct ip6 *ip6;
+  struct ip6 *ip6 = NULL;
   if (ip_dst->is_ip6) {
     ip6 = tx_ip6(ifp, mac_dst, 17, ip_src->ip6, ip_dst->ip6,
                  len + sizeof(struct udp));
@@ -4821,7 +4821,7 @@ static struct ip6 *tx_ip6(struct mg_tcpip_if *ifp, uint8_t *mac_dst,
   memcpy(eth->src, ifp->mac, sizeof(eth->src));  // Use our MAC
   eth->type = mg_htons(0x86dd);
   memset(ip6, 0, sizeof(*ip6));
-  ip6->ver = 0x60;  // Version 6, skip traffic class
+  ip6->ver = 0x60;  // Version 6, traffic class 0
   ip6->plen = mg_htons((uint16_t) plen);
   ip6->next = next;
   ip6->hops = 255;  // NDP requires max
@@ -5098,7 +5098,7 @@ static bool rx_udp(struct mg_tcpip_if *ifp, struct pkt *pkt) {
   s = (struct connstate *) (c + 1);
   c->rem.port = pkt->udp->sport;
 #if MG_ENABLE_IPV6
-  if (c->loc.ip6) {
+  if (c->loc.is_ip6) {
     c->rem.ip6[0] = pkt->ip6->src[0], c->rem.ip6[1] = pkt->ip6->src[1],
     c->rem.is_ip6 = true;
   } else
@@ -5124,11 +5124,11 @@ static size_t tx_tcp(struct mg_tcpip_if *ifp, uint8_t *mac_dst,
                      struct mg_addr *ip_src, struct mg_addr *ip_dst,
                      uint8_t flags, uint32_t seq, uint32_t ack, const void *buf,
                      size_t len) {
-  struct ip *ip;
+  struct ip *ip = NULL;
   struct tcp *tcp;
   uint16_t opts[4 / 2], mss;
 #if MG_ENABLE_IPV6
-  struct ip6 *ip6;
+  struct ip6 *ip6 = NULL;
   mss = (uint16_t) (ifp->mtu - 60);  // RFC-9293 3.7.1; RFC-6691 2
 #else
   mss = (uint16_t) (ifp->mtu - 40);  // RFC-9293 3.7.1; RFC-6691 2
@@ -5699,7 +5699,7 @@ static void rx_ip6(struct mg_tcpip_if *ifp, struct pkt *pkt) {
     pkt->tcp = (struct tcp *) (pkt->pay.buf);
     if (pkt->pay.len < sizeof(*pkt->tcp)) return;
     off = pkt->tcp->off >> 4;  // account for opts
-    if (pkt->pay.len < sizeof(*pkt->tcp) + 4 * off) return;
+    if (pkt->pay.len < (4 * off)) return;
     mkpay(pkt, (uint32_t *) pkt->tcp + off);
     MG_DEBUG(("TCP %M:%hu -> %M:%hu len %u", mg_print_ip6, &pkt->ip6->src,
               mg_ntohs(pkt->tcp->sport), mg_print_ip6, &pkt->ip6->dst,
@@ -5961,19 +5961,10 @@ void mg_tcpip_init(struct mg_mgr *mgr, struct mg_tcpip_if *ifp) {
                                            // MG_EPHEMERAL_PORT_BASE to 65535
     if (ifp->tx.buf == NULL || ifp->recv_queue.buf == NULL) MG_ERROR(("OOM"));
 #if MG_ENABLE_IPV6
-    // TODO: for static configuration, set the values for global address,
-    // mask and gateway here (it cannot be done inside
-    // MG_TCPIP_DRIVER_INIT macro). If no static configuration is used,
-    // the macros will have values of 0. This section might need rework.
-    memset(ifp->ip6, (uint8_t[16]) MG_TCPIP_GLOBAL_PREFIX, 16);
-    memset(ifp->mask6, 0, 16);
-    memset(ifp->gw6, (uint8_t[16]) MG_TCPIP_GW6, 16);
+    // TODO: see how to set global address, mask, and gw; for static configuration,
+    // must be properly filled before arriving here
     if (ifp->ip6[0] == 0 && ifp->ip6[1] == 0) {
       ifp->enable_slaac = true;
-    } else {
-      // static configuration
-      fill_mask6(ifp->mask6, MG_TCPIP_PREFIX_LEN);
-      fill_global(ifp->ip6, (uint8_t[16]) MG_TCPIP_GLOBAL_PREFIX, MG_TCPIP_PREFIX_LEN, ifp->mac);
     }
     memset(ifp->gw6mac, 255, sizeof(ifp->gw6mac));  // Set best-effort to bcast
     ip6genll((uint8_t *) ifp->ip6ll, ifp->mac);     // build link-local address
