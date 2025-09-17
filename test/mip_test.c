@@ -41,15 +41,25 @@ static void test_csum(void) {
   // UDP and TCP checksum calc funcions use the same basic calls as ipcsum()
 }
 
+static bool executed = false;
+
+static void mif_fn(struct mg_tcpip_if *ifp, int ev, void *ev_data) {
+  if (ev == MG_TCPIP_EV_ST_CHG)
+    ASSERT(*(uint8_t *) ev_data == MG_TCPIP_STATE_READY);
+    executed = true;
+  (void) ifp;
+}
+
 static void test_statechange(void) {
-  char tx[1540];
   struct mg_tcpip_if iface;
   memset(&iface, 0, sizeof(iface));
   iface.ip = mg_htonl(0x01020304);
   iface.state = MG_TCPIP_STATE_READY;
-  iface.tx.buf = tx, iface.tx.len = sizeof(tx);
   iface.driver = &mg_tcpip_driver_mock;
+  iface.fn = mif_fn;
   onstatechange(&iface);
+  ASSERT(executed == true);
+  executed = false;
 }
 
 static void ph(struct mg_connection *c, int ev, void *ev_data) {
