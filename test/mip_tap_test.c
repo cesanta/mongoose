@@ -253,7 +253,7 @@ static int fetch(struct mg_mgr *mgr, char *buf, const char *url,
 static void test_http_client(struct mg_mgr *mgr) {
   char buf[FETCH_BUF_SIZE];
   int rc = 0;
-  const bool ipv6 = 0;
+  const bool ipv6 = MG_ENABLE_IPV6;
 #if MG_TLS
   if (ipv6) {
     rc = fetch(mgr, buf, "https://ipv6.google.com",
@@ -267,11 +267,12 @@ static void test_http_client(struct mg_mgr *mgr) {
   if (ipv6) {
     rc = fetch(mgr, buf, "http://ipv6.google.com",
                "GET / HTTP/1.0\r\nHost: ipv6.google.com\r\n\r\n");
+    ASSERT(rc == 200);  // OK
   } else {
     rc = fetch(mgr, buf, "http://cesanta.com",
                "GET /robots.txt HTTP/1.0\r\nHost: cesanta.com\r\n\r\n");
+    ASSERT(rc == 301);  // OK: Permanently moved (HTTP->HTTPS redirect)
   }
-  ASSERT(rc == 301);  // OK: Permanently moved (HTTP->HTTPS redirect)
 
 #endif
 }
