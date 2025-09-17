@@ -44,9 +44,10 @@ static void test_csum(void) {
 static bool executed = false;
 
 static void mif_fn(struct mg_tcpip_if *ifp, int ev, void *ev_data) {
-  if (ev == MG_TCPIP_EV_ST_CHG)
+  if (ev == MG_TCPIP_EV_ST_CHG) {
     ASSERT(*(uint8_t *) ev_data == MG_TCPIP_STATE_READY);
     executed = true;
+  }
   (void) ifp;
 }
 
