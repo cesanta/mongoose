@@ -4964,6 +4964,35 @@ static void tx_ndp_rs(struct mg_tcpip_if *ifp, uint64_t *ip_dst, uint8_t *mac) {
   MG_DEBUG(("NDP Router Solicitation sent"));
 }
 
+static void fill_mask6(uint64_t *mask6, uint8_t prefix_len) {
+  mask6[0] = mask6[1] = 0;
+  uint8_t full = prefix_len / 8;
+  uint8_t rem = prefix_len % 8;
+  for (uint8_t i = 0; i < full; i++) ((uint8_t *) mask6)[i] = 0xFF;
+  if (rem) ((uint8_t *) mask6)[full] = (uint8_t) (0xFF << (8 - rem));
+}
+
+static bool fill_global(uint64_t *ip6, uint8_t *prefix, uint8_t prefix_len,
+            uint8_t *mac) {
+  uint8_t full = prefix_len / 8;
+  uint8_t rem = prefix_len % 8;
+  if (full >= 8 && rem != 0) {
+    MG_ERROR(("Prefix length > 64, UNSUPPORTED"));
+    return false;
+  } else if (full == 8 && rem == 0) {
+    ip6gen((uint8_t *) ip6, prefix, mac);
+  } else {
+    ip6[0] = ip6[1] = 0;  // already zeroed before firing RS...
+    if (full) memcpy(ip6, prefix, full);
+    if (rem) {
+      uint8_t mask = (uint8_t) (0xFF << (8 - rem));
+      ((uint8_t *) ip6)[full] = prefix[full] & mask;
+    }
+    meui64(((uint8_t *) &ip6[1]), mac);  // RFC-4291 2.5.4, 2.5.1
+  }
+  return true;
+}
+
 // Router Advertisement, 4.2
 static void rx_ndp_ra(struct mg_tcpip_if *ifp, struct pkt *pkt) {
   if (pkt->pay.len < 12) return;
@@ -5004,29 +5033,9 @@ static void rx_ndp_ra(struct mg_tcpip_if *ifp, struct pkt *pkt) {
         (void) pref_lifetime;
         (void) prefix;
 
-        // form mask6
-        ifp->mask6[0] = ifp->mask6[1] = 0;
-        uint8_t full = prefix_len / 8;
-        uint8_t rem = prefix_len % 8;
-        for (uint8_t i = 0; i < full; i++) ((uint8_t *) ifp->mask6)[i] = 0xFF;
-        if (rem) ((uint8_t *) ifp->mask6)[full] = (uint8_t) (0xFF << (8 - rem));
-
-        // fill the global IP address (ifp->ip6) with its prefix
-        if (full >= 8 && rem != 0) {
-          MG_ERROR(("Prefix length > 64, UNSUPPORTED"));
-          return;
-        } else if (full == 8 && rem == 0) {
-          ip6gen((uint8_t *) ifp->ip6, prefix, ifp->mac);
-        } else {
-          ifp->ip6[0] = ifp->ip6[1] = 0;  // already zeroed before firing RS...
-          if (full) memcpy(ifp->ip6, prefix, full);
-          if (rem) {
-            uint8_t mask = (uint8_t) (0xFF << (8 - rem));
-            ((uint8_t *) ifp->ip6)[full] = prefix[full] & mask;
-          }
-          meui64(((uint8_t *) &ifp->ip6[1]),
-                 ifp->mac);  // RFC-4291 2.5.4, 2.5.1
-        }
+        // form mask6 and global
+        fill_mask6(ifp->mask6, prefix_len);
+        if (!fill_global(ifp->ip6, prefix, prefix_len, ifp->mac)) return;
       }
       opts += length;
       opt_left -= length;
@@ -5952,7 +5961,20 @@ void mg_tcpip_init(struct mg_mgr *mgr, struct mg_tcpip_if *ifp) {
                                            // MG_EPHEMERAL_PORT_BASE to 65535
     if (ifp->tx.buf == NULL || ifp->recv_queue.buf == NULL) MG_ERROR(("OOM"));
 #if MG_ENABLE_IPV6
-    if (ifp->ip6[0] == 0 && ifp->ip6[1] == 0) ifp->enable_slaac = true;
+    // TODO: for static configuration, set the values for global address,
+    // mask and gateway here (it cannot be done inside
+    // MG_TCPIP_DRIVER_INIT macro). If no static configuration is used,
+    // the macros will have values of 0. This section might need rework.
+    memset(ifp->ip6, (uint8_t[16]) MG_TCPIP_GLOBAL_PREFIX, 16);
+    memset(ifp->mask6, 0, 16);
+    memset(ifp->gw6, (uint8_t[16]) MG_TCPIP_GW6, 16);
+    if (ifp->ip6[0] == 0 && ifp->ip6[1] == 0) {
+      ifp->enable_slaac = true;
+    } else {
+      // static configuration
+      fill_mask6(ifp->mask6, MG_TCPIP_PREFIX_LEN);
+      fill_global(ifp->ip6, (uint8_t[16]) MG_TCPIP_GLOBAL_PREFIX, MG_TCPIP_PREFIX_LEN, ifp->mac);
+    }
     memset(ifp->gw6mac, 255, sizeof(ifp->gw6mac));  // Set best-effort to bcast
     ip6genll((uint8_t *) ifp->ip6ll, ifp->mac);     // build link-local address
 #endif

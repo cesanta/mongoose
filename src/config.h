@@ -175,6 +175,22 @@
 #define MG_TCPIP_GW MG_IPV4(0, 0, 0, 0)  // Default is 0.0.0.0 (DHCP)
 #endif
 
+#if defined(MG_ENABLE_IPV6) && MG_ENABLE_IPV6
+
+#ifndef MG_TCPIP_GLOBAL_PREFIX
+#define MG_TCPIP_GLOBAL_PREFIX MG_IPV6(0, 0, 0, 0, 0, 0, 0, 0)
+#endif
+
+#ifndef MG_TCPIP_PREFIX_LEN
+#define MG_TCPIP_PREFIX_LEN 0
+#endif
+
+#ifndef MG_TCPIP_GW6
+#define MG_TCPIP_GW6 MG_IPV6(0, 0, 0, 0, 0, 0, 0, 0)
+#endif
+
+#endif
+
 #ifndef MG_SET_MAC_ADDRESS
 #define MG_SET_MAC_ADDRESS(mac)
 #endif

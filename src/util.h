@@ -27,6 +27,16 @@ void mg_delayms(unsigned int ms);
 
 #define MG_IPV4(a, b, c, d) mg_htonl(MG_U32(a, b, c, d))
 
+#define MG_IPV6(a, b, c, d, e, f, g ,h) \
+  { (uint8_t)((a)>>8),(uint8_t)(a), \
+    (uint8_t)((b)>>8),(uint8_t)(b), \
+    (uint8_t)((c)>>8),(uint8_t)(c), \
+    (uint8_t)((d)>>8),(uint8_t)(d), \
+    (uint8_t)((e)>>8),(uint8_t)(e), \
+    (uint8_t)((f)>>8),(uint8_t)(f), \
+    (uint8_t)((g)>>8),(uint8_t)(g), \
+    (uint8_t)((h)>>8),(uint8_t)(h) }
+
 // For printing IPv4 addresses: printf("%d.%d.%d.%d\n", MG_IPADDR_PARTS(&ip))
 #define MG_U8P(ADDR) ((uint8_t *) (ADDR))
 #define MG_IPADDR_PARTS(ADDR) \
