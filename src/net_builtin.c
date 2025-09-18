@@ -227,45 +227,40 @@ static void ip6genll(uint8_t *addr, uint8_t *mac) {
   uint8_t prefix[8] = {0xfe, 0x80, 0, 0, 0, 0, 0, 0};  // RFC-4291 2.5.6
   ip6gen(addr, prefix, mac);                           // 2.5.1
 }
-static void ip6sn(uint8_t *addr, uint8_t *sn_addr) {
+static void ip6sn(uint64_t *addr, uint64_t *sn_addr) {
   // Build solicited-node multicast address from a given unicast IP
   // RFC-4291 2.7
+  uint8_t *sn = (uint8_t *) sn_addr;
   memset(sn_addr, 0, 16);
-  sn_addr[0] = 0xff;
-  sn_addr[1] = 0x02;
-  sn_addr[11] = 0x01;
-  sn_addr[12] = 0xff;
-  sn_addr[13] = addr[13];
-  sn_addr[14] = addr[14];
-  sn_addr[15] = addr[15];
+  sn[0] = 0xff;
+  sn[1] = 0x02;
+  sn[11] = 0x01;
+  sn[12] = 0xff;
+  sn[13] = ((uint8_t *)addr)[13];
+  sn[14] = ((uint8_t *)addr)[14];
+  sn[15] = ((uint8_t *)addr)[15];
 }
-static void ip6macmc(uint8_t *ip_addr_mc, uint8_t *mac_mc) {
+static void ip6_mcastmac(uint8_t *mac, uint64_t *ip6) {
   // Build multicast MAC address from a solicited-node
-  // multicast IPv6 addres
-  // RFC-4291 2.7
-  mac_mc[0] = 0x33;
-  mac_mc[1] = 0x33;
-  mac_mc[2] = ip_addr_mc[12];
-  mac_mc[3] = ip_addr_mc[13];
-  mac_mc[4] = ip_addr_mc[14];
-  mac_mc[5] = ip_addr_mc[15];
-}
-static void ip6mac_routermc(uint8_t *mac) {
-  // Build multicast MAC for routers
+  // multicast IPv6 address, RFC-4291 2.7
+  uint8_t *ip = (uint8_t *) ip6;
   mac[0] = 0x33;
   mac[1] = 0x33;
-  mac[2] = 0x00;
-  mac[3] = 0x00;
-  mac[4] = 0x00;
-  mac[5] = 0x02;
+  mac[2] = ip[12];
+  mac[3] = ip[13];
+  mac[4] = ip[14];
+  mac[5] = ip[15];
 }
-static void ip6addr_routermc(uint8_t *ip) {
-  // Build multicast IP for routers
-  memset(ip, 0, 16);
-  ip[0] = 0xff;
-  ip[1] = 0x02;   // ff02::
-  ip[15] = 0x02;  // ::2
-}
+
+union ip6addr {
+  uint64_t u[2];
+  uint8_t b[16];
+};
+
+static const union ip6addr ip6_allrouters = {.b = {0xFF, 0x02, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0x02}};
+static const union ip6addr ip6_allnodes = {.b = {0xFF, 0x02, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0x01}};
+static const uint8_t ip6mac_allnodes[6] = {0x33, 0x33, 0x00, 0x00, 0x00, 0x01};
+static const uint8_t ip6mac_allrouters[6] = {0x33, 0x33, 0x00, 0x00, 0x00, 0x02};
 
 #define MG_IP6MATCH(a, b) (a[0] == b[0] && a[1] == b[1])
 #endif
@@ -360,12 +355,14 @@ static bool tx_udp(struct mg_tcpip_if *ifp, uint8_t *mac_dst,
     ip6 = tx_ip6(ifp, mac_dst, 17, ip_src->ip6, ip_dst->ip6,
                  len + sizeof(struct udp));
     udp = (struct udp *) (ip6 + 1);
+    eth_len = sizeof(struct eth) + sizeof(*ip6) + sizeof(*udp) + len;
   } else
 #endif
   {
     ip = tx_ip(ifp, mac_dst, 17, ip_src->ip4, ip_dst->ip4,
                len + sizeof(struct udp));
     udp = (struct udp *) (ip + 1);
+    eth_len = sizeof(struct eth) + sizeof(*ip) + sizeof(*udp) + len;
   }
   udp->sport = ip_src->port;
   udp->dport = ip_dst->port;
@@ -386,7 +383,6 @@ static bool tx_udp(struct mg_tcpip_if *ifp, uint8_t *mac_dst,
   cs += (uint32_t) (17 + sizeof(*udp) + len);
   udp->csum = csumfin(cs);
   memmove(udp + 1, buf, len);
-  eth_len = sizeof(struct eth) + sizeof(*ip) + sizeof(*udp) + len;
   return (ether_output(ifp, eth_len) == eth_len);
 }
 
@@ -767,8 +763,8 @@ static void tx_ndp_ns(struct mg_tcpip_if *ifp, uint64_t *ip_dst, uint8_t *mac) {
     }
   }
   if (mcast_ns) {
-    ip6sn((uint8_t *) ip_dst, (uint8_t *) mcast_ip);
-    ip6macmc((uint8_t *) mcast_ip, mcast_mac);
+    ip6sn(ip_dst, mcast_ip);
+    ip6_mcastmac(mcast_mac, mcast_ip);
   }
   // TODO(robertc2000): using only link-local IP addr for now
   // We might consider to add an option to use either link-local or global IP
@@ -791,8 +787,6 @@ static void tx_ndp_rs(struct mg_tcpip_if *ifp, uint64_t *ip_dst, uint8_t *mac) {
   uint8_t payload[4 + 8];  // reserved + optional source MAC addr
   size_t payload_len = 4;
   uint64_t unspec_ip[2] = {0, 0};
-  uint64_t mcast_ip[2];
-  uint8_t mcast_mac[6];
 
   memset(payload, 0, sizeof(payload));
   if (!MG_IP6MATCH(ifp->ip6ll, unspec_ip)) {
@@ -800,15 +794,12 @@ static void tx_ndp_rs(struct mg_tcpip_if *ifp, uint64_t *ip_dst, uint8_t *mac) {
     memcpy(payload + 6, ifp->mac, 6);
     payload_len += 8;
   }
-
-  ip6mac_routermc((uint8_t *) mcast_mac);
-  ip6addr_routermc((uint8_t *) mcast_ip);
-  tx_icmp6(ifp, mcast_mac, ifp->ip6ll, mcast_ip, 133, 0, payload, payload_len);
+  tx_icmp6(ifp, (uint8_t *)ip6mac_allrouters, ifp->ip6ll, (uint64_t *)ip6_allrouters.u, 133, 0, payload, payload_len);
   MG_DEBUG(("NDP Router Solicitation sent"));
 }
 
 static bool fill_global(uint64_t *ip6, uint8_t *prefix, uint8_t prefix_len,
-            uint8_t *mac) {
+                        uint8_t *mac) {
   uint8_t full = prefix_len / 8;
   uint8_t rem = prefix_len % 8;
   if (full >= 8 && rem != 0) {
@@ -1033,10 +1024,13 @@ static size_t tx_tcp_ctrlresp(struct mg_tcpip_if *ifp, struct pkt *pkt,
   memset(&ips, 0, sizeof(ips));
   memset(&ipd, 0, sizeof(ipd));
   if (pkt->ip != NULL) {
-    ips.ip4 = pkt->ip->src;
+    ips.ip4 = pkt->ip->dst;
+    ipd.ip4 = pkt->ip->src;
   } else {
-    ips.ip6[0] = pkt->ip6->src[0], ips.ip6[1] = pkt->ip6->src[1];
+    ips.ip6[0] = pkt->ip6->dst[0], ips.ip6[1] = pkt->ip6->dst[1];
+    ipd.ip6[0] = pkt->ip6->src[0], ipd.ip6[1] = pkt->ip6->src[1];
     ips.is_ip6 = true;
+    ipd.is_ip6 = true;
   }
   ips.port = pkt->tcp->dport;
   ipd.port = pkt->tcp->sport;
@@ -1070,7 +1064,6 @@ static struct mg_connection *accept_conn(struct mg_connection *lsn,
   {
     c->rem.ip4 = pkt->ip->src;
   }
-  memcpy(c->rem.ip, &pkt->ip->src, sizeof(uint32_t));
   c->rem.port = pkt->tcp->sport;
   MG_DEBUG(("%lu accepted %M", c->id, mg_print_ip_port, &c->rem));
   LIST_ADD_HEAD(struct mg_connection, &lsn->mgr->conns, c);
@@ -1512,6 +1505,10 @@ static void rx_ip6(struct mg_tcpip_if *ifp, struct pkt *pkt) {
   } else if (next == 17) {
     pkt->udp = (struct udp *) (pkt->pay.buf);
     if (pkt->pay.len < sizeof(*pkt->udp)) return;
+    // Take length from UDP header
+    len = mg_ntohs(pkt->udp->len);  // UDP datagram length
+    if (len < sizeof(*pkt->udp) || len > pkt->pay.len) return;  // malformed
+    pkt->pay.len = len;  // strip excess data
     mkpay(pkt, pkt->udp + 1);
     MG_DEBUG(("UDP %M:%hu -> %M:%hu len %u", mg_print_ip6, &pkt->ip6->src,
               mg_ntohs(pkt->udp->sport), mg_print_ip6, &pkt->ip6->dst,
@@ -1800,7 +1797,7 @@ void mg_tcpip_init(struct mg_mgr *mgr, struct mg_tcpip_if *ifp) {
     // prefix length, and gw are already filled at this point.
     if (ifp->ip6[0] == 0 && ifp->ip6[1] == 0) {
       ifp->enable_slaac = true;
-      ip6genll((uint8_t *) ifp->ip6ll, ifp->mac);     // build link-local address
+      ip6genll((uint8_t *) ifp->ip6ll, ifp->mac);  // build link-local address
     }
     memset(ifp->gw6mac, 255, sizeof(ifp->gw6mac));  // Set best-effort to bcast
 #endif
@@ -1856,16 +1853,23 @@ void mg_connect_resolved(struct mg_connection *c) {
   c->is_connecting = 1;
 #if MG_ENABLE_IPV6
   if (c->rem.is_ip6) {
-    if (1 && !MG_IP6MATCH(c->rem.ip6,
-                          ifp->gw6)) {  // skip if gw (onstate6change -> NS)
+    if (c->is_udp && MG_IP6MATCH(c->rem.ip6, ip6_allnodes.u)) { // local broadcast
+      struct connstate *s = (struct connstate *) (c + 1);
+      memcpy(s->mac, ip6mac_allnodes, sizeof(s->mac));
+      mac_resolved(c);
+    } else if (c->rem.ip6[0] == ifp->ip6[0] && !MG_IP6MATCH(c->rem.ip6, ifp->gw6)) {  // skip if gw (onstate6change -> NS)
       // If we're in the same LAN, fire a Neighbor Solicitation
       MG_DEBUG(("%lu NS lookup...", c->id));
       tx_ndp_ns(ifp, c->rem.ip6, ifp->mac);
       settmout(c, MIP_TTYPE_ARP);
       c->is_arplooking = 1;
+    } else if (*((uint8_t *)c->rem.ip6) == 0xFF) {  // multicast
+      struct connstate *s = (struct connstate *) (c + 1);
+      ip6_mcastmac(s->mac, c->rem.ip6);
+      mac_resolved(c);
     } else {
       struct connstate *s = (struct connstate *) (c + 1);
-      memcpy(s->mac, ifp->gw6mac, sizeof(ifp->gw6mac));
+      memcpy(s->mac, ifp->gw6mac, sizeof(s->mac));
       mac_resolved(c);
     }
   } else
@@ -1902,6 +1906,12 @@ bool mg_open_listener(struct mg_connection *c, const char *url) {
   if (!mg_aton(mg_url_host(url), &c->loc)) {
     MG_ERROR(("invalid listening URL: %s", url));
     return false;
+#if MG_ENABLE_IPV6
+  } else if (c->loc.is_ip6) {
+    c->loc.ip6[0] = c->mgr->ifp->ip6[0], c->loc.ip6[1] = c->mgr->ifp->ip6[1];
+#endif
+  } else {
+    c->loc.ip4 = c->mgr->ifp->ip;
   }
   return true;
 }
@@ -1995,7 +2005,7 @@ bool mg_send(struct mg_connection *c, const void *buf, size_t len) {
 
 uint8_t mcast_addr[6] = {0x01, 0x00, 0x5e, 0x00, 0x00, 0xfb};
 void mg_multicast_add(struct mg_connection *c, char *ip) {
-  (void) ip;  // ip4_mcastmac(mcast_mac, &ip);
+  (void) ip;  // ip4/6_mcastmac(mcast_mac, &ip); ipv6 param
   // TODO(): actual IP -> MAC; check database, update
   c->mgr->ifp->update_mac_hash_table = true;  // mark dirty
 }

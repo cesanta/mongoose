@@ -248,6 +248,18 @@ static void init_tests(struct mg_mgr *mgr, struct eth *e, struct ipp *ipp,
   driver->rx = if_rx;
   mif->driver = driver;
   mif->driver_data = &s_driver_data;
+#if MG_ENABLE_IPV6
+  if (ipp->ip6 != NULL) {
+    mif->ip6[0] = 1;
+    mif->state = MG_TCPIP_STATE_READY;  // so DHCP stops
+    mif->state6 = MG_TCPIP_STATE_READY;  // so mg_send() works and RS stops
+  } else
+#endif
+  {
+    mif->ip = 1;
+    mif->mask = 255; // use router, to avoid firing an ARP request
+    mif->state = MG_TCPIP_STATE_READY;  // so mg_send() works and DHCP stops
+  }
   mg_tcpip_init(mgr, mif);
 
   // setting the Ethernet header
@@ -262,6 +274,9 @@ static void init_tests(struct mg_mgr *mgr, struct eth *e, struct ipp *ipp,
     memset(ip, 0, sizeof(*ip));
     ip->ver = 0x60;
     ip->next = proto;
+    // must be outside of Mongoose network to avoid firing NS requests
+    ip->src[0] = 2;
+    ip->dst[0] = mif->ip6[0];
   } else
 #endif
   {
@@ -269,6 +284,9 @@ static void init_tests(struct mg_mgr *mgr, struct eth *e, struct ipp *ipp,
     memset(ip, 0, sizeof(*ip));
     ip->ver = (4 << 4) | 5;
     ip->proto = proto;
+    // must be outside of Mongoose network to avoid firing ARP requests
+    ip->src = 2;
+    ip->dst = mif->ip;
   }
 }
 
@@ -278,7 +296,7 @@ static void init_tcp_tests(struct mg_mgr *mgr, struct eth *e, struct ipp *ipp,
   init_tests(mgr, e, ipp, driver, mif, 6);  // 6 -> TCP
 #if MG_ENABLE_IPV6
   if (ipp->ip6 != NULL) {
-    mg_http_listen(mgr, "http://[::0]:80", f, NULL);
+    mg_http_listen(mgr, "http://[::]:80", f, NULL);
   } else
 #endif
   {
@@ -340,7 +358,12 @@ static void test_tcp_basics(bool ipv6) {
   ASSERT(t->flags == (TH_RST | TH_ACK));
   ASSERT(t->seq == mg_htonl(0));
   ASSERT(t->ack == mg_htonl(1235));
-
+  if (ipv6) {
+    ASSERT(i6->src[0] == 1 && i6->dst[0] == 2);
+  } else {
+    ASSERT(i->src == 1 && i->dst == 2);
+  }
+  
   // send SYN+ACK, expect RST
   create_tcp_seg(&e, &ipp, 1234, 4321, TH_SYN | TH_ACK, 1, 69, 0, NULL, 0);
   mg_mgr_poll(&mgr, 0);  // make sure we clean former stuff in buffer
@@ -389,6 +412,11 @@ static void test_tcp_basics(bool ipv6) {
   while (!received_response(&s_driver_data)) mg_mgr_poll(&mgr, 0);
   ASSERT(t->flags == TH_RST);
   ASSERT(t->seq == mg_htonl(4321));
+  if (ipv6) {
+    ASSERT(i6->src[0] == 1 && i6->dst[0] == 2);
+  } else {
+    ASSERT(i->src == 1 && i->dst == 2);
+  }
 
   // send SYN+ACK, expect RST
   create_tcp_seg(&e, &ipp, 1234, 4321, TH_SYN | TH_ACK, 1, 80, 0, NULL, 0);
@@ -413,8 +441,8 @@ static void test_tcp_basics(bool ipv6) {
 
   init_tcp_handshake(&e, &ipp, &mgr);  // starts with seq_no=1000, ackno=2
 
-  // no MSS sent, so it must default to 536 (RFC-9293 3.7.1)
-  ASSERT((((struct connstate *) (mgr.conns + 1))->dmss == 536));
+  // no MSS sent, so it must default to 536/1220 (RFC-9293 3.7.1)
+  ASSERT(((struct connstate *) (mgr.conns + 1))->dmss == (ipv6 ? 1220 : 536));
 
   // segment with seq_no within window
   create_tcp_simpleseg(&e, &ipp, 1010, 2, TH_PUSH, 2);
@@ -422,6 +450,11 @@ static void test_tcp_basics(bool ipv6) {
   while (!received_response(&s_driver_data)) mg_mgr_poll(&mgr, 0);
   ASSERT((t->flags == TH_ACK));
   ASSERT((t->ack == mg_htonl(1001)));  // expecting 1001, dude
+  if (ipv6) {
+    ASSERT(i6->src[0] == 1 && i6->dst[0] == 2);
+  } else {
+    ASSERT(i->src == 1 && i->dst == 2);
+  }
 
   // segment with seq_no way out of window
   create_tcp_simpleseg(&e, &ipp, 1000000, 2, TH_PUSH, 2);
@@ -626,20 +659,28 @@ static void test_tcp_basics(bool ipv6) {
     // this creates a listener we won't use
     init_tcp_tests(&mgr, &e, &ipp, &driver, &mif, tcpclosure_fn);
 
-    c = mg_connect(&mgr, "tcp://1.2.3.4:1234/", client_fn, &event);
+    // must be outside of our network to avoid firing ARP requests  
+    if (ipv6) {
+      c = mg_connect(&mgr, "tcp://[200::]:1234/", client_fn, &event);
+    } else {
+      c = mg_connect(&mgr, "tcp://2.0.0.0:1234/", client_fn, &event);
+    }
     ASSERT(c != NULL);
     ASSERT(received_response(&s_driver_data));
     ASSERT((t->flags == TH_SYN));
     ASSERT(event == 255);
-    // invalid SYN + ACK to connecting client (after SYN...), send ACK out of
-    // seq
+    if (ipv6) {
+      ASSERT(i6->src[0] == 1 && i6->dst[0] == 2);
+    } else {
+      ASSERT(i->src == 1 && i->dst == 2);
+    }
+
+    // invalid SYN + ACK to connecting client (after SYN...), send ACK != seq
     ackno = mg_ntohl(t->seq) + 1000;
     //  create_tcp_seg(&e, &ipp, 4321, ackno, TH_SYN | TH_ACK, 1234,
-    //  mg_ntohs(c->loc.port), 0, NULL, 0); mg_mgr_poll(&mgr, 0); // make sure
-    //  we clean former stuff in buffer while
-    //  (!received_response(&s_driver_data)) mg_mgr_poll(&mgr, 0);
-    //  ASSERT((t->flags == (TH_RST | TH_ACK)));  // ***************** WHAT DOES
-    //  LINUX DO HERE ????
+    //  mg_ntohs(c->loc.port), 0, NULL, 0); mg_mgr_poll(&mgr, 0); 
+    //  while(!received_response(&s_driver_data)) mg_mgr_poll(&mgr, 0);
+    //  ASSERT((t->flags == (TH_RST | TH_ACK)));
     // ******** WE FAIL THIS, Mongoose does not validate the ACK number
     //  ASSERT((t->seq == mg_htonl(ackno)));
     //  ASSERT((t->ack == mg_htonl(4322)));
@@ -662,7 +703,11 @@ static void test_tcp_basics(bool ipv6) {
     // test connection failure, send RST+ACK
     // this creates a listener we won't use
     init_tcp_tests(&mgr, &e, &ipp, &driver, &mif, tcpclosure_fn);
-    c = mg_connect(&mgr, "tcp://1.2.3.4:1234/", client_fn, &event);
+    if (ipv6) {
+      c = mg_connect(&mgr, "tcp://[200::]:1234/", client_fn, &event);
+    } else {
+      c = mg_connect(&mgr, "tcp://2.0.0.0:1234/", client_fn, &event);
+    }
     received_response(&s_driver_data);  // get the SYN
     ackno = mg_ntohl(t->seq) + 1;
     create_tcp_seg(&e, &ipp, 4321, ackno, TH_RST + TH_ACK, 1234,
@@ -971,14 +1016,12 @@ static void init_udp_tests(struct mg_mgr *mgr, struct eth *e, struct ipp *ipp,
   init_tests(mgr, e, ipp, driver, mif, 17);  // 17 -> UDP
 #if MG_ENABLE_IPV6
   if (ipp->ip6 != NULL) {
-    mif->ip6[0] = 1;
     mif->state = MG_TCPIP_STATE_READY;  // so DHCP stops
     mif->state6 = MG_TCPIP_STATE_READY;  // so mg_send() works and RS stops
-    mg_listen(mgr, "udp://[::0]:888", f, NULL);
+    mg_listen(mgr, "udp://[::]:888", f, NULL);
   } else
 #endif
   {
-    mif->ip = 1;
     mif->state = MG_TCPIP_STATE_READY;  // so mg_send() works and DHCP stops
     mg_listen(mgr, "udp://0.0.0.0:888", f, NULL);
   }
@@ -992,6 +1035,8 @@ static void test_udp(bool ipv6) {
   struct ip6 ip6;
   struct ipp ipp;
   struct udp *u = (struct udp *) (s_driver_data.buf + sizeof(e) + (!ipv6 ? sizeof(ip) : sizeof(ip6)));
+  struct ip *i = (struct ip *) (s_driver_data.buf + sizeof(e));
+  struct ip6 *i6 = (struct ip6 *) (s_driver_data.buf + sizeof(e));
   struct mg_tcpip_driver driver;
   struct mg_tcpip_if mif;
 
@@ -1013,8 +1058,13 @@ static void test_udp(bool ipv6) {
   mg_mgr_poll(&mgr, 0);
   ASSERT(received_response(&s_driver_data));
   ASSERT(u->sport == mg_htons(888));
-  ASSERT(u->len == mg_htons(sizeof(u) + 3));
+  ASSERT(u->len == mg_htons(sizeof(*u) + 3));
   ASSERT(*((char *) (u + 1)) == 'P');
+  if (ipv6) {
+    ASSERT(i6->src[0] == 1 && i6->dst[0] == 2);
+  } else {
+    ASSERT(i->src == 1 && i->dst == 2);
+  }
 
   s_driver_data.len = 0;
   mg_mgr_free(&mgr);
