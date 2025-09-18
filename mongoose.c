@@ -4964,14 +4964,6 @@ static void tx_ndp_rs(struct mg_tcpip_if *ifp, uint64_t *ip_dst, uint8_t *mac) {
   MG_DEBUG(("NDP Router Solicitation sent"));
 }
 
-static void fill_mask6(uint64_t *mask6, uint8_t prefix_len) {
-  mask6[0] = mask6[1] = 0;
-  uint8_t full = prefix_len / 8;
-  uint8_t rem = prefix_len % 8;
-  for (uint8_t i = 0; i < full; i++) ((uint8_t *) mask6)[i] = 0xFF;
-  if (rem) ((uint8_t *) mask6)[full] = (uint8_t) (0xFF << (8 - rem));
-}
-
 static bool fill_global(uint64_t *ip6, uint8_t *prefix, uint8_t prefix_len,
             uint8_t *mac) {
   uint8_t full = prefix_len / 8;
@@ -5033,8 +5025,8 @@ static void rx_ndp_ra(struct mg_tcpip_if *ifp, struct pkt *pkt) {
         (void) pref_lifetime;
         (void) prefix;
 
-        // form mask6 and global
-        fill_mask6(ifp->mask6, prefix_len);
+        // fill prefix length and global
+        ifp->prefix_len = prefix_len;
         if (!fill_global(ifp->ip6, prefix, prefix_len, ifp->mac)) return;
       }
       opts += length;
@@ -5961,13 +5953,13 @@ void mg_tcpip_init(struct mg_mgr *mgr, struct mg_tcpip_if *ifp) {
                                            // MG_EPHEMERAL_PORT_BASE to 65535
     if (ifp->tx.buf == NULL || ifp->recv_queue.buf == NULL) MG_ERROR(("OOM"));
 #if MG_ENABLE_IPV6
-    // TODO: see how to set global address, mask, and gw; for static configuration,
-    // must be properly filled before arriving here
+    // If static conviguration is used, link-local and global addresses,
+    // prefix length, and gw are already filled at this point.
     if (ifp->ip6[0] == 0 && ifp->ip6[1] == 0) {
       ifp->enable_slaac = true;
+      ip6genll((uint8_t *) ifp->ip6ll, ifp->mac);     // build link-local address
     }
     memset(ifp->gw6mac, 255, sizeof(ifp->gw6mac));  // Set best-effort to bcast
-    ip6genll((uint8_t *) ifp->ip6ll, ifp->mac);     // build link-local address
 #endif
   }
 }
@@ -24867,7 +24859,7 @@ static bool mg_tcpip_driver_stm32h_init(struct mg_tcpip_if *ifp) {
   ETH->MACIER = 0;  // Do not enable additional irq sources (reset value)
   ETH->MACTFCR = MG_BIT(7);  // Disable zero-quanta pause
 #if !MG_ENABLE_DRIVER_MCXN
-  ETH->MACPFR = MG_BIT(10);  // Perfect filtering
+  ETH->MACPFR = MG_BIT(31);  // Perfect filtering
 #endif
   struct mg_phy phy = {eth_read_phy, eth_write_phy};
   mg_phy_init(&phy, phy_addr, phy_conf);

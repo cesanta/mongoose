@@ -177,8 +177,12 @@
 
 #if defined(MG_ENABLE_IPV6) && MG_ENABLE_IPV6
 
-#ifndef MG_TCPIP_GLOBAL_PREFIX
-#define MG_TCPIP_GLOBAL_PREFIX MG_IPV6(0, 0, 0, 0, 0, 0, 0, 0)
+#ifndef MG_TCPIP_GLOBAL
+#define MG_TCPIP_GLOBAL MG_IPV6(0, 0, 0, 0, 0, 0, 0, 0)
+#endif
+
+#ifndef MG_TCPIP_LINK_LOCAL
+#define MG_TCPIP_LINK_LOCAL MG_IPV6(0, 0, 0, 0, 0, 0, 0, 0)
 #endif
 
 #ifndef MG_TCPIP_PREFIX_LEN

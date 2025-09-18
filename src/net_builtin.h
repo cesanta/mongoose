@@ -58,7 +58,8 @@ struct mg_tcpip_if {
 #define MG_TCPIP_MTU_DEFAULT 1500
 #if MG_ENABLE_IPV6
   uint64_t ip6ll[2], ip6[2];       // IPv6 link-local and global addresses
-  uint64_t mask6[2], gw6[2];       // IPv6 mask (we should use prefix len...), default gateway
+  uint8_t prefix_len;              // Prefix length
+  uint64_t gw6[2];                 // Default gateway
   bool enable_slaac;               // Enable IPv6 address autoconfiguration
   bool enable_dhcp6_client;        // Enable DCHPv6 client
 #endif

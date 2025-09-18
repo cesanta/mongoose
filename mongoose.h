@@ -1059,8 +1059,12 @@ struct timeval {
 
 #if defined(MG_ENABLE_IPV6) && MG_ENABLE_IPV6
 
-#ifndef MG_TCPIP_GLOBAL_PREFIX
-#define MG_TCPIP_GLOBAL_PREFIX MG_IPV6(0, 0, 0, 0, 0, 0, 0, 0)
+#ifndef MG_TCPIP_GLOBAL
+#define MG_TCPIP_GLOBAL MG_IPV6(0, 0, 0, 0, 0, 0, 0, 0)
+#endif
+
+#ifndef MG_TCPIP_LINK_LOCAL
+#define MG_TCPIP_LINK_LOCAL MG_IPV6(0, 0, 0, 0, 0, 0, 0, 0)
 #endif
 
 #ifndef MG_TCPIP_PREFIX_LEN
@@ -3146,7 +3150,8 @@ struct mg_tcpip_if {
 #define MG_TCPIP_MTU_DEFAULT 1500
 #if MG_ENABLE_IPV6
   uint64_t ip6ll[2], ip6[2];       // IPv6 link-local and global addresses
-  uint64_t mask6[2], gw6[2];       // IPv6 mask (we should use prefix len...), default gateway
+  uint8_t prefix_len;              // Prefix length
+  uint64_t gw6[2];                 // Default gateway
   bool enable_slaac;               // Enable IPv6 address autoconfiguration
   bool enable_dhcp6_client;        // Enable DCHPv6 client
 #endif
@@ -3667,6 +3672,18 @@ struct mg_tcpip_driver_stm32h_data {
 #define MG_ENABLE_ETH_IRQ()
 #endif
 
+#if defined(MG_ENABLE_IPV6) && MG_ENABLE_IPV6
+#define MG_IPV6_INIT(mif)                                         \
+  do {                                                            \
+    memcpy(mif.ip6ll, (uint8_t[16]) MG_TCPIP_LINK_LOCAL, 16);     \
+    memcpy(mif.ip6, (uint8_t[16]) MG_TCPIP_GLOBAL, 16);           \
+    memcpy(mif.gw6, (uint8_t[16]) MG_TCPIP_GW6, 16);              \
+    mif.prefix_len = MG_TCPIP_PREFIX_LEN;                        \
+  } while(0)
+#else
+#define MG_IPV6_INIT(mif)
+#endif
+
 #define MG_TCPIP_DRIVER_INIT(mgr)                                 \
   do {                                                            \
     static struct mg_tcpip_driver_stm32h_data driver_data_;       \
@@ -3680,6 +3697,7 @@ struct mg_tcpip_driver_stm32h_data {
     mif_.driver = &mg_tcpip_driver_stm32h;                        \
     mif_.driver_data = &driver_data_;                             \
     MG_SET_MAC_ADDRESS(mif_.mac);                                 \
+    MG_IPV6_INIT(mif_);                                           \
     mg_tcpip_init(mgr, &mif_);                                    \
     MG_ENABLE_ETH_IRQ();                                          \
     MG_INFO(("Driver: stm32h, MAC: %M", mg_print_mac, mif_.mac)); \
