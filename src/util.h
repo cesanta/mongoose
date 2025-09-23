@@ -27,6 +27,16 @@ void mg_delayms(unsigned int ms);
 
 #define MG_IPV4(a, b, c, d) mg_htonl(MG_U32(a, b, c, d))
 
+#define MG_IPV6(a, b, c, d, e, f, g ,h) \
+  { (uint8_t)((a)>>8),(uint8_t)(a), \
+    (uint8_t)((b)>>8),(uint8_t)(b), \
+    (uint8_t)((c)>>8),(uint8_t)(c), \
+    (uint8_t)((d)>>8),(uint8_t)(d), \
+    (uint8_t)((e)>>8),(uint8_t)(e), \
+    (uint8_t)((f)>>8),(uint8_t)(f), \
+    (uint8_t)((g)>>8),(uint8_t)(g), \
+    (uint8_t)((h)>>8),(uint8_t)(h) }
+
 // For printing IPv4 addresses: printf("%d.%d.%d.%d\n", MG_IPADDR_PARTS(&ip))
 #define MG_U8P(ADDR) ((uint8_t *) (ADDR))
 #define MG_IPADDR_PARTS(ADDR) \
@@ -41,6 +51,14 @@ void mg_delayms(unsigned int ms);
   ((uint32_t) (((uint32_t) MG_U8P(p)[0] << 24U) | \
                ((uint32_t) MG_U8P(p)[1] << 16U) | \
                ((uint32_t) MG_U8P(p)[2] << 8U) | MG_U8P(p)[3]))
+#define MG_LOAD_BE64(p)                           \
+  ((uint64_t) (((uint64_t) MG_U8P(p)[0] << 56U) | \
+               ((uint64_t) MG_U8P(p)[1] << 48U) | \
+               ((uint64_t) MG_U8P(p)[2] << 40U) | \
+               ((uint64_t) MG_U8P(p)[3] << 32U) | \
+               ((uint64_t) MG_U8P(p)[4] << 24U) | \
+               ((uint64_t) MG_U8P(p)[5] << 16U) | \
+               ((uint64_t) MG_U8P(p)[6] << 8U) | MG_U8P(p)[7]))
 #define MG_STORE_BE16(p, n)           \
   do {                                \
     MG_U8P(p)[0] = ((n) >> 8U) & 255; \
@@ -59,11 +77,24 @@ void mg_delayms(unsigned int ms);
     MG_U8P(p)[2] = ((n) >> 8U) & 255;  \
     MG_U8P(p)[3] = (n) &255;           \
   } while (0)
+#define MG_STORE_BE64(p, n)            \
+  do {                                 \
+    MG_U8P(p)[0] = ((n) >> 56U) & 255; \
+    MG_U8P(p)[1] = ((n) >> 48U) & 255; \
+    MG_U8P(p)[2] = ((n) >> 40U) & 255; \
+    MG_U8P(p)[3] = ((n) >> 32U) & 255; \
+    MG_U8P(p)[4] = ((n) >> 24U) & 255; \
+    MG_U8P(p)[5] = ((n) >> 16U) & 255; \
+    MG_U8P(p)[6] = ((n) >> 8U) & 255;  \
+    MG_U8P(p)[7] = (n) &255;           \
+  } while (0)
 
 uint16_t mg_ntohs(uint16_t net);
 uint32_t mg_ntohl(uint32_t net);
+uint64_t mg_ntohll(uint64_t net);
 #define mg_htons(x) mg_ntohs(x)
 #define mg_htonl(x) mg_ntohl(x)
+#define mg_htonll(x) mg_ntohll(x)
 
 #define MG_REG(x) ((volatile uint32_t *) (x))[0]
 #define MG_BIT(x) (((uint32_t) 1U) << (x))
