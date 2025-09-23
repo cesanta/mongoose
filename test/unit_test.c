@@ -2617,6 +2617,8 @@ static void test_util(void) {
   const char *e;
   char buf[100], *s;
   struct mg_addr a;
+  uint64_t ipv3;
+  uint8_t d64[8] = {0x12, 0x34, 0x56, 0x78, 0x90, 0xab, 0xcd, 0xef};
   uint32_t ipv4;
   uint16_t port;
   struct mg_str data;
@@ -2650,6 +2652,20 @@ static void test_util(void) {
   ASSERT(((uint8_t *) &ipv4)[0] == 0xef && ((uint8_t *) &ipv4)[1] == 0x23 &&
          ((uint8_t *) &ipv4)[2] == 0x45);
   ASSERT(MG_LOAD_BE24(&ipv4) == 0xef2345);
+
+  memcpy(&ipv3, d64, sizeof(ipv3));
+#if defined(_MSC_VER) && _MSC_VER < 1700
+  // VC98 doesn't suppport LL suffix
+#else
+  ASSERT(ipv3 == mg_htonll(0x1234567890abcdefLL));
+  ASSERT(mg_ntohll(ipv3) == 0x1234567890abcdefLL);
+#endif
+  MG_STORE_BE64(&ipv3, 0x5678abcd12349ef0);
+  ASSERT(((uint8_t *) &ipv3)[0] == 0x56 && ((uint8_t *) &ipv3)[1] == 0x78 &&
+         ((uint8_t *) &ipv3)[2] == 0xab && ((uint8_t *) &ipv3)[3] == 0xcd &&
+         ((uint8_t *) &ipv3)[4] == 0x12 && ((uint8_t *) &ipv3)[5] == 0x34 &&
+         ((uint8_t *) &ipv3)[6] == 0x9e && ((uint8_t *) &ipv3)[7] == 0xf0);
+  ASSERT(MG_LOAD_BE64(&ipv3) == 0x5678abcd12349ef0);
 
   memset(a.ip, 0xa5, sizeof(a.ip));
   ASSERT(mg_aton(mg_str("1:2:3:4:5:6:7:8"), &a) == true);
