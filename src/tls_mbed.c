@@ -59,6 +59,10 @@ void mg_tls_free(struct mg_connection *c) {
 #ifdef MBEDTLS_SSL_SESSION_TICKETS
     mbedtls_ssl_ticket_free(&tls->ticket);
 #endif
+#if defined(MBEDTLS_VERSION_NUMBER) && MBEDTLS_VERSION_NUMBER >= 0x03000000 && \
+    defined(MBEDTLS_PSA_CRYPTO_C)
+    mbedtls_psa_crypto_free(); // https://github.com/Mbed-TLS/mbedtls/issues/9223#issuecomment-2144898336
+#endif
     mg_free(tls);
     c->tls = NULL;
   }
