@@ -873,8 +873,10 @@ static int fetch(struct mg_mgr *mgr, char *buf, const char *url,
     if (strstr(url, "localhost") != NULL) {
       // Local connection, use self-signed certificates
       opts.ca = mg_unpacked("/certs/ca.crt");
-      // opts.cert = mg_str(s_tls_cert);
-      // opts.key = mg_str(s_tls_key);
+      if (strstr(url, "23456") != NULL) { // hinted from caller
+        opts.cert = mg_unpacked("/certs/client.crt");
+        opts.key = mg_unpacked("/certs/client.key");
+      }
     }
     mg_tls_init(c, &opts);
   }
@@ -1420,7 +1422,6 @@ static void test_tls(void) {
   struct mg_str bd;
   ASSERT(data.buf != NULL && data.len > 0);
   memset(&opts, 0, sizeof(opts));
-  // opts.ca = mg_str(s_tls_ca);
   opts.cert = mg_unpacked("/certs/server.crt");
   opts.key = mg_unpacked("/certs/server.key");
   mg_mgr_init(&mgr);
@@ -1469,6 +1470,20 @@ static void test_tls(void) {
       "is 1.3 only; re-enable when other stacks can be easily configured for "
       "1.3\n");
 #endif
+
+  // Repeat the simplest test with two-way authentication
+  opts.ca = mg_unpacked("/certs/ca.crt"); // configure the server for two-way
+  // make it fail: the client will not use 2-way
+  ASSERT(fetch(&mgr, buf, url, "GET /a.txt HTTP/1.0\n\n") != 200);
+  // make it work
+  mg_mgr_free(&mgr);
+  ASSERT(mgr.conns == NULL);
+  mg_mgr_init(&mgr);
+  url = "https://localhost:23456"; // port # hints the client to use two-way
+  c = mg_http_listen(&mgr, url, eh1, &opts);
+  ASSERT(c != NULL);
+  ASSERT(fetch(&mgr, buf, url, "GET /a.txt HTTP/1.0\n\n") == 200);
+  ASSERT(cmpbody(buf, "hello\n") == 0);
   mg_mgr_free(&mgr);
   ASSERT(mgr.conns == NULL);
 #endif
@@ -1531,7 +1546,7 @@ static void test_http_client(void) {
   ASSERT(ok == 200);
   mg_mgr_poll(&mgr, 1);
 
-  // Make host validationfail
+  // Make host validation fail
   c = mg_http_connect(&mgr, url, f3, &ok);
   ASSERT(c != NULL);
   opts.name = mg_str("dummy");  // Set some invalid hostname value
@@ -1540,6 +1555,16 @@ static void test_http_client(void) {
   for (i = 0; i < 500 && ok <= 0; i++) mg_mgr_poll(&mgr, 10);
   MG_INFO(("OK: %d", ok));
   ASSERT(ok == 777);
+  mg_mgr_poll(&mgr, 1);
+  // Skip host validation
+  c = mg_http_connect(&mgr, url, f3, &ok);
+  ASSERT(c != NULL);
+  opts.name = mg_str("");
+  mg_tls_init(c, &opts);
+  ok = 0;
+  for (i = 0; i < 500 && ok <= 0; i++) mg_mgr_poll(&mgr, 10);
+  MG_INFO(("OK: %d", ok));
+  ASSERT(ok == 200);
   mg_mgr_poll(&mgr, 1);
   opts.name = mg_url_host(url);
 #if MG_TLS == MG_TLS_BUILTIN
