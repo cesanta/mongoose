@@ -25,6 +25,7 @@ int mg_iobuf_resize(struct mg_iobuf *io, size_t new_size) {
       mg_free(io->buf);
       io->buf = (unsigned char *) p;
       io->size = new_size;
+      io->len = len;
     } else {
       ok = 0;
       MG_ERROR(("%lld->%lld", (uint64_t) io->size, (uint64_t) new_size));
