@@ -322,6 +322,8 @@ static void test_iobuf(void) {
   mg_iobuf_add(&io, io.len, "a", 1);
   ASSERT(io.buf != NULL && io.size == 20 && io.len == 11);
   ASSERT(memcmp(io.buf, "xhi!123456a", io.len) == 0);
+  mg_iobuf_resize(&io, 1);
+  ASSERT(io.buf != NULL && io.size == 10 && io.len == 10);
   mg_iobuf_free(&io);
 }
 
