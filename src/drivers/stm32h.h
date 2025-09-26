@@ -7,7 +7,10 @@
 #if !defined(MG_ENABLE_DRIVER_MCXN)
 #define MG_ENABLE_DRIVER_MCXN 0
 #endif
-#if MG_ENABLE_DRIVER_STM32H || MG_ENABLE_DRIVER_MCXN
+#if !defined(MG_ENABLE_DRIVER_STM32N)
+#define MG_ENABLE_DRIVER_STM32N 0
+#endif
+#if MG_ENABLE_DRIVER_STM32H || MG_ENABLE_DRIVER_MCXN || MG_ENABLE_DRIVER_STM32N
 
 struct mg_tcpip_driver_stm32h_data {
   // MDC clock divider. MDC clock is derived from HCLK, must not exceed 2.5MHz
