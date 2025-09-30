@@ -1343,7 +1343,7 @@ static int mg_tls_recv_cert(struct mg_connection *c, bool is_client) {
       if (ci == certs) {
         // First certificate in the chain is peer cert, check SAN if requested,
         // and store public key for further CertVerify step
-        if (tls->hostname != NULL && *tls->hostname != '\0' &&
+        if (tls->hostname[0] != '\0' &&
             mg_tls_verify_cert_san(cert, certsz, tls->hostname) <= 0 &&
             mg_tls_verify_cert_cn(&ci->subj, tls->hostname) <= 0) {
           mg_error(c, "failed to verify hostname");
