@@ -24272,9 +24272,10 @@ struct mg_tcpip_driver mg_tcpip_driver_stm32f = {
 #endif
 
 
-#if MG_ENABLE_TCPIP && (MG_ENABLE_DRIVER_STM32H || MG_ENABLE_DRIVER_MCXN)
+#if MG_ENABLE_TCPIP && (MG_ENABLE_DRIVER_STM32H || MG_ENABLE_DRIVER_MCXN || \
+                        MG_ENABLE_DRIVER_STM32N)
 // STM32H: vendor modded single-queue Synopsys v4.2
-// MCXNx4x: dual-queue Synopsys v5.2 with no hash table option
+// STM32N, MCXNx4x: dual-queue Synopsys v5.2 with no hash table option
 // RT1170 ENET_QOS: quad-queue Synopsys v5.1
 struct synopsys_enet_qos {
   volatile uint32_t MACCR, MACECR, MACPFR, MACWTR, MACHT0R, MACHT1R,
@@ -24313,17 +24314,20 @@ struct synopsys_enet_qos {
                                              0x8000UL))
 #elif MG_ENABLE_DRIVER_MCXN
 #define ETH ((struct synopsys_enet_qos *) (uintptr_t) 0x40100000UL)
+#elif MG_ENABLE_DRIVER_STM32N
+#define ETH ((struct synopsys_enet_qos *) (uintptr_t) 0x48036000UL)
 #endif
 
 #define ETH_PKT_SIZE 1540  // Max frame size
 #define ETH_DESC_CNT 4     // Descriptors count
 #define ETH_DS 4           // Descriptor size (words)
 
-static volatile uint32_t s_rxdesc[ETH_DESC_CNT][ETH_DS];  // RX descriptors
-static volatile uint32_t s_txdesc[ETH_DESC_CNT][ETH_DS];  // TX descriptors
-static uint8_t s_rxbuf[ETH_DESC_CNT][ETH_PKT_SIZE];       // RX ethernet buffers
-static uint8_t s_txbuf[ETH_DESC_CNT][ETH_PKT_SIZE];       // TX ethernet buffers
-static struct mg_tcpip_if *s_ifp;                         // MIP interface
+#define MG_8BYTE_ALIGNED __attribute__((aligned(8)))
+static volatile uint32_t s_rxdesc[ETH_DESC_CNT][ETH_DS] MG_8BYTE_ALIGNED;
+static volatile uint32_t s_txdesc[ETH_DESC_CNT][ETH_DS] MG_8BYTE_ALIGNED;
+static uint8_t s_rxbuf[ETH_DESC_CNT][ETH_PKT_SIZE] MG_8BYTE_ALIGNED;
+static uint8_t s_txbuf[ETH_DESC_CNT][ETH_PKT_SIZE] MG_8BYTE_ALIGNED;
+static struct mg_tcpip_if *s_ifp;         // MIP interface
 
 static uint16_t eth_read_phy(uint8_t addr, uint8_t reg) {
   ETH->MACMDIOAR &= (0xF << 8);
@@ -24374,7 +24378,7 @@ static bool mg_tcpip_driver_stm32h_init(struct mg_tcpip_if *ifp) {
   ETH->DMASBMR |= MG_BIT(12);  // AAL NOTE(scaprile): is this actually needed
   ETH->MACIER = 0;  // Do not enable additional irq sources (reset value)
   ETH->MACTFCR = MG_BIT(7);  // Disable zero-quanta pause
-#if !MG_ENABLE_DRIVER_MCXN
+#if MG_ENABLE_DRIVER_STM32H
   ETH->MACPFR = MG_BIT(10);  // Perfect filtering
 #endif
   struct mg_phy phy = {eth_read_phy, eth_write_phy};
@@ -24443,7 +24447,7 @@ static size_t mg_tcpip_driver_stm32h_tx(const void *buf, size_t len,
 }
 
 static void mg_tcpip_driver_stm32h_update_hash_table(struct mg_tcpip_if *ifp) {
-#if MG_ENABLE_DRIVER_MCXN
+#if MG_ENABLE_DRIVER_MCXN || MG_ENABLE_DRIVER_STM32N
   ETH->MACPFR = MG_BIT(4);  // Pass Multicast (pass all multicast frames)
 #else
   // TODO(): read database, rebuild hash table
@@ -24454,7 +24458,7 @@ static void mg_tcpip_driver_stm32h_update_hash_table(struct mg_tcpip_if *ifp) {
   ETH->MACA1HR = (uint32_t) mcast_addr[5] << 8 | (uint32_t) mcast_addr[4];
   ETH->MACA1HR |= MG_BIT(31);  // AE
 #endif
-(void) ifp;
+  (void) ifp;
 }
 
 static bool mg_tcpip_driver_stm32h_poll(struct mg_tcpip_if *ifp, bool s1) {
@@ -24488,9 +24492,12 @@ static uint32_t s_rxno;
 #if MG_ENABLE_DRIVER_MCXN
 void ETHERNET_IRQHandler(void);
 void ETHERNET_IRQHandler(void) {
-#else
+#elif MG_ENABLE_DRIVER_STM32H
 void ETH_IRQHandler(void);
 void ETH_IRQHandler(void) {
+#else
+void ETH1_IRQHandler(void);
+void ETH1_IRQHandler(void) {
 #endif
   if (ETH->DMACSR & MG_BIT(6)) {           // Frame received, loop
     ETH->DMACSR = MG_BIT(15) | MG_BIT(6);  // Clear flag
