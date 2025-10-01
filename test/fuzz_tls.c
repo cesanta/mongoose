@@ -20,8 +20,8 @@ int LLVMFuzzerTestOneInput(const uint8_t *, size_t);
 _(mg_tls_server_recv_hello) \
 //_(mg_tls_client_recv_hello) \
 //_(mg_tls_client_recv_ext ) \
-//_(mg_tls_client_recv_cert) \
-//_(mg_tls_client_recv_cert_verify) \
+//_(mg_tls_recv_cert) \
+//_(mg_tls_recv_cert_verify) \
 // ... 
 
 struct f {

@@ -100,7 +100,8 @@ int LLVMFuzzerTestOneInput(const uint8_t *data, size_t size) {
     memcpy(pkt, data, size);
     if (size > sizeof(*eth)) {
       static size_t i;
-      uint16_t eth_types[] = {0x800, 0x806, 0x86dd}; // IPv4, ARP, IPv6
+//      uint16_t eth_types[] = {0x800, 0x806, 0x86dd}; // IPv4, ARP, IPv6
+      uint16_t eth_types[] = {0x800, 0x806}; // IPv4, ARP, skip IPv6 until we merge it ***
       memcpy(eth->dst, mif.mac, 6);  // Set valid destination MAC
       // send all handled eth types, then 2 random ones
       if (i >= (sizeof(eth_types) / sizeof(eth_types[0]) + 2)) i = 0;
@@ -111,31 +112,49 @@ int LLVMFuzzerTestOneInput(const uint8_t *data, size_t size) {
         uint8_t ip_protos[] = {1, 6, 17}; // ICMP, TCP, UDP
         struct ip *ip4 = (struct ip *) (eth + 1);
         ip4->ver = (ip4->ver & ~0xf0) | (4 << 4);
-        // send all handled ip protos, then 2 random ones
+        // send all handled IP protos, then 2 random ones
         if (j >= (sizeof(ip_protos) / sizeof(ip_protos[0]) + 2)) j = 0;
         if (j < (sizeof(ip_protos) / sizeof(ip_protos[0]))) ip4->proto = (ip_protos[j++]);
         if (ip4->proto == 1) { // ICMP
         } else if (ip4->proto == 6) { // TCP
-        } else if (ip4->proto == 17 && size > (sizeof(*eth) + sizeof(struct ip) + sizeof(struct udp))) { // UDP
-          static size_t k;
-          uint16_t udp_ports[] = {67, 68}; // DHCP server and client
-          struct udp *udp = (struct udp *) (ip4 + 1);
-          // send all handled udp ports, then 2 random ones
-          if (k >= (sizeof(udp_ports) / sizeof(udp_ports[0]) + 2)) k = 0;
-          if (k < (sizeof(udp_ports) / sizeof(udp_ports[0]))) udp->dport = mg_htons(udp_ports[k++]);
+        } else if (ip4->proto == 17) { // UDP
+          if (size > (sizeof(*eth) + sizeof(struct ip) + sizeof(struct udp))) {
+            static size_t k;
+            uint16_t udp_ports[] = {67, 68}; // DHCP server and client
+            struct udp *udp = (struct udp *) (ip4 + 1);
+            // send all handled UDP ports, then 2 random ones
+            if (k >= (sizeof(udp_ports) / sizeof(udp_ports[0]) + 2)) k = 0;
+            if (k < (sizeof(udp_ports) / sizeof(udp_ports[0]))) udp->dport = mg_htons(udp_ports[k++]);
+          }
         }
       } else if (eth->type == mg_htons(0x806)) {      // ARP
+#if 0
       } else if (eth->type == mg_htons(0x86dd) && size > (sizeof(*eth) + sizeof(struct ip6))) {     // IPv6
         static size_t j;
-        uint8_t ip6_protos[] = {6, 17}; // TCP, UDP
+        uint8_t ip6_protos[] = {6, 17, 58}; // TCP, UDP, ICMPv6
         struct ip6 *ip6 = (struct ip6 *) (eth + 1);
         ip6->ver = (ip6->ver & ~0xf0) | (6 << 4);
-        // send all handled ip6 "next headers", then 2 random ones
+        // send all handled IPv6 "next headers", then 2 random ones
         if (j >= (sizeof(ip6_protos) / sizeof(ip6_protos[0]) + 2)) j = 0;
-        if (j < (sizeof(ip6_protos) / sizeof(ip6_protos[0]))) ip6->proto = (ip6_protos[j++]);
-        if (ip6->proto == 6) { // TCP
-        } else if (ip6->proto == 17) { // UDP
-        }    
+        if (j < (sizeof(ip6_protos) / sizeof(ip6_protos[0]))) ip6->next = (ip6_protos[j++]);
+        if (ip6->next == 6) { // TCP
+        } else if (ip6->next == 17) { // UDP
+        } else if (ip6->next == 58) { // ICMPv6
+          if (size >= (sizeof(*eth) + sizeof(struct ip6) + sizeof(struct icmp6))) {
+            static size_t k;
+            uint16_t icmp6_types[] = {128, 134, 135, 136}; // Echo Request, RA, NS, NA
+            struct icmp6 *icmp6 = (struct icmp6 *) (ip6 + 1);
+            // send all handled ICMPv6 types, then 2 random ones
+            if (k >= (sizeof(icmp6_types) / sizeof(icmp6_types[0]) + 2)) k = 0;
+            if (k < (sizeof(icmp6_types) / sizeof(icmp6_types[0]))) icmp6->type = mg_htons(icmp6_types[k++]);
+          }
+        }
+#else
+      } else if (eth->type == mg_htons(0x86dd)) {     // IPv6
+        free(pkt);
+        mg_mgr_free(&mgr);
+        return 0;
+#endif
       }
     }
 
