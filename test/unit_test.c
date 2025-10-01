@@ -2268,11 +2268,12 @@ static void test_str(void) {
   { // mg_queue_printf()
 	struct mg_queue q;
 	char buf[128];
+	uint32_t p = 0xffffffff;
+	size_t len;
 	mg_queue_init(&q, buf, sizeof(buf));
-	void *p = (void *) 0xffffffffffffffff;
-	size_t len = mg_queue_printf(&q, "A%p%p%pB", p, p, p);
-  ASSERT(len == 56);
-  ASSERT(memcmp(buf + 4, "A0xffffffffffffffff0xffffffffffffffff0xffffffffffffffffB", 56) == 0);
+	len = mg_queue_printf(&q, "A%p%p%pB", p, p, p);
+  ASSERT(len == 32);
+  ASSERT(memcmp(buf + 4, "A0xffffffff0xffffffff0xffffffffB", 32) == 0);
   }
 
   // Non-standard formatting
