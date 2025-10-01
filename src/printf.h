@@ -9,7 +9,6 @@ size_t mg_vsnprintf(char *buf, size_t len, const char *fmt, va_list *ap);
 size_t mg_snprintf(char *, size_t, const char *fmt, ...);
 char *mg_vmprintf(const char *fmt, va_list *ap);
 char *mg_mprintf(const char *fmt, ...);
-size_t mg_queue_vprintf(struct mg_queue *, const char *fmt, va_list *);
 size_t mg_queue_printf(struct mg_queue *, const char *fmt, ...);
 
 // %M print helper functions

@@ -2,27 +2,19 @@
 #include "fmt.h"
 #include "util.h"
 
-size_t mg_queue_vprintf(struct mg_queue *q, const char *fmt, va_list *ap) {
+size_t mg_queue_printf(struct mg_queue *q, const char *fmt, ...) {
   char *buf;
   size_t len;
-  va_list ap_copy;
-  va_copy(ap_copy, *ap);
-  len = mg_vsnprintf(NULL, 0, fmt, &ap_copy);
-  if (len == 0 || mg_queue_book(q, &buf, len + 1) < len + 1) {
-    len = 0;  // Nah. Not enough space
-  } else {
-    len = mg_vsnprintf((char *) buf, len + 1, fmt, ap);
-    mg_queue_add(q, len);
-  }
-  return len;
-}
-
-size_t mg_queue_printf(struct mg_queue *q, const char *fmt, ...) {
-  va_list ap;
-  size_t len;
-  va_start(ap, fmt);
-  len = mg_queue_vprintf(q, fmt, &ap);
-  va_end(ap);
+  va_list ap1, ap2;
+  va_start(ap1, fmt);
+  len = mg_vsnprintf(NULL, 0, fmt, &ap1);
+  va_end(ap1);
+  if (len == 0 || mg_queue_book(q, &buf, len + 1) < len + 1)
+    return 0;  // Nah. Not enough space
+  va_start(ap2, fmt);
+  len = mg_vsnprintf(buf, len + 1, fmt, &ap2);
+  mg_queue_add(q, len);
+  va_end(ap2);
   return len;
 }
 

@@ -5121,7 +5121,7 @@ static void rx_ip(struct mg_tcpip_if *ifp, struct pkt *pkt) {
   if ((pkt->ip->ver >> 4) != 4) return;         // Not IP
   ihl = pkt->ip->ver & 0x0F;
   if (ihl < 5) return;                     // bad IHL
-  if (pkt->pay.len < (ihl * 4)) return;    // Truncated / malformed
+  if (pkt->pay.len < (uint16_t)(ihl * 4)) return;    // Truncated / malformed
   // There can be link padding, take length from IP header
   len = mg_ntohs(pkt->ip->len); // IP datagram length
   if (len < (ihl * 4) || len > pkt->pay.len) return; // malformed
@@ -5166,7 +5166,7 @@ static void rx_ip(struct mg_tcpip_if *ifp, struct pkt *pkt) {
     pkt->tcp = (struct tcp *) (pkt->pay.buf);
     if (pkt->pay.len < sizeof(*pkt->tcp)) return;
     off = pkt->tcp->off >> 4;  // account for opts
-    if (pkt->pay.len < (4 * off)) return;
+    if (pkt->pay.len < (uint16_t)(4 * off)) return;
     mkpay(pkt, (uint32_t *) pkt->tcp + off);
     MG_VERBOSE(("TCP %M:%hu -> %M:%hu len %u", mg_print_ip4, &pkt->ip->src,
                 mg_ntohs(pkt->tcp->sport), mg_print_ip4, &pkt->ip->dst,
@@ -7811,26 +7811,19 @@ bool mg_ota_end(void) {
 
 
 
-size_t mg_queue_vprintf(struct mg_queue *q, const char *fmt, va_list *ap) {
-  va_list ap_copy;
-  va_copy(ap_copy, *ap);
-  size_t len = mg_vsnprintf(NULL, 0, fmt, &ap_copy);
-  char *buf;
-  if (len == 0 || mg_queue_book(q, &buf, len + 1) < len + 1) {
-    len = 0;  // Nah. Not enough space
-  } else {
-    len = mg_vsnprintf((char *) buf, len + 1, fmt, ap);
-    mg_queue_add(q, len);
-  }
-  return len;
-}
-
 size_t mg_queue_printf(struct mg_queue *q, const char *fmt, ...) {
-  va_list ap;
+  char *buf;
   size_t len;
-  va_start(ap, fmt);
-  len = mg_queue_vprintf(q, fmt, &ap);
-  va_end(ap);
+  va_list ap1, ap2;
+  va_start(ap1, fmt);
+  len = mg_vsnprintf(NULL, 0, fmt, &ap1);
+  va_end(ap1);
+  if (len == 0 || mg_queue_book(q, &buf, len + 1) < len + 1)
+    return 0;  // Nah. Not enough space
+  va_start(ap2, fmt);
+  len = mg_vsnprintf(buf, len + 1, fmt, &ap2);
+  mg_queue_add(q, len);
+  va_end(ap2);
   return len;
 }
 

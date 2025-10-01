@@ -963,7 +963,7 @@ static void rx_ip(struct mg_tcpip_if *ifp, struct pkt *pkt) {
   if ((pkt->ip->ver >> 4) != 4) return;         // Not IP
   ihl = pkt->ip->ver & 0x0F;
   if (ihl < 5) return;                     // bad IHL
-  if (pkt->pay.len < (ihl * 4)) return;    // Truncated / malformed
+  if (pkt->pay.len < (uint16_t)(ihl * 4)) return;    // Truncated / malformed
   // There can be link padding, take length from IP header
   len = mg_ntohs(pkt->ip->len); // IP datagram length
   if (len < (ihl * 4) || len > pkt->pay.len) return; // malformed
@@ -1008,7 +1008,7 @@ static void rx_ip(struct mg_tcpip_if *ifp, struct pkt *pkt) {
     pkt->tcp = (struct tcp *) (pkt->pay.buf);
     if (pkt->pay.len < sizeof(*pkt->tcp)) return;
     off = pkt->tcp->off >> 4;  // account for opts
-    if (pkt->pay.len < (4 * off)) return;
+    if (pkt->pay.len < (uint16_t)(4 * off)) return;
     mkpay(pkt, (uint32_t *) pkt->tcp + off);
     MG_VERBOSE(("TCP %M:%hu -> %M:%hu len %u", mg_print_ip4, &pkt->ip->src,
                 mg_ntohs(pkt->tcp->sport), mg_print_ip4, &pkt->ip->dst,
