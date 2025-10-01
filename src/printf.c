@@ -3,10 +3,11 @@
 #include "util.h"
 
 size_t mg_queue_vprintf(struct mg_queue *q, const char *fmt, va_list *ap) {
+  char *buf;
+  size_t len;
   va_list ap_copy;
   va_copy(ap_copy, *ap);
-  size_t len = mg_vsnprintf(NULL, 0, fmt, &ap_copy);
-  char *buf;
+  len = mg_vsnprintf(NULL, 0, fmt, &ap_copy);
   if (len == 0 || mg_queue_book(q, &buf, len + 1) < len + 1) {
     len = 0;  // Nah. Not enough space
   } else {
