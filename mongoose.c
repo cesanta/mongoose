@@ -22123,7 +22123,8 @@ bool mg_wifi_ap_stop(void) {
 
 #if MG_ENABLE_TCPIP && \
   (defined(MG_ENABLE_DRIVER_IMXRT10) && MG_ENABLE_DRIVER_IMXRT10) || \
-  (defined(MG_ENABLE_DRIVER_IMXRT11) && MG_ENABLE_DRIVER_IMXRT11)
+  (defined(MG_ENABLE_DRIVER_IMXRT11) && MG_ENABLE_DRIVER_IMXRT11) || \
+  (defined(MG_ENABLE_DRIVER_MCXE) && MG_ENABLE_DRIVER_MCXE)
 struct imxrt_enet {
   volatile uint32_t RESERVED0, EIR, EIMR, RESERVED1, RDAR, TDAR, RESERVED2[3],
       ECR, RESERVED3[6], MMFR, MSCR, RESERVED4[7], MIBC, RESERVED5[7], RCR,
@@ -22152,9 +22153,12 @@ struct imxrt_enet {
 #if defined(MG_ENABLE_DRIVER_IMXRT11) && MG_ENABLE_DRIVER_IMXRT11
 #define ENET ((struct imxrt_enet *) (uintptr_t) 0x40424000U)
 #define ETH_DESC_CNT 5     // Descriptors count
-#else
+#elif defined(MG_ENABLE_DRIVER_IMXRT10) && MG_ENABLE_DRIVER_IMXRT10
 #define ENET ((struct imxrt_enet *) (uintptr_t) 0x402D8000U)
 #define ETH_DESC_CNT 4     // Descriptors count
+#else // MG_ENABLE_DRIVER_MCXE
+#define ENET ((struct imxrt_enet *) (uintptr_t) 0x40079000U)
+#define ETH_DESC_CNT 4     // Descriptor count
 #endif
 
 #define ETH_PKT_SIZE 1536  // Max frame size, 64-bit aligned
@@ -22310,9 +22314,14 @@ static bool mg_tcpip_driver_imxrt_poll(struct mg_tcpip_if *ifp, bool s1) {
   return up;
 }
 
-void ENET_IRQHandler(void);
 static uint32_t s_rxno;
+#if !defined(MG_ENABLE_DRIVER_MCXE)
+void ENET_IRQHandler(void);
 void ENET_IRQHandler(void) {
+#else
+void ENET_Receive_IRQHandler(void);
+void ENET_Receive_IRQHandler(void) {
+#endif
   ENET->EIR = MG_BIT(25);  // Ack IRQ
   // Frame received, loop
   for (uint32_t i = 0; i < 10; i++) {  // read as they arrive but not forever

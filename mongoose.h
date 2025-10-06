@@ -3234,7 +3234,8 @@ struct mg_tcpip_driver_cyw_data {
 
 #if MG_ENABLE_TCPIP && \
   (defined(MG_ENABLE_DRIVER_IMXRT10) && MG_ENABLE_DRIVER_IMXRT10) || \
-  (defined(MG_ENABLE_DRIVER_IMXRT11) && MG_ENABLE_DRIVER_IMXRT11)
+  (defined(MG_ENABLE_DRIVER_IMXRT11) && MG_ENABLE_DRIVER_IMXRT11) || \
+  (defined(MG_ENABLE_DRIVER_MCXE) && MG_ENABLE_DRIVER_MCXE)
 
 struct mg_tcpip_driver_imxrt_data {
   // MDC clock divider. MDC clock is derived from IPS Bus clock (ipg_clk),
