@@ -40,7 +40,6 @@ int mg_http_parse(const char *s, size_t len, struct mg_http_message *);
 int mg_http_get_request_len(const unsigned char *buf, size_t buf_len);
 void mg_http_printf_chunk(struct mg_connection *cnn, const char *fmt, ...);
 void mg_http_write_chunk(struct mg_connection *c, const char *buf, size_t len);
-void mg_http_delete_chunk(struct mg_connection *c, struct mg_http_message *hm);
 struct mg_connection *mg_http_listen(struct mg_mgr *, const char *url,
                                      mg_event_handler_t fn, void *fn_data);
 struct mg_connection *mg_http_connect(struct mg_mgr *, const char *url,
