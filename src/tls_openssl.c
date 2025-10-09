@@ -243,6 +243,11 @@ void mg_tls_handshake(struct mg_connection *c) {
   if (rc == 1) {
     MG_DEBUG(("%lu success", c->id));
     c->is_tls_hs = 0;
+    // Check if SSL has buffered application data after handshake
+    if (mg_tls_pending(c) > 0) {
+      c->is_readable = 1;
+      MG_DEBUG(("%lu has %lu pending bytes", c->id, mg_tls_pending(c)));
+    }
     mg_call(c, MG_EV_TLS_HS, NULL);
   } else {
     int code = mg_tls_err(c, tls, rc);
@@ -261,6 +266,11 @@ long mg_tls_recv(struct mg_connection *c, void *buf, size_t len) {
   if (!c->is_tls_hs && buf == NULL && n == 0) return 0; // TODO(): MIP
   if (n < 0 && mg_tls_err(c, tls, n) == 0) return MG_IO_WAIT;
   if (n <= 0) return MG_IO_ERR;
+  // After successful read, check if more data is buffered
+  if (n > 0 && mg_tls_pending(c) > 0) {
+    c->is_readable = 1;
+    MG_VERBOSE(("%lu still has %lu bytes buffered", c->id, mg_tls_pending(c)));
+  }
   return n;
 }
 
