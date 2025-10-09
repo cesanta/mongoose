@@ -79,7 +79,7 @@ void wifi_init(const char *ssid, const char *pass) {
   snprintf((char *) c.sta.ssid, sizeof(c.sta.ssid), "%s", ssid);
   snprintf((char *) c.sta.password, sizeof(c.sta.password), "%s", pass);
   ESP_ERROR_CHECK(esp_wifi_set_mode(WIFI_MODE_STA));
-  ESP_ERROR_CHECK(esp_wifi_set_config(ESP_IF_WIFI_STA, &c));
+  ESP_ERROR_CHECK(esp_wifi_set_config(WIFI_IF_STA, &c));
   ESP_ERROR_CHECK(esp_wifi_start());
   MG_DEBUG(("wifi_init_sta finished."));
 
