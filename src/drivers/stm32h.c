@@ -50,11 +50,11 @@ struct synopsys_enet_qos {
 #define ETH_DESC_CNT 4     // Descriptors count
 #define ETH_DS 4           // Descriptor size (words)
 
-#define MG_8BYTE_ALIGNED __attribute__((aligned(8)))
-static volatile uint32_t s_rxdesc[ETH_DESC_CNT][ETH_DS] MG_8BYTE_ALIGNED;
-static volatile uint32_t s_txdesc[ETH_DESC_CNT][ETH_DS] MG_8BYTE_ALIGNED;
-static uint8_t s_rxbuf[ETH_DESC_CNT][ETH_PKT_SIZE] MG_8BYTE_ALIGNED;
-static uint8_t s_txbuf[ETH_DESC_CNT][ETH_PKT_SIZE] MG_8BYTE_ALIGNED;
+#define MG_ETH_ATTR __attribute__((aligned(8), section(".eth_ram")))
+static volatile uint32_t s_rxdesc[ETH_DESC_CNT][ETH_DS] MG_ETH_ATTR;
+static volatile uint32_t s_txdesc[ETH_DESC_CNT][ETH_DS] MG_ETH_ATTR;
+static uint8_t s_rxbuf[ETH_DESC_CNT][ETH_PKT_SIZE] MG_ETH_ATTR;
+static uint8_t s_txbuf[ETH_DESC_CNT][ETH_PKT_SIZE] MG_ETH_ATTR;
 static struct mg_tcpip_if *s_ifp;         // MIP interface
 
 static uint16_t eth_read_phy(uint8_t addr, uint8_t reg) {
@@ -81,12 +81,14 @@ static bool mg_tcpip_driver_stm32h_init(struct mg_tcpip_if *ifp) {
   uint8_t phy_conf = d == NULL ? MG_PHY_CLOCKS_MAC : d->phy_conf;
 
   // Init RX descriptors
+  memset((char *) s_rxdesc, 0, sizeof(s_rxdesc));  // manual init
   for (int i = 0; i < ETH_DESC_CNT; i++) {
     s_rxdesc[i][0] = (uint32_t) (uintptr_t) s_rxbuf[i];  // Point to data buffer
     s_rxdesc[i][3] = MG_BIT(31) | MG_BIT(30) | MG_BIT(24);  // OWN, IOC, BUF1V
   }
 
   // Init TX descriptors
+  memset((char *) s_txdesc, 0, sizeof(s_txdesc));  // manual init
   for (int i = 0; i < ETH_DESC_CNT; i++) {
     s_txdesc[i][0] = (uint32_t) (uintptr_t) s_txbuf[i];  // Buf pointer
   }
