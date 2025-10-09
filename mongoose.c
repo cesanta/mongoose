@@ -22169,15 +22169,12 @@ struct enet_desc {
   uint32_t *buffer;  // Data ptr
 };
 
-// TODO(): handle these in a portable compiler-independent CMSIS-friendly way
-#define MG_64BYTE_ALIGNED __attribute__((aligned((64U))))
-
 // Descriptors: in non-cached area (TODO(scaprile)), (37.5.1.22.2 37.5.1.23.2)
 // Buffers: 64-byte aligned (37.3.14)
-static volatile struct enet_desc s_rxdesc[ETH_DESC_CNT] MG_64BYTE_ALIGNED;
-static volatile struct enet_desc s_txdesc[ETH_DESC_CNT] MG_64BYTE_ALIGNED;
-static uint8_t s_rxbuf[ETH_DESC_CNT][ETH_PKT_SIZE] MG_64BYTE_ALIGNED;
-static uint8_t s_txbuf[ETH_DESC_CNT][ETH_PKT_SIZE] MG_64BYTE_ALIGNED;
+static volatile struct enet_desc s_rxdesc[ETH_DESC_CNT] MG_ETH_RAM MG_64BYTE_ALIGNED;
+static volatile struct enet_desc s_txdesc[ETH_DESC_CNT] MG_ETH_RAM MG_64BYTE_ALIGNED;
+static uint8_t s_rxbuf[ETH_DESC_CNT][ETH_PKT_SIZE] MG_ETH_RAM MG_64BYTE_ALIGNED;
+static uint8_t s_txbuf[ETH_DESC_CNT][ETH_PKT_SIZE] MG_ETH_RAM MG_64BYTE_ALIGNED;
 static struct mg_tcpip_if *s_ifp;  // MIP interface
 
 static uint16_t enet_read_phy(uint8_t addr, uint8_t reg) {
@@ -23161,16 +23158,12 @@ struct ra_edmac {
 #define ETH_PKT_SIZE 1536  // Max frame size, multiple of 32
 #define ETH_DESC_CNT 4     // Descriptors count
 
-// TODO(): handle these in a portable compiler-independent CMSIS-friendly way
-#define MG_16BYTE_ALIGNED __attribute__((aligned((16U))))
-#define MG_32BYTE_ALIGNED __attribute__((aligned((32U))))
-
 // Descriptors: 16-byte aligned
 // Buffers: 32-byte aligned (27.3.1)
-static volatile uint32_t s_rxdesc[ETH_DESC_CNT][4] MG_16BYTE_ALIGNED;
-static volatile uint32_t s_txdesc[ETH_DESC_CNT][4] MG_16BYTE_ALIGNED;
-static uint8_t s_rxbuf[ETH_DESC_CNT][ETH_PKT_SIZE] MG_32BYTE_ALIGNED;
-static uint8_t s_txbuf[ETH_DESC_CNT][ETH_PKT_SIZE] MG_32BYTE_ALIGNED;
+static volatile uint32_t s_rxdesc[ETH_DESC_CNT][4] MG_ETH_RAM MG_16BYTE_ALIGNED;
+static volatile uint32_t s_txdesc[ETH_DESC_CNT][4] MG_ETH_RAM MG_16BYTE_ALIGNED;
+static uint8_t s_rxbuf[ETH_DESC_CNT][ETH_PKT_SIZE] MG_ETH_RAM MG_32BYTE_ALIGNED;
+static uint8_t s_txbuf[ETH_DESC_CNT][ETH_PKT_SIZE] MG_ETH_RAM MG_32BYTE_ALIGNED;
 static struct mg_tcpip_if *s_ifp;  // MIP interface
 
 // fastest is 3 cycles (SUB + BNE) on a 3-stage pipeline or equivalent
@@ -23426,11 +23419,10 @@ struct ENET_Type {
 #define ETH_DESC_CNT 4     // Descriptors count
 #define ETH_DS 2           // Descriptor size (words)
 
-#define MG_8BYTE_ALIGNED __attribute__((aligned((8U))))
-static uint8_t s_rxbuf[ETH_DESC_CNT][ETH_PKT_SIZE] MG_8BYTE_ALIGNED;
-static uint8_t s_txbuf[ETH_DESC_CNT][ETH_PKT_SIZE] MG_8BYTE_ALIGNED;
-static uint32_t s_rxdesc[ETH_DESC_CNT][ETH_DS] MG_8BYTE_ALIGNED;
-static uint32_t s_txdesc[ETH_DESC_CNT][ETH_DS] MG_8BYTE_ALIGNED;
+static uint8_t s_rxbuf[ETH_DESC_CNT][ETH_PKT_SIZE] MG_ETH_RAM MG_8BYTE_ALIGNED;
+static uint8_t s_txbuf[ETH_DESC_CNT][ETH_PKT_SIZE] MG_ETH_RAM MG_8BYTE_ALIGNED;
+static uint32_t s_rxdesc[ETH_DESC_CNT][ETH_DS] MG_ETH_RAM MG_8BYTE_ALIGNED;
+static uint32_t s_txdesc[ETH_DESC_CNT][ETH_DS] MG_ETH_RAM MG_8BYTE_ALIGNED;
 static uint8_t s_txno;  // Current TX descriptor
 static uint8_t s_rxno;  // Current RX descriptor
 
@@ -24044,10 +24036,10 @@ struct stm32f_eth {
 #define ETH_DESC_CNT 4     // Descriptors count
 #define ETH_DS 4           // Descriptor size (words)
 
-static uint32_t s_rxdesc[ETH_DESC_CNT][ETH_DS];      // RX descriptors
-static uint32_t s_txdesc[ETH_DESC_CNT][ETH_DS];      // TX descriptors
-static uint8_t s_rxbuf[ETH_DESC_CNT][ETH_PKT_SIZE];  // RX ethernet buffers
-static uint8_t s_txbuf[ETH_DESC_CNT][ETH_PKT_SIZE];  // TX ethernet buffers
+static uint32_t s_rxdesc[ETH_DESC_CNT][ETH_DS] MG_ETH_RAM;      // RX descriptors
+static uint32_t s_txdesc[ETH_DESC_CNT][ETH_DS] MG_ETH_RAM;      // TX descriptors
+static uint8_t s_rxbuf[ETH_DESC_CNT][ETH_PKT_SIZE] MG_ETH_RAM;  // RX ethernet buffers
+static uint8_t s_txbuf[ETH_DESC_CNT][ETH_PKT_SIZE] MG_ETH_RAM;  // TX ethernet buffers
 static uint8_t s_txno;                               // Current TX descriptor
 static uint8_t s_rxno;                               // Current RX descriptor
 
@@ -24324,11 +24316,10 @@ struct synopsys_enet_qos {
 #define ETH_DESC_CNT 4     // Descriptors count
 #define ETH_DS 4           // Descriptor size (words)
 
-#define MG_ETH_ATTR __attribute__((aligned(8), section(".eth_ram")))
-static volatile uint32_t s_rxdesc[ETH_DESC_CNT][ETH_DS] MG_ETH_ATTR;
-static volatile uint32_t s_txdesc[ETH_DESC_CNT][ETH_DS] MG_ETH_ATTR;
-static uint8_t s_rxbuf[ETH_DESC_CNT][ETH_PKT_SIZE] MG_ETH_ATTR;
-static uint8_t s_txbuf[ETH_DESC_CNT][ETH_PKT_SIZE] MG_ETH_ATTR;
+static volatile uint32_t s_rxdesc[ETH_DESC_CNT][ETH_DS] MG_ETH_RAM MG_8BYTE_ALIGNED;
+static volatile uint32_t s_txdesc[ETH_DESC_CNT][ETH_DS] MG_ETH_RAM MG_8BYTE_ALIGNED;
+static uint8_t s_rxbuf[ETH_DESC_CNT][ETH_PKT_SIZE] MG_ETH_RAM MG_8BYTE_ALIGNED;
+static uint8_t s_txbuf[ETH_DESC_CNT][ETH_PKT_SIZE] MG_ETH_RAM MG_8BYTE_ALIGNED;
 static struct mg_tcpip_if *s_ifp;         // MIP interface
 
 static uint16_t eth_read_phy(uint8_t addr, uint8_t reg) {
@@ -25305,18 +25296,12 @@ struct ETH_GLOBAL_TypeDef {
 #define ETH_DESC_CNT 4     // Descriptors count
 #define ETH_DS 4           // Descriptor size (words)
 
-#ifndef ETH_RAM_SECTION
-// if no section is specified, then the data will be placed in the default
-// bss section
-#define ETH_RAM_SECTION
-#endif
-
-static uint8_t s_rxbuf[ETH_DESC_CNT][ETH_PKT_SIZE] ETH_RAM_SECTION;
-static uint8_t s_txbuf[ETH_DESC_CNT][ETH_PKT_SIZE] ETH_RAM_SECTION;
+static uint8_t s_rxbuf[ETH_DESC_CNT][ETH_PKT_SIZE] MG_ETH_RAM;
+static uint8_t s_txbuf[ETH_DESC_CNT][ETH_PKT_SIZE] MG_ETH_RAM;
 static uint32_t s_rxdesc[ETH_DESC_CNT]
-                        [ETH_DS] ETH_RAM_SECTION;  // RX descriptors
+                        [ETH_DS] MG_ETH_RAM;  // RX descriptors
 static uint32_t s_txdesc[ETH_DESC_CNT]
-                        [ETH_DS] ETH_RAM_SECTION;  // TX descriptors
+                        [ETH_DS] MG_ETH_RAM;  // TX descriptors
 static uint8_t s_txno;                             // Current TX descriptor
 static uint8_t s_rxno;                             // Current RX descriptor
 
@@ -25577,15 +25562,12 @@ struct ETH_Type {
 #define ETH_DESC_CNT 4     // Descriptors count
 #define ETH_DS 2           // Descriptor size (words)
 
-// TODO(): handle these in a portable compiler-independent CMSIS-friendly way
-#define MG_8BYTE_ALIGNED __attribute__((aligned((8U))))
-
-static uint8_t s_rxbuf[ETH_DESC_CNT][ETH_PKT_SIZE];
-static uint8_t s_txbuf[ETH_DESC_CNT][ETH_PKT_SIZE];
-static uint32_t s_rxdesc[ETH_DESC_CNT][ETH_DS] MG_8BYTE_ALIGNED;
-static uint32_t s_txdesc[ETH_DESC_CNT][ETH_DS] MG_8BYTE_ALIGNED;
-static uint8_t s_txno MG_8BYTE_ALIGNED;  // Current TX descriptor
-static uint8_t s_rxno MG_8BYTE_ALIGNED;  // Current RX descriptor
+static uint8_t s_rxbuf[ETH_DESC_CNT][ETH_PKT_SIZE] MG_ETH_RAM;
+static uint8_t s_txbuf[ETH_DESC_CNT][ETH_PKT_SIZE] MG_ETH_RAM;
+static uint32_t s_rxdesc[ETH_DESC_CNT][ETH_DS] MG_ETH_RAM MG_8BYTE_ALIGNED;
+static uint32_t s_txdesc[ETH_DESC_CNT][ETH_DS] MG_ETH_RAM MG_8BYTE_ALIGNED;
+static uint8_t s_txno;  // Current TX descriptor
+static uint8_t s_rxno;  // Current RX descriptor
 
 static struct mg_tcpip_if *s_ifp;  // MIP interface
 enum { MG_PHY_ADDR = 0, MG_PHYREG_BCR = 0, MG_PHYREG_BSR = 1 };

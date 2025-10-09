@@ -35,18 +35,12 @@ struct ETH_GLOBAL_TypeDef {
 #define ETH_DESC_CNT 4     // Descriptors count
 #define ETH_DS 4           // Descriptor size (words)
 
-#ifndef ETH_RAM_SECTION
-// if no section is specified, then the data will be placed in the default
-// bss section
-#define ETH_RAM_SECTION
-#endif
-
-static uint8_t s_rxbuf[ETH_DESC_CNT][ETH_PKT_SIZE] ETH_RAM_SECTION;
-static uint8_t s_txbuf[ETH_DESC_CNT][ETH_PKT_SIZE] ETH_RAM_SECTION;
+static uint8_t s_rxbuf[ETH_DESC_CNT][ETH_PKT_SIZE] MG_ETH_RAM;
+static uint8_t s_txbuf[ETH_DESC_CNT][ETH_PKT_SIZE] MG_ETH_RAM;
 static uint32_t s_rxdesc[ETH_DESC_CNT]
-                        [ETH_DS] ETH_RAM_SECTION;  // RX descriptors
+                        [ETH_DS] MG_ETH_RAM;  // RX descriptors
 static uint32_t s_txdesc[ETH_DESC_CNT]
-                        [ETH_DS] ETH_RAM_SECTION;  // TX descriptors
+                        [ETH_DS] MG_ETH_RAM;  // TX descriptors
 static uint8_t s_txno;                             // Current TX descriptor
 static uint8_t s_rxno;                             // Current RX descriptor
 
