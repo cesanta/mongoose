@@ -1335,7 +1335,26 @@ PORTABLE_8439_DECL size_t mg_chacha20_poly1305_decrypt(
   if (MG_OVERLAPPING(plain_text, actual_size, cipher_text, cipher_text_size)) {
     return (size_t) -1;
   }
-
+  
+  // SECURITY FIX: Verify MAC before decrypting
+  uint8_t computed_mac[RFC_8439_TAG_SIZE];
+  const uint8_t *provided_mac = cipher_text + actual_size;
+  
+  // Compute expected MAC
+  poly1305_calculate_mac(computed_mac, cipher_text, actual_size, key, nonce, NULL, 0);
+  
+  // Constant-time comparison to prevent timing attacks
+  unsigned char result = 0;
+  for (size_t i = 0; i < RFC_8439_TAG_SIZE; i++) {
+    result |= computed_mac[i] ^ provided_mac[i];
+  }
+  
+  // If MAC doesn't match, return error without decrypting
+  if (result != 0) {
+    return (size_t) -1;
+  }
+  
+  // MAC verified - safe to decrypt
   chacha20_xor_stream(plain_text, cipher_text, actual_size, key, nonce, 1);
   return actual_size;
 }
