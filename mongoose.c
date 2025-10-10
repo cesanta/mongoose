@@ -4862,15 +4862,15 @@ long mg_io_send(struct mg_connection *c, const void *buf, size_t len) {
 }
 
 static void handle_tls_recv(struct mg_connection *c) {
-  size_t avail = mg_tls_pending(c);
-  size_t min = avail > MG_MAX_RECV_SIZE ? MG_MAX_RECV_SIZE : avail;
   struct mg_iobuf *io = &c->recv;
+  // in non-buffered TLS libs, io must be non NULL when calling mg_tls_recv()
+  size_t avail = io->buf != NULL ? mg_tls_pending(c) : c->rtls.len;
+  size_t min = avail > MG_MAX_RECV_SIZE ? MG_MAX_RECV_SIZE : avail;
   if (io->size - io->len < min && !mg_iobuf_resize(io, io->len + min)) {
     mg_error(c, "oom");
   } else {
     // Decrypt data directly into c->recv
-    long n = mg_tls_recv(c, io->buf != NULL ? &io->buf[io->len] : io->buf,
-                         io->size - io->len);
+    long n = mg_tls_recv(c, &io->buf[io->len], io->size - io->len);
     if (n == MG_IO_ERR) {
       mg_error(c, "TLS recv error");
     } else if (n > 0) {
@@ -5240,7 +5240,7 @@ static void rx_ip6(struct mg_tcpip_if *ifp, struct pkt *pkt) {
       pkt->dhcp6 = (struct dhcp6 *) (pkt->udp + 1);
       mkpay(pkt, pkt->dhcp6 + 1);
       // rx_dhcp6_server(ifp, pkt);
-    } else if (!rx_udp(ifp, pkt)) {
+//    } else if (!rx_udp(ifp, pkt)) {
       // Should send ICMPv6 Destination Unreachable for unicasts, keep silent
     }
   } else if (next == 6) {
@@ -5253,7 +5253,7 @@ static void rx_ip6(struct mg_tcpip_if *ifp, struct pkt *pkt) {
     MG_DEBUG(("TCP %M:%hu -> %M:%hu len %u", mg_print_ip6, &pkt->ip6->src,
               mg_ntohs(pkt->tcp->sport), mg_print_ip6, &pkt->ip6->dst,
               mg_ntohs(pkt->tcp->dport), (int) pkt->pay.len));
-    rx_tcp(ifp, pkt);
+//    rx_tcp(ifp, pkt);
   } else {
     MG_DEBUG(("Unknown IPv6 next hdr %x", (int) next));
     if (mg_log_level >= MG_LL_VERBOSE)
@@ -14467,7 +14467,6 @@ size_t mg_tls_pending(struct mg_connection *c) {
 long mg_tls_recv(struct mg_connection *c, void *buf, size_t len) {
   struct mg_tls *tls = (struct mg_tls *) c->tls;
   long n = mbedtls_ssl_read(&tls->ssl, (unsigned char *) buf, len);
-  if (!c->is_tls_hs && buf == NULL && n == 0) return 0; // TODO(): MIP
   if (n == MBEDTLS_ERR_SSL_WANT_READ || n == MBEDTLS_ERR_SSL_WANT_WRITE)
     return MG_IO_WAIT;
 #if defined(MBEDTLS_ERR_SSL_RECEIVED_NEW_SESSION_TICKET)
@@ -14800,7 +14799,6 @@ size_t mg_tls_pending(struct mg_connection *c) {
 long mg_tls_recv(struct mg_connection *c, void *buf, size_t len) {
   struct mg_tls *tls = (struct mg_tls *) c->tls;
   int n = SSL_read(tls->ssl, buf, (int) len);
-  if (!c->is_tls_hs && buf == NULL && n == 0) return 0; // TODO(): MIP
   if (n < 0 && mg_tls_err(c, tls, n) == 0) return MG_IO_WAIT;
   if (n <= 0) return MG_IO_ERR;
   return n;
