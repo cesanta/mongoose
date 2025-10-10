@@ -516,6 +516,10 @@ static int mg_tls_recv_record(struct mg_connection *c) {
       return -1;
     }
     n = mg_chacha20_poly1305_decrypt(dec, key, nonce, msg, msgsz);
+    if (n == (size_t) -1) {
+      mg_error(c, "decryption error");
+      return -1;
+    }
     memmove(msg, dec, n);
     mg_free(dec);
   }
