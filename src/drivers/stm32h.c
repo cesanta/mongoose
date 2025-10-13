@@ -50,11 +50,10 @@ struct synopsys_enet_qos {
 #define ETH_DESC_CNT 4     // Descriptors count
 #define ETH_DS 4           // Descriptor size (words)
 
-#define MG_ETH_ATTR __attribute__((aligned(8), section(".eth_ram")))
-static volatile uint32_t s_rxdesc[ETH_DESC_CNT][ETH_DS] MG_ETH_ATTR;
-static volatile uint32_t s_txdesc[ETH_DESC_CNT][ETH_DS] MG_ETH_ATTR;
-static uint8_t s_rxbuf[ETH_DESC_CNT][ETH_PKT_SIZE] MG_ETH_ATTR;
-static uint8_t s_txbuf[ETH_DESC_CNT][ETH_PKT_SIZE] MG_ETH_ATTR;
+static volatile uint32_t s_rxdesc[ETH_DESC_CNT][ETH_DS] MG_ETH_RAM MG_8BYTE_ALIGNED;
+static volatile uint32_t s_txdesc[ETH_DESC_CNT][ETH_DS] MG_ETH_RAM MG_8BYTE_ALIGNED;
+static uint8_t s_rxbuf[ETH_DESC_CNT][ETH_PKT_SIZE] MG_ETH_RAM MG_8BYTE_ALIGNED;
+static uint8_t s_txbuf[ETH_DESC_CNT][ETH_PKT_SIZE] MG_ETH_RAM MG_8BYTE_ALIGNED;
 static struct mg_tcpip_if *s_ifp;         // MIP interface
 
 static uint16_t eth_read_phy(uint8_t addr, uint8_t reg) {

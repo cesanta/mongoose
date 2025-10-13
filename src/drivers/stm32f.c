@@ -22,10 +22,10 @@ struct stm32f_eth {
 #define ETH_DESC_CNT 4     // Descriptors count
 #define ETH_DS 4           // Descriptor size (words)
 
-static uint32_t s_rxdesc[ETH_DESC_CNT][ETH_DS];      // RX descriptors
-static uint32_t s_txdesc[ETH_DESC_CNT][ETH_DS];      // TX descriptors
-static uint8_t s_rxbuf[ETH_DESC_CNT][ETH_PKT_SIZE];  // RX ethernet buffers
-static uint8_t s_txbuf[ETH_DESC_CNT][ETH_PKT_SIZE];  // TX ethernet buffers
+static uint32_t s_rxdesc[ETH_DESC_CNT][ETH_DS] MG_ETH_RAM;      // RX descriptors
+static uint32_t s_txdesc[ETH_DESC_CNT][ETH_DS] MG_ETH_RAM;      // TX descriptors
+static uint8_t s_rxbuf[ETH_DESC_CNT][ETH_PKT_SIZE] MG_ETH_RAM;  // RX ethernet buffers
+static uint8_t s_txbuf[ETH_DESC_CNT][ETH_PKT_SIZE] MG_ETH_RAM;  // TX ethernet buffers
 static uint8_t s_txno;                               // Current TX descriptor
 static uint8_t s_rxno;                               // Current RX descriptor
 

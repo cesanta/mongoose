@@ -3171,6 +3171,48 @@ struct mg_tcpip_spi {
   uint8_t (*txn)(void *, uint8_t);  // SPI transaction: write 1 byte, read reply
 };
 
+
+// Alignment and memory section requirements
+#ifndef MG_8BYTE_ALIGNED
+#if defined(__GNUC__)
+#define MG_8BYTE_ALIGNED __attribute__((aligned((8U))))
+#else
+#define MG_8BYTE_ALIGNED
+#endif // compiler
+#endif // 8BYTE_ALIGNED
+
+#ifndef MG_16BYTE_ALIGNED
+#if defined(__GNUC__)
+#define MG_16BYTE_ALIGNED __attribute__((aligned((16U))))
+#else
+#define MG_16BYTE_ALIGNED
+#endif // compiler
+#endif // 16BYTE_ALIGNED
+
+#ifndef MG_32BYTE_ALIGNED
+#if defined(__GNUC__)
+#define MG_32BYTE_ALIGNED __attribute__((aligned((32U))))
+#else
+#define MG_32BYTE_ALIGNED
+#endif // compiler
+#endif // 32BYTE_ALIGNED
+
+#ifndef MG_64BYTE_ALIGNED
+#if defined(__GNUC__)
+#define MG_64BYTE_ALIGNED __attribute__((aligned((64U))))
+#else
+#define MG_64BYTE_ALIGNED
+#endif // compiler
+#endif // 64BYTE_ALIGNED
+
+#ifndef MG_ETH_RAM
+#if defined(__GNUC__)
+#define MG_ETH_RAM __attribute__((section(".eth_ram")))
+#else
+#define MG_ETH_RAM
+#endif // compiler
+#endif // ETH_RAM
+
 #endif
 
 

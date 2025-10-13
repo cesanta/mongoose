@@ -38,16 +38,12 @@ struct ra_edmac {
 #define ETH_PKT_SIZE 1536  // Max frame size, multiple of 32
 #define ETH_DESC_CNT 4     // Descriptors count
 
-// TODO(): handle these in a portable compiler-independent CMSIS-friendly way
-#define MG_16BYTE_ALIGNED __attribute__((aligned((16U))))
-#define MG_32BYTE_ALIGNED __attribute__((aligned((32U))))
-
 // Descriptors: 16-byte aligned
 // Buffers: 32-byte aligned (27.3.1)
-static volatile uint32_t s_rxdesc[ETH_DESC_CNT][4] MG_16BYTE_ALIGNED;
-static volatile uint32_t s_txdesc[ETH_DESC_CNT][4] MG_16BYTE_ALIGNED;
-static uint8_t s_rxbuf[ETH_DESC_CNT][ETH_PKT_SIZE] MG_32BYTE_ALIGNED;
-static uint8_t s_txbuf[ETH_DESC_CNT][ETH_PKT_SIZE] MG_32BYTE_ALIGNED;
+static volatile uint32_t s_rxdesc[ETH_DESC_CNT][4] MG_ETH_RAM MG_16BYTE_ALIGNED;
+static volatile uint32_t s_txdesc[ETH_DESC_CNT][4] MG_ETH_RAM MG_16BYTE_ALIGNED;
+static uint8_t s_rxbuf[ETH_DESC_CNT][ETH_PKT_SIZE] MG_ETH_RAM MG_32BYTE_ALIGNED;
+static uint8_t s_txbuf[ETH_DESC_CNT][ETH_PKT_SIZE] MG_ETH_RAM MG_32BYTE_ALIGNED;
 static struct mg_tcpip_if *s_ifp;  // MIP interface
 
 // fastest is 3 cycles (SUB + BNE) on a 3-stage pipeline or equivalent
