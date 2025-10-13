@@ -85,7 +85,7 @@ void ev_handler(struct mg_connection *c, int ev, void *ev_data) {
 
 int main(void) {
   struct mg_mgr mgr;  // Declare event manager
-  mg_mgr_init(&mgr);  // Initialise event manager
+  mg_mgr_init(&mgr);  // Initialize event manager
   mg_http_listen(&mgr, "http://0.0.0.0:8000", ev_handler, NULL);  // Setup listener
   for (;;) {          // Run an infinite event loop
     mg_mgr_poll(&mgr, 1000);
@@ -150,7 +150,7 @@ static void timer_fn(void *arg) {
 
 int main() {
   struct mg_mgr mgr;  // Mongoose event manager. Holds all connections
-  mg_mgr_init(&mgr);  // Initialise event manager
+  mg_mgr_init(&mgr);  // Initialize event manager
   mg_timer_add(&mgr, 3000, MG_TIMER_REPEAT | MG_TIMER_RUN_NOW, timer_fn, &mgr);
   for (;;) {
     mg_mgr_poll(&mgr, 1000);  // Infinite event loop
