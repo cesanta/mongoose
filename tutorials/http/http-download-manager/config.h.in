@@ -1,0 +1,2 @@
+#define http-file-downloader_VERSION_MAJOR @http-file-downloader_VERSION_MAJOR@
+#define http-file-downloader_VERSION_MINOR @http-file-downloader_VERSION_MINOR@
