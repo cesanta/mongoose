@@ -10,7 +10,7 @@
 #define HTTP_BUFFER_SIZE  	  4096*10
 #define POLL_FOR_EVENTS_TIME  50
 #define BUFF_SIZE 			  4096
-#define TEST_URL              "http://127.0.0.1:9000/pax-bucket/update_prolin_20.07.57.zip?X-Amz-Algorithm=AWS4-HMAC-SHA256&X-Amz-Credential=minio-admin%2F20251020%2Fus-east-1%2Fs3%2Faws4_request&X-Amz-Date=20251020T062641Z&X-Amz-Expires=604800&X-Amz-SignedHeaders=host&X-Amz-Signature=cc5218587ca14b3ac098beaa81cc2c792bdb1aa9b167aaa9f6e7a3f78498f6bb"
+#define TEST_URL              "http://127.0.0.1:80/dl/your_file_zip"
 #define RETRY_COUNT           1
 #define IDLE_TIMEOUT 		  5 // seconds
 #define BYTE_COPY_BUFFER      4096
