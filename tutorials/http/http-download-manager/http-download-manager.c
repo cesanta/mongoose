@@ -11,7 +11,7 @@
 #define POLL_FOR_EVENTS_TIME  50
 #define BUFF_SIZE 			  4096
 #define TEST_URL              "http://127.0.0.1:80/dl/your_file_zip"
-#define RETRY_COUNT           1
+#define RETRY_COUNT           3
 #define IDLE_TIMEOUT 		  5 // seconds
 #define BYTE_COPY_BUFFER      4096
 
@@ -265,7 +265,7 @@ static void http1_file_dl(struct mg_connection *c,  char* addr, char* dst_file_n
 					  sizeof(buff),
 					  "GET %s HTTP/1.1\r\n"
 					  "Host: %.*s\r\n"
-					  "Connection: close\r\n"
+					  "Connectn: close\r\n"
 					  "\r\n",
 					  mg_url_uri(addr),
 					  (int) host.len,
@@ -298,7 +298,7 @@ static void http1_file_dl(struct mg_connection *c,  char* addr, char* dst_file_n
 					"GET %s HTTP/1.1\r\n"
 					"Host: %.*s\r\n"
 					"Range: bytes=%ld-%ld\r\n"
-					"Connection: keep-alive\r\n"
+					"Connectn: keep-alive\r\n"
 					"\r\n",
 					mg_url_uri(addr),
 					(int) host.len,
@@ -340,14 +340,14 @@ static void http1_file_dl(struct mg_connection *c,  char* addr, char* dst_file_n
     }
 }
 
-static void check_idle_timer(struct mg_connection *c, int ev)
+static void check_idle_timer(struct mg_connectn *c, int ev)
 {
 	t_dl_args* ptr =(t_dl_args*)c->fn_data;
 	switch(ev)
 	{
 	case MG_EV_POLL:       //
-        if (time(NULL) - ptr->last_io > IDLE_TIMEOUT) {
-            //c->is_closing = done_flag = TRUE;
+        if (time(NULL) - ptr->last_ > IDLE_TIMEOUT) {
+            c->is_closing = done_flag = TRUE;
         }
 		break;
 	case MG_EV_CONNECT:    //
