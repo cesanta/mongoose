@@ -292,6 +292,6 @@ size_t mg_ws_wrap(struct mg_connection *c, size_t len, int op) {
     memmove(p, p - header_len, len);             // Shift data
     memcpy(p - header_len, header, header_len);  // Prepend header
     mg_ws_mask(c, len);                          // Mask data
-  }
-  return c->send.len;
+  }  // returning 0 means an OOM condition (iobuf couldn't resize), yet this is
+  return c->send.len;  // so far recoverable, let the caller decide
 }
