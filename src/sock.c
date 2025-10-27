@@ -142,6 +142,8 @@ bool mg_send(struct mg_connection *c, const void *buf, size_t len) {
     return n > 0;
   } else {
     return mg_iobuf_add(&c->send, c->send.len, buf, len);
+    // returning 0 means an OOM condition (iobuf couldn't resize), yet this is
+    // so far recoverable, let the caller decide
   }
 }
 
@@ -163,7 +165,7 @@ static void mg_set_non_blocking_mode(MG_SOCKET_TYPE fd) {
 #elif MG_ARCH == MG_ARCH_THREADX
   // NetxDuo fails to send large blocks of data to the non-blocking sockets
   (void) fd;
-  //fcntl(fd, F_SETFL, O_NONBLOCK);
+  // fcntl(fd, F_SETFL, O_NONBLOCK);
 #elif MG_ARCH == MG_ARCH_TIRTOS
   int val = 0;
   setsockopt(fd, SOL_SOCKET, SO_BLOCKING, &val, sizeof(val));
@@ -195,9 +197,10 @@ void mg_multicast_add(struct mg_connection *c, char *ip) {
   struct ip_mreq mreq;
   mreq.imr_multiaddr.s_addr = inet_addr(ip);
   mreq.imr_interface.s_addr = mg_htonl(INADDR_ANY);
-  setsockopt(FD(c), IPPROTO_IP, IP_ADD_MEMBERSHIP, (char *) &mreq, sizeof(mreq));
-#endif // !Zephyr
-#endif // !lwIP
+  setsockopt(FD(c), IPPROTO_IP, IP_ADD_MEMBERSHIP, (char *) &mreq,
+             sizeof(mreq));
+#endif  // !Zephyr
+#endif  // !lwIP
 #endif
 }
 
@@ -315,9 +318,9 @@ static void read_conn(struct mg_connection *c) {
       if (n == MG_IO_ERR || n == MG_IO_RESET) {  // Windows, see #3031
         if (c->rtls.len == 0 || m < 0) {
           // Close only when we have fully drained both rtls and TLS buffers
-          c->is_closing = 1;  // or there's nothing we can do about it.
-          if (m < 0) m = MG_IO_ERR; // but return last record data, see #3104
-        } else { // see #2885
+          c->is_closing = 1;         // or there's nothing we can do about it.
+          if (m < 0) m = MG_IO_ERR;  // but return last record data, see #3104
+        } else {                     // see #2885
           // TLS buffer is capped to max record size, even though, there can
           // be more than one record, give TLS a chance to process them.
         }
@@ -367,7 +370,7 @@ static void connect_conn(struct mg_connection *c) {
     mg_call(c, MG_EV_CONNECT, NULL);
     MG_EPOLL_MOD(c, 0);
     if (c->is_tls_hs) mg_tls_handshake(c);
-    if (!c->is_tls_hs) c->is_tls = 0; // user did not call mg_tls_init()
+    if (!c->is_tls_hs) c->is_tls = 0;  // user did not call mg_tls_init()
   } else {
     mg_error(c, "socket error");
   }
@@ -419,9 +422,9 @@ void mg_connect_resolved(struct mg_connection *c) {
     rc = connect(FD(c), &usa.sa, slen);  // Attempt to connect
     if (rc == 0) {                       // Success
       setlocaddr(FD(c), &c->loc);
-      mg_call(c, MG_EV_CONNECT, NULL);  // Send MG_EV_CONNECT to the user
-      if (!c->is_tls_hs) c->is_tls = 0; // user did not call mg_tls_init()
-    } else if (MG_SOCK_PENDING(rc)) {   // Need to wait for TCP handshake
+      mg_call(c, MG_EV_CONNECT, NULL);   // Send MG_EV_CONNECT to the user
+      if (!c->is_tls_hs) c->is_tls = 0;  // user did not call mg_tls_init()
+    } else if (MG_SOCK_PENDING(rc)) {    // Need to wait for TCP handshake
       MG_DEBUG(("%lu %ld -> %M pend", c->id, c->fd, mg_print_ip_port, &c->rem));
       c->is_connecting = 1;
     } else {
@@ -481,7 +484,7 @@ static void accept_conn(struct mg_mgr *mgr, struct mg_connection *lsn) {
               &c->rem, mg_print_ip_port, &c->loc));
     mg_call(c, MG_EV_OPEN, NULL);
     mg_call(c, MG_EV_ACCEPT, NULL);
-    if (!c->is_tls_hs) c->is_tls = 0; // user did not call mg_tls_init()
+    if (!c->is_tls_hs) c->is_tls = 0;  // user did not call mg_tls_init()
   }
 }
 

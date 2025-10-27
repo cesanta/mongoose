@@ -2004,6 +2004,7 @@ bool mg_send(struct mg_connection *c, const void *buf, size_t len) {
     res = tx_udp(ifp, s->mac, &c->loc, &c->rem, buf, len);
   } else {
     res = mg_iobuf_add(&c->send, c->send.len, buf, len);
+    // res == 0 means an OOM condition (iobuf couldn't resize), yet this is so far recoverable, let the caller decide
   }
   return res;
 }
