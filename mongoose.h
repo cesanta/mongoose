@@ -3206,12 +3206,8 @@ struct mg_tcpip_spi {
 #endif // 64BYTE_ALIGNED
 
 #ifndef MG_ETH_RAM
-#if defined(__GNUC__)
-#define MG_ETH_RAM __attribute__((section(".eth_ram")))
-#else
 #define MG_ETH_RAM
-#endif // compiler
-#endif // ETH_RAM
+#endif
 
 #endif
 
