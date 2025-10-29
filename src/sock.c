@@ -141,7 +141,7 @@ bool mg_send(struct mg_connection *c, const void *buf, size_t len) {
     iolog(c, (char *) buf, n, false);
     return n > 0;
   } else {
-    return mg_iobuf_add(&c->send, c->send.len, buf, len);
+    return (bool) mg_iobuf_add(&c->send, c->send.len, buf, len);
     // returning 0 means an OOM condition (iobuf couldn't resize), yet this is
     // so far recoverable, let the caller decide
   }
@@ -341,6 +341,7 @@ static void write_conn(struct mg_connection *c) {
   char *buf = (char *) c->send.buf;
   size_t len = c->send.len;
   long n = c->is_tls ? mg_tls_send(c, buf, len) : mg_io_send(c, buf, len);
+  // TODO(): mg_tls_send() may return 0 forever on steady OOM
   MG_DEBUG(("%lu %ld snd %ld/%ld rcv %ld/%ld n=%ld err=%d", c->id, c->fd,
             (long) c->send.len, (long) c->send.size, (long) c->recv.len,
             (long) c->recv.size, n, MG_SOCK_ERR(n)));
