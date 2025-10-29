@@ -3866,8 +3866,14 @@ struct mg_connection *mg_mqtt_listen(struct mg_mgr *mgr, const char *url,
 
 size_t mg_vprintf(struct mg_connection *c, const char *fmt, va_list *ap) {
   size_t old = c->send.len;
-  mg_vxprintf(mg_pfn_iobuf, &c->send, fmt, ap);
-  return c->send.len - old;
+  size_t expected = mg_vxprintf(mg_pfn_iobuf, &c->send, fmt, ap);
+  size_t actual = c->send.len - old;
+  if (actual != expected) {
+    mg_error(c, "OOM");
+    c->send.len = old;
+    actual = 0;
+  }
+  return actual;
 }
 
 size_t mg_printf(struct mg_connection *c, const char *fmt, ...) {
