@@ -1924,6 +1924,7 @@ bool mg_open_listener(struct mg_connection *c, const char *url) {
 static void write_conn(struct mg_connection *c) {
   long len = c->is_tls ? mg_tls_send(c, c->send.buf, c->send.len)
                        : mg_io_send(c, c->send.buf, c->send.len);
+  // TODO(): mg_tls_send() may return 0 forever on steady OOM
   if (len == MG_IO_ERR) {
     mg_error(c, "tx err");
   } else if (len > 0) {
@@ -1936,14 +1937,8 @@ static void init_closure(struct mg_connection *c) {
   struct connstate *s = (struct connstate *) (c + 1);
   if (c->is_udp == false && c->is_listening == false &&
       c->is_connecting == false) {  // For TCP conns,
-<<<<<<< HEAD
     tx_tcp(c->mgr->ifp, s->mac, &c->loc, &c->rem, TH_FIN | TH_ACK,
            mg_htonl(s->seq), mg_htonl(s->ack), NULL, 0);
-=======
-    uint32_t rem_ip = c->rem.ip4;
-    tx_tcp(c->mgr->ifp, s->mac, rem_ip, TH_FIN | TH_ACK, c->loc.port,
-           c->rem.port, mg_htonl(s->seq), mg_htonl(s->ack), NULL, 0);
->>>>>>> 81b87991 (wip)
     settmout(c, MIP_TTYPE_FIN);
   }
 }
@@ -2009,7 +2004,7 @@ bool mg_send(struct mg_connection *c, const void *buf, size_t len) {
     len = trim_len(c, len);  // Trimming length if necessary
     res = tx_udp(ifp, s->mac, &c->loc, &c->rem, buf, len);
   } else {
-    res = mg_iobuf_add(&c->send, c->send.len, buf, len);
+    res = (bool) mg_iobuf_add(&c->send, c->send.len, buf, len);
     // res == 0 means an OOM condition (iobuf couldn't resize), yet this is so
     // far recoverable, let the caller decide
   }

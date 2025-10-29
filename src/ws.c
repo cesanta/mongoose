@@ -55,7 +55,7 @@ static void ws_handshake(struct mg_connection *c, const struct mg_str *wskey,
     mg_printf(c, "Sec-WebSocket-Protocol: %.*s\r\n", (int) wsproto->len,
               wsproto->buf);
   }
-  mg_send(c, "\r\n", 2);
+  if (!mg_send(c, "\r\n", 2)) mg_error(c, "OOM");
 }
 
 static uint32_t be32(const uint8_t *p) {
