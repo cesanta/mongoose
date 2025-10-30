@@ -1538,7 +1538,7 @@ static void test_http_client(void) {
   opts.name = mg_url_host(url);
 #if MG_TLS == MG_TLS_BUILTIN
   // our TLS does not search for the proper CA in a bundle
-  opts.ca = mg_file_read(&mg_fs_posix, "data/e5.crt");
+  opts.ca = mg_file_read(&mg_fs_posix, "data/e8.crt");
 #endif
   c = mg_http_connect(&mgr, url, f3, &ok);
   ASSERT(c != NULL);
