@@ -46,8 +46,8 @@ static const struct mg_mqtt_pmap s_prop_map[] = {
     {MQTT_PROP_SUBSCRIPTION_IDENTIFIER_AVAILABLE, MQTT_PROP_TYPE_BYTE},
     {MQTT_PROP_SHARED_SUBSCRIPTION_AVAILABLE, MQTT_PROP_TYPE_BYTE}};
 
-void mg_mqtt_send_header(struct mg_connection *c, uint8_t cmd, uint8_t flags,
-                         uint32_t len) {
+static bool mqtt_send_header(struct mg_connection *c, uint8_t cmd,
+                             uint8_t flags, uint32_t len) {
   uint8_t buf[1 + sizeof(len)], *vlen = &buf[1];
   buf[0] = (uint8_t) ((cmd << 4) | flags);
   do {
@@ -56,15 +56,20 @@ void mg_mqtt_send_header(struct mg_connection *c, uint8_t cmd, uint8_t flags,
     if (len > 0) *vlen |= 0x80;
     vlen++;
   } while (len > 0 && vlen < &buf[sizeof(buf)]);
-  mg_send(c, buf, (size_t) (vlen - buf));
+  return mg_send(c, buf, (size_t) (vlen - buf));
 }
 
-static void mg_send_u16(struct mg_connection *c, uint16_t value) {
-  mg_send(c, &value, sizeof(value));
+void mg_mqtt_send_header(struct mg_connection *c, uint8_t cmd, uint8_t flags,
+                         uint32_t len) {
+  if (!mqtt_send_header(c, cmd, flags, len)) mg_error(c, "OOM");
 }
 
-static void mg_send_u32(struct mg_connection *c, uint32_t value) {
-  mg_send(c, &value, sizeof(value));
+static bool mg_send_u16(struct mg_connection *c, uint16_t value) {
+  return mg_send(c, &value, sizeof(value));
+}
+
+static bool mg_send_u32(struct mg_connection *c, uint32_t value) {
+  return mg_send(c, &value, sizeof(value));
 }
 
 static uint8_t varint_size(size_t length) {
@@ -157,46 +162,50 @@ static size_t get_props_size(struct mg_mqtt_prop *props, size_t count) {
   return size;
 }
 
-static void mg_send_mqtt_properties(struct mg_connection *c,
+static bool mg_send_mqtt_properties(struct mg_connection *c,
                                     struct mg_mqtt_prop *props, size_t nprops) {
   size_t total_size = get_properties_length(props, nprops);
   uint8_t buf_v[4] = {0, 0, 0, 0};
   uint8_t buf[4] = {0, 0, 0, 0};
   size_t i, len = encode_varint(buf, total_size);
 
-  mg_send(c, buf, (size_t) len);
+  if (!mg_send(c, buf, (size_t) len)) return false;
   for (i = 0; i < nprops; i++) {
-    mg_send(c, &props[i].id, sizeof(props[i].id));
+    if (!mg_send(c, &props[i].id, sizeof(props[i].id))) return false;
     switch (mqtt_prop_type_by_id(props[i].id)) {
       case MQTT_PROP_TYPE_STRING_PAIR:
-        mg_send_u16(c, mg_htons((uint16_t) props[i].key.len));
-        mg_send(c, props[i].key.buf, props[i].key.len);
-        mg_send_u16(c, mg_htons((uint16_t) props[i].val.len));
-        mg_send(c, props[i].val.buf, props[i].val.len);
+        if (!mg_send_u16(c, mg_htons((uint16_t) props[i].key.len)) ||
+            !mg_send(c, props[i].key.buf, props[i].key.len) ||
+            !mg_send_u16(c, mg_htons((uint16_t) props[i].val.len)) ||
+            !mg_send(c, props[i].val.buf, props[i].val.len))
+          return false;
         break;
       case MQTT_PROP_TYPE_BYTE:
-        mg_send(c, &props[i].iv, sizeof(uint8_t));
+        if (!mg_send(c, &props[i].iv, sizeof(uint8_t))) return false;
         break;
       case MQTT_PROP_TYPE_SHORT:
-        mg_send_u16(c, mg_htons((uint16_t) props[i].iv));
+        if (!mg_send_u16(c, mg_htons((uint16_t) props[i].iv))) return false;
         break;
       case MQTT_PROP_TYPE_INT:
-        mg_send_u32(c, mg_htonl((uint32_t) props[i].iv));
+        if (!mg_send_u32(c, mg_htonl((uint32_t) props[i].iv))) return false;
         break;
       case MQTT_PROP_TYPE_STRING:
-        mg_send_u16(c, mg_htons((uint16_t) props[i].val.len));
-        mg_send(c, props[i].val.buf, props[i].val.len);
+        if (!mg_send_u16(c, mg_htons((uint16_t) props[i].val.len)) ||
+            !mg_send(c, props[i].val.buf, props[i].val.len))
+          return false;
         break;
       case MQTT_PROP_TYPE_BINARY_DATA:
-        mg_send_u16(c, mg_htons((uint16_t) props[i].val.len));
-        mg_send(c, props[i].val.buf, props[i].val.len);
+        if (!mg_send_u16(c, mg_htons((uint16_t) props[i].val.len)) ||
+            !mg_send(c, props[i].val.buf, props[i].val.len))
+          return false;
         break;
       case MQTT_PROP_TYPE_VARIABLE_INT:
         len = encode_varint(buf_v, props[i].iv);
-        mg_send(c, buf_v, (size_t) len);
+        if (!mg_send(c, buf_v, (size_t) len)) return false;
         break;
     }
   }
+  return true;
 }
 
 size_t mg_mqtt_next_prop(struct mg_mqtt_message *msg, struct mg_mqtt_prop *prop,
@@ -289,33 +298,41 @@ void mg_mqtt_login(struct mg_connection *c, const struct mg_mqtt_opts *opts) {
       total_len += get_props_size(opts->will_props, opts->num_will_props);
   }
 
-  mg_mqtt_send_header(c, MQTT_CMD_CONNECT, 0, (uint32_t) total_len);
-  mg_send(c, hdr, sizeof(hdr));
   // keepalive == 0 means "do not disconnect us!"
-  mg_send_u16(c, mg_htons((uint16_t) opts->keepalive));
+  if (!mqtt_send_header(c, MQTT_CMD_CONNECT, 0, (uint32_t) total_len) ||
+      !mg_send(c, hdr, sizeof(hdr)) ||
+      !mg_send_u16(c, mg_htons((uint16_t) opts->keepalive)))
+    goto fail;
 
-  if (c->is_mqtt5) mg_send_mqtt_properties(c, opts->props, opts->num_props);
+  if (c->is_mqtt5 && !mg_send_mqtt_properties(c, opts->props, opts->num_props))
+    goto fail;
 
-  mg_send_u16(c, mg_htons((uint16_t) cid.len));
-  mg_send(c, cid.buf, cid.len);
+  if (!mg_send_u16(c, mg_htons((uint16_t) cid.len)) ||
+      !mg_send(c, cid.buf, cid.len))
+    goto fail;
 
   if (hdr[7] & MQTT_HAS_WILL) {
-    if (c->is_mqtt5)
-      mg_send_mqtt_properties(c, opts->will_props, opts->num_will_props);
+    if (c->is_mqtt5 &&
+        !mg_send_mqtt_properties(c, opts->will_props, opts->num_will_props))
+      goto fail;
 
-    mg_send_u16(c, mg_htons((uint16_t) opts->topic.len));
-    mg_send(c, opts->topic.buf, opts->topic.len);
-    mg_send_u16(c, mg_htons((uint16_t) opts->message.len));
-    mg_send(c, opts->message.buf, opts->message.len);
+    if (!mg_send_u16(c, mg_htons((uint16_t) opts->topic.len)) ||
+        !mg_send(c, opts->topic.buf, opts->topic.len) ||
+        !mg_send_u16(c, mg_htons((uint16_t) opts->message.len)) ||
+        !mg_send(c, opts->message.buf, opts->message.len))
+      goto fail;
   }
-  if (opts->user.len > 0) {
-    mg_send_u16(c, mg_htons((uint16_t) opts->user.len));
-    mg_send(c, opts->user.buf, opts->user.len);
-  }
-  if (opts->pass.len > 0) {
-    mg_send_u16(c, mg_htons((uint16_t) opts->pass.len));
-    mg_send(c, opts->pass.buf, opts->pass.len);
-  }
+  if (opts->user.len > 0 &&
+      (!mg_send_u16(c, mg_htons((uint16_t) opts->user.len)) ||
+       !mg_send(c, opts->user.buf, opts->user.len)))
+    goto fail;
+  if (opts->pass.len > 0 &&
+      (!mg_send_u16(c, mg_htons((uint16_t) opts->pass.len)) ||
+       !mg_send(c, opts->pass.buf, opts->pass.len)))
+    goto fail;
+  return;
+fail:
+  mg_error(c, "OOM");
 }
 
 uint16_t mg_mqtt_pub(struct mg_connection *c, const struct mg_mqtt_opts *opts) {
@@ -330,20 +347,28 @@ uint16_t mg_mqtt_pub(struct mg_connection *c, const struct mg_mqtt_opts *opts) {
   if (c->is_mqtt5) len += get_props_size(opts->props, opts->num_props);
 
   if (opts->qos > 0 && id != 0) flags |= 1 << 3;
-  mg_mqtt_send_header(c, MQTT_CMD_PUBLISH, flags, (uint32_t) len);
-  mg_send_u16(c, mg_htons((uint16_t) opts->topic.len));
-  mg_send(c, opts->topic.buf, opts->topic.len);
+  if (!mqtt_send_header(c, MQTT_CMD_PUBLISH, flags, (uint32_t) len) ||
+      !mg_send_u16(c, mg_htons((uint16_t) opts->topic.len)) ||
+      !mg_send(c, opts->topic.buf, opts->topic.len))
+    goto fail;
   if (opts->qos > 0) {  // need to send 'id' field
     if (id == 0) {      // generate new one if not resending
       if (++c->mgr->mqtt_id == 0) ++c->mgr->mqtt_id;
       id = c->mgr->mqtt_id;
     }
-    mg_send_u16(c, mg_htons(id));
+    if (!mg_send_u16(c, mg_htons(id))) goto fail;
   }
 
-  if (c->is_mqtt5) mg_send_mqtt_properties(c, opts->props, opts->num_props);
+  if (c->is_mqtt5 && !mg_send_mqtt_properties(c, opts->props, opts->num_props))
+    goto fail;
 
-  if (opts->message.len > 0) mg_send(c, opts->message.buf, opts->message.len);
+  if (opts->message.len > 0 &&
+      !mg_send(c, opts->message.buf, opts->message.len))
+    goto fail;
+  return id;
+
+fail:
+  mg_error(c, "OOM");
   return id;
 }
 
@@ -352,14 +377,20 @@ void mg_mqtt_sub(struct mg_connection *c, const struct mg_mqtt_opts *opts) {
   size_t plen = c->is_mqtt5 ? get_props_size(opts->props, opts->num_props) : 0;
   size_t len = 2 + opts->topic.len + 2 + 1 + plen;
 
-  mg_mqtt_send_header(c, MQTT_CMD_SUBSCRIBE, 2, (uint32_t) len);
+  if (!mqtt_send_header(c, MQTT_CMD_SUBSCRIBE, 2, (uint32_t) len)) goto fail;
   if (++c->mgr->mqtt_id == 0) ++c->mgr->mqtt_id;
-  mg_send_u16(c, mg_htons(c->mgr->mqtt_id));
-  if (c->is_mqtt5) mg_send_mqtt_properties(c, opts->props, opts->num_props);
+  if (!mg_send_u16(c, mg_htons(c->mgr->mqtt_id))) goto fail;
 
-  mg_send_u16(c, mg_htons((uint16_t) opts->topic.len));
-  mg_send(c, opts->topic.buf, opts->topic.len);
-  mg_send(c, &qos_, sizeof(qos_));
+  if (c->is_mqtt5 && !mg_send_mqtt_properties(c, opts->props, opts->num_props))
+    goto fail;
+
+  if (!mg_send_u16(c, mg_htons((uint16_t) opts->topic.len)) ||
+      !mg_send(c, opts->topic.buf, opts->topic.len) ||
+      !mg_send(c, &qos_, sizeof(qos_)))
+    goto fail;
+  return;
+fail:
+  mg_error(c, "OOM");
 }
 
 int mg_mqtt_parse(const uint8_t *buf, size_t len, uint8_t version,
@@ -466,15 +497,16 @@ static void mqtt_cb(struct mg_connection *c, int ev, void *ev_data) {
               uint32_t remaining_len = sizeof(id);
               if (c->is_mqtt5) remaining_len += 2;  // 3.4.2
 
-              mg_mqtt_send_header(
-                  c,
-                  (uint8_t) (mm.qos == 2 ? MQTT_CMD_PUBREC : MQTT_CMD_PUBACK),
-                  0, remaining_len);
-              mg_send(c, &id, sizeof(id));
+              if (!mqtt_send_header(c,
+                                    (uint8_t) (mm.qos == 2 ? MQTT_CMD_PUBREC
+                                                           : MQTT_CMD_PUBACK),
+                                    0, remaining_len) ||
+                  !mg_send(c, &id, sizeof(id)))
+                goto fail;
 
               if (c->is_mqtt5) {
                 uint16_t zero = 0;
-                mg_send(c, &zero, sizeof(zero));
+                if (!mg_send(c, &zero, sizeof(zero))) goto fail;
               }
             }
             mg_call(c, MG_EV_MQTT_MSG, &mm);  // let the app handle qos stuff
@@ -483,15 +515,18 @@ static void mqtt_cb(struct mg_connection *c, int ev, void *ev_data) {
           case MQTT_CMD_PUBREC: {  // MQTT5: 3.5.2-1 TODO(): variable header rc
             uint16_t id = mg_ntohs(mm.id);
             uint32_t remaining_len = sizeof(id);  // MQTT5 3.6.2-1
-            mg_mqtt_send_header(c, MQTT_CMD_PUBREL, 2, remaining_len);
-            mg_send(c, &id, sizeof(id));  // MQTT5 3.6.1-1, flags = 2
+            if (!mqtt_send_header(c, MQTT_CMD_PUBREL, 2,
+                                  remaining_len)  // MQTT5 3.6.1-1, flags = 2
+                || !mg_send(c, &id, sizeof(id)))
+              goto fail;
             break;
           }
           case MQTT_CMD_PUBREL: {  // MQTT5: 3.6.2-1 TODO(): variable header rc
             uint16_t id = mg_ntohs(mm.id);
             uint32_t remaining_len = sizeof(id);  // MQTT5 3.7.2-1
-            mg_mqtt_send_header(c, MQTT_CMD_PUBCOMP, 0, remaining_len);
-            mg_send(c, &id, sizeof(id));
+            if (!mqtt_send_header(c, MQTT_CMD_PUBCOMP, 0, remaining_len) ||
+                !mg_send(c, &id, sizeof(id)))
+              goto fail;
             break;
           }
         }
@@ -503,6 +538,9 @@ static void mqtt_cb(struct mg_connection *c, int ev, void *ev_data) {
     }
   }
   (void) ev_data;
+  return;
+fail:
+  mg_error(c, "OOM");
 }
 
 void mg_mqtt_ping(struct mg_connection *nc) {
@@ -517,19 +555,24 @@ void mg_mqtt_disconnect(struct mg_connection *c,
                         const struct mg_mqtt_opts *opts) {
   size_t len = 0;
   if (c->is_mqtt5) len = 1 + get_props_size(opts->props, opts->num_props);
-  mg_mqtt_send_header(c, MQTT_CMD_DISCONNECT, 0, (uint32_t) len);
+  if (!mqtt_send_header(c, MQTT_CMD_DISCONNECT, 0, (uint32_t) len)) goto fail;
 
   if (c->is_mqtt5) {
     uint8_t zero = 0;
-    mg_send(c, &zero, sizeof(zero));  // reason code
-    mg_send_mqtt_properties(c, opts->props, opts->num_props);
+    if (!mg_send(c, &zero, sizeof(zero))  // reason code
+        || !mg_send_mqtt_properties(c, opts->props, opts->num_props))
+      goto fail;
   }
+  return;
+fail:
+  mg_error(c, "OOM");
 }
 
 struct mg_connection *mg_mqtt_connect(struct mg_mgr *mgr, const char *url,
                                       const struct mg_mqtt_opts *opts,
                                       mg_event_handler_t fn, void *fn_data) {
-  struct mg_connection *c = mg_connect_svc(mgr, url, fn, fn_data, mqtt_cb, NULL);
+  struct mg_connection *c =
+      mg_connect_svc(mgr, url, fn, fn_data, mqtt_cb, NULL);
   if (c != NULL) {
     struct mg_mqtt_opts empty;
     memset(&empty, 0, sizeof(empty));

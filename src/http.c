@@ -346,14 +346,14 @@ int mg_http_parse(const char *s, size_t len, struct mg_http_message *hm) {
 static void mg_http_vprintf_chunk(struct mg_connection *c, const char *fmt,
                                   va_list *ap) {
   size_t len = c->send.len;
-  mg_send(c, "        \r\n", 10);
+  if (!mg_send(c, "        \r\n", 10)) mg_error(c, "OOM");
   mg_vxprintf(mg_pfn_iobuf, &c->send, fmt, ap);
   if (c->send.len >= len + 10) {
     mg_snprintf((char *) c->send.buf + len, 9, "%08lx", c->send.len - len - 10);
     c->send.buf[len + 8] = '\r';
     if (c->send.len == len + 10) c->is_resp = 0;  // Last chunk, reset marker
   }
-  mg_send(c, "\r\n", 2);
+  if (!mg_send(c, "\r\n", 2)) mg_error(c, "OOM");
 }
 
 void mg_http_printf_chunk(struct mg_connection *c, const char *fmt, ...) {
@@ -365,8 +365,7 @@ void mg_http_printf_chunk(struct mg_connection *c, const char *fmt, ...) {
 
 void mg_http_write_chunk(struct mg_connection *c, const char *buf, size_t len) {
   mg_printf(c, "%lx\r\n", (unsigned long) len);
-  mg_send(c, buf, len);
-  mg_send(c, "\r\n", 2);
+  if (!mg_send(c, buf, len) || !mg_send(c, "\r\n", 2)) mg_error(c, "OOM");
   if (len == 0) c->is_resp = 0;
 }
 

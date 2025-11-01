@@ -160,18 +160,11 @@ struct pkt {
 
 static void mg_tcpip_call(struct mg_tcpip_if *ifp, int ev, void *ev_data) {
 #if MG_ENABLE_PROFILE
-  const char *names[] = {
-  "TCPIP_EV_ST_CHG",
-  "TCPIP_EV_DHCP_DNS",
-  "TCPIP_EV_DHCP_SNTP",
-  "TCPIP_EV_ARP",
-  "TCPIP_EV_TIMER_1S",
-  "TCPIP_EV_WIFI_SCAN_RESULT",
-  "TCPIP_EV_WIFI_SCAN_END",
-  "TCPIP_EV_WIFI_CONNECT_ERR",
-  "TCPIP_EV_DRIVER",
-  "TCPIP_EV_USER" 
-  };
+  const char *names[] = {"TCPIP_EV_ST_CHG",        "TCPIP_EV_DHCP_DNS",
+                         "TCPIP_EV_DHCP_SNTP",     "TCPIP_EV_ARP",
+                         "TCPIP_EV_TIMER_1S",      "TCPIP_EV_WIFI_SCAN_RESULT",
+                         "TCPIP_EV_WIFI_SCAN_END", "TCPIP_EV_WIFI_CONNECT_ERR",
+                         "TCPIP_EV_DRIVER",        "TCPIP_EV_USER"};
   if (ev != MG_TCPIP_EV_POLL && ev < (int) (sizeof(names) / sizeof(names[0]))) {
     MG_PROF_ADD(c, names[ev]);
   }
@@ -962,13 +955,13 @@ static void rx_ip(struct mg_tcpip_if *ifp, struct pkt *pkt) {
   if (pkt->pay.len < sizeof(*pkt->ip)) return;  // Truncated
   if ((pkt->ip->ver >> 4) != 4) return;         // Not IP
   ihl = pkt->ip->ver & 0x0F;
-  if (ihl < 5) return;                     // bad IHL
-  if (pkt->pay.len < (uint16_t)(ihl * 4)) return;    // Truncated / malformed
+  if (ihl < 5) return;                              // bad IHL
+  if (pkt->pay.len < (uint16_t) (ihl * 4)) return;  // Truncated / malformed
   // There can be link padding, take length from IP header
-  len = mg_ntohs(pkt->ip->len); // IP datagram length
-  if (len < (ihl * 4) || len > pkt->pay.len) return; // malformed
-  pkt->pay.len = len; // strip padding
-  mkpay(pkt, (uint32_t *) pkt->ip + ihl);  // account for opts
+  len = mg_ntohs(pkt->ip->len);                       // IP datagram length
+  if (len < (ihl * 4) || len > pkt->pay.len) return;  // malformed
+  pkt->pay.len = len;                                 // strip padding
+  mkpay(pkt, (uint32_t *) pkt->ip + ihl);             // account for opts
   frag = mg_ntohs(pkt->ip->frag);
   if (frag & IP_MORE_FRAGS_MSK || frag & IP_FRAG_OFFSET_MSK) {
     struct mg_connection *c;
@@ -983,11 +976,11 @@ static void rx_ip(struct mg_tcpip_if *ifp, struct pkt *pkt) {
     rx_icmp(ifp, pkt);
   } else if (pkt->ip->proto == 17) {
     pkt->udp = (struct udp *) (pkt->pay.buf);
-    if (pkt->pay.len < sizeof(*pkt->udp)) return; // truncated
+    if (pkt->pay.len < sizeof(*pkt->udp)) return;  // truncated
     // Take length from UDP header
-    len = mg_ntohs(pkt->udp->len); // UDP datagram length
-    if (len < sizeof(*pkt->udp) || len > pkt->pay.len) return; // malformed
-    pkt->pay.len = len; // strip excess data
+    len = mg_ntohs(pkt->udp->len);  // UDP datagram length
+    if (len < sizeof(*pkt->udp) || len > pkt->pay.len) return;  // malformed
+    pkt->pay.len = len;  // strip excess data
     mkpay(pkt, pkt->udp + 1);
     MG_VERBOSE(("UDP %M:%hu -> %M:%hu len %u", mg_print_ip4, &pkt->ip->src,
                 mg_ntohs(pkt->udp->sport), mg_print_ip4, &pkt->ip->dst,
@@ -1008,7 +1001,7 @@ static void rx_ip(struct mg_tcpip_if *ifp, struct pkt *pkt) {
     pkt->tcp = (struct tcp *) (pkt->pay.buf);
     if (pkt->pay.len < sizeof(*pkt->tcp)) return;
     off = pkt->tcp->off >> 4;  // account for opts
-    if (pkt->pay.len < (uint16_t)(4 * off)) return;
+    if (pkt->pay.len < (uint16_t) (4 * off)) return;
     mkpay(pkt, (uint32_t *) pkt->tcp + off);
     MG_VERBOSE(("TCP %M:%hu -> %M:%hu len %u", mg_print_ip4, &pkt->ip->src,
                 mg_ntohs(pkt->tcp->sport), mg_print_ip4, &pkt->ip->dst,
@@ -1037,7 +1030,7 @@ static void rx_ip6(struct mg_tcpip_if *ifp, struct pkt *pkt) {
       case 51:  // Authentication RFC-4302
         MG_INFO(("IPv6 extension header %d", (int) next));
         next = nhdr[0];
-        len += (uint16_t)(8 * (nhdr[1] + 1));
+        len += (uint16_t) (8 * (nhdr[1] + 1));
         nhdr += 8 * (nhdr[1] + 1);
         break;
       case 44:  // Fragment 4.5
@@ -1107,8 +1100,8 @@ static void mg_tcpip_rx(struct mg_tcpip_if *ifp, void *buf, size_t len) {
   struct pkt pkt;
   memset(&pkt, 0, sizeof(pkt));
   pkt.pay.buf = pkt.raw.buf = (char *) buf;
-  pkt.pay.len = pkt.raw.len = len; // payload = raw
-  pkt.eth = (struct eth *) buf;   // Ethernet = raw
+  pkt.pay.len = pkt.raw.len = len;             // payload = raw
+  pkt.eth = (struct eth *) buf;                // Ethernet = raw
   if (pkt.raw.len < sizeof(*pkt.eth)) return;  // Truncated - runt?
   if (ifp->enable_mac_check &&
       memcmp(pkt.eth->dst, ifp->mac, sizeof(pkt.eth->dst)) != 0 &&
@@ -1124,7 +1117,7 @@ static void mg_tcpip_rx(struct mg_tcpip_if *ifp, void *buf, size_t len) {
   mkpay(&pkt, pkt.eth + 1);
   if (pkt.eth->type == mg_htons(0x806)) {
     pkt.arp = (struct arp *) (pkt.pay.buf);
-    if (pkt.pay.len < sizeof(*pkt.arp)) return; // Truncated
+    if (pkt.pay.len < sizeof(*pkt.arp)) return;  // Truncated
     mg_tcpip_call(ifp, MG_TCPIP_EV_ARP, &pkt.raw);
     rx_arp(ifp, &pkt);
   } else if (pkt.eth->type == mg_htons(0x86dd)) {
@@ -1380,6 +1373,7 @@ bool mg_open_listener(struct mg_connection *c, const char *url) {
 static void write_conn(struct mg_connection *c) {
   long len = c->is_tls ? mg_tls_send(c, c->send.buf, c->send.len)
                        : mg_io_send(c, c->send.buf, c->send.len);
+  // TODO(): mg_tls_send() may return 0 forever on steady OOM
   if (len == MG_IO_ERR) {
     mg_error(c, "tx err");
   } else if (len > 0) {
@@ -1392,7 +1386,7 @@ static void init_closure(struct mg_connection *c) {
   struct connstate *s = (struct connstate *) (c + 1);
   if (c->is_udp == false && c->is_listening == false &&
       c->is_connecting == false) {  // For TCP conns,
-  uint32_t rem_ip = c->rem.ip4;
+    uint32_t rem_ip = c->rem.ip4;
     tx_tcp(c->mgr->ifp, s->mac, rem_ip, TH_FIN | TH_ACK, c->loc.port,
            c->rem.port, mg_htonl(s->seq), mg_htonl(s->ack), NULL, 0);
     settmout(c, MIP_TTYPE_FIN);
@@ -1458,7 +1452,9 @@ bool mg_send(struct mg_connection *c, const void *buf, size_t len) {
     res = tx_udp(ifp, s->mac, ifp->ip, c->loc.port, rem_ip, c->rem.port, buf,
                  len);
   } else {
-    res = mg_iobuf_add(&c->send, c->send.len, buf, len);
+    res = (bool) mg_iobuf_add(&c->send, c->send.len, buf, len);
+    // res == 0 means an OOM condition (iobuf couldn't resize), yet this is so
+    // far recoverable, let the caller decide
   }
   return res;
 }
