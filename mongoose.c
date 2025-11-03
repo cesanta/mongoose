@@ -4968,10 +4968,8 @@ static void read_conn(struct mg_connection *c, struct pkt *pkt) {
     // if not already running, setup a timer to send an ACK later
     if (s->ttype != MIP_TTYPE_ACK) settmout(c, MIP_TTYPE_ACK);
   }
-  if (c->is_tls && c->is_tls_hs) {
-    mg_tls_handshake(c);
-  } else if (c->is_tls) {
-    handle_tls_recv(c);
+  if (c->is_tls) {
+    c->is_tls_hs ? mg_tls_handshake(c) : handle_tls_recv(c);
   } else {
     // Plain text connection, data is already in c->recv, trigger MG_EV_READ
     mg_call(c, MG_EV_READ, &pkt->pay.len);
@@ -5592,7 +5590,7 @@ void mg_mgr_poll(struct mg_mgr *mgr, int ms) {
                 mg_tls_pending(c), c->rtls.len));
     // order is important, TLS conn close with > 1 record in buffer (below)
     if (is_tls && (c->rtls.len > 0 || mg_tls_pending(c) > 0))
-      handle_tls_recv(c);
+      c->is_tls_hs ? mg_tls_handshake(c) : handle_tls_recv(c);
     if (can_write(c)) write_conn(c);
     if (is_tls && c->send.len == 0) mg_tls_flush(c);
     if (c->is_draining && c->send.len == 0 && s->ttype != MIP_TTYPE_FIN)
@@ -11164,7 +11162,8 @@ struct tls_data {
   size_t pubkeysz;           // size of the server public key
   uint8_t sighash[32];       // calculated signature verification hash
 
-  struct tls_enc enc;
+  struct tls_enc enc;       // actual keys in use at this time
+  struct tls_enc app_keys;  // storage during two-way auth handshake
 };
 
 #define TLS_RECHDR_SIZE 5  // 1 byte type, 2 bytes version, 2 bytes length
@@ -11554,8 +11553,7 @@ static int mg_tls_recv_record(struct mg_connection *c) {
     }
     if (rio->buf[0] == MG_TLS_APP_DATA) {
       break;
-    } else if (rio->buf[0] ==
-               MG_TLS_CHANGE_CIPHER) {  // Skip ChangeCipher messages
+    } else if (rio->buf[0] == MG_TLS_CHANGE_CIPHER) {  // skip CCS
       mg_tls_drop_record(c);
     } else if (rio->buf[0] == MG_TLS_ALERT) {  // Skip Alerts
       MG_INFO(("TLS ALERT packet received"));
@@ -11764,29 +11762,28 @@ static void mg_tls_server_send_ext(struct mg_connection *c) {
 // signature algorithms we actually support:
 // rsa_pkcs1_sha256, rsa_pss_rsae_sha256 and ecdsa_secp256r1_sha256
 static const uint8_t secp256r1_sig_algs[12] = {
-    0x00, 0x0d, 0x00, 0x08, 0x00, 0x06, 0x04, 0x03, 0x08, 0x04, 0x04, 0x01,
+    0x00, 0x0d, 0x00, 0x08, 0x00, 0x06, 0x04, 0x03, 0x08, 0x04, 0x04, 0x01
 };
 
 static void mg_tls_server_send_cert_request(struct mg_connection *c) {
   struct tls_data *tls = (struct tls_data *) c->tls;
-  size_t n = sizeof(secp256r1_sig_algs) + 6;
-  uint8_t *req = (uint8_t *) mg_calloc(1, 13 + n);
+  uint8_t *req = (uint8_t *) mg_calloc(1, 13 + sizeof(secp256r1_sig_algs));
   if (req == NULL) {
     mg_error(c, "tls cert req oom");
     return;
   }
   req[0] = MG_TLS_CERTIFICATE_REQUEST;  // handshake header
-  MG_STORE_BE24(req + 1, n + 9);
-  req[4] = 0;                  // context length
-  MG_STORE_BE16(req + 5, n);   // extensions length
+  MG_STORE_BE24(req + 1, 9 + sizeof(secp256r1_sig_algs));
+  req[4] = 0;                                              // context length
+  MG_STORE_BE16(req + 5, 6 + sizeof(secp256r1_sig_algs));  // extensions length
   MG_STORE_BE16(req + 7, 13);  // "signature algorithms"
-  MG_STORE_BE16(req + 9, sizeof(secp256r1_sig_algs) + 2);  // length
+  MG_STORE_BE16(req + 9, 2 + sizeof(secp256r1_sig_algs));  // length
   MG_STORE_BE16(
       req + 11,
       sizeof(secp256r1_sig_algs));  // signature hash algorithms length
   memcpy(req + 13, (uint8_t *) secp256r1_sig_algs, sizeof(secp256r1_sig_algs));
-  mg_sha256_update(&tls->sha256, req, 13 + n);
-  mg_tls_encrypt(c, req, 13 + n, MG_TLS_HANDSHAKE);
+  mg_sha256_update(&tls->sha256, req, 13 + sizeof(secp256r1_sig_algs));
+  mg_tls_encrypt(c, req, 13 + sizeof(secp256r1_sig_algs), MG_TLS_HANDSHAKE);
   mg_free(req);
 }
 
@@ -12627,11 +12624,19 @@ static void mg_tls_client_handshake(struct mg_connection *c) {
         break;
       }
       if (tls->cert_requested && tls->cert_der.len > 0) {  // two-way auth
+        // generate application keys at this point, keep using handshake keys
+        struct tls_enc hs_keys = tls->enc;
+        mg_tls_generate_application_keys(c);
+        tls->app_keys = tls->enc;
+        tls->enc = hs_keys;
         mg_tls_send_cert(c, true);
         mg_tls_send_cert_verify(c, true);
+        mg_tls_client_send_finish(c);
+        tls->enc = tls->app_keys;
+      } else {
+        mg_tls_client_send_finish(c);
+        mg_tls_generate_application_keys(c);
       }
-      mg_tls_client_send_finish(c);
-      mg_tls_generate_application_keys(c);
       tls->state = MG_TLS_STATE_CLIENT_CONNECTED;
       c->is_tls_hs = 0;
       mg_call(c, MG_EV_TLS_HS, NULL);
@@ -12657,6 +12662,11 @@ static void mg_tls_server_handshake(struct mg_connection *c) {
       mg_tls_send_cert_verify(c, false);
       mg_tls_server_send_finish(c);
       if (tls->is_twoway) {
+        // generate application keys at this point, keep using handshake keys
+        struct tls_enc hs_keys = tls->enc;
+        mg_tls_generate_application_keys(c);
+        tls->app_keys = tls->enc;
+        tls->enc = hs_keys;
         tls->state = MG_TLS_STATE_SERVER_WAIT_CERT;
         break;
       }
@@ -12666,7 +12676,11 @@ static void mg_tls_server_handshake(struct mg_connection *c) {
       if (mg_tls_server_recv_finish(c) < 0) {
         return;
       }
-      mg_tls_generate_application_keys(c);
+      if (tls->is_twoway) {  // use previously generated keys
+        tls->enc = tls->app_keys;
+      } else {  // generate keys now
+        mg_tls_generate_application_keys(c);
+      }
       tls->state = MG_TLS_STATE_SERVER_CONNECTED;
       c->is_tls_hs = 0;
       return;

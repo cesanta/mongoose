@@ -804,10 +804,8 @@ static void read_conn(struct mg_connection *c, struct pkt *pkt) {
     // if not already running, setup a timer to send an ACK later
     if (s->ttype != MIP_TTYPE_ACK) settmout(c, MIP_TTYPE_ACK);
   }
-  if (c->is_tls && c->is_tls_hs) {
-    mg_tls_handshake(c);
-  } else if (c->is_tls) {
-    handle_tls_recv(c);
+  if (c->is_tls) {
+    c->is_tls_hs ? mg_tls_handshake(c) : handle_tls_recv(c);
   } else {
     // Plain text connection, data is already in c->recv, trigger MG_EV_READ
     mg_call(c, MG_EV_READ, &pkt->pay.len);
@@ -1428,7 +1426,7 @@ void mg_mgr_poll(struct mg_mgr *mgr, int ms) {
                 mg_tls_pending(c), c->rtls.len));
     // order is important, TLS conn close with > 1 record in buffer (below)
     if (is_tls && (c->rtls.len > 0 || mg_tls_pending(c) > 0))
-      handle_tls_recv(c);
+      c->is_tls_hs ? mg_tls_handshake(c) : handle_tls_recv(c);
     if (can_write(c)) write_conn(c);
     if (is_tls && c->send.len == 0) mg_tls_flush(c);
     if (c->is_draining && c->send.len == 0 && s->ttype != MIP_TTYPE_FIN)
