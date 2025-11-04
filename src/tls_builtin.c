@@ -1187,7 +1187,8 @@ static int mg_tls_parse_cert_der(void *buf, size_t dersz,
 }
 
 static int mg_tls_verify_cert_san(const uint8_t *der, size_t dersz,
-                                  const char *server_name) {
+                                  const char *server_name,
+                                  struct mg_addr *server_ip) {
   struct mg_der_tlv root, field, name;
   if (mg_der_parse((uint8_t *) der, dersz, &root) < 0) {
     MG_ERROR(("failed to parse certificate"));
@@ -1202,12 +1203,16 @@ static int mg_tls_verify_cert_san(const uint8_t *der, size_t dersz,
     return -1;
   }
   while (mg_der_next(&field, &name) > 0) {
-    MG_DEBUG(("Found SAN: %.*s", name.len, name.value));
-    if (mg_match(mg_str(server_name), mg_str_n((char *) name.value, name.len),
-                 NULL)) {
-      // Found SAN that matches the host name
-      return 1;
-    }
+    if (name.type == 0x87 && name.len == 4) { // this is an IPv4 address
+      MG_DEBUG(("Found SAN, IP: %M", mg_print_ip4, name.value));
+      if (!server_ip->is_ip6 && *((uint32_t *) name.value) == server_ip->ip4)
+        return 1;  // and matches the one we're connected to
+    } else {  // this is a text SAN
+      MG_DEBUG(("Found SAN, (%u): %.*s", name.type, name.len, name.value));
+      if (mg_match(mg_str(server_name), mg_str_n((char *) name.value, name.len),
+                   NULL))
+        return 1;  // and matches the host name
+    }              // TODO(): add IPv6 comparison, more items ?
   }
   return -1;
 }
@@ -1347,7 +1352,7 @@ static int mg_tls_recv_cert(struct mg_connection *c, bool is_client) {
         // First certificate in the chain is peer cert, check SAN if requested,
         // and store public key for further CertVerify step
         if (tls->hostname[0] != '\0' &&
-            mg_tls_verify_cert_san(cert, certsz, tls->hostname) <= 0 &&
+            mg_tls_verify_cert_san(cert, certsz, tls->hostname, &c->rem) <= 0 &&
             mg_tls_verify_cert_cn(&ci->subj, tls->hostname) <= 0) {
           mg_error(c, "failed to verify hostname");
           return -1;
