@@ -100,8 +100,7 @@ int LLVMFuzzerTestOneInput(const uint8_t *data, size_t size) {
     memcpy(pkt, data, size);
     if (size > sizeof(*eth)) {
       static size_t i;
-//      uint16_t eth_types[] = {0x800, 0x806, 0x86dd}; // IPv4, ARP, IPv6
-      uint16_t eth_types[] = {0x800, 0x806}; // IPv4, ARP, skip IPv6 until we merge it ***
+      uint16_t eth_types[] = {0x800, 0x806, 0x86dd}; // IPv4, ARP, IPv6
       memcpy(eth->dst, mif.mac, 6);  // Set valid destination MAC
       // send all handled eth types, then 2 random ones
       if (i >= (sizeof(eth_types) / sizeof(eth_types[0]) + 2)) i = 0;
@@ -128,7 +127,7 @@ int LLVMFuzzerTestOneInput(const uint8_t *data, size_t size) {
           }
         }
       } else if (eth->type == mg_htons(0x806)) {      // ARP
-#if 0
+
       } else if (eth->type == mg_htons(0x86dd) && size > (sizeof(*eth) + sizeof(struct ip6))) {     // IPv6
         static size_t j;
         uint8_t ip6_protos[] = {6, 17, 58}; // TCP, UDP, ICMPv6
@@ -142,19 +141,13 @@ int LLVMFuzzerTestOneInput(const uint8_t *data, size_t size) {
         } else if (ip6->next == 58) { // ICMPv6
           if (size >= (sizeof(*eth) + sizeof(struct ip6) + sizeof(struct icmp6))) {
             static size_t k;
-            uint16_t icmp6_types[] = {128, 134, 135, 136}; // Echo Request, RA, NS, NA
+            uint8_t icmp6_types[] = {128, 134, 135, 136}; // Echo Request, RA, NS, NA
             struct icmp6 *icmp6 = (struct icmp6 *) (ip6 + 1);
             // send all handled ICMPv6 types, then 2 random ones
             if (k >= (sizeof(icmp6_types) / sizeof(icmp6_types[0]) + 2)) k = 0;
-            if (k < (sizeof(icmp6_types) / sizeof(icmp6_types[0]))) icmp6->type = mg_htons(icmp6_types[k++]);
+            if (k < (sizeof(icmp6_types) / sizeof(icmp6_types[0]))) icmp6->type = icmp6_types[k++];
           }
         }
-#else
-      } else if (eth->type == mg_htons(0x86dd)) {     // IPv6
-        free(pkt);
-        mg_mgr_free(&mgr);
-        return 0;
-#endif
       }
     }
 
