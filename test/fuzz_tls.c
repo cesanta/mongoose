@@ -18,10 +18,11 @@ int LLVMFuzzerTestOneInput(const uint8_t *, size_t);
 // Preprocessor magic, just add/remove functions here and leave the rest alone
 #define TABLE(_) \
 _(mg_tls_server_recv_hello) \
-//_(mg_tls_client_recv_hello) \
-//_(mg_tls_client_recv_ext ) \
-//_(mg_tls_recv_cert) \
-//_(mg_tls_recv_cert_verify) \
+_(mg_tls_server_recv_finish) \
+_(mg_tls_client_recv_hello) \
+_(mg_tls_client_recv_finish) \
+_(mg_tls_client_recv_ext) \
+_(mg_tls_recv_cert_verify) \
 // ... 
 
 struct f {
@@ -52,7 +53,7 @@ int LLVMFuzzerTestOneInput(const uint8_t *data, size_t size) {
     c = &c_[i];
     io = &c->rtls;
     if (i > 0) memcpy(c, &c_[0], sizeof(*c)); // copy from 1st one
-    if (i > 0) c->is_client = 1;  // from 1 on, client functions
+    if (i > 1) c->is_client = 1;  // from 2 on, client functions
     memset(&tls_[i], 0, sizeof(struct tls_data));
     if (io->size - io->len < size && !mg_iobuf_resize(io, io->len + size)) {
       mg_error(c, "oom");
@@ -64,10 +65,31 @@ int LLVMFuzzerTestOneInput(const uint8_t *data, size_t size) {
 #ifdef PRINT_FUNCNAME
     printf("CALLING %s\n", f_[i].name);
 #endif
-    f_[i].f(&c[i]);
+    f_[i].f(c);
     mg_iobuf_free(io);
   }
-  
+
+  // mg_tls_recv_cert() has an extra bool parameter 
+  c = &c_[0]; // reuse first one
+  c->tls = &tls_[0];
+  for (i = 0; i < 2; i++) {
+    struct mg_iobuf *io;
+    io = &c->rtls;
+    c->is_client = (i > 0);
+    memset(c->tls, 0, sizeof(struct tls_data));
+    if (io->size - io->len < size && !mg_iobuf_resize(io, io->len + size)) {
+      mg_error(c, "oom");
+      return 0; // drop it
+    }
+    memcpy(&io->buf[io->len], data, size);
+    io->len += size;
+#ifdef PRINT_FUNCNAME
+    printf("CALLING mg_tls_recv_cert\n");
+#endif
+    mg_tls_recv_cert(c, !c->is_client); // call server for client and client for server
+    mg_iobuf_free(io);
+  }
+
   return 0;
 }
 
