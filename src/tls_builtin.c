@@ -399,7 +399,7 @@ static void mg_tls_generate_application_keys(struct mg_connection *c) {
 }
 
 // AES GCM encryption of the message + put encoded data into the write buffer
-static void mg_tls_encrypt(struct mg_connection *c, const uint8_t *msg,
+static bool mg_tls_encrypt(struct mg_connection *c, const uint8_t *msg,
                            size_t msgsz, uint8_t msgtype) {
   struct tls_data *tls = (struct tls_data *) c->tls;
   struct mg_iobuf *wio = &tls->send;
@@ -430,8 +430,9 @@ static void mg_tls_encrypt(struct mg_connection *c, const uint8_t *msg,
   nonce[10] ^= (uint8_t) ((seq >> 8) & 255U);
   nonce[11] ^= (uint8_t) ((seq) & 255U);
 
-  mg_iobuf_add(wio, wio->len, hdr, sizeof(hdr));
-  mg_iobuf_resize(wio, wio->len + encsz);
+  if (mg_iobuf_add(wio, wio->len, hdr, sizeof(hdr)) == 0 ||
+      !mg_iobuf_resize(wio, wio->len + encsz))
+    return false;
   outmsg = wio->buf + wio->len;
   tag = wio->buf + wio->len + msgsz + 1;
   memmove(outmsg, msg, msgsz);
@@ -440,17 +441,14 @@ static void mg_tls_encrypt(struct mg_connection *c, const uint8_t *msg,
   (void) tag;  // tag is only used in aes gcm
   {
     size_t maxlen = MG_IO_SIZE > 16384 ? 16384 : MG_IO_SIZE;
+    size_t n;
     uint8_t *enc = (uint8_t *) mg_calloc(1, maxlen + 256 + 1);
-    if (enc == NULL) {
-      mg_error(c, "TLS OOM");
-      return;
-    } else {
-      size_t n = mg_chacha20_poly1305_encrypt(enc, key, nonce, associated_data,
-                                              sizeof(associated_data), outmsg,
-                                              msgsz + 1);
-      memmove(outmsg, enc, n);
-      mg_free(enc);
-    }
+    if (enc == NULL) return false;
+    n = mg_chacha20_poly1305_encrypt(enc, key, nonce, associated_data,
+                                     sizeof(associated_data), outmsg,
+                                     msgsz + 1);
+    memmove(outmsg, enc, n);
+    mg_free(enc);
   }
 #else
   mg_aes_gcm_encrypt(outmsg, outmsg, msgsz + 1, key, 16, nonce, sizeof(nonce),
@@ -458,6 +456,7 @@ static void mg_tls_encrypt(struct mg_connection *c, const uint8_t *msg,
 #endif
   c->is_client ? tls->enc.cseq++ : tls->enc.sseq++;
   wio->len += encsz;
+  return true;
 }
 
 // read an encrypted record, decrypt it in place
@@ -633,7 +632,7 @@ fail:
 #define PLACEHOLDER_32B PLACEHOLDER_16B, PLACEHOLDER_16B
 
 // put ServerHello record into wio buffer
-static void mg_tls_server_send_hello(struct mg_connection *c) {
+static bool mg_tls_server_send_hello(struct mg_connection *c) {
   struct tls_data *tls = (struct tls_data *) c->tls;
   struct mg_iobuf *wio = &tls->send;
 
@@ -674,20 +673,24 @@ static void mg_tls_server_send_hello(struct mg_connection *c) {
   memmove(msg_server_hello + 84, x25519_pub, sizeof(x25519_pub));
 
   // server hello message
-  mg_iobuf_add(wio, wio->len, "\x16\x03\x03\x00\x7a", 5);
-  mg_iobuf_add(wio, wio->len, msg_server_hello, sizeof(msg_server_hello));
+  if (mg_iobuf_add(wio, wio->len, "\x16\x03\x03\x00\x7a", 5) == 0 ||
+      mg_iobuf_add(wio, wio->len, msg_server_hello, sizeof(msg_server_hello)) ==
+          0)
+    return false;
   mg_sha256_update(&tls->sha256, msg_server_hello, sizeof(msg_server_hello));
 
   // change cipher message
-  mg_iobuf_add(wio, wio->len, "\x14\x03\x03\x00\x01\x01", 6);
+  if (mg_iobuf_add(wio, wio->len, "\x14\x03\x03\x00\x01\x01", 6) == 0)
+    return false;
+  return true;
 }
 
-static void mg_tls_server_send_ext(struct mg_connection *c) {
+static bool mg_tls_server_send_ext(struct mg_connection *c) {
   struct tls_data *tls = (struct tls_data *) c->tls;
   // server extensions
   uint8_t ext[6] = {0x08, 0, 0, 2, 0, 0};
   mg_sha256_update(&tls->sha256, ext, sizeof(ext));
-  mg_tls_encrypt(c, ext, sizeof(ext), MG_TLS_HANDSHAKE);
+  return mg_tls_encrypt(c, ext, sizeof(ext), MG_TLS_HANDSHAKE);
 }
 
 // signature algorithms we actually support:
@@ -696,13 +699,11 @@ static const uint8_t secp256r1_sig_algs[12] = {
     0x00, 0x0d, 0x00, 0x08, 0x00, 0x06, 0x04, 0x03, 0x08, 0x04, 0x04, 0x01
 };
 
-static void mg_tls_server_send_cert_request(struct mg_connection *c) {
+static bool mg_tls_server_send_cert_request(struct mg_connection *c) {
   struct tls_data *tls = (struct tls_data *) c->tls;
   uint8_t *req = (uint8_t *) mg_calloc(1, 13 + sizeof(secp256r1_sig_algs));
-  if (req == NULL) {
-    mg_error(c, "tls cert req oom");
-    return;
-  }
+  bool res;
+  if (req == NULL) return false;
   req[0] = MG_TLS_CERTIFICATE_REQUEST;  // handshake header
   MG_STORE_BE24(req + 1, 9 + sizeof(secp256r1_sig_algs));
   req[4] = 0;                                              // context length
@@ -714,20 +715,19 @@ static void mg_tls_server_send_cert_request(struct mg_connection *c) {
       sizeof(secp256r1_sig_algs));  // signature hash algorithms length
   memcpy(req + 13, (uint8_t *) secp256r1_sig_algs, sizeof(secp256r1_sig_algs));
   mg_sha256_update(&tls->sha256, req, 13 + sizeof(secp256r1_sig_algs));
-  mg_tls_encrypt(c, req, 13 + sizeof(secp256r1_sig_algs), MG_TLS_HANDSHAKE);
+  res = mg_tls_encrypt(c, req, 13 + sizeof(secp256r1_sig_algs), MG_TLS_HANDSHAKE);
   mg_free(req);
+  return res;
 }
 
-static void mg_tls_send_cert(struct mg_connection *c, bool is_client) {
+static bool mg_tls_send_cert(struct mg_connection *c, bool is_client) {
   struct tls_data *tls = (struct tls_data *) c->tls;
   int send_ca = !is_client && tls->ca_der.len > 0;
   // DER certificate + CA (server optional)
   size_t n = tls->cert_der.len + (send_ca ? tls->ca_der.len + 5 : 0);
   uint8_t *cert = (uint8_t *) mg_calloc(1, 13 + n);
-  if (cert == NULL) {
-    mg_error(c, "tls cert oom");
-    return;
-  }
+  bool res;
+  if (cert == NULL) return false;
   cert[0] = MG_TLS_CERTIFICATE;  // handshake header
   MG_STORE_BE24(cert + 1, n + 9);
   cert[4] = 0;                                 // request context
@@ -745,8 +745,9 @@ static void mg_tls_send_cert(struct mg_connection *c, bool is_client) {
     MG_STORE_BE16(cert + 11 + n, 0);  // certificate extensions (none)
   }
   mg_sha256_update(&tls->sha256, cert, 13 + n);
-  mg_tls_encrypt(c, cert, 13 + n, MG_TLS_HANDSHAKE);
+  res = mg_tls_encrypt(c, cert, 13 + n, MG_TLS_HANDSHAKE);
   mg_free(cert);
+  return res;
 }
 
 // type adapter between uECC hash context and our sha256 implementation
@@ -771,7 +772,7 @@ static void finish_SHA256(const MG_UECC_HashContext *base,
   mg_sha256_final(hash_result, &c->ctx);
 }
 
-static void mg_tls_send_cert_verify(struct mg_connection *c, bool is_client) {
+static bool mg_tls_send_cert_verify(struct mg_connection *c, bool is_client) {
   struct tls_data *tls = (struct tls_data *) c->tls;
   // server certificate verify packet
   uint8_t verify[82] = {0x0f, 0x00, 0x00, 0x00, 0x04, 0x03, 0x00, 0x00};
@@ -805,10 +806,10 @@ static void mg_tls_send_cert_verify(struct mg_connection *c, bool is_client) {
   verify[7] = (uint8_t) sigsz;
 
   mg_sha256_update(&tls->sha256, verify, verifysz);
-  mg_tls_encrypt(c, verify, verifysz, MG_TLS_HANDSHAKE);
+  return mg_tls_encrypt(c, verify, verifysz, MG_TLS_HANDSHAKE);
 }
 
-static void mg_tls_server_send_finish(struct mg_connection *c) {
+static bool mg_tls_server_send_finish(struct mg_connection *c) {
   struct tls_data *tls = (struct tls_data *) c->tls;
   mg_sha256_ctx sha256;
   uint8_t hash[32];
@@ -816,8 +817,10 @@ static void mg_tls_server_send_finish(struct mg_connection *c) {
   memmove(&sha256, &tls->sha256, sizeof(mg_sha256_ctx));
   mg_sha256_final(hash, &sha256);
   mg_hmac_sha256(finish + 4, tls->enc.server_finished_key, 32, hash, 32);
-  mg_tls_encrypt(c, finish, sizeof(finish), MG_TLS_HANDSHAKE);
+  if (!mg_tls_encrypt(c, finish, sizeof(finish), MG_TLS_HANDSHAKE))
+    return false;
   mg_sha256_update(&tls->sha256, finish, sizeof(finish));
+  return true;
 }
 
 static int mg_tls_server_recv_finish(struct mg_connection *c) {
@@ -842,7 +845,7 @@ static int mg_tls_server_recv_finish(struct mg_connection *c) {
   return 0;
 }
 
-static void mg_tls_client_send_hello(struct mg_connection *c) {
+static bool mg_tls_client_send_hello(struct mg_connection *c) {
   struct tls_data *tls = (struct tls_data *) c->tls;
   struct mg_iobuf *wio = &tls->send;
 
@@ -925,20 +928,27 @@ static void mg_tls_client_send_hello(struct mg_connection *c) {
   memmove(msg_client_hello + 94, x25519_pub, sizeof(x25519_pub));
 
   // client hello message
-  mg_iobuf_add(wio, wio->len, msg_client_hello, sizeof(msg_client_hello));
+  if (mg_iobuf_add(wio, wio->len, msg_client_hello, sizeof(msg_client_hello)) ==
+      0)
+    return false;
   mg_sha256_update(&tls->sha256, msg_client_hello + 5,
                    sizeof(msg_client_hello) - 5);
-  mg_iobuf_add(wio, wio->len, sig_alg, sig_alg_sz);
+  if (mg_iobuf_add(wio, wio->len, sig_alg, sig_alg_sz) == 0) return false;
   mg_sha256_update(&tls->sha256, sig_alg, sig_alg_sz);
   if (hostnamesz > 0) {
-    mg_iobuf_add(wio, wio->len, server_name_ext, sizeof(server_name_ext));
-    mg_iobuf_add(wio, wio->len, hostname, hostnamesz);
+    if (mg_iobuf_add(wio, wio->len, server_name_ext, sizeof(server_name_ext)) ==
+            0 ||
+        mg_iobuf_add(wio, wio->len, hostname, hostnamesz) == 0)
+      return false;
     mg_sha256_update(&tls->sha256, server_name_ext, sizeof(server_name_ext));
     mg_sha256_update(&tls->sha256, (uint8_t *) hostname, hostnamesz);
   }
 
   // change cipher message
-  mg_iobuf_add(wio, wio->len, (const char *) "\x14\x03\x03\x00\x01\x01", 6);
+  if (mg_iobuf_add(wio, wio->len, (const char *) "\x14\x03\x03\x00\x01\x01",
+                   6) == 0)
+    return false;
+  return true;
 }
 
 static int mg_tls_client_recv_hello(struct mg_connection *c) {
@@ -1513,7 +1523,7 @@ static int mg_tls_client_recv_finish(struct mg_connection *c) {
   return 0;
 }
 
-static void mg_tls_client_send_finish(struct mg_connection *c) {
+static bool mg_tls_client_send_finish(struct mg_connection *c) {
   struct tls_data *tls = (struct tls_data *) c->tls;
   mg_sha256_ctx sha256;
   uint8_t hash[32];
@@ -1521,56 +1531,46 @@ static void mg_tls_client_send_finish(struct mg_connection *c) {
   memmove(&sha256, &tls->sha256, sizeof(mg_sha256_ctx));
   mg_sha256_final(hash, &sha256);
   mg_hmac_sha256(finish + 4, tls->enc.client_finished_key, 32, hash, 32);
-  mg_tls_encrypt(c, finish, sizeof(finish), MG_TLS_HANDSHAKE);
+  return mg_tls_encrypt(c, finish, sizeof(finish), MG_TLS_HANDSHAKE);
 }
 
-static void mg_tls_client_handshake(struct mg_connection *c) {
+static bool mg_tls_client_handshake(struct mg_connection *c) {
   struct tls_data *tls = (struct tls_data *) c->tls;
   switch (tls->state) {
     case MG_TLS_STATE_CLIENT_START:
-      mg_tls_client_send_hello(c);
+      if (!mg_tls_client_send_hello(c)) return false;
       tls->state = MG_TLS_STATE_CLIENT_WAIT_SH;
       // Fallthrough
     case MG_TLS_STATE_CLIENT_WAIT_SH:
-      if (mg_tls_client_recv_hello(c) < 0) {
-        break;
-      }
+      if (mg_tls_client_recv_hello(c) < 0) break;
       tls->state = MG_TLS_STATE_CLIENT_WAIT_EE;
       // Fallthrough
     case MG_TLS_STATE_CLIENT_WAIT_EE:
-      if (mg_tls_client_recv_ext(c) < 0) {
-        break;
-      }
+      if (mg_tls_client_recv_ext(c) < 0) break;
       tls->state = MG_TLS_STATE_CLIENT_WAIT_CERT;
       // Fallthrough
     case MG_TLS_STATE_CLIENT_WAIT_CERT:
-      if (mg_tls_recv_cert(c, true) < 0) {
-        break;
-      }
+      if (mg_tls_recv_cert(c, true) < 0) break;
       tls->state = MG_TLS_STATE_CLIENT_WAIT_CV;
       // Fallthrough
     case MG_TLS_STATE_CLIENT_WAIT_CV:
-      if (mg_tls_recv_cert_verify(c) < 0) {
-        break;
-      }
+      if (mg_tls_recv_cert_verify(c) < 0) break;
       tls->state = MG_TLS_STATE_CLIENT_WAIT_FINISH;
       // Fallthrough
     case MG_TLS_STATE_CLIENT_WAIT_FINISH:
-      if (mg_tls_client_recv_finish(c) < 0) {
-        break;
-      }
+      if (mg_tls_client_recv_finish(c) < 0) break;
       if (tls->cert_requested && tls->cert_der.len > 0) {  // two-way auth
         // generate application keys at this point, keep using handshake keys
         struct tls_enc hs_keys = tls->enc;
         mg_tls_generate_application_keys(c);
         tls->app_keys = tls->enc;
         tls->enc = hs_keys;
-        mg_tls_send_cert(c, true);
-        mg_tls_send_cert_verify(c, true);
-        mg_tls_client_send_finish(c);
+        if (!mg_tls_send_cert(c, true) || !mg_tls_send_cert_verify(c, true) ||
+            !mg_tls_client_send_finish(c))
+          return false;
         tls->enc = tls->app_keys;
       } else {
-        mg_tls_client_send_finish(c);
+        if (!mg_tls_client_send_finish(c)) return false;
         mg_tls_generate_application_keys(c);
       }
       tls->state = MG_TLS_STATE_CLIENT_CONNECTED;
@@ -1581,22 +1581,19 @@ static void mg_tls_client_handshake(struct mg_connection *c) {
       mg_error(c, "unexpected client state: %d", tls->state);
       break;
   }
+  return true;
 }
 
-static void mg_tls_server_handshake(struct mg_connection *c) {
+static bool mg_tls_server_handshake(struct mg_connection *c) {
   struct tls_data *tls = (struct tls_data *) c->tls;
   switch (tls->state) {
     case MG_TLS_STATE_SERVER_START:
-      if (mg_tls_server_recv_hello(c) < 0) {
-        return;
-      }
-      mg_tls_server_send_hello(c);
+      if (mg_tls_server_recv_hello(c) < 0) break;
+      if (!mg_tls_server_send_hello(c)) return false;
       mg_tls_generate_handshake_keys(c);
-      mg_tls_server_send_ext(c);
-      if (tls->is_twoway) mg_tls_server_send_cert_request(c);
-      mg_tls_send_cert(c, false);
-      mg_tls_send_cert_verify(c, false);
-      mg_tls_server_send_finish(c);
+      if (!mg_tls_server_send_ext(c)) return false;
+      if (tls->is_twoway && !mg_tls_server_send_cert_request(c)) return false;
+      if (!mg_tls_send_cert(c, false) || !mg_tls_send_cert_verify(c, false) || !mg_tls_server_send_finish(c)) return false;
       if (tls->is_twoway) {
         // generate application keys at this point, keep using handshake keys
         struct tls_enc hs_keys = tls->enc;
@@ -1609,9 +1606,7 @@ static void mg_tls_server_handshake(struct mg_connection *c) {
       tls->state = MG_TLS_STATE_SERVER_NEGOTIATED;
       // fallthrough
     case MG_TLS_STATE_SERVER_NEGOTIATED:
-      if (mg_tls_server_recv_finish(c) < 0) {
-        return;
-      }
+      if (mg_tls_server_recv_finish(c) < 0) break;
       if (tls->is_twoway) {  // use previously generated keys
         tls->enc = tls->app_keys;
       } else {  // generate keys now
@@ -1619,7 +1614,7 @@ static void mg_tls_server_handshake(struct mg_connection *c) {
       }
       tls->state = MG_TLS_STATE_SERVER_CONNECTED;
       c->is_tls_hs = 0;
-      return;
+      break;
     case MG_TLS_STATE_SERVER_WAIT_CERT:
       if (mg_tls_recv_cert(c, false) < 0) break;
       tls->state = MG_TLS_STATE_SERVER_WAIT_CV;
@@ -1632,16 +1627,22 @@ static void mg_tls_server_handshake(struct mg_connection *c) {
       mg_error(c, "unexpected server state: %d", tls->state);
       break;
   }
+  return true;
 }
 
 void mg_tls_handshake(struct mg_connection *c) {
   struct tls_data *tls = (struct tls_data *) c->tls;
   long n;
+  bool res;
   if (c->is_client) {
     // will clear is_hs when sending last chunk
-    mg_tls_client_handshake(c);
+    res = mg_tls_client_handshake(c);
   } else {
-    mg_tls_server_handshake(c);
+    res = mg_tls_server_handshake(c);
+  }
+  if (!res) {
+    mg_error(c, "TLS OOM");
+    return;
   }
   while (tls->send.len > 0 &&
          (n = mg_io_send(c, tls->send.buf, tls->send.len)) > 0) {
@@ -1778,8 +1779,10 @@ long mg_tls_send(struct mg_connection *c, const void *buf, size_t len) {
   if (!was_throttled) {                      // encrypt new data
     if (len > MG_IO_SIZE) len = MG_IO_SIZE;
     if (len > 16384) len = 16384;
-    mg_tls_encrypt(c, (const uint8_t *) buf, len, MG_TLS_APP_DATA);
-  }  // else, resend outstanding encrypted data in tls->send
+    if (!mg_tls_encrypt(c, (const uint8_t *) buf, len, MG_TLS_APP_DATA))
+      return 0;  // returning 0 means an OOM condition (iobuf couldn't resize),
+                 // yet this is so far recoverable, let the caller decide
+  } // else, resend outstanding encrypted data in tls->send
   while (tls->send.len > 0 &&
          (n = mg_io_send(c, tls->send.buf, tls->send.len)) > 0) {
     mg_iobuf_del(&tls->send, 0, (size_t) n);

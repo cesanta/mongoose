@@ -1,5 +1,5 @@
-#include "arch.h"
 #include "iobuf.h"
+#include "arch.h"
 #include "log.h"
 #include "util.h"
 
@@ -7,8 +7,8 @@ static size_t roundup(size_t size, size_t align) {
   return align == 0 ? size : (size + align - 1) / align * align;
 }
 
-int mg_iobuf_resize(struct mg_iobuf *io, size_t new_size) {
-  int ok = 1;
+bool mg_iobuf_resize(struct mg_iobuf *io, size_t new_size) {
+  bool ok = true;
   new_size = roundup(new_size, io->align);
   if (new_size == 0) {
     mg_bzero(io->buf, io->size);
@@ -27,14 +27,14 @@ int mg_iobuf_resize(struct mg_iobuf *io, size_t new_size) {
       io->size = new_size;
       io->len = len;
     } else {
-      ok = 0;
+      ok = false;
       MG_ERROR(("%lld->%lld", (uint64_t) io->size, (uint64_t) new_size));
     }
   }
   return ok;
 }
 
-int mg_iobuf_init(struct mg_iobuf *io, size_t size, size_t align) {
+bool mg_iobuf_init(struct mg_iobuf *io, size_t size, size_t align) {
   io->buf = NULL;
   io->align = align;
   io->size = io->len = 0;

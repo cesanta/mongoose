@@ -1793,14 +1793,14 @@ int mg_http_parse(const char *s, size_t len, struct mg_http_message *hm) {
 static void mg_http_vprintf_chunk(struct mg_connection *c, const char *fmt,
                                   va_list *ap) {
   size_t len = c->send.len;
-  mg_send(c, "        \r\n", 10);
+  if (!mg_send(c, "        \r\n", 10)) mg_error(c, "OOM");
   mg_vxprintf(mg_pfn_iobuf, &c->send, fmt, ap);
   if (c->send.len >= len + 10) {
     mg_snprintf((char *) c->send.buf + len, 9, "%08lx", c->send.len - len - 10);
     c->send.buf[len + 8] = '\r';
     if (c->send.len == len + 10) c->is_resp = 0;  // Last chunk, reset marker
   }
-  mg_send(c, "\r\n", 2);
+  if (!mg_send(c, "\r\n", 2)) mg_error(c, "OOM");
 }
 
 void mg_http_printf_chunk(struct mg_connection *c, const char *fmt, ...) {
@@ -1812,8 +1812,7 @@ void mg_http_printf_chunk(struct mg_connection *c, const char *fmt, ...) {
 
 void mg_http_write_chunk(struct mg_connection *c, const char *buf, size_t len) {
   mg_printf(c, "%lx\r\n", (unsigned long) len);
-  mg_send(c, buf, len);
-  mg_send(c, "\r\n", 2);
+  if (!mg_send(c, buf, len) || !mg_send(c, "\r\n", 2)) mg_error(c, "OOM");
   if (len == 0) c->is_resp = 0;
 }
 
@@ -2590,8 +2589,8 @@ static size_t roundup(size_t size, size_t align) {
   return align == 0 ? size : (size + align - 1) / align * align;
 }
 
-int mg_iobuf_resize(struct mg_iobuf *io, size_t new_size) {
-  int ok = 1;
+bool mg_iobuf_resize(struct mg_iobuf *io, size_t new_size) {
+  bool ok = true;
   new_size = roundup(new_size, io->align);
   if (new_size == 0) {
     mg_bzero(io->buf, io->size);
@@ -2610,14 +2609,14 @@ int mg_iobuf_resize(struct mg_iobuf *io, size_t new_size) {
       io->size = new_size;
       io->len = len;
     } else {
-      ok = 0;
+      ok = false;
       MG_ERROR(("%lld->%lld", (uint64_t) io->size, (uint64_t) new_size));
     }
   }
   return ok;
 }
 
-int mg_iobuf_init(struct mg_iobuf *io, size_t size, size_t align) {
+bool mg_iobuf_init(struct mg_iobuf *io, size_t size, size_t align) {
   io->buf = NULL;
   io->align = align;
   io->size = io->len = 0;
@@ -3353,8 +3352,8 @@ static const struct mg_mqtt_pmap s_prop_map[] = {
     {MQTT_PROP_SUBSCRIPTION_IDENTIFIER_AVAILABLE, MQTT_PROP_TYPE_BYTE},
     {MQTT_PROP_SHARED_SUBSCRIPTION_AVAILABLE, MQTT_PROP_TYPE_BYTE}};
 
-void mg_mqtt_send_header(struct mg_connection *c, uint8_t cmd, uint8_t flags,
-                         uint32_t len) {
+static bool mqtt_send_header(struct mg_connection *c, uint8_t cmd,
+                             uint8_t flags, uint32_t len) {
   uint8_t buf[1 + sizeof(len)], *vlen = &buf[1];
   buf[0] = (uint8_t) ((cmd << 4) | flags);
   do {
@@ -3363,15 +3362,20 @@ void mg_mqtt_send_header(struct mg_connection *c, uint8_t cmd, uint8_t flags,
     if (len > 0) *vlen |= 0x80;
     vlen++;
   } while (len > 0 && vlen < &buf[sizeof(buf)]);
-  mg_send(c, buf, (size_t) (vlen - buf));
+  return mg_send(c, buf, (size_t) (vlen - buf));
 }
 
-static void mg_send_u16(struct mg_connection *c, uint16_t value) {
-  mg_send(c, &value, sizeof(value));
+void mg_mqtt_send_header(struct mg_connection *c, uint8_t cmd, uint8_t flags,
+                         uint32_t len) {
+  if (!mqtt_send_header(c, cmd, flags, len)) mg_error(c, "OOM");
 }
 
-static void mg_send_u32(struct mg_connection *c, uint32_t value) {
-  mg_send(c, &value, sizeof(value));
+static bool mg_send_u16(struct mg_connection *c, uint16_t value) {
+  return mg_send(c, &value, sizeof(value));
+}
+
+static bool mg_send_u32(struct mg_connection *c, uint32_t value) {
+  return mg_send(c, &value, sizeof(value));
 }
 
 static uint8_t varint_size(size_t length) {
@@ -3464,46 +3468,50 @@ static size_t get_props_size(struct mg_mqtt_prop *props, size_t count) {
   return size;
 }
 
-static void mg_send_mqtt_properties(struct mg_connection *c,
+static bool mg_send_mqtt_properties(struct mg_connection *c,
                                     struct mg_mqtt_prop *props, size_t nprops) {
   size_t total_size = get_properties_length(props, nprops);
   uint8_t buf_v[4] = {0, 0, 0, 0};
   uint8_t buf[4] = {0, 0, 0, 0};
   size_t i, len = encode_varint(buf, total_size);
 
-  mg_send(c, buf, (size_t) len);
+  if (!mg_send(c, buf, (size_t) len)) return false;
   for (i = 0; i < nprops; i++) {
-    mg_send(c, &props[i].id, sizeof(props[i].id));
+    if (!mg_send(c, &props[i].id, sizeof(props[i].id))) return false;
     switch (mqtt_prop_type_by_id(props[i].id)) {
       case MQTT_PROP_TYPE_STRING_PAIR:
-        mg_send_u16(c, mg_htons((uint16_t) props[i].key.len));
-        mg_send(c, props[i].key.buf, props[i].key.len);
-        mg_send_u16(c, mg_htons((uint16_t) props[i].val.len));
-        mg_send(c, props[i].val.buf, props[i].val.len);
+        if (!mg_send_u16(c, mg_htons((uint16_t) props[i].key.len)) ||
+            !mg_send(c, props[i].key.buf, props[i].key.len) ||
+            !mg_send_u16(c, mg_htons((uint16_t) props[i].val.len)) ||
+            !mg_send(c, props[i].val.buf, props[i].val.len))
+          return false;
         break;
       case MQTT_PROP_TYPE_BYTE:
-        mg_send(c, &props[i].iv, sizeof(uint8_t));
+        if (!mg_send(c, &props[i].iv, sizeof(uint8_t))) return false;
         break;
       case MQTT_PROP_TYPE_SHORT:
-        mg_send_u16(c, mg_htons((uint16_t) props[i].iv));
+        if (!mg_send_u16(c, mg_htons((uint16_t) props[i].iv))) return false;
         break;
       case MQTT_PROP_TYPE_INT:
-        mg_send_u32(c, mg_htonl((uint32_t) props[i].iv));
+        if (!mg_send_u32(c, mg_htonl((uint32_t) props[i].iv))) return false;
         break;
       case MQTT_PROP_TYPE_STRING:
-        mg_send_u16(c, mg_htons((uint16_t) props[i].val.len));
-        mg_send(c, props[i].val.buf, props[i].val.len);
+        if (!mg_send_u16(c, mg_htons((uint16_t) props[i].val.len)) ||
+            !mg_send(c, props[i].val.buf, props[i].val.len))
+          return false;
         break;
       case MQTT_PROP_TYPE_BINARY_DATA:
-        mg_send_u16(c, mg_htons((uint16_t) props[i].val.len));
-        mg_send(c, props[i].val.buf, props[i].val.len);
+        if (!mg_send_u16(c, mg_htons((uint16_t) props[i].val.len)) ||
+            !mg_send(c, props[i].val.buf, props[i].val.len))
+          return false;
         break;
       case MQTT_PROP_TYPE_VARIABLE_INT:
         len = encode_varint(buf_v, props[i].iv);
-        mg_send(c, buf_v, (size_t) len);
+        if (!mg_send(c, buf_v, (size_t) len)) return false;
         break;
     }
   }
+  return true;
 }
 
 size_t mg_mqtt_next_prop(struct mg_mqtt_message *msg, struct mg_mqtt_prop *prop,
@@ -3596,33 +3604,41 @@ void mg_mqtt_login(struct mg_connection *c, const struct mg_mqtt_opts *opts) {
       total_len += get_props_size(opts->will_props, opts->num_will_props);
   }
 
-  mg_mqtt_send_header(c, MQTT_CMD_CONNECT, 0, (uint32_t) total_len);
-  mg_send(c, hdr, sizeof(hdr));
   // keepalive == 0 means "do not disconnect us!"
-  mg_send_u16(c, mg_htons((uint16_t) opts->keepalive));
+  if (!mqtt_send_header(c, MQTT_CMD_CONNECT, 0, (uint32_t) total_len) ||
+      !mg_send(c, hdr, sizeof(hdr)) ||
+      !mg_send_u16(c, mg_htons((uint16_t) opts->keepalive)))
+    goto fail;
 
-  if (c->is_mqtt5) mg_send_mqtt_properties(c, opts->props, opts->num_props);
+  if (c->is_mqtt5 && !mg_send_mqtt_properties(c, opts->props, opts->num_props))
+    goto fail;
 
-  mg_send_u16(c, mg_htons((uint16_t) cid.len));
-  mg_send(c, cid.buf, cid.len);
+  if (!mg_send_u16(c, mg_htons((uint16_t) cid.len)) ||
+      !mg_send(c, cid.buf, cid.len))
+    goto fail;
 
   if (hdr[7] & MQTT_HAS_WILL) {
-    if (c->is_mqtt5)
-      mg_send_mqtt_properties(c, opts->will_props, opts->num_will_props);
+    if (c->is_mqtt5 &&
+        !mg_send_mqtt_properties(c, opts->will_props, opts->num_will_props))
+      goto fail;
 
-    mg_send_u16(c, mg_htons((uint16_t) opts->topic.len));
-    mg_send(c, opts->topic.buf, opts->topic.len);
-    mg_send_u16(c, mg_htons((uint16_t) opts->message.len));
-    mg_send(c, opts->message.buf, opts->message.len);
+    if (!mg_send_u16(c, mg_htons((uint16_t) opts->topic.len)) ||
+        !mg_send(c, opts->topic.buf, opts->topic.len) ||
+        !mg_send_u16(c, mg_htons((uint16_t) opts->message.len)) ||
+        !mg_send(c, opts->message.buf, opts->message.len))
+      goto fail;
   }
-  if (opts->user.len > 0) {
-    mg_send_u16(c, mg_htons((uint16_t) opts->user.len));
-    mg_send(c, opts->user.buf, opts->user.len);
-  }
-  if (opts->pass.len > 0) {
-    mg_send_u16(c, mg_htons((uint16_t) opts->pass.len));
-    mg_send(c, opts->pass.buf, opts->pass.len);
-  }
+  if (opts->user.len > 0 &&
+      (!mg_send_u16(c, mg_htons((uint16_t) opts->user.len)) ||
+       !mg_send(c, opts->user.buf, opts->user.len)))
+    goto fail;
+  if (opts->pass.len > 0 &&
+      (!mg_send_u16(c, mg_htons((uint16_t) opts->pass.len)) ||
+       !mg_send(c, opts->pass.buf, opts->pass.len)))
+    goto fail;
+  return;
+fail:
+  mg_error(c, "OOM");
 }
 
 uint16_t mg_mqtt_pub(struct mg_connection *c, const struct mg_mqtt_opts *opts) {
@@ -3637,20 +3653,28 @@ uint16_t mg_mqtt_pub(struct mg_connection *c, const struct mg_mqtt_opts *opts) {
   if (c->is_mqtt5) len += get_props_size(opts->props, opts->num_props);
 
   if (opts->qos > 0 && id != 0) flags |= 1 << 3;
-  mg_mqtt_send_header(c, MQTT_CMD_PUBLISH, flags, (uint32_t) len);
-  mg_send_u16(c, mg_htons((uint16_t) opts->topic.len));
-  mg_send(c, opts->topic.buf, opts->topic.len);
+  if (!mqtt_send_header(c, MQTT_CMD_PUBLISH, flags, (uint32_t) len) ||
+      !mg_send_u16(c, mg_htons((uint16_t) opts->topic.len)) ||
+      !mg_send(c, opts->topic.buf, opts->topic.len))
+    goto fail;
   if (opts->qos > 0) {  // need to send 'id' field
     if (id == 0) {      // generate new one if not resending
       if (++c->mgr->mqtt_id == 0) ++c->mgr->mqtt_id;
       id = c->mgr->mqtt_id;
     }
-    mg_send_u16(c, mg_htons(id));
+    if (!mg_send_u16(c, mg_htons(id))) goto fail;
   }
 
-  if (c->is_mqtt5) mg_send_mqtt_properties(c, opts->props, opts->num_props);
+  if (c->is_mqtt5 && !mg_send_mqtt_properties(c, opts->props, opts->num_props))
+    goto fail;
 
-  if (opts->message.len > 0) mg_send(c, opts->message.buf, opts->message.len);
+  if (opts->message.len > 0 &&
+      !mg_send(c, opts->message.buf, opts->message.len))
+    goto fail;
+  return id;
+
+fail:
+  mg_error(c, "OOM");
   return id;
 }
 
@@ -3659,14 +3683,20 @@ void mg_mqtt_sub(struct mg_connection *c, const struct mg_mqtt_opts *opts) {
   size_t plen = c->is_mqtt5 ? get_props_size(opts->props, opts->num_props) : 0;
   size_t len = 2 + opts->topic.len + 2 + 1 + plen;
 
-  mg_mqtt_send_header(c, MQTT_CMD_SUBSCRIBE, 2, (uint32_t) len);
+  if (!mqtt_send_header(c, MQTT_CMD_SUBSCRIBE, 2, (uint32_t) len)) goto fail;
   if (++c->mgr->mqtt_id == 0) ++c->mgr->mqtt_id;
-  mg_send_u16(c, mg_htons(c->mgr->mqtt_id));
-  if (c->is_mqtt5) mg_send_mqtt_properties(c, opts->props, opts->num_props);
+  if (!mg_send_u16(c, mg_htons(c->mgr->mqtt_id))) goto fail;
 
-  mg_send_u16(c, mg_htons((uint16_t) opts->topic.len));
-  mg_send(c, opts->topic.buf, opts->topic.len);
-  mg_send(c, &qos_, sizeof(qos_));
+  if (c->is_mqtt5 && !mg_send_mqtt_properties(c, opts->props, opts->num_props))
+    goto fail;
+
+  if (!mg_send_u16(c, mg_htons((uint16_t) opts->topic.len)) ||
+      !mg_send(c, opts->topic.buf, opts->topic.len) ||
+      !mg_send(c, &qos_, sizeof(qos_)))
+    goto fail;
+  return;
+fail:
+  mg_error(c, "OOM");
 }
 
 int mg_mqtt_parse(const uint8_t *buf, size_t len, uint8_t version,
@@ -3773,15 +3803,16 @@ static void mqtt_cb(struct mg_connection *c, int ev, void *ev_data) {
               uint32_t remaining_len = sizeof(id);
               if (c->is_mqtt5) remaining_len += 2;  // 3.4.2
 
-              mg_mqtt_send_header(
-                  c,
-                  (uint8_t) (mm.qos == 2 ? MQTT_CMD_PUBREC : MQTT_CMD_PUBACK),
-                  0, remaining_len);
-              mg_send(c, &id, sizeof(id));
+              if (!mqtt_send_header(c,
+                                    (uint8_t) (mm.qos == 2 ? MQTT_CMD_PUBREC
+                                                           : MQTT_CMD_PUBACK),
+                                    0, remaining_len) ||
+                  !mg_send(c, &id, sizeof(id)))
+                goto fail;
 
               if (c->is_mqtt5) {
                 uint16_t zero = 0;
-                mg_send(c, &zero, sizeof(zero));
+                if (!mg_send(c, &zero, sizeof(zero))) goto fail;
               }
             }
             mg_call(c, MG_EV_MQTT_MSG, &mm);  // let the app handle qos stuff
@@ -3790,15 +3821,18 @@ static void mqtt_cb(struct mg_connection *c, int ev, void *ev_data) {
           case MQTT_CMD_PUBREC: {  // MQTT5: 3.5.2-1 TODO(): variable header rc
             uint16_t id = mg_ntohs(mm.id);
             uint32_t remaining_len = sizeof(id);  // MQTT5 3.6.2-1
-            mg_mqtt_send_header(c, MQTT_CMD_PUBREL, 2, remaining_len);
-            mg_send(c, &id, sizeof(id));  // MQTT5 3.6.1-1, flags = 2
+            if (!mqtt_send_header(c, MQTT_CMD_PUBREL, 2,
+                                  remaining_len)  // MQTT5 3.6.1-1, flags = 2
+                || !mg_send(c, &id, sizeof(id)))
+              goto fail;
             break;
           }
           case MQTT_CMD_PUBREL: {  // MQTT5: 3.6.2-1 TODO(): variable header rc
             uint16_t id = mg_ntohs(mm.id);
             uint32_t remaining_len = sizeof(id);  // MQTT5 3.7.2-1
-            mg_mqtt_send_header(c, MQTT_CMD_PUBCOMP, 0, remaining_len);
-            mg_send(c, &id, sizeof(id));
+            if (!mqtt_send_header(c, MQTT_CMD_PUBCOMP, 0, remaining_len) ||
+                !mg_send(c, &id, sizeof(id)))
+              goto fail;
             break;
           }
         }
@@ -3810,6 +3844,9 @@ static void mqtt_cb(struct mg_connection *c, int ev, void *ev_data) {
     }
   }
   (void) ev_data;
+  return;
+fail:
+  mg_error(c, "OOM");
 }
 
 void mg_mqtt_ping(struct mg_connection *nc) {
@@ -3824,19 +3861,24 @@ void mg_mqtt_disconnect(struct mg_connection *c,
                         const struct mg_mqtt_opts *opts) {
   size_t len = 0;
   if (c->is_mqtt5) len = 1 + get_props_size(opts->props, opts->num_props);
-  mg_mqtt_send_header(c, MQTT_CMD_DISCONNECT, 0, (uint32_t) len);
+  if (!mqtt_send_header(c, MQTT_CMD_DISCONNECT, 0, (uint32_t) len)) goto fail;
 
   if (c->is_mqtt5) {
     uint8_t zero = 0;
-    mg_send(c, &zero, sizeof(zero));  // reason code
-    mg_send_mqtt_properties(c, opts->props, opts->num_props);
+    if (!mg_send(c, &zero, sizeof(zero))  // reason code
+        || !mg_send_mqtt_properties(c, opts->props, opts->num_props))
+      goto fail;
   }
+  return;
+fail:
+  mg_error(c, "OOM");
 }
 
 struct mg_connection *mg_mqtt_connect(struct mg_mgr *mgr, const char *url,
                                       const struct mg_mqtt_opts *opts,
                                       mg_event_handler_t fn, void *fn_data) {
-  struct mg_connection *c = mg_connect_svc(mgr, url, fn, fn_data, mqtt_cb, NULL);
+  struct mg_connection *c =
+      mg_connect_svc(mgr, url, fn, fn_data, mqtt_cb, NULL);
   if (c != NULL) {
     struct mg_mqtt_opts empty;
     memset(&empty, 0, sizeof(empty));
@@ -6088,6 +6130,7 @@ bool mg_open_listener(struct mg_connection *c, const char *url) {
 static void write_conn(struct mg_connection *c) {
   long len = c->is_tls ? mg_tls_send(c, c->send.buf, c->send.len)
                        : mg_io_send(c, c->send.buf, c->send.len);
+  // TODO(): mg_tls_send() may return 0 forever on steady OOM
   if (len == MG_IO_ERR) {
     mg_error(c, "tx err");
   } else if (len > 0) {
@@ -6167,7 +6210,9 @@ bool mg_send(struct mg_connection *c, const void *buf, size_t len) {
     len = trim_len(c, len);  // Trimming length if necessary
     res = tx_udp(ifp, s->mac, &c->loc, &c->rem, buf, len);
   } else {
-    res = mg_iobuf_add(&c->send, c->send.len, buf, len);
+    res = (bool) mg_iobuf_add(&c->send, c->send.len, buf, len);
+    // res == 0 means an OOM condition (iobuf couldn't resize), yet this is so
+    // far recoverable, let the caller decide
   }
   return res;
 }
@@ -9522,7 +9567,9 @@ bool mg_send(struct mg_connection *c, const void *buf, size_t len) {
     iolog(c, (char *) buf, n, false);
     return n > 0;
   } else {
-    return mg_iobuf_add(&c->send, c->send.len, buf, len);
+    return (bool) mg_iobuf_add(&c->send, c->send.len, buf, len);
+    // returning 0 means an OOM condition (iobuf couldn't resize), yet this is
+    // so far recoverable, let the caller decide
   }
 }
 
@@ -9544,7 +9591,7 @@ static void mg_set_non_blocking_mode(MG_SOCKET_TYPE fd) {
 #elif MG_ARCH == MG_ARCH_THREADX
   // NetxDuo fails to send large blocks of data to the non-blocking sockets
   (void) fd;
-  //fcntl(fd, F_SETFL, O_NONBLOCK);
+  // fcntl(fd, F_SETFL, O_NONBLOCK);
 #elif MG_ARCH == MG_ARCH_TIRTOS
   int val = 0;
   setsockopt(fd, SOL_SOCKET, SO_BLOCKING, &val, sizeof(val));
@@ -9576,9 +9623,10 @@ void mg_multicast_add(struct mg_connection *c, char *ip) {
   struct ip_mreq mreq;
   mreq.imr_multiaddr.s_addr = inet_addr(ip);
   mreq.imr_interface.s_addr = mg_htonl(INADDR_ANY);
-  setsockopt(FD(c), IPPROTO_IP, IP_ADD_MEMBERSHIP, (char *) &mreq, sizeof(mreq));
-#endif // !Zephyr
-#endif // !lwIP
+  setsockopt(FD(c), IPPROTO_IP, IP_ADD_MEMBERSHIP, (char *) &mreq,
+             sizeof(mreq));
+#endif  // !Zephyr
+#endif  // !lwIP
 #endif
 }
 
@@ -9696,9 +9744,9 @@ static void read_conn(struct mg_connection *c) {
       if (n == MG_IO_ERR || n == MG_IO_RESET) {  // Windows, see #3031
         if (c->rtls.len == 0 || m < 0) {
           // Close only when we have fully drained both rtls and TLS buffers
-          c->is_closing = 1;  // or there's nothing we can do about it.
-          if (m < 0) m = MG_IO_ERR; // but return last record data, see #3104
-        } else { // see #2885
+          c->is_closing = 1;         // or there's nothing we can do about it.
+          if (m < 0) m = MG_IO_ERR;  // but return last record data, see #3104
+        } else {                     // see #2885
           // TLS buffer is capped to max record size, even though, there can
           // be more than one record, give TLS a chance to process them.
         }
@@ -9719,6 +9767,7 @@ static void write_conn(struct mg_connection *c) {
   char *buf = (char *) c->send.buf;
   size_t len = c->send.len;
   long n = c->is_tls ? mg_tls_send(c, buf, len) : mg_io_send(c, buf, len);
+  // TODO(): mg_tls_send() may return 0 forever on steady OOM
   MG_DEBUG(("%lu %ld snd %ld/%ld rcv %ld/%ld n=%ld err=%d", c->id, c->fd,
             (long) c->send.len, (long) c->send.size, (long) c->recv.len,
             (long) c->recv.size, n, MG_SOCK_ERR(n)));
@@ -9748,7 +9797,7 @@ static void connect_conn(struct mg_connection *c) {
     mg_call(c, MG_EV_CONNECT, NULL);
     MG_EPOLL_MOD(c, 0);
     if (c->is_tls_hs) mg_tls_handshake(c);
-    if (!c->is_tls_hs) c->is_tls = 0; // user did not call mg_tls_init()
+    if (!c->is_tls_hs) c->is_tls = 0;  // user did not call mg_tls_init()
   } else {
     mg_error(c, "socket error");
   }
@@ -9800,9 +9849,9 @@ void mg_connect_resolved(struct mg_connection *c) {
     rc = connect(FD(c), &usa.sa, slen);  // Attempt to connect
     if (rc == 0) {                       // Success
       setlocaddr(FD(c), &c->loc);
-      mg_call(c, MG_EV_CONNECT, NULL);  // Send MG_EV_CONNECT to the user
-      if (!c->is_tls_hs) c->is_tls = 0; // user did not call mg_tls_init()
-    } else if (MG_SOCK_PENDING(rc)) {   // Need to wait for TCP handshake
+      mg_call(c, MG_EV_CONNECT, NULL);   // Send MG_EV_CONNECT to the user
+      if (!c->is_tls_hs) c->is_tls = 0;  // user did not call mg_tls_init()
+    } else if (MG_SOCK_PENDING(rc)) {    // Need to wait for TCP handshake
       MG_DEBUG(("%lu %ld -> %M pend", c->id, c->fd, mg_print_ip_port, &c->rem));
       c->is_connecting = 1;
     } else {
@@ -9862,7 +9911,7 @@ static void accept_conn(struct mg_mgr *mgr, struct mg_connection *lsn) {
               &c->rem, mg_print_ip_port, &c->loc));
     mg_call(c, MG_EV_OPEN, NULL);
     mg_call(c, MG_EV_ACCEPT, NULL);
-    if (!c->is_tls_hs) c->is_tls = 0; // user did not call mg_tls_init()
+    if (!c->is_tls_hs) c->is_tls = 0;  // user did not call mg_tls_init()
   }
 }
 
@@ -10178,31 +10227,35 @@ static char *mg_ssi(const char *path, const char *root, int depth) {
           mg_snprintf(tmp, sizeof(tmp), "%.*s%s", (int) (p - path), path, arg);
           if (depth < MG_MAX_SSI_DEPTH &&
               (data = mg_ssi(tmp, root, depth + 1)) != NULL) {
-            mg_iobuf_add(&b, b.len, data, strlen(data));
+            size_t datalen = strlen(data);
+            size_t ret = mg_iobuf_add(&b, b.len, data, datalen);
             mg_free(data);
+            if (datalen > 0 && ret == 0) goto fail;
           } else {
             MG_ERROR(("%s: file=%s error or too deep", path, arg));
-          }
+          } // TODO(): or OOM at recursive call
         } else if (sscanf(buf, "<!--#include virtual=\"%[^\"]", arg) > 0) {
           char tmp[MG_PATH_MAX + MG_SSI_BUFSIZ + 10], *data;
           mg_snprintf(tmp, sizeof(tmp), "%s%s", root, arg);
           if (depth < MG_MAX_SSI_DEPTH &&
               (data = mg_ssi(tmp, root, depth + 1)) != NULL) {
-            mg_iobuf_add(&b, b.len, data, strlen(data));
+            size_t datalen = strlen(data);
+            size_t ret = mg_iobuf_add(&b, b.len, data, datalen);
             mg_free(data);
+            if (datalen > 0 && ret == 0) goto fail;
           } else {
             MG_ERROR(("%s: virtual=%s error or too deep", path, arg));
-          }
+          } // TODO(): or OOM at recursive call
         } else {
           // Unknown SSI tag
           MG_ERROR(("Unknown SSI tag: %.*s", (int) len, buf));
-          mg_iobuf_add(&b, b.len, buf, len);
+          if (len > 0 && mg_iobuf_add(&b, b.len, buf, len) == 0) goto fail;
         }
         intag = 0;
         len = 0;
       } else if (ch == '<') {
         intag = 1;
-        if (len > 0) mg_iobuf_add(&b, b.len, buf, len);
+        if (len > 0 && mg_iobuf_add(&b, b.len, buf, len) == 0) goto fail;
         len = 0;
         buf[len++] = (char) (ch & 0xff);
       } else if (intag) {
@@ -10216,24 +10269,33 @@ static char *mg_ssi(const char *path, const char *root, int depth) {
       } else {
         buf[len++] = (char) (ch & 0xff);
         if (len >= sizeof(buf)) {
-          mg_iobuf_add(&b, b.len, buf, len);
+          if (mg_iobuf_add(&b, b.len, buf, len) == 0) goto fail;
           len = 0;
         }
       }
     }
-    if (len > 0) mg_iobuf_add(&b, b.len, buf, len);
-    if (b.len > 0) mg_iobuf_add(&b, b.len, "", 1);  // nul-terminate
+    if (len > 0 && mg_iobuf_add(&b, b.len, buf, len) == 0) goto fail;
+    if (b.len > 0 && mg_iobuf_add(&b, b.len, "", 1) == 0)  // nul-terminate
+      goto fail;
     fclose(fp);
   }
   (void) depth;
   (void) root;
   return (char *) b.buf;
+
+fail:
+  fclose(fp);
+  return NULL;
 }
 
 void mg_http_serve_ssi(struct mg_connection *c, const char *root,
                        const char *fullpath) {
   const char *headers = "Content-Type: text/html; charset=utf-8\r\n";
   char *data = mg_ssi(fullpath, root, 0);
+  if (data == NULL) {
+    mg_error(c, "OOM");
+    return;
+  }
   mg_http_reply(c, 200, headers, "%s", data == NULL ? "" : data);
   mg_free(data);
 }
@@ -12015,7 +12077,7 @@ static void mg_tls_generate_application_keys(struct mg_connection *c) {
 }
 
 // AES GCM encryption of the message + put encoded data into the write buffer
-static void mg_tls_encrypt(struct mg_connection *c, const uint8_t *msg,
+static bool mg_tls_encrypt(struct mg_connection *c, const uint8_t *msg,
                            size_t msgsz, uint8_t msgtype) {
   struct tls_data *tls = (struct tls_data *) c->tls;
   struct mg_iobuf *wio = &tls->send;
@@ -12046,8 +12108,9 @@ static void mg_tls_encrypt(struct mg_connection *c, const uint8_t *msg,
   nonce[10] ^= (uint8_t) ((seq >> 8) & 255U);
   nonce[11] ^= (uint8_t) ((seq) & 255U);
 
-  mg_iobuf_add(wio, wio->len, hdr, sizeof(hdr));
-  mg_iobuf_resize(wio, wio->len + encsz);
+  if (mg_iobuf_add(wio, wio->len, hdr, sizeof(hdr)) == 0 ||
+      !mg_iobuf_resize(wio, wio->len + encsz))
+    return false;
   outmsg = wio->buf + wio->len;
   tag = wio->buf + wio->len + msgsz + 1;
   memmove(outmsg, msg, msgsz);
@@ -12056,17 +12119,14 @@ static void mg_tls_encrypt(struct mg_connection *c, const uint8_t *msg,
   (void) tag;  // tag is only used in aes gcm
   {
     size_t maxlen = MG_IO_SIZE > 16384 ? 16384 : MG_IO_SIZE;
+    size_t n;
     uint8_t *enc = (uint8_t *) mg_calloc(1, maxlen + 256 + 1);
-    if (enc == NULL) {
-      mg_error(c, "TLS OOM");
-      return;
-    } else {
-      size_t n = mg_chacha20_poly1305_encrypt(enc, key, nonce, associated_data,
-                                              sizeof(associated_data), outmsg,
-                                              msgsz + 1);
-      memmove(outmsg, enc, n);
-      mg_free(enc);
-    }
+    if (enc == NULL) return false;
+    n = mg_chacha20_poly1305_encrypt(enc, key, nonce, associated_data,
+                                     sizeof(associated_data), outmsg,
+                                     msgsz + 1);
+    memmove(outmsg, enc, n);
+    mg_free(enc);
   }
 #else
   mg_aes_gcm_encrypt(outmsg, outmsg, msgsz + 1, key, 16, nonce, sizeof(nonce),
@@ -12074,6 +12134,7 @@ static void mg_tls_encrypt(struct mg_connection *c, const uint8_t *msg,
 #endif
   c->is_client ? tls->enc.cseq++ : tls->enc.sseq++;
   wio->len += encsz;
+  return true;
 }
 
 // read an encrypted record, decrypt it in place
@@ -12249,7 +12310,7 @@ fail:
 #define PLACEHOLDER_32B PLACEHOLDER_16B, PLACEHOLDER_16B
 
 // put ServerHello record into wio buffer
-static void mg_tls_server_send_hello(struct mg_connection *c) {
+static bool mg_tls_server_send_hello(struct mg_connection *c) {
   struct tls_data *tls = (struct tls_data *) c->tls;
   struct mg_iobuf *wio = &tls->send;
 
@@ -12290,20 +12351,24 @@ static void mg_tls_server_send_hello(struct mg_connection *c) {
   memmove(msg_server_hello + 84, x25519_pub, sizeof(x25519_pub));
 
   // server hello message
-  mg_iobuf_add(wio, wio->len, "\x16\x03\x03\x00\x7a", 5);
-  mg_iobuf_add(wio, wio->len, msg_server_hello, sizeof(msg_server_hello));
+  if (mg_iobuf_add(wio, wio->len, "\x16\x03\x03\x00\x7a", 5) == 0 ||
+      mg_iobuf_add(wio, wio->len, msg_server_hello, sizeof(msg_server_hello)) ==
+          0)
+    return false;
   mg_sha256_update(&tls->sha256, msg_server_hello, sizeof(msg_server_hello));
 
   // change cipher message
-  mg_iobuf_add(wio, wio->len, "\x14\x03\x03\x00\x01\x01", 6);
+  if (mg_iobuf_add(wio, wio->len, "\x14\x03\x03\x00\x01\x01", 6) == 0)
+    return false;
+  return true;
 }
 
-static void mg_tls_server_send_ext(struct mg_connection *c) {
+static bool mg_tls_server_send_ext(struct mg_connection *c) {
   struct tls_data *tls = (struct tls_data *) c->tls;
   // server extensions
   uint8_t ext[6] = {0x08, 0, 0, 2, 0, 0};
   mg_sha256_update(&tls->sha256, ext, sizeof(ext));
-  mg_tls_encrypt(c, ext, sizeof(ext), MG_TLS_HANDSHAKE);
+  return mg_tls_encrypt(c, ext, sizeof(ext), MG_TLS_HANDSHAKE);
 }
 
 // signature algorithms we actually support:
@@ -12312,13 +12377,11 @@ static const uint8_t secp256r1_sig_algs[12] = {
     0x00, 0x0d, 0x00, 0x08, 0x00, 0x06, 0x04, 0x03, 0x08, 0x04, 0x04, 0x01
 };
 
-static void mg_tls_server_send_cert_request(struct mg_connection *c) {
+static bool mg_tls_server_send_cert_request(struct mg_connection *c) {
   struct tls_data *tls = (struct tls_data *) c->tls;
   uint8_t *req = (uint8_t *) mg_calloc(1, 13 + sizeof(secp256r1_sig_algs));
-  if (req == NULL) {
-    mg_error(c, "tls cert req oom");
-    return;
-  }
+  bool res;
+  if (req == NULL) return false;
   req[0] = MG_TLS_CERTIFICATE_REQUEST;  // handshake header
   MG_STORE_BE24(req + 1, 9 + sizeof(secp256r1_sig_algs));
   req[4] = 0;                                              // context length
@@ -12330,20 +12393,19 @@ static void mg_tls_server_send_cert_request(struct mg_connection *c) {
       sizeof(secp256r1_sig_algs));  // signature hash algorithms length
   memcpy(req + 13, (uint8_t *) secp256r1_sig_algs, sizeof(secp256r1_sig_algs));
   mg_sha256_update(&tls->sha256, req, 13 + sizeof(secp256r1_sig_algs));
-  mg_tls_encrypt(c, req, 13 + sizeof(secp256r1_sig_algs), MG_TLS_HANDSHAKE);
+  res = mg_tls_encrypt(c, req, 13 + sizeof(secp256r1_sig_algs), MG_TLS_HANDSHAKE);
   mg_free(req);
+  return res;
 }
 
-static void mg_tls_send_cert(struct mg_connection *c, bool is_client) {
+static bool mg_tls_send_cert(struct mg_connection *c, bool is_client) {
   struct tls_data *tls = (struct tls_data *) c->tls;
   int send_ca = !is_client && tls->ca_der.len > 0;
   // DER certificate + CA (server optional)
   size_t n = tls->cert_der.len + (send_ca ? tls->ca_der.len + 5 : 0);
   uint8_t *cert = (uint8_t *) mg_calloc(1, 13 + n);
-  if (cert == NULL) {
-    mg_error(c, "tls cert oom");
-    return;
-  }
+  bool res;
+  if (cert == NULL) return false;
   cert[0] = MG_TLS_CERTIFICATE;  // handshake header
   MG_STORE_BE24(cert + 1, n + 9);
   cert[4] = 0;                                 // request context
@@ -12361,8 +12423,9 @@ static void mg_tls_send_cert(struct mg_connection *c, bool is_client) {
     MG_STORE_BE16(cert + 11 + n, 0);  // certificate extensions (none)
   }
   mg_sha256_update(&tls->sha256, cert, 13 + n);
-  mg_tls_encrypt(c, cert, 13 + n, MG_TLS_HANDSHAKE);
+  res = mg_tls_encrypt(c, cert, 13 + n, MG_TLS_HANDSHAKE);
   mg_free(cert);
+  return res;
 }
 
 // type adapter between uECC hash context and our sha256 implementation
@@ -12387,7 +12450,7 @@ static void finish_SHA256(const MG_UECC_HashContext *base,
   mg_sha256_final(hash_result, &c->ctx);
 }
 
-static void mg_tls_send_cert_verify(struct mg_connection *c, bool is_client) {
+static bool mg_tls_send_cert_verify(struct mg_connection *c, bool is_client) {
   struct tls_data *tls = (struct tls_data *) c->tls;
   // server certificate verify packet
   uint8_t verify[82] = {0x0f, 0x00, 0x00, 0x00, 0x04, 0x03, 0x00, 0x00};
@@ -12421,10 +12484,10 @@ static void mg_tls_send_cert_verify(struct mg_connection *c, bool is_client) {
   verify[7] = (uint8_t) sigsz;
 
   mg_sha256_update(&tls->sha256, verify, verifysz);
-  mg_tls_encrypt(c, verify, verifysz, MG_TLS_HANDSHAKE);
+  return mg_tls_encrypt(c, verify, verifysz, MG_TLS_HANDSHAKE);
 }
 
-static void mg_tls_server_send_finish(struct mg_connection *c) {
+static bool mg_tls_server_send_finish(struct mg_connection *c) {
   struct tls_data *tls = (struct tls_data *) c->tls;
   mg_sha256_ctx sha256;
   uint8_t hash[32];
@@ -12432,8 +12495,10 @@ static void mg_tls_server_send_finish(struct mg_connection *c) {
   memmove(&sha256, &tls->sha256, sizeof(mg_sha256_ctx));
   mg_sha256_final(hash, &sha256);
   mg_hmac_sha256(finish + 4, tls->enc.server_finished_key, 32, hash, 32);
-  mg_tls_encrypt(c, finish, sizeof(finish), MG_TLS_HANDSHAKE);
+  if (!mg_tls_encrypt(c, finish, sizeof(finish), MG_TLS_HANDSHAKE))
+    return false;
   mg_sha256_update(&tls->sha256, finish, sizeof(finish));
+  return true;
 }
 
 static int mg_tls_server_recv_finish(struct mg_connection *c) {
@@ -12458,7 +12523,7 @@ static int mg_tls_server_recv_finish(struct mg_connection *c) {
   return 0;
 }
 
-static void mg_tls_client_send_hello(struct mg_connection *c) {
+static bool mg_tls_client_send_hello(struct mg_connection *c) {
   struct tls_data *tls = (struct tls_data *) c->tls;
   struct mg_iobuf *wio = &tls->send;
 
@@ -12541,20 +12606,27 @@ static void mg_tls_client_send_hello(struct mg_connection *c) {
   memmove(msg_client_hello + 94, x25519_pub, sizeof(x25519_pub));
 
   // client hello message
-  mg_iobuf_add(wio, wio->len, msg_client_hello, sizeof(msg_client_hello));
+  if (mg_iobuf_add(wio, wio->len, msg_client_hello, sizeof(msg_client_hello)) ==
+      0)
+    return false;
   mg_sha256_update(&tls->sha256, msg_client_hello + 5,
                    sizeof(msg_client_hello) - 5);
-  mg_iobuf_add(wio, wio->len, sig_alg, sig_alg_sz);
+  if (mg_iobuf_add(wio, wio->len, sig_alg, sig_alg_sz) == 0) return false;
   mg_sha256_update(&tls->sha256, sig_alg, sig_alg_sz);
   if (hostnamesz > 0) {
-    mg_iobuf_add(wio, wio->len, server_name_ext, sizeof(server_name_ext));
-    mg_iobuf_add(wio, wio->len, hostname, hostnamesz);
+    if (mg_iobuf_add(wio, wio->len, server_name_ext, sizeof(server_name_ext)) ==
+            0 ||
+        mg_iobuf_add(wio, wio->len, hostname, hostnamesz) == 0)
+      return false;
     mg_sha256_update(&tls->sha256, server_name_ext, sizeof(server_name_ext));
     mg_sha256_update(&tls->sha256, (uint8_t *) hostname, hostnamesz);
   }
 
   // change cipher message
-  mg_iobuf_add(wio, wio->len, (const char *) "\x14\x03\x03\x00\x01\x01", 6);
+  if (mg_iobuf_add(wio, wio->len, (const char *) "\x14\x03\x03\x00\x01\x01",
+                   6) == 0)
+    return false;
+  return true;
 }
 
 static int mg_tls_client_recv_hello(struct mg_connection *c) {
@@ -13129,7 +13201,7 @@ static int mg_tls_client_recv_finish(struct mg_connection *c) {
   return 0;
 }
 
-static void mg_tls_client_send_finish(struct mg_connection *c) {
+static bool mg_tls_client_send_finish(struct mg_connection *c) {
   struct tls_data *tls = (struct tls_data *) c->tls;
   mg_sha256_ctx sha256;
   uint8_t hash[32];
@@ -13137,56 +13209,46 @@ static void mg_tls_client_send_finish(struct mg_connection *c) {
   memmove(&sha256, &tls->sha256, sizeof(mg_sha256_ctx));
   mg_sha256_final(hash, &sha256);
   mg_hmac_sha256(finish + 4, tls->enc.client_finished_key, 32, hash, 32);
-  mg_tls_encrypt(c, finish, sizeof(finish), MG_TLS_HANDSHAKE);
+  return mg_tls_encrypt(c, finish, sizeof(finish), MG_TLS_HANDSHAKE);
 }
 
-static void mg_tls_client_handshake(struct mg_connection *c) {
+static bool mg_tls_client_handshake(struct mg_connection *c) {
   struct tls_data *tls = (struct tls_data *) c->tls;
   switch (tls->state) {
     case MG_TLS_STATE_CLIENT_START:
-      mg_tls_client_send_hello(c);
+      if (!mg_tls_client_send_hello(c)) return false;
       tls->state = MG_TLS_STATE_CLIENT_WAIT_SH;
       // Fallthrough
     case MG_TLS_STATE_CLIENT_WAIT_SH:
-      if (mg_tls_client_recv_hello(c) < 0) {
-        break;
-      }
+      if (mg_tls_client_recv_hello(c) < 0) break;
       tls->state = MG_TLS_STATE_CLIENT_WAIT_EE;
       // Fallthrough
     case MG_TLS_STATE_CLIENT_WAIT_EE:
-      if (mg_tls_client_recv_ext(c) < 0) {
-        break;
-      }
+      if (mg_tls_client_recv_ext(c) < 0) break;
       tls->state = MG_TLS_STATE_CLIENT_WAIT_CERT;
       // Fallthrough
     case MG_TLS_STATE_CLIENT_WAIT_CERT:
-      if (mg_tls_recv_cert(c, true) < 0) {
-        break;
-      }
+      if (mg_tls_recv_cert(c, true) < 0) break;
       tls->state = MG_TLS_STATE_CLIENT_WAIT_CV;
       // Fallthrough
     case MG_TLS_STATE_CLIENT_WAIT_CV:
-      if (mg_tls_recv_cert_verify(c) < 0) {
-        break;
-      }
+      if (mg_tls_recv_cert_verify(c) < 0) break;
       tls->state = MG_TLS_STATE_CLIENT_WAIT_FINISH;
       // Fallthrough
     case MG_TLS_STATE_CLIENT_WAIT_FINISH:
-      if (mg_tls_client_recv_finish(c) < 0) {
-        break;
-      }
+      if (mg_tls_client_recv_finish(c) < 0) break;
       if (tls->cert_requested && tls->cert_der.len > 0) {  // two-way auth
         // generate application keys at this point, keep using handshake keys
         struct tls_enc hs_keys = tls->enc;
         mg_tls_generate_application_keys(c);
         tls->app_keys = tls->enc;
         tls->enc = hs_keys;
-        mg_tls_send_cert(c, true);
-        mg_tls_send_cert_verify(c, true);
-        mg_tls_client_send_finish(c);
+        if (!mg_tls_send_cert(c, true) || !mg_tls_send_cert_verify(c, true) ||
+            !mg_tls_client_send_finish(c))
+          return false;
         tls->enc = tls->app_keys;
       } else {
-        mg_tls_client_send_finish(c);
+        if (!mg_tls_client_send_finish(c)) return false;
         mg_tls_generate_application_keys(c);
       }
       tls->state = MG_TLS_STATE_CLIENT_CONNECTED;
@@ -13197,22 +13259,19 @@ static void mg_tls_client_handshake(struct mg_connection *c) {
       mg_error(c, "unexpected client state: %d", tls->state);
       break;
   }
+  return true;
 }
 
-static void mg_tls_server_handshake(struct mg_connection *c) {
+static bool mg_tls_server_handshake(struct mg_connection *c) {
   struct tls_data *tls = (struct tls_data *) c->tls;
   switch (tls->state) {
     case MG_TLS_STATE_SERVER_START:
-      if (mg_tls_server_recv_hello(c) < 0) {
-        return;
-      }
-      mg_tls_server_send_hello(c);
+      if (mg_tls_server_recv_hello(c) < 0) break;
+      if (!mg_tls_server_send_hello(c)) return false;
       mg_tls_generate_handshake_keys(c);
-      mg_tls_server_send_ext(c);
-      if (tls->is_twoway) mg_tls_server_send_cert_request(c);
-      mg_tls_send_cert(c, false);
-      mg_tls_send_cert_verify(c, false);
-      mg_tls_server_send_finish(c);
+      if (!mg_tls_server_send_ext(c)) return false;
+      if (tls->is_twoway && !mg_tls_server_send_cert_request(c)) return false;
+      if (!mg_tls_send_cert(c, false) || !mg_tls_send_cert_verify(c, false) || !mg_tls_server_send_finish(c)) return false;
       if (tls->is_twoway) {
         // generate application keys at this point, keep using handshake keys
         struct tls_enc hs_keys = tls->enc;
@@ -13225,9 +13284,7 @@ static void mg_tls_server_handshake(struct mg_connection *c) {
       tls->state = MG_TLS_STATE_SERVER_NEGOTIATED;
       // fallthrough
     case MG_TLS_STATE_SERVER_NEGOTIATED:
-      if (mg_tls_server_recv_finish(c) < 0) {
-        return;
-      }
+      if (mg_tls_server_recv_finish(c) < 0) break;
       if (tls->is_twoway) {  // use previously generated keys
         tls->enc = tls->app_keys;
       } else {  // generate keys now
@@ -13235,7 +13292,7 @@ static void mg_tls_server_handshake(struct mg_connection *c) {
       }
       tls->state = MG_TLS_STATE_SERVER_CONNECTED;
       c->is_tls_hs = 0;
-      return;
+      break;
     case MG_TLS_STATE_SERVER_WAIT_CERT:
       if (mg_tls_recv_cert(c, false) < 0) break;
       tls->state = MG_TLS_STATE_SERVER_WAIT_CV;
@@ -13248,16 +13305,22 @@ static void mg_tls_server_handshake(struct mg_connection *c) {
       mg_error(c, "unexpected server state: %d", tls->state);
       break;
   }
+  return true;
 }
 
 void mg_tls_handshake(struct mg_connection *c) {
   struct tls_data *tls = (struct tls_data *) c->tls;
   long n;
+  bool res;
   if (c->is_client) {
     // will clear is_hs when sending last chunk
-    mg_tls_client_handshake(c);
+    res = mg_tls_client_handshake(c);
   } else {
-    mg_tls_server_handshake(c);
+    res = mg_tls_server_handshake(c);
+  }
+  if (!res) {
+    mg_error(c, "TLS OOM");
+    return;
   }
   while (tls->send.len > 0 &&
          (n = mg_io_send(c, tls->send.buf, tls->send.len)) > 0) {
@@ -13394,8 +13457,10 @@ long mg_tls_send(struct mg_connection *c, const void *buf, size_t len) {
   if (!was_throttled) {                      // encrypt new data
     if (len > MG_IO_SIZE) len = MG_IO_SIZE;
     if (len > 16384) len = 16384;
-    mg_tls_encrypt(c, (const uint8_t *) buf, len, MG_TLS_APP_DATA);
-  }  // else, resend outstanding encrypted data in tls->send
+    if (!mg_tls_encrypt(c, (const uint8_t *) buf, len, MG_TLS_APP_DATA))
+      return 0;  // returning 0 means an OOM condition (iobuf couldn't resize),
+                 // yet this is so far recoverable, let the caller decide
+  } // else, resend outstanding encrypted data in tls->send
   while (tls->send.len > 0 &&
          (n = mg_io_send(c, tls->send.buf, tls->send.len)) > 0) {
     mg_iobuf_del(&tls->send, 0, (size_t) n);
@@ -20905,7 +20970,7 @@ static void ws_handshake(struct mg_connection *c, const struct mg_str *wskey,
     mg_printf(c, "Sec-WebSocket-Protocol: %.*s\r\n", (int) wsproto->len,
               wsproto->buf);
   }
-  mg_send(c, "\r\n", 2);
+  if (!mg_send(c, "\r\n", 2)) mg_error(c, "OOM");
 }
 
 static uint32_t be32(const uint8_t *p) {
@@ -21142,8 +21207,8 @@ size_t mg_ws_wrap(struct mg_connection *c, size_t len, int op) {
     memmove(p, p - header_len, len);             // Shift data
     memcpy(p - header_len, header, header_len);  // Prepend header
     mg_ws_mask(c, len);                          // Mask data
-  }
-  return c->send.len;
+  }  // returning 0 means an OOM condition (iobuf couldn't resize), yet this is
+  return c->send.len;  // so far recoverable, let the caller decide
 }
 
 #ifdef MG_ENABLE_LINES

@@ -1924,6 +1924,7 @@ bool mg_open_listener(struct mg_connection *c, const char *url) {
 static void write_conn(struct mg_connection *c) {
   long len = c->is_tls ? mg_tls_send(c, c->send.buf, c->send.len)
                        : mg_io_send(c, c->send.buf, c->send.len);
+  // TODO(): mg_tls_send() may return 0 forever on steady OOM
   if (len == MG_IO_ERR) {
     mg_error(c, "tx err");
   } else if (len > 0) {
@@ -2003,7 +2004,9 @@ bool mg_send(struct mg_connection *c, const void *buf, size_t len) {
     len = trim_len(c, len);  // Trimming length if necessary
     res = tx_udp(ifp, s->mac, &c->loc, &c->rem, buf, len);
   } else {
-    res = mg_iobuf_add(&c->send, c->send.len, buf, len);
+    res = (bool) mg_iobuf_add(&c->send, c->send.len, buf, len);
+    // res == 0 means an OOM condition (iobuf couldn't resize), yet this is so
+    // far recoverable, let the caller decide
   }
   return res;
 }
