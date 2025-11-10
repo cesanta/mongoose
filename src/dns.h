@@ -31,17 +31,24 @@ struct mg_dns_rr {
   uint16_t alen;    // Address length
 };
 
-// DNS-SD service record
+
+// DNS-SD response record
 struct mg_dnssd_record {
-  char *srvcproto;  // service.proto, service name
-  char *txt;        // TXT record contents
-  uint16_t port;    // SRV record port
+  struct mg_str srvcproto;  // service.proto, service name
+  struct mg_str txt;        // TXT record contents
+  uint16_t port;            // SRV record port
 };
 
-// DNS-SD service database
-struct mg_dnssd_db {
-  struct mg_dnssd_record *srvcs;  // service record data
-  uint8_t num;                    // number of records in db
+// mDNS request
+struct mg_mdns_req {
+  struct mg_dns_rr *rr;
+  struct mg_dnssd_record *r;
+  struct mg_str reqname;        // requested name in RR
+  struct mg_str respname;       // actual name in response
+  struct mg_addr addr;
+  bool is_listing;
+  bool is_resp;
+  bool is_unicast;
 };
 
 void mg_resolve(struct mg_connection *, const char *url);
@@ -50,4 +57,4 @@ bool mg_dns_parse(const uint8_t *buf, size_t len, struct mg_dns_message *);
 size_t mg_dns_parse_rr(const uint8_t *buf, size_t len, size_t ofs,
                        bool is_question, struct mg_dns_rr *);
                        
-struct mg_connection *mg_mdns_listen(struct mg_mgr *mgr, char *name);
+struct mg_connection *mg_mdns_listen(struct mg_mgr *mgr, mg_event_handler_t fn, void *fn_data);
