@@ -27,5 +27,9 @@ enum {
   MG_EV_MQTT_OPEN,  // MQTT CONNACK received        int *connack_status_code
   MG_EV_SNTP_TIME,  // SNTP time received           uint64_t *epoch_millis
   MG_EV_WAKEUP,     // mg_wakeup() data received    struct mg_str *data
+  MG_EV_MDNS_A,     // mDNS A record request        struct mg_mdns_req *
+  MG_EV_MDNS_PTR,   // mDNS PTR record request      struct mg_mdns_req *
+  MG_EV_MDNS_SRV,   // mDNS SRV record request      struct mg_mdns_req *
+  MG_EV_MDNS_TXT,   // mDNS TXT record request      struct mg_mdns_req *
   MG_EV_USER        // Starting ID for user events
 };

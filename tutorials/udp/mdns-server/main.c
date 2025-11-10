@@ -11,7 +11,7 @@ int main(void) {
   mg_mgr_init(&mgr);        // Initialise event manager
 
   // Desired name must NOT have any dots in it, nor a domain
-  c = mg_mdns_listen(&mgr, "Mongoose");  // Start mDNS server
+  c = mg_mdns_listen(&mgr, NULL, "Mongoose");  // Start mDNS server
   if (c == NULL) return 1;
   // if not using our built-in TCP/IP stack, pass the IP address you want to
   // use as a response, this depends on your underlying TCP/IP stack and number
