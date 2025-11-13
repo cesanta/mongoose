@@ -24059,6 +24059,7 @@ struct ENET_Type {
       CHANNEL_TCSR[4], CHANNEL_TCCR[4];
 };
 
+#undef ENET
 #define ENET ((struct ENET_Type *) 0x40138000)
 
 #define ETH_PKT_SIZE 1536  // Max frame size
