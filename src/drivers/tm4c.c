@@ -111,11 +111,11 @@ static int guess_mdc_cr(void) {
   uint8_t crs[] = {2, 3, 0, 1};      // EMAC->MACMIIAR::CR values
   uint8_t div[] = {16, 26, 42, 62};  // Respective HCLK dividers
   uint32_t sysclk = get_sysclk();    // Guess system SYSCLK
-  int result = -1;                   // Invalid CR value
+  int i, result = -1;                // Invalid CR value
   if (sysclk < 25000000) {
     MG_ERROR(("SYSCLK too low"));
   } else {
-    for (int i = 0; i < 4; i++) {
+    for (i = 0; i < 4; i++) {
       if (sysclk / div[i] <= 2375000UL /* 2.5MHz - 5% */) {
         result = crs[i];
         break;
@@ -130,10 +130,11 @@ static int guess_mdc_cr(void) {
 static bool mg_tcpip_driver_tm4c_init(struct mg_tcpip_if *ifp) {
   struct mg_tcpip_driver_tm4c_data *d =
       (struct mg_tcpip_driver_tm4c_data *) ifp->driver_data;
+  int i;
   s_ifp = ifp;
 
   // Init RX descriptors
-  for (int i = 0; i < ETH_DESC_CNT; i++) {
+  for (i = 0; i < ETH_DESC_CNT; i++) {
     s_rxdesc[i][0] = MG_BIT(31);                         // Own
     s_rxdesc[i][1] = sizeof(s_rxbuf[i]) | MG_BIT(14);    // 2nd address chained
     s_rxdesc[i][2] = (uint32_t) (uintptr_t) s_rxbuf[i];  // Point to data buffer
@@ -143,7 +144,7 @@ static bool mg_tcpip_driver_tm4c_init(struct mg_tcpip_if *ifp) {
   }
 
   // Init TX descriptors
-  for (int i = 0; i < ETH_DESC_CNT; i++) {
+  for (i = 0; i < ETH_DESC_CNT; i++) {
     s_txdesc[i][2] = (uint32_t) (uintptr_t) s_txbuf[i];  // Buf pointer
     s_txdesc[i][3] =
         (uint32_t) (uintptr_t) s_txdesc[(i + 1) % ETH_DESC_CNT];  // Chain
@@ -204,7 +205,6 @@ static size_t mg_tcpip_driver_tm4c_tx(const void *buf, size_t len,
   EMAC->EMACDMARIS = MG_BIT(2) | MG_BIT(5);  // Clear any prior TU/UNF
   EMAC->EMACTXPOLLD = 0;                     // and resume
   return len;
-  (void) ifp;
 }
 
 static void mg_tcpip_driver_tm4c_update_hash_table(struct mg_tcpip_if *ifp) {
@@ -245,9 +245,10 @@ static bool mg_tcpip_driver_tm4c_poll(struct mg_tcpip_if *ifp, bool s1) {
 void EMAC0_IRQHandler(void);
 static uint32_t s_rxno;
 void EMAC0_IRQHandler(void) {
+  int i;
   if (EMAC->EMACDMARIS & MG_BIT(6)) {           // Frame received, loop
     EMAC->EMACDMARIS = MG_BIT(16) | MG_BIT(6);  // Clear flag
-    for (uint32_t i = 0; i < 10; i++) {  // read as they arrive but not forever
+    for (i = 0; i < 10; i++) {  // read as they arrive but not forever
       if (s_rxdesc[s_rxno][0] & MG_BIT(31)) break;  // exit when done
       if (((s_rxdesc[s_rxno][0] & (MG_BIT(8) | MG_BIT(9))) ==
            (MG_BIT(8) | MG_BIT(9))) &&

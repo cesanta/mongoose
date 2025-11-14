@@ -53,7 +53,6 @@ static const char *mg_phy_id_to_str(uint16_t id1, uint16_t id2) {
     default:
       return "unknown";
   }
-  (void) id2;
 }
 
 void mg_phy_init(struct mg_phy *phy, uint8_t phy_addr, uint8_t config) {
