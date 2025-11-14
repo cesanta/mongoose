@@ -4509,11 +4509,24 @@ void mg_tcpip_arp_request(struct mg_tcpip_if *ifp, uint32_t ip, uint8_t *mac) {
   ether_output(ifp, PDIFF(eth, arp + 1));
 }
 
+static void mg_tcpip_set_local_addr(struct mg_connection *c) {
+#if MG_ENABLE_IPV6
+  if (c->loc.is_ip6) {
+    c->loc.ip6[0] = c->mgr->ifp->ip6[0], c->loc.ip6[1] = c->mgr->ifp->ip6[1];
+  } else
+#endif
+    c->loc.ip4 = c->mgr->ifp->ip;
+}
+
 static void onstatechange(struct mg_tcpip_if *ifp) {
   if (ifp->state == MG_TCPIP_STATE_READY) {
+    struct mg_connection *c;
     MG_INFO(("READY, IP: %M", mg_print_ip4, &ifp->ip));
     MG_INFO(("       GW: %M", mg_print_ip4, &ifp->gw));
     MG_INFO(("      MAC: %M", mg_print_mac, &ifp->mac));
+    for (c = ifp->mgr->conns; c != NULL; c = c->next) {
+      mg_tcpip_set_local_addr(c);
+    }
   } else if (ifp->state == MG_TCPIP_STATE_IP) {
     mg_tcpip_arp_request(ifp, ifp->gw, NULL);  // unsolicited GW ARP request
   } else if (ifp->state == MG_TCPIP_STATE_UP) {
@@ -6117,12 +6130,8 @@ bool mg_open_listener(struct mg_connection *c, const char *url) {
   if (!mg_aton(mg_url_host(url), &c->loc)) {
     MG_ERROR(("invalid listening URL: %s", url));
     return false;
-#if MG_ENABLE_IPV6
-  } else if (c->loc.is_ip6) {
-    c->loc.ip6[0] = c->mgr->ifp->ip6[0], c->loc.ip6[1] = c->mgr->ifp->ip6[1];
-#endif
   } else {
-    c->loc.ip4 = c->mgr->ifp->ip;
+    mg_tcpip_set_local_addr(c);
   }
   return true;
 }
@@ -25213,15 +25222,11 @@ enum {
   EPHYSTS = 16
 };  // PHY constants
 
-static inline void tm4cspin(volatile uint32_t count) {
-  while (count--) (void) 0;
-}
-
 static uint32_t emac_read_phy(uint8_t addr, uint8_t reg) {
   EMAC->EMACMIIADDR &= (0xf << 2);
   EMAC->EMACMIIADDR |= ((uint32_t) addr << 11) | ((uint32_t) reg << 6);
   EMAC->EMACMIIADDR |= MG_BIT(0);
-  while (EMAC->EMACMIIADDR & MG_BIT(0)) tm4cspin(1);
+  while (EMAC->EMACMIIADDR & MG_BIT(0)) (void) 0;
   return EMAC->EMACMIIDATA;
 }
 
@@ -25231,7 +25236,7 @@ static void emac_write_phy(uint8_t addr, uint8_t reg, uint32_t val) {
   EMAC->EMACMIIADDR |=
       ((uint32_t) addr << 11) | ((uint32_t) reg << 6) | MG_BIT(1);
   EMAC->EMACMIIADDR |= MG_BIT(0);
-  while (EMAC->EMACMIIADDR & MG_BIT(0)) tm4cspin(1);
+  while (EMAC->EMACMIIADDR & MG_BIT(0)) (void) 0;
 }
 
 static uint32_t get_sysclk(void) {
@@ -25323,9 +25328,8 @@ static bool mg_tcpip_driver_tm4c_init(struct mg_tcpip_if *ifp) {
         (uint32_t) (uintptr_t) s_txdesc[(i + 1) % ETH_DESC_CNT];  // Chain
   }
 
-  EMAC->EMACDMABUSMOD |= MG_BIT(0);  // Software reset
-  while ((EMAC->EMACDMABUSMOD & MG_BIT(0)) != 0)
-    tm4cspin(1);  // Wait until done
+  EMAC->EMACDMABUSMOD |= MG_BIT(0);                         // Software reset
+  while ((EMAC->EMACDMABUSMOD & MG_BIT(0)) != 0) (void) 0;  // Wait until done
 
   // Set MDC clock divider. If user told us the value, use it. Otherwise, guess
   int cr = (d == NULL || d->mdc_cr < 0) ? guess_mdc_cr() : d->mdc_cr;
