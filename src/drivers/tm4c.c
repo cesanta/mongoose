@@ -40,15 +40,11 @@ enum {
   EPHYSTS = 16
 };  // PHY constants
 
-static inline void tm4cspin(volatile uint32_t count) {
-  while (count--) (void) 0;
-}
-
 static uint32_t emac_read_phy(uint8_t addr, uint8_t reg) {
   EMAC->EMACMIIADDR &= (0xf << 2);
   EMAC->EMACMIIADDR |= ((uint32_t) addr << 11) | ((uint32_t) reg << 6);
   EMAC->EMACMIIADDR |= MG_BIT(0);
-  while (EMAC->EMACMIIADDR & MG_BIT(0)) tm4cspin(1);
+  while (EMAC->EMACMIIADDR & MG_BIT(0)) (void) 0;
   return EMAC->EMACMIIDATA;
 }
 
@@ -58,7 +54,7 @@ static void emac_write_phy(uint8_t addr, uint8_t reg, uint32_t val) {
   EMAC->EMACMIIADDR |=
       ((uint32_t) addr << 11) | ((uint32_t) reg << 6) | MG_BIT(1);
   EMAC->EMACMIIADDR |= MG_BIT(0);
-  while (EMAC->EMACMIIADDR & MG_BIT(0)) tm4cspin(1);
+  while (EMAC->EMACMIIADDR & MG_BIT(0)) (void) 0;
 }
 
 static uint32_t get_sysclk(void) {
@@ -150,9 +146,8 @@ static bool mg_tcpip_driver_tm4c_init(struct mg_tcpip_if *ifp) {
         (uint32_t) (uintptr_t) s_txdesc[(i + 1) % ETH_DESC_CNT];  // Chain
   }
 
-  EMAC->EMACDMABUSMOD |= MG_BIT(0);  // Software reset
-  while ((EMAC->EMACDMABUSMOD & MG_BIT(0)) != 0)
-    tm4cspin(1);  // Wait until done
+  EMAC->EMACDMABUSMOD |= MG_BIT(0);                         // Software reset
+  while ((EMAC->EMACDMABUSMOD & MG_BIT(0)) != 0) (void) 0;  // Wait until done
 
   // Set MDC clock divider. If user told us the value, use it. Otherwise, guess
   int cr = (d == NULL || d->mdc_cr < 0) ? guess_mdc_cr() : d->mdc_cr;

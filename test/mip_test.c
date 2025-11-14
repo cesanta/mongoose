@@ -56,12 +56,14 @@ static void mif_fn(struct mg_tcpip_if *ifp, int ev, void *ev_data) {
 }
 
 static void test_statechange(void) {
+  struct mg_mgr mgr;
   struct mg_tcpip_if iface;
   memset(&iface, 0, sizeof(iface));
   iface.ip = mg_htonl(0x01020304);
   iface.state = MG_TCPIP_STATE_READY;
   iface.driver = &mg_tcpip_driver_mock;
   iface.fn = mif_fn;
+  iface.mgr = &mgr;
   onstatechange(&iface);
   ASSERT(executed == true);
   executed = false;
@@ -76,6 +78,7 @@ static void mif6_fn(struct mg_tcpip_if *ifp, int ev, void *ev_data) {
 }
 
 static void test_state6change(void) {
+  struct mg_mgr mgr;
   struct mg_tcpip_if iface;
   memset(&iface, 0, sizeof(iface));
   iface.ip6[0] = (uint64_t) mg_htonl(0x01020304);
@@ -83,6 +86,7 @@ static void test_state6change(void) {
   iface.state6 = MG_TCPIP_STATE_READY;
   iface.driver = &mg_tcpip_driver_mock;
   iface.fn = mif6_fn;
+  iface.mgr = &mgr;
   onstate6change(&iface);
   ASSERT(executed == true);
   executed = false;

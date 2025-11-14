@@ -305,9 +305,20 @@ void mg_tcpip_arp_request(struct mg_tcpip_if *ifp, uint32_t ip, uint8_t *mac) {
 
 static void onstatechange(struct mg_tcpip_if *ifp) {
   if (ifp->state == MG_TCPIP_STATE_READY) {
+    struct mg_connection *c;
     MG_INFO(("READY, IP: %M", mg_print_ip4, &ifp->ip));
     MG_INFO(("       GW: %M", mg_print_ip4, &ifp->gw));
     MG_INFO(("      MAC: %M", mg_print_mac, &ifp->mac));
+    for (c = ifp->mgr->conns; c != NULL; c = c->next) {
+      if (ifp->is_ip_changed) {
+        if (c->is_listening || c->is_udp) {
+          c->loc.ip4 = c->mgr->ifp->ip;
+        } else {
+          c->is_closing = 1;
+        }
+      }
+    }
+    ifp->is_ip_changed = false;
   } else if (ifp->state == MG_TCPIP_STATE_IP) {
     mg_tcpip_arp_request(ifp, ifp->gw, NULL);  // unsolicited GW ARP request
   } else if (ifp->state == MG_TCPIP_STATE_UP) {
@@ -594,6 +605,7 @@ static void rx_dhcp_client(struct mg_tcpip_if *ifp, struct pkt *pkt) {
       MG_INFO(("Lease: %u sec (%lld)", lease, ifp->lease_expire / 1000));
       // assume DHCP server = router until ARP resolves
       memcpy(ifp->gwmac, pkt->eth->src, sizeof(ifp->gwmac));
+      if (ifp->ip != ip) ifp->is_ip_changed = true;
       ifp->ip = ip, ifp->gw = gw, ifp->mask = mask;
       ifp->state = MG_TCPIP_STATE_IP;  // BOUND state
       mg_random(&rand, sizeof(rand));
@@ -806,21 +818,42 @@ static bool fill_global(uint64_t *ip6, uint8_t *prefix, uint8_t prefix_len,
                         uint8_t *mac) {
   uint8_t full = prefix_len / 8;
   uint8_t rem = prefix_len % 8;
-  if (full >= 8 && rem != 0) {
+  if (full > 8 || (full == 8 && rem != 0)) {
     MG_ERROR(("Prefix length > 64, UNSUPPORTED"));
     return false;
   } else if (full == 8 && rem == 0) {
     ip6gen((uint8_t *) ip6, prefix, mac);
   } else {
     ip6[0] = ip6[1] = 0;  // already zeroed before firing RS...
-    if (full) memcpy(ip6, prefix, full);
-    if (rem) {
+    if (full > 0) memcpy(ip6, prefix, full);
+    if (rem > 0) {
       uint8_t mask = (uint8_t) (0xFF << (8 - rem));
       ((uint8_t *) ip6)[full] = prefix[full] & mask;
     }
     meui64(((uint8_t *) &ip6[1]), mac);  // RFC-4291 2.5.4, 2.5.1
   }
   return true;
+}
+
+static bool match_prefix(uint8_t *new, uint8_t len, uint8_t *cur,
+                         uint8_t *cur_len) {
+  uint8_t full = len / 8;
+  uint8_t rem = len % 8;
+  bool res = true;
+  if (full > 8 || (full == 8 && rem != 0))
+    return false;  // Prefix length > 64: UNSUPPORTED
+  if (*cur_len != len) res = false;
+  if (full > 0) {
+    if (res && memcmp(cur, new, full) != 0) res = false;
+    memcpy(cur, new, full);
+  }
+  if (rem > 0) {
+    uint8_t mask = (uint8_t) (0xFF << (8 - rem));
+    if (res && cur[full] != (new[full] & mask)) res = false;
+    cur[full] = new[full] & mask;
+  }
+  *cur_len = len;
+  return res;
 }
 
 // Router Advertisement, 4.2
@@ -857,14 +890,13 @@ static void rx_ndp_ra(struct mg_tcpip_if *ifp, struct pkt *pkt) {
         uint8_t *prefix = opts + 16;
 
         // TODO (robertc2000): handle prefix options if necessary
-        (void) prefix_len;
         (void) pfx_flags;
         (void) valid;
         (void) pref_lifetime;
-        (void) prefix;
 
-        // fill prefix length and global
-        ifp->prefix_len = prefix_len;
+        // fill prefix and global address
+        if (!match_prefix(prefix, prefix_len, ifp->prefix, &ifp->prefix_len))
+          ifp->is_ip6_changed = true;
         if (!fill_global(ifp->ip6, prefix, prefix_len, ifp->mac)) return;
       }
       opts += length;
@@ -907,10 +939,21 @@ static void rx_icmp6(struct mg_tcpip_if *ifp, struct pkt *pkt) {
 }
 
 static void onstate6change(struct mg_tcpip_if *ifp) {
+  struct mg_connection *c;
   if (ifp->state6 == MG_TCPIP_STATE_READY) {
     MG_INFO(("READY, IP: %M", mg_print_ip6, &ifp->ip6));
     MG_INFO(("       GW: %M", mg_print_ip6, &ifp->gw6));
     MG_INFO(("      MAC: %M", mg_print_mac, &ifp->mac));
+    for (c = ifp->mgr->conns; c != NULL; c = c->next) {
+      if (ifp->is_ip6_changed) {
+        if (c->is_listening || c->is_udp) {
+          c->loc.ip6[0] = ifp->ip6[0], c->loc.ip6[1] = ifp->ip6[1];
+        } else {
+          c->is_closing = 1;
+        }
+      }
+    }
+    ifp->is_ip6_changed = false;
   } else if (ifp->state6 == MG_TCPIP_STATE_IP) {
     tx_ndp_ns(ifp, ifp->gw6, ifp->gw6mac);  // unsolicited GW MAC resolution
   } else if (ifp->state6 == MG_TCPIP_STATE_UP) {
@@ -1397,10 +1440,10 @@ static void rx_ip(struct mg_tcpip_if *ifp, struct pkt *pkt) {
   if (ihl < 5) return;                              // bad IHL
   if (pkt->pay.len < (uint16_t) (ihl * 4)) return;  // Truncated / malformed
   // There can be link padding, take length from IP header
-  len = mg_ntohs(pkt->ip->len);                       // IP datagram length
+  len = mg_ntohs(pkt->ip->len);  // IP datagram length
   if (len < (uint16_t) (ihl * 4) || len > pkt->pay.len) return;  // malformed
-  pkt->pay.len = len;                                 // strip padding
-  mkpay(pkt, (uint32_t *) pkt->ip + ihl);             // account for opts
+  pkt->pay.len = len;                      // strip padding
+  mkpay(pkt, (uint32_t *) pkt->ip + ihl);  // account for opts
   frag = mg_ntohs(pkt->ip->frag);
   if (frag & IP_MORE_FRAGS_MSK || frag & IP_FRAG_OFFSET_MSK) {
     struct mg_connection *c;
