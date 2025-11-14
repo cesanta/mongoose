@@ -419,6 +419,11 @@ static bool mg_tls_encrypt(struct mg_connection *c, const uint8_t *msg,
   uint8_t *iv =
       c->is_client ? tls->enc.client_write_iv : tls->enc.server_write_iv;
 
+  if (msgsz > 16384) {
+    MG_ERROR(("msg longer than recordsz"));
+    return false;
+  }
+
 #if MG_ENABLE_CHACHA20
 #else
   mg_gcm_initialize();
@@ -440,9 +445,8 @@ static bool mg_tls_encrypt(struct mg_connection *c, const uint8_t *msg,
 #if MG_ENABLE_CHACHA20
   (void) tag;  // tag is only used in aes gcm
   {
-    size_t maxlen = MG_IO_SIZE > 16384 ? 16384 : MG_IO_SIZE;
     size_t n;
-    uint8_t *enc = (uint8_t *) mg_calloc(1, maxlen + 256 + 1);
+    uint8_t *enc = (uint8_t *) mg_calloc(1, msgsz + 256 + 1);
     if (enc == NULL) return false;
     n = mg_chacha20_poly1305_encrypt(enc, key, nonce, associated_data,
                                      sizeof(associated_data), outmsg,
@@ -701,9 +705,7 @@ static const uint8_t secp256r1_sig_algs[12] = {
 
 static bool mg_tls_server_send_cert_request(struct mg_connection *c) {
   struct tls_data *tls = (struct tls_data *) c->tls;
-  uint8_t *req = (uint8_t *) mg_calloc(1, 13 + sizeof(secp256r1_sig_algs));
-  bool res;
-  if (req == NULL) return false;
+  uint8_t req[13 + sizeof(secp256r1_sig_algs)];
   req[0] = MG_TLS_CERTIFICATE_REQUEST;  // handshake header
   MG_STORE_BE24(req + 1, 9 + sizeof(secp256r1_sig_algs));
   req[4] = 0;                                              // context length
@@ -714,10 +716,8 @@ static bool mg_tls_server_send_cert_request(struct mg_connection *c) {
       req + 11,
       sizeof(secp256r1_sig_algs));  // signature hash algorithms length
   memcpy(req + 13, (uint8_t *) secp256r1_sig_algs, sizeof(secp256r1_sig_algs));
-  mg_sha256_update(&tls->sha256, req, 13 + sizeof(secp256r1_sig_algs));
-  res = mg_tls_encrypt(c, req, 13 + sizeof(secp256r1_sig_algs), MG_TLS_HANDSHAKE);
-  mg_free(req);
-  return res;
+  mg_sha256_update(&tls->sha256, req, sizeof(req));
+  return mg_tls_encrypt(c, req, sizeof(req), MG_TLS_HANDSHAKE);
 }
 
 static bool mg_tls_send_cert(struct mg_connection *c, bool is_client) {
@@ -1634,6 +1634,7 @@ void mg_tls_handshake(struct mg_connection *c) {
   struct tls_data *tls = (struct tls_data *) c->tls;
   long n;
   bool res;
+  if (c->is_closing) return; // we don't clear rx buf, so ignore what's left
   if (c->is_client) {
     // will clear is_hs when sending last chunk
     res = mg_tls_client_handshake(c);
