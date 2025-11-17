@@ -1063,18 +1063,22 @@ static struct mg_connection *accept_conn(struct mg_connection *lsn,
   if (lsn->loc.is_ip6) {
     c->rem.ip6[0] = pkt->ip6->src[0], c->rem.ip6[1] = pkt->ip6->src[1],
     c->rem.is_ip6 = true;
+    c->loc.ip6[0] = c->mgr->ifp->ip6[0], c->loc.ip6[1] = c->mgr->ifp->ip6[1],
+    c->loc.is_ip6 = true;
+    // TODO(): compare lsn to link-local, or rem as link-local: use ll instead
   } else
 #endif
   {
     c->rem.ip4 = pkt->ip->src;
+    c->loc.ip4 = c->mgr->ifp->ip;
   }
   c->rem.port = pkt->tcp->sport;
+  c->loc.port = lsn->loc.port;
   MG_DEBUG(("%lu accepted %M", c->id, mg_print_ip_port, &c->rem));
   LIST_ADD_HEAD(struct mg_connection, &lsn->mgr->conns, c);
   c->is_accepted = 1;
   c->is_hexdumping = lsn->is_hexdumping;
   c->pfn = lsn->pfn;
-  c->loc = lsn->loc;
   c->pfn_data = lsn->pfn_data;
   c->fn = lsn->fn;
   c->fn_data = lsn->fn_data;
@@ -1115,13 +1119,31 @@ static size_t trim_len(struct mg_connection *c, size_t len) {
   return len;
 }
 
-long mg_io_send(struct mg_connection *c, const void *buf, size_t len) {
+static bool udp_send(struct mg_connection *c, const void *buf, size_t len) {
   struct mg_tcpip_if *ifp = c->mgr->ifp;
+  struct connstate *s = (struct connstate *) (c + 1);
+  struct mg_addr ips;
+  memset(&ips, 0, sizeof(ips));
+#if MG_ENABLE_IPV6
+  if (c->loc.is_ip6) {
+    ips.ip6[0] = ifp->ip6[0], ips.ip6[1] = ifp->ip6[1], ips.is_ip6 = true;
+    // TODO(): detect link-local (c->rem) and use it
+  } else
+#endif
+  {
+    ips.ip4 = ifp->ip;
+  }
+  ips.port = c->loc.port;
+  return tx_udp(ifp, s->mac, &ips, &c->rem, buf, len);
+}
+
+long mg_io_send(struct mg_connection *c, const void *buf, size_t len) {
   struct connstate *s = (struct connstate *) (c + 1);
   len = trim_len(c, len);
   if (c->is_udp) {
-    if (!tx_udp(ifp, s->mac, &c->loc, &c->rem, buf, len)) return MG_IO_WAIT;
+    if (!udp_send(c, buf, len)) return MG_IO_WAIT;
   } else {  // TCP, cap to peer's MSS
+    struct mg_tcpip_if *ifp = c->mgr->ifp;
     size_t sent;
     if (len > s->dmss) len = s->dmss;  // RFC-6691: reduce if sending opts
     sent = tx_tcp(ifp, s->mac, &c->loc, &c->rem, TH_PUSH | TH_ACK,
@@ -1911,12 +1933,6 @@ bool mg_open_listener(struct mg_connection *c, const char *url) {
   if (!mg_aton(mg_url_host(url), &c->loc)) {
     MG_ERROR(("invalid listening URL: %s", url));
     return false;
-#if MG_ENABLE_IPV6
-  } else if (c->loc.is_ip6) {
-    c->loc.ip6[0] = c->mgr->ifp->ip6[0], c->loc.ip6[1] = c->mgr->ifp->ip6[1];
-#endif
-  } else {
-    c->loc.ip4 = c->mgr->ifp->ip;
   }
   return true;
 }
@@ -2000,9 +2016,8 @@ bool mg_send(struct mg_connection *c, const void *buf, size_t len) {
     // Fail to send, no target MAC or IP
     MG_VERBOSE(("still resolving..."));
   } else if (c->is_udp) {
-    struct connstate *s = (struct connstate *) (c + 1);
     len = trim_len(c, len);  // Trimming length if necessary
-    res = tx_udp(ifp, s->mac, &c->loc, &c->rem, buf, len);
+    res = udp_send(c, buf, len);
   } else {
     res = (bool) mg_iobuf_add(&c->send, c->send.len, buf, len);
     // res == 0 means an OOM condition (iobuf couldn't resize), yet this is so
