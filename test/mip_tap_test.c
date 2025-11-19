@@ -413,6 +413,7 @@ static void test_http_server(struct mg_mgr *mgr) {
       mg_mprintf("./mip_curl.sh http://%M:12347", mg_print_ip4, &mgr->ifp->ip);
 #endif
   ASSERT(c != NULL);
+  ASSERT (mg_send(c, "NADA", 0)); // check mg_send allows len=0
   pthread_create(&thread_id, NULL, poll_thread,
                  mgr);  // simpler this way, no concurrency anyway
   MG_DEBUG(("CURL"));

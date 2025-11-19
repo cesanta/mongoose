@@ -2977,6 +2977,14 @@ static void eZ(struct mg_connection *c, int ev, void *ev_data) {
   (void) ev_data;
 }
 
+static void eS(struct mg_connection *c, int ev, void *ev_data) {
+  if (ev == MG_EV_HTTP_MSG) {
+    ASSERT (mg_send(c, "NADA", 0));
+    mg_http_reply(c, 200, "", "abcd");
+  }
+  (void) ev_data;
+}
+
 // Do not delete chunks as they arrive
 static void eh4(struct mg_connection *c, int ev, void *ev_data) {
   uint32_t *crc = (uint32_t *) c->fn_data;
@@ -3012,6 +3020,9 @@ static void test_http_chunked_case(mg_event_handler_t s, mg_event_handler_t c,
 }
 
 static void test_http_chunked(void) {
+  // test mg_send allows calls with 0 length
+  test_http_chunked_case(eS, eh4, 1, "abcd");
+
   // Non-chunked encoding
   test_http_chunked_case(eY, eh4, 1, "abcd");  // Chunks not deleted
   test_http_chunked_case(eY, eh4, 2, "abcdabcd");

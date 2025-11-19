@@ -2019,9 +2019,9 @@ bool mg_send(struct mg_connection *c, const void *buf, size_t len) {
     len = trim_len(c, len);  // Trimming length if necessary
     res = udp_send(c, buf, len);
   } else {
-    res = (bool) mg_iobuf_add(&c->send, c->send.len, buf, len);
-    // res == 0 means an OOM condition (iobuf couldn't resize), yet this is so
-    // far recoverable, let the caller decide
+    res = len == 0 || mg_iobuf_add(&c->send, c->send.len, buf, len) > 0;
+    // returning 0 means an OOM condition (iobuf couldn't resize), yet this is
+    // so far recoverable, let the caller decide
   }
   return res;
 }

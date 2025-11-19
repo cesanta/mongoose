@@ -141,7 +141,7 @@ bool mg_send(struct mg_connection *c, const void *buf, size_t len) {
     iolog(c, (char *) buf, n, false);
     return n > 0;
   } else {
-    return (bool) mg_iobuf_add(&c->send, c->send.len, buf, len);
+    return len == 0 || mg_iobuf_add(&c->send, c->send.len, buf, len) > 0;
     // returning 0 means an OOM condition (iobuf couldn't resize), yet this is
     // so far recoverable, let the caller decide
   }
