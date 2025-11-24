@@ -309,7 +309,8 @@ static void onstatechange(struct mg_tcpip_if *ifp) {
     MG_INFO(("       GW: %M", mg_print_ip4, &ifp->gw));
     MG_INFO(("      MAC: %M", mg_print_mac, &ifp->mac));
   } else if (ifp->state == MG_TCPIP_STATE_IP) {
-    mg_tcpip_arp_request(ifp, ifp->gw, NULL);  // unsolicited GW ARP request
+    if (ifp->gw != 0)
+      mg_tcpip_arp_request(ifp, ifp->gw, NULL);  // unsolicited GW ARP request
   } else if (ifp->state == MG_TCPIP_STATE_UP) {
     srand((unsigned int) mg_millis());
   } else if (ifp->state == MG_TCPIP_STATE_DOWN) {
@@ -912,7 +913,8 @@ static void onstate6change(struct mg_tcpip_if *ifp) {
     MG_INFO(("       GW: %M", mg_print_ip6, &ifp->gw6));
     MG_INFO(("      MAC: %M", mg_print_mac, &ifp->mac));
   } else if (ifp->state6 == MG_TCPIP_STATE_IP) {
-    tx_ndp_ns(ifp, ifp->gw6, ifp->gw6mac);  // unsolicited GW MAC resolution
+    if (ifp->gw6[0] != 0 || ifp->gw6[1] != 0) 
+      tx_ndp_ns(ifp, ifp->gw6, ifp->gw6mac);  // unsolicited GW MAC resolution
   } else if (ifp->state6 == MG_TCPIP_STATE_UP) {
     MG_INFO(("IP: %M", mg_print_ip6, &ifp->ip6ll));
   }
@@ -1894,10 +1896,12 @@ void mg_connect_resolved(struct mg_connection *c) {
       struct connstate *s = (struct connstate *) (c + 1);
       ip6_mcastmac(s->mac, c->rem.ip6);
       mac_resolved(c);
-    } else {
+    } else if (ifp->gw6[0] != 0 || ifp->gw6[1] != 0) {
       struct connstate *s = (struct connstate *) (c + 1);
       memcpy(s->mac, ifp->gw6mac, sizeof(s->mac));
       mac_resolved(c);
+    } else {
+      MG_ERROR(("No IPv6 gateway, can't connect"));
     }
   } else
 #endif
@@ -1920,10 +1924,12 @@ void mg_connect_resolved(struct mg_connection *c) {
           (struct connstate *) (c + 1);  // 224 to 239, E0 to EF
       ip4_mcastmac(s->mac, &rem_ip);     // multicast group
       mac_resolved(c);
-    } else {
+    } else if (ifp->gw != 0) {
       struct connstate *s = (struct connstate *) (c + 1);
       memcpy(s->mac, ifp->gwmac, sizeof(ifp->gwmac));
       mac_resolved(c);
+    } else {
+      MG_ERROR(("No gateway, can't connect"));
     }
   }
 }
