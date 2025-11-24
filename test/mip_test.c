@@ -251,12 +251,14 @@ static void init_tests(struct mg_mgr *mgr, struct eth *e, struct ipp *ipp,
 #if MG_ENABLE_IPV6
   if (ipp->ip6 != NULL) {
     mif->ip6[0] = 1;
+    mif->gw6[0] = 1;
     mif->state = MG_TCPIP_STATE_READY;  // so DHCP stops
     mif->state6 = MG_TCPIP_STATE_READY;  // so mg_send() works and RS stops
   } else
 #endif
   {
     mif->ip = 1;
+    mif->gw = 1;
     mif->mask = 255; // use router, to avoid firing an ARP request
     mif->state = MG_TCPIP_STATE_READY;  // so mg_send() works and DHCP stops
   }
