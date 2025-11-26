@@ -21663,7 +21663,7 @@ static void cyw_handle_bdc_evnt(struct bdc_hdr *bdc, size_t len) {
     uint32_t status = mg_ntohl(msg->event.status);
     uint32_t reason = mg_ntohl(msg->event.reason);
     uint16_t flags = mg_ntohs(msg->event.flags);
-    MG_DEBUG(("BCM event %lu %lu %lu %p", event_type, status, reason, flags));
+    MG_VERBOSE(("BCM evt %lu %lu %lu %p", event_type, status, reason, flags));
     if (event_type == 16 && status == 0) {  // Link
       s_link = flags & 1;
     } else if (event_type == 46 && s_link) {  // PSK sup with link up
