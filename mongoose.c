@@ -21729,7 +21729,7 @@ static bool cyw_wifi_connect(char *ssid, char *pass) {
   uint32_t data[64/4 + 1]; // max pass length: 64 for WPA, 128 for WPA3 SAE
   uint16_t *da = (uint16_t *) data;
   unsigned int len;
-  uint32_t val; 
+  uint32_t val;
   val = 4; // security type: 0 for none, 2 for WPA, 4 for WPA2/WPA3, 6 for mixed WPA/WPA2
   // sup_wpa[1] = 0 if not using security
   if (!(cyw_ioctl_set(134 /* SET_WSEC */, (uint8_t *)&val, sizeof(val))
@@ -21771,7 +21771,7 @@ static bool cyw_wifi_ap_start(char *ssid, char *pass, unsigned int channel) {
   uint32_t data[64/4 + 2]; // max pass length: 64 for WPA, 128 for WPA3 SAE
   uint16_t *da = (uint16_t *) data;
   unsigned int len;
-  uint32_t val; 
+  uint32_t val;
   // CHIP DEPENDENCY
   // RPi set the AMPDU parameter for AP (window size = 2) *****************
   // val = 2 ; cyw_ioctl_iovar_set_(0, "ampdu_ba_wsize", (uint8_t *)&val, sizeof(val));
@@ -21800,10 +21800,10 @@ static bool cyw_wifi_ap_start(char *ssid, char *pass, unsigned int channel) {
   da[1] = 1; // indicates wireless security key, skip for WPA3 SAE
   memcpy((uint8_t *)data + 2 * sizeof(uint16_t), pass, len); // skip for WPA3 SAE
   if (!cyw_ioctl_set_(1, 268 /* SET_WSEC_PMK */, data, sizeof(data))) return false; // skip for WPA3 SAE, sizeof/2 if supporting SAE but using WPA
-  /* for WPA3 SAE: 
+  /* for WPA3 SAE:
     memcpy((uint8_t *)data + sizeof(uint16_t), pass, len);
     cyw_ioctl_iovar_set_(1, "sae_password", data, sizeof(data)); */
-  /* for WPA3 or mixed WPA2/WPA3: 
+  /* for WPA3 or mixed WPA2/WPA3:
     val = 5 ; cyw_ioctl_iovar_set_(1, "sae_max_pwe_loop", (uint8_t *)&val, sizeof(val));  // Some chipsets do not support this */
   // resume if not using auth
 
@@ -21949,7 +21949,7 @@ static void cyw_handle_scan_result(uint32_t status, struct scan_result *data, si
     bss.band = band & CYW_BSS_BAND2G ? MG_WIFI_BAND_2G : MG_WIFI_BAND_5G;
     bss.security = (sbss->capability & MG_BIT(4) /* CAP_PRIVACY */) ? MG_WIFI_SECURITY_WEP : MG_WIFI_SECURITY_OPEN;
     { // travel IEs (Information Elements) in search of security definitions
-      const uint8_t wot1[4] = {0x00, 0x50, 0xf2, 0x01}; // WPA_OUI_TYPE1                     
+      const uint8_t wot1[4] = {0x00, 0x50, 0xf2, 0x01}; // WPA_OUI_TYPE1
       uint8_t *ie = (uint8_t *)sbss + sbss->ie_offset;
       int bytes = (int) sbss->ie_length;
       while (bytes > 0 && ie[1] + 2 < bytes) { // ie[0] -> type, ie[1] -> bytes from ie[2]
@@ -21960,11 +21960,11 @@ static void cyw_handle_scan_result(uint32_t status, struct scan_result *data, si
         bytes -= ie[1] + 2;
       }
     }
-    MG_VERBOSE(("BSS: %.*s (%u) (%M) %d dBm %u", bss.SSID.len, bss.SSID.buf, bss.channel, mg_print_mac, bss.BSSID, (int) bss.RSSI, bss.security));  
+    MG_VERBOSE(("BSS: %.*s (%u) (%M) %d dBm %u", bss.SSID.len, bss.SSID.buf, bss.channel, mg_print_mac, bss.BSSID, (int) bss.RSSI, bss.security));
     mg_tcpip_call(s_ifp, MG_TCPIP_EV_WIFI_SCAN_RESULT, &bss);
   } else {
     MG_ERROR(("scan error"));
-  } 
+  }
 }
 // clang-format on
 
@@ -21986,7 +21986,7 @@ static void cyw_handle_cdc(struct cdc_hdr *cdc, size_t len) {
     return;
   }
   if (mg_log_level >= MG_LL_VERBOSE) mg_hexdump((void *) cdc, len);
-  MG_DEBUG(("IOCTL result: %02x %02x %02x %02x ...", r[0], r[1], r[2], r[3]));
+  MG_VERBOSE(("IOCTL result: %02x %02x %02x %02x ..", r[0], r[1], r[2], r[3]));
   s_ioctl_resp = r;
 }
 // NOTE(): alt no loop handler dispatching IOCTL response to current handler:
@@ -22156,7 +22156,7 @@ static bool cyw_init(uint8_t *mac) {
   // CHIP DEPENDENCY
   val = 8 ; cyw_ioctl_iovar_set("ampdu_ba_wsize", (uint8_t *)&val, sizeof(val));
   val = 4 ; cyw_ioctl_iovar_set("ampdu_mpdu", (uint8_t *)&val, sizeof(val));
-  val = 0 /* 8K */; cyw_ioctl_iovar_set("ampdu_rx_factor", (uint8_t *)&val, sizeof(val));  
+  val = 0 /* 8K */; cyw_ioctl_iovar_set("ampdu_rx_factor", (uint8_t *)&val, sizeof(val));
   //
   {
     struct cyw_country c;
@@ -22374,7 +22374,7 @@ static bool cyw_load_fwll(void *fwdata, size_t fwlen, void *nvramdata, size_t nv
   cyw_load_data(CYW_CHIP_ATCMRAM_BASE, fwdata, fwlen);
   mg_delayms(5); // TODO(scaprile): CHECK IF THIS IS ACTUALLY NEEDED
   // Load NVRAM and place 'length ~length' at the end; end of chip RAM
-  { 
+  {
     const uint32_t start = CYW_CHIP_RAM_SIZE - 4 - nvramlen;
     cyw_load_data(start, nvramdata, nvramlen); // nvramlen must be a multiple of 4
     // RAM_SIZE is a multiple of WINSZ, so the place for len ~len will be at the end of the window
@@ -22665,7 +22665,7 @@ static bool cyw_sdio_init() {
   struct mg_tcpip_sdio *s = (struct mg_tcpip_sdio *) d->bus;
   uint32_t val = 0;
   if (!mg_sdio_init(s)) return false;
-  // no block transfers on F0. if (!mg_sdio_set_blksz(s, CYW_SDIO_FUNC_BUS, 32)) return false; 
+  // no block transfers on F0. if (!mg_sdio_set_blksz(s, CYW_SDIO_FUNC_BUS, 32)) return false;
   if (!mg_sdio_set_blksz(s, CYW_SDIO_FUNC_CHIP, 64)) return false;
   if (!mg_sdio_set_blksz(s, CYW_SDIO_FUNC_WLAN, 64)) return false;
   // TODO(scaprile): we don't handle SDIO interrupts, study CCCR INTEN and SDIO support (SDIO 6.3, 8)
