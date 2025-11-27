@@ -26,7 +26,8 @@ firmware.elf: cmsis_core cmsis_mcu mbed $(SOURCES) $(wildcard *.h) link.ld Makef
 	arm-none-eabi-gcc $(SOURCES) $(CFLAGS) $(LDFLAGS) -o $@
 
 flash: firmware.bin
-	STM32_Programmer_CLI -c port=swd -w $< 0x8040000 -hardRst
+	dfu-util -a 0 -s 0x8040000:leave -D $<
+	# connecting SWD: STM32_Programmer_CLI -c port=swd -w $< 0x8040000 -hardRst
 
 cmsis_core:     # ARM CMSIS core headers
 	git clone --depth 1 -b 5.9.0 https://github.com/ARM-software/CMSIS_5 $@
