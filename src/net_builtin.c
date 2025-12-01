@@ -557,7 +557,7 @@ static void rx_dhcp_client(struct mg_tcpip_if *ifp, struct pkt *pkt) {
   // perform size check first, then access fields
   uint8_t *p = pkt->dhcp->options,
           *end = (uint8_t *) &pkt->pay.buf[pkt->pay.len];
-  if (end < (uint8_t *) (pkt->dhcp + 1)) return;
+  if (end < p) return; // options are optional, check min header length
   if (memcmp(&pkt->dhcp->xid, ifp->mac + 2, sizeof(pkt->dhcp->xid))) return;
   while (p + 1 < end && p[0] != 255) {  // Parse options RFC-1533 #9
     if (p[0] == 1 && p[1] == sizeof(ifp->mask) && p + 6 < end) {  // Mask
@@ -619,7 +619,7 @@ static void rx_dhcp_server(struct mg_tcpip_if *ifp, struct pkt *pkt) {
           *end = (uint8_t *) &pkt->pay.buf[pkt->pay.len];
   // struct dhcp *req = pkt->dhcp;
   struct dhcp res = {2, 1, 6, 0, 0, 0, 0, 0, 0, 0, 0, {0}, 0, {0}};
-  if (end < (uint8_t *) (pkt->dhcp + 1)) return;
+  if (end < p) return; // options are optional, check min header length
   res.yiaddr = ifp->ip;
   ((uint8_t *) (&res.yiaddr))[3]++;                // Offer our IP + 1
   while (p + 1 < end && p[0] != 255) {             // Parse options
@@ -1450,11 +1450,11 @@ static void rx_ip(struct mg_tcpip_if *ifp, struct pkt *pkt) {
                 mg_ntohs(pkt->udp->dport), (int) pkt->pay.len));
     if (ifp->enable_dhcp_client && pkt->udp->dport == mg_htons(68)) {
       pkt->dhcp = (struct dhcp *) (pkt->udp + 1);
-      mkpay(pkt, pkt->dhcp + 1);
+      mkpay(pkt, &pkt->dhcp->options);
       rx_dhcp_client(ifp, pkt);
     } else if (ifp->enable_dhcp_server && pkt->udp->dport == mg_htons(67)) {
       pkt->dhcp = (struct dhcp *) (pkt->udp + 1);
-      mkpay(pkt, pkt->dhcp + 1);
+      mkpay(pkt, &pkt->dhcp->options);
       rx_dhcp_server(ifp, pkt);
     } else if (!rx_udp(ifp, pkt)) {
       // Should send ICMP Destination Unreachable for unicasts, but keep
