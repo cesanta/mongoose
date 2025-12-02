@@ -57,13 +57,13 @@ static socklen_t tousa(struct mg_addr *a, union usa *usa) {
   memset(usa, 0, sizeof(*usa));
   usa->sin.sin_family = AF_INET;
   usa->sin.sin_port = a->port;
-  memcpy(&usa->sin.sin_addr, a->ip, sizeof(uint32_t));
+  memcpy(&usa->sin.sin_addr, a->addr.ip, sizeof(uint32_t));
 #if MG_ENABLE_IPV6
   if (a->is_ip6) {
     usa->sin.sin_family = AF_INET6;
     usa->sin6.sin6_port = a->port;
     usa->sin6.sin6_scope_id = a->scope_id;
-    memcpy(&usa->sin6.sin6_addr, a->ip, sizeof(a->ip));
+    memcpy(&usa->sin6.sin6_addr, a->addr.ip, sizeof(a->addr.ip));
     len = sizeof(usa->sin6);
   }
 #endif
@@ -73,10 +73,10 @@ static socklen_t tousa(struct mg_addr *a, union usa *usa) {
 static void tomgaddr(union usa *usa, struct mg_addr *a, bool is_ip6) {
   a->is_ip6 = is_ip6;
   a->port = usa->sin.sin_port;
-  memcpy(&a->ip, &usa->sin.sin_addr, sizeof(uint32_t));
+  memcpy(&a->addr.ip, &usa->sin.sin_addr, sizeof(uint32_t));
 #if MG_ENABLE_IPV6
   if (is_ip6) {
-    memcpy(a->ip, &usa->sin6.sin6_addr, sizeof(a->ip));
+    memcpy(a->addr.ip, &usa->sin6.sin6_addr, sizeof(a->addr.ip));
     a->port = usa->sin6.sin6_port;
     a->scope_id = (uint8_t) usa->sin6.sin6_scope_id;
   }

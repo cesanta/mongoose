@@ -31,7 +31,6 @@ struct mg_dns_rr {
   uint16_t alen;    // Address length
 };
 
-
 // DNS-SD response record
 struct mg_dnssd_record {
   struct mg_str srvcproto;  // service.proto, service name
@@ -43,8 +42,8 @@ struct mg_dnssd_record {
 struct mg_mdns_req {
   struct mg_dns_rr *rr;
   struct mg_dnssd_record *r;
-  struct mg_str reqname;        // requested name in RR
-  struct mg_str respname;       // actual name in response
+  struct mg_str reqname;   // requested name in RR
+  struct mg_str respname;  // actual name in response
   struct mg_addr addr;
   bool is_listing;
   bool is_resp;
@@ -56,5 +55,6 @@ void mg_resolve_cancel(struct mg_connection *);
 bool mg_dns_parse(const uint8_t *buf, size_t len, struct mg_dns_message *);
 size_t mg_dns_parse_rr(const uint8_t *buf, size_t len, size_t ofs,
                        bool is_question, struct mg_dns_rr *);
-                       
-struct mg_connection *mg_mdns_listen(struct mg_mgr *mgr, mg_event_handler_t fn, void *fn_data);
+
+struct mg_connection *mg_mdns_listen(struct mg_mgr *mgr, mg_event_handler_t fn,
+                                     void *fn_data);

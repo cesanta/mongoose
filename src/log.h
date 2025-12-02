@@ -16,12 +16,18 @@ void mg_log_set_fn(mg_pfn_t fn, void *param);
 #define mg_log_set(level_) mg_log_level = (level_)
 
 #if MG_ENABLE_LOG
-#define MG_LOG(level, args)                                 \
-  do {                                                      \
-    if ((level) <= mg_log_level) {                          \
-      mg_log_prefix((level), __FILE__, __LINE__, __func__); \
-      mg_log args;                                          \
-    }                                                       \
+#if !defined(_MSC_VER) && \
+    (!defined(__STDC_VERSION__) || __STDC_VERSION__ < 199901L)
+#define MG___FUNC__ ""
+#else
+#define MG___FUNC__ __func__  // introduced in C99
+#endif
+#define MG_LOG(level, args)                                    \
+  do {                                                         \
+    if ((level) <= mg_log_level) {                             \
+      mg_log_prefix((level), __FILE__, __LINE__, MG___FUNC__); \
+      mg_log args;                                             \
+    }                                                          \
   } while (0)
 #else
 #define MG_LOG(level, args) \

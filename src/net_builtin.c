@@ -34,7 +34,11 @@ struct connstate {
   bool twclosure;        // 3-way closure done
 };
 
+#if defined(__DCC__)
+#pragma pack(1)
+#else
 #pragma pack(push, 1)
+#endif
 
 struct lcp {
   uint8_t addr, ctrl, proto[2], code, id, len[2];
@@ -153,7 +157,11 @@ struct dhcp6 {
   uint8_t options[30 + sizeof(((struct mg_tcpip_if *) 0)->dhcp_name)];
 };
 
+#if defined(__DCC__)
+#pragma pack(0)
+#else
 #pragma pack(pop)
+#endif
 
 // pkt is 8-bit aligned, pointers to headers hint compilers to generate
 // byte-copy code for micros with alignment constraints
@@ -356,14 +364,14 @@ static bool tx_udp(struct mg_tcpip_if *ifp, uint8_t *mac_dst,
 #if MG_ENABLE_IPV6
   struct ip6 *ip6 = NULL;
   if (ip_dst->is_ip6) {
-    ip6 = tx_ip6(ifp, mac_dst, 17, ip_src->ip6, ip_dst->ip6,
+    ip6 = tx_ip6(ifp, mac_dst, 17, ip_src->addr.ip6, ip_dst->addr.ip6,
                  len + sizeof(struct udp));
     udp = (struct udp *) (ip6 + 1);
     eth_len = sizeof(struct eth) + sizeof(*ip6) + sizeof(*udp) + len;
   } else
 #endif
   {
-    ip = tx_ip(ifp, mac_dst, 17, ip_src->ip4, ip_dst->ip4,
+    ip = tx_ip(ifp, mac_dst, 17, ip_src->addr.ip4, ip_dst->addr.ip4,
                len + sizeof(struct udp));
     udp = (struct udp *) (ip + 1);
     eth_len = sizeof(struct eth) + sizeof(*ip) + sizeof(*udp) + len;
@@ -395,10 +403,10 @@ static bool tx_udp4(struct mg_tcpip_if *ifp, uint8_t *mac_dst, uint32_t ip_src,
                     const void *buf, size_t len) {
   struct mg_addr ips, ipd;
   memset(&ips, 0, sizeof(ips));
-  ips.ip4 = ip_src;
+  ips.addr.ip4 = ip_src;
   ips.port = sport;
   memset(&ipd, 0, sizeof(ipd));
-  ipd.ip4 = ip_dst;
+  ipd.addr.ip4 = ip_dst;
   ipd.port = dport;
   return tx_udp(ifp, mac_dst, &ips, &ipd, buf, len);
 }
@@ -470,11 +478,11 @@ static struct mg_connection *getpeer(struct mg_mgr *mgr, struct pkt *pkt,
                                      bool lsn) {
   struct mg_connection *c = NULL;
   for (c = mgr->conns; c != NULL; c = c->next) {
-    if (c->is_arplooking && pkt->arp && pkt->arp->spa == c->rem.ip4) break;
+    if (c->is_arplooking && pkt->arp && pkt->arp->spa == c->rem.addr.ip4) break;
 #if MG_ENABLE_IPV6
     if (c->is_arplooking && pkt->icmp6 && pkt->icmp6->type == 136) {
       struct ndp_na *na = (struct ndp_na *) (pkt->icmp6 + 1);
-      if (MG_IP6MATCH(na->addr, c->rem.ip6)) break;
+      if (MG_IP6MATCH(na->addr, c->rem.addr.ip6)) break;
     }
 #endif
     if (c->is_udp && pkt->udp && c->loc.port == pkt->udp->dport &&
@@ -526,8 +534,8 @@ static void rx_arp(struct mg_tcpip_if *ifp, struct pkt *pkt) {
       if (c != NULL && c->is_arplooking) {
         struct connstate *s = (struct connstate *) (c + 1);
         memcpy(s->mac, pkt->arp->sha, sizeof(s->mac));
-        MG_DEBUG(("%lu ARP resolved %M -> %M", c->id, mg_print_ip4, c->rem.ip,
-                  mg_print_mac, s->mac));
+        MG_DEBUG(("%lu ARP resolved %M -> %M", c->id, mg_print_ip4,
+                  c->rem.addr.ip, mg_print_mac, s->mac));
         c->is_arplooking = 0;
         mac_resolved(c);
       }
@@ -542,7 +550,7 @@ static void rx_icmp(struct mg_tcpip_if *ifp, struct pkt *pkt) {
     struct ip *ip;
     struct icmp *icmp;
     struct mg_addr ips;
-    ips.ip4 = pkt->ip->src;
+    ips.addr.ip4 = pkt->ip->src;
     ips.is_ip6 = false;
     if (get_return_mac(ifp, &ips, false, pkt) == NULL)
       return;  // safety net for lousy networks
@@ -640,13 +648,14 @@ static void rx_dhcp_server(struct mg_tcpip_if *ifp, struct pkt *pkt) {
   if (op == 1 || op == 3) {         // DHCP Discover or DHCP Request
     uint8_t msg = op == 1 ? 2 : 5;  // Message type: DHCP OFFER or DHCP ACK
     uint8_t opts[] = {
-        53, 1, msg,                 // Message type
+        53, 1, 0,                   // Message type
         1,  4, 0,   0,   0,   0,    // Subnet mask
         54, 4, 0,   0,   0,   0,    // Server ID
         12, 3, 'm', 'i', 'p',       // Host name: "mip"
         51, 4, 255, 255, 255, 255,  // Lease time
         255                         // End of options
     };
+    opts[2] = msg;
     memcpy(&res.hwaddr, pkt->dhcp->hwaddr, 6);
     memcpy(opts + 5, &ifp->mask, sizeof(ifp->mask));
     memcpy(opts + 11, &ifp->ip, sizeof(ifp->ip));
@@ -742,8 +751,8 @@ static void rx_ndp_na(struct mg_tcpip_if *ifp, struct pkt *pkt) {
     if (c != NULL && c->is_arplooking) {
       struct connstate *s = (struct connstate *) (c + 1);
       memcpy(s->mac, opts, sizeof(s->mac));
-      MG_DEBUG(("%lu NDP resolved %M -> %M", c->id, mg_print_ip6, c->rem.ip,
-                mg_print_mac, s->mac));
+      MG_DEBUG(("%lu NDP resolved %M -> %M", c->id, mg_print_ip6,
+                c->rem.addr.ip, mg_print_mac, s->mac));
       c->is_arplooking = 0;
       mac_resolved(c);
     }
@@ -955,7 +964,7 @@ static uint8_t *get_return_mac(struct mg_tcpip_if *ifp, struct mg_addr *rem,
   } else
 #endif
   {
-    uint32_t rem_ip = rem->ip4;
+    uint32_t rem_ip = rem->addr.ip4;
     if (is_udp && (rem_ip == 0xffffffff || rem_ip == (ifp->ip | ~ifp->mask)))
       return (uint8_t *) broadcast;  // global or local broadcast
     if (ifp->ip != 0 && ((rem_ip & ifp->mask) == (ifp->ip & ifp->mask)))
@@ -981,12 +990,12 @@ static bool rx_udp(struct mg_tcpip_if *ifp, struct pkt *pkt) {
   c->rem.port = pkt->udp->sport;
 #if MG_ENABLE_IPV6
   if (c->loc.is_ip6) {
-    c->rem.ip6[0] = pkt->ip6->src[0], c->rem.ip6[1] = pkt->ip6->src[1],
-    c->rem.is_ip6 = true;
+    c->rem.addr.ip6[0] = pkt->ip6->src[0],
+    c->rem.addr.ip6[1] = pkt->ip6->src[1], c->rem.is_ip6 = true;
   } else
 #endif
   {
-    c->rem.ip4 = pkt->ip->src;
+    c->rem.addr.ip4 = pkt->ip->src;
   }
   if ((mac = get_return_mac(ifp, &c->rem, true, pkt)) == NULL)
     return false;  // safety net for lousy networks
@@ -1025,13 +1034,13 @@ static size_t tx_tcp(struct mg_tcpip_if *ifp, uint8_t *mac_dst,
   }
 #if MG_ENABLE_IPV6
   if (ip_dst->is_ip6) {
-    ip6 = tx_ip6(ifp, mac_dst, 6, ip_src->ip6, ip_dst->ip6,
+    ip6 = tx_ip6(ifp, mac_dst, 6, ip_src->addr.ip6, ip_dst->addr.ip6,
                  sizeof(struct tcp) + len);
     tcp = (struct tcp *) (ip6 + 1);
   } else
 #endif
   {
-    ip = tx_ip(ifp, mac_dst, 6, ip_src->ip4, ip_dst->ip4,
+    ip = tx_ip(ifp, mac_dst, 6, ip_src->addr.ip4, ip_dst->addr.ip4,
                sizeof(struct tcp) + len);
     tcp = (struct tcp *) (ip + 1);
   }
@@ -1054,9 +1063,6 @@ static size_t tx_tcp(struct mg_tcpip_if *ifp, uint8_t *mac_dst,
       cs = csumup(cs, &ip6->src, sizeof(ip6->src));
       cs = csumup(cs, &ip6->dst, sizeof(ip6->dst));
       cs += (uint32_t) (6 + n);
-      MG_VERBOSE(("TCP %M:%hu -> %M:%hu fl %x len %u", mg_print_ip6, &ip6->src,
-                  mg_ntohs(tcp->sport), mg_print_ip6, &ip6->dst,
-                  mg_ntohs(tcp->dport), tcp->flags, len));
     } else
 #endif
     {
@@ -1065,12 +1071,11 @@ static size_t tx_tcp(struct mg_tcpip_if *ifp, uint8_t *mac_dst,
       cs = csumup(cs, &ip->src, sizeof(ip->src));
       cs = csumup(cs, &ip->dst, sizeof(ip->dst));
       cs = csumup(cs, pseudo, sizeof(pseudo));
-      MG_VERBOSE(("TCP %M:%hu -> %M:%hu fl %x len %u", mg_print_ip4, &ip->src,
-                  mg_ntohs(tcp->sport), mg_print_ip4, &ip->dst,
-                  mg_ntohs(tcp->dport), tcp->flags, len));
     }
     tcp->csum = csumfin(cs);
   }
+  MG_VERBOSE(("TCP %M -> %M fl %x len %u", mg_print_ip_port, ip_src,
+              mg_print_ip_port, ip_dst, tcp->flags, len));
   return ether_output(ifp, PDIFF(ifp->tx.buf, tcp + 1) + len);
 }
 
@@ -1083,11 +1088,11 @@ static size_t tx_tcp_ctrlresp(struct mg_tcpip_if *ifp, struct pkt *pkt,
   memset(&ips, 0, sizeof(ips));
   memset(&ipd, 0, sizeof(ipd));
   if (pkt->ip != NULL) {
-    ips.ip4 = pkt->ip->dst;
-    ipd.ip4 = pkt->ip->src;
+    ips.addr.ip4 = pkt->ip->dst;
+    ipd.addr.ip4 = pkt->ip->src;
   } else {
-    ips.ip6[0] = pkt->ip6->dst[0], ips.ip6[1] = pkt->ip6->dst[1];
-    ipd.ip6[0] = pkt->ip6->src[0], ipd.ip6[1] = pkt->ip6->src[1];
+    ips.addr.ip6[0] = pkt->ip6->dst[0], ips.addr.ip6[1] = pkt->ip6->dst[1];
+    ipd.addr.ip6[0] = pkt->ip6->src[0], ipd.addr.ip6[1] = pkt->ip6->src[1];
     ips.is_ip6 = true;
     ipd.is_ip6 = true;
   }
@@ -1117,16 +1122,16 @@ static struct mg_connection *accept_conn(struct mg_connection *lsn,
   s->seq = mg_ntohl(pkt->tcp->ack), s->ack = mg_ntohl(pkt->tcp->seq);
 #if MG_ENABLE_IPV6
   if (lsn->loc.is_ip6) {
-    c->rem.ip6[0] = pkt->ip6->src[0], c->rem.ip6[1] = pkt->ip6->src[1],
-    c->rem.is_ip6 = true;
-    c->loc.ip6[0] = c->mgr->ifp->ip6[0], c->loc.ip6[1] = c->mgr->ifp->ip6[1],
-    c->loc.is_ip6 = true;
+    c->rem.addr.ip6[0] = pkt->ip6->src[0],
+    c->rem.addr.ip6[1] = pkt->ip6->src[1], c->rem.is_ip6 = true;
+    c->loc.addr.ip6[0] = c->mgr->ifp->ip6[0],
+    c->loc.addr.ip6[1] = c->mgr->ifp->ip6[1], c->loc.is_ip6 = true;
     // TODO(): compare lsn to link-local, or rem as link-local: use ll instead
   } else
 #endif
   {
-    c->rem.ip4 = pkt->ip->src;
-    c->loc.ip4 = c->mgr->ifp->ip;
+    c->rem.addr.ip4 = pkt->ip->src;
+    c->loc.addr.ip4 = c->mgr->ifp->ip;
   }
   c->rem.port = pkt->tcp->sport;
   c->loc.port = lsn->loc.port;
@@ -1188,12 +1193,13 @@ static bool udp_send(struct mg_connection *c, const void *buf, size_t len) {
   memset(&ips, 0, sizeof(ips));
 #if MG_ENABLE_IPV6
   if (c->loc.is_ip6) {
-    ips.ip6[0] = ifp->ip6[0], ips.ip6[1] = ifp->ip6[1], ips.is_ip6 = true;
+    ips.addr.ip6[0] = ifp->ip6[0], ips.addr.ip6[1] = ifp->ip6[1],
+    ips.is_ip6 = true;
     // TODO(): detect link-local (c->rem) and use it
   } else
 #endif
   {
-    ips.ip4 = ifp->ip;
+    ips.addr.ip4 = ifp->ip;
   }
   ips.port = c->loc.port;
   return tx_udp(ifp, s->mac, &ips, &c->rem, buf, len);
@@ -1931,12 +1937,12 @@ void mg_connect_resolved(struct mg_connection *c) {
   c->loc.port = mg_htons(ifp->eport++);
 #if MG_ENABLE_IPV6
   if (c->rem.is_ip6) {
-    c->loc.ip6[0] = ifp->ip6[0], c->loc.ip6[1] = ifp->ip6[1],
+    c->loc.addr.ip6[0] = ifp->ip6[0], c->loc.addr.ip6[1] = ifp->ip6[1],
     c->loc.is_ip6 = true;
   } else
 #endif
   {
-    c->loc.ip4 = ifp->ip;
+    c->loc.addr.ip4 = ifp->ip;
   }
   MG_DEBUG(("%lu %M -> %M", c->id, mg_print_ip_port, &c->loc, mg_print_ip_port,
             &c->rem));
@@ -1945,21 +1951,21 @@ void mg_connect_resolved(struct mg_connection *c) {
 #if MG_ENABLE_IPV6
   if (c->rem.is_ip6) {
     if (c->is_udp &&
-        MG_IP6MATCH(c->rem.ip6, ip6_allnodes.u)) {  // local broadcast
+        MG_IP6MATCH(c->rem.addr.ip6, ip6_allnodes.u)) {  // local broadcast
       struct connstate *s = (struct connstate *) (c + 1);
       memcpy(s->mac, ip6mac_allnodes, sizeof(s->mac));
       mac_resolved(c);
-    } else if (c->rem.ip6[0] == ifp->ip6[0] &&  // TODO(): HANDLE PREFIX ***
-               !MG_IP6MATCH(c->rem.ip6,
+    } else if (c->rem.addr.ip6[0] == ifp->ip6[0] &&  // TODO(): HANDLE PREFIX ***
+               !MG_IP6MATCH(c->rem.addr.ip6,
                             ifp->gw6)) {  // skip if gw (onstate6change -> NS)
       // If we're in the same LAN, fire a Neighbor Solicitation
       MG_DEBUG(("%lu NS lookup...", c->id));
-      tx_ndp_ns(ifp, c->rem.ip6, ifp->mac);
+      tx_ndp_ns(ifp, c->rem.addr.ip6, ifp->mac);
       settmout(c, MIP_TTYPE_ARP);
       c->is_arplooking = 1;
-    } else if (c->is_udp && *((uint8_t *) c->rem.ip6) == 0xFF) {  // multicast
+    } else if (c->is_udp && *((uint8_t *) c->rem.addr.ip6) == 0xFF) {  // multicast
       struct connstate *s = (struct connstate *) (c + 1);
-      ip6_mcastmac(s->mac, c->rem.ip6);
+      ip6_mcastmac(s->mac, c->rem.addr.ip6);
       mac_resolved(c);
     } else if (ifp->gw6_ready) {
       struct connstate *s = (struct connstate *) (c + 1);
@@ -1971,7 +1977,7 @@ void mg_connect_resolved(struct mg_connection *c) {
   } else
 #endif
   {
-    uint32_t rem_ip = c->rem.ip4;
+    uint32_t rem_ip = c->rem.addr.ip4;
     if (c->is_udp &&
         (rem_ip == 0xffffffff || rem_ip == (ifp->ip | ~ifp->mask))) {
       struct connstate *s = (struct connstate *) (c + 1);

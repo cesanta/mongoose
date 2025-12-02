@@ -120,7 +120,7 @@ int mg_check_ip_acl(struct mg_str acl, struct mg_addr *remote_ip) {
   if (remote_ip->is_ip6) {
     return -1;  // TODO(): handle IPv6 ACL and addresses
   } else {      // IPv4
-    memcpy((void *) &remote_ip4, remote_ip->ip, sizeof(remote_ip4));
+    memcpy((void *) &remote_ip4, remote_ip->addr.ip, sizeof(remote_ip4));
     while (mg_span(acl, &entry, &acl, ',')) {
       uint32_t net, mask;
       if (entry.buf[0] != '+' && entry.buf[0] != '-') return -1;
@@ -134,7 +134,7 @@ int mg_check_ip_acl(struct mg_str acl, struct mg_addr *remote_ip) {
 bool mg_path_is_sane(const struct mg_str path) {
   const char *s = path.buf;
   size_t n = path.len;
-  if (path.buf[0] == '~') return false;  // Starts with ~
+  if (path.buf[0] == '~') return false;                        // Starts with ~
   if (path.buf[0] == '.' && path.buf[1] == '.') return false;  // Starts with ..
   for (; s[0] != '\0' && n > 0; s++, n--) {
     if ((s[0] == '/' || s[0] == '\\') && n >= 2) {   // Subdir?
@@ -212,7 +212,6 @@ void mg_delayms(unsigned int ms) {
   uint64_t to = mg_millis() + ms + 1;
   while (mg_millis() < to) (void) 0;
 }
-
 
 #if MG_ENABLE_CUSTOM_CALLOC
 #else

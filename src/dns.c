@@ -136,12 +136,12 @@ bool mg_dns_parse(const uint8_t *buf, size_t len, struct mg_dns_message *dm) {
 
     if (rr.alen == 4 && rr.atype == 1 && rr.aclass == 1) {
       dm->addr.is_ip6 = false;
-      memcpy(&dm->addr.ip, &buf[ofs - 4], 4);
+      memcpy(&dm->addr.addr.ip, &buf[ofs - 4], 4);
       dm->resolved = true;
       break;  // Return success
     } else if (rr.alen == 16 && rr.atype == 28 && rr.aclass == 1) {
       dm->addr.is_ip6 = true;
-      memcpy(&dm->addr.ip, &buf[ofs - 16], 16);
+      memcpy(&dm->addr.addr.ip, &buf[ofs - 16], 16);
       dm->resolved = true;
       break;  // Return success
     }
