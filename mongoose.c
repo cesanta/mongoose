@@ -4872,6 +4872,8 @@ static struct mg_connection *getpeer(struct mg_mgr *mgr, struct pkt *pkt,
 }
 
 static void mac_resolved(struct mg_connection *c);
+static uint8_t *get_return_mac(struct mg_tcpip_if *ifp, struct mg_addr *rem,
+                               bool is_udp, struct pkt *pkt);
 
 static void rx_arp(struct mg_tcpip_if *ifp, struct pkt *pkt) {
   if (pkt->arp->op == mg_htons(1) && pkt->arp->tpa == ifp->ip) {
@@ -4897,6 +4899,7 @@ static void rx_arp(struct mg_tcpip_if *ifp, struct pkt *pkt) {
     if (pkt->arp->spa == ifp->gw) {
       // Got response for the GW ARP request. Set ifp->gwmac and IP -> READY
       memcpy(ifp->gwmac, pkt->arp->sha, sizeof(ifp->gwmac));
+      ifp->gw_ready = true;
       if (ifp->state == MG_TCPIP_STATE_IP) {
         ifp->state = MG_TCPIP_STATE_READY;
         onstatechange(ifp);
@@ -4921,6 +4924,11 @@ static void rx_icmp(struct mg_tcpip_if *ifp, struct pkt *pkt) {
     size_t space = ifp->tx.len - hlen, plen = pkt->pay.len;
     struct ip *ip;
     struct icmp *icmp;
+    struct mg_addr ips;
+    ips.ip4 = pkt->ip->src;
+    ips.is_ip6 = false;
+    if (get_return_mac(ifp, &ips, false, pkt) == NULL)
+      return;  // safety net for lousy networks
     if (plen > space) plen = space;
     ip = tx_ip(ifp, pkt->eth->src, 1, ifp->ip, pkt->ip->src,
                sizeof(*icmp) + plen);
@@ -4940,7 +4948,7 @@ static void rx_dhcp_client(struct mg_tcpip_if *ifp, struct pkt *pkt) {
   // perform size check first, then access fields
   uint8_t *p = pkt->dhcp->options,
           *end = (uint8_t *) &pkt->pay.buf[pkt->pay.len];
-  if (end < p) return; // options are optional, check min header length
+  if (end < p) return;  // options are optional, check min header length
   if (memcmp(&pkt->dhcp->xid, ifp->mac + 2, sizeof(pkt->dhcp->xid))) return;
   while (p + 1 < end && p[0] != 255) {  // Parse options RFC-1533 #9
     if (p[0] == 1 && p[1] == sizeof(ifp->mask) && p + 6 < end) {  // Mask
@@ -4978,6 +4986,7 @@ static void rx_dhcp_client(struct mg_tcpip_if *ifp, struct pkt *pkt) {
       MG_INFO(("Lease: %u sec (%lld)", lease, ifp->lease_expire / 1000));
       // assume DHCP server = router until ARP resolves
       memcpy(ifp->gwmac, pkt->eth->src, sizeof(ifp->gwmac));
+      ifp->gw_ready = true;  // NOTE(): actual gw ARP won't retry now
       ifp->ip = ip, ifp->gw = gw, ifp->mask = mask;
       ifp->state = MG_TCPIP_STATE_IP;  // BOUND state
       mg_random(&rand, sizeof(rand));
@@ -5002,7 +5011,7 @@ static void rx_dhcp_server(struct mg_tcpip_if *ifp, struct pkt *pkt) {
           *end = (uint8_t *) &pkt->pay.buf[pkt->pay.len];
   // struct dhcp *req = pkt->dhcp;
   struct dhcp res = {2, 1, 6, 0, 0, 0, 0, 0, 0, 0, 0, {0}, 0, {0}};
-  if (end < p) return; // options are optional, check min header length
+  if (end < p) return;  // options are optional, check min header length
   res.yiaddr = ifp->ip;
   ((uint8_t *) (&res.yiaddr))[3]++;                // Offer our IP + 1
   while (p + 1 < end && p[0] != 255) {             // Parse options
@@ -5106,6 +5115,7 @@ static void rx_ndp_na(struct mg_tcpip_if *ifp, struct pkt *pkt) {
   if (MG_IP6MATCH(na->addr, ifp->gw6)) {
     // Got response for the GW NS request. Set ifp->gw6mac and IP6 -> READY
     memcpy(ifp->gw6mac, opts, sizeof(ifp->gw6mac));
+    ifp->gw6_ready = true;
     if (ifp->state6 == MG_TCPIP_STATE_IP) {
       ifp->state6 = MG_TCPIP_STATE_READY;
       onstate6change(ifp);
@@ -5226,6 +5236,7 @@ static void rx_ndp_ra(struct mg_tcpip_if *ifp, struct pkt *pkt) {
         // Received router's MAC address
         ifp->state6 = MG_TCPIP_STATE_READY;
         memcpy(ifp->gw6mac, opts + 2, 6);
+        ifp->gw6_ready = true;
       } else if (type == 5 && length >= 8) {
         // process MTU if available
         uint32_t mtu = mg_ntohl(*(uint32_t *) (opts + 4));
@@ -5272,6 +5283,11 @@ static void rx_icmp6(struct mg_tcpip_if *ifp, struct pkt *pkt) {
         size_t hlen =
             sizeof(struct eth) + sizeof(struct ip6) + sizeof(struct icmp6);
         size_t space = ifp->tx.len - hlen, plen = pkt->pay.len;
+        struct mg_addr ips;
+        ips.ip6[0] = pkt->ip6->src[0], ips.ip6[1] = pkt->ip6->src[1];
+        ips.is_ip6 = true;
+        if (get_return_mac(ifp, &ips, false, pkt) == NULL)
+          return;                        // safety net for lousy networks
         if (plen > space) plen = space;  // Copy (truncated) RX payload to TX
         // Echo Reply, 4.2
         tx_icmp6(ifp, pkt->eth->src, pkt->ip6->dst, pkt->ip6->src, 129, 0,
@@ -5296,7 +5312,7 @@ static void onstate6change(struct mg_tcpip_if *ifp) {
     MG_INFO(("       GW: %M", mg_print_ip6, &ifp->gw6));
     MG_INFO(("      MAC: %M", mg_print_mac, &ifp->mac));
   } else if (ifp->state6 == MG_TCPIP_STATE_IP) {
-    if (ifp->gw6[0] != 0 || ifp->gw6[1] != 0) 
+    if (ifp->gw6[0] != 0 || ifp->gw6[1] != 0)
       tx_ndp_ns(ifp, ifp->gw6, ifp->gw6mac);  // unsolicited GW MAC resolution
   } else if (ifp->state6 == MG_TCPIP_STATE_UP) {
     MG_INFO(("IP: %M", mg_print_ip6, &ifp->ip6ll));
@@ -5306,9 +5322,43 @@ static void onstate6change(struct mg_tcpip_if *ifp) {
 }
 #endif
 
+static uint8_t *get_return_mac(struct mg_tcpip_if *ifp, struct mg_addr *rem,
+                               bool is_udp, struct pkt *pkt) {
+#if MG_ENABLE_IPV6
+  if (rem->is_ip6) {
+    if (is_udp && MG_IP6MATCH(rem->ip6, ip6_allnodes.u))  // local broadcast
+      return (uint8_t *) ip6mac_allnodes;
+    if (rem->ip6[0] == ifp->ip6[0])  // TODO(): HANDLE PREFIX ***
+      return pkt->eth->src;  // we're on the same LAN, get MAC from frame
+    if (is_udp && *((uint8_t *) rem->ip6) == 0xFF)  // multicast
+    {
+    }  // TODO(): ip6_mcastmac(s->mac, c->rem.ip6), l2 PR handles this better
+    if (ifp->gw6_ready)    // use the router
+      return ifp->gw6mac;  // ignore source MAC in frame
+  } else
+#endif
+  {
+    uint32_t rem_ip = rem->ip4;
+    if (is_udp && (rem_ip == 0xffffffff || rem_ip == (ifp->ip | ~ifp->mask)))
+      return (uint8_t *) broadcast;  // global or local broadcast
+    if (ifp->ip != 0 && ((rem_ip & ifp->mask) == (ifp->ip & ifp->mask)))
+      return pkt->eth->src;  // we're on the same LAN, get MAC from frame
+    if (is_udp &&
+        (*((uint8_t *) &rem_ip) & 0xE0) == 0xE0)  // 224 to 239, E0 to EF
+    {
+    }  // TODO(): ip4_mcastmac(s->mac, &rem_ip);     // multicast group, l2 PR
+    if (ifp->gw_ready)  // use the router, ignore source MAC
+      return ifp->gwmac;
+  }
+  MG_ERROR(("%M %s: No way back, can't respond", mg_print_ip_port, rem,
+            is_udp ? "UDP" : "TCP"));
+  return NULL;
+}
+
 static bool rx_udp(struct mg_tcpip_if *ifp, struct pkt *pkt) {
   struct mg_connection *c = getpeer(ifp->mgr, pkt, true);
   struct connstate *s;
+  uint8_t *mac;
   if (c == NULL) return false;  // No UDP listener on this port
   s = (struct connstate *) (c + 1);
   c->rem.port = pkt->udp->sport;
@@ -5321,7 +5371,9 @@ static bool rx_udp(struct mg_tcpip_if *ifp, struct pkt *pkt) {
   {
     c->rem.ip4 = pkt->ip->src;
   }
-  memcpy(s->mac, pkt->eth->src, sizeof(s->mac));
+  if ((mac = get_return_mac(ifp, &c->rem, true, pkt)) == NULL)
+    return false;  // safety net for lousy networks
+  memcpy(s->mac, mac, sizeof(s->mac));
   if (c->recv.len >= MG_MAX_RECV_SIZE) {
     mg_error(c, "max_recv_buf_size reached");
   } else if (c->recv.size - c->recv.len < pkt->pay.len &&
@@ -5410,6 +5462,7 @@ static size_t tx_tcp_ctrlresp(struct mg_tcpip_if *ifp, struct pkt *pkt,
   uint32_t ackno = mg_htonl(mg_ntohl(pkt->tcp->seq) + (uint32_t) pkt->pay.len +
                             ((pkt->tcp->flags & (TH_SYN | TH_FIN)) ? 1 : 0));
   struct mg_addr ips, ipd;
+  uint8_t *mac;
   memset(&ips, 0, sizeof(ips));
   memset(&ipd, 0, sizeof(ipd));
   if (pkt->ip != NULL) {
@@ -5423,7 +5476,9 @@ static size_t tx_tcp_ctrlresp(struct mg_tcpip_if *ifp, struct pkt *pkt,
   }
   ips.port = pkt->tcp->dport;
   ipd.port = pkt->tcp->sport;
-  return tx_tcp(ifp, pkt->eth->src, &ips, &ipd, flags, seqno, ackno, NULL, 0);
+  if ((mac = get_return_mac(ifp, &ipd, false, pkt)) == NULL)
+    return 0;  // safety net for lousy networks
+  return tx_tcp(ifp, mac, &ips, &ipd, flags, seqno, ackno, NULL, 0);
 }
 
 static size_t tx_tcp_rst(struct mg_tcpip_if *ifp, struct pkt *pkt, bool toack) {
@@ -5435,6 +5490,7 @@ static struct mg_connection *accept_conn(struct mg_connection *lsn,
                                          struct pkt *pkt, uint16_t mss) {
   struct mg_connection *c = mg_alloc_conn(lsn->mgr);
   struct connstate *s;
+  uint8_t *mac;
   if (c == NULL) {
     MG_ERROR(("OOM"));
     return NULL;
@@ -5442,8 +5498,6 @@ static struct mg_connection *accept_conn(struct mg_connection *lsn,
   s = (struct connstate *) (c + 1);
   s->dmss = mss;  // from options in client SYN
   s->seq = mg_ntohl(pkt->tcp->ack), s->ack = mg_ntohl(pkt->tcp->seq);
-  memcpy(s->mac, pkt->eth->src, sizeof(s->mac));
-  settmout(c, MIP_TTYPE_KEEPALIVE);
 #if MG_ENABLE_IPV6
   if (lsn->loc.is_ip6) {
     c->rem.ip6[0] = pkt->ip6->src[0], c->rem.ip6[1] = pkt->ip6->src[1],
@@ -5459,6 +5513,12 @@ static struct mg_connection *accept_conn(struct mg_connection *lsn,
   }
   c->rem.port = pkt->tcp->sport;
   c->loc.port = lsn->loc.port;
+  if ((mac = get_return_mac(lsn->mgr->ifp, &c->rem, false, pkt)) == NULL) {
+    free(c);      // safety net for lousy networks, not actually needed
+    return NULL;  // as path has already been checked at SYN (sending SYN+ACK)
+  } 
+  memcpy(s->mac, mac, sizeof(s->mac));
+  settmout(c, MIP_TTYPE_KEEPALIVE);
   MG_DEBUG(("%lu accepted %M", c->id, mg_print_ip_port, &c->rem));
   LIST_ADD_HEAD(struct mg_connection, &lsn->mgr->conns, c);
   c->is_accepted = 1;
@@ -5770,7 +5830,8 @@ static void rx_tcp(struct mg_tcpip_if *ifp, struct pkt *pkt) {
         // Use peer's src port and bl key as ISN, to later identify the
         // handshake
         isn = (mg_htonl(((uint32_t) key << 16) | mg_ntohs(pkt->tcp->sport)));
-        tx_tcp_ctrlresp(ifp, pkt, TH_SYN | TH_ACK, isn);
+        if (tx_tcp_ctrlresp(ifp, pkt, TH_SYN | TH_ACK, isn) == 0)
+          backlog_remove(c, (uint16_t) key);  // safety net for lousy networks
       }  // what should we do when port=0 ? Linux takes port 0 as any other
          // port
     } else if (pkt->tcp->flags == TH_ACK) {
@@ -5804,10 +5865,10 @@ static void rx_ip(struct mg_tcpip_if *ifp, struct pkt *pkt) {
   if (ihl < 5) return;                              // bad IHL
   if (pkt->pay.len < (uint16_t) (ihl * 4)) return;  // Truncated / malformed
   // There can be link padding, take length from IP header
-  len = mg_ntohs(pkt->ip->len);                       // IP datagram length
+  len = mg_ntohs(pkt->ip->len);  // IP datagram length
   if (len < (uint16_t) (ihl * 4) || len > pkt->pay.len) return;  // malformed
-  pkt->pay.len = len;                                 // strip padding
-  mkpay(pkt, (uint32_t *) pkt->ip + ihl);             // account for opts
+  pkt->pay.len = len;                      // strip padding
+  mkpay(pkt, (uint32_t *) pkt->ip + ihl);  // account for opts
   frag = mg_ntohs(pkt->ip->frag);
   if (frag & IP_MORE_FRAGS_MSK || frag & IP_FRAG_OFFSET_MSK) {
     struct mg_connection *c;
@@ -6074,15 +6135,21 @@ static void mg_tcpip_poll(struct mg_tcpip_if *ifp, uint64_t now) {
   }
   // Handle gw ARP request timeout, order is important
   if (expired_1000ms && ifp->state == MG_TCPIP_STATE_IP) {
-    ifp->state = MG_TCPIP_STATE_READY;  // keep best-effort MAC
+    ifp->state = MG_TCPIP_STATE_READY;  // keep best-effort MAC or poison mark
     onstatechange(ifp);
   }
+  if (expired_1000ms && ifp->state == MG_TCPIP_STATE_READY && !ifp->gw_ready &&
+      ifp->gw != 0)
+    mg_tcpip_arp_request(ifp, ifp->gw, NULL);  // retry GW ARP request
 #if MG_ENABLE_IPV6
   // Handle gw NS/NA req/resp timeout, order is important
   if (expired_1000ms && ifp->state6 == MG_TCPIP_STATE_IP) {
-    ifp->state6 = MG_TCPIP_STATE_READY;  // keep best-effort MAC
+    ifp->state6 = MG_TCPIP_STATE_READY;  // keep best-effort MAC or poison mark
     onstate6change(ifp);
   }
+  if (expired_1000ms && ifp->state == MG_TCPIP_STATE_READY && !ifp->gw6_ready &&
+      (ifp->gw6[0] != 0 || ifp->gw6[1] != 0))
+    tx_ndp_ns(ifp, ifp->gw6, ifp->gw6mac);  // retry GW MAC resolution
 #endif
 
   // poll driver
@@ -6196,9 +6263,8 @@ void mg_tcpip_init(struct mg_mgr *mgr, struct mg_tcpip_if *ifp) {
     ifp->mtu = MG_TCPIP_MTU_DEFAULT;
     mgr->extraconnsize = sizeof(struct connstate);
     if (ifp->ip == 0) ifp->enable_dhcp_client = true;
-    memset(ifp->gwmac, 255, sizeof(ifp->gwmac));  // Set best-effort to bcast
-    mg_random(&ifp->eport, sizeof(ifp->eport));   // Random from 0 to 65535
-    ifp->eport |= MG_EPHEMERAL_PORT_BASE;         // Random from
+    mg_random(&ifp->eport, sizeof(ifp->eport));  // Random from 0 to 65535
+    ifp->eport |= MG_EPHEMERAL_PORT_BASE;        // Random from
                                            // MG_EPHEMERAL_PORT_BASE to 65535
     if (ifp->tx.buf == NULL || ifp->recv_queue.buf == NULL) MG_ERROR(("OOM"));
 #if MG_ENABLE_IPV6
@@ -6208,7 +6274,6 @@ void mg_tcpip_init(struct mg_mgr *mgr, struct mg_tcpip_if *ifp) {
       ifp->enable_slaac = true;
       ip6genll((uint8_t *) ifp->ip6ll, ifp->mac);  // build link-local address
     }
-    memset(ifp->gw6mac, 255, sizeof(ifp->gw6mac));  // Set best-effort to bcast
 #endif
   }
 }
@@ -6267,7 +6332,7 @@ void mg_connect_resolved(struct mg_connection *c) {
       struct connstate *s = (struct connstate *) (c + 1);
       memcpy(s->mac, ip6mac_allnodes, sizeof(s->mac));
       mac_resolved(c);
-    } else if (c->rem.ip6[0] == ifp->ip6[0] &&
+    } else if (c->rem.ip6[0] == ifp->ip6[0] &&  // TODO(): HANDLE PREFIX ***
                !MG_IP6MATCH(c->rem.ip6,
                             ifp->gw6)) {  // skip if gw (onstate6change -> NS)
       // If we're in the same LAN, fire a Neighbor Solicitation
@@ -6275,11 +6340,11 @@ void mg_connect_resolved(struct mg_connection *c) {
       tx_ndp_ns(ifp, c->rem.ip6, ifp->mac);
       settmout(c, MIP_TTYPE_ARP);
       c->is_arplooking = 1;
-    } else if (*((uint8_t *) c->rem.ip6) == 0xFF) {  // multicast
+    } else if (c->is_udp && *((uint8_t *) c->rem.ip6) == 0xFF) {  // multicast
       struct connstate *s = (struct connstate *) (c + 1);
       ip6_mcastmac(s->mac, c->rem.ip6);
       mac_resolved(c);
-    } else if (ifp->gw6[0] != 0 || ifp->gw6[1] != 0) {
+    } else if (ifp->gw6_ready) {
       struct connstate *s = (struct connstate *) (c + 1);
       memcpy(s->mac, ifp->gw6mac, sizeof(s->mac));
       mac_resolved(c);
@@ -6302,14 +6367,14 @@ void mg_connect_resolved(struct mg_connection *c) {
       mg_tcpip_arp_request(ifp, rem_ip, NULL);
       settmout(c, MIP_TTYPE_ARP);
       c->is_arplooking = 1;
-    } else if ((*((uint8_t *) &rem_ip) & 0xE0) == 0xE0) {
+    } else if (c->is_udp && (*((uint8_t *) &rem_ip) & 0xE0) == 0xE0) {
       struct connstate *s =
           (struct connstate *) (c + 1);  // 224 to 239, E0 to EF
       ip4_mcastmac(s->mac, &rem_ip);     // multicast group
       mac_resolved(c);
-    } else if (ifp->gw != 0) {
+    } else if (ifp->gw_ready) {
       struct connstate *s = (struct connstate *) (c + 1);
-      memcpy(s->mac, ifp->gwmac, sizeof(ifp->gwmac));
+      memcpy(s->mac, ifp->gwmac, sizeof(s->mac));
       mac_resolved(c);
     } else {
       MG_ERROR(("No gateway, can't connect"));

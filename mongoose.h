@@ -3219,9 +3219,11 @@ struct mg_tcpip_if {
 #define MG_TCPIP_STATE_REQ 2    // Interface is up, DHCP REQUESTING state
 #define MG_TCPIP_STATE_IP 3     // Interface is up and has an IP assigned
 #define MG_TCPIP_STATE_READY 4  // Interface has fully come up, ready to work
+  bool gw_ready;                // We've got a hw address for the router
 #if MG_ENABLE_IPV6
   uint8_t gw6mac[6];             // IPv6 Router's MAC
   uint8_t state6;                // Current IPv6 state
+  bool gw6_ready;                // We've got a hw address for the IPv6 router
 #endif
 };
 void mg_tcpip_init(struct mg_mgr *, struct mg_tcpip_if *);
