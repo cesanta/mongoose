@@ -4162,7 +4162,7 @@ static bool mg_aton6(struct mg_str str, struct mg_addr *addr) {
   size_t i, j = 0, n = 0, dc = 42;
   addr->scope_id = 0;
   if (str.len > 2 && str.buf[0] == '[') str.buf++, str.len -= 2;
-  if (mg_v4mapped(str, addr)) return true;
+  if (mg_v4mapped(str, addr)) return true;  // sets addr->is_ip6
   for (i = 0; i < str.len; i++) {
     if ((str.buf[i] >= '0' && str.buf[i] <= '9') ||
         (str.buf[i] >= 'a' && str.buf[i] <= 'f') ||
@@ -4184,8 +4184,13 @@ static bool mg_aton6(struct mg_str str, struct mg_addr *addr) {
       if (n > 14) return false;
       addr->ip[n] = addr->ip[n + 1] = 0;  // For trailing ::
     } else if (str.buf[i] == '%') {       // Scope ID, last in string
-      return mg_str_to_num(mg_str_n(&str.buf[i + 1], str.len - i - 1), 10,
-                           &addr->scope_id, sizeof(uint8_t));
+      if (mg_str_to_num(mg_str_n(&str.buf[i + 1], str.len - i - 1), 10,
+                        &addr->scope_id, sizeof(uint8_t))) {
+        addr->is_ip6 = true;
+        return true;
+      } else {
+        return false;
+      }
     } else {
       return false;
     }

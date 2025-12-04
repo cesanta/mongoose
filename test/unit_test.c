@@ -2717,22 +2717,22 @@ static void test_util(void) {
   ASSERT(mg_url_decode("a=%123", 6, buf, sizeof(buf), 0) == 4 &&
          buf[2] == 0x12 && buf[3] == '3');
 
-  memset(a.ip, 0xaa, sizeof(a.ip));
+  memset(&a, 0, sizeof(a));
   ASSERT(mg_aton(mg_str("::1%1"), &a) == true);
   ASSERT(a.is_ip6 == true);
   ASSERT(a.scope_id == 1);
 
-  memset(a.ip, 0xaa, sizeof(a.ip));
+  memset(&a, 0, sizeof(a));
   ASSERT(mg_aton(mg_str("abcd::aabb:ccdd%17"), &a) == true);
   ASSERT(a.is_ip6 == true);
   ASSERT(a.scope_id == 17);
 
-  memset(a.ip, 0xaa, sizeof(a.ip));
+  memset(&a, 0xaa, sizeof(a)), a.is_ip6 = false;
   ASSERT(mg_aton(mg_str("::1%17"), &a) == true);
   ASSERT(a.is_ip6 == true);
   ASSERT(a.scope_id == 17);
 
-  memset(a.ip, 0xaa, sizeof(a.ip));
+  memset(&a, 0xaa, sizeof(a)), a.is_ip6 = false;
   ASSERT(mg_aton(mg_str("::1%255"), &a) == true);
   ASSERT(a.is_ip6 == true);
   ASSERT(a.scope_id == 255);
