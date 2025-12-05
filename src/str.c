@@ -2,12 +2,14 @@
 #include "util.h"
 
 struct mg_str mg_str_s(const char *s) {
-  struct mg_str str = {(char *) s, s == NULL ? 0 : strlen(s)};
+  struct mg_str str;
+  str.buf = (char *) s, str.len = (s == NULL) ? 0 : strlen(s);
   return str;
 }
 
 struct mg_str mg_str_n(const char *s, size_t n) {
-  struct mg_str str = {(char *) s, n};
+  struct mg_str str;
+  str.buf = (char *) s, str.len = n;
   return str;
 }
 

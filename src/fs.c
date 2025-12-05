@@ -86,7 +86,8 @@ static void mg_fs_ls_fn(const char *filename, void *param) {
 }
 
 bool mg_fs_ls(struct mg_fs *fs, const char *path, char *buf, size_t len) {
-  struct mg_str s = {buf, len};
+  struct mg_str s;
+  s.buf = buf, s.len = len;
   fs->ls(path, mg_fs_ls_fn, &s);
   return buf[0] != '\0';
 }

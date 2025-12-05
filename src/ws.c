@@ -173,9 +173,13 @@ static void mg_ws_cb(struct mg_connection *c, int ev, void *ev_data) {
 
     while (ws_process(c->recv.buf + ofs, c->recv.len - ofs, &msg) > 0) {
       char *s = (char *) c->recv.buf + ofs + msg.header_len;
-      struct mg_ws_message m = {{s, msg.data_len}, msg.flags};
-      size_t len = msg.header_len + msg.data_len;
-      uint8_t final = msg.flags & 128, op = msg.flags & 15;
+      struct mg_ws_message m;
+      size_t len;
+      uint8_t final, op;
+      m.data.buf = s, m.data.len = msg.data_len, m.flags = msg.flags;
+      len = msg.header_len + msg.data_len;
+      final = msg.flags & 128;
+      op = msg.flags & 15;
       // MG_VERBOSE ("fin %d op %d len %d [%.*s]", final, op,
       //                       (int) m.data.len, (int) m.data.len, m.data.buf));
       switch (op) {

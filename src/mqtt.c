@@ -266,7 +266,8 @@ void mg_mqtt_login(struct mg_connection *c, const struct mg_mqtt_opts *opts) {
   char client_id[21];
   struct mg_str cid = opts->client_id;
   size_t total_len = 7 + 1 + 2 + 2;
-  uint8_t hdr[8] = {0, 4, 'M', 'Q', 'T', 'T', opts->version, 0};
+  uint8_t hdr[8] = {0, 4, 'M', 'Q', 'T', 'T', 0, 0};
+  hdr[6] = opts->version;
 
   if (cid.len == 0) {
     mg_random_str(client_id, sizeof(client_id) - 1);

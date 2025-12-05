@@ -22,7 +22,8 @@ static int xisinf(double x) {
   union {
     double f;
     uint64_t u;
-  } ieee754 = {x};
+  } ieee754;
+  ieee754.f = x;
   return ((unsigned) (ieee754.u >> 32) & 0x7fffffff) == 0x7ff00000 &&
          ((unsigned) ieee754.u == 0);
 }
@@ -31,7 +32,8 @@ static int xisnan(double x) {
   union {
     double f;
     uint64_t u;
-  } ieee754 = {x};
+  } ieee754;
+  ieee754.f = x;
   return ((unsigned) (ieee754.u >> 32) & 0x7fffffff) +
              ((unsigned) ieee754.u != 0) >
          0x7ff00000;
@@ -99,7 +101,7 @@ static size_t mg_dtoa(char *dst, size_t dstlen, double d, int width, bool tz) {
   }
 
   while (tz && n > 0 && buf[s + n - 1] == '0') n--;  // Trim trailing zeroes
-  if (tz && n > 0 && buf[s + n - 1] == '.') n--;           // Trim trailing dot
+  if (tz && n > 0 && buf[s + n - 1] == '.') n--;     // Trim trailing dot
   n += s;
   if (n >= (int) sizeof(buf)) n = (int) sizeof(buf) - 1;
   buf[n] = '\0';
@@ -129,7 +131,7 @@ static size_t mg_lld(char *buf, int64_t val, bool is_signed, bool is_hex) {
 }
 
 static size_t scpy(void (*out)(char, void *), void *ptr, char *buf,
-                          size_t len) {
+                   size_t len) {
   size_t i = 0;
   while (i < len && buf[i] != '\0') out(buf[i++], ptr);
   return i;

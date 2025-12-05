@@ -1267,12 +1267,18 @@ void mg_log_set_fn(mg_pfn_t fn, void *param);
 #define mg_log_set(level_) mg_log_level = (level_)
 
 #if MG_ENABLE_LOG
-#define MG_LOG(level, args)                                 \
-  do {                                                      \
-    if ((level) <= mg_log_level) {                          \
-      mg_log_prefix((level), __FILE__, __LINE__, __func__); \
-      mg_log args;                                          \
-    }                                                       \
+#if !defined(_MSC_VER) && \
+    (!defined(__STDC_VERSION__) || __STDC_VERSION__ < 199901L)
+#define MG___FUNC__ ""
+#else
+#define MG___FUNC__ __func__  // introduced in C99
+#endif
+#define MG_LOG(level, args)                                    \
+  do {                                                         \
+    if ((level) <= mg_log_level) {                             \
+      mg_log_prefix((level), __FILE__, __LINE__, MG___FUNC__); \
+      mg_log args;                                             \
+    }                                                          \
   } while (0)
 #else
 #define MG_LOG(level, args) \
@@ -1663,11 +1669,11 @@ struct mg_dns {
 };
 
 struct mg_addr {
-  union {    // Holds IPv4 or IPv6 address, in network byte order
+  union {  // Holds IPv4 or IPv6 address, in network byte order
     uint8_t ip[16];
     uint32_t ip4;
     uint64_t ip6[2];
-  };
+  } addr;
   uint16_t port;     // TCP or UDP port in network byte order
   uint8_t scope_id;  // IPv6 scope ID
   bool is_ip6;       // True when address is IPv6 address
@@ -2954,7 +2960,6 @@ struct mg_dns_rr {
   uint16_t alen;    // Address length
 };
 
-
 // DNS-SD response record
 struct mg_dnssd_record {
   struct mg_str srvcproto;  // service.proto, service name
@@ -2966,8 +2971,8 @@ struct mg_dnssd_record {
 struct mg_mdns_req {
   struct mg_dns_rr *rr;
   struct mg_dnssd_record *r;
-  struct mg_str reqname;        // requested name in RR
-  struct mg_str respname;       // actual name in response
+  struct mg_str reqname;   // requested name in RR
+  struct mg_str respname;  // actual name in response
   struct mg_addr addr;
   bool is_listing;
   bool is_resp;
@@ -2979,8 +2984,9 @@ void mg_resolve_cancel(struct mg_connection *);
 bool mg_dns_parse(const uint8_t *buf, size_t len, struct mg_dns_message *);
 size_t mg_dns_parse_rr(const uint8_t *buf, size_t len, size_t ofs,
                        bool is_question, struct mg_dns_rr *);
-                       
-struct mg_connection *mg_mdns_listen(struct mg_mgr *mgr, mg_event_handler_t fn, void *fn_data);
+
+struct mg_connection *mg_mdns_listen(struct mg_mgr *mgr, mg_event_handler_t fn,
+                                     void *fn_data);
 
 
 

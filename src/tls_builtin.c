@@ -1215,7 +1215,7 @@ static int mg_tls_verify_cert_san(const uint8_t *der, size_t dersz,
   while (mg_der_next(&field, &name) > 0) {
     if (name.type == 0x87 && name.len == 4) { // this is an IPv4 address
       MG_DEBUG(("Found SAN, IP: %M", mg_print_ip4, name.value));
-      if (!server_ip->is_ip6 && *((uint32_t *) name.value) == server_ip->ip4)
+      if (!server_ip->is_ip6 && *((uint32_t *) name.value) == server_ip->addr.ip4)
         return 1;  // and matches the one we're connected to
     } else {  // this is a text SAN
       MG_DEBUG(("Found SAN, (%u): %.*s", name.type, name.len, name.value));
