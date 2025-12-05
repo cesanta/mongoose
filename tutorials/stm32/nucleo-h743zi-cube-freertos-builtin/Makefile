@@ -17,7 +17,7 @@ firmware.elf: wizard
 	cp wizard/$(TARGET)/$$PROJNAME.elf firmware.elf
 
 wizard:
-	hash=$$(curl -H 'Cookie: mongoose_wizard_uid=F2PPlAgQCqSthV1g' -s -X POST -H "Content-Type: application/json" -d '{"build":{"board":"$(BOARD)","ide":"$(IDE)","rtos":"$(RTOS)"}}' $(WIZARD_URL)/api/hash | jq -r '.hash') \
+	hash=$$(curl -H 'Cookie: mongoose_wizard_uid=F2PPlAgQCqSthV1g' -s -X POST -H "Content-Type: application/json" -d '{"build":{"board":"$(BOARD)","ide":"$(IDE)","rtos":"$(RTOS)"},"http":{"http": true}}' $(WIZARD_URL)/api/hash | jq -r '.hash') \
 	&& curl -H 'Cookie: mongoose_wizard_uid=F2PPlAgQCqSthV1g' -s $(WIZARD_URL)/api/zip -o wizard.zip
 	unzip wizard.zip
 	cd wizard/mongoose ; rm mongoose.[ch] ; cp -L ../../../../../mongoose.c . ; cp -L ../../../../../mongoose.h .
