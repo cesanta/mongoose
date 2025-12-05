@@ -87,7 +87,7 @@ jobs:
     steps:
     - uses: actions/checkout@v4
       with: { fetch-depth: 2 }
-    - run: make -C test ${{ matrix.target }} 
+    - run: make -C test ${{ matrix.target }}
   s390:
     runs-on: ubuntu-latest
     strategy:
@@ -163,7 +163,7 @@ jobs:
     name: macos SSL=${{ matrix.ssl }} TFLAGS=${{ matrix.select }}
     env:
       SSL: ${{ matrix.ssl }}
-      TFLAGS: ${{ matrix.select }} -DMQTT_LOCALHOST ${{ matrix.env.tflags }} -Wno-sign-conversion # Workaround for MbedTLS 3.5.0
+      TFLAGS: ${{ matrix.select }} -DMQTT_LOCALHOST ${{ matrix.env.tflags }} -DNO_ABORT -Wno-sign-conversion # Workaround for MbedTLS 3.5.0
       HOMEBREW_NO_AUTO_UPDATE: 1
     steps:
     - uses: actions/checkout@v4
@@ -195,7 +195,7 @@ jobs:
     name: windows ${{ matrix.target }} SSL=${{ matrix.ssl }} TFLAGS=${{ matrix.select }}
     env:
       SSL: ${{ matrix.ssl }}
-      TFLAGS: ${{ matrix.select }} -DMQTT_LOCALHOST
+      TFLAGS: ${{ matrix.select }} -DMQTT_LOCALHOST -DNO_ABORT
     steps:
     - uses: actions/checkout@v4
       with: { fetch-depth: 2 }
