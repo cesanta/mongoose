@@ -15,7 +15,7 @@
 static const char *s_url = "mqtt://broker.hivemq.com:1883";
 static const char *s_sub_topic = "mg/123/rx";  // Subscribe topic
 static const char *s_pub_topic = "mg/123/tx";  // Publish topic
-static int s_qos = 1;                          // MQTT QoS
+static uint8_t s_qos = 1;                      // MQTT QoS
 static struct mg_connection *s_mqtt_conn;      // Client connection
 
 static void subscribe(struct mg_connection *c, struct mg_str topic) {
