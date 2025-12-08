@@ -251,6 +251,8 @@ static void init_tests(struct mg_mgr *mgr, struct eth *e, struct ipp *ipp,
 #if MG_ENABLE_IPV6
   if (ipp->ip6 != NULL) {
     mif->ip6[0] = 1;
+    mif->prefix[0] = 1;
+    mif->prefix_len = 64;
     mif->gw6[0] = 1;
     mif->gw6_ready = true;
     mif->state = MG_TCPIP_STATE_READY;  // so DHCP stops
