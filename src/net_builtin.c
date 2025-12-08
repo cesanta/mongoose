@@ -822,23 +822,40 @@ static void tx_ndp_rs(struct mg_tcpip_if *ifp, uint64_t *ip_dst, uint8_t *mac) {
   MG_DEBUG(("NDP Router Solicitation sent"));
 }
 
+static void fill_prefix(uint8_t *dst, uint8_t *src, uint8_t len) {
+  uint8_t full = len / 8;
+  uint8_t rem = len % 8;
+  if (full > 0) memcpy(dst, src, full);
+  if (rem > 0) {
+    uint8_t mask = (uint8_t) (0xFF << (8 - rem));
+    dst[full] = src[full] & mask;
+  }
+}
+
 static bool fill_global(uint64_t *ip6, uint8_t *prefix, uint8_t prefix_len,
                         uint8_t *mac) {
   uint8_t full = prefix_len / 8;
   uint8_t rem = prefix_len % 8;
-  if (full >= 8 && rem != 0) {
+  if (full > 8 || (full == 8 && rem != 0)) {
     MG_ERROR(("Prefix length > 64, UNSUPPORTED"));
     return false;
   } else if (full == 8 && rem == 0) {
     ip6gen((uint8_t *) ip6, prefix, mac);
   } else {
-    ip6[0] = ip6[1] = 0;  // already zeroed before firing RS...
-    if (full) memcpy(ip6, prefix, full);
-    if (rem) {
-      uint8_t mask = (uint8_t) (0xFF << (8 - rem));
-      ((uint8_t *) ip6)[full] = prefix[full] & mask;
-    }
+    ip6[0] = ip6[1] = 0;
+    fill_prefix((uint8_t *) ip6, prefix, prefix_len);
     meui64(((uint8_t *) &ip6[1]), mac);  // RFC-4291 2.5.4, 2.5.1
+  }
+  return true;
+}
+
+static bool match_prefix(uint8_t *new, uint8_t *cur, uint8_t len) {
+  uint8_t full = len / 8;
+  uint8_t rem = len % 8;
+  if (full > 0 && memcmp(cur, new, full) != 0) return false;
+  if (rem > 0) {
+    uint8_t mask = (uint8_t) (0xFF << (8 - rem));
+    if (cur[full] != (new[full] & mask)) return false;
   }
   return true;
 }
@@ -878,15 +895,14 @@ static void rx_ndp_ra(struct mg_tcpip_if *ifp, struct pkt *pkt) {
         uint8_t *prefix = opts + 16;
 
         // TODO (robertc2000): handle prefix options if necessary
-        (void) prefix_len;
         (void) pfx_flags;
         (void) valid;
         (void) pref_lifetime;
-        (void) prefix;
 
-        // fill prefix length and global
-        ifp->prefix_len = prefix_len;
+        // fill prefix and global
         if (!fill_global(ifp->ip6, prefix, prefix_len, ifp->mac)) return;
+        ifp->prefix_len = prefix_len;
+        fill_prefix(ifp->prefix, prefix, prefix_len);
       }
       opts += length;
       opt_left -= length;
@@ -953,9 +969,11 @@ static uint8_t *get_return_mac(struct mg_tcpip_if *ifp, struct mg_addr *rem,
                                bool is_udp, struct pkt *pkt) {
 #if MG_ENABLE_IPV6
   if (rem->is_ip6) {
-    if (is_udp && MG_IP6MATCH(rem->addr.ip6, ip6_allnodes.u))  // local broadcast
+    if (is_udp &&
+        MG_IP6MATCH(rem->addr.ip6, ip6_allnodes.u))  // local broadcast
       return (uint8_t *) ip6mac_allnodes;
-    if (rem->addr.ip6[0] == ifp->ip6[0])  // TODO(): HANDLE PREFIX ***
+    if (rem->addr.ip6[0] == ifp->ip6ll[0] ||
+        match_prefix((uint8_t *) rem->addr.ip6, ifp->prefix, ifp->prefix_len))
       return pkt->eth->src;  // we're on the same LAN, get MAC from frame
     if (is_udp && *((uint8_t *) rem->addr.ip6) == 0xFF)  // multicast
     {
@@ -1139,7 +1157,7 @@ static struct mg_connection *accept_conn(struct mg_connection *lsn,
   if ((mac = get_return_mac(lsn->mgr->ifp, &c->rem, false, pkt)) == NULL) {
     free(c);      // safety net for lousy networks, not actually needed
     return NULL;  // as path has already been checked at SYN (sending SYN+ACK)
-  } 
+  }
   memcpy(s->mac, mac, sizeof(s->mac));
   settmout(c, MIP_TTYPE_KEEPALIVE);
   MG_DEBUG(("%lu accepted %M", c->id, mg_print_ip_port, &c->rem));
@@ -1956,15 +1974,16 @@ void mg_connect_resolved(struct mg_connection *c) {
       struct connstate *s = (struct connstate *) (c + 1);
       memcpy(s->mac, ip6mac_allnodes, sizeof(s->mac));
       mac_resolved(c);
-    } else if (c->rem.addr.ip6[0] == ifp->ip6[0] &&  // TODO(): HANDLE PREFIX ***
-               !MG_IP6MATCH(c->rem.addr.ip6,
-                            ifp->gw6)) {  // skip if gw (onstate6change -> NS)
-      // If we're in the same LAN, fire a Neighbor Solicitation
-      MG_DEBUG(("%lu NS lookup...", c->id));
+    } else if (match_prefix((uint8_t *) c->rem.addr.ip6, ifp->prefix,
+                            ifp->prefix_len)            // same global LAN
+               || (c->rem.addr.ip6[0] == ifp->ip6ll[0]  // same local LAN
+                   && !MG_IP6MATCH(c->rem.addr.ip6, ifp->gw6))) {  // and not gw
+      MG_DEBUG(("%lu NS lookup...", c->id));  // fire a Neighbor Solicitation
       tx_ndp_ns(ifp, c->rem.addr.ip6, ifp->mac);
       settmout(c, MIP_TTYPE_ARP);
       c->is_arplooking = 1;
-    } else if (c->is_udp && *((uint8_t *) c->rem.addr.ip6) == 0xFF) {  // multicast
+    } else if (c->is_udp &&
+               *((uint8_t *) c->rem.addr.ip6) == 0xFF) {  // multicast
       struct connstate *s = (struct connstate *) (c + 1);
       ip6_mcastmac(s->mac, c->rem.addr.ip6);
       mac_resolved(c);
