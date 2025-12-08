@@ -5300,9 +5300,10 @@ static void rx_icmp6(struct mg_tcpip_if *ifp, struct pkt *pkt) {
       if (MG_IP6MATCH(target, ifp->ip6ll) || MG_IP6MATCH(target, ifp->ip6)) {
         size_t hlen =
             sizeof(struct eth) + sizeof(struct ip6) + sizeof(struct icmp6);
-        size_t space = ifp->tx.len - hlen, plen = pkt->pay.len;
+        size_t space, plen;
         struct mg_addr ips;
-        ips.ip6[0] = pkt->ip6->src[0], ips.ip6[1] = pkt->ip6->src[1];
+        space = ifp->tx.len - hlen, plen = pkt->pay.len;
+        ips.addr.ip6[0] = pkt->ip6->src[0], ips.addr.ip6[1] = pkt->ip6->src[1];
         ips.is_ip6 = true;
         if (get_return_mac(ifp, &ips, false, pkt) == NULL)
           return;                        // safety net for lousy networks
@@ -5344,11 +5345,11 @@ static uint8_t *get_return_mac(struct mg_tcpip_if *ifp, struct mg_addr *rem,
                                bool is_udp, struct pkt *pkt) {
 #if MG_ENABLE_IPV6
   if (rem->is_ip6) {
-    if (is_udp && MG_IP6MATCH(rem->ip6, ip6_allnodes.u))  // local broadcast
+    if (is_udp && MG_IP6MATCH(rem->addr.ip6, ip6_allnodes.u))  // local broadcast
       return (uint8_t *) ip6mac_allnodes;
-    if (rem->ip6[0] == ifp->ip6[0])  // TODO(): HANDLE PREFIX ***
+    if (rem->addr.ip6[0] == ifp->ip6[0])  // TODO(): HANDLE PREFIX ***
       return pkt->eth->src;  // we're on the same LAN, get MAC from frame
-    if (is_udp && *((uint8_t *) rem->ip6) == 0xFF)  // multicast
+    if (is_udp && *((uint8_t *) rem->addr.ip6) == 0xFF)  // multicast
     {
     }  // TODO(): ip6_mcastmac(s->mac, c->rem.ip6), l2 PR handles this better
     if (ifp->gw6_ready)    // use the router
