@@ -50,11 +50,13 @@ struct synopsys_enet_qos {
 #define ETH_DESC_CNT 4     // Descriptors count
 #define ETH_DS 4           // Descriptor size (words)
 
-static volatile uint32_t s_rxdesc[ETH_DESC_CNT][ETH_DS] MG_ETH_RAM MG_8BYTE_ALIGNED;
-static volatile uint32_t s_txdesc[ETH_DESC_CNT][ETH_DS] MG_ETH_RAM MG_8BYTE_ALIGNED;
+static volatile uint32_t s_rxdesc[ETH_DESC_CNT][ETH_DS] MG_ETH_RAM
+    MG_8BYTE_ALIGNED;
+static volatile uint32_t s_txdesc[ETH_DESC_CNT][ETH_DS] MG_ETH_RAM
+    MG_8BYTE_ALIGNED;
 static uint8_t s_rxbuf[ETH_DESC_CNT][ETH_PKT_SIZE] MG_ETH_RAM MG_8BYTE_ALIGNED;
 static uint8_t s_txbuf[ETH_DESC_CNT][ETH_PKT_SIZE] MG_ETH_RAM MG_8BYTE_ALIGNED;
-static struct mg_tcpip_if *s_ifp;         // MIP interface
+static struct mg_tcpip_if *s_ifp;  // MIP interface
 
 static uint16_t eth_read_phy(uint8_t addr, uint8_t reg) {
   ETH->MACMDIOAR &= (0xF << 8);
@@ -130,7 +132,7 @@ static bool mg_tcpip_driver_stm32h_init(struct mg_tcpip_if *ifp) {
 #endif
   ETH->DMACIER = MG_BIT(6) | MG_BIT(15);  // RIE, NIE
   ETH->MACCR = MG_BIT(0) | MG_BIT(1) | MG_BIT(13) | MG_BIT(14) |
-               MG_BIT(15);  // RE, TE, Duplex, Fast, Reserved
+               MG_BIT(15);  // RE, TE, Duplex, Fast, (10/100)/Reserved
 #if MG_ENABLE_DRIVER_STM32H
   ETH->MTLTQOMR |= MG_BIT(1);  // TSF
   ETH->MTLRQOMR |= MG_BIT(5);  // RSF
@@ -208,8 +210,11 @@ static bool mg_tcpip_driver_stm32h_poll(struct mg_tcpip_if *ifp, bool s1) {
     // if(link is slow or half) set flags otherwise
     // reg = tmp
     uint32_t maccr = ETH->MACCR | MG_BIT(14) | MG_BIT(13);  // 100M, Full-duplex
-    if (speed == MG_PHY_SPEED_10M) maccr &= ~MG_BIT(14);    // 10M
-    if (full_duplex == false) maccr &= ~MG_BIT(13);         // Half-duplex
+#if MG_ENABLE_DRIVER_STM32N
+    if (speed == MG_PHY_SPEED_1000M) maccr &= ~MG_BIT(15);  // 1000M
+#endif
+    if (speed == MG_PHY_SPEED_10M) maccr &= ~MG_BIT(14);  // 10M
+    if (full_duplex == false) maccr &= ~MG_BIT(13);       // Half-duplex
     ETH->MACCR = maccr;  // IRQ handler does not fiddle with this register
     MG_DEBUG(("Link is %uM %s-duplex", maccr & MG_BIT(14) ? 100 : 10,
               maccr & MG_BIT(13) ? "full" : "half"));

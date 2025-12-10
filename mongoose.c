@@ -23446,8 +23446,8 @@ enum {                  // ID1  ID2
   MG_PHY_DP83848 = 0x5ca2,  // 2000 5ca2 - TI DP83848I
   MG_PHY_LAN87x = 0x7,      // 0007 c0fx - LAN8720
   MG_PHY_RTL82x = 0x1c,
-  MG_PHY_RTL8201 = 0xc816,  // 001c c816 - RTL8201,
-  MG_PHY_RTL8211 = 0xc916,  // 001c c916 - RTL8201,
+  MG_PHY_RTL8201 = 0xc816,  // 001c c816 - RTL8201F
+  MG_PHY_RTL8211 = 0xc916,  // 001c c916 - RTL8211F
   MG_PHY_ICS1894x = 0x15,
   MG_PHY_ICS189432 = 0xf450  // 0015 f450 - ICS1894
 };
@@ -23464,10 +23464,9 @@ enum {
   MG_PHY_KSZ8x_REG_PC1R = 30,
   MG_PHY_KSZ8x_REG_PC2R = 31,
   MG_PHY_LAN87x_REG_SCSR = 31,
-  MG_PHY_RTL8201_REG_RMSR = 16,  // in page 7
-  MG_PHY_RTL8201_REG_PAGESEL = 31,
+  MG_PHY_RTL82x_REG_PAGESEL = 31,
+  MG_PHY_RTL8201_REG_RMSR = 16,   // in page 7
   MG_PHY_RTL8211_REG_PHYSR = 26,  // in page a43
-  MG_PHY_RTL8211_REG_PAGESEL = 31,
   MG_PHY_ICS189432_REG_POLL = 17
 };
 
@@ -23542,9 +23541,9 @@ void mg_phy_init(struct mg_phy *phy, uint8_t phy_addr, uint8_t config) {
     } else if (id1 == MG_PHY_RTL82x && id2 == MG_PHY_RTL8201) {
       // assume PHY has been hardware strapped properly
 #if 0
-      phy->write_reg(phy_addr, MG_PHY_RTL8201_REG_PAGESEL, 7);  // Select page 7
+      phy->write_reg(phy_addr, MG_PHY_RTL82x_REG_PAGESEL, 7);  // Select page 7
       phy->write_reg(phy_addr, MG_PHY_RTL8201_REG_RMSR, 0x1ffa);
-      phy->write_reg(phy_addr, MG_PHY_RTL8201_REG_PAGESEL, 0);  // Select page 0
+      phy->write_reg(phy_addr, MG_PHY_RTL82x_REG_PAGESEL, 0);  // Select page 0
 #endif
     } else if (id1 == MG_PHY_RTL82x && id2 == MG_PHY_RTL8211) {
       // assume PHY has been hardware strapped properly
@@ -23591,9 +23590,9 @@ bool mg_phy_up(struct mg_phy *phy, uint8_t phy_addr, bool *full_duplex,
       uint16_t id2 = phy->read_reg(phy_addr, MG_PHY_REG_ID2);
       if (id2 == MG_PHY_RTL8211) {
         uint16_t physr;
-        phy->write_reg(phy_addr, MG_PHY_RTL8211_REG_PAGESEL, 0xa43);
+        phy->write_reg(phy_addr, MG_PHY_RTL82x_REG_PAGESEL, 0xa43);
         physr = phy->read_reg(phy_addr, MG_PHY_RTL8211_REG_PHYSR);
-        phy->write_reg(phy_addr, MG_PHY_RTL8211_REG_PAGESEL, 0);
+        phy->write_reg(phy_addr, MG_PHY_RTL82x_REG_PAGESEL, 0);
         *full_duplex = physr & MG_BIT(3);
         *speed = (physr & MG_BIT(5))   ? MG_PHY_SPEED_1000M
                  : (physr & MG_BIT(4)) ? MG_PHY_SPEED_100M
@@ -25336,11 +25335,13 @@ struct synopsys_enet_qos {
 #define ETH_DESC_CNT 4     // Descriptors count
 #define ETH_DS 4           // Descriptor size (words)
 
-static volatile uint32_t s_rxdesc[ETH_DESC_CNT][ETH_DS] MG_ETH_RAM MG_8BYTE_ALIGNED;
-static volatile uint32_t s_txdesc[ETH_DESC_CNT][ETH_DS] MG_ETH_RAM MG_8BYTE_ALIGNED;
+static volatile uint32_t s_rxdesc[ETH_DESC_CNT][ETH_DS] MG_ETH_RAM
+    MG_8BYTE_ALIGNED;
+static volatile uint32_t s_txdesc[ETH_DESC_CNT][ETH_DS] MG_ETH_RAM
+    MG_8BYTE_ALIGNED;
 static uint8_t s_rxbuf[ETH_DESC_CNT][ETH_PKT_SIZE] MG_ETH_RAM MG_8BYTE_ALIGNED;
 static uint8_t s_txbuf[ETH_DESC_CNT][ETH_PKT_SIZE] MG_ETH_RAM MG_8BYTE_ALIGNED;
-static struct mg_tcpip_if *s_ifp;         // MIP interface
+static struct mg_tcpip_if *s_ifp;  // MIP interface
 
 static uint16_t eth_read_phy(uint8_t addr, uint8_t reg) {
   ETH->MACMDIOAR &= (0xF << 8);
@@ -25416,7 +25417,7 @@ static bool mg_tcpip_driver_stm32h_init(struct mg_tcpip_if *ifp) {
 #endif
   ETH->DMACIER = MG_BIT(6) | MG_BIT(15);  // RIE, NIE
   ETH->MACCR = MG_BIT(0) | MG_BIT(1) | MG_BIT(13) | MG_BIT(14) |
-               MG_BIT(15);  // RE, TE, Duplex, Fast, Reserved
+               MG_BIT(15);  // RE, TE, Duplex, Fast, (10/100)/Reserved
 #if MG_ENABLE_DRIVER_STM32H
   ETH->MTLTQOMR |= MG_BIT(1);  // TSF
   ETH->MTLRQOMR |= MG_BIT(5);  // RSF
@@ -25494,8 +25495,11 @@ static bool mg_tcpip_driver_stm32h_poll(struct mg_tcpip_if *ifp, bool s1) {
     // if(link is slow or half) set flags otherwise
     // reg = tmp
     uint32_t maccr = ETH->MACCR | MG_BIT(14) | MG_BIT(13);  // 100M, Full-duplex
-    if (speed == MG_PHY_SPEED_10M) maccr &= ~MG_BIT(14);    // 10M
-    if (full_duplex == false) maccr &= ~MG_BIT(13);         // Half-duplex
+#if MG_ENABLE_DRIVER_STM32N
+    if (speed == MG_PHY_SPEED_1000M) maccr &= ~MG_BIT(15);  // 1000M
+#endif
+    if (speed == MG_PHY_SPEED_10M) maccr &= ~MG_BIT(14);  // 10M
+    if (full_duplex == false) maccr &= ~MG_BIT(13);       // Half-duplex
     ETH->MACCR = maccr;  // IRQ handler does not fiddle with this register
     MG_DEBUG(("Link is %uM %s-duplex", maccr & MG_BIT(14) ? 100 : 10,
               maccr & MG_BIT(13) ? "full" : "half"));
