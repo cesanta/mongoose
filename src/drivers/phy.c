@@ -7,7 +7,9 @@ enum {                  // ID1  ID2
   MG_PHY_DP83825 = 0xa140,  // 2000 a140 - TI DP83825I
   MG_PHY_DP83848 = 0x5ca2,  // 2000 5ca2 - TI DP83848I
   MG_PHY_LAN87x = 0x7,      // 0007 c0fx - LAN8720
-  MG_PHY_RTL8201 = 0x1C,    // 001c c816 - RTL8201,
+  MG_PHY_RTL82x = 0x1c,
+  MG_PHY_RTL8201 = 0xc816,  // 001c c816 - RTL8201F
+  MG_PHY_RTL8211 = 0xc916,  // 001c c916 - RTL8211F
   MG_PHY_ICS1894x = 0x15,
   MG_PHY_ICS189432 = 0xf450  // 0015 f450 - ICS1894
 };
@@ -24,8 +26,9 @@ enum {
   MG_PHY_KSZ8x_REG_PC1R = 30,
   MG_PHY_KSZ8x_REG_PC2R = 31,
   MG_PHY_LAN87x_REG_SCSR = 31,
-  MG_PHY_RTL8201_REG_RMSR = 16,  // in page 7
-  MG_PHY_RTL8201_REG_PAGESEL = 31,
+  MG_PHY_RTL82x_REG_PAGESEL = 31,
+  MG_PHY_RTL8201_REG_RMSR = 16,   // in page 7
+  MG_PHY_RTL8211_REG_PHYSR = 26,  // in page a43
   MG_PHY_ICS189432_REG_POLL = 17
 };
 
@@ -46,8 +49,15 @@ static const char *mg_phy_id_to_str(uint16_t id1, uint16_t id2) {
       return "KSZ8x";
     case MG_PHY_LAN87x:
       return "LAN87x";
-    case MG_PHY_RTL8201:
-      return "RTL8201";
+    case MG_PHY_RTL82x:
+      switch (id2) {
+        case MG_PHY_RTL8201:
+          return "RTL8201";
+        case MG_PHY_RTL8211:
+          return "RTL8211";
+        default:
+          return "RTL82x";
+      }
     case MG_PHY_ICS1894x:
       return "ICS1894x";
     default:
@@ -90,13 +100,15 @@ void mg_phy_init(struct mg_phy *phy, uint8_t phy_addr, uint8_t config) {
                      (uint16_t) (MG_BIT(15) | MG_BIT(8) | MG_BIT(7)));
     } else if (id1 == MG_PHY_LAN87x) {
       // nothing to do
-    } else if (id1 == MG_PHY_RTL8201) {
+    } else if (id1 == MG_PHY_RTL82x && id2 == MG_PHY_RTL8201) {
       // assume PHY has been hardware strapped properly
 #if 0
-      phy->write_reg(phy_addr, MG_PHY_RTL8201_REG_PAGESEL, 7);  // Select page 7
+      phy->write_reg(phy_addr, MG_PHY_RTL82x_REG_PAGESEL, 7);  // Select page 7
       phy->write_reg(phy_addr, MG_PHY_RTL8201_REG_RMSR, 0x1ffa);
-      phy->write_reg(phy_addr, MG_PHY_RTL8201_REG_PAGESEL, 0);  // Select page 0
+      phy->write_reg(phy_addr, MG_PHY_RTL82x_REG_PAGESEL, 0);  // Select page 0
 #endif
+    } else if (id1 == MG_PHY_RTL82x && id2 == MG_PHY_RTL8211) {
+      // assume PHY has been hardware strapped properly
     }
   }
 
@@ -136,10 +148,22 @@ bool mg_phy_up(struct mg_phy *phy, uint8_t phy_addr, bool *full_duplex,
       uint16_t scsr = phy->read_reg(phy_addr, MG_PHY_LAN87x_REG_SCSR);
       *full_duplex = scsr & MG_BIT(4);
       *speed = (scsr & MG_BIT(3)) ? MG_PHY_SPEED_100M : MG_PHY_SPEED_10M;
-    } else if (id1 == MG_PHY_RTL8201) {
-      uint16_t bcr = phy->read_reg(phy_addr, MG_PHY_REG_BCR);
-      *full_duplex = bcr & MG_BIT(8);
-      *speed = (bcr & MG_BIT(13)) ? MG_PHY_SPEED_100M : MG_PHY_SPEED_10M;
+    } else if (id1 == MG_PHY_RTL82x) {
+      uint16_t id2 = phy->read_reg(phy_addr, MG_PHY_REG_ID2);
+      if (id2 == MG_PHY_RTL8211) {
+        uint16_t physr;
+        phy->write_reg(phy_addr, MG_PHY_RTL82x_REG_PAGESEL, 0xa43);
+        physr = phy->read_reg(phy_addr, MG_PHY_RTL8211_REG_PHYSR);
+        phy->write_reg(phy_addr, MG_PHY_RTL82x_REG_PAGESEL, 0);
+        *full_duplex = physr & MG_BIT(3);
+        *speed = (physr & MG_BIT(5))   ? MG_PHY_SPEED_1000M
+                 : (physr & MG_BIT(4)) ? MG_PHY_SPEED_100M
+                                       : MG_PHY_SPEED_10M;
+      } else {
+        uint16_t bcr = phy->read_reg(phy_addr, MG_PHY_REG_BCR);
+        *full_duplex = bcr & MG_BIT(8);
+        *speed = (bcr & MG_BIT(13)) ? MG_PHY_SPEED_100M : MG_PHY_SPEED_10M;
+      }
     } else if (id1 == MG_PHY_ICS1894x) {
       uint16_t poll_reg = phy->read_reg(phy_addr, MG_PHY_ICS189432_REG_POLL);
       *full_duplex = poll_reg & MG_BIT(14);
