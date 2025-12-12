@@ -163,7 +163,7 @@ jobs:
     name: macos SSL=${{ matrix.ssl }} TFLAGS=${{ matrix.select }}
     env:
       SSL: ${{ matrix.ssl }}
-      TFLAGS: ${{ matrix.select }} -DMQTT_LOCALHOST ${{ matrix.env.tflags }} -DNO_ABORT -Wno-sign-conversion # Workaround for MbedTLS 3.5.0
+      TFLAGS: ${{ matrix.select }} -DMQTT_LOCALHOST ${{ matrix.env.tflags }} -DNO_ABORT -Wno-sign-conversion -Wno-undef # Workarounds for MbedTLS
       HOMEBREW_NO_AUTO_UPDATE: 1
     steps:
     - uses: actions/checkout@v4

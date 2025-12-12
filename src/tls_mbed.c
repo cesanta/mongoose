@@ -6,7 +6,8 @@
 
 #if MG_TLS == MG_TLS_MBED
 
-#if defined(MBEDTLS_VERSION_NUMBER) && MBEDTLS_VERSION_NUMBER >= 0x03000000
+#if defined(MBEDTLS_VERSION_NUMBER) && MBEDTLS_VERSION_NUMBER >= 0x03000000 && \
+    MBEDTLS_VERSION_NUMBER < 0x04000000
 #define MG_MBEDTLS_RNG_GET , mg_mbed_rng, NULL
 #else
 #define MG_MBEDTLS_RNG_GET
@@ -19,11 +20,14 @@ static int mg_tls_err(struct mg_connection *c, int rc) {
   return rc;
 }
 
+#if defined(MBEDTLS_VERSION_NUMBER) && MBEDTLS_VERSION_NUMBER >= 0x04000000
+#else
 static int mg_mbed_rng(void *ctx, unsigned char *buf, size_t len) {
   mg_random(buf, len);
   (void) ctx;
   return 0;
 }
+#endif
 
 static bool mg_load_cert(struct mg_str str, mbedtls_x509_crt *p) {
   int rc;
@@ -61,7 +65,7 @@ void mg_tls_free(struct mg_connection *c) {
 #endif
 #if defined(MBEDTLS_VERSION_NUMBER) && MBEDTLS_VERSION_NUMBER >= 0x03000000 && \
     defined(MBEDTLS_PSA_CRYPTO_C)
-    mbedtls_psa_crypto_free(); // https://github.com/Mbed-TLS/mbedtls/issues/9223#issuecomment-2144898336
+    mbedtls_psa_crypto_free();  // https://github.com/Mbed-TLS/mbedtls/issues/9223#issuecomment-2144898336
 #endif
     mg_free(tls);
     c->tls = NULL;
@@ -139,7 +143,11 @@ void mg_tls_init(struct mg_connection *c, const struct mg_tls_opts *opts) {
     mg_error(c, "tls defaults %#x", -mg_tls_err(c, rc));
     goto fail;
   }
+#if defined(MBEDTLS_VERSION_NUMBER) && MBEDTLS_VERSION_NUMBER >= 0x04000000
+  MG_INFO(("PSA is in control of random number generation"));
+#else
   mbedtls_ssl_conf_rng(&tls->conf, mg_mbed_rng, c);
+#endif
 
   if (opts->ca.len == 0 || mg_strcmp(opts->ca, mg_str("*")) == 0) {
     // NOTE: MBEDTLS_SSL_VERIFY_NONE is not supported for TLS1.3 on client side
@@ -191,7 +199,7 @@ size_t mg_tls_pending(struct mg_connection *c) {
 long mg_tls_recv(struct mg_connection *c, void *buf, size_t len) {
   struct mg_tls *tls = (struct mg_tls *) c->tls;
   long n = mbedtls_ssl_read(&tls->ssl, (unsigned char *) buf, len);
-  if (!c->is_tls_hs && buf == NULL && n == 0) return 0; // TODO(): MIP
+  if (!c->is_tls_hs && buf == NULL && n == 0) return 0;  // TODO(): MIP
   if (n == MBEDTLS_ERR_SSL_WANT_READ || n == MBEDTLS_ERR_SSL_WANT_WRITE)
     return MG_IO_WAIT;
 #if defined(MBEDTLS_ERR_SSL_RECEIVED_NEW_SESSION_TICKET)
@@ -215,10 +223,11 @@ long mg_tls_send(struct mg_connection *c, const void *buf, size_t len) {
       (n == MBEDTLS_ERR_SSL_WANT_READ || n == MBEDTLS_ERR_SSL_WANT_WRITE);
   if (was_throttled) return MG_IO_WAIT;  // flushed throttled data instead
   if (c->is_tls_throttled) {
-    tls->throttled_buf = (unsigned char *)buf; // MbedTLS code actually ignores
-    tls->throttled_len = len; //  these, but let's play API rules
-    return (long) len;  // already encripted that when throttled
-  } // if last chunk fails to be sent, it needs to be flushed
+    tls->throttled_buf =
+        (unsigned char *) buf;  // MbedTLS code actually ignores
+    tls->throttled_len = len;   //  these, but let's play API rules
+    return (long) len;          // already encripted that when throttled
+  }  // if last chunk fails to be sent, it needs to be flushed
   if (n <= 0) return MG_IO_ERR;
   return n;
 }
@@ -226,8 +235,10 @@ long mg_tls_send(struct mg_connection *c, const void *buf, size_t len) {
 void mg_tls_flush(struct mg_connection *c) {
   struct mg_tls *tls = (struct mg_tls *) c->tls;
   if (c->is_tls_throttled) {
-    long n = mbedtls_ssl_write(&tls->ssl, tls->throttled_buf, tls->throttled_len);
-    c->is_tls_throttled = (n == MBEDTLS_ERR_SSL_WANT_READ || n == MBEDTLS_ERR_SSL_WANT_WRITE);
+    long n =
+        mbedtls_ssl_write(&tls->ssl, tls->throttled_buf, tls->throttled_len);
+    c->is_tls_throttled =
+        (n == MBEDTLS_ERR_SSL_WANT_READ || n == MBEDTLS_ERR_SSL_WANT_WRITE);
   }
 }
 
@@ -239,9 +250,14 @@ void mg_tls_ctx_init(struct mg_mgr *mgr) {
 #ifdef MBEDTLS_SSL_SESSION_TICKETS
     int rc;
     mbedtls_ssl_ticket_init(&ctx->tickets);
+#if defined(MBEDTLS_VERSION_NUMBER) && MBEDTLS_VERSION_NUMBER >= 0x04000000
+    if ((rc = mbedtls_ssl_ticket_setup(&ctx->tickets, PSA_ALG_GCM,
+                                       PSA_KEY_TYPE_AES, 128, 86400))
+#else
     if ((rc = mbedtls_ssl_ticket_setup(&ctx->tickets, mg_mbed_rng, NULL,
-                                       MBEDTLS_CIPHER_AES_128_GCM, 86400)) !=
-        0) {
+                                       MBEDTLS_CIPHER_AES_128_GCM, 86400))
+#endif
+        != 0) {
       MG_ERROR((" mbedtls_ssl_ticket_setup %#x", -rc));
     }
 #endif
