@@ -20,6 +20,7 @@ size_t mg_print_ip_port(void (*out)(char, void *), void *arg, va_list *ap);
 size_t mg_print_ip4(void (*out)(char, void *), void *arg, va_list *ap);
 size_t mg_print_ip6(void (*out)(char, void *), void *arg, va_list *ap);
 size_t mg_print_mac(void (*out)(char, void *), void *arg, va_list *ap);
+size_t mg_print_l2addr(void (*out)(char, void *), void *arg, va_list *ap);
 
 // Various output functions
 void mg_pfn_iobuf(char ch, void *param);  // param: struct mg_iobuf *

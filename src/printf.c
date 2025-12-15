@@ -107,11 +107,26 @@ size_t mg_print_ip_port(void (*out)(char, void *), void *arg, va_list *ap) {
   return mg_xprintf(out, arg, "%M:%hu", mg_print_ip, a, mg_ntohs(a->port));
 }
 
-size_t mg_print_mac(void (*out)(char, void *), void *arg, va_list *ap) {
-  uint8_t *p = va_arg(*ap, uint8_t *);
+static size_t print_mac(void (*out)(char, void *), void *arg, uint8_t *p) {
   return mg_xprintf(out, arg, "%02x:%02x:%02x:%02x:%02x:%02x", p[0], p[1], p[2],
                     p[3], p[4], p[5]);
 }
+
+size_t mg_print_mac(void (*out)(char, void *), void *arg, va_list *ap) {
+  uint8_t *p = va_arg(*ap, uint8_t *);
+  return print_mac(out, arg, p);
+}
+
+#if MG_ENABLE_TCPIP
+size_t mg_print_l2addr(void (*out)(char, void *), void *arg, va_list *ap) {
+  enum mg_l2type type = (enum mg_l2type) va_arg(*ap, int);
+  if (type == MG_TCPIP_L2_ETH) {
+    uint8_t *p = va_arg(*ap, uint8_t *);
+    return print_mac(out, arg, p);
+  }
+  return 0;
+}
+#endif
 
 static char mg_esc(int c, bool esc) {
   const char *p, *esc1 = "\b\f\n\r\t\\\"", *esc2 = "bfnrt\\\"";
