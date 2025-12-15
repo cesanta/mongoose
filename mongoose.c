@@ -5477,8 +5477,11 @@ static size_t tx_tcp(struct mg_tcpip_if *ifp, uint8_t *mac_dst,
     } else
 #endif
     {
-      uint8_t pseudo[] = {0, ip->proto, (uint8_t) (n >> 8),
-                          (uint8_t) (n & 255)};
+      uint8_t pseudo[4];
+      pseudo[0] = 0;
+      pseudo[1] = ip->proto;
+      pseudo[2] = (uint8_t) (n >> 8);
+      pseudo[3] = (uint8_t) (n & 255);
       cs = csumup(cs, &ip->src, sizeof(ip->src));
       cs = csumup(cs, &ip->dst, sizeof(ip->dst));
       cs = csumup(cs, pseudo, sizeof(pseudo));
