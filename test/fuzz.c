@@ -100,7 +100,7 @@ int LLVMFuzzerTestOneInput(const uint8_t *data, size_t size) {
     memcpy(pkt, data, size);
     if (size > sizeof(*eth)) {
       static size_t i;
-      uint16_t eth_types[] = {0x800, 0x806, 0x86dd}; // IPv4, ARP, IPv6
+      // eth_types[] exists in l2_eth.c
       memcpy(eth->dst, mif.mac, 6);  // Set valid destination MAC
       // send all handled eth types, then 2 random ones
       if (i >= (sizeof(eth_types) / sizeof(eth_types[0]) + 2)) i = 0;
