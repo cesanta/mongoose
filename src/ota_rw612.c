@@ -2,7 +2,7 @@
 #include "log.h"
 #include "ota.h"
 
-#if MG_OTA == MG_OTA_FRDM
+#if MG_OTA == MG_OTA_RW612
 
 MG_IRAM static bool mg_frdm_write(void *, const void *, size_t);
 static bool mg_frdm_swap(void);
