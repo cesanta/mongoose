@@ -714,7 +714,7 @@ static void tx_ndp_na(struct mg_tcpip_if *ifp, uint8_t *l2_dst,
   memcpy(data + 4, ip_src, 16);                         // Target address
   data[20] = 2;                                         // 4.6.1, target hwaddr
   data[21] = mg_l2_ip6put(ifp->l2type, l2, data + 22);  // option length / 8
-  tx_icmp6(ifp, l2_dst, ip_src, ip_dst, 136, 0, data, 20 + 8 * data[21]);
+  tx_icmp6(ifp, l2_dst, ip_src, ip_dst, 136, 0, data, 20 + (size_t)(8 * data[21]));
 }
 
 static void onstate6change(struct mg_tcpip_if *ifp);
@@ -754,12 +754,14 @@ static void rx_ndp_ns(struct mg_tcpip_if *ifp, struct pkt *pkt) {
   if (pkt->pay.len < sizeof(target)) return;
   memcpy(target, pkt->pay.buf + 4, sizeof(target));
   if (MG_IP6MATCH(target, ifp->ip6ll) || MG_IP6MATCH(target, ifp->ip6)) {
+    uint64_t req[2]; // requester address
     uint8_t l2[sizeof(struct mg_l2addr)];
     uint8_t len, *opts = (uint8_t *) pkt->pay.buf + 20;
-    if (*opts++ != 2) return;  // no target hwaddr
+    if (*opts++ != 1) return;  // no requester hwaddr (source)
     len = *opts++;             // check valid hwaddr and get it
     if (!mg_l2_ip6get(ifp->l2type, l2, opts, len)) return;
-    tx_ndp_na(ifp, l2, target, pkt->ip6->src, true, ifp->mac);
+    req[0] = pkt->ip6->src[0], req[1] = pkt->ip6->src[1]; // align to 64-bit
+    tx_ndp_na(ifp, l2, target, req, true, ifp->mac);
   }
 }
 
@@ -932,7 +934,7 @@ static void rx_icmp6(struct mg_tcpip_if *ifp, struct pkt *pkt) {
           return;                      // safety net for lousy networks
         if (plen > room) plen = room;  // Copy (truncated) RX payload to TX
         // Echo Reply, 4.2
-        tx_icmp6(ifp, l2addr, pkt->ip6->dst, pkt->ip6->src, 129, 0,
+        tx_icmp6(ifp, l2addr, target, ips.addr.ip6, 129, 0,
                  pkt->pay.buf, plen);
       }
     } break;
