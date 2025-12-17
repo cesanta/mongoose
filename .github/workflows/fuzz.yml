@@ -17,7 +17,7 @@ jobs:
     steps:
     - uses: actions/checkout@v4
       with: { fetch-depth: 2 }
-    - run: make -C test ${{ matrix.target }} ARGS="-max_total_time=7200"
+    - run: make -C test ${{ matrix.target }} ARGS="-max_total_time=21600"
 
 # as we're not getting access to test units causing a problem, convert from the log:
 # base64 -d > dataofdeath
