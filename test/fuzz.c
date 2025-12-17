@@ -104,7 +104,7 @@ int LLVMFuzzerTestOneInput(const uint8_t *data, size_t size) {
       memcpy(eth->dst, mif.mac, 6);  // Set valid destination MAC
       // send all handled eth types, then 2 random ones
       if (i >= (sizeof(eth_types) / sizeof(eth_types[0]) + 2)) i = 0;
-      if (i < (sizeof(eth_types) / sizeof(eth_types[0]))) eth->type = (eth_types[i++]);
+      if (i < (sizeof(eth_types) / sizeof(eth_types[0]))) eth->type = mg_htons(eth_types[i++]);
       // build proper layer-3 datagrams, to be able to exercise layers above
       if (eth->type == mg_htons(0x800) && size > (sizeof(*eth) + sizeof(struct ip))) {             // IPv4
         static size_t j;

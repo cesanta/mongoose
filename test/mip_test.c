@@ -1076,6 +1076,72 @@ static void test_udp(bool ipv6) {
   mg_mgr_free(&mgr);
 }
 
+static void create_icmp_dat(struct eth *e, struct ipp *ipp, uint8_t type,
+                           uint8_t code, size_t payload_len) {
+  struct icmp icmp;
+  struct ip *ip = ipp->ip4;
+  memset(&icmp, 0, sizeof(struct icmp));
+  icmp.type = type;
+  icmp.code = code;
+  memcpy(s_driver_data.buf, e, sizeof(*e));
+  ip->len = mg_htons((uint16_t) (sizeof(*ip) + sizeof(icmp) + payload_len));
+  memcpy(s_driver_data.buf + sizeof(*e), ip, sizeof(*ip));
+  memcpy(s_driver_data.buf + sizeof(*e) + sizeof(*ip), &icmp, sizeof(icmp));
+  s_driver_data.len = sizeof(*e) + sizeof(*ip) + sizeof(icmp) + payload_len;
+  icmp.csum = ipcsum(s_driver_data.buf + sizeof(*e), sizeof(icmp) + payload_len);
+  if (s_driver_data.len < 64) s_driver_data.len = 64;  // add padding if needed
+}
+
+static void init_icmp_tests(struct mg_mgr *mgr, struct eth *e, struct ipp *ipp,
+                           struct mg_tcpip_driver *driver,
+                           struct mg_tcpip_if *mif) {
+  init_tests(mgr, e, ipp, driver, mif, 1);  // 1 -> ICMP
+}
+
+static void test_icmp_basics(void) {
+  struct mg_mgr mgr;
+  struct eth e;
+  struct ip ip;
+  struct ipp ipp;
+  struct icmp *icmp = (struct icmp *) (s_driver_data.buf + sizeof(e) + sizeof(ip));
+  struct ip *i = (struct ip *) (s_driver_data.buf + sizeof(e));
+  struct mg_tcpip_driver driver;
+  struct mg_tcpip_if mif;
+
+  ipp.ip4 = &ip;
+  ipp.ip6 = NULL;
+  init_icmp_tests(&mgr, &e, &ipp, &driver, &mif);
+
+  create_icmp_dat(&e, &ipp, 8, 0, 0);
+  mg_mgr_poll(&mgr, 0);  // make sure we clean former stuff in buffer
+  while (!received_response(&s_driver_data)) mg_mgr_poll(&mgr, 0);
+  ASSERT(i->src == 1 && i->dst == 2);
+  ASSERT(i->proto == 1);
+  ASSERT(i->len == mg_htons(sizeof(*i) + sizeof(*icmp) + 0));
+  ASSERT(ipcsum(i, sizeof(*i)) == 0); // Bonus, not tested elsewhere
+  ASSERT(icmp->type == 0);  // Echo Reply
+  ASSERT(icmp->code == 0);
+  ASSERT(ipcsum(icmp, sizeof(*icmp) + 0) == 0);
+  
+  create_icmp_dat(&e, &ipp, 8, 0, 69);
+  mg_mgr_poll(&mgr, 0);  // make sure we clean former stuff in buffer
+  while (!received_response(&s_driver_data)) mg_mgr_poll(&mgr, 0);
+  ASSERT(i->src == 1 && i->dst == 2);
+  ASSERT(i->proto == 1);
+  ASSERT(i->len == mg_htons(sizeof(*i) + sizeof(*icmp) + 69));
+  ASSERT(icmp->type == 0);  // Echo Reply
+  ASSERT(icmp->code == 0);
+  ASSERT(ipcsum(icmp, sizeof(*icmp) + 69) == 0);
+
+  s_driver_data.len = 0;
+  mg_mgr_free(&mgr);
+}
+
+static void test_icmp(void) {
+  test_icmp_basics();
+}
+
+
 
 #define DASHBOARD(x) \
   printf("HEALTH_DASHBOARD\t\"%s\": %s,\n", x, s_error ? "false" : "true");
@@ -1092,6 +1158,10 @@ int main(void) {
   s_error = false;
   test_poll();
   DASHBOARD("poll");
+
+  s_error = false;
+  test_icmp();
+  DASHBOARD("icmp");
 
   s_error = false;
   test_tcp(false);
