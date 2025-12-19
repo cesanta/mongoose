@@ -86,9 +86,19 @@ int LLVMFuzzerTestOneInput(const uint8_t *data, size_t size) {
 
   // Test built-in TCP/IP stack
   if (size > 0) {
-    struct mg_tcpip_if mif = {.ip = 0x01020304,
+    struct mg_tcpip_if mif = {.ip = 1,
                               .mask = 255,
-                              .gw = 0x01010101,
+                              .gw = 1,
+                              .gw_ready = true,
+                              .state = MG_TCPIP_STATE_READY,
+#if MG_ENABLE_IPV6
+                              .ip6[0] = 1;
+                              .prefix[0] = 1;
+                              .prefix_len = 64;
+                              .gw6[0] = 1;
+                              .gw6_ready = true;
+                              .state6 = MG_TCPIP_STATE_READY;  // so mg_send() works and RS stops
+#endif
                               .driver = &mg_tcpip_driver_mock};
     struct mg_mgr mgr;
     mg_mgr_init(&mgr);
@@ -151,6 +161,10 @@ int LLVMFuzzerTestOneInput(const uint8_t *data, size_t size) {
       }
     }
 
+#if defined(MAIN)
+    printf("Sending to net_builtin:\n");
+    mg_hexdump(pkt, size);
+#endif
     mg_tcpip_rx(&mif, pkt, size);
 
     // Test HTTP serving (via our built-in TCP/IP stack)
