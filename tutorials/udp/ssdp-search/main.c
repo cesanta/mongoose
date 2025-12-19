@@ -32,7 +32,7 @@ static void fn(struct mg_connection *c, int ev, void *ev_data) {
     // We can now do mg_printf(c, "haha"); to respond back to the remote side.
     // But in our case, we should restore the multicast address in order
     // to have next search to go to the multicast address
-    memcpy(&c->rem, c->data, sizeof(c->rem));
+    mg_multicast_restore(c, (uint8_t *) c->data);
     // Discard the content of this response as we expect each SSDP response
     // to generate at most one MG_EV_READ event.
     c->recv.len = 0UL;
