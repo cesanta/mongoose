@@ -87,7 +87,7 @@ bool mg_l2_eth_rx(struct mg_tcpip_if *ifp, enum mg_l2proto *proto,
       return false;
   }
   pay->buf = (char *) (eth + 1);
-  pay->len = len;
+  pay->len = len - sizeof(*eth);
 
   type = mg_htons(eth->type);
   for (i = 0; i < sizeof(eth_types) / sizeof(uint16_t); i++) {
