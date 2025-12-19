@@ -1,0 +1,32 @@
+name: On demand ad hoc test
+on:
+  workflow_dispatch:
+env:
+  IPV6: 0
+jobs:
+  macos:
+    runs-on: macos-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        ssl: [MBEDTLS, WOLFSSL]
+        select: [-DMG_ENABLE_POLL=1]
+    name: macos SSL=${{ matrix.ssl }} TFLAGS=${{ matrix.select }}
+    env:
+      SSL: ${{ matrix.ssl }}
+      TFLAGS: ${{ matrix.select }} -DMQTT_LOCALHOST -DNO_ABORT -Wno-sign-conversion -Wno-undef # Workarounds for MbedTLS
+      HOMEBREW_NO_AUTO_UPDATE: 1
+    steps:
+    - uses: actions/checkout@v4
+      with: { fetch-depth: 2 }
+    - uses: webfactory/ssh-agent@v0.9.1
+      with:
+            ssh-private-key: ${{ secrets.HEALTH_TESTS_SSH_KEY }}
+    - run: brew install mbedtls wolfssl mosquitto gawk # jq openssl already pre-installed
+    - run: /opt/homebrew/opt/mosquitto/sbin/mosquitto -c /Users/runner/work/mongoose/mongoose/test/mosquitto.conf.macos &
+    - run: make -C test test ASAN_OPTIONS= MBEDTLS=$(echo $(brew --cellar)/mbedtls*/*) OPENSSL=$(echo $(brew --cellar)/openssl*/*) WOLFSSL=$(echo $(brew --cellar)/wolfssl*/*) > log
+    - if: success() || failure()
+      run: |
+        cat log
+        test/health.awk < log > json
+        scp -o "StrictHostKeyChecking=no" json "root@176.9.217.245:/data/downloads/health/macos_test_cc_${{ matrix.ssl }}_${{ matrix.select }}_$(date +"%Y%m%d").json"
