@@ -3225,76 +3225,74 @@ typedef void (*mg_tcpip_event_handler_t)(struct mg_tcpip_if *ifp, int ev,
                                          void *ev_data);
 
 enum {
-  MG_TCPIP_EV_ST_CHG,  // state change                   uint8_t * (&ifp->state)
-  MG_TCPIP_EV_DHCP_DNS,   // DHCP DNS assignment            uint32_t *ipaddr
-  MG_TCPIP_EV_DHCP_SNTP,  // DHCP SNTP assignment           uint32_t *ipaddr
-  MG_TCPIP_EV_ARP,        // Got ARP packet                 struct mg_str *
-  MG_TCPIP_EV_TIMER_1S,   // 1 second timer                 NULL
-  MG_TCPIP_EV_WIFI_SCAN_RESULT,  // Wi-Fi scan results             struct
-                                 // mg_wifi_scan_bss_data *
-  MG_TCPIP_EV_WIFI_SCAN_END,     // Wi-Fi scan has finished        NULL
-  MG_TCPIP_EV_WIFI_CONNECT_ERR,  // Wi-Fi connect has failed       driver and
-                                 // chip specific
-  MG_TCPIP_EV_DRIVER,   // Driver event                   driver specific
-  MG_TCPIP_EV_ST6_CHG,  // state6 change                  uint8_t *
-                        // (&ifp->state6)
-  MG_TCPIP_EV_USER      // Starting ID for user events
+  MG_TCPIP_EV_ST_CHG,           // state change                   uint8_t * (&ifp->state)
+  MG_TCPIP_EV_DHCP_DNS,         // DHCP DNS assignment            uint32_t *ipaddr
+  MG_TCPIP_EV_DHCP_SNTP,        // DHCP SNTP assignment           uint32_t *ipaddr
+  MG_TCPIP_EV_ARP,              // Got ARP packet                 struct mg_str *
+  MG_TCPIP_EV_TIMER_1S,         // 1 second timer                 NULL
+  MG_TCPIP_EV_WIFI_SCAN_RESULT, // Wi-Fi scan results             struct mg_wifi_scan_bss_data *
+  MG_TCPIP_EV_WIFI_SCAN_END,    // Wi-Fi scan has finished        NULL
+  MG_TCPIP_EV_WIFI_CONNECT_ERR, // Wi-Fi connect has failed       driver and chip specific
+  MG_TCPIP_EV_DRIVER,           // Driver event                   driver specific
+  MG_TCPIP_EV_ST6_CHG,          // state6 change                  uint8_t * (&ifp->state6)
+  MG_TCPIP_EV_USER              // Starting ID for user events
 };
 
 // Network interface
 struct mg_tcpip_if {
-  uint8_t mac[sizeof(struct mg_l2addr)];  // hw address. Set to a valid addr
-  uint32_t ip, mask, gw;                  // IP address, mask, default gateway
-  struct mg_str tx;                       // Output (TX) buffer
-  bool enable_dhcp_client;                // Enable DCHP client
-  bool enable_dhcp_server;                // Enable DCHP server
-  bool enable_get_gateway;                // DCHP server sets client as gateway
-  bool enable_req_dns;                    // DCHP client requests DNS server
-  bool enable_req_sntp;                   // DCHP client requests SNTP server
-  bool enable_crc32_check;         // Do a CRC check on RX frames and strip it
-  bool enable_mac_check;           // Do a MAC check on RX frames
-  bool update_mac_hash_table;      // Signal drivers to update MAC controller
-  struct mg_tcpip_driver *driver;  // Low level driver
-  void *driver_data;               // Driver-specific data
-  mg_tcpip_event_handler_t pfn;    // Driver-specific event handler function
-  mg_tcpip_event_handler_t fn;     // User-specified event handler function
-  struct mg_mgr *mgr;              // Mongoose event manager
-  struct mg_queue recv_queue;      // Receive queue
-  char dhcp_name[MG_TCPIP_DHCPNAME_SIZE];  // Name for DHCP, "mip" if unset
-  uint16_t mtu;                            // Interface link payload
-  uint16_t framesize;                      // Interface frame max length
+  uint8_t mac[sizeof(struct mg_l2addr)];      // hw address. Set to a valid addr
+  uint32_t ip, mask, gw;                      // IP address, mask, default gateway
+  struct mg_str tx;                           // Output (TX) buffer
+  bool enable_dhcp_client;                    // Enable DCHP client
+  bool enable_dhcp_server;                    // Enable DCHP server
+  bool enable_get_gateway;                    // DCHP server sets client as gateway
+  bool enable_req_dns;                        // DCHP client requests DNS server
+  bool enable_req_sntp;                       // DCHP client requests SNTP server
+  bool enable_crc32_check;                    // Do a CRC check on RX frames and strip it
+  bool enable_mac_check;                      // Do a MAC check on RX frames
+  bool update_mac_hash_table;                 // Signal drivers to update MAC controller
+  struct mg_tcpip_driver *driver;             // Low level driver
+  void *driver_data;                          // Driver-specific data
+  mg_tcpip_event_handler_t pfn;               // Driver-specific event handler function
+  mg_tcpip_event_handler_t fn;                // User-specified event handler function
+  struct mg_mgr *mgr;                         // Mongoose event manager
+  struct mg_queue recv_queue;                 // Receive queue
+  char dhcp_name[MG_TCPIP_DHCPNAME_SIZE];     // Name for DHCP, "mip" if unset
+  uint16_t mtu;                               // Interface link payload
+  uint16_t framesize;                         // Interface frame max length
 #if MG_ENABLE_IPV6
-  uint64_t ip6ll[2], ip6[2];  // IPv6 link-local and global addresses,
-  uint8_t prefix[8];          // prefix,
-  uint8_t prefix_len;         // prefix length,
-  uint64_t gw6[2];            // default gateway.
-  bool enable_slaac;          // Enable IPv6 address autoconfiguration
-  bool enable_dhcp6_client;   // Enable DCHPv6 client TODO()
+  uint64_t ip6ll[2], ip6[2];                  // IPv6 link-local and global addresses,
+  uint8_t prefix_len;                         // prefix,
+  uint8_t prefix[8];                          // prefix length,
+  uint64_t gw6[2];                            // default gateway.
+  bool enable_slaac;                          // Enable IPv6 address autoconfiguration
+  bool enable_dhcp6_client;                   // Enable DCHPv6 client TODO()
+
 #endif
 
   // Internal state, user can use it but should not change it
-  uint8_t gwmac[sizeof(struct mg_l2addr)];  // Router's hw address
-  enum mg_l2type l2type;                    // Ethernet, PPP, etc.
-  char *dns4_url;                           // DNS server URL
-  uint64_t now;                             // Current time
-  uint64_t timer_1000ms;        // 1000 ms timer: for DHCP and link state
-  uint64_t lease_expire;        // Lease expiration time, in ms
-  uint16_t eport;               // Next ephemeral port
-  volatile uint32_t ndrop;      // Number of received, but dropped frames
-  volatile uint32_t nrecv;      // Number of received frames
-  volatile uint32_t nsent;      // Number of transmitted frames
-  volatile uint32_t nerr;       // Number of driver errors
-  uint8_t state;                // Current link and IPv4 state
-#define MG_TCPIP_STATE_DOWN 0   // Interface is down
-#define MG_TCPIP_STATE_UP 1     // Interface is up
-#define MG_TCPIP_STATE_REQ 2    // Interface is up, DHCP REQUESTING state
-#define MG_TCPIP_STATE_IP 3     // Interface is up and has an IP assigned
-#define MG_TCPIP_STATE_READY 4  // Interface has fully come up, ready to work
-  bool gw_ready;                // We've got a hw address for the router
+  uint8_t gwmac[sizeof(struct mg_l2addr)];    // Router's hw address
+  enum mg_l2type l2type;                      // Ethernet, PPP, etc.
+  char *dns4_url;                             // DNS server URL
+  uint64_t now;                               // Current time
+  uint64_t timer_1000ms;                      // 1000 ms timer: for DHCP and link state
+  uint64_t lease_expire;                      // Lease expiration time, in ms
+  uint16_t eport;                             // Next ephemeral port
+  volatile uint32_t ndrop;                    // Number of received, but dropped frames
+  volatile uint32_t nrecv;                    // Number of received frames
+  volatile uint32_t nsent;                    // Number of transmitted frames
+  volatile uint32_t nerr;                     // Number of driver errors
+  uint8_t state;                              // Current link and IPv4 state
+#define MG_TCPIP_STATE_DOWN 0                 // Interface is down
+#define MG_TCPIP_STATE_UP 1                   // Interface is up
+#define MG_TCPIP_STATE_REQ 2                  // Interface is up, DHCP REQUESTING state
+#define MG_TCPIP_STATE_IP 3                   // Interface is up and has an IP assigned
+#define MG_TCPIP_STATE_READY 4                // Interface has fully come up, ready to work
+  bool gw_ready;                              // We've got a hw address for the router
 #if MG_ENABLE_IPV6
-  uint8_t gw6mac[sizeof(struct mg_l2addr)];  // IPV6 Router's hw address
-  uint8_t state6;                            // Current IPv6 state
-  bool gw6_ready;  // We've got a hw address for the IPv6 router
+  uint8_t gw6mac[sizeof(struct mg_l2addr)];   // IPV6 Router's hw address
+  uint8_t state6;                             // Current IPv6 state
+  bool gw6_ready;                             // We've got a hw address for the IPv6 router
 #endif
 };
 
@@ -3382,9 +3380,9 @@ struct mg_tcpip_spi {
      (defined(MG_ENABLE_DRIVER_CYW_SDIO) && MG_ENABLE_DRIVER_CYW_SDIO))
 
 struct mg_tcpip_spi_ {
-  void *spi;              // Opaque SPI bus descriptor
-  void (*begin)(void *);  // SPI begin: slave select low
-  void (*end)(void *);    // SPI end: slave select high
+  void *spi;                // Opaque SPI bus descriptor
+  void (*begin)(void *);    // SPI begin: slave select low
+  void (*end)(void *);      // SPI end: slave select high
   void (*txn)(void *, uint8_t *, uint8_t *,
               size_t len);  // SPI transaction: write-read len bytes
 };
