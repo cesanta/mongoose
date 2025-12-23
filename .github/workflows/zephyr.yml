@@ -10,7 +10,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        revno: ["--mr v3.7-branch", "--mr v4.2.0"] # LTS, latest stable
+        revno: ["--mr v3.7-branch", "--mr v4.2.0", "--mr v4.3.0"] # LTS, latest stable
     name: Zephyr ${{ matrix.revno }}
     steps:
       - uses: actions/checkout@v4
