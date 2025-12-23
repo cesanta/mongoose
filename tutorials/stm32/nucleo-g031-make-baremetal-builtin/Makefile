@@ -1,6 +1,6 @@
 CFLAGS  = -W -Wall -Wextra -Werror -Wundef -Wshadow -Wdouble-promotion
 CFLAGS += -Wformat-truncation -fno-common -Wconversion -Wno-sign-conversion
-CFLAGS += -g3 -O3 -ffunction-sections -fdata-sections
+CFLAGS += -g3 -Os -ffunction-sections -fdata-sections
 CFLAGS += -I. -Icmsis_core/CMSIS/Core/Include -Icmsis_g0/Include
 CFLAGS += -mcpu=cortex-m0 -mthumb -mfloat-abi=soft $(CFLAGS_EXTRA)
 LDFLAGS ?= -Tlink.ld -nostdlib -nostartfiles --specs nano.specs -lc -lgcc -Wl,--gc-sections -Wl,-Map=$@.map
