@@ -21460,6 +21460,15 @@ bool mg_random(void *buf, size_t len) {
 #elif MG_ARCH == MG_ARCH_PICOSDK
   while (len--) *p++ = (unsigned char) (get_rand_32() & 255);
   success = true;
+#elif MG_ARCH == MG_ARCH_ZEPHYR
+#if MG_TLS == MG_TLS_BUILTIN ||                                    \
+    (MG_TLS == MG_TLS_MBED && (!defined(MBEDTLS_VERSION_NUMBER) || \
+                               MBEDTLS_VERSION_NUMBER < 0x04000000))
+  return (sys_csrand_get(buf, len) == 0);  // do not fallback on reseed error
+#else
+  sys_rand_get(buf, len);
+  success = true;
+#endif
 #elif MG_ARCH == MG_ARCH_WIN32
 #if defined(_MSC_VER) && _MSC_VER < 1700
   static bool initialised = false;
