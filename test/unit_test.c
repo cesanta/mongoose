@@ -439,7 +439,7 @@ static const char *s_ca_cert =
 #else
 #define MQTTS_URL "mqtts://broker.hivemq.com:8883"
 #define MQTTS_CA mg_unpacked("/data/ca.pem")
-#endif // MQTT_LOCALHOST
+#endif  // MQTT_LOCALHOST
 #endif
 
 struct mqtt_data {
@@ -463,7 +463,7 @@ static void mqtt_cb(struct mg_connection *c, int ev, void *ev_data) {
     struct mg_tls_opts opts;
     memset(&opts, 0, sizeof(opts));
     opts.ca = MQTTS_CA;
-#if defined( MQTT_LOCALHOST) && MG_TLS != MG_TLS_BUILTIN
+#if defined(MQTT_LOCALHOST) && MG_TLS != MG_TLS_BUILTIN
     MG_ERROR(("Hostname not tested"));
 #else
     opts.name = mg_url_host(MQTTS_URL);
@@ -499,7 +499,7 @@ static void mqtt_cb(struct mg_connection *c, int ev, void *ev_data) {
       size_t pos = 0, i = 0, j = 0;
       struct mg_mqtt_prop prop;
 
-      for (i = 0; i < 5 ; i++) {
+      for (i = 0; i < 5; i++) {
         ASSERT((pos = mg_mqtt_next_prop(mm, &prop, pos)) > 0);
         if (prop.id == MQTT_PROP_MESSAGE_EXPIRY_INTERVAL) {
           ASSERT(prop.iv == 10);
@@ -508,14 +508,20 @@ static void mqtt_cb(struct mg_connection *c, int ev, void *ev_data) {
           j += 2;
           continue;
         } else if (prop.id == MQTT_PROP_CONTENT_TYPE) {
-          ASSERT(strncmp(prop.val.buf, "test_content_val_2", prop.val.len) == 0 && prop.val.len == strlen("test_content_val_2"));
+          ASSERT(strncmp(prop.val.buf, "test_content_val_2", prop.val.len) ==
+                     0 &&
+                 prop.val.len == strlen("test_content_val_2"));
           j += 4;
         } else if (prop.id == MQTT_PROP_USER_PROPERTY) {
-          if (strncmp(prop.key.buf, "test_key_1", prop.key.len) == 0 && prop.key.len == strlen("test_key_1")) {
-            ASSERT(strncmp(prop.val.buf, "test_value_1", prop.val.len) == 0 && prop.val.len == strlen("test_value_1"));
+          if (strncmp(prop.key.buf, "test_key_1", prop.key.len) == 0 &&
+              prop.key.len == strlen("test_key_1")) {
+            ASSERT(strncmp(prop.val.buf, "test_value_1", prop.val.len) == 0 &&
+                   prop.val.len == strlen("test_value_1"));
             j += 8;
-          } else if (strncmp(prop.key.buf, "test_key_2", prop.key.len) == 0 && prop.key.len == strlen("test_key_2")) {
-            ASSERT(strncmp(prop.val.buf, "test_value_2", prop.val.len) == 0 && prop.val.len == strlen("test_value_2"));
+          } else if (strncmp(prop.key.buf, "test_key_2", prop.key.len) == 0 &&
+                     prop.key.len == strlen("test_key_2")) {
+            ASSERT(strncmp(prop.val.buf, "test_value_2", prop.val.len) == 0 &&
+                   prop.val.len == strlen("test_value_2"));
             j += 16;
           } else {
             ASSERT(0);
@@ -875,7 +881,7 @@ static int fetch(struct mg_mgr *mgr, char *buf, const char *url,
     if (strstr(url, "localhost") != NULL) {
       // Local connection, use self-signed certificates
       opts.ca = mg_unpacked("/certs/ca.crt");
-      if (strstr(url, "23456") != NULL) { // hinted from caller
+      if (strstr(url, "23456") != NULL) {  // hinted from caller
         opts.cert = mg_unpacked("/certs/client.crt");
         opts.key = mg_unpacked("/certs/client.key");
       }
@@ -1464,7 +1470,8 @@ static void test_tls(void) {
     ASSERT(cmpbody(buf, data.buf) == 0);  // "thefile" links to Makefile
     ASSERT(system("killall tls_multirec/server") == 0);
   } else {
-    MG_ERROR(("SKIPPED TLS MULTIPLE RECORDS TEST, tls_multirec/server NOT PRESENT"));
+    MG_ERROR(
+        ("SKIPPED TLS MULTIPLE RECORDS TEST, tls_multirec/server NOT PRESENT"));
   }
 #else
   printf(
@@ -1474,14 +1481,14 @@ static void test_tls(void) {
 #endif
 
   // Repeat the simplest test with two-way authentication
-  opts.ca = mg_unpacked("/certs/ca.crt"); // configure the server for two-way
+  opts.ca = mg_unpacked("/certs/ca.crt");  // configure the server for two-way
   // make it fail: the client will not use 2-way
   ASSERT(fetch(&mgr, buf, url, "GET /a.txt HTTP/1.0\n\n") != 200);
   // make it work
   mg_mgr_free(&mgr);
   ASSERT(mgr.conns == NULL);
   mg_mgr_init(&mgr);
-  url = "https://localhost:23456"; // port # hints the client to use two-way
+  url = "https://localhost:23456";  // port # hints the client to use two-way
   c = mg_http_listen(&mgr, url, eh1, &opts);
   ASSERT(c != NULL);
   ASSERT(fetch(&mgr, buf, url, "GET /a.txt HTTP/1.0\n\n") == 200);
@@ -1496,7 +1503,8 @@ static void f3(struct mg_connection *c, int ev, void *ev_data) {
   // MG_INFO(("%d", ev));
   if (ev == MG_EV_CONNECT) {
     // c->is_hexdumping = 1;
-    ASSERT((c->loc.addr.ip[0] != 0));  // Make sure that c->loc address is populated
+    ASSERT((c->loc.addr.ip[0] !=
+            0));  // Make sure that c->loc address is populated
     mg_printf(c, "GET /%s HTTP/1.0\r\nHost: %s\r\n\r\n",
               c->rem.is_ip6 ? "" : "/robots.txt",
               c->rem.is_ip6 ? "ipv6.google.com" : "cesanta.com");
@@ -2265,15 +2273,15 @@ static void test_str(void) {
   ASSERT(sn("%s ", "a"));
   ASSERT(sn("%s %s", "a", "b"));
   ASSERT(sn("%2s %s", "a", "b"));
-  { // mg_queue_printf()
-	struct mg_queue q;
-	char buf[128];
-	uint32_t p = 0xffffffff;
-	size_t len;
-	mg_queue_init(&q, buf, sizeof(buf));
-	len = mg_queue_printf(&q, "A%p%p%pB", p, p, p);
-  ASSERT(len == 32);
-  ASSERT(memcmp(buf + 4, "A0xffffffff0xffffffff0xffffffffB", 32) == 0);
+  {  // mg_queue_printf()
+    struct mg_queue q;
+    char buf[128];
+    uint32_t p = 0xffffffff;
+    size_t len;
+    mg_queue_init(&q, buf, sizeof(buf));
+    len = mg_queue_printf(&q, "A%p%p%pB", p, p, p);
+    ASSERT(len == 32);
+    ASSERT(memcmp(buf + 4, "A0xffffffff0xffffffff0xffffffffB", 32) == 0);
   }
 
   // Non-standard formatting
@@ -2979,7 +2987,7 @@ static void eZ(struct mg_connection *c, int ev, void *ev_data) {
 
 static void eS(struct mg_connection *c, int ev, void *ev_data) {
   if (ev == MG_EV_HTTP_MSG) {
-    ASSERT (mg_send(c, "NADA", 0));
+    ASSERT(mg_send(c, "NADA", 0));
     mg_http_reply(c, 200, "", "abcd");
   }
   (void) ev_data;
@@ -4023,8 +4031,8 @@ static void test_crypto(void) {
   test_rsa();
 }
 
-
-#define DASHBOARD(x)  printf("HEALTH_DASHBOARD\t\"%s\": %s,\n", x, s_error ? "false":"true");
+#define DASHBOARD(x) \
+  printf("HEALTH_DASHBOARD\t\"%s\": %s,\n", x, s_error ? "false" : "true");
 
 int main(void) {
   const char *debug_level = getenv("V");
@@ -4122,7 +4130,7 @@ int main(void) {
   DASHBOARD("sntp");
 
   s_error = false;
-  test_mqtt();  // sorry, MQTT_LOCALHOST is also skipped 
+  test_mqtt();  // sorry, MQTT_LOCALHOST is also skipped
   DASHBOARD("mqtt");
 
   s_error = false;
@@ -4134,11 +4142,18 @@ int main(void) {
 #endif
   s_error = false;
   test_poll();
-  printf("HEALTH_DASHBOARD\t\"poll\": %s\n", s_error ? "false":"true");
- // last entry with no comma
+  printf("HEALTH_DASHBOARD\t\"poll\": %s\n", s_error ? "false" : "true");
+  // last entry with no comma
 
 #ifdef NO_ABORT
   if (s_abort != 0) return EXIT_FAILURE;
+#endif
+
+#if defined(MBEDTLS_VERSION_NUMBER) && MBEDTLS_VERSION_NUMBER >= 0x03000000 && \
+    defined(MBEDTLS_PSA_CRYPTO_C)
+  // Call mbedtls_psa_crypto_free() here to avoid triggering memory-leak
+  // detectors. We are actually freeing all our resources and leaving
+  mbedtls_psa_crypto_free();
 #endif
 
   printf("SUCCESS. Total tests: %d\n", s_num_tests);
