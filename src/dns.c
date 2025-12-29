@@ -504,7 +504,7 @@ static void handle_mdns_record(struct mg_connection *c) {
       p = build_name(respname, p);
       p = build_a_record(c, p);
     }
-    if (!req.is_unicast) memcpy(&c->rem, &c->loc, sizeof(c->rem));
+    if (!req.is_unicast) mg_multicast_restore(c, (uint8_t *) &c->loc);
     mg_send(c, buf, (size_t) (p - buf));  // And send it!
     MG_DEBUG(("mDNS %c response sent", req.is_unicast ? 'U' : 'M'));
   }

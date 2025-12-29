@@ -625,7 +625,7 @@ static void handle_mdns_record(struct mg_connection *c) {
       p = build_name(respname, p);
       p = build_a_record(c, p);
     }
-    if (!req.is_unicast) memcpy(&c->rem, &c->loc, sizeof(c->rem));
+    if (!req.is_unicast) mg_multicast_restore(c, (uint8_t *) &c->loc);
     mg_send(c, buf, (size_t) (p - buf));  // And send it!
     MG_DEBUG(("mDNS %c response sent", req.is_unicast ? 'U' : 'M'));
   }
@@ -4806,6 +4806,16 @@ void mg_mgr_init(struct mg_mgr *mgr) {
                                        : "custom"));
 }
 
+#if MG_ENABLE_TCPIP
+void mg_tcpip_mapip(struct mg_connection *, struct mg_addr *);
+#endif
+void mg_multicast_restore(struct mg_connection *c, uint8_t *from) {
+  memcpy(&c->rem, from, sizeof(c->rem));
+#if MG_ENABLE_TCPIP
+  mg_tcpip_mapip(c, &c->rem);
+#endif
+}
+
 #ifdef MG_ENABLE_LINES
 #line 1 "src/net_builtin.c"
 #endif
@@ -5525,7 +5535,8 @@ static void tx_ndp_na(struct mg_tcpip_if *ifp, uint8_t *l2_dst,
   memcpy(data + 4, ip_src, 16);                         // Target address
   data[20] = 2;                                         // 4.6.1, target hwaddr
   data[21] = mg_l2_ip6put(ifp->l2type, l2, data + 22);  // option length / 8
-  tx_icmp6(ifp, l2_dst, ip_src, ip_dst, 136, 0, data, 20 + (size_t)(8 * data[21]));
+  tx_icmp6(ifp, l2_dst, ip_src, ip_dst, 136, 0, data,
+           20 + (size_t) (8 * data[21]));
 }
 
 static void onstate6change(struct mg_tcpip_if *ifp);
@@ -5565,13 +5576,13 @@ static void rx_ndp_ns(struct mg_tcpip_if *ifp, struct pkt *pkt) {
   if (pkt->pay.len < sizeof(target)) return;
   memcpy(target, pkt->pay.buf + 4, sizeof(target));
   if (MG_IP6MATCH(target, ifp->ip6ll) || MG_IP6MATCH(target, ifp->ip6)) {
-    uint64_t req[2]; // requester address
+    uint64_t req[2];  // requester address
     uint8_t l2[sizeof(struct mg_l2addr)];
     uint8_t len, *opts = (uint8_t *) pkt->pay.buf + 20;
     if (*opts++ != 1) return;  // no requester hwaddr (source)
     len = *opts++;             // check valid hwaddr and get it
     if (!mg_l2_ip6get(ifp->l2type, l2, opts, len)) return;
-    req[0] = pkt->ip6->src[0], req[1] = pkt->ip6->src[1]; // align to 64-bit
+    req[0] = pkt->ip6->src[0], req[1] = pkt->ip6->src[1];  // align to 64-bit
     tx_ndp_na(ifp, l2, target, req, true, ifp->mac);
   }
 }
@@ -5745,8 +5756,7 @@ static void rx_icmp6(struct mg_tcpip_if *ifp, struct pkt *pkt) {
           return;                      // safety net for lousy networks
         if (plen > room) plen = room;  // Copy (truncated) RX payload to TX
         // Echo Reply, 4.2
-        tx_icmp6(ifp, l2addr, target, ips.addr.ip6, 129, 0,
-                 pkt->pay.buf, plen);
+        tx_icmp6(ifp, l2addr, target, ips.addr.ip6, 129, 0, pkt->pay.buf, plen);
       }
     } break;
     case 134:  // Router Advertisement
@@ -5778,32 +5788,43 @@ static void onstate6change(struct mg_tcpip_if *ifp) {
 }
 #endif
 
-static uint8_t *get_return_l2addr(struct mg_tcpip_if *ifp, struct mg_addr *rem,
-                                  bool is_udp, struct pkt *pkt) {
+static uint8_t *tcpip_mapip(struct mg_tcpip_if *ifp, struct mg_addr *ip) {
 #if MG_ENABLE_IPV6
-  if (rem->is_ip6) {
-    if (is_udp &&
-        MG_IP6MATCH(rem->addr.ip6, ip6_allnodes.addr.ip6))  // local bcast
+  if (ip->is_ip6) {
+    if (MG_IP6MATCH(ip->addr.ip6, ip6_allnodes.addr.ip6))  // local broadcast
       return mg_l2_mapip(ifp->l2type, MG_TCPIP_L2ADDR_MCAST6,
                          (struct mg_addr *) &ip6_allnodes);
+    if (*ip->addr.ip == 0xFF)  // multicast
+      return mg_l2_mapip(ifp->l2type, MG_TCPIP_L2ADDR_MCAST6, ip);
+  } else
+#endif
+  {  // global/local broadcast
+    if (ip->addr.ip4 == 0xffffffff || ip->addr.ip4 == (ifp->ip | ~ifp->mask))
+      return mg_l2_mapip(ifp->l2type, MG_TCPIP_L2ADDR_BCAST, NULL);
+    if ((*ip->addr.ip & 0xE0) == 0xE0)  // 224 ~ 239 = E0 ~ EF, multicast
+      return mg_l2_mapip(ifp->l2type, MG_TCPIP_L2ADDR_MCAST, ip);
+  }
+  return NULL;
+}
+
+static uint8_t *get_return_l2addr(struct mg_tcpip_if *ifp, struct mg_addr *rem,
+                                  bool is_udp, struct pkt *pkt) {
+  uint8_t *l2addr;
+  if (is_udp && (l2addr = tcpip_mapip(ifp, rem)) != NULL)
+    return l2addr;  // broadcast or multicast
+#if MG_ENABLE_IPV6
+  if (rem->is_ip6) {
     if (rem->addr.ip6[0] == ifp->ip6ll[0] ||
         match_prefix((uint8_t *) rem->addr.ip6, ifp->prefix, ifp->prefix_len))
       return mg_l2_getaddr(ifp->l2type, pkt->l2);  // same LAN, get from frame
-    if (is_udp && *((uint8_t *) rem->addr.ip6) == 0xFF)  // multicast
-      return mg_l2_mapip(ifp->l2type, MG_TCPIP_L2ADDR_MCAST6, rem);
-    if (ifp->gw6_ready)    // use the router
+    if (ifp->gw6_ready)                            // use the router
       return ifp->gw6mac;  // ignore source address in frame
   } else
 #endif
   {
-    uint32_t rem_ip = rem->addr.ip4;
-    if (is_udp && (rem_ip == 0xffffffff || rem_ip == (ifp->ip | ~ifp->mask)))
-      return mg_l2_mapip(ifp->l2type, MG_TCPIP_L2ADDR_BCAST, NULL);
-    if (ifp->ip != 0 && ((rem_ip & ifp->mask) == (ifp->ip & ifp->mask)))
+    if (ifp->ip != 0 && ((rem->addr.ip4 & ifp->mask) == (ifp->ip & ifp->mask)))
       return mg_l2_getaddr(ifp->l2type, pkt->l2);  // same LAN, get from frame
-    if (is_udp && (*((uint8_t *) &rem_ip) & 0xE0) == 0xE0)  // 224~239 = E0~EF
-      return mg_l2_mapip(ifp->l2type, MG_TCPIP_L2ADDR_MCAST, rem);
-    if (ifp->gw_ready)    // use the router
+    if (ifp->gw_ready)                             // use the router
       return ifp->gwmac;  // ignore source address in frame
   }
   MG_ERROR(("%M %s: No way back, can't respond", mg_print_ip_port, rem,
@@ -6744,6 +6765,7 @@ static void l2addr_resolved(struct mg_connection *c) {
 
 void mg_connect_resolved(struct mg_connection *c) {
   struct mg_tcpip_if *ifp = c->mgr->ifp;
+  uint8_t *l2addr;
   c->is_resolving = 0;
   if (ifp->eport < MG_EPHEMERAL_PORT_BASE) ifp->eport = MG_EPHEMERAL_PORT_BASE;
   c->loc.port = mg_htons(ifp->eport++);
@@ -6760,31 +6782,21 @@ void mg_connect_resolved(struct mg_connection *c) {
             &c->rem));
   mg_call(c, MG_EV_RESOLVE, NULL);
   c->is_connecting = 1;
+  if (c->is_udp && (l2addr = tcpip_mapip(ifp, &c->rem)) != NULL) {
+    struct connstate *s = (struct connstate *) (c + 1);
+    memcpy(s->mac, l2addr, sizeof(s->mac));
+    l2addr_resolved(c);  // broadcast or multicast
 #if MG_ENABLE_IPV6
-  if (c->rem.is_ip6) {
-    if (c->is_udp &&  // local broadcast
-        MG_IP6MATCH(c->rem.addr.ip6, ip6_allnodes.addr.ip6)) {
-      struct connstate *s = (struct connstate *) (c + 1);
-      memcpy(s->mac,
-             mg_l2_mapip(ifp->l2type, MG_TCPIP_L2ADDR_MCAST6,
-                         (struct mg_addr *) &ip6_allnodes),
-             sizeof(s->mac));
-      l2addr_resolved(c);
-    } else if (match_prefix((uint8_t *) c->rem.addr.ip6, ifp->prefix,
-                            ifp->prefix_len)            // same global LAN
-               || (c->rem.addr.ip6[0] == ifp->ip6ll[0]  // same local LAN
-                   && !MG_IP6MATCH(c->rem.addr.ip6, ifp->gw6))) {  // and not gw
+  } else if (c->rem.is_ip6) {
+    if (match_prefix((uint8_t *) c->rem.addr.ip6, ifp->prefix,
+                     ifp->prefix_len)                       // same global LAN
+        || (c->rem.addr.ip6[0] == ifp->ip6ll[0]             // same local LAN
+            && !MG_IP6MATCH(c->rem.addr.ip6, ifp->gw6))) {  // and not gw
       // If we're in the same LAN, fire a Neighbor Solicitation
       MG_DEBUG(("%lu NS lookup...", c->id));
       tx_ndp_ns(ifp, c->rem.addr.ip6, NULL);  // RFC-4861 4.3, requesting
       settmout(c, MIP_TTYPE_ARP);
       c->is_arplooking = 1;
-    } else if (c->is_udp &&
-               *((uint8_t *) c->rem.addr.ip6) == 0xFF) {  // multicast
-      struct connstate *s = (struct connstate *) (c + 1);
-      memcpy(s->mac, mg_l2_mapip(ifp->l2type, MG_TCPIP_L2ADDR_MCAST6, &c->rem),
-             sizeof(s->mac));
-      l2addr_resolved(c);
     } else if (ifp->gw6_ready) {
       struct connstate *s = (struct connstate *) (c + 1);
       memcpy(s->mac, ifp->gw6mac, sizeof(s->mac));
@@ -6792,28 +6804,16 @@ void mg_connect_resolved(struct mg_connection *c) {
     } else {
       MG_ERROR(("No IPv6 gateway, can't connect"));
     }
-  } else
 #endif
-  {
+  } else {
     uint32_t rem_ip = c->rem.addr.ip4;
-    if (c->is_udp &&  // global or local broadcast
-        (rem_ip == 0xffffffff || rem_ip == (ifp->ip | ~ifp->mask))) {
-      struct connstate *s = (struct connstate *) (c + 1);
-      memcpy(s->mac, mg_l2_mapip(ifp->l2type, MG_TCPIP_L2ADDR_BCAST, NULL),
-             sizeof(s->mac));
-      l2addr_resolved(c);
-    } else if (ifp->ip && ((rem_ip & ifp->mask) == (ifp->ip & ifp->mask)) &&
-               rem_ip != ifp->gw) {  // skip if gw (onstatechange -> ARP)
+    if (ifp->ip && ((rem_ip & ifp->mask) == (ifp->ip & ifp->mask)) &&
+        rem_ip != ifp->gw) {  // skip if gw (onstatechange -> ARP)
       // If we're in the same LAN, fire an ARP lookup.
       MG_DEBUG(("%lu ARP lookup...", c->id));
       mg_tcpip_arp_request(ifp, rem_ip, NULL);
       settmout(c, MIP_TTYPE_ARP);
       c->is_arplooking = 1;
-    } else if (c->is_udp && (*((uint8_t *) &rem_ip) & 0xE0) == 0xE0) {
-      struct connstate *s = (struct connstate *) (c + 1);  // 224~239, E0 EF
-      memcpy(s->mac, mg_l2_mapip(ifp->l2type, MG_TCPIP_L2ADDR_MCAST, &c->rem),
-             sizeof(s->mac));
-      l2addr_resolved(c);
     } else if (ifp->gw_ready) {
       struct connstate *s = (struct connstate *) (c + 1);
       memcpy(s->mac, ifp->gwmac, sizeof(s->mac));
@@ -6942,6 +6942,13 @@ static void setdns4(struct mg_tcpip_if *ifp, uint32_t *ip) {
   if (dnsc->c != NULL) mg_close_conn(dnsc->c);
   if (!mg_dnsc_init(ifp->mgr, dnsc))  // create DNS connection
     MG_ERROR(("DNS connection creation failed"));
+}
+
+void mg_tcpip_mapip(struct mg_connection *c, struct mg_addr *ip) {
+  struct connstate *s = (struct connstate *) (c + 1);
+  uint8_t *l2addr = tcpip_mapip(c->mgr->ifp, ip);
+  if (l2addr == NULL) return;
+  memcpy(s->mac, l2addr, sizeof(s->mac));
 }
 
 #endif  // MG_ENABLE_TCPIP

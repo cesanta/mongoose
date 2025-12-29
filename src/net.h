@@ -112,3 +112,4 @@ struct mg_timer *mg_timer_add(struct mg_mgr *mgr, uint64_t milliseconds,
 struct mg_connection *mg_connect_svc(struct mg_mgr *mgr, const char *url,
                                      mg_event_handler_t fn, void *fn_data,
                                      mg_event_handler_t pfn, void *pfn_data);
+void mg_multicast_restore(struct mg_connection *c, uint8_t *from);

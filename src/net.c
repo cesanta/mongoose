@@ -306,3 +306,13 @@ void mg_mgr_init(struct mg_mgr *mgr) {
             : MG_TLS == MG_TLS_WOLFSSL ? "WolfSSL"
                                        : "custom"));
 }
+
+#if MG_ENABLE_TCPIP
+void mg_tcpip_mapip(struct mg_connection *, struct mg_addr *);
+#endif
+void mg_multicast_restore(struct mg_connection *c, uint8_t *from) {
+  memcpy(&c->rem, from, sizeof(c->rem));
+#if MG_ENABLE_TCPIP
+  mg_tcpip_mapip(c, &c->rem);
+#endif
+}
