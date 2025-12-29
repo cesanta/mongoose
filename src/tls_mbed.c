@@ -63,10 +63,9 @@ void mg_tls_free(struct mg_connection *c) {
 #ifdef MBEDTLS_SSL_SESSION_TICKETS
     mbedtls_ssl_ticket_free(&tls->ticket);
 #endif
-#if defined(MBEDTLS_VERSION_NUMBER) && MBEDTLS_VERSION_NUMBER >= 0x03000000 && \
-    defined(MBEDTLS_PSA_CRYPTO_C)
-    mbedtls_psa_crypto_free();  // https://github.com/Mbed-TLS/mbedtls/issues/9223#issuecomment-2144898336
-#endif
+    // PSA has global data. Do not call mbedtls_psa_crypto_free() here,
+    // it will free all global resources. Call it when actually freeing all
+    // application resources (main() exits)
     mg_free(tls);
     c->tls = NULL;
   }
@@ -126,6 +125,7 @@ void mg_tls_init(struct mg_connection *c, const struct mg_tls_opts *opts) {
 #if defined(MBEDTLS_VERSION_NUMBER) && MBEDTLS_VERSION_NUMBER >= 0x03000000 && \
     defined(MBEDTLS_PSA_CRYPTO_C)
   psa_crypto_init();  // https://github.com/Mbed-TLS/mbedtls/issues/9072#issuecomment-2084845711
+  // this initializes global resources and then just returns when called again
 #endif
   mbedtls_ssl_init(&tls->ssl);
   mbedtls_ssl_config_init(&tls->conf);
@@ -156,11 +156,16 @@ void mg_tls_init(struct mg_connection *c, const struct mg_tls_opts *opts) {
   } else {
     if (mg_load_cert(opts->ca, &tls->ca) == false) goto fail;
     mbedtls_ssl_conf_ca_chain(&tls->conf, &tls->ca, NULL);
-    if (c->is_client && opts->name.buf != NULL && opts->name.buf[0] != '\0') {
-      char *host = mg_mprintf("%.*s", opts->name.len, opts->name.buf);
-      mbedtls_ssl_set_hostname(&tls->ssl, host);
-      MG_DEBUG(("%lu hostname verification: %s", c->id, host));
-      mg_free(host);
+    if (c->is_client) {
+      if (opts->name.buf != NULL && opts->name.buf[0] != '\0') {
+        char *host = mg_mprintf("%.*s", opts->name.len, opts->name.buf);
+        mbedtls_ssl_set_hostname(&tls->ssl, host);
+        MG_DEBUG(("%lu hostname verification: %s", c->id, host));
+        mg_free(host);
+      } else {
+        MG_DEBUG(("%lu skipping hostname verification", c->id));
+        mbedtls_ssl_set_hostname(&tls->ssl, NULL);
+      }
     }
     mbedtls_ssl_conf_authmode(&tls->conf, MBEDTLS_SSL_VERIFY_REQUIRED);
   }

@@ -148,11 +148,6 @@ jobs:
         # Mongoose does not work with WolfSSL version in MacOS
         ssl: ["", BUILTIN, MBEDTLS, OPENSSL] # , WOLFSSL]
         select: [-DMG_ENABLE_POLL=0, -DMG_ENABLE_POLL=1]
-        include:
-        - ssl: MBEDTLS
-          env:
-            # MbedTLS version in MacOS refuses to validate a certificate without a hostname, causing MQTT tests to fail when using MQTT_LOCALHOST
-            tflags: -DNO_MQTT_TESTS 
         exclude:
         - ssl: MBEDTLS
           select: -DMG_ENABLE_POLL=0
