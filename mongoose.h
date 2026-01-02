@@ -651,7 +651,10 @@ typedef enum { false = 0, true = 1 } bool;
 #endif
 #endif
 
-typedef unsigned long nfds_t;
+#if defined(MG_ENABLE_POLL) && MG_ENABLE_POLL && (!defined(MG_ENABLE_LWIP) || !MG_ENABLE_LWIP)
+typedef unsigned long nfds_t; // see #3388
+#endif
+
 #if defined(_MSC_VER)
 #if MG_ENABLE_WINSOCK
 #pragma comment(lib, "ws2_32.lib")
