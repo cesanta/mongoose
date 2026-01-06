@@ -3,13 +3,12 @@
 #if MG_ARCH == MG_ARCH_ZEPHYR
 
 #include <zephyr/kernel.h>
-#include <zephyr/version.h>
 #include <zephyr/net/socket.h>
-//#include <zephyr/posix/dirent.h>
+#include <zephyr/posix/dirent.h>
 #include <zephyr/posix/fcntl.h>
 #include <zephyr/posix/sys/select.h>
 #include <zephyr/random/random.h>
-
+#include <zephyr/version.h>
 
 #include <ctype.h>
 #include <errno.h>
