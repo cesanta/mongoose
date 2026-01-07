@@ -4836,7 +4836,7 @@ void mg_multicast_restore(struct mg_connection *c, uint8_t *from) {
 #define MG_TCPIP_FIN_MS 1000   // Timeout for closing connection
 
 #ifndef MG_TCPIP_WIN
-#define MG_TCPIP_WIN 6000      // TCP window size
+#define MG_TCPIP_WIN 6000  // TCP window size
 #endif
 
 struct connstate {
@@ -6648,8 +6648,8 @@ static void mg_tcpip_poll(struct mg_tcpip_if *ifp, uint64_t now) {
     }
   } else {  // Complex poll / Interrupt-based driver. Queues recvd frames
     char *buf;
-    size_t len;
-    while ((len = mg_queue_next(&ifp->recv_queue, &buf)) > 0) {
+    size_t len, cnt = 7;  // Max 7 packets to fetch
+    while (cnt-- > 0 && (len = mg_queue_next(&ifp->recv_queue, &buf)) > 0) {
       mg_tcpip_rx(ifp, buf, len);
       mg_queue_del(&ifp->recv_queue, len);
     }
