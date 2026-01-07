@@ -35,11 +35,14 @@
 #define MG_ENABLE_TCPIP 1  // Enable built-in TCP/IP stack
 #endif
 
-#if MG_ENABLE_TCPIP && !defined(MG_ENABLE_DRIVER_STM32F) && !defined(MG_ENABLE_DRIVER_STM32H)
+#if MG_ENABLE_TCPIP && !defined(MG_ENABLE_DRIVER_STM32F) && \
+    !defined(MG_ENABLE_DRIVER_STM32H) && !defined(MG_ENABLE_DRIVER_STM32N)
 #if defined(STM32F1) || defined(STM32F2) || defined(STM32F4) || defined(STM32F7)
 #define MG_ENABLE_DRIVER_STM32F 1
 #elif defined(STM32H5) || defined(STM32H7)
 #define MG_ENABLE_DRIVER_STM32H 1
+#elif defined(STM32N6)
+#define MG_ENABLE_DRIVER_STM32N 1
 #else
 #error Select a driver in mongoose_config.h
 #endif
@@ -49,7 +52,8 @@
 #define MG_TLS MG_TLS_BUILTIN
 #endif
 
-#if !defined(MG_OTA) && defined(STM32F1) || defined(STM32F2) || defined(STM32F4) || defined(STM32F7)
+#if !defined(MG_OTA) && defined(STM32F1) || defined(STM32F2) || \
+    defined(STM32F4) || defined(STM32F7)
 #define MG_OTA MG_OTA_STM32F
 #elif !defined(MG_OTA) && defined(STM32H5)
 #define MG_OTA MG_OTA_STM32H5
