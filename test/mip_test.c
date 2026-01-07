@@ -512,8 +512,8 @@ static void test_tcp_basics(bool ipv6) {
     if (received_response(&s_driver_data) && (ipv6 ? i6->next : i->proto) == 6)
       break;  // check first
     now = mg_millis() - start;
-  } while (now < (12 * MIP_TCP_FIN_MS) / 10);
-  ASSERT(now > MIP_TCP_FIN_MS);
+  } while (now < (12 * MG_TCPIP_FIN_MS) / 10);
+  ASSERT(now > MG_TCPIP_FIN_MS);
   // make sure it is closed
   ASSERT(mgr.conns->next == NULL);  // only one connection: the listener
 
@@ -530,7 +530,7 @@ static void test_tcp_basics(bool ipv6) {
   while (!received_response(&s_driver_data)) {
     mg_mgr_poll(&mgr, 0);
     now = mg_millis() - start;
-    if (now > 2 * MIP_TCP_ACK_MS)
+    if (now > 2 * MG_TCPIP_ACK_MS)
       ASSERT(0);  // response should have been received by now
   }
   ASSERT((t->seq == mg_htonl(2)));
@@ -567,8 +567,8 @@ static void test_tcp_basics(bool ipv6) {
     if (received_response(&s_driver_data)) break;  // check first
     mg_mgr_poll(&mgr, 0);
     now = mg_millis() - start;
-  } while (now < 2 * MIP_TCP_ACK_MS);  // keep timeout below 1s (DHCP discover)
-  ASSERT(now >= 2 * MIP_TCP_ACK_MS);
+  } while (now < 2 * MG_TCPIP_ACK_MS);  // keep timeout below 1s (DHCP discover)
+  ASSERT(now >= 2 * MG_TCPIP_ACK_MS);
   // make sure it is still open
   ASSERT(mgr.conns->next !=
          NULL);  // more than one connection: the listener + us
@@ -600,8 +600,8 @@ static void test_tcp_basics(bool ipv6) {
     if (received_response(&s_driver_data)) break;  // check first
     mg_mgr_poll(&mgr, 0);
     now = mg_millis() - start;
-  } while (now < 2 * MIP_TCP_ACK_MS);  // keep timeout below 1s (DHCP discover)
-  //  ASSERT(now < 2 * MIP_TCP_ACK_MS); ******** WE FAIL THIS, Mongoose does not
+  } while (now < 2 * MG_TCPIP_ACK_MS);  // keep timeout below 1s (DHCP discover)
+  //  ASSERT(now < 2 * MG_TCPIP_ACK_MS); ******** WE FAIL THIS, Mongoose does not
   //  retransmit, FIN is not an additional element in the stream ASSERT((t->seq
   //  == mg_htonl(2))); ASSERT((t->ack == mg_htonl(1001))); ASSERT(t->flags ==
   //  (TH_FIN | TH_ACK)); // Mongoose retransmits FIN
@@ -628,7 +628,7 @@ static void test_tcp_basics(bool ipv6) {
   while (!received_response(&s_driver_data)) {
     mg_mgr_poll(&mgr, 0);
     now = mg_millis() - start;
-    if (now > 2 * MIP_TCP_ACK_MS)
+    if (now > 2 * MG_TCPIP_ACK_MS)
       ASSERT(0);  // response should have been received by now
   }
   ASSERT((t->seq == mg_htonl(2)));
@@ -763,7 +763,7 @@ static void test_tcp_retransmit(void) {
     mg_mgr_poll(&mgr, 0);
     now = mg_millis() - start;
     // we wait enough time for a reply
-    if (now > 2 * MIP_TCP_ACK_MS) {
+    if (now > 2 * MG_TCPIP_ACK_MS) {
       response_recv = false;
       break;
     }
@@ -777,7 +777,7 @@ static void test_tcp_retransmit(void) {
   while (!received_response(&s_driver_data)) {
     mg_mgr_poll(&mgr, 0);
     now = mg_millis() - start;
-    if (now > 2 * MIP_TCP_ACK_MS)
+    if (now > 2 * MG_TCPIP_ACK_MS)
       ASSERT(0);  // response should have been received by now
   }
   ASSERT((t->flags == TH_ACK));
@@ -796,7 +796,7 @@ static void test_tcp_retransmit(void) {
   while (!received_response(&s_driver_data)) {
     mg_mgr_poll(&mgr, 0);
     now = mg_millis() - start;
-    if (now > 2 * MIP_TCP_ACK_MS)
+    if (now > 2 * MG_TCPIP_ACK_MS)
       ASSERT(0);  // response should have been received by now
   }
   ASSERT((t->flags == TH_ACK));
