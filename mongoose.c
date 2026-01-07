@@ -4826,15 +4826,18 @@ void mg_multicast_restore(struct mg_connection *c, uint8_t *from) {
 #define MG_EPHEMERAL_PORT_BASE 32768
 #define PDIFF(a, b) ((size_t) (((char *) (b)) - ((char *) (a))))
 
-#ifndef MIP_TCP_KEEPALIVE_MS
-#define MIP_TCP_KEEPALIVE_MS 45000  // TCP keep-alive period, ms
+#ifndef MG_TCPIP_KEEPALIVE_MS
+#define MG_TCPIP_KEEPALIVE_MS 45000  // TCP keep-alive period, ms
 #endif
 
-#define MIP_TCP_ACK_MS 150    // Timeout for ACKing
-#define MIP_ARP_RESP_MS 100   // Timeout for ARP response
-#define MIP_TCP_SYN_MS 15000  // Timeout for connection establishment
-#define MIP_TCP_FIN_MS 1000   // Timeout for closing connection
-#define MIP_TCP_WIN 6000      // TCP window size
+#define MG_TCPIP_ACK_MS 150    // Timeout for ACKing
+#define MG_TCPIP_ARP_MS 100    // Timeout for ARP response
+#define MG_TCPIP_SYN_MS 15000  // Timeout for connection establishment
+#define MG_TCPIP_FIN_MS 1000   // Timeout for closing connection
+
+#ifndef MG_TCPIP_WIN
+#define MG_TCPIP_WIN 6000      // TCP window size
+#endif
 
 struct connstate {
   uint32_t seq, ack;                      // TCP seq/ack counters
@@ -5082,11 +5085,11 @@ static const struct mg_addr ip6_allnodes = {
 static void settmout(struct mg_connection *c, uint8_t type) {
   struct mg_tcpip_if *ifp = c->mgr->ifp;
   struct connstate *s = (struct connstate *) (c + 1);
-  unsigned n = type == MIP_TTYPE_ACK   ? MIP_TCP_ACK_MS
-               : type == MIP_TTYPE_ARP ? MIP_ARP_RESP_MS
-               : type == MIP_TTYPE_SYN ? MIP_TCP_SYN_MS
-               : type == MIP_TTYPE_FIN ? MIP_TCP_FIN_MS
-                                       : MIP_TCP_KEEPALIVE_MS;
+  unsigned n = type == MIP_TTYPE_ACK   ? MG_TCPIP_ACK_MS
+               : type == MIP_TTYPE_ARP ? MG_TCPIP_ARP_MS
+               : type == MIP_TTYPE_SYN ? MG_TCPIP_SYN_MS
+               : type == MIP_TTYPE_FIN ? MG_TCPIP_FIN_MS
+                                       : MG_TCPIP_KEEPALIVE_MS;
   if (s->ttype == MIP_TTYPE_FIN) return;  // skip if 3-way closing
   s->timer = ifp->now + n;
   s->ttype = type;
@@ -5903,7 +5906,7 @@ static size_t tx_tcp(struct mg_tcpip_if *ifp, uint8_t *l2_dst,
   tcp->seq = seq;
   tcp->ack = ack;
   tcp->flags = flags;
-  tcp->win = mg_htons(MIP_TCP_WIN);
+  tcp->win = mg_htons(MG_TCPIP_WIN);
   tcp->off = (uint8_t) (sizeof(*tcp) / 4 << 4);
   if (flags & TH_SYN) tcp->off += (uint8_t) (sizeof(opts) / 4 << 4);
   {
@@ -6174,7 +6177,7 @@ static void read_conn(struct mg_connection *c, struct pkt *pkt) {
   s->ack = (uint32_t) (mg_htonl(pkt->tcp->seq) + pkt->pay.len);
   s->unacked += pkt->pay.len;
   // size_t diff = s->acked <= s->ack ? s->ack - s->acked : s->ack;
-  if (s->unacked > MIP_TCP_WIN / 2 && s->acked != s->ack) {
+  if (s->unacked > MG_TCPIP_WIN / 2 && s->acked != s->ack) {
     // Send ACK immediately
     MG_VERBOSE(("%lu imm ACK %lu", c->id, s->acked));
     tx_tcp(c->mgr->ifp, s->mac, &c->loc, &c->rem, TH_ACK, mg_htonl(s->seq),
@@ -6437,9 +6440,7 @@ static void rx_ip6(struct mg_tcpip_if *ifp, struct pkt *pkt) {
       case 59:  // No Next Header 4.7
         return;
       case 50:  // IPsec ESP RFC-4303, unsupported
-      default:
-        loop = false;
-        break;
+      default: loop = false; break;
     }
   }
   if (len >= plen) return;
