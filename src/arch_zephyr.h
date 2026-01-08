@@ -4,7 +4,7 @@
 
 #include <zephyr/kernel.h>
 #include <zephyr/net/socket.h>
-#include <zephyr/posix/dirent.h>
+// #include <zephyr/posix/dirent.h>
 #include <zephyr/posix/fcntl.h>
 #include <zephyr/posix/sys/select.h>
 #include <zephyr/random/random.h>

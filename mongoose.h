@@ -176,7 +176,8 @@ extern "C" {
 #define MG_TLS MG_TLS_BUILTIN
 #endif
 
-#if !defined(MG_OTA) && defined(STM32F1) || defined(STM32F2) || defined(STM32F4) || defined(STM32F7)
+#if !defined(MG_OTA) && defined(STM32F1) || defined(STM32F2) || \
+    defined(STM32F4) || defined(STM32F7)
 #define MG_OTA MG_OTA_STM32F
 #elif !defined(MG_OTA) && defined(STM32H5)
 #define MG_OTA MG_OTA_STM32H5
@@ -729,7 +730,7 @@ typedef int socklen_t;
 
 #include <zephyr/kernel.h>
 #include <zephyr/net/socket.h>
-#include <zephyr/posix/dirent.h>
+// #include <zephyr/posix/dirent.h>
 #include <zephyr/posix/fcntl.h>
 #include <zephyr/posix/sys/select.h>
 #include <zephyr/random/random.h>
