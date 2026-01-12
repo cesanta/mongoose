@@ -1882,6 +1882,7 @@ void mg_tls_handshake(struct mg_connection *);
 // Private
 void mg_tls_ctx_init(struct mg_mgr *);
 void mg_tls_ctx_free(struct mg_mgr *);
+#define MG_IS_DER(buf) ((uint8_t) (buf)[0] == 0x30)  // DER begins with 0x30
 
 // Low-level IO primives used by TLS layer
 enum { MG_IO_ERR = -1, MG_IO_WAIT = -2, MG_IO_RESET = -3 };
