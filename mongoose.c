@@ -4939,8 +4939,9 @@ struct tcp {
 #define TH_PUSH 0x08
 #define TH_ACK 0x10
 #define TH_URG 0x20
-#define TH_ECE 0x40
-#define TH_CWR 0x80
+#define TH_STDFLAGS 0x3f
+//#define TH_ECE 0x40 // not part of TCP but RFC-3168 (ECN)
+//#define TH_CWR 0x80
   uint16_t win;   // Window
   uint16_t csum;  // Checksum
   uint16_t urp;   // Urgent pointer
@@ -6269,6 +6270,7 @@ static void handle_opt(struct connstate *s, struct tcp *tcp, bool ip6) {
 static void rx_tcp(struct mg_tcpip_if *ifp, struct pkt *pkt) {
   struct mg_connection *c = getpeer(ifp->mgr, pkt, false);
   struct connstate *s = c == NULL ? NULL : (struct connstate *) (c + 1);
+  pkt->tcp->flags &= TH_STDFLAGS; // tolerate creative usage (ECN, ?)
   // Order is VERY important; RFC-9293 3.5.2
   // - check clients (Group 1) and established connections (Group 3)
   if (c != NULL && c->is_connecting && pkt->tcp->flags == (TH_SYN | TH_ACK)) {
