@@ -15721,7 +15721,7 @@ static int mg_mbed_rng(void *ctx, unsigned char *buf, size_t len) {
 static bool mg_load_cert(struct mg_str str, mbedtls_x509_crt *p) {
   int rc;
   if (str.buf == NULL || str.buf[0] == '\0' || str.buf[0] == '*') return true;
-  if (str.buf[0] == '-') str.len++;  // PEM, include trailing NUL
+  if (!MG_IS_DER(str.buf)) str.len++;  // PEM, include trailing NUL
   if ((rc = mbedtls_x509_crt_parse(p, (uint8_t *) str.buf, str.len)) != 0) {
     MG_ERROR(("cert err %#x", -rc));
     return false;
@@ -15732,7 +15732,7 @@ static bool mg_load_cert(struct mg_str str, mbedtls_x509_crt *p) {
 static bool mg_load_key(struct mg_str str, mbedtls_pk_context *p) {
   int rc;
   if (str.buf == NULL || str.buf[0] == '\0' || str.buf[0] == '*') return true;
-  if (str.buf[0] == '-') str.len++;  // PEM, include trailing NUL
+  if (!MG_IS_DER(str.buf)) str.len++;  // PEM, include trailing NUL
   if ((rc = mbedtls_pk_parse_key(p, (uint8_t *) str.buf, str.len, NULL,
                                  0 MG_MBEDTLS_RNG_GET)) != 0) {
     MG_ERROR(("key err %#x", -rc));
@@ -16034,9 +16034,9 @@ static EVP_PKEY *load_key(struct mg_str s) {
 static X509 *load_cert(struct mg_str s) {
   BIO *bio = BIO_new_mem_buf(s.buf, (int) (long) s.len);
   X509 *cert = bio == NULL ? NULL
-               : s.buf[0] == '-'
-                   ? PEM_read_bio_X509(bio, NULL, NULL, NULL)  // PEM
-                   : d2i_X509_bio(bio, NULL);                  // DER
+               : MG_IS_DER(s.buf)
+                   ? d2i_X509_bio(bio, NULL)                    // DER
+                   : PEM_read_bio_X509(bio, NULL, NULL, NULL);  // PEM
   if (bio) BIO_free(bio);
   return cert;
 }
@@ -16235,7 +16235,7 @@ size_t mg_tls_pending(struct mg_connection *c) {
 long mg_tls_recv(struct mg_connection *c, void *buf, size_t len) {
   struct mg_tls *tls = (struct mg_tls *) c->tls;
   int n = SSL_read(tls->ssl, buf, (int) len);
-  if (!c->is_tls_hs && buf == NULL && n == 0) return 0; // TODO(): MIP
+  if (!c->is_tls_hs && buf == NULL && n == 0) return 0;  // TODO(): MIP
   if (n < 0 && mg_tls_err(c, tls, n) == 0) return MG_IO_WAIT;
   if (n <= 0) return MG_IO_ERR;
   return n;
