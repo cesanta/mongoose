@@ -454,6 +454,7 @@ struct mqtt_data {
 #define flags_received (1 << 2)
 #define flags_released (1 << 3)
 #define flags_completed (1 << 4)
+#define flags_unsubscribed (1 << 5)
 
 static void mqtt_cb(struct mg_connection *c, int ev, void *ev_data) {
   struct mqtt_data *test_data = (struct mqtt_data *) c->fn_data;
@@ -487,6 +488,8 @@ static void mqtt_cb(struct mg_connection *c, int ev, void *ev_data) {
       test_data->flags |= flags_released;
     } else if (mm->cmd == MQTT_CMD_PUBCOMP) {
       test_data->flags |= flags_completed;
+    } else if (mm->cmd == MQTT_CMD_UNSUBACK) {
+      test_data->flags = flags_unsubscribed;
     }
   } else if (ev == MG_EV_MQTT_MSG) {
     struct mg_mqtt_message *mm = (struct mg_mqtt_message *) ev_data;
@@ -763,6 +766,12 @@ static void test_mqtt_ver(uint8_t mqtt_version) {
     mg_mgr_poll(&mgr, 10);
   ASSERT(test_data.flags & flags_released);  // Mongoose sent PUBCOMP
   memset(mbuf + 1, 0, sizeof(mbuf) - 1);
+  test_data.flags = 0;
+
+  opts.props = 0; opts.num_props = 0;
+  mg_mqtt_unsub(c, &opts);
+  for (i = 0; i < 500 && test_data.flags == 0; i++) mg_mgr_poll(&mgr, 10);
+  ASSERT(test_data.flags == flags_unsubscribed);
   test_data.flags = 0;
 
   // dirty disconnect
@@ -4155,7 +4164,6 @@ int main(void) {
   // detectors. We are actually freeing all our resources and leaving
   mbedtls_psa_crypto_free();
 #endif
-
   printf("SUCCESS. Total tests: %d\n", s_num_tests);
   return EXIT_SUCCESS;
 }

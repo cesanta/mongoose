@@ -4042,17 +4042,10 @@ static size_t get_properties_length(struct mg_mqtt_prop *props, size_t count) {
       case MQTT_PROP_TYPE_VARIABLE_INT:
         size += varint_size((uint32_t) props[i].iv);
         break;
-      case MQTT_PROP_TYPE_INT:
-        size += (uint32_t) sizeof(uint32_t);
-        break;
-      case MQTT_PROP_TYPE_SHORT:
-        size += (uint32_t) sizeof(uint16_t);
-        break;
-      case MQTT_PROP_TYPE_BYTE:
-        size += (uint32_t) sizeof(uint8_t);
-        break;
-      default:
-        return size;  // cannot parse further down
+      case MQTT_PROP_TYPE_INT: size += (uint32_t) sizeof(uint32_t); break;
+      case MQTT_PROP_TYPE_SHORT: size += (uint32_t) sizeof(uint16_t); break;
+      case MQTT_PROP_TYPE_BYTE: size += (uint32_t) sizeof(uint8_t); break;
+      default: return size;  // cannot parse further down
     }
   }
 
@@ -4160,8 +4153,7 @@ size_t mg_mqtt_next_prop(struct mg_mqtt_message *msg, struct mg_mqtt_prop *prop,
       len = decode_varint(i, (size_t) (end - i), (size_t *) &prop->iv);
       new_pos = (!len) ? 0 : new_pos + len;
       break;
-    default:
-      new_pos = 0;
+    default: new_pos = 0;
   }
 
   return new_pos;
@@ -4278,12 +4270,14 @@ fail:
   return id;
 }
 
-void mg_mqtt_sub(struct mg_connection *c, const struct mg_mqtt_opts *opts) {
+static void mg_mqtt_sub_unsub(struct mg_connection *c,
+                              const struct mg_mqtt_opts *opts, uint8_t cmd) {
   uint8_t qos_ = opts->qos & 3;
+  bool is_sub = cmd == MQTT_CMD_SUBSCRIBE;
   size_t plen = c->is_mqtt5 ? get_props_size(opts->props, opts->num_props) : 0;
-  size_t len = 2 + opts->topic.len + 2 + 1 + plen;
+  size_t len = 2 + opts->topic.len + 2 + (is_sub ? 1 : 0) + plen;
 
-  if (!mqtt_send_header(c, MQTT_CMD_SUBSCRIBE, 2, (uint32_t) len)) goto fail;
+  if (!mqtt_send_header(c, cmd, 2, (uint32_t) len)) goto fail;
   if (++c->mgr->mqtt_id == 0) ++c->mgr->mqtt_id;
   if (!mg_send_u16(c, mg_htons(c->mgr->mqtt_id))) goto fail;
 
@@ -4291,12 +4285,20 @@ void mg_mqtt_sub(struct mg_connection *c, const struct mg_mqtt_opts *opts) {
     goto fail;
 
   if (!mg_send_u16(c, mg_htons((uint16_t) opts->topic.len)) ||
-      !mg_send(c, opts->topic.buf, opts->topic.len) ||
-      !mg_send(c, &qos_, sizeof(qos_)))
+      !mg_send(c, opts->topic.buf, opts->topic.len))
     goto fail;
+  if (is_sub && !mg_send(c, &qos_, sizeof(qos_))) goto fail;
   return;
 fail:
   mg_error(c, "OOM");
+}
+
+void mg_mqtt_sub(struct mg_connection *c, const struct mg_mqtt_opts *opts) {
+  mg_mqtt_sub_unsub(c, opts, MQTT_CMD_SUBSCRIBE);
+}
+
+void mg_mqtt_unsub(struct mg_connection *c, const struct mg_mqtt_opts *opts) {
+  mg_mqtt_sub_unsub(c, opts, MQTT_CMD_UNSUBSCRIBE);
 }
 
 int mg_mqtt_parse(const uint8_t *buf, size_t len, uint8_t version,
@@ -4364,8 +4366,7 @@ int mg_mqtt_parse(const uint8_t *buf, size_t len, uint8_t version,
       m->data.len = (size_t) (end - p);
       break;
     }
-    default:
-      break;
+    default: break;
   }
   return MQTT_OK;
 }
