@@ -145,12 +145,13 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        # Mongoose does not work with WolfSSL version in MacOS
-        ssl: ["", BUILTIN, MBEDTLS, OPENSSL] # , WOLFSSL]
+        ssl: ["", BUILTIN, MBEDTLS, OPENSSL] # , WOLFSSL] # see issue#2821
         select: [-DMG_ENABLE_POLL=0, -DMG_ENABLE_POLL=1]
         exclude:
         - ssl: MBEDTLS
           select: -DMG_ENABLE_POLL=0
+        - ssl: MBEDTLS                # see issue#2694
+          select: -DMG_ENABLE_POLL=1
         - ssl: OPENSSL
           select: -DMG_ENABLE_POLL=0
         #- ssl: WOLFSSL
@@ -187,6 +188,8 @@ jobs:
         exclude:
         - target: vc98
           select: -DMG_ENABLE_POLL=1
+        - target: vc98  # see issue#3408
+          ssl: BUILTIN
     name: windows ${{ matrix.target }} SSL=${{ matrix.ssl }} TFLAGS=${{ matrix.select }}
     env:
       SSL: ${{ matrix.ssl }}
