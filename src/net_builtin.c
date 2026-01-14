@@ -119,8 +119,8 @@ struct tcp {
 #define TH_ACK 0x10
 #define TH_URG 0x20
 #define TH_STDFLAGS 0x3f
-//#define TH_ECE 0x40 // not part of TCP but RFC-3168 (ECN)
-//#define TH_CWR 0x80
+  // #define TH_ECE 0x40 // not part of TCP but RFC-3168 (ECN)
+  // #define TH_CWR 0x80
   uint16_t win;   // Window
   uint16_t csum;  // Checksum
   uint16_t urp;   // Urgent pointer
@@ -556,6 +556,10 @@ static void rx_icmp(struct mg_tcpip_if *ifp, struct pkt *pkt) {
 
 static void setdns4(struct mg_tcpip_if *ifp, uint32_t *ip);
 
+static inline bool dhcp_opt_len_ok(uint8_t len, uint8_t *p, uint8_t *end) {
+  return (len >= 4 && (len & 3) == 0 && p + 6 < end);
+}
+
 static void rx_dhcp_client(struct mg_tcpip_if *ifp, struct pkt *pkt) {
   uint32_t ip = 0, gw = 0, mask = 0, lease = 0, dns = 0, sntp = 0;
   uint8_t msgtype = 0, state = ifp->state;
@@ -564,17 +568,17 @@ static void rx_dhcp_client(struct mg_tcpip_if *ifp, struct pkt *pkt) {
           *end = (uint8_t *) &pkt->pay.buf[pkt->pay.len];
   if (end < p) return;  // options are optional, check min header length
   if (memcmp(&pkt->dhcp->xid, ifp->mac + 2, sizeof(pkt->dhcp->xid))) return;
-  while (p + 1 < end && p[0] != 255) {  // Parse options RFC-1533 #9
-    if (p[0] == 1 && p[1] == sizeof(ifp->mask) && p + 6 < end) {  // Mask
+  while (p + 1 < end && p[0] != 255) {  // Parse options, get #1; RFC-2132 9
+    if (p[0] == 1 && p[1] == 4 && p + 6 < end) {  // Mask, 3.3
       memcpy(&mask, p + 2, sizeof(mask));
-    } else if (p[0] == 3 && p[1] == sizeof(ifp->gw) && p + 6 < end) {  // GW
+    } else if (p[0] == 3 && dhcp_opt_len_ok(p[1], p, end)) {  // GW, 3.5
       memcpy(&gw, p + 2, sizeof(gw));
       ip = pkt->dhcp->yiaddr;
-    } else if (ifp->enable_req_dns && p[0] == 6 && p[1] == sizeof(dns) &&
-               p + 6 < end) {  // DNS
+    } else if (ifp->enable_req_dns && p[0] == 6 &&
+               dhcp_opt_len_ok(p[1], p, end)) {  // DNS, 3.8
       memcpy(&dns, p + 2, sizeof(dns));
-    } else if (ifp->enable_req_sntp && p[0] == 42 && p[1] == sizeof(sntp) &&
-               p + 6 < end) {  // SNTP
+    } else if (ifp->enable_req_sntp && p[0] == 42 &&
+               dhcp_opt_len_ok(p[1], p, end)) {  // SNTP, 8.3
       memcpy(&sntp, p + 2, sizeof(sntp));
     } else if (p[0] == 51 && p[1] == 4 && p + 6 < end) {  // Lease
       memcpy(&lease, p + 2, sizeof(lease));
@@ -1449,7 +1453,7 @@ static void handle_opt(struct connstate *s, struct tcp *tcp, bool ip6) {
 static void rx_tcp(struct mg_tcpip_if *ifp, struct pkt *pkt) {
   struct mg_connection *c = getpeer(ifp->mgr, pkt, false);
   struct connstate *s = c == NULL ? NULL : (struct connstate *) (c + 1);
-  pkt->tcp->flags &= TH_STDFLAGS; // tolerate creative usage (ECN, ?)
+  pkt->tcp->flags &= TH_STDFLAGS;  // tolerate creative usage (ECN, ?)
   // Order is VERY important; RFC-9293 3.5.2
   // - check clients (Group 1) and established connections (Group 3)
   if (c != NULL && c->is_connecting && pkt->tcp->flags == (TH_SYN | TH_ACK)) {
@@ -1621,7 +1625,9 @@ static void rx_ip6(struct mg_tcpip_if *ifp, struct pkt *pkt) {
       case 59:  // No Next Header 4.7
         return;
       case 50:  // IPsec ESP RFC-4303, unsupported
-      default: loop = false; break;
+      default:
+        loop = false;
+        break;
     }
   }
   if (len >= plen) return;
