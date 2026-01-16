@@ -556,7 +556,7 @@ static void rx_icmp(struct mg_tcpip_if *ifp, struct pkt *pkt) {
 
 static void setdns4(struct mg_tcpip_if *ifp, uint32_t *ip);
 
-static inline bool dhcp_opt_len_ok(uint8_t len, uint8_t *p, uint8_t *end) {
+static bool dhcp_opt_len_ok(uint8_t len, uint8_t *p, uint8_t *end) {
   return (len >= 4 && (len & 3) == 0 && p + 6 < end);
 }
 
