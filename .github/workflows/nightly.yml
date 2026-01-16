@@ -188,8 +188,6 @@ jobs:
         exclude:
         - target: vc98
           select: -DMG_ENABLE_POLL=1
-        - target: vc98  # see issue#3408
-          ssl: BUILTIN
     name: windows ${{ matrix.target }} SSL=${{ matrix.ssl }} TFLAGS=${{ matrix.select }}
     env:
       SSL: ${{ matrix.ssl }}

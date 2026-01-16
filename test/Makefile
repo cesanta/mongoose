@@ -93,7 +93,7 @@ mip_tap_test: mip_tap_test.c mongoose.c mongoose.h packed_fs.c Makefile tls_mult
 
 mip_vc98: mip_test.c mongoose.c mongoose.h packed_fs.c Makefile
 	$(DOCKER) mdashnet/vc98 wine cl mip_test.c packed_fs.c $(VCFLAGS) $(DEFS) $(TFLAGS) /Fe$@.exe
-	$(DOCKER) mdashnet/vc98 wine $@.exe
+	$(DOCKER) -e WINEPREFIX=/tmp/wineprefix mdashnet/vc98 wine $@.exe
 
 packed_fs.c: Makefile data/ssi.h fuzz.c data/a.txt data/ca.pem certs/ca.crt certs/server.crt certs/server.key
 	$(CC) $(CFLAGS) pack.c -o pack
@@ -194,7 +194,7 @@ riscv: mongoose.h $(SRCS)
 
 vc98: Makefile mongoose.h $(SRCS)
 	$(DOCKER) mdashnet/vc98 wine cl $(SRCS) $(VCFLAGS) $(DEFS) $(TFLAGS) /Fe$@.exe
-	$(DOCKER) mdashnet/vc98 wine $@.exe
+	$(DOCKER) -e WINEPREFIX=/tmp/wineprefix mdashnet/vc98 wine $@.exe
 
 vc17: Makefile mongoose.h $(SRCS)
 	$(DOCKER) mdashnet/vc17 wine64 cl $(SRCS) $(VCFLAGS) $(DEFS) $(TFLAGS) /Fe$@.exe
