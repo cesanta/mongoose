@@ -1603,12 +1603,12 @@ int mg_rsa_crt_sign(const uint8_t *em, size_t em_len,
     return -1;
   }
 
-  em_bi = bi_import(ctx, em, em_len);
-  dP_bi = bi_import(ctx, dP, dP_len);
-  dQ_bi = bi_import(ctx, dQ, dQ_len);
-  p_bi = bi_import(ctx, p, p_len);
-  q_bi = bi_import(ctx, q, q_len);
-  qInv_bi = bi_import(ctx, qInv, qInv_len);
+  em_bi = bi_import(ctx, em, (int) em_len);
+  dP_bi = bi_import(ctx, dP, (int) dP_len);
+  dQ_bi = bi_import(ctx, dQ, (int) dQ_len);
+  p_bi = bi_import(ctx, p, (int) p_len);
+  q_bi = bi_import(ctx, q, (int) q_len);
+  qInv_bi = bi_import(ctx, qInv, (int) qInv_len);
 
   if (em_bi == NULL || dP_bi == NULL || dQ_bi == NULL ||
       p_bi == NULL || q_bi == NULL || qInv_bi == NULL) {
@@ -1622,7 +1622,7 @@ int mg_rsa_crt_sign(const uint8_t *em, size_t em_len,
   if (result_bi == NULL) {
     goto cleanup;
   }
-  bi_export(ctx, result_bi, signature, sig_len);
+  bi_export(ctx, result_bi, signature, (int) sig_len);
   ret = 0;  // Success!
 cleanup:
   bi_free_mod(ctx, BIGINT_P_OFFSET);  // cloned p_bi stored in mod context
