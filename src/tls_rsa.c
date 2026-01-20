@@ -1520,7 +1520,6 @@ NS_INTERNAL bigint *bi_mod_power(BI_CTX *ctx, bigint *bi, bigint *biexp) {
 #endif
 }
 
-#if 0
 /**
  * @brief Use the Chinese Remainder Theorem to quickly perform RSA decrypts.
  *
@@ -1533,6 +1532,7 @@ NS_INTERNAL bigint *bi_mod_power(BI_CTX *ctx, bigint *bi, bigint *biexp) {
  * @param qInv [in] CRT's qInv bigint
  * @return The result of the CRT operation
  */
+#if 1
 NS_INTERNAL bigint *bi_crt(BI_CTX *ctx, bigint *bi, bigint *dP, bigint *dQ,
                            bigint *p, bigint *q, bigint *qInv) {
   bigint *m1, *m2, *h;
@@ -1558,7 +1558,6 @@ NS_INTERNAL bigint *bi_crt(BI_CTX *ctx, bigint *bi, bigint *dP, bigint *dQ,
   return bi_add(ctx, m2, bi_multiply(ctx, q, h));
 }
 #endif
-
 
 // Proper lib usage:
 // - BI_CTX *c = bi_initialize()
@@ -1586,6 +1585,50 @@ int mg_rsa_mod_pow(const uint8_t *mod, size_t modsz, const uint8_t *exp, size_t 
 	bi_export(bi_ctx, m1, out, (int) outsz);
 	bi_terminate(bi_ctx);
 	return 0;
+}
+
+int mg_rsa_crt_sign(const uint8_t *em, size_t em_len,
+                    const uint8_t *dP, size_t dP_len,
+                    const uint8_t *dQ, size_t dQ_len,
+                    const uint8_t *p, size_t p_len,
+                    const uint8_t *q, size_t q_len,
+                    const uint8_t *qInv, size_t qInv_len,
+                    uint8_t *signature, size_t sig_len) {
+  BI_CTX *ctx;
+  bigint *em_bi, *dP_bi, *dQ_bi, *p_bi, *q_bi, *qInv_bi, *result_bi;
+  int ret = -1;
+
+  ctx = bi_initialize();
+  if (ctx == NULL) {
+    return -1;
+  }
+
+  em_bi = bi_import(ctx, em, em_len);
+  dP_bi = bi_import(ctx, dP, dP_len);
+  dQ_bi = bi_import(ctx, dQ, dQ_len);
+  p_bi = bi_import(ctx, p, p_len);
+  q_bi = bi_import(ctx, q, q_len);
+  qInv_bi = bi_import(ctx, qInv, qInv_len);
+
+  if (em_bi == NULL || dP_bi == NULL || dQ_bi == NULL ||
+      p_bi == NULL || q_bi == NULL || qInv_bi == NULL) {
+    goto cleanup;
+  }
+
+  bi_set_mod(ctx, bi_clone(ctx, p_bi), BIGINT_P_OFFSET);
+  bi_set_mod(ctx, bi_clone(ctx, q_bi), BIGINT_Q_OFFSET);
+
+  result_bi = bi_crt(ctx, em_bi, dP_bi, dQ_bi, p_bi, q_bi, qInv_bi);
+  if (result_bi == NULL) {
+    goto cleanup;
+  }
+  bi_export(ctx, result_bi, signature, sig_len);
+  ret = 0;  // Success!
+cleanup:
+  bi_free_mod(ctx, BIGINT_P_OFFSET);  // cloned p_bi stored in mod context
+  bi_free_mod(ctx, BIGINT_Q_OFFSET);  // cloned q_bi stored in mod context
+  bi_terminate(ctx);
+  return ret;
 }
 
 #endif /* MG_TLS == MG_TLS_BUILTIN */
