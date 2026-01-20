@@ -857,17 +857,17 @@ static void mg_tls_mgf1(uint8_t *mask, size_t mask_len, const uint8_t *seed,
   }
 }
 
-static unsigned mg_tls_rsa_bits(const struct mg_str *n) {
+static unsigned int mg_tls_rsa_bits(const struct mg_str *n) {
   size_t i = 0;
-  unsigned bits = 0;
+  unsigned int bits = 0;
   while (i < n->len && n->buf[i] == 0) i++;
   if (i == n->len) return 0;
-  bits = (unsigned) ((n->len - i) * 8);
+  bits = (unsigned int) ((n->len - i) * 8);
   {
     uint8_t byte = (uint8_t) n->buf[i];
     while ((byte & 0x80U) == 0) {
       bits--;
-      byte <<= 1;
+      byte = (uint8_t) (byte << 1);
     }
   }
   return bits;
@@ -1030,9 +1030,9 @@ static bool mg_tls_send_cert_verify(struct mg_connection *c, bool is_client) {
 
     // Build verify packet header, then sign directly into the packet
     verify[0] = 0x0f;
-    MG_STORE_BE24(verify + 1, (uint32_t) (emlen + 4));
+    MG_STORE_BE24(verify + 1, emlen + 4);
     MG_STORE_BE16(verify + 4, 0x0804);
-    MG_STORE_BE16(verify + 6, (uint16_t) emlen);
+    MG_STORE_BE16(verify + 6, emlen);
 
     // Sign directly into the verify buffer (verify + 8 = signature location)
     memset(verify + 8, 0, emlen);  // Initialize signature area
@@ -1985,7 +1985,7 @@ static int mg_rsa_parse_der_int(const uint8_t **p, const uint8_t *end,
   *p = value_end;
 
   MG_VERBOSE(("DER INT: parsed %u bytes (skipped zero=%d)", len,
-              value_end - value_start != len ? 1 : 0));
+              (size_t)(value_end - value_start) != (size_t) len ? 1 : 0));
   return 0;
 }
 
@@ -2037,7 +2037,7 @@ static int mg_parse_ec_private_key(const uint8_t *der, size_t dersz,
 //   exponent2         INTEGER,  -- dQ = d mod (q-1)
 //   coefficient       INTEGER,  -- qInv = (inverse of q) mod p
 // }
-int mg_rsa_parse_key(const uint8_t *der, size_t dersz, struct mg_rsa_key *key) {
+static int mg_rsa_parse_key(const uint8_t *der, size_t dersz, struct mg_rsa_key *key) {
   const uint8_t *p = der;
   const uint8_t *end = der + dersz;
   uint32_t seq_len;
