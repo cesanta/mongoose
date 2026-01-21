@@ -29,6 +29,11 @@ jobs:
           select: "-DMG_ENABLE_POLL=0 -DMG_ENABLE_EPOLL=0"
         - ssl: WOLFSSL
           select: "-DMG_ENABLE_POLL=1 -DMG_ENABLE_EPOLL=0"
+        include:
+        - ssl: BUILTIN
+          cc: gcc
+          target: test
+          select: "-DMG_ENABLE_POLL=0 -DMG_ENABLE_EPOLL=1 -DMG_ENABLE_CHACHA20=0"
     name: linux ${{ matrix.target }} CC=${{ matrix.cc }} SSL=${{ matrix.ssl }} TFLAGS=${{ matrix.select }}
     env:
       CC: ${{ matrix.cc }}
