@@ -15100,9 +15100,10 @@ static PORTABLE_8439_DECL void poly1305_finish(poly1305_context *ctx,
 #elif defined(__LITTLE_ENDIAN__) || defined(__ARMEL__) ||                 \
     defined(__THUMBEL__) || defined(__AARCH64EL__) || defined(_MIPSEL) || \
     defined(__MIPSEL) || defined(__MIPSEL__) || defined(__XTENSA_EL__) || \
-    defined(__AVR__) || defined(LITTLE_ENDIAN)
+    defined(__AVR__)
 #define __HAVE_LITTLE_ENDIAN 1
 #endif
+// DO NOT test for LITTLE_ENDIAN, as it is defined as 1234 when including sys/types.h in GCC
 
 #ifndef TEST_SLOW_PATH
 #if defined(__HAVE_LITTLE_ENDIAN)
