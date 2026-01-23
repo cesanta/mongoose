@@ -41,8 +41,98 @@ struct ipp {
 static void test_csum(void) {
   uint8_t ip[20] = {0x45, 0x00, 0x00, 0x1c, 0x00, 0x00, 0x00, 0x00, 0x28, 0x11,
                     0x94, 0xcf, 0x7f, 0x00, 0x00, 0x01, 0x7f, 0x00, 0x00, 0x01};
+  uint8_t udp_odd[53] = {0xc0, 0xa8, 0x45, 0x58, 0x08, 0x08, 0x08, 0x08, 0x00,
+                         0x11, 0x00, 0x29, 0xad, 0x67, 0x00, 0x35, 0x00, 0x29,
+                         0xaf, 0xf8, 0x00, 0x01, 0x01, 0x00, 0x00, 0x01, 0x00,
+                         0x00, 0x00, 0x00, 0x00, 0x00, 0x04, 0x74, 0x69, 0x6d,
+                         0x65, 0x06, 0x67, 0x6f, 0x6f, 0x67, 0x6c, 0x65, 0x03,
+                         0x63, 0x6f, 0x6d, 0x00, 0x00, 0x01, 0x00, 0x01};
+
   ASSERT(ipcsum(ip, 20) == 0);
+  ASSERT(ipcsum(udp_odd, 53) == 0);
   // UDP and TCP checksum calc funcions use the same basic calls as ipcsum()
+}
+
+#if defined(__DCC__)
+#pragma pack(1)
+#else
+#pragma pack(push, 1)
+#endif
+
+struct pseudoip {
+  uint32_t src;   // Source IP
+  uint32_t dst;   // Destination IP
+  uint8_t zero;
+  uint8_t proto;  // Upper level protocol
+  uint16_t len;   // Datagram length
+};
+
+struct pseudoip6 {
+  uint64_t src[2];   // Source IP
+  uint64_t dst[2];   // Destination IP
+  uint32_t plen;     // Payload length
+  uint8_t zero[3];
+  uint8_t next;      // Upper level protocol
+};
+
+#if defined(__DCC__)
+#pragma pack(0)
+#else
+#pragma pack(pop)
+#endif
+
+static bool test_udp_csum(void *d, void *u) {
+  struct ip *ip = (struct ip *) d;
+  struct udp *udp = (struct udp *) u;
+  struct pseudoip pseudo, *pip;
+  pseudo.src = ip->src;
+  pseudo.dst = ip->dst;
+  pseudo.zero = 0;
+  pseudo.proto = ip->proto;
+  pseudo.len = udp->len;
+  pip = (struct pseudoip *)((size_t) u - sizeof(*pip));
+  memcpy(pip, &pseudo, sizeof(*pip));
+  return (ipcsum(pip, sizeof(*pip) + mg_ntohs(udp->len)) == 0);
+}
+
+static bool test_udp6_csum(void *d, void *u) {
+  struct ip6 *ip = (struct ip6 *) d;
+  struct udp *udp = (struct udp *) u;
+  struct pseudoip6 pseudo, *pip;
+  pseudo.src[0] = ip->src[0], pseudo.src[1] = ip->src[1];
+  pseudo.dst[0] = ip->dst[0], pseudo.dst[1] = ip->dst[1];
+  pseudo.zero[0] = 0, pseudo.zero[1] = 0, pseudo.zero[2] = 0;
+  pseudo.plen = mg_htonl((uint32_t) mg_ntohs(udp->len));
+  pseudo.next = ip->next;
+  pip = (struct pseudoip6 *) ((size_t) u - sizeof(*pip));
+  memcpy(pip, &pseudo, sizeof(*pip));
+  return (ipcsum(pip, sizeof(*pip) + mg_ntohs(udp->len)) == 0);
+}
+
+static bool test_tcp_csum(void *d, void *t) {
+  struct ip *ip = (struct ip *) d;
+  struct pseudoip pseudo, *pip;
+  pseudo.src = ip->src;
+  pseudo.dst = ip->dst;
+  pseudo.zero = 0;
+  pseudo.proto = ip->proto;
+  pseudo.len = mg_htons((uint16_t)(mg_ntohs(ip->len) - (ip->ver & 0x0F) * 4));
+  pip = (struct pseudoip *)((size_t) t - sizeof(*pip));
+  memcpy(pip, &pseudo, sizeof(*pip));
+  return (ipcsum(pip, sizeof(*pip) + mg_ntohs(pip->len)) == 0);
+}
+
+static bool test_tcp6_csum(void *d, void *t) {
+  struct ip6 *ip = (struct ip6 *) d;
+  struct pseudoip6 pseudo, *pip;
+  pseudo.src[0] = ip->src[0], pseudo.src[1] = ip->src[1];
+  pseudo.dst[0] = ip->dst[0], pseudo.dst[1] = ip->dst[1];
+  pseudo.zero[0] = 0, pseudo.zero[1] = 0, pseudo.zero[2] = 0;
+  pseudo.plen = mg_htonl((uint32_t) mg_ntohs(ip->plen));
+  pseudo.next = ip->next;
+  pip = (struct pseudoip6 *) ((size_t) t - sizeof(*pip));
+  memcpy(pip, &pseudo, sizeof(*pip));
+  return (ipcsum(pip, sizeof(*pip) + mg_ntohl(pip->plen)) == 0);
 }
 
 static bool executed = false;
@@ -364,10 +454,13 @@ static void test_tcp_basics(bool ipv6) {
   ASSERT(t->flags == (TH_RST | TH_ACK));
   ASSERT(t->seq == mg_htonl(0));
   ASSERT(t->ack == mg_htonl(1235));
+  mg_hexdump(s_driver_data.buf, s_driver_data.len);
   if (ipv6) {
     ASSERT(i6->src[0] == 1 && i6->dst[0] == 2);
+    ASSERT(test_tcp6_csum(i6, t));
   } else {
     ASSERT(i->src == 1 && i->dst == 2);
+    ASSERT(test_tcp_csum(i, t));
   }
   
   // send SYN+ACK, expect RST
@@ -1068,8 +1161,10 @@ static void test_udp(bool ipv6) {
   ASSERT(*((char *) (u + 1)) == 'P');
   if (ipv6) {
     ASSERT(i6->src[0] == 1 && i6->dst[0] == 2);
+    ASSERT(test_udp6_csum(i6, u));
   } else {
     ASSERT(i->src == 1 && i->dst == 2);
+    ASSERT(test_udp_csum(i, u));
   }
 
   s_driver_data.len = 0;
