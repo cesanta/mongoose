@@ -13949,12 +13949,12 @@ static int mg_tls_verify_cert_san(const uint8_t *der, size_t dersz,
   }
   while (mg_der_next(&field, &name) > 0) {
     if (name.type == 0x87 && name.len == 4) {  // this is an IPv4 address
-      MG_DEBUG(("Found SAN, IP: %M", mg_print_ip4, name.value));
+      MG_VERBOSE(("Found SAN, IP: %M", mg_print_ip4, name.value));
       if (!server_ip->is_ip6 &&
           *((uint32_t *) name.value) == server_ip->addr.ip4)
         return 1;  // and matches the one we're connected to
     } else {       // this is a text SAN
-      MG_DEBUG(("Found SAN, (%u): %.*s", name.type, name.len, name.value));
+      MG_VERBOSE(("Found SAN, (%u): %.*s", name.type, name.len, name.value));
       if (mg_match(mg_str(server_name), mg_str_n((char *) name.value, name.len),
                    NULL))
         return 1;  // and matches the host name
@@ -13985,7 +13985,7 @@ static int mg_tls_verify_cert_signature(const struct mg_tls_cert *cert,
                             (unsigned) cert->tbshashsz, sig,
                             mg_uecc_secp256r1());
     } else if (issuer->pubkey.len == 96) {
-      MG_DEBUG(("ignore secp386 for now"));
+      MG_VERBOSE(("ignore secp386 for now"));
       return 1;
     } else {
       MG_ERROR(("unsupported public key length: %d", issuer->pubkey.len));
@@ -14015,7 +14015,7 @@ static int mg_tls_verify_cert_cn(struct mg_der_tlv *subj, const char *host) {
   struct mg_der_tlv v;
   int matched = 0;
   if (mg_der_find_oid(subj, (uint8_t *) "\x55\x04\x03", 3, &v) > 0) {
-    MG_DEBUG(("using CN: %.*s <-> %s", v.len, v.value, host));
+    MG_VERBOSE(("using CN: %.*s <-> %s", v.len, v.value, host));
     matched = mg_match(mg_str(host), mg_str_n((char *) v.value, v.len), NULL);
   }
   return matched;
@@ -14195,7 +14195,7 @@ static int mg_tls_recv_cert_verify(struct mg_connection *c) {
         mg_error(c, "failed to verify RSA certificate (certverify)");
         return -1;
       }
-      MG_DEBUG(("certificate verification successful (RSA)"));
+      MG_VERBOSE(("certificate verification successful (RSA)"));
     } else if (sigalg == 0x0403) {  // ecdsa_secp256r1_sha256
       // Extract certificate signature and verify it using pubkey and sighash
       uint8_t sig[64];
@@ -14224,7 +14224,7 @@ static int mg_tls_recv_cert_verify(struct mg_connection *c) {
         mg_error(c, "failed to verify EC certificate (certverify)");
         return -1;
       }
-      MG_DEBUG(("certificate verification successful (EC)"));
+      MG_VERBOSE(("certificate verification successful (EC)"));
     } else {
       // From
       // https://www.iana.org/assignments/tls-parameters/tls-parameters.xhtml:
@@ -14508,7 +14508,7 @@ static int mg_rsa_parse_key(const uint8_t *der, size_t dersz, struct mg_rsa_key 
   memset(key, 0, sizeof(*key));
 
   // Debug: show first few bytes
-  MG_DEBUG(
+  MG_VERBOSE(
       ("RSA key DER first 16 bytes: %02x %02x %02x %02x %02x %02x %02x %02x "
        "%02x %02x %02x %02x %02x %02x %02x %02x",
        der[0], der[1], der[2], der[3], der[4], der[5], der[6], der[7], der[8],
@@ -14530,7 +14530,7 @@ static int mg_rsa_parse_key(const uint8_t *der, size_t dersz, struct mg_rsa_key 
   if (seq_len > 0x7F) {
     // Long form length
     uint8_t len_bytes = seq_len & 0x7F;
-    MG_DEBUG(("Long form length: %d bytes", len_bytes));
+    MG_VERBOSE(("Long form length: %d bytes", len_bytes));
     if (end - p < len_bytes) {
       MG_ERROR(("Not enough bytes for long form length"));
       return -1;
@@ -14542,7 +14542,7 @@ static int mg_rsa_parse_key(const uint8_t *der, size_t dersz, struct mg_rsa_key 
     p += len_bytes;
   }
 
-  MG_DEBUG(
+  MG_VERBOSE(
       ("SEQUENCE length: %u, total DER size: %u", seq_len, (unsigned) dersz));
 
   if (end - p < (long) seq_len) {
@@ -14552,7 +14552,7 @@ static int mg_rsa_parse_key(const uint8_t *der, size_t dersz, struct mg_rsa_key 
   end = p + seq_len;  // Adjust end to sequence boundary
 
   // Parse version (should be 0)
-  MG_DEBUG(("Before version: offset=%d, bytes: %02x %02x %02x %02x",
+  MG_VERBOSE(("Before version: offset=%d, bytes: %02x %02x %02x %02x",
             (int) (p - der), p[0], p[1], p[2], p[3]));
   if (mg_rsa_parse_der_int(&p, end, &version) < 0) {
     MG_ERROR(("Failed to parse version"));
@@ -14563,20 +14563,20 @@ static int mg_rsa_parse_key(const uint8_t *der, size_t dersz, struct mg_rsa_key 
             (int) (p - der)));
 
   // Parse the 8 components: n, e, d, p, q, dP, dQ, qInv
-  MG_DEBUG(("Before n: offset=%d, bytes: %02x %02x %02x %02x %02x %02x",
+  MG_VERBOSE(("Before n: offset=%d, bytes: %02x %02x %02x %02x %02x %02x",
             (int) (p - der), p[0], p[1], p[2], p[3], p[4], p[5]));
   if (mg_rsa_parse_der_int(&p, end, &key->n) < 0) {
     MG_ERROR(("Failed to parse n (modulus)"));
     return -1;
   }
-  MG_DEBUG(("Parsed n: %d bytes, offset now=%d, consumed=%d bytes total",
+  MG_VERBOSE(("Parsed n: %d bytes, offset now=%d, consumed=%d bytes total",
             (int) key->n.len, (int) (p - der), (int) (p - der)));
-  MG_DEBUG(("  First 8 bytes of n: %02x %02x %02x %02x %02x %02x %02x %02x",
+  MG_VERBOSE(("  First 8 bytes of n: %02x %02x %02x %02x %02x %02x %02x %02x",
             (unsigned char) key->n.buf[0], (unsigned char) key->n.buf[1],
             (unsigned char) key->n.buf[2], (unsigned char) key->n.buf[3],
             (unsigned char) key->n.buf[4], (unsigned char) key->n.buf[5],
             (unsigned char) key->n.buf[6], (unsigned char) key->n.buf[7]));
-  MG_DEBUG(("  Next bytes after n: %02x %02x %02x %02x %02x %02x",
+  MG_VERBOSE(("  Next bytes after n: %02x %02x %02x %02x %02x %02x",
             p < end ? p[0] : 0xFF, p + 1 < end ? p[1] : 0xFF,
             p + 2 < end ? p[2] : 0xFF, p + 3 < end ? p[3] : 0xFF,
             p + 4 < end ? p[4] : 0xFF, p + 5 < end ? p[5] : 0xFF));
@@ -14614,7 +14614,7 @@ static int mg_rsa_parse_key(const uint8_t *der, size_t dersz, struct mg_rsa_key 
     return -1;
   }
 
-  MG_DEBUG(("Successfully parsed RSA key"));
+  MG_VERBOSE(("Successfully parsed RSA key"));
   return 0;
 }
 
