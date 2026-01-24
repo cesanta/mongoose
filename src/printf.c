@@ -1,5 +1,5 @@
-#include "printf.h"
 #include "fmt.h"
+#include "printf.h"
 #include "util.h"
 
 size_t mg_queue_printf(struct mg_queue *q, const char *fmt, ...) {
@@ -29,7 +29,7 @@ static void mg_pfn_iobuf_private(char ch, void *param, bool expand) {
   }
 }
 
-static void mg_putchar_iobuf_static(char ch, void *param) {
+void mg_pfn_iobuf_noresize(char ch, void *param) {
   mg_pfn_iobuf_private(ch, param, false);
 }
 
@@ -41,7 +41,7 @@ size_t mg_vsnprintf(char *buf, size_t len, const char *fmt, va_list *ap) {
   struct mg_iobuf io = {0, 0, 0, 0};
   size_t n;
   io.buf = (uint8_t *) buf, io.size = len;
-  n = mg_vxprintf(mg_putchar_iobuf_static, &io, fmt, ap);
+  n = mg_vxprintf(mg_pfn_iobuf_noresize, &io, fmt, ap);
   if (n < len) buf[n] = '\0';
   return n;
 }
