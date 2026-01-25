@@ -4673,6 +4673,10 @@ struct mg_connection *mg_connect_svc(struct mg_mgr *mgr, const char *url,
   struct mg_connection *c = NULL;
   if (url == NULL || url[0] == '\0') {
     MG_ERROR(("null url"));
+#if MG_ENABLE_TCPIP
+  } else if (mgr->ifp != NULL && mgr->ifp->state != MG_TCPIP_STATE_READY) {
+    MG_ERROR(("Network is down"));
+#endif
   } else if ((c = mg_alloc_conn(mgr)) == NULL) {
     MG_ERROR(("OOM"));
   } else {
