@@ -1,37 +1,34 @@
-#define MIPTAPTEST_USING_DHCP 1
+#define MIPPORTTEST_USING_DHCP 1
 
 #include <sys/socket.h>
-#ifndef __OpenBSD__
-#include <linux/if.h>
-#include <linux/if_tun.h>
-#else
-#include <net/if.h>
-#include <net/if_tun.h>
-#include <net/if_types.h>
-#endif
 #include <sys/ioctl.h>
 
 #include "mip_x_test.c"
 
+struct port_driver_data {
+  int sockfd;
+  struct sockaddr_in port_addr;
+  struct sockaddr_in tap_addr;
+};
 
-// MIP TUNTAP driver
-static size_t tap_rx(void *buf, size_t len, struct mg_tcpip_if *ifp) {
-  ssize_t received = read(*(int *) ifp->driver_data, buf, len);
+// MIP Socket driver
+static size_t sock_rx(void *buf, size_t len, struct mg_tcpip_if *ifp) {
+  ssize_t received = recv(((struct port_driver_data *)ifp->driver_data)->sockfd, buf, len, 0); 
   usleep(1);  // This is to avoid 100% CPU
   if (received < 0) return 0;
   return (size_t) received;
 }
 
-static size_t tap_tx(const void *buf, size_t len, struct mg_tcpip_if *ifp) {
-  ssize_t res = write(*(int *) ifp->driver_data, buf, len);
+static size_t sock_tx(const void *buf, size_t len, struct mg_tcpip_if *ifp) {
+  ssize_t res = send(((struct port_driver_data *)ifp->driver_data)->sockfd, buf, len, 0); 
   if (res < 0) {
-    MG_ERROR(("tap_tx failed: %d", errno));
+    MG_ERROR(("sock_tx failed: %d", errno));
     return 0;
   }
   return (size_t) res;
 }
 
-static bool tap_poll(struct mg_tcpip_if *ifp, bool s1) {
+static bool sock_poll(struct mg_tcpip_if *ifp, bool s1) {
   return s1 && ifp->driver_data ? true : false;
 }
 
@@ -40,33 +37,23 @@ int main(void) {
   bool result;
   const char *debug_level = getenv("V");
   // Setup interface
-  const char *iface = "tap0";             // Network iface
+  const uint16_t port = 0xAA55;           // UDP port
   const char *mac = "02:00:01:02:03:78";  // MAC address
-#ifndef __OpenBSD__
-  const char *tuntap_device = "/dev/net/tun";
-#else
-  const char *tuntap_device = "/dev/tap0";
-#endif
-  int fd = open(tuntap_device, O_RDWR);
-  struct ifreq ifr;
-  memset(&ifr, 0, sizeof(ifr));
-  strncpy(ifr.ifr_name, iface, IFNAMSIZ);
-#ifndef __OpenBSD__
-  ifr.ifr_flags = IFF_TAP | IFF_NO_PI;
-  if (ioctl(fd, TUNSETIFF, (void *) &ifr) < 0) {
-    MG_ERROR(("Failed to setup TAP interface: %s", ifr.ifr_name));
-    ABORT();  // return EXIT_FAILURE;
-  }
-#else
-  ifr.ifr_flags = (short) (IFF_UP | IFF_BROADCAST | IFF_MULTICAST);
-  if (ioctl(fd, TUNSIFMODE, (void *) &ifr) < 0) {
-    MG_ERROR(("Failed to setup TAP interface: %s", ifr.ifr_name));
-    ABORT();  // return EXIT_FAILURE;
-  }
-#endif
-  fcntl(fd, F_SETFL, fcntl(fd, F_GETFL, 0) | O_NONBLOCK);  // Non-blocking mode
 
-  MG_INFO(("Opened TAP interface: %s", iface));
+	struct port_driver_data pdd;
+  pdd.sockfd = socket(AF_INET, SOCK_DGRAM, 0); 
+	pdd.port_addr.sin_family = AF_INET;
+	pdd.port_addr.sin_addr.s_addr = htonl(INADDR_ANY);
+	pdd.port_addr.sin_port = htons(port);
+	if (bind(pdd.sockfd, (struct sockaddr *) &pdd.port_addr, sizeof(pdd.port_addr)) < 0) return EXIT_FAILURE; 
+  printf("Opened UDP socket\n");
+
+	pdd.tap_addr.sin_family = AF_INET;
+	pdd.tap_addr.sin_addr.s_addr =  htonl(0x7f000001U);  // 127.0.0.1
+	pdd.tap_addr.sin_port = htons(0x55AA);
+	if (connect(pdd.sockfd, (struct sockaddr *) &pdd.tap_addr, sizeof(pdd.tap_addr)) < 0) return EXIT_FAILURE; 
+  printf("Connected to TAP UDP socket\n");
+
   usleep(200000);  // 200 ms
 
   if (debug_level == NULL) debug_level = "3";
@@ -79,17 +66,17 @@ int main(void) {
   struct mg_tcpip_driver driver;
   memset(&driver, 0, sizeof(driver));
 
-  driver.tx = tap_tx;
-  driver.poll = tap_poll;
-  driver.rx = tap_rx;
+  driver.tx = sock_tx;
+  driver.poll = sock_poll;
+  driver.rx = sock_rx;
 
   struct mg_tcpip_if mif;
   memset(&mif, 0, sizeof(mif));
 
   mif.driver = &driver;
-  mif.driver_data = &fd;
+  mif.driver_data = &pdd;
 
-#if MIPTAPTEST_USING_DHCP == 1
+#if MIPPORTTEST_USING_DHCP == 1
 #else
   mif.ip = mg_htonl(MG_U32(192, 168, 32, 2));  // Triggering a network failure
   mif.mask = mg_htonl(MG_U32(255, 255, 255, 0));
@@ -104,7 +91,7 @@ int main(void) {
   usleep(200000);  // 200 ms
 
   // Stack initialization, Network configuration (DHCP lease, ...)
-#if MIPTAPTEST_USING_DHCP == 0
+#if MIPPORTTEST_USING_DHCP == 0
   MG_INFO(("MIF configuration: Static IP"));
   ASSERT(mif.ip != 0);     // Check we have a satic IP assigned
   mg_mgr_poll(&mgr, 100);  // For initialisation
@@ -126,7 +113,7 @@ int main(void) {
 
   // RUN TESTS
   result = mip_x_test(&mgr);
-  close(fd);
+  close(pdd.sockfd);
   if (!result) return EXIT_FAILURE;
   return EXIT_SUCCESS;
 }

@@ -91,6 +91,15 @@ mip_tap_test: mip_tap_test.c mongoose.c mongoose.h packed_fs.c Makefile tls_mult
 	$(CC) mip_tap_test.c packed_fs.c $(CFLAGS) $(LDFLAGS) -o $@
 	ASAN_OPTIONS=$(ASAN_OPTIONS) $(RUN) ./$@
 
+# bridge UDP port <--> TAP interface
+port_tap_bridge: port_tap_bridge.c
+	cc port_tap_bridge.c -o $@
+
+# requires port_tap_bridge to be running
+mip_port_test: mip_port_test.c mongoose.c mongoose.h packed_fs.c Makefile tls_multirec/server
+	$(CC) mip_port_test.c packed_fs.c $(CFLAGS) $(LDFLAGS) -o $@
+	ASAN_OPTIONS=$(ASAN_OPTIONS) $(RUN) ./$@
+
 mip_vc98: mip_test.c mongoose.c mongoose.h packed_fs.c Makefile
 	$(DOCKER) mdashnet/vc98 wine cl mip_test.c packed_fs.c $(VCFLAGS) $(DEFS) $(TFLAGS) /Fe$@.exe
 	$(DOCKER) -e WINEPREFIX=/tmp/wineprefix mdashnet/vc98 wine $@.exe
@@ -182,6 +191,19 @@ s390: CFLAGS += -Wno-stringop-overflow
 s390: CC = $(DOCKER) mdashnet/s390 cc
 s390: RUN = $(DOCKER) --init mdashnet/s390
 s390: test
+
+mip_s390: ASAN=
+mip_s390: CC = $(DOCKER) mdashnet/s390 cc
+mip_s390: RUN = $(DOCKER) --init mdashnet/s390
+mip_s390: mip_test
+
+mip_port_s390: ASAN=
+mip_port_s390: IPV6=0
+# This test requires curl, not present in this image
+mip_port_s390: CFLAGS += -DNO_HTTPSERVER_TEST
+mip_port_s390: CC = $(DOCKER) mdashnet/s390 cc
+mip_port_s390: RUN = $(DOCKER) --init mdashnet/s390
+mip_port_s390: mip_port_test
 
 arm: DEFS += -DMG_ENABLE_POSIX_FS=0 -DMG_ENABLE_TCPIP=1 -DMG_ENABLE_TCPIP_DRIVER_INIT=0 -DMG_ARCH=MG_ARCH_ARMGCC -DNO_SLEEP_ABORT
 arm: mongoose.h $(SRCS)
