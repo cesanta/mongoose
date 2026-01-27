@@ -216,6 +216,7 @@ static void mkpay(struct pkt *pkt, void *p) {
       mg_str_n((char *) p, (size_t) (&pkt->pay.buf[pkt->pay.len] - (char *) p));
 }
 
+// NOTE(): DOES NOT handle reentries after odd length, use last
 static uint32_t csumup(uint32_t sum, const void *buf, size_t len) {
   size_t i;
   const uint8_t *p = (const uint8_t *) buf;
@@ -366,18 +367,25 @@ static bool tx_udp(struct mg_tcpip_if *ifp, uint8_t *l2_dst,
   udp->len = mg_htons((uint16_t) (sizeof(*udp) + len));
   udp->csum = 0;
   cs = csumup(0, udp, sizeof(*udp));
-  cs = csumup(cs, buf, len);
 #if MG_ENABLE_IPV6
   if (ip_dst->is_ip6) {
+    uint32_t pseudo[2];
     cs = csumup(cs, &ip6->src, sizeof(ip6->src));
     cs = csumup(cs, &ip6->dst, sizeof(ip6->dst));
+    pseudo[0] = mg_htonl((uint32_t) (sizeof(*udp) + len));
+    pseudo[1] = mg_htonl(17);
+    cs = csumup(cs, pseudo, 2 * sizeof(uint32_t));
   } else
 #endif
   {
+    uint16_t pseudo[2];
     cs = csumup(cs, &ip->src, sizeof(ip->src));
     cs = csumup(cs, &ip->dst, sizeof(ip->dst));
+    pseudo[0] = mg_htons(17);
+    pseudo[1] = udp->len;
+    cs = csumup(cs, pseudo, 2 * sizeof(uint16_t));
   }
-  cs += (uint32_t) (17 + sizeof(*udp) + len);
+  cs = csumup(cs, buf, len);  // possibly odd length must be last
   udp->csum = csumfin(cs);
   memmove(udp + 1, buf, len);
   l2_len = mg_l2_footer(ifp->l2type, l2_len, l2p);
@@ -694,6 +702,7 @@ static void tx_icmp6(struct mg_tcpip_if *ifp, uint8_t *l2_dst, uint64_t *ip_src,
   struct ip6 *ip6;
   struct icmp6 *icmp6;
   uint32_t cs;
+  uint16_t pseudo[2];
   ip6 = tx_ip6(ifp, l2_dst, 58, ip_src, ip_dst, sizeof(*icmp6) + len);
   icmp6 = (struct icmp6 *) (ip6 + 1);
   memset(icmp6, 0, sizeof(*icmp6));  // Set csum to 0
@@ -702,10 +711,12 @@ static void tx_icmp6(struct mg_tcpip_if *ifp, uint8_t *l2_dst, uint64_t *ip_src,
   memcpy(icmp6 + 1, buf, len);  // Copy payload
   icmp6->csum = 0;              // RFC-4443 2.3, RFC-8200 8.1
   cs = csumup(0, icmp6, sizeof(*icmp6));
-  cs = csumup(cs, buf, len);
   cs = csumup(cs, ip_src, 16);
   cs = csumup(cs, ip_dst, 16);
-  cs += (uint32_t) (58 + sizeof(*icmp6) + len);
+  pseudo[0] = htons(58);
+  pseudo[1] = htons((uint16_t) (sizeof(*icmp6) + len));
+  cs = csumup(cs, pseudo, 4);
+  cs = csumup(cs, buf, len);  // possibly odd length must be last
   icmp6->csum = csumfin(cs);
   driver_output(
       ifp, mg_l2_footer(ifp->l2type, sizeof(*ip6) + sizeof(*icmp6) + len, l2p));
@@ -1096,24 +1107,25 @@ static size_t tx_tcp(struct mg_tcpip_if *ifp, uint8_t *l2_dst,
   {
     uint32_t cs = 0;
     uint16_t n = (uint16_t) (sizeof(*tcp) + len);
-    cs = csumup(cs, tcp, n);
 #if MG_ENABLE_IPV6
     if (ip_dst->is_ip6) {
+      uint32_t pseudo[2];
       cs = csumup(cs, &ip6->src, sizeof(ip6->src));
       cs = csumup(cs, &ip6->dst, sizeof(ip6->dst));
-      cs += (uint32_t) (6 + n);
+      pseudo[0] = mg_htonl((uint32_t) n);
+      pseudo[1] = mg_htonl(6);
+      cs = csumup(cs, pseudo, 2 * sizeof(uint32_t));
     } else
 #endif
     {
-      uint8_t pseudo[4];
-      pseudo[0] = 0;
-      pseudo[1] = ip->proto;
-      pseudo[2] = (uint8_t) (n >> 8);
-      pseudo[3] = (uint8_t) (n & 255);
+      uint16_t pseudo[2];
       cs = csumup(cs, &ip->src, sizeof(ip->src));
       cs = csumup(cs, &ip->dst, sizeof(ip->dst));
-      cs = csumup(cs, pseudo, sizeof(pseudo));
+      pseudo[0] = mg_htons(6);
+      pseudo[1] = mg_htons(n);
+      cs = csumup(cs, pseudo, 2 * sizeof(uint16_t));
     }
+    cs = csumup(cs, tcp, n);  // possibly odd length must be last
     tcp->csum = csumfin(cs);
   }
   MG_VERBOSE(("TCP %M -> %M fl %x len %u", mg_print_ip_port, ip_src,
