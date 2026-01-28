@@ -58,7 +58,7 @@ int main(void) {
 	tap_addr.sin_addr.s_addr = htonl(0x7f000001U);  // 127.0.0.1
 	tap_addr.sin_port = htons(port);
 	if (bind(sockfd, (struct sockaddr *) &tap_addr, sizeof(tap_addr)) < 0) return EXIT_FAILURE; 
-  printf("Opened UDP socket\n");
+  printf("Opened UDP socket: 127.0.0.1:%u (0x%04x)\n", port, port);
 
   memset(&port_addr, 0, sizeof(port_addr));
 

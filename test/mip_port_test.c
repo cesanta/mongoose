@@ -38,6 +38,7 @@ int main(void) {
   const char *debug_level = getenv("V");
   // Setup interface
   const uint16_t port = 0xAA55;           // UDP port
+  const uint16_t tap_port = 0x55AA;       // UDP port for TAP socket
   const char *mac = "02:00:01:02:03:78";  // MAC address
 
 	struct port_driver_data pdd;
@@ -46,13 +47,13 @@ int main(void) {
 	pdd.port_addr.sin_addr.s_addr = htonl(INADDR_ANY);
 	pdd.port_addr.sin_port = htons(port);
 	if (bind(pdd.sockfd, (struct sockaddr *) &pdd.port_addr, sizeof(pdd.port_addr)) < 0) return EXIT_FAILURE; 
-  printf("Opened UDP socket\n");
+  printf("Opened UDP socket: 127.0.0.1:%u (0x%04x)\n", port, port);
 
 	pdd.tap_addr.sin_family = AF_INET;
 	pdd.tap_addr.sin_addr.s_addr =  htonl(0x7f000001U);  // 127.0.0.1
 	pdd.tap_addr.sin_port = htons(0x55AA);
 	if (connect(pdd.sockfd, (struct sockaddr *) &pdd.tap_addr, sizeof(pdd.tap_addr)) < 0) return EXIT_FAILURE; 
-  printf("Connected to TAP UDP socket\n");
+  printf("Connected to TAP UDP socket: 127.0.0.1:%u (0x%04x)\n", tap_port, tap_port);
 
   usleep(200000);  // 200 ms
 
