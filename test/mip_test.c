@@ -41,7 +41,7 @@ struct ipp {
 static void test_csum(void) {
   uint8_t ip[20] = {0x45, 0x00, 0x00, 0x1c, 0x00, 0x00, 0x00, 0x00, 0x28, 0x11,
                     0x94, 0xcf, 0x7f, 0x00, 0x00, 0x01, 0x7f, 0x00, 0x00, 0x01};
-  uint8_t udp_odd[53] = {0xc0, 0xa8, 0x45, 0x58, 0x08, 0x08, 0x08, 0x08, 0x00,
+  uint8_t pseudo_udp_odd[53] = {0xc0, 0xa8, 0x45, 0x58, 0x08, 0x08, 0x08, 0x08, 0x00,
                          0x11, 0x00, 0x29, 0xad, 0x67, 0x00, 0x35, 0x00, 0x29,
                          0xaf, 0xf8, 0x00, 0x01, 0x01, 0x00, 0x00, 0x01, 0x00,
                          0x00, 0x00, 0x00, 0x00, 0x00, 0x04, 0x74, 0x69, 0x6d,
@@ -49,91 +49,15 @@ static void test_csum(void) {
                          0x63, 0x6f, 0x6d, 0x00, 0x00, 0x01, 0x00, 0x01};
 
   ASSERT(ipcsum(ip, 20) == 0);
-  ASSERT(ipcsum(udp_odd, 53) == 0);
+  ASSERT(ipcsum(pseudo_udp_odd, 53) == 0);
   // UDP and TCP checksum calc funcions use the same basic calls as ipcsum()
 }
 
-#if defined(__DCC__)
-#pragma pack(1)
-#else
-#pragma pack(push, 1)
+
+#if !MG_ENABLE_IPV6
+#define udp6csum_ok(d, u) true
+#define tcp6csum_ok(d, t) true
 #endif
-
-struct pseudoip {
-  uint32_t src;   // Source IP
-  uint32_t dst;   // Destination IP
-  uint8_t zero;
-  uint8_t proto;  // Upper level protocol
-  uint16_t len;   // Datagram length
-};
-
-struct pseudoip6 {
-  uint64_t src[2];   // Source IP
-  uint64_t dst[2];   // Destination IP
-  uint32_t plen;     // Payload length
-  uint8_t zero[3];
-  uint8_t next;      // Upper level protocol
-};
-
-#if defined(__DCC__)
-#pragma pack(0)
-#else
-#pragma pack(pop)
-#endif
-
-static bool test_udp_csum(void *d, void *u) {
-  struct ip *ip = (struct ip *) d;
-  struct udp *udp = (struct udp *) u;
-  struct pseudoip pseudo, *pip;
-  pseudo.src = ip->src;
-  pseudo.dst = ip->dst;
-  pseudo.zero = 0;
-  pseudo.proto = ip->proto;
-  pseudo.len = udp->len;
-  pip = (struct pseudoip *)((size_t) u - sizeof(*pip));
-  memcpy(pip, &pseudo, sizeof(*pip));
-  return (ipcsum(pip, sizeof(*pip) + mg_ntohs(udp->len)) == 0);
-}
-
-static bool test_udp6_csum(void *d, void *u) {
-  struct ip6 *ip = (struct ip6 *) d;
-  struct udp *udp = (struct udp *) u;
-  struct pseudoip6 pseudo, *pip;
-  pseudo.src[0] = ip->src[0], pseudo.src[1] = ip->src[1];
-  pseudo.dst[0] = ip->dst[0], pseudo.dst[1] = ip->dst[1];
-  pseudo.zero[0] = 0, pseudo.zero[1] = 0, pseudo.zero[2] = 0;
-  pseudo.plen = mg_htonl((uint32_t) mg_ntohs(udp->len));
-  pseudo.next = ip->next;
-  pip = (struct pseudoip6 *) ((size_t) u - sizeof(*pip));
-  memcpy(pip, &pseudo, sizeof(*pip));
-  return (ipcsum(pip, sizeof(*pip) + mg_ntohs(udp->len)) == 0);
-}
-
-static bool test_tcp_csum(void *d, void *t) {
-  struct ip *ip = (struct ip *) d;
-  struct pseudoip pseudo, *pip;
-  pseudo.src = ip->src;
-  pseudo.dst = ip->dst;
-  pseudo.zero = 0;
-  pseudo.proto = ip->proto;
-  pseudo.len = mg_htons((uint16_t)(mg_ntohs(ip->len) - (ip->ver & 0x0F) * 4));
-  pip = (struct pseudoip *)((size_t) t - sizeof(*pip));
-  memcpy(pip, &pseudo, sizeof(*pip));
-  return (ipcsum(pip, sizeof(*pip) + mg_ntohs(pip->len)) == 0);
-}
-
-static bool test_tcp6_csum(void *d, void *t) {
-  struct ip6 *ip = (struct ip6 *) d;
-  struct pseudoip6 pseudo, *pip;
-  pseudo.src[0] = ip->src[0], pseudo.src[1] = ip->src[1];
-  pseudo.dst[0] = ip->dst[0], pseudo.dst[1] = ip->dst[1];
-  pseudo.zero[0] = 0, pseudo.zero[1] = 0, pseudo.zero[2] = 0;
-  pseudo.plen = mg_htonl((uint32_t) mg_ntohs(ip->plen));
-  pseudo.next = ip->next;
-  pip = (struct pseudoip6 *) ((size_t) t - sizeof(*pip));
-  memcpy(pip, &pseudo, sizeof(*pip));
-  return (ipcsum(pip, sizeof(*pip) + mg_ntohl(pip->plen)) == 0);
-}
 
 static bool executed = false;
 
@@ -285,7 +209,7 @@ static void create_tcp_seg(struct eth *e, struct ipp *ipp, uint32_t seq,
                            uint16_t dport, size_t payload_len, void *opts,
                            unsigned int opts_len) {
   struct tcp t;
-  memset(&t, 0, sizeof(struct tcp));
+  memset(&t, 0, sizeof(t));
   t.flags = flags;
   t.seq = mg_htonl(seq);
   t.ack = mg_htonl(ack);
@@ -296,25 +220,31 @@ static void create_tcp_seg(struct eth *e, struct ipp *ipp, uint32_t seq,
 #if MG_ENABLE_IPV6
   if (ipp->ip6 != NULL) {
     struct ip6 *ip = ipp->ip6;
+    struct tcp *tcp = (struct tcp *) (s_driver_data.buf + sizeof(*e) + sizeof(*ip));
     ip->plen = mg_htons((uint16_t) (4 * (t.off >> 4) + payload_len));
     memcpy(s_driver_data.buf + sizeof(*e), ip, sizeof(*ip));
-    memcpy(s_driver_data.buf + sizeof(*e) + sizeof(*ip), &t, sizeof(t));
+    memcpy(tcp, &t, sizeof(t));
     if (opts != NULL && opts_len)
       memcpy(s_driver_data.buf + sizeof(*e) + sizeof(*ip) + sizeof(t), opts,
              opts_len);
+    tcp->csum = p6csum(ip, tcp, (4 * (t.off >> 4) + payload_len));
     s_driver_data.len =
         sizeof(*e) + sizeof(*ip) + sizeof(t) + payload_len + opts_len;
   } else
 #endif
   {
     struct ip *ip = ipp->ip4;
+    struct tcp *tcp = (struct tcp *) (s_driver_data.buf + sizeof(*e) + sizeof(*ip));
     ip->len =
         mg_htons((uint16_t) (sizeof(*ip) + 4 * (t.off >> 4) + payload_len));
+    ip->csum = ipcsum(ip, sizeof(*ip)); // no options
     memcpy(s_driver_data.buf + sizeof(*e), ip, sizeof(*ip));
-    memcpy(s_driver_data.buf + sizeof(*e) + sizeof(*ip), &t, sizeof(t));
+    ip->csum = 0;
+    memcpy(tcp, &t, sizeof(t));
     if (opts != NULL && opts_len)
       memcpy(s_driver_data.buf + sizeof(*e) + sizeof(*ip) + sizeof(t), opts,
              opts_len);
+    tcp->csum = pcsum(ip, tcp, (4 * (t.off >> 4) + payload_len));
     s_driver_data.len =
         sizeof(*e) + sizeof(*ip) + sizeof(t) + payload_len + opts_len;
   }
@@ -454,13 +384,12 @@ static void test_tcp_basics(bool ipv6) {
   ASSERT(t->flags == (TH_RST | TH_ACK));
   ASSERT(t->seq == mg_htonl(0));
   ASSERT(t->ack == mg_htonl(1235));
-  mg_hexdump(s_driver_data.buf, s_driver_data.len);
   if (ipv6) {
-    ASSERT(i6->src[0] == 1 && i6->dst[0] == 2);
-    ASSERT(test_tcp6_csum(i6, t));
+    ASSERT(i6->src[0] == mg_htonll(1ULL << 56) && i6->src[1] == 0 && i6->dst[0] == mg_htonll(2ULL << 56) && i6->dst[1] == 0);
+    ASSERT(tcp6csum_ok(i6, t));
   } else {
     ASSERT(i->src == mg_htonl(0x1000000) && i->dst == mg_htonl(0x2000000));
-    ASSERT(test_tcp_csum(i, t));
+    ASSERT(tcpcsum_ok(i, t));
   }
   
   // send SYN+ACK, expect RST
@@ -512,7 +441,7 @@ static void test_tcp_basics(bool ipv6) {
   ASSERT(t->flags == TH_RST);
   ASSERT(t->seq == mg_htonl(4321));
   if (ipv6) {
-    ASSERT(i6->src[0] == 1 && i6->dst[0] == 2);
+    ASSERT(i6->src[0] == mg_htonll(1ULL << 56) && i6->src[1] == 0 && i6->dst[0] == mg_htonll(2ULL << 56) && i6->dst[1] == 0);
   } else {
     ASSERT(i->src == mg_htonl(0x1000000) && i->dst == mg_htonl(0x2000000));
   }
@@ -550,7 +479,7 @@ static void test_tcp_basics(bool ipv6) {
   ASSERT((t->flags == TH_ACK));
   ASSERT((t->ack == mg_htonl(1001)));  // expecting 1001, dude
   if (ipv6) {
-    ASSERT(i6->src[0] == 1 && i6->dst[0] == 2);
+    ASSERT(i6->src[0] == mg_htonll(1ULL << 56) && i6->src[1] == 0 && i6->dst[0] == mg_htonll(2ULL << 56) && i6->dst[1] == 0);
   } else {
     ASSERT(i->src == mg_htonl(0x1000000) && i->dst == mg_htonl(0x2000000));
   }
@@ -769,9 +698,11 @@ static void test_tcp_basics(bool ipv6) {
     ASSERT((t->flags == TH_SYN));
     ASSERT(event == 255);
     if (ipv6) {
-      ASSERT(i6->src[0] == 1 && i6->dst[0] == 2);
+      ASSERT(i6->src[0] == mg_htonll(1ULL << 56) && i6->src[1] == 0 && i6->dst[0] == mg_htonll(2ULL << 56) && i6->dst[1] == 0);
+      ASSERT(tcp6csum_ok(i6, t));
     } else {
       ASSERT(i->src == mg_htonl(0x1000000) && i->dst == mg_htonl(0x2000000));
+    ASSERT(tcpcsum_ok(i, t));
     }
 
     // invalid SYN + ACK to connecting client (after SYN...), send ACK != seq
@@ -1083,7 +1014,7 @@ static void udp_fn(struct mg_connection *c, int ev, void *ev_data) {
 static void create_udp_dat(struct eth *e, struct ipp *ipp, uint16_t sport,
                            uint16_t dport, size_t payload_len) {
   struct udp u;
-  memset(&u, 0, sizeof(struct udp));
+  memset(&u, 0, sizeof(u));
   u.sport = mg_htons(sport);
   u.dport = mg_htons(dport);
   u.len = mg_htons((uint16_t) (sizeof(u) + payload_len));
@@ -1091,19 +1022,25 @@ static void create_udp_dat(struct eth *e, struct ipp *ipp, uint16_t sport,
 #if MG_ENABLE_IPV6
   if (ipp->ip6 != NULL) {
     struct ip6 *ip = ipp->ip6;
+    struct udp *udp = (struct udp *) (s_driver_data.buf + sizeof(*e) + sizeof(*ip));
     ip->plen = mg_htons((uint16_t) (sizeof(u) + payload_len));
     memcpy(s_driver_data.buf + sizeof(*e), ip, sizeof(*ip));
-    memcpy(s_driver_data.buf + sizeof(*e) + sizeof(*ip), &u, sizeof(u));
+    memcpy(udp, &u, sizeof(u));
     *(s_driver_data.buf + sizeof(*e) + sizeof(*ip) + sizeof(u)) = 'p';
+    udp->csum = p6csum(ip, udp, (sizeof(u) + payload_len));
     s_driver_data.len = sizeof(*e) + sizeof(*ip) + sizeof(u) + payload_len;
   } else
 #endif
   {
     struct ip *ip = ipp->ip4;
+    struct udp *udp = (struct udp *) (s_driver_data.buf + sizeof(*e) + sizeof(*ip));
     ip->len = mg_htons((uint16_t) (sizeof(*ip) + sizeof(u) + payload_len));
+    ip->csum = ipcsum(ip, sizeof(*ip)); // no options
     memcpy(s_driver_data.buf + sizeof(*e), ip, sizeof(*ip));
-    memcpy(s_driver_data.buf + sizeof(*e) + sizeof(*ip), &u, sizeof(u));
+    ip->csum = 0;
+    memcpy(udp, &u, sizeof(u));
     *(s_driver_data.buf + sizeof(*e) + sizeof(*ip) + sizeof(u)) = 'p';
+    udp->csum = pcsum(ip, udp, (sizeof(u) + payload_len));
     s_driver_data.len = sizeof(*e) + sizeof(*ip) + sizeof(u) + payload_len;
   }
   if (s_driver_data.len < 64) s_driver_data.len = 64;  // add padding if needed
@@ -1160,11 +1097,11 @@ static void test_udp(bool ipv6) {
   ASSERT(u->len == mg_htons(sizeof(*u) + 3));
   ASSERT(*((char *) (u + 1)) == 'P');
   if (ipv6) {
-    ASSERT(i6->src[0] == 1 && i6->dst[0] == 2);
-    ASSERT(test_udp6_csum(i6, u));
+    ASSERT(i6->src[0] == mg_htonll(1ULL << 56) && i6->src[1] == 0 && i6->dst[0] == mg_htonll(2ULL << 56) && i6->dst[1] == 0);
+    ASSERT(udp6csum_ok(i6, u));
   } else {
     ASSERT(i->src == mg_htonl(0x1000000) && i->dst == mg_htonl(0x2000000));
-    ASSERT(test_udp_csum(i, u));
+    ASSERT(udpcsum_ok(i, u));
   }
 
   s_driver_data.len = 0;
@@ -1173,17 +1110,19 @@ static void test_udp(bool ipv6) {
 
 static void create_icmp_dat(struct eth *e, struct ipp *ipp, uint8_t type,
                            uint8_t code, size_t payload_len) {
-  struct icmp icmp;
   struct ip *ip = ipp->ip4;
-  memset(&icmp, 0, sizeof(struct icmp));
-  icmp.type = type;
-  icmp.code = code;
+  struct icmp i, *icmp = (struct icmp *)(s_driver_data.buf + sizeof(*e) + sizeof(*ip));
+  memset(&i, 0, sizeof(i));
+  i.type = type;
+  i.code = code;
   memcpy(s_driver_data.buf, e, sizeof(*e));
-  ip->len = mg_htons((uint16_t) (sizeof(*ip) + sizeof(icmp) + payload_len));
+  ip->len = mg_htons((uint16_t) (sizeof(*ip) + sizeof(*icmp) + payload_len));
+  ip->csum = ipcsum(ip, sizeof(*ip));
   memcpy(s_driver_data.buf + sizeof(*e), ip, sizeof(*ip));
-  memcpy(s_driver_data.buf + sizeof(*e) + sizeof(*ip), &icmp, sizeof(icmp));
-  s_driver_data.len = sizeof(*e) + sizeof(*ip) + sizeof(icmp) + payload_len;
-  icmp.csum = ipcsum(s_driver_data.buf + sizeof(*e), sizeof(icmp) + payload_len);
+  ip->csum = 0;
+  memcpy(icmp, &i, sizeof(i));
+  icmp->csum = ipcsum(icmp, sizeof(*icmp) + payload_len);
+  s_driver_data.len = sizeof(*e) + sizeof(*ip) + sizeof(*icmp) + payload_len;
   if (s_driver_data.len < 64) s_driver_data.len = 64;  // add padding if needed
 }
 
@@ -1217,10 +1156,10 @@ static void test_icmp_basics(void) {
   ASSERT(i->src == mg_htonl(0x1000000) && i->dst == mg_htonl(0x2000000));
   ASSERT(i->proto == 1);
   ASSERT(i->len == mg_htons(sizeof(*i) + sizeof(*icmp) + 0));
-  ASSERT(ipcsum(i, sizeof(*i)) == 0); // Bonus, not tested elsewhere
+  ASSERT(ipcsum_ok(i)); // Bonus, not tested elsewhere
   ASSERT(icmp->type == 0);  // Echo Reply
   ASSERT(icmp->code == 0);
-  ASSERT(ipcsum(icmp, sizeof(*icmp) + 0) == 0);
+  ASSERT(icmpcsum_ok(icmp, sizeof(*icmp) + 0));
   
   create_icmp_dat(&e, &ipp, 8, 0, 69); // Echo Request
   mg_mgr_poll(&mgr, 0);  // make sure we clean former stuff in buffer
@@ -1242,32 +1181,21 @@ static void test_icmp(void) {
 
 
 #if MG_ENABLE_IPV6
-static uint16_t icmp6csum(struct ip6 *ip6, size_t len) {
-  uint32_t cs;
-  struct icmp6 *icmp6 = (struct icmp6 *) (ip6 + 1);
-  cs = csumup(0, icmp6, sizeof(*icmp6));
-  cs = csumup(cs, icmp6 + 1, len);
-  cs = csumup(cs, ip6->src, 16);
-  cs = csumup(cs, ip6->dst, 16);
-  cs += (uint32_t) (58 + sizeof(*icmp6) + len);
-  return csumfin(cs);
-}
-
 static void create_icmp6_dat(struct eth *e, struct ipp *ipp, uint8_t type,
                            uint8_t code, uint8_t *payload, size_t payload_len) {
-  struct icmp6 icmp6;
   struct ip6 *ip6 = ipp->ip6;
-  memset(&icmp6, 0, sizeof(icmp6));
-  icmp6.type = type;
-  icmp6.code = code;
-  memcpy(s_driver_data.buf, e, sizeof(*e));
-  ip6->plen = mg_htons((uint16_t) (sizeof(icmp6) + payload_len));
-  memcpy(s_driver_data.buf + sizeof(*e), ip6, sizeof(*ip6));
-  memcpy(s_driver_data.buf + sizeof(*e) + sizeof(*ip6), &icmp6, sizeof(icmp6));
+  struct icmp6 i6, *icmp6 = (struct icmp6 *)(s_driver_data.buf + sizeof(*e) + sizeof(*ip6));
+  memset(&i6, 0, sizeof(i6));
+  i6.type = type;
+  i6.code = code;
   if (payload != NULL) 
-    memcpy(s_driver_data.buf + sizeof(*e) + sizeof(*ip6) + sizeof(icmp6), payload, payload_len);
-  s_driver_data.len = sizeof(*e) + sizeof(*ip6) + sizeof(icmp6) + payload_len;
-  icmp6.csum = icmp6csum((struct ip6 *)(s_driver_data.buf + sizeof(*e)), payload_len);
+    memcpy(s_driver_data.buf + sizeof(*e) + sizeof(*ip6) + sizeof(*icmp6), payload, payload_len);
+  ip6->plen = mg_htons((uint16_t) (sizeof(*icmp6) + payload_len));
+  memcpy(s_driver_data.buf, e, sizeof(*e));
+  memcpy(s_driver_data.buf + sizeof(*e), ip6, sizeof(*ip6));
+  memcpy(icmp6, &i6, sizeof(i6));
+  icmp6->csum = p6csum(ip6, icmp6, sizeof (*icmp6) + payload_len);
+  s_driver_data.len = sizeof(*e) + sizeof(*ip6) + sizeof(*icmp6) + payload_len;
   if (s_driver_data.len < 64) s_driver_data.len = 64;  // add padding if needed
 }
 
@@ -1301,7 +1229,7 @@ static void test_icmp6_basics(void) {
   ASSERT(i->plen == mg_htons(sizeof(*icmp6) + 0));
   ASSERT(icmp6->type == 129);  // Echo Reply
   ASSERT(icmp6->code == 0);
-  ASSERT(icmp6csum(i, 0) == 0);
+  ASSERT(icmp6csum_ok(i, icmp6));
   
   create_icmp6_dat(&e, &ipp, 128, 0, NULL, 69); // Echo Request
   mg_mgr_poll(&mgr, 0);  // make sure we clean former stuff in buffer
@@ -1311,7 +1239,7 @@ static void test_icmp6_basics(void) {
   ASSERT(i->plen == mg_htons(sizeof(*icmp6) + 69));
   ASSERT(icmp6->type == 129);  // Echo Reply
   ASSERT(icmp6->code == 0);
-  ASSERT(icmp6csum(i, 69) == 0);
+  ASSERT(icmp6csum_ok(i, icmp6));
 
   // Neighbor Solicitation
   memset(payload, 0, sizeof(payload));
