@@ -15037,31 +15037,37 @@ long mg_tls_send(struct mg_connection *c, const void *buf, size_t len) {
 }
 
 long mg_tls_recv(struct mg_connection *c, void *buf, size_t len) {
-  int r = 0;
   struct tls_data *tls = (struct tls_data *) c->tls;
-  unsigned char *recv_buf;
-  size_t minlen;
+  long res = 0;
 
-  r = mg_tls_recv_record(c);
-  if (r < 0) {
-    return r;
+  while (buf != NULL && len > 0) {
+    if (tls->recv_len == 0) {
+      int r = mg_tls_recv_record(c);
+      if (r < 0) {
+        if (res == 0) res = r;
+        break;
+      }
+      if (tls->content_type != MG_TLS_APP_DATA) {
+        tls->recv_len = 0;
+        mg_tls_drop_record(c);
+        continue;
+      }
+    }
+    {
+      uint8_t *recv_buf = &c->rtls.buf[tls->recv_offset];
+      size_t n = len < tls->recv_len ? len : tls->recv_len;
+      memmove(buf, recv_buf, n);
+      tls->recv_offset += n;
+      tls->recv_len -= n;
+      res += (long) n;
+      buf = (char *) buf + n;
+      len -= n;
+      if (tls->recv_len == 0) {
+        mg_tls_drop_record(c);
+      }
+    }
   }
-  recv_buf = &c->rtls.buf[tls->recv_offset];
-
-  if (tls->content_type != MG_TLS_APP_DATA) {
-    tls->recv_len = 0;
-    mg_tls_drop_record(c);
-    return MG_IO_WAIT;
-  }
-  if (buf == NULL || len == 0) return 0L;
-  minlen = len < tls->recv_len ? len : tls->recv_len;
-  memmove(buf, recv_buf, minlen);
-  tls->recv_offset += minlen;
-  tls->recv_len -= minlen;
-  if (tls->recv_len == 0) {
-    mg_tls_drop_record(c);
-  }
-  return (long) minlen;
+  return res;
 }
 
 size_t mg_tls_pending(struct mg_connection *c) {
