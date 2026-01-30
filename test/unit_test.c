@@ -1466,7 +1466,7 @@ static void test_tls(void) {
                "%s",
                bd.len, bd.buf) == 200);
   ASSERT(cmpbody(buf, bd.buf) == 0);
-#if MG_TLS == MG_TLS_BUILTIN && defined(__linux__)
+#if MG_TLS == MG_TLS_BUILTIN && defined(__linux__) && MG_ENABLE_CHACHA20  // skip for non-CHACHA tests
   // fire patched server, test multiple TLS records per TCP segment handling
   // skip other TLS stacks to avoid "bad client hello", we are 1.3 only
   if (access("tls_multirec/server", X_OK) == 0) {
