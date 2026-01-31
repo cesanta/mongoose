@@ -198,6 +198,10 @@ We take security seriously:
   have specific security requirements and run independent security audits,
   of which we get notified and in case of any issue, act similar to (3).
 
+## How to report security vulnerability
+
+Please send an email to support at mongoose dot ws, with the full information.
+Do NOT create a github issue.
 
 ## Articles
 
