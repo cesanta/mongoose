@@ -256,6 +256,7 @@ mongoose.h: $(HDRS) Makefile
 
 clean: clean_tutorials clean_tutorials_embedded
 	rm -rf $(PROG) *.exe *.o *.dSYM *_test ut fuzzer *.gcov *.gcno *.gcda *.obj *.exe *.ilk *.pdb slow-unit* _CL_* infer-out data.txt crash-* packed_fs.c pack
+	$(MAKE) -C tls_multirec $@
 	#find tutorials -maxdepth 3 -name zephyr -prune -o -name Makefile -print | xargs dirname | xargs -n1 make clean -C
 
 

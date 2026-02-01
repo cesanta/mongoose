@@ -6,4 +6,4 @@ server: main.c patched_mongoose.c mongoose.h Makefile
 	$(CC) main.c patched_mongoose.c $(CFLAGS) $(CFLAGS_MONGOOSE) $(CFLAGS_EXTRA) -o $@
 
 clean:
-	rm -f server
+	rm -rf server *.exe *.o *.dSYM
