@@ -5,6 +5,8 @@
 [![Code Coverage](https://codecov.io/gh/cesanta/mongoose/branch/master/graph/badge.svg)](https://codecov.io/gh/cesanta/mongoose)
 [![Fuzzing Status](https://oss-fuzz-build-logs.storage.googleapis.com/badges/mongoose.svg)](https://issues.oss-fuzz.com/issues?sort=-opened&can=1&q=proj:mongoose)
 
+<img src="https://mongoose.ws/images/logo.svg" width="24" height="24" align="left" style="float:left;" />
+
 Mongoose is a network library for C/C++.  It provides event-driven non-blocking
 APIs for TCP, UDP, HTTP, WebSocket, MQTT, and other protocols.  It is designed
 for connecting devices and bringing them online. On the market since 2004, used
