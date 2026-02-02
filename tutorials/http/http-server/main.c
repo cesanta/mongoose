@@ -154,6 +154,7 @@ int main(int argc, char *argv[]) {
   // Initialise stuff
   signal(SIGINT, signal_handler);
   signal(SIGTERM, signal_handler);
+  setvbuf(stdout, NULL, _IONBF, 0);  // Switch off output buffering
   mg_log_set(s_debug_level);
   mg_mgr_init(&mgr);
   if ((c = mg_http_listen(&mgr, s_listening_addr, cb, NULL)) == NULL) {
