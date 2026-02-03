@@ -14272,6 +14272,7 @@ static int mg_tls_recv_cert_verify(struct mg_connection *c) {
       // Extract certificate signature and verify it using pubkey and sighash
       uint8_t sig[64];
       struct mg_der_tlv seq, r, s;
+      memset(sig, 0, 64);
       if (mg_der_to_tlv(sigbuf, siglen, &seq) < 0) {
         mg_error(c, "verification message is not an ASN.1 DER sequence");
         return -1;
@@ -14288,8 +14289,9 @@ static int mg_tls_recv_cert_verify(struct mg_connection *c) {
       if (r.len > 32) r.value = r.value + (r.len - 32), r.len = 32;
       if (s.len > 32) s.value = s.value + (s.len - 32), s.len = 32;
 
-      memmove(sig, r.value, r.len);
-      memmove(sig + 32, s.value, s.len);
+      // r or s may be shorter than 32 bytes, "right-justify" (network order)
+      memmove(sig + (32 - r.len), r.value, r.len);
+      memmove(sig + 32 + (32 - s.len), s.value, s.len);
 
       if (mg_uecc_verify(tls->pubkey, tls->sighash, sizeof(tls->sighash), sig,
                          mg_uecc_secp256r1()) != 1) {
