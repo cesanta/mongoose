@@ -7,9 +7,7 @@ CFLAGS = -W -Wall -Wextra -g -I.  # Build options
 
 # Mongoose build options. See https://mongoose.ws/documentation/#build-options
 CFLAGS_MONGOOSE += -DMG_ENABLE_LINES=1
-CFLAGS_MONGOOSE += -DMG_TLS=MG_TLS_BUILTIN
-#CFLAGS_MONGOOSE += -DMG_TLS=MG_TLS_OPENSSL -L/opt/homebrew/opt/openssl/lib -I/opt/homebrew/opt/openssl/include -lssl -lcrypto
-#CFLAGS_MONGOOSE += -DMG_TLS=MG_TLS_MBED -L/opt/homebrew/opt/mbedtls/lib -I/opt/homebrew/opt/mbedtls/include -lmbedtls -lmbedcrypto -lmbedx509
+CFLAGS_EXTRA ?= -DMG_TLS=MG_TLS_BUILTIN
 
 ifeq ($(OS),Windows_NT)   # Windows settings. Assume MinGW compiler. To use VC: make CC=cl CFLAGS=/MD OUT=/Feprog.exe
   PROG ?= example.exe           # Use .exe suffix for the binary
