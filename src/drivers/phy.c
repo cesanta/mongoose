@@ -1,7 +1,7 @@
 #include "phy.h"
 
 enum {                  // ID1  ID2
-  MG_PHY_KSZ8x = 0x22,  // 0022 1561 - KSZ8081RNB
+  MG_PHY_KSZ8x = 0x22,  // 0022 156x - KSZ8081RNB, KSZ8091RNB
   MG_PHY_DP83x = 0x2000,
   MG_PHY_DP83867 = 0xa231,  // 2000 a231 - TI DP83867I
   MG_PHY_DP83825 = 0xa140,  // 2000 a140 - TI DP83825I

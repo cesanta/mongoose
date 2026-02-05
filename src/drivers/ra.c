@@ -160,7 +160,7 @@ static bool mg_tcpip_driver_ra_init(struct mg_tcpip_if *ifp) {
 
   MG_DEBUG(("PHY addr: %d, smispin: %d", d->phy_addr, s_smispin));
   struct mg_phy phy = {raeth_read_phy, raeth_write_phy};
-  mg_phy_init(&phy, d->phy_addr, 0);  // MAC clocks PHY
+  mg_phy_init(&phy, d->phy_addr, MG_PHY_CLOCKS_MAC);
 
   // Select RMII mode,
   ETHERC->ECMR = MG_BIT(2) | MG_BIT(1);  // 100M, Full-duplex, CRC
