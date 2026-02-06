@@ -208,47 +208,59 @@ size_t mg_mqtt_next_prop(struct mg_mqtt_message *msg, struct mg_mqtt_prop *prop,
   size_t new_pos = ofs, len;
   prop->id = i[0];
 
-  if (ofs >= msg->dgram.len || ofs >= msg->props_start + msg->props_size)
+  if (ofs >= msg->dgram.len || ofs >= msg->props_start + msg->props_size || (i + 1) >= end)
     return 0;
   i++, new_pos++;
 
   switch (mqtt_prop_type_by_id(prop->id)) {
     case MQTT_PROP_TYPE_STRING_PAIR:
+      if (i + 2 >= end) return 0;
       prop->key.len = (uint16_t) ((((uint16_t) i[0]) << 8) | i[1]);
       prop->key.buf = (char *) i + 2;
       i += 2 + prop->key.len;
+      if (i + 2 >= end) return 0;
       prop->val.len = (uint16_t) ((((uint16_t) i[0]) << 8) | i[1]);
       prop->val.buf = (char *) i + 2;
+      if (i + 2 + prop->val.len > end) return 0;
       new_pos += 2 * sizeof(uint16_t) + prop->val.len + prop->key.len;
       break;
     case MQTT_PROP_TYPE_BYTE:
+      if (i + 1 > end) return 0;
       prop->iv = (uint8_t) i[0];
       new_pos++;
       break;
     case MQTT_PROP_TYPE_SHORT:
+      if (i + 2 > end) return 0;
       prop->iv = (uint16_t) ((((uint16_t) i[0]) << 8) | i[1]);
       new_pos += sizeof(uint16_t);
       break;
     case MQTT_PROP_TYPE_INT:
+      if (i + 4 > end) return 0;
       prop->iv = ((uint32_t) i[0] << 24) | ((uint32_t) i[1] << 16) |
                  ((uint32_t) i[2] << 8) | i[3];
       new_pos += sizeof(uint32_t);
       break;
     case MQTT_PROP_TYPE_STRING:
+      if (i + 2 >= end) return 0;
       prop->val.len = (uint16_t) ((((uint16_t) i[0]) << 8) | i[1]);
       prop->val.buf = (char *) i + 2;
+      if (i + 2 + prop->val.len > end) return 0;
       new_pos += 2 + prop->val.len;
       break;
     case MQTT_PROP_TYPE_BINARY_DATA:
+      if (i + 2 > end) return 0;
       prop->val.len = (uint16_t) ((((uint16_t) i[0]) << 8) | i[1]);
       prop->val.buf = (char *) i + 2;
       new_pos += 2 + prop->val.len;
       break;
     case MQTT_PROP_TYPE_VARIABLE_INT:
       len = decode_varint(i, (size_t) (end - i), (size_t *) &prop->iv);
-      new_pos = (!len) ? 0 : new_pos + len;
+      if (i + len > end) return 0;
+      new_pos = (len == 0) ? 0 : new_pos + len;
       break;
-    default: new_pos = 0;
+    default:
+      new_pos = 0;
+      break;
   }
 
   return new_pos;

@@ -62,6 +62,14 @@ int LLVMFuzzerTestOneInput(const uint8_t *data, size_t size) {
     mg_crc32(0, mm.topic.buf, mm.topic.len);
     mg_crc32(0, mm.data.buf, mm.data.len);
     mg_crc32(0, mm.dgram.buf, mm.dgram.len);
+    {
+      struct mg_mqtt_prop prop;
+      size_t ofs = 0;
+      while ((ofs = mg_mqtt_next_prop(&mm, &prop, ofs)) > 0) {
+          mg_crc32(0, prop.key.buf, prop.key.len);
+          mg_crc32(0, prop.val.buf, prop.val.len);
+      }
+    }
   }
   mg_mqtt_parse(NULL, 0, 5, &mm);
 
