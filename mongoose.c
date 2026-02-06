@@ -24735,7 +24735,7 @@ bool __attribute__((weak)) mg_wifi_ap_stop(void) {
 
 
 enum {                  // ID1  ID2
-  MG_PHY_KSZ8x = 0x22,  // 0022 1561 - KSZ8081RNB
+  MG_PHY_KSZ8x = 0x22,  // 0022 156x - KSZ8081RNB, KSZ8091RNB
   MG_PHY_DP83x = 0x2000,
   MG_PHY_DP83867 = 0xa231,  // 2000 a231 - TI DP83867I
   MG_PHY_DP83825 = 0xa140,  // 2000 a140 - TI DP83825I
@@ -25594,7 +25594,7 @@ static bool mg_tcpip_driver_ra_init(struct mg_tcpip_if *ifp) {
 
   MG_DEBUG(("PHY addr: %d, smispin: %d", d->phy_addr, s_smispin));
   struct mg_phy phy = {raeth_read_phy, raeth_write_phy};
-  mg_phy_init(&phy, d->phy_addr, 0);  // MAC clocks PHY
+  mg_phy_init(&phy, d->phy_addr, MG_PHY_CLOCKS_MAC);
 
   // Select RMII mode,
   ETHERC->ECMR = MG_BIT(2) | MG_BIT(1);  // 100M, Full-duplex, CRC
