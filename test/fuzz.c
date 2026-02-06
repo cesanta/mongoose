@@ -66,7 +66,9 @@ int LLVMFuzzerTestOneInput(const uint8_t *data, size_t size) {
       struct mg_mqtt_prop prop;
       size_t ofs = 0;
       while ((ofs = mg_mqtt_next_prop(&mm, &prop, ofs)) > 0) {
+        if (prop.id == MQTT_PROP_TYPE_STRING_PAIR)
           mg_crc32(0, prop.key.buf, prop.key.len);
+        if (prop.id == MQTT_PROP_TYPE_STRING_PAIR || prop.id == MQTT_PROP_TYPE_STRING || prop.id == MQTT_PROP_TYPE_BINARY_DATA)
           mg_crc32(0, prop.val.buf, prop.val.len);
       }
     }
