@@ -4111,10 +4111,12 @@ size_t mg_mqtt_next_prop(struct mg_mqtt_message *msg, struct mg_mqtt_prop *prop,
   uint8_t *i = (uint8_t *) msg->dgram.buf + msg->props_start + ofs;
   uint8_t *end = (uint8_t *) msg->dgram.buf + msg->dgram.len;
   size_t new_pos = ofs, len;
-  prop->id = i[0];
 
   if (ofs >= msg->dgram.len || ofs >= msg->props_start + msg->props_size || (i + 1) >= end)
     return 0;
+
+  memset(prop, 0, sizeof(struct mg_mqtt_prop));
+  prop->id = i[0];
   i++, new_pos++;
 
   switch (mqtt_prop_type_by_id(prop->id)) {
@@ -4126,21 +4128,21 @@ size_t mg_mqtt_next_prop(struct mg_mqtt_message *msg, struct mg_mqtt_prop *prop,
       if (i + 2 >= end) return 0;
       prop->val.len = (uint16_t) ((((uint16_t) i[0]) << 8) | i[1]);
       prop->val.buf = (char *) i + 2;
-      if (i + 2 + prop->val.len > end) return 0;
+      if (i + 2 + prop->val.len >= end) return 0;
       new_pos += 2 * sizeof(uint16_t) + prop->val.len + prop->key.len;
       break;
     case MQTT_PROP_TYPE_BYTE:
-      if (i + 1 > end) return 0;
+      if (i + 1 >= end) return 0;
       prop->iv = (uint8_t) i[0];
       new_pos++;
       break;
     case MQTT_PROP_TYPE_SHORT:
-      if (i + 2 > end) return 0;
+      if (i + 2 >= end) return 0;
       prop->iv = (uint16_t) ((((uint16_t) i[0]) << 8) | i[1]);
       new_pos += sizeof(uint16_t);
       break;
     case MQTT_PROP_TYPE_INT:
-      if (i + 4 > end) return 0;
+      if (i + 4 >= end) return 0;
       prop->iv = ((uint32_t) i[0] << 24) | ((uint32_t) i[1] << 16) |
                  ((uint32_t) i[2] << 8) | i[3];
       new_pos += sizeof(uint32_t);
@@ -4149,18 +4151,19 @@ size_t mg_mqtt_next_prop(struct mg_mqtt_message *msg, struct mg_mqtt_prop *prop,
       if (i + 2 >= end) return 0;
       prop->val.len = (uint16_t) ((((uint16_t) i[0]) << 8) | i[1]);
       prop->val.buf = (char *) i + 2;
-      if (i + 2 + prop->val.len > end) return 0;
+      if (i + 2 + prop->val.len >= end) return 0;
       new_pos += 2 + prop->val.len;
       break;
     case MQTT_PROP_TYPE_BINARY_DATA:
-      if (i + 2 > end) return 0;
+      if (i + 2 >= end) return 0;
       prop->val.len = (uint16_t) ((((uint16_t) i[0]) << 8) | i[1]);
       prop->val.buf = (char *) i + 2;
+      if (i + 2 + prop->val.len >= end) return 0;
       new_pos += 2 + prop->val.len;
       break;
     case MQTT_PROP_TYPE_VARIABLE_INT:
       len = decode_varint(i, (size_t) (end - i), (size_t *) &prop->iv);
-      if (i + len > end) return 0;
+      if (i + len >= end) return 0;
       new_pos = (len == 0) ? 0 : new_pos + len;
       break;
     default:
