@@ -52,8 +52,13 @@ static void http_ev_handler(struct mg_connection *c, int ev, void *ev_data) {
   if (ev == MG_EV_HTTP_MSG) {
     struct mg_http_message *hm = (struct mg_http_message *) ev_data;
     char buf[256];
-    mg_snprintf(buf, sizeof(buf), "Location: %s%.*s\r\n", s_https_addr,
-                hm->uri.len, hm->uri.buf);
+    mg_snprintf(buf, sizeof(buf), "Location: https://%M:%u%.*s\r\n",
+                mg_print_ip, &c->loc, mg_url_port(s_https_addr), hm->uri.len,
+                hm->uri.buf);
+    // If you want to redirect to a name, you must provide a redirection URL:
+    // - static const char *s_https_redirect_addr = "https://yourname:port"
+    // - mg_snprintf(buf, sizeof(buf), "Location: %s%.*s\r\n",
+    //               s_https_redirect_addr, hm->uri.len, hm->uri.buf);
     mg_http_reply(c, 302, buf, "%s", buf);  // 302 redirect
   }
 }
