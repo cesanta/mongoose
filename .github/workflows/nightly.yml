@@ -150,7 +150,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        ssl: ["", BUILTIN, MBEDTLS, OPENSSL] # , WOLFSSL] # see issue#2821
+        ssl: ["", BUILTIN, MBEDTLS, OPENSSL, WOLFSSL]
         select: [-DMG_ENABLE_POLL=0, -DMG_ENABLE_POLL=1]
         exclude:
         - ssl: MBEDTLS
@@ -159,8 +159,8 @@ jobs:
           select: -DMG_ENABLE_POLL=1
         - ssl: OPENSSL
           select: -DMG_ENABLE_POLL=0
-        #- ssl: WOLFSSL
-        #  select: -DMG_ENABLE_POLL=0
+        - ssl: WOLFSSL
+          select: -DMG_ENABLE_POLL=0
     name: macos SSL=${{ matrix.ssl }} TFLAGS=${{ matrix.select }}
     env:
       SSL: ${{ matrix.ssl }}
