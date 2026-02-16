@@ -9,38 +9,14 @@ static const char *s_root_dir = ".";
 static const char *s_listening_addr = "http://0.0.0.0:8000";
 static const char *s_enable_hexdump = "no";
 static const char *s_ssi_pattern = "#.html";
-static const char *s_upload_dir = NULL;  // File uploads disabled by default
+static const char *s_upload_dir = NULL;     // File uploads disabled by default
+static const char *s_ca_path = NULL;        // TLS CA file. Enables mutual TLS
+static const char *s_crt_path = "crt.pem";  // TLS cert file
+static const char *s_key_path = "key.pem";  // TLS key file
 
-// Self signed certificates, see
+// For self signed certificates, see
 // https://github.com/cesanta/mongoose/blob/master/test/certs/generate.sh
-#ifdef TLS_TWOWAY
-static const char *s_tls_ca =
-    "-----BEGIN CERTIFICATE-----\n"
-    "MIIBFTCBvAIJAMNTFtpfcq8NMAoGCCqGSM49BAMCMBMxETAPBgNVBAMMCE1vbmdv\n"
-    "b3NlMB4XDTI0MDUwNzE0MzczNloXDTM0MDUwNTE0MzczNlowEzERMA8GA1UEAwwI\n"
-    "TW9uZ29vc2UwWTATBgcqhkjOPQIBBggqhkjOPQMBBwNCAASuP+86T/rOWnGpEVhl\n"
-    "fxYZ+pjMbCmDZ+vdnP0rjoxudwRMRQCv5slRlDK7Lxue761sdvqxWr0Ma6TFGTNg\n"
-    "epsRMAoGCCqGSM49BAMCA0gAMEUCIQCwb2CxuAKm51s81S6BIoy1IcandXSohnqs\n"
-    "us64BAA7QgIgGGtUrpkgFSS0oPBlCUG6YPHFVw42vTfpTC0ySwAS0M4=\n"
-    "-----END CERTIFICATE-----\n";
-#endif
-static const char *s_tls_cert =
-    "-----BEGIN CERTIFICATE-----\n"
-    "MIIBMTCB2aADAgECAgkAluqkgeuV/zUwCgYIKoZIzj0EAwIwEzERMA8GA1UEAwwI\n"
-    "TW9uZ29vc2UwHhcNMjQwNTA3MTQzNzM2WhcNMzQwNTA1MTQzNzM2WjARMQ8wDQYD\n"
-    "VQQDDAZzZXJ2ZXIwWTATBgcqhkjOPQIBBggqhkjOPQMBBwNCAASo3oEiG+BuTt5y\n"
-    "ZRyfwNr0C+SP+4M0RG2pYkb2v+ivbpfi72NHkmXiF/kbHXtgmSrn/PeTqiA8M+mg\n"
-    "BhYjDX+zoxgwFjAUBgNVHREEDTALgglsb2NhbGhvc3QwCgYIKoZIzj0EAwIDRwAw\n"
-    "RAIgTXW9MITQSwzqbNTxUUdt9DcB+8pPUTbWZpiXcA26GMYCIBiYw+DSFMLHmkHF\n"
-    "+5U3NXW3gVCLN9ntD5DAx8LTG8sB\n"
-    "-----END CERTIFICATE-----\n";
-
-static const char *s_tls_key =
-    "-----BEGIN EC PRIVATE KEY-----\n"
-    "MHcCAQEEIAVdo8UAScxG7jiuNY2UZESNX/KPH8qJ0u0gOMMsAzYWoAoGCCqGSM49\n"
-    "AwEHoUQDQgAEqN6BIhvgbk7ecmUcn8Da9Avkj/uDNERtqWJG9r/or26X4u9jR5Jl\n"
-    "4hf5Gx17YJkq5/z3k6ogPDPpoAYWIw1/sw==\n"
-    "-----END EC PRIVATE KEY-----\n";
+static struct mg_str s_ca, s_crt, s_key;  // Initialised in main
 
 // Handle interrupts, like Ctrl-C
 static int s_signo;
@@ -54,11 +30,9 @@ static void cb(struct mg_connection *c, int ev, void *ev_data) {
   if (ev == MG_EV_ACCEPT && c->is_tls) {
     struct mg_tls_opts opts;
     memset(&opts, 0, sizeof(opts));
-#ifdef TLS_TWOWAY
-    opts.ca = mg_str(s_tls_ca);
-#endif
-    opts.cert = mg_str(s_tls_cert);
-    opts.key = mg_str(s_tls_key);
+    opts.cert = s_crt;
+    opts.key = s_key;
+    opts.ca = s_ca;
     mg_tls_init(c, &opts);
   }
   if (ev == MG_EV_HTTP_MSG) {
@@ -143,6 +117,11 @@ int main(int argc, char *argv[]) {
       usage(argv[0]);
     }
   }
+
+  // Load certificates from files
+  s_ca = mg_file_read(&mg_fs_posix, s_ca_path);
+  s_crt = mg_file_read(&mg_fs_posix, s_crt_path);
+  s_key = mg_file_read(&mg_fs_posix, s_key_path);
 
   // Root directory must not contain double dots. Make it absolute
   // Do the conversion only if the root dir spec does not contain overrides
