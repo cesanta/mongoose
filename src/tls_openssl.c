@@ -28,6 +28,7 @@ static int mg_tls_err(struct mg_connection *c, struct mg_tls *tls, int res) {
   return err;
 }
 
+#if MG_TLS != MG_TLS_WOLFSSL
 static STACK_OF(X509_INFO) * load_ca_certs(struct mg_str ca) {
   BIO *bio = BIO_new_mem_buf(ca.buf, (int) ca.len);
   STACK_OF(X509_INFO) *certs =
@@ -47,6 +48,7 @@ static bool add_ca_certs(SSL_CTX *ctx, STACK_OF(X509_INFO) * certs) {
   }
   return true;
 }
+#endif
 
 static EVP_PKEY *load_key(struct mg_str s) {
   BIO *bio = BIO_new_mem_buf(s.buf, (int) (long) s.len);
@@ -171,9 +173,21 @@ void mg_tls_init(struct mg_connection *c, const struct mg_tls_opts *opts) {
     SSL_set_verify(tls->ssl, SSL_VERIFY_NONE, NULL);
   }
 #endif
+
   if (opts->ca.buf != NULL && opts->ca.buf[0] != '\0') {
     SSL_set_verify(tls->ssl, SSL_VERIFY_PEER | SSL_VERIFY_FAIL_IF_NO_PEER_CERT,
                    NULL);
+#if MG_TLS == MG_TLS_WOLFSSL
+    extern int wolfSSL_CTX_load_verify_buffer(SSL_CTX *, const unsigned char *,
+                                              long, int);
+    rc = wolfSSL_CTX_load_verify_buffer(tls->ctx,
+                                        (const unsigned char *) opts->ca.buf,
+                                        (long) opts->ca.len, SSL_FILETYPE_PEM);
+    if (rc != 1) {
+      mg_error(c, "CA err");
+      goto fail;
+    }
+#else
     STACK_OF(X509_INFO) *certs = load_ca_certs(opts->ca);
     rc = add_ca_certs(tls->ctx, certs);
     sk_X509_INFO_pop_free(certs, X509_INFO_free);
@@ -181,7 +195,9 @@ void mg_tls_init(struct mg_connection *c, const struct mg_tls_opts *opts) {
       mg_error(c, "CA err");
       goto fail;
     }
+#endif
   }
+
   if (opts->cert.buf != NULL && opts->cert.buf[0] != '\0') {
     X509 *cert = load_cert(opts->cert);
     rc = cert == NULL ? 0 : SSL_use_certificate(tls->ssl, cert);
