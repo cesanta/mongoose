@@ -9,14 +9,14 @@ static const char *s_root_dir = ".";
 static const char *s_listening_addr = "http://0.0.0.0:8000";
 static const char *s_enable_hexdump = "no";
 static const char *s_ssi_pattern = "#.html";
-static const char *s_upload_dir = NULL;     // File uploads disabled by default
-static const char *s_ca_path = NULL;        // TLS CA file. Enables mutual TLS
-static const char *s_crt_path = "crt.pem";  // TLS cert file
-static const char *s_key_path = "key.pem";  // TLS key file
+static const char *s_upload_dir = NULL;  // File uploads disabled by default
 
-// For self signed certificates, see
+// TLS certificates. For self signed certificates, see
 // https://github.com/cesanta/mongoose/blob/master/test/certs/generate.sh
-static struct mg_str s_ca, s_crt, s_key;  // Initialised in main
+static const char *s_ca_path = NULL;  // TLS CA file. Enables mutual TLS
+static const char *s_crt_path = "certs/server.crt";  // TLS cert file
+static const char *s_key_path = "certs/server.key";  // TLS key file
+static struct mg_str s_ca, s_crt, s_key;             // Initialised in main
 
 // Handle interrupts, like Ctrl-C
 static int s_signo;
@@ -122,6 +122,7 @@ int main(int argc, char *argv[]) {
   s_ca = mg_file_read(&mg_fs_posix, s_ca_path);
   s_crt = mg_file_read(&mg_fs_posix, s_crt_path);
   s_key = mg_file_read(&mg_fs_posix, s_key_path);
+  if (s_crt.len == 0 || s_key.len == 0) MG_ERROR(("TLS cert+key not loaded"));
 
   // Root directory must not contain double dots. Make it absolute
   // Do the conversion only if the root dir spec does not contain overrides
