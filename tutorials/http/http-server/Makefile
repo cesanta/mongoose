@@ -7,15 +7,16 @@ CFLAGS = -W -Wall -Wextra -g -I.  # Build options
 
 # Mongoose build options. See https://mongoose.ws/documentation/#build-options
 CFLAGS_MONGOOSE += -DMG_HTTP_DIRLIST_TIME_FMT="%Y/%m/%d %H:%M:%S"
-CFLAGS_MONGOOSE += -DMG_ENABLE_LINES=1 -DMG_ENABLE_IPV6=1 -DMG_ENABLE_SSI=1
-CFLAGS_EXTRA ?= -DMG_TLS=MG_TLS_BUILTIN
+CFLAGS_MONGOOSE += -DMG_ENABLE_LINES=1
+CFLAGS_MONGOOSE += -DMG_ENABLE_SSI=1
+CFLAGS_MONGOOSE += -DMG_ENABLE_IPV6=1
+CFLAGS_MONGOOSE += -DMG_TLS=MG_TLS_BUILTIN
 
-ifeq ($(OS),Windows_NT)   # Windows settings. Assume MinGW compiler. To use VC: make CC=cl CFLAGS=/MD OUT=/Feprog.exe
+ifeq ($(OS),Windows_NT)   # Windows settings. Assume MinGW compiler
   PROG ?= example.exe           # Use .exe suffix for the binary
   CC = gcc                      # Use MinGW gcc compiler
   CFLAGS += -lws2_32 -lbcrypt   # Link against Winsock library
   DELETE = cmd /C del /Q /F /S  # Command prompt command to delete files
-  OUT ?= -o $(PROG)             # Build output
 endif
 
 all: $(PROG)              # Default target. Build and run program
@@ -24,8 +25,10 @@ all: $(PROG)              # Default target. Build and run program
 $(PROG): $(SOURCES)       # Build program from sources
 	$(CC) $(SOURCES) $(CFLAGS) $(CFLAGS_MONGOOSE) $(CFLAGS_EXTRA) $(OUT)
 
+# To use VC: make vc98 CC="wine cl"
+vc98: CC = cl
 vc98:
-	cl $(SOURCES) -DMG_ENABLE_SSI=1 -DMG_TLS=MG_TLS_BUILTIN
+	$(CC) $(SOURCES) $(CFLAGS_MONGOOSE) -DMG_ENABLE_IPV6=0 $(CFLAGS_EXTRA) /MD /Feserver.exe
 
 clean:                    # Cleanup. Delete built program and all build artifacts
 	$(DELETE) $(PROG) *.o *.obj *.exe *.dSYM
