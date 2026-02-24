@@ -424,7 +424,21 @@ static uint8_t *build_a_record(struct mg_connection *c, uint8_t *p) {
 #if MG_ENABLE_TCPIP
   memcpy(p, &c->mgr->ifp->ip, 4), p += 4;
 #else
-  memcpy(p, c->data, 4), p += 4;
+  if (c->data[0] == 0) {
+    // Find out local IP address. Create UDP connection to google DNS
+    // and then look at our locally assigned address
+    struct sockaddr_in sin;
+    int s = socket(AF_INET, SOCK_DGRAM, 0);
+    socklen_t sl = sizeof(sin);
+    memset(&sin, 0, sizeof(sin));
+    sin.sin_family = AF_INET;
+    sin.sin_port = mg_htons(53);
+    memcpy(&sin.sin_addr, "\x08\x08\x08\x08", 4);
+    connect(s, (struct sockaddr *) &sin, sl);
+    getsockname(s, (struct sockaddr *) &sin, &sl);
+    MG_DEBUG(("%lu Setting IP to %M", c->id, mg_print_ip4, &sin.sin_addr));
+    memcpy(&sin.sin_addr, c->data, 4), p += 4;
+  }
 #endif
   return p;
 }
@@ -521,7 +535,7 @@ static void handle_mdns_record(struct mg_connection *c) {
     qh->num_questions = mg_htons(1);      // parser sanity
     mg_dns_parse_name(c->recv.buf, c->recv.len, 12, name, sizeof(name));
     name_len = (uint8_t) strlen(name);  // verify it ends in .local
-    if (strcmp(".local", &name[name_len - 6]) != 0 ||
+    if (name_len <= 6 || strcmp(".local", &name[name_len - 6]) != 0 ||
         (rr.aclass != 1 && rr.aclass != 0xff))
       return;
     name[name_len -= 6] = '\0';  // remove .local
@@ -627,7 +641,8 @@ static void handle_mdns_record(struct mg_connection *c) {
     }
     if (!req.is_unicast) mg_multicast_restore(c, (uint8_t *) &c->loc);
     mg_send(c, buf, (size_t) (p - buf));  // And send it!
-    MG_DEBUG(("mDNS %c response sent", req.is_unicast ? 'U' : 'M'));
+    MG_DEBUG(("%M > %M", mg_print_ip_port, &c->loc, mg_print_ip_port, &c->rem));
+    MG_DEBUG(("mDNS %s response sent", req.is_unicast ? "unicast" : "mcast"));
   }
 }
 
