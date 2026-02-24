@@ -15,7 +15,10 @@
 // Desired name must NOT have any dots in it, nor a domain
 #define MDNS_NAME "mongoose-device"
 #define WEB_SERVER_ADDR "http://0.0.0.0:8000"  // port is hardcoded below
-#define RESPONSE_IP "192.168.69.11"
+
+// When not using our built-in TCP/IP stack, Mongoose responds with the address
+// of the interface in which the request came in. If, for some reason, you want
+// to use some other address, fill req->addr. See: mdns-client advanced example
 
 #ifdef ADVANCED_EXAMPLE
 // A TXT record data containing JSON, if actually needed.
@@ -80,7 +83,8 @@ static void mdns_ev_handler(struct mg_connection *c, int ev, void *ev_data) {
                req->rr->atype == MG_DNS_RTYPE_TXT) {
       // Mongoose already checked the host name for us, otherwise we need to do
       // that ourselves first, then check for service name in db
-      struct mg_dnssd_record *r = (struct mg_dnssd_record *) dnssd_lookup(req->reqname);
+      struct mg_dnssd_record *r =
+          (struct mg_dnssd_record *) dnssd_lookup(req->reqname);
       if (r == NULL) return;
       req->r = r;
       req->is_resp = true;
@@ -107,17 +111,12 @@ static void http_ev_handler(struct mg_connection *c, int ev, void *ev_data) {
 int main(void) {
   struct mg_mgr mgr;
   static struct mg_connection *c;
-  uint32_t response_ip = inet_addr(RESPONSE_IP);
 
   mg_log_set(MG_LL_DEBUG);  // Set log level
   mg_mgr_init(&mgr);        // Initialise event manager
 
   c = mg_mdns_listen(&mgr, mdns_ev_handler, MDNS_NAME);
   if (c == NULL) return 1;
-  // if not using our built-in TCP/IP stack, pass the IP address you want to
-  // use as a response, this depends on your underlying TCP/IP stack and number
-  // of interfaces available
-  memcpy(c->data, &response_ip, sizeof(response_ip));
 
   mg_http_listen(&mgr, WEB_SERVER_ADDR, http_ev_handler, NULL);
 

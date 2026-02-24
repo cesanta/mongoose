@@ -3,12 +3,11 @@
 #include "net.h"
 #include "str.h"
 
-#define MG_DNS_RTYPE_A  1
-#define MG_DNS_RTYPE_PTR  12
-#define MG_DNS_RTYPE_TXT  16
-#define MG_DNS_RTYPE_AAAA  28
-#define MG_DNS_RTYPE_SRV  33
-
+#define MG_DNS_RTYPE_A 1
+#define MG_DNS_RTYPE_PTR 12
+#define MG_DNS_RTYPE_TXT 16
+#define MG_DNS_RTYPE_AAAA 28
+#define MG_DNS_RTYPE_SRV 33
 
 // Mongoose sends DNS queries that contain only one question:
 // either A (IPv4) or AAAA (IPv6) address lookup.
@@ -51,7 +50,7 @@ struct mg_mdns_req {
   struct mg_dnssd_record *r;
   struct mg_str reqname;   // requested name in RR
   struct mg_str respname;  // actual name to use in response
-  struct mg_addr addr;
+  struct mg_addr *addr;    // actual address to use in response
   bool is_listing;
   bool is_resp;
   bool is_unicast;
@@ -59,10 +58,10 @@ struct mg_mdns_req {
 
 struct mg_mdns_resp {
   struct mg_dns_rr *rr;
-// TODO(scaprile )struct mg_str srvcproto; struct mg_str txt; uint16_t port; ?
+  // TODO(scaprile )struct mg_str srvcproto; struct mg_str txt; uint16_t port; ?
   struct mg_str name;
   struct mg_addr addr;
-// TODO(scaprile); bool has_A; bool has_PTR; bool has_SRV; bool has_TXT; ?
+  // TODO(scaprile); bool has_A; bool has_PTR; bool has_SRV; bool has_TXT; ?
 };
 
 void mg_resolve(struct mg_connection *, const char *url);

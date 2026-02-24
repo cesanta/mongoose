@@ -72,15 +72,17 @@ static socklen_t tousa(struct mg_addr *a, union usa *usa) {
 
 static void tomgaddr(union usa *usa, struct mg_addr *a, bool is_ip6) {
   a->is_ip6 = is_ip6;
-  a->port = usa->sin.sin_port;
-  memcpy(&a->addr.ip, &usa->sin.sin_addr, sizeof(uint32_t));
 #if MG_ENABLE_IPV6
   if (is_ip6) {
     memcpy(a->addr.ip, &usa->sin6.sin6_addr, sizeof(a->addr.ip));
     a->port = usa->sin6.sin6_port;
     a->scope_id = (uint8_t) usa->sin6.sin6_scope_id;
-  }
+  } else
 #endif
+  {
+    a->port = usa->sin.sin_port;
+    memcpy(&a->addr.ip, &usa->sin.sin_addr, sizeof(uint32_t));
+  }
 }
 
 static void setlocaddr(MG_SOCKET_TYPE fd, struct mg_addr *addr) {
@@ -90,6 +92,29 @@ static void setlocaddr(MG_SOCKET_TYPE fd, struct mg_addr *addr) {
     tomgaddr(&usa, addr, n != sizeof(usa.sin));
   }
 }
+
+// Get the local 'addr' the stack will use to connect to 'to'
+void mg_getlocaddr(struct mg_connection *c, struct mg_addr *to, struct mg_addr *addr);
+void mg_getlocaddr(struct mg_connection *c, struct mg_addr *to, struct mg_addr *addr) {
+  union usa usa;
+  socklen_t slen;
+  MG_SOCKET_TYPE fd;
+  int rc, af = to->is_ip6 ? AF_INET6 : AF_INET;
+  fd = socket(af, SOCK_DGRAM, IPPROTO_UDP);
+  if (fd == MG_INVALID_SOCKET) {
+    mg_error(c, "socket(): %d", MG_SOCK_ERR(-1));
+    return;
+  }
+  // NOTE(): TI-RTOS NDK may require binding
+  slen = tousa(to, &usa);
+  if ((rc = connect(fd, &usa.sa, slen)) != 0) {
+    mg_error(c, "connect: %d", MG_SOCK_ERR(rc));
+    return;
+  }
+  setlocaddr(fd, addr);
+  closesocket(fd);
+}
+
 
 static void iolog(struct mg_connection *c, char *buf, long n, bool r) {
   if (n == MG_IO_WAIT) {
