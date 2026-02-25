@@ -1494,7 +1494,7 @@ static void backlog_poll(struct mg_mgr *mgr) {
 }
 
 // process options (MSS)
-static void handle_opt(struct connstate *s, struct tcp *tcp, bool ip6) {
+static bool handle_opt(struct connstate *s, struct tcp *tcp, bool ip6) {
   uint8_t *opts = (uint8_t *) (tcp + 1);
   int len = 4 * ((int) (tcp->off >> 4) - ((int) sizeof(*tcp) / 4));
   s->dmss = ip6 ? 1220 : 536;  // assume default, RFC-9293 3.7.1
@@ -1502,6 +1502,7 @@ static void handle_opt(struct connstate *s, struct tcp *tcp, bool ip6) {
     uint8_t kind = opts[0], optlen = 1;
     if (kind != 1) {         // No-Operation
       if (kind == 0) break;  // End of Option List
+      if (len < 2 || opts[1] == 0) return false; // Malformed options
       optlen = opts[1];
       if (kind == 2 && optlen == 4)  // set received MSS
         s->dmss = (uint16_t) (((uint16_t) opts[2] << 8) + opts[3]);
@@ -1510,6 +1511,7 @@ static void handle_opt(struct connstate *s, struct tcp *tcp, bool ip6) {
     opts += optlen;
     len -= optlen;
   }
+  return true;
 }
 
 static void rx_tcp(struct mg_tcpip_if *ifp, struct pkt *pkt) {
@@ -1524,7 +1526,7 @@ static void rx_tcp(struct mg_tcpip_if *ifp, struct pkt *pkt) {
   // - check clients (Group 1) and established connections (Group 3)
   if (c != NULL && c->is_connecting && pkt->tcp->flags == (TH_SYN | TH_ACK)) {
     // client got a server connection accept
-    handle_opt(s, pkt->tcp, pkt->ip6 != NULL);  // process options (MSS)
+    if (!handle_opt(s, pkt->tcp, pkt->ip6 != NULL)) return;  // process options (MSS)
     s->seq = mg_ntohl(pkt->tcp->ack), s->ack = mg_ntohl(pkt->tcp->seq) + 1;
     tx_tcp_ctrlresp(ifp, pkt, TH_ACK, pkt->tcp->ack);
     c->is_connecting = 0;  // Client connected
@@ -1558,7 +1560,7 @@ static void rx_tcp(struct mg_tcpip_if *ifp, struct pkt *pkt) {
       int key;
       uint32_t isn;
       if (pkt->tcp->sport != 0) {
-        handle_opt(&cs, pkt->tcp, pkt->ip6 != NULL);  // process options (MSS)
+        if (!handle_opt(&cs, pkt->tcp, pkt->ip6 != NULL)) return;  // process options (MSS)
         key = backlog_insert(c, pkt->tcp->sport,
                              cs.dmss);  // backlog options (MSS)
         if (key < 0) return;  // no room in backlog, discard SYN, client retries
