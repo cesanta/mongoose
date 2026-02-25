@@ -255,8 +255,12 @@ static void mg_sendnsreq(struct mg_connection *c, struct mg_str *name, int ms,
     mg_error(c, "resolve OOM");
   } else {
     struct dns_data *reqs = (struct dns_data *) c->mgr->active_dns_requests;
-    d->txnid = reqs ? (uint16_t) (reqs->txnid + 1) : 1;
-    d->next = (struct dns_data *) c->mgr->active_dns_requests;
+    uint16_t id;
+    mg_random(&id, sizeof(uint16_t));
+    // TODO(): traverse reqs and check id != reqs->txnid; repeat otherwise
+    if (reqs != NULL) id = (uint16_t) (reqs->txnid + 1); // no collision
+    d->txnid = id;
+    d->next = reqs;
     c->mgr->active_dns_requests = d;
     d->expire = mg_millis() + (uint64_t) ms;
     d->c = c;
