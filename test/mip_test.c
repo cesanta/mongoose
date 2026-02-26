@@ -41,18 +41,17 @@ struct ipp {
 static void test_csum(void) {
   uint8_t ip[20] = {0x45, 0x00, 0x00, 0x1c, 0x00, 0x00, 0x00, 0x00, 0x28, 0x11,
                     0x94, 0xcf, 0x7f, 0x00, 0x00, 0x01, 0x7f, 0x00, 0x00, 0x01};
-  uint8_t pseudo_udp_odd[53] = {0xc0, 0xa8, 0x45, 0x58, 0x08, 0x08, 0x08, 0x08, 0x00,
-                         0x11, 0x00, 0x29, 0xad, 0x67, 0x00, 0x35, 0x00, 0x29,
-                         0xaf, 0xf8, 0x00, 0x01, 0x01, 0x00, 0x00, 0x01, 0x00,
-                         0x00, 0x00, 0x00, 0x00, 0x00, 0x04, 0x74, 0x69, 0x6d,
-                         0x65, 0x06, 0x67, 0x6f, 0x6f, 0x67, 0x6c, 0x65, 0x03,
-                         0x63, 0x6f, 0x6d, 0x00, 0x00, 0x01, 0x00, 0x01};
+  uint8_t pseudo_udp_odd[53] = {
+      0xc0, 0xa8, 0x45, 0x58, 0x08, 0x08, 0x08, 0x08, 0x00, 0x11, 0x00,
+      0x29, 0xad, 0x67, 0x00, 0x35, 0x00, 0x29, 0xaf, 0xf8, 0x00, 0x01,
+      0x01, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x04,
+      0x74, 0x69, 0x6d, 0x65, 0x06, 0x67, 0x6f, 0x6f, 0x67, 0x6c, 0x65,
+      0x03, 0x63, 0x6f, 0x6d, 0x00, 0x00, 0x01, 0x00, 0x01};
 
   ASSERT(ipcsum(ip, 20) == 0);
   ASSERT(ipcsum(pseudo_udp_odd, 53) == 0);
   // UDP and TCP checksum calc funcions use the same basic calls as ipcsum()
 }
-
 
 #if !MG_ENABLE_IPV6
 #define udp6csum_ok(d, u) true
@@ -194,7 +193,7 @@ static size_t if_rx(void *buf, size_t len, struct mg_tcpip_if *ifp) {
   if (len > driver_data->len) len = driver_data->len;
   memcpy(buf, driver_data->buf, len);
   driver_data->len = 0;  // cleaning up the buffer
-  driver_data->tx_ready = false; 
+  driver_data->tx_ready = false;
   return len;
 }
 
@@ -220,7 +219,8 @@ static void create_tcp_seg(struct eth *e, struct ipp *ipp, uint32_t seq,
 #if MG_ENABLE_IPV6
   if (ipp->ip6 != NULL) {
     struct ip6 *ip = ipp->ip6;
-    struct tcp *tcp = (struct tcp *) (s_driver_data.buf + sizeof(*e) + sizeof(*ip));
+    struct tcp *tcp =
+        (struct tcp *) (s_driver_data.buf + sizeof(*e) + sizeof(*ip));
     ip->plen = mg_htons((uint16_t) (4 * (t.off >> 4) + payload_len));
     memcpy(s_driver_data.buf + sizeof(*e), ip, sizeof(*ip));
     memcpy(tcp, &t, sizeof(t));
@@ -234,10 +234,11 @@ static void create_tcp_seg(struct eth *e, struct ipp *ipp, uint32_t seq,
 #endif
   {
     struct ip *ip = ipp->ip4;
-    struct tcp *tcp = (struct tcp *) (s_driver_data.buf + sizeof(*e) + sizeof(*ip));
+    struct tcp *tcp =
+        (struct tcp *) (s_driver_data.buf + sizeof(*e) + sizeof(*ip));
     ip->len =
         mg_htons((uint16_t) (sizeof(*ip) + 4 * (t.off >> 4) + payload_len));
-    ip->csum = ipcsum(ip, sizeof(*ip)); // no options
+    ip->csum = ipcsum(ip, sizeof(*ip));  // no options
     memcpy(s_driver_data.buf + sizeof(*e), ip, sizeof(*ip));
     ip->csum = 0;
     memcpy(tcp, &t, sizeof(t));
@@ -270,12 +271,12 @@ static void init_tests(struct mg_mgr *mgr, struct eth *e, struct ipp *ipp,
   mif->driver_data = &s_driver_data;
 #if MG_ENABLE_IPV6
   if (ipp->ip6 != NULL) {
-    mif->ip6[0] = mg_htonll(0x1000000000000000);
+    mif->ip6[0] = mg_htonll(0x100000000000000);
     mif->prefix[0] = 1;
     mif->prefix_len = 64;
-    mif->gw6[0] = mg_htonll(0x1000000000000000);
+    mif->gw6[0] = mg_htonll(0x100000000000000);
     mif->gw6_ready = true;
-    mif->state = MG_TCPIP_STATE_READY;  // so DHCP stops
+    mif->state = MG_TCPIP_STATE_READY;   // so DHCP stops
     mif->state6 = MG_TCPIP_STATE_READY;  // so mg_send() works and RS stops
   } else
 #endif
@@ -283,7 +284,7 @@ static void init_tests(struct mg_mgr *mgr, struct eth *e, struct ipp *ipp,
     mif->ip = mg_htonl(0x1000000);
     mif->gw = mg_htonl(0x1000000);
     mif->gw_ready = true;
-    mif->mask = 255; // use router, to avoid firing an ARP request
+    mif->mask = 255;  // use router, to avoid firing an ARP request
     mif->state = MG_TCPIP_STATE_READY;  // so mg_send() works and DHCP stops
   }
   mg_tcpip_init(mgr, mif);
@@ -301,7 +302,7 @@ static void init_tests(struct mg_mgr *mgr, struct eth *e, struct ipp *ipp,
     ip->ver = 0x60;
     ip->next = proto;
     // must be outside of Mongoose network to avoid firing NS requests
-    ip->src[0] = mg_htonll(0x2000000000000000);
+    ip->src[0] = mg_htonll(0x200000000000000);
     ip->dst[0] = mif->ip6[0];
   } else
 #endif
@@ -364,7 +365,8 @@ static void test_tcp_basics(bool ipv6) {
   struct ip ip;
   struct ip6 ip6;
   struct ipp ipp;
-  struct tcp *t = (struct tcp *) (s_driver_data.buf + sizeof(e) + (!ipv6 ? sizeof(ip) : sizeof(ip6)));
+  struct tcp *t = (struct tcp *) (s_driver_data.buf + sizeof(e) +
+                                  (!ipv6 ? sizeof(ip) : sizeof(ip6)));
   struct ip *i = (struct ip *) (s_driver_data.buf + sizeof(e));
   struct ip6 *i6 = (struct ip6 *) (s_driver_data.buf + sizeof(e));
   uint64_t start, now;
@@ -385,13 +387,14 @@ static void test_tcp_basics(bool ipv6) {
   ASSERT(t->seq == mg_htonl(0));
   ASSERT(t->ack == mg_htonl(1235));
   if (ipv6) {
-    ASSERT(i6->src[0] == mg_htonll(0x1000000000000000) && i6->src[1] == 0 && i6->dst[0] == mg_htonll(0x2000000000000000) && i6->dst[1] == 0);
+    ASSERT(i6->src[0] == mg_htonll(0x100000000000000) && i6->src[1] == 0 &&
+           i6->dst[0] == mg_htonll(0x200000000000000) && i6->dst[1] == 0);
     ASSERT(tcp6csum_ok(i6, t));
   } else {
     ASSERT(i->src == mg_htonl(0x1000000) && i->dst == mg_htonl(0x2000000));
     ASSERT(tcpcsum_ok(i, t));
   }
-  
+
   // send SYN+ACK, expect RST
   create_tcp_seg(&e, &ipp, 1234, 4321, TH_SYN | TH_ACK, 1, 69, 0, NULL, 0);
   mg_mgr_poll(&mgr, 0);  // make sure we clean former stuff in buffer
@@ -441,7 +444,8 @@ static void test_tcp_basics(bool ipv6) {
   ASSERT(t->flags == TH_RST);
   ASSERT(t->seq == mg_htonl(4321));
   if (ipv6) {
-    ASSERT(i6->src[0] == mg_htonll(0x1000000000000000) && i6->src[1] == 0 && i6->dst[0] == mg_htonll(0x2000000000000000) && i6->dst[1] == 0);
+    ASSERT(i6->src[0] == mg_htonll(0x100000000000000) && i6->src[1] == 0 &&
+           i6->dst[0] == mg_htonll(0x200000000000000) && i6->dst[1] == 0);
   } else {
     ASSERT(i->src == mg_htonl(0x1000000) && i->dst == mg_htonl(0x2000000));
   }
@@ -479,7 +483,8 @@ static void test_tcp_basics(bool ipv6) {
   ASSERT((t->flags == TH_ACK));
   ASSERT((t->ack == mg_htonl(1001)));  // expecting 1001, dude
   if (ipv6) {
-    ASSERT(i6->src[0] == mg_htonll(0x1000000000000000) && i6->src[1] == 0 && i6->dst[0] == mg_htonll(0x2000000000000000) && i6->dst[1] == 0);
+    ASSERT(i6->src[0] == mg_htonll(0x100000000000000) && i6->src[1] == 0 &&
+           i6->dst[0] == mg_htonll(0x200000000000000) && i6->dst[1] == 0);
   } else {
     ASSERT(i->src == mg_htonl(0x1000000) && i->dst == mg_htonl(0x2000000));
   }
@@ -623,8 +628,9 @@ static void test_tcp_basics(bool ipv6) {
     mg_mgr_poll(&mgr, 0);
     now = mg_millis() - start;
   } while (now < 2 * MG_TCPIP_ACK_MS);  // keep timeout below 1s (DHCP discover)
-  //  ASSERT(now < 2 * MG_TCPIP_ACK_MS); ******** WE FAIL THIS, Mongoose does not
-  //  retransmit, FIN is not an additional element in the stream ASSERT((t->seq
+  //  ASSERT(now < 2 * MG_TCPIP_ACK_MS); ******** WE FAIL THIS, Mongoose does
+  //  not retransmit, FIN is not an additional element in the stream
+  //  ASSERT((t->seq
   //  == mg_htonl(2))); ASSERT((t->ack == mg_htonl(1001))); ASSERT(t->flags ==
   //  (TH_FIN | TH_ACK)); // Mongoose retransmits FIN
   // send FIN + ACK
@@ -687,7 +693,7 @@ static void test_tcp_basics(bool ipv6) {
     // this creates a listener we won't use
     init_tcp_tests(&mgr, &e, &ipp, &driver, &mif, tcpclosure_fn);
 
-    // must be outside of our network to avoid firing ARP requests  
+    // must be outside of our network to avoid firing ARP requests
     if (ipv6) {
       c = mg_connect(&mgr, "tcp://[200::]:1234/", client_fn, &event);
     } else {
@@ -698,17 +704,18 @@ static void test_tcp_basics(bool ipv6) {
     ASSERT((t->flags == TH_SYN));
     ASSERT(event == 255);
     if (ipv6) {
-      ASSERT(i6->src[0] == mg_htonll(0x1000000000000000) && i6->src[1] == 0 && i6->dst[0] == mg_htonll(0x2000000000000000) && i6->dst[1] == 0);
+      ASSERT(i6->src[0] == mg_htonll(0x100000000000000) && i6->src[1] == 0 &&
+             i6->dst[0] == mg_htonll(0x200000000000000) && i6->dst[1] == 0);
       ASSERT(tcp6csum_ok(i6, t));
     } else {
       ASSERT(i->src == mg_htonl(0x1000000) && i->dst == mg_htonl(0x2000000));
-    ASSERT(tcpcsum_ok(i, t));
+      ASSERT(tcpcsum_ok(i, t));
     }
 
     // invalid SYN + ACK to connecting client (after SYN...), send ACK != seq
     ackno = mg_ntohl(t->seq) + 1000;
     //  create_tcp_seg(&e, &ipp, 4321, ackno, TH_SYN | TH_ACK, 1234,
-    //  mg_ntohs(c->loc.port), 0, NULL, 0); mg_mgr_poll(&mgr, 0); 
+    //  mg_ntohs(c->loc.port), 0, NULL, 0); mg_mgr_poll(&mgr, 0);
     //  while(!received_response(&s_driver_data)) mg_mgr_poll(&mgr, 0);
     //  ASSERT((t->flags == (TH_RST | TH_ACK)));
     // ******** WE FAIL THIS, Mongoose does not validate the ACK number
@@ -999,7 +1006,7 @@ static void test_tcp_backlog(void) {
 
 static void test_tcp(bool ipv6) {
   test_tcp_basics(ipv6);
-  if(!ipv6) {
+  if (!ipv6) {
     test_tcp_backlog();
     test_tcp_retransmit();
   }
@@ -1022,7 +1029,8 @@ static void create_udp_dat(struct eth *e, struct ipp *ipp, uint16_t sport,
 #if MG_ENABLE_IPV6
   if (ipp->ip6 != NULL) {
     struct ip6 *ip = ipp->ip6;
-    struct udp *udp = (struct udp *) (s_driver_data.buf + sizeof(*e) + sizeof(*ip));
+    struct udp *udp =
+        (struct udp *) (s_driver_data.buf + sizeof(*e) + sizeof(*ip));
     ip->plen = mg_htons((uint16_t) (sizeof(u) + payload_len));
     memcpy(s_driver_data.buf + sizeof(*e), ip, sizeof(*ip));
     memcpy(udp, &u, sizeof(u));
@@ -1033,9 +1041,10 @@ static void create_udp_dat(struct eth *e, struct ipp *ipp, uint16_t sport,
 #endif
   {
     struct ip *ip = ipp->ip4;
-    struct udp *udp = (struct udp *) (s_driver_data.buf + sizeof(*e) + sizeof(*ip));
+    struct udp *udp =
+        (struct udp *) (s_driver_data.buf + sizeof(*e) + sizeof(*ip));
     ip->len = mg_htons((uint16_t) (sizeof(*ip) + sizeof(u) + payload_len));
-    ip->csum = ipcsum(ip, sizeof(*ip)); // no options
+    ip->csum = ipcsum(ip, sizeof(*ip));  // no options
     memcpy(s_driver_data.buf + sizeof(*e), ip, sizeof(*ip));
     ip->csum = 0;
     memcpy(udp, &u, sizeof(u));
@@ -1052,7 +1061,7 @@ static void init_udp_tests(struct mg_mgr *mgr, struct eth *e, struct ipp *ipp,
   init_tests(mgr, e, ipp, driver, mif, 17);  // 17 -> UDP
 #if MG_ENABLE_IPV6
   if (ipp->ip6 != NULL) {
-    mif->state = MG_TCPIP_STATE_READY;  // so DHCP stops
+    mif->state = MG_TCPIP_STATE_READY;   // so DHCP stops
     mif->state6 = MG_TCPIP_STATE_READY;  // so mg_send() works and RS stops
     mg_listen(mgr, "udp://[::]:888", f, NULL);
   } else
@@ -1070,7 +1079,8 @@ static void test_udp(bool ipv6) {
   struct ip ip;
   struct ip6 ip6;
   struct ipp ipp;
-  struct udp *u = (struct udp *) (s_driver_data.buf + sizeof(e) + (!ipv6 ? sizeof(ip) : sizeof(ip6)));
+  struct udp *u = (struct udp *) (s_driver_data.buf + sizeof(e) +
+                                  (!ipv6 ? sizeof(ip) : sizeof(ip6)));
   struct ip *i = (struct ip *) (s_driver_data.buf + sizeof(e));
   struct ip6 *i6 = (struct ip6 *) (s_driver_data.buf + sizeof(e));
   struct mg_tcpip_driver driver;
@@ -1097,7 +1107,8 @@ static void test_udp(bool ipv6) {
   ASSERT(u->len == mg_htons(sizeof(*u) + 3));
   ASSERT(*((char *) (u + 1)) == 'P');
   if (ipv6) {
-    ASSERT(i6->src[0] == mg_htonll(0x1000000000000000) && i6->src[1] == 0 && i6->dst[0] == mg_htonll(0x2000000000000000) && i6->dst[1] == 0);
+    ASSERT(i6->src[0] == mg_htonll(0x100000000000000) && i6->src[1] == 0 &&
+           i6->dst[0] == mg_htonll(0x200000000000000) && i6->dst[1] == 0);
     ASSERT(udp6csum_ok(i6, u));
   } else {
     ASSERT(i->src == mg_htonl(0x1000000) && i->dst == mg_htonl(0x2000000));
@@ -1109,9 +1120,10 @@ static void test_udp(bool ipv6) {
 }
 
 static void create_icmp_dat(struct eth *e, struct ipp *ipp, uint8_t type,
-                           uint8_t code, size_t payload_len) {
+                            uint8_t code, size_t payload_len) {
   struct ip *ip = ipp->ip4;
-  struct icmp i, *icmp = (struct icmp *)(s_driver_data.buf + sizeof(*e) + sizeof(*ip));
+  struct icmp i,
+      *icmp = (struct icmp *) (s_driver_data.buf + sizeof(*e) + sizeof(*ip));
   memset(&i, 0, sizeof(i));
   i.type = type;
   i.code = code;
@@ -1127,8 +1139,8 @@ static void create_icmp_dat(struct eth *e, struct ipp *ipp, uint8_t type,
 }
 
 static void init_icmp_tests(struct mg_mgr *mgr, struct eth *e, struct ipp *ipp,
-                           struct mg_tcpip_driver *driver,
-                           struct mg_tcpip_if *mif) {
+                            struct mg_tcpip_driver *driver,
+                            struct mg_tcpip_if *mif) {
   init_tests(mgr, e, ipp, driver, mif, 1);  // 1 -> ICMP
 #if MG_ENABLE_IPV6
   mif->state6 = MG_TCPIP_STATE_READY;  // so RS stops
@@ -1141,7 +1153,8 @@ static void test_icmp_basics(void) {
   struct eth e;
   struct ip ip;
   struct ipp ipp;
-  struct icmp *icmp = (struct icmp *) (s_driver_data.buf + sizeof(e) + sizeof(ip));
+  struct icmp *icmp =
+      (struct icmp *) (s_driver_data.buf + sizeof(e) + sizeof(ip));
   struct ip *i = (struct ip *) (s_driver_data.buf + sizeof(e));
   struct mg_tcpip_driver driver;
   struct mg_tcpip_if mif;
@@ -1150,18 +1163,18 @@ static void test_icmp_basics(void) {
   ipp.ip6 = NULL;
   init_icmp_tests(&mgr, &e, &ipp, &driver, &mif);
 
-  create_icmp_dat(&e, &ipp, 8, 0, 0); // Echo Request
+  create_icmp_dat(&e, &ipp, 8, 0, 0);  // Echo Request
   mg_mgr_poll(&mgr, 0);  // make sure we clean former stuff in buffer
   while (!received_response(&s_driver_data)) mg_mgr_poll(&mgr, 0);
   ASSERT(i->src == mg_htonl(0x1000000) && i->dst == mg_htonl(0x2000000));
   ASSERT(i->proto == 1);
   ASSERT(i->len == mg_htons(sizeof(*i) + sizeof(*icmp) + 0));
-  ASSERT(ipcsum_ok(i)); // Bonus, not tested elsewhere
+  ASSERT(ipcsum_ok(i));     // Bonus, not tested elsewhere
   ASSERT(icmp->type == 0);  // Echo Reply
   ASSERT(icmp->code == 0);
   ASSERT(icmpcsum_ok(icmp, sizeof(*icmp) + 0));
-  
-  create_icmp_dat(&e, &ipp, 8, 0, 69); // Echo Request
+
+  create_icmp_dat(&e, &ipp, 8, 0, 69);  // Echo Request
   mg_mgr_poll(&mgr, 0);  // make sure we clean former stuff in buffer
   while (!received_response(&s_driver_data)) mg_mgr_poll(&mgr, 0);
   ASSERT(i->src == mg_htonl(0x1000000) && i->dst == mg_htonl(0x2000000));
@@ -1179,29 +1192,31 @@ static void test_icmp(void) {
   test_icmp_basics();
 }
 
-
 #if MG_ENABLE_IPV6
 static void create_icmp6_dat(struct eth *e, struct ipp *ipp, uint8_t type,
-                           uint8_t code, uint8_t *payload, size_t payload_len) {
+                             uint8_t code, uint8_t *payload,
+                             size_t payload_len) {
   struct ip6 *ip6 = ipp->ip6;
-  struct icmp6 i6, *icmp6 = (struct icmp6 *)(s_driver_data.buf + sizeof(*e) + sizeof(*ip6));
+  struct icmp6 i6,
+      *icmp6 = (struct icmp6 *) (s_driver_data.buf + sizeof(*e) + sizeof(*ip6));
   memset(&i6, 0, sizeof(i6));
   i6.type = type;
   i6.code = code;
-  if (payload != NULL) 
-    memcpy(s_driver_data.buf + sizeof(*e) + sizeof(*ip6) + sizeof(*icmp6), payload, payload_len);
+  if (payload != NULL)
+    memcpy(s_driver_data.buf + sizeof(*e) + sizeof(*ip6) + sizeof(*icmp6),
+           payload, payload_len);
   ip6->plen = mg_htons((uint16_t) (sizeof(*icmp6) + payload_len));
   memcpy(s_driver_data.buf, e, sizeof(*e));
   memcpy(s_driver_data.buf + sizeof(*e), ip6, sizeof(*ip6));
   memcpy(icmp6, &i6, sizeof(i6));
-  icmp6->csum = p6csum(ip6, icmp6, sizeof (*icmp6) + payload_len);
+  icmp6->csum = p6csum(ip6, icmp6, sizeof(*icmp6) + payload_len);
   s_driver_data.len = sizeof(*e) + sizeof(*ip6) + sizeof(*icmp6) + payload_len;
   if (s_driver_data.len < 64) s_driver_data.len = 64;  // add padding if needed
 }
 
 static void init_icmp6_tests(struct mg_mgr *mgr, struct eth *e, struct ipp *ipp,
-                           struct mg_tcpip_driver *driver,
-                           struct mg_tcpip_if *mif) {
+                             struct mg_tcpip_driver *driver,
+                             struct mg_tcpip_if *mif) {
   init_tests(mgr, e, ipp, driver, mif, 58);  // 58 -> ICMPv6
 }
 
@@ -1210,31 +1225,33 @@ static void test_icmp6_basics(void) {
   struct eth e;
   struct ip6 ip6;
   struct ipp ipp;
-  struct icmp6 *icmp6 = (struct icmp6 *) (s_driver_data.buf + sizeof(e) + sizeof(ip6));
+  struct icmp6 *icmp6 =
+      (struct icmp6 *) (s_driver_data.buf + sizeof(e) + sizeof(ip6));
   struct ip6 *i = (struct ip6 *) (s_driver_data.buf + sizeof(e));
   struct mg_tcpip_driver driver;
   struct mg_tcpip_if mif;
-  uint8_t payload[28], *p = (uint8_t *)(icmp6 + 1);
-
+  uint8_t payload[28], *p = (uint8_t *) (icmp6 + 1);
 
   ipp.ip4 = NULL;
   ipp.ip6 = &ip6;
   init_icmp6_tests(&mgr, &e, &ipp, &driver, &mif);
 
-  create_icmp6_dat(&e, &ipp, 128, 0, NULL, 0); // Echo Request
+  create_icmp6_dat(&e, &ipp, 128, 0, NULL, 0);  // Echo Request
   mg_mgr_poll(&mgr, 0);  // make sure we clean former stuff in buffer
   while (!received_response(&s_driver_data)) mg_mgr_poll(&mgr, 0);
-  ASSERT(i->src[0] == mg_htonll(0x1000000000000000) && i->src[1] == 0 && i->dst[0] == mg_htonll(0x2000000000000000) && i->dst[1] == 0);
+  ASSERT(i->src[0] == mg_htonll(0x100000000000000) && i->src[1] == 0 &&
+         i->dst[0] == mg_htonll(0x200000000000000) && i->dst[1] == 0);
   ASSERT(i->next == 58);
   ASSERT(i->plen == mg_htons(sizeof(*icmp6) + 0));
   ASSERT(icmp6->type == 129);  // Echo Reply
   ASSERT(icmp6->code == 0);
   ASSERT(icmp6csum_ok(i, icmp6));
-  
-  create_icmp6_dat(&e, &ipp, 128, 0, NULL, 69); // Echo Request
+
+  create_icmp6_dat(&e, &ipp, 128, 0, NULL, 69);  // Echo Request
   mg_mgr_poll(&mgr, 0);  // make sure we clean former stuff in buffer
   while (!received_response(&s_driver_data)) mg_mgr_poll(&mgr, 0);
-  ASSERT(i->src[0] == mg_htonll(0x1000000000000000) && i->src[1] == 0 && i->dst[0] == mg_htonll(0x2000000000000000) && i->dst[1] == 0);
+  ASSERT(i->src[0] == mg_htonll(0x100000000000000) && i->src[1] == 0 &&
+         i->dst[0] == mg_htonll(0x200000000000000) && i->dst[1] == 0);
   ASSERT(i->next == 58);
   ASSERT(i->plen == mg_htons(sizeof(*icmp6) + 69));
   ASSERT(icmp6->type == 129);  // Echo Reply
@@ -1249,15 +1266,16 @@ static void test_icmp6_basics(void) {
   create_icmp6_dat(&e, &ipp, 135, 0, payload, 28);
   mg_mgr_poll(&mgr, 0);  // make sure we clean former stuff in buffer
   while (!received_response(&s_driver_data)) mg_mgr_poll(&mgr, 0);
-  ASSERT(i->src[0] == mg_htonll(0x1000000000000000) && i->src[1] == 0 && i->dst[0] == mg_htonll(0x2000000000000000) && i->dst[1] == 0);
+  ASSERT(i->src[0] == mg_htonll(0x100000000000000) && i->src[1] == 0 &&
+         i->dst[0] == mg_htonll(0x200000000000000) && i->dst[1] == 0);
   ASSERT(i->next == 58);
   ASSERT(i->plen == mg_htons(sizeof(*icmp6) + 28));
   ASSERT(icmp6->type == 136);  // Neighbor Advertisement
   ASSERT(icmp6->code == 0);
-  ASSERT(p[0] == 0x60); // solicited + override
-  ASSERT(memcmp(p + 4, mif.ip6, 16) == 0); // target address
-  ASSERT(p[20] == 2); // target hwaddr
-  ASSERT(p[21] == 1); // hwaddr len
+  ASSERT(p[0] == 0x60);                     // solicited + override
+  ASSERT(memcmp(p + 4, mif.ip6, 16) == 0);  // target address
+  ASSERT(p[20] == 2);                       // target hwaddr
+  ASSERT(p[21] == 1);                       // hwaddr len
   ASSERT(memcmp(p + 22, mif.mac, 6) == 0);
 
   s_driver_data.len = 0;
@@ -1268,7 +1286,6 @@ static void test_icmp6(void) {
   test_icmp6_basics();
 }
 #endif
-
 
 #define DASHBOARD(x) \
   printf("HEALTH_DASHBOARD\t\"%s\": %s,\n", x, s_error ? "false" : "true");
@@ -1310,7 +1327,7 @@ int main(void) {
   s_error = false;
   test_tcp(true);
   DASHBOARD("tcp_ipv6");
-  
+
   s_error = false;
   test_udp(true);
   DASHBOARD("udp_ipv6");

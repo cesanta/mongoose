@@ -74,7 +74,7 @@ jobs:
     - uses: webfactory/ssh-agent@v0.9.1
       with:
             ssh-private-key: ${{ secrets.HEALTH_TESTS_SSH_KEY }}
-    - run: if [ "${{ matrix.target }}" == "mip_tap_test" ]; then ./test/setup_ga_network.sh ; fi && sudo apt -y update ; sudo apt -y install libmbedtls-dev libwolfssl-dev && make -C test ${{ matrix.target }} IPV6=0 > log
+    - run: if [ "${{ matrix.target }}" == "mip_tap_test" ]; then ./test/setup_ga_network.sh ; export IPV6=0; else export IPV6=1 ; fi && sudo apt -y update ; sudo apt -y install libmbedtls-dev libwolfssl-dev && make -C test ${{ matrix.target }} > log
     - if: success() || failure()
       run: |
         cat log
@@ -92,7 +92,7 @@ jobs:
     steps:
     - uses: actions/checkout@v4
       with: { fetch-depth: 2 }
-    - run: make -C test ${{ matrix.target }}
+    - run: make -C test ${{ matrix.target }} IPV6=1
   s390:
     runs-on: ubuntu-latest
     strategy:

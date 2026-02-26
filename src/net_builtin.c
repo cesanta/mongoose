@@ -152,19 +152,19 @@ struct dhcp6 {
 };
 
 struct pseudoip {
-  uint32_t src;   // Source IP
-  uint32_t dst;   // Destination IP
+  uint32_t src;  // Source IP
+  uint32_t dst;  // Destination IP
   uint8_t zero;
   uint8_t proto;  // Upper level protocol
   uint16_t len;   // Datagram length
 };
 
 struct pseudoip6 {
-  uint64_t src[2];   // Source IP
-  uint64_t dst[2];   // Destination IP
-  uint32_t plen;     // Payload length
+  uint64_t src[2];  // Source IP
+  uint64_t dst[2];  // Destination IP
+  uint32_t plen;    // Payload length
   uint8_t zero[3];
-  uint8_t next;      // Upper level protocol
+  uint8_t next;  // Upper level protocol
 };
 
 #if defined(__DCC__)
@@ -268,8 +268,8 @@ static uint16_t pcsum(void *d, void *p, size_t plen) {
   pip.zero = 0;
   pip.proto = ip->proto;
   pip.len = mg_htons((uint16_t) plen);
-  sum = csumup(0, &pip, sizeof(pip)); // even length
-  sum = csumup(sum, p, plen); // possibly odd length: last
+  sum = csumup(0, &pip, sizeof(pip));  // even length
+  sum = csumup(sum, p, plen);          // possibly odd length: last
   return csumfin(sum);
 }
 
@@ -282,7 +282,8 @@ static bool udpcsum_ok(void *d, void *u) {
 
 static bool tcpcsum_ok(void *d, void *t) {
   struct ip *ip = (struct ip *) d;
-  return (pcsum(d, t, (size_t)(mg_ntohs(ip->len) - (ip->ver & 0x0F) * 4)) == 0);
+  return (pcsum(d, t, (size_t) (mg_ntohs(ip->len) - (ip->ver & 0x0F) * 4)) ==
+          0);
 }
 
 #if MG_ENABLE_IPV6
@@ -295,14 +296,14 @@ static uint16_t p6csum(void *d, void *p, size_t plen) {
   pip6.zero[0] = 0, pip6.zero[1] = 0, pip6.zero[2] = 0;
   pip6.plen = mg_htonl((uint32_t) plen);
   pip6.next = ip6->next;
-  sum = csumup(0, &pip6, sizeof(pip6)); // even length
-  sum = csumup(sum, p, plen); // possibly odd length: last
+  sum = csumup(0, &pip6, sizeof(pip6));  // even length
+  sum = csumup(sum, p, plen);            // possibly odd length: last
   return csumfin(sum);
 }
 
 static bool udp6csum_ok(void *d, void *u) {
   struct udp *udp = (struct udp *) u;
-  if (udp->csum == 0) return false; // mandatory in IPv6
+  if (udp->csum == 0) return false;  // mandatory in IPv6
   if (udp->csum == 0xFFFF) udp->csum = 0;
   return (p6csum(d, u, (size_t) mg_ntohs(udp->len)) == 0);
 }
@@ -547,10 +548,11 @@ static struct mg_connection *getpeer(struct mg_mgr *mgr, struct pkt *pkt,
     }
 #endif
     if (c->is_udp && pkt->udp && c->loc.port == pkt->udp->dport &&
-        !(c->loc.is_ip6 ^ (pkt->ip6 != NULL))) // IP or IPv6 to same dest
+        !(c->loc.is_ip6 ^ (pkt->ip6 != NULL)))  // IP or IPv6 to same dest
       break;
     if (!c->is_udp && pkt->tcp && c->loc.port == pkt->tcp->dport &&
-        !(c->loc.is_ip6 ^ (pkt->ip6 != NULL)) && lsn == (bool) c->is_listening &&
+        !(c->loc.is_ip6 ^ (pkt->ip6 != NULL)) &&
+        lsn == (bool) c->is_listening &&
         (lsn || c->rem.port == pkt->tcp->sport))
       break;
   }
@@ -1098,7 +1100,7 @@ static bool rx_udp(struct mg_tcpip_if *ifp, struct pkt *pkt) {
   s = (struct connstate *) (c + 1);
   c->rem.port = pkt->udp->sport;
 #if MG_ENABLE_IPV6
-  if (c->loc.is_ip6) { // matching of v4/v6 to dest is done bt getpeer()
+  if (c->loc.is_ip6) {  // matching of v4/v6 to dest is done bt getpeer()
     if (!udp6csum_ok(pkt->ip6, pkt->udp)) return false;
     c->rem.addr.ip6[0] = pkt->ip6->src[0],
     c->rem.addr.ip6[1] = pkt->ip6->src[1], c->rem.is_ip6 = true;
@@ -1138,21 +1140,22 @@ static size_t tx_tcp(struct mg_tcpip_if *ifp, uint8_t *l2_dst,
 #endif
 
   // Handle any options first, here, to determine header size
-  if (flags & TH_SYN) {          // Send MSS
+  if (flags & TH_SYN) {  // Send MSS
     uint16_t mss;
-#if MG_ENABLE_IPV6   // RFC-9293 3.7.1; RFC-6691 2
+#if MG_ENABLE_IPV6  // RFC-9293 3.7.1; RFC-6691 2
     mss = (uint16_t) (ifp->mtu - 60);
 #else
     mss = (uint16_t) (ifp->mtu - 40);
 #endif
     opts[0] = mg_htons(0x0204);  // RFC-9293 3.2
     opts[1] = mg_htons(mss);
-    hlen += sizeof(opts); // always whole number of 32-bit words
+    hlen += sizeof(opts);  // always whole number of 32-bit words
   }
 
 #if MG_ENABLE_IPV6
   if (ip_dst->is_ip6) {
-    ip6 = tx_ip6(ifp, l2_dst, 6, ip_src->addr.ip6, ip_dst->addr.ip6, hlen + len);
+    ip6 =
+        tx_ip6(ifp, l2_dst, 6, ip_src->addr.ip6, ip_dst->addr.ip6, hlen + len);
     tcp = (struct tcp *) (ip6 + 1);
   } else
 #endif
@@ -1161,8 +1164,8 @@ static size_t tx_tcp(struct mg_tcpip_if *ifp, uint8_t *l2_dst,
     tcp = (struct tcp *) (ip + 1);
   }
   memset(tcp, 0, sizeof(*tcp));
-  memmove(tcp + 1, opts, hlen - sizeof(*tcp)); // copy opts if any
-  if (buf != NULL && len) memmove((uint8_t *)tcp + hlen, buf, len);
+  memmove(tcp + 1, opts, hlen - sizeof(*tcp));  // copy opts if any
+  if (buf != NULL && len) memmove((uint8_t *) tcp + hlen, buf, len);
   tcp->sport = ip_src->port;
   tcp->dport = ip_dst->port;
   tcp->seq = seq;
@@ -1515,7 +1518,7 @@ static void handle_opt(struct connstate *s, struct tcp *tcp, bool ip6) {
 static void rx_tcp(struct mg_tcpip_if *ifp, struct pkt *pkt) {
   struct mg_connection *c = getpeer(ifp->mgr, pkt, false);
   struct connstate *s = c == NULL ? NULL : (struct connstate *) (c + 1);
-#if MG_ENABLE_IPV6 // matching of v4/v6 to dest is done by getpeer()
+#if MG_ENABLE_IPV6  // matching of v4/v6 to dest is done by getpeer()
   if (pkt->ip6 != NULL && !tcp6csum_ok(pkt->ip6, pkt->tcp)) return;
 #endif
   if (pkt->ip != NULL && !tcpcsum_ok(pkt->ip, pkt->tcp)) return;
