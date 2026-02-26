@@ -200,7 +200,7 @@ We take security seriously:
 
 ## How to report security vulnerabilities
 
-Please send an email to support at mongoose dot ws, with the full information.
+Please send an email to support@cesanta.com, with the full information.
 Do NOT create a github issue.
 
 ## Articles
