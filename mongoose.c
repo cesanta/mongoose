@@ -14190,6 +14190,10 @@ static int mg_tls_recv_cert(struct mg_connection *c, bool is_client) {
           mg_error(c, "failed to verify hostname");
           return -1;
         }
+        if (ci->pubkey.len > sizeof(tls->pubkey)) {
+          mg_error(c, "invalid certificate length");
+          return -1;
+        }
         memmove(tls->pubkey, ci->pubkey.buf, ci->pubkey.len);
         tls->pubkeysz = ci->pubkey.len;
       } else {
