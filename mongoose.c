@@ -5170,16 +5170,13 @@ static void ip6sn(uint64_t *addr, uint64_t *sn_addr) {
   sn[15] = ((uint8_t *) addr)[15];
 }
 
-static const struct mg_addr ip6_allrouters = {
-    .addr = {.ip = {0xFF, 0x02, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0x02}},
-    .port = 0,
-    .scope_id = 0,
-    .is_ip6 = true};
-static const struct mg_addr ip6_allnodes = {
-    .addr = {.ip = {0xFF, 0x02, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0x01}},
-    .port = 0,
-    .scope_id = 0,
-    .is_ip6 = true};
+static const uint8_t s_ip6_allrouters_addr[16] = {
+  0xFF, 0x02, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0x02};
+static const uint8_t s_ip6_allnodes_addr[16] = {
+  0xFF, 0x02, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0x01};
+
+static struct mg_addr ip6_allrouters;
+static struct mg_addr ip6_allnodes;
 
 #define MG_IP6MATCH(a, b) (a[0] == b[0] && a[1] == b[1])
 #endif
@@ -5748,13 +5745,13 @@ static void fill_prefix(uint8_t *dst, uint8_t *src, uint8_t len) {
   }
 }
 
-static bool match_prefix(uint8_t *new, uint8_t *cur, uint8_t len) {
+static bool match_prefix(uint8_t *addr, uint8_t *cur, uint8_t len) {
   uint8_t full = len / 8;
   uint8_t rem = len % 8;
-  if (full > 0 && memcmp(cur, new, full) != 0) return false;
+  if (full > 0 && memcmp(cur, addr, full) != 0) return false;
   if (rem > 0) {
     uint8_t mask = (uint8_t) (0xFF << (8 - rem));
-    if (cur[full] != (new[full] & mask)) return false;
+    if (cur[full] != (addr[full] & mask)) return false;
   }
   return true;
 }
@@ -6832,6 +6829,12 @@ void mg_tcpip_init(struct mg_mgr *mgr, struct mg_tcpip_if *ifp) {
     // If static configuration is used, global addresses,
     // prefix length, and gw are already filled at this point.
     if (ifp->ip6[0] == 0 && ifp->ip6[1] == 0) ifp->enable_slaac = true;
+    memcpy(ip6_allrouters.addr.ip, s_ip6_allrouters_addr,
+            sizeof(s_ip6_allrouters_addr));
+    ip6_allrouters.is_ip6 = true;
+    memcpy(ip6_allnodes.addr.ip, s_ip6_allnodes_addr,
+            sizeof(s_ip6_allnodes_addr));
+    ip6_allnodes.is_ip6 = true;
 #endif
     if (ifp->tx.buf == NULL || ifp->recv_queue.buf == NULL) MG_ERROR(("OOM"));
   }
