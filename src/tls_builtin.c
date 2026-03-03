@@ -778,33 +778,36 @@ static bool mg_tls_send_cert(struct mg_connection *c, bool is_client) {
   cert = (uint8_t *) mg_calloc(1, 13 + total_size);
   if (cert == NULL) return res;
   cert[0] = MG_TLS_CERTIFICATE;  // handshake header
+  if (is_client && tls->cert_der.len == 0) total_size = 0; // empty list
   MG_STORE_BE24(cert + 1, total_size + 4);
   cert[4] = 0;                          // request context
   MG_STORE_BE24(cert + 5, total_size);  // 3 bytes: cert (s) length
   offset = 8;
-  MG_STORE_BE24(cert + offset, tls->cert_der.len);  // 3 bytes: first cert len
-  offset += 3;
-  // bytes 11+ are certificate in DER format
-  memmove(cert + offset, tls->cert_der.buf, tls->cert_der.len);
-  offset += tls->cert_der.len;
-  MG_STORE_BE16(cert + offset, 0);  // certificate extensions (none)
-  offset += 2;
-  for (i = 1; i < tls->chain_len; i++) {
-    MG_STORE_BE24(cert + offset, tls->chain_der[i].len);
+  if (total_size > 0) { // handle empty list, RFC-8446 4.4.2
+    MG_STORE_BE24(cert + offset, tls->cert_der.len);  // 3 bytes: 1st cert len
     offset += 3;
-    memmove(cert + offset, tls->chain_der[i].buf, tls->chain_der[i].len);
-    offset += tls->chain_der[i].len;
+    // bytes 11+ are certificate in DER format
+    memmove(cert + offset, tls->cert_der.buf, tls->cert_der.len);
+    offset += tls->cert_der.len;
     MG_STORE_BE16(cert + offset, 0);  // certificate extensions (none)
     offset += 2;
-  }
-  if (send_ca) {
-    MG_STORE_BE24(cert + offset, tls->ca_der.len);  // 3 bytes: CA cert length
-    offset += 3;
-    memmove(cert + offset, tls->ca_der.buf,
-            tls->ca_der.len);  // CA cert data
-    offset += tls->ca_der.len;
-    MG_STORE_BE16(cert + offset, 0);  // certificate extensions (none)
-    offset += 2;
+    for (i = 1; i < tls->chain_len; i++) {
+      MG_STORE_BE24(cert + offset, tls->chain_der[i].len);
+      offset += 3;
+      memmove(cert + offset, tls->chain_der[i].buf, tls->chain_der[i].len);
+      offset += tls->chain_der[i].len;
+      MG_STORE_BE16(cert + offset, 0);  // certificate extensions (none)
+      offset += 2;
+    }
+    if (send_ca) {
+      MG_STORE_BE24(cert + offset, tls->ca_der.len);  // 3 bytes: CA cert length
+      offset += 3;
+      memmove(cert + offset, tls->ca_der.buf,
+              tls->ca_der.len);  // CA cert data
+      offset += tls->ca_der.len;
+      MG_STORE_BE16(cert + offset, 0);  // certificate extensions (none)
+      offset += 2;
+    }
   }
   mg_sha256_update(&tls->sha256, cert, offset);
   res = mg_tls_encrypt(c, cert, offset, MG_TLS_HANDSHAKE);
@@ -1836,7 +1839,7 @@ static bool mg_tls_client_handshake(struct mg_connection *c) {
       // Fallthrough
     case MG_TLS_STATE_CLIENT_WAIT_FINISH:
       if (mg_tls_client_recv_finish(c) < 0) break;
-      if (tls->cert_requested && tls->cert_der.len > 0) {  // two-way auth
+      if (tls->cert_requested) {  // two-way auth
         // generate application keys at this point, keep using handshake keys
         struct tls_enc hs_keys = tls->enc;
         mg_tls_generate_application_keys(c);
