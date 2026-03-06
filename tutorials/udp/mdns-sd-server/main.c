@@ -1,18 +1,23 @@
 // Copyright (c) 2022-2026 Cesanta Software Limited
 // All rights reserved
 //
-// This example runs MDNS server, auto-discoverable as MDNS_NAME
-// Also it runs as web server
+// This example runs an MDNS server, auto-discoverable as MDNS_NAME.
+// Also, it runs a web server; we can find it by discovering MDNS_NAME.
+
+// Finally, under ADVANCED_EXAMPLE there is an example of how to
+// implement a database that can hold those services we serve, and how to
+// announce them responding mDNS-SD requests, like this web server
+// - make CFLAGS_EXTRA="-DADVANCED_EXAMPLE"
+// - avahi -r _http._tcp
 
 #include "mongoose.h"
 
+// Desired name must NOT have any dots in it, nor a domain
 #define MDNS_NAME "mongoose-device"
-#define WEB_SERVER_ADDR "http://0.0.0.0:8000"
+#define WEB_SERVER_ADDR "http://0.0.0.0:8000"  // port is hardcoded below
+#define RESPONSE_IP "192.168.69.11"
 
-//static struct mg_connection *s_mdns_conn;
-//static struct mg_connection *s_http_conn;
-
-#if 0
+#ifdef ADVANCED_EXAMPLE
 // A TXT record data containing JSON, if actually needed.
 // The whole record must not exceed 256 bytes, so keep this small
 char txt[] = "\x15{\"property\": \"value\"}";
@@ -20,6 +25,7 @@ char txt[] = "\x15{\"property\": \"value\"}";
 
 // DNS-SD service records
 static const struct mg_dnssd_record s_records[] = {
+    {{"_http._tcp", 10}, {"", 0}, 8000},  // port is hardcoded
     {{"_myservice._tcp", 15}, {"", 0}, 9876},
     {{"_myservice._udp", 15}, {txt, 22}, 9876}};
 
@@ -34,7 +40,7 @@ struct dnssd_db {
 };
 #endif
 
-static struct mg_dnssd_record *dnssd_lookup(struct mg_str name) {
+static const struct mg_dnssd_record *dnssd_lookup(struct mg_str name) {
   size_t i;
   for (i = 0; i < sizeof(s_records) / sizeof(s_records[0]); i++) {
     if (mg_strcasecmp(s_records[i].srvcproto, name) == 0) return &s_records[i];
@@ -45,43 +51,46 @@ static struct mg_dnssd_record *dnssd_lookup(struct mg_str name) {
 
 // we can do more complex stuff, this is a simple implementation
 static void mdns_ev_handler(struct mg_connection *c, int ev, void *ev_data) {
-  struct mg_mdns_req *req = (struct mg_mdns_req *) ev_data;
-  // MDNS resolver expects response IP address in the c->data
-  // memcpy(c->data, &response_ip, sizeof(response_ip));
-  MG_INFO(("---> %lu %d %p %p", c->id, ev, ev_data, req));
-  if (ev == MG_EV_MDNS_PTR) {
-    // do we serve this service ?
-    //MG_INFO(("PTR"));
-  } else if (ev == MG_EV_MDNS_SRV) {
-    //MG_INFO(("SrV"));
-  } else if (ev == MG_EV_MDNS_TXT) {
-    //MG_INFO(("TXT"));
-  } else if (ev == MG_EV_MDNS_A) {  // is this us ?
-    //MG_INFO(("A, ADDR: %M", mg_print_ip, &req->addr));
+#ifndef ADVANCED_EXAMPLE
+  if (ev == MG_EV_MDNS_REQ) {
+    struct mg_mdns_req *req = (struct mg_mdns_req *) ev_data;
+    if (req->rr->atype == MG_DNS_RTYPE_PTR) {
+      // do we serve this service ?
+      MG_INFO(("PTR %.*s", req->reqname.len, req->reqname.buf));
+    } else if (req->rr->atype == MG_DNS_RTYPE_SRV) {
+      MG_INFO(("SRV"));
+    } else if (req->rr->atype == MG_DNS_RTYPE_TXT) {
+      MG_INFO(("TXT"));
+    } else if (req->rr->atype == MG_DNS_RTYPE_A) {
+      MG_INFO(("A %.*s", req->reqname.len, req->reqname.buf));
+    }
   }
 
-#if 0
-  struct mg_mdns_req *req = (struct mg_mdns_req *) ev_data;
-  if (ev == MG_EV_MDNS_PTR) {  // do we serve this service ?
-    struct mg_dnssd_record *r;
-    if (req->is_listing) return;  // TODO(): handle services listing
-    r = dnssd_lookup(req->reqname);
-    if (r == NULL) return;
-    req->r = r;
-    req->is_resp = true;
-  } else if (ev == MG_EV_MDNS_SRV || ev == MG_EV_MDNS_TXT) {
-    // Mongoose already checked the host name for us, otherwise we need to do
-    // that ourselves first, then check for service name in db
-    struct mg_dnssd_record *r = dnssd_lookup(req->reqname);
-    if (r == NULL) return;
-    req->r = r;
-    req->is_resp = true;
-  } else if (ev == MG_EV_MDNS_A) {  // is this us ?
-    // Mongoose already checked the host name for us, otherwise we need to do
-    // that ourselves
+#else
+  if (ev == MG_EV_MDNS_REQ) {
+    struct mg_mdns_req *req = (struct mg_mdns_req *) ev_data;
+    if (req->rr->atype == MG_DNS_RTYPE_PTR) {  // do we serve this service ?
+      struct mg_dnssd_record *r;
+      if (req->is_listing) return;  // TODO(): handle services listing
+      r = (struct mg_dnssd_record *) dnssd_lookup(req->reqname);
+      if (r == NULL) return;
+      req->r = r;
+      req->is_resp = true;
+    } else if (req->rr->atype == MG_DNS_RTYPE_SRV ||
+               req->rr->atype == MG_DNS_RTYPE_TXT) {
+      // Mongoose already checked the host name for us, otherwise we need to do
+      // that ourselves first, then check for service name in db
+      struct mg_dnssd_record *r = (struct mg_dnssd_record *) dnssd_lookup(req->reqname);
+      if (r == NULL) return;
+      req->r = r;
+      req->is_resp = true;
+    } else if (req->rr->atype == MG_DNS_RTYPE_A) {  // is this us ?
+      // Mongoose already checked the host name for us, otherwise we need to do
+      // that ourselves
+    }
   }
-  (void) c;
 #endif
+  (void) c;
 }
 
 // Simple web server, responds with a JSON like this
@@ -97,11 +106,19 @@ static void http_ev_handler(struct mg_connection *c, int ev, void *ev_data) {
 
 int main(void) {
   struct mg_mgr mgr;
+  static struct mg_connection *c;
+  uint32_t response_ip = inet_addr(RESPONSE_IP);
 
   mg_log_set(MG_LL_DEBUG);  // Set log level
   mg_mgr_init(&mgr);        // Initialise event manager
 
-  mg_mdns_listen(&mgr, mdns_ev_handler, MDNS_NAME);
+  c = mg_mdns_listen(&mgr, mdns_ev_handler, MDNS_NAME);
+  if (c == NULL) return 1;
+  // if not using our built-in TCP/IP stack, pass the IP address you want to
+  // use as a response, this depends on your underlying TCP/IP stack and number
+  // of interfaces available
+  memcpy(c->data, &response_ip, sizeof(response_ip));
+
   mg_http_listen(&mgr, WEB_SERVER_ADDR, http_ev_handler, NULL);
 
   for (;;) mg_mgr_poll(&mgr, 1000);  // Event loop
