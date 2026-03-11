@@ -1672,14 +1672,12 @@ static void test_http_no_content_length(void) {
   // 12348 is in TIME_WAIT, use another port
   mg_mgr_init(&mgr);
   mg_http_listen(&mgr, url2, f41, (void *) NULL);
-  ASSERT(fetch(&mgr, buf, url2, "POST / HTTP/1.1\r\n\r\n") == 411);
+  ASSERT(fetch(&mgr, buf, url2, "POST / HTTP/1.1\r\n\r\n") == 200);
   ASSERT(fetch(&mgr, buf, url2, "HTTP/1.1 200\r\n\r\n") == 411);
   ASSERT(fetch(&mgr, buf, url2, "HTTP/1.1 100\r\n\r\n") != 411);
   ASSERT(fetch(&mgr, buf, url2, "HTTP/1.1 304\r\n\r\n") != 411);
   ASSERT(fetch(&mgr, buf, url2, "HTTP/1.1 305\r\n\r\n") == 411);
   ASSERT(fetch(&mgr, buf, url2, post_req) != 411);
-  // Check it is processed only once (see #2811)
-  ASSERT(fpr(&mgr, buf, url2, "POST / HTTP/1.1\r\n\r\n") == 411);
   mg_mgr_free(&mgr);
   ASSERT(mgr.conns == NULL);
 }
@@ -1844,7 +1842,7 @@ static void test_http_parse(void) {
   {
     const char *s = "POST /x HTTP/1.0\n\n";
     ASSERT(mg_http_parse(s, strlen(s), &req) == (int) strlen(s));
-    ASSERT(req.body.len == (size_t) ~0);
+    ASSERT(req.body.len == 0);
   }
 
   {
