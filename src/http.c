@@ -317,17 +317,9 @@ int mg_http_parse(const char *s, size_t len, struct mg_http_message *hm) {
   // responses. If HTTP response does not have Content-Length set, then
   // body is read until socket is closed, i.e. body.len is infinite (~0).
   //
-  // For HTTP requests though, according to
-  // http://tools.ietf.org/html/rfc7231#section-8.1.3,
-  // only POST and PUT methods have defined body semantics.
-  // Therefore, if Content-Length is not specified and methods are
-  // not one of PUT or POST, set body length to 0.
-  //
-  // So, if it is HTTP request, and Content-Length is not set,
-  // and method is not (PUT or POST) then reset body length to zero.
-  if (hm->body.len == (size_t) ~0 && !is_response &&
-      mg_strcasecmp(hm->method, mg_str("PUT")) != 0 &&
-      mg_strcasecmp(hm->method, mg_str("POST")) != 0) {
+  // For HTTP requests though, if Content-Length is not specified
+  // set body length to 0.
+  if (hm->body.len == (size_t) ~0 && !is_response) {
     hm->body.len = 0;
     hm->message.len = (size_t) req_len;
   }
@@ -1058,9 +1050,10 @@ static void http_cb(struct mg_connection *c, int ev, void *ev_data) {
         if (!is_response && (mg_strcasecmp(hm.method, mg_str("POST")) == 0 ||
                              mg_strcasecmp(hm.method, mg_str("PUT")) == 0)) {
           // POST and PUT should include an entity body. Therefore, they should
-          // contain a Content-length header. Other requests can also contain a
+          // contain a Content-length header (unless the body length is 0, in
+          // which case it can be omitted). Other requests can also contain a
           // body, but their content has no defined semantics (RFC 7231)
-          require_content_len = true;
+          if (hm.body.len != 0) require_content_len = true;
           ofs += (size_t) n;  // this request has been processed
         } else if (is_response) {
           // HTTP spec 7.2 Entity body: All other responses must include a body
