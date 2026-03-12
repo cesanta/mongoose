@@ -5151,6 +5151,9 @@ static bool icmpcsum_ok(const void *d, size_t len) {
 static uint16_t pcsum(void *d, void *p, size_t plen) {
   uint32_t sum;
   struct ip *ip = (struct ip *) d;
+#if defined(__DCC__)
+  volatile  /* Makes PPC & Diab4.3 happy */
+#endif
   struct pseudoip pip;
   pip.src = ip->src;
   pip.dst = ip->dst;
@@ -5179,6 +5182,9 @@ static bool tcpcsum_ok(void *d, void *t) {
 static uint16_t p6csum(void *d, void *p, size_t plen) {
   uint32_t sum;
   struct ip6 *ip6 = (struct ip6 *) d;
+#if defined(__DCC__)
+  volatile  /* Makes PPC & Diab4.3 happy */
+#endif
   struct pseudoip6 pip6;
   pip6.src[0] = ip6->src[0], pip6.src[1] = ip6->src[1];
   pip6.dst[0] = ip6->dst[0], pip6.dst[1] = ip6->dst[1];
