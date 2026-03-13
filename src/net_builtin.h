@@ -87,6 +87,7 @@ struct mg_tcpip_if {
 #define MG_TCPIP_STATE_IP 3     // Interface is up and has an IP assigned
 #define MG_TCPIP_STATE_READY 4  // Interface has fully come up, ready to work
   bool gw_ready;                // We've got a hw address for the router
+  bool driver_up;               // Driver reports link state is up
 #if MG_ENABLE_IPV6
   uint8_t gw6mac[sizeof(struct mg_l2addr)];  // IPV6 Router's hw address
   uint8_t state6;                            // Current IPv6 state
@@ -111,12 +112,12 @@ extern struct mg_tcpip_driver mg_tcpip_driver_cmsis;
 extern struct mg_tcpip_driver mg_tcpip_driver_ra;
 extern struct mg_tcpip_driver mg_tcpip_driver_xmc;
 extern struct mg_tcpip_driver mg_tcpip_driver_xmc7;
-extern struct mg_tcpip_driver mg_tcpip_driver_ppp;
 extern struct mg_tcpip_driver mg_tcpip_driver_pico_w;
 extern struct mg_tcpip_driver mg_tcpip_driver_rw612;
 extern struct mg_tcpip_driver mg_tcpip_driver_cyw;
 extern struct mg_tcpip_driver mg_tcpip_driver_nxp_wifi;
 extern struct mg_tcpip_driver mg_tcpip_driver_st67w6;
+extern struct mg_tcpip_driver mg_tcpip_driver_atcmd;
 
 // Drivers that require SPI, can use this SPI abstraction
 struct mg_tcpip_spi {
