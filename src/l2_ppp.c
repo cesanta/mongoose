@@ -82,6 +82,7 @@ struct pppoe {  // RFC-2516, "A Method for Transmitting PPP Over Ethernet
 #define MG_PPPoE_PADS 0x65
 #define MG_PPPoE_PADT 0xa7
 
+<<<<<<< HEAD
 #define MG_PPPoE_ST_DISC 0  // Discovery phase, see what servers are out there
 #define MG_PPPoE_ST_REQ 1   // Chose a server, request a session and wait
 #define MG_PPPoE_ST_SESS 2  // Session established, PPP traffic is exchanged
@@ -90,6 +91,12 @@ struct pppoe {  // RFC-2516, "A Method for Transmitting PPP Over Ethernet
 
 static bool s_link = false;  // *******************************************
 static uint8_t s_state = MG_PPPoE_ST_DISC;
+=======
+#define PDIFF(a, b) ((size_t) (((char *) (b)) - ((char *) (a))))
+
+static bool s_link = false;  // *******************************************
+static uint8_t s_state = 0;
+>>>>>>> 668f10fc (Add L2 PPP and PPPoE)
 static uint16_t s_id;
 
 void mg_l2_ppp_init(struct mg_tcpip_if *ifp) {
@@ -106,7 +113,12 @@ void mg_l2_pppoe_init(struct mg_tcpip_if *ifp) {
 }
 
 bool mg_l2_ppp_poll(struct mg_tcpip_if *ifp, bool expired_1000ms) {
+<<<<<<< HEAD
   if (expired_1000ms && ifp->state == MG_TCPIP_STATE_DOWN) s_link = false;
+=======
+  (void) ifp;
+  (void) expired_1000ms;
+>>>>>>> 668f10fc (Add L2 PPP and PPPoE)
   return s_link;
 }
 

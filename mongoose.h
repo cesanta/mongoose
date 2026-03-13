@@ -3346,6 +3346,7 @@ struct mg_tcpip_if {
 #define MG_TCPIP_STATE_IP 4       // Interface is up and has an IP assigned
 #define MG_TCPIP_STATE_READY 5    // Interface has fully come up, ready to work
   bool gw_ready;                // We've got a hw address for the router
+  bool driver_up;               // Driver reports link state is up
 #if MG_ENABLE_IPV6
   uint8_t gw6mac[sizeof(struct mg_l2addr)];  // IPV6 Router's hw address
   uint8_t state6;                            // Current IPv6 state
