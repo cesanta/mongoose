@@ -3746,6 +3746,7 @@ struct pppoe {  // RFC-2516, "A Method for Transmitting PPP Over Ethernet
 #define MG_PPPoE_PADS 0x65
 #define MG_PPPoE_PADT 0xa7
 
+<<<<<<< HEAD
 #define MG_PPPoE_ST_DISC 0  // Discovery phase, see what servers are out there
 #define MG_PPPoE_ST_REQ 1   // Chose a server, request a session and wait
 #define MG_PPPoE_ST_SESS 2  // Session established, PPP traffic is exchanged
@@ -3754,6 +3755,12 @@ struct pppoe {  // RFC-2516, "A Method for Transmitting PPP Over Ethernet
 
 static bool s_link = false;  // ************ THESE SHOULD MOVE TO A struct mg_l2data *******************************
 static uint8_t s_state = MG_PPPoE_ST_DISC;
+=======
+#define PDIFF(a, b) ((size_t) (((char *) (b)) - ((char *) (a))))
+
+static bool s_link = false;  // *******************************************
+static uint8_t s_state = 0;
+>>>>>>> 3b7ca757 (Add L2 PPP and PPPoE)
 static uint16_t s_id;
 
 void mg_l2_ppp_init(struct mg_tcpip_if *ifp) {
@@ -3770,7 +3777,12 @@ void mg_l2_pppoe_init(struct mg_tcpip_if *ifp) {
 }
 
 bool mg_l2_ppp_poll(struct mg_tcpip_if *ifp, bool expired_1000ms) {
+<<<<<<< HEAD
   if (expired_1000ms && ifp->state == MG_TCPIP_STATE_DOWN) s_link = false;
+=======
+  (void) ifp;
+  (void) expired_1000ms;
+>>>>>>> 3b7ca757 (Add L2 PPP and PPPoE)
   return s_link;
 }
 
@@ -4180,17 +4192,26 @@ static size_t pppoe_tx_frame(struct mg_tcpip_if *ifp, uint8_t code, uint16_t id,
 }
 
 bool mg_l2_pppoe_poll(struct mg_tcpip_if *ifp, bool expired_1000ms) {
+<<<<<<< HEAD
   if (expired_1000ms && s_state == MG_PPPoE_ST_DISC &&
       ifp->state == MG_TCPIP_STATE_LINK_UP) {
+=======
+  if (expired_1000ms && s_state == 0 && ifp->driver_up) {
+>>>>>>> 3b7ca757 (Add L2 PPP and PPPoE)
     uint16_t tags[2];
     tags[0] = mg_htons(0x0101);  // Service Request
     tags[1] = mg_htons(0x0000);  // Any
     pppoe_tx_frame(ifp, MG_PPPoE_PADI, 0, (uint8_t *) tags, sizeof(tags),
                    mg_l2_eth_mapip(MG_TCPIP_L2ADDR_BCAST, NULL));
     MG_DEBUG(("Sent PADI"));
+<<<<<<< HEAD
   } else if (expired_1000ms && (s_state != MG_PPPoE_ST_SESS ||
                                 ifp->state == MG_TCPIP_STATE_DOWN)) {
     s_state = MG_PPPoE_ST_DISC;
+=======
+  } else if (expired_1000ms && (s_state != 2 || !ifp->driver_up)) {
+    s_state = 0;
+>>>>>>> 3b7ca757 (Add L2 PPP and PPPoE)
   }
   return mg_l2_ppp_poll(ifp, expired_1000ms);
 }
@@ -4208,8 +4229,12 @@ bool mg_l2_pppoe_rx(struct mg_tcpip_if *ifp, enum mg_l2proto *proto,
   if (pay->len < sizeof(*pppoe)) return false;  // Truncated
   if (eth_proto == MG_TCPIP_L2PROTO_PPPoE_DISC) {
     MG_VERBOSE(("PPPoE_DISC"));
+<<<<<<< HEAD
     if (s_state == MG_PPPoE_ST_DISC && pppoe->code == MG_PPPoE_PADO &&
         pppoe->id == 0) {
+=======
+    if (s_state == 0 && pppoe->code == MG_PPPoE_PADO && pppoe->id == 0) {
+>>>>>>> 3b7ca757 (Add L2 PPP and PPPoE)
       uint16_t tags[2];
       bool has_cookie = false;
       size_t len = pay->len - sizeof(*pppoe);
@@ -4238,6 +4263,7 @@ bool mg_l2_pppoe_rx(struct mg_tcpip_if *ifp, enum mg_l2proto *proto,
       pppoe_tx_frame(ifp, MG_PPPoE_PADR, 0, p, taglen,
                      mg_l2_eth_getaddr((uint8_t *) raw->buf));
       MG_DEBUG(("Sent PADR"));
+<<<<<<< HEAD
       s_state = MG_PPPoE_ST_REQ;
     } else if (s_state == MG_PPPoE_ST_REQ && pppoe->code == MG_PPPoE_PADS) {
       s_id = pppoe->id;
@@ -4245,14 +4271,29 @@ bool mg_l2_pppoe_rx(struct mg_tcpip_if *ifp, enum mg_l2proto *proto,
       MG_DEBUG(("PPPoE session 0x%04x started", mg_ntohs(s_id)));
       s_state = MG_PPPoE_ST_SESS;
     } else if (s_state == MG_PPPoE_ST_SESS && pppoe->code == MG_PPPoE_PADT &&
+=======
+      s_state = 1;
+    } else if (s_state == 1 && pppoe->code == MG_PPPoE_PADS) {
+      s_id = pppoe->id;
+      memcpy(&ifp->gwmac, mg_l2_eth_getaddr((uint8_t *) raw->buf)->addr.mac, 6);
+      MG_DEBUG(("PPPoE session 0x%04x started", mg_ntohs(s_id)));
+      s_state = 2;
+    } else if (s_state == 2 && pppoe->code == MG_PPPoE_PADT &&
+>>>>>>> 3b7ca757 (Add L2 PPP and PPPoE)
                pppoe->id == s_id) {
       MG_ERROR(("Got PADT"));
       s_id = 0;
       s_link = false;
+<<<<<<< HEAD
       s_state = MG_PPPoE_ST_DISC;
     }
   } else if (eth_proto == MG_TCPIP_L2PROTO_PPPoE_SESS &&
              s_state == MG_PPPoE_ST_SESS) {
+=======
+      s_state = 0;
+    }
+  } else if (eth_proto == MG_TCPIP_L2PROTO_PPPoE_SESS && s_state == 2) {
+>>>>>>> 3b7ca757 (Add L2 PPP and PPPoE)
     pay->buf = (char *) (pppoe + 1);
     pay->len = pay->len - sizeof(*pppoe);
     return ppp_rx(ifp, proto, pay, raw);
@@ -7275,7 +7316,11 @@ static void mg_tcpip_rx(struct mg_tcpip_if *ifp, void *buf, size_t len) {
   pkt.raw.len = len;
   pkt.l2 = (uint8_t *) pkt.raw.buf;
   if (!mg_l2_rx(ifp, &proto, &pkt.pay, &pkt.raw)) return;
+<<<<<<< HEAD
   if (ifp->state < MG_TCPIP_STATE_UP) return;  // discard while L2 is not up
+=======
+  if (ifp->state == MG_TCPIP_STATE_DOWN) return;  // discard while L2 is not up
+>>>>>>> 3b7ca757 (Add L2 PPP and PPPoE)
   if (proto == MG_TCPIP_L2PROTO_ARP) {
     pkt.arp = (struct arp *) (pkt.pay.buf);
     if (pkt.pay.len < sizeof(*pkt.arp)) return;  // Truncated
@@ -7409,9 +7454,17 @@ static void mg_tcpip_poll(struct mg_tcpip_if *ifp, uint64_t now) {
     drv_up = ifp->driver->poll ? ifp->driver->poll(ifp, expired_1000ms) : true;
     l2_up = mg_l2_poll(ifp, expired_1000ms);  // Handle L2 up/down link status;
     if (expired_1000ms) {                     // ifp->state rules over state6
+<<<<<<< HEAD
       mg_ip_link(ifp, drv_up, l2_up);             // Handle IPv4
       mg_ip6_link(ifp, drv_up, l2_up);            // Handle IPv6
       if (ifp->state < MG_TCPIP_STATE_UP) MG_ERROR(("Network is down"));
+=======
+      bool up = drv_up & l2_up;
+      ifp->driver_up = drv_up;  // update physical link state
+      mg_ip_link(ifp, up);      // Handle IPv4
+      mg_ip6_link(ifp, up);     // Handle IPv6
+      if (ifp->state == MG_TCPIP_STATE_DOWN) MG_ERROR(("Network is down"));
+>>>>>>> 3b7ca757 (Add L2 PPP and PPPoE)
       mg_tcpip_call(ifp, MG_TCPIP_EV_TIMER_1S, NULL);
     }
   }
@@ -7435,7 +7488,11 @@ static void mg_tcpip_poll(struct mg_tcpip_if *ifp, uint64_t now) {
       mg_queue_del(&ifp->recv_queue, len);
     }
   }
+<<<<<<< HEAD
   if (ifp->state < MG_TCPIP_STATE_UP) return;  // need to let L2 do its job
+=======
+  if (ifp->state == MG_TCPIP_STATE_DOWN) return;  // need to let L2 do its job
+>>>>>>> 3b7ca757 (Add L2 PPP and PPPoE)
 
   // Process timeouts
   for (c = ifp->mgr->conns; c != NULL; c = c->next) {
