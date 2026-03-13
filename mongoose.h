@@ -3209,7 +3209,7 @@ bool mg_wifi_ap_stop(void);
 #if MG_ENABLE_TCPIP
 
 // no config defaults to 0 => Ethernet
-enum mg_l2type { MG_TCPIP_L2_ETH = 0, MG_TCPIP_L2_PPP };  // MG_TCPIP_L2_PPPoE
+enum mg_l2type { MG_TCPIP_L2_ETH = 0, MG_TCPIP_L2_PPP, MG_TCPIP_L2_PPPoE};
 
 #if defined(__DCC__)
 #pragma pack(1)
@@ -3340,10 +3340,11 @@ struct mg_tcpip_if {
   volatile uint32_t nerr;       // Number of driver errors
   uint8_t state;                // Current link and IPv4 state
 #define MG_TCPIP_STATE_DOWN 0   // Interface is down
-#define MG_TCPIP_STATE_UP 1     // Interface is up
-#define MG_TCPIP_STATE_REQ 2    // Interface is up, DHCP REQUESTING state
-#define MG_TCPIP_STATE_IP 3     // Interface is up and has an IP assigned
-#define MG_TCPIP_STATE_READY 4  // Interface has fully come up, ready to work
+#define MG_TCPIP_STATE_LINK_UP 1  // Driver reports link state is up
+#define MG_TCPIP_STATE_UP 2       // Interface is up --> LINK_READY
+#define MG_TCPIP_STATE_REQ 3      // Interface is up, DHCP REQUESTING state
+#define MG_TCPIP_STATE_IP 4       // Interface is up and has an IP assigned
+#define MG_TCPIP_STATE_READY 5    // Interface has fully come up, ready to work
   bool gw_ready;                // We've got a hw address for the router
 #if MG_ENABLE_IPV6
   uint8_t gw6mac[sizeof(struct mg_l2addr)];  // IPV6 Router's hw address
@@ -3369,12 +3370,12 @@ extern struct mg_tcpip_driver mg_tcpip_driver_cmsis;
 extern struct mg_tcpip_driver mg_tcpip_driver_ra;
 extern struct mg_tcpip_driver mg_tcpip_driver_xmc;
 extern struct mg_tcpip_driver mg_tcpip_driver_xmc7;
-extern struct mg_tcpip_driver mg_tcpip_driver_ppp;
 extern struct mg_tcpip_driver mg_tcpip_driver_pico_w;
 extern struct mg_tcpip_driver mg_tcpip_driver_rw612;
 extern struct mg_tcpip_driver mg_tcpip_driver_cyw;
 extern struct mg_tcpip_driver mg_tcpip_driver_nxp_wifi;
 extern struct mg_tcpip_driver mg_tcpip_driver_st67w6;
+extern struct mg_tcpip_driver mg_tcpip_driver_atcmd;
 
 // Drivers that require SPI, can use this SPI abstraction
 struct mg_tcpip_spi {
@@ -3422,6 +3423,20 @@ struct mg_tcpip_spi {
 #endif
 
 #endif
+
+
+struct mg_tcpip_driver_atcmd_data {
+  void *usart;                  // Opaque UART/SPI descriptor
+  void (*reset)(void *);        // Modem hardware reset
+  void (*tx)(void *, uint8_t);  // USART transmit single byte
+  int (*rx)(void *);            // USART receive single byte
+  const char **script;          // List of AT commands and expected replies
+  int script_index;             // Index of the current AT command in the list
+  uint64_t deadline;            // AT command deadline in ms
+  bool no_byte_stuff;           // Do not perform byte stuffing/unstuffing
+  bool link;                    // internal use: done with AT processing
+  bool unstuffing;              // internal use: unstuffing state
+};
 
 
 #if MG_ENABLE_TCPIP && defined(MG_ENABLE_DRIVER_CMSIS) && MG_ENABLE_DRIVER_CMSIS
@@ -3606,17 +3621,6 @@ struct mg_tcpip_driver_pico_w_data {
   } while (0)
 
 #endif
-
-
-struct mg_tcpip_driver_ppp_data {
-  void *uart;                   // Opaque UART bus descriptor
-  void (*reset)(void *);        // Modem hardware reset
-  void (*tx)(void *, uint8_t);  // UART transmit single byte
-  int (*rx)(void *);            // UART receive single byte
-  const char **script;          // List of AT commands and expected replies
-  int script_index;             // Index of the current AT command in the list
-  uint64_t deadline;            // AT command deadline in ms
-};
 
 
 #if MG_ENABLE_TCPIP && \
