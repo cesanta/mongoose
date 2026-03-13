@@ -260,7 +260,8 @@ bool mg_dns_parse(const uint8_t *buf, size_t len, struct mg_dns_message *dm) {
       memcpy(&dm->addr.addr.ip, &buf[ofs - 4], 4);
       dm->resolved = true;
       break;  // Return success
-    } else if (rr.alen == 16 && rr.atype == MG_DNS_RTYPE_AAAA && rr.aclass == 1) {
+    } else if (rr.alen == 16 && rr.atype == MG_DNS_RTYPE_AAAA &&
+               rr.aclass == 1) {
       dm->addr.is_ip6 = true;
       memcpy(&dm->addr.addr.ip, &buf[ofs - 16], 16);
       dm->resolved = true;
@@ -379,7 +380,7 @@ static void mg_sendnsreq(struct mg_connection *c, struct mg_str *name, int ms,
     uint16_t id;
     mg_random(&id, sizeof(uint16_t));
     // TODO(): traverse reqs and check id != reqs->txnid; repeat otherwise
-    if (reqs != NULL) id = (uint16_t) (reqs->txnid + 1); // no collision
+    if (reqs != NULL) id = (uint16_t) (reqs->txnid + 1);  // no collision
     d->txnid = id;
     d->next = reqs;
     c->mgr->active_dns_requests = d;
@@ -423,13 +424,26 @@ static uint8_t *build_name(struct mg_str *name, uint8_t *p) {
   return p;
 }
 
-static uint8_t *build_a_record(struct mg_connection *c, uint8_t *p) {
+void mg_getlocaddr(struct mg_connection *, struct mg_addr *, struct mg_addr *);
+
+static uint8_t *build_a_record(struct mg_connection *c, uint8_t *p,
+                               struct mg_addr *addr) {
   memcpy(p, mdns_answer, sizeof(mdns_answer)), p += sizeof(mdns_answer);
+  if (addr != NULL && !addr->is_ip6) {
+    memcpy(p, &addr->addr.ip4, 4), p += 4;
+  } else {
 #if MG_ENABLE_TCPIP
-  memcpy(p, &c->mgr->ifp->ip, 4), p += 4;
+    memcpy(p, &c->mgr->ifp->ip, 4), p += 4;
 #else
-  memcpy(p, c->data, 4), p += 4;
+    struct mg_addr loc, to;
+    memset(&loc, 0, sizeof(loc));
+    to.is_ip6 = false;
+    to.port = mg_htons(5353);
+    to.addr.ip4 = MG_IPV4(224, 0, 0, 51);
+    mg_getlocaddr(c, &to, &loc);
+    memcpy(p, &loc.addr.ip4, 4), p += 4;
 #endif
+  }
   return p;
 }
 
@@ -523,7 +537,7 @@ static void handle_mdns_query(struct mg_connection *c) {
     qh->num_questions = mg_htons(1);      // parser sanity
     mg_dns_parse_name(c->recv.buf, c->recv.len, 12, name, sizeof(name));
     name_len = (uint8_t) strlen(name);  // verify it ends in .local
-    if (strcmp(".local", &name[name_len - 6]) != 0 ||
+    if (name_len <= 6 || strcmp(".local", &name[name_len - 6]) != 0 ||
         (rr.aclass != 1 && rr.aclass != 0xff))
       return;
     name[name_len -= 6] = '\0';  // remove .local
@@ -545,7 +559,8 @@ static void handle_mdns_query(struct mg_connection *c) {
             ("PTR request for %s", req.is_listing ? "services listing" : name));
         req.reqname = mg_str_n(name, name_len);
       } else if (rr.atype == MG_DNS_RTYPE_SRV || rr.atype == MG_DNS_RTYPE_TXT) {
-        MG_DEBUG(("%s request for %s", rr.atype == MG_DNS_RTYPE_SRV ? "SRV" : "TXT", name));
+        MG_DEBUG(("%s request for %s",
+                  rr.atype == MG_DNS_RTYPE_SRV ? "SRV" : "TXT", name));
         // if possible, check it starts with our name, users will check it ends
         // in a service name they handle
         if (c->fn_data != NULL) {
@@ -602,7 +617,7 @@ static void handle_mdns_query(struct mg_connection *c) {
       offset = mg_htons((uint16_t) (o - buf));
       memcpy(p, &offset, 2);  // point to target name, in record
       *p |= 0xC0, p += 2;
-      p = build_a_record(c, p);
+      p = build_a_record(c, p, req.addr);
     } else if (rr.atype == MG_DNS_RTYPE_TXT) {
       p = build_srv_name(p, req.r);
       p = build_txt_record(p, req.r);
@@ -619,16 +634,17 @@ static void handle_mdns_query(struct mg_connection *c) {
       offset = mg_htons((uint16_t) (o - buf));
       memcpy(p, &offset, 2);  // point to target name, in record
       *p |= 0xC0, p += 2;
-      p = build_a_record(c, p);
+      p = build_a_record(c, p, req.addr);
     } else {  // A requested
       // RFC-6762 6: 0 Auth, 0 Additional RRs
       if (respname->buf == NULL || respname->len == 0) return;
       p = build_name(respname, p);
-      p = build_a_record(c, p);
+      p = build_a_record(c, p, req.addr);
     }
     if (!req.is_unicast) mg_multicast_restore(c, (uint8_t *) &c->loc);
     mg_send(c, buf, (size_t) (p - buf));  // And send it!
-    MG_DEBUG(("mDNS %c response sent", req.is_unicast ? 'U' : 'M'));
+    MG_DEBUG(("%M > %M", mg_print_ip_port, &c->loc, mg_print_ip_port, &c->rem));
+    MG_DEBUG(("mDNS %s response sent", req.is_unicast ? "unicast" : "mcast"));
   }
 }
 
@@ -641,22 +657,27 @@ static void handle_mdns_response(struct mg_connection *c) {
   MG_VERBOSE(("mDNS response parsed, result=%d", (int) n));
   if (n > 0) {
     // RFC-6762 Appendix C, RFC2181 11: m(n + 1-63), max 255 + 0x0
-    char name[256]; 
+    char name[256];
     uint8_t name_len;
     struct mg_mdns_resp resp;
     memset(&resp, 0, sizeof(resp));
     if (rh->num_answers > mg_htons(1)) MG_DEBUG(("ignoring > 1 answers"));
     mg_dns_parse_name(c->recv.buf, c->recv.len, 12, name, sizeof(name));
     name_len = (uint8_t) strlen(name);  // verify it ends in .local
-    MG_VERBOSE(("RR %u %u %s", (unsigned int) rr.atype, (unsigned int) rr.aclass, name));
-    if (rr.alen == 4 && rr.atype == MG_DNS_RTYPE_A && (rr.aclass & 0x7FFF) == 1) {
+    MG_VERBOSE(("RR %u %u %s", (unsigned int) rr.atype,
+                (unsigned int) rr.aclass, name));
+    if (rr.alen == 4 && rr.atype == MG_DNS_RTYPE_A &&
+        (rr.aclass & 0x7FFF) == 1) {
       resp.addr.is_ip6 = false;
-      memcpy(resp.addr.addr.ip, (char *)(rh + 1) + n - 4, 4);
-      MG_DEBUG(("A response from %.*s = %M", name_len, name, mg_print_ip, &resp.addr));
-//    } else if (rr.alen == 16 && rr.atype == MG_DNS_RTYPE_AAAA && (rr.aclass & 0x7FFF) == 1) {
-//      resp.addr.is_ip6 = true;
-//      memcpy(resp.addr.addr.ip, (char *)(rh + 1) + n - 16], 16);
-//      MG_DEBUG(("AAAA response from %.*s = %M", name_len, name, mg_print_ip, &resp.addr));
+      memcpy(resp.addr.addr.ip, (char *) (rh + 1) + n - 4, 4);
+      MG_DEBUG(("A response from %.*s = %M", name_len, name, mg_print_ip,
+                &resp.addr));
+      //    } else if (rr.alen == 16 && rr.atype == MG_DNS_RTYPE_AAAA &&
+      //    (rr.aclass & 0x7FFF) == 1) {
+      //      resp.addr.is_ip6 = true;
+      //      memcpy(resp.addr.addr.ip, (char *)(rh + 1) + n - 16], 16);
+      //      MG_DEBUG(("AAAA response from %.*s = %M", name_len, name,
+      //      mg_print_ip, &resp.addr));
     } else {
       return;
     }
@@ -697,9 +718,10 @@ struct mg_connection *mg_mdns_listen(struct mg_mgr *mgr, mg_event_handler_t fn,
   return c;
 }
 
-bool mg_mdns_query(struct mg_connection *c, const char *name, unsigned int rtype) {
+bool mg_mdns_query(struct mg_connection *c, const char *name,
+                   unsigned int rtype) {
   struct mg_str name_;
-  name_.buf = (char *)name, name_.len = strlen(name);
+  name_.buf = (char *) name, name_.len = strlen(name);
   mg_multicast_restore(c, (uint8_t *) &c->loc);
   (void) rtype;
   return mg_dns_send(c, &name_, 0, false);
@@ -10417,15 +10439,17 @@ static socklen_t tousa(struct mg_addr *a, union usa *usa) {
 
 static void tomgaddr(union usa *usa, struct mg_addr *a, bool is_ip6) {
   a->is_ip6 = is_ip6;
-  a->port = usa->sin.sin_port;
-  memcpy(&a->addr.ip, &usa->sin.sin_addr, sizeof(uint32_t));
 #if MG_ENABLE_IPV6
   if (is_ip6) {
     memcpy(a->addr.ip, &usa->sin6.sin6_addr, sizeof(a->addr.ip));
     a->port = usa->sin6.sin6_port;
     a->scope_id = (uint8_t) usa->sin6.sin6_scope_id;
-  }
+  } else
 #endif
+  {
+    a->port = usa->sin.sin_port;
+    memcpy(&a->addr.ip, &usa->sin.sin_addr, sizeof(uint32_t));
+  }
 }
 
 static void setlocaddr(MG_SOCKET_TYPE fd, struct mg_addr *addr) {
@@ -10435,6 +10459,29 @@ static void setlocaddr(MG_SOCKET_TYPE fd, struct mg_addr *addr) {
     tomgaddr(&usa, addr, n != sizeof(usa.sin));
   }
 }
+
+// Get the local 'addr' the stack will use to connect to 'to'
+void mg_getlocaddr(struct mg_connection *c, struct mg_addr *to, struct mg_addr *addr);
+void mg_getlocaddr(struct mg_connection *c, struct mg_addr *to, struct mg_addr *addr) {
+  union usa usa;
+  socklen_t slen;
+  MG_SOCKET_TYPE fd;
+  int rc, af = to->is_ip6 ? AF_INET6 : AF_INET;
+  fd = socket(af, SOCK_DGRAM, IPPROTO_UDP);
+  if (fd == MG_INVALID_SOCKET) {
+    mg_error(c, "socket(): %d", MG_SOCK_ERR(-1));
+    return;
+  }
+  // NOTE(): TI-RTOS NDK may require binding
+  slen = tousa(to, &usa);
+  if ((rc = connect(fd, &usa.sa, slen)) != 0) {
+    mg_error(c, "connect: %d", MG_SOCK_ERR(rc));
+    return;
+  }
+  setlocaddr(fd, addr);
+  closesocket(fd);
+}
+
 
 static void iolog(struct mg_connection *c, char *buf, long n, bool r) {
   if (n == MG_IO_WAIT) {
