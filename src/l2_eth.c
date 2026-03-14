@@ -34,8 +34,8 @@ static const uint16_t eth_types[] = {
     0x8864   // PPPoE Session Stage
 };
 
-void mg_l2_eth_init(struct mg_l2addr *l2addr, uint16_t *mtu,
-                    uint16_t *framesize) {
+void mg_l2_eth_init(struct mg_tcpip_if *ifp) {
+  struct mg_l2addr *l2addr = (struct mg_l2addr *)ifp->mac;
   // If MAC is not set, make a random one
   if (l2addr->addr.mac[0] == 0 && l2addr->addr.mac[1] == 0 &&
       l2addr->addr.mac[2] == 0 && l2addr->addr.mac[3] == 0 &&
@@ -45,8 +45,14 @@ void mg_l2_eth_init(struct mg_l2addr *l2addr, uint16_t *mtu,
     MG_INFO(
         ("MAC not set. Generated random: %M", mg_print_mac, l2addr->addr.mac));
   }
-  *mtu = 1500;
-  *framesize = 1540;
+  ifp->mtu = 1500;
+  ifp->framesize = 1540;
+}
+
+bool mg_l2_eth_poll(struct mg_tcpip_if *ifp, bool expired_1000ms) {
+  (void) ifp;
+  (void) expired_1000ms;
+  return true;
 }
 
 uint8_t *mg_l2_eth_header(enum mg_l2proto proto, struct mg_l2addr *src,
@@ -58,10 +64,11 @@ uint8_t *mg_l2_eth_header(enum mg_l2proto proto, struct mg_l2addr *src,
   return (uint8_t *) (eth + 1);
 }
 
-size_t mg_l2_eth_footer(size_t len, uint8_t *frame) {
-  struct eth *eth = (struct eth *) frame;
-  // nothing to do; there is no len field in Ethernet, CRC is hw-calculated
-  return len + sizeof(*eth);
+size_t mg_l2_eth_footer(size_t len, uint8_t *cur) {
+  // there is no len field in Ethernet, CRC is hw-calculated; pad to 64 - CRC
+  size_t ethlen = len + sizeof(struct eth);
+  (void) cur;
+  return ethlen >= 60 ? ethlen : 60;
 }
 
 struct mg_l2addr *mg_l2_eth_mapip(enum mg_l2addrtype addrtype,
