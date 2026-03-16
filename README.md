@@ -220,6 +220,7 @@ Technical guides and deep dives into embedded web servers, WebUI integration and
 - [RP2350 OTA Firmware Update](https://mongoose.ws/articles/rp2350-ota-firmware-update/)
 - [STM32 Ethernet and caches](https://mongoose.ws/articles/stm32-ethernet-and-cache/)
 - [NXP RW612 OTA Firmware Update](https://mongoose.ws/articles/rw612-ota-firmware-update/)
+- [lwIP vs Mongoose - TCP/IP Stack Integration Benchmark](https://mongoose.ws/articles/lwip-vs-mongoose-tcpip-stack-integration/)
 
 
 ## Contributions
