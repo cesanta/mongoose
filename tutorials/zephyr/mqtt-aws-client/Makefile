@@ -1,10 +1,11 @@
 TOP_DIR ?= $(realpath $(CURDIR)/../../..)
 ZEPHYR_DIR ?= $(realpath $(CURDIR)/..)/zephyrproject
+REPO ?= zephyrprojectrtos/ci
 DOCKER ?= docker run --rm \
           -v $(TOP_DIR):$(TOP_DIR) \
           -w $(realpath $(CURDIR)) \
           -e ZEPHYR_BASE=$(ZEPHYR_DIR)/zephyr \
-          $(DOCKER_ARGS) zephyrprojectrtos/ci
+          $(DOCKER_ARGS) $(REPO) 
 BUILD_ARGS ?= -b nucleo_f746zg
 .PHONY: build
 
