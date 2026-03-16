@@ -35,7 +35,7 @@ static bool cmsis_init(struct mg_tcpip_if *ifp) {
   mac->PowerControl(ARM_POWER_FULL);
   if (cap.mac_address) {  // driver provides MAC address
     mac->GetMacAddress(&addr);
-    memcpy(ifp->mac, &addr, sizeof(ifp->mac));
+    memcpy(ifp->mac, &addr, sizeof(addr));
   } else {  // we provide MAC address
     memcpy(&addr, ifp->mac, sizeof(addr));
     mac->SetMacAddress(&addr);
