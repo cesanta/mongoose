@@ -16,11 +16,12 @@ jobs:
       - uses: actions/checkout@v4
         with: { fetch-depth: 2 }
       - run: test/setup_ga_docker_filesystem.sh
-      - run: make -C tutorials/zephyr init REPO=zephyrprojectrtos/ci REVNO="${{ matrix.revno }}"
+      - run: make -C tutorials/zephyr init REPO=zephyrprojectrtos/ci:v0.28.8 REVNO="${{ matrix.revno }}"
       - run: make -C tutorials/zephyr minify REVNO="${{ matrix.revno }}"
       - run: make -C tutorials/zephyr update
-      - run: make -C tutorials/zephyr/device-dashboard build
-      - run: make -C tutorials/zephyr/http-client build
-      - run: make -C tutorials/zephyr/http-server build
-      - run: make -C tutorials/zephyr/mqtt-aws-client build
-      - run: make -C tutorials/zephyr/websocket-server build
+      - run: make -C tutorials/zephyr/device-dashboard build REPO=zephyrprojectrtos/ci:v0.28.8
+      - run: make -C tutorials/zephyr/http-client build REPO=zephyrprojectrtos/ci:v0.28.8
+      - run: make -C tutorials/zephyr/http-server build REPO=zephyrprojectrtos/ci:v0.28.8
+      - run: make -C tutorials/zephyr/mqtt-aws-client build REPO=zephyrprojectrtos/ci:v0.28.8
+      - run: make -C tutorials/zephyr/websocket-server build REPO=zephyrprojectrtos/ci:v0.28.8
+# Latest CI image does not work with pre 4.4, they changed some SDK paths
