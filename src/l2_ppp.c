@@ -127,32 +127,36 @@ static uint8_t *l2_ppp_header(enum mg_l2proto proto, uint8_t *p) {
   return ppp_header(ppp_proto, p);
 }
 
-uint8_t *mg_l2_ppp_header(enum mg_l2proto proto, struct mg_l2addr *src,
-                          struct mg_l2addr *dst, uint8_t *frame) {
+uint8_t *mg_l2_ppp_header(struct mg_tcpip_if *ifp, enum mg_l2proto proto,
+                          struct mg_l2addr *src, struct mg_l2addr *dst,
+                          uint8_t *frame) {
+  (void) ifp;
   (void) src;
   (void) dst;
   return l2_ppp_header(proto, hdlc_header(frame));
 }
 
-extern uint8_t *mg_l2_eth_header(enum mg_l2proto proto, struct mg_l2addr *src,
-                                 struct mg_l2addr *dst, uint8_t *frame);
+extern uint8_t *mg_l2_eth_header(struct mg_tcpip_if *ifp, enum mg_l2proto proto,
+                                 struct mg_l2addr *src, struct mg_l2addr *dst,
+                                 uint8_t *frame);
 
-static uint8_t *pppoe_header(enum mg_l2proto proto, uint8_t code, uint16_t id,
-                             struct mg_l2addr *src, struct mg_l2addr *dst,
-                             uint8_t *frame) {
+static uint8_t *pppoe_header(struct mg_tcpip_if *ifp, enum mg_l2proto proto,
+                             uint8_t code, uint16_t id, struct mg_l2addr *src,
+                             struct mg_l2addr *dst, uint8_t *frame) {
   struct pppoe *pppoe =
-      (struct pppoe *) mg_l2_eth_header(proto, src, dst, frame);
+      (struct pppoe *) mg_l2_eth_header(ifp, proto, src, dst, frame);
   pppoe->vertype = 0x11;
   pppoe->code = code;
   pppoe->id = id;
   return (uint8_t *) (pppoe + 1);
 }
 
-uint8_t *mg_l2_pppoe_header(enum mg_l2proto proto, struct mg_l2addr *src,
-                            struct mg_l2addr *dst, uint8_t *frame) {
+uint8_t *mg_l2_pppoe_header(struct mg_tcpip_if *ifp, enum mg_l2proto proto,
+                            struct mg_l2addr *src, struct mg_l2addr *dst,
+                            uint8_t *frame) {
   (void) dst;
-  return l2_ppp_header(proto, pppoe_header(MG_TCPIP_L2PROTO_PPPoE_SESS, 0, s_id,
-                                           src, dst, frame));
+  return l2_ppp_header(proto, pppoe_header(ifp, MG_TCPIP_L2PROTO_PPPoE_SESS, 0,
+                                           s_id, src, dst, frame));
 }
 
 // Calculate FCS/CRC for PPP frames. Could be implemented faster using lookup
@@ -171,7 +175,7 @@ static uint16_t fcs_do(uint8_t *frame, size_t len) {
   return (uint16_t) (fcs & 0xffff);
 }
 
-size_t mg_l2_ppp_footer(size_t len, uint8_t *cur) {
+size_t mg_l2_ppp_trailer(struct mg_tcpip_if *ifp, size_t len, uint8_t *cur) {
   uint16_t crc;
   uint8_t *frame;
   len += sizeof(struct ppp) + sizeof(struct hdlc_);
@@ -180,19 +184,20 @@ size_t mg_l2_ppp_footer(size_t len, uint8_t *cur) {
   *cur++ = (uint8_t) ~crc;  // add CRC, note the byte order
   *cur++ = (uint8_t) (~crc >> 8);
   // there is no len field in PPP
+  (void) ifp;
   return len + 2;
 }
 
-extern size_t mg_l2_eth_footer(size_t len, uint8_t *cur);
+extern size_t mg_l2_eth_trailer(struct mg_tcpip_if *, size_t, uint8_t *);
 
-static size_t pppoe_footer(size_t len, uint8_t *cur) {
+static size_t pppoe_trailer(struct mg_tcpip_if *ifp, size_t len, uint8_t *cur) {
   struct pppoe *pppoe = (struct pppoe *) (cur - len - sizeof(struct pppoe));
   pppoe->len = mg_htons((uint16_t) len);
-  return mg_l2_eth_footer(PDIFF(pppoe, cur), cur);
+  return mg_l2_eth_trailer(ifp, PDIFF(pppoe, cur), cur);
 }
 
-size_t mg_l2_pppoe_footer(size_t len, uint8_t *cur) {
-  return pppoe_footer(len + sizeof(struct ppp), cur);
+size_t mg_l2_pppoe_trailer(struct mg_tcpip_if *ifp, size_t len, uint8_t *cur) {
+  return pppoe_trailer(ifp, len + sizeof(struct ppp), cur);
 }
 
 size_t mg_l2_driver_output(struct mg_tcpip_if *ifp, size_t len);
@@ -201,15 +206,15 @@ static uint8_t *ppp_tx_frame_header(struct mg_tcpip_if *ifp, uint16_t proto) {
   uint8_t *l2p = (uint8_t *) ifp->tx.buf;
   if (ifp->l2type == MG_TCPIP_L2_PPP)
     return ppp_header(proto, hdlc_header(l2p));
-  return ppp_header(proto, pppoe_header(MG_TCPIP_L2PROTO_PPPoE_SESS, 0, s_id,
-                                        (struct mg_l2addr *) ifp->mac,
+  return ppp_header(proto, pppoe_header(ifp, MG_TCPIP_L2PROTO_PPPoE_SESS, 0,
+                                        s_id, (struct mg_l2addr *) ifp->mac,
                                         (struct mg_l2addr *) ifp->gwmac, l2p));
 }
-static size_t ppp_tx_frame_footer(struct mg_tcpip_if *ifp, size_t len,
-                                  uint8_t *cur) {
+static size_t ppp_tx_frame_trailer(struct mg_tcpip_if *ifp, size_t len,
+                                   uint8_t *cur) {
   return mg_l2_driver_output(ifp, ifp->l2type == MG_TCPIP_L2_PPPoE
-                                      ? mg_l2_pppoe_footer(len, cur)
-                                      : mg_l2_ppp_footer(len, cur));
+                                      ? mg_l2_pppoe_trailer(ifp, len, cur)
+                                      : mg_l2_ppp_trailer(ifp, len, cur));
 }
 
 // Transmit a single PPP frame for the given protocol
@@ -217,7 +222,7 @@ static size_t ppp_tx_frame(struct mg_tcpip_if *ifp, uint16_t proto,
                            uint8_t *data, size_t datasz) {
   uint8_t *pay = ppp_tx_frame_header(ifp, proto);
   memcpy(pay, data, datasz);
-  return ppp_tx_frame_footer(ifp, datasz, pay + datasz);
+  return ppp_tx_frame_trailer(ifp, datasz, pay + datasz);
 }
 
 static void ppp_handle_lcp(struct mg_tcpip_if *ifp, uint8_t *lcpp,
@@ -372,7 +377,7 @@ static bool ppp_rx(struct mg_tcpip_if *ifp, enum mg_l2proto *proto,
       p = ppp_tx_frame_header(ifp, MG_PPP_PROTO_LCP);
       memmove(p, &rej, sizeof(rej));          // LCP reject
       memmove(p + sizeof(rej), ppp, msglen);  // rejected PPP message
-      ppp_tx_frame_footer(ifp, msglen + sizeof(rej), p + msglen + sizeof(rej));
+      ppp_tx_frame_trailer(ifp, msglen + sizeof(rej), p + msglen + sizeof(rej));
     }
       return false;
   }
@@ -394,7 +399,8 @@ bool mg_l2_ppp_rx(struct mg_tcpip_if *ifp, enum mg_l2proto *proto,
   return ppp_rx(ifp, proto, pay, raw);
 }
 
-struct mg_l2addr *mg_l2_ppp_getaddr(uint8_t *frame) {
+struct mg_l2addr *mg_l2_ppp_getaddr(struct mg_tcpip_if *ifp, uint8_t *frame) {
+  (void) ifp;
   (void) frame;
   return &s_mapip;  // bogus
 }
@@ -436,10 +442,10 @@ static size_t pppoe_tx_frame(struct mg_tcpip_if *ifp, uint8_t code, uint16_t id,
                              uint8_t *data, size_t datasz,
                              struct mg_l2addr *dst) {
   uint8_t *l2p = (uint8_t *) ifp->tx.buf;
-  uint8_t *p = pppoe_header(MG_TCPIP_L2PROTO_PPPoE_DISC, code, id,
+  uint8_t *p = pppoe_header(ifp, MG_TCPIP_L2PROTO_PPPoE_DISC, code, id,
                             (struct mg_l2addr *) ifp->mac, dst, l2p);
   memmove(p, data, datasz);
-  return mg_l2_driver_output(ifp, pppoe_footer(datasz, p + datasz));
+  return mg_l2_driver_output(ifp, pppoe_trailer(ifp, datasz, p + datasz));
 }
 
 extern struct mg_l2addr *mg_l2_eth_mapip(enum mg_l2addrtype, struct mg_addr *);
@@ -460,7 +466,7 @@ bool mg_l2_pppoe_poll(struct mg_tcpip_if *ifp, bool expired_1000ms) {
 
 extern bool mg_l2_eth_rx(struct mg_tcpip_if *ifp, enum mg_l2proto *proto,
                          struct mg_str *pay, struct mg_str *raw);
-extern struct mg_l2addr *mg_l2_eth_getaddr(uint8_t *);
+extern struct mg_l2addr *mg_l2_eth_getaddr(struct mg_tcpip_if *, uint8_t *);
 
 bool mg_l2_pppoe_rx(struct mg_tcpip_if *ifp, enum mg_l2proto *proto,
                     struct mg_str *pay, struct mg_str *raw) {
@@ -498,12 +504,13 @@ bool mg_l2_pppoe_rx(struct mg_tcpip_if *ifp, enum mg_l2proto *proto,
         taglen = sizeof(tags);
       }
       pppoe_tx_frame(ifp, MG_PPPoE_PADR, 0, p, taglen,
-                     mg_l2_eth_getaddr((uint8_t *) raw->buf));
+                     mg_l2_eth_getaddr(ifp, (uint8_t *) raw->buf));
       MG_DEBUG(("Sent PADR"));
       s_state = 1;
     } else if (s_state == 1 && pppoe->code == MG_PPPoE_PADS) {
       s_id = pppoe->id;
-      memcpy(&ifp->gwmac, mg_l2_eth_getaddr((uint8_t *) raw->buf)->addr.mac, 6);
+      memcpy(&ifp->gwmac,
+             mg_l2_eth_getaddr(ifp, (uint8_t *) raw->buf)->addr.mac, 6);
       MG_DEBUG(("PPPoE session 0x%04x started", mg_ntohs(s_id)));
       s_state = 2;
     } else if (s_state == 2 && pppoe->code == MG_PPPoE_PADT &&

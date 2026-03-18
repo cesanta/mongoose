@@ -192,12 +192,12 @@ struct pkt {
 
 // L2 API
 void mg_l2_init(struct mg_tcpip_if *ifp);
-uint8_t *mg_l2_header(enum mg_l2type type, enum mg_l2proto proto, uint8_t *src,
-                      uint8_t *dst, uint8_t *frame);
-size_t mg_l2_footer(enum mg_l2type type, size_t len, uint8_t *cur);
+uint8_t *mg_l2_header(struct mg_tcpip_if *ifp, enum mg_l2proto proto,
+                      uint8_t *src, uint8_t *dst, uint8_t *frame);
+size_t mg_l2_trailer(struct mg_tcpip_if *ifp, size_t len, uint8_t *cur);
 bool mg_l2_rx(struct mg_tcpip_if *ifp, enum mg_l2proto *proto,
               struct mg_str *pay, struct mg_str *raw);
-uint8_t *mg_l2_getaddr(enum mg_l2type type, uint8_t *frame);
+uint8_t *mg_l2_getaddr(struct mg_tcpip_if *ifp, uint8_t *frame);
 uint8_t *mg_l2_mapip(enum mg_l2type type, enum mg_l2addrtype addrtype,
                      struct mg_addr *ip);
 #if MG_ENABLE_IPV6
@@ -368,7 +368,7 @@ static size_t driver_output(struct mg_tcpip_if *ifp, size_t len) {
 void mg_tcpip_arp_request(struct mg_tcpip_if *ifp, uint32_t ip, uint8_t *mac) {
   uint8_t *l2p = (uint8_t *) ifp->tx.buf;
   struct arp *arp = (struct arp *) mg_l2_header(
-      ifp->l2type, MG_TCPIP_L2PROTO_ARP, ifp->mac,
+      ifp, MG_TCPIP_L2PROTO_ARP, ifp->mac,
       mg_l2_mapip(ifp->l2type, MG_TCPIP_L2ADDR_BCAST, NULL), l2p);
   memset(arp, 0, sizeof(*arp));
   arp->fmt = mg_htons(1), arp->pro = mg_htons(0x800), arp->hlen = 6,
@@ -376,8 +376,7 @@ void mg_tcpip_arp_request(struct mg_tcpip_if *ifp, uint32_t ip, uint8_t *mac) {
   arp->op = mg_htons(1), arp->tpa = ip, arp->spa = ifp->ip;
   memcpy(arp->sha, ifp->mac, sizeof(arp->sha));
   if (mac != NULL) memcpy(arp->tha, mac, sizeof(arp->tha));
-  driver_output(ifp,
-                mg_l2_footer(ifp->l2type, sizeof(*arp), (uint8_t *) (arp + 1)));
+  driver_output(ifp, mg_l2_trailer(ifp, sizeof(*arp), (uint8_t *) (arp + 1)));
 }
 
 static void onstatechange(struct mg_tcpip_if *ifp) {
@@ -405,7 +404,7 @@ static struct ip *tx_ip(struct mg_tcpip_if *ifp, uint8_t *l2_dst, uint8_t proto,
                         uint32_t ip_src, uint32_t ip_dst, size_t plen) {
   // ifp->tx.buf is 8-bit aligned, keep other headers as pointers, see pkt
   uint8_t *l2p = (uint8_t *) ifp->tx.buf;
-  struct ip *ip = (struct ip *) mg_l2_header(ifp->l2type, MG_TCPIP_L2PROTO_IPV4,
+  struct ip *ip = (struct ip *) mg_l2_header(ifp, MG_TCPIP_L2PROTO_IPV4,
                                              ifp->mac, l2_dst, l2p);
   memset(ip, 0, sizeof(*ip));
   ip->ver = 0x45;               // Version 4, header length 5 words
@@ -462,7 +461,7 @@ static bool tx_udp(struct mg_tcpip_if *ifp, uint8_t *l2_dst,
   {
     udp->csum = pcsum(ip, udp, sizeof(*udp) + len);
   }
-  l2_len = mg_l2_footer(ifp->l2type, l2_len, l3p + l2_len);
+  l2_len = mg_l2_trailer(ifp, l2_len, l3p + l2_len);
   return (driver_output(ifp, l2_len) == l2_len);
 }
 
@@ -576,9 +575,8 @@ static void rx_arp(struct mg_tcpip_if *ifp, struct pkt *pkt) {
     // ARP request. Make a response, then send
     // MG_VERBOSE(("ARP req from %M", mg_print_ip4, &pkt->arp->spa));
     uint8_t *l2p = (uint8_t *) ifp->tx.buf;
-    struct arp *arp =
-        (struct arp *) mg_l2_header(ifp->l2type, MG_TCPIP_L2PROTO_ARP, ifp->mac,
-                                    mg_l2_getaddr(ifp->l2type, pkt->l2), l2p);
+    struct arp *arp = (struct arp *) mg_l2_header(
+        ifp, MG_TCPIP_L2PROTO_ARP, ifp->mac, mg_l2_getaddr(ifp, pkt->l2), l2p);
     *arp = *pkt->arp;
     arp->op = mg_htons(2);
     memcpy(arp->tha, pkt->arp->sha, sizeof(pkt->arp->tha));
@@ -587,8 +585,7 @@ static void rx_arp(struct mg_tcpip_if *ifp, struct pkt *pkt) {
     arp->spa = ifp->ip;
     MG_DEBUG(("ARP: tell %M we're %M", mg_print_ip4, &arp->tpa, mg_print_mac,
               ifp->mac));
-    driver_output(
-        ifp, mg_l2_footer(ifp->l2type, sizeof(*arp), (uint8_t *) (arp + 1)));
+    driver_output(ifp, mg_l2_trailer(ifp, sizeof(*arp), (uint8_t *) (arp + 1)));
   } else if (pkt->arp->op == mg_htons(2)) {
     if (memcmp(pkt->arp->tha, ifp->mac, sizeof(pkt->arp->tha)) != 0) return;
     // MG_VERBOSE(("ARP resp from %M", mg_print_ip4, &pkt->arp->spa));
@@ -635,8 +632,8 @@ static void rx_icmp(struct mg_tcpip_if *ifp, struct pkt *pkt) {
     memset(icmp, 0, sizeof(*icmp));        // Set csum, type, code to 0
     memcpy(icmp + 1, pkt->pay.buf, plen);  // Copy RX payload to TX
     icmp->csum = ipcsum(icmp, sizeof(*icmp) + plen);
-    driver_output(ifp, mg_l2_footer(ifp->l2type, hlen + plen,
-                                    (uint8_t *) ip + hlen + plen));
+    driver_output(
+        ifp, mg_l2_trailer(ifp, hlen + plen, (uint8_t *) ip + hlen + plen));
   }
 }
 
@@ -689,8 +686,7 @@ static void rx_dhcp_client(struct mg_tcpip_if *ifp, struct pkt *pkt) {
       ifp->lease_expire = ifp->now + lease * 1000;
       MG_INFO(("Lease: %u sec (%lld)", lease, ifp->lease_expire / 1000));
       // assume DHCP server = router until ARP resolves
-      memcpy(ifp->gwmac, mg_l2_getaddr(ifp->l2type, pkt->l2),
-             sizeof(ifp->gwmac));
+      memcpy(ifp->gwmac, mg_l2_getaddr(ifp, pkt->l2), sizeof(ifp->gwmac));
       ifp->gw_ready = true;  // NOTE(): actual gw ARP won't retry now
       ifp->ip = ip, ifp->gw = gw, ifp->mask = mask;
       ifp->state = MG_TCPIP_STATE_IP;  // BOUND state
@@ -743,7 +739,7 @@ static void rx_dhcp_server(struct mg_tcpip_if *ifp, struct pkt *pkt) {
     memcpy(&res.options, opts, sizeof(opts));
     res.magic = pkt->dhcp->magic;
     res.xid = pkt->dhcp->xid;
-    mac = mg_l2_getaddr(ifp->l2type, pkt->l2);
+    mac = mg_l2_getaddr(ifp, pkt->l2);
     if (ifp->enable_get_gateway) {
       ifp->gw = res.yiaddr;  // set gw IP, best-effort gwmac as DHCP server's
       memcpy(ifp->gwmac, mac, sizeof(ifp->gwmac));
@@ -759,8 +755,8 @@ static struct ip6 *tx_ip6(struct mg_tcpip_if *ifp, uint8_t *l2_dst,
                           size_t plen) {
   // ifp->tx.buf is 8-bit aligned, keep other headers as pointers, see pkt
   uint8_t *l2p = (uint8_t *) ifp->tx.buf;
-  struct ip6 *ip6 = (struct ip6 *) mg_l2_header(
-      ifp->l2type, MG_TCPIP_L2PROTO_IPV6, ifp->mac, l2_dst, l2p);
+  struct ip6 *ip6 = (struct ip6 *) mg_l2_header(ifp, MG_TCPIP_L2PROTO_IPV6,
+                                                ifp->mac, l2_dst, l2p);
   memset(ip6, 0, sizeof(*ip6));
   ip6->ver = 0x60;  // Version 6, traffic class 0
   ip6->plen = mg_htons((uint16_t) plen);
@@ -787,8 +783,8 @@ static void tx_icmp6(struct mg_tcpip_if *ifp, uint8_t *l2_dst, uint64_t *ip_src,
   icmp6->csum = 0;              // RFC-4443 2.3, RFC-8200 8.1
   icmp6->csum = p6csum(ip6, icmp6, sizeof(*icmp6) + len);
   driver_output(ifp,
-                mg_l2_footer(ifp->l2type, sizeof(*ip6) + sizeof(*icmp6) + len,
-                             (uint8_t *) (ip6 + 1) + sizeof(*icmp6) + len));
+                mg_l2_trailer(ifp, sizeof(*ip6) + sizeof(*icmp6) + len,
+                              (uint8_t *) (ip6 + 1) + sizeof(*icmp6) + len));
 }
 
 // Neighbor Discovery Protocol, RFC-4861
@@ -1084,16 +1080,16 @@ static uint8_t *get_return_l2addr(struct mg_tcpip_if *ifp, struct mg_addr *rem,
   if (rem->is_ip6) {
     if (rem->addr.ip6[0] == ifp->ip6ll[0] ||
         match_prefix((uint8_t *) rem->addr.ip6, ifp->prefix, ifp->prefix_len))
-      return mg_l2_getaddr(ifp->l2type, pkt->l2);  // same LAN, get from frame
-    if (ifp->gw6_ready)                            // use the router
-      return ifp->gw6mac;  // ignore source address in frame
+      return mg_l2_getaddr(ifp, pkt->l2);  // same LAN, get from frame
+    if (ifp->gw6_ready)                    // use the router
+      return ifp->gw6mac;                  // ignore source address in frame
   } else
 #endif
   {
     if (ifp->ip != 0 && ((rem->addr.ip4 & ifp->mask) == (ifp->ip & ifp->mask)))
-      return mg_l2_getaddr(ifp->l2type, pkt->l2);  // same LAN, get from frame
-    if (ifp->gw_ready)                             // use the router
-      return ifp->gwmac;  // ignore source address in frame
+      return mg_l2_getaddr(ifp, pkt->l2);  // same LAN, get from frame
+    if (ifp->gw_ready)                     // use the router
+      return ifp->gwmac;                   // ignore source address in frame
   }
   MG_ERROR(("%M %s: No way back, can't respond", mg_print_ip_port, rem,
             is_udp ? "UDP" : "TCP"));
@@ -1194,8 +1190,8 @@ static size_t tx_tcp(struct mg_tcpip_if *ifp, uint8_t *l2_dst,
   MG_VERBOSE(("TCP %M -> %M fl %x len %u", mg_print_ip_port, ip_src,
               mg_print_ip_port, ip_dst, tcp->flags, len));
   return driver_output(
-      ifp, mg_l2_footer(ifp->l2type, PDIFF(l3p, (uint8_t *) tcp + hlen + len),
-                        (uint8_t *) tcp + hlen + len));
+      ifp, mg_l2_trailer(ifp, PDIFF(l3p, (uint8_t *) tcp + hlen + len),
+                         (uint8_t *) tcp + hlen + len));
 }
 
 static size_t tx_tcp_ctrlresp(struct mg_tcpip_if *ifp, struct pkt *pkt,

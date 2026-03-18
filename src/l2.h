@@ -6,7 +6,7 @@
 #if MG_ENABLE_TCPIP
 
 // no config defaults to 0 => Ethernet
-enum mg_l2type { MG_TCPIP_L2_ETH = 0, MG_TCPIP_L2_PPP, MG_TCPIP_L2_PPPoE};
+enum mg_l2type { MG_TCPIP_L2_ETH = 0, MG_TCPIP_L2_PPP, MG_TCPIP_L2_PPPoE };
 
 #if defined(__DCC__)
 #pragma pack(1)
@@ -20,24 +20,25 @@ struct mg_l2addr {
   } addr;
 };
 
+// L2 using L2 (PPPoE) must inherit the lower layer first, so they overlap
+struct eth_data {
+  uint16_t vlan_id;
+};
+struct pppoe_data {  // (struct eth_data *) &pppoe_data = pppoedata.eth
+  struct eth_data eth;
+};
+
+union mg_l2data {
+  struct eth_data eth;
+  struct pppoe_data pppoe;
+};
+
 #if defined(__DCC__)
 #pragma pack(0)
 #else
 #pragma pack(pop)
 #endif
 
-#if 0
-TODO(): ?
-struct eth_opts {
-  bool enable_crc32_check;         // Do a CRC check on RX frames and strip it
-  bool enable_mac_check;           // Do a MAC check on RX frames
-};
-struct mg_l2opts {
-  union {
-    struct eth_opts eth;
-  };
-};
-#endif
 
 enum mg_l2proto {
   MG_TCPIP_L2PROTO_IPV4 = 0,

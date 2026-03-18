@@ -19,6 +19,12 @@ struct eth {
   uint16_t type;   // Ethernet type
 };
 
+struct qtag {
+  uint16_t tpid;  // Ethernet 802.1Q type
+  uint16_t tci;   // PCP, DEI, VLAN id
+#define VLAN_ID(x) ((uint16_t) ((x) &0x0FFF))
+};
+
 #if defined(__DCC__)
 #pragma pack(0)
 #else
@@ -35,7 +41,7 @@ static const uint16_t eth_types[] = {
 };
 
 void mg_l2_eth_init(struct mg_tcpip_if *ifp) {
-  struct mg_l2addr *l2addr = (struct mg_l2addr *)ifp->mac;
+  struct mg_l2addr *l2addr = (struct mg_l2addr *) ifp->mac;
   // If MAC is not set, make a random one
   if (l2addr->addr.mac[0] == 0 && l2addr->addr.mac[1] == 0 &&
       l2addr->addr.mac[2] == 0 && l2addr->addr.mac[3] == 0 &&
@@ -55,18 +61,32 @@ bool mg_l2_eth_poll(struct mg_tcpip_if *ifp, bool expired_1000ms) {
   return true;
 }
 
-uint8_t *mg_l2_eth_header(enum mg_l2proto proto, struct mg_l2addr *src,
-                          struct mg_l2addr *dst, uint8_t *frame) {
+uint8_t *mg_l2_eth_header(struct mg_tcpip_if *ifp, enum mg_l2proto proto,
+                          struct mg_l2addr *src, struct mg_l2addr *dst,
+                          uint8_t *frame) {
+  struct eth_data *d = &ifp->l2data.eth;
   struct eth *eth = (struct eth *) frame;
-  eth->type = mg_htons(eth_types[(unsigned int) proto]);
+  uint8_t *hlp;
+  hlp = (uint8_t *) (eth + 1);
   memcpy(eth->src, src->addr.mac, sizeof(eth->dst));
   memcpy(eth->dst, dst->addr.mac, sizeof(eth->dst));
-  return (uint8_t *) (eth + 1);
+  if (d->vlan_id == 0) {  // Traditional plain frame
+    eth->type = mg_htons(eth_types[(unsigned int) proto]);
+  } else {  // Add 802.1Q tag
+    struct qtag *qtag = (struct qtag *) &eth->type;
+    qtag->tpid = mg_htons(0x8100);
+    qtag->tci = mg_htons(d->vlan_id);  // PCP = default (best-effort)
+    hlp += sizeof(*qtag);
+    *(uint16_t *) (qtag + 1) = mg_htons(eth_types[(unsigned int) proto]);
+  }
+  return hlp;
 }
 
-size_t mg_l2_eth_footer(size_t len, uint8_t *cur) {
+size_t mg_l2_eth_trailer(struct mg_tcpip_if *ifp, size_t len, uint8_t *cur) {
+  struct eth_data *d = &ifp->l2data.eth;
   // there is no len field in Ethernet, CRC is hw-calculated; pad to 64 - CRC
-  size_t ethlen = len + sizeof(struct eth);
+  size_t ethlen =
+      len + sizeof(struct eth) + (d->vlan_id != 0 ? sizeof(struct qtag) : 0);
   (void) cur;
   return ethlen >= 60 ? ethlen : 60;
 }
@@ -77,26 +97,36 @@ struct mg_l2addr *mg_l2_eth_mapip(enum mg_l2addrtype addrtype,
 bool mg_l2_eth_rx(struct mg_tcpip_if *ifp, enum mg_l2proto *proto,
                   struct mg_str *pay, struct mg_str *raw) {
   struct eth *eth = (struct eth *) raw->buf;
+  struct eth_data *d = &ifp->l2data.eth;
   uint16_t type, len;
   unsigned int i;
-  if (raw->len < sizeof(*eth)) return false;  // Truncated - runt?
+  size_t hdrlen =
+      sizeof(struct eth) + (d->vlan_id != 0 ? sizeof(struct qtag) : 0);
+  if (raw->len < hdrlen) return false;  // Truncated - runt?
   len = (uint16_t) raw->len;
+  if (d->vlan_id == 0) {  // We don't handle VLANs
+    type = mg_ntohs(eth->type);
+  } else {  // We do, check 802.1Q tag
+    struct qtag *qtag = (struct qtag *) &eth->type;
+    if (qtag->tpid != mg_htons(0x8100)) return false;  // Untagged frame
+    if (mg_ntohs(VLAN_ID(qtag->tci)) != VLAN_ID(d->vlan_id))
+      return false;  // Not our VLAN
+    type = mg_ntohs(*(uint16_t *) (qtag + 1));
+  }
   if (ifp->enable_mac_check &&
       memcmp(eth->dst, ifp->mac, sizeof(eth->dst)) != 0 &&
       memcmp(eth->dst, mg_l2_eth_mapip(MG_TCPIP_L2ADDR_BCAST, NULL),
              sizeof(eth->dst)) != 0)
     return false;  // TODO(): add multicast addresses
-  if (ifp->enable_crc32_check && len > sizeof(*eth) + 4) {
+  if (ifp->enable_fcs_check && len > hdrlen + 4) {
     uint32_t crc;
     len -= 4;  // TODO(scaprile): check on bigendian
     crc = mg_crc32(0, (const char *) raw->buf, len);
     if (memcmp((void *) ((size_t) raw->buf + len), &crc, sizeof(crc)))
       return false;
   }
-  pay->buf = (char *) (eth + 1);
-  pay->len = len - sizeof(*eth);
-
-  type = mg_htons(eth->type);
+  pay->buf = ((char *) eth) + hdrlen;
+  pay->len = len - hdrlen;
   for (i = 0; i < sizeof(eth_types) / sizeof(uint16_t); i++) {
     if (type == eth_types[i]) break;
   }
@@ -110,7 +140,8 @@ bool mg_l2_eth_rx(struct mg_tcpip_if *ifp, enum mg_l2proto *proto,
   return true;
 }
 
-struct mg_l2addr *mg_l2_eth_getaddr(uint8_t *frame) {
+struct mg_l2addr *mg_l2_eth_getaddr(struct mg_tcpip_if *ifp, uint8_t *frame) {
+  (void) ifp;  // address field is before a possible 802.1Q tag
   struct eth *eth = (struct eth *) frame;
   return (struct mg_l2addr *) &eth->src;
 }
