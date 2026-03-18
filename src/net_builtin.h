@@ -47,8 +47,8 @@ struct mg_tcpip_if {
   bool enable_get_gateway;                // DCHP server sets client as gateway
   bool enable_req_dns;                    // DCHP client requests DNS server
   bool enable_req_sntp;                   // DCHP client requests SNTP server
-  bool enable_crc32_check;         // Do a CRC check on RX frames and strip it
-  bool enable_mac_check;           // Do a MAC check on RX frames
+  bool enable_fcs_check;           // Do a FCS check on RX frames and strip it
+  bool enable_mac_check;           // Do a hw addr check on RX frames
   bool update_mac_hash_table;      // Signal drivers to update MAC controller
   struct mg_tcpip_driver *driver;  // Low level driver
   void *driver_data;               // Driver-specific data
@@ -70,7 +70,8 @@ struct mg_tcpip_if {
 
   // Internal state, user can use it but should not change it
   uint8_t gwmac[sizeof(struct mg_l2addr)];  // Router's hw address
-  enum mg_l2type l2type;                    // Ethernet, PPP, etc.
+  enum mg_l2type l2type;                    // Ethernet, PPP, etc. (l2.h)
+  union mg_l2data l2data;                   // config and state for L2 (l2.h)
   char *dns4_url;                           // DNS server URL
   uint64_t now;                             // Current time
   uint64_t timer_1000ms;        // 1000 ms timer: for DHCP and link state

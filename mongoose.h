@@ -3210,7 +3210,7 @@ bool mg_wifi_ap_stop(void);
 #if MG_ENABLE_TCPIP
 
 // no config defaults to 0 => Ethernet
-enum mg_l2type { MG_TCPIP_L2_ETH = 0, MG_TCPIP_L2_PPP, MG_TCPIP_L2_PPPoE};
+enum mg_l2type { MG_TCPIP_L2_ETH = 0, MG_TCPIP_L2_PPP, MG_TCPIP_L2_PPPoE };
 
 #if defined(__DCC__)
 #pragma pack(1)
@@ -3226,24 +3226,25 @@ struct mg_l2addr {
   } addr;
 };
 
+// L2 using L2 (PPPoE) must inherit the lower layer first, so they overlap
+struct eth_data {
+  uint16_t vlan_id;
+};
+struct pppoe_data {  // (struct eth_data *) &pppoe_data = pppoedata.eth
+  struct eth_data eth;
+};
+
+union mg_l2data {
+  struct eth_data eth;
+  struct pppoe_data pppoe;
+};
+
 #if defined(__DCC__)
 #pragma pack(0)
 #else
 #pragma pack(pop)
 #endif
 
-#if 0
-TODO(): ?
-struct eth_opts {
-  bool enable_crc32_check;         // Do a CRC check on RX frames and strip it
-  bool enable_mac_check;           // Do a MAC check on RX frames
-};
-struct mg_l2opts {
-  union {
-    struct eth_opts eth;
-  };
-};
-#endif
 
 enum mg_l2proto {
   MG_TCPIP_L2PROTO_IPV4 = 0,
@@ -3308,8 +3309,8 @@ struct mg_tcpip_if {
   bool enable_get_gateway;                // DCHP server sets client as gateway
   bool enable_req_dns;                    // DCHP client requests DNS server
   bool enable_req_sntp;                   // DCHP client requests SNTP server
-  bool enable_crc32_check;         // Do a CRC check on RX frames and strip it
-  bool enable_mac_check;           // Do a MAC check on RX frames
+  bool enable_fcs_check;           // Do a FCS check on RX frames and strip it
+  bool enable_mac_check;           // Do a hw addr check on RX frames
   bool update_mac_hash_table;      // Signal drivers to update MAC controller
   struct mg_tcpip_driver *driver;  // Low level driver
   void *driver_data;               // Driver-specific data
@@ -3331,7 +3332,8 @@ struct mg_tcpip_if {
 
   // Internal state, user can use it but should not change it
   uint8_t gwmac[sizeof(struct mg_l2addr)];  // Router's hw address
-  enum mg_l2type l2type;                    // Ethernet, PPP, etc.
+  enum mg_l2type l2type;                    // Ethernet, PPP, etc. (l2.h)
+  union mg_l2data l2data;                   // config and state for L2 (l2.h)
   char *dns4_url;                           // DNS server URL
   uint64_t now;                             // Current time
   uint64_t timer_1000ms;        // 1000 ms timer: for DHCP and link state
@@ -4034,41 +4036,6 @@ struct mg_tcpip_driver_tms570_data {
 
 
 
-#if MG_ENABLE_TCPIP && defined(MG_ENABLE_DRIVER_XMC7) && MG_ENABLE_DRIVER_XMC7
-
-struct mg_tcpip_driver_xmc7_data {
-  int mdc_cr;  // Valid values: -1, 0, 1, 2, 3, 4, 5
-  uint8_t phy_addr;
-};
-
-#ifndef MG_TCPIP_PHY_ADDR
-#define MG_TCPIP_PHY_ADDR 0
-#endif
-
-#ifndef MG_DRIVER_MDC_CR
-#define MG_DRIVER_MDC_CR 3
-#endif
-
-#define MG_TCPIP_DRIVER_INIT(mgr)                                 \
-  do {                                                            \
-    static struct mg_tcpip_driver_xmc7_data driver_data_;       \
-    static struct mg_tcpip_if mif_;                               \
-    driver_data_.mdc_cr = MG_DRIVER_MDC_CR;                       \
-    driver_data_.phy_addr = MG_TCPIP_PHY_ADDR;                    \
-    mif_.ip = MG_TCPIP_IP;                                        \
-    mif_.mask = MG_TCPIP_MASK;                                    \
-    mif_.gw = MG_TCPIP_GW;                                        \
-    mif_.driver = &mg_tcpip_driver_xmc7;                        \
-    mif_.driver_data = &driver_data_;                             \
-    MG_SET_MAC_ADDRESS(mif_.mac);                                 \
-    mg_tcpip_init(mgr, &mif_);                                    \
-    MG_INFO(("Driver: xmc7, MAC: %M", mg_print_mac, mif_.mac)); \
-  } while (0)
-
-#endif
-
-
-
 #if MG_ENABLE_TCPIP && defined(MG_ENABLE_DRIVER_XMC) && MG_ENABLE_DRIVER_XMC
 
 struct mg_tcpip_driver_xmc_data {
@@ -4114,6 +4081,41 @@ struct mg_tcpip_driver_xmc_data {
   } while (0)
 
 #endif
+
+
+#if MG_ENABLE_TCPIP && defined(MG_ENABLE_DRIVER_XMC7) && MG_ENABLE_DRIVER_XMC7
+
+struct mg_tcpip_driver_xmc7_data {
+  int mdc_cr;  // Valid values: -1, 0, 1, 2, 3, 4, 5
+  uint8_t phy_addr;
+};
+
+#ifndef MG_TCPIP_PHY_ADDR
+#define MG_TCPIP_PHY_ADDR 0
+#endif
+
+#ifndef MG_DRIVER_MDC_CR
+#define MG_DRIVER_MDC_CR 3
+#endif
+
+#define MG_TCPIP_DRIVER_INIT(mgr)                                 \
+  do {                                                            \
+    static struct mg_tcpip_driver_xmc7_data driver_data_;       \
+    static struct mg_tcpip_if mif_;                               \
+    driver_data_.mdc_cr = MG_DRIVER_MDC_CR;                       \
+    driver_data_.phy_addr = MG_TCPIP_PHY_ADDR;                    \
+    mif_.ip = MG_TCPIP_IP;                                        \
+    mif_.mask = MG_TCPIP_MASK;                                    \
+    mif_.gw = MG_TCPIP_GW;                                        \
+    mif_.driver = &mg_tcpip_driver_xmc7;                        \
+    mif_.driver_data = &driver_data_;                             \
+    MG_SET_MAC_ADDRESS(mif_.mac);                                 \
+    mg_tcpip_init(mgr, &mif_);                                    \
+    MG_INFO(("Driver: xmc7, MAC: %M", mg_print_mac, mif_.mac)); \
+  } while (0)
+
+#endif
+
 
 #ifdef __cplusplus
 }
