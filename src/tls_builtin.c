@@ -555,14 +555,19 @@ static int mg_tls_recv_record(struct mg_connection *c) {
   nonce[11] ^= (uint8_t) ((seq) & 255U);
 #if MG_ENABLE_CHACHA20
   {
+    uint8_t associated_data[5] = {MG_TLS_APP_DATA, 0x03, 0x03,
+                                  (uint8_t) ((msgsz >> 8) & 0xff),
+                                  (uint8_t) (msgsz & 0xff)};
     uint8_t *dec = (uint8_t *) mg_calloc(1, msgsz);
     size_t n;
     if (dec == NULL) {
       mg_error(c, "TLS OOM");
       return -1;
     }
-    n = mg_chacha20_poly1305_decrypt(dec, key, nonce, msg, msgsz);
+    n = mg_chacha20_poly1305_decrypt(dec, key, nonce, associated_data,
+                                     sizeof(associated_data), msg, msgsz);
     if (n == (size_t) -1) {
+      mg_free(dec);
       mg_error(c, "decryption error");
       return -1;
     }
@@ -570,8 +575,18 @@ static int mg_tls_recv_record(struct mg_connection *c) {
     mg_free(dec);
   }
 #else
-  mg_gcm_initialize();
-  mg_aes_gcm_decrypt(msg, msg, msgsz - 16, key, 16, nonce, sizeof(nonce));
+  {
+    uint8_t associated_data[5] = {MG_TLS_APP_DATA, 0x03, 0x03,
+                                  (uint8_t) ((msgsz >> 8) & 0xff),
+                                  (uint8_t) (msgsz & 0xff)};
+    mg_gcm_initialize();
+    if (mg_aes_gcm_decrypt(msg, msg, msgsz - 16, key, 16, nonce, sizeof(nonce),
+                           associated_data, sizeof(associated_data),
+                           msg + msgsz - 16, 16) != 0) {
+      mg_error(c, "GCM tag verify failed");
+      return -1;
+    }
+  }
 #endif
 
   r = msgsz - 16 - 1;
@@ -1497,7 +1512,7 @@ static int mg_tls_verify_cert_san(const uint8_t *der, size_t dersz,
       if (mg_match(mg_str(server_name), mg_str_n((char *) name.value, name.len),
                    NULL))
         return 1;  // and matches the host name
-    }              // TODO(): add IPv6 comparison, more items ?
+    }  // TODO(): add IPv6 comparison, more items ?
   }
   return -1;
 }
@@ -1525,7 +1540,7 @@ static int mg_tls_verify_cert_signature(const struct mg_tls_cert *cert,
                             mg_uecc_secp256r1());
     } else if (issuer->pubkey.len == 96) {
       MG_VERBOSE(("ignore secp386 for now"));
-      return 1;
+      return 0;
     } else {
       MG_ERROR(("unsupported public key length: %d", issuer->pubkey.len));
       return 0;
@@ -1640,6 +1655,14 @@ static int mg_tls_recv_cert(struct mg_connection *c, bool is_client) {
             mg_tls_verify_cert_san(cert, certsz, tls->hostname, &c->rem) <= 0 &&
             mg_tls_verify_cert_cn(&ci->subj, tls->hostname) <= 0) {
           mg_error(c, "failed to verify hostname");
+          return -1;
+        }
+        if (ci->pubkey.len > sizeof(tls->pubkey)) {
+          mg_error(c, "invalid certificate length");
+          return -1;
+        }
+        if (ci->pubkey.len > sizeof(tls->pubkey)) {
+          mg_error(c, "peer public key too large");
           return -1;
         }
         memmove(tls->pubkey, ci->pubkey.buf, ci->pubkey.len);
@@ -1989,7 +2012,7 @@ static int mg_rsa_parse_der_int(const uint8_t **p, const uint8_t *end,
   *p = value_end;
 
   MG_VERBOSE(("DER INT: parsed %u bytes (skipped zero=%d)", len,
-              (size_t)(value_end - value_start) != (size_t) len ? 1 : 0));
+              (size_t) (value_end - value_start) != (size_t) len ? 1 : 0));
   return 0;
 }
 
@@ -2499,7 +2522,7 @@ long mg_tls_send(struct mg_connection *c, const void *buf, size_t len) {
     if (!mg_tls_encrypt(c, (const uint8_t *) buf, len, MG_TLS_APP_DATA))
       return 0;  // returning 0 means an OOM condition (iobuf couldn't resize),
                  // yet this is so far recoverable, let the caller decide
-  }              // else, resend outstanding encrypted data in tls->send
+  }  // else, resend outstanding encrypted data in tls->send
   while (tls->send.len > 0 &&
          (n = mg_io_send(c, tls->send.buf, tls->send.len)) > 0) {
     mg_iobuf_del(&tls->send, 0, (size_t) n);

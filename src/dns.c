@@ -287,6 +287,7 @@ void mg_resolve(struct mg_connection *c, const char *url) {
   }
 }
 
+// Response header length is 10 bytes
 static const uint8_t mdns_answer[] = {
     0, 1,          // 2 bytes - record type, A
     0, 1,          // 2 bytes - address class, INET
@@ -294,6 +295,7 @@ static const uint8_t mdns_answer[] = {
     0, 4           // 2 bytes - address length
 };
 
+// A name length is name->len + '.local' + 2 = name->len + 8
 static uint8_t *build_name(struct mg_str *name, uint8_t *p) {
   *p++ = (uint8_t) name->len;  // label 1
   memcpy(p, name->buf, name->len), p += name->len;
@@ -305,6 +307,7 @@ static uint8_t *build_name(struct mg_str *name, uint8_t *p) {
 
 void mg_getlocaddr(struct mg_connection *, struct mg_addr *, struct mg_addr *);
 
+// An A record length is 10 + 4 = 14 bytes
 static uint8_t *build_a_record(struct mg_connection *c, uint8_t *p,
                                struct mg_addr *addr) {
   memcpy(p, mdns_answer, sizeof(mdns_answer)), p += sizeof(mdns_answer);
@@ -326,6 +329,7 @@ static uint8_t *build_a_record(struct mg_connection *c, uint8_t *p,
   return p;
 }
 
+// A srv name length is r->srvcproto.len + '.local' + 2 = r->srvcproto.len + 8
 static uint8_t *build_srv_name(uint8_t *p, struct mg_dnssd_record *r) {
   *p++ = (uint8_t) r->srvcproto.len - 5;  // label 1, up to '._tcp'
   memcpy(p, r->srvcproto.buf, r->srvcproto.len), p += r->srvcproto.len;
@@ -346,6 +350,7 @@ static uint8_t *build_mysrv_name(struct mg_str *name, uint8_t *p,
 }
 #endif
 
+// A PTR record length is 10 + name->len + 3 = name->len + 13
 static uint8_t *build_ptr_record(struct mg_str *name, uint8_t *p, uint16_t o) {
   uint16_t offset = mg_htons(o);
   memcpy(p, mdns_answer, sizeof(mdns_answer));
@@ -360,6 +365,7 @@ static uint8_t *build_ptr_record(struct mg_str *name, uint8_t *p, uint16_t o) {
   return p;
 }
 
+// An SRV record length is 10 + name->len + 9 = name->len + 19
 static uint8_t *build_srv_record(struct mg_str *name, uint8_t *p,
                                  struct mg_dnssd_record *r, uint16_t o) {
   uint16_t port = mg_htons(r->port);
@@ -380,6 +386,7 @@ static uint8_t *build_srv_record(struct mg_str *name, uint8_t *p,
   return p;
 }
 
+// A TXT record length is r->txt.len (txt contents) + 10
 static uint8_t *build_txt_record(uint8_t *p, struct mg_dnssd_record *r) {
   uint16_t len = mg_htons((uint16_t) r->txt.len);
   memcpy(p, mdns_answer, sizeof(mdns_answer));
@@ -389,6 +396,8 @@ static uint8_t *build_txt_record(uint8_t *p, struct mg_dnssd_record *r) {
   memcpy(p, r->txt.buf, r->txt.len), p += r->txt.len;  // copy record verbatim
   return p;
 }
+
+// Each additional record has a 2-byte field pointing to the name label
 
 // RFC-6762 16: case-insensitivity --> RFC-1034, 1035
 
@@ -478,6 +487,10 @@ static void handle_mdns_query(struct mg_connection *c) {
       uint8_t *o = p, *aux;
       uint16_t offset;
       if (respname->buf == NULL || respname->len == 0) return;
+      if ((sizeof(*h) + req.r->srvcproto.len + 8 + respname->len + 13 + 2 +
+           respname->len + 19 + 2 + req.r->txt.len + 10 + 2 + 14) >
+          sizeof(buf))  // srv name + PTR + 2 + SRV + 2 + TXT + 2 + A
+        return;
       h->num_other_prs = mg_htons(3);  // 3 additional records
       p = build_srv_name(p, req.r);
       aux = build_ptr_record(respname, p, (uint16_t) (o - buf));
@@ -498,12 +511,18 @@ static void handle_mdns_query(struct mg_connection *c) {
       *p |= 0xC0, p += 2;
       p = build_a_record(c, p, req.addr);
     } else if (rr.atype == MG_DNS_RTYPE_TXT) {
+      if ((sizeof(*h) + req.r->srvcproto.len + 8 + req.r->txt.len + 10) >
+          sizeof(buf))  // srv name + TXT
+        return;
       p = build_srv_name(p, req.r);
       p = build_txt_record(p, req.r);
     } else if (rr.atype == MG_DNS_RTYPE_SRV) {  // serve SRV + A
       uint8_t *o, *aux;
       uint16_t offset;
       if (respname->buf == NULL || respname->len == 0) return;
+      if ((sizeof(*h) + req.r->srvcproto.len + 8 + respname->len + 19 + 2 +
+           14) > sizeof(buf))  // srv name + SRV + 2 + A
+        return;
       h->num_other_prs = mg_htons(1);  // 1 additional record
       p = build_srv_name(p, req.r);
       o = p - 7;  // point to '.local' label (\x05local\x00)
@@ -517,6 +536,8 @@ static void handle_mdns_query(struct mg_connection *c) {
     } else {  // A requested
       // RFC-6762 6: 0 Auth, 0 Additional RRs
       if (respname->buf == NULL || respname->len == 0) return;
+      if ((sizeof(*h) + respname->len + 8 + 14) > sizeof(buf))  // name + A
+        return;
       p = build_name(respname, p);
       p = build_a_record(c, p, req.addr);
     }

@@ -87,7 +87,9 @@ bool mg_match(struct mg_str s, struct mg_str p, struct mg_str *caps) {
     } else if (i < p.len && (p.buf[i] == '*' || p.buf[i] == '#')) {
       if (caps && !caps->buf) caps->len = 0, caps->buf = &s.buf[j];  // Init cap
       ni = i++, nj = j + 1;
-    } else if (nj > 0 && nj <= s.len && ((ni < p.len && p.buf[ni] == '#') || s.buf[j] != '/')) {
+    } else if (nj > 0 && nj <= s.len &&
+               ((ni < p.len && p.buf[ni] == '#') ||
+                (j < s.len && s.buf[j] != '/'))) {
       i = ni, j = nj;
       if (caps && caps->buf == NULL && caps->len == 0) {
         caps--, caps->len = 0;  // Restart previous cap
@@ -168,8 +170,7 @@ bool mg_str_to_num(struct mg_str str, int base, void *val, size_t val_len) {
         i++, ndigits++;
       }
       break;
-    default:
-      return false;
+    default: return false;
   }
   if (ndigits == 0) return false;
   if (i != str.len) return false;

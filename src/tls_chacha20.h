@@ -105,6 +105,7 @@ PORTABLE_8439_DECL size_t mg_chacha20_poly1305_encrypt(
 PORTABLE_8439_DECL size_t mg_chacha20_poly1305_decrypt(
     uint8_t *restrict plain_text, const uint8_t key[RFC_8439_KEY_SIZE],
     const uint8_t nonce[RFC_8439_NONCE_SIZE],
+    const uint8_t *restrict ad, size_t ad_size,
     const uint8_t *restrict cipher_text, size_t cipher_text_size);
 #if defined(__cplusplus)
 }

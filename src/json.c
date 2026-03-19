@@ -60,15 +60,28 @@ static double mg_atod(const char *p, int len, int *numlen) {
 
   // Exponential
   if (i < len && (p[i] == 'e' || p[i] == 'E')) {
-    int j, exp = 0, minus = 0;
+    int exp = 0, minus = 0;
     i++;
     if (i < len && p[i] == '-') minus = 1, i++;
     if (i < len && p[i] == '+') i++;
     while (i < len && p[i] >= '0' && p[i] <= '9' && exp < 308)
       exp = exp * 10 + (p[i++] - '0');
-    if (minus) exp = -exp;
-    for (j = 0; j < exp; j++) d *= 10.0;
-    for (j = 0; j < -exp; j++) d /= 10.0;
+    // use fast exponentiation
+    // https://en.wikipedia.org/wiki/Exponentiation_by_squaring
+    if (exp != 0) {
+      double x = 10, y = 1;
+      if (exp > 308) exp = 308;
+      if (minus) x = 0.1;
+      while (exp > 1) {
+        if (exp & 1) {
+          y *= x;
+          --exp;
+        }
+        x *= x;
+        exp >>= 1;
+      }
+      d *= x * y;
+    }
   }
 
   if (numlen != NULL) *numlen = i;

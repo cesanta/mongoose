@@ -1961,7 +1961,9 @@ int mg_aes_gcm_encrypt(unsigned char *output, const unsigned char *input,
 int mg_aes_gcm_decrypt(unsigned char *output, const unsigned char *input,
                        size_t input_length, const unsigned char *key,
                        const size_t key_len, const unsigned char *iv,
-                       const size_t iv_len);
+                       const size_t iv_len, unsigned char *aead,
+                       size_t aead_len, const unsigned char *tag,
+                       const size_t tag_len);
 
 #endif /* TLS_AES128_H */
 
@@ -2727,6 +2729,7 @@ PORTABLE_8439_DECL size_t mg_chacha20_poly1305_encrypt(
 PORTABLE_8439_DECL size_t mg_chacha20_poly1305_decrypt(
     uint8_t *restrict plain_text, const uint8_t key[RFC_8439_KEY_SIZE],
     const uint8_t nonce[RFC_8439_NONCE_SIZE],
+    const uint8_t *restrict ad, size_t ad_size,
     const uint8_t *restrict cipher_text, size_t cipher_text_size);
 #if defined(__cplusplus)
 }

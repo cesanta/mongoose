@@ -59,7 +59,9 @@ int mg_aes_gcm_encrypt(unsigned char *output, const unsigned char *input,
 int mg_aes_gcm_decrypt(unsigned char *output, const unsigned char *input,
                        size_t input_length, const unsigned char *key,
                        const size_t key_len, const unsigned char *iv,
-                       const size_t iv_len);
+                       const size_t iv_len, unsigned char *aead,
+                       size_t aead_len, const unsigned char *tag,
+                       const size_t tag_len);
 
 #endif /* TLS_AES128_H */
 

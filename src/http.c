@@ -237,6 +237,8 @@ static const char *skiptorn(const char *s, const char *end, struct mg_str *v) {
 static bool mg_http_parse_headers(const char *s, const char *end,
                                   struct mg_http_header *h, size_t max_hdrs) {
   size_t i, n;
+  int cl_count = 0, te_count = 0, auth_count = 0;
+  int conn_count = 0, cookie_count = 0;
   for (i = 0; i < max_hdrs; i++) {
     struct mg_str k = {NULL, 0}, v = {NULL, 0};
     if (s >= end) return false;
@@ -252,6 +254,13 @@ static bool mg_http_parse_headers(const char *s, const char *end,
     while (v.len > 0 && (v.buf[v.len - 1] == ' ' || v.buf[v.len - 1] == '\t')) {
       v.len--;  // Trim spaces
     }
+    // detect duplicated headers -> discard
+    if (((mg_strcasecmp(k, mg_str("Content-Length")) == 0) && (++cl_count > 1)) ||
+      ((mg_strcasecmp(k, mg_str("Transfer-Encoding")) == 0) && (++te_count > 1)) ||
+      ((mg_strcasecmp(k, mg_str("Authorization")) == 0) && (++auth_count > 1)) ||
+      ((mg_strcasecmp(k, mg_str("Cookie")) == 0) && (++cookie_count > 1)) ||
+      ((mg_strcasecmp(k, mg_str("Connection")) == 0) && (++conn_count > 1)))
+      return false;
     // MG_INFO(("--HH [%.*s] [%.*s]", (int) k.len, k.buf, (int) v.len, v.buf));
     h[i].name = k, h[i].value = v;  // Success. Assign values
   }
@@ -286,6 +295,8 @@ int mg_http_parse(const char *s, size_t len, struct mg_http_message *hm) {
   // If we're given a version, check that it is HTTP/x.x
   version_prefix_valid =
       hm->proto.len > 5 && (mg_ncasecmp(hm->proto.buf, "HTTP/", 5) == 0);
+  if (!is_response && !version_prefix_valid)
+    return -1; // no version detected in request
   if (!is_response && hm->proto.len > 0 &&
       (!version_prefix_valid || hm->proto.len != 8 ||
        (hm->proto.buf[5] < '0' || hm->proto.buf[5] > '9') ||
@@ -1035,7 +1046,11 @@ static void http_cb(struct mg_connection *c, int ev, void *ev_data) {
         hm.message.len = c->recv.len - ofs;  // and closes now, deliver MSG
         hm.body.len = hm.message.len - (size_t) (hm.body.buf - hm.message.buf);
       }
-      if ((te = mg_http_get_header(&hm, "Transfer-Encoding")) != NULL) {
+      bool is_http_1_0 =
+          hm.proto.len > 8 && mg_ncasecmp(hm.proto.buf, "HTTP/1.0", 8) == 0;
+      // HTTP/1.0 does not use "Transfer-Encoding: chunked"
+      if (!is_http_1_0 &&
+          (te = mg_http_get_header(&hm, "Transfer-Encoding")) != NULL) {
         if (mg_strcasecmp(*te, mg_str("chunked")) == 0) {
           is_chunked = true;
         } else {

@@ -82,7 +82,8 @@ static PORTABLE_8439_DECL void poly1305_finish(poly1305_context *ctx,
     defined(__AVR__)
 #define __HAVE_LITTLE_ENDIAN 1
 #endif
-// DO NOT test for LITTLE_ENDIAN, as it is defined as 1234 when including sys/types.h in GCC
+// DO NOT test for LITTLE_ENDIAN, as it is defined as 1234 when including
+// sys/types.h in GCC
 
 #ifndef TEST_SLOW_PATH
 #if defined(__HAVE_LITTLE_ENDIAN)
@@ -178,7 +179,7 @@ static void core_block(const uint32_t *restrict start,
   TIMES16(__FIN)
 }
 
-#define U8(x) ((uint8_t) ((x) &0xFF))
+#define U8(x) ((uint8_t) ((x) & 0xFF))
 
 #ifdef FAST_PATH
 #define xor32_le(dst, src, pad)            \
@@ -503,7 +504,7 @@ static unsigned short U8TO16(const unsigned char *p) {
 /* store a 16 bit unsigned integer as two 8 bit unsigned integers in little
  * endian */
 static void U16TO8(unsigned char *p, unsigned short v) {
-  p[0] = (v) &0xff;
+  p[0] = (v) & 0xff;
   p[1] = (v >> 8) & 0xff;
 }
 
@@ -514,7 +515,7 @@ static void poly1305_init(poly1305_context *ctx, const unsigned char key[32]) {
 
   /* r &= 0xffffffc0ffffffc0ffffffc0fffffff */
   t0 = U8TO16(&key[0]);
-  st->r[0] = (t0) &0x1fff;
+  st->r[0] = (t0) & 0x1fff;
   t1 = U8TO16(&key[2]);
   st->r[1] = ((t0 >> 13) | (t1 << 3)) & 0x1fff;
   t2 = U8TO16(&key[4]);
@@ -554,7 +555,7 @@ static void poly1305_blocks(poly1305_state_internal_t *st,
 
     /* h += m[i] */
     t0 = U8TO16(&m[0]);
-    st->h[0] += (t0) &0x1fff;
+    st->h[0] += (t0) & 0x1fff;
     t1 = U8TO16(&m[2]);
     st->h[1] += ((t0 >> 13) | (t1 << 3)) & 0x1fff;
     t2 = U8TO16(&m[4]);
@@ -716,7 +717,7 @@ static unsigned long U8TO32(const unsigned char *p) {
 /* store a 32 bit unsigned integer as four 8 bit unsigned integers in little
  * endian */
 static void U32TO8(unsigned char *p, unsigned long v) {
-  p[0] = (unsigned char) ((v) &0xff);
+  p[0] = (unsigned char) ((v) & 0xff);
   p[1] = (unsigned char) ((v >> 8) & 0xff);
   p[2] = (unsigned char) ((v >> 16) & 0xff);
   p[3] = (unsigned char) ((v >> 24) & 0xff);
@@ -980,8 +981,8 @@ typedef unsigned uint128_t __attribute__((mode(TI)));
 #define MUL128(out, x, y) out = ((uint128_t) x * y)
 #define ADD(out, in) out += in
 #define ADDLO(out, in) out += in
-#define SHR(in, shift) (uint64_t)(in >> (shift))
-#define LO(in) (uint64_t)(in)
+#define SHR(in, shift) (uint64_t) (in >> (shift))
+#define LO(in) (uint64_t) (in)
 
 #define POLY1305_NOINLINE __attribute__((noinline))
 #endif
@@ -1010,7 +1011,7 @@ static uint64_t U8TO64(const unsigned char *p) {
 /* store a 64 bit unsigned integer as eight 8 bit unsigned integers in little
  * endian */
 static void U64TO8(unsigned char *p, uint64_t v) {
-  p[0] = (unsigned char) ((v) &0xff);
+  p[0] = (unsigned char) ((v) & 0xff);
   p[1] = (unsigned char) ((v >> 8) & 0xff);
   p[2] = (unsigned char) ((v >> 16) & 0xff);
   p[3] = (unsigned char) ((v >> 24) & 0xff);
@@ -1028,7 +1029,7 @@ static void poly1305_init(poly1305_context *ctx, const unsigned char key[32]) {
   t0 = U8TO64(&key[0]);
   t1 = U8TO64(&key[8]);
 
-  st->r[0] = (t0) &0xffc0fffffff;
+  st->r[0] = (t0) & 0xffc0fffffff;
   st->r[1] = ((t0 >> 44) | (t1 << 20)) & 0xfffffc0ffff;
   st->r[2] = ((t1 >> 24)) & 0x00ffffffc0f;
 
@@ -1072,7 +1073,7 @@ static void poly1305_blocks(poly1305_state_internal_t *st,
     t0 = U8TO64(&m[0]);
     t1 = U8TO64(&m[8]);
 
-    h0 += ((t0) &0xfffffffffff);
+    h0 += ((t0) & 0xfffffffffff);
     h1 += (((t0 >> 44) | (t1 << 20)) & 0xfffffffffff);
     h2 += (((t1 >> 24)) & 0x3ffffffffff) | hibit;
 
@@ -1179,7 +1180,7 @@ static POLY1305_NOINLINE void poly1305_finish(poly1305_context *ctx,
   t0 = st->pad[0];
   t1 = st->pad[1];
 
-  h0 += ((t0) &0xfffffffffff);
+  h0 += ((t0) & 0xfffffffffff);
   c = (h0 >> 44);
   h0 &= 0xfffffffffff;
   h1 += (((t0 >> 44) | (t1 << 20)) & 0xfffffffffff) + c;
@@ -1256,7 +1257,7 @@ static PORTABLE_8439_DECL void pad_if_needed(poly1305_context *ctx,
   }
 }
 
-#define __u8(v) ((uint8_t) ((v) &0xFF))
+#define __u8(v) ((uint8_t) ((v) & 0xFF))
 
 // TODO: make this depending on the unaligned/native read size possible
 static PORTABLE_8439_DECL void write_64bit_int(poly1305_context *ctx,
@@ -1329,13 +1330,25 @@ PORTABLE_8439_DECL size_t mg_chacha20_poly1305_encrypt(
 
 PORTABLE_8439_DECL size_t mg_chacha20_poly1305_decrypt(
     uint8_t *restrict plain_text, const uint8_t key[RFC_8439_KEY_SIZE],
-    const uint8_t nonce[RFC_8439_NONCE_SIZE],
-    const uint8_t *restrict cipher_text, size_t cipher_text_size) {
+    const uint8_t nonce[RFC_8439_NONCE_SIZE], const uint8_t *restrict ad,
+    size_t ad_size, const uint8_t *restrict cipher_text,
+    size_t cipher_text_size) {
   // first we calculate the mac and see if it lines up, only then do we decrypt
   size_t actual_size = cipher_text_size - RFC_8439_TAG_SIZE;
+  uint8_t computed_mac[RFC_8439_TAG_SIZE];
+  int diff = 0;
+  size_t i;
   if (MG_OVERLAPPING(plain_text, actual_size, cipher_text, cipher_text_size)) {
     return (size_t) -1;
   }
+
+  poly1305_calculate_mac(computed_mac, cipher_text, actual_size, key, nonce, ad,
+                         ad_size);
+
+  // compare tags
+  for (i = 0; i < RFC_8439_TAG_SIZE; i++)
+    diff |= computed_mac[i] ^ cipher_text[actual_size + i];
+  if (diff != 0) return (size_t) -1;
 
   chacha20_xor_stream(plain_text, cipher_text, actual_size, key, nonce, 1);
   return actual_size;
