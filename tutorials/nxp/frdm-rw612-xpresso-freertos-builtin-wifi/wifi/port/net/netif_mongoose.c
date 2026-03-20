@@ -471,13 +471,17 @@ static void handle_scan_result(unsigned int i, mg_tcpip_event_handler_t evcb) {
   mg_mprintf(bssid, "%M", print_mac, r.bssid);
   bss.BSSID = bssid;
   bss.RSSI = (int8_t) -r.rssi;
-  bss.has_n = r.dot11n;  // TODO(scaprile): add 11ac, 11ax, etc
+  bss.has_n = r.dot11n;
+  bss.has_ac = r.dot11ac;
+  bss.has_ax = r.dot11ax;
   bss.channel = r.channel;
   bss.band = r.channel <= MAX_CHANNELS_BG ? MG_WIFI_BAND_2G : MG_WIFI_BAND_5G;
   bss.security = r.wep ? MG_WIFI_SECURITY_WEP : MG_WIFI_SECURITY_OPEN;
   if (r.wpa) bss.security |= MG_WIFI_SECURITY_WPA;
-  if (r.wpa2) bss.security |= MG_WIFI_SECURITY_WPA2;
-  // TODO(scaprile): add WPA3, enterprise
+  if (r.wpa2 || r.wpa2_sha256) bss.security |= MG_WIFI_SECURITY_WPA2;
+  if (r.wpa3_sae) bss.security |= MG_WIFI_SECURITY_WPA3;
+  if (r.wpa2_entp || r.wpa2_entp_sha256) bss.security |= MG_WIFI_SECURITY_WPA2_ENTERPRISE;
+  if (r.wpa3_1x_sha256 || r.wpa3_1x_sha384) bss.security |= MG_WIFI_SECURITY_WPA3_ENTERPRISE;
   MG_VERBOSE(("BSS: %.*s (%u) (%M) %d dBm %u", bss.SSID.len, bss.SSID.buf,
               bss.channel, mg_print_mac, bss.BSSID, (int) bss.RSSI,
               bss.security));
