@@ -26733,14 +26733,11 @@ static void st67w6_handle_scan_result(char *data, size_t len) {
       !mg_str_to_num(fields[0], 10, &val, 1))
     return;
   bss.security =
-      (val == 0)
-          ? MG_WIFI_SECURITY_OPEN
-          : MG_WIFI_SECURITY_WEP |
-                ((val == 2 || val == 4 || val == 5) ? MG_WIFI_SECURITY_WPA
-                                                    : 0) |
-                ((val == 3 || val == 4 || val == 7) ? MG_WIFI_SECURITY_WPA2
-                                                    : 0) |
-                ((val == 6 || val == 7) ? MG_WIFI_SECURITY_WPA3 : 0);
+      (val == 0) ? MG_WIFI_SECURITY_OPEN : (uint8_t) MG_WIFI_SECURITY_WEP;
+  if (val == 2 || val == 4) bss.security |= MG_WIFI_SECURITY_WPA;
+  if (val == 3 || val == 4 || val == 7) bss.security |= MG_WIFI_SECURITY_WPA2;
+  if (val == 6 || val == 7) bss.security |= MG_WIFI_SECURITY_WPA3;
+  if (val == 5) bss.security |= MG_WIFI_SECURITY_WPA_ENTERPRISE;
   if (!mg_span(fields[1], &fields[0], &fields[1], ',')) return;
   bss.SSID.buf = fields[0].buf + 1, bss.SSID.len = fields[0].len - 2;
   if (!mg_span(fields[1], &fields[0], &fields[1], ',')) return;
@@ -26770,7 +26767,7 @@ static void st67w6_handle_scan_result(char *data, size_t len) {
       !mg_str_to_num(fields[0], 10, &val, 1))
     return;
   bss.has_n = (val & 4) != 0;
-  // bss.has_ax = (val & 8) != 0;
+  bss.has_ax = (val & 8) != 0;
   bss.band = MG_WIFI_BAND_2G;  // NOT INFORMED with default options, no docs
   MG_VERBOSE(("BSS: %.*s (%u) (%M) %d dBm %u", bss.SSID.len, bss.SSID.buf,
               bss.channel, mg_print_mac, bss.BSSID, (int) bss.RSSI,
