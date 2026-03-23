@@ -170,6 +170,7 @@ jobs:
           - path: pico-sdk/pico-2-w-picosdk-baremetal-builtin
           - path: pico-sdk/w5500-evb-pico-picosdk-baremetal-builtin
           - path: pico-sdk/w5500-evb-pico2-picosdk-baremetal-builtin
+          - path: pico-sdk/w55rp20-evb-pico-picosdk-baremetal-builtin
           - path: stm32/nucleo-f429zi-make-baremetal-builtin
           - path: stm32/nucleo-f429zi-make-freertos-builtin
           - path: stm32/nucleo-f746zg-make-baremetal-builtin
@@ -346,6 +347,22 @@ jobs:
           fi
       - if: ${{ env.GO == 1 }}
         run: cd test/cube && make
+
+#  xpresso_examples:
+#    runs-on: ubuntu-latest
+#    env:
+#      GO: 0
+#    steps:
+#      - uses: actions/checkout@v4
+#        with: { fetch-depth: 2 }
+#      - run: |
+#          if ./test/match_changed_files.sh '^src|tutorials/stm32/nucleo-*-cube-*'; then
+#            echo GO=1 >> $GITHUB_ENV
+#            sudo pip install yq
+#          fi
+#      - if: ${{ env.GO == 1 }}
+#        run: cd test/xpresso && make
+
 
 #  test_f7:
 #    runs-on: ubuntu-latest
