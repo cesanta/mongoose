@@ -279,4 +279,5 @@ void web_init(struct mg_mgr *mgr) {
   mg_http_listen(mgr, HTTPS_URL, fn, (void *) 1);
   mg_timer_add(mgr, 10 * 60 * 1000, MG_TIMER_RUN_NOW | MG_TIMER_REPEAT,
                timer_sntp_fn, mgr);
+  mg_mem_files = mg_packed_files;  // Use generated packed filesystem
 }

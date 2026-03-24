@@ -3187,6 +3187,7 @@ static void eh7(struct mg_connection *c, int ev, void *ev_data) {
     memset(&sopts, 0, sizeof(sopts));
     sopts.root_dir = "/";
     sopts.fs = &mg_fs_packed;
+    mg_mem_files = mg_packed_files;
     mg_http_serve_dir(c, hm, &sopts);
   }
 }

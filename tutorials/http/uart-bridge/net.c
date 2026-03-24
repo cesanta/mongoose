@@ -225,6 +225,7 @@ void uart_bridge_fn(struct mg_connection *c, int ev, void *ev_data) {
 #if 1
       opts.root_dir = "/web_root";
       opts.fs = &mg_fs_packed;
+      mg_mem_files = mg_packed_files;
 #else
       opts.root_dir = "web_root";
 #endif
