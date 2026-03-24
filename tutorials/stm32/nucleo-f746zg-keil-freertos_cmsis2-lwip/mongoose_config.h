@@ -45,6 +45,7 @@
 #define MG_ENABLE_CUSTOM_RANDOM 1
 
 // <q> Enable packed (embedded) filesystem
+#define MG_ENABLE_PACKED_FS 1
 
 // <<< end of configuration section >>>
 

@@ -1,1 +1,1 @@
-../../../test/pack.js
+../../http/device-dashboard/pack.js
