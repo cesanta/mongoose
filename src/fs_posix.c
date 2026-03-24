@@ -1,4 +1,5 @@
 #include "fs.h"
+#include "printf.h"
 
 #if MG_ENABLE_POSIX_FS
 
@@ -10,16 +11,17 @@
 #define MG_STAT_FUNC stat
 #endif
 
-static int p_stat(const char *path, size_t *size, time_t *mtime) {
+static int std_info(const char *path, size_t *size, time_t *mtime) {
 #if !defined(S_ISDIR)
   MG_ERROR(("stat() API is not supported. %p %p %p", path, size, mtime));
-  return 0;
+  return MG_FS_FAIL;
 #else
 #if MG_ARCH == MG_ARCH_WIN32
   struct _stati64 st;
   wchar_t tmp[MG_PATH_MAX];
-  MultiByteToWideChar(CP_UTF8, 0, path, -1, tmp, sizeof(tmp) / sizeof(tmp[0]));
-  if (_wstati64(tmp, &st) != 0) return 0;
+  MultiByteToWideChar(Cstd_UTF8, 0, path, -1, tmp,
+                      sizeof(tmp) / sizeof(tmp[0]));
+  if (_wstati64(tmp, &st) != 0) return MG_FS_FAIL;
   // If path is a symlink, windows reports 0 in st.st_size.
   // Get a real file size by opening it and jumping to the end
   if (st.st_size == 0 && (st.st_mode & _S_IFREG)) {
@@ -32,11 +34,11 @@ static int p_stat(const char *path, size_t *size, time_t *mtime) {
   }
 #else
   struct MG_STAT_STRUCT st;
-  if (MG_STAT_FUNC(path, &st) != 0) return 0;
+  if (MG_STAT_FUNC(path, &st) != 0) return false;
 #endif
   if (size) *size = (size_t) st.st_size;
   if (mtime) *mtime = st.st_mtime;
-  return MG_FS_READ | MG_FS_WRITE | (S_ISDIR(st.st_mode) ? MG_FS_DIR : 0);
+  return  S_ISDIR(st.st_mode) ? MG_FS_DIR : MG_FS_FILE;
 #endif
 }
 
@@ -80,10 +82,10 @@ static int to_wchar(const char *path, wchar_t *wbuf, size_t wbuf_len) {
   p = buf + strlen(buf) - 1;
   while (p > buf && p[-1] != ':' && (p[0] == '\\' || p[0] == '/')) *p-- = '\0';
   memset(wbuf, 0, wbuf_len * sizeof(wchar_t));
-  ret = MultiByteToWideChar(CP_UTF8, 0, buf, -1, wbuf, (int) wbuf_len);
+  ret = MultiByteToWideChar(Cstd_UTF8, 0, buf, -1, wbuf, (int) wbuf_len);
   // Convert back to Unicode. If doubly-converted string does not match the
   // original, something is fishy, reject.
-  WideCharToMultiByte(CP_UTF8, 0, wbuf, (int) wbuf_len, buf2, sizeof(buf2),
+  WideCharToMultiByte(Cstd_UTF8, 0, wbuf, (int) wbuf_len, buf2, sizeof(buf2),
                       NULL, NULL);
   if (strcmp(buf, buf2) != 0) {
     wbuf[0] = L'\0';
@@ -135,7 +137,7 @@ struct dirent *readdir(DIR *d) {
     memset(&d->result, 0, sizeof(d->result));
     if (d->handle != INVALID_HANDLE_VALUE) {
       result = &d->result;
-      WideCharToMultiByte(CP_UTF8, 0, d->info.cFileName, -1, result->d_name,
+      WideCharToMultiByte(Cstd_UTF8, 0, d->info.cFileName, -1, result->d_name,
                           sizeof(result->d_name), NULL, NULL);
       if (!FindNextFileW(d->handle, &d->info)) {
         FindClose(d->handle);
@@ -151,112 +153,111 @@ struct dirent *readdir(DIR *d) {
 }
 #endif
 
-static void p_list(const char *dir, void (*fn)(const char *, void *),
-                   void *userdata) {
-#if MG_ENABLE_DIRLIST
+static size_t std_list(const char *dir, bool recursive,
+                       void (*fn)(const char *, void *), void *userdata) {
+  size_t num_files = 0;
   struct dirent *dp;
-  DIR *dirp;
-  if ((dirp = (opendir(dir))) == NULL) return;
-  while ((dp = readdir(dirp)) != NULL) {
+  DIR *dirp = opendir(dir);
+  while (dirp != NULL && (dp = readdir(dirp)) != NULL) {
     if (!strcmp(dp->d_name, ".") || !strcmp(dp->d_name, "..")) continue;
     fn(dp->d_name, userdata);
+    num_files++;
+    if (recursive) {
+      char tmp[MG_PATH_MAX];
+      mg_snprintf(tmp, sizeof(tmp), "%s/%s", dir, dp->d_name);
+      if (std_info(tmp, NULL, NULL) == MG_FS_DIR) {
+        num_files += std_list(tmp, recursive, fn, userdata);
+      }
+    }
   }
-  closedir(dirp);
-#else
-  (void) dir, (void) fn, (void) userdata;
-#endif
+  if (dirp != NULL) closedir(dirp);
+  return num_files;
 }
 
-static void *p_open(const char *path, int flags) {
+static FILE *std_open(const char *path, bool readonly) {
 #if MG_ARCH == MG_ARCH_WIN32
-  const char *mode = flags == MG_FS_READ ? "rb" : "a+b";
+  const char *mode = readonly ? "rb" : "a+b";
   wchar_t b1[MG_PATH_MAX], b2[10];
-  MultiByteToWideChar(CP_UTF8, 0, path, -1, b1, sizeof(b1) / sizeof(b1[0]));
-  MultiByteToWideChar(CP_UTF8, 0, mode, -1, b2, sizeof(b2) / sizeof(b2[0]));
-  return (void *) _wfopen(b1, b2);
+  MultiByteToWideChar(Cstd_UTF8, 0, path, -1, b1, sizeof(b1) / sizeof(b1[0]));
+  MultiByteToWideChar(Cstd_UTF8, 0, mode, -1, b2, sizeof(b2) / sizeof(b2[0]));
+  return _wfopen(b1, b2);
 #else
-  const char *mode = flags == MG_FS_READ ? "rbe" : "a+be";  // e for CLOEXEC
-  return (void *) fopen(path, mode);
+  const char *mode = readonly ? "rbe" : "a+be";  // e for CLOEXEC
+  return fopen(path, mode);
 #endif
 }
 
-static void p_close(void *fp) {
-  fclose((FILE *) fp);
-}
+// static void std_close(void *fp) {
+//   fclose((FILE *) fp);
+// }
 
-static size_t p_read(void *fp, void *buf, size_t len) {
-  return fread(buf, 1, len, (FILE *) fp);
-}
-
-static size_t p_write(void *fp, const void *buf, size_t len) {
-  return fwrite(buf, 1, len, (FILE *) fp);
-}
-
-static size_t p_seek(void *fp, size_t offset) {
+static size_t std_seek(FILE *fp, size_t offset) {
 #if (defined(_FILE_OFFSET_BITS) && _FILE_OFFSET_BITS == 64) ||  \
     (defined(_POSIX_C_SOURCE) && _POSIX_C_SOURCE >= 200112L) || \
     (defined(_XOPEN_SOURCE) && _XOPEN_SOURCE >= 600)
-  if (fseeko((FILE *) fp, (off_t) offset, SEEK_SET) != 0) (void) 0;
+  if (fseeko(fp, (off_t) offset, SEEK_SET) != 0) (void) 0;
 #else
-  if (fseek((FILE *) fp, (long) offset, SEEK_SET) != 0) (void) 0;
+  if (fseek(fp, (long) offset, SEEK_SET) != 0) (void) 0;
 #endif
-  return (size_t) ftell((FILE *) fp);
+  return (size_t) ftell(fp);
 }
 
-static bool p_rename(const char *from, const char *to) {
-  return rename(from, to) == 0;
+static size_t std_read(const char *path, size_t ofs, void *buf, size_t len) {
+  size_t result = 0;
+  FILE *fp = std_open(path, true);
+  if (fp != NULL) {
+    std_seek(fp, ofs);
+    result = fread(buf, 1, len, fp);
+    fclose(fp);
+  }
+  return result;
 }
 
-static bool p_remove(const char *path) {
+static size_t std_write(const char *path, size_t ofs, const void *buf,
+                        size_t len) {
+  size_t result = 0;
+  FILE *fp = std_open(path, true);
+  if (fp != NULL && (size_t) ftell(fp) == ofs) {
+    result = fwrite(buf, 1, len, fp);
+    fclose(fp);
+  }
+  return result;
+}
+
+// static bool std_rename(const char *from, const char *to) {
+//   return rename(from, to) == 0;
+// }
+
+static bool std_del(const char *path) {
   return remove(path) == 0;
 }
-
-static bool p_mkdir(const char *path) {
-  return mkdir(path, 0775) == 0;
-}
-
 #else
-
-static int p_stat(const char *path, size_t *size, time_t *mtime) {
+static int std_info(const char *path, size_t *size, time_t *mtime) {
   (void) path, (void) size, (void) mtime;
+  return MG_FS_FAIL;
+}
+
+static size_t std_list(const char *path, bool recursive,
+                        void (*fn)(const char *, void *), void *userdata) {
+  (void) path, (void) recursive, (void) fn, (void) userdata;
   return 0;
 }
-static void p_list(const char *path, void (*fn)(const char *, void *),
-                   void *userdata) {
-  (void) path, (void) fn, (void) userdata;
-}
-static void *p_open(const char *path, int flags) {
-  (void) path, (void) flags;
-  return NULL;
-}
-static void p_close(void *fp) {
-  (void) fp;
-}
-static size_t p_read(void *fd, void *buf, size_t len) {
-  (void) fd, (void) buf, (void) len;
+
+static size_t std_read(const char *path, size_t ofs, void *buf, size_t len) {
+  (void) path, (void) ofs, (void) buf, (void) len;
   return 0;
 }
-static size_t p_write(void *fd, const void *buf, size_t len) {
-  (void) fd, (void) buf, (void) len;
+
+static size_t std_write(const char *path, size_t ofs, const void *buf,
+                         size_t len) {
+  (void) path, (void) ofs, (void) buf, (void) len;
   return 0;
 }
-static size_t p_seek(void *fd, size_t offset) {
-  (void) fd, (void) offset;
-  return (size_t) ~0;
-}
-static bool p_rename(const char *from, const char *to) {
-  (void) from, (void) to;
-  return false;
-}
-static bool p_remove(const char *path) {
-  (void) path;
-  return false;
-}
-static bool p_mkdir(const char *path) {
+
+static bool std_del(const char *path) {
   (void) path;
   return false;
 }
 #endif
 
-struct mg_fs mg_fs_posix = {p_stat,  p_list, p_open,   p_close,  p_read,
-                            p_write, p_seek, p_rename, p_remove, p_mkdir};
+struct mg_fs mg_fs_std = {std_info, std_list, std_read, std_write, std_del};
