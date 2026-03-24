@@ -1,6 +1,6 @@
 SRCS = mongoose.c unit_test.c packed_fs.c
 HDRS = $(wildcard ../src/*.h) $(wildcard ../src/drivers/*.h)
-DEFS ?= -DMG_MAX_HTTP_HEADERS=7 -DMG_ENABLE_LINES -DMG_ENABLE_SSI=1 -DMG_ENABLE_ASSERT=1
+DEFS ?= -DMG_MAX_HTTP_HEADERS=7 -DMG_ENABLE_LINES -DMG_ENABLE_PACKED_FS=1 -DMG_ENABLE_SSI=1 -DMG_ENABLE_ASSERT=1
 WARN ?= -pedantic -W -Wall -Werror -Wshadow -Wdouble-promotion -fno-common -Wconversion -Wundef
 OPTS ?= -O3 -g3
 INCS ?= -Isrc -I.
@@ -172,7 +172,7 @@ valgrind: Makefile mongoose.h $(SRCS)
 	$(VALGRIND_RUN) ./unit_test
 
 misra:
-	cppcheck --addon=misra -DMG_ARCH=MG_ARCH_UNIX -DMG_ENABLE_SSI=1 mongoose.c >/tmp/x 2>&1
+	cppcheck --addon=misra -DMG_ARCH=MG_ARCH_UNIX -DMG_ENABLE_PACKED_FS=1 -DMG_ENABLE_SSI=1 mongoose.c >/tmp/x 2>&1
 	cppcheck --addon=misra -DMG_ARCH=MG_ARCH_CUSTOM -DMG_ENABLE_LINES=1 -DTLS=MG_TLS_BUILTIN -DMG_ENABLE_TCPIP=1 mongoose.c  >>/tmp/x 2>&1
 	cppcheck --addon=misra --clang -DMG_ENABLE_LINES=1 -DTLS=MG_TLS_BUILTIN -DMG_ENABLE_TCPIP=1 mongoose.c  >>/tmp/x 2>&1
 	cppcheck --addon=misra --clang -DMG_ENABLE_LINES=1 -DMG_ENABLE_SSI=1 mongoose.c  >>/tmp/x 2>&1
@@ -285,3 +285,4 @@ tutorials_embedded:
 	@for X in $(TUTORIALS_EMBEDDED); do test -f $$X/Makefile || continue; $(MAKE) -C $$X build || exit 1; done
 clean_tutorials_embedded:
 	for X in $(TUTORIALS_EMBEDDED); do test -f $$X/Makefile || continue; $(MAKE) -C $$X clean || exit 1; done
+

@@ -78,6 +78,10 @@
 #define MG_ENABLE_CUSTOM_MILLIS 0
 #endif
 
+#ifndef MG_ENABLE_PACKED_FS
+#define MG_ENABLE_PACKED_FS 0
+#endif
+
 #ifndef MG_ENABLE_ASSERT
 #define MG_ENABLE_ASSERT 0
 #endif
