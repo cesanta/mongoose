@@ -307,12 +307,9 @@ static void fn(struct mg_connection *c, int ev, void *ev_data) {
     } else {
       struct mg_http_serve_opts opts;
       memset(&opts, 0, sizeof(opts));
-#if MG_ENABLE_PACKED_FS
       opts.root_dir = "/web_root";
       opts.fs = &mg_fs_packed;
-#else
-      opts.root_dir = "web_root";
-#endif
+      mg_mem_files = mg_packed_files;
       mg_http_serve_dir(c, ev_data, &opts);
     }
     MG_DEBUG(("%lu %.*s %.*s -> %.*s", c->id, (int) hm->method.len,
