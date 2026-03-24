@@ -1,27 +1,17 @@
 #include "fs.h"
 #include "printf.h"
 #include "str.h"
-#include "util.h"
-
-struct packed_file {
-  const char *data;
-  size_t size;
-  size_t pos;
-};
 
 const struct mg_mem_file *mg_mem_files;
 
-static int mg_scmp(const char *a, const char *b) {
-  while (*a && (*a == *b)) a++, b++;
-  return *(const unsigned char *) a - *(const unsigned char *) b;
-}
 static const char *mg_unlist(size_t no) {
   return mg_mem_files == NULL ? NULL : mg_mem_files[no].path;
 }
+
 static const char *mg_unpack(const char *path, size_t *size, time_t *mtime) {
   const struct mg_mem_file *p;
   for (p = mg_mem_files; p != NULL && p->path != NULL; p++) {
-    if (mg_scmp(p->path, path) != 0) continue;
+    if (strcmp(p->path, path) != 0) continue;
     if (size != NULL) *size = p->size;
     if (mtime != NULL) *mtime = p->mtime;
     return (const char *) p->data;
@@ -41,90 +31,73 @@ static int is_dir_prefix(const char *prefix, size_t n, const char *path) {
          (n == 0 || path[n] == '/' || path[n - 1] == '/');
 }
 
-static int packed_stat(const char *path, size_t *size, time_t *mtime) {
+static int mem_info(const char *path, size_t *size, time_t *mtime) {
+  int result = MG_FS_FAIL;
   const char *p;
   size_t i, n = strlen(path);
-  if (mg_unpack(path, size, mtime)) return MG_FS_READ;  // Regular file
-  // Scan all files. If `path` is a dir prefix for any of them, it's a dir
-  for (i = 0; (p = mg_unlist(i)) != NULL; i++) {
-    if (is_dir_prefix(path, n, p)) return MG_FS_DIR;
+  if (mg_unpack(path, size, mtime) != NULL) {
+    result = MG_FS_FILE;
+  } else {
+    // Scan all files. If `path` is a dir prefix for any of them, it's a dir
+    for (i = 0; (p = mg_unlist(i)) != NULL; i++) {
+      if (is_dir_prefix(path, n, p)) {
+        if (size != NULL) *size = 0;
+        if (mtime != NULL) *mtime = 0;
+        result = MG_FS_DIR;
+        break;
+      }
+    }
   }
-  return 0;
+  return result;
 }
 
-static void packed_list(const char *dir, void (*fn)(const char *, void *),
-                        void *userdata) {
+static size_t mem_list(const char *dir, bool recursive,
+                       void (*fn)(const char *, void *), void *userdata) {
   char buf[MG_PATH_MAX], tmp[sizeof(buf)];
   const char *path, *begin, *end;
-  size_t i, n = strlen(dir);
+  size_t result = 0, i, n = strlen(dir);
   tmp[0] = '\0';  // Previously listed entry
   for (i = 0; (path = mg_unlist(i)) != NULL; i++) {
     if (!is_dir_prefix(dir, n, path)) continue;
     begin = &path[n + 1];
-    end = strchr(begin, '/');
-    if (end == NULL) end = begin + strlen(begin);
-    mg_snprintf(buf, sizeof(buf), "%.*s", (int) (end - begin), begin);
+    if (recursive) {
+      mg_snprintf(buf, sizeof(buf), "%s", begin);
+    } else {
+      end = strchr(begin, '/');
+      if (end == NULL) end = begin + strlen(begin);
+      mg_snprintf(buf, sizeof(buf), "%.*s", (end - begin), begin);
+    }
     buf[sizeof(buf) - 1] = '\0';
     // If this entry has been already listed, skip
     // NOTE: we're assuming that file list is sorted alphabetically
     if (strcmp(buf, tmp) == 0) continue;
     fn(buf, userdata);  // Not yet listed, call user function
     strcpy(tmp, buf);   // And save this entry as listed
+    result++;
   }
+  return result;
 }
 
-static void *packed_open(const char *path, int flags) {
-  size_t size = 0;
-  const char *data = mg_unpack(path, &size, NULL);
-  struct packed_file *fp = NULL;
-  if (data == NULL) return NULL;
-  if (flags & MG_FS_WRITE) return NULL;
-  if ((fp = (struct packed_file *) mg_calloc(1, sizeof(*fp))) != NULL) {
-    fp->size = size;
-    fp->data = data;
+static size_t mem_read(const char *path, size_t ofs, void *buf, size_t len) {
+  size_t size = 0, n = 0;
+  const char *p = mg_unpack(path, &size, NULL);
+  if (p != NULL && ofs < size) {
+    n = size - ofs;
+    if (n > len) n = len;
+    memcpy(buf, p + ofs, n);
   }
-  return (void *) fp;
+  return n;
 }
 
-static void packed_close(void *fp) {
-  if (fp != NULL) mg_free(fp);
-}
-
-static size_t packed_read(void *fd, void *buf, size_t len) {
-  struct packed_file *fp = (struct packed_file *) fd;
-  if (fp->pos + len > fp->size) len = fp->size - fp->pos;
-  memcpy(buf, &fp->data[fp->pos], len);
-  fp->pos += len;
-  return len;
-}
-
-static size_t packed_write(void *fd, const void *buf, size_t len) {
-  (void) fd, (void) buf, (void) len;
+static size_t mem_write(const char *path, size_t ofs, const void *buf,
+                        size_t len) {
+  (void) path, (void) ofs, (void) buf, (void) len;
   return 0;
 }
 
-static size_t packed_seek(void *fd, size_t offset) {
-  struct packed_file *fp = (struct packed_file *) fd;
-  fp->pos = offset;
-  if (fp->pos > fp->size) fp->pos = fp->size;
-  return fp->pos;
-}
-
-static bool packed_rename(const char *from, const char *to) {
-  (void) from, (void) to;
-  return false;
-}
-
-static bool packed_remove(const char *path) {
+static bool mem_del(const char *path) {
   (void) path;
   return false;
 }
 
-static bool packed_mkdir(const char *path) {
-  (void) path;
-  return false;
-}
-
-struct mg_fs mg_fs_packed = {
-    packed_stat,  packed_list, packed_open,   packed_close,  packed_read,
-    packed_write, packed_seek, packed_rename, packed_remove, packed_mkdir};
+struct mg_fs mg_fs_mem = {mem_info, mem_list, mem_read, mem_write, mem_del};
