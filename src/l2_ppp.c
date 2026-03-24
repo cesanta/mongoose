@@ -60,12 +60,6 @@ struct pppoe {  // RFC-2516, "A Method for Transmitting PPP Over Ethernet
 #define MG_PPP_PROTO_PAP 0xc023
 #define MG_PPP_PROTO_CHAP 0xc223
 
-#define MG_PPP_IPCP_REQ 1
-#define MG_PPP_IPCP_ACK 2
-#define MG_PPP_IPCP_NACK 3
-#define MG_PPP_IPCP_REJECT 4
-#define MG_PPP_IPCP_IPADDR 3
-
 #define MG_PPP_LCP_CFG_REQ 1
 #define MG_PPP_LCP_CFG_ACK 2
 #define MG_PPP_LCP_CFG_NACK 3
@@ -76,6 +70,18 @@ struct pppoe {  // RFC-2516, "A Method for Transmitting PPP Over Ethernet
 #define MG_PPP_LCP_ECHO_REQ 9
 #define MG_PPP_LCP_ECHO_REPLY 10
 
+#define MG_PPP_IPCP_CFG_REQ 1
+#define MG_PPP_IPCP_CFG_ACK 2
+#define MG_PPP_IPCP_CFG_NACK 3
+#define MG_PPP_IPCP_CFG_REJECT 4
+#define MG_PPP_IPCP_OPT_IPADDR 3
+
+#define MG_PPP_IPV6CP_CFG_REQ 1
+#define MG_PPP_IPV6CP_CFG_ACK 2
+#define MG_PPP_IPV6CP_CFG_NACK 3
+#define MG_PPP_IPV6CP_CFG_REJECT 4
+#define MG_PPP_IPV6CP_OPT_IFCID 1
+
 #define MG_PPPoE_PADI 0x09
 #define MG_PPPoE_PADO 0x07
 #define MG_PPPoE_PADR 0x19
@@ -84,7 +90,7 @@ struct pppoe {  // RFC-2516, "A Method for Transmitting PPP Over Ethernet
 
 #define PDIFF(a, b) ((size_t) (((char *) (b)) - ((char *) (a))))
 
-static bool s_link = false;  // *******************************************
+static bool s_link = false;  // ************ THESE SHOULD MOVE TO A struct mg_l2data *******************************
 static uint8_t s_state = 0;
 static uint16_t s_id;
 
@@ -150,7 +156,6 @@ static uint8_t *pppoe_header(enum mg_l2proto proto, uint8_t code, uint16_t id,
 
 uint8_t *mg_l2_pppoe_header(enum mg_l2proto proto, struct mg_l2addr *src,
                             struct mg_l2addr *dst, uint8_t *frame) {
-  (void) dst;
   return l2_ppp_header(proto, pppoe_header(MG_TCPIP_L2PROTO_PPPoE_SESS, 0, s_id,
                                            src, dst, frame));
 }
@@ -280,51 +285,117 @@ static void ppp_handle_ipcp(struct mg_tcpip_if *ifp, uint8_t *ipcpp,
   uint8_t id;
   struct ipcp *ipcp = (struct ipcp *) ipcpp;
   uint8_t req[] = {
-      MG_PPP_IPCP_REQ, 0, 0, 10, MG_PPP_IPCP_IPADDR, 6, 0, 0, 0, 0};
+      MG_PPP_IPCP_CFG_REQ, 0, 0, 10, MG_PPP_IPCP_OPT_IPADDR, 6, 0, 0, 0, 0};
   if (ipcpsz < sizeof(*ipcp)) return;
   id = ipcp->id;
   len = mg_ntohs(ipcp->len);
   switch (ipcp->code) {
-    case MG_PPP_IPCP_REQ:
+    case MG_PPP_IPCP_CFG_REQ:
       MG_VERBOSE(("got IPCP config request, acknowledging..."));
       if (len >= 10 &&
-          find_opt(MG_PPP_IPCP_IPADDR, 6, (const uint8_t *) (ipcp + 1),
-                   len - sizeof(*ipcp), (uint8_t *) &ifp->gw))
-        MG_DEBUG(("IPCP ack, GW IP: %M", mg_print_ip4, &ifp->gw));
-      ipcp->code = MG_PPP_IPCP_ACK;
+          find_opt(MG_PPP_IPCP_OPT_IPADDR, 6, (const uint8_t *) (ipcp + 1),
+                   len - sizeof(*ipcp), (uint8_t *) &ifp->gw)) {
+        MG_DEBUG(("IPCP cfg, GW IP: %M", mg_print_ip4, &ifp->gw));
+        ipcp->code = MG_PPP_IPCP_CFG_ACK;
+      } else if (ifp->gw == 0) {
+        MG_ERROR(("Peer did not provide its IP address"));
+        // NOTE: We should NACK with an added option, probably we can just store
+        // the incoming address and offer a statically configured ifp->gw when
+        // theirs == 0, but it is unlikely to find such a dumb PPP server and it
+        // will complicate our config and this protocol state machine
+        ipcp->code = MG_PPP_IPCP_CFG_REJECT;
+        ppp_tx_frame(ifp, MG_PPP_PROTO_IPCP, ipcpp, len);
+      }
       ppp_tx_frame(ifp, MG_PPP_PROTO_IPCP, ipcpp, len);
       req[1] = id;
       memcpy(req + 6, &ifp->ip, 4);  // Request config IP address or 0.0.0.0
       ppp_tx_frame(ifp, MG_PPP_PROTO_IPCP, req, sizeof(req));
       break;
-    case MG_PPP_IPCP_ACK:
-      // Our peer accepted our static IP address (unlikely if 0.0.0.0)
+    case MG_PPP_IPCP_CFG_ACK:
+      // Our peer accepted our IP address
       MG_VERBOSE(("got IPCP config ack"));
       ifp->mask = 0xffffffff;  // send to gw
       ifp->state = MG_TCPIP_STATE_IP;
       ifp->gw_ready = true;
       break;
-    case MG_PPP_IPCP_NACK:
+    case MG_PPP_IPCP_CFG_NACK:
       MG_VERBOSE(("got IPCP config nack"));
       // NACK contains our "suggested" IP address, use it
       if (len >= 10 &&
-          find_opt(MG_PPP_IPCP_IPADDR, 6, (const uint8_t *) (ipcp + 1),
+          find_opt(MG_PPP_IPCP_OPT_IPADDR, 6, (const uint8_t *) (ipcp + 1),
                    len - sizeof(*ipcp), (uint8_t *) &ifp->ip)) {
-        ifp->mask = 0xffffffff;  // send to gw
-        ifp->state = MG_TCPIP_STATE_IP;
-        ifp->gw_ready = true;
-        MG_DEBUG(("IPCP ack, IP: %M", mg_print_ip4, &ifp->ip));
-        ipcp->code = MG_PPP_IPCP_REQ;
+        MG_DEBUG(("IPCP cfg, IP: %M", mg_print_ip4, &ifp->ip));
+        ipcp->code = MG_PPP_IPCP_CFG_REQ;
         ppp_tx_frame(ifp, MG_PPP_PROTO_IPCP, ipcpp, len);
       }
       break;
-    case MG_PPP_IPCP_REJECT:
+    case MG_PPP_IPCP_CFG_REJECT:
       MG_ERROR(("Peer rejected our IP address, need to properly set ifp->ip"));
       break;
   }
 }
 
 #if MG_ENABLE_IPV6
+static void ppp_handle_ipv6cp(struct mg_tcpip_if *ifp, uint8_t *ipv6cpp,
+                              size_t ipv6cpsz) {
+  uint16_t len;
+  uint8_t id;
+  struct ipv6cp *ipv6cp = (struct ipv6cp *) ipv6cpp;
+  uint8_t req[14];
+  memset(req, 0, sizeof(req));
+  req[0] = MG_PPP_IPV6CP_CFG_REQ, req[3] = 14, req[4] = MG_PPP_IPV6CP_OPT_IFCID,
+  req[5] = 10;
+  if (ipv6cpsz < sizeof(*ipv6cp)) return;
+  id = ipv6cp->id;
+  len = mg_ntohs(ipv6cp->len);
+  switch (ipv6cp->code) {
+    case MG_PPP_IPV6CP_CFG_REQ:
+      MG_VERBOSE(("got IPV6CP config request..."));
+      if (len >= 10 &&
+          find_opt(MG_PPP_IPV6CP_OPT_IFCID, 10, (const uint8_t *) (ipv6cp + 1),
+                   len - sizeof(*ipv6cp), (uint8_t *) &((struct mg_l2addr *)(ifp->gwmac))->addr.ieee64)) {
+        if (((struct mg_l2addr *)(ifp->gwmac))->addr.ieee64 != 0) {
+          MG_DEBUG(("IPV6CP cfg, GW IFCID: %M", mg_print_ieee64, &((struct mg_l2addr *)(ifp->gwmac))->addr.ieee64));
+          ipv6cp->code = MG_PPP_IPV6CP_CFG_ACK;
+          ppp_tx_frame(ifp, MG_PPP_PROTO_IPV6CP, ipv6cpp, len);
+          req[1] = id;
+          memset(req + 6, 0, 8);  // Inform ifc id 0
+          ppp_tx_frame(ifp, MG_PPP_PROTO_IPV6CP, req, sizeof(req));
+        } else {
+          MG_ERROR(("Peer is not able to provide its interface id"));
+          ipv6cp->code = MG_PPP_IPV6CP_CFG_REJECT;
+          ppp_tx_frame(ifp, MG_PPP_PROTO_IPV6CP, ipv6cpp, len);
+        }
+      } else {
+        MG_ERROR(("Peer did not provide its interface id"));
+        // We should NACK with an added option, but we can't provide one for
+        // them
+        ipv6cp->code = MG_PPP_IPV6CP_CFG_REJECT;
+        ppp_tx_frame(ifp, MG_PPP_PROTO_IPV6CP, ipv6cpp, len);
+      }
+      break;
+    case MG_PPP_IPV6CP_CFG_ACK:
+      // Our peer accepted our ifc id
+      MG_VERBOSE(("got IPV6CP config ack"));
+      break;
+    case MG_PPP_IPV6CP_CFG_NACK:
+      MG_VERBOSE(("got IPV6CP config nack"));
+      // NACK contains our "suggested" IFC id, use it
+      if (len >= 10 &&
+          find_opt(MG_PPP_IPV6CP_OPT_IFCID, 10, (const uint8_t *) (ipv6cp + 1),
+                   len - sizeof(*ipv6cp), (uint8_t *) &((struct mg_l2addr *)(ifp->mac))->addr.ieee64)) {
+        MG_DEBUG(("IPV6CP cfg, IFCID: %M", mg_print_ieee64, &((struct mg_l2addr *)(ifp->mac))->addr.ieee64));
+        ipv6cp->code = MG_PPP_IPV6CP_CFG_REQ;
+        ppp_tx_frame(ifp, MG_PPP_PROTO_IPV6CP, ipv6cpp, len);
+      } else {
+        MG_ERROR(("Peer is not able to offer an interface id"));
+      }
+      break;
+    case MG_PPP_IPV6CP_CFG_REJECT:
+      MG_ERROR(("Peer rejected our interface id"));
+      break;
+  }
+}
 #endif
 
 static bool ppp_rx(struct mg_tcpip_if *ifp, enum mg_l2proto *proto,
@@ -345,7 +416,7 @@ static bool ppp_rx(struct mg_tcpip_if *ifp, enum mg_l2proto *proto,
       MG_VERBOSE(("got IP packet of %d bytes", pay->len));
       *proto = MG_TCPIP_L2PROTO_IPV4;
       break;
-#if 0 && MG_ENABLE_IPV6
+#if MG_ENABLE_IPV6
     case MG_PPP_PROTO_IPV6CP:
       if (s_link) ppp_handle_ipv6cp(ifp, (uint8_t *) pay->buf, pay->len);
       return false;
@@ -399,33 +470,35 @@ struct mg_l2addr *mg_l2_ppp_getaddr(uint8_t *frame) {
   return &s_mapip;  // bogus
 }
 
-extern struct mg_l2addr s_mapip;
+extern struct mg_l2addr *mg_l2_eth_mapip(enum mg_l2addrtype, struct mg_addr *);
 
 struct mg_l2addr *mg_l2_ppp_mapip(enum mg_l2addrtype addrtype,
                                   struct mg_addr *addr) {
-  (void) addrtype;
-  (void) addr;
-  return &s_mapip;  // bogus
+  return mg_l2_eth_mapip(addrtype, addr);
 }
 
 #if MG_ENABLE_IPV6
 bool mg_l2_ppp_genip6(uint64_t *ip6, uint8_t prefix_len,
-                      struct mg_l2addr *addr) {
-  (void) ip6;
-  (void) prefix_len;
-  (void) addr;
+                      struct mg_l2addr *l2addr) {
+  if (prefix_len > 64) {
+    MG_ERROR(("Prefix length > 64, UNSUPPORTED"));
+    return false;
+  }
+  ip6[0] = 0;
+  ip6[1] = l2addr->addr.ieee64;
   return false;
 }
 
-bool mg_l2_ppp_ip6get(struct mg_l2addr *addr, uint8_t *opts, uint8_t len) {
-  (void) addr;
+bool mg_l2_ppp_ip6get(struct mg_l2addr *l2addr, uint8_t *opts, uint8_t len) {
+  (void) l2addr;
   (void) opts;
   (void) len;
-  return false;
+  return true;
 }
 
-uint8_t mg_l2_ppp_ip6put(struct mg_l2addr *addr, uint8_t *opts) {
-  (void) addr;
+
+uint8_t mg_l2_ppp_ip6put(struct mg_l2addr *l2addr, uint8_t *opts) {
+  (void) l2addr;
   (void) opts;
   return 0;
 }
@@ -441,8 +514,6 @@ static size_t pppoe_tx_frame(struct mg_tcpip_if *ifp, uint8_t code, uint16_t id,
   memmove(p, data, datasz);
   return mg_l2_driver_output(ifp, pppoe_footer(datasz, p + datasz));
 }
-
-extern struct mg_l2addr *mg_l2_eth_mapip(enum mg_l2addrtype, struct mg_addr *);
 
 bool mg_l2_pppoe_poll(struct mg_tcpip_if *ifp, bool expired_1000ms) {
   if (expired_1000ms && s_state == 0 && ifp->driver_up) {

@@ -1251,6 +1251,7 @@ size_t mg_print_ip_port(void (*out)(char, void *), void *arg, va_list *ap);
 size_t mg_print_ip4(void (*out)(char, void *), void *arg, va_list *ap);
 size_t mg_print_ip6(void (*out)(char, void *), void *arg, va_list *ap);
 size_t mg_print_mac(void (*out)(char, void *), void *arg, va_list *ap);
+size_t mg_print_ieee64(void (*out)(char, void *), void *arg, va_list *ap);
 size_t mg_print_l2addr(void (*out)(char, void *), void *arg, va_list *ap);
 
 // Various output functions
@@ -3199,7 +3200,9 @@ enum mg_l2type { MG_TCPIP_L2_ETH = 0, MG_TCPIP_L2_PPP, MG_TCPIP_L2_PPPoE};
 
 struct mg_l2addr {
   union {
-    uint8_t mac[6];
+    uint8_t mac[6];   // ieee48
+    uint64_t ieee64;  // PPP ifcid
+    uint16_t ieee16;
   } addr;
 };
 
