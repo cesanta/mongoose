@@ -9,19 +9,25 @@ struct packed_file {
   size_t pos;
 };
 
-#if MG_ENABLE_PACKED_FS
-#else
-const char *mg_unpack(const char *path, size_t *size, time_t *mtime) {
-  if (size != NULL) *size = 0;
-  if (mtime != NULL) *mtime = 0;
-  (void) path;
+const struct mg_mem_file *mg_mem_files;
+
+static int mg_scmp(const char *a, const char *b) {
+  while (*a && (*a == *b)) a++, b++;
+  return *(const unsigned char *) a - *(const unsigned char *) b;
+}
+static const char *mg_unlist(size_t no) {
+  return mg_mem_files == NULL ? NULL : mg_mem_files[no].path;
+}
+static const char *mg_unpack(const char *path, size_t *size, time_t *mtime) {
+  const struct mg_mem_file *p;
+  for (p = mg_mem_files; p != NULL && p->path != NULL; p++) {
+    if (mg_scmp(p->path, path) != 0) continue;
+    if (size != NULL) *size = p->size;
+    if (mtime != NULL) *mtime = p->mtime;
+    return (const char *) p->data;
+  }
   return NULL;
 }
-const char *mg_unlist(size_t no) {
-  (void) no;
-  return NULL;
-}
-#endif
 
 struct mg_str mg_unpacked(const char *path) {
   size_t len = 0;

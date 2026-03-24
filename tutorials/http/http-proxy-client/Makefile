@@ -5,7 +5,7 @@ SOURCES = main.c mongoose.c  packed_fs.c      # Source code files, packed_fs.c c
 CFLAGS = -W -Wall -Wextra -g -I.  # Build options
 
 # Mongoose build options. See https://mongoose.ws/documentation/#build-options
-CFLAGS_MONGOOSE += -DMG_ENABLE_LINES=1 -DMG_ENABLE_PACKED_FS=1
+CFLAGS_MONGOOSE += -DMG_ENABLE_LINES=1
 
 # See tutorial at https://mongoose.ws/tutorials/http-proxy-client/
 ARGS ?= 167.235.63.238:3128 http://info.cern.ch/	# default call arguments
