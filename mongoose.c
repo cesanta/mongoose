@@ -3281,14 +3281,12 @@ long mg_json_get_long(struct mg_str json, const char *path, long dflt) {
 // L2 API
 void mg_l2_init(struct mg_tcpip_if *ifp);
 bool mg_l2_poll(struct mg_tcpip_if *ifp, bool expired_1000ms);
-uint8_t *mg_l2_header(enum mg_l2type type, enum mg_l2proto proto, uint8_t *src,
-                      uint8_t *dst, uint8_t *frame);
-size_t mg_l2_footer(enum mg_l2type type, size_t len, uint8_t *cur);
+uint8_t *mg_l2_header(struct mg_tcpip_if *ifp, enum mg_l2proto proto,
+                      uint8_t *src, uint8_t *dst, uint8_t *frame);
+size_t mg_l2_trailer(struct mg_tcpip_if *ifp, size_t len, uint8_t *cur);
 bool mg_l2_rx(struct mg_tcpip_if *ifp, enum mg_l2proto *proto,
               struct mg_str *pay, struct mg_str *raw);
-// TODO(): ? bool mg_l2_rx(enum mg_l2type type, struct mg_l2opts *opts, uint8_t
-// *addr, enum mg_l2proto *proto, struct mg_str *pay, struct mg_str *raw);
-uint8_t *mg_l2_getaddr(enum mg_l2type type, uint8_t *frame);
+uint8_t *mg_l2_getaddr(struct mg_tcpip_if *ifp, uint8_t *frame);
 uint8_t *mg_l2_mapip(enum mg_l2type type, enum mg_l2addrtype addrtype,
                      struct mg_addr *ip);
 #if MG_ENABLE_IPV6
@@ -3303,10 +3301,10 @@ size_t mg_l2_driver_output(struct mg_tcpip_if *ifp, size_t len);
 // clang-format off
 extern void mg_l2_eth_init(struct mg_tcpip_if *);
 extern bool mg_l2_eth_poll(struct mg_tcpip_if *, bool);
-extern uint8_t *mg_l2_eth_header(enum mg_l2proto, struct mg_l2addr *, struct mg_l2addr *, uint8_t *);
-extern size_t mg_l2_eth_footer(size_t, uint8_t *);
+extern uint8_t *mg_l2_eth_header(struct mg_tcpip_if *, enum mg_l2proto, struct mg_l2addr *, struct mg_l2addr *, uint8_t *);
+extern size_t mg_l2_eth_trailer(struct mg_tcpip_if *, size_t, uint8_t *);
 extern bool mg_l2_eth_rx(struct mg_tcpip_if *, enum mg_l2proto *, struct mg_str *, struct mg_str *);
-extern struct mg_l2addr *mg_l2_eth_getaddr(uint8_t *);
+extern struct mg_l2addr *mg_l2_eth_getaddr(struct mg_tcpip_if *, uint8_t *);
 extern struct mg_l2addr *mg_l2_eth_mapip(enum mg_l2addrtype, struct mg_addr *);
 #if MG_ENABLE_IPV6
 extern bool mg_l2_eth_genip6(uint64_t *, uint8_t, struct mg_l2addr *);
@@ -3316,10 +3314,10 @@ extern uint8_t mg_l2_eth_ip6put(struct mg_l2addr *, uint8_t *);
 
 extern void mg_l2_ppp_init(struct mg_tcpip_if *);
 extern bool mg_l2_ppp_poll(struct mg_tcpip_if *, bool);
-extern uint8_t *mg_l2_ppp_header(enum mg_l2proto, struct mg_l2addr *, struct mg_l2addr *, uint8_t *);
-extern size_t mg_l2_ppp_footer(size_t, uint8_t *);
+extern uint8_t *mg_l2_ppp_header(struct mg_tcpip_if *, enum mg_l2proto, struct mg_l2addr *, struct mg_l2addr *, uint8_t *);
+extern size_t mg_l2_ppp_trailer(struct mg_tcpip_if *, size_t, uint8_t *);
 extern bool mg_l2_ppp_rx(struct mg_tcpip_if *, enum mg_l2proto *, struct mg_str *, struct mg_str *);
-extern struct mg_l2addr *mg_l2_ppp_getaddr(uint8_t *);
+extern struct mg_l2addr *mg_l2_ppp_getaddr(struct mg_tcpip_if *, uint8_t *);
 extern struct mg_l2addr *mg_l2_ppp_mapip(enum mg_l2addrtype, struct mg_addr *);
 #if MG_ENABLE_IPV6
 extern bool mg_l2_ppp_genip6(uint64_t *, uint8_t, struct mg_l2addr *);
@@ -3328,16 +3326,16 @@ extern uint8_t mg_l2_ppp_ip6put(struct mg_l2addr *, uint8_t *);
 #endif
 extern void mg_l2_pppoe_init(struct mg_tcpip_if *);
 extern bool mg_l2_pppoe_poll(struct mg_tcpip_if *, bool);
-extern uint8_t *mg_l2_pppoe_header(enum mg_l2proto, struct mg_l2addr *, struct mg_l2addr *, uint8_t *);
-extern size_t mg_l2_pppoe_footer(size_t, uint8_t *);
+extern uint8_t *mg_l2_pppoe_header(struct mg_tcpip_if *, enum mg_l2proto, struct mg_l2addr *, struct mg_l2addr *, uint8_t *);
+extern size_t mg_l2_pppoe_trailer(struct mg_tcpip_if *, size_t, uint8_t *);
 extern bool mg_l2_pppoe_rx(struct mg_tcpip_if *, enum mg_l2proto *, struct mg_str *, struct mg_str *);
 
 typedef void (*l2_init_fn)(struct mg_tcpip_if *);
 typedef bool (*l2_poll_fn)(struct mg_tcpip_if *, bool);
-typedef uint8_t *((*l2_header_fn)(enum mg_l2proto, struct mg_l2addr *, struct mg_l2addr *, uint8_t *));
-typedef size_t (*l2_footer_fn)(size_t, uint8_t *);
+typedef uint8_t *((*l2_header_fn)(struct mg_tcpip_if *, enum mg_l2proto, struct mg_l2addr *, struct mg_l2addr *, uint8_t *));
+typedef size_t (*l2_trailer_fn)(struct mg_tcpip_if *, size_t, uint8_t *);
 typedef bool (*l2_rx_fn)(struct mg_tcpip_if *, enum mg_l2proto *, struct mg_str *, struct mg_str *);
-typedef struct mg_l2addr (*(*l2_getaddr_fn)(uint8_t *));
+typedef struct mg_l2addr (*(*l2_getaddr_fn)(struct mg_tcpip_if *, uint8_t *));
 typedef struct mg_l2addr (*(*l2_mapip_fn)(enum mg_l2addrtype, struct mg_addr *));
 #if MG_ENABLE_IPV6
 typedef bool (*l2_genip6_fn)(uint64_t *, uint8_t, struct mg_l2addr *);
@@ -3346,17 +3344,26 @@ typedef uint8_t (*l2_ip6put_fn)(struct mg_l2addr *, uint8_t *);
 #endif
 // clang-format on
 
-static const l2_init_fn l2_init[] = {mg_l2_eth_init, mg_l2_ppp_init, mg_l2_pppoe_init};
-static const l2_poll_fn l2_poll[] = {mg_l2_eth_poll, mg_l2_ppp_poll, mg_l2_pppoe_poll};
-static const l2_header_fn l2_header[] = {mg_l2_eth_header, mg_l2_ppp_header, mg_l2_pppoe_header};
-static const l2_footer_fn l2_footer[] = {mg_l2_eth_footer, mg_l2_ppp_footer, mg_l2_pppoe_footer};
+static const l2_init_fn l2_init[] = {mg_l2_eth_init, mg_l2_ppp_init,
+                                     mg_l2_pppoe_init};
+static const l2_poll_fn l2_poll[] = {mg_l2_eth_poll, mg_l2_ppp_poll,
+                                     mg_l2_pppoe_poll};
+static const l2_header_fn l2_header[] = {mg_l2_eth_header, mg_l2_ppp_header,
+                                         mg_l2_pppoe_header};
+static const l2_trailer_fn l2_trailer[] = {mg_l2_eth_trailer, mg_l2_ppp_trailer,
+                                           mg_l2_pppoe_trailer};
 static const l2_rx_fn l2_rx[] = {mg_l2_eth_rx, mg_l2_ppp_rx, mg_l2_pppoe_rx};
-static const l2_getaddr_fn l2_getaddr[] = {mg_l2_eth_getaddr, mg_l2_ppp_getaddr, mg_l2_ppp_getaddr};
-static const l2_mapip_fn l2_mapip[] = {mg_l2_eth_mapip, mg_l2_ppp_mapip, mg_l2_ppp_mapip};
+static const l2_getaddr_fn l2_getaddr[] = {mg_l2_eth_getaddr, mg_l2_ppp_getaddr,
+                                           mg_l2_ppp_getaddr};
+static const l2_mapip_fn l2_mapip[] = {mg_l2_eth_mapip, mg_l2_ppp_mapip,
+                                       mg_l2_ppp_mapip};
 #if MG_ENABLE_IPV6
-static const l2_genip6_fn l2_genip6[] = {mg_l2_eth_genip6, mg_l2_ppp_genip6, mg_l2_ppp_genip6};
-static const l2_ip6get_fn l2_ip6get[] = {mg_l2_eth_ip6get, mg_l2_ppp_ip6get, mg_l2_ppp_ip6get};
-static const l2_ip6put_fn l2_ip6put[] = {mg_l2_eth_ip6put, mg_l2_ppp_ip6put, mg_l2_ppp_ip6put};
+static const l2_genip6_fn l2_genip6[] = {mg_l2_eth_genip6, mg_l2_ppp_genip6,
+                                         mg_l2_ppp_genip6};
+static const l2_ip6get_fn l2_ip6get[] = {mg_l2_eth_ip6get, mg_l2_ppp_ip6get,
+                                         mg_l2_ppp_ip6get};
+static const l2_ip6put_fn l2_ip6put[] = {mg_l2_eth_ip6put, mg_l2_ppp_ip6put,
+                                         mg_l2_ppp_ip6put};
 #endif
 
 void mg_l2_init(struct mg_tcpip_if *ifp) {
@@ -3367,14 +3374,14 @@ bool mg_l2_poll(struct mg_tcpip_if *ifp, bool expired_1000ms) {
   return l2_poll[ifp->l2type](ifp, expired_1000ms);
 }
 
-uint8_t *mg_l2_header(enum mg_l2type type, enum mg_l2proto proto, uint8_t *src,
-                      uint8_t *dst, uint8_t *frame) {
-  return l2_header[type](proto, (struct mg_l2addr *) src,
-                         (struct mg_l2addr *) dst, frame);
+uint8_t *mg_l2_header(struct mg_tcpip_if *ifp, enum mg_l2proto proto,
+                      uint8_t *src, uint8_t *dst, uint8_t *frame) {
+  return l2_header[ifp->l2type](ifp, proto, (struct mg_l2addr *) src,
+                                (struct mg_l2addr *) dst, frame);
 }
 
-size_t mg_l2_footer(enum mg_l2type type, size_t len, uint8_t *frame) {
-  return l2_footer[type](len, frame);
+size_t mg_l2_trailer(struct mg_tcpip_if *ifp, size_t len, uint8_t *frame) {
+  return l2_trailer[ifp->l2type](ifp, len, frame);
 }
 
 bool mg_l2_rx(struct mg_tcpip_if *ifp, enum mg_l2proto *proto,
@@ -3382,8 +3389,8 @@ bool mg_l2_rx(struct mg_tcpip_if *ifp, enum mg_l2proto *proto,
   return l2_rx[ifp->l2type](ifp, proto, pay, raw);
 }
 
-uint8_t *mg_l2_getaddr(enum mg_l2type type, uint8_t *frame) {
-  return (uint8_t *) l2_getaddr[type](frame);
+uint8_t *mg_l2_getaddr(struct mg_tcpip_if *ifp, uint8_t *frame) {
+  return (uint8_t *) l2_getaddr[ifp->l2type](ifp, frame);
 }
 
 struct mg_l2addr s_mapip;
@@ -3440,6 +3447,12 @@ struct eth {
   uint16_t type;   // Ethernet type
 };
 
+struct qtag {
+  uint16_t tpid;  // Ethernet 802.1Q type
+  uint16_t tci;   // PCP, DEI, VLAN id
+#define VLAN_ID(x) ((uint16_t) ((x) &0x0FFF))
+};
+
 #if defined(__DCC__)
 #pragma pack(0)
 #else
@@ -3456,7 +3469,7 @@ static const uint16_t eth_types[] = {
 };
 
 void mg_l2_eth_init(struct mg_tcpip_if *ifp) {
-  struct mg_l2addr *l2addr = (struct mg_l2addr *)ifp->mac;
+  struct mg_l2addr *l2addr = (struct mg_l2addr *) ifp->mac;
   // If MAC is not set, make a random one
   if (l2addr->addr.mac[0] == 0 && l2addr->addr.mac[1] == 0 &&
       l2addr->addr.mac[2] == 0 && l2addr->addr.mac[3] == 0 &&
@@ -3476,18 +3489,32 @@ bool mg_l2_eth_poll(struct mg_tcpip_if *ifp, bool expired_1000ms) {
   return true;
 }
 
-uint8_t *mg_l2_eth_header(enum mg_l2proto proto, struct mg_l2addr *src,
-                          struct mg_l2addr *dst, uint8_t *frame) {
+uint8_t *mg_l2_eth_header(struct mg_tcpip_if *ifp, enum mg_l2proto proto,
+                          struct mg_l2addr *src, struct mg_l2addr *dst,
+                          uint8_t *frame) {
+  struct eth_data *d = &ifp->l2data.eth;
   struct eth *eth = (struct eth *) frame;
-  eth->type = mg_htons(eth_types[(unsigned int) proto]);
+  uint8_t *hlp;
+  hlp = (uint8_t *) (eth + 1);
   memcpy(eth->src, src->addr.mac, sizeof(eth->dst));
   memcpy(eth->dst, dst->addr.mac, sizeof(eth->dst));
-  return (uint8_t *) (eth + 1);
+  if (d->vlan_id == 0) {  // Traditional plain frame
+    eth->type = mg_htons(eth_types[(unsigned int) proto]);
+  } else {  // Add 802.1Q tag
+    struct qtag *qtag = (struct qtag *) &eth->type;
+    qtag->tpid = mg_htons(0x8100);
+    qtag->tci = mg_htons(d->vlan_id);  // PCP = default (best-effort)
+    hlp += sizeof(*qtag);
+    *(uint16_t *) (qtag + 1) = mg_htons(eth_types[(unsigned int) proto]);
+  }
+  return hlp;
 }
 
-size_t mg_l2_eth_footer(size_t len, uint8_t *cur) {
+size_t mg_l2_eth_trailer(struct mg_tcpip_if *ifp, size_t len, uint8_t *cur) {
+  struct eth_data *d = &ifp->l2data.eth;
   // there is no len field in Ethernet, CRC is hw-calculated; pad to 64 - CRC
-  size_t ethlen = len + sizeof(struct eth);
+  size_t ethlen =
+      len + sizeof(struct eth) + (d->vlan_id != 0 ? sizeof(struct qtag) : 0);
   (void) cur;
   return ethlen >= 60 ? ethlen : 60;
 }
@@ -3498,26 +3525,36 @@ struct mg_l2addr *mg_l2_eth_mapip(enum mg_l2addrtype addrtype,
 bool mg_l2_eth_rx(struct mg_tcpip_if *ifp, enum mg_l2proto *proto,
                   struct mg_str *pay, struct mg_str *raw) {
   struct eth *eth = (struct eth *) raw->buf;
+  struct eth_data *d = &ifp->l2data.eth;
   uint16_t type, len;
   unsigned int i;
-  if (raw->len < sizeof(*eth)) return false;  // Truncated - runt?
+  size_t hdrlen =
+      sizeof(struct eth) + (d->vlan_id != 0 ? sizeof(struct qtag) : 0);
+  if (raw->len < hdrlen) return false;  // Truncated - runt?
   len = (uint16_t) raw->len;
+  if (d->vlan_id == 0) {  // We don't handle VLANs
+    type = mg_ntohs(eth->type);
+  } else {  // We do, check 802.1Q tag
+    struct qtag *qtag = (struct qtag *) &eth->type;
+    if (qtag->tpid != mg_htons(0x8100)) return false;  // Untagged frame
+    if (mg_ntohs(VLAN_ID(qtag->tci)) != VLAN_ID(d->vlan_id))
+      return false;  // Not our VLAN
+    type = mg_ntohs(*(uint16_t *) (qtag + 1));
+  }
   if (ifp->enable_mac_check &&
       memcmp(eth->dst, ifp->mac, sizeof(eth->dst)) != 0 &&
       memcmp(eth->dst, mg_l2_eth_mapip(MG_TCPIP_L2ADDR_BCAST, NULL),
              sizeof(eth->dst)) != 0)
     return false;  // TODO(): add multicast addresses
-  if (ifp->enable_crc32_check && len > sizeof(*eth) + 4) {
+  if (ifp->enable_fcs_check && len > hdrlen + 4) {
     uint32_t crc;
     len -= 4;  // TODO(scaprile): check on bigendian
     crc = mg_crc32(0, (const char *) raw->buf, len);
     if (memcmp((void *) ((size_t) raw->buf + len), &crc, sizeof(crc)))
       return false;
   }
-  pay->buf = (char *) (eth + 1);
-  pay->len = len - sizeof(*eth);
-
-  type = mg_htons(eth->type);
+  pay->buf = ((char *) eth) + hdrlen;
+  pay->len = len - hdrlen;
   for (i = 0; i < sizeof(eth_types) / sizeof(uint16_t); i++) {
     if (type == eth_types[i]) break;
   }
@@ -3531,7 +3568,8 @@ bool mg_l2_eth_rx(struct mg_tcpip_if *ifp, enum mg_l2proto *proto,
   return true;
 }
 
-struct mg_l2addr *mg_l2_eth_getaddr(uint8_t *frame) {
+struct mg_l2addr *mg_l2_eth_getaddr(struct mg_tcpip_if *ifp, uint8_t *frame) {
+  (void) ifp;  // address field is before a possible 802.1Q tag
   struct eth *eth = (struct eth *) frame;
   return (struct mg_l2addr *) &eth->src;
 }
@@ -3730,32 +3768,36 @@ static uint8_t *l2_ppp_header(enum mg_l2proto proto, uint8_t *p) {
   return ppp_header(ppp_proto, p);
 }
 
-uint8_t *mg_l2_ppp_header(enum mg_l2proto proto, struct mg_l2addr *src,
-                          struct mg_l2addr *dst, uint8_t *frame) {
+uint8_t *mg_l2_ppp_header(struct mg_tcpip_if *ifp, enum mg_l2proto proto,
+                          struct mg_l2addr *src, struct mg_l2addr *dst,
+                          uint8_t *frame) {
+  (void) ifp;
   (void) src;
   (void) dst;
   return l2_ppp_header(proto, hdlc_header(frame));
 }
 
-extern uint8_t *mg_l2_eth_header(enum mg_l2proto proto, struct mg_l2addr *src,
-                                 struct mg_l2addr *dst, uint8_t *frame);
+extern uint8_t *mg_l2_eth_header(struct mg_tcpip_if *ifp, enum mg_l2proto proto,
+                                 struct mg_l2addr *src, struct mg_l2addr *dst,
+                                 uint8_t *frame);
 
-static uint8_t *pppoe_header(enum mg_l2proto proto, uint8_t code, uint16_t id,
-                             struct mg_l2addr *src, struct mg_l2addr *dst,
-                             uint8_t *frame) {
+static uint8_t *pppoe_header(struct mg_tcpip_if *ifp, enum mg_l2proto proto,
+                             uint8_t code, uint16_t id, struct mg_l2addr *src,
+                             struct mg_l2addr *dst, uint8_t *frame) {
   struct pppoe *pppoe =
-      (struct pppoe *) mg_l2_eth_header(proto, src, dst, frame);
+      (struct pppoe *) mg_l2_eth_header(ifp, proto, src, dst, frame);
   pppoe->vertype = 0x11;
   pppoe->code = code;
   pppoe->id = id;
   return (uint8_t *) (pppoe + 1);
 }
 
-uint8_t *mg_l2_pppoe_header(enum mg_l2proto proto, struct mg_l2addr *src,
-                            struct mg_l2addr *dst, uint8_t *frame) {
+uint8_t *mg_l2_pppoe_header(struct mg_tcpip_if *ifp, enum mg_l2proto proto,
+                            struct mg_l2addr *src, struct mg_l2addr *dst,
+                            uint8_t *frame) {
   (void) dst;
-  return l2_ppp_header(proto, pppoe_header(MG_TCPIP_L2PROTO_PPPoE_SESS, 0, s_id,
-                                           src, dst, frame));
+  return l2_ppp_header(proto, pppoe_header(ifp, MG_TCPIP_L2PROTO_PPPoE_SESS, 0,
+                                           s_id, src, dst, frame));
 }
 
 // Calculate FCS/CRC for PPP frames. Could be implemented faster using lookup
@@ -3774,7 +3816,7 @@ static uint16_t fcs_do(uint8_t *frame, size_t len) {
   return (uint16_t) (fcs & 0xffff);
 }
 
-size_t mg_l2_ppp_footer(size_t len, uint8_t *cur) {
+size_t mg_l2_ppp_trailer(struct mg_tcpip_if *ifp, size_t len, uint8_t *cur) {
   uint16_t crc;
   uint8_t *frame;
   len += sizeof(struct ppp) + sizeof(struct hdlc_);
@@ -3783,19 +3825,20 @@ size_t mg_l2_ppp_footer(size_t len, uint8_t *cur) {
   *cur++ = (uint8_t) ~crc;  // add CRC, note the byte order
   *cur++ = (uint8_t) (~crc >> 8);
   // there is no len field in PPP
+  (void) ifp;
   return len + 2;
 }
 
-extern size_t mg_l2_eth_footer(size_t len, uint8_t *cur);
+extern size_t mg_l2_eth_trailer(struct mg_tcpip_if *, size_t, uint8_t *);
 
-static size_t pppoe_footer(size_t len, uint8_t *cur) {
+static size_t pppoe_trailer(struct mg_tcpip_if *ifp, size_t len, uint8_t *cur) {
   struct pppoe *pppoe = (struct pppoe *) (cur - len - sizeof(struct pppoe));
   pppoe->len = mg_htons((uint16_t) len);
-  return mg_l2_eth_footer(PDIFF(pppoe, cur), cur);
+  return mg_l2_eth_trailer(ifp, PDIFF(pppoe, cur), cur);
 }
 
-size_t mg_l2_pppoe_footer(size_t len, uint8_t *cur) {
-  return pppoe_footer(len + sizeof(struct ppp), cur);
+size_t mg_l2_pppoe_trailer(struct mg_tcpip_if *ifp, size_t len, uint8_t *cur) {
+  return pppoe_trailer(ifp, len + sizeof(struct ppp), cur);
 }
 
 size_t mg_l2_driver_output(struct mg_tcpip_if *ifp, size_t len);
@@ -3804,15 +3847,15 @@ static uint8_t *ppp_tx_frame_header(struct mg_tcpip_if *ifp, uint16_t proto) {
   uint8_t *l2p = (uint8_t *) ifp->tx.buf;
   if (ifp->l2type == MG_TCPIP_L2_PPP)
     return ppp_header(proto, hdlc_header(l2p));
-  return ppp_header(proto, pppoe_header(MG_TCPIP_L2PROTO_PPPoE_SESS, 0, s_id,
-                                        (struct mg_l2addr *) ifp->mac,
+  return ppp_header(proto, pppoe_header(ifp, MG_TCPIP_L2PROTO_PPPoE_SESS, 0,
+                                        s_id, (struct mg_l2addr *) ifp->mac,
                                         (struct mg_l2addr *) ifp->gwmac, l2p));
 }
-static size_t ppp_tx_frame_footer(struct mg_tcpip_if *ifp, size_t len,
-                                  uint8_t *cur) {
+static size_t ppp_tx_frame_trailer(struct mg_tcpip_if *ifp, size_t len,
+                                   uint8_t *cur) {
   return mg_l2_driver_output(ifp, ifp->l2type == MG_TCPIP_L2_PPPoE
-                                      ? mg_l2_pppoe_footer(len, cur)
-                                      : mg_l2_ppp_footer(len, cur));
+                                      ? mg_l2_pppoe_trailer(ifp, len, cur)
+                                      : mg_l2_ppp_trailer(ifp, len, cur));
 }
 
 // Transmit a single PPP frame for the given protocol
@@ -3820,7 +3863,7 @@ static size_t ppp_tx_frame(struct mg_tcpip_if *ifp, uint16_t proto,
                            uint8_t *data, size_t datasz) {
   uint8_t *pay = ppp_tx_frame_header(ifp, proto);
   memcpy(pay, data, datasz);
-  return ppp_tx_frame_footer(ifp, datasz, pay + datasz);
+  return ppp_tx_frame_trailer(ifp, datasz, pay + datasz);
 }
 
 static void ppp_handle_lcp(struct mg_tcpip_if *ifp, uint8_t *lcpp,
@@ -3975,7 +4018,7 @@ static bool ppp_rx(struct mg_tcpip_if *ifp, enum mg_l2proto *proto,
       p = ppp_tx_frame_header(ifp, MG_PPP_PROTO_LCP);
       memmove(p, &rej, sizeof(rej));          // LCP reject
       memmove(p + sizeof(rej), ppp, msglen);  // rejected PPP message
-      ppp_tx_frame_footer(ifp, msglen + sizeof(rej), p + msglen + sizeof(rej));
+      ppp_tx_frame_trailer(ifp, msglen + sizeof(rej), p + msglen + sizeof(rej));
     }
       return false;
   }
@@ -3997,7 +4040,8 @@ bool mg_l2_ppp_rx(struct mg_tcpip_if *ifp, enum mg_l2proto *proto,
   return ppp_rx(ifp, proto, pay, raw);
 }
 
-struct mg_l2addr *mg_l2_ppp_getaddr(uint8_t *frame) {
+struct mg_l2addr *mg_l2_ppp_getaddr(struct mg_tcpip_if *ifp, uint8_t *frame) {
+  (void) ifp;
   (void) frame;
   return &s_mapip;  // bogus
 }
@@ -4039,10 +4083,10 @@ static size_t pppoe_tx_frame(struct mg_tcpip_if *ifp, uint8_t code, uint16_t id,
                              uint8_t *data, size_t datasz,
                              struct mg_l2addr *dst) {
   uint8_t *l2p = (uint8_t *) ifp->tx.buf;
-  uint8_t *p = pppoe_header(MG_TCPIP_L2PROTO_PPPoE_DISC, code, id,
+  uint8_t *p = pppoe_header(ifp, MG_TCPIP_L2PROTO_PPPoE_DISC, code, id,
                             (struct mg_l2addr *) ifp->mac, dst, l2p);
   memmove(p, data, datasz);
-  return mg_l2_driver_output(ifp, pppoe_footer(datasz, p + datasz));
+  return mg_l2_driver_output(ifp, pppoe_trailer(ifp, datasz, p + datasz));
 }
 
 extern struct mg_l2addr *mg_l2_eth_mapip(enum mg_l2addrtype, struct mg_addr *);
@@ -4063,7 +4107,7 @@ bool mg_l2_pppoe_poll(struct mg_tcpip_if *ifp, bool expired_1000ms) {
 
 extern bool mg_l2_eth_rx(struct mg_tcpip_if *ifp, enum mg_l2proto *proto,
                          struct mg_str *pay, struct mg_str *raw);
-extern struct mg_l2addr *mg_l2_eth_getaddr(uint8_t *);
+extern struct mg_l2addr *mg_l2_eth_getaddr(struct mg_tcpip_if *, uint8_t *);
 
 bool mg_l2_pppoe_rx(struct mg_tcpip_if *ifp, enum mg_l2proto *proto,
                     struct mg_str *pay, struct mg_str *raw) {
@@ -4101,12 +4145,13 @@ bool mg_l2_pppoe_rx(struct mg_tcpip_if *ifp, enum mg_l2proto *proto,
         taglen = sizeof(tags);
       }
       pppoe_tx_frame(ifp, MG_PPPoE_PADR, 0, p, taglen,
-                     mg_l2_eth_getaddr((uint8_t *) raw->buf));
+                     mg_l2_eth_getaddr(ifp, (uint8_t *) raw->buf));
       MG_DEBUG(("Sent PADR"));
       s_state = 1;
     } else if (s_state == 1 && pppoe->code == MG_PPPoE_PADS) {
       s_id = pppoe->id;
-      memcpy(&ifp->gwmac, mg_l2_eth_getaddr((uint8_t *) raw->buf)->addr.mac, 6);
+      memcpy(&ifp->gwmac,
+             mg_l2_eth_getaddr(ifp, (uint8_t *) raw->buf)->addr.mac, 6);
       MG_DEBUG(("PPPoE session 0x%04x started", mg_ntohs(s_id)));
       s_state = 2;
     } else if (s_state == 2 && pppoe->code == MG_PPPoE_PADT &&
@@ -5541,12 +5586,12 @@ struct pkt {
 
 // L2 API
 void mg_l2_init(struct mg_tcpip_if *ifp);
-uint8_t *mg_l2_header(enum mg_l2type type, enum mg_l2proto proto, uint8_t *src,
-                      uint8_t *dst, uint8_t *frame);
-size_t mg_l2_footer(enum mg_l2type type, size_t len, uint8_t *cur);
+uint8_t *mg_l2_header(struct mg_tcpip_if *ifp, enum mg_l2proto proto,
+                      uint8_t *src, uint8_t *dst, uint8_t *frame);
+size_t mg_l2_trailer(struct mg_tcpip_if *ifp, size_t len, uint8_t *cur);
 bool mg_l2_rx(struct mg_tcpip_if *ifp, enum mg_l2proto *proto,
               struct mg_str *pay, struct mg_str *raw);
-uint8_t *mg_l2_getaddr(enum mg_l2type type, uint8_t *frame);
+uint8_t *mg_l2_getaddr(struct mg_tcpip_if *ifp, uint8_t *frame);
 uint8_t *mg_l2_mapip(enum mg_l2type type, enum mg_l2addrtype addrtype,
                      struct mg_addr *ip);
 #if MG_ENABLE_IPV6
@@ -5717,7 +5762,7 @@ static size_t driver_output(struct mg_tcpip_if *ifp, size_t len) {
 void mg_tcpip_arp_request(struct mg_tcpip_if *ifp, uint32_t ip, uint8_t *mac) {
   uint8_t *l2p = (uint8_t *) ifp->tx.buf;
   struct arp *arp = (struct arp *) mg_l2_header(
-      ifp->l2type, MG_TCPIP_L2PROTO_ARP, ifp->mac,
+      ifp, MG_TCPIP_L2PROTO_ARP, ifp->mac,
       mg_l2_mapip(ifp->l2type, MG_TCPIP_L2ADDR_BCAST, NULL), l2p);
   memset(arp, 0, sizeof(*arp));
   arp->fmt = mg_htons(1), arp->pro = mg_htons(0x800), arp->hlen = 6,
@@ -5725,8 +5770,7 @@ void mg_tcpip_arp_request(struct mg_tcpip_if *ifp, uint32_t ip, uint8_t *mac) {
   arp->op = mg_htons(1), arp->tpa = ip, arp->spa = ifp->ip;
   memcpy(arp->sha, ifp->mac, sizeof(arp->sha));
   if (mac != NULL) memcpy(arp->tha, mac, sizeof(arp->tha));
-  driver_output(ifp,
-                mg_l2_footer(ifp->l2type, sizeof(*arp), (uint8_t *) (arp + 1)));
+  driver_output(ifp, mg_l2_trailer(ifp, sizeof(*arp), (uint8_t *) (arp + 1)));
 }
 
 static void onstatechange(struct mg_tcpip_if *ifp) {
@@ -5754,7 +5798,7 @@ static struct ip *tx_ip(struct mg_tcpip_if *ifp, uint8_t *l2_dst, uint8_t proto,
                         uint32_t ip_src, uint32_t ip_dst, size_t plen) {
   // ifp->tx.buf is 8-bit aligned, keep other headers as pointers, see pkt
   uint8_t *l2p = (uint8_t *) ifp->tx.buf;
-  struct ip *ip = (struct ip *) mg_l2_header(ifp->l2type, MG_TCPIP_L2PROTO_IPV4,
+  struct ip *ip = (struct ip *) mg_l2_header(ifp, MG_TCPIP_L2PROTO_IPV4,
                                              ifp->mac, l2_dst, l2p);
   memset(ip, 0, sizeof(*ip));
   ip->ver = 0x45;               // Version 4, header length 5 words
@@ -5811,7 +5855,7 @@ static bool tx_udp(struct mg_tcpip_if *ifp, uint8_t *l2_dst,
   {
     udp->csum = pcsum(ip, udp, sizeof(*udp) + len);
   }
-  l2_len = mg_l2_footer(ifp->l2type, l2_len, l3p + l2_len);
+  l2_len = mg_l2_trailer(ifp, l2_len, l3p + l2_len);
   return (driver_output(ifp, l2_len) == l2_len);
 }
 
@@ -5925,9 +5969,8 @@ static void rx_arp(struct mg_tcpip_if *ifp, struct pkt *pkt) {
     // ARP request. Make a response, then send
     // MG_VERBOSE(("ARP req from %M", mg_print_ip4, &pkt->arp->spa));
     uint8_t *l2p = (uint8_t *) ifp->tx.buf;
-    struct arp *arp =
-        (struct arp *) mg_l2_header(ifp->l2type, MG_TCPIP_L2PROTO_ARP, ifp->mac,
-                                    mg_l2_getaddr(ifp->l2type, pkt->l2), l2p);
+    struct arp *arp = (struct arp *) mg_l2_header(
+        ifp, MG_TCPIP_L2PROTO_ARP, ifp->mac, mg_l2_getaddr(ifp, pkt->l2), l2p);
     *arp = *pkt->arp;
     arp->op = mg_htons(2);
     memcpy(arp->tha, pkt->arp->sha, sizeof(pkt->arp->tha));
@@ -5936,8 +5979,7 @@ static void rx_arp(struct mg_tcpip_if *ifp, struct pkt *pkt) {
     arp->spa = ifp->ip;
     MG_DEBUG(("ARP: tell %M we're %M", mg_print_ip4, &arp->tpa, mg_print_mac,
               ifp->mac));
-    driver_output(
-        ifp, mg_l2_footer(ifp->l2type, sizeof(*arp), (uint8_t *) (arp + 1)));
+    driver_output(ifp, mg_l2_trailer(ifp, sizeof(*arp), (uint8_t *) (arp + 1)));
   } else if (pkt->arp->op == mg_htons(2)) {
     if (memcmp(pkt->arp->tha, ifp->mac, sizeof(pkt->arp->tha)) != 0) return;
     // MG_VERBOSE(("ARP resp from %M", mg_print_ip4, &pkt->arp->spa));
@@ -5984,8 +6026,8 @@ static void rx_icmp(struct mg_tcpip_if *ifp, struct pkt *pkt) {
     memset(icmp, 0, sizeof(*icmp));        // Set csum, type, code to 0
     memcpy(icmp + 1, pkt->pay.buf, plen);  // Copy RX payload to TX
     icmp->csum = ipcsum(icmp, sizeof(*icmp) + plen);
-    driver_output(ifp, mg_l2_footer(ifp->l2type, hlen + plen,
-                                    (uint8_t *) ip + hlen + plen));
+    driver_output(
+        ifp, mg_l2_trailer(ifp, hlen + plen, (uint8_t *) ip + hlen + plen));
   }
 }
 
@@ -6038,8 +6080,7 @@ static void rx_dhcp_client(struct mg_tcpip_if *ifp, struct pkt *pkt) {
       ifp->lease_expire = ifp->now + lease * 1000;
       MG_INFO(("Lease: %u sec (%lld)", lease, ifp->lease_expire / 1000));
       // assume DHCP server = router until ARP resolves
-      memcpy(ifp->gwmac, mg_l2_getaddr(ifp->l2type, pkt->l2),
-             sizeof(ifp->gwmac));
+      memcpy(ifp->gwmac, mg_l2_getaddr(ifp, pkt->l2), sizeof(ifp->gwmac));
       ifp->gw_ready = true;  // NOTE(): actual gw ARP won't retry now
       ifp->ip = ip, ifp->gw = gw, ifp->mask = mask;
       ifp->state = MG_TCPIP_STATE_IP;  // BOUND state
@@ -6092,7 +6133,7 @@ static void rx_dhcp_server(struct mg_tcpip_if *ifp, struct pkt *pkt) {
     memcpy(&res.options, opts, sizeof(opts));
     res.magic = pkt->dhcp->magic;
     res.xid = pkt->dhcp->xid;
-    mac = mg_l2_getaddr(ifp->l2type, pkt->l2);
+    mac = mg_l2_getaddr(ifp, pkt->l2);
     if (ifp->enable_get_gateway) {
       ifp->gw = res.yiaddr;  // set gw IP, best-effort gwmac as DHCP server's
       memcpy(ifp->gwmac, mac, sizeof(ifp->gwmac));
@@ -6108,8 +6149,8 @@ static struct ip6 *tx_ip6(struct mg_tcpip_if *ifp, uint8_t *l2_dst,
                           size_t plen) {
   // ifp->tx.buf is 8-bit aligned, keep other headers as pointers, see pkt
   uint8_t *l2p = (uint8_t *) ifp->tx.buf;
-  struct ip6 *ip6 = (struct ip6 *) mg_l2_header(
-      ifp->l2type, MG_TCPIP_L2PROTO_IPV6, ifp->mac, l2_dst, l2p);
+  struct ip6 *ip6 = (struct ip6 *) mg_l2_header(ifp, MG_TCPIP_L2PROTO_IPV6,
+                                                ifp->mac, l2_dst, l2p);
   memset(ip6, 0, sizeof(*ip6));
   ip6->ver = 0x60;  // Version 6, traffic class 0
   ip6->plen = mg_htons((uint16_t) plen);
@@ -6136,8 +6177,8 @@ static void tx_icmp6(struct mg_tcpip_if *ifp, uint8_t *l2_dst, uint64_t *ip_src,
   icmp6->csum = 0;              // RFC-4443 2.3, RFC-8200 8.1
   icmp6->csum = p6csum(ip6, icmp6, sizeof(*icmp6) + len);
   driver_output(ifp,
-                mg_l2_footer(ifp->l2type, sizeof(*ip6) + sizeof(*icmp6) + len,
-                             (uint8_t *) (ip6 + 1) + sizeof(*icmp6) + len));
+                mg_l2_trailer(ifp, sizeof(*ip6) + sizeof(*icmp6) + len,
+                              (uint8_t *) (ip6 + 1) + sizeof(*icmp6) + len));
 }
 
 // Neighbor Discovery Protocol, RFC-4861
@@ -6433,16 +6474,16 @@ static uint8_t *get_return_l2addr(struct mg_tcpip_if *ifp, struct mg_addr *rem,
   if (rem->is_ip6) {
     if (rem->addr.ip6[0] == ifp->ip6ll[0] ||
         match_prefix((uint8_t *) rem->addr.ip6, ifp->prefix, ifp->prefix_len))
-      return mg_l2_getaddr(ifp->l2type, pkt->l2);  // same LAN, get from frame
-    if (ifp->gw6_ready)                            // use the router
-      return ifp->gw6mac;  // ignore source address in frame
+      return mg_l2_getaddr(ifp, pkt->l2);  // same LAN, get from frame
+    if (ifp->gw6_ready)                    // use the router
+      return ifp->gw6mac;                  // ignore source address in frame
   } else
 #endif
   {
     if (ifp->ip != 0 && ((rem->addr.ip4 & ifp->mask) == (ifp->ip & ifp->mask)))
-      return mg_l2_getaddr(ifp->l2type, pkt->l2);  // same LAN, get from frame
-    if (ifp->gw_ready)                             // use the router
-      return ifp->gwmac;  // ignore source address in frame
+      return mg_l2_getaddr(ifp, pkt->l2);  // same LAN, get from frame
+    if (ifp->gw_ready)                     // use the router
+      return ifp->gwmac;                   // ignore source address in frame
   }
   MG_ERROR(("%M %s: No way back, can't respond", mg_print_ip_port, rem,
             is_udp ? "UDP" : "TCP"));
@@ -6543,8 +6584,8 @@ static size_t tx_tcp(struct mg_tcpip_if *ifp, uint8_t *l2_dst,
   MG_VERBOSE(("TCP %M -> %M fl %x len %u", mg_print_ip_port, ip_src,
               mg_print_ip_port, ip_dst, tcp->flags, len));
   return driver_output(
-      ifp, mg_l2_footer(ifp->l2type, PDIFF(l3p, (uint8_t *) tcp + hlen + len),
-                        (uint8_t *) tcp + hlen + len));
+      ifp, mg_l2_trailer(ifp, PDIFF(l3p, (uint8_t *) tcp + hlen + len),
+                         (uint8_t *) tcp + hlen + len));
 }
 
 static size_t tx_tcp_ctrlresp(struct mg_tcpip_if *ifp, struct pkt *pkt,
