@@ -14138,12 +14138,18 @@ static int mg_tls_verify_cert_san(const uint8_t *der, size_t dersz,
       if (!server_ip->is_ip6 &&
           *((uint32_t *) name.value) == server_ip->addr.ip4)
         return 1;  // and matches the one we're connected to
-    } else {       // this is a text SAN
+#if MG_ENABLE_IPV6
+    } else if (name.type == 0x87 && name.len == 16) {  // is an IPv6 address
+      MG_VERBOSE(("Found SAN, IPv6: %M", mg_print_ip6, name.value));
+      if (server_ip->is_ip6 && memcmp(name.value, server_ip->addr.ip6, 16) == 0)
+        return 1;  // and matches the one we're connected to
+#endif
+    } else {  // this is a text SAN
       MG_VERBOSE(("Found SAN, (%u): %.*s", name.type, name.len, name.value));
       if (mg_match(mg_str(server_name), mg_str_n((char *) name.value, name.len),
                    NULL))
         return 1;  // and matches the host name
-    }              // TODO(): add IPv6 comparison, more items ?
+    }
   }
   return -1;
 }
