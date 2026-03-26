@@ -86,7 +86,7 @@ int main(void) {
   struct mg_tcpip_spi spi = {
       .begin = (void (*)(void *)) spi_begin,
       .end = (void (*)(void *)) spi_end,
-      .txn = (uint8_t(*)(void *, uint8_t)) spi_txn,
+      .txn = (void (*)(void *, uint8_t *, uint8_t *, size_t)) spi_txn,
       .spi = &spi_pins,
   };
   struct mg_tcpip_if mif = {.mac = GENERATE_LOCALLY_ADMINISTERED_MAC(),

@@ -439,7 +439,7 @@ static size_t st67w6_spi_poll(uint8_t *write, uint8_t *read) {
   struct mg_tcpip_driver_st67w6_data *d =
       (struct mg_tcpip_driver_st67w6_data *) s_ifp->driver_data;
   struct spi_hdr *th, *rh = (struct spi_hdr *) read;
-  struct mg_tcpip_spi_ *s = (struct mg_tcpip_spi_ *) d->spi;
+  struct mg_tcpip_spi *s = (struct mg_tcpip_spi *) d->spi;
   size_t padded;
   unsigned int times;
 
