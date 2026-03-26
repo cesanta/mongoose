@@ -227,6 +227,9 @@ jobs:
       fail-fast: false
       matrix:
         example:
+          - path: pico-sdk/rm2-pico-picosdk-baremetal-builtin
+          - path: stm32/rm2-nucleo-f429zi-make-baremetal-builtin
+          - path: stm32/rm2-nucleo-f746zg-make-baremetal-builtin
           - path: stm32/nucleo-g031-make-baremetal-builtin
     name: ${{ matrix.example.path }}
     env:

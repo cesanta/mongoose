@@ -12,7 +12,13 @@ struct mg_tcpip_spi spi = {
     NULL,  // SPI metadata
     [](void *) { digitalWrite(SS_PIN, LOW); SPI.beginTransaction(SPISettings()); },
     [](void *) { digitalWrite(SS_PIN, HIGH); SPI.endTransaction(); },
-    [](void *, uint8_t c) { return SPI.transfer(c); }, // Execute transaction
+    [](void *, uint8_t *w, uint8_t *r, size_t n) {  // Execute transaction
+        while (n--) {
+          uint8_t c = (w != NULL) ? *w++ : 0xFF;
+          uint8_t d = SPI.transfer(c);
+          if (r != NULL) *r++ = d;
+        }       
+      },
 };
 struct mg_mgr mgr;                                     // Mongoose event manager
 struct mg_tcpip_if mif = {.mac = {2, 0, 1, 2, 3, 5}};  // Network interface

@@ -66,7 +66,7 @@ static void hwspecific_spi_init(void) {
   mg_delayms(50);
 }
 
-static const struct mg_tcpip_spi_ spi = {NULL, hwspecific_spi_begin, hwspecific_spi_end, hwspecific_spi_txn};
+static const struct mg_tcpip_spi spi = {NULL, hwspecific_spi_begin, hwspecific_spi_end, hwspecific_spi_txn};
 
 #ifndef CYW43_RESOURCE_ATTRIBUTE
 #define CYW43_RESOURCE_ATTRIBUTE
@@ -162,7 +162,7 @@ static void mif_fn(struct mg_tcpip_if *ifp, int ev, void *ev_data) {
 
 
 static struct mg_tcpip_driver_cyw_data d = {
-  {WIFI_SSID, WIFI_PASS, "mongoose", "mongoose", 0, 0, 0, 0, 10, true}, (struct mg_tcpip_spi_ *)&spi, (struct mg_tcpip_driver_cyw_firmware *)&fw, false};
+  {WIFI_SSID, WIFI_PASS, "mongoose", "mongoose", 0, 0, 0, 0, 10, true}, (struct mg_tcpip_spi *)&spi, (struct mg_tcpip_driver_cyw_firmware *)&fw, false};
 
 int main(void) {
   uart_init(UART_DEBUG, 115200);  // Initialise debug printf

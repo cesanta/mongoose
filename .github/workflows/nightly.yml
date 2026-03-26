@@ -397,9 +397,12 @@ jobs:
           - path: nxp/nxp-lpcxpresso54628-lwip-freertos
           - path: nxp/nxp-twrk65f180m-lwip-freertos
           - path: nxp/nxp-twrkv58f220m-lwip-freertos
+          - path: pico-sdk/rm2-pico-picosdk-baremetal-builtin
           - path: pico-sdk/pico-rmii
           - path: stm32/nucleo-f429zi-make-baremetal-builtin-rndis
+          - path: stm32/rm2-nucleo-f429zi-make-baremetal-builtin
           - path: stm32/nucleo-f746zg-make-baremetal-builtin-rndis
+          - path: stm32/rm2-nucleo-f746zg-make-baremetal-builtin
           - path: stm32/nucleo-g031-make-baremetal-builtin
           - path: ti/ti-ek-tm4c1294xl-http-server
           - path: ti/ek-tm4c1294xl-make-baremetal-builtin-rndis
