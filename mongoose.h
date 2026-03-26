@@ -3358,10 +3358,11 @@ extern struct mg_tcpip_driver mg_tcpip_driver_st67w6;
 
 // Drivers that require SPI, can use this SPI abstraction
 struct mg_tcpip_spi {
-  void *spi;                        // Opaque SPI bus descriptor
-  void (*begin)(void *);            // SPI begin: slave select low
-  void (*end)(void *);              // SPI end: slave select high
-  uint8_t (*txn)(void *, uint8_t);  // SPI transaction: write 1 byte, read reply
+  void *spi;              // Opaque SPI bus descriptor
+  void (*begin)(void *);  // SPI begin: slave select active
+  void (*end)(void *);    // SPI end: slave select inactive
+  void (*txn)(void *, uint8_t *, uint8_t *,
+              size_t len);  // SPI transaction: write-read len bytes
 };
 
 // Alignment and memory section requirements
@@ -3415,14 +3416,6 @@ struct mg_tcpip_spi {
 #if MG_ENABLE_TCPIP &&                                          \
     ((defined(MG_ENABLE_DRIVER_CYW) && MG_ENABLE_DRIVER_CYW) || \
      (defined(MG_ENABLE_DRIVER_CYW_SDIO) && MG_ENABLE_DRIVER_CYW_SDIO))
-
-struct mg_tcpip_spi_ {
-  void *spi;              // Opaque SPI bus descriptor
-  void (*begin)(void *);  // SPI begin: slave select low
-  void (*end)(void *);    // SPI end: slave select high
-  void (*txn)(void *, uint8_t *, uint8_t *,
-              size_t len);  // SPI transaction: write-read len bytes
-};
 
 struct mg_tcpip_driver_cyw_firmware {
   const uint8_t *code_addr;
@@ -3764,14 +3757,6 @@ bool mg_sdio_transfer(struct mg_tcpip_sdio *sdio, bool write, unsigned int f,
 
 #if MG_ENABLE_TCPIP && defined(MG_ENABLE_DRIVER_ST67W6) && \
     MG_ENABLE_DRIVER_ST67W6
-
-struct mg_tcpip_spi_ {
-  void *spi;              // Opaque SPI bus descriptor
-  void (*begin)(void *);  // SPI begin: slave select low
-  void (*end)(void *);    // SPI end: slave select high
-  void (*txn)(void *, uint8_t *, uint8_t *,
-              size_t len);  // SPI transaction: write-read len bytes
-};
 
 struct mg_tcpip_driver_st67w6_data {
   struct mg_wifi_data wifi;

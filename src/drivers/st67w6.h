@@ -3,14 +3,6 @@
 #if MG_ENABLE_TCPIP && defined(MG_ENABLE_DRIVER_ST67W6) && \
     MG_ENABLE_DRIVER_ST67W6
 
-struct mg_tcpip_spi_ {
-  void *spi;              // Opaque SPI bus descriptor
-  void (*begin)(void *);  // SPI begin: slave select low
-  void (*end)(void *);    // SPI end: slave select high
-  void (*txn)(void *, uint8_t *, uint8_t *,
-              size_t len);  // SPI transaction: write-read len bytes
-};
-
 struct mg_tcpip_driver_st67w6_data {
   struct mg_wifi_data wifi;
   void *spi;

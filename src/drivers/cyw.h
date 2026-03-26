@@ -4,14 +4,6 @@
     ((defined(MG_ENABLE_DRIVER_CYW) && MG_ENABLE_DRIVER_CYW) || \
      (defined(MG_ENABLE_DRIVER_CYW_SDIO) && MG_ENABLE_DRIVER_CYW_SDIO))
 
-struct mg_tcpip_spi_ {
-  void *spi;              // Opaque SPI bus descriptor
-  void (*begin)(void *);  // SPI begin: slave select low
-  void (*end)(void *);    // SPI end: slave select high
-  void (*txn)(void *, uint8_t *, uint8_t *,
-              size_t len);  // SPI transaction: write-read len bytes
-};
-
 struct mg_tcpip_driver_cyw_firmware {
   const uint8_t *code_addr;
   size_t code_len;
