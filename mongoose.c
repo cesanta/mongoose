@@ -3971,6 +3971,124 @@ void mg_md5_final(mg_md5_ctx *ctx, unsigned char digest[16]) {
 #endif
 
 #ifdef MG_ENABLE_LINES
+#line 1 "src/modbus.c"
+#endif
+
+
+
+
+
+#define MG_MODBUS_MIN_PAYLOAD_LEN 12
+
+static void handle_pdu(struct mg_connection *c, uint8_t *buf, size_t len) {
+  // len is MG_MODBUS_MIN_PAYLOAD_LEN or higher.
+  uint16_t addr = MG_LOAD_BE16(&buf[8]);
+  uint16_t quantity = MG_LOAD_BE16(&buf[10]);
+  uint16_t resp_len = 0;
+  struct mg_modbus_cmd mc = {buf[7], MG_MODBUS_ERROR_NONE, addr, {0}, quantity};
+
+  if (mc.command == MG_MODBUS_COMMAND_READ_COILS) {
+    mg_call(c, MG_EV_MODBUS_CMD, &mc);
+  } else {
+    mc.error = MG_MODBUS_ERROR_ILLEGAL_FUNCTION;
+  }
+
+  if (mc.error == MG_MODBUS_ERROR_NONE) {
+  } else {
+    // Exception response: MBAP + (FC | 0x80) | ExceptionCode(1)
+    resp_len = 1, buf[7] |= 0x80, ((uint8_t *) &mc.values)[0] = mc.error;
+  }
+
+  // Send MBAP header + function code
+  MG_STORE_BE16(&buf[4], resp_len);
+  mg_send(c, buf, 8);
+  if (resp_len > 0) mg_send(c, mc.values, resp_len);
+
+#if 0
+    size_t i, response_len = 0;
+    uint8_t response[12] = {0};
+    struct mg_modbus_cmd mc = {
+        buf[7], MG_MODBUS_ERROR_NONE, MG_LOAD_BE16(&buf[8]), {0}, 0};
+    memcpy(response, buf, 10);
+    if (mc.command == MG_MODBUS_COMMAND_WRITE_SINGLE_REGISTER) {
+      mc.values[0] = MG_LOAD_BE16(&buf[10]);
+      mc.num_values = 1;
+      mg_call(c, MG_EV_MODBUS_CMD, &mc);
+      // mc.values[0] = mg_ntohs(mc.values[0]);
+      response_len = 12;
+    } else if (mc.command == MG_MODBUS_COMMAND_WRITE_MULTIPLE_REGISTERS) {
+      mc.num_values = MG_LOAD_BE16(&buf[10]);
+      if (mc.num_values < sizeof(mc.values) / sizeof(mc.values[0])) {
+        for (i = 0; i < mc.num_values; i++) {
+          mc.values[i] = MG_LOAD_BE16(&buf[13 + i * 2]);
+        }
+        mg_call(c, MG_EV_MODBUS_CMD, &mc);
+        response_len = 12;
+      } else {
+        mc.error = MG_MODBUS_ERROR_ILLEGAL_DEVICE_FAILURE;
+      }
+    } else if (mc.command == MG_MODBUS_COMMAND_READ_HOLDING_REGISTERS ||
+               mc.command == MG_MODBUS_COMMAND_READ_INPUT_REGISTERS) {
+      mc.num_values = MG_LOAD_BE16(&buf[10]);
+      if (mc.num_values < sizeof(mc.values) / sizeof(mc.values[0])) {
+        mg_call(c, MG_EV_MODBUS_CMD, &mc);
+        for (i = 0; i < mc.num_values; i++) {
+          mc.values[i] = MG_LOAD_BE16(&mc.values[i]);
+        }
+        response_len = 9;
+      } else {
+        mc.error = MG_MODBUS_ERROR_ILLEGAL_DEVICE_FAILURE;
+      }
+    } else if (mc.command == MG_MODBUS_COMMAND_READ_COILS) {
+      mc.num_values = MG_LOAD_BE16(&buf[10]);
+      if (mc.num_values < sizeof(mc.values) / sizeof(mc.values[0])) {
+        mg_call(c, MG_EV_MODBUS_CMD, &mc);
+    // //     for (i = 0; i < mc.num_values; i++) {
+    // //       mc.values[i] = MG_LOAD_BE16(&mc.values[i]);
+    // //     }
+    // //     response_len = 9;
+      } else {
+        mc.error = MG_MODBUS_ERROR_ILLEGAL_DEVICE_FAILURE;
+      }
+    } else {
+      mc.error = MG_MODBUS_ERROR_ILLEGAL_FUNCTION;
+    }
+    MG_INFO(("PDU %u addr %u values %u", mc.command, mc.address, mc.num_values));
+    if (mc.error == MG_MODBUS_ERROR_NONE) {
+    } else {
+      response_len = 9;
+      response[7] |= 0x80;
+      response[8] = mc.error;
+      mc.num_values = 0;
+    }
+    *(uint16_t *) &response[4] = mg_htons((uint16_t) (response_len - 6));
+    mg_send(c, response, response_len);
+    if (mc.num_values > 0) mg_send(c, mc.values, mc.num_values * 2);
+  }
+#endif
+  (void) c, (void) buf, (void) len;
+}
+
+static void modbus_ev_handler(struct mg_connection *c, int ev, void *ev_data) {
+  // MBAP header (7) +  function code FC(1) + ADDR(2) + QUANTITY(2)
+  if (ev == MG_EV_READ && c->recv.len >= MG_MODBUS_MIN_PAYLOAD_LEN) {
+    uint16_t len = MG_LOAD_BE16(&c->recv.buf[4]);  // PDU length
+    // MG_DEBUG(("Got %lu, expecting %lu", c->recv.len, len + 6));
+    if (c->recv.len < len + 6U) return;   // Partial frame, buffer more
+    handle_pdu(c, c->recv.buf, len + 6);  // Parse PDU and call user
+    mg_iobuf_del(&c->recv, 0, len + 6U);  // Delete received PDU
+  }
+  (void) ev_data;
+}
+
+struct mg_connection *mg_modbus_listen(struct mg_mgr *mgr, const char *url,
+                                       mg_event_handler_t fn, void *fn_data) {
+  struct mg_connection *c = mg_listen(mgr, url, fn, fn_data);
+  if (c != NULL) c->pfn = modbus_ev_handler;
+  return c;
+}
+
+#ifdef MG_ENABLE_LINES
 #line 1 "src/mqtt.c"
 #endif
 
