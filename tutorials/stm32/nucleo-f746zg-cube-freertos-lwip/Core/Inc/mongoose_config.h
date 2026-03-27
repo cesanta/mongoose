@@ -7,7 +7,6 @@
 #define MG_STMPACK_ARCH MG_ARCH_ARMGCC
 #endif
 
-#define MG_ENABLE_PACKED_FS  1
 #define MG_ENABLE_CUSTOM_MILLIS  0
 #define MG_ENABLE_MBEDTLS  0
 #define MG_ARCH MG_ARCH_FREERTOS
@@ -25,8 +24,6 @@
 #define MG_ENABLE_RL 1
 #endif
 
-#if MG_ENABLE_PACKED_FS
 #define MG_ENABLE_POSIX_FS 0
-#endif
 
 // See https://mongoose.ws/documentation/#build-options

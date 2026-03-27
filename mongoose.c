@@ -1083,95 +1083,46 @@ size_t mg_vxprintf(void (*out)(char, void *), void *param, const char *fmt,
 
 
 
-
-struct mg_fd *mg_fs_open(struct mg_fs *fs, const char *path, int flags) {
-  struct mg_fd *fd = (struct mg_fd *) mg_calloc(1, sizeof(*fd));
-  if (fd != NULL) {
-    fd->fd = fs->op(path, flags);
-    fd->fs = fs;
-    if (fd->fd == NULL) {
-      mg_free(fd);
-      fd = NULL;
-    }
-  }
-  return fd;
-}
-
-void mg_fs_close(struct mg_fd *fd) {
-  if (fd != NULL) {
-    fd->fs->cl(fd->fd);
-    mg_free(fd);
-  }
-}
-
 struct mg_str mg_file_read(struct mg_fs *fs, const char *path) {
-  struct mg_str result = {NULL, 0};
-  void *fp;
-  fs->st(path, &result.len, NULL);
-  if ((fp = fs->op(path, MG_FS_READ)) != NULL) {
-    result.buf = (char *) mg_calloc(1, result.len + 1);
-    if (result.buf != NULL &&
-        fs->rd(fp, (void *) result.buf, result.len) != result.len) {
-      mg_free((void *) result.buf);
-      result.buf = NULL;
-    }
-    fs->cl(fp);
+  struct mg_str data;
+  if (fs->info(path, &data.len, NULL) == MG_FS_FILE &&
+      (data.buf = (char *) mg_calloc(1, data.len)) != NULL) {
+    fs->reader(path, 0, data.buf, data.len);
+  } else {
+    data.buf = NULL, data.len = 0;
   }
-  if (result.buf == NULL) result.len = 0;
-  return result;
+  return data;
 }
 
 bool mg_file_write(struct mg_fs *fs, const char *path, const void *buf,
                    size_t len) {
-  bool result = false;
-  struct mg_fd *fd;
-  char tmp[MG_PATH_MAX];
-  mg_snprintf(tmp, sizeof(tmp), "%s..%d", path, rand());
-  if ((fd = mg_fs_open(fs, tmp, MG_FS_WRITE)) != NULL) {
-    result = fs->wr(fd->fd, buf, len) == len;
-    mg_fs_close(fd);
-    if (result) {
-      fs->rm(path);
-      fs->mv(tmp, path);
-    } else {
-      fs->rm(tmp);
-    }
-  }
-  return result;
+  fs->del(path);
+  return fs->writer(path, 0, buf, len) == len;
 }
 
-bool mg_file_printf(struct mg_fs *fs, const char *path, const char *fmt, ...) {
-  va_list ap;
-  char *data;
-  bool result = false;
-  va_start(ap, fmt);
-  data = mg_vmprintf(fmt, &ap);
-  va_end(ap);
-  result = mg_file_write(fs, path, data, strlen(data));
-  mg_free(data);
-  return result;
-}
+// struct mg_file_pfn_data {
+//   struct mg_fs *fs;
+//   const char *path;
+// };
 
-// This helper function allows to scan a filesystem in a sequential way,
-// without using callback function:
-//      char buf[100] = "";
-//      while (mg_fs_ls(&mg_fs_posix, "./", buf, sizeof(buf))) {
-//        ...
-static void mg_fs_ls_fn(const char *filename, void *param) {
-  struct mg_str *s = (struct mg_str *) param;
-  if (s->buf[0] == '\0') {
-    mg_snprintf((char *) s->buf, s->len, "%s", filename);
-  } else if (strcmp(s->buf, filename) == 0) {
-    ((char *) s->buf)[0] = '\0';  // Fetch next file
-  }
-}
+// static void mg_pfn_file(char ch, void *param) {
+//   struct mg_file_pfn_data *data = (struct mg_file_pfn_data *) param;
+//   size_t size = 0;
+//   data->fs->info(data->path, &size, NULL);
+//   data->fs->writer(data->path, size, &ch, 1);
+// }
 
-bool mg_fs_ls(struct mg_fs *fs, const char *path, char *buf, size_t len) {
-  struct mg_str s;
-  s.buf = buf, s.len = len;
-  fs->ls(path, mg_fs_ls_fn, &s);
-  return buf[0] != '\0';
-}
+
+// size_t mg_file_printf(struct mg_fs *fs, const char *path, const char *fmt, ...) {
+//   struct mg_file_pfn_data data = {fs, path};
+//   va_list ap;
+//   size_t result = 0;
+//   fs->del(path);
+//   va_start(ap, fmt);
+//   result = mg_xprintf(mg_pfn_file, &data, fmt, &ap);
+//   va_end(ap);
+//   return result;
+// }
 
 #ifdef MG_ENABLE_LINES
 #line 1 "src/fs_fat.c"
@@ -1312,26 +1263,22 @@ struct mg_fs mg_fs_fat = {ff_stat,  ff_list, ff_open,   ff_close,  ff_read,
 
 
 
+const struct mg_mem_file *mg_mem_files;
 
-struct packed_file {
-  const char *data;
-  size_t size;
-  size_t pos;
-};
+static const char *mg_unlist(size_t no) {
+  return mg_mem_files == NULL ? NULL : mg_mem_files[no].path;
+}
 
-#if MG_ENABLE_PACKED_FS
-#else
-const char *mg_unpack(const char *path, size_t *size, time_t *mtime) {
-  if (size != NULL) *size = 0;
-  if (mtime != NULL) *mtime = 0;
-  (void) path;
+static const char *mg_unpack(const char *path, size_t *size, time_t *mtime) {
+  const struct mg_mem_file *p;
+  for (p = mg_mem_files; p != NULL && p->path != NULL; p++) {
+    if (strcmp(p->path, path) != 0) continue;
+    if (size != NULL) *size = p->size;
+    if (mtime != NULL) *mtime = p->mtime;
+    return (const char *) p->data;
+  }
   return NULL;
 }
-const char *mg_unlist(size_t no) {
-  (void) no;
-  return NULL;
-}
-#endif
 
 struct mg_str mg_unpacked(const char *path) {
   size_t len = 0;
@@ -1345,97 +1292,81 @@ static int is_dir_prefix(const char *prefix, size_t n, const char *path) {
          (n == 0 || path[n] == '/' || path[n - 1] == '/');
 }
 
-static int packed_stat(const char *path, size_t *size, time_t *mtime) {
+static int mem_info(const char *path, size_t *size, time_t *mtime) {
+  int result = MG_FS_FAIL;
   const char *p;
   size_t i, n = strlen(path);
-  if (mg_unpack(path, size, mtime)) return MG_FS_READ;  // Regular file
-  // Scan all files. If `path` is a dir prefix for any of them, it's a dir
-  for (i = 0; (p = mg_unlist(i)) != NULL; i++) {
-    if (is_dir_prefix(path, n, p)) return MG_FS_DIR;
+  if (mg_unpack(path, size, mtime) != NULL) {
+    result = MG_FS_FILE;
+  } else {
+    // Scan all files. If `path` is a dir prefix for any of them, it's a dir
+    for (i = 0; (p = mg_unlist(i)) != NULL; i++) {
+      if (is_dir_prefix(path, n, p)) {
+        if (size != NULL) *size = 0;
+        if (mtime != NULL) *mtime = 0;
+        result = MG_FS_DIR;
+        break;
+      }
+    }
   }
-  return 0;
+  return result;
 }
 
-static void packed_list(const char *dir, void (*fn)(const char *, void *),
-                        void *userdata) {
+static size_t mem_list(const char *dir, bool recursive,
+                       void (*fn)(const char *, void *), void *userdata) {
   char buf[MG_PATH_MAX], tmp[sizeof(buf)];
   const char *path, *begin, *end;
-  size_t i, n = strlen(dir);
+  size_t result = 0, i, n = strlen(dir);
   tmp[0] = '\0';  // Previously listed entry
   for (i = 0; (path = mg_unlist(i)) != NULL; i++) {
     if (!is_dir_prefix(dir, n, path)) continue;
     begin = &path[n + 1];
-    end = strchr(begin, '/');
-    if (end == NULL) end = begin + strlen(begin);
-    mg_snprintf(buf, sizeof(buf), "%.*s", (int) (end - begin), begin);
+    if (recursive) {
+      mg_snprintf(buf, sizeof(buf), "%s", begin);
+    } else {
+      end = strchr(begin, '/');
+      if (end == NULL) end = begin + strlen(begin);
+      mg_snprintf(buf, sizeof(buf), "%.*s", (end - begin), begin);
+    }
     buf[sizeof(buf) - 1] = '\0';
     // If this entry has been already listed, skip
     // NOTE: we're assuming that file list is sorted alphabetically
     if (strcmp(buf, tmp) == 0) continue;
     fn(buf, userdata);  // Not yet listed, call user function
     strcpy(tmp, buf);   // And save this entry as listed
+    result++;
   }
+  return result;
 }
 
-static void *packed_open(const char *path, int flags) {
-  size_t size = 0;
-  const char *data = mg_unpack(path, &size, NULL);
-  struct packed_file *fp = NULL;
-  if (data == NULL) return NULL;
-  if (flags & MG_FS_WRITE) return NULL;
-  if ((fp = (struct packed_file *) mg_calloc(1, sizeof(*fp))) != NULL) {
-    fp->size = size;
-    fp->data = data;
+static size_t mem_read(const char *path, size_t ofs, void *buf, size_t len) {
+  size_t size = 0, n = 0;
+  const char *p = mg_unpack(path, &size, NULL);
+  if (p != NULL && ofs < size) {
+    n = size - ofs;
+    if (n > len) n = len;
+    memcpy(buf, p + ofs, n);
   }
-  return (void *) fp;
+  return n;
 }
 
-static void packed_close(void *fp) {
-  if (fp != NULL) mg_free(fp);
-}
-
-static size_t packed_read(void *fd, void *buf, size_t len) {
-  struct packed_file *fp = (struct packed_file *) fd;
-  if (fp->pos + len > fp->size) len = fp->size - fp->pos;
-  memcpy(buf, &fp->data[fp->pos], len);
-  fp->pos += len;
-  return len;
-}
-
-static size_t packed_write(void *fd, const void *buf, size_t len) {
-  (void) fd, (void) buf, (void) len;
+static size_t mem_write(const char *path, size_t ofs, const void *buf,
+                        size_t len) {
+  (void) path, (void) ofs, (void) buf, (void) len;
   return 0;
 }
 
-static size_t packed_seek(void *fd, size_t offset) {
-  struct packed_file *fp = (struct packed_file *) fd;
-  fp->pos = offset;
-  if (fp->pos > fp->size) fp->pos = fp->size;
-  return fp->pos;
-}
-
-static bool packed_rename(const char *from, const char *to) {
-  (void) from, (void) to;
-  return false;
-}
-
-static bool packed_remove(const char *path) {
+static bool mem_del(const char *path) {
   (void) path;
   return false;
 }
 
-static bool packed_mkdir(const char *path) {
-  (void) path;
-  return false;
-}
-
-struct mg_fs mg_fs_packed = {
-    packed_stat,  packed_list, packed_open,   packed_close,  packed_read,
-    packed_write, packed_seek, packed_rename, packed_remove, packed_mkdir};
+struct mg_fs mg_fs_mem = {mem_info, mem_list, mem_read, mem_write, mem_del};
 
 #ifdef MG_ENABLE_LINES
 #line 1 "src/fs_posix.c"
 #endif
+
 
 
 #if MG_ENABLE_POSIX_FS
@@ -1448,16 +1379,17 @@ struct mg_fs mg_fs_packed = {
 #define MG_STAT_FUNC stat
 #endif
 
-static int p_stat(const char *path, size_t *size, time_t *mtime) {
+static int std_info(const char *path, size_t *size, time_t *mtime) {
 #if !defined(S_ISDIR)
   MG_ERROR(("stat() API is not supported. %p %p %p", path, size, mtime));
-  return 0;
+  return MG_FS_FAIL;
 #else
 #if MG_ARCH == MG_ARCH_WIN32
   struct _stati64 st;
   wchar_t tmp[MG_PATH_MAX];
-  MultiByteToWideChar(CP_UTF8, 0, path, -1, tmp, sizeof(tmp) / sizeof(tmp[0]));
-  if (_wstati64(tmp, &st) != 0) return 0;
+  MultiByteToWideChar(Cstd_UTF8, 0, path, -1, tmp,
+                      sizeof(tmp) / sizeof(tmp[0]));
+  if (_wstati64(tmp, &st) != 0) return MG_FS_FAIL;
   // If path is a symlink, windows reports 0 in st.st_size.
   // Get a real file size by opening it and jumping to the end
   if (st.st_size == 0 && (st.st_mode & _S_IFREG)) {
@@ -1470,11 +1402,11 @@ static int p_stat(const char *path, size_t *size, time_t *mtime) {
   }
 #else
   struct MG_STAT_STRUCT st;
-  if (MG_STAT_FUNC(path, &st) != 0) return 0;
+  if (MG_STAT_FUNC(path, &st) != 0) return false;
 #endif
   if (size) *size = (size_t) st.st_size;
   if (mtime) *mtime = st.st_mtime;
-  return MG_FS_READ | MG_FS_WRITE | (S_ISDIR(st.st_mode) ? MG_FS_DIR : 0);
+  return  S_ISDIR(st.st_mode) ? MG_FS_DIR : MG_FS_FILE;
 #endif
 }
 
@@ -1518,10 +1450,10 @@ static int to_wchar(const char *path, wchar_t *wbuf, size_t wbuf_len) {
   p = buf + strlen(buf) - 1;
   while (p > buf && p[-1] != ':' && (p[0] == '\\' || p[0] == '/')) *p-- = '\0';
   memset(wbuf, 0, wbuf_len * sizeof(wchar_t));
-  ret = MultiByteToWideChar(CP_UTF8, 0, buf, -1, wbuf, (int) wbuf_len);
+  ret = MultiByteToWideChar(Cstd_UTF8, 0, buf, -1, wbuf, (int) wbuf_len);
   // Convert back to Unicode. If doubly-converted string does not match the
   // original, something is fishy, reject.
-  WideCharToMultiByte(CP_UTF8, 0, wbuf, (int) wbuf_len, buf2, sizeof(buf2),
+  WideCharToMultiByte(Cstd_UTF8, 0, wbuf, (int) wbuf_len, buf2, sizeof(buf2),
                       NULL, NULL);
   if (strcmp(buf, buf2) != 0) {
     wbuf[0] = L'\0';
@@ -1573,7 +1505,7 @@ struct dirent *readdir(DIR *d) {
     memset(&d->result, 0, sizeof(d->result));
     if (d->handle != INVALID_HANDLE_VALUE) {
       result = &d->result;
-      WideCharToMultiByte(CP_UTF8, 0, d->info.cFileName, -1, result->d_name,
+      WideCharToMultiByte(Cstd_UTF8, 0, d->info.cFileName, -1, result->d_name,
                           sizeof(result->d_name), NULL, NULL);
       if (!FindNextFileW(d->handle, &d->info)) {
         FindClose(d->handle);
@@ -1589,122 +1521,118 @@ struct dirent *readdir(DIR *d) {
 }
 #endif
 
-static void p_list(const char *dir, void (*fn)(const char *, void *),
-                   void *userdata) {
-#if MG_ENABLE_DIRLIST
+static size_t std_list(const char *dir, bool recursive,
+                       void (*fn)(const char *, void *), void *userdata) {
+  size_t num_files = 0;
   struct dirent *dp;
-  DIR *dirp;
-  if ((dirp = (opendir(dir))) == NULL) return;
-  while ((dp = readdir(dirp)) != NULL) {
+  DIR *dirp = opendir(dir);
+  while (dirp != NULL && (dp = readdir(dirp)) != NULL) {
     if (!strcmp(dp->d_name, ".") || !strcmp(dp->d_name, "..")) continue;
     fn(dp->d_name, userdata);
+    num_files++;
+    if (recursive) {
+      char tmp[MG_PATH_MAX];
+      mg_snprintf(tmp, sizeof(tmp), "%s/%s", dir, dp->d_name);
+      if (std_info(tmp, NULL, NULL) == MG_FS_DIR) {
+        num_files += std_list(tmp, recursive, fn, userdata);
+      }
+    }
   }
-  closedir(dirp);
-#else
-  (void) dir, (void) fn, (void) userdata;
-#endif
+  if (dirp != NULL) closedir(dirp);
+  return num_files;
 }
 
-static void *p_open(const char *path, int flags) {
+static FILE *std_open(const char *path, bool readonly) {
 #if MG_ARCH == MG_ARCH_WIN32
-  const char *mode = flags == MG_FS_READ ? "rb" : "a+b";
+  const char *mode = readonly ? "rb" : "a+b";
   wchar_t b1[MG_PATH_MAX], b2[10];
-  MultiByteToWideChar(CP_UTF8, 0, path, -1, b1, sizeof(b1) / sizeof(b1[0]));
-  MultiByteToWideChar(CP_UTF8, 0, mode, -1, b2, sizeof(b2) / sizeof(b2[0]));
-  return (void *) _wfopen(b1, b2);
+  MultiByteToWideChar(Cstd_UTF8, 0, path, -1, b1, sizeof(b1) / sizeof(b1[0]));
+  MultiByteToWideChar(Cstd_UTF8, 0, mode, -1, b2, sizeof(b2) / sizeof(b2[0]));
+  return _wfopen(b1, b2);
 #else
-  const char *mode = flags == MG_FS_READ ? "rbe" : "a+be";  // e for CLOEXEC
-  return (void *) fopen(path, mode);
+  const char *mode = readonly ? "rbe" : "a+be";  // e for CLOEXEC
+  return fopen(path, mode);
 #endif
 }
 
-static void p_close(void *fp) {
-  fclose((FILE *) fp);
-}
+// static void std_close(void *fp) {
+//   fclose((FILE *) fp);
+// }
 
-static size_t p_read(void *fp, void *buf, size_t len) {
-  return fread(buf, 1, len, (FILE *) fp);
-}
-
-static size_t p_write(void *fp, const void *buf, size_t len) {
-  return fwrite(buf, 1, len, (FILE *) fp);
-}
-
-static size_t p_seek(void *fp, size_t offset) {
+static size_t std_seek(FILE *fp, size_t offset) {
 #if (defined(_FILE_OFFSET_BITS) && _FILE_OFFSET_BITS == 64) ||  \
     (defined(_POSIX_C_SOURCE) && _POSIX_C_SOURCE >= 200112L) || \
     (defined(_XOPEN_SOURCE) && _XOPEN_SOURCE >= 600)
-  if (fseeko((FILE *) fp, (off_t) offset, SEEK_SET) != 0) (void) 0;
+  if (fseeko(fp, (off_t) offset, SEEK_SET) != 0) (void) 0;
 #else
-  if (fseek((FILE *) fp, (long) offset, SEEK_SET) != 0) (void) 0;
+  if (fseek(fp, (long) offset, SEEK_SET) != 0) (void) 0;
 #endif
-  return (size_t) ftell((FILE *) fp);
+  return (size_t) ftell(fp);
 }
 
-static bool p_rename(const char *from, const char *to) {
-  return rename(from, to) == 0;
+static size_t std_read(const char *path, size_t ofs, void *buf, size_t len) {
+  size_t result = 0;
+  FILE *fp = std_open(path, true);
+  if (fp != NULL) {
+    std_seek(fp, ofs);
+    result = fread(buf, 1, len, fp);
+    fclose(fp);
+  }
+  return result;
 }
 
-static bool p_remove(const char *path) {
+static size_t std_write(const char *path, size_t ofs, const void *buf,
+                        size_t len) {
+  size_t result = 0;
+  FILE *fp = std_open(path, true);
+  if (fp != NULL && (size_t) ftell(fp) == ofs) {
+    result = fwrite(buf, 1, len, fp);
+    fclose(fp);
+  }
+  return result;
+}
+
+// static bool std_rename(const char *from, const char *to) {
+//   return rename(from, to) == 0;
+// }
+
+static bool std_del(const char *path) {
   return remove(path) == 0;
 }
-
-static bool p_mkdir(const char *path) {
-  return mkdir(path, 0775) == 0;
-}
-
 #else
-
-static int p_stat(const char *path, size_t *size, time_t *mtime) {
+static int std_info(const char *path, size_t *size, time_t *mtime) {
   (void) path, (void) size, (void) mtime;
+  return MG_FS_FAIL;
+}
+
+static size_t std_list(const char *path, bool recursive,
+                        void (*fn)(const char *, void *), void *userdata) {
+  (void) path, (void) recursive, (void) fn, (void) userdata;
   return 0;
 }
-static void p_list(const char *path, void (*fn)(const char *, void *),
-                   void *userdata) {
-  (void) path, (void) fn, (void) userdata;
-}
-static void *p_open(const char *path, int flags) {
-  (void) path, (void) flags;
-  return NULL;
-}
-static void p_close(void *fp) {
-  (void) fp;
-}
-static size_t p_read(void *fd, void *buf, size_t len) {
-  (void) fd, (void) buf, (void) len;
+
+static size_t std_read(const char *path, size_t ofs, void *buf, size_t len) {
+  (void) path, (void) ofs, (void) buf, (void) len;
   return 0;
 }
-static size_t p_write(void *fd, const void *buf, size_t len) {
-  (void) fd, (void) buf, (void) len;
+
+static size_t std_write(const char *path, size_t ofs, const void *buf,
+                         size_t len) {
+  (void) path, (void) ofs, (void) buf, (void) len;
   return 0;
 }
-static size_t p_seek(void *fd, size_t offset) {
-  (void) fd, (void) offset;
-  return (size_t) ~0;
-}
-static bool p_rename(const char *from, const char *to) {
-  (void) from, (void) to;
-  return false;
-}
-static bool p_remove(const char *path) {
-  (void) path;
-  return false;
-}
-static bool p_mkdir(const char *path) {
+
+static bool std_del(const char *path) {
   (void) path;
   return false;
 }
 #endif
 
-struct mg_fs mg_fs_posix = {p_stat,  p_list, p_open,   p_close,  p_read,
-                            p_write, p_seek, p_rename, p_remove, p_mkdir};
+struct mg_fs mg_fs_std = {std_info, std_list, std_read, std_write, std_del};
 
 #ifdef MG_ENABLE_LINES
 #line 1 "src/http.c"
 #endif
-
-
-
 
 
 
@@ -2156,7 +2084,7 @@ void mg_http_reply(struct mg_connection *c, int code, const char *headers,
 
 static void http_cb(struct mg_connection *, int, void *);
 static void restore_http_cb(struct mg_connection *c) {
-  mg_fs_close((struct mg_fd *) c->pfn_data);
+  mg_free(c->pfn_data);
   c->pfn_data = NULL;
   c->pfn = http_cb;
   c->is_resp = 0;
@@ -2168,20 +2096,26 @@ char *mg_http_etag(char *buf, size_t len, size_t size, time_t mtime) {
   return buf;
 }
 
+struct file_state {
+  size_t ofs;
+  size_t eof;
+  char *path;
+  const struct mg_fs *fs;
+};
+
 static void static_cb(struct mg_connection *c, int ev, void *ev_data) {
+  struct file_state *f = (struct file_state *) c->pfn_data;
   if (ev == MG_EV_WRITE || ev == MG_EV_POLL) {
-    struct mg_fd *fd = (struct mg_fd *) c->pfn_data;
     // Read to send IO buffer directly, avoid extra on-stack buffer
-    size_t n, max = MG_IO_SIZE, space;
-    size_t *cl = (size_t *) &c->data[(sizeof(c->data) - sizeof(size_t)) /
-                                     sizeof(size_t) * sizeof(size_t)];
+    size_t n, max = MG_IO_SIZE, space, left = f->eof - f->ofs;
     if (c->send.size < max) mg_iobuf_resize(&c->send, max);
     if (c->send.len >= c->send.size) return;  // Rate limit
-    if ((space = c->send.size - c->send.len) > *cl) space = *cl;
-    n = fd->fs->rd(fd->fd, c->send.buf + c->send.len, space);
+    if ((space = c->send.size - c->send.len) > left) space = left;
+    n = f->fs->reader(f->path, f->ofs, c->send.buf + c->send.len, space);
+    // MG_INFO(("DSFDF %s %lu", f->path, n));
     c->send.len += n;
-    *cl -= n;
-    if (n == 0) restore_http_cb(c);
+    f->ofs += n;
+    if (f->ofs >= f->eof) restore_http_cb(c);
   } else if (ev == MG_EV_CLOSE) {
     restore_http_cb(c);
   }
@@ -2272,67 +2206,55 @@ void mg_http_serve_file(struct mg_connection *c, struct mg_http_message *hm,
                         const char *path,
                         const struct mg_http_serve_opts *opts) {
   char etag[64], tmp[MG_PATH_MAX];
-  struct mg_fs *fs = opts->fs == NULL ? &mg_fs_posix : opts->fs;
-  struct mg_fd *fd = NULL;
+  struct mg_fs *fs = opts && opts->fs ? opts->fs : &mg_fs_std;
+  const char *mime_types = opts == NULL ? NULL : opts->mime_types;
   size_t size = 0;
   time_t mtime = 0;
-  struct mg_str *inm = NULL;
-  struct mg_str mime = guess_content_type(mg_str(path), opts->mime_types);
-  bool gzip = false;
+  struct mg_str *inm = NULL, *ae = NULL;
+  bool gzip = false, found = false;
 
+  if (path == NULL && opts != NULL) path = opts->page404;
   if (path != NULL) {
     // If a browser sends us "Accept-Encoding: gzip", try to open .gz first
-    struct mg_str *ae = mg_http_get_header(hm, "Accept-Encoding");
-    if (ae != NULL) {
-      if (mg_match(*ae, mg_str("*gzip*"), NULL)) {
-        mg_snprintf(tmp, sizeof(tmp), "%s.gz", path);
-        fd = mg_fs_open(fs, tmp, MG_FS_READ);
-        if (fd != NULL) gzip = true, path = tmp;
+    if ((ae = mg_http_get_header(hm, "Accept-Encoding")) != NULL &&
+        mg_match(*ae, mg_str("*gzip*"), NULL)) {
+      mg_snprintf(tmp, sizeof(tmp), "%s.gz", path);
+      if (fs->info(tmp, &size, &mtime) == MG_FS_FILE) {
+        gzip = true, path = tmp, found = true;
       }
     }
-    // No luck opening .gz? Open what we've told to open
-    if (fd == NULL) fd = mg_fs_open(fs, path, MG_FS_READ);
+    if (found == false) found = (fs->info(path, &size, &mtime) == MG_FS_FILE);
   }
 
-  // Failed to open, and page404 is configured? Open it, then
-  if (fd == NULL && opts->page404 != NULL) {
-    fd = mg_fs_open(fs, opts->page404, MG_FS_READ);
-    path = opts->page404;
-    mime = guess_content_type(mg_str(path), opts->mime_types);
-  }
-
-  if (fd == NULL || fs->st(path, &size, &mtime) == 0) {
-    mg_http_reply(c, 404, opts->extra_headers, "Not found\n");
-    mg_fs_close(fd);
+  if (found == false) {
+    mg_http_reply(c, 404, opts ? opts->extra_headers : NULL, "Not found\n");
     // NOTE: mg_http_etag() call should go first!
   } else if (mg_http_etag(etag, sizeof(etag), size, mtime) != NULL &&
              (inm = mg_http_get_header(hm, "If-None-Match")) != NULL &&
              mg_strcasecmp(*inm, mg_str(etag)) == 0) {
-    mg_fs_close(fd);
-    mg_http_reply(c, 304, opts->extra_headers, "");
+    mg_http_reply(c, 304, opts ? opts->extra_headers : NULL, "");
   } else {
     int n, status = 200;
     char range[100];
-    size_t r1 = 0, r2 = 0, cl = size;
+    size_t r1 = 0, r2 = 0, ofs = 0, eof = size;
+    struct mg_str p = mg_str(path);
+    struct mg_str mime = guess_content_type(p, mime_types);
+    struct mg_str *rh = mg_http_get_header(hm, "Range");
 
     // Handle Range header
-    struct mg_str *rh = mg_http_get_header(hm, "Range");
     range[0] = '\0';
     if (rh != NULL && (n = getrange(rh, &r1, &r2)) > 0) {
       // If range is specified like "400-", set second limit to content len
-      if (n == 1) r2 = cl - 1;
-      if (r1 > r2 || r2 >= cl) {
-        status = 416;
-        cl = 0;
+      if (n == 1) r2 = size > 0 ? size - 1 : 0;
+      if (r1 > r2 || r2 >= size) {
+        status = 416, eof = 0;
         mg_snprintf(range, sizeof(range), "Content-Range: bytes */%lld\r\n",
                     (int64_t) size);
       } else {
-        status = 206;
-        cl = r2 - r1 + 1;
+        status = 206, ofs = r1, eof = r2 + 1;
         mg_snprintf(range, sizeof(range),
                     "Content-Range: bytes %llu-%llu/%llu\r\n", (uint64_t) r1,
-                    (uint64_t) (r1 + cl - 1), (uint64_t) size);
-        fs->sk(fd->fd, r1);
+                    (uint64_t) r2, (uint64_t) size);
       }
     }
     mg_printf(c,
@@ -2342,18 +2264,24 @@ void mg_http_serve_file(struct mg_connection *c, struct mg_http_message *hm,
               "Content-Length: %llu\r\n"
               "%s%s%s\r\n",
               status, mg_http_status_code_str(status), (int) mime.len, mime.buf,
-              etag, (uint64_t) cl, gzip ? "Content-Encoding: gzip\r\n" : "",
-              range, opts->extra_headers ? opts->extra_headers : "");
+              etag, (uint64_t) (eof - ofs),
+              gzip ? "Content-Encoding: gzip\r\n" : "", range,
+              opts && opts->extra_headers ? opts->extra_headers : "");
     if (mg_strcasecmp(hm->method, mg_str("HEAD")) == 0 || c->is_closing) {
+      // start serving static content only if not closing, see #3354
       c->is_resp = 0;
-      mg_fs_close(fd);
-    } else { // start serving static content only if not closing, see #3354
-      // Track to-be-sent content length at the end of c->data, aligned
-      size_t *clp = (size_t *) &c->data[(sizeof(c->data) - sizeof(size_t)) /
-                                        sizeof(size_t) * sizeof(size_t)];
+    } else {
+      // Allocate memory to hold the file state with file path
+      struct file_state *f =
+          (struct file_state *) mg_calloc(1, sizeof(*f) + p.len + 1);
+      f->ofs = ofs;
+      f->eof = eof;
+      f->path = (char *) (f + 1);
+      f->fs = fs;
+      memcpy(f->path, p.buf, p.len);
+      f->path[p.len] = '\0';  // Not needed because of the calloc, but well
       c->pfn = static_cb;
-      c->pfn_data = fd;
-      *clp = cl;
+      c->pfn_data = f;
     }
   }
 }
@@ -2368,7 +2296,7 @@ struct printdirentrydata {
 #if MG_ENABLE_DIRLIST
 static void printdirentry(const char *name, void *userdata) {
   struct printdirentrydata *d = (struct printdirentrydata *) userdata;
-  struct mg_fs *fs = d->opts->fs == NULL ? &mg_fs_posix : d->opts->fs;
+  struct mg_fs *fs = d->opts && d->opts->fs ? d->opts->fs : &mg_fs_std;
   size_t size = 0;
   time_t t = 0;
   char path[MG_PATH_MAX], sz[40], mod[40];
@@ -2378,8 +2306,8 @@ static void printdirentry(const char *name, void *userdata) {
   if (mg_snprintf(path, sizeof(path), "%s%c%s", d->dir, '/', name) >
       sizeof(path)) {
     MG_ERROR(("%s truncated", name));
-  } else if ((flags = fs->st(path, &size, &t)) == 0) {
-    MG_ERROR(("%lu stat(%s)", d->c->id, path));
+  } else if ((flags = fs->info(path, &size, &t)) == MG_FS_FAIL) {
+    MG_ERROR(("%lu into(%s)", d->c->id, path));
   } else {
     const char *slash = flags & MG_FS_DIR ? "/" : "";
     if (flags & MG_FS_DIR) {
@@ -2431,7 +2359,7 @@ static void listdir(struct mg_connection *c, struct mg_http_message *hm,
       "srt(tb, sc, so, true);"
       "}"
       "</script>";
-  struct mg_fs *fs = opts->fs == NULL ? &mg_fs_posix : opts->fs;
+  struct mg_fs *fs = opts && opts->fs ? opts->fs : &mg_fs_std;
   struct printdirentrydata d = {c, hm, opts, dir};
   char tmp[10], buf[MG_PATH_MAX];
   size_t off, n;
@@ -2443,7 +2371,7 @@ static void listdir(struct mg_connection *c, struct mg_http_message *hm,
             "Content-Type: text/html; charset=utf-8\r\n"
             "%s"
             "Content-Length:         \r\n\r\n",
-            opts->extra_headers == NULL ? "" : opts->extra_headers);
+            opts && opts->extra_headers ? opts->extra_headers : "");
   off = c->send.len;  // Start of body
   mg_printf(c,
             "<!DOCTYPE html><html><head><title>Index of %.*s</title>%s%s"
@@ -2462,7 +2390,7 @@ static void listdir(struct mg_connection *c, struct mg_http_message *hm,
             "  <tr><td><a href=\"..\">..</a></td>"
             "<td name=-1></td><td name=-1>[DIR]</td></tr>\n");
 
-  fs->ls(dir, printdirentry, &d);
+  fs->list(dir, false, printdirentry, &d);
   mg_printf(c,
             "</tbody><tfoot><tr><td colspan=\"3\"><hr></td></tr></tfoot>"
             "</table><address>Mongoose v.%s</address></body></html>\n",
@@ -2500,7 +2428,7 @@ static int uri_to_path2(struct mg_connection *c, struct mg_http_message *hm,
   n = strlen(path);
   while (n > 1 && path[n - 1] == '/') path[--n] = 0;  // Trim trailing slashes
   flags = mg_strcmp(hm->uri, mg_str("/")) == 0 ? MG_FS_DIR
-                                               : fs->st(path, NULL, NULL);
+                                               : fs->info(path, NULL, NULL);
   MG_VERBOSE(("%lu %.*s -> %s %d", c->id, (int) hm->uri.len, hm->uri.buf, path,
               flags));
   if (flags == 0) {
@@ -2517,14 +2445,14 @@ static int uri_to_path2(struct mg_connection *c, struct mg_http_message *hm,
     flags = -1;
   } else if (flags & MG_FS_DIR) {
     if (((mg_snprintf(path + n, path_size - n, "/" MG_HTTP_INDEX) > 0 &&
-          (tmp = fs->st(path, NULL, NULL)) != 0) ||
+          (tmp = fs->info(path, NULL, NULL)) != MG_FS_FAIL) ||
          (mg_snprintf(path + n, path_size - n, "/index.shtml") > 0 &&
-          (tmp = fs->st(path, NULL, NULL)) != 0))) {
+          (tmp = fs->info(path, NULL, NULL)) != MG_FS_FAIL))) {
       flags = tmp;
     } else if ((mg_snprintf(path + n, path_size - n, "/" MG_HTTP_INDEX ".gz") >
                     0 &&
-                (tmp = fs->st(path, NULL, NULL)) !=
-                    0)) {  // check for gzipped index
+                (tmp = fs->info(path, NULL, NULL)) != MG_FS_FAIL)) {
+      // check for gzipped index
       flags = tmp;
       path[n + 1 + strlen(MG_HTTP_INDEX)] =
           '\0';  // Remove appended .gz in index file name
@@ -2538,8 +2466,9 @@ static int uri_to_path2(struct mg_connection *c, struct mg_http_message *hm,
 static int uri_to_path(struct mg_connection *c, struct mg_http_message *hm,
                        const struct mg_http_serve_opts *opts, char *path,
                        size_t path_size) {
-  struct mg_fs *fs = opts->fs == NULL ? &mg_fs_posix : opts->fs;
-  struct mg_str k, v, part, s = mg_str(opts->root_dir), u = {NULL, 0}, p = u;
+  struct mg_fs *fs = opts && opts->fs ? opts->fs : &mg_fs_std;
+  struct mg_str s = mg_str(opts && opts->root_dir ? opts->root_dir : ".");
+  struct mg_str k, v, part, u = {NULL, 0}, p = u;
   while (mg_span(s, &part, &s, ',')) {
     if (!mg_span(part, &k, &v, '=')) k = part, v = mg_str_n(NULL, 0);
     if (v.len == 0) v = k, k = mg_str("/"), u = k, p = v;
@@ -2661,20 +2590,17 @@ long mg_http_upload(struct mg_connection *c, struct mg_http_message *hm,
                   (unsigned long) max_size);
     res = -4;
   } else {
-    struct mg_fd *fd;
+    // struct mg_fd *fd;
     size_t current_size = 0;
     MG_DEBUG(("%s -> %lu bytes @ %ld", path, hm->body.len, offset));
-    if (offset == 0) fs->rm(path);  // If offset if 0, truncate file
-    fs->st(path, &current_size, NULL);
+    if (offset == 0) fs->del(path);  // If offset if 0, truncate file
+    fs->info(path, &current_size, NULL);
     if (offset > 0 && current_size != (size_t) offset) {
       mg_http_reply(c, 400, "", "%s: offset mismatch", path);
       res = -5;
-    } else if ((fd = mg_fs_open(fs, path, MG_FS_WRITE)) == NULL) {
-      mg_http_reply(c, 400, "", "open(%s)", path);
-      res = -6;
     } else {
-      res = offset + (long) fs->wr(fd->fd, hm->body.buf, hm->body.len);
-      mg_fs_close(fd);
+      res =
+          offset + (long) fs->writer(path, offset, hm->body.buf, hm->body.len);
       mg_http_reply(c, 200, "", "%ld", res);
     }
   }
