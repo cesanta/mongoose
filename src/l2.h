@@ -16,7 +16,9 @@ enum mg_l2type { MG_TCPIP_L2_ETH = 0, MG_TCPIP_L2_PPP, MG_TCPIP_L2_PPPoE};
 
 struct mg_l2addr {
   union {
-    uint8_t mac[6];
+    uint8_t mac[6];   // ieee48
+    uint64_t ieee64;  // PPP ifcid
+    uint16_t ieee16;
   } addr;
 };
 

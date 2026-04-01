@@ -117,12 +117,26 @@ size_t mg_print_mac(void (*out)(char, void *), void *arg, va_list *ap) {
   return print_mac(out, arg, p);
 }
 
+static size_t print_ieee64(void (*out)(char, void *), void *arg, uint8_t *p) {
+  return mg_xprintf(out, arg, "%02x:%02x:%02x:%02x:%02x:%02x:%02x:%02x", p[0],
+                    p[1], p[2], p[3], p[4], p[5], p[6], p[7]);
+}
+
+size_t mg_print_ieee64(void (*out)(char, void *), void *arg, va_list *ap) {
+  uint8_t *p = va_arg(*ap, uint8_t *);
+  return print_ieee64(out, arg, p);
+}
+
 #if MG_ENABLE_TCPIP
 size_t mg_print_l2addr(void (*out)(char, void *), void *arg, va_list *ap) {
   enum mg_l2type type = (enum mg_l2type) va_arg(*ap, int);
-  if (type == MG_TCPIP_L2_ETH) {
-    uint8_t *p = va_arg(*ap, uint8_t *);
-    return print_mac(out, arg, p);
+  switch (type) {
+    case MG_TCPIP_L2_ETH:
+    case MG_TCPIP_L2_PPPoE: {
+      uint8_t *p = va_arg(*ap, uint8_t *);
+      return print_mac(out, arg, p);
+    } break;
+    default: break;
   }
   return 0;
 }
