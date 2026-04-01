@@ -12,6 +12,7 @@ void fn(struct mg_connection *c, int ev, void *ev_data) {
         .root_dir = "/web_root",
         .fs = &mg_fs_packed
       };
+    mg_mem_files = mg_packed_files;  // Use generated packed filesystem
     mg_http_serve_dir(c, ev_data, &opts);
   }
 }

@@ -6,7 +6,6 @@
 
 #define MG_ENABLE_TCPIP 1
 #define MG_ENABLE_DRIVER_PICO_W 1
-#define MG_ENABLE_PACKED_FS 1
 
 // For static IP configuration, define MG_TCPIP_{IP,MASK,GW}
 // By default, those are set to zero, meaning that DHCP is used
