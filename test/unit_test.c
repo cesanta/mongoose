@@ -73,10 +73,9 @@ static void test_match(void) {
   ASSERT(mg_match(mg_str_n("a__b_c", 6), mg_str_n("a*b*c", 5), NULL) == 1);
 
   {
-    char *ae_value = malloc(1);  // Exact size for ASAN
+    char *ae_value = (char *) malloc(1);  // Exact size for ASAN
     ae_value[0] = 'g';
-    struct mg_str input = {ae_value, 1};
-    mg_match(input, mg_str("*gzip*"), NULL);  // Check for OOB
+    mg_match(mg_str_n(ae_value, 1), mg_str("*gzip*"), NULL);  // Check for OOB
     free(ae_value);
   }
 
@@ -1558,7 +1557,7 @@ static void test_http_client(void) {
   ASSERT(ok == 301 || ok == 200);
   mg_mgr_poll(&mgr, 0);
   ok = 0;
-#if MG_TLS
+#if MG_TLS && MG_TLS != MG_TLS_BUILTIN
   url = "https://cesanta.com";
   opts.name = mg_url_host(url);
 #if MG_TLS == MG_TLS_BUILTIN
@@ -1889,8 +1888,7 @@ static void test_http_parse(void) {
   }
 
   {
-    static const char *s =
-        "a b HTTP/1.0\na:1\nb:2\nc:3\nd:4\ne:5\nf:6\ng:7\nh:8\n\n";
+    const char *s = "a b HTTP/1.0\na:1\nb:2\nc:3\nd:4\ne:5\nf:6\ng:7\nh:8\n\n";
     ASSERT(mg_http_parse(s, strlen(s), &req) == (int) strlen(s));
     ASSERT((v = mg_http_get_header(&req, "e")) != NULL);
     ASSERT(vcmp(*v, "5"));
@@ -1901,16 +1899,16 @@ static void test_http_parse(void) {
 
   {
     // no HTTP version
-    static char *s = "a b\na:1\nb:2\nc:2\n\n";
+    const char *s = "a b\na:1\nb:2\nc:2\n\n";
     ASSERT(mg_http_parse(s, strlen(s), &req) == -1);
 
     // HTTP version
     s = "a b HTTP/1.0\na:1\nb:2\nc:2\n\n";
-    ASSERT(mg_http_parse(s, strlen(s), &req) == strlen(s));
+    ASSERT(mg_http_parse(s, strlen(s), &req) == (int) strlen(s));
 
     // Content-Length
     s = "a b HTTP/1.0\nContent-Length:10\nb:2\nc:2\n\n";
-    ASSERT(mg_http_parse(s, strlen(s), &req) == strlen(s));
+    ASSERT(mg_http_parse(s, strlen(s), &req) == (int) strlen(s));
 
     // duplicated Content-Length
     s = "a b HTTP/1.0\nContent-Length:10\nb:2\nContent-Length:20\n\n";
@@ -3654,7 +3652,7 @@ static void test_json(void) {
 
   // mg_json_get_num: parsing exponential
   {
-    double d = 0.0;
+    double d = 0.0, tolerance = 1e-12;
     json = mg_str(
       "{"
       "\"i\":1e3,"
@@ -3666,7 +3664,6 @@ static void test_json(void) {
       "\"a\":[6.123456789e3,-1e-9],"
       "\"bad\":\"1e3\""
       "}");
-    double tolerance = 1e-12;
     ASSERT(mg_json_get_num(json, "$.i", &d) == true);
     ASSERT(fabs(d - 1000.0) < tolerance);
     ASSERT(mg_json_get_num(json, "$.n", &d) == true);
@@ -4196,9 +4193,13 @@ int main(void) {
   test_sntp();
   DASHBOARD("sntp");
 
+#if MG_TLS != MG_TLS_BUILTIN
   s_error = false;
   test_mqtt();  // sorry, MQTT_LOCALHOST is also skipped
   DASHBOARD("mqtt");
+#else 
+  (void) test_mqtt;
+#endif
 
   s_error = false;
   test_http_client();

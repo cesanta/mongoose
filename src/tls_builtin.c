@@ -1539,7 +1539,7 @@ static int mg_tls_verify_cert_signature(const struct mg_tls_cert *cert,
                             (unsigned) cert->tbshashsz, sig,
                             mg_uecc_secp256r1());
     } else if (issuer->pubkey.len == 96) {
-      MG_VERBOSE(("ignore secp386 for now"));
+      MG_ERROR(("reject secp386 for now"));
       return 0;
     } else {
       MG_ERROR(("unsupported public key length: %d", issuer->pubkey.len));

@@ -2748,7 +2748,7 @@ static void http_cb(struct mg_connection *c, int ev, void *ev_data) {
       const char *buf = (char *) c->recv.buf + ofs;
       int n = mg_http_parse(buf, c->recv.len - ofs, &hm);
       struct mg_str *te;  // Transfer - encoding header
-      bool is_chunked = false;
+      bool is_chunked = false, is_http_1_0 = false;
       size_t old_len = c->recv.len;
       if (n < 0) {
         // We don't use mg_error() here, to avoid closing pipelined requests
@@ -2771,7 +2771,7 @@ static void http_cb(struct mg_connection *c, int ev, void *ev_data) {
         hm.message.len = c->recv.len - ofs;  // and closes now, deliver MSG
         hm.body.len = hm.message.len - (size_t) (hm.body.buf - hm.message.buf);
       }
-      bool is_http_1_0 =
+      is_http_1_0 =
           hm.proto.len > 8 && mg_ncasecmp(hm.proto.buf, "HTTP/1.0", 8) == 0;
       // HTTP/1.0 does not use "Transfer-Encoding: chunked"
       if (!is_http_1_0 &&
@@ -14254,7 +14254,7 @@ static int mg_tls_verify_cert_signature(const struct mg_tls_cert *cert,
                             (unsigned) cert->tbshashsz, sig,
                             mg_uecc_secp256r1());
     } else if (issuer->pubkey.len == 96) {
-      MG_VERBOSE(("ignore secp386 for now"));
+      MG_ERROR(("reject secp386 for now"));
       return 0;
     } else {
       MG_ERROR(("unsupported public key length: %d", issuer->pubkey.len));
