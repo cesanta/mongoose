@@ -3624,8 +3624,8 @@ bool mg_l2_eth_rx(struct mg_tcpip_if *ifp, enum mg_l2proto *proto,
 }
 
 struct mg_l2addr *mg_l2_eth_getaddr(struct mg_tcpip_if *ifp, uint8_t *frame) {
-  (void) ifp;  // address field is before a possible 802.1Q tag
-  struct eth *eth = (struct eth *) frame;
+  struct eth *eth = (struct eth *) frame; 
+  (void) ifp; // address field is before a possible 802.1Q tag
   return (struct mg_l2addr *) &eth->src;
 }
 

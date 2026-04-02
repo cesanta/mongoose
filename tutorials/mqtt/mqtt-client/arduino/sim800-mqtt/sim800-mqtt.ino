@@ -28,7 +28,7 @@ static const char *script[] = {
 //SoftwareSerial ModemSerial(RX_PIN, TX_PIN);
 
 struct mg_connection *mqtt_connection;
-struct mg_tcpip_driver_ppp_data driver_data;
+struct mg_tcpip_driver_atcmd_data driver_data;
 struct mg_mgr mgr;                                     // Mongoose event manager
 struct mg_tcpip_if mif = {.mac = {2, 0, 1, 2, 3, 5}};  // Network interface
 
