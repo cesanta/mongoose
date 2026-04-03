@@ -47,15 +47,16 @@ static void cb(struct mg_connection *c, int ev, void *ev_data) {
         size_t pos = 0, total_bytes = 0, num_files = 0;
         while ((pos = mg_http_next_multipart(hm->body, pos, &part)) > 0) {
           char path[MG_PATH_MAX];
-          MG_INFO(("Chunk name: [%.*s] filename: [%.*s] length: %lu bytes",
+          MG_DEBUG(("Chunk name: [%.*s] filename: [%.*s] length: %lu bytes",
                    part.name.len, part.name.buf, part.filename.len,
                    part.filename.buf, part.body.len));
           mg_snprintf(path, sizeof(path), "%s/%.*s", s_upload_dir,
                       part.filename.len, part.filename.buf);
           if (mg_path_is_sane(mg_str(path))) {
-            mg_file_write(&mg_fs_posix, path, part.body.buf, part.body.len);
+            mg_file_write(&mg_fs_std, path, part.body.buf, part.body.len);
             total_bytes += part.body.len;
             num_files++;
+            MG_INFO(("Written %s, %lu bytes", path, part.body.len));
           } else {
             MG_ERROR(("Rejecting dangerous path %s", path));
           }
@@ -119,9 +120,9 @@ int main(int argc, char *argv[]) {
   }
 
   // Load certificates from files
-  s_ca = mg_file_read(&mg_fs_posix, s_ca_path);
-  s_crt = mg_file_read(&mg_fs_posix, s_crt_path);
-  s_key = mg_file_read(&mg_fs_posix, s_key_path);
+  s_ca = mg_file_read(&mg_fs_std, s_ca_path);
+  s_crt = mg_file_read(&mg_fs_std, s_crt_path);
+  s_key = mg_file_read(&mg_fs_std, s_key_path);
 
   // Root directory must not contain double dots. Make it absolute
   // Do the conversion only if the root dir spec does not contain overrides
