@@ -563,7 +563,7 @@ static struct mg_connection *getpeer(struct mg_mgr *mgr, struct pkt *pkt,
 #if MG_ENABLE_IPV6
            || (c->loc.is_ip6 && MG_IP6MATCH(c->rem.addr.ip6, pkt->ip6->src))
 #endif
-               )))) // validate addr for established (not listening) conns
+               ))))  // validate addr for established (not listening) conns
       break;
   }
   return c;
@@ -648,7 +648,7 @@ static bool dhcp_opt_len_ok(uint8_t len, uint8_t *p, uint8_t *end) {
 }
 
 static void rx_dhcp_client(struct mg_tcpip_if *ifp, struct pkt *pkt) {
-  uint32_t ip = 0, gw = 0, mask = 0, lease = 0, dns = 0, sntp = 0;
+  uint32_t ip = 0, gw = 0, mask = 0, lease = 0, dns = 0, sntp = 0, owner = 0;
   uint8_t msgtype = 0, state = ifp->state;
   // perform size check first, then access fields
   uint8_t *p = pkt->dhcp->options,
@@ -672,6 +672,8 @@ static void rx_dhcp_client(struct mg_tcpip_if *ifp, struct pkt *pkt) {
       lease = mg_ntohl(lease);
     } else if (p[0] == 53 && p[1] == 1 && p + 6 < end) {  // Msg Type
       msgtype = p[2];
+    } else if (p[0] == 54 && p[1] == 4 && p + 6 < end) {  // Server id 9.7
+      memcpy(&owner, p + 2, sizeof(sntp));  // This is the lease owner
     }
     p += p[1] + 2;
   }
@@ -680,9 +682,13 @@ static void rx_dhcp_client(struct mg_tcpip_if *ifp, struct pkt *pkt) {
     ifp->state = MG_TCPIP_STATE_UP, ifp->ip = 0;
   } else if (msgtype == 2 && ifp->state == MG_TCPIP_STATE_UP && ip && gw &&
              lease) {  // DHCPOFFER
-    // select IP, (4.4.1) (fallback to IP source addr on foul play)
+    // select a server (2131 4.4.1, 2132 9.7): lease owner takes precedence,
+    // otherwise use siaddr (fallback to IP source addr on foul play).
+    // This is broadcast, otherwise siaddr would be the destination.
     tx_dhcp_request_sel(ifp, ip,
-                        pkt->dhcp->siaddr ? pkt->dhcp->siaddr : pkt->ip->src);
+                        owner               ? owner
+                        : pkt->dhcp->siaddr ? pkt->dhcp->siaddr
+                                            : pkt->ip->src);
     ifp->state = MG_TCPIP_STATE_REQ;  // REQUESTING state
   } else if (msgtype == 5) {          // DHCPACK
     if (ifp->state == MG_TCPIP_STATE_REQ && ip && gw && lease) {  // got an IP
@@ -1522,9 +1528,9 @@ static bool handle_opt(struct connstate *s, struct tcp *tcp, bool ip6) {
   s->dmss = ip6 ? 1220 : 536;  // assume default, RFC-9293 3.7.1
   while (len > 0) {            // RFC-9293 3.1 3.2
     uint8_t kind = opts[0], optlen = 1;
-    if (kind != 1) {         // No-Operation
-      if (kind == 0) break;  // End of Option List
-      if (len < 2 || opts[1] == 0) return false; // Malformed options
+    if (kind != 1) {                              // No-Operation
+      if (kind == 0) break;                       // End of Option List
+      if (len < 2 || opts[1] == 0) return false;  // Malformed options
       optlen = opts[1];
       if (kind == 2 && optlen == 4)  // set received MSS
         s->dmss = (uint16_t) (((uint16_t) opts[2] << 8) + opts[3]);
@@ -1548,7 +1554,8 @@ static void rx_tcp(struct mg_tcpip_if *ifp, struct pkt *pkt) {
   // - check clients (Group 1) and established connections (Group 3)
   if (c != NULL && c->is_connecting && pkt->tcp->flags == (TH_SYN | TH_ACK)) {
     // client got a server connection accept
-    if (!handle_opt(s, pkt->tcp, pkt->ip6 != NULL)) return;  // process options (MSS)
+    if (!handle_opt(s, pkt->tcp, pkt->ip6 != NULL))
+      return;  // process options (MSS)
     s->seq = mg_ntohl(pkt->tcp->ack), s->ack = mg_ntohl(pkt->tcp->seq) + 1;
     tx_tcp_ctrlresp(ifp, pkt, TH_ACK, pkt->tcp->ack);
     c->is_connecting = 0;  // Client connected
@@ -1583,7 +1590,8 @@ static void rx_tcp(struct mg_tcpip_if *ifp, struct pkt *pkt) {
       int key;
       uint32_t isn;
       if (pkt->tcp->sport != 0) {
-        if (!handle_opt(&cs, pkt->tcp, pkt->ip6 != NULL)) return;  // process options (MSS)
+        if (!handle_opt(&cs, pkt->tcp, pkt->ip6 != NULL))
+          return;  // process options (MSS)
         key = backlog_insert(c, pkt->tcp->sport,
                              cs.dmss);  // backlog options (MSS)
         if (key < 0) return;  // no room in backlog, discard SYN, client retries
