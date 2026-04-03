@@ -122,10 +122,11 @@ extern struct mg_tcpip_driver mg_tcpip_driver_atcmd;
 
 // Drivers that require SPI, can use this SPI abstraction
 struct mg_tcpip_spi {
-  void *spi;                        // Opaque SPI bus descriptor
-  void (*begin)(void *);            // SPI begin: slave select low
-  void (*end)(void *);              // SPI end: slave select high
-  uint8_t (*txn)(void *, uint8_t);  // SPI transaction: write 1 byte, read reply
+  void *spi;              // Opaque SPI bus descriptor
+  void (*begin)(void *);  // SPI begin: slave select active
+  void (*end)(void *);    // SPI end: slave select inactive
+  void (*txn)(void *, uint8_t *write, uint8_t *read,
+              size_t len);  // SPI transaction: write-read len bytes
 };
 
 // Alignment and memory section requirements

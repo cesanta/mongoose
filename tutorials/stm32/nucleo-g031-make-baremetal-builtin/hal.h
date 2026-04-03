@@ -159,7 +159,7 @@ static inline void spi_init(struct spi *spi) {
 }
 
 // Send a byte, and return a received byte
-static inline uint8_t spi_txn(struct spi *spi, uint8_t write_byte) {
+static inline uint8_t spi_1byte(struct spi *spi, uint8_t write_byte) {
   unsigned count = spi->spin <= 0 ? 9 : (unsigned) spi->spin;
   uint8_t rx = 0, tx = write_byte;
   for (int i = 0; i < 8; i++) {
@@ -174,6 +174,14 @@ static inline uint8_t spi_txn(struct spi *spi, uint8_t write_byte) {
   }
   // printf("%s %02x %02x\n", __func__, (int) write_byte, (int) rx);
   return rx;  // Return the received byte
+}
+
+static inline void spi_txn(struct spi *spi, uint8_t *w, uint8_t *r, size_t n) {
+  while (n--) {
+    uint8_t c = (w != NULL) ? *w++ : 0xFF;
+    uint8_t d = spi_1byte(spi, c);
+    if (r != NULL) *r++ = d;
+  }       
 }
 
 #define UUID ((uint32_t *) UID_BASE)  // Unique 96-bit chip ID. TRM 59.1

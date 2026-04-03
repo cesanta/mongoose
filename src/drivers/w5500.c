@@ -6,16 +6,12 @@ enum { W5500_CR = 0, W5500_S0 = 1, W5500_TX0 = 2, W5500_RX0 = 3 };
 
 static void w5500_txn(struct mg_tcpip_spi *s, uint8_t block, uint16_t addr,
                       bool wr, void *buf, size_t len) {
-  size_t i;
-  uint8_t *p = (uint8_t *) buf;
   uint8_t cmd[] = {(uint8_t) (addr >> 8), (uint8_t) (addr & 255),
                    (uint8_t) ((block << 3) | (wr ? 4 : 0))};
   s->begin(s->spi);
-  for (i = 0; i < sizeof(cmd); i++) s->txn(s->spi, cmd[i]);
-  for (i = 0; i < len; i++) {
-    uint8_t r = s->txn(s->spi, p[i]);
-    if (!wr) p[i] = r;
-  }
+  s->txn(s->spi, cmd, NULL, sizeof(cmd));
+  if (wr) s->txn(s->spi, (uint8_t *) buf, NULL, len);
+  if (!wr) s->txn(s->spi, NULL, (uint8_t *) buf, len);
   s->end(s->spi);
 }
 

@@ -25189,7 +25189,7 @@ static bool cyw_spi_write(unsigned int f, uint32_t addr, void *data,
                           uint16_t len) {
   struct mg_tcpip_driver_cyw_data *d =
       (struct mg_tcpip_driver_cyw_data *) s_ifp->driver_data;
-  struct mg_tcpip_spi_ *s = (struct mg_tcpip_spi_ *) d->bus;
+  struct mg_tcpip_spi *s = (struct mg_tcpip_spi *) d->bus;
   uint32_t hdr = CYW_SPID_WR | CYW_SPID_INC | CYW_SPID_FUNC(f) |
                  CYW_SPID_ADDR(addr) | CYW_SPID_LEN(len);  // gSPI header
   // TODO(scaprile): check spin in between and timeout values, return false
@@ -25219,7 +25219,7 @@ static void cyw_spi_read(unsigned int f, uint32_t addr, void *data,
                          uint16_t len) {
   struct mg_tcpip_driver_cyw_data *d =
       (struct mg_tcpip_driver_cyw_data *) s_ifp->driver_data;
-  struct mg_tcpip_spi_ *s = (struct mg_tcpip_spi_ *) d->bus;
+  struct mg_tcpip_spi *s = (struct mg_tcpip_spi *) d->bus;
   uint32_t padding =
       f == CYW_SPID_FUNC_CHIP
           ? 4
@@ -27454,7 +27454,7 @@ static size_t st67w6_spi_poll(uint8_t *write, uint8_t *read) {
   struct mg_tcpip_driver_st67w6_data *d =
       (struct mg_tcpip_driver_st67w6_data *) s_ifp->driver_data;
   struct spi_hdr *th, *rh = (struct spi_hdr *) read;
-  struct mg_tcpip_spi_ *s = (struct mg_tcpip_spi_ *) d->spi;
+  struct mg_tcpip_spi *s = (struct mg_tcpip_spi *) d->spi;
   size_t padded;
   unsigned int times;
 
@@ -28681,16 +28681,12 @@ struct mg_tcpip_driver mg_tcpip_driver_tms570 = {mg_tcpip_driver_tms570_init,
 
 static void w5100_txn(struct mg_tcpip_spi *s, uint16_t addr, bool wr, void *buf,
                       size_t len) {
-  size_t i;
-  uint8_t *p = (uint8_t *) buf;
   uint8_t control = wr ? 0xF0 : 0x0F;
   uint8_t cmd[] = {control, (uint8_t) (addr >> 8), (uint8_t) (addr & 255)};
   s->begin(s->spi);
-  for (i = 0; i < sizeof(cmd); i++) s->txn(s->spi, cmd[i]);
-  for (i = 0; i < len; i++) {
-    uint8_t r = s->txn(s->spi, p[i]);
-    if (!wr) p[i] = r;
-  }
+  s->txn(s->spi, cmd, NULL, sizeof(cmd));
+  if (wr) s->txn(s->spi, (uint8_t *) buf, NULL, len);
+  if (!wr) s->txn(s->spi, NULL, (uint8_t *) buf, len);
   s->end(s->spi);
 }
 
@@ -28794,16 +28790,12 @@ enum { W5500_CR = 0, W5500_S0 = 1, W5500_TX0 = 2, W5500_RX0 = 3 };
 
 static void w5500_txn(struct mg_tcpip_spi *s, uint8_t block, uint16_t addr,
                       bool wr, void *buf, size_t len) {
-  size_t i;
-  uint8_t *p = (uint8_t *) buf;
   uint8_t cmd[] = {(uint8_t) (addr >> 8), (uint8_t) (addr & 255),
                    (uint8_t) ((block << 3) | (wr ? 4 : 0))};
   s->begin(s->spi);
-  for (i = 0; i < sizeof(cmd); i++) s->txn(s->spi, cmd[i]);
-  for (i = 0; i < len; i++) {
-    uint8_t r = s->txn(s->spi, p[i]);
-    if (!wr) p[i] = r;
-  }
+  s->txn(s->spi, cmd, NULL, sizeof(cmd));
+  if (wr) s->txn(s->spi, (uint8_t *) buf, NULL, len);
+  if (!wr) s->txn(s->spi, NULL, (uint8_t *) buf, len);
   s->end(s->spi);
 }
 
