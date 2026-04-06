@@ -29,5 +29,6 @@ enum {
   MG_EV_WAKEUP,     // mg_wakeup() data received    struct mg_str *data
   MG_EV_MDNS_REQ,   // mDNS request                 struct mg_mdns_req *
   MG_EV_MDNS_RESP,  // mDNS response                struct mg_mdns_resp *
+  MG_EV_MODBUS_REQ, // ModBus request               struct mg_modbus_cmd *
   MG_EV_USER        // Starting ID for user events
 };
