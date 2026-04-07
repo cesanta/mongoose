@@ -71,8 +71,11 @@ char *mg_mprintf(const char *fmt, ...) {
 }
 
 void mg_pfn_stdout(char c, void *param) {
+#if MG_ENABLE_POSIX_FS
   putchar(c);
+#endif
   (void) param;
+  (void) c;
 }
 
 static size_t print_ip4(void (*out)(char, void *), void *arg, uint8_t *p) {
