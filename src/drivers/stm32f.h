@@ -28,9 +28,9 @@ struct mg_tcpip_driver_stm32f_data {
 #define MG_DRIVER_MDC_CR 4
 #endif
 
-#if MG_ARCH == MG_ARCH_CUBE
+#if MG_ARCH == MG_ARCH_CUBE && !defined(MG_ENABLE_ETH_IRQ)
 #define MG_ENABLE_ETH_IRQ() NVIC_EnableIRQ(ETH_IRQn)
-#else
+#elif !defined(MG_ENABLE_ETH_IRQ)
 #define MG_ENABLE_ETH_IRQ()
 #endif
 
