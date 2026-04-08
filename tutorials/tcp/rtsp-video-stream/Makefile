@@ -2,7 +2,7 @@ PROG ?= example                   # Program we are building
 DELETE = rm -rf                   # Command to remove files
 OUT ?= -o $(PROG)                 # Compiler argument for output file
 SOURCES = main.c mongoose.c rtsp.c  # Source code files
-CFLAGS = -W -Wall -Wextra -g -I. -include rtsp.h  # Build options
+CFLAGS = -W -Wall -Wextra -g -I.  # Build options
 
 # Mongoose build options. See https://mongoose.ws/documentation/#build-options
 #CFLAGS_MONGOOSE += -DMG_ENABLE_LINES

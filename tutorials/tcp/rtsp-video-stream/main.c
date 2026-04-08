@@ -2,6 +2,7 @@
 // All rights reserved
 
 #include "mongoose.h"
+#include "rtsp.h"
 
 int main(void) {
   struct mg_mgr mgr;
