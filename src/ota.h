@@ -4,6 +4,7 @@
 #pragma once
 
 #include "arch.h"
+#include "net.h"
 
 #define MG_OTA_NONE 0       // No OTA support
 #define MG_OTA_STM32H5 1    // STM32 H5
@@ -40,3 +41,7 @@
 bool mg_ota_begin(size_t new_firmware_size);     // Start writing
 bool mg_ota_write(const void *buf, size_t len);  // Write chunk, aligned to 1k
 bool mg_ota_end(void);                           // Stop writing
+void mg_ota_url_check(struct mg_mgr *mgr,
+                      const char *current_version,
+                      const char *metadata_url,
+                      void (*fn)(const char *status));
