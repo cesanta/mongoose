@@ -60,8 +60,15 @@
 #elif !defined(MG_OTA) && defined(STM32H7)
 #define MG_OTA MG_OTA_STM32H7
 #endif
+
 // use HAL-defined execute-in-ram section
+#ifndef MG_IRAM
 #define MG_IRAM __attribute__((section(".RamFunc")))
+#endif
+
+#ifndef MG_ETH_RAM
+#define MG_ETH_RAM __attribute__((section(".eth_ram")))
+#endif
 
 #ifndef HAL_ICACHE_MODULE_ENABLED
 #define HAL_ICACHE_IsEnabled() 0
