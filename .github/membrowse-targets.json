@@ -1,0 +1,47 @@
+[
+  {
+    "target_name": "stm32-g031",
+    "setup_cmd": "sudo apt-get update && sudo apt-get install -y gcc-arm-none-eabi libnewlib-arm-none-eabi",
+    "build_cmd": "make -C tutorials/stm32/nucleo-g031-make-baremetal-builtin firmware.elf",
+    "elf": "tutorials/stm32/nucleo-g031-make-baremetal-builtin/firmware.elf",
+    "map_file": "tutorials/stm32/nucleo-g031-make-baremetal-builtin/firmware.elf.map",
+    "ld": "tutorials/stm32/nucleo-g031-make-baremetal-builtin/link.ld",
+    "linker_vars": ""
+  },
+  {
+    "target_name": "stm32-f429zi",
+    "setup_cmd": "sudo apt-get update && sudo apt-get install -y gcc-arm-none-eabi libnewlib-arm-none-eabi",
+    "build_cmd": "make -C tutorials/stm32/nucleo-f429zi-make-baremetal-builtin-rndis firmware.elf",
+    "elf": "tutorials/stm32/nucleo-f429zi-make-baremetal-builtin-rndis/firmware.elf",
+    "map_file": "tutorials/stm32/nucleo-f429zi-make-baremetal-builtin-rndis/firmware.elf.map",
+    "ld": "tutorials/stm32/nucleo-f429zi-make-baremetal-builtin-rndis/link.ld",
+    "linker_vars": ""
+  },
+  {
+    "target_name": "stm32-f746zg",
+    "setup_cmd": "sudo apt-get update && sudo apt-get install -y gcc-arm-none-eabi libnewlib-arm-none-eabi",
+    "build_cmd": "make -C tutorials/stm32/nucleo-f746zg-make-baremetal-builtin-rndis firmware.elf",
+    "elf": "tutorials/stm32/nucleo-f746zg-make-baremetal-builtin-rndis/firmware.elf",
+    "map_file": "tutorials/stm32/nucleo-f746zg-make-baremetal-builtin-rndis/firmware.elf.map",
+    "ld": "tutorials/stm32/nucleo-f746zg-make-baremetal-builtin-rndis/link.ld",
+    "linker_vars": ""
+  },
+  {
+    "target_name": "renesas-ra6m4",
+    "setup_cmd": "sudo apt-get update && sudo apt-get install -y gcc-arm-none-eabi libnewlib-arm-none-eabi",
+    "build_cmd": "make -C tutorials/renesas/ek-ra6m4-make-baremetal-builtin firmware.elf",
+    "elf": "tutorials/renesas/ek-ra6m4-make-baremetal-builtin/firmware.elf",
+    "map_file": "tutorials/renesas/ek-ra6m4-make-baremetal-builtin/firmware.elf.map",
+    "ld": "tutorials/renesas/ek-ra6m4-make-baremetal-builtin/link.ld",
+    "linker_vars": ""
+  },
+  {
+    "target_name": "ti-tm4c1294xl",
+    "setup_cmd": "sudo apt-get update && sudo apt-get install -y gcc-arm-none-eabi libnewlib-arm-none-eabi",
+    "build_cmd": "make -C tutorials/ti/ek-tm4c1294xl-make-baremetal-builtin-rndis firmware.elf",
+    "elf": "tutorials/ti/ek-tm4c1294xl-make-baremetal-builtin-rndis/firmware.elf",
+    "map_file": "tutorials/ti/ek-tm4c1294xl-make-baremetal-builtin-rndis/firmware.elf.map",
+    "ld": "tutorials/ti/ek-tm4c1294xl-make-baremetal-builtin-rndis/link.ld",
+    "linker_vars": ""
+  }
+]
