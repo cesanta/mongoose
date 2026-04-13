@@ -28,6 +28,7 @@ struct mg_mgr {
   struct mg_connection *conns;  // List of active connections
   struct mg_dns dns4;           // DNS for IPv4
   struct mg_dns dns6;           // DNS for IPv6
+  struct mg_connection *mdns;   // mDNS connection
   int dnstimeout;               // DNS resolve timeout in milliseconds
   bool use_dns6;                // Use DNS6 server by default, see #1532
   unsigned long nextid;         // Next connection ID
@@ -35,6 +36,7 @@ struct mg_mgr {
   void *tls_ctx;                // TLS context shared by all TLS sessions
   uint16_t mqtt_id;             // MQTT IDs for pub/sub
   void *active_dns_requests;    // DNS requests in progress
+  void *active_mdns_requests;   // mDNS requests in progress (resolver only)
   struct mg_timer *timers;      // Active timers
   int epoll_fd;                 // Used when MG_EPOLL_ENABLE=1
   struct mg_tcpip_if *ifp;      // Builtin TCP/IP stack only. Interface pointer
