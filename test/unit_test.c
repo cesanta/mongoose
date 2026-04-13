@@ -1950,7 +1950,8 @@ static void test_http_parse(void) {
     ASSERT(mg_http_parse(s, strlen(s), &hm) == (int) strlen(s));
     ASSERT((v = mg_http_get_header(&hm, "c")) != NULL);
     ASSERT(vcmp(*v, "\xc0"));
-    s = "a b HTTP/1.0\n\xc0: 2\n\n";  // Invalid UTF in the header name: do NOT accept
+    s = "a b HTTP/1.0\n\xc0: 2\n\n";  // Invalid UTF in the header name: do NOT
+                                      // accept
     ASSERT(mg_http_parse(s, strlen(s), &hm) == -1);
   }
 
@@ -3657,16 +3658,16 @@ static void test_json(void) {
   {
     double d = 0.0, tolerance = 1e-12;
     json = mg_str(
-      "{"
-      "\"i\":1e3,"
-      "\"n\":-2.5e2,"
-      "\"p\":3E+4,"
-      "\"m\":4.25E-1,"
-      "\"z\":0e0,"
-      "\"s\":-0.0e+0,"
-      "\"a\":[6.123456789e3,-1e-9],"
-      "\"bad\":\"1e3\""
-      "}");
+        "{"
+        "\"i\":1e3,"
+        "\"n\":-2.5e2,"
+        "\"p\":3E+4,"
+        "\"m\":4.25E-1,"
+        "\"z\":0e0,"
+        "\"s\":-0.0e+0,"
+        "\"a\":[6.123456789e3,-1e-9],"
+        "\"bad\":\"1e3\""
+        "}");
     ASSERT(mg_json_get_num(json, "$.i", &d) == true);
     ASSERT(fabs(d - 1000.0) < tolerance);
     ASSERT(mg_json_get_num(json, "$.n", &d) == true);
@@ -4102,11 +4103,9 @@ static void test_crypto(void) {
   printf("HEALTH_DASHBOARD\t\"%s\": %s,\n", x, s_error ? "false" : "true");
 
 static uint8_t coils_database[25] = {
-  0x4D, 0x9C, 0xAA, 0x55, 0xCC,
-  0xA3, 0x66, 0xAF, 0x60, 0xBC,
-  0xCC, 0x6C, 0x53, 0xFF, 0x00,
-  0x55, 0x3C, 0x0F, 0xF0, 0x8F,
-  0x54, 0x99, 0xF8, 0x0D, 0x2A,
+    0x4D, 0x9C, 0xAA, 0x55, 0xCC, 0xA3, 0x66, 0xAF, 0x60,
+    0xBC, 0xCC, 0x6C, 0x53, 0xFF, 0x00, 0x55, 0x3C, 0x0F,
+    0xF0, 0x8F, 0x54, 0x99, 0xF8, 0x0D, 0x2A,
 };
 
 static bool modbus_read_coil(uint16_t i) {
@@ -4408,17 +4407,14 @@ static void test_modbus(void) {
        {0x00, 0x1C, 0x00, 0x00, 0x00, 0x03, 0x01, 0x84, 0x04},
        9},
 
-       /* --- Stress Test ---*/
-       {"read coils - 200 @ 0x0000",
-        {0x00, 0x1D, 0x00, 0x00, 0x00, 0x06, 0x01, 0x01, 0x00, 0x00, 0x00, 0xC8},
-        12,
-        {0x00, 0x1D, 0x00, 0x00, 0x00, 0x1C, 0x01, 0x01, 0x19,
-          0x4D, 0x9C, 0xAA, 0x55, 0xCC,
-          0xA3, 0x66, 0xAF, 0x60, 0xBC,
-          0xCC, 0x6C, 0x53, 0xFF, 0x00,
-          0x55, 0x3C, 0x0F, 0xF0, 0x8F,
-          0x54, 0x99, 0xF8, 0x0D, 0x2A},
-        34},
+      /* --- Stress Test ---*/
+      {"read coils - 200 @ 0x0000",
+       {0x00, 0x1D, 0x00, 0x00, 0x00, 0x06, 0x01, 0x01, 0x00, 0x00, 0x00, 0xC8},
+       12,
+       {0x00, 0x1D, 0x00, 0x00, 0x00, 0x1C, 0x01, 0x01, 0x19, 0x4D, 0x9C, 0xAA,
+        0x55, 0xCC, 0xA3, 0x66, 0xAF, 0x60, 0xBC, 0xCC, 0x6C, 0x53, 0xFF, 0x00,
+        0x55, 0x3C, 0x0F, 0xF0, 0x8F, 0x54, 0x99, 0xF8, 0x0D, 0x2A},
+       34},
   };
 
   struct mg_mgr mgr;
@@ -4445,10 +4441,71 @@ static void test_modbus(void) {
   mg_mgr_free(&mgr);
 }
 
+static void test_fields(void) {
+  char buf[999];
+  int i = 42;
+  const char *s = "hi";
+  double d = 3.14;
+  bool b = true;
+  struct mg_field f[] = {
+      {"i", "int", &i, mg_get_int, mg_set_int},
+      {"bar.s", "string", &s, mg_get_string, mg_set_string},
+      {"bar.d", "double", &d, mg_get_double, mg_set_double},
+      {"bar.b", "bool", &b, mg_get_bool, mg_set_bool},
+      {NULL, NULL, NULL, NULL, NULL},
+  };
+  struct mg_field f2[] = {
+      {"i", "int", &i, mg_get_int, mg_set_int},
+      {"foo.j", "int", NULL, NULL, NULL},
+      {NULL, NULL, NULL, NULL, NULL},
+  };
+  struct mg_field f3[] = {
+      {"i", "int", &i, mg_get_int, mg_set_int},
+      {"bar.baz.k", "int", NULL, NULL, NULL},
+      {"foo.j", "int", NULL, NULL, NULL},
+      {NULL, NULL, NULL, NULL, NULL},
+  };
+  const char *s1 = "{\"i\":42,\"bar\":{\"s\":\"hi\",\"d\":3.14,\"b\":true}}";
+  const char *s2 = "{\"s\":\"hi\",\"d\":3.14,\"b\":true}";
+  const char *s3 = "\"i\":42";
+  const char *s4 = "\"b\":true";
+  const char *s5 = "{\"i\":42,\"foo\":{\"j\":null}}";
+  const char *s6 =
+      "{\"i\":42,\"bar\":{\"baz\":{\"k\":null}},\"foo\":{\"j\":null}}";
+
+  mg_snprintf(buf, sizeof(buf), "%M", mg_print_one_field, &f[0]);
+  MG_INFO(("%s", buf));
+  ASSERT(strcmp(buf, s3) == 0);
+
+  mg_snprintf(buf, sizeof(buf), "%M", mg_print_one_field, &f[3]);
+  MG_INFO(("%s", buf));
+  ASSERT(strcmp(buf, s4) == 0);
+
+  mg_snprintf(buf, sizeof(buf), "%M", mg_print_fields, f2, "");
+  MG_INFO(("[%s]  [%s]", buf, s5));
+  ASSERT(strcmp(buf, s5) == 0);
+
+  mg_snprintf(buf, sizeof(buf), "%M", mg_print_fields, f, "");
+  MG_INFO(("%s ", buf));
+  ASSERT(strcmp(buf, s1) == 0);
+
+  mg_snprintf(buf, sizeof(buf), "%M", mg_print_fields, f, "bar.");
+  MG_INFO(("%s", buf));
+  ASSERT(strcmp(buf, s2) == 0);
+
+  mg_snprintf(buf, sizeof(buf), "%M", mg_print_fields, f3, "");
+  MG_INFO(("%s", buf));
+  ASSERT(strcmp(buf, s6) == 0);
+
+  exit(0);
+}
+
 int main(void) {
   const char *debug_level = getenv("V");
   if (debug_level == NULL) debug_level = "3";
   mg_log_set(atoi(debug_level));
+
+  test_fields();
 
   s_error = false;
   test_modbus();
@@ -4548,7 +4605,7 @@ int main(void) {
   s_error = false;
   test_mqtt();  // sorry, MQTT_LOCALHOST is also skipped
   DASHBOARD("mqtt");
-#else 
+#else
   (void) test_mqtt;
 #endif
 
