@@ -376,9 +376,12 @@ static void test_http_server(struct mg_mgr *mgr) {
 #if MG_TLS
   struct mg_tls_opts opts;
   memset(&opts, 0, sizeof(opts));
+  mg_mem_files = mg_packed_files;  // Use generated packed filesystem
   // opts.ca = mg_str(s_tls_ca);
   opts.cert = mg_unpacked("/certs/server.crt");
   opts.key = mg_unpacked("/certs/server.key");
+  mg_hexdump(opts.cert.buf, opts.cert.len);
+  mg_hexdump(opts.key.buf, opts.key.len);
   c = mg_http_listen(mgr, "https://0.0.0.0:12347", eh1, &opts);
   cmd = mg_mprintf("./mip_curl.sh --insecure https://%M:12347", mg_print_ip4,
                    &mgr->ifp->ip);
@@ -389,6 +392,8 @@ static void test_http_server(struct mg_mgr *mgr) {
 #endif
   ASSERT(c != NULL);
   ASSERT (mg_send(c, "NADA", 0)); // check mg_send allows len=0
+  MG_INFO(("%s", cmd));
+  MG_INFO(("%p %u %.*s", opts.key.buf, opts.key.len, opts.key.len, opts.key.buf));
   pthread_create(&thread_id, NULL, poll_thread,
                  mgr);  // simpler this way, no concurrency anyway
   MG_DEBUG(("CURL"));
@@ -404,6 +409,7 @@ static void test_tls(struct mg_mgr *mgr) {
 #if MG_TLS
   char *url;
   char buf[FETCH_BUF_SIZE];  // make sure it can hold Makefile
+  mg_mem_files = mg_packed_files;  // Use generated packed filesystem
   struct mg_str data = mg_unpacked("/Makefile");
   if (host_ip == NULL) {
     printf("\nNo HOST_IP provided, skipping TLS tests\n");
