@@ -13,20 +13,43 @@ struct dns_data {
   uint16_t txnid;
 };
 
-static void mg_sendnsreq(struct mg_connection *, struct mg_str *, int,
-                         struct mg_dns *, bool);
+static void sendnsreq(struct mg_connection *, struct mg_str *, int,
+                      struct mg_dns *, bool);
 
-static void mg_dns_free(struct dns_data **head, struct dns_data *d) {
+struct mdns_data {
+  struct mdns_data *next;
+  struct mg_connection *c;
+  uint64_t expire;
+  struct mg_str name;
+};
+
+static void sendmdnsreq(struct mg_connection *, struct mg_str *, int,
+                        struct mg_connection *, bool);
+
+static void dns_free(struct dns_data **head, struct dns_data *d) {
   LIST_DELETE(struct dns_data, head, d);
+  mg_free(d);
+}
+
+static void mdns_free(struct mdns_data **head, struct mdns_data *d) {
+  LIST_DELETE(struct mdns_data, head, d);
+  mg_free((void *) d->name.buf);
   mg_free(d);
 }
 
 void mg_resolve_cancel(struct mg_connection *c) {
   struct dns_data *tmp, *d;
+  struct mdns_data *mtmp, *md;
   struct dns_data **head = (struct dns_data **) &c->mgr->active_dns_requests;
+  struct mdns_data **mhead =
+      (struct mdns_data **) &c->mgr->active_mdns_requests;
   for (d = *head; d != NULL; d = tmp) {
     tmp = d->next;
-    if (d->c == c) mg_dns_free(head, d);
+    if (d->c == c) dns_free(head, d);
+  }
+  for (md = *mhead; md != NULL; md = mtmp) {
+    mtmp = md->next;
+    if (md->c == c) mdns_free(mhead, md);
   }
 }
 
@@ -157,8 +180,8 @@ static void dns_cb(struct mg_connection *c, int ev, void *ev_data) {
     uint64_t now = *(uint64_t *) ev_data;
     for (d = *head; d != NULL; d = tmp) {
       tmp = d->next;
-      // MG_DEBUG ("%lu %lu dns poll", d->expire, now));
-      if (now > d->expire) mg_error(d->c, "DNS timeout");
+      // MG_DEBUG(("%lu %lu dns poll", d->expire, now));
+      if (now > d->expire) mg_error(d->c, "DNS timeout");  // will remove entry
     }
   } else if (ev == MG_EV_READ) {
     struct mg_dns_message dm;
@@ -183,7 +206,7 @@ static void dns_cb(struct mg_connection *c, int ev, void *ev_data) {
           } else if (dm.addr.is_ip6 == false && dm.name[0] != '\0' &&
                      c->mgr->use_dns6 == false) {
             struct mg_str x = mg_str(dm.name);
-            mg_sendnsreq(d->c, &x, c->mgr->dnstimeout, &c->mgr->dns6, true);
+            sendnsreq(d->c, &x, c->mgr->dnstimeout, &c->mgr->dns6, true);
 #endif
           } else {
             mg_error(d->c, "%s DNS lookup failed", dm.name);
@@ -191,7 +214,7 @@ static void dns_cb(struct mg_connection *c, int ev, void *ev_data) {
         } else {
           MG_ERROR(("%lu already resolved", d->c->id));
         }
-        mg_dns_free(head, d);
+        dns_free(head, d);
         resolved = 1;
       }
     }
@@ -200,8 +223,7 @@ static void dns_cb(struct mg_connection *c, int ev, void *ev_data) {
   } else if (ev == MG_EV_CLOSE) {
     for (d = *head; d != NULL; d = tmp) {
       tmp = d->next;
-      mg_error(d->c, "DNS error");
-      mg_dns_free(head, d);
+      mg_error(d->c, "DNS error");  // will remove entry
     }
   }
 }
@@ -247,8 +269,8 @@ bool mg_dnsc_init(struct mg_mgr *mgr, struct mg_dns *dnsc) {
   return true;
 }
 
-static void mg_sendnsreq(struct mg_connection *c, struct mg_str *name, int ms,
-                         struct mg_dns *dnsc, bool ipv6) {
+static void sendnsreq(struct mg_connection *c, struct mg_str *name, int ms,
+                      struct mg_dns *dnsc, bool ipv6) {
   struct dns_data *d = NULL;
   if (!mg_dnsc_init(c->mgr, dnsc)) {
     mg_error(c, "resolver");
@@ -280,10 +302,14 @@ void mg_resolve(struct mg_connection *c, const char *url) {
   if (mg_aton(host, &c->rem)) {
     // host is an IP address, do not fire name resolution
     mg_connect_resolved(c);
+  } else if (host.len > 6 &&
+             strncmp(".local", &host.buf[host.len - 6], 6) == 0) {
+    // this is a request for a .local name (mDNS)
+    sendmdnsreq(c, &host, 500, c->mgr->mdns, c->mgr->use_dns6);  // 500ms tmout
   } else {
-    // host is not an IP, send DNS resolution request
+    // host is not an IP nor a .local, send DNS resolution request
     struct mg_dns *dns = c->mgr->use_dns6 ? &c->mgr->dns6 : &c->mgr->dns4;
-    mg_sendnsreq(c, &host, c->mgr->dnstimeout, dns, c->mgr->use_dns6);
+    sendnsreq(c, &host, c->mgr->dnstimeout, dns, c->mgr->use_dns6);
   }
 }
 
@@ -563,7 +589,7 @@ static void handle_mdns_response(struct mg_connection *c) {
     memset(&resp, 0, sizeof(resp));
     if (rh->num_answers > mg_htons(1)) MG_DEBUG(("ignoring > 1 answers"));
     mg_dns_parse_name(c->recv.buf, c->recv.len, 12, name, sizeof(name));
-    name_len = (uint8_t) strlen(name);  // verify it ends in .local
+    name_len = (uint8_t) strlen(name);
     MG_VERBOSE(("RR %u %u %s", (unsigned int) rr.atype,
                 (unsigned int) rr.aclass, name));
     if (rr.alen == 4 && rr.atype == MG_DNS_RTYPE_A &&
@@ -600,10 +626,46 @@ static void handle_mdns_record(struct mg_connection *c) {
 }
 
 static void mdns_cb(struct mg_connection *c, int ev, void *ev_data) {
-  if (ev == MG_EV_READ) {
-    handle_mdns_record(c);
+  struct mdns_data *d, *tmp;
+  struct mdns_data **head = (struct mdns_data **) &c->mgr->active_mdns_requests;
+  // mDNS resolver
+  if (ev == MG_EV_POLL) {
+    uint64_t now = *(uint64_t *) ev_data;
+    for (d = *head; d != NULL; d = tmp) {
+      tmp = d->next;
+      // MG_DEBUG(("%lu %lu mdns poll", d->expire, now));
+      if (now > d->expire) mg_error(d->c, "mDNS timeout");  // will remove entry
+    }
+  } else if (ev == MG_EV_CLOSE) {
+    for (d = *head; d != NULL; d = tmp) {
+      tmp = d->next;
+      mg_error(d->c, "mDNS listener error");  // this will remove entry
+    }
+  } else if (ev == MG_EV_MDNS_RESP) {
+    struct mg_mdns_resp *resp = (struct mg_mdns_resp *) ev_data;
+    if (resp->rr->atype == MG_DNS_RTYPE_A) {
+      for (d = *head; d != NULL; d = tmp) {
+        tmp = d->next;
+        if (mg_strcasecmp(d->name, resp->name) != 0) continue;
+        if (d->c->is_resolving) {
+          resp->addr.port = d->c->rem.port;  // Save port
+          d->c->rem = resp->addr;            // Copy resolved address
+          MG_DEBUG(("%lu %.*s is %M", d->c->id, resp->name.len, resp->name.buf,
+                    mg_print_ip, &d->c->rem));
+          mg_connect_resolved(d->c);
+        } else {
+          // this should not happen, unless above does not clear c->is_resolving
+          MG_ERROR(("%lu already resolved", d->c->id));
+        }
+        mdns_free(head, d);
+      }
+    }
+  } else if (ev == MG_EV_READ) {
+    // generic mDNS[-SD] handling
+    handle_mdns_record(c);  // this will call us back with MG_EV_MDNS_RESP
     mg_iobuf_del(&c->recv, 0, c->recv.len);
   }
+
   (void) ev_data;
 }
 
@@ -613,16 +675,46 @@ struct mg_connection *mg_mdns_listen(struct mg_mgr *mgr, mg_event_handler_t fn,
   struct mg_connection *c =
       mg_listen(mgr, "udp://224.0.0.251:5353", fn, fn_data);
   if (c == NULL) return NULL;
+  c->mgr->mdns = c;  // Add mDNS entry to enable resolver to use it
   c->pfn = mdns_cb, c->pfn_data = fn_data;
   mg_multicast_add(c, (char *) "224.0.0.251");
   return c;
+}
+
+static bool mdns_query(struct mg_connection *c, struct mg_str *name,
+                       unsigned int rtype) {
+  mg_multicast_restore(c, (uint8_t *) &c->loc);
+  (void) rtype;
+  return mg_dns_send(c, name, 0, false);
 }
 
 bool mg_mdns_query(struct mg_connection *c, const char *name,
                    unsigned int rtype) {
   struct mg_str name_;
   name_.buf = (char *) name, name_.len = strlen(name);
-  mg_multicast_restore(c, (uint8_t *) &c->loc);
-  (void) rtype;
-  return mg_dns_send(c, &name_, 0, false);
+  return mdns_query(c, &name_, rtype);
+}
+
+static void sendmdnsreq(struct mg_connection *c, struct mg_str *name, int ms,
+                        struct mg_connection *mdnsc, bool ipv6) {
+  struct mdns_data *d = NULL;
+  if (mdnsc == NULL) {
+    mg_error(c, "no mDNS listener, see mg_mdns_listen()");
+  } else if ((d = (struct mdns_data *) mg_calloc(1, sizeof(*d))) == NULL) {
+    mg_error(c, "resolve OOM");
+  } else {
+    struct mdns_data *reqs = (struct mdns_data *) c->mgr->active_mdns_requests;
+    d->next = reqs;
+    c->mgr->active_mdns_requests = d;
+    d->expire = mg_millis() + (uint64_t) ms;
+    d->name = mg_strdup(*name);
+    d->c = c;
+    c->is_resolving = 1;
+    MG_VERBOSE(
+        ("%lu resolving %.*s via mDNS", c->id, (int) name->len, name->buf));
+    if (!mdns_query(mdnsc, name, MG_DNS_RTYPE_A)) {
+      mg_error(c, "mDNS send");  // will remove newly created entry
+    }
+  }
+  (void) ipv6;
 }
