@@ -24,8 +24,10 @@ all: $(PROG)              # Default target. Build and run program
 $(PROG): $(SOURCES)       # Build program from sources
 	$(CC) $(SOURCES) $(CFLAGS) $(CFLAGS_MONGOOSE) $(CFLAGS_EXTRA) $(OUT)
 
-vc98:
-	cl $(SOURCES) -DMG_ENABLE_SSI=1 -DMG_TLS=MG_TLS_BUILTIN
-
 clean:                    # Cleanup. Delete built program and all build artifacts
 	$(DELETE) $(PROG) *.o *.obj *.exe *.dSYM
+
+
+vc98: CC = cl
+vc98:
+	$(CC) $(SOURCES) $(CFLAGS_MONGOOSE) -DMG_ENABLE_IPV6=0 $(CFLAGS_EXTRA) /MD /Feserver.exe
