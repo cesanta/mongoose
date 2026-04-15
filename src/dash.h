@@ -182,3 +182,4 @@ static inline void mg_dash_process_msg(struct mg_connection *c,
     mg_dash_error(c, req, "%s", "unknown method");
   }
 }
+
