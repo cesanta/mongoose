@@ -1,0 +1,176 @@
+#pragma once
+
+#include "ws.h"
+
+union mg_val {
+  int i;
+  bool b;
+  double d;
+  char *s;
+};
+
+struct mg_field {
+  const char *name;
+  const char *type;
+  union mg_val value;
+};
+
+typedef void (*mg_dash_get_fn)(struct mg_field *);
+typedef void (*mg_dash_set_fn)(struct mg_field *);
+
+static inline struct mg_str trimq(struct mg_str s) {  // Trim double quotes
+  if (s.len > 1 && s.buf[0] == '"') s.len -= 2, s.buf++;
+  return s;
+}
+
+static inline void mg_dash_broacast(struct mg_mgr *mgr, const char *fmt, ...) {
+  struct mg_connection *c;
+  va_list ap;
+  for (c = mgr->conns; c != NULL; c = c->next) {
+    if (!c->is_websocket) continue;
+    va_start(ap, fmt);
+    mg_ws_vprintf(c, WEBSOCKET_OP_TEXT, fmt, &ap);
+    va_end(ap);
+  }
+}
+
+static inline size_t mg_print_fmt(mg_pfn_t out, void *param, va_list *ap) {
+  const char *fmt = va_arg(*ap, const char *);
+  ap = va_arg(*ap, va_list *);
+  return mg_vxprintf(out, param, fmt, ap);
+}
+
+static inline void mg_dash_success(struct mg_connection *c, struct mg_str req,
+                                   const char *fmt, ...) {
+  struct mg_str id = mg_json_get_tok(req, "$.id");
+  va_list ap;
+  va_start(ap, fmt);
+  mg_ws_printf(c, WEBSOCKET_OP_TEXT, "{%m:%.*s,%m:%M}", MG_ESC("id"), id.len,
+               id.buf, MG_ESC("result"), mg_print_fmt, fmt, &ap);
+  va_end(ap);
+}
+
+static inline void mg_dash_error(struct mg_connection *c, struct mg_str req,
+                                 const char *fmt, ...) {
+  struct mg_str id = mg_json_get_tok(req, "$.id");
+  va_list ap;
+  va_start(ap, fmt);
+  mg_ws_printf(c, WEBSOCKET_OP_TEXT, "{%m:%.*s,%m:{%m:%d,%m:%m}}", MG_ESC("id"),
+               id.len, id.buf, MG_ESC("error"), MG_ESC("code"), -1,
+               MG_ESC("message"), mg_print_fmt, fmt, &ap);
+  va_end(ap);
+}
+
+static inline struct mg_field *mg_dash_find_field(struct mg_field *fields,
+                                                  struct mg_str name) {
+  size_t i;
+  for (i = 0; fields[i].name != NULL; i++) {
+    if (mg_strcmp(name, mg_str(fields[i].name)) == 0) return &fields[i];
+  }
+  return NULL;
+}
+
+static inline size_t mg_print_field(mg_pfn_t fn, void *arg, va_list *ap) {
+  struct mg_field *f = va_arg(*ap, struct mg_field *);
+  size_t n = 0;
+  n += mg_xprintf(fn, arg, "%m:", MG_ESC(f->name));
+  if (strcmp(f->type, "bool") == 0) {
+    n += mg_xprintf(fn, arg, "%s", f->value.b ? "true" : "false");
+  } else if (strcmp(f->type, "int") == 0) {
+    n += mg_xprintf(fn, arg, "%d", f->value.i);
+  } else if (strcmp(f->type, "double") == 0) {
+    n += mg_xprintf(fn, arg, "%g", f->value.d);
+  } else if (strcmp(f->type, "string") == 0) {
+    n += mg_xprintf(fn, arg, "%m", MG_ESC(f->value.s));
+  } else {
+    n += mg_xprintf(fn, arg, "null");
+  }
+  return n;
+}
+
+static inline bool mg_parse_field(struct mg_str json, struct mg_field *f) {
+  bool ok = false;
+  if (strcmp(f->type, "bool") == 0) {
+    ok = mg_json_get_bool(json, "$", &f->value.b);
+  } else if (strcmp(f->type, "int") == 0) {
+    // n += mg_xprintf(fn, arg, "%d", f->value.i);
+  } else if (strcmp(f->type, "double") == 0) {
+    // n += mg_xprintf(fn, arg, "%g", f->value.d);
+  } else if (strcmp(f->type, "string") == 0) {
+    // n += mg_xprintf(fn, arg, "%m", MG_ESC(f->value.s));
+  } else {
+    // n += mg_xprintf(fn, arg, "null");
+  }
+  return ok;
+}
+
+static inline size_t mg_dash_print(mg_pfn_t fn, void *arg, va_list *ap) {
+  struct mg_str *req = va_arg(*ap, struct mg_str *);
+  struct mg_field *fields = va_arg(*ap, struct mg_field *);
+  mg_dash_get_fn get = va_arg(*ap, mg_dash_get_fn);
+  struct mg_str name = trimq(mg_json_get_tok(*req, "$.params"));
+  struct mg_field *f = mg_dash_find_field(fields, name);
+  size_t i, n = 0;
+  if (name.len == 0) {
+    const char *comma = "";
+    n += mg_xprintf(fn, arg, "{");
+    for (i = 0; fields[i].name != NULL; i++) {
+      f = &fields[i];
+      if (get) get(f);
+      n += mg_xprintf(fn, arg, "%s", comma);
+      n += mg_xprintf(fn, arg, "%M", mg_print_field, f);
+      comma = ",";
+    }
+    n += mg_xprintf(fn, arg, "}");
+  } else if (f != NULL) {
+    if (get) get(f);
+    n += mg_xprintf(fn, arg, "{%M}", mg_print_field, f);
+  } else {
+    n += mg_xprintf(fn, arg, "null");
+  }
+  return n;
+}
+
+static inline bool mg_dash_apply(struct mg_connection *c, struct mg_str json,
+                                 struct mg_field *fields, mg_dash_get_fn get,
+                                 mg_dash_set_fn set) {
+  struct mg_str key, val;
+  size_t ofs = 0;
+  bool changed = false;
+  struct mg_field *f = NULL;
+  while ((ofs = mg_json_next(json, ofs, &key, &val)) > 0) {
+    key = trimq(key);
+    if ((f = mg_dash_find_field(fields, key)) != NULL) {
+      union mg_val old_value = f->value;
+      if (get) get(f);
+      mg_parse_field(val, f);
+      if (set) set(f);
+      if (memcmp(&f->value, &old_value, sizeof(old_value)) != 0) changed = true;
+      break;
+    } else {
+      MG_ERROR(("UNKNOWN FIELD: [%.*s]", key.len, key.buf));
+    }
+  }
+  if (changed && f != NULL) {
+    mg_dash_broacast(c->mgr, "{%m:%m,%m:{%M}}", MG_ESC("method"),
+                     MG_ESC("change"), MG_ESC("params"), mg_print_field, f);
+  }
+  return changed;
+}
+
+static inline void mg_dash_process_msg(struct mg_connection *c,
+                                       struct mg_ws_message *wm,
+                                       struct mg_field *fields,
+                                       mg_dash_get_fn get, mg_dash_set_fn set) {
+  struct mg_str req = wm->data;
+  struct mg_str method = trimq(mg_json_get_tok(req, "$.method"));
+  if (mg_match(method, mg_str("get"), NULL)) {
+    mg_dash_success(c, req, "%M", mg_dash_print, &req, fields, get);
+  } else if (mg_match(method, mg_str("set"), NULL)) {
+    struct mg_str params = trimq(mg_json_get_tok(req, "$.params"));
+    bool changed = mg_dash_apply(c, params, fields, get, set);
+    mg_dash_success(c, req, "%s", changed ? "true" : "false");
+  } else {
+    mg_dash_error(c, req, "%s", "unknown method");
+  }
+}
