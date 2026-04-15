@@ -3144,7 +3144,7 @@ union mg_val {
   int i;
   bool b;
   double d;
-  char *s;
+  struct mg_str s;
 };
 
 struct mg_field {
@@ -3219,7 +3219,8 @@ static inline size_t mg_print_field(mg_pfn_t fn, void *arg, va_list *ap) {
   } else if (strcmp(f->type, "double") == 0) {
     n += mg_xprintf(fn, arg, "%g", f->value.d);
   } else if (strcmp(f->type, "string") == 0) {
-    n += mg_xprintf(fn, arg, "%m", MG_ESC(f->value.s));
+    struct mg_str s = f->value.s;
+    n += mg_xprintf(fn, arg, "%m", mg_print_esc, s.len, s.buf);
   } else {
     n += mg_xprintf(fn, arg, "null");
   }
@@ -3231,13 +3232,13 @@ static inline bool mg_parse_field(struct mg_str json, struct mg_field *f) {
   if (strcmp(f->type, "bool") == 0) {
     ok = mg_json_get_bool(json, "$", &f->value.b);
   } else if (strcmp(f->type, "int") == 0) {
-    // n += mg_xprintf(fn, arg, "%d", f->value.i);
+    double d;
+    ok = mg_json_get_num(json, "$", &d);
+    if (ok) f->value.i = (int) d;
   } else if (strcmp(f->type, "double") == 0) {
-    // n += mg_xprintf(fn, arg, "%g", f->value.d);
+    ok = mg_json_get_num(json, "$", &f->value.d);
   } else if (strcmp(f->type, "string") == 0) {
-    // n += mg_xprintf(fn, arg, "%m", MG_ESC(f->value.s));
-  } else {
-    // n += mg_xprintf(fn, arg, "null");
+    f->value.s = trimq(json);
   }
   return ok;
 }
@@ -3279,11 +3280,18 @@ static inline bool mg_dash_apply(struct mg_connection *c, struct mg_str json,
   while ((ofs = mg_json_next(json, ofs, &key, &val)) > 0) {
     key = trimq(key);
     if ((f = mg_dash_find_field(fields, key)) != NULL) {
-      union mg_val old_value = f->value;
+      union mg_val old_value;
       if (get) get(f);
+      old_value = f->value;
       mg_parse_field(val, f);
       if (set) set(f);
-      if (memcmp(&f->value, &old_value, sizeof(old_value)) != 0) changed = true;
+      // Strings require special comparison
+      if (strcmp(f->type, "string") == 0 &&
+          mg_strcmp(old_value.s, f->value.s) != 0) {
+        changed = true;
+      } else if (memcmp(&f->value, &old_value, sizeof(old_value)) != 0) {
+        changed = true;
+      }
       break;
     } else {
       MG_ERROR(("UNKNOWN FIELD: [%.*s]", key.len, key.buf));
