@@ -109,7 +109,9 @@ struct tls_data {
   bool cert_requested;       // client received a CertificateRequest
   bool is_twoway;            // server is configured to authenticate clients
   struct mg_str cert_der;    // certificate in DER format
-  struct mg_str ca_der;      // CA certificate
+  struct mg_str ca_der;      // current CA certificate
+  struct mg_str *ca_bundle_der; // bundle of CA certificates
+  size_t ca_bundle_len;         // number of certificates in bundle
   struct mg_str *chain_der;  // certificate chain (intermediate certs)
   size_t chain_len;          // number of certificates in chain
   uint8_t ec_key[32];        // EC private key
@@ -117,7 +119,7 @@ struct tls_data {
   struct mg_str rsa_key_der;  // RSA private key in DER format
   char hostname[254];         // matching hostname
 
-  bool is_ec_pubkey;         // EC or RSA
+  bool is_ec_pubkey;         // EC or RSA. TODO(): currently unused
   uint8_t pubkey[512 + 16];  // server EC (64) or RSA (512+exp) public key to
                              // verify cert
   size_t pubkeysz;           // size of the server public key
@@ -1361,18 +1363,20 @@ static int mg_tls_client_recv_ext(struct mg_connection *c) {
 }
 
 struct mg_tls_cert {
-  int is_ec_pubkey;
+  bool is_ec_pubkey;
   struct mg_str sn;
   struct mg_str pubkey;
+  struct mg_der_tlv issuer;
   struct mg_der_tlv subj;
   struct mg_str sig;    // signature
-  uint8_t tbshash[48];  // 32b for sha256/secp256, 48b for sha384/secp384
+  uint8_t tbshash[48];  // 32B for sha256/secp256, 48B for sha384/secp384
   size_t tbshashsz;     // actual TBS hash size
 };
 
 static void mg_der_debug_cert_name(const char *name, struct mg_der_tlv *tlv) {
   struct mg_der_tlv v;
   struct mg_str cn, c, o, ou;
+  if (mg_log_level < MG_LL_VERBOSE) return; // skip recursive computations
   cn = c = o = ou = mg_str("");
   if (mg_der_find_oid(tlv, (uint8_t *) "\x55\x04\x03", 3, &v))
     cn = mg_str_n((const char *) v.value, v.len);
@@ -1452,6 +1456,7 @@ static int mg_tls_parse_cert_der(void *buf, size_t dersz,
 
   // issuer
   if (mg_der_next(&tbs_cert, &field) <= 0 || field.type != 0x30) return -1;
+  cert->issuer = field;
   mg_der_debug_cert_name("issuer", &field);
 
   // validity dates (before/after)
@@ -1483,21 +1488,21 @@ static int mg_tls_parse_cert_der(void *buf, size_t dersz,
   MG_VERBOSE(("pk algo (oid): %M", mg_print_hex, pki_algo.len, pki_algo.value));
   if (pki_algo.len == 8 &&
       memcmp(pki_algo.value, "\x2A\x86\x48\xCE\x3D\x03\x01\x07", 8) == 0) {
-    cert->is_ec_pubkey = 1;
+    cert->is_ec_pubkey = true;
     MG_VERBOSE(("pk algo: ECDSA secp256r1"));
   } else if (pki_algo.len == 8 &&
              memcmp(pki_algo.value, "\x2A\x86\x48\xCE\x3D\x03\x01\x08", 8) ==
                  0) {
-    cert->is_ec_pubkey = 1;
+    cert->is_ec_pubkey = true;
     MG_VERBOSE(("pk algo: ECDSA secp384r1"));
   } else if (pki_algo.len == 7 &&
              memcmp(pki_algo.value, "\x2A\x86\x48\xCE\x3D\x02\x01", 7) == 0) {
-    cert->is_ec_pubkey = 1;
+    cert->is_ec_pubkey = true;
     MG_VERBOSE(("pk algo: EC public key"));
   } else if (pki_algo.len == 9 &&
              memcmp(pki_algo.value, "\x2A\x86\x48\x86\xF7\x0D\x01\x01\x01",
                     9) == 0) {
-    cert->is_ec_pubkey = 0;
+    cert->is_ec_pubkey = false;
     MG_VERBOSE(("pk algo: RSA"));
   } else {
     MG_ERROR(("unsupported pk algo: %M", mg_print_hex, pki_algo.len,
@@ -1588,7 +1593,7 @@ static int mg_tls_verify_cert_signature(const struct mg_tls_cert *cert,
                             (unsigned) cert->tbshashsz, sig,
                             mg_uecc_secp256r1());
     } else if (issuer->pubkey.len == 96) {
-      MG_ERROR(("reject secp386 for now"));
+      MG_ERROR(("reject secp384 for now"));
       return 0;
     } else {
       MG_ERROR(("unsupported public key length: %d", issuer->pubkey.len));
@@ -1627,6 +1632,27 @@ static int mg_tls_verify_cert_cn(struct mg_der_tlv *subj, const char *host) {
     matched = mg_match(mg_str(host), mg_str_n((char *) v.value, v.len), NULL);
   }
   return matched;
+}
+
+static int tls_bundle_find(struct tls_data *tls, struct mg_der_tlv *name,
+                           struct mg_tls_cert *cert) {
+  size_t i;
+  struct mg_der_tlv v;
+  struct mg_str *p = tls->ca_bundle_der, tgt;
+  if (!mg_der_find_oid(name, (uint8_t *) "\x55\x04\x03", 3, &v)) return false;
+  tgt = mg_str_n((const char *) v.value, v.len);
+  for (i = 0; i < tls->ca_bundle_len; i++, p++) {
+    struct mg_str subj;
+    if (mg_tls_parse_cert_der(p->buf, p->len, cert) < 0 ||
+        !mg_der_find_oid(&cert->subj, (uint8_t *) "\x55\x04\x03", 3, &v)) {
+      MG_ERROR(("failed to parse certificate #%u in bundle", i + 1));
+      return -1;
+    }
+    subj = mg_str_n((const char *) v.value, v.len);
+    MG_VERBOSE(("#%u: %.*s (%.*s)", i + 1, subj.len, subj.buf, tgt.len, tgt.buf));
+    if (mg_strcasecmp(subj, tgt) == 0) return 1;
+  }
+  return 0;
 }
 
 static int mg_tls_recv_cert(struct mg_connection *c, bool is_client) {
@@ -1678,7 +1704,7 @@ static int mg_tls_recv_cert(struct mg_connection *c, bool is_client) {
     memset(certs, 0, sizeof(certs));
     memset(&ca, 0, sizeof(ca));
 
-    if (tls->ca_der.len > 0) {
+    if (tls->ca_der.len > 0) { // single cert or server
       if (mg_tls_parse_cert_der(tls->ca_der.buf, tls->ca_der.len, &ca) < 0) {
         mg_error(c, "failed to parse CA certificate");
         return -1;
@@ -1728,10 +1754,18 @@ static int mg_tls_recv_cert(struct mg_connection *c, bool is_client) {
         }
       }
 
-      if (ca.pubkey.len == ci->pubkey.len &&
-          memcmp(ca.pubkey.buf, ci->pubkey.buf, ca.pubkey.len) == 0) {
-        found_ca = true;
-        break;
+      if (tls->ca_bundle_len > 0) {  // bundle, find subject and compare keys
+        MG_VERBOSE(("Search current cert in bundle"));
+        int r = tls_bundle_find(tls, &ci->subj, &ca);  // find current cert ci
+        if (r < 0) {
+          mg_error(c, "failed to parse CA bundle");
+          return -1;
+        } else if (r > 0 && ca.pubkey.len == ci->pubkey.len &&
+                   memcmp(ca.pubkey.buf, ci->pubkey.buf, ca.pubkey.len) == 0) {
+          found_ca = true;
+          MG_VERBOSE(("CA serial: %M", mg_print_hex, ca.sn.len, ca.sn.buf));
+          break;
+        }  // else either r = 0 => subj not found or pubkey not matching
       }
 
       if (certnum == sizeof(certs) / sizeof(certs[0]) - 1) {
@@ -1740,15 +1774,23 @@ static int mg_tls_recv_cert(struct mg_connection *c, bool is_client) {
       }
     }
 
-    if (!found_ca && tls->ca_der.len > 0) {
+    if (!found_ca && certnum > 0 && tls->ca_bundle_len > 0) {  // bundle
+      MG_VERBOSE(("Search bundle for issuer of last cert in chain"));
+      int r = tls_bundle_find(tls, &certs[certnum - 1].issuer, &ca);
+      if (r <= 0) {
+        mg_error(c, r < 0 ? "failed to parse CA bundle"
+                          : "failed to find issuing CA in bundle");
+        return -1;
+      }  // else r > 0 => issuer found
+      MG_VERBOSE(("CA serial: %M", mg_print_hex, ca.sn.len, ca.sn.buf));
+    }
+    if (!found_ca && tls->ca_der.len > 0) {  // single cert or server
       if (certnum < 1 ||
           !mg_tls_verify_cert_signature(&certs[certnum - 1], &ca)) {
         mg_error(c, "failed to verify CA");
         return -1;
       } else if (is_client) {
-        MG_VERBOSE(
-            ("CA was not in the chain, but verification with builtin CA "
-             "passed"));
+        MG_VERBOSE(("no CA in chain; verification with builtin CA passed"));
       }
     }
   }
@@ -2446,12 +2488,26 @@ void mg_tls_init(struct mg_connection *c, const struct mg_tls_opts *opts) {
     strncpy((char *) tls->hostname, opts->name.buf, sizeof(tls->hostname) - 1);
     tls->hostname[opts->name.len] = 0;
   }
-  // server CA certificate, store serial number
-  if (opts->ca.len > 0) {
-    if (mg_parse_pem(opts->ca, mg_str_s("CERTIFICATE"), &tls->ca_der) < 0) {
-      MG_ERROR(("Failed to load certificate"));
-      return;
-    }
+
+  // server CA certificate; parse PEM [bundle] or DER
+  if (opts->ca.len > 0)  {
+    struct mg_str *all_certs = NULL;
+    int cert_count = mg_parse_pem_certs(opts->ca, &all_certs);
+
+    if (cert_count > 1 && c->is_client) { // use bundle for clients only
+      tls->ca_bundle_len = (size_t) cert_count;
+      tls->ca_bundle_der = all_certs;
+      MG_VERBOSE(("%d-cert bundle", cert_count));
+    } else if (cert_count > 0) {
+      tls->ca_der.buf = all_certs[0].buf;
+      tls->ca_der.len = all_certs[0].len;
+      mg_free(all_certs);
+    } else { // parse again for a possible DER (or a truncated begin string)
+      if (mg_parse_pem(opts->ca, mg_str_s("CERTIFICATE"), &tls->ca_der) < 0) {
+        MG_ERROR(("Failed to load CA certificate"));
+        return;
+      }
+    } // ca_bundle_len != 0 && ca_der.len = 0 => bundle
     if (!c->is_client) tls->is_twoway = true;  // server + CA: two-way auth
   }
 
@@ -2474,7 +2530,7 @@ void mg_tls_init(struct mg_connection *c, const struct mg_tls_opts *opts) {
       } else {
         mg_free(all_certs);
       }
-    } else {
+    } else { // parse again for a possible DER (or a truncated begin string)
       if (mg_parse_pem(opts->cert, mg_str_s("CERTIFICATE"), &tls->cert_der) <
           0) {
         MG_ERROR(("Failed to load certificate"));

@@ -99,6 +99,7 @@ static void mqtt_ev_handler(struct mg_connection *c, int ev, void *ev_data) {
 void mg_mqtt_init(struct mg_mgr *mgr) {
   (void) mgr;
   if (!s_rpc) mg_rpc_add(&s_rpc, mg_str("ota.update"), rpc_ota_update, NULL);
+  mg_mem_files = mg_packed_files;  // Use generated packed filesystem
 }
 
 void mg_mqtt_poll(struct mg_mgr *mgr) {
