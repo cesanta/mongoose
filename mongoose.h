@@ -3158,6 +3158,12 @@ struct mg_field {
 typedef void (*mg_dash_get_fn)(struct mg_field *);
 typedef void (*mg_dash_set_fn)(struct mg_field *);
 
+struct mg_dash {
+  struct mg_field *fields;
+  mg_dash_get_fn get;
+  mg_dash_set_fn set;
+};
+
 static inline struct mg_str trimq(struct mg_str s) {  // Trim double quotes
   if (s.len > 1 && s.buf[0] == '"') s.len -= 2, s.buf++;
   return s;
@@ -3326,6 +3332,26 @@ static inline void mg_dash_process_msg(struct mg_connection *c,
     mg_dash_success(c, req, "%s", changed ? "true" : "false");
   } else {
     mg_dash_error(c, req, "%s", "unknown method");
+  }
+}
+
+static inline void mg_dash_ev_handler(struct mg_connection *c, int ev,
+                                      void *ev_data) {
+  if (ev == MG_EV_HTTP_MSG) {
+    struct mg_http_message *hm = (struct mg_http_message *) ev_data;
+    if (mg_match(hm->uri, mg_str("/api/websocket"), NULL)) {
+      mg_ws_upgrade(c, hm, NULL);
+    } else {
+      struct mg_http_serve_opts opts = {0};
+      opts.fs = &mg_fs_packed;
+      mg_mem_files = mg_packed_files;
+      mg_http_serve_file(c, hm, "/dashboard.html", &opts);
+    }
+  } else if (ev == MG_EV_WS_MSG) {
+    // Add this to automatically handle "get" and "set" JSON-RPC calls
+    struct mg_dash *dash = (struct mg_dash *) c->fn_data;
+    struct mg_ws_message *wm = (struct mg_ws_message *) ev_data;
+    mg_dash_process_msg(c, wm, dash->fields, dash->get, dash->set);
   }
 }
 // Copyright (c) 2023 Cesanta Software Limited
