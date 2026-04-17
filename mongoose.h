@@ -3342,7 +3342,8 @@ static inline void mg_dash_ev_handler(struct mg_connection *c, int ev,
     if (mg_match(hm->uri, mg_str("/api/websocket"), NULL)) {
       mg_ws_upgrade(c, hm, NULL);
     } else {
-      struct mg_http_serve_opts opts = {0};
+      struct mg_http_serve_opts opts;
+      memset(&opts, 0, sizeof(opts));
       opts.fs = &mg_fs_packed;
       mg_mem_files = mg_packed_files;
       mg_http_serve_file(c, hm, "/dashboard.html", &opts);
