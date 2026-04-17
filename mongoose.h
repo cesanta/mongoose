@@ -3140,6 +3140,8 @@ void mg_rpc_list(struct mg_rpc_req *r);
 
 
 
+enum mg_val_type { MG_VAL_INT, MG_VAL_BOOL, MG_VAL_DBL, MG_VAL_STR };
+
 union mg_val {
   int i;
   bool b;
@@ -3149,7 +3151,7 @@ union mg_val {
 
 struct mg_field {
   const char *name;
-  const char *type;
+  enum mg_val_type type;
   union mg_val value;
 };
 
@@ -3161,7 +3163,7 @@ static inline struct mg_str trimq(struct mg_str s) {  // Trim double quotes
   return s;
 }
 
-static inline void mg_dash_broacast(struct mg_mgr *mgr, const char *fmt, ...) {
+static inline void mg_dash_broadcast(struct mg_mgr *mgr, const char *fmt, ...) {
   struct mg_connection *c;
   va_list ap;
   for (c = mgr->conns; c != NULL; c = c->next) {
@@ -3212,13 +3214,13 @@ static inline size_t mg_print_field(mg_pfn_t fn, void *arg, va_list *ap) {
   struct mg_field *f = va_arg(*ap, struct mg_field *);
   size_t n = 0;
   n += mg_xprintf(fn, arg, "%m:", MG_ESC(f->name));
-  if (strcmp(f->type, "bool") == 0) {
+  if (f->type == MG_VAL_BOOL) {
     n += mg_xprintf(fn, arg, "%s", f->value.b ? "true" : "false");
-  } else if (strcmp(f->type, "int") == 0) {
+  } else if (f->type == MG_VAL_INT) {
     n += mg_xprintf(fn, arg, "%d", f->value.i);
-  } else if (strcmp(f->type, "double") == 0) {
+  } else if (f->type == MG_VAL_DBL) {
     n += mg_xprintf(fn, arg, "%g", f->value.d);
-  } else if (strcmp(f->type, "string") == 0) {
+  } else if (f->type == MG_VAL_STR) {
     struct mg_str s = f->value.s;
     n += mg_xprintf(fn, arg, "%m", mg_print_esc, s.len, s.buf);
   } else {
@@ -3229,15 +3231,15 @@ static inline size_t mg_print_field(mg_pfn_t fn, void *arg, va_list *ap) {
 
 static inline bool mg_parse_field(struct mg_str json, struct mg_field *f) {
   bool ok = false;
-  if (strcmp(f->type, "bool") == 0) {
+  if (f->type == MG_VAL_BOOL) {
     ok = mg_json_get_bool(json, "$", &f->value.b);
-  } else if (strcmp(f->type, "int") == 0) {
+  } else if (f->type == MG_VAL_INT) {
     double d;
     ok = mg_json_get_num(json, "$", &d);
     if (ok) f->value.i = (int) d;
-  } else if (strcmp(f->type, "double") == 0) {
+  } else if (f->type == MG_VAL_DBL) {
     ok = mg_json_get_num(json, "$", &f->value.d);
-  } else if (strcmp(f->type, "string") == 0) {
+  } else if (f->type == MG_VAL_STR) {
     f->value.s = trimq(json);
   }
   return ok;
@@ -3270,36 +3272,42 @@ static inline size_t mg_dash_print(mg_pfn_t fn, void *arg, va_list *ap) {
   return n;
 }
 
+static inline bool mg_dash_sync(struct mg_mgr *mgr, struct mg_field *f,
+                                mg_dash_get_fn get) {
+  union mg_val old_value = f->value;
+  bool changed = false;
+  if (get) get(f);
+  // Strings require special comparison
+  if (f->type == MG_VAL_STR && mg_strcmp(old_value.s, f->value.s) != 0) {
+    changed = true;
+  } else if (memcmp(&f->value, &old_value, sizeof(old_value)) != 0) {
+    changed = true;
+  }
+  if (changed && f != NULL) {
+    mg_dash_broadcast(mgr, "{%m:%m,%m:{%M}}", MG_ESC("method"),
+                      MG_ESC("change"), MG_ESC("params"), mg_print_field, f);
+  }
+  return changed;
+}
+
 static inline bool mg_dash_apply(struct mg_connection *c, struct mg_str json,
                                  struct mg_field *fields, mg_dash_get_fn get,
                                  mg_dash_set_fn set) {
   struct mg_str key, val;
   size_t ofs = 0;
-  bool changed = false;
   struct mg_field *f = NULL;
+  bool changed = false;
   while ((ofs = mg_json_next(json, ofs, &key, &val)) > 0) {
     key = trimq(key);
     if ((f = mg_dash_find_field(fields, key)) != NULL) {
-      union mg_val old_value;
-      if (get) get(f);
-      old_value = f->value;
-      mg_parse_field(val, f);
-      if (set) set(f);
-      // Strings require special comparison
-      if (strcmp(f->type, "string") == 0 &&
-          mg_strcmp(old_value.s, f->value.s) != 0) {
-        changed = true;
-      } else if (memcmp(&f->value, &old_value, sizeof(old_value)) != 0) {
-        changed = true;
-      }
+      struct mg_field tmp = *f;
+      mg_parse_field(val, &tmp);
+      if (set) set(&tmp);
+      if (mg_dash_sync(c->mgr, f, get)) changed = true;
       break;
     } else {
       MG_ERROR(("UNKNOWN FIELD: [%.*s]", key.len, key.buf));
     }
-  }
-  if (changed && f != NULL) {
-    mg_dash_broacast(c->mgr, "{%m:%m,%m:{%M}}", MG_ESC("method"),
-                     MG_ESC("change"), MG_ESC("params"), mg_print_field, f);
   }
   return changed;
 }
@@ -3320,7 +3328,6 @@ static inline void mg_dash_process_msg(struct mg_connection *c,
     mg_dash_error(c, req, "%s", "unknown method");
   }
 }
-
 // Copyright (c) 2023 Cesanta Software Limited
 // All rights reserved
 
