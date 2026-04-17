@@ -213,6 +213,10 @@ static inline void mg_dash_ev_handler(struct mg_connection *c, int ev,
     // Add this to automatically handle "get" and "set" JSON-RPC calls
     struct mg_dash *dash = (struct mg_dash *) c->fn_data;
     struct mg_ws_message *wm = (struct mg_ws_message *) ev_data;
-    mg_dash_process_msg(c, wm, dash->fields, dash->get, dash->set);
+    if (dash == NULL || dash->fields == NULL) {
+      mg_dash_error(c, wm->data, "%s", "no fields defined");
+    } else {
+      mg_dash_process_msg(c, wm, dash->fields, dash->get, dash->set);
+    }
   }
 }
