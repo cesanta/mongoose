@@ -1,0 +1,53 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <!-- Mongoose device dashboard -->
+  <script src="https://cdn.jsdelivr.net/gh/cesanta/mongoose@master/resources/dashboard.js"></script>
+  <script>
+    Dashboard.init({
+      debug: true,
+      data: {
+        location: 'Dublin',
+        threshold: 42,
+        firmware_version: '1.0.0',
+      },
+    });
+  </script>
+
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+
+  <div class="main">
+    <h1>
+      Settings panel example
+    </h1>
+
+    <div class="panel" style="margin: 1rem 0;">
+      <div class="panel-title">Settings panel</div>
+      <div class="panel-row">
+        <span>Location:</span>
+        <input class="input" data-bind='location' data-autosave="1" />
+      </div>
+      <div class="panel-row">
+        <span>Noise threshold:</span>
+        <input class="input" data-bind="threshold" />
+      </div>
+      <div class="panel-row" style="justify-content: end;">
+        <button class="button" data-cancel="loc.*|threshold">cancel</button>
+        <button class="button" data-save="loc.*|threshold">save</button>
+      </div>
+    </div>
+
+    <div style="font-size:80%;color: #000000a0">
+      When a field is edited, a local copy is created. For as long as that
+      copy is different from the device's  value, the field is added an
+      "edited" CSS class. Bad values (e.g. non-numeric value for the field
+      that is bound to a numeric data) give a "error" CSS class.
+
+      <p style="margin-top: .5rem;">The Location field has autosave flag set, so it is saved automatically
+      as the user type text<//>
+    </div>
+  </div>
+</body>
+</html>

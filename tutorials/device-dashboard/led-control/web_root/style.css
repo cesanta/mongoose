@@ -1,0 +1,48 @@
+:root {
+}
+
+*, *::before, *::after {
+  box-sizing: border-box; margin: 0; padding: 0;
+  font-family: Arial, sans-serif;
+}
+
+.toggle {
+  position: relative;
+  width: 2.75rem;
+  height: 1.6rem;
+  margin: 0;
+  vertical-align: top;
+  border: 1px solid transparent;
+  background: #d1d5db;
+  border-radius: 0.75rem;
+  outline: none;
+  cursor: pointer;
+  -webkit-appearance: none;
+  -moz-appearance: none;
+  appearance: none;
+}
+.toggle::after {
+  content: "";
+  position: absolute;
+  left: 1px;
+  top: 1px;
+  width: 1.35rem;
+  height: 1.35rem;
+  background: #fff;
+  border-radius: 50%;
+  transition: all 0.3s;
+}
+.toggle:checked {
+  background: #d1d5db;
+}
+.toggle:checked::after {
+  transform: translateX(calc(100% - 3px));
+}
+.toggle:disabled,
+.toggle.disabled {
+  background: #d1d5db;
+  cursor: not-allowed;
+}
+.toggle.edited {
+  border-color: #ee0;
+}

@@ -1,0 +1,140 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <link rel="stylesheet" href="style.css">
+    <!-- Mongoose device dashboard -->
+    <script src="https://cdn.jsdelivr.net/gh/cesanta/mongoose@master/resources/dashboard.js"></script>
+    <script>
+      Dashboard.init({
+        debug: true,
+        data: {
+          temperature: 25,
+          humidity: 60,
+          voltage: 12.5,
+          current: 4.2,
+          power: 52.5,
+          speed: 100,
+        },
+      });
+    </script>
+    <script src="main.js" defer></script>
+    <title>My Dashboard Toolbar</title>
+  </head>
+  <body>
+    <div class="header">
+      <div class="header-container">
+        <div class="header-left">
+          <nav class="nav-tabs" role="tablist" aria-label="Primary tabs">
+            <img src="logo.svg" alt="Logo" class="logo" />
+            <a href="#overview" id="tab-overview" class="nav-link nav-link-active" role="tab" aria-controls="overview" aria-selected="true">
+              <svg viewBox="0 0 24 24" class="nav-icon" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M3 11.5 12 4l9 7.5" />
+                <path d="M5 10.5V20h14v-9.5" />
+              </svg>
+              Overview
+            </a>
+            <a href="#settings" id="tab-settings" class="nav-link" role="tab" aria-controls="settings" aria-selected="false" tabindex="-1">
+              <svg viewBox="0 0 24 24" class="nav-icon" fill="none" stroke="currentColor" stroke-width="2">
+                <circle cx="12" cy="12" r="3" />
+                <path d="M19.4 15a1.7 1.7 0 0 0 .34 1.87l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06A1.7 1.7 0 0 0 15 19.4a1.7 1.7 0 0 0-1 .6 1.7 1.7 0 0 0-.4 1.1V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-.4-1.1 1.7 1.7 0 0 0-1-.6 1.7 1.7 0 0 0-1.87.34l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06A1.7 1.7 0 0 0 4.6 15a1.7 1.7 0 0 0-.6-1 1.7 1.7 0 0 0-1.1-.4H2.8a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.1-.4 1.7 1.7 0 0 0 .6-1 1.7 1.7 0 0 0-.34-1.87l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.7 1.7 0 0 0 9 4.6c.38-.16.72-.4 1-.7.26-.3.4-.69.4-1.1V2.8a2 2 0 1 1 4 0v.1c0 .41.14.8.4 1.1.28.3.62.54 1 .7a1.7 1.7 0 0 0 1.87-.34l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06A1.7 1.7 0 0 0 19.4 9c.16.38.4.72.7 1 .3.26.69.4 1.1.4h.1a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.1.4 1.7 1.7 0 0 0-.7 1z" />
+              </svg>
+              Settings
+            </a>
+            <a href="#firmware" id="tab-firmware" class="nav-link" role="tab" aria-controls="firmware" aria-selected="false" tabindex="-1">
+              <svg viewBox="0 0 24 24" class="nav-icon" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M12 3v10" />
+                <path d="m8 9 4 4 4-4" />
+                <rect x="4" y="17" width="16" height="4" rx="2" />
+              </svg>
+              Firmware Update
+            </a>
+            <a href="#events" id="tab-events" class="nav-link" role="tab" aria-controls="events" aria-selected="false" tabindex="-1">
+              <svg viewBox="0 0 24 24" class="nav-icon" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M8 7h8" />
+                <path d="M8 12h8" />
+                <path d="M8 17h5" />
+                <rect x="4" y="4" width="16" height="16" rx="3" />
+              </svg>
+              Events
+            </a>
+          </nav>
+        </div>
+        <div class="header-actions">
+          <div class="connection-badge" aria-label="connection active">
+            <span class="connection-label">live</span>
+            <span class="connection-dot" aria-hidden="true"></span>
+          </div>
+          <nav class="nav-tabs">
+            <div class="nav-link">
+              <svg viewBox="0 0 24 24" class="nav-icon" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" />
+                <circle cx="12" cy="7" r="4" />
+              </svg>
+              <span>admin</span>
+              <svg viewBox="0 0 24 24" class="nav-icon" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+                <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" />
+                <path d="M16 17l5-5-5-5" />
+                <path d="M21 12H9" />
+              </svg>
+            </div>
+          </nav>
+        </div>
+      </div>
+    </div>
+    <main class="tab-stage">
+      <section id="overview" class="tab-panel tab-panel-active" role="tabpanel" aria-labelledby="tab-overview">
+        <div class="overview-grid" aria-label="Electrical overview">
+          <article class="metric-tile">
+            <div class="metric-tile-top">
+              <div class="metric-label">VOLTAGE</div>
+              <span class="metric-chip">
+                <svg viewBox="0 0 24 24" class="metric-icon" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+                  <path d="M13 2 6 14h5l-1 8 7-12h-5z" />
+                </svg>
+              </span>
+            </div>
+            <div class="metric-value">
+              <span class="metric-number">12.5</span>
+              <span class="metric-unit">V</span>
+            </div>
+          </article>
+          <article class="metric-tile">
+            <div class="metric-tile-top">
+              <div class="metric-label">CURRENT</div>
+              <span class="metric-chip">
+                <svg viewBox="0 0 24 24" class="metric-icon" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+                  <path d="M4 12h4l2-6 4 12 2-6h4" />
+                </svg>
+              </span>
+            </div>
+            <div class="metric-value">
+              <span class="metric-number">4.2</span>
+              <span class="metric-unit">A</span>
+            </div>
+          </article>
+          <article class="metric-tile">
+            <div class="metric-tile-top">
+              <div class="metric-label">POWER</div>
+              <span class="metric-chip">
+                <svg viewBox="0 0 24 24" class="metric-icon" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+                  <path d="M12 3v8" />
+                  <path d="M7 8h10" />
+                  <rect x="5" y="11" width="14" height="8" rx="2" />
+                </svg>
+              </span>
+            </div>
+            <div class="metric-value">
+              <span class="metric-number">52.5</span>
+              <span class="metric-unit">W</span>
+            </div>
+          </article>
+        </div>
+      </section>
+      <section id="settings" class="tab-panel" role="tabpanel" aria-labelledby="tab-settings" hidden></section>
+      <section id="firmware" class="tab-panel" role="tabpanel" aria-labelledby="tab-firmware" hidden></section>
+      <section id="events" class="tab-panel" role="tabpanel" aria-labelledby="tab-events" hidden></section>
+    </main>
+  </body>
+</html>

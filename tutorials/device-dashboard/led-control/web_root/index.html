@@ -1,0 +1,30 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <!-- Mongoose device dashboard -->
+  <script src="https://cdn.jsdelivr.net/gh/cesanta/mongoose@master/resources/dashboard.js"></script>
+  <script>
+    Dashboard.init({
+      debug: true,
+      data: {
+        led1: true,
+        volume: 42,
+        firmware_version: '1.0.0',
+      },
+    });
+  </script>
+
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <div style="margin: 2rem auto; width: 480px; padding: 1rem 2rem; background: #0001; border-radius:.3rem;">
+    <h1 style="font-size: 1.25rem;">
+      My Device, version <span data-set-html="Dashboard.data.firmware_version"></span>
+    </h1>
+    <div style="margin: 1rem 0;">
+      <span>LED status:</span>
+      <input type="checkbox" class="toggle" data-bind="led1" data-autosave="1" />
+    </div>
+  </div>
+</body>
+</html>

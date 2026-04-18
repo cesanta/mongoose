@@ -1,0 +1,50 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <!-- Mongoose device dashboard -->
+  <script src="https://cdn.jsdelivr.net/gh/cesanta/mongoose@master/resources/dashboard.js"></script>
+  <script>
+    Dashboard.init({
+      debug: false,
+      data: {
+        points: '',
+      },
+    });
+  </script>
+
+  <link rel="stylesheet" href="style.css" />
+  <link rel="stylesheet" href="uplot.min.css" />
+
+  <script src="uPlot.iife.min.js"></script>
+  <script src="main.js"></script>
+
+</head>
+<body>
+
+  <div class="main">
+    <h1>
+      Graph example
+    </h1>
+
+    <div class="panel" style="margin: 1rem 0;">
+      <div class="panel-title">Graph</div>
+      <div class="panel-row">
+
+      <div id="graph" style="height: 10rem; width: 100%;">
+      </div>
+
+      </div>
+    </div>
+
+    <div style="font-size:80%;color: #000000a0">
+      <p>In server.c, we generate "change" notifications periodically,
+      reporting 512 data points:
+      <code>{"method":"change","params":{"points":[[0,83],[1,99],...</code>
+      </p>
+      <p>In main.js, we create a uPlot chart instance bound to the div
+      inside the panel</p>
+      <p>In main.js, we call <code>Dashboard.on('change', function() {...})</code> to intercept all change notifications, get the points, and then calling chart.setData() to plot received values.</p>
+    </div>
+  </div>
+</body>
+</html>

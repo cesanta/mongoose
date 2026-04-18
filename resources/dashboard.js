@@ -1,3 +1,5 @@
+// SPDX-FileCopyrightText: 2026 Cesanta Software Limited
+// SPDX-License-Identifier: GPL-2.0-only or commercial
 (function (global) {
   "use strict";
 

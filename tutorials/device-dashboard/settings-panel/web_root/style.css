@@ -1,0 +1,108 @@
+:root {
+  --btn-color: white;
+  --btn-disabled-color: #d1d5db;
+  --bg-color: '#d8dcdf';
+}
+
+*, *::before, *::after {
+  box-sizing: border-box; margin: 0; padding: 0;
+  font-family: Arial, sans-serif;
+}
+
+body { background: #0004;}
+h1 {font-size: 1.25rem;}
+
+.main {
+  margin: 2rem auto; width: 380px; padding: 1em 2em;
+  border-radius:0.3rem; background: #fff5;
+}
+
+.panel {
+  display: flex; flex-direction: column; gap: 0.5rem;
+  background: #fffe;
+  border: 1px solid #0002;
+  border-radius: 0.3rem;
+  overflow: hidden;
+  padding: 0.5rem 0.75rem;
+  font-size: 0.875rem;
+}
+.panel-title {
+  margin: -0.5rem -0.75rem 0 -0.75rem;
+  padding: 0.5rem 0.75rem 0.3rem 0.75rem;
+  border-bottom: 1px solid #0003;
+  border-radius: 0.25rem 0.25rem 0 0;
+  background: #0001;
+  font-weight: 600;
+  color: #000c;
+}
+
+.input, .dropdown {
+  display:inline-flex;
+  border-radius: 5px;
+  background: #fff;
+  color: #475569;
+  border: 1px solid #ccc;
+  border-width: 1px;
+  outline: none;
+  box-sizing: border-box;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  overflow: hidden;
+  margin:0;
+  font-size: 14px;
+  font-weight: normal;
+  transition: all .2s ease;
+}
+
+.button {
+  padding: 0.25rem 1rem;
+  border: 1px solid transparent;
+  border-radius: 4px;
+  background: #2563eb;
+  color: var(--btn-color);
+  font-weight: 600;
+  cursor: pointer;
+  position: relative;
+  transition: all .2s ease;
+}
+
+.button:hover {
+  background: #3b82f6;
+}
+
+.button.loading {
+  color: transparent;
+  text-shadow: none;
+}
+
+.button:disabled,.button:hover:disabled,.button.disabled,.button:hover.disabled {
+  background: var(--btn-disabled-color) !important;
+  border-color: var(--btn-disabled-color);
+  cursor: not-allowed;
+}
+
+.input {
+  padding: 0.25rem 0.5rem;
+}
+
+.panel-row {
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap: 0.5rem;
+}
+
+.input:disabled,.select:disabled,.input.disabled,.select.disabled,.slider.disabled {
+  background: var(--bg-color) !important;
+  cursor: not-allowed;
+}
+
+.input.edited, .select.edited, .slider.edited>* {
+  border-color: #50500040;
+  background: #ffff0020;
+}
+
+.input.error, .select.error, .slider.error>* {
+  border-color: #50000040;
+  background: #ff000020;
+}
