@@ -3157,6 +3157,10 @@ struct mg_field {
   void (*set)(const union mg_val *);
 };
 
+struct mg_dash {
+  struct mg_field *fields;
+};
+
 static inline struct mg_str trimq(struct mg_str s) {  // Trim double quotes
   if (s.len > 1 && s.buf[0] == '"') s.len -= 2, s.buf++;
   return s;
@@ -3302,14 +3306,14 @@ static inline void mg_dash_apply(struct mg_connection *c, struct mg_str json,
 
 static inline void mg_dash_process_msg(struct mg_connection *c,
                                        struct mg_ws_message *wm,
-                                       struct mg_field *fields) {
+                                       struct mg_dash *dash) {
   struct mg_str req = wm->data;
   struct mg_str method = trimq(mg_json_get_tok(req, "$.method"));
   if (mg_match(method, mg_str("get"), NULL)) {
-    mg_dash_success(c, req, "%M", mg_dash_print, &req, fields);
+    mg_dash_success(c, req, "%M", mg_dash_print, &req, dash->fields);
   } else if (mg_match(method, mg_str("set"), NULL)) {
     struct mg_str params = trimq(mg_json_get_tok(req, "$.params"));
-    mg_dash_apply(c, params, fields);
+    mg_dash_apply(c, params, dash->fields);
     mg_dash_success(c, req, "%s", "true");
   } else {
     mg_dash_error(c, req, "%s", "unknown method");
@@ -3331,12 +3335,12 @@ static inline void mg_dash_ev_handler(struct mg_connection *c, int ev,
     }
   } else if (ev == MG_EV_WS_MSG) {
     // Add this to automatically handle "get" and "set" JSON-RPC calls
-    struct mg_field *fields = (struct mg_field *) c->fn_data;
+    struct mg_dash *dash = (struct mg_dash *) c->fn_data;
     struct mg_ws_message *wm = (struct mg_ws_message *) ev_data;
-    if (fields == NULL) {
+    if (dash == NULL || dash->fields == NULL) {
       mg_dash_error(c, wm->data, "%s", "no fields defined");
     } else {
-      mg_dash_process_msg(c, wm, fields);
+      mg_dash_process_msg(c, wm, dash);
     }
   }
 }
