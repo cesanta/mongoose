@@ -324,8 +324,6 @@ body {
 .legend-dot-color2 { background: rgba(237, 126, 23, 1); }
 .legend-dot-color1 { background: rgba(5, 141, 199, 1) }
 
-/* Controls */
-
 .controls-panel {
   /* column flex already set by .panel */
 }
