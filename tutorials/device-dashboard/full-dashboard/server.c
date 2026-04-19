@@ -1,8 +1,8 @@
 // SPDX-FileCopyrightText: 2026 Cesanta Software Limited
 // SPDX-License-Identifier: GPL-2.0-only or commercial
 
-#include "mongoose.h"
 #include "math.h"
+#include "mongoose.h"
 
 #if MG_ARCH == MG_ARCH_UNIX || MG_ARCH == MG_ARCH_WIN32
 #define HTTP_ADDR "http://0.0.0.0:8000"
@@ -10,8 +10,7 @@
 #define HTTP_ADDR "http://0.0.0.0:80"
 #endif
 
-#define NUM_POINTS 256   // How many data points to send
-// #define INTERVAL_MS 200  // How often, in milliseconds
+#define NUM_POINTS 256  // How many data points to send
 
 struct point {
   uint16_t x;   // X coordinate of the data point, usually this is time
@@ -42,7 +41,6 @@ size_t print_points(void (*fn)(char, void *), void *arg, va_list *ap) {
 static void get_points(union mg_val *val) {
   val->fn = (void (*)(void)) print_points;
 }
-
 
 static bool s_led;
 
