@@ -91,7 +91,7 @@ jobs:
       with: { fetch-depth: 2 }
     - run: if ./test/match_changed_files.sh '^test|^src/.*.[ch]' ; then echo GO=1 >> $GITHUB_ENV ; fi
     - if: ${{ env.GO == 1 }}
-      run: ./test/setup_mqtt_server.sh && make -C test ${{ matrix.target }} 
+      run: ./test/setup_mqtt_server.sh && make -C test ${{ matrix.target }}
   arm:
     runs-on: ubuntu-latest
     steps:
@@ -127,6 +127,7 @@ jobs:
     env: { HOMEBREW_NO_AUTO_UPDATE: 1 }
     steps:
     - uses: actions/checkout@v4
+    - run: brew install monolith
     - run: make -C test tutorials_mac
     - run: make -C test clean_tutorials_mac
 
@@ -220,7 +221,7 @@ jobs:
           # nothing specific to install or do
       - if: ${{ env.GO == 1 }}
         run: make -C tutorials/${{ matrix.example.path }} build
-  
+
   generic_examples_arm:
     runs-on: ubuntu-latest
     strategy:
@@ -300,7 +301,7 @@ jobs:
 #      fail-fast: false
 #      matrix:
 #        example:
-#          - path: 
+#          - path:
 #    name: ${{ matrix.example.path }}
 #    env:
 #      GO: 0
@@ -314,7 +315,7 @@ jobs:
 #          fi
 #      - if: ${{ env.GO == 1 }}
 #        run: make -C tutorials/${{ matrix.example.path }} build
-      
+
   mqtt_dashboard_examples_arm:
     runs-on: ubuntu-latest
     strategy:
@@ -335,7 +336,7 @@ jobs:
           fi
       - if: ${{ env.GO == 1 }}
         run: make -C tutorials/${{ matrix.example.path }} build
-      
+
   cube_examples:
     runs-on: ubuntu-latest
     env:
@@ -412,7 +413,7 @@ jobs:
 ##    - if: ${{ env.GO == 1 }}
 ##      run: |
 ##        if ./test/match_changed_files.sh 'tutorials/stm32/nucleo-f746zg-cube-freertos-builtin'; then
-##          make -C test/cube test PROJECTS=../../tutorials/stm32/nucleo-f746zg-cube-freertos-builtin VCON_API_KEY=${{secrets.VCON_API_KEY}} DEVICE=5    
+##          make -C test/cube test PROJECTS=../../tutorials/stm32/nucleo-f746zg-cube-freertos-builtin VCON_API_KEY=${{secrets.VCON_API_KEY}} DEVICE=5
 ##        fi
 #    - if: ${{ env.GO == 1 }}
 #      run: |
@@ -534,7 +535,7 @@ jobs:
 #        if ./test/match_changed_files.sh 'tutorials/stm32/nucleo-h723zg-make-freertos-builtin'; then
 #          make -C tutorials/stm32/nucleo-h723zg-make-freertos-builtin test VCON_API_KEY=${{secrets.VCON_API_KEY}}
 #        fi
-#    
+#
 #  test_h5:
 #    runs-on: ubuntu-latest
 #    env:
@@ -723,4 +724,3 @@ jobs:
 #        fi
 #    - if: ${{ env.GO == 1 }}
 #      run:  make -C tutorials/pico-sdk/w5500-evb-pico-picosdk-baremetal-builtin test VCON_API_KEY=${{secrets.VCON_API_KEY}}
-
