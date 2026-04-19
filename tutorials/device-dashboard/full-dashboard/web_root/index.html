@@ -4,6 +4,7 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <link rel="stylesheet" href="style.css">
+    <link rel="stylesheet" href="uPlot.min.css">
     <!-- Mongoose device dashboard -->
     <script src="https://cdn.jsdelivr.net/gh/cesanta/mongoose@master/resources/dashboard.js"></script>
     <script>
@@ -20,7 +21,8 @@
       });
     </script>
     <script src="main.js" defer></script>
-    <title>My Dashboard Toolbar</title>
+    <script src="uPlot.iife.min.js" defer></script>
+    <title>My Dashboard</title>
   </head>
   <body>
     <div class="header">
@@ -118,6 +120,61 @@
             </div>
             <div class="metric-status metric-status-good">Healthy headroom</div>
           </article>
+        </div>
+
+        <div class="detail-row">
+
+          <!-- Sensor History Chart -->
+          <div class="panel chart-panel">
+            <div class="panel-header">
+              <div>
+                <div class="panel-title">Sensor History</div>
+              </div>
+              <div class="chart-legend">
+                <div class="legend-item"><span class="legend-dot legend-dot-color1"></span>Temperature</div>
+                <div class="legend-item"><span class="legend-dot legend-dot-color2"></span>Humidity</div>
+              </div>
+            </div>
+            <div id="chart"></div>
+          </div>
+
+          <!-- Controls Panel -->
+          <div class="panel controls-panel">
+            <div class="panel-title">Controls</div>
+            <div class="controls-list">
+              <div class="control-row">
+                <div class="control-info">
+                  <div class="control-name">Cooling Fan</div>
+                  <div class="control-desc">PWM controlled output</div>
+                </div>
+                <label class="toggle">
+                  <input type="checkbox" checked>
+                  <span class="toggle-track"></span>
+                </label>
+              </div>
+              <div class="control-row">
+                <div class="control-info">
+                  <div class="control-name">Relay Channel 1</div>
+                  <div class="control-desc">Auxiliary load output</div>
+                </div>
+                <label class="toggle">
+                  <input type="checkbox" checked>
+                  <span class="toggle-track"></span>
+                </label>
+              </div>
+              <div class="control-row">
+                <div class="control-info">
+                  <div class="control-name">Relay Channel 2</div>
+                  <div class="control-desc">Safety-controlled line</div>
+                </div>
+                <label class="toggle">
+                  <input type="checkbox">
+                  <span class="toggle-track"></span>
+                </label>
+              </div>
+            </div>
+          </div>
+
         </div>
       </section>
       <section id="settings" class="tab-panel" role="tabpanel" aria-labelledby="tab-settings" hidden></section>

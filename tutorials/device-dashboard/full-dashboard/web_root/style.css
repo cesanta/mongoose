@@ -155,7 +155,7 @@ body {
 }
 
 .metric-tile {
-  padding: 1.25rem 1.5rem 1.2rem;
+  padding: 0.75rem 1.5rem 0.75rem;
   border-radius: 1rem;
   background: #ffffff;
   border: 1px solid rgba(203, 213, 225, 0.75);
@@ -178,8 +178,8 @@ body {
 }
 
 .metric-label {
-  color: #7d94ac;
-  font-size: 0.82rem;
+  color: #94a3b8;
+  font-size: 0.9rem;
   font-weight: 700;
   letter-spacing: 0.06em;
   text-transform: uppercase;
@@ -189,7 +189,7 @@ body {
   display: flex;
   align-items: baseline;
   gap: 0.2rem;
-  color: #18314f;
+  color: #475569;
 }
 
 .metric-number {
@@ -202,7 +202,7 @@ body {
 .metric-unit {
   font-size: 1rem;
   font-weight: 600;
-  color: #4a6580;
+  color: #cbd5e1;
   letter-spacing: -0.01em;
 }
 
@@ -210,6 +210,7 @@ body {
   font-size: 0.78rem;
   font-weight: 600;
   margin-top: 0.1rem;
+  display: none;
 }
 
 .metric-status-good {
@@ -226,6 +227,198 @@ body {
 
 .tab-panel[hidden] {
   display: none;
+}
+
+/* ── Detail row (chart + controls) ─────────────────────────────── */
+
+.detail-row {
+  display: grid;
+  grid-template-columns: 1fr 300px;
+  gap: 1rem;
+  margin-top: 1rem;
+  align-items: stretch;
+}
+
+.panel {
+  background: #ffffff;
+  border: 1px solid rgba(203, 213, 225, 0.75);
+  border-radius: 1rem;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 1),
+    0 2px 6px rgba(148, 163, 184, 0.1),
+    0 8px 24px rgba(148, 163, 184, 0.08);
+  padding: 1.5rem;
+  display: flex;
+  flex-direction: column;
+}
+
+.panel-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  margin-bottom: 1.1rem;
+}
+
+.panel-title {
+  font-size: 1.05rem;
+  font-weight: 700;
+  color: #18314f;
+  margin-bottom: 0.2rem;
+}
+
+.panel-subtitle {
+  color: #7d94ac;
+  font-size: 0.8rem;
+}
+
+/* Chart */
+
+.chart-panel {
+  /* column flex already set by .panel */
+}
+
+.chart-wrapper {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-height: 180px;
+}
+
+#chart {
+  width: 100%;
+  height: 12rem;
+}
+
+.chart-x-labels {
+  display: flex;
+  justify-content: space-between;
+  margin-top: 0.6rem;
+  color: #94a3b8;
+  font-size: 0.72rem;
+  font-weight: 500;
+}
+
+.chart-legend {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  flex-shrink: 0;
+}
+
+.legend-item {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  font-size: 0.75rem;
+  color: #5d7088;
+  font-weight: 600;
+}
+
+.legend-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.legend-dot-color2 { background: rgba(237, 126, 23, 1); }
+.legend-dot-color1 { background: rgba(5, 141, 199, 1) }
+
+/* Controls */
+
+.controls-panel {
+  /* column flex already set by .panel */
+}
+
+.controls-list {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  margin-top: 0.25rem;
+}
+
+.control-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 1rem 0;
+  border-bottom: 1px solid #e8eef5;
+}
+
+.control-row:last-child {
+  border-bottom: none;
+}
+
+.control-name {
+  font-size: 0.88rem;
+  font-weight: 700;
+  color: #18314f;
+  margin-bottom: 0.15rem;
+}
+
+.control-desc {
+  font-size: 0.75rem;
+  color: #7d94ac;
+}
+
+/* Toggle switch */
+
+.toggle {
+  position: relative;
+  display: inline-block;
+  width: 3rem;
+  height: 1.65rem;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+
+.toggle input {
+  position: absolute;
+  opacity: 0;
+  width: 0;
+  height: 0;
+}
+
+.toggle-track {
+  position: absolute;
+  inset: 0;
+  border-radius: 999px;
+  background: #cbd5e1;
+  transition: background 0.22s ease;
+}
+
+.toggle-track::before {
+  content: '';
+  position: absolute;
+  width: 1.25rem;
+  height: 1.25rem;
+  border-radius: 50%;
+  background: #ffffff;
+  top: 50%;
+  left: 0.2rem;
+  transform: translateY(-50%);
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.18);
+  transition: left 0.22s ease;
+}
+
+.toggle input:checked + .toggle-track {
+  background: linear-gradient(135deg, #10b981, #06b6d4);
+}
+
+.toggle input:checked + .toggle-track::before {
+  left: calc(100% - 1.45rem);
+}
+
+.toggle input:focus-visible + .toggle-track {
+  outline: 2px solid #0ea5e9;
+  outline-offset: 2px;
+}
+
+@media (max-width: 900px) {
+  .detail-row {
+    grid-template-columns: 1fr;
+  }
 }
 
 @media (max-width: 900px) {
