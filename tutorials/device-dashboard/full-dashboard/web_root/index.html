@@ -85,50 +85,38 @@
     </div>
     <main class="tab-stage">
       <section id="overview" class="tab-panel tab-panel-active" role="tabpanel" aria-labelledby="tab-overview">
-        <div class="overview-grid" aria-label="Electrical overview">
+        <div class="overview-grid" aria-label="Device metrics overview">
           <article class="metric-tile">
-            <div class="metric-tile-top">
-              <div class="metric-label">VOLTAGE</div>
-              <span class="metric-chip">
-                <svg viewBox="0 0 24 24" class="metric-icon" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
-                  <path d="M13 2 6 14h5l-1 8 7-12h-5z" />
-                </svg>
-              </span>
-            </div>
+            <div class="metric-label">Temperature</div>
             <div class="metric-value">
-              <span class="metric-number">12.5</span>
-              <span class="metric-unit">V</span>
+              <span class="metric-number">24.8</span>
+              <span class="metric-unit">°C</span>
             </div>
+            <div class="metric-status metric-status-good">Stable — within target range</div>
           </article>
           <article class="metric-tile">
-            <div class="metric-tile-top">
-              <div class="metric-label">CURRENT</div>
-              <span class="metric-chip">
-                <svg viewBox="0 0 24 24" class="metric-icon" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
-                  <path d="M4 12h4l2-6 4 12 2-6h4" />
-                </svg>
-              </span>
-            </div>
+            <div class="metric-label">Humidity</div>
             <div class="metric-value">
-              <span class="metric-number">4.2</span>
-              <span class="metric-unit">A</span>
+              <span class="metric-number">51</span>
+              <span class="metric-unit">%</span>
             </div>
+            <div class="metric-status metric-status-good">+2% in the last hour</div>
           </article>
           <article class="metric-tile">
-            <div class="metric-tile-top">
-              <div class="metric-label">POWER</div>
-              <span class="metric-chip">
-                <svg viewBox="0 0 24 24" class="metric-icon" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
-                  <path d="M12 3v8" />
-                  <path d="M7 8h10" />
-                  <rect x="5" y="11" width="14" height="8" rx="2" />
-                </svg>
-              </span>
-            </div>
+            <div class="metric-label">CPU Load</div>
             <div class="metric-value">
-              <span class="metric-number">52.5</span>
-              <span class="metric-unit">W</span>
+              <span class="metric-number">37</span>
+              <span class="metric-unit">%</span>
             </div>
+            <div class="metric-status metric-status-warn">Moderate load</div>
+          </article>
+          <article class="metric-tile">
+            <div class="metric-label">Free Memory</div>
+            <div class="metric-value">
+              <span class="metric-number">182</span>
+              <span class="metric-unit">KB</span>
+            </div>
+            <div class="metric-status metric-status-good">Healthy headroom</div>
           </article>
         </div>
       </section>
