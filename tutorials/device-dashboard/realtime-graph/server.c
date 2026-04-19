@@ -49,24 +49,27 @@ static struct mg_field fields[] = {
     {NULL, 0, 0, 0},
 };
 
-void run_mongoose(void) {
-  struct mg_mgr mgr;
-  struct mg_dash dash = {fields};
+struct mg_mgr mgr;
+struct mg_dash dash = {fields};
+
+void mongoose_init(void) {
   mg_mgr_init(&mgr);
-  mg_http_listen(&mgr, "http://0.0.0.0:8000", mg_dash_ev_handler, &dash);
+  mg_http_listen(&mgr, HTTP_ADDR, mg_dash_ev_handler, &dash);
+}
 
-  uint64_t timer = 0;
-  for (;;) {
-    mg_mgr_poll(&mgr, 10);
-
-    // Send WS change notifications periodically
-    if (mg_timer_expired(&timer, INTERVAL_MS, mg_now())) {
-      mg_dash_send_change(&mgr, mg_dash_find_field(fields, mg_str("points")));
-    }
+void mongoose_poll(void) {
+  mg_mgr_poll(&mgr, 1);
+  // Send WS change notifications periodically
+  static uint64_t timer = 0;
+  if (mg_timer_expired(&timer, INTERVAL_MS, mg_now())) {
+    mg_dash_send_change(&mgr, mg_dash_find_field(fields, mg_str("points")));
   }
 }
 
 int main(void) {
-  run_mongoose();
+  mongoose_init();
+  for (;;) {
+    mongoose_poll();
+  }
   return 0;
 }

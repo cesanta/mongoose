@@ -30,17 +30,22 @@ static struct mg_field fields[] = {
     {NULL, 0, 0, 0},
 };
 
-void run_mongoose(void) {
-  struct mg_mgr mgr;
-  struct mg_dash dash = {fields};
+struct mg_mgr mgr;
+struct mg_dash dash = {fields};
+
+void mongoose_init(void) {
   mg_mgr_init(&mgr);
   mg_http_listen(&mgr, HTTP_ADDR, mg_dash_ev_handler, &dash);
-  for (;;) {
-    mg_mgr_poll(&mgr, 10);
-  }
+}
+
+void mongoose_poll(void) {
+  mg_mgr_poll(&mgr, 1);
 }
 
 int main(void) {
-  run_mongoose();
+  mongoose_init();
+  for (;;) {
+    mongoose_poll();
+  }
   return 0;
 }

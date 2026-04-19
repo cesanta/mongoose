@@ -25,8 +25,8 @@ dashboard.html.c: dashboard.html
 	@echo "On-flash size: `grep -oE '[0-9]+' $@ | wc -l`"
 
 # For development: rebuild and restart if any of the sources change
-run: $(SOURCES)
-	watchexec -r -w server.c -w web_root -w ../../glue -e c,h,html,css,js -- make
+watch: $(SOURCES)
+	watchexec -r -w server.c -w web_root -e c,h,html,css,js -- make
 
 clean:
 	rm -rf $(PROG) *.exe *.obj *.dSYM mongoose dashboard.*
