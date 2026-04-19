@@ -10,7 +10,7 @@
 #define HTTP_ADDR "http://0.0.0.0:80"
 #endif
 
-#define NUM_POINTS 256  // How many data points to send
+#define NUM_POINTS 257  // How many data points to send
 
 struct point {
   uint16_t x;   // X coordinate of the data point, usually this is time
