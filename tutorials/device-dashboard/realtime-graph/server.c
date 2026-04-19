@@ -1,7 +1,6 @@
 // SPDX-FileCopyrightText: 2026 Cesanta Software Limited
 // SPDX-License-Identifier: GPL-2.0-only or commercial
 
-#include "math.h"
 #include "mongoose.h"
 
 #if MG_ARCH == MG_ARCH_UNIX || MG_ARCH == MG_ARCH_WIN32
@@ -28,10 +27,13 @@ size_t print_points(void (*fn)(char, void *), void *arg, va_list *ap) {
   for (i = 0; i < NUM_POINTS; i++) {
     struct point p;
     p.x = (uint16_t) i;
-    // rand() - 0.5 + sin(x * 0.00002) * 40 + sin(x * 0.001) * 5 + sin(x * 0.1)
-    // * 2;
-    p.y1 = 100 + 50 * sin(i * 0.1) + rand() % 21;
-    p.y2 = 70 + 30 * sin(i * 0.03) + rand() % 17;
+    p.y1 = 50 -
+           (uint16_t) ((40 * (i > (NUM_POINTS - 1) / 4
+                                  ? i - (NUM_POINTS - 1) / 4
+                                  : (NUM_POINTS - 1) / 4 - i)) /
+                       (NUM_POINTS - 1)) +
+           (rand() % 9);
+    p.y2 = 20 + (uint16_t) ((29 * i) / NUM_POINTS) + (rand() % 5);
     n += mg_xprintf(fn, arg, "%s[%hu,%hu,%hu]", comma, p.x, p.y1, p.y2);
     comma = ",";
   }
