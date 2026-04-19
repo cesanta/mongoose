@@ -1,5 +1,8 @@
 #pragma once
 
+#include "json.h"
+#include "printf.h"
+#include "str.h"
 #include "ws.h"
 
 enum mg_val_type { MG_VAL_INT, MG_VAL_BOOL, MG_VAL_DBL, MG_VAL_STR, MG_VAL_FN };
@@ -90,7 +93,7 @@ static inline size_t mg_print_field(mg_pfn_t fn, void *arg, va_list *ap) {
   } else if (f->type == MG_VAL_STR) {
     n += mg_xprintf(fn, arg, "%m", mg_print_esc, val.s.len, val.s.buf);
   } else if (f->type == MG_VAL_FN) {
-    n += mg_xprintf(fn, arg, "%M", val.fn);
+    n += mg_xprintf(fn, arg, val.fn ? "%M" : "null", val.fn);
   } else {
     n += mg_xprintf(fn, arg, "null");
   }

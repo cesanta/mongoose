@@ -11,12 +11,23 @@
       Dashboard.init({
         debug: true,
         data: {
-          temperature: 25,
-          humidity: 60,
-          voltage: 12.5,
-          current: 4.2,
-          power: 52.5,
-          speed: 100,
+          points: [],
+          controls: {
+            fan: true,
+            relay1: false,
+            relay2: false,
+          },
+          settings: {
+            volume: 12,
+            motor: false,
+            name: 'Galway',
+          },
+          metrics: {
+            temperature: 1.2,
+            humidity: 3,
+            cpu: 4,
+            ram: 5,
+          },
         },
       });
     </script>
@@ -90,35 +101,54 @@
         <div class="overview-grid" aria-label="Device metrics overview">
           <article class="metric-tile">
             <div class="metric-label">Temperature</div>
-            <div class="metric-value">
-              <span class="metric-number">24.8</span>
-              <span class="metric-unit">°C</span>
+            <div class="metric-value-row">
+              <div class="metric-value">
+                <span class="metric-number" data-bind="metrics.temperature">24.8</span>
+                <span class="metric-unit">°C</span>
+              </div>
+              <span class="metric-status metric-status-good">ok</span>
             </div>
-            <div class="metric-status metric-status-good">Stable — within target range</div>
           </article>
           <article class="metric-tile">
             <div class="metric-label">Humidity</div>
-            <div class="metric-value">
-              <span class="metric-number">51</span>
-              <span class="metric-unit">%</span>
+            <div class="metric-value-row">
+              <div class="metric-value">
+                <span class="metric-number" data-bind="metrics.humidity">51</span>
+                <span class="metric-unit">%</span>
+              </div>
+              <span class="metric-status metric-status-good">ok</span>
             </div>
-            <div class="metric-status metric-status-good">+2% in the last hour</div>
           </article>
-          <article class="metric-tile">
+          <article class="metric-tile metric-tile-warning">
             <div class="metric-label">CPU Load</div>
-            <div class="metric-value">
-              <span class="metric-number">37</span>
-              <span class="metric-unit">%</span>
+            <div class="metric-value-row">
+              <div class="metric-value">
+                <span class="metric-number" data-bind="metrics.cpu">37</span>
+                <span class="metric-unit">%</span>
+              </div>
+              <span class="metric-status metric-status-warn">moderate</span>
             </div>
-            <div class="metric-status metric-status-warn">Moderate load</div>
+          </article>
+          <article class="metric-tile metric-tile-alert">
+            <div class="metric-label">Free Memory</div>
+            <div class="metric-value-row">
+              <div class="metric-value">
+                <span class="metric-number">${metrics.ram}</span>
+                <span class="metric-unit">KB</span>
+              </div>
+              <span class="metric-status metric-status-alert" style="${metrics.ram <= 30 ? '': 'display:none;'}">low</span>
+              <span class="metric-status metric-status-warn" style="${metrics.ram <= 50 && metrics.ram > 30 ? '': 'display:none;'}">low</span>
+            </div>
           </article>
           <article class="metric-tile">
-            <div class="metric-label">Free Memory</div>
-            <div class="metric-value">
-              <span class="metric-number">182</span>
-              <span class="metric-unit">KB</span>
+            <div class="metric-label">Volume</div>
+            <div class="metric-value-row">
+              <div class="metric-value">
+                <span class="metric-number" data-bind="settings.volume">18.7</span>
+                <span class="metric-unit">dB</span>
+              </div>
+              <span class="metric-status metric-status-good">ok</span>
             </div>
-            <div class="metric-status metric-status-good">Healthy headroom</div>
           </article>
         </div>
 
@@ -147,37 +177,48 @@
                   <div class="control-name">Cooling Fan</div>
                   <div class="control-desc">PWM controlled output</div>
                 </div>
-                <label class="toggle">
-                  <input type="checkbox" checked>
-                  <span class="toggle-track"></span>
-                </label>
+                <input type="checkbox" data-bind="controls.fan" data-autosave="1" class="toggle" />
               </div>
               <div class="control-row">
                 <div class="control-info">
                   <div class="control-name">Relay Channel 1</div>
                   <div class="control-desc">Auxiliary load output</div>
                 </div>
-                <label class="toggle">
-                  <input type="checkbox" checked>
-                  <span class="toggle-track"></span>
-                </label>
+                <input type="checkbox" data-bind="controls.relay1" data-autosave="1" class="toggle" />
               </div>
               <div class="control-row">
                 <div class="control-info">
                   <div class="control-name">Relay Channel 2</div>
                   <div class="control-desc">Safety-controlled line</div>
                 </div>
-                <label class="toggle">
-                  <input type="checkbox">
-                  <span class="toggle-track"></span>
-                </label>
+                <input type="checkbox" data-bind="controls.relay2" data-autosave="1" class="toggle" />
               </div>
             </div>
           </div>
 
         </div>
       </section>
-      <section id="settings" class="tab-panel" role="tabpanel" aria-labelledby="tab-settings" hidden></section>
+      <section id="settings" class="tab-panel" role="tabpanel" aria-labelledby="tab-settings" hidden>
+        <div class="settings-layout">
+          <div class="settings-panel">
+            <div class="settings-panel-title">Device settings</div>
+            <div class="settings-fields">
+              <div class="field">
+                <label class="field-label" for="setting-name">Name</label>
+                <input class="field-input" id="setting-name" type="text" data-bind="settings.name" />
+              </div>
+              <div class="field">
+                <label class="field-label" for="setting-volume">Volume</label>
+                <input class="field-input" id="setting-volume" type="text" data-bind="settings.volume" />
+              </div>
+            </div>
+            <div class="settings-panel-footer">
+              <button class="btn btn-secondary" type="button" data-cancel="settings">Cancel</button>
+              <button class="btn btn-primary" type="button" data-save="settings">Save</button>
+            </div>
+          </div>
+        </div>
+      </section>
       <section id="firmware" class="tab-panel" role="tabpanel" aria-labelledby="tab-firmware" hidden></section>
       <section id="events" class="tab-panel" role="tabpanel" aria-labelledby="tab-events" hidden></section>
     </main>

@@ -13,8 +13,9 @@
         ? realsend(JSON.stringify(x))
         : q.push(x);
       const connect = () => {
+        if (debug) console.log('WS connect');
         ws = new WebSocket(url);
-        ws.onopen = () => { while (q.length) realsend(JSON.stringify(q.shift())); };
+        ws.onopen = () => { if (debug) console.log('WS open'); while (q.length) realsend(JSON.stringify(q.shift())); };
         ws.onclose = () => { fail(); setTimeout(connect, 1000); };
         ws.onmessage = e => {
           if (debug) console.log('WS <-', e.data);
@@ -62,34 +63,34 @@
   const isMock = !!window.frameElement || (window !== window.top);
   const rpc = isMock ? null : Rpc('api/websocket');
   const settings = {data: {}, edits: {}, debug: true};
-  const bound = {};  // data_key => [ el1, el2, ...]
+  const substitutions = {};
   const userhandlers = {}; // User event handlers
+
+  const fromPath = (path, value) => path.split('.').reverse().reduce((acc, k) => ({ [k]: acc }), value);
+  const get = (obj, path) => path.split('.').reduce((o, k) => o?.[k], obj);
+  const set = (obj, path, value) => apply(obj, fromPath(path, value));
+  const has = (obj, path) => path.split('.').every(k => (obj = obj?.[k]) !== undefined);
+  const del = (obj, path) => {
+    const keys = path.split('.');
+    const last = keys.pop();
+    const parent = keys.reduce((o, k) => o?.[k], obj);
+    return parent && delete parent[last];
+  };
 
   function safeEval(expr, context) {
     const c = Object.freeze(context);
     const k = Object.keys(c).join(",");
-    return Function("x", `"use strict"; const {${k}} = x; return ${expr};`)(c);
+    let result;
+    try {
+      result = Function("x", `"use strict"; const {${k}} = x; return ${expr};`)(c);
+    } catch (err) {
+    }
+    return result;
   }
 
-  // function scanAttr(el, name, val, context) {
-  //   let res;
-  //   try {
-  //     res = safeEval(val, context);
-  //   } catch (err) {
-  //     console.error('EVAL', attr.name, attr.value, context);
-  //     //errors.push({type: 'eval', expr: attr.value});
-  //     return;
-  //   }
-  //   //console.log('xxxx', el);
-  //   if (name == 'html') {
-  //     el.innerHTML = res;
-  //   } else {
-  //     el[name] = res;
-  //   }
-  // };
-
   function edit(el, key, val) {
-    if (typeof(settings.data[key]) === 'number') {
+    const dv = get(settings.data, key);
+    if (typeof(dv) === 'number') {
       const v = +val;
       if (isNaN(v)) {
         el.classList.toggle("error", true);
@@ -97,94 +98,124 @@
         el.classList.toggle("error", false);
         val = v;
       }
-    } else if (typeof(settings.data[key]) === 'boolean') {
+    } else if (typeof(v) === 'boolean') {
       val = !!val;
     }
 
-    settings.edits[key] = val;
-    if (settings.edits[key] == settings.data[key]) {
-      delete settings.edits[key];
+    set(settings.edits, key, val);
+    if (val == dv) {
+      del(settings.edits, key);
       el.classList.toggle("edited", false);
     } else {
       el.classList.toggle("edited", true);
     }
 
-    if (el.dataset.autosave) save(new RegExp(key));
-
+    if (el.dataset.autosave) save([key]);
     rescan();
   };
 
   // Return if any of the keys matching pattern is edited
-  function edited(regex) {
+  function edited(keys) {
     for (const key of Object.keys(settings.edits)) {
-      if (regex.test(key)) return true;
+      if (keys.includes(key)) return true;
     }
     return false;
   };
 
   function scan_bind(el, key, context) {
-    if (key in settings.data) {
-      if (el.tagName == 'INPUT') {
-        if (el.type == 'checkbox') el.checked = context[key];
-        if (el.type == 'text') el.value = context[key];
-        if (!(key in settings.edits)) {
-          el.classList.toggle('edited', false);
-          el.classList.toggle('error', false);
-        }
-        if (!el.bound) el.addEventListener("input", ev => edit(el, key, el.type == 'checkbox' ? ev.target.checked : ev.target.value)), el.bound = true;
+    if (!has(context, key)) { console.error('EVAL', key, context); return; }
+    const v = get(context, key)
+    // console.log(2, key, v);
+    if (['INPUT', 'TEXTAREA', 'SELECT'].includes(el.tagName)) {
+      if (el.type == 'checkbox') el.checked = v;
+      if (el.type == 'text') el.value = v;
+      if (!has(settings.edits, key)) {
+        el.classList.toggle('edited', false);
+        el.classList.toggle('error', false);
       }
+      if (!el.bound) el.addEventListener("input", ev => edit(el, key, el.type == 'checkbox' ? ev.target.checked : ev.target.value)), el.bound = true;
     } else {
-      console.error(`data-bind: ${key} is not in data`);
+      el.innerHTML = v;
     }
   };
 
   // Save the edits for keys that match pattern
-  function save(regex) {
+  function save(keys) {
     const changes = {};
-    for (const key of Object.keys(settings.edits)) {
-      if (regex.test(key)) changes[key] = settings.edits[key];
+    for (const key of keys) {
+      if (!has(settings.edits, key)) continue;
+      set(changes, key, get(settings.edits, key));
     }
     rpc.call('set', changes).then(r => apply_and_rescan(settings.data, r));
   };
 
   // Cancel the edits for keys that match pattern
-  function cancel(regex) {
-    console.log('CANCELLING');
+  function cancel(keys) {
     for (const key of Object.keys(settings.edits)) {
-      if (regex.test(key)) delete settings.edits[key];
+      if (keys.includes(key)) delete settings.edits[key];
     }
     rescan();
   };
 
-  function scan_save(el, pattern) {
-    try {
-      const re = new RegExp(pattern);
-      el.disabled = !edited(re);
-      if (!el.bound) el.addEventListener("click", ev => save(re)), el.bound = true;
-    } catch (err) {
-      console.error('Invalid regex', pattern, 'for data-save');
-    }
+  function scan_save(el, keys) {
+    el.disabled = !edited(keys);
+    if (!el.bound) el.addEventListener("click", ev => save(keys)), el.bound = true;
   };
 
-  function scan_cancel(el, pattern) {
-    try {
-      const re = new RegExp(pattern);
-      if (!el.bound) el.addEventListener("click", ev => cancel(re)), el.bound = true;
-      el.disabled = !edited(re);
-    } catch (err) {
-      console.error('Invalid regex', pattern, 'for data-save');
-    }
+  function scan_cancel(el, keys) {
+    if (!el.bound) el.addEventListener("click", ev => cancel(keys)), el.bound = true;
+    el.disabled = !edited(keys);
   };
+
+  function createSubstitutions() {
+    substitutions.nodes = [], substitutions.attributes = [], substitutions.bound = [];
+    document.querySelectorAll("*").forEach(function (el) {
+      if (el.tagName === "SCRIPT" || el.tagName === "STYLE") return;
+      for (const node of el.childNodes) {
+        if (node.nodeType === Node.TEXT_NODE && node.nodeValue.includes('${')) {
+          node.originalValue = node.nodeValue;
+          substitutions.nodes.push(node);
+        }
+      }
+      for (const attr of el.attributes) {
+        if (attr.value.includes('${')) {
+          attr.originalValue = attr.value;
+          substitutions.attributes.push(attr);
+        }
+      }
+      for (const [key, val] of Object.entries(el.dataset)) {
+        if (['bind', 'save', 'cancel'].includes(key)) substitutions.bound.push(el);
+      }
+    });
+    // console.log(substitutions);
+  };
+
+  function substituteExpressions(text, context) {
+    const expected = { string: 1, number: 1, boolean: 1 };
+    const f = (orig, expr) => {
+      const res = safeEval(expr, context);
+      return (typeof res) in expected ? res : orig;
+    };
+    return typeof text == "string" ? text.replace(/\${(.+?)}/g, f) : text;
+  }
 
   function realrescan() {
-    const context = {...settings.data, ...settings.edits};
-    //console.log('rescanning..', context);
-    document.querySelectorAll("*").forEach((el) => {
-      if (el.tagName === "SCRIPT" || el.tagName === "STYLE") return;
+    const context = JSON.parse(JSON.stringify(settings.data));
+    apply(context, settings.edits);
+    if (!substitutions.nodes) createSubstitutions();
+    substitutions.attributes.forEach(attr => {
+      const v = substituteExpressions(attr.originalValue, context);
+      if (v !== attr.value) attr.value = v;
+    });
+    substitutions.nodes.forEach(node => {
+      const v = substituteExpressions(node.originalValue, context);
+      if (v !== node.nodeValue) node.nodeValue = v;
+    });
+    substitutions.bound.forEach(el => {
       for (const [key, val] of Object.entries(el.dataset)) {
         if (key == 'bind') scan_bind(el, val, context);
-        if (key == 'save') scan_save(el, val);
-        if (key == 'cancel') scan_cancel(el, val);
+        if (key == 'save') scan_save(el, val.split(/\s*,\s*/));
+        if (key == 'cancel') scan_cancel(el, val.split(/\s*,\s*/));
       }
     });
   };

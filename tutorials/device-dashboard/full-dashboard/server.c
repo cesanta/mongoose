@@ -9,7 +9,7 @@
 #define HTTP_ADDR "http://0.0.0.0:80"
 #endif
 
-#define NUM_POINTS 258  // How many data points to send
+#define NUM_POINTS 7  // How many data points to send
 
 struct point {
   uint16_t x;   // X coordinate of the data point, usually this is time
@@ -39,24 +39,69 @@ size_t print_points(void (*fn)(char, void *), void *arg, va_list *ap) {
   n += mg_xprintf(fn, arg, "]");
   return n;
 }
-
 static void get_points(union mg_val *val) {
   val->fn = (void (*)(void)) print_points;
 }
 
-static bool s_led;
-
-static void get_led(union mg_val *val) {
-  val->b = s_led;
+// This function prints a JSON object with read-only metrics
+size_t print_metrics(void (*fn)(char, void *), void *arg, va_list *ap) {
+  size_t n = 0;
+  (void) ap;
+  n += mg_xprintf(fn, arg, "{");
+  n += mg_xprintf(fn, arg, "%s%m:%g", " ", MG_ESC("temperature"), 24.8);
+  n += mg_xprintf(fn, arg, "%s%m:%d", ",", MG_ESC("humidity"), 59);
+  n += mg_xprintf(fn, arg, "%s%m:%d", ",", MG_ESC("cpu"), 37);
+  n += mg_xprintf(fn, arg, "%s%m:%d", ",", MG_ESC("ram"), 32);
+  n += mg_xprintf(fn, arg, "}");
+  return n;
+}
+static void get_metrics(union mg_val *val) {
+  val->fn = (void (*)(void)) print_metrics;
 }
 
-static void set_led(const union mg_val *val) {
-  s_led = val->b;
+static bool s_motor = false;
+static double s_volume = 17.2;
+static char s_name[20] = "Dublin";
+// This function prints a JSON object with read-only metrics
+size_t print_settings(void (*fn)(char, void *), void *arg, va_list *ap) {
+  size_t n = 0;
+  (void) ap;
+  n += mg_xprintf(fn, arg, "{");
+  n += mg_xprintf(fn, arg, "%s%m:%g", " ", MG_ESC("volume"), s_volume);
+  n += mg_xprintf(fn, arg, "%s%m:%s", ",", MG_ESC("motor"), s_motor ? "true" : "false");
+  n += mg_xprintf(fn, arg, "%s%m:%m", ",", MG_ESC("name"), MG_ESC(s_name));
+  n += mg_xprintf(fn, arg, "}");
+  return n;
+}
+static void get_settings(union mg_val *val) {
+  val->fn = (void (*)(void)) print_settings;
+}
+
+static bool s_fan, s_relay1, s_relay2;
+size_t print_controls(void (*fn)(char, void *), void *arg, va_list *ap) {
+  size_t n = 0;
+  (void) ap;
+  n += mg_xprintf(fn, arg, "{");
+  n += mg_xprintf(fn, arg, "%s%m:%s", " ", MG_ESC("fan"), s_fan ? "true" : "false");
+  n += mg_xprintf(fn, arg, "%s%m:%s", ",", MG_ESC("relay1"), s_relay1 ? "true" : "false");
+  n += mg_xprintf(fn, arg, "%s%m:%s", ",", MG_ESC("relay2"), s_relay2 ? "true" : "false");
+  n += mg_xprintf(fn, arg, "}");
+  return n;
+}
+static void set_controls(const union mg_val *val) {
+  mg_json_get_bool(val->s, "$.fan", &s_fan);
+  mg_json_get_bool(val->s, "$.relay1", &s_relay1);
+  mg_json_get_bool(val->s, "$.relay2", &s_relay2);
+}
+static void get_controls(union mg_val *val) {
+  val->fn = (void (*)(void)) print_controls;
 }
 
 // Modify this. This represents device's state to the dashboard
 static struct mg_field fields[] = {
-    {"led", MG_VAL_BOOL, get_led, set_led},
+    {"controls", MG_VAL_FN, get_controls, set_controls},
+    {"settings", MG_VAL_FN, get_settings, NULL},
+    {"metrics", MG_VAL_FN, get_metrics, NULL},
     {"points", MG_VAL_FN, get_points, NULL},
     {NULL, 0, 0, 0},
 };

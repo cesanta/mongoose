@@ -57,6 +57,7 @@ document.addEventListener("DOMContentLoaded", () => {
   const chart = new uPlot(options, [], el);
 
   function updateGraphPoints(args) {
+    if (!args.points) return;
     const data = [
       args.points.map(x => x[0]),
       args.points.map(x => x[1]),
