@@ -107,6 +107,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
     - uses: actions/checkout@v4
+    - run: sudo apt -y update && sudo apt -y install monolith
     - run: make -C test tutorials_essential
     - run: make -C test clean_tutorials_essential
   tutorials_win:
