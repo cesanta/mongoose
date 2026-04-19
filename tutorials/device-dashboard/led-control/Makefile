@@ -1,6 +1,6 @@
 # Environment setup: https://mongoose.ws/docs/getting-started/build-environment/
 
-PROG ?= server
+PROG ?= example
 MGDIR ?= ../../..
 SOURCES = server.c dashboard.html.c $(MGDIR)/mongoose.c
 CFLAGS ?= -W -Wall -Wextra -Werror -Wundef -Wshadow -g3 -O0
