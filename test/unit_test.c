@@ -1950,7 +1950,8 @@ static void test_http_parse(void) {
     ASSERT(mg_http_parse(s, strlen(s), &hm) == (int) strlen(s));
     ASSERT((v = mg_http_get_header(&hm, "c")) != NULL);
     ASSERT(vcmp(*v, "\xc0"));
-    s = "a b HTTP/1.0\n\xc0: 2\n\n";  // Invalid UTF in the header name: do NOT accept
+    s = "a b HTTP/1.0\n\xc0: 2\n\n";  // Invalid UTF in the header name: do NOT
+                                      // accept
     ASSERT(mg_http_parse(s, strlen(s), &hm) == -1);
   }
 
@@ -3517,14 +3518,16 @@ static void test_json(void) {
   {
     char to[4], expect[4] = {0, 0, 0, 0};
     memset(to, 0, sizeof(to));
-    ASSERT(mg_json_unescape(mg_str("\"\\u0000\""), "$", to, 4) &&
-           memcmp(to, expect, 4) == 0);
+    json = mg_str("\"\\u0000\"");
+    ASSERT(mg_json_unescape(json, "$", to, 4) && memcmp(to, expect, 4) == 0);
     to[0] = 0;
     expect[0] = (char) 0xff;
-    ASSERT(mg_json_unescape(mg_str("\"\\u00ff\""), "$", to, 4) &&
-           memcmp(to, expect, 4) == 0);
-    ASSERT(!mg_json_unescape(mg_str("\"\\u0100\""), "$", to, 4));
-    ASSERT(!mg_json_unescape(mg_str("\"\\u1000\""), "$", to, 4));
+    json = mg_str("\"\\u00ff\"");
+    ASSERT(mg_json_unescape(json, "$", to, 4) && memcmp(to, expect, 4) == 0);
+    json = mg_str("\"\\u0100\"");
+    ASSERT(mg_json_unescape(json, "$", to, 4) == 0);
+    json = mg_str("\"\\u1000\"");
+    ASSERT(mg_json_unescape(json, "$", to, 4) == 0);
     json = mg_str("{\"a\":\"\"}");
     mg_snprintf(to, sizeof(to), "hi");
     ASSERT(mg_json_unescape(json, "$.a", to, sizeof(to)) == 0);
@@ -3664,16 +3667,16 @@ static void test_json(void) {
   {
     double d = 0.0, tolerance = 1e-12;
     json = mg_str(
-      "{"
-      "\"i\":1e3,"
-      "\"n\":-2.5e2,"
-      "\"p\":3E+4,"
-      "\"m\":4.25E-1,"
-      "\"z\":0e0,"
-      "\"s\":-0.0e+0,"
-      "\"a\":[6.123456789e3,-1e-9],"
-      "\"bad\":\"1e3\""
-      "}");
+        "{"
+        "\"i\":1e3,"
+        "\"n\":-2.5e2,"
+        "\"p\":3E+4,"
+        "\"m\":4.25E-1,"
+        "\"z\":0e0,"
+        "\"s\":-0.0e+0,"
+        "\"a\":[6.123456789e3,-1e-9],"
+        "\"bad\":\"1e3\""
+        "}");
     ASSERT(mg_json_get_num(json, "$.i", &d) == true);
     ASSERT(fabs(d - 1000.0) < tolerance);
     ASSERT(mg_json_get_num(json, "$.n", &d) == true);
@@ -4109,11 +4112,9 @@ static void test_crypto(void) {
   printf("HEALTH_DASHBOARD\t\"%s\": %s,\n", x, s_error ? "false" : "true");
 
 static uint8_t coils_database[25] = {
-  0x4D, 0x9C, 0xAA, 0x55, 0xCC,
-  0xA3, 0x66, 0xAF, 0x60, 0xBC,
-  0xCC, 0x6C, 0x53, 0xFF, 0x00,
-  0x55, 0x3C, 0x0F, 0xF0, 0x8F,
-  0x54, 0x99, 0xF8, 0x0D, 0x2A,
+    0x4D, 0x9C, 0xAA, 0x55, 0xCC, 0xA3, 0x66, 0xAF, 0x60,
+    0xBC, 0xCC, 0x6C, 0x53, 0xFF, 0x00, 0x55, 0x3C, 0x0F,
+    0xF0, 0x8F, 0x54, 0x99, 0xF8, 0x0D, 0x2A,
 };
 
 static bool modbus_read_coil(uint16_t i) {
@@ -4415,17 +4416,14 @@ static void test_modbus(void) {
        {0x00, 0x1C, 0x00, 0x00, 0x00, 0x03, 0x01, 0x84, 0x04},
        9},
 
-       /* --- Stress Test ---*/
-       {"read coils - 200 @ 0x0000",
-        {0x00, 0x1D, 0x00, 0x00, 0x00, 0x06, 0x01, 0x01, 0x00, 0x00, 0x00, 0xC8},
-        12,
-        {0x00, 0x1D, 0x00, 0x00, 0x00, 0x1C, 0x01, 0x01, 0x19,
-          0x4D, 0x9C, 0xAA, 0x55, 0xCC,
-          0xA3, 0x66, 0xAF, 0x60, 0xBC,
-          0xCC, 0x6C, 0x53, 0xFF, 0x00,
-          0x55, 0x3C, 0x0F, 0xF0, 0x8F,
-          0x54, 0x99, 0xF8, 0x0D, 0x2A},
-        34},
+      /* --- Stress Test ---*/
+      {"read coils - 200 @ 0x0000",
+       {0x00, 0x1D, 0x00, 0x00, 0x00, 0x06, 0x01, 0x01, 0x00, 0x00, 0x00, 0xC8},
+       12,
+       {0x00, 0x1D, 0x00, 0x00, 0x00, 0x1C, 0x01, 0x01, 0x19, 0x4D, 0x9C, 0xAA,
+        0x55, 0xCC, 0xA3, 0x66, 0xAF, 0x60, 0xBC, 0xCC, 0x6C, 0x53, 0xFF, 0x00,
+        0x55, 0x3C, 0x0F, 0xF0, 0x8F, 0x54, 0x99, 0xF8, 0x0D, 0x2A},
+       34},
   };
 
   struct mg_mgr mgr;
