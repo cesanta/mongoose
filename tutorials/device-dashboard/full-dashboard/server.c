@@ -26,13 +26,13 @@ size_t print_points(void (*fn)(char, void *), void *arg, va_list *ap) {
   for (i = 0; i < NUM_POINTS; i++) {
     struct point p;
     p.x = (uint16_t) i;
-    p.y1 = 50 -
-           (uint16_t) ((40 * (i > (NUM_POINTS - 1) / 4
+    p.y1 = 80 -
+           (uint16_t) ((90 * (i > (NUM_POINTS - 1) / 4
                                   ? i - (NUM_POINTS - 1) / 4
                                   : (NUM_POINTS - 1) / 4 - i)) /
                        (NUM_POINTS - 1)) +
            (rand() % 9);
-    p.y2 = 20 + (uint16_t) ((29 * i) / NUM_POINTS) + (rand() % 5);
+    p.y2 = 20 + (uint16_t) ((69 * i) / NUM_POINTS) + (rand() % 5);
     n += mg_xprintf(fn, arg, "%s[%hu,%hu,%hu]", comma, p.x, p.y1, p.y2);
     comma = ",";
   }
@@ -43,15 +43,17 @@ static void get_points(union mg_val *val) {
   val->fn = (void (*)(void)) print_points;
 }
 
+static int s_ram = 32, s_cpu = 37, s_humidity = 59;
+static double s_temp = 24.8;
 // This function prints a JSON object with read-only metrics
 size_t print_metrics(void (*fn)(char, void *), void *arg, va_list *ap) {
   size_t n = 0;
   (void) ap;
   n += mg_xprintf(fn, arg, "{");
-  n += mg_xprintf(fn, arg, "%s%m:%g", " ", MG_ESC("temperature"), 24.8);
-  n += mg_xprintf(fn, arg, "%s%m:%d", ",", MG_ESC("humidity"), 59);
-  n += mg_xprintf(fn, arg, "%s%m:%d", ",", MG_ESC("cpu"), 37);
-  n += mg_xprintf(fn, arg, "%s%m:%d", ",", MG_ESC("ram"), 32);
+  n += mg_xprintf(fn, arg, "%s%m:%.3g", " ", MG_ESC("temperature"), s_temp);
+  n += mg_xprintf(fn, arg, "%s%m:%d", ",", MG_ESC("humidity"), s_humidity);
+  n += mg_xprintf(fn, arg, "%s%m:%d", ",", MG_ESC("cpu"), s_cpu);
+  n += mg_xprintf(fn, arg, "%s%m:%d", ",", MG_ESC("ram"), s_ram);
   n += mg_xprintf(fn, arg, "}");
   return n;
 }
@@ -84,9 +86,12 @@ size_t print_controls(void (*fn)(char, void *), void *arg, va_list *ap) {
   size_t n = 0;
   (void) ap;
   n += mg_xprintf(fn, arg, "{");
-  n += mg_xprintf(fn, arg, "%s%m:%s", " ", MG_ESC("fan"), s_fan ? "true" : "false");
-  n += mg_xprintf(fn, arg, "%s%m:%s", ",", MG_ESC("relay1"), s_relay1 ? "true" : "false");
-  n += mg_xprintf(fn, arg, "%s%m:%s", ",", MG_ESC("relay2"), s_relay2 ? "true" : "false");
+  n += mg_xprintf(fn, arg, "%s%m:%s", " ", MG_ESC("fan"),
+                  s_fan ? "true" : "false");
+  n += mg_xprintf(fn, arg, "%s%m:%s", ",", MG_ESC("relay1"),
+                  s_relay1 ? "true" : "false");
+  n += mg_xprintf(fn, arg, "%s%m:%s", ",", MG_ESC("relay2"),
+                  s_relay2 ? "true" : "false");
   n += mg_xprintf(fn, arg, "}");
   return n;
 }
@@ -118,6 +123,17 @@ void mongoose_init(void) {
 
 void mongoose_poll(void) {
   mg_mgr_poll(&mgr, 1);
+
+  // Simulate metrics change periodically
+  static uint64_t timer = 0;
+  if (mg_timer_expired(&timer, 30000, mg_now())) {
+    // s_temp = 14.8 + ((double)rand() / RAND_MAX) * 20.0;
+    // s_humidity = 37 + (rand() % 21);
+    // s_cpu = 3 + (rand() % 21);
+    // s_ram = 25 + (rand() % 16);
+    mg_dash_send_change(&mgr, mg_dash_find_field(fields, mg_str("metrics")));
+    mg_dash_send_change(&mgr, mg_dash_find_field(fields, mg_str("points")));
+  }
 }
 
 int main(void) {

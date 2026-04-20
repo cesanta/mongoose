@@ -60,6 +60,10 @@ document.addEventListener("DOMContentLoaded", () => {
       { values: "{MMM} {DD}", size: 25 },
       { size: 50, xvalues: (u, vals, space) => vals.map(v => (+v / 1000).toFixed(1) + 'k') },
     ],
+    scales: {
+      x: { time: true },
+      y: { range: [0, 100] },
+    },
     series: [
       {},
       {stroke: 'rgba(5, 141, 199, 1)', fill: 'rgba(5, 141, 199, 0.1)'},
