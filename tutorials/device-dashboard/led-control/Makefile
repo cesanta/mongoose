@@ -16,7 +16,6 @@ $(PROG): $(SOURCES)
 
 # Generate a single, self-contained dashboard.html from the UI in web_root/
 dashboard.html: $(wildcard web_root/*)
-	curl https://purge.jsdelivr.net/gh/cesanta/mongoose@master/resources/dashboard.js -s -o /dev/null
 	monolith web_root/index.html > $@
 
 # Create an embedded filesystem containing compressed dashboard.html
