@@ -3250,7 +3250,7 @@ static inline bool mg_parse_field(struct mg_str json, struct mg_field *f,
   } else if (f->type == MG_VAL_DBL) {
     ok = mg_json_get_num(json, "$", &val->d);
   } else if (f->type == MG_VAL_STR) {
-    val->s = trimq(json);
+    val->s = json;
   } else if (f->type == MG_VAL_FN) {
     val->s = json;
   }

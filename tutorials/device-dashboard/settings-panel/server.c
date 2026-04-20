@@ -16,7 +16,7 @@ static void location_get(union mg_val *val) {
   val->s = mg_str(s_location);
 }
 static void location_set(const union mg_val *val) {
-  mg_json_unescape(val->s, s_location, sizeof(s_location));
+  mg_json_unescape(val->s, "$", s_location, sizeof(s_location));
 }
 
 static void threshold_get(union mg_val *val) {
