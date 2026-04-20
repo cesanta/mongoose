@@ -59,7 +59,6 @@ static void get_metrics(union mg_val *val) {
   val->fn = (void (*)(void)) print_metrics;
 }
 
-static bool s_motor = false;
 static double s_volume = 17.2;
 static char s_name[20] = "Dublin";
 // This function prints a JSON object with read-only metrics
@@ -68,10 +67,13 @@ size_t print_settings(void (*fn)(char, void *), void *arg, va_list *ap) {
   (void) ap;
   n += mg_xprintf(fn, arg, "{");
   n += mg_xprintf(fn, arg, "%s%m:%g", " ", MG_ESC("volume"), s_volume);
-  n += mg_xprintf(fn, arg, "%s%m:%s", ",", MG_ESC("motor"), s_motor ? "true" : "false");
   n += mg_xprintf(fn, arg, "%s%m:%m", ",", MG_ESC("name"), MG_ESC(s_name));
   n += mg_xprintf(fn, arg, "}");
   return n;
+}
+static void set_settings(const union mg_val *val) {
+  mg_json_unescape(val->s, "$.name", s_name, sizeof(s_name));
+  mg_json_get_num(val->s, "$.volume", &s_volume);
 }
 static void get_settings(union mg_val *val) {
   val->fn = (void (*)(void)) print_settings;
@@ -100,7 +102,7 @@ static void get_controls(union mg_val *val) {
 // Modify this. This represents device's state to the dashboard
 static struct mg_field fields[] = {
     {"controls", MG_VAL_FN, get_controls, set_controls},
-    {"settings", MG_VAL_FN, get_settings, NULL},
+    {"settings", MG_VAL_FN, get_settings, set_settings},
     {"metrics", MG_VAL_FN, get_metrics, NULL},
     {"points", MG_VAL_FN, get_points, NULL},
     {NULL, 0, 0, 0},

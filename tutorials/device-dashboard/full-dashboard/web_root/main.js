@@ -2,6 +2,8 @@ document.addEventListener("DOMContentLoaded", () => {
   const tabs = Array.from(document.querySelectorAll(".header-left .nav-link[href^='#']"));
   const panels = Array.from(document.querySelectorAll(".tab-panel"));
 
+  let chart = null;
+
   const activateTab = targetId => {
     const targetPanel = document.getElementById(targetId);
     if (!targetPanel) return;
@@ -17,6 +19,19 @@ document.addEventListener("DOMContentLoaded", () => {
       const isActive = panel.id === targetId;
       panel.classList.toggle("tab-panel-active", isActive);
       panel.hidden = !isActive;
+    });
+
+    requestAnimationFrame(() => {
+      const rect = el.getBoundingClientRect();
+      if (rect.width <= 0 || rect.height <= 0) rect.height = rect.width = 10;
+
+      if (!chart) {
+        options.width = rect.width;
+        options.height = rect.height;
+        chart = new uPlot(options, [], el);
+      } else {
+        chart.setSize({ width: rect.width, height: rect.height });
+      }
     });
   };
 
@@ -34,11 +49,10 @@ document.addEventListener("DOMContentLoaded", () => {
 
 
   const el = document.getElementById("chart");
-  const rect = el.getBoundingClientRect();
 
   const options = {
-    width: rect.width,
-    height: rect.height,
+    width: 100,
+    height: 100,
     tzDate: (ts) => uPlot.tzDate(new Date(ts * 1e3), "Europe/London"),
     plugins: [],
     legend: { show: false },
@@ -53,17 +67,13 @@ document.addEventListener("DOMContentLoaded", () => {
     ],
   };
 
-  // Create chart instance
-  const chart = new uPlot(options, [], el);
-
   function updateGraphPoints(args) {
-    if (!args.points) return;
+    if (!args.points || !chart) return;
     const data = [
       args.points.map(x => x[0]),
       args.points.map(x => x[1]),
       args.points.map(x => x[2]),
     ];
-    //console.log(123, args.points);
     chart.setData(data);
   };
 

@@ -3517,14 +3517,21 @@ static void test_json(void) {
   {
     char to[4], expect[4] = {0, 0, 0, 0};
     memset(to, 0, sizeof(to));
-    ASSERT(mg_json_unescape(mg_str("\\u0000"), to, 4) &&
+    ASSERT(mg_json_unescape(mg_str("\"\\u0000\""), "$", to, 4) &&
            memcmp(to, expect, 4) == 0);
     to[0] = 0;
     expect[0] = (char) 0xff;
-    ASSERT(mg_json_unescape(mg_str("\\u00ff"), to, 4) &&
+    ASSERT(mg_json_unescape(mg_str("\"\\u00ff\""), "$", to, 4) &&
            memcmp(to, expect, 4) == 0);
-    ASSERT(!mg_json_unescape(mg_str("\\u0100"), to, 4));
-    ASSERT(!mg_json_unescape(mg_str("\\u1000"), to, 4));
+    ASSERT(!mg_json_unescape(mg_str("\"\\u0100\""), "$", to, 4));
+    ASSERT(!mg_json_unescape(mg_str("\"\\u1000\""), "$", to, 4));
+    json = mg_str("{\"a\":\"\"}");
+    mg_snprintf(to, sizeof(to), "hi");
+    ASSERT(mg_json_unescape(json, "$.a", to, sizeof(to)) == 0);
+    ASSERT(to[0] == '\0');
+    json = mg_str("{\"a\":\"b\"}");
+    ASSERT(mg_json_unescape(json, "$.a", to, sizeof(to)) == 1);
+    ASSERT(strcmp(to, "b") == 0);
   }
 
   {
@@ -4548,7 +4555,7 @@ int main(void) {
   s_error = false;
   test_mqtt();  // sorry, MQTT_LOCALHOST is also skipped
   DASHBOARD("mqtt");
-#else 
+#else
   (void) test_mqtt;
 #endif
 

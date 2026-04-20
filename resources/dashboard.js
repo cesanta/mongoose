@@ -76,6 +76,22 @@
     const parent = keys.reduce((o, k) => o?.[k], obj);
     return parent && delete parent[last];
   };
+  const eq = (a, b) =>
+    a === b ||
+    (a && b && typeof a === 'object' && typeof b === 'object' &&
+     Object.keys(a).length === Object.keys(b).length &&
+     Object.keys(a).every(k => eq(a[k], b[k])));
+  const isEmpty = obj => obj && typeof obj === 'object' && Object.keys(obj).length === 0;
+  function prune(o1, o2, p = '') {
+    for (const k in p ? get(o2, p) : o2) {
+      const path = p ? p + '.' + k : k;
+      if (!has(o1, path)) continue;
+      const x1 = get(o1, path), x2 = get(o2, path);
+      if (eq(x1, x2)) del(o2, path);
+      if (x2 && typeof (x2) === 'object') prune(o1, o2, path);
+      if (isEmpty(get(o2, path))) del(o2, path);
+    }
+  }
 
   function safeEval(expr, context) {
     const c = Object.freeze(context);
@@ -234,12 +250,7 @@
     if (isMock) {
       return delay(750, true).then(val => console.log('response', name));
     } else {
-      return rpc.call(name, args)
-        .then(r => {
-          //if (storedConfig?.debug) console.log('CALL', name, args,  '->', r);
-          return r;
-        })
-        .catch(err => console.log('CALL FAILED', name, args, err));
+      return rpc.call(name, args).catch(err => console.log('CALL FAILED', name, args, err));
     }
   };
 
@@ -256,10 +267,8 @@
   };
 
   function apply_and_rescan(target, patch) {
-    apply(target, patch)
-    for (const key of Object.keys(settings.data)) {
-      if (settings.data[key] == settings.edits[key]) delete settings.edits[key];
-    }
+    apply(target, patch);
+    prune(settings.data, settings.edits);
     rescan();
   };
 

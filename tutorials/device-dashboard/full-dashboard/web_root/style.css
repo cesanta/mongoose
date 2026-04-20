@@ -114,6 +114,7 @@ body {
   transition: all 0.15s cubic-bezier(0.4, 0, 0.2, 1);
   gap: var(--spacing-2);
   text-decoration: none;
+  white-space: nowrap;
 }
 
 .nav-link-active {
