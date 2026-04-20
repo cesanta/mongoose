@@ -86,7 +86,6 @@ body {
   height: 11px;
   border-radius: 50%;
   background: rgb(16, 185, 129);
-
   flex-shrink: 0;
 }
 
@@ -140,9 +139,6 @@ body {
 
 .tab-panel {
   min-height: calc(100vh - 6rem);
-  box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 0.72),
-    0 18px 40px rgba(148, 163, 184, 0.1);
 }
 
 .overview-grid {
@@ -249,38 +245,31 @@ body {
   display: none;
 }
 
-/* ── Settings panel ─────────────────────────────── */
+/* ── Panel ──────────────────────────────────────── */
 
-.settings-layout {
+.panel-layout {
   padding-top: 1rem;
   max-width: 22rem;
 }
 
-.settings-panel {
-  background: #ffffff;
-  border: 1px solid rgba(203, 213, 225, 0.75);
-  border-radius: 1rem;
-  box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 1),
-    0 2px 6px rgba(148, 163, 184, 0.1),
-    0 8px 24px rgba(148, 163, 184, 0.08);
-  overflow: hidden;
-}
-
-.settings-panel-title {
-  font-size: 0.95rem;
-  font-weight: 700;
-  color: #334155;
-  padding: 1rem 1.25rem 0.9rem;
-  border-bottom: 1px solid #e2e8f0;
-}
-
-.settings-fields {
+.panel-body {
   display: flex;
   flex-direction: column;
   gap: 0.75rem;
   padding: 1rem 1.25rem;
+  flex: 1;
 }
+
+.panel-footer {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 0.5rem;
+  padding: 0.75rem 1.25rem;
+  border-top: 1px solid #e2e8f0;
+}
+
+/* ── Form fields ─────────────────────────────────── */
 
 .field {
   display: flex;
@@ -349,15 +338,7 @@ body {
   pointer-events: none;
 }
 
-.settings-panel-footer {
-  display: flex;
-  align-items: center;
-  justify-content: flex-end;
-  gap: 0.5rem;
-  padding: 0.75rem 1.25rem;
-  background: #f8fafc;
-  border-top: 1px solid #e2e8f0;
-}
+/* ── Buttons ─────────────────────────────────────── */
 
 .btn {
   display: inline-flex;
@@ -396,7 +377,6 @@ body {
 .btn-primary:hover {
   background: linear-gradient(160deg, #0ea5e9, #0284c7);
   box-shadow: 0 1px 3px rgba(14, 165, 233, 0.4), 0 6px 14px rgba(14, 165, 233, 0.2);
-  /*transform: translateY(-1px);*/
 }
 
 .btn-primary:active,
@@ -431,28 +411,21 @@ body {
     inset 0 1px 0 rgba(255, 255, 255, 1),
     0 2px 6px rgba(148, 163, 184, 0.1),
     0 8px 24px rgba(148, 163, 184, 0.08);
-  padding: 1.5rem;
+  overflow: hidden;
   display: flex;
   flex-direction: column;
 }
 
-.panel-header {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  margin-bottom: 1.1rem;
-}
-
 .panel-title {
-  font-size: 1.05rem;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 0.95rem;
   font-weight: 700;
-  color: #18314f;
-  margin-bottom: 0.2rem;
-}
-
-.panel-subtitle {
-  color: #7d94ac;
-  font-size: 0.8rem;
+  color: #334155;
+  padding: 1rem 1.25rem 0.9rem;
+  border-bottom: 1px solid #e2e8f0;
+  flex-shrink: 0;
 }
 
 /* Chart */
@@ -516,7 +489,6 @@ body {
   display: flex;
   flex-direction: column;
   flex: 1;
-  margin-top: 0.25rem;
 }
 
 .control-row {

@@ -156,42 +156,44 @@
 
           <!-- Sensor History Chart -->
           <div class="panel chart-panel">
-            <div class="panel-header">
-              <div>
-                <div class="panel-title">Sensor History</div>
-              </div>
+            <div class="panel-title">
+              <span>Sensor History</span>
               <div class="chart-legend">
                 <div class="legend-item"><span class="legend-dot legend-dot-color1"></span>Temperature</div>
                 <div class="legend-item"><span class="legend-dot legend-dot-color2"></span>Humidity</div>
               </div>
             </div>
-            <div id="chart"></div>
+            <div class="panel-body">
+              <div id="chart"></div>
+            </div>
           </div>
 
           <!-- Controls Panel -->
           <div class="panel controls-panel">
             <div class="panel-title">Controls</div>
-            <div class="controls-list">
-              <div class="control-row">
-                <div class="control-info">
-                  <div class="control-name">Cooling Fan</div>
-                  <div class="control-desc">PWM controlled output</div>
+            <div class="panel-body">
+              <div class="controls-list">
+                <div class="control-row">
+                  <div class="control-info">
+                    <div class="control-name">Cooling Fan</div>
+                    <div class="control-desc">PWM controlled output</div>
+                  </div>
+                  <input type="checkbox" data-bind="controls.fan" data-autosave="1" class="toggle" />
                 </div>
-                <input type="checkbox" data-bind="controls.fan" data-autosave="1" class="toggle" />
-              </div>
-              <div class="control-row">
-                <div class="control-info">
-                  <div class="control-name">Relay Channel 1</div>
-                  <div class="control-desc">Auxiliary load output</div>
+                <div class="control-row">
+                  <div class="control-info">
+                    <div class="control-name">Relay Channel 1</div>
+                    <div class="control-desc">Auxiliary load output</div>
+                  </div>
+                  <input type="checkbox" data-bind="controls.relay1" data-autosave="1" class="toggle" />
                 </div>
-                <input type="checkbox" data-bind="controls.relay1" data-autosave="1" class="toggle" />
-              </div>
-              <div class="control-row">
-                <div class="control-info">
-                  <div class="control-name">Relay Channel 2</div>
-                  <div class="control-desc">Safety-controlled line</div>
+                <div class="control-row">
+                  <div class="control-info">
+                    <div class="control-name">Relay Channel 2</div>
+                    <div class="control-desc">Safety-controlled line</div>
+                  </div>
+                  <input type="checkbox" data-bind="controls.relay2" data-autosave="1" class="toggle" />
                 </div>
-                <input type="checkbox" data-bind="controls.relay2" data-autosave="1" class="toggle" />
               </div>
             </div>
           </div>
@@ -199,10 +201,10 @@
         </div>
       </section>
       <section id="settings" class="tab-panel" role="tabpanel" aria-labelledby="tab-settings" hidden>
-        <div class="settings-layout">
-          <div class="settings-panel">
-            <div class="settings-panel-title">Device settings</div>
-            <div class="settings-fields">
+        <div class="panel-layout">
+          <div class="panel">
+            <div class="panel-title">Device settings</div>
+            <div class="panel-body">
               <div class="field">
                 <label class="field-label" for="setting-name">Name</label>
                 <input class="field-input" id="setting-name" type="text" data-bind="settings.name" data-autosave="1" />
@@ -212,7 +214,7 @@
                 <input class="field-input" id="setting-volume" type="text" data-bind="settings.volume" />
               </div>
             </div>
-            <div class="settings-panel-footer">
+            <div class="panel-footer">
               <button class="btn btn-secondary" type="button" data-cancel="settings">Cancel</button>
               <button class="btn btn-primary" type="button" data-save="settings">Save</button>
             </div>
