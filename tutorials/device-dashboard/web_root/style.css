@@ -15,6 +15,8 @@
   --spacing-2: 0.5rem;
   --spacing-3: 0.75rem;
   --spacing-4: 1rem;
+  --spacing-5: 1.25rem;
+  --spacing-6: 1.5rem;
 }
 
 * {
@@ -46,7 +48,7 @@ body {
   align-items: center;
   justify-content: space-between;
   gap: var(--spacing-4);
-  padding: var(--spacing-2) var(--spacing-3);
+  padding: var(--spacing-2) var(--spacing-4);
 }
 
 .header-left {
@@ -134,7 +136,7 @@ body {
 .tab-stage {
   max-width: var(--max-width);
   margin: 0 auto;
-  padding: 5.5rem var(--spacing-3) var(--spacing-3);
+  padding: 5.5rem var(--spacing-4) var(--spacing-4);
 }
 
 .tab-panel {

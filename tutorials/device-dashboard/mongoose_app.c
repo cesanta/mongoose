@@ -32,7 +32,7 @@ static void sync_control(bool is_write) {
 }
 
 // Read-only device Metrics
-static int s_ram = 32, s_cpu = 37, s_humidity = 59;
+static int s_ram = 32, s_cpu = 7, s_humidity = 59;
 static double s_temperature = 24.8;
 
 static struct mg_field fields_metrics[] = {
@@ -45,8 +45,9 @@ static struct mg_field fields_metrics[] = {
 
 static void sync_metrics(bool is_write) {
   if (is_write) return;
-  // Read values from hardware into the state variables
-  // s_ram = calculate_current_free_ram();
+   s_ram = 25 + (rand() % 16);  // Sumulate metric change
+   s_cpu = 7 + (rand() % 21);
+   s_temperature = 14.8 + ((double)rand() / RAND_MAX) * 20.0;
 }
 
 // Read-write device settings
@@ -127,8 +128,7 @@ void mongoose_poll(void) {
   {
     // Send metrics change periodically
     static uint64_t timer = 0;
-    if (mg_timer_expired(&timer, 30000, mg_now())) {
-      sync_metrics(false);
+    if (mg_timer_expired(&timer, 300, mg_now())) {
       mg_dash_send_change(&s_mgr, &s_dashboard, "metrics");
     }
   }

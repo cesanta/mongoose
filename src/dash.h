@@ -110,12 +110,9 @@ static inline size_t mg_print_field(mg_pfn_t fn, void *arg, va_list *ap) {
   } else if (f->type == MG_VAL_INT) {
     n += mg_xprintf(fn, arg, "%d", *(int *) f->value);
   } else if (f->type == MG_VAL_DBL) {
-    n += mg_xprintf(fn, arg, "%g", *(double *) f->value);
+    n += mg_xprintf(fn, arg, "%.2f", *(double *) f->value);
   } else if (f->type == MG_VAL_STR) {
-    // struct mg_str *s = * (struct mg_str *) f->value;
     n += mg_xprintf(fn, arg, "%m", MG_ESC(f->value));
-    // } else if (f->type == MG_VAL_FN) {
-    //   n += mg_xprintf(fn, arg, val.fn ? "%M" : "null", val.fn);
   } else {
     n += mg_xprintf(fn, arg, "null");
   }
@@ -168,6 +165,7 @@ static inline void mg_dash_send_change(struct mg_mgr *mgr, struct mg_dash *dash,
                                        const char *name) {
   struct mg_field_set *set = mg_dash_find_field_set(dash, mg_str(name));
   if (set != NULL) {
+    if (set->sync) set->sync(false);
     mg_dash_broadcast(mgr, "{%m:%m,%m:{%m:%M}}", MG_ESC("method"),
                       MG_ESC("change"), MG_ESC("params"), MG_ESC(set->name),
                       mg_print_field_set, set);
