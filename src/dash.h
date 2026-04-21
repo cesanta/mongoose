@@ -1,6 +1,8 @@
 #pragma once
 
+#include "fmt.h"
 #include "json.h"
+#include "log.h"
 #include "printf.h"
 #include "str.h"
 #include "ws.h"
@@ -11,19 +13,27 @@ union mg_val {
   int i;
   bool b;
   double d;
-  struct mg_str s;
+  char *s;
   void (*fn)(void);
 };
 
 struct mg_field {
   const char *name;
   enum mg_val_type type;
-  void (*get)(union mg_val *);
-  void (*set)(const union mg_val *);
+  void *value;
+  size_t value_size;
+};
+
+struct mg_field_set {
+  const char *name;
+  struct mg_field *fields;
+  void (*sync)(bool is_reading);
+  int read_level;
+  int write_level;
 };
 
 struct mg_dash {
-  struct mg_field *fields;
+  struct mg_field_set *sets;
 };
 
 static inline struct mg_str trimq(struct mg_str s) {  // Trim double quotes
@@ -69,10 +79,21 @@ static inline void mg_dash_error(struct mg_connection *c, struct mg_str req,
   va_end(ap);
 }
 
+static inline struct mg_field_set *mg_dash_find_field_set(struct mg_dash *dash,
+                                                          struct mg_str name) {
+  size_t i;
+  for (i = 0; dash->sets != NULL && dash->sets[i].name != NULL; i++) {
+    if (mg_strcmp(name, mg_str(dash->sets[i].name)) == 0) {
+      return &dash->sets[i];
+    }
+  }
+  return NULL;
+}
+
 static inline struct mg_field *mg_dash_find_field(struct mg_field *fields,
                                                   struct mg_str name) {
   size_t i;
-  for (i = 0; fields[i].name != NULL; i++) {
+  for (i = 0; fields != NULL && fields[i].name != NULL; i++) {
     if (mg_strcmp(name, mg_str(fields[i].name)) == 0) return &fields[i];
   }
   return NULL;
@@ -80,93 +101,119 @@ static inline struct mg_field *mg_dash_find_field(struct mg_field *fields,
 
 static inline size_t mg_print_field(mg_pfn_t fn, void *arg, va_list *ap) {
   struct mg_field *f = va_arg(*ap, struct mg_field *);
-  union mg_val val = {0};
+  // union mg_val val = {0};
   size_t n = 0;
-  if (f->get) f->get(&val);
+  // if (f->get) f->get(&val);
   n += mg_xprintf(fn, arg, "%m:", MG_ESC(f->name));
   if (f->type == MG_VAL_BOOL) {
-    n += mg_xprintf(fn, arg, "%s", val.b ? "true" : "false");
+    n += mg_xprintf(fn, arg, "%s", *(bool *) f->value ? "true" : "false");
   } else if (f->type == MG_VAL_INT) {
-    n += mg_xprintf(fn, arg, "%d", val.i);
+    n += mg_xprintf(fn, arg, "%d", *(int *) f->value);
   } else if (f->type == MG_VAL_DBL) {
-    n += mg_xprintf(fn, arg, "%g", val.d);
+    n += mg_xprintf(fn, arg, "%g", *(double *) f->value);
   } else if (f->type == MG_VAL_STR) {
-    n += mg_xprintf(fn, arg, "%m", mg_print_esc, val.s.len, val.s.buf);
-  } else if (f->type == MG_VAL_FN) {
-    n += mg_xprintf(fn, arg, val.fn ? "%M" : "null", val.fn);
+    // struct mg_str *s = * (struct mg_str *) f->value;
+    n += mg_xprintf(fn, arg, "%m", MG_ESC(f->value));
+    // } else if (f->type == MG_VAL_FN) {
+    //   n += mg_xprintf(fn, arg, val.fn ? "%M" : "null", val.fn);
   } else {
     n += mg_xprintf(fn, arg, "null");
   }
   return n;
 }
 
-static inline bool mg_parse_field(struct mg_str json, struct mg_field *f,
-                                  union mg_val *val) {
-  bool ok = false;
-  if (f->type == MG_VAL_BOOL) {
-    ok = mg_json_get_bool(json, "$", &val->b);
-  } else if (f->type == MG_VAL_INT) {
-    double d;
-    ok = mg_json_get_num(json, "$", &d);
-    if (ok) val->i = (int) d;
-  } else if (f->type == MG_VAL_DBL) {
-    ok = mg_json_get_num(json, "$", &val->d);
-  } else if (f->type == MG_VAL_STR) {
-    val->s = json;
-  } else if (f->type == MG_VAL_FN) {
-    val->s = json;
+static inline size_t mg_print_field_set(mg_pfn_t fn, void *arg, va_list *ap) {
+  struct mg_field_set *set = va_arg(*ap, struct mg_field_set *);
+  size_t i, n = 0;
+  n += mg_xprintf(fn, arg, "{");
+  for (i = 0; set != NULL && set->fields[i].name != NULL; i++) {
+    if (i > 0) n += mg_xprintf(fn, arg, ",");
+    n += mg_xprintf(fn, arg, "%M", mg_print_field, &set->fields[i]);
   }
-  return ok;
+  n += mg_xprintf(fn, arg, "}");
+  return n;
+}
+
+static inline size_t mg_dash_print_name(mg_pfn_t fn, void *arg, va_list *ap) {
+  struct mg_dash *dash = va_arg(*ap, struct mg_dash *);
+  struct mg_str *name = va_arg(*ap, struct mg_str *);
+  struct mg_field_set *set = mg_dash_find_field_set(dash, *name);
+  size_t i, n = 0;
+  if (name->len == 0) {
+    n += mg_xprintf(fn, arg, "{");
+    for (i = 0; dash->sets != NULL && dash->sets[i].name != NULL; i++) {
+      if (dash->sets[i].sync) dash->sets[i].sync(false);
+      if (i > 0) n += mg_xprintf(fn, arg, ",");
+      n += mg_xprintf(fn, arg, "%m:", MG_ESC(dash->sets[i].name));
+      n += mg_xprintf(fn, arg, "%M", mg_print_field_set, &dash->sets[i]);
+    }
+    n += mg_xprintf(fn, arg, "}");
+  } else if (set != NULL) {
+    if (set->sync) set->sync(false);
+    n += mg_xprintf(fn, arg, "%M", mg_print_field_set, set);
+  } else {
+    n += mg_xprintf(fn, arg, "null");
+  }
+  return n;
 }
 
 static inline size_t mg_dash_print(mg_pfn_t fn, void *arg, va_list *ap) {
   struct mg_str *req = va_arg(*ap, struct mg_str *);
-  struct mg_field *fields = va_arg(*ap, struct mg_field *);
-  // mg_dash_get_fn get = va_arg(*ap, mg_dash_get_fn);
+  struct mg_dash *dash = va_arg(*ap, struct mg_dash *);
   struct mg_str name = trimq(mg_json_get_tok(*req, "$.params"));
-  struct mg_field *f = mg_dash_find_field(fields, name);
-  size_t i, n = 0;
-  if (name.len == 0) {
-    const char *comma = "";
-    n += mg_xprintf(fn, arg, "{");
-    for (i = 0; fields[i].name != NULL; i++) {
-      n += mg_xprintf(fn, arg, "%s", comma);
-      n += mg_xprintf(fn, arg, "%M", mg_print_field, &fields[i]);
-      comma = ",";
-    }
-    n += mg_xprintf(fn, arg, "}");
-  } else if (f != NULL) {
-    n += mg_xprintf(fn, arg, "{%M}", mg_print_field, f);
-  } else {
-    n += mg_xprintf(fn, arg, "null");
-  }
-  return n;
+  return mg_xprintf(fn, arg, "%M", mg_dash_print_name, dash, &name);
 }
 
-static inline void mg_dash_send_change(struct mg_mgr *mgr, struct mg_field *f) {
-  if (f != NULL) {
-    mg_dash_broadcast(mgr, "{%m:%m,%m:{%M}}", MG_ESC("method"),
-                      MG_ESC("change"), MG_ESC("params"), mg_print_field, f);
+static inline void mg_dash_send_change(struct mg_mgr *mgr, struct mg_dash *dash,
+                                       const char *name) {
+  struct mg_field_set *set = mg_dash_find_field_set(dash, mg_str(name));
+  if (set != NULL) {
+    mg_dash_broadcast(mgr, "{%m:%m,%m:{%m:%M}}", MG_ESC("method"),
+                      MG_ESC("change"), MG_ESC("params"), MG_ESC(set->name),
+                      mg_print_field_set, set);
   }
 }
 
-static inline void mg_dash_apply(struct mg_connection *c, struct mg_str json,
-                                 struct mg_field *fields) {
+static inline int mg_dash_parse_field(struct mg_str json, struct mg_field *f) {
+  char json_path[128];
+  bool ok = false;
+  mg_snprintf(json_path, sizeof(json_path), "$.%s", f->name);
+  if (f->type == MG_VAL_BOOL) {
+    ok = mg_json_get_bool(json, json_path, (bool *) f->value);
+  } else if (f->type == MG_VAL_INT) {
+    double d;
+    ok = mg_json_get_num(json, json_path, &d);
+    if (ok) *(int *) f->value = (int) d;
+  } else if (f->type == MG_VAL_DBL) {
+    ok = mg_json_get_num(json, json_path, (double *) f->value);
+  } else if (f->type == MG_VAL_STR) {
+    ok = mg_json_unescape(json, json_path, (char *) f->value, f->value_size);
+  }
+  return ok;
+}
+
+static inline int mg_dash_apply(struct mg_connection *c, struct mg_dash *dash,
+                                struct mg_str json) {
   struct mg_str key, val;
   size_t ofs = 0;
-  struct mg_field *f = NULL;
+  int count = 0;
+  // struct mg_field *f = NULL;
   while ((ofs = mg_json_next(json, ofs, &key, &val)) > 0) {
-    key = trimq(key);
-    if ((f = mg_dash_find_field(fields, key)) != NULL && f->set != NULL) {
-      union mg_val v = {0};
-      mg_parse_field(val, f, &v);
-      f->set(&v);
-      mg_dash_send_change(c->mgr, f);
-      break;
+    struct mg_field_set *set = mg_dash_find_field_set(dash, trimq(key));
+    if (set != NULL) {
+      size_t i;
+      for (i = 0; set->fields[i].name != NULL; i++) {
+        if (mg_dash_parse_field(val, &set->fields[i])) count++;
+      }
+      if (count > 0 && set->sync != NULL) {
+        set->sync(true);
+        mg_dash_send_change(c->mgr, dash, set->name);
+      }
     } else {
-      MG_ERROR(("UNKNOWN FIELD: [%.*s]", key.len, key.buf));
+      MG_ERROR(("UNKNOWN SET: [%.*s]", key.len, key.buf));
     }
   }
+  return count;
 }
 
 static inline void mg_dash_process_msg(struct mg_connection *c,
@@ -175,22 +222,35 @@ static inline void mg_dash_process_msg(struct mg_connection *c,
   struct mg_str req = wm->data;
   struct mg_str method = trimq(mg_json_get_tok(req, "$.method"));
   if (mg_match(method, mg_str("get"), NULL)) {
-    mg_dash_success(c, req, "%M", mg_dash_print, &req, dash->fields);
+    mg_dash_success(c, req, "%M", mg_dash_print, &req, dash);
   } else if (mg_match(method, mg_str("set"), NULL)) {
     struct mg_str params = trimq(mg_json_get_tok(req, "$.params"));
-    mg_dash_apply(c, params, dash->fields);
-    mg_dash_success(c, req, "%s", "true");
+    int count = mg_dash_apply(c, dash, params);
+    mg_dash_success(c, req, "%d", count);
   } else {
     mg_dash_error(c, req, "%s", "unknown method");
   }
 }
 
+#define MG_NO_CACHE_HEADERS "Cache-Control: no-cache\r\n"
+#define MG_JSON_HEADERS "Content-Type: application/json\r\n" MG_NO_CACHE_HEADERS
+
 static inline void mg_dash_ev_handler(struct mg_connection *c, int ev,
                                       void *ev_data) {
+  struct mg_dash *dash = (struct mg_dash *) c->fn_data;
   if (ev == MG_EV_HTTP_MSG) {
     struct mg_http_message *hm = (struct mg_http_message *) ev_data;
+    struct mg_str parts[5];
+    memset(parts, 0, sizeof(parts));
     if (mg_match(hm->uri, mg_str("/api/websocket"), NULL)) {
       mg_ws_upgrade(c, hm, NULL);
+    } else if (mg_match(hm->uri, mg_str("/api/get/#"), parts) ||
+               mg_match(hm->uri, mg_str("/api/get"), NULL)) {
+      mg_http_reply(c, 200, MG_JSON_HEADERS, "%M\n", mg_dash_print_name, dash,
+                    &parts[0]);
+    } else if (mg_match(hm->uri, mg_str("/api/set"), NULL)) {
+      int count = mg_dash_apply(c, dash, hm->body);
+      mg_http_reply(c, 200, MG_JSON_HEADERS, "%d\n", count);
     } else {
       struct mg_http_serve_opts opts;
       memset(&opts, 0, sizeof(opts));
@@ -200,10 +260,9 @@ static inline void mg_dash_ev_handler(struct mg_connection *c, int ev,
     }
   } else if (ev == MG_EV_WS_MSG) {
     // Add this to automatically handle "get" and "set" JSON-RPC calls
-    struct mg_dash *dash = (struct mg_dash *) c->fn_data;
     struct mg_ws_message *wm = (struct mg_ws_message *) ev_data;
-    if (dash == NULL || dash->fields == NULL) {
-      mg_dash_error(c, wm->data, "%s", "no fields defined");
+    if (dash == NULL) {
+      mg_dash_error(c, wm->data, "%s", "no dash defined");
     } else {
       mg_dash_process_msg(c, wm, dash);
     }

@@ -1,10 +1,8 @@
 <!DOCTYPE html>
 <html lang="en">
   <head>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <link rel="stylesheet" href="style.css">
-    <link rel="stylesheet" href="uPlot.min.css">
+    <title>My Dashboard</title>
+
     <!-- Mongoose device dashboard -->
     <script src="https://cdn.jsdelivr.net/gh/cesanta/mongoose@master/resources/dashboard.js"></script>
     <script>
@@ -31,9 +29,16 @@
         },
       });
     </script>
+
     <script src="main.js" defer></script>
-    <script src="uPlot.iife.min.js" defer></script>
-    <title>My Dashboard</title>
+    <link rel="stylesheet" href="style.css">
+
+    <!-- uPlot graph library -->
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/uplot@1.6.32/dist/uPlot.min.css">
+    <script src="https://cdn.jsdelivr.net/npm/uplot@1.6.32/dist/uPlot.iife.min.js" defer></script>
+
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   </head>
   <body>
     <div class="header">

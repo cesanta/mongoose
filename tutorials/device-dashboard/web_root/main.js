@@ -71,18 +71,19 @@ document.addEventListener("DOMContentLoaded", () => {
     ],
   };
 
-  function updateGraphPoints(args) {
-    if (!args.points || !chart) return;
-    const data = [
-      args.points.map(x => x[0]),
-      args.points.map(x => x[1]),
-      args.points.map(x => x[2]),
+  function updateGraphPoints(data) {
+    if (!data) return;
+    const parsed = JSON.parse(data);
+    const uplot_data = [
+      parsed.map(x => x[0]),
+      parsed.map(x => x[1]),
+      parsed.map(x => x[2]),
     ];
-    chart.setData(data);
+    chart.setData(uplot_data);
   };
 
   // Intercept change notifications
-  Dashboard.on('change', args => updateGraphPoints(args));
-  Dashboard.call('get', 'points').then(resp => updateGraphPoints(resp));
+  Dashboard.on('change', args => updateGraphPoints(args?.chart1?.data));
+  Dashboard.call('get', 'chart1').then(resp => updateGraphPoints(resp?.data));
 
 });
