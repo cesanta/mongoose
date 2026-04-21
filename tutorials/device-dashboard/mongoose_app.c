@@ -51,17 +51,21 @@ static void sync_metrics(bool is_write) {
 
 // Read-write device settings
 static double s_volume = 17.2;
+static int s_log_level = MG_LL_DEBUG;
 static char s_name[20] = "Dublin";
 
 static struct mg_field fields_settings[] = {
     {"volume", MG_VAL_DBL, &s_volume, sizeof(s_volume)},
     {"name", MG_VAL_STR, &s_name, sizeof(s_name)},
+    {"log_level", MG_VAL_INT, &s_log_level, sizeof(s_log_level)},
     {NULL, 0, NULL, 0},
 };
 
 static void sync_settings(bool is_write) {
   if (is_write) {
+    mg_log_level = s_log_level;
   } else {
+    s_log_level = mg_log_level;
   }
 }
 

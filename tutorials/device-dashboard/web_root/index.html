@@ -17,7 +17,7 @@
           },
           settings: {
             volume: 12,
-            motor: false,
+            log_level: 3,
             name: 'Galway',
           },
           metrics: {
@@ -211,12 +211,22 @@
             <div class="panel-title">Device settings</div>
             <div class="panel-body">
               <div class="field">
-                <label class="field-label" for="setting-name">Name</label>
-                <input class="field-input" id="setting-name" type="text" data-bind="settings.name" data-autosave="1" />
+                <label class="field-label">Name</label>
+                <input class="field-input"type="text" data-bind="settings.name" data-autosave="1" />
               </div>
               <div class="field">
-                <label class="field-label" for="setting-volume">Volume</label>
-                <input class="field-input" id="setting-volume" type="text" data-bind="settings.volume" />
+                <label class="field-label">Volume</label>
+                <input class="field-input" type="text" data-bind="settings.volume" />
+              </div>
+              <div class="field">
+                <label class="field-label">Log Level</label>
+                <select class="field-input" data-bind="settings.log_level">
+                  <option value="0">Disable logs</option>
+                  <option value="1">Error</option>
+                  <option value="2">Info</option>
+                  <option value="3">Debug</option>
+                  <option value="4">Verbose (very noisy)</option>
+                </select>
               </div>
             </div>
             <div class="panel-footer">

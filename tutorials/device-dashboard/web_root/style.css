@@ -302,8 +302,8 @@ body {
 }
 
 .field-input.edited, .select.edited, .slider.edited>* {
-  border-color: #50500040;
-  background: #ffff0020;
+  border-color: #00502040;
+  background: #00ff0020;
 }
 
 .field-input.error, .select.error, .slider.error>* {
@@ -554,7 +554,7 @@ body {
   cursor: not-allowed;
 }
 .toggle.edited {
-  border-color: #ee0;
+  border-color: #0fe;
 }
 
 @media (max-width: 900px) {
