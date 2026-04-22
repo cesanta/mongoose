@@ -1,10 +1,10 @@
-VERSION = 7.21.1
-PACKPATH = Mongoose
-FILES = $(PACKPATH) App Cesanta.I-CUBE-Mongoose.pdsc License.txt Release_Notes.html
+VERSION = 7.21.2
+REPO_ROOT = ../..
+FILES = Mongoose App Cesanta.I-CUBE-Mongoose.pdsc License.txt Release_Notes.html
 
 all: Cesanta.I-CUBE-Mongoose.$(VERSION).pack
 
-Cesanta.I-CUBE-Mongoose.$(VERSION).pack: $(FILES) $(PACKPATH)/mongoose.h $(PACKPATH)/mongoose.c
+Cesanta.I-CUBE-Mongoose.$(VERSION).pack: $(FILES) Mongoose/mongoose.h Mongoose/mongoose.c App/mongoose_app.c App/dashboard.html.c
 	zip -r $@ $^
 
 # Get packchk from https://github.com/Open-CMSIS-Pack/cmsis-toolbox
@@ -13,13 +13,18 @@ check: Cesanta.I-CUBE-Mongoose.$(VERSION).pack
 	packchk Cesanta.I-CUBE-Mongoose.pdsc
 
 License.txt:
-	cp ../../LICENSE $@
-$(PACKPATH):
-	mkdir -p $(PACKPATH)
-$(PACKPATH)/mongoose.h: $(PACKPATH)
-	cp ../../mongoose.h $@
-$(PACKPATH)/mongoose.c: $(PACKPATH)
-	cp ../../mongoose.c $@
+	cp $(REPO_ROOT)/LICENSE $@
+Mongoose:
+	mkdir -p Mongoose
+App/mongoose_app.c:
+	cp $(REPO_ROOT)/tutorials/device-dashboard/mongoose_app.c $@
+App/dashboard.html.c:
+	make -C $(REPO_ROOT)/tutorials/device-dashboard dashboard.html.c
+	cp $(REPO_ROOT)/tutorials/device-dashboard/dashboard.html.c $@
+Mongoose/mongoose.h: Mongoose
+	cp $(REPO_ROOT)/mongoose.h $@
+Mongoose/mongoose.c: Mongoose
+	cp $(REPO_ROOT)/mongoose.c $@
 
 clean:
-	rm -rf *.pack License.txt $(PACKPATH)
+	rm -rf *.pack License.txt Mongoose App/*.{html,js,c}

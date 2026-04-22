@@ -7,7 +7,7 @@
   <license>License.txt</license>
   <supportContact>https://mongoose.ws/contact/</supportContact>
   <releases>
-    <release date="2026-04-22" version="7.21.1">See https://github.com/cesanta/mongoose/releases/tag/7.21</release>
+    <release date="2026-04-22" version="7.21.2">See https://github.com/cesanta/mongoose/releases/tag/7.21</release>
     <release date="2026-04-08" version="7.21.0">See https://github.com/cesanta/mongoose/releases/tag/7.21</release>
     <release date="2024-03-01" version="7.13.0">See https://github.com/cesanta/mongoose/releases/tag/7.13</release>
   </releases>
@@ -21,13 +21,14 @@
     </description>
   </taxonomy>
   <components>
-    <component Cclass="Network" Cgroup="Mongoose" Cversion="7.21.1" maxInstances="1">
+    <component Cclass="Network" Cgroup="Mongoose" Cversion="7.21.2" maxInstances="1">
       <description>Mongoose - TCP/IP stack + TLS + HTTP + WebSocket + MQTT + Firmware OTA</description>
       <files>
         <file category="header" name="Mongoose/mongoose.h" />
         <file category="sourceC" name="Mongoose/mongoose.c" />
-        <file category="sourceC" name="App/mongoose_app.c" attr="config" version="7.21.1" />
-        <file category="header" name="App/mongoose_config.h" attr="config" version="7.21.1" />
+        <file category="sourceC" name="App/mongoose_app.c" attr="config" version="7.21.2" />
+        <file category="sourceC" name="App/dashboard.html.c" attr="config" version="7.21.2" />
+        <file category="header" name="App/mongoose_config.h" attr="config" version="7.21.2" />
       </files>
     </component>
   </components>
