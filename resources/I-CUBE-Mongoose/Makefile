@@ -6,6 +6,7 @@ all: Cesanta.I-CUBE-Mongoose.$(VERSION).pack
 
 Cesanta.I-CUBE-Mongoose.$(VERSION).pack: $(FILES) Mongoose/mongoose.h Mongoose/mongoose.c App/mongoose_app.c App/dashboard.html.c
 	zip -r $@ $^
+	cp $@ Cesanta.I-CUBE-Mongoose.pack
 
 # Get packchk from https://github.com/Open-CMSIS-Pack/cmsis-toolbox
 check: Cesanta.I-CUBE-Mongoose.$(VERSION).pack
