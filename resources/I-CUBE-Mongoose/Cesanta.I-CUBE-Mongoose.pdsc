@@ -1,0 +1,34 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<package schemaVersion="1.7.40" xmlns:xs="http://www.w3.org/2001/XMLSchema-instance" xs:noNamespaceSchemaLocation="PACK.xsd">
+  <vendor>Cesanta</vendor>
+  <name>I-CUBE-Mongoose</name>
+  <description>Mongoose - TCP/IP stack + TLS + HTTP + WebSocket + MQTT + Firmware OTA</description>
+  <url>https://mongoose.ws/</url>
+  <license>License.txt</license>
+  <supportContact>https://mongoose.ws/contact/</supportContact>
+  <releases>
+    <release date="2026-04-22" version="7.21.1">See https://github.com/cesanta/mongoose/releases/tag/7.21</release>
+    <release date="2026-04-08" version="7.21.0">See https://github.com/cesanta/mongoose/releases/tag/7.21</release>
+    <release date="2024-03-01" version="7.13.0">See https://github.com/cesanta/mongoose/releases/tag/7.13</release>
+  </releases>
+  <keywords>
+      <keyword>CUBE_RULES_COMPLIANT</keyword>
+      <keyword>IMPLEMENTED_WITH_STM32CUBEMX</keyword>
+  </keywords>
+  <taxonomy>
+    <description Cclass="Network" Cgroup="Mongoose">
+      Mongoose - TCP/IP stack + TLS + HTTP + WebSocket + MQTT + Firmware OTA
+    </description>
+  </taxonomy>
+  <components>
+    <component Cclass="Network" Cgroup="Mongoose" Cversion="7.21.1" maxInstances="1">
+      <description>Mongoose - TCP/IP stack + TLS + HTTP + WebSocket + MQTT + Firmware OTA</description>
+      <files>
+        <file category="header" name="Mongoose/mongoose.h" />
+        <file category="sourceC" name="Mongoose/mongoose.c" />
+        <file category="sourceC" name="App/mongoose_app.c" attr="config" version="7.21.1" />
+        <file category="header" name="App/mongoose_config.h" attr="config" version="7.21.1" />
+      </files>
+    </component>
+  </components>
+</package>

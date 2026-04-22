@@ -3411,6 +3411,9 @@ static inline void mg_dash_ev_handler(struct mg_connection *c, int ev,
     }
   }
 }
+
+extern void mongoose_init(void);
+extern void mongoose_poll(void);
 // Copyright (c) 2023 Cesanta Software Limited
 // All rights reserved
 
