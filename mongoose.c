@@ -12027,6 +12027,7 @@ void mg_connect_resolved(struct mg_connection *c) {
     if (rc == 0) {                       // Success
       setlocaddr(FD(c), &c->loc);
       mg_call(c, MG_EV_CONNECT, NULL);   // Send MG_EV_CONNECT to the user
+      if (c->is_tls_hs) mg_tls_handshake(c);  // Trigger TLS handshake immediately if user called mg_tls_init()
       if (!c->is_tls_hs) c->is_tls = 0;  // user did not call mg_tls_init()
     } else if (MG_SOCK_PENDING(rc)) {    // Need to wait for TCP handshake
       MG_DEBUG(("%lu %ld -> %M pend", c->id, c->fd, mg_print_ip_port, &c->rem));
