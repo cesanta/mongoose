@@ -1,13 +1,18 @@
 // SPDX-FileCopyrightText: 2026 Cesanta Software Limited
 // SPDX-License-Identifier: GPL-2.0-only or commercial
 
-extern void mongoose_init(void);
-extern void mongoose_poll(void);
+#include "mongoose.h"
 
 int main(void) {
-  mongoose_init();
+  struct mg_mgr mgr;
+
+  mg_mgr_init(&mgr);
+  mg_dash_init(&mgr);
+
   for (;;) {
-    mongoose_poll();
+    mg_mgr_poll(&mgr, 10);
+    mg_dash_poll(&mgr);
   }
+
   return 0;
 }

@@ -2,7 +2,7 @@
 
 PROG ?= example
 MONGOOSE_DIR ?= ../..
-SOURCES = main.c mongoose_app.c dashboard.html.c $(MONGOOSE_DIR)/mongoose.c
+SOURCES = main.c mongoose_dashboard.c dashboard.html.c $(MONGOOSE_DIR)/mongoose.c
 CFLAGS ?= -W -Wall -Wextra -Werror -Wundef -Wshadow -g3 -O0
 PFLAGS = -I$(MONGOOSE_DIR) -DMG_DATA_SIZE=64 -DMG_TLS=MG_TLS_BUILTIN
 AFLAGS ?= -fsanitize=signed-integer-overflow,address,undefined,alignment
@@ -25,7 +25,7 @@ dashboard.html.c: dashboard.html
 
 # For development: rebuild and restart if any of the sources change
 watch:
-	watchexec -r -w main.c -w mongoose_app.c -w $(MONGOOSE_DIR)/mongoose.h -w web_root -e c,h,html,css,js -- make
+	watchexec -r -w main.c -w mongoose_dashboard.c -w $(MONGOOSE_DIR)/mongoose.h -w web_root -e c,h,html,css,js -- make
 
 clean:
 	rm -rf $(PROG) *.exe *.obj *.dSYM mongoose dashboard.*

@@ -7,7 +7,7 @@
   <license>License.txt</license>
   <supportContact>https://mongoose.ws/contact/</supportContact>
   <releases>
-    <release date="2026-04-22" version="7.21.2">See https://github.com/cesanta/mongoose/releases/tag/7.21</release>
+    <release date="2026-04-22" version="7.21.3">See https://github.com/cesanta/mongoose/releases/tag/7.21</release>
     <release date="2026-04-08" version="7.21.0">See https://github.com/cesanta/mongoose/releases/tag/7.21</release>
     <release date="2024-03-01" version="7.13.0">See https://github.com/cesanta/mongoose/releases/tag/7.13</release>
   </releases>
@@ -15,20 +15,25 @@
       <keyword>CUBE_RULES_COMPLIANT</keyword>
       <keyword>IMPLEMENTED_WITH_STM32CUBEMX</keyword>
   </keywords>
-  <taxonomy>
-    <description Cclass="Network" Cgroup="Mongoose">
-      Mongoose - TCP/IP stack + TLS + HTTP + WebSocket + MQTT + Firmware OTA
-    </description>
-  </taxonomy>
+  <conditions>
+    <condition id="MongooseCore">
+      <require Cclass="Mongoose" Cgroup="Networking Core"/>
+    </condition>
+  </conditions>
   <components>
-    <component Cclass="Network" Cgroup="Mongoose" Cversion="7.21.2" maxInstances="1">
-      <description>Mongoose - TCP/IP stack + TLS + HTTP + WebSocket + MQTT + Firmware OTA</description>
+    <component Cclass="Mongoose" Cgroup="Networking Core" Cversion="7.21.3" maxInstances="1">
+      <description>Networking Core</description>
       <files>
-        <file category="header" name="Mongoose/mongoose.h" />
-        <file category="sourceC" name="Mongoose/mongoose.c" />
-        <file category="sourceC" name="App/mongoose_app.c" attr="config" version="7.21.2" />
-        <file category="sourceC" name="App/dashboard.html.c" attr="config" version="7.21.2" />
-        <file category="header" name="App/mongoose_config.h" attr="config" version="7.21.2" />
+        <file category="header" name="mongoose.h" />
+        <file category="sourceC" name="mongoose.c" />
+        <file category="header" name="mongoose_config.h"/>
+      </files>
+    </component>
+    <component Cclass="Mongoose" Cgroup="Web Device Dashboard" Cversion="7.21.3" condition="MongooseCore" maxInstances="1">
+      <description>Web Device Dashboard</description>
+      <files>
+        <file category="sourceC" name="mongoose_dashboard.c"/>
+        <file category="sourceC" name="dashboard.html.c"/>
       </files>
     </component>
   </components>

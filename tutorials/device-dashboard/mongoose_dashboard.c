@@ -114,22 +114,16 @@ static struct mg_field_set field_sets[] = {
     {"chart1", fields_chart1, sync_chart1, 0, 0},
     {0, 0, 0, 0, 0},
 };
-static struct mg_mgr s_mgr;
 static struct mg_dash s_dashboard = {field_sets};
 
-void mongoose_init(void) {
-  mg_mgr_init(&s_mgr);
-  mg_http_listen(&s_mgr, HTTP_ADDR, mg_dash_ev_handler, &s_dashboard);
+void mg_dash_init(struct mg_mgr *mgr) {
+  mg_http_listen(mgr, HTTP_ADDR, mg_dash_ev_handler, &s_dashboard);
 }
 
-void mongoose_poll(void) {
-  mg_mgr_poll(&s_mgr, 1);
-
-  {
-    // Send metrics change periodically
-    static uint64_t timer = 0;
-    if (mg_timer_expired(&timer, 300, mg_now())) {
-      mg_dash_send_change(&s_mgr, &s_dashboard, "metrics");
-    }
+void mg_dash_poll(struct mg_mgr *mgr) {
+  // Send metrics change periodically
+  static uint64_t timer = 0;
+  if (mg_timer_expired(&timer, 30000, mg_now())) {
+    mg_dash_send_change(mgr, &s_dashboard, "metrics");
   }
 }
