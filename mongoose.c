@@ -2826,7 +2826,7 @@ static int skip_chunk(const char *buf, int len, int *pl, int *dl) {
   while (i < len && is_hex_digit(buf[i])) i++;
   if (i == 0) return -1;                     // Error, no length specified
   if (i > (int) sizeof(int) * 2) return -1;  // Chunk length is too big
-  if (len < i + 1 || buf[i] != '\r' || buf[i + 1] != '\n') return -1;  // Error
+  if (len < i + 2 || buf[i] != '\r' || buf[i + 1] != '\n') return -1;  // Error
   if (mg_str_to_num(mg_str_n(buf, (size_t) i), 16, &n, sizeof(int)) == false)
     return -1;                    // Decode chunk length, overflow
   if (n < 0) return -1;           // Error. TODO(): some checks now redundant
