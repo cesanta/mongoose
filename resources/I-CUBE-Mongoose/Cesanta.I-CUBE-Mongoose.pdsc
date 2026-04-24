@@ -25,6 +25,7 @@
     <component Cclass="Mongoose" Cgroup="Networking Core" Cversion="7.21.4" maxInstances="1">
       <description>Networking Core</description>
       <files>
+        <file category="other" name="README.md"/>
         <file category="header" name="mongoose.h" />
         <file category="sourceC" name="mongoose.c" />
         <file category="header" name="mongoose_config.h"/>

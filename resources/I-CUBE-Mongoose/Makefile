@@ -9,13 +9,13 @@ GENERATED = License.txt \
 all: Cesanta.I-CUBE-Mongoose.$(VERSION).pack
 
 Cesanta.I-CUBE-Mongoose.$(VERSION).pack: $(FILES) $(GENERATED)
-	zip -r $@ $^
+	zip -q -r $@ $^
 	cp $@ Cesanta.I-CUBE-Mongoose.pack
 
 # Get packchk from https://github.com/Open-CMSIS-Pack/cmsis-toolbox
 check: Cesanta.I-CUBE-Mongoose.$(VERSION).pack
-	grep $(VERSION) Cesanta.I-CUBE-Mongoose.pdsc || exit 1
-	packchk Cesanta.I-CUBE-Mongoose.pdsc
+	grep $(VERSION) Cesanta.I-CUBE-Mongoose.pdsc > /dev/null || exit 1
+	packchk -w 1 Cesanta.I-CUBE-Mongoose.pdsc
 
 License.txt:
 	cp $(REPO_ROOT)/LICENSE $@
