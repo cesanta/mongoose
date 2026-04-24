@@ -1,11 +1,10 @@
-VERSION = 7.21.3
+VERSION = 7.21.4
 REPO_ROOT = ../..
 FILES = Cesanta.I-CUBE-Mongoose.pdsc Release_Notes.html mongoose_config.h README.md
 GENERATED = License.txt \
             mongoose.h mongoose.c \
-            mongoose_dashboard.c dashboard.html.c
-        # STM32CubeMX/Cesanta.I-CUBE-Mongoose.$(VERSION)_Configs.xml \
-        # STM32CubeMX/Cesanta.I-CUBE-Mongoose.$(VERSION)_Modes.xml
+            mongoose_dashboard.c dashboard.html.c \
+            mongoose_mqtt.c dashboard.html.c
 
 all: Cesanta.I-CUBE-Mongoose.$(VERSION).pack
 
@@ -27,6 +26,9 @@ Mongoose:
 mongoose_dashboard.c:
 	cp $(REPO_ROOT)/tutorials/device-dashboard/mongoose_dashboard.c $@
 
+mongoose_mqtt.c:
+	cp $(REPO_ROOT)/tutorials/mqtt/mqtt-client/mongoose_mqtt.c $@
+
 dashboard.html.c:
 	make -C $(REPO_ROOT)/tutorials/device-dashboard dashboard.html.c
 	cp $(REPO_ROOT)/tutorials/device-dashboard/dashboard.html.c $@
@@ -36,12 +38,6 @@ mongoose.h: Mongoose
 
 mongoose.c: Mongoose
 	cp $(REPO_ROOT)/mongoose.c $@
-
-STM32CubeMX/Cesanta.I-CUBE-Mongoose.${VERSION}_Modes.xml:	STM32CubeMX/m.xml
-	sed s,__VERSION__,$(VERSION),g $^ > $@
-
-STM32CubeMX/Cesanta.I-CUBE-Mongoose.${VERSION}_Configs.xml:	STM32CubeMX/c.xml
-	sed s,__VERSION__,$(VERSION),g $^ > $@
 
 clean:
 	rm -rf *.pack STM32CubeMX/*.$(VERSION)_*.xml $(GENERATED)

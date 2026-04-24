@@ -2,12 +2,13 @@
 <package schemaVersion="1.7.40" xmlns:xs="http://www.w3.org/2001/XMLSchema-instance" xs:noNamespaceSchemaLocation="PACK.xsd">
   <vendor>Cesanta</vendor>
   <name>I-CUBE-Mongoose</name>
-  <description>Mongoose - TCP/IP stack + TLS + HTTP + WebSocket + MQTT + Firmware OTA</description>
-  <url>https://mongoose.ws/</url>
+  <description>Mongoose - a lightweight networking library providing TCP/IP stack, TLS, HTTP (Embedded Web Server), WebSocket, MQTT, and Firmware OTA updates. Build production-ready web device dashboards and MQTT cloud connectivity without stitching multiple components together.
+  </description>
+  <url>https://mongoose.ws/downloads/stm32pack/</url>
   <license>License.txt</license>
   <supportContact>https://mongoose.ws/contact/</supportContact>
   <releases>
-    <release date="2026-04-22" version="7.21.3">See https://github.com/cesanta/mongoose/releases/tag/7.21</release>
+    <release date="2026-04-24" version="7.21.4">See https://github.com/cesanta/mongoose/releases/tag/7.21</release>
     <release date="2026-04-08" version="7.21.0">See https://github.com/cesanta/mongoose/releases/tag/7.21</release>
     <release date="2024-03-01" version="7.13.0">See https://github.com/cesanta/mongoose/releases/tag/7.13</release>
   </releases>
@@ -21,7 +22,7 @@
     </condition>
   </conditions>
   <components>
-    <component Cclass="Mongoose" Cgroup="Networking Core" Cversion="7.21.3" maxInstances="1">
+    <component Cclass="Mongoose" Cgroup="Networking Core" Cversion="7.21.4" maxInstances="1">
       <description>Networking Core</description>
       <files>
         <file category="header" name="mongoose.h" />
@@ -29,11 +30,17 @@
         <file category="header" name="mongoose_config.h"/>
       </files>
     </component>
-    <component Cclass="Mongoose" Cgroup="Web Device Dashboard" Cversion="7.21.3" condition="MongooseCore" maxInstances="1">
+    <component Cclass="Mongoose" Cgroup="Web Device Dashboard" Cversion="7.21.4" condition="MongooseCore" maxInstances="1">
       <description>Web Device Dashboard</description>
       <files>
         <file category="sourceC" name="mongoose_dashboard.c"/>
         <file category="sourceC" name="dashboard.html.c"/>
+      </files>
+    </component>
+    <component Cclass="Mongoose" Cgroup="MQTT Client" Cversion="7.21.4" condition="MongooseCore" maxInstances="1">
+      <description>MQTT Client</description>
+      <files>
+        <file category="sourceC" name="mongoose_mqtt.c"/>
       </files>
     </component>
   </components>

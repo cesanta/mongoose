@@ -101,6 +101,8 @@ Hi from Mongoose! Tick 38187
 
 ## Add full device dashboard
 
+Enable "Mongoose Web Device Dashboard" component in CubeMX. Regenerate code.
+
 Remove the hello world server if you added it. Modify your while loop
 to look like this:
 
@@ -119,3 +121,27 @@ while (1)
 
 Rebuild, reflash your board and enjoy the fully functional device dashboard
 that you can tailor to your firmware.
+
+## Add MQTT Client
+
+Enable "Mongoose MQTT Client" component in CubeMX. Regenerate code.
+
+Add MQTT init and poll to your while loop:
+
+```c
+/* USER CODE BEGIN WHILE */
+struct mg_mgr mgr;
+mg_mgr_init(&mgr);
+mg_mqtt_init(&mgr);
+
+while (1)
+{
+  mg_mgr_poll(&mgr, 1);
+  mg_mqtt_poll(&mgr);
+/* USER CODE END WHILE */
+```
+
+Rebuild, reflash your board. This MQTT Client connects to the
+HiveMQ public MQTT broker - see `mongoose_mqtt.c` file for details.
+Also it add a JSON-RPC "ota.update" function via MQTT, so you can
+update your firmware over MQTT, see https://mongoose.ws/mqtt/
