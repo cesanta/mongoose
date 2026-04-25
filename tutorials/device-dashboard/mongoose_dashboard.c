@@ -45,9 +45,9 @@ static struct mg_field fields_metrics[] = {
 
 static void sync_metrics(bool is_write) {
   if (is_write) return;
-   s_ram = 25 + (rand() % 16);  // Sumulate metric change
-   s_cpu = 7 + (rand() % 21);
-   s_temperature = 14.8 + ((double)rand() / RAND_MAX) * 20.0;
+  s_ram = 25 + (rand() % 16);  // Sumulate metric change
+  s_cpu = 7 + (rand() % 21);
+  s_temperature = 14.8 + ((double) rand() / RAND_MAX) * 20.0;
 }
 
 // Read-write device settings
@@ -108,7 +108,7 @@ void sync_chart1(bool is_write) {
 }
 
 static struct mg_field_set field_sets[] = {
-    {"control", fields_control, sync_control, 0, 0},
+    {"controls", fields_control, sync_control, 0, 0},
     {"metrics", fields_metrics, sync_metrics, 0, 0},
     {"settings", fields_settings, sync_settings, 0, 0},
     {"chart1", fields_chart1, sync_chart1, 0, 0},

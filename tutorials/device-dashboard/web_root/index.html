@@ -206,38 +206,37 @@
         </div>
       </section>
       <section id="settings" class="tab-panel" role="tabpanel" aria-labelledby="tab-settings" hidden>
-        <div class="panel-layout">
-          <div class="panel">
-            <div class="panel-title">Device settings</div>
-            <div class="panel-body">
-              <div class="field">
-                <label class="field-label">Name</label>
-                <input class="field-input"type="text" data-bind="settings.name" data-autosave="1" />
-              </div>
-              <div class="field">
-                <label class="field-label">Volume</label>
-                <input class="field-input" type="text" data-bind="settings.volume" />
-              </div>
-              <div class="field">
-                <label class="field-label">Log Level</label>
-                <select class="field-input" data-bind="settings.log_level">
-                  <option value="0">Disable logs</option>
-                  <option value="1">Error</option>
-                  <option value="2">Info</option>
-                  <option value="3">Debug</option>
-                  <option value="4">Verbose (very noisy)</option>
-                </select>
-              </div>
+        <div class="panel" style="width: 22rem;">
+          <div class="panel-title">Device settings</div>
+          <div class="panel-body">
+            <div class="field">
+              <label class="field-label">Name</label>
+              <input class="field-input"type="text" data-bind="settings.name" data-autosave="1" />
             </div>
-            <div class="panel-footer">
-              <button class="btn btn-secondary" type="button" data-cancel="settings">Cancel</button>
-              <button class="btn btn-primary" type="button" data-save="settings">Save</button>
+            <div class="field">
+              <label class="field-label">Volume</label>
+              <input class="field-input" type="text" data-bind="settings.volume" />
             </div>
+            <div class="field">
+              <label class="field-label">Log Level</label>
+              <select class="field-input" data-bind="settings.log_level">
+                <option value="0">Disable logs</option>
+                <option value="1">Error</option>
+                <option value="2">Info</option>
+                <option value="3">Debug</option>
+                <option value="4">Verbose (very noisy)</option>
+              </select>
+            </div>
+          </div>
+          <div class="panel-footer">
+            <button class="btn btn-secondary" type="button" data-cancel="settings">Cancel</button>
+            <button class="btn btn-primary" type="button" data-save="settings">Save</button>
           </div>
         </div>
       </section>
       <section id="firmware" class="tab-panel" role="tabpanel" aria-labelledby="tab-firmware" hidden></section>
-      <section id="events" class="tab-panel" role="tabpanel" aria-labelledby="tab-events" hidden></section>
+      <section id="events" class="tab-panel" role="tabpanel" aria-labelledby="tab-events" hidden>
+      </section>
     </main>
   </body>
 </html>

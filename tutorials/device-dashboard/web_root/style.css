@@ -34,10 +34,6 @@ body {
 }
 
 .header {
-  position: fixed;
-  top: 0;
-  left: 0;
-  right: 0;
   z-index: 50;
 }
 
@@ -48,7 +44,7 @@ body {
   align-items: center;
   justify-content: space-between;
   gap: var(--spacing-4);
-  padding: var(--spacing-2) var(--spacing-4);
+  padding: var(--spacing-2) var(--spacing-6);
 }
 
 .header-left {
@@ -136,7 +132,7 @@ body {
 .tab-stage {
   max-width: var(--max-width);
   margin: 0 auto;
-  padding: 5.5rem var(--spacing-4) var(--spacing-4);
+  padding: 0.5rem var(--spacing-6) var(--spacing-4);
 }
 
 .tab-panel {
@@ -245,13 +241,6 @@ body {
 
 .tab-panel[hidden] {
   display: none;
-}
-
-/* ── Panel ──────────────────────────────────────── */
-
-.panel-layout {
-  padding-top: 1rem;
-  max-width: 22rem;
 }
 
 .panel-body {
