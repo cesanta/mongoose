@@ -63,7 +63,6 @@
   const isMock = !!window.frameElement || (window !== window.top);
   const rpc = isMock ? null : Rpc('api/websocket');
   const settings = {data: {}, edits: {}, debug: true};
-  const substitutions = {};
   const userhandlers = {}; // User event handlers
 
   const fromPath = (path, value) => path.split('.').reverse().reduce((acc, k) => ({ [k]: acc }), value);
@@ -138,7 +137,7 @@
     return false;
   };
 
-  function scan_bind(el, key, context) {
+  function handle_bind(el, key, context) {
     if (!has(context, key)) { console.error('EVAL', key, context); return; }
     const v = get(context, key)
     // console.log(2, key, v);
@@ -173,37 +172,55 @@
     rescan();
   };
 
-  function scan_save(el, keys) {
+  function handle_save(el, keys) {
     el.disabled = !edited(keys);
     if (!el.bound) el.addEventListener("click", ev => save(keys)), el.bound = true;
   };
 
-  function scan_cancel(el, keys) {
+  function handle_cancel(el, keys) {
     if (!el.bound) el.addEventListener("click", ev => cancel(keys)), el.bound = true;
     el.disabled = !edited(keys);
   };
 
-  function createSubstitutions() {
-    substitutions.nodes = [], substitutions.attributes = [], substitutions.bound = [];
-    document.querySelectorAll("*").forEach(function (el) {
-      if (el.tagName === "SCRIPT" || el.tagName === "STYLE") return;
-      for (const node of el.childNodes) {
-        if (node.nodeType === Node.TEXT_NODE && node.nodeValue.includes('${')) {
-          node.originalValue = node.nodeValue;
-          substitutions.nodes.push(node);
-        }
-      }
-      for (const attr of el.attributes) {
-        if (attr.value.includes('${')) {
-          attr.originalValue = attr.value;
-          substitutions.attributes.push(attr);
-        }
-      }
-      for (const [key, val] of Object.entries(el.dataset)) {
-        if (['bind', 'save', 'cancel'].includes(key)) substitutions.bound.push(el);
-      }
+  function handle_repeat(el, key, context) {
+    if (!has(context, key)) { console.error('EVAL', key, context); return; }
+    if (!el.orig) el.orig = el.children[0];
+    const v = get(context, key), v2 = JSON.stringify(v);
+    // if (el.v2 === v2) return;
+    const frag = document.createDocumentFragment();
+    const it = el.dataset.iterator ?? '__obj';
+    v.forEach(function (item, index) {
+      const child = el.orig.cloneNode(true);
+      const ctx = { ...context, [it]: item };
+      process(child, ctx);
+      frag.appendChild(child);
     });
-    // console.log(substitutions);
+    el.replaceChildren(frag);
+    // el.v2 = v2;
+  };
+
+  function handle_upload(el) {
+    if (el.bound) return;
+    el.bound = true;
+    el.addEventListener("change", function (ev) {
+      const f = ev.target.files[0];
+      if (!f) return;
+      const reader = new FileReader();
+      reader.readAsArrayBuffer(f);
+      reader.onload = function () {
+        const url = `files/${encodeURIComponent(f.name)}`;
+        let begin = Date.now(), body = reader.result, ok = false;
+        // console.log(2, url, body);
+        fetch(url, { method: 'POST', body })
+          .then(r => { ok = r.ok; })
+          .catch(() => true)
+          .finally(() => {
+            console.log('UPLOAD finshed in ', Date.now() - begin, 'ms');
+          });
+        };
+      ev.target.value = '';
+      ev.preventDefault();
+    });
   };
 
   function substituteExpressions(text, context) {
@@ -215,25 +232,44 @@
     return typeof text == "string" ? text.replace(/\${(.+?)}/g, f) : text;
   }
 
-  function realrescan() {
-    const context = JSON.parse(JSON.stringify(settings.data));
-    apply(context, settings.edits);
-    if (!substitutions.nodes) createSubstitutions();
-    substitutions.attributes.forEach(attr => {
-      const v = substituteExpressions(attr.originalValue, context);
-      if (v !== attr.value) attr.value = v;
-    });
-    substitutions.nodes.forEach(node => {
-      const v = substituteExpressions(node.originalValue, context);
-      if (v !== node.nodeValue) node.nodeValue = v;
-    });
-    substitutions.bound.forEach(el => {
+  function process(el, context) {
+    el.querySelectorAll("*").forEach(function (el) {
+      if (el.tagName === "SCRIPT" || el.tagName === "STYLE") return;
+      for (const node of el.childNodes) {
+        if (node.nodeType === Node.TEXT_NODE &&
+            (node.originalValue || node.nodeValue.includes('${'))) {
+          if (!node.originalValue) node.originalValue = node.nodeValue;
+          const v = substituteExpressions(node.originalValue, context);
+          if (v !== node.nodeValue) node.nodeValue = v;
+        }
+      }
+      for (const attr of el.attributes) {
+        const cv = decodeURIComponent(attr.value || '');
+        if (attr.originalValue || cv.includes('${')) {
+          if (!attr.originalValue) attr.originalValue = cv;
+          const v = substituteExpressions(attr.originalValue, context);
+          if (v !== attr.value) attr.value = v;
+        }
+      }
+      const datakeys = { bind: 1, save: 1, cancel: 1, repeat: 1, upload: 1 };
       for (const [key, val] of Object.entries(el.dataset)) {
-        if (key == 'bind') scan_bind(el, val, context);
-        if (key == 'save') scan_save(el, val.split(/\s*,\s*/));
-        if (key == 'cancel') scan_cancel(el, val.split(/\s*,\s*/));
+        if (!datakeys[key]) continue;
+        if (key == 'bind') handle_bind(el, val, context);
+        if (key == 'save') handle_save(el, val.split(/\s*,\s*/));
+        if (key == 'cancel') handle_cancel(el, val.split(/\s*,\s*/));
+        if (key == 'repeat') handle_repeat(el, val, context);
+        if (key == 'upload') handle_upload(el);
       }
     });
+  };
+
+  function realrescan() {
+    // const t0 = performance.now();
+    const context = JSON.parse(JSON.stringify(settings.data));
+    apply(context, settings.edits);
+    process(document, context);
+    // const t1 = performance.now();
+    // console.log(`Took2 ${t1 - t0} ms`);
   };
 
   function rescan() {
@@ -250,7 +286,8 @@
     if (isMock) {
       return delay(750, true).then(val => console.log('response', name));
     } else {
-      return rpc.call(name, args).catch(err => console.log('CALL FAILED', name, args, err));
+      return rpc.call(name, args)
+        .catch(err => console.log('CALL FAILED', name, args, err));
     }
   };
 
@@ -291,5 +328,5 @@
     }
   };
 
-  global.Dashboard = { init, call, on};
+  global.Dashboard = { init, call, on };
 })(window);

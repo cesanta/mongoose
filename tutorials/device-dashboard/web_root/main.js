@@ -73,7 +73,8 @@ document.addEventListener("DOMContentLoaded", () => {
 
   function updateGraphPoints(data) {
     if (!data) return;
-    const parsed = JSON.parse(data);
+    // const parsed = JSON.parse(data);
+    const parsed = data || [];
     const uplot_data = [
       parsed.map(x => x[0]),
       parsed.map(x => x[1]),
@@ -87,7 +88,8 @@ document.addEventListener("DOMContentLoaded", () => {
   Dashboard.call('get', 'chart1').then(resp => updateGraphPoints(resp?.data));
 
   // Show logs
-  fetch('logs/')
-    .then(resp => resp.text())
-    .then(text => document.getElementById("logs").textContent = text);
+  // fetch('logs/')
+  //   .then(resp => resp.text())
+  //   .then(text => document.getElementById("logs").textContent = text);
+
 });

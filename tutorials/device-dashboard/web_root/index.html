@@ -4,15 +4,17 @@
     <title>My Dashboard</title>
 
     <!-- Mongoose device dashboard -->
-    <script src="https://cdn.jsdelivr.net/gh/cesanta/mongoose@master/resources/dashboard.js"></script>
+    <!--<script src="https://cdn.jsdelivr.net/gh/cesanta/mongoose@master/resources/dashboard.js"></script>-->
+    <script src="dashboard.js"></script>
     <script>
       Dashboard.init({
         debug: true,
         data: {
-          chart1: {data: ''},
+          chart1: {data: []},
           leds: { led1: true, led2: false, led3: false },
           settings: { volume: 12, log_level: 3, name: 'Galway' },
           metrics: { temperature: 1.2, humidity: 3, cpu: 4, ram: 5 },
+          files: {data: [{name: 'device-log-2026-04-25.txt', size: 8625563}]},
         },
       });
     </script>
@@ -55,22 +57,21 @@
               </svg>
               Firmware Update
             </a>
-            <a href="#events" id="tab-events" class="nav-link" role="tab" aria-controls="events" aria-selected="false" tabindex="-1">
+            <a href="#files" id="tab-files" class="nav-link" role="tab" aria-controls="files" aria-selected="false" tabindex="-1">
               <svg viewBox="0 0 24 24" class="nav-icon" fill="none" stroke="currentColor" stroke-width="2">
-                <path d="M8 7h8" />
-                <path d="M8 12h8" />
-                <path d="M8 17h5" />
-                <rect x="4" y="4" width="16" height="16" rx="3" />
+                <path d="M4 7a2 2 0 0 1 2-2h4l2 2h6a2 2 0 0 1 2 2v2H4Z" />
+                <path d="M4 11h16v7a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2Z" />
+                <path d="M8 15h8" />
               </svg>
-              Event Log
+              File Manager
             </a>
           </nav>
-        </div>
-        <div class="header-actions">
           <div class="connection-badge" aria-label="connection active">
             <span class="connection-label">live</span>
             <span class="connection-dot" aria-hidden="true"></span>
           </div>
+        </div>
+        <div class="header-actions">
           <nav class="nav-tabs">
             <div class="nav-link">
               <svg viewBox="0 0 24 24" class="nav-icon" fill="none" stroke="currentColor" stroke-width="2">
@@ -205,14 +206,79 @@
             </div>
           </div>
           <div class="panel-footer">
-            <button class="btn btn-secondary" type="button" data-cancel="settings">Cancel</button>
-            <button class="btn btn-primary" type="button" data-save="settings">Save</button>
+            <button class="btn btn-secondary" type="button" data-cancel="settings">
+              <svg viewBox="0 0 24 24" class="nav-icon" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M18 6 6 18" />
+                <path d="m6 6 12 12" />
+              </svg>
+              Cancel
+            </button>
+            <button class="btn btn-primary" type="button" data-save="settings">
+              <svg viewBox="0 0 24 24" class="nav-icon" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2Z" />
+                <path d="M17 21v-8H7v8" />
+                <path d="M7 3v5h8" />
+              </svg>
+              Save
+            </button>
           </div>
         </div>
       </section>
       <section id="firmware" class="tab-panel" role="tabpanel" aria-labelledby="tab-firmware" hidden></section>
-      <section id="events" class="tab-panel" role="tabpanel" aria-labelledby="tab-events" hidden>
-        <pre id="logs" class="file-content"></pre>
+      <section id="files" class="tab-panel" role="tabpanel" aria-labelledby="tab-files" hidden>
+        <div class="panel" style="max-width: 40rem;">
+          <div class="panel-title">
+            <span>
+              <span>File Manager</span>
+              <span class="metric-status">${files.data.length} Files</span>
+            </span>
+            <div class="header-actions">
+              <label class="btn btn-primary">
+                <svg viewBox="0 0 24 24" class="nav-icon" fill="none" stroke="currentColor" stroke-width="2">
+                  <path d="M12 3v12" />
+                  <path d="m7 8 5-5 5 5" />
+                  <path d="M5 21h14" />
+                </svg>
+                Upload
+                <input type="file" hidden data-upload="1" />
+              </label>
+            </div>
+          </div>
+          <div class="panel-body">
+            <div class="file-list" data-repeat="files.data" data-iterator="f">
+              <div class="file-row">
+                <div class="file-info">
+                  <span class="file-icon" aria-hidden="true">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                      <path d="M14 2H7a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V7Z" />
+                      <path d="M14 2v5h5" />
+                    </svg>
+                  </span>
+                  <div class="file-name">${f.name}</div>
+                </div>
+                <div class="file-size">${f.size}</div>
+                <div class="file-actions">
+                  <a onclick="window.open('files/${encodeURIComponent(f.name)}', '_blank')" target="_blank" class="btn btn-secondary">
+                    <svg viewBox="0 0 24 24" class="nav-icon" fill="none" stroke="currentColor" stroke-width="2">
+                      <path d="M12 3v12" />
+                      <path d="m7 10 5 5 5-5" />
+                      <path d="M5 21h14" />
+                    </svg>
+                  </a>
+                  <button onclick="fetch('files/${encodeURIComponent(f.name)}?action=delete'); return false;" class="btn btn-secondary">
+                    <svg viewBox="0 0 24 24" class="nav-icon" fill="none" stroke="currentColor" stroke-width="2">
+                      <path d="M3 6h18" />
+                      <path d="M8 6V4h8v2" />
+                      <path d="M19 6l-1 14H6L5 6" />
+                      <path d="M10 11v5" />
+                      <path d="M14 11v5" />
+                    </svg>
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
       </section>
     </main>
   </body>

@@ -87,7 +87,7 @@ struct point {
 static char s_chart1_data[NUM_POINTS * POINT_SIZE + 2 + 1];
 
 static struct mg_field fields_chart1[] = {
-    {"data", MG_VAL_STR, s_chart1_data, sizeof(s_chart1_data)},
+    {"data", MG_VAL_RAW, s_chart1_data, sizeof(s_chart1_data)},
     {NULL, 0, NULL, 0},
 };
 
@@ -107,19 +107,50 @@ void sync_chart1(bool is_write) {
   len += mg_snprintf(s_chart1_data + len, sizeof(s_chart1_data) - len, "]");
 }
 
-static int s_num_log_files = 0;
-static int s_log_file_index = 0;
-static char s_log_file_name[100];
-static struct mg_field fields_log_files[] = {
-    {"size", MG_VAL_INT, &s_num_log_files, sizeof(s_num_log_files)},
-    {"index", MG_VAL_INT, &s_log_file_index, sizeof(s_log_file_index)},
-    {"name", MG_VAL_STR, &s_log_file_name, sizeof(s_log_file_name)},
+struct file {
+  struct file *next;
+  char *name;
+  size_t size;
+} *s_file_list;
+
+static void file_add(struct mg_str name, size_t size) {
+  struct file *f = mg_calloc(1, sizeof(*f));
+  f->name = mg_strdup(name).buf;
+  f->size = size;
+  f->next = s_file_list;
+  s_file_list = f;
+}
+
+static void file_del(struct mg_str name) {
+  struct file **head, *f;
+  for (head = &s_file_list, f = *head; f; head = &(*head)->next, f = *head) {
+    if (mg_strcmp(mg_str(f->name), name) == 0) {
+      MG_INFO(("Deleting %s", f->name));
+      *head = f->next;
+      mg_free(f->name);
+      mg_free(f);
+      return;
+    }
+  }
+}
+
+// Files array: [{"name": "foo.txt", "size": 1234}]
+static char s_files[1024];
+static struct mg_field fields_files[] = {
+    {"data", MG_VAL_RAW, s_files, sizeof(s_files)},
     {NULL, 0, NULL, 0},
 };
-static void sync_log_files(bool is_write) {
+static void sync_files(bool is_write) {
+  size_t len = 0;
+  struct file *f;
   if (is_write) return;
-  mg_log_level = s_log_level;
-  s_log_level = mg_log_level;
+  len += mg_snprintf(s_files + len, sizeof(s_files) - len, "[");
+  for (f = s_file_list; f; f = f->next) {
+    len += mg_snprintf(s_files + len, sizeof(s_files) - len, "%s{%m:%m,%m:%u}",
+                       len > 1 ? "," : "", MG_ESC("name"), MG_ESC(f->name),
+                       MG_ESC("size"), f->size);
+  }
+  len += mg_snprintf(s_files + len, sizeof(s_files) - len, "]");
 }
 
 static struct mg_field_set field_sets[] = {
@@ -127,19 +158,82 @@ static struct mg_field_set field_sets[] = {
     {"metrics", fields_metrics, sync_metrics, 0, 0},
     {"settings", fields_settings, sync_settings, 0, 0},
     {"chart1", fields_chart1, sync_chart1, 0, 0},
-    {"log_files", fields_log_files, sync_log_files, 0, 0},
+    {"files", fields_files, sync_files, 0, 0},
     {0, 0, 0, 0, 0},
 };
 static struct mg_dash s_dashboard = {field_sets, NULL};
 
-static void log_ev_handler(struct mg_connection *c, int ev, void *ev_data) {
-  if (ev == MG_EV_HTTP_MSG) {
-    mg_http_serve_file(c, ev_data, "Makefile", NULL);
+struct upload_state {
+  char marker;      // Tells that we're a file upload connection
+  size_t expected;  // POST data length, bytes
+  size_t received;  // Already received bytes
+  void *ctx;        // OTA context
+};
+
+static void file_ev_handler(struct mg_connection *c, int ev, void *ev_data) {
+  struct upload_state *us = (struct upload_state *) c->data;
+  if ((ev == MG_EV_HTTP_HDRS || ev == MG_EV_HTTP_MSG) && us->marker == 0) {
+    struct mg_http_message *hm = (struct mg_http_message *) ev_data;
+    if (hm->uri.len > 7) hm->uri.len -= 7, hm->uri.buf += 7;  // Strip /files/
+    if (sizeof(*us) > sizeof(c->data)) {
+      mg_error(c,
+               "FAILURE: sizeof(c->data) == %lu, need %lu."
+               " Set #define MG_DATA_SIZE XXX",
+               sizeof(c->data), sizeof(*us));
+    } else if (mg_strcmp(hm->query, mg_str("action=delete")) == 0) {
+      // Query string ?action=delete - file deletion
+      file_del(hm->uri);
+      mg_dash_send_change(c->mgr, &s_dashboard, "files");
+      mg_http_reply(c, 200, NULL, "true");
+    } else if (mg_path_is_sane(hm->uri) == false) {
+      // Bad file name, return error. Protect from traversal, etc
+      mg_http_reply(c, 400, NULL, "Bad name");
+    } else if (mg_match(hm->method, mg_str("POST"), NULL) ||
+               mg_match(hm->method, mg_str("PUT"), NULL)) {
+      // File upload
+      char path[128];
+      mg_snprintf(path, sizeof(path), "/tmp/%.*s", hm->uri.len, hm->uri.buf);
+      us->ctx = fopen(path, "wb+");
+      if (us->ctx == NULL) {
+        mg_http_reply(c, 500, NULL, "File upload error %d\n", errno);
+      } else {
+        file_add(hm->uri, hm->body.len);
+        MG_DEBUG(("Starting upload, [%.*s] %lu", hm->uri.len, hm->uri.buf, hm->body.len));
+        us->marker = 'U';
+        us->expected = hm->body.len;
+        us->received = 0;
+        mg_iobuf_del(&c->recv, 0, hm->head.len);
+        c->pfn = NULL;
+        c->fn = file_ev_handler;
+        mg_call(c, MG_EV_READ, &c->recv.len);
+      }
+    } else {
+      // Serve file
+      char path[128];
+      mg_snprintf(path, sizeof(path), "/tmp/%.*s", hm->uri.len, hm->uri.buf);
+      mg_http_serve_file(c, ev_data, path, NULL);
+    }
+  } else if (ev == MG_EV_READ && us->marker == 'U') {
+    // Write uploaded data
+    MG_DEBUG(("Uploading.. recv.len=%u", c->recv.len));
+    us->received += c->recv.len;
+    fwrite(c->recv.buf, 1, c->recv.len, us->ctx);
+    c->recv.len = 0;
+    if (us->received >= us->expected) {
+      fclose(us->ctx);
+      MG_DEBUG(("Uploaded %lu", us->expected));
+      mg_http_reply(c, 200, NULL, "%lu uploaded\n", us->expected);
+      mg_dash_send_change(c->mgr, &s_dashboard, "files");
+      memset(us, 0, sizeof(*us));
+      c->is_draining = 1;
+    }
   }
 }
 
 void mg_dash_init(struct mg_mgr *mgr) {
-  MG_DASH_REGISTER_CUSTOM_HANDLER(&s_dashboard, "/logs/#", log_ev_handler);
+  file_add(mg_str("device-config.json"), 1234);
+  file_add(mg_str("device-log-2026-04-25.txt"), 1327854);
+  MG_DASH_REGISTER_CUSTOM_HANDLER(&s_dashboard, "/files/#", file_ev_handler);
   mg_http_listen(mgr, HTTP_ADDR, mg_dash_ev_handler, &s_dashboard);
 }
 

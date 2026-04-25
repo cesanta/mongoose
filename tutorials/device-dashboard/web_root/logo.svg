@@ -7,17 +7,17 @@
   </defs>
 
   <!-- icon: two rounded rectangles -->
-  <g fill="none" stroke="url(#g)" stroke-width="40" stroke-linecap="round" stroke-linejoin="round">
-    <rect x="140" y="160" width="260" height="260" rx="70"/>
-    <rect x="260" y="80" width="260" height="260" rx="70"/>
+  <g fill="none" stroke="url(#g)" stroke-width="30" stroke-linecap="round" stroke-linejoin="round">
+    <rect x="160" y="60" width="300" height="300" rx="70"/>
+    <rect x="20" y="200" width="300" height="300" rx="70"/>
   </g>
 
   <!-- text -->
-  <text x="560" y="330"
+  <text x="560" y="360"
         font-family="system-ui, -apple-system, Segoe UI, Roboto, sans-serif"
-        font-size="160"
+        font-size="180"
         font-weight="600"
         fill="#6b7280">
-    my logo
+    MyLogo
   </text>
 </svg>

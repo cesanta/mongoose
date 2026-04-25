@@ -44,7 +44,7 @@ body {
   align-items: center;
   justify-content: space-between;
   gap: var(--spacing-4);
-  padding: var(--spacing-2) var(--spacing-6);
+  padding: var(--spacing-3) var(--spacing-6);
 }
 
 .header-left {
@@ -93,7 +93,7 @@ body {
   gap: var(--spacing-2);
   background: rgb(248, 250, 252);
   border: 1px solid rgb(226, 232, 240);
-  padding: calc(var(--spacing-1) + 2px);
+  padding: var(--spacing-1) var(--spacing-2);
   border-radius: 1rem;
   box-shadow: rgba(0, 0, 0, 0) 0px 0px 0px 0px, rgba(0, 0, 0, 0) 0px 0px 0px 0px, rgba(0, 0, 0, 0.05) 0px 2px 4px 0px inset;
 }
@@ -255,7 +255,7 @@ body {
   display: flex;
   align-items: center;
   justify-content: flex-end;
-  gap: 0.5rem;
+  gap: 0.75rem;
   padding: 0.75rem 1.25rem;
   border-top: 1px solid #e2e8f0;
 }
@@ -335,11 +335,14 @@ body {
 .btn {
   display: inline-flex;
   align-items: center;
-  padding: 0.42rem 1rem;
-  font-size: 0.82rem;
+  justify-content: center;
+  gap: 0.5rem;
+  height: 2rem;
+  padding: 0.3rem 1rem;
+  font-size: 0.85rem;
   font-family: inherit;
   font-weight: 600;
-  border-radius: 0.55rem;
+  border-radius: 0.5rem;
   border: 1px solid transparent;
   cursor: pointer;
   transition: all 0.15s ease;
@@ -398,7 +401,7 @@ body {
 .panel {
   background: #ffffff;
   border: 1px solid rgba(203, 213, 225, 0.75);
-  border-radius: 1rem;
+  border-radius: 0.75rem;
   box-shadow:
     inset 0 1px 0 rgba(255, 255, 255, 1),
     0 2px 6px rgba(148, 163, 184, 0.1),
@@ -415,7 +418,8 @@ body {
   font-size: 0.95rem;
   font-weight: 700;
   color: #334155;
-  padding: 1rem 1.25rem 0.9rem;
+  padding: 0 1rem;
+  min-height: 3rem;
   border-bottom: 1px solid #e2e8f0;
   flex-shrink: 0;
 }
@@ -447,6 +451,80 @@ body {
 .file-content:empty::before {
   content: "Waiting for events...";
   color: #64748b;
+}
+
+/* File manager */
+
+.file-list {
+  display: flex;
+  flex-direction: column;
+}
+.file-list:empty::before {
+  content: "No Files";
+  color: #888;
+}
+
+.file-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto auto;
+  align-items: center;
+  gap: 1rem;
+  padding: 0.82rem 0;
+  border-top: 1px solid #edf2f7;
+}
+
+.file-row:first-child {
+  border-top: none;
+}
+
+.file-info {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  min-width: 0;
+}
+
+.file-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 2.25rem;
+  height: 2.25rem;
+  color: #0369a1;
+  background: #e0f2fe;
+  border: 1px solid #bae6fd;
+  border-radius: 0.65rem;
+  flex-shrink: 0;
+}
+
+.file-icon svg {
+  width: 1.15rem;
+  height: 1.15rem;
+}
+
+.file-name {
+  min-width: 0;
+  color: #334155;
+  font-size: 0.9rem;
+  font-weight: 700;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.file-size {
+  color: #94a3b8;
+  font-size: 0.8rem;
+  font-weight: 700;
+  text-align: right;
+  white-space: nowrap;
+}
+
+.file-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 0.45rem;
 }
 
 /* Chart */
@@ -593,5 +671,21 @@ body {
 @media (max-width: 480px) {
   .overview-grid {
     grid-template-columns: 1fr;
+  }
+
+  .file-row {
+    grid-template-columns: 1fr;
+  }
+
+  .file-actions {
+    justify-content: flex-start;
+  }
+
+  .file-row {
+    gap: 0.65rem;
+  }
+
+  .file-size {
+    text-align: left;
   }
 }

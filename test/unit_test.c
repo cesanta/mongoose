@@ -1970,6 +1970,15 @@ static void test_http_parse(void) {
     ASSERT(mg_http_parse(s, strlen(s), &hm) == (int) strlen(s));
     ASSERT(mg_strcmp(hm.headers[0].value, mg_str("e")) == 0);
   }
+
+  {
+    // Test that query-string gets stripped
+    struct mg_http_message hm;
+    const char *s = "GET /foo?bar HTTP/1.0\n\n";
+    ASSERT(mg_http_parse(s, strlen(s), &hm) == (int) strlen(s));
+    ASSERT(mg_strcmp(hm.uri, mg_str("/foo")) == 0);
+    ASSERT(mg_strcmp(hm.query, mg_str("bar")) == 0);
+  }
 }
 
 static void ehr(struct mg_connection *c, int ev, void *ev_data) {

@@ -3152,7 +3152,13 @@ void mg_rpc_list(struct mg_rpc_req *r);
 
 
 
-enum mg_val_type { MG_VAL_INT, MG_VAL_BOOL, MG_VAL_DBL, MG_VAL_STR, MG_VAL_FN };
+enum mg_val_type {
+  MG_VAL_INT,
+  MG_VAL_BOOL,
+  MG_VAL_DBL,
+  MG_VAL_STR,
+  MG_VAL_RAW
+};
 
 union mg_val {
   int i;
@@ -3262,9 +3268,7 @@ static inline struct mg_field *mg_dash_find_field(struct mg_field *fields,
 
 static inline size_t mg_print_field(mg_pfn_t fn, void *arg, va_list *ap) {
   struct mg_field *f = va_arg(*ap, struct mg_field *);
-  // union mg_val val = {0};
   size_t n = 0;
-  // if (f->get) f->get(&val);
   n += mg_xprintf(fn, arg, "%m:", MG_ESC(f->name));
   if (f->type == MG_VAL_BOOL) {
     n += mg_xprintf(fn, arg, "%s", *(bool *) f->value ? "true" : "false");
@@ -3274,6 +3278,8 @@ static inline size_t mg_print_field(mg_pfn_t fn, void *arg, va_list *ap) {
     n += mg_xprintf(fn, arg, "%.2f", *(double *) f->value);
   } else if (f->type == MG_VAL_STR) {
     n += mg_xprintf(fn, arg, "%m", MG_ESC(f->value));
+  } else if (f->type == MG_VAL_RAW) {
+    n += mg_xprintf(fn, arg, "%s", f->value);
   } else {
     n += mg_xprintf(fn, arg, "null");
   }
@@ -3347,6 +3353,9 @@ static inline int mg_dash_parse_field(struct mg_str json, struct mg_field *f) {
     ok = mg_json_get_num(json, json_path, (double *) f->value);
   } else if (f->type == MG_VAL_STR) {
     ok = mg_json_unescape(json, json_path, (char *) f->value, f->value_size);
+  } else if (f->type == MG_VAL_RAW) {
+    ok = mg_snprintf((char *) f->value, f->value_size, "%.*s", json.len,
+                     json.buf) == json.len;
   }
   return ok;
 }
