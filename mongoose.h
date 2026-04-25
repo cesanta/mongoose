@@ -3177,9 +3177,25 @@ struct mg_field_set {
   int write_level;
 };
 
+struct mg_dash_custom_handler {
+  struct mg_dash_custom_handler *next;
+  struct mg_str uri_pattern;
+  mg_event_handler_t handler;
+};
+
 struct mg_dash {
   struct mg_field_set *sets;
+  struct mg_dash_custom_handler *custom_handlers;
 };
+
+#define MG_DASH_REGISTER_CUSTOM_HANDLER(dash_, uri_, fn_) \
+  do {                                                    \
+    static struct mg_dash_custom_handler ch_;             \
+    ch_.next = (dash_)->custom_handlers;                  \
+    ch_.uri_pattern = mg_str(uri_);                       \
+    ch_.handler = (fn_);                                  \
+    (dash_)->custom_handlers = &ch_;                      \
+  } while (0)
 
 static inline struct mg_str trimq(struct mg_str s) {  // Trim double quotes
   if (s.len > 1 && s.buf[0] == '"') s.len -= 2, s.buf++;
@@ -3394,12 +3410,21 @@ static inline void mg_dash_ev_handler(struct mg_connection *c, int ev,
     } else if (mg_match(hm->uri, mg_str("/api/set"), NULL)) {
       int count = mg_dash_apply(c, dash, hm->body);
       mg_http_reply(c, 200, MG_JSON_HEADERS, "%d\n", count);
-    } else {
+    } else if (mg_match(hm->uri, mg_str("/"), NULL)) {
       struct mg_http_serve_opts opts;
       memset(&opts, 0, sizeof(opts));
       opts.fs = &mg_fs_packed;
       mg_mem_files = mg_packed_files;
       mg_http_serve_file(c, hm, "/dashboard.html", &opts);
+    } else {
+      struct mg_dash_custom_handler *ch = dash->custom_handlers;
+      for (ch = dash->custom_handlers; ch != NULL; ch = ch->next) {
+        if (mg_match(hm->uri, ch->uri_pattern, NULL)) {
+          ch->handler(c, ev, ev_data);
+          break;
+        }
+      }
+      if (ch == NULL) mg_http_reply(c, 404, MG_JSON_HEADERS, "Not Found");
     }
   } else if (ev == MG_EV_WS_MSG) {
     // Add this to automatically handle "get" and "set" JSON-RPC calls

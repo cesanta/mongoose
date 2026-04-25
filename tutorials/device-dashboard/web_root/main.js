@@ -86,6 +86,8 @@ document.addEventListener("DOMContentLoaded", () => {
   Dashboard.on('change', args => updateGraphPoints(args?.chart1?.data));
   Dashboard.call('get', 'chart1').then(resp => updateGraphPoints(resp?.data));
 
-  // Set iframe source in JS, to prevent Monolith killing it
-  document.getElementById("logs").src = "/logs/";
+  // Show logs
+  fetch('logs/')
+    .then(resp => resp.text())
+    .then(text => document.getElementById("logs").textContent = text);
 });

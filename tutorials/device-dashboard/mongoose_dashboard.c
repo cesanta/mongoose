@@ -10,24 +10,24 @@
 #endif
 
 // Control panel
-static bool s_fan, s_relay1, s_relay2;
+static bool s_led1, s_led2, s_led3;
 
-static struct mg_field fields_control[] = {
-    {"fan", MG_VAL_BOOL, &s_fan, sizeof(s_fan)},
-    {"relay1", MG_VAL_BOOL, &s_relay1, sizeof(s_relay1)},
-    {"relay2", MG_VAL_BOOL, &s_relay2, sizeof(s_relay2)},
+static struct mg_field fields_leds[] = {
+    {"led1", MG_VAL_BOOL, &s_led1, sizeof(s_led1)},
+    {"led2", MG_VAL_BOOL, &s_led2, sizeof(s_led2)},
+    {"led3", MG_VAL_BOOL, &s_led3, sizeof(s_led3)},
     {NULL, 0, NULL, 0},
 };
 
-static void sync_control(bool is_write) {
+static void sync_leds(bool is_write) {
   if (is_write) {
-    // gpio_write(FAN_PIN, s_fan);
-    // gpio_write(RELAY_1_PIN, s_relay1);
-    // gpio_write(RELAY_2_PIN, s_relay2);
+    // gpio_write(LED1_PIN, s_led1);
+    // gpio_write(LED2_PIN, s_led2);
+    // gpio_write(LED3_PIN, s_led3);
   } else {
-    // s_fan = gpio_read(FAN_PIN);
-    // s_relay1 = gpio_read(RELAY_1_PIN);
-    // s_relay2 = gpio_read(RELAY_2_PIN);
+    // s_led1 = gpio_read(LED1_PIN);
+    // s_led2 = gpio_read(LED2_PIN);
+    // s_led3 = gpio_read(LED3_PIN);
   }
 }
 
@@ -107,16 +107,39 @@ void sync_chart1(bool is_write) {
   len += mg_snprintf(s_chart1_data + len, sizeof(s_chart1_data) - len, "]");
 }
 
+static int s_num_log_files = 0;
+static int s_log_file_index = 0;
+static char s_log_file_name[100];
+static struct mg_field fields_log_files[] = {
+    {"size", MG_VAL_INT, &s_num_log_files, sizeof(s_num_log_files)},
+    {"index", MG_VAL_INT, &s_log_file_index, sizeof(s_log_file_index)},
+    {"name", MG_VAL_STR, &s_log_file_name, sizeof(s_log_file_name)},
+    {NULL, 0, NULL, 0},
+};
+static void sync_log_files(bool is_write) {
+  if (is_write) return;
+  mg_log_level = s_log_level;
+  s_log_level = mg_log_level;
+}
+
 static struct mg_field_set field_sets[] = {
-    {"controls", fields_control, sync_control, 0, 0},
+    {"leds", fields_leds, sync_leds, 0, 0},
     {"metrics", fields_metrics, sync_metrics, 0, 0},
     {"settings", fields_settings, sync_settings, 0, 0},
     {"chart1", fields_chart1, sync_chart1, 0, 0},
+    {"log_files", fields_log_files, sync_log_files, 0, 0},
     {0, 0, 0, 0, 0},
 };
-static struct mg_dash s_dashboard = {field_sets};
+static struct mg_dash s_dashboard = {field_sets, NULL};
+
+static void log_ev_handler(struct mg_connection *c, int ev, void *ev_data) {
+  if (ev == MG_EV_HTTP_MSG) {
+    mg_http_serve_file(c, ev_data, "Makefile", NULL);
+  }
+}
 
 void mg_dash_init(struct mg_mgr *mgr) {
+  MG_DASH_REGISTER_CUSTOM_HANDLER(&s_dashboard, "/logs/#", log_ev_handler);
   mg_http_listen(mgr, HTTP_ADDR, mg_dash_ev_handler, &s_dashboard);
 }
 

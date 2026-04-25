@@ -1831,9 +1831,6 @@ struct mg_fs mg_fs_posix = {p_stat,  p_list, p_open,   p_close,  p_read,
 
 
 
-
-
-
 static int mg_ncasecmp(const char *s1, const char *s2, size_t len) {
   int diff = 0;
   if (len > 0) do {
@@ -2078,11 +2075,14 @@ static bool mg_http_parse_headers(const char *s, const char *end,
       v.len--;  // Trim spaces
     }
     // detect duplicated headers -> discard
-    if (((mg_strcasecmp(k, mg_str("Content-Length")) == 0) && (++cl_count > 1)) ||
-      ((mg_strcasecmp(k, mg_str("Transfer-Encoding")) == 0) && (++te_count > 1)) ||
-      ((mg_strcasecmp(k, mg_str("Authorization")) == 0) && (++auth_count > 1)) ||
-      ((mg_strcasecmp(k, mg_str("Cookie")) == 0) && (++cookie_count > 1)) ||
-      ((mg_strcasecmp(k, mg_str("Connection")) == 0) && (++conn_count > 1)))
+    if (((mg_strcasecmp(k, mg_str("Content-Length")) == 0) &&
+         (++cl_count > 1)) ||
+        ((mg_strcasecmp(k, mg_str("Transfer-Encoding")) == 0) &&
+         (++te_count > 1)) ||
+        ((mg_strcasecmp(k, mg_str("Authorization")) == 0) &&
+         (++auth_count > 1)) ||
+        ((mg_strcasecmp(k, mg_str("Cookie")) == 0) && (++cookie_count > 1)) ||
+        ((mg_strcasecmp(k, mg_str("Connection")) == 0) && (++conn_count > 1)))
       return false;
     // MG_INFO(("--HH [%.*s] [%.*s]", (int) k.len, k.buf, (int) v.len, v.buf));
     h[i].name = k, h[i].value = v;  // Success. Assign values
@@ -2119,7 +2119,7 @@ int mg_http_parse(const char *s, size_t len, struct mg_http_message *hm) {
   version_prefix_valid =
       hm->proto.len > 5 && (mg_ncasecmp(hm->proto.buf, "HTTP/", 5) == 0);
   if (!is_response && !version_prefix_valid)
-    return -1; // no version detected in request
+    return -1;  // no version detected in request
   if (!is_response && hm->proto.len > 0 &&
       (!version_prefix_valid || hm->proto.len != 8 ||
        (hm->proto.buf[5] < '0' || hm->proto.buf[5] > '9') ||
@@ -2402,12 +2402,14 @@ void mg_http_serve_file(struct mg_connection *c, struct mg_http_message *hm,
                         const char *path,
                         const struct mg_http_serve_opts *opts) {
   char etag[64], tmp[MG_PATH_MAX];
-  struct mg_fs *fs = opts->fs == NULL ? &mg_fs_posix : opts->fs;
+  struct mg_fs *fs = opts && opts->fs ? opts->fs : &mg_fs_posix;
   struct mg_fd *fd = NULL;
   size_t size = 0;
   time_t mtime = 0;
+  const char *mime_types = opts && opts->mime_types ? opts->mime_types : NULL;
+  const char *hdrs = opts && opts->extra_headers ? opts->extra_headers : "";
   struct mg_str *inm = NULL;
-  struct mg_str mime = guess_content_type(mg_str(path), opts->mime_types);
+  struct mg_str mime = guess_content_type(mg_str(path), mime_types);
   bool gzip = false;
 
   if (path != NULL) {
@@ -2425,21 +2427,21 @@ void mg_http_serve_file(struct mg_connection *c, struct mg_http_message *hm,
   }
 
   // Failed to open, and page404 is configured? Open it, then
-  if (fd == NULL && opts->page404 != NULL) {
+  if (fd == NULL && opts && opts->page404) {
     fd = mg_fs_open(fs, opts->page404, MG_FS_READ);
     path = opts->page404;
-    mime = guess_content_type(mg_str(path), opts->mime_types);
+    mime = guess_content_type(mg_str(path), mime_types);
   }
 
   if (fd == NULL || fs->st(path, &size, &mtime) == 0) {
-    mg_http_reply(c, 404, opts->extra_headers, "Not found\n");
+    mg_http_reply(c, 404, hdrs, "Not found\n");
     mg_fs_close(fd);
     // NOTE: mg_http_etag() call should go first!
   } else if (mg_http_etag(etag, sizeof(etag), size, mtime) != NULL &&
              (inm = mg_http_get_header(hm, "If-None-Match")) != NULL &&
              mg_strcasecmp(*inm, mg_str(etag)) == 0) {
     mg_fs_close(fd);
-    mg_http_reply(c, 304, opts->extra_headers, "");
+    mg_http_reply(c, 304, hdrs, "");
   } else {
     int n, status = 200;
     char range[100];
@@ -2473,11 +2475,11 @@ void mg_http_serve_file(struct mg_connection *c, struct mg_http_message *hm,
               "%s%s%s\r\n",
               status, mg_http_status_code_str(status), (int) mime.len, mime.buf,
               etag, (uint64_t) cl, gzip ? "Content-Encoding: gzip\r\n" : "",
-              range, opts->extra_headers ? opts->extra_headers : "");
+              range, hdrs);
     if (mg_strcasecmp(hm->method, mg_str("HEAD")) == 0 || c->is_closing) {
       c->is_resp = 0;
       mg_fs_close(fd);
-    } else { // start serving static content only if not closing, see #3354
+    } else {  // start serving static content only if not closing, see #3354
       // Track to-be-sent content length at the end of c->data, aligned
       size_t *clp = (size_t *) &c->data[(sizeof(c->data) - sizeof(size_t)) /
                                         sizeof(size_t) * sizeof(size_t)];

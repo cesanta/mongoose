@@ -4,7 +4,7 @@ PROG ?= example
 MONGOOSE_DIR ?= ../..
 SOURCES = main.c mongoose_dashboard.c dashboard.html.c $(MONGOOSE_DIR)/mongoose.c
 CFLAGS ?= -W -Wall -Wextra -Werror -Wundef -Wshadow -g3 -O0
-PFLAGS = -I$(MONGOOSE_DIR) -DMG_DATA_SIZE=64 -DMG_TLS=MG_TLS_BUILTIN
+PFLAGS = -I$(MONGOOSE_DIR) -DMG_DATA_SIZE=64 -DMG_TLS=MG_TLS_BUILTIN -DMG_ENABLE_LINES=1
 AFLAGS ?= -fsanitize=signed-integer-overflow,address,undefined,alignment
 
 all: $(PROG)

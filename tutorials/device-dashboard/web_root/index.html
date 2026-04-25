@@ -10,22 +10,9 @@
         debug: true,
         data: {
           chart1: {data: ''},
-          controls: {
-            fan: true,
-            relay1: false,
-            relay2: false,
-          },
-          settings: {
-            volume: 12,
-            log_level: 3,
-            name: 'Galway',
-          },
-          metrics: {
-            temperature: 1.2,
-            humidity: 3,
-            cpu: 4,
-            ram: 5,
-          },
+          leds: { led1: true, led2: false, led3: false },
+          settings: { volume: 12, log_level: 3, name: 'Galway' },
+          metrics: { temperature: 1.2, humidity: 3, cpu: 4, ram: 5 },
         },
       });
     </script>
@@ -75,7 +62,7 @@
                 <path d="M8 17h5" />
                 <rect x="4" y="4" width="16" height="16" rx="3" />
               </svg>
-              Events
+              Event Log
             </a>
           </nav>
         </div>
@@ -175,30 +162,19 @@
 
           <!-- Controls Panel -->
           <div class="panel controls-panel">
-            <div class="panel-title">Controls</div>
+            <div class="panel-title">LED Control</div>
             <div class="panel-body">
-              <div class="controls-list">
-                <div class="control-row">
-                  <div class="control-info">
-                    <div class="control-name">Cooling Fan</div>
-                    <div class="control-desc">PWM controlled output</div>
-                  </div>
-                  <input type="checkbox" data-bind="controls.fan" data-autosave="1" class="toggle" />
-                </div>
-                <div class="control-row">
-                  <div class="control-info">
-                    <div class="control-name">Relay Channel 1</div>
-                    <div class="control-desc">Auxiliary load output</div>
-                  </div>
-                  <input type="checkbox" data-bind="controls.relay1" data-autosave="1" class="toggle" />
-                </div>
-                <div class="control-row">
-                  <div class="control-info">
-                    <div class="control-name">Relay Channel 2</div>
-                    <div class="control-desc">Safety-controlled line</div>
-                  </div>
-                  <input type="checkbox" data-bind="controls.relay2" data-autosave="1" class="toggle" />
-                </div>
+              <div class="field">
+                <div class="field-label">LED1</div>
+                <input type="checkbox" data-bind="leds.led1" data-autosave="1" class="toggle" />
+              </div>
+              <div class="field">
+                <div class="field-label">LED2</div>
+                <input type="checkbox" data-bind="leds.led2" data-autosave="1" class="toggle" />
+              </div>
+              <div class="field">
+                <div class="field-label">LED3</div>
+                <input type="checkbox" data-bind="leds.led3" data-autosave="1" class="toggle" />
               </div>
             </div>
           </div>
@@ -236,6 +212,7 @@
       </section>
       <section id="firmware" class="tab-panel" role="tabpanel" aria-labelledby="tab-firmware" hidden></section>
       <section id="events" class="tab-panel" role="tabpanel" aria-labelledby="tab-events" hidden>
+        <pre id="logs" class="file-content"></pre>
       </section>
     </main>
   </body>
