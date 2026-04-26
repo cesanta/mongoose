@@ -33,6 +33,8 @@ body {
   color: var(--color-text-strong);
 }
 
+a, a:visited, a:link { text-decoration: none; }
+
 .header {
   z-index: 50;
 }
@@ -311,7 +313,7 @@ body {
 }
 
 .field-input.edited, .select.edited, .slider.edited>* {
-  border-color: #00502040;
+  border-color: #00500040 !important;
   background: #00ff0020;
 }
 
@@ -405,7 +407,25 @@ body {
   transform: none;
 }
 
-/* ── Detail row (chart + controls) ─────────────────────────────── */
+.note {
+  color: #075985;
+  background: #e0f2fe;
+  border: 1px solid #7dd3fc;
+  border-radius: 0.5rem;
+  padding: 0.75rem 0.9rem;
+  font-size: 0.86rem;
+  line-height: 1.55;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.75);
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 1rem;
+}
 
 .detail-row {
   display: grid;

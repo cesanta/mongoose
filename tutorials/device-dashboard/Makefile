@@ -23,6 +23,9 @@ dashboard.html.c: dashboard.html
 	node $(MONGOOSE_DIR)/resources/pack.js dashboard.html::gzip > $@
 	@echo "On-flash size: `grep -oE '[0-9]+' $@ | wc -l`"
 
+purge:
+	curl -s https://purge.jsdelivr.net/gh/cesanta/mongoose@master/resources/dashboard.js
+
 # For development: rebuild and restart if any of the sources change
 watch:
 	watchexec -r -w main.c -w mongoose_dashboard.c -w $(MONGOOSE_DIR)/mongoose.h -w web_root -e c,h,html,css,js,svg,png -- make

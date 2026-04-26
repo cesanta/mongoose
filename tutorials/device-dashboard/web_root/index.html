@@ -12,7 +12,7 @@
           chart1: {data: []},
           leds: { led1: true, led2: false, led3: false },
           settings: { volume: 12, log_level: 3, name: 'Galway' },
-          metrics: { temperature: 1.2, humidity: 3, cpu: 4, ram: 5 },
+          metrics: { temperature: 1.2, cpu: 4, ram: 5 },
           files: {data: [{name: 'device-log-2026-04-25.txt', size: 8625563}]},
         },
       });
@@ -101,16 +101,6 @@
               <span class="metric-status metric-status-good">ok</span>
             </div>
           </article>
-          <article class="metric-tile">
-            <div class="metric-label">Humidity</div>
-            <div class="metric-value-row">
-              <div class="metric-value">
-                <span class="metric-number" data-bind="metrics.humidity">51</span>
-                <span class="metric-unit">%</span>
-              </div>
-              <span class="metric-status metric-status-good">ok</span>
-            </div>
-          </article>
           <article class="metric-tile metric-tile-warning">
             <div class="metric-label">CPU Load</div>
             <div class="metric-value-row">
@@ -142,6 +132,12 @@
               <span class="metric-status metric-status-good">ok</span>
             </div>
           </article>
+          <article class="metric-tile note">
+            <div>
+            To tailor this dashboard to your firmware, follow
+              <a target="_blank" href="https://mongoose.ws/docs/guides/web-dashboard-guide/#dashboard-example">this guide</a>
+            </div>
+          </article>
         </div>
 
         <div class="detail-row">
@@ -161,7 +157,7 @@
           </div>
 
           <!-- Controls Panel -->
-          <div class="panel controls-panel">
+          <div class="panel">
             <div class="panel-title">LED Control</div>
             <div class="panel-body">
               <div class="field">
@@ -176,107 +172,150 @@
                 <div class="field-label">LED3</div>
                 <input type="checkbox" data-bind="leds.led3" data-autosave="1" class="toggle" />
               </div>
+
+              <div class="note">
+                To attach these LED controls to your hardware,
+                modify mongoose_dashboard.c :: sync_leds() function.
+              </div>
+
             </div>
           </div>
 
         </div>
+
       </section>
       <section id="settings" class="tab-panel" role="tabpanel" aria-labelledby="tab-settings" hidden>
-        <div class="panel" style="width: 22rem;">
-          <div class="panel-title">Device settings</div>
-          <div class="panel-body">
-            <div class="field">
-              <label class="field-label">Name</label>
-              <input class="field-input"type="text" data-bind="settings.name" data-autosave="1" />
+        <div class="row">
+
+          <div class="panel" style="width: 22rem;">
+            <div class="panel-title">Device settings</div>
+            <div class="panel-body">
+              <div class="field">
+                <label class="field-label">Name</label>
+                <input class="field-input"type="text" data-bind="settings.name" data-autosave="1" />
+              </div>
+              <div class="field">
+                <label class="field-label">Volume</label>
+                <input class="field-input" type="text" data-bind="settings.volume" />
+              </div>
+              <div class="field">
+                <label class="field-label">Log Level</label>
+                <select class="field-input" data-bind="settings.log_level">
+                  <option value="0">Disable logs</option>
+                  <option value="1">Error</option>
+                  <option value="2">Info</option>
+                  <option value="3">Debug</option>
+                  <option value="4">Verbose (very noisy)</option>
+                </select>
+              </div>
             </div>
-            <div class="field">
-              <label class="field-label">Volume</label>
-              <input class="field-input" type="text" data-bind="settings.volume" />
-            </div>
-            <div class="field">
-              <label class="field-label">Log Level</label>
-              <select class="field-input" data-bind="settings.log_level">
-                <option value="0">Disable logs</option>
-                <option value="1">Error</option>
-                <option value="2">Info</option>
-                <option value="3">Debug</option>
-                <option value="4">Verbose (very noisy)</option>
-              </select>
+            <div class="panel-footer">
+              <button class="btn btn-secondary" type="button" data-cancel="settings">
+                <svg viewBox="0 0 24 24" class="nav-icon" fill="none" stroke="currentColor" stroke-width="2">
+                  <path d="M18 6 6 18" />
+                  <path d="m6 6 12 12" />
+                </svg>
+                Cancel
+              </button>
+              <button class="btn btn-primary" type="button" data-save="settings">
+                <svg viewBox="0 0 24 24" class="nav-icon" fill="none" stroke="currentColor" stroke-width="2">
+                  <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2Z" />
+                  <path d="M17 21v-8H7v8" />
+                  <path d="M7 3v5h8" />
+                </svg>
+                Save
+              </button>
             </div>
           </div>
-          <div class="panel-footer">
-            <button class="btn btn-secondary" type="button" data-cancel="settings">
-              <svg viewBox="0 0 24 24" class="nav-icon" fill="none" stroke="currentColor" stroke-width="2">
-                <path d="M18 6 6 18" />
-                <path d="m6 6 12 12" />
-              </svg>
-              Cancel
-            </button>
-            <button class="btn btn-primary" type="button" data-save="settings">
-              <svg viewBox="0 0 24 24" class="nav-icon" fill="none" stroke="currentColor" stroke-width="2">
-                <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2Z" />
-                <path d="M17 21v-8H7v8" />
-                <path d="M7 3v5h8" />
-              </svg>
-              Save
-            </button>
-          </div>
+
+        <div class="note" style="width: 44rem;">
+          <p>This settings panel is backed by the "settings" dashboard object
+            see Dashboard.init call at the top of index.html - and, consequently,
+            by the "settings" fieldset in mongoose_dashboard.c. </p>
+          <p>Fields are bound to the dashboard object via the data-bind attribute,
+            e.g. data-bind="setttings.name"</p>
+          <p>When you save changed fields, the changes are saved to the device.</p>
+          <p> The "NAME" field
+          has data-autosave="1", so it is autosaved when user types text.</p>
+          <p>The other fields are not auto-saved, so when they are changed,
+            dashboard.js automatically applies CSS class "edited" to them to
+            indicate they were changed but not saved.</p>
+          <p>The cancel and save buttons are attached to the settings object
+            via the data-cancel and data-save attributes. Those buttons
+            get automatically enabled or disabled based on editing status.</p>
         </div>
+
+      </div>
       </section>
       <section id="firmware" class="tab-panel" role="tabpanel" aria-labelledby="tab-firmware" hidden></section>
       <section id="files" class="tab-panel" role="tabpanel" aria-labelledby="tab-files" hidden>
-        <div class="panel" style="max-width: 40rem;">
-          <div class="panel-title">
-            <span>
-              <span>File Manager</span>
-              <span class="metric-status">${files.data.length} Files</span>
-            </span>
-            <div class="header-actions">
-              <label class="btn btn-primary">
-                <svg viewBox="0 0 24 24" class="nav-icon" fill="none" stroke="currentColor" stroke-width="2">
-                  <path d="M12 3v12" />
-                  <path d="m7 8 5-5 5 5" />
-                  <path d="M5 21h14" />
-                </svg>
-                Upload
-                <input type="file" hidden data-upload="1" />
-              </label>
+        <div class="row">
+          <div class="panel" style="width: 40rem;">
+            <div class="panel-title">
+              <span>
+                <span>File Manager</span>
+                <span class="metric-status">${files.data.length} Files</span>
+              </span>
+              <div class="header-actions">
+                <label class="btn btn-primary">
+                  <svg viewBox="0 0 24 24" class="nav-icon" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M12 3v12" />
+                    <path d="m7 8 5-5 5 5" />
+                    <path d="M5 21h14" />
+                  </svg>
+                  Upload
+                  <input type="file" hidden data-upload="1" />
+                </label>
+              </div>
             </div>
-          </div>
-          <div class="panel-body">
-            <div class="file-list" data-repeat="files.data" data-iterator="f">
-              <div class="file-row">
-                <div class="file-info">
-                  <span class="file-icon" aria-hidden="true">
-                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                      <path d="M14 2H7a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V7Z" />
-                      <path d="M14 2v5h5" />
-                    </svg>
-                  </span>
-                  <div class="file-name">${f.name}</div>
-                </div>
-                <div class="file-size">${f.size}</div>
-                <div class="file-actions">
-                  <a onclick="window.open('files/${encodeURIComponent(f.name)}', '_blank')" target="_blank" class="btn btn-secondary">
-                    <svg viewBox="0 0 24 24" class="nav-icon" fill="none" stroke="currentColor" stroke-width="2">
-                      <path d="M12 3v12" />
-                      <path d="m7 10 5 5 5-5" />
-                      <path d="M5 21h14" />
-                    </svg>
-                  </a>
-                  <button onclick="fetch('files/${encodeURIComponent(f.name)}?action=delete'); return false;" class="btn btn-secondary">
-                    <svg viewBox="0 0 24 24" class="nav-icon" fill="none" stroke="currentColor" stroke-width="2">
-                      <path d="M3 6h18" />
-                      <path d="M8 6V4h8v2" />
-                      <path d="M19 6l-1 14H6L5 6" />
-                      <path d="M10 11v5" />
-                      <path d="M14 11v5" />
-                    </svg>
-                  </button>
+            <div class="panel-body">
+              <div class="file-list" data-repeat="files.data" data-iterator="f">
+                <div class="file-row">
+                  <div class="file-info">
+                    <span class="file-icon" aria-hidden="true">
+                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M14 2H7a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V7Z" />
+                        <path d="M14 2v5h5" />
+                      </svg>
+                    </span>
+                    <div class="file-name">${f.name}</div>
+                  </div>
+                  <div class="file-size">${f.size}</div>
+                  <div class="file-actions">
+                    <a onclick="window.open('files/${encodeURIComponent(f.name)}', '_blank')" target="_blank" class="btn btn-secondary">
+                      <svg viewBox="0 0 24 24" class="nav-icon" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M12 3v12" />
+                        <path d="m7 10 5 5 5-5" />
+                        <path d="M5 21h14" />
+                      </svg>
+                    </a>
+                    <button onclick="fetch('files/${encodeURIComponent(f.name)}?action=delete'); return false;" class="btn btn-secondary">
+                      <svg viewBox="0 0 24 24" class="nav-icon" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M3 6h18" />
+                        <path d="M8 6V4h8v2" />
+                        <path d="M19 6l-1 14H6L5 6" />
+                        <path d="M10 11v5" />
+                        <path d="M14 11v5" />
+                      </svg>
+                    </button>
+                  </div>
                 </div>
               </div>
             </div>
           </div>
+
+          <div class="note" style="max-width: 40em;">
+            <p>The two default files are fake - you can delete them</p>
+            <p>However the manager works - you can upload new files. They
+              are uploaded to /tmp/ directory on the device.
+              This requires stdio (fopen/fread/...) implemeneted.</p>
+            <p>The easiest way to implement it is to use a filesystem like
+              LittleFS on your internal or external flash
+              and retarget the standard library to use it.</p>
+            <p>See <a href="https://github.com/cpq/bare-metal-programming-guide/tree/main/templates/lfs/nucleo-h563zi">this example</a> on how LittleFS can be implemented on
+              Nucleo-H563ZI internal flash partition.</p>
+          </div>
+
         </div>
       </section>
     </main>

@@ -32,13 +32,12 @@ static void sync_leds(bool is_write) {
 }
 
 // Read-only device Metrics
-static int s_ram = 32, s_cpu = 7, s_humidity = 59;
+static int s_ram = 32, s_cpu = 7;
 static double s_temperature = 24.8;
 
 static struct mg_field fields_metrics[] = {
     {"ram", MG_VAL_INT, &s_ram, sizeof(s_ram)},
     {"cpu", MG_VAL_INT, &s_cpu, sizeof(s_cpu)},
-    {"humidity", MG_VAL_INT, &s_humidity, sizeof(s_humidity)},
     {"temperature", MG_VAL_DBL, &s_temperature, sizeof(s_temperature)},
     {NULL, 0, NULL, 0},
 };
