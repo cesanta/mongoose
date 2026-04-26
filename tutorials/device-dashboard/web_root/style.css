@@ -71,20 +71,37 @@ body {
   display: inline-flex;
   align-items: center;
   gap: 0.4rem;
-  color: rgb(4, 120, 87);
-  border: 1px solid rgb(167, 243, 208);
-  background: rgb(236, 253, 245);
   padding: 4px 14px;
   border-radius: 14px;
   font-weight: 600;
 }
 
+.connection-badge-online {
+  color: rgb(4, 120, 87);
+  border: 1px solid rgb(167, 243, 208);
+  background: rgb(236, 253, 245);
+}
+
+.connection-badge-offline {
+  color: rgb(120, 44, 57);
+  border: 1px solid rgb(243, 177, 208);
+  background: rgb(253, 246, 245);
+}
+
+
 .connection-dot {
   width: 11px;
   height: 11px;
   border-radius: 50%;
-  background: rgb(16, 185, 129);
   flex-shrink: 0;
+}
+
+.connection-dot-online {
+  background: rgb(16, 185, 129);
+}
+
+.connection-dot-offline {
+  background: rgb(185, 96, 109);
 }
 
 .nav-tabs {

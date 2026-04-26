@@ -4,21 +4,20 @@
   "use strict";
 
   const Rpc = (function() {
-    function Rpc(url) {
-      let ws, id = 1, oncall, q = [], debug = false;
+    function Rpc(url, onev) {
+      let ws, id = 1, oncall, q = [];
       const pending = new Map();
-      const realsend = s => { ws.send(s); if (debug) console.log('WS ->', s); };
+      const realsend = s => { ws.send(s); on('send', s); };
       const fail = e => { for (const p of pending.values()) p[1](e || 'disconnected'); pending.clear(); };
       const send = x => ws && ws.readyState === 1
         ? realsend(JSON.stringify(x))
         : q.push(x);
       const connect = () => {
-        if (debug) console.log('WS connect');
         ws = new WebSocket(url);
-        ws.onopen = () => { if (debug) console.log('WS open'); while (q.length) realsend(JSON.stringify(q.shift())); };
-        ws.onclose = () => { fail(); setTimeout(connect, 1000); };
+        ws.onopen = () => { onev && onev('open'); while (q.length) realsend(JSON.stringify(q.shift())); };
+        ws.onclose = () => { onev && onev('close'); fail(); setTimeout(connect, 1000); };
         ws.onmessage = e => {
-          if (debug) console.log('WS <-', e.data);
+          onev && onev('message', e.data);
           let m;
           try {
             m = JSON.parse(e.data);
@@ -44,7 +43,6 @@
 
       connect();
       return {
-        debug: arg => debug = arg,
         call: (method, params) => new Promise((ok, bad) => {
           const i = id++;
           pending.set(i, [ok, bad]);
@@ -61,9 +59,14 @@
 
   if (global.Dashboard) return;
   const isMock = !!window.frameElement || (window !== window.top);
-  const rpc = isMock ? null : Rpc('api/websocket');
   const settings = {data: {}, edits: {}, debug: true};
   const userhandlers = {}; // User event handlers
+  const status = { online: true, username: '', userlevel: 0, lastseen: '' };
+  const rpc = isMock ? null : Rpc('api/websocket', function (evname, args) {
+    if (evname == 'open') status.online = true, rescan();
+    if (evname == 'close') status.online = false, rescan();
+    if (settings.debug) console.log('WS', evname, args);
+  });
 
   const fromPath = (path, value) => path.split('.').reverse().reduce((acc, k) => ({ [k]: acc }), value);
   const get = (obj, path) => path.split('.').reduce((o, k) => o?.[k], obj);
@@ -266,6 +269,7 @@
   function realrescan() {
     // const t0 = performance.now();
     const context = JSON.parse(JSON.stringify(settings.data));
+    apply(context, { __status: status });
     apply(context, settings.edits);
     process(document, context);
     // const t1 = performance.now();
@@ -316,7 +320,6 @@
   function init(conf) {
     apply_and_rescan(settings, conf);
     if (rpc) {
-      rpc.debug(settings.debug);
       rpc.handle((method, args) => {
         if (method == 'change') apply_and_rescan(settings.data, args);
         if (method != 'change') console.log('UNKNOWN REQUEST', method, args);
@@ -328,5 +331,5 @@
     }
   };
 
-  global.Dashboard = { init, call, on };
+  global.Dashboard = { init, call, on, status };
 })(window);

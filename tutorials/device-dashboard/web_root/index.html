@@ -4,8 +4,7 @@
     <title>My Dashboard</title>
 
     <!-- Mongoose device dashboard -->
-    <!--<script src="https://cdn.jsdelivr.net/gh/cesanta/mongoose@master/resources/dashboard.js"></script>-->
-    <script src="dashboard.js"></script>
+    <script src="https://cdn.jsdelivr.net/gh/cesanta/mongoose@master/resources/dashboard.js"></script>
     <script>
       Dashboard.init({
         debug: true,
@@ -66,9 +65,9 @@
               File Manager
             </a>
           </nav>
-          <div class="connection-badge" aria-label="connection active">
-            <span class="connection-label">live</span>
-            <span class="connection-dot" aria-hidden="true"></span>
+          <div class="connection-badge connection-badge-${__status.online ? 'online' : 'offline'}" aria-label="connection active">
+            <span class="connection-label">${__status.online ? 'live' : 'offline'}</span>
+            <span class="connection-dot connection-dot-${__status.online ? 'online' : 'offline'}" aria-hidden="true"></span>
           </div>
         </div>
         <div class="header-actions">
