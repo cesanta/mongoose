@@ -16,7 +16,7 @@ $(PROG): $(SOURCES) $(MONGOOSE_DIR)/mongoose.h
 
 # Generate a single, self-contained dashboard.html from the UI in web_root/
 dashboard.html: $(wildcard web_root/*)
-	monolith web_root/index.html -o $@
+	node $(MONGOOSE_DIR)/resources/inline.js web_root/index.html -o $@
 
 # Create an embedded filesystem containing compressed dashboard.html
 dashboard.html.c: dashboard.html
@@ -28,7 +28,7 @@ purge:
 
 # For development: rebuild and restart if any of the sources change
 watch:
-	watchexec -r -w main.c -w mongoose_dashboard.c -w $(MONGOOSE_DIR)/mongoose.h -w web_root -e c,h,html,css,js,svg,png -- make
+	node $(MONGOOSE_DIR)/resources/watch.js -w main.c -w mongoose_dashboard.c -w $(MONGOOSE_DIR)/mongoose.h -w web_root -- make
 
 clean:
 	rm -rf $(PROG) *.exe *.obj *.dSYM mongoose dashboard.*
