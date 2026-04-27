@@ -15,14 +15,6 @@ enum mg_val_type {
   MG_VAL_RAW,
 };
 
-union mg_val {
-  int i;
-  bool b;
-  double d;
-  char *s;
-  void (*fn)(void);
-};
-
 struct mg_field {
   const char *name;
   enum mg_val_type type;

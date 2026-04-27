@@ -3157,15 +3157,7 @@ enum mg_val_type {
   MG_VAL_BOOL,
   MG_VAL_DBL,
   MG_VAL_STR,
-  MG_VAL_RAW
-};
-
-union mg_val {
-  int i;
-  bool b;
-  double d;
-  char *s;
-  void (*fn)(void);
+  MG_VAL_RAW,
 };
 
 struct mg_field {
