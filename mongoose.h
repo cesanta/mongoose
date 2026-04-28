@@ -3170,7 +3170,8 @@ struct mg_field {
 struct mg_field_set {
   const char *name;
   struct mg_field *fields;
-  void (*sync)(bool is_reading);
+  void (*reader)(void);
+  void (*writer)(void);
   int read_level;
   int write_level;
 };
@@ -3179,20 +3180,29 @@ struct mg_dash_custom_handler {
   struct mg_dash_custom_handler *next;
   struct mg_str uri_pattern;
   mg_event_handler_t handler;
+  void *handler_data;
+};
+
+struct mg_dash_file {
+  struct mg_dash_file *next;
+  char *name;
+  size_t size;
 };
 
 struct mg_dash {
   struct mg_field_set *sets;
   struct mg_dash_custom_handler *custom_handlers;
+  struct mg_dash_file *files;
 };
 
-#define MG_DASH_REGISTER_CUSTOM_HANDLER(dash_, uri_, fn_) \
-  do {                                                    \
-    static struct mg_dash_custom_handler ch_;             \
-    ch_.next = (dash_)->custom_handlers;                  \
-    ch_.uri_pattern = mg_str(uri_);                       \
-    ch_.handler = (fn_);                                  \
-    (dash_)->custom_handlers = &ch_;                      \
+#define MG_DASH_REGISTER_CUSTOM_HANDLER(dash_, uri_, fn_, data_) \
+  do {                                                           \
+    static struct mg_dash_custom_handler ch_;                    \
+    ch_.next = (dash_)->custom_handlers;                         \
+    ch_.uri_pattern = mg_str(uri_);                              \
+    ch_.handler = (fn_);                                         \
+    ch_.handler_data = (data_);                                  \
+    (dash_)->custom_handlers = &ch_;                             \
   } while (0)
 
 static inline struct mg_str trimq(struct mg_str s) {  // Trim double quotes
@@ -3298,14 +3308,14 @@ static inline size_t mg_dash_print_name(mg_pfn_t fn, void *arg, va_list *ap) {
   if (name->len == 0) {
     n += mg_xprintf(fn, arg, "{");
     for (i = 0; dash->sets != NULL && dash->sets[i].name != NULL; i++) {
-      if (dash->sets[i].sync) dash->sets[i].sync(false);
+      if (dash->sets[i].reader) dash->sets[i].reader();
       if (i > 0) n += mg_xprintf(fn, arg, ",");
       n += mg_xprintf(fn, arg, "%m:", MG_ESC(dash->sets[i].name));
       n += mg_xprintf(fn, arg, "%M", mg_print_field_set, &dash->sets[i]);
     }
     n += mg_xprintf(fn, arg, "}");
   } else if (set != NULL) {
-    if (set->sync) set->sync(false);
+    if (set->reader) set->reader();
     n += mg_xprintf(fn, arg, "%M", mg_print_field_set, set);
   } else {
     n += mg_xprintf(fn, arg, "null");
@@ -3324,7 +3334,7 @@ static inline void mg_dash_send_change(struct mg_mgr *mgr, struct mg_dash *dash,
                                        const char *name) {
   struct mg_field_set *set = mg_dash_find_field_set(dash, mg_str(name));
   if (set != NULL) {
-    if (set->sync) set->sync(false);
+    if (set->reader) set->reader();
     mg_dash_broadcast(mgr, "{%m:%m,%m:{%m:%M}}", MG_ESC("method"),
                       MG_ESC("change"), MG_ESC("params"), MG_ESC(set->name),
                       mg_print_field_set, set);
@@ -3365,8 +3375,8 @@ static inline int mg_dash_apply(struct mg_connection *c, struct mg_dash *dash,
       for (i = 0; set->fields[i].name != NULL; i++) {
         if (mg_dash_parse_field(val, &set->fields[i])) count++;
       }
-      if (count > 0 && set->sync != NULL) {
-        set->sync(true);
+      if (count > 0 && set->writer != NULL) {
+        set->writer();
         mg_dash_send_change(c->mgr, dash, set->name);
       }
     } else {
@@ -3395,6 +3405,96 @@ static inline void mg_dash_process_msg(struct mg_connection *c,
 #define MG_NO_CACHE_HEADERS "Cache-Control: no-cache\r\n"
 #define MG_JSON_HEADERS "Content-Type: application/json\r\n" MG_NO_CACHE_HEADERS
 
+struct mg_upload_state {
+  char marker;      // Tells that we're a file upload connection
+  size_t expected;  // POST data length, bytes
+  size_t received;  // Already received bytes
+  void *ctx;        // OTA context
+};
+
+static inline void mg_dash_file_add(struct mg_dash *dash, struct mg_str name,
+                                    size_t size) {
+  struct mg_dash_file *f = mg_calloc(1, sizeof(*f));
+  f->name = mg_strdup(name).buf;
+  f->size = size;
+  f->next = dash->files;
+  dash->files = f;
+}
+
+static inline void mg_dash_file_del(struct mg_dash *dash, struct mg_str name) {
+  struct mg_dash_file **head, *f;
+  for (head = &dash->files, f = *head; f; head = &(*head)->next, f = *head) {
+    if (mg_strcmp(mg_str(f->name), name) == 0) {
+      MG_INFO(("Deleting %s", f->name));
+      *head = f->next;
+      mg_free(f->name);
+      mg_free(f);
+      return;
+    }
+  }
+}
+
+static void file_ev_handler(struct mg_connection *c, int ev, void *ev_data) {
+  struct mg_upload_state *us = (struct mg_upload_state *) c->data;
+  if ((ev == MG_EV_HTTP_HDRS || ev == MG_EV_HTTP_MSG) && us->marker == 0) {
+    struct mg_http_message *hm = (struct mg_http_message *) ev_data;
+    if (hm->uri.len > 7) hm->uri.len -= 7, hm->uri.buf += 7;  // Strip /files/
+    if (sizeof(*us) > sizeof(c->data)) {
+      mg_error(c,
+               "FAILURE: sizeof(c->data) == %lu, need %lu."
+               " Set #define MG_DATA_SIZE XXX",
+               sizeof(c->data), sizeof(*us));
+    } else if (mg_strcmp(hm->query, mg_str("action=delete")) == 0) {
+      // Query string ?action=delete - file deletion
+      mg_dash_file_del(c->fn_data, hm->uri);
+      mg_dash_send_change(c->mgr, c->fn_data, "files");
+      mg_http_reply(c, 200, NULL, "true");
+    } else if (mg_path_is_sane(hm->uri) == false) {
+      // Bad file name, return error. Protect from traversal, etc
+      mg_http_reply(c, 400, NULL, "Bad name");
+    } else if (mg_match(hm->method, mg_str("POST"), NULL) ||
+               mg_match(hm->method, mg_str("PUT"), NULL)) {
+      // File upload
+      char path[128];
+      mg_snprintf(path, sizeof(path), "/tmp/%.*s", hm->uri.len, hm->uri.buf);
+      us->ctx = fopen(path, "wb+");
+      if (us->ctx == NULL) {
+        mg_http_reply(c, 500, NULL, "File upload error %d\n", errno);
+      } else {
+        mg_dash_file_add(c->fn_data, hm->uri, hm->body.len);
+        MG_DEBUG(("Starting upload, [%.*s] %lu", hm->uri.len, hm->uri.buf,
+                  hm->body.len));
+        us->marker = 'U';
+        us->expected = hm->body.len;
+        us->received = 0;
+        mg_iobuf_del(&c->recv, 0, hm->head.len);
+        c->pfn = NULL;
+        c->fn = file_ev_handler;
+        mg_call(c, MG_EV_READ, &c->recv.len);
+      }
+    } else {
+      // Serve file
+      char path[128];
+      mg_snprintf(path, sizeof(path), "/tmp/%.*s", hm->uri.len, hm->uri.buf);
+      mg_http_serve_file(c, ev_data, path, NULL);
+    }
+  } else if (ev == MG_EV_READ && us->marker == 'U') {
+    // Write uploaded data
+    MG_DEBUG(("Uploading.. recv.len=%u", c->recv.len));
+    us->received += c->recv.len;
+    fwrite(c->recv.buf, 1, c->recv.len, us->ctx);
+    c->recv.len = 0;
+    if (us->received >= us->expected) {
+      fclose(us->ctx);
+      MG_DEBUG(("Uploaded %lu", us->expected));
+      mg_http_reply(c, 200, NULL, "%lu uploaded\n", us->expected);
+      mg_dash_send_change(c->mgr, c->fn_data, "files");
+      memset(us, 0, sizeof(*us));
+      c->is_draining = 1;
+    }
+  }
+}
+
 static inline void mg_dash_ev_handler(struct mg_connection *c, int ev,
                                       void *ev_data) {
   struct mg_dash *dash = (struct mg_dash *) c->fn_data;
@@ -3404,6 +3504,8 @@ static inline void mg_dash_ev_handler(struct mg_connection *c, int ev,
     memset(parts, 0, sizeof(parts));
     if (mg_match(hm->uri, mg_str("/api/websocket"), NULL)) {
       mg_ws_upgrade(c, hm, NULL);
+    } else if (mg_match(hm->uri, mg_str("/files/#"), NULL)) {
+      file_ev_handler(c, ev, ev_data);
     } else if (mg_match(hm->uri, mg_str("/api/get/#"), parts) ||
                mg_match(hm->uri, mg_str("/api/get"), NULL)) {
       mg_http_reply(c, 200, MG_JSON_HEADERS, "%M\n", mg_dash_print_name, dash,
@@ -3437,6 +3539,16 @@ static inline void mg_dash_ev_handler(struct mg_connection *c, int ev,
     }
   }
 }
+
+#if MG_ARCH == MG_ARCH_UNIX || MG_ARCH == MG_ARCH_WIN32
+#define MG_HTTP_ADDR "http://0.0.0.0:8000"
+#define MG_HTTPS_ADDR "https://0.0.0.0:8443"
+#define MG_MODBUS_ADDR "tcp://0.0.0.0:8502"
+#else
+#define MG_HTTP_ADDR "http://0.0.0.0:80"
+#define MG_HTTPS_ADDR "http://0.0.0.0:443"
+#define MG_MODBUS_ADDR "tcp://0.0.0.0:502"
+#endif
 
 // Helper forward declarations for Mongoose CMSIS pack modules
 extern struct mg_mgr g_mgr;

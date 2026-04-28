@@ -247,7 +247,7 @@
         }
       }
       for (const attr of el.attributes) {
-        const cv = decodeURIComponent(attr.value || '');
+        const cv = attr.value || '';
         if (attr.originalValue || cv.includes('${')) {
           if (!attr.originalValue) attr.originalValue = cv;
           const v = substituteExpressions(attr.originalValue, context);

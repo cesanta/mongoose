@@ -147,7 +147,7 @@ async function processHtml(content) {
 processHtml(html).then(result => {
   if (outputFile) {
     fs.writeFileSync(outputFile, result);
-    console.log(`Written to ${outputFile}`);
+    //console.log(`Written to ${outputFile}`);
   } else {
     console.log(result);
   }
