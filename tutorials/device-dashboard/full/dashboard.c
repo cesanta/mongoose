@@ -3,6 +3,8 @@
 
 #include "mongoose.h"
 
+static struct mg_dash s_dashboard;
+
 // Control panel
 // s_led1, s_led2, s_led3 are used to communicate LED status
 static bool s_led1, s_led2, s_led3;
@@ -11,7 +13,7 @@ static struct mg_field fields_leds[] = {
     {"led1", MG_VAL_BOOL, &s_led1, sizeof(s_led1)},
     {"led2", MG_VAL_BOOL, &s_led2, sizeof(s_led2)},
     {"led3", MG_VAL_BOOL, &s_led3, sizeof(s_led3)},
-    {NULL, 0, NULL, 0},
+    {NULL, MG_VAL_INT, NULL, 0},
 };
 
 static void write_leds(void) {
@@ -34,7 +36,7 @@ static struct mg_field fields_metrics[] = {
     {"ram", MG_VAL_INT, &s_ram, sizeof(s_ram)},
     {"cpu", MG_VAL_INT, &s_cpu, sizeof(s_cpu)},
     {"temperature", MG_VAL_DBL, &s_temperature, sizeof(s_temperature)},
-    {NULL, 0, NULL, 0},
+    {NULL, MG_VAL_INT, NULL, 0},
 };
 
 static void read_metrics(void) {
@@ -52,7 +54,7 @@ static struct mg_field fields_settings[] = {
     {"volume", MG_VAL_DBL, &s_volume, sizeof(s_volume)},
     {"name", MG_VAL_STR, &s_name, sizeof(s_name)},
     {"log_level", MG_VAL_INT, &s_log_level, sizeof(s_log_level)},
-    {NULL, 0, NULL, 0},
+    {NULL, MG_VAL_INT, NULL, 0},
 };
 
 static void write_settings(void) {
@@ -81,7 +83,7 @@ static char s_chart1_data[NUM_POINTS * POINT_SIZE + 2 + 1];
 
 static struct mg_field fields_chart1[] = {
     {"data", MG_VAL_RAW, s_chart1_data, sizeof(s_chart1_data)},
-    {NULL, 0, NULL, 0},
+    {NULL, MG_VAL_INT, NULL, 0},
 };
 
 // Randomly generate graph points and serialise them into a string
@@ -103,9 +105,8 @@ void read_chart1(void) {
 static char s_files[1024];
 static struct mg_field fields_files[] = {
     {"data", MG_VAL_RAW, s_files, sizeof(s_files)},
-    {NULL, 0, NULL, 0},
+    {NULL, MG_VAL_INT, NULL, 0},
 };
-static struct mg_dash s_dashboard;
 static void read_files(void) {
   size_t len = 0;
   struct mg_dash_file *f;
@@ -127,9 +128,9 @@ static struct mg_field_set field_sets[] = {
     {"files", fields_files, read_files, NULL, 0, 0},
     {0, 0, NULL, NULL, 0, 0},
 };
-static struct mg_dash s_dashboard = {field_sets, NULL, NULL};
 
 void mg_dash_init(struct mg_mgr *mgr) {
+  s_dashboard.sets = field_sets;
   mg_dash_file_add(&s_dashboard, mg_str("device-config.json"), 1234);
   mg_dash_file_add(&s_dashboard, mg_str("device-log-2026-04-25.txt"), 1327854);
   mg_http_listen(mgr, MG_HTTP_ADDR, mg_dash_ev_handler, &s_dashboard);

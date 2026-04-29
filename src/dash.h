@@ -269,7 +269,7 @@ struct mg_upload_state {
 
 static inline void mg_dash_file_add(struct mg_dash *dash, struct mg_str name,
                                     size_t size) {
-  struct mg_dash_file *f = mg_calloc(1, sizeof(*f));
+  struct mg_dash_file *f = (struct mg_dash_file *) mg_calloc(1, sizeof(*f));
   f->name = mg_strdup(name).buf;
   f->size = size;
   f->next = dash->files;
@@ -332,16 +332,16 @@ static void file_ev_handler(struct mg_connection *c, int ev, void *ev_data) {
       // Serve file
       char path[128];
       mg_snprintf(path, sizeof(path), "/tmp/%.*s", hm->uri.len, hm->uri.buf);
-      mg_http_serve_file(c, ev_data, path, NULL);
+      mg_http_serve_file(c, hm, path, NULL);
     }
   } else if (ev == MG_EV_READ && us->marker == 'U') {
     // Write uploaded data
     MG_DEBUG(("Uploading.. recv.len=%u", c->recv.len));
     us->received += c->recv.len;
-    fwrite(c->recv.buf, 1, c->recv.len, us->ctx);
+    fwrite(c->recv.buf, 1, c->recv.len, (FILE *) us->ctx);
     c->recv.len = 0;
     if (us->received >= us->expected) {
-      fclose(us->ctx);
+      fclose((FILE *) us->ctx);
       MG_DEBUG(("Uploaded %lu", us->expected));
       mg_http_reply(c, 200, NULL, "%lu uploaded\n", us->expected);
       mg_dash_send_change(c->mgr, dash, "files");

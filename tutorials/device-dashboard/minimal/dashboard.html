@@ -1,0 +1,60 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>LED Control Dashboard</title>
+
+    <script src="https://cdn.jsdelivr.net/gh/cesanta/mongoose@master/resources/dashboard.js"></script>
+    <script>
+      Dashboard.init({
+        debug: true,
+        data: { status: { led1: false, version: '1.0.0' } },
+      });
+    </script>
+
+    <style>
+      * { box-sizing: border-box; }
+      html, body { height: 100%; }
+      body {  background:#f8fafc; font:500 14px/1.35 Arial,sans-serif; }
+      code {white-space: nowrap; background: #ddd; border-radius: 4px; padding: 1px 4px;}
+      .toggle { display:grid; justify-items:center; }
+      .toggle { -webkit-appearance:none; appearance:none; cursor:pointer; width:56px; height:32px; border-radius:999px; border:1px solid #0f172a1a; background:#e2e8f0; position:relative; outline:0; transition:background .18s ease,box-shadow .18s ease; }
+      .toggle::after { content:""; position:absolute; top:50%; left:3px; width:26px; height:26px; border-radius:999px; background:#fff; transform:translate(0,-50%); box-shadow:0 10px 20px #0f172a1a; transition:transform .18s ease; }
+      .toggle:checked { background:linear-gradient(180deg,#22c55e,#16a34a); box-shadow:0 0 0 4px #22c55e26; }
+      .toggle:checked::after { transform:translate(24px,-50%); }
+      .toggle:focus-visible { box-shadow:0 0 0 4px #60a5fa55; }
+    </style>
+  </head>
+
+  <body>
+    <main style="margin: 2rem; color: #64748b;">
+      <h1>LED control version ${status.version}</h1>
+
+      <div style="display: flex; gap: 1rem; ">
+        <section aria-label="LED status" style="width: 12rem; border: 1px solid #ccc; border-radius: .5rem; padding: 1rem; ">
+          <input type="checkbox" class="toggle" data-bind="status.led1" data-autosave="1" aria-label="Toggle LED" />
+          <div>LED ${status.led1 ? 'ON' : 'OFF'}</div>
+        </section>
+
+        <div style="max-width: 40em; color: #075985; background: #e0f2fe; border: 1px solid #7dd3fc; border-radius: 0.5rem; padding: 0.75rem 0.9rem; font-size: 0.86rem; line-height: 1.55; box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.75); display: flex; flex-direction: column; gap: 0.5rem; ">
+          <div>
+            This toggle button is a stylised checkbox.
+            <code>data-bind="status.led1"</code> binds it to the device variable.
+            <code>data-autosave="1"</code> makes it send POST /api/status
+            <code>{"led1": VALUE}</code> to the device every time the user toggles the
+            button. On the device side, <code>sync_status()</code> is called every time
+            the LED state is read or written.
+          </div>
+
+          <div style="text-align: left; margin-top: 6px;">
+            Open this page in two or more browser windows and see how the dashboards
+            stay synchronised when changes are made in any of them.
+          </div>
+        </div>
+
+      </div>
+
+    </main>
+  </body>
+</html>
