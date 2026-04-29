@@ -3435,6 +3435,7 @@ static inline void mg_dash_file_del(struct mg_dash *dash, struct mg_str name) {
 }
 
 static void file_ev_handler(struct mg_connection *c, int ev, void *ev_data) {
+  struct mg_dash *dash = (struct mg_dash *) c->fn_data;
   struct mg_upload_state *us = (struct mg_upload_state *) c->data;
   if ((ev == MG_EV_HTTP_HDRS || ev == MG_EV_HTTP_MSG) && us->marker == 0) {
     struct mg_http_message *hm = (struct mg_http_message *) ev_data;
@@ -3446,8 +3447,8 @@ static void file_ev_handler(struct mg_connection *c, int ev, void *ev_data) {
                sizeof(c->data), sizeof(*us));
     } else if (mg_strcmp(hm->query, mg_str("action=delete")) == 0) {
       // Query string ?action=delete - file deletion
-      mg_dash_file_del(c->fn_data, hm->uri);
-      mg_dash_send_change(c->mgr, c->fn_data, "files");
+      mg_dash_file_del(dash, hm->uri);
+      mg_dash_send_change(c->mgr, dash, "files");
       mg_http_reply(c, 200, NULL, "true");
     } else if (mg_path_is_sane(hm->uri) == false) {
       // Bad file name, return error. Protect from traversal, etc
@@ -3461,7 +3462,7 @@ static void file_ev_handler(struct mg_connection *c, int ev, void *ev_data) {
       if (us->ctx == NULL) {
         mg_http_reply(c, 500, NULL, "File upload error %d\n", errno);
       } else {
-        mg_dash_file_add(c->fn_data, hm->uri, hm->body.len);
+        mg_dash_file_add(dash, hm->uri, hm->body.len);
         MG_DEBUG(("Starting upload, [%.*s] %lu", hm->uri.len, hm->uri.buf,
                   hm->body.len));
         us->marker = 'U';
@@ -3488,7 +3489,7 @@ static void file_ev_handler(struct mg_connection *c, int ev, void *ev_data) {
       fclose(us->ctx);
       MG_DEBUG(("Uploaded %lu", us->expected));
       mg_http_reply(c, 200, NULL, "%lu uploaded\n", us->expected);
-      mg_dash_send_change(c->mgr, c->fn_data, "files");
+      mg_dash_send_change(c->mgr, dash, "files");
       memset(us, 0, sizeof(*us));
       c->is_draining = 1;
     }
