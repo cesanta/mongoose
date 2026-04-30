@@ -110,7 +110,7 @@
     const dv = get(settings.data, key);
     if (typeof(dv) === 'number') {
       const v = +val;
-      if (isNaN(v)) {
+      if (isNaN(v) || val.endsWith('.')) {  // Typing number, endingdot
         el.classList.toggle("error", true);
       } else {
         el.classList.toggle("error", false);
@@ -121,7 +121,7 @@
     }
 
     set(settings.edits, key, val);
-    if (val == dv) {
+    if (val === dv) {
       del(settings.edits, key);
       el.classList.toggle("edited", false);
     } else {
@@ -146,7 +146,7 @@
     // console.log(2, key, v);
     if (['INPUT', 'TEXTAREA', 'SELECT'].includes(el.tagName)) {
       if (el.type == 'checkbox') el.checked = v;
-      if (el.type == 'text') el.value = v;
+      if (el.type == 'text' || el.tagName == 'SELECT') el.value = v;
       if (!has(settings.edits, key)) {
         el.classList.toggle('edited', false);
         el.classList.toggle('error', false);
