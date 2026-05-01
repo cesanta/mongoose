@@ -8,13 +8,21 @@ static char s_version[10];
 
 static void read_status(void) {
   MG_INFO(("READING STATUS"));
-  // s_led1 = gpio_read(LED1_PIN);
   mg_snprintf(s_version, sizeof(s_version), "1.2.3");
+
+  // These conditionals make this file work on both microcontroller and desktop
+  // Useful for developing the UI on desktop, and copying to an MCU project.
+#if MG_ARCH == MG_ARCH_CUBE
+  s_led1 = HAL_GPIO_ReadPin(GPIOB, GPIO_PIN_0);  // Read LED state into field
+#endif
 }
 
 static void write_status(void) {
   MG_INFO(("WRITING STATUS"));
-  // gpio_write(LED1_PIN, s_led1);
+
+#if MG_ARCH == MG_ARCH_CUBE
+  HAL_GPIO_WritePin(GPIOB, GPIO_PIN_0, s_led1);  // Write LED state from field
+#endif
 }
 
 static struct mg_field fields_status[] = {
