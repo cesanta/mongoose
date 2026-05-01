@@ -28,10 +28,17 @@ if (watchTargets.length === 0 || command.length === 0) {
 
 let child = null;
 let restartTimeout = null;
+let ignoreEventsUntil = 0;
+let lastStartAt = 0;
+const MIN_RESTART_MS = 250;
 
 function start() {
+  // Prevent restart loops caused by the command touching watched paths.
+  ignoreEventsUntil = Date.now() + 200;
+  lastStartAt = Date.now();
+
   if (child) {
-    child.kill();
+    child.kill('SIGTERM');
   }
   console.log(`Starting: ${command.join(' ')}`);
   child = spawn(command[0], command.slice(1), { stdio: 'inherit', shell: true });
@@ -45,20 +52,25 @@ function start() {
 function watch(target) {
   const stats = fs.statSync(target);
   if (stats.isFile()) {
-    fs.watchFile(target, (curr, prev) => {
-      if (curr.mtime !== prev.mtime) {
+    // fs.watchFile is polling-based; use a small interval to react quickly.
+    fs.watchFile(target, { interval: 100 }, (curr, prev) => {
+      if (Date.now() < ignoreEventsUntil) return;
+      if (curr.mtimeMs !== prev.mtimeMs) {
         console.log(`File changed: ${target}`);
         clearTimeout(restartTimeout);
-        restartTimeout = setTimeout(start, 100);
+        const delay = Math.max(25, MIN_RESTART_MS - (Date.now() - lastStartAt));
+        restartTimeout = setTimeout(start, delay);
       }
     });
   } else {
     const dir = target;
     fs.watch(dir, { recursive: true }, (eventType, filename) => {
+      if (Date.now() < ignoreEventsUntil) return;
       if (filename) {
         console.log(`File changed: ${filename}`);
         clearTimeout(restartTimeout);
-        restartTimeout = setTimeout(start, 100);
+        const delay = Math.max(25, MIN_RESTART_MS - (Date.now() - lastStartAt));
+        restartTimeout = setTimeout(start, delay);
       }
     });
   }

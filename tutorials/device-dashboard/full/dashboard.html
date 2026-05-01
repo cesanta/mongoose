@@ -9,7 +9,9 @@
       Dashboard.init({
         debug: true,
         data: {
-          chart1: {data: []},
+          graph1: {data: []},
+          graph2: {data: [], report: true},
+          actions: { action1: false, action2: false },
           leds: { led1: true, led2: false, led3: false },
           settings: { volume: 12, log_level: 3, name: 'Galway' },
           metrics: { temperature: 1.2, cpu: 4, ram: 5 },
@@ -22,8 +24,6 @@
       document.addEventListener("DOMContentLoaded", () => {
         const tabs = Array.from(document.querySelectorAll(".header-left .nav-link[href^='#']"));
         const panels = Array.from(document.querySelectorAll(".tab-panel"));
-
-        let chart = null;
 
         const activateTab = targetId => {
           const targetPanel = document.getElementById(targetId);
@@ -42,17 +42,10 @@
             panel.hidden = !isActive;
           });
 
-          requestAnimationFrame(() => {
-            const rect = el.getBoundingClientRect();
-            if (rect.width <= 0 || rect.height <= 0) rect.height = rect.width = 10;
 
-            if (!chart) {
-              options.width = rect.width;
-              options.height = rect.height;
-              chart = new uPlot(options, [], el);
-            } else {
-              chart.setSize({ width: rect.width, height: rect.height });
-            }
+          requestAnimationFrame(() => {
+            mkGraph(graphs.graph1);
+            mkGraph(graphs.graph2);
           });
         };
 
@@ -68,45 +61,76 @@
         const initialId = window.location.hash.slice(1) || "overview";
         activateTab(initialId);
 
+        // GRAPHS
+        // {stroke: '#14B8A6FF', fill: '#14B8A61A'}, // teal
+        // {stroke: '#F59E0BFF', fill: '#F59E0B1A'}, // amber
+        // {stroke: '#22C55EFF', fill: '#22C55E1A'}, // green
+        // {stroke: '#EF4444FF', fill: '#EF44441A'}, // red
+        // {stroke: '#8B5CF6FF', fill: '#8B5CF61A'}, // purple
+        // {stroke: '#058DC7FF', fill: '#058DC71A'}, // azure
+        // {stroke: '#ED7E17FF', fill: '#ED7E171A'}, // tangerine
 
-        const el = document.getElementById("chart");
-
-        const options = {
-          width: 100,
-          height: 100,
-          tzDate: (ts) => uPlot.tzDate(new Date(ts * 1e3), "Europe/London"),
-          plugins: [],
-          legend: { show: false },
-          axes: [
-            { values: "{MMM} {DD}", size: 25 },
-            { size: 50, xvalues: (u, vals, space) => vals.map(v => (+v / 1000).toFixed(1) + 'k') },
-          ],
-          scales: {
-            x: { time: true },
-            y: { range: [0, 100] },
+        const graphs = {
+          graph1: {
+            el: document.getElementById("graph1"),
+            plot: null,
+            opts: {
+              width: 10, height: 10,
+              tzDate: (ts) => uPlot.tzDate(new Date(ts * 1e3), "Europe/London"),
+              legend: { show: false },
+              axes: [ { size: 25, gap: 2, }, { size: 40, gap: 2, }, ],
+              scales: { x: { time: false }, y: { range: [0, 100] }, },
+              series: [
+                {},
+                {stroke: '#22C55EFF', fill: '#22C55E1A'}, // green
+                {stroke: '#F59E0BFF', fill: '#F59E0B1A'}, // amber
+              ],
+            },
           },
-          series: [
-            {},
-            {stroke: 'rgba(5, 141, 199, 1)', fill: 'rgba(5, 141, 199, 0.1)'},
-            {stroke: 'rgba(237, 126, 23, 1)', fill: 'rgba(237, 126, 23, 0.1)'},
-          ],
+          graph2: {
+            el: document.getElementById("graph2"),
+            plot: null,
+            opts: {
+              width: 10, height: 10,
+              legend: { show: false },
+              axes: [ { size: 25, gap: 2, }, { size: 40, gap: 2, }, ],
+              scales: { x: { time: false }, y: { range: [50, 200] }, },
+              series: [
+                {},
+                {stroke: '#058DC7FF', fill: '#058DC71A'}, // azure
+              ],
+            }
+          },
         };
 
-        function updateGraphPoints(data) {
-          if (!data) return;
-          // const parsed = JSON.parse(data);
-          const parsed = data || [];
-          const uplot_data = [
-            parsed.map(x => x[0]),
-            parsed.map(x => x[1]),
-            parsed.map(x => x[2]),
-          ];
-          chart.setData(uplot_data);
+        function mkGraph(g) {
+          if (!g.plot) g.plot = new uPlot(g.opts, [], g.el);
+          const rect = g.el.getBoundingClientRect();
+          if (rect.width > 0 && rect.height > 0) {
+            g.plot.setSize({ width: rect.width, height: rect.height });
+          }
         };
 
-        // Intercept change notifications
-        Dashboard.on('change', args => updateGraphPoints(args?.chart1?.data));
-        Dashboard.call('get', 'chart1').then(resp => updateGraphPoints(resp?.data));
+        function updateGraph1(data) {
+          data && graphs.graph1.plot.setData([
+            data.map(x => x[0]),
+            data.map(x => x[1]),
+            data.map(x => x[2]),
+          ]);
+        };
+
+        function updateGraph2(data) {
+          data && graphs.graph2.plot.setData([
+            data.map((_, i) => i),
+            data,
+          ]);
+        };
+
+        // Intercept graph change notifications, re-plot data
+        Dashboard.on('change', args => {
+          args?.graph1?.data && updateGraph1(args?.graph1?.data);
+          args?.graph2?.data && updateGraph2(args?.graph2?.data);
+        });
       });
     </script>
     <style>
@@ -131,7 +155,7 @@ a, a:visited, a:link { text-decoration: none; }
 .nav-icon { height: 1rem; width: 1rem; flex-shrink: 0; }
 .tab-stage { max-width: var(--max-width); margin: 0 auto; padding: 0.5rem var(--spacing-6) var(--spacing-4); }
 .tab-panel { min-height: calc(100vh - 6rem); }
-.overview-grid { display: grid; grid-template-columns: repeat(5, 1fr); gap: 1rem; }
+.metrics-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 1rem; }
 .metric-tile { padding: 0.75rem 1.5rem 0.75rem; border-radius: 1rem; background: #ffffff; border: 1px solid rgba(203, 213, 225, 0.75); box-shadow: inset 0 1px 0 rgba(255, 255, 255, 1), 0 2px 6px rgba(148, 163, 184, 0.1), 0 8px 24px rgba(148, 163, 184, 0.08); display: flex; flex-direction: column; gap: 0.35rem; transition: box-shadow 0.15s ease, transform 0.15s ease; }
 .metric-tile:hover { box-shadow: inset 0 1px 0 rgba(255, 255, 255, 1), 0 4px 12px rgba(148, 163, 184, 0.18), 0 12px 32px rgba(148, 163, 184, 0.12); transform: translateY(-1px); }
 .metric-label { color: #94a3b8; font-size: 0.9rem; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; }
@@ -144,7 +168,7 @@ a, a:visited, a:link { text-decoration: none; }
 .metric-status-warn { color: #92400e; background: #fef3c7; border-color: #fcd34d; }
 .metric-status-alert { color: #991b1b; background: #fee2e2; border-color: #fca5a5; }
 .tab-panel[hidden] { display: none; }
-.panel-body { display: flex; flex-direction: column; gap: 0.75rem; padding: 1rem 1.25rem; flex: 1; }
+.panel-body { display: flex; flex-direction: column; gap: 0.5rem; padding: 1rem 1.25rem; flex: 1; }
 .panel-footer { display: flex; align-items: center; justify-content: flex-end; gap: 0.75rem; padding: 0.75rem 1.25rem; border-top: 1px solid #e2e8f0; }
 .field { display: flex; flex-direction: row; justify-content: space-between; align-items: center; gap: 0.75rem; }
 .field-label { font-size: 0.75rem; font-weight: 700; text-transform: uppercase; color: #94a3b8; flex-shrink: 0; white-space: nowrap; min-width: 6rem; }
@@ -167,9 +191,9 @@ a, a:visited, a:link { text-decoration: none; }
 #files .row { align-items: stretch; flex-wrap: nowrap; }
 #files .panel { flex: 0 0 40rem; width: 40rem; }
 #files .note { flex: 1 1 0; min-width: 0; }
-.detail-row { display: grid; grid-template-columns: 1fr 300px; gap: 1rem; margin-top: 1rem; align-items: stretch; }
+.grid { display: grid; gap: 1rem; margin: 1rem 0; align-items: stretch; }
 .panel { background: #ffffff; border: 1px solid rgba(203, 213, 225, 0.75); border-radius: 0.75rem; box-shadow: inset 0 1px 0 rgba(255, 255, 255, 1), 0 2px 6px rgba(148, 163, 184, 0.1), 0 8px 24px rgba(148, 163, 184, 0.08); overflow: hidden; display: flex; flex-direction: column; }
-.panel-title { display: flex; align-items: center; justify-content: space-between; font-size: 0.95rem; font-weight: 700; color: #334155; padding: 0 1rem; min-height: 3rem; border-bottom: 1px solid #e2e8f0; flex-shrink: 0; }
+.panel-title { display: flex; align-items: center; justify-content: space-between; font-size: 0.95rem; font-weight: 700; color: #334155; padding: 0 1rem; min-height: 3rem; border-bottom: 1px solid #e2e8f0; flex-shrink: 0; white-space: nowrap; gap: 1rem; }
 .file-list { display: flex; flex-direction: column; }
 .file-list:empty::before { content: "No Files"; color: #888; }
 .file-row { display: grid; grid-template-columns: minmax(0, 1fr) auto auto; align-items: center; gap: 1rem; padding: 0.82rem 0; border-top: 1px solid #edf2f7; }
@@ -180,21 +204,22 @@ a, a:visited, a:link { text-decoration: none; }
 .file-name { min-width: 0; color: #334155; font-size: 0.9rem; font-weight: 700; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .file-size { color: #94a3b8; font-size: 0.8rem; font-weight: 700; text-align: right; white-space: nowrap; }
 .file-actions { display: flex; align-items: center; justify-content: flex-end; gap: 0.45rem; }
-#chart { width: 100%; height: 12rem; }
-.chart-legend { display: flex; align-items: center; gap: 1rem; flex-shrink: 0; }
+#graph1, #graph2 { width: 100%; height: 100%; min-height: 10rem; }
+.legend { display: flex; align-items: center; gap: 1rem; flex-shrink: 0; }
 .legend-item { display: flex; align-items: center; gap: 0.35rem; font-size: 0.75rem; color: #5d7088; font-weight: 600; }
 .legend-dot { width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0; }
 .legend-dot-color2 { background: rgba(237, 126, 23, 1); }
 .legend-dot-color1 { background: rgba(5, 141, 199, 1); }
 .toggle { position: relative; width: 2.75rem; height: 1.6rem; margin: 0; vertical-align: top; border: 1px solid transparent; background: #d1d5db; border-radius: 0.75rem; outline: none; cursor: pointer; -webkit-appearance: none; -moz-appearance: none; appearance: none; }
 .toggle::after { content: ""; position: absolute; left: 1px; top: 1px; width: 1.35rem; height: 1.35rem; background: #fff; border-radius: 50%; transition: all 0.3s; }
-.toggle:checked { background: #d1d5db; }
+.toggle:checked { background: #10B981; }
 .toggle:checked::after { transform: translateX(calc(100% - 3px)); }
 .toggle:disabled, .toggle.disabled { background: #d1d5db; cursor: not-allowed; }
 .toggle.edited { border-color: #0fe; }
-@media (max-width: 900px) { .detail-row { grid-template-columns: 1fr; } #files .row { flex-direction: column; flex-wrap: nowrap; } #files .panel, #files .note { flex: 1 1 auto; width: 100%; } }
-@media (max-width: 900px) { .overview-grid { grid-template-columns: repeat(2, 1fr); } }
-@media (max-width: 480px) { .overview-grid { grid-template-columns: 1fr; } .file-row { grid-template-columns: 1fr; } .file-actions { justify-content: flex-start; } .file-row { gap: 0.65rem; } .file-size { text-align: left; } }
+.u-over { top: 0 !important; }
+@media (max-width: 900px) { .grid { grid-template-columns: 1fr; } #files .row { flex-direction: column; flex-wrap: nowrap; } #files .panel, #files .note { flex: 1 1 auto; width: 100%; } }
+@media (max-width: 900px) { .metrics-grid { grid-template-columns: repeat(2, 1fr); } }
+@media (max-width: 480px) { .metrics-grid { grid-template-columns: 1fr; } .file-row { grid-template-columns: 1fr; } .file-actions { justify-content: flex-start; } .file-row { gap: 0.65rem; } .file-size { text-align: left; } }
     </style>
 
     <!-- uPlot graph library -->
@@ -284,7 +309,7 @@ a, a:visited, a:link { text-decoration: none; }
     </div>
     <main class="tab-stage">
       <section id="overview" class="tab-panel tab-panel-active" role="tabpanel" aria-labelledby="tab-overview">
-        <div class="overview-grid" aria-label="Device metrics overview">
+        <div class="metrics-grid" aria-label="Device metrics overview">
           <article class="metric-tile">
             <div class="metric-label">Temperature</div>
             <div class="metric-value-row">
@@ -326,34 +351,47 @@ a, a:visited, a:link { text-decoration: none; }
               <span class="metric-status metric-status-good">ok</span>
             </div>
           </article>
-          <article class="metric-tile note" style="min-width: 15rem;">
-            <div>
-              This dashboard source code is <a href="https://github.com/cesanta/mongoose/tree/master/tutorials/device-dashboard" target="_blank">here</a>.
-              To tailor it to your firmware, follow
-              <a target="_blank" href="https://mongoose.ws/docs/guides/web-dashboard-guide/#dashboard-example">this guide</a>
-            </div>
-          </article>
         </div>
 
-        <div class="detail-row">
+        <div class="grid" style="grid-template-columns: 1fr 1fr;">
 
           <!-- Sensor History Chart -->
           <div class="panel chart-panel">
             <div class="panel-title">
-              <span>Sensor History</span>
-              <div class="chart-legend">
+              <span>Static Graph</span>
+              <div class="legend">
                 <div class="legend-item"><span class="legend-dot legend-dot-color1"></span>Temperature</div>
                 <div class="legend-item"><span class="legend-dot legend-dot-color2"></span>Humidity</div>
               </div>
             </div>
             <div class="panel-body">
-              <div id="chart"></div>
+              <div id="graph1"></div>
             </div>
           </div>
 
-          <!-- Controls Panel -->
+          <div class="panel chart-panel">
+            <div class="panel-title">
+              <span>Real-Time Graph</span>
+              <div class="legend">
+                <small>autoupdate:</small>
+                <input type="checkbox" data-bind="graph2.report" data-autosave="1" class="toggle" />
+                <div class="legend-item"><span class="legend-dot legend-dot-color1"></span>Motor Voltage</div>
+              </div>
+            </div>
+            <div class="panel-body">
+              <div id="graph2"></div>
+            </div>
+          </div>
+
+        </div>
+
+        <div class="grid" style="grid-template-columns: 300px 1fr 1fr;">
+
+          <!-- LEDs panel -->
           <div class="panel">
-            <div class="panel-title">LED Control</div>
+            <div class="panel-title">
+              <span>LED Control</span>
+            </div>
             <div class="panel-body">
               <div class="field">
                 <div class="field-label">LED1</div>
@@ -367,12 +405,56 @@ a, a:visited, a:link { text-decoration: none; }
                 <div class="field-label">LED3</div>
                 <input type="checkbox" data-bind="leds.led3" data-autosave="1" class="toggle" />
               </div>
+              <div style="flex:1;"></div>
+              <span class="note">
+                To attach LED controls to your device,
+                modify read_leds() and write_leds() functions
+              </span>
+            </div>
+          </div>
 
-              <div class="note">
-                To attach these LED controls to your hardware,
-                modify mongoose_dashboard.c :: sync_leds() function.
+          <!-- Action button panel -->
+          <div class="panel">
+            <div class="panel-title">
+              <span>Start/Stop Action Button</span>
+              <span class="legend"><span class="legend-item">actions.action1=${actions.action1}</span></span>
+            </div>
+            <div class="panel-body">
+              <div class="field">
+                <div class="field-label">Press to start/stop</div>
+                <button class="btn btn-primary" data-bind="actions.action1" >Press to start/stop</button>
               </div>
+              <div style="flex:1;"></div>
+              <span class="note">
+                This button is bound to the data-bind="actions.action1"
+                boolean field. When it is pressed, the field on a device
+                side is set to true. When unpressed, it is set to false.
+                Add device-specific code in read_actions() and write_actions()
+                to act on the button state.
+              </span>
+            </div>
+          </div>
 
+          <!-- Action button panel -->
+          <div class="panel">
+            <div class="panel-title">
+              <span>Start Action Button</span>
+              <span class="legend"><span class="legend-item">actions.action2=${actions.action2}</span></span>
+            </div>
+            <div class="panel-body">
+              <div class="field">
+                <div class="field-label">Press to start</div>
+                <button class="btn btn-primary" data-bind="actions.action2" >Press to start</button>
+              </div>
+              <div style="flex:1;"></div>
+              <span class="note">
+                This button is different - the C handler code for it
+                reacts on start, and ignores stops. Use it to implement actions
+                that start some process - like formatting SD card, which
+                finishes at some point in the future.
+                  When the process is finished, flip the boolean field
+                  back to false, and send change notification.
+              </span>
             </div>
           </div>
 

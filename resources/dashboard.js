@@ -7,7 +7,7 @@
     function Rpc(url, onev) {
       let ws, id = 1, oncall, q = [];
       const pending = new Map();
-      const realsend = s => { ws.send(s); on('send', s); };
+      const realsend = s => { ws.send(s); onev && onev('send', s); };
       const fail = e => { for (const p of pending.values()) p[1](e || 'disconnected'); pending.clear(); };
       const send = x => ws && ws.readyState === 1
         ? realsend(JSON.stringify(x))
@@ -61,7 +61,7 @@
   const isMock = !!window.frameElement || (window !== window.top);
   const settings = {data: {}, edits: {}, debug: true};
   const userhandlers = {}; // User event handlers
-  const status = { online: true, username: '', userlevel: 0, lastseen: '' };
+  const status = { online: true, username: '', userlevel: 0, lastseen: '', initialized: false };
   const rpc = isMock ? null : Rpc('api/websocket', function (evname, args) {
     if (evname == 'open') status.online = true, rescan();
     if (evname == 'close') status.online = false, rescan();
@@ -152,8 +152,15 @@
         el.classList.toggle('error', false);
       }
       if (!el.bound) el.addEventListener("input", ev => edit(el, key, el.type == 'checkbox' ? ev.target.checked : ev.target.value)), el.bound = true;
+    } else if (el.tagName == 'BUTTON') {
+      if (!el.bound) {
+        el.addEventListener("pointerdown", ev => Dashboard.call('set', set({}, key, true)));
+        el.addEventListener("pointerup", ev => Dashboard.call('set', set({}, key, false)));
+        el.bound = true;
+        el.dataset.autosave = 1;
+      }
     } else {
-      el.innerHTML = v;
+     el.innerHTML = v;
     }
   };
 
@@ -317,19 +324,40 @@
     userhandlers[name] = fn;
   };
 
+  const setbody = visibility => document.body.style.visibility = visibility;
+
   function init(conf) {
     apply_and_rescan(settings, conf);
     if (rpc) {
       rpc.handle((method, args) => {
-        if (method == 'change') apply_and_rescan(settings.data, args);
+        if (method == 'change') {
+          // "initialized" means that the device has sent us all initial
+          // data change notifications, and our settings.data contain
+          // actual refreshed device data - not the UI mock
+          if (!args) {
+            setbody('visible');
+            status.initialized = true;
+          }
+          if (args) apply_and_rescan(settings.data, args);
+        }
         if (method != 'change') console.log('UNKNOWN REQUEST', method, args);
         if (userhandlers[method]) userhandlers[method](args);
       });
-
       // After init, fetch all device data
-      rpc.call('get').then(r => apply_and_rescan(settings.data, r));
+      //rpc.call('get').then(r => apply_and_rescan(settings.data, r));
+    } else {
+      setTimeout(function() { 
+        status.initialized = true;
+        setbody('visible');
+      }, 500);
     }
   };
+
+  if (document.readyState === "loading") {
+    document.addEventListener("DOMContentLoaded", () => setbody('hidden'), { once: true });
+  } else {
+    setbody('hidden');
+  }
 
   global.Dashboard = { init, call, on, status };
 })(window);
