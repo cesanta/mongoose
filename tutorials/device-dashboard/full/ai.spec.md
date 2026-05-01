@@ -8,8 +8,8 @@ Your goal is to produce a dashboard.c and dashboard.html files
 
 Fetch the initial implementation of these two files from:
 
-https://github.com/cesanta/mongoose/blob/master/tutorials/device-dashboard/minimal/dashboard.c
-https://github.com/cesanta/mongoose/blob/master/tutorials/device-dashboard/minimal/dashboard.html
+https://github.com/cesanta/mongoose/blob/master/tutorials/device-dashboard/full/dashboard.c
+https://github.com/cesanta/mongoose/blob/master/tutorials/device-dashboard/full/dashboard.html
 
 The C API for dashboard.c is described at https://mongoose.ws/docs/api/dash/
 
@@ -25,11 +25,7 @@ No vanilla JS event listeners, no fetch calls, no custom reactive logic.
 
 ## dashboard.html
 
-On a page, create single control panel titled "LED control"
-
-On that control, add 3 LED toggles: LED1, LED2, LED3
-
-Update Dashboard.init call accordingly. Update dashboard.c accordingly - have 3 LEDs in the "leds" data set.
+Change theme to dark
 
 ## dashboard.c
 
