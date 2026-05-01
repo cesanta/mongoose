@@ -3,8 +3,6 @@
 
 #include "mongoose.h"
 
-static struct mg_dash s_dashboard;
-
 // Action buttons
 static bool s_action1, s_action2;
 static uint64_t s_action2_timeout;
@@ -165,18 +163,20 @@ static struct mg_field_set set_graph2 = {
 };
 
 void mg_dash_init(struct mg_mgr *mgr) {
-  MG_DASH_ADD_FIELD_SET(&s_dashboard, &set_leds);
-  MG_DASH_ADD_FIELD_SET(&s_dashboard, &set_metrics);
-  MG_DASH_ADD_FIELD_SET(&s_dashboard, &set_settings);
-  MG_DASH_ADD_FIELD_SET(&s_dashboard, &set_graph1);
-  MG_DASH_ADD_FIELD_SET(&s_dashboard, &set_graph2);
-  MG_DASH_ADD_FIELD_SET(&s_dashboard, &set_actions);
+  static struct mg_dash dash;  // Important: keep it static!
+
+  MG_DASH_ADD_FIELD_SET(&dash, &set_leds);
+  MG_DASH_ADD_FIELD_SET(&dash, &set_metrics);
+  MG_DASH_ADD_FIELD_SET(&dash, &set_settings);
+  MG_DASH_ADD_FIELD_SET(&dash, &set_graph1);
+  MG_DASH_ADD_FIELD_SET(&dash, &set_graph2);
+  MG_DASH_ADD_FIELD_SET(&dash, &set_actions);
 
   // Add two fake files - for demonstration
   mg_dash_file_add(mg_str("device-config.json"), 1234);
   mg_dash_file_add(mg_str("device-log-2026-04-25.txt"), 1327854);
 
-  mg_http_listen(mgr, MG_HTTP_ADDR, mg_dash_ev_handler, &s_dashboard);
+  mg_http_listen(mgr, MG_HTTP_ADDR, mg_dash_ev_handler, &dash);
 }
 
 void mg_dash_poll(struct mg_mgr *mgr) {
