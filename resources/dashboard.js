@@ -102,6 +102,7 @@
     try {
       result = Function("x", `"use strict"; const {${k}} = x; return ${expr};`)(c);
     } catch (err) {
+      //console.log('EVAL', expr, context,  err);
     }
     return result;
   }
@@ -194,19 +195,19 @@
 
   function handle_repeat(el, key, context) {
     if (!has(context, key)) { console.error('EVAL', key, context); return; }
-    if (!el.orig) el.orig = el.children[0];
+    if (!el.orig) el.orig = el.children[0].cloneNode(true);
     const v = get(context, key), v2 = JSON.stringify(v);
-    // if (el.v2 === v2) return;
+    if (el.v2 === v2) return;
     const frag = document.createDocumentFragment();
     const it = el.dataset.iterator ?? '__obj';
     v.forEach(function (item, index) {
       const child = el.orig.cloneNode(true);
       const ctx = { ...context, [it]: item };
-      process(child, ctx);
+      process(child, ctx, true);
       frag.appendChild(child);
     });
     el.replaceChildren(frag);
-    // el.v2 = v2;
+    el.v2 = v2;
   };
 
   function handle_upload(el) {
@@ -242,8 +243,10 @@
     return typeof text == "string" ? text.replace(/\${(.+?)}/g, f) : text;
   }
 
-  function process(el, context) {
-    el.querySelectorAll("*").forEach(function (el) {
+  function process(root, context, x) {
+    const all = root.querySelectorAll("*:not([data-repeat] *)");
+    const els = root.nodeType === Node.DOCUMENT_NODE ? all : [root, ...all];
+    els.forEach(function (el) {
       if (el.tagName === "SCRIPT" || el.tagName === "STYLE") return;
       for (const node of el.childNodes) {
         if (node.nodeType === Node.TEXT_NODE &&
