@@ -3,6 +3,14 @@
 #define MG_NO_CACHE_HEADERS "Cache-Control: no-cache\r\n"
 #define MG_JSON_HEADERS "Content-Type: application/json\r\n" MG_NO_CACHE_HEADERS
 
+struct mg_dash_user {
+  struct mg_dash_user *next;
+  char name[32];    // User name
+  char token[21];   // Login token
+  int level;        // Access level
+  uint64_t expire;  // Expiration timestamp
+};
+
 struct mg_upload_state {
   char marker;      // Tells that we're a file upload connection
   size_t expected;  // POST data length, bytes
@@ -156,8 +164,10 @@ static int mg_dash_parse_field(struct mg_str json, struct mg_field *f) {
     ok = mg_json_get_bool(json, json_path, (bool *) f->value);
   } else if (f->type == MG_VAL_INT) {
     double d;
-    ok = mg_json_get_num(json, json_path, &d);
-    if (ok) *(int *) f->value = (int) d;
+    if (mg_json_get_num(json, json_path, &d) && d == (int) d) {
+      *(int *) f->value = (int) d;
+      ok = true;
+    }
   } else if (f->type == MG_VAL_DBL) {
     ok = mg_json_get_num(json, json_path, (double *) f->value);
   } else if (f->type == MG_VAL_STR) {
@@ -173,24 +183,25 @@ static int mg_dash_apply(struct mg_connection *c, struct mg_dash *dash,
                          struct mg_str json) {
   struct mg_str key, val;
   size_t ofs = 0;
-  int count = 0;
-  // struct mg_field *f = NULL;
+  int total_count = 0;
   while ((ofs = mg_json_next(json, ofs, &key, &val)) > 0) {
     struct mg_field_set *set = mg_dash_find_field_set(dash, trimq(key));
+    int count = 0;
     if (set != NULL) {
       size_t i;
       for (i = 0; set->fields[i].name != NULL; i++) {
         if (mg_dash_parse_field(val, &set->fields[i])) count++;
       }
-      if (count > 0) {
+      if (count) {
         if (set->writer) set->writer();
         mg_dash_send_change(c->mgr, set);
+        total_count += count;
       }
     } else {
       MG_ERROR(("UNKNOWN SET: [%.*s]", key.len, key.buf));
     }
   }
-  return count;
+  return total_count;
 }
 
 static void mg_dash_process_msg(struct mg_connection *c,
@@ -284,8 +295,8 @@ static void file_ev_handler(struct mg_connection *c, int ev, void *ev_data) {
         mg_http_reply(c, 500, NULL, "File upload error %d\n", errno);
       } else {
         mg_dash_file_add(hm->uri, hm->body.len);
-        MG_DEBUG(("Starting upload, [%.*s] %lu", hm->uri.len, hm->uri.buf,
-                  hm->body.len));
+        MG_DEBUG(("%lu Starting upload, [%.*s] %lu", c->id, hm->uri.len,
+                  hm->uri.buf, hm->body.len));
         us->marker = 'U';
         us->expected = hm->body.len;
         us->received = 0;
@@ -308,13 +319,98 @@ static void file_ev_handler(struct mg_connection *c, int ev, void *ev_data) {
     c->recv.len = 0;
     if (us->received >= us->expected) {
       fclose((FILE *) us->ctx);
-      MG_DEBUG(("Uploaded %lu", us->expected));
+      MG_DEBUG(("%lu Uploaded %lu", c->id, us->expected));
       mg_http_reply(c, 200, NULL, "%lu uploaded\n", us->expected);
       mg_dash_send_change(c->mgr, &set_files);
       memset(us, 0, sizeof(*us));
       c->is_draining = 1;
     }
   }
+}
+
+static uint64_t mg_dash_make_expiration_time(struct mg_dash *dash) {
+  unsigned t = (unsigned) dash->session_auto_expiration_seconds;
+  if (t == 0) t = 3600;  // Default expiration time in seconds
+  return mg_millis() + t * 1000;
+}
+
+// Parse HTTP requests, return authenticated user or NULL
+static struct mg_dash_user *mg_dash_authenticate(struct mg_http_message *hm,
+                                                 struct mg_dash *dash) {
+  static struct mg_dash_user *s_users;  // List of authenticated users
+  char user[100], pass[100];
+  struct mg_dash_user *u, *tmp, *result = NULL;
+
+  if (dash->authenticate == NULL) return NULL;
+  mg_http_creds(hm, user, sizeof(user), pass, sizeof(pass));
+
+  // Remove expired users
+  for (u = s_users; u != NULL; u = tmp) {
+    tmp = u->next;
+    if (u->expire < mg_millis()) {
+      MG_DEBUG(("Deleting expired auth %s/%d %llu %u", u->name, u->level,
+                u->expire, mg_millis() - u->expire));
+      LIST_DELETE(struct mg_dash_user, &s_users, u);
+    }
+  }
+
+  if (pass[0] != '\0') {
+    struct mg_str *ah = mg_http_get_header(hm, "Authorization");
+    if (ah != NULL) {
+      // Auth header and password are set, auth by user/password via glue API
+      int num_users = 0, level = dash->authenticate(user, pass);
+      MG_DEBUG(("user %s, level: %d", user, level));
+      if (level > 0) {  // Proceed only if the firmware authenticated us
+        for (u = s_users; u != NULL && result == NULL;
+             u = u->next, num_users++) {
+          if (strcmp(user, u->name) == 0) {
+            u->expire = mg_dash_make_expiration_time(dash);
+            result = u;
+          }
+        }
+        // Not yet authenticated, add to the list
+        if (result == NULL && num_users < 10) {
+          result = (struct mg_dash_user *) mg_calloc(1, sizeof(*result));
+          mg_snprintf(result->name, sizeof(result->name), "%s", user);
+          mg_random_str(result->token, sizeof(result->token) - 1);
+          result->level = level, result->next = s_users, s_users = result;
+          result->expire = mg_dash_make_expiration_time(dash);
+        }
+      }
+    } else if (ah == NULL) {
+      for (u = s_users; u != NULL && result == NULL; u = u->next) {
+        if (strcmp(u->token, pass) == 0) {
+          u->expire = mg_dash_make_expiration_time(dash);
+          result = u;
+        }
+      }
+    }
+  }
+
+  // MG_DEBUG(("[%s/%s] -> %s", user, pass, result ? "OK" : "FAIL"));
+  return result;
+}
+
+static void mg_handle_login(struct mg_connection *c, struct mg_dash_user *u) {
+  char cookie[256];
+  mg_snprintf(cookie, sizeof(cookie),
+              "Set-Cookie: access_token=%s; Path=/; "
+              "%sHttpOnly; SameSite=Lax; Max-Age=%d\r\n%s",
+              u->token, c->is_tls ? "Secure; " : "", 3600 * 24,
+              MG_JSON_HEADERS);
+  mg_http_reply(c, 200, cookie, "{%m:%m,%m:%d}\n",  //
+                MG_ESC("user"), MG_ESC(u->name),    //
+                MG_ESC("level"), u->level);
+}
+
+static void mg_handle_logout(struct mg_connection *c) {
+  char cookie[256];
+  mg_snprintf(cookie, sizeof(cookie),
+              "Set-Cookie: access_token=; Path=/; "
+              "Expires=Thu, 01 Jan 1970 00:00:00 UTC; "
+              "%sHttpOnly; Max-Age=0; \r\n",
+              c->is_tls ? "Secure; " : "");
+  mg_http_reply(c, 401, cookie, "Unauthorized\n");
 }
 
 void mg_dash_ev_handler(struct mg_connection *c, int ev, void *ev_data) {
@@ -325,9 +421,24 @@ void mg_dash_ev_handler(struct mg_connection *c, int ev, void *ev_data) {
     }
   } else if (ev == MG_EV_HTTP_MSG) {
     struct mg_http_message *hm = (struct mg_http_message *) ev_data;
+    struct mg_dash_user *u = mg_dash_authenticate(hm, dash);
     struct mg_str parts[5];
     memset(parts, 0, sizeof(parts));
-    if (mg_match(hm->uri, mg_str("/api/websocket"), NULL)) {
+
+    MG_DEBUG(("%lu %p %s", c->id, u, u ? u->name : ""));
+
+    if (mg_match(hm->uri, mg_str("/api/hi"), NULL)) {
+      mg_http_reply(c, 200, MG_JSON_HEADERS, "hi\n");
+    } else if (mg_match(hm->uri, mg_str("/api/logout"), NULL)) {
+      mg_handle_logout(c);
+      mg_ws_printf(c, WEBSOCKET_OP_TEXT, "{%m:%m}", MG_ESC("method"),
+                   MG_ESC("logout"));
+    } else if (mg_match(hm->uri, mg_str("/api/login"), NULL) && u != NULL) {
+      mg_handle_login(c, u);
+    } else if (dash->authenticate && u == NULL &&
+               mg_match(hm->uri, mg_str("/api/#"), NULL)) {
+      mg_http_reply(c, 403, MG_JSON_HEADERS, "Not Authorised\n");
+    } else if (mg_match(hm->uri, mg_str("/api/websocket"), NULL)) {
       mg_ws_upgrade(c, hm, NULL);
     } else if (mg_match(hm->uri, mg_str("/files/#"), NULL)) {
       file_ev_handler(c, ev, ev_data);
@@ -360,8 +471,7 @@ void mg_dash_ev_handler(struct mg_connection *c, int ev, void *ev_data) {
     for (fs = dash->sets; fs != NULL; fs = fs->next) {
       mg_dash_send_change(c->mgr, fs);
     }
-    // Send change notification with no params to indicate we're done for now
-    mg_dash_broadcast(c->mgr, "{%m:%m}", MG_ESC("method"), MG_ESC("change"));
+    mg_dash_broadcast(c->mgr, "{%m:%m}", MG_ESC("method"), MG_ESC("ready"));
   } else if (ev == MG_EV_WS_MSG) {
     // Add this to automatically handle "get" and "set" JSON-RPC calls
     struct mg_ws_message *wm = (struct mg_ws_message *) ev_data;

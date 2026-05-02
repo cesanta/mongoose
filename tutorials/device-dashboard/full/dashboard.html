@@ -4,10 +4,14 @@
     <title>My Dashboard</title>
 
     <!-- Mongoose device dashboard -->
+    <!--
     <script src="https://cdn.jsdelivr.net/gh/cesanta/mongoose@master/resources/dashboard.js"></script>
+    -->
+    <script src="dashboard.js"></script>
     <script>
       Dashboard.init({
         debug: true,
+        auth: true,
         data: {
           graph1: {data: []},
           graph2: {data: [], report: true},
@@ -22,6 +26,8 @@
 
     <script>
       document.addEventListener("DOMContentLoaded", () => {
+
+        // Tab switching
         const tabs = Array.from(document.querySelectorAll(".header-left .nav-link[href^='#']"));
         const panels = Array.from(document.querySelectorAll(".tab-panel"));
 
@@ -60,6 +66,54 @@
 
         const initialId = window.location.hash.slice(1) || "overview";
         activateTab(initialId);
+
+        // Auto logout on inactivity
+        function restartAutoLogout() {
+          const autologoutTimeoutSeconds = 300;
+          if (window.autoLogoutTimerId) clearTimeout(window.autoLogoutTimerId);
+          window.autoLogoutTimerId = setTimeout(() => {
+            Dashboard.logout().then(() => location.reload());
+          }, autologoutTimeoutSeconds * 1000);
+        };
+        function setupAutoLogout() {
+          ['mousemove', 'keydown', 'scroll', 'touchstart'].forEach(ev => {
+            document.addEventListener(ev, restartAutoLogout, true);
+          });
+          restartAutoLogout();
+        };
+
+        // Login page
+        const passwordEl = document.getElementById('login-password');
+        const loginButtonEl = document.getElementById('login-submit');
+        function showLogin(yes) {
+          document.getElementById('auth').style.display = yes ? '' : 'none';
+          document.getElementById('app').style.display = yes ? 'none' : '';
+          if (yes) {
+            document.body.style.visibility = 'visible';
+            passwordEl.focus();
+            passwordEl.onkeydown = function(ev) {
+              if (ev.key === 'Enter') {
+                ev.preventDefault();
+                loginButtonEl.click();
+              }
+            };
+          }
+        };
+
+        loginButtonEl.onclick = function(ev) {
+          ev.preventDefault();
+          const username = (document.getElementById('login-username')?.value || '').trim();
+          const password = passwordEl.value || '';
+          passwordEl.value = '';
+          Dashboard.login({username, password}).then(r => showLogin(false));
+        };
+
+        Dashboard.on('logout', function() { showLogin(true); });
+        Dashboard.on('ready', function() {
+          setupAutoLogout();
+          document.body.style.visibility = 'visible';
+        });
+        Dashboard.login().catch(err => showLogin(true));
 
         // GRAPHS
         // {stroke: '#14B8A6FF', fill: '#14B8A61A'}, // teal
@@ -216,7 +270,8 @@ a, a:visited, a:link { text-decoration: none; }
 .toggle:checked::after { transform: translateX(calc(100% - 3px)); }
 .toggle:disabled, .toggle.disabled { background: #d1d5db; cursor: not-allowed; }
 .toggle.edited { border-color: #0fe; }
-.u-over { top: 0 !important; }
+.u-under { top: 0 !important; }
+.hidden { display: none; }
 @media (max-width: 900px) { .grid { grid-template-columns: 1fr; } #files .row { flex-direction: column; flex-wrap: nowrap; } #files .panel, #files .note { flex: 1 1 auto; width: 100%; } }
 @media (max-width: 900px) { .metrics-grid { grid-template-columns: repeat(2, 1fr); } }
 @media (max-width: 480px) { .metrics-grid { grid-template-columns: 1fr; } .file-row { grid-template-columns: 1fr; } .file-actions { justify-content: flex-start; } .file-row { gap: 0.65rem; } .file-size { text-align: left; } }
@@ -229,129 +284,155 @@ a, a:visited, a:link { text-decoration: none; }
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   </head>
-  <body>
-    <div class="header">
-      <div class="header-container">
-        <div class="header-left">
-          <nav class="nav-tabs" role="tablist" aria-label="Primary tabs">
-            <svg class="logo" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 600" width="1200" height="600">
-              <defs>
-                <linearGradient id="g" x1="0" y1="0" x2="1" y2="1">
-                  <stop offset="0%" stop-color="#2dd4bf"/>
-                  <stop offset="100%" stop-color="#0f766e"/>
-                </linearGradient>
-              </defs>
-              <g fill="none" stroke="url(#g)" stroke-width="30" stroke-linecap="round" stroke-linejoin="round">
-                <rect x="160" y="60" width="300" height="300" rx="70"/>
-                <rect x="20" y="200" width="300" height="300" rx="70"/>
-              </g>
-              <text x="560" y="360"
-                    font-family="system-ui, -apple-system, Segoe UI, Roboto, sans-serif"
-                    font-size="180"
-                    font-weight="600"
-                    fill="#6b7280">
-                MyLogo
-              </text>
-            </svg>
-            <a href="#overview" id="tab-overview" class="nav-link nav-link-active" role="tab" aria-controls="overview" aria-selected="true">
-              <svg viewBox="0 0 24 24" class="nav-icon" fill="none" stroke="currentColor" stroke-width="2">
-                <path d="M3 11.5 12 4l9 7.5" />
-                <path d="M5 10.5V20h14v-9.5" />
-              </svg>
-              Overview
-            </a>
-            <a href="#settings" id="tab-settings" class="nav-link" role="tab" aria-controls="settings" aria-selected="false" tabindex="-1">
-              <svg viewBox="0 0 24 24" class="nav-icon" fill="none" stroke="currentColor" stroke-width="2">
-                <circle cx="12" cy="12" r="3" />
-                <path d="M19.4 15a1.7 1.7 0 0 0 .34 1.87l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06A1.7 1.7 0 0 0 15 19.4a1.7 1.7 0 0 0-1 .6 1.7 1.7 0 0 0-.4 1.1V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-.4-1.1 1.7 1.7 0 0 0-1-.6 1.7 1.7 0 0 0-1.87.34l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06A1.7 1.7 0 0 0 4.6 15a1.7 1.7 0 0 0-.6-1 1.7 1.7 0 0 0-1.1-.4H2.8a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.1-.4 1.7 1.7 0 0 0 .6-1 1.7 1.7 0 0 0-.34-1.87l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.7 1.7 0 0 0 9 4.6c.38-.16.72-.4 1-.7.26-.3.4-.69.4-1.1V2.8a2 2 0 1 1 4 0v.1c0 .41.14.8.4 1.1.28.3.62.54 1 .7a1.7 1.7 0 0 0 1.87-.34l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06A1.7 1.7 0 0 0 19.4 9c.16.38.4.72.7 1 .3.26.69.4 1.1.4h.1a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.1.4 1.7 1.7 0 0 0-.7 1z" />
-              </svg>
-              Settings
-            </a>
-            <a href="#firmware" id="tab-firmware" class="nav-link" role="tab" aria-controls="firmware" aria-selected="false" tabindex="-1">
-              <svg viewBox="0 0 24 24" class="nav-icon" fill="none" stroke="currentColor" stroke-width="2">
-                <path d="M12 3v10" />
-                <path d="m8 9 4 4 4-4" />
-                <rect x="4" y="17" width="16" height="4" rx="2" />
-              </svg>
-              Firmware Update
-            </a>
-            <a href="#files" id="tab-files" class="nav-link" role="tab" aria-controls="files" aria-selected="false" tabindex="-1">
-              <svg viewBox="0 0 24 24" class="nav-icon" fill="none" stroke="currentColor" stroke-width="2">
-                <path d="M4 7a2 2 0 0 1 2-2h4l2 2h6a2 2 0 0 1 2 2v2H4Z" />
-                <path d="M4 11h16v7a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2Z" />
-                <path d="M8 15h8" />
-              </svg>
-              File Manager
-            </a>
-          </nav>
-          <div class="connection-badge connection-badge-${__status.online ? 'online' : 'offline'}" aria-label="connection active">
-            <span class="connection-label">${__status.online ? 'live' : 'offline'}</span>
-            <span class="connection-dot connection-dot-${__status.online ? 'online' : 'offline'}" aria-hidden="true"></span>
+  <body style="visibility: hidden;">
+    <section id="auth" style="display:none; min-height: 100vh; background: radial-gradient(900px 520px at 15% 0%, rgba(56, 189, 248, 0.18), rgba(56, 189, 248, 0)), radial-gradient(760px 460px at 85% 10%, rgba(45, 212, 191, 0.14), rgba(45, 212, 191, 0)), linear-gradient(180deg, #f8fafc, #def2f7);">
+      <div class="tab-stage" style="min-height: 100vh; display: flex; align-items: center; justify-content: center;">
+        <div class="panel" style="width: 100%; max-width: 28rem;">
+          <div class="panel-title">Dashboard Sign In</div>
+          <div class="panel-body" style="gap: 0.75rem;">
+            <form id="login-form" autocomplete="on" style="display: flex; flex-direction: column; gap: 0.75rem;">
+              <div class="field">
+                <label class="field-label" for="login-password">Password</label>
+                <input id="login-password" class="field-input" type="password" name="password" autocomplete="current-password" placeholder="••••••" />
+              </div>
+              <div id="login-error" class="note" aria-live="polite" style="display:none; background: #fee2e2; border-color: #fca5a5; color: #991b1b;"></div>
+              <div style="margin: 0; color: #999;">
+                Use "admin" or "user" to sign in.
+              </div>
+              <div style="display:flex; justify-content:flex-end;">
+                <button class="btn btn-primary" id="login-submit" type="submit">Login</button>
+              </div>
+            </form>
           </div>
         </div>
-        <div class="header-actions">
-          <nav class="nav-tabs">
-            <div class="nav-link">
-              <svg viewBox="0 0 24 24" class="nav-icon" fill="none" stroke="currentColor" stroke-width="2">
-                <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" />
-                <circle cx="12" cy="7" r="4" />
-              </svg>
-              <span>admin</span>
-              <svg viewBox="0 0 24 24" class="nav-icon" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
-                <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" />
-                <path d="M16 17l5-5-5-5" />
-                <path d="M21 12H9" />
-              </svg>
-            </div>
-          </nav>
-        </div>
       </div>
-    </div>
-    <main class="tab-stage">
-      <section id="overview" class="tab-panel tab-panel-active" role="tabpanel" aria-labelledby="tab-overview">
-        <div class="metrics-grid" aria-label="Device metrics overview">
-          <article class="metric-tile">
-            <div class="metric-label">Temperature</div>
-            <div class="metric-value-row">
-              <div class="metric-value">
-                <span class="metric-number" data-bind="metrics.temperature">24.8</span>
-                <span class="metric-unit">°C</span>
-              </div>
-              <span class="metric-status metric-status-good">ok</span>
-            </div>
-          </article>
-          <article class="metric-tile metric-tile-warning">
-            <div class="metric-label">CPU Load</div>
-            <div class="metric-value-row">
-              <div class="metric-value">
-                <span class="metric-number" data-bind="metrics.cpu">37</span>
-                <span class="metric-unit">%</span>
-              </div>
-              <span class="metric-status metric-status-warn">moderate</span>
-            </div>
-          </article>
-          <article class="metric-tile metric-tile-alert">
-            <div class="metric-label">Free Memory</div>
-            <div class="metric-value-row">
-              <div class="metric-value">
-                <span class="metric-number">${metrics.ram}</span>
-                <span class="metric-unit">KB</span>
-              </div>
-              <span class="metric-status metric-status-alert" style="${metrics.ram <= 30 ? '': 'display:none;'}">low</span>
-              <span class="metric-status metric-status-warn" style="${metrics.ram <= 50 && metrics.ram > 30 ? '': 'display:none;'}">ok-ish</span>
-            </div>
-          </article>
-          <article class="metric-tile">
-            <div class="metric-label">Volume</div>
-            <div class="metric-value-row">
-              <div class="metric-value">
-                <span class="metric-number" data-bind="settings.volume">18.7</span>
-                <span class="metric-unit">dB</span>
-              </div>
-              <span class="metric-status metric-status-good">ok</span>
-            </div>
-          </article>
-        </div>
+    </section>
+    <div id="app">
+   <div class="header">
+     <div class="header-container">
+       <div class="header-left">
+         <nav class="nav-tabs" role="tablist" aria-label="Primary tabs">
+           <svg class="logo" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 600" width="1200" height="600">
+             <defs>
+               <linearGradient id="g" x1="0" y1="0" x2="1" y2="1">
+                 <stop offset="0%" stop-color="#2dd4bf"/>
+                 <stop offset="100%" stop-color="#0f766e"/>
+               </linearGradient>
+             </defs>
+             <g fill="none" stroke="url(#g)" stroke-width="30" stroke-linecap="round" stroke-linejoin="round">
+               <rect x="160" y="60" width="300" height="300" rx="70"/>
+               <rect x="20" y="200" width="300" height="300" rx="70"/>
+             </g>
+             <text x="560" y="360"
+                   font-family="system-ui, -apple-system, Segoe UI, Roboto, sans-serif"
+                   font-size="180"
+                   font-weight="600"
+                   fill="#6b7280">
+               MyLogo
+             </text>
+           </svg>
+           <a href="#overview" id="tab-overview" class="nav-link nav-link-active" role="tab" aria-controls="overview" aria-selected="true">
+             <svg viewBox="0 0 24 24" class="nav-icon" fill="none" stroke="currentColor" stroke-width="2">
+               <path d="M3 11.5 12 4l9 7.5" />
+               <path d="M5 10.5V20h14v-9.5" />
+             </svg>
+             Overview
+           </a>
+           <a href="#settings" id="tab-settings" class="nav-link" role="tab" aria-controls="settings" aria-selected="false" tabindex="-1">
+             <svg viewBox="0 0 24 24" class="nav-icon" fill="none" stroke="currentColor" stroke-width="2">
+               <circle cx="12" cy="12" r="3" />
+               <path d="M19.4 15a1.7 1.7 0 0 0 .34 1.87l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06A1.7 1.7 0 0 0 15 19.4a1.7 1.7 0 0 0-1 .6 1.7 1.7 0 0 0-.4 1.1V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-.4-1.1 1.7 1.7 0 0 0-1-.6 1.7 1.7 0 0 0-1.87.34l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06A1.7 1.7 0 0 0 4.6 15a1.7 1.7 0 0 0-.6-1 1.7 1.7 0 0 0-1.1-.4H2.8a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.1-.4 1.7 1.7 0 0 0 .6-1 1.7 1.7 0 0 0-.34-1.87l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.7 1.7 0 0 0 9 4.6c.38-.16.72-.4 1-.7.26-.3.4-.69.4-1.1V2.8a2 2 0 1 1 4 0v.1c0 .41.14.8.4 1.1.28.3.62.54 1 .7a1.7 1.7 0 0 0 1.87-.34l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06A1.7 1.7 0 0 0 19.4 9c.16.38.4.72.7 1 .3.26.69.4 1.1.4h.1a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.1.4 1.7 1.7 0 0 0-.7 1z" />
+             </svg>
+             Settings
+           </a>
+           <a href="#firmware" id="tab-firmware" class="nav-link" role="tab" aria-controls="firmware" aria-selected="false" tabindex="-1">
+             <svg viewBox="0 0 24 24" class="nav-icon" fill="none" stroke="currentColor" stroke-width="2">
+               <path d="M12 3v10" />
+               <path d="m8 9 4 4 4-4" />
+               <rect x="4" y="17" width="16" height="4" rx="2" />
+             </svg>
+             Firmware Update
+           </a>
+           <a href="#files" id="tab-files" class="nav-link" role="tab" aria-controls="files" aria-selected="false" tabindex="-1">
+             <svg viewBox="0 0 24 24" class="nav-icon" fill="none" stroke="currentColor" stroke-width="2">
+               <path d="M4 7a2 2 0 0 1 2-2h4l2 2h6a2 2 0 0 1 2 2v2H4Z" />
+               <path d="M4 11h16v7a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2Z" />
+               <path d="M8 15h8" />
+             </svg>
+             File Manager
+           </a>
+         </nav>
+         <div class="connection-badge connection-badge-${__status.online ? 'online' : 'offline'}" aria-label="connection active">
+           <span class="connection-label">${__status.online ? 'live' : 'offline'}</span>
+           <span class="connection-dot connection-dot-${__status.online ? 'online' : 'offline'}" aria-hidden="true"></span>
+         </div>
+       </div>
+       <div class="header-actions">
+         <nav class="nav-tabs">
+           <div class="nav-link">
+             <svg viewBox="0 0 24 24" class="nav-icon" fill="none" stroke="currentColor" stroke-width="2">
+               <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" />
+               <circle cx="12" cy="7" r="4" />
+             </svg>
+             <span>${__status.username || 'admin'}</span>
+             <svg viewBox="0 0 24 24"
+                  onclick="Dashboard.logout()"
+                  style="cursor: pointer;"
+               class="nav-icon" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+               <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" />
+               <path d="M16 17l5-5-5-5" />
+               <path d="M21 12H9" />
+             </svg>
+           </div>
+         </nav>
+       </div>
+     </div>
+   </div>
+   <main class="tab-stage">
+     <section id="overview" class="tab-panel tab-panel-active" role="tabpanel" aria-labelledby="tab-overview">
+       <div class="metrics-grid" aria-label="Device metrics overview">
+         <article class="metric-tile">
+           <div class="metric-label">Temperature</div>
+           <div class="metric-value-row">
+             <div class="metric-value">
+               <span class="metric-number" data-bind="metrics.temperature">24.8</span>
+               <span class="metric-unit">°C</span>
+             </div>
+             <span class="metric-status metric-status-good">ok</span>
+           </div>
+         </article>
+         <article class="metric-tile metric-tile-warning">
+           <div class="metric-label">CPU Load</div>
+           <div class="metric-value-row">
+             <div class="metric-value">
+               <span class="metric-number" data-bind="metrics.cpu">37</span>
+               <span class="metric-unit">%</span>
+             </div>
+             <span class="metric-status metric-status-warn">moderate</span>
+           </div>
+         </article>
+         <article class="metric-tile metric-tile-alert">
+           <div class="metric-label">Free Memory</div>
+           <div class="metric-value-row">
+             <div class="metric-value">
+               <span class="metric-number">${metrics.ram}</span>
+               <span class="metric-unit">KB</span>
+             </div>
+             <span class="metric-status metric-status-alert" style="${metrics.ram <= 30 ? '': 'display:none;'}">low</span>
+             <span class="metric-status metric-status-warn" style="${metrics.ram <= 50 && metrics.ram > 30 ? '': 'display:none;'}">ok-ish</span>
+           </div>
+         </article>
+         <article class="metric-tile">
+           <div class="metric-label">Volume</div>
+           <div class="metric-value-row">
+             <div class="metric-value">
+               <span class="metric-number" data-bind="settings.volume">18.7</span>
+               <span class="metric-unit">dB</span>
+             </div>
+             <span class="metric-status metric-status-good">ok</span>
+           </div>
+         </article>
+       </div>
 
         <div class="grid" style="grid-template-columns: 1fr 1fr;">
 
@@ -596,5 +677,6 @@ a, a:visited, a:link { text-decoration: none; }
         </div>
       </section>
     </main>
+    </div>
   </body>
 </html>

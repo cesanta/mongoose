@@ -11,6 +11,9 @@
         debug: true,
         data: { status: { led1: false, version: '1.0.0' } },
       });
+
+      // Show dashboard only when all device data is reported
+      Dashboard.on('ready', () => document.body.style.visibility = 'visible');
     </script>
 
     <style>
@@ -27,8 +30,8 @@
     </style>
   </head>
 
-  <body>
-    <main style="margin: 2rem; color: #64748b;">
+  <body style="visibility: hidden;">
+    <main id="main" style="margin: 2rem; color: #64748b;">
       <h1>LED control version ${status.version}</h1>
 
       <div style="display: flex; gap: 1rem; ">

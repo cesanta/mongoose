@@ -5,7 +5,7 @@
 
   const Rpc = (function() {
     function Rpc(url, onev) {
-      let ws, id = 1, oncall, q = [];
+      let ws, id = 1, oncall, q = [], reconnect = true;
       const pending = new Map();
       const realsend = s => { ws.send(s); onev && onev('send', s); };
       const fail = e => { for (const p of pending.values()) p[1](e || 'disconnected'); pending.clear(); };
@@ -15,7 +15,7 @@
       const connect = () => {
         ws = new WebSocket(url);
         ws.onopen = () => { onev && onev('open'); while (q.length) realsend(JSON.stringify(q.shift())); };
-        ws.onclose = () => { onev && onev('close'); fail(); setTimeout(connect, 1000); };
+        ws.onclose = () => { onev && onev('close'); fail(); reconnect && setTimeout(connect, 1000); };
         ws.onmessage = e => {
           onev && onev('message', e.data);
           let m;
@@ -43,6 +43,7 @@
 
       connect();
       return {
+        close: () => { reconnect = false; ws?.close(); },
         call: (method, params) => new Promise((ok, bad) => {
           const i = id++;
           pending.set(i, [ok, bad]);
@@ -57,16 +58,75 @@
     return Rpc;
   })();
 
+  function rpc_connect() {
+    if (isMock) {
+      setTimeout(() => userhandlers['ready']?.(), 500);
+      return;
+    }
+    if (rpc) return rpc;
+    //if (settings.auth && !status.authed) return null;
+    rpc = Rpc('api/websocket', function (evname, args) {
+      if (evname == 'open') status.online = true, rescan();
+      if (evname == 'close') status.online = false, rescan();
+      if (settings.debug) console.log('WS', evname, args);
+    });
+    rpc.handle((method, args) => {
+      if (method == 'change' && args) apply_and_rescan(settings.data, args);
+      if (method == 'logout') rpc_disconnect();
+      if (userhandlers[method]) userhandlers[method](args);
+    });
+    return rpc;
+  }
+
+  function rpc_disconnect() {
+    if (!rpc) return;
+    rpc.close();
+    rpc = null;
+    status.online = false;
+  }
+
+
+  function login(params) {
+    if (isMock) { rpc_connect(); return Promise.resolve({}); }
+    const opts = {};
+    if (params) {
+      const username = (params?.username ?? '').trim();
+      const password = params?.password ?? '';
+      const join = username + ':' + password;
+      opts.headers = { Authorization: `Basic ${btoa(join)}` };
+    }
+    return fetch('api/login', opts)
+      .then(r => r.ok ? r.json() : r.text().then(t => Promise.reject(t || r.statusText)))
+      .then(resp => {
+        status.username = resp?.user || '';
+        status.userlevel = resp?.level || 0;
+        //status.authed = !!status.username;
+        //if (settings.auth && status.authed) {
+        rpc_connect();
+        //rescan();
+        return resp;
+      });
+  };
+
+  function logout() {
+    if (isMock) { rpc_disconnect(); return Promise.resolve({}); }
+    return fetch('api/logout')
+      .catch(() => true)
+      .then(() => {
+        status.username = '';
+        status.userlevel = 0;
+        rpc_disconnect();
+        rescan();
+        return true;
+      });
+  }
+
   if (global.Dashboard) return;
-  const isMock = !!window.frameElement || (window !== window.top);
+  const isMock = location.protocol === 'file:' || !!window.frameElement || (window !== window.top);
   const settings = {data: {}, edits: {}, debug: true};
   const userhandlers = {}; // User event handlers
-  const status = { online: true, username: '', userlevel: 0, lastseen: '', initialized: false };
-  const rpc = isMock ? null : Rpc('api/websocket', function (evname, args) {
-    if (evname == 'open') status.online = true, rescan();
-    if (evname == 'close') status.online = false, rescan();
-    if (settings.debug) console.log('WS', evname, args);
-  });
+  const status = { online: true, username: '', userlevel: 0, lastseen: '', ready: false };
+  let rpc = null;
 
   const fromPath = (path, value) => path.split('.').reverse().reduce((acc, k) => ({ [k]: acc }), value);
   const get = (obj, path) => path.split('.').reduce((o, k) => o?.[k], obj);
@@ -327,40 +387,10 @@
     userhandlers[name] = fn;
   };
 
-  const setbody = visibility => document.body.style.visibility = visibility;
-
   function init(conf) {
     apply_and_rescan(settings, conf);
-    if (rpc) {
-      rpc.handle((method, args) => {
-        if (method == 'change') {
-          // "initialized" means that the device has sent us all initial
-          // data change notifications, and our settings.data contain
-          // actual refreshed device data - not the UI mock
-          if (!args) {
-            setbody('visible');
-            status.initialized = true;
-          }
-          if (args) apply_and_rescan(settings.data, args);
-        }
-        if (method != 'change') console.log('UNKNOWN REQUEST', method, args);
-        if (userhandlers[method]) userhandlers[method](args);
-      });
-      // After init, fetch all device data
-      //rpc.call('get').then(r => apply_and_rescan(settings.data, r));
-    } else {
-      setTimeout(function() { 
-        status.initialized = true;
-        setbody('visible');
-      }, 500);
-    }
+    if (!settings.auth) rpc_connect();
   };
 
-  if (document.readyState === "loading") {
-    document.addEventListener("DOMContentLoaded", () => setbody('hidden'), { once: true });
-  } else {
-    setbody('hidden');
-  }
-
-  global.Dashboard = { init, call, on, status };
+  global.Dashboard = { init, call, on, status, login, logout };
 })(window);

@@ -162,6 +162,17 @@ static struct mg_field_set set_graph2 = {
     "graph2", fields_graph2, read_graph2, NULL, 0, 0, NULL,
 };
 
+static int authenticate(const char *user, const char *pass) {
+  int level = 0;  // Authentication failure
+  if (strcmp(pass, "admin") == 0) {
+    level = 7;  // Administrator
+  } else if (strcmp(pass, "user") == 0) {
+    level = 3;  // Ordinary dude
+  }
+  (void) user;
+  return level;
+}
+
 void mg_dash_init(struct mg_mgr *mgr) {
   static struct mg_dash dash;  // Important: keep it static!
 
@@ -175,6 +186,9 @@ void mg_dash_init(struct mg_mgr *mgr) {
   // Add two fake files - for demonstration
   mg_dash_file_add(mg_str("device-config.json"), 1234);
   mg_dash_file_add(mg_str("device-log-2026-04-25.txt"), 1327854);
+
+  // Require authentication
+  dash.authenticate = authenticate;
 
   mg_http_listen(mgr, MG_HTTP_ADDR, mg_dash_ev_handler, &dash);
 }
