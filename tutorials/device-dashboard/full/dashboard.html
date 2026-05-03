@@ -14,8 +14,8 @@
           graph2: {data: [], report: true},
           actions: { action1: false, action2: false },
           leds: { led1: true, led2: false, led3: false },
-          settings: { volume: 12, log_level: 3, name: 'Galway' },
-          metrics: { temperature: 1.2, cpu: 4, ram: 5 },
+          settings: { volume: 12, log_level: 3, name: 'Galway', ota_version: '1.2.3', ota_status: 'No checks yet', ota_url: 'http://my-product.com/ota.json', ota_interval: 30 },
+          metrics: { temperature: 1.2, cpu: 4, ram: 5, version: '1.2.3' },
           files: {data: [{name: 'device-log-2026-04-25.txt', size: 8625563}]},
         },
       });
@@ -222,7 +222,7 @@ a, a:visited, a:link { text-decoration: none; }
 .panel-body { display: flex; flex-direction: column; gap: 0.5rem; padding: 1rem 1.25rem; flex: 1; }
 .panel-footer { display: flex; align-items: center; justify-content: flex-end; gap: 0.75rem; padding: 0.75rem 1.25rem; border-top: 1px solid #e2e8f0; }
 .field { display: flex; flex-direction: row; justify-content: space-between; align-items: center; gap: 0.75rem; }
-.field-label { font-size: 0.75rem; font-weight: 700; text-transform: uppercase; color: #94a3b8; flex-shrink: 0; white-space: nowrap; min-width: 6rem; }
+.field-label { font-size: 0.75rem; font-weight: 700; text-transform: uppercase; color: #94a3b8; flex-shrink: 0; white-space: nowrap; min-width: 3rem; }
 .field-input { flex: 1; min-width: 0; padding: 0.45rem 0.75rem; font-size: 0.88rem; font-family: inherit; color: #334155; border: 1px solid #e2e8f0; border-radius: 0.55rem; outline: none; transition: border-color 0.15s ease; }
 .field-input.edited { border-color: #00500040 !important; background: #00ff0020; }
 .field-input.error { border-color: #50000040; background: #ff000020; }
@@ -253,6 +253,7 @@ a, a:visited, a:link { text-decoration: none; }
 .file-icon { display: inline-flex; align-items: center; justify-content: center; width: 2.25rem; height: 2.25rem; color: #0369a1; background: #e0f2fe; border: 1px solid #bae6fd; border-radius: 0.65rem; flex-shrink: 0; }
 .file-icon svg { width: 1.15rem; height: 1.15rem; }
 .file-name { min-width: 0; color: #334155; font-size: 0.9rem; font-weight: 700; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.field-value { min-width: 0; color: #334155; font-size: 0.9rem; font-weight: 700; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .file-size { color: #94a3b8; font-size: 0.8rem; font-weight: 700; text-align: right; white-space: nowrap; }
 .file-actions { display: flex; align-items: center; justify-content: flex-end; gap: 0.45rem; }
 #graph1, #graph2 { width: 100%; height: 100%; min-height: 10rem; }
@@ -269,7 +270,7 @@ a, a:visited, a:link { text-decoration: none; }
 .toggle.edited { border-color: #0fe; }
 .u-under { top: 0 !important; }
 .hidden { display: none; }
-@media (max-width: 900px) { .grid { grid-template-columns: 1fr; } #files .row { flex-direction: column; flex-wrap: nowrap; } #files .panel, #files .note { flex: 1 1 auto; width: 100%; } }
+@media (max-width: 900px) { .grid { grid-template-columns: 1fr !important; } #files .row { flex-direction: column; flex-wrap: nowrap; } #files .panel, #files .note { flex: 1 1 auto; width: 100%; } }
 @media (max-width: 900px) { .metrics-grid { grid-template-columns: repeat(2, 1fr); } }
 @media (max-width: 480px) { .metrics-grid { grid-template-columns: 1fr; } .file-row { grid-template-columns: 1fr; } .file-actions { justify-content: flex-start; } .file-row { gap: 0.65rem; } .file-size { text-align: left; } }
     </style>
@@ -602,7 +603,79 @@ a, a:visited, a:link { text-decoration: none; }
 
       </div>
       </section>
-      <section id="firmware" class="tab-panel" role="tabpanel" aria-labelledby="tab-firmware" hidden></section>
+      <section id="firmware" class="tab-panel" role="tabpanel" aria-labelledby="tab-firmware" hidden>
+        <div class="grid" style="grid-template-columns: 28rem 1fr;">
+          <div class="panel">
+            <div class="panel-title">Firmware update via file upload</div>
+            <div class="panel-body">
+              <div class="field">
+                <div class="field-label">Current firmware version</div>
+                <span class="field-value">${settings.ota_version}</span>
+              </div>
+              <div class="field">
+                <div class="field-label">Upload new firmware</div>
+                <label class="btn btn-primary">
+                  Select .bin file
+                  <input type="file" accept=".bin" hidden>
+                </label>
+              </div>
+            </div>
+          </div>
+          <div class="note" style="min-width: 40rem;">
+            <div>
+            This firmware update method is the simplest. Just select your
+            `firmware.bin` file and upload it.
+
+            Mongoose includes built-in firmware update support for many
+            architectures, such as STM32, RP2040, and ESP32. See
+ <a target="_blank" href="https://github.com/cesanta/mongoose/blob/master/src/ota.h">ota.h</a> 
+            for the full list of supported MCUs.
+
+            If you are using STM32, it works out of the box with no additional setup.
+            For other architectures, add `#define MG_OTA MG_OTA_XXX` to your
+            mongoose_config.h.
+            </div>
+          </div>
+          <div class="panel">
+            <div class="panel-title">Firmware update via periodic URL check</div>
+            <div class="panel-body">
+              <div class="field">
+                <div class="field-label">Current firmware version</div>
+                <span class="field-value">${settings.ota_version}</span>
+              </div>
+              <div class="field">
+                <div class="field-label">Current status</div>
+                <span class="field-value">${settings.ota_status}</span>
+              </div>
+              <div class="field">
+                <div class="field-label">Check interval, seconds</div>
+                <input class="field-input"  style="max-width: 6rem;" data-bind="settings.ota_interval" data-autosave="1" />
+              </div>
+              <div class="field">
+                <div class="field-label">URL</div>
+                <input class="field-input" data-bind="settings.ota_url" data-autosave="1" />
+              </div>
+            </div>
+          </div>
+          <div class="note" style="min-width: 20rem;">
+            <div>
+              With this mechanism, you can configure an entire device fleet to update
+              automatically. Upload your firmware .bin to a web server and create a
+              JSON file that describes the firmware, including its URL, checksum, and
+              size. Mongoose periodically checks this JSON file, and if the version
+              differs from the current one, it downloads the firmware and performs the
+              update. The JSON file format is described in the
+              <a target="_blank" href="https://mongoose.ws/docs/api/ota/#mg_ota_url_check">docs</a>:
+              <pre>
+{
+  "version": "1.2.3",
+  "url": "http://my-product.com/firmwares/firmware-1.2.3.bin",
+  "size": 324645
+}
+              </pre>
+          </div>
+        </div>
+      </section>
       <section id="files" class="tab-panel" role="tabpanel" aria-labelledby="tab-files" hidden>
         <div class="row">
           <div class="panel">

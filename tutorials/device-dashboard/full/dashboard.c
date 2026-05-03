@@ -69,6 +69,10 @@ static struct mg_field_set set_metrics = {
 static double s_volume = 17.2;
 static int s_log_level = MG_LL_DEBUG;
 static char s_name[20] = "Dublin";
+static int s_ota_interval = 30;
+static char s_ota_version[] = "1.1.2";
+static char s_ota_status[40] = "No scans yet";
+static char s_ota_url[100] = "https://my-product.com/ota.json";
 
 static void write_settings(void) {
   mg_log_level = s_log_level;
@@ -82,6 +86,10 @@ static struct mg_field fields_settings[] = {
     {"volume", MG_VAL_DBL, &s_volume, sizeof(s_volume)},
     {"name", MG_VAL_STR, &s_name, sizeof(s_name)},
     {"log_level", MG_VAL_INT, &s_log_level, sizeof(s_log_level)},
+    {"ota_version", MG_VAL_STR, &s_ota_version, sizeof(s_ota_version)},
+    {"ota_status", MG_VAL_STR, &s_ota_status, sizeof(s_ota_status)},
+    {"ota_url", MG_VAL_STR, &s_ota_url, sizeof(s_ota_url)},
+    {"ota_interval", MG_VAL_INT, &s_ota_interval, sizeof(s_ota_interval)},
     {NULL, MG_VAL_INT, NULL, 0},
 };
 

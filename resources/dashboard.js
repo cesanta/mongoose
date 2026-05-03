@@ -100,10 +100,7 @@
       .then(resp => {
         status.username = resp?.user || '';
         status.userlevel = resp?.level || 0;
-        //status.authed = !!status.username;
-        //if (settings.auth && status.authed) {
         rpc_connect();
-        //rescan();
         return resp;
       });
   };
@@ -116,7 +113,6 @@
         status.username = '';
         status.userlevel = 0;
         rpc_disconnect();
-        rescan();
         return true;
       });
   }
@@ -125,7 +121,7 @@
   const isMock = location.protocol === 'file:' || !!window.frameElement || (window !== window.top);
   const settings = {data: {}, edits: {}, debug: true};
   const userhandlers = {}; // User event handlers
-  const status = { online: true, username: '', userlevel: 0, lastseen: '', ready: false };
+  const status = { online: false, username: '', userlevel: 0, ready: false };
   let rpc = null;
 
   const fromPath = (path, value) => path.split('.').reverse().reduce((acc, k) => ({ [k]: acc }), value);
