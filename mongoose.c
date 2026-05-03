@@ -121,6 +121,7 @@ fail:
 #endif
 
 
+
 #define MG_NO_CACHE_HEADERS "Cache-Control: no-cache\r\n"
 #define MG_JSON_HEADERS "Content-Type: application/json\r\n" MG_NO_CACHE_HEADERS
 
@@ -574,7 +575,6 @@ void mg_dash_ev_handler(struct mg_connection *c, int ev, void *ev_data) {
       struct mg_http_serve_opts opts;
       memset(&opts, 0, sizeof(opts));
       opts.fs = &mg_fs_packed;
-      mg_mem_files = mg_packed_files;
       mg_http_serve_file(c, hm, "/dashboard.html", &opts);
     } else {
       struct mg_dash_custom_handler *ch = dash->custom_handlers;

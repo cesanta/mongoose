@@ -190,6 +190,7 @@ void mg_dash_init(struct mg_mgr *mgr) {
   // Require authentication
   dash.authenticate = authenticate;
 
+  mg_mem_files = mg_packed_files;
   mg_http_listen(mgr, MG_HTTP_ADDR, mg_dash_ev_handler, &dash);
 }
 

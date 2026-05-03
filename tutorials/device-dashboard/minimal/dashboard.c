@@ -38,6 +38,7 @@ static struct mg_field_set field_set_status = {
 void mg_dash_init(struct mg_mgr *mgr) {
   static struct mg_dash dash;  // Important: keep it static!
   MG_DASH_ADD_FIELD_SET(&dash, &field_set_status);
+  mg_mem_files = mg_packed_files;
   mg_http_listen(mgr, MG_HTTP_ADDR, mg_dash_ev_handler, &dash);
 }
 
