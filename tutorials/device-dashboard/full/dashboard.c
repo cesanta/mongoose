@@ -209,7 +209,7 @@ void mg_dash_poll(struct mg_mgr *mgr) {
     mg_dash_send_change(mgr, &set_metrics);
   }
   if (mg_timer_expired(&timer2, 120, mg_now()) && s_graph2_report) {
-    //mg_dash_send_change(mgr, &set_graph2);
+    mg_dash_send_change(mgr, &set_graph2);
   }
   if (s_action2 == true && s_action2_timeout < mg_now()) {
     s_action2 = false;
