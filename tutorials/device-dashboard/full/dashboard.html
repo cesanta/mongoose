@@ -4,7 +4,7 @@
     <title>My Dashboard</title>
 
     <!-- Mongoose device dashboard -->
-    <script src="https://cdn.jsdelivr.net/gh/cesanta/mongoose@master/resources/dashboard.js"></script>
+    <script src="https://mongoose.ws/resources/dashboard.js?2"></script>
     <script>
       Dashboard.init({
         debug: true,
@@ -101,8 +101,9 @@
           ev.preventDefault();
           const username = (document.getElementById('login-username')?.value || '').trim();
           const password = passwordEl.value || '';
-          passwordEl.value = '';
           Dashboard.login({username, password}).then(r => showLogin(false));
+          console.log('LOGIN', {username, password});
+          passwordEl.value = '';
         };
 
         Dashboard.on('logout', function() { showLogin(true); });
@@ -374,7 +375,7 @@ a, a:visited, a:link { text-decoration: none; }
              </svg>
              <span>${__status.username || 'admin'}</span>
              <svg viewBox="0 0 24 24"
-                  onclick="Dashboard.logout()"
+                  onclick="Dashboard.logout().then(() => location.reload())"
                   style="cursor: pointer;"
                class="nav-icon" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
                <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" />
@@ -614,10 +615,16 @@ a, a:visited, a:link { text-decoration: none; }
               </div>
               <div class="field">
                 <div class="field-label">Upload new firmware</div>
-                <label class="btn btn-primary">
+                 <label class="btn btn-primary">
+                  <svg viewBox="0 0 24 24" class="nav-icon" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M12 3v12" />
+                    <path d="m7 8 5-5 5 5" />
+                    <path d="M5 21h14" />
+                  </svg>
                   Select .bin file
-                  <input type="file" accept=".bin" hidden>
+                  <input type="file" accept=".bin" hidden data-upload="1" />
                 </label>
+
               </div>
             </div>
           </div>
@@ -710,14 +717,14 @@ a, a:visited, a:link { text-decoration: none; }
                   </div>
                   <div class="file-size">${f.size}</div>
                   <div class="file-actions">
-                    <a href="files/${encodeURIComponent(f.name)}" target="_blank" class="btn btn-secondary">
+                    <a href="fs/${encodeURIComponent(f.name)}" target="_blank" class="btn btn-secondary">
                       <svg viewBox="0 0 24 24" class="nav-icon" fill="none" stroke="currentColor" stroke-width="2">
                         <path d="M12 3v12" />
                         <path d="m7 10 5 5 5-5" />
                         <path d="M5 21h14" />
                       </svg>
                     </a>
-                    <button onclick="fetch('files/${encodeURIComponent(f.name)}?action=delete'); return false;" class="btn btn-secondary">
+                    <button onclick="fetch('fs/${encodeURIComponent(f.name)}', {method: 'DELETE'}); return false;" class="btn btn-secondary">
                       <svg viewBox="0 0 24 24" class="nav-icon" fill="none" stroke="currentColor" stroke-width="2">
                         <path d="M3 6h18" />
                         <path d="M8 6V4h8v2" />

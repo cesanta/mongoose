@@ -20,9 +20,6 @@ file_data.c: dashboard.html
 	node $(TOP)/resources/pack.js out.html:dashboard.html:gzip > file_data.c
 	@echo "On-flash size: `grep -oE '[0-9]+' file_data.c | wc -l`"
 
-purge:
-	curl -s https://purge.jsdelivr.net/gh/cesanta/mongoose@master/resources/dashboard.js
-
 # For development: rebuild and restart if any of the sources change
 watch:
 	node $(TOP)/resources/watch.js -w main.c -w dashboard.c -w $(TOP)/mongoose.h -w dashboard.html -- make

@@ -140,6 +140,10 @@ struct mg_upload_state {
   void *ctx;        // OTA context
 };
 
+#define CONN_OTA 'O'
+#define CONN_UPLOAD 'F'
+#define CONN_HANDLED 'Z'
+
 static struct mg_str trimq(struct mg_str s) {  // Trim double quotes
   if (s.len > 1 && s.buf[0] == '"') s.len -= 2, s.buf++;
   return s;
@@ -388,64 +392,106 @@ static struct mg_field_set set_files = {
     "files", fields_files, read_files, NULL, 0, 0, NULL,
 };
 
-static void file_ev_handler(struct mg_connection *c, int ev, void *ev_data) {
+static inline void mg_log_http_req(struct mg_connection *c,
+                                   struct mg_http_message *hm) {
+  int len = 0;
+  size_t n, spaces = 0;
+  struct mg_http_message tmp;
+  memset(&tmp, 0, sizeof(tmp));
+  len = mg_http_parse((char *) c->send.buf, c->send.len, &tmp);
+  n = (len < 0 || (size_t) len > c->send.len) ? c->send.len : (size_t) len;
+  while ((n + spaces) < c->send.len && spaces < c->send.len &&
+         (c->send.buf[c->send.len - spaces - 1] == '\r' ||
+          c->send.buf[c->send.len - spaces - 1] == '\n'))
+    spaces++;
+  MG_DEBUG(("%lu %.*s %.*s %.*s: %lu %.*s -> %lu %.*s", c->id, hm->method.len,
+            hm->method.buf, hm->uri.len, hm->uri.buf, c->send.len > 15 ? 3 : 0,
+            &c->send.buf[9], hm->body.len, hm->body.len, hm->body.buf,
+            c->send.len - n, c->send.len - n - spaces, c->send.buf + n));
+}
+
+static struct mg_str mg_dash_file_name(struct mg_http_message *hm) {
+  struct mg_str name = mg_str_n(hm->uri.buf + 4, hm->uri.len - 4);  // - /fs/
+  // Decode file name in-place - directly into the request buffer
+  int len = mg_url_decode(name.buf, name.len, name.buf, name.len + 1, 0);
+  if (len > 0 && (size_t) len <= name.len) name.len = (size_t) len;
+  return name;
+}
+
+static void upload_ev_handler(struct mg_connection *c, int ev, void *ev_data) {
   // struct mg_dash *dash = (struct mg_dash *) c->fn_data;
   struct mg_upload_state *us = (struct mg_upload_state *) c->data;
-  if ((ev == MG_EV_HTTP_HDRS || ev == MG_EV_HTTP_MSG) && us->marker == 0) {
+  if (ev == MG_EV_HTTP_HDRS) {
     struct mg_http_message *hm = (struct mg_http_message *) ev_data;
-    if (hm->uri.len > 7) hm->uri.len -= 7, hm->uri.buf += 7;  // Strip /files/
+    struct mg_str name = mg_dash_file_name(hm);
     if (sizeof(*us) > sizeof(c->data)) {
-      mg_error(c,
-               "FAILURE: sizeof(c->data) == %lu, need %lu."
-               " Set #define MG_DATA_SIZE XXX",
-               sizeof(c->data), sizeof(*us));
-    } else if (mg_strcmp(hm->query, mg_str("action=delete")) == 0) {
-      // Query string ?action=delete - file deletion
-      mg_dash_file_del(hm->uri);
-      mg_dash_send_change(c->mgr, &set_files);
-      mg_http_reply(c, 200, NULL, "true");
-    } else if (mg_path_is_sane(hm->uri) == false) {
+      MG_ERROR(
+          ("FAIL: sizeof(c->data) == %lu, need %lu."
+           " Set #define MG_DATA_SIZE XXX",
+           sizeof(c->data), sizeof(*us)));
+      mg_http_reply(c, 500, NULL, ":(\n");
+      c->is_draining = 1;
+    } else if (mg_path_is_sane(name) == false) {
       // Bad file name, return error. Protect from traversal, etc
       mg_http_reply(c, 400, NULL, "Bad name");
-    } else if (mg_match(hm->method, mg_str("POST"), NULL) ||
-               mg_match(hm->method, mg_str("PUT"), NULL)) {
-      // File upload
-      char path[128];
-      mg_snprintf(path, sizeof(path), "/tmp/%.*s", hm->uri.len, hm->uri.buf);
-      us->ctx = fopen(path, "wb+");
-      if (us->ctx == NULL) {
-        mg_http_reply(c, 500, NULL, "File upload error %d\n", errno);
+      c->is_draining = 1;
+    } else {
+      bool ok = false;
+      if (us->marker == CONN_UPLOAD) {
+        char path[128];
+        mg_snprintf(path, sizeof(path), "/tmp/%.*s", name.len, name.buf);
+        us->ctx = fopen(path, "wb+");
+        if (us->ctx == NULL) MG_ERROR(("open(%s): %d", path, errno));
+        if (us->ctx != NULL) ok = true;
       } else {
-        mg_dash_file_add(hm->uri, hm->body.len);
-        MG_DEBUG(("%lu Starting upload, [%.*s] %lu", c->id, hm->uri.len,
-                  hm->uri.buf, hm->body.len));
-        us->marker = 'U';
+        ok = mg_ota_begin(hm->body.len);
+      }
+      if (ok == false) {
+        mg_http_reply(c, 500, NULL, "Upload failed to start\n");
+        c->is_draining = 1;
+      } else {
+        if (us->marker == CONN_UPLOAD) mg_dash_file_add(name, hm->body.len);
         us->expected = hm->body.len;
         us->received = 0;
         mg_iobuf_del(&c->recv, 0, hm->head.len);
-        c->pfn = NULL;
-        c->fn = file_ev_handler;
         mg_call(c, MG_EV_READ, &c->recv.len);
       }
-    } else {
-      // Serve file
-      char path[128];
-      mg_snprintf(path, sizeof(path), "/tmp/%.*s", hm->uri.len, hm->uri.buf);
-      mg_http_serve_file(c, hm, path, NULL);
     }
-  } else if (ev == MG_EV_READ && us->marker == 'U') {
+  } else if (ev == MG_EV_READ && us->expected > 0 && c->recv.len > 0) {
     // Write uploaded data
-    MG_DEBUG(("Uploading.. recv.len=%u", c->recv.len));
-    us->received += c->recv.len;
-    fwrite(c->recv.buf, 1, c->recv.len, (FILE *) us->ctx);
-    c->recv.len = 0;
-    if (us->received >= us->expected) {
-      fclose((FILE *) us->ctx);
-      MG_DEBUG(("%lu Uploaded %lu", c->id, us->expected));
-      mg_http_reply(c, 200, NULL, "%lu uploaded\n", us->expected);
-      mg_dash_send_change(c->mgr, &set_files);
+
+    size_t alignment = 512;  // Maximum flash write granularity (iMXRT, Pico)
+    size_t aligned = (us->received + c->recv.len < us->expected)
+                         ? aligned = MG_ROUND_DOWN(c->recv.len, alignment)
+                         : c->recv.len;  // Last write can be unaligned
+    bool ok = true, is_ota = us->marker == CONN_OTA;
+    if (aligned > 0 && !is_ota) {
+      ok = (fwrite(c->recv.buf, 1, aligned, (FILE *) us->ctx) == aligned);
+    } else if (aligned > 0 && is_ota) {
+      ok = mg_ota_write(c->recv.buf, aligned);
+    }
+
+    us->received += aligned;
+    // MG_DEBUG(("%lu chunk: %lu/%lu, %lu/%lu, ok: %d", c->id, aligned,
+    //           c->recv.len, us->received, us->expected, ok));
+    mg_iobuf_del(&c->recv, 0, aligned);  // Delete received data
+
+    if (ok == false) {
+      // Some sort of failure - send error response and cleanup
+      mg_http_reply(c, 400, "", "Upload error\n");
+      c->is_draining = 1;  // Close connection when response it sent
+      if (is_ota) mg_ota_end();
+      if (!is_ota) mg_free(us->ctx);
       memset(us, 0, sizeof(*us));
-      c->is_draining = 1;
+    } else if (us->received >= us->expected) {
+      // Uploaded everything. Send success response and cleanup
+      mg_http_reply(c, 200, NULL, "%lu ok\n", us->received);
+      c->is_draining = 1;  // Close connection when response it sent
+      MG_INFO(("%lu done, %lu bytes", c->id, us->received));
+      if (is_ota) mg_ota_end();
+      if (!is_ota) (void) fclose((FILE *) us->ctx);
+      if (!is_ota) mg_dash_send_change(c->mgr, &set_files);
+      memset(us, 0, sizeof(*us));
     }
   }
 }
@@ -465,6 +511,8 @@ static struct mg_dash_user *mg_dash_authenticate(struct mg_http_message *hm,
 
   if (dash->authenticate == NULL) return NULL;
   mg_http_creds(hm, user, sizeof(user), pass, sizeof(pass));
+  // MG_DEBUG(("user [%s], pass: [%s], h: %.*s", user, pass, hm->head.len,
+  // hm->head.buf));
 
   // Remove expired users
   for (u = s_users; u != NULL; u = tmp) {
@@ -508,7 +556,6 @@ static struct mg_dash_user *mg_dash_authenticate(struct mg_http_message *hm,
       }
     }
   }
-
   // MG_DEBUG(("[%s/%s] -> %s", user, pass, result ? "OK" : "FAIL"));
   return result;
 }
@@ -537,17 +584,55 @@ static void mg_handle_logout(struct mg_connection *c) {
 
 void mg_dash_ev_handler(struct mg_connection *c, int ev, void *ev_data) {
   struct mg_dash *dash = (struct mg_dash *) c->fn_data;
+
   if (ev == MG_EV_OPEN) {
     if (mg_dash_find_field_set(dash, mg_str("files")) == NULL) {
       MG_DASH_ADD_FIELD_SET(dash, &set_files);
     }
-  } else if (ev == MG_EV_HTTP_MSG) {
+    // c->is_hexdumping = 1;
+  } else if (ev == MG_EV_HTTP_HDRS && c->data[0] == 0) {
+    // Received headers - check authentication and possibly start uploads/ota
     struct mg_http_message *hm = (struct mg_http_message *) ev_data;
     struct mg_dash_user *u = mg_dash_authenticate(hm, dash);
+
+    MG_DEBUG(("%lu HDRS %.*s", c->id, hm->uri.len, hm->uri.buf));
+    if (mg_match(hm->uri, mg_str("/api/hi"), NULL) ||
+        mg_match(hm->uri, mg_str("/api/logout"), NULL)) {
+      // Do nothing, handle them MG_EV_HTTP_MSG. We bypass auth for those
+    } else if (dash->authenticate && u == NULL &&
+               mg_match(hm->uri, mg_str("/api/#"), NULL)) {
+      // Auth check fail
+      mg_http_reply(c, 403, MG_JSON_HEADERS, "Not Authorised\n");
+      c->data[0] = CONN_HANDLED;
+    } else if (mg_match(hm->uri, mg_str("/api/login"), NULL) && u != NULL) {
+      mg_handle_login(c, u);
+      c->data[0] = CONN_HANDLED;
+    } else if (mg_match(hm->uri, mg_str("/api/ota"), NULL)) {
+      // Start OTA - in a separate handler function
+      c->data[0] = CONN_OTA;
+      c->fn = upload_ev_handler;
+      c->pfn = NULL;
+      mg_call(c, ev, ev_data);
+    } else if (mg_match(hm->uri, mg_str("/fs/#"), NULL) &&
+               (mg_strcasecmp(hm->method, mg_str("POST")) == 0 ||
+                mg_strcasecmp(hm->method, mg_str("PUT")) == 0)) {
+      // Start file upload - in a separate function
+      c->data[0] = CONN_UPLOAD;
+      c->fn = upload_ev_handler;
+      c->pfn = NULL;
+      mg_call(c, ev, ev_data);
+    }
+    if (c->data[0] != '\0') mg_log_http_req(c, hm);
+  } else if (ev == MG_EV_HTTP_MSG && c->data[0] != '\0') {
+    // The response has been send in EV_HDRS path, so we're not reponding
+    // anything but clearing the c->data[0] flag for the next request.
+    c->data[0] = 0;
+    c->is_resp = 0;
+  } else if (ev == MG_EV_HTTP_MSG && c->data[0] == '\0') {
+    struct mg_http_message *hm = (struct mg_http_message *) ev_data;
+    // struct mg_dash_user *u = mg_dash_authenticate(hm, dash);
     struct mg_str parts[5];
     memset(parts, 0, sizeof(parts));
-
-    MG_DEBUG(("%lu %p %s", c->id, u, u ? u->name : ""));
 
     if (mg_match(hm->uri, mg_str("/api/hi"), NULL)) {
       mg_http_reply(c, 200, MG_JSON_HEADERS, "hi\n");
@@ -555,15 +640,21 @@ void mg_dash_ev_handler(struct mg_connection *c, int ev, void *ev_data) {
       mg_handle_logout(c);
       mg_ws_printf(c, WEBSOCKET_OP_TEXT, "{%m:%m}", MG_ESC("method"),
                    MG_ESC("logout"));
-    } else if (mg_match(hm->uri, mg_str("/api/login"), NULL) && u != NULL) {
-      mg_handle_login(c, u);
-    } else if (dash->authenticate && u == NULL &&
-               mg_match(hm->uri, mg_str("/api/#"), NULL)) {
-      mg_http_reply(c, 403, MG_JSON_HEADERS, "Not Authorised\n");
     } else if (mg_match(hm->uri, mg_str("/api/websocket"), NULL)) {
       mg_ws_upgrade(c, hm, NULL);
-    } else if (mg_match(hm->uri, mg_str("/files/#"), NULL)) {
-      file_ev_handler(c, ev, ev_data);
+    } else if (mg_match(hm->uri, mg_str("/fs/#"), NULL)) {
+      struct mg_str name = mg_dash_file_name(hm);
+      char path[128];
+      mg_snprintf(path, sizeof(path), "/tmp/%.*s", name.len, name.buf);
+      if (mg_strcasecmp(hm->method, mg_str("DELETE")) == 0) {
+        // Delete file
+        mg_dash_file_del(name);
+        mg_dash_send_change(c->mgr, &set_files);
+        mg_http_reply(c, 200, NULL, "true");
+      } else {
+        // Serve file
+        mg_http_serve_file(c, hm, path, NULL);
+      }
     } else if (mg_match(hm->uri, mg_str("/api/get/#"), parts) ||
                mg_match(hm->uri, mg_str("/api/get"), NULL)) {
       mg_http_reply(c, 200, MG_JSON_HEADERS, "%M\n", mg_dash_print_name, dash,
@@ -585,6 +676,7 @@ void mg_dash_ev_handler(struct mg_connection *c, int ev, void *ev_data) {
         }
       }
       if (ch == NULL) mg_http_reply(c, 404, MG_JSON_HEADERS, "Not Found");
+      mg_log_http_req(c, hm);
     }
   } else if (ev == MG_EV_WS_OPEN) {
     // WS connection established, send change notifications for all data
