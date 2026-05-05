@@ -1,5 +1,6 @@
 #include "dash.h"
 #include "util.h"
+#include "ota.h"
 
 #define MG_NO_CACHE_HEADERS "Cache-Control: no-cache\r\n"
 #define MG_JSON_HEADERS "Content-Type: application/json\r\n" MG_NO_CACHE_HEADERS
