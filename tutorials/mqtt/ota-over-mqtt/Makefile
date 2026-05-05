@@ -5,8 +5,8 @@ SOURCES = main.c mongoose.c       # Source code files, packed_fs.c contains ca.p
 CFLAGS = -W -Wall -Wextra -g -I.  # Build options
 
 # Mongoose build options. See https://mongoose.ws/documentation/#build-options
+CFLAGS_EXTRA ?= -DMG_TLS=MG_TLS_BUILTIN
 CFLAGS_MONGOOSE += -DMG_ENABLE_LINES=1
-CFLAGS_MONGOOSE += -DMG_TLS=MG_TLS_BUILTIN
 #CFLAGS_MONGOOSE += -DMG_TLS=MG_TLS_OPENSSL -L/opt/homebrew/opt/openssl/lib -I/opt/homebrew/opt/openssl/include -lssl -lcrypto
 #CFLAGS_MONGOOSE += -DMG_TLS=MG_TLS_MBED -L/opt/homebrew/opt/mbedtls/lib -I/opt/homebrew/opt/mbedtls/include -lmbedtls -lmbedcrypto -lmbedx509
 

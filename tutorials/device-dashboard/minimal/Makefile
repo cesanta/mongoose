@@ -3,8 +3,9 @@
 PROG ?= example
 TOP ?= ../../..
 SOURCES = main.c dashboard.c file_data.c $(TOP)/mongoose.c
+CFLAGS_EXTRA ?= -DMG_TLS=MG_TLS_BUILTIN
 CFLAGS ?= -W -Wall -Wextra -Werror -Wundef -Wshadow -O0 $(CFLAGS_EXTRA)
-PFLAGS = -I$(TOP) -DMG_DATA_SIZE=64 -DMG_TLS=MG_TLS_BUILTIN -DMG_ENABLE_LINES=1
+PFLAGS = -I$(TOP) -DMG_DATA_SIZE=64 -DMG_ENABLE_LINES=1
 AFLAGS ?= -fsanitize=signed-integer-overflow,address,undefined,alignment
 
 all: $(PROG)
