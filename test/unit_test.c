@@ -369,6 +369,59 @@ static bool test_sntp_server(const char *url) {
   return ms > 0;
 }
 
+static void sntp_put_timestamp(unsigned char *buf, size_t ofs, int64_t ms) {
+  uint64_t msec = (uint64_t) ms;
+  uint32_t sec = (uint32_t) (msec / 1000U + 2208988800ULL);
+  uint32_t frac = (uint32_t) (((msec % 1000U) * 4294967295ULL) / 1000U);
+
+  buf[ofs] = (unsigned char) (sec >> 24);
+  buf[ofs + 1] = (unsigned char) (sec >> 16);
+  buf[ofs + 2] = (unsigned char) (sec >> 8);
+  buf[ofs + 3] = (unsigned char) sec;
+  buf[ofs + 4] = (unsigned char) (frac >> 24);
+  buf[ofs + 5] = (unsigned char) (frac >> 16);
+  buf[ofs + 6] = (unsigned char) (frac >> 8);
+  buf[ofs + 7] = (unsigned char) frac;
+}
+
+static void sntp_make_reply(unsigned char *buf, uint8_t version, uint8_t mode,
+                            int64_t origin, int64_t receive,
+                            int64_t transmit) {
+  memset(buf, 0, 48);
+  buf[0] = (unsigned char) ((version << 3) | mode);
+  buf[1] = 1;  // Non-zero stratum: not a kiss-of-death response
+  sntp_put_timestamp(buf, 24, origin);
+  sntp_put_timestamp(buf, 32, receive);
+  sntp_put_timestamp(buf, 40, transmit);
+}
+
+static void test_sntp_parse_local(void) {
+  unsigned char pkt[48];
+  int64_t start = (int64_t) mg_millis();
+  int64_t parsed, transmit = start + 1000;
+
+  sntp_make_reply(pkt, 4, 4, start, transmit, transmit);
+  parsed = mg_sntp_parse(pkt, sizeof(pkt));
+  ASSERT(parsed >= transmit - 1 && parsed <= transmit + 100);
+
+  transmit = start + 2000;
+  sntp_make_reply(pkt, 3, 5, start, transmit, transmit);
+  parsed = mg_sntp_parse(pkt, sizeof(pkt));
+  ASSERT(parsed >= transmit - 1 && parsed <= transmit + 100);
+
+  ASSERT(mg_sntp_parse(pkt, 47) == -1);
+
+  sntp_make_reply(pkt, 4, 3, start, transmit, transmit);
+  ASSERT(mg_sntp_parse(pkt, sizeof(pkt)) == -1);
+
+  sntp_make_reply(pkt, 4, 4, start, transmit, transmit);
+  pkt[1] = 0;
+  ASSERT(mg_sntp_parse(pkt, sizeof(pkt)) == -1);
+
+  sntp_make_reply(pkt, 2, 4, start, transmit, transmit);
+  ASSERT(mg_sntp_parse(pkt, sizeof(pkt)) == -1);
+}
+
 static void test_sntp(void) {
   bool result;
   const unsigned char bad[] =
@@ -562,6 +615,89 @@ static void construct_props(struct mg_mqtt_prop *props) {
 
   props[4].id = MQTT_PROP_PAYLOAD_FORMAT_INDICATOR;
   props[4].iv = 1;
+}
+
+static void test_mqtt_parse_local(void) {
+  const uint8_t connack[] = {0x20, 0x02, 0x00, 0x00};
+  const uint8_t publish_qos0[] = {0x30, 0x07, 0x00, 0x03, 'a',
+                                  '/',  'b',  'h',  'i'};
+  const uint8_t publish_qos1[] = {0x32, 0x09, 0x00, 0x03, 'q', '/',
+                                  '1',  0x12, 0x34, 'o',  'k'};
+  const uint8_t publish_mqtt5[] = {
+      0x30, 0x1f, 0x00, 0x03, 'v',  '/',  '5',  0x15, 0x01, 0x01, 0x03,
+      0x00, 0x04, 'j',  's',  'o',  'n',  0x26, 0x00, 0x01, 'k',  0x00,
+      0x01, 'v',  0x02, 0x00, 0x00, 0x00, 0x0a, 'b',  'o',  'd',  'y'};
+  const uint8_t malformed_varint[] = {0x30, 0x80, 0x80, 0x80, 0x80};
+  const uint8_t truncated_topic[] = {0x30, 0x04, 0x00, 0x03, 'a', 'X'};
+  const uint8_t truncated_prop_section[] = {0x30, 0x07, 0x00, 0x01, 'a',
+                                            0x04, 0x03, 0x00, 0x04};
+  const uint8_t truncated_prop_payload[] = {0x30, 0x09, 0x00, 0x01, 'a',
+                                            0x04, 0x03, 0x00, 0x02, 'x',
+                                            'z'};
+  struct mg_mqtt_message mm;
+  struct mg_mqtt_prop prop;
+  size_t pos;
+
+  ASSERT(mg_mqtt_parse(connack, sizeof(connack), 4, &mm) == MQTT_OK);
+  ASSERT(mm.cmd == MQTT_CMD_CONNACK);
+  ASSERT(mm.ack == 0);
+  ASSERT(mm.dgram.len == sizeof(connack));
+
+  ASSERT(mg_mqtt_parse(publish_qos0, sizeof(publish_qos0), 4, &mm) ==
+         MQTT_OK);
+  ASSERT(mm.cmd == MQTT_CMD_PUBLISH);
+  ASSERT(mm.qos == 0);
+  ASSERT(mm.topic.len == 3 && memcmp(mm.topic.buf, "a/b", 3) == 0);
+  ASSERT(mm.id == 0);
+  ASSERT(mm.data.len == 2 && memcmp(mm.data.buf, "hi", 2) == 0);
+
+  ASSERT(mg_mqtt_parse(publish_qos1, sizeof(publish_qos1), 4, &mm) ==
+         MQTT_OK);
+  ASSERT(mm.cmd == MQTT_CMD_PUBLISH);
+  ASSERT(mm.qos == 1);
+  ASSERT(mm.topic.len == 3 && memcmp(mm.topic.buf, "q/1", 3) == 0);
+  ASSERT(mm.id == 0x1234);
+  ASSERT(mm.data.len == 2 && memcmp(mm.data.buf, "ok", 2) == 0);
+
+  ASSERT(mg_mqtt_parse(publish_mqtt5, sizeof(publish_mqtt5), 5, &mm) ==
+         MQTT_OK);
+  ASSERT(mm.cmd == MQTT_CMD_PUBLISH);
+  ASSERT(mm.topic.len == 3 && memcmp(mm.topic.buf, "v/5", 3) == 0);
+  ASSERT(mm.props_size == 21);
+  ASSERT(mm.data.len == 4 && memcmp(mm.data.buf, "body", 4) == 0);
+
+  pos = mg_mqtt_next_prop(&mm, &prop, 0);
+  ASSERT(pos > 0);
+  ASSERT(prop.id == MQTT_PROP_PAYLOAD_FORMAT_INDICATOR);
+  ASSERT(prop.iv == 1);
+
+  pos = mg_mqtt_next_prop(&mm, &prop, pos);
+  ASSERT(pos > 0);
+  ASSERT(prop.id == MQTT_PROP_CONTENT_TYPE);
+  ASSERT(prop.val.len == 4 && memcmp(prop.val.buf, "json", 4) == 0);
+
+  pos = mg_mqtt_next_prop(&mm, &prop, pos);
+  ASSERT(pos > 0);
+  ASSERT(prop.id == MQTT_PROP_USER_PROPERTY);
+  ASSERT(prop.key.len == 1 && memcmp(prop.key.buf, "k", 1) == 0);
+  ASSERT(prop.val.len == 1 && memcmp(prop.val.buf, "v", 1) == 0);
+
+  pos = mg_mqtt_next_prop(&mm, &prop, pos);
+  ASSERT(pos > 0);
+  ASSERT(prop.id == MQTT_PROP_MESSAGE_EXPIRY_INTERVAL);
+  ASSERT(prop.iv == 10);
+  ASSERT(mg_mqtt_next_prop(&mm, &prop, pos) == 0);
+
+  ASSERT(mg_mqtt_parse(malformed_varint, sizeof(malformed_varint), 4, &mm) ==
+         MQTT_MALFORMED);
+  ASSERT(mg_mqtt_parse(truncated_topic, sizeof(truncated_topic), 4, &mm) ==
+         MQTT_MALFORMED);
+  ASSERT(mg_mqtt_parse(truncated_prop_section,
+                       sizeof(truncated_prop_section), 5, &mm) ==
+         MQTT_MALFORMED);
+  ASSERT(mg_mqtt_parse(truncated_prop_payload,
+                       sizeof(truncated_prop_payload), 5, &mm) == MQTT_OK);
+  ASSERT(mg_mqtt_next_prop(&mm, &prop, 0) == 0);
 }
 
 static void test_mqtt_base(void);
@@ -4552,6 +4688,14 @@ int main(void) {
   test_http_pipeline();
   test_http_range();
   DASHBOARD("http_server");
+
+  s_error = false;
+  test_sntp_parse_local();
+  DASHBOARD("sntp_parse");
+
+  s_error = false;
+  test_mqtt_parse_local();
+  DASHBOARD("mqtt_parse");
 
 #ifndef LOCALHOST_ONLY
   s_error = false;
