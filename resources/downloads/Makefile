@@ -1,6 +1,6 @@
 TOP ?= ../..
 ST_TARGETS = nucleo_h723zg nucleo_f756zg nucleo_h563zi
-#ST_TARGETS = $(subst .ioc,,$(wildcard *.ioc))
+# ST_TARGETS = $(subst .ioc,,$(wildcard *.ioc))
 PROJECTS = full minimal
 TARGETS = desktop $(ST_TARGETS)
 MX ?= /Applications/STM32CubeMX.app/Contents/MacOs/STM32CubeMX
@@ -23,13 +23,17 @@ $(DESKTOP_DIRS): desktop_%:
 	sed -i ""  "s,../../..,.," $@/Makefile
 
 define ST_RULE
-$(1)_$(2): $(1).ioc
+$(1): $(1).ioc    # This creates MX-generated baseline project
 	mkdir -p $$@
 	cp $(1).ioc $$@
 	echo config load `pwd`/$$@/$(1).ioc > gen.mx
 	echo project generate >> gen.mx
 	echo exit >> gen.mx
-	test -d $$@/Core || $(MX) -q `pwd`/gen.mx
+	$(MX) -q `pwd`/gen.mx
+
+$(1)_$(2): $(1)
+	mkdir -p $$@
+	test -d $$@/$(1).ioc || cp -r $(1)/* $$@/
 	grep mongoose.h $$@/Core/Src/main.c || sed -i '' '/BEGIN Includes/r patch_include.c' $$@/Core/Src/main.c
 	grep '^int _write' $$@/Core/Src/main.c || sed -i '' '/USER CODE BEGIN 0 /r patch_write.c' $$@/Core/Src/main.c
 	grep 'mg_dash_init' $$@/Core/Src/main.c || sed -i '' '/USER CODE BEGIN WHILE/,/USER CODE END WHILE/{//!d;};' $$@/Core/Src/main.c
@@ -49,4 +53,4 @@ upload: $(ZIPS)
 	scp $(ZIPS) h1:/data/downloads/
 
 clean:
-	rm -rf $(DIRS) $(ZIPS) gen.mx
+	rm -rf $(DIRS) $(ST_TARGETS) $(ZIPS) gen.mx
