@@ -83,29 +83,24 @@ static uint8_t varint_size(size_t length) {
 
 static size_t encode_varint(uint8_t *buf, size_t value) {
   size_t len = 0;
-
   do {
     uint8_t b = (uint8_t) (value % 128);
     value /= 128;
     if (value > 0) b |= 0x80;
     buf[len++] = b;
   } while (value > 0);
-
   return len;
 }
 
-static size_t decode_varint(const uint8_t *buf, size_t len, size_t *value) {
-  size_t multiplier = 1, offset;
+static size_t decode_varint(const uint8_t *buf, size_t len, uint32_t *value) {
+  uint32_t mul = 1, ofs;
   *value = 0;
-
-  for (offset = 0; offset < 4 && offset < len; offset++) {
-    uint8_t encoded_byte = buf[offset];
-    *value += (encoded_byte & 0x7f) * multiplier;
-    multiplier *= 128;
-
-    if ((encoded_byte & 0x80) == 0) return offset + 1;
+  for (ofs = 0; ofs < 4 && ofs < len; ofs++) {
+    uint8_t enc_byte = buf[ofs];
+    *value += (enc_byte & 0x7f) * mul;
+    mul *= 128;
+    if ((enc_byte & 0x80) == 0) return ofs + 1;
   }
-
   return 0;
 }
 
@@ -257,7 +252,7 @@ size_t mg_mqtt_next_prop(struct mg_mqtt_message *msg, struct mg_mqtt_prop *prop,
       new_pos += 2 + prop->val.len;
       break;
     case MQTT_PROP_TYPE_VARIABLE_INT:
-      len = decode_varint(i, (size_t) (end - i), (size_t *) &prop->iv);
+      len = decode_varint(i, (size_t) (end - i), &prop->iv);
       if (i + len >= end) return 0;
       new_pos = (len == 0) ? 0 : new_pos + len;
       break;
@@ -465,8 +460,8 @@ int mg_mqtt_parse(const uint8_t *buf, size_t len, uint8_t version,
       }
       if (p > end) return MQTT_MALFORMED;
       if (version == 5 && p + 2 < end) {
-        len_len =
-            (uint32_t) decode_varint(p, (size_t) (end - p), &m->props_size);
+        len_len = (uint32_t) decode_varint(p, (size_t) (end - p),
+                                           (uint32_t *) &m->props_size);
         if (!len_len) return MQTT_MALFORMED;
         m->props_start = (size_t) (p + len_len - buf);
         p += len_len + m->props_size;
