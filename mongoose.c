@@ -440,7 +440,7 @@ static void upload_ev_handler(struct mg_connection *c, int ev, void *ev_data) {
       bool ok = false;
       if (us->marker == CONN_UPLOAD) {
         char path[128];
-        mg_snprintf(path, sizeof(path), "/tmp/%.*s", name.len, name.buf);
+        mg_snprintf(path, sizeof(path), "/tmp/%.*s", (int) name.len, name.buf);
         us->ctx = fopen(path, "wb+");
         if (us->ctx == NULL) MG_ERROR(("open(%s): %d", path, errno));
         if (us->ctx != NULL) ok = true;
@@ -462,9 +462,9 @@ static void upload_ev_handler(struct mg_connection *c, int ev, void *ev_data) {
     // Write uploaded data
 
     size_t alignment = 512;  // Maximum flash write granularity (iMXRT, Pico)
-    size_t aligned = (us->received + c->recv.len < us->expected)
-                         ? aligned = MG_ROUND_DOWN(c->recv.len, alignment)
-                         : c->recv.len;  // Last write can be unaligned
+    size_t left = us->expected > us->received ? us->expected - us->received : 0;
+    size_t aligned = c->recv.len < left ? MG_ROUND_DOWN(c->recv.len, alignment)
+                                        : c->recv.len;
     bool ok = true, is_ota = us->marker == CONN_OTA;
     if (aligned > 0 && !is_ota) {
       ok = (fwrite(c->recv.buf, 1, aligned, (FILE *) us->ctx) == aligned);
@@ -482,7 +482,7 @@ static void upload_ev_handler(struct mg_connection *c, int ev, void *ev_data) {
       mg_http_reply(c, 400, "", "Upload error\n");
       c->is_draining = 1;  // Close connection when response it sent
       if (is_ota) mg_ota_end();
-      if (!is_ota) mg_free(us->ctx);
+      if (!is_ota && us->ctx != NULL) (void) fclose((FILE *) us->ctx);
       memset(us, 0, sizeof(*us));
     } else if (us->received >= us->expected) {
       // Uploaded everything. Send success response and cleanup
@@ -490,7 +490,7 @@ static void upload_ev_handler(struct mg_connection *c, int ev, void *ev_data) {
       c->is_draining = 1;  // Close connection when response it sent
       MG_INFO(("%lu done, %lu bytes", c->id, us->received));
       if (is_ota) mg_ota_end();
-      if (!is_ota) (void) fclose((FILE *) us->ctx);
+      if (!is_ota && us->ctx != NULL) (void) fclose((FILE *) us->ctx);
       if (!is_ota) mg_dash_send_change(c->mgr, &set_files);
       memset(us, 0, sizeof(*us));
     }
