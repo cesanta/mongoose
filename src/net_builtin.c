@@ -389,6 +389,8 @@ static void onstatechange(struct mg_tcpip_if *ifp) {
     if (ifp->l2type == MG_TCPIP_L2_ETH ||
         ifp->l2type == MG_TCPIP_L2_PPPoE)  // TODO(): print other l2
       MG_INFO(("      MAC: %M", mg_print_mac, ifp->mac));
+    if (ifp->l2type == MG_TCPIP_L2_ETH)
+      mg_tcpip_arp_request(ifp, ifp->ip, ifp->mac);  // gratuitous ARP annc
   } else if (ifp->state == MG_TCPIP_STATE_IP) {
     if (ifp->gw != 0 && ifp->l2type == MG_TCPIP_L2_ETH)
       mg_tcpip_arp_request(ifp, ifp->gw, NULL);  // unsolicited GW ARP request
@@ -1059,6 +1061,19 @@ static void onstate6change(struct mg_tcpip_if *ifp) {
     MG_INFO(("       GW: %M", mg_print_ip6, &ifp->gw6));
     if (ifp->l2type == MG_TCPIP_L2_ETH)  // TODO(): print other l2
       MG_INFO(("      MAC: %M", mg_print_mac, &ifp->mac));
+    if (ifp->l2type == MG_TCPIP_L2_ETH) {  // gratuitous NA annc
+      tx_ndp_na(ifp,                       // RFC-4861 7.2.6
+                mg_l2_mapip(ifp->l2type, MG_TCPIP_L2ADDR_MCAST6,
+                            (struct mg_addr *) &ip6_allnodes),
+                ifp->ip6ll, (uint64_t *) ip6_allnodes.addr.ip6, false,
+                ifp->mac);
+      if (ifp->ip6[0] != 0 && ifp->ip6[1] != 0)
+        tx_ndp_na(ifp,  // RFC-9131 4.1
+                  mg_l2_mapip(ifp->l2type, MG_TCPIP_L2ADDR_MCAST6,
+                              (struct mg_addr *) &ip6_allrouters),
+                  ifp->ip6, (uint64_t *) ip6_allrouters.addr.ip6, false,
+                  ifp->mac);
+    }
   } else if (ifp->state6 == MG_TCPIP_STATE_IP) {
     if ((ifp->gw6[0] != 0 || ifp->gw6[1] != 0) && (ifp->l2type != MG_TCPIP_L2_PPP && ifp->l2type != MG_TCPIP_L2_PPPoE))
       tx_ndp_ns(ifp, ifp->gw6, NULL);  // unsolicited GW hwaddr resolution

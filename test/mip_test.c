@@ -62,7 +62,7 @@ static bool executed = false;
 
 static void mif_fn(struct mg_tcpip_if *ifp, int ev, void *ev_data) {
   if (ev == MG_TCPIP_EV_ST_CHG) {
-    ASSERT(*(uint8_t *) ev_data == MG_TCPIP_STATE_READY);
+    ASSERT(*(uint8_t *) ev_data == MG_TCPIP_STATE_UP); 
     executed = true;
   }
   (void) ifp;
@@ -72,7 +72,7 @@ static void test_statechange(void) {
   struct mg_tcpip_if iface;
   memset(&iface, 0, sizeof(iface));
   iface.ip = mg_htonl(0x01020304);
-  iface.state = MG_TCPIP_STATE_READY;
+  iface.state = MG_TCPIP_STATE_UP; // READY now sends gratuitous ARP
   iface.driver = &mg_tcpip_driver_mock;
   iface.fn = mif_fn;
   onstatechange(&iface);
@@ -82,7 +82,7 @@ static void test_statechange(void) {
 #if MG_ENABLE_IPV6
 static void mif6_fn(struct mg_tcpip_if *ifp, int ev, void *ev_data) {
   if (ev == MG_TCPIP_EV_ST6_CHG) {
-    ASSERT(*(uint8_t *) ev_data == MG_TCPIP_STATE_READY);
+    ASSERT(*(uint8_t *) ev_data == MG_TCPIP_STATE_REQ);
     executed = true;
   }
   (void) ifp;
@@ -93,7 +93,7 @@ static void test_state6change(void) {
   memset(&iface, 0, sizeof(iface));
   iface.ip6[0] = mg_htonll(0x01020304);
   iface.ip6[1] = mg_htonll(0x05060708);
-  iface.state6 = MG_TCPIP_STATE_READY;
+  iface.state6 = MG_TCPIP_STATE_REQ; // READY now sends gratuitous NA, > UP
   iface.driver = &mg_tcpip_driver_mock;
   iface.fn = mif6_fn;
   onstate6change(&iface);
