@@ -3,7 +3,7 @@ ST_TARGETS = nucleo_h723zg nucleo_f756zg nucleo_h563zi
 # ST_TARGETS = $(subst .ioc,,$(wildcard *.ioc))
 PROJECTS = full minimal
 TARGETS = desktop $(ST_TARGETS)
-MX ?= /Applications/STM32CubeMX.app/Contents/MacOs/STM32CubeMX
+MX ?= /Applications/STMicroelectronics/STM32CubeMX.app/Contents/MacOs/STM32CubeMX
 
 DIRS = $(foreach P,$(PROJECTS),$(foreach T,$(TARGETS),$(T)_$(P)))
 ZIPS = $(foreach D,$(DIRS),$(D).zip)

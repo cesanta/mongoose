@@ -216,3 +216,21 @@ void mg_dash_poll(struct mg_mgr *mgr) {
     mg_dash_send_change(mgr, &set_actions);
   }
 }
+
+// On desktop, build with -DMAIN flag to include main().
+// On embedded system, run this code in your main() function
+#ifdef MAIN
+int main(void) {
+  struct mg_mgr mgr;
+
+  mg_mgr_init(&mgr);
+  mg_dash_init(&mgr);
+
+  for (;;) {
+    mg_mgr_poll(&mgr, 1);
+    mg_dash_poll(&mgr);
+  }
+
+  return 0;
+}
+#endif

@@ -102,6 +102,11 @@ Hi from Mongoose! Tick 38187
 ## Add full device dashboard
 
 Enable "Mongoose Web Device Dashboard" component in CubeMX. Regenerate code.
+This component installs the following files:
+- `dashboard.c` - a C backend side
+- `dashboard.html` - an HTML frontend side: the Web UI itself
+- `file_data.c` - this file is generated from `dashboard.html`
+- `html2c.js` - a node.js script that generates `file_data.c` using this command: `node html2c.js dashboard.html -o file_data.c`. This script first inlines all external resources into an amalgamated HTML file - so it does not depend on anything external, and then zips it and packs into a Mongoose embedded filesystem. This way it takes the minimum space on flash.
 
 Remove the hello world server if you added it. Modify your while loop
 to look like this:
@@ -121,6 +126,19 @@ while (1)
 
 Rebuild, reflash your board and enjoy the fully functional device dashboard
 that you can tailor to your firmware.
+
+To customise your dashboard, edit `dashboard.c` and `dashboard.html`.
+After editing `dashboard.html`, regenerate `file_data.c` using this command:
+
+```sh
+node html2c.js dashboard.html -o file_data.c
+```
+
+For agentic development, use https://github.com/cesanta/mongoose/tree/master/resources/AGENTS.md
+Use a prompt like this:
+
+> Read and apply https://github.com/cesanta/mongoose/tree/master/resources/AGENTS.md
+
 
 ## Add MQTT Client
 
