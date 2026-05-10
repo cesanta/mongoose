@@ -31,6 +31,30 @@ The full reference project is at https://github.com/cesanta/mongoose/blob/master
 
 ## dashboard.html
 
+The `dashboard.html` file has to use `dashboard.js`, for example:
+
+```html
+<script src="https://mongoose.ws/resources/dashboard.js"></script>
+<script>
+  Dashboard.init({
+    debug: true,  // Show websocket messages on the console
+    data: {
+      status: { led1: false, version: '1.0.0' },
+    },
+  });
+  // Show dashboard only when all device data is reported
+  Dashboard.on('ready', () => document.body.style.visibility = 'visible');
+</script>
+```
+
+The `Dashboard.init()` call should be the only direct `Dashboard` API usage.
+Do not generate anything that uses other `Dashboard` API - treat it as a black box.
+
+The `Dashboard.init()` call has an argument that is a settings object which should
+be edited. The `data`
+attrubute specifies device state representation, and it is used in the expression
+evaluation and `data-*` attributes described below.
+
 For editing dashboard.html, use only Mongoose `data-bind` and `${...}` template syntax
 No vanilla JS event listeners, no fetch calls, no custom reactive logic.
 Do not make any changes to dashboard.html unless asked by a user.
