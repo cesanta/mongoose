@@ -16,7 +16,7 @@ DESKTOP_DIRS = $(foreach P,$(PROJECTS),desktop_$(P))
 $(DESKTOP_DIRS): desktop_%:
 	mkdir -p $@ $@/resources
 	$(MAKE) -C $(TOP)/tutorials/device-dashboard/$* clean
-	cp $(TOP)/tutorials/device-dashboard/$*/*{c,md,html,Makefile} $@
+	cp $(TOP)/tutorials/device-dashboard/$*/*{c,html,Makefile} $@
 	cp $(TOP)/mongoose.{c,h} $@
 	cp $(TOP)/LICENSE $@
 	cp $(TOP)/resources/*.js $@/resources
