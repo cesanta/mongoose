@@ -35,6 +35,38 @@ For editing dashboard.html, use only Mongoose `data-bind` and `${...}` template 
 No vanilla JS event listeners, no fetch calls, no custom reactive logic.
 Do not make any changes to dashboard.html unless asked by a user.
 
+- checkboxes, inputs, selects: add `data-bind="FIELDSET.FIELD"` to to bind them to a specific field. Optionally, specify `data-autosave="1"` to send a change immediately after modification, without pressing a "save" button
+- any other element: add `data-bind="FIELDSET.FIELD"` to replace its contents with the curent value of the field. You can achieve the same with the `${...}` expression
+- buttons: add `data-save="FIELDSET"` to create a "save" button for a given field set. If any value in the field set is edited by the bound control, a button would activate, otherwise it'll stay disabled
+- buttons: add `data-cancel="FIELDSET"` to create a "cancel" button, similar to "save"
+- `${...}` expressions: add those anywhere
+
+
+Here is the example of binding a toggle button to a device variable:
+
+```html
+<input type="checkbox" data-bind="leds.led1" data-autosave="1" class="toggle" />
+```
+
+Here is the example of using `${...}` expressions:
+
+```html
+<div>LED ${status.led1 ? 'ON' : 'OFF'}</div>
+```
+
+When the expression is evaluated,
+its evaluation context contains your Dashboard data, and all global JS variables like `window`.
+For example, `${settings.volume + 1}` will be evaluated exactly as you think.
+
+Expressions are useful for the conditional display: expression can add CSS classes, or
+CSS styles depending on some conditions. For example, this shows or hides
+the warning depedning on the `metrics.ram` condition:
+
+```html
+<span class="${metrics.ram <= 30 ? 'alert': 'hidden'}">low RAM !</span>
+```
+
+
 ## dashboard.c
 
 Do not make any changes to dashboard.c unless asked by a user.
