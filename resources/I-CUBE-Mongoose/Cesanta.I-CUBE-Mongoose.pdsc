@@ -8,7 +8,7 @@
   <license>License.txt</license>
   <supportContact>https://mongoose.ws/contact/</supportContact>
   <releases>
-    <release date="2026-05-09" version="7.21.6">See https://github.com/cesanta/mongoose/releases/tag/7.21</release>
+    <release date="2026-05-11" version="7.21.6">See https://github.com/cesanta/mongoose/releases/tag/7.21</release>
     <release date="2026-05-05" version="7.21.5">See https://github.com/cesanta/mongoose/releases/tag/7.21</release>
     <release date="2026-04-24" version="7.21.4">See https://github.com/cesanta/mongoose/releases/tag/7.21</release>
     <release date="2026-04-08" version="7.21.0">See https://github.com/cesanta/mongoose/releases/tag/7.21</release>

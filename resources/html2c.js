@@ -11,6 +11,7 @@ const fs = require('fs');
 const path = require('path');
 const http = require('http');
 const https = require('https');
+const zlib = require('zlib');
 
 const args = process.argv.slice(2);
 let outputFile = null;
@@ -141,14 +142,15 @@ async function processHtml(content) {
 }
 
 function cArray(data) {
-  return Array.from(Buffer.from(data, 'utf8')).concat(0).join(',');
+  return Array.from(Buffer.from(data)).concat(0).join(',');
 }
 
 function generateC(data) {
-  const destination = path.basename(inputFile);
+  const destination = `${path.basename(inputFile)}.gz`;
   const stat = fs.statSync(inputFile);
   const mtime = parseInt(stat.mtimeMs / 1000);
-  const bytes = cArray(data);
+  const zipped = zlib.gzipSync(data);
+  const bytes = cArray(zipped);
 
   return `// DO NOT EDIT. This file is generated using this command:
 // ${process.argv.join(' ')}
@@ -158,7 +160,7 @@ function generateC(data) {
 static const unsigned char v0[] = {${bytes}};
 
 const struct mg_mem_file mg_packed_files[] = {
-  {"/${destination}", v0, sizeof(v0) - 1, ${mtime}},
+  {"/${destination}", v0, sizeof(v0) - 1, ${mtime}},  // size: ${zipped.length}
   {NULL, NULL, 0, 0}
 };
 `;
