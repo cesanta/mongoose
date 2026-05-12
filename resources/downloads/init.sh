@@ -1,13 +1,10 @@
-#!/bin/bash
-
-set -u
+#!/bin/sh
 
 BOARD=${1:-}
 DASH=${2:-}
 CURL="curl -fsSL"
-REPO="cesanta/mongoose"
-API="https://api.github.com/repos/$REPO"
-RAW="https://raw.githubusercontent.com/$REPO/HEAD/"
+API="https://api.github.com/repos/cesanta/mongoose"
+RAW="https://raw.githubusercontent.com/cesanta/mongoose/HEAD/"
 
 trap "rm -rf gen.mx" EXIT
 fail() { echo $@ >&2 ; exit 1 ; }
@@ -51,7 +48,7 @@ if test "$DASH" == "full" -o "$DASH" == "minimal" ; then
   test -d ${BOARD}_${DASH} || cp -r $BOARD ${BOARD}_${DASH}
   test -d ${BOARD}_${DASH}/Mongoose || mkdir -p ${BOARD}_${DASH}/Mongoose
   test -f ${BOARD}_${DASH}/Mongoose/dashboard.c || $CURL $RAW/tutorials/device-dashboard/$DASH/dashboard.c -o ${BOARD}_${DASH}/Mongoose/dashboard.c
-  test -f ${BOARD}_${DASH}/Mongoose/dashboard.html || $CURL $RAW/tutorials/device-dashboard/$DASH/dashboard.c -o ${BOARD}_${DASH}/Mongoose/dashboard.html
+  test -f ${BOARD}_${DASH}/Mongoose/dashboard.html || $CURL $RAW/tutorials/device-dashboard/$DASH/dashboard.html -o ${BOARD}_${DASH}/Mongoose/dashboard.html
   test -f ${BOARD}_${DASH}/Mongoose/html2c.js || $CURL $RAW/resources/html2c.js -o ${BOARD}_${DASH}/Mongoose/html2c.js
   MAIN2_C=${BOARD}_${DASH}/Core/Src/main.c
   grep -q 'mg_dash_init' $MAIN2_C || perl -i -ne 'print; print "  mg_dash_init(&mgr);\n" if /mg_mgr_init/' $MAIN2_C
