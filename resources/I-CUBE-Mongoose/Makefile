@@ -1,11 +1,8 @@
-VERSION = 7.21.6
+VERSION = 7.21.7
 REPO_ROOT = ../..
 MX ?= /Applications/STMicroelectronics/STM32CubeMX.app/Contents/MacOs/STM32CubeMX
 FILES = Cesanta.I-CUBE-Mongoose.pdsc Release_Notes.html mongoose_config.h README.md
-GENERATED = License.txt \
-            mongoose.h mongoose.c \
-            dashboard.c file_data.c dashboard.html html2c.js \
-            mongoose_mqtt.c
+GENERATED = License.txt mongoose.h mongoose.c
 
 PACK = Cesanta.I-CUBE-Mongoose.$(VERSION).pack
 all: $(PACK)

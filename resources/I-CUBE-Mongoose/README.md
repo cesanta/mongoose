@@ -101,15 +101,44 @@ Hi from Mongoose! Tick 38187
 
 ## Add full device dashboard
 
-Enable "Mongoose Web Device Dashboard" component in CubeMX. Regenerate code.
-This component installs the following files:
-- `dashboard.c` - a C backend side
-- `dashboard.html` - an HTML frontend side: the Web UI itself
-- `file_data.c` - this file is generated from `dashboard.html`
-- `html2c.js` - a node.js script that generates `file_data.c` using this command: `node html2c.js dashboard.html -o file_data.c`. This script first inlines all external resources into an amalgamated HTML file - so it does not depend on anything external, and then zips it and packs into a Mongoose embedded filesystem. This way it takes the minimum space on flash.
+Remove the hello world server if you added it.
 
-Remove the hello world server if you added it. Modify your while loop
-to look like this:
+Create `Mongoose` directory in the project root and copy
+the following files there:
+
+- [dashboard.c](https://raw.githubusercontent.com/cesanta/mongoose/refs/heads/master/tutorials/device-dashboard/full/dashboard.c)
+- [dashboard.html](https://raw.githubusercontent.com/cesanta/mongoose/refs/heads/master/tutorials/device-dashboard/full/dashboard.html)
+- [html2c.js](https://raw.githubusercontent.com/cesanta/mongoose/refs/heads/master/resources/html2c.js)
+ 
+`html2c.js` is a node.js script that generates `file_data.c` using this command:
+`node html2c.js dashboard.html -o file_data.c`. This script first inlines all
+external resources into an amalgamated HTML file - so it does not depend on
+anything external, and then zips it and packs into a Mongoose embedded
+filesystem. This way it takes the minimum space on flash.
+
+In top-level `CMakeLists.txt`, add two extra source files to the build,
+and add the rule to generate `file_data.c` from `dashboard.html`.
+Note that requires Nodejs installed:
+
+```text
+# Generate file_data.c from dashboard.html
+add_custom_command(
+    OUTPUT ${CMAKE_SOURCE_DIR}/Mongoose/file_data.c
+    COMMAND node ${CMAKE_SOURCE_DIR}/Mongoose/html2c.js ${CMAKE_SOURCE_DIR}/Mongoose/dashboard.html -o ${CMAKE_SOURCE_DIR}/Mongoose/file_data.c
+    DEPENDS ${CMAKE_SOURCE_DIR}/Mongoose/dashboard.html
+    VERBATIM
+)
+
+# Add sources to executable
+target_sources(${CMAKE_PROJECT_NAME} PRIVATE
+    # Add user sources here
+    Mongoose/dashboard.c
+    Mongoose/file_data.c
+)
+```
+
+
+Modify your while loop to look like this:
 
 ```c
 /* USER CODE BEGIN WHILE */
@@ -124,15 +153,23 @@ while (1)
 /* USER CODE END WHILE */
 ```
 
-Rebuild, reflash your board and enjoy the fully functional device dashboard
-that you can tailor to your firmware.
+Rebuild and reflash your board, then open the device's IP address in your
+browser. Log in using `admin` as the password. You should see the full
+dashboard, including the status panel, device settings, firmware update, and
+file manager. You can easily customize it for your product, but we will start
+by implementing a simple LED control dashboard to demonstrate the principles.
 
-To customise your dashboard, edit `dashboard.c` and `dashboard.html`.
-After editing `dashboard.html`, regenerate `file_data.c` using this command:
+## Simple LED control dashboard
 
-```sh
-node html2c.js dashboard.html -o file_data.c
-```
+Copy a minimal LED control dashboard example to your `Mongoose/` directory:
+
+- [dashboard.c](https://raw.githubusercontent.com/cesanta/mongoose/refs/heads/master/tutorials/device-dashboard/minimal/dashboard.c)
+- [dashboard.html](https://raw.githubusercontent.com/cesanta/mongoose/refs/heads/master/tutorials/device-dashboard/minimal/dashboard.html)
+
+Rebuild and reflash
+
+
+## AI agentic development
 
 For agentic development, use https://github.com/cesanta/mongoose/tree/master/resources/AGENTS.md
 Use a prompt like this:
@@ -142,7 +179,9 @@ Use a prompt like this:
 
 ## Add MQTT Client
 
-Enable "Mongoose MQTT Client" component in CubeMX. Regenerate code.
+
+Copy [mqtt.c](https://raw.githubusercontent.com/cesanta/mongoose/refs/heads/master/tutorials/mqtt/mqtt-client/mqtt.c)
+to the `Mongoose/` directory. Add it to the extra source files in `CMakeLists.txt`
 
 Add MQTT init and poll to your while loop:
 
@@ -160,6 +199,6 @@ while (1)
 ```
 
 Rebuild, reflash your board. This MQTT Client connects to the
-HiveMQ public MQTT broker - see `mongoose_mqtt.c` file for details.
+HiveMQ public MQTT broker.
 Also it add a JSON-RPC "ota.update" function via MQTT, so you can
 update your firmware over MQTT, see https://mongoose.ws/mqtt/

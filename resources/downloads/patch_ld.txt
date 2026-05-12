@@ -1,4 +1,0 @@
-
-  /* Mongoose Ethernet driver: place Ethernet buffers to DMA-accessible region */
-  .eth_ram : { *(.eth_ram .eth_ram*) } > RAM_D2 AT > FLASH
-

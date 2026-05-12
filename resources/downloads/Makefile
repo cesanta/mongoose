@@ -26,22 +26,10 @@ define ST_RULE
 $(1): $(1).ioc    # This creates MX-generated baseline project
 	mkdir -p $$@
 	cp $(1).ioc $$@
-	echo config load `pwd`/$$@/$(1).ioc > gen.mx
-	echo project generate >> gen.mx
-	echo exit >> gen.mx
-	$(MX) -q `pwd`/gen.mx
+	sh init.sh $(1)
 
 $(1)_$(2): $(1)
-	mkdir -p $$@
-	test -d $$@/$(1).ioc || cp -r $(1)/* $$@/
-	grep mongoose.h $$@/Core/Src/main.c || sed -i '' '/BEGIN Includes/r patch_include.c' $$@/Core/Src/main.c
-	grep '^int _write' $$@/Core/Src/main.c || sed -i '' '/USER CODE BEGIN 0 /r patch_write.c' $$@/Core/Src/main.c
-	grep 'mg_dash_init' $$@/Core/Src/main.c || sed -i '' '/USER CODE BEGIN WHILE/,/USER CODE END WHILE/{//!d;};' $$@/Core/Src/main.c
-	grep 'mg_dash_init' $$@/Core/Src/main.c || sed -i '' '/USER CODE BEGIN WHILE/r patch_loop.c' $$@/Core/Src/main.c
-	test -f $$@/STM32H723XG_FLASH.ld && (grep eth_ram $$@/STM32H723XG_FLASH.ld || sed -i '' '/_sidata =/r patch_ld.txt'  $$@/STM32H723XG_FLASH.ld) || true
-	$(MAKE) -C $(TOP)/tutorials/device-dashboard/$(2) file_data.c
-	cp $(TOP)/tutorials/device-dashboard/$(2)/{file_data.c,dashboard.c} $$@/Middlewares/Third_Party/Cesanta_Mongoose/
-	cp $(TOP)/LICENSE $$@
+	sh init.sh $(1) $(2)
 endef
 
 $(foreach T,$(ST_TARGETS), $(foreach P,$(PROJECTS), $(eval $(call ST_RULE,$(T),$(P)))))

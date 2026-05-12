@@ -8,7 +8,7 @@
   <license>License.txt</license>
   <supportContact>https://mongoose.ws/contact/</supportContact>
   <releases>
-    <release date="2026-05-11" version="7.21.6">See https://github.com/cesanta/mongoose/releases/tag/7.21</release>
+    <release date="2026-05-11" version="7.21.7">See https://github.com/cesanta/mongoose/releases/tag/7.21</release>
     <release date="2026-05-05" version="7.21.5">See https://github.com/cesanta/mongoose/releases/tag/7.21</release>
     <release date="2026-04-24" version="7.21.4">See https://github.com/cesanta/mongoose/releases/tag/7.21</release>
     <release date="2026-04-08" version="7.21.0">See https://github.com/cesanta/mongoose/releases/tag/7.21</release>
@@ -24,7 +24,7 @@
     </condition>
   </conditions>
   <components>
-    <component Cclass="Mongoose" Cgroup="Networking Core" Cversion="7.21.6" maxInstances="1">
+    <component Cclass="Mongoose" Cgroup="Networking Core" Cversion="7.21.7" maxInstances="1">
       <description>Networking Core</description>
       <files>
         <file category="doc" name="README.md"/>
@@ -32,21 +32,6 @@
         <file category="sourceC" name="mongoose.c" />
         <file category="header" name="mongoose_config.h"/>
         <file category="utility" name="README.md" public="false"/>
-      </files>
-    </component>
-    <component Cclass="Mongoose" Cgroup="Web Device Dashboard" Cversion="7.21.6" condition="MongooseCore" maxInstances="1" generator="copyassets" >
-      <description>Web Device Dashboard</description>
-      <files>
-        <file category="sourceC" name="dashboard.c"/>
-        <file category="sourceC" name="file_data.c"/>
-        <file category="utility" name="dashboard.html" public="false"/>
-        <file category="utility" name="html2c.js" public="false"/>
-      </files>
-    </component>
-    <component Cclass="Mongoose" Cgroup="MQTT Client" Cversion="7.21.6" condition="MongooseCore" maxInstances="1">
-      <description>MQTT Client</description>
-      <files>
-        <file category="sourceC" name="mongoose_mqtt.c"/>
       </files>
     </component>
   </components>
