@@ -173,7 +173,7 @@
         el.classList.toggle("error", false);
         val = v;
       }
-    } else if (typeof(v) === 'boolean') {
+    } else if (typeof(dv) === 'boolean') {
       val = !!val;
     }
 
@@ -185,16 +185,13 @@
       el.classList.toggle("edited", true);
     }
 
-    if (el.dataset.autosave) save([key]);
+    if (el.dataset.autosave) save(key);
     rescan();
   };
 
   // Return if any of the keys matching pattern is edited
-  function edited(keys) {
-    for (const key of Object.keys(settings.edits)) {
-      if (keys.includes(key)) return true;
-    }
-    return false;
+  function edited(key) {
+    return has(settings.edits, key);
   };
 
   function handle_bind(el, key, context) {
@@ -222,31 +219,26 @@
   };
 
   // Save the edits for keys that match pattern
-  function save(keys) {
+  function save(key) {
     const changes = {};
-    for (const key of keys) {
-      if (!has(settings.edits, key)) continue;
-      set(changes, key, get(settings.edits, key));
-    }
+    set(changes, key, get(settings.edits, key));
     rpc.call('set', changes).then(r => apply_and_rescan(settings.data, r));
   };
 
   // Cancel the edits for keys that match pattern
-  function cancel(keys) {
-    for (const key of Object.keys(settings.edits)) {
-      if (keys.includes(key)) delete settings.edits[key];
-    }
+  function cancel(key) {
+    del(settings.edits, key);
     rescan();
   };
 
-  function handle_save(el, keys) {
-    el.disabled = !edited(keys);
-    if (!el.bound) el.addEventListener("click", ev => save(keys)), el.bound = true;
+  function handle_save(el, key) {
+    el.disabled = !edited(key);
+    if (!el.bound) el.addEventListener("click", ev => save(key)), el.bound = true;
   };
 
-  function handle_cancel(el, keys) {
-    if (!el.bound) el.addEventListener("click", ev => cancel(keys)), el.bound = true;
-    el.disabled = !edited(keys);
+  function handle_cancel(el, key) {
+    if (!el.bound) el.addEventListener("click", ev => cancel(key)), el.bound = true;
+    el.disabled = !edited(key);
   };
 
   function handle_repeat(el, key, context) {
@@ -323,7 +315,6 @@
           if (v !== attr.value) attr.value = v;
         }
       }
-      //const datakeys = { bind: 1, save: 1, cancel: 1, repeat: 1, upload: 1, ota: 1 };
       const handlers = {
         bind: handle_bind,
         save: handle_save,
