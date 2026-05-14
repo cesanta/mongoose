@@ -409,7 +409,7 @@ void mg_mqtt_unsub(struct mg_connection *c, const struct mg_mqtt_opts *opts) {
 int mg_mqtt_parse(const uint8_t *buf, size_t len, uint8_t version,
                   struct mg_mqtt_message *m) {
   uint8_t lc = 0, *p, *end;
-  uint32_t n = 0, len_len = 0;
+  uint32_t n = 0, len_len = 0, tmp;
 
   memset(m, 0, sizeof(*m));
   m->dgram.buf = (char *) buf;
@@ -460,9 +460,9 @@ int mg_mqtt_parse(const uint8_t *buf, size_t len, uint8_t version,
       }
       if (p > end) return MQTT_MALFORMED;
       if (version == 5 && p + 2 < end) {
-        len_len = (uint32_t) decode_varint(p, (size_t) (end - p),
-                                           (uint32_t *) &m->props_size);
+        len_len = (uint32_t) decode_varint(p, (size_t) (end - p), &tmp);
         if (!len_len) return MQTT_MALFORMED;
+        m->props_size = (size_t) tmp;
         m->props_start = (size_t) (p + len_len - buf);
         p += len_len + m->props_size;
       }
