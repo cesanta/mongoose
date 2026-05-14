@@ -980,9 +980,17 @@ static void sendnsreq(struct mg_connection *c, struct mg_str *name, int ms,
   } else {
     struct dns_data *reqs = (struct dns_data *) c->mgr->active_dns_requests;
     uint16_t id;
-    mg_random(&id, sizeof(uint16_t));
-    // TODO(): traverse reqs and check id != reqs->txnid; repeat otherwise
-    if (reqs != NULL) id = (uint16_t) (reqs->txnid + 1);  // no collision
+    // Random txnid is a defense against off-path DNS response spoofing
+    // (RFC 5452). Avoid collisions with in-flight requests via rejection
+    // sampling rather than a predictable counter.
+    int tries;
+    struct dns_data *r;
+    for (tries = 0; tries < 10; tries++) {
+      mg_random(&id, sizeof(uint16_t));
+      for (r = reqs; r != NULL && r->txnid != id; r = r->next) {
+      }
+      if (r == NULL) break;  // No collision, use this id
+    }
     d->txnid = id;
     d->next = reqs;
     c->mgr->active_dns_requests = d;
