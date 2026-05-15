@@ -387,9 +387,10 @@ static struct mg_dash_user *mg_dash_authenticate(struct mg_http_message *hm,
                                                  struct mg_dash *dash) {
   static struct mg_dash_user *s_users;  // List of authenticated users
   char user[100], pass[100];
+  static struct mg_dash_user admin = {NULL, "admin", "admin", 9, (uint64_t) -1};
   struct mg_dash_user *u, *tmp, *result = NULL;
 
-  if (dash->authenticate == NULL) return NULL;
+  if (dash->authenticate == NULL) return &admin;
   mg_http_creds(hm, user, sizeof(user), pass, sizeof(pass));
   // MG_DEBUG(("user [%s], pass: [%s], h: %.*s", user, pass, hm->head.len,
   // hm->head.buf));
@@ -478,9 +479,7 @@ void mg_dash_ev_handler(struct mg_connection *c, int ev, void *ev_data) {
     if (mg_match(hm->uri, mg_str("/api/hi"), NULL) ||
         mg_match(hm->uri, mg_str("/api/logout"), NULL)) {
       // Do nothing, handle them MG_EV_HTTP_MSG. We bypass auth for those
-    } else if (dash->authenticate && u == NULL &&
-               mg_match(hm->uri, mg_str("/api/#"), NULL)) {
-      // Auth check fail
+    } else if (u == NULL && mg_match(hm->uri, mg_str("/api/#"), NULL)) {
       mg_http_reply(c, 403, MG_JSON_HEADERS, "Not Authorised\n");
       c->data[0] = CONN_HANDLED;
     } else if (mg_match(hm->uri, mg_str("/api/login"), NULL) && u != NULL) {

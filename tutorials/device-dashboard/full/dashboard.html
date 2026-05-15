@@ -4,7 +4,7 @@
     <title>My Dashboard</title>
 
     <!-- Mongoose device dashboard -->
-    <script src="https://mongoose.ws/resources/dashboard.js?2"></script>
+    <script src="dashboard.js"></script>
     <script>
       Dashboard.init({
         debug: true,
@@ -14,7 +14,7 @@
           graph2: {data: [], report: true},
           actions: { action1: false, action2: false },
           leds: { led1: true, led2: false, led3: false },
-          settings: { volume: 12, log_level: 3, name: 'Galway', ota_version: '1.2.3', ota_status: 'No checks yet', ota_url: 'http://my-product.com/ota.json', ota_interval: 30 },
+          settings: { volume: 12, log_level: 3, name: 'Galway', enable_login: true, ota_version: '1.2.3', ota_status: 'No checks yet', ota_url: 'http://my-product.com/ota.json', ota_interval: 30 },
           metrics: { temperature: 1.2, cpu: 4, ram: 5, version: '1.2.3' },
           files: {data: [{name: 'device-log-2026-04-25.txt', size: 8625563}]},
         },
@@ -560,6 +560,10 @@ a, a:visited, a:link { text-decoration: none; }
                   <option value="3">Debug</option>
                   <option value="4">Verbose (very noisy)</option>
                 </select>
+              </div>
+              <div class="field">
+                <label class="field-label">Enable login</label>
+                <input type="checkbox" data-bind="settings.enable_login" class="toggle" />
               </div>
             </div>
             <div class="panel-footer">

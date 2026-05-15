@@ -3,6 +3,9 @@
 
 #include "mongoose.h"
 
+static struct mg_dash s_dash;
+static int authenticate(const char *user, const char *pass);
+
 // Action buttons
 static bool s_action1, s_action2;
 static uint64_t s_action2_timeout;
@@ -66,6 +69,7 @@ static struct mg_field_set set_metrics = {
 };
 
 // Read-write device settings
+static bool s_enable_login = false;
 static double s_volume = 17.2;
 static int s_log_level = MG_LL_DEBUG;
 static char s_name[20] = "Dublin";
@@ -76,6 +80,7 @@ static char s_ota_url[100] = "https://my-product.com/ota.json";
 
 static void write_settings(void) {
   mg_log_level = s_log_level;
+  s_dash.authenticate = s_enable_login ? authenticate : NULL;
 }
 
 static void read_settings(void) {
@@ -86,6 +91,7 @@ static struct mg_field fields_settings[] = {
     {"volume", MG_VAL_DBL, &s_volume, sizeof(s_volume)},
     {"name", MG_VAL_STR, &s_name, sizeof(s_name)},
     {"log_level", MG_VAL_INT, &s_log_level, sizeof(s_log_level)},
+    {"enable_login", MG_VAL_BOOL, &s_enable_login, sizeof(s_enable_login)},
     {"ota_version", MG_VAL_STR, &s_ota_version, sizeof(s_ota_version)},
     {"ota_status", MG_VAL_STR, &s_ota_status, sizeof(s_ota_status)},
     {"ota_url", MG_VAL_STR, &s_ota_url, sizeof(s_ota_url)},
@@ -182,24 +188,19 @@ static int authenticate(const char *user, const char *pass) {
 }
 
 void mg_dash_init(struct mg_mgr *mgr) {
-  static struct mg_dash dash;  // Important: keep it static!
-
-  MG_DASH_ADD_FIELD_SET(&dash, &set_leds);
-  MG_DASH_ADD_FIELD_SET(&dash, &set_metrics);
-  MG_DASH_ADD_FIELD_SET(&dash, &set_settings);
-  MG_DASH_ADD_FIELD_SET(&dash, &set_graph1);
-  MG_DASH_ADD_FIELD_SET(&dash, &set_graph2);
-  MG_DASH_ADD_FIELD_SET(&dash, &set_actions);
+  MG_DASH_ADD_FIELD_SET(&s_dash, &set_leds);
+  MG_DASH_ADD_FIELD_SET(&s_dash, &set_metrics);
+  MG_DASH_ADD_FIELD_SET(&s_dash, &set_settings);
+  MG_DASH_ADD_FIELD_SET(&s_dash, &set_graph1);
+  MG_DASH_ADD_FIELD_SET(&s_dash, &set_graph2);
+  MG_DASH_ADD_FIELD_SET(&s_dash, &set_actions);
 
   // Add two fake files - for demonstration
   mg_dash_file_add(mg_str("device-config.json"), 1234);
   mg_dash_file_add(mg_str("device-log-2026-04-25.txt"), 1327854);
 
-  // Require authentication
-  dash.authenticate = authenticate;
-
   mg_mem_files = mg_packed_files;
-  mg_http_listen(mgr, MG_HTTP_ADDR, mg_dash_ev_handler, &dash);
+  mg_http_listen(mgr, MG_HTTP_ADDR, mg_dash_ev_handler, &s_dash);
 }
 
 void mg_dash_poll(struct mg_mgr *mgr) {
