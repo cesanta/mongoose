@@ -18,11 +18,6 @@
       <keyword>CUBE_RULES_COMPLIANT</keyword>
       <keyword>IMPLEMENTED_WITH_STM32CUBEMX</keyword>
   </keywords>
-  <conditions>
-    <condition id="MongooseCore">
-      <require Cclass="Mongoose" Cgroup="Networking Core"/>
-    </condition>
-  </conditions>
   <components>
     <component Cclass="Mongoose" Cgroup="Networking Core" Cversion="7.21.7" maxInstances="1">
       <description>Networking Core</description>
