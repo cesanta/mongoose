@@ -11,6 +11,8 @@ ZIPS = $(foreach D,$(DIRS),$(D).zip)
 all:
 	@echo $(TARGETS)
 
+dirs: $(DIRS)
+
 DESKTOP_DIRS = $(foreach P,$(PROJECTS),desktop_dashboard_$(P))
 
 $(DESKTOP_DIRS): desktop_dashboard_%:
