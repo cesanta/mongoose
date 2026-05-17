@@ -3,7 +3,7 @@
 This guide explains how to bring up a production-grade Web UI dashboard on the
 STM32 Nucleo-H723ZG development board.
 
-A pre-configured, ready-to-run project archive is available for download at
+A pre-configured, ready-to-run project zip is available for download at
 https://mongoose.ws.
 
 To integrate the Web UI dashboard into an existing CubeMX project, or to create a
@@ -11,11 +11,7 @@ new project from scratch:
 
 1. Configure the peripherals (described below).
 2. Regenerate your project code and integrate Mongoose core by following
-   https://mongoose.ws/docs/guides/stm32-tcpip-stack/. After Mongoose core has
-   been integrated, the protocol examples at
-   https://github.com/cesanta/mongoose/tree/master/tutorials should run on your
-   board. Copy the corresponding functionality from the example's `main.c` into
-   your project's `main.c`.
+   https://mongoose.ws/docs/guides/stm32-tcpip-stack/.
 3. Add the Web UI dashboard by following
    https://mongoose.ws/docs/guides/web-dashboard-guide/.
 
