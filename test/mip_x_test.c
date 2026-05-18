@@ -392,8 +392,6 @@ static void test_http_server(struct mg_mgr *mgr) {
 #endif
   ASSERT(c != NULL);
   ASSERT (mg_send(c, "NADA", 0)); // check mg_send allows len=0
-  MG_INFO(("%s", cmd));
-  MG_INFO(("%p %u %.*s", opts.key.buf, opts.key.len, opts.key.len, opts.key.buf));
   pthread_create(&thread_id, NULL, poll_thread,
                  mgr);  // simpler this way, no concurrency anyway
   MG_DEBUG(("CURL"));
