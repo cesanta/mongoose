@@ -6474,7 +6474,6 @@ struct connstate {
 #define MIP_TTYPE_SYN 3        // SYN sent, waiting for response
 #define MIP_TTYPE_FIN 4  // FIN sent, waiting until terminating the connection
   uint8_t tmiss;         // Number of keep-alive misses
-  struct mg_iobuf raw;   // For TLS only. Incoming raw data
   bool fin_rcvd;         // We have received FIN from the peer
   bool twclosure;        // 3-way closure done
 };
@@ -8609,8 +8608,8 @@ static void init_closure(struct mg_connection *c) {
 
 static void close_conn(struct mg_connection *c) {
   struct connstate *s = (struct connstate *) (c + 1);
-  mg_iobuf_free(&s->raw);  // For TLS connections, release raw data
   mg_close_conn(c);
+  (void) s;
 }
 
 static bool can_write(struct mg_connection *c) {
