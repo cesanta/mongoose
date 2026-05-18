@@ -14,11 +14,15 @@
 
       let pageStart = 0;
       let loading = false;
+      let eventReadQueue = Promise.resolve();
 
       async function readEvent(index) {
-        await Dashboard.call('set', { event: { index } });
-        const ev = await Dashboard.call('get', 'event');
-        return ev && typeof ev == 'object' ? ev : { index, message: `my ev ${index}` };
+        eventReadQueue = eventReadQueue.then(async () => {
+          await Dashboard.call('set', { event: { index } });
+          const ev = await Dashboard.call('get', 'event');
+          return ev && typeof ev == 'object' ? ev : { index, message: `my ev ${index}` };
+        });
+        return eventReadQueue;
       }
 
       function setLoading(value) {
@@ -38,20 +42,21 @@
         setLoading(true);
 
         try {
-          for (let i = pageStart; i < pageStart + count; i++) {
+          const rows = await Promise.all(Array.from({ length: count }, (_, i) =>
+            readEvent(pageStart + i)));
+          const frag = document.createDocumentFragment();
+
+          rows.forEach(ev => {
             const tr = document.createElement('tr');
             const tdIndex = document.createElement('td');
             const tdMessage = document.createElement('td');
 
-            tdIndex.textContent = i;
-            tdMessage.textContent = 'Loading...';
-            tr.append(tdIndex, tdMessage);
-            tbody.appendChild(tr);
-
-            const ev = await readEvent(i);
             tdIndex.textContent = ev.index;
             tdMessage.textContent = ev.message;
-          }
+            tr.append(tdIndex, tdMessage);
+            frag.appendChild(tr);
+          });
+          tbody.replaceChildren(frag);
           status.textContent = `Showing ${pageStart}..${pageStart + count - 1}`;
         } catch (err) {
           status.textContent = `Error: ${err && err.message ? err.message : err}`;
