@@ -4,7 +4,9 @@
 #define _POSIX_TIMERS
 
 #include <ctype.h>
+#if !defined(MG_ENABLE_LWIP) || !MG_ENABLE_LWIP
 #include <errno.h>
+#endif
 #include <stdarg.h>
 #include <stdbool.h>
 #include <stdio.h>
@@ -17,7 +19,6 @@
 #include <unistd.h>
 
 #define MG_PATH_MAX 100
-#define MG_ENABLE_SOCKET 0
 #define MG_ENABLE_DIRLIST 0
 
 #endif

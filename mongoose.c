@@ -24474,15 +24474,8 @@ bool mg_path_is_sane(const struct mg_str path) {
 #if MG_ENABLE_CUSTOM_MILLIS
 #else
 uint64_t mg_millis(void) {
-#if MG_ARCH == MG_ARCH_WIN32
-  return GetTickCount();
-#elif MG_ARCH == MG_ARCH_PICOSDK
-  return time_us_64() / 1000;
-#elif MG_ARCH == MG_ARCH_ESP8266 || MG_ARCH == MG_ARCH_ESP32 || \
-    MG_ARCH == MG_ARCH_FREERTOS
+#if MG_ARCH == MG_ARCH_ESP8266 || MG_ARCH == MG_ARCH_ESP32 || MG_ENABLE_FREERTOS
   return xTaskGetTickCount() * portTICK_PERIOD_MS;
-#elif MG_ARCH == MG_ARCH_CUBE
-  return (uint64_t) HAL_GetTick();
 #elif MG_ARCH == MG_ARCH_THREADX
   return tx_time_get() * (1000 /* MS per SEC */ / TX_TIMER_TICKS_PER_SECOND);
 #elif MG_ARCH == MG_ARCH_TIRTOS
@@ -24495,6 +24488,12 @@ uint64_t mg_millis(void) {
   return (uint64_t) ((osKernelGetTickCount() * 1000) / osKernelGetTickFreq());
 #elif MG_ARCH == MG_ARCH_RTTHREAD
   return (uint64_t) ((rt_tick_get() * 1000) / RT_TICK_PER_SECOND);
+#elif MG_ARCH == MG_ARCH_WIN32
+  return GetTickCount();
+#elif MG_ARCH == MG_ARCH_PICOSDK
+  return time_us_64() / 1000;
+#elif MG_ARCH == MG_ARCH_CUBE
+  return (uint64_t) HAL_GetTick();
 #elif MG_ARCH == MG_ARCH_UNIX && defined(__APPLE__)
   // Apple CLOCK_MONOTONIC_RAW is equivalent to CLOCK_BOOTTIME on linux
   // Apple CLOCK_UPTIME_RAW is equivalent to CLOCK_MONOTONIC_RAW on linux

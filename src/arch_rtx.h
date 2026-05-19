@@ -26,11 +26,14 @@ extern uint32_t rt_time_get(void);
 
 #if defined(__ARMCC_VERSION)
 #define mode_t size_t
+#if !defined(MG_ENABLE_POSIX_FS) || !MG_ENABLE_POSIX_FS
+#else
 #define mkdir(a, b) mg_mkdir(a, b)
 static inline int mg_mkdir(const char *path, mode_t mode) {
   (void) path, (void) mode;
   return -1;
 }
+#endif
 #endif
 
 #if (MG_ARCH == MG_ARCH_CMSIS_RTOS1 || MG_ARCH == MG_ARCH_CMSIS_RTOS2) &&     \

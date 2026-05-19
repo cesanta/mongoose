@@ -5,7 +5,9 @@
 #define MG_ARCH_WIN32 2         // Windows
 #define MG_ARCH_ESP32 3         // ESP32
 #define MG_ARCH_ESP8266 4       // ESP8266
-#define MG_ARCH_FREERTOS 5      // FreeRTOS
+
+#define MG_ARCH_FREERTOS 5      // FreeRTOS <-- DEPRECATED !!!
+
 #define MG_ARCH_THREADX 6       // Eclipse ThreadX (former MS Azure RTOS)
 #define MG_ARCH_ZEPHYR 7        // Zephyr RTOS
 #define MG_ARCH_ARMGCC 8        // Plain ARM GCC
@@ -34,6 +36,11 @@
 
 #if !defined(MG_ARCH)
 #error "MG_ARCH is not specified and we couldn't guess it. Define MG_ARCH=... in mongoose_config.h"
+#elif MG_ARCH == MG_ARCH_FREERTOS
+#error "MG_ARCH_FREERTOS has been deprecated, set MG_ARCH=your_build_environment and MG_ENABLE_FREERTOS=1 instead"
+#undef MG_ARCH	// avoid errors piling up, provide a clean environment so the error above is seen
+#define MG_ARCH MG_ARCH_ARMGCC
+#define MG_ENABLE_FREERTOS 1
 #endif
 
 // http://esr.ibiblio.org/?p=5095
@@ -43,12 +50,13 @@
 #include "arch_cube.h"
 #include "arch_esp32.h"
 #include "arch_esp8266.h"
-#include "arch_freertos.h"
 #include "arch_rtx.h"
 #include "arch_threadx.h"
 #include "arch_unix.h"
 #include "arch_win32.h"
 #include "arch_zephyr.h"
+
+#include "os_freertos.h"
 
 #include "net_ft.h"
 #include "net_lwip.h"
