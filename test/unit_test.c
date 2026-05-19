@@ -4144,7 +4144,7 @@ static void test_dash(void) {
   char buf[FETCH_BUF_SIZE];
   const char *url = "http://localhost:26352";
   struct mg_mgr mgr;
-  struct mg_dash dash = {0};
+  struct mg_dash dash;
   bool two = false;
   struct mg_field fields1[] = {
       {"one", MG_VAL_INT, &one, sizeof(one)},
@@ -4157,7 +4157,18 @@ static void test_dash(void) {
   };
   struct mg_field_set set1 = {"set1", fields1, rfields1, NULL, 0, 0, NULL};
   struct mg_field_set set2 = {"set2", fields2, NULL, NULL, 0, 0, NULL};
+  const char *get_all_expected =
+      "{\"files\":{\"data\":[]},\"set2\":{\"two\":false},"
+      "\"set1\":{\"one\":1,\"three\":\"t: 1\"}}\n";
+  const char *set1_req = "POST /api/set HTTP/1.0\nContent-Length: 18\n\n"
+                         "{\"set1\":{\"one\":2}}";
+  const char *set1_expected = "{\"one\":2,\"three\":\"t: 2\"}\n";
+  const char *set2_req = "POST /api/set HTTP/1.0\nContent-Length: 21\n\n"
+                         "{\"set2\":{\"two\":true}}";
+  const char *set2_expected = "{\"two\":false}\n";
   char marker = 0;
+
+  memset(&dash, 0, sizeof(dash));
 
   MG_DASH_ADD_FIELD_SET(&dash, &set1);
   ASSERT(dash.sets == &set1);
@@ -4199,24 +4210,18 @@ static void test_dash(void) {
   ASSERT(mg_http_listen(&mgr, url, mg_dash_ev_handler, &dash) != NULL);
 
   ASSERT(fetch(&mgr, buf, url, "GET /api/get HTTP/1.0\n\n") == 200);
-  ASSERT(cmpbody(buf,
-                 "{\"files\":{\"data\":[]},\"set2\":{\"two\":false},"
-                 "\"set1\":{\"one\":1,\"three\":\"t: 1\"}}\n") == 0);
+  ASSERT(cmpbody(buf, get_all_expected) == 0);
 
-  ASSERT(fetch(&mgr, buf, url,
-               "POST /api/set HTTP/1.0\nContent-Length: 18\n\n"
-               "{\"set1\":{\"one\":2}}") == 200);
+  ASSERT(fetch(&mgr, buf, url, set1_req) == 200);
   ASSERT(cmpbody(buf, "1\n") == 0);
   ASSERT(fetch(&mgr, buf, url, "GET /api/get/set1 HTTP/1.0\n\n") == 200);
-  ASSERT(cmpbody(buf, "{\"one\":2,\"three\":\"t: 2\"}\n") == 0);
+  ASSERT(cmpbody(buf, set1_expected) == 0);
 
-  ASSERT(fetch(&mgr, buf, url,
-               "POST /api/set HTTP/1.0\nContent-Length: 21\n\n"
-               "{\"set2\":{\"two\":true}}") == 200);
+  ASSERT(fetch(&mgr, buf, url, set2_req) == 200);
   ASSERT(cmpbody(buf, "0\n") == 0);
   ASSERT(two == false);
   ASSERT(fetch(&mgr, buf, url, "GET /api/get/set2 HTTP/1.0\n\n") == 200);
-  ASSERT(cmpbody(buf, "{\"two\":false}\n") == 0);
+  ASSERT(cmpbody(buf, set2_expected) == 0);
   mg_mgr_free(&mgr);
 }
 
