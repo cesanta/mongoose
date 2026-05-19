@@ -4470,7 +4470,7 @@ struct pppoe {  // RFC-2516, "A Method for Transmitting PPP Over Ethernet
 
 #define PDIFF(a, b) ((size_t) (((char *) (b)) - ((char *) (a))))
 
-static bool s_link = false;  // ************ THESE SHOULD MOVE TO A struct
+static bool s_lcpup = false;  // ************ THESE SHOULD MOVE TO A struct
                              // mg_l2data *******************************
 static uint8_t s_state = MG_PPPoE_ST_DISC;
 static uint16_t s_id;
@@ -4489,8 +4489,8 @@ void mg_l2_pppoe_init(struct mg_tcpip_if *ifp) {
 }
 
 bool mg_l2_ppp_poll(struct mg_tcpip_if *ifp, bool expired_1000ms) {
-  if (expired_1000ms && ifp->state == MG_TCPIP_STATE_DOWN) s_link = false;
-  return s_link;
+  if (expired_1000ms && ifp->state == MG_TCPIP_STATE_DOWN) s_lcpup = false;
+  return s_lcpup;
 }
 
 static uint8_t *hdlc_header(uint8_t *p) {
@@ -4634,13 +4634,13 @@ static void ppp_handle_lcp(struct mg_tcpip_if *ifp, uint8_t *lcpp,
       }
     } break;
     case MG_PPP_LCP_CFG_ACK:
-      s_link = true;
+      s_lcpup = true;
       break;
     case MG_PPP_LCP_CFG_TERM_REQ: {
       uint8_t ack[4] = {MG_PPP_LCP_CFG_TERM_ACK, id, 0, 4};
       MG_DEBUG(("LCP termination request, acknowledging..."));
       ppp_tx_frame(ifp, MG_PPP_PROTO_LCP, ack, sizeof(ack));
-      s_link = false;
+      s_lcpup = false;
     } break;
     case MG_PPP_LCP_ECHO_REQ:  // RFC-1661 5.8: must respond
       MG_DEBUG(("LCP echo request of %d bytes, replying...", len));
@@ -4802,19 +4802,19 @@ static bool ppp_rx(struct mg_tcpip_if *ifp, enum mg_l2proto *proto,
       ppp_handle_lcp(ifp, (uint8_t *) pay->buf, pay->len);
       return false;
     case MG_PPP_PROTO_IPCP:
-      if (s_link) ppp_handle_ipcp(ifp, (uint8_t *) pay->buf, pay->len);
+      if (s_lcpup) ppp_handle_ipcp(ifp, (uint8_t *) pay->buf, pay->len);
       return false;
     case MG_PPP_PROTO_IP:
-      if (!s_link) return false;
+      if (!s_lcpup) return false;
       MG_VERBOSE(("got IP packet of %d bytes", pay->len));
       *proto = MG_TCPIP_L2PROTO_IPV4;
       break;
 #if MG_ENABLE_IPV6
     case MG_PPP_PROTO_IPV6CP:
-      if (s_link) ppp_handle_ipv6cp(ifp, (uint8_t *) pay->buf, pay->len);
+      if (s_lcpup) ppp_handle_ipv6cp(ifp, (uint8_t *) pay->buf, pay->len);
       return false;
     case MG_PPP_PROTO_IPV6:
-      if (!s_link) return false;
+      if (!s_lcpup) return false;
       MG_VERBOSE(("got IPv6 packet of %d bytes", pay->len));
       *proto = MG_TCPIP_L2PROTO_IPV6;
       break;
@@ -4826,7 +4826,7 @@ static bool ppp_rx(struct mg_tcpip_if *ifp, enum mg_l2proto *proto,
       MG_DEBUG(("unknown %u-byte PPP frame with proto 0x%04x:",
                 pay->len + sizeof(*ppp), mg_ntohs(ppp->proto)));
       if (mg_log_level >= MG_LL_DEBUG) mg_hexdump(ppp, sizeof(*ppp) + 20);
-      if (!s_link) return false;  // RFC-1661 5.7: must reject on link up
+      if (!s_lcpup) return false;  // RFC-1661 5.7: must reject on link up
       if (pay->len > (size_t) (ifp->mtu - 20))
         pay->len = (size_t) (ifp->mtu - 20);  // truncate to some safe limit
       rej.code = MG_PPP_LCP_REJECT;
@@ -4980,7 +4980,7 @@ bool mg_l2_pppoe_rx(struct mg_tcpip_if *ifp, enum mg_l2proto *proto,
                pppoe->id == s_id) {
       MG_ERROR(("Got PADT"));
       s_id = 0;
-      s_link = false;
+      s_lcpup = false;
       s_state = MG_PPPoE_ST_DISC;
     }
   } else if (eth_proto == MG_TCPIP_L2PROTO_PPPoE_SESS &&
