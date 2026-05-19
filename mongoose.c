@@ -288,18 +288,21 @@ static int mg_dash_parse_field(struct mg_str json, struct mg_field *f) {
   bool ok = false;
   mg_snprintf(json_path, sizeof(json_path), "$.%s", f->name);
   if (f->type == MG_VAL_BOOL) {
-    ok = mg_json_get_bool(json, json_path, (bool *) f->value);
+    ok = f->value_size == sizeof(bool) &&
+         mg_json_get_bool(json, json_path, (bool *) f->value);
   } else if (f->type == MG_VAL_INT) {
     double d;
-    if (mg_json_get_num(json, json_path, &d) && d == (int) d) {
+    if (f->value_size == sizeof(int) && mg_json_get_num(json, json_path, &d) &&
+        d == (int) d) {
       *(int *) f->value = (int) d;
       ok = true;
     }
   } else if (f->type == MG_VAL_DBL) {
-    ok = mg_json_get_num(json, json_path, (double *) f->value);
-  } else if (f->type == MG_VAL_STR) {
+    ok = f->value_size == sizeof(double) &&
+         mg_json_get_num(json, json_path, (double *) f->value);
+  } else if (f->type == MG_VAL_STR && f->value_size > 0) {
     ok = mg_json_unescape(json, json_path, (char *) f->value, f->value_size);
-  } else if (f->type == MG_VAL_RAW) {
+  } else if (f->type == MG_VAL_RAW && f->value_size > 0) {
     ok = mg_snprintf((char *) f->value, f->value_size, "%.*s", json.len,
                      json.buf) == json.len;
   }

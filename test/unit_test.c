@@ -4130,6 +4130,96 @@ static void test_crypto(void) {
   test_rsa();
 }
 
+static void dash_custom(struct mg_connection *c, int ev, void *ev_data) {
+  (void) c, (void) ev, (void) ev_data;
+}
+
+char three[10] = "hi";
+int one = 1;
+static void rfields1(void) {
+  mg_snprintf(three, sizeof(three), "t: %d", one);  // Simulate array
+}
+
+static void test_dash(void) {
+  char buf[FETCH_BUF_SIZE];
+  const char *url = "http://localhost:26352";
+  struct mg_mgr mgr;
+  struct mg_dash dash = {0};
+  bool two = false;
+  struct mg_field fields1[] = {
+      {"one", MG_VAL_INT, &one, sizeof(one)},
+      {"three", MG_VAL_STR, three, sizeof(three)},
+      {NULL, MG_VAL_INT, NULL, 0},
+  };
+  struct mg_field fields2[] = {
+      {"two", MG_VAL_BOOL, &two, 0},  // Size set to 0 - readonly
+      {NULL, MG_VAL_INT, NULL, 0},
+  };
+  struct mg_field_set set1 = {"set1", fields1, rfields1, NULL, 0, 0, NULL};
+  struct mg_field_set set2 = {"set2", fields2, NULL, NULL, 0, 0, NULL};
+  char marker = 0;
+
+  MG_DASH_ADD_FIELD_SET(&dash, &set1);
+  ASSERT(dash.sets == &set1);
+  ASSERT(set1.next == NULL);
+
+  MG_DASH_ADD_FIELD_SET(&dash, &set2);
+  ASSERT(dash.sets == &set2);
+  ASSERT(set2.next == &set1);
+
+  MG_DASH_REGISTER_CUSTOM_HANDLER(&dash, "/api/custom", dash_custom, &marker);
+  ASSERT(dash.custom_handlers != NULL);
+  ASSERT(mg_strcmp(dash.custom_handlers->uri_pattern, mg_str("/api/custom")) ==
+         0);
+  ASSERT(dash.custom_handlers->handler == dash_custom);
+  ASSERT(dash.custom_handlers->handler_data == &marker);
+
+  while (mg_dash_files != NULL) mg_dash_file_del(mg_str(mg_dash_files->name));
+  mg_dash_file_add(mg_str("one.txt"), 123);
+  ASSERT(mg_dash_files != NULL);
+  ASSERT(strcmp(mg_dash_files->name, "one.txt") == 0);
+  ASSERT(mg_dash_files->size == 123);
+  mg_dash_file_add(mg_str("two.bin"), 456);
+  ASSERT(mg_dash_files != NULL);
+  ASSERT(strcmp(mg_dash_files->name, "two.bin") == 0);
+  ASSERT(mg_dash_files->size == 456);
+  ASSERT(mg_dash_files->next != NULL);
+  ASSERT(strcmp(mg_dash_files->next->name, "one.txt") == 0);
+  mg_dash_file_del(mg_str("one.txt"));
+  ASSERT(mg_dash_files != NULL);
+  ASSERT(strcmp(mg_dash_files->name, "two.bin") == 0);
+  ASSERT(mg_dash_files->next == NULL);
+  mg_dash_file_del(mg_str("missing.txt"));
+  ASSERT(mg_dash_files != NULL);
+  mg_dash_file_del(mg_str("two.bin"));
+  ASSERT(mg_dash_files == NULL);
+
+  mg_mgr_init(&mgr);
+  mg_mem_files = mg_packed_files;
+  ASSERT(mg_http_listen(&mgr, url, mg_dash_ev_handler, &dash) != NULL);
+
+  ASSERT(fetch(&mgr, buf, url, "GET /api/get HTTP/1.0\n\n") == 200);
+  ASSERT(cmpbody(buf,
+                 "{\"files\":{\"data\":[]},\"set2\":{\"two\":false},"
+                 "\"set1\":{\"one\":1,\"three\":\"t: 1\"}}\n") == 0);
+
+  ASSERT(fetch(&mgr, buf, url,
+               "POST /api/set HTTP/1.0\nContent-Length: 18\n\n"
+               "{\"set1\":{\"one\":2}}") == 200);
+  ASSERT(cmpbody(buf, "1\n") == 0);
+  ASSERT(fetch(&mgr, buf, url, "GET /api/get/set1 HTTP/1.0\n\n") == 200);
+  ASSERT(cmpbody(buf, "{\"one\":2,\"three\":\"t: 2\"}\n") == 0);
+
+  ASSERT(fetch(&mgr, buf, url,
+               "POST /api/set HTTP/1.0\nContent-Length: 21\n\n"
+               "{\"set2\":{\"two\":true}}") == 200);
+  ASSERT(cmpbody(buf, "0\n") == 0);
+  ASSERT(two == false);
+  ASSERT(fetch(&mgr, buf, url, "GET /api/get/set2 HTTP/1.0\n\n") == 200);
+  ASSERT(cmpbody(buf, "{\"two\":false}\n") == 0);
+  mg_mgr_free(&mgr);
+}
+
 #define DASHBOARD(x) \
   printf("HEALTH_DASHBOARD\t\"%s\": %s,\n", x, s_error ? "false" : "true");
 
@@ -4504,6 +4594,10 @@ int main(void) {
   s_error = false;
   test_rpc();
   DASHBOARD("rpc");
+
+  s_error = false;
+  test_dash();
+  DASHBOARD("dash");
 
   s_error = false;
   test_check_ip_acl();
