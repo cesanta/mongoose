@@ -3565,11 +3565,21 @@ static void test_json(void) {
     int len;
     char *str = NULL;
 
-    json = mg_str("{\"a\":\"b\"}");
+    json = mg_str("{\"a\":\"b\", \"c\":\"\"}");
     str = mg_json_get_str(json, "$.a");
     ASSERT(str != NULL);
     // printf("---> [%s]\n", str);
     ASSERT(strcmp(str, "b") == 0);
+    mg_free(str);
+
+    // Non existent string
+    str = mg_json_get_str(json, "$.d");
+    ASSERT(str == NULL);
+
+    // Empty string
+    str = mg_json_get_str(json, "$.c");
+    ASSERT(str != NULL);
+    ASSERT(strcmp(str, "") == 0);
     mg_free(str);
 
     json = mg_str("{\"a\": \"hi\\nthere\",\"b\": [12345, true]}");

@@ -338,9 +338,9 @@ size_t mg_json_unescape(struct mg_str json, const char *path, char *to,
 char *mg_json_get_str(struct mg_str json, const char *path) {
   char *result = NULL;
   int len = 0, off = mg_json_get(json, path, &len);
-  if (off >= 0 && len > 2 && json.buf[off] == '"') {
+  if (off >= 0 && len >= 2 && json.buf[off] == '"') {
     if ((result = (char *) mg_calloc(1, (size_t) len)) != NULL &&
-        mg_json_unescape(json, path, result, (size_t) len) == 0) {
+        len > 2 && mg_json_unescape(json, path, result, (size_t) len) == 0) {
       mg_free(result);
       result = NULL;
     }
