@@ -341,7 +341,7 @@ static void read_conn(struct mg_connection *c) {
       // there can still be > 16K from last iteration, always mg_tls_recv()
       m = c->is_tls_hs ? (long) MG_IO_WAIT : mg_tls_recv(c, buf, len);
       if (n == MG_IO_ERR || n == MG_IO_RESET) {  // Windows, see #3031
-        if (c->rtls.len == 0 || m < 0) {
+        if (c->rtls.len == 0 || (m < 0 && m != MG_IO_WAIT)) {
           // Close only when we have fully drained both rtls and TLS buffers
           c->is_closing = 1;         // or there's nothing we can do about it.
           if (m < 0) m = MG_IO_ERR;  // but return last record data, see #3104
