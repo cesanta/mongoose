@@ -38,3 +38,16 @@ fullclean: clean
 $(SDK_PATH):
 	git clone -c advice.detachedHead=false --quiet --depth 1 -b 2.1.1 https://github.com/raspberrypi/pico-sdk $@
 	cd $@ && git submodule update --quiet --init
+
+# Automated remote test. Requires env variable VCON_API_KEY set. See https://vcon.io/automated-firmware-tests/
+DEVICE_URL ?= https://dash.vcon.io/api/v3/devices/3
+# stdio has to be changed from USB to UART in CMakeLists.txt
+update:
+	perl -pi -e 's/pico_enable_stdio_usb(firmware 1)/pico_enable_stdio_usb(firmware 0)/' CMakeLists.txt
+	$(MAKE) build
+	perl -pi -e 's/pico_enable_stdio_usb(firmware 0)/pico_enable_stdio_usb(firmware 1)/' CMakeLists.txt
+	curl --fail-with-body -su :$(VCON_API_KEY) $(DEVICE_URL)/ota?uf2=1 --data-binary @build/firmware.uf2
+
+test: update
+	curl --fail-with-body -su :$(VCON_API_KEY) $(DEVICE_URL)/tx?t=15 | tee /tmp/output.txt
+	grep 'READY, IP:' /tmp/output.txt       # Check for network init

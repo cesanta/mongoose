@@ -25,10 +25,12 @@ void wifi_setconfig(void *data) {
   wifi->apmode = ENABLE_AP;
 }
 
-static void blink_timer(void *arg) {
-  (void) arg;
-  cyw43_arch_gpio_put(CYW43_WL_GPIO_LED_PIN,
-                      !cyw43_arch_gpio_get(CYW43_WL_GPIO_LED_PIN));
+static void blink_task(void) {
+  static uint64_t timer;
+  if (mg_timer_expired(&timer, 500, mg_now())) {
+    cyw43_arch_gpio_put(CYW43_WL_GPIO_LED_PIN,
+                        !cyw43_arch_gpio_get(CYW43_WL_GPIO_LED_PIN));
+  }
 }
 
 static void http_ev_handler(struct mg_connection *c, int ev, void *ev_data) {
@@ -43,18 +45,22 @@ static void http_ev_handler(struct mg_connection *c, int ev, void *ev_data) {
   }
 }
 
-int main(void) {
-  stdio_init_all();
-  // do not access the CYW43 LED before Mongoose initializes !
-  MG_INFO(("Hardware initialised, starting firmware..."));
-
+// In an RTOS environment, give this task 8 KB of stack space.
+static void run_mongoose(void) {
   struct mg_mgr mgr;
   mg_mgr_init(&mgr);
   mg_http_listen(&mgr, "http://0.0.0.0", http_ev_handler, NULL);
 
   for (;;) {
     mg_mgr_poll(&mgr, 1);
+    blink_task();
   }
+}
 
+int main(void) {
+  stdio_init_all();
+  // do not access the CYW43 LED before Mongoose initializes !
+  MG_INFO(("Hardware initialised, starting firmware..."));
+  run_mongoose();
   return 0;
 }
