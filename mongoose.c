@@ -14967,6 +14967,23 @@ static bool mg_tls_encrypt(struct mg_connection *c, const uint8_t *msg,
   return true;
 }
 
+static void verbose_alert(uint8_t *buf) {
+  uint8_t level = buf[0], desc = buf[1];
+  MG_INFO(("TLS ALERT received: level=%d, desc=%d (%s)", level, desc,
+           desc == 0    ? "close_notify"
+           : desc == 10 ? "unexpected_message"
+           : desc == 20 ? "bad_record_mac"
+           : desc == 21 ? "decryption_failed"
+           : desc == 40 ? "handshake_failure"
+           : desc == 42 ? "bad_certificate"
+           : desc == 43 ? "unsupported_certificate"
+           : desc == 44 ? "certificate_revoked"
+           : desc == 45 ? "certificate_expired"
+           : desc == 46 ? "certificate_unknown"
+           : desc == 48 ? "unknown_ca"
+                        : "unknown"));
+}
+
 // read an encrypted record, decrypt it in place
 static int mg_tls_recv_record(struct mg_connection *c) {
   struct tls_data *tls = (struct tls_data *) c->tls;
@@ -14995,16 +15012,7 @@ static int mg_tls_recv_record(struct mg_connection *c) {
       mg_tls_drop_record(c);
     } else if (rio->buf[0] == MG_TLS_ALERT) {  // Skip Alerts
       if (rio->len >= 7) {
-        uint8_t level = rio->buf[5], desc = rio->buf[6];
-        MG_INFO(("TLS ALERT received: level=%d, desc=%d (%s)", level, desc,
-                 desc == 0    ? "close_notify"
-                 : desc == 10 ? "unexpected_message"
-                 : desc == 20 ? "bad_record_mac"
-                 : desc == 21 ? "decryption_failed"
-                 : desc == 40 ? "handshake_failure"
-                 : desc == 42 ? "bad_certificate"
-                 : desc == 43 ? "unsupported_certificate"
-                              : "unknown"));
+        verbose_alert(&rio->buf[5]);
       } else {
         MG_INFO(("TLS ALERT packet received (short)"));
       }
@@ -15065,6 +15073,16 @@ static int mg_tls_recv_record(struct mg_connection *c) {
 
   r = msgsz - 16 - 1;
   tls->content_type = msg[msgsz - 16 - 1];
+  if (tls->content_type == MG_TLS_ALERT) {  // Process Alerts
+    verbose_alert(msg);
+    if (msg[0] == 2) {
+      mg_error(c, "TLS Fatal alert");
+      return -1;
+    } else {
+      mg_tls_drop_record(c);
+      return MG_IO_WAIT;
+    }
+  }
   tls->recv_offset = (size_t) msg - (size_t) rio->buf;
   tls->recv_len = (size_t) msgsz - 16 - 1;
   c->is_client ? tls->enc.sseq++ : tls->enc.cseq++;
@@ -15727,7 +15745,8 @@ static int mg_tls_client_recv_hello(struct mg_connection *c) {
   }
   if (rio->buf[0] != MG_TLS_HANDSHAKE || rio->buf[5] != MG_TLS_SERVER_HELLO) {
     if (rio->buf[0] == MG_TLS_ALERT && rio->len >= 7) {
-      mg_error(c, "tls alert %d", rio->buf[6]);
+      verbose_alert(&rio->buf[5]);
+      mg_error(c, "TLS error alert");
       return -1;
     }
     MG_INFO(("got packet type 0x%02x/0x%02x", rio->buf[0], rio->buf[5]));
