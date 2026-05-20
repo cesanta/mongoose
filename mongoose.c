@@ -150,19 +150,22 @@ static struct mg_str trimq(struct mg_str s) {  // Trim double quotes
   return s;
 }
 
-static void mg_dash_broadcast(struct mg_mgr *mgr, const char *fmt, ...) {
+static void mg_dash_broadcast(struct mg_mgr *mgr, int level, const char *fmt,
+                              ...) {
   struct mg_connection *c;
   va_list ap;
   for (c = mgr->conns; c != NULL; c = c->next) {
+    int user_level = *(int *) c->data;
     if (!c->is_websocket) continue;
+    if (level > 0 && user_level < level) continue;
     if (c->send.len > MG_DASH_MAX_SEND_BUF_SIZE) {
-      MG_ERROR(("%lu buffered data %lu > MG_DASH_MAX_SEND_BUF_SIZE, throttled",
-                c->id, c->send.len));
-      continue;
+      mg_error(c, "%lu buffered data %lu > MG_DASH_MAX_SEND_BUF_SIZE", c->id,
+               c->send.len);
+    } else {
+      va_start(ap, fmt);
+      mg_ws_vprintf(c, WEBSOCKET_OP_TEXT, fmt, &ap);
+      va_end(ap);
     }
-    va_start(ap, fmt);
-    mg_ws_vprintf(c, WEBSOCKET_OP_TEXT, fmt, &ap);
-    va_end(ap);
   }
 }
 
@@ -246,6 +249,7 @@ static size_t mg_print_field_set(mg_pfn_t fn, void *arg, va_list *ap) {
 static size_t mg_dash_print_name(mg_pfn_t fn, void *arg, va_list *ap) {
   struct mg_dash *dash = va_arg(*ap, struct mg_dash *);
   struct mg_str *name = va_arg(*ap, struct mg_str *);
+  int level = va_arg(*ap, int);
   struct mg_field_set *set = mg_dash_find_field_set(dash, *name);
   size_t n = 0;
   if (name->len == 0) {
@@ -253,6 +257,7 @@ static size_t mg_dash_print_name(mg_pfn_t fn, void *arg, va_list *ap) {
     const char *comma = "";
     n += mg_xprintf(fn, arg, "{");
     for (fs = dash->sets; fs != NULL; fs = fs->next) {
+      if (fs->read_level > 0 && level < fs->read_level) continue;
       if (fs->reader) fs->reader();
       n += mg_xprintf(fn, arg, comma);
       n += mg_xprintf(fn, arg, "%m:", MG_ESC(fs->name));
@@ -260,7 +265,8 @@ static size_t mg_dash_print_name(mg_pfn_t fn, void *arg, va_list *ap) {
       comma = ",";
     }
     n += mg_xprintf(fn, arg, "}");
-  } else if (set != NULL) {
+  } else if (set != NULL &&
+             (set->read_level <= 0 || level >= set->read_level)) {
     if (set->reader) set->reader();
     n += mg_xprintf(fn, arg, "%M", mg_print_field_set, set);
   } else {
@@ -272,15 +278,16 @@ static size_t mg_dash_print_name(mg_pfn_t fn, void *arg, va_list *ap) {
 static size_t mg_dash_print(mg_pfn_t fn, void *arg, va_list *ap) {
   struct mg_str *req = va_arg(*ap, struct mg_str *);
   struct mg_dash *dash = va_arg(*ap, struct mg_dash *);
+  int level = va_arg(*ap, int);
   struct mg_str name = trimq(mg_json_get_tok(*req, "$.params"));
-  return mg_xprintf(fn, arg, "%M", mg_dash_print_name, dash, &name);
+  return mg_xprintf(fn, arg, "%M", mg_dash_print_name, dash, &name, level);
 }
 
 void mg_dash_send_change(struct mg_mgr *mgr, struct mg_field_set *set) {
   if (set->reader) set->reader();
-  mg_dash_broadcast(mgr, "{%m:%m,%m:{%m:%M}}", MG_ESC("method"),
-                    MG_ESC("change"), MG_ESC("params"), MG_ESC(set->name),
-                    mg_print_field_set, set);
+  mg_dash_broadcast(mgr, set->read_level, "{%m:%m,%m:{%m:%M}}",
+                    MG_ESC("method"), MG_ESC("change"), MG_ESC("params"),
+                    MG_ESC(set->name), mg_print_field_set, set);
 }
 
 static int mg_dash_parse_field(struct mg_str json, struct mg_field *f) {
@@ -310,14 +317,14 @@ static int mg_dash_parse_field(struct mg_str json, struct mg_field *f) {
 }
 
 static int mg_dash_apply(struct mg_connection *c, struct mg_dash *dash,
-                         struct mg_str json) {
+                         struct mg_str json, int level) {
   struct mg_str key, val;
   size_t ofs = 0;
   int total_count = 0;
   while ((ofs = mg_json_next(json, ofs, &key, &val)) > 0) {
     struct mg_field_set *set = mg_dash_find_field_set(dash, trimq(key));
     int count = 0;
-    if (set != NULL) {
+    if (set != NULL && (set->write_level <= 0 || level >= set->write_level)) {
       size_t i;
       for (i = 0; set->fields[i].name != NULL; i++) {
         if (mg_dash_parse_field(val, &set->fields[i])) count++;
@@ -327,7 +334,7 @@ static int mg_dash_apply(struct mg_connection *c, struct mg_dash *dash,
         mg_dash_send_change(c->mgr, set);
         total_count += count;
       }
-    } else {
+    } else if (set == NULL) {
       MG_ERROR(("UNKNOWN SET: [%.*s]", key.len, key.buf));
     }
   }
@@ -339,11 +346,12 @@ static void mg_dash_process_msg(struct mg_connection *c,
                                 struct mg_dash *dash) {
   struct mg_str req = wm->data;
   struct mg_str method = trimq(mg_json_get_tok(req, "$.method"));
+  int level = *(int *) c->data;
   if (mg_match(method, mg_str("get"), NULL)) {
-    mg_dash_success(c, req, "%M", mg_dash_print, &req, dash);
+    mg_dash_success(c, req, "%M", mg_dash_print, &req, dash, level);
   } else if (mg_match(method, mg_str("set"), NULL)) {
     struct mg_str params = trimq(mg_json_get_tok(req, "$.params"));
-    int count = mg_dash_apply(c, dash, params);
+    int count = mg_dash_apply(c, dash, params, level);
     mg_dash_success(c, req, "%d", count);
   } else {
     mg_dash_error(c, req, "%s", "unknown method");
@@ -632,7 +640,8 @@ void mg_dash_ev_handler(struct mg_connection *c, int ev, void *ev_data) {
     c->is_resp = 0;
   } else if (ev == MG_EV_HTTP_MSG && c->data[0] == '\0') {
     struct mg_http_message *hm = (struct mg_http_message *) ev_data;
-    // struct mg_dash_user *u = mg_dash_authenticate(hm, dash);
+    struct mg_dash_user *u = mg_dash_authenticate(hm, dash);
+    int level = u == NULL ? 0 : u->level;
     struct mg_str parts[5];
     memset(parts, 0, sizeof(parts));
 
@@ -643,6 +652,7 @@ void mg_dash_ev_handler(struct mg_connection *c, int ev, void *ev_data) {
       mg_ws_printf(c, WEBSOCKET_OP_TEXT, "{%m:%m}", MG_ESC("method"),
                    MG_ESC("logout"));
     } else if (mg_match(hm->uri, mg_str("/api/websocket"), NULL)) {
+      *(int *) c->data = level;
       mg_ws_upgrade(c, hm, NULL);
     } else if (mg_match(hm->uri, mg_str("/fs/#"), NULL)) {
       struct mg_str name = mg_dash_file_name(hm);
@@ -660,9 +670,9 @@ void mg_dash_ev_handler(struct mg_connection *c, int ev, void *ev_data) {
     } else if (mg_match(hm->uri, mg_str("/api/get/#"), parts) ||
                mg_match(hm->uri, mg_str("/api/get"), NULL)) {
       mg_http_reply(c, 200, MG_JSON_HEADERS, "%M\n", mg_dash_print_name, dash,
-                    &parts[0]);
+                    &parts[0], level);
     } else if (mg_match(hm->uri, mg_str("/api/set"), NULL)) {
-      int count = mg_dash_apply(c, dash, hm->body);
+      int count = mg_dash_apply(c, dash, hm->body, level);
       mg_http_reply(c, 200, MG_JSON_HEADERS, "%d\n", count);
     } else if (mg_match(hm->uri, mg_str("/"), NULL)) {
       struct mg_http_serve_opts opts;
@@ -686,7 +696,7 @@ void mg_dash_ev_handler(struct mg_connection *c, int ev, void *ev_data) {
     for (fs = dash->sets; fs != NULL; fs = fs->next) {
       mg_dash_send_change(c->mgr, fs);
     }
-    mg_dash_broadcast(c->mgr, "{%m:%m}", MG_ESC("method"), MG_ESC("ready"));
+    mg_dash_broadcast(c->mgr, 0, "{%m:%m}", MG_ESC("method"), MG_ESC("ready"));
   } else if (ev == MG_EV_WS_MSG) {
     // Add this to automatically handle "get" and "set" JSON-RPC calls
     struct mg_ws_message *wm = (struct mg_ws_message *) ev_data;

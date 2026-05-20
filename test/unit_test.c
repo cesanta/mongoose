@@ -4134,6 +4134,52 @@ static void dash_custom(struct mg_connection *c, int ev, void *ev_data) {
   (void) c, (void) ev, (void) ev_data;
 }
 
+static int dash_authenticate(const char *user, const char *pass) {
+  int level = 0;
+  if (strcmp(pass, "admin") == 0) {
+    level = 7;
+  } else if (strcmp(pass, "user") == 0) {
+    level = 3;
+  }
+  (void) user;
+  return level;
+}
+
+struct dash_ws_test {
+  const char *req;
+  int done;
+  int result;
+  int saw_set3;
+};
+
+static void dash_ws_cb(struct mg_connection *c, int ev, void *ev_data) {
+  struct dash_ws_test *d = (struct dash_ws_test *) c->fn_data;
+  if (ev == MG_EV_WS_OPEN) {
+    if (d->req != NULL) {
+      mg_ws_send(c, d->req, strlen(d->req), WEBSOCKET_OP_TEXT);
+    }
+  } else if (ev == MG_EV_WS_MSG) {
+    struct mg_ws_message *wm = (struct mg_ws_message *) ev_data;
+    struct mg_str method = mg_json_get_tok(wm->data, "$.method");
+    struct mg_str set3 = mg_json_get_tok(wm->data, "$.params.set3");
+    double result = 0;
+    if (mg_strcmp(method, mg_str("\"change\"")) == 0 && set3.buf != NULL) {
+      d->saw_set3 = 1;
+    }
+    if (mg_json_get_num(wm->data, "$.result", &result)) {
+      d->result = (int) result;
+      d->done = 1;
+      c->is_closing = 1;
+    } else if (d->req == NULL &&
+               mg_strcmp(method, mg_str("\"ready\"")) == 0) {
+      d->done = 1;
+      c->is_closing = 1;
+    }
+  } else if (ev == MG_EV_CLOSE && d->done == 0) {
+    d->done = -1;
+  }
+}
+
 char three[10] = "hi";
 int one = 1;
 static void rfields1(void) {
@@ -4143,9 +4189,13 @@ static void rfields1(void) {
 static void test_dash(void) {
   char buf[FETCH_BUF_SIZE];
   const char *url = "http://localhost:26352";
+  const char *ws_url = "ws://localhost:26352/api/websocket";
   struct mg_mgr mgr;
   struct mg_dash dash;
+  struct dash_ws_test ws_user, ws_admin, ws_user_notify;
   bool two = false;
+  int admin = 7;
+  int i;
   struct mg_field fields1[] = {
       {"one", MG_VAL_INT, &one, sizeof(one)},
       {"three", MG_VAL_STR, three, sizeof(three)},
@@ -4155,14 +4205,44 @@ static void test_dash(void) {
       {"two", MG_VAL_BOOL, &two, 0},  // Size set to 0 - readonly
       {NULL, MG_VAL_INT, NULL, 0},
   };
-  struct mg_field_set set1 = {"set1", fields1, rfields1, NULL, 0, 0, NULL};
+  struct mg_field fields3[] = {
+      {"admin", MG_VAL_INT, &admin, sizeof(admin)},
+      {NULL, MG_VAL_INT, NULL, 0},
+  };
+  struct mg_field_set set1 = {"set1", fields1, rfields1, NULL, 3, 7, NULL};
   struct mg_field_set set2 = {"set2", fields2, NULL, NULL, 0, 0, NULL};
+  struct mg_field_set set3 = {"set3", fields3, NULL, NULL, 7, 7, NULL};
   const char *get_all_expected =
-      "{\"files\":{\"data\":[]},\"set2\":{\"two\":false},"
+      "{\"files\":{\"data\":[]},\"set3\":{\"admin\":7},"
+      "\"set2\":{\"two\":false},"
       "\"set1\":{\"one\":1,\"three\":\"t: 1\"}}\n";
   const char *set1_req = "POST /api/set HTTP/1.0\nContent-Length: 18\n\n"
                          "{\"set1\":{\"one\":2}}";
+  const char *set1_set3_req = "POST /api/set HTTP/1.0\n"
+                              "Authorization: Basic dXNlcjp1c2Vy\n"
+                              "Content-Length: 18\n\n"
+                              "{\"set1\":{\"one\":3}}";
+  const char *set1_admin_set3_req = "POST /api/set HTTP/1.0\n"
+                                    "Authorization: Basic YWRtaW46YWRtaW4=\n"
+                                    "Content-Length: 18\n\n"
+                                    "{\"set1\":{\"one\":3}}";
+  const char *set3_user_req = "POST /api/set HTTP/1.0\n"
+                              "Authorization: Basic dXNlcjp1c2Vy\n"
+                              "Content-Length: 20\n\n"
+                              "{\"set3\":{\"admin\":8}}";
+  const char *set3_admin_req = "POST /api/set HTTP/1.0\n"
+                               "Authorization: Basic YWRtaW46YWRtaW4=\n"
+                               "Content-Length: 20\n\n"
+                               "{\"set3\":{\"admin\":8}}";
+  const char *set1_ws_set4_req =
+      "{\"id\":1,\"method\":\"set\",\"params\":{\"set1\":{\"one\":4}}}";
   const char *set1_expected = "{\"one\":2,\"three\":\"t: 2\"}\n";
+  const char *set1_expected3 = "{\"one\":3,\"three\":\"t: 3\"}\n";
+  const char *set1_expected4 = "{\"one\":4,\"three\":\"t: 4\"}\n";
+  const char *set3_expected = "{\"admin\":7}\n";
+  const char *set3_expected8 = "{\"admin\":8}\n";
+  const char *login_user_expected = "{\"user\":\"user\",\"level\":3}\n";
+  const char *login_admin_expected = "{\"user\":\"admin\",\"level\":7}\n";
   const char *set2_req = "POST /api/set HTTP/1.0\nContent-Length: 21\n\n"
                          "{\"set2\":{\"two\":true}}";
   const char *set2_expected = "{\"two\":false}\n";
@@ -4177,6 +4257,10 @@ static void test_dash(void) {
   MG_DASH_ADD_FIELD_SET(&dash, &set2);
   ASSERT(dash.sets == &set2);
   ASSERT(set2.next == &set1);
+
+  MG_DASH_ADD_FIELD_SET(&dash, &set3);
+  ASSERT(dash.sets == &set3);
+  ASSERT(set3.next == &set2);
 
   MG_DASH_REGISTER_CUSTOM_HANDLER(&dash, "/api/custom", dash_custom, &marker);
   ASSERT(dash.custom_handlers != NULL);
@@ -4209,6 +4293,7 @@ static void test_dash(void) {
   mg_mem_files = mg_packed_files;
   ASSERT(mg_http_listen(&mgr, url, mg_dash_ev_handler, &dash) != NULL);
 
+  // Test general get / set functionality
   ASSERT(fetch(&mgr, buf, url, "GET /api/get HTTP/1.0\n\n") == 200);
   ASSERT(cmpbody(buf, get_all_expected) == 0);
 
@@ -4217,11 +4302,109 @@ static void test_dash(void) {
   ASSERT(fetch(&mgr, buf, url, "GET /api/get/set1 HTTP/1.0\n\n") == 200);
   ASSERT(cmpbody(buf, set1_expected) == 0);
 
+  // Setting a variable with zero size should fail
   ASSERT(fetch(&mgr, buf, url, set2_req) == 200);
   ASSERT(cmpbody(buf, "0\n") == 0);
   ASSERT(two == false);
   ASSERT(fetch(&mgr, buf, url, "GET /api/get/set2 HTTP/1.0\n\n") == 200);
   ASSERT(cmpbody(buf, set2_expected) == 0);
+
+  // Install auth function with two users - user, level 3 and admin, level 7
+  dash.authenticate = dash_authenticate;
+  ASSERT(fetch(&mgr, buf, url, "GET /api/get HTTP/1.0\n\n") == 403);
+  ASSERT(cmpbody(buf, "Not Authorised\n") == 0);
+  ASSERT(fetch(&mgr, buf, url,
+               "GET /api/login HTTP/1.0\n"
+               "Authorization: Basic dXNlcjpiYWQ=\n\n") == 403);
+  ASSERT(fetch(&mgr, buf, url,
+               "GET /api/login HTTP/1.0\n"
+               "Authorization: Basic dXNlcjp1c2Vy\n\n") == 200);
+  ASSERT(cmpbody(buf, login_user_expected) == 0);
+  ASSERT(fetch(&mgr, buf, url,
+               "GET /api/login HTTP/1.0\n"
+               "Authorization: Basic YWRtaW46YWRtaW4=\n\n") == 200);
+  ASSERT(cmpbody(buf, login_admin_expected) == 0);
+
+  // set3 is admin-only
+  ASSERT(fetch(&mgr, buf, url,
+               "GET /api/get/set3 HTTP/1.0\n"
+               "Authorization: Basic dXNlcjp1c2Vy\n\n") == 200);
+  ASSERT(cmpbody(buf, "null\n") == 0);
+  ASSERT(fetch(&mgr, buf, url,
+               "GET /api/get/set3 HTTP/1.0\n"
+               "Authorization: Basic YWRtaW46YWRtaW4=\n\n") == 200);
+  ASSERT(cmpbody(buf, set3_expected) == 0);
+  ASSERT(fetch(&mgr, buf, url, set3_user_req) == 200);
+  ASSERT(cmpbody(buf, "0\n") == 0);
+  ASSERT(fetch(&mgr, buf, url,
+               "GET /api/get/set3 HTTP/1.0\n"
+               "Authorization: Basic YWRtaW46YWRtaW4=\n\n") == 200);
+  ASSERT(cmpbody(buf, set3_expected) == 0);
+  ASSERT(fetch(&mgr, buf, url, set3_admin_req) == 200);
+  ASSERT(cmpbody(buf, "1\n") == 0);
+  ASSERT(fetch(&mgr, buf, url,
+               "GET /api/get/set3 HTTP/1.0\n"
+               "Authorization: Basic YWRtaW46YWRtaW4=\n\n") == 200);
+  ASSERT(cmpbody(buf, set3_expected8) == 0);
+
+  // set1 read level should be 3, write level 7
+  ASSERT(fetch(&mgr, buf, url,
+               "GET /api/get/set1 HTTP/1.0\n"
+               "Authorization: Basic dXNlcjp1c2Vy\n\n") == 200);
+  ASSERT(cmpbody(buf, set1_expected) == 0);
+  ASSERT(fetch(&mgr, buf, url, set1_set3_req) == 200);
+  ASSERT(cmpbody(buf, "0\n") == 0);
+  ASSERT(fetch(&mgr, buf, url,
+               "GET /api/get/set1 HTTP/1.0\n"
+               "Authorization: Basic dXNlcjp1c2Vy\n\n") == 200);
+  ASSERT(cmpbody(buf, set1_expected) == 0);
+  ASSERT(fetch(&mgr, buf, url, set1_admin_set3_req) == 200);
+  ASSERT(cmpbody(buf, "1\n") == 0);
+  ASSERT(fetch(&mgr, buf, url,
+               "GET /api/get/set1 HTTP/1.0\n"
+               "Authorization: Basic YWRtaW46YWRtaW4=\n\n") == 200);
+  ASSERT(cmpbody(buf, set1_expected3) == 0);
+
+  ws_user_notify.req = NULL;
+  ws_user_notify.done = 0;
+  ws_user_notify.result = -1;
+  ws_user_notify.saw_set3 = 0;
+  mg_ws_connect(&mgr, ws_url, dash_ws_cb, &ws_user_notify, "%s",
+                "Authorization: Basic dXNlcjp1c2Vy\r\n");
+  for (i = 0; i < 200 && ws_user_notify.done == 0; i++) mg_mgr_poll(&mgr, 1);
+  ASSERT(ws_user_notify.done == 1);
+  ASSERT(ws_user_notify.saw_set3 == 0);
+
+  ws_user.req = set1_ws_set4_req;
+  ws_user.done = 0;
+  ws_user.result = -1;
+  ws_user.saw_set3 = 0;
+  mg_ws_connect(&mgr, ws_url, dash_ws_cb, &ws_user, "%s",
+                "Authorization: Basic dXNlcjp1c2Vy\r\n");
+  for (i = 0; i < 200 && ws_user.done == 0; i++) mg_mgr_poll(&mgr, 1);
+  ASSERT(ws_user.done == 1);
+  ASSERT(ws_user.result == 0);
+  ASSERT(ws_user.saw_set3 == 0);
+  ASSERT(fetch(&mgr, buf, url,
+               "GET /api/get/set1 HTTP/1.0\n"
+               "Authorization: Basic dXNlcjp1c2Vy\n\n") == 200);
+  ASSERT(cmpbody(buf, set1_expected3) == 0);
+
+  ws_admin.req = set1_ws_set4_req;
+  ws_admin.done = 0;
+  ws_admin.result = -1;
+  ws_admin.saw_set3 = 0;
+  mg_ws_connect(&mgr, ws_url, dash_ws_cb, &ws_admin, "%s",
+                "Authorization: Basic YWRtaW46YWRtaW4=\r\n");
+  for (i = 0; i < 200 && ws_admin.done == 0; i++) mg_mgr_poll(&mgr, 1);
+  ASSERT(ws_admin.done == 1);
+  ASSERT(ws_admin.result == 1);
+  ASSERT(ws_admin.saw_set3 == 1);
+  ASSERT(fetch(&mgr, buf, url,
+               "GET /api/get/set1 HTTP/1.0\n"
+               "Authorization: Basic YWRtaW46YWRtaW4=\n\n") == 200);
+  ASSERT(cmpbody(buf, set1_expected4) == 0);
+
   mg_mgr_free(&mgr);
 }
 

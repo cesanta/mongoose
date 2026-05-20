@@ -100,7 +100,7 @@ static struct mg_field fields_settings[] = {
 };
 
 static struct mg_field_set set_settings = {
-    "settings", fields_settings, read_settings, write_settings, 0, 0, NULL,
+    "settings", fields_settings, read_settings, write_settings, 3, 7, NULL,
 };
 
 #define NUM_POINTS_GRAPH1 7  // How many graph1 data points to send
@@ -126,8 +126,8 @@ void read_graph1(void) {
   for (i = 0; i < NUM_POINTS_GRAPH1; i++) {
     struct point p;
     p.x = (uint16_t) i;
-    p.y1 = 85 - (uint16_t) ((49 * i) / NUM_POINTS_GRAPH1) + (rand() % 9);
-    p.y2 = 20 + (uint16_t) ((69 * i) / NUM_POINTS_GRAPH1) + (rand() % 5);
+    p.y1 = (uint16_t) (85 - ((49 * i) / NUM_POINTS_GRAPH1) + (rand() % 9));
+    p.y2 = (uint16_t) (20 + ((69 * i) / NUM_POINTS_GRAPH1) + (rand() % 5));
     len += mg_snprintf(s_graph1_data + len, sizeof(s_graph1_data) - len,
                        "%s[%hu,%hu,%hu]", i > 0 ? "," : "", p.x, p.y1, p.y2);
   }
@@ -156,8 +156,8 @@ void read_graph2(void) {
   for (i = 0; i < NUM_POINTS_GRAPH2; i++) {
     uint16_t x = (uint16_t) (i * 7 + t);
     uint16_t y = (uint16_t) (i * 3 - t / 2);
-    uint8_t a = (x ^ (x >> 3)) & 255;
-    uint8_t b = (y ^ (y >> 4)) & 255;
+    uint8_t a = (uint8_t) (x ^ (x >> 3)) & 255;
+    uint8_t b = (uint8_t) (y ^ (y >> 4)) & 255;
     int v =
         70 + ((a < 128 ? a : 255 - a) >> 1) + ((b < 128 ? b : 255 - b) >> 2);
     len += mg_snprintf(s_graph2_data + len, sizeof(s_graph2_data) - len,
