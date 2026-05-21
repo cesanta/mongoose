@@ -24,12 +24,23 @@ case $DIR in *_n657*) (grep -q MG_TLS_NONE $DIR/Mongoose/mongoose_config.h || ec
 
 # Patch main.c and linker script
 MAIN_C=$DIR/Core/Src/main.c
+patch_linker_script() {
+  LD=$1
+  test -f "$LD" || return
+  echo $LD
+  grep -q RAM_D2 "$LD" || perl -i -ne 'print; print "  RAM_D2 (xrw)   : ORIGIN = 0x24000000, LENGTH =  512K\n" if /^\s*MEMORY\b.*\{/ || ($m && /\{/); $m = /^\s*MEMORY\b/ && !/\{/' "$LD"
+  grep -q eth_ram "$LD" || perl -i -ne 'print ; print "\n  /* Mongoose Ethernet driver */\n  .eth_ram : { *(.eth_ram .eth_ram*) } > RAM_D2 AT > FLASH\n" if /_sidata =/' "$LD"
+}
 HUART=`perl -nle 'print \$1 if /^UART_HandleTypeDef (.+);/' $MAIN_C`
 grep -q mongoose.h $MAIN_C || perl -i -ne 'print; print "#include \"mongoose.h\"\n" if /BEGIN Includes/' $MAIN_C
 grep -q '^int _write' $MAIN_C || perl -i -ne "print; print \"int _write(int fd, unsigned char *buf, int len) {\n  HAL_UART_Transmit(&${HUART}, buf, len, HAL_MAX_DELAY);\n  return len;\n}\n\" if /USER CODE BEGIN 0/" $MAIN_C
 grep -q 'mg_mgr_init' $MAIN_C || perl -i -ne 'print; print "  struct mg_mgr mgr;\n  mg_mgr_init(&mgr);\n\n" if /USER CODE BEGIN WHILE/' $MAIN_C
 grep -q 'mg_mgr_poll' $MAIN_C || perl -i -ne 'print "    mg_mgr_poll(&mgr, 0);\n" if /USER CODE END WHILE/; print;' $MAIN_C
-test -f $DIR/STM32H723XG_FLASH.ld && (grep -q eth_ram $DIR/STM32H723XG_FLASH.ld || perl -i -ne 'print ; print "\n  /* Mongoose Ethernet driver */\n  .eth_ram : { *(.eth_ram .eth_ram*) } > RAM_D2 AT > FLASH\n" if /_sidata =/' $DIR/STM32H723XG_FLASH.ld)
+patch_linker_script $DIR/STM32H723XG_FLASH.ld
+patch_linker_script $DIR/STM32H743XX_FLASH.ld
+patch_linker_script $DIR/STM32H743ZITX_FLASH.ld
+patch_linker_script $DIR/STM32H747XIHX_FLASH.ld
+patch_linker_script $DIR/stm32h747xx_flash_CM7.ld
 test -f $DIR/LICENSE || $CURL $RAW/LICENSE -o $DIR/LICENSE
 case $DIR in portenta*) (
   grep -q 'void hwspecific_sdio_init(void);' "$MAIN_C" || \
