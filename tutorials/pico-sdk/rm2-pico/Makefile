@@ -38,4 +38,3 @@ fullclean: clean
 $(SDK_PATH):
 	git clone -c advice.detachedHead=false --quiet --depth 1 -b 2.1.1 https://github.com/raspberrypi/pico-sdk $@
 	cd $@ && git submodule update --quiet --init
-
