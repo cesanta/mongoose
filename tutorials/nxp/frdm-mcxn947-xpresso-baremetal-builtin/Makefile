@@ -24,4 +24,4 @@ wizard:
 
 
 clean:
-	sudo rm -rf firmware.* wizard* workspace mcuxpresso .cache .eclipse .p2
+	test -f firmware.axf && sudo rm -rf firmware.* wizard* workspace mcuxpresso .cache .eclipse .p2 || true

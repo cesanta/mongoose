@@ -200,7 +200,7 @@
 #endif
 
 #ifndef MG_SET_WIFI_CONFIG
-#define MG_SET_WIFI_CONFIG(data)
+#define MG_SET_WIFI_CONFIG(ifp, driver_data)
 #endif
 
 #ifndef MG_ENABLE_TCPIP_PRINT_DEBUG_STATS

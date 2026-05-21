@@ -16,7 +16,7 @@ IPV6 ?= 1
 ASAN ?= -fsanitize=address,undefined,alignment -fno-sanitize-recover=all -fno-omit-frame-pointer -fno-common
 ASAN_OPTIONS ?= detect_leaks=1
 # This does not include ESP32, ESP8266, Microchip; all examples that are directly placed under an OS tutorial. Also, it is needed that way...
-TUTORIALS_EMBEDDED := $(dir $(wildcard ../tutorials/infineon/*/Makefile)) $(dir $(wildcard ../tutorials/nxp/*/Makefile)) $(dir $(wildcard ../tutorials/pico-sdk/*/Makefile)) $(dir $(wildcard ../tutorials/renesas/*/Makefile)) $(dir $(wildcard ../tutorials/stm32/*/Makefile)) $(dir $(wildcard ../tutorials/ti/*/Makefile)) $(dir $(wildcard ../tutorials/wch/*/Makefile))
+TUTORIALS_EMBEDDED := $(dir $(wildcard ../tutorials/infineon/*/Makefile)) $(dir $(wildcard ../tutorials/nxp/*/Makefile)) $(dir $(wildcard ../tutorials/rp/*/Makefile)) $(dir $(wildcard ../tutorials/renesas/*/Makefile)) $(dir $(wildcard ../tutorials/stm32/*/Makefile)) $(dir $(wildcard ../tutorials/ti/*/Makefile)) $(dir $(wildcard ../tutorials/wch/*/Makefile))
 TUTORIALS := ../tutorials/micropython/ $(filter-out $(TUTORIALS_EMBEDDED), $(dir $(wildcard ../tutorials/*/*/Makefile)))
 TUTORIALS_QUICK := $(filter-out ../tutorials/micropython/ ../tutorials/tcpip/pcap-driver/, $(TUTORIALS))
 TUTORIALS_MAC := $(filter-out ../tutorials/micropython/ ../tutorials/tcpip/pcap-driver/ ../tutorials/tcpip/tap-driver/, $(TUTORIALS))

@@ -1101,7 +1101,7 @@ struct timeval {
 #endif
 
 #ifndef MG_SET_WIFI_CONFIG
-#define MG_SET_WIFI_CONFIG(data)
+#define MG_SET_WIFI_CONFIG(ifp, driver_data)
 #endif
 
 #ifndef MG_ENABLE_TCPIP_PRINT_DEBUG_STATS
@@ -3629,7 +3629,7 @@ struct mg_tcpip_driver_cyw_data {
   do {                                                         \
     static struct mg_tcpip_driver_cyw_data driver_data_;       \
     static struct mg_tcpip_if mif_;                            \
-    MG_SET_WIFI_CONFIG(&driver_data_);                         \
+    MG_SET_WIFI_CONFIG(&mif_, &driver_data_);                  \
     mif_.ip = MG_TCPIP_IP;                                     \
     mif_.mask = MG_TCPIP_MASK;                                 \
     mif_.gw = MG_TCPIP_GW;                                     \
@@ -3706,7 +3706,7 @@ struct mg_tcpip_driver_nxp_wifi_data {
   do {                                                              \
     static struct mg_tcpip_driver_nxp_wifi_data driver_data_;       \
     static struct mg_tcpip_if mif_;                                 \
-    MG_SET_WIFI_CONFIG(&driver_data_);                              \
+    MG_SET_WIFI_CONFIG(&mif_, &driver_data_);                       \
     mif_.ip = MG_TCPIP_IP;                                          \
     mif_.mask = MG_TCPIP_MASK;                                      \
     mif_.gw = MG_TCPIP_GW;                                          \
@@ -3758,7 +3758,7 @@ struct mg_tcpip_driver_pico_w_data {
   do {                                                            \
     static struct mg_tcpip_driver_pico_w_data driver_data_;       \
     static struct mg_tcpip_if mif_;                               \
-    MG_SET_WIFI_CONFIG(&driver_data_);                            \
+    MG_SET_WIFI_CONFIG(&mif_, &driver_data_);                     \
     mif_.ip = MG_TCPIP_IP;                                        \
     mif_.mask = MG_TCPIP_MASK;                                    \
     mif_.gw = MG_TCPIP_GW;                                        \
@@ -3950,7 +3950,7 @@ struct mg_tcpip_driver_st67w6_data {
   do {                                                            \
     static struct mg_tcpip_driver_st67w6_data driver_data_;       \
     static struct mg_tcpip_if mif_;                               \
-    MG_SET_WIFI_CONFIG(&driver_data_);                            \
+    MG_SET_WIFI_CONFIG(&mif_, &driver_data_);                     \
     mif_.ip = MG_TCPIP_IP;                                        \
     mif_.mask = MG_TCPIP_MASK;                                    \
     mif_.gw = MG_TCPIP_GW;                                        \

@@ -11,4 +11,4 @@
 
 // Set your Wi-Fi configuration using a custom function:
 extern void wifi_setconfig(void *data);
-#define MG_SET_WIFI_CONFIG(data) wifi_setconfig(data)
+#define MG_SET_WIFI_CONFIG(ifp, data) wifi_setconfig(data)
