@@ -44,7 +44,7 @@ pico2_w_dashboard_full pico2_w_dashboard_minimal: pico2_w_dashboard_%:
 define ST_DASHBOARD_RULE
 $(1)_dashboard_$(2): $(TOP)/tutorials/stm32/$(1)/cubemx/$(1).ioc
 	mkdir -p $$@
-	cp $$^ $$@
+	cp $(TOP)/tutorials/stm32/$(1)/cubemx/* $$@ 2>/dev/null || true
 	echo config load `realpath $$@/$(1).ioc` > gen.mx
 	echo project generate >> gen.mx
 	echo exit >> gen.mx

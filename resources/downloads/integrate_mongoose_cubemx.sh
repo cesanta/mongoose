@@ -2,6 +2,7 @@
 
 # IOC="${1:-}"
 DIR="${1:-}"
+ROOT_DIR=$DIR
 DASH=${2:-}
 CURL="curl -fsSL"
 RAW="https://raw.githubusercontent.com/cesanta/mongoose/HEAD/"
@@ -12,6 +13,7 @@ fail() { echo $@ >&2 ; exit 1 ; }
 test -d "$DIR" || fail "Usage: $0 DIRECTORY"
 
 test -f $DIR/FSBL/Core/Src/main.c && DIR=$DIR/FSBL
+test -f $DIR/CM7/Core/Src/main.c && DIR=$DIR/CM7
 
 # Add mongoose core files
 test -d $DIR/Mongoose || mkdir -p $DIR/Mongoose
@@ -29,12 +31,54 @@ grep -q 'mg_mgr_init' $MAIN_C || perl -i -ne 'print; print "  struct mg_mgr mgr;
 grep -q 'mg_mgr_poll' $MAIN_C || perl -i -ne 'print "    mg_mgr_poll(&mgr, 0);\n" if /USER CODE END WHILE/; print;' $MAIN_C
 test -f $DIR/STM32H723XG_FLASH.ld && (grep -q eth_ram $DIR/STM32H723XG_FLASH.ld || perl -i -ne 'print ; print "\n  /* Mongoose Ethernet driver */\n  .eth_ram : { *(.eth_ram .eth_ram*) } > RAM_D2 AT > FLASH\n" if /_sidata =/' $DIR/STM32H723XG_FLASH.ld)
 test -f $DIR/LICENSE || $CURL $RAW/LICENSE -o $DIR/LICENSE
+case $DIR in portenta*) (
+  grep -q 'void hwspecific_sdio_init(void);' "$MAIN_C" || \
+    perl -i -ne 'print; print "void hwspecific_sdio_init(void);\n" if /USER CODE BEGIN 0/' "$MAIN_C"
+  grep -q 'hwspecific_sdio_init();' "$MAIN_C" || \
+    perl -i -ne 'print "  hwspecific_sdio_init();\n" if /mg_mgr_init\(&mgr\);/; print;' "$MAIN_C"
+) ;; esac
+case $DIR in *u5a5*) (
+  grep -q 'void hwspecific_spi_init(void);' "$MAIN_C" || \
+    perl -i -ne 'print; print "void hwspecific_spi_init(void);\n" if /USER CODE BEGIN 0/' "$MAIN_C"
+  grep -q 'hwspecific_spi_init();' "$MAIN_C" || \
+    perl -i -ne 'print "  hwspecific_spi_init();\n" if /mg_mgr_init\(&mgr\);/; print;' "$MAIN_C"
+) ;; esac
 
 # Add Mongoose dir to the build
 test -f $DIR/CMakeLists.txt && (grep -q 'Mongoose/$' $DIR/CMakeLists.txt || perl -i -ne 'print; print "    \${CMAKE_SOURCE_DIR}/Mongoose/\n" if /Add user defined include paths/' $DIR/CMakeLists.txt)
 test -f $DIR/CMakeLists.txt && (grep -q 'mongoose.c$' $DIR/CMakeLists.txt || perl -i -ne 'print; print "    \${CMAKE_SOURCE_DIR}/Mongoose/mongoose.c\n" if /Add user sources here/' $DIR/CMakeLists.txt)
+case $DIR in portenta*) (
+  test -f $ROOT_DIR/mongoose_config.h && mv $ROOT_DIR/mongoose_config.h $DIR/Mongoose
+  test -f $ROOT_DIR/wifi.c && mv $ROOT_DIR/wifi.c $DIR/Mongoose
+  test -f $ROOT_DIR/getfw.cmake && mv $ROOT_DIR/getfw.cmake $DIR/
+  test -f $DIR/CMakeLists.txt && (grep -q 'Mongoose/wifi.c$' "$DIR/CMakeLists.txt" || \
+    perl -i -ne 'print; print "    \${CMAKE_SOURCE_DIR}/Mongoose/wifi.c\n" if /Add user sources here/' "$DIR/CMakeLists.txt")
+  test -f $DIR/CMakeLists.txt && (grep -q '^[[:space:]]*\${CMAKE_SOURCE_DIR}[[:space:]]*$' "$DIR/CMakeLists.txt" || \
+    perl -i -ne 'print; print "    \${CMAKE_SOURCE_DIR}\n" if /Add user defined include paths/' "$DIR/CMakeLists.txt")
+  test -f $DIR/CMakeLists.txt && (grep -q 'COMPONENT_WHD$' "$DIR/CMakeLists.txt" || \
+    perl -i -ne 'print; print "    \${CMAKE_SOURCE_DIR}/mbed/targets/TARGET_STM/TARGET_STM32H7/TARGET_STM32H747xI/TARGET_PORTENTA_H7/COMPONENT_WHD\n" if /Add user defined include paths/' "$DIR/CMakeLists.txt")
+  test -f $DIR/CMakeLists.txt && (grep -q '^add_custom_target(getfw' "$DIR/CMakeLists.txt" || \
+    cat >> "$DIR/CMakeLists.txt" <<'EOF'
+
+add_custom_target(getfw
+  COMMAND ${CMAKE_COMMAND} -P ${CMAKE_SOURCE_DIR}/getfw.cmake
+  WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
+)
+
+add_dependencies(${CMAKE_PROJECT_NAME} getfw)
+EOF
+  )
+) ;; esac
+case $DIR in *u5a5*) (
+  test -f $ROOT_DIR/mongoose_config.h && mv $ROOT_DIR/mongoose_config.h $DIR/Mongoose
+  test -f $ROOT_DIR/wifi.c && mv $ROOT_DIR/wifi.c $DIR/Mongoose
+  test -f $DIR/CMakeLists.txt && (grep -q 'Mongoose/wifi.c$' "$DIR/CMakeLists.txt" || \
+    perl -i -ne 'print; print "    \${CMAKE_SOURCE_DIR}/Mongoose/wifi.c\n" if /Add user sources here/' "$DIR/CMakeLists.txt")
+  
+) ;; esac
 
 # If dashboard is specified, copy it to the project
+#if test "$DASH" = "full" -o "$DASH" = "minimal" ; then
 if test "$DASH" == "full" -o "$DASH" == "minimal" ; then
   test -f $DIR/Mongoose/dashboard.c || $CURL $RAW/tutorials/device-dashboard/$DASH/dashboard.c -o $DIR/Mongoose/dashboard.c
   test -f $DIR/Mongoose/dashboard.html || $CURL $RAW/tutorials/device-dashboard/$DASH/dashboard.html -o $DIR/Mongoose/dashboard.html
