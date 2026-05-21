@@ -210,11 +210,11 @@ bool mg_l2_poll(struct mg_tcpip_if *ifp, bool expired_1000ms);
 
 static void mg_tcpip_call(struct mg_tcpip_if *ifp, int ev, void *ev_data) {
 #if 0 && MG_ENABLE_PROFILE
-  const char *names[] = {"TCPIP_EV_ST_CHG",        "TCPIP_EV_DHCP_DNS",
+  const char *names[] = {"TCPIP_EV_STATE_CHANGE",  "TCPIP_EV_DHCP_DNS",
                          "TCPIP_EV_DHCP_SNTP",     "TCPIP_EV_ARP",
                          "TCPIP_EV_TIMER_1S",      "TCPIP_EV_WIFI_SCAN_RESULT",
                          "TCPIP_EV_WIFI_SCAN_END", "TCPIP_EV_WIFI_CONNECT_ERR",
-                         "TCPIP_EV_DRIVER",        "MG_TCPIP_EV_ST6_CHG",
+                         "TCPIP_EV_DRIVER",        "TCPIP_EV_STATE6_CHANGE",
                          "TCPIP_EV_USER"};
   if (ev != MG_TCPIP_EV_TIMER_1S && ev < (int) (sizeof(names) / sizeof(names[0]))) {
     MG_PROF_ADD(ifp, names[ev]); // TODO(): call MG_PROF_DUMP() MG_PROF_FREE()
@@ -399,7 +399,7 @@ static void onstatechange(struct mg_tcpip_if *ifp) {
   } else if (ifp->state == MG_TCPIP_STATE_DOWN) {
     MG_ERROR(("Link down"));
   }
-  mg_tcpip_call(ifp, MG_TCPIP_EV_ST_CHG, &ifp->state);
+  mg_tcpip_call(ifp, MG_TCPIP_EV_STATE_CHANGE, &ifp->state);
 }
 
 static struct ip *tx_ip(struct mg_tcpip_if *ifp, uint8_t *l2_dst, uint8_t proto,
@@ -1081,7 +1081,7 @@ static void onstate6change(struct mg_tcpip_if *ifp) {
     MG_INFO(("IP: %M", mg_print_ip6, &ifp->ip6ll));
   }
   if (ifp->state6 > MG_TCPIP_STATE_UP)
-    mg_tcpip_call(ifp, MG_TCPIP_EV_ST6_CHG, &ifp->state6);
+    mg_tcpip_call(ifp, MG_TCPIP_EV_STATE6_CHANGE, &ifp->state6);
 }
 #endif
 

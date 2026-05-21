@@ -89,12 +89,12 @@ static void mif_fn(struct mg_tcpip_if *ifp, int ev, void *ev_data) {
   if (ev == MG_TCPIP_EV_DRIVER) {
     spi_setup(CYWSPI, 3);  // /16: 2.8MHz SPI3, 5.6MHz SPI1 (< 50MHz)
   }
-  if (ev == MG_TCPIP_EV_ST_CHG) {
+  if (ev == MG_TCPIP_EV_STATE_CHANGE) {
     MG_INFO(("State change: %u", *(uint8_t *) ev_data));
   }
   switch(state) {
     case AP: // we are in AP mode, wait for a user connection to trigger a scan or a connection to a network
-      if (ev == MG_TCPIP_EV_ST_CHG && *(uint8_t *) ev_data == MG_TCPIP_STATE_READY) {
+      if (ev == MG_TCPIP_EV_STATE_CHANGE && *(uint8_t *) ev_data == MG_TCPIP_STATE_READY) {
         MG_INFO(("Access Point READY !"));
 
         // simulate user request to scan for networks
@@ -119,7 +119,7 @@ static void mif_fn(struct mg_tcpip_if *ifp, int ev, void *ev_data) {
       }
       break;
     case STOPPING_AP:
-      if (ev == MG_TCPIP_EV_ST_CHG && *(uint8_t *) ev_data == MG_TCPIP_STATE_DOWN) {
+      if (ev == MG_TCPIP_EV_STATE_CHANGE && *(uint8_t *) ev_data == MG_TCPIP_STATE_DOWN) {
         struct mg_wifi_data *wifi = &((struct mg_tcpip_driver_cyw_data *) ifp->driver_data)->wifi;
         wifi->apmode = false;
 
@@ -132,7 +132,7 @@ static void mif_fn(struct mg_tcpip_if *ifp, int ev, void *ev_data) {
       }
       break;
     case CONNECTING:
-      if (ev == MG_TCPIP_EV_ST_CHG && *(uint8_t *) ev_data == MG_TCPIP_STATE_READY) {
+      if (ev == MG_TCPIP_EV_STATE_CHANGE && *(uint8_t *) ev_data == MG_TCPIP_STATE_READY) {
         MG_INFO(("READY!"));
         state = READY;
 
@@ -146,7 +146,7 @@ static void mif_fn(struct mg_tcpip_if *ifp, int ev, void *ev_data) {
       break;
     case READY:
       // go back to AP mode after a disconnection (simulation 2/2), you could retry
-      if (ev == MG_TCPIP_EV_ST_CHG && *(uint8_t *) ev_data == MG_TCPIP_STATE_DOWN) {
+      if (ev == MG_TCPIP_EV_STATE_CHANGE && *(uint8_t *) ev_data == MG_TCPIP_STATE_DOWN) {
         struct mg_wifi_data *wifi = &((struct mg_tcpip_driver_cyw_data *) ifp->driver_data)->wifi;
         bool res = mg_wifi_ap_start(wifi);
         MG_INFO(("Disconnected"));

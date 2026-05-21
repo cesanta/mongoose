@@ -171,7 +171,7 @@ static void mqtt_ev_handler(struct mg_connection *c, int ev, void *ev_data) {
 
 static void if_ev_handler(struct mg_tcpip_if *ifp, int ev, void *ev_data) {
   // Trigger MQTT connection when we have an IP address
-  if (ifp->state == MG_TCPIP_STATE_READY && ev == MG_TCPIP_EV_ST_CHG) {
+  if (ifp->state == MG_TCPIP_STATE_READY && ev == MG_TCPIP_EV_STATE_CHANGE) {
     struct mg_mqtt_opts opts = {.clean = true};
     // mg_mqtt_connect(ifp->mgr, MQTT_URL, &opts, mqtt_ev_handler, NULL);
     mg_mqtt_connect(ifp->mgr, MQTTS_URL, &opts, mqtt_ev_handler, "tls enabled");
@@ -185,7 +185,7 @@ static void if_ev_handler(struct mg_tcpip_if *ifp, int ev, void *ev_data) {
     if (ip == 0) ip = MG_IPV4(169, 254, 2, 100);
 
     // restart process on link change
-    if (ev == MG_TCPIP_EV_ST_CHG && ifp->state == MG_TCPIP_STATE_DOWN) {
+    if (ev == MG_TCPIP_EV_STATE_CHANGE && ifp->state == MG_TCPIP_STATE_DOWN) {
       ifp->ip = 0;
       counter = 0;
     }
