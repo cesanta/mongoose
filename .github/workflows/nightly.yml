@@ -325,22 +325,22 @@ jobs:
           - path: nxp/rt1020-evk-make-baremetal-builtin
           - path: nxp/rt1060-evk-make-baremetal-builtin
           - path: nxp/rt1170-evk-make-baremetal-builtin
-          - path: rp/pico2-w
-          - path: rp/w5500-evb-pico2
+          - path: rp/pico-w
+          - path: rp/w5500-evb-pico
           - path: rp/w55rp20-evb-pico
           - path: rp/pico-rndis
-          - path: stm32/nucleo-f429zi-make-baremetal-builtin
-          - path: stm32/nucleo-f429zi-make-freertos-builtin
-          - path: stm32/nucleo-f746zg-make-baremetal-builtin
-          - path: stm32/nucleo-f746zg-make-freertos-builtin
-          - path: stm32/nucleo-h563zi-make-baremetal-builtin
-          - path: stm32/nucleo-h563zi-make-freertos-builtin
-          - path: stm32/nucleo-h723zg-make-baremetal-builtin
-          - path: stm32/nucleo-h723zg-make-freertos-builtin
-          - path: stm32/nucleo-h743zi-make-baremetal-builtin
-          - path: stm32/nucleo-h743zi-make-freertos-builtin
-          - path: stm32/stm32h573i-dk-make-baremetal-builtin
-          - path: stm32/stm32h573i-dk-make-freertos-builtin
+          - path: stm32/nucleo-f429zi/minimal
+          - path: stm32/nucleo-f746zg/minimal
+          - path: stm32/nucleo-f746zg/minimal-pppoe
+          - path: stm32/nucleo-f756zg/minimal
+          - path: stm32/nucleo-h563zi/minimal
+          - path: stm32/nucleo-h723zg/minimal
+          - path: stm32/nucleo-h743zi/minimal
+          - path: stm32/nucleo-n657x0-q/minimal
+          - path: stm32/nucleo-u5a5zj-q/minimal
+          - path: stm32/portenta-h7/minimal
+          - path: stm32/stm32h573i-dk/minimal
+          - path: stm32/stm32h747i-disco/minimal
           - path: ti/ek-tm4c1294xl-make-baremetal-builtin
           - path: ti/ek-tm4c1294xl-make-freertos-builtin
     name: ${{ matrix.example.path }}
@@ -397,11 +397,11 @@ jobs:
           - path: nxp/nxp-twrk65f180m-lwip-freertos
           - path: nxp/nxp-twrkv58f220m-lwip-freertos
           - path: rp/pico-rmii
-          - path: stm32/nucleo-f429zi-make-baremetal-builtin-rndis
-          - path: stm32/rm2-nucleo-f429zi-make-baremetal-builtin
-          - path: stm32/nucleo-f746zg-make-baremetal-builtin-rndis
-          - path: stm32/rm2-nucleo-f746zg-make-baremetal-builtin
-          - path: stm32/nucleo-g031-make-baremetal-builtin
+          - path: stm32/nucleo-f746zg/minimal-rm2
+          - path: stm32/nucleo-f746zg/minimal-rndis
+          - path: stm32/nucleo-f429zi/minimal-rm2
+          - path: stm32/nucleo-f429zi/minimal-rndis
+          - path: stm32/nucleo-g031k8/minimal-w5500
           - path: ti/ti-ek-tm4c1294xl-http-server
           - path: ti/ek-tm4c1294xl-make-baremetal-builtin-rndis
     name: ${{ matrix.example.path }}
@@ -438,8 +438,6 @@ jobs:
           - path: nxp/rt1060-evk-make-freertos-builtin
           - path: nxp/rt1170-evk-make-freertos-builtin
           - path: renesas/ek-ra6m4-make-baremetal-builtin
-          - path: stm32/nucleo-f746zg-make-freertos-tcp
-          - path: stm32/nucleo-f746zg-make-baremetal-builtin-cmsis_driver
     name: ${{ matrix.example.path }} ${{ matrix.ssl }}
     steps:
       - uses: actions/checkout@v4
