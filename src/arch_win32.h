@@ -43,7 +43,9 @@
 
 #include <ctype.h>
 #include <direct.h>
+#if !defined(MG_ENABLE_LWIP) || !MG_ENABLE_LWIP
 #include <errno.h>
+#endif
 #include <fcntl.h>
 #include <limits.h>
 #include <signal.h>

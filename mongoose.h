@@ -32,7 +32,9 @@ extern "C" {
 #define MG_ARCH_WIN32 2         // Windows
 #define MG_ARCH_ESP32 3         // ESP32
 #define MG_ARCH_ESP8266 4       // ESP8266
-#define MG_ARCH_FREERTOS 5      // FreeRTOS
+
+#define MG_ARCH_FREERTOS 5      // FreeRTOS <-- DEPRECATED !!!
+
 #define MG_ARCH_THREADX 6       // Eclipse ThreadX (former MS Azure RTOS)
 #define MG_ARCH_ZEPHYR 7        // Zephyr RTOS
 #define MG_ARCH_ARMGCC 8        // Plain ARM GCC
@@ -61,10 +63,16 @@ extern "C" {
 
 #if !defined(MG_ARCH)
 #error "MG_ARCH is not specified and we couldn't guess it. Define MG_ARCH=... in mongoose_config.h"
+#elif MG_ARCH == MG_ARCH_FREERTOS
+#error "MG_ARCH_FREERTOS has been deprecated, set MG_ARCH=your_build_environment and MG_ENABLE_FREERTOS=1 instead"
+#undef MG_ARCH	// avoid errors piling up, provide a clean environment so the error above is seen
+#define MG_ARCH MG_ARCH_ARMGCC
+#define MG_ENABLE_FREERTOS 1
 #endif
 
 // http://esr.ibiblio.org/?p=5095
 #define MG_BIG_ENDIAN (*(uint16_t *) "\0\xff" < 0x100)
+
 
 
 
@@ -95,7 +103,6 @@ extern "C" {
 #include <time.h>
 
 #define MG_PATH_MAX 100
-#define MG_ENABLE_SOCKET 0
 #define MG_ENABLE_DIRLIST 0
 
 #endif
@@ -105,7 +112,9 @@ extern "C" {
 #define _POSIX_TIMERS
 
 #include <ctype.h>
+#if !defined(MG_ENABLE_LWIP) || !MG_ENABLE_LWIP
 #include <errno.h>
+#endif
 #include <stdarg.h>
 #include <stdbool.h>
 #include <stdio.h>
@@ -118,7 +127,6 @@ extern "C" {
 #include <unistd.h>
 
 #define MG_PATH_MAX 100
-#define MG_ENABLE_SOCKET 0
 #define MG_ENABLE_DIRLIST 0
 
 #endif
@@ -127,7 +135,9 @@ extern "C" {
 #if MG_ARCH == MG_ARCH_CUBE
 
 #include <ctype.h>
+#if !defined(MG_ENABLE_LWIP) || !MG_ENABLE_LWIP
 #include <errno.h>
+#endif
 #include <stdarg.h>
 #include <stdbool.h>
 #include <stdio.h>
@@ -151,9 +161,6 @@ extern "C" {
 #define MG_ENABLE_DIRLIST 0
 #endif
 
-#ifndef MG_ENABLE_SOCKET
-#define MG_ENABLE_SOCKET 0
-#endif
 
 #ifndef MG_ENABLE_TCPIP
 #define MG_ENABLE_TCPIP 1  // Enable built-in TCP/IP stack
@@ -281,57 +288,6 @@ extern "C" {
 #endif
 
 
-#if MG_ARCH == MG_ARCH_FREERTOS
-
-#include <ctype.h>
-#if !defined(MG_ENABLE_LWIP) || !MG_ENABLE_LWIP
-#include <errno.h>
-#endif
-#include <stdarg.h>
-#include <stdbool.h>
-#include <stddef.h>
-#include <stdint.h>
-#include <stdio.h>
-#include <stdlib.h>  // rand(), strtol(), atoi()
-#include <string.h>
-#if defined(__ARMCC_VERSION)
-#define mode_t size_t
-#include <alloca.h>
-#include <time.h>
-#define strdup(s) ((char *) mg_strdup(mg_str(s)).buf)
-#elif defined(__CCRH__)
-#else
-#include <sys/stat.h>
-#endif
-
-#include <FreeRTOS.h>
-#include <task.h>
-
-#define MG_ENABLE_CUSTOM_CALLOC 1
-
-static inline void mg_free(void *ptr) {
-  vPortFree(ptr);
-}
-
-// Re-route calloc/free to the FreeRTOS's functions, don't use stdlib
-static inline void *mg_calloc(size_t cnt, size_t size) {
-  void *p = pvPortMalloc(cnt * size);
-  if (p != NULL) memset(p, 0, size * cnt);
-  return p;
-}
-
-#if !defined(MG_ENABLE_POSIX_FS) || !MG_ENABLE_POSIX_FS
-#else
-#define mkdir(a, b) mg_mkdir(a, b)
-static inline int mg_mkdir(const char *path, mode_t mode) {
-  (void) path, (void) mode;
-  return -1;
-}
-#endif
-
-#endif  // MG_ARCH == MG_ARCH_FREERTOS
-
-
 #if MG_ARCH == MG_ARCH_PICOSDK
 #if !defined(MG_ENABLE_LWIP) || !MG_ENABLE_LWIP
 #include <errno.h>
@@ -406,11 +362,14 @@ extern uint32_t rt_time_get(void);
 
 #if defined(__ARMCC_VERSION)
 #define mode_t size_t
+#if !defined(MG_ENABLE_POSIX_FS) || !MG_ENABLE_POSIX_FS
+#else
 #define mkdir(a, b) mg_mkdir(a, b)
 static inline int mg_mkdir(const char *path, mode_t mode) {
   (void) path, (void) mode;
   return -1;
 }
+#endif
 #endif
 
 #if (MG_ARCH == MG_ARCH_CMSIS_RTOS1 || MG_ARCH == MG_ARCH_CMSIS_RTOS2) &&     \
@@ -504,7 +463,9 @@ static inline int mg_mkdir(const char *path, mode_t mode) {
 #include <arpa/inet.h>
 #include <ctype.h>
 #include <dirent.h>
+#if !defined(MG_ENABLE_LWIP) || !MG_ENABLE_LWIP
 #include <errno.h>
+#endif
 #include <fcntl.h>
 #include <inttypes.h>
 #include <limits.h>
@@ -597,7 +558,9 @@ static inline int mg_mkdir(const char *path, mode_t mode) {
 
 #include <ctype.h>
 #include <direct.h>
+#if !defined(MG_ENABLE_LWIP) || !MG_ENABLE_LWIP
 #include <errno.h>
+#endif
 #include <fcntl.h>
 #include <limits.h>
 #include <signal.h>
@@ -779,6 +742,27 @@ int sscanf(const char *, const char *, ...);
 #endif
 
 
+#if defined(MG_ENABLE_FREERTOS) && MG_ENABLE_FREERTOS
+
+#include <FreeRTOS.h>
+#include <task.h>
+
+#define MG_ENABLE_CUSTOM_CALLOC 1
+
+static inline void mg_free(void *ptr) {
+  vPortFree(ptr);
+}
+
+// Re-route calloc/free to FreeRTOS functions, don't use stdlib
+static inline void *mg_calloc(size_t cnt, size_t size) {
+  void *p = pvPortMalloc(cnt * size);
+  if (p != NULL) memset(p, 0, size * cnt);
+  return p;
+}
+
+#endif  // MG_ENABLE_FREERTOS
+
+
 #if defined(MG_ENABLE_FREERTOS_TCP) && MG_ENABLE_FREERTOS_TCP
 
 #include <limits.h>
@@ -913,12 +897,16 @@ struct timeval {
 #define MG_ENABLE_CUSTOM_LOG 0  // Let user define their own MG_LOG
 #endif
 
+#ifndef MG_ENABLE_FREERTOS
+#define MG_ENABLE_FREERTOS 0  // FreeRTOS RTOS
+#endif
+
 #ifndef MG_ENABLE_TCPIP
 #define MG_ENABLE_TCPIP 0  // Mongoose built-in network stack
 #endif
 
 #ifndef MG_ENABLE_LWIP
-#define MG_ENABLE_LWIP 0  // lWIP network stack
+#define MG_ENABLE_LWIP 0  // lwIP network stack
 #endif
 
 #ifndef MG_ENABLE_FREERTOS_TCP

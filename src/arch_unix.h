@@ -17,7 +17,9 @@
 #include <arpa/inet.h>
 #include <ctype.h>
 #include <dirent.h>
+#if !defined(MG_ENABLE_LWIP) || !MG_ENABLE_LWIP
 #include <errno.h>
+#endif
 #include <fcntl.h>
 #include <inttypes.h>
 #include <limits.h>

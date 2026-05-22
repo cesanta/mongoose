@@ -3,7 +3,9 @@
 #if MG_ARCH == MG_ARCH_CUBE
 
 #include <ctype.h>
+#if !defined(MG_ENABLE_LWIP) || !MG_ENABLE_LWIP
 #include <errno.h>
+#endif
 #include <stdarg.h>
 #include <stdbool.h>
 #include <stdio.h>
@@ -27,9 +29,6 @@
 #define MG_ENABLE_DIRLIST 0
 #endif
 
-#ifndef MG_ENABLE_SOCKET
-#define MG_ENABLE_SOCKET 0
-#endif
 
 #ifndef MG_ENABLE_TCPIP
 #define MG_ENABLE_TCPIP 1  // Enable built-in TCP/IP stack

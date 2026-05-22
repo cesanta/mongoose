@@ -12,12 +12,16 @@
 #define MG_ENABLE_CUSTOM_LOG 0  // Let user define their own MG_LOG
 #endif
 
+#ifndef MG_ENABLE_FREERTOS
+#define MG_ENABLE_FREERTOS 0  // FreeRTOS RTOS
+#endif
+
 #ifndef MG_ENABLE_TCPIP
 #define MG_ENABLE_TCPIP 0  // Mongoose built-in network stack
 #endif
 
 #ifndef MG_ENABLE_LWIP
-#define MG_ENABLE_LWIP 0  // lWIP network stack
+#define MG_ENABLE_LWIP 0  // lwIP network stack
 #endif
 
 #ifndef MG_ENABLE_FREERTOS_TCP
