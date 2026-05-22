@@ -15,7 +15,7 @@ struct mg_tcpip_driver_pico_w_data {
   do {                                                            \
     static struct mg_tcpip_driver_pico_w_data driver_data_;       \
     static struct mg_tcpip_if mif_;                               \
-    MG_SET_WIFI_CONFIG(&driver_data_);                            \
+    MG_SET_WIFI_CONFIG(&mif_, &driver_data_);                     \
     mif_.ip = MG_TCPIP_IP;                                        \
     mif_.mask = MG_TCPIP_MASK;                                    \
     mif_.gw = MG_TCPIP_GW;                                        \

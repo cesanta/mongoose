@@ -168,11 +168,6 @@ jobs:
           - path: nxp/rt1020-evk-make-baremetal-builtin
           - path: nxp/rt1060-evk-make-baremetal-builtin
           - path: nxp/rt1170-evk-make-baremetal-builtin
-          - path: pico-sdk/pico-w-picosdk-baremetal-builtin
-          - path: pico-sdk/pico-2-w-picosdk-baremetal-builtin
-          - path: pico-sdk/w5500-evb-pico-picosdk-baremetal-builtin
-          - path: pico-sdk/w5500-evb-pico2-picosdk-baremetal-builtin
-          - path: pico-sdk/w55rp20-evb-pico-picosdk-baremetal-builtin
           - path: stm32/nucleo-f429zi-make-baremetal-builtin
           - path: stm32/nucleo-f429zi-make-freertos-builtin
           - path: stm32/nucleo-f746zg-make-baremetal-builtin
@@ -229,7 +224,7 @@ jobs:
       fail-fast: false
       matrix:
         example:
-          - path: pico-sdk/rm2-pico-picosdk-baremetal-builtin
+          - path: rp/pico-rm2
           - path: stm32/rm2-nucleo-f429zi-make-baremetal-builtin
           - path: stm32/rm2-nucleo-f746zg-make-baremetal-builtin
           - path: stm32/nucleo-g031-make-baremetal-builtin
@@ -277,9 +272,10 @@ jobs:
           - path: nxp/rt1060-evk-make-freertos-builtin
           - path: nxp/rt1170-evk-make-freertos-builtin
           - path: renesas/ek-ra6m4-make-baremetal-builtin
-          - path: pico-sdk/pico-rndis-dashboard
-          - path: pico-sdk/pico-w-picosdk-freertos-lwip
-          - path: pico-sdk/pico-2-w-picosdk-freertos-lwip
+          - path: rp/pico-rndis
+          - path: rp/pico-w
+          - path: rp/w55rp20-evb-pico
+          - path: rp/w5500-evb-pico
           - path: stm32/nucleo-f746zg-make-freertos-tcp
           - path: stm32/nucleo-f746zg-make-baremetal-builtin-cmsis_driver
     name: ${{ matrix.example.path }}
@@ -317,26 +313,6 @@ jobs:
 #      - if: ${{ env.GO == 1 }}
 #        run: make -C tutorials/${{ matrix.example.path }} build
 
-  mqtt_dashboard_examples_arm:
-    runs-on: ubuntu-latest
-    strategy:
-      fail-fast: false
-      matrix:
-        example:
-          - path: pico-sdk/pico-rndis-device
-    name: ${{ matrix.example.path }}
-    env:
-      GO: 0
-    steps:
-      - uses: actions/checkout@v4
-        with: { fetch-depth: 2 }
-      - run: |
-          if ./test/match_changed_files.sh '^src|tutorials/mqtt/mqtt-dashboard/device|^tutorials/${{ matrix.example.path }}'; then
-            echo GO=1 >> $GITHUB_ENV
-            sudo apt -y update && sudo apt -y install gcc-arm-none-eabi
-          fi
-      - if: ${{ env.GO == 1 }}
-        run: make -C tutorials/${{ matrix.example.path }} build
 
   cube_examples:
     runs-on: ubuntu-latest
@@ -709,19 +685,3 @@ jobs:
 #        if ./test/match_changed_files.sh '^src|tutorials/mqtt/mqtt-client'; then
 #          make -C tutorials/mqtt/mqtt-client/microchip/same54-xpro test VCON_API_KEY=${{secrets.VCON_API_KEY}}
 #        fi
-#
-#  test_pico_w5500:
-#    runs-on: ubuntu-latest
-#    env:
-#      GO: 0
-#    steps:
-#    - uses: actions/checkout@v4
-#      with: { fetch-depth: 2 }
-#    - name: SDK
-#      run: |
-#        if ./test/match_changed_files.sh "^src" ; then
-#          echo GO=1 >> $GITHUB_ENV
-#          sudo apt -y update && sudo apt -y install gcc-arm-none-eabi
-#        fi
-#    - if: ${{ env.GO == 1 }}
-#      run:  make -C tutorials/pico-sdk/w5500-evb-pico-picosdk-baremetal-builtin test VCON_API_KEY=${{secrets.VCON_API_KEY}}

@@ -13,7 +13,7 @@ struct mg_tcpip_driver_nxp_wifi_data {
   do {                                                              \
     static struct mg_tcpip_driver_nxp_wifi_data driver_data_;       \
     static struct mg_tcpip_if mif_;                                 \
-    MG_SET_WIFI_CONFIG(&driver_data_);                              \
+    MG_SET_WIFI_CONFIG(&mif_, &driver_data_);                       \
     mif_.ip = MG_TCPIP_IP;                                          \
     mif_.mask = MG_TCPIP_MASK;                                      \
     mif_.gw = MG_TCPIP_GW;                                          \
