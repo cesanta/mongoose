@@ -15,6 +15,11 @@ test -d "$DIR" || fail "Usage: $0 DIRECTORY"
 test -f $DIR/FSBL/Core/Src/main.c && DIR=$DIR/FSBL
 test -f $DIR/CM7/Core/Src/main.c && DIR=$DIR/CM7
 
+# If we're running from the mongoose repo, cp instead of curl from github
+TOP=$(realpath $(dirname "$0")/../..)
+local_curl() { cp "$TOP/${1#$RAW}" "$3"; }
+test -f "$TOP/mongoose.c" && CURL=local_curl
+
 # Add mongoose core files
 test -d $DIR/Mongoose || mkdir -p $DIR/Mongoose
 test -f $DIR/Mongoose/mongoose.c || $CURL $RAW/mongoose.c -o $DIR/Mongoose/mongoose.c
@@ -85,7 +90,7 @@ case $DIR in *u5a5*) (
   test -f $ROOT_DIR/wifi.c && mv $ROOT_DIR/wifi.c $DIR/Mongoose
   test -f $DIR/CMakeLists.txt && (grep -q 'Mongoose/wifi.c$' "$DIR/CMakeLists.txt" || \
     perl -i -ne 'print; print "    \${CMAKE_SOURCE_DIR}/Mongoose/wifi.c\n" if /Add user sources here/' "$DIR/CMakeLists.txt")
-  
+
 ) ;; esac
 
 # If dashboard is specified, copy it to the project

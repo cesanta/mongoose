@@ -1,6 +1,6 @@
 TOP ?= ../..
-# ST_TARGETS = nucleo_h723zg nucleo_f756zg nucleo_h563zi
-ST_TARGETS = $(basename $(notdir $(wildcard $(TOP)/tutorials/stm32/*/cubemx/*.ioc)))
+ST_TARGETS = nucleo-f429zi  nucleo-h723zg nucleo-f756zg nucleo-h563zi portenta-h7 nucleo-n657x0-q nucleo-u5a5zj-q
+# ST_TARGETS = $(basename $(notdir $(wildcard $(TOP)/tutorials/stm32/*/cubemx/*.ioc)))
 RP_TARGETS = pico-w pico-rndis w5500-evb-pico w55rp20-evb-pico
 PROJECTS = full
 TARGETS = desktop $(RP_TARGETS) $(ST_TARGETS)
@@ -43,13 +43,15 @@ $(1)-dashboard-$(2):
 endef
 
 define ST_DASHBOARD_RULE
-$(1)-dashboard-$(2): $(TOP)/tutorials/stm32/$(1)/cubemx/$(1).ioc
-	mkdir -p $$@
-	cp $(TOP)/tutorials/stm32/$(1)/cubemx/* $$@ 2>/dev/null || true
-	echo config load `realpath $$@/$(1).ioc` > gen.mx
+$(1)-dashboard-$(2):
+	mkdir -p $$@ .cache/$(1)
+	echo config load `realpath .cache/$(1)/$(1).ioc` > gen.mx
 	echo project generate >> gen.mx
 	echo exit >> gen.mx
-	$(MX) -q `pwd`/gen.mx
+	test -f .cache/$(1)/$(1).ioc || cp $(TOP)/tutorials/stm32/$(1)/cubemx/$(1).ioc .cache/$(1)/
+	test -f .cache/$(1)/README.md || cp $(TOP)/tutorials/stm32/$(1)/cubemx/README.md .cache/$(1)/
+	test -f .cache/$(1)/CMakeLists.txt || $(MX) -q `pwd`/gen.mx
+	cp -r .cache/$(1)/* $$@
 	sh integrate_mongoose_cubemx.sh $$@ $(2)
 endef
 
