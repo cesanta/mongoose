@@ -21,12 +21,13 @@ jobs:
       with: { fetch-depth: 2 }
 
     - name: Initialize CodeQL
-      uses: github/codeql-action/init@v3
+      uses: github/codeql-action/init@v4
       with:
-        languages: cpp
-    - run: |
-        make -C test test CC=gcc ASAN= ASAN_OPTIONS=
-        ./test/setup_ga_network.sh && make -C test mip_test CC=gcc ASAN= ASAN_OPTIONS=
+        languages: c
+        build-mode: none
+    - run: | # This should just build code, not run it... ?
+        make -C test test SSL=BUILTIN CC=gcc IPV6=0 ASAN= ASAN_OPTIONS=
+        # make -C test mip_tap_test SSL=BUILTIN CC=gcc IPV6=0 ASAN= ASAN_OPTIONS=
 
     - name: Perform CodeQL Analysis
-      uses: github/codeql-action/analyze@v3
+      uses: github/codeql-action/analyze@v4
