@@ -977,8 +977,11 @@ static bool mg_tls_pss_encode(const uint8_t *hash, size_t hashlen,
 
 static bool mg_tls_rsa_sign(struct tls_data *tls, const uint8_t *em,
                             size_t emlen, uint8_t *sig) {
-  size_t nlen;
+  const uint8_t *n = (const uint8_t *) tls->rsa.n.buf;
+  size_t nlen = tls->rsa.n.len;
   int crt_result;
+  while (nlen > 0 && *n == 0) n++, nlen--;
+  if (emlen != nlen) return false;
 #if MG_TLS_RSA_USE_CRT
   // RSA CRT (Chinese Remainder Theorem) optimization:
   // s1 = em^dP mod p
@@ -994,8 +997,6 @@ static bool mg_tls_rsa_sign(struct tls_data *tls, const uint8_t *em,
 
   MG_VERBOSE(("Using RSA-CRT optimization"));
 
-  nlen = tls->rsa.n.len;
-
   crt_result = mg_rsa_crt_sign(
       em, emlen, (const uint8_t *) tls->rsa.dP.buf, tls->rsa.dP.len,
       (const uint8_t *) tls->rsa.dQ.buf, tls->rsa.dQ.len,
@@ -1004,6 +1005,20 @@ static bool mg_tls_rsa_sign(struct tls_data *tls, const uint8_t *em,
       (const uint8_t *) tls->rsa.qInv.buf, tls->rsa.qInv.len, sig, nlen);
 
   if (crt_result == 0) {
+    uint8_t check[512];
+    bool verified;
+    if (nlen > sizeof(check) ||
+        mg_rsa_mod_pow(n, nlen, (const uint8_t *) tls->rsa.e.buf,
+                       tls->rsa.e.len, sig, nlen, check, nlen) != 0) {
+      MG_ERROR(("CRT signature verification failed"));
+      return false;
+    }
+    verified = memcmp(check, em, emlen) == 0;
+    mg_bzero(check, sizeof(check));
+    if (!verified) {
+      MG_ERROR(("CRT signature verification failed"));
+      return false;
+    }
     MG_VERBOSE(("CRT signature successful (first 4 bytes): %02x %02x %02x %02x",
                 sig[0], sig[1], sig[2], sig[3]));
     MG_VERBOSE(("CRT signature successful (last 4 bytes): %02x %02x %02x %02x",
@@ -1016,19 +1031,22 @@ static bool mg_tls_rsa_sign(struct tls_data *tls, const uint8_t *em,
 #else
   int ret;
   // Standard RSA: s = em^d mod n
-  memset(sig, 0, tls->rsa.n.len);
-  ret = mg_rsa_mod_pow((const uint8_t *) tls->rsa.n.buf, tls->rsa.n.len,
-                       (const uint8_t *) tls->rsa.d.buf, tls->rsa.d.len, em,
-                       emlen, sig, tls->rsa.n.len);
+  memset(sig, 0, nlen);
+  ret = mg_rsa_mod_pow(n, nlen, (const uint8_t *) tls->rsa.d.buf,
+                       tls->rsa.d.len, em, emlen, sig, nlen);
   if (ret == 0) {
     MG_VERBOSE(("RSA signature first 4 bytes: %02x %02x %02x %02x", sig[0],
                 sig[1], sig[2], sig[3]));
     MG_VERBOSE(("RSA signature last 4 bytes: %02x %02x %02x %02x",
-                sig[tls->rsa.n.len - 4], sig[tls->rsa.n.len - 3],
-                sig[tls->rsa.n.len - 2], sig[tls->rsa.n.len - 1]));
+                sig[nlen - 4], sig[nlen - 3], sig[nlen - 2], sig[nlen - 1]));
   }
   return ret == 0;
 #endif
+}
+
+static size_t mg_rsa_trim_len(const uint8_t **p, size_t n) {
+  while (n > 0 && **p == 0) (*p)++, n--;
+  return n;
 }
 
 static bool mg_tls_send_cert_verify(struct mg_connection *c, bool is_client) {
@@ -1039,10 +1057,16 @@ static bool mg_tls_send_cert_verify(struct mg_connection *c, bool is_client) {
 
   if (tls->rsa.n.len > 0 && tls->rsa.d.len > 0) {
     // RSA certificate verify packet
-    size_t emlen = tls->rsa.n.len;
-    size_t verifysz = 8U + emlen;
+    const uint8_t *n = (const uint8_t *) tls->rsa.n.buf;
+    size_t nlen = tls->rsa.n.len;
+    struct mg_str rn;
+    size_t emlen, verifysz;
     uint8_t em[512];      // Max for 4096-bit RSA
     uint8_t verify[520];  // 8 + 512 max
+    nlen = mg_rsa_trim_len(&n, nlen);
+    rn = mg_str_n((char *) n, nlen);
+    emlen = nlen;
+    verifysz = 8U + emlen;
 
     // Check bounds
     if (emlen > sizeof(em) || verifysz > sizeof(verify)) {
@@ -1050,7 +1074,7 @@ static bool mg_tls_send_cert_verify(struct mg_connection *c, bool is_client) {
       return false;
     }
 
-    if (!mg_tls_pss_encode(hash, sizeof(hash), &tls->rsa.n, em)) {
+    if (!mg_tls_pss_encode(hash, sizeof(hash), &rn, em)) {
       MG_ERROR(("Failed PSS encode"));
       return false;
     }
@@ -1572,7 +1596,9 @@ static int mg_tls_verify_cert_signature(const struct mg_tls_cert *cert,
     }
   } else {
     int r;
-    uint8_t sig2[256];  // 2048 bits
+    const uint8_t *n;
+    size_t nlen;
+    uint8_t sig2[512];  // 4096 bits
     struct mg_der_tlv seq, modulus, exponent;
     if (mg_der_parse((uint8_t *) issuer->pubkey.buf, issuer->pubkey.len,
                      &seq) <= 0 ||
@@ -1580,12 +1606,15 @@ static int mg_tls_verify_cert_signature(const struct mg_tls_cert *cert,
         mg_der_next(&seq, &exponent) <= 0 || exponent.type != 2) {
       return -1;
     }
-    mg_rsa_mod_pow(modulus.value, modulus.len, exponent.value, exponent.len,
-                   (uint8_t *) cert->sig.buf, cert->sig.len, sig2,
-                   sizeof(sig2));
+    n = modulus.value, nlen = mg_rsa_trim_len(&n, modulus.len);
+    if (nlen > sizeof(sig2) || cert->tbshashsz > nlen ||
+        mg_rsa_mod_pow(modulus.value, modulus.len, exponent.value,
+                       exponent.len, (uint8_t *) cert->sig.buf, cert->sig.len,
+                       sig2, nlen) != 0) {
+      return 0;
+    }
 
-    r = memcmp(sig2 + sizeof(sig2) - cert->tbshashsz, cert->tbshash,
-               cert->tbshashsz);
+    r = memcmp(sig2 + nlen - cert->tbshashsz, cert->tbshash, cert->tbshashsz);
     return r == 0;
   }
 }
@@ -1766,6 +1795,8 @@ static int mg_tls_recv_cert_verify(struct mg_connection *c) {
 
     if (sigalg == 0x0804) {  // rsa_pss_rsae_sha256
       uint8_t sig2[512];     // 2048 or 4096 bits
+      const uint8_t *n;
+      size_t nlen;
       struct mg_der_tlv seq, modulus, exponent;
 
       if (mg_der_parse(tls->pubkey, tls->pubkeysz, &seq) <= 0 ||
@@ -1775,10 +1806,15 @@ static int mg_tls_recv_cert_verify(struct mg_connection *c) {
         return -1;
       }
 
-      mg_rsa_mod_pow(modulus.value, modulus.len, exponent.value, exponent.len,
-                     sigbuf, siglen, sig2, sizeof(sig2));
+      n = modulus.value, nlen = mg_rsa_trim_len(&n, modulus.len);
+      if (nlen > sizeof(sig2) ||
+          mg_rsa_mod_pow(modulus.value, modulus.len, exponent.value,
+                         exponent.len, sigbuf, siglen, sig2, nlen) != 0) {
+        mg_error(c, "failed to verify RSA certificate (certverify)");
+        return -1;
+      }
 
-      if (sig2[sizeof(sig2) - 1] != 0xbc) {
+      if (sig2[nlen - 1] != 0xbc) {
         mg_error(c, "failed to verify RSA certificate (certverify)");
         return -1;
       }
