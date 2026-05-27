@@ -106,6 +106,10 @@
 #undef MG_UECC_MAX_WORDS
 #define MG_UECC_MAX_WORDS 32
 #endif
+#if MG_UECC_SUPPORTS_secp384r1
+#undef MG_UECC_MAX_WORDS
+#define MG_UECC_MAX_WORDS 48
+#endif
 #elif (MG_UECC_WORD_SIZE == 4)
 #if MG_UECC_SUPPORTS_secp160r1
 #define MG_UECC_MAX_WORDS 6 /* Due to the size of curve_n. */
@@ -122,6 +126,10 @@
 #undef MG_UECC_MAX_WORDS
 #define MG_UECC_MAX_WORDS 8
 #endif
+#if MG_UECC_SUPPORTS_secp384r1
+#undef MG_UECC_MAX_WORDS
+#define MG_UECC_MAX_WORDS 12
+#endif
 #elif (MG_UECC_WORD_SIZE == 8)
 #if MG_UECC_SUPPORTS_secp160r1
 #define MG_UECC_MAX_WORDS 3
@@ -137,6 +145,10 @@
 #if (MG_UECC_SUPPORTS_secp256r1 || MG_UECC_SUPPORTS_secp256k1)
 #undef MG_UECC_MAX_WORDS
 #define MG_UECC_MAX_WORDS 4
+#endif
+#if MG_UECC_SUPPORTS_secp384r1
+#undef MG_UECC_MAX_WORDS
+#define MG_UECC_MAX_WORDS 6
 #endif
 #endif /* MG_UECC_WORD_SIZE */
 
@@ -783,6 +795,7 @@ MG_UECC_VLI_API void mg_uecc_vli_modInv(mg_uecc_word_t *result,
 #define num_bytes_secp224r1 28
 #define num_bytes_secp256r1 32
 #define num_bytes_secp256k1 32
+#define num_bytes_secp384r1 48
 
 #if (MG_UECC_WORD_SIZE == 1)
 
@@ -791,6 +804,7 @@ MG_UECC_VLI_API void mg_uecc_vli_modInv(mg_uecc_word_t *result,
 #define num_words_secp224r1 28
 #define num_words_secp256r1 32
 #define num_words_secp256k1 32
+#define num_words_secp384r1 48
 
 #define BYTES_TO_WORDS_8(a, b, c, d, e, f, g, h) \
   0x##a, 0x##b, 0x##c, 0x##d, 0x##e, 0x##f, 0x##g, 0x##h
@@ -803,6 +817,7 @@ MG_UECC_VLI_API void mg_uecc_vli_modInv(mg_uecc_word_t *result,
 #define num_words_secp224r1 7
 #define num_words_secp256r1 8
 #define num_words_secp256k1 8
+#define num_words_secp384r1 12
 
 #define BYTES_TO_WORDS_8(a, b, c, d, e, f, g, h) 0x##d##c##b##a, 0x##h##g##f##e
 #define BYTES_TO_WORDS_4(a, b, c, d) 0x##d##c##b##a
@@ -814,6 +829,7 @@ MG_UECC_VLI_API void mg_uecc_vli_modInv(mg_uecc_word_t *result,
 #define num_words_secp224r1 4
 #define num_words_secp256r1 4
 #define num_words_secp256k1 4
+#define num_words_secp384r1 6
 
 #define BYTES_TO_WORDS_8(a, b, c, d, e, f, g, h) 0x##h##g##f##e##d##c##b##a##U
 #define BYTES_TO_WORDS_4(a, b, c, d) 0x##d##c##b##a##U
@@ -821,7 +837,8 @@ MG_UECC_VLI_API void mg_uecc_vli_modInv(mg_uecc_word_t *result,
 #endif /* MG_UECC_WORD_SIZE */
 
 #if MG_UECC_SUPPORTS_secp160r1 || MG_UECC_SUPPORTS_secp192r1 || \
-    MG_UECC_SUPPORTS_secp224r1 || MG_UECC_SUPPORTS_secp256r1
+    MG_UECC_SUPPORTS_secp224r1 || MG_UECC_SUPPORTS_secp256r1 || \
+    MG_UECC_SUPPORTS_secp384r1
 static void double_jacobian_default(mg_uecc_word_t *X1, mg_uecc_word_t *Y1,
                                     mg_uecc_word_t *Z1, MG_UECC_Curve curve) {
   /* t1 = X, t2 = Y, t3 = Z */
@@ -886,7 +903,8 @@ static void x_side_default(mg_uecc_word_t *result, const mg_uecc_word_t *x,
 
 #if MG_UECC_SUPPORT_COMPRESSED_POINT
 #if MG_UECC_SUPPORTS_secp160r1 || MG_UECC_SUPPORTS_secp192r1 || \
-    MG_UECC_SUPPORTS_secp256r1 || MG_UECC_SUPPORTS_secp256k1
+    MG_UECC_SUPPORTS_secp256r1 || MG_UECC_SUPPORTS_secp256k1 || \
+    MG_UECC_SUPPORTS_secp384r1
 /* Compute a = sqrt(a) (mod curve_p). */
 static void mod_sqrt_default(mg_uecc_word_t *a, MG_UECC_Curve curve) {
   bitcount_t i;
@@ -2291,6 +2309,75 @@ static void omega_mult_secp256k1(uint64_t *result, const uint64_t *right) {
 #endif /* (MG_UECC_OPTIMIZATION_LEVEL > 0 &&  && !asm_mmod_fast_secp256k1) */
 
 #endif /* MG_UECC_SUPPORTS_secp256k1 */
+
+#if MG_UECC_SUPPORTS_secp384r1
+
+#if (MG_UECC_OPTIMIZATION_LEVEL > 0)
+static void vli_mmod_fast_secp384r1(mg_uecc_word_t *result,
+                                    mg_uecc_word_t *product);
+#endif
+
+static const struct MG_UECC_Curve_t curve_secp384r1 = {
+    num_words_secp384r1,
+    num_bytes_secp384r1,
+    384, /* num_n_bits */
+    /* p */
+    {BYTES_TO_WORDS_8(FF, FF, FF, FF, 00, 00, 00, 00),
+     BYTES_TO_WORDS_8(00, 00, 00, 00, FF, FF, FF, FF),
+     BYTES_TO_WORDS_8(FE, FF, FF, FF, FF, FF, FF, FF),
+     BYTES_TO_WORDS_8(FF, FF, FF, FF, FF, FF, FF, FF),
+     BYTES_TO_WORDS_8(FF, FF, FF, FF, FF, FF, FF, FF),
+     BYTES_TO_WORDS_8(FF, FF, FF, FF, FF, FF, FF, FF)},
+    /* n */
+    {BYTES_TO_WORDS_8(73, 29, C5, CC, 6A, 19, EC, EC),
+     BYTES_TO_WORDS_8(7A, A7, B0, 48, B2, 0D, 1A, 58),
+     BYTES_TO_WORDS_8(DF, 2D, 37, F4, 81, 4D, 63, C7),
+     BYTES_TO_WORDS_8(FF, FF, FF, FF, FF, FF, FF, FF),
+     BYTES_TO_WORDS_8(FF, FF, FF, FF, FF, FF, FF, FF),
+     BYTES_TO_WORDS_8(FF, FF, FF, FF, FF, FF, FF, FF)},
+    /* G = (Gx || Gy) little-endian */
+    {BYTES_TO_WORDS_8(B7, 0A, 76, 72, 38, 5E, 54, 3A),
+     BYTES_TO_WORDS_8(6C, 29, 55, BF, 5D, F2, 02, 55),
+     BYTES_TO_WORDS_8(38, 2A, 54, 82, E0, 41, F7, 59),
+     BYTES_TO_WORDS_8(98, 9B, A7, 8B, 62, 3B, 1D, 6E),
+     BYTES_TO_WORDS_8(74, AD, 20, F3, 1E, C7, B1, 8E),
+     BYTES_TO_WORDS_8(37, 05, 8B, BE, 22, CA, 87, AA),
+
+     BYTES_TO_WORDS_8(5F, 0E, EA, 90, 7C, 1D, 43, 7A),
+     BYTES_TO_WORDS_8(9D, 81, 7E, 1D, CE, B1, 60, 0A),
+     BYTES_TO_WORDS_8(C0, B8, F0, B5, 13, 31, DA, E9),
+     BYTES_TO_WORDS_8(7C, 14, 9A, 28, BD, 1D, F4, F8),
+     BYTES_TO_WORDS_8(29, DC, 92, 92, BF, 98, 9E, 5D),
+     BYTES_TO_WORDS_8(6F, 2C, 26, 96, 4A, DE, 17, 36)},
+    /* b */
+    {BYTES_TO_WORDS_8(EF, 2A, EC, D3, ED, C8, 85, 2A),
+     BYTES_TO_WORDS_8(9D, D1, 2E, 8A, 8D, 39, 56, C6),
+     BYTES_TO_WORDS_8(5A, 87, 13, 50, 8F, 08, 14, 03),
+     BYTES_TO_WORDS_8(12, 41, 81, FE, 6E, 9C, 1D, 18),
+     BYTES_TO_WORDS_8(19, 2D, F8, E3, 6B, 05, 8E, 98),
+     BYTES_TO_WORDS_8(E4, E7, 3E, E2, A7, 2F, 31, B3)},
+    &double_jacobian_default,
+#if MG_UECC_SUPPORT_COMPRESSED_POINT
+    &mod_sqrt_default,
+#endif
+    &x_side_default,
+#if (MG_UECC_OPTIMIZATION_LEVEL > 0)
+    &vli_mmod_fast_secp384r1
+#endif
+};
+
+MG_UECC_Curve mg_uecc_secp384r1(void) {
+  return &curve_secp384r1;
+}
+
+#if (MG_UECC_OPTIMIZATION_LEVEL > 0)
+static void vli_mmod_fast_secp384r1(mg_uecc_word_t *result,
+                                    mg_uecc_word_t *product) {
+  mg_uecc_vli_mmod(result, product, curve_secp384r1.p, num_words_secp384r1);
+}
+#endif
+
+#endif /* MG_UECC_SUPPORTS_secp384r1 */
 
 #endif /* _UECC_CURVE_SPECIFIC_H_ */
 

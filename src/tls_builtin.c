@@ -1583,6 +1583,7 @@ static int mg_tls_verify_cert_signature(const struct mg_tls_cert *cert,
       MG_ERROR(("cert verification error"));
       return 0;
     }
+#if MG_UECC_SUPPORTS_secp256r1
     if (issuer->pubkey.len == 64) {
       const uint32_t N = 32;
       if (a.len > N) a.value += (a.len - N), a.len = N;
@@ -1592,10 +1593,21 @@ static int mg_tls_verify_cert_signature(const struct mg_tls_cert *cert,
       return mg_uecc_verify((uint8_t *) issuer->pubkey.buf, cert->tbshash,
                             (unsigned) cert->tbshashsz, sig,
                             mg_uecc_secp256r1());
-    } else if (issuer->pubkey.len == 96) {
-      MG_ERROR(("reject secp384 for now"));
-      return 0;
-    } else {
+    } else
+#endif
+#if MG_UECC_SUPPORTS_secp384r1
+    if (issuer->pubkey.len == 96) {
+      const uint32_t N = 48;
+      if (a.len > N) a.value += (a.len - N), a.len = N;
+      if (b.len > N) b.value += (b.len - N), b.len = N;
+      memmove(sig, a.value, N);
+      memmove(sig + N, b.value, N);
+      return mg_uecc_verify((uint8_t *) issuer->pubkey.buf, cert->tbshash,
+                            (unsigned) cert->tbshashsz, sig,
+                            mg_uecc_secp384r1());
+    } else
+#endif
+    {
       MG_ERROR(("unsupported public key length: %d", issuer->pubkey.len));
       return 0;
     }
@@ -1646,7 +1658,7 @@ static int tls_bundle_find(struct tls_data *tls, struct mg_der_tlv *name,
     if (mg_tls_parse_cert_der(p->buf, p->len, cert) < 0 ||
         !mg_der_find_oid(&cert->subj, (uint8_t *) "\x55\x04\x03", 3, &v)) {
       MG_ERROR(("failed to parse certificate #%u in bundle", i + 1));
-      return -1;
+      continue; // skip this certificate but don't halt the process
     }
     subj = mg_str_n((const char *) v.value, v.len);
     MG_VERBOSE(("#%u: %.*s (%.*s)", i + 1, subj.len, subj.buf, tgt.len, tgt.buf));
@@ -1738,10 +1750,6 @@ static int mg_tls_recv_cert(struct mg_connection *c, bool is_client) {
           return -1;
         }
         if (ci->pubkey.len > sizeof(tls->pubkey)) {
-          mg_error(c, "invalid certificate length");
-          return -1;
-        }
-        if (ci->pubkey.len > sizeof(tls->pubkey)) {
           mg_error(c, "peer public key too large");
           return -1;
         }
@@ -1755,8 +1763,9 @@ static int mg_tls_recv_cert(struct mg_connection *c, bool is_client) {
       }
 
       if (tls->ca_bundle_len > 0) {  // bundle, find subject and compare keys
+        int r;
         MG_VERBOSE(("Search current cert in bundle"));
-        int r = tls_bundle_find(tls, &ci->subj, &ca);  // find current cert ci
+        r = tls_bundle_find(tls, &ci->subj, &ca);  // find current cert ci
         if (r < 0) {
           mg_error(c, "failed to parse CA bundle");
           return -1;
@@ -1775,8 +1784,9 @@ static int mg_tls_recv_cert(struct mg_connection *c, bool is_client) {
     }
 
     if (!found_ca && certnum > 0 && tls->ca_bundle_len > 0) {  // bundle
+      int r;
       MG_VERBOSE(("Search bundle for issuer of last cert in chain"));
-      int r = tls_bundle_find(tls, &certs[certnum - 1].issuer, &ca);
+      r = tls_bundle_find(tls, &certs[certnum - 1].issuer, &ca);
       if (r <= 0) {
         mg_error(c, r < 0 ? "failed to parse CA bundle"
                           : "failed to find issuing CA in bundle");
@@ -2621,6 +2631,12 @@ void mg_tls_free(struct mg_connection *c) {
       mg_free(tls->chain_der);
     } else {
       mg_free((void *) tls->cert_der.buf);
+    }
+    if (tls->ca_bundle_der != NULL) {
+      for (i = 0; i < tls->ca_bundle_len; i++) {
+        mg_free((void *) tls->ca_bundle_der[i].buf);
+      }
+      mg_free(tls->ca_bundle_der);
     }
     mg_free((void *) tls->ca_der.buf);
     mg_free((void *) tls->rsa_key_der.buf);

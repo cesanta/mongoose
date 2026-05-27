@@ -1572,13 +1572,9 @@ static void test_http_client(void) {
   ASSERT(ok == 301 || ok == 200);
   mg_mgr_poll(&mgr, 0);
   ok = 0;
-#if MG_TLS && MG_TLS != MG_TLS_BUILTIN
+#if MG_TLS
   url = "https://cesanta.com";
   opts.name = mg_url_host(url);
-#if MG_TLS == MG_TLS_BUILTIN
-  // our TLS does not search for the proper CA in a bundle
-  opts.ca = mg_file_read(&mg_fs_posix, "data/e8.crt");
-#endif
   c = mg_http_connect(&mgr, url, f3, &ok);
   ASSERT(c != NULL);
   mg_tls_init(c, &opts);
@@ -1608,9 +1604,6 @@ static void test_http_client(void) {
   ASSERT(ok == 200);
   mg_mgr_poll(&mgr, 1);
   opts.name = mg_url_host(url);
-#if MG_TLS == MG_TLS_BUILTIN
-  mg_free((void *) opts.ca.buf);
-#endif
 
   // Test empty CA
   // Disable mbedTLS: https://github.com/Mbed-TLS/mbedtls/issues/7075
@@ -4863,13 +4856,9 @@ int main(void) {
   test_sntp();
   DASHBOARD("sntp");
 
-#if MG_TLS != MG_TLS_BUILTIN
   s_error = false;
   test_mqtt();  // sorry, MQTT_LOCALHOST is also skipped
   DASHBOARD("mqtt");
-#else
-  (void) test_mqtt;
-#endif
 
   s_error = false;
   test_http_client();

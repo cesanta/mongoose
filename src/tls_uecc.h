@@ -1,7 +1,6 @@
 #pragma once
 #include "arch.h"
 
-#define MG_UECC_SUPPORTS_secp256r1 1
 /* Copyright 2014, Kenneth MacKay. Licensed under the BSD 2-clause license. */
 
 #ifndef _UECC_H_
@@ -72,6 +71,9 @@ endianness. */
 #ifndef MG_UECC_SUPPORTS_secp256k1
 #define MG_UECC_SUPPORTS_secp256k1 0
 #endif
+#ifndef MG_UECC_SUPPORTS_secp384r1
+#define MG_UECC_SUPPORTS_secp384r1 1
+#endif
 
 /* Specifies whether compressed point format is supported.
    Set to 0 to disable point compression/decompression functions. */
@@ -100,6 +102,9 @@ MG_UECC_Curve mg_uecc_secp256r1(void);
 #endif
 #if MG_UECC_SUPPORTS_secp256k1
 MG_UECC_Curve mg_uecc_secp256k1(void);
+#endif
+#if MG_UECC_SUPPORTS_secp384r1
+MG_UECC_Curve mg_uecc_secp384r1(void);
 #endif
 
 /* MG_UECC_RNG_Function type
