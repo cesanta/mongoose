@@ -12,7 +12,6 @@ SOURCES = main.c hal.c
 SOURCES += cmsis_h5/Source/Templates/gcc/startup_stm32h563xx.s
 SOURCES += mongoose/mongoose.c
 
-
 all build example: firmware.bin
 
 mongoose/mongoose.c mongoose/mongoose.h:
@@ -26,6 +25,9 @@ firmware.bin: firmware.elf
 	@echo
 	@echo "To flash, run 'make flash', or use STM32CubeProgrammer"
 
+sign firmware.signed.bin: firmware.bin
+	node ../../../../resources/sign.js sign firmware.bin private.pem
+
 flash: firmware.bin
 	STM32_Programmer_CLI -c port=swd mode=UR -w firmware.elf -hardRst
 
@@ -36,7 +38,6 @@ gdb: firmware.elf
 CUBEPROG_DIR ?= $(dir $(shell which STM32_Programmer_CLI))
 gdb_server:
 	ST-LINK_gdbserver --port-number 61234 --log-level 1 --swd --verify --stm32cubeprogrammer-path $(CUBEPROG_DIR) --apid 1 --initialize-reset
-
 
 cmsis_core:
 	git clone -q -c advice.detachedHead=false --depth 1 -b 5.9.0 https://github.com/ARM-software/CMSIS_5 $@
