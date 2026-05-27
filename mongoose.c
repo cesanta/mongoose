@@ -19888,7 +19888,7 @@ static size_t rsa_trim(const uint8_t **p, size_t n) {
 }
 
 static int rsa_i31_len(size_t nbytes) {
-  long z = (long) nbytes << 3;
+  int z = (int) (nbytes * 8U);
   int n = 1;
   while (z > 0) z -= 31, n++;
   return n + (n & 1);
@@ -19916,12 +19916,13 @@ int mg_rsa_mod_pow(const uint8_t *mod, size_t modsz, const uint8_t *exp,
   if (mod == NULL || exp == NULL || msg == NULL) return -1;
   modsz = rsa_trim(&mod, modsz);
   expsz = rsa_trim(&exp, expsz);
-  if (modsz == 0 || modsz > (BR_MAX_RSA_SIZE >> 3) || expsz == 0 ||
+  if (modsz < 256 || modsz > (BR_MAX_RSA_SIZE >> 3) || expsz == 0 ||
       expsz > modsz || outsz != modsz || msgsz != modsz) {
     return -1;
   }
   if (memcmp(msg, mod, modsz) >= 0) return -1;
   fwlen = rsa_i31_len(modsz);
+  if (4 * (size_t) fwlen > sizeof(tmp) / sizeof(tmp[0])) return -1;
   x = m + fwlen, t1 = x + fwlen, t2 = t1 + fwlen;
   br_i31_decode(m, mod, modsz);
   m0i = br_i31_ninv31(m[1]);
@@ -19957,10 +19958,11 @@ int mg_rsa_crt_sign(const uint8_t *em, size_t em_len,
   dP_len = rsa_trim(&dP, dP_len);
   dQ_len = rsa_trim(&dQ, dQ_len);
   qInv_len = rsa_trim(&qInv, qInv_len);
-  if (p_len == 0 || q_len == 0 || p_len > (BR_MAX_RSA_FACTOR >> 3) ||
+  if (p_len < 128 || q_len < 128 || p_len > (BR_MAX_RSA_FACTOR >> 3) ||
       q_len > (BR_MAX_RSA_FACTOR >> 3) || dP_len == 0 || dQ_len == 0 ||
       qInv_len == 0 || dP_len > p_len || dQ_len > q_len ||
-      qInv_len > p_len || xlen > sizeof(x) || em_len > xlen) {
+      qInv_len > p_len || xlen > sizeof(x) || em_len == 0 ||
+      em_len > xlen) {
     return -1;
   }
   plen = p_len, qlen = q_len;
@@ -20000,10 +20002,12 @@ int mg_rsa_crt_sign(const uint8_t *em, size_t em_len,
   br_i31_montymul(t2, s1, t1, mp, p0i);
   br_i31_mulacc(s2, mq, t2);
   br_i31_reduce(t1, s2, mq);
-  if (!rsa_i31_eq(t1, c2)) goto done;
+  ok = rsa_i31_eq(t1, c2);
   br_i31_decode(mp, p, plen);
   br_i31_reduce(t1, s2, mp);
-  if (!rsa_i31_eq(t1, c1)) goto done;
+  ok &= rsa_i31_eq(t1, c1);
+  if (!ok) goto done;
+  ok = 0;
   br_i31_encode(signature, sig_len, s2);
   ok = 1;
 done:
