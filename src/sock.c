@@ -94,8 +94,10 @@ static void setlocaddr(MG_SOCKET_TYPE fd, struct mg_addr *addr) {
 }
 
 // Get the local 'addr' the stack will use to connect to 'to'
-void mg_getlocaddr(struct mg_connection *c, struct mg_addr *to, struct mg_addr *addr);
-void mg_getlocaddr(struct mg_connection *c, struct mg_addr *to, struct mg_addr *addr) {
+void mg_getlocaddr(struct mg_connection *c, struct mg_addr *to,
+                   struct mg_addr *addr);
+void mg_getlocaddr(struct mg_connection *c, struct mg_addr *to,
+                   struct mg_addr *addr) {
   union usa usa;
   socklen_t slen;
   MG_SOCKET_TYPE fd;
@@ -114,7 +116,6 @@ void mg_getlocaddr(struct mg_connection *c, struct mg_addr *to, struct mg_addr *
   setlocaddr(fd, addr);
   closesocket(fd);
 }
-
 
 static void iolog(struct mg_connection *c, char *buf, long n, bool r) {
   if (n == MG_IO_WAIT) {
@@ -153,7 +154,7 @@ long mg_io_send(struct mg_connection *c, const void *buf, size_t len) {
   }
   MG_VERBOSE(("%lu %ld %d", c->id, n, MG_SOCK_ERR(n)));
   if (MG_SOCK_PENDING(n)) return MG_IO_WAIT;
-  if (MG_SOCK_RESET(n)) return MG_IO_RESET;  // MbedTLS, see #1507
+  if (MG_SOCK_RESET(n)) return MG_IO_ERR;  // See #1507, #3031
   if (n <= 0) return MG_IO_ERR;
   return n;
 }
@@ -303,7 +304,7 @@ static long recv_raw(struct mg_connection *c, void *buf, size_t len) {
   }
   MG_VERBOSE(("%lu %ld %d", c->id, n, MG_SOCK_ERR(n)));
   if (MG_SOCK_PENDING(n)) return MG_IO_WAIT;
-  if (MG_SOCK_RESET(n)) return MG_IO_RESET;  // MbedTLS, see #1507
+  if (MG_SOCK_RESET(n)) return MG_IO_ERR;  // See #1507, #3031
   if (n <= 0) return MG_IO_ERR;
   return n;
 }
@@ -324,42 +325,40 @@ static bool ioalloc(struct mg_connection *c, struct mg_iobuf *io) {
 // NOTE(lsm): do only one iteration of reads, cause some systems
 // (e.g. FreeRTOS stack) return 0 instead of -1/EWOULDBLOCK when no data
 static void read_conn(struct mg_connection *c) {
-  if (ioalloc(c, &c->recv)) {
-    char *buf = (char *) &c->recv.buf[c->recv.len];
-    size_t len = c->recv.size - c->recv.len;
-    long n = -1;
-    if (c->is_tls) {
-      // Do not read to the raw TLS buffer if it already has enough.
-      // This is to prevent overflowing c->rtls if our reads are slow
-      long m;
-      if (c->rtls.len < 16 * 1024 + 40) {  // TLS record, header, MAC, padding
-        if (!ioalloc(c, &c->rtls)) return;
-        n = recv_raw(c, (char *) &c->rtls.buf[c->rtls.len],
-                     c->rtls.size - c->rtls.len);
-        if (n > 0) c->rtls.len += (size_t) n;
-      }
-      // there can still be > 16K from last iteration, always mg_tls_recv()
-      m = c->is_tls_hs ? (long) MG_IO_WAIT : mg_tls_recv(c, buf, len);
-      if (n == MG_IO_ERR || n == MG_IO_RESET) {  // Windows, see #3031
-        if (c->rtls.len == 0 || m < 0) {
-          // Close only when we have fully drained both rtls and TLS buffers
-          c->is_closing = 1;         // or there's nothing we can do about it.
-          if (m < 0) m = MG_IO_ERR;  // but return last record data, see #3104
-        } else {                     // see #2885
-          // TLS buffer is capped to max record size, even though, there can
-          // be more than one record, give TLS a chance to process them.
-        }
-      } else if (c->is_tls_hs) {
+  long n = MG_IO_WAIT;
+  if (ioalloc(c, &c->recv) == false) return;  // Oopsie poopsie, OOM
+  if (c->is_tls) {
+    size_t rtls = c->rtls.len, pending = mg_tls_pending(c);
+    long m = MG_IO_WAIT;
+    if (c->rtls.len < 16 * 1024 + 40) {  // TLS record, header, MAC, padding
+      if (!ioalloc(c, &c->rtls)) return;
+      n = recv_raw(c, (char *) &c->rtls.buf[c->rtls.len],
+                   c->rtls.size - c->rtls.len);
+      if (n > 0) c->rtls.len += (size_t) n;
+    }
+    // There can still be > 16K from last iteration, always mg_tls_recv()
+    if (c->is_tls_hs) {
+      if (n != MG_IO_ERR || c->rtls.len > 0 || pending > 0) {
         mg_tls_handshake(c);
       }
-      n = m;
     } else {
-      n = recv_raw(c, buf, len);
+      m = mg_tls_recv(c, &c->recv.buf[c->recv.len], c->recv.size - c->recv.len);
     }
-    MG_DEBUG(("%lu %ld %lu:%lu:%lu %ld err %d", c->id, c->fd, c->send.len,
-              c->recv.len, c->rtls.len, n, MG_SOCK_ERR(n)));
-    iolog(c, buf, n, true);
+    if (n == MG_IO_ERR &&
+        (m == MG_IO_ERR || (c->rtls.len == 0 && mg_tls_pending(c) == 0) ||
+         (c->is_tls_hs && c->rtls.len == rtls &&
+          mg_tls_pending(c) == pending))) {
+      // Close only when we have fully drained both rtls and TLS buffers
+      c->is_closing = 1;         // or there's nothing we can do about it.
+      if (m < 0) m = MG_IO_ERR;  // but return last record data, see #3104
+    }
+    n = m;
+  } else {
+    n = recv_raw(c, &c->recv.buf[c->recv.len], c->recv.size - c->recv.len);
   }
+  MG_DEBUG(("%lu %ld %lu:%lu:%lu %ld err %d", c->id, c->fd, c->send.len,
+            c->recv.len, c->rtls.len, n, MG_SOCK_ERR(n)));
+  iolog(c, (char *) &c->recv.buf[c->recv.len], n, true);
 }
 
 static void write_conn(struct mg_connection *c) {
@@ -500,7 +499,7 @@ static void accept_conn(struct mg_mgr *mgr, struct mg_connection *lsn) {
     setsockopts(c);
     c->is_accepted = 1;
     c->is_hexdumping = lsn->is_hexdumping;
-    setlocaddr(fd, &c->loc); // set local addr to where the client connected to
+    setlocaddr(fd, &c->loc);  // set local addr to where the client connected to
     c->pfn = lsn->pfn;
     c->pfn_data = lsn->pfn_data;
     c->fn = lsn->fn;
