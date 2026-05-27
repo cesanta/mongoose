@@ -1,7 +1,8 @@
 #include "arch.h"
+#include "config.h"
 #include "ota.h"
 
-#if MG_OTA != MG_OTA_NONE && MG_OTA != MG_OTA_CUSTOM
+#if (MG_OTA != MG_OTA_NONE && MG_OTA != MG_OTA_CUSTOM) || MG_ENABLE_LFS
 
 struct mg_flash {
   void *start;    // Address at which flash starts
@@ -11,6 +12,9 @@ struct mg_flash {
   bool (*write_fn)(void *, const void *, size_t);  // Write function
   bool (*swap_fn)(void);                           // Swap partitions
 };
+
+extern struct mg_flash *mg_flash;
+bool mg_lfs_init(size_t size);
 
 bool mg_ota_flash_begin(size_t new_firmware_size, struct mg_flash *flash);
 bool mg_ota_flash_write(const void *buf, size_t len, struct mg_flash *flash);
