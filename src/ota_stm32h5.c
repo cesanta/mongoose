@@ -152,4 +152,5 @@ bool mg_ota_end(void) {
   *(volatile unsigned long *) 0xe000ed0c = 0x5fa0004;
   return true;
 }
+struct mg_flash *mg_flash = &s_mg_flash_stm32h5;
 #endif

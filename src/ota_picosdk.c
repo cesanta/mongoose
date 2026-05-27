@@ -165,4 +165,5 @@ bool mg_ota_end(void) {
   }
   return false;
 }
+struct mg_flash *mg_flash = &s_mg_flash_picosdk;
 #endif

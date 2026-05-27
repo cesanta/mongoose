@@ -48,6 +48,10 @@
 #define MG_ENABLE_FATFS 0
 #endif
 
+#ifndef MG_ENABLE_LFS
+#define MG_ENABLE_LFS 0
+#endif
+
 #ifndef MG_ENABLE_SSI
 #define MG_ENABLE_SSI 0
 #endif
