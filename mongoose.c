@@ -1476,6 +1476,10 @@ void mg_error(struct mg_connection *c, const char *fmt, ...) {
 
 
 
+#ifdef MG_OTA_PUBLIC_KEY
+
+
+#endif
 
 #if MG_OTA != MG_OTA_NONE && MG_OTA != MG_OTA_CUSTOM
 
@@ -1533,6 +1537,18 @@ bool mg_ota_flash_end(struct mg_flash *flash) {
     if (size == s_size && crc32 == s_crc32) ok = true;
     MG_DEBUG(("CRC: %x/%x, size: %lu/%lu, status: %s", s_crc32, crc32, s_size,
               size, ok ? "ok" : "fail"));
+#ifdef MG_OTA_PUBLIC_KEY
+    if (ok && s_size > 64) {
+      static const uint8_t s_pubkey[] = MG_OTA_PUBLIC_KEY;
+      uint8_t hash[32];
+      size_t fw_size = s_size - 64;
+      mg_sha256(hash, (uint8_t *) base, fw_size);
+      ok = mg_uecc_verify(s_pubkey, hash, sizeof(hash),
+                          (uint8_t *) base + fw_size,
+                          mg_uecc_secp256r1()) == 1;
+      MG_INFO(("Signature: %s", ok ? "ok" : "fail"));
+    }
+#endif
     s_size = 0;
     if (ok) ok = flash->swap_fn();
   }
