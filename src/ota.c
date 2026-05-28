@@ -1,8 +1,10 @@
 #include "ota.h"
 #include "http.h"
+#include "json.h"
 #include "log.h"
-
-#if MG_OTA != MG_OTA_NONE
+#include "timer.h"
+#include "url.h"
+#include "util.h"
 
 enum { MG_OTA_STATUS_WAITING, MG_OTA_STATUS_SUCCESS, MG_OTA_STATUS_FAIL };
 static int s_version_status;
@@ -71,95 +73,40 @@ static void s_version_fn(struct mg_connection *c, int ev, void *ev_data) {
   }
 }
 
+static void s_ota_done(struct mg_connection *c, const char *errmsg) {
+  (void) c;
+  s_ota_status = errmsg ? MG_OTA_STATUS_FAIL : MG_OTA_STATUS_SUCCESS;
+  if (errmsg) MG_ERROR(("OTA failed: %s", errmsg));
+}
+
 static void s_firmware_fn(struct mg_connection *c, int ev, void *ev_data) {
   struct mg_str host = mg_url_host(s_ota_metadata.url);
-  struct mg_http_message hm;
-  static size_t ofs = 0;
-  static bool ota_begun = false;
-  size_t alignment = 512, drop, len;
-  int n, status;
-  char *buf;
-  (void) ev_data;
-
   if (ev == MG_EV_POLL) {
-    if (s_start_time + 120 * 1000 < mg_millis()) {
-      mg_error(c, "Connection timeout");
-    }
+    if (s_start_time + 120 * 1000 < mg_millis()) mg_error(c, "Timeout");
   } else if (ev == MG_EV_CONNECT) {
     mg_printf(c,
               "GET %s HTTP/1.1\r\n"
               "Host: %.*s\r\n"
               "Connection: close\r\n\r\n",
               mg_url_uri(s_ota_metadata.url), (int) host.len, host.buf);
-    ofs = 0;
-    ota_begun = false;
-  } else if (ev == MG_EV_READ) {
-    if (s_ota_status == MG_OTA_STATUS_FAIL) return;
-    if (!ota_begun) {  // First chunk, parse headers, OTA begin
-      n = mg_http_parse((char *) c->recv.buf, c->recv.len, &hm);
-      if (n < 0) {
-        mg_error(c, "Bad HTTP response");
-        return;
-      }
-      if (n == 0) return;
-      status = mg_http_status(&hm);
-      if (status != 200 || hm.body.len != s_ota_metadata.size) {
-        mg_error(c, "Bad HTTP response (%d), body length: %lu", status,
-                 hm.body.len);
-        return;
-      }
-      MG_DEBUG(("Beginning OTA (%ld bytes)", s_ota_metadata.size));
-      if (!mg_ota_begin(s_ota_metadata.size)) {
-        s_ota_status = MG_OTA_STATUS_FAIL;
-        mg_error(c, "mg_ota_begin(%lu) failed",
-                 (unsigned long) s_ota_metadata.size);
-        return;
-      }
-      ota_begun = true;
-      len = c->recv.len - (size_t) n;
-      buf = (char *) c->recv.buf + n;
-      drop = (size_t) n;
-    } else {  // Header parsed, incoming chunks
-      len = c->recv.len;
-      buf = (char *) c->recv.buf;
-      drop = 0;
-    }
-    // OTA write
-    size_t aligned = (ofs + len < s_ota_metadata.size)
-                         ? aligned = MG_ROUND_DOWN(len, alignment)
-                         : len;
-    if (aligned == 0) return;
-    if (!mg_ota_write(buf, aligned)) {
-      mg_error(c, "mg_ota_write(%lu) @%lu failed", (unsigned long) aligned,
-               (unsigned long) ofs);
+  } else if (ev == MG_EV_HTTP_HDRS) {
+    struct mg_http_message *hm = (struct mg_http_message *) ev_data;
+    int status = mg_http_status(hm);
+    if (status != 200 || hm->body.len != s_ota_metadata.size) {
+      mg_error(c, "Bad HTTP response: status %d, size %lu vs %lu", status,
+               (unsigned long) hm->body.len,
+               (unsigned long) s_ota_metadata.size);
+      s_ota_status = MG_OTA_STATUS_FAIL;
       return;
     }
-    ofs += aligned;
-    mg_iobuf_del(&c->recv, 0, aligned + drop);
-    MG_DEBUG(("Wrote %lu/%lu bytes", (unsigned long) ofs,
-              (unsigned long) s_ota_metadata.size));
+    MG_DEBUG(
+        ("Beginning OTA (%lu bytes)", (unsigned long) s_ota_metadata.size));
+    mg_http_start_ota(c, hm, s_ota_done);
   } else if (ev == MG_EV_ERROR) {
     MG_ERROR(("%lu Connection error", c->id));
     s_ota_status = MG_OTA_STATUS_FAIL;
-  } else if (ev == MG_EV_CLOSE) {  // OTA end
-    MG_DEBUG(("Connection closing, downloaded %ld/%ld bytes", ofs,
-              s_ota_metadata.size));
-    if (s_ota_status != MG_OTA_STATUS_FAIL && ota_begun) {
-      if (ofs != s_ota_metadata.size) {
-        s_ota_status = MG_OTA_STATUS_FAIL;
-        MG_ERROR(("Firmware size mismatch: got %lu expected %lu",
-                  (unsigned long) ofs, (unsigned long) s_ota_metadata.size));
-      } else if (!mg_ota_end()) {
-        s_ota_status = MG_OTA_STATUS_FAIL;
-        MG_ERROR(("mg_ota_end() failed"));
-      } else {
-        MG_DEBUG(("mg_ota_end() successful"));
-        s_ota_status = MG_OTA_STATUS_SUCCESS;
-      }
-    }
-    ota_begun = false;
-    ofs = 0;
   }
+  (void) ev_data;
 }
 
 void mg_ota_url_check(struct mg_mgr *mgr, const char *current_version,
@@ -189,7 +136,7 @@ void mg_ota_url_check(struct mg_mgr *mgr, const char *current_version,
   if (fn) fn("Pulling firmware");
   s_start_time = mg_millis();
   MG_DEBUG(("Connecting to %s to download firmware", s_ota_metadata.url));
-  if (!mg_connect(mgr, s_ota_metadata.url, s_firmware_fn, NULL)) {
+  if (!mg_http_connect(mgr, s_ota_metadata.url, s_firmware_fn, NULL)) {
     if (fn) fn("Failed to connect");
     free_ota_metadata();
     return;
@@ -198,5 +145,3 @@ void mg_ota_url_check(struct mg_mgr *mgr, const char *current_version,
   if (s_ota_status == MG_OTA_STATUS_FAIL && fn) fn("OTA fail");
   free_ota_metadata();
 }
-
-#endif

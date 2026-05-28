@@ -123,6 +123,7 @@ fail:
 
 
 
+
 #define MG_NO_CACHE_HEADERS "Cache-Control: no-cache\r\n"
 #define MG_JSON_HEADERS "Content-Type: application/json\r\n" MG_NO_CACHE_HEADERS
 
@@ -134,15 +135,6 @@ struct mg_dash_user {
   uint64_t expire;  // Expiration timestamp
 };
 
-struct mg_upload_state {
-  char marker;      // Tells that we're a file upload connection
-  size_t expected;  // POST data length, bytes
-  size_t received;  // Already received bytes
-  void *ctx;        // OTA context
-};
-
-#define CONN_OTA 'O'
-#define CONN_UPLOAD 'F'
 #define CONN_HANDLED 'Z'
 
 static struct mg_str trimq(struct mg_str s) {  // Trim double quotes
@@ -430,82 +422,24 @@ static struct mg_str mg_dash_file_name(struct mg_http_message *hm) {
   return name;
 }
 
-static void upload_ev_handler(struct mg_connection *c, int ev, void *ev_data) {
-  // struct mg_dash *dash = (struct mg_dash *) c->fn_data;
-  struct mg_upload_state *us = (struct mg_upload_state *) c->data;
-  if (ev == MG_EV_HTTP_HDRS) {
-    struct mg_http_message *hm = (struct mg_http_message *) ev_data;
-    struct mg_str name = mg_dash_file_name(hm);
-    if (sizeof(*us) > sizeof(c->data)) {
-      MG_ERROR(
-          ("FAIL: sizeof(c->data) == %lu, need %lu."
-           " Set #define MG_DATA_SIZE XXX",
-           sizeof(c->data), sizeof(*us)));
-      mg_http_reply(c, 500, NULL, ":(\n");
-      c->is_draining = 1;
-    } else if (mg_path_is_sane(name) == false) {
-      // Bad file name, return error. Protect from traversal, etc
-      mg_http_reply(c, 400, NULL, "Bad name");
-      c->is_draining = 1;
-    } else {
-      bool ok = false;
-      if (us->marker == CONN_UPLOAD) {
-        char path[128];
-        mg_snprintf(path, sizeof(path), "/tmp/%.*s", (int) name.len, name.buf);
-        us->ctx = fopen(path, "wb+");
-        if (us->ctx == NULL) MG_ERROR(("open(%s): %d", path, errno));
-        if (us->ctx != NULL) ok = true;
-      } else {
-        ok = mg_ota_begin(hm->body.len);
-      }
-      if (ok == false) {
-        mg_http_reply(c, 500, NULL, "Upload failed to start\n");
-        c->is_draining = 1;
-      } else {
-        if (us->marker == CONN_UPLOAD) mg_dash_file_add(name, hm->body.len);
-        us->expected = hm->body.len;
-        us->received = 0;
-        mg_iobuf_del(&c->recv, 0, hm->head.len);
-        mg_call(c, MG_EV_READ, &c->recv.len);
-      }
-    }
-  } else if (ev == MG_EV_READ && us->expected > 0 && c->recv.len > 0) {
-    // Write uploaded data
+static void mg_dash_ota_cb(struct mg_connection *c, const char *errmsg) {
+  mg_http_reply(c, errmsg ? 500 : 200, NULL, errmsg ? errmsg : "ok\n");
+  c->is_draining = 1;
+}
 
-    size_t alignment = 512;  // Maximum flash write granularity (iMXRT, Pico)
-    size_t left = us->expected > us->received ? us->expected - us->received : 0;
-    size_t aligned = c->recv.len < left ? MG_ROUND_DOWN(c->recv.len, alignment)
-                                        : c->recv.len;
-    bool ok = true, is_ota = us->marker == CONN_OTA;
-    if (aligned > 0 && !is_ota) {
-      ok = (fwrite(c->recv.buf, 1, aligned, (FILE *) us->ctx) == aligned);
-    } else if (aligned > 0 && is_ota) {
-      ok = mg_ota_write(c->recv.buf, aligned);
-    }
-
-    us->received += aligned;
-    // MG_DEBUG(("%lu chunk: %lu/%lu, %lu/%lu, ok: %d", c->id, aligned,
-    //           c->recv.len, us->received, us->expected, ok));
-    mg_iobuf_del(&c->recv, 0, aligned);  // Delete received data
-
-    if (ok == false) {
-      // Some sort of failure - send error response and cleanup
-      mg_http_reply(c, 400, "", "Upload error\n");
-      c->is_draining = 1;  // Close connection when response it sent
-      if (is_ota) mg_ota_end();
-      if (!is_ota && us->ctx != NULL) (void) fclose((FILE *) us->ctx);
-      memset(us, 0, sizeof(*us));
-    } else if (us->received >= us->expected) {
-      // Uploaded everything. Send success response and cleanup
-      mg_http_reply(c, 200, NULL, "%lu ok\n", us->received);
-      c->is_draining = 1;  // Close connection when response it sent
-      MG_INFO(("%lu done, %lu bytes", c->id, us->received));
-      if (is_ota) mg_ota_end();
-      if (!is_ota && us->ctx != NULL) (void) fclose((FILE *) us->ctx);
-      if (!is_ota) mg_dash_send_change(c->mgr, &set_files);
-      memset(us, 0, sizeof(*us));
-    }
+static void mg_dash_upload_cb(struct mg_connection *c, const char *errmsg) {
+  if (errmsg) {
+    mg_http_reply(c, 500, NULL, "%s\n", errmsg);
+  } else {
+    char path[128];
+    size_t size = 0;
+    mg_snprintf(path, sizeof(path), "/tmp/%s", c->data);
+    mg_fs_posix.st(path, &size, NULL);
+    mg_dash_file_add(mg_str(c->data), size);
+    mg_http_reply(c, 200, NULL, "ok\n");
+    mg_dash_send_change(c->mgr, &set_files);
   }
+  c->is_draining = 1;
 }
 
 static uint64_t mg_dash_make_expiration_time(struct mg_dash *dash) {
@@ -618,19 +552,14 @@ void mg_dash_ev_handler(struct mg_connection *c, int ev, void *ev_data) {
       mg_handle_login(c, u);
       c->data[0] = CONN_HANDLED;
     } else if (mg_match(hm->uri, mg_str("/api/ota"), NULL)) {
-      // Start OTA - in a separate handler function
-      c->data[0] = CONN_OTA;
-      c->fn = upload_ev_handler;
-      c->pfn = NULL;
-      mg_call(c, ev, ev_data);
+      mg_http_start_ota(c, hm, mg_dash_ota_cb);
     } else if (mg_match(hm->uri, mg_str("/fs/#"), NULL) &&
                (mg_strcasecmp(hm->method, mg_str("POST")) == 0 ||
                 mg_strcasecmp(hm->method, mg_str("PUT")) == 0)) {
-      // Start file upload - in a separate function
-      c->data[0] = CONN_UPLOAD;
-      c->fn = upload_ev_handler;
-      c->pfn = NULL;
-      mg_call(c, ev, ev_data);
+      struct mg_str name = mg_dash_file_name(hm);
+      mg_snprintf(c->data, sizeof(c->data), "%.*s", (int) name.len, name.buf);
+      mg_http_start_upload(c, hm, name, mg_str("/tmp"), &mg_fs_posix,
+                           mg_dash_upload_cb);
     }
     if (c->data[0] != '\0') mg_log_http_req(c, hm);
   } else if (ev == MG_EV_HTTP_MSG && c->data[0] != '\0') {
@@ -2439,6 +2368,7 @@ struct mg_fs mg_fs_posix = {p_stat,  p_list, p_open,   p_close,  p_read,
 
 
 
+
 static int mg_ncasecmp(const char *s1, const char *s2, size_t len) {
   int diff = 0;
   if (len > 0) do {
@@ -3423,6 +3353,90 @@ long mg_http_upload(struct mg_connection *c, struct mg_http_message *hm,
 
 int mg_http_status(const struct mg_http_message *hm) {
   return atoi(hm->uri.buf);
+}
+
+struct mg_upload_priv {
+  size_t expected;
+  size_t received;
+  struct mg_fd *fd;  // non-NULL: file upload; NULL: OTA
+  void (*fn)(struct mg_connection *, const char *);
+};
+
+static void mg_upload_handler(struct mg_connection *c, int ev, void *ev_data) {
+  struct mg_upload_priv *p = (struct mg_upload_priv *) c->data;
+  if (p->fn == NULL) return;
+  if (ev == MG_EV_READ && c->recv.len > 0) {
+    size_t alignment = 512;
+    size_t left = p->expected > p->received ? p->expected - p->received : 0;
+    size_t aligned = c->recv.len < left ? MG_ROUND_DOWN(c->recv.len, alignment)
+                                        : c->recv.len;
+    bool ok = true;
+    if (aligned > 0) {
+      if (p->fd != NULL) {
+        ok = p->fd->fs->wr(p->fd->fd, c->recv.buf, aligned) == aligned;
+      } else {
+        ok = mg_ota_write(c->recv.buf, aligned);
+      }
+    }
+    p->received += aligned;
+    mg_iobuf_del(&c->recv, 0, aligned);
+    if (!ok) {
+      if (p->fd != NULL) { mg_fs_close(p->fd); p->fd = NULL; }
+      else mg_ota_end();
+      p->fn(c, "write error");
+      p->fn = NULL;
+    } else if (p->received >= p->expected) {
+      const char *errmsg = NULL;
+      if (p->fd != NULL) { mg_fs_close(p->fd); p->fd = NULL; }
+      else if (!mg_ota_end()) errmsg = "OTA finalize failed";
+      p->fn(c, errmsg);
+      p->fn = NULL;
+    }
+  } else if (ev == MG_EV_ERROR || ev == MG_EV_CLOSE) {
+    if (p->fd != NULL) { mg_fs_close(p->fd); p->fd = NULL; }
+    else mg_ota_end();
+    p->fn(c, ev == MG_EV_ERROR ? (const char *) ev_data : "connection closed");
+    p->fn = NULL;
+  }
+  (void) ev_data;
+}
+
+void mg_http_start_upload(struct mg_connection *c, struct mg_http_message *hm,
+                          struct mg_str name, struct mg_str dir,
+                          struct mg_fs *fs,
+                          void (*fn)(struct mg_connection *, const char *)) {
+  struct mg_upload_priv *p = (struct mg_upload_priv *) c->data;
+  char path[MG_PATH_MAX];
+  struct mg_fd *fd;
+  if (sizeof(*p) > sizeof(c->data)) { fn(c, "data too small"); return; }
+  if (!mg_path_is_sane(name)) { fn(c, "bad name"); return; }
+  mg_snprintf(path, sizeof(path), "%.*s%c%.*s", (int) dir.len, dir.buf,
+              MG_DIRSEP, (int) name.len, name.buf);
+  fd = mg_fs_open(fs, path, MG_FS_WRITE);
+  if (fd == NULL) { fn(c, "open failed"); return; }
+  p->expected = hm->body.len;
+  p->received = 0;
+  p->fd = fd;
+  p->fn = fn;
+  c->fn = mg_upload_handler;
+  c->pfn = NULL;
+  mg_iobuf_del(&c->recv, 0, hm->head.len);
+  mg_call(c, MG_EV_READ, &c->recv.len);
+}
+
+void mg_http_start_ota(struct mg_connection *c, struct mg_http_message *hm,
+                       void (*fn)(struct mg_connection *, const char *)) {
+  struct mg_upload_priv *p = (struct mg_upload_priv *) c->data;
+  if (sizeof(*p) > sizeof(c->data)) { fn(c, "data too small"); return; }
+  if (!mg_ota_begin(hm->body.len)) { fn(c, "ota begin failed"); return; }
+  p->expected = hm->body.len;
+  p->received = 0;
+  p->fd = NULL;
+  p->fn = fn;
+  c->fn = mg_upload_handler;
+  c->pfn = NULL;
+  mg_iobuf_del(&c->recv, 0, hm->head.len);
+  mg_call(c, MG_EV_READ, &c->recv.len);
 }
 
 static bool is_hex_digit(int c) {
@@ -9018,7 +9032,9 @@ void mg_tcpip_mapip(struct mg_connection *c, struct mg_addr *ip) {
 
 
 
-#if MG_OTA != MG_OTA_NONE
+
+
+
 
 enum { MG_OTA_STATUS_WAITING, MG_OTA_STATUS_SUCCESS, MG_OTA_STATUS_FAIL };
 static int s_version_status;
@@ -9087,95 +9103,40 @@ static void s_version_fn(struct mg_connection *c, int ev, void *ev_data) {
   }
 }
 
+static void s_ota_done(struct mg_connection *c, const char *errmsg) {
+  (void) c;
+  s_ota_status = errmsg ? MG_OTA_STATUS_FAIL : MG_OTA_STATUS_SUCCESS;
+  if (errmsg) MG_ERROR(("OTA failed: %s", errmsg));
+}
+
 static void s_firmware_fn(struct mg_connection *c, int ev, void *ev_data) {
   struct mg_str host = mg_url_host(s_ota_metadata.url);
-  struct mg_http_message hm;
-  static size_t ofs = 0;
-  static bool ota_begun = false;
-  size_t alignment = 512, drop, len;
-  int n, status;
-  char *buf;
-  (void) ev_data;
-
   if (ev == MG_EV_POLL) {
-    if (s_start_time + 120 * 1000 < mg_millis()) {
-      mg_error(c, "Connection timeout");
-    }
+    if (s_start_time + 120 * 1000 < mg_millis()) mg_error(c, "Timeout");
   } else if (ev == MG_EV_CONNECT) {
     mg_printf(c,
               "GET %s HTTP/1.1\r\n"
               "Host: %.*s\r\n"
               "Connection: close\r\n\r\n",
               mg_url_uri(s_ota_metadata.url), (int) host.len, host.buf);
-    ofs = 0;
-    ota_begun = false;
-  } else if (ev == MG_EV_READ) {
-    if (s_ota_status == MG_OTA_STATUS_FAIL) return;
-    if (!ota_begun) {  // First chunk, parse headers, OTA begin
-      n = mg_http_parse((char *) c->recv.buf, c->recv.len, &hm);
-      if (n < 0) {
-        mg_error(c, "Bad HTTP response");
-        return;
-      }
-      if (n == 0) return;
-      status = mg_http_status(&hm);
-      if (status != 200 || hm.body.len != s_ota_metadata.size) {
-        mg_error(c, "Bad HTTP response (%d), body length: %lu", status,
-                 hm.body.len);
-        return;
-      }
-      MG_DEBUG(("Beginning OTA (%ld bytes)", s_ota_metadata.size));
-      if (!mg_ota_begin(s_ota_metadata.size)) {
-        s_ota_status = MG_OTA_STATUS_FAIL;
-        mg_error(c, "mg_ota_begin(%lu) failed",
-                 (unsigned long) s_ota_metadata.size);
-        return;
-      }
-      ota_begun = true;
-      len = c->recv.len - (size_t) n;
-      buf = (char *) c->recv.buf + n;
-      drop = (size_t) n;
-    } else {  // Header parsed, incoming chunks
-      len = c->recv.len;
-      buf = (char *) c->recv.buf;
-      drop = 0;
-    }
-    // OTA write
-    size_t aligned = (ofs + len < s_ota_metadata.size)
-                         ? aligned = MG_ROUND_DOWN(len, alignment)
-                         : len;
-    if (aligned == 0) return;
-    if (!mg_ota_write(buf, aligned)) {
-      mg_error(c, "mg_ota_write(%lu) @%lu failed", (unsigned long) aligned,
-               (unsigned long) ofs);
+  } else if (ev == MG_EV_HTTP_HDRS) {
+    struct mg_http_message *hm = (struct mg_http_message *) ev_data;
+    int status = mg_http_status(hm);
+    if (status != 200 || hm->body.len != s_ota_metadata.size) {
+      mg_error(c, "Bad HTTP response: status %d, size %lu vs %lu", status,
+               (unsigned long) hm->body.len,
+               (unsigned long) s_ota_metadata.size);
+      s_ota_status = MG_OTA_STATUS_FAIL;
       return;
     }
-    ofs += aligned;
-    mg_iobuf_del(&c->recv, 0, aligned + drop);
-    MG_DEBUG(("Wrote %lu/%lu bytes", (unsigned long) ofs,
-              (unsigned long) s_ota_metadata.size));
+    MG_DEBUG(
+        ("Beginning OTA (%lu bytes)", (unsigned long) s_ota_metadata.size));
+    mg_http_start_ota(c, hm, s_ota_done);
   } else if (ev == MG_EV_ERROR) {
     MG_ERROR(("%lu Connection error", c->id));
     s_ota_status = MG_OTA_STATUS_FAIL;
-  } else if (ev == MG_EV_CLOSE) {  // OTA end
-    MG_DEBUG(("Connection closing, downloaded %ld/%ld bytes", ofs,
-              s_ota_metadata.size));
-    if (s_ota_status != MG_OTA_STATUS_FAIL && ota_begun) {
-      if (ofs != s_ota_metadata.size) {
-        s_ota_status = MG_OTA_STATUS_FAIL;
-        MG_ERROR(("Firmware size mismatch: got %lu expected %lu",
-                  (unsigned long) ofs, (unsigned long) s_ota_metadata.size));
-      } else if (!mg_ota_end()) {
-        s_ota_status = MG_OTA_STATUS_FAIL;
-        MG_ERROR(("mg_ota_end() failed"));
-      } else {
-        MG_DEBUG(("mg_ota_end() successful"));
-        s_ota_status = MG_OTA_STATUS_SUCCESS;
-      }
-    }
-    ota_begun = false;
-    ofs = 0;
   }
+  (void) ev_data;
 }
 
 void mg_ota_url_check(struct mg_mgr *mgr, const char *current_version,
@@ -9205,7 +9166,7 @@ void mg_ota_url_check(struct mg_mgr *mgr, const char *current_version,
   if (fn) fn("Pulling firmware");
   s_start_time = mg_millis();
   MG_DEBUG(("Connecting to %s to download firmware", s_ota_metadata.url));
-  if (!mg_connect(mgr, s_ota_metadata.url, s_firmware_fn, NULL)) {
+  if (!mg_http_connect(mgr, s_ota_metadata.url, s_firmware_fn, NULL)) {
     if (fn) fn("Failed to connect");
     free_ota_metadata();
     return;
@@ -9214,8 +9175,6 @@ void mg_ota_url_check(struct mg_mgr *mgr, const char *current_version,
   if (s_ota_status == MG_OTA_STATUS_FAIL && fn) fn("OTA fail");
   free_ota_metadata();
 }
-
-#endif
 
 #ifdef MG_ENABLE_LINES
 #line 1 "src/ota_ch32v307.c"

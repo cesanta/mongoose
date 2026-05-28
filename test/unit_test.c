@@ -2983,6 +2983,29 @@ static void uc(struct mg_connection *c, int ev, void *ev_data) {
   }
 }
 
+static int s_su_done;
+
+static void su_cb(struct mg_connection *c, const char *errmsg) {
+  s_su_done = errmsg ? -1 : 1;
+  mg_http_reply(c, errmsg ? 400 : 200, "", errmsg ? errmsg : "ok\n");
+  c->is_draining = 1;
+}
+
+static void su(struct mg_connection *c, int ev, void *ev_data) {
+  if (ev == MG_EV_HTTP_HDRS) {
+    struct mg_http_message *hm = (struct mg_http_message *) ev_data;
+    struct mg_str name = mg_str_n(hm->uri.buf + 1, hm->uri.len - 1);
+    mg_http_start_upload(c, hm, name, mg_str("."), &mg_fs_posix, su_cb);
+  }
+}
+
+static void cu(struct mg_connection *c, int ev, void *ev_data) {
+  if (ev == MG_EV_CONNECT)
+    mg_printf(c, "POST %s HTTP/1.0\r\nContent-Length: 8\r\n\r\nfoo\nbar\n",
+              (char *) c->fn_data);
+  (void) ev_data;
+}
+
 static void test_http_upload(void) {
   struct mg_mgr mgr;
   const char *url = "http://127.0.0.1:12352";
@@ -2996,6 +3019,36 @@ static void test_http_upload(void) {
   ASSERT(s == NULL);
   mg_mgr_free(&mgr);
   ASSERT(mgr.conns == NULL);
+
+  // mg_http_start_upload: successful upload, file content verified
+  {
+    char buf[FETCH_BUF_SIZE];
+    struct mg_str fc;
+    remove("su_ok.txt");
+    mg_mgr_init(&mgr);
+    mg_http_listen(&mgr, "http://127.0.0.1:12355", su, NULL);
+    ASSERT(fetch(&mgr, buf, "http://127.0.0.1:12355",
+                 "POST /su_ok.txt HTTP/1.0\r\nContent-Length: 8\r\n\r\nfoo\nbar\n") ==
+           200);
+    fc = mg_file_read(&mg_fs_posix, "su_ok.txt");
+    ASSERT(mg_strcmp(fc, mg_str("foo\nbar\n")) == 0);
+    mg_free((void *) fc.buf);
+    remove("su_ok.txt");
+    mg_mgr_free(&mgr);
+    ASSERT(mgr.conns == NULL);
+  }
+
+  // mg_http_start_upload: path traversal rejected, callback gets error
+  {
+    s_su_done = 0;
+    mg_mgr_init(&mgr);
+    mg_http_listen(&mgr, "http://127.0.0.1:12356", su, NULL);
+    mg_http_connect(&mgr, "http://127.0.0.1:12356", cu, (void *) "/../evil.txt");
+    for (i = 0; i < 50 && !s_su_done; i++) mg_mgr_poll(&mgr, 5);
+    ASSERT(s_su_done == -1);
+    mg_mgr_free(&mgr);
+    ASSERT(mgr.conns == NULL);
+  }
 }
 
 #define LONG_CHUNK "chunk with length taking up more than two hex digits"
