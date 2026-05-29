@@ -3,6 +3,7 @@
 #include "fmt.h"
 #include "log.h"
 #include "net.h"
+#include "ota.h"
 #include "printf.h"
 #include "ssi.h"
 #include "util.h"
@@ -992,6 +993,90 @@ long mg_http_upload(struct mg_connection *c, struct mg_http_message *hm,
 
 int mg_http_status(const struct mg_http_message *hm) {
   return atoi(hm->uri.buf);
+}
+
+struct mg_upload_priv {
+  size_t expected;
+  size_t received;
+  struct mg_fd *fd;  // non-NULL: file upload; NULL: OTA
+  void (*fn)(struct mg_connection *, const char *);
+};
+
+static void mg_upload_handler(struct mg_connection *c, int ev, void *ev_data) {
+  struct mg_upload_priv *p = (struct mg_upload_priv *) c->data;
+  if (p->fn == NULL) return;
+  if (ev == MG_EV_READ && c->recv.len > 0) {
+    size_t alignment = 512;
+    size_t left = p->expected > p->received ? p->expected - p->received : 0;
+    size_t aligned = c->recv.len < left ? MG_ROUND_DOWN(c->recv.len, alignment)
+                                        : c->recv.len;
+    bool ok = true;
+    if (aligned > 0) {
+      if (p->fd != NULL) {
+        ok = p->fd->fs->wr(p->fd->fd, c->recv.buf, aligned) == aligned;
+      } else {
+        ok = mg_ota_write(c->recv.buf, aligned);
+      }
+    }
+    p->received += aligned;
+    mg_iobuf_del(&c->recv, 0, aligned);
+    if (!ok) {
+      if (p->fd != NULL) { mg_fs_close(p->fd); p->fd = NULL; }
+      else mg_ota_end();
+      p->fn(c, "write error");
+      p->fn = NULL;
+    } else if (p->received >= p->expected) {
+      const char *errmsg = NULL;
+      if (p->fd != NULL) { mg_fs_close(p->fd); p->fd = NULL; }
+      else if (!mg_ota_end()) errmsg = "OTA finalize failed";
+      p->fn(c, errmsg);
+      p->fn = NULL;
+    }
+  } else if (ev == MG_EV_ERROR || ev == MG_EV_CLOSE) {
+    if (p->fd != NULL) { mg_fs_close(p->fd); p->fd = NULL; }
+    else mg_ota_end();
+    p->fn(c, ev == MG_EV_ERROR ? (const char *) ev_data : "connection closed");
+    p->fn = NULL;
+  }
+  (void) ev_data;
+}
+
+void mg_http_start_upload(struct mg_connection *c, struct mg_http_message *hm,
+                          struct mg_str name, struct mg_str dir,
+                          struct mg_fs *fs,
+                          void (*fn)(struct mg_connection *, const char *)) {
+  struct mg_upload_priv *p = (struct mg_upload_priv *) c->data;
+  char path[MG_PATH_MAX];
+  struct mg_fd *fd;
+  if (sizeof(*p) > sizeof(c->data)) { fn(c, "data too small"); return; }
+  if (!mg_path_is_sane(name)) { fn(c, "bad name"); return; }
+  mg_snprintf(path, sizeof(path), "%.*s%c%.*s", (int) dir.len, dir.buf,
+              MG_DIRSEP, (int) name.len, name.buf);
+  fd = mg_fs_open(fs, path, MG_FS_WRITE);
+  if (fd == NULL) { fn(c, "open failed"); return; }
+  p->expected = hm->body.len;
+  p->received = 0;
+  p->fd = fd;
+  p->fn = fn;
+  c->fn = mg_upload_handler;
+  c->pfn = NULL;
+  mg_iobuf_del(&c->recv, 0, hm->head.len);
+  mg_call(c, MG_EV_READ, &c->recv.len);
+}
+
+void mg_http_start_ota(struct mg_connection *c, struct mg_http_message *hm,
+                       void (*fn)(struct mg_connection *, const char *)) {
+  struct mg_upload_priv *p = (struct mg_upload_priv *) c->data;
+  if (sizeof(*p) > sizeof(c->data)) { fn(c, "data too small"); return; }
+  if (!mg_ota_begin(hm->body.len)) { fn(c, "ota begin failed"); return; }
+  p->expected = hm->body.len;
+  p->received = 0;
+  p->fd = NULL;
+  p->fn = fn;
+  c->fn = mg_upload_handler;
+  c->pfn = NULL;
+  mg_iobuf_del(&c->recv, 0, hm->head.len);
+  mg_call(c, MG_EV_READ, &c->recv.len);
 }
 
 static bool is_hex_digit(int c) {
