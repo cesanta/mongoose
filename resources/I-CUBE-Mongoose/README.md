@@ -171,10 +171,10 @@ Rebuild and reflash
 
 ## AI agentic development
 
-For agentic development, use https://github.com/cesanta/mongoose/tree/master/resources/AGENTS.md
+For agentic development, use https://github.com/cesanta/mongoose/tree/master/resources/specs/CLAUDE.md
 Use a prompt like this:
 
-> Read and apply https://github.com/cesanta/mongoose/tree/master/resources/AGENTS.md
+> Read and apply https://github.com/cesanta/mongoose/tree/master/resources/specs/CLAUDE.md
 
 
 ## Add MQTT Client
