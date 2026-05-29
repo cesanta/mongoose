@@ -1,0 +1,124 @@
+**External Attacker Threat Model:**
+- Analyze vulnerabilities from the perspective of an external attacker, not from the perspective of a developer, local user, debugger, test harness, or code running inside the process.
+- The attacker can provide bytes through real external interfaces exposed by Mongoose or a Mongoose-based application: TCP, UDP, HTTP, WebSocket, MQTT, DNS, mDNS, TLS handshakes/certificates, Ethernet/IP/TCP/UDP packets, uploaded files, request paths, query strings, headers, message bodies, malicious server responses, and other protocol inputs.
+- The attacker cannot directly call internal C functions, pass arbitrary invalid pointers, mutate internal structs, invoke callbacks manually, edit compile-time macros, alter build flags, write to hardware registers, control DMA descriptors directly, attach a debugger, or run code inside the target process.
+- For a finding to be valid, show how attacker-controlled external input reaches the vulnerable code path through normal library/application execution.
+- Do not report findings that require impossible internal states unless the finding also explains how an external input can cause that state.
+- Do not report “API misuse” as a library vulnerability unless the API contract makes the insecure use likely, undocumented, or unavoidable.
+- For embedded networking and driver code, assume the attacker can send malformed network traffic to the device, but cannot directly manipulate hardware registers, memory-mapped I/O, DMA rings, or interrupt state except as a consequence of packets processed by the driver.
+
+**Mongoose-Specific Security Review Scope:**
+- Treat this repository as a security-sensitive embedded C/C++ networking stack. Mongoose processes attacker-controlled bytes from TCP, UDP, HTTP, WebSocket, MQTT, DNS, mDNS, TLS, filesystem upload/download paths, and built-in TCP/IP drivers.
+- In this repository, remotely triggerable denial of service is security-relevant when it is caused by a concrete implementation flaw such as memory corruption, parser abort, assertion failure, stack exhaustion, infinite loop, unbounded recursion, IRQ livelock, connection state corruption, descriptor-ring corruption, or a single unauthenticated packet causing process/device crash.
+- Report HIGH or MEDIUM confidence findings only. Do not report vague robustness concerns. Every finding must identify the attacker-controlled input, affected parser/state machine/buffer, concrete impact, and the exact code path.
+- Prefer findings with a plausible packet/request/message shape. For network protocol issues, describe the relevant malformed HTTP request, MQTT packet, WebSocket frame, DNS message, TLS handshake/certificate input, Ethernet/IP/TCP/UDP packet, or filesystem request.
+- Because this is C/C++, memory safety vulnerabilities are in scope. Buffer overflows, stack overflows, heap overflows, out-of-bounds reads/writes, use-after-free, double free, integer overflow leading to memory corruption, invalid pointer lifetime, and unsafe length conversions must be reviewed carefully.
+- Do not dismiss issues merely because they are “only DoS” if the issue is remotely triggerable against an embedded server, broker, device dashboard, firmware-update endpoint, or network-facing parser.
+
+**C Memory Safety and Length-Handling Vulnerabilities:**
+- Look for writes to fixed-size stack or heap buffers where the loop bound is derived from attacker-controlled protocol fields, including topic counts, header counts, chunk counts, multipart parts, DNS labels, WebSocket fragments, TCP/IP options, or filesystem path components.
+- Check all conversions between `size_t`, `int`, `long`, `uint16_t`, `uint32_t`, and signed protocol lengths. Flag integer truncation, wraparound, negative-to-large conversion, or off-by-one behavior that can affect allocation, parsing, copying, or bounds checks.
+- Review any `memcpy`, `memmove`, `memcmp`, `snprintf`, `mg_snprintf`, `mg_xprintf`, iobuf append/delete/resize operation, and manual pointer increment where source length can originate from network input.
+- Treat `struct mg_str` values as non-null-terminated unless the code proves otherwise. Flag use of `strlen`, `%s`, `strcmp`, `strstr`, or C-string APIs on attacker-controlled `mg_str.buf` unless length and termination are guaranteed.
+- Check for parser code that advances pointers without proving that enough bytes remain. Flag any read of fixed-size fields, variable-length integers, DNS labels, TLS vectors, MQTT remaining length, WebSocket extended lengths, or HTTP chunks before bounds are validated.
+- Look for inconsistent ownership and lifetime of buffers referenced by `mg_str`, connection receive/send iobufs, TLS buffers, filesystem buffers, and event callback data.
+- Check for reentrancy hazards in event callbacks where user handlers may close a connection, mutate iobufs, start TLS, change protocol handlers, or free state while protocol code continues using stale pointers.
+
+**HTTP Parser, Request Smuggling, and Message Framing:**
+- Verify that HTTP requests or responses containing both `Content-Length` and `Transfer-Encoding` are rejected or handled in a way that cannot cause front-end/back-end desynchronization. Treat CL+TE coexistence as security-relevant request smuggling risk.
+- Verify that duplicate `Content-Length`, duplicate `Transfer-Encoding`, conflicting transfer codings, malformed chunk sizes, chunk extensions, premature EOF, and body length mismatches cannot cause inconsistent body parsing.
+- Check whether HTTP/1.0, HTTP/1.1, and malformed protocol versions alter CL/TE handling unsafely. A message with both `Content-Length` and `Transfer-Encoding` should not be accepted merely because of version differences.
+- Look for parsing paths where headers are normalized differently from later lookup paths, including case folding, whitespace around colon, obs-fold/line folding, embedded NUL, duplicate headers, or partial header names.
+- Review URL decoding, query parsing, multipart parsing, upload handling, range handling, and chunked responses for bounds mistakes, truncation, or inconsistent decoded-vs-raw path decisions.
+- Check static file serving and SSI handling for path traversal through percent-encoding, double decoding, backslashes on Windows, mixed separators, dot-dot segments, absolute paths, drive letters, symlinks, embedded NUL, or alias/root_dir confusion.
+- Review HTTP authentication helper paths for parsing ambiguities in Basic auth, header extraction, credential truncation, empty username/password acceptance, or incorrect comparison behavior.
+- Check that HTTP upgrade to WebSocket validates method, headers, key, version, and connection semantics consistently before switching protocol state.
+
+**MQTT Parser and Broker/Client State Machine Vulnerabilities:**
+- Review MQTT fixed header parsing, remaining-length decoding, variable-length integer loops, packet identifier handling, QoS transitions, topic extraction, property parsing, and MQTT 3.x vs MQTT 5 differences.
+- Look for malformed MQTT packets that can trigger out-of-bounds reads/writes, stack buffer overflow, heap corruption, assertion/crash, or parser desynchronization.
+- Specifically check SUBSCRIBE and UNSUBSCRIBE handling for unbounded numbers of topics, malformed topic length fields, missing QoS bytes, invalid QoS values, and writes to fixed-size response arrays.
+- Verify that PUBLISH handling enforces topic length, packet length, QoS rules, retained flag handling, packet identifier requirements, and message bounds before accessing fields.
+- Check broker examples and protocol handlers for authorization bypass, cross-topic data exposure, wildcard topic mishandling, `$SYS` or reserved topic confusion, and unintended publish/subscribe access.
+- Review MQTT reconnect/resubscribe logic for stale connection state, packet identifier reuse bugs, and memory lifetime problems after close/reconnect.
+- Treat unauthenticated single-packet broker crash, client crash from malicious broker response, or memory corruption during MQTT parsing as reportable.
+
+**WebSocket Framing and Upgrade Vulnerabilities:**
+- Review WebSocket frame parsing for extended payload length handling, 16-bit/64-bit length conversion, masking rules, fragmentation, continuation frames, control-frame length limits, close/ping/pong handling, and compression-related assumptions if present.
+- Check that client-to-server frames require masking and that malformed mask/payload boundaries cannot read or write out of bounds.
+- Look for state-machine confusion after HTTP upgrade, especially where partial frames, fragmented messages, or mixed HTTP/WebSocket bytes can cause parser desynchronization.
+- Check whether large or malformed frame lengths can cause integer overflow, memory corruption, uncontrolled allocation, connection lockup, or single-connection/device crash.
+- Verify that WebSocket message APIs preserve attacker-controlled binary data length correctly and do not pass non-null-terminated payloads to C-string functions.
+
+**TLS, Certificate, Hostname Verification, and Cryptographic Validation:**
+- Review all TLS backends, including built-in TLS, mbedTLS, OpenSSL, WolfSSL, and custom TLS integration, for equivalent security behavior where possible.
+- Flag certificate verification bypasses, accidental `skip_verification` use in security-sensitive examples or defaults, missing hostname verification when `name`/SNI is available, or inconsistent validation across TLS backends.
+- For hostname verification, check wildcard handling carefully. A wildcard certificate identity must not match multiple DNS labels. For example, `*.example.com` must not match `a.b.example.com`.
+- Verify that wildcard matching is applied only to certificate presented identifiers, not to arbitrary reference identifiers or general DNS glob matching.
+- Review `mg_match` or other glob/matching helpers if used for certificate identity checks, authorization checks, filesystem paths, routing, or topic matching. Flag cases where glob semantics are broader than the security policy requires.
+- Check certificate parsing for DER/PEM boundary errors, length overflows, malformed ASN.1, extension parsing mistakes, name constraints, SAN vs CN precedence, embedded NUL, and invalid string type handling.
+- Review TLS record parsing, handshake transcript handling, key schedule, random generation, ECC/X25519 operations, AES-GCM nonce/tag handling, and error handling for memory safety and authentication failures.
+- Flag any behavior that silently falls back from verified TLS to unverified TLS or plaintext.
+- Check that TLS receive/send error paths cannot corrupt connection state, reuse freed buffers, or continue processing unauthenticated plaintext as encrypted data.
+
+**DNS, mDNS, URL Parsing, and Name Resolution:**
+- Review DNS and mDNS message parsing for label length validation, compression pointer loops, pointer bounds, recursive expansion limits, integer overflow, malformed resource records, and out-of-bounds reads.
+- Check that DNS answers are matched to outstanding requests by transaction ID, question name/type/class, and source expectations where applicable.
+- Look for cache poisoning, response spoofing, or name confusion if DNS response validation is weak in client or resolver code.
+- Review URL parsing for scheme, host, port, IPv6 literal, userinfo, percent-encoding, embedded NUL, empty host, default port, and path/query boundary confusion.
+- Check for SSRF-relevant behavior only when attacker input can control the destination host, protocol, or network boundary. Path-only control is not sufficient.
+- Verify that DNS failures, timeouts, and retries cannot leave dangling active request state or corrupt connection state.
+
+**Built-In TCP/IP Stack, Packet Parsing, and Embedded Network Drivers:**
+- Review Ethernet, ARP, IP, IPv6, ICMP, UDP, TCP, DHCP, SNTP, and driver receive/transmit paths for packet-length validation before reading protocol headers.
+- Check IP/TCP/UDP header length fields, options length, fragmentation/reassembly behavior, checksum handling, and payload offset calculations for underflow, overflow, or out-of-bounds access.
+- Look for malformed packets that can corrupt descriptor rings, RX/TX buffers, queue state, ARP tables, connection state, or timers.
+- Review interrupt handlers and bare-metal driver code for bounded processing loops. Flag IRQ paths where attacker-controlled traffic can cause livelock, starvation, descriptor ownership loss, or repeated processing of the same malformed frame.
+- Check DMA descriptor ownership transitions, memory barriers, cache coherency handling, and buffer length fields for race-like bugs that can cause memory corruption or stale packet reuse.
+- Review platform-specific drivers such as STM32, NXP, TI, Microchip, Renesas, Infineon, Wiznet, Cypress WiFi, cellular, and other built-in stack integrations for inconsistent bounds checks or endian conversions.
+- Treat a remotely reachable malformed Ethernet/IP/TCP/UDP packet that crashes, wedges, or corrupts an embedded target as reportable.
+
+**Filesystem Serving, Uploads, Packed Filesystems, and SSI:**
+- Review `mg_http_serve_dir`, `mg_http_serve_file`, upload APIs, packed filesystem code, and SSI expansion for traversal, unauthorized file read/write, overwrite, truncation, or unexpected executable/include behavior.
+- Check path canonicalization across POSIX, Windows, embedded filesystems, packed filesystems, and custom `mg_fs` implementations.
+- Look for inconsistent handling of decoded and undecoded paths, double decoding, query string leakage into path, trailing slash confusion, NUL byte truncation, and case sensitivity differences.
+- Review multipart upload parsing for boundary confusion, filename traversal, field length overflow, partial-write behavior, and max-size enforcement.
+- Check SSI include handling for directory escape, recursive include loops, unintended disclosure of local files, and parsing of attacker-controlled SSI directives.
+- Verify that range requests and static response headers cannot cause out-of-bounds reads or disclose memory.
+
+**OTA/Firmware Update and Device Dashboard Security:**
+- Review firmware update endpoints and examples for missing authentication, authorization bypass, path confusion, arbitrary write, unsafe flash offset/length handling, and failure to verify firmware authenticity where the code claims secure update behavior.
+- Check update chunk parsing for integer overflow, flash boundary crossing, rollback/downgrade exposure, incomplete image bootability, and crash/power-loss unsafe state transitions.
+- Flag any code path where unauthenticated network input can write firmware, configuration, filesystem contents, flash pages, bootloader state, or device identity material.
+- Review device dashboard examples for security-sensitive default routes, credentials, upload handlers, debug endpoints, config mutation endpoints, and CORS/header behavior when they are likely to be copied into production.
+- Do not report ordinary insecure demo behavior unless it creates a realistic copy-paste production vulnerability or affects library code.
+
+**Protocol State Machine and Event-Driven Lifecycle Bugs:**
+- Review transitions between listening, accepted, connecting, resolving, TLS handshaking, HTTP, WebSocket, MQTT, draining, closing, and closed states.
+- Check whether malformed input can cause protocol handlers to process data in the wrong state, process stale data after close, or invoke callbacks with invalid event data.
+- Look for use-after-free or stale pointer use when callbacks call `mg_close_conn`, mark a connection closing, mutate iobufs, change protocol handlers, or initiate TLS/WebSocket/MQTT transitions.
+- Verify that partial reads/writes, backpressure, `is_full`, draining, TLS pending states, and send-buffer mutations cannot cause duplicated sends, skipped validation, or parser confusion.
+- Review timer and wakeup handling for stale user data pointers, cross-thread queue misuse, and callbacks firing after associated connections/state have been freed.
+- Only report concurrency or race issues when a concrete event ordering can trigger memory corruption, unauthorized action, or reliable device/process crash.
+
+**Cross-Platform C Portability With Security Impact:**
+- Review code paths whose security depends on struct packing, alignment, endianness, pointer size, signedness of `char`, integer width, or platform-specific filesystem/network behavior.
+- Check for unaligned memory access on embedded targets when parsing attacker-controlled network packets.
+- Verify endian conversions for Ethernet/IP/TCP/UDP/DNS/MQTT/TLS fields before bounds checks and allocations.
+- Look for platform branches where one backend performs validation and another does not, especially across UNIX, Windows, lwIP, Zephyr, FreeRTOS-like systems, bare-metal, and built-in TCP/IP stack modes.
+- Flag portability bugs only when they create a realistic vulnerability on a supported platform, not merely theoretical undefined behavior.
+
+**Authentication, Authorization, and Access-Control Patterns in Mongoose Integrations:**
+- Review examples and helper APIs that implement HTTP auth, cookies, sessions, tokens, device dashboards, REST APIs, MQTT topic access, upload endpoints, and firmware update endpoints.
+- Flag authentication bypasses caused by prefix route matching, glob matching, decoded-vs-raw URI confusion, case normalization mistakes, missing boundary checks, or default-open sensitive endpoints.
+- Check for authorization decisions made in client-side JavaScript only. Client-side checks are not security boundaries.
+- Review CORS and origin checks only when they protect credentialed sensitive operations and the exploit path is concrete.
+- Look for credential comparison bugs, truncation of usernames/passwords, accepting empty credentials, parsing only part of an Authorization header, or treating malformed credentials as anonymous-but-authorized.
+- Flag sensitive data exposure when secrets, credentials, tokens, private keys, firmware signing material, PII, or device identity values can be read by unauthorized remote clients or logged from attacker-triggered paths.
+
+**Finding Quality Requirements for This Repository:**
+- Each finding must include the vulnerable file and line, severity, category, description, attacker-controlled input, exploit scenario, and concrete fix recommendation.
+- For parser and protocol bugs, include a minimal malformed input shape, such as “HTTP request with both Content-Length and Transfer-Encoding,” “MQTT SUBSCRIBE with more topic/QoS pairs than the response buffer,” “certificate SAN wildcard matching multiple labels,” or “DNS name with compression pointer loop.”
+- Distinguish library vulnerabilities from insecure application use. Prefer reporting library-level parser, helper, backend, driver, or default behavior issues over weaknesses in standalone tutorials.
+- Do not report low-confidence theoretical issues, style concerns, missing hardening, absence of rate limiting, lack of audit logs, or generic best-practice advice.
+- Do not suppress concrete memory corruption, remotely triggerable crash, request smuggling, authentication bypass, certificate verification bypass, arbitrary file read/write, firmware overwrite, or network packet parser vulnerabilities merely because they do not lead to code execution.
