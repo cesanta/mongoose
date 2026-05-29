@@ -32,13 +32,14 @@ $(1)-dashboard-$(2):
 	mkdir -p $$@
 	$(MAKE) -C $(TOP)/tutorials/rp/$(1) clean
 	cp -r $(TOP)/tutorials/rp/$(1)/* $$@/
-	cp $(TOP)/{mongoose.c,mongoose.c,LICENSE} $$@/mongoose/
+	cp $(TOP)/{LICENSE,resources/specs/CLAUDE.md} $$@/
+	cp $(TOP)/{mongoose.c,mongoose.h} $$@/mongoose/
 	cp $(TOP)/resources/html2c.js $$@/mongoose/
 	cp $(TOP)/tutorials/device-dashboard/$(2)/{dashboard.c,dashboard.html} $$@/mongoose/
 	sed -i '' -e '/mg_http_listen/d' $$@/main.c
 	grep -q 'mg_dash_init' $$@/main.c || perl -i -ne 'print; print "  mg_dash_init(&mgr);\n" if /mg_mgr_init/' $$@/main.c
 	grep -q 'mg_dash_poll' $$@/main.c || perl -i -ne 'print; print "    mg_dash_poll(&mgr);\n" if /mg_mgr_poll/' $$@/main.c
-	grep -q 'dashboard.c' $$@/CMakeLists.txt || sed -i -e 's,mongoose.c,mongoose.c mongoose/dashboard.c mongoose/file_data.c,' $$@/CMakeLists.txt
+	grep -q 'dashboard.c' $$@/CMakeLists.txt || perl -i -pe 's,mongoose\.c,mongoose.c mongoose/dashboard.c mongoose/file_data.c,' $$@/CMakeLists.txt
 	grep -q 'html2c.js' $$@/CMakeLists.txt || perl -i -ne 'print "add_custom_command(\n    OUTPUT \$$$${CMAKE_SOURCE_DIR}/mongoose/file_data.c\n    COMMAND node \$$$${CMAKE_SOURCE_DIR}/mongoose/html2c.js \$$$${CMAKE_SOURCE_DIR}/mongoose/dashboard.html -o \$$$${CMAKE_SOURCE_DIR}/mongoose/file_data.c\n    DEPENDS \$$$${CMAKE_SOURCE_DIR}/mongoose/dashboard.html\n    VERBATIM\n)\n\n" if /add_executable/; print;' $$@/CMakeLists.txt
 endef
 
