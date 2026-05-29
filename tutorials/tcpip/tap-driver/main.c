@@ -45,7 +45,7 @@ static size_t tap_rx(void *buf, size_t len, struct mg_tcpip_if *ifp) {
 char *s_sntp = NULL;
 
 static void mif_fn(struct mg_tcpip_if *ifp, int ev, void *ev_data) {
-  if (ev == MG_TCPIP_EV_ST_CHG) {
+  if (ev == MG_TCPIP_EV_STATE_CHANGE) {
     MG_INFO(("State change: %u", *(uint8_t *) ev_data));
   } else if (ev == MG_TCPIP_EV_DHCP_DNS) {
     MG_INFO(("Got DNS from DHCP: %M", mg_print_ip4, (uint32_t *) ev_data));

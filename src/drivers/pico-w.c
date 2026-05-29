@@ -13,7 +13,7 @@ static bool s_stalink = false, s_connecting = false;
 static void wifi_cb(struct mg_tcpip_if *ifp, int ev, void *ev_data) {
   struct mg_wifi_data *wifi =
       &((struct mg_tcpip_driver_pico_w_data *) ifp->driver_data)->wifi;
-  if (wifi->apmode && ev == MG_TCPIP_EV_ST_CHG &&
+  if (wifi->apmode && ev == MG_TCPIP_EV_STATE_CHANGE &&
       *(uint8_t *) ev_data == MG_TCPIP_STATE_UP) {
     MG_DEBUG(("Access Point started"));
     s_ip = ifp->ip, ifp->ip = wifi->apip;
