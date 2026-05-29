@@ -6,19 +6,20 @@ License: GPLv2 or commercial.
 
 ## Integration
 
-Copy `mongoose.h` and `mongoose.c` into the project source tree and add
-`mongoose.c` to the build.
+Copy `mongoose.h` and `mongoose.c` into a `mongoose/` subdirectory of the
+project and add `mongoose/mongoose.c` to the build.
 
 **Desktop/server** (Linux, macOS, Windows): two files are sufficient.
 
 ```
 your_project/
-├── mongoose.h       # single header
-├── mongoose.c       # single source file
-└── main.c           # your code
+├── main.c               # your code
+└── mongoose/
+    ├── mongoose.h       # single header
+    └── mongoose.c       # single source file
 ```
 
-Build: `cc main.c mongoose.c`
+Build: `cc main.c mongoose/mongoose.c -Imongoose`
 
 **Embedded systems**: a third file `mongoose_config.h` is required. Create it
 in the project source tree to set `MG_ARCH` and any other compile-time options.
@@ -26,10 +27,11 @@ Mongoose includes it automatically when `MG_ARCH` cannot be auto-detected.
 
 ```
 your_project/
-├── mongoose.h           # single header
-├── mongoose.c           # single source file
-├── mongoose_config.h    # required for embedded: set MG_ARCH and options
-└── main.c               # your code
+├── main.c                   # your code
+└── mongoose/
+    ├── mongoose.h           # single header
+    ├── mongoose.c           # single source file
+    └── mongoose_config.h    # required for embedded: set MG_ARCH and options
 ```
 
 Minimal `mongoose_config.h` for STM32:
@@ -150,21 +152,31 @@ void net_task(void *param) {
 xTaskCreate(net_task, "net", 8192, NULL, tskIDLE_PRIORITY + 1, NULL);
 ```
 
-## Device dashboard
+## HTTP / Web Device Dashboard
 
 For a web UI with real-time device state over WebSocket, use the Mongoose
 device dashboard.
 
 ### Required files
 
-- `mongoose.h` + `mongoose.c` — networking
-- `dashboard.c` — C-side dashboard logic
-- `dashboard.html` — HTML/JS UI (source)
-- `file_data.c` — generated from `dashboard.html` using:
-  ```sh
-  node html2c.js dashboard.html -o file_data.c
-  ```
-  `html2c.js` is at https://github.com/cesanta/mongoose/blob/master/resources/html2c.js
+```
+your_project/
+├── main.c               # your code
+└── mongoose/
+    ├── mongoose.h       # single header
+    ├── mongoose.c       # single source file
+    ├── dashboard.c      # C-side dashboard logic
+    ├── dashboard.html   # HTML/JS UI (source)
+    └── file_data.c      # generated from dashboard.html (see below)
+```
+
+Generate `file_data.c` from `dashboard.html`:
+
+```sh
+node html2c.js dashboard.html -o file_data.c
+```
+
+`html2c.js` is at https://github.com/cesanta/mongoose/blob/master/resources/html2c.js
 
 If the project does not yet have `dashboard.c` and `dashboard.html`, fetch the
 minimal reference versions:
@@ -222,7 +234,126 @@ for (;;) {
 
 ### dashboard.c rules
 
-- Do **not** modify `dashboard.c` unless the user explicitly asks.
+Mongoose backend exports device data as a collection of "fieldsets". Each fieldset groups several fields
+
+Example fieldset:
+
+```c
+static struct settings {
+  double volume;
+  char name[10];
+  int log_level;
+  bool enable_login;
+} s_settings = {2.7, "Dublin", 2, false, false};
+
+static struct mg_field fields_settings[] = {
+    {"volume", MG_VAL_DBL, &s_settings.volume, sizeof(s_settings.volume)},
+    {"name", MG_VAL_STR, &s_settings.name, sizeof(s_settings.name)},
+    {"log_level", MG_VAL_INT, &s_settings.log_level, sizeof(s_settings.log_level)},
+    {"enable_login", MG_VAL_BOOL, &s_settings.enable_login, sizeof(s_settings.enable_login)},
+    {NULL, MG_VAL_INT, NULL, 0},
+};
+
+static struct mg_field_set set_settings = {
+    "settings", fields_settings, read_settings, write_settings, 3, 7, NULL,
+};
+```
+
+To enable user authentication, set `authenticate` function for the dashboard descriptor:
+```c
+static struct mg_dash s_dash;
+
+static int authenticate(const char *user, const char *pass) {
+  int level = 0;  // Authentication failure
+  if (strcmp(pass, "admin") == 0 && strcmp(user, "admin") == 0) {
+    level = 7;  // Administrator
+  } else if (strcmp(pass, "user") == 0 && strcmp(user, "user") == 0) {
+    level = 3;  // Ordinary dude
+  }
+  return level;
+}
+
+static void write_settings(void) {
+  s_dash.authenticate = s_settings.enable_login ? authenticate : NULL;
+}
+```
+
+Fieldset may have reader and writer function, which acts as a hardware glue. For example, "led1" variable may reflect real LED status using reader and writer:
+
+```c
+static struct leds {
+  bool led1;
+} s_leds = {false};
+
+static void write_leds(void) {
+  gpio_write(LED1_PIN, s_leds.led1);
+}
+
+static void read_leds(void) {
+  s_leds.led1 = gpio_read(LED1_PIN);
+}
+
+static struct mg_field fields_leds[] = {
+    {"led1", MG_VAL_BOOL, &s_leds.led1, sizeof(s_leds.led1)},
+    {NULL, MG_VAL_INT, NULL, 0},
+};
+
+static struct mg_field_set set_leds = {
+    "leds", fields_leds, read_leds, write_leds, 0, 0, NULL,
+};
+```
+
+In order to make a field read only, set its size to 0 in the field descriptor:
+
+```c
+static struct mg_field fields_leds[] = {
+    {"led1", MG_VAL_BOOL, &s_leds.led1, 0 /* read-only */},
+    {NULL, MG_VAL_INT, NULL, 0},
+};
+```
+
+In order to simulate array of elements, use an integer field as an index.
+Reader first writes an index of the element to read, and then it reads
+an element.
+
+```c
+struct event {
+  int index;
+  char message[100];
+};
+
+static struct event s_event;
+
+static void read_event(void) {
+  mg_snprintf(s_event.message, sizeof(s_event.message), "my ev %d",
+              s_event.index);
+}
+
+static void write_event(void) {
+  // Do nothing. Dashboard sets the s_event.index
+}
+
+static struct mg_field fields_event[] = {
+    {"index", MG_VAL_INT, &s_event.index, sizeof(s_event.index)},
+    {"message", MG_VAL_STR, &s_event.message, sizeof(s_event.message)},
+    {NULL, MG_VAL_INT, NULL, 0},
+};
+
+static struct mg_field_set field_set_event = {
+    "event", fields_event, read_event, write_event, 0, 0, NULL,
+};
+```
+
+Each fieldset is exported via the get/set JSON-RPC interface, as well via the REST API
+
+- JSON-RPC {"method": "set", "params": {"settings":{"log_level": 1}}}
+- JSON-RPC {"method": "get", "params": "settings"}
+- REST: GET /api/get/settings
+- REST: GET /api/get
+- REST: POST /api/set {"settings":{"log_level": 1}}}
+
+Do not use the API directly, dashboard.js interfaces with the UI via the data-* attributes.
+
 
 ## Filesystem
 
