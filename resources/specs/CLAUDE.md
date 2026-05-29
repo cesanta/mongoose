@@ -7,7 +7,11 @@ License: GPLv2 or commercial.
 ## Integration
 
 Copy `mongoose.h` and `mongoose.c` into a `mongoose/` subdirectory of the
-project and add `mongoose/mongoose.c` to the build.
+project and add `mongoose/mongoose.c` to the build. The easiest is to
+copy from GitHub:
+
+https://raw.githubusercontent.com/cesanta/mongoose/refs/heads/master/mongoose.c
+https://raw.githubusercontent.com/cesanta/mongoose/refs/heads/master/mongoose.h
 
 **Desktop/server** (Linux, macOS, Windows): two files are sufficient.
 
