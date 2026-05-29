@@ -4305,6 +4305,7 @@ static void test_dash(void) {
   char marker = 0;
 
   memset(&dash, 0, sizeof(dash));
+  dash.session_auto_expiration_seconds = 1;
 
   MG_DASH_ADD_FIELD_SET(&dash, &set1);
   ASSERT(dash.sets == &set1);
@@ -4460,6 +4461,10 @@ static void test_dash(void) {
                "GET /api/get/set1 HTTP/1.0\n"
                "Authorization: Basic YWRtaW46YWRtaW4=\n\n") == 200);
   ASSERT(cmpbody(buf, set1_expected4) == 0);
+
+  mg_delayms(1100);
+  ASSERT(fetch(&mgr, buf, url, "GET /api/hi HTTP/1.0\n\n") == 200);
+  ASSERT(cmpbody(buf, "hi\n") == 0);
 
   mg_mgr_free(&mgr);
 }
