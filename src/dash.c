@@ -347,6 +347,7 @@ static struct mg_dash_user *mg_dash_authenticate(struct mg_http_message *hm,
       MG_DEBUG(("Deleting expired auth %s/%d %llu %u", u->name, u->level,
                 u->expire, mg_millis() - u->expire));
       LIST_DELETE(struct mg_dash_user, &s_users, u);
+      mg_free(u);
     }
   }
 
