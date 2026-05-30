@@ -1431,7 +1431,7 @@ bool mg_ota_flash_begin(size_t new_firmware_size, struct mg_flash *flash) {
       s_size = new_firmware_size;
       MG_INFO(("Starting OTA, firmware size %lu", s_size));
     } else {
-      MG_ERROR(("Firmware %lu is too big to fit %lu", new_firmware_size, half));
+      MG_ERROR(("Firmware %lu is too big to fit %lu", new_firmware_size, half - flash->align));
     }
   }
   return ok;
@@ -1480,6 +1480,7 @@ bool mg_ota_flash_end(struct mg_flash *flash) {
     }
 #endif
     s_size = 0;
+    if (ok) MG_OTA_STATE_SET(MG_OTA_TESTING);
     if (ok) ok = flash->swap_fn();
   }
   MG_INFO(("Finishing OTA: %s", ok ? "ok" : "fail"));
@@ -3402,6 +3403,11 @@ static void mg_upload_handler(struct mg_connection *c, int ev, void *ev_data) {
   (void) ev_data;
 }
 
+static void mg_upload_default_cb(struct mg_connection *c, const char *status) {
+  MG_INFO(("%lu %s", c->id, status ? status : "ok"));
+  mg_http_reply(c, status ? 500 : 200, "", "%s\n", status ? status : "ok");
+}
+
 void mg_http_start_upload(struct mg_connection *c, struct mg_http_message *hm,
                           struct mg_str name, struct mg_str dir,
                           struct mg_fs *fs,
@@ -3409,6 +3415,7 @@ void mg_http_start_upload(struct mg_connection *c, struct mg_http_message *hm,
   struct mg_upload_priv *p = (struct mg_upload_priv *) c->data;
   char path[MG_PATH_MAX];
   struct mg_fd *fd;
+  if (fn == NULL) fn = mg_upload_default_cb;
   if (sizeof(*p) > sizeof(c->data)) { fn(c, "data too small"); return; }
   if (!mg_path_is_sane(name)) { fn(c, "bad name"); return; }
   mg_snprintf(path, sizeof(path), "%.*s%c%.*s", (int) dir.len, dir.buf,
@@ -3428,6 +3435,7 @@ void mg_http_start_upload(struct mg_connection *c, struct mg_http_message *hm,
 void mg_http_start_ota(struct mg_connection *c, struct mg_http_message *hm,
                        void (*fn)(struct mg_connection *, const char *)) {
   struct mg_upload_priv *p = (struct mg_upload_priv *) c->data;
+  if (fn == NULL) fn = mg_upload_default_cb;
   if (sizeof(*p) > sizeof(c->data)) { fn(c, "data too small"); return; }
   if (!mg_ota_begin(hm->body.len)) { fn(c, "ota begin failed"); return; }
   p->expected = hm->body.len;
@@ -11058,10 +11066,8 @@ static bool mg_stm32h5_swap(void) {
   uint32_t desired = flash_bank_is_swapped() ? 0 : MG_BIT(31);
   flash_unlock();
   flash_clear_err();
-  // printf("OPTSR_PRG 1 %#lx\n", FLASH->OPTSR_PRG);
   MG_SET_BITS(MG_REG(FLASH_OPTSR_PRG), MG_BIT(31), desired);
-  // printf("OPTSR_PRG 2 %#lx\n", FLASH->OPTSR_PRG);
-  MG_REG(FLASH_OPTCR) |= MG_BIT(1);  // OPTSTART
+  MG_REG(FLASH_OPTCR) |= MG_BIT(1);  // OPTSTART; triggers auto-reset on H5
   while ((MG_REG(FLASH_OPTSR_CUR) & MG_BIT(31)) != desired) (void) 0;
   return true;
 }
@@ -11108,10 +11114,9 @@ bool mg_ota_write(const void *buf, size_t len) {
   return mg_ota_flash_write(buf, len, &s_mg_flash_stm32h5);
 }
 
-// Actual bank swap is deferred until reset, it is safe to execute in flash
 bool mg_ota_end(void) {
-  if(!mg_ota_flash_end(&s_mg_flash_stm32h5)) return false;
-  *(volatile unsigned long *) 0xe000ed0c = 0x5fa0004;
+  if (!mg_ota_flash_end(&s_mg_flash_stm32h5)) return false;
+  *(volatile uint32_t *) 0xe000ed0c = 0x5fa0004U;  // NVIC_SystemReset()
   return true;
 }
 struct mg_flash *mg_flash = &s_mg_flash_stm32h5;
@@ -11234,6 +11239,7 @@ MG_IRAM static bool mg_stm32h7_erase(void *addr) {
     MG_REG(bank + FLASH_CR) |= (sector & 7U) << 8U;  // Sector to erase
     MG_REG(bank + FLASH_CR) |= MG_BIT(2);            // Sector erase bit
     MG_REG(bank + FLASH_CR) |= MG_BIT(7);            // Start erasing
+    flash_wait(bank);
     ok = !flash_is_err(bank);
     MG_DEBUG(("Erase sector %lu @ %p %s. CR %#lx SR %#lx", sector, addr,
               ok ? "ok" : "fail", MG_REG(bank + FLASH_CR),
@@ -11249,9 +11255,7 @@ MG_IRAM static bool mg_stm32h7_swap(void) {
   uint32_t desired = flash_bank_is_swapped(bank) ? 0 : MG_BIT(31);
   flash_unlock();
   flash_clear_err(bank);
-  // printf("OPTSR_PRG 1 %#lx\n", FLASH->OPTSR_PRG);
   MG_SET_BITS(MG_REG(bank + FLASH_OPTSR_PRG), MG_BIT(31), desired);
-  // printf("OPTSR_PRG 2 %#lx\n", FLASH->OPTSR_PRG);
   MG_REG(bank + FLASH_OPTCR) |= MG_BIT(1);  // OPTSTART
   while ((MG_REG(bank + FLASH_OPTSR_CUR) & MG_BIT(31)) != desired) (void) 0;
   return true;
@@ -11284,7 +11288,7 @@ MG_IRAM static bool mg_stm32h7_write(void *addr, const void *buf, size_t len) {
     if (flash_is_err(bank)) ok = false;
   }
   if (!s_flash_irq_disabled) MG_ARM_ENABLE_IRQ();
-  MG_DEBUG(("Flash write %lu bytes @ %p: %s. CR %#lx SR %#lx", len, dst,
+  MG_DEBUG(("Flash write %lu bytes @ %p: %s. CR %#lx SR %#lx", len, addr,
             ok ? "ok" : "fail", MG_REG(bank + FLASH_CR),
             MG_REG(bank + FLASH_SR)));
   MG_REG(bank + FLASH_CR) &= ~MG_BIT(1);  // Clear programming flag
@@ -11297,7 +11301,7 @@ MG_IRAM static void single_bank_swap(char *p1, char *p2, size_t s, size_t ss) {
   for (size_t ofs = 0; ofs < s; ofs += ss) {
     mg_stm32h7_write(p1 + ofs, p2 + ofs, ss);
   }
-  *(volatile unsigned long *) 0xe000ed0c = 0x5fa0004;
+  *(volatile uint32_t *) 0xe000ed0cU = 0x5fa0004U;  // NVIC_SystemReset()
 }
 
 bool mg_ota_begin(size_t new_firmware_size) {
@@ -11307,8 +11311,8 @@ bool mg_ota_begin(size_t new_firmware_size) {
     s_mg_flash_stm32h7.size /= 2;
   }
 #ifdef __ZEPHYR__
-  *((uint32_t *)0xE000ED94) = 0;
-  MG_DEBUG(("Jailbreak %s", *((uint32_t *)0xE000ED94) == 0 ? "successful" : "failed"));
+  *((uint32_t *) 0xE000ED94) = 0;
+  MG_DEBUG(("Jailbreak %s", *((uint32_t *) 0xE000ED94) == 0 ? "ok" : "failed"));
 #endif
   return mg_ota_flash_begin(new_firmware_size, &s_mg_flash_stm32h7);
 }
@@ -11321,7 +11325,7 @@ bool mg_ota_end(void) {
   if (mg_ota_flash_end(&s_mg_flash_stm32h7)) {
     if (is_dualbank()) {
       // Bank swap is deferred until reset, been executing in flash, reset
-      *(volatile unsigned long *) 0xe000ed0c = 0x5fa0004;
+      *(volatile uint32_t *) 0xe000ed0cU = 0x5fa0004U;  // NVIC_SystemReset()
     } else {
       // Swap partitions. Pray power does not go away
       MG_INFO(("Swapping partitions, size %u (%u sectors)",
@@ -11339,6 +11343,7 @@ bool mg_ota_end(void) {
   }
   return false;
 }
+
 struct mg_flash *mg_flash = &s_mg_flash_stm32h7;
 #endif
 
@@ -20375,7 +20380,7 @@ done:
 
 
 
-#if MG_TLS == MG_TLS_BUILTIN
+#if MG_TLS == MG_TLS_BUILTIN || defined(MG_OTA_PUBLIC_KEY)
 
 #ifndef MG_UECC_RNG_MAX_TRIES
 #define MG_UECC_RNG_MAX_TRIES 64

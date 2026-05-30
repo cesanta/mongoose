@@ -96,10 +96,8 @@ static bool mg_stm32h5_swap(void) {
   uint32_t desired = flash_bank_is_swapped() ? 0 : MG_BIT(31);
   flash_unlock();
   flash_clear_err();
-  // printf("OPTSR_PRG 1 %#lx\n", FLASH->OPTSR_PRG);
   MG_SET_BITS(MG_REG(FLASH_OPTSR_PRG), MG_BIT(31), desired);
-  // printf("OPTSR_PRG 2 %#lx\n", FLASH->OPTSR_PRG);
-  MG_REG(FLASH_OPTCR) |= MG_BIT(1);  // OPTSTART
+  MG_REG(FLASH_OPTCR) |= MG_BIT(1);  // OPTSTART; triggers auto-reset on H5
   while ((MG_REG(FLASH_OPTSR_CUR) & MG_BIT(31)) != desired) (void) 0;
   return true;
 }
@@ -146,10 +144,9 @@ bool mg_ota_write(const void *buf, size_t len) {
   return mg_ota_flash_write(buf, len, &s_mg_flash_stm32h5);
 }
 
-// Actual bank swap is deferred until reset, it is safe to execute in flash
 bool mg_ota_end(void) {
-  if(!mg_ota_flash_end(&s_mg_flash_stm32h5)) return false;
-  *(volatile unsigned long *) 0xe000ed0c = 0x5fa0004;
+  if (!mg_ota_flash_end(&s_mg_flash_stm32h5)) return false;
+  *(volatile uint32_t *) 0xe000ed0c = 0x5fa0004U;  // NVIC_SystemReset()
   return true;
 }
 struct mg_flash *mg_flash = &s_mg_flash_stm32h5;

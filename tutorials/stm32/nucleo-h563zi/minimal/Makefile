@@ -12,7 +12,7 @@ SOURCES = main.c hal.c
 SOURCES += cmsis_h5/Source/Templates/gcc/startup_stm32h563xx.s
 SOURCES += mongoose/mongoose.c
 
-all build example: firmware.bin
+all build example: firmware.signed.bin
 
 mongoose/mongoose.c mongoose/mongoose.h:
 	cp ../../../../mongoose.[ch] mongoose/

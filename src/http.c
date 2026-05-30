@@ -1041,6 +1041,11 @@ static void mg_upload_handler(struct mg_connection *c, int ev, void *ev_data) {
   (void) ev_data;
 }
 
+static void mg_upload_default_cb(struct mg_connection *c, const char *status) {
+  MG_INFO(("%lu %s", c->id, status ? status : "ok"));
+  mg_http_reply(c, status ? 500 : 200, "", "%s\n", status ? status : "ok");
+}
+
 void mg_http_start_upload(struct mg_connection *c, struct mg_http_message *hm,
                           struct mg_str name, struct mg_str dir,
                           struct mg_fs *fs,
@@ -1048,6 +1053,7 @@ void mg_http_start_upload(struct mg_connection *c, struct mg_http_message *hm,
   struct mg_upload_priv *p = (struct mg_upload_priv *) c->data;
   char path[MG_PATH_MAX];
   struct mg_fd *fd;
+  if (fn == NULL) fn = mg_upload_default_cb;
   if (sizeof(*p) > sizeof(c->data)) { fn(c, "data too small"); return; }
   if (!mg_path_is_sane(name)) { fn(c, "bad name"); return; }
   mg_snprintf(path, sizeof(path), "%.*s%c%.*s", (int) dir.len, dir.buf,
@@ -1067,6 +1073,7 @@ void mg_http_start_upload(struct mg_connection *c, struct mg_http_message *hm,
 void mg_http_start_ota(struct mg_connection *c, struct mg_http_message *hm,
                        void (*fn)(struct mg_connection *, const char *)) {
   struct mg_upload_priv *p = (struct mg_upload_priv *) c->data;
+  if (fn == NULL) fn = mg_upload_default_cb;
   if (sizeof(*p) > sizeof(c->data)) { fn(c, "data too small"); return; }
   if (!mg_ota_begin(hm->body.len)) { fn(c, "ota begin failed"); return; }
   p->expected = hm->body.len;

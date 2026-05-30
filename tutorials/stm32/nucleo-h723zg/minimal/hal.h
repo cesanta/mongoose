@@ -51,9 +51,6 @@ enum { PLL1_HSI = 64, PLL1_M = 32, PLL1_N = 225, PLL1_P = 1 };
 #define APB2_FREQUENCY (AHB_FREQUENCY / (BIT(HAL_D2PPRE2 - 3)))
 #define APB1_FREQUENCY (AHB_FREQUENCY / (BIT(HAL_D2PPRE1 - 3)))
 
-static inline void hal_spin(volatile uint32_t n) {
-  while (n--) (void) 0;
-}
 
 enum { HAL_GPIO_MODE_INPUT, HAL_GPIO_MODE_OUTPUT, HAL_GPIO_MODE_AF, HAL_GPIO_MODE_ANALOG };
 enum { HAL_GPIO_OTYPE_PUSH_PULL, HAL_GPIO_OTYPE_OPEN_DRAIN };
@@ -124,7 +121,7 @@ static inline void hal_uart_init(USART_TypeDef *uart, uint16_t tx,
 }
 static inline void hal_uart_write_byte(USART_TypeDef *uart, uint8_t byte) {
   uart->TDR = byte;
-  while ((uart->ISR & BIT(7)) == 0) hal_spin(1);
+  while ((uart->ISR & USART_ISR_TXE_TXFNF) == 0) (void) 0;
 }
 static inline void hal_uart_write_buf(USART_TypeDef *uart, char *buf, size_t len) {
   while (len-- > 0) hal_uart_write_byte(uart, *(uint8_t *) buf++);
@@ -146,7 +143,7 @@ static inline void hal_rng_init(void) {
   RNG->HTCR = 0x17590abc;
   RNG->HTCR = 0xaa74;
   RNG->CR &= ~RNG_CR_CONDRST ;
-  while(RNG->CR & RNG_CR_CONDRST) hal_spin(1); // 39.7.1
+  while (RNG->CR & RNG_CR_CONDRST) (void) 0;  // 39.7.1
   RNG->CR |= RNG_CR_RNGEN;  // Enable RNG
 }
 
@@ -184,11 +181,19 @@ static inline unsigned int hal_pllrge(unsigned int f) {
   return val - 1;
 }
 
+// Enable RTC/BKP APB clock and backup domain write access.
+// Must be called before accessing RTC backup registers or IWDG.
+static inline void hal_backup_domain_init(void) {
+  RCC->APB4ENR |= RCC_APB4ENR_RTCAPBEN;  // enable RTC/BKP APB clock
+  PWR->CR1 |= PWR_CR1_DBP;               // enable backup domain write access
+}
+
 static inline void hal_clock_init(void) {
-  PWR->CR3 |= BIT(1);                          // select LDO (reset value)
-  while ((PWR->CSR1 & BIT(13)) == 0) hal_spin(1);  // ACTVOSRDY
-  PWR->D3CR &= ~(BIT(15) | BIT(14));           // Select VOS0
-  while ((PWR->D3CR & BIT(13)) == 0) hal_spin(1);  // VOSRDY
+  hal_backup_domain_init();
+  PWR->CR3 |= PWR_CR3_LDOEN;                   // select LDO (reset value)
+  while ((PWR->CSR1 & PWR_CSR1_ACTVOSRDY) == 0) (void) 0;  // ACTVOSRDY
+  PWR->D3CR &= ~PWR_D3CR_VOS_Msk;              // Select VOS0
+  while ((PWR->D3CR & PWR_D3CR_VOSRDY) == 0) (void) 0;  // VOSRDY
   CLRSET(
       RCC->D1CFGR, (0x0F << 8) | (7 << 4) | (0x0F << 0),
       (hal_div2prescval(HAL_D1CPRE) << 8) | (HAL_D1PPRE << 4) | (hal_div2prescval(HAL_HPRE) << 0));
@@ -201,16 +206,17 @@ static inline void hal_clock_init(void) {
           ((PLL1_P - 1) << 9) | ((PLL1_N - 1) << 0));  // Set PLL1_P PLL1_N
   CLRSET(RCC->PLLCKSELR, 0x3F << 4,
           PLL1_M << 4);          // Set PLL1_M (source defaults to HSI)
-  RCC->CR |= BIT(24) | BIT(12);  // Enable PLL1 and HSI48 (for RNG)
-  while ((RCC->CR & BIT(25)) == 0) hal_spin(1);  // Wait until done
-  RCC->CFGR |= (3 << 0);                     // Set clock source to PLL1
-  while ((RCC->CFGR & (7 << 3)) != (3 << 3)) hal_spin(1);  // Wait until done
-  FLASH->ACR = HAL_FLASH_LATENCY;                          // default is larger
-  RCC->APB4ENR |= RCC_APB4ENR_SYSCFGEN;      // Enable SYSCFG
-  while ((RCC->CR & BIT(13)) == 0) hal_spin(1);  // Make sure HSI48 is ready
+  RCC->CR |= RCC_CR_PLL1ON | RCC_CR_HSI48ON;  // Enable PLL1 and HSI48 (for RNG)
+  while ((RCC->CR & RCC_CR_PLL1RDY) == 0) (void) 0;  // Wait until done
+  RCC->CFGR |= (3 << 0);                      // Set clock source to PLL1
+  while ((RCC->CFGR & (7 << 3)) != (3 << 3)) (void) 0;  // Wait until done
+  FLASH->ACR = HAL_FLASH_LATENCY;             // default is larger
+  RCC->APB4ENR |= RCC_APB4ENR_SYSCFGEN;       // Enable SYSCFG
+  while ((RCC->CR & RCC_CR_HSI48RDY) == 0) (void) 0;  // Make sure HSI48 is ready
   SystemCoreClock = SYS_FREQUENCY;         // Update SystemCoreClock global var
   SysTick_Config(SystemCoreClock / 1000);  // Sys tick every 1ms
 }
+
 
 static inline void hal_system_init(void) {
   SCB->CPACR |= ((3UL << 10 * 2) | (3UL << 11 * 2));  // Enable FPU

@@ -126,7 +126,7 @@ static inline bool hal_uart_init(USART_TypeDef *uart, uint16_t tx_pin,
 }
 static inline void hal_uart_write_byte(USART_TypeDef *uart, uint8_t byte) {
   uart->TDR = byte;
-  while ((uart->ISR & BIT(7)) == 0) spin(1);
+  while ((uart->ISR & USART_ISR_TXE_TXFNF) == 0) (void) 0;
 }
 static inline void hal_uart_write_buf(USART_TypeDef *uart, char *buf, size_t len) {
   while (len-- > 0) hal_uart_write_byte(uart, *(uint8_t *) buf++);
@@ -144,7 +144,7 @@ static inline void hal_rng_init(void) {
   RNG->CR |= RNG_CR_RNGEN;             // Enable RNG
 }
 static inline uint32_t hal_rng_read(void) {
-  while ((RNG->SR & RNG_SR_DRDY) == 0) spin(1);
+  while ((RNG->SR & RNG_SR_DRDY) == 0) (void) 0;
   return RNG->DR;
 }
 
@@ -181,7 +181,23 @@ static inline void hal_system_init(void) {
   __ISB();
 }
 
+// Enable TAMP/RTC APB clock, backup domain write access, and RTC/TAMP kernel
+// clock (LSI). Idempotent: skips RTC init if already enabled after a reset.
+// Must be called before accessing TAMP backup registers or IWDG.
+static inline void hal_backup_domain_init(void) {
+  RCC->APB3ENR |= RCC_APB3ENR_RTCAPBEN;  // enable TAMP/RTC APB clock
+  PWR->DBPCR |= PWR_DBPCR_DBP;           // enable backup domain write access
+  if ((RCC->BDCR & RCC_BDCR_RTCEN) == 0) {  // init only once (not warm reset)
+    RCC->BDCR |= RCC_BDCR_LSION;                           // enable LSI
+    while ((RCC->BDCR & RCC_BDCR_LSIRDY) == 0) (void) 0;  // wait ready
+    RCC->BDCR |= (2U << RCC_BDCR_RTCSEL_Pos);              // LSI as clock source
+    RCC->BDCR |= RCC_BDCR_RTCEN;                           // enable RTC/TAMP clock
+  }
+}
+
 static inline void hal_clock_init(void) {
+  hal_backup_domain_init();
+
   // Set flash latency. RM0481, section 7.11.1, section 7.3.4 table 37
   CLRSET(FLASH->ACR, (FLASH_ACR_WRHIGHFREQ_Msk | FLASH_ACR_LATENCY_Msk),
          FLASH_ACR_LATENCY_5WS | FLASH_ACR_WRHIGHFREQ_1);
@@ -192,10 +208,10 @@ static inline void hal_clock_init(void) {
     PWR->VOSCR = PWR_VOSCR_VOS_1;  // Select VOS1
   }
   uint32_t f = PWR->VOSCR;  // fake read to wait for bus clocking
-  while ((PWR->VOSSR & PWR_VOSSR_ACTVOSRDY) == 0) spin(1);
+  while ((PWR->VOSSR & PWR_VOSSR_ACTVOSRDY) == 0) (void) 0;
   (void) f;
   RCC->CR = RCC_CR_HSION;                          // Clear HSI clock divisor
-  while ((RCC->CR & RCC_CR_HSIRDY) == 0) spin(1);  // Wait until done
+  while ((RCC->CR & RCC_CR_HSIRDY) == 0) (void) 0;  // Wait until done
   RCC->CFGR2 = (HAL_PPRE3 << 12) | (HAL_PPRE2 << 8) | (HAL_PPRE1 << 4) | (HAL_HPRE << 0);
   RCC->PLL1DIVR =
       ((PLL1_P - 1) << 9) | ((PLL1_N - 1) << 0);  // Set PLL1_P PLL1_N
@@ -204,9 +220,9 @@ static inline void hal_clock_init(void) {
   RCC->PLL1CFGR =
       RCC_PLL1CFGR_PLL1QEN | RCC_PLL1CFGR_PLL1PEN | (PLL1_M << 8) | (1 << 0);
   RCC->CR |= RCC_CR_PLL1ON;                         // Enable PLL1
-  while ((RCC->CR & RCC_CR_PLL1RDY) == 0) spin(1);  // Wait until done
+  while ((RCC->CR & RCC_CR_PLL1RDY) == 0) (void) 0;  // Wait until done
   RCC->CFGR1 |= (3 << 0);                           // Set clock source to PLL1
-  while ((RCC->CFGR1 & (7 << 3)) != (3 << 3)) spin(1);  // Wait until done
+  while ((RCC->CFGR1 & (7 << 3)) != (3 << 3)) (void) 0;  // Wait until done
 
   SystemCoreClock = SYS_FREQUENCY;
 }
