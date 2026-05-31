@@ -1,4 +1,9 @@
 {
   "url": "https://context7.com/cesanta/mongoose",
-  "public_key": "pk_Zqt34dujIyJWtBGaNv2KX"
+  "public_key": "pk_Zqt34dujIyJWtBGaNv2KX",
+  "projectTitle": "Mongoose - Embedded Web Server / Embedded Network Library",
+  "description": "Mongoose is a two-file C/C++ networking library and embedded web server for microcontrollers that combines TCP/IP stack, HTTP, WebSocket, MQTT, TLS 1.3 stack, firmware OTA updates, and device-dashboard infrastructure",
+  "rules": [
+    "Read and apply AGENTS.md from the root of the repository before writing any code"
+  ]
 }
