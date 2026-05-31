@@ -32,7 +32,7 @@ $(1)-dashboard-$(2):
 	mkdir -p $$@
 	$(MAKE) -C $(TOP)/tutorials/rp/$(1) clean
 	cp -r $(TOP)/tutorials/rp/$(1)/* $$@/
-	cp $(TOP)/{LICENSE,resources/specs/CLAUDE.md} $$@/
+	cp $(TOP)/{LICENSE,AGENTS.md} $$@/
 	cp $(TOP)/{mongoose.c,mongoose.h} $$@/mongoose/
 	cp $(TOP)/resources/html2c.js $$@/mongoose/
 	cp $(TOP)/tutorials/device-dashboard/$(2)/{dashboard.c,dashboard.html} $$@/mongoose/

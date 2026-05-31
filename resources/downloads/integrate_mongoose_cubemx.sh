@@ -47,7 +47,7 @@ patch_linker_script $DIR/STM32H743ZITX_FLASH.ld
 patch_linker_script $DIR/STM32H747XIHX_FLASH.ld
 patch_linker_script $DIR/stm32h747xx_flash_CM7.ld
 test -f $DIR/LICENSE || $CURL $RAW/LICENSE -o $DIR/LICENSE
-test -f $DIR/CLAUDE.md || $CURL $RAW/resources/specs/CLAUDE.md -o $DIR/CLAUDE.md
+test -f $DIR/AGENTS.md || $CURL $RAW/AGENTS.md -o $DIR/AGENTS.md
 case $DIR in portenta*) (
   grep -q 'void hwspecific_sdio_init(void);' "$MAIN_C" || \
     perl -i -ne 'print; print "void hwspecific_sdio_init(void);\n" if /USER CODE BEGIN 0/' "$MAIN_C"
