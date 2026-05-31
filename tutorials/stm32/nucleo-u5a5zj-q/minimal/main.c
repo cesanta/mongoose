@@ -9,10 +9,8 @@
 #define LED2 PIN('B', 7) // On-board LED pin (blue)
 #define LED3 PIN('G', 2) // On-board LED pin (red)
 
-// Redirect stdout debug output to UART
-int _write(int fd, char *ptr, int len) {
-  if (fd == 1 || fd == 2) hal_uart_write_buf(DEBUG_UART, ptr, (size_t) len);
-  return len;
+static void log_fn(char ch, void *param) {
+  hal_uart_write_buf(param, &ch, 1);
 }
 
 static void blink_task(void) {
@@ -53,6 +51,7 @@ int main(void) {
   hal_gpio_output(LED2);
   hal_gpio_output(LED3);
   hal_uart_init(DEBUG_UART, 115200);
+  mg_log_set_fn(log_fn, DEBUG_UART);
 
   extern void hwspecific_spi_init();
   hwspecific_spi_init();

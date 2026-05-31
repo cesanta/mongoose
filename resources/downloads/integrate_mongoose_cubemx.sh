@@ -38,8 +38,9 @@ patch_linker_script() {
 }
 HUART=`perl -nle 'print \$1 if /^UART_HandleTypeDef (.+);/' $MAIN_C`
 grep -q mongoose.h $MAIN_C || perl -i -ne 'print; print "#include \"mongoose.h\"\n" if /BEGIN Includes/' $MAIN_C
-grep -q '^int _write' $MAIN_C || perl -i -ne "print; print \"int _write(int fd, unsigned char *buf, int len) {\n  HAL_UART_Transmit(&${HUART}, buf, len, HAL_MAX_DELAY);\n  return len;\n}\n\" if /USER CODE BEGIN 0/" $MAIN_C
-grep -q 'mg_mgr_init' $MAIN_C || perl -i -ne 'print; print "  struct mg_mgr mgr;\n  mg_mgr_init(&mgr);\n\n" if /USER CODE BEGIN WHILE/' $MAIN_C
+grep -q '^static void log_fn' $MAIN_C || perl -i -ne "print; print \"static void log_fn(char ch, void *param) {\n  HAL_UART_Transmit(param, (unsigned char *) &ch, 1, HAL_MAX_DELAY);\n}\n\" if /USER CODE BEGIN 0/" $MAIN_C
+grep -q 'mg_mgr_init' $MAIN_C || perl -i -ne 'print; print "  struct mg_mgr mgr;\n  mg_mgr_init(&mgr);\n  mg_log_set_fn(log_fn, &'"${HUART}"');\n\n" if /USER CODE BEGIN WHILE/' $MAIN_C
+grep -q 'mg_mgr_init' $MAIN_C && grep -q 'mg_log_set_fn' $MAIN_C || perl -i -ne 'print; print "  mg_log_set_fn(log_fn, &'"${HUART}"');\n" if /mg_mgr_init/' $MAIN_C
 grep -q 'mg_mgr_poll' $MAIN_C || perl -i -ne 'print "    mg_mgr_poll(&mgr, 0);\n" if /USER CODE END WHILE/; print;' $MAIN_C
 patch_linker_script $DIR/STM32H723XG_FLASH.ld
 patch_linker_script $DIR/STM32H743XX_FLASH.ld

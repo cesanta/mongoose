@@ -17,10 +17,8 @@
 #define LED2 PIN('E', 1)
 #define LED3 PIN('B', 14)
 
-// Redirect stdout debug output to UART
-int _write(int fd, char *ptr, int len) {
-  if (fd == 1) hal_uart_write_buf(UART_DEBUG, ptr, (size_t) len);
-  return len;
+static void log_fn(char ch, void *param) {
+  hal_uart_write_buf(param, &ch, 1);
 }
 
 static void blink_task(void) {
@@ -56,6 +54,7 @@ static void http_ev_handler(struct mg_connection *c, int ev, void *ev_data) {
 int main(void) {
   hal_clock_init();
   hal_uart_init(UART_DEBUG, UART_DEBUG_TX_PIN, UART_DEBUG_RX_PIN, 115200);
+  mg_log_set_fn(log_fn, UART_DEBUG);
   hal_rng_init();
   hal_ethernet_init();
   hal_gpio_output(LED1);
