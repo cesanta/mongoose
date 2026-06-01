@@ -17,7 +17,6 @@ void mg_bzero(volatile unsigned char *buf, size_t len);
 bool mg_random(void *buf, size_t len);
 char *mg_random_str(char *buf, size_t len);
 uint32_t mg_crc32(uint32_t crc, const char *buf, size_t len);
-uint64_t mg_millis(void);  // Return milliseconds since boot
 bool mg_path_is_sane(const struct mg_str path);
 void mg_delayms(unsigned int ms);
 
