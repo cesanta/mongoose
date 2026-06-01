@@ -1712,6 +1712,10 @@ static int mg_tls_recv_cert(struct mg_connection *c, bool is_client) {
       mg_error(c, "certificate chain length mismatch");
       return -1;
     }
+    if (cert_chain_len > tls->recv_len) {
+      mg_error(c, "certificate list exceeds message");
+      return -1;
+    }
 
     memset(certs, 0, sizeof(certs));
     memset(&ca, 0, sizeof(ca));
@@ -1726,9 +1730,20 @@ static int mg_tls_recv_cert(struct mg_connection *c, bool is_client) {
 
     while (p < endp) {
       struct mg_tls_cert *ci = &certs[certnum++];
-      uint32_t certsz = MG_LOAD_BE24(p);
-      uint8_t *cert = p + 3;
-      uint16_t certext = MG_LOAD_BE16(cert + certsz);
+      uint32_t certsz;
+      uint8_t *cert;
+      uint16_t certext;
+      if (endp - p < 3) {
+        mg_error(c, "truncated certificate entry");
+        return -1;
+      }
+      certsz = MG_LOAD_BE24(p);
+      cert = p + 3;
+      if (certsz + 2 > (uint32_t) (endp - cert)) {
+        mg_error(c, "certificate entry exceeds list");
+        return -1;
+      }
+      certext = MG_LOAD_BE16(cert + certsz);
       if (certext != 0) {
         mg_error(c, "certificate extensions are not supported");
         return -1;
