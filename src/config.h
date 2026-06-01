@@ -20,6 +20,14 @@
 #define MG_ENABLE_TCPIP 0  // Mongoose built-in network stack
 #endif
 
+#ifndef MG_ENABLE_BSD_SOCKETS
+#define MG_ENABLE_BSD_SOCKETS 0  // BSD API support for built-in stack
+#endif
+
+#ifndef MG_ENABLE_BSD_PROTOTYPES
+#define MG_ENABLE_BSD_PROTOTYPES 1
+#endif
+
 #ifndef MG_ENABLE_LWIP
 #define MG_ENABLE_LWIP 0  // lwIP network stack
 #endif

@@ -1423,9 +1423,10 @@ static void read_conn(struct mg_connection *c, struct pkt *pkt) {
       }
       s->twclosure = true;
     } else {
-      flags |= TH_FIN;
+      // Peer closed first: send ACK only, enter CLOSE_WAIT.
+      // The connection loop will call init_closure after pending send data
+      // is flushed, then send our FIN.
       c->is_draining = 1;
-      settmout(c, MIP_TTYPE_FIN);
     }
     tx_tcp(c->mgr->ifp, s->mac, &c->loc, &c->rem, flags, mg_htonl(s->seq),
            mg_htonl(s->ack), "", 0);
