@@ -1,0 +1,97 @@
+{
+  "$schema": "http://cyclonedx.org/schema/bom-1.6.schema.json",
+  "bomFormat": "CycloneDX",
+  "specVersion": "1.6",
+  "serialNumber": "urn:uuid:d3f8b1e2-4a7c-4d9e-bf2a-1c3e5f7a9b0d",
+  "version": 1,
+  "metadata": {
+    "timestamp": "2026-06-01T00:00:00Z",
+    "component": {
+      "type": "library",
+      "bom-ref": "mongoose",
+      "supplier": { "name": "Cesanta Software Limited", "url": ["https://cesanta.com"] },
+      "author": "Cesanta Software Limited",
+      "name": "mongoose",
+      "version": "7.21",
+      "description": "Two-file C/C++ embedded networking library. HTTP, WebSocket, MQTT, TLS 1.3, OTA firmware updates, device dashboard. Runs on microcontrollers and desktop OS.",
+      "licenses": [
+        { "expression": "GPL-2.0-only" },
+        { "license": { "name": "Cesanta Commercial License", "url": "https://mongoose.ws/licensing/" } }
+      ],
+      "purl": "pkg:github/cesanta/mongoose@7.21",
+      "externalReferences": [
+        { "type": "website",          "url": "https://mongoose.ws" },
+        { "type": "vcs",              "url": "https://github.com/cesanta/mongoose" },
+        { "type": "issue-tracker",    "url": "https://github.com/cesanta/mongoose/issues" },
+        { "type": "security-contact", "url": "https://mongoose.ws/support/" },
+        { "type": "distribution",     "url": "https://raw.githubusercontent.com/cesanta/mongoose/master/mongoose.c" }
+      ],
+      "properties": [
+        { "name": "cpe", "value": "cpe:2.3:a:cesanta:mongoose:7.21:*:*:*:*:*:*:*" }
+      ]
+    }
+  },
+  "components": [
+    {
+      "type": "library",
+      "bom-ref": "micro-ecc",
+      "author": "Kenneth MacKay",
+      "name": "micro-ecc",
+      "description": "ECC point operations on GF(p) curves (secp256r1). Used by Mongoose built-in TLS 1.3 for ECDH key exchange and ECDSA signatures. Source: src/tls_uecc.c, src/tls_uecc.h.",
+      "licenses": [ { "expression": "BSD-2-Clause" } ],
+      "purl": "pkg:github/kmackay/micro-ecc",
+      "externalReferences": [
+        { "type": "vcs", "url": "https://github.com/kmackay/micro-ecc" }
+      ]
+    },
+    {
+      "type": "library",
+      "bom-ref": "bearsslrsa",
+      "author": "Thomas Pornin",
+      "name": "BearSSL RSA (i31 backend)",
+      "description": "RSA bigint arithmetic derived from BearSSL's i31 backend. Used by Mongoose built-in TLS 1.3 for RSA certificate parsing and verification. Source: src/tls_rsa.c.",
+      "licenses": [ { "expression": "MIT" } ],
+      "externalReferences": [
+        { "type": "website", "url": "https://bearssl.org" }
+      ]
+    },
+    {
+      "type": "library",
+      "bom-ref": "strobe-x25519",
+      "author": "Cryptography Research, Inc. / Mike Hamburg",
+      "name": "STROBE x25519 (adapted)",
+      "description": "X25519 Diffie-Hellman function adapted from the STROBE project. Used by Mongoose built-in TLS 1.3 for ECDH key exchange. Source: src/tls_x25519.c.",
+      "licenses": [ { "expression": "MIT" } ],
+      "externalReferences": [
+        { "type": "website", "url": "https://strobe.sourceforge.io/" }
+      ]
+    },
+    {
+      "type": "library",
+      "bom-ref": "sha1-reid",
+      "author": "Steve Reid",
+      "name": "SHA-1",
+      "description": "Public domain SHA-1 implementation. Used by Mongoose for WebSocket handshake (RFC 6455). Source: src/sha1.c.",
+      "licenses": [ { "expression": "LicenseRef-PublicDomain" } ]
+    },
+    {
+      "type": "library",
+      "bom-ref": "sha256-conte",
+      "author": "Brad Conte",
+      "name": "SHA-256 (crypto-algorithms)",
+      "description": "Public domain SHA-256 implementation. Used by Mongoose for TLS certificate hashing and MQTT. Source: src/sha256.c.",
+      "licenses": [ { "expression": "LicenseRef-PublicDomain" } ],
+      "externalReferences": [
+        { "type": "vcs", "url": "https://github.com/B-Con/crypto-algorithms" }
+      ]
+    },
+    {
+      "type": "library",
+      "bom-ref": "md5-plumb",
+      "author": "Colin Plumb",
+      "name": "MD5",
+      "description": "Public domain MD5 implementation (no copyright claimed). Used by Mongoose for HTTP Digest authentication. Source: src/md5.c.",
+      "licenses": [ { "expression": "LicenseRef-PublicDomain" } ]
+    }
+  ]
+}
