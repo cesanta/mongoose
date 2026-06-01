@@ -27,7 +27,7 @@ bool mg_ota_flash_begin(size_t new_firmware_size, struct mg_flash *flash) {
       s_size = new_firmware_size;
       MG_INFO(("Starting OTA, firmware size %lu", s_size));
     } else {
-      MG_ERROR(("Firmware %lu is too big to fit %lu", new_firmware_size, half));
+      MG_ERROR(("Firmware %lu is too big to fit %lu", new_firmware_size, half - flash->align));
     }
   }
   return ok;
@@ -76,6 +76,7 @@ bool mg_ota_flash_end(struct mg_flash *flash) {
     }
 #endif
     s_size = 0;
+    if (ok) MG_OTA_STATE_SET(MG_OTA_TESTING);
     if (ok) ok = flash->swap_fn();
   }
   MG_INFO(("Finishing OTA: %s", ok ? "ok" : "fail"));

@@ -1,4 +1,5 @@
 #pragma once
+#include "hal.h"
 
 // See https://mongoose.ws/docs/getting-started/build-options/
 #define MG_ARCH MG_ARCH_ARMGCC
@@ -22,8 +23,27 @@
 // #define MG_TCPIP_GW MG_IPV4(192, 168, 0, 1)      // Gateway
 // #define MG_TCPIP_MASK MG_IPV4(255, 255, 255, 0)  // Netmask
 
+// OTA rollback timer via IWDG1. PR=7 → /512 on H723 (RM0468 §54.4.2).
+// Max timeout: 4095 * 512 / 32000 = 65 s.
+// RM0468 §54.4 sequence: 0xCCCC first (starts LSI), then 0x5555 to unlock,
+// write PR+RLR, wait SR=0 (PVU|RVU), then 0xAAAA to reload the counter.
+#define MG_OTA_ROLLBACK_TIMER_START(seconds)                                    \
+  do {                                                                          \
+    IWDG1->KR = 0xCCCCU;                               /* start/LSI     */    \
+    IWDG1->KR = 0x5555U;                               /* unlock        */    \
+    IWDG1->PR = 7U;                                    /* /512          */    \
+    IWDG1->RLR = (uint32_t) ((seconds) * 32000 / 512);                        \
+    while (IWDG1->SR & (IWDG_SR_PVU | IWDG_SR_RVU)) (void) 0; /* wait SR=0 */ \
+    IWDG1->KR = 0xAAAAU;                               /* reload        */    \
+  } while (0)
+
+// OTA state in RTC backup register 0 (survives all resets, clears on POR).
+// Requires hal_backup_domain_init() (called from hal_clock_init) to have run.
+#define MG_OTA_STATE_GET()    (RTC->BKP0R)
+#define MG_OTA_STATE_SET(v)   (RTC->BKP0R = (uint32_t) (v))
+
 // Construct MAC address from the MCU unique ID
-#define MGUID ((uint32_t *) 0x1ff1e800)  // Unique 96-bit chip ID
+#define MGUID ((uint32_t *) UID_BASE)
 #define MG_SET_MAC_ADDRESS(mac)      \
   do {                               \
     mac[0] = 2;                      \

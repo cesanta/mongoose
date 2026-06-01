@@ -27,7 +27,7 @@ firmware.bin: firmware.elf
 	@echo "To flash, run 'make flash', or use STM32CubeProgrammer"
 
 flash: firmware.bin
-	STM32_Programmer_CLI -c port=swd -e all -w firmware.elf -hardRst
+	STM32_Programmer_CLI -c port=swd -w firmware.elf -hardRst
 
 cmsis_core:
 	git clone -q -c advice.detachedHead=false --depth 1 -b 5.9.0 https://github.com/ARM-software/CMSIS_5 $@

@@ -3,7 +3,7 @@
 #include "tls_uecc.h"
 #include "tls.h"
 
-#if MG_TLS == MG_TLS_BUILTIN
+#if MG_TLS == MG_TLS_BUILTIN || defined(MG_OTA_PUBLIC_KEY)
 
 #ifndef MG_UECC_RNG_MAX_TRIES
 #define MG_UECC_RNG_MAX_TRIES 64
