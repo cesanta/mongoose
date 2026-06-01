@@ -249,6 +249,7 @@ static int mg_der_to_tlv(uint8_t *der, size_t dersz, struct mg_der_tlv *tlv) {
   tlv->value = der + 2;
   if (tlv->len > 0x7f) {
     uint32_t i, n = tlv->len - 0x80;
+    if (dersz < (size_t) (2 + n)) return -1;
     tlv->len = 0;
     for (i = 0; i < n; i++) {
       tlv->len = (tlv->len << 8) | (der[2 + i]);
