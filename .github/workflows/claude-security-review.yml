@@ -37,7 +37,7 @@ jobs:
         with:
           claude-api-key: ${{ secrets.CLAUDE_API_KEY }}
           claude-model: claude-opus-4-7
-          comment-pr: false
+          comment-pr: true
           upload-results: true
           custom-security-scan-instructions: resources/claude-security-scan-instructions.txt
           false-positive-filtering-instructions: resources/claude-false-positive-filtering.txt
