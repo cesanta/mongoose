@@ -5,8 +5,6 @@
 #include "mongoose.h"
 #include <zephyr/net/net_mgmt.h>
 
-static time_t s_boot_timestamp = 0;
-static struct mg_connection *s_sntp_conn = NULL;
 static const char *s_url = "https://example.org/";
 static const char *s_post_data = NULL;     // POST data
 static const int64_t s_timeout_ms = 1500;  // Connect timeout in milliseconds
@@ -56,37 +54,6 @@ static void fn(struct mg_connection *c, int ev, void *ev_data) {
   }
 }
 
-// example system time()-like function
-time_t ourtime(time_t *tp) {
-  time_t t = s_boot_timestamp + mg_millis() / 1000;
-  if (tp != NULL) *tp = t;
-  return t;
-}
-
-// SNTP callback. Modifies s_boot_timestamp, to make ourtime() correct
-static void sfn(struct mg_connection *c, int ev, void *ev_data) {
-  if (ev == MG_EV_SNTP_TIME) {
-    int64_t t = *(int64_t *) ev_data;
-    MG_INFO(("Got SNTP time: %lld ms from epoch", t));
-    s_boot_timestamp = (time_t) ((t - mg_millis()) / 1000);
-
-    if (!s_connected) {
-      MG_INFO(("Connecting to    : [%s]", s_url));
-      mg_http_connect(&s_mgr, s_url, fn, &done);  // Create client connection
-      s_connected = 1;
-    }
-  } else if (ev == MG_EV_CLOSE) {
-    s_sntp_conn = NULL;
-  }
-}
-
-// Periodic timer syncs time via SNTP
-static void timer_fn(void *arg) {
-  struct mg_mgr *mgr = (struct mg_mgr *) arg;
-  if (s_sntp_conn == NULL) s_sntp_conn = mg_sntp_connect(mgr, NULL, sfn, NULL);
-  if (s_boot_timestamp < 9999) mg_sntp_request(s_sntp_conn);
-}
-
 // Zephyr: Define a semaphore and network management callback to be able to wait
 // until our IP address is ready. The main function will start and block on this
 // semaphore until this event handler releases it when the network is ready
@@ -111,15 +78,24 @@ int main(int argc, char *argv[]) {
   k_sem_take(&run, K_FOREVER);
 
   mg_log_set(MG_LL_DEBUG);
-
   mg_mgr_init(&s_mgr);
-  mg_timer_add(&s_mgr, 5000, MG_TIMER_REPEAT | MG_TIMER_RUN_NOW, timer_fn,
-               &s_mgr);
 
-  // Start event loop, exit when client is done
   MG_INFO(("Mongoose version : v%s", MG_VERSION));
 
-  while (!done) mg_mgr_poll(&s_mgr, 1000);
+  uint64_t sntp_timer = 0;
+  while (!done) {
+    uint64_t period = mg_boot_timestamp_ms == 0 ? 1000 : 24 * 3600 * 1000;
+    if (mg_timer_expired(&sntp_timer, period, mg_millis())) {
+      mg_sntp_connect(&s_mgr, NULL, NULL, NULL);
+    }
+    // Initiate the HTTPS request once we have a valid time (needed for TLS)
+    if (mg_boot_timestamp_ms > 0 && !s_connected) {
+      MG_INFO(("Connecting to    : [%s]", s_url));
+      mg_http_connect(&s_mgr, s_url, fn, &done);
+      s_connected = 1;
+    }
+    mg_mgr_poll(&s_mgr, 1000);
+  }
   mg_mgr_free(&s_mgr);
 
   return 0;

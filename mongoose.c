@@ -12901,10 +12901,10 @@ void mg_sha384(uint8_t dst[48], uint8_t *data, size_t datasz) {
 #define SNTP_TIME_OFFSET 2208988800U  // (1970 - 1900) in seconds
 #define SNTP_MAX_FRAC 4294967295.0    // 2 ** 32 - 1
 
-static uint64_t s_boot_timestamp = 0;  // Updated by SNTP
+uint64_t mg_boot_timestamp_ms = 0;  // Updated by SNTP
 
 uint64_t mg_now(void) {
-  return mg_millis() + s_boot_timestamp;
+  return mg_millis() + mg_boot_timestamp_ms;
 }
 
 static int64_t gettimestamp(const uint32_t *data) {
@@ -12931,7 +12931,7 @@ int64_t mg_sntp_parse(const unsigned char *buf, size_t len) {
     int64_t now = (int64_t) mg_millis();
     int64_t latency = (now - origin_time) - (transmit_time - receive_time);
     epoch_milliseconds = transmit_time + latency / 2;
-    s_boot_timestamp = (uint64_t) (epoch_milliseconds - now);
+    mg_boot_timestamp_ms = (uint64_t) (epoch_milliseconds - now);
   } else {
     MG_ERROR(("unexpected version: %d", version));
   }
@@ -12947,7 +12947,7 @@ static void sntp_cb(struct mg_connection *c, int ev, void *ev_data) {
   } else if (ev == MG_EV_READ) {
     int64_t milliseconds = mg_sntp_parse(c->recv.buf, c->recv.len);
     if (milliseconds > 0) {
-      s_boot_timestamp = (uint64_t) milliseconds - mg_millis();
+      mg_boot_timestamp_ms = (uint64_t) milliseconds - mg_millis();
       mg_call(c, MG_EV_SNTP_TIME, (uint64_t *) &milliseconds);
       MG_DEBUG(("%lu got time: %lld ms from epoch", c->id, milliseconds));
     }
@@ -12980,6 +12980,7 @@ struct mg_connection *mg_sntp_connect(struct mg_mgr *mgr, const char *url,
   if (url == NULL) url = "udp://time.google.com:123";
   return mg_connect_svc(mgr, url, fn, fn_data, sntp_cb, NULL);
 }
+
 
 #ifdef MG_ENABLE_LINES
 #line 1 "src/sock.c"

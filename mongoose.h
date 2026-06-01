@@ -1333,7 +1333,6 @@ void mg_timer_init(struct mg_timer **head, struct mg_timer *timer,
                    void *arg);
 void mg_timer_free(struct mg_timer **head, struct mg_timer *);
 void mg_timer_poll(struct mg_timer **head, uint64_t new_ms);
-bool mg_timer_expired(uint64_t *expiration, uint64_t period, uint64_t now);
 
 
 
@@ -1424,7 +1423,6 @@ void mg_bzero(volatile unsigned char *buf, size_t len);
 bool mg_random(void *buf, size_t len);
 char *mg_random_str(char *buf, size_t len);
 uint32_t mg_crc32(uint32_t crc, const char *buf, size_t len);
-uint64_t mg_millis(void);  // Return milliseconds since boot
 bool mg_path_is_sane(const struct mg_str path);
 void mg_delayms(unsigned int ms);
 
@@ -2904,16 +2902,61 @@ size_t mg_ws_wrap(struct mg_connection *, size_t len, int op);
 size_t mg_ws_printf(struct mg_connection *c, int op, const char *fmt, ...);
 size_t mg_ws_vprintf(struct mg_connection *c, int op, const char *fmt,
                      va_list *);
+// Time / SNTP functions
 
 
 
 
+
+// Return milliseconds since boot (uptime). Never goes backwards.
+// On RTOS targets (FreeRTOS, ThreadX, Zephyr, etc.) uses the RTOS tick count.
+// On STM32/Cube uses HAL_GetTick(). On Arduino uses millis().
+// On Linux/macOS uses CLOCK_MONOTONIC_RAW or CLOCK_MONOTONIC; falls back to
+// CLOCK_REALTIME if neither is available.
+uint64_t mg_millis(void);
+
+// Boot timestamp in ms since Epoch. Updated by successful SNTP request
+extern uint64_t mg_boot_timestamp_ms;
+
+// Return milliseconds since Epoch: mg_millis() + mg_boot_timestamp_ms.
+// Until a successful SNTP request completes, this is identical to mg_millis().
+uint64_t mg_now(void);
+
+// Check whether a periodic timer has expired.
+//
+// - `expiration` holds the next expiry time in ms
+// - `period` is a interval in ms
+// - `now` - a current time in ms
+//
+// Return value: true if expired, in which case a function advances the
+// `expiration` by one period. Handles millisecond counter wrap-around.
+// See mg_sntp_connect() for usage example.
+bool mg_timer_expired(uint64_t *expiration, uint64_t period, uint64_t now);
+
+// Connect to an SNTP server and send a time request.
+// `url` defaults to "udp://time.google.com:123" when NULL.
+// On success the internal boot timestamp is updated so that mg_now() returns
+// the correct wall-clock time, and MG_EV_SNTP_TIME is fired on `fn` (if not
+// NULL) with a pointer to the int64_t epoch in milliseconds.
+// Pass fn == NULL and fn_data == NULL for a fire-and-forget sync that only
+// updates mg_boot_timestamp_ms. Typical polling usage:
+//
+// ```c
+// uint64_t timer = 0;
+// for (;;) {
+//   uint64_t period = mg_boot_timestamp_ms == 0 ? 1000 : 3600 * 1000;
+//   if (mg_timer_expired(&timer, period, mg_millis())) {
+//     mg_sntp_connect(&mgr, NULL, NULL, NULL);
+//   }
+//   mg_mgr_poll(&mgr, 1000);
+// }
+// ```
 struct mg_connection *mg_sntp_connect(struct mg_mgr *mgr, const char *url,
                                       mg_event_handler_t fn, void *fn_data);
+
+// Private API, do not expose
 void mg_sntp_request(struct mg_connection *c);
 int64_t mg_sntp_parse(const unsigned char *buf, size_t len);
-
-uint64_t mg_now(void);     // Return milliseconds since Epoch
 
 
 
