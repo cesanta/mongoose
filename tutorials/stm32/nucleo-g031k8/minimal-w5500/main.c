@@ -21,10 +21,8 @@ static struct spi spi_pins = {
     .cs = PIN('A', 4),
 };
 
-// Redirect stdout debug output to UART
-int _write(int fd, char *ptr, int len) {
-  if (fd == 1 || fd == 2) uart_write_buf(UART_DEBUG, ptr, (size_t) len);
-  return len;
+static void log_fn(char ch, void *param) {
+  uart_write_buf(param, &ch, 1);
 }
 
 bool mg_random(void *buf, size_t len) {  // Use on-board RNG
@@ -74,6 +72,7 @@ static void fn(struct mg_connection *c, int ev, void *ev_data) {
 int main(void) {
   gpio_output(LED);               // Setup green LED
   uart_init(UART_DEBUG, UART_DEBUG_TX_PIN, UART_DEBUG_RX_PIN, 115200);
+  mg_log_set_fn(log_fn, UART_DEBUG);
 
   // ethernet_init();                // Initialise ethernet pins
   MG_INFO(("Starting, CPU freq %g MHz", (double) SystemCoreClock / 1000000));

@@ -12,10 +12,8 @@
 #define LED_2 PIN('G', 8)   // Blue LED
 #define LED_3 PIN('G', 10)  // Red LED
 
-// Redirect stdout debug output to UART
-int _write(int fd, char *ptr, int len) {
-  if (fd == 1) hal_uart_write_buf(DEBUG_UART, ptr, (size_t) len);
-  return len;
+static void log_fn(char ch, void *param) {
+  hal_uart_write_buf(param, &ch, 1);
 }
 
 // Blink green LED every 500ms
@@ -52,6 +50,7 @@ static void http_ev_handler(struct mg_connection *c, int ev, void *ev_data) {
 
 int main(void) {
   hal_uart_init(DEBUG_UART, UART_TX, UART_RX, 115200);
+  mg_log_set_fn(log_fn, DEBUG_UART);
   hal_rng_init();
 
   // Initialise pins and turn them off: they are active high

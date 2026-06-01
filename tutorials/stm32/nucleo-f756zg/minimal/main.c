@@ -17,10 +17,8 @@
 #define LED2 PIN('B', 7)
 #define LED3 PIN('B', 14)
 
-// Redirect stdout debug output to UART
-int _write(int fd, char *ptr, int len) {
-  if (fd == 1 || fd == 2) hal_uart_write_buf(UART_DEBUG, ptr, (size_t) len);
-  return len;
+static void log_fn(char ch, void *param) {
+  hal_uart_write_buf(param, &ch, 1);
 }
 
 static void blink_task(void) {
@@ -61,6 +59,7 @@ int main(void) {
   hal_gpio_output(LED2);
   hal_gpio_output(LED3);
   hal_uart_init(UART_DEBUG, UART_DEBUG_TX_PIN, UART_DEBUG_RX_PIN, 115200);
+  mg_log_set_fn(log_fn, UART_DEBUG);
 
   hal_ethernet_init();
 
