@@ -354,7 +354,7 @@ static struct mg_dash_user *mg_dash_authenticate(struct mg_http_message *hm,
     struct mg_str *ah = mg_http_get_header(hm, "Authorization");
     if (ah != NULL) {
       // Auth header and password are set, auth by user/password via glue API
-      int num_users = 0, level = dash->authenticate(user, pass);
+      int num_users = 0, level = dash->authenticate(user, sizeof(user), pass);
       MG_DEBUG(("user %s, level: %d", user, level));
       if (level > 0) {  // Proceed only if the firmware authenticated us
         for (u = s_users; u != NULL && result == NULL;

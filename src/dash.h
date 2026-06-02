@@ -48,7 +48,7 @@ struct mg_dash_file {
 struct mg_dash {
   struct mg_field_set *sets;
   struct mg_dash_custom_handler *custom_handlers;
-  int (*authenticate)(const char *user, const char *pass);
+  int (*authenticate)(char *user, size_t userlen, const char *pass);
   int session_auto_expiration_seconds;
   //struct mg_dash_file *files;
 };

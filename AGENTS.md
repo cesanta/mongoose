@@ -267,11 +267,17 @@ To enable user authentication, set `authenticate` function for the dashboard des
 ```c
 static struct mg_dash s_dash;
 
-static int authenticate(const char *user, const char *pass) {
+// Signature: (char *user, size_t userlen, const char *pass)
+// `user` is both input (username from the login form) and output: the function
+// may overwrite it with the canonical username. Return access level > 0 on
+// success, 0 on failure.
+static int authenticate(char *user, size_t userlen, const char *pass) {
   int level = 0;  // Authentication failure
-  if (strcmp(pass, "admin") == 0 && strcmp(user, "admin") == 0) {
+  if (strcmp(pass, "admin") == 0) {
+    mg_snprintf(user, userlen, "%s", "admin");
     level = 7;  // Administrator
-  } else if (strcmp(pass, "user") == 0 && strcmp(user, "user") == 0) {
+  } else if (strcmp(pass, "user") == 0) {
+    mg_snprintf(user, userlen, "%s", "user");
     level = 3;  // Ordinary dude
   }
   return level;

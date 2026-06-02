@@ -4,7 +4,7 @@
 #include "mongoose.h"
 
 static struct mg_dash s_dash;
-static int authenticate(const char *user, const char *pass);
+static int authenticate(char *user, size_t userlen, const char *pass);
 
 // Action buttons
 static bool s_action1, s_action2;
@@ -176,14 +176,15 @@ static struct mg_field_set set_graph2 = {
     "graph2", fields_graph2, read_graph2, NULL, 0, 0, NULL,
 };
 
-static int authenticate(const char *user, const char *pass) {
+static int authenticate(char *user, size_t userlen, const char *pass) {
   int level = 0;  // Authentication failure
   if (strcmp(pass, "admin") == 0) {
+    mg_snprintf(user, userlen, "%s", "admin");
     level = 7;  // Administrator
   } else if (strcmp(pass, "user") == 0) {
+    mg_snprintf(user, userlen, "%s", "user");
     level = 3;  // Ordinary dude
   }
-  (void) user;
   return level;
 }
 

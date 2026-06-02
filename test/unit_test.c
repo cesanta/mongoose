@@ -4190,14 +4190,14 @@ static void dash_custom(struct mg_connection *c, int ev, void *ev_data) {
   (void) c, (void) ev, (void) ev_data;
 }
 
-static int dash_authenticate(const char *user, const char *pass) {
+static int dash_authenticate(char *user, size_t userlen, const char *pass) {
   int level = 0;
   if (strcmp(pass, "admin") == 0) {
     level = 7;
   } else if (strcmp(pass, "user") == 0) {
     level = 3;
   }
-  (void) user;
+  (void) user, (void) userlen;
   return level;
 }
 
