@@ -136,8 +136,10 @@ void mg_tls_free(struct mg_connection *c) {
   struct mg_tls *tls = (struct mg_tls *) c->tls;
   if (tls == NULL) return;
   SSL_free(tls->ssl);
+#if MG_TLS != MG_TLS_WOLFSSL
   SSL_CTX_free(tls->ctx);
   BIO_meth_free(tls->bm);
+#endif
   mg_free(tls);
   c->tls = NULL;
 }
@@ -168,6 +170,25 @@ void mg_tls_init(struct mg_connection *c, const struct mg_tls_opts *opts) {
 #ifdef MG_TLS_SSLKEYLOGFILE
   SSL_CTX_set_keylog_callback(tls->ctx, ssl_keylog_cb);
 #endif
+
+#if MG_TLS == MG_TLS_WOLFSSL
+  rc = wolfSSL_CTX_use_certificate_buffer(tls->ctx, (unsigned char *) opts->cert.buf,
+    (int) opts->cert.len, WOLFSSL_FILETYPE_PEM);
+
+  if (rc != WOLFSSL_SUCCESS) {
+    mg_error(c, "CERT err %d", mg_tls_err(c, tls, rc));
+    goto fail;
+  }
+
+  rc = wolfSSL_CTX_use_PrivateKey_buffer(tls->ctx, (unsigned char *) opts->key.buf,
+    (int) opts->key.len, WOLFSSL_FILETYPE_PEM);
+
+  if (rc != WOLFSSL_SUCCESS) {
+    mg_error(c, "KEY err %d", mg_tls_err(c, tls, rc));
+    goto fail;
+  }
+#endif
+
   if ((tls->ssl = SSL_new(tls->ctx)) == NULL) {
     mg_error(c, "SSL_new");
     goto fail;
@@ -218,6 +239,7 @@ void mg_tls_init(struct mg_connection *c, const struct mg_tls_opts *opts) {
 #endif
   }
 
+#if MG_TLS != MG_TLS_WOLFSSL
   if (opts->cert.buf != NULL && opts->cert.buf[0] != '\0') {
     rc = load_cert(tls->ssl, opts->cert);
     if (rc != 1) {
@@ -234,6 +256,7 @@ void mg_tls_init(struct mg_connection *c, const struct mg_tls_opts *opts) {
       goto fail;
     }
   }
+#endif
 
   SSL_set_mode(tls->ssl, SSL_MODE_ACCEPT_MOVING_WRITE_BUFFER);
 #if MG_TLS == MG_TLS_OPENSSL && OPENSSL_VERSION_NUMBER > 0x10002000L
