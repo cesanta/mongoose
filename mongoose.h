@@ -1268,22 +1268,40 @@ void mg_pfn_stdout(char c, void *param);           // param: ignored
 
 // A helper macro for printing JSON: mg_snprintf(buf, len, "%m", MG_ESC("hi"))
 #define MG_ESC(str) mg_print_esc, 0, (str)
+// Logging
+//
+// Mongoose provides a set of functions and macros for logging. The application can
+// use these functions for its own purposes as well as the rest of Mongoose API.
 
 
 
 
 
 
+
+// Log levels
 enum { MG_LL_NONE, MG_LL_ERROR, MG_LL_INFO, MG_LL_DEBUG, MG_LL_VERBOSE };
+
+// Set Mongoose logging level. Example: `mg_log_set(MG_LL_INFO);`
 extern int mg_log_level;  // Current log level, one of MG_LL_*
+#define mg_log_set(level_) mg_log_level = (level_)
 
 void mg_log(const char *fmt, ...);
 void mg_log_prefix(int ll, const char *file, int line, const char *fname);
-// bool mg_log2(int ll, const char *file, int line, const char *fmt, ...);
-void mg_hexdump(const void *buf, size_t len);
-void mg_log_set_fn(mg_pfn_t fn, void *param);
 
-#define mg_log_set(level_) mg_log_level = (level_)
+// Log a hex dump of binary data `buf`, `len`.
+void mg_hexdump(const void *buf, size_t len);
+
+// Set log printer function which prints one byte. Example:
+//
+// ```c
+// static void print_char(char ch, void *param) {
+//   hal_uart_write_char(param, ch);
+// }
+// ...
+// mg_log_set_fn(print_char, USART3);
+// ```
+void mg_log_set_fn(mg_pfn_t fn, void *param);
 
 #if MG_ENABLE_LOG
 #if !defined(_MSC_VER) && \
@@ -1306,6 +1324,11 @@ void mg_log_set_fn(mg_pfn_t fn, void *param);
   } while (0)
 #endif
 
+// Logging macros. Note: the argument is exactly like for mg_snprintf(),
+// and it should be enclosed in double parenthesis. Example:
+// ```c
+// MG_INFO(("Conn %lu, recv buf: %.*s", c->id, c->recv.len, c->recv.buf));
+// ```
 #define MG_ERROR(args) MG_LOG(MG_LL_ERROR, args)
 #define MG_INFO(args) MG_LOG(MG_LL_INFO, args)
 #define MG_DEBUG(args) MG_LOG(MG_LL_DEBUG, args)
@@ -2922,15 +2945,18 @@ extern uint64_t mg_boot_timestamp_ms;
 // Until a successful SNTP request completes, this is identical to mg_millis().
 uint64_t mg_now(void);
 
-// Check whether a periodic timer has expired.
+// Return true if the periodic timer has fired; advance `expiration` by one
+// `period`. Handles wrap-around. Usage example:
 //
-// - `expiration` holds the next expiry time in ms
-// - `period` is a interval in ms
-// - `now` - a current time in ms
-//
-// Return value: true if expired, in which case a function advances the
-// `expiration` by one period. Handles millisecond counter wrap-around.
-// See mg_sntp_connect() for usage example.
+// ```c
+// uint64_t timer = 0;
+// for (;;) {
+//   if (mg_timer_expired(&timer, 1000, mg_millis())) {
+//     MG_INFO(("Hi"));  // Print a message every second
+//   }
+//   mg_mgr_poll(&mgr, 10);
+// }
+// ```
 bool mg_timer_expired(uint64_t *expiration, uint64_t period, uint64_t now);
 
 // Connect to an SNTP server and send a time request.
