@@ -15944,6 +15944,7 @@ static int mg_tls_server_recv_hello(struct mg_connection *c) {
   memmove(tls->random, rio->buf + 11, sizeof(tls->random));
   // store session_id
   session_id_len = rio->buf[43];
+  if (((uint32_t) session_id_len + 46) > rio->len) goto fail;
   if (session_id_len == sizeof(tls->session_id)) {
     memmove(tls->session_id, rio->buf + 44, session_id_len);
   } else if (session_id_len != 0) {
