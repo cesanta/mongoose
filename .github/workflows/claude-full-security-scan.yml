@@ -1,0 +1,106 @@
+name: Claude Full Codebase Security Scan
+
+on:
+  workflow_dispatch:
+    inputs:
+      prompt_path:
+        description: "Path to the repo prompt file Claude should read"
+        required: true
+        default: "resources/specs/claude-security-scan.md"
+      target_ref:
+        description: "Branch, tag, or SHA to scan"
+        required: false
+        default: ""
+  #schedule:
+    # Weekly scan: Sunday 02:00 UTC
+  #  - cron: "0 2 * * 0"
+
+permissions:
+  contents: read
+  id-token: write
+
+concurrency:
+  group: claude-full-codebase-security-scan-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  scan:
+    name: Full codebase security scan
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+
+    env:
+      DEFAULT_PROMPT_PATH: "resources/specs/claude-security-scan.md"
+
+    steps:
+      - name: Resolve scan inputs
+        id: vars
+        shell: bash
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            PROMPT_PATH="${{ inputs.prompt_path }}"
+            TARGET_REF="${{ inputs.target_ref }}"
+          else
+            PROMPT_PATH="${DEFAULT_PROMPT_PATH}"
+            TARGET_REF=""
+          fi
+
+          if [ -z "$TARGET_REF" ]; then
+            TARGET_REF="${{ github.ref }}"
+          fi
+
+          echo "prompt_path=$PROMPT_PATH" >> "$GITHUB_OUTPUT"
+          echo "target_ref=$TARGET_REF" >> "$GITHUB_OUTPUT"
+
+      - name: Checkout repository
+        uses: actions/checkout@v6
+        with:
+          ref: ${{ steps.vars.outputs.target_ref }}
+          fetch-depth: 0
+
+      - name: Verify prompt file exists
+        shell: bash
+        run: |
+          test -f "${{ steps.vars.outputs.prompt_path }}" || {
+            echo "Prompt file not found: ${{ steps.vars.outputs.prompt_path }}"
+            exit 1
+          }
+
+      - name: Run Claude full codebase security scan
+        id: claude_scan
+        uses: anthropics/claude-code-action@v1
+        with:
+          anthropic_api_key: ${{ secrets.CLAUDE_API_KEY }}
+
+          prompt: |
+            REPO: ${{ github.repository }}
+            REF: ${{ steps.vars.outputs.target_ref }}
+            PROMPT_FILE: ${{ steps.vars.outputs.prompt_path }}
+
+            You are running a full-codebase security scan in GitHub Actions.
+
+            First, read the prompt file at:
+            ${{ steps.vars.outputs.prompt_path }}
+
+            Treat that file as the authoritative security-review instruction set.
+
+            Scan the checked-out repository as a whole codebase.
+            Do not modify files.
+            Do not create commits.
+            Do not open pull requests.
+            Do not post GitHub comments.
+            Do not create GitHub issues.
+
+          claude_args: |
+            --max-turns 20
+            --allowedTools "Read,Glob,Grep,Bash(git:*),Bash(find:*),Bash(grep:*),Bash(sed:*),Bash(cat:*)"
+            --model claude-opus-4-8
+
+      - name: Upload Claude scan execution output
+        if: always() && steps.claude_scan.outputs.execution_file != ''
+        uses: actions/upload-artifact@v4
+        with:
+          name: claude-full-codebase-security-scan-${{ github.run_id }}
+          path: ${{ steps.claude_scan.outputs.execution_file }}
+          if-no-files-found: warn
+          retention-days: 30
