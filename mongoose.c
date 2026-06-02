@@ -661,7 +661,6 @@ void mg_bsd_transport_close(void *t) {
 
 
 
-
 #define MG_NO_CACHE_HEADERS "Cache-Control: no-cache\r\n"
 #define MG_JSON_HEADERS "Content-Type: application/json\r\n" MG_NO_CACHE_HEADERS
 

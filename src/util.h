@@ -3,6 +3,7 @@
 #include "arch.h"
 #include "config.h"
 #include "net.h"
+#include "sntp.h"
 #include "str.h"
 
 #if MG_ENABLE_ASSERT

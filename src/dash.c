@@ -1,6 +1,5 @@
 #include "dash.h"
 #include "http.h"
-#include "ota.h"
 #include "util.h"
 
 #define MG_NO_CACHE_HEADERS "Cache-Control: no-cache\r\n"

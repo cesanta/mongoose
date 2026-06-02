@@ -1,6 +1,7 @@
 // TLS / Security
 #pragma once
 
+// Available TLS backend libraries
 #define MG_TLS_NONE 0     // No TLS support
 #define MG_TLS_MBED 1     // mbedTLS
 #define MG_TLS_OPENSSL 2  // OpenSSL
@@ -9,6 +10,8 @@
 #define MG_TLS_CUSTOM 4   // Custom implementation
 
 #ifndef MG_TLS
+// mongoose_config.h setting. Set MG_TLS to one of the MG_TLS_* values above to
+// select a TLS backend. Defaults to MG_TLS_NONE (no TLS).
 #define MG_TLS MG_TLS_NONE
 #endif
 
