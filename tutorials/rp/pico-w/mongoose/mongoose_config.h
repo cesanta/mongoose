@@ -7,7 +7,6 @@
 
 #define MG_ENABLE_TCPIP 1
 #define MG_ENABLE_DRIVER_PICO_W 1
-#define MG_ENABLE_TCPIP_DRIVER_INIT 0
 
 // MAC address is read from OTP by the driver
 // Set your Wi-Fi configuration using a custom function:
