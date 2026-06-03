@@ -83,7 +83,7 @@ static void test_statechange(void) {
 }
 #if MG_ENABLE_IPV6
 static void mif6_fn(struct mg_tcpip_if *ifp, int ev, void *ev_data) {
-  if (ev == MG_TCPIP_EV_STATE_CHANGE) {
+  if (ev == MG_TCPIP_EV_STATE6_CHANGE) {
     ASSERT(*(uint8_t *) ev_data == MG_TCPIP_STATE_REQ);
     executed = true;
   }

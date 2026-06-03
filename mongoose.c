@@ -8307,7 +8307,7 @@ static void rx_ndp_ra(struct mg_tcpip_if *ifp, struct pkt *pkt) {
         (void) pref_lifetime;
 
         gotprefix = true;
-        if (prefix_len != ifp->prefix || !match_prefix(prefix, ifp->prefix, ifp->prefix_len))
+        if (prefix_len != ifp->prefix_len || !match_prefix(prefix, ifp->prefix, ifp->prefix_len))
           changed = true;
       }
       opts += length;
@@ -8395,6 +8395,7 @@ static void onstate6change(struct mg_tcpip_if *ifp) {
                               (struct mg_addr *) &ip6_allrouters),
                   ifp->ip6, (uint64_t *) ip6_allrouters.addr.ip6, false,
                   ifp->mac);
+    }
     if (ifp->is_ip6_changed) {
       struct mg_connection *c;
       for (c = ifp->mgr->conns; c != NULL; c = c->next) {
