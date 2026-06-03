@@ -1306,6 +1306,7 @@ static int mg_tls_client_recv_hello(struct mg_connection *c) {
     return -1;
   }
 
+  if (rio->len < 5 + 39 + 32 + 3 + 2) goto fail;
   msgsz = MG_LOAD_BE16(rio->buf + 3);
   mg_sha256_update(&tls->sha256, rio->buf + 5, msgsz);
 
