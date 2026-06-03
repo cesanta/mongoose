@@ -5,6 +5,8 @@
 
 #include "driver_mock.c"
 
+#define TCP_TEST_WIN 3000 // arbitrary peer window size to test txwindow
+
 static int s_num_tests = 0;
 static bool s_error = false;
 static int s_sent_fragment = 0;
@@ -116,6 +118,17 @@ static void tcpclosure_fn(struct mg_connection *c, int ev, void *ev_data) {
   (void) c, (void) ev_data;
 }
 
+static void txwindow_fn(struct mg_connection *c, int ev, void *ev_data) {
+  if (ev == MG_EV_ACCEPT) {
+    char bigdata[2 * TCP_TEST_WIN + 256];
+    *(int *) c->fn_data = 0;
+    mg_send(c, bigdata, sizeof(bigdata));
+  } else if (ev == MG_EV_WRITE) {
+     ++(*(int *) c->fn_data);
+  }
+  (void) c, (void) ev_data;
+}
+
 static void client_fn(struct mg_connection *c, int ev, void *ev_data) {
   if (ev == MG_EV_ERROR || ev == MG_EV_CONNECT) (*(int *) c->fn_data) = ev;
   (void) c, (void) ev_data;
@@ -139,7 +152,7 @@ static void frag_send_fn(struct mg_connection *c, int ev, void *ev_data) {
   if (ev == MG_EV_POLL) {
     if (!s_sent) {
       struct connstate *s = (struct connstate *) (c + 1);
-      s->dmss = 1500;      // mock set some destination MSS way larger
+      s->dmss = 1500, s->maxseq = 1500; // mock set dest MSS and win way larger
       c->send.len = 1200;  // setting TCP payload size
       s_sent = true;
     }
@@ -214,6 +227,7 @@ static void create_tcp_seg(struct eth *e, struct ipp *ipp, uint32_t seq,
   t.ack = mg_htonl(ack);
   t.sport = mg_htons(sport);
   t.dport = mg_htons(dport);
+  t.win = mg_htons(TCP_TEST_WIN);
   t.off = (uint8_t) ((sizeof(t) / 4) << 4) + (uint8_t) ((opts_len / 4) << 4);
   memcpy(s_driver_data.buf, e, sizeof(*e));
 #if MG_ENABLE_IPV6
@@ -898,6 +912,54 @@ static void test_tcp_retransmit(void) {
   mg_mgr_free(&mgr);
 }
 
+
+static void test_tcp_txwindow(void) {
+  struct mg_mgr mgr;
+  struct eth e;
+  struct ip ip;
+  struct ipp ipp;
+  struct tcp *t = (struct tcp *) (s_driver_data.buf + sizeof(e) + sizeof(ip));
+  int count = 0, stallcount;
+  uint32_t seq;
+  //bool response_recv = true;
+  struct mg_tcpip_driver driver;
+  struct mg_tcpip_if mif;
+
+  ipp.ip4 = &ip;
+  ipp.ip6 = NULL;
+
+  init_tcp_tests(&mgr, &e, &ipp, &driver, &mif, txwindow_fn);
+  mgr.conns->fn_data = &count;
+  init_tcp_handshake(&e, &ipp, &mgr);  // starts with seq_no=1000, ackno=2
+  ASSERT((t->seq == mg_htonl(2)));
+  do {
+    while (!received_response(&s_driver_data)) mg_mgr_poll(&mgr, 0);
+    seq = (uint32_t)(mg_htonl(t->seq) + s_driver_data.len - (size_t)((char *)((uint32_t *)t + (t->off >> 4)) - s_driver_data.buf));
+  } while (seq < (TCP_TEST_WIN + 2));
+  stallcount = count;
+  mg_mgr_poll(&mgr, 0), s_driver_data.len = 0;
+  mg_mgr_poll(&mgr, 0), s_driver_data.len = 0;
+  ASSERT((stallcount == count));
+  s_driver_data.tx_ready = false;
+  create_tcp_simpleseg(&e, &ipp, 1001, seq - TCP_TEST_WIN/2, TH_ACK, 0); // send ACK for half window
+  while (!received_response(&s_driver_data)) mg_mgr_poll(&mgr, 0);
+  ASSERT((stallcount < count));
+  do {
+    while (!received_response(&s_driver_data)) mg_mgr_poll(&mgr, 0);
+    seq = (uint32_t)(mg_htonl(t->seq) + s_driver_data.len - (size_t)((char *)((uint32_t *)t + (t->off >> 4)) - s_driver_data.buf));
+  } while (seq < (TCP_TEST_WIN + TCP_TEST_WIN/2 + 2));
+  stallcount = count;
+  mg_mgr_poll(&mgr, 0), s_driver_data.len = 0;
+  mg_mgr_poll(&mgr, 0), s_driver_data.len = 0;
+  ASSERT((stallcount == count));
+  s_driver_data.tx_ready = false;
+  create_tcp_simpleseg(&e, &ipp, 1001, seq, TH_ACK, 0); // send ACK
+  while (!received_response(&s_driver_data)) mg_mgr_poll(&mgr, 0);
+  ASSERT((stallcount < count));
+  s_driver_data.len = 0;
+  mg_mgr_free(&mgr);
+}
+
 static void test_frag_recv_path(void) {
   struct mg_mgr mgr;
   struct eth e;
@@ -1058,6 +1120,7 @@ static void test_tcp(bool ipv6) {
   if (!ipv6) {
     test_tcp_backlog();
     test_tcp_retransmit();
+    test_tcp_txwindow();
   }
 }
 

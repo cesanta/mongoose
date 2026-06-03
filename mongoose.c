@@ -7332,6 +7332,8 @@ struct connstate {
   uint64_t timer;                         // TCP timer (see 'ttype' below)
   uint32_t acked;                         // Last ACK-ed number
   size_t unacked;                         // Not acked bytes
+  uint32_t maxseq;                        // Max send seq (ack + window)
+  uint16_t win;                           // destination current window size
   uint16_t dmss;                          // destination MSS (from TCP opts)
   uint8_t mac[sizeof(struct mg_l2addr)];  // Peer hw address
   uint8_t ttype;                          // Timer type:
@@ -8577,6 +8579,7 @@ static struct mg_connection *accept_conn(struct mg_connection *lsn,
   s = (struct connstate *) (c + 1);
   s->dmss = mss;  // from options in client SYN
   s->seq = mg_ntohl(pkt->tcp->ack), s->ack = mg_ntohl(pkt->tcp->seq);
+  s->win = mg_ntohs(pkt->tcp->win), s->maxseq = (uint32_t)(s->seq + s->win);
 #if MG_ENABLE_IPV6
   if (lsn->loc.is_ip6) {
     c->rem.addr.ip6[0] = pkt->ip6->src[0],
@@ -8669,10 +8672,13 @@ long mg_io_send(struct mg_connection *c, const void *buf, size_t len) {
   len = trim_len(c, len);
   if (c->is_udp) {
     if (!udp_send(c, buf, len)) return MG_IO_WAIT;
-  } else {  // TCP, cap to peer's MSS
+  } else {  // TCP, cap to peer's MSS and check window
     struct mg_tcpip_if *ifp = c->mgr->ifp;
     size_t sent;
+    uint32_t room = s->maxseq - s->seq;
+    if (room == 0) return MG_IO_WAIT;
     if (len > s->dmss) len = s->dmss;  // RFC-6691: reduce if sending opts
+    if ((uint32_t) len > room) len = room;
     sent = tx_tcp(ifp, s->mac, &c->loc, &c->rem, TH_PUSH | TH_ACK,
                   mg_htonl(s->seq), mg_htonl(s->ack), buf, len);
     if (sent == 0) {
@@ -8705,6 +8711,12 @@ static void handle_tls_recv(struct mg_connection *c) {
       mg_call(c, MG_EV_READ, &n);
     }  // else n < 0: outstanding data to be moved to c->recv
   }
+}
+
+static void handle_ack(struct connstate *s, uint32_t ackno, uint16_t win) {
+  if (ackno < (s->seq - s->win) || ackno > s->seq) return;
+  s->maxseq = (uint32_t)(ackno + win);
+  s->win = win;
 }
 
 static void read_conn(struct mg_connection *c, struct pkt *pkt) {
@@ -8747,6 +8759,8 @@ static void read_conn(struct mg_connection *c, struct pkt *pkt) {
            mg_htonl(s->ack), NULL, 0);
     return;                        // no data to process
   } else if (pkt->pay.len == 0) {  // this is an ACK
+    if (pkt->tcp->flags & TH_ACK)
+      handle_ack(s, mg_ntohl(pkt->tcp->ack), mg_ntohs(pkt->tcp->win));
     if (s->fin_rcvd && s->ttype == MIP_TTYPE_FIN) s->twclosure = true;
     return;  // no data to process
   } else if (seq != s->ack) {
@@ -8764,6 +8778,8 @@ static void read_conn(struct mg_connection *c, struct pkt *pkt) {
     mg_error(c, "oom");
     return;  // drop it
   }
+    if (pkt->tcp->flags & TH_ACK)
+      handle_ack(s, mg_ntohl(pkt->tcp->ack), mg_ntohs(pkt->tcp->win));
   // Copy TCP payload into the IO buffer. If the connection is plain text,
   // we copy to c->recv. If the connection is TLS, this data is encrypted,
   // therefore we copy that encrypted data to the c->rtls iobuffer instead,
@@ -8882,6 +8898,7 @@ static void rx_tcp(struct mg_tcpip_if *ifp, struct pkt *pkt) {
     if (!handle_opt(s, pkt->tcp, pkt->ip6 != NULL))
       return;  // process options (MSS)
     s->seq = mg_ntohl(pkt->tcp->ack), s->ack = mg_ntohl(pkt->tcp->seq) + 1;
+    s->win = mg_ntohs(pkt->tcp->win), s->maxseq = (uint32_t)(s->seq + s->win);
     tx_tcp_ctrlresp(ifp, pkt, TH_ACK, pkt->tcp->ack);
     c->is_connecting = 0;  // Client connected
     settmout(c, MIP_TTYPE_KEEPALIVE);
