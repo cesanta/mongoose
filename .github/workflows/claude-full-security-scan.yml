@@ -104,3 +104,25 @@ jobs:
           path: ${{ steps.claude_scan.outputs.execution_file }}
           if-no-files-found: warn
           retention-days: 30
+
+      - name: Extract JSON findings from Claude output
+        if: always() && steps.claude_scan.outputs.execution_file != ''
+        shell: bash
+        run: |
+          jq -r '
+            .[]
+            | select(.type == "result")
+            | .result
+            | sub("^[^{]*"; "")
+          ' "${{ steps.claude_scan.outputs.execution_file }}" | jq . > security-findings.json
+
+          jq -e '.findings and .analysis_summary' security-findings.json > /dev/null
+
+      - name: Upload extracted JSON findings
+        if: always() && hashFiles('security-findings.json') != ''
+        uses: actions/upload-artifact@v4
+        with:
+          name: security-findings-${{ github.run_id }}
+          path: security-findings.json
+          if-no-files-found: error
+          retention-days: 30
