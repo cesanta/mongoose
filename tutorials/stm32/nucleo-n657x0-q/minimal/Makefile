@@ -16,7 +16,8 @@ FSBL_SOURCES = cmsis_n6/Source/Templates/gcc/startup_stm32n657xx_fsbl.s
 FSBL_SOURCES += fsbl.c
 
 
-all build example: fsbl.signed.bin firmware.bin
+all: fsbl.signed.bin firmware.bin
+build example: firmware.bin
 
 mongoose/mongoose.c mongoose/mongoose.h:
 	cp ../../../../mongoose.[ch] mongoose/
