@@ -292,12 +292,14 @@ static inline void mg_log_http_req(struct mg_connection *c,
             c->send.len - n, c->send.len - n - spaces, c->send.buf + n));
 }
 
-static struct mg_str mg_dash_file_name(struct mg_http_message *hm) {
-  struct mg_str name = mg_str_n(hm->uri.buf + 4, hm->uri.len - 4);  // - /fs/
+static bool mg_dash_file_name(struct mg_http_message *hm, struct mg_str *name) {
+  int len;
+  *name = mg_str_n(hm->uri.buf + 4, hm->uri.len - 4);  // - /fs/
   // Decode file name in-place - directly into the request buffer
-  int len = mg_url_decode(name.buf, name.len, name.buf, name.len + 1, 0);
-  if (len > 0 && (size_t) len <= name.len) name.len = (size_t) len;
-  return name;
+  len = mg_url_decode(name->buf, name->len, name->buf, name->len + 1, 0);
+  if (len > 0 && (size_t) len <= name->len) name->len = (size_t) len;
+  if (!mg_path_is_sane(*name)) return false;
+  return true;
 }
 
 static void mg_dash_ota_cb(struct mg_connection *c, const char *errmsg) {
@@ -435,10 +437,12 @@ void mg_dash_ev_handler(struct mg_connection *c, int ev, void *ev_data) {
     } else if (mg_match(hm->uri, mg_str("/fs/#"), NULL) &&
                (mg_strcasecmp(hm->method, mg_str("POST")) == 0 ||
                 mg_strcasecmp(hm->method, mg_str("PUT")) == 0)) {
-      struct mg_str name = mg_dash_file_name(hm);
-      mg_snprintf(c->data, sizeof(c->data), "%.*s", (int) name.len, name.buf);
-      mg_http_start_upload(c, hm, name, mg_str("/tmp"), &mg_fs_posix,
-                           mg_dash_upload_cb);
+      struct mg_str name;
+      if (mg_dash_file_name(hm, &name)) {
+        mg_snprintf(c->data, sizeof(c->data), "%.*s", (int) name.len, name.buf);
+        mg_http_start_upload(c, hm, name, mg_str("/tmp"), &mg_fs_posix,
+                             mg_dash_upload_cb);
+      }
     }
     if (c->data[0] != '\0') mg_log_http_req(c, hm);
   } else if (ev == MG_EV_HTTP_MSG && c->data[0] != '\0') {
@@ -463,17 +467,19 @@ void mg_dash_ev_handler(struct mg_connection *c, int ev, void *ev_data) {
       *(int *) c->data = level;
       mg_ws_upgrade(c, hm, NULL);
     } else if (mg_match(hm->uri, mg_str("/fs/#"), NULL)) {
-      struct mg_str name = mg_dash_file_name(hm);
-      char path[128];
-      mg_snprintf(path, sizeof(path), "/tmp/%.*s", name.len, name.buf);
-      if (mg_strcasecmp(hm->method, mg_str("DELETE")) == 0) {
-        // Delete file
-        mg_dash_file_del(name);
-        mg_dash_send_change(c->mgr, &set_files);
-        mg_http_reply(c, 200, NULL, "true");
-      } else {
-        // Serve file
-        mg_http_serve_file(c, hm, path, NULL);
+      struct mg_str name;
+      if (mg_dash_file_name(hm, &name)) {
+        char path[128];
+        mg_snprintf(path, sizeof(path), "/tmp/%.*s", name.len, name.buf);
+        if (mg_strcasecmp(hm->method, mg_str("DELETE")) == 0) {
+          // Delete file
+          mg_dash_file_del(name);
+          mg_dash_send_change(c->mgr, &set_files);
+          mg_http_reply(c, 200, NULL, "true");
+        } else {
+          // Serve file
+          mg_http_serve_file(c, hm, path, NULL);
+        }
       }
     } else if (mg_match(hm->uri, mg_str("/api/get/#"), parts) ||
                mg_match(hm->uri, mg_str("/api/get"), NULL)) {
