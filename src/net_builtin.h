@@ -49,6 +49,7 @@ struct mg_tcpip_if {
   bool enable_fcs_check;           // Do a FCS check on RX frames and strip it
   bool enable_mac_check;           // Do a hw addr check on RX frames
   bool update_mac_hash_table;      // Signal drivers to update MAC controller
+  bool is_ip_changed;              // IP address changed, close/restart conns
   struct mg_tcpip_driver *driver;  // Low level driver
   void *driver_data;               // Driver-specific data
   mg_tcpip_event_handler_t pfn;    // Driver-specific event handler function
@@ -65,6 +66,7 @@ struct mg_tcpip_if {
   uint64_t gw6[2];            // default gateway.
   bool enable_slaac;          // Enable IPv6 address autoconfiguration
   bool enable_dhcp6_client;   // Enable DCHPv6 client TODO()
+  bool is_ip6_changed;        // IPv6 address changed, close/restart conns
 #endif
 
   // Internal state, user can use it but should not change it

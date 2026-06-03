@@ -7702,6 +7702,13 @@ static void onstatechange(struct mg_tcpip_if *ifp) {
       MG_INFO(("      MAC: %M", mg_print_mac, ifp->mac));
     if (ifp->l2type == MG_TCPIP_L2_ETH)
       mg_tcpip_arp_request(ifp, ifp->ip, ifp->mac);  // gratuitous ARP annc
+    if (ifp->is_ip_changed) {
+      struct mg_connection *c;
+      for (c = ifp->mgr->conns; c != NULL; c = c->next) {
+        if (!c->is_listening && !c->is_udp) c->is_closing = 1;
+      }
+      ifp->is_ip_changed = false;
+    }
   } else if (ifp->state == MG_TCPIP_STATE_IP) {
     if (ifp->gw != 0 && ifp->l2type == MG_TCPIP_L2_ETH)
       mg_tcpip_arp_request(ifp, ifp->gw, NULL);  // unsolicited GW ARP request
@@ -8011,6 +8018,7 @@ static void rx_dhcp_client(struct mg_tcpip_if *ifp, struct pkt *pkt) {
       // assume DHCP server = router until ARP resolves
       memcpy(ifp->gwmac, mg_l2_getaddr(ifp, pkt->l2), sizeof(ifp->gwmac));
       ifp->gw_ready = true;  // NOTE(): actual gw ARP won't retry now
+      if (ifp->ip != ip) ifp->is_ip_changed = true;
       ifp->ip = ip, ifp->gw = gw, ifp->mask = mask;
       ifp->state = MG_TCPIP_STATE_IP;  // BOUND state
       mg_random(&rand, sizeof(rand));
@@ -8266,7 +8274,7 @@ static void rx_ndp_ra(struct mg_tcpip_if *ifp, struct pkt *pkt) {
   struct ndp_ra *ra = (struct ndp_ra *) (pkt->icmp6 + 1);
   uint8_t *opts = (uint8_t *) (ra + 1);
   size_t opt_left = pkt->pay.len - 12;
-  bool gotl2addr = false, gotprefix = false;
+  bool gotl2addr = false, gotprefix = false, changed = false;
   uint8_t l2[sizeof(struct mg_l2addr)];
   uint32_t mtu = 0;
   uint8_t *prefix, prefix_len;
@@ -8299,6 +8307,8 @@ static void rx_ndp_ra(struct mg_tcpip_if *ifp, struct pkt *pkt) {
         (void) pref_lifetime;
 
         gotprefix = true;
+        if (prefix_len != ifp->prefix || !match_prefix(prefix, ifp->prefix, ifp->prefix_len))
+          changed = true;
       }
       opts += length;
       opt_left -= length;
@@ -8306,6 +8316,7 @@ static void rx_ndp_ra(struct mg_tcpip_if *ifp, struct pkt *pkt) {
 
     // fill prefix and global
     if (gotprefix && !fill_global(ifp, prefix, prefix_len)) return;
+    if (changed) ifp->is_ip6_changed = true;
     ifp->gw6[0] = pkt->ip6->src[0], ifp->gw6[1] = pkt->ip6->src[1];
     if (gotl2addr) memcpy(ifp->gw6mac, l2, sizeof(ifp->gw6mac));
     if (gotl2addr || ifp->l2type == MG_TCPIP_L2_PPP || ifp->l2type == MG_TCPIP_L2_PPPoE) {
@@ -8384,6 +8395,12 @@ static void onstate6change(struct mg_tcpip_if *ifp) {
                               (struct mg_addr *) &ip6_allrouters),
                   ifp->ip6, (uint64_t *) ip6_allrouters.addr.ip6, false,
                   ifp->mac);
+    if (ifp->is_ip6_changed) {
+      struct mg_connection *c;
+      for (c = ifp->mgr->conns; c != NULL; c = c->next) {
+        if (!c->is_listening && !c->is_udp) c->is_closing = 1;
+      }
+      ifp->is_ip6_changed = false;
     }
   } else if (ifp->state6 == MG_TCPIP_STATE_IP) {
     if ((ifp->gw6[0] != 0 || ifp->gw6[1] != 0) && (ifp->l2type != MG_TCPIP_L2_PPP && ifp->l2type != MG_TCPIP_L2_PPPoE))
