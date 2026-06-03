@@ -9,33 +9,32 @@ static int authenticate(char *user, size_t userlen, const char *pass);
 // Action buttons
 static bool s_action1, s_action2;
 static uint64_t s_action2_timeout;
-static void write_actions(void) {
-  if (s_action2 == true) s_action2_timeout = mg_now() + 750;
-}
-static void read_actions(void) {
-  if (s_action2_timeout > mg_now()) s_action2 = true;
+static bool actions_fn(enum mg_dash_op op, struct mg_dash_user *u) {
+  (void) u;
+  if (op == MG_DASH_READ) {
+    if (s_action2_timeout > mg_now()) s_action2 = true;
+    return true;
+  }
+  if (op == MG_DASH_WRITE) {
+    if (s_action2 == true) s_action2_timeout = mg_now() + 750;
+    return true;
+  }
+  return false;
 }
 static struct mg_field fields_actions[] = {
     {"action1", MG_VAL_BOOL, &s_action1, sizeof(s_action1)},
     {"action2", MG_VAL_BOOL, &s_action2, sizeof(s_action2)},
     {NULL, MG_VAL_INT, NULL, 0},
 };
-static struct mg_field_set set_actions = {
-    "actions", fields_actions, read_actions, write_actions, 0, 0, NULL,
-};
+static struct mg_field_set set_actions = {"actions", fields_actions, actions_fn,
+                                          NULL,      NULL,           NULL};
 
 // Control panel
 // s_led1, s_led2, s_led3 are used to communicate LED status
 static bool s_led1, s_led2, s_led3;
-static void write_leds(void) {
-  // gpio_write(LED1_PIN, s_led1);
-  // gpio_write(LED2_PIN, s_led2);
-  // gpio_write(LED3_PIN, s_led3);
-}
-static void read_leds(void) {
-  // s_led1 = gpio_read(LED1_PIN);
-  // s_led2 = gpio_read(LED2_PIN);
-  // s_led3 = gpio_read(LED3_PIN);
+static bool leds_fn(enum mg_dash_op op, struct mg_dash_user *u) {
+  (void) u;
+  return op == MG_DASH_READ || op == MG_DASH_WRITE;
 }
 static struct mg_field fields_leds[] = {
     {"led1", MG_VAL_BOOL, &s_led1, sizeof(s_led1)},
@@ -43,18 +42,20 @@ static struct mg_field fields_leds[] = {
     {"led3", MG_VAL_BOOL, &s_led3, sizeof(s_led3)},
     {NULL, MG_VAL_INT, NULL, 0},
 };
-static struct mg_field_set set_leds = {
-    "leds", fields_leds, read_leds, write_leds, 0, 0, NULL,
-};
+static struct mg_field_set set_leds = {"leds", fields_leds, leds_fn,
+                                       NULL,   NULL,        NULL};
 
 // Read-only device Metrics
 static int s_ram = 32, s_cpu = 7;
 static double s_temperature = 24.8;
 
-static void read_metrics(void) {
-  s_ram = 25 + (rand() % 16);  // Sumulate metric change
+static bool metrics_fn(enum mg_dash_op op, struct mg_dash_user *u) {
+  (void) u;
+  if (op != MG_DASH_READ) return false;
+  s_ram = 25 + (rand() % 16);
   s_cpu = 7 + (rand() % 21);
   s_temperature = 14.8 + ((double) rand() / RAND_MAX) * 20.0;
+  return true;
 }
 
 static struct mg_field fields_metrics[] = {
@@ -64,9 +65,8 @@ static struct mg_field fields_metrics[] = {
     {NULL, MG_VAL_INT, NULL, 0},
 };
 
-static struct mg_field_set set_metrics = {
-    "metrics", fields_metrics, read_metrics, NULL, 0, 0, NULL,
-};
+static struct mg_field_set set_metrics = {"metrics", fields_metrics, metrics_fn,
+                                          NULL,      NULL,           NULL};
 
 // Read-write device settings
 static bool s_enable_login = false;
@@ -78,13 +78,18 @@ static char s_ota_version[] = "1.1.2";
 static char s_ota_status[40] = "No scans yet";
 static char s_ota_url[100] = "https://my-product.com/ota.json";
 
-static void write_settings(void) {
-  mg_log_level = s_log_level;
-  s_dash.authenticate = s_enable_login ? authenticate : NULL;
-}
-
-static void read_settings(void) {
-  s_log_level = mg_log_level;
+static bool settings_fn(enum mg_dash_op op, struct mg_dash_user *u) {
+  if (u->level < 3) return false;
+  if (op == MG_DASH_READ) {
+    s_log_level = mg_log_level;
+    return true;
+  }
+  if (op == MG_DASH_WRITE && u->level >= 7) {
+    mg_log_level = s_log_level;
+    s_dash.authenticate = s_enable_login ? authenticate : NULL;
+    return true;
+  }
+  return false;
 }
 
 static struct mg_field fields_settings[] = {
@@ -100,8 +105,7 @@ static struct mg_field fields_settings[] = {
 };
 
 static struct mg_field_set set_settings = {
-    "settings", fields_settings, read_settings, write_settings, 3, 7, NULL,
-};
+    "settings", fields_settings, settings_fn, NULL, NULL, NULL};
 
 #define NUM_POINTS_GRAPH1 7  // How many graph1 data points to send
 
@@ -139,9 +143,14 @@ static struct mg_field fields_graph1[] = {
     {NULL, MG_VAL_INT, NULL, 0},
 };
 
-static struct mg_field_set set_graph1 = {
-    "graph1", fields_graph1, read_graph1, NULL, 0, 0, NULL,
-};
+static bool graph1_fn(enum mg_dash_op op, struct mg_dash_user *u) {
+  (void) u;
+  if (op != MG_DASH_READ) return false;
+  read_graph1();
+  return true;
+}
+static struct mg_field_set set_graph1 = {"graph1", fields_graph1, graph1_fn,
+                                         NULL,     NULL,          NULL};
 
 #define NUM_POINTS_GRAPH2 100  // How many graph2 data points to send
 static char s_graph2_data[NUM_POINTS_GRAPH2 * 4 + 2 + 1];
@@ -172,9 +181,13 @@ static struct mg_field fields_graph2[] = {
     {NULL, MG_VAL_INT, NULL, 0},
 };
 
-static struct mg_field_set set_graph2 = {
-    "graph2", fields_graph2, read_graph2, NULL, 0, 0, NULL,
-};
+static bool graph2_fn(enum mg_dash_op op, struct mg_dash_user *u) {
+  (void) u;
+  if (op == MG_DASH_READ) read_graph2();
+  return op == MG_DASH_READ || op == MG_DASH_WRITE;
+}
+static struct mg_field_set set_graph2 = {"graph2", fields_graph2, graph2_fn,
+                                         NULL,     NULL,          NULL};
 
 static int authenticate(char *user, size_t userlen, const char *pass) {
   int level = 0;  // Authentication failure
@@ -188,7 +201,42 @@ static int authenticate(char *user, size_t userlen, const char *pass) {
   return level;
 }
 
+static struct file {
+  int index;
+  char name[64];
+  size_t size;
+  uint64_t checksum;
+} s_file;
+static struct mg_field_set set_files;
+
+static bool get_dir(const struct mg_dash_user *u, char *buf, size_t len) {
+  (void) u;
+  mg_snprintf(buf, len, "%s", "/tmp/dashboard");
+  return true;
+}
+
+static struct mg_field fields_files[] = {
+    {"name", MG_VAL_STR, s_file.name, sizeof(s_file.name)},
+    {"size", MG_VAL_UINT64, &s_file.size, 0},
+    {"checksum", MG_VAL_UINT64, &s_file.checksum, sizeof(s_file.checksum)},
+    {NULL, MG_VAL_INT, NULL, 0},
+};
+
+// Custom reader: let the framework fill "name" and "size", then add our
+// own field. A real implementation would hash the file instead of
+// hardcoding zero
+static bool files_fn(enum mg_dash_op op, struct mg_dash_user *u) {
+  if (op != MG_DASH_READ) return false;
+  if (!mg_dash_dir_read(&set_files, u)) return false;
+  s_file.checksum = 0;
+  return true;
+}
+
+static struct mg_field_set set_files = {"files",       fields_files, files_fn,
+                                        &s_file.index, get_dir,      NULL};
+
 void mg_dash_init(struct mg_mgr *mgr) {
+  MG_DASH_ADD_FIELD_SET(&s_dash, &set_files);
   MG_DASH_ADD_FIELD_SET(&s_dash, &set_leds);
   MG_DASH_ADD_FIELD_SET(&s_dash, &set_metrics);
   MG_DASH_ADD_FIELD_SET(&s_dash, &set_settings);
@@ -196,9 +244,14 @@ void mg_dash_init(struct mg_mgr *mgr) {
   MG_DASH_ADD_FIELD_SET(&s_dash, &set_graph2);
   MG_DASH_ADD_FIELD_SET(&s_dash, &set_actions);
 
-  // Add two fake files - for demonstration
-  mg_dash_file_add(mg_str("device-config.json"), 1234);
-  mg_dash_file_add(mg_str("device-log-2026-04-25.txt"), 1327854);
+#if MG_ARCH == MG_ARCH_UNIX
+  // Create demo files in the upload directory
+  mkdir("/tmp/dashboard", 0755);
+  mg_file_printf(&mg_fs_posix, "/tmp/dashboard/device-config.json",
+                 "{\"model\":\"example\",\"fw\":\"1.0\"}");
+  mg_file_printf(&mg_fs_posix, "/tmp/dashboard/device-log-2026-04-25.txt",
+                 "2026-04-25 12:00:00 Device started\n");
+#endif
 
   mg_mem_files = mg_packed_files;
   mg_http_listen(mgr, MG_HTTP_ADDR, mg_dash_ev_handler, &s_dash);

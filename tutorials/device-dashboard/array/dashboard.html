@@ -1,0 +1,129 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Array Dashboard</title>
+
+    <script src="https://mongoose.ws/resources/dashboard.js"></script>
+    <script>
+      let pageStart = 0;
+      function getPageSize() { return parseInt(document.getElementById('page-size').value) || 5; }
+      function loadPage(start) {
+        pageStart = Math.max(0, start);
+        Dashboard.call('get', { name: 'event', start: pageStart, size: getPageSize() });
+      }
+
+      // PATCH one element, then reload the current page to show the result
+      function modifyEntry(index, patch) {
+        return fetch(`api/get/event/${index}`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(patch),
+        }).then(() => loadPage(pageStart));
+      }
+
+      // Delete one element, then reload the current page
+      function removeEntry(index) {
+        return fetch(`api/del/event/${index}`, { method: 'DELETE' })
+          .then(() => loadPage(pageStart));
+      }
+
+      // Append a new element from the "add" form, then reload the current page
+      function addEntry() {
+        const text = document.getElementById('new-text').value;
+        const checked = document.getElementById('new-checked').checked;
+        return fetch('api/add/event', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ text, checked }),
+        }).then(() => {
+          document.getElementById('new-text').value = '';
+          document.getElementById('new-checked').checked = false;
+          loadPage(pageStart);
+        });
+      }
+
+      Dashboard.init({
+        debug: true,
+        data: { event: { start: 0, end: 100, data: [] } },
+      });
+
+      Dashboard.on('ready', () => {
+        document.body.style.visibility = 'visible';
+        loadPage(0);
+      });
+    </script>
+
+    <style>
+      * { box-sizing: border-box; }
+      html, body { height: 100%; }
+      body { margin: 0; background:#f8fafc; font:500 14px/1.35 Arial,sans-serif; }
+      .btn { display: inline-flex; align-items: center; justify-content: center; gap: 0.5rem; height: 2rem; padding: 0.3rem 1rem; font-size: 0.85rem; font-family: inherit; font-weight: 600; border-radius: 0.5rem; border: 1px solid transparent; cursor: pointer; transition: all 0.15s ease; white-space: nowrap; }
+      .btn-secondary { color: #64748b; background: #ffffff; border-color: #e2e8f0; }
+      .btn-secondary:hover { background: #f1f5f9; border-color: #cbd5e1; color: #475569; }
+      .btn-primary { color: #ffffff; background: linear-gradient(160deg, #38bdf8, #0ea5e9); border-color: #0284c7; }
+      .btn-primary:hover { background: linear-gradient(160deg, #0ea5e9, #0284c7); }
+      .btn:disabled { opacity: 0.45; cursor: not-allowed; pointer-events: none; }
+      .btn-icon { width: 2rem; padding: 0.3rem; }
+      .toolbar { display: flex; align-items: center; flex-wrap: wrap; gap: 0.75rem; margin: 1.25rem 0; }
+      input[type=text] { width: 4rem; padding: 0.3rem 0.5rem; font-size: 0.85rem; font-family: inherit; border: 1px solid #e2e8f0; border-radius: 0.5rem; outline: none; }
+      input[type=text]:focus { border-color: #7dd3fc; }
+      .toggle { position: relative; width: 2.75rem; height: 1.6rem; margin: 0; vertical-align: middle; border: 1px solid transparent; background: #d1d5db; border-radius: 0.8rem; outline: none; cursor: pointer; -webkit-appearance: none; appearance: none; transition: background 0.2s ease; }
+      .toggle::after { content: ""; position: absolute; left: 2px; top: 50%; width: 1.3rem; height: 1.3rem; background: #fff; border-radius: 50%; box-shadow: 0 1px 2px rgba(0,0,0,0.25); transform: translateY(-50%) translateX(0); transition: transform 0.2s ease; }
+      .toggle:checked { background: #10b981; }
+      .toggle:checked::after { transform: translateY(-50%) translateX(calc(100% - 4px)); }
+      .toggle:focus-visible { box-shadow: 0 0 0 3px rgba(16,185,129,0.25); }
+      .table-wrap { max-width: 44rem; overflow: auto; border: 1px solid #e2e8f0; border-radius: 0.5rem; background: #fff; }
+      table { width: 100%; border-collapse: collapse; }
+      th, td { padding: 0.65rem 0.85rem; border-bottom: 1px solid #e2e8f0; text-align: left; }
+      th { font-size: 0.75rem; text-transform: uppercase; color: #64748b; background: #f1f5f9; }
+      td:first-child { width: 7rem; color: #334155; font-variant-numeric: tabular-nums; }
+      tr:last-child td { border-bottom: 0; }
+    </style>
+  </head>
+
+  <body style="visibility: hidden;">
+    <main style="margin: 2rem; color: #64748b;">
+      <h1>Array read/write/add/delete</h1>
+
+      <div class="toolbar">
+        <button class="btn btn-secondary" onclick="loadPage(pageStart - getPageSize())">Prev</button>
+        <button class="btn btn-secondary" onclick="loadPage(pageStart + getPageSize())">Next</button>
+        <button class="btn btn-primary"   onclick="loadPage(pageStart)">Reload</button>
+        <label>Page size: <input id="page-size" type="text" value="5" /></label>
+        <span>${(event.start ?? 0) + 1}–${(event.start ?? 0) + event.data.length} of ${event.size ?? 0}</span>
+      </div>
+
+      <div class="table-wrap" id="entries">
+        <table>
+          <thead><tr><th>Index</th><th>Text</th><th>Done</th><th></th></tr></thead>
+          <tbody data-repeat="event.data" data-iterator="ev">
+            <tr>
+              <td>${ev.index}</td>
+              <td><input type="text" style="width: 100%;" value="${ev.text}" onchange="modifyEntry(${ev.index}, {text: this.value})" /></td>
+              <td><input type="checkbox" class="toggle" data-checked="ev.checked" onchange="modifyEntry(${ev.index}, {checked: this.checked})" /></td>
+              <td>
+                <button class="btn btn-secondary btn-icon" onclick="removeEntry(${ev.index})" title="Delete" aria-label="Delete">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                    <path d="M3 6h18" />
+                    <path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
+                    <path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6" />
+                    <line x1="10" y1="11" x2="10" y2="17" />
+                    <line x1="14" y1="11" x2="14" y2="17" />
+                  </svg>
+                </button>
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div class="toolbar">
+        <input id="new-text" type="text" style="width: 12rem;" placeholder="New entry text" />
+        <label><input id="new-checked" type="checkbox" class="toggle" /> Done</label>
+        <button class="btn btn-primary" onclick="addEntry()">Add</button>
+      </div>
+    </main>
+  </body>
+</html>

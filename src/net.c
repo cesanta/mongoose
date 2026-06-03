@@ -2,6 +2,7 @@
 #include "dns.h"
 #include "fmt.h"
 #include "log.h"
+#include "ota.h"
 #include "printf.h"
 #include "profile.h"
 #include "timer.h"
@@ -278,6 +279,11 @@ void mg_mgr_free(struct mg_mgr *mgr) {
 
 void mg_mgr_init(struct mg_mgr *mgr) {
   memset(mgr, 0, sizeof(*mgr));
+  // Anchor mg_fw_version: a real store into a struct field the optimiser
+  // can't elide forces the linker to keep the section alive even when no
+  // OTA polling code runs it. Callers that want mgr->userdata for their own
+  // purposes simply overwrite it after this call returns
+  mgr->userdata = (void *) mg_fw_version;
 #if MG_ENABLE_EPOLL
   if ((mgr->epoll_fd = epoll_create1(EPOLL_CLOEXEC)) < 0)
     MG_ERROR(("epoll_create1 errno %d", errno));

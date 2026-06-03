@@ -16,7 +16,7 @@
           leds: { led1: true, led2: false, led3: false },
           settings: { volume: 12, log_level: 3, name: 'Galway', enable_login: true, ota_version: '1.2.3', ota_status: 'No checks yet', ota_url: 'http://my-product.com/ota.json', ota_interval: 30 },
           metrics: { temperature: 1.2, cpu: 4, ram: 5, version: '1.2.3' },
-          files: {data: [{name: 'device-log-2026-04-25.txt', size: 8625563}]},
+          files: {start: 0, end: 100, data: [{name: 'device-log-2026-04-25.txt', size: 8625563}]},
         },
       });
     </script>
@@ -170,10 +170,12 @@
           ]);
         };
 
-        // Intercept graph change notifications, re-plot data
+        // Intercept change notifications: re-plot graphs, reload the file
+        // list whenever its size changes (file uploaded or deleted)
         Dashboard.on('change', args => {
           args?.graph1?.data && updateGraph1(args?.graph1?.data);
           args?.graph2?.data && updateGraph2(args?.graph2?.data);
+          typeof args?.files === 'number' && Dashboard.call('get', { name: 'files', start: 0, end: 100 });
         });
       });
     </script>
@@ -689,7 +691,7 @@ a, a:visited, a:link { text-decoration: none; }
             <div class="panel-title">
               <span>
                 <span>File Manager</span>
-                <span class="metric-status">${files.data.length} Files</span>
+                <span class="metric-status">${files.size ?? files.data.length} Files</span>
               </span>
               <div class="header-actions">
                 <label class="btn btn-primary">
@@ -699,7 +701,7 @@ a, a:visited, a:link { text-decoration: none; }
                     <path d="M5 21h14" />
                   </svg>
                   Upload
-                  <input type="file" hidden data-upload="1" />
+                  <input type="file" hidden data-upload="files" />
                 </label>
               </div>
             </div>
@@ -717,14 +719,14 @@ a, a:visited, a:link { text-decoration: none; }
                   </div>
                   <div class="file-size">${f.size}</div>
                   <div class="file-actions">
-                    <a href="fs/${encodeURIComponent(f.name)}" target="_blank" class="btn btn-secondary">
+                    <a href="fs/files/${encodeURIComponent(f.name)}" target="_blank" class="btn btn-secondary">
                       <svg viewBox="0 0 24 24" class="nav-icon" fill="none" stroke="currentColor" stroke-width="2">
                         <path d="M12 3v12" />
                         <path d="m7 10 5 5 5-5" />
                         <path d="M5 21h14" />
                       </svg>
                     </a>
-                    <button onclick="fetch('fs/${encodeURIComponent(f.name)}', {method: 'DELETE'}); return false;" class="btn btn-secondary">
+                    <button onclick="fetch('fs/files/${encodeURIComponent(f.name)}', {method: 'DELETE'}); return false;" class="btn btn-secondary">
                       <svg viewBox="0 0 24 24" class="nav-icon" fill="none" stroke="currentColor" stroke-width="2">
                         <path d="M3 6h18" />
                         <path d="M8 6V4h8v2" />

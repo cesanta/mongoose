@@ -100,3 +100,37 @@ enum { MG_OTA_CONFIRMED = 0, MG_OTA_TESTING = 1, MG_OTA_FAILED = 2 };
 // Pull based OTA over HTTP
 void mg_ota_url_check(struct mg_mgr *mgr, const char *current_version,
                       const char *metadata_url, void (*fn)(const char *status));
+
+#ifndef MG_OTA_URL
+#define MG_OTA_URL NULL
+#endif
+
+#ifndef MG_OTA_STATUS_FN
+#define MG_OTA_STATUS_FN NULL
+#endif
+
+#ifndef MG_OTA_FIRMWARE_VERSION
+#define MG_OTA_FIRMWARE_VERSION "1.0.0"
+#endif
+
+#ifndef MG_OTA_MAX_VERSION_LEN
+#define MG_OTA_MAX_VERSION_LEN 64
+#endif
+
+// Scannable "MG_VERSION:<MG_OTA_FIRMWARE_VERSION>" tag embedded in every
+// firmware binary, for server-side extraction. mg_mgr_init() stashes its
+// address in mgr->userdata, which is what keeps it from being stripped by
+// -Wl,--gc-sections on builds that never poll for OTAs
+extern const char mg_fw_version[];
+
+#ifndef MG_OTA_PULL_INTERVAL_SECONDS
+#define MG_OTA_PULL_INTERVAL_SECONDS 60
+#endif
+
+#ifndef MG_ENABLE_CUSTOM_DEVICE_ID
+#define MG_ENABLE_CUSTOM_DEVICE_ID 0
+#endif
+
+void mg_ota_device_id(char *buf, size_t len);
+
+void mg_ota_poll(struct mg_mgr *);

@@ -2180,6 +2180,7 @@ void mg_mgr_poll(struct mg_mgr *mgr, int ms) {
   struct mg_connection *c, *tmp;
   uint64_t now = mg_millis();
   mg_timer_poll(&mgr->timers, now);
+  mg_ota_poll(mgr);
   if (mgr->ifp == NULL || mgr->ifp->driver == NULL) return;
   mg_tcpip_poll(mgr->ifp, now);
   for (c = mgr->conns; c != NULL; c = tmp) {

@@ -1024,19 +1024,19 @@ static void mg_upload_handler(struct mg_connection *c, int ev, void *ev_data) {
       if (p->fd != NULL) { mg_fs_close(p->fd); p->fd = NULL; }
       else mg_ota_end();
       p->fn(c, "write error");
-      p->fn = NULL;
+      mg_free(c->pfn_data); c->pfn_data = NULL; p->fn = NULL;
     } else if (p->received >= p->expected) {
       const char *errmsg = NULL;
       if (p->fd != NULL) { mg_fs_close(p->fd); p->fd = NULL; }
       else if (!mg_ota_end()) errmsg = "OTA finalize failed";
       p->fn(c, errmsg);
-      p->fn = NULL;
+      mg_free(c->pfn_data); c->pfn_data = NULL; p->fn = NULL;
     }
   } else if (ev == MG_EV_ERROR || ev == MG_EV_CLOSE) {
     if (p->fd != NULL) { mg_fs_close(p->fd); p->fd = NULL; }
     else mg_ota_end();
     p->fn(c, ev == MG_EV_ERROR ? (const char *) ev_data : "connection closed");
-    p->fn = NULL;
+    mg_free(c->pfn_data); c->pfn_data = NULL; p->fn = NULL;
   }
   (void) ev_data;
 }
@@ -1044,6 +1044,10 @@ static void mg_upload_handler(struct mg_connection *c, int ev, void *ev_data) {
 static void mg_upload_default_cb(struct mg_connection *c, const char *status) {
   MG_INFO(("%lu %s", c->id, status ? status : "ok"));
   mg_http_reply(c, status ? 500 : 200, "", "%s\n", status ? status : "ok");
+}
+
+const char *mg_upload_path(struct mg_connection *c) {
+  return (const char *) c->pfn_data;
 }
 
 void mg_http_start_upload(struct mg_connection *c, struct mg_http_message *hm,
@@ -1065,6 +1069,7 @@ void mg_http_start_upload(struct mg_connection *c, struct mg_http_message *hm,
   p->fd = fd;
   p->fn = fn;
   c->fn = mg_upload_handler;
+  c->pfn_data = strdup(path);
   c->pfn = NULL;
   mg_iobuf_del(&c->recv, 0, hm->head.len);
   mg_call(c, MG_EV_READ, &c->recv.len);

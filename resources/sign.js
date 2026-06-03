@@ -70,8 +70,8 @@ function sign(firmware, privateKeyFile = 'private.pem') {
     ? firmware.slice(0, dot) + '.signed' + firmware.slice(dot)
     : firmware + '.signed';
 
-  fs.writeFileSync(out, Buffer.concat([fw, raw]));
-  console.log(`Signed: ${out}  (${fw.length} bytes firmware + 64 bytes signature)`);
+  fs.writeFileSync(out, Buffer.concat([fw, raw, Buffer.from('MGSG')]));
+  console.log(`Signed: ${out}  (${fw.length} bytes firmware + 64 bytes signature + 4 bytes magic)`);
 }
 
 const [,, cmd, arg1, arg2] = process.argv;

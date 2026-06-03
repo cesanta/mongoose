@@ -44,7 +44,7 @@
           <div>
             This toggle button is a stylised checkbox.
             <code>data-bind="status.led1"</code> binds it to the device variable.
-            <code>data-autosave="1"</code> makes it send <code>{"led1": VALUE}</code> to the device every time the user toggles the
+            <code>data-autosave="1"</code> makes it send <code>{"status":{"led1": VALUE}}</code> to the device every time the user toggles the
             button. On the device side, <code>read_status()</code> or <code>write_status()</code> are called every time
             the LED state is read or written.
           </div>

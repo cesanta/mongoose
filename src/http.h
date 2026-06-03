@@ -64,6 +64,7 @@ void mg_http_start_upload(struct mg_connection *c, struct mg_http_message *hm,
                           void (*fn)(struct mg_connection *, const char *));
 void mg_http_start_ota(struct mg_connection *c, struct mg_http_message *hm,
                        void (*fn)(struct mg_connection *, const char *));
+const char *mg_upload_path(struct mg_connection *c);
 void mg_http_bauth(struct mg_connection *, const char *user, const char *pass);
 struct mg_str mg_http_get_header_var(struct mg_str s, struct mg_str v);
 size_t mg_http_next_multipart(struct mg_str, size_t, struct mg_http_part *);

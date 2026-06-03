@@ -4,6 +4,14 @@ Mongoose is a two-file C/C++ networking library for embedded and desktop systems
 It is developed by Cesanta (https://cesanta.com) and available at https://mongoose.ws.
 License: GPLv2 or commercial.
 
+## General rules
+
+- Always re-read files before patching, so you do not overwrite existing changes
+- Never guess. If you don't know, say you don't know and stop
+- Read mongoose.h for API definition and docstrings
+- Do not use a separate HTTP library, MQTT library, or WebSocket library,
+  or Modbus-TCP library alongside Mongoose. Mongoose provides all of these.
+
 ## Integration
 
 Copy `mongoose.h` and `mongoose.c` into a `mongoose/` subdirectory of the
@@ -38,15 +46,11 @@ your_project/
     └── mongoose_config.h    # required for embedded: set MG_ARCH and options
 ```
 
-Minimal `mongoose_config.h` for STM32:
+Minimal `mongoose_config.h` should set `MG_ARCH`. For exmaple, for STM32:
 
 ```c
 #define MG_ARCH MG_ARCH_CUBE
-// add driver, TLS, and other options here
 ```
-
-Do not use a separate HTTP library, MQTT library, or WebSocket library alongside
-Mongoose. Mongoose provides all of these.
 
 ## Core API
 
@@ -80,7 +84,7 @@ void handler(struct mg_connection *c, int ev, void *ev_data) {
 
 ## TCP/IP stack — set exactly one
 
-Configure in the build system (`-D` flag) or in `mongoose_config.h`:
+Configure in `mongoose_config.h`:
 
 | Define | Use when |
 |--------|----------|
@@ -216,7 +220,11 @@ for (;;) {
 - Do **not** add vanilla JS event listeners, `fetch()` calls, or custom
   reactive logic to `dashboard.html`.
 - Do **not** modify `dashboard.html` unless the user explicitly asks.
-- Bind controls to device state using `data-bind` attributes:
+- Bind controls to device state using `data-bind` attributes
+- The `__status` object in evaluations is read-only, do not alter it
+- If you need to pass data between the UI and backend.c, add extra
+  fieldsets/fields - see next section about it
+- If you want to display device data in HTML, use `${}` evaluations
 
 ```html
 <!-- checkbox bound to a device field, auto-saves on change -->
@@ -322,35 +330,20 @@ static struct mg_field fields_leds[] = {
 };
 ```
 
-In order to simulate array of elements, use an integer field as an index.
-Reader first writes an index of the element to read, and then it reads
-an element.
+Array field sets are recognised by the "index" pointer in the
+field set descriptor:
+// Non-NULL: array set. *index is set before fn(READ) call;
+// fn sets *index = -1 to signal end of iteration.
+// Size query: framework sets *index = -1 before fn(READ); fn sets *index = total size
 
 ```c
-struct event {
+static struct event {
   int index;
   char message[100];
-};
-
-static struct event s_event;
-
-static void read_event(void) {
-  mg_snprintf(s_event.message, sizeof(s_event.message), "my ev %d",
-              s_event.index);
-}
-
-static void write_event(void) {
-  // Do nothing. Dashboard sets the s_event.index
-}
-
-static struct mg_field fields_event[] = {
-    {"index", MG_VAL_INT, &s_event.index, sizeof(s_event.index)},
-    {"message", MG_VAL_STR, &s_event.message, sizeof(s_event.message)},
-    {NULL, MG_VAL_INT, NULL, 0},
-};
+} s_event;
 
 static struct mg_field_set field_set_event = {
-    "event", fields_event, read_event, write_event, 0, 0, NULL,
+    "event", fields_event, event_fn, &s_event.index, 0, 0, 0
 };
 ```
 
@@ -397,6 +390,18 @@ MG_ERROR(("errno=%d", err));
 ```
 
 Set `MG_ENABLE_LOG=0` to disable all logging (production / size-sensitive builds).
+
+## Firmware OTA
+
+Mongoose implements OTA for a variety of targets, see MG_OTA_ defines. To
+enable, set the respective define in `mongoose_config.h`, for example:
+
+```c
+#define MG_OTA MG_OTA_STM32H5
+```
+
+Once this is done, you do OTA via HTTP upload, or HTTP periodic pull, or over
+MQTT. Read https://mongoose.ws/docs/guides/firmware-ota-updates/ for details.
 
 ## Key rules for AI code generation
 
