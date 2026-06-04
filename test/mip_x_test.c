@@ -8,8 +8,11 @@
 bool mip_x_test(struct mg_mgr *);
 
 
-#ifdef MQTT_LOCALHOST
-#define MQTT_URL "mqtt://127.0.0.1:1883"
+#ifdef MQTT_HOST
+// we'll generate MQTT_URL
+#ifndef MQTT_HOST_NAME
+#define MQTT_HOST_NAME "localhost"
+#endif
 #else
 #define MQTT_URL "mqtt://broker.hivemq.com:1883"
 #endif
@@ -49,7 +52,7 @@ static const char *s_ca_cert =
     "emyPxgcYxn/eR44/KJ4EBs+lVDR3veyJm+kXQ99b21/+jh5Xos1AnX5iItreGCc=\n"
     "-----END CERTIFICATE-----\n";
 #elif MG_TLS
-#ifdef MQTT_LOCALHOST
+#ifdef MQTT_HOST
 // we'll generate MQTTS_URL
 #define MQTTS_CA mg_str(s_ca_cert)
 static const char *s_ca_cert =
@@ -64,7 +67,7 @@ static const char *s_ca_cert =
 #else
 #define MQTTS_URL "mqtts://broker.hivemq.com:8883"
 #define MQTTS_CA mg_unpacked("/data/ca.pem")
-#endif // MQTT_LOCALHOST
+#endif // MQTT_HOST
 #endif
 
 static char *host_ip;
@@ -163,15 +166,8 @@ static void fcb(struct mg_connection *c, int ev, void *ev_data) {
       } else {
         opts.name = mg_url_host(fd->url);
         opts.ca = mg_unpacked("/data/ca.pem");
-#if MG_TLS == MG_TLS_BUILTIN
-        // our TLS does not search for the proper CA in a bundle
-        opts.ca = mg_file_read(&mg_fs_posix, "data/e5.crt");
-#endif
       }
       mg_tls_init(c, &opts);
-#if MG_TLS == MG_TLS_BUILTIN
-      mg_free((void *) opts.ca.buf);
-#endif
     }
   } else if (ev == MG_EV_HTTP_MSG) {
     struct mg_http_message *hm = (struct mg_http_message *) ev_data;
@@ -263,7 +259,12 @@ static void mqtt_fn(struct mg_connection *c, int ev, void *ev_data) {
     struct mg_tls_opts opts;
     memset(&opts, 0, sizeof(opts));
     opts.ca = MQTTS_CA;
+#if defined(MQTT_HOST) && MG_TLS != MG_TLS_BUILTIN
+    opts.name = mg_str_s(MQTT_HOST_NAME);
+    printf("HOST_NAME: %.*s\n", (int) opts.name.len, opts.name.buf);
+#else
     opts.name = mg_url_host(data->url);
+#endif
     mg_tls_init(c, &opts);
 #endif
   } else if (ev == MG_EV_MQTT_OPEN) {
@@ -322,26 +323,33 @@ static void test_mqtt_connsubpub(struct mg_mgr *mgr) {
   memset(&opts, 0, sizeof(opts));
   opts.clean = true, opts.version = 4;
   data.passed = false;
-#if defined(MQTT_LOCALHOST) && MG_TLS != MG_TLS_BUILTIN
+#if defined(MQTT_HOST) && MG_TLS != MG_TLS_BUILTIN
   if (host_ip == NULL) {
-    printf("\nMQTT_LOCALHOST defined but no HOST_IP provided, skipping MQTTS tests\n");
+    printf("\nMQTT_HOST defined but no HOST_IP provided, skipping MQTT tests\n");
     return;
   }
   printf("HOST_IP: %s\n", host_ip);
 #endif
 #if MG_TLS
-#if defined(MQTT_LOCALHOST) && MG_TLS != MG_TLS_BUILTIN
+#if MG_TLS != MG_TLS_BUILTIN
+#if defined(MQTT_HOST)
   data.url = mg_mprintf("mqtts://%s:8883", host_ip);
 #else
   data.url = strdup(MQTTS_URL);
 #endif
-#else
-#ifdef MQTT_LOCALHOST
+#else // MG_TLS != MG_TLS_BUILTIN
+#if defined(MQTT_HOST)
+  printf("\nAssuming MQTT_HOST is NOT 1.3, ignoring it for MQTTS tests\n");
+#endif
+  data.url = strdup(MQTTS_URL);
+#endif
+#else // MG_TLS
+#ifdef MQTT_HOST
   data.url = mg_mprintf("mqtt://%s:1883", host_ip);
 #else
   data.url = strdup(MQTT_URL);
 #endif
-#endif
+#endif // MG_TLS
   s_conn = mg_mqtt_connect(mgr, data.url, &opts, mqtt_fn, &data);
   ASSERT(s_conn != NULL);
   for (int i = 0; i < 1000 && s_conn != NULL && !s_conn->is_closing; i++) {
@@ -414,16 +422,32 @@ static void test_tls(struct mg_mgr *mgr) {
     return;
   }
   printf("HOST_IP: %s\n", host_ip);
-  // - POST a large file, make sure we drain TLS buffers and read all: done at
-  // server test, using curl as POSTing client
+  printf("NO SIMPLE TLS TEST, no known way to connect to ourselves and no server in HOST_IP\n");
+#if MG_TLS == MG_TLS_BUILTIN && defined(__linux__) && \
+    MG_ENABLE_CHACHA20  // skip for non-CHACHA tests
   // - Fire patched server, test multiple TLS records per TCP segment handling
-  url = mg_mprintf("https://%s:8443", host_ip);  // for historic reasons
-  ASSERT(system("tls_multirec/server -d tls_multirec &") == 0);
-  sleep(1);
-  ASSERT(fetch(mgr, buf, url, "GET /thefile HTTP/1.0\n\n") == 200);
-  ASSERT(cmpbody(buf, data.buf) == 0);  // "thefile" links to Makefile
-  ASSERT(system("killall tls_multirec/server") == 0);
-  free(url);
+  // skip other TLS stacks to avoid "bad client hello", we are 1.3 only
+  if (access("tls_multirec/server", X_OK) == 0) {
+    url = mg_mprintf("https://%s:8443", host_ip);  
+    ASSERT(system("tls_multirec/server -d tls_multirec &") == 0);
+    sleep(1);
+    // fetch() needs to loop enough times in order to process all TLS records;
+    // otherwise it will end with 200 and shorter file contents
+    ASSERT(fetch(mgr, buf, url, "GET /thefile HTTP/1.0\n\n") == 200);
+    ASSERT(cmpbody(buf, data.buf) == 0);  // "thefile" links to Makefile
+    ASSERT(system("killall tls_multirec/server") == 0);
+    free(url);
+  } else {
+    printf("SKIPPED TLS MULTIPLE RECORDS TEST, tls_multirec/server NOT PRESENT\n");
+  }
+#else
+  printf("SKIPPED TLS MULTIPLE RECORDS TEST, not a known TLS 1.3 stack\n");
+  (void) cmpbody("", "");
+  (void) mgr;
+  (void) url; // these three: NO SIMPLE TLS TEST
+  (void) buf;
+  (void) data;
+#endif
 #else
   (void) cmpbody("", "");
   (void) mgr;
