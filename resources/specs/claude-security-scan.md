@@ -481,6 +481,7 @@ PRECEDENTS - Mongoose-specific filtering decisions:
 28. Keep availability findings when one malformed packet, request, certificate, DNS response, MQTT message, WebSocket frame, or small sequence can reliably crash, wedge, corrupt, or disrupt a Mongoose target.
 29. Keep custom backend findings only when the issue is in Mongoose’s backend interface, default backend, documented backend contract, or common backend implementation.
 30. When uncertain, keep findings with clear external input, reachable code path, and concrete impact in Mongoose library/protocol/driver code; filter internal-access, impossible-state, local-misuse, generic-hardening, and speculative reports.
+31. For dashboard reports, do not infer unauthenticated access from a route-specific check alone; account for the broader authentication flow. Keep concrete reachable bugs such as path traversal, unsafe decoded paths, or file read/write/delete issues.
 
 ## DIRECTORY AND FILE EXCLUSIONS
 
