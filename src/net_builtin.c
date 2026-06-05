@@ -1403,13 +1403,16 @@ long mg_io_send(struct mg_connection *c, const void *buf, size_t len) {
 }
 
 static void handle_tls_recv(struct mg_connection *c) {
-  size_t avail = mg_tls_pending(c);
+  size_t avail = mg_tls_pending(c); // will change after mg_tls_recv()
   size_t min = avail > MG_MAX_RECV_SIZE ? MG_MAX_RECV_SIZE : avail;
-  struct mg_iobuf *io = &c->recv;
+  struct mg_iobuf *io = &c->recv; // allocated on first avail > 0
   if (io->size - io->len < min && !mg_iobuf_resize(io, io->len + min)) {
     mg_error(c, "oom");
   } else {
-    // Decrypt data directly into c->recv
+    // Decrypt data directly into c->recv. If io->buf = NULL or
+    // io->len = io->size (no room), there can be outstanding data that can't be
+    // moved (mg_tls_pending() > 0 after mg_tls_recv() returns). So mg_tls_recv()
+    // takes care of returning 0 in this case (commented as "MIP")
     long n = mg_tls_recv(c, io->buf != NULL ? &io->buf[io->len] : io->buf,
                          io->size - io->len);
     if (n == MG_IO_ERR) {
