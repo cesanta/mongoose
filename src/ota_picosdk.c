@@ -89,7 +89,7 @@ static bool __no_inline_not_in_flash_func(mg_picosdk_write)(void *addr,
 #ifndef __riscv
     MG_ARM_ENABLE_IRQ();
 #else
-    asm volatile("csrrs mstatus, %0" : : "i"(1 << 3) : "memory");
+    asm volatile("csrs mstatus, %0" : : "i"(1 << 3) : "memory");
 #endif
   }
   MG_DEBUG(("Flash write %lu bytes @ %p.", len, dst));
