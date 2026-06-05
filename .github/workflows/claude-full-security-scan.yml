@@ -27,7 +27,7 @@ jobs:
   scan:
     name: Full codebase security scan
     runs-on: ubuntu-latest
-    timeout-minutes: 90
+    timeout-minutes: 60
 
     env:
       DEFAULT_PROMPT_PATH: "resources/specs/claude-security-scan.md"
@@ -96,33 +96,84 @@ jobs:
             --allowedTools "Read,Glob,Grep,Bash(git:*),Bash(find:*),Bash(grep:*),Bash(sed:*),Bash(cat:*)"
             --model claude-opus-4-8
 
-      - name: Upload Claude scan execution output
+      - name: Prepare private security scan outputs
         if: always() && steps.claude_scan.outputs.execution_file != ''
-        uses: actions/upload-artifact@v4
-        with:
-          name: claude-full-codebase-security-scan-${{ github.run_id }}
-          path: ${{ steps.claude_scan.outputs.execution_file }}
-          if-no-files-found: warn
-          retention-days: 30
-
-      - name: Extract JSON findings from Claude output
-        if: always() && steps.claude_scan.outputs.execution_file != ''
+        id: prepare_outputs
         shell: bash
         run: |
-          jq -r '
-            .[]
-            | select(.type == "result")
-            | .result
-            | sub("^[^{]*"; "")
-          ' "${{ steps.claude_scan.outputs.execution_file }}" | jq . > security-findings.json
+          set -u
+          mkdir -p private-scan-results
+          TODAY="$(date -u +%Y%m%d)"
+          EXECUTION_OUTPUT_FILE="claude-execution-output_${TODAY}.json"
+          FINDINGS_FILE="security-findings_${TODAY}.json"
 
-          jq -e '.findings and .analysis_summary' security-findings.json > /dev/null
+          HAS_EXECUTION_OUTPUT="false"
+          HAS_JSON_FINDINGS="false"
 
-      - name: Upload extracted JSON findings
-        if: always() && hashFiles('security-findings.json') != ''
-        uses: actions/upload-artifact@v4
-        with:
-          name: security-findings-${{ github.run_id }}
-          path: security-findings.json
-          if-no-files-found: error
-          retention-days: 30
+          echo "date_suffix=${TODAY}" >> "$GITHUB_OUTPUT"
+          echo "execution_output_file=${EXECUTION_OUTPUT_FILE}" >> "$GITHUB_OUTPUT"
+          echo "findings_file=${FINDINGS_FILE}" >> "$GITHUB_OUTPUT"
+
+          # First check whether the raw Claude execution output exists.
+          if [ -f "${{ steps.claude_scan.outputs.execution_file }}" ]; then
+            jq '
+              map(select(.type == "result"))
+              ' "${{ steps.claude_scan.outputs.execution_file }}" > "private-scan-results/${EXECUTION_OUTPUT_FILE}"
+            HAS_EXECUTION_OUTPUT="true"
+
+            if jq -r '
+              .[]
+              | select(.type == "result")
+              | .result
+              | sub("^[^{]*"; "")
+            ' "${{ steps.claude_scan.outputs.execution_file }}" \
+              | jq . > "private-scan-results/${FINDINGS_FILE}"
+            then
+              if jq -e '.findings and .analysis_summary' "private-scan-results/${FINDINGS_FILE}" > /dev/null; then
+                HAS_JSON_FINDINGS="true"
+              else
+                rm -f "private-scan-results/${FINDINGS_FILE}"
+              fi
+            else
+              rm -f "private-scan-results/${FINDINGS_FILE}"
+            fi
+          fi
+
+          echo "has_execution_output=${HAS_EXECUTION_OUTPUT}" >> "$GITHUB_OUTPUT"
+          echo "has_json_findings=${HAS_JSON_FINDINGS}" >> "$GITHUB_OUTPUT"
+
+      - name: Push scan outputs to private security repo
+        if: always() && steps.prepare_outputs.outputs.has_execution_output == 'true'
+        env:
+          SECURITY_RESULTS_TOKEN: ${{ secrets.SECURITY_RESULTS_TOKEN }}
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          RESULTS_REPO="cesanta/security"
+          WORKDIR="$(mktemp -d)"
+
+          git clone "https://x-access-token:${SECURITY_RESULTS_TOKEN}@github.com/${RESULTS_REPO}.git" "$WORKDIR"
+
+          mkdir -p "$WORKDIR/files"
+
+          cp "private-scan-results/${{ steps.prepare_outputs.outputs.execution_output_file }}" "$WORKDIR/files/"
+
+          if [ "${{ steps.prepare_outputs.outputs.has_json_findings }}" = "true" ]; then
+            cp "private-scan-results/${{ steps.prepare_outputs.outputs.findings_file }}" "$WORKDIR/files/"
+          fi
+
+          cd "$WORKDIR"
+
+          git config user.name "security-scan-bot"
+          git config user.email "security-scan-bot@users.noreply.github.com"
+
+          git add files/
+
+          if git diff --cached --quiet; then
+            echo "No scan outputs to commit."
+            exit 0
+          fi
+
+          git commit -m "Add security scan results ${{ steps.prepare_outputs.outputs.date_suffix }}"
+          git push
