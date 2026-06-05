@@ -4,7 +4,7 @@ BRIDGE_BROADCAST=192.168.32.255
 BRIDGE_IP=192.168.32.1
 BRIDGE_NETWORK=192.168.32.0/24
 BRIDGE_MASK=255.255.255.0
-// Host network is 'eth0'
+# Host network is 'eth0'
 TAP=tap0
 
 # see our network configuration

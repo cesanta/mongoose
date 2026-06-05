@@ -87,7 +87,7 @@ mip_test: mip_test.c mongoose.c mongoose.h packed_fs.c Makefile
 	$(CC) mip_test.c packed_fs.c $(CFLAGS) $(LDFLAGS) -o $@
 	ASAN_OPTIONS=$(ASAN_OPTIONS) $(RUN) ./$@
 
-mip_tap_test: mip_tap_test.c mongoose.c mongoose.h packed_fs.c Makefile tls_multirec/server
+mip_tap_test: mip_x_test.c mip_tap_test.c mongoose.c mongoose.h packed_fs.c Makefile tls_multirec/server
 	$(CC) mip_tap_test.c packed_fs.c $(CFLAGS) $(LDFLAGS) -o $@
 	ASAN_OPTIONS=$(ASAN_OPTIONS) $(RUN) ./$@
 
@@ -96,7 +96,7 @@ port_tap_bridge: port_tap_bridge.c
 	cc port_tap_bridge.c -o $@
 
 # requires port_tap_bridge to be running
-mip_port_test: mip_port_test.c mongoose.c mongoose.h packed_fs.c Makefile tls_multirec/server
+mip_port_test: mip_x_test.c mip_port_test.c mongoose.c mongoose.h packed_fs.c Makefile tls_multirec/server
 	$(CC) mip_port_test.c packed_fs.c $(CFLAGS) $(LDFLAGS) -o $@
 	ASAN_OPTIONS=$(ASAN_OPTIONS) $(RUN) ./$@
 
