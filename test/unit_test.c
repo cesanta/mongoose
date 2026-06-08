@@ -2555,7 +2555,18 @@ static void test_str(void) {
     ASSERT(strcmp(buf, "[164:2100:0:0:0:0:0:0]:3 7") == 0);
   }
 
-  ASSERT(mg_path_is_sane(mg_str(".")) == true);
+  {
+    char s[1] = ".";
+    ASSERT(mg_path_is_sane(mg_str_n(s, 1)) == true);
+  }
+  {
+    char s[2] = "/.";
+    ASSERT(mg_path_is_sane(mg_str_n(s, 2)) == true);
+  }
+  {
+    char s[3] = "a/.";
+    ASSERT(mg_path_is_sane(mg_str_n(s, 3)) == true);
+  }
   ASSERT(mg_path_is_sane(mg_str("")) == true);
   ASSERT(mg_path_is_sane(mg_str("a.b")) == true);
   ASSERT(mg_path_is_sane(mg_str("a..b")) == true);
@@ -2571,6 +2582,7 @@ static void test_str(void) {
   ASSERT(mg_path_is_sane(mg_str("a/../b")) == false);
   ASSERT(mg_path_is_sane(mg_str_n("a/..", 2)) == true);
   ASSERT(mg_path_is_sane(mg_str_n("a/../b", 2)) == true);
+  ASSERT(mg_path_is_sane(mg_str_n("a\0/../b", 7)) == false);
 }
 
 static void fn1(struct mg_connection *c, int ev, void *ev_data) {
