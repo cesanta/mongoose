@@ -10,4 +10,5 @@ sudo ss -tpln | grep 883
 # so we need to restart it with the actual config
 sudo systemctl restart mosquitto
 sudo ss -tpln | grep 883
+echo "/var/log/mosquitto/ contents:"
 sudo cat /var/log/mosquitto/*

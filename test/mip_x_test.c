@@ -70,7 +70,7 @@ static const char *s_ca_cert =
 #endif // MQTT_HOST
 #endif
 
-static char *host_ip;
+static char *host_ip, *host_ip6;
 
 static int s_num_tests = 0;
 static bool s_error = false;
@@ -359,6 +359,27 @@ static void test_mqtt_connsubpub(struct mg_mgr *mgr) {
   ASSERT(data.passed);
   mg_mgr_poll(mgr, 0);
   free(data.url);
+
+#if 0
+#if defined(MQTT_HOST) && MG_ENABLE_IPV6
+  if (host_ip6 == NULL) {
+    printf("\nMQTT_HOST defined but no HOST_IPV6 provided, skipping MQTT IPV6 tests\n");
+    return;
+  }
+  printf("HOST_IPV6: %s\n", host_ip6);
+  data.url = mg_mprintf("mqtt://[%s]:1883", host_ip6);
+#endif
+  data.passed = false;
+  s_conn = mg_mqtt_connect(mgr, data.url, &opts, mqtt_fn, &data);
+  ASSERT(s_conn != NULL);
+  for (int i = 0; i < 1000 && s_conn != NULL && !s_conn->is_closing; i++) {
+    mg_mgr_poll(mgr, 0);
+    usleep(10000);  // 10 ms. Slow down poll loop to ensure packets transit
+  }
+  ASSERT(data.passed);
+  mg_mgr_poll(mgr, 0);
+  free(data.url);
+#endif
 }
 
 #ifndef NO_HTTPSERVER_TEST
@@ -457,6 +478,7 @@ static void test_tls(struct mg_mgr *mgr) {
 bool mip_x_test(struct mg_mgr *mgr) {
 
   host_ip = getenv("HOST_IP");
+  host_ip6 = getenv("HOST_IPV6");
 
 #define DASHBOARD(x)  printf("HEALTH_DASHBOARD\t\"%s\": %s,\n", x, s_error ? "false":"true");
 
