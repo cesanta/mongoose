@@ -664,65 +664,19 @@ void mg_bsd_transport_close(void *t) {
 #define MG_NO_CACHE_HEADERS "Cache-Control: no-cache\r\n"
 #define MG_JSON_HEADERS "Content-Type: application/json\r\n" MG_NO_CACHE_HEADERS
 
-struct mg_dash_user {
-  struct mg_dash_user *next;
-  char name[32];    // User name
-  char token[21];   // Login token
-  int level;        // Access level
-  uint64_t expire;  // Expiration timestamp
+#define CONN_HANDLED 'Z'
+
+struct mg_dash_cdata {
+  char marker;
+  struct mg_dash_user *u;
+  struct mg_dash *dash;
 };
 
-#define CONN_HANDLED 'Z'
+static struct mg_dash_user s_guest;
 
 static struct mg_str trimq(struct mg_str s) {  // Trim double quotes
   if (s.len > 1 && s.buf[0] == '"') s.len -= 2, s.buf++;
   return s;
-}
-
-static void mg_dash_broadcast(struct mg_mgr *mgr, int level, const char *fmt,
-                              ...) {
-  struct mg_connection *c;
-  va_list ap;
-  for (c = mgr->conns; c != NULL; c = c->next) {
-    int user_level = *(int *) c->data;
-    if (!c->is_websocket) continue;
-    if (level > 0 && user_level < level) continue;
-    if (c->send.len > MG_DASH_MAX_SEND_BUF_SIZE) {
-      mg_error(c, "%lu buffered data %lu > MG_DASH_MAX_SEND_BUF_SIZE", c->id,
-               c->send.len);
-    } else {
-      va_start(ap, fmt);
-      mg_ws_vprintf(c, WEBSOCKET_OP_TEXT, fmt, &ap);
-      va_end(ap);
-    }
-  }
-}
-
-static size_t mg_print_fmt(mg_pfn_t out, void *param, va_list *ap) {
-  const char *fmt = va_arg(*ap, const char *);
-  ap = va_arg(*ap, va_list *);
-  return mg_vxprintf(out, param, fmt, ap);
-}
-
-static void mg_dash_success(struct mg_connection *c, struct mg_str req,
-                            const char *fmt, ...) {
-  struct mg_str id = mg_json_get_tok(req, "$.id");
-  va_list ap;
-  va_start(ap, fmt);
-  mg_ws_printf(c, WEBSOCKET_OP_TEXT, "{%m:%.*s,%m:%M}", MG_ESC("id"), id.len,
-               id.buf, MG_ESC("result"), mg_print_fmt, fmt, &ap);
-  va_end(ap);
-}
-
-static void mg_dash_error(struct mg_connection *c, struct mg_str req,
-                          const char *fmt, ...) {
-  struct mg_str id = mg_json_get_tok(req, "$.id");
-  va_list ap;
-  va_start(ap, fmt);
-  mg_ws_printf(c, WEBSOCKET_OP_TEXT, "{%m:%.*s,%m:{%m:%d,%m:%m}}", MG_ESC("id"),
-               id.len, id.buf, MG_ESC("error"), MG_ESC("code"), -1,
-               MG_ESC("message"), mg_print_fmt, fmt, &ap);
-  va_end(ap);
 }
 
 static struct mg_field_set *mg_dash_find_field_set(struct mg_dash *dash,
@@ -751,6 +705,8 @@ static size_t mg_print_field(mg_pfn_t fn, void *arg, va_list *ap) {
     n += mg_xprintf(fn, arg, "%s", *(bool *) f->value ? "true" : "false");
   } else if (f->type == MG_VAL_INT) {
     n += mg_xprintf(fn, arg, "%d", *(int *) f->value);
+  } else if (f->type == MG_VAL_UINT64) {
+    n += mg_xprintf(fn, arg, "%llu", (uint64_t) *(uint64_t *) f->value);
   } else if (f->type == MG_VAL_DBL) {
     n += mg_xprintf(fn, arg, "%.2f", *(double *) f->value);
   } else if (f->type == MG_VAL_STR) {
@@ -775,10 +731,56 @@ static size_t mg_print_field_set(mg_pfn_t fn, void *arg, va_list *ap) {
   return n;
 }
 
-static size_t mg_dash_print_name(mg_pfn_t fn, void *arg, va_list *ap) {
+static int mg_dash_array_size(struct mg_field_set *set,
+                              struct mg_dash_user *u) {
+  int saved = *set->index, sz = -1;
+  *set->index = -1;
+  if (set->fn) {
+    if (set->fn(MG_DASH_READ, u)) sz = *set->index;
+  } else if (set->get_dir) {
+    mg_dash_dir_read(set, u);
+    sz = *set->index;
+  }
+  *set->index = saved;
+  return sz;
+}
+
+static size_t mg_dash_print_array(mg_pfn_t fn, void *arg, va_list *ap) {
+  struct mg_field_set *set = va_arg(*ap, struct mg_field_set *);
+  int from = va_arg(*ap, int);
+  int to = va_arg(*ap, int);
+  struct mg_dash_user *u = va_arg(*ap, struct mg_dash_user *);
+  bool started = false;
+  int saved = *set->index;
+  size_t n = 0;
+  *set->index = from;
+  n += mg_xprintf(fn, arg, "[");
+  for (;;) {
+    bool done = to >= 0 && *set->index > to;
+    if (!done) {
+      if (set->fn)
+        set->fn(MG_DASH_READ, u);
+      else if (set->get_dir)
+        mg_dash_dir_read(set, u);
+      done = *set->index < 0;
+    }
+    if (done) break;
+    n += mg_xprintf(fn, arg, "%s%M", started ? "," : "", mg_print_field_set,
+                    set);
+    started = true;
+    (*set->index)++;
+  }
+  n += mg_xprintf(fn, arg, "]");
+  *set->index = saved;
+  return n;
+}
+
+static size_t mg_dash_print_endpoint(mg_pfn_t fn, void *arg, va_list *ap) {
   struct mg_dash *dash = va_arg(*ap, struct mg_dash *);
+  struct mg_dash_user *u = va_arg(*ap, struct mg_dash_user *);
   struct mg_str *name = va_arg(*ap, struct mg_str *);
-  int level = va_arg(*ap, int);
+  struct mg_str *from_str = va_arg(*ap, struct mg_str *);
+  struct mg_str *to_str = va_arg(*ap, struct mg_str *);
   struct mg_field_set *set = mg_dash_find_field_set(dash, *name);
   size_t n = 0;
   if (name->len == 0) {
@@ -786,37 +788,74 @@ static size_t mg_dash_print_name(mg_pfn_t fn, void *arg, va_list *ap) {
     const char *comma = "";
     n += mg_xprintf(fn, arg, "{");
     for (fs = dash->sets; fs != NULL; fs = fs->next) {
-      if (fs->read_level > 0 && level < fs->read_level) continue;
-      if (fs->reader) fs->reader();
-      n += mg_xprintf(fn, arg, comma);
-      n += mg_xprintf(fn, arg, "%m:", MG_ESC(fs->name));
-      n += mg_xprintf(fn, arg, "%M", mg_print_field_set, fs);
+      if (fs->index != NULL) {
+        int sz = mg_dash_array_size(fs, u);
+        if (sz < 0) continue;
+        n += mg_xprintf(fn, arg, comma);
+        n += mg_xprintf(fn, arg, "%m:%d", MG_ESC(fs->name), sz);
+      } else {
+        if (fs->fn && !fs->fn(MG_DASH_READ, u)) continue;
+        n += mg_xprintf(fn, arg, comma);
+        n += mg_xprintf(fn, arg, "%m:%M", MG_ESC(fs->name), mg_print_field_set,
+                        fs);
+      }
       comma = ",";
     }
     n += mg_xprintf(fn, arg, "}");
-  } else if (set != NULL &&
-             (set->read_level <= 0 || level >= set->read_level)) {
-    if (set->reader) set->reader();
-    n += mg_xprintf(fn, arg, "%M", mg_print_field_set, set);
+  } else if (set != NULL && (set->fn == NULL || set->fn(MG_DASH_READ, u))) {
+    if (set->index != NULL && from_str != NULL && from_str->len > 0) {
+      int from = 0, to = 0;
+      mg_str_to_num(*from_str, 10, &from, sizeof(from));
+      to = from;
+      if (to_str != NULL && to_str->len > 0) {
+        mg_str_to_num(*to_str, 10, &to, sizeof(to));
+      }
+      n += mg_xprintf(fn, arg, "%M", mg_dash_print_array, set, from, to, u);
+    } else if (set->index != NULL) {
+      n += mg_xprintf(fn, arg, "%d", mg_dash_array_size(set, u));
+    } else {
+      n += mg_xprintf(fn, arg, "%M", mg_print_field_set, set);
+    }
   } else {
     n += mg_xprintf(fn, arg, "null");
   }
   return n;
 }
 
-static size_t mg_dash_print(mg_pfn_t fn, void *arg, va_list *ap) {
-  struct mg_str *req = va_arg(*ap, struct mg_str *);
-  struct mg_dash *dash = va_arg(*ap, struct mg_dash *);
-  int level = va_arg(*ap, int);
-  struct mg_str name = trimq(mg_json_get_tok(*req, "$.params"));
-  return mg_xprintf(fn, arg, "%M", mg_dash_print_name, dash, &name, level);
-}
-
 void mg_dash_send_change(struct mg_mgr *mgr, struct mg_field_set *set) {
-  if (set->reader) set->reader();
-  mg_dash_broadcast(mgr, set->read_level, "{%m:%m,%m:{%m:%M}}",
-                    MG_ESC("method"), MG_ESC("change"), MG_ESC("params"),
-                    MG_ESC(set->name), mg_print_field_set, set);
+  struct mg_connection *c;
+  for (c = mgr->conns; c != NULL; c = c->next) {
+    struct mg_dash_cdata *d = (struct mg_dash_cdata *) c->data;
+    struct mg_dash_user *u = d->u;
+    if (!c->is_websocket) continue;
+    if (u == NULL) continue;
+    if (set->index != NULL && *set->index < 0) {
+      int sz = mg_dash_array_size(set, u);
+      if (sz < 0) continue;
+      mg_ws_printf(c, WEBSOCKET_OP_TEXT, "{%m:%m,%m:{%m:%d}}", MG_ESC("method"),
+                   MG_ESC("change"), MG_ESC("params"), MG_ESC(set->name), sz);
+    } else {
+      int saved_idx = set->index != NULL ? *set->index : 0;
+      bool ok = set->fn ? set->fn(MG_DASH_READ, u)
+                        : (set->get_dir ? mg_dash_dir_read(set, u) : true);
+      if (!ok) {
+        if (set->index != NULL) *set->index = saved_idx;
+        continue;
+      }
+      if (set->index != NULL) {
+        char key[64];
+        mg_snprintf(key, sizeof(key), "%s/%d", set->name, *set->index);
+        mg_ws_printf(c, WEBSOCKET_OP_TEXT, "{%m:%m,%m:{%m:%M}}",
+                     MG_ESC("method"), MG_ESC("change"), MG_ESC("params"),
+                     MG_ESC(key), mg_print_field_set, set);
+        *set->index = saved_idx;
+      } else {
+        mg_ws_printf(c, WEBSOCKET_OP_TEXT, "{%m:%m,%m:{%m:%M}}",
+                     MG_ESC("method"), MG_ESC("change"), MG_ESC("params"),
+                     MG_ESC(set->name), mg_print_field_set, set);
+      }
+    }
+  }
 }
 
 static int mg_dash_parse_field(struct mg_str json, struct mg_field *f) {
@@ -833,6 +872,13 @@ static int mg_dash_parse_field(struct mg_str json, struct mg_field *f) {
       *(int *) f->value = (int) d;
       ok = true;
     }
+  } else if (f->type == MG_VAL_UINT64) {
+    double d;
+    if (f->value_size == sizeof(uint64_t) &&
+        mg_json_get_num(json, json_path, &d) && d == (double) (int64_t) d) {
+      *(uint64_t *) f->value = (uint64_t) d;
+      ok = true;
+    }
   } else if (f->type == MG_VAL_DBL) {
     ok = f->value_size == sizeof(double) &&
          mg_json_get_num(json, json_path, (double *) f->value);
@@ -846,97 +892,99 @@ static int mg_dash_parse_field(struct mg_str json, struct mg_field *f) {
 }
 
 static int mg_dash_apply(struct mg_connection *c, struct mg_dash *dash,
-                         struct mg_str json, int level) {
+                         struct mg_str json, struct mg_dash_user *u) {
   struct mg_str key, val;
   size_t ofs = 0;
   int total_count = 0;
   while ((ofs = mg_json_next(json, ofs, &key, &val)) > 0) {
     struct mg_field_set *set = mg_dash_find_field_set(dash, trimq(key));
     int count = 0;
-    if (set != NULL && (set->write_level <= 0 || level >= set->write_level)) {
+    if (set == NULL) {
+      MG_ERROR(("UNKNOWN SET: [%.*s]", key.len, key.buf));
+      continue;
+    }
+    if (set->fn != NULL && !set->fn(MG_DASH_WRITE, u)) continue;  // auth check
+    {
       size_t i;
       for (i = 0; set->fields[i].name != NULL; i++) {
         if (mg_dash_parse_field(val, &set->fields[i])) count++;
       }
-      if (count) {
-        if (set->writer) set->writer();
-        mg_dash_send_change(c->mgr, set);
-        total_count += count;
-      }
-    } else if (set == NULL) {
-      MG_ERROR(("UNKNOWN SET: [%.*s]", key.len, key.buf));
+    }
+    if (count) {
+      if (set->fn) set->fn(MG_DASH_WRITE, u);  // apply side effects
+      mg_dash_send_change(c->mgr, set);
+      total_count += count;
     }
   }
   return total_count;
 }
 
-static void mg_dash_process_msg(struct mg_connection *c,
-                                struct mg_ws_message *wm,
-                                struct mg_dash *dash) {
-  struct mg_str req = wm->data;
-  struct mg_str method = trimq(mg_json_get_tok(req, "$.method"));
-  int level = *(int *) c->data;
-  if (mg_match(method, mg_str("get"), NULL)) {
-    mg_dash_success(c, req, "%M", mg_dash_print, &req, dash, level);
-  } else if (mg_match(method, mg_str("set"), NULL)) {
-    struct mg_str params = trimq(mg_json_get_tok(req, "$.params"));
-    int count = mg_dash_apply(c, dash, params, level);
-    mg_dash_success(c, req, "%d", count);
-  } else {
-    mg_dash_error(c, req, "%s", "unknown method");
+bool mg_dash_dir_read(struct mg_field_set *set, struct mg_dash_user *u) {
+  char dir[256], fname[128] = "";
+  struct mg_fs *fs = u->dash->upload_fs ? u->dash->upload_fs : &mg_fs_posix;
+  struct mg_field *name_field = NULL, *size_field = NULL;
+  size_t i;
+
+  if (!set->get_dir(u, dir, sizeof(dir))) return false;
+
+  for (i = 0; set->fields[i].name != NULL; i++) {
+    if (name_field == NULL && set->fields[i].type == MG_VAL_STR &&
+        strcmp(set->fields[i].name, "name") == 0)
+      name_field = &set->fields[i];
+    if (size_field == NULL && strcmp(set->fields[i].name, "size") == 0)
+      size_field = &set->fields[i];
+  }
+  if (name_field == NULL) return false;
+
+  if (*set->index == -1) {  // Size query: count all files
+    int count = 0;
+    while (mg_fs_ls(fs, dir, fname, sizeof(fname))) count++;
+    *set->index = count;
+    return true;
+  }
+
+  {  // Regular read: scan to *set->index
+    int target = *set->index, cur = 0;
+    while (mg_fs_ls(fs, dir, fname, sizeof(fname))) {
+      if (cur++ == target) {
+        mg_snprintf((char *) name_field->value, name_field->value_size, "%s",
+                    fname);
+        if (size_field != NULL) {
+          char path[512];
+          size_t sz = 0;
+          mg_snprintf(path, sizeof(path), "%s/%s", dir, fname);
+          fs->st(path, &sz, NULL);
+          if (size_field->type == MG_VAL_UINT64)
+            *(uint64_t *) size_field->value = (uint64_t) sz;
+          else if (size_field->type == MG_VAL_INT)
+            *(int *) size_field->value = (int) sz;
+        }
+        return true;
+      }
+    }
+    *set->index = -1;  // No more entries
+    return true;
   }
 }
 
-void mg_dash_file_add(struct mg_str name, size_t size) {
-  struct mg_dash_file *f = (struct mg_dash_file *) mg_calloc(1, sizeof(*f));
-  f->name = mg_strdup(name).buf;
-  f->size = size;
-  f->next = mg_dash_files;
-  mg_dash_files = f;
-}
-
-void mg_dash_file_del(struct mg_str name) {
-  struct mg_dash_file **head, *f;
-  for (head = &mg_dash_files, f = *head; f; head = &(*head)->next, f = *head) {
-    if (mg_strcmp(mg_str(f->name), name) == 0) {
-      MG_INFO(("Deleting %s", f->name));
-      *head = f->next;
-      mg_free(f->name);
-      mg_free(f);
-      return;
+static bool mg_dash_set_file_name(struct mg_field_set *set,
+                                  struct mg_str name) {
+  size_t i;
+  for (i = 0; set->fields[i].name != NULL; i++) {
+    struct mg_field *f = &set->fields[i];
+    if (f->type == MG_VAL_STR && strcmp(f->name, "name") == 0) {
+      mg_snprintf((char *) f->value, f->value_size, "%.*s", (int) name.len,
+                  name.buf);
+      return true;
     }
   }
+  return false;
 }
-
-// Files array: [{"name": "foo.txt", "size": 1234}]
-struct mg_dash_file *mg_dash_files;
-static char s_files[1024];
-
-static void read_files(void) {
-  size_t len = 0;
-  struct mg_dash_file *f;
-  len += mg_snprintf(s_files + len, sizeof(s_files) - len, "[");
-  for (f = mg_dash_files; f; f = f->next) {
-    len += mg_snprintf(s_files + len, sizeof(s_files) - len, "%s{%m:%m,%m:%u}",
-                       len > 1 ? "," : "", MG_ESC("name"), MG_ESC(f->name),
-                       MG_ESC("size"), f->size);
-  }
-  len += mg_snprintf(s_files + len, sizeof(s_files) - len, "]");
-}
-
-static struct mg_field fields_files[] = {
-    {"data", MG_VAL_RAW, s_files, sizeof(s_files)},
-    {NULL, MG_VAL_INT, NULL, 0},
-};
-
-static struct mg_field_set set_files = {
-    "files", fields_files, read_files, NULL, 0, 0, NULL,
-};
 
 static inline void mg_log_http_req(struct mg_connection *c,
                                    struct mg_http_message *hm) {
   int len = 0;
-  size_t n, spaces = 0;
+  size_t n, spaces = 0, body_n = hm->body.len;
   struct mg_http_message tmp;
   memset(&tmp, 0, sizeof(tmp));
   len = mg_http_parse((char *) c->send.buf, c->send.len, &tmp);
@@ -945,18 +993,24 @@ static inline void mg_log_http_req(struct mg_connection *c,
          (c->send.buf[c->send.len - spaces - 1] == '\r' ||
           c->send.buf[c->send.len - spaces - 1] == '\n'))
     spaces++;
-  MG_DEBUG(("%lu %.*s %.*s %.*s: %lu %.*s -> %lu %.*s", c->id, hm->method.len,
-            hm->method.buf, hm->uri.len, hm->uri.buf, c->send.len > 15 ? 3 : 0,
-            &c->send.buf[9], hm->body.len, hm->body.len, hm->body.buf,
-            c->send.len - n, c->send.len - n - spaces, c->send.buf + n));
-}
-
-static struct mg_str mg_dash_file_name(struct mg_http_message *hm) {
-  struct mg_str name = mg_str_n(hm->uri.buf + 4, hm->uri.len - 4);  // - /fs/
-  // Decode file name in-place - directly into the request buffer
-  int len = mg_url_decode(name.buf, name.len, name.buf, name.len + 1, 0);
-  if (len > 0 && (size_t) len <= name.len) name.len = (size_t) len;
-  return name;
+  // hm->body.len comes from Content-Length and can be larger than the bytes
+  // actually buffered so far (e.g. mid-stream uploads); cap the preview to
+  // what's actually present in c->recv, or we'd read past its end
+  {
+    char *recv_end = (char *) c->recv.buf + c->recv.len;
+    if (hm->body.buf >= (char *) c->recv.buf && hm->body.buf <= recv_end) {
+      size_t avail = (size_t) (recv_end - hm->body.buf);
+      if (body_n > avail) body_n = avail;
+    } else {
+      body_n = 0;
+    }
+  }
+  MG_DEBUG(("%lu %.*s %.*s%s%.*s %.*s: %lu %.*s -> %lu %.*s", c->id,
+            hm->method.len, hm->method.buf, hm->uri.len, hm->uri.buf,
+            hm->query.len > 0 ? "?" : "", hm->query.len, hm->query.buf,
+            c->send.len > 15 ? 3 : 0, &c->send.buf[9], hm->body.len, body_n,
+            hm->body.buf, c->send.len - n, c->send.len - n - spaces,
+            c->send.buf + n));
 }
 
 static void mg_dash_ota_cb(struct mg_connection *c, const char *errmsg) {
@@ -968,13 +1022,20 @@ static void mg_dash_upload_cb(struct mg_connection *c, const char *errmsg) {
   if (errmsg) {
     mg_http_reply(c, 500, NULL, "%s\n", errmsg);
   } else {
-    char path[128];
-    size_t size = 0;
-    mg_snprintf(path, sizeof(path), "/tmp/%s", c->data);
-    mg_fs_posix.st(path, &size, NULL);
-    mg_dash_file_add(mg_str(c->data), size);
+    // mg_http_start_upload() repurposes c->data for its own bookkeeping,
+    // so the field set can't be cached there. Re-derive the dashboard from
+    // c->fn_data instead, and notify every file-backed array: the upload
+    // could belong to any of them, and re-querying get_dir() per recipient
+    // is what mg_dash_send_change() does anyway (directories can be
+    // user-specific)
+    struct mg_dash *dash = (struct mg_dash *) c->fn_data;
+    struct mg_field_set *fs;
     mg_http_reply(c, 200, NULL, "ok\n");
-    mg_dash_send_change(c->mgr, &set_files);
+    for (fs = dash->sets; fs != NULL; fs = fs->next) {
+      if (fs->get_dir == NULL) continue;
+      *fs->index = -1;  // Signal mg_dash_send_change() to broadcast new size
+      mg_dash_send_change(c->mgr, fs);
+    }
   }
   c->is_draining = 1;
 }
@@ -985,16 +1046,69 @@ static uint64_t mg_dash_make_expiration_time(struct mg_dash *dash) {
   return mg_millis() + t * 1000;
 }
 
+static struct mg_dash_user *mg_dash_add_user(struct mg_dash_user **users,
+                                             struct mg_dash *dash,
+                                             const char *name,
+                                             const char *token, int level) {
+  struct mg_dash_user *u = (struct mg_dash_user *) mg_calloc(1, sizeof(*u));
+  if (u != NULL) {
+    mg_snprintf(u->name, sizeof(u->name), "%s", name);
+    if (token == NULL) {
+      mg_random_str(u->token, sizeof(u->token) - 1);
+    } else {
+      mg_snprintf(u->token, sizeof(u->token), "%s", token);
+    }
+    u->level = level;
+    u->expire = mg_dash_make_expiration_time(dash);
+    u->dash = dash;
+    u->next = *users;
+    *users = u;
+  }
+  return u;
+}
+
+static struct mg_dash_user *mg_dash_find_user(struct mg_dash_user *users,
+                                              const char *name) {
+  struct mg_dash_user *u;
+  for (u = users; u != NULL; u = u->next) {
+    if (strcmp(u->name, name) == 0) return u;
+  }
+  return NULL;
+}
+
+static struct mg_dash_user *mg_dash_find_token(struct mg_dash_user *users,
+                                               const char *token) {
+  struct mg_dash_user *u;
+  for (u = users; u != NULL; u = u->next) {
+    if (strcmp(u->token, token) == 0) return u;
+  }
+  return NULL;
+}
+
+static void mg_dash_refresh_user(struct mg_dash *dash,
+                                 struct mg_dash_user *user) {
+  user->expire = mg_dash_make_expiration_time(dash);
+}
+
 // Parse HTTP requests, return authenticated user or NULL
-static struct mg_dash_user *mg_dash_authenticate(struct mg_http_message *hm,
+static struct mg_dash_user *mg_dash_authenticate(struct mg_connection *c,
+                                                 struct mg_http_message *hm,
                                                  struct mg_dash *dash) {
   static struct mg_dash_user *s_users;  // List of authenticated users
   char user[100], pass[100];
-  static struct mg_dash_user admin = {NULL, "admin", "admin", 9, (uint64_t) -1};
-  struct mg_dash_user *u, *tmp, *result = NULL;
+  struct mg_dash_user *u, *tmp;
+  struct mg_str *ah;
+  int level = 0, num_users = 0;
 
-  if (dash->authenticate == NULL) return &admin;
+  if (dash->authenticate == NULL) {
+    mg_snprintf(s_guest.name, sizeof(s_guest.name), "%s", "guest");
+    s_guest.level = 9;
+    s_guest.dash = dash;
+    dash->guest = &s_guest;
+    return dash->guest;
+  }
   mg_http_creds(hm, user, sizeof(user), pass, sizeof(pass));
+  ah = mg_http_get_header(hm, "Authorization");
   // MG_DEBUG(("user [%s], pass: [%s], h: %.*s", user, pass, hm->head.len,
   // hm->head.buf));
 
@@ -1002,47 +1116,48 @@ static struct mg_dash_user *mg_dash_authenticate(struct mg_http_message *hm,
   for (u = s_users; u != NULL; u = tmp) {
     tmp = u->next;
     if (u->expire < mg_millis()) {
+      struct mg_connection *conn;
       MG_DEBUG(("Deleting expired auth %s/%d %llu %u", u->name, u->level,
                 u->expire, mg_millis() - u->expire));
+      for (conn = c->mgr->conns; conn != NULL; conn = conn->next) {
+        struct mg_dash_cdata *d = (struct mg_dash_cdata *) conn->data;
+        if (conn->is_websocket && d->u == u) {
+          d->u = NULL;
+          conn->is_closing = 1;
+        }
+      }
       LIST_DELETE(struct mg_dash_user, &s_users, u);
       mg_free(u);
     }
   }
 
-  if (pass[0] != '\0') {
-    struct mg_str *ah = mg_http_get_header(hm, "Authorization");
-    if (ah != NULL) {
-      // Auth header and password are set, auth by user/password via glue API
-      int num_users = 0, level = dash->authenticate(user, sizeof(user), pass);
-      MG_DEBUG(("user %s, level: %d", user, level));
-      if (level > 0) {  // Proceed only if the firmware authenticated us
-        for (u = s_users; u != NULL && result == NULL;
-             u = u->next, num_users++) {
-          if (strcmp(user, u->name) == 0) {
-            u->expire = mg_dash_make_expiration_time(dash);
-            result = u;
-          }
-        }
-        // Not yet authenticated, add to the list
-        if (result == NULL && num_users < 10) {
-          result = (struct mg_dash_user *) mg_calloc(1, sizeof(*result));
-          mg_snprintf(result->name, sizeof(result->name), "%s", user);
-          mg_random_str(result->token, sizeof(result->token) - 1);
-          result->level = level, result->next = s_users, s_users = result;
-          result->expire = mg_dash_make_expiration_time(dash);
-        }
-      }
-    } else if (ah == NULL) {
-      for (u = s_users; u != NULL && result == NULL; u = u->next) {
-        if (strcmp(u->token, pass) == 0) {
-          u->expire = mg_dash_make_expiration_time(dash);
-          result = u;
-        }
-      }
+  if (pass[0] == '\0') return NULL;
+
+  for (u = s_users; u != NULL; u = u->next) num_users++;
+  if (ah == NULL) {
+    u = mg_dash_find_token(s_users, pass);
+    if (u != NULL) {
+      mg_dash_refresh_user(dash, u);
+      return u;
     }
   }
+
+  level = dash->authenticate(user, sizeof(user), pass);
+  MG_DEBUG(("user %s, level: %d", user, level));
+  if (level <= 0) return NULL;
+
+  u = mg_dash_find_user(s_users, user);
+  if (u != NULL) {
+    if (ah == NULL) mg_snprintf(u->token, sizeof(u->token), "%s", pass);
+    mg_dash_refresh_user(dash, u);
+    return u;
+  }
+
+  if (num_users < 10)
+    return mg_dash_add_user(&s_users, dash, user, ah == NULL ? pass : NULL,
+                            level);
   // MG_DEBUG(("[%s/%s] -> %s", user, pass, result ? "OK" : "FAIL"));
-  return result;
+  return NULL;
 }
 
 static void mg_handle_login(struct mg_connection *c, struct mg_dash_user *u) {
@@ -1067,48 +1182,157 @@ static void mg_handle_logout(struct mg_connection *c) {
   mg_http_reply(c, 401, cookie, "Unauthorized\n");
 }
 
+static void mg_dash_handle_del(struct mg_connection *c, struct mg_dash *dash,
+                               struct mg_dash_user *u, struct mg_str *parts) {
+  struct mg_field_set *set = mg_dash_find_field_set(dash, parts[0]);
+  if (set == NULL || set->index == NULL) {
+    mg_http_reply(c, 404, MG_JSON_HEADERS, "null\n");
+  } else {
+    int from = 0, to = 0, count = 0;
+    if (parts[1].len) mg_str_to_num(parts[1], 10, &from, sizeof(from));
+    to = parts[2].len ? 0 : from;
+    if (parts[2].len) mg_str_to_num(parts[2], 10, &to, sizeof(to));
+    for (*set->index = from; *set->index <= to; (*set->index)++) {
+      if (set->fn && set->fn(MG_DASH_DELETE, u))
+        count++;
+      else
+        break;
+    }
+    if (count) {
+      *set->index = -1;
+      mg_dash_send_change(c->mgr, set);
+      mg_http_reply(c, 200, MG_JSON_HEADERS, "%d\n", count);
+    } else {
+      mg_http_reply(c, 403, MG_JSON_HEADERS, "false\n");
+    }
+  }
+}
+
+// Handle "POST /api/get/<set>/<index>": modify one array element. Loads the
+// element at <index> first - that doubles as a read-access check and as a
+// pre-fill, so that JSON keys absent from the body keep their old values -
+// then overlays the values from the body and asks fn to persist them
+static void mg_dash_handle_mod(struct mg_connection *c, struct mg_dash *dash,
+                               struct mg_dash_user *u, struct mg_str *parts,
+                               struct mg_str body) {
+  struct mg_field_set *set = mg_dash_find_field_set(dash, parts[0]);
+  int index = 0, count = 0;
+  size_t i;
+  if (set == NULL || set->index == NULL || set->fn == NULL) {
+    mg_http_reply(c, 404, MG_JSON_HEADERS, "null\n");
+    return;
+  }
+  mg_str_to_num(parts[1], 10, &index, sizeof(index));
+  *set->index = index;
+  if (!set->fn(MG_DASH_READ, u) || *set->index != index) {
+    mg_http_reply(c, 404, MG_JSON_HEADERS, "null\n");
+    return;
+  }
+  for (i = 0; set->fields[i].name != NULL; i++) {
+    if (mg_dash_parse_field(body, &set->fields[i])) count++;
+  }
+  if (count && set->fn(MG_DASH_WRITE, u)) {
+    mg_dash_send_change(c->mgr, set);
+    mg_http_reply(c, 200, MG_JSON_HEADERS, "%d\n", count);
+  } else {
+    mg_http_reply(c, 403, MG_JSON_HEADERS, "false\n");
+  }
+}
+
+// Handle "POST /api/add/<set>": append a new array element. Parses the body
+// straight into the bound fields, then asks fn to accept and persist them as
+// a new element - fn returns false to reject, e.g. when a cap is reached
+static void mg_dash_handle_add(struct mg_connection *c, struct mg_dash *dash,
+                               struct mg_dash_user *u, struct mg_str *parts,
+                               struct mg_str body) {
+  struct mg_field_set *set = mg_dash_find_field_set(dash, parts[0]);
+  int count = 0;
+  size_t i;
+  if (set == NULL || set->index == NULL || set->fn == NULL) {
+    mg_http_reply(c, 404, MG_JSON_HEADERS, "null\n");
+    return;
+  }
+  for (i = 0; set->fields[i].name != NULL; i++) {
+    if (mg_dash_parse_field(body, &set->fields[i])) count++;
+  }
+  if (count && set->fn(MG_DASH_ADD, u)) {
+    *set->index = -1;  // Signal mg_dash_send_change() to send new size
+    mg_dash_send_change(c->mgr, set);
+    mg_http_reply(c, 200, MG_JSON_HEADERS, "true\n");
+  } else {
+    mg_http_reply(c, 403, MG_JSON_HEADERS, "false\n");
+  }
+}
+
 void mg_dash_ev_handler(struct mg_connection *c, int ev, void *ev_data) {
   struct mg_dash *dash = (struct mg_dash *) c->fn_data;
+  struct mg_dash_cdata *d = (struct mg_dash_cdata *) c->data;
 
   if (ev == MG_EV_OPEN) {
-    if (mg_dash_find_field_set(dash, mg_str("files")) == NULL) {
-      MG_DASH_ADD_FIELD_SET(dash, &set_files);
-    }
+    d->dash = dash;
     // c->is_hexdumping = 1;
-  } else if (ev == MG_EV_HTTP_HDRS && c->data[0] == 0) {
+  } else if (ev == MG_EV_HTTP_HDRS && d->marker == 0) {
     // Received headers - check authentication and possibly start uploads/ota
     struct mg_http_message *hm = (struct mg_http_message *) ev_data;
-    struct mg_dash_user *u = mg_dash_authenticate(hm, dash);
+    struct mg_dash_user *u = mg_dash_authenticate(c, hm, dash);
+    struct mg_str parts[3];
+    memset(parts, 0, sizeof(parts));
 
     if (mg_match(hm->uri, mg_str("/api/hi"), NULL) ||
         mg_match(hm->uri, mg_str("/api/logout"), NULL)) {
       // Do nothing, handle them MG_EV_HTTP_MSG. We bypass auth for those
     } else if (u == NULL && mg_match(hm->uri, mg_str("/api/#"), NULL)) {
       mg_http_reply(c, 403, MG_JSON_HEADERS, "Not Authorised\n");
-      c->data[0] = CONN_HANDLED;
+      d->marker = CONN_HANDLED;
     } else if (mg_match(hm->uri, mg_str("/api/login"), NULL) && u != NULL) {
       mg_handle_login(c, u);
-      c->data[0] = CONN_HANDLED;
+      d->marker = CONN_HANDLED;
     } else if (mg_match(hm->uri, mg_str("/api/ota"), NULL)) {
       mg_http_start_ota(c, hm, mg_dash_ota_cb);
-    } else if (mg_match(hm->uri, mg_str("/fs/#"), NULL) &&
+    } else if (mg_match(hm->uri, mg_str("/fs/*/*"), parts) &&
                (mg_strcasecmp(hm->method, mg_str("POST")) == 0 ||
                 mg_strcasecmp(hm->method, mg_str("PUT")) == 0)) {
-      struct mg_str name = mg_dash_file_name(hm);
-      mg_snprintf(c->data, sizeof(c->data), "%.*s", (int) name.len, name.buf);
-      mg_http_start_upload(c, hm, name, mg_str("/tmp"), &mg_fs_posix,
-                           mg_dash_upload_cb);
+      struct mg_field_set *set = mg_dash_find_field_set(dash, parts[0]);
+      struct mg_str name = parts[1];
+      int len =
+          mg_url_decode(name.buf, name.len, (char *) name.buf, name.len + 1, 0);
+      if (len > 0 && (size_t) len <= name.len) name.len = (size_t) len;
+      if (set == NULL || set->get_dir == NULL) {
+        mg_http_reply(c, 404, MG_JSON_HEADERS, "Not Found\n");
+        d->marker = CONN_HANDLED;
+      } else if (u == NULL) {
+        mg_http_reply(c, 403, MG_JSON_HEADERS, "Not Authorised\n");
+        d->marker = CONN_HANDLED;
+      } else if (!mg_path_is_sane(name)) {
+        mg_http_reply(c, 400, MG_JSON_HEADERS, "Bad file name\n");
+        d->marker = CONN_HANDLED;
+      } else {
+        mg_dash_set_file_name(set, name);
+        if (set->fn != NULL && !set->fn(MG_DASH_WRITE, u)) {
+          mg_http_reply(c, 403, MG_JSON_HEADERS, "Not Authorised\n");
+          d->marker = CONN_HANDLED;
+        } else {
+          char dir[256];
+          struct mg_fs *fs = dash->upload_fs ? dash->upload_fs : &mg_fs_posix;
+          if (!set->get_dir(u, dir, sizeof(dir))) {
+            mg_http_reply(c, 500, MG_JSON_HEADERS, "Upload dir error\n");
+            d->marker = CONN_HANDLED;
+          } else {
+            mg_http_start_upload(c, hm, name, mg_str(dir), fs,
+                                 mg_dash_upload_cb);
+          }
+        }
+      }
     }
-    if (c->data[0] != '\0') mg_log_http_req(c, hm);
-  } else if (ev == MG_EV_HTTP_MSG && c->data[0] != '\0') {
+    if (d->marker != '\0') mg_log_http_req(c, hm);
+  } else if (ev == MG_EV_HTTP_MSG && d->marker != '\0') {
     // The response has been send in EV_HDRS path, so we're not reponding
-    // anything but clearing the c->data[0] flag for the next request.
-    c->data[0] = 0;
+    // anything but clearing the marker for the next request.
+    d->marker = 0;
     c->is_resp = 0;
-  } else if (ev == MG_EV_HTTP_MSG && c->data[0] == '\0') {
+  } else if (ev == MG_EV_HTTP_MSG && d->marker == '\0') {
     struct mg_http_message *hm = (struct mg_http_message *) ev_data;
-    struct mg_dash_user *u = mg_dash_authenticate(hm, dash);
-    int level = u == NULL ? 0 : u->level;
+    struct mg_dash_user *u = mg_dash_authenticate(c, hm, dash);
     struct mg_str parts[5];
     memset(parts, 0, sizeof(parts));
 
@@ -1119,27 +1343,60 @@ void mg_dash_ev_handler(struct mg_connection *c, int ev, void *ev_data) {
       mg_ws_printf(c, WEBSOCKET_OP_TEXT, "{%m:%m}", MG_ESC("method"),
                    MG_ESC("logout"));
     } else if (mg_match(hm->uri, mg_str("/api/websocket"), NULL)) {
-      *(int *) c->data = level;
+      d->u = u;
       mg_ws_upgrade(c, hm, NULL);
-    } else if (mg_match(hm->uri, mg_str("/fs/#"), NULL)) {
-      struct mg_str name = mg_dash_file_name(hm);
-      char path[128];
-      mg_snprintf(path, sizeof(path), "/tmp/%.*s", name.len, name.buf);
-      if (mg_strcasecmp(hm->method, mg_str("DELETE")) == 0) {
-        // Delete file
-        mg_dash_file_del(name);
-        mg_dash_send_change(c->mgr, &set_files);
-        mg_http_reply(c, 200, NULL, "true");
+    } else if (mg_match(hm->uri, mg_str("/fs/*/*"), parts)) {
+      struct mg_field_set *set = mg_dash_find_field_set(dash, parts[0]);
+      if (set == NULL || set->get_dir == NULL) {
+        mg_http_reply(c, 404, MG_JSON_HEADERS, "Not Found");
+      } else if (u == NULL) {
+        mg_http_reply(c, 403, MG_JSON_HEADERS, "Not Authorised\n");
       } else {
-        // Serve file
-        mg_http_serve_file(c, hm, path, NULL);
+        char dir[256], path[512];
+        struct mg_fs *fs = dash->upload_fs ? dash->upload_fs : &mg_fs_posix;
+        struct mg_str name = parts[1];
+        int len = mg_url_decode(name.buf, name.len, (char *) name.buf,
+                                name.len + 1, 0);
+        if (len > 0 && (size_t) len <= name.len) name.len = (size_t) len;
+        if (!mg_path_is_sane(name)) {
+          mg_http_reply(c, 400, MG_JSON_HEADERS, "Bad file name\n");
+          return;
+        }
+        if (!set->get_dir(u, dir, sizeof(dir))) {
+          mg_http_reply(c, 500, MG_JSON_HEADERS, "Upload dir error\n");
+          return;
+        }
+        mg_snprintf(path, sizeof(path), "%s/%.*s", dir, name.len, name.buf);
+        if (mg_strcasecmp(hm->method, mg_str("DELETE")) == 0) {
+          mg_dash_set_file_name(set, name);
+          if (set->fn != NULL && !set->fn(MG_DASH_DELETE, u)) {
+            mg_http_reply(c, 403, MG_JSON_HEADERS, "Not Authorised\n");
+          } else {
+            fs->rm(path);
+            *set->index = -1;  // Signal mg_dash_send_change() to send new size
+            mg_dash_send_change(c->mgr, set);
+            mg_http_reply(c, 200, NULL, "true");
+          }
+        } else {
+          mg_http_serve_file(c, hm, path, NULL);
+        }
       }
-    } else if (mg_match(hm->uri, mg_str("/api/get/#"), parts) ||
+    } else if (mg_match(hm->uri, mg_str("/api/del/*/*/*"), parts) ||
+               mg_match(hm->uri, mg_str("/api/del/*/*"), parts)) {
+      mg_dash_handle_del(c, dash, u, parts);
+    } else if (mg_match(hm->uri, mg_str("/api/add/*"), parts)) {
+      mg_dash_handle_add(c, dash, u, parts, hm->body);
+    } else if (mg_match(hm->uri, mg_str("/api/get/*/*"), parts) &&
+               mg_strcasecmp(hm->method, mg_str("POST")) == 0) {
+      mg_dash_handle_mod(c, dash, u, parts, hm->body);
+    } else if (mg_match(hm->uri, mg_str("/api/get/*/*/*"), parts) ||
+               mg_match(hm->uri, mg_str("/api/get/*/*"), parts) ||
+               mg_match(hm->uri, mg_str("/api/get/*"), parts) ||
                mg_match(hm->uri, mg_str("/api/get"), NULL)) {
-      mg_http_reply(c, 200, MG_JSON_HEADERS, "%M\n", mg_dash_print_name, dash,
-                    &parts[0], level);
+      mg_http_reply(c, 200, MG_JSON_HEADERS, "%M\n", mg_dash_print_endpoint,
+                    dash, u, &parts[0], &parts[1], &parts[2]);
     } else if (mg_match(hm->uri, mg_str("/api/set"), NULL)) {
-      int count = mg_dash_apply(c, dash, hm->body, level);
+      int count = mg_dash_apply(c, dash, hm->body, u);
       mg_http_reply(c, 200, MG_JSON_HEADERS, "%d\n", count);
     } else if (mg_match(hm->uri, mg_str("/"), NULL)) {
       struct mg_http_serve_opts opts;
@@ -1156,21 +1413,6 @@ void mg_dash_ev_handler(struct mg_connection *c, int ev, void *ev_data) {
       }
       if (ch == NULL) mg_http_reply(c, 404, MG_JSON_HEADERS, "Not Found");
       mg_log_http_req(c, hm);
-    }
-  } else if (ev == MG_EV_WS_OPEN) {
-    // WS connection established, send change notifications for all data
-    struct mg_field_set *fs;
-    for (fs = dash->sets; fs != NULL; fs = fs->next) {
-      mg_dash_send_change(c->mgr, fs);
-    }
-    mg_dash_broadcast(c->mgr, 0, "{%m:%m}", MG_ESC("method"), MG_ESC("ready"));
-  } else if (ev == MG_EV_WS_MSG) {
-    // Add this to automatically handle "get" and "set" JSON-RPC calls
-    struct mg_ws_message *wm = (struct mg_ws_message *) ev_data;
-    if (dash == NULL) {
-      mg_dash_error(c, wm->data, "%s", "no dash defined");
-    } else {
-      mg_dash_process_msg(c, wm, dash);
     }
   }
 }
@@ -2005,15 +2247,22 @@ bool mg_ota_flash_end(struct mg_flash *flash) {
     MG_DEBUG(("CRC: %x/%x, size: %lu/%lu, status: %s", s_crc32, crc32, s_size,
               size, ok ? "ok" : "fail"));
 #ifdef MG_OTA_PUBLIC_KEY
-    if (ok && s_size > 64) {
-      static const uint8_t s_pubkey[] = MG_OTA_PUBLIC_KEY;
-      uint8_t hash[32];
-      size_t fw_size = s_size - 64;
-      mg_sha256(hash, (uint8_t *) base, fw_size);
-      ok = mg_uecc_verify(s_pubkey, hash, sizeof(hash),
-                          (uint8_t *) base + fw_size,
-                          mg_uecc_secp256r1()) == 1;
-      MG_INFO(("Signature: %s", ok ? "ok" : "fail"));
+    if (ok) {
+      bool signed_fw = s_size > 68 &&
+                       memcmp((uint8_t *) base + s_size - 4, "MGSG", 4) == 0;
+      if (signed_fw) {
+        static const uint8_t s_pubkey[] = MG_OTA_PUBLIC_KEY;
+        uint8_t hash[32];
+        size_t fw_size = s_size - 68;  // strip 64-byte sig + 4-byte magic
+        mg_sha256(hash, (uint8_t *) base, fw_size);
+        ok = mg_uecc_verify(s_pubkey, hash, sizeof(hash),
+                            (uint8_t *) base + fw_size,
+                            mg_uecc_secp256r1()) == 1;
+        MG_INFO(("Signature: %s", ok ? "ok" : "fail"));
+      } else {
+        ok = false;
+        MG_ERROR(("Unsigned firmware rejected"));
+      }
     }
 #endif
     s_size = 0;
@@ -3923,19 +4172,19 @@ static void mg_upload_handler(struct mg_connection *c, int ev, void *ev_data) {
       if (p->fd != NULL) { mg_fs_close(p->fd); p->fd = NULL; }
       else mg_ota_end();
       p->fn(c, "write error");
-      p->fn = NULL;
+      mg_free(c->pfn_data); c->pfn_data = NULL; p->fn = NULL;
     } else if (p->received >= p->expected) {
       const char *errmsg = NULL;
       if (p->fd != NULL) { mg_fs_close(p->fd); p->fd = NULL; }
       else if (!mg_ota_end()) errmsg = "OTA finalize failed";
       p->fn(c, errmsg);
-      p->fn = NULL;
+      mg_free(c->pfn_data); c->pfn_data = NULL; p->fn = NULL;
     }
   } else if (ev == MG_EV_ERROR || ev == MG_EV_CLOSE) {
     if (p->fd != NULL) { mg_fs_close(p->fd); p->fd = NULL; }
     else mg_ota_end();
     p->fn(c, ev == MG_EV_ERROR ? (const char *) ev_data : "connection closed");
-    p->fn = NULL;
+    mg_free(c->pfn_data); c->pfn_data = NULL; p->fn = NULL;
   }
   (void) ev_data;
 }
@@ -3943,6 +4192,10 @@ static void mg_upload_handler(struct mg_connection *c, int ev, void *ev_data) {
 static void mg_upload_default_cb(struct mg_connection *c, const char *status) {
   MG_INFO(("%lu %s", c->id, status ? status : "ok"));
   mg_http_reply(c, status ? 500 : 200, "", "%s\n", status ? status : "ok");
+}
+
+const char *mg_upload_path(struct mg_connection *c) {
+  return (const char *) c->pfn_data;
 }
 
 void mg_http_start_upload(struct mg_connection *c, struct mg_http_message *hm,
@@ -3964,6 +4217,7 @@ void mg_http_start_upload(struct mg_connection *c, struct mg_http_message *hm,
   p->fd = fd;
   p->fn = fn;
   c->fn = mg_upload_handler;
+  c->pfn_data = strdup(path);
   c->pfn = NULL;
   mg_iobuf_del(&c->recv, 0, hm->head.len);
   mg_call(c, MG_EV_READ, &c->recv.len);
@@ -6990,6 +7244,7 @@ struct mg_connection *mg_mqtt_listen(struct mg_mgr *mgr, const char *url,
 
 
 
+
 size_t mg_vprintf(struct mg_connection *c, const char *fmt, va_list *ap) {
   size_t old = c->send.len;
   size_t expected = mg_vxprintf(mg_pfn_iobuf, &c->send, fmt, ap);
@@ -7261,6 +7516,11 @@ void mg_mgr_free(struct mg_mgr *mgr) {
 
 void mg_mgr_init(struct mg_mgr *mgr) {
   memset(mgr, 0, sizeof(*mgr));
+  // Anchor mg_fw_version: a real store into a struct field the optimiser
+  // can't elide forces the linker to keep the section alive even when no
+  // OTA polling code runs it. Callers that want mgr->userdata for their own
+  // purposes simply overwrite it after this call returns
+  mgr->userdata = (void *) mg_fw_version;
 #if MG_ENABLE_EPOLL
   if ((mgr->epoll_fd = epoll_create1(EPOLL_CLOEXEC)) < 0)
     MG_ERROR(("epoll_create1 errno %d", errno));
@@ -9527,6 +9787,7 @@ void mg_mgr_poll(struct mg_mgr *mgr, int ms) {
   struct mg_connection *c, *tmp;
   uint64_t now = mg_millis();
   mg_timer_poll(&mgr->timers, now);
+  mg_ota_poll(mgr);
   if (mgr->ifp == NULL || mgr->ifp->driver == NULL) return;
   mg_tcpip_poll(mgr->ifp, now);
   for (c = mgr->conns; c != NULL; c = tmp) {
@@ -9621,144 +9882,170 @@ void mg_tcpip_mapip(struct mg_connection *c, struct mg_addr *ip) {
 
 
 
-enum { MG_OTA_STATUS_WAITING, MG_OTA_STATUS_SUCCESS, MG_OTA_STATUS_FAIL };
-static int s_version_status;
-static int s_ota_status;
-static uint64_t s_start_time;
+#ifndef MG_OTA_MAX_URL_LEN
+#define MG_OTA_MAX_URL_LEN 256
+#endif
 
-static struct mg_ota_metadata {
-  char *version;
-  char *url;
+// Scannable version tag embedded in every firmware binary, for server-side
+// version extraction. Non-static so mg_mgr_init() can stash its address in
+// mgr->userdata: that store is what actually keeps -Wl,--gc-sections from
+// stripping it on builds that never poll for OTAs (an attribute alone does
+// not - the linker drops unreferenced sections regardless of "used"/"retain")
+const char mg_fw_version[] = "MG_VERSION:" MG_OTA_FIRMWARE_VERSION;
+
+static struct mg_ota_state {
+  char my_version[MG_OTA_MAX_VERSION_LEN];
+  char json_url[MG_OTA_MAX_URL_LEN];
+  char version[MG_OTA_MAX_VERSION_LEN];
+  char url[MG_OTA_MAX_URL_LEN];
   size_t size;
   uint8_t sha256[32];
-} s_ota_metadata;
+  void (*fn)(const char *status);
+} *s_ota;
 
-static void free_ota_metadata(void) {
-  if (s_ota_metadata.version) mg_free(s_ota_metadata.version);
-  if (s_ota_metadata.url) mg_free(s_ota_metadata.url);
-  memset(&s_ota_metadata, 0, sizeof(s_ota_metadata));
-}
+static void s_firmware_fn(struct mg_connection *c, int ev, void *ev_data);
 
-static int fetch_ota_metadata(struct mg_http_message *response) {
-  double result;
-  if (mg_http_status(response) != 200) goto fetch_failed;
-  if (mg_json_get(response->body, "$", NULL) != 0) goto fetch_failed;
-  free_ota_metadata();
-  s_ota_metadata.version = mg_json_get_str(response->body, "$.version");
-  if (s_ota_metadata.version == NULL) goto fetch_failed;
-  s_ota_metadata.url = mg_json_get_str(response->body, "$.url");
-  if (s_ota_metadata.url == NULL) goto fetch_failed;
-  if (!mg_json_get_num(response->body, "$.size", &result) || result <= 0)
-    goto fetch_failed;
-  s_ota_metadata.size = (size_t) result;
-  // TODO (robertc2000): parse and validate sha256
-  MG_DEBUG(("Firmware version: %s, url: %s, size: %ld", s_ota_metadata.version,
-            s_ota_metadata.url, s_ota_metadata.size));
-  return MG_OTA_STATUS_SUCCESS;
-fetch_failed:
-  free_ota_metadata();
-  return MG_OTA_STATUS_FAIL;
+#if MG_ENABLE_CUSTOM_DEVICE_ID
+#else
+void mg_ota_device_id(char *buf, size_t len) {
+#if MG_ARCH == MG_ARCH_CUBE && defined(UID_BASE)
+  mg_snprintf(buf, len, "%M", mg_print_hex, 12, (uint8_t *) UID_BASE);
+#else
+  mg_snprintf(buf, len, "%d", 0);
+#endif
 }
+#endif
 
 static void s_version_fn(struct mg_connection *c, int ev, void *ev_data) {
-  struct mg_str host = mg_url_host((char *) c->fn_data);
-  struct mg_http_message *hm;
-  static int fetch_status;
-
+  uint64_t expiration = *(uint64_t *) c->data;
   if (ev == MG_EV_POLL) {
-    if (s_start_time + 5 * 1000 < mg_millis()) {
-      mg_error(c, "Connection timeout");
-    }
+    if (mg_millis() > expiration) mg_error(c, "Metadata timeout");
   } else if (ev == MG_EV_CONNECT) {
+    char id[33];
+    struct mg_str host = mg_url_host(s_ota->json_url);
+    const char *uri = mg_url_uri(s_ota->json_url);
+    const char *sep = strchr(uri, '?') == NULL ? "?" : "&";
+    mg_ota_device_id(id, sizeof(id));
+    id[sizeof(id) - 1] = '\0';
     mg_printf(c,
-              "GET %s HTTP/1.1\r\n"
+              "GET %s%sarch=%d&version=%s&id=%s&interval=%d HTTP/1.1\r\n"
               "Host: %.*s\r\n"
               "Connection: close\r\n\r\n",
-              mg_url_uri((char *) c->fn_data), (int) host.len, host.buf);
-    fetch_status = MG_OTA_STATUS_WAITING;
+              uri, sep, MG_ARCH, s_ota->my_version, id,
+              MG_OTA_PULL_INTERVAL_SECONDS, host.len, host.buf);
   } else if (ev == MG_EV_HTTP_MSG) {
-    hm = (struct mg_http_message *) ev_data;
-    fetch_status = fetch_ota_metadata(hm);
+    struct mg_http_message *hm = (struct mg_http_message *) ev_data;
+    double result;
+    MG_DEBUG(("Got metadata:\n%.*s", hm->body.len, hm->body.buf));
+    if (mg_http_status(hm) != 200 || mg_json_get(hm->body, "$", NULL) != 0 ||
+        !mg_json_unescape(hm->body, "$.version", s_ota->version,
+                          sizeof(s_ota->version)) ||
+        !mg_json_unescape(hm->body, "$.url", s_ota->url, sizeof(s_ota->url)) ||
+        !mg_json_get_num(hm->body, "$.size", &result) || result <= 0) {
+      char buf[100];
+      mg_snprintf(buf, sizeof(buf), "Bad metadata: %.*s", hm->body.len,
+                  hm->body.buf);
+      s_ota->fn(buf);
+      mg_free(s_ota);
+      s_ota = NULL;
+    } else if (strcmp(s_ota->version, s_ota->my_version) == 0) {
+      s_ota->fn("Same version");
+      mg_free(s_ota);
+      s_ota = NULL;
+    } else {
+      struct mg_connection *fc;
+      s_ota->size = (size_t) result;
+      // TODO (robertc2000): parse and validate sha256
+      MG_DEBUG(("Firmware version: %s, url: %s, size: %ld", s_ota->version,
+                s_ota->url, s_ota->size));
+      fc = mg_http_connect(c->mgr, s_ota->url, s_firmware_fn, NULL);
+      if (fc == NULL) {
+        s_ota->fn("Failed to connect");
+        mg_free(s_ota);
+        s_ota = NULL;
+      } else {
+        *(uint64_t *) fc->data = mg_millis() + 300 * 1000;  // Set expiration
+      }
+    }
+    c->is_closing = 1;
   } else if (ev == MG_EV_ERROR) {
-    MG_ERROR(("%lu Connection error", c->id));
-    s_version_status = MG_OTA_STATUS_FAIL;
-  } else if (ev == MG_EV_CLOSE) {
-    MG_DEBUG(("%lu Connection closed %lu", c->id, mg_millis() - s_start_time));
-    s_version_status = fetch_status;
+    s_ota->fn((char *) ev_data);
+    mg_free(s_ota);
+    s_ota = NULL;
   }
 }
 
-static void s_ota_done(struct mg_connection *c, const char *errmsg) {
-  (void) c;
-  s_ota_status = errmsg ? MG_OTA_STATUS_FAIL : MG_OTA_STATUS_SUCCESS;
+static void status_fn(const char *errmsg) {
   if (errmsg) MG_ERROR(("OTA failed: %s", errmsg));
 }
 
+static void status_fn_2(struct mg_connection *c, const char *errmsg) {
+  if (s_ota) s_ota->fn(errmsg);
+  mg_free(s_ota);
+  s_ota = NULL;
+  mg_http_reply(c, errmsg ? 500 : 200, "", "%s\n", errmsg ? errmsg : "ok");
+}
+
 static void s_firmware_fn(struct mg_connection *c, int ev, void *ev_data) {
-  struct mg_str host = mg_url_host(s_ota_metadata.url);
+  uint64_t expiration = *(uint64_t *) c->data;
   if (ev == MG_EV_POLL) {
-    if (s_start_time + 120 * 1000 < mg_millis()) mg_error(c, "Timeout");
+    if (mg_millis() > expiration) mg_error(c, "OTA timeout");
   } else if (ev == MG_EV_CONNECT) {
+    struct mg_str host = mg_url_host(s_ota->url);
     mg_printf(c,
               "GET %s HTTP/1.1\r\n"
               "Host: %.*s\r\n"
               "Connection: close\r\n\r\n",
-              mg_url_uri(s_ota_metadata.url), (int) host.len, host.buf);
+              mg_url_uri(s_ota->url), (int) host.len, host.buf);
   } else if (ev == MG_EV_HTTP_HDRS) {
     struct mg_http_message *hm = (struct mg_http_message *) ev_data;
     int status = mg_http_status(hm);
-    if (status != 200 || hm->body.len != s_ota_metadata.size) {
+    if (status != 200 || hm->body.len != s_ota->size) {
       mg_error(c, "Bad HTTP response: status %d, size %lu vs %lu", status,
-               (unsigned long) hm->body.len,
-               (unsigned long) s_ota_metadata.size);
-      s_ota_status = MG_OTA_STATUS_FAIL;
-      return;
+               (unsigned long) hm->body.len, (unsigned long) s_ota->size);
+    } else {
+      MG_DEBUG(("Beginning OTA (%lu bytes)", (unsigned long) s_ota->size));
+      mg_http_start_ota(c, hm, status_fn_2);
     }
-    MG_DEBUG(
-        ("Beginning OTA (%lu bytes)", (unsigned long) s_ota_metadata.size));
-    mg_http_start_ota(c, hm, s_ota_done);
   } else if (ev == MG_EV_ERROR) {
-    MG_ERROR(("%lu Connection error", c->id));
-    s_ota_status = MG_OTA_STATUS_FAIL;
+    s_ota->fn((char *) ev_data);
+    mg_free(s_ota);
+    s_ota = NULL;
   }
-  (void) ev_data;
 }
 
-void mg_ota_url_check(struct mg_mgr *mgr, const char *current_version,
-                      const char *metadata_url,
-                      void (*fn)(const char *status)) {
-  s_version_status = MG_OTA_STATUS_WAITING;
-  s_ota_status = MG_OTA_STATUS_WAITING;
-  s_start_time = mg_millis();
-  MG_DEBUG(("Connecting to %s to retrieve metadata", metadata_url));
-  if (!mg_http_connect(mgr, metadata_url, s_version_fn,
-                       (void *) metadata_url)) {
-    if (fn) fn("Failed to connect");
-    return;
-  }
-  while (s_version_status == MG_OTA_STATUS_WAITING) mg_mgr_poll(mgr, 10);
-  if (s_version_status == MG_OTA_STATUS_SUCCESS) {
-    if (strcmp(s_ota_metadata.version, current_version) == 0) {
-      if (fn) fn("Same version");
-      free_ota_metadata();
-      return;
-    }
+void mg_ota_url_check(struct mg_mgr *mgr, const char *my_version,
+                      const char *json_url, void (*fn)(const char *status)) {
+  if (fn == NULL) fn = status_fn;
+  if (s_ota != NULL) {
+    fn("OTA already in progress");
+  } else if ((s_ota = (struct mg_ota_state *) mg_calloc(1, sizeof(*s_ota))) ==
+             NULL) {
+    fn("Out of memory");
   } else {
-    if (fn) fn("Version retrieving error");
-    free_ota_metadata();
-    return;
+    struct mg_connection *c;
+    mg_snprintf(s_ota->my_version, sizeof(s_ota->my_version), "%s", my_version);
+    mg_snprintf(s_ota->json_url, sizeof(s_ota->json_url), "%s", json_url);
+    MG_DEBUG(("Connecting to %s", json_url));
+    c = mg_http_connect(mgr, s_ota->json_url, s_version_fn, NULL);
+    if (c == NULL) {
+      mg_free(s_ota);
+      s_ota = NULL;
+      fn("Failed to connect");
+    } else {
+      s_ota->fn = fn;
+      *(uint64_t *) c->data = mg_millis() + 5 * 1000;  // Set expiration
+    }
   }
-  if (fn) fn("Pulling firmware");
-  s_start_time = mg_millis();
-  MG_DEBUG(("Connecting to %s to download firmware", s_ota_metadata.url));
-  if (!mg_http_connect(mgr, s_ota_metadata.url, s_firmware_fn, NULL)) {
-    if (fn) fn("Failed to connect");
-    free_ota_metadata();
-    return;
+}
+
+void mg_ota_poll(struct mg_mgr *mgr) {
+  static uint64_t t = 1;
+  if (MG_OTA_URL != NULL &&
+      mg_timer_expired(&t, MG_OTA_PULL_INTERVAL_SECONDS * 1000, mg_millis())) {
+    mg_ota_url_check(mgr, MG_OTA_FIRMWARE_VERSION, MG_OTA_URL,
+                     MG_OTA_STATUS_FN);
   }
-  while (s_ota_status == MG_OTA_STATUS_WAITING) mg_mgr_poll(mgr, 10);
-  if (s_ota_status == MG_OTA_STATUS_FAIL && fn) fn("OTA fail");
-  free_ota_metadata();
 }
 
 #ifdef MG_ENABLE_LINES
@@ -13033,6 +13320,7 @@ struct mg_connection *mg_sntp_connect(struct mg_mgr *mgr, const char *url,
 
 
 
+
 #if MG_ENABLE_SOCKET
 
 #ifndef closesocket
@@ -13781,6 +14069,7 @@ void mg_mgr_poll(struct mg_mgr *mgr, int ms) {
   mg_iotest(mgr, ms);
   now = mg_millis();
   mg_timer_poll(&mgr->timers, now);
+  mg_ota_poll(mgr);
 
   for (c = mgr->conns; c != NULL; c = tmp) {
     bool is_resp = c->is_resp;

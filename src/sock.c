@@ -8,6 +8,7 @@
 #include "tls.h"
 #include "url.h"
 #include "util.h"
+#include "ota.h"
 
 #if MG_ENABLE_SOCKET
 
@@ -757,6 +758,7 @@ void mg_mgr_poll(struct mg_mgr *mgr, int ms) {
   mg_iotest(mgr, ms);
   now = mg_millis();
   mg_timer_poll(&mgr->timers, now);
+  mg_ota_poll(mgr);
 
   for (c = mgr->conns; c != NULL; c = tmp) {
     bool is_resp = c->is_resp;

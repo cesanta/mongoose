@@ -6,23 +6,25 @@
 static bool s_led1;
 static char s_version[10];
 
-static void read_status(void) {
-  MG_INFO(("READING STATUS"));
-  mg_snprintf(s_version, sizeof(s_version), "1.2.3");
-
-  // These conditionals make this file work on both microcontroller and desktop
-  // Useful for developing the UI on desktop, and copying to an MCU project.
+static bool status_fn(enum mg_dash_op op, struct mg_dash_user *u) {
+  (void) u;
+  if (op == MG_DASH_READ) {
+    MG_INFO(("READING STATUS"));
+    mg_snprintf(s_version, sizeof(s_version), "1.2.3");
+    // These conditionals make this file work on both microcontroller and desktop
 #if MG_ARCH == MG_ARCH_CUBE
-  s_led1 = HAL_GPIO_ReadPin(GPIOB, GPIO_PIN_0);  // Read LED state into field
+    s_led1 = HAL_GPIO_ReadPin(GPIOB, GPIO_PIN_0);
 #endif
-}
-
-static void write_status(void) {
-  MG_INFO(("WRITING STATUS"));
-
+    return true;
+  }
+  if (op == MG_DASH_WRITE) {
+    MG_INFO(("WRITING STATUS"));
 #if MG_ARCH == MG_ARCH_CUBE
-  HAL_GPIO_WritePin(GPIOB, GPIO_PIN_0, s_led1);  // Write LED state from field
+    HAL_GPIO_WritePin(GPIOB, GPIO_PIN_0, s_led1);
 #endif
+    return true;
+  }
+  return false;
 }
 
 static struct mg_field fields_status[] = {
@@ -32,7 +34,7 @@ static struct mg_field fields_status[] = {
 };
 
 static struct mg_field_set field_set_status = {
-    "status", fields_status, read_status, write_status, 0, 0, NULL,
+    "status", fields_status, status_fn, NULL, NULL, NULL,
 };
 
 void mg_dash_init(struct mg_mgr *mgr) {

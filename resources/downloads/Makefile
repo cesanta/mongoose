@@ -62,7 +62,7 @@ $(foreach T,$(RP_TARGETS), $(foreach P,$(PROJECTS), $(eval $(call RP_DASHBOARD_R
 %.zip: %
 	zip -qr $@ $<
 
-upload: $(ZIPS)
+deploy: $(ZIPS)
 	scp $(ZIPS) h1:/data/downloads/
 
 clean:

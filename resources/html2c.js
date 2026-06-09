@@ -5,7 +5,7 @@
 // inlining referenced CSS, JS, images, and icons.
 //
 // Usage:
-//   node html2c.js [-o OUTPUT.c] HTML_FILE
+//   node html2c.js [-o OUTPUT.c] HTML_FILE [HTML_FILE ...]
 
 const fs = require('fs');
 const path = require('path');
@@ -15,23 +15,24 @@ const zlib = require('zlib');
 
 const args = process.argv.slice(2);
 let outputFile = null;
-let inputFile = null;
+const inputFiles = [];
+const useMap = new Map();
 
 for (let i = 0; i < args.length; i++) {
   if (args[i] === '-o' && i + 1 < args.length) {
     outputFile = args[++i];
-  } else if (!args[i].startsWith('-') && inputFile === null) {
-    inputFile = args[i];
+  } else if (args[i] === '--use' && i + 1 < args.length) {
+    const eq = args[++i].indexOf('=');
+    if (eq > 0) useMap.set(args[i].slice(0, eq), args[i].slice(eq + 1));
+  } else if (!args[i].startsWith('-')) {
+    inputFiles.push(args[i]);
   }
 }
 
-if (!inputFile) {
-  console.error('Usage: node html2c.js [-o OUTPUT.c] HTML_FILE');
+if (inputFiles.length === 0) {
+  console.error('Usage: node html2c.js [-o OUTPUT.c] HTML_FILE [HTML_FILE ...]');
   process.exit(1);
 }
-
-const baseDir = path.dirname(path.resolve(inputFile));
-const html = fs.readFileSync(inputFile, 'utf8');
 
 function fetchUrl(url) {
   return new Promise((resolve, reject) => {
@@ -47,12 +48,15 @@ function fetchUrl(url) {
   });
 }
 
-async function readAsset(name, encoding) {
+async function readAsset(name, encoding, baseDir) {
+  const override = useMap.get(name);
+  if (override != null) name = override;
   if (name.startsWith('http://') || name.startsWith('https://')) {
     const data = await fetchUrl(name);
     return encoding ? data.toString(encoding) : data;
   }
-  return fs.readFileSync(path.join(baseDir, name), encoding || null);
+  const fullPath = path.isAbsolute(name) ? name : path.join(baseDir, name);
+  return fs.readFileSync(fullPath, encoding || null);
 }
 
 function attr(match, name) {
@@ -66,21 +70,21 @@ function replaceAttr(match, name, value) {
   return match.replace(re, `${name}="${value}"`);
 }
 
-async function inlineCss(match) {
+async function inlineCss(match, baseDir) {
   const href = attr(match, 'href');
   if (!href) return match;
-  const css = await readAsset(href, 'utf8');
+  const css = await readAsset(href, 'utf8', baseDir);
   return `<style>${css}</style>`;
 }
 
-async function inlineJs(match) {
+async function inlineJs(match, baseDir) {
   const src = attr(match, 'src');
   if (!src) return match;
-  const js = await readAsset(src, 'utf8');
+  const js = await readAsset(src, 'utf8', baseDir);
   return `<script>${js}</script>`;
 }
 
-async function inlineImg(match) {
+async function inlineImg(match, baseDir) {
   const src = attr(match, 'src');
   if (!src) return match;
   const ext = path.extname(src).toLowerCase();
@@ -91,7 +95,7 @@ async function inlineImg(match) {
   else if (ext === '.webp') mime = 'image/webp';
   else if (ext === '.ico') mime = 'image/x-icon';
 
-  const data = await readAsset(src);
+  const data = await readAsset(src, null, baseDir);
   if (ext === '.svg') {
     const svg = Buffer.isBuffer(data) ? data.toString('utf8') : data;
     return replaceAttr(
@@ -107,10 +111,10 @@ async function inlineImg(match) {
   );
 }
 
-async function inlineSvg(match) {
+async function inlineSvg(match, baseDir) {
   const href = attr(match, 'href');
   if (!href || !href.toLowerCase().endsWith('.svg')) return match;
-  const data = await readAsset(href);
+  const data = await readAsset(href, null, baseDir);
   return replaceAttr(
     match,
     'href',
@@ -118,7 +122,7 @@ async function inlineSvg(match) {
   );
 }
 
-async function processHtml(content) {
+async function processHtml(content, baseDir) {
   let result = content;
   const cssRegex = /<link[^>]+rel=["']stylesheet["'][^>]*>/g;
   const jsRegex = /<script[^>]+src=["'][^"']+["'][^>]*><\/script>/g;
@@ -126,16 +130,16 @@ async function processHtml(content) {
   const svgRegex = /<link[^>]+rel=["']icon["'][^>]*>/g;
 
   for (const match of content.match(cssRegex) || []) {
-    if (!match.includes('data:')) result = result.replace(match, await inlineCss(match));
+    if (!match.includes('data:')) result = result.replace(match, await inlineCss(match, baseDir));
   }
   for (const match of content.match(jsRegex) || []) {
-    if (!match.includes('data:')) result = result.replace(match, await inlineJs(match));
+    if (!match.includes('data:')) result = result.replace(match, await inlineJs(match, baseDir));
   }
   for (const match of content.match(imgRegex) || []) {
-    if (!match.includes('data:')) result = result.replace(match, await inlineImg(match));
+    if (!match.includes('data:')) result = result.replace(match, await inlineImg(match, baseDir));
   }
   for (const match of content.match(svgRegex) || []) {
-    if (!match.includes('data:')) result = result.replace(match, await inlineSvg(match));
+    if (!match.includes('data:')) result = result.replace(match, await inlineSvg(match, baseDir));
   }
 
   return result;
@@ -145,30 +149,43 @@ function cArray(data) {
   return Array.from(Buffer.from(data)).concat(0).join(',');
 }
 
-function generateC(data) {
-  const destination = `${path.basename(inputFile)}.gz`;
-  const stat = fs.statSync(inputFile);
-  const mtime = parseInt(stat.mtimeMs / 1000);
-  const zipped = zlib.gzipSync(data);
-  const bytes = cArray(zipped);
+function generateC(files) {
+  const vars = files.map(({inputFile, data}, i) => {
+    const zipped = zlib.gzipSync(data);
+    return {inputFile, zipped};
+  });
+
+  const decls = vars.map(({zipped}, i) =>
+    `static const unsigned char v${i}[] = {${cArray(zipped)}};`
+  ).join('\n');
+
+  const entries = vars.map(({inputFile, zipped}, i) => {
+    const destination = `${path.basename(inputFile)}.gz`;
+    const mtime = parseInt(fs.statSync(inputFile).mtimeMs / 1000);
+    return `  {"/${destination}", v${i}, sizeof(v${i}) - 1, ${mtime}},  // size: ${zipped.length}`;
+  }).join('\n');
 
   return `// DO NOT EDIT. This file is generated using this command:
 // ${process.argv.join(' ')}
 
 #include "mongoose.h"
 
-static const unsigned char v0[] = {${bytes}};
+${decls}
 
 const struct mg_mem_file mg_packed_files[] = {
-  {"/${destination}", v0, sizeof(v0) - 1, ${mtime}},  // size: ${zipped.length}
+${entries}
   {NULL, NULL, 0, 0}
 };
 `;
 }
 
-processHtml(html)
-  .then(result => {
-    const c = generateC(result);
+Promise.all(inputFiles.map(inputFile => {
+  const baseDir = path.dirname(path.resolve(inputFile));
+  const html = fs.readFileSync(inputFile, 'utf8');
+  return processHtml(html, baseDir).then(data => ({inputFile, data}));
+}))
+  .then(files => {
+    const c = generateC(files);
     if (outputFile) {
       fs.writeFileSync(outputFile, c);
     } else {
