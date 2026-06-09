@@ -21,11 +21,11 @@ local_curl() { cp "$TOP/${1#$RAW}" "$3"; }
 test -f "$TOP/mongoose.c" && CURL=local_curl
 
 # Add mongoose core files
-test -d $DIR/Mongoose || mkdir -p $DIR/Mongoose
-test -f $DIR/Mongoose/mongoose.c || $CURL $RAW/mongoose.c -o $DIR/Mongoose/mongoose.c
-test -f $DIR/Mongoose/mongoose.h || $CURL $RAW/mongoose.h -o $DIR/Mongoose/mongoose.h
-test -f $DIR/Mongoose/mongoose_config.h || (echo "#pragma once" ; echo "#define MG_ARCH MG_ARCH_CUBE" ; ) >> $DIR/Mongoose/mongoose_config.h
-case $DIR in *_n657*) (grep -q MG_TLS_NONE $DIR/Mongoose/mongoose_config.h || echo "#define MG_TLS MG_TLS_NONE" >> $DIR/Mongoose/mongoose_config.h) ;; esac
+test -d $DIR/mongoose || mkdir -p $DIR/mongoose
+test -f $DIR/mongoose/mongoose.c || $CURL $RAW/mongoose.c -o $DIR/mongoose/mongoose.c
+test -f $DIR/mongoose/mongoose.h || $CURL $RAW/mongoose.h -o $DIR/mongoose/mongoose.h
+test -f $DIR/mongoose/mongoose_config.h || (echo "#pragma once" ; echo "#define MG_ARCH MG_ARCH_CUBE" ; ) >> $DIR/mongoose/mongoose_config.h
+case $DIR in *_n657*) (grep -q MG_TLS_NONE $DIR/mongoose/mongoose_config.h || echo "#define MG_TLS MG_TLS_NONE" >> $DIR/mongoose/mongoose_config.h) ;; esac
 
 # Patch main.c and linker script
 MAIN_C=$DIR/Core/Src/main.c
@@ -34,7 +34,7 @@ patch_linker_script() {
   test -f "$LD" || return
   echo $LD
   grep -q RAM_D2 "$LD" || perl -i -ne 'print; print "  RAM_D2 (xrw)   : ORIGIN = 0x24000000, LENGTH =  512K\n" if /^\s*MEMORY\b.*\{/ || ($m && /\{/); $m = /^\s*MEMORY\b/ && !/\{/' "$LD"
-  grep -q eth_ram "$LD" || perl -i -ne 'print ; print "\n  /* Mongoose Ethernet driver */\n  .eth_ram : { *(.eth_ram .eth_ram*) } > RAM_D2 AT > FLASH\n" if /_sidata =/' "$LD"
+  grep -q eth_ram "$LD" || perl -i -ne 'print ; print "\n  /* mongoose Ethernet driver */\n  .eth_ram : { *(.eth_ram .eth_ram*) } > RAM_D2 AT > FLASH\n" if /_sidata =/' "$LD"
 }
 HUART=`perl -nle 'print \$1 if /^UART_HandleTypeDef (.+);/' $MAIN_C`
 grep -q mongoose.h $MAIN_C || perl -i -ne 'print; print "#include \"mongoose.h\"\n" if /BEGIN Includes/' $MAIN_C
@@ -62,15 +62,15 @@ case $DIR in *u5a5*) (
     perl -i -ne 'print "  hwspecific_spi_init();\n" if /mg_mgr_init\(&mgr\);/; print;' "$MAIN_C"
 ) ;; esac
 
-# Add Mongoose dir to the build
-test -f $DIR/CMakeLists.txt && (grep -q 'Mongoose/$' $DIR/CMakeLists.txt || perl -i -ne 'print; print "    \${CMAKE_SOURCE_DIR}/Mongoose/\n" if /Add user defined include paths/' $DIR/CMakeLists.txt)
-test -f $DIR/CMakeLists.txt && (grep -q 'mongoose.c$' $DIR/CMakeLists.txt || perl -i -ne 'print; print "    \${CMAKE_SOURCE_DIR}/Mongoose/mongoose.c\n" if /Add user sources here/' $DIR/CMakeLists.txt)
+# Add mongoose dir to the build
+test -f $DIR/CMakeLists.txt && (grep -q 'mongoose/$' $DIR/CMakeLists.txt || perl -i -ne 'print; print "    \${CMAKE_SOURCE_DIR}/mongoose/\n" if /Add user defined include paths/' $DIR/CMakeLists.txt)
+test -f $DIR/CMakeLists.txt && (grep -q 'mongoose.c$' $DIR/CMakeLists.txt || perl -i -ne 'print; print "    \${CMAKE_SOURCE_DIR}/mongoose/mongoose.c\n" if /Add user sources here/' $DIR/CMakeLists.txt)
 case $DIR in portenta*) (
-  test -f $ROOT_DIR/mongoose_config.h && mv $ROOT_DIR/mongoose_config.h $DIR/Mongoose
-  test -f $ROOT_DIR/wifi.c && mv $ROOT_DIR/wifi.c $DIR/Mongoose
+  test -f $ROOT_DIR/mongoose_config.h && mv $ROOT_DIR/mongoose_config.h $DIR/mongoose
+  test -f $ROOT_DIR/wifi.c && mv $ROOT_DIR/wifi.c $DIR/mongoose
   test -f $ROOT_DIR/getfw.cmake && mv $ROOT_DIR/getfw.cmake $DIR/
-  test -f $DIR/CMakeLists.txt && (grep -q 'Mongoose/wifi.c$' "$DIR/CMakeLists.txt" || \
-    perl -i -ne 'print; print "    \${CMAKE_SOURCE_DIR}/Mongoose/wifi.c\n" if /Add user sources here/' "$DIR/CMakeLists.txt")
+  test -f $DIR/CMakeLists.txt && (grep -q 'mongoose/wifi.c$' "$DIR/CMakeLists.txt" || \
+    perl -i -ne 'print; print "    \${CMAKE_SOURCE_DIR}/mongoose/wifi.c\n" if /Add user sources here/' "$DIR/CMakeLists.txt")
   test -f $DIR/CMakeLists.txt && (grep -q '^[[:space:]]*\${CMAKE_SOURCE_DIR}[[:space:]]*$' "$DIR/CMakeLists.txt" || \
     perl -i -ne 'print; print "    \${CMAKE_SOURCE_DIR}\n" if /Add user defined include paths/' "$DIR/CMakeLists.txt")
   test -f $DIR/CMakeLists.txt && (grep -q 'COMPONENT_WHD$' "$DIR/CMakeLists.txt" || \
@@ -88,21 +88,23 @@ EOF
   )
 ) ;; esac
 case $DIR in *u5a5*) (
-  test -f $ROOT_DIR/mongoose_config.h && mv $ROOT_DIR/mongoose_config.h $DIR/Mongoose
-  test -f $ROOT_DIR/wifi.c && mv $ROOT_DIR/wifi.c $DIR/Mongoose
-  test -f $DIR/CMakeLists.txt && (grep -q 'Mongoose/wifi.c$' "$DIR/CMakeLists.txt" || \
-    perl -i -ne 'print; print "    \${CMAKE_SOURCE_DIR}/Mongoose/wifi.c\n" if /Add user sources here/' "$DIR/CMakeLists.txt")
+  test -f $ROOT_DIR/mongoose_config.h && mv $ROOT_DIR/mongoose_config.h $DIR/mongoose
+  test -f $ROOT_DIR/wifi.c && mv $ROOT_DIR/wifi.c $DIR/mongoose
+  test -f $DIR/CMakeLists.txt && (grep -q 'mongoose/wifi.c$' "$DIR/CMakeLists.txt" || \
+    perl -i -ne 'print; print "    \${CMAKE_SOURCE_DIR}/mongoose/wifi.c\n" if /Add user sources here/' "$DIR/CMakeLists.txt")
 
 ) ;; esac
 
 # If dashboard is specified, copy it to the project
 #if test "$DASH" = "full" -o "$DASH" = "minimal" ; then
 if test "$DASH" == "full" -o "$DASH" == "minimal" ; then
-  test -f $DIR/Mongoose/dashboard.c || $CURL $RAW/tutorials/device-dashboard/$DASH/dashboard.c -o $DIR/Mongoose/dashboard.c
-  test -f $DIR/Mongoose/dashboard.html || $CURL $RAW/tutorials/device-dashboard/$DASH/dashboard.html -o $DIR/Mongoose/dashboard.html
-  test -f $DIR/Mongoose/html2c.js || $CURL $RAW/resources/html2c.js -o $DIR/Mongoose/html2c.js
+  test -f $DIR/mongoose/dashboard.c || $CURL $RAW/tutorials/device-dashboard/$DASH/dashboard.c -o $DIR/mongoose/dashboard.c
+  test -f $DIR/mongoose/dashboard.html || $CURL $RAW/tutorials/device-dashboard/$DASH/dashboard.html -o $DIR/mongoose/dashboard.html
+  test -f $DIR/mongoose/html2c.js || $CURL $RAW/resources/html2c.js -o $DIR/mongoose/html2c.js
+  test -f $DIR/mongoose/sign.js || $CURL $RAW/resources/sign.js -o $DIR/mongoose/sign.js
   grep -q 'mg_dash_init' $MAIN_C || perl -i -ne 'print; print "  mg_dash_init(&mgr);\n" if /mg_mgr_init/' $MAIN_C
   grep -q 'mg_dash_poll' $MAIN_C || perl -i -ne 'print; print "    mg_dash_poll(&mgr);\n" if /mg_mgr_poll/' $MAIN_C
-  test -f $DIR/CMakeLists.txt && (grep -q 'file_data.c$' $DIR/CMakeLists.txt || perl -i -ne 'print; print "    \${CMAKE_SOURCE_DIR}/Mongoose/dashboard.c\n    \${CMAKE_SOURCE_DIR}/Mongoose/file_data.c\n" if /# Add user sources here/' $DIR/CMakeLists.txt)
-  test -f $DIR/CMakeLists.txt && (grep -q 'html2c.js' $DIR/CMakeLists.txt || perl -i -ne 'print "# Generate file_data.c from dashboard.html\nadd_custom_command(\n    OUTPUT \${CMAKE_SOURCE_DIR}/Mongoose/file_data.c\n    COMMAND node \${CMAKE_SOURCE_DIR}/Mongoose/html2c.js \${CMAKE_SOURCE_DIR}/Mongoose/dashboard.html -o \${CMAKE_SOURCE_DIR}/Mongoose/file_data.c\n    DEPENDS \${CMAKE_SOURCE_DIR}/Mongoose/dashboard.html\n    VERBATIM\n)\n\n" if /^# Add sources to executable/; print;' $DIR/CMakeLists.txt)
+  test -f $DIR/CMakeLists.txt && (grep -q 'file_data.c$' $DIR/CMakeLists.txt || perl -i -ne 'print; print "    \${CMAKE_SOURCE_DIR}/mongoose/dashboard.c\n    \${CMAKE_SOURCE_DIR}/mongoose/file_data.c\n" if /# Add user sources here/' $DIR/CMakeLists.txt)
+  test -f $DIR/CMakeLists.txt && (grep -q 'html2c.js' $DIR/CMakeLists.txt || perl -i -ne 'print "# Generate file_data.c from dashboard.html\nadd_custom_command(\n    OUTPUT \${CMAKE_SOURCE_DIR}/mongoose/file_data.c\n    COMMAND node \${CMAKE_SOURCE_DIR}/mongoose/html2c.js \${CMAKE_SOURCE_DIR}/mongoose/dashboard.html -o \${CMAKE_SOURCE_DIR}/mongoose/file_data.c\n    DEPENDS \${CMAKE_SOURCE_DIR}/mongoose/dashboard.html\n    VERBATIM\n)\n\n" if /^# Add sources to executable/; print;' $DIR/CMakeLists.txt)
+  test -f $DIR/CMakeLists.txt && (grep -q 'POST_BUILD' $DIR/CMakeLists.txt || printf '\n# Generate .bin from .elf\nadd_custom_command(TARGET ${CMAKE_PROJECT_NAME} POST_BUILD\n    COMMAND arm-none-eabi-objcopy -O binary $<TARGET_FILE:${CMAKE_PROJECT_NAME}> ${CMAKE_PROJECT_NAME}.bin\n    VERBATIM\n)\nif(EXISTS ${CMAKE_SOURCE_DIR}/private.pem)\n  add_custom_command(TARGET ${CMAKE_PROJECT_NAME} POST_BUILD\n      COMMAND node ${CMAKE_SOURCE_DIR}/mongoose/sign.js sign ${CMAKE_PROJECT_NAME}.bin ${CMAKE_SOURCE_DIR}/private.pem\n      VERBATIM\n  )\nendif()\n' >> $DIR/CMakeLists.txt)
 fi
