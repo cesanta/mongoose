@@ -74,7 +74,7 @@ jobs:
     - uses: webfactory/ssh-agent@v0.9.1
       with:
             ssh-private-key: ${{ secrets.HEALTH_TESTS_SSH_KEY }}
-    - run: if [ "${{ matrix.target }}" == "mip_tap_test" ]; then source ./test/setup_ga_network.sh ; export IPV6=0; sed -i -e "s/127.0.0.1/$HOST_IP/" test/mosquitto.conf; ./test/setup_mqtt_server.sh; else export IPV6=1 ; fi && sudo apt -y update ; sudo apt -y install libmbedtls-dev libwolfssl-dev && make -C test ${{ matrix.target }} > log
+    - run: if [ "${{ matrix.target }}" == "mip_tap_test" ]; then source ./test/setup_ga_network.sh ; export IPV6=0; sed -i -e "s/127.0.0.1//" test/mosquitto.conf; cat test/mosquitto.conf; ./test/setup_mqtt_server.sh; else export IPV6=1 ; fi && sudo apt -y update ; sudo apt -y install libmbedtls-dev libwolfssl-dev && make -C test ${{ matrix.target }} > log
     - if: success() || failure()
       run: |
         cat log

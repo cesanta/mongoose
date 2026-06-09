@@ -4,7 +4,8 @@ BRIDGE_BROADCAST=192.168.32.255
 BRIDGE_IP=192.168.32.1
 BRIDGE_NETWORK=192.168.32.0/24
 BRIDGE_MASK=255.255.255.0
-# Host network is 'eth0'
+BRIDGE_IPV6=fe80::01ff:fe02:0301
+# Host outside network interface is 'eth0'
 TAP=tap0
 
 # see our network configuration
@@ -24,6 +25,7 @@ echo
 echo "Network configuration script: TAP"
 sudo ip link add $BRIDGE type bridge	# Create brige
 sudo ifconfig $BRIDGE $BRIDGE_IP netmask $BRIDGE_MASK up
+sudo ip -6 addr add $BRIDGE_IPV6/64 dev $BRIDGE
 echo
 
 echo "Create $TAP attached to $BRIDGE"
@@ -46,6 +48,10 @@ sudo iptables -t nat -A POSTROUTING -s $BRIDGE_NETWORK ! -d $BRIDGE_NETWORK -j M
 echo 1 | sudo tee /proc/sys/net/ipv4/ip_forward
 echo
 
+HOST_IFC=$BRIDGE
+export HOST_IFC
+echo "Host inside network interface is $BRIDGE"
+
 # Setup DHCP server
 echo "Network configuration script: DHCP server"
 echo "Serving from $BRIDGE_IP"
@@ -58,6 +64,9 @@ sudo cp test/dhcpd.conf /etc/dhcp/dhcpd.conf
 sudo chmod a+w /var/lib/dhcp/*
 sudo dhcpd mg_bridge0 &
 echo
+HOST_IPV6=$BRIDGE_IPV6
+export HOST_IPV6
+echo "Listening at $BRIDGE_IPV6"
 
 # Do we have connectivity ?
 echo "Check connectivity:"
