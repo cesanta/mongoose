@@ -224,7 +224,10 @@ static int mg_dash_parse_field(struct mg_str json, struct mg_field *f) {
     ok = f->value_size == sizeof(double) &&
          mg_json_get_num(json, json_path, (double *) f->value);
   } else if (f->type == MG_VAL_STR && f->value_size > 0) {
-    ok = mg_json_unescape(json, json_path, (char *) f->value, f->value_size);
+    struct mg_str tok = mg_json_get_tok(json, json_path);
+    ok = tok.len >= 2 && tok.buf[0] == '"' &&
+         tok.buf[tok.len - 1] == '"';
+    if (ok) mg_json_unescape(json, json_path, (char *) f->value, f->value_size);
   } else if (f->type == MG_VAL_RAW && f->value_size > 0) {
     ok = mg_snprintf((char *) f->value, f->value_size, "%.*s", json.len,
                      json.buf) == json.len;
