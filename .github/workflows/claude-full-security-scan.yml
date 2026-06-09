@@ -79,10 +79,12 @@ jobs:
 
             You are running a full-codebase security scan in GitHub Actions.
 
-            First, read the prompt file at:
+            First, read the main prompt file at:
             ${{ steps.vars.outputs.prompt_path }}
 
-            Treat that file as the authoritative security-review instruction set.
+            Treat that file as the authoritative security-review instruction set. You will also
+            read and analyze additional prompt files mentioned in the main prompt file by their absolute paths in the repo, 
+            as per the instructions found in it.
 
             Scan the checked-out repository as a whole codebase.
             Do not modify files.

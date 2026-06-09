@@ -1,4 +1,5 @@
-HARD EXCLUSIONS - Automatically exclude findings matching these patterns:
+# HARD EXCLUSIONS
+**Automatically exclude findings matching these patterns:**
 1. The attacker must be inside the process, run local code, attach a debugger, or directly invoke Mongoose internals.
 2. The attacker must call internal C functions directly, pass arbitrary API arguments from local code, construct fake callback data, or manually invoke event handlers.
 3. The exploit depends on NULL, dangling, fake, or corrupted pointers/objects supplied by a local caller, including invalid `mg_connection`, `mg_mgr`, `mg_str`, iobufs, or callback data.
@@ -13,9 +14,9 @@ HARD EXCLUSIONS - Automatically exclude findings matching these patterns:
 12. Generic crypto advice with no concrete impact on authentication, confidentiality, integrity, downgrade resistance, hostname verification, certificate validation, key handling, nonces/tags, or plaintext fallback.
 13. Speculative protocol claims without a specific malformed input shape, reachable parser path, and concrete security impact.
 14. Pure application policy gaps: no default auth, no CSRF, no user access model, no account lockout, no audit logs, or no password policy.
-15. Cloud/managed-infra assumptions are used to downgrade or suppress findings; Mongoose often runs on embedded, bare-metal, RTOS, gateway, industrial, and IoT targets.
 
-SIGNAL QUALITY CRITERIA - For remaining findings, assess:
+# SIGNAL QUALITY CRITERIA
+**For remaining findings, assess:**
 1. What external attacker-controlled input reaches the code: HTTP, MQTT, WebSocket, DNS/mDNS, TLS, Ethernet/IP/TCP/UDP, upload data, path, query, header, body, or malicious peer response?
 2. How does that input reach the vulnerable code through normal Mongoose execution?
 3. Does the exploit respect the external-attacker model, without local code execution, fake pointers, struct mutation, debugger access, or direct hardware access?
@@ -29,7 +30,8 @@ SIGNAL QUALITY CRITERIA - For remaining findings, assess:
 11. Is a DoS finding caused by a concrete implementation flaw rather than volume, slow clients, missing quotas, or capacity limits?
 12. In embedded context, can a small malformed input reliably crash, wedge, corrupt, or permanently disrupt a device/process?
 
-PRECEDENTS - Mongoose-specific filtering decisions:
+# PRECEDENTS
+**Mongoose-specific filtering decisions:**
 1. Keep malformed HTTP framing issues that can cause CL+TE smuggling, parser disagreement, body confusion, desynchronization, memory corruption, data exposure, or crash.
 2. Keep duplicate/conflicting `Content-Length`, duplicate/conflicting `Transfer-Encoding`, malformed chunking, and HTTP version framing issues with concrete security impact.
 3. Keep malformed MQTT packet bugs in CONNECT, PUBLISH, SUBSCRIBE, UNSUBSCRIBE, properties, remaining length, topics, QoS, packet IDs, or response construction when externally reachable.
@@ -60,3 +62,4 @@ PRECEDENTS - Mongoose-specific filtering decisions:
 28. Keep availability findings when one malformed packet, request, certificate, DNS response, MQTT message, WebSocket frame, or small sequence can reliably crash, wedge, corrupt, or disrupt a Mongoose target.
 29. Keep custom backend findings only when the issue is in Mongoose’s backend interface, default backend, documented backend contract, or common backend implementation.
 30. When uncertain, keep findings with clear external input, reachable code path, and concrete impact in Mongoose library/protocol/driver code; filter internal-access, impossible-state, local-misuse, generic-hardening, and speculative reports.
+31. For dashboard reports, do not infer unauthenticated access from a route-specific check alone; account for the broader authentication flow. Keep concrete reachable bugs such as path traversal, unsafe decoded paths, or file read/write/delete issues.

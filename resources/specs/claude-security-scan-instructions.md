@@ -1,3 +1,5 @@
+# SECURITY SCAN CONTEXT
+
 **External Attacker Threat Model:**
 - Analyze vulnerabilities from the perspective of an external attacker, not from the perspective of a developer, local user, debugger, test harness, or code running inside the process.
 - The attacker can provide bytes through real external interfaces exposed by Mongoose or a Mongoose-based application: TCP, UDP, HTTP, WebSocket, MQTT, DNS, mDNS, TLS handshakes/certificates, Ethernet/IP/TCP/UDP packets, uploaded files, request paths, query strings, headers, message bodies, malicious server responses, and other protocol inputs.
@@ -10,10 +12,12 @@
 **Mongoose-Specific Security Review Scope:**
 - Treat this repository as a security-sensitive embedded C/C++ networking stack. Mongoose processes attacker-controlled bytes from TCP, UDP, HTTP, WebSocket, MQTT, DNS, mDNS, TLS, filesystem upload/download paths, and built-in TCP/IP drivers.
 - In this repository, remotely triggerable denial of service is security-relevant when it is caused by a concrete implementation flaw such as memory corruption, parser abort, assertion failure, stack exhaustion, infinite loop, unbounded recursion, IRQ livelock, connection state corruption, descriptor-ring corruption, or a single unauthenticated packet causing process/device crash.
-- Report HIGH or MEDIUM confidence findings only. Do not report vague robustness concerns. Every finding must identify the attacker-controlled input, affected parser/state machine/buffer, concrete impact, and the exact code path.
+- Prioritize HIGH and MEDIUM severity findings. Include LOW only when unusually concrete, externally relevant, and useful. Do not report vague robustness concerns. Every finding must identify the attacker-controlled input, affected parser/state machine/buffer, concrete impact, and the exact code path.
 - Prefer findings with a plausible packet/request/message shape. For network protocol issues, describe the relevant malformed HTTP request, MQTT packet, WebSocket frame, DNS message, TLS handshake/certificate input, Ethernet/IP/TCP/UDP packet, or filesystem request.
 - Because this is C/C++, memory safety vulnerabilities are in scope. Buffer overflows, stack overflows, heap overflows, out-of-bounds reads/writes, use-after-free, double free, integer overflow leading to memory corruption, invalid pointer lifetime, and unsafe length conversions must be reviewed carefully.
 - Do not dismiss issues merely because they are “only DoS” if the issue is remotely triggerable against an embedded server, broker, device dashboard, firmware-update endpoint, or network-facing parser.
+
+# SECURITY CATEGORIES TO EXAMINE
 
 **C Memory Safety and Length-Handling Vulnerabilities:**
 - Look for writes to fixed-size stack or heap buffers where the loop bound is derived from attacker-controlled protocol fields, including topic counts, header counts, chunk counts, multipart parts, DNS labels, WebSocket fragments, TCP/IP options, or filesystem path components.
@@ -115,10 +119,3 @@
 - Review CORS and origin checks only when they protect credentialed sensitive operations and the exploit path is concrete.
 - Look for credential comparison bugs, truncation of usernames/passwords, accepting empty credentials, parsing only part of an Authorization header, or treating malformed credentials as anonymous-but-authorized.
 - Flag sensitive data exposure when secrets, credentials, tokens, private keys, firmware signing material, PII, or device identity values can be read by unauthorized remote clients or logged from attacker-triggered paths.
-
-**Finding Quality Requirements for This Repository:**
-- Each finding must include the vulnerable file and line, severity, category, description, attacker-controlled input, exploit scenario, and concrete fix recommendation.
-- For parser and protocol bugs, include a minimal malformed input shape, such as “HTTP request with both Content-Length and Transfer-Encoding,” “MQTT SUBSCRIBE with more topic/QoS pairs than the response buffer,” “certificate SAN wildcard matching multiple labels,” or “DNS name with compression pointer loop.”
-- Distinguish library vulnerabilities from insecure application use. Prefer reporting library-level parser, helper, backend, driver, or default behavior issues over weaknesses in standalone tutorials.
-- Do not report low-confidence theoretical issues, style concerns, missing hardening, absence of rate limiting, lack of audit logs, or generic best-practice advice.
-- Do not suppress concrete memory corruption, remotely triggerable crash, request smuggling, authentication bypass, certificate verification bypass, arbitrary file read/write, firmware overwrite, or network packet parser vulnerabilities merely because they do not lead to code execution.
