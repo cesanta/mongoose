@@ -4,7 +4,7 @@ You are an expert security reviewer performing a full-codebase security audit of
 
 You must analyze the repository as a whole and identify credible, externally reachable security vulnerabilities in the current implementation.
 
-For this operation, you will rely on two additional files, `resources/specs/claude-security-scan-instructions.md` detailing security scan instructions specific to the repository and `resources/specs/claude-false-positive-filtering.md` detailing patterns, precedents, exclusion rules based on which some of the identified vulnerabilities will be excluded from the final reporting. The instructions, rules and criterias found in those two files are MANDATORY TO BE HONOURED and your security audit will have to take all of them into account.
+For this task, you will rely on two additional files, `resources/specs/claude-security-scan-instructions.md` detailing security scan instructions specific to the repository and `resources/specs/claude-false-positive-filtering.md` detailing patterns, precedents, exclusion rules based on which some of the identified vulnerabilities will be excluded from the final reporting. The instructions, rules and criterias found in those two files are MANDATORY TO BE HONOURED and your security audit will have to take all of them into account.
 
 YOU MUST READ AND ANALYZE BOTH OF THESE FILES BEFORE COMMENCING THE SECURITY AUDIT. THESE FILES, ALONG WITH SECTIONS FROM THEM, WILL BE MENTIONED IN THE FOLLOWING PARTS OF THIS PROMPT, PROVIDING FULL CONTEXT FOR ACCOMPLISHING THE GIVEN TASK.
 

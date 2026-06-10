@@ -1,0 +1,114 @@
+name: Claude PR Security Review
+
+on:
+  pull_request:
+    types: [opened]
+
+  workflow_dispatch:
+    inputs:
+      pr_number:
+        description: "PR number to review manually"
+        required: true
+        type: number
+      prompt_path:
+        description: "Path to the repo prompt file Claude should read"
+        required: false
+        default: "resources/specs/claude-pr-security-review.md"
+        type: string
+
+permissions:
+  contents: read
+  pull-requests: write
+  issues: write
+
+concurrency:
+  group: claude-pr-security-review-${{ github.event.pull_request.number || inputs.pr_number }}
+  cancel-in-progress: false
+
+jobs:
+  security-review:
+    name: Claude PR Security Review
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+
+    env:
+      GH_TOKEN: ${{ github.token }}
+      PR_NUMBER: ${{ github.event.pull_request.number || inputs.pr_number }}
+
+    steps:
+      - name: Resolve workflow variables
+        id: vars
+        shell: bash
+        run: |
+          set -euo pipefail
+          PROMPT_PATH="${{ inputs.prompt_path || 'resources/specs/claude-pr-security-review.md' }}"
+          echo "prompt_path=${PROMPT_PATH}" >> "$GITHUB_OUTPUT"
+
+      - name: Resolve and authorize PR
+        id: auth
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          PR_JSON="$(gh api \
+            "repos/${{ github.repository }}/pulls/${PR_NUMBER}")"
+
+          AUTHOR_ASSOCIATION="$(jq -r '.author_association' <<< "$PR_JSON")"
+          HEAD_REF="$(jq -r '.head.ref' <<< "$PR_JSON")"
+          HEAD_REPO_FULL_NAME="$(jq -r '.head.repo.full_name' <<< "$PR_JSON")"
+          BASE_REPO_FULL_NAME="$(jq -r '.base.repo.full_name' <<< "$PR_JSON")"
+
+          echo "author_association=${AUTHOR_ASSOCIATION}" >> "$GITHUB_OUTPUT"
+          echo "head_ref=${HEAD_REF}" >> "$GITHUB_OUTPUT"
+          echo "head_repo_full_name=${HEAD_REPO_FULL_NAME}" >> "$GITHUB_OUTPUT"
+          echo "base_repo_full_name=${BASE_REPO_FULL_NAME}" >> "$GITHUB_OUTPUT"
+
+          case "$AUTHOR_ASSOCIATION" in
+            OWNER|MEMBER|COLLABORATOR)
+              echo "trusted_author=true" >> "$GITHUB_OUTPUT"
+              ;;
+            *)
+              echo "trusted_author=false" >> "$GITHUB_OUTPUT"
+              echo "Refusing to run Claude on PR #${PR_NUMBER}: author_association=${AUTHOR_ASSOCIATION}"
+              exit 1
+              ;;
+          esac
+
+      - name: Checkout PR head
+        uses: actions/checkout@v6
+        with:
+          repository: ${{ steps.auth.outputs.head_repo_full_name }}
+          ref: ${{ steps.auth.outputs.head_ref }}
+          fetch-depth: 1
+
+      - name: Claude PR security review
+        uses: anthropics/claude-code-action@v1
+        with:
+          anthropic_api_key: ${{ secrets.CLAUDE_API_KEY }}
+          github_token: ${{ github.token }}
+
+          track_progress: false
+
+          prompt: |
+            REPO: ${{ github.repository }}
+            PR NUMBER: ${{ env.PR_NUMBER }}
+
+            You are a senior security engineer conducting a focused security review of this GitHub pull request.
+            Use the available repository and GitHub CLI tools to inspect the PR.
+
+            First, read the main prompt file at:
+            ${{ steps.vars.outputs.prompt_path }}
+
+            Treat that file as the authoritative security-review instruction set. You will also
+            read and analyze additional prompt files mentioned in the main prompt file by their absolute paths in the repo, 
+            as per the instructions found in it.
+
+            Operational requirements:
+            - Review only the changes in this pull request.
+            - Use `gh pr diff` and `gh pr view` to inspect the PR.
+            - Post the final security review as a single top-level PR comment using `gh pr comment`.
+            - Do not modify files, commit changes, push branches, approve the PR, or merge the PR.
+
+          claude_args: |
+            --allowedTools "Read,Bash(cat:*),Bash(gh pr diff:*),Bash(gh pr view:*),Bash(gh pr comment:*)"
+            --model claude-opus-4-8
