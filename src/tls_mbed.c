@@ -222,27 +222,25 @@ long mg_tls_send(struct mg_connection *c, const void *buf, size_t len) {
                     : mbedtls_ssl_write(&tls->ssl, (unsigned char *) buf,
                                         len);  // encrypt current data
 #if defined(MBEDTLS_ERR_SSL_RECEIVED_NEW_SESSION_TICKET)
-  if (n == MBEDTLS_ERR_SSL_RECEIVED_NEW_SESSION_TICKET) {
-    c->is_tls_throttled = was_throttled;
+  if (n == MBEDTLS_ERR_SSL_RECEIVED_NEW_SESSION_TICKET)
     return MG_IO_WAIT;
-  }
 #endif
   c->is_tls_throttled =
       (n == MBEDTLS_ERR_SSL_WANT_READ || n == MBEDTLS_ERR_SSL_WANT_WRITE);
-  if (was_throttled) return MG_IO_WAIT;  // flushed throttled data instead
+  if (was_throttled && c->is_tls_throttled) return MG_IO_WAIT;  // no changes
   if (c->is_tls_throttled) {
     tls->throttled_buf =
         (unsigned char *) buf;  // MbedTLS code actually ignores
-    tls->throttled_len = len;   //  these, but let's play API rules
-    return (long) len;          // already encripted that when throttled
-  }  // if last chunk fails to be sent, it needs to be flushed
+    tls->throttled_len = len;   // these, but let's play API rules
+    return MG_IO_WAIT;
+  }
   if (n <= 0) return MG_IO_ERR;
   return n;
 }
 
 void mg_tls_flush(struct mg_connection *c) {
   struct mg_tls *tls = (struct mg_tls *) c->tls;
-  if (c->is_tls_throttled) {
+  if (c->is_tls_throttled && c->is_draining) {
     long n =
         mbedtls_ssl_write(&tls->ssl, tls->throttled_buf, tls->throttled_len);
 #if defined(MBEDTLS_ERR_SSL_RECEIVED_NEW_SESSION_TICKET)
