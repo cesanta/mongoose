@@ -1374,6 +1374,7 @@ size_t mg_xprintf(mg_pfn_t fn, void *arg, const char *fmt, ...);
 
 
 
+
 // Formats into buf/len. Returns the number of bytes that would be written if
 // buf were large enough (like snprintf). Call with buf=NULL, len=0 to measure.
 // NUL-terminates if the result fits (n < len).
@@ -1397,7 +1398,7 @@ size_t mg_print_ip4(mg_pfn_t, void *arg, va_list *ap);      // expects: uint32_t
 size_t mg_print_ip6(mg_pfn_t, void *arg, va_list *ap);      // expects: uint8_t[16] ipv6
 size_t mg_print_mac(mg_pfn_t, void *arg, va_list *ap);      // expects: uint8_t[6] mac
 size_t mg_print_ieee64(mg_pfn_t, void *arg, va_list *ap);   // expects: uint64_t
-size_t mg_print_l2addr(mg_pfn_t, void *arg, va_list *ap);   // expects: const struct mg_addr *
+size_t mg_print_l2addr(mg_pfn_t, void *arg, va_list *ap);   // expects: uint8_t l2, uint8_t[n] n-byte l2-dependent address
 
 // Output functions for use as the fn argument to mg_xprintf/mg_vxprintf.
 void mg_pfn_iobuf(char ch, void *param);           // param: struct mg_iobuf * (resizes as needed)
@@ -1672,34 +1673,34 @@ void mg_delayms(unsigned int ms);
 
 // Write a native integer to byte pointer p in big-endian byte order.
 // Safe on architectures that forbid unaligned access.
-#define MG_STORE_BE16(p, n)           \
-  do {                                \
-    MG_U8P(p)[0] = ((n) >> 8U) & 255; \
-    MG_U8P(p)[1] = (n) &255;          \
+#define MG_STORE_BE16(p, n)               \
+  do {                                    \
+    MG_U8P(p)[0] = (uint8_t) ((n) >> 8U); \
+    MG_U8P(p)[1] = (uint8_t) (n);         \
   } while (0)
-#define MG_STORE_BE24(p, n)            \
-  do {                                 \
-    MG_U8P(p)[0] = ((n) >> 16U) & 255; \
-    MG_U8P(p)[1] = ((n) >> 8U) & 255;  \
-    MG_U8P(p)[2] = (n) &255;           \
+#define MG_STORE_BE24(p, n)                \
+  do {                                     \
+    MG_U8P(p)[0] = (uint8_t) ((n) >> 16U); \
+    MG_U8P(p)[1] = (uint8_t) ((n) >> 8U);  \
+    MG_U8P(p)[2] = (uint8_t) (n);          \
   } while (0)
-#define MG_STORE_BE32(p, n)            \
-  do {                                 \
-    MG_U8P(p)[0] = ((n) >> 24U) & 255; \
-    MG_U8P(p)[1] = ((n) >> 16U) & 255; \
-    MG_U8P(p)[2] = ((n) >> 8U) & 255;  \
-    MG_U8P(p)[3] = (n) &255;           \
+#define MG_STORE_BE32(p, n)                \
+  do {                                     \
+    MG_U8P(p)[0] = (uint8_t) ((n) >> 24U); \
+    MG_U8P(p)[1] = (uint8_t) ((n) >> 16U); \
+    MG_U8P(p)[2] = (uint8_t) ((n) >> 8U);  \
+    MG_U8P(p)[3] = (uint8_t) (n);          \
   } while (0)
-#define MG_STORE_BE64(p, n)            \
-  do {                                 \
-    MG_U8P(p)[0] = ((n) >> 56U) & 255; \
-    MG_U8P(p)[1] = ((n) >> 48U) & 255; \
-    MG_U8P(p)[2] = ((n) >> 40U) & 255; \
-    MG_U8P(p)[3] = ((n) >> 32U) & 255; \
-    MG_U8P(p)[4] = ((n) >> 24U) & 255; \
-    MG_U8P(p)[5] = ((n) >> 16U) & 255; \
-    MG_U8P(p)[6] = ((n) >> 8U) & 255;  \
-    MG_U8P(p)[7] = (n) &255;           \
+#define MG_STORE_BE64(p, n)                \
+  do {                                     \
+    MG_U8P(p)[0] = (uint8_t) ((n) >> 56U); \
+    MG_U8P(p)[1] = (uint8_t) ((n) >> 48U); \
+    MG_U8P(p)[2] = (uint8_t) ((n) >> 40U); \
+    MG_U8P(p)[3] = (uint8_t) ((n) >> 32U); \
+    MG_U8P(p)[4] = (uint8_t) ((n) >> 24U); \
+    MG_U8P(p)[5] = (uint8_t) ((n) >> 16U); \
+    MG_U8P(p)[6] = (uint8_t) ((n) >> 8U);  \
+    MG_U8P(p)[7] = (uint8_t) (n);          \
   } while (0)
 
 // Network / host byte-order conversion (big-endian <-> native).
