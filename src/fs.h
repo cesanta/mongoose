@@ -3,69 +3,77 @@
 #include "arch.h"
 #include "config.h"
 
+// Flags returned by mg_fs.st() and passed to mg_fs.open().
 enum { MG_FS_READ = 1, MG_FS_WRITE = 2, MG_FS_DIR = 4 };
 
-// Filesystem API functions
-// st() returns MG_FS_* flags and populates file size and modification time
-// ls() calls fn() for every directory entry, allowing to list a directory
-//
-// NOTE: UNIX-style shorthand names for the API functions are deliberately
-// chosen to avoid conflicts with some libraries that make macros for e.g.
-// stat(), write(), read() calls.
+// Filesystem abstraction. Implement all function pointers to plug in a custom
+// filesystem. Short UNIX-style names are used deliberately to avoid conflicts
+// with libraries that define macros for stat(), read(), write(), etc.
 struct mg_fs {
-  int (*st)(const char *path, size_t *size, time_t *mtime);  // stat file
-  void (*ls)(const char *path, void (*fn)(const char *, void *),
-             void *);  // List directory entries: call fn(file_name, fn_data)
-                       // for each directory entry
-  void *(*op)(const char *path, int flags);             // Open file
+  int (*st)(const char *path, size_t *size, time_t *mtime);  // Stat: return MG_FS_* flags; size/mtime may be NULL
+  void (*ls)(const char *path, void (*fn)(const char *, void *), void *);  // List dir: call fn(name, arg) per entry
+  void *(*op)(const char *path, int flags);             // Open file; return opaque fd, or NULL on error
   void (*cl)(void *fd);                                 // Close file
-  size_t (*rd)(void *fd, void *buf, size_t len);        // Read file
-  size_t (*wr)(void *fd, const void *buf, size_t len);  // Write file
-  size_t (*sk)(void *fd, size_t offset);                // Set file position
-  bool (*mv)(const char *from, const char *to);         // Rename file
+  size_t (*rd)(void *fd, void *buf, size_t len);        // Read up to len bytes; return bytes read
+  size_t (*wr)(void *fd, const void *buf, size_t len);  // Write len bytes; return bytes written
+  size_t (*sk)(void *fd, size_t offset);                // Seek to offset from start; return new position
+  bool (*mv)(const char *from, const char *to);         // Rename/move file
   bool (*rm)(const char *path);                         // Delete file
   bool (*mkd)(const char *path);                        // Create directory
 };
 
-extern struct mg_fs mg_fs_posix;   // POSIX open/close/read/write/seek
-extern struct mg_fs mg_fs_packed;  // see tutorials/core/embedded-filesystem
-extern struct mg_fs mg_fs_fat;     // FAT FS
+extern struct mg_fs mg_fs_posix;   // POSIX filesystem (open/close/read/write/seek)
+extern struct mg_fs mg_fs_packed;  // Read-only packed filesystem (see tutorials/core/embedded-filesystem)
+extern struct mg_fs mg_fs_fat;     // FAT filesystem
 
-// File descriptor
+// Open file descriptor returned by mg_fs_open(). Bundles the raw fd with its fs.
 struct mg_fd {
-  void *fd;
-  struct mg_fs *fs;
+  void *fd;          // Opaque file handle from fs->op()
+  struct mg_fs *fs;  // Filesystem that owns fd
 };
 
+// Opens path with the given MG_FS_* flags. Returns NULL on error.
 struct mg_fd *mg_fs_open(struct mg_fs *fs, const char *path, int flags);
+
+// Closes fd and frees the mg_fd struct. Safe to call with NULL.
 void mg_fs_close(struct mg_fd *fd);
+
+// Sequential directory iterator. Call repeatedly with the same buf/len;
+// each call fills buf with the next entry name. Returns false when done.
 bool mg_fs_ls(struct mg_fs *fs, const char *path, char *buf, size_t len);
+
+// Reads the entire file into a heap-allocated buffer. The returned mg_str is
+// NUL-terminated. Caller must mg_free(result.buf). Returns {NULL,0} on error.
 struct mg_str mg_file_read(struct mg_fs *fs, const char *path);
-bool mg_file_write(struct mg_fs *fs, const char *path, const void *, size_t);
+
+// Atomically writes buf/len to path (via a temp file + rename). Returns false on error.
+bool mg_file_write(struct mg_fs *fs, const char *path, const void *buf, size_t len);
+
+// Formats a string and atomically writes it to path. Returns false on error.
 bool mg_file_printf(struct mg_fs *fs, const char *path, const char *fmt, ...);
 
 
-// A piece of memory (flash or RAM) represented as a file
+// A file stored in memory (flash or RAM), used by mg_fs_packed.
 struct mg_mem_file {
-  const char *path;
-  const unsigned char *data;
-  size_t size;   // Data size
-  time_t mtime;  // Modification time
+  const char *path;          // Virtual file path, e.g. "/web_root/index.html"
+  const unsigned char *data; // Pointer to file content
+  size_t size;               // Content size in bytes
+  time_t mtime;              // Modification time (may be 0)
 };
 
-// Global variable that points to the array of memory files. It can be
-// changed to point to the user-defined file array. The last element
-// should have NULL path.
-//
-// static const struct mg_mem_file my_files[] = {
-//   {"/web_root/index.html", "hi", 2, 0},
-//   {NULL, NULL, 0, 0},
-// };
-// mg_mem_files = my_files;
+// Pointer to a NULL-path-terminated array of in-memory files for mg_fs_packed.
+// Override to serve a custom set of files:
+//   static const struct mg_mem_file my_files[] = {
+//     {"/index.html", data, sizeof(data), 0},
+//     {NULL, NULL, 0, 0},
+//   };
+//   mg_mem_files = my_files;
 extern const struct mg_mem_file *mg_mem_files;
 
-// const char *mg_unpack(const char *path, size_t *size, time_t *mtime);
-// const char *mg_unlist(size_t no);             // Get no'th packed filename
-struct mg_str mg_unpacked(const char *path);  // Packed file as mg_str
+// Looks up path in the packed file array. Returns an mg_str pointing directly
+// into the stored data (zero-copy). Returns {NULL,0} if not found.
+struct mg_str mg_unpacked(const char *path);
 
-extern const struct mg_mem_file mg_packed_files[];  // Generated by "pack" util
+// Array of packed files generated by the "pack" utility into packed_fs.c.
+// Activate by assigning: mg_mem_files = mg_packed_files;
+extern const struct mg_mem_file mg_packed_files[];

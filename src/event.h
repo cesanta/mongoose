@@ -1,12 +1,23 @@
 #pragma once
 
 struct mg_connection;
+
+// User-supplied event handler. ev is enum mg_event; ev_data type depends on
+// the event (see enum below). c->fn_data is the user pointer passed to
+// mg_listen(), mg_connect(), mg_*_listen(), mg_*_connect().
 typedef void (*mg_event_handler_t)(struct mg_connection *, int ev,
                                    void *ev_data);
+
+// Fires ev on connection c, invoking c->fn and c->pfn with ev_data.
 void mg_call(struct mg_connection *c, int ev, void *ev_data);
+
+// Sets c->is_closing and fires MG_EV_ERROR with a printf-formatted message.
 void mg_error(struct mg_connection *c, const char *fmt, ...);
 
-enum {
+// Event codes passed to mg_event_handler_t. Each entry shows the type of
+// ev_data cast to use inside the handler, e.g.: char *msg = (char *) ev_data;
+enum mg_event {
+  // Event          Meaning                         ev_data type
   MG_EV_ERROR,      // Error                        char *error_message
   MG_EV_OPEN,       // Connection created           NULL
   MG_EV_POLL,       // mg_mgr_poll iteration        uint64_t *uptime_millis
@@ -29,6 +40,6 @@ enum {
   MG_EV_WAKEUP,     // mg_wakeup() data received    struct mg_str *data
   MG_EV_MDNS_REQ,   // mDNS request                 struct mg_mdns_req *
   MG_EV_MDNS_RESP,  // mDNS response                struct mg_mdns_resp *
-  MG_EV_MODBUS_REQ, // ModBus request               struct mg_modbus_cmd *
+  MG_EV_MODBUS_REQ, // Modbus TCP request            struct mg_modbus_req *
   MG_EV_USER        // Starting ID for user events
 };

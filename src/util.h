@@ -12,21 +12,53 @@
 #define assert(x)
 #endif
 
+// Wrappers around calloc/free. Override by defining MG_ENABLE_CUSTOM_CALLOC=1
+// and providing your own implementations.
 void *mg_calloc(size_t count, size_t size);
 void mg_free(void *ptr);
+
+// Zeroes len bytes at buf using a volatile write loop that the compiler cannot
+// elide. Safe to call with buf=NULL. Use instead of memset() for clearing
+// sensitive data (keys, passwords).
 void mg_bzero(volatile unsigned char *buf, size_t len);
+
+// Fills buf with len cryptographically random bytes. Uses the best available
+// hardware or OS source (hardware RNG, /dev/urandom, CryptGenRandom, etc.).
+// Falls back to rand() with an error log if no strong source is available.
+// Returns true when a strong source was used, false on fallback to rand().
+// Override by defining MG_ENABLE_CUSTOM_RANDOM=1 and providing your own impl.
 bool mg_random(void *buf, size_t len);
+
+// Fills buf with len-1 random alphanumeric characters ([a-zA-Z0-9]) and
+// NUL-terminates. Returns buf.
 char *mg_random_str(char *buf, size_t len);
+
+// Computes CRC32 (polynomial 0xEDB88320) over buf/len. Pass crc=0 to start
+// a new checksum; pass the result of a prior call to extend over more data.
 uint32_t mg_crc32(uint32_t crc, const char *buf, size_t len);
+
+// Returns true if path is safe to serve from the filesystem. Rejects paths
+// that start with '~' or '..', or contain a '/../' component, to prevent
+// directory traversal attacks.
 bool mg_path_is_sane(const struct mg_str path);
+
+// Busy-waits for at least ms milliseconds using mg_millis(). Blocks the
+// calling context; avoid in event handlers.
 void mg_delayms(unsigned int ms);
 
+// Packs four byte values into a uint32_t in big-endian order.
+// MG_U32(1, 2, 3, 4) == 0x01020304
 #define MG_U32(a, b, c, d)                                         \
   (((uint32_t) ((a) &255) << 24) | ((uint32_t) ((b) &255) << 16) | \
    ((uint32_t) ((c) &255) << 8) | (uint32_t) ((d) &255))
 
+// Constructs an IPv4 address in network byte order from four decimal octets.
+// Usage: uint32_t ip = MG_IPV4(192, 168, 1, 1);
 #define MG_IPV4(a, b, c, d) mg_htonl(MG_U32(a, b, c, d))
 
+// Expands to a brace-enclosed byte initialiser for a 16-byte IPv6 address.
+// Arguments are the eight 16-bit groups in the address, e.g.:
+//   uint8_t ip6[16] = MG_IPV6(0x2001, 0xdb8, 0, 0, 0, 0, 0, 1);
 #define MG_IPV6(a, b, c, d, e, f, g ,h) \
   { (uint8_t)((a)>>8),(uint8_t)(a), \
     (uint8_t)((b)>>8),(uint8_t)(b), \
@@ -42,6 +74,8 @@ void mg_delayms(unsigned int ms);
 #define MG_IPADDR_PARTS(ADDR) \
   MG_U8P(ADDR)[0], MG_U8P(ADDR)[1], MG_U8P(ADDR)[2], MG_U8P(ADDR)[3]
 
+// Read an unaligned big-endian value from byte pointer p into a native integer.
+// Safe on architectures that forbid unaligned access (e.g. Cortex-M0).
 #define MG_LOAD_BE16(p) \
   ((uint16_t) (((uint16_t) MG_U8P(p)[0] << 8U) | MG_U8P(p)[1]))
 #define MG_LOAD_BE24(p)                           \
@@ -59,6 +93,9 @@ void mg_delayms(unsigned int ms);
                ((uint64_t) MG_U8P(p)[4] << 24U) | \
                ((uint64_t) MG_U8P(p)[5] << 16U) | \
                ((uint64_t) MG_U8P(p)[6] << 8U) | MG_U8P(p)[7]))
+
+// Write a native integer to byte pointer p in big-endian byte order.
+// Safe on architectures that forbid unaligned access.
 #define MG_STORE_BE16(p, n)           \
   do {                                \
     MG_U8P(p)[0] = ((n) >> 8U) & 255; \
@@ -89,6 +126,8 @@ void mg_delayms(unsigned int ms);
     MG_U8P(p)[7] = (n) &255;           \
   } while (0)
 
+// Network / host byte-order conversion (big-endian <-> native).
+// mg_htons/mg_htonl/mg_htonll are aliases for the same operation (symmetric).
 uint16_t mg_ntohs(uint16_t net);
 uint32_t mg_ntohl(uint32_t net);
 uint64_t mg_ntohll(uint64_t net);
@@ -96,10 +135,17 @@ uint64_t mg_ntohll(uint64_t net);
 #define mg_htonl(x) mg_ntohl(x)
 #define mg_htonll(x) mg_ntohll(x)
 
+// Memory-mapped register access: reads/writes a volatile uint32_t at address x.
 #define MG_REG(x) ((volatile uint32_t *) (x))[0]
+
+// Produces a uint32_t with bit x set. x must be 0-31.
 #define MG_BIT(x) (((uint32_t) 1U) << (x))
+
+// Clears bits in CLRMASK and sets bits in SETMASK in register R atomically
+// (read-modify-write). Example: MG_SET_BITS(MG_REG(addr), 0xF, 0x3);
 #define MG_SET_BITS(R, CLRMASK, SETMASK) (R) = ((R) & ~(CLRMASK)) | (SETMASK)
 
+// Round x up / down to the nearest multiple of a. Returns x when a is 0.
 #define MG_ROUND_UP(x, a) ((a) == 0 ? (x) : ((((x) + (a) -1) / (a)) * (a)))
 #define MG_ROUND_DOWN(x, a) ((a) == 0 ? (x) : (((x) / (a)) * (a)))
 

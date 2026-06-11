@@ -11,7 +11,8 @@
 // CLOCK_REALTIME if neither is available.
 uint64_t mg_millis(void);
 
-// Boot timestamp in ms since Epoch. Updated by successful SNTP request
+// Boot timestamp in ms since Epoch. 0 until the first successful SNTP sync;
+// updated automatically by mg_sntp_connect() on each successful response.
 extern uint64_t mg_boot_timestamp_ms;
 
 // Return milliseconds since Epoch: mg_millis() + mg_boot_timestamp_ms.
@@ -36,7 +37,7 @@ bool mg_timer_expired(uint64_t *expiration, uint64_t period, uint64_t now);
 // `url` defaults to "udp://time.google.com:123" when NULL.
 // On success the internal boot timestamp is updated so that mg_now() returns
 // the correct wall-clock time, and MG_EV_SNTP_TIME is fired on `fn` (if not
-// NULL) with a pointer to the int64_t epoch in milliseconds.
+// NULL) with ev_data pointing to a uint64_t containing the epoch in milliseconds.
 // Pass fn == NULL and fn_data == NULL for a fire-and-forget sync that only
 // updates mg_boot_timestamp_ms. Typical polling usage:
 //
