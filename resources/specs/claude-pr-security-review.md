@@ -70,7 +70,7 @@ Then include the findings section:
 
 If there are no findings, write exactly:
 
-No security findings identified.
+`No security findings identified.` Then STOP. Do not add anything else.
 
 If there are findings, list each finding using this format:
 
