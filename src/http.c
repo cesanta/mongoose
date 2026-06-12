@@ -1046,10 +1046,6 @@ static void mg_upload_default_cb(struct mg_connection *c, const char *status) {
   mg_http_reply(c, status ? 500 : 200, "", "%s\n", status ? status : "ok");
 }
 
-const char *mg_upload_path(struct mg_connection *c) {
-  return (const char *) c->pfn_data;
-}
-
 void mg_http_start_upload(struct mg_connection *c, struct mg_http_message *hm,
                           struct mg_str name, struct mg_str dir,
                           struct mg_fs *fs,
