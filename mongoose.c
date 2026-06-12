@@ -10061,7 +10061,7 @@ void mg_ota_url_check(struct mg_mgr *mgr, const char *my_version,
 }
 
 void mg_ota_poll(struct mg_mgr *mgr) {
-  static uint64_t t = 1;
+  static uint64_t t = 5000;  // Fire first time 5 sec after boot
   if (MG_OTA_URL != NULL &&
       mg_timer_expired(&t, MG_OTA_PULL_INTERVAL_SECONDS * 1000, mg_millis())) {
     mg_ota_url_check(mgr, MG_OTA_FIRMWARE_VERSION, MG_OTA_URL,
