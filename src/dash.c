@@ -14,6 +14,7 @@ struct mg_dash_cdata {
 };
 
 static struct mg_dash_user s_guest;
+static struct mg_dash_user *s_users;  // List of authenticated users
 
 static struct mg_str trimq(struct mg_str s) {  // Trim double quotes
   if (s.len > 1 && s.buf[0] == '"') s.len -= 2, s.buf++;
@@ -412,19 +413,21 @@ static struct mg_dash_user *mg_dash_add_user(struct mg_dash_user **users,
 }
 
 static struct mg_dash_user *mg_dash_find_user(struct mg_dash_user *users,
+                                              struct mg_dash *dash,
                                               const char *name) {
   struct mg_dash_user *u;
   for (u = users; u != NULL; u = u->next) {
-    if (strcmp(u->name, name) == 0) return u;
+    if (u->dash == dash && strcmp(u->name, name) == 0) return u;
   }
   return NULL;
 }
 
 static struct mg_dash_user *mg_dash_find_token(struct mg_dash_user *users,
+                                               struct mg_dash *dash,
                                                const char *token) {
   struct mg_dash_user *u;
   for (u = users; u != NULL; u = u->next) {
-    if (strcmp(u->token, token) == 0) return u;
+    if (u->dash == dash && strcmp(u->token, token) == 0) return u;
   }
   return NULL;
 }
@@ -434,11 +437,31 @@ static void mg_dash_refresh_user(struct mg_dash *dash,
   user->expire = mg_dash_make_expiration_time(dash);
 }
 
+static void mg_dash_delete_user(struct mg_mgr *mgr, struct mg_dash_user *u) {
+  struct mg_connection *conn;
+  for (conn = mgr->conns; conn != NULL; conn = conn->next) {
+    struct mg_dash_cdata *d = (struct mg_dash_cdata *) conn->data;
+    if (conn->is_websocket && d->dash == u->dash && d->u == u) {
+      d->u = NULL;
+      conn->is_closing = 1;
+    }
+  }
+  LIST_DELETE(struct mg_dash_user, &s_users, u);
+  mg_free(u);
+}
+
+static void mg_dash_delete_users(struct mg_mgr *mgr, struct mg_dash *dash) {
+  struct mg_dash_user *u, *tmp;
+  for (u = s_users; u != NULL; u = tmp) {
+    tmp = u->next;
+    if (u->dash == dash) mg_dash_delete_user(mgr, u);
+  }
+}
+
 // Parse HTTP requests, return authenticated user or NULL
 static struct mg_dash_user *mg_dash_authenticate(struct mg_connection *c,
                                                  struct mg_http_message *hm,
                                                  struct mg_dash *dash) {
-  static struct mg_dash_user *s_users;  // List of authenticated users
   char user[100], pass[100];
   struct mg_dash_user *u, *tmp;
   struct mg_str *ah;
@@ -460,26 +483,19 @@ static struct mg_dash_user *mg_dash_authenticate(struct mg_connection *c,
   for (u = s_users; u != NULL; u = tmp) {
     tmp = u->next;
     if (u->expire < mg_millis()) {
-      struct mg_connection *conn;
       MG_DEBUG(("Deleting expired auth %s/%d %llu %u", u->name, u->level,
                 u->expire, mg_millis() - u->expire));
-      for (conn = c->mgr->conns; conn != NULL; conn = conn->next) {
-        struct mg_dash_cdata *d = (struct mg_dash_cdata *) conn->data;
-        if (conn->is_websocket && d->u == u) {
-          d->u = NULL;
-          conn->is_closing = 1;
-        }
-      }
-      LIST_DELETE(struct mg_dash_user, &s_users, u);
-      mg_free(u);
+      mg_dash_delete_user(c->mgr, u);
     }
   }
 
   if (pass[0] == '\0') return NULL;
 
-  for (u = s_users; u != NULL; u = u->next) num_users++;
+  for (u = s_users; u != NULL; u = u->next) {
+    if (u->dash == dash) num_users++;
+  }
   if (ah == NULL) {
-    u = mg_dash_find_token(s_users, pass);
+    u = mg_dash_find_token(s_users, dash, pass);
     if (u != NULL) {
       mg_dash_refresh_user(dash, u);
       return u;
@@ -490,7 +506,7 @@ static struct mg_dash_user *mg_dash_authenticate(struct mg_connection *c,
   MG_DEBUG(("user %s, level: %d", user, level));
   if (level <= 0) return NULL;
 
-  u = mg_dash_find_user(s_users, user);
+  u = mg_dash_find_user(s_users, dash, user);
   if (u != NULL) {
     if (ah == NULL) mg_snprintf(u->token, sizeof(u->token), "%s", pass);
     mg_dash_refresh_user(dash, u);
@@ -615,6 +631,8 @@ void mg_dash_ev_handler(struct mg_connection *c, int ev, void *ev_data) {
   if (ev == MG_EV_OPEN) {
     d->dash = dash;
     // c->is_hexdumping = 1;
+  } else if (ev == MG_EV_CLOSE && c->is_listening) {
+    mg_dash_delete_users(c->mgr, dash);
   } else if (ev == MG_EV_HTTP_HDRS && d->marker == 0) {
     // Received headers - check authentication and possibly start uploads/ota
     struct mg_http_message *hm = (struct mg_http_message *) ev_data;
