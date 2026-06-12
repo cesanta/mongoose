@@ -1,6 +1,7 @@
 #pragma once
 
 #include "arch.h"
+#include "fmt.h"
 #include "iobuf.h"
 #include "queue.h"
 
