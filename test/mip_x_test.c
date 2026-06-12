@@ -219,7 +219,12 @@ static int fetch(struct mg_mgr *mgr, char *buf, const char *url,
 static void test_http_client(struct mg_mgr *mgr) {
   char buf[FETCH_BUF_SIZE];
   int rc = 0;
-  const bool ipv6 = MG_ENABLE_IPV6;
+  const bool ipv6 =
+#ifdef IPV6_NOROUTING
+      0;  // GitHub does not route IPv6 (as far as I can tell)
+#else
+      MG_ENABLE_IPV6;
+#endif
 #if MG_TLS
   if (ipv6) {
     rc = fetch(mgr, buf, "https://ipv6.google.com",
@@ -350,6 +355,7 @@ static void test_mqtt_connsubpub(struct mg_mgr *mgr) {
   data.url = strdup(MQTT_URL);
 #endif
 #endif // MG_TLS
+  mg_mgr_poll(mgr, 0); // update interface timing
   s_conn = mg_mqtt_connect(mgr, data.url, &opts, mqtt_fn, &data);
   ASSERT(s_conn != NULL);
   for (int i = 0; i < 1000 && s_conn != NULL && !s_conn->is_closing; i++) {
@@ -359,16 +365,40 @@ static void test_mqtt_connsubpub(struct mg_mgr *mgr) {
   ASSERT(data.passed);
   mg_mgr_poll(mgr, 0);
   free(data.url);
-
-#if 0
-#if defined(MQTT_HOST) && MG_ENABLE_IPV6
+#if MG_ENABLE_IPV6 && defined(MQTT_HOST) && MG_TLS != MG_TLS_BUILTIN
   if (host_ip6 == NULL) {
     printf("\nMQTT_HOST defined but no HOST_IPV6 provided, skipping MQTT IPV6 tests\n");
     return;
   }
   printf("HOST_IPV6: %s\n", host_ip6);
-  data.url = mg_mprintf("mqtt://[%s]:1883", host_ip6);
+#if MG_TLS
+#if MG_TLS != MG_TLS_BUILTIN
+#if defined(MQTT_HOST)
+  data.url = mg_mprintf("mqtts://[%s]:8883", host_ip6);
+#else
+  printf("\nMQTT[S] tests over IPv6 require MQTT_HOST, skipping\n");
+  return;
+  //data.url = strdup(MQTTS_URL);
 #endif
+#else // MG_TLS != MG_TLS_BUILTIN
+#if defined(MQTT_HOST)
+  printf("\nAssuming MQTT_HOST is NOT 1.3, ignoring it for MQTTS tests\n");
+  printf("\nMQTT[S] tests over IPv6 require MQTT_HOST, skipping\n");
+  return;
+#endif
+  printf("\nMQTT[S] tests over IPv6 require MQTT_HOST, skipping\n");
+  return;
+  //data.url = strdup(MQTTS_URL);
+#endif
+#else // MG_TLS
+#ifdef MQTT_HOST
+  data.url = mg_mprintf("mqtt://[%s]:1883", host_ip6);
+#else
+  printf("\nMQTT[S] tests over IPv6 require MQTT_HOST, skipping\n");
+  return;
+  //data.url = strdup(MQTT_URL);
+#endif
+#endif // MG_TLS
   data.passed = false;
   s_conn = mg_mqtt_connect(mgr, data.url, &opts, mqtt_fn, &data);
   ASSERT(s_conn != NULL);

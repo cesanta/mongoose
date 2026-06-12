@@ -5097,7 +5097,7 @@ uint8_t *mg_l2_eth_header(struct mg_tcpip_if *ifp, enum mg_l2proto proto,
     qtag->tpid = mg_htons(0x8100);
     qtag->tci = mg_htons(d->vlan_id);  // PCP = default (best-effort)
     hlp += sizeof(*qtag);
-    *(uint16_t *) (qtag + 1) = mg_htons(eth_types[(unsigned int) proto]);
+    MG_STORE_BE16(qtag + 1, eth_types[(unsigned int) proto]);
   }
   return hlp;
 }
@@ -5131,7 +5131,7 @@ bool mg_l2_eth_rx(struct mg_tcpip_if *ifp, enum mg_l2proto *proto,
     if (qtag->tpid != mg_htons(0x8100)) return false;  // Untagged frame
     if (mg_ntohs(VLAN_ID(qtag->tci)) != VLAN_ID(d->vlan_id))
       return false;  // Not our VLAN
-    type = mg_ntohs(*(uint16_t *) (qtag + 1));
+    type = MG_LOAD_BE16(qtag + 1);
   }
   if (ifp->enable_mac_check &&
       memcmp(eth->dst, ifp->mac, sizeof(eth->dst)) != 0 &&
@@ -8434,7 +8434,7 @@ static void rx_ndp_na(struct mg_tcpip_if *ifp, struct pkt *pkt) {
       uint8_t len = *opts++;  // check valid hwaddr and get it
       if (!mg_l2_ip6get(ifp->l2type, s->mac, opts, len)) return;
       MG_DEBUG(("%lu NDP resolved %M -> %M", c->id, mg_print_ip6,
-                &c->rem.addr.ip6, mg_print_mac, ifp->l2type, s->mac));
+                &c->rem.addr.ip6, mg_print_l2addr, ifp->l2type, s->mac));
       c->is_arplooking = 0;
       l2addr_resolved(c);
     }
@@ -8569,12 +8569,12 @@ static void rx_ndp_ra(struct mg_tcpip_if *ifp, struct pkt *pkt) {
         gotl2addr = true;
       } else if (type == 5 && length >= 8) {
         // process MTU if available
-        mtu = mg_ntohl(*(uint32_t *) (opts + 4));
+        mtu = MG_LOAD_BE32(opts + 4);
       } else if (type == 3 && length >= 32) {
         // process prefix, 4.6.2
         uint8_t pfx_flags = opts[3];  // L=0x80, A=0x40
-        uint32_t valid = mg_ntohl(*(uint32_t *) (opts + 4));
-        uint32_t pref_lifetime = mg_ntohl(*(uint32_t *) (opts + 8));
+        uint32_t valid = MG_LOAD_BE32(opts + 4);
+        uint32_t pref_lifetime = MG_LOAD_BE32(opts + 8);
         prefix_len = opts[2];
         prefix = opts + 16;
 
@@ -9705,7 +9705,11 @@ void mg_connect_resolved(struct mg_connection *c) {
   c->loc.port = mg_htons(ifp->eport++);
 #if MG_ENABLE_IPV6
   if (c->rem.is_ip6) {
-    c->loc.addr.ip6[0] = ifp->ip6[0], c->loc.addr.ip6[1] = ifp->ip6[1],
+    if(c->rem.addr.ip6[0] == ifp->ip6ll[0]) { // same local LAN, use ll
+      c->loc.addr.ip6[0] = ifp->ip6ll[0], c->loc.addr.ip6[1] = ifp->ip6ll[1];
+    } else { // use global address
+      c->loc.addr.ip6[0] = ifp->ip6[0], c->loc.addr.ip6[1] = ifp->ip6[1];
+    }
     c->loc.is_ip6 = true;
   } else
 #endif

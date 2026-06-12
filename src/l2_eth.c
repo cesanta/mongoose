@@ -77,7 +77,7 @@ uint8_t *mg_l2_eth_header(struct mg_tcpip_if *ifp, enum mg_l2proto proto,
     qtag->tpid = mg_htons(0x8100);
     qtag->tci = mg_htons(d->vlan_id);  // PCP = default (best-effort)
     hlp += sizeof(*qtag);
-    *(uint16_t *) (qtag + 1) = mg_htons(eth_types[(unsigned int) proto]);
+    MG_STORE_BE16(qtag + 1, eth_types[(unsigned int) proto]);
   }
   return hlp;
 }
@@ -111,7 +111,7 @@ bool mg_l2_eth_rx(struct mg_tcpip_if *ifp, enum mg_l2proto *proto,
     if (qtag->tpid != mg_htons(0x8100)) return false;  // Untagged frame
     if (mg_ntohs(VLAN_ID(qtag->tci)) != VLAN_ID(d->vlan_id))
       return false;  // Not our VLAN
-    type = mg_ntohs(*(uint16_t *) (qtag + 1));
+    type = MG_LOAD_BE16(qtag + 1);
   }
   if (ifp->enable_mac_check &&
       memcmp(eth->dst, ifp->mac, sizeof(eth->dst)) != 0 &&

@@ -96,34 +96,34 @@ void mg_delayms(unsigned int ms);
 
 // Write a native integer to byte pointer p in big-endian byte order.
 // Safe on architectures that forbid unaligned access.
-#define MG_STORE_BE16(p, n)           \
-  do {                                \
-    MG_U8P(p)[0] = ((n) >> 8U) & 255; \
-    MG_U8P(p)[1] = (n) &255;          \
+#define MG_STORE_BE16(p, n)               \
+  do {                                    \
+    MG_U8P(p)[0] = (uint8_t) ((n) >> 8U); \
+    MG_U8P(p)[1] = (uint8_t) (n);         \
   } while (0)
-#define MG_STORE_BE24(p, n)            \
-  do {                                 \
-    MG_U8P(p)[0] = ((n) >> 16U) & 255; \
-    MG_U8P(p)[1] = ((n) >> 8U) & 255;  \
-    MG_U8P(p)[2] = (n) &255;           \
+#define MG_STORE_BE24(p, n)                \
+  do {                                     \
+    MG_U8P(p)[0] = (uint8_t) ((n) >> 16U); \
+    MG_U8P(p)[1] = (uint8_t) ((n) >> 8U);  \
+    MG_U8P(p)[2] = (uint8_t) (n);          \
   } while (0)
-#define MG_STORE_BE32(p, n)            \
-  do {                                 \
-    MG_U8P(p)[0] = ((n) >> 24U) & 255; \
-    MG_U8P(p)[1] = ((n) >> 16U) & 255; \
-    MG_U8P(p)[2] = ((n) >> 8U) & 255;  \
-    MG_U8P(p)[3] = (n) &255;           \
+#define MG_STORE_BE32(p, n)                \
+  do {                                     \
+    MG_U8P(p)[0] = (uint8_t) ((n) >> 24U); \
+    MG_U8P(p)[1] = (uint8_t) ((n) >> 16U); \
+    MG_U8P(p)[2] = (uint8_t) ((n) >> 8U);  \
+    MG_U8P(p)[3] = (uint8_t) (n);          \
   } while (0)
-#define MG_STORE_BE64(p, n)            \
-  do {                                 \
-    MG_U8P(p)[0] = ((n) >> 56U) & 255; \
-    MG_U8P(p)[1] = ((n) >> 48U) & 255; \
-    MG_U8P(p)[2] = ((n) >> 40U) & 255; \
-    MG_U8P(p)[3] = ((n) >> 32U) & 255; \
-    MG_U8P(p)[4] = ((n) >> 24U) & 255; \
-    MG_U8P(p)[5] = ((n) >> 16U) & 255; \
-    MG_U8P(p)[6] = ((n) >> 8U) & 255;  \
-    MG_U8P(p)[7] = (n) &255;           \
+#define MG_STORE_BE64(p, n)                \
+  do {                                     \
+    MG_U8P(p)[0] = (uint8_t) ((n) >> 56U); \
+    MG_U8P(p)[1] = (uint8_t) ((n) >> 48U); \
+    MG_U8P(p)[2] = (uint8_t) ((n) >> 40U); \
+    MG_U8P(p)[3] = (uint8_t) ((n) >> 32U); \
+    MG_U8P(p)[4] = (uint8_t) ((n) >> 24U); \
+    MG_U8P(p)[5] = (uint8_t) ((n) >> 16U); \
+    MG_U8P(p)[6] = (uint8_t) ((n) >> 8U);  \
+    MG_U8P(p)[7] = (uint8_t) (n);          \
   } while (0)
 
 // Network / host byte-order conversion (big-endian <-> native).

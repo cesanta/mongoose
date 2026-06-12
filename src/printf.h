@@ -28,7 +28,7 @@ size_t mg_print_ip4(mg_pfn_t, void *arg, va_list *ap);      // expects: uint32_t
 size_t mg_print_ip6(mg_pfn_t, void *arg, va_list *ap);      // expects: uint8_t[16] ipv6
 size_t mg_print_mac(mg_pfn_t, void *arg, va_list *ap);      // expects: uint8_t[6] mac
 size_t mg_print_ieee64(mg_pfn_t, void *arg, va_list *ap);   // expects: uint64_t
-size_t mg_print_l2addr(mg_pfn_t, void *arg, va_list *ap);   // expects: const struct mg_addr *
+size_t mg_print_l2addr(mg_pfn_t, void *arg, va_list *ap);   // expects: uint8_t l2, uint8_t[n] n-byte l2-dependent address
 
 // Output functions for use as the fn argument to mg_xprintf/mg_vxprintf.
 void mg_pfn_iobuf(char ch, void *param);           // param: struct mg_iobuf * (resizes as needed)
