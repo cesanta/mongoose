@@ -82,20 +82,32 @@ bool mg_ota_end(void);
   } while (0)
 #endif
 
-// MG_OTA_ROLLBACK_TIMER_START(seconds): arm a hardware watchdog as the rollback
-// deadline. If it fires before MG_OTA_STATE_SET(MG_OTA_CONFIRMED), the device
-// resets and MG_OTA_STATE_GET() == MG_OTA_FAILED triggers MG_OTA_ROLLBACK().
+// Arm a hardware watchdog. mg_ota_poll() feeds it while in MG_OTA_TESTING state;
+// if the event loop hangs, it fires, resets the device, and MG_OTA_FAILED
+// triggers MG_OTA_ROLLBACK() on next boot. Timeout is arch-defined.
 #ifndef MG_OTA_ROLLBACK_TIMER_START
-#define MG_OTA_ROLLBACK_TIMER_START(seconds) (void) (seconds)
+#define MG_OTA_ROLLBACK_TIMER_START()
+#endif
+
+#ifndef MG_OTA_ROLLBACK_TIMER_FEED
+#define MG_OTA_ROLLBACK_TIMER_FEED()
 #endif
 
 // OTA state values for MG_OTA_STATE_GET / MG_OTA_STATE_SET.
-// MG_OTA_CONFIRMED: firmware is committed, normal operation.
-// MG_OTA_TESTING:   new firmware booted for the first time; IWDG is armed.
-//                   If the device reboots while in this state, it transitions
-//                   to MG_OTA_FAILED and rolls back on the next boot.
-// MG_OTA_FAILED:    previous boot did not commit in time; rollback on next boot.
-enum { MG_OTA_CONFIRMED = 0, MG_OTA_TESTING = 1, MG_OTA_FAILED = 2 };
+// MG_OTA_CONFIRMED:  firmware is committed, normal operation.
+// MG_OTA_TESTING:    new firmware booted for the first time; IWDG is armed.
+//                    If the device reboots while in this state, it transitions
+//                    to MG_OTA_FAILED and rolls back on the next boot.
+// MG_OTA_FAILED:     previous boot did not commit in time; rollback on next boot.
+// MG_OTA_ROLLEDBACK: device rolled back to previous firmware. Sent to the OTA
+//                    server as boot=3 on every poll until a new OTA succeeds,
+//                    which overwrites this state with MG_OTA_TESTING.
+enum {
+  MG_OTA_CONFIRMED = 0,
+  MG_OTA_TESTING = 1,
+  MG_OTA_FAILED = 2,
+  MG_OTA_ROLLEDBACK = 3
+};
 
 // Persistent OTA state storage. Override in mongoose_config.h to persist state across resets.
 #ifndef MG_OTA_STATE_GET
@@ -105,31 +117,47 @@ enum { MG_OTA_CONFIRMED = 0, MG_OTA_TESTING = 1, MG_OTA_FAILED = 2 };
 #define MG_OTA_STATE_SET(val) (void) (val)
 #endif
 
-// Call once at boot. Arms the rollback watchdog for (seconds) seconds when
-// the new firmware is in TESTING state. Rolls back immediately if FAILED.
+// Evaluation window for new firmware in seconds. mg_ota_poll() feeds the
+// rollback watchdog while in MG_OTA_TESTING state and within this window;
+// when it expires, auto-commits if the OTA server confirmed the same version,
+// otherwise stops feeding and the watchdog triggers a rollback.
+#ifndef MG_OTA_ROLLBACK_TIMEOUT_SECONDS
+#define MG_OTA_ROLLBACK_TIMEOUT_SECONDS 120
+#endif
+
+// Call once at boot, after clock and backup-domain init (e.g. after HAL_Init()
+// + SystemClock_Config() on CubeMX projects, or after hal_clock_init() on
+// Mongoose tutorials). The backup domain must be write-accessible so the state
+// transition TESTING → FAILED persists across resets.
+// Arms the rollback watchdog if new firmware is in TESTING state, rolls back
+// immediately if FAILED. mg_ota_poll() feeds the watchdog and auto-commits
+// when the server confirms the same version within the window.
 // boot (TESTING) → set FAILED → arm IWDG → run firmware
-//  ├── commit called → set CONFIRMED → NVIC_SystemReset() → clean boot
-//  └── IWDG fires → hard reset → boot → state is still FAILED → rollback
-#define MG_OTA_BOOT_CHECK(seconds)                                 \
+//  ├── server ok + window expires → set CONFIRMED → IWDG resets cleanly
+//  └── no server ok + window expires → stop feeding → IWDG fires → FAILED → rollback
+#define MG_OTA_BOOT_CHECK()                                        \
   do {                                                             \
     if (MG_OTA_STATE_GET() == MG_OTA_FAILED) {                     \
-      MG_OTA_STATE_SET(MG_OTA_CONFIRMED);                          \
+      MG_OTA_STATE_SET(MG_OTA_ROLLEDBACK);                         \
       MG_INFO(("Commit deadline expired, rolling back"));          \
       MG_OTA_ROLLBACK();                                           \
     } else if (MG_OTA_STATE_GET() == MG_OTA_TESTING) {             \
       MG_OTA_STATE_SET(MG_OTA_FAILED);                             \
       MG_INFO(("New firmware: commit within %u sec or rolls back", \
-               (unsigned) (seconds)));                             \
-      MG_OTA_ROLLBACK_TIMER_START(seconds);                        \
+               (unsigned) MG_OTA_ROLLBACK_TIMEOUT_SECONDS));       \
+      MG_OTA_ROLLBACK_TIMER_START();                               \
     }                                                              \
   } while (0)
 
-// Pull-based OTA over HTTP. Fetches the given URL, which should return a JSON
+// Pull-based OTA over HTTP. Fetches metadata_url, which must return a JSON
 // object like: { "version": "1.2.3", "url": "FIRMWARE_URL", "size": 324645 }
-// If the current firmware version differs from the JSON version, downloads
-// FIRMWARE_URL and performs the OTA update.
-void mg_ota_url_check(struct mg_mgr *mgr, const char *current_version,
-                      const char *metadata_url, void (*fn)(const char *status));
+// If the server version differs from MG_OTA_FIRMWARE_VERSION, downloads
+// FIRMWARE_URL and performs the OTA update. fn is called on every outcome:
+// NULL on successful flash, "Same version" when already up to date, or an
+// error string on failure. Pass NULL to use the default handler which logs
+// failures via MG_ERROR.
+void mg_ota_url_check(struct mg_mgr *mgr, const char *metadata_url,
+                      void (*fn)(const char *error_message));
 
 // Firmware info URL for mg_ota_poll() which calls mg_ota_url_check().
 // Example:  "http://mongoose.ws/ota/u/0/ota.json". See http://mongoose.ws/ota/
@@ -152,12 +180,6 @@ void mg_ota_url_check(struct mg_mgr *mgr, const char *current_version,
 #ifndef MG_OTA_MAX_VERSION_LEN
 #define MG_OTA_MAX_VERSION_LEN 64
 #endif
-
-// Scannable "MG_VERSION:<MG_OTA_FIRMWARE_VERSION>" tag embedded in every
-// firmware binary, for server-side extraction. mg_mgr_init() stashes its
-// address in mgr->userdata, which is what keeps it from being stripped by
-// -Wl,--gc-sections on builds that never poll for OTAs
-extern const char mg_fw_version[];
 
 // How often mg_ota_poll() checks for a firmware update, in seconds
 #ifndef MG_OTA_PULL_INTERVAL_SECONDS

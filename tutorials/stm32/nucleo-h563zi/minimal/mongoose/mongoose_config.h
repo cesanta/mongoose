@@ -24,18 +24,20 @@
   }
 
 // OTA rollback timer via IWDG. PR=8 → /1024 on H563 (RM0481 §52.4.2).
-// Max timeout: 4095 * 1024 / 32000 = 131 s. PVU/RVU must clear before
-// writing RLR/starting, otherwise the write is ignored (RM0481 §52.4.3).
-#define MG_OTA_ROLLBACK_TIMER_START(seconds)                                   \
+// Fixed 10 s hang-detection window: RLR = 10 * 32000 / 1024 = 312.
+// PVU/RVU must clear before writing RLR/starting (RM0481 §52.4.3).
+// mg_ota_poll() feeds the watchdog every 500ms while in MG_OTA_TESTING state.
+#define MG_OTA_ROLLBACK_TIMER_START()                                          \
   do {                                                                         \
     IWDG->KR = 0x5555U;                               /* unlock        */     \
     IWDG->PR = 8U;                                    /* /1024         */     \
     while (IWDG->SR & IWDG_SR_PVU) (void) 0;          /* wait PVU      */     \
-    IWDG->RLR = (uint32_t) ((seconds) * 32000 / 1024);                        \
+    IWDG->RLR = 312U;                                 /* 10 s          */     \
     while (IWDG->SR & IWDG_SR_RVU) (void) 0;          /* wait RVU      */     \
     IWDG->KR = 0xCCCCU;                               /* start         */     \
     IWDG->KR = 0xAAAAU;                               /* reload RLR    */     \
   } while (0)
+#define MG_OTA_ROLLBACK_TIMER_FEED() (IWDG->KR = 0xAAAAU)
 
 // OTA state in TAMP backup register 0 (survives all resets, clears on POR).
 // Requires hal_backup_domain_init() (called from hal_clock_init) to have run.

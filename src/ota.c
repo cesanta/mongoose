@@ -11,20 +11,18 @@
 #endif
 
 // Scannable version tag embedded in every firmware binary, for server-side
-// version extraction. Non-static so mg_mgr_init() can stash its address in
-// mgr->userdata: that store is what actually keeps -Wl,--gc-sections from
-// stripping it on builds that never poll for OTAs (an attribute alone does
-// not - the linker drops unreferenced sections regardless of "used"/"retain")
-const char mg_fw_version[] = "MG_VERSION:" MG_OTA_FIRMWARE_VERSION;
+// version extraction. The version string starts after the 11-char "MG_VERSION:" prefix.
+static const char mg_fw_version[] = "MG_VERSION:" MG_OTA_FIRMWARE_VERSION;
+
+static bool s_autocommit_ok;  // True after OTA server confirms "same version"
 
 static struct mg_ota_state {
-  char my_version[MG_OTA_MAX_VERSION_LEN];
   char json_url[MG_OTA_MAX_URL_LEN];
   char version[MG_OTA_MAX_VERSION_LEN];
   char url[MG_OTA_MAX_URL_LEN];
   size_t size;
   uint8_t sha256[32];
-  void (*fn)(const char *status);
+  void (*fn)(const char *error_message);
 } *s_ota;
 
 static void s_firmware_fn(struct mg_connection *c, int ev, void *ev_data);
@@ -52,15 +50,15 @@ static void s_version_fn(struct mg_connection *c, int ev, void *ev_data) {
     mg_ota_device_id(id, sizeof(id));
     id[sizeof(id) - 1] = '\0';
     mg_printf(c,
-              "GET %s%sarch=%d&version=%s&id=%s&interval=%d HTTP/1.1\r\n"
+              "GET %s%sarch=%d&version=%s&id=%s&interval=%d&boot=%d HTTP/1.1\r\n"
               "Host: %.*s\r\n"
               "Connection: close\r\n\r\n",
-              uri, sep, MG_ARCH, s_ota->my_version, id,
-              MG_OTA_PULL_INTERVAL_SECONDS, host.len, host.buf);
+              uri, sep, MG_ARCH, mg_fw_version + 11, id,
+              MG_OTA_PULL_INTERVAL_SECONDS, MG_OTA_STATE_GET(), host.len, host.buf);
   } else if (ev == MG_EV_HTTP_MSG) {
     struct mg_http_message *hm = (struct mg_http_message *) ev_data;
     double result;
-    MG_DEBUG(("Got metadata:\n%.*s", hm->body.len, hm->body.buf));
+    MG_DEBUG(("Got metadata: %.*s", hm->body.len, hm->body.buf));
     if (mg_http_status(hm) != 200 || mg_json_get(hm->body, "$", NULL) != 0 ||
         !mg_json_unescape(hm->body, "$.version", s_ota->version,
                           sizeof(s_ota->version)) ||
@@ -72,7 +70,8 @@ static void s_version_fn(struct mg_connection *c, int ev, void *ev_data) {
       s_ota->fn(buf);
       mg_free(s_ota);
       s_ota = NULL;
-    } else if (strcmp(s_ota->version, s_ota->my_version) == 0) {
+    } else if (strcmp(s_ota->version, mg_fw_version + 11) == 0) {
+      s_autocommit_ok = true;
       s_ota->fn("Same version");
       mg_free(s_ota);
       s_ota = NULL;
@@ -138,8 +137,8 @@ static void s_firmware_fn(struct mg_connection *c, int ev, void *ev_data) {
   }
 }
 
-void mg_ota_url_check(struct mg_mgr *mgr, const char *my_version,
-                      const char *json_url, void (*fn)(const char *status)) {
+void mg_ota_url_check(struct mg_mgr *mgr, const char *json_url,
+                      void (*fn)(const char *error_message)) {
   if (fn == NULL) fn = status_fn;
   if (s_ota != NULL) {
     fn("OTA already in progress");
@@ -148,7 +147,6 @@ void mg_ota_url_check(struct mg_mgr *mgr, const char *my_version,
     fn("Out of memory");
   } else {
     struct mg_connection *c;
-    mg_snprintf(s_ota->my_version, sizeof(s_ota->my_version), "%s", my_version);
     mg_snprintf(s_ota->json_url, sizeof(s_ota->json_url), "%s", json_url);
     MG_DEBUG(("Connecting to %s", json_url));
     c = mg_http_connect(mgr, s_ota->json_url, s_version_fn, NULL);
@@ -165,9 +163,23 @@ void mg_ota_url_check(struct mg_mgr *mgr, const char *my_version,
 
 void mg_ota_poll(struct mg_mgr *mgr) {
   static uint64_t t = 5000;  // Fire first time 5 sec after boot
+
+  static uint64_t feed_timer;  // Advances by 500ms per tick; tracks elapsed time
+  if (MG_OTA_STATE_GET() == MG_OTA_TESTING &&
+      mg_timer_expired(&feed_timer, 500, mg_millis())) {
+    if (feed_timer < (uint64_t) MG_OTA_ROLLBACK_TIMEOUT_SECONDS * 1000) {
+      MG_OTA_ROLLBACK_TIMER_FEED();  // Feed watchdog every 500ms
+    } else if (s_autocommit_ok) {
+      MG_INFO(("Auto-committing firmware"));
+      MG_OTA_STATE_SET(MG_OTA_CONFIRMED);  // Stop feeding → IWDG resets cleanly
+    } else {
+      MG_INFO(("No commit confirmation, rolling back"));
+      // Stop feeding → IWDG fires → resets into MG_OTA_FAILED → rollback
+    }
+  }
+
   if (MG_OTA_URL != NULL &&
       mg_timer_expired(&t, MG_OTA_PULL_INTERVAL_SECONDS * 1000, mg_millis())) {
-    mg_ota_url_check(mgr, MG_OTA_FIRMWARE_VERSION, MG_OTA_URL,
-                     MG_OTA_STATUS_FN);
+    mg_ota_url_check(mgr, MG_OTA_URL, MG_OTA_STATUS_FN);
   }
 }
