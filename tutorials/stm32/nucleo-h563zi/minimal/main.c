@@ -73,17 +73,15 @@ int main(void) {
   hal_clock_init();
   hal_uart_init(UART_DEBUG, UART_DEBUG_TX_PIN, UART_DEBUG_RX_PIN, 115200);
   mg_log_set_fn(log_fn, UART_DEBUG);
+
+  MG_OTA_BOOT_CHECK();  // Must be called after clock init
+
   hal_rng_init();
   hal_gpio_output(LED_1);
   hal_gpio_output(LED_2);
   hal_gpio_output(LED_3);
-
   hal_ethernet_init();
-
   MG_INFO(("Initialised. CPU clock: %lu MHz", SystemCoreClock / 1000000));
-
-  // Max delay 131 seconds
-  MG_OTA_BOOT_CHECK(30);
 
   struct mg_mgr mgr;
   mg_mgr_init(&mgr);

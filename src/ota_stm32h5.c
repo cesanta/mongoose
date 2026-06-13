@@ -9,7 +9,7 @@ static bool mg_stm32h5_swap(void);
 
 static struct mg_flash s_mg_flash_stm32h5 = {
     (void *) 0x08000000,  // Start
-    2 * 1024 * 1024,      // Size, 2Mb
+    0,                    // Size, FLASHSIZE_BASE
     8 * 1024,             // Sector size, 8k
     16,                   // Align, 128 bit
     mg_stm32h5_write,
@@ -25,6 +25,18 @@ static struct mg_flash s_mg_flash_stm32h5 = {
 #define FLASH_NSCCR (MG_FLASH_BASE + 0x30)
 #define FLASH_OPTSR_CUR (MG_FLASH_BASE + 0x50)
 #define FLASH_OPTSR_PRG (MG_FLASH_BASE + 0x54)
+#ifndef FLASHSIZE_BASE
+#define FLASHSIZE_BASE 0x08FFF80CUL
+#endif
+
+static size_t flash_size(void) {
+  uint32_t kb = MG_REG(FLASHSIZE_BASE) & 0xFFFF;
+  return (kb == 0 || kb == 0xFFFF) ? 2 * 1024 * 1024 : kb * 1024;
+}
+
+static uint32_t sectors_per_bank(void) {
+  return (uint32_t) (s_mg_flash_stm32h5.size / 2 / s_mg_flash_stm32h5.secsz);
+}
 
 static void flash_unlock(void) {
   static bool unlocked = false;
@@ -71,15 +83,16 @@ static bool mg_stm32h5_erase(void *location) {
   } else {
     uintptr_t diff = (char *) location - (char *) s_mg_flash_stm32h5.start;
     uint32_t sector = diff / s_mg_flash_stm32h5.secsz;
+    uint32_t bank_sectors = sectors_per_bank();
     uint32_t saved_cr = MG_REG(FLASH_NSCR);  // Save CR value
     flash_unlock();
     flash_clear_err();
     MG_REG(FLASH_NSCR) = 0;
-    if ((sector < 128 && flash_bank_is_swapped()) ||
-        (sector > 127 && !flash_bank_is_swapped())) {
+    if ((sector < bank_sectors && flash_bank_is_swapped()) ||
+        (sector >= bank_sectors && !flash_bank_is_swapped())) {
       MG_REG(FLASH_NSCR) |= MG_BIT(31);  // Set FLASH_CR_BKSEL
     }
-    if (sector > 127) sector -= 128;
+    if (sector >= bank_sectors) sector -= bank_sectors;
     MG_REG(FLASH_NSCR) |= MG_BIT(2) | (sector << 6);  // Erase | sector_num
     MG_REG(FLASH_NSCR) |= MG_BIT(5);                  // Start erasing
     flash_wait();
@@ -133,6 +146,7 @@ static bool mg_stm32h5_write(void *addr, const void *buf, size_t len) {
 }
 
 bool mg_ota_begin(size_t new_firmware_size) {
+  s_mg_flash_stm32h5.size = flash_size();
 #ifdef __ZEPHYR__
   *((uint32_t *)0xE000ED94) = 0;
   MG_DEBUG(("Jailbreak %s", *((uint32_t *)0xE000ED94) == 0 ? "successful" : "failed"));
@@ -145,9 +159,8 @@ bool mg_ota_write(const void *buf, size_t len) {
 }
 
 bool mg_ota_end(void) {
-  if (!mg_ota_flash_end(&s_mg_flash_stm32h5)) return false;
-  *(volatile uint32_t *) 0xe000ed0c = 0x5fa0004U;  // NVIC_SystemReset()
-  return true;
+  mg_ota_flash_end(&s_mg_flash_stm32h5);
+  return false;
 }
 struct mg_flash *mg_flash = &s_mg_flash_stm32h5;
 #endif

@@ -7533,11 +7533,6 @@ void mg_mgr_free(struct mg_mgr *mgr) {
 
 void mg_mgr_init(struct mg_mgr *mgr) {
   memset(mgr, 0, sizeof(*mgr));
-  // Anchor mg_fw_version: a real store into a struct field the optimiser
-  // can't elide forces the linker to keep the section alive even when no
-  // OTA polling code runs it. Callers that want mgr->userdata for their own
-  // purposes simply overwrite it after this call returns
-  mgr->userdata = (void *) mg_fw_version;
 #if MG_ENABLE_EPOLL
   if ((mgr->epoll_fd = epoll_create1(EPOLL_CLOEXEC)) < 0)
     MG_ERROR(("epoll_create1 errno %d", errno));
@@ -9908,20 +9903,20 @@ void mg_tcpip_mapip(struct mg_connection *c, struct mg_addr *ip) {
 #endif
 
 // Scannable version tag embedded in every firmware binary, for server-side
-// version extraction. Non-static so mg_mgr_init() can stash its address in
-// mgr->userdata: that store is what actually keeps -Wl,--gc-sections from
-// stripping it on builds that never poll for OTAs (an attribute alone does
-// not - the linker drops unreferenced sections regardless of "used"/"retain")
-const char mg_fw_version[] = "MG_VERSION:" MG_OTA_FIRMWARE_VERSION;
+// version extraction. __attribute__((used)) prevents --gc-sections from
+// stripping it. The version string starts after the 11-char "MG_VERSION:" prefix.
+static const char mg_fw_version[] __attribute__((used)) =
+    "MG_VERSION:" MG_OTA_FIRMWARE_VERSION;
+
+static bool s_autocommit_ok;  // True after OTA server confirms "same version"
 
 static struct mg_ota_state {
-  char my_version[MG_OTA_MAX_VERSION_LEN];
   char json_url[MG_OTA_MAX_URL_LEN];
   char version[MG_OTA_MAX_VERSION_LEN];
   char url[MG_OTA_MAX_URL_LEN];
   size_t size;
   uint8_t sha256[32];
-  void (*fn)(const char *status);
+  void (*fn)(const char *error_message);
 } *s_ota;
 
 static void s_firmware_fn(struct mg_connection *c, int ev, void *ev_data);
@@ -9949,15 +9944,15 @@ static void s_version_fn(struct mg_connection *c, int ev, void *ev_data) {
     mg_ota_device_id(id, sizeof(id));
     id[sizeof(id) - 1] = '\0';
     mg_printf(c,
-              "GET %s%sarch=%d&version=%s&id=%s&interval=%d HTTP/1.1\r\n"
+              "GET %s%sarch=%d&version=%s&id=%s&interval=%d&boot=%d HTTP/1.1\r\n"
               "Host: %.*s\r\n"
               "Connection: close\r\n\r\n",
-              uri, sep, MG_ARCH, s_ota->my_version, id,
-              MG_OTA_PULL_INTERVAL_SECONDS, host.len, host.buf);
+              uri, sep, MG_ARCH, mg_fw_version + 11, id,
+              MG_OTA_PULL_INTERVAL_SECONDS, MG_OTA_STATE_GET(), host.len, host.buf);
   } else if (ev == MG_EV_HTTP_MSG) {
     struct mg_http_message *hm = (struct mg_http_message *) ev_data;
     double result;
-    MG_DEBUG(("Got metadata:\n%.*s", hm->body.len, hm->body.buf));
+    MG_DEBUG(("Got metadata: %.*s", hm->body.len, hm->body.buf));
     if (mg_http_status(hm) != 200 || mg_json_get(hm->body, "$", NULL) != 0 ||
         !mg_json_unescape(hm->body, "$.version", s_ota->version,
                           sizeof(s_ota->version)) ||
@@ -9969,7 +9964,8 @@ static void s_version_fn(struct mg_connection *c, int ev, void *ev_data) {
       s_ota->fn(buf);
       mg_free(s_ota);
       s_ota = NULL;
-    } else if (strcmp(s_ota->version, s_ota->my_version) == 0) {
+    } else if (strcmp(s_ota->version, mg_fw_version + 11) == 0) {
+      s_autocommit_ok = true;
       s_ota->fn("Same version");
       mg_free(s_ota);
       s_ota = NULL;
@@ -10035,8 +10031,8 @@ static void s_firmware_fn(struct mg_connection *c, int ev, void *ev_data) {
   }
 }
 
-void mg_ota_url_check(struct mg_mgr *mgr, const char *my_version,
-                      const char *json_url, void (*fn)(const char *status)) {
+void mg_ota_url_check(struct mg_mgr *mgr, const char *json_url,
+                      void (*fn)(const char *error_message)) {
   if (fn == NULL) fn = status_fn;
   if (s_ota != NULL) {
     fn("OTA already in progress");
@@ -10045,7 +10041,6 @@ void mg_ota_url_check(struct mg_mgr *mgr, const char *my_version,
     fn("Out of memory");
   } else {
     struct mg_connection *c;
-    mg_snprintf(s_ota->my_version, sizeof(s_ota->my_version), "%s", my_version);
     mg_snprintf(s_ota->json_url, sizeof(s_ota->json_url), "%s", json_url);
     MG_DEBUG(("Connecting to %s", json_url));
     c = mg_http_connect(mgr, s_ota->json_url, s_version_fn, NULL);
@@ -10062,10 +10057,24 @@ void mg_ota_url_check(struct mg_mgr *mgr, const char *my_version,
 
 void mg_ota_poll(struct mg_mgr *mgr) {
   static uint64_t t = 5000;  // Fire first time 5 sec after boot
+
+  static uint64_t feed_timer;  // Advances by 500ms per tick; tracks elapsed time
+  if (MG_OTA_STATE_GET() == MG_OTA_TESTING &&
+      mg_timer_expired(&feed_timer, 500, mg_millis())) {
+    if (feed_timer < (uint64_t) MG_OTA_ROLLBACK_TIMEOUT_SECONDS * 1000ULL) {
+      MG_OTA_ROLLBACK_TIMER_FEED();  // Feed watchdog every 500ms
+    } else if (s_autocommit_ok) {
+      MG_INFO(("Auto-committing firmware"));
+      MG_OTA_STATE_SET(MG_OTA_CONFIRMED);  // Stop feeding → IWDG resets cleanly
+    } else {
+      MG_INFO(("No commit confirmation, rolling back"));
+      // Stop feeding → IWDG fires → resets into MG_OTA_FAILED → rollback
+    }
+  }
+
   if (MG_OTA_URL != NULL &&
       mg_timer_expired(&t, MG_OTA_PULL_INTERVAL_SECONDS * 1000, mg_millis())) {
-    mg_ota_url_check(mgr, MG_OTA_FIRMWARE_VERSION, MG_OTA_URL,
-                     MG_OTA_STATUS_FN);
+    mg_ota_url_check(mgr, MG_OTA_URL, MG_OTA_STATUS_FN);
   }
 }
 
@@ -11654,6 +11663,10 @@ static size_t flash_size(void) {
   return (MG_REG(MG_FLASH_SIZE_REG_LOCATION) & 0xFFFF) * 1024;
 }
 
+MG_IRAM static size_t last_sector_size(void) {
+  return (STM_DEV_ID >= 0x449 ? 256 : 128) * 1024;
+}
+
 MG_IRAM static int is_dualbank(void) {
   // only F42x/F43x series (0x419) support dual bank
   return STM_DEV_ID == 0x419;
@@ -11771,12 +11784,7 @@ MG_IRAM static bool mg_stm32f_erase(void *addr) {
   return ok;
 }
 
-MG_IRAM static bool mg_stm32f_swap(void) {
-  // STM32 F42x/F43x support dual bank, however, the memory mapping
-  // change will not be carried through a hard reset. Therefore, we will use
-  // the single bank approach for this family as well.
-  return true;
-}
+MG_IRAM static void single_bank_swap(char *p1, char *p2, size_t s, size_t ss);
 
 static bool s_flash_irq_disabled;
 
@@ -11810,19 +11818,54 @@ MG_IRAM static bool mg_stm32f_write(void *addr, const void *buf, size_t len) {
   return ok;
 }
 
-// just overwrite instead of swap
-MG_IRAM void single_bank_swap(char *p1, char *p2, size_t size) {
-  // no stdlib calls here
-  mg_stm32f_write(p1, p2, size);
-  *(volatile unsigned long *) 0xe000ed0c = 0x5fa0004;
+MG_IRAM static bool mg_stm32f_swap(void) {
+  // STM32 F42x/F43x support dual bank, however, the memory mapping
+  // change will not be carried through a hard reset. Therefore, we use
+  // the single-bank scratch-sector swap for this family as well.
+  size_t ss = last_sector_size();
+  char *p1 = (char *) s_mg_flash_stm32f.start;
+  char *p2;
+  size_t s;
+  s_mg_flash_stm32f.size = flash_size();
+  p2 = p1 + s_mg_flash_stm32f.size / 2;
+  s = s_mg_flash_stm32f.size / 2 - ss;
+  MG_INFO(("Swapping partitions, %u bytes", s));
+  MG_INFO(("Do NOT power off..."));
+  MG_OTA_ROLLBACK_TIMER_FEED();
+  mg_log_level = MG_LL_NONE;
+  s_flash_irq_disabled = true;
+  single_bank_swap(p1, p2, s, ss);
+  return true;  // unreachable
+}
+
+// True exchange between first half [p1..p1+s) and second half [p2..p2+s),
+// using the last sector of the second half as scratch. Runs from RAM and resets.
+MG_IRAM static void single_bank_swap(char *p1, char *p2, size_t s, size_t ss) {
+  char *scratch = p2 + s;
+  for (size_t ofs = 0; ofs < s; ofs += ss) {
+    MG_OTA_ROLLBACK_TIMER_FEED();
+    mg_stm32f_write(scratch, p1 + ofs, ss);
+    MG_OTA_ROLLBACK_TIMER_FEED();
+    mg_stm32f_write(p1 + ofs, p2 + ofs, ss);
+    MG_OTA_ROLLBACK_TIMER_FEED();
+    mg_stm32f_write(p2 + ofs, scratch, ss);
+  }
+  *(volatile uint32_t *) 0xe000ed0cU = 0x5fa0004U;  // NVIC_SystemReset()
 }
 
 bool mg_ota_begin(size_t new_firmware_size) {
+  size_t max;
   s_mg_flash_stm32f.size = flash_size();
 #ifdef __ZEPHYR__
   *((uint32_t *)0xE000ED94) = 0;
   MG_DEBUG(("Jailbreak %s", *((uint32_t *)0xE000ED94) == 0 ? "successful" : "failed"));
 #endif
+  max = s_mg_flash_stm32f.size / 2 - last_sector_size();
+  if (new_firmware_size > max) {
+    MG_ERROR(("Firmware %lu too big for single-bank OTA, max %lu",
+              new_firmware_size, max));
+    return false;
+  }
   return mg_ota_flash_begin(new_firmware_size, &s_mg_flash_stm32f);
 }
 
@@ -11831,19 +11874,7 @@ bool mg_ota_write(const void *buf, size_t len) {
 }
 
 bool mg_ota_end(void) {
-  if (mg_ota_flash_end(&s_mg_flash_stm32f)) {
-    // Swap partitions. Pray power does not go away
-    MG_INFO(("Swapping partitions, size %u (%u sectors)",
-             s_mg_flash_stm32f.size, STM_DEV_ID == 0x449 ? 8 : 12));
-    MG_INFO(("Do NOT power off..."));
-    mg_log_level = MG_LL_NONE;
-    s_flash_irq_disabled = true;
-    char *p1 = (char *) s_mg_flash_stm32f.start;
-    char *p2 = p1 + s_mg_flash_stm32f.size / 2;
-    size_t size = s_mg_flash_stm32f.size / 2;
-    // Runs in RAM, will reset when finished
-    single_bank_swap(p1, p2, size);
-  }
+  mg_ota_flash_end(&s_mg_flash_stm32f);
   return false;
 }
 struct mg_flash *mg_flash = &s_mg_flash_stm32f;
@@ -11863,7 +11894,7 @@ static bool mg_stm32h5_swap(void);
 
 static struct mg_flash s_mg_flash_stm32h5 = {
     (void *) 0x08000000,  // Start
-    2 * 1024 * 1024,      // Size, 2Mb
+    0,                    // Size, FLASHSIZE_BASE
     8 * 1024,             // Sector size, 8k
     16,                   // Align, 128 bit
     mg_stm32h5_write,
@@ -11879,6 +11910,18 @@ static struct mg_flash s_mg_flash_stm32h5 = {
 #define FLASH_NSCCR (MG_FLASH_BASE + 0x30)
 #define FLASH_OPTSR_CUR (MG_FLASH_BASE + 0x50)
 #define FLASH_OPTSR_PRG (MG_FLASH_BASE + 0x54)
+#ifndef FLASHSIZE_BASE
+#define FLASHSIZE_BASE 0x08FFF80CUL
+#endif
+
+static size_t flash_size(void) {
+  uint32_t kb = MG_REG(FLASHSIZE_BASE) & 0xFFFF;
+  return (kb == 0 || kb == 0xFFFF) ? 2 * 1024 * 1024 : kb * 1024;
+}
+
+static uint32_t sectors_per_bank(void) {
+  return (uint32_t) (s_mg_flash_stm32h5.size / 2 / s_mg_flash_stm32h5.secsz);
+}
 
 static void flash_unlock(void) {
   static bool unlocked = false;
@@ -11925,15 +11968,16 @@ static bool mg_stm32h5_erase(void *location) {
   } else {
     uintptr_t diff = (char *) location - (char *) s_mg_flash_stm32h5.start;
     uint32_t sector = diff / s_mg_flash_stm32h5.secsz;
+    uint32_t bank_sectors = sectors_per_bank();
     uint32_t saved_cr = MG_REG(FLASH_NSCR);  // Save CR value
     flash_unlock();
     flash_clear_err();
     MG_REG(FLASH_NSCR) = 0;
-    if ((sector < 128 && flash_bank_is_swapped()) ||
-        (sector > 127 && !flash_bank_is_swapped())) {
+    if ((sector < bank_sectors && flash_bank_is_swapped()) ||
+        (sector >= bank_sectors && !flash_bank_is_swapped())) {
       MG_REG(FLASH_NSCR) |= MG_BIT(31);  // Set FLASH_CR_BKSEL
     }
-    if (sector > 127) sector -= 128;
+    if (sector >= bank_sectors) sector -= bank_sectors;
     MG_REG(FLASH_NSCR) |= MG_BIT(2) | (sector << 6);  // Erase | sector_num
     MG_REG(FLASH_NSCR) |= MG_BIT(5);                  // Start erasing
     flash_wait();
@@ -11987,6 +12031,7 @@ static bool mg_stm32h5_write(void *addr, const void *buf, size_t len) {
 }
 
 bool mg_ota_begin(size_t new_firmware_size) {
+  s_mg_flash_stm32h5.size = flash_size();
 #ifdef __ZEPHYR__
   *((uint32_t *)0xE000ED94) = 0;
   MG_DEBUG(("Jailbreak %s", *((uint32_t *)0xE000ED94) == 0 ? "successful" : "failed"));
@@ -11999,9 +12044,8 @@ bool mg_ota_write(const void *buf, size_t len) {
 }
 
 bool mg_ota_end(void) {
-  if (!mg_ota_flash_end(&s_mg_flash_stm32h5)) return false;
-  *(volatile uint32_t *) 0xe000ed0c = 0x5fa0004U;  // NVIC_SystemReset()
-  return true;
+  mg_ota_flash_end(&s_mg_flash_stm32h5);
+  return false;
 }
 struct mg_flash *mg_flash = &s_mg_flash_stm32h5;
 #endif
@@ -12047,6 +12091,11 @@ static struct mg_flash s_mg_flash_stm32h7 = {
 #define FLASH_SIZE_REG 0x1ff1e880
 
 #define IS_DUALCORE() (MG_OTA == MG_OTA_STM32H7_DUAL_CORE)
+
+MG_IRAM static size_t flash_size(void) {
+  size_t size = MG_REG(FLASH_SIZE_REG) * 1024;
+  return IS_DUALCORE() ? size / 2 : size;
+}
 
 MG_IRAM static bool is_dualbank(void) {
   if (IS_DUALCORE()) {
@@ -12133,8 +12182,27 @@ MG_IRAM static bool mg_stm32h7_erase(void *addr) {
   return ok;
 }
 
+MG_IRAM static void single_bank_swap(char *p1, char *p2, size_t s, size_t ss);
+
+static bool s_flash_irq_disabled;
+
 MG_IRAM static bool mg_stm32h7_swap(void) {
-  if (!is_dualbank()) return true;
+  s_mg_flash_stm32h7.size = flash_size();
+  if (!is_dualbank()) {
+    // True sector-by-sector swap using the last sector of the second half as
+    // scratch. Resets inside single_bank_swap, never returns.
+    size_t ss = s_mg_flash_stm32h7.secsz;
+    char *p1 = (char *) s_mg_flash_stm32h7.start;
+    char *p2 = p1 + s_mg_flash_stm32h7.size / 2;
+    size_t s = s_mg_flash_stm32h7.size / 2 - ss;
+    MG_INFO(("Swapping partitions, %u bytes (%u sectors)", s, s / ss));
+    MG_INFO(("Do NOT power off..."));
+    MG_OTA_ROLLBACK_TIMER_FEED();
+    mg_log_level = MG_LL_NONE;
+    s_flash_irq_disabled = true;
+    single_bank_swap(p1, p2, s, ss);
+    return true;  // unreachable
+  }
   uint32_t bank = FLASH_BASE1;
   uint32_t desired = flash_bank_is_swapped(bank) ? 0 : MG_BIT(31);
   flash_unlock();
@@ -12144,8 +12212,6 @@ MG_IRAM static bool mg_stm32h7_swap(void) {
   while ((MG_REG(bank + FLASH_OPTSR_CUR) & MG_BIT(31)) != desired) (void) 0;
   return true;
 }
-
-static bool s_flash_irq_disabled;
 
 MG_IRAM static bool mg_stm32h7_write(void *addr, const void *buf, size_t len) {
   if ((len % s_mg_flash_stm32h7.align) != 0) {
@@ -12179,25 +12245,36 @@ MG_IRAM static bool mg_stm32h7_write(void *addr, const void *buf, size_t len) {
   return ok;
 }
 
-// just overwrite instead of swap
+// True sector-by-sector exchange between first half [p1..p1+s) and second half
+// [p2..p2+s), using the sector at p2+s as scratch. Runs from RAM. Resets on
+// completion. Symmetric: calling twice returns flash to original state.
 MG_IRAM static void single_bank_swap(char *p1, char *p2, size_t s, size_t ss) {
-  // no stdlib calls here
+  char *scratch = p2 + s;  // Last sector of second half, reserved as scratch
   for (size_t ofs = 0; ofs < s; ofs += ss) {
-    mg_stm32h7_write(p1 + ofs, p2 + ofs, ss);
+    MG_OTA_ROLLBACK_TIMER_FEED();
+    mg_stm32h7_write(scratch, p1 + ofs, ss);   // Save p1[i] to scratch
+    MG_OTA_ROLLBACK_TIMER_FEED();
+    mg_stm32h7_write(p1 + ofs, p2 + ofs, ss);  // Copy p2[i] to p1[i]
+    MG_OTA_ROLLBACK_TIMER_FEED();
+    mg_stm32h7_write(p2 + ofs, scratch, ss);   // Copy scratch to p2[i]
   }
   *(volatile uint32_t *) 0xe000ed0cU = 0x5fa0004U;  // NVIC_SystemReset()
 }
 
 bool mg_ota_begin(size_t new_firmware_size) {
-  s_mg_flash_stm32h7.size = MG_REG(FLASH_SIZE_REG) * 1024;
-  if (IS_DUALCORE()) {
-    // Using only the 1st bank (mapped to CM7)
-    s_mg_flash_stm32h7.size /= 2;
-  }
+  s_mg_flash_stm32h7.size = flash_size();
 #ifdef __ZEPHYR__
   *((uint32_t *) 0xE000ED94) = 0;
   MG_DEBUG(("Jailbreak %s", *((uint32_t *) 0xE000ED94) == 0 ? "ok" : "failed"));
 #endif
+  if (!is_dualbank()) {
+    // Last sector of the second half is reserved as swap scratch; enforce limit.
+    size_t max = s_mg_flash_stm32h7.size / 2 - s_mg_flash_stm32h7.secsz;
+    if (new_firmware_size > max) {
+      MG_ERROR(("Firmware %lu too big for single-bank OTA, max %lu", new_firmware_size, max));
+      return false;
+    }
+  }
   return mg_ota_flash_begin(new_firmware_size, &s_mg_flash_stm32h7);
 }
 
@@ -12210,19 +12287,6 @@ bool mg_ota_end(void) {
     if (is_dualbank()) {
       // Bank swap is deferred until reset, been executing in flash, reset
       *(volatile uint32_t *) 0xe000ed0cU = 0x5fa0004U;  // NVIC_SystemReset()
-    } else {
-      // Swap partitions. Pray power does not go away
-      MG_INFO(("Swapping partitions, size %u (%u sectors)",
-               s_mg_flash_stm32h7.size,
-               s_mg_flash_stm32h7.size / s_mg_flash_stm32h7.secsz));
-      MG_INFO(("Do NOT power off..."));
-      mg_log_level = MG_LL_NONE;
-      s_flash_irq_disabled = true;
-      // Runs in RAM, will reset when finished
-      single_bank_swap(
-          (char *) s_mg_flash_stm32h7.start,
-          (char *) s_mg_flash_stm32h7.start + s_mg_flash_stm32h7.size / 2,
-          s_mg_flash_stm32h7.size / 2, s_mg_flash_stm32h7.secsz);
     }
   }
   return false;

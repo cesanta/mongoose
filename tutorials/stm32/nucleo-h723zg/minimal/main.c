@@ -80,8 +80,7 @@ int main(void) {
 
   MG_INFO(("Initialised. CPU clock: %lu MHz", SystemCoreClock / 1000000));
 
-  // Max delay 65 seconds
-  MG_OTA_BOOT_CHECK(30);
+  MG_OTA_BOOT_CHECK();  // Must be called after clock init
 
   struct mg_mgr mgr;
   mg_mgr_init(&mgr);

@@ -35,6 +35,10 @@ static size_t flash_size(void) {
   return (MG_REG(MG_FLASH_SIZE_REG_LOCATION) & 0xFFFF) * 1024;
 }
 
+MG_IRAM static size_t last_sector_size(void) {
+  return (STM_DEV_ID >= 0x449 ? 256 : 128) * 1024;
+}
+
 MG_IRAM static int is_dualbank(void) {
   // only F42x/F43x series (0x419) support dual bank
   return STM_DEV_ID == 0x419;
@@ -152,12 +156,7 @@ MG_IRAM static bool mg_stm32f_erase(void *addr) {
   return ok;
 }
 
-MG_IRAM static bool mg_stm32f_swap(void) {
-  // STM32 F42x/F43x support dual bank, however, the memory mapping
-  // change will not be carried through a hard reset. Therefore, we will use
-  // the single bank approach for this family as well.
-  return true;
-}
+MG_IRAM static void single_bank_swap(char *p1, char *p2, size_t s, size_t ss);
 
 static bool s_flash_irq_disabled;
 
@@ -191,19 +190,54 @@ MG_IRAM static bool mg_stm32f_write(void *addr, const void *buf, size_t len) {
   return ok;
 }
 
-// just overwrite instead of swap
-MG_IRAM void single_bank_swap(char *p1, char *p2, size_t size) {
-  // no stdlib calls here
-  mg_stm32f_write(p1, p2, size);
-  *(volatile unsigned long *) 0xe000ed0c = 0x5fa0004;
+MG_IRAM static bool mg_stm32f_swap(void) {
+  // STM32 F42x/F43x support dual bank, however, the memory mapping
+  // change will not be carried through a hard reset. Therefore, we use
+  // the single-bank scratch-sector swap for this family as well.
+  size_t ss = last_sector_size();
+  char *p1 = (char *) s_mg_flash_stm32f.start;
+  char *p2;
+  size_t s;
+  s_mg_flash_stm32f.size = flash_size();
+  p2 = p1 + s_mg_flash_stm32f.size / 2;
+  s = s_mg_flash_stm32f.size / 2 - ss;
+  MG_INFO(("Swapping partitions, %u bytes", s));
+  MG_INFO(("Do NOT power off..."));
+  MG_OTA_ROLLBACK_TIMER_FEED();
+  mg_log_level = MG_LL_NONE;
+  s_flash_irq_disabled = true;
+  single_bank_swap(p1, p2, s, ss);
+  return true;  // unreachable
+}
+
+// True exchange between first half [p1..p1+s) and second half [p2..p2+s),
+// using the last sector of the second half as scratch. Runs from RAM and resets.
+MG_IRAM static void single_bank_swap(char *p1, char *p2, size_t s, size_t ss) {
+  char *scratch = p2 + s;
+  for (size_t ofs = 0; ofs < s; ofs += ss) {
+    MG_OTA_ROLLBACK_TIMER_FEED();
+    mg_stm32f_write(scratch, p1 + ofs, ss);
+    MG_OTA_ROLLBACK_TIMER_FEED();
+    mg_stm32f_write(p1 + ofs, p2 + ofs, ss);
+    MG_OTA_ROLLBACK_TIMER_FEED();
+    mg_stm32f_write(p2 + ofs, scratch, ss);
+  }
+  *(volatile uint32_t *) 0xe000ed0cU = 0x5fa0004U;  // NVIC_SystemReset()
 }
 
 bool mg_ota_begin(size_t new_firmware_size) {
+  size_t max;
   s_mg_flash_stm32f.size = flash_size();
 #ifdef __ZEPHYR__
   *((uint32_t *)0xE000ED94) = 0;
   MG_DEBUG(("Jailbreak %s", *((uint32_t *)0xE000ED94) == 0 ? "successful" : "failed"));
 #endif
+  max = s_mg_flash_stm32f.size / 2 - last_sector_size();
+  if (new_firmware_size > max) {
+    MG_ERROR(("Firmware %lu too big for single-bank OTA, max %lu",
+              new_firmware_size, max));
+    return false;
+  }
   return mg_ota_flash_begin(new_firmware_size, &s_mg_flash_stm32f);
 }
 
@@ -212,19 +246,7 @@ bool mg_ota_write(const void *buf, size_t len) {
 }
 
 bool mg_ota_end(void) {
-  if (mg_ota_flash_end(&s_mg_flash_stm32f)) {
-    // Swap partitions. Pray power does not go away
-    MG_INFO(("Swapping partitions, size %u (%u sectors)",
-             s_mg_flash_stm32f.size, STM_DEV_ID == 0x449 ? 8 : 12));
-    MG_INFO(("Do NOT power off..."));
-    mg_log_level = MG_LL_NONE;
-    s_flash_irq_disabled = true;
-    char *p1 = (char *) s_mg_flash_stm32f.start;
-    char *p2 = p1 + s_mg_flash_stm32f.size / 2;
-    size_t size = s_mg_flash_stm32f.size / 2;
-    // Runs in RAM, will reset when finished
-    single_bank_swap(p1, p2, size);
-  }
+  mg_ota_flash_end(&s_mg_flash_stm32f);
   return false;
 }
 struct mg_flash *mg_flash = &s_mg_flash_stm32f;
