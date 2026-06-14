@@ -9905,7 +9905,11 @@ void mg_tcpip_mapip(struct mg_connection *c, struct mg_addr *ip) {
 // Scannable version tag embedded in every firmware binary, for server-side
 // version extraction. __attribute__((used)) prevents --gc-sections from
 // stripping it. The version string starts after the 11-char "MG_VERSION:" prefix.
+#if defined(_WIN32)
+static const char mg_fw_version[] =
+#else
 static const char mg_fw_version[] __attribute__((used)) =
+#endif
     "MG_VERSION:" MG_OTA_FIRMWARE_VERSION;
 
 static bool s_autocommit_ok;  // True after OTA server confirms "same version"
