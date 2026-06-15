@@ -9903,10 +9903,8 @@ void mg_tcpip_mapip(struct mg_connection *c, struct mg_addr *ip) {
 #endif
 
 // Scannable version tag embedded in every firmware binary, for server-side
-// version extraction. __attribute__((used)) prevents --gc-sections from
-// stripping it. The version string starts after the 11-char "MG_VERSION:" prefix.
-static const char mg_fw_version[] __attribute__((used)) =
-    "MG_VERSION:" MG_OTA_FIRMWARE_VERSION;
+// version extraction. The version string starts after the 11-char "MG_VERSION:" prefix.
+static const char mg_fw_version[] = "MG_VERSION:" MG_OTA_FIRMWARE_VERSION;
 
 static bool s_autocommit_ok;  // True after OTA server confirms "same version"
 
@@ -9924,7 +9922,10 @@ static void s_firmware_fn(struct mg_connection *c, int ev, void *ev_data);
 #if MG_ENABLE_CUSTOM_DEVICE_ID
 #else
 void mg_ota_device_id(char *buf, size_t len) {
-#if MG_ARCH == MG_ARCH_CUBE && defined(UID_BASE)
+#if defined(UID_BASE) &&                                               \
+    (defined(__SYSTEM_STM32F4XX_H) || defined(__SYSTEM_STM32F7XX_H) || \
+     defined(SYSTEM_STM32H5XX_H) || defined(SYSTEM_STM32H7XX_H) ||     \
+     defined(SYSTEM_STM32N6XX_H) || defined(SYSTEM_STM32U5XX_H))
   mg_snprintf(buf, len, "%M", mg_print_hex, 12, (uint8_t *) UID_BASE);
 #else
   mg_snprintf(buf, len, "%d", 0);
@@ -9981,7 +9982,7 @@ static void s_version_fn(struct mg_connection *c, int ev, void *ev_data) {
         mg_free(s_ota);
         s_ota = NULL;
       } else {
-        *(uint64_t *) fc->data = mg_millis() + 300 * 1000;  // Set expiration
+        *(uint64_t *) fc->data = mg_millis() + 5 * 1000;  // Set expiration
       }
     }
     c->is_closing = 1;
@@ -10014,6 +10015,7 @@ static void s_firmware_fn(struct mg_connection *c, int ev, void *ev_data) {
               "Host: %.*s\r\n"
               "Connection: close\r\n\r\n",
               mg_url_uri(s_ota->url), (int) host.len, host.buf);
+    *(uint64_t *) c->data = mg_millis() + 300 * 1000;  // Set expiration
   } else if (ev == MG_EV_HTTP_HDRS) {
     struct mg_http_message *hm = (struct mg_http_message *) ev_data;
     int status = mg_http_status(hm);
@@ -10061,7 +10063,7 @@ void mg_ota_poll(struct mg_mgr *mgr) {
   static uint64_t feed_timer;  // Advances by 500ms per tick; tracks elapsed time
   if (MG_OTA_STATE_GET() == MG_OTA_TESTING &&
       mg_timer_expired(&feed_timer, 500, mg_millis())) {
-    if (feed_timer < (uint64_t) MG_OTA_ROLLBACK_TIMEOUT_SECONDS * 1000ULL) {
+    if (feed_timer < (uint64_t) MG_OTA_ROLLBACK_TIMEOUT_SECONDS * 1000) {
       MG_OTA_ROLLBACK_TIMER_FEED();  // Feed watchdog every 500ms
     } else if (s_autocommit_ok) {
       MG_INFO(("Auto-committing firmware"));

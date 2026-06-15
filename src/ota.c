@@ -30,7 +30,10 @@ static void s_firmware_fn(struct mg_connection *c, int ev, void *ev_data);
 #if MG_ENABLE_CUSTOM_DEVICE_ID
 #else
 void mg_ota_device_id(char *buf, size_t len) {
-#if MG_ARCH == MG_ARCH_CUBE && defined(UID_BASE)
+#if defined(UID_BASE) &&                                               \
+    (defined(__SYSTEM_STM32F4XX_H) || defined(__SYSTEM_STM32F7XX_H) || \
+     defined(SYSTEM_STM32H5XX_H) || defined(SYSTEM_STM32H7XX_H) ||     \
+     defined(SYSTEM_STM32N6XX_H) || defined(SYSTEM_STM32U5XX_H))
   mg_snprintf(buf, len, "%M", mg_print_hex, 12, (uint8_t *) UID_BASE);
 #else
   mg_snprintf(buf, len, "%d", 0);
@@ -87,7 +90,7 @@ static void s_version_fn(struct mg_connection *c, int ev, void *ev_data) {
         mg_free(s_ota);
         s_ota = NULL;
       } else {
-        *(uint64_t *) fc->data = mg_millis() + 300 * 1000;  // Set expiration
+        *(uint64_t *) fc->data = mg_millis() + 5 * 1000;  // Set expiration
       }
     }
     c->is_closing = 1;
@@ -120,6 +123,7 @@ static void s_firmware_fn(struct mg_connection *c, int ev, void *ev_data) {
               "Host: %.*s\r\n"
               "Connection: close\r\n\r\n",
               mg_url_uri(s_ota->url), (int) host.len, host.buf);
+    *(uint64_t *) c->data = mg_millis() + 300 * 1000;  // Set expiration
   } else if (ev == MG_EV_HTTP_HDRS) {
     struct mg_http_message *hm = (struct mg_http_message *) ev_data;
     int status = mg_http_status(hm);
