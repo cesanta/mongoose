@@ -99,20 +99,28 @@
 // safe to call from any context (before or after HAL_Init).
 // H5 (TAMP->BKP0R), H7 (RTC->BKP0R), F4/F7 (RTC->BKP0R).
 #ifndef MG_OTA_STATE_GET
+#if defined(PWR_DBPCR_DBP)
+#define MG_OTA_DBP_ENABLE() (PWR->DBPCR |= PWR_DBPCR_DBP)
+#elif defined(PWR_CR1_DBP)
+#define MG_OTA_DBP_ENABLE() (PWR->CR1 |= PWR_CR1_DBP)
+#else
+#define MG_OTA_DBP_ENABLE() (PWR->CR |= PWR_CR_DBP)
+#endif
+
 #if defined(TAMP)
 #define MG_OTA_STATE_GET() (TAMP->BKP0R)
-#define MG_OTA_STATE_SET(v)                                             \
-  (RCC->APB3ENR |= RCC_APB3ENR_RTCAPBEN, PWR->DBPCR |= PWR_DBPCR_DBP, \
+#define MG_OTA_STATE_SET(v)                                           \
+  (RCC->APB3ENR |= RCC_APB3ENR_RTCAPBEN, MG_OTA_DBP_ENABLE(),        \
    (TAMP->BKP0R = (uint32_t) (v)))
 #elif defined(RCC_APB4ENR_RTCAPBEN)
 #define MG_OTA_STATE_GET() (RTC->BKP0R)
-#define MG_OTA_STATE_SET(v)                                              \
-  (RCC->APB4ENR |= RCC_APB4ENR_RTCAPBEN, PWR->CR1 |= PWR_CR1_DBP,      \
+#define MG_OTA_STATE_SET(v)                                           \
+  (RCC->APB4ENR |= RCC_APB4ENR_RTCAPBEN, MG_OTA_DBP_ENABLE(),        \
    (RTC->BKP0R = (uint32_t) (v)))
 #else
 #define MG_OTA_STATE_GET() (RTC->BKP0R)
-#define MG_OTA_STATE_SET(v)                                              \
-  (RCC->APB1ENR |= RCC_APB1ENR_PWREN, PWR->CR |= PWR_CR_DBP,           \
+#define MG_OTA_STATE_SET(v)                                           \
+  (RCC->APB1ENR |= RCC_APB1ENR_PWREN, MG_OTA_DBP_ENABLE(),           \
    (RTC->BKP0R = (uint32_t) (v)))
 #endif
 #endif
