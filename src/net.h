@@ -35,7 +35,7 @@ struct mg_mgr {
   int dnstimeout;               // DNS resolve timeout in ms (default: 3000)
   bool use_dns6;                // If true, prefer DNS6 for hostname resolution
   unsigned long nextid;         // Auto-incrementing counter for connection IDs
-  void *userdata;               // Arbitrary user pointer (initially set to mg_fw_version)
+  void *userdata;               // Arbitrary user pointer
   void *tls_ctx;                // Shared TLS context for all TLS connections
   uint16_t mqtt_id;             // Packet ID counter for MQTT pub/sub
   void *active_dns_requests;    // Pending DNS queries (internal)

@@ -9903,8 +9903,8 @@ void mg_tcpip_mapip(struct mg_connection *c, struct mg_addr *ip) {
 #endif
 
 // Scannable version tag embedded in every firmware binary, for server-side
-// version extraction. The version string starts after the 11-char "MG_VERSION:" prefix.
-static const char mg_fw_version[] = "MG_VERSION:" MG_OTA_FIRMWARE_VERSION;
+// version extraction. The version string starts after the "MG_VERSION:" prefix.
+static const char s_fw_version[] = "MG_VERSION:" MG_OTA_FIRMWARE_VERSION;
 
 static bool s_autocommit_ok;  // True after OTA server confirms "same version"
 
@@ -9926,7 +9926,8 @@ void mg_ota_device_id(char *buf, size_t len) {
     (defined(__SYSTEM_STM32F4XX_H) || defined(__SYSTEM_STM32F7XX_H) || \
      defined(SYSTEM_STM32H5XX_H) || defined(SYSTEM_STM32H7XX_H) ||     \
      defined(SYSTEM_STM32N6XX_H) || defined(SYSTEM_STM32U5XX_H))
-  mg_snprintf(buf, len, "%M", mg_print_hex, 12, (uint8_t *) UID_BASE);
+  uint32_t *p = (uint32_t *) UID_BASE;
+  mg_snprintf(buf, len, "%08x%08x%08x", p[0], p[1], p[2]);
 #else
   mg_snprintf(buf, len, "%d", 0);
 #endif
@@ -9944,11 +9945,12 @@ static void s_version_fn(struct mg_connection *c, int ev, void *ev_data) {
     const char *sep = strchr(uri, '?') == NULL ? "?" : "&";
     mg_ota_device_id(id, sizeof(id));
     id[sizeof(id) - 1] = '\0';
+    id[sizeof(id) - 1] = '\0';
     mg_printf(c,
               "GET %s%sarch=%d&version=%s&id=%s&interval=%d&boot=%d HTTP/1.1\r\n"
               "Host: %.*s\r\n"
               "Connection: close\r\n\r\n",
-              uri, sep, MG_ARCH, mg_fw_version + 11, id,
+              uri, sep, MG_ARCH, s_fw_version + 11, id,
               MG_OTA_PULL_INTERVAL_SECONDS, MG_OTA_STATE_GET(), host.len, host.buf);
   } else if (ev == MG_EV_HTTP_MSG) {
     struct mg_http_message *hm = (struct mg_http_message *) ev_data;
@@ -9965,7 +9967,7 @@ static void s_version_fn(struct mg_connection *c, int ev, void *ev_data) {
       s_ota->fn(buf);
       mg_free(s_ota);
       s_ota = NULL;
-    } else if (strcmp(s_ota->version, mg_fw_version + 11) == 0) {
+    } else if (strcmp(s_ota->version, s_fw_version + 11) == 0) {
       s_autocommit_ok = true;
       s_ota->fn("Same version");
       mg_free(s_ota);
