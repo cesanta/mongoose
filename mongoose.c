@@ -12048,9 +12048,11 @@ bool mg_ota_write(const void *buf, size_t len) {
 }
 
 bool mg_ota_end(void) {
-  mg_ota_flash_end(&s_mg_flash_stm32h5);
-  return false;
+  if (!mg_ota_flash_end(&s_mg_flash_stm32h5)) return false;
+  *(volatile uint32_t *) 0xe000ed0c = 0x5fa0004U;  // NVIC_SystemReset()
+  return true;
 }
+
 struct mg_flash *mg_flash = &s_mg_flash_stm32h5;
 #endif
 

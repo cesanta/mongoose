@@ -41,8 +41,10 @@
 
 // OTA state in TAMP backup register 0 (survives all resets, clears on POR).
 // Requires hal_backup_domain_init() (called from hal_clock_init) to have run.
-#define MG_OTA_STATE_GET()    (TAMP->BKP0R)
-#define MG_OTA_STATE_SET(v)   (TAMP->BKP0R = (uint32_t) (v))
+#define MG_OTA_STATE_GET()    (RCC->APB3ENR |= RCC_APB3ENR_RTCAPBEN, TAMP->BKP0R)
+#define MG_OTA_STATE_SET(v)                                           \
+  (RCC->APB3ENR |= RCC_APB3ENR_RTCAPBEN, PWR->DBPCR |= PWR_DBPCR_DBP, \
+   (TAMP->BKP0R = (uint32_t) (v)), TAMP->BKP0R)
 
 // #define MG_DRIVER_MDC_CR 4   // RMII MDC clock divider, from 0 to 4
 // #define MG_TCPIP_PHY_ADDR 0  // PHY address

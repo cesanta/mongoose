@@ -240,10 +240,11 @@ extern "C" {
 #endif
 
 #if defined(TAMP)
-#define MG_OTA_STATE_GET() (TAMP->BKP0R)
+#define MG_OTA_STATE_GET()                                           \
+  (RCC->APB3ENR |= RCC_APB3ENR_RTCAPBEN, TAMP->BKP0R)
 #define MG_OTA_STATE_SET(v)                                           \
   (RCC->APB3ENR |= RCC_APB3ENR_RTCAPBEN, MG_OTA_DBP_ENABLE(),        \
-   (TAMP->BKP0R = (uint32_t) (v)))
+   (TAMP->BKP0R = (uint32_t) (v)), TAMP->BKP0R)
 #elif defined(RCC_APB4ENR_RTCAPBEN)
 #define MG_OTA_STATE_GET() (RTC->BKP0R)
 #define MG_OTA_STATE_SET(v)                                           \
