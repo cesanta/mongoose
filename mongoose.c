@@ -9910,7 +9910,6 @@ static bool s_autocommit_ok;  // True after OTA server confirms "same version"
 
 static struct mg_ota_state {
   char json_url[MG_OTA_MAX_URL_LEN];
-  char version[MG_OTA_MAX_VERSION_LEN];
   char url[MG_OTA_MAX_URL_LEN];
   size_t size;
   uint8_t sha256[32];
@@ -9927,7 +9926,22 @@ void mg_ota_device_id(char *buf, size_t len) {
      defined(SYSTEM_STM32H5XX_H) || defined(SYSTEM_STM32H7XX_H) ||     \
      defined(SYSTEM_STM32N6XX_H) || defined(SYSTEM_STM32U5XX_H))
   uint32_t *p = (uint32_t *) UID_BASE;
-  mg_snprintf(buf, len, "%08x%08x%08x", p[0], p[1], p[2]);
+  mg_snprintf(buf, len, "stm32_%08x%08x%08x", p[0], p[1], p[2]);
+#elif MG_ARCH == MG_ARCH_PICOSDK
+  pico_unique_board_id_t x = {0};
+  pico_get_unique_board_id(&x);
+  mg_snprintf(buf, len, "rp_%02x%02x%02x%02x%02x%02x%02x%02x", x.id[0], x.id[1],
+              x.id[2], x.id[3], x.id[4], x.id[5], x.id[6], x.id[7]);
+#elif defined(OCOTP_BASE) && OCOTP_BASE == 0x401F4000u
+  mg_snprintf(buf, len, "rt10xx_%08x%08x", OCOTP->CFG0, OCOTP->CFG1);
+#elif defined(OCOTP_BASE) && OCOTP_BASE == 0x40CAC000u
+  mg_snprintf(buf, len, "rt11xx_%08x%08x", OCOTP->FUSEN[16].FUSE,
+              OCOTP->FUSEN[17].FUSE);
+#elif MG_ARCH == MG_ARCH_ESP32
+  uint8_t mac[6] = {0};
+  esp_efuse_mac_get_default(mac);
+  mg_snprintf(buf, len, "esp32_%02x%02x%02x%02x%02x%02x", mac[0], mac[1],
+              mac[2], mac[3], mac[4], mac[5]);
 #else
   mg_snprintf(buf, len, "%d", 0);
 #endif
@@ -9939,26 +9953,26 @@ static void s_version_fn(struct mg_connection *c, int ev, void *ev_data) {
   if (ev == MG_EV_POLL) {
     if (mg_millis() > expiration) mg_error(c, "Metadata timeout");
   } else if (ev == MG_EV_CONNECT) {
-    char id[33];
+    char id[40];
     struct mg_str host = mg_url_host(s_ota->json_url);
     const char *uri = mg_url_uri(s_ota->json_url);
     const char *sep = strchr(uri, '?') == NULL ? "?" : "&";
     mg_ota_device_id(id, sizeof(id));
     id[sizeof(id) - 1] = '\0';
-    id[sizeof(id) - 1] = '\0';
-    mg_printf(c,
-              "GET %s%sarch=%d&version=%s&id=%s&interval=%d&boot=%d HTTP/1.1\r\n"
-              "Host: %.*s\r\n"
-              "Connection: close\r\n\r\n",
-              uri, sep, MG_ARCH, s_fw_version + 11, id,
-              MG_OTA_PULL_INTERVAL_SECONDS, MG_OTA_STATE_GET(), host.len, host.buf);
+    mg_printf(
+        c,
+        "GET %s%sarch=%d&version=%s&id=%s&interval=%d&boot=%d HTTP/1.1\r\n"
+        "Host: %.*s\r\n"
+        "Connection: close\r\n\r\n",
+        uri, sep, MG_ARCH, s_fw_version + 11, id, MG_OTA_PULL_INTERVAL_SECONDS,
+        MG_OTA_STATE_GET(), host.len, host.buf);
   } else if (ev == MG_EV_HTTP_MSG) {
     struct mg_http_message *hm = (struct mg_http_message *) ev_data;
+    char version[MG_OTA_MAX_VERSION_LEN];
     double result;
     MG_DEBUG(("Got metadata: %.*s", hm->body.len, hm->body.buf));
     if (mg_http_status(hm) != 200 || mg_json_get(hm->body, "$", NULL) != 0 ||
-        !mg_json_unescape(hm->body, "$.version", s_ota->version,
-                          sizeof(s_ota->version)) ||
+        !mg_json_unescape(hm->body, "$.version", version, sizeof(version)) ||
         !mg_json_unescape(hm->body, "$.url", s_ota->url, sizeof(s_ota->url)) ||
         !mg_json_get_num(hm->body, "$.size", &result) || result <= 0) {
       char buf[100];
@@ -9967,7 +9981,7 @@ static void s_version_fn(struct mg_connection *c, int ev, void *ev_data) {
       s_ota->fn(buf);
       mg_free(s_ota);
       s_ota = NULL;
-    } else if (strcmp(s_ota->version, s_fw_version + 11) == 0) {
+    } else if (strcmp(version, s_fw_version + 11) == 0) {
       s_autocommit_ok = true;
       s_ota->fn("Same version");
       mg_free(s_ota);
@@ -9976,8 +9990,8 @@ static void s_version_fn(struct mg_connection *c, int ev, void *ev_data) {
       struct mg_connection *fc;
       s_ota->size = (size_t) result;
       // TODO (robertc2000): parse and validate sha256
-      MG_DEBUG(("Firmware version: %s, url: %s, size: %ld", s_ota->version,
-                s_ota->url, s_ota->size));
+      MG_DEBUG(("Firmware version: %s, url: %s, size: %ld", version, s_ota->url,
+                s_ota->size));
       fc = mg_http_connect(c->mgr, s_ota->url, s_firmware_fn, NULL);
       if (fc == NULL) {
         s_ota->fn("Failed to connect");
@@ -10062,7 +10076,7 @@ void mg_ota_url_check(struct mg_mgr *mgr, const char *json_url,
 void mg_ota_poll(struct mg_mgr *mgr) {
   static uint64_t t = 5000;  // Fire first time 5 sec after boot
 
-  static uint64_t feed_timer;  // Advances by 500ms per tick; tracks elapsed time
+  static uint64_t feed_timer;  // Advances 500ms per tick; tracks elapsed time
   if (MG_OTA_STATE_GET() == MG_OTA_TESTING &&
       mg_timer_expired(&feed_timer, 500, mg_millis())) {
     if (feed_timer < (uint64_t) MG_OTA_ROLLBACK_TIMEOUT_SECONDS * 1000) {
@@ -30732,6 +30746,186 @@ static bool w5500_poll(struct mg_tcpip_if *ifp, bool s1) {
 
 struct mg_tcpip_driver mg_tcpip_driver_w5500 = {w5500_init, w5500_tx, w5500_rx,
                                                 w5500_poll};
+#endif
+
+#ifdef MG_ENABLE_LINES
+#line 1 "src/drivers/wiznet.c"
+#endif
+// Auto-detecting WIZnet SPI Ethernet driver. Supports W5500 and W5100S.
+// Detection uses the W5500 VERSIONR register (0x04); any other value
+// is treated as W5100/W5100S.
+
+
+
+#if MG_ENABLE_TCPIP && defined(MG_ENABLE_DRIVER_WIZNET) && MG_ENABLE_DRIVER_WIZNET
+
+static bool s_w5100;  // Detected chip: false = W5500, true = W5100/W5100S
+
+enum { W55_CR = 0, W55_S0 = 1, W55_TX0 = 2, W55_RX0 = 3 };
+
+// W5500 SPI frame: [addr_msb][addr_lsb][(block<<3)|rw] then N data bytes.
+static void w55_txn(struct mg_tcpip_spi *s, uint8_t block, uint16_t addr,
+                    bool wr, void *buf, size_t len) {
+  uint8_t cmd[] = {(uint8_t) (addr >> 8), (uint8_t) (addr & 255),
+                   (uint8_t) ((block << 3) | (wr ? 4 : 0))};
+  s->begin(s->spi);
+  s->txn(s->spi, cmd, NULL, sizeof(cmd));
+  if (wr) s->txn(s->spi, (uint8_t *) buf, NULL, len);
+  if (!wr) s->txn(s->spi, NULL, (uint8_t *) buf, len);
+  s->end(s->spi);
+}
+
+// W5100S SPI frame: [opcode][addr_msb][addr_lsb] then N data bytes.
+static void w51_txn(struct mg_tcpip_spi *s, uint16_t addr, bool wr, void *buf,
+                    size_t len) {
+  uint8_t cmd[] = {(uint8_t) (wr ? 0xF0 : 0x0F), (uint8_t) (addr >> 8),
+                   (uint8_t) (addr & 255)};
+  s->begin(s->spi);
+  s->txn(s->spi, cmd, NULL, sizeof(cmd));
+  if (wr) s->txn(s->spi, (uint8_t *) buf, NULL, len);
+  if (!wr) s->txn(s->spi, NULL, (uint8_t *) buf, len);
+  s->end(s->spi);
+}
+
+// clang-format off
+static void     w55_wn(struct mg_tcpip_spi *s, uint8_t bl, uint16_t a, void *b, size_t n) { w55_txn(s, bl, a, true, b, n); }
+static void     w55_w1(struct mg_tcpip_spi *s, uint8_t bl, uint16_t a, uint8_t v)         { w55_wn(s, bl, a, &v, 1); }
+static void     w55_w2(struct mg_tcpip_spi *s, uint8_t bl, uint16_t a, uint16_t v)        { uint8_t b[2] = {(uint8_t) (v >> 8), (uint8_t) (v & 255)}; w55_wn(s, bl, a, b, 2); }
+static void     w55_rn(struct mg_tcpip_spi *s, uint8_t bl, uint16_t a, void *b, size_t n) { w55_txn(s, bl, a, false, b, n); }
+static uint8_t  w55_r1(struct mg_tcpip_spi *s, uint8_t bl, uint16_t a)                    { uint8_t r = 0; w55_rn(s, bl, a, &r, 1); return r; }
+static uint16_t w55_r2(struct mg_tcpip_spi *s, uint8_t bl, uint16_t a)                    { uint8_t b[2] = {0, 0}; w55_rn(s, bl, a, b, 2); return (uint16_t) ((b[0] << 8) | b[1]); }
+static void     w51_wn(struct mg_tcpip_spi *s, uint16_t a, void *b, size_t n)             { w51_txn(s, a, true, b, n); }
+static void     w51_w1(struct mg_tcpip_spi *s, uint16_t a, uint8_t v)                     { w51_wn(s, a, &v, 1); }
+static void     w51_w2(struct mg_tcpip_spi *s, uint16_t a, uint16_t v)                    { uint8_t b[2] = {(uint8_t) (v >> 8), (uint8_t) (v & 255)}; w51_wn(s, a, b, 2); }
+static void     w51_rn(struct mg_tcpip_spi *s, uint16_t a, void *b, size_t n)             { w51_txn(s, a, false, b, n); }
+static uint8_t  w51_r1(struct mg_tcpip_spi *s, uint16_t a)                                { uint8_t r = 0; w51_rn(s, a, &r, 1); return r; }
+static uint16_t w51_r2(struct mg_tcpip_spi *s, uint16_t a)                                { uint8_t b[2] = {0, 0}; w51_rn(s, a, b, 2); return (uint16_t) ((b[0] << 8) | b[1]); }
+// clang-format on
+
+static bool wiznet_init(struct mg_tcpip_if *ifp) {
+  struct mg_tcpip_spi *s = (struct mg_tcpip_spi *) ifp->driver_data;
+  uint8_t ver;
+  s->end(s->spi);
+  ver = w55_r1(s, W55_CR, 0x39);  // W5500 VERSIONR; 0x04 = W5500
+  s_w5100 = (ver != 0x04);
+  MG_DEBUG(("Wiznet chip: %s (ver %#x)", s_w5100 ? "W5100S" : "W5500", ver));
+  if (s_w5100) {
+    w51_w1(s, 0, 0x80);              // Software reset
+    mg_delayms(2);                   // Wait for reset (~1ms per datasheet)
+    w51_w1(s, 0x72, 0x53);          // PHYLCKR -> unlock PHY
+    w51_w1(s, 0x46, 0);             // PHYCR0 -> autonegotiation
+    w51_w1(s, 0x47, 0);             // PHYCR1 -> reset
+    w51_w1(s, 0x72, 0x00);          // PHYLCKR -> lock PHY
+    w51_wn(s, 0x09, ifp->mac, 6);   // SHAR -> set source MAC
+    w51_w1(s, 0x1a, 6);             // RMSR -> Sock0 RX buf 4KB
+    w51_w1(s, 0x1b, 6);             // TMSR -> Sock0 TX buf 4KB
+    w51_w1(s, 0x400, 0x44);         // Sock0 MR -> MACRAW + MAC filter
+    w51_w1(s, 0x401, 1);            // Sock0 CR -> OPEN
+    return w51_r1(s, 0x403) == 0x42;
+  } else {
+    w55_w1(s, W55_CR, 0, 0x80);     // Software reset
+    mg_delayms(2);                   // Wait for reset (~1ms per datasheet)
+    w55_w1(s, W55_CR, 0x2e, 0);     // PHYCFGR -> reset
+    w55_w1(s, W55_CR, 0x2e, 0xf8);  // PHYCFGR -> set
+    w55_w1(s, W55_S0, 0x1e, 16);    // Sock0 RX buf 16KB
+    w55_w1(s, W55_S0, 0x1f, 16);    // Sock0 TX buf 16KB
+    w55_w1(s, W55_S0, 0, 4);        // Sock0 MR -> MACRAW
+    w55_w1(s, W55_S0, 1, 1);        // Sock0 CR -> OPEN
+    return w55_r1(s, W55_S0, 3) == 0x42;
+  }
+}
+
+static size_t wiznet_rx(void *buf, size_t buflen, struct mg_tcpip_if *ifp) {
+  struct mg_tcpip_spi *s = (struct mg_tcpip_spi *) ifp->driver_data;
+  uint16_t r = 0, n = 0, len = (uint16_t) buflen, n2;
+  if (s_w5100) {
+    while ((n2 = w51_r2(s, 0x426)) > n) n = n2;
+    if (n > 0) {
+      uint16_t ptr = w51_r2(s, 0x428);
+      uint16_t rxsz = (uint16_t) ((1U << (w51_r1(s, 0x1a) & 3)) * 1024U);
+      uint16_t ofs = (uint16_t) ((ptr + 2) & (rxsz - 1));
+      if (n <= len + 2 && n > 1) r = (uint16_t) (n - 2);
+      if (ofs + r <= rxsz) {
+        w51_rn(s, (uint16_t) (0x6000 + ofs), buf, r);
+      } else {
+        uint16_t tail = rxsz - ofs;
+        w51_rn(s, (uint16_t) (0x6000 + ofs), buf, tail);
+        w51_rn(s, 0x6000, (uint8_t *) buf + tail, (size_t) (r - tail));
+      }
+      w51_w2(s, 0x428, (uint16_t) (ptr + n));
+      w51_w1(s, 0x401, 0x40);  // Sock0 CR -> RECV
+    }
+  } else {
+    while ((n2 = w55_r2(s, W55_S0, 0x26)) > n) n = n2;
+    if (n > 0) {
+      uint16_t ptr = w55_r2(s, W55_S0, 0x28);
+      n = w55_r2(s, W55_RX0, ptr);
+      if (n <= len + 2 && n > 1) {
+        r = (uint16_t) (n - 2);
+        w55_rn(s, W55_RX0, (uint16_t) (ptr + 2), buf, r);
+      }
+      w55_w2(s, W55_S0, 0x28, (uint16_t) (ptr + n));
+      w55_w1(s, W55_S0, 1, 0x40);  // Sock0 CR -> RECV
+    }
+  }
+  return r;
+}
+
+static size_t wiznet_tx(const void *buf, size_t buflen,
+                        struct mg_tcpip_if *ifp) {
+  struct mg_tcpip_spi *s = (struct mg_tcpip_spi *) ifp->driver_data;
+  uint16_t i, n = 0, len = (uint16_t) buflen;
+  if (s_w5100) {
+    uint16_t ptr;
+    while (n < len) n = w51_r2(s, 0x420);
+    ptr = w51_r2(s, 0x424);
+    uint16_t txsz = (uint16_t) ((1U << (w51_r1(s, 0x1b) & 3)) * 1024U);
+    uint16_t ofs = (uint16_t) (ptr & (txsz - 1));
+    if (ofs + len > txsz) {
+      uint16_t head = txsz - ofs;
+      w51_wn(s, (uint16_t) (0x4000 + ofs), (void *) buf, head);
+      w51_wn(s, 0x4000, (void *) ((uint8_t *) buf + head), len - head);
+    } else {
+      w51_wn(s, (uint16_t) (0x4000 + ofs), (void *) buf, len);
+    }
+    w51_w2(s, 0x424, (uint16_t) (ptr + len));
+    w51_w1(s, 0x401, 0x20);  // Sock0 CR -> SEND
+    for (i = 0; i < 40; i++) {
+      uint8_t ir = w51_r1(s, 0x402);
+      if (ir == 0) continue;
+      w51_w1(s, 0x402, ir);
+      if (ir & 8) len = 0;
+      if (ir & (16 | 8)) break;
+    }
+  } else {
+    uint16_t ptr;
+    while (n < len) n = w55_r2(s, W55_S0, 0x20);
+    ptr = w55_r2(s, W55_S0, 0x24);
+    w55_wn(s, W55_TX0, ptr, (void *) buf, len);
+    w55_w2(s, W55_S0, 0x24, (uint16_t) (ptr + len));
+    w55_w1(s, W55_S0, 1, 0x20);  // Sock0 CR -> SEND
+    for (i = 0; i < 40; i++) {
+      uint8_t ir = w55_r1(s, W55_S0, 2);
+      if (ir == 0) continue;
+      w55_w1(s, W55_S0, 2, ir);
+      if (ir & 8) len = 0;
+      if (ir & (16 | 8)) break;
+    }
+  }
+  return len;
+}
+
+static bool wiznet_poll(struct mg_tcpip_if *ifp, bool s1) {
+  struct mg_tcpip_spi *spi = (struct mg_tcpip_spi *) ifp->driver_data;
+  if (s_w5100) {
+    return s1 ? (w51_r1(spi, 0x3c) & 1) : false;   // PHYSR bit 0 = LNK
+  } else {
+    return s1 ? (w55_r1(spi, W55_CR, 0x2e) & 1) : false;  // PHYCFGR bit 0 = LNK
+  }
+}
+
+struct mg_tcpip_driver mg_tcpip_driver_wiznet = {wiznet_init, wiznet_tx,
+                                                  wiznet_rx, wiznet_poll};
 #endif
 
 #ifdef MG_ENABLE_LINES

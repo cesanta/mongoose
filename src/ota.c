@@ -18,7 +18,6 @@ static bool s_autocommit_ok;  // True after OTA server confirms "same version"
 
 static struct mg_ota_state {
   char json_url[MG_OTA_MAX_URL_LEN];
-  char version[MG_OTA_MAX_VERSION_LEN];
   char url[MG_OTA_MAX_URL_LEN];
   size_t size;
   uint8_t sha256[32];
@@ -35,7 +34,22 @@ void mg_ota_device_id(char *buf, size_t len) {
      defined(SYSTEM_STM32H5XX_H) || defined(SYSTEM_STM32H7XX_H) ||     \
      defined(SYSTEM_STM32N6XX_H) || defined(SYSTEM_STM32U5XX_H))
   uint32_t *p = (uint32_t *) UID_BASE;
-  mg_snprintf(buf, len, "%08x%08x%08x", p[0], p[1], p[2]);
+  mg_snprintf(buf, len, "stm32_%08x%08x%08x", p[0], p[1], p[2]);
+#elif MG_ARCH == MG_ARCH_PICOSDK
+  pico_unique_board_id_t x = {0};
+  pico_get_unique_board_id(&x);
+  mg_snprintf(buf, len, "rp_%02x%02x%02x%02x%02x%02x%02x%02x", x.id[0], x.id[1],
+              x.id[2], x.id[3], x.id[4], x.id[5], x.id[6], x.id[7]);
+#elif defined(OCOTP_BASE) && OCOTP_BASE == 0x401F4000u
+  mg_snprintf(buf, len, "rt10xx_%08x%08x", OCOTP->CFG0, OCOTP->CFG1);
+#elif defined(OCOTP_BASE) && OCOTP_BASE == 0x40CAC000u
+  mg_snprintf(buf, len, "rt11xx_%08x%08x", OCOTP->FUSEN[16].FUSE,
+              OCOTP->FUSEN[17].FUSE);
+#elif MG_ARCH == MG_ARCH_ESP32
+  uint8_t mac[6] = {0};
+  esp_efuse_mac_get_default(mac);
+  mg_snprintf(buf, len, "esp32_%02x%02x%02x%02x%02x%02x", mac[0], mac[1],
+              mac[2], mac[3], mac[4], mac[5]);
 #else
   mg_snprintf(buf, len, "%d", 0);
 #endif
@@ -47,26 +61,26 @@ static void s_version_fn(struct mg_connection *c, int ev, void *ev_data) {
   if (ev == MG_EV_POLL) {
     if (mg_millis() > expiration) mg_error(c, "Metadata timeout");
   } else if (ev == MG_EV_CONNECT) {
-    char id[33];
+    char id[40];
     struct mg_str host = mg_url_host(s_ota->json_url);
     const char *uri = mg_url_uri(s_ota->json_url);
     const char *sep = strchr(uri, '?') == NULL ? "?" : "&";
     mg_ota_device_id(id, sizeof(id));
     id[sizeof(id) - 1] = '\0';
-    id[sizeof(id) - 1] = '\0';
-    mg_printf(c,
-              "GET %s%sarch=%d&version=%s&id=%s&interval=%d&boot=%d HTTP/1.1\r\n"
-              "Host: %.*s\r\n"
-              "Connection: close\r\n\r\n",
-              uri, sep, MG_ARCH, s_fw_version + 11, id,
-              MG_OTA_PULL_INTERVAL_SECONDS, MG_OTA_STATE_GET(), host.len, host.buf);
+    mg_printf(
+        c,
+        "GET %s%sarch=%d&version=%s&id=%s&interval=%d&boot=%d HTTP/1.1\r\n"
+        "Host: %.*s\r\n"
+        "Connection: close\r\n\r\n",
+        uri, sep, MG_ARCH, s_fw_version + 11, id, MG_OTA_PULL_INTERVAL_SECONDS,
+        MG_OTA_STATE_GET(), host.len, host.buf);
   } else if (ev == MG_EV_HTTP_MSG) {
     struct mg_http_message *hm = (struct mg_http_message *) ev_data;
+    char version[MG_OTA_MAX_VERSION_LEN];
     double result;
     MG_DEBUG(("Got metadata: %.*s", hm->body.len, hm->body.buf));
     if (mg_http_status(hm) != 200 || mg_json_get(hm->body, "$", NULL) != 0 ||
-        !mg_json_unescape(hm->body, "$.version", s_ota->version,
-                          sizeof(s_ota->version)) ||
+        !mg_json_unescape(hm->body, "$.version", version, sizeof(version)) ||
         !mg_json_unescape(hm->body, "$.url", s_ota->url, sizeof(s_ota->url)) ||
         !mg_json_get_num(hm->body, "$.size", &result) || result <= 0) {
       char buf[100];
@@ -75,7 +89,7 @@ static void s_version_fn(struct mg_connection *c, int ev, void *ev_data) {
       s_ota->fn(buf);
       mg_free(s_ota);
       s_ota = NULL;
-    } else if (strcmp(s_ota->version, s_fw_version + 11) == 0) {
+    } else if (strcmp(version, s_fw_version + 11) == 0) {
       s_autocommit_ok = true;
       s_ota->fn("Same version");
       mg_free(s_ota);
@@ -84,8 +98,8 @@ static void s_version_fn(struct mg_connection *c, int ev, void *ev_data) {
       struct mg_connection *fc;
       s_ota->size = (size_t) result;
       // TODO (robertc2000): parse and validate sha256
-      MG_DEBUG(("Firmware version: %s, url: %s, size: %ld", s_ota->version,
-                s_ota->url, s_ota->size));
+      MG_DEBUG(("Firmware version: %s, url: %s, size: %ld", version, s_ota->url,
+                s_ota->size));
       fc = mg_http_connect(c->mgr, s_ota->url, s_firmware_fn, NULL);
       if (fc == NULL) {
         s_ota->fn("Failed to connect");
@@ -170,7 +184,7 @@ void mg_ota_url_check(struct mg_mgr *mgr, const char *json_url,
 void mg_ota_poll(struct mg_mgr *mgr) {
   static uint64_t t = 5000;  // Fire first time 5 sec after boot
 
-  static uint64_t feed_timer;  // Advances by 500ms per tick; tracks elapsed time
+  static uint64_t feed_timer;  // Advances 500ms per tick; tracks elapsed time
   if (MG_OTA_STATE_GET() == MG_OTA_TESTING &&
       mg_timer_expired(&feed_timer, 500, mg_millis())) {
     if (feed_timer < (uint64_t) MG_OTA_ROLLBACK_TIMEOUT_SECONDS * 1000) {

@@ -310,8 +310,9 @@ extern "C" {
 #include <sys/types.h>
 #include <time.h>
 
-#include <esp_ota_ops.h>  // Use angle brackets to avoid
-#include <esp_timer.h>    // amalgamation ditching them
+#include <esp_ota_ops.h>   // Use angle brackets to avoid
+#include <esp_timer.h>     // amalgamation ditching them
+#include <esp_system.h>
 
 #define MG_PATH_MAX 128
 
@@ -366,6 +367,7 @@ extern "C" {
 
 #include <pico/stdlib.h>
 #include <pico/rand.h>
+#include <pico/unique_id.h>
 int mkdir(const char *, mode_t);
 
 #if MG_OTA == MG_OTA_PICOSDK
