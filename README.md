@@ -199,7 +199,7 @@ We take security seriously:
 
 ## How to report security vulnerabilities
 
-Please send an email to support@cesanta.com, with the full information.
+Please report via https://github.com/cesanta/mongoose/security/advisories.
 Do NOT create a github issue.
 
 ## Articles
