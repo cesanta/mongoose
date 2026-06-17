@@ -100,7 +100,7 @@ static uint8_t s_state = MG_PPPoE_ST_DISC;
 static uint16_t s_id;
 
 void mg_l2_ppp_init(struct mg_tcpip_if *ifp) {
-  ifp->mtu = 1500;
+  ifp->l2mtu = 1500;
   ifp->framesize = 1500 + sizeof(struct ppp) + sizeof(struct hdlc_);
 }
 
@@ -108,7 +108,7 @@ extern void mg_l2_eth_init(struct mg_tcpip_if *);
 
 void mg_l2_pppoe_init(struct mg_tcpip_if *ifp) {
   mg_l2_eth_init(ifp);
-  ifp->mtu = ifp->mtu - (uint16_t) (sizeof(struct pppoe) +
+  ifp->l2mtu = ifp->l2mtu - (uint16_t) (sizeof(struct pppoe) +
                                     sizeof(struct ppp));  // 1500 --> 1492
 }
 
@@ -277,8 +277,8 @@ static void ppp_handle_lcp(struct mg_tcpip_if *ifp, uint8_t *lcpp,
 static bool find_opt(const uint8_t opt, const uint8_t optlen,
                      const uint8_t *opts, size_t optslen, uint8_t *dest) {
   uint8_t *p = (uint8_t *) opts;
-  while (optslen >= 2) {               // parse options for requested one
-    if (p[1] > optslen) return false;  // truncated / malformed
+  while (optslen >= 2) {  // parse options for requested one
+    if (p[1] > optslen || p[1] < 2) return false;  // truncated / malformed
     if (p[0] == opt && p[1] == optlen) {
       memcpy(dest, p + 2, optlen - 2);
       return true;
@@ -299,6 +299,7 @@ static void ppp_handle_ipcp(struct mg_tcpip_if *ifp, uint8_t *ipcpp,
   if (ipcpsz < sizeof(*ipcp)) return;
   id = ipcp->id;
   len = mg_ntohs(ipcp->len);
+  if (len > ipcpsz) return;
   switch (ipcp->code) {
     case MG_PPP_IPCP_CFG_REQ:
       MG_VERBOSE(("got IPCP config request, acknowledging..."));
@@ -449,8 +450,9 @@ static bool ppp_rx(struct mg_tcpip_if *ifp, enum mg_l2proto *proto,
       size_t msglen;
       MG_DEBUG(("unknown %u-byte PPP frame with proto 0x%04x:",
                 pay->len + sizeof(*ppp), mg_ntohs(ppp->proto)));
-      if (mg_log_level >= MG_LL_DEBUG) mg_hexdump(ppp, sizeof(*ppp) + 20);
-      if (!s_lcpup) return false;  // RFC-1661 5.7: must reject on link up
+      if (mg_log_level >= MG_LL_DEBUG)
+        mg_hexdump(ppp, pay->len > 14 ? 16 : pay->len + sizeof(*ppp));
+      if (!s_lcpup) return false;  // RFC-1661 5.7: must reject on link down
       if (pay->len > (size_t) (ifp->mtu - 20))
         pay->len = (size_t) (ifp->mtu - 20);  // truncate to some safe limit
       rej.code = MG_PPP_LCP_REJECT;

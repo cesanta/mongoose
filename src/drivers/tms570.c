@@ -155,7 +155,10 @@ static size_t mg_tcpip_driver_tms570_tx(const void *buf, size_t len,
     len = 0;  // fail
   } else {
     memcpy(s_txbuf[s_txno], buf, len);     // Copy data
-    if (len < 128) len = 128;
+    if (len < 128) {
+      memset(s_txbuf[s_txno] + len, 0, 128 - len);
+      len = 128;
+    }
     s_txdesc[s_txno][2] = SWAP32((uint32_t) len);  // Set data len
     s_txdesc[s_txno][3] =
         SWAP32(MG_BIT(31) | MG_BIT(30) | MG_BIT(29) | len);  // SOP, EOP, OWN, length

@@ -1,4 +1,5 @@
 #include "arch.h"
+#include "event.h"
 #include "fs.h"
 
 #if MG_ENABLE_FATFS
@@ -69,17 +70,22 @@ static void ff_list(const char *dir, void (*fn)(const char *, void *),
 }
 
 static void *ff_open(const char *path, int flags) {
-  FIL f;
+  FIL *fp = NULL;
   unsigned char mode = FA_READ;
-  if (flags & MG_FS_WRITE) mode |= FA_WRITE | FA_OPEN_ALWAYS | FA_OPEN_APPEND;
-  if (f_open(&f, path, mode) == 0) {
-    FIL *fp;
-    if ((fp = mg_calloc(1, sizeof(*fp))) != NULL) {
-      memcpy(fp, &f, sizeof(*fp));
-      return fp;
+  if (flags & MG_FS_WRITE) {
+    mode |= FA_WRITE;
+    if (flags & MG_FS_EXCL) {
+      mode |= FA_OPEN_ALWAYS | FA_OPEN_APPEND;
+    } else {
+      mode |= FA_CREATE_NEW;
     }
   }
-  return NULL;
+  if ((fp = mg_calloc(1, sizeof(*fp))) != NULL &&
+      f_open(fp, path, mode) != FR_OK) {
+    mg_free(fp);
+    fp = NULL;
+  }
+  return fp;
 }
 
 static void ff_close(void *fp) {

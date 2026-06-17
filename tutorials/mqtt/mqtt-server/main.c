@@ -31,7 +31,7 @@ static size_t mg_mqtt_next_topic(struct mg_mqtt_message *msg,
                                  size_t pos) {
   unsigned char *buf = (unsigned char *) msg->dgram.buf + pos;
   size_t new_pos;
-  if (pos >= msg->dgram.len) return 0;
+  if (pos + 2 > msg->dgram.len) return 0;
 
   topic->len = (size_t) (((unsigned) buf[0]) << 8 | buf[1]);
   topic->buf = (char *) buf + 2;
@@ -77,7 +77,8 @@ static void fn(struct mg_connection *c, int ev, void *ev_data) {
         uint8_t qos, resp[256];
         struct mg_str topic;
         int num_topics = 0;
-        while ((pos = mg_mqtt_next_sub(mm, &topic, &qos, pos)) > 0) {
+        while (num_topics < sizeof(resp) &&
+              (pos = mg_mqtt_next_sub(mm, &topic, &qos, pos)) > 0) {
           struct sub *sub = (struct sub *)calloc(1, sizeof(*sub));
           sub->c = c;
           sub->topic = mg_strdup(topic);

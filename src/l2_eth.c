@@ -51,7 +51,7 @@ void mg_l2_eth_init(struct mg_tcpip_if *ifp) {
     MG_INFO(
         ("MAC not set. Generated random: %M", mg_print_mac, l2addr->addr.mac));
   }
-  ifp->mtu = 1500;
+  ifp->l2mtu = 1500;
   ifp->framesize = 1540;
 }
 

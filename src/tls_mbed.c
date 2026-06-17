@@ -23,9 +23,8 @@ static int mg_tls_err(struct mg_connection *c, int rc) {
 #if defined(MBEDTLS_VERSION_NUMBER) && MBEDTLS_VERSION_NUMBER >= 0x04000000
 #else
 static int mg_mbed_rng(void *ctx, unsigned char *buf, size_t len) {
-  mg_random(buf, len);
   (void) ctx;
-  return 0;
+  return mg_random(buf, len) ? 0 : -1;
 }
 #endif
 

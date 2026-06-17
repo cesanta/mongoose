@@ -112,9 +112,9 @@ void mg_getlocaddr(struct mg_connection *c, struct mg_addr *to,
   slen = tousa(to, &usa);
   if ((rc = connect(fd, &usa.sa, slen)) != 0) {
     mg_error(c, "connect: %d", MG_SOCK_ERR(rc));
-    return;
+  } else {
+    setlocaddr(fd, addr);
   }
-  setlocaddr(fd, addr);
   closesocket(fd);
 }
 

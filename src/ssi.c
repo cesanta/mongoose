@@ -21,7 +21,7 @@ static char *mg_ssi(const char *path, const char *root, int depth) {
     size_t len = 0;
     buf[0] = arg[0] = '\0';
     while ((ch = fgetc(fp)) != EOF) {
-      if (intag && ch == '>' && buf[len - 1] == '-' && buf[len - 2] == '-') {
+      if (intag && ch == '>' && len >= 2 && buf[len - 1] == '-' && buf[len - 2] == '-') {
         buf[len++] = (char) (ch & 0xff);
         buf[len] = '\0';
         if (sscanf(buf, "<!--#include file=\"%[^\"]", arg) > 0) {
@@ -29,7 +29,9 @@ static char *mg_ssi(const char *path, const char *root, int depth) {
               *p = (char *) path + strlen(path), *data;
           while (p > path && p[-1] != MG_DIRSEP && p[-1] != '/') p--;
           mg_snprintf(tmp, sizeof(tmp), "%.*s%s", (int) (p - path), path, arg);
-          if (depth < MG_MAX_SSI_DEPTH &&
+          if (!mg_path_is_sane(mg_str(tmp))) {
+            MG_ERROR(("SSI include path traversal blocked: %s", arg));
+          } else if (depth < MG_MAX_SSI_DEPTH &&
               (data = mg_ssi(tmp, root, depth + 1)) != NULL) {
             size_t datalen = strlen(data);
             size_t ret = mg_iobuf_add(&b, b.len, data, datalen);
@@ -41,7 +43,9 @@ static char *mg_ssi(const char *path, const char *root, int depth) {
         } else if (sscanf(buf, "<!--#include virtual=\"%[^\"]", arg) > 0) {
           char tmp[MG_PATH_MAX + MG_SSI_BUFSIZ + 10], *data;
           mg_snprintf(tmp, sizeof(tmp), "%s%s", root, arg);
-          if (depth < MG_MAX_SSI_DEPTH &&
+          if (!mg_path_is_sane(mg_str(tmp))) {
+            MG_ERROR(("SSI include path traversal blocked: %s", arg));
+          } else if (depth < MG_MAX_SSI_DEPTH &&
               (data = mg_ssi(tmp, root, depth + 1)) != NULL) {
             size_t datalen = strlen(data);
             size_t ret = mg_iobuf_add(&b, b.len, data, datalen);
@@ -89,6 +93,7 @@ static char *mg_ssi(const char *path, const char *root, int depth) {
 
 fail:
   fclose(fp);
+  mg_iobuf_free(&b);
   return NULL;
 }
 

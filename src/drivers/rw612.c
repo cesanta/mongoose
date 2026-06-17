@@ -182,11 +182,11 @@ void ENET_IRQHandler(void) {
             (MG_BIT(21) | MG_BIT(20) | MG_BIT(18) | MG_BIT(17) | MG_BIT(16)))) {
         size_t len = s_rxdesc[s_rxno][0] & 0xffff;
         mg_tcpip_qwrite(s_rxbuf[s_rxno], len, s_ifp);
-        s_rxdesc[s_rxno][0] |= MG_BIT(31);  // OWN bit: handle control to DMA
-        MG_DSB();
-        ENET->RDAR = 0;
-        if (++s_rxno >= ETH_DESC_CNT) s_rxno = 0;
       }
+      s_rxdesc[s_rxno][0] |= MG_BIT(31);  // OWN bit: handle control to DMA
+      MG_DSB();
+      ENET->RDAR = 0;
+      if (++s_rxno >= ETH_DESC_CNT) s_rxno = 0;
     }
   }
 }

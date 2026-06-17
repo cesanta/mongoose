@@ -4,7 +4,7 @@
 #include "config.h"
 
 // Flags returned by mg_fs.st() and passed to mg_fs.open().
-enum { MG_FS_READ = 1, MG_FS_WRITE = 2, MG_FS_DIR = 4 };
+enum { MG_FS_READ = 1, MG_FS_WRITE = 2, MG_FS_DIR = 4, MG_FS_EXCL = 8 };
 
 // Filesystem abstraction. Implement all function pointers to plug in a custom
 // filesystem. Short UNIX-style names are used deliberately to avoid conflicts

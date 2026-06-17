@@ -12,9 +12,12 @@ subjectAltName=DNS:localhost
 EOF
 
 # Generate CA
-# Important: CN names must be different for CA and client/server certs
+# Important: CN names must be different for CA and client/server certs;
+# extensions are required for a proper CA certificate
 openssl ecparam -noout -name prime256v1 -genkey -out ca.key
-openssl req -x509 -new -key ca.key -days 3650 -subj /CN=Mongoose -out ca.crt
+openssl req -x509 -new -key ca.key -days 3650 -subj /CN=Mongoose \
+  -addext "basicConstraints=critical,CA:TRUE" \
+  -addext "keyUsage=critical,keyCertSign,cRLSign" -out ca.crt
 
 # Generate server cert
 openssl ecparam -noout -name prime256v1 -genkey -out server.key

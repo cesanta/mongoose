@@ -12,6 +12,10 @@
 
 #if MG_TLS == MG_TLS_BUILTIN
 
+#ifndef MG_MAX_TLSOID_DEPTH
+#define MG_MAX_TLSOID_DEPTH 15
+#endif
+
 // PKCS#8 algorithm OIDs
 static const uint8_t mg_rsa_oid[] = {
     0x2a, 0x86, 0x48, 0x86, 0xf7,
@@ -136,25 +140,25 @@ struct tls_data {
 #include <stdio.h>
 static void mg_ssl_key_log(const char *label, uint8_t client_random[32],
                            uint8_t *secret, size_t secretsz) {
+  FILE *f;
   char *keylogfile = getenv("SSLKEYLOGFILE");
-  size_t i;
-  if (keylogfile != NULL) {
-    MG_DEBUG(("Dumping key log into %s", keylogfile));
-    FILE *f = fopen(keylogfile, "a");
-    if (f != NULL) {
-      fprintf(f, "%s ", label);
-      for (i = 0; i < 32; i++) {
-        fprintf(f, "%02x", client_random[i]);
-      }
-      fprintf(f, " ");
-      for (i = 0; i < secretsz; i++) {
-        fprintf(f, "%02x", secret[i]);
-      }
-      fprintf(f, "\n");
-      fclose(f);
-    } else {
-      MG_ERROR(("Cannot open %s", keylogfile));
+  if (keylogfile == NULL) return;
+  MG_DEBUG(("Dumping key log into %s", keylogfile));
+  f = fopen(keylogfile, "a");
+  if (f != NULL) {
+    size_t i;
+    fprintf(f, "%s ", label);
+    for (i = 0; i < 32; i++) {
+      fprintf(f, "%02x", client_random[i]);
     }
+    fprintf(f, " ");
+    for (i = 0; i < secretsz; i++) {
+      fprintf(f, "%02x", secret[i]);
+    }
+    fprintf(f, "\n");
+    fclose(f);
+  } else {
+    MG_ERROR(("Cannot open %s", keylogfile));
   }
 }
 #endif
@@ -178,24 +182,34 @@ struct mg_der_tlv {
   uint8_t *value;
 };
 
-static int mg_der_parse(uint8_t *der, size_t dersz, struct mg_der_tlv *tlv) {
-  size_t header_len = 2;
-  uint32_t len = dersz < 2 ? 0 : der[1];
-  if (dersz < 2) return -1;  // Invalid DER
+// parse DER into a TLV record
+static int mg_der_to_tlv(uint8_t *der, size_t dersz, struct mg_der_tlv *tlv) {
+  uint32_t n = 0;
+  if (dersz < 2) return -1;
   tlv->type = der[0];
-  if (len > 0x7F) {  // long-form length
-    uint8_t len_bytes = len & 0x7F, i;
-    if (dersz < (size_t) (2 + len_bytes)) return -1;
-    len = 0;
-    for (i = 0; i < len_bytes; i++) {
-      len = (len << 8) | der[2 + i];
+  tlv->len = der[1];
+  tlv->value = der + 2;
+  if (tlv->len > 0x7f) {  // long-form length
+    uint32_t i;
+    n = tlv->len - 0x80;
+    if (n > 4 || dersz < (2 + n)) return -1;
+    tlv->len = 0;
+    for (i = 0; i < n; i++) {
+      tlv->len = (tlv->len << 8) | der[2 + i];
     }
-    header_len += len_bytes;
+    if (n > (dersz - 2)) return -1;
+    tlv->value += n;
+  } else {
+    if (der + dersz < tlv->value + tlv->len) return -1;
   }
-  if (dersz < header_len + len) return -1;
-  tlv->len = len;
-  tlv->value = der + header_len;
-  return (int) (header_len + len);
+  return (int) n;
+}
+
+static int mg_der_parse(uint8_t *der, size_t dersz, struct mg_der_tlv *tlv) {
+  int n = mg_der_to_tlv(der, dersz, tlv);
+  if (n < 0) return -1;
+  if (tlv->len >= (uint32_t)((unsigned) -6)) return -1; // avoid overflow
+  return 2 + n + (int) tlv->len; // 2: type, len; n = long form len bytes
 }
 
 static int mg_der_next(struct mg_der_tlv *parent, struct mg_der_tlv *child) {
@@ -208,20 +222,32 @@ static int mg_der_next(struct mg_der_tlv *parent, struct mg_der_tlv *child) {
   return 1;
 }
 
-static int mg_der_find_oid(struct mg_der_tlv *tlv, const uint8_t *oid,
-                           size_t oid_len, struct mg_der_tlv *found) {
+static int der_find_oid(struct mg_der_tlv *tlv, const uint8_t *oid, size_t oid_len, struct mg_der_tlv *found, int depth) {
   struct mg_der_tlv parent, child;
+  int r;
   parent = *tlv;
-  while (mg_der_next(&parent, &child) > 0) {
+  while ((r = mg_der_next(&parent, &child)) > 0) {
     if (child.type == 0x06 && child.len == oid_len &&
         memcmp(child.value, oid, oid_len) == 0) {
       return mg_der_next(&parent, found);
     } else if (child.type & 0x20) {
       struct mg_der_tlv sub_parent = child;
-      if (mg_der_find_oid(&sub_parent, oid, oid_len, found)) return 1;
+      if (depth >= MG_MAX_TLSOID_DEPTH) {
+        MG_ERROR(("too nested der"));
+        return -1;
+      }
+      if ((r = der_find_oid(&sub_parent, oid, oid_len, found, depth + 1)) > 0)
+        return 1;
+      if (r < 0) return -1; // exit on error; r = 0 => not found, keep parsing
     }
   }
+  if (r < 0) return -1;
   return 0;
+}
+
+static int mg_der_find_oid(struct mg_der_tlv *tlv, const uint8_t *oid,
+                           size_t oid_len, struct mg_der_tlv *found) {
+  return der_find_oid(tlv, oid, oid_len, found, 0);
 }
 
 #if 0
@@ -238,28 +264,6 @@ static void mg_der_debug(struct mg_der_tlv *tlv, int depth) {
   }
 }
 #endif
-
-// parse DER into a TLV record
-static int mg_der_to_tlv(uint8_t *der, size_t dersz, struct mg_der_tlv *tlv) {
-  if (dersz < 2) {
-    return -1;
-  }
-  tlv->type = der[0];
-  tlv->len = der[1];
-  tlv->value = der + 2;
-  if (tlv->len > 0x7f) {
-    uint32_t i, n = tlv->len - 0x80;
-    tlv->len = 0;
-    for (i = 0; i < n; i++) {
-      tlv->len = (tlv->len << 8) | (der[2 + i]);
-    }
-    tlv->value = der + 2 + n;
-  }
-  if (der + dersz < tlv->value + tlv->len) {
-    return -1;
-  }
-  return 0;
-}
 
 // Did we receive a full TLS record in the c->rtls buffer?
 static bool mg_tls_got_record(struct mg_connection *c) {
@@ -667,12 +671,15 @@ static int mg_tls_server_recv_hello(struct mg_connection *c) {
   // store session_id
   session_id_len = rio->buf[43];
   if (session_id_len == sizeof(tls->session_id)) {
+    if (rio->len < (size_t)(46 + session_id_len)) goto fail; // 2: ciphers len
     memmove(tls->session_id, rio->buf + 44, session_id_len);
   } else if (session_id_len != 0) {
-    MG_INFO(("bad session id len"));
-  }
+    MG_ERROR(("bad session id len"));
+    goto fail;
+  } // session_id_len is either sizeof(tls->session_id) or 0
+  if (((uint32_t) 44 + 2 + session_id_len) > rio->len) goto fail;
   cipher_suites_len = MG_LOAD_BE16(rio->buf + 44 + session_id_len);
-  if (((uint32_t) cipher_suites_len + 46 + session_id_len) > rio->len)
+  if (((uint32_t) cipher_suites_len + 46 + 2 + 2 + session_id_len) > rio->len)
     goto fail;
   ext_len = MG_LOAD_BE16(rio->buf + 48 + session_id_len + cipher_suites_len);
   ext = rio->buf + 50 + session_id_len + cipher_suites_len;
@@ -689,8 +696,7 @@ static int mg_tls_server_recv_hello(struct mg_connection *c) {
     }
     key_exchange_len = MG_LOAD_BE16(ext + j + 4);
     key_exchange = ext + j + 6;
-    if (((size_t) key_exchange_len +
-         ((size_t) key_exchange - (size_t) rio->buf)) > rio->len)
+    if ((key_exchange + key_exchange_len) > ((uint8_t *) rio->buf + rio->len))
       goto fail;
     for (k = 0; k < key_exchange_len;) {
       uint16_t m = MG_LOAD_BE16(key_exchange + k + 2);
@@ -745,8 +751,10 @@ static bool mg_tls_server_send_hello(struct mg_connection *c) {
   uint8_t x25519_pub[X25519_BYTES];
   uint8_t x25519_prv[X25519_BYTES];
   if (!mg_random(x25519_prv, sizeof(x25519_prv))) mg_error(c, "RNG");
-  mg_tls_x25519(x25519_pub, x25519_prv, X25519_BASE_POINT, 1);
-  mg_tls_x25519(tls->x25519_sec, x25519_prv, tls->x25519_cli, 1);
+  if( mg_tls_x25519(x25519_pub, x25519_prv, X25519_BASE_POINT, 1) < 0 || mg_tls_x25519(tls->x25519_sec, x25519_prv, tls->x25519_cli, 1) < 0) {
+    mg_error(c, "bad key");
+    return false;
+  }
   mg_tls_hexdump("s x25519 sec", tls->x25519_sec, sizeof(tls->x25519_sec));
 
   // fill in the gaps: random + session ID + keyshare
@@ -1298,17 +1306,18 @@ static int mg_tls_client_recv_hello(struct mg_connection *c) {
   if (!mg_tls_got_record(c)) {
     return MG_IO_WAIT;
   }
-  if (rio->buf[0] != MG_TLS_HANDSHAKE || rio->buf[5] != MG_TLS_SERVER_HELLO) {
+  if (rio->buf[0] != MG_TLS_HANDSHAKE || rio->len < 6 || rio->buf[5] != MG_TLS_SERVER_HELLO) {
     if (rio->buf[0] == MG_TLS_ALERT && rio->len >= 7) {
       verbose_alert(&rio->buf[5]);
       mg_error(c, "TLS error alert");
       return -1;
     }
-    MG_INFO(("got packet type 0x%02x/0x%02x", rio->buf[0], rio->buf[5]));
+    if (rio->len >= 6) MG_ERROR(("got packet type 0x%02x/0x%02x", rio->buf[0], rio->buf[5]));
     mg_error(c, "not a server hello packet");
     return -1;
   }
 
+  if (rio->len < 5 + 39 + 32 + 3 + 2) goto fail;
   msgsz = MG_LOAD_BE16(rio->buf + 3);
   mg_sha256_update(&tls->sha256, rio->buf + 5, msgsz);
 
@@ -1317,16 +1326,17 @@ static int mg_tls_client_recv_hello(struct mg_connection *c) {
   if (ext_len > (rio->len - (5 + 39 + 32 + 3 + 2))) goto fail;
 
   for (j = 0; j < ext_len;) {
-    uint16_t ext_type = MG_LOAD_BE16(ext + j);
-    uint16_t ext_len2 = MG_LOAD_BE16(ext + j + 2);
-    uint16_t group;
+    uint16_t ext_type, ext_len2, group, key_exchange_len;
     uint8_t *key_exchange;
-    uint16_t key_exchange_len;
+    if ((ext_len - j) < 4) goto fail;
+    ext_type = MG_LOAD_BE16(ext + j);
+    ext_len2 = MG_LOAD_BE16(ext + j + 2);
     if (ext_len2 > (ext_len - j - 4)) goto fail;
     if (ext_type != 0x0033) {  // not a key share extension, ignore
       j += (uint16_t) (ext_len2 + 4);
       continue;
     }
+    if (ext_len2 < (2 + 2 + 32)) goto fail;
     group = MG_LOAD_BE16(ext + j + 4);
     if (group != 0x001d) {
       mg_error(c, "bad key exchange group");
@@ -1334,11 +1344,10 @@ static int mg_tls_client_recv_hello(struct mg_connection *c) {
     }
     key_exchange_len = MG_LOAD_BE16(ext + j + 6);
     key_exchange = ext + j + 8;
-    if (key_exchange_len != 32) {
-      mg_error(c, "bad key exchange length");
+    if (key_exchange_len != 32 || mg_tls_x25519(tls->x25519_sec, tls->x25519_cli, key_exchange, 1) < 0) {
+      mg_error(c, "bad key");
       return -1;
-    }
-    mg_tls_x25519(tls->x25519_sec, tls->x25519_cli, key_exchange, 1);
+    }    
     mg_tls_hexdump("c x25519 sec", tls->x25519_sec, 32);
     mg_tls_drop_record(c);
     /* generate handshake keys */
@@ -1367,6 +1376,7 @@ static int mg_tls_client_recv_ext(struct mg_connection *c) {
 
 struct mg_tls_cert {
   bool is_ec_pubkey;
+  bool is_ca;
   struct mg_str sn;
   struct mg_str pubkey;
   struct mg_der_tlv issuer;
@@ -1381,16 +1391,39 @@ static void mg_der_debug_cert_name(const char *name, struct mg_der_tlv *tlv) {
   struct mg_str cn, c, o, ou;
   if (mg_log_level < MG_LL_VERBOSE) return; // skip recursive computations
   cn = c = o = ou = mg_str("");
-  if (mg_der_find_oid(tlv, (uint8_t *) "\x55\x04\x03", 3, &v))
+  if (mg_der_find_oid(tlv, (uint8_t *) "\x55\x04\x03", 3, &v) > 0)
     cn = mg_str_n((const char *) v.value, v.len);
-  if (mg_der_find_oid(tlv, (uint8_t *) "\x55\x04\x06", 3, &v))
+  if (mg_der_find_oid(tlv, (uint8_t *) "\x55\x04\x06", 3, &v) > 0)
     c = mg_str_n((const char *) v.value, v.len);
-  if (mg_der_find_oid(tlv, (uint8_t *) "\x55\x04\x0a", 3, &v))
+  if (mg_der_find_oid(tlv, (uint8_t *) "\x55\x04\x0a", 3, &v) > 0)
     o = mg_str_n((const char *) v.value, v.len);
-  if (mg_der_find_oid(tlv, (uint8_t *) "\x55\x04\x0b", 3, &v))
+  if (mg_der_find_oid(tlv, (uint8_t *) "\x55\x04\x0b", 3, &v) > 0)
     ou = mg_str_n((const char *) v.value, v.len);
   MG_VERBOSE(("%s: CN=%.*s, C=%.*s, O=%.*s, OU=%.*s", name, cn.len, cn.buf,
               c.len, c.buf, o.len, o.buf, ou.len, ou.buf));
+}
+
+static uint64_t asnt2t(uint8_t *v, uint8_t type) {
+  unsigned int y, mo, d, h, mi, ss, ly;
+  uint16_t dm[12] = {0, 31, 59, 90, 120, 151, 181, 212, 243, 273, 304, 334};
+  y = 10U * (*v++ - '0'), y += (*v++ - '0');
+  if (type == 0x17) {       // UTCTime, RFC-5280 4.1.2.5.1 YYMMDDHHMMSSZ
+    if (y >= 50) return (uint64_t) 0;  // 19YY is in the past
+    y += 2000;
+  } else {  // GeneralizedTime, RFC-5280 4.1.2.5.2 YYYYMMDDHHMMSSZ
+    y *= 100U, y += 10U * (*v++ - '0'), y += (*v++ - '0');
+  }
+  y -= 1900;
+  mo = 10U * (*v++ - '0'), mo += (*v++ - '0');
+  d = 10U * (*v++ - '0'), d += (*v++ - '0');
+  h = 10U * (*v++ - '0'), h += (*v++ - '0');
+  mi = 10U * (*v++ - '0'), mi += (*v++ - '0');
+  ss = 10U * (*v++ - '0'), ss += (*v++ - '0');
+  if (*v != 'Z') return 0; // invalid
+  ly = (mo > 2) ? y + 1 : y;
+  return (uint64_t) ss + 60U * mi + 3600U * h + 86400U * (dm[mo - 1] + d - 1) +
+         31536000U * (y - 70) + 86400U * ((ly - 69) / 4U) -
+         86400U * ((ly - 1) / 100U) + 86400U * ((ly + 299) / 400U);
 }
 
 static int mg_tls_parse_cert_der(void *buf, size_t dersz,
@@ -1464,14 +1497,21 @@ static int mg_tls_parse_cert_der(void *buf, size_t dersz,
 
   // validity dates (before/after)
   if (mg_der_next(&tbs_cert, &field) <= 0 || field.type != 0x30) return -1;
-  if (1) {
+  {
     struct mg_der_tlv before, after;
-    mg_der_next(&field, &before);
-    mg_der_next(&field, &after);
-    if (after.len == 13 && memcmp(after.value, "250101000000Z", 13) < 0) {
-      MG_ERROR(("invalid validity dates: before=%M after=%M", mg_print_hex,
-                before.len, before.value, mg_print_hex, after.len,
-                after.value));
+    uint64_t now = mg_now() / 1000U, t;
+    if (mg_der_next(&field, &before) <= 0 || ((before.type != 0x17 || before.len != 13) && (before.type != 0x18 || before.len != 15))) return -1;
+    if (now < (t = asnt2t(before.value, before.type))) {
+      MG_ERROR(("cert is not yet valid: before=%.*s (%lu), now=%lu", before.len, before.value, t, now));
+      return -1;
+    }
+    if (mg_der_next(&field, &after) <= 0 || ((after.type != 0x17 || after.len != 13) && (after.type != 0x18 || after.len != 15))) return -1;
+    if (memcmp(after.value, "99991231235959Z", 15) == 0) { // RFC-5280 4.1.2.5
+      MG_ERROR(("No well-defined expiration date"));
+      return -1;
+    }
+    if (now > (t = asnt2t(after.value, after.type))) {
+      MG_ERROR(("cert is no longer valid: after=%.*s (%lu), now=%lu", after.len, after.value, t, now));
       return -1;
     }
   }
@@ -1520,11 +1560,47 @@ static int mg_tls_parse_cert_der(void *buf, size_t dersz,
   if (mg_der_next(&field, &pki_key) <= 0 || pki_key.type != 0x03) return -1;
 
   if (cert->is_ec_pubkey) {  // Skip leading 0x00 and 0x04 (=uncompressed)
+    if (pki_key.len < 2) return -1;
     cert->pubkey = mg_str_n((char *) pki_key.value + 2, pki_key.len - 2);
   } else {  // Skip leading 0x00 byte
+    if (pki_key.len < 1) return -1;
     cert->pubkey = mg_str_n((char *) pki_key.value + 1, pki_key.len - 1);
   }
 
+  { // parse optional fields
+    int r; // unique ids
+    while ((r = mg_der_next(&tbs_cert, &field)) > 0 && field.type == 0xa1);
+    if (r > 0 && field.type == 0xa3) { // extensions
+      bool ca = false, certsign = true;
+      struct mg_der_tlv ext, e, i;  // ext[e(i, ...), ...]
+      if (mg_der_next(&field, &ext) <= 0 || ext.type != 0x30) return -1;
+      while (mg_der_next(&ext, &e) > 0) {
+        if (mg_der_next(&e, &i) <= 0 || i.type != 0x06) return -1;
+        if (i.len == 3 && memcmp(i.value, (uint8_t *) "\x55\x1d\x13", 3) == 0) {
+          struct mg_der_tlv s, v; // basicConstraints
+          MG_VERBOSE(("basicConstraints"));
+          if (mg_der_next(&e, &i) <= 0 || i.type != 0x01 || i.len != 1 || *i.value != 0xff) return -1;
+          if (mg_der_next(&e, &i) <= 0 || i.type != 0x04) return -1;
+          if (mg_der_next(&i, &s) <= 0 || s.type != 0x30) return -1;
+          if (s.len == 0) break;
+          if (mg_der_next(&s, &v) <= 0) return -1;
+          if (v.type == 0x01 && v.len == 1 && *v.value == 0xff) ca = true;
+        } else if (i.len == 3 && memcmp(i.value, (uint8_t *) "\x55\x1d\x0f", 3) == 0) {
+          struct mg_der_tlv b; // keyUsage, enforce when present
+          MG_VERBOSE(("keyUsage"));
+          if (mg_der_next(&e, &i) <= 0) return -1;
+          if (i.type == 0x01) { // SHOULD, defaults to false
+            if (i.len != 1) return -1;
+            if (mg_der_next(&e, &i) <= 0) return -1;
+          }
+          if (i.type != 0x04) return -1;
+          if (mg_der_next(&i, &b) <= 0 || b.type != 0x03) return -1;
+          if (!(b.value[1] & MG_BIT(2))) certsign = false;
+        }
+      }
+      if (ca && certsign) cert->is_ca = true;
+    }
+  }
   // Parse signature
   if (mg_der_next(&root, &field) <= 0 || field.type != 0x30) return -1;
   if (mg_der_next(&root, &raw_sig) <= 0 || raw_sig.type != 0x03) return -1;
@@ -1534,6 +1610,16 @@ static int mg_tls_parse_cert_der(void *buf, size_t dersz,
   MG_VERBOSE(("sig: %M", mg_print_hex, cert->sig.len, cert->sig.buf));
 
   return 0;
+}
+
+static int countdots(struct mg_str s) {
+  int count = 0;
+  size_t len = s.len;
+  char *p = s.buf;
+  while (len--) {
+    if (*(p++) == '.') ++count;
+  }    
+  return count;
 }
 
 static int mg_tls_verify_cert_san(const uint8_t *der, size_t dersz,
@@ -1565,9 +1651,10 @@ static int mg_tls_verify_cert_san(const uint8_t *der, size_t dersz,
         return 1;  // and matches the one we're connected to
 #endif
     } else {  // this is a text SAN
+      struct mg_str sn, tn;
       MG_VERBOSE(("Found SAN, (%u): %.*s", name.type, name.len, name.value));
-      if (mg_match(mg_str(server_name), mg_str_n((char *) name.value, name.len),
-                   NULL))
+      sn = mg_str(server_name), tn = mg_str_n((char *) name.value, name.len);
+      if (countdots(sn) == countdots(tn) && mg_match(sn, tn, NULL))
         return 1;  // and matches the host name
     }
   }
@@ -1589,10 +1676,12 @@ static int mg_tls_verify_cert_signature(const struct mg_tls_cert *cert,
 #if MG_UECC_SUPPORTS_secp256r1
     if (issuer->pubkey.len == 64) {
       const uint32_t N = 32;
-      if (a.len > N) a.value += (a.len - N), a.len = N;
+      if (a.len > N) a.value += (a.len - N), a.len = N; // padding
       if (b.len > N) b.value += (b.len - N), b.len = N;
-      memmove(sig, a.value, N);
-      memmove(sig + N, b.value, N);
+      memset(sig, 0, N - a.len); // short encoding
+      memmove(sig + (N - a.len), a.value, a.len);
+      memset(sig + N, 0, N - b.len);
+      memmove(sig + N + (N - b.len), b.value, b.len);
       return mg_uecc_verify((uint8_t *) issuer->pubkey.buf, cert->tbshash,
                             (unsigned) cert->tbshashsz, sig,
                             mg_uecc_secp256r1());
@@ -1615,7 +1704,7 @@ static int mg_tls_verify_cert_signature(const struct mg_tls_cert *cert,
       return 0;
     }
   } else {
-    int r;
+    uint8_t r;
     const uint8_t *n;
     size_t nlen;
     uint8_t sig2[512];  // 4096 bits
@@ -1623,7 +1712,8 @@ static int mg_tls_verify_cert_signature(const struct mg_tls_cert *cert,
     if (mg_der_parse((uint8_t *) issuer->pubkey.buf, issuer->pubkey.len,
                      &seq) <= 0 ||
         mg_der_next(&seq, &modulus) <= 0 || modulus.type != 2 ||
-        mg_der_next(&seq, &exponent) <= 0 || exponent.type != 2) {
+        modulus.len == 0 || mg_der_next(&seq, &exponent) <= 0 ||
+        exponent.type != 2 || exponent.len == 0) {
       return -1;
     }
     n = modulus.value, nlen = mg_rsa_trim_len(&n, modulus.len);
@@ -1634,7 +1724,14 @@ static int mg_tls_verify_cert_signature(const struct mg_tls_cert *cert,
       return 0;
     }
 
-    r = memcmp(sig2 + nlen - cert->tbshashsz, cert->tbshash, cert->tbshashsz);
+    r = 0;
+    {
+      const uint8_t *p, *q;
+      size_t i;
+      p = sig2 + nlen - cert->tbshashsz;
+      q = cert->tbshash;
+      for (i = 0; i < cert->tbshashsz; i++) r |= (uint8_t)(*p++ ^ *q++);
+    }
     return r == 0;
   }
 }
@@ -1643,8 +1740,10 @@ static int mg_tls_verify_cert_cn(struct mg_der_tlv *subj, const char *host) {
   struct mg_der_tlv v;
   int matched = 0;
   if (mg_der_find_oid(subj, (uint8_t *) "\x55\x04\x03", 3, &v) > 0) {
+    struct mg_str hn, cn;
     MG_VERBOSE(("using CN: %.*s <-> %s", v.len, v.value, host));
-    matched = mg_match(mg_str(host), mg_str_n((char *) v.value, v.len), NULL);
+    hn = mg_str(host), cn = mg_str_n((char *) v.value, v.len);
+    matched = (int) (countdots(hn) == countdots(cn) && mg_match(hn, cn, NULL));
   }
   return matched;
 }
@@ -1693,7 +1792,7 @@ static int mg_tls_recv_cert(struct mg_connection *c, bool is_client) {
     return -1;
   }
 
-  if (tls->recv_len < 11) {
+  if (tls->recv_len < 13) { // 8 + 3 + 2, chain len + cert len + ext len
     mg_error(c, "certificate list too short");
     return -1;
   }
@@ -1705,14 +1804,13 @@ static int mg_tls_recv_cert(struct mg_connection *c, bool is_client) {
     uint32_t full_cert_chain_len = MG_LOAD_BE24(recv_buf + 1);
     uint32_t cert_chain_len = MG_LOAD_BE24(recv_buf + 5);
     uint8_t *p = recv_buf + 8;
-    uint8_t *endp = recv_buf + cert_chain_len;
+    uint8_t *endp = recv_buf + cert_chain_len + 8;
     bool found_ca = false;
     struct mg_tls_cert ca;
 
-    if (cert_chain_len != full_cert_chain_len - 4) {
-      MG_ERROR(("full chain length: %d, chain length: %d", full_cert_chain_len,
-                cert_chain_len));
-      mg_error(c, "certificate chain length mismatch");
+    if (cert_chain_len != full_cert_chain_len - 4 || cert_chain_len > (tls->recv_len - 8)) {
+      MG_ERROR(("full chain length: %d, chain length: %d, msg length: %d", full_cert_chain_len, cert_chain_len, tls->recv_len));
+      mg_error(c, "invalid certificate chain length");
       return -1;
     }
 
@@ -1729,14 +1827,25 @@ static int mg_tls_recv_cert(struct mg_connection *c, bool is_client) {
 
     while (p < endp) {
       struct mg_tls_cert *ci = &certs[certnum++];
-      uint32_t certsz = MG_LOAD_BE24(p);
+      uint32_t certsz;
+      uint16_t certext;
       uint8_t *cert = p + 3;
-      uint16_t certext = MG_LOAD_BE16(cert + certsz);
+
+      if ((endp - p) < 5) { // 3 + 2, cert len + ext len fields
+        mg_error(c, "truncated certificate in chain");
+        return -1;
+      }
+      certsz = MG_LOAD_BE24(p);
+      p = cert + certsz + 2; // skip cert extensions (size only, not supported)
+      if (p > endp) {
+        mg_error(c, "invalid certificate length");
+        return -1;
+      }
+      certext = MG_LOAD_BE16(cert + certsz);
       if (certext != 0) {
         mg_error(c, "certificate extensions are not supported");
         return -1;
       }
-      p = cert + certsz + 2;
 
       if (mg_tls_parse_cert_der(cert, certsz, ci) < 0) {
         mg_error(c, "failed to parse certificate");
@@ -1759,8 +1868,8 @@ static int mg_tls_recv_cert(struct mg_connection *c, bool is_client) {
         memmove(tls->pubkey, ci->pubkey.buf, ci->pubkey.len);
         tls->pubkeysz = ci->pubkey.len;
       } else {
-        if (!mg_tls_verify_cert_signature(ci - 1, ci)) {
-          mg_error(c, "failed to verify certificate chain");
+        if (!ci->is_ca || !mg_tls_verify_cert_signature(ci - 1, ci)) {
+          mg_error(c, "failed to verify certificate chain %s", ci->is_ca ? "" : "(not a true CA)");
           return -1;
         }
       }
@@ -1856,7 +1965,8 @@ static int mg_tls_recv_cert_verify(struct mg_connection *c) {
 
       if (mg_der_parse(tls->pubkey, tls->pubkeysz, &seq) <= 0 ||
           mg_der_next(&seq, &modulus) <= 0 || modulus.type != 2 ||
-          mg_der_next(&seq, &exponent) <= 0 || exponent.type != 2) {
+          modulus.len == 0 || mg_der_next(&seq, &exponent) <= 0 ||
+          exponent.type != 2 || exponent.len == 0) {
         mg_error(c, "invalid public key");
         return -1;
       }
@@ -1864,12 +1974,8 @@ static int mg_tls_recv_cert_verify(struct mg_connection *c) {
       n = modulus.value, nlen = mg_rsa_trim_len(&n, modulus.len);
       if (nlen > sizeof(sig2) ||
           mg_rsa_mod_pow(modulus.value, modulus.len, exponent.value,
-                         exponent.len, sigbuf, siglen, sig2, nlen) != 0) {
-        mg_error(c, "failed to verify RSA certificate (certverify)");
-        return -1;
-      }
-
-      if (sig2[nlen - 1] != 0xbc) {
+                         exponent.len, sigbuf, siglen, sig2, nlen) != 0 ||
+          !mg_rsa_verify(sig2, nlen, tls->sighash)) {
         mg_error(c, "failed to verify RSA certificate (certverify)");
         return -1;
       }
@@ -2188,13 +2294,6 @@ static int mg_rsa_parse_key(const uint8_t *der, size_t dersz,
   struct mg_str version;
 
   memset(key, 0, sizeof(*key));
-
-  // Debug: show first few bytes
-  MG_VERBOSE(
-      ("RSA key DER first 16 bytes: %02x %02x %02x %02x %02x %02x %02x %02x "
-       "%02x %02x %02x %02x %02x %02x %02x %02x",
-       der[0], der[1], der[2], der[3], der[4], der[5], der[6], der[7], der[8],
-       der[9], der[10], der[11], der[12], der[13], der[14], der[15]));
 
   // Parse outer SEQUENCE
   if (end - p < 2) {
@@ -2559,26 +2658,20 @@ void mg_tls_init(struct mg_connection *c, const struct mg_tls_opts *opts) {
   }
 
   if (mg_parse_pem(opts->key, mg_str_s("EC PRIVATE KEY"), &key) == 0) {
-    if (key.len < 39) {
-      MG_ERROR(("EC private key too short"));
-      return;
-    }
     // expect ASN.1 SEQUENCE=[INTEGER=1, BITSTRING of 32 bytes, ...]
     // 30 nn 02 01 01 04 20 [key] ...
-    if (key.buf[0] != 0x30 || (key.buf[1] & 0x80) != 0) {
-      MG_ERROR(("EC private key: ASN.1 bad sequence"));
-      return;
+    if (key.len < (2 + 5 + 32) || key.buf[0] != 0x30 ||
+        (key.buf[1] & 0x80) != 0 ||
+        memcmp(key.buf + 2, "\x02\x01\x01\x04\x20", 5) != 0) {
+      mg_error(c, "EC private key: invalid ASN.1");
+    } else {
+      memmove(tls->ec_key, key.buf + 7, 32);
     }
-    if (memcmp(key.buf + 2, "\x02\x01\x01\x04\x20", 5) != 0) {
-      MG_ERROR(("EC private key: ASN.1 bad data"));
-    }
-    memmove(tls->ec_key, key.buf + 7, 32);
     mg_free((void *) key.buf);
   } else if (mg_parse_pem(opts->key, mg_str_s("RSA PRIVATE KEY"), &key) == 0) {
     struct mg_rsa_key rsa_key;
     // RSA private key found, store it for later use
     tls->rsa_key_der = key;
-    MG_INFO(("Parsed RSA private key: %d bytes", (int) key.len));
 
     // parse and validate the key structure
     // we keep the DER buffer, rsa_key just points into it

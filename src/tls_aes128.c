@@ -1009,6 +1009,7 @@ int gcm_finish(gcm_context *ctx,    // pointer to user-provided GCM context
   uint64_t orig_add_len = ctx->add_len * 8;
   size_t i;
 
+  if (tag_len > sizeof(work_buf)) return -1;
   if (tag_len != 0) memcpy(tag, ctx->base_ectr, tag_len);
 
   if (orig_len || orig_add_len) {
