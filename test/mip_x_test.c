@@ -505,10 +505,52 @@ static void test_tls(struct mg_mgr *mgr) {
 #endif
 }
 
+#if MG_TLS
+static bool unixms(void) {
+  bool res = false;
+#if MG_ARCH == MG_ARCH_UNIX
+  struct timeval tv = {0, 0};
+  gettimeofday(&tv, 0);
+  mg_boot_timestamp_ms = (uint64_t)((int64_t) tv.tv_sec * 1000 + tv.tv_usec / 1000);
+  res = true;
+#endif
+  return res;
+}
+
+static void sntpcb(struct mg_connection *c, int ev, void *ev_data) {
+  if (ev == MG_EV_SNTP_TIME) *(int64_t *) c->fn_data = *(int64_t *) ev_data;
+}
+
+static bool sntpms(struct mg_mgr *mgr, const char *url) {
+  int64_t ms = 0;
+  int i;
+  mg_sntp_connect(mgr, url, sntpcb, &ms);
+  for (i = 0; i < 50 && ms == 0; i++) {
+    mg_mgr_poll(mgr, 0);
+    usleep(10000);  // 10 ms. Slow down poll loop to ensure packet transit
+  }
+  return ms > 0;
+}
+
+static void gettimefortls(struct mg_mgr *mgr) {
+  // NOTE(): historical NTP port blockage issue; expect at least one to be
+  // reachable and work. https://github.com/actions/runner-images/issues/5615
+  if (sntpms(mgr, "udp://time.apple.com:123") ||
+      sntpms(mgr, "udp://time.windows.com:123") || sntpms(mgr, NULL) ||
+      unixms()) return;
+  mg_boot_timestamp_ms = (uint64_t) time(NULL) * 1000;
+}
+#endif
+
 bool mip_x_test(struct mg_mgr *mgr) {
 
   host_ip = getenv("HOST_IP");
   host_ip6 = getenv("HOST_IPV6");
+
+#if MG_TLS
+  // Feel free to move to other module to support more systems...
+  gettimefortls(mgr);
+#endif
 
 #define DASHBOARD(x)  printf("HEALTH_DASHBOARD\t\"%s\": %s,\n", x, s_error ? "false":"true");
 
