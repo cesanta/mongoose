@@ -46,11 +46,6 @@ static bool __no_inline_not_in_flash_func(flash_erase)(void *addr) {
   return true;
 }
 
-static bool __no_inline_not_in_flash_func(mg_picosdk_swap)(void) {
-  // TODO(): RP2350 might have some A/B functionality (DS 5.1)
-  return true;
-}
-
 static bool s_flash_irq_disabled;
 
 static bool __no_inline_not_in_flash_func(mg_picosdk_write)(void *addr,
@@ -100,12 +95,14 @@ static bool __no_inline_not_in_flash_func(mg_picosdk_write)(void *addr,
 static void __no_inline_not_in_flash_func(single_bank_swap)(char *p1, char *p2,
                                                             size_t s,
                                                             size_t ss) {
-  char *tmp = mg_calloc(1, ss);
-  if (tmp == NULL) return;
+  char *tmp_1 = mg_calloc(1, ss); // copy from 1st partition
+  if (tmp_1 == NULL) return;
+  char *tmp_2 = mg_calloc(1, ss); // copy from 2nd partition
+  if (tmp_2 == NULL) return;
 #if PICO_RP2040
   uint32_t xip[256 / sizeof(uint32_t)];
-  void *dst = (void *) ((char *) p1 - (char *) s_mg_flash_picosdk.start);
-  size_t count = MG_ROUND_UP(s, ss);
+  void *dst_1 = (void *) ((char *) p1 - (char *) s_mg_flash_picosdk.start);
+  void *dst_2 = (void *) ((char *) p2- (char *) s_mg_flash_picosdk.start);
   // use SDK function calls to get BootROM function pointers
   rom_connect_internal_flash_fn connect = (rom_connect_internal_flash_fn) rom_func_lookup(ROM_FUNC_CONNECT_INTERNAL_FLASH);
   rom_flash_exit_xip_fn xit = (rom_flash_exit_xip_fn) rom_func_lookup(ROM_FUNC_FLASH_EXIT_XIP);
@@ -116,14 +113,19 @@ static void __no_inline_not_in_flash_func(single_bank_swap)(char *p1, char *p2,
   // 2nd bootloader (XIP) is in flash, SDK functions copy it to RAM on entry
   for (size_t i = 0; i < 256 / sizeof(uint32_t); i++)
     xip[i] = ((uint32_t *) (s_mg_flash_picosdk.start))[i];
-  flash_range_erase((uint32_t) dst, count);
   // flash has been erased, no XIP to copy. Only BootROM calls possible
   for (uint32_t ofs = 0; ofs < s; ofs += ss) {
-    for (size_t i = 0; i < ss; i++) tmp[i] = p2[ofs + i];
+    for (size_t i = 0; i < ss; i++) {
+      tmp_1[i] = p1[ofs + i];
+      tmp_2[i] = p2[ofs + i];
+    }
+    flash_range_erase((uint32_t) dst_1 + ofs, ss);
+    flash_range_erase((uint32_t) dst_2 + ofs, ss);
     __compiler_memory_barrier();
     connect();
     xit();
-    program((uint32_t) dst + ofs, tmp, ss);
+    program((uint32_t) dst_1 + ofs, tmp_2, ss);
+    program((uint32_t) dst_2 + ofs, tmp_1, ss);
     flush();
     ((void (*)(void))((intptr_t) xip + 1))(); // enter XIP again
   }
@@ -133,11 +135,32 @@ static void __no_inline_not_in_flash_func(single_bank_swap)(char *p1, char *p2,
   // It might also be able to take advantage of partition swapping
   rom_reboot_fn reboot = (rom_reboot_fn) rom_func_lookup(ROM_FUNC_REBOOT);
   for (size_t ofs = 0; ofs < s; ofs += ss) {
-    for (size_t i = 0; i < ss; i++) tmp[i] = p2[ofs + i];
-    mg_picosdk_write(p1 + ofs, tmp, ss);
+    for (size_t i = 0; i < ss; i++) {
+      tmp_1[i] = p1[ofs + i];
+      tmp_2[i] = p2[ofs + i];
+    }
+    mg_picosdk_write(p1 + ofs, tmp_2, ss);
+    mg_picosdk_write(p2 + ofs, tmp_1, ss);
   }
   reboot(BOOT_TYPE_NORMAL | 0x100, 1, 0, 0); // 0x100: NO_RETURN_ON_SUCCESS
 #endif
+}
+
+static bool __no_inline_not_in_flash_func(mg_picosdk_swap)(void) {
+  // TODO(): RP2350 might have some A/B functionality (DS 5.1)
+  // Swap partitions. Pray power does not go away
+  MG_INFO(("Swapping partitions, size %u (%u sectors)",
+            s_mg_flash_picosdk.size,
+            s_mg_flash_picosdk.size / s_mg_flash_picosdk.secsz));
+  MG_INFO(("Do NOT power off..."));
+  mg_log_level = MG_LL_NONE;
+  s_flash_irq_disabled = true;
+  // Runs in RAM, will reset when finished or return on failure
+  single_bank_swap(
+      (char *) s_mg_flash_picosdk.start,
+      (char *) s_mg_flash_picosdk.start + s_mg_flash_picosdk.size / 2,
+      s_mg_flash_picosdk.size / 2, s_mg_flash_picosdk.secsz);
+  return false;
 }
 
 bool mg_ota_begin(size_t new_firmware_size) {
@@ -149,20 +172,7 @@ bool mg_ota_write(const void *buf, size_t len) {
 }
 
 bool mg_ota_end(void) {
-  if (mg_ota_flash_end(&s_mg_flash_picosdk)) {
-    // Swap partitions. Pray power does not go away
-    MG_INFO(("Swapping partitions, size %u (%u sectors)",
-             s_mg_flash_picosdk.size,
-             s_mg_flash_picosdk.size / s_mg_flash_picosdk.secsz));
-    MG_INFO(("Do NOT power off..."));
-    mg_log_level = MG_LL_NONE;
-    s_flash_irq_disabled = true;
-    // Runs in RAM, will reset when finished or return on failure
-    single_bank_swap(
-        (char *) s_mg_flash_picosdk.start,
-        (char *) s_mg_flash_picosdk.start + s_mg_flash_picosdk.size / 2,
-        s_mg_flash_picosdk.size / 2, s_mg_flash_picosdk.secsz);
-  }
+  if (mg_ota_flash_end(&s_mg_flash_picosdk));
   return false;
 }
 struct mg_flash *mg_flash = &s_mg_flash_picosdk;

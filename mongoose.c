@@ -2261,6 +2261,7 @@ bool mg_ota_flash_write(const void *buf, size_t len, struct mg_flash *flash) {
 bool mg_ota_flash_end(struct mg_flash *flash) {
   char *base = (char *) flash->start + flash->size / 2;
   bool ok = false;
+  int prev_state = MG_OTA_STATE_GET();
   if (s_size) {
     size_t size = (size_t) (s_addr - base);
     uint32_t crc32 = mg_crc32(0, base, s_size);
@@ -2289,6 +2290,7 @@ bool mg_ota_flash_end(struct mg_flash *flash) {
     s_size = 0;
     if (ok) MG_OTA_STATE_SET(MG_OTA_TESTING);
     if (ok) ok = flash->swap_fn();
+    if (!ok) MG_OTA_STATE_SET(prev_state); // undo state in case of failure
   }
   MG_INFO(("Finishing OTA: %s", ok ? "ok" : "fail"));
   return ok;
@@ -11151,11 +11153,6 @@ static bool __no_inline_not_in_flash_func(flash_erase)(void *addr) {
   return true;
 }
 
-static bool __no_inline_not_in_flash_func(mg_picosdk_swap)(void) {
-  // TODO(): RP2350 might have some A/B functionality (DS 5.1)
-  return true;
-}
-
 static bool s_flash_irq_disabled;
 
 static bool __no_inline_not_in_flash_func(mg_picosdk_write)(void *addr,
@@ -11205,12 +11202,14 @@ static bool __no_inline_not_in_flash_func(mg_picosdk_write)(void *addr,
 static void __no_inline_not_in_flash_func(single_bank_swap)(char *p1, char *p2,
                                                             size_t s,
                                                             size_t ss) {
-  char *tmp = mg_calloc(1, ss);
-  if (tmp == NULL) return;
+  char *tmp_1 = mg_calloc(1, ss); // copy from 1st partition
+  if (tmp_1 == NULL) return;
+  char *tmp_2 = mg_calloc(1, ss); // copy from 2nd partition
+  if (tmp_2 == NULL) return;
 #if PICO_RP2040
   uint32_t xip[256 / sizeof(uint32_t)];
-  void *dst = (void *) ((char *) p1 - (char *) s_mg_flash_picosdk.start);
-  size_t count = MG_ROUND_UP(s, ss);
+  void *dst_1 = (void *) ((char *) p1 - (char *) s_mg_flash_picosdk.start);
+  void *dst_2 = (void *) ((char *) p2- (char *) s_mg_flash_picosdk.start);
   // use SDK function calls to get BootROM function pointers
   rom_connect_internal_flash_fn connect = (rom_connect_internal_flash_fn) rom_func_lookup(ROM_FUNC_CONNECT_INTERNAL_FLASH);
   rom_flash_exit_xip_fn xit = (rom_flash_exit_xip_fn) rom_func_lookup(ROM_FUNC_FLASH_EXIT_XIP);
@@ -11221,14 +11220,19 @@ static void __no_inline_not_in_flash_func(single_bank_swap)(char *p1, char *p2,
   // 2nd bootloader (XIP) is in flash, SDK functions copy it to RAM on entry
   for (size_t i = 0; i < 256 / sizeof(uint32_t); i++)
     xip[i] = ((uint32_t *) (s_mg_flash_picosdk.start))[i];
-  flash_range_erase((uint32_t) dst, count);
   // flash has been erased, no XIP to copy. Only BootROM calls possible
   for (uint32_t ofs = 0; ofs < s; ofs += ss) {
-    for (size_t i = 0; i < ss; i++) tmp[i] = p2[ofs + i];
+    for (size_t i = 0; i < ss; i++) {
+      tmp_1[i] = p1[ofs + i];
+      tmp_2[i] = p2[ofs + i];
+    }
+    flash_range_erase((uint32_t) dst_1 + ofs, ss);
+    flash_range_erase((uint32_t) dst_2 + ofs, ss);
     __compiler_memory_barrier();
     connect();
     xit();
-    program((uint32_t) dst + ofs, tmp, ss);
+    program((uint32_t) dst_1 + ofs, tmp_2, ss);
+    program((uint32_t) dst_2 + ofs, tmp_1, ss);
     flush();
     ((void (*)(void))((intptr_t) xip + 1))(); // enter XIP again
   }
@@ -11238,11 +11242,32 @@ static void __no_inline_not_in_flash_func(single_bank_swap)(char *p1, char *p2,
   // It might also be able to take advantage of partition swapping
   rom_reboot_fn reboot = (rom_reboot_fn) rom_func_lookup(ROM_FUNC_REBOOT);
   for (size_t ofs = 0; ofs < s; ofs += ss) {
-    for (size_t i = 0; i < ss; i++) tmp[i] = p2[ofs + i];
-    mg_picosdk_write(p1 + ofs, tmp, ss);
+    for (size_t i = 0; i < ss; i++) {
+      tmp_1[i] = p1[ofs + i];
+      tmp_2[i] = p2[ofs + i];
+    }
+    mg_picosdk_write(p1 + ofs, tmp_2, ss);
+    mg_picosdk_write(p2 + ofs, tmp_1, ss);
   }
   reboot(BOOT_TYPE_NORMAL | 0x100, 1, 0, 0); // 0x100: NO_RETURN_ON_SUCCESS
 #endif
+}
+
+static bool __no_inline_not_in_flash_func(mg_picosdk_swap)(void) {
+  // TODO(): RP2350 might have some A/B functionality (DS 5.1)
+  // Swap partitions. Pray power does not go away
+  MG_INFO(("Swapping partitions, size %u (%u sectors)",
+            s_mg_flash_picosdk.size,
+            s_mg_flash_picosdk.size / s_mg_flash_picosdk.secsz));
+  MG_INFO(("Do NOT power off..."));
+  mg_log_level = MG_LL_NONE;
+  s_flash_irq_disabled = true;
+  // Runs in RAM, will reset when finished or return on failure
+  single_bank_swap(
+      (char *) s_mg_flash_picosdk.start,
+      (char *) s_mg_flash_picosdk.start + s_mg_flash_picosdk.size / 2,
+      s_mg_flash_picosdk.size / 2, s_mg_flash_picosdk.secsz);
+  return false;
 }
 
 bool mg_ota_begin(size_t new_firmware_size) {
@@ -11254,20 +11279,7 @@ bool mg_ota_write(const void *buf, size_t len) {
 }
 
 bool mg_ota_end(void) {
-  if (mg_ota_flash_end(&s_mg_flash_picosdk)) {
-    // Swap partitions. Pray power does not go away
-    MG_INFO(("Swapping partitions, size %u (%u sectors)",
-             s_mg_flash_picosdk.size,
-             s_mg_flash_picosdk.size / s_mg_flash_picosdk.secsz));
-    MG_INFO(("Do NOT power off..."));
-    mg_log_level = MG_LL_NONE;
-    s_flash_irq_disabled = true;
-    // Runs in RAM, will reset when finished or return on failure
-    single_bank_swap(
-        (char *) s_mg_flash_picosdk.start,
-        (char *) s_mg_flash_picosdk.start + s_mg_flash_picosdk.size / 2,
-        s_mg_flash_picosdk.size / 2, s_mg_flash_picosdk.secsz);
-  }
+  if (mg_ota_flash_end(&s_mg_flash_picosdk));
   return false;
 }
 struct mg_flash *mg_flash = &s_mg_flash_picosdk;
@@ -30746,186 +30758,6 @@ static bool w5500_poll(struct mg_tcpip_if *ifp, bool s1) {
 
 struct mg_tcpip_driver mg_tcpip_driver_w5500 = {w5500_init, w5500_tx, w5500_rx,
                                                 w5500_poll};
-#endif
-
-#ifdef MG_ENABLE_LINES
-#line 1 "src/drivers/wiznet.c"
-#endif
-// Auto-detecting WIZnet SPI Ethernet driver. Supports W5500 and W5100S.
-// Detection uses the W5500 VERSIONR register (0x04); any other value
-// is treated as W5100/W5100S.
-
-
-
-#if MG_ENABLE_TCPIP && defined(MG_ENABLE_DRIVER_WIZNET) && MG_ENABLE_DRIVER_WIZNET
-
-static bool s_w5100;  // Detected chip: false = W5500, true = W5100/W5100S
-
-enum { W55_CR = 0, W55_S0 = 1, W55_TX0 = 2, W55_RX0 = 3 };
-
-// W5500 SPI frame: [addr_msb][addr_lsb][(block<<3)|rw] then N data bytes.
-static void w55_txn(struct mg_tcpip_spi *s, uint8_t block, uint16_t addr,
-                    bool wr, void *buf, size_t len) {
-  uint8_t cmd[] = {(uint8_t) (addr >> 8), (uint8_t) (addr & 255),
-                   (uint8_t) ((block << 3) | (wr ? 4 : 0))};
-  s->begin(s->spi);
-  s->txn(s->spi, cmd, NULL, sizeof(cmd));
-  if (wr) s->txn(s->spi, (uint8_t *) buf, NULL, len);
-  if (!wr) s->txn(s->spi, NULL, (uint8_t *) buf, len);
-  s->end(s->spi);
-}
-
-// W5100S SPI frame: [opcode][addr_msb][addr_lsb] then N data bytes.
-static void w51_txn(struct mg_tcpip_spi *s, uint16_t addr, bool wr, void *buf,
-                    size_t len) {
-  uint8_t cmd[] = {(uint8_t) (wr ? 0xF0 : 0x0F), (uint8_t) (addr >> 8),
-                   (uint8_t) (addr & 255)};
-  s->begin(s->spi);
-  s->txn(s->spi, cmd, NULL, sizeof(cmd));
-  if (wr) s->txn(s->spi, (uint8_t *) buf, NULL, len);
-  if (!wr) s->txn(s->spi, NULL, (uint8_t *) buf, len);
-  s->end(s->spi);
-}
-
-// clang-format off
-static void     w55_wn(struct mg_tcpip_spi *s, uint8_t bl, uint16_t a, void *b, size_t n) { w55_txn(s, bl, a, true, b, n); }
-static void     w55_w1(struct mg_tcpip_spi *s, uint8_t bl, uint16_t a, uint8_t v)         { w55_wn(s, bl, a, &v, 1); }
-static void     w55_w2(struct mg_tcpip_spi *s, uint8_t bl, uint16_t a, uint16_t v)        { uint8_t b[2] = {(uint8_t) (v >> 8), (uint8_t) (v & 255)}; w55_wn(s, bl, a, b, 2); }
-static void     w55_rn(struct mg_tcpip_spi *s, uint8_t bl, uint16_t a, void *b, size_t n) { w55_txn(s, bl, a, false, b, n); }
-static uint8_t  w55_r1(struct mg_tcpip_spi *s, uint8_t bl, uint16_t a)                    { uint8_t r = 0; w55_rn(s, bl, a, &r, 1); return r; }
-static uint16_t w55_r2(struct mg_tcpip_spi *s, uint8_t bl, uint16_t a)                    { uint8_t b[2] = {0, 0}; w55_rn(s, bl, a, b, 2); return (uint16_t) ((b[0] << 8) | b[1]); }
-static void     w51_wn(struct mg_tcpip_spi *s, uint16_t a, void *b, size_t n)             { w51_txn(s, a, true, b, n); }
-static void     w51_w1(struct mg_tcpip_spi *s, uint16_t a, uint8_t v)                     { w51_wn(s, a, &v, 1); }
-static void     w51_w2(struct mg_tcpip_spi *s, uint16_t a, uint16_t v)                    { uint8_t b[2] = {(uint8_t) (v >> 8), (uint8_t) (v & 255)}; w51_wn(s, a, b, 2); }
-static void     w51_rn(struct mg_tcpip_spi *s, uint16_t a, void *b, size_t n)             { w51_txn(s, a, false, b, n); }
-static uint8_t  w51_r1(struct mg_tcpip_spi *s, uint16_t a)                                { uint8_t r = 0; w51_rn(s, a, &r, 1); return r; }
-static uint16_t w51_r2(struct mg_tcpip_spi *s, uint16_t a)                                { uint8_t b[2] = {0, 0}; w51_rn(s, a, b, 2); return (uint16_t) ((b[0] << 8) | b[1]); }
-// clang-format on
-
-static bool wiznet_init(struct mg_tcpip_if *ifp) {
-  struct mg_tcpip_spi *s = (struct mg_tcpip_spi *) ifp->driver_data;
-  uint8_t ver;
-  s->end(s->spi);
-  ver = w55_r1(s, W55_CR, 0x39);  // W5500 VERSIONR; 0x04 = W5500
-  s_w5100 = (ver != 0x04);
-  MG_DEBUG(("Wiznet chip: %s (ver %#x)", s_w5100 ? "W5100S" : "W5500", ver));
-  if (s_w5100) {
-    w51_w1(s, 0, 0x80);              // Software reset
-    mg_delayms(2);                   // Wait for reset (~1ms per datasheet)
-    w51_w1(s, 0x72, 0x53);          // PHYLCKR -> unlock PHY
-    w51_w1(s, 0x46, 0);             // PHYCR0 -> autonegotiation
-    w51_w1(s, 0x47, 0);             // PHYCR1 -> reset
-    w51_w1(s, 0x72, 0x00);          // PHYLCKR -> lock PHY
-    w51_wn(s, 0x09, ifp->mac, 6);   // SHAR -> set source MAC
-    w51_w1(s, 0x1a, 6);             // RMSR -> Sock0 RX buf 4KB
-    w51_w1(s, 0x1b, 6);             // TMSR -> Sock0 TX buf 4KB
-    w51_w1(s, 0x400, 0x44);         // Sock0 MR -> MACRAW + MAC filter
-    w51_w1(s, 0x401, 1);            // Sock0 CR -> OPEN
-    return w51_r1(s, 0x403) == 0x42;
-  } else {
-    w55_w1(s, W55_CR, 0, 0x80);     // Software reset
-    mg_delayms(2);                   // Wait for reset (~1ms per datasheet)
-    w55_w1(s, W55_CR, 0x2e, 0);     // PHYCFGR -> reset
-    w55_w1(s, W55_CR, 0x2e, 0xf8);  // PHYCFGR -> set
-    w55_w1(s, W55_S0, 0x1e, 16);    // Sock0 RX buf 16KB
-    w55_w1(s, W55_S0, 0x1f, 16);    // Sock0 TX buf 16KB
-    w55_w1(s, W55_S0, 0, 4);        // Sock0 MR -> MACRAW
-    w55_w1(s, W55_S0, 1, 1);        // Sock0 CR -> OPEN
-    return w55_r1(s, W55_S0, 3) == 0x42;
-  }
-}
-
-static size_t wiznet_rx(void *buf, size_t buflen, struct mg_tcpip_if *ifp) {
-  struct mg_tcpip_spi *s = (struct mg_tcpip_spi *) ifp->driver_data;
-  uint16_t r = 0, n = 0, len = (uint16_t) buflen, n2;
-  if (s_w5100) {
-    while ((n2 = w51_r2(s, 0x426)) > n) n = n2;
-    if (n > 0) {
-      uint16_t ptr = w51_r2(s, 0x428);
-      uint16_t rxsz = (uint16_t) ((1U << (w51_r1(s, 0x1a) & 3)) * 1024U);
-      uint16_t ofs = (uint16_t) ((ptr + 2) & (rxsz - 1));
-      if (n <= len + 2 && n > 1) r = (uint16_t) (n - 2);
-      if (ofs + r <= rxsz) {
-        w51_rn(s, (uint16_t) (0x6000 + ofs), buf, r);
-      } else {
-        uint16_t tail = rxsz - ofs;
-        w51_rn(s, (uint16_t) (0x6000 + ofs), buf, tail);
-        w51_rn(s, 0x6000, (uint8_t *) buf + tail, (size_t) (r - tail));
-      }
-      w51_w2(s, 0x428, (uint16_t) (ptr + n));
-      w51_w1(s, 0x401, 0x40);  // Sock0 CR -> RECV
-    }
-  } else {
-    while ((n2 = w55_r2(s, W55_S0, 0x26)) > n) n = n2;
-    if (n > 0) {
-      uint16_t ptr = w55_r2(s, W55_S0, 0x28);
-      n = w55_r2(s, W55_RX0, ptr);
-      if (n <= len + 2 && n > 1) {
-        r = (uint16_t) (n - 2);
-        w55_rn(s, W55_RX0, (uint16_t) (ptr + 2), buf, r);
-      }
-      w55_w2(s, W55_S0, 0x28, (uint16_t) (ptr + n));
-      w55_w1(s, W55_S0, 1, 0x40);  // Sock0 CR -> RECV
-    }
-  }
-  return r;
-}
-
-static size_t wiznet_tx(const void *buf, size_t buflen,
-                        struct mg_tcpip_if *ifp) {
-  struct mg_tcpip_spi *s = (struct mg_tcpip_spi *) ifp->driver_data;
-  uint16_t i, n = 0, len = (uint16_t) buflen;
-  if (s_w5100) {
-    uint16_t ptr;
-    while (n < len) n = w51_r2(s, 0x420);
-    ptr = w51_r2(s, 0x424);
-    uint16_t txsz = (uint16_t) ((1U << (w51_r1(s, 0x1b) & 3)) * 1024U);
-    uint16_t ofs = (uint16_t) (ptr & (txsz - 1));
-    if (ofs + len > txsz) {
-      uint16_t head = txsz - ofs;
-      w51_wn(s, (uint16_t) (0x4000 + ofs), (void *) buf, head);
-      w51_wn(s, 0x4000, (void *) ((uint8_t *) buf + head), len - head);
-    } else {
-      w51_wn(s, (uint16_t) (0x4000 + ofs), (void *) buf, len);
-    }
-    w51_w2(s, 0x424, (uint16_t) (ptr + len));
-    w51_w1(s, 0x401, 0x20);  // Sock0 CR -> SEND
-    for (i = 0; i < 40; i++) {
-      uint8_t ir = w51_r1(s, 0x402);
-      if (ir == 0) continue;
-      w51_w1(s, 0x402, ir);
-      if (ir & 8) len = 0;
-      if (ir & (16 | 8)) break;
-    }
-  } else {
-    uint16_t ptr;
-    while (n < len) n = w55_r2(s, W55_S0, 0x20);
-    ptr = w55_r2(s, W55_S0, 0x24);
-    w55_wn(s, W55_TX0, ptr, (void *) buf, len);
-    w55_w2(s, W55_S0, 0x24, (uint16_t) (ptr + len));
-    w55_w1(s, W55_S0, 1, 0x20);  // Sock0 CR -> SEND
-    for (i = 0; i < 40; i++) {
-      uint8_t ir = w55_r1(s, W55_S0, 2);
-      if (ir == 0) continue;
-      w55_w1(s, W55_S0, 2, ir);
-      if (ir & 8) len = 0;
-      if (ir & (16 | 8)) break;
-    }
-  }
-  return len;
-}
-
-static bool wiznet_poll(struct mg_tcpip_if *ifp, bool s1) {
-  struct mg_tcpip_spi *spi = (struct mg_tcpip_spi *) ifp->driver_data;
-  if (s_w5100) {
-    return s1 ? (w51_r1(spi, 0x3c) & 1) : false;   // PHYSR bit 0 = LNK
-  } else {
-    return s1 ? (w55_r1(spi, W55_CR, 0x2e) & 1) : false;  // PHYCFGR bit 0 = LNK
-  }
-}
-
-struct mg_tcpip_driver mg_tcpip_driver_wiznet = {wiznet_init, wiznet_tx,
-                                                  wiznet_rx, wiznet_poll};
 #endif
 
 #ifdef MG_ENABLE_LINES
