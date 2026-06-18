@@ -57,6 +57,7 @@ bool mg_ota_flash_write(const void *buf, size_t len, struct mg_flash *flash) {
 bool mg_ota_flash_end(struct mg_flash *flash) {
   char *base = (char *) flash->start + flash->size / 2;
   bool ok = false;
+  int prev_state = MG_OTA_STATE_GET();
   if (s_size) {
     size_t size = (size_t) (s_addr - base);
     uint32_t crc32 = mg_crc32(0, base, s_size);
@@ -85,6 +86,7 @@ bool mg_ota_flash_end(struct mg_flash *flash) {
     s_size = 0;
     if (ok) MG_OTA_STATE_SET(MG_OTA_TESTING);
     if (ok) ok = flash->swap_fn();
+    if (!ok) MG_OTA_STATE_SET(prev_state); // undo state in case of failure
   }
   MG_INFO(("Finishing OTA: %s", ok ? "ok" : "fail"));
   return ok;
