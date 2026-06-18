@@ -26,6 +26,11 @@ struct mg_addr {
   bool is_ip6;       // True when this address holds an IPv6 address
 };
 
+union mg_pipe {
+  MG_SOCKET_TYPE fd;
+  void *q;
+};
+
 // Central event manager. Zero-initialise with mg_mgr_init() before use.
 struct mg_mgr {
   struct mg_connection *conns;  // Linked list of all open connections
@@ -44,7 +49,7 @@ struct mg_mgr {
   int epoll_fd;                 // epoll file descriptor; -1 when unused (MG_EPOLL_ENABLE=1)
   struct mg_tcpip_if *ifp;      // Builtin TCP/IP stack: network interface pointer
   size_t extraconnsize;         // Builtin TCP/IP stack: extra bytes allocated per connection
-  MG_SOCKET_TYPE pipe;          // Socketpair write-end used by mg_wakeup()
+  union mg_pipe pipe;           // Socketpair write-end / queue, used by mg_wakeup()
 #if MG_ENABLE_FREERTOS_TCP
   SocketSet_t ss;               // FreeRTOS-TCP socket set
 #endif
