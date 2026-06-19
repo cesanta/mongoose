@@ -472,7 +472,7 @@ static void mqtt_cb(struct mg_connection *c, int ev, void *ev_data) {
     memset(&opts, 0, sizeof(opts));
     opts.ca = MQTTS_CA;
 #if defined(MQTT_LOCALHOST) && MG_TLS != MG_TLS_BUILTIN
-    MG_ERROR(("Hostname not tested"));
+    printf("\nHostname not tested\n");
 #else
     opts.name = mg_url_host(MQTTS_URL);
 #endif
@@ -802,7 +802,7 @@ static void test_mqtt_parse(void) {
 static void test_mqtt(void) {
   test_mqtt_base();
 #ifdef NO_MQTT_TESTS
-  MG_ERROR(("MQTT tests skipped on request"));
+  printf("\nMQTT tests skipped on request\n");
   (void) test_mqtt_basic, (void) test_mqtt_ver;
 #else
   test_mqtt_parse();
@@ -1501,8 +1501,7 @@ static void test_tls(void) {
     ASSERT(cmpbody(buf, data.buf) == 0);  // "thefile" links to Makefile
     ASSERT(system("killall tls_multirec/server") == 0);
   } else {
-    MG_ERROR(
-        ("SKIPPED TLS MULTIPLE RECORDS TEST, tls_multirec/server NOT PRESENT"));
+    printf("\nSKIPPED TLS MULTIPLE RECORDS TEST, tls_multirec/server NOT PRESENT\n");
   }
 #else
   printf(
@@ -5137,6 +5136,50 @@ static void test_modbus(void) {
   mg_mgr_free(&mgr);
 }
 
+
+struct wudata {
+  struct mg_mgr *mgr;
+  unsigned long conn_id;  // Parent connection ID
+};
+
+static void wuthread(void *param) {
+  struct wudata *p = (struct wudata *) param;
+  mg_wakeup(p->mgr, p->conn_id, "hi!", 3);  // Send to parent
+  free(p);       // Free all resources that were passed to us
+}
+
+static void hwu(struct mg_connection *c, int ev, void *ev_data) {
+  if (ev == MG_EV_WAKEUP) {
+    struct mg_str *data = (struct mg_str *) ev_data;
+    MG_DEBUG(("Woke up, got: %.*s", data->len, data->buf));
+    memcpy(c->data, data->buf, data->len);
+    c->data[data->len] = '\0';
+  }
+}
+
+static void test_wakeup(void) {
+#if MG_ENABLE_SOCKET
+  struct mg_mgr mgr;
+  struct mg_connection *c;
+  struct wudata *data;
+  int i;
+  mg_mgr_init(&mgr);        // Initialise event manager
+  mg_log_set(MG_LL_DEBUG);  // Set debug log level
+  c = mg_http_listen(&mgr, "http://127.0.0.1:42347", hwu, NULL);
+  mg_wakeup_init(&mgr);  // Initialise wakeup socket pair
+  data = (struct wudata *) calloc(1, sizeof(*data));  // wuthread owns it
+  data->conn_id = c->id;
+  data->mgr = c->mgr;
+  start_thread(wuthread, data);  // Start thread and pass data
+  for (i = 0; i < 10 || c->data[0] == '\0'; i++) mg_mgr_poll(&mgr, 100);
+  ASSERT(mg_strcmp(mg_str(c->data), mg_str_n("hi!", 3)) == 0);
+  mg_mgr_free(&mgr);
+#else
+  printf("\nNO SOCKET SUPPORT, skipping mg_wakeup() test\n");
+  (void) hwu; (void) wuthread;
+#endif
+}
+
 int main(void) {
   const char *debug_level = getenv("V");
   if (debug_level == NULL) debug_level = "3";
@@ -5181,6 +5224,10 @@ int main(void) {
   s_error = false;
   test_udp();
   DASHBOARD("udp");
+
+  s_error = false;
+  test_wakeup();
+  DASHBOARD("wakeup");
 
   s_error = false;
   test_get_header_var();
@@ -5249,6 +5296,7 @@ int main(void) {
   DASHBOARD("http_client");
 
 #else
+  printf("\nLOCALHOST_ONLY, skipping SNTP, MQTT and HTTPclient tests\n");
   (void) test_sntp, (void) test_mqtt, (void) test_http_client;
 #endif
   s_error = false;

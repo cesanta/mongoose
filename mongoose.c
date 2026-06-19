@@ -14240,7 +14240,7 @@ bool mg_wakeup_init(struct mg_mgr *mgr) {
       sp[0] = sp[1] = MG_INVALID_SOCKET;
     } else {
       tomgaddr(&usa[0], &c->rem, false);
-      MG_DEBUG(("%lu %p pipe %lu", c->id, c->fd, (unsigned long) sp[0]));
+      MG_DEBUG(("%lu %ld pipe %ld", c->id, c->fd, (long) sp[0]));
       mgr->pipe.fd = sp[0];
       ok = true;
     }
