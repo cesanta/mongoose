@@ -651,6 +651,83 @@ void mg_bsd_transport_close(void *t) {
   mg_bsd_transport_free(x);
 }
 
+#ifndef MG_WAKEUP_QUEUE_DEPTH
+#define MG_WAKEUP_QUEUE_DEPTH 4
+#endif
+
+
+struct wumsg {
+  unsigned long id;
+  size_t len;
+  uint8_t data[];
+};
+
+static void wufn(struct mg_connection *c, int ev, void *ev_data) {
+  QueueHandle_t q = (QueueHandle_t) c->mgr->pipe.q;
+  if (ev == MG_EV_POLL) {
+    struct wumsg *m;
+    if (xQueueReceive(q, &m, 0) == pdTRUE) {
+      struct mg_connection *t;
+      for (t = c->mgr->conns; t != NULL; t = t->next) {
+        if (t->id == m->id) {
+          struct mg_str data = mg_str_n((char *) m->data, m->len);
+          mg_call(t, MG_EV_WAKEUP, &data);
+          break;
+        }
+      }
+      free(m);
+    }
+  } else if (ev == MG_EV_CLOSE) {
+    struct wumsg *m;
+    while (xQueueReceive(q, &m, 0) == pdTRUE) free(m);
+    vQueueDelete(q);
+    c->mgr->pipe.q = NULL;
+  }
+  (void) ev_data;
+}
+
+bool mg_wakeup_init(struct mg_mgr *mgr) {
+  struct mg_connection *c;
+  if (mgr->pipe.q != NULL) return true;
+  mgr->pipe.q = xQueueCreate(MG_WAKEUP_QUEUE_DEPTH, sizeof(void *));
+  if (mgr->pipe.q == NULL) {
+      MG_ERROR(("Cannot create queue"));
+      return false;
+  }
+  c = mg_alloc_conn(mgr);
+  if (c == NULL) {
+    vQueueDelete((QueueHandle_t) mgr->pipe.q);
+    mgr->pipe.q = NULL;
+    return false;
+  }
+  c->fd = (void *) (size_t) MG_INVALID_SOCKET;
+  c->fn = wufn;
+  LIST_ADD_HEAD(struct mg_connection, &mgr->conns, c);
+  MG_DEBUG(("%lu queue %p", c->id, mgr->pipe.q));
+  mg_call(c, MG_EV_OPEN, NULL);
+  return true;
+}
+
+bool mg_wakeup(struct mg_mgr *mgr, unsigned long conn_id, const void *buf,
+               size_t len) {
+  struct wumsg *m;
+  if (mgr->pipe.q == NULL || conn_id == 0) return false;
+  m = (struct wumsg *) calloc(1, sizeof(*m) + len);
+  if (m == NULL) {
+    MG_ERROR("OOM");
+    return false;
+  }
+  m->id = conn_id;
+  m->len = len;
+  memcpy(m->data, buf, len);
+  if (xQueueSend((QueueHandle_t) mgr->pipe.q, &m, 0) != pdTRUE) {
+    free(m);
+    MG_ERROR("xQueueSend");
+    return false;
+  }
+  return true;
+}
+
 #endif  // MG_ENABLE_FREERTOS
 #endif  // MG_ENABLE_BSD_SOCKETS
 
@@ -7554,7 +7631,11 @@ void mg_mgr_init(struct mg_mgr *mgr) {
 #elif MG_ENABLE_TCPIP_DRIVER_INIT && defined(MG_TCPIP_DRIVER_INIT)
   MG_TCPIP_DRIVER_INIT(mgr);
 #endif
-  mgr->pipe = MG_INVALID_SOCKET;
+#if MG_ENABLE_BSD_SOCKETS
+  mgr->pipe.q = NULL;
+#else
+  mgr->pipe.fd = MG_INVALID_SOCKET;
+#endif
   mgr->dnstimeout = 3000;
   mgr->dns4.url = "udp://8.8.8.8:53";
   mgr->dns6.url = "udp://[2001:4860:4860::8888]:53";
@@ -14139,15 +14220,15 @@ static void wufn(struct mg_connection *c, int ev, void *ev_data) {
     }
     c->recv.len = 0;  // Consume received data
   } else if (ev == MG_EV_CLOSE) {
-    closesocket(c->mgr->pipe);         // When we're closing, close the other
-    c->mgr->pipe = MG_INVALID_SOCKET;  // side of the socketpair, too
+    closesocket(c->mgr->pipe.fd);        // When we're closing, close the other
+    c->mgr->pipe.fd = MG_INVALID_SOCKET; // side of the socketpair, too
   }
   (void) ev_data;
 }
 
 bool mg_wakeup_init(struct mg_mgr *mgr) {
   bool ok = false;
-  if (mgr->pipe == MG_INVALID_SOCKET) {
+  if (mgr->pipe.fd == MG_INVALID_SOCKET) {
     union usa usa[2];
     MG_SOCKET_TYPE sp[2] = {MG_INVALID_SOCKET, MG_INVALID_SOCKET};
     struct mg_connection *c = NULL;
@@ -14160,7 +14241,7 @@ bool mg_wakeup_init(struct mg_mgr *mgr) {
     } else {
       tomgaddr(&usa[0], &c->rem, false);
       MG_DEBUG(("%lu %p pipe %lu", c->id, c->fd, (unsigned long) sp[0]));
-      mgr->pipe = sp[0];
+      mgr->pipe.fd = sp[0];
       ok = true;
     }
   }
@@ -14169,11 +14250,11 @@ bool mg_wakeup_init(struct mg_mgr *mgr) {
 
 bool mg_wakeup(struct mg_mgr *mgr, unsigned long conn_id, const void *buf,
                size_t len) {
-  if (mgr->pipe != MG_INVALID_SOCKET && conn_id > 0) {
+  if (mgr->pipe.fd != MG_INVALID_SOCKET && conn_id > 0) {
     char *extended_buf = (char *) alloca(len + sizeof(conn_id));
     memcpy(extended_buf, &conn_id, sizeof(conn_id));
     memcpy(extended_buf + sizeof(conn_id), buf, len);
-    send(mgr->pipe, extended_buf, len + sizeof(conn_id), MSG_NONBLOCKING);
+    send(mgr->pipe.fd, extended_buf, len + sizeof(conn_id), MSG_NONBLOCKING);
     return true;
   }
   return false;

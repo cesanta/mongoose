@@ -298,7 +298,11 @@ void mg_mgr_init(struct mg_mgr *mgr) {
 #elif MG_ENABLE_TCPIP_DRIVER_INIT && defined(MG_TCPIP_DRIVER_INIT)
   MG_TCPIP_DRIVER_INIT(mgr);
 #endif
-  mgr->pipe = MG_INVALID_SOCKET;
+#if MG_ENABLE_BSD_SOCKETS
+  mgr->pipe.q = NULL;
+#else
+  mgr->pipe.fd = MG_INVALID_SOCKET;
+#endif
   mgr->dnstimeout = 3000;
   mgr->dns4.url = "udp://8.8.8.8:53";
   mgr->dns6.url = "udp://[2001:4860:4860::8888]:53";

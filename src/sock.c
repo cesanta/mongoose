@@ -711,15 +711,15 @@ static void wufn(struct mg_connection *c, int ev, void *ev_data) {
     }
     c->recv.len = 0;  // Consume received data
   } else if (ev == MG_EV_CLOSE) {
-    closesocket(c->mgr->pipe);         // When we're closing, close the other
-    c->mgr->pipe = MG_INVALID_SOCKET;  // side of the socketpair, too
+    closesocket(c->mgr->pipe.fd);        // When we're closing, close the other
+    c->mgr->pipe.fd = MG_INVALID_SOCKET; // side of the socketpair, too
   }
   (void) ev_data;
 }
 
 bool mg_wakeup_init(struct mg_mgr *mgr) {
   bool ok = false;
-  if (mgr->pipe == MG_INVALID_SOCKET) {
+  if (mgr->pipe.fd == MG_INVALID_SOCKET) {
     union usa usa[2];
     MG_SOCKET_TYPE sp[2] = {MG_INVALID_SOCKET, MG_INVALID_SOCKET};
     struct mg_connection *c = NULL;
@@ -732,7 +732,7 @@ bool mg_wakeup_init(struct mg_mgr *mgr) {
     } else {
       tomgaddr(&usa[0], &c->rem, false);
       MG_DEBUG(("%lu %p pipe %lu", c->id, c->fd, (unsigned long) sp[0]));
-      mgr->pipe = sp[0];
+      mgr->pipe.fd = sp[0];
       ok = true;
     }
   }
@@ -741,11 +741,11 @@ bool mg_wakeup_init(struct mg_mgr *mgr) {
 
 bool mg_wakeup(struct mg_mgr *mgr, unsigned long conn_id, const void *buf,
                size_t len) {
-  if (mgr->pipe != MG_INVALID_SOCKET && conn_id > 0) {
+  if (mgr->pipe.fd != MG_INVALID_SOCKET && conn_id > 0) {
     char *extended_buf = (char *) alloca(len + sizeof(conn_id));
     memcpy(extended_buf, &conn_id, sizeof(conn_id));
     memcpy(extended_buf + sizeof(conn_id), buf, len);
-    send(mgr->pipe, extended_buf, len + sizeof(conn_id), MSG_NONBLOCKING);
+    send(mgr->pipe.fd, extended_buf, len + sizeof(conn_id), MSG_NONBLOCKING);
     return true;
   }
   return false;
