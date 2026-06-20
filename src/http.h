@@ -57,20 +57,56 @@ void mg_http_printf_chunk(struct mg_connection *cnn, const char *fmt, ...);
 // Call with len=0 to send the terminating zero-length chunk.
 void mg_http_write_chunk(struct mg_connection *c, const char *buf, size_t len);
 
-// Creates an HTTP server on url (e.g. "http://0.0.0.0:8000"). Returns the
-// listening connection, or NULL on error. Fires MG_EV_HTTP_MSG (full request
-// received) and MG_EV_HTTP_HDRS (headers only).
-// ev_data for those events is struct mg_http_message *
+// Creates an HTTP server on url, e.g. "http://0.0.0.0:8000".
+//
+// Returns:
+//   Listening connection, or NULL on error.
+// Example:
+//   mg_http_listen(&mgr, "http://0.0.0.0:8000", fn, NULL);
+// Full examples:
+//   tutorials/http/http-server, tutorials/http/*
+// Related APIs:
+//   mg_http_reply(), mg_http_serve_dir(), mg_match()
+// Notes:
+//   Call mg_mgr_poll() in the main loop. The user-supplied fn event handler
+//   receives normal connection events. It also receives MG_EV_HTTP_HDRS when
+//   headers are received and MG_EV_HTTP_MSG when the full request is received.
+//   ev_data for both HTTP events is struct mg_http_message *.
 struct mg_connection *mg_http_listen(struct mg_mgr *, const char *url,
                                      mg_event_handler_t fn, void *fn_data);
 
-// Opens an HTTP client connection to url. Returns the connection, or NULL on
-// error. Send the request in the MG_EV_CONNECT handler; read reply in
-// MG_EV_HTTP_MSG.
+// Opens an HTTP client connection to url, e.g. "http://example.org".
+//
+// Returns:
+//   Client connection, or NULL on error.
+// Example:
+//   mg_http_connect(&mgr, "http://example.org", fn, NULL);
+// Full examples:
+//   tutorials/http/http-client, tutorials/http/huge-response
+// Related APIs:
+//   mg_printf(), mg_http_status(), mg_http_get_header()
+// Notes:
+//   In the user-supplied fn event handler, send the HTTP request on
+//   MG_EV_CONNECT. The handler receives normal connection events. It also
+//   receives MG_EV_HTTP_HDRS when headers are received and MG_EV_HTTP_MSG when
+//   the full response is received. ev_data for both HTTP events is struct
+//   mg_http_message *.
 struct mg_connection *mg_http_connect(struct mg_mgr *, const char *url,
                                       mg_event_handler_t fn, void *fn_data);
 
-// Serves files from a directory. Call from an MG_EV_HTTP_MSG handler.
+// Serves static files from a directory.
+//
+// Example:
+//   struct mg_http_serve_opts o = {.root_dir = "web_root", .fs = &mg_fs_posix};
+//   mg_http_serve_dir(c, hm, &o);
+// Full examples:
+//   tutorials/http/http-server, tutorials/core/embedded-filesystem
+// Related APIs:
+//   mg_http_listen(), mg_http_serve_file(), mg_http_reply(), mg_match()
+// Notes:
+//   Call from an MG_EV_HTTP_MSG handler. The uri in hm is mapped under
+//   opts->root_dir. Directory listing depends on MG_ENABLE_DIRLIST; SSI uses
+//   opts->ssi_pattern when configured.
 void mg_http_serve_dir(struct mg_connection *, struct mg_http_message *hm,
                        const struct mg_http_serve_opts *);
 
@@ -78,10 +114,20 @@ void mg_http_serve_dir(struct mg_connection *, struct mg_http_message *hm,
 void mg_http_serve_file(struct mg_connection *, struct mg_http_message *hm,
                         const char *path, const struct mg_http_serve_opts *);
 
-// Sends an HTTP response. headers must end with "\r\n", or be "" for none.
-// body_fmt is printf-style. Example:
+// Sends a complete HTTP response with Content-Length.
+//
+// Example:
 //   mg_http_reply(c, 200, "Content-Type: application/json\r\n",
 //                 "{%m:%d}", MG_ESC("temperature"), 123);
+// Full examples:
+//   tutorials/http/http-server, tutorials/http/http-restful-server,
+//   tutorials/http/device-dashboard
+// Related APIs:
+//   mg_http_listen(), mg_printf(), mg_http_printf_chunk(), MG_ESC
+// Notes:
+//   headers must end with "\r\n"; pass "" or NULL for no extra headers.
+//   body_fmt is printf-style and supports %M/%m custom printers. Use MG_ESC
+//   when printing JSON strings.
 void mg_http_reply(struct mg_connection *, int status_code, const char *headers,
                    const char *body_fmt, ...);
 
@@ -135,10 +181,22 @@ void mg_http_bauth(struct mg_connection *, const char *user, const char *pass);
 // E.g. for s="multipart/form-data; boundary=abc", v="boundary" returns "abc".
 struct mg_str mg_http_get_header_var(struct mg_str s, struct mg_str v);
 
-// Iterates over parts of a multipart/form-data body. Start with ofs=0.
-// Returns the offset for the next call, or 0 when there are no more parts. Example:
+// Iterates over parts of a multipart/form-data body.
+//
+// Returns:
+//   Offset for the next call, or 0 when there are no more parts.
+// Example:
 //   size_t ofs = 0;
+//   struct mg_http_part part;
 //   while ((ofs = mg_http_next_multipart(hm->body, ofs, &part)) > 0) { ... }
+// Full examples:
+//   tutorials/http/file-upload-html-form, tutorials/http/http-server
+// Related APIs:
+//   mg_http_listen(), mg_http_start_upload()
+// Notes:
+//   Call from an MG_EV_HTTP_MSG handler after the full request body is
+//   received. part.name, part.filename, and part.body are zero-copy slices into
+//   hm->body and are not NUL-terminated.
 size_t mg_http_next_multipart(struct mg_str, size_t, struct mg_http_part *);
 
 // Returns the HTTP status code from a parsed response message (e.g. 200, 404).

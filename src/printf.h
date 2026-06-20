@@ -5,9 +5,24 @@
 #include "iobuf.h"
 #include "queue.h"
 
-// Formats into buf/len. Returns the number of bytes that would be written if
-// buf were large enough (like snprintf). Call with buf=NULL, len=0 to measure.
-// NUL-terminates if the result fits (n < len).
+// Formats data into a caller-supplied buffer.
+//
+// Returns:
+//   Number of bytes that would be written if buf were large enough, like
+//   snprintf().
+// Example:
+//   char buf[20];
+//   mg_snprintf(buf, sizeof(buf), "{%m:%d}", MG_ESC("status"), 1);
+// Full examples:
+//   tutorials/http/link-checker, tutorials/http/redirect-to-https,
+//   tutorials/mqtt/mqtt-dashboard/device
+// Related APIs:
+//   mg_xprintf(), mg_printf(), mg_mprintf(), MG_ESC
+// Notes:
+//   These functions are just wrappers around mg_xprintf().
+//   Call with buf=NULL and len=0 to measure. NUL-terminates if the result fits
+//   (return value < len). Supports mg_xprintf specifiers, including custom
+//   %M/%m printers. Use MG_ESC when printing JSON strings.
 size_t mg_vsnprintf(char *buf, size_t len, const char *fmt, va_list *ap);
 size_t mg_snprintf(char *buf, size_t len, const char *fmt, ...);
 

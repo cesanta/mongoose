@@ -46,9 +46,9 @@ struct mg_tls_opts {
   bool skip_verification;  // Skip certificate and hostname verification
 };
 
-// Initialise TLS on a connection. Call from the event handler on
-// MG_EV_ACCEPT (server) or MG_EV_CONNECT (client).
+// Initialises TLS on a connection.
 //
+// Example:
 // ```c
 // // Server: one-way TLS
 // if (ev == MG_EV_ACCEPT) {
@@ -64,6 +64,16 @@ struct mg_tls_opts {
 //   mg_tls_init(c, &opts);
 // }
 // ```
+// Full examples:
+//   tutorials/http/http-server, tutorials/http/http-client,
+//   tutorials/mqtt/mqtt-client-aws-iot, tutorials/websocket/websocket-client
+// Related APIs:
+//   mg_http_listen(), mg_http_connect(), mg_ws_connect(), mg_mqtt_connect()
+// Notes:
+//   Call from the user-supplied event handler on MG_EV_ACCEPT for servers or
+//   MG_EV_CONNECT for clients, before application data is sent. Servers usually
+//   set cert and key. Clients usually set ca and name; name enables SNI and
+//   hostname verification.
 void mg_tls_init(struct mg_connection *c, const struct mg_tls_opts *opts);
 
 // Private API, do not expose

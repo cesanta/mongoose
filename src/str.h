@@ -37,14 +37,25 @@ int mg_strcasecmp(const struct mg_str str1, const struct mg_str str2);
 // Caller must mg_free(result.buf) when done.
 struct mg_str mg_strdup(const struct mg_str s);
 
-// Matches str against a glob pattern. Supported wildcards:
-//   ?  matches exactly one character
-//   *  matches any sequence of characters except '/'
-//   #  matches any sequence of characters including '/'
-// caps, if not NULL, points to an array of mg_str filled with the
-// text captured by each wildcard (zero-copy slices into str).
-// Pass caps=NULL when captures are not needed.
-// Returns true on a full match.
+// Matches a string against a glob pattern.
+//
+// Returns:
+//   True if the whole str matches pattern.
+// Example:
+//   if (mg_match(hm->uri, mg_str("/api/#"), NULL)) { ... }
+// Full examples:
+//   tutorials/http/http-server, tutorials/http/link-checker,
+//   tutorials/websocket/websocket-server
+// Related APIs:
+//   mg_str(), mg_str_n(), mg_span(), mg_strcmp(), mg_strcasecmp()
+// Notes:
+//   Pattern wildcards: ? matches one character, * matches any sequence except
+//   '/', and # matches any sequence including '/'. If caps is not NULL, each
+//   wildcard capture is stored as a zero-copy mg_str slice into str. Pass
+//   caps=NULL when captures are not needed. The caps array size should be
+//   at least the number of wildcards in a pattern plus one. The last cap
+//   is initialised to an empty string.
+//   Attention: the pattern must consume the whole str in order to match.
 bool mg_match(struct mg_str str, struct mg_str pattern, struct mg_str *caps);
 
 // Splits s at the first occurrence of sep. Sets *a to the part before sep

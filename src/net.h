@@ -95,15 +95,40 @@ struct mg_connection {
   unsigned is_writable : 1;       // Socket is ready to write (epoll/select)
 };
 
-// Runs one iteration of the event loop. Waits up to ms milliseconds for I/O
-// events (0 = return immediately). Calls event handlers for all ready
-// connections and fires expired timers. Call in a tight loop:
+// Runs one iteration of the event loop.
+//
+// Example:
 //   while (keep_running) mg_mgr_poll(&mgr, 50);
+// Full examples:
+//   tutorials/http/http-server, tutorials/mqtt/mqtt-client,
+//   tutorials/websocket/websocket-server, tutorials/core/timers
+// Related APIs:
+//   mg_mgr_init(), mg_mgr_free(), mg_timer_add(), mg_wakeup()
+// Notes:
+//   Waits up to ms milliseconds for I/O events; use ms=0 to return
+//   immediately. Calls event handlers for ready connections and fires expired
+//   timers. Call repeatedly from the main loop or a dedicated network task.
 void mg_mgr_poll(struct mg_mgr *, int ms);
 
-// Initialises mgr to a safe zero state and sets defaults: DNS servers,
-// 3-second DNS timeout, epoll/SIGPIPE setup, TLS context. Must be called
-// before any other mg_* function. Overwrite mgr->userdata afterwards if needed.
+// Initialises an event manager before use.
+//
+// Example:
+//   struct mg_mgr mgr;
+//   mg_mgr_init(&mgr);
+// Full examples:
+//   tutorials/http/http-server, tutorials/mqtt/mqtt-client,
+//   tutorials/websocket/websocket-server, tutorials/core/embedded-filesystem
+// Related APIs:
+//   mg_mgr_poll(), mg_mgr_free(), mg_http_listen(), mg_connect()
+// Notes:
+//   Sets safe defaults such as DNS servers, DNS timeout, epoll/SIGPIPE setup,
+//   and TLS context. Call before creating connections, listeners, or timers.
+//   Set mgr.userdata after this call if your application needs it.
+//   On embedded systems, if the built-in TCP/IP stack is enabled
+//   (MG_ENABLE_TCPIP=1) and one built-in driver is selected, e.g.
+//   MG_ENABLE_DRIVER_STM32H=1, mg_mgr_init() also calls mg_tcpip_init().
+//   If no driver is selected, automatic driver init is disabled, or multiple
+//   interfaces are intended, call mg_tcpip_init() separately.
 void mg_mgr_init(struct mg_mgr *);
 
 // Closes all connections, frees all timers, and releases the TLS context.
@@ -138,9 +163,22 @@ void mg_connect_resolved(struct mg_connection *);
 // Data is sent asynchronously by the next mg_mgr_poll() call.
 bool mg_send(struct mg_connection *, const void *, size_t);
 
-// Formats and appends to c->send using printf-style format string.
-// Returns bytes written, or 0 on OOM. Supports all mg_xprintf specifiers
-// including %M/%m custom printers. See fmt.h for the full specifier list.
+// Formats data and appends it to a connection send buffer.
+//
+// Returns:
+//   Number of bytes appended, or 0 on OOM.
+// Example:
+//   mg_printf(c, "GET / HTTP/1.0\r\nHost: %.*s\r\n\r\n",
+//             (int) host.len, host.buf);
+// Full examples:
+//   tutorials/http/http-client, tutorials/http/http-proxy-client,
+//   tutorials/http/http-restful-server
+// Related APIs:
+//   mg_send(), mg_snprintf(), mg_http_reply(), mg_ws_printf()
+// Notes:
+//   Data is sent asynchronously by a later mg_mgr_poll() call. Supports
+//   mg_xprintf specifiers, including custom %M/%m printers. See src/fmt.h for
+//   the full specifier list.
 size_t mg_printf(struct mg_connection *, const char *fmt, ...);
 size_t mg_vprintf(struct mg_connection *, const char *fmt, va_list *ap);
 

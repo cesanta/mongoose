@@ -19,18 +19,23 @@ extern uint64_t mg_boot_timestamp_ms;
 // Until a successful SNTP request completes, this is identical to mg_millis().
 uint64_t mg_now(void);
 
-// Return true if the periodic timer has fired; advance `expiration` by one
-// `period`. Handles wrap-around. Usage example:
+// Checks whether a periodic deadline has expired.
 //
-// ```c
-// uint64_t timer = 0;
-// for (;;) {
+// Returns:
+//   True when the timer has fired; false otherwise.
+// Example:
+//   uint64_t timer = 0;
 //   if (mg_timer_expired(&timer, 1000, mg_millis())) {
-//     MG_INFO(("Hi"));  // Print a message every second
+//     MG_INFO(("every second"));
 //   }
-//   mg_mgr_poll(&mgr, 10);
-// }
-// ```
+// Full examples:
+//   tutorials/http/http-server/arduino/teensy41-http,
+//   tutorials/mqtt/mqtt-client
+// Related APIs:
+//   mg_millis(), mg_now()
+// Notes:
+//   Initialise *expiration to 0 before first use. On expiry, this function
+//   advances *expiration by period and handles time wrap-around.
 bool mg_timer_expired(uint64_t *expiration, uint64_t period, uint64_t now);
 
 // Connect to an SNTP server and send a time request.

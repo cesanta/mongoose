@@ -109,12 +109,23 @@ struct mg_mqtt_message {
   size_t props_size;    // MQTT5: byte length of the properties section
 };
 
-// Opens a TCP connection to url and immediately sends a CONNECT packet.
-// opts may be NULL to use defaults (MQTT 3.1.1, no auth, auto client ID).
-// Fires MG_EV_MQTT_OPEN when CONNACK is received (ev_data: uint8_t* return code, 0=success).
-// Fires MG_EV_MQTT_MSG for incoming PUBLISH packets (ev_data: struct mg_mqtt_message *).
-// Fires MG_EV_MQTT_CMD for every received MQTT packet (ev_data: struct mg_mqtt_message *).
-// Returns NULL on error.
+// Opens an MQTT client connection and sends a CONNECT packet.
+//
+// Returns:
+//   Client connection, or NULL on error.
+// Example:
+//   struct mg_mqtt_opts opts = {.client_id = mg_str("device1")};
+//   mg_mqtt_connect(&mgr, "mqtt://broker:1883", &opts, fn, NULL);
+// Full examples:
+//   tutorials/mqtt/mqtt-client, tutorials/mqtt/mqtt-client-aws-iot,
+//   tutorials/mqtt/ota-over-mqtt
+// Related APIs:
+//   mg_mqtt_pub(), mg_mqtt_sub(), mg_tls_init(), mg_mgr_poll()
+// Notes:
+//   opts may be NULL to use MQTT 3.1.1 defaults with no auth and an auto client
+//   ID. The user-supplied fn event handler receives normal connection events,
+//   MG_EV_MQTT_OPEN when CONNACK is received, MG_EV_MQTT_MSG for incoming
+//   PUBLISH packets, and MG_EV_MQTT_CMD for every received MQTT packet.
 struct mg_connection *mg_mqtt_connect(struct mg_mgr *, const char *url,
                                       const struct mg_mqtt_opts *opts,
                                       mg_event_handler_t fn, void *fn_data);
@@ -130,13 +141,42 @@ struct mg_connection *mg_mqtt_listen(struct mg_mgr *mgr, const char *url,
 // as re-authenticating on an existing connection.
 void mg_mqtt_login(struct mg_connection *c, const struct mg_mqtt_opts *opts);
 
-// Sends a PUBLISH packet. opts.topic and opts.message carry the topic and
-// payload. For QoS 0 returns 0; for QoS 1/2 returns the assigned packet ID.
-// To retransmit, set opts.retransmit_id to the ID from the previous call;
-// use 0 for a new message.
+// Sends an MQTT PUBLISH packet.
+//
+// Returns:
+//   0 for QoS 0; assigned packet ID for QoS 1 or 2.
+// Example:
+//   struct mg_mqtt_opts opts = {
+//       .topic = mg_str("device/status"),
+//       .message = mg_str("{\"ok\":true}"),
+//       .qos = 1,
+//   };
+//   uint16_t id = mg_mqtt_pub(c, &opts);
+// Full examples:
+//   tutorials/mqtt/mqtt-client, tutorials/mqtt/mqtt-client-aws-iot,
+//   tutorials/mqtt/ota-over-mqtt
+// Related APIs:
+//   mg_mqtt_connect(), mg_mqtt_sub(), mg_mqtt_send_header()
+// Notes:
+//   On success, opts.topic and opts.message are copied into c->send before the
+//   function returns. To retransmit a QoS message, set opts.retransmit_id to the
+//   packet ID returned by the previous call; use 0 for a new message.
 uint16_t mg_mqtt_pub(struct mg_connection *c, const struct mg_mqtt_opts *opts);
 
-// Sends a SUBSCRIBE packet for opts.topic at opts.qos.
+// Sends an MQTT SUBSCRIBE packet.
+//
+// Example:
+//   struct mg_mqtt_opts opts = {.topic = mg_str("device/rx"), .qos = 1};
+//   mg_mqtt_sub(c, &opts);
+// Full examples:
+//   tutorials/mqtt/mqtt-client, tutorials/mqtt/mqtt-client-aws-iot,
+//   tutorials/mqtt/ota-over-mqtt
+// Related APIs:
+//   mg_mqtt_connect(), mg_mqtt_pub(), mg_mqtt_unsub()
+// Notes:
+//   Send after MG_EV_MQTT_OPEN reports a successful CONNACK. Incoming PUBLISH
+//   messages are delivered to the user-supplied fn event handler as
+//   MG_EV_MQTT_MSG with ev_data pointing to struct mg_mqtt_message.
 void mg_mqtt_sub(struct mg_connection *, const struct mg_mqtt_opts *opts);
 
 // Sends an UNSUBSCRIBE packet for opts.topic.

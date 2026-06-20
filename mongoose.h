@@ -1329,14 +1329,22 @@ int mg_strcasecmp(const struct mg_str str1, const struct mg_str str2);
 // Caller must mg_free(result.buf) when done.
 struct mg_str mg_strdup(const struct mg_str s);
 
-// Matches str against a glob pattern. Supported wildcards:
-//   ?  matches exactly one character
-//   *  matches any sequence of characters except '/'
-//   #  matches any sequence of characters including '/'
-// caps, if not NULL, points to an array of mg_str filled with the
-// text captured by each wildcard (zero-copy slices into str).
-// Pass caps=NULL when captures are not needed.
-// Returns true on a full match.
+// Matches a string against a glob pattern.
+//
+// Returns:
+//   True if the whole str matches pattern.
+// Example:
+//   if (mg_match(hm->uri, mg_str("/api/#"), NULL)) { ... }
+// Full examples:
+//   tutorials/http/http-server, tutorials/http/link-checker,
+//   tutorials/websocket/websocket-server
+// Related APIs:
+//   mg_str(), mg_str_n(), mg_span(), mg_strcmp(), mg_strcasecmp()
+// Notes:
+//   Pattern wildcards: ? matches one character, * matches any sequence except
+//   '/', and # matches any sequence including '/'. If caps is not NULL, each
+//   wildcard capture is stored as a zero-copy mg_str slice into str. Pass
+//   caps=NULL when captures are not needed.
 bool mg_match(struct mg_str str, struct mg_str pattern, struct mg_str *caps);
 
 // Splits s at the first occurrence of sep. Sets *a to the part before sep
@@ -1479,9 +1487,22 @@ size_t mg_xprintf(mg_pfn_t fn, void *arg, const char *fmt, ...);
 
 
 
-// Formats into buf/len. Returns the number of bytes that would be written if
-// buf were large enough (like snprintf). Call with buf=NULL, len=0 to measure.
-// NUL-terminates if the result fits (n < len).
+// Formats data into a caller-supplied buffer.
+//
+// Returns:
+//   Number of bytes that would be written if buf were large enough, like
+//   snprintf().
+// Example:
+//   mg_snprintf(buf, sizeof(buf), "{%m:%d}", MG_ESC("status"), 1);
+// Full examples:
+//   tutorials/http/link-checker, tutorials/http/redirect-to-https,
+//   tutorials/mqtt/mqtt-dashboard/device
+// Related APIs:
+//   mg_printf(), mg_mprintf(), mg_xprintf(), MG_ESC
+// Notes:
+//   Call with buf=NULL and len=0 to measure. NUL-terminates if the result fits
+//   (return value < len). Supports mg_xprintf specifiers, including custom
+//   %M/%m printers. Use MG_ESC when printing JSON strings.
 size_t mg_vsnprintf(char *buf, size_t len, const char *fmt, va_list *ap);
 size_t mg_snprintf(char *buf, size_t len, const char *fmt, ...);
 
@@ -2151,15 +2172,40 @@ struct mg_connection {
   unsigned is_writable : 1;       // Socket is ready to write (epoll/select)
 };
 
-// Runs one iteration of the event loop. Waits up to ms milliseconds for I/O
-// events (0 = return immediately). Calls event handlers for all ready
-// connections and fires expired timers. Call in a tight loop:
+// Runs one iteration of the event loop.
+//
+// Example:
 //   while (keep_running) mg_mgr_poll(&mgr, 50);
+// Full examples:
+//   tutorials/http/http-server, tutorials/mqtt/mqtt-client,
+//   tutorials/websocket/websocket-server, tutorials/core/timers
+// Related APIs:
+//   mg_mgr_init(), mg_mgr_free(), mg_timer_add(), mg_wakeup()
+// Notes:
+//   Waits up to ms milliseconds for I/O events; use ms=0 to return
+//   immediately. Calls event handlers for ready connections and fires expired
+//   timers. Call repeatedly from the main loop or a dedicated network task.
 void mg_mgr_poll(struct mg_mgr *, int ms);
 
-// Initialises mgr to a safe zero state and sets defaults: DNS servers,
-// 3-second DNS timeout, epoll/SIGPIPE setup, TLS context. Must be called
-// before any other mg_* function. Overwrite mgr->userdata afterwards if needed.
+// Initialises an event manager before use.
+//
+// Example:
+//   struct mg_mgr mgr;
+//   mg_mgr_init(&mgr);
+// Full examples:
+//   tutorials/http/http-server, tutorials/mqtt/mqtt-client,
+//   tutorials/websocket/websocket-server, tutorials/core/embedded-filesystem
+// Related APIs:
+//   mg_mgr_poll(), mg_mgr_free(), mg_http_listen(), mg_connect()
+// Notes:
+//   Sets safe defaults such as DNS servers, DNS timeout, epoll/SIGPIPE setup,
+//   and TLS context. Call before creating connections, listeners, or timers.
+//   Set mgr.userdata after this call if your application needs it.
+//   On embedded systems, if the built-in TCP/IP stack is enabled
+//   (MG_ENABLE_TCPIP=1) and one built-in driver is selected, e.g.
+//   MG_ENABLE_DRIVER_STM32H=1, mg_mgr_init() also calls mg_tcpip_init().
+//   If no driver is selected, automatic driver init is disabled, or multiple
+//   interfaces are intended, call mg_tcpip_init() separately.
 void mg_mgr_init(struct mg_mgr *);
 
 // Closes all connections, frees all timers, and releases the TLS context.
@@ -2194,9 +2240,22 @@ void mg_connect_resolved(struct mg_connection *);
 // Data is sent asynchronously by the next mg_mgr_poll() call.
 bool mg_send(struct mg_connection *, const void *, size_t);
 
-// Formats and appends to c->send using printf-style format string.
-// Returns bytes written, or 0 on OOM. Supports all mg_xprintf specifiers
-// including %M/%m custom printers. See fmt.h for the full specifier list.
+// Formats data and appends it to a connection send buffer.
+//
+// Returns:
+//   Number of bytes appended, or 0 on OOM.
+// Example:
+//   mg_printf(c, "GET / HTTP/1.0\r\nHost: %.*s\r\n\r\n",
+//             (int) host.len, host.buf);
+// Full examples:
+//   tutorials/http/http-client, tutorials/http/http-proxy-client,
+//   tutorials/http/http-restful-server
+// Related APIs:
+//   mg_send(), mg_snprintf(), mg_http_reply(), mg_ws_printf()
+// Notes:
+//   Data is sent asynchronously by a later mg_mgr_poll() call. Supports
+//   mg_xprintf specifiers, including custom %M/%m printers. See src/fmt.h for
+//   the full specifier list.
 size_t mg_printf(struct mg_connection *, const char *fmt, ...);
 size_t mg_vprintf(struct mg_connection *, const char *fmt, va_list *ap);
 
@@ -2305,20 +2364,56 @@ void mg_http_printf_chunk(struct mg_connection *cnn, const char *fmt, ...);
 // Call with len=0 to send the terminating zero-length chunk.
 void mg_http_write_chunk(struct mg_connection *c, const char *buf, size_t len);
 
-// Creates an HTTP server on url (e.g. "http://0.0.0.0:8000"). Returns the
-// listening connection, or NULL on error. Fires MG_EV_HTTP_MSG (full request
-// received) and MG_EV_HTTP_HDRS (headers only).
-// ev_data for those events is struct mg_http_message *
+// Creates an HTTP server on url, e.g. "http://0.0.0.0:8000".
+//
+// Returns:
+//   Listening connection, or NULL on error.
+// Example:
+//   mg_http_listen(&mgr, "http://0.0.0.0:8000", fn, NULL);
+// Full examples:
+//   tutorials/http/http-server, tutorials/http/*
+// Related APIs:
+//   mg_http_reply(), mg_http_serve_dir(), mg_match()
+// Notes:
+//   Call mg_mgr_poll() in the main loop. The user-supplied fn event handler
+//   receives normal connection events. It also receives MG_EV_HTTP_HDRS when
+//   headers are received and MG_EV_HTTP_MSG when the full request is received.
+//   ev_data for both HTTP events is struct mg_http_message *.
 struct mg_connection *mg_http_listen(struct mg_mgr *, const char *url,
                                      mg_event_handler_t fn, void *fn_data);
 
-// Opens an HTTP client connection to url. Returns the connection, or NULL on
-// error. Send the request in the MG_EV_CONNECT handler; read reply in
-// MG_EV_HTTP_MSG.
+// Opens an HTTP client connection to url, e.g. "http://example.org".
+//
+// Returns:
+//   Client connection, or NULL on error.
+// Example:
+//   mg_http_connect(&mgr, "http://example.org", fn, NULL);
+// Full examples:
+//   tutorials/http/http-client, tutorials/http/huge-response
+// Related APIs:
+//   mg_printf(), mg_http_status(), mg_http_get_header()
+// Notes:
+//   In the user-supplied fn event handler, send the HTTP request on
+//   MG_EV_CONNECT. The handler receives normal connection events. It also
+//   receives MG_EV_HTTP_HDRS when headers are received and MG_EV_HTTP_MSG when
+//   the full response is received. ev_data for both HTTP events is struct
+//   mg_http_message *.
 struct mg_connection *mg_http_connect(struct mg_mgr *, const char *url,
                                       mg_event_handler_t fn, void *fn_data);
 
-// Serves files from a directory. Call from an MG_EV_HTTP_MSG handler.
+// Serves static files from a directory.
+//
+// Example:
+//   struct mg_http_serve_opts o = {.root_dir = "web_root", .fs = &mg_fs_posix};
+//   mg_http_serve_dir(c, hm, &o);
+// Full examples:
+//   tutorials/http/http-server, tutorials/core/embedded-filesystem
+// Related APIs:
+//   mg_http_listen(), mg_http_serve_file(), mg_http_reply(), mg_match()
+// Notes:
+//   Call from an MG_EV_HTTP_MSG handler. The uri in hm is mapped under
+//   opts->root_dir. Directory listing depends on MG_ENABLE_DIRLIST; SSI uses
+//   opts->ssi_pattern when configured.
 void mg_http_serve_dir(struct mg_connection *, struct mg_http_message *hm,
                        const struct mg_http_serve_opts *);
 
@@ -2326,10 +2421,20 @@ void mg_http_serve_dir(struct mg_connection *, struct mg_http_message *hm,
 void mg_http_serve_file(struct mg_connection *, struct mg_http_message *hm,
                         const char *path, const struct mg_http_serve_opts *);
 
-// Sends an HTTP response. headers must end with "\r\n", or be "" for none.
-// body_fmt is printf-style. Example:
+// Sends a complete HTTP response with Content-Length.
+//
+// Example:
 //   mg_http_reply(c, 200, "Content-Type: application/json\r\n",
 //                 "{%m:%d}", MG_ESC("temperature"), 123);
+// Full examples:
+//   tutorials/http/http-server, tutorials/http/http-restful-server,
+//   tutorials/http/device-dashboard
+// Related APIs:
+//   mg_http_listen(), mg_printf(), mg_http_printf_chunk(), MG_ESC
+// Notes:
+//   headers must end with "\r\n"; pass "" or NULL for no extra headers.
+//   body_fmt is printf-style and supports %M/%m custom printers. Use MG_ESC
+//   when printing JSON strings.
 void mg_http_reply(struct mg_connection *, int status_code, const char *headers,
                    const char *body_fmt, ...);
 
@@ -2383,10 +2488,22 @@ void mg_http_bauth(struct mg_connection *, const char *user, const char *pass);
 // E.g. for s="multipart/form-data; boundary=abc", v="boundary" returns "abc".
 struct mg_str mg_http_get_header_var(struct mg_str s, struct mg_str v);
 
-// Iterates over parts of a multipart/form-data body. Start with ofs=0.
-// Returns the offset for the next call, or 0 when there are no more parts. Example:
+// Iterates over parts of a multipart/form-data body.
+//
+// Returns:
+//   Offset for the next call, or 0 when there are no more parts.
+// Example:
 //   size_t ofs = 0;
+//   struct mg_http_part part;
 //   while ((ofs = mg_http_next_multipart(hm->body, ofs, &part)) > 0) { ... }
+// Full examples:
+//   tutorials/http/file-upload-html-form, tutorials/http/http-server
+// Related APIs:
+//   mg_http_listen(), mg_http_start_upload()
+// Notes:
+//   Call from an MG_EV_HTTP_MSG handler after the full request body is
+//   received. part.name, part.filename, and part.body are zero-copy slices into
+//   hm->body and are not NUL-terminated.
 size_t mg_http_next_multipart(struct mg_str, size_t, struct mg_http_part *);
 
 // Returns the HTTP status code from a parsed response message (e.g. 200, 404).
@@ -2443,9 +2560,9 @@ struct mg_tls_opts {
   bool skip_verification;  // Skip certificate and hostname verification
 };
 
-// Initialise TLS on a connection. Call from the event handler on
-// MG_EV_ACCEPT (server) or MG_EV_CONNECT (client).
+// Initialises TLS on a connection.
 //
+// Example:
 // ```c
 // // Server: one-way TLS
 // if (ev == MG_EV_ACCEPT) {
@@ -2461,6 +2578,16 @@ struct mg_tls_opts {
 //   mg_tls_init(c, &opts);
 // }
 // ```
+// Full examples:
+//   tutorials/http/http-server, tutorials/http/http-client,
+//   tutorials/mqtt/mqtt-client-aws-iot, tutorials/websocket/websocket-client
+// Related APIs:
+//   mg_http_listen(), mg_http_connect(), mg_ws_connect(), mg_mqtt_connect()
+// Notes:
+//   Call from the user-supplied event handler on MG_EV_ACCEPT for servers or
+//   MG_EV_CONNECT for clients, before application data is sent. Servers usually
+//   set cert and key. Clients usually set ca and name; name enables SNI and
+//   hostname verification.
 void mg_tls_init(struct mg_connection *c, const struct mg_tls_opts *opts);
 
 // Private API, do not expose
@@ -3414,30 +3541,61 @@ struct mg_ws_message {
   uint8_t flags;       // First byte of the WS frame header: FIN (bit7) | opcode (bits3:0)
 };
 
-// Opens an outbound WebSocket connection to url (e.g. "ws://host/path" or
-// "wss://host/path" for TLS). Sends the HTTP Upgrade request immediately.
-// fmt is a printf-style format string for extra HTTP request headers
-// (each header must end with \r\n); pass NULL for no extra headers.
-// Fires MG_EV_WS_OPEN when the handshake completes (ev_data: struct mg_http_message *).
-// Fires MG_EV_WS_MSG for each complete incoming message (ev_data: struct mg_ws_message *).
-// Fires MG_EV_WS_CTL for control frames: PING (auto-replied), PONG, CLOSE.
-// Returns NULL on error.
+// Opens an outbound WebSocket connection.
+//
+// Returns:
+//   Client connection, or NULL on error.
+// Example:
+//   mg_ws_connect(&mgr, "ws://localhost:8000/websocket", fn, NULL, NULL);
+// Full examples:
+//   tutorials/websocket/websocket-client, tutorials/mqtt/mqtt-over-ws-client
+// Related APIs:
+//   mg_ws_send(), mg_ws_printf(), mg_tls_init(), mg_mgr_poll()
+// Notes:
+//   url may use ws:// or wss://. Sends the HTTP Upgrade request immediately.
+//   fmt is a printf-style string for extra HTTP request headers; each header
+//   must end with "\r\n". The user-supplied fn event handler receives
+//   MG_EV_WS_OPEN on handshake success, MG_EV_WS_MSG for messages, and
+//   MG_EV_WS_CTL for control frames.
 struct mg_connection *mg_ws_connect(struct mg_mgr *, const char *url,
                                     mg_event_handler_t fn, void *fn_data,
                                     const char *fmt, ...);
 
-// Server-side: upgrades an existing HTTP connection to WebSocket.
-// Call from an MG_EV_HTTP_MSG handler, passing the received hm.
-// fmt is a printf-style format string for extra response headers
-// (each header must end with \r\n); pass NULL for none.
-// Fires MG_EV_WS_OPEN immediately on success (ev_data: struct mg_http_message *).
-// Sends HTTP 426 and drains the connection if the request lacks Sec-WebSocket-Key.
+// Upgrades a server-side HTTP connection to WebSocket.
+//
+// Example:
+//   if (mg_match(hm->uri, mg_str("/websocket"), NULL)) {
+//     mg_ws_upgrade(c, hm, NULL);
+//   }
+// Full examples:
+//   tutorials/websocket/websocket-server,
+//   tutorials/websocket/json-rpc-over-websocket, tutorials/core/timers
+// Related APIs:
+//   mg_http_listen(), mg_match(), mg_ws_send(), mg_ws_printf()
+// Notes:
+//   Call from an MG_EV_HTTP_MSG handler and pass that event's hm. fmt is a
+//   printf-style string for extra response headers; each header must end with
+//   "\r\n". Fires MG_EV_WS_OPEN immediately on success. Sends HTTP 426 and
+//   drains the connection if the request lacks Sec-WebSocket-Key.
 void mg_ws_upgrade(struct mg_connection *, struct mg_http_message *,
                    const char *fmt, ...);
 
-// Sends a WebSocket frame containing buf/len with opcode op (WEBSOCKET_OP_*).
-// Client connections are automatically masked per RFC 6455.
-// Returns total bytes appended to c->send (header + payload), or 0 on OOM.
+// Sends one WebSocket frame.
+//
+// Returns:
+//   Number of bytes appended to c->send; 0 if the frame header cannot be
+//   appended.
+// Example:
+//   mg_ws_send(c, "hello", 5, WEBSOCKET_OP_TEXT);
+// Full examples:
+//   tutorials/websocket/websocket-server, tutorials/websocket/websocket-client,
+//   tutorials/core/timers
+// Related APIs:
+//   mg_ws_connect(), mg_ws_upgrade(), mg_ws_printf(), mg_ws_wrap()
+// Notes:
+//   op is one of WEBSOCKET_OP_*. Client connections are automatically masked
+//   per RFC 6455. On OOM, the return value can be smaller than header + len.
+//   Data is appended to c->send and sent by a later mg_mgr_poll() call.
 size_t mg_ws_send(struct mg_connection *, const void *buf, size_t len, int op);
 
 // Wraps the last len bytes already in c->send with a WebSocket frame header
@@ -3473,18 +3631,24 @@ extern uint64_t mg_boot_timestamp_ms;
 // Until a successful SNTP request completes, this is identical to mg_millis().
 uint64_t mg_now(void);
 
-// Return true if the periodic timer has fired; advance `expiration` by one
-// `period`. Handles wrap-around. Usage example:
+// Checks whether a periodic deadline has expired.
 //
-// ```c
-// uint64_t timer = 0;
-// for (;;) {
+// Returns:
+//   True when the timer has fired; false otherwise.
+// Example:
+//   uint64_t timer = 0;
 //   if (mg_timer_expired(&timer, 1000, mg_millis())) {
-//     MG_INFO(("Hi"));  // Print a message every second
+//     MG_INFO(("every second"));
 //   }
-//   mg_mgr_poll(&mgr, 10);
-// }
-// ```
+// Full examples:
+//   tutorials/http/http-server/arduino/teensy41-http,
+//   tutorials/mqtt/mqtt-client
+// Related APIs:
+//   mg_millis(), mg_now(), mg_timer_add(), mg_mgr_poll()
+// Notes:
+//   Initialise *expiration to 0 before first use. On expiry, this function
+//   advances *expiration by period and handles time wrap-around. For callbacks
+//   managed by the event loop, use mg_timer_add() instead.
 bool mg_timer_expired(uint64_t *expiration, uint64_t period, uint64_t now);
 
 // Connect to an SNTP server and send a time request.
@@ -3622,12 +3786,23 @@ struct mg_mqtt_message {
   size_t props_size;    // MQTT5: byte length of the properties section
 };
 
-// Opens a TCP connection to url and immediately sends a CONNECT packet.
-// opts may be NULL to use defaults (MQTT 3.1.1, no auth, auto client ID).
-// Fires MG_EV_MQTT_OPEN when CONNACK is received (ev_data: uint8_t* return code, 0=success).
-// Fires MG_EV_MQTT_MSG for incoming PUBLISH packets (ev_data: struct mg_mqtt_message *).
-// Fires MG_EV_MQTT_CMD for every received MQTT packet (ev_data: struct mg_mqtt_message *).
-// Returns NULL on error.
+// Opens an MQTT client connection and sends a CONNECT packet.
+//
+// Returns:
+//   Client connection, or NULL on error.
+// Example:
+//   struct mg_mqtt_opts opts = {.client_id = mg_str("device1")};
+//   mg_mqtt_connect(&mgr, "mqtt://broker:1883", &opts, fn, NULL);
+// Full examples:
+//   tutorials/mqtt/mqtt-client, tutorials/mqtt/mqtt-client-aws-iot,
+//   tutorials/mqtt/ota-over-mqtt
+// Related APIs:
+//   mg_mqtt_pub(), mg_mqtt_sub(), mg_tls_init(), mg_mgr_poll()
+// Notes:
+//   opts may be NULL to use MQTT 3.1.1 defaults with no auth and an auto client
+//   ID. The user-supplied fn event handler receives normal connection events,
+//   MG_EV_MQTT_OPEN when CONNACK is received, MG_EV_MQTT_MSG for incoming
+//   PUBLISH packets, and MG_EV_MQTT_CMD for every received MQTT packet.
 struct mg_connection *mg_mqtt_connect(struct mg_mgr *, const char *url,
                                       const struct mg_mqtt_opts *opts,
                                       mg_event_handler_t fn, void *fn_data);
@@ -3643,13 +3818,42 @@ struct mg_connection *mg_mqtt_listen(struct mg_mgr *mgr, const char *url,
 // as re-authenticating on an existing connection.
 void mg_mqtt_login(struct mg_connection *c, const struct mg_mqtt_opts *opts);
 
-// Sends a PUBLISH packet. opts.topic and opts.message carry the topic and
-// payload. For QoS 0 returns 0; for QoS 1/2 returns the assigned packet ID.
-// To retransmit, set opts.retransmit_id to the ID from the previous call;
-// use 0 for a new message.
+// Sends an MQTT PUBLISH packet.
+//
+// Returns:
+//   0 for QoS 0; assigned packet ID for QoS 1 or 2.
+// Example:
+//   struct mg_mqtt_opts opts = {
+//       .topic = mg_str("device/status"),
+//       .message = mg_str("{\"ok\":true}"),
+//       .qos = 1,
+//   };
+//   uint16_t id = mg_mqtt_pub(c, &opts);
+// Full examples:
+//   tutorials/mqtt/mqtt-client, tutorials/mqtt/mqtt-client-aws-iot,
+//   tutorials/mqtt/ota-over-mqtt
+// Related APIs:
+//   mg_mqtt_connect(), mg_mqtt_sub(), mg_mqtt_send_header()
+// Notes:
+//   On success, opts.topic and opts.message are copied into c->send before the
+//   function returns. To retransmit a QoS message, set opts.retransmit_id to the
+//   packet ID returned by the previous call; use 0 for a new message.
 uint16_t mg_mqtt_pub(struct mg_connection *c, const struct mg_mqtt_opts *opts);
 
-// Sends a SUBSCRIBE packet for opts.topic at opts.qos.
+// Sends an MQTT SUBSCRIBE packet.
+//
+// Example:
+//   struct mg_mqtt_opts opts = {.topic = mg_str("device/rx"), .qos = 1};
+//   mg_mqtt_sub(c, &opts);
+// Full examples:
+//   tutorials/mqtt/mqtt-client, tutorials/mqtt/mqtt-client-aws-iot,
+//   tutorials/mqtt/ota-over-mqtt
+// Related APIs:
+//   mg_mqtt_connect(), mg_mqtt_pub(), mg_mqtt_unsub()
+// Notes:
+//   Send after MG_EV_MQTT_OPEN reports a successful CONNACK. Incoming PUBLISH
+//   messages are delivered to the user-supplied fn event handler as
+//   MG_EV_MQTT_MSG with ev_data pointing to struct mg_mqtt_message.
 void mg_mqtt_sub(struct mg_connection *, const struct mg_mqtt_opts *opts);
 
 // Sends an UNSUBSCRIBE packet for opts.topic.
@@ -3849,8 +4053,20 @@ enum { MG_JSON_TOO_DEEP = -1, MG_JSON_INVALID = -2, MG_JSON_NOT_FOUND = -3 };
 // Returns MG_JSON_NOT_FOUND, MG_JSON_INVALID, or MG_JSON_TOO_DEEP on error.
 int mg_json_get(struct mg_str json, const char *path, int *toklen);
 
-// Returns the raw JSON token at path as an mg_str slice into json.buf.
-// Returns {NULL, 0} if the path is not found or the JSON is invalid.
+// Returns the raw JSON token at path.
+//
+// Returns:
+//   Zero-copy mg_str slice into json.buf, or {NULL, 0} if not found or invalid.
+// Example:
+//   struct mg_str tok = mg_json_get_tok(body, "$.device.name");
+// Full examples:
+//   src/dash.c
+// Related APIs:
+//   mg_json_get(), mg_json_get_str(), mg_json_unescape()
+// Notes:
+//   The returned token is not NUL-terminated. String tokens include the
+//   surrounding double quotes and escape sequences; use mg_json_unescape() or
+//   mg_json_get_str() when you need decoded string content.
 struct mg_str mg_json_get_tok(struct mg_str json, const char *path);
 
 // Parses a numeric JSON value at path into *v.
@@ -3882,9 +4098,21 @@ char *mg_json_get_hex(struct mg_str json, const char *path, int *len);
 // Returns NULL if not found or not a string.
 char *mg_json_get_b64(struct mg_str json, const char *path, int *len);
 
-// Writes the JSON-unescaped string at path into the caller-supplied buffer
-// to/n. NUL-terminates on success. Returns the number of bytes written
-// (excluding the NUL), or 0 on error or if the path is not found.
+// Writes a JSON-unescaped string value at path into a caller-supplied buffer.
+//
+// Returns:
+//   Number of bytes written excluding the NUL, or 0 on error, not found,
+//   non-string token, too-small buffer, or an empty string.
+// Example:
+//   char name[32];
+//   mg_json_unescape(body, "$.device.name", name, sizeof(name));
+// Full examples:
+//   src/dash.c, src/ota.c
+// Related APIs:
+//   mg_json_get_tok(), mg_json_get_str(), mg_json_get_num()
+// Notes:
+//   On success, NUL-terminates when n > 0. The destination buffer is owned by
+//   the caller. Only string tokens are unescaped; other token types return 0.
 size_t mg_json_unescape(struct mg_str json, const char *path, char *, size_t);
 
 // Sequential iterator over a JSON object or array. Start with ofs=0.

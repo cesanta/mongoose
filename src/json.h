@@ -20,8 +20,20 @@ enum { MG_JSON_TOO_DEEP = -1, MG_JSON_INVALID = -2, MG_JSON_NOT_FOUND = -3 };
 // Returns MG_JSON_NOT_FOUND, MG_JSON_INVALID, or MG_JSON_TOO_DEEP on error.
 int mg_json_get(struct mg_str json, const char *path, int *toklen);
 
-// Returns the raw JSON token at path as an mg_str slice into json.buf.
-// Returns {NULL, 0} if the path is not found or the JSON is invalid.
+// Returns the raw JSON token at path.
+//
+// Returns:
+//   Zero-copy mg_str slice into json.buf, or {NULL, 0} if not found or invalid.
+// Example:
+//   struct mg_str tok = mg_json_get_tok(body, "$.device.name");
+// Full examples:
+//   src/dash.c
+// Related APIs:
+//   mg_json_get(), mg_json_get_str(), mg_json_unescape()
+// Notes:
+//   The returned token is not NUL-terminated. String tokens include the
+//   surrounding double quotes and escape sequences; use mg_json_unescape() or
+//   mg_json_get_str() when you need decoded string content.
 struct mg_str mg_json_get_tok(struct mg_str json, const char *path);
 
 // Parses a numeric JSON value at path into *v.
@@ -53,9 +65,21 @@ char *mg_json_get_hex(struct mg_str json, const char *path, int *len);
 // Returns NULL if not found or not a string.
 char *mg_json_get_b64(struct mg_str json, const char *path, int *len);
 
-// Writes the JSON-unescaped string at path into the caller-supplied buffer
-// to/n. NUL-terminates on success. Returns the number of bytes written
-// (excluding the NUL), or 0 on error or if the path is not found.
+// Writes a JSON-unescaped string value at path into a caller-supplied buffer.
+//
+// Returns:
+//   Number of bytes written excluding the NUL, or 0 on error, not found,
+//   non-string token, too-small buffer, or an empty string.
+// Example:
+//   char name[32];
+//   mg_json_unescape(body, "$.device.name", name, sizeof(name));
+// Full examples:
+//   src/dash.c, src/ota.c
+// Related APIs:
+//   mg_json_get_tok(), mg_json_get_str(), mg_json_get_num()
+// Notes:
+//   On success, NUL-terminates when n > 0. The destination buffer is owned by
+//   the caller. Only string tokens are unescaped; other token types return 0.
 size_t mg_json_unescape(struct mg_str json, const char *path, char *, size_t);
 
 // Sequential iterator over a JSON object or array. Start with ofs=0.
