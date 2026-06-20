@@ -1344,7 +1344,10 @@ struct mg_str mg_strdup(const struct mg_str s);
 //   Pattern wildcards: ? matches one character, * matches any sequence except
 //   '/', and # matches any sequence including '/'. If caps is not NULL, each
 //   wildcard capture is stored as a zero-copy mg_str slice into str. Pass
-//   caps=NULL when captures are not needed.
+//   caps=NULL when captures are not needed. The caps array size should be
+//   at least the number of wildcards in a pattern plus one. The last cap
+//   is initialised to an empty string.
+//   Attention: the pattern must consume the whole str in order to match.
 bool mg_match(struct mg_str str, struct mg_str pattern, struct mg_str *caps);
 
 // Splits s at the first occurrence of sep. Sets *a to the part before sep
@@ -1493,13 +1496,15 @@ size_t mg_xprintf(mg_pfn_t fn, void *arg, const char *fmt, ...);
 //   Number of bytes that would be written if buf were large enough, like
 //   snprintf().
 // Example:
+//   char buf[20];
 //   mg_snprintf(buf, sizeof(buf), "{%m:%d}", MG_ESC("status"), 1);
 // Full examples:
 //   tutorials/http/link-checker, tutorials/http/redirect-to-https,
 //   tutorials/mqtt/mqtt-dashboard/device
 // Related APIs:
-//   mg_printf(), mg_mprintf(), mg_xprintf(), MG_ESC
+//   mg_xprintf(), mg_printf(), mg_mprintf(), MG_ESC
 // Notes:
+//   These functions are just wrappers around mg_xprintf().
 //   Call with buf=NULL and len=0 to measure. NUL-terminates if the result fits
 //   (return value < len). Supports mg_xprintf specifiers, including custom
 //   %M/%m printers. Use MG_ESC when printing JSON strings.
@@ -3550,7 +3555,7 @@ struct mg_ws_message {
 // Full examples:
 //   tutorials/websocket/websocket-client, tutorials/mqtt/mqtt-over-ws-client
 // Related APIs:
-//   mg_ws_send(), mg_ws_printf(), mg_tls_init(), mg_mgr_poll()
+//   mg_ws_send(), mg_ws_printf(), mg_tls_init(), mg_ws_upgrade()
 // Notes:
 //   url may use ws:// or wss://. Sends the HTTP Upgrade request immediately.
 //   fmt is a printf-style string for extra HTTP request headers; each header
@@ -3644,11 +3649,10 @@ uint64_t mg_now(void);
 //   tutorials/http/http-server/arduino/teensy41-http,
 //   tutorials/mqtt/mqtt-client
 // Related APIs:
-//   mg_millis(), mg_now(), mg_timer_add(), mg_mgr_poll()
+//   mg_millis(), mg_now()
 // Notes:
 //   Initialise *expiration to 0 before first use. On expiry, this function
-//   advances *expiration by period and handles time wrap-around. For callbacks
-//   managed by the event loop, use mg_timer_add() instead.
+//   advances *expiration by period and handles time wrap-around.
 bool mg_timer_expired(uint64_t *expiration, uint64_t period, uint64_t now);
 
 // Connect to an SNTP server and send a time request.
