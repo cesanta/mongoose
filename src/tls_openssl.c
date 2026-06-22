@@ -138,6 +138,7 @@ void mg_tls_free(struct mg_connection *c) {
   SSL_free(tls->ssl);
   SSL_CTX_free(tls->ctx);
   BIO_meth_free(tls->bm);
+  mg_free(tls->name);
   mg_free(tls);
   c->tls = NULL;
 }
@@ -145,6 +146,7 @@ void mg_tls_free(struct mg_connection *c) {
 void mg_tls_init(struct mg_connection *c, const struct mg_tls_opts *opts) {
   struct mg_tls *tls = (struct mg_tls *) mg_calloc(1, sizeof(*tls));
   const char *id = "mongoose";
+  bool check_name = false;
   static unsigned char s_initialised = 0;
   BIO *bio = NULL;
   int rc;
@@ -186,6 +188,14 @@ void mg_tls_init(struct mg_connection *c, const struct mg_tls_opts *opts) {
   SSL_set_options(tls->ssl, SSL_OP_CIPHER_SERVER_PREFERENCE);
 #endif
 
+if (c->is_client && opts->name.buf != NULL && opts->name.len > 0 && opts->name.buf[0] != '\0') {
+  tls->name = mg_mprintf("%.*s", (int) opts->name.len, opts->name.buf);
+  if (tls->name == NULL) {
+    mg_error(c, "TLS OOM");
+    goto fail;
+  }
+  check_name = true;
+}
 #if MG_TLS == MG_TLS_WOLFSSL && !defined(OPENSSL_COMPATIBLE_DEFAULTS)
   if (opts->ca.len == 0 || mg_strcmp(opts->ca, mg_str("*")) == 0) {
     // Older versions require that either the CA is loaded or SSL_VERIFY_NONE
@@ -194,7 +204,7 @@ void mg_tls_init(struct mg_connection *c, const struct mg_tls_opts *opts) {
   }
 #endif
 
-  if (opts->ca.buf != NULL && opts->ca.buf[0] != '\0') {
+  if (opts->ca.buf != NULL && opts->ca.len > 0 && opts->ca.buf[0] != '\0') {
     SSL_set_verify(tls->ssl, SSL_VERIFY_PEER | SSL_VERIFY_FAIL_IF_NO_PEER_CERT,
                    NULL);
 #if MG_TLS == MG_TLS_WOLFSSL
@@ -216,6 +226,8 @@ void mg_tls_init(struct mg_connection *c, const struct mg_tls_opts *opts) {
       goto fail;
     }
 #endif
+  } else {
+    tls->check_name = check_name; // host name set but no CA cert given
   }
 
   if (opts->cert.buf != NULL && opts->cert.buf[0] != '\0') {
@@ -240,15 +252,13 @@ void mg_tls_init(struct mg_connection *c, const struct mg_tls_opts *opts) {
   (void) SSL_set_ecdh_auto(tls->ssl, 1);
 #endif
 #if OPENSSL_VERSION_NUMBER >= 0x10100000L
-  if (opts->name.len > 0) {
-    char *s = mg_mprintf("%.*s", (int) opts->name.len, opts->name.buf);
+  if (tls->name != NULL) {
 #if MG_TLS != MG_TLS_WOLFSSL || LIBWOLFSSL_VERSION_HEX >= 0x05005002
-    SSL_set1_host(tls->ssl, s);
+    SSL_set1_host(tls->ssl, tls->name);
 #else
-    X509_VERIFY_PARAM_set1_host(SSL_get0_param(tls->ssl), s, 0);
+    X509_VERIFY_PARAM_set1_host(SSL_get0_param(tls->ssl), tls->name, 0);
 #endif
-    SSL_set_tlsext_host_name(tls->ssl, s);
-    mg_free(s);
+    SSL_set_tlsext_host_name(tls->ssl, tls->name);
   }
 #endif
 #if MG_TLS == MG_TLS_WOLFSSL
@@ -276,6 +286,16 @@ void mg_tls_handshake(struct mg_connection *c) {
   struct mg_tls *tls = (struct mg_tls *) c->tls;
   int rc = c->is_client ? SSL_connect(tls->ssl) : SSL_accept(tls->ssl);
   if (rc == 1) {
+    if (tls->check_name) {  // host name set but no CA cert given
+      X509 *cert = SSL_get_peer_certificate(tls->ssl);
+      bool ok =
+          cert != NULL && X509_check_host(cert, tls->name, 0, 0, NULL) == 1;
+      X509_free(cert);
+      if (!ok) {
+        mg_error(c, "failed to verify hostname");
+        return;
+      }
+    }
     MG_DEBUG(("%lu success", c->id));
     c->is_tls_hs = 0;
     mg_call(c, MG_EV_TLS_HS, NULL);

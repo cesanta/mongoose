@@ -1605,9 +1605,8 @@ static void test_http_client(void) {
   opts.name = mg_url_host(url);
 
   // Test empty CA
-  // Disable mbedTLS: https://github.com/Mbed-TLS/mbedtls/issues/7075
-#if MG_TLS != MG_TLS_MBED
   opts.ca = mg_str("");
+  opts.name = mg_url_host(url);
   c = mg_http_connect(&mgr, url, f3, &ok);
   mg_tls_init(c, &opts);
   ok = 0;
@@ -1615,7 +1614,21 @@ static void test_http_client(void) {
   MG_INFO(("OK: %d", ok));
   ASSERT(ok == 200);
   mg_mgr_poll(&mgr, 1);
+  // Make host validation fail
+  c = mg_http_connect(&mgr, url, f3, &ok);
+  ASSERT(c != NULL);
+  opts.name = mg_str("dummy");  // Set some invalid hostname value
+  mg_tls_init(c, &opts);
+  ok = 0;
+  for (i = 0; i < 500 && ok <= 0; i++) mg_mgr_poll(&mgr, 10);
+  MG_INFO(("OK: %d", ok));
+#if MG_TLS != MG_TLS_MBED || !defined(MBEDTLS_VERSION_NUMBER) || \
+    MBEDTLS_VERSION_NUMBER < 0x03030000 ||                       \
+    MBEDTLS_VERSION_NUMBER >= 0x04000000
+  // Ignore result for 3.3.0 <= mbedTLS < 4.0.0 : https://github.com/Mbed-TLS/mbedtls/issues/7075
+  ASSERT(ok == 777);
 #endif
+  mg_mgr_poll(&mgr, 1);
 #endif
 
 #if MG_ENABLE_IPV6

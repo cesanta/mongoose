@@ -156,8 +156,6 @@ jobs:
         exclude:
         - ssl: MBEDTLS
           select: -DMG_ENABLE_POLL=0
-        - ssl: MBEDTLS                # see issue#2694
-          select: -DMG_ENABLE_POLL=1
         - ssl: OPENSSL
           select: -DMG_ENABLE_POLL=0
         - ssl: WOLFSSL
