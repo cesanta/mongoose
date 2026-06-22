@@ -81,7 +81,7 @@ endif
 all:
 	$(MAKE) -C ../tutorials/http/http-server
 
-tall: mg_prefix unamalgamated test valgrind fuzz fuzz_tls vc98 vc17 vc22 mingw mingw++ arm armhf riscv s390 tutorials tutorials_win tutorials_embedded mip_test mip_vc98
+tall: mg_prefix unamalgamated test valgrind fuzz fuzz_tls fuzz_ws vc98 vc17 vc22 mingw mingw++ arm armhf riscv s390 tutorials tutorials_win tutorials_embedded mip_test mip_vc98
 
 mip_test: mip_test.c mongoose.c mongoose.h packed_fs.c Makefile
 	$(CC) mip_test.c packed_fs.c $(CFLAGS) $(LDFLAGS) -o $@
@@ -141,6 +141,15 @@ fuzz_tls: mongoose.c mongoose.h Makefile fuzz_tls.c
 fuzz_tls2: mongoose.c mongoose.h Makefile fuzz_tls.c
 	$(CC) fuzz_tls.c -DMAIN $(OPTS) $(WARN) $(ASAN) $(INCS) -o fuzzer_tls
 	$(RUN) ./fuzzer_tls $(FUZZDATA)
+
+fuzz_ws: ASAN = -fsanitize=fuzzer,signed-integer-overflow,address,undefined
+fuzz_ws: mongoose.c mongoose.h Makefile fuzz_ws.c
+	$(CC) fuzz_ws.c $(OPTS) $(WARN) $(INCS) $(TFLAGS) $(ASAN) -o fuzzer_ws
+	$(RUN) ./fuzzer_ws $(ARGS)
+
+fuzz_ws2: mongoose.c mongoose.h Makefile fuzz_ws.c
+	$(CC) fuzz_ws.c -DMAIN $(OPTS) $(WARN) $(ASAN) $(INCS) -o fuzzer_ws
+	$(RUN) ./fuzzer_ws $(FUZZDATA)
 
 
 
