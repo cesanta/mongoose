@@ -206,12 +206,14 @@ mip_port_s390: RUN = $(DOCKER) --init mdashnet/s390
 mip_port_s390: mip_port_test
 
 arm: DEFS += -DMG_ENABLE_POSIX_FS=0 -DMG_ENABLE_TCPIP=1 -DMG_ENABLE_TCPIP_DRIVER_INIT=0 -DMG_ARCH=MG_ARCH_ARMGCC -DNO_SLEEP_ABORT
-arm: mongoose.h $(SRCS)
+arm: mongoose.h $(SRCS) mip_test.c
 	$(DOCKER) mdashnet/armgcc arm-none-eabi-gcc -mcpu=cortex-m3 -mthumb $(SRCS) $(OPTS) $(WARN) $(INCS) $(DEFS) $(TFLAGS) -o unit_test -nostartfiles --specs nosys.specs -e 0
+	$(DOCKER) mdashnet/armgcc arm-none-eabi-gcc -mcpu=cortex-m3 -mthumb mip_test.c packed_fs.c $(OPTS) $(WARN) $(INCS) $(DEFS) $(TFLAGS) -o mip_test -nostartfiles --specs nosys.specs -e 0
 
 riscv: DEFS += -DMG_ENABLE_POSIX_FS=0 -DMG_ENABLE_TCPIP=1 -DMG_ENABLE_TCPIP_DRIVER_INIT=0 -DMG_ARCH=MG_ARCH_ARMGCC -DNO_SLEEP_ABORT
-riscv: mongoose.h $(SRCS)
+riscv: mongoose.h $(SRCS) mip_test.c
 	$(DOCKER) mdashnet/riscv riscv-none-elf-gcc -march=rv32imc -mabi=ilp32 $(SRCS) $(OPTS) $(WARN) $(INCS) $(DEFS) $(TFLAGS) -o unit_test
+	$(DOCKER) mdashnet/riscv riscv-none-elf-gcc -march=rv32imc -mabi=ilp32 mip_test.c packed_fs.c $(OPTS) $(WARN) $(INCS) $(DEFS) $(TFLAGS) -o mip_test
 
 vc98: Makefile mongoose.h $(SRCS)
 	$(DOCKER) mdashnet/vc98 wine cl $(SRCS) $(VCFLAGS) $(DEFS) $(TFLAGS) /Fe$@.exe
