@@ -15,7 +15,7 @@ jobs:
         target: [fuzz, fuzz_tls]
     name: ${{ matrix.target }}
     steps:
-    - uses: actions/checkout@v4
+    - uses: actions/checkout@v5
       with: { fetch-depth: 2 }
     - run: make -C test ${{ matrix.target }} ARGS="-max_total_time=14400"
 

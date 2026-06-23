@@ -24,7 +24,7 @@ jobs:
       SSL: ${{ matrix.ssl }}
       TFLAGS: -DMQTT_LOCALHOST
     steps:
-    - uses: actions/checkout@v4
+    - uses: actions/checkout@v5
       with: { fetch-depth: 2 }
     - run: if ./test/match_changed_files.sh '^test|^src/.*.[ch]' ; then echo GO=1 >> $GITHUB_ENV ; fi
     - if: ${{ env.GO == 1 }}
@@ -34,7 +34,7 @@ jobs:
     env:
       TFLAGS: -DMQTT_LOCALHOST
     steps:
-    - uses: actions/checkout@v4
+    - uses: actions/checkout@v5
       with: { fetch-depth: 2 }
     - run: if ./test/match_changed_files.sh '^test|^src/.*.[ch]' ; then echo GO=1 >> $GITHUB_ENV ; fi
     - if: ${{ env.GO == 1 }}
@@ -44,7 +44,7 @@ jobs:
     env:
       TFLAGS: -DMQTT_LOCALHOST
     steps:
-    - uses: actions/checkout@v4
+    - uses: actions/checkout@v5
       with: { fetch-depth: 2 }
     - run: if ./test/match_changed_files.sh '^test|^src/.*.[ch]' ; then echo GO=1 >> $GITHUB_ENV ; fi
     - if: ${{ env.GO == 1 }}
@@ -52,7 +52,7 @@ jobs:
   unamalgamated-mg_prefix:
     runs-on: ubuntu-latest
     steps:
-    - uses: actions/checkout@v4
+    - uses: actions/checkout@v5
       with: { fetch-depth: 2 }
     - run: if ./test/match_changed_files.sh '^test|^src/.*.[ch]' ; then echo GO=1 >> $GITHUB_ENV ; fi
     - if: ${{ env.GO == 1 }}
@@ -69,7 +69,7 @@ jobs:
       TFLAGS: -DMQTT_LOCALHOST # -DNO_SNTP_CHECK
       HOMEBREW_NO_AUTO_UPDATE: 1
     steps:
-    - uses: actions/checkout@v4
+    - uses: actions/checkout@v5
       with: { fetch-depth: 2 }
     - run: if ./test/match_changed_files.sh '^test|^src/.*.[ch]' ; then echo GO=1 >> $GITHUB_ENV ; fi
     - if: ${{ env.GO == 1 }}
@@ -87,7 +87,7 @@ jobs:
     env:
       TFLAGS: -DMQTT_LOCALHOST
     steps:
-    - uses: actions/checkout@v4
+    - uses: actions/checkout@v5
       with: { fetch-depth: 2 }
     - run: if ./test/match_changed_files.sh '^test|^src/.*.[ch]' ; then echo GO=1 >> $GITHUB_ENV ; fi
     - if: ${{ env.GO == 1 }}
@@ -95,25 +95,25 @@ jobs:
   arm:
     runs-on: ubuntu-latest
     steps:
-    - uses: actions/checkout@v4
+    - uses: actions/checkout@v5
     - run: make -C test arm
   riscv:
     runs-on: ubuntu-latest
     steps:
-    - uses: actions/checkout@v4
+    - uses: actions/checkout@v5
     - run: make -C test riscv
 
   tutorials:
     runs-on: ubuntu-latest
     steps:
-    - uses: actions/checkout@v4
+    - uses: actions/checkout@v5
     - run: curl -sL https://github.com/Y2Z/monolith/releases/download/v2.10.1/monolith-gnu-linux-x86_64 -o /usr/local/bin/monolith ; chmod a+x /usr/local/bin/monolith
     - run: make -C test tutorials_essential
     - run: make -C test clean_tutorials_essential
   tutorials_win:
     runs-on: windows-latest
     steps:
-    - uses: actions/checkout@v4
+    - uses: actions/checkout@v5
       with: { fetch-depth: 2 }
 #    - uses: egor-tensin/setup-mingw@v2
 #      with:
@@ -128,7 +128,7 @@ jobs:
     runs-on: macos-latest
     env: { HOMEBREW_NO_AUTO_UPDATE: 1 }
     steps:
-    - uses: actions/checkout@v4
+    - uses: actions/checkout@v5
     - run: brew install monolith
     - run: make -C test tutorials_mac
     - run: make -C test clean_tutorials_mac
@@ -160,7 +160,7 @@ jobs:
     env:
       GO: 0
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
         with: { fetch-depth: 2 }
       - run: |
           if ./test/match_changed_files.sh '^src'; then
@@ -183,7 +183,7 @@ jobs:
     env:
       GO: 0
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
         with: { fetch-depth: 2 }
       - run: if ./test/match_changed_files.sh '^src|^tutorials/http/uart-bridge|^tutorials/${{ matrix.example.path }}'; then echo GO=1 >> $GITHUB_ENV ; fi
       - if: ${{ env.GO == 1 }}
@@ -206,7 +206,7 @@ jobs:
     env:
       GO: 0
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
         with: { fetch-depth: 2 }
       - run: if ./test/match_changed_files.sh '^src|^tutorials/${{ matrix.example.path }}'; then echo GO=1 >> $GITHUB_ENV ; fi
       - if: ${{ env.GO == 1 }}
@@ -225,7 +225,7 @@ jobs:
     env:
       GO: 0
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
         with: { fetch-depth: 2 }
       - run: |
           if ./test/match_changed_files.sh '^src|tutorials/http/device-dashboard'; then
@@ -254,7 +254,7 @@ jobs:
     env:
       GO: 0
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
         with: { fetch-depth: 2 }
       - run: |
           if ./test/match_changed_files.sh '^src|tutorials/http/device-dashboard|^tutorials/${{ matrix.example.path }}'; then

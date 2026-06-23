@@ -40,7 +40,7 @@ jobs:
       SSL: ${{ matrix.ssl }}
       TFLAGS: ${{ matrix.select }} -DMQTT_LOCALHOST -DNO_ABORT
     steps:
-    - uses: actions/checkout@v4
+    - uses: actions/checkout@v5
       with: { fetch-depth: 2 }
     - uses: webfactory/ssh-agent@v0.9.1
       with:
@@ -70,7 +70,7 @@ jobs:
       IPV6: 1
       TFLAGS: -DMQTT_HOST -DIPV6_NOROUTING -DNO_ABORT  # -DMQTT_HOST_NAME=\"server\"
     steps:
-    - uses: actions/checkout@v4
+    - uses: actions/checkout@v5
       with: { fetch-depth: 2 }
     - uses: webfactory/ssh-agent@v0.9.1
       with:
@@ -91,7 +91,7 @@ jobs:
         target: [mip_vc98]
     name: mip89 ${{ matrix.target }}
     steps:
-    - uses: actions/checkout@v4
+    - uses: actions/checkout@v5
       with: { fetch-depth: 2 }
     - run: make -C test ${{ matrix.target }} IPV6=1
   s390:
@@ -104,7 +104,7 @@ jobs:
     env:
       TFLAGS: -DMQTT_LOCALHOST
     steps:
-    - uses: actions/checkout@v4
+    - uses: actions/checkout@v5
       with: { fetch-depth: 2 }
     - run: sudo apt -y update ; sudo apt -y install binfmt-support qemu-user-static && ./test/setup_mqtt_server.sh && docker run --rm --privileged multiarch/qemu-user-static --reset -p yes && make -C test s390 SSL=${{ matrix.ssl }} MULTIREC=NO
   armhf:
@@ -117,7 +117,7 @@ jobs:
     env:
       TFLAGS: -DMQTT_LOCALHOST
     steps:
-    - uses: actions/checkout@v4
+    - uses: actions/checkout@v5
       with: { fetch-depth: 2 }
     - run: sudo apt -y update ; sudo apt -y install binfmt-support qemu-user-static && ./test/setup_mqtt_server.sh && docker run --rm --privileged multiarch/qemu-user-static --reset -p yes && make -C test armhf SSL=${{ matrix.ssl }} MULTIREC=NO
   unamalgamated-mg_prefix:
@@ -128,7 +128,7 @@ jobs:
         ssl: ["", BUILTIN, MBEDTLS, OPENSSL, WOLFSSL]
     name: unamalgamated-mg_prefix SSL=${{ matrix.ssl }}
     steps:
-    - uses: actions/checkout@v4
+    - uses: actions/checkout@v5
       with: { fetch-depth: 2 }
     - run: sudo apt -y update ; sudo apt -y install libmbedtls-dev libwolfssl-dev
     - run: make -C test unamalgamated SSL=${{ matrix.ssl }} && make -C test mg_prefix
@@ -142,7 +142,7 @@ jobs:
     env:
       TFLAGS: -DMQTT_LOCALHOST
     steps:
-    - uses: actions/checkout@v4
+    - uses: actions/checkout@v5
       with: { fetch-depth: 2 }
     - run: sudo apt -y update ; sudo apt -y install libmbedtls-dev libwolfssl-dev valgrind
     - run: ./test/setup_mqtt_server.sh && make -C test valgrind SSL=${{ matrix.ssl }}
@@ -168,7 +168,7 @@ jobs:
       TFLAGS: ${{ matrix.select }} -DMQTT_LOCALHOST ${{ matrix.env.tflags }} -DNO_ABORT -Wno-sign-conversion -Wno-undef # Workarounds for MbedTLS
       HOMEBREW_NO_AUTO_UPDATE: 1
     steps:
-    - uses: actions/checkout@v4
+    - uses: actions/checkout@v5
       with: { fetch-depth: 2 }
     - uses: webfactory/ssh-agent@v0.9.1
       with:
@@ -199,7 +199,7 @@ jobs:
       SSL: ${{ matrix.ssl }}
       TFLAGS: ${{ matrix.select }} -DMQTT_LOCALHOST -DNO_ABORT
     steps:
-    - uses: actions/checkout@v4
+    - uses: actions/checkout@v5
       with: { fetch-depth: 2 }
     - uses: webfactory/ssh-agent@v0.9.1
       with:
@@ -219,7 +219,7 @@ jobs:
         ssl: ["", BUILTIN]
     name: Arm SSL=${{ matrix.ssl }}
     steps:
-    - uses: actions/checkout@v4
+    - uses: actions/checkout@v5
     - run: make -C test arm SSL=${{ matrix.ssl }}
   riscv:
     runs-on: ubuntu-latest
@@ -229,7 +229,7 @@ jobs:
         ssl: ["", BUILTIN]
     name: RISC-V SSL=${{ matrix.ssl }}
     steps:
-    - uses: actions/checkout@v4
+    - uses: actions/checkout@v5
     - run: make -C test riscv SSL=${{ matrix.ssl }}
 
   tutorials:
@@ -240,7 +240,7 @@ jobs:
         ssl: [-DMG_TLS=MG_TLS_NONE, -DMG_TLS=MG_TLS_BUILTIN]
     name: tutorials ${{ matrix.ssl }}
     steps:
-    - uses: actions/checkout@v4
+    - uses: actions/checkout@v5
     - uses: webfactory/ssh-agent@v0.9.1
       with:
             ssh-private-key: ${{ secrets.HEALTH_TESTS_SSH_KEY }}
@@ -261,7 +261,7 @@ jobs:
         ssl: [-DMG_TLS=MG_TLS_NONE, -DMG_TLS=MG_TLS_BUILTIN]
     name: tutorials_win ${{ matrix.ssl }}
     steps:
-    - uses: actions/checkout@v4
+    - uses: actions/checkout@v5
       with: { fetch-depth: 2 }
 #    - uses: egor-tensin/setup-mingw@v2
 #      with:
@@ -281,7 +281,7 @@ jobs:
         ssl: [-DMG_TLS=MG_TLS_NONE, -DMG_TLS=MG_TLS_BUILTIN]
     name: tutorials_mac ${{ matrix.ssl }}
     steps:
-    - uses: actions/checkout@v4
+    - uses: actions/checkout@v5
     - run: make -C test tutorials_mac CFLAGS_EXTRA="${{ matrix.ssl }}"
     - run: make -C test clean_tutorials_mac
 
@@ -289,7 +289,7 @@ jobs:
   arduino:
     runs-on: ubuntu-latest
     steps:
-    - uses: actions/checkout@v4
+    - uses: actions/checkout@v5
       with: { fetch-depth: 2 }
     - run: echo # nothing specific to install or do
     - run: make -C test/arduino
@@ -307,7 +307,7 @@ jobs:
 #    env:
 #      GO: 0
 #    steps:
-#      - uses: actions/checkout@v4
+#      - uses: actions/checkout@v5
 #        with: { fetch-depth: 2 }
 #      - run: echo # nothing specific to install or do
 #          fi
@@ -349,7 +349,7 @@ jobs:
     env:
       GO: 0
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
         with: { fetch-depth: 2 }
       - run: sudo apt -y update && sudo apt -y install gcc-arm-none-eabi
       - run: make -C tutorials/${{ matrix.example.path }} build
@@ -368,7 +368,7 @@ jobs:
     env:
       GO: 0
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
         with: { fetch-depth: 2 }
       - run: echo # nothing specific to install or do
       - run: make -C tutorials/${{ matrix.example.path }} build
@@ -408,7 +408,7 @@ jobs:
           - path: ti/ek-tm4c1294xl-make-baremetal-builtin-rndis
     name: ${{ matrix.example.path }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
         with: { fetch-depth: 2 }
       - run: sudo apt -y update && sudo apt -y install gcc-arm-none-eabi
       - run: make -C tutorials/${{ matrix.example.path }} build
@@ -422,7 +422,7 @@ jobs:
           - path: esp32
     name: ${{ matrix.example.path }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
         with: { fetch-depth: 2 }
       - run: echo # nothing specific to install or do
       - run: make -C tutorials/http/device-dashboard/${{ matrix.example.path }} build
@@ -442,7 +442,7 @@ jobs:
           - path: renesas/ek-ra6m4-make-baremetal-builtin
     name: ${{ matrix.example.path }} ${{ matrix.ssl }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
         with: { fetch-depth: 2 }
       - run: sudo apt -y update && sudo apt -y install gcc-arm-none-eabi
       - run: make -C tutorials/${{ matrix.example.path }} build CFLAGS_EXTRA="${{ matrix.ssl }}"
@@ -456,7 +456,7 @@ jobs:
 #          - path:
 #    name: ${{ matrix.example.path }}
 #    steps:
-#      - uses: actions/checkout@v4
+#      - uses: actions/checkout@v5
 #        with: { fetch-depth: 2 }
 #      - run: echo # nothing specific to install or do
 #      - run: make -C tutorials/${{ matrix.example.path }} build
@@ -471,7 +471,7 @@ jobs:
 #          - path:
 #    name: ${{ matrix.example.path }}
 #    steps:
-#      - uses: actions/checkout@v4
+#      - uses: actions/checkout@v5
 #        with: { fetch-depth: 2 }
 #      - run: echo # nothing specific to install or do
 #      - run: make -C tutorials/${{ matrix.example.path }} device_dashboard
@@ -480,7 +480,7 @@ jobs:
   cube_examples:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
         with: { fetch-depth: 2 }
       - run: sudo pip install yq
       - run: cd test/cube && make
@@ -488,7 +488,7 @@ jobs:
 #  xpresso_examples:
 #    runs-on: ubuntu-latest
 #    steps:
-#      - uses: actions/checkout@v4
+#      - uses: actions/checkout@v5
 #        with: { fetch-depth: 2 }
 #      - run: sudo pip install yq
 #      - run: cd test/xpresso && make

@@ -22,7 +22,7 @@ jobs:
       SSL: ${{ matrix.ssl }}
       TFLAGS: -DMQTT_HOST -DIPV6_NOROUTING -DNO_ABORT  # -DMQTT_HOST_NAME=\"server\"
     steps:
-    - uses: actions/checkout@v4
+    - uses: actions/checkout@v5
       with: { fetch-depth: 2 }
     - uses: webfactory/ssh-agent@v0.9.1
       with:
@@ -48,7 +48,7 @@ jobs:
 #      TFLAGS: ${{ matrix.select }} -DMQTT_LOCALHOST -DNO_ABORT -Wno-sign-conversion -Wno-undef # Workarounds for MbedTLS
 #      HOMEBREW_NO_AUTO_UPDATE: 1
 #    steps:
-#    - uses: actions/checkout@v4
+#    - uses: actions/checkout@v5
 #      with: { fetch-depth: 2 }
 #    - uses: webfactory/ssh-agent@v0.9.1
 #      with:

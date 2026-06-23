@@ -13,7 +13,7 @@ jobs:
         revno: ["--mr v3.7-branch", "--mr v4.2.0", "--mr v4.3.0"] # LTS, latest stable
     name: Zephyr ${{ matrix.revno }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
         with: { fetch-depth: 2 }
       - run: test/setup_ga_docker_filesystem.sh
       - run: make -C tutorials/zephyr init REPO=zephyrprojectrtos/ci:v0.28.8 REVNO="${{ matrix.revno }}"
