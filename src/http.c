@@ -65,14 +65,14 @@ size_t mg_http_next_multipart(struct mg_str body, size_t ofs,
   if (part != NULL) part->name = part->filename = part->body = mg_str_n(0, 0);
 
   // Skip boundary
-  while (b + 2 < max && s[b] != '\r' && s[b + 1] != '\n') b++;
+  while (b + 2 < max && !(s[b] == '\r' && s[b + 1] == '\n')) b++;
   if (b <= ofs || b + 2 >= max) return 0;
   // MG_INFO(("B: %zu %zu [%.*s]", ofs, b - ofs, (int) (b - ofs), s));
 
   // Skip headers
   h1 = h2 = b + 2;
   for (;;) {
-    while (h2 + 2 < max && s[h2] != '\r' && s[h2 + 1] != '\n') h2++;
+    while (h2 + 2 < max && !(s[h2] == '\r' && s[h2 + 1] == '\n')) h2++;
     if (h2 == h1) break;
     if (h2 + 2 >= max) return 0;
     // MG_INFO(("Header: [%.*s]", (int) (h2 - h1), &s[h1]));
@@ -320,7 +320,10 @@ int mg_http_parse(const char *s, size_t len, struct mg_http_message *hm) {
   if (!mg_http_parse_headers(s, end, hm->headers,
                              sizeof(hm->headers) / sizeof(hm->headers[0])))
     return -1;  // error when parsing
-  if ((cl = mg_http_get_header(hm, "Content-Length")) != NULL) {
+  cl = mg_http_get_header(hm, "Content-Length");
+  if (cl != NULL && mg_http_get_header(hm, "Transfer-Encoding") != NULL)
+    return -1; // cannot contain both CL and TE
+  if (cl != NULL) {
     if (mg_to_size_t(*cl, &hm->body.len) == false) return -1;
     hm->message.len = (size_t) req_len + hm->body.len;
   }
@@ -676,6 +679,24 @@ struct printdirentrydata {
 };
 
 #if MG_ENABLE_DIRLIST
+// Print file name, escaping HTML chars
+static size_t html_esc(void (*fn)(char, void *), void *arg, va_list *ap) {
+  const char *s = va_arg(*ap, const char *);
+  size_t i, len = 0;
+  for (i = 0; s[i] != '\0'; i++) {
+    if (s[i] == '<') {
+      len += mg_xprintf(fn, arg, "%s", "&lt;");
+    } else if (s[i] == '>') {
+      len += mg_xprintf(fn, arg, "%s", "&gt;");
+    } else if (s[i] == '&') {
+      len += mg_xprintf(fn, arg, "%s", "&amp;");
+    } else {
+      len += mg_xprintf(fn, arg, "%c", s[i]);
+    }
+  }
+  return len;
+}
+
 static void printdirentry(const char *name, void *userdata) {
   struct printdirentrydata *d = (struct printdirentrydata *) userdata;
   struct mg_fs *fs = d->opts->fs == NULL ? &mg_fs_posix : d->opts->fs;
@@ -709,9 +730,9 @@ static void printdirentry(const char *name, void *userdata) {
 #endif
     n = (int) mg_url_encode(name, strlen(name), path, sizeof(path));
     mg_printf(d->c,
-              "  <tr><td><a href=\"%.*s%s\">%s%s</a></td>"
+              "  <tr><td><a href=\"%.*s%s\">%M%s</a></td>"
               "<td name=%lu>%s</td><td name=%lld>%s</td></tr>\n",
-              n, path, slash, name, slash, (unsigned long) t, mod,
+              n, path, slash, html_esc, name, slash, (unsigned long) t, mod,
               flags & MG_FS_DIR ? (int64_t) -1 : (int64_t) size, sz);
   }
 }
@@ -756,22 +777,21 @@ static void listdir(struct mg_connection *c, struct mg_http_message *hm,
             opts->extra_headers == NULL ? "" : opts->extra_headers);
   off = c->send.len;  // Start of body
   mg_printf(c,
-            "<!DOCTYPE html><html><head><title>Index of %.*s</title>%s%s"
+            "<!DOCTYPE html><html><head><title>Index of %M</title>%s%s"
             "<style>th,td {text-align: left; padding-right: 1em; "
             "font-family: monospace; }</style></head>"
-            "<body><h1>Index of %.*s</h1><table cellpadding=\"0\"><thead>"
+            "<body><h1>Index of %M</h1><table cellpadding=\"0\"><thead>"
             "<tr><th><a href=\"#\" rel=\"0\">Name</a></th><th>"
             "<a href=\"#\" rel=\"1\">Modified</a></th>"
             "<th><a href=\"#\" rel=\"2\">Size</a></th></tr>"
             "<tr><td colspan=\"3\"><hr></td></tr>"
             "</thead>"
             "<tbody id=\"tb\">\n",
-            (int) uri.len, uri.buf, sort_js_code, sort_js_code2, (int) uri.len,
-            uri.buf);
+            mg_print_html_esc, (int) uri.len, uri.buf, sort_js_code, sort_js_code2,
+            mg_print_html_esc, (int) uri.len, uri.buf);
   mg_printf(c, "%s",
             "  <tr><td><a href=\"..\">..</a></td>"
             "<td name=-1></td><td name=-1>[DIR]</td></tr>\n");
-
   fs->ls(dir, printdirentry, &d);
   mg_printf(c,
             "</tbody><tfoot><tr><td colspan=\"3\"><hr></td></tr></tfoot>"
@@ -941,7 +961,8 @@ struct mg_str mg_http_get_header_var(struct mg_str s, struct mg_str v) {
         p++;
       // MG_INFO(("[%.*s] [%.*s] [%.*s]", (int) s.len, s.buf, (int) v.len,
       // v.buf, (int) (p - b), b));
-      return stripquotes(mg_str_n(b, (size_t) (p - b + q)));
+      return stripquotes(mg_str_n(b,
+        (size_t) (p - b + (q && p < x && *p == '"' ? 1 : 0))));
     }
   }
   return mg_str_n(NULL, 0);
@@ -1098,7 +1119,7 @@ static int skip_chunk(const char *buf, int len, int *pl, int *dl) {
   while (i < len && is_hex_digit(buf[i])) i++;
   if (i == 0) return -1;                     // Error, no length specified
   if (i > (int) sizeof(int) * 2) return -1;  // Chunk length is too big
-  if (len < i + 1 || buf[i] != '\r' || buf[i + 1] != '\n') return -1;  // Error
+  if (len < i + 2 || buf[i] != '\r' || buf[i + 1] != '\n') return -1;  // Error
   if (mg_str_to_num(mg_str_n(buf, (size_t) i), 16, &n, sizeof(int)) == false)
     return -1;                    // Decode chunk length, overflow
   if (n < 0) return -1;           // Error. TODO(): some checks now redundant
@@ -1142,7 +1163,7 @@ static void http_cb(struct mg_connection *c, int ev, void *ev_data) {
         hm.body.len = hm.message.len - (size_t) (hm.body.buf - hm.message.buf);
       }
       is_http_1_0 =
-          hm.proto.len > 8 && mg_ncasecmp(hm.proto.buf, "HTTP/1.0", 8) == 0;
+          hm.proto.len == 8 && mg_ncasecmp(hm.proto.buf, "HTTP/1.0", 8) == 0;
       // HTTP/1.0 does not use "Transfer-Encoding: chunked"
       if (!is_http_1_0 &&
           (te = mg_http_get_header(&hm, "Transfer-Encoding")) != NULL) {

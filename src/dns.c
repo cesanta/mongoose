@@ -280,8 +280,8 @@ static void sendnsreq(struct mg_connection *c, struct mg_str *name, int ms,
     struct dns_data *reqs = (struct dns_data *) c->mgr->active_dns_requests;
     uint16_t id;
     mg_random(&id, sizeof(uint16_t));
-    // TODO(): traverse reqs and check id != reqs->txnid; repeat otherwise
-    if (reqs != NULL) id = (uint16_t) (reqs->txnid + 1);  // no collision
+    if (reqs != NULL) // no seq, no collision for upto 256 in-flight requests
+      id = (uint16_t) (reqs->txnid + (id & 0xFF) + 1);
     d->txnid = id;
     d->next = reqs;
     c->mgr->active_dns_requests = d;

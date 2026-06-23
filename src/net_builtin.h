@@ -70,6 +70,7 @@ struct mg_tcpip_if {
   char dhcp_name[MG_TCPIP_DHCPNAME_SIZE]; // Hostname sent in DHCP requests; defaults to "mip"
   uint16_t mtu;                           // IP MTU (max payload size at the IP layer)
   uint16_t framesize;                     // Maximum L2 frame size in bytes
+  uint16_t l2mtu;                 	  // L2 frame payload, default net MTU
 
 #if MG_ENABLE_IPV6
   uint64_t ip6ll[2], ip6[2];  // IPv6 link-local and global addresses

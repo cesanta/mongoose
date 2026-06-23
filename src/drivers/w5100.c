@@ -39,7 +39,7 @@ static size_t w5100_rx(void *buf, size_t buflen, struct mg_tcpip_if *ifp) {
     } else {
       uint16_t remaining_len = rxbuf_size - ptr_ofs;
       w5100_rn(s, rxbuf_addr + ptr_ofs, buf, remaining_len);
-      w5100_rn(s, rxbuf_addr, buf + remaining_len, n - remaining_len);
+      w5100_rn(s, rxbuf_addr, buf + remaining_len, r - remaining_len);
     }
     w5100_w2(s, 0x428, (uint16_t) (ptr + n));
     w5100_w1(s, 0x401, 0x40);  // Sock0 CR -> RECV

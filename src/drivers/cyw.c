@@ -1054,7 +1054,7 @@ static size_t cyw_spi_poll(uint8_t *response) {
 }
 
 static size_t cyw_spi_tx(uint32_t *data, uint16_t len) {
-  while (len & 3) data[len++] = 0; // SPI 32-bit padding
+  while (len & 3) ((uint8_t *)data)[len++] = 0; // SPI 32-bit padding
   return cyw_spi_write(CYW_SPID_FUNC_WLAN, 0, data, len) ? len: 0;
 }
 

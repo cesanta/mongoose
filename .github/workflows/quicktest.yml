@@ -114,6 +114,7 @@ jobs:
     runs-on: windows-latest
     steps:
     - uses: actions/checkout@v4
+      with: { fetch-depth: 2 }
 #    - uses: egor-tensin/setup-mingw@v2
 #      with:
 #        platform: x64

@@ -96,6 +96,7 @@ DIR *opendir(const char *name) {
   DIR *d = NULL;
   wchar_t wpath[MAX_PATH];
   DWORD attrs;
+  size_t n;
 
   if (name == NULL) {
     SetLastError(ERROR_BAD_ARGUMENTS);
@@ -105,9 +106,16 @@ DIR *opendir(const char *name) {
     to_wchar(name, wpath, sizeof(wpath) / sizeof(wpath[0]));
     attrs = GetFileAttributesW(wpath);
     if (attrs != 0Xffffffff && (attrs & FILE_ATTRIBUTE_DIRECTORY)) {
-      (void) wcscat(wpath, L"\\*");
-      d->handle = FindFirstFileW(wpath, &d->info);
-      d->result.d_name[0] = '\0';
+      n = wcslen(wpath);
+      if (n <= (sizeof(wpath) / sizeof(wpath[0])) - 3) {
+        (void) wcscat(wpath, L"\\*");
+        d->handle = FindFirstFileW(wpath, &d->info);
+        d->result.d_name[0] = '\0';
+      } else {
+        mg_free(d);
+        d = NULL;
+        SetLastError(ERROR_BUFFER_OVERFLOW);
+      }
     } else {
       mg_free(d);
       d = NULL;
@@ -169,13 +177,17 @@ static void p_list(const char *dir, void (*fn)(const char *, void *),
 
 static void *p_open(const char *path, int flags) {
 #if MG_ARCH == MG_ARCH_WIN32
-  const char *mode = flags == MG_FS_READ ? "rb" : "a+b";
+  const char *mode = flags == MG_FS_READ    ? "rb"
+                     : (flags & MG_FS_EXCL) ? "wxb"
+                                            : "a+b";
   wchar_t b1[MG_PATH_MAX], b2[10];
   MultiByteToWideChar(CP_UTF8, 0, path, -1, b1, sizeof(b1) / sizeof(b1[0]));
   MultiByteToWideChar(CP_UTF8, 0, mode, -1, b2, sizeof(b2) / sizeof(b2[0]));
   return (void *) _wfopen(b1, b2);
 #else
-  const char *mode = flags == MG_FS_READ ? "rbe" : "a+be";  // e for CLOEXEC
+  const char *mode = flags == MG_FS_READ    ? "rbe"
+                     : (flags & MG_FS_EXCL) ? "wxbe"
+                                            : "a+be"; // e for CLOSEXEC
   return (void *) fopen(path, mode);
 #endif
 }

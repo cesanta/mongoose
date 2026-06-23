@@ -68,16 +68,17 @@ static size_t mg_dtoa(char *dst, size_t dstlen, double d, int width, bool tz) {
   while (d < 1.0 && d / mul < 1.0) mul /= 10.0, e--;
   // printf(" --> %g %d %g %g\n", saved, e, t, mul);
 
-  if (tz && e >= width && width > 1) {
-    n = (int) mg_dtoa(buf, sizeof(buf), saved / mul, width, tz);
+  if (tz && (e >= width || e <= -width) && width > 1) {
+    char exp[6];
+    int ne;
+    n = (int) mg_dtoa(buf + s, sizeof(buf) - (size_t) s, saved / mul, width, tz);
     // printf(" --> %.*g %d [%.*s]\n", 10, d / t, e, n, buf);
-    n += addexp(buf + s + n, e, '+');
-    return mg_snprintf(dst, dstlen, "%.*s", n, buf);
-  } else if (tz && e <= -width && width > 1) {
-    n = (int) mg_dtoa(buf, sizeof(buf), saved / mul, width, tz);
-    // printf(" --> %.*g %d [%.*s]\n", 10, d / mul, e, n, buf);
-    n += addexp(buf + s + n, -e, '-');
-    return mg_snprintf(dst, dstlen, "%.*s", n, buf);
+    ne = addexp(exp, e < 0 ? -e : e, e < 0 ? '-' : '+');
+    if (s + n + ne >= (int) sizeof(buf))
+      n = (int) sizeof(buf) - s - ne - 1;
+    memcpy(buf + s + n, exp, (size_t) ne);
+    n += ne;
+    return mg_snprintf(dst, dstlen, "%.*s", s + n, buf);
   } else {
     int targ_width = width;
     for (i = 0, t = mul; t >= 1.0 && s + n < (int) sizeof(buf); i++) {

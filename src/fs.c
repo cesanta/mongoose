@@ -44,17 +44,18 @@ bool mg_file_write(struct mg_fs *fs, const char *path, const void *buf,
                    size_t len) {
   bool result = false;
   struct mg_fd *fd;
-  char tmp[MG_PATH_MAX];
-  mg_snprintf(tmp, sizeof(tmp), "%s..%d", path, rand());
-  if ((fd = mg_fs_open(fs, tmp, MG_FS_WRITE)) != NULL) {
+  char tmp[MG_PATH_MAX], rnd[10];
+  size_t path_len = mg_snprintf(tmp, sizeof(tmp), "%s..%s", path,
+                                mg_random_str(rnd, sizeof(rnd)));
+  if (path_len < sizeof(tmp) &&
+      (fd = mg_fs_open(fs, tmp, MG_FS_WRITE | MG_FS_EXCL)) != NULL) {
     result = fs->wr(fd->fd, buf, len) == len;
     mg_fs_close(fd);
     if (result) {
       fs->rm(path);
-      fs->mv(tmp, path);
-    } else {
-      fs->rm(tmp);
+      result = fs->mv(tmp, path);
     }
+    fs->rm(tmp);
   }
   return result;
 }

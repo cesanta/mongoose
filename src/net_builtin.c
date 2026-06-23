@@ -630,7 +630,7 @@ static void rx_icmp(struct mg_tcpip_if *ifp, struct pkt *pkt) {
   size_t plen = pkt->pay.len;
   if (!icmpcsum_ok(pkt->icmp, sizeof(struct icmp) + plen)) return;
   if (pkt->icmp->type == 8 && pkt->ip != NULL && pkt->ip->dst == ifp->ip) {
-    size_t l2_max_overhead = ifp->framesize - ifp->mtu;
+    size_t l2_max_overhead = ifp->framesize - ifp->l2mtu;
     size_t hlen = sizeof(struct ip) + sizeof(struct icmp);
     size_t room = ifp->tx.len - hlen - l2_max_overhead;
     uint8_t *l2addr;
@@ -662,9 +662,9 @@ static void rx_dhcp_client(struct mg_tcpip_if *ifp, struct pkt *pkt) {
   uint32_t ip = 0, gw = 0, mask = 0, lease = 0, dns = 0, sntp = 0, owner = 0;
   uint8_t msgtype = 0, state = ifp->state;
   // perform size check first, then access fields
-  uint8_t *p = pkt->dhcp->options,
+  uint8_t *p = (uint8_t *) pkt->pay.buf,
           *end = (uint8_t *) &pkt->pay.buf[pkt->pay.len];
-  if (end < p) return;  // options are optional, check min header length
+  // min header length checked at payload calculation, options are optional
   if (memcmp(&pkt->dhcp->xid, ifp->mac + 2, sizeof(pkt->dhcp->xid))) return;
   while (p + 1 < end && p[0] != 255) {  // Parse options, get #1; RFC-2132 9
     if (p[0] == 1 && p[1] == 4 && p + 6 < end) {  // Mask, 3.3
@@ -704,7 +704,7 @@ static void rx_dhcp_client(struct mg_tcpip_if *ifp, struct pkt *pkt) {
   } else if (msgtype == 5) {          // DHCPACK
     if (ifp->state == MG_TCPIP_STATE_REQ && ip && gw && lease) {  // got an IP
       uint64_t rand;
-      ifp->lease_expire = ifp->now + lease * 1000;
+      ifp->lease_expire = ifp->now + (uint64_t) lease * 1000;
       MG_INFO(("Lease: %u sec (%lld)", lease, ifp->lease_expire / 1000));
       // assume DHCP server = router until ARP resolves
       memcpy(ifp->gwmac, mg_l2_getaddr(ifp, pkt->l2), sizeof(ifp->gwmac));
@@ -721,7 +721,7 @@ static void rx_dhcp_client(struct mg_tcpip_if *ifp, struct pkt *pkt) {
       if (ifp->enable_req_sntp && sntp != 0)
         mg_tcpip_call(ifp, MG_TCPIP_EV_DHCP_SNTP, &sntp);
     } else if (ifp->state == MG_TCPIP_STATE_READY && ifp->ip == ip) {  // renew
-      ifp->lease_expire = ifp->now + lease * 1000;
+      ifp->lease_expire = ifp->now + (uint64_t) lease * 1000;
       MG_INFO(("Lease: %u sec (%lld)", lease, ifp->lease_expire / 1000));
     }  // TODO(): accept provided T1/T2 and store server IP for renewal (4.4)
   }
@@ -731,11 +731,11 @@ static void rx_dhcp_client(struct mg_tcpip_if *ifp, struct pkt *pkt) {
 // Simple DHCP server that assigns a next IP address: ifp->ip + 1
 static void rx_dhcp_server(struct mg_tcpip_if *ifp, struct pkt *pkt) {
   uint8_t *mac;
-  uint8_t op = 0, *p = pkt->dhcp->options,
+  uint8_t op = 0, *p = (uint8_t *) pkt->pay.buf,
           *end = (uint8_t *) &pkt->pay.buf[pkt->pay.len];
   // NOTE(): assumes Ethernet: htype=1 hlen=6, copy 6 bytes
   struct dhcp res = {2, 1, 6, 0, 0, 0, 0, 0, 0, 0, 0, {0}, 0, {0}};
-  if (end < p) return;  // options are optional, check min header length
+  // min header length checked at payload calculation, options are optional
   res.yiaddr = ifp->ip;
   ((uint8_t *) (&res.yiaddr))[3]++;                // Offer our IP + 1
   while (p + 1 < end && p[0] != 255) {             // Parse options
@@ -827,14 +827,16 @@ static void tx_ndp_na(struct mg_tcpip_if *ifp, uint8_t *l2_dst,
 static void onstate6change(struct mg_tcpip_if *ifp);
 
 static void rx_ndp_na(struct mg_tcpip_if *ifp, struct pkt *pkt) {
-  struct ndp_na *na = (struct ndp_na *) (pkt->icmp6 + 1);
-  uint8_t *opts = (uint8_t *) (na + 1);
+  struct ndp_na *na = (struct ndp_na *) pkt->pay.buf;
+  uint8_t *opts = (uint8_t *) (na + 1), *endp = opts + pkt->pay.len - sizeof(*na);
+  if (pkt->pay.len < (sizeof(*na) + 2)) return; // first 2 bytes in opts
   if ((na->res[0] & 0x40) == 0) return;  // not "solicited"
-  if (*opts++ != 2) return;              // no target hwaddr
+  if (*opts++ != 2) return;              // no target hwaddr, must have
   MG_VERBOSE(("NDP NA resp from %M", mg_print_ip6, (char *) &na->addr));
   if (MG_IP6MATCH(na->addr, ifp->gw6)) {
     // Got response for the GW NS request. Set ifp->gw6mac and IP6 -> READY
     uint8_t len = *opts++;  // check valid hwaddr and get it
+    if ((opts + 8 * len - 2) > endp) return; // truncated
     if (!mg_l2_ip6get(ifp->l2type, ifp->gw6mac, opts, len)) return;
     ifp->gw6_ready = true;
     if (ifp->state6 == MG_TCPIP_STATE_IP) {
@@ -846,6 +848,7 @@ static void rx_ndp_na(struct mg_tcpip_if *ifp, struct pkt *pkt) {
     if (c != NULL && c->is_arplooking) {
       struct connstate *s = (struct connstate *) (c + 1);
       uint8_t len = *opts++;  // check valid hwaddr and get it
+      if ((opts + 8 * len - 2) > endp) return; // truncated
       if (!mg_l2_ip6get(ifp->l2type, s->mac, opts, len)) return;
       MG_DEBUG(("%lu NDP resolved %M -> %M", c->id, mg_print_ip6,
                 &c->rem.addr.ip6, mg_print_l2addr, ifp->l2type, s->mac));
@@ -857,15 +860,17 @@ static void rx_ndp_na(struct mg_tcpip_if *ifp, struct pkt *pkt) {
 
 // Neighbor Solicitation, 4.3
 static void rx_ndp_ns(struct mg_tcpip_if *ifp, struct pkt *pkt) {
+  struct ndp_na *ns = (struct ndp_na *) pkt->pay.buf; // struct ndp_ns = ndp_na
   uint64_t target[2];
-  if (pkt->pay.len < sizeof(target)) return;
-  memcpy(target, pkt->pay.buf + 4, sizeof(target));
+  if (pkt->pay.len < (sizeof(*ns) + 2)) return; // first 2 bytes in opts
+  memcpy(target, ns->addr, sizeof(target));
   if (MG_IP6MATCH(target, ifp->ip6ll) || MG_IP6MATCH(target, ifp->ip6)) {
     uint64_t req[2];  // requester address
     uint8_t l2[sizeof(struct mg_l2addr)];
-    uint8_t len, *opts = (uint8_t *) pkt->pay.buf + 20;
+    uint8_t len, *opts = (uint8_t *) (ns + 1), *endp = opts + pkt->pay.len - sizeof(*ns);
     if (*opts++ != 1) return;  // no requester hwaddr (source)
     len = *opts++;             // check valid hwaddr and get it
+    if ((opts + 8 * len - 2) > endp) return; // truncated
     if (!mg_l2_ip6get(ifp->l2type, l2, opts, len)) return;
     req[0] = pkt->ip6->src[0], req[1] = pkt->ip6->src[1];  // align to 64-bit
     tx_ndp_na(ifp, l2, target, req, true, ifp->mac);
@@ -961,15 +966,15 @@ static bool fill_global(struct mg_tcpip_if *ifp, uint8_t *prefix,
 
 // Router Advertisement, 4.2
 static void rx_ndp_ra(struct mg_tcpip_if *ifp, struct pkt *pkt) {
-  if (pkt->pay.len < 12) return;
-  struct ndp_ra *ra = (struct ndp_ra *) (pkt->icmp6 + 1);
+  struct ndp_ra *ra = (struct ndp_ra *) pkt->pay.buf;
   uint8_t *opts = (uint8_t *) (ra + 1);
-  size_t opt_left = pkt->pay.len - 12;
+  size_t opt_left = pkt->pay.len - sizeof(*ra);
   bool gotl2addr = false, gotprefix = false, changed = false;
   uint8_t l2[sizeof(struct mg_l2addr)];
   uint32_t mtu = 0;
   uint8_t *prefix, prefix_len;
 
+  if (pkt->pay.len < sizeof(*ra)) return;
   if (ifp->state6 == MG_TCPIP_STATE_UP) {
     MG_DEBUG(("Received NDP RA"));  // fill gw6 address
     // parse options
@@ -982,8 +987,9 @@ static void rx_ndp_ra(struct mg_tcpip_if *ifp, struct pkt *pkt) {
         if (!mg_l2_ip6get(ifp->l2type, l2, opts + 2, len)) break;
         gotl2addr = true;
       } else if (type == 5 && length >= 8) {
-        // process MTU if available
+        // process MTU if available, ignore if it smells
         mtu = MG_LOAD_BE32(opts + 4);
+        if (mtu < 1280 || mtu > ifp->l2mtu) mtu = 0; // RFC-8200, minimum MTU
       } else if (type == 3 && length >= 32) {
         // process prefix, 4.6.2
         uint8_t pfx_flags = opts[3];  // L=0x80, A=0x40
@@ -1037,7 +1043,7 @@ static void rx_icmp6(struct mg_tcpip_if *ifp, struct pkt *pkt) {
       uint64_t target[2];
       target[0] = pkt->ip6->dst[0], target[1] = pkt->ip6->dst[1];
       if (MG_IP6MATCH(target, ifp->ip6ll) || MG_IP6MATCH(target, ifp->ip6)) {
-        size_t l2_max_overhead = ifp->framesize - ifp->mtu;
+        size_t l2_max_overhead = ifp->framesize - ifp->l2mtu;
         size_t hlen = sizeof(struct ip6) + sizeof(struct icmp6);
         size_t room = ifp->tx.len - hlen - l2_max_overhead, plen = pkt->pay.len;
         struct mg_addr ips;
@@ -1328,7 +1334,7 @@ static struct mg_connection *accept_conn(struct mg_connection *lsn,
 
 static size_t trim_len(struct mg_connection *c, size_t len) {
   struct mg_tcpip_if *ifp = c->mgr->ifp;
-  size_t l2_max_overhead = ifp->framesize - ifp->mtu;
+  size_t l2_max_overhead = ifp->framesize - ifp->l2mtu;
   size_t ip_max_h_len = c->rem.is_ip6 ? 40 : 24;  // we don't send options
   size_t tcp_max_h_len = 60 /* RFC-9293 3.7.1; RFC-6691 2 */, udp_h_len = 8;
   size_t max_headers_len =
@@ -1715,11 +1721,13 @@ static void rx_ip(struct mg_tcpip_if *ifp, struct pkt *pkt) {
     MG_VERBOSE(("UDP %M:%hu -> %M:%hu len %u", mg_print_ip4, &pkt->ip->src,
                 mg_ntohs(pkt->udp->sport), mg_print_ip4, &pkt->ip->dst,
                 mg_ntohs(pkt->udp->dport), (int) pkt->pay.len));
-    if (ifp->enable_dhcp_client && pkt->udp->dport == mg_htons(68)) {
+    if (ifp->enable_dhcp_client && pkt->udp->dport == mg_htons(68) &&
+        len >= offsetof(struct dhcp, options)) {
       pkt->dhcp = (struct dhcp *) (pkt->udp + 1);
       mkpay(pkt, &pkt->dhcp->options);
       rx_dhcp_client(ifp, pkt);
-    } else if (ifp->enable_dhcp_server && pkt->udp->dport == mg_htons(67)) {
+    } else if (ifp->enable_dhcp_server && pkt->udp->dport == mg_htons(67) &&
+               len >= offsetof(struct dhcp, options)) {
       pkt->dhcp = (struct dhcp *) (pkt->udp + 1);
       mkpay(pkt, &pkt->dhcp->options);
       rx_dhcp_server(ifp, pkt);
@@ -1757,19 +1765,24 @@ static void rx_ip6(struct mg_tcpip_if *ifp, struct pkt *pkt) {
   next = pkt->ip6->next;
   nhdr = (uint8_t *) (pkt->ip6 + 1);
   while (loop) {
+    uint16_t hlen;
     switch (next) {
       case 0:   // Hop-by-Hop 4.3
       case 43:  // Routing 4.4
       case 60:  // Destination Options 4.6
       case 51:  // Authentication RFC-4302
         MG_INFO(("IPv6 extension header %d", (int) next));
+        if (((uint32_t) len + 2) > plen) return;  // nhdr[0, 1]; malformed
         next = nhdr[0];
-        len += (uint16_t) (8 * (nhdr[1] + 1));
-        nhdr += 8 * (nhdr[1] + 1);
+        hlen = (uint16_t) (8 * (nhdr[1] + 1));
+        if (((uint32_t) len + hlen) > plen) return;  // malformed
+        len += hlen;
+        nhdr += hlen;
         break;
       case 44:  // Fragment 4.5
       {
         struct mg_connection *c;
+        if (((uint32_t) len + 2) > plen) return;  // nhdr[0, 1]; malformed
         if (nhdr[0] == 17) pkt->udp = (struct udp *) (pkt->pay.buf);
         if (nhdr[0] == 6) pkt->tcp = (struct tcp *) (pkt->pay.buf);
         c = getpeer(ifp->mgr, pkt, false);
@@ -1784,7 +1797,6 @@ static void rx_ip6(struct mg_tcpip_if *ifp, struct pkt *pkt) {
         break;
     }
   }
-  if (len >= plen) return;
   // There can be link padding, take payload length from IPv6 header - options
   pkt->pay.buf = (char *) nhdr;
   pkt->pay.len = plen - len;
@@ -2062,6 +2074,7 @@ void mg_tcpip_qwrite(void *buf, size_t len, struct mg_tcpip_if *ifp) {
 void mg_tcpip_init(struct mg_mgr *mgr, struct mg_tcpip_if *ifp) {
   // If L2 address is not set, make a random one; fill MTU
   mg_l2_init(ifp);
+  ifp->mtu = ifp->l2mtu;
 
   if (ifp->dhcp_name[0] == '\0')  // If DHCP name is not set, use "mip"
     memcpy(ifp->dhcp_name, "mip", 4);

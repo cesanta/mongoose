@@ -209,3 +209,31 @@ size_t mg_print_esc(void (*out)(char, void *), void *arg, va_list *ap) {
   if (len == 0) len = p == NULL ? 0 : strlen(p);
   return qcpy(out, arg, p, len);
 }
+
+size_t mg_print_html_esc(void (*out)(char, void *), void *arg, va_list *ap) {
+  size_t i, n = 0;
+  int len = va_arg(*ap, int);
+  const char *s = va_arg(*ap, const char *);
+  for (i = 0; i < (size_t) len; i++) {
+    const char *esc = NULL;
+    switch (s[i]) {
+      // clang-format off
+      case '&': esc = "&amp;"; break;
+      case '<': esc = "&lt;"; break;
+      case '>': esc = "&gt;"; break;
+      case '"': esc = "&quot;"; break;
+      default: break;
+      // clang-format on
+    }
+    if (esc != NULL) {
+      while (*esc != '\0') {
+        out(*esc++, arg);
+        n++;
+      }
+    } else {
+      out(s[i], arg);
+      n++;
+    }
+  }
+  return n;
+}

@@ -120,14 +120,17 @@ static int mg_bio_write(BIO *bio, const char *buf, int len) {
 
 #ifdef MG_TLS_SSLKEYLOGFILE
 static void ssl_keylog_cb(const SSL *ssl, const char *line) {
+  FILE *f;
   char *keylogfile = getenv("SSLKEYLOGFILE");
-  if (keylogfile == NULL) {
-    return;
+  if (keylogfile == NULL) return;
+  f = fopen(keylogfile, "a");
+  if (f != NULL) {
+    fprintf(f, "%s\n", line);
+    fflush(f);
+    fclose(f);
+  } else {
+    MG_ERROR(("Cannot open %s", keylogfile));
   }
-  FILE *f = fopen(keylogfile, "a");
-  fprintf(f, "%s\n", line);
-  fflush(f);
-  fclose(f);
   (void) ssl;
 }
 #endif
