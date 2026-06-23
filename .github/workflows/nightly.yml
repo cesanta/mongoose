@@ -42,7 +42,7 @@ jobs:
     steps:
     - uses: actions/checkout@v5
       with: { fetch-depth: 2 }
-    - uses: webfactory/ssh-agent@v0.9.1
+    - uses: webfactory/ssh-agent@v0.10.0
       with:
             ssh-private-key: ${{ secrets.HEALTH_TESTS_SSH_KEY }}
     - run: sudo apt -y update ; sudo apt -y install libmbedtls-dev libwolfssl-dev && test/setup_mqtt_server.sh && make -C test ${{ matrix.target }} > log
@@ -72,7 +72,7 @@ jobs:
     steps:
     - uses: actions/checkout@v5
       with: { fetch-depth: 2 }
-    - uses: webfactory/ssh-agent@v0.9.1
+    - uses: webfactory/ssh-agent@v0.10.0
       with:
             ssh-private-key: ${{ secrets.HEALTH_TESTS_SSH_KEY }}
     - run: if [ "${{ matrix.target }}" == "mip_tap_test" ]; then source ./test/setup_ga_network.sh ; sed -i -e "s/127.0.0.1//" test/mosquitto.conf; cat test/mosquitto.conf; ./test/setup_mqtt_server.sh; fi && sudo apt -y update ; sudo apt -y install libmbedtls-dev libwolfssl-dev && make -C test ${{ matrix.target }} > log
@@ -170,7 +170,7 @@ jobs:
     steps:
     - uses: actions/checkout@v5
       with: { fetch-depth: 2 }
-    - uses: webfactory/ssh-agent@v0.9.1
+    - uses: webfactory/ssh-agent@v0.10.0
       with:
             ssh-private-key: ${{ secrets.HEALTH_TESTS_SSH_KEY }}
     - run: brew install mbedtls wolfssl mosquitto gawk # jq openssl already pre-installed
@@ -201,7 +201,7 @@ jobs:
     steps:
     - uses: actions/checkout@v5
       with: { fetch-depth: 2 }
-    - uses: webfactory/ssh-agent@v0.9.1
+    - uses: webfactory/ssh-agent@v0.10.0
       with:
             ssh-private-key: ${{ secrets.HEALTH_TESTS_SSH_KEY }}
     - run: ./test/setup_mqtt_server.sh && make -C test ${{ matrix.target }} > log
@@ -241,7 +241,7 @@ jobs:
     name: tutorials ${{ matrix.ssl }}
     steps:
     - uses: actions/checkout@v5
-    - uses: webfactory/ssh-agent@v0.9.1
+    - uses: webfactory/ssh-agent@v0.10.0
       with:
             ssh-private-key: ${{ secrets.HEALTH_TESTS_SSH_KEY }}
     - run: sudo apt -y install libpcap-dev
