@@ -2555,15 +2555,15 @@ static void test_str(void) {
   }
 
   {
-    char s[1] = ".";
+    char s[1] = {'.'};
     ASSERT(mg_path_is_sane(mg_str_n(s, 1)) == true);
   }
   {
-    char s[2] = "/.";
+    char s[2] = {'/', '.'}; // "/."
     ASSERT(mg_path_is_sane(mg_str_n(s, 2)) == true);
   }
   {
-    char s[3] = "a/.";
+    char s[3] = {'a', '/', '.'}; // "a/."
     ASSERT(mg_path_is_sane(mg_str_n(s, 3)) == true);
   }
   ASSERT(mg_path_is_sane(mg_str("")) == true);
