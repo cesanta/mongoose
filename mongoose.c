@@ -4051,11 +4051,11 @@ static int uri_to_path2(struct mg_connection *c, struct mg_http_message *hm,
                   path_size - n, 0);
   }
   path[path_size - 1] = '\0';  // Double-check
-  if (!mg_path_is_sane(mg_str_n(path, path_size))) {
+  n = strlen(path);
+  if (!mg_path_is_sane(mg_str_n(path, n))) {
     mg_http_reply(c, 400, "", "Invalid path");
     return -1;
   }
-  n = strlen(path);
   while (n > 1 && path[n - 1] == '/') path[--n] = 0;  // Trim trailing slashes
   flags = mg_strcmp(hm->uri, mg_str("/")) == 0 ? MG_FS_DIR
                                                : fs->st(path, NULL, NULL);
