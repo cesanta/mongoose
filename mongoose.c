@@ -714,7 +714,7 @@ bool mg_wakeup(struct mg_mgr *mgr, unsigned long conn_id, const void *buf,
   if (mgr->pipe.q == NULL || conn_id == 0) return false;
   m = (struct wumsg *) calloc(1, sizeof(*m) + len);
   if (m == NULL) {
-    MG_ERROR("OOM");
+    MG_ERROR(("OOM"));
     return false;
   }
   m->id = conn_id;
@@ -722,7 +722,7 @@ bool mg_wakeup(struct mg_mgr *mgr, unsigned long conn_id, const void *buf,
   memcpy(m->data, buf, len);
   if (xQueueSend((QueueHandle_t) mgr->pipe.q, &m, 0) != pdTRUE) {
     free(m);
-    MG_ERROR("xQueueSend");
+    MG_ERROR(("xQueueSend"));
     return false;
   }
   return true;

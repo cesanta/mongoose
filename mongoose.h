@@ -4903,7 +4903,6 @@ struct mg_tcpip_spi {
 #else
 #include <errno.h>
 typedef unsigned int socklen_t;
-typedef int ssize_t;
 typedef uint32_t in_addr_t;
 struct in_addr { in_addr_t s_addr; };
 struct in6_addr { uint8_t s6_addr[16]; };
