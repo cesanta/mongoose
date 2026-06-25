@@ -4919,7 +4919,9 @@ static void test_dash(void) {
   }
 
   remove("mongoose_dash_test/test.bin");
+#if MG_ARCH == MG_ARCH_UNIX || MG_ARCH == MG_ARCH_WIN32
   rmdir("mongoose_dash_test");
+#endif
 }
 
 #define DASHBOARD(x) \
