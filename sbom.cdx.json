@@ -5,20 +5,20 @@
   "serialNumber": "urn:uuid:d3f8b1e2-4a7c-4d9e-bf2a-1c3e5f7a9b0d",
   "version": 1,
   "metadata": {
-    "timestamp": "2026-06-01T00:00:00Z",
+    "timestamp": "2026-06-25T00:00:00Z",
     "component": {
       "type": "library",
       "bom-ref": "mongoose",
       "supplier": { "name": "Cesanta Software Limited", "url": ["https://cesanta.com"] },
       "author": "Cesanta Software Limited",
       "name": "mongoose",
-      "version": "7.21",
+      "version": "7.22",
       "description": "Two-file C/C++ embedded networking library. HTTP, WebSocket, MQTT, TLS 1.3, OTA firmware updates, device dashboard. Runs on microcontrollers and desktop OS.",
       "licenses": [
         { "expression": "GPL-2.0-only" },
         { "license": { "name": "Cesanta Commercial License", "url": "https://mongoose.ws/licensing/" } }
       ],
-      "purl": "pkg:github/cesanta/mongoose@7.21",
+      "purl": "pkg:github/cesanta/mongoose@7.22",
       "externalReferences": [
         { "type": "website",          "url": "https://mongoose.ws" },
         { "type": "vcs",              "url": "https://github.com/cesanta/mongoose" },
@@ -27,7 +27,7 @@
         { "type": "distribution",     "url": "https://raw.githubusercontent.com/cesanta/mongoose/master/mongoose.c" }
       ],
       "properties": [
-        { "name": "cpe", "value": "cpe:2.3:a:cesanta:mongoose:7.21:*:*:*:*:*:*:*" }
+        { "name": "cpe", "value": "cpe:2.3:a:cesanta:mongoose:7.22:*:*:*:*:*:*:*" }
       ]
     }
   },
