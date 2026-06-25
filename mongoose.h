@@ -778,6 +778,7 @@ typedef int socklen_t;
 #define realpath(a, b) _fullpath((b), (a), MG_PATH_MAX)
 #define sleep(x) Sleep((x) *1000)
 #define mkdir(a, b) _mkdir(a)
+#define rmdir(a) _rmdir(a)
 #define timegm(x) _mkgmtime(x)
 
 #ifndef S_ISDIR

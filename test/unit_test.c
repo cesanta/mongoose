@@ -4422,9 +4422,9 @@ static bool set3_fn(enum mg_dash_op op, struct mg_dash_user *u) {
 static bool test_upload_dir(const struct mg_dash_user *u, char *buf, size_t len) {
   (void) u;
 #if MG_ARCH == MG_ARCH_UNIX || MG_ARCH == MG_ARCH_WIN32
-  mkdir("/tmp/mongoose_dash_test", 0755);
+  mkdir("mongoose_dash_test", 0755);
 #endif
-  mg_snprintf(buf, len, "%s", "/tmp/mongoose_dash_test");
+  mg_snprintf(buf, len, "%s", "mongoose_dash_test");
   return true;
 }
 
@@ -4588,7 +4588,7 @@ static void test_dash(void) {
 
   memset(&dash, 0, sizeof(dash));
   dash.session_auto_expiration_seconds = 1;
-  remove("/tmp/mongoose_dash_test/test.bin");
+  remove("mongoose_dash_test/test.bin");
 
   MG_DASH_ADD_FIELD_SET(&dash, &test_files_set);
   MG_DASH_ADD_FIELD_SET(&dash, &set1);
@@ -4917,6 +4917,9 @@ static void test_dash(void) {
     ASSERT(strstr(buf, test_bin_probe) != NULL);
     mg_mgr_free(&mgr3);
   }
+
+  remove("mongoose_dash_test/test.bin");
+  rmdir("mongoose_dash_test");
 }
 
 #define DASHBOARD(x) \
