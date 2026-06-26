@@ -10,6 +10,7 @@
 #include <fcntl.h>
 #include <sys/ioctl.h>
 #include <sys/poll.h>
+#include <signal.h>
 
 #ifndef __OpenBSD__
 #include <linux/if.h>
@@ -20,7 +21,7 @@
 #include <net/if_types.h>
 #endif
 
-static int s_signo;
+static volatile sig_atomic_t s_signo;
 void signal_handler(int signo) {
   s_signo = signo;
 }
@@ -49,6 +50,8 @@ int main(void) {
     return EXIT_FAILURE;
   }
   printf("Opened TAP interface: %s\n", iface);
+  signal(SIGINT, signal_handler);
+  signal(SIGTERM, signal_handler);
 
   int sockfd;
   struct sockaddr_in tap_addr, port_addr;
@@ -97,8 +100,9 @@ int main(void) {
         }
 				break;
 			}
-		} while (result >= 0);
-    printf("looks like we got an error here... should I quit ? Waiting for CTRL-C\n");
+		} while (result >= 0 && s_signo == 0);
+    if (result < 0)
+      printf("looks like we got an error here... should I quit ? Waiting for CTRL-C\n");
 	} 
   close(sockfd);
   close(fd);
