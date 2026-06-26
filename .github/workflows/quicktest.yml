@@ -152,6 +152,7 @@ jobs:
           - path: stm32/nucleo-f746zg/minimal
           - path: stm32/nucleo-h563zi/minimal
           - path: stm32/nucleo-h723zg/minimal
+          - path: stm32/nucleo-h723zg/minimal-bsd
           - path: stm32/nucleo-h743zi/minimal
           - path: stm32/stm32h573i-dk/minimal
           - path: ti/ek-tm4c1294xl-make-baremetal-builtin
