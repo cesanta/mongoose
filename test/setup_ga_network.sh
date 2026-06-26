@@ -88,8 +88,8 @@ wget https://cesanta.com/robots.txt
 echo robots.txt:
 cat  robots.txt
 rm   robots.txt
-wget https://ipv6.google.com/
-rm index.html
+wget https://ipv6.google.com/ || true
+rm index.html || true
 echo
 
 # Confirm OK
