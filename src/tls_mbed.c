@@ -92,6 +92,11 @@ void mg_tls_handshake(struct mg_connection *c) {
   struct mg_tls *tls = (struct mg_tls *) c->tls;
   int rc = mbedtls_ssl_handshake(&tls->ssl);
   if (rc == 0) {  // Success
+    if (tls->check_name && (mbedtls_ssl_get_verify_result(&tls->ssl) &
+                            MBEDTLS_X509_BADCERT_CN_MISMATCH)) {
+      mg_error(c, "failed to verify hostname");
+      return;
+    } // ignore MBEDTLS_X509_BADCERT_NOT_TRUSTED, no CA cert given
     MG_DEBUG(("%lu success", c->id));
     c->is_tls_hs = 0;
     mg_call(c, MG_EV_TLS_HS, NULL);
@@ -113,6 +118,7 @@ static void debug_cb(void *c, int lev, const char *s, int n, const char *s2) {
 void mg_tls_init(struct mg_connection *c, const struct mg_tls_opts *opts) {
   struct mg_tls *tls = (struct mg_tls *) mg_calloc(1, sizeof(*tls));
   int rc = 0;
+  bool check_name = false;
   c->tls = tls;
   if (c->tls == NULL) {
     mg_error(c, "TLS OOM");
@@ -143,24 +149,30 @@ void mg_tls_init(struct mg_connection *c, const struct mg_tls_opts *opts) {
   mbedtls_ssl_conf_rng(&tls->conf, mg_mbed_rng, c);
 #endif
 
+  if (c->is_client && opts->name.buf != NULL && opts->name.len > 0 &&
+      opts->name.buf[0] != '\0') {
+    char *host = mg_mprintf("%.*s", opts->name.len, opts->name.buf);
+    mbedtls_ssl_set_hostname(&tls->ssl, host);
+#if !defined(MBEDTLS_VERSION_NUMBER) || MBEDTLS_VERSION_NUMBER < 0x03030000 || \
+    MBEDTLS_VERSION_NUMBER >= 0x04000000
+    // NOTE: MBEDTLS_SSL_VERIFY_OPTIONAL is not supported for TLS1.3 on client
+    // side See https://github.com/Mbed-TLS/mbedtls/issues/7075
+    check_name = true;
+#endif
+    MG_DEBUG(("%lu hostname verification: %s", c->id, host));
+    mg_free(host);
+  } else {
+    MG_DEBUG(("%lu skipping hostname verification", c->id));
+    mbedtls_ssl_set_hostname(&tls->ssl, NULL);
+  }
   if (opts->ca.len == 0 || mg_strcmp(opts->ca, mg_str("*")) == 0) {
-    // NOTE: MBEDTLS_SSL_VERIFY_NONE is not supported for TLS1.3 on client side
-    // See https://github.com/Mbed-TLS/mbedtls/issues/7075
-    mbedtls_ssl_conf_authmode(&tls->conf, MBEDTLS_SSL_VERIFY_NONE);
+    mbedtls_ssl_conf_authmode(&tls->conf, check_name  // see set comment above
+                                              ? MBEDTLS_SSL_VERIFY_OPTIONAL
+                                              : MBEDTLS_SSL_VERIFY_NONE);
+    tls->check_name = check_name; // host name set but no CA cert given
   } else {
     if (mg_load_cert(opts->ca, &tls->ca) == false) goto fail;
     mbedtls_ssl_conf_ca_chain(&tls->conf, &tls->ca, NULL);
-    if (c->is_client) {
-      if (opts->name.buf != NULL && opts->name.buf[0] != '\0') {
-        char *host = mg_mprintf("%.*s", opts->name.len, opts->name.buf);
-        mbedtls_ssl_set_hostname(&tls->ssl, host);
-        MG_DEBUG(("%lu hostname verification: %s", c->id, host));
-        mg_free(host);
-      } else {
-        MG_DEBUG(("%lu skipping hostname verification", c->id));
-        mbedtls_ssl_set_hostname(&tls->ssl, NULL);
-      }
-    }
     mbedtls_ssl_conf_authmode(&tls->conf, MBEDTLS_SSL_VERIFY_REQUIRED);
   }
   if (!mg_load_cert(opts->cert, &tls->cert)) goto fail;
