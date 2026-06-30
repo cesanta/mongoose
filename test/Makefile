@@ -29,7 +29,7 @@ COMMON_CFLAGS ?= $(C_WARN) $(WARN) $(INCS) $(DEFS) -DMG_ENABLE_IPV6=$(IPV6) $(TF
 CFLAGS ?= $(OPTS) $(ASAN) $(COMMON_CFLAGS)
 VALGRIND_CFLAGS ?= $(OPTS) $(COMMON_CFLAGS)
 VALGRIND_RUN ?= valgrind --tool=memcheck --gen-suppressions=all --leak-check=full --show-leak-kinds=all --leak-resolution=high --track-origins=yes --error-exitcode=1 --exit-on-first-error=yes --fair-sched=yes
-.PHONY: clean_tutorials tutorials mip_test eth_test ppp_test test valgrind
+.PHONY: tutorials mip_test eth_test ppp_test eth_vc98 ppp_vc98 eth_s390 ppp_s390 test valgrind
 
 ifeq "$(findstring ++,$(CC))" ""
 # $(CC) does not end with ++, i.e. we're using C. Apply C flags
@@ -81,7 +81,7 @@ endif
 all:
 	$(MAKE) -C ../tutorials/http/http-server
 
-tall: mg_prefix unamalgamated test valgrind fuzz fuzz_tls vc98 vc17 vc22 mingw mingw++ arm armhf riscv s390 tutorials tutorials_win tutorials_embedded mip_test eth_test ppp_test mip_vc98
+tall: mg_prefix unamalgamated test valgrind fuzz fuzz_tls vc98 vc17 vc22 mingw mingw++ arm armhf riscv s390 tutorials tutorials_win tutorials_embedded mip_test eth_test ppp_test mip_vc98 eth_vc98 ppp_vc98 eth_s390 ppp_s390
 
 mip_test: mip_test.c mongoose.c mongoose.h packed_fs.c Makefile
 	$(CC) mip_test.c packed_fs.c $(CFLAGS) $(LDFLAGS) -o $@
@@ -110,6 +110,14 @@ mip_port_test: mip_x_test.c mip_port_test.c mongoose.c mongoose.h packed_fs.c Ma
 
 mip_vc98: mip_test.c mongoose.c mongoose.h packed_fs.c Makefile
 	$(DOCKER) mdashnet/vc98 wine cl mip_test.c packed_fs.c $(VCFLAGS) $(DEFS) $(TFLAGS) /Fe$@.exe
+	$(DOCKER) -e WINEPREFIX=/tmp/wineprefix mdashnet/vc98 wine $@.exe
+
+eth_vc98: eth_test.c mongoose.c mongoose.h Makefile
+	$(DOCKER) mdashnet/vc98 wine cl eth_test.c $(VCFLAGS) $(DEFS) $(TFLAGS) /Fe$@.exe
+	$(DOCKER) -e WINEPREFIX=/tmp/wineprefix mdashnet/vc98 wine $@.exe
+
+ppp_vc98: ppp_test.c driver_mock.c mongoose.c mongoose.h Makefile
+	$(DOCKER) mdashnet/vc98 wine cl ppp_test.c $(VCFLAGS) $(DEFS) $(TFLAGS) /Fe$@.exe
 	$(DOCKER) -e WINEPREFIX=/tmp/wineprefix mdashnet/vc98 wine $@.exe
 
 packed_fs.c: Makefile data/ssi.h fuzz.c data/a.txt data/ca.pem certs/ca.crt certs/server.crt certs/server.key
@@ -204,6 +212,16 @@ mip_s390: ASAN=
 mip_s390: CC = $(DOCKER) mdashnet/s390 cc
 mip_s390: RUN = $(DOCKER) --init mdashnet/s390
 mip_s390: mip_test
+
+eth_s390: ASAN=
+eth_s390: CC = $(DOCKER) mdashnet/s390 cc
+eth_s390: RUN = $(DOCKER) --init mdashnet/s390
+eth_s390: eth_test
+
+ppp_s390: ASAN=
+ppp_s390: CC = $(DOCKER) mdashnet/s390 cc
+ppp_s390: RUN = $(DOCKER) --init mdashnet/s390
+ppp_s390: ppp_test
 
 mip_port_s390: ASAN=
 mip_port_s390: IPV6=0
