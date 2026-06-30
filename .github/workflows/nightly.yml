@@ -81,7 +81,6 @@ jobs:
         cat log
         test/health.awk < log > json
         scp -o "StrictHostKeyChecking=no" json "root@176.9.217.245:/data/downloads/health/${{ matrix.target }}_${{ matrix.cc }}_${{ matrix.ssl }}_$(date +"%Y%m%d").json"
-
   mip89:
     runs-on: ubuntu-latest
     strategy:
@@ -94,6 +93,29 @@ jobs:
     - uses: actions/checkout@v5
       with: { fetch-depth: 2 }
     - run: make -C test ${{ matrix.target }} IPV6=1
+
+  l2:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        cc: [gcc, clang, g++, clang++]
+        target: [eth_test, ppp_test]
+        ipv6: [0, 1]
+    name: ${{ matrix.target }} CC=${{ matrix.cc }} IPV6=${{ matrix.ipv6 }}
+    steps:
+    - uses: actions/checkout@v5
+      with: { fetch-depth: 2 }
+    - uses: webfactory/ssh-agent@v0.10.0
+      with:
+            ssh-private-key: ${{ secrets.HEALTH_TESTS_SSH_KEY }}
+    - run: make -C test ${{ matrix.target }} IPV6=${{ matrix.ipv6 }} CC=${{ matrix.cc }} > log
+    - if: success() || failure()
+      run: |
+        cat log
+        test/health.awk < log > json
+        scp -o "StrictHostKeyChecking=no" json "root@176.9.217.245:/data/downloads/health/${{ matrix.target }}_${{ matrix.cc }}_${{ matrix.ipv6 }}_$(date +"%Y%m%d").json"
+
   s390:
     runs-on: ubuntu-latest
     strategy:

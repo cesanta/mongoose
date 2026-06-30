@@ -4,35 +4,22 @@ on:
 env:
   IPV6: 0
 jobs:
-  mip:
+  l2:
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
       matrix:
-        cc: [gcc]
-        target: [mip_tap_test]
-        ssl: ["", BUILTIN, MBEDTLS, OPENSSL, WOLFSSL]
-        # #3226: built-in TCP is currently not working with WolfSSL (builds fine)
-        exclude:
-        - ssl: WOLFSSL
-          target: mip_tap_test
-    name: ${{ matrix.target }} CC=${{ matrix.cc }} SSL=${{ matrix.ssl }}
-    env:
-      CC: ${{ matrix.cc }}
-      SSL: ${{ matrix.ssl }}
-      TFLAGS: -DMQTT_HOST -DIPV6_NOROUTING -DNO_ABORT  # -DMQTT_HOST_NAME=\"server\"
+        cc: [gcc, clang, g++, clang++]
+        target: [eth_test, ppp_test]
+        ipv6: [0, 1]
+    name: ${{ matrix.target }} CC=${{ matrix.cc }} IPV6=${{ matrix.ipv6 }}
     steps:
     - uses: actions/checkout@v5
       with: { fetch-depth: 2 }
     - uses: webfactory/ssh-agent@v0.10.0
       with:
             ssh-private-key: ${{ secrets.HEALTH_TESTS_SSH_KEY }}
-    - run: if [ "${{ matrix.target }}" == "mip_tap_test" ]; then source ./test/setup_ga_network.sh ; export IPV6=1; sed -i -e "s/127.0.0.1//" test/mosquitto.conf; cat test/mosquitto.conf; ./test/setup_mqtt_server.sh; else export IPV6=1 ; fi && sudo apt -y update ; sudo apt -y install libmbedtls-dev libwolfssl-dev && make -C test ${{ matrix.target }} > log
-    - if: success() || failure()
-      run: |
-        cat log
-        test/health.awk < log > json
-        scp -o "StrictHostKeyChecking=no" json "root@176.9.217.245:/data/downloads/health/${{ matrix.target }}_${{ matrix.cc }}_${{ matrix.ssl }}_$(date +"%Y%m%d").json"
+    - run: make -C test ${{ matrix.target }} IPV6=${{ matrix.ipv6 }} CC=${{ matrix.cc }} > log
 
 
 #  macos:

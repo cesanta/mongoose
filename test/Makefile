@@ -29,7 +29,7 @@ COMMON_CFLAGS ?= $(C_WARN) $(WARN) $(INCS) $(DEFS) -DMG_ENABLE_IPV6=$(IPV6) $(TF
 CFLAGS ?= $(OPTS) $(ASAN) $(COMMON_CFLAGS)
 VALGRIND_CFLAGS ?= $(OPTS) $(COMMON_CFLAGS)
 VALGRIND_RUN ?= valgrind --tool=memcheck --gen-suppressions=all --leak-check=full --show-leak-kinds=all --leak-resolution=high --track-origins=yes --error-exitcode=1 --exit-on-first-error=yes --fair-sched=yes
-.PHONY: clean_tutorials tutorials mip_test test valgrind
+.PHONY: clean_tutorials tutorials mip_test eth_test ppp_test test valgrind
 
 ifeq "$(findstring ++,$(CC))" ""
 # $(CC) does not end with ++, i.e. we're using C. Apply C flags
@@ -81,10 +81,18 @@ endif
 all:
 	$(MAKE) -C ../tutorials/http/http-server
 
-tall: mg_prefix unamalgamated test valgrind fuzz fuzz_tls vc98 vc17 vc22 mingw mingw++ arm armhf riscv s390 tutorials tutorials_win tutorials_embedded mip_test mip_vc98
+tall: mg_prefix unamalgamated test valgrind fuzz fuzz_tls vc98 vc17 vc22 mingw mingw++ arm armhf riscv s390 tutorials tutorials_win tutorials_embedded mip_test eth_test ppp_test mip_vc98
 
 mip_test: mip_test.c mongoose.c mongoose.h packed_fs.c Makefile
 	$(CC) mip_test.c packed_fs.c $(CFLAGS) $(LDFLAGS) -o $@
+	ASAN_OPTIONS=$(ASAN_OPTIONS) $(RUN) ./$@
+
+eth_test: eth_test.c mongoose.c mongoose.h Makefile
+	$(CC) eth_test.c $(CFLAGS) $(LDFLAGS) -o $@
+	ASAN_OPTIONS=$(ASAN_OPTIONS) $(RUN) ./$@
+
+ppp_test: ppp_test.c mongoose.c mongoose.h Makefile
+	$(CC) ppp_test.c $(CFLAGS) $(LDFLAGS) -o $@
 	ASAN_OPTIONS=$(ASAN_OPTIONS) $(RUN) ./$@
 
 mip_tap_test: mip_x_test.c mip_tap_test.c mongoose.c mongoose.h packed_fs.c Makefile tls_multirec/server
