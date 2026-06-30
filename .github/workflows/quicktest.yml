@@ -16,8 +16,13 @@ jobs:
       fail-fast: false
       matrix:
         cc: [gcc, clang++]
-        target: [test, mip_test]
+        target: [test, mip_test, eth_test, ppp_test]
         ssl: ["", BUILTIN]
+        exclude:
+        - target: eth_test
+          ssl: BUILTIN
+        - target: ppp_test
+          ssl: BUILTIN
     name: linux ${{ matrix.target }} CC=${{ matrix.cc }} SSL=${{ matrix.ssl }}
     env:
       CC: ${{ matrix.cc }}
