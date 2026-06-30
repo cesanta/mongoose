@@ -158,7 +158,7 @@ static void frag_send_fn(struct mg_connection *c, int ev, void *ev_data) {
     }
   } else if (ev == MG_EV_WRITE) {
     // Checking TCP segment sizes (ev_data points to the TCP payload length)
-    ASSERT(*(int *) ev_data == s_seg_sizes[s_seg_sent++]);
+    ASSERT(*(long *) ev_data == s_seg_sizes[s_seg_sent++]);
   }
   (void) c, (void) ev_data;
 }
@@ -298,7 +298,7 @@ static void init_tests(struct mg_mgr *mgr, struct eth *e, struct ipp *ipp,
     mif->ip = mg_htonl(0x1000000);
     mif->gw = mg_htonl(0x1000000);
     mif->gw_ready = true;
-    mif->mask = 255;  // use router, to avoid firing an ARP request
+    mif->mask = mg_htonl(0xff000000);   // use router, avoid firing ARP request
     mif->state = MG_TCPIP_STATE_READY;  // so mg_send() works and DHCP stops
   }
   mg_tcpip_init(mgr, mif);
