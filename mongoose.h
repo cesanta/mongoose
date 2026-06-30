@@ -4629,7 +4629,7 @@ bool mg_wifi_ap_stop(void);
 #if MG_ENABLE_TCPIP
 
 // no config defaults to 0 => Ethernet
-enum mg_l2type { MG_TCPIP_L2_ETH = 0, MG_TCPIP_L2_PPP, MG_TCPIP_L2_PPPoE };
+enum mg_l2type { MG_TCPIP_L2_ETH = 0, MG_TCPIP_L2_PPP, MG_TCPIP_L2_PPPoE, MG_TCPIP_L2_USER };
 
 #if defined(__DCC__)
 #pragma pack(1)
