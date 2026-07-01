@@ -1,6 +1,6 @@
 SRCS = mongoose.c unit_test.c packed_fs.c
 HDRS = $(wildcard ../src/*.h) $(wildcard ../src/drivers/*.h)
-DEFS ?= -DMG_MAX_HTTP_HEADERS=7 -DMG_ENABLE_LINES -DMG_ENABLE_SSI=1 -DMG_ENABLE_ASSERT=1
+DEFS ?= -DMG_MAX_HTTP_HEADERS=7 -DMG_ENABLE_LINES -DMG_ENABLE_SSI=1 -DMG_ENABLE_ASSERT=1 -DMG_ENABLE_IPV6=$(IPV6)
 WARN ?= -pedantic -W -Wall -Werror -Wshadow -Wdouble-promotion -fno-common -Wconversion -Wundef
 OPTS ?= -O3 -g3
 INCS ?= -Isrc -I.
@@ -25,7 +25,7 @@ PREFIX ?= /usr/local
 LIBDIR ?= $(PREFIX)/lib
 INCLUDEDIR ?= $(PREFIX)/include
 VERSION ?= $(shell cut -d'"' -f2 ../src/version.h)
-COMMON_CFLAGS ?= $(C_WARN) $(WARN) $(INCS) $(DEFS) -DMG_ENABLE_IPV6=$(IPV6) $(TFLAGS) -pthread
+COMMON_CFLAGS ?= $(C_WARN) $(WARN) $(INCS) $(DEFS) $(TFLAGS) -pthread
 CFLAGS ?= $(OPTS) $(ASAN) $(COMMON_CFLAGS)
 VALGRIND_CFLAGS ?= $(OPTS) $(COMMON_CFLAGS)
 VALGRIND_RUN ?= valgrind --tool=memcheck --gen-suppressions=all --leak-check=full --show-leak-kinds=all --leak-resolution=high --track-origins=yes --error-exitcode=1 --exit-on-first-error=yes --fair-sched=yes

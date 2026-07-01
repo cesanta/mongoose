@@ -67,203 +67,200 @@ static size_t add_fcs(uint8_t *buf, size_t len) {
   return len + sizeof(crc);
 }
 
-static void test_plain_accept(void) {
-  uint8_t frame[64], payload[] = {1, 2, 3, 4};
-  struct mg_tcpip_if ifp;
-  struct mg_str raw, pay;
-  enum mg_l2proto proto = MG_TCPIP_L2PROTO_ARP;
-  size_t len;
-  reset_if(&ifp);
-  mg_l2_init(&ifp);
-  MG_DEBUG(("MTU: %u, frame size: %u", ifp.l2mtu, ifp.framesize));
-  ASSERT(ifp.l2mtu != 0);
-  ASSERT(ifp.framesize != 0);
-  len = mk_eth(frame, s_mac, 0x0800, payload, sizeof(payload));
-  raw = mg_str_n((char *) frame, len);
-  ASSERT(mg_l2_rx(&ifp, &proto, &pay, &raw) == true);
-  ASSERT(proto == MG_TCPIP_L2PROTO_IPV4);
-  ASSERT(pay.len == sizeof(payload));
-  ASSERT(memcmp(pay.buf, payload, sizeof(payload)) == 0);
-}
-
-static void test_plain_discard(void) {
-  uint8_t frame[64], payload[] = {1, 2, 3, 4};
-  char sentinel[] = "discard";
-  struct mg_tcpip_if ifp;
-  struct mg_str raw, pay = mg_str_n(sentinel, sizeof(sentinel));
-  enum mg_l2proto proto = MG_TCPIP_L2PROTO_ARP;
-  size_t len;
-  reset_if(&ifp);
-  mg_l2_init(&ifp);
-  len = mk_eth(frame, s_mac, 0x1234, payload, sizeof(payload));
-  raw = mg_str_n((char *) frame, len);
-  ASSERT(mg_l2_rx(&ifp, &proto, &pay, &raw) == false);
-  ASSERT(proto == MG_TCPIP_L2PROTO_ARP);
-}
-
-static void test_mac_check_accept(void) {
-  uint8_t frame[64], payload[] = {1, 2, 3, 4};
-  struct mg_tcpip_if ifp;
-  struct mg_str raw, pay;
-  enum mg_l2proto proto = MG_TCPIP_L2PROTO_ARP;
-  size_t len;
-  reset_if(&ifp);
-  ifp.enable_mac_check = true;
-  mg_l2_init(&ifp);
-  len = mk_eth(frame, s_mac, 0x0800, payload, sizeof(payload));
-  raw = mg_str_n((char *) frame, len);
-  ASSERT(mg_l2_rx(&ifp, &proto, &pay, &raw) == true);
-  ASSERT(proto == MG_TCPIP_L2PROTO_IPV4);
-  ASSERT(pay.len == sizeof(payload));
-  ASSERT(memcmp(pay.buf, payload, sizeof(payload)) == 0);
-}
-
-static void test_mac_check_discard(void) {
-  uint8_t frame[64], payload[] = {1, 2, 3, 4}, dst[6] = {1, 1, 1, 1, 1, 1};
-  char sentinel[] = "discard";
-  struct mg_tcpip_if ifp;
-  struct mg_str raw, pay = mg_str_n(sentinel, sizeof(sentinel));
-  enum mg_l2proto proto = MG_TCPIP_L2PROTO_ARP;
-  size_t len;
-  reset_if(&ifp);
-  ifp.enable_mac_check = true;
-  mg_l2_init(&ifp);
-  len = mk_eth(frame, dst, 0x0800, payload, sizeof(payload));
-  raw = mg_str_n((char *) frame, len);
-  ASSERT(mg_l2_rx(&ifp, &proto, &pay, &raw) == false);
-  ASSERT(proto == MG_TCPIP_L2PROTO_ARP);
-  ASSERT(pay.buf == sentinel);
-  ASSERT(pay.len == sizeof(sentinel));
-}
-
-static void test_fcs_check_accept(void) {
-  uint8_t frame[64], payload[] = {1, 2, 3, 4};
-  struct mg_tcpip_if ifp;
-  struct mg_str raw, pay;
-  enum mg_l2proto proto = MG_TCPIP_L2PROTO_ARP;
-  size_t len;
-  reset_if(&ifp);
-  ifp.enable_fcs_check = true;
-  mg_l2_init(&ifp);
-  len = add_fcs(frame, mk_eth(frame, s_mac, 0x0800, payload, sizeof(payload)));
-  raw = mg_str_n((char *) frame, len);
-  ASSERT(mg_l2_rx(&ifp, &proto, &pay, &raw) == true);
-  ASSERT(proto == MG_TCPIP_L2PROTO_IPV4);
-  ASSERT(pay.len == sizeof(payload));
-  ASSERT(memcmp(pay.buf, payload, sizeof(payload)) == 0);
-}
-
-static void test_fcs_check_discard(void) {
-  uint8_t frame[64], payload[] = {1, 2, 3, 4};
-  char sentinel[] = "discard";
-  struct mg_tcpip_if ifp;
-  struct mg_str raw, pay = mg_str_n(sentinel, sizeof(sentinel));
-  enum mg_l2proto proto = MG_TCPIP_L2PROTO_ARP;
-  size_t len;
-  reset_if(&ifp);
-  ifp.enable_fcs_check = true;
-  mg_l2_init(&ifp);
-  len = add_fcs(frame, mk_eth(frame, s_mac, 0x0800, payload, sizeof(payload)));
-  frame[len - 1] ^= 1;
-  raw = mg_str_n((char *) frame, len);
-  ASSERT(mg_l2_rx(&ifp, &proto, &pay, &raw) == false);
-  ASSERT(proto == MG_TCPIP_L2PROTO_ARP);
-  ASSERT(pay.buf == sentinel);
-  ASSERT(pay.len == sizeof(sentinel));
-}
-
-static void test_fcs_check_disabled(void) {
-  uint8_t frame[64], payload[] = {1, 2, 3, 4};
-  struct mg_tcpip_if ifp;
-  struct mg_str raw, pay;
-  enum mg_l2proto proto = MG_TCPIP_L2PROTO_ARP;
-  size_t len;
-  reset_if(&ifp);
-  mg_l2_init(&ifp);
-  len = add_fcs(frame, mk_eth(frame, s_mac, 0x0800, payload, sizeof(payload)));
-  raw = mg_str_n((char *) frame, len);
-  ASSERT(mg_l2_rx(&ifp, &proto, &pay, &raw) == true);
-  ASSERT(proto == MG_TCPIP_L2PROTO_IPV4);
-  ASSERT(pay.len == sizeof(payload) + sizeof(uint32_t));
-  ASSERT(memcmp(pay.buf, payload, sizeof(payload)) == 0);
-}
-
-static void test_vlan_accept(void) {
-  uint8_t frame[64], payload[] = {5, 6, 7, 8};
-  struct mg_tcpip_if ifp;
-  struct mg_str raw, pay;
-  enum mg_l2proto proto = MG_TCPIP_L2PROTO_ARP;
-  size_t len;
-  reset_if(&ifp);
-  ifp.l2data.eth.vlan_id = 123;
-  mg_l2_init(&ifp);
-  MG_DEBUG(("MTU: %u, frame size: %u", ifp.l2mtu, ifp.framesize));
-  ASSERT(ifp.l2mtu != 0);
-  ASSERT(ifp.framesize != 0);
-  len = mk_vlan(frame, s_mac, 123, 0x86dd, payload, sizeof(payload));
-  raw = mg_str_n((char *) frame, len);
-  ASSERT(mg_l2_rx(&ifp, &proto, &pay, &raw) == true);
-  ASSERT(proto == MG_TCPIP_L2PROTO_IPV6);
-  ASSERT(pay.len == sizeof(payload));
-  ASSERT(memcmp(pay.buf, payload, sizeof(payload)) == 0);
-}
-
-static void test_vlan_discard(void) {
-  uint8_t frame[64], payload[] = {5, 6, 7, 8};
-  char sentinel[] = "discard";
-  struct mg_tcpip_if ifp;
-  struct mg_str raw, pay = mg_str_n(sentinel, sizeof(sentinel));
-  enum mg_l2proto proto = MG_TCPIP_L2PROTO_ARP;
-  size_t len;
-  reset_if(&ifp);
-  ifp.l2data.eth.vlan_id = 123;
-  mg_l2_init(&ifp);
-  len = mk_vlan(frame, s_mac, 124, 0x86dd, payload, sizeof(payload));
-  raw = mg_str_n((char *) frame, len);
-  ASSERT(mg_l2_rx(&ifp, &proto, &pay, &raw) == false);
-  ASSERT(proto == MG_TCPIP_L2PROTO_ARP);
-  ASSERT(pay.buf == sentinel);
-  ASSERT(pay.len == sizeof(sentinel));
-}
-
-static void test_tagged_without_vlan_discard(void) {
-  uint8_t frame[64], payload[] = {5, 6, 7, 8};
-  struct mg_tcpip_if ifp;
-  struct mg_str raw, pay;
-  enum mg_l2proto proto = MG_TCPIP_L2PROTO_ARP;
-  size_t len;
-  reset_if(&ifp);
-  mg_l2_init(&ifp);
-  len = mk_vlan(frame, s_mac, 123, 0x86dd, payload, sizeof(payload));
-  raw = mg_str_n((char *) frame, len);
-  ASSERT(mg_l2_rx(&ifp, &proto, &pay, &raw) == false);
-  ASSERT(proto == MG_TCPIP_L2PROTO_ARP);
-}
-
 #define DASHBOARD(x) \
   printf("HEALTH_DASHBOARD\t\"%s\": %s,\n", x, s_error ? "false" : "true")
 
+static void test_eth(void) {
+  struct mg_tcpip_if ifp;
+  struct mg_str raw, pay;
+  enum mg_l2proto proto;
+  size_t len;
+  uint8_t frame[64];
+
+  {  // Plain Ethernet frame is accepted
+    uint8_t payload[] = {1, 2, 3, 4};
+    reset_if(&ifp);
+    mg_l2_init(&ifp);
+    MG_DEBUG(("MTU: %u, frame size: %u", ifp.l2mtu, ifp.framesize));
+    ASSERT(ifp.l2mtu != 0);
+    ASSERT(ifp.framesize != 0);
+    len = mk_eth(frame, s_mac, 0x0800, payload, sizeof(payload));
+    raw = mg_str_n((char *) frame, len);
+    proto = MG_TCPIP_L2PROTO_ARP;
+    ASSERT(mg_l2_rx(&ifp, &proto, &pay, &raw) == true);
+    ASSERT(proto == MG_TCPIP_L2PROTO_IPV4);
+    ASSERT(pay.len == sizeof(payload));
+    ASSERT(memcmp(pay.buf, payload, sizeof(payload)) == 0);
+  }
+  {  // Unknown Ethernet type is discarded
+    uint8_t payload[] = {1, 2, 3, 4};
+    char sentinel[] = "discard";
+    reset_if(&ifp);
+    mg_l2_init(&ifp);
+    len = mk_eth(frame, s_mac, 0x1234, payload, sizeof(payload));
+    raw = mg_str_n((char *) frame, len);
+    pay = mg_str_n(sentinel, sizeof(sentinel));
+    proto = MG_TCPIP_L2PROTO_ARP;
+    ASSERT(mg_l2_rx(&ifp, &proto, &pay, &raw) == false);
+    ASSERT(proto == MG_TCPIP_L2PROTO_ARP);
+  }
+}
+
+static void test_mac(void) {
+  struct mg_tcpip_if ifp;
+  struct mg_str raw, pay;
+  enum mg_l2proto proto;
+  size_t len;
+  uint8_t frame[64];
+
+  {  // MAC check accepts frames addressed to us
+    uint8_t payload[] = {1, 2, 3, 4};
+    reset_if(&ifp);
+    ifp.enable_mac_check = true;
+    mg_l2_init(&ifp);
+    len = mk_eth(frame, s_mac, 0x0800, payload, sizeof(payload));
+    raw = mg_str_n((char *) frame, len);
+    proto = MG_TCPIP_L2PROTO_ARP;
+    ASSERT(mg_l2_rx(&ifp, &proto, &pay, &raw) == true);
+    ASSERT(proto == MG_TCPIP_L2PROTO_IPV4);
+    ASSERT(pay.len == sizeof(payload));
+    ASSERT(memcmp(pay.buf, payload, sizeof(payload)) == 0);
+  }
+  {  // MAC check discards alien unicast frames
+    uint8_t payload[] = {1, 2, 3, 4}, dst[6] = {1, 1, 1, 1, 1, 1};
+    char sentinel[] = "discard";
+    reset_if(&ifp);
+    ifp.enable_mac_check = true;
+    mg_l2_init(&ifp);
+    len = mk_eth(frame, dst, 0x0800, payload, sizeof(payload));
+    raw = mg_str_n((char *) frame, len);
+    pay = mg_str_n(sentinel, sizeof(sentinel));
+    proto = MG_TCPIP_L2PROTO_ARP;
+    ASSERT(mg_l2_rx(&ifp, &proto, &pay, &raw) == false);
+    ASSERT(proto == MG_TCPIP_L2PROTO_ARP);
+    ASSERT(pay.buf == sentinel);
+    ASSERT(pay.len == sizeof(sentinel));
+  }
+}
+
+static void test_fcs(void) {
+  struct mg_tcpip_if ifp;
+  struct mg_str raw, pay;
+  enum mg_l2proto proto;
+  size_t len;
+  uint8_t frame[64];
+
+  {  // FCS check strips a valid CRC
+    uint8_t payload[] = {1, 2, 3, 4};
+    reset_if(&ifp);
+    ifp.enable_fcs_check = true;
+    mg_l2_init(&ifp);
+    len = add_fcs(frame, mk_eth(frame, s_mac, 0x0800, payload,
+                                sizeof(payload)));
+    raw = mg_str_n((char *) frame, len);
+    proto = MG_TCPIP_L2PROTO_ARP;
+    ASSERT(mg_l2_rx(&ifp, &proto, &pay, &raw) == true);
+    ASSERT(proto == MG_TCPIP_L2PROTO_IPV4);
+    ASSERT(pay.len == sizeof(payload));
+    ASSERT(memcmp(pay.buf, payload, sizeof(payload)) == 0);
+  }
+  {  // FCS check rejects a bad CRC
+    uint8_t payload[] = {1, 2, 3, 4};
+    char sentinel[] = "discard";
+    reset_if(&ifp);
+    ifp.enable_fcs_check = true;
+    mg_l2_init(&ifp);
+    len = add_fcs(frame, mk_eth(frame, s_mac, 0x0800, payload,
+                                sizeof(payload)));
+    frame[len - 1] ^= 1;
+    raw = mg_str_n((char *) frame, len);
+    pay = mg_str_n(sentinel, sizeof(sentinel));
+    proto = MG_TCPIP_L2PROTO_ARP;
+    ASSERT(mg_l2_rx(&ifp, &proto, &pay, &raw) == false);
+    ASSERT(proto == MG_TCPIP_L2PROTO_ARP);
+    ASSERT(pay.buf == sentinel);
+    ASSERT(pay.len == sizeof(sentinel));
+  }
+  {  // Disabled FCS check leaves the CRC in payload
+    uint8_t payload[] = {1, 2, 3, 4};
+    reset_if(&ifp);
+    mg_l2_init(&ifp);
+    len = add_fcs(frame, mk_eth(frame, s_mac, 0x0800, payload,
+                                sizeof(payload)));
+    raw = mg_str_n((char *) frame, len);
+    proto = MG_TCPIP_L2PROTO_ARP;
+    ASSERT(mg_l2_rx(&ifp, &proto, &pay, &raw) == true);
+    ASSERT(proto == MG_TCPIP_L2PROTO_IPV4);
+    ASSERT(pay.len == sizeof(payload) + sizeof(uint32_t));
+    ASSERT(memcmp(pay.buf, payload, sizeof(payload)) == 0);
+  }
+}
+
+static void test_vlan(void) {
+  struct mg_tcpip_if ifp;
+  struct mg_str raw, pay;
+  enum mg_l2proto proto;
+  size_t len;
+  uint8_t frame[64];
+
+  {  // Configured VLAN accepts matching tagged frames
+    uint8_t payload[] = {5, 6, 7, 8};
+    reset_if(&ifp);
+    ifp.l2data.eth.vlan_id = 123;
+    mg_l2_init(&ifp);
+    MG_DEBUG(("MTU: %u, frame size: %u", ifp.l2mtu, ifp.framesize));
+    ASSERT(ifp.l2mtu != 0);
+    ASSERT(ifp.framesize != 0);
+    len = mk_vlan(frame, s_mac, 123, 0x86dd, payload, sizeof(payload));
+    raw = mg_str_n((char *) frame, len);
+    proto = MG_TCPIP_L2PROTO_ARP;
+    ASSERT(mg_l2_rx(&ifp, &proto, &pay, &raw) == true);
+    ASSERT(proto == MG_TCPIP_L2PROTO_IPV6);
+    ASSERT(pay.len == sizeof(payload));
+    ASSERT(memcmp(pay.buf, payload, sizeof(payload)) == 0);
+  }
+  {  // Configured VLAN rejects non-matching tags
+    uint8_t payload[] = {5, 6, 7, 8};
+    char sentinel[] = "discard";
+    reset_if(&ifp);
+    ifp.l2data.eth.vlan_id = 123;
+    mg_l2_init(&ifp);
+    len = mk_vlan(frame, s_mac, 124, 0x86dd, payload, sizeof(payload));
+    raw = mg_str_n((char *) frame, len);
+    pay = mg_str_n(sentinel, sizeof(sentinel));
+    proto = MG_TCPIP_L2PROTO_ARP;
+    ASSERT(mg_l2_rx(&ifp, &proto, &pay, &raw) == false);
+    ASSERT(proto == MG_TCPIP_L2PROTO_ARP);
+    ASSERT(pay.buf == sentinel);
+    ASSERT(pay.len == sizeof(sentinel));
+  }
+  {  // Tagged frames are rejected when no VLAN is configured
+    uint8_t payload[] = {5, 6, 7, 8};
+    reset_if(&ifp);
+    mg_l2_init(&ifp);
+    len = mk_vlan(frame, s_mac, 123, 0x86dd, payload, sizeof(payload));
+    raw = mg_str_n((char *) frame, len);
+    proto = MG_TCPIP_L2PROTO_ARP;
+    ASSERT(mg_l2_rx(&ifp, &proto, &pay, &raw) == false);
+    ASSERT(proto == MG_TCPIP_L2PROTO_ARP);
+  }
+}
+
 int main(void) {
   s_error = false;
-  test_plain_accept();
-  test_plain_discard();
+  test_eth();
   DASHBOARD("eth");
 
   s_error = false;
-  test_mac_check_accept();
-  test_mac_check_discard();
+  test_mac();
   DASHBOARD("mac");
 
   s_error = false;
-  test_fcs_check_accept();
-  test_fcs_check_discard();
-  test_fcs_check_disabled();
+  test_fcs();
   DASHBOARD("fcs");
 
   s_error = false;
-  test_vlan_accept();
-  test_vlan_discard();
-  test_tagged_without_vlan_discard();
+  test_vlan();
   printf("HEALTH_DASHBOARD\t\"vlan\": %s\n", s_error ? "false" : "true");
 
 #ifdef NO_ABORT

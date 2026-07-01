@@ -93,314 +93,292 @@ static size_t mk_pppoe_sess(uint8_t *buf, uint16_t id, uint16_t proto,
   return sizeof(*eth) + sizeof(*pppoe) + sizeof(*ppp) + len;
 }
 
-static void test_ppp_lcp_accept(void) {
+static void test_lcp(void) {
   uint8_t frame[64];
   struct mg_tcpip_if ifp;
-  struct lcp lcp = {MG_PPP_LCP_CFG_ACK, 1, mg_htons(sizeof(lcp))};
   struct mg_str raw, pay;
-  enum mg_l2proto proto = MG_TCPIP_L2PROTO_ARP;
-  init_if(&ifp, MG_TCPIP_L2_PPP);
-  s_lcpup = false;
-  raw = mg_str_n((char *) frame,
-                 mk_ppp(frame, MG_PPP_PROTO_LCP, &lcp, sizeof(lcp)));
-  ASSERT(mg_l2_rx(&ifp, &proto, &pay, &raw) == false);
-  ASSERT(s_lcpup == true);
+  enum mg_l2proto proto;
+
+  {  // LCP ACK brings PPP link up
+    struct lcp lcp = {MG_PPP_LCP_CFG_ACK, 1, mg_htons(sizeof(lcp))};
+    init_if(&ifp, MG_TCPIP_L2_PPP);
+    s_lcpup = false;
+    raw = mg_str_n((char *) frame,
+                   mk_ppp(frame, MG_PPP_PROTO_LCP, &lcp, sizeof(lcp)));
+    proto = MG_TCPIP_L2PROTO_ARP;
+    ASSERT(mg_l2_rx(&ifp, &proto, &pay, &raw) == false);
+    ASSERT(s_lcpup == true);
+  }
+  {  // Short LCP frame is discarded
+    uint8_t lcp[] = {MG_PPP_LCP_CFG_ACK, 1};
+    init_if(&ifp, MG_TCPIP_L2_PPP);
+    s_lcpup = false;
+    raw = mg_str_n((char *) frame,
+                   mk_ppp(frame, MG_PPP_PROTO_LCP, lcp, sizeof(lcp)));
+    proto = MG_TCPIP_L2PROTO_ARP;
+    ASSERT(mg_l2_rx(&ifp, &proto, &pay, &raw) == false);
+    ASSERT(s_lcpup == false);
+  }
 }
 
-static void test_ppp_lcp_discard(void) {
-  uint8_t frame[64], lcp[] = {MG_PPP_LCP_CFG_ACK, 1};
+static void test_ipcp(void) {
+  uint8_t frame[64];
   struct mg_tcpip_if ifp;
   struct mg_str raw, pay;
-  enum mg_l2proto proto = MG_TCPIP_L2PROTO_ARP;
-  init_if(&ifp, MG_TCPIP_L2_PPP);
-  s_lcpup = false;
-  raw = mg_str_n((char *) frame,
-                 mk_ppp(frame, MG_PPP_PROTO_LCP, lcp, sizeof(lcp)));
-  ASSERT(mg_l2_rx(&ifp, &proto, &pay, &raw) == false);
-  ASSERT(s_lcpup == false);
-}
+  enum mg_l2proto proto;
 
-static void test_ppp_ip_accept(void) {
-  uint8_t frame[64], payload[sizeof(struct ip)];
-  struct mg_tcpip_if ifp;
-  struct mg_str raw, pay;
-  enum mg_l2proto proto = MG_TCPIP_L2PROTO_ARP;
-  memset(payload, 0, sizeof(payload));
-  init_if(&ifp, MG_TCPIP_L2_PPP);
-  MG_DEBUG(("MTU: %u, frame size: %u", ifp.l2mtu, ifp.framesize));
-  ASSERT(ifp.l2mtu != 0);
-  ASSERT(ifp.framesize != 0);
-  s_lcpup = true;
-  raw = mg_str_n((char *) frame,
-                 mk_ppp(frame, MG_PPP_PROTO_IP, payload, sizeof(payload)));
-  ASSERT(mg_l2_rx(&ifp, &proto, &pay, &raw) == true);
-  ASSERT(proto == MG_TCPIP_L2PROTO_IPV4);
-  ASSERT(pay.len == sizeof(payload));
-  ASSERT(memcmp(pay.buf, payload, sizeof(payload)) == 0);
-}
-
-static void test_ppp_ip_discard(void) {
-  uint8_t frame[64], payload[sizeof(struct ip)];
-  struct mg_tcpip_if ifp;
-  struct mg_str raw, pay;
-  enum mg_l2proto proto = MG_TCPIP_L2PROTO_ARP;
-  memset(payload, 0, sizeof(payload));
-  init_if(&ifp, MG_TCPIP_L2_PPP);
-  s_lcpup = false;
-  raw = mg_str_n((char *) frame,
-                 mk_ppp(frame, MG_PPP_PROTO_IP, payload, sizeof(payload)));
-  ASSERT(mg_l2_rx(&ifp, &proto, &pay, &raw) == false);
-}
-
-static void test_ppp_ipcp_accept(void) {
-  uint8_t frame[64], ipcp[] = {MG_PPP_IPCP_CFG_REQ, 1, 0, 10,
-                               MG_PPP_IPCP_OPT_IPADDR, 6, 192, 0, 2, 1};
-  struct mg_tcpip_if ifp;
-  struct mg_str raw, pay;
-  enum mg_l2proto proto = MG_TCPIP_L2PROTO_ARP;
-  uint32_t peer;
-  init_if(&ifp, MG_TCPIP_L2_PPP);
-  s_lcpup = true;
-  memcpy(&peer, ipcp + 6, sizeof(peer));
-  raw = mg_str_n((char *) frame,
-                 mk_ppp(frame, MG_PPP_PROTO_IPCP, ipcp, sizeof(ipcp)));
-  ASSERT(mg_l2_rx(&ifp, &proto, &pay, &raw) == false);
-  ASSERT(ifp.gw == peer);
-  ASSERT(((struct ipcp *) ppp_payload(frame))->code == MG_PPP_IPCP_CFG_ACK);
-  ASSERT(ifp.nsent == 2);
-}
-
-static void test_ppp_ipcp_reject(void) {
-  uint8_t frame[64], ipcp[] = {MG_PPP_IPCP_CFG_REQ, 1, 0, 4};
-  struct mg_tcpip_if ifp;
-  struct mg_str raw, pay;
-  enum mg_l2proto proto = MG_TCPIP_L2PROTO_ARP;
-  init_if(&ifp, MG_TCPIP_L2_PPP);
-  s_lcpup = true;
-  raw = mg_str_n((char *) frame,
-                 mk_ppp(frame, MG_PPP_PROTO_IPCP, ipcp, sizeof(ipcp)));
-  ASSERT(mg_l2_rx(&ifp, &proto, &pay, &raw) == false);
-  ASSERT(ifp.gw == 0);
-  ASSERT(((struct ipcp *) ppp_payload(frame))->code == MG_PPP_IPCP_CFG_REJECT);
-  ASSERT(ifp.nsent == 3);
+  {  // IPCP request with peer IP address is ACKed
+    uint8_t ipcp[] = {MG_PPP_IPCP_CFG_REQ, 1, 0, 10,
+                      MG_PPP_IPCP_OPT_IPADDR, 6, 192, 0, 2, 1};
+    uint32_t peer;
+    init_if(&ifp, MG_TCPIP_L2_PPP);
+    s_lcpup = true;
+    memcpy(&peer, ipcp + 6, sizeof(peer));
+    raw = mg_str_n((char *) frame,
+                   mk_ppp(frame, MG_PPP_PROTO_IPCP, ipcp, sizeof(ipcp)));
+    proto = MG_TCPIP_L2PROTO_ARP;
+    ASSERT(mg_l2_rx(&ifp, &proto, &pay, &raw) == false);
+    ASSERT(ifp.gw == peer);
+    ASSERT(((struct ipcp *) ppp_payload(frame))->code == MG_PPP_IPCP_CFG_ACK);
+    ASSERT(ifp.nsent == 2);
+  }
+  {  // IPCP request without peer IP address is rejected
+    uint8_t ipcp[] = {MG_PPP_IPCP_CFG_REQ, 1, 0, 4};
+    init_if(&ifp, MG_TCPIP_L2_PPP);
+    s_lcpup = true;
+    raw = mg_str_n((char *) frame,
+                   mk_ppp(frame, MG_PPP_PROTO_IPCP, ipcp, sizeof(ipcp)));
+    proto = MG_TCPIP_L2PROTO_ARP;
+    ASSERT(mg_l2_rx(&ifp, &proto, &pay, &raw) == false);
+    ASSERT(ifp.gw == 0);
+    ASSERT(((struct ipcp *) ppp_payload(frame))->code ==
+           MG_PPP_IPCP_CFG_REJECT);
+    ASSERT(ifp.nsent == 3);
+  }
 }
 
 #if MG_ENABLE_IPV6
-static void test_ppp_ipv6_accept(void) {
-  uint8_t frame[96], payload[sizeof(struct ip6)];
+static void test_ipv6cp(void) {
+  uint8_t frame[64];
   struct mg_tcpip_if ifp;
   struct mg_str raw, pay;
-  enum mg_l2proto proto = MG_TCPIP_L2PROTO_ARP;
-  memset(payload, 0, sizeof(payload));
-  init_if(&ifp, MG_TCPIP_L2_PPP);
-  s_lcpup = true;
-  raw = mg_str_n((char *) frame,
-                 mk_ppp(frame, MG_PPP_PROTO_IPV6, payload, sizeof(payload)));
-  ASSERT(mg_l2_rx(&ifp, &proto, &pay, &raw) == true);
-  ASSERT(proto == MG_TCPIP_L2PROTO_IPV6);
-  ASSERT(pay.len == sizeof(payload));
-  ASSERT(memcmp(pay.buf, payload, sizeof(payload)) == 0);
-}
+  enum mg_l2proto proto;
 
-static void test_ppp_ipv6_discard(void) {
-  uint8_t frame[96], payload[sizeof(struct ip6)];
-  struct mg_tcpip_if ifp;
-  struct mg_str raw, pay;
-  enum mg_l2proto proto = MG_TCPIP_L2PROTO_ARP;
-  memset(payload, 0, sizeof(payload));
-  init_if(&ifp, MG_TCPIP_L2_PPP);
-  s_lcpup = false;
-  raw = mg_str_n((char *) frame,
-                 mk_ppp(frame, MG_PPP_PROTO_IPV6, payload, sizeof(payload)));
-  ASSERT(mg_l2_rx(&ifp, &proto, &pay, &raw) == false);
-}
-
-static void test_ppp_ipv6cp_accept(void) {
-  uint8_t frame[64], ipv6cp[] = {MG_PPP_IPV6CP_CFG_REQ, 1, 0, 14,
-                                 MG_PPP_IPV6CP_OPT_IFCID, 10,
-                                 2, 3, 4, 5, 6, 7, 8, 9};
-  struct mg_tcpip_if ifp;
-  struct mg_str raw, pay;
-  enum mg_l2proto proto = MG_TCPIP_L2PROTO_ARP;
-  init_if(&ifp, MG_TCPIP_L2_PPP);
-  s_lcpup = true;
-  raw = mg_str_n((char *) frame,
-                 mk_ppp(frame, MG_PPP_PROTO_IPV6CP, ipv6cp, sizeof(ipv6cp)));
-  ASSERT(mg_l2_rx(&ifp, &proto, &pay, &raw) == false);
-  ASSERT(memcmp(&((struct mg_l2addr *) ifp.gwmac)->addr.ieee64, ipv6cp + 6,
-                8) == 0);
-  ASSERT(((struct ipv6cp *) ppp_payload(frame))->code ==
-         MG_PPP_IPV6CP_CFG_ACK);
-  ASSERT(ifp.nsent == 2);
-}
-
-static void test_ppp_ipv6cp_reject(void) {
-  uint8_t frame[64], ipv6cp[] = {MG_PPP_IPV6CP_CFG_REQ, 1, 0, 14,
-                                 MG_PPP_IPV6CP_OPT_IFCID, 10,
-                                 0, 0, 0, 0, 0, 0, 0, 0};
-  struct mg_tcpip_if ifp;
-  struct mg_str raw, pay;
-  enum mg_l2proto proto = MG_TCPIP_L2PROTO_ARP;
-  init_if(&ifp, MG_TCPIP_L2_PPP);
-  s_lcpup = true;
-  raw = mg_str_n((char *) frame,
-                 mk_ppp(frame, MG_PPP_PROTO_IPV6CP, ipv6cp, sizeof(ipv6cp)));
-  ASSERT(mg_l2_rx(&ifp, &proto, &pay, &raw) == false);
-  ASSERT(((struct ipv6cp *) ppp_payload(frame))->code ==
-         MG_PPP_IPV6CP_CFG_REJECT);
-  ASSERT(ifp.nsent == 1);
+  {  // IPv6CP request with interface ID is ACKed
+    uint8_t ipv6cp[] = {MG_PPP_IPV6CP_CFG_REQ, 1, 0, 14,
+                        MG_PPP_IPV6CP_OPT_IFCID, 10, 2, 3, 4, 5, 6, 7, 8, 9};
+    init_if(&ifp, MG_TCPIP_L2_PPP);
+    s_lcpup = true;
+    raw = mg_str_n((char *) frame,
+                   mk_ppp(frame, MG_PPP_PROTO_IPV6CP, ipv6cp,
+                          sizeof(ipv6cp)));
+    proto = MG_TCPIP_L2PROTO_ARP;
+    ASSERT(mg_l2_rx(&ifp, &proto, &pay, &raw) == false);
+    ASSERT(memcmp(&((struct mg_l2addr *) ifp.gwmac)->addr.ieee64, ipv6cp + 6,
+                  8) == 0);
+    ASSERT(((struct ipv6cp *) ppp_payload(frame))->code ==
+           MG_PPP_IPV6CP_CFG_ACK);
+    ASSERT(ifp.nsent == 2);
+  }
+  {  // IPv6CP request with zero interface ID is rejected
+    uint8_t ipv6cp[] = {MG_PPP_IPV6CP_CFG_REQ, 1, 0, 14,
+                        MG_PPP_IPV6CP_OPT_IFCID, 10, 0, 0, 0, 0, 0, 0, 0, 0};
+    init_if(&ifp, MG_TCPIP_L2_PPP);
+    s_lcpup = true;
+    raw = mg_str_n((char *) frame,
+                   mk_ppp(frame, MG_PPP_PROTO_IPV6CP, ipv6cp,
+                          sizeof(ipv6cp)));
+    proto = MG_TCPIP_L2PROTO_ARP;
+    ASSERT(mg_l2_rx(&ifp, &proto, &pay, &raw) == false);
+    ASSERT(((struct ipv6cp *) ppp_payload(frame))->code ==
+           MG_PPP_IPV6CP_CFG_REJECT);
+    ASSERT(ifp.nsent == 1);
+  }
 }
 #endif
 
-static void test_ppp_unknown_reject(void) {
-  uint8_t frame[64], payload[] = {1, 2, 3, 4};
+static void test_ppp(void) {
+  uint8_t frame[96];
   struct mg_tcpip_if ifp;
   struct mg_str raw, pay;
-  enum mg_l2proto proto = MG_TCPIP_L2PROTO_ARP;
-  init_if(&ifp, MG_TCPIP_L2_PPP);
-  s_lcpup = true;
-  raw = mg_str_n((char *) frame,
-                 mk_ppp(frame, 0x1234, payload, sizeof(payload)));
-  ASSERT(mg_l2_rx(&ifp, &proto, &pay, &raw) == false);
-  ASSERT(ifp.nsent == 1);
+  enum mg_l2proto proto;
+
+  {  // IPv4 packet is accepted after LCP is up
+    uint8_t payload[sizeof(struct ip)];
+    memset(payload, 0, sizeof(payload));
+    init_if(&ifp, MG_TCPIP_L2_PPP);
+    MG_DEBUG(("MTU: %u, frame size: %u", ifp.l2mtu, ifp.framesize));
+    ASSERT(ifp.l2mtu != 0);
+    ASSERT(ifp.framesize != 0);
+    s_lcpup = true;
+    raw = mg_str_n((char *) frame,
+                   mk_ppp(frame, MG_PPP_PROTO_IP, payload, sizeof(payload)));
+    proto = MG_TCPIP_L2PROTO_ARP;
+    ASSERT(mg_l2_rx(&ifp, &proto, &pay, &raw) == true);
+    ASSERT(proto == MG_TCPIP_L2PROTO_IPV4);
+    ASSERT(pay.len == sizeof(payload));
+    ASSERT(memcmp(pay.buf, payload, sizeof(payload)) == 0);
+  }
+  {  // IPv4 packet is discarded while LCP is down
+    uint8_t payload[sizeof(struct ip)];
+    memset(payload, 0, sizeof(payload));
+    init_if(&ifp, MG_TCPIP_L2_PPP);
+    s_lcpup = false;
+    raw = mg_str_n((char *) frame,
+                   mk_ppp(frame, MG_PPP_PROTO_IP, payload, sizeof(payload)));
+    proto = MG_TCPIP_L2PROTO_ARP;
+    ASSERT(mg_l2_rx(&ifp, &proto, &pay, &raw) == false);
+  }
+#if MG_ENABLE_IPV6
+  {  // IPv6 packet is accepted after LCP is up
+    uint8_t payload[sizeof(struct ip6)];
+    memset(payload, 0, sizeof(payload));
+    init_if(&ifp, MG_TCPIP_L2_PPP);
+    s_lcpup = true;
+    raw = mg_str_n((char *) frame,
+                   mk_ppp(frame, MG_PPP_PROTO_IPV6, payload,
+                          sizeof(payload)));
+    proto = MG_TCPIP_L2PROTO_ARP;
+    ASSERT(mg_l2_rx(&ifp, &proto, &pay, &raw) == true);
+    ASSERT(proto == MG_TCPIP_L2PROTO_IPV6);
+    ASSERT(pay.len == sizeof(payload));
+    ASSERT(memcmp(pay.buf, payload, sizeof(payload)) == 0);
+  }
+  {  // IPv6 packet is discarded while LCP is down
+    uint8_t payload[sizeof(struct ip6)];
+    memset(payload, 0, sizeof(payload));
+    init_if(&ifp, MG_TCPIP_L2_PPP);
+    s_lcpup = false;
+    raw = mg_str_n((char *) frame,
+                   mk_ppp(frame, MG_PPP_PROTO_IPV6, payload,
+                          sizeof(payload)));
+    proto = MG_TCPIP_L2PROTO_ARP;
+    ASSERT(mg_l2_rx(&ifp, &proto, &pay, &raw) == false);
+  }
+#endif
+  {  // Unknown protocol is rejected after LCP is up
+    uint8_t payload[] = {1, 2, 3, 4};
+    init_if(&ifp, MG_TCPIP_L2_PPP);
+    s_lcpup = true;
+    raw = mg_str_n((char *) frame,
+                   mk_ppp(frame, 0x1234, payload, sizeof(payload)));
+    proto = MG_TCPIP_L2PROTO_ARP;
+    ASSERT(mg_l2_rx(&ifp, &proto, &pay, &raw) == false);
+    ASSERT(ifp.nsent == 1);
+  }
+  {  // Unknown protocol is discarded while LCP is down
+    uint8_t payload[] = {1, 2, 3, 4};
+    init_if(&ifp, MG_TCPIP_L2_PPP);
+    s_lcpup = false;
+    raw = mg_str_n((char *) frame,
+                   mk_ppp(frame, 0x1234, payload, sizeof(payload)));
+    proto = MG_TCPIP_L2PROTO_ARP;
+    ASSERT(mg_l2_rx(&ifp, &proto, &pay, &raw) == false);
+    ASSERT(ifp.nsent == 0);
+  }
 }
 
-static void test_ppp_unknown_discard(void) {
-  uint8_t frame[64], payload[] = {1, 2, 3, 4};
+static void test_pppoe(void) {
+  uint8_t frame[96];
   struct mg_tcpip_if ifp;
   struct mg_str raw, pay;
-  enum mg_l2proto proto = MG_TCPIP_L2PROTO_ARP;
-  init_if(&ifp, MG_TCPIP_L2_PPP);
-  s_lcpup = false;
-  raw = mg_str_n((char *) frame,
-                 mk_ppp(frame, 0x1234, payload, sizeof(payload)));
-  ASSERT(mg_l2_rx(&ifp, &proto, &pay, &raw) == false);
-  ASSERT(ifp.nsent == 0);
-}
+  enum mg_l2proto proto;
 
-static void test_pppoe_pado_accept(void) {
-  uint8_t frame[64];
-  struct mg_tcpip_if ifp;
-  struct mg_str raw, pay;
-  enum mg_l2proto proto = MG_TCPIP_L2PROTO_ARP;
-  init_if(&ifp, MG_TCPIP_L2_PPPoE);
-  MG_DEBUG(("MTU: %u, frame size: %u", ifp.l2mtu, ifp.framesize));
-  ASSERT(ifp.l2mtu != 0);
-  ASSERT(ifp.framesize != 0);
-  s_state = MG_PPPoE_ST_DISC;
-  raw = mg_str_n((char *) frame,
-                 mk_pppoe_disc(frame, MG_PPPoE_PADO, 0, NULL, 0));
-  ASSERT(mg_l2_rx(&ifp, &proto, &pay, &raw) == false);
-  ASSERT(s_state == MG_PPPoE_ST_REQ);
-  ASSERT(ifp.nsent == 1);
-}
-
-static void test_pppoe_pado_discard(void) {
-  uint8_t frame[64];
-  struct mg_tcpip_if ifp;
-  struct mg_str raw, pay;
-  enum mg_l2proto proto = MG_TCPIP_L2PROTO_ARP;
-  init_if(&ifp, MG_TCPIP_L2_PPPoE);
-  s_state = MG_PPPoE_ST_REQ;
-  raw = mg_str_n((char *) frame,
-                 mk_pppoe_disc(frame, MG_PPPoE_PADO, 0, NULL, 0));
-  ASSERT(mg_l2_rx(&ifp, &proto, &pay, &raw) == false);
-  ASSERT(s_state == MG_PPPoE_ST_REQ);
-  ASSERT(ifp.nsent == 0);
-}
-
-static void test_pppoe_pads_accept(void) {
-  uint8_t frame[64];
-  struct mg_tcpip_if ifp;
-  struct mg_str raw, pay;
-  enum mg_l2proto proto = MG_TCPIP_L2PROTO_ARP;
-  init_if(&ifp, MG_TCPIP_L2_PPPoE);
-  s_state = MG_PPPoE_ST_REQ;
-  raw = mg_str_n((char *) frame,
-                 mk_pppoe_disc(frame, MG_PPPoE_PADS, 0x1234, NULL, 0));
-  ASSERT(mg_l2_rx(&ifp, &proto, &pay, &raw) == false);
-  ASSERT(s_state == MG_PPPoE_ST_SESS);
-  ASSERT(s_id == mg_htons(0x1234));
-}
-
-static void test_pppoe_pads_discard(void) {
-  uint8_t frame[64];
-  struct mg_tcpip_if ifp;
-  struct mg_str raw, pay;
-  enum mg_l2proto proto = MG_TCPIP_L2PROTO_ARP;
-  init_if(&ifp, MG_TCPIP_L2_PPPoE);
-  s_state = MG_PPPoE_ST_DISC;
-  raw = mg_str_n((char *) frame,
-                 mk_pppoe_disc(frame, MG_PPPoE_PADS, 0x1234, NULL, 0));
-  ASSERT(mg_l2_rx(&ifp, &proto, &pay, &raw) == false);
-  ASSERT(s_state == MG_PPPoE_ST_DISC);
-}
-
-static void test_pppoe_padt_accept(void) {
-  uint8_t frame[64];
-  struct mg_tcpip_if ifp;
-  struct mg_str raw, pay;
-  enum mg_l2proto proto = MG_TCPIP_L2PROTO_ARP;
-  init_if(&ifp, MG_TCPIP_L2_PPPoE);
-  s_state = MG_PPPoE_ST_SESS;
-  s_id = mg_htons(0x1234);
-  s_lcpup = true;
-  raw = mg_str_n((char *) frame,
-                 mk_pppoe_disc(frame, MG_PPPoE_PADT, 0x1234, NULL, 0));
-  ASSERT(mg_l2_rx(&ifp, &proto, &pay, &raw) == false);
-  ASSERT(s_state == MG_PPPoE_ST_DISC);
-  ASSERT(s_id == 0);
-  ASSERT(s_lcpup == false);
-}
-
-static void test_pppoe_padt_discard(void) {
-  uint8_t frame[64];
-  struct mg_tcpip_if ifp;
-  struct mg_str raw, pay;
-  enum mg_l2proto proto = MG_TCPIP_L2PROTO_ARP;
-  init_if(&ifp, MG_TCPIP_L2_PPPoE);
-  s_state = MG_PPPoE_ST_SESS;
-  s_id = mg_htons(0x4321);
-  s_lcpup = true;
-  raw = mg_str_n((char *) frame,
-                 mk_pppoe_disc(frame, MG_PPPoE_PADT, 0x1234, NULL, 0));
-  ASSERT(mg_l2_rx(&ifp, &proto, &pay, &raw) == false);
-  ASSERT(s_state == MG_PPPoE_ST_SESS);
-  ASSERT(s_id == mg_htons(0x4321));
-  ASSERT(s_lcpup == true);
-}
-
-static void test_pppoe_session_accept(void) {
-  uint8_t frame[96], payload[sizeof(struct ip)];
-  struct mg_tcpip_if ifp;
-  struct mg_str raw, pay;
-  enum mg_l2proto proto = MG_TCPIP_L2PROTO_ARP;
-  memset(payload, 0, sizeof(payload));
-  init_if(&ifp, MG_TCPIP_L2_PPPoE);
-  s_state = MG_PPPoE_ST_SESS;
-  s_lcpup = true;
-  raw = mg_str_n((char *) frame,
-                 mk_pppoe_sess(frame, 0x1234, MG_PPP_PROTO_IP, payload,
-                               sizeof(payload)));
-  ASSERT(mg_l2_rx(&ifp, &proto, &pay, &raw) == true);
-  ASSERT(proto == MG_TCPIP_L2PROTO_IPV4);
-  ASSERT(pay.len == sizeof(payload));
-  ASSERT(memcmp(pay.buf, payload, sizeof(payload)) == 0);
-}
-
-static void test_pppoe_session_discard(void) {
-  uint8_t frame[96], payload[sizeof(struct ip)];
-  struct mg_tcpip_if ifp;
-  struct mg_str raw, pay;
-  enum mg_l2proto proto = MG_TCPIP_L2PROTO_ARP;
-  memset(payload, 0, sizeof(payload));
-  init_if(&ifp, MG_TCPIP_L2_PPPoE);
-  s_state = MG_PPPoE_ST_REQ;
-  s_lcpup = true;
-  raw = mg_str_n((char *) frame,
-                 mk_pppoe_sess(frame, 0x1234, MG_PPP_PROTO_IP, payload,
-                               sizeof(payload)));
-  ASSERT(mg_l2_rx(&ifp, &proto, &pay, &raw) == false);
+  {  // PADO moves discovery to request state
+    init_if(&ifp, MG_TCPIP_L2_PPPoE);
+    MG_DEBUG(("MTU: %u, frame size: %u", ifp.l2mtu, ifp.framesize));
+    ASSERT(ifp.l2mtu != 0);
+    ASSERT(ifp.framesize != 0);
+    s_state = MG_PPPoE_ST_DISC;
+    raw = mg_str_n((char *) frame,
+                   mk_pppoe_disc(frame, MG_PPPoE_PADO, 0, NULL, 0));
+    proto = MG_TCPIP_L2PROTO_ARP;
+    ASSERT(mg_l2_rx(&ifp, &proto, &pay, &raw) == false);
+    ASSERT(s_state == MG_PPPoE_ST_REQ);
+    ASSERT(ifp.nsent == 1);
+  }
+  {  // PADO is ignored outside discovery state
+    init_if(&ifp, MG_TCPIP_L2_PPPoE);
+    s_state = MG_PPPoE_ST_REQ;
+    raw = mg_str_n((char *) frame,
+                   mk_pppoe_disc(frame, MG_PPPoE_PADO, 0, NULL, 0));
+    proto = MG_TCPIP_L2PROTO_ARP;
+    ASSERT(mg_l2_rx(&ifp, &proto, &pay, &raw) == false);
+    ASSERT(s_state == MG_PPPoE_ST_REQ);
+    ASSERT(ifp.nsent == 0);
+  }
+  {  // PADS establishes the session
+    init_if(&ifp, MG_TCPIP_L2_PPPoE);
+    s_state = MG_PPPoE_ST_REQ;
+    raw = mg_str_n((char *) frame,
+                   mk_pppoe_disc(frame, MG_PPPoE_PADS, 0x1234, NULL, 0));
+    proto = MG_TCPIP_L2PROTO_ARP;
+    ASSERT(mg_l2_rx(&ifp, &proto, &pay, &raw) == false);
+    ASSERT(s_state == MG_PPPoE_ST_SESS);
+    ASSERT(s_id == mg_htons(0x1234));
+  }
+  {  // PADS is ignored outside request state
+    init_if(&ifp, MG_TCPIP_L2_PPPoE);
+    s_state = MG_PPPoE_ST_DISC;
+    raw = mg_str_n((char *) frame,
+                   mk_pppoe_disc(frame, MG_PPPoE_PADS, 0x1234, NULL, 0));
+    proto = MG_TCPIP_L2PROTO_ARP;
+    ASSERT(mg_l2_rx(&ifp, &proto, &pay, &raw) == false);
+    ASSERT(s_state == MG_PPPoE_ST_DISC);
+  }
+  {  // PADT matching the session tears it down
+    init_if(&ifp, MG_TCPIP_L2_PPPoE);
+    s_state = MG_PPPoE_ST_SESS;
+    s_id = mg_htons(0x1234);
+    s_lcpup = true;
+    raw = mg_str_n((char *) frame,
+                   mk_pppoe_disc(frame, MG_PPPoE_PADT, 0x1234, NULL, 0));
+    proto = MG_TCPIP_L2PROTO_ARP;
+    ASSERT(mg_l2_rx(&ifp, &proto, &pay, &raw) == false);
+    ASSERT(s_state == MG_PPPoE_ST_DISC);
+    ASSERT(s_id == 0);
+    ASSERT(s_lcpup == false);
+  }
+  {  // PADT for a different session is ignored
+    init_if(&ifp, MG_TCPIP_L2_PPPoE);
+    s_state = MG_PPPoE_ST_SESS;
+    s_id = mg_htons(0x4321);
+    s_lcpup = true;
+    raw = mg_str_n((char *) frame,
+                   mk_pppoe_disc(frame, MG_PPPoE_PADT, 0x1234, NULL, 0));
+    proto = MG_TCPIP_L2PROTO_ARP;
+    ASSERT(mg_l2_rx(&ifp, &proto, &pay, &raw) == false);
+    ASSERT(s_state == MG_PPPoE_ST_SESS);
+    ASSERT(s_id == mg_htons(0x4321));
+    ASSERT(s_lcpup == true);
+  }
+  {  // PPPoE session packet is accepted in session state
+    uint8_t payload[sizeof(struct ip)];
+    memset(payload, 0, sizeof(payload));
+    init_if(&ifp, MG_TCPIP_L2_PPPoE);
+    s_state = MG_PPPoE_ST_SESS;
+    s_lcpup = true;
+    raw = mg_str_n((char *) frame,
+                   mk_pppoe_sess(frame, 0x1234, MG_PPP_PROTO_IP, payload,
+                                 sizeof(payload)));
+    proto = MG_TCPIP_L2PROTO_ARP;
+    ASSERT(mg_l2_rx(&ifp, &proto, &pay, &raw) == true);
+    ASSERT(proto == MG_TCPIP_L2PROTO_IPV4);
+    ASSERT(pay.len == sizeof(payload));
+    ASSERT(memcmp(pay.buf, payload, sizeof(payload)) == 0);
+  }
+  {  // PPPoE session packet is discarded outside session state
+    uint8_t payload[sizeof(struct ip)];
+    memset(payload, 0, sizeof(payload));
+    init_if(&ifp, MG_TCPIP_L2_PPPoE);
+    s_state = MG_PPPoE_ST_REQ;
+    s_lcpup = true;
+    raw = mg_str_n((char *) frame,
+                   mk_pppoe_sess(frame, 0x1234, MG_PPP_PROTO_IP, payload,
+                                 sizeof(payload)));
+    proto = MG_TCPIP_L2PROTO_ARP;
+    ASSERT(mg_l2_rx(&ifp, &proto, &pay, &raw) == false);
+  }
 }
 
 #define DASHBOARD(x) \
@@ -408,42 +386,25 @@ static void test_pppoe_session_discard(void) {
 
 int main(void) {
   s_error = false;
-  test_ppp_lcp_accept();
-  test_ppp_lcp_discard();
+  test_lcp();
   DASHBOARD("lcp");
 
   s_error = false;
-  test_ppp_ipcp_accept();
-  test_ppp_ipcp_reject();
+  test_ipcp();
   DASHBOARD("ipcp");
 
 #if MG_ENABLE_IPV6
   s_error = false;
-  test_ppp_ipv6cp_accept();
-  test_ppp_ipv6cp_reject();
+  test_ipv6cp();
   DASHBOARD("ipv6cp");
 #endif
 
   s_error = false;
-  test_ppp_ip_accept();
-  test_ppp_ip_discard();
-#if MG_ENABLE_IPV6
-  test_ppp_ipv6_accept();
-  test_ppp_ipv6_discard();
-#endif
-  test_ppp_unknown_reject();
-  test_ppp_unknown_discard();
+  test_ppp();
   DASHBOARD("ppp");
 
   s_error = false;
-  test_pppoe_pado_accept();
-  test_pppoe_pado_discard();
-  test_pppoe_pads_accept();
-  test_pppoe_pads_discard();
-  test_pppoe_padt_accept();
-  test_pppoe_padt_discard();
-  test_pppoe_session_accept();
-  test_pppoe_session_discard();
+  test_pppoe();
   printf("HEALTH_DASHBOARD\t\"pppoe\": %s\n", s_error ? "false" : "true");
 
 #ifdef NO_ABORT
