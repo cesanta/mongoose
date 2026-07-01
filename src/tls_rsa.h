@@ -10,5 +10,7 @@ int mg_rsa_crt_sign(const uint8_t *em, size_t em_len,
                     const uint8_t *q, size_t q_len,
                     const uint8_t *qInv, size_t qInv_len,
                     uint8_t *signature, size_t sig_len);
+bool mg_rsa_pkcs_verify(const uint8_t *em, size_t nlen, const uint8_t *hash,
+                        size_t hashlen);
 bool mg_rsa_verify(const uint8_t *em, size_t nlen, const uint8_t *mhash);
 #endif // TLS_RSA_H
