@@ -4311,6 +4311,51 @@ static void test_rsa(void) {
     ASSERT(!mg_rsa_verify(em, 256, tv_mhash));
     em[50] = tv_em[50];
   }
+  {
+    static const uint8_t sha256_di[] = {
+        0x30, 0x31, 0x30, 0x0d, 0x06, 0x09, 0x60, 0x86, 0x48, 0x01,
+        0x65, 0x03, 0x04, 0x02, 0x01, 0x05, 0x00, 0x04, 0x20};
+    static const uint8_t sha384_di[] = {
+        0x30, 0x41, 0x30, 0x0d, 0x06, 0x09, 0x60, 0x86, 0x48, 0x01,
+        0x65, 0x03, 0x04, 0x02, 0x02, 0x05, 0x00, 0x04, 0x30};
+    uint8_t hash[48], em[256];
+    size_t i, pslen;
+
+    for (i = 0; i < sizeof(hash); i++) hash[i] = (uint8_t) i;
+
+    memset(em, 0xff, sizeof(em));
+    em[0] = 0, em[1] = 1;
+    pslen = sizeof(em) - 3 - sizeof(sha256_di) - 32;
+    em[2 + pslen] = 0;
+    memcpy(em + 3 + pslen, sha256_di, sizeof(sha256_di));
+    memcpy(em + 3 + pslen + sizeof(sha256_di), hash, 32);
+    ASSERT(mg_rsa_pkcs_verify(em, sizeof(em), hash, 32));
+
+    em[1] = 2;  // bad block type
+    ASSERT(!mg_rsa_pkcs_verify(em, sizeof(em), hash, 32));
+    em[1] = 1;
+    em[10] = 0;  // bad padding
+    ASSERT(!mg_rsa_pkcs_verify(em, sizeof(em), hash, 32));
+    em[10] = 0xff;
+    em[3 + pslen + 15] ^= 1;  // bad DigestInfo
+    ASSERT(!mg_rsa_pkcs_verify(em, sizeof(em), hash, 32));
+    em[3 + pslen + 15] ^= 1;
+    em[sizeof(em) - 1] ^= 1;  // bad hash
+    ASSERT(!mg_rsa_pkcs_verify(em, sizeof(em), hash, 32));
+
+    memset(em, 0, sizeof(em));  // former suffix-only bypass
+    memcpy(em + sizeof(em) - 32, hash, 32);
+    ASSERT(!mg_rsa_pkcs_verify(em, sizeof(em), hash, 32));
+
+    memset(em, 0xff, sizeof(em));
+    em[0] = 0, em[1] = 1;
+    pslen = sizeof(em) - 3 - sizeof(sha384_di) - 48;
+    em[2 + pslen] = 0;
+    memcpy(em + 3 + pslen, sha384_di, sizeof(sha384_di));
+    memcpy(em + 3 + pslen + sizeof(sha384_di), hash, 48);
+    ASSERT(mg_rsa_pkcs_verify(em, sizeof(em), hash, 48));
+    ASSERT(!mg_rsa_pkcs_verify(em, sizeof(em), hash, 20));
+  }
 #endif
 }
 
