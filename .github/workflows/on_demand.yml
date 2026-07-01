@@ -4,76 +4,47 @@ on:
 env:
   IPV6: 0
 jobs:
-  mip89:
-    runs-on: ubuntu-latest
-    strategy:
-      fail-fast: false
-      matrix:
-        target: [mip_vc98]
-        ipv6: [0, 1]
-    name: MIP C89 ${{ matrix.target }} IPV6=${{ matrix.ipv6 }}
-    steps:
-    - uses: actions/checkout@v5
-      with: { fetch-depth: 2 }
-    - run: make -C test ${{ matrix.target }} IPV6=${{ matrix.ipv6 }}
-  mipbe:
-    runs-on: ubuntu-latest
-    strategy:
-      fail-fast: false
-      matrix:
-        target: [mip_s390]
-        ipv6: [0, 1]
-    name: MIP be ${{ matrix.target }} IPV6=${{ matrix.ipv6 }}
-    steps:
-    - uses: actions/checkout@v5
-      with: { fetch-depth: 2 }
-    - run: sudo apt -y update ; sudo apt -y install binfmt-support qemu-user-static && docker run --rm --privileged multiarch/qemu-user-static --reset -p yes && make -C test ${{ matrix.target }} IPV6=${{ matrix.ipv6 }}
-
-  l2:
+  atcmd:
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
       matrix:
         cc: [gcc, clang, g++, clang++]
-        target: [eth_test, ppp_test]
-        ipv6: [0, 1]
-    name: L2 ${{ matrix.target }} CC=${{ matrix.cc }} IPV6=${{ matrix.ipv6 }}
+    name: ATcmd CC=${{ matrix.cc }}
     steps:
     - uses: actions/checkout@v5
       with: { fetch-depth: 2 }
     - uses: webfactory/ssh-agent@v0.10.0
       with:
             ssh-private-key: ${{ secrets.HEALTH_TESTS_SSH_KEY }}
-    - run: make -C test ${{ matrix.target }} IPV6=${{ matrix.ipv6 }} CC=${{ matrix.cc }} > log
+    - run: make -C test atcmd_test CC=${{ matrix.cc }} > log
     - if: success() || failure()
       run: |
         cat log
         test/health.awk < log > json
-        scp -o "StrictHostKeyChecking=no" json "root@176.9.217.245:/data/downloads/health/${{ matrix.target }}_${{ matrix.cc }}_${{ matrix.ipv6 }}_$(date +"%Y%m%d").json"
-  l289:
+        scp -o "StrictHostKeyChecking=no" json "root@176.9.217.245:/data/downloads/health/atcmd_${{ matrix.cc }}_$(date +"%Y%m%d").json"
+  atcmd89:
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
       matrix:
-        target: [eth_vc98, ppp_vc98]
-        ipv6: [0, 1]
-    name: L2 C89 ${{ matrix.target }} IPV6=${{ matrix.ipv6 }}
+        target: [atcmd_vc98]
+    name: ATcmd C89 ${{ matrix.target }}
     steps:
     - uses: actions/checkout@v5
       with: { fetch-depth: 2 }
-    - run: make -C test ${{ matrix.target }} IPV6=${{ matrix.ipv6 }}
-  l2be:
+    - run: make -C test ${{ matrix.target }}
+  atcmdbe:
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
       matrix:
-        target: [eth_s390, ppp_s390]
-        ipv6: [0, 1]
-    name: L2 be ${{ matrix.target }} IPV6=${{ matrix.ipv6 }}
+        target: [atcmd_s390]
+    name: ATcmd be ${{ matrix.target }}
     steps:
     - uses: actions/checkout@v5
       with: { fetch-depth: 2 }
-    - run: sudo apt -y update ; sudo apt -y install binfmt-support qemu-user-static && docker run --rm --privileged multiarch/qemu-user-static --reset -p yes && make -C test ${{ matrix.target }} IPV6=${{ matrix.ipv6 }}
+    - run: sudo apt -y update ; sudo apt -y install binfmt-support qemu-user-static && docker run --rm --privileged multiarch/qemu-user-static --reset -p yes && make -C test ${{ matrix.target }}
 
 
 #  macos:

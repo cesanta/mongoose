@@ -29,7 +29,7 @@ COMMON_CFLAGS ?= $(C_WARN) $(WARN) $(INCS) $(DEFS) $(TFLAGS) -pthread
 CFLAGS ?= $(OPTS) $(ASAN) $(COMMON_CFLAGS)
 VALGRIND_CFLAGS ?= $(OPTS) $(COMMON_CFLAGS)
 VALGRIND_RUN ?= valgrind --tool=memcheck --gen-suppressions=all --leak-check=full --show-leak-kinds=all --leak-resolution=high --track-origins=yes --error-exitcode=1 --exit-on-first-error=yes --fair-sched=yes
-.PHONY: tutorials mip_test eth_test ppp_test eth_vc98 ppp_vc98 eth_s390 ppp_s390 test valgrind
+.PHONY: tutorials mip_test eth_test ppp_test atcmd_test eth_vc98 ppp_vc98 atcmd_vc98 eth_s390 ppp_s390 atcmd_s390 test valgrind
 
 ifeq "$(findstring ++,$(CC))" ""
 # $(CC) does not end with ++, i.e. we're using C. Apply C flags
@@ -81,7 +81,7 @@ endif
 all:
 	$(MAKE) -C ../tutorials/http/http-server
 
-tall: mg_prefix unamalgamated test valgrind fuzz fuzz_tls vc98 vc17 vc22 mingw mingw++ arm armhf riscv s390 tutorials tutorials_win tutorials_embedded mip_test eth_test ppp_test mip_vc98 eth_vc98 ppp_vc98 eth_s390 ppp_s390
+tall: mg_prefix unamalgamated test valgrind fuzz fuzz_tls vc98 vc17 vc22 mingw mingw++ arm armhf riscv s390 tutorials tutorials_win tutorials_embedded mip_test eth_test ppp_test atcmd_test mip_vc98 eth_vc98 ppp_vc98 atcmd_vc98 eth_s390 ppp_s390 atcmd_s390
 
 mip_test: mip_test.c mongoose.c mongoose.h packed_fs.c Makefile
 	$(CC) mip_test.c packed_fs.c $(CFLAGS) $(LDFLAGS) -o $@
@@ -93,6 +93,10 @@ eth_test: eth_test.c mongoose.c mongoose.h Makefile
 
 ppp_test: ppp_test.c mongoose.c mongoose.h Makefile
 	$(CC) ppp_test.c $(CFLAGS) $(LDFLAGS) -o $@
+	ASAN_OPTIONS=$(ASAN_OPTIONS) $(RUN) ./$@
+
+atcmd_test: atcmd_test.c mongoose.c mongoose.h Makefile
+	$(CC) atcmd_test.c $(CFLAGS) $(LDFLAGS) -o $@
 	ASAN_OPTIONS=$(ASAN_OPTIONS) $(RUN) ./$@
 
 mip_tap_test: mip_x_test.c mip_tap_test.c mongoose.c mongoose.h packed_fs.c Makefile tls_multirec/server
@@ -118,6 +122,10 @@ eth_vc98: eth_test.c mongoose.c mongoose.h Makefile
 
 ppp_vc98: ppp_test.c driver_mock.c mongoose.c mongoose.h Makefile
 	$(DOCKER) mdashnet/vc98 wine cl ppp_test.c $(VCFLAGS) $(DEFS) $(TFLAGS) /Fe$@.exe
+	$(DOCKER) -e WINEPREFIX=/tmp/wineprefix mdashnet/vc98 wine $@.exe
+
+atcmd_vc98: atcmd_test.c mongoose.c mongoose.h Makefile
+	$(DOCKER) mdashnet/vc98 wine cl atcmd_test.c $(VCFLAGS) $(DEFS) $(TFLAGS) /Fe$@.exe
 	$(DOCKER) -e WINEPREFIX=/tmp/wineprefix mdashnet/vc98 wine $@.exe
 
 packed_fs.c: Makefile data/ssi.h fuzz.c data/a.txt data/ca.pem certs/ca.crt certs/server.crt certs/server.key
@@ -223,6 +231,11 @@ ppp_s390: CC = $(DOCKER) mdashnet/s390 cc
 ppp_s390: RUN = $(DOCKER) --init mdashnet/s390
 ppp_s390: ppp_test
 
+atcmd_s390: ASAN=
+atcmd_s390: CC = $(DOCKER) mdashnet/s390 cc
+atcmd_s390: RUN = $(DOCKER) --init mdashnet/s390
+atcmd_s390: atcmd_test
+
 mip_port_s390: ASAN=
 mip_port_s390: IPV6=0
 # This test requires curl, not present in this image
@@ -241,6 +254,7 @@ riscv: mongoose.h $(SRCS) mip_test.c
 	$(DOCKER) mdashnet/riscv riscv-none-elf-gcc -march=rv32imc -mabi=ilp32 $(SRCS) $(OPTS) $(WARN) $(INCS) $(DEFS) $(TFLAGS) -o unit_test
 	$(DOCKER) mdashnet/riscv riscv-none-elf-gcc -march=rv32imc -mabi=ilp32 mip_test.c packed_fs.c $(OPTS) $(WARN) $(INCS) $(DEFS) $(TFLAGS) -o mip_test
 
+vc98: IPV6=0  # VC98 does NOT support IPV6 sockets
 vc98: Makefile mongoose.h $(SRCS)
 	$(DOCKER) mdashnet/vc98 wine cl $(SRCS) $(VCFLAGS) $(DEFS) $(TFLAGS) /Fe$@.exe
 	$(DOCKER) -e WINEPREFIX=/tmp/wineprefix mdashnet/vc98 wine $@.exe
