@@ -465,6 +465,14 @@ static MG_SOCKET_TYPE raccept(MG_SOCKET_TYPE sock, union usa *usa,
   do {
     memset(usa, 0, sizeof(*usa));
     fd = accept(sock, &usa->sa, len);
+#if MG_ENABLE_FREERTOS_TCP
+    // FreeRTOS_accept() returns NULL to mean "no pending connection",
+    // therefore we avoid retrying it forever on non-blocking listeners
+    if (fd == NULL) {
+      fd = MG_INVALID_SOCKET;
+      break;
+    }
+#endif
   } while (MG_SOCK_INTR(fd));
   return fd;
 }
