@@ -20,7 +20,7 @@ jobs:
     - uses: actions/checkout@v5
       with: { fetch-depth: 2 }
     - name: Restore Combined Fuzzing Corpus
-      uses: dawidd6/action-download-artifact@v
+      uses: dawidd6/action-download-artifact@v21
       with:
         name: combined-fuzz-corpus
         path: test/corpus_dir
@@ -75,7 +75,7 @@ jobs:
     - uses: actions/checkout@v5
       with: { fetch-depth: 2 }
     - name: Restore Fuzzing Corpus
-      uses: actions/cache/restore@v7
+      uses: actions/cache/restore@v6
       with:
         path: test/corpus_dir
         key: fuzz-corpus-${{ github.head_ref || github.ref_name }}-${{ github.run_id }}
@@ -99,7 +99,7 @@ jobs:
         if-no-files-found: ignore
         retention-days: 14
     - name: Save Updated Corpus to Cache
-      uses: actions/cache/save@v4
+      uses: actions/cache/save@v6
       with:
         path: test/corpus_dir
         key: fuzz-corpus-${{ github.head_ref || github.ref_name }}-${{ github.run_id }}
