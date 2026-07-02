@@ -1030,7 +1030,7 @@ static void mg_upload_handler(struct mg_connection *c, int ev, void *ev_data) {
     size_t alignment = 512;
     size_t left = p->expected > p->received ? p->expected - p->received : 0;
     size_t aligned = c->recv.len < left ? MG_ROUND_DOWN(c->recv.len, alignment)
-                                        : c->recv.len;
+                                        : left;
     bool ok = true;
     if (aligned > 0) {
       if (p->fd != NULL) {

@@ -2318,6 +2318,9 @@ bool mg_ota_flash_write(const void *buf, size_t len, struct mg_flash *flash) {
   bool ok = false;
   if (s_size == 0) {
     MG_ERROR(("OTA is not started, call mg_ota_begin()"));
+  } else if (s_addr + MG_ROUND_UP(len, flash->align) >
+             (char *) flash->start + flash->size) {
+    MG_ERROR(("Flash overflow: attempting to write past the flash boundary"));
   } else {
     size_t len_aligned_down = MG_ROUND_DOWN(len, flash->align);
     if (len_aligned_down) ok = flash->write_fn(s_addr, buf, len_aligned_down);
@@ -4298,7 +4301,7 @@ static void mg_upload_handler(struct mg_connection *c, int ev, void *ev_data) {
     size_t alignment = 512;
     size_t left = p->expected > p->received ? p->expected - p->received : 0;
     size_t aligned = c->recv.len < left ? MG_ROUND_DOWN(c->recv.len, alignment)
-                                        : c->recv.len;
+                                        : left;
     bool ok = true;
     if (aligned > 0) {
       if (p->fd != NULL) {
