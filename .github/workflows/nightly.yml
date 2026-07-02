@@ -153,6 +153,54 @@ jobs:
       with: { fetch-depth: 2 }
     - run: sudo apt -y update ; sudo apt -y install binfmt-support qemu-user-static && docker run --rm --privileged multiarch/qemu-user-static --reset -p yes && make -C test ${{ matrix.target }} IPV6=${{ matrix.ipv6 }}
 
+  atcmd:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        cc: [gcc, clang, g++, clang++]
+    name: ATcmd CC=${{ matrix.cc }}
+    env:
+      IPV6: 0 # makes no sense, shorten code
+    steps:
+    - uses: actions/checkout@v5
+      with: { fetch-depth: 2 }
+    - uses: webfactory/ssh-agent@v0.10.0
+      with:
+            ssh-private-key: ${{ secrets.HEALTH_TESTS_SSH_KEY }}
+    - run: make -C test atcmd_test CC=${{ matrix.cc }} > log
+    - if: success() || failure()
+      run: |
+        cat log
+        test/health.awk < log > json
+        scp -o "StrictHostKeyChecking=no" json "root@176.9.217.245:/data/downloads/health/ATcmd_${{ matrix.cc }}_$(date +"%Y%m%d").json"
+  atcmd89:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        target: [atcmd_vc98]
+    name: ATcmd C89 ${{ matrix.target }}
+    env:
+      IPV6: 0 # makes no sense, shorten code
+    steps:
+    - uses: actions/checkout@v5
+      with: { fetch-depth: 2 }
+    - run: make -C test ${{ matrix.target }}
+  atcmdbe:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        target: [atcmd_s390]
+    name: ATcmd be ${{ matrix.target }}
+    env:
+      IPV6: 0 # makes no sense, shorten code
+    steps:
+    - uses: actions/checkout@v5
+      with: { fetch-depth: 2 }
+    - run: sudo apt -y update ; sudo apt -y install binfmt-support qemu-user-static && docker run --rm --privileged multiarch/qemu-user-static --reset -p yes && make -C test ${{ matrix.target }}
+
   s390:
     runs-on: ubuntu-latest
     strategy:

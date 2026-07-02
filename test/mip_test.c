@@ -306,7 +306,7 @@ static void init_tests(struct mg_mgr *mgr, struct eth *e, struct ipp *ipp,
   // setting the Ethernet header
   memset(e, 0, sizeof(*e));
   memcpy(e->dst, mif->mac, 6 * sizeof(uint8_t));
-  e->type = mg_htons(ipp->ip4 != NULL ? 0x800 : 0x86dd);
+  e->type = mg_htons((uint16_t)(ipp->ip4 != NULL ? 0x800 : 0x86dd));
 
   // setting the IP header
 #if MG_ENABLE_IPV6
