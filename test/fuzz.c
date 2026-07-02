@@ -147,12 +147,12 @@ int LLVMFuzzerTestOneInput(const uint8_t *data, size_t size) {
                               .gw_ready = true,
                               .state = MG_TCPIP_STATE_READY,
 #if MG_ENABLE_IPV6
-                              .ip6[0] = 1;
-                              .prefix[0] = 1;
-                              .prefix_len = 64;
-                              .gw6[0] = 1;
-                              .gw6_ready = true;
-                              .state6 = MG_TCPIP_STATE_READY;  // so mg_send() works and RS stops
+                              .ip6[0] = 1,
+                              .prefix[0] = 1,
+                              .prefix_len = 64,
+                              .gw6[0] = 1,
+                              .gw6_ready = true,
+                              .state6 = MG_TCPIP_STATE_READY,  // so mg_send() works and RS stops
 #endif
                               .driver = &mg_tcpip_driver_mock};
     struct mg_mgr mgr;
