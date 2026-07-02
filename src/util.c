@@ -185,18 +185,9 @@ uint64_t mg_millis(void) {
   return clock_gettime_nsec_np(CLOCK_UPTIME_RAW) / 1000000;
 #elif MG_ARCH == MG_ARCH_UNIX
   struct timespec ts = {0, 0};
-  // See #1615 - prefer monotonic clock
-#if defined(CLOCK_MONOTONIC_RAW)
-  // Raw hardware-based time that is not subject to NTP adjustment
-  clock_gettime(CLOCK_MONOTONIC_RAW, &ts);
-#elif defined(CLOCK_MONOTONIC)
-  // Affected by the incremental adjustments performed by adjtime and NTP
-  clock_gettime(CLOCK_MONOTONIC, &ts);
-#else
   // Affected by discontinuous jumps in the system time and by the incremental
   // adjustments performed by adjtime and NTP
   clock_gettime(CLOCK_REALTIME, &ts);
-#endif
   return ((uint64_t) ts.tv_sec * 1000 + (uint64_t) ts.tv_nsec / 1000000);
 #elif defined(ARDUINO)
   return (uint64_t) millis();
