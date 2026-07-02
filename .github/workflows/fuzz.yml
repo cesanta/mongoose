@@ -12,13 +12,99 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        target: [fuzz, fuzz_tls]
-    name: ${{ matrix.target }}
+        ipv6: [0, 1] # fuzz code always feeds IPv6, so this fuzzes ignoring while going parallel in sync
+    name: fuzz IPV6=${{ matrix.ipv6 }}
+    env:
+      TFLAGS: -DMG_ENABLE_IPV6=${{ matrix.ipv6 }}
     steps:
     - uses: actions/checkout@v5
       with: { fetch-depth: 2 }
-    - run: make -C test ${{ matrix.target }} ARGS="-max_total_time=14400"
+    - name: Restore Combined Fuzzing Corpus
+      uses: dawidd6/action-download-artifact@v
+      with:
+        name: combined-fuzz-corpus
+        path: test/corpus_dir
+        branch: ${{ github.base_ref || github.ref_name }}
+        search_artifacts: true
+        if_no_artifact_found: warn
+    - name: Run Matrix Fuzzers
+      run: mkdir -p test/corpus_dir && make -C test fuzz ARGS="corpus_dir -seed=${{ github.run_id }} -max_total_time=14400"
+    # Keep failures split by matrix leg so the offending input is easy to find.
+    - name: Upload Fuzz Failure Artifacts
+      if: failure()
+      uses: actions/upload-artifact@v7
+      with:
+        name: fuzz-failure-ipv6-${{ matrix.ipv6 }}
+        path: |
+          test/corpus_dir
+          test/crash-*
+          test/leak-*
+          test/oom-*
+          test/timeout-*
+        if-no-files-found: ignore
+        retention-days: 14
+    # v4 artifacts are immutable, so each parallel leg uploads its own corpus.
+    - name: Upload Corpus Shard
+      uses: actions/upload-artifact@v7
+      with:
+        name: fuzz-corpus-ipv6-${{ matrix.ipv6 }}
+        path: test/corpus_dir
+        retention-days: 14
 
-# as we're not getting access to test units causing a problem, convert from the log:
+  merge_fuzz_corpus:
+    runs-on: ubuntu-latest
+    needs: fuzz
+    name: merge fuzz corpus
+    steps:
+    # Merge both parallel fuzzing corpuses into the shared seed for next run.
+    - name: Merge Corpus Shards
+      uses: actions/upload-artifact/merge@v7
+      with:
+        name: combined-fuzz-corpus
+        pattern: fuzz-corpus-ipv6-*
+        delete-merged: true
+        retention-days: 14
+  # see NOTE
+
+  fuzz_tls:
+    runs-on: ubuntu-latest
+    name: fuzz_tls
+    env:
+      TFLAGS: -DMG_ENABLE_IPV6=0
+    steps:
+    - uses: actions/checkout@v5
+      with: { fetch-depth: 2 }
+    - name: Restore Fuzzing Corpus
+      uses: actions/cache/restore@v7
+      with:
+        path: test/corpus_dir
+        key: fuzz-corpus-${{ github.head_ref || github.ref_name }}-${{ github.run_id }}
+        restore-keys: |
+          fuzz-corpus-${{ github.head_ref || github.ref_name }}-
+          fuzz-corpus-main-
+          fuzz-corpus-
+    - name: Run Fuzzer
+      run: mkdir -p test/corpus_dir && make -C test fuzz_tls ARGS="corpus_dir -seed=${{ github.run_id }} -max_total_time=14400"
+    - name: Upload Fuzz TLS Failure Artifacts
+      if: failure()
+      uses: actions/upload-artifact@v7
+      with:
+        name: fuzz-tls-failure-artifacts
+        path: |
+          test/corpus_dir
+          test/crash-*
+          test/leak-*
+          test/oom-*
+          test/timeout-*
+        if-no-files-found: ignore
+        retention-days: 14
+    - name: Save Updated Corpus to Cache
+      uses: actions/cache/save@v4
+      with:
+        path: test/corpus_dir
+        key: fuzz-corpus-${{ github.head_ref || github.ref_name }}-${{ github.run_id }}
+
+# NOTE
+# In case we can't get access to test units causing a problem, convert from the log:
 # base64 -d > dataofdeath
 # then paste the base64 data, enter, Ctrl-D; maybe check with hexdump -C dataofdeath
