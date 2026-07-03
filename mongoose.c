@@ -5833,10 +5833,10 @@ static void ppp_handle_ipv6cp(struct mg_tcpip_if *ifp, uint8_t *ipv6cpp,
           find_opt(
               MG_PPP_IPV6CP_OPT_IFCID, 10, (const uint8_t *) (ipv6cp + 1),
               len - sizeof(*ipv6cp),
-              (uint8_t *) &((struct mg_l2addr *) (ifp->gwmac))->addr.ieee64)) {
-        if (((struct mg_l2addr *) (ifp->gwmac))->addr.ieee64 != 0) {
+              (uint8_t *) &((struct mg_l2addr *) (ifp->gw6mac))->addr.ieee64)) {
+        if (((struct mg_l2addr *) (ifp->gw6mac))->addr.ieee64 != 0) {
           MG_DEBUG(("IPV6CP cfg, GW IFCID: %M", mg_print_ieee64,
-                    &((struct mg_l2addr *) (ifp->gwmac))->addr.ieee64));
+                    &((struct mg_l2addr *) (ifp->gw6mac))->addr.ieee64));
           ipv6cp->code = MG_PPP_IPV6CP_CFG_ACK;
           ppp_tx_frame(ifp, MG_PPP_PROTO_IPV6CP, ipv6cpp, len);
           req[1] = id;
@@ -5860,22 +5860,21 @@ static void ppp_handle_ipv6cp(struct mg_tcpip_if *ifp, uint8_t *ipv6cpp,
       // Our peer accepted our ifc id
       MG_VERBOSE(("got IPV6CP config ack"));
       break;
-    case MG_PPP_IPV6CP_CFG_NACK:
+    case MG_PPP_IPV6CP_CFG_NACK: {
+      struct mg_l2addr l2;
       MG_VERBOSE(("got IPV6CP config nack"));
       // NACK contains our "suggested" IFC id, use it
       if (len >= 10 &&
-          find_opt(
-              MG_PPP_IPV6CP_OPT_IFCID, 10, (const uint8_t *) (ipv6cp + 1),
-              len - sizeof(*ipv6cp),
-              (uint8_t *) &((struct mg_l2addr *) (ifp->mac))->addr.ieee64)) {
-        MG_DEBUG(("IPV6CP cfg, IFCID: %M", mg_print_ieee64,
-                  &((struct mg_l2addr *) (ifp->mac))->addr.ieee64));
+          find_opt(MG_PPP_IPV6CP_OPT_IFCID, 10, (const uint8_t *) (ipv6cp + 1),
+                   len - sizeof(*ipv6cp), (uint8_t *) &l2.addr.ieee64)) {
+        MG_DEBUG(("IPV6CP cfg, IFCID: %M", mg_print_ieee64, &l2.addr.ieee64));
+        ifp->ip6ll[1] = l2.addr.ieee64;  // RFC-5072 5, signal L3 we're ready
         ipv6cp->code = MG_PPP_IPV6CP_CFG_REQ;
         ppp_tx_frame(ifp, MG_PPP_PROTO_IPV6CP, ipv6cpp, len);
       } else {
         MG_ERROR(("Peer is not able to offer an interface id"));
       }
-      break;
+    } break;
     case MG_PPP_IPV6CP_CFG_REJECT:
       MG_ERROR(("Peer rejected our interface id"));
       break;
@@ -6040,10 +6039,10 @@ bool mg_l2_pppoe_rx(struct mg_tcpip_if *ifp, enum mg_l2proto *proto,
       uint8_t *p = (uint8_t *) (pppoe + 1);
       uint16_t taglen;
       while (len >= 4) {  // parse tags for a possible AC-Cookie
-        uint16_t curtag = *((uint16_t *) p);
-        taglen = mg_ntohs(*(((uint16_t *) p) + 1));
+        uint16_t curtag = MG_LOAD_BE16(p);
+        taglen = MG_LOAD_BE16(p + 2);
         if (taglen > len - 4) return false;  // truncated / malformed
-        if (curtag == mg_htons(0x0104)) {
+        if (curtag == 0x0104) {
           has_cookie = true;
           break;
         }
@@ -9747,11 +9746,12 @@ static void mg_ip6_poll(struct mg_tcpip_if *ifp, bool s1) {
 static void mg_ip6_link(struct mg_tcpip_if *ifp, bool drv_up, bool l2_up) {
   bool cur_drv = (ifp->state6 != MG_TCPIP_STATE_DOWN);
   bool cur_l2 = (ifp->state6 >= MG_TCPIP_STATE_UP);
+  const uint8_t px[8] = {0xfe, 0x80, 0, 0, 0, 0, 0, 0};  // RFC-4291 2.5.6
   if (drv_up != cur_drv || l2_up != cur_l2) {  // link/L2 state has changed
-    if (l2_up && ifp->ip6ll[0] == 0 && ifp->ip6ll[1] == 0) { // gen ll address
-      uint8_t px[8] = {0xfe, 0x80, 0, 0, 0, 0, 0, 0};  // RFC-4291 2.5.6
+    if (ifp->l2type == MG_TCPIP_L2_ETH && l2_up && ifp->ip6ll[0] == 0 &&
+        ifp->ip6ll[1] == 0) {  // gen ll address
       mg_l2_genip6(ifp->l2type, ifp->ip6ll, 64, ifp->mac);
-      memcpy(ifp->ip6ll, px, 8);  // RFC-4291 2.5.4
+      memcpy(ifp->ip6ll, px, 8);  // RFC-2464 5
     }  // just got our link local address if we didn't have one.
     // If static configuration is used, global addresses,
     // prefix length, and gw are already filled at this point.
@@ -9759,14 +9759,21 @@ static void mg_ip6_link(struct mg_tcpip_if *ifp, bool drv_up, bool l2_up) {
     if (!l2_up && ifp->enable_slaac) ifp->ip6[0] = ifp->ip6[1] = 0;
     ifp->state6 = !drv_up  ? MG_TCPIP_STATE_DOWN
                   : !l2_up ? MG_TCPIP_STATE_LINK_UP
-                  : ifp->enable_slaac || ifp->ip6[0] == 0 ? MG_TCPIP_STATE_UP
-                                                          : MG_TCPIP_STATE_IP;
+                  : ifp->ip6ll[0] == 0 || ifp->enable_slaac || ifp->ip6[0] == 0
+                      ? MG_TCPIP_STATE_UP
+                      : MG_TCPIP_STATE_IP;
     onstate6change(ifp);
   } else if (!ifp->enable_slaac && ifp->state6 == MG_TCPIP_STATE_UP &&
-             ifp->ip6[0]) {
+             ifp->ip6ll[0] != 0 && ifp->ip6[0] != 0) {
     ifp->state6 = MG_TCPIP_STATE_IP;  // ifp->fn has set an IP
     onstate6change(ifp);
   }
+  if ((ifp->l2type == MG_TCPIP_L2_PPP || ifp->l2type == MG_TCPIP_L2_PPPoE) &&
+      ifp->state6 == MG_TCPIP_STATE_UP && ifp->ip6ll[0] == 0 &&
+      ifp->ip6ll[1] != 0) {     // IPV6CP has got an IFCID, gen ll address
+    memcpy(ifp->ip6ll, px, 8);  // RFC-5072 5
+    onstate6change(ifp);
+  }  // just got our link local address if we didn't have one.
 }
 #else
 #define mg_ip6_poll(x, y)

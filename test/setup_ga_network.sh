@@ -23,18 +23,20 @@ echo
 
 # Package installation
 echo "Package installation"
-sudo apt-get -y install isc-dhcp-server net-tools radvd
-sudo systemctl stop radvd # just in case they think it is cool to start it
+sudo apt-get -y install isc-dhcp-server net-tools radvd ppp pppoe
+sudo systemctl stop radvd # they think it is cool to start it
 # sudo apt-get -y install build-essential sshpass
 echo
 
 echo "Network configuration script: Bridge"
 sudo ip link add $BRIDGE type bridge	# Create brige
-sudo ifconfig $BRIDGE $BRIDGE_IP netmask $BRIDGE_MASK up
-sudo ifconfig $BRIDGE:1 $GATEWAY_IP netmask $BRIDGE_MASK up
-sudo ifconfig $BRIDGE:2 $HOST_IP netmask $BRIDGE_MASK up
-sudo ip -6 addr add $BRIDGE_IPV6/64 dev $BRIDGE
-sudo ip -6 addr add $HOST_IPV6/64 dev $BRIDGE:1
+sudo ifconfig $BRIDGE $BRIDGE_IP netmask $BRIDGE_MASK up	# its IP
+sudo ifconfig $BRIDGE:1 $GATEWAY_IP netmask $BRIDGE_MASK up	# IP announced by DHCP as gateway
+sudo ifconfig $BRIDGE:2 $HOST_IP netmask $BRIDGE_MASK up	# IP exported for LAN (dut) connections
+sudo ip -6 addr add $BRIDGE_IPV6/64 dev $BRIDGE			# its IPv6
+sudo ip -6 addr add $HOST_IPV6/64 dev $BRIDGE:1			# IPv6 exported for LAN (dut) connections
+sudo ip link add link $BRIDGE name $BRIDGE.3 type vlan id 3	# Create VLAN for PPPoE+VLAN tests
+sudo ifconfig $BRIDGE.3 up
 echo
 
 echo "Network configuration script: TAP"
@@ -73,10 +75,20 @@ sudo cp test/dhcpd.conf /etc/dhcp/dhcpd.conf
 sudo chmod a+w /var/lib/dhcp/*
 sudo dhcpd mg_bridge0 &
 echo
+
+# Setup Router Advertising server
 echo "radvd listening at $BRIDGE_IPV6"
 sudo ip link set $BRIDGE up # there's no physical port, so we need to set link up for radvd to work
 sudo radvd -n -d 5 -C test/radvd.conf &
 echo
+
+# Setup PPPoE server
+echo "pppoe-server listening at $BRIDGE.3"
+printf "lock\n" | sudo tee /etc/ppp/options
+sudo pppoe-server -F -D -O test/pppoe-server-options -I $BRIDGE.3 &
+echo
+
+# Export generic server addresses so DUTs can connect to them
 echo "Host listening at $HOST_IP and $HOST_IPV6"
 export HOST_IP
 export HOST_IPV6

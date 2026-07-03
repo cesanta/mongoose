@@ -1,0 +1,7 @@
+# PPP options for the PPPoE server
+noauth
+10.0.0.1:10.67.15.1
+lcp-echo-interval 1
+lcp-echo-failure 2
++ipv6
+ipv6cp-use-ipaddr
