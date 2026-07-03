@@ -174,7 +174,7 @@ static void test_ipv6cp(void) {
                           sizeof(ipv6cp)));
     proto = MG_TCPIP_L2PROTO_ARP;
     ASSERT(mg_l2_rx(&ifp, &proto, &pay, &raw) == false);
-    ASSERT(memcmp(&((struct mg_l2addr *) ifp.gwmac)->addr.ieee64, ipv6cp + 6,
+    ASSERT(memcmp(&((struct mg_l2addr *) ifp.gw6mac)->addr.ieee64, ipv6cp + 6,
                   8) == 0);
     ASSERT(((struct ipv6cp *) ppp_payload(frame))->code ==
            MG_PPP_IPV6CP_CFG_ACK);

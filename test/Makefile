@@ -103,6 +103,10 @@ mip_tap_test: mip_x_test.c mip_tap_test.c mongoose.c mongoose.h packed_fs.c Make
 	$(CC) mip_tap_test.c packed_fs.c $(CFLAGS) $(LDFLAGS) -o $@
 	ASAN_OPTIONS=$(ASAN_OPTIONS) $(RUN) ./$@
 
+pppoe_tap_test: pppoe_tap_test.c mongoose.c mongoose.h Makefile
+	$(CC) pppoe_tap_test.c $(CFLAGS) $(LDFLAGS) -o $@
+	ASAN_OPTIONS=$(ASAN_OPTIONS) $(RUN) ./$@
+
 # bridge UDP port <--> TAP interface
 port_tap_bridge: port_tap_bridge.c
 	cc port_tap_bridge.c -o $@
