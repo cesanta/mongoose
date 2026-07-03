@@ -201,6 +201,31 @@ jobs:
       with: { fetch-depth: 2 }
     - run: sudo apt -y update ; sudo apt -y install binfmt-support qemu-user-static && docker run --rm --privileged multiarch/qemu-user-static --reset -p yes && make -C test ${{ matrix.target }}
 
+  bsd:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        cc: [gcc, clang, g++, clang++]
+    name: bsd CC=${{ matrix.cc }}
+    steps:
+    - uses: actions/checkout@v5
+      with: { fetch-depth: 2 }
+    - uses: webfactory/ssh-agent@v0.10.0
+      with:
+            ssh-private-key: ${{ secrets.HEALTH_TESTS_SSH_KEY }}
+    - run: |
+        source ./test/setup_ga_network.sh
+        make -C test/bsd shm_tap_bridge
+        test/bsd/shm_tap_bridge &
+        sleep 2
+        make -C test/bsd
+    - if: success() || failure()
+      run: |
+        cat log
+        test/health.awk < log > json
+        scp -o "StrictHostKeyChecking=no" json "root@176.9.217.245:/data/downloads/health/bsd_$(date +"%Y%m%d").json"
+
   s390:
     runs-on: ubuntu-latest
     strategy:
