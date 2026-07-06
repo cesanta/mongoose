@@ -69,3 +69,4 @@ struct mg_connection *mg_sync_time(struct mg_mgr *mgr, mg_sync_time_fn fn,
 // Private API, do not expose
 void mg_sntp_request(struct mg_connection *c);
 int64_t mg_sntp_parse(const unsigned char *buf, size_t len);
+void mg_sync_time_cancel(struct mg_connection *c);

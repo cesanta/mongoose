@@ -87,7 +87,7 @@ struct mg_connection *mg_sntp_connect(struct mg_mgr *mgr, const char *url,
   return mg_connect_svc(mgr, url, fn, fn_data, sntp_cb, NULL);
 }
 
-// sntp_cb already uses c->data, so we can't peruse it
+// sntp_cb already uses c->data, so we can't reuse it
 struct st_ctx {
   mg_sync_time_fn fn;
   void *fn_data;
@@ -96,17 +96,20 @@ struct st_ctx {
 static void sync_time_cb(struct mg_connection *c, int ev, void *ev_data) {
   if (ev == MG_EV_SNTP_TIME || (ev == MG_EV_CLOSE)) {
     struct st_ctx *ctx = (struct st_ctx *) c->fn_data;
-    c->fn = NULL;
-    c->fn_data = NULL;
-    if (ev == MG_EV_CLOSE && mg_boot_timestamp_ms == 0)
-      c->mgr->did_sync_time = false;  // first attempt failed now, allow retries
-    c->is_closing = 1;
-    if (ctx != NULL) {
-      if (ctx->fn != NULL) ctx->fn(ev == MG_EV_SNTP_TIME, ctx->fn_data);
-      mg_free(ctx);
-    }
+    if (ctx != NULL && ctx->fn != NULL)
+      ctx->fn(ev == MG_EV_SNTP_TIME, ctx->fn_data);
+    mg_sync_time_cancel(c);
   }
   (void) ev_data;
+}
+
+void mg_sync_time_cancel(struct mg_connection *c) {
+  struct st_ctx *ctx = (struct st_ctx *) c->fn_data;
+  if (mg_boot_timestamp_ms == 0) c->mgr->did_sync_time = false;
+  c->fn = NULL;
+  c->fn_data = NULL;
+  c->is_closing = 1;
+  mg_free(ctx);
 }
 
 struct mg_connection *mg_sync_time(struct mg_mgr *mgr, mg_sync_time_fn fn,

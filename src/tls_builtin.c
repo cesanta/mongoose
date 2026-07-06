@@ -2735,10 +2735,7 @@ void mg_tls_free(struct mg_connection *c) {
   struct tls_data *tls = (struct tls_data *) c->tls;
   size_t i;
   if (tls != NULL) {
-    if (tls->timec != NULL) {
-      tls->timec->fn = NULL;
-      tls->timec->is_closing = 1;
-    }
+    if (tls->timec != NULL) mg_sync_time_cancel(tls->timec);
     mg_iobuf_free(&tls->send);
     if (tls->chain_der != NULL) {
       for (i = 0; i < tls->chain_len; i++) {
