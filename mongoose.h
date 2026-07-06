@@ -3363,7 +3363,7 @@ int mg_uecc_generate_random_int(mg_uecc_word_t *random,
 
 
 
-#if MG_TLS == MG_TLS_BUILTIN
+#if MG_TLS == MG_TLS_BUILTIN && MG_ENABLE_CHACHA20
 #ifndef __PORTABLE_8439_H
 #define __PORTABLE_8439_H
 #if defined(__cplusplus)

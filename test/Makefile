@@ -248,6 +248,26 @@ mip_port_s390: CC = $(DOCKER) mdashnet/s390 cc
 mip_port_s390: RUN = $(DOCKER) --init mdashnet/s390
 mip_port_s390: mip_port_test
 
+diabish: CC = gcc
+diabish: CFLAGS += -std=gnu89 -Werror=declaration-after-statement -Werror=vla -Wno-pedantic
+diabish: test
+
+mip_diabish: CC = gcc
+mip_diabish: CFLAGS += -std=gnu89 -Werror=declaration-after-statement -Werror=vla -Wno-pedantic
+mip_diabish: mip_test
+
+ppc_diabish: ASAN=
+ppc_diabish: CFLAGS += -std=gnu89 -Werror=declaration-after-statement -Werror=vla -Wno-pedantic
+ppc_diabish: CC = $(DOCKER) dockcross/linux-ppc powerpc-unknown-linux-gnu-gcc -static
+ppc_diabish: RUN = qemu-ppc-static
+ppc_diabish: test
+
+mip_ppc_diabish: ASAN=
+mip_ppc_diabish: CFLAGS += -std=gnu89 -Werror=declaration-after-statement -Werror=vla -Wno-pedantic
+mip_ppc_diabish: CC = $(DOCKER) dockcross/linux-ppc powerpc-unknown-linux-gnu-gcc -static
+mip_ppc_diabish: RUN = qemu-ppc-static
+mip_ppc_diabish: mip_test
+
 arm: DEFS += -DMG_ENABLE_POSIX_FS=0 -DMG_ENABLE_TCPIP=1 -DMG_ENABLE_TCPIP_DRIVER_INIT=0 -DMG_ARCH=MG_ARCH_ARMGCC -DNO_SLEEP_ABORT
 arm: mongoose.h $(SRCS) mip_test.c
 	$(DOCKER) mdashnet/armgcc arm-none-eabi-gcc -mcpu=cortex-m3 -mthumb $(SRCS) $(OPTS) $(WARN) $(INCS) $(DEFS) $(TFLAGS) -o unit_test -nostartfiles --specs nosys.specs -e 0
