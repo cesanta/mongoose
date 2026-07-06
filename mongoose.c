@@ -13712,6 +13712,66 @@ struct mg_connection *mg_sntp_connect(struct mg_mgr *mgr, const char *url,
   return mg_connect_svc(mgr, url, fn, fn_data, sntp_cb, NULL);
 }
 
+// sntp_cb already uses c->data, so we can't peruse it
+struct st_ctx {
+  mg_sync_time_fn fn;
+  void *fn_data;
+};
+
+static void sync_time_cb(struct mg_connection *c, int ev, void *ev_data) {
+  if (ev == MG_EV_SNTP_TIME || (ev == MG_EV_CLOSE)) {
+    struct st_ctx *ctx = (struct st_ctx *) c->fn_data;
+    c->fn = NULL;
+    c->fn_data = NULL;
+    if (ev == MG_EV_CLOSE && mg_boot_timestamp_ms == 0)
+      c->mgr->did_sync_time = false;  // first attempt failed now, allow retries
+    c->is_closing = 1;
+    if (ctx != NULL) {
+      if (ctx->fn != NULL) ctx->fn(ev == MG_EV_SNTP_TIME, ctx->fn_data);
+      mg_free(ctx);
+    }
+  }
+  (void) ev_data;
+}
+
+struct mg_connection *mg_sync_time(struct mg_mgr *mgr, mg_sync_time_fn fn,
+                                   void *fn_data) {
+  struct mg_connection *c = NULL;
+  if (mg_boot_timestamp_ms == 0) {
+#if MG_ARCH == MG_ARCH_UNIX || MG_ARCH == MG_ARCH_WIN32
+    uint64_t now = mg_millis(), wall = 0;
+#if MG_ARCH == MG_ARCH_UNIX
+    struct timeval tv;
+    if (gettimeofday(&tv, NULL) == 0 && tv.tv_sec > 0)
+      wall = (uint64_t) tv.tv_sec * 1000 + (uint64_t) tv.tv_usec / 1000;
+#elif MG_ARCH == MG_ARCH_WIN32
+    time_t t = time(NULL);
+    if (t > 0) wall = (uint64_t) t * 1000;
+#endif
+    if (wall > now) mg_boot_timestamp_ms = wall - now;
+#endif
+  }
+  if (mg_boot_timestamp_ms != 0) {
+    if (fn != NULL) fn(true, fn_data);
+  } else if (!mgr->did_sync_time) {
+    struct st_ctx *ctx = (struct st_ctx *) mg_calloc(1, sizeof(*ctx));
+    if (ctx == NULL) {
+      MG_ERROR(("oom"));
+      if (fn != NULL) fn(false, fn_data);
+    } else {
+      ctx->fn = fn;
+      ctx->fn_data = fn_data;
+      c = mg_sntp_connect(mgr, NULL, sync_time_cb, ctx);
+      if (c == NULL) {
+        mg_free(ctx);
+        if (fn != NULL) fn(false, fn_data);
+      } else {
+        mgr->did_sync_time = true;  // prevent further simultaneous attempts
+      }
+    }
+  }
+  return c;
+}
 
 #ifdef MG_ENABLE_LINES
 #line 1 "src/sock.c"
@@ -16137,6 +16197,8 @@ struct tls_data {
   bool skip_verification;    // do not perform checks on server certificate
   bool cert_requested;       // client received a CertificateRequest
   bool is_twoway;            // server is configured to authenticate clients
+  bool is_waiting_time;      // TLS handshake is waiting for wall-clock time
+  struct mg_connection *timec;  // SNTP connection for wall-clock time
   struct mg_str cert_der;    // certificate in DER format
   struct mg_str ca_der;      // current CA certificate
   struct mg_str *ca_bundle_der; // bundle of CA certificates
@@ -18175,6 +18237,7 @@ void mg_tls_handshake(struct mg_connection *c) {
   long n;
   bool res;
   if (c->is_closing) return;  // we don't clear rx buf, so ignore what's left
+  if (tls->is_waiting_time) return;
   if (c->is_client) {
     // will clear is_hs when sending last chunk
     res = mg_tls_client_handshake(c);
@@ -18588,6 +18651,15 @@ static int mg_parse_pem_certs(const struct mg_str pem, struct mg_str **ders) {
   return count;
 }
 
+static void tls_time_cb(bool ok, void *fn_data) {
+  struct mg_connection *c = (struct mg_connection *) fn_data;
+  struct tls_data *tls = (struct tls_data *) c->tls;
+  tls->timec = NULL;
+  tls->is_waiting_time = false;
+  if (ok) mg_tls_handshake(c);
+  if (!ok) mg_error(c, "time sync failed");
+}
+
 void mg_tls_init(struct mg_connection *c, const struct mg_tls_opts *opts) {
   struct mg_str key;
   struct tls_data *tls =
@@ -18633,7 +18705,7 @@ void mg_tls_init(struct mg_connection *c, const struct mg_tls_opts *opts) {
     } else { // parse again for a possible DER (or a truncated begin string)
       if (mg_parse_pem(opts->ca, mg_str_s("CERTIFICATE"), &tls->ca_der) < 0) {
         MG_ERROR(("Failed to load CA certificate"));
-        return;
+        goto xit;
       }
     } // ca_bundle_len != 0 && ca_der.len = 0 => bundle
     if (!c->is_client) tls->is_twoway = true;  // server + CA: two-way auth
@@ -18641,7 +18713,7 @@ void mg_tls_init(struct mg_connection *c, const struct mg_tls_opts *opts) {
 
   if (opts->cert.buf == NULL) {
     MG_VERBOSE(("No certificate provided"));
-    return;
+    goto xit;
   }
 
   // parse PEM or DER certificate
@@ -18728,6 +18800,19 @@ void mg_tls_init(struct mg_connection *c, const struct mg_tls_opts *opts) {
   } else {
     mg_error(
         c, "Expected EC PRIVATE KEY, RSA PRIVATE KEY, or PRIVATE KEY (PKCS#8)");
+    return;
+  }
+xit:
+  if (mg_boot_timestamp_ms == 0 &&
+      (tls->ca_bundle_len > 0 || tls->ca_der.len > 0) &&
+      !tls->skip_verification) {
+    // mg_sync_time() can call tls_time_cb() right away (OS), so set flag first
+    tls->is_waiting_time = true;
+    tls->timec = mg_sync_time(c->mgr, tls_time_cb, c);
+    if (tls->timec == NULL && mg_boot_timestamp_ms == 0) {
+      mg_error(c, "time sync failed");
+      return;
+    }
   }
 }
 
@@ -18735,6 +18820,10 @@ void mg_tls_free(struct mg_connection *c) {
   struct tls_data *tls = (struct tls_data *) c->tls;
   size_t i;
   if (tls != NULL) {
+    if (tls->timec != NULL) {
+      tls->timec->fn = NULL;
+      tls->timec->is_closing = 1;
+    }
     mg_iobuf_free(&tls->send);
     if (tls->chain_der != NULL) {
       for (i = 0; i < tls->chain_len; i++) {

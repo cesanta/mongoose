@@ -87,3 +87,63 @@ struct mg_connection *mg_sntp_connect(struct mg_mgr *mgr, const char *url,
   return mg_connect_svc(mgr, url, fn, fn_data, sntp_cb, NULL);
 }
 
+// sntp_cb already uses c->data, so we can't peruse it
+struct st_ctx {
+  mg_sync_time_fn fn;
+  void *fn_data;
+};
+
+static void sync_time_cb(struct mg_connection *c, int ev, void *ev_data) {
+  if (ev == MG_EV_SNTP_TIME || (ev == MG_EV_CLOSE)) {
+    struct st_ctx *ctx = (struct st_ctx *) c->fn_data;
+    c->fn = NULL;
+    c->fn_data = NULL;
+    if (ev == MG_EV_CLOSE && mg_boot_timestamp_ms == 0)
+      c->mgr->did_sync_time = false;  // first attempt failed now, allow retries
+    c->is_closing = 1;
+    if (ctx != NULL) {
+      if (ctx->fn != NULL) ctx->fn(ev == MG_EV_SNTP_TIME, ctx->fn_data);
+      mg_free(ctx);
+    }
+  }
+  (void) ev_data;
+}
+
+struct mg_connection *mg_sync_time(struct mg_mgr *mgr, mg_sync_time_fn fn,
+                                   void *fn_data) {
+  struct mg_connection *c = NULL;
+  if (mg_boot_timestamp_ms == 0) {
+#if MG_ARCH == MG_ARCH_UNIX || MG_ARCH == MG_ARCH_WIN32
+    uint64_t now = mg_millis(), wall = 0;
+#if MG_ARCH == MG_ARCH_UNIX
+    struct timeval tv;
+    if (gettimeofday(&tv, NULL) == 0 && tv.tv_sec > 0)
+      wall = (uint64_t) tv.tv_sec * 1000 + (uint64_t) tv.tv_usec / 1000;
+#elif MG_ARCH == MG_ARCH_WIN32
+    time_t t = time(NULL);
+    if (t > 0) wall = (uint64_t) t * 1000;
+#endif
+    if (wall > now) mg_boot_timestamp_ms = wall - now;
+#endif
+  }
+  if (mg_boot_timestamp_ms != 0) {
+    if (fn != NULL) fn(true, fn_data);
+  } else if (!mgr->did_sync_time) {
+    struct st_ctx *ctx = (struct st_ctx *) mg_calloc(1, sizeof(*ctx));
+    if (ctx == NULL) {
+      MG_ERROR(("oom"));
+      if (fn != NULL) fn(false, fn_data);
+    } else {
+      ctx->fn = fn;
+      ctx->fn_data = fn_data;
+      c = mg_sntp_connect(mgr, NULL, sync_time_cb, ctx);
+      if (c == NULL) {
+        mg_free(ctx);
+        if (fn != NULL) fn(false, fn_data);
+      } else {
+        mgr->did_sync_time = true;  // prevent further simultaneous attempts
+      }
+    }
+  }
+  return c;
+}

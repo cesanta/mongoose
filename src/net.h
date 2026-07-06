@@ -39,6 +39,7 @@ struct mg_mgr {
   struct mg_connection *mdns;   // mDNS listener connection, or NULL
   int dnstimeout;               // DNS resolve timeout in ms (default: 3000)
   bool use_dns6;                // If true, prefer DNS6 for hostname resolution
+  bool did_sync_time;           // True after time sync has been requested
   unsigned long nextid;         // Auto-incrementing counter for connection IDs
   void *userdata;               // Arbitrary user pointer
   void *tls_ctx;                // Shared TLS context for all TLS connections

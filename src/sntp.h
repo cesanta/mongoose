@@ -59,6 +59,13 @@ bool mg_timer_expired(uint64_t *expiration, uint64_t period, uint64_t now);
 struct mg_connection *mg_sntp_connect(struct mg_mgr *mgr, const char *url,
                                       mg_event_handler_t fn, void *fn_data);
 
+typedef void (*mg_sync_time_fn)(bool ok, void *fn_data);
+
+// Synchronise wall-clock time. On OS targets, uses system time if available.
+// Otherwise, starts an SNTP request and calls `fn` when done.
+struct mg_connection *mg_sync_time(struct mg_mgr *mgr, mg_sync_time_fn fn,
+                                   void *fn_data);
+
 // Private API, do not expose
 void mg_sntp_request(struct mg_connection *c);
 int64_t mg_sntp_parse(const unsigned char *buf, size_t len);
