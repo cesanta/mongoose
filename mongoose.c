@@ -2667,6 +2667,7 @@ size_t mg_vxprintf(void (*out)(char, void *), void *param, const char *fmt,
         is_long++, c = fmt[++i];
         if (c == 'l') is_long++, c = fmt[++i];
       }
+      if (c == 'z') is_long = 1, c = fmt[++i];
       if (c == 'p') x = 1, is_long = 1;
       if (c == 'd' || c == 'u' || c == 'x' || c == 'X' || c == 'p' ||
           c == 'g' || c == 'f') {
