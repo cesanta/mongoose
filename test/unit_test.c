@@ -2321,6 +2321,19 @@ static void test_str(void) {
     ASSERT(chkdbl(mg_str("123e-3"), 0.123));
   }
 
+#if defined(_MSC_VER) && _MSC_VER < 1700
+  // VC98 does not have '%zu'
+#else
+  ASSERT(sn("%zu", 0));
+  ASSERT(sn("%zu", -1));
+  ASSERT(sn("%zu", -2));
+  ASSERT(sn("%zd", 123));
+#if !defined(_MSC_VER)
+  ASSERT(sn("%zd", -3));  // MSVC casts to unsigned
+#endif
+  ASSERT(sn("%zu", 0x1234));
+#endif
+
   ASSERT(sn("%d", 0));
   ASSERT(sn("%d", 1));
   ASSERT(sn("%d", -1));
