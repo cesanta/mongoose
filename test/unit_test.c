@@ -2321,8 +2321,8 @@ static void test_str(void) {
     ASSERT(chkdbl(mg_str("123e-3"), 0.123));
   }
 
-#if defined(_MSC_VER) && _MSC_VER < 1700
-  // VC98 does not have '%zu'
+#if defined(NO_ZU_TEST) || (defined(_MSC_VER) && _MSC_VER < 1700)
+  // VC98 does not have '%zu', some old compilers may also not support it
 #else
   ASSERT(sn("%zu", 0));
   ASSERT(sn("%zu", -1));
