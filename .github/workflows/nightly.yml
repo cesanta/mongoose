@@ -340,7 +340,7 @@ jobs:
       fail-fast: false
       max-parallel: 1   # no parallel runs, to minimize MQTT errors
       matrix:
-        target: [vc98, vc17, vc22, mingw, mingw++]
+        target: [vc98, vc17, vc22, mingw, mingw++] # current mdash/mingw image compiler does not have support for %zu; test disabled below
         ssl: ["", BUILTIN]
         select: [-DMG_ENABLE_POLL=0, -DMG_ENABLE_POLL=1]
         exclude:
@@ -349,14 +349,14 @@ jobs:
     name: windows ${{ matrix.target }} SSL=${{ matrix.ssl }} TFLAGS=${{ matrix.select }}
     env:
       SSL: ${{ matrix.ssl }}
-      TFLAGS: ${{ matrix.select }} -DMQTT_LOCALHOST -DNO_ABORT
+      TFLAGS: ${{ matrix.select }} -DMQTT_LOCALHOST -DNO_ABORT 
     steps:
     - uses: actions/checkout@v5
       with: { fetch-depth: 2 }
     - uses: webfactory/ssh-agent@v0.10.0
       with:
             ssh-private-key: ${{ secrets.HEALTH_TESTS_SSH_KEY }}
-    - run: ./test/setup_mqtt_server.sh && make -C test ${{ matrix.target }} > log
+    - run: if [ "${{ matrix.target }}" == "mingw" ]; then export TFLAGS="$TFLAGS -DNO_ZU_TEST"; fi && ./test/setup_mqtt_server.sh && make -C test ${{ matrix.target }} > log
     - if: success() || failure()
       run: |
         cat log
