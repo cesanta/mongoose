@@ -112,6 +112,8 @@ struct tls_data {
   bool skip_verification;    // do not perform checks on server certificate
   bool cert_requested;       // client received a CertificateRequest
   bool is_twoway;            // server is configured to authenticate clients
+  bool is_sntp_pending;      // TLS handshake is waiting for wall-clock time
+  struct mg_connection *timec;  // SNTP connection for wall-clock time
   struct mg_str cert_der;    // certificate in DER format
   struct mg_str ca_der;      // current CA certificate
   struct mg_str *ca_bundle_der; // bundle of CA certificates
@@ -2150,6 +2152,7 @@ void mg_tls_handshake(struct mg_connection *c) {
   long n;
   bool res;
   if (c->is_closing) return;  // we don't clear rx buf, so ignore what's left
+  if (tls->is_sntp_pending) return;
   if (c->is_client) {
     // will clear is_hs when sending last chunk
     res = mg_tls_client_handshake(c);
@@ -2563,6 +2566,24 @@ static int mg_parse_pem_certs(const struct mg_str pem, struct mg_str **ders) {
   return count;
 }
 
+static void sync_time_cancel(struct mg_connection *c) {
+  c->fn = NULL;
+  c->is_closing = 1;
+}
+
+static void sync_time_cb(struct mg_connection *c, int ev, void *ev_data) {
+  if (ev == MG_EV_SNTP_TIME || (ev == MG_EV_CLOSE)) {
+    struct mg_connection *tlsc = (struct mg_connection *) c->fn_data;
+    struct tls_data *tls = (struct tls_data *) tlsc->tls;
+    sync_time_cancel(c);  // c = tls->timec
+    tls->timec = NULL;
+    tls->is_sntp_pending = false;
+    if (ev == MG_EV_SNTP_TIME) mg_tls_handshake(tlsc);
+    if (ev == MG_EV_CLOSE) mg_error(tlsc, "time sync failed");
+  }
+  (void) ev_data;
+}
+
 void mg_tls_init(struct mg_connection *c, const struct mg_tls_opts *opts) {
   struct mg_str key;
   struct tls_data *tls =
@@ -2608,7 +2629,7 @@ void mg_tls_init(struct mg_connection *c, const struct mg_tls_opts *opts) {
     } else { // parse again for a possible DER (or a truncated begin string)
       if (mg_parse_pem(opts->ca, mg_str_s("CERTIFICATE"), &tls->ca_der) < 0) {
         MG_ERROR(("Failed to load CA certificate"));
-        return;
+        goto xit;
       }
     } // ca_bundle_len != 0 && ca_der.len = 0 => bundle
     if (!c->is_client) tls->is_twoway = true;  // server + CA: two-way auth
@@ -2616,7 +2637,7 @@ void mg_tls_init(struct mg_connection *c, const struct mg_tls_opts *opts) {
 
   if (opts->cert.buf == NULL) {
     MG_VERBOSE(("No certificate provided"));
-    return;
+    goto xit;
   }
 
   // parse PEM or DER certificate
@@ -2703,6 +2724,19 @@ void mg_tls_init(struct mg_connection *c, const struct mg_tls_opts *opts) {
   } else {
     mg_error(
         c, "Expected EC PRIVATE KEY, RSA PRIVATE KEY, or PRIVATE KEY (PKCS#8)");
+    return;
+  }
+xit:
+  if (mg_boot_timestamp_ms == 0 && !tls->skip_verification &&
+      (tls->ca_bundle_len > 0 || tls->ca_der.len > 0)) {
+    struct mg_connection *timec;
+    timec = mg_sntp_connect(c->mgr, NULL, sync_time_cb, c);
+    if (timec == NULL) {
+      mg_error(c, "time sync failed");
+      return;
+    }
+    tls->is_sntp_pending = true;
+    tls->timec = timec;
   }
 }
 
@@ -2710,6 +2744,10 @@ void mg_tls_free(struct mg_connection *c) {
   struct tls_data *tls = (struct tls_data *) c->tls;
   size_t i;
   if (tls != NULL) {
+    if (tls->timec != NULL) {
+      sync_time_cancel(tls->timec);
+      tls->timec = NULL;
+    }
     mg_iobuf_free(&tls->send);
     if (tls->chain_der != NULL) {
       for (i = 0; i < tls->chain_len; i++) {
