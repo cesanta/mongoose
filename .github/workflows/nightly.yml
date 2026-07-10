@@ -272,6 +272,24 @@ jobs:
         test/health.awk < log > json
         scp -o "StrictHostKeyChecking=no" json "root@176.9.217.245:/data/downloads/health/bsd_${{ matrix.cc }}_$(date +"%Y%m%d").json"
 
+  bsdbe:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        target: [bsd_s390]
+    name: bsd be ${{ matrix.target }}
+    steps:
+    - uses: actions/checkout@v5
+      with: { fetch-depth: 2 }
+    - run: |
+        sudo apt -y update ; sudo apt -y install binfmt-support qemu-user-static && docker run --rm --privileged multiarch/qemu-user-static --reset -p yes
+        source ./test/setup_ga_network.sh
+        make -C test port_tap_bridge
+        test/port_tap_bridge &
+        sleep 2
+        make -C test/bsd ${{ matrix.target }}
+
   s390:
     runs-on: ubuntu-latest
     strategy:
