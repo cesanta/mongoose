@@ -339,7 +339,7 @@ static void sntp_cb(struct mg_connection *c, int ev, void *ev_data) {
     int64_t received = *(int64_t *) ev_data;
     *(int64_t *) c->fn_data = received;
     MG_DEBUG(("got time: %lld", received));
-#if MG_ARCH == MG_ARCH_UNIX
+#if MG_ARCH == MG_ARCH_UNIX && defined(__STDC__) && defined(__STDC_VERSION__)
     struct timeval tv = {0, 0};
     gettimeofday(&tv, 0);
     int64_t ms = (int64_t) tv.tv_sec * 1000 + tv.tv_usec / 1000;
@@ -1462,7 +1462,7 @@ static void test_tls(void) {
   const char *url = "https://localhost:12347";
   char buf[FETCH_BUF_SIZE];
   struct mg_tls_opts opts;
-  struct mg_str data = mg_unpacked("/Makefile");
+  struct mg_str data = mg_unpacked("/fuzz.c");
   char bigdata[FETCH_BUF_SIZE - 256];  // leave extra room
   struct mg_str bd;
   ASSERT(data.buf != NULL && data.len > 0);
@@ -1505,6 +1505,7 @@ static void test_tls(void) {
     // otherwise it will end with 200 and shorter file contents
     ASSERT(fetch(&mgr, buf, "https://localhost:8443",
                  "GET /thefile HTTP/1.0\n\n") == 200);
+    data = mg_unpacked("/Makefile");
     ASSERT(cmpbody(buf, data.buf) == 0);  // "thefile" links to Makefile
     ASSERT(system("killall tls_multirec/server") == 0);
   } else {
@@ -3014,7 +3015,7 @@ static void test_util(void) {
 static void test_crc32(void) {
   //  echo -n aaa | cksum -o3
   ASSERT(mg_crc32(0, 0, 0) == 0);
-  ASSERT(mg_crc32(0, "a", 1) == 3904355907);
+  ASSERT(mg_crc32(0, "a", 1) == 3904355907U);
   ASSERT(mg_crc32(0, "abc", 3) == 891568578);
   ASSERT(mg_crc32(mg_crc32(0, "ab", 2), "c", 1) == 891568578);
 }
@@ -4501,7 +4502,7 @@ static bool test_upload_dir(const struct mg_dash_user *u, char *buf, size_t len)
 
 struct test_file_entry {
   char name[64];
-  size_t size;
+  uint64_t size;
 };
 static struct test_file_entry s_test_file;
 static int s_test_file_index;

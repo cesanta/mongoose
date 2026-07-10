@@ -52,6 +52,24 @@ jobs:
         test/health.awk < log > json
         scp -o "StrictHostKeyChecking=no" json "root@176.9.217.245:/data/downloads/health/linux_${{ matrix.target }}_${{ matrix.cc }}_${{ matrix.ssl }}_${{ matrix.select }}_$(date +"%Y%m%d").json"
 
+  c89:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        target: [diabish, ppc_diabish]
+        ssl: ["", BUILTIN]
+    name: C89 ${{ matrix.target }} SSL=${{ matrix.ssl }}
+    env:
+      SSL: ${{ matrix.ssl }}
+      TFLAGS: -DMG_ENABLE_POLL=0 -DMG_ENABLE_EPOLL=0 -DMG_ENABLE_CHACHA20=0 -DMQTT_LOCALHOST -DNO_ZU_TEST
+    steps:
+    - uses: actions/checkout@v5
+      with: { fetch-depth: 2 }
+    - run: | # GH runners seem to overflow the 32-bit FS for the QEMU PPC (works for me in RHEL9)
+        if [[ "${{ matrix.target }}" = ppc_* ]]; then export TFLAGS="$TFLAGS -D_FILE_OFFSET_BITS=64"; fi
+        sudo apt -y update ; sudo apt -y install binfmt-support qemu-user-static && ./test/setup_mqtt_server.sh && docker run --rm --privileged multiarch/qemu-user-static --reset -p yes && make -C test ${{ matrix.target }}
+
   mip:
     runs-on: ubuntu-latest
     strategy:
@@ -87,13 +105,13 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        target: [mip_vc98]
+        target: [mip_vc98, mip_diabish, mip_ppc_diabish]
         ipv6: [0, 1]
     name: MIP C89 ${{ matrix.target }} IPV6=${{ matrix.ipv6 }}
     steps:
     - uses: actions/checkout@v5
       with: { fetch-depth: 2 }
-    - run: make -C test ${{ matrix.target }} IPV6=${{ matrix.ipv6 }}
+    - run: sudo apt -y update ; sudo apt -y install binfmt-support qemu-user-static && docker run --rm --privileged multiarch/qemu-user-static --reset -p yes && make -C test ${{ matrix.target }} IPV6=${{ matrix.ipv6 }}
   mipbe:
     runs-on: ubuntu-latest
     strategy:
