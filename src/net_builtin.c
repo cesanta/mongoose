@@ -666,24 +666,31 @@ static void rx_dhcp_client(struct mg_tcpip_if *ifp, struct pkt *pkt) {
           *end = (uint8_t *) &pkt->pay.buf[pkt->pay.len];
   // min header length checked at payload calculation, options are optional
   if (memcmp(&pkt->dhcp->xid, ifp->mac + 2, sizeof(pkt->dhcp->xid))) return;
-  while (p + 1 < end && p[0] != 255) {  // Parse options, get #1; RFC-2132 9
-    if (p[0] == 1 && p[1] == 4 && p + 6 < end) {  // Mask, 3.3
+  while (p < end && p[0] != 255) {  // RFC-2132 9
+    if (p[0] == 0) { p++; continue; }  // Pad
+    if ((size_t) (end - p) < 2 || (size_t) (end - p) < 2U + p[1]) break;
+    if (p[0] == 1) {  // Mask, 3.3
+      if (p[1] != 4) break;
       memcpy(&mask, p + 2, sizeof(mask));
-    } else if (p[0] == 3 && dhcp_opt_len_ok(p[1], p, end)) {  // GW, 3.5
+    } else if (p[0] == 3) {  // GW, 3.5
+      if (!dhcp_opt_len_ok(p[1], p, end)) break;
       memcpy(&gw, p + 2, sizeof(gw));
       ip = pkt->dhcp->yiaddr;
-    } else if (ifp->enable_req_dns && p[0] == 6 &&
-               dhcp_opt_len_ok(p[1], p, end)) {  // DNS, 3.8
+    } else if (ifp->enable_req_dns && p[0] == 6) {  // DNS, 3.8
+      if (!dhcp_opt_len_ok(p[1], p, end)) break;
       memcpy(&dns, p + 2, sizeof(dns));
-    } else if (ifp->enable_req_sntp && p[0] == 42 &&
-               dhcp_opt_len_ok(p[1], p, end)) {  // SNTP, 8.3
+    } else if (ifp->enable_req_sntp && p[0] == 42) {  // SNTP, 8.3
+      if (!dhcp_opt_len_ok(p[1], p, end)) break;
       memcpy(&sntp, p + 2, sizeof(sntp));
-    } else if (p[0] == 51 && p[1] == 4 && p + 6 < end) {  // Lease
+    } else if (p[0] == 51) {  // Lease
+      if (p[1] != 4) break;
       memcpy(&lease, p + 2, sizeof(lease));
       lease = mg_ntohl(lease);
-    } else if (p[0] == 53 && p[1] == 1 && p + 6 < end) {  // Msg Type
+    } else if (p[0] == 53) {  // Msg Type
+      if (p[1] != 1) break;
       msgtype = p[2];
-    } else if (p[0] == 54 && p[1] == 4 && p + 6 < end) {  // Server id 9.7
+    } else if (p[0] == 54) {  // Server id 9.7
+      if (p[1] != 4) break;
       memcpy(&owner, p + 2, sizeof(sntp));  // This is the lease owner
     }
     p += p[1] + 2;
@@ -738,8 +745,11 @@ static void rx_dhcp_server(struct mg_tcpip_if *ifp, struct pkt *pkt) {
   // min header length checked at payload calculation, options are optional
   res.yiaddr = ifp->ip;
   ((uint8_t *) (&res.yiaddr))[3]++;                // Offer our IP + 1
-  while (p + 1 < end && p[0] != 255) {             // Parse options
-    if (p[0] == 53 && p[1] == 1 && p + 2 < end) {  // Message type
+  while (p < end && p[0] != 255) {                 // Parse options
+    if (p[0] == 0) { p++; continue; }              // Pad
+    if ((size_t) (end - p) < 2 || (size_t) (end - p) < 2U + p[1]) break;
+    if (p[0] == 53) {  // Message type
+      if (p[1] != 1) break;
       op = p[2];
     }
     p += p[1] + 2;

@@ -1321,6 +1321,7 @@ static int mg_tls_client_recv_hello(struct mg_connection *c) {
 
   if (rio->len < 5 + 39 + 32 + 3 + 2) goto fail;
   msgsz = MG_LOAD_BE16(rio->buf + 3);
+  if (msgsz > rio->len - 5) goto fail;
   mg_sha256_update(&tls->sha256, rio->buf + 5, msgsz);
 
   ext_len = MG_LOAD_BE16(rio->buf + 5 + 39 + 32 + 3);
@@ -2192,7 +2193,7 @@ static int mg_rsa_parse_der_int(const uint8_t **p, const uint8_t *end,
     // Long form length
     uint8_t len_bytes = len & 0x7F;
     MG_VERBOSE(("DER INT: long form, %d length bytes", len_bytes));
-    if (end - *p < len_bytes) {
+    if (len_bytes == 0 || len_bytes > 4 || (size_t) (end - *p) < len_bytes) {
       MG_VERBOSE(("DER INT: not enough bytes for length"));
       return -1;
     }
@@ -2205,7 +2206,7 @@ static int mg_rsa_parse_der_int(const uint8_t **p, const uint8_t *end,
 
   MG_VERBOSE(("DER INT: length=%u, remaining=%d", len, (int) (end - *p)));
 
-  if (end - *p < (long) len) {
+  if ((size_t) (end - *p) < len) {
     MG_VERBOSE(("DER INT: length exceeds remaining bytes"));
     return -1;
   }
@@ -2306,7 +2307,7 @@ static int mg_rsa_parse_key(const uint8_t *der, size_t dersz,
     // Long form length
     uint8_t i, len_bytes = seq_len & 0x7F;
     MG_VERBOSE(("Long form length: %d bytes", len_bytes));
-    if (end - p < len_bytes) {
+    if (len_bytes == 0 || len_bytes > 4 || (size_t) (end - p) < len_bytes) {
       MG_ERROR(("Not enough bytes for long form length"));
       return -1;
     }
@@ -2320,7 +2321,7 @@ static int mg_rsa_parse_key(const uint8_t *der, size_t dersz,
   MG_VERBOSE(
       ("SEQUENCE length: %u, total DER size: %u", seq_len, (unsigned) dersz));
 
-  if (end - p < (long) seq_len) {
+  if ((size_t) (end - p) < seq_len) {
     MG_ERROR(("SEQUENCE length exceeds buffer"));
     return -1;
   }
