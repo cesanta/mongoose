@@ -16223,16 +16223,14 @@ static int mg_der_to_tlv(uint8_t *der, size_t dersz, struct mg_der_tlv *tlv) {
   if (tlv->len > 0x7f) {  // long-form length
     uint32_t i;
     n = tlv->len - 0x80;
-    if (n > 4 || dersz < (2 + n)) return -1;
+    if (n == 0 || n > 4 || dersz < (2 + n)) return -1;
     tlv->len = 0;
     for (i = 0; i < n; i++) {
       tlv->len = (tlv->len << 8) | der[2 + i];
     }
-    if (n > (dersz - 2)) return -1;
     tlv->value += n;
-  } else {
-    if (der + dersz < tlv->value + tlv->len) return -1;
   }
+  if (tlv->len > dersz - (size_t) (tlv->value - der)) return -1;
   return (int) n;
 }
 
