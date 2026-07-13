@@ -1,7 +1,7 @@
 #define MG_ENABLE_TCPIP 1
 #define MG_ENABLE_TCPIP_DRIVER_INIT 0
 
-#define FETCH_BUF_SIZE (16 * 1024)
+#define FETCH_BUF_SIZE (32 * 1024)
 
 #include "mongoose.c"
 

@@ -255,7 +255,7 @@ uninstall:
 	rm -rf $(DESTDIR)$(LIBDIR)/libmongoose.a $(DESTDIR)$(LIBDIR)/libmongoose.so.$(VERSION) $(DESTDIR)$(INCLUDEDIR)/mongoose.h $(DESTDIR)$(LIBDIR)/libmongoose.so
 
 
-packed_fs.c: Makefile data/ssi.h fuzz.c data/a.txt data/ca.pem certs/ca.crt certs/server.crt certs/server.key
+packed_fs.c: Makefile data/ssi.h fuzz.c data/a.txt data/range.txt data/ca.pem certs/ca.crt certs/server.crt certs/server.key certs/client.key certs/client.crt
 	$(CC) $(CFLAGS) pack.c -o pack
 	$(RUN) ./pack Makefile data/ssi.h fuzz.c data/a.txt data/range.txt data/ca.pem certs/ca.crt certs/server.crt certs/server.key certs/client.key certs/client.crt > $@
 
