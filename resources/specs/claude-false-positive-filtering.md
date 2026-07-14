@@ -64,3 +64,4 @@
 30. When uncertain, keep findings with clear external input, reachable code path, and concrete impact in Mongoose library/protocol/driver code; filter internal-access, impossible-state, local-misuse, generic-hardening, and speculative reports.
 31. For dashboard reports, do not infer unauthenticated access from a route-specific check alone; account for the broader authentication flow. Keep concrete reachable bugs such as path traversal, unsafe decoded paths, or file read/write/delete issues.
 32. Filter reports regarding DNS transaction ID predictability or lack of strict question-name matching in DNS response processing, as these are acknowledged design limitations of the current implementation.
+33. Filter reports that unauthenticated SNTP time affects TLS certificate validity when Mongoose only performs the SNTP sync if mg_boot_timestamp_ms has not already been initialized.
