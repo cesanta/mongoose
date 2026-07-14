@@ -1588,9 +1588,9 @@ static bool handle_opt(struct connstate *s, struct tcp *tcp, bool ip6) {
   s->dmss = ip6 ? 1220 : 536;  // assume default, RFC-9293 3.7.1
   while (len > 0) {            // RFC-9293 3.1 3.2
     uint8_t kind = opts[0], optlen = 1;
-    if (kind != 1) {                              // No-Operation
-      if (kind == 0) break;                       // End of Option List
-      if (len < 2 || opts[1] == 0) return false;  // Malformed options
+    if (kind != 1) {         // No-Operation
+      if (kind == 0) break;  // End of Option List
+      if (len < 2 || opts[1] == 0 || opts[1] > len) return false;  // Malformed
       optlen = opts[1];
       if (kind == 2 && optlen == 4)  // set received MSS
         s->dmss = (uint16_t) (((uint16_t) opts[2] << 8) + opts[3]);
