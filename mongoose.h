@@ -1756,6 +1756,9 @@ bool mg_path_is_sane(const struct mg_str path);
 // calling context; avoid in event handlers.
 void mg_delayms(unsigned int ms);
 
+uint64_t mg_timegm(unsigned int year, unsigned int month, unsigned int day,
+                   unsigned int hour, unsigned int min, unsigned int sec);
+
 // Packs four byte values into a uint32_t in big-endian order.
 // MG_U32(1, 2, 3, 4) == 0x01020304
 #define MG_U32(a, b, c, d)                                         \

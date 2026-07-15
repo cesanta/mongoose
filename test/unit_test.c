@@ -2786,6 +2786,11 @@ static void test_util(void) {
          ((uint8_t *) &ipv4)[2] == 0x45);
   ASSERT(MG_LOAD_BE24(&ipv4) == 0xef2345);
 
+  ASSERT(mg_timegm(2023, 1, 1, 0, 0, 0) == 1672531200);
+  ASSERT(mg_timegm(2025, 12, 31, 23, 59, 59) == 1767225599);
+  ASSERT(mg_timegm(2024, 2, 1, 0, 0, 0) == 1706745600);
+  ASSERT(mg_timegm(2000, 4, 1, 0, 0, 0) == 954547200);
+
   memcpy(&ipv3, d64, sizeof(ipv3));
 #if defined(_MSC_VER) && _MSC_VER < 1700
   // VC98 doesn't suppport LL suffix
