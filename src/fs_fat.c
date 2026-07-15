@@ -1,44 +1,19 @@
 #include "arch.h"
 #include "event.h"
 #include "fs.h"
+#include "util.h"
 
 #if MG_ENABLE_FATFS
 #include <ff.h>
 
-static int mg_days_from_epoch(int y, int m, int d) {
-  y -= m <= 2;
-  int era = y / 400;
-  int yoe = y - era * 400;
-  int doy = (153 * (m + (m > 2 ? -3 : 9)) + 2) / 5 + d - 1;
-  int doe = yoe * 365 + yoe / 4 - yoe / 100 + doy;
-  return era * 146097 + doe - 719468;
-}
-
-static time_t mg_timegm(const struct tm *t) {
-  int year = t->tm_year + 1900;
-  int month = t->tm_mon;  // 0-11
-  if (month > 11) {
-    year += month / 12;
-    month %= 12;
-  } else if (month < 0) {
-    int years_diff = (11 - month) / 12;
-    year -= years_diff;
-    month += 12 * years_diff;
-  }
-  int x = mg_days_from_epoch(year, month + 1, t->tm_mday);
-  return 60 * (60 * (24L * x + t->tm_hour) + t->tm_min) + t->tm_sec;
-}
-
 static time_t ff_time_to_epoch(uint16_t fdate, uint16_t ftime) {
-  struct tm tm;
-  memset(&tm, 0, sizeof(struct tm));
-  tm.tm_sec = (ftime << 1) & 0x3e;
-  tm.tm_min = ((ftime >> 5) & 0x3f);
-  tm.tm_hour = ((ftime >> 11) & 0x1f);
-  tm.tm_mday = (fdate & 0x1f);
-  tm.tm_mon = ((fdate >> 5) & 0x0f) - 1;
-  tm.tm_year = ((fdate >> 9) & 0x7f) + 80;
-  return mg_timegm(&tm);
+  unsigned int sec = (ftime << 1) & 0x3e;
+  unsigned int min = (ftime >> 5) & 0x3f;
+  unsigned int hour = (ftime >> 11) & 0x1f;
+  unsigned int day = fdate & 0x1f;
+  unsigned int month = (fdate >> 5) & 0x0f;
+  unsigned int year = ((fdate >> 9) & 0x7f) + 1980;
+  return (time_t) mg_timegm(year, month, day, hour, min, sec);
 }
 
 static int ff_stat(const char *path, size_t *size, time_t *mtime) {

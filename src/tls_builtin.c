@@ -1406,8 +1406,7 @@ static void mg_der_debug_cert_name(const char *name, struct mg_der_tlv *tlv) {
 }
 
 static uint64_t asnt2t(uint8_t *v, uint8_t type) {
-  unsigned int y, mo, d, h, mi, ss, ly;
-  uint16_t dm[12] = {0, 31, 59, 90, 120, 151, 181, 212, 243, 273, 304, 334};
+  unsigned int y, mo, d, h, mi, ss;
   y = 10U * (*v++ - '0'), y += (*v++ - '0');
   if (type == 0x17) {       // UTCTime, RFC-5280 4.1.2.5.1 YYMMDDHHMMSSZ
     if (y >= 50) return (uint64_t) 0;  // 19YY is in the past
@@ -1415,17 +1414,13 @@ static uint64_t asnt2t(uint8_t *v, uint8_t type) {
   } else {  // GeneralizedTime, RFC-5280 4.1.2.5.2 YYYYMMDDHHMMSSZ
     y *= 100U, y += 10U * (*v++ - '0'), y += (*v++ - '0');
   }
-  y -= 1900;
   mo = 10U * (*v++ - '0'), mo += (*v++ - '0');
   d = 10U * (*v++ - '0'), d += (*v++ - '0');
   h = 10U * (*v++ - '0'), h += (*v++ - '0');
   mi = 10U * (*v++ - '0'), mi += (*v++ - '0');
   ss = 10U * (*v++ - '0'), ss += (*v++ - '0');
   if (*v != 'Z') return 0; // invalid
-  ly = (mo > 2) ? y + 1 : y;
-  return (uint64_t) ss + 60U * mi + 3600U * h + 86400U * (dm[mo - 1] + d - 1) +
-         31536000U * (y - 70) + 86400U * ((ly - 69) / 4U) -
-         86400U * ((ly - 1) / 100U) + 86400U * ((ly + 299) / 400U);
+  return mg_timegm(y, mo, d, h, mi, ss);
 }
 
 static int mg_tls_parse_cert_der(void *buf, size_t dersz,

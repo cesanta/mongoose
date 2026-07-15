@@ -2837,43 +2837,18 @@ bool mg_fs_ls(struct mg_fs *fs, const char *path, char *buf, size_t len) {
 
 
 
+
 #if MG_ENABLE_FATFS
 #include <ff.h>
 
-static int mg_days_from_epoch(int y, int m, int d) {
-  y -= m <= 2;
-  int era = y / 400;
-  int yoe = y - era * 400;
-  int doy = (153 * (m + (m > 2 ? -3 : 9)) + 2) / 5 + d - 1;
-  int doe = yoe * 365 + yoe / 4 - yoe / 100 + doy;
-  return era * 146097 + doe - 719468;
-}
-
-static time_t mg_timegm(const struct tm *t) {
-  int year = t->tm_year + 1900;
-  int month = t->tm_mon;  // 0-11
-  if (month > 11) {
-    year += month / 12;
-    month %= 12;
-  } else if (month < 0) {
-    int years_diff = (11 - month) / 12;
-    year -= years_diff;
-    month += 12 * years_diff;
-  }
-  int x = mg_days_from_epoch(year, month + 1, t->tm_mday);
-  return 60 * (60 * (24L * x + t->tm_hour) + t->tm_min) + t->tm_sec;
-}
-
 static time_t ff_time_to_epoch(uint16_t fdate, uint16_t ftime) {
-  struct tm tm;
-  memset(&tm, 0, sizeof(struct tm));
-  tm.tm_sec = (ftime << 1) & 0x3e;
-  tm.tm_min = ((ftime >> 5) & 0x3f);
-  tm.tm_hour = ((ftime >> 11) & 0x1f);
-  tm.tm_mday = (fdate & 0x1f);
-  tm.tm_mon = ((fdate >> 5) & 0x0f) - 1;
-  tm.tm_year = ((fdate >> 9) & 0x7f) + 80;
-  return mg_timegm(&tm);
+  unsigned int sec = (ftime << 1) & 0x3e;
+  unsigned int min = (ftime >> 5) & 0x3f;
+  unsigned int hour = (ftime >> 11) & 0x1f;
+  unsigned int day = fdate & 0x1f;
+  unsigned int month = (fdate >> 5) & 0x0f;
+  unsigned int year = ((fdate >> 9) & 0x7f) + 1980;
+  return (time_t) mg_timegm(year, month, day, hour, min, sec);
 }
 
 static int ff_stat(const char *path, size_t *size, time_t *mtime) {
@@ -17435,8 +17410,7 @@ static void mg_der_debug_cert_name(const char *name, struct mg_der_tlv *tlv) {
 }
 
 static uint64_t asnt2t(uint8_t *v, uint8_t type) {
-  unsigned int y, mo, d, h, mi, ss, ly;
-  uint16_t dm[12] = {0, 31, 59, 90, 120, 151, 181, 212, 243, 273, 304, 334};
+  unsigned int y, mo, d, h, mi, ss;
   y = 10U * (*v++ - '0'), y += (*v++ - '0');
   if (type == 0x17) {       // UTCTime, RFC-5280 4.1.2.5.1 YYMMDDHHMMSSZ
     if (y >= 50) return (uint64_t) 0;  // 19YY is in the past
@@ -17444,17 +17418,13 @@ static uint64_t asnt2t(uint8_t *v, uint8_t type) {
   } else {  // GeneralizedTime, RFC-5280 4.1.2.5.2 YYYYMMDDHHMMSSZ
     y *= 100U, y += 10U * (*v++ - '0'), y += (*v++ - '0');
   }
-  y -= 1900;
   mo = 10U * (*v++ - '0'), mo += (*v++ - '0');
   d = 10U * (*v++ - '0'), d += (*v++ - '0');
   h = 10U * (*v++ - '0'), h += (*v++ - '0');
   mi = 10U * (*v++ - '0'), mi += (*v++ - '0');
   ss = 10U * (*v++ - '0'), ss += (*v++ - '0');
   if (*v != 'Z') return 0; // invalid
-  ly = (mo > 2) ? y + 1 : y;
-  return (uint64_t) ss + 60U * mi + 3600U * h + 86400U * (dm[mo - 1] + d - 1) +
-         31536000U * (y - 70) + 86400U * ((ly - 69) / 4U) -
-         86400U * ((ly - 1) / 100U) + 86400U * ((ly + 299) / 400U);
+  return mg_timegm(y, mo, d, h, mi, ss);
 }
 
 static int mg_tls_parse_cert_der(void *buf, size_t dersz,
@@ -25605,6 +25575,22 @@ void mg_bzero(volatile unsigned char *buf, size_t len) {
   if (buf != NULL) {
     while (len--) *buf++ = 0;
   }
+}
+
+uint64_t mg_timegm(unsigned int year, unsigned int month, unsigned int day,
+                   unsigned int hour, unsigned int min, unsigned int sec) {
+  static const uint16_t dm[12] = {0,   31,  59,  90,  120, 151,
+                                  181, 212, 243, 273, 304, 334};
+  const uint64_t day_secs = 86400;
+  const uint64_t year_secs = 31536000;
+  unsigned int y, ly;
+  if (year < 1970) return 0;
+  y = year - 1900;
+  ly = month > 2 ? y + 1 : y;
+  return (uint64_t) sec + 60 * min + 3600 * hour +
+         day_secs * (dm[month - 1] + day - 1) + year_secs * (y - 70) +
+         day_secs * ((ly - 69) / 4) - day_secs * ((ly - 1) / 100) +
+         day_secs * ((ly + 299) / 400);
 }
 
 #if MG_ENABLE_CUSTOM_RANDOM
