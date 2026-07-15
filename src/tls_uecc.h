@@ -113,28 +113,28 @@ if 'dest' was filled with random data, or 0 if the random data could not be
 generated. The filled-in values should be either truly random, or from a
 cryptographically-secure PRNG.
 
-A correctly functioning RNG function must be set (using mg_uecc_set_rng())
-before calling mg_uecc_make_key() or mg_uecc_sign().
+A correctly functioning RNG is required before calling mg_uecc_make_key() or
+mg_uecc_sign().
 
 Setting a correctly functioning RNG function improves the resistance to
 side-channel attacks for mg_uecc_shared_secret() and
 mg_uecc_sign_deterministic().
-
-A correct RNG function is set by default when building for Windows, Linux, or OS
-X. If you are building on another POSIX-compliant system that supports
-/dev/random or /dev/urandom, you can define MG_UECC_POSIX to use the predefined
-RNG. For embedded platforms there is no predefined RNG function; you must
-provide your own.
 */
 typedef int (*MG_UECC_RNG_Function)(uint8_t *dest, unsigned size);
+
+// Mongoose: mg_uecc_make_key() and mg_uecc_sign() use mg_random() when no
+// explicit uECC RNG is installed. If mg_random() cannot provide a strong source,
+// those operations fail. Deterministic signing works without RNG, but only an
+// explicit uECC RNG enables its optional side-channel blinding.
 
 /* mg_uecc_set_rng() function.
 Set the function that will be used to generate random bytes. The RNG function
 should return 1 if the random data was generated, or 0 if the random data could
 not be generated.
 
-On platforms where there is no predefined RNG function (eg embedded platforms),
-this must be called before mg_uecc_make_key() or mg_uecc_sign() are used.
+Mongoose: this overrides the default mg_random() fallback used by
+mg_uecc_make_key() and mg_uecc_sign(). Do not call mg_uecc_set_rng() unless the
+application must provide its own cryptographic RNG.
 
 Inputs:
     rng_function - The function that will be used to generate random bytes.
