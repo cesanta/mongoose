@@ -3741,12 +3741,22 @@ static void test_json(void) {
     ASSERT(b == true);
     ASSERT(mg_json_get(json, "$.b[2]", &len) < 0);
 
-    json = mg_str("[\"YWJj\", \"0100026869\"]");
+    json = mg_str("[\"YWJj\", \"0100026869\", \"\", \"abc\", \"0g\"]");
     ASSERT((str = mg_json_get_b64(json, "$[0]", &len)) != NULL);
     ASSERT(len == 3 && memcmp(str, "abc", (size_t) len) == 0);
     mg_free(str);
     ASSERT((str = mg_json_get_hex(json, "$[1]", &len)) != NULL);
     ASSERT(len == 5 && memcmp(str, "\x01\x00\x02hi", (size_t) len) == 0);
+    mg_free(str);
+    ASSERT((str = mg_json_get_hex(json, "$[2]", &len)) != NULL);
+    ASSERT(len == 0 && str[0] == '\0');
+    mg_free(str);
+    len = 42;
+    str = mg_json_get_hex(json, "$[3]", &len);
+    ASSERT(str == NULL && len == 42);
+    mg_free(str);
+    str = mg_json_get_hex(json, "$[4]", &len);
+    ASSERT(str == NULL && len == 42);
     mg_free(str);
 
     json = mg_str("{\"a\":[1,2,3], \"ab\": 2}");
