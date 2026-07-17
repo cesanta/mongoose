@@ -46,6 +46,10 @@ bool mg_ota_end(void) {
   }
   MG_DEBUG(("Finished ESP32 OTA, success: %d", s_ota_success));
   s_ota_update_partition = NULL;
+  if (s_ota_success) {
+    MG_OTA_STATE_SET(MG_OTA_TESTING);
+    esp_restart();
+  }
   return s_ota_success;
 }
 
