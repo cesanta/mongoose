@@ -356,8 +356,11 @@ int LLVMFuzzerTestOneInput(const uint8_t *data, size_t size) {
 #endif
     mg_tcpip_rx(&mif, pkt, size);
 
+    // prior actions may have had consequences on link state
+    mif.state = MG_TCPIP_STATE_READY;
     // Test HTTP serving (via our built-in TCP/IP stack)
-    const char *url = "http://localhost:12345";
+    const char *url = "http://localhost:12345"; // internally resolves
+    // creates a connection and sends SYN via the router, unless OOM
     struct mg_connection *c = mg_http_connect(&mgr, url, fn, NULL);
     mg_iobuf_add(&c->recv, 0, data, size);
     c->pfn(c, MG_EV_READ, NULL); // manually invoke protocol event handler
