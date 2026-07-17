@@ -4269,8 +4269,9 @@ size_t mg_url_encode(const char *s, size_t sl, char *buf, size_t len) {
   size_t i, n = 0;
   for (i = 0; i < sl; i++) {
     int c = *(unsigned char *) &s[i];
-    if (n + 4 >= len) return 0;
-    if (mg_is_url_safe(c)) {
+    bool safe = mg_is_url_safe(c);
+    if (n >= len || len - n < (safe ? 2 : 4)) return 0;
+    if (safe) {
       buf[n++] = s[i];
     } else {
       mg_snprintf(&buf[n], 4, "%%%M", mg_print_hex, 1, &s[i]);

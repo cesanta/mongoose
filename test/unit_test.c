@@ -2881,6 +2881,12 @@ static void test_util(void) {
     ASSERT((n = mg_url_encode("a", 1, buf, 0)) == 0);
     ASSERT((n = mg_url_encode("a", 1, buf, sizeof(buf))) == 1);
     ASSERT(strncmp(buf, "a", n) == 0);
+    ASSERT((n = mg_url_encode("a", 1, buf, 2)) == 1);
+    ASSERT(strcmp(buf, "a") == 0);
+    ASSERT(mg_url_encode("a", 1, buf, 1) == 0);
+    ASSERT((n = mg_url_encode("@", 1, buf, 4)) == 3);
+    ASSERT(strcmp(buf, "%40") == 0);
+    ASSERT(mg_url_encode("@", 1, buf, 3) == 0);
     ASSERT((n = mg_url_encode("._-~", 4, buf, sizeof(buf))) == 4);
     ASSERT(strncmp(buf, "._-~", n) == 0);
     ASSERT((n = mg_url_encode("a@%>", 4, buf, sizeof(buf))) == 10);
