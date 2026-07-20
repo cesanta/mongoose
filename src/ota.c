@@ -185,7 +185,7 @@ void mg_ota_poll(struct mg_mgr *mgr) {
   static uint64_t t = 5000;  // Fire first time 5 sec after boot
 
   static uint64_t feed_timer;  // Advances 500ms per tick; tracks elapsed time
-  if (MG_OTA_STATE_GET() == MG_OTA_TESTING &&
+  if (MG_OTA_STATE_GET() == MG_OTA_FAILED &&
       mg_timer_expired(&feed_timer, 500, mg_millis())) {
     if (feed_timer < (uint64_t) MG_OTA_ROLLBACK_TIMEOUT_SECONDS * 1000) {
       MG_OTA_ROLLBACK_TIMER_FEED();  // Feed watchdog every 500ms
