@@ -57,7 +57,7 @@ char *mg_json_get_str(struct mg_str json, const char *path);
 
 // Decodes a hex-encoded JSON string at path into a heap-allocated byte array.
 // Sets *len to the decoded byte count. Caller must mg_free() the result.
-// Returns NULL if not found or not a string.
+// Returns NULL if not found, not a string, or not valid hexadecimal.
 char *mg_json_get_hex(struct mg_str json, const char *path, int *len);
 
 // Decodes a base64-encoded JSON string at path into a heap-allocated byte
