@@ -301,6 +301,13 @@ static void test_base64(void) {
   ASSERT(mg_base64_decode("AAA=", 4, buf, 2) == 0);
   ASSERT(mg_base64_decode("AAA=", 4, buf, 3) == 0);
   ASSERT(mg_base64_decode("AAA=", 4, buf, 4) == 2);
+
+  ASSERT(mg_base64url_encode((uint8_t *) "???", 3, buf, sizeof(buf)) == 4);
+  ASSERT(strcmp(buf, "Pz8_") == 0);
+  ASSERT(mg_base64url_decode("Pz8_", 4, buf, sizeof(buf)) == 3);
+  ASSERT(strcmp(buf, "???") == 0);
+  ASSERT(mg_base64url_decode("Pz8/", 4, buf, sizeof(buf)) == 0);
+  ASSERT(mg_base64url_decode("A", 1, buf, sizeof(buf)) == 0);
 }
 
 static void test_iobuf(void) {
@@ -4378,6 +4385,83 @@ static void test_rsa(void) {
 #endif
 }
 
+static void test_jwt(void) {
+  char jwt[512], claims[128], got[128], hdr[128], extra[64], tampered[512];
+  struct mg_jwt_opts opts, bad;
+  const char *dot;
+  char *str;
+  size_t n, m;
+
+  mg_snprintf(claims, sizeof(claims), "{%m:%m,%m:%d}", MG_ESC("sub"),
+              MG_ESC("admin"), MG_ESC("iat"), 123);
+  mg_snprintf(extra, sizeof(extra), "%m:%m", MG_ESC("cty"), MG_ESC("JWT"));
+  memset(&opts, 0, sizeof(opts));
+  opts.claims = mg_str(claims);
+  opts.header = mg_str(extra);
+  opts.kid = mg_str("hmac-key-1");
+  opts.secret = mg_str("secret");
+  n = mg_jwt_sign_hs256(&opts, jwt, sizeof(jwt));
+  ASSERT(n > 0 && n + 1 < sizeof(jwt));
+  jwt[n] = '\0';
+
+  dot = strchr(jwt, '.');
+  ASSERT(dot != NULL);
+  ASSERT(mg_base64url_decode(jwt, (size_t) (dot - jwt), hdr,
+                             sizeof(hdr)) > 0);
+  str = mg_json_get_str(mg_str(hdr), "$.kid");
+  ASSERT(str != NULL && strcmp(str, "hmac-key-1") == 0);
+  mg_free(str);
+  str = mg_json_get_str(mg_str(hdr), "$.cty");
+  ASSERT(str != NULL && strcmp(str, "JWT") == 0);
+  mg_free(str);
+
+  m = mg_jwt_verify_hs256(mg_str_n(jwt, n), &opts, got, sizeof(got));
+  ASSERT(m == strlen(claims));
+  ASSERT(strcmp(got, claims) == 0);
+  bad = opts;
+  bad.secret = mg_str("bad-secret");
+  ASSERT(mg_jwt_verify_hs256(mg_str_n(jwt, n), &bad, got,
+                             sizeof(got)) == 0);
+  memcpy(tampered, jwt, n + 1);
+  tampered[n - 1] = tampered[n - 1] == 'A' ? 'B' : 'A';
+  ASSERT(mg_jwt_verify_hs256(mg_str_n(tampered, n), &opts, got,
+                             sizeof(got)) == 0);
+  ASSERT(mg_jwt_sign_hs256(&opts, got, 10) == 0);
+  ASSERT(mg_jwt_verify_hs256(mg_str_n(jwt, n), &opts, got, 4) == 0);
+
+#if MG_TLS == MG_TLS_BUILTIN
+  {
+    const char *key_pem =
+        "-----BEGIN EC PRIVATE KEY-----\n"
+        "MHcCAQEEIAVdo8UAScxG7jiuNY2UZESNX/KPH8qJ0u0gOMMsAzYWoAoGCCqGSM49\n"
+        "AwEHoUQDQgAEqN6BIhvgbk7ecmUcn8Da9Avkj/uDNERtqWJG9r/or26X4u9jR5Jl\n"
+        "4hf5Gx17YJkq5/z3k6ogPDPpoAYWIw1/sw==\n"
+        "-----END EC PRIVATE KEY-----\n";
+    uint8_t key[32], pub[64];
+
+    memset(&opts, 0, sizeof(opts));
+    opts.claims = mg_str(claims);
+    opts.kid = mg_str("ec-key-1");
+    opts.private_key = key;
+    opts.public_key = pub;
+    ASSERT(mg_uecc_parse_private_key(mg_str(key_pem), key, sizeof(key)) == 32);
+    ASSERT(mg_uecc_compute_public_key(key, pub, mg_uecc_secp256r1()) == 1);
+    n = mg_jwt_sign_es256(&opts, jwt, sizeof(jwt));
+    ASSERT(n > 0 && n + 1 < sizeof(jwt));
+    jwt[n] = '\0';
+    m = mg_jwt_verify_es256(mg_str_n(jwt, n), &opts, got, sizeof(got));
+    ASSERT(m == strlen(claims));
+    ASSERT(strcmp(got, claims) == 0);
+    ASSERT(mg_jwt_verify_hs256(mg_str_n(jwt, n), &bad, got,
+                               sizeof(got)) == 0);
+    memcpy(tampered, jwt, n + 1);
+    tampered[n - 1] = tampered[n - 1] == 'A' ? 'B' : 'A';
+    ASSERT(mg_jwt_verify_es256(mg_str_n(tampered, n), &opts, got,
+                               sizeof(got)) == 0);
+  }
+#endif
+}
+
 static void test_crypto(void) {
   test_md5();
   test_sha1();
@@ -4385,6 +4469,7 @@ static void test_crypto(void) {
   test_sha384();
   test_x25519();
   test_rsa();
+  test_jwt();
 }
 
 static void dash_custom(struct mg_connection *c, int ev, void *ev_data) {

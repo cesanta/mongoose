@@ -12,22 +12,30 @@ static int mg_base64_encode_single(int c) {
   }
 }
 
-static int mg_base64_decode_single(int c) {
+static int base64_decode_single(int c, char plus, char slash) {
   if (c >= 'A' && c <= 'Z') {
     return c - 'A';
   } else if (c >= 'a' && c <= 'z') {
     return c + 26 - 'a';
   } else if (c >= '0' && c <= '9') {
     return c + 52 - '0';
-  } else if (c == '+') {
+  } else if (c == plus) {
     return 62;
-  } else if (c == '/') {
+  } else if (c == slash) {
     return 63;
   } else if (c == '=') {
     return 64;
   } else {
     return -1;
   }
+}
+
+static int mg_base64_decode_single(int c) {
+  return base64_decode_single(c, '+', '/');
+}
+
+static int mg_base64url_decode_single(int c) {
+  return base64_decode_single(c, '-', '_');
 }
 
 size_t mg_base64_update(unsigned char ch, char *to, size_t n) {
@@ -84,6 +92,44 @@ size_t mg_base64_decode(const char *src, size_t n, char *dst, size_t dl) {
       if (src[3] != '=') dst[len++] = (char) ((c << 6) | d);
     }
     src += 4;
+  }
+  dst[len] = '\0';
+  return len;
+fail:
+  if (dl > 0) dst[0] = '\0';
+  return 0;
+}
+
+size_t mg_base64url_encode(const unsigned char *p, size_t n, char *to,
+                           size_t dl) {
+  size_t i, len = mg_base64_encode(p, n, to, dl);
+  if (len == 0) return 0;
+  for (i = 0; i < len; i++) {
+    if (to[i] == '+') {
+      to[i] = '-';
+    } else if (to[i] == '/') {
+      to[i] = '_';
+    }
+  }
+  while (len > 0 && to[len - 1] == '=') to[--len] = '\0';
+  return len;
+}
+
+size_t mg_base64url_decode(const char *src, size_t n, char *dst, size_t dl) {
+  size_t i, len = 0;
+  unsigned int bits = 0, v = 0;
+  if (dl == 0 || (n & 3) == 1) goto fail;
+  for (i = 0; src != NULL && i < n; i++) {
+    int c = mg_base64url_decode_single(src[i]);
+    if (c == 64) break;
+    if (c < 0) goto fail;
+    v = (v << 6) | (unsigned int) c;
+    bits += 6;
+    if (bits >= 8) {
+      bits -= 8;
+      if (len + 1 >= dl) goto fail;
+      dst[len++] = (char) ((v >> bits) & 255U);
+    }
   }
   dst[len] = '\0';
   return len;

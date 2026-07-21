@@ -222,11 +222,7 @@ static cmpresult_t mg_uecc_vli_cmp_unsafe(const mg_uecc_word_t *left,
 #define asm_mmod_fast_secp256r1 0
 #endif
 
-#if defined(default_RNG_defined) && default_RNG_defined
-static MG_UECC_RNG_Function g_rng_function = &default_RNG;
-#else
-static MG_UECC_RNG_Function g_rng_function = 0;
-#endif
+static MG_UECC_RNG_Function g_rng_function = NULL;
 
 void mg_uecc_set_rng(MG_UECC_RNG_Function rng_function) {
   g_rng_function = rng_function;
@@ -2560,15 +2556,11 @@ MG_UECC_VLI_API int mg_uecc_generate_random_int(mg_uecc_word_t *random,
   mg_uecc_word_t tries;
   bitcount_t num_bits = mg_uecc_vli_numBits(top, num_words);
 
-  if (!g_rng_function) {
-    return 0;
-  }
-
   for (tries = 0; tries < MG_UECC_RNG_MAX_TRIES; ++tries) {
-    if (!g_rng_function((uint8_t *) random,
-                        (unsigned int) (num_words * MG_UECC_WORD_SIZE))) {
+    unsigned int len = (unsigned int) (num_words * MG_UECC_WORD_SIZE);
+    if (!(g_rng_function == NULL ? mg_random((uint8_t *) random, len)
+                                 : g_rng_function((uint8_t *) random, len)))
       return 0;
-    }
     random[num_words - 1] &=
         mask >> ((bitcount_t) (num_words * MG_UECC_WORD_SIZE * 8 - num_bits));
     if (!mg_uecc_vli_isZero(random, num_words) &&

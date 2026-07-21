@@ -2409,7 +2409,7 @@ static int mg_rsa_parse_key(const uint8_t *der, size_t dersz,
 //   parameters ANY OPTIONAL
 // }
 static int mg_parse_pkcs8_key(const uint8_t *der, size_t dersz,
-                              struct tls_data *tls) {
+                              struct mg_rsa_key *rsa, uint8_t *ec_key) {
   struct mg_der_tlv root, version, alg_id, private_key_octets;
   struct mg_der_tlv alg_oid, alg_params;
 
@@ -2442,17 +2442,19 @@ static int mg_parse_pkcs8_key(const uint8_t *der, size_t dersz,
   if (alg_oid.len == sizeof(mg_rsa_oid) &&
       memcmp(alg_oid.value, mg_rsa_oid, sizeof(mg_rsa_oid)) == 0) {
     struct mg_rsa_key rsa_key;
+    if (rsa == NULL) return -1;
     if (mg_rsa_parse_key(private_key_octets.value, private_key_octets.len,
                          &rsa_key) < 0) {
       MG_ERROR(("PKCS#8: failed to parse inner RSA key"));
       return -1;
     }
-    tls->rsa = rsa_key;
+    *rsa = rsa_key;
     return 0;
 
   } else if (alg_oid.len == sizeof(mg_ec_public_key_oid) &&
              memcmp(alg_oid.value, mg_ec_public_key_oid,
                     sizeof(mg_ec_public_key_oid)) == 0) {
+    if (ec_key == NULL) return -1;
     if (mg_der_next(&alg_id, &alg_params) < 0 || alg_params.type != 0x06) {
       MG_ERROR(("PKCS#8: invalid EC parameters OID"));
       return -1;
@@ -2466,7 +2468,7 @@ static int mg_parse_pkcs8_key(const uint8_t *der, size_t dersz,
     }
 
     return mg_parse_ec_private_key(private_key_octets.value,
-                                   private_key_octets.len, tls->ec_key);
+                                   private_key_octets.len, ec_key);
 
   } else {
     MG_ERROR(("PKCS#8: unsupported algorithm"));
@@ -2569,6 +2571,20 @@ static int mg_parse_pem_certs(const struct mg_str pem, struct mg_str **ders) {
 
   *ders = certs;
   return count;
+}
+
+size_t mg_uecc_parse_private_key(struct mg_str key, uint8_t *buf, size_t len) {
+  struct mg_str der = mg_str_n(NULL, 0);
+  size_t n = 0;
+  if (buf == NULL || len < 32) return 0;
+  // current mg_parse_ec_private_key() only handles 32-byte keys
+  if (mg_parse_pem(key, mg_str_s("EC PRIVATE KEY"), &der) == 0) {
+    if (mg_parse_ec_private_key((uint8_t *) der.buf, der.len, buf) == 0) n = 32;
+  } else if (mg_parse_pem(key, mg_str_s("PRIVATE KEY"), &der) == 0) {
+    if (mg_parse_pkcs8_key((uint8_t *) der.buf, der.len, NULL, buf) == 0) n = 32;
+  }
+  mg_free((void *) der.buf);
+  return n;
 }
 
 static void sync_time_cancel(struct mg_connection *c) {
@@ -2713,7 +2729,8 @@ void mg_tls_init(struct mg_connection *c, const struct mg_tls_opts *opts) {
     // Copy parsed RSA key components to tls->rsa for signing operations
     tls->rsa = rsa_key;
   } else if (mg_parse_pem(opts->key, mg_str_s("PRIVATE KEY"), &key) == 0) {
-    if (mg_parse_pkcs8_key((const uint8_t *) key.buf, key.len, tls) == 0) {
+    if (mg_parse_pkcs8_key((const uint8_t *) key.buf, key.len, &tls->rsa,
+                           tls->ec_key) == 0) {
       if (tls->rsa.n.len > 0) {
         tls->rsa_key_der = key;
         MG_INFO(("Parsed PKCS#8 RSA private key: %d bytes", (int) key.len));

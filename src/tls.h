@@ -87,6 +87,12 @@ void mg_tls_ctx_init(struct mg_mgr *);
 void mg_tls_ctx_free(struct mg_mgr *);
 #define MG_IS_DER(buf) (((uint8_t *) (buf))[0] == 0x30)  // DER begins with 0x30
 
+#if MG_TLS == MG_TLS_BUILTIN
+// Extracts a 32-byte P-256 private scalar from EC PRIVATE KEY or PKCS#8 PRIVATE
+// KEY input. Accepts PEM or DER. Returns key size, or 0 on error.
+size_t mg_uecc_parse_private_key(struct mg_str key, uint8_t *buf, size_t len);
+#endif
+
 // Low-level IO primitives used by TLS layer
 enum { MG_IO_ERR = -1, MG_IO_WAIT = -2 };
 long mg_io_send(struct mg_connection *c, const void *buf, size_t len);

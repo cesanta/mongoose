@@ -6,6 +6,7 @@
 
 #include "tls_chacha20.h"
 #include "tls.h"
+#include "util.h"
 
 #if MG_TLS == MG_TLS_BUILTIN && MG_ENABLE_CHACHA20
 // ******* BEGIN: chacha-portable/chacha-portable.h ********
@@ -1336,8 +1337,6 @@ PORTABLE_8439_DECL size_t mg_chacha20_poly1305_decrypt(
   // first we calculate the mac and see if it lines up, only then do we decrypt
   size_t actual_size = cipher_text_size - RFC_8439_TAG_SIZE;
   uint8_t computed_mac[RFC_8439_TAG_SIZE];
-  int diff = 0;
-  size_t i;
   if (MG_OVERLAPPING(plain_text, actual_size, cipher_text, cipher_text_size)) {
     return (size_t) -1;
   }
@@ -1345,10 +1344,8 @@ PORTABLE_8439_DECL size_t mg_chacha20_poly1305_decrypt(
   poly1305_calculate_mac(computed_mac, cipher_text, actual_size, key, nonce, ad,
                          ad_size);
 
-  // compare tags
-  for (i = 0; i < RFC_8439_TAG_SIZE; i++)
-    diff |= computed_mac[i] ^ cipher_text[actual_size + i];
-  if (diff != 0) return (size_t) -1;
+  if (!mg_memeq(computed_mac, cipher_text + actual_size, RFC_8439_TAG_SIZE))
+    return (size_t) -1;
 
   chacha20_xor_stream(plain_text, cipher_text, actual_size, key, nonce, 1);
   return actual_size;

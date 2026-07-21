@@ -22,6 +22,9 @@ void mg_free(void *ptr);
 // sensitive data (keys, passwords).
 void mg_bzero(volatile unsigned char *buf, size_t len);
 
+// Fixed-length constant-time byte equality. Use for MACs, tags, signatures.
+bool mg_memeq(const void *a, const void *b, size_t n);
+
 // Fills buf with len cryptographically random bytes. Uses the best available
 // hardware or OS source (hardware RNG, /dev/urandom, CryptGenRandom, etc.).
 // Falls back to rand() with an error log if no strong source is available.

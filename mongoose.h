@@ -1788,6 +1788,9 @@ void mg_free(void *ptr);
 // sensitive data (keys, passwords).
 void mg_bzero(volatile unsigned char *buf, size_t len);
 
+// Fixed-length constant-time byte equality. Use for MACs, tags, signatures.
+bool mg_memeq(const void *a, const void *b, size_t n);
+
 // Fills buf with len cryptographically random bytes. Uses the best available
 // hardware or OS source (hardware RNG, /dev/urandom, CryptGenRandom, etc.).
 // Falls back to rand() with an error log if no strong source is available.
@@ -2035,6 +2038,9 @@ size_t mg_base64_update(unsigned char input_byte, char *buf, size_t len);
 size_t mg_base64_final(char *buf, size_t len);
 size_t mg_base64_encode(const unsigned char *p, size_t n, char *buf, size_t);
 size_t mg_base64_decode(const char *src, size_t n, char *dst, size_t);
+size_t mg_base64url_encode(const unsigned char *p, size_t n, char *buf,
+                           size_t);
+size_t mg_base64url_decode(const char *src, size_t n, char *dst, size_t);
 
 
 
@@ -2668,6 +2674,12 @@ void mg_tls_ctx_init(struct mg_mgr *);
 void mg_tls_ctx_free(struct mg_mgr *);
 #define MG_IS_DER(buf) (((uint8_t *) (buf))[0] == 0x30)  // DER begins with 0x30
 
+#if MG_TLS == MG_TLS_BUILTIN
+// Extracts a 32-byte P-256 private scalar from EC PRIVATE KEY or PKCS#8 PRIVATE
+// KEY input. Accepts PEM or DER. Returns key size, or 0 on error.
+size_t mg_uecc_parse_private_key(struct mg_str key, uint8_t *buf, size_t len);
+#endif
+
 // Low-level IO primitives used by TLS layer
 enum { MG_IO_ERR = -1, MG_IO_WAIT = -2 };
 long mg_io_send(struct mg_connection *c, const void *buf, size_t len);
@@ -2868,28 +2880,28 @@ if 'dest' was filled with random data, or 0 if the random data could not be
 generated. The filled-in values should be either truly random, or from a
 cryptographically-secure PRNG.
 
-A correctly functioning RNG function must be set (using mg_uecc_set_rng())
-before calling mg_uecc_make_key() or mg_uecc_sign().
+A correctly functioning RNG is required before calling mg_uecc_make_key() or
+mg_uecc_sign().
 
 Setting a correctly functioning RNG function improves the resistance to
 side-channel attacks for mg_uecc_shared_secret() and
 mg_uecc_sign_deterministic().
-
-A correct RNG function is set by default when building for Windows, Linux, or OS
-X. If you are building on another POSIX-compliant system that supports
-/dev/random or /dev/urandom, you can define MG_UECC_POSIX to use the predefined
-RNG. For embedded platforms there is no predefined RNG function; you must
-provide your own.
 */
 typedef int (*MG_UECC_RNG_Function)(uint8_t *dest, unsigned size);
+
+// Mongoose: mg_uecc_make_key() and mg_uecc_sign() use mg_random() when no
+// explicit uECC RNG is installed. If mg_random() cannot provide a strong source,
+// those operations fail. Deterministic signing works without RNG, but only an
+// explicit uECC RNG enables its optional side-channel blinding.
 
 /* mg_uecc_set_rng() function.
 Set the function that will be used to generate random bytes. The RNG function
 should return 1 if the random data was generated, or 0 if the random data could
 not be generated.
 
-On platforms where there is no predefined RNG function (eg embedded platforms),
-this must be called before mg_uecc_make_key() or mg_uecc_sign() are used.
+Mongoose: this overrides the default mg_random() fallback used by
+mg_uecc_make_key() and mg_uecc_sign(). Do not call mg_uecc_set_rng() unless the
+application must provide its own cryptographic RNG.
 
 Inputs:
     rng_function - The function that will be used to generate random bytes.
@@ -4195,6 +4207,33 @@ size_t mg_json_unescape(struct mg_str json, const char *path, char *, size_t);
 // quoted key (e.g. "\"name\""). *val is the raw unparsed token.
 size_t mg_json_next(struct mg_str obj, size_t ofs, struct mg_str *key,
                     struct mg_str *val);
+
+
+
+
+
+
+struct mg_jwt_opts {
+  struct mg_str claims;  // JSON payload
+  struct mg_str header;  // Extra header members, no braces; alg/typ are set
+  struct mg_str kid;     // Key ID protected header
+  struct mg_str secret;  // HS256 secret
+  const uint8_t *private_key;  // ES256 private key (MG_TLS_BUILTIN only)
+  const uint8_t *public_key;   // ES256 public key (MG_TLS_BUILTIN only)
+};
+
+// Signs JSON claims as a compact JWT. Returns JWT length, or 0 on error.
+size_t mg_jwt_sign_hs256(const struct mg_jwt_opts *opts, char *buf,
+                         size_t len);
+
+// Verifies JWT and decodes JSON claims into buf. Returns claims length, or 0.
+size_t mg_jwt_verify_hs256(struct mg_str jwt, const struct mg_jwt_opts *opts,
+                           char *buf, size_t len);
+
+size_t mg_jwt_sign_es256(const struct mg_jwt_opts *opts, char *buf,
+                         size_t len);
+size_t mg_jwt_verify_es256(struct mg_str jwt, const struct mg_jwt_opts *opts,
+                           char *buf, size_t len);
 
 
 
