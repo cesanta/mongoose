@@ -8,7 +8,8 @@ char s_theone[] = "Server.local";
 static void mdns_ev_handler(struct mg_connection *c, int ev, void *ev_data) {
   if (ev == MG_EV_MDNS_RESP) {  // is this the one ?
     struct mg_mdns_resp *resp = (struct mg_mdns_resp *) ev_data;
-    if (mg_strcasecmp(mg_str(s_theone), resp->name) == 0)
+    if (resp->rr->atype == MG_DNS_RTYPE_A &&
+        mg_strcasecmp(mg_str(s_theone), resp->name) == 0)
       MG_INFO(("%.*s is: %M", resp->name.len, resp->name.buf, mg_print_ip, &resp->addr));
   }
   (void) c;

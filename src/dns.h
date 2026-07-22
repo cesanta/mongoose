@@ -60,11 +60,12 @@ struct mg_mdns_req {
   bool is_unicast;  // True if the client requested a unicast (QU) response
 };
 
-// ev_data for MG_EV_MDNS_RESP, carrying the resolved address from an mDNS response.
+// ev_data for MG_EV_MDNS_RESP, carrying address/data from a mDNS response
 struct mg_mdns_resp {
-  struct mg_dns_rr *rr;  // Resource record from the response
+  struct mg_dns_rr *rr;  // Resource record from the response (1st in chain)
   struct mg_str name;    // Resolved hostname, without the .local suffix
   struct mg_addr addr;   // Resolved IP address
+  struct mg_dnssd_record sd; // Service Discovery data
 };
 
 // Parses a DNS query or response from buf/len into dm. Returns true on success.
