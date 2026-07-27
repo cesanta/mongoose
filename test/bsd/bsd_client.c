@@ -7,13 +7,18 @@
 #include <unistd.h>
 
 #define PORT 1234
-#define NUM_THREADS 12
+#define NUM_CONNECTIONS 12
 #define DATA_SIZE (4 * 1024)
 
 static int read_full(int fd, void *buf, size_t len) {
+  static const size_t sizes[] = {1, 7, 17, 255, 256, 257, 511, 512, 4096};
   char *p = (char *) buf;
+  size_t i = 0;
   while (len > 0) {
-    ssize_t n = recv(fd, p, len, 0);
+    size_t nreq = sizes[i++ % (sizeof(sizes) / sizeof(sizes[0]))];
+    ssize_t n;
+    if (nreq > len) nreq = len;
+    n = recv(fd, p, nreq, 0);
     if (n <= 0) return -1;
     p += n;
     len -= (size_t) n;
@@ -80,7 +85,7 @@ fail:
 }
 
 int main(int argc, char *argv[]) {
-  pthread_t threads[NUM_THREADS];
+  pthread_t threads[NUM_CONNECTIONS];
   int i;
 
   if (argc != 2) {
@@ -90,11 +95,11 @@ int main(int argc, char *argv[]) {
 
   srandom(1);
 
-  for (i = 0; i < NUM_THREADS; i++) {
+  for (i = 0; i < NUM_CONNECTIONS; i++) {
     if (pthread_create(&threads[i], NULL, worker, argv[1]) != 0) return 1;
   }
 
-  for (i = 0; i < NUM_THREADS; i++) {
+  for (i = 0; i < NUM_CONNECTIONS; i++) {
     if (pthread_join(threads[i], NULL) != 0) return 1;
   }
 

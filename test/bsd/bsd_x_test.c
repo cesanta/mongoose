@@ -69,9 +69,12 @@ static void client_task(void *args) {
 // echo_task: one per accepted connection.  Echoes data back.
 static void echo_task(void *args) {
   int fd = (int) (uintptr_t) args;
+  static const size_t sizes[] = {1, 7, 17, 255, 256, 257, 511, 512};
   char buf[512];
+  size_t i = 0;
   ssize_t n;
-  while ((n = recv(fd, buf, sizeof(buf), 0)) > 0) send(fd, buf, (size_t) n, 0);
+  while ((n = recv(fd, buf, sizes[i++ % (sizeof(sizes) / sizeof(sizes[0]))], 0)) > 0)
+    send(fd, buf, (size_t) n, 0);
   close(fd);
   vTaskDelete(NULL);
 }
