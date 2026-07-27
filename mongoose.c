@@ -18586,12 +18586,12 @@ static int mg_parse_ec_private_key(const uint8_t *der, size_t dersz,
     return -1;
   }
 
-  if (mg_der_next(&root, &version) < 0 || version.type != 0x02) {
+  if (mg_der_next(&root, &version) <= 0 || version.type != 0x02) {
     MG_ERROR(("EC private key: invalid version"));
     return -1;
   }
 
-  if (mg_der_next(&root, &private_key_octets) < 0 ||
+  if (mg_der_next(&root, &private_key_octets) <= 0 ||
       private_key_octets.type != 0x04) {
     MG_ERROR(("EC private key: invalid privateKey OCTET STRING"));
     return -1;
@@ -18761,22 +18761,22 @@ static int mg_parse_pkcs8_key(const uint8_t *der, size_t dersz,
     return -1;
   }
 
-  if (mg_der_next(&root, &version) < 0 || version.type != 0x02) {
+  if (mg_der_next(&root, &version) <= 0 || version.type != 0x02) {
     MG_ERROR(("PKCS#8: invalid version"));
     return -1;
   }
 
-  if (mg_der_next(&root, &alg_id) < 0 || alg_id.type != 0x30) {
+  if (mg_der_next(&root, &alg_id) <= 0 || alg_id.type != 0x30) {
     MG_ERROR(("PKCS#8: invalid AlgorithmIdentifier SEQUENCE"));
     return -1;
   }
 
-  if (mg_der_next(&alg_id, &alg_oid) < 0 || alg_oid.type != 0x06) {
+  if (mg_der_next(&alg_id, &alg_oid) <= 0 || alg_oid.type != 0x06) {
     MG_ERROR(("PKCS#8: invalid algorithm OID"));
     return -1;
   }
 
-  if (mg_der_next(&root, &private_key_octets) < 0 ||
+  if (mg_der_next(&root, &private_key_octets) <= 0 ||
       private_key_octets.type != 0x04) {
     MG_ERROR(("PKCS#8: invalid privateKey OCTET STRING"));
     return -1;
@@ -18798,7 +18798,7 @@ static int mg_parse_pkcs8_key(const uint8_t *der, size_t dersz,
              memcmp(alg_oid.value, mg_ec_public_key_oid,
                     sizeof(mg_ec_public_key_oid)) == 0) {
     if (ec_key == NULL) return -1;
-    if (mg_der_next(&alg_id, &alg_params) < 0 || alg_params.type != 0x06) {
+    if (mg_der_next(&alg_id, &alg_params) <= 0 || alg_params.type != 0x06) {
       MG_ERROR(("PKCS#8: invalid EC parameters OID"));
       return -1;
     }
