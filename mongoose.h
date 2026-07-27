@@ -1106,7 +1106,8 @@ static inline void *mg_calloc(size_t cnt, size_t size) {
   ((errcode) == -pdFREERTOS_ERRNO_EWOULDBLOCK || \
    (errcode) == -pdFREERTOS_ERRNO_EISCONN ||     \
    (errcode) == -pdFREERTOS_ERRNO_EINPROGRESS || \
-   (errcode) == -pdFREERTOS_ERRNO_EAGAIN)
+   (errcode) == -pdFREERTOS_ERRNO_EAGAIN ||      \
+   (errcode) == -pdFREERTOS_ERRNO_ENOSPC)
 
 #define MG_SOCK_RESET(errcode) ((errcode) == -pdFREERTOS_ERRNO_ENOTCONN)
 
