@@ -2855,6 +2855,13 @@ static void test_util(void) {
   e = "\x20\x01\x48\x60\x48\x60\x00\x00\x00\x00\x00\x00\x00\x00\x88\x88";
   ASSERT(memcmp(&a.addr.ip6, e, sizeof(a.addr.ip6)) == 0);
 
+  ASSERT(mg_aton(mg_str("12345::1"), &a) == false);
+  ASSERT(mg_aton(mg_str("1:::2"), &a) == false);
+  ASSERT(mg_aton(mg_str("1::2::3"), &a) == false);
+  ASSERT(mg_aton(mg_str("1:2:3:4:5:6:7"), &a) == false);
+  ASSERT(mg_aton(mg_str("1:2:3:4:5:6:7:8:9"), &a) == false);
+  ASSERT(mg_aton(mg_str("1:2:3:4:5:6:7:g"), &a) == false);
+
   ASSERT(mg_url_decode("a=%", 3, buf, sizeof(buf), 0) < 0);
   ASSERT(mg_url_decode("&&&a=%", 6, buf, sizeof(buf), 0) < 0);
   ASSERT(mg_url_decode("a=%1", 4, buf, sizeof(buf), 0) < 0);
