@@ -528,41 +528,66 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        example:
-          - path: infineon/xmc47_relax-make-baremetal-builtin
-          - path: infineon/xmc_plt2go_4400-make-baremetal-builtin
-          - path: infineon/xmc72_evk-make-baremetal-builtin
-          - path: nxp/frdm-mcxn947-make-baremetal-builtin
-          - path: nxp/frdm-mcxn947-make-freertos-builtin
-          - path: nxp/rt1020-evk-make-baremetal-builtin
-          - path: nxp/rt1060-evk-make-baremetal-builtin
-          - path: nxp/rt1170-evk-make-baremetal-builtin
-          - path: rp/pico-w
-          - path: rp/w5500-evb-pico
-          - path: rp/w55rp20-evb-pico
-          - path: rp/pico-rndis
-          - path: stm32/nucleo-f429zi/minimal
-          - path: stm32/nucleo-f746zg/minimal
-          - path: stm32/nucleo-f746zg/minimal-pppoe
-          - path: stm32/nucleo-f756zg/minimal
-          - path: stm32/nucleo-h563zi/minimal
-          - path: stm32/nucleo-h723zg/minimal
-          - path: stm32/nucleo-h743zi/minimal
-          - path: stm32/nucleo-n657x0-q/minimal
-          - path: stm32/nucleo-u5a5zj-q/minimal
-          - path: stm32/portenta-h7/minimal
-          - path: stm32/stm32h573i-dk/minimal
-          - path: stm32/stm32h747i-disco/minimal
-          - path: ti/ek-tm4c1294xl-make-baremetal-builtin
-          - path: ti/ek-tm4c1294xl-make-freertos-builtin
-    name: ${{ matrix.example.path }}
+        include:
+          - group: infineon-nxp
+            examples: |
+              infineon/xmc47_relax-make-baremetal-builtin
+              infineon/xmc_plt2go_4400-make-baremetal-builtin
+              infineon/xmc72_evk-make-baremetal-builtin
+              nxp/frdm-mcxn947-make-baremetal-builtin
+              nxp/frdm-mcxn947-make-freertos-builtin
+              nxp/rt1020-evk-make-baremetal-builtin
+              nxp/rt1060-evk-make-baremetal-builtin
+              nxp/rt1170-evk-make-baremetal-builtin
+          - group: rp-ti
+            examples: |
+              rp/pico-w
+              rp/w5500-evb-pico
+              rp/w55rp20-evb-pico
+              rp/pico-rndis
+              ti/ek-tm4c1294xl-make-baremetal-builtin
+              ti/ek-tm4c1294xl-make-freertos-builtin
+          - group: stm32-1
+            examples: |
+              stm32/nucleo-f429zi/minimal
+              stm32/nucleo-f746zg/minimal
+              stm32/nucleo-f746zg/minimal-pppoe
+              stm32/nucleo-f756zg/minimal
+              stm32/nucleo-h563zi/minimal
+              stm32/nucleo-h723zg/minimal
+          - group: stm32-2
+            examples: |
+              stm32/nucleo-h743zi/minimal
+              stm32/nucleo-n657x0-q/minimal
+              stm32/nucleo-u5a5zj-q/minimal
+              stm32/portenta-h7/minimal
+              stm32/stm32h573i-dk/minimal
+              stm32/stm32h747i-disco/minimal
+    name: wizard ARM ${{ matrix.group }}
     env:
       GO: 0
     steps:
       - uses: actions/checkout@v5
         with: { fetch-depth: 2 }
       - run: sudo apt -y update && sudo apt -y install gcc-arm-none-eabi
-      - run: make -C tutorials/${{ matrix.example.path }} build
+      - run: |
+          failed=0
+          sep=
+          examples='${{ matrix.examples }}'
+          for x in $examples; do
+            echo "========== $x =========="
+            if make -C "tutorials/$x" build; then
+              ok=true
+              echo "SUCCESS: $x"
+            else
+              ok=false
+              failed=1
+              echo "FAILURE: $x"
+            fi
+            printf 'HEALTH_DASHBOARD\t%s"%s": %s\n' "$sep" "$x" "$ok"
+            sep=,
+          done
+          exit $failed
 
 
   generic_examples:
@@ -588,40 +613,63 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        example:
-          - path: mqtt/mqtt-client/microchip/same54-xpro
-          - path: nxp/nxp-frdmk66f-freertos
-          - path: nxp/nxp-lpcxpresso54s018m-freertos
-          - path: nxp/nxp-mimxrt1020-freertos
-          - path: nxp/nxp-evkbimxrt1050-lwip-freertos
-          - path: nxp/nxp-evkmimxrt1020-lwip-freertos
-          - path: nxp/nxp-evkmimxrt1024-lwip-freertos
-          - path: nxp/nxp-evkmimxrt1060-lwip-freertos
-          - path: nxp/nxp-evkmimxrt1064-lwip-freertos
-          - path: nxp/nxp-evkmimxrt1160-cm7-lwip-freertos
-          - path: nxp/nxp-evkmimxrt1170-cm7-lwip-freertos
-          - path: nxp/nxp-frdmk64f-lwip-freertos
-          - path: nxp/nxp-frdmk66f-lwip-freertos
-          - path: nxp/nxp-lpcxpresso54018-lwip-freertos
-          - path: nxp/nxp-lpcxpresso54608-lwip-freertos
-          - path: nxp/nxp-lpcxpresso54618-lwip-freertos
-          - path: nxp/nxp-lpcxpresso54628-lwip-freertos
-          - path: nxp/nxp-twrk65f180m-lwip-freertos
-          - path: nxp/nxp-twrkv58f220m-lwip-freertos
-          - path: rp/pico-rmii
-          - path: stm32/nucleo-f746zg/minimal-rm2
-          - path: stm32/nucleo-f746zg/minimal-rndis
-          - path: stm32/nucleo-f429zi/minimal-rm2
-          - path: stm32/nucleo-f429zi/minimal-rndis
-          - path: stm32/nucleo-g031k8/minimal-w5500
-          - path: ti/ti-ek-tm4c1294xl-http-server
-          - path: ti/ek-tm4c1294xl-make-baremetal-builtin-rndis
-    name: ${{ matrix.example.path }}
+        include:
+          - group: nxp-1
+            examples: |
+              nxp/nxp-frdmk66f-freertos
+              nxp/nxp-lpcxpresso54s018m-freertos
+              nxp/nxp-mimxrt1020-freertos
+              nxp/nxp-evkbimxrt1050-lwip-freertos
+              nxp/nxp-evkmimxrt1020-lwip-freertos
+              nxp/nxp-evkmimxrt1024-lwip-freertos
+              nxp/nxp-evkmimxrt1060-lwip-freertos
+              nxp/nxp-evkmimxrt1064-lwip-freertos
+              nxp/nxp-evkmimxrt1160-cm7-lwip-freertos
+          - group: nxp-2
+            examples: |
+              nxp/nxp-evkmimxrt1170-cm7-lwip-freertos
+              nxp/nxp-frdmk64f-lwip-freertos
+              nxp/nxp-frdmk66f-lwip-freertos
+              nxp/nxp-lpcxpresso54018-lwip-freertos
+              nxp/nxp-lpcxpresso54608-lwip-freertos
+              nxp/nxp-lpcxpresso54618-lwip-freertos
+              nxp/nxp-lpcxpresso54628-lwip-freertos
+              nxp/nxp-twrk65f180m-lwip-freertos
+              nxp/nxp-twrkv58f220m-lwip-freertos
+          - group: other
+            examples: |
+              mqtt/mqtt-client/microchip/same54-xpro
+              rp/pico-rmii
+              stm32/nucleo-f746zg/minimal-rm2
+              stm32/nucleo-f746zg/minimal-rndis
+              stm32/nucleo-f429zi/minimal-rm2
+              stm32/nucleo-f429zi/minimal-rndis
+              stm32/nucleo-g031k8/minimal-w5500
+              ti/ti-ek-tm4c1294xl-http-server
+              ti/ek-tm4c1294xl-make-baremetal-builtin-rndis
+    name: generic ARM ${{ matrix.group }}
     steps:
       - uses: actions/checkout@v5
         with: { fetch-depth: 2 }
       - run: sudo apt -y update && sudo apt -y install gcc-arm-none-eabi
-      - run: make -C tutorials/${{ matrix.example.path }} build
+      - run: |
+          failed=0
+          sep=
+          examples='${{ matrix.examples }}'
+          for x in $examples; do
+            echo "========== $x =========="
+            if make -C "tutorials/$x" build; then
+              ok=true
+              echo "SUCCESS: $x"
+            else
+              ok=false
+              failed=1
+              echo "FAILURE: $x"
+            fi
+            printf 'HEALTH_DASHBOARD\t%s"%s": %s\n' "$sep" "$x" "$ok"
+            sep=,
+          done
+          exit $failed
 
   device_dashboard_examples:
     runs-on: ubuntu-latest
@@ -643,19 +691,46 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        ssl: ["", -DMG_TLS=MG_TLS_BUILTIN]
-        example:
-          - path: http/device-dashboard/microchip/same54-xpro
-          - path: nxp/rt1020-evk-make-freertos-builtin
-          - path: nxp/rt1060-evk-make-freertos-builtin
-          - path: nxp/rt1170-evk-make-freertos-builtin
-          - path: renesas/ek-ra6m4-make-baremetal-builtin
-    name: ${{ matrix.example.path }} ${{ matrix.ssl }}
+        include:
+          - group: none
+            cflags: ""
+            examples: |
+              http/device-dashboard/microchip/same54-xpro
+              nxp/rt1020-evk-make-freertos-builtin
+              nxp/rt1060-evk-make-freertos-builtin
+              nxp/rt1170-evk-make-freertos-builtin
+              renesas/ek-ra6m4-make-baremetal-builtin
+          - group: builtin
+            cflags: -DMG_TLS=MG_TLS_BUILTIN
+            examples: |
+              http/device-dashboard/microchip/same54-xpro
+              nxp/rt1020-evk-make-freertos-builtin
+              nxp/rt1060-evk-make-freertos-builtin
+              nxp/rt1170-evk-make-freertos-builtin
+              renesas/ek-ra6m4-make-baremetal-builtin
+    name: device dashboard ARM ${{ matrix.group }}
     steps:
       - uses: actions/checkout@v5
         with: { fetch-depth: 2 }
       - run: sudo apt -y update && sudo apt -y install gcc-arm-none-eabi
-      - run: make -C tutorials/${{ matrix.example.path }} build CFLAGS_EXTRA="${{ matrix.ssl }}"
+      - run: |
+          failed=0
+          sep=
+          examples='${{ matrix.examples }}'
+          for x in $examples; do
+            echo "========== $x =========="
+            if make -C "tutorials/$x" build CFLAGS_EXTRA="${{ matrix.cflags }}"; then
+              ok=true
+              echo "SUCCESS: $x"
+            else
+              ok=false
+              failed=1
+              echo "FAILURE: $x"
+            fi
+            printf 'HEALTH_DASHBOARD\t%s"%s": %s\n' "$sep" "$x" "$ok"
+            sep=,
+          done
+          exit $failed
 
 #  mqtt_dashboard_examples:
 #    runs-on: ubuntu-latest
