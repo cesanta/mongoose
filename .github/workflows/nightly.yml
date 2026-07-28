@@ -78,10 +78,6 @@ jobs:
         cc: [gcc, clang, g++, clang++]
         target: [mip_test, mip_tap_test]
         ssl: ["", BUILTIN, MBEDTLS, OPENSSL, WOLFSSL]
-        # #3226: built-in TCP is currently not working with WolfSSL (builds fine)
-        exclude:
-        - ssl: WOLFSSL
-          target: mip_tap_test
     name: ${{ matrix.target }} CC=${{ matrix.cc }} SSL=${{ matrix.ssl }}
     env:
       CC: ${{ matrix.cc }}
@@ -94,6 +90,26 @@ jobs:
     - uses: webfactory/ssh-agent@v0.10.0
       with:
             ssh-private-key: ${{ secrets.HEALTH_TESTS_SSH_KEY }}
+    # WolfSSL version (5.6.6) in current GH runner (Ubuntu 24.04) is broken for EC
+    # https://github.com/wolfSSL/wolfssl/pull/10065
+    - name: Build non-broken WolfSSL version
+      if: matrix.ssl == 'WOLFSSL'
+      run: |
+        sudo apt -y update
+        sudo apt -y install autoconf automake libtool
+        git clone --depth 1 --branch v5.9.1-stable https://github.com/wolfSSL/wolfssl
+        cd wolfssl
+        ./autogen.sh
+        ./configure --prefix="$GITHUB_WORKSPACE/wolfssl-install" --enable-all
+        make -j"$(nproc)"
+        make install
+        echo "WOLFSSL=$GITHUB_WORKSPACE/wolfssl-install" >> "$GITHUB_ENV"
+        echo "LD_LIBRARY_PATH=$GITHUB_WORKSPACE/wolfssl-install/lib${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}" >> "$GITHUB_ENV"
+        if [ "${{ matrix.cc }}" = "g++" ] || [ "${{ matrix.cc }}" = "clang++" ]; then
+          echo "TFLAGS=$TFLAGS -DWOLFSSL_USE_OPTIONS_H -Wno-pedantic" >> "$GITHUB_ENV"
+        else
+          echo "TFLAGS=$TFLAGS -DWOLFSSL_USE_OPTIONS_H" >> "$GITHUB_ENV"
+        fi
     - run: if [ "${{ matrix.target }}" == "mip_tap_test" ]; then source ./test/setup_ga_network.sh ; sed -i -e "s/127.0.0.1//" test/mosquitto.conf; cat test/mosquitto.conf; ./test/setup_mqtt_server.sh; fi && sudo apt -y update ; sudo apt -y install libmbedtls-dev libwolfssl-dev && make -C test ${{ matrix.target }} > log
     - if: success() || failure()
       run: |
