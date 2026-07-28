@@ -4487,10 +4487,10 @@ struct mg_str mg_http_get_header_var(struct mg_str s, struct mg_str v) {
 long mg_http_upload(struct mg_connection *c, struct mg_http_message *hm,
                     struct mg_fs *fs, const char *dir, size_t max_size) {
   char buf[20] = "0", file[MG_PATH_MAX], path[MG_PATH_MAX];
-  long res = 0, offset;
+  long res = 0;
+  size_t offset = 0;
   mg_http_get_var(&hm->query, "offset", buf, sizeof(buf));
   mg_http_get_var(&hm->query, "file", file, sizeof(file));
-  offset = strtol(buf, NULL, 0);
   mg_snprintf(path, sizeof(path), "%s%c%s", dir, MG_DIRSEP, file);
   if (hm->body.len == 0) {
     mg_http_reply(c, 200, "", "%ld", res);  // Nothing to write
@@ -4500,27 +4500,28 @@ long mg_http_upload(struct mg_connection *c, struct mg_http_message *hm,
   } else if (mg_path_is_sane(mg_str(file)) == false) {
     mg_http_reply(c, 400, "", "%s: invalid file", file);
     res = -2;
-  } else if (offset < 0) {
+  } else if (!mg_str_to_num(mg_str(buf), 0, &offset, sizeof(offset))) {
     mg_http_reply(c, 400, "", "offset required");
     res = -3;
-  } else if ((size_t) offset + hm->body.len > max_size) {
+  } else if (offset > max_size || hm->body.len > max_size - offset) {
     mg_http_reply(c, 400, "", "%s: over max size of %lu", path,
                   (unsigned long) max_size);
     res = -4;
   } else {
     struct mg_fd *fd;
     size_t current_size = 0;
-    MG_DEBUG(("%s -> %lu bytes @ %ld", path, hm->body.len, offset));
+    MG_DEBUG(("%s -> %lu bytes @ %lu", path, hm->body.len,
+              (unsigned long) offset));
     if (offset == 0) fs->rm(path);  // If offset if 0, truncate file
     fs->st(path, &current_size, NULL);
-    if (offset > 0 && current_size != (size_t) offset) {
+    if (offset > 0 && current_size != offset) {
       mg_http_reply(c, 400, "", "%s: offset mismatch", path);
       res = -5;
     } else if ((fd = mg_fs_open(fs, path, MG_FS_WRITE)) == NULL) {
       mg_http_reply(c, 400, "", "open(%s)", path);
       res = -6;
     } else {
-      res = offset + (long) fs->wr(fd->fd, hm->body.buf, hm->body.len);
+      res = (long) offset + (long) fs->wr(fd->fd, hm->body.buf, hm->body.len);
       mg_fs_close(fd);
       mg_http_reply(c, 200, "", "%ld", res);
     }
