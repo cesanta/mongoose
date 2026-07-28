@@ -85,22 +85,31 @@ static bool mg_v4mapped(struct mg_str str, struct mg_addr *addr) {
 
 static bool mg_aton6(struct mg_str str, struct mg_addr *addr) {
   size_t i, j = 0, n = 0, dc = 42;
+  uint16_t val = 0;
+  bool have = false;
   addr->scope_id = 0;
   if (str.len > 2 && str.buf[0] == '[') str.buf++, str.len -= 2;
   if (mg_v4mapped(str, addr)) return true;  // sets addr->is_ip6
   for (i = 0; i < str.len; i++) {
-    if ((str.buf[i] >= '0' && str.buf[i] <= '9') ||
-        (str.buf[i] >= 'a' && str.buf[i] <= 'f') ||
-        (str.buf[i] >= 'A' && str.buf[i] <= 'F')) {
-      unsigned long val = 0;  // TODO(): This loops on chars, refactor
+    int x = str.buf[i] >= '0' && str.buf[i] <= '9'   ? str.buf[i] - '0'
+            : str.buf[i] >= 'a' && str.buf[i] <= 'f' ? str.buf[i] - 'a' + 10
+            : str.buf[i] >= 'A' && str.buf[i] <= 'F' ? str.buf[i] - 'A' + 10
+                                                     : -1;
+    if (x >= 0) {
       if (i > j + 3) return false;
-      // MG_DEBUG(("%lu %lu [%.*s]", i, j, (int) (i - j + 1), &str.buf[j]));
-      mg_str_to_num(mg_str_n(&str.buf[j], i - j + 1), 16, &val, sizeof(val));
-      addr->addr.ip[n] = (uint8_t) ((val >> 8) & 255);
-      addr->addr.ip[n + 1] = (uint8_t) (val & 255);
-    } else if (str.buf[i] == ':') {
+      val = (uint16_t) ((val << 4) | (uint16_t) x);
+      have = true;
+      continue;
+    }
+    if (have) {
+      addr->addr.ip[n] = (uint8_t) (val >> 8),
+      addr->addr.ip[n + 1] = (uint8_t) val;
+      val = 0, have = false;
+    }
+    if (str.buf[i] == ':') {
       j = i + 1;
       if (i > 0 && str.buf[i - 1] == ':') {
+        if (dc != 42) return false;
         dc = n;  // Double colon
         if (i > 1 && str.buf[i - 2] == ':') return false;
       } else if (i > 0) {
@@ -120,12 +129,14 @@ static bool mg_aton6(struct mg_str str, struct mg_addr *addr) {
       return false;
     }
   }
+  if (have)
+    addr->addr.ip[n] = (uint8_t) (val >> 8),
+    addr->addr.ip[n + 1] = (uint8_t) val;
   if (n < 14 && dc == 42) return false;
   if (n < 14) {
     memmove(&addr->addr.ip[dc + (14 - n)], &addr->addr.ip[dc], n - dc + 2);
     memset(&addr->addr.ip[dc], 0, 14 - n);
   }
-
   addr->is_ip6 = true;
   return true;
 }
