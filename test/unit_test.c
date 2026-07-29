@@ -3039,6 +3039,13 @@ static void test_crc32(void) {
   ASSERT(mg_crc32(mg_crc32(0, "ab", 2), "c", 1) == 891568578);
 }
 
+static void test_crc16(void) {
+  ASSERT(mg_crc16(0, 0, 0) == 0);
+  ASSERT(mg_crc16(0, "a", 1) == 0x82f7);
+  ASSERT(mg_crc16(0, "abc", 3) == 0x9e25);
+  ASSERT(mg_crc16(mg_crc16(0, "ab", 2), "c", 1) == 0x9e25);
+}
+
 static void us(struct mg_connection *c, int ev, void *ev_data) {
   struct mg_http_message *hm = (struct mg_http_message *) ev_data;
   if (ev == MG_EV_HTTP_MSG && mg_match(hm->uri, mg_str("/upload"), NULL)) {
@@ -5512,6 +5519,7 @@ int main(void) {
   test_str();
   test_match();
   test_crc32();
+  test_crc16();
   DASHBOARD("misc");
 
   s_error = false;

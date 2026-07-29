@@ -61,6 +61,17 @@ static void *ppp_payload(uint8_t *frame) {
   return (struct ppp *) ((struct hdlc_ *) frame + 1) + 1;
 }
 
+static void test_fcs(void) {
+  struct mg_tcpip_if ifp;
+  uint8_t frame[] = {0xff, 0x03, 0x00, 0x21, 1, 2, 3, 4, 0, 0};
+  uint8_t fcs[] = {0xae, 0x77};
+  init_if(&ifp, MG_TCPIP_L2_PPP);
+  // PPP trailer stores the FCS bytes in the proper order
+  ASSERT(mg_l2_ppp_trailer(&ifp, 4, frame + sizeof(frame) - sizeof(fcs)) ==
+         sizeof(frame));
+  ASSERT(memcmp(frame + sizeof(frame) - sizeof(fcs), fcs, sizeof(fcs)) == 0);
+}
+
 static size_t mk_pppoe_disc(uint8_t *buf, uint8_t code, uint16_t id,
                             const void *payload, size_t len) {
   struct eth *eth = (struct eth *) buf;
@@ -385,6 +396,10 @@ static void test_pppoe(void) {
   printf("HEALTH_DASHBOARD\t\"%s\": %s,\n", x, s_error ? "false" : "true")
 
 int main(void) {
+  s_error = false;
+  test_fcs();
+  DASHBOARD("fcs");
+
   s_error = false;
   test_lcp();
   DASHBOARD("lcp");
