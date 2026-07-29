@@ -4208,6 +4208,7 @@ size_t mg_dns_parse_rr(const uint8_t *buf, size_t len, size_t ofs,
 // Creates an mDNS listener on UDP multicast 224.0.0.251:5353. Registers it as
 // the manager's mDNS resolver (mgr->mdns). Fires MG_EV_MDNS_REQ for incoming
 // queries and MG_EV_MDNS_RESP for incoming responses. Returns NULL on error.
+// fn_data is a NUL-terminated server name, or NULL to pass all requests to fn.
 struct mg_connection *mg_mdns_listen(struct mg_mgr *mgr, mg_event_handler_t fn,
                                      void *fn_data);
 

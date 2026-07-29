@@ -463,7 +463,6 @@ static void handle_mdns_query(struct mg_connection *c) {
     MG_VERBOSE(("RR %u %u %s", (unsigned int) rr.atype,
                 (unsigned int) rr.aclass, name));
     if (rr.atype == MG_DNS_RTYPE_A) {
-      // TODO(): ensure c->fn_data ends in \0
       // if we have a name to match, go; otherwise users will match and fill
       // req.r.name and set req.is_resp
       if (c->fn_data != NULL && mg_casecmp((char *) c->fn_data, name) != 0)

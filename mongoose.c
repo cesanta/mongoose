@@ -2142,7 +2142,6 @@ static void handle_mdns_query(struct mg_connection *c) {
     MG_VERBOSE(("RR %u %u %s", (unsigned int) rr.atype,
                 (unsigned int) rr.aclass, name));
     if (rr.atype == MG_DNS_RTYPE_A) {
-      // TODO(): ensure c->fn_data ends in \0
       // if we have a name to match, go; otherwise users will match and fill
       // req.r.name and set req.is_resp
       if (c->fn_data != NULL && mg_casecmp((char *) c->fn_data, name) != 0)
@@ -5653,6 +5652,13 @@ size_t mg_l2_eth_trailer(struct mg_tcpip_if *ifp, size_t len, uint8_t *cur) {
 struct mg_l2addr *mg_l2_eth_mapip(enum mg_l2addrtype addrtype,
                                   struct mg_addr *addr);
 
+// Read an unaligned little-endian value from byte pointer p into a native integer.
+// Safe on architectures that forbid unaligned access (e.g. Cortex-M0).
+#define MG_LOAD_LE32(p)                           \
+  ((uint32_t) (((uint32_t) MG_U8P(p)[3] << 24U) | \
+               ((uint32_t) MG_U8P(p)[2] << 16U) | \
+               ((uint32_t) MG_U8P(p)[1] << 8U) | MG_U8P(p)[0]))
+
 bool mg_l2_eth_rx(struct mg_tcpip_if *ifp, enum mg_l2proto *proto,
                   struct mg_str *pay, struct mg_str *raw) {
   struct eth *eth = (struct eth *) raw->buf;
@@ -5678,10 +5684,11 @@ bool mg_l2_eth_rx(struct mg_tcpip_if *ifp, enum mg_l2proto *proto,
              sizeof(eth->dst)) != 0)
     return false;  // TODO(): add multicast addresses
   if (ifp->enable_fcs_check && len > hdrlen + 4) {
-    uint32_t crc;
-    len -= 4;  // TODO(scaprile): check on bigendian
+    uint32_t crc, crc_rx;
+    len -= 4;
     crc = mg_crc32(0, (const char *) raw->buf, len);
-    if (memcmp((void *) ((size_t) raw->buf + len), &crc, sizeof(crc)))
+    crc_rx = MG_LOAD_LE32(raw->buf + len);
+    if (crc_rx != crc)
       return false;
   }
   pay->buf = ((char *) eth) + hdrlen;
