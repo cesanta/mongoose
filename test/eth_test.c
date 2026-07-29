@@ -63,8 +63,11 @@ static size_t mk_vlan(uint8_t *buf, const uint8_t *dst, uint16_t vlan,
 
 static size_t add_fcs(uint8_t *buf, size_t len) {
   uint32_t crc = mg_crc32(0, (const char *) buf, len);
-  memcpy(buf + len, &crc, sizeof(crc));
-  return len + sizeof(crc);
+  buf[len++] = (uint8_t) crc;       // store as LE32
+  buf[len++] = (uint8_t) (crc >> 8);
+  buf[len++] = (uint8_t) (crc >> 16);
+  buf[len++] = (uint8_t) (crc >> 24);
+  return len;
 }
 
 #define DASHBOARD(x) \
@@ -150,6 +153,14 @@ static void test_fcs(void) {
   size_t len;
   uint8_t frame[64];
 
+  {  // verify add_fcs() stores the CRC bytes in the proper order
+    // (internal consistency test)
+    uint8_t payload[] = {1, 2, 3, 4};
+    uint8_t fcs[] = {0xf4, 0xd4, 0x37, 0xf6};
+    len = add_fcs(frame, mk_eth(frame, s_mac, 0x0800, payload,
+                                sizeof(payload)));
+    ASSERT(memcmp(frame + len - sizeof(fcs), fcs, sizeof(fcs)) == 0);
+  }
   {  // FCS check strips a valid CRC
     uint8_t payload[] = {1, 2, 3, 4};
     reset_if(&ifp);
