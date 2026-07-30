@@ -29,6 +29,28 @@ size_t mg_printf(struct mg_connection *c, const char *fmt, ...) {
   return len;
 }
 
+bool mg_dscp(struct mg_connection *c, uint8_t dscp) {
+#if MG_ENABLE_SOCKET
+#if MG_ENABLE_FREERTOS_TCP || MG_ARCH == MG_ARCH_THREADX || \
+    MG_ARCH == MG_ARCH_TIRTOS || MG_ARCH == MG_ARCH_WIN32
+  (void) c;
+  (void) dscp;
+#else
+  int tos = dscp << 2, level = IPPROTO_IP, optname = IP_TOS;
+  c->dscp = (unsigned) (dscp & 63);
+#if MG_ENABLE_IPV6 && !MG_ENABLE_LWIP
+  if (c->loc.is_ip6)
+    level = IPPROTO_IPV6, optname = IPV6_TCLASS;
+#endif
+  return setsockopt((MG_SOCKET_TYPE) (size_t) c->fd, level, optname, (char *) &tos, sizeof(tos)) == 0;
+#endif
+#elif MG_ENABLE_TCPIP
+  c->dscp = (unsigned) (dscp & 63);
+  return true;
+#endif
+  return false;
+}
+
 static bool mg_atonl(struct mg_str str, struct mg_addr *addr) {
   uint32_t localhost = mg_htonl(0x7f000001);
   if (mg_strcasecmp(str, mg_str("localhost")) != 0) return false;
