@@ -5947,30 +5947,14 @@ uint8_t *mg_l2_pppoe_header(struct mg_tcpip_if *ifp, enum mg_l2proto proto,
                                            s_id, src, dst, frame));
 }
 
-// Calculate FCS/CRC for PPP frames. Could be implemented faster using lookup
-// tables.
-static uint16_t fcs_do(uint8_t *frame, size_t len) {
-  uint32_t fcs = 0xffff;
-  unsigned int j;
-  for (j = 0; j < len; j++) {
-    unsigned int i;
-    uint8_t x = frame[j];
-    for (i = 0; i < 8; i++) {
-      fcs = ((fcs ^ x) & 1) ? (fcs >> 1) ^ 0x8408 : fcs >> 1;
-      x >>= 1;
-    }
-  }
-  return (uint16_t) (fcs & 0xffff);
-}
-
 size_t mg_l2_ppp_trailer(struct mg_tcpip_if *ifp, size_t len, uint8_t *cur) {
   uint16_t crc;
   uint8_t *frame;
   len += sizeof(struct ppp) + sizeof(struct hdlc_);
   frame = cur - len;
-  crc = fcs_do(frame, len);
-  *cur++ = (uint8_t) ~crc;  // add CRC, note the byte order
-  *cur++ = (uint8_t) (~crc >> 8);
+  crc = mg_crc16(0, (const char *) frame, len);
+  *cur++ = (uint8_t) crc;  // add CRC, note the byte order
+  *cur++ = (uint8_t) (crc >> 8);
   // there is no len field in PPP
   (void) ifp;
   return len + 2;
@@ -26072,6 +26056,20 @@ uint32_t mg_crc32(uint32_t crc, const char *buf, size_t len) {
     crc = crclut[(crc ^ (b >> 4)) & 0x0F] ^ (crc >> 4);
   }
   return ~crc;
+}
+
+uint16_t mg_crc16(uint16_t crc, const char *buf, size_t len) {
+  static const uint16_t crclut[16] = {
+      // table for polynomial 0x8408 (reflected)
+      0x0000, 0x1081, 0x2102, 0x3183, 0x4204, 0x5285, 0x6306, 0x7387,
+      0x8408, 0x9489, 0xA50A, 0xB58B, 0xC60C, 0xD68D, 0xE70E, 0xF78F};
+  unsigned int c = (unsigned int) ~crc & 0xffff;
+  while (len--) {
+    uint8_t b = *(uint8_t *) buf++;
+    c = crclut[(c ^ b) & 0x0F] ^ (c >> 4);
+    c = crclut[(c ^ (b >> 4)) & 0x0F] ^ (c >> 4);
+  }
+  return (uint16_t) ~c;
 }
 
 static int isbyte(int n) {

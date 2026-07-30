@@ -40,6 +40,10 @@ char *mg_random_str(char *buf, size_t len);
 // a new checksum; pass the result of a prior call to extend over more data.
 uint32_t mg_crc32(uint32_t crc, const char *buf, size_t len);
 
+// Computes CRC16 (HDLC, polynomial 0x8408) over buf/len. Pass crc=0 to start
+// a new checksum; pass the result of a prior call to extend over more data.
+uint16_t mg_crc16(uint16_t crc, const char *buf, size_t len);
+
 // Returns true if path is safe to serve from the filesystem. Rejects paths
 // that start with '~' or '..', or contain a '/../' component, to prevent
 // directory traversal attacks.
