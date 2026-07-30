@@ -3992,9 +3992,8 @@ static void ph(struct mg_connection *c, int ev, void *ev_data) {
 static void test_poll(void) {
   int count = 0, i;
   struct mg_mgr mgr;
-  mg_mgr_init(&mgr);
-  mg_http_listen(&mgr, "http://127.0.0.1:42346", ph,
-                 &count);  // To prevent bind errors on Windows
+  mg_mgr_init(&mgr);   // To prevent bind errors on Windows
+  mg_http_listen(&mgr, "http://127.0.0.1:32345", ph, &count);
   for (i = 0; i < 10; i++) mg_mgr_poll(&mgr, 0);
   ASSERT(count == 10);
   mg_mgr_free(&mgr);
@@ -5479,8 +5478,8 @@ static void test_wakeup(void) {
   struct wudata *data;
   int i;
   mg_mgr_init(&mgr);        // Initialise event manager
-  mg_log_set(MG_LL_DEBUG);  // Set debug log level
-  c = mg_http_listen(&mgr, "http://127.0.0.1:42347", hwu, NULL);
+  mg_log_set(MG_LL_DEBUG);  // To prevent bind errors on Windows
+  c = mg_http_listen(&mgr, "http://127.0.0.1:32346", hwu, NULL);
   mg_wakeup_init(&mgr);  // Initialise wakeup socket pair
   data = (struct wudata *) calloc(1, sizeof(*data));  // wuthread owns it
   data->conn_id = c->id;
