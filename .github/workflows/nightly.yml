@@ -1,7 +1,7 @@
 name: Full build
 on:
   schedule:
-    - cron: '0 22 * * *' # run at 10 PM UTC
+    - cron: '17 22 * * *' # run at 10:17 PM UTC
   # Allow manual runs
   workflow_dispatch:
 env:

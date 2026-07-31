@@ -12,7 +12,7 @@ jobs:
     - env:
         GH_TOKEN: ${{ github.token }}
       run: |
-        min=$(date -u -d '4 hours ago' +%s)
+        min=$(date -u -d '5 hours ago' +%s)
         max=$(date -u -d '2 hours ago' +%s)
         gh api --paginate "/repos/$GITHUB_REPOSITORY/actions/workflows/nightly.yml/runs?status=failure&per_page=100" --jq '.workflow_runs[] | select(.run_attempt == 1) | [.id, .updated_at] | @tsv' |
           while IFS=$'\t' read -r id updated; do
