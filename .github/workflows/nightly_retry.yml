@@ -1,0 +1,23 @@
+name: Retry failed nightly jobs
+on:
+  schedule:
+    - cron: '17 2 * * *'
+  workflow_dispatch:
+permissions:
+  actions: write
+jobs:
+  retry:
+    runs-on: ubuntu-latest
+    steps:
+    - env:
+        GH_TOKEN: ${{ github.token }}
+      run: |
+        min=$(date -u -d '4 hours ago' +%s)
+        max=$(date -u -d '2 hours ago' +%s)
+        gh api --paginate "/repos/$GITHUB_REPOSITORY/actions/workflows/nightly.yml/runs?status=failure&per_page=100" --jq '.workflow_runs[] | select(.run_attempt == 1) | [.id, .updated_at] | @tsv' |
+          while IFS=$'\t' read -r id updated; do
+            when=$(date -u -d "$updated" +%s)
+            if [ "$when" -ge "$min" ] && [ "$when" -le "$max" ]; then
+              gh api --method POST "/repos/$GITHUB_REPOSITORY/actions/runs/$id/rerun-failed-jobs"
+            fi
+          done
