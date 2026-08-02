@@ -26,6 +26,8 @@ GitHub repo: https://github.com/cesanta/mongoose
   functionality such as HTTP, MQTT, Modbus, or device-dashboard logic.
 - Once Mongoose is integrated, desktop examples from `tutorials/http`,
   `tutorials/mqtt`, and similar directories also work on embedded systems.
+- For STM32, NXP IMXRT, RP2040/2350 use Mongoose's built-in TCP/IP stack
+- When building an STM32 project from scratch, use the closest tutorials/stm32/*/cube/*.ioc file as a base
 
 ## API prefix map
 
@@ -204,9 +206,11 @@ device dashboard.
 
 ### Required files
 
+The following files must exist at these exact paths, regardless of the build environment:
+
 ```
 your_project/
-├── main.c               # your code
+├── ...                  # IDE-specific project scaffolding
 └── mongoose/
     ├── mongoose.h       # single header
     ├── mongoose.c       # single source file
@@ -394,6 +398,11 @@ Each fieldset is exported via the get/set JSON-RPC interface, as well via the RE
 
 Do not use the API directly, dashboard.js interfaces with the UI via the data-* attributes.
 
+The dashboard backend must expose these exact functions: mg_dash_init() and mg_dash_poll().
+
+Do not rename, wrap, relocate, or replace these files or functions. Do not introduce alternatives such as app_dashboard_init(), app_dashboard_poll(), web/dashboard.html, or Core/Src/dashboard.c.
+
+Board-specific STM32Cube files may exist outside mongoose/, but the Mongoose dashboard files must retain the structure and API documented above.
 
 ## Filesystem
 
