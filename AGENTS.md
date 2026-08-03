@@ -51,14 +51,17 @@ function signatures, structs, options, examples, and constraints.
 - `MG_OTA_*`, `mg_ota_*` - firmware OTA support
 
 
-## Integration
+## How to integrate Mongoose into an existing project
 
-Copy `mongoose.h` and `mongoose.c` into a `mongoose/` subdirectory of the
-project and add `mongoose/mongoose.c` to the build. The easiest is to
-copy from GitHub:
+Create `mongoose/` directory in your project.
+Download `mongoose.h` and `mongoose.c` into a `mongoose/` directory.
 
-https://raw.githubusercontent.com/cesanta/mongoose/refs/heads/master/mongoose.c
-https://raw.githubusercontent.com/cesanta/mongoose/refs/heads/master/mongoose.h
+```sh
+curl --fail --silent --create-dirs -o mongoose/mongoose.c https://raw.githubusercontent.com/cesanta/mongoose/refs/heads/master/mongoose.c
+curl --fail --silent --create-dirs -o mongoose/mongoose.h https://raw.githubusercontent.com/cesanta/mongoose/refs/heads/master/mongoose.h
+```
+
+Add `mongoose/mongoose.c` to the build.
 
 **Desktop/server** (Linux, macOS, Windows): two files are sufficient.
 
@@ -90,6 +93,27 @@ Minimal `mongoose_config.h` should set `MG_ARCH`. For example, for STM32:
 ```c
 #define MG_ARCH MG_ARCH_CUBE
 ```
+
+## How to generate a new STM32 project from scratch
+
+Download and unzip the pre-generated project which is the closest to your MCU:
+
+- https://mongoose.ws/downloads/nucleo-h723zg-dashboard-full.zip
+- https://mongoose.ws/downloads/nucleo-f429zi-dashboard-full.zip
+- https://mongoose.ws/downloads/nucleo-h563zi-dashboard-full.zip
+- https://mongoose.ws/downloads/nucleo-f756zg-dashboard-full.zip
+- https://mongoose.ws/downloads/nucleo-n657x0-q-dashboard-full.zip
+- https://mongoose.ws/downloads/nucleo-u5a5zj-q-dashboard-full.zip
+- https://mongoose.ws/downloads/portenta-h7-dashboard-full.zip
+
+## How to generate a new RP2040 / RP2350 project from scratch
+
+Download and unzip the pre-generated project which is the closest to your MCU:
+
+- https://mongoose.ws/downloads/w5500-evb-pico-dashboard-full.zip
+- https://mongoose.ws/downloads/w55rp20-evb-pico-dashboard-full.zip
+- https://mongoose.ws/downloads/pico-w-dashboard-full.zip
+- https://mongoose.ws/downloads/pico-rndis-dashboard-full.zip
 
 ## Core API
 
