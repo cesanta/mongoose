@@ -19,6 +19,15 @@
 
 # SECURITY CATEGORIES TO EXAMINE
 
+## Mandatory High-Risk Coverage: Built-In TLS
+
+The built-in TLS implementation (`MG_TLS_BUILTIN`) is a mandatory high-risk review target. Perform a substantial security analysis of all security-relevant built-in TLS code, including parsing, cryptographic processing, authentication and certificate validation, length and buffer handling, protocol state, cross-call behavior, and failure paths.
+
+Trace attacker-controlled TLS peer input through normal client and server execution, including traffic received before peer authentication is complete. Report any credible memory-safety, authentication, confidentiality, integrity, state-corruption, or remotely triggerable availability vulnerability.
+
+Do not set `review_completed` to `true` unless the built-in TLS implementation has been meaningfully inspected as a whole.
+
+
 **C Memory Safety and Length-Handling Vulnerabilities:**
 - Look for writes to fixed-size stack or heap buffers where the loop bound is derived from attacker-controlled protocol fields, including topic counts, header counts, chunk counts, multipart parts, DNS labels, WebSocket fragments, TCP/IP options, or filesystem path components.
 - Check all conversions between `size_t`, `int`, `long`, `uint16_t`, `uint32_t`, and signed protocol lengths. Flag integer truncation, wraparound, negative-to-large conversion, or off-by-one behavior that can affect allocation, parsing, copying, or bounds checks.
