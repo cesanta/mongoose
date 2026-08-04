@@ -96,7 +96,7 @@ jobs:
           claude_args: |
             --max-turns 20
             --allowedTools "Read,Glob,Grep,Bash(git:*),Bash(find:*),Bash(grep:*),Bash(sed:*),Bash(cat:*)"
-            --model claude-opus-4-8
+            --model claude-opus-5
 
       - name: Prepare private security scan outputs
         if: always() && steps.claude_scan.outputs.execution_file != ''

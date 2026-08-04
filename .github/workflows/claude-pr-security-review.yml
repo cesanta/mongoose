@@ -111,4 +111,4 @@ jobs:
 
           claude_args: |
             --allowedTools "Read,Bash(cat:*),Bash(gh pr diff:*),Bash(gh pr view:*),Bash(gh pr comment:*)"
-            --model claude-opus-4-8
+            --model claude-opus-5
