@@ -74,6 +74,10 @@ struct mg_connection {
   void *pfn_data;                 // Protocol-level handler argument
   char data[MG_DATA_SIZE];        // Scratch space for protocol state; freely readable
   void *tls;                      // TLS state (internal)
+  unsigned dscp : 6;              // Differentiated Services Code Point
+#define MG_DSCP_CS(class_) ((class_) << 3)
+#define MG_DSCP_AF(class_, drop_) (((class_) << 3) | ((drop_) << 1))
+#define MG_DSCP_EF 46
   unsigned is_listening : 1;      // Listening connection; accepts inbound connections
   unsigned is_client : 1;         // Outbound connection created by mg_connect()
   unsigned is_accepted : 1;       // Inbound connection accepted from a listener
@@ -153,6 +157,11 @@ struct mg_connection *mg_connect(struct mg_mgr *, const char *url,
 // Useful for integrating pre-opened sockets (e.g. stdin, accept() fd).
 struct mg_connection *mg_wrapfd(struct mg_mgr *mgr, int fd,
                                 mg_event_handler_t fn, void *fn_data);
+
+// Sets the 6-bit Differentiated Services Code Point for outgoing datagrams.
+// Call on MG_EV_OPEN for UDP listeners, MG_EV_CONNECT for clients, or
+// MG_EV_ACCEPT for TCP servers, before sending application data.
+bool mg_dscp(struct mg_connection *, uint8_t dscp);
 
 // Called internally after DNS resolution completes to create the OS socket
 // and initiate the TCP/IP connect. Normally not called by user code.

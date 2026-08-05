@@ -110,7 +110,8 @@ static void ph(struct mg_connection *c, int ev, void *ev_data) {
 }
 
 static void fn(struct mg_connection *c, int ev, void *ev_data) {
-  (void) c, (void) ev, (void) ev_data;
+  if (ev == MG_EV_ACCEPT) ASSERT(mg_dscp(c, MG_DSCP_AF(4, 1)));
+  (void) ev_data;
 }
 
 static void tcpclosure_fn(struct mg_connection *c, int ev, void *ev_data) {
@@ -499,8 +500,11 @@ static void test_tcp_basics(bool ipv6) {
   if (ipv6) {
     ASSERT(i6->src[0] == mg_htonll(0x100000000000000) && i6->src[1] == 0 &&
            i6->dst[0] == mg_htonll(0x200000000000000) && i6->dst[1] == 0);
+    ASSERT((uint8_t) (((i6->ver & 15) << 2) | (i6->label[0] >> 6)) ==
+           MG_DSCP_AF(4, 1));
   } else {
     ASSERT(i->src == mg_htonl(0x1000000) && i->dst == mg_htonl(0x2000000));
+    ASSERT(i->tos == (MG_DSCP_AF(4, 1) << 2));
   }
 
   // segment with seq_no way out of window
@@ -1125,8 +1129,11 @@ static void test_tcp(bool ipv6) {
 }
 
 static void udp_fn(struct mg_connection *c, int ev, void *ev_data) {
-  if (ev == MG_EV_READ && c->recv.len == 2 && c->recv.buf[0] == 'p')
+  if (ev == MG_EV_OPEN) {
+    ASSERT(mg_dscp(c, MG_DSCP_AF(4, 1)));
+  } else if (ev == MG_EV_READ && c->recv.len == 2 && c->recv.buf[0] == 'p') {
     mg_send(c, "P90", 3);
+  }
   (void) ev_data;
 }
 
@@ -1221,9 +1228,12 @@ static void test_udp(bool ipv6) {
   if (ipv6) {
     ASSERT(i6->src[0] == mg_htonll(0x100000000000000) && i6->src[1] == 0 &&
            i6->dst[0] == mg_htonll(0x200000000000000) && i6->dst[1] == 0);
+    ASSERT((uint8_t) (((i6->ver & 15) << 2) | (i6->label[0] >> 6)) ==
+           MG_DSCP_AF(4, 1));
     ASSERT(udp6csum_ok(i6, u));
   } else {
     ASSERT(i->src == mg_htonl(0x1000000) && i->dst == mg_htonl(0x2000000));
+    ASSERT(i->tos == (MG_DSCP_AF(4, 1) << 2));
     ASSERT(udpcsum_ok(i, u));
   }
 
