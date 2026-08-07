@@ -28,8 +28,10 @@ static struct mg_ota_state {
 static void s_firmware_fn(struct mg_connection *c, int ev, void *ev_data);
 
 static bool s_tls_init(struct mg_connection *c, const char *url) {
-  struct mg_tls_opts opts = {
-      .ca = mg_str(MG_OTA_TLS_CA), .name = mg_url_host(url)};
+  struct mg_tls_opts opts;
+  memset(&opts, 0, sizeof(opts));
+  opts.ca = mg_str(MG_OTA_TLS_CA);
+  opts.name = mg_url_host(url);
   if (opts.ca.len == 0) {
     mg_error(c, "MG_OTA_TLS_CA is not configured");
   } else {
