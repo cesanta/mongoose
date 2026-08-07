@@ -536,6 +536,23 @@ static void test_tcp_basics(bool ipv6) {
   s_driver_data.len = 0;
   mg_mgr_free(&mgr);
 
+  // Initiate closure with FIN and payload
+  init_tcp_tests(&mgr, &e, &ipp, &driver, &mif, fn);
+  init_tcp_handshake(&e, &ipp, &mgr);  // starts with seq_no=1000, ackno=2
+  create_tcp_simpleseg(&e, &ipp, 1001, 2, TH_FIN | TH_ACK, 2);
+  mg_mgr_poll(&mgr, 0);
+  while (!received_response(&s_driver_data)) mg_mgr_poll(&mgr, 0);
+  ASSERT((t->flags == (TH_FIN | TH_ACK)));
+  ASSERT((t->seq == mg_htonl(2)));
+  ASSERT((t->ack == mg_htonl(1004)));
+  create_tcp_simpleseg(&e, &ipp, 1004, 3, TH_ACK, 0);
+  mg_mgr_poll(&mgr, 0);
+  ASSERT(!received_response(&s_driver_data));
+  ASSERT(mgr.conns->next == NULL);  // only one connection: the listener
+
+  s_driver_data.len = 0;
+  mg_mgr_free(&mgr);
+
   // Test client-initiated closure timeout, do not ACK
   init_tcp_tests(&mgr, &e, &ipp, &driver, &mif, fn);
   init_tcp_handshake(&e, &ipp, &mgr);  // starts with seq_no=1000, ackno=2
@@ -964,6 +981,49 @@ static void test_tcp_txwindow(void) {
   mg_mgr_free(&mgr);
 }
 
+static void test_tcp_ackseq(void) {
+  struct mg_mgr mgr;
+  struct eth e;
+  struct ip ip;
+  struct ipp ipp;
+  struct tcp *t = (struct tcp *) (s_driver_data.buf + sizeof(e) + sizeof(ip));
+  int count = 0, stallcount;
+  uint32_t seq;
+  struct mg_tcpip_driver driver;
+  struct mg_tcpip_if mif;
+
+  ipp.ip4 = &ip;
+  ipp.ip6 = NULL;
+  init_tcp_tests(&mgr, &e, &ipp, &driver, &mif, txwindow_fn);
+  mgr.conns->fn_data = &count;
+  init_tcp_handshake(&e, &ipp, &mgr);
+  do {
+    while (!received_response(&s_driver_data)) mg_mgr_poll(&mgr, 0);
+    seq = (uint32_t)(mg_htonl(t->seq) + s_driver_data.len - (size_t)((char *)((uint32_t *)t + (t->off >> 4)) - s_driver_data.buf));
+  } while (seq < (TCP_TEST_WIN + 2));
+  stallcount = count;
+  mg_mgr_poll(&mgr, 0), s_driver_data.len = 0;
+  ASSERT(stallcount == count);
+
+  // Keepalive probe
+  create_tcp_simpleseg(&e, &ipp, 1000, seq, TH_ACK, 0);
+  mg_mgr_poll(&mgr, 0);
+  ASSERT(stallcount == count);
+
+  // Invalid SEG.SEQ
+  create_tcp_simpleseg(&e, &ipp, 1002, seq, TH_ACK, 0);
+  mg_mgr_poll(&mgr, 0);
+  ASSERT(stallcount == count);
+
+  // Valid FIN+ACK
+  create_tcp_simpleseg(&e, &ipp, 1001, seq, TH_FIN | TH_ACK, 0);
+  mg_mgr_poll(&mgr, 0);
+  ASSERT(stallcount < count);
+
+  s_driver_data.len = 0;
+  mg_mgr_free(&mgr);
+}
+
 static void test_frag_recv_path(void) {
   struct mg_mgr mgr;
   struct eth e;
@@ -1125,6 +1185,7 @@ static void test_tcp(bool ipv6) {
     test_tcp_backlog();
     test_tcp_retransmit();
     test_tcp_txwindow();
+    test_tcp_ackseq();
   }
 }
 
