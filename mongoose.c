@@ -10591,6 +10591,7 @@ void mg_tcpip_mapip(struct mg_connection *c, struct mg_addr *ip) {
 
 
 
+
 #ifndef MG_OTA_MAX_URL_LEN
 #define MG_OTA_MAX_URL_LEN 256
 #endif
@@ -10610,6 +10611,17 @@ static struct mg_ota_state {
 } *s_ota;
 
 static void s_firmware_fn(struct mg_connection *c, int ev, void *ev_data);
+
+static bool s_tls_init(struct mg_connection *c, const char *url) {
+  struct mg_tls_opts opts = {
+      .ca = mg_str(MG_OTA_TLS_CA), .name = mg_url_host(url)};
+  if (opts.ca.len == 0) {
+    mg_error(c, "MG_OTA_TLS_CA is not configured");
+  } else {
+    mg_tls_init(c, &opts);
+  }
+  return c->is_tls_hs != 0 && !c->is_closing;
+}
 
 #if MG_ENABLE_CUSTOM_DEVICE_ID
 #else
@@ -10643,6 +10655,11 @@ void mg_ota_device_id(char *buf, size_t len) {
 
 static void s_version_fn(struct mg_connection *c, int ev, void *ev_data) {
   uint64_t expiration = *(uint64_t *) c->data;
+  if (s_ota == NULL) {
+    c->fn = NULL;
+    c->is_closing = 1;
+    return;
+  }
   if (ev == MG_EV_POLL) {
     if (mg_millis() > expiration) mg_error(c, "Metadata timeout");
   } else if (ev == MG_EV_CONNECT) {
@@ -10650,6 +10667,9 @@ static void s_version_fn(struct mg_connection *c, int ev, void *ev_data) {
     struct mg_str host = mg_url_host(s_ota->json_url);
     const char *uri = mg_url_uri(s_ota->json_url);
     const char *sep = strchr(uri, '?') == NULL ? "?" : "&";
+    if (mg_url_is_ssl(s_ota->json_url)) {
+      if (!s_tls_init(c, s_ota->json_url)) return;
+    }
     mg_ota_device_id(id, sizeof(id));
     id[sizeof(id) - 1] = '\0';
     mg_printf(
@@ -10715,10 +10735,18 @@ static void status_fn_2(struct mg_connection *c, const char *errmsg) {
 
 static void s_firmware_fn(struct mg_connection *c, int ev, void *ev_data) {
   uint64_t expiration = *(uint64_t *) c->data;
+  if (s_ota == NULL) {
+    c->fn = NULL;
+    c->is_closing = 1;
+    return;
+  }
   if (ev == MG_EV_POLL) {
     if (mg_millis() > expiration) mg_error(c, "OTA timeout");
   } else if (ev == MG_EV_CONNECT) {
     struct mg_str host = mg_url_host(s_ota->url);
+    if (mg_url_is_ssl(s_ota->url)) {
+      if (!s_tls_init(c, s_ota->url)) return;
+    }
     mg_printf(c,
               "GET %s HTTP/1.1\r\n"
               "Host: %.*s\r\n"

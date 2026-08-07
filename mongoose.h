@@ -4628,7 +4628,7 @@ extern void mg_mqtt_poll(struct mg_mgr *);
 //
 // This is a low-level OTA API, not intended to be called directly by users.
 // Users are provided with a higher-level API:
-// - defining MG_OTA_URL enables HTTP pull-based updates
+// - defining MG_OTA_URL enables HTTP or HTTPS pull-based updates
 // - mg_http_start_ota() enables push-based updates
 //
 // However, it is possible to use the mg_ota_* API directly. Below is the
@@ -4775,8 +4775,10 @@ enum {
     }                                                              \
   } while (0)
 
-// Pull-based OTA over HTTP. Fetches metadata_url, which must return a JSON
-// object like: { "version": "1.2.3", "url": "FIRMWARE_URL", "size": 324645 }
+// Pull-based OTA over HTTP or HTTPS. If it's HTTPS, MG_OTA_TLS_CA
+// needs to be defined. Fetches metadata_url, which must
+// return a JSON object like:
+// { "version": "1.2.3", "url": "FIRMWARE_URL", "size": 324645 }
 // If the server version differs from MG_OTA_FIRMWARE_VERSION, downloads
 // FIRMWARE_URL and performs the OTA update. fn is called on every outcome:
 // NULL on successful flash, "Same version" when already up to date, or an
@@ -4786,10 +4788,16 @@ void mg_ota_url_check(struct mg_mgr *mgr, const char *metadata_url,
                       void (*fn)(const char *error_message));
 
 // Firmware info URL for mg_ota_poll() which calls mg_ota_url_check().
-// Example:  "http://mongoose.ws/ota/u/0/ota.json". See http://mongoose.ws/ota/
+// Example: "http://mongoose.ws/ota/u/0/ota.json". See http://mongoose.ws/ota/
 // Settable in mongoose_config.h
 #ifndef MG_OTA_URL
 #define MG_OTA_URL NULL
+#endif
+
+// PEM or DER CA certificate used to authenticate an HTTPS OTA server. Set to
+// NULL to use HTTP. Set in mongoose_config.h.
+#ifndef MG_OTA_TLS_CA
+#define MG_OTA_TLS_CA NULL
 #endif
 
 // OTA status callback function for mg_ota_poll()
@@ -4821,8 +4829,9 @@ void mg_ota_url_check(struct mg_mgr *mgr, const char *metadata_url,
 // E.g. on STM32, uses the 96-bit MCU UID converted to a hex string.
 void mg_ota_device_id(char *buf, size_t len);
 
-// Checks for a firmware update over HTTP. Called automatically by mg_mgr_poll()
-// when MG_OTA_URL is set in mongoose_config.h. Do not call directly.
+// Checks for a firmware update over HTTP or HTTPS. Called automatically by
+// mg_mgr_poll() when MG_OTA_URL is set in mongoose_config.h. Do not call
+// directly.
 void mg_ota_poll(struct mg_mgr *);
 
 
