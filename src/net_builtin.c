@@ -13,6 +13,10 @@
 #define MG_TCPIP_ARP_MS 100    // Timeout for ARP response
 #define MG_TCPIP_SYN_MS 15000  // Timeout for connection establishment
 #define MG_TCPIP_FIN_MS 1000   // Timeout for closing connection
+#define MG_TCPIP_RTX_MS 1000   // Initial retransmission timeout (RFC-6298, 2.1)
+#define MG_TCPIP_RTX_MAX_MS 60000  // Minimum permitted RTO cap (RFC-6298, 2.5)
+#define MG_TCPIP_RTX_R1 3  // Delivery-problem threshold (RFC-9293, 3.8.3)
+// No R2: MG_TCPIP_KEEPALIVE_MS eventually closes non-responsive peers
 
 #ifndef MG_TCPIP_WIN
 #define MG_TCPIP_WIN 6000  // TCP window size
@@ -21,9 +25,12 @@
 struct connstate {
   uint32_t seq, ack;                      // TCP seq/ack counters
   uint64_t timer;                         // TCP timer (see 'ttype' below)
+  uint64_t txq_timer;                     // TCP retransmission timer (RFC-6298, 5)
   uint32_t acked;                         // Last ACK-ed number
   size_t unacked;                         // Not acked bytes
   uint32_t maxseq;                        // Max send seq (ack + window)
+  uint32_t txq_seq;                       // Sequence of first txq record (RFC-9293, 3.8)
+  uint32_t txq_una;                       // Oldest unacknowledged sequence (RFC-9293, 3.4)
   uint16_t win;                           // destination current window size
   uint16_t dmss;                          // destination MSS (from TCP opts)
   uint8_t mac[sizeof(struct mg_l2addr)];  // Peer hw address
@@ -34,8 +41,11 @@ struct connstate {
 #define MIP_TTYPE_SYN 3        // SYN sent, waiting for response
 #define MIP_TTYPE_FIN 4  // FIN sent, waiting until terminating the connection
   uint8_t tmiss;         // Number of keep-alive misses
+  uint8_t txq_retries;   // Retransmissions since ACK progress (RFC-9293, 3.8.3)
   bool fin_rcvd;         // We have received FIN from the peer
   bool twclosure;        // 3-way closure done
+  bool retransmit;       // Retain sent data until acknowledged
+  struct mg_iobuf txq;   // Length-prefixed sent TCP segments (RFC-9293, 3.8)
 };
 
 #if defined(__DCC__)
@@ -1312,6 +1322,8 @@ static struct mg_connection *accept_conn(struct mg_connection *lsn,
     return NULL;
   }
   s = (struct connstate *) (c + 1);
+  s->retransmit = lsn->mgr->ifp->enable_tcp_retransmit;
+  s->txq.align = MG_IO_SIZE;
   s->dmss = mss;  // from options in client SYN
   s->seq = mg_ntohl(pkt->tcp->ack), s->ack = mg_ntohl(pkt->tcp->seq);
   s->win = mg_ntohs(pkt->tcp->win), s->maxseq = (uint32_t) (s->seq + s->win);
@@ -1402,6 +1414,25 @@ static bool udp_send(struct mg_connection *c, const void *buf, size_t len) {
   return tx_udp(ifp, s->mac, &ips, &c->rem, c->dscp, buf, len);
 }
 
+static size_t txq_next(struct connstate *s, uint8_t **buf) {
+  uint32_t len;
+  if (s->txq.len == 0) return 0;
+  assert(s->txq.len >= sizeof(len));
+  memcpy(&len, s->txq.buf, sizeof(len));
+  assert(len > 0 && len <= s->txq.len - sizeof(len));
+  if (buf != NULL) *buf = s->txq.buf + sizeof(len);
+  return len;
+}
+
+static bool txq_add(struct connstate *s, const void *buf, size_t len) {
+  uint32_t n = (uint32_t) len;
+  size_t off = s->txq.len, total = sizeof(n) + len;
+  if (mg_iobuf_add(&s->txq, off, NULL, total) != total) return false;
+  memcpy(s->txq.buf + off, &n, sizeof(n));
+  memcpy(s->txq.buf + off + sizeof(n), buf, len);
+  return true;
+}
+
 long mg_io_send(struct mg_connection *c, const void *buf, size_t len) {
   struct connstate *s = (struct connstate *) (c + 1);
   len = trim_len(c, len);
@@ -1411,19 +1442,34 @@ long mg_io_send(struct mg_connection *c, const void *buf, size_t len) {
     struct mg_tcpip_if *ifp = c->mgr->ifp;
     size_t sent;
     uint32_t room = s->maxseq - s->seq;
+    bool was_empty = s->txq.len == 0;
+    if (s->retransmit) {
+      uint32_t in_flight = s->txq.len > 0 ? s->seq - s->txq_una : 0;
+      uint32_t qroom = in_flight < MG_TCPIP_WIN ? MG_TCPIP_WIN - in_flight : 0;
+      room = s->win > in_flight ? s->win - in_flight : 0;
+      if (room > qroom) room = qroom;
+    }
     if (room == 0) return MG_IO_WAIT;
-    if (len > s->dmss) len = s->dmss;  // RFC-6691: reduce if sending opts
-    if ((uint32_t) len > room) len = room;
+    if (len > s->dmss) len = s->dmss;  // RFC-6691, reduce if sending opts
+    if (len > room) len = room;
+    if (s->retransmit) {
+      if (was_empty) s->txq_seq = s->txq_una = s->seq;
+      if (!txq_add(s, buf, len)) return MG_IO_WAIT;
+    }
     sent = tx_tcp(ifp, s->mac, &c->loc, &c->rem, c->dscp, TH_PUSH | TH_ACK,
                   mg_htonl(s->seq), mg_htonl(s->ack), buf, len);
-    if (sent == 0) {
-      return MG_IO_WAIT;
-    } else if (sent == (size_t) -1) {
-      return MG_IO_ERR;
-    } else {
-      s->seq += (uint32_t) len;
-      if (s->ttype == MIP_TTYPE_ACK) settmout(c, MIP_TTYPE_KEEPALIVE);
+    if (sent == 0 || sent == (size_t) -1) {
+      if (s->retransmit)
+        mg_iobuf_del(&s->txq, s->txq.len - len - sizeof(uint32_t),
+                     len + sizeof(uint32_t));
+      return sent == 0 ? MG_IO_WAIT : MG_IO_ERR;
     }
+    s->seq += (uint32_t) len;
+    if (s->retransmit && was_empty) {
+      s->txq_timer = ifp->now + MG_TCPIP_RTX_MS;
+      s->txq_retries = 0;
+    }
+    if (s->ttype == MIP_TTYPE_ACK) settmout(c, MIP_TTYPE_KEEPALIVE);
   }
   return (long) len;
 }
@@ -1451,10 +1497,50 @@ static void handle_tls_recv(struct mg_connection *c) {
   }
 }
 
-static void handle_ack(struct connstate *s, uint32_t ackno, uint16_t win) {
-  if (ackno < (s->seq - s->win) || ackno > s->seq) return;
+static void handle_ack(struct connstate *s, uint32_t ackno, uint16_t win,
+                       uint64_t now) {
+  if (ackno > s->seq) return;
+  if (s->retransmit && s->txq.len > 0) {
+    if (ackno < s->txq_una) return;
+    if (ackno > s->txq_una) {
+      size_t len;
+      // Remove only entirely acknowledged segments (RFC-9293, 3.10.7.4)
+      while ((len = txq_next(s, NULL)) > 0 && ackno >= s->txq_seq + len) {
+        mg_iobuf_del(&s->txq, 0, len + sizeof(uint32_t));
+        s->txq_seq += (uint32_t) len;
+      }
+      s->txq_una = ackno;
+      s->txq_retries = 0;
+      // Restart RTO when an ACK acknowledges new data (RFC-6298, 5.3)
+      s->txq_timer = now + MG_TCPIP_RTX_MS;
+    }  // else: dup ack, ignore it but handle its window upddate
+  } else if (ackno < (s->seq - s->win)) {
+    return;
+  }
   s->maxseq = (uint32_t) (ackno + win);
   s->win = win;
+}
+
+static void retransmit(struct mg_connection *c) {
+  struct connstate *s = (struct connstate *) (c + 1);
+  struct mg_tcpip_if *ifp = c->mgr->ifp;
+  uint8_t *buf, i;
+  uint64_t rto;
+  size_t len = txq_next(s, &buf);
+  // Send the front retransmission-queue segment only (RFC-9293, 3.10.8)
+  if (len == 0 ||
+      tx_tcp(ifp, s->mac, &c->loc, &c->rem, c->dscp, TH_PUSH | TH_ACK,
+             mg_htonl(s->txq_seq), mg_htonl(s->ack), buf, len) == (size_t) -1) {
+    mg_error(c, "retransmit");
+    return;
+  }
+  // Back off RTO after every timeout (RFC-6298, 5.5)
+  for (i = 0, rto = MG_TCPIP_RTX_MS;
+       i < s->txq_retries && rto < MG_TCPIP_RTX_MAX_MS; i++) {
+    rto *= 2;
+    if (rto > MG_TCPIP_RTX_MAX_MS) rto = MG_TCPIP_RTX_MAX_MS;
+  }
+  s->txq_timer = ifp->now + rto;
 }
 
 static void read_conn(struct mg_connection *c, struct pkt *pkt) {
@@ -1510,7 +1596,8 @@ static void read_conn(struct mg_connection *c, struct pkt *pkt) {
   }
   // Now process the segment for ACK and payload
   if (pkt->tcp->flags & TH_ACK) {
-    handle_ack(s, mg_ntohl(pkt->tcp->ack), mg_ntohs(pkt->tcp->win));
+    handle_ack(s, mg_ntohl(pkt->tcp->ack), mg_ntohs(pkt->tcp->win),
+               c->mgr->ifp->now);
     if (pkt->pay.len == 0 && s->fin_rcvd && s->ttype == MIP_TTYPE_FIN)
       s->twclosure = true;
   }
@@ -2064,6 +2151,13 @@ static void mg_tcpip_poll(struct mg_tcpip_if *ifp, uint64_t now) {
     struct connstate *s = (struct connstate *) (c + 1);
     if ((c->is_udp && !c->is_arplooking) || c->is_listening || c->is_resolving)
       continue;
+    if (s->retransmit && s->txq.len > 0 && ifp->now > s->txq_timer) {
+      if (s->txq_retries < 255) s->txq_retries++;
+      // R1 reports a delivery problem; it does not close (RFC-9293, 3.8.3).
+      if (s->txq_retries == MG_TCPIP_RTX_R1)
+        MG_ERROR(("%lu retransmit", c->id));
+      retransmit(c);
+    }
     if (ifp->now > s->timer) {
       if (s->ttype == MIP_TTYPE_ARP) {
         mg_error(c, "ARP timeout");
@@ -2165,6 +2259,9 @@ static void l2addr_resolved(struct mg_connection *c) {
 void mg_connect_resolved(struct mg_connection *c) {
   struct mg_tcpip_if *ifp = c->mgr->ifp;
   uint8_t *l2addr;
+  struct connstate *s = (struct connstate *) (c + 1);
+  s->retransmit = ifp->enable_tcp_retransmit;
+  s->txq.align = MG_IO_SIZE;
   c->is_resolving = 0;
   if (ifp->eport < MG_EPHEMERAL_PORT_BASE) ifp->eport = MG_EPHEMERAL_PORT_BASE;
   c->loc.port = mg_htons(ifp->eport++);
@@ -2186,7 +2283,6 @@ void mg_connect_resolved(struct mg_connection *c) {
   mg_call(c, MG_EV_RESOLVE, NULL);
   c->is_connecting = 1;
   if (c->is_udp && (l2addr = tcpip_mapip(ifp, &c->rem)) != NULL) {
-    struct connstate *s = (struct connstate *) (c + 1);
     memcpy(s->mac, l2addr, sizeof(s->mac));
     l2addr_resolved(c);  // broadcast or multicast
 #if MG_ENABLE_IPV6
@@ -2201,7 +2297,6 @@ void mg_connect_resolved(struct mg_connection *c) {
       settmout(c, MIP_TTYPE_ARP);
       c->is_arplooking = 1;
     } else if (ifp->gw6_ready) {
-      struct connstate *s = (struct connstate *) (c + 1);
       memcpy(s->mac, ifp->gw6mac, sizeof(s->mac));
       l2addr_resolved(c);
     } else {
@@ -2218,7 +2313,6 @@ void mg_connect_resolved(struct mg_connection *c) {
       settmout(c, MIP_TTYPE_ARP);
       c->is_arplooking = 1;
     } else if (ifp->gw_ready) {
-      struct connstate *s = (struct connstate *) (c + 1);
       memcpy(s->mac, ifp->gwmac, sizeof(s->mac));
       l2addr_resolved(c);
     } else {
@@ -2259,8 +2353,8 @@ static void init_closure(struct mg_connection *c) {
 
 static void close_conn(struct mg_connection *c) {
   struct connstate *s = (struct connstate *) (c + 1);
+  mg_iobuf_free(&s->txq);
   mg_close_conn(c);
-  (void) s;
 }
 
 static bool can_write(struct mg_connection *c) {
@@ -2294,7 +2388,8 @@ void mg_mgr_poll(struct mg_mgr *mgr, int ms) {
     if (flush == MG_IO_ERR) mg_error(c, "tx err");
     if (c->is_draining && c->send.len == 0) {
       if (c->is_udp) c->is_closing = 1;
-      if (!c->is_udp && flush == 0 && s->ttype != MIP_TTYPE_FIN)
+      if (!c->is_udp && flush == 0 && s->txq.len == 0 &&
+          s->ttype != MIP_TTYPE_FIN)
         init_closure(c);
     }
     // For non-TLS, close immediately upon completing the 3-way closure

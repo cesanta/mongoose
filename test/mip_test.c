@@ -157,6 +157,15 @@ static void txwindow_fn(struct mg_connection *c, int ev, void *ev_data) {
   (void) c, (void) ev_data;
 }
 
+static char s_rtx_data[MG_TCPIP_WIN];
+static size_t s_rtx_len;
+static uint16_t s_tcp_window;
+
+static void rtx_fn(struct mg_connection *c, int ev, void *ev_data) {
+  if (ev == MG_EV_ACCEPT) mg_send(c, s_rtx_data, s_rtx_len);
+  (void) ev_data;
+}
+
 static void client_fn(struct mg_connection *c, int ev, void *ev_data) {
   if (ev == MG_EV_ERROR || ev == MG_EV_CONNECT) (*(int *) c->fn_data) = ev;
   (void) c, (void) ev_data;
@@ -210,6 +219,7 @@ static void test_poll(void) {
 struct driver_data {
   char buf[DRIVER_BUF_SIZE];
   size_t len;
+  size_t tx_count;
   bool tx_ready;  // data can be read from tx
 };
 
@@ -219,6 +229,7 @@ static size_t if_tx(const void *buf, size_t len, struct mg_tcpip_if *ifp) {
   struct driver_data *driver_data = (struct driver_data *) ifp->driver_data;
   if (len > DRIVER_BUF_SIZE) len = DRIVER_BUF_SIZE;
   driver_data->len = len;
+  driver_data->tx_count++;
   memcpy(driver_data->buf, buf, len);
   driver_data->tx_ready = true;
   return len;
@@ -255,7 +266,7 @@ static void create_tcp_seg(struct eth *e, struct ipp *ipp, uint32_t seq,
   t.ack = mg_htonl(ack);
   t.sport = mg_htons(sport);
   t.dport = mg_htons(dport);
-  t.win = mg_htons(TCP_TEST_WIN);
+  t.win = mg_htons(s_tcp_window);
   t.off = (uint8_t) ((sizeof(t) / 4) << 4) + (uint8_t) ((opts_len / 4) << 4);
   memcpy(s_driver_data.buf, e, sizeof(*e));
 #if MG_ENABLE_IPV6
@@ -307,6 +318,7 @@ static void init_tests(struct mg_mgr *mgr, struct eth *e, struct ipp *ipp,
   mg_mgr_init(mgr);
   memset(mif, 0, sizeof(*mif));
   memset(&s_driver_data, 0, sizeof(struct driver_data));
+  s_tcp_window = TCP_TEST_WIN;
   driver->init = NULL, driver->tx = if_tx, driver->poll = if_poll,
   driver->rx = if_rx;
   mif->driver = driver;
@@ -962,6 +974,127 @@ static void test_tcp_retransmit(void) {
   mg_mgr_free(&mgr);
 }
 
+static void test_tcp_retransmit_queue(void) {
+  struct mg_mgr mgr;
+  struct eth e;
+  struct ip ip;
+  struct ipp ipp;
+  struct tcp *t = (struct tcp *) (s_driver_data.buf + sizeof(e) + sizeof(ip));
+  struct connstate *s;
+  size_t i, first, off, len = 0, retired;
+  uint8_t *data;
+  struct mg_tcpip_driver driver;
+  struct mg_tcpip_if mif;
+
+  ipp.ip4 = &ip;
+  ipp.ip6 = NULL;
+  for (i = 0; i < sizeof(s_rtx_data); i++) s_rtx_data[i] = (char) i;
+  s_rtx_len = sizeof(s_rtx_data);
+  init_tcp_tests(&mgr, &e, &ipp, &driver, &mif, rtx_fn);
+  mif.enable_tcp_retransmit = true;
+  s_tcp_window = MG_TCPIP_WIN;
+  init_tcp_handshake(&e, &ipp, &mgr);
+  s = (struct connstate *) (mgr.conns + 1);
+
+  // Fill the retransmission queue and verify its hard cap
+  while (s->seq - s->txq_una < s_rtx_len) {
+    while (!received_response(&s_driver_data)) mg_mgr_poll(&mgr, 0);
+  }
+  ASSERT(s->txq_seq == 2);
+  ASSERT(s->txq_una == 2);
+  ASSERT(s->seq - s->txq_una == s_rtx_len);
+  first = txq_next(s, &data);
+  ASSERT(first == s->dmss);
+  ASSERT(memcmp(data, s_rtx_data, first) == 0);
+  ASSERT(mg_io_send(mgr.conns, s_rtx_data, 1) == MG_IO_WAIT);
+
+  // Timeout resends the first retained segment only
+  s_driver_data.len = 0;
+  s_driver_data.tx_ready = false;
+  s_driver_data.tx_count = 0;
+  s->txq_timer = 0;
+  mg_mgr_poll(&mgr, 0);
+  ASSERT(s_driver_data.tx_count == 1);
+  ASSERT(t->flags == (TH_PUSH | TH_ACK));
+  ASSERT(t->seq == mg_htonl(2));
+  ASSERT(s->txq_retries == 1);
+  ASSERT(txq_next(s, &data) == first);
+  ASSERT(memcmp(data, s_rtx_data, first) == 0);
+
+  // A piggybacked partial ACK advances SND.UNA but retains the segment
+  retired = first / 2;
+  create_tcp_simpleseg(&e, &ipp, 1001, 2 + (uint32_t) retired,
+                       TH_PUSH | TH_ACK, 2);
+  mg_mgr_poll(&mgr, 0);
+  ASSERT(s->txq_seq == 2);
+  ASSERT(s->txq_una == 2 + retired);
+  ASSERT(s->seq - s->txq_una == s_rtx_len - retired);
+  ASSERT(s->txq_retries == 0);
+  ASSERT(txq_next(s, &data) == first);
+  ASSERT(memcmp(data, s_rtx_data, first) == 0);
+  ASSERT(mgr.conns->recv.len == 2);
+
+  // Timeout after partial ACK retains the segment's original SEQ and data
+  s_driver_data.tx_count = 0;
+  s->txq_timer = 0;
+  mg_mgr_poll(&mgr, 0);
+  ASSERT(s_driver_data.tx_count == 1);
+  ASSERT(t->seq == mg_htonl(2));
+  ASSERT(s->txq_retries == 1);
+  ASSERT(txq_next(s, &data) == first);
+  ASSERT(memcmp(data, s_rtx_data, first) == 0);
+
+  // ACKing record one and part of two retires only record one
+  create_tcp_simpleseg(&e, &ipp, 1003, 2 + (uint32_t) (first + retired),
+                       TH_ACK, 0);
+  mg_mgr_poll(&mgr, 0);
+  ASSERT(s->txq_seq == 2 + first);
+  ASSERT(s->txq_una == 2 + first + retired);
+  ASSERT(s->txq_retries == 0);
+  ASSERT(txq_next(s, &data) == first);
+  ASSERT(memcmp(data, s_rtx_data + first, first) == 0);
+
+  // Timeout retransmits record two with its original SEQ and data
+  s_driver_data.tx_count = 0;
+  s->txq_timer = 0;
+  mg_mgr_poll(&mgr, 0);
+  ASSERT(s_driver_data.tx_count == 1);
+  ASSERT(t->seq == mg_htonl(2 + (uint32_t) first));
+  ASSERT(s->txq_retries == 1);
+  ASSERT(txq_next(s, &data) == first);
+  ASSERT(memcmp(data, s_rtx_data + first, first) == 0);
+
+  // A complete ACK retires record two; appending restores the full flight
+  create_tcp_simpleseg(&e, &ipp, 1003, 2 + (uint32_t) (2 * first), TH_ACK, 0);
+  mg_mgr_poll(&mgr, 0);
+  ASSERT(s->txq_seq == 2 + 2 * first);
+  ASSERT(s->txq_una == 2 + 2 * first);
+  ASSERT(txq_next(s, &data) == first);
+  ASSERT(memcmp(data, s_rtx_data + 2 * first, first) == 0);
+  mg_send(mgr.conns, s_rtx_data, 2 * first);
+  while (s->seq - s->txq_una < s_rtx_len) {
+    while (!received_response(&s_driver_data)) mg_mgr_poll(&mgr, 0);
+  }
+  for (off = 0; off < s->txq.len; off += sizeof(uint32_t) + len) {
+    memcpy(&len, s->txq.buf + off, sizeof(uint32_t));
+  }
+  ASSERT(off == s->txq.len);
+  ASSERT(len == first);
+  ASSERT(memcmp(s->txq.buf + off - len, s_rtx_data + first, len) == 0);
+
+  // Draining waits for the rebuilt flight to be acknowledged before FIN
+  mgr.conns->is_draining = 1;
+  s_driver_data.len = 0;
+  mg_mgr_poll(&mgr, 0);
+  ASSERT(!received_response(&s_driver_data));
+  create_tcp_simpleseg(&e, &ipp, 1003, s->seq, TH_ACK, 0);
+  while (!received_response(&s_driver_data)) mg_mgr_poll(&mgr, 0);
+  ASSERT(t->flags == (TH_FIN | TH_ACK));
+  ASSERT(s->txq.len == 0);
+  s_driver_data.len = 0;
+  mg_mgr_free(&mgr);
+}
+
 
 static void test_tcp_txwindow(void) {
   struct mg_mgr mgr;
@@ -987,6 +1120,7 @@ static void test_tcp_txwindow(void) {
     seq = (uint32_t)(mg_htonl(t->seq) + s_driver_data.len - (size_t)((char *)((uint32_t *)t + (t->off >> 4)) - s_driver_data.buf));
   } while (seq < (TCP_TEST_WIN + 2));
   stallcount = count;
+  ASSERT(((struct connstate *) (mgr.conns + 1))->txq.buf == NULL);
   mg_mgr_poll(&mgr, 0), s_driver_data.len = 0;
   mg_mgr_poll(&mgr, 0), s_driver_data.len = 0;
   ASSERT((stallcount == count));
@@ -1248,6 +1382,7 @@ static void test_tcp(bool ipv6) {
   if (!ipv6) {
     test_tcp_backlog();
     test_tcp_retransmit();
+    test_tcp_retransmit_queue();
     test_tcp_txwindow();
     test_tcp_ackseq();
     test_tcp_drain(false);

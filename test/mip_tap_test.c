@@ -22,7 +22,33 @@ static size_t tap_rx(void *buf, size_t len, struct mg_tcpip_if *ifp) {
   return (size_t) received;
 }
 
+// ignore IPv6, testing segment loss under IPv4 is enough
+static bool is_tcp_segment(const void *buf, size_t len) {
+  const struct eth *eth = (const struct eth *) buf;
+  const struct ip *ip;
+  const struct tcp *tcp;
+  size_t hlen;
+  if (len < sizeof(*eth)) return false;
+  if (eth->type != mg_htons(0x800)) return false;
+  ip = (const struct ip *) (eth + 1);
+  if (len < sizeof(*eth) + sizeof(*ip)) return false;
+  hlen = (size_t) (ip->ver & 15) * 4;
+  if ((ip->ver >> 4) != 4 || ip->proto != 6 || hlen < sizeof(*ip) ||
+      len < sizeof(*eth) + hlen + sizeof(*tcp))
+    return false;
+  tcp = (const struct tcp *) ((const char *) ip + hlen);
+  return (tcp->flags & (TH_SYN | TH_FIN)) == 0;
+}
+
 static size_t tap_tx(const void *buf, size_t len, struct mg_tcpip_if *ifp) {
+  uint32_t random;
+  if (ifp->enable_tcp_retransmit && is_tcp_segment(buf, len)) {  // introduce a 30% segment loss
+    mg_random(&random, sizeof(random));
+    if (random % 10 < 3) {
+      MG_DEBUG(("dropping TCP segment"));
+      return len;
+    }
+  }
   ssize_t res = write(*(int *) ifp->driver_data, buf, len);
   if (res < 0) {
     MG_ERROR(("tap_tx failed: %d", errno));
@@ -125,6 +151,7 @@ int main(void) {
   }
 
   // RUN TESTS
+  mif.enable_tcp_retransmit = getenv("RTX") != NULL;
   result = mip_x_test(&mgr);
   close(fd);
   if (!result) return EXIT_FAILURE;

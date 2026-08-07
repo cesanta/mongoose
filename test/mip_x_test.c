@@ -75,6 +75,8 @@ static char *host_ip, *host_ip6;
 static int s_num_tests = 0;
 static bool s_error = false;
 
+#define POLL_LIMIT(n) (mgr->ifp->enable_tcp_retransmit ? (n) * 10 : (n))
+
 #ifdef NO_ABORT
 static int s_abort = 0;
 #define ABORT() ++s_abort, s_error = true
@@ -205,7 +207,7 @@ static int fetch(struct mg_mgr *mgr, char *buf, const char *url,
   buf[0] = '\0';
   // - TLS: multiple (small) records: allow enough loops so mg_mgr_poll can
   // process buffered records when no more frames are coming in
-  for (i = 0; i < 500 && buf[0] == '\0' && !fd.closed; i++) {
+  for (i = 0; i < POLL_LIMIT(500) && buf[0] == '\0' && !fd.closed; i++) {
     mg_mgr_poll(mgr, 0);
     usleep(5000);  // 5 ms. Slow down poll loop to ensure packet transit, but
                    // allow enough loops to get the ARP response, otherwise,
@@ -360,7 +362,9 @@ static void test_mqtt_connsubpub(struct mg_mgr *mgr) {
   mg_mgr_poll(mgr, 0);
   s_conn = mg_mqtt_connect(mgr, data.url, &opts, mqtt_fn, &data);
   ASSERT(s_conn != NULL);
-  for (int i = 0; i < 1000 && s_conn != NULL && !s_conn->is_closing; i++) {
+  for (int i = 0;
+       i < POLL_LIMIT(1000) && s_conn != NULL && !s_conn->is_closing;
+       i++) {
     mg_mgr_poll(mgr, 0);
     usleep(5000);  // 5 ms (*) See fetch() above for reasons
   }
@@ -406,7 +410,9 @@ static void test_mqtt_connsubpub(struct mg_mgr *mgr) {
   mg_mgr_poll(mgr, 0);
   s_conn = mg_mqtt_connect(mgr, data.url, &opts, mqtt_fn, &data);
   ASSERT(s_conn != NULL);
-  for (int i = 0; i < 1000 && s_conn != NULL && !s_conn->is_closing; i++) {
+  for (int i = 0;
+       i < POLL_LIMIT(1000) && s_conn != NULL && !s_conn->is_closing;
+       i++) {
     mg_mgr_poll(mgr, 0);
     usleep(5000);  // 5 ms (*) See fetch() above for reasons
   }
@@ -418,10 +424,12 @@ static void test_mqtt_connsubpub(struct mg_mgr *mgr) {
 
 #ifndef NO_HTTPSERVER_TEST
 #include <pthread.h>
+static volatile bool s_poll_done;
+
 static void *poll_thread(void *p) {
   struct mg_mgr *mgr = (struct mg_mgr *) p;
   int i;
-  for (i = 0; i < 300; i++) {
+  for (i = 0; i < POLL_LIMIT(300) && !s_poll_done; i++) {
     mg_mgr_poll(mgr, 0);
     usleep(10000);  // 10 ms. Slow down poll loop to ensure packet transit
   }
@@ -436,6 +444,7 @@ static void test_http_server(struct mg_mgr *mgr) {
   struct mg_connection *c;
   char *cmd;
   pthread_t thread_id = (pthread_t) 0;
+  int rc;
 #if MG_TLS
   struct mg_tls_opts opts;
   memset(&opts, 0, sizeof(opts));
@@ -455,12 +464,15 @@ static void test_http_server(struct mg_mgr *mgr) {
 #endif
   ASSERT(c != NULL);
   ASSERT (mg_send(c, "NADA", 0)); // check mg_send allows len=0
+  s_poll_done = false;
   pthread_create(&thread_id, NULL, poll_thread,
                  mgr);  // simpler this way, no concurrency anyway
   MG_DEBUG(("CURL"));
-  ASSERT(system(cmd) == 0);  // wait for curl
+  rc = system(cmd);  // wait for curl
   MG_DEBUG(("MONGOOSE"));
+  s_poll_done = true;
   pthread_join(thread_id, NULL);  // wait for Mongoose
+  ASSERT(rc == 0);
   MG_DEBUG(("DONE"));
   free(cmd);
 #endif
@@ -529,7 +541,7 @@ static bool sntpms(struct mg_mgr *mgr, const char *url) {
   int64_t ms = 0;
   int i;
   mg_sntp_connect(mgr, url, sntpcb, &ms);
-  for (i = 0; i < 50 && ms == 0; i++) {
+  for (i = 0; i < POLL_LIMIT(50) && ms == 0; i++) {
     mg_mgr_poll(mgr, 0);
     usleep(10000);  // 10 ms. Slow down poll loop to ensure packet transit
   }

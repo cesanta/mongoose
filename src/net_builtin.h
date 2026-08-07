@@ -59,6 +59,7 @@ struct mg_tcpip_if {
   bool enable_req_sntp;                   // DHCP client requests an SNTP server address
   bool enable_fcs_check;                  // Verify and strip FCS from received frames
   bool enable_mac_check;                  // Drop frames not addressed to this MAC
+  bool enable_tcp_retransmit;             // Enable optional TCP retransmission queue
   bool update_mac_hash_table;             // Signal driver to refresh MAC multicast hash table
   bool is_ip_changed;                     // Set by stack when IP changes; triggers connection restart
   struct mg_tcpip_driver *driver;         // Hardware driver; must be set before mg_tcpip_init()
