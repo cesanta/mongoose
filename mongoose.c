@@ -10501,6 +10501,7 @@ void mg_mgr_poll(struct mg_mgr *mgr, int ms) {
   mg_tcpip_poll(mgr->ifp, now);
   for (c = mgr->conns; c != NULL; c = tmp) {
     struct connstate *s = (struct connstate *) (c + 1);
+    long flush = 0;
     bool is_tls = c->is_tls && !c->is_resolving && !c->is_arplooking &&
                   !c->is_listening && !c->is_connecting;
     tmp = c->next;
@@ -10513,8 +10514,10 @@ void mg_mgr_poll(struct mg_mgr *mgr, int ms) {
     if (is_tls && (c->rtls.len > 0 || mg_tls_pending(c) > 0))
       c->is_tls_hs ? mg_tls_handshake(c) : handle_tls_recv(c);
     if (can_write(c)) write_conn(c);
-    if (is_tls && c->send.len == 0) mg_tls_flush(c);
-    if (c->is_draining && c->send.len == 0 && s->ttype != MIP_TTYPE_FIN)
+    if (is_tls && c->send.len == 0) flush = mg_tls_flush(c);
+    if (flush == MG_IO_ERR) mg_error(c, "tx err");
+    if (c->is_draining && c->send.len == 0 && flush == 0 &&
+        s->ttype != MIP_TTYPE_FIN)
       init_closure(c);
     // For non-TLS, close immediately upon completing the 3-way closure
     // For TLS, handle any pending data (above) until MIP_TTYPE_FIN expires
@@ -14923,6 +14926,7 @@ void mg_mgr_poll(struct mg_mgr *mgr, int ms) {
   mg_ota_poll(mgr);
 
   for (c = mgr->conns; c != NULL; c = tmp) {
+    long flush = 0;
     bool is_resp = c->is_resp;
     tmp = c->next;
     mg_call(c, MG_EV_POLL, &now);
@@ -14944,10 +14948,12 @@ void mg_mgr_poll(struct mg_mgr *mgr, int ms) {
     } else {
       if (c->is_readable) read_conn(c);
       if (c->is_writable) write_conn(c);
-      if (c->is_tls && !c->is_tls_hs && c->send.len == 0) mg_tls_flush(c);
+      if (c->is_tls && !c->is_tls_hs && c->send.len == 0)
+        flush = mg_tls_flush(c);
     }
 
-    if (c->is_draining && c->send.len == 0) c->is_closing = 1;
+    if (flush == MG_IO_ERR) mg_error(c, "tx err");
+    if (c->is_draining && c->send.len == 0 && flush == 0) c->is_closing = 1;
     if (c->is_closing) close_conn(c);
   }
 }
@@ -19301,13 +19307,16 @@ size_t mg_tls_pending(struct mg_connection *c) {
   return tls != NULL ? tls->recv_len : 0;
 }
 
-void mg_tls_flush(struct mg_connection *c) {
+long mg_tls_flush(struct mg_connection *c) {
   struct tls_data *tls = (struct tls_data *) c->tls;
-  long n;
+  long n = 0;
   while (tls->send.len > 0 &&
          (n = mg_io_send(c, tls->send.buf, tls->send.len)) > 0) {
     mg_iobuf_del(&tls->send, 0, (size_t) n);
   }
+  if (n == MG_IO_ERR) return n;
+  c->is_tls_throttled = tls->send.len > 0;
+  return c->is_tls_throttled ? MG_IO_WAIT : 0;
 }
 
 void mg_tls_ctx_init(struct mg_mgr *mgr) {
@@ -20703,8 +20712,9 @@ size_t mg_tls_pending(struct mg_connection *c) {
   (void) c;
   return 0;
 }
-void mg_tls_flush(struct mg_connection *c) {
+long mg_tls_flush(struct mg_connection *c) {
   (void) c;
+  return 0;
 }
 void mg_tls_ctx_init(struct mg_mgr *mgr) {
   (void) mgr;
@@ -20968,17 +20978,20 @@ long mg_tls_send(struct mg_connection *c, const void *buf, size_t len) {
   return n;
 }
 
-void mg_tls_flush(struct mg_connection *c) {
+long mg_tls_flush(struct mg_connection *c) {
   struct mg_tls *tls = (struct mg_tls *) c->tls;
+  long n = 0;
   if (c->is_tls_throttled && c->is_draining) {
-    long n =
-        mbedtls_ssl_write(&tls->ssl, tls->throttled_buf, tls->throttled_len);
+    n = mbedtls_ssl_write(&tls->ssl, tls->throttled_buf, tls->throttled_len);
 #if defined(MBEDTLS_ERR_SSL_RECEIVED_NEW_SESSION_TICKET)
-    if (n == MBEDTLS_ERR_SSL_RECEIVED_NEW_SESSION_TICKET) return;
+    if (n == MBEDTLS_ERR_SSL_RECEIVED_NEW_SESSION_TICKET) return MG_IO_WAIT;
 #endif
     c->is_tls_throttled =
         (n == MBEDTLS_ERR_SSL_WANT_READ || n == MBEDTLS_ERR_SSL_WANT_WRITE);
+    if (c->is_tls_throttled) return MG_IO_WAIT;
+    if (n <= 0) return MG_IO_ERR;
   }
+  return 0;
 }
 
 void mg_tls_ctx_init(struct mg_mgr *mgr) {
@@ -21367,8 +21380,9 @@ long mg_tls_send(struct mg_connection *c, const void *buf, size_t len) {
   return n;
 }
 
-void mg_tls_flush(struct mg_connection *c) {
+long mg_tls_flush(struct mg_connection *c) {
   (void) c;
+  return 0;
 }
 
 void mg_tls_ctx_init(struct mg_mgr *mgr) {
