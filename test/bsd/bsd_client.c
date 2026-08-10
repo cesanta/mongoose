@@ -4,6 +4,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <sys/socket.h>
+#include <sys/time.h>
 #include <unistd.h>
 
 #define PORT 1234
@@ -46,6 +47,7 @@ static void *worker(void *arg) {
   const char *host = (const char *) arg;
   char tx[DATA_SIZE], rx[DATA_SIZE];
   struct sockaddr_in sa;
+  struct timeval timeout;
   unsigned port = 0;
   int fd;
 
@@ -54,6 +56,11 @@ static void *worker(void *arg) {
 
   fd = socket(AF_INET, SOCK_STREAM, 0);
   if (fd < 0) goto fail;
+  timeout.tv_sec = 5;
+  timeout.tv_usec = 0;
+  if (setsockopt(fd, SOL_SOCKET, SO_RCVTIMEO, &timeout, sizeof(timeout)) != 0 ||
+      setsockopt(fd, SOL_SOCKET, SO_SNDTIMEO, &timeout, sizeof(timeout)) != 0)
+    goto fail_close;
 
   memset(&sa, 0, sizeof(sa));
   sa.sin_family = AF_INET;

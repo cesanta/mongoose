@@ -281,10 +281,10 @@ jobs:
         make -C test/bsd shm_tap_bridge
         test/bsd/shm_tap_bridge &
         sleep 2
-        set -o pipefail; make -C test/bsd CC=${{ matrix.cc }} | tee log
+        make -C test/bsd CC=${{ matrix.cc }} > log
     - if: success() || failure()
       run: |
-        # cat log
+        cat log
         test/health.awk < log > json
         scp -o "StrictHostKeyChecking=no" json "root@176.9.217.245:/data/downloads/health/bsd_${{ matrix.cc }}_$(date +"%Y%m%d").json"
 

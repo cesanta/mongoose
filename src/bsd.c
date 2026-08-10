@@ -127,7 +127,8 @@ int listen(int fd, int backlog) {
 int accept(int fd, struct sockaddr *addr, socklen_t *addrlen) {
   struct mg_bsd_sock *ls = get(fd);
   if (!ls) return -1;
-  struct sockaddr_in peer = {0};
+  struct sockaddr_in peer;
+  memset(&peer, 0, sizeof(peer));
   void *t = mg_bsd_transport_accept(ls->t, &peer, ls->nonblock);
   if (!t) return -1; // errno was set by transport_accept()
   struct mg_bsd_sock *ns = (struct mg_bsd_sock *) calloc(1, sizeof(*ns));
@@ -250,7 +251,8 @@ void freeaddrinfo(struct addrinfo *res) { (void) res; }
 #endif
 
 int inet_pton(int af, const char *src, void *dst) {
-  struct mg_addr a = {0};
+  struct mg_addr a;
+  memset(&a, 0, sizeof(a));
   if (af == AF_INET && mg_aton(mg_str_s(src), &a)) { memcpy(dst, &a.addr.ip4, 4); return 1; }
   return 0;
 }
@@ -265,7 +267,8 @@ const char *inet_ntop(int af, const void *src, char *dst, socklen_t size) {
 }
 
 in_addr_t inet_addr(const char *cp) {
-  struct mg_addr a = {0};
+  struct mg_addr a;
+  memset(&a, 0, sizeof(a));
   return mg_aton(mg_str_s(cp), &a) ? a.addr.ip4 : (in_addr_t) -1;
 }
 
