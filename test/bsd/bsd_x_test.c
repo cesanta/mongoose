@@ -42,7 +42,10 @@ static void client_task(void *args) {
   struct client_data *d = (struct client_data *) args;
   char req[256];
   fd = socket(AF_INET, SOCK_STREAM, 0);
-  struct sockaddr_in sa = {.sin_family = AF_INET, .sin_port = htons(80)};
+  struct sockaddr_in sa;
+  memset(&sa, 0, sizeof(sa));
+  sa.sin_family = AF_INET;
+  sa.sin_port = htons(80);
   memcpy(&sa.sin_addr, &d->ip, 4);
   c = connect(fd, (struct sockaddr *) &sa, sizeof(sa));
   ASSERT(c >= 0);
@@ -73,6 +76,7 @@ static void echo_task(void *args) {
   char buf[512];
   size_t i = 0;
   ssize_t n;
+  MG_INFO(("Echo task started: %d", fd));
   while ((n = recv(fd, buf, sizes[i++ % (sizeof(sizes) / sizeof(sizes[0]))], 0)) > 0)
     send(fd, buf, (size_t) n, 0);
   close(fd);
@@ -82,9 +86,14 @@ static void echo_task(void *args) {
 // accept loop.  Waits for incoming connections on port 1234 and spawns
 // an echo_task for each one, allowing concurrent clients.
 static void atask(void *args) {
+  BaseType_t result;
   mg_bsd_init();
   int lfd = socket(AF_INET, SOCK_STREAM, 0);
-  struct sockaddr_in sa = {.sin_family = AF_INET, .sin_port = htons(1234), .sin_addr = {INADDR_ANY}};
+  struct sockaddr_in sa;
+  memset(&sa, 0, sizeof(sa));
+  sa.sin_family = AF_INET;
+  sa.sin_port = htons(1234);
+  sa.sin_addr.s_addr = INADDR_ANY;
   bind(lfd, (struct sockaddr *) &sa, sizeof(sa));
   listen(lfd, 5);
   fcntl(lfd, F_SETFL, O_NONBLOCK);
@@ -93,7 +102,10 @@ static void atask(void *args) {
     int fd = accept(lfd, NULL, NULL);
     if (fd < 0) { vTaskDelay(pdMS_TO_TICKS(10)); continue; }
     // echo_task at higher priority than task1
-    xTaskCreate(echo_task, "echo", 512, (void *) (uintptr_t) fd, configMAX_PRIORITIES - 1, NULL);
+    result = xTaskCreate(echo_task, "echo", 512, (void *) (uintptr_t) fd,
+                         configMAX_PRIORITIES - 1, NULL);
+    MG_INFO(("Echo task %d: %s", fd, result == pdPASS ? "created" : "FAILED"));
+    ASSERT(result == pdPASS);
   }
   close(lfd);
   s_wait = false;
@@ -118,7 +130,7 @@ static void task2(void *args) {
   // atask at higher priority than task1
   xTaskCreate(atask, "atask", 256,  NULL, configMAX_PRIORITIES - 1, NULL);
   ip = mg_mprintf("%M", mg_print_ip4, &mgr->ifp->ip);
-  cmd[0] = "./bsd_client";
+  cmd[0] = (char *) "./bsd_client";
   cmd[1] = ip;
   cmd[2] = NULL;
   ASSERT(posix_spawn(&pid, cmd[0], NULL, NULL, cmd, environ) == 0);
@@ -217,6 +229,7 @@ static void task1(void *args) {
   while (!s_done) {
     mg_mgr_poll(mgr, 0);
     mg_bsd_poll(mgr);
+    vTaskDelay(1);  // Let idle reclaim deleted echo tasks
   }
   s_done = false;
   vTaskDelete(NULL);

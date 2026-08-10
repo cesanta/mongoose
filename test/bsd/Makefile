@@ -15,14 +15,24 @@ endif
 
 .PHONY: all bsd_test bsd_client shm_tap_bridge shm_port_bridge bsd_s390 clean
 
-SOURCES = bsd_shm_test.c ../../mongoose.c
-
-# FreeRTOS
-SOURCES += FreeRTOS-Kernel/portable/MemMang/heap_4.c
-SOURCES += FreeRTOS-Kernel/portable/ThirdParty/GCC/Posix/port.c
-SOURCES += FreeRTOS-Kernel/portable/ThirdParty/GCC/Posix/utils/wait_for_event.c
+TEST_SOURCES = bsd_shm_test.c
+# A C++ application compiles its sources as C++, linking Mongoose and FreeRTOS as C.
+# FreeRTOS does not build as C++, so C sources are compiled separately.
+C_SOURCES = ../../mongoose.c
+C_SOURCES += FreeRTOS-Kernel/portable/MemMang/heap_4.c
+C_SOURCES += FreeRTOS-Kernel/portable/ThirdParty/GCC/Posix/port.c
+C_SOURCES += FreeRTOS-Kernel/portable/ThirdParty/GCC/Posix/utils/wait_for_event.c
+C_SOURCES += $(wildcard FreeRTOS-Kernel/*.c)
+C_OBJECTS = $(notdir $(C_SOURCES:.c=.o))
+C_INPUTS = $(foreach S,$(C_SOURCES),-x c $(S))
 CFLAGS += -IFreeRTOS-Kernel/include 
 CFLAGS += -IFreeRTOS-Kernel/portable/ThirdParty/GCC/Posix -Wno-conversion -Wno-undef
+
+ifeq "$(findstring ++,$(CC))" ""
+TEST_LANGUAGE = c
+else
+TEST_LANGUAGE = c++
+endif
 
 DOCKER_BIN ?= docker
 CWD ?= $(realpath $(CURDIR))
@@ -38,8 +48,10 @@ all bsd: shm_tap_bridge bsd_client FreeRTOS-Kernel bsd_test
 	ASAN_OPTIONS=$(ASAN_OPTIONS) $(RUN) ./bsd_test $(ARGS)
 
 # requires shm_tap_bridge to be running
-bsd_test: $(SOURCES) bsd_x_test.c ../../mongoose.h shm_queue.h
-	$(CC) $(SOURCES) $(wildcard FreeRTOS-Kernel/*.c) $(CFLAGS) $(CFLAGS_MONGOOSE) $(CFLAGS_EXTRA) -o $@
+bsd_test: FreeRTOS-Kernel
+	$(CC) $(C_INPUTS) -c $(CFLAGS) $(CFLAGS_MONGOOSE) $(CFLAGS_EXTRA)
+	$(CC) -x $(TEST_LANGUAGE) -c $(TEST_SOURCES) $(CFLAGS) $(CFLAGS_MONGOOSE) $(CFLAGS_EXTRA)
+	$(CC) $(C_OBJECTS) $(TEST_SOURCES:.c=.o) $(CFLAGS) $(CFLAGS_MONGOOSE) $(CFLAGS_EXTRA) -o $@
 
 bsd_client: bsd_client.c
 	$(CC) bsd_client.c -pthread -o $@
