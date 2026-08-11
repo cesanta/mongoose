@@ -39,13 +39,14 @@ static uint32_t sectors_per_bank(void) {
 }
 
 static void flash_unlock(void) {
-  static bool unlocked = false;
-  if (unlocked == false) {
+  if (MG_REG(FLASH_NSCR) & MG_BIT(0)) {
     MG_REG(FLASH_KEYR) = 0x45670123;
-    MG_REG(FLASH_KEYR) = 0Xcdef89ab;
+    MG_REG(FLASH_KEYR) = 0xcdef89ab;
+  }
+
+  if (MG_REG(FLASH_OPTCR) & MG_BIT(0)) {
     MG_REG(FLASH_OPTKEYR) = 0x08192a3b;
     MG_REG(FLASH_OPTKEYR) = 0x4c5d6e7f;
-    unlocked = true;
   }
 }
 
