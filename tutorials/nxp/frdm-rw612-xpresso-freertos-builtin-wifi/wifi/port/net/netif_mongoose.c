@@ -249,7 +249,7 @@ static struct mg_tcpip_if *s_ifp;
 static void deliver_packet_above(struct pb *buf, int ifc) {
   struct eth_hdr *ethhdr = (struct eth_hdr *) buf->data;
   w_pkt_d("Data RX: Driver=>Kernel, if %d, len %d", ifc, buf->len);
-  if (mg_ntohs(ethhdr->type == 0x888E)) {
+  if (ethhdr->type == mg_htons(0x888E)) {
 #if CONFIG_WPS2
     if (wps_rx_callback != NULL) wps_rx_callback(buf->data, buf->len);
 #endif
