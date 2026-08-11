@@ -559,7 +559,7 @@ static int mg_tls_recv_record(struct mg_connection *c) {
 
   msgsz = MG_LOAD_BE16(rio->buf + 3);
   msg = rio->buf + 5;
-  if (msgsz < 16) {
+  if (msgsz < 17) {
     mg_error(c, "wrong size");
     return -1;
   }
