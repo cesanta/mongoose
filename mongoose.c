@@ -18382,7 +18382,11 @@ static int mg_tls_recv_cert(struct mg_connection *c, bool is_client) {
         mg_error(c, r < 0 ? "failed to parse CA bundle"
                           : "failed to find issuing CA in bundle");
         return -1;
-      }  // else r > 0 => issuer found
+      } else if (!ca.is_ca ||  // candidate issuer found
+                 !mg_tls_verify_cert_signature(&certs[certnum - 1], &ca)) {
+        mg_error(c, "failed to verify CA");
+        return -1;
+      }  // issuer verified. NOTE(): may fail if two diff CAs share a CN
       MG_VERBOSE(("CA serial: %M", mg_print_hex, ca.sn.len, ca.sn.buf));
     }
     if (!found_ca && tls->ca_der.len > 0) {  // single cert or server
