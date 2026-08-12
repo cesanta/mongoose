@@ -1,1 +1,1 @@
-#define MG_VERSION "7.22"
+#define MG_VERSION "7.23"
