@@ -2242,8 +2242,7 @@ static void write_conn(struct mg_connection *c) {
 
 static void init_closure(struct mg_connection *c) {
   struct connstate *s = (struct connstate *) (c + 1);
-  if (c->is_udp == false && c->is_listening == false &&
-      c->is_connecting == false) {  // For TCP conns,
+  if (c->is_listening == false && c->is_connecting == false) {
     tx_tcp(c->mgr->ifp, s->mac, &c->loc, &c->rem, c->dscp, TH_FIN | TH_ACK,
            mg_htonl(s->seq), mg_htonl(s->ack), NULL, 0);
     settmout(c, MIP_TTYPE_FIN);
@@ -2283,8 +2282,10 @@ void mg_mgr_poll(struct mg_mgr *mgr, int ms) {
       c->is_tls_hs ? mg_tls_handshake(c) : handle_tls_recv(c);
     if (can_write(c)) write_conn(c);
     if (is_tls && c->send.len == 0) mg_tls_flush(c);
-    if (c->is_draining && c->send.len == 0 && s->ttype != MIP_TTYPE_FIN)
-      init_closure(c);
+    if (c->is_draining && c->send.len == 0) {
+      if (c->is_udp) c->is_closing = 1;
+      if (!c->is_udp && s->ttype != MIP_TTYPE_FIN) init_closure(c);
+    }
     // For non-TLS, close immediately upon completing the 3-way closure
     // For TLS, handle any pending data (above) until MIP_TTYPE_FIN expires
     if (s->twclosure &&
