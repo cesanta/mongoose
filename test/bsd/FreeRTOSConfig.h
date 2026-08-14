@@ -15,7 +15,7 @@
 #define configUSE_MALLOC_FAILED_HOOK 0
 #define configUSE_COUNTING_SEMAPHORES 1
 #define configMINIMAL_STACK_SIZE 128
-#define configTOTAL_HEAP_SIZE (1024 * 128)
+#define configTOTAL_HEAP_SIZE (1024 * 256)
 #define INCLUDE_vTaskDelay 1
 #define INCLUDE_vTaskDelete 1
 #define INCLUDE_xTaskGetSchedulerState 1
