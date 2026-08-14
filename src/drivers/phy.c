@@ -11,7 +11,9 @@ enum {                  // ID1  ID2
   MG_PHY_RTL8201 = 0xc816,  // 001c c816 - RTL8201F
   MG_PHY_RTL8211 = 0xc916,  // 001c c916 - RTL8211F
   MG_PHY_ICS1894x = 0x15,
-  MG_PHY_ICS189432 = 0xf450  // 0015 f450 - ICS1894
+  MG_PHY_ICS189432 = 0xf450,  // 0015 f450 - ICS1894
+  MG_PHY_YT85x = 0x4f51,
+  MG_PHY_YT8531 = 0xe91a  // 4f51 e91a - Motorcomm YT8531
 };
 
 enum {
@@ -29,7 +31,10 @@ enum {
   MG_PHY_RTL82x_REG_PAGESEL = 31,
   MG_PHY_RTL8201_REG_RMSR = 16,   // in page 7
   MG_PHY_RTL8211_REG_PHYSR = 26,  // in page a43
-  MG_PHY_ICS189432_REG_POLL = 17
+  MG_PHY_ICS189432_REG_POLL = 17,
+  MG_PHY_YT8531_REG_PHYSTS = 17,
+  MG_PHY_YT8531_REG_EXT_ADDR = 30,
+  MG_PHY_YT8531_REG_EXT_DATA = 31
 };
 
 static const char *mg_phy_id_to_str(uint16_t id1, uint16_t id2) {
@@ -60,6 +65,8 @@ static const char *mg_phy_id_to_str(uint16_t id1, uint16_t id2) {
       }
     case MG_PHY_ICS1894x:
       return "ICS1894x";
+    case MG_PHY_YT85x:
+      return id2 == MG_PHY_YT8531 ? "YT8531" : "YT85x";
     default:
       return "unknown";
   }
@@ -74,6 +81,18 @@ void mg_phy_init(struct mg_phy *phy, uint8_t phy_addr, uint8_t config) {
   id1 = phy->read_reg(phy_addr, MG_PHY_REG_ID1);
   id2 = phy->read_reg(phy_addr, MG_PHY_REG_ID2);
   MG_INFO(("PHY ID: %#04x %#04x (%s)", id1, id2, mg_phy_id_to_str(id1, id2)));
+
+  if (id1 == MG_PHY_YT85x && id2 == MG_PHY_YT8531) {
+    uint16_t value;
+    // TODO (robertc2000): Autonegotiation remains disabled after PHY is reset
+    // We temporarily force enabling autoneg, until a workaround is found.
+    phy->write_reg(phy_addr, MG_PHY_REG_BCR, MG_BIT(12));
+    phy->write_reg(phy_addr, MG_PHY_YT8531_REG_EXT_ADDR, 0xa003);
+    value = phy->read_reg(phy_addr, MG_PHY_YT8531_REG_EXT_DATA);
+    value &= (uint16_t) ~(MG_BIT(3) | MG_BIT(2) | MG_BIT(1) | MG_BIT(0));
+    phy->write_reg(phy_addr, MG_PHY_YT8531_REG_EXT_DATA,
+                   (uint16_t) (value | MG_BIT(1)));  // TXDLY: 2 * 150 ps
+  }
 
   if (id1 == MG_PHY_DP83x && id2 == MG_PHY_DP83867) {
     phy->write_reg(phy_addr, 0x0d, 0x1f);  // write 0x10d to IO_MUX_CFG (0x0170)
@@ -168,6 +187,15 @@ bool mg_phy_up(struct mg_phy *phy, uint8_t phy_addr, bool *full_duplex,
       uint16_t poll_reg = phy->read_reg(phy_addr, MG_PHY_ICS189432_REG_POLL);
       *full_duplex = poll_reg & MG_BIT(14);
       *speed = (poll_reg & MG_BIT(15)) ? MG_PHY_SPEED_100M : MG_PHY_SPEED_10M;
+    } else if (id1 == MG_PHY_YT85x) {
+      uint16_t id2 = phy->read_reg(phy_addr, MG_PHY_REG_ID2);
+      if (id2 == MG_PHY_YT8531) {
+        uint16_t physts = phy->read_reg(phy_addr, MG_PHY_YT8531_REG_PHYSTS);
+        *full_duplex = physts & MG_BIT(13);
+        *speed = (physts & MG_BIT(15))   ? MG_PHY_SPEED_1000M
+                 : (physts & MG_BIT(14)) ? MG_PHY_SPEED_100M
+                                         : MG_PHY_SPEED_10M;
+      }
     }
   }
   return up;

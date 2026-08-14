@@ -152,6 +152,7 @@ extern struct mg_tcpip_driver mg_tcpip_driver_cyw;
 extern struct mg_tcpip_driver mg_tcpip_driver_nxp_wifi;
 extern struct mg_tcpip_driver mg_tcpip_driver_st67w6;
 extern struct mg_tcpip_driver mg_tcpip_driver_atcmd;
+extern struct mg_tcpip_driver mg_tcpip_driver_netc;
 
 // SPI bus abstraction for SPI-attached network chips (e.g. W5500).
 // Populate and assign to the driver's driver_data field.
