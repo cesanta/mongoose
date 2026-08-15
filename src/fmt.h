@@ -34,8 +34,8 @@ typedef size_t (*mg_pm_t)(mg_pfn_t fn, void *arg, va_list *);
 //   - mg_print_base64 - prints a buffer as a base64-encoded string
 //   - mg_print_esc - prints a JSON-escaped string
 //   - mg_print_hex - prints a buffer as a hex string
-//   - mg_print_ip - prints an IP address in a struct mg_str
-//   - mg_print_ip_port - prints IP address and port in a struct mg_str
+//   - mg_print_ip - prints an IP address in a struct mg_addr
+//   - mg_print_ip_port - prints IP address and port in a struct mg_addr
 //   - mg_print_ip4 - prints an IPv4 address
 //   - mg_print_ip6 - prints an IPv6 address
 //   - mg_print_mac - prints a MAC address

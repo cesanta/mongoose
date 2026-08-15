@@ -34,15 +34,15 @@ char *mg_mprintf(const char *fmt, ...);
 size_t mg_queue_printf(struct mg_queue *, const char *fmt, ...);
 
 // Built-in %M/%m printer functions. Each reads its argument(s) from ap.
-size_t mg_print_base64(mg_pfn_t, void *arg, va_list *ap);   // expects: const void *buf, size_t len
+size_t mg_print_base64(mg_pfn_t, void *arg, va_list *ap);   // expects: int len, uint8_t *buf
 size_t mg_print_esc(mg_pfn_t, void *arg, va_list *ap);      // expects: int len, const char *str -- use MG_ESC()
-size_t mg_print_hex(mg_pfn_t, void *arg, va_list *ap);      // expects: const void *buf, size_t len
+size_t mg_print_hex(mg_pfn_t, void *arg, va_list *ap);      // expects: int len, uint8_t *buf
 size_t mg_print_ip(mg_pfn_t, void *arg, va_list *ap);       // expects: const struct mg_addr *
 size_t mg_print_ip_port(mg_pfn_t, void *arg, va_list *ap);  // expects: const struct mg_addr *
 size_t mg_print_ip4(mg_pfn_t, void *arg, va_list *ap);      // expects: uint32_t *ipv4
 size_t mg_print_ip6(mg_pfn_t, void *arg, va_list *ap);      // expects: uint8_t[16] ipv6
 size_t mg_print_mac(mg_pfn_t, void *arg, va_list *ap);      // expects: uint8_t[6] mac
-size_t mg_print_ieee64(mg_pfn_t, void *arg, va_list *ap);   // expects: uint64_t
+size_t mg_print_ieee64(mg_pfn_t, void *arg, va_list *ap);   // expects: uint8_t[8] ieee64
 size_t mg_print_l2addr(mg_pfn_t, void *arg, va_list *ap);   // expects: uint8_t l2, uint8_t[n] n-byte l2-dependent address
 size_t mg_print_html_esc(mg_pfn_t, void *arg, va_list *ap); // expects: int len, const char *str -- use MG_ESC()
 
