@@ -2,7 +2,7 @@
 #include "log.h"
 #include "ota.h"
 
-#if MG_OTA >= MG_OTA_RT1020 && MG_OTA <= MG_OTA_RT1170
+#if MG_OTA >= MG_OTA_RT1020 && MG_OTA <= MG_OTA_RT1180
 
 static bool mg_imxrt_write(void *, const void *, size_t);
 static bool mg_imxrt_swap(void);
@@ -13,9 +13,12 @@ static bool mg_imxrt_swap(void);
 #elif MG_OTA == MG_OTA_RT1064
 #define MG_IMXRT_FLASH_START 0x70000000
 #define FLEXSPI_NOR_INSTANCE 1
-#else  // RT1170
+#elif MG_OTA == MG_OTA_RT1170
 #define MG_IMXRT_FLASH_START 0x30000000
 #define FLEXSPI_NOR_INSTANCE 1
+#else  // RT1180 FlexSPI2
+#define MG_IMXRT_FLASH_START 0x04000000
+#define FLEXSPI_NOR_INSTANCE 2
 #endif
 
 #if MG_OTA == MG_OTA_RT1050
@@ -324,7 +327,7 @@ struct mg_flexspi_nor_driver_interface {
                     uint32_t *option);
 };
 #else
-// RT117x support ROM API version 1.7
+// RT117x and RT118x
 struct mg_flexspi_nor_driver_interface {
   uint32_t version;
   int (*init)(uint32_t instance, struct mg_flexspi_nor_config *config);
@@ -359,10 +362,15 @@ struct mg_flexspi_nor_driver_interface {
 #define flexspi_nor                                                          \
   (*((struct mg_flexspi_nor_driver_interface **) (*(uint32_t *) 0x0020001c + \
                                                   16)))
-#else
+#elif MG_OTA == MG_OTA_RT1170
 #define MG_FLEXSPI_BASE 0x400CC000
 #define flexspi_nor                                                          \
   (*((struct mg_flexspi_nor_driver_interface **) (*(uint32_t *) 0x0021001c + \
+                                                  12)))
+#else
+#define MG_FLEXSPI_BASE 0x445E0000
+#define flexspi_nor                                                          \
+  (*((struct mg_flexspi_nor_driver_interface **) (*(uint32_t *) 0x1000001c + \
                                                   12)))
 #endif
 
@@ -408,6 +416,13 @@ static struct mg_flexspi_nor_config default_config = {
 #else
 // Note: this QSPI configuration works for RTs supporting QSPI
 // Configuration for QSPI memory
+#if MG_OTA == MG_OTA_RT1180
+#define MG_FLEXSPI_QSPI_SERIAL_CLK_FREQ 5  // 100MHz
+#define MG_FLEXSPI_QSPI_FLASH_SIZE (16 * 1024 * 1024)
+#else
+#define MG_FLEXSPI_QSPI_SERIAL_CLK_FREQ 7  // 133MHz
+#define MG_FLEXSPI_QSPI_FLASH_SIZE (8 * 1024 * 1024)
+#endif
 static struct mg_flexspi_nor_config default_config = {
     .memConfig = {.tag = MG_FLEXSPI_CFG_BLK_TAG,
                   .version = MG_FLEXSPI_CFG_BLK_VERSION,
@@ -417,8 +432,8 @@ static struct mg_flexspi_nor_config default_config = {
                   .controllerMiscOption = MG_BIT(4),
                   .deviceType = 1,  // serial NOR
                   .sflashPadType = 4,
-                  .serialClkFreq = 7,  // 133MHz
-                  .sflashA1Size = 8 * 1024 * 1024,
+                  .serialClkFreq = MG_FLEXSPI_QSPI_SERIAL_CLK_FREQ,
+                  .sflashA1Size = MG_FLEXSPI_QSPI_FLASH_SIZE,
                   .lookupTable = MG_FLEXSPI_QSPI_LUT},
     .pageSize = 256,
     .sectorSize = 4 * 1024,
@@ -453,6 +468,7 @@ MG_IRAM static int flexspi_nor_get_config(
 }
 #endif
 
+#if MG_OTA == MG_OTA_RT1020 || MG_OTA == MG_OTA_RT1050
 MG_IRAM static void mg_spin(volatile uint32_t count) {
   while (count--) (void) 0;
 }
@@ -461,6 +477,7 @@ MG_IRAM static void flash_wait(void) {
   while ((*((volatile uint32_t *) (MG_FLEXSPI_BASE + 0xE0)) & MG_BIT(1)) == 0)
     mg_spin(1);
 }
+#endif
 
 MG_IRAM static bool flash_erase(struct mg_flexspi_nor_config *config,
                                 void *addr) {
@@ -509,6 +526,8 @@ MG_IRAM static bool mg_imxrt_write(void *addr, const void *buf, size_t len) {
   uint32_t *dst = (uint32_t *) addr;
   uint32_t *src = (uint32_t *) buf;
   uint32_t *end = (uint32_t *) ((char *) buf + len);
+  char *flash_start = (char *) s_mg_flash_imxrt.start;
+  char *flash_end = flash_start + s_mg_flash_imxrt.size;
   ok = true;
 
   while (ok && src < end) {
@@ -516,20 +535,32 @@ MG_IRAM static bool mg_imxrt_write(void *addr, const void *buf, size_t len) {
       ok = false;
       break;
     }
-    uint32_t status;
+    uint32_t status = 0;
     uint32_t dst_ofs = (uint32_t) dst - (uint32_t) s_mg_flash_imxrt.start;
-    if ((char *) buf >= (char *) s_mg_flash_imxrt.start) {
+    if ((char *) buf >= flash_start && (char *) buf < flash_end) {
       // If we copy from FLASH to FLASH, then we first need to copy the source
       // to RAM
       size_t tmp_buf_size = s_mg_flash_imxrt.align / sizeof(uint32_t);
       uint32_t tmp[tmp_buf_size];
 
+#if MG_OTA == MG_OTA_RT1020 || MG_OTA == MG_OTA_RT1050
+      // ROM API 1.4 does not provide flexspi_nor_flash_read().
+      // Manually copy byte by byte into the RAM buffer.
       for (size_t i = 0; i < tmp_buf_size; i++) {
         flash_wait();
         tmp[i] = src[i];
       }
-      status = flexspi_nor->program(FLEXSPI_NOR_INSTANCE, config_ptr,
-                                    (uint32_t) dst_ofs, tmp);
+#else
+      // When supported, prefer the read API call.
+      uint32_t src_ofs =
+          (uint32_t) src - (uint32_t) s_mg_flash_imxrt.start;
+      status = flexspi_nor->read(FLEXSPI_NOR_INSTANCE, config_ptr, tmp,
+                                 src_ofs, s_mg_flash_imxrt.align);
+#endif
+      if (status == 0) {
+        status = flexspi_nor->program(FLEXSPI_NOR_INSTANCE, config_ptr,
+                                      dst_ofs, tmp);
+      }
     } else {
       status = flexspi_nor->program(FLEXSPI_NOR_INSTANCE, config_ptr,
                                     (uint32_t) dst_ofs, src);
