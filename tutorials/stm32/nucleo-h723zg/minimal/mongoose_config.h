@@ -44,6 +44,13 @@
 #define MG_OTA_STATE_GET()    (RTC->BKP0R)
 #define MG_OTA_STATE_SET(v)   (RTC->BKP0R = (uint32_t) (v))
 
+// Health record lives in the .mg_health region, see link.ld
+#define MG_HEALTH_RAM __attribute__((section(".mg_health")))
+
+// mdash device token
+#define MG_ENABLE_DASH 1
+#define MG_MDASH_KEY ""  // Set this
+
 // Construct MAC address from the MCU unique ID
 #define MGUID ((uint32_t *) UID_BASE)
 #define MG_SET_MAC_ADDRESS(mac)      \

@@ -1,6 +1,6 @@
-#include "dns.h"
 #include "event.h"
 #include "log.h"
+#include "mdash.h"
 #include "net.h"
 #include "printf.h"
 #include "str.h"
@@ -768,6 +768,7 @@ void mg_mgr_poll(struct mg_mgr *mgr, int ms) {
   now = mg_millis();
   mg_timer_poll(&mgr->timers, now);
   mg_ota_poll(mgr);
+  mg_mdash_poll(mgr);
 
   for (c = mgr->conns; c != NULL; c = tmp) {
     long flush = 0;

@@ -1,24 +1,22 @@
 # Copyright (c) 2026 Cesanta Software Limited
 # Environment setup: https://mongoose.ws/docs/getting-started/build-environment/
 
+MGDIR = ../../../..
+
 CFLAGS  = -W -Wall -Wextra -Wundef -Wshadow -Wdouble-promotion
 CFLAGS += -Wformat-truncation -fno-common -Wconversion -Wno-sign-conversion
 CFLAGS += -g3 -Os -ffunction-sections -fdata-sections
-CFLAGS += -I. -Icmsis_core/CMSIS/Core/Include -Icmsis_h7/Include -Imongoose
+CFLAGS += -I. -I$(MGDIR) -Icmsis_core/CMSIS/Core/Include -Icmsis_h7/Include
 CFLAGS += -mcpu=cortex-m7 -mthumb -mfloat-abi=hard -mfpu=fpv5-d16 $(CFLAGS_EXTRA)
 LDFLAGS ?= -Tlink.ld -nostdlib -nostartfiles --specs nosys.specs -lc -lgcc -Wl,--gc-sections -Wl,-Map=$@.map
 
 SOURCES = main.c hal.c
 SOURCES += cmsis_h7/Source/Templates/gcc/startup_stm32h723xx.s
-SOURCES += mongoose/mongoose.c
-
+SOURCES += $(MGDIR)/mongoose.c
 
 all build example: firmware.bin
 
-mongoose/mongoose.c mongoose/mongoose.h:
-	cp ../../../../mongoose.[ch] mongoose/
-
-firmware.elf: cmsis_core cmsis_h7 hal.h link.ld Makefile $(SOURCES) mongoose/mongoose.h
+firmware.elf: cmsis_core cmsis_h7 hal.h link.ld Makefile $(SOURCES) $(MGDIR)/mongoose.h
 	arm-none-eabi-gcc $(SOURCES) $(CFLAGS) $(CFLAGS_EXTRA) $(LDFLAGS) -o $@
 
 firmware.bin: firmware.elf
@@ -36,7 +34,7 @@ cmsis_h7:
 	git clone -q -c advice.detachedHead=false --depth 1 -b v1.10.6 https://github.com/STMicroelectronics/cmsis_device_h7 $@
 
 clean:
-	rm -rf firmware.* cmsis_* mongoose/mongoose.*
+	rm -rf firmware.* cmsis_*
 
 
 # Automated remote test. Requires env variable VCON_API_KEY set. See https://vcon.io/automated-firmware-tests/

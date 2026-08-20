@@ -50,6 +50,7 @@ struct mg_mgr {
   struct mg_tcpip_if *ifp;      // Builtin TCP/IP stack: network interface pointer
   size_t extraconnsize;         // Builtin TCP/IP stack: extra bytes allocated per connection
   union mg_pipe pipe;           // Socketpair write-end / queue, used by mg_wakeup()
+  struct mg_rpc *rpcs;          // Linked list of registered RPC handlers
 #if MG_ENABLE_FREERTOS_TCP
   SocketSet_t ss;               // FreeRTOS-TCP socket set
 #endif

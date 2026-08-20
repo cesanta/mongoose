@@ -2,7 +2,7 @@
 #include "dns.h"
 #include "fmt.h"
 #include "log.h"
-#include "ota.h"
+#include "mdash.h"
 #include "printf.h"
 #include "profile.h"
 #include "timer.h"
@@ -347,6 +347,9 @@ void mg_mgr_init(struct mg_mgr *mgr) {
             : MG_TLS == MG_TLS_BUILTIN ? "builtin"
             : MG_TLS == MG_TLS_WOLFSSL ? "WolfSSL"
                                        : "custom"));
+#if MG_ENABLE_MDASH
+  mg_mdash_init(mgr);
+#endif
 }
 
 #if MG_ENABLE_TCPIP

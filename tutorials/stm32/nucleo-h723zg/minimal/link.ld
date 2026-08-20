@@ -23,6 +23,10 @@ SECTIONS {
 
   .eth_ram : { *(.eth_ram .eth_ram*) } > ram_d1 AT > flash
 
+  /* Health record. NOLOAD and in unused DTCM, so startup code neither copies
+     nor zeroes it and the contents survive a warm reset */
+  .mg_health (NOLOAD) : { KEEP(*(.mg_health .mg_health*)) } > dtcmram
+
   . = ALIGN(8);
   _end = .;
 }
