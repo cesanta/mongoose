@@ -447,7 +447,7 @@ static inline uint32_t mg_ota_esp32_state_set(uint32_t state) {
 #endif
 
 #if MG_ENABLE_TCPIP && !defined(MG_ENABLE_DRIVER_IMXRT10) && \
-    !defined(MG_ENABLE_DRIVER_IMXRT11)
+    !defined(MG_ENABLE_DRIVER_IMXRT11) && !defined(MG_ENABLE_DRIVER_NETC)
 #if defined(CPU_MIMXRT1021DAG5A) || defined(CPU_MIMXRT1024DAG5A) ||         \
     defined(CPU_MIMXRT1042XJM5B) || defined(CPU_MIMXRT1052DVL6B) ||         \
     defined(CPU_MIMXRT1062DVL6B) || defined(CPU_MIMXRT1064DVL6B) ||         \
@@ -462,6 +462,8 @@ static inline uint32_t mg_ota_esp32_state_set(uint32_t state) {
     defined(_MIMXRT1176_cm7_H_) || defined(_MIMXRT1176_cm4_H_) ||             \
     defined(_MIMXRT1176_H_)
 #define MG_ENABLE_DRIVER_IMXRT11 1
+#elif defined(CPU_MIMXRT1186CVJ8C_cm33) || defined(MIMXRT1186_cm33_H_)
+#define MG_ENABLE_DRIVER_NETC 1
 #else
 #error Select an Ethernet driver in mongoose_config.h
 #endif
@@ -493,13 +495,31 @@ static inline uint32_t mg_ota_esp32_state_set(uint32_t state) {
      defined(_MIMXRT1176_cm7_H_) || defined(_MIMXRT1176_cm4_H_) ||           \
      defined(_MIMXRT1176_H_))
 #define MG_OTA MG_OTA_RT1170
+#elif !defined(MG_OTA) && \
+    (defined(CPU_MIMXRT1186CVJ8C_cm33) || defined(MIMXRT1186_cm33_H_))
+#define MG_OTA MG_OTA_RT1180
 #endif
 
 #ifndef MG_IRAM
+#if defined(CPU_MIMXRT1186CVJ8C_cm33) || defined(MIMXRT1186_cm33_H_)
+#define MG_IRAM \
+  __attribute__((noinline, section(".data.$SRAM_ITC_cm33")))
+#else
 #define MG_IRAM __attribute__((noinline, section(".data_RAM2")))
+#endif
+#endif
+
+#ifndef MG_ETH_RAM
+#if defined(CPU_MIMXRT1186CVJ8C_cm33) || defined(MIMXRT1186_cm33_H_)
+#define MG_ETH_RAM __attribute__((section(".bss.$ETH_RAM")))
+#endif
 #endif
 
 #ifndef MG_SET_MAC_ADDRESS
+#if defined(MG_ENABLE_DRIVER_NETC) && MG_ENABLE_DRIVER_NETC
+// No OCOTP_FUSES present on RT1186 to generate the UUID
+#define MG_SET_MAC_ADDRESS(mac) (void) (mac)
+#else
 #if defined(MG_ENABLE_DRIVER_IMXRT11) && MG_ENABLE_DRIVER_IMXRT11
 #define MG_OCOTP_FUSES ((volatile uint32_t *) 0x40cac900)
 #else
@@ -515,10 +535,69 @@ static inline uint32_t mg_ota_esp32_state_set(uint32_t state) {
     mac[5] = (MG_OCOTP_FUSES[4] >> 0) & 255;                                \
   } while (0)
 #endif
+#endif
 
 #ifndef MG_IMXRT_WDOG1_TIMEOUT_MS
-#define MG_IMXRT_WDOG1_TIMEOUT_MS 10000
+#define MG_IMXRT_WDOG1_TIMEOUT_MS 10000U
 #endif
+
+#if defined(CPU_MIMXRT1186CVJ8C_cm33) || defined(MIMXRT1186_cm33_H_)
+
+#define MG_IMXRT_RTWDOG1_UNLOCK()                                \
+  do {                                                           \
+    if ((RTWDOG1->CS & RTWDOG_CS_CMD32EN_MASK) != 0U) {          \
+      RTWDOG1->CNT = RTWDOG_UPDATE_KEY;                          \
+    } else {                                                     \
+      RTWDOG1->CNT = RTWDOG_UPDATE_KEY & 0xffffU;                \
+      RTWDOG1->CNT = RTWDOG_UPDATE_KEY >> 16;                    \
+    }                                                            \
+    while ((RTWDOG1->CS & RTWDOG_CS_ULK_MASK) == 0U) (void) 0;  \
+  } while (0)
+
+#define MG_IMXRT_RTWDOG1_FEED()                                  \
+  do {                                                           \
+    uint32_t primask_ = __get_PRIMASK();                         \
+    __disable_irq();                                             \
+    if ((RTWDOG1->CS & RTWDOG_CS_CMD32EN_MASK) != 0U) {          \
+      RTWDOG1->CNT = RTWDOG_REFRESH_KEY;                         \
+    } else {                                                     \
+      RTWDOG1->CNT = RTWDOG_REFRESH_KEY & 0xffffU;               \
+      RTWDOG1->CNT = RTWDOG_REFRESH_KEY >> 16;                   \
+    }                                                            \
+    if (primask_ == 0U) __enable_irq();                          \
+  } while (0)
+
+#ifndef MG_OTA_ROLLBACK_TIMER_START
+#define MG_OTA_ROLLBACK_TIMER_START()                                      \
+  do {                                                                     \
+    uint32_t primask_ = __get_PRIMASK();                                   \
+    SRC_GENERAL_REG->SRMASK &= ~SRC_GENERAL_SRMASK_WDOG1_MASK_MASK;        \
+    __disable_irq();                                                       \
+    MG_IMXRT_RTWDOG1_UNLOCK();                                             \
+    RTWDOG1->WIN = 0U;                                                     \
+    RTWDOG1->TOVAL = (MG_IMXRT_WDOG1_TIMEOUT_MS + 7U) / 8U;                \
+    RTWDOG1->CS = RTWDOG_CS_EN_MASK | RTWDOG_CS_UPDATE_MASK |              \
+                  RTWDOG_CS_CLK(1U) | RTWDOG_CS_PRES_MASK |                \
+                  RTWDOG_CS_CMD32EN_MASK;                                  \
+    while ((RTWDOG1->CS & RTWDOG_CS_RCS_MASK) == 0U) (void) 0;             \
+    if (primask_ == 0U) __enable_irq();                                    \
+  } while (0)
+#endif
+
+#ifndef MG_OTA_ROLLBACK_TIMER_FEED
+#define MG_OTA_ROLLBACK_TIMER_FEED() MG_IMXRT_RTWDOG1_FEED()
+#endif
+
+// GPR5 survives RTWDOG global resets and is not reserved by the boot ROM.
+#ifndef MG_OTA_STATE_GET
+#define MG_OTA_STATE_GET() SRC_GENERAL_REG->GPR[5]
+#endif
+
+#ifndef MG_OTA_STATE_SET
+#define MG_OTA_STATE_SET(v) (SRC_GENERAL_REG->GPR[5] = (uint32_t) (v))
+#endif
+
+#else
 
 #define MG_IMXRT_WDOG1_FEED() \
   do {                        \
@@ -558,6 +637,8 @@ static inline uint32_t mg_ota_esp32_state_set(uint32_t state) {
     }                                \
     SNVS->LPGPR[0] = (uint32_t) (v); \
   } while (0)
+#endif
+
 #endif
 
 #endif
@@ -4667,6 +4748,7 @@ extern void mg_mqtt_poll(struct mg_mgr *);
 #define MG_OTA_RT1060 302           // IMXRT1060
 #define MG_OTA_RT1064 303           // IMXRT1064
 #define MG_OTA_RT1170 304           // IMXRT1170
+#define MG_OTA_RT1180 305           // IMXRT1180
 #define MG_OTA_MCXN 310             // MCXN947
 #define MG_OTA_RW612 320            // FRDM-RW612
 #define MG_OTA_FLASH 900            // OTA via internal flash

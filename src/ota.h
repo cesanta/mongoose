@@ -41,6 +41,7 @@
 #define MG_OTA_RT1060 302           // IMXRT1060
 #define MG_OTA_RT1064 303           // IMXRT1064
 #define MG_OTA_RT1170 304           // IMXRT1170
+#define MG_OTA_RT1180 305           // IMXRT1180
 #define MG_OTA_MCXN 310             // MCXN947
 #define MG_OTA_RW612 320            // FRDM-RW612
 #define MG_OTA_FLASH 900            // OTA via internal flash
