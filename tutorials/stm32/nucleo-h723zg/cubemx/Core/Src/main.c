@@ -133,7 +133,7 @@ int main(void)
 
   /* Initialize all configured peripherals */
   MX_GPIO_Init();
-  (void) MX_ETH_Init;  // Don't use that stuff, Mongoose handle Ethernet
+  MX_ETH_Init();
   MX_RNG_Init();
   MX_USART3_UART_Init();
   /* USER CODE BEGIN 2 */
