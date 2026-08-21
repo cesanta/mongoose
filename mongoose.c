@@ -3862,6 +3862,12 @@ static bool mg_http_parse_headers(const char *s, const char *end,
     // MG_INFO(("--HH [%.*s] [%.*s]", (int) k.len, k.buf, (int) v.len, v.buf));
     h[i].name = k, h[i].value = v;  // Success. Assign values
   }
+  if (i == max_hdrs &&
+      !(s < end &&
+        (s[0] == '\n' ||
+         (s[0] == '\r' && s + 1 < end && s[1] == '\n')))) {
+    return false;
+  }
   return true;
 }
 
