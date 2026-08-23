@@ -1462,6 +1462,8 @@ static void read_conn(struct mg_connection *c, struct pkt *pkt) {
   struct connstate *s = (struct connstate *) (c + 1);
   struct mg_iobuf *io = c->is_tls ? &c->rtls : &c->recv;
   uint32_t seq = mg_ntohl(pkt->tcp->seq);
+  // Evaluation order is important: 1) process FIN, 2) process keep-alive,
+  // 3) discard invalid SEG.SEQ, 4) process ACK and payload.
   if (pkt->tcp->flags & TH_FIN) {
     uint8_t flags = TH_ACK;
     if (mg_ntohl(pkt->tcp->seq) != s->ack) {
@@ -1490,18 +1492,12 @@ static void read_conn(struct mg_connection *c, struct pkt *pkt) {
     }
     tx_tcp(c->mgr->ifp, s->mac, &c->loc, &c->rem, c->dscp, flags,
            mg_htonl(s->seq), mg_htonl(s->ack), "", 0);
-    if (pkt->pay.len == 0) return;  // if no data, we're done
   } else if (pkt->pay.len <= 1 && mg_ntohl(pkt->tcp->seq) == s->ack - 1) {
     // Keep-Alive (RFC-9293 3.8.4, allow erroneous implementations)
     MG_VERBOSE(("%lu keepalive ACK", c->id));
     tx_tcp(c->mgr->ifp, s->mac, &c->loc, &c->rem, c->dscp, TH_ACK,
            mg_htonl(s->seq), mg_htonl(s->ack), NULL, 0);
-    return;                        // no data to process
-  } else if (pkt->pay.len == 0) {  // this is an ACK
-    if (pkt->tcp->flags & TH_ACK)
-      handle_ack(s, mg_ntohl(pkt->tcp->ack), mg_ntohs(pkt->tcp->win));
-    if (s->fin_rcvd && s->ttype == MIP_TTYPE_FIN) s->twclosure = true;
-    return;  // no data to process
+    return;  // RFC-9293 3.10.7.4 discard (incorrect) payload, ACK, window
   } else if (seq != s->ack) {
     uint32_t ack = (uint32_t) (mg_htonl(pkt->tcp->seq) + pkt->pay.len);
     if (s->ack == ack) {
@@ -1511,14 +1507,20 @@ static void read_conn(struct mg_connection *c, struct pkt *pkt) {
       tx_tcp(c->mgr->ifp, s->mac, &c->loc, &c->rem, c->dscp, TH_ACK,
              mg_htonl(s->seq), mg_htonl(s->ack), "", 0);
     }
-    return;  // drop it
-  } else if (io->size - io->len < pkt->pay.len &&
-             !mg_iobuf_resize(io, io->len + pkt->pay.len)) {
+    return;  // drop it, RFC-9293 3.10.7.4: ignore ACKno
+  }
+  // Now process the segment for ACK and payload
+  if (pkt->tcp->flags & TH_ACK) {
+    handle_ack(s, mg_ntohl(pkt->tcp->ack), mg_ntohs(pkt->tcp->win));
+    if (pkt->pay.len == 0 && s->fin_rcvd && s->ttype == MIP_TTYPE_FIN)
+      s->twclosure = true;
+  }
+  if (pkt->pay.len == 0) return;
+  if (io->size - io->len < pkt->pay.len &&
+      !mg_iobuf_resize(io, io->len + pkt->pay.len)) {
     mg_error(c, "oom");
     return;  // drop it
   }
-  if (pkt->tcp->flags & TH_ACK)
-    handle_ack(s, mg_ntohl(pkt->tcp->ack), mg_ntohs(pkt->tcp->win));
   // Copy TCP payload into the IO buffer. If the connection is plain text,
   // we copy to c->recv. If the connection is TLS, this data is encrypted,
   // therefore we copy that encrypted data to the c->rtls iobuffer instead,
@@ -1527,9 +1529,11 @@ static void read_conn(struct mg_connection *c, struct pkt *pkt) {
   memcpy(&io->buf[io->len], pkt->pay.buf, pkt->pay.len);
   io->len += pkt->pay.len;
   MG_VERBOSE(("%lu SEQ %x -> %x", c->id, mg_htonl(pkt->tcp->seq), s->ack));
-  // Advance ACK counter
-  s->ack = (uint32_t) (mg_htonl(pkt->tcp->seq) + pkt->pay.len);
-  s->unacked += pkt->pay.len;
+  if (!(pkt->tcp->flags & TH_FIN)) {  // FIN already advanced s->ack
+    // Advance ACK counter
+    s->ack = (uint32_t) (mg_htonl(pkt->tcp->seq) + pkt->pay.len);
+    s->unacked += pkt->pay.len;
+  }
   // size_t diff = s->acked <= s->ack ? s->ack - s->acked : s->ack;
   if (s->unacked > MG_TCPIP_WIN / 2 && s->acked != s->ack) {
     // Send ACK immediately
