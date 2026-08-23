@@ -3122,9 +3122,9 @@ static void *ff_open(const char *path, int flags) {
   if (flags & MG_FS_WRITE) {
     mode |= FA_WRITE;
     if (flags & MG_FS_EXCL) {
-      mode |= FA_OPEN_ALWAYS | FA_OPEN_APPEND;
-    } else {
       mode |= FA_CREATE_NEW;
+    } else {
+      mode |= FA_OPEN_ALWAYS | FA_OPEN_APPEND;
     }
   }
   if ((fp = mg_calloc(1, sizeof(*fp))) != NULL &&
