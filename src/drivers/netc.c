@@ -31,7 +31,9 @@ struct netc_enetc { // 53.4.6.6
   struct {
     volatile uint32_t PSIPMAR0, PSIPMAR1, PSIVLANR, reserved0, PSICFGR0,
       PSICFGR1, PSICFGR2;
-    volatile uint8_t reserved1[0x64];
+    volatile uint8_t reserved1[0x3c];
+    volatile uint32_t PSIMMHFR0, PSIMMHFR1;
+    volatile uint8_t reserved2[0x20];
   } PSI[1];
 };
 
@@ -374,7 +376,18 @@ static size_t mg_tcpip_driver_netc_tx(const void *buf, size_t len,
   return len;
 }
 
+static void mg_tcpip_driver_netc_update_hash_table(struct mg_tcpip_if *ifp) {
+  // mcast address has NETC XOR hash index 56 (RM 53.4.2.3.1.3.8.4.1)
+  NETC_ENETC1->PSI[0].PSIMMHFR0 = 0;
+  NETC_ENETC1->PSI[0].PSIMMHFR1 = MG_BIT(24);
+  (void) ifp;
+}
+
 static bool mg_tcpip_driver_netc_poll(struct mg_tcpip_if *ifp, bool s1) {
+  if (ifp->update_mac_hash_table) {
+    mg_tcpip_driver_netc_update_hash_table(ifp);
+    ifp->update_mac_hash_table = false;
+  }
   if (!s1) return false;
   struct mg_tcpip_driver_netc_data *d =
       (struct mg_tcpip_driver_netc_data *) ifp->driver_data;
