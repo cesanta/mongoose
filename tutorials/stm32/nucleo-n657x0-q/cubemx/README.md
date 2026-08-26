@@ -23,7 +23,7 @@ using the following steps:
 - Open CubeMX, File / New project, type "STM32N657X0H3Q" in the part number, select
   it from the list, click "Start project" on the top right, choose "Secure domain only"
 - Project Manager: Project name: "n657". Project location: path to this directory.
-  Project strucure: "FSBL" only. Toolchain/IDE: pick ether Cmake or CubeIDE.
+  Project structure: "FSBL" only. Toolchain/IDE: pick ether Cmake or CubeIDE.
 - Clock configuration: Find SYSB, enter 400 MHz, Resolve clock issues
 - MCU pinout view: set PG0, PG8, PG10 to GPIO_Output mode
 - Pinout & Configuration / System Core: click on "GPIO", then click on each
