@@ -92,7 +92,7 @@
 #ifndef MG_IRAM
 #if defined(CPU_MIMXRT1186CVJ8C_cm33) || defined(MIMXRT1186_cm33_H_)
 #define MG_IRAM \
-  __attribute__((noinline, section(".data.$SRAM_ITC_cm33")))
+  __attribute__((noinline, section(".ramfunc.$SRAM_ITC_cm33")))
 #else
 #define MG_IRAM __attribute__((noinline, section(".data_RAM2")))
 #endif
