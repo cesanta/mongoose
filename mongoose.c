@@ -3598,18 +3598,6 @@ struct mg_fs mg_fs_posix = {p_stat,  p_list, p_open,   p_close,  p_read,
                             p_write, p_seek, p_rename, p_remove, p_mkdir};
 
 #ifdef MG_ENABLE_LINES
-#line 1 "src/health.c"
-#endif
-
-
-// The one health record. Lives in RAM that survives a warm reset, see
-// MG_HEALTH_RAM and the .mg_health region in the linker script
-struct mg_health mg_health_record MG_HEALTH_RAM;
-
-// Next ms tick at which mg_health_uptime() increments the record's uptime
-uint64_t mg_health_next_ms;
-
-#ifdef MG_ENABLE_LINES
 #line 1 "src/http.c"
 #endif
 
