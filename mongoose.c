@@ -1145,6 +1145,11 @@ void mg_dash_send_change(struct mg_mgr *mgr, struct mg_field_set *set) {
     struct mg_dash_cdata *d;
     struct mg_dash_user *u;
     if (!c->is_websocket) continue;
+    if (c->send.len > MG_DASH_MAX_SEND_BUF_SIZE) {  // Skip slow consumers
+      MG_ERROR(("skipping, send buf %lu > %d", (unsigned long) c->send.len,
+                MG_DASH_MAX_SEND_BUF_SIZE));
+      continue;
+    }
     d = (struct mg_dash_cdata *) c->data;
     u = d->u;
     if (u == NULL) continue;
@@ -3591,6 +3596,18 @@ static bool p_mkdir(const char *path) {
 
 struct mg_fs mg_fs_posix = {p_stat,  p_list, p_open,   p_close,  p_read,
                             p_write, p_seek, p_rename, p_remove, p_mkdir};
+
+#ifdef MG_ENABLE_LINES
+#line 1 "src/health.c"
+#endif
+
+
+// The one health record. Lives in RAM that survives a warm reset, see
+// MG_HEALTH_RAM and the .mg_health region in the linker script
+struct mg_health mg_health_record MG_HEALTH_RAM;
+
+// Next ms tick at which mg_health_uptime() increments the record's uptime
+uint64_t mg_health_next_ms;
 
 #ifdef MG_ENABLE_LINES
 #line 1 "src/http.c"

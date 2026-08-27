@@ -170,6 +170,11 @@ void mg_dash_send_change(struct mg_mgr *mgr, struct mg_field_set *set) {
     struct mg_dash_cdata *d;
     struct mg_dash_user *u;
     if (!c->is_websocket) continue;
+    if (c->send.len > MG_DASH_MAX_SEND_BUF_SIZE) {  // Skip slow consumers
+      MG_ERROR(("skipping, send buf %lu > %d", (unsigned long) c->send.len,
+                MG_DASH_MAX_SEND_BUF_SIZE));
+      continue;
+    }
     d = (struct mg_dash_cdata *) c->data;
     u = d->u;
     if (u == NULL) continue;
