@@ -6,19 +6,30 @@ Perform a security-focused code review to identify HIGH-CONFIDENCE security vuln
 
 This is not a general code review - focus ONLY on security implications newly added by this PR. Do not comment on existing security concerns.
 
-For this task, you will rely on two additional files, `resources/specs/claude-security-scan-instructions.md` detailing security scan instructions specific to the repository and `resources/specs/claude-false-positive-filtering.md` detailing patterns, precedents, exclusion rules based on which some of the identified vulnerabilities will be excluded from the final reporting. The instructions, rules and criterias found in those two files are MANDATORY TO BE HONOURED and your security audit will have to take all of them into account.
+For this task, you will rely on the specified shared security-review sections in `resources/specs/claude-security-scan.md`, the specified security-guidance sections in the six `resources/specs/areas/*.md` prompts listed below, and `resources/specs/claude-false-positive-filtering.md` detailing patterns, precedents, exclusion rules based on which some of the identified vulnerabilities will be excluded from the final reporting. The instructions, rules and criterias found in those referenced sections and the filtering file are MANDATORY TO BE HONOURED and your security audit will have to take all of them into account.
 
-YOU MUST READ AND ANALYZE BOTH OF THESE FILES BEFORE COMMENCING THE SECURITY AUDIT. THESE FILES, ALONG WITH SECTIONS FROM THEM, WILL BE MENTIONED IN THE FOLLOWING PARTS OF THIS PROMPT, PROVIDING FULL CONTEXT FOR ACCOMPLISHING THE GIVEN TASK.
+YOU MUST READ AND ANALYZE THE SPECIFIED SECTIONS AND THE FILTERING FILE BEFORE COMMENCING THE SECURITY AUDIT. THESE SOURCES WILL BE MENTIONED IN THE FOLLOWING PARTS OF THIS PROMPT, PROVIDING FULL CONTEXT FOR ACCOMPLISHING THE GIVEN TASK.
 
 # CRITICAL INSTRUCTIONS
 1. MINIMIZE FALSE POSITIVES: Only flag issues where you're >80% confident of actual exploitability
 2. AVOID NOISE: Skip theoretical issues, style concerns, or low-impact findings
-3. UNDERSTANDING CONTEXT AND SCOPE OF REVIEW: In the security scan instructions file `resources/specs/claude-security-scan-instructions.md`, read the `External Attacker Threat Model` and `Mongoose-Specific Security Review Scope` subsections found in the `SECURITY SCAN CONTEXT` main section for a full understanding of the scanning model, code review context and the perspective from which the scanning is going to take place.
+3. UNDERSTANDING CONTEXT AND SCOPE OF REVIEW: In `resources/specs/claude-security-scan.md`, read only the `External Attacker Threat Model` and `Mongoose-Specific Security Review Scope` subsections found in the `SECURITY SCAN CONTEXT` main section for a full understanding of the scanning model, code review context and the perspective from which the scanning is going to take place. Do not apply unrelated full-scan instructions from that file. In particular, do not inherit assigned-area scan scope, full-scan JSON output requirements, full-scan `review_completed` semantics, instructions to scan long-standing code independently of the PR, or area-selection workflow behavior. This PR prompt's scope, methodology, validation, and output rules remain authoritative.
 4. TREAT EXCLUSIONS AS MANDATORY. The exclusions section below is mandatory. If a potential finding falls under an exclusion, do not report it. If a finding partially overlaps an exclusion, only report it if there is a concrete, non-excluded security impact.
 
 # SECURITY CATEGORIES TO EXAMINE 
 
-In the security scan instructions file `resources/specs/claude-security-scan-instructions.md`, read all the security categories found in the `SECURITY CATEGORIES TO EXAMINE` main section. THESE ARE THE SECURITY CATEGORIES WHICH NEED TO BE EXAMINED.
+Read the general/common security categories in the `GENERAL SECURITY CATEGORIES TO EXAMINE` section of `resources/specs/claude-security-scan.md`.
+
+Also read the `Area-Specific Security Guidance` section from every area prompt:
+
+* `resources/specs/areas/common_misc.md`
+* `resources/specs/areas/mongoose_core.md`
+* `resources/specs/areas/web_http_auth.md`
+* `resources/specs/areas/tls.md`
+* `resources/specs/areas/net_builtin.md`
+* `resources/specs/areas/protocols.md`
+
+Use only the security guidance from the area prompts and ignore their full-scan-specific `Target` sections. Consider the complete set of common and area-specific security categories regardless of which source files the PR modifies. Do not choose one area or make this PR review area-scoped. Review the PR diff and report only security vulnerabilities introduced by that PR.
 
 Use these categories to guide prioritization, not as a checklist requiring equal coverage of every item.
 
