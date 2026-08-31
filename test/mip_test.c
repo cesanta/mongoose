@@ -119,6 +119,33 @@ static void tcpclosure_fn(struct mg_connection *c, int ev, void *ev_data) {
   (void) c, (void) ev_data;
 }
 
+static struct mg_connection *s_drain_conn;
+static bool s_drain_tls;
+
+static void tcpdrain_fn(struct mg_connection *c, int ev, void *ev_data) {
+  static const char data[2 * TCP_TEST_WIN] = {0};
+  if (ev == MG_EV_ACCEPT) {
+    s_drain_conn = c;
+#if MG_TLS == MG_TLS_BUILTIN
+    if (s_drain_tls) {
+      struct mg_tls_opts opts;
+      struct tls_data *tls;
+
+      memset(&opts, 0, sizeof(opts));
+      mg_tls_init(c, &opts);
+      tls = (struct tls_data *) c->tls;
+      ASSERT(tls != NULL);
+      ASSERT(mg_iobuf_add(&tls->send, 0, data, sizeof(data)) == sizeof(data));
+    } else
+#endif
+      mg_send(c, data, sizeof(data));
+    c->is_draining = 1;
+  } else if (ev == MG_EV_CLOSE && c == s_drain_conn) {
+    s_drain_conn = NULL;
+  }
+  (void) ev_data;
+}
+
 static void txwindow_fn(struct mg_connection *c, int ev, void *ev_data) {
   if (ev == MG_EV_ACCEPT) {
     char bigdata[2 * TCP_TEST_WIN + 256];
@@ -1024,6 +1051,41 @@ static void test_tcp_ackseq(void) {
   mg_mgr_free(&mgr);
 }
 
+static void test_tcp_drain(bool tls) {
+  struct mg_mgr mgr;
+  struct eth e;
+  struct ip ip;
+  struct ipp ipp;
+  struct tcp *t = (struct tcp *) (s_driver_data.buf + sizeof(e) + sizeof(ip));
+  struct connstate *s;
+  struct mg_tcpip_driver driver;
+  struct mg_tcpip_if mif;
+
+  ipp.ip4 = &ip;
+  ipp.ip6 = NULL;
+  s_drain_conn = NULL;
+  s_drain_tls = tls;
+  init_tcp_tests(&mgr, &e, &ipp, &driver, &mif, tcpdrain_fn);
+  init_tcp_handshake(&e, &ipp, &mgr);  // Send until peer window closes
+  ASSERT(s_drain_conn != NULL);
+  while (received_response(&s_driver_data)) {
+    s_driver_data.len = 0;  // Do not feed Mongoose its own TX packet
+    mg_mgr_poll(&mgr, 0);
+  }
+  ASSERT((t->flags & TH_FIN) == 0);
+
+  ASSERT(s_drain_conn != NULL);
+  s = (struct connstate *) (s_drain_conn + 1);
+  create_tcp_simpleseg(&e, &ipp, 1001, s->seq, TH_ACK, 0);  // Reopen window
+  do {
+    while (!received_response(&s_driver_data)) mg_mgr_poll(&mgr, 0);
+  } while (t->flags != (TH_FIN | TH_ACK));
+  ASSERT(t->flags == (TH_FIN | TH_ACK));
+
+  s_driver_data.len = 0;
+  mg_mgr_free(&mgr);
+}
+
 static void test_frag_recv_path(void) {
   struct mg_mgr mgr;
   struct eth e;
@@ -1186,6 +1248,10 @@ static void test_tcp(bool ipv6) {
     test_tcp_retransmit();
     test_tcp_txwindow();
     test_tcp_ackseq();
+    test_tcp_drain(false);
+#if MG_TLS == MG_TLS_BUILTIN
+    test_tcp_drain(true);
+#endif
   }
 }
 

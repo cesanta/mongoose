@@ -770,6 +770,7 @@ void mg_mgr_poll(struct mg_mgr *mgr, int ms) {
   mg_ota_poll(mgr);
 
   for (c = mgr->conns; c != NULL; c = tmp) {
+    long flush = 0;
     bool is_resp = c->is_resp;
     tmp = c->next;
     mg_call(c, MG_EV_POLL, &now);
@@ -791,10 +792,12 @@ void mg_mgr_poll(struct mg_mgr *mgr, int ms) {
     } else {
       if (c->is_readable) read_conn(c);
       if (c->is_writable) write_conn(c);
-      if (c->is_tls && !c->is_tls_hs && c->send.len == 0) mg_tls_flush(c);
+      if (c->is_tls && !c->is_tls_hs && c->send.len == 0)
+        flush = mg_tls_flush(c);
     }
 
-    if (c->is_draining && c->send.len == 0) c->is_closing = 1;
+    if (flush == MG_IO_ERR) mg_error(c, "tx err");
+    if (c->is_draining && c->send.len == 0 && flush == 0) c->is_closing = 1;
     if (c->is_closing) close_conn(c);
   }
 }
