@@ -3772,6 +3772,7 @@ int mg_url_decode(const char *src, size_t src_len, char *dst, size_t dst_len,
         mg_str_to_num(mg_str_n(src + i + 1, 2), 16, &dst[j], sizeof(uint8_t));
         i += 2;
       } else {
+        dst[0] = '\0';
         return -1;
       }
     } else if (is_form_url_encoded && src[i] == '+') {
@@ -4420,9 +4421,11 @@ static int uri_to_path2(struct mg_connection *c, struct mg_http_message *hm,
   path[path_size - 1] = '\0';
   // Terminate root dir with slash
   if (n > 0 && path[n - 1] != '/') path[n++] = '/', path[n] = '\0';
-  if (url.len < hm->uri.len) {
-    mg_url_decode(hm->uri.buf + url.len, hm->uri.len - url.len, path + n,
-                  path_size - n, 0);
+  if (url.len < hm->uri.len &&
+      mg_url_decode(hm->uri.buf + url.len, hm->uri.len - url.len, path + n,
+                    path_size - n, 0) < 0) {
+    mg_http_reply(c, 400, "", "Invalid path");
+    return -1;
   }
   path[path_size - 1] = '\0';  // Double-check
   n = strlen(path);
@@ -4574,8 +4577,14 @@ long mg_http_upload(struct mg_connection *c, struct mg_http_message *hm,
                     struct mg_fs *fs, const char *dir, size_t max_size) {
   char buf[20] = "0", file[MG_PATH_MAX], path[MG_PATH_MAX];
   long res = 0, offset;
-  mg_http_get_var(&hm->query, "offset", buf, sizeof(buf));
-  mg_http_get_var(&hm->query, "file", file, sizeof(file));
+  if (mg_http_get_var(&hm->query, "offset", buf, sizeof(buf)) == -3) {
+    mg_http_reply(c, 400, "", "invalid offset");
+    return -3;
+  }
+  if (mg_http_get_var(&hm->query, "file", file, sizeof(file)) == -3) {
+    mg_http_reply(c, 400, "", "invalid file");
+    return -2;
+  }
   offset = strtol(buf, NULL, 0);
   mg_snprintf(path, sizeof(path), "%s%c%s", dir, MG_DIRSEP, file);
   if (hm->body.len == 0) {

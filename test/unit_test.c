@@ -156,6 +156,10 @@ static void test_http_get_var(void) {
 
   body = mg_str("key=broken%2x");
   ASSERT(mg_http_get_var(&body, "key", buf, sizeof(buf)) == -3);
+  memset(buf, 'x', sizeof(buf));
+  body = mg_str("access_token=a%zz");
+  ASSERT(mg_http_get_var(&body, "access_token", buf, sizeof(buf)) == -3);
+  ASSERT(memchr(buf, '\0', sizeof(buf)) != NULL);
   ASSERT(mg_http_get_var(&body, "inexistent", buf, sizeof(buf)) == -4);
   body = mg_str("key=%");
   ASSERT(mg_http_get_var(&body, "key", buf, sizeof(buf)) == -3);
