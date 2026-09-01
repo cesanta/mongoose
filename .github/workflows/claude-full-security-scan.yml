@@ -1,16 +1,42 @@
-name: Claude Full Codebase Security Scan
+name: Claude Codebase Security Scan
 
 on:
   workflow_dispatch:
     inputs:
-      prompt_path:
-        description: "Path to the repo prompt file Claude should read"
-        required: true
-        default: "resources/specs/claude-security-scan.md"
       target_ref:
         description: "Branch, tag, or SHA to scan"
         required: false
         default: ""
+      common_misc:
+        description: "Run common/misc security scan"
+        required: false
+        type: boolean
+        default: true
+      mongoose_core:
+        description: "Run Mongoose core security scan"
+        required: false
+        type: boolean
+        default: true
+      web_http_auth:
+        description: "Run web/HTTP/auth security scan"
+        required: false
+        type: boolean
+        default: true
+      tls:
+        description: "Run TLS security scan"
+        required: false
+        type: boolean
+        default: true
+      net_builtin:
+        description: "Run built-in network security scan"
+        required: false
+        type: boolean
+        default: true
+      protocols:
+        description: "Run protocol security scan"
+        required: false
+        type: boolean
+        default: true
   #schedule:
     # Weekly scan: Sunday 02:00 UTC
   #  - cron: "0 2 * * 0"
@@ -20,53 +46,140 @@ permissions:
   id-token: write
 
 concurrency:
-  group: claude-full-codebase-security-scan-${{ github.ref }}
+  group: claude-security-scans
   cancel-in-progress: false
+  queue: max
 
 jobs:
-  scan:
-    name: Full codebase security scan
+  prepare:
+    name: Prepare selected scan matrix
     runs-on: ubuntu-latest
-    timeout-minutes: 60
 
-    env:
-      DEFAULT_PROMPT_PATH: "resources/specs/claude-security-scan.md"
+    outputs:
+      target_ref: ${{ steps.plan.outputs.target_ref }}
+      matrix: ${{ steps.plan.outputs.matrix }}
+      has_scans: ${{ steps.plan.outputs.has_scans }}
 
     steps:
-      - name: Resolve scan inputs
-        id: vars
+      - name: Resolve scan inputs and build matrix
+        id: plan
         shell: bash
         run: |
+          set -euo pipefail
+
           if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
-            PROMPT_PATH="${{ inputs.prompt_path }}"
             TARGET_REF="${{ inputs.target_ref }}"
+            RUN_COMMON_MISC="${{ inputs.common_misc }}"
+            RUN_MONGOOSE_CORE="${{ inputs.mongoose_core }}"
+            RUN_WEB_HTTP_AUTH="${{ inputs.web_http_auth }}"
+            RUN_TLS="${{ inputs.tls }}"
+            RUN_NET_BUILTIN="${{ inputs.net_builtin }}"
+            RUN_PROTOCOLS="${{ inputs.protocols }}"
           else
-            PROMPT_PATH="${DEFAULT_PROMPT_PATH}"
             TARGET_REF=""
+            RUN_COMMON_MISC="true"
+            RUN_MONGOOSE_CORE="true"
+            RUN_WEB_HTTP_AUTH="true"
+            RUN_TLS="true"
+            RUN_NET_BUILTIN="true"
+            RUN_PROTOCOLS="true"
           fi
 
           if [ -z "$TARGET_REF" ]; then
             TARGET_REF="${{ github.ref }}"
           fi
 
-          echo "prompt_path=$PROMPT_PATH" >> "$GITHUB_OUTPUT"
-          echo "target_ref=$TARGET_REF" >> "$GITHUB_OUTPUT"
+          MATRIX="$(jq -cn \
+            --arg common_misc "$RUN_COMMON_MISC" \
+            --arg mongoose_core "$RUN_MONGOOSE_CORE" \
+            --arg web_http_auth "$RUN_WEB_HTTP_AUTH" \
+            --arg tls "$RUN_TLS" \
+            --arg net_builtin "$RUN_NET_BUILTIN" \
+            --arg protocols "$RUN_PROTOCOLS" \
+            '{
+              include: ([
+                {
+                  enabled: ($common_misc == "true"),
+                  area: "common_misc",
+                  display_name: "Common / Misc",
+                  area_prompt: "resources/specs/areas/common_misc.md"
+                },
+                {
+                  enabled: ($mongoose_core == "true"),
+                  area: "mongoose_core",
+                  display_name: "Mongoose Core",
+                  area_prompt: "resources/specs/areas/mongoose_core.md"
+                },
+                {
+                  enabled: ($web_http_auth == "true"),
+                  area: "web_http_auth",
+                  display_name: "Web / HTTP / Auth",
+                  area_prompt: "resources/specs/areas/web_http_auth.md"
+                },
+                {
+                  enabled: ($tls == "true"),
+                  area: "tls",
+                  display_name: "TLS",
+                  area_prompt: "resources/specs/areas/tls.md"
+                },
+                {
+                  enabled: ($net_builtin == "true"),
+                  area: "net_builtin",
+                  display_name: "Built-In Network",
+                  area_prompt: "resources/specs/areas/net_builtin.md"
+                },
+                {
+                  enabled: ($protocols == "true"),
+                  area: "protocols",
+                  display_name: "Protocols",
+                  area_prompt: "resources/specs/areas/protocols.md"
+                }
+              ] | map(select(.enabled)) | map(del(.enabled)))
+            }'
+          )"
 
+          HAS_SCANS="$(jq -r '.include | length > 0' <<< "$MATRIX")"
+
+          echo "target_ref=$TARGET_REF" >> "$GITHUB_OUTPUT"
+          echo "matrix=$MATRIX" >> "$GITHUB_OUTPUT"
+          echo "has_scans=$HAS_SCANS" >> "$GITHUB_OUTPUT"
+
+  scan:
+    name: ${{ matrix.display_name }} security scan
+    needs: prepare
+    if: needs.prepare.outputs.has_scans == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+
+    strategy:
+      fail-fast: false
+      max-parallel: 1
+      matrix: ${{ fromJSON(needs.prepare.outputs.matrix) }}
+
+    env:
+      MASTER_PROMPT_PATH: "resources/specs/claude-security-scan.md"
+      FILTERING_PROMPT_PATH: "resources/specs/claude-false-positive-filtering.md"
+      SCAN_AREA: ${{ matrix.area }}
+      AREA_PROMPT_PATH: ${{ matrix.area_prompt }}
+
+    steps:
       - name: Checkout repository
         uses: actions/checkout@v6
         with:
-          ref: ${{ steps.vars.outputs.target_ref }}
+          ref: ${{ needs.prepare.outputs.target_ref }}
           fetch-depth: 0
 
-      - name: Verify prompt file exists
+      - name: Verify required prompt files exist
         shell: bash
         run: |
-          test -f "${{ steps.vars.outputs.prompt_path }}" || {
-            echo "Prompt file not found: ${{ steps.vars.outputs.prompt_path }}"
-            exit 1
-          }
+          for prompt_file in "$MASTER_PROMPT_PATH" "$AREA_PROMPT_PATH" "$FILTERING_PROMPT_PATH"; do
+            test -f "$prompt_file" || {
+              echo "Required prompt file not found: $prompt_file"
+              exit 1
+            }
+          done
 
-      - name: Run Claude full codebase security scan
+      - name: Run Claude ${{ matrix.display_name }} security scan
         id: claude_scan
         uses: anthropics/claude-code-action@v1
         timeout-minutes: 30
@@ -75,19 +188,21 @@ jobs:
 
           prompt: |
             REPO: ${{ github.repository }}
-            REF: ${{ steps.vars.outputs.target_ref }}
-            PROMPT_FILE: ${{ steps.vars.outputs.prompt_path }}
+            REF: ${{ needs.prepare.outputs.target_ref }}
+            MASTER_PROMPT_FILE: ${{ env.MASTER_PROMPT_PATH }}
+            SCAN_AREA: ${{ matrix.area }}
+            AREA_PROMPT_FILE: ${{ matrix.area_prompt }}
+            FILTERING_PROMPT_FILE: ${{ env.FILTERING_PROMPT_PATH }}
 
-            You are running a full-codebase security scan in GitHub Actions.
+            You are running a focused security scan for the assigned area in GitHub Actions.
 
-            First, read the main prompt file at:
-            ${{ steps.vars.outputs.prompt_path }}
+            First, read the master prompt at ${{ env.MASTER_PROMPT_PATH }}.
+            Then read the assigned area prompt at ${{ matrix.area_prompt }}.
+            Read the false-positive filtering prompt at ${{ env.FILTERING_PROMPT_PATH }} as required by the master prompt.
 
-            Treat that file as the authoritative security-review instruction set. You will also
-            read and analyze additional prompt files mentioned in the main prompt file by their absolute paths in the repo, 
-            as per the instructions found in it.
+            Perform the security review for the ${{ matrix.area }} area. Follow relevant supporting code when necessary, but do not independently scan unrelated areas.
+            Return only the JSON required by the master prompt.
 
-            Scan the checked-out repository as a whole codebase.
             Do not modify files.
             Do not create commits.
             Do not open pull requests.
@@ -106,8 +221,8 @@ jobs:
           set -u
           mkdir -p private-scan-results
           TODAY="$(date -u +%Y%m%d)"
-          EXECUTION_OUTPUT_FILE="claude-execution-output_${TODAY}.json"
-          FINDINGS_FILE="security-findings_${TODAY}.json"
+          EXECUTION_OUTPUT_FILE="claude-execution-output_${SCAN_AREA}_${TODAY}.json"
+          FINDINGS_FILE="security-findings_${SCAN_AREA}_${TODAY}.json"
 
           HAS_EXECUTION_OUTPUT="false"
           HAS_JSON_FINDINGS="false"
@@ -177,5 +292,5 @@ jobs:
             exit 0
           fi
 
-          git commit -m "Add security scan results ${{ steps.prepare_outputs.outputs.date_suffix }}"
+          git commit -m "Add ${SCAN_AREA} security scan results ${{ steps.prepare_outputs.outputs.date_suffix }}"
           git push
