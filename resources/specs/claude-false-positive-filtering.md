@@ -14,6 +14,8 @@
 12. Generic crypto advice with no concrete impact on authentication, confidentiality, integrity, downgrade resistance, hostname verification, certificate validation, key handling, nonces/tags, or plaintext fallback.
 13. Speculative protocol claims without a specific malformed input shape, reachable parser path, and concrete security impact.
 14. Pure application policy gaps: no default auth, no CSRF, no user access model, no account lockout, no audit logs, or no password policy.
+15. OTA findings based only on allowing plain HTTP, lacking firmware hash/signature verification, or permitting update URLs to change scheme/host when this is documented/configurable behavior and no existing security check is bypassed.
+16. Filter TCP findings that rely primarily on predictability or insufficient entropy in protocol sequence-state generation, including attacks based on guessing or reconstructing connection state without observing the traffic.
 
 # SIGNAL QUALITY CRITERIA
 **For remaining findings, assess:**
@@ -42,26 +44,26 @@
 8. Keep unsafe `mg_match` or glob use at security boundaries: certificate identity, route authorization, filesystem policy, MQTT topic authorization, or access control.
 9. Keep DNS/mDNS label, compression pointer, pointer loop, RR length, transaction matching, spoofing, OOB, or infinite-loop issues with external reachability.
 10. Keep filesystem traversal through exposed serving/upload/SSI paths, including encoding, double decoding, backslashes, dot-dot, absolute paths, drive letters, symlinks, NULs, alias/root confusion, and upload filename traversal.
-11. Keep OTA/update issues allowing unauthenticated or improperly validated writes to firmware, flash, config, filesystem, boot state, device identity, or update metadata.
-12. Keep embedded packet parser bugs in Ethernet, ARP, IP, IPv6, ICMP, UDP, TCP, DHCP, SNTP, or drivers when malformed traffic causes OOB, overflow, descriptor corruption, queue corruption, state corruption, or crash.
-13. Keep IRQ, polling, RX descriptor, and packet-loop livelock/starvation/wedge bugs caused by received traffic.
-14. Keep event-lifecycle bugs reachable from external input: UAF, stale pointer, double close, callback lifetime error, iobuf mutation after close, protocol transition confusion, timer/wakeup after free.
-15. Keep externally reachable `mg_str` null-termination mistakes causing OOB read, data leak, auth bypass, parser confusion, or crash.
-16. Keep integer conversion bugs where external lengths affect allocation, copying, parsing, or bounds checks.
-17. Filter parser/helper reports based only on a local caller passing invalid pointers, fake lengths, fake structs, or corrupted objects.
-18. Filter reports requiring direct mutation of connection internals such as protocol flags, closing flags, handler pointers, iobuf fields, callback pointers, or user data.
-19. Filter reports requiring attacker control of `MG_ENABLE_*`, TLS backend macros, filesystem backend macros, compiler flags, debug flags, sanitizer settings, or platform defines.
-20. Filter direct hardware-access reports requiring writes to registers, DMA descriptors, MMIO, IRQ state, cache controls, or peripheral configuration.
-21. Filter generic “Mongoose lacks authentication” reports unless a helper, example, route pattern, auth parser, MQTT broker behavior, dashboard, upload handler, or OTA endpoint creates a concrete issue.
-22. Filter generic rate-limit/quota/connection-cap/upload-cap findings unless a specific bug lets a small malformed input trigger crash, corruption, infinite loop, or disproportionate exhaustion.
-23. Filter purely theoretical UB, portability, unaligned-access, or signed-overflow reports with no supported-platform impact and no realistic external trigger.
-24. Filter RFC non-compliance without concrete smuggling, bypass, memory corruption, data exposure, state corruption, or crash.
-25. Keep security-relevant production-like examples: dashboards, upload servers, MQTT brokers, firmware update flows, auth examples, TLS examples, and filesystem-serving examples.
-26. Keep client-side findings caused by malicious servers, brokers, DNS responders, TLS peers, WebSocket peers, or HTTP peers.
-27. Keep callback-related findings only when Mongoose invokes the callback normally and then unsafely continues using freed or mutated state.
-28. Keep availability findings when one malformed packet, request, certificate, DNS response, MQTT message, WebSocket frame, or small sequence can reliably crash, wedge, corrupt, or disrupt a Mongoose target.
-29. Keep custom backend findings only when the issue is in Mongoose’s backend interface, default backend, documented backend contract, or common backend implementation.
-30. When uncertain, keep findings with clear external input, reachable code path, and concrete impact in Mongoose library/protocol/driver code; filter internal-access, impossible-state, local-misuse, generic-hardening, and speculative reports.
-31. For dashboard reports, do not infer unauthenticated access from a route-specific check alone; account for the broader authentication flow. Keep concrete reachable bugs such as path traversal, unsafe decoded paths, or file read/write/delete issues.
-32. Filter reports regarding DNS transaction ID predictability or lack of strict question-name matching in DNS response processing, as these are acknowledged design limitations of the current implementation.
-33. Filter reports that unauthenticated SNTP time affects TLS certificate validity when Mongoose only performs the SNTP sync if mg_boot_timestamp_ms has not already been initialized.
+11. Keep embedded packet parser bugs in Ethernet, ARP, IP, IPv6, ICMP, UDP, TCP, DHCP, SNTP, or drivers when malformed traffic causes OOB, overflow, descriptor corruption, queue corruption, state corruption, or crash.
+12. Keep IRQ, polling, RX descriptor, and packet-loop livelock/starvation/wedge bugs caused by received traffic.
+13. Keep event-lifecycle bugs reachable from external input: UAF, stale pointer, double close, callback lifetime error, iobuf mutation after close, protocol transition confusion, timer/wakeup after free.
+14. Keep externally reachable `mg_str` null-termination mistakes causing OOB read, data leak, auth bypass, parser confusion, or crash.
+15. Keep integer conversion bugs where external lengths affect allocation, copying, parsing, or bounds checks.
+16. Filter parser/helper reports based only on a local caller passing invalid pointers, fake lengths, fake structs, or corrupted objects.
+17. Filter reports requiring direct mutation of connection internals such as protocol flags, closing flags, handler pointers, iobuf fields, callback pointers, or user data.
+18. Filter reports requiring attacker control of `MG_ENABLE_*`, TLS backend macros, filesystem backend macros, compiler flags, debug flags, sanitizer settings, or platform defines.
+19. Filter direct hardware-access reports requiring writes to registers, DMA descriptors, MMIO, IRQ state, cache controls, or peripheral configuration.
+20. Filter generic “Mongoose lacks authentication” reports unless a helper, example, route pattern, auth parser, MQTT broker behavior, dashboard, upload handler, or OTA endpoint creates a concrete issue.
+21. Filter generic rate-limit/quota/connection-cap/upload-cap findings unless a specific bug lets a small malformed input trigger crash, corruption, infinite loop, or disproportionate exhaustion.
+22. Filter purely theoretical UB, portability, unaligned-access, or signed-overflow reports with no supported-platform impact and no realistic external trigger.
+23. Filter RFC non-compliance without concrete smuggling, bypass, memory corruption, data exposure, state corruption, or crash.
+24. Keep security-relevant production-like examples: dashboards, upload servers, MQTT brokers, firmware update flows, auth examples, TLS examples, and filesystem-serving examples.
+25. Keep client-side findings caused by malicious servers, brokers, DNS responders, TLS peers, WebSocket peers, or HTTP peers.
+26. Keep callback-related findings only when Mongoose invokes the callback normally and then unsafely continues using freed or mutated state.
+27. Keep availability findings when one malformed packet, request, certificate, DNS response, MQTT message, WebSocket frame, or small sequence can reliably crash, wedge, corrupt, or disrupt a Mongoose target.
+28. Keep custom backend findings only when the issue is in Mongoose’s backend interface, default backend, documented backend contract, or common backend implementation.
+29. When uncertain, keep findings with clear external input, reachable code path, and concrete impact in Mongoose library/protocol/driver code; filter internal-access, impossible-state, local-misuse, generic-hardening, and speculative reports.
+30. For dashboard reports, do not infer unauthenticated access from a route-specific check alone; account for the broader authentication flow. Keep concrete reachable bugs such as path traversal, unsafe decoded paths, or file read/write/delete issues.
+31. Filter reports regarding DNS transaction ID predictability or lack of strict question-name matching in DNS response processing, as these are acknowledged design limitations of the current implementation.
+32. Filter reports that unauthenticated SNTP time affects TLS certificate validity when Mongoose only performs the SNTP sync if mg_boot_timestamp_ms has not already been initialized.
+33. Filter TCP ISN predictability, weak sequence-number generation, RFC 6528 non-compliance, blind/off-path handshake spoofing, forged RST, and sequence-number-guessing reports in the built-in TCP/IP stack.
