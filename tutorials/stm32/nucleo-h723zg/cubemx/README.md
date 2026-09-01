@@ -28,3 +28,4 @@ using the following steps:
   Configure pins PD8 and PD9 for USART.
 - In Pinout & Configuration / Connectivity, enable ETH in RMII mode and set pins
   PA1, PA2, PA7, PC1, PC4, PC5, PB13, PG11, and PG13 for Ethernet.
+- In the "Project Manager", set heap size to 0x10000, and stack size to 0x2000

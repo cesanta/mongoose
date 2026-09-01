@@ -255,6 +255,7 @@ void mg_dash_init(struct mg_mgr *mgr) {
 
   mg_mem_files = mg_packed_files;
   mg_http_listen(mgr, MG_HTTP_ADDR, mg_dash_ev_handler, &s_dash);
+  mg_http_listen(mgr, MG_HTTPS_ADDR, mg_dash_ev_handler, &s_dash);
 }
 
 void mg_dash_poll(struct mg_mgr *mgr) {
