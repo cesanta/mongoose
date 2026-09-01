@@ -1758,6 +1758,14 @@ static void test_http_pipeline(void) {
   for (i = 0; i < 20; i++) mg_mgr_poll(&mgr, 1);
   ASSERT(ok == 1);
   ASSERT(ok2 == 1);
+  // A bodyless POST must not consume the following pipelined request
+  ok = ok2 = 0;
+  c = mg_http_connect(&mgr, url, f6, (void *) &ok2);
+  mg_printf(c, "POST /x HTTP/1.1\r\nHost: h\r\n\r\n"
+               "GET /next HTTP/1.1\r\nHost: h\r\n\r\n");
+  for (i = 0; i < 20; i++) mg_mgr_poll(&mgr, 1);
+  ASSERT(ok == 2);
+  ASSERT(ok2 == 2);
   // MG_INFO(("-----> [%d] [%d]", ok, ok2));
   mg_mgr_free(&mgr);
   ASSERT(mgr.conns == NULL);

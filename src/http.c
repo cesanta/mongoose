@@ -1183,8 +1183,9 @@ static void http_cb(struct mg_connection *c, int ev, void *ev_data) {
           // contain a Content-length header (unless the body length is 0, in
           // which case it can be omitted). Other requests can also contain a
           // body, but their content has no defined semantics (RFC 7231)
+          // It is a non-chunked request, so the offset (ofs) is updated after
+          // exiting this branch.
           if (hm.body.len != 0) require_content_len = true;
-          ofs += (size_t) n;  // this request has been processed
         } else if (is_response) {
           // HTTP spec 7.2 Entity body: All other responses must include a body
           // or Content-Length header field defined with a value of 0.
