@@ -26539,14 +26539,14 @@ static size_t ws_process(uint8_t *buf, size_t len, struct ws_msg *msg) {
       msg->header_len = 4 + mask_len;
       msg->data_len = (((size_t) buf[2]) << 8) | buf[3];
     } else if (len >= 10 + mask_len) {
+      uint64_t data_len = ((uint64_t) be32(buf + 2) << 32) + be32(buf + 6);
+      // Sanity check, and integer overflow protection for the boundary check below
+      // data_len should not be larger than 1 GB
+      if (data_len > 1024 * 1024 * 1024) return 0;
+      msg->data_len = (size_t) data_len;
       msg->header_len = 10 + mask_len;
-      msg->data_len =
-          (size_t) (((uint64_t) be32(buf + 2) << 32) + be32(buf + 6));
     }
   }
-  // Sanity check, and integer overflow protection for the boundary check below
-  // data_len should not be larger than 1 Gb
-  if (msg->data_len > 1024 * 1024 * 1024) return 0;
   if (msg->header_len + msg->data_len > len) return 0;
   if (mask_len > 0) {
     uint8_t *p = buf + msg->header_len, *m = p - mask_len;
