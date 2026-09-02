@@ -14,7 +14,7 @@ jobs:
       run: |
         min=$(date -u -d '5 hours ago' +%s)
         max=$(date -u -d '2 hours ago' +%s)
-        gh api --paginate "/repos/$GITHUB_REPOSITORY/actions/workflows/nightly.yml/runs?status=failure&per_page=100" --jq '.workflow_runs[] | select(.run_attempt == 1) | [.id, .updated_at] | @tsv' |
+        gh api --paginate "/repos/$GITHUB_REPOSITORY/actions/workflows/nightly.yml/runs?status=failure&per_page=100" --jq '.workflow_runs[] | select(.run_attempt == 1) | [.id, .created_at] | @tsv' |
           while IFS=$'\t' read -r id updated; do
             when=$(date -u -d "$updated" +%s)
             if [ "$when" -ge "$min" ] && [ "$when" -le "$max" ]; then
