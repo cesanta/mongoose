@@ -292,7 +292,7 @@ static bool tcpcsum_ok(void *d, void *t) {
 }
 
 #if MG_ENABLE_IPV6
-static uint16_t p6csum(void *d, void *p, size_t plen) {
+static uint16_t p6csum(void *d, void *p, uint8_t proto, size_t plen) {
   uint32_t sum;
   struct ip6 *ip6 = (struct ip6 *) d;
 #if defined(__DCC__)
@@ -303,7 +303,7 @@ static uint16_t p6csum(void *d, void *p, size_t plen) {
   pip6.dst[0] = ip6->dst[0], pip6.dst[1] = ip6->dst[1];
   pip6.zero[0] = 0, pip6.zero[1] = 0, pip6.zero[2] = 0;
   pip6.plen = mg_htonl((uint32_t) plen);
-  pip6.next = ip6->next;
+  pip6.next = proto;
   sum = csumup(0, &pip6, sizeof(pip6));  // even length
   sum = csumup(sum, p, plen);            // possibly odd length: last
   return csumfin(sum);
@@ -313,17 +313,15 @@ static bool udp6csum_ok(void *d, void *u) {
   struct udp *udp = (struct udp *) u;
   if (udp->csum == 0) return false;  // mandatory in IPv6
   if (udp->csum == 0xFFFF) udp->csum = 0;
-  return (p6csum(d, u, (size_t) mg_ntohs(udp->len)) == 0);
+  return (p6csum(d, u, 17, (size_t) mg_ntohs(udp->len)) == 0);
 }
-static bool tcp6csum_ok(void *d, void *t) {
-  struct ip6 *ip6 = (struct ip6 *) d;
-  return (p6csum(d, t, (size_t) mg_ntohs(ip6->plen)) == 0);
-}
-static bool icmp6csum_ok(void *d, void *i) {
-  struct ip6 *ip6 = (struct ip6 *) d;
-  return (p6csum(d, i, (size_t) mg_ntohs(ip6->plen)) == 0);
+static bool tcp6csum_ok(void *d, void *t, size_t len) {
+  return p6csum(d, t, 6, len) == 0;
 }
 
+static bool icmp6csum_ok(void *d, void *i, size_t len) {
+  return p6csum(d, i, 58, len) == 0;
+}
 static void ip6sn(uint64_t *addr, uint64_t *sn_addr) {
   // Build solicited-node multicast address from a given unicast IP
   // RFC-4291 2.7
@@ -468,7 +466,7 @@ static bool tx_udp(struct mg_tcpip_if *ifp, uint8_t *l2_dst,
   memmove(udp + 1, buf, len);
 #if MG_ENABLE_IPV6
   if (ip_dst->is_ip6) {
-    udp->csum = p6csum(ip6, udp, sizeof(*udp) + len);
+    udp->csum = p6csum(ip6, udp, 17, sizeof(*udp) + len);
   } else
 #endif
   {
@@ -816,7 +814,7 @@ static void tx_icmp6(struct mg_tcpip_if *ifp, uint8_t *l2_dst, uint64_t *ip_src,
   icmp6->code = code;
   memcpy(icmp6 + 1, buf, len);  // Copy payload
   icmp6->csum = 0;              // RFC-4443 2.3, RFC-8200 8.1
-  icmp6->csum = p6csum(ip6, icmp6, sizeof(*icmp6) + len);
+  icmp6->csum = p6csum(ip6, icmp6, 58, sizeof(*icmp6) + len);
   driver_output(ifp,
                 mg_l2_trailer(ifp, sizeof(*ip6) + sizeof(*icmp6) + len,
                               (uint8_t *) (ip6 + 1) + sizeof(*icmp6) + len));
@@ -1055,7 +1053,8 @@ static void rx_ndp_ra(struct mg_tcpip_if *ifp, struct pkt *pkt) {
 }
 
 static void rx_icmp6(struct mg_tcpip_if *ifp, struct pkt *pkt) {
-  if (!icmp6csum_ok(pkt->ip6, pkt->icmp6)) return;
+  if (!icmp6csum_ok(pkt->ip6, pkt->icmp6, sizeof(*pkt->icmp6) + pkt->pay.len))
+    return;
   switch (pkt->icmp6->type) {
     case 128: {  // Echo Request, RFC-4443 4.1
       uint64_t target[2];
@@ -1260,7 +1259,7 @@ static size_t tx_tcp(struct mg_tcpip_if *ifp, uint8_t *l2_dst,
   tcp->off = (uint8_t) (hlen / 4 << 4);
 #if MG_ENABLE_IPV6
   if (ip_dst->is_ip6) {
-    tcp->csum = p6csum(ip6, tcp, hlen + len);
+   tcp->csum = p6csum(ip6, tcp, 6, hlen + len);
   } else
 #endif
   {
@@ -1630,7 +1629,10 @@ static void rx_tcp(struct mg_tcpip_if *ifp, struct pkt *pkt) {
   struct mg_connection *c = getpeer(ifp->mgr, pkt, false);
   struct connstate *s = c == NULL ? NULL : (struct connstate *) (c + 1);
 #if MG_ENABLE_IPV6  // matching of v4/v6 to dest is done by getpeer()
-  if (pkt->ip6 != NULL && !tcp6csum_ok(pkt->ip6, pkt->tcp)) return;
+  if (pkt->ip6 != NULL &&
+      !tcp6csum_ok(pkt->ip6, pkt->tcp,
+                   PDIFF(pkt->tcp, pkt->pay.buf) + pkt->pay.len))
+    return;
 #endif
   if (pkt->ip != NULL && !tcpcsum_ok(pkt->ip, pkt->tcp)) return;
   pkt->tcp->flags &= TH_STDFLAGS;  // tolerate creative usage (ECN, ?)
@@ -1765,7 +1767,8 @@ static void rx_ip(struct mg_tcpip_if *ifp, struct pkt *pkt) {
     pkt->tcp = (struct tcp *) (pkt->pay.buf);
     if (pkt->pay.len < sizeof(*pkt->tcp)) return;
     off = pkt->tcp->off >> 4;  // account for opts
-    if (pkt->pay.len < (uint16_t) (4 * off)) return;
+    if (off < sizeof(*pkt->tcp) / 4 || pkt->pay.len < (uint16_t) (4 * off))
+      return;
     mkpay(pkt, (uint32_t *) pkt->tcp + off);
     MG_VERBOSE(("TCP %M:%hu -> %M:%hu len %u", mg_print_ip4, &pkt->ip->src,
                 mg_ntohs(pkt->tcp->sport), mg_print_ip4, &pkt->ip->dst,
@@ -1861,7 +1864,8 @@ static void rx_ip6(struct mg_tcpip_if *ifp, struct pkt *pkt) {
     pkt->tcp = (struct tcp *) (pkt->pay.buf);
     if (pkt->pay.len < sizeof(*pkt->tcp)) return;
     off = pkt->tcp->off >> 4;  // account for opts
-    if (pkt->pay.len < (uint16_t) (4 * off)) return;
+    if (off < sizeof(*pkt->tcp) / 4 || pkt->pay.len < (uint16_t) (4 * off))
+      return;
     mkpay(pkt, (uint32_t *) pkt->tcp + off);
     MG_DEBUG(("TCP %M:%hu -> %M:%hu len %u", mg_print_ip6, &pkt->ip6->src,
               mg_ntohs(pkt->tcp->sport), mg_print_ip6, &pkt->ip6->dst,
