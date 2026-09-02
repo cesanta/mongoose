@@ -16,7 +16,7 @@ uint64_t mg_timegm(unsigned int year, unsigned int month, unsigned int day,
   const uint64_t day_secs = 86400;
   const uint64_t year_secs = 31536000;
   unsigned int y, ly;
-  if (year < 1970) return 0;
+  if (year < 1970 || month == 0 || month > 12) return 0;
   y = year - 1900;
   ly = month > 2 ? y + 1 : y;
   return (uint64_t) sec + 60 * min + 3600 * hour +
