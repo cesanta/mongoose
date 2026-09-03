@@ -1735,17 +1735,18 @@ static int mg_tls_verify_cert_cn(struct mg_der_tlv *subj, const char *host) {
   return matched;
 }
 
+// 1: found, 0: not found, < 0: parse error: -1: bundle (unused), -2: name
 static int tls_bundle_find(struct tls_data *tls, struct mg_der_tlv *name,
                            struct mg_tls_cert *cert) {
   size_t i;
   struct mg_der_tlv v;
   struct mg_str *p = tls->ca_bundle_der, tgt;
-  if (!mg_der_find_oid(name, (uint8_t *) "\x55\x04\x03", 3, &v)) return false;
+  if (mg_der_find_oid(name, (uint8_t *) "\x55\x04\x03", 3, &v) <= 0) return -2;
   tgt = mg_str_n((const char *) v.value, v.len);
   for (i = 0; i < tls->ca_bundle_len; i++, p++) {
     struct mg_str subj;
     if (mg_tls_parse_cert_der(p->buf, p->len, cert) < 0 ||
-        !mg_der_find_oid(&cert->subj, (uint8_t *) "\x55\x04\x03", 3, &v)) {
+        mg_der_find_oid(&cert->subj, (uint8_t *) "\x55\x04\x03", 3, &v) <= 0) {
       MG_ERROR(("failed to parse certificate #%u in bundle", i + 1));
       continue; // skip this certificate but don't halt the process
     }
@@ -1865,7 +1866,7 @@ static int mg_tls_recv_cert(struct mg_connection *c, bool is_client) {
         int r;
         MG_VERBOSE(("Search current cert in bundle"));
         r = tls_bundle_find(tls, &ci->subj, &ca);  // find current cert ci
-        if (r < 0) {
+        if (r == -1) {
           mg_error(c, "failed to parse CA bundle");
           return -1;
         } else if (r > 0 && ca.pubkey.len == ci->pubkey.len &&
@@ -1873,7 +1874,7 @@ static int mg_tls_recv_cert(struct mg_connection *c, bool is_client) {
           found_ca = true;
           MG_VERBOSE(("CA serial: %M", mg_print_hex, ca.sn.len, ca.sn.buf));
           break;
-        }  // else either r = 0 => subj not found or pubkey not matching
+        }  // else r = 0 or -2 => subj not found or pubkey not matching
       }
 
       if (certnum == sizeof(certs) / sizeof(certs[0]) - 1) {
@@ -1887,8 +1888,10 @@ static int mg_tls_recv_cert(struct mg_connection *c, bool is_client) {
       MG_VERBOSE(("Search bundle for issuer of last cert in chain"));
       r = tls_bundle_find(tls, &certs[certnum - 1].issuer, &ca);
       if (r <= 0) {
-        mg_error(c, r < 0 ? "failed to parse CA bundle"
-                          : "failed to find issuing CA in bundle");
+        mg_error(c, "failed to %s",
+                 r == 0    ? "find issuing CA in bundle"
+                 : r == -1 ? "parse CA bundle"
+                           : "parse name OID");
         return -1;
       } else if (!ca.is_ca ||  // candidate issuer found
                  !mg_tls_verify_cert_signature(&certs[certnum - 1], &ca)) {
