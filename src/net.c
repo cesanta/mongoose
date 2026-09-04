@@ -163,10 +163,13 @@ static bool mg_aton6(struct mg_str str, struct mg_addr *addr) {
   return true;
 }
 
+bool mg_aton_(struct mg_str str, struct mg_addr *addr);
+bool mg_aton_(struct mg_str str, struct mg_addr *addr) {
+  return mg_aton4(str, addr) || mg_aton6(str, addr);
+}
+
 bool mg_aton(struct mg_str str, struct mg_addr *addr) {
-  // MG_INFO(("[%.*s]", (int) str.len, str.buf));
-  return mg_atone(str, addr) || mg_atonl(str, addr) || mg_aton4(str, addr) ||
-         mg_aton6(str, addr);
+  return mg_atone(str, addr) || mg_atonl(str, addr) || mg_aton_(str, addr);
 }
 
 struct mg_connection *mg_alloc_conn(struct mg_mgr *mgr) {

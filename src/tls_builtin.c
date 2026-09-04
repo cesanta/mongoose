@@ -1625,8 +1625,9 @@ static int countdots(struct mg_str s) {
 
 static int mg_tls_verify_cert_san(const uint8_t *der, size_t dersz,
                                   const char *server_name,
-                                  struct mg_addr *server_ip) {
+                                  struct mg_addr *ref_ip) {
   struct mg_der_tlv root, field, name;
+  bool is_addr = ref_ip != NULL;
   if (mg_der_parse((uint8_t *) der, dersz, &root) < 0) {
     MG_ERROR(("failed to parse certificate"));
     return -1;
@@ -1640,20 +1641,24 @@ static int mg_tls_verify_cert_san(const uint8_t *der, size_t dersz,
     return -1;
   }
   while (mg_der_next(&field, &name) > 0) {
-    if (name.type == 0x87 && name.len == 4) {  // this is an IPv4 address
-      MG_VERBOSE(("Found SAN, IP: %M", mg_print_ip4, name.value));
-      if (!server_ip->is_ip6 &&
-          *((uint32_t *) name.value) == server_ip->addr.ip4)
-        return 1;  // and matches the one we're connected to
+    if (is_addr) {  // match ref IP to IP and name to DNS name (RFC-9525 6.2)
+      if (name.type == 0x87 && name.len == 4) {  // this is an IPv4 address
+        uint32_t cert_ip;
+        MG_VERBOSE(("Found SAN, IP: %M", mg_print_ip4, name.value));
+        memcpy(&cert_ip, name.value, 4);
+        if (!ref_ip->is_ip6 && cert_ip == ref_ip->addr.ip4)  // RFC-9525 6.4
+          return 1;  // and byte-matches the one we wanted to connected to
+      }
 #if MG_ENABLE_IPV6
-    } else if (name.type == 0x87 && name.len == 16) {  // is an IPv6 address
-      MG_VERBOSE(("Found SAN, IPv6: %M", mg_print_ip6, name.value));
-      if (server_ip->is_ip6 && memcmp(name.value, server_ip->addr.ip6, 16) == 0)
-        return 1;  // and matches the one we're connected to
+      else if (name.type == 0x87 && name.len == 16) {  // is an IPv6 address
+        MG_VERBOSE(("Found SAN, IPv6: %M", mg_print_ip6, name.value));
+        if (ref_ip->is_ip6 && memcmp(name.value, ref_ip->addr.ip6, 16) == 0)
+          return 1;  // and byte-matches the one we wanted to connected to
+      }
 #endif
-    } else {  // this is a text SAN
+    } else if (name.type == 0x82) {  // this is a DNS name
       struct mg_str sn, tn;
-      MG_VERBOSE(("Found SAN, (%u): %.*s", name.type, name.len, name.value));
+      MG_VERBOSE(("Found SAN, DNS: %.*s", name.len, name.value));
       sn = mg_str(server_name), tn = mg_str_n((char *) name.value, name.len);
       if (countdots(sn) == countdots(tn) && mg_match(sn, tn, NULL))
         return 1;  // and matches the host name
@@ -1762,6 +1767,8 @@ static int tls_bundle_find(struct tls_data *tls, struct mg_der_tlv *name,
   return 0;
 }
 
+bool mg_aton_(struct mg_str str, struct mg_addr *addr);
+
 static int mg_tls_recv_cert(struct mg_connection *c, bool is_client) {
   struct tls_data *tls = (struct tls_data *) c->tls;
   unsigned char *recv_buf;
@@ -1848,11 +1855,16 @@ static int mg_tls_recv_cert(struct mg_connection *c, bool is_client) {
       if (ci == certs) {
         // First certificate in the chain is peer cert, check SAN if requested,
         // and store public key for further CertVerify step
-        if (tls->hostname[0] != '\0' &&
-            mg_tls_verify_cert_san(cert, certsz, tls->hostname, &c->rem) <= 0 &&
-            mg_tls_verify_cert_cn(&ci->subj, tls->hostname) <= 0) {
-          mg_error(c, "failed to verify hostname");
-          return -1;
+        if (tls->hostname[0] != '\0') {
+          struct mg_addr addr;  // use aton_ so localhost evals as a name
+          bool is_addr = mg_aton_(mg_str_s(tls->hostname), &addr);
+          if (mg_tls_verify_cert_san(cert, certsz, tls->hostname,
+                                     is_addr ? &addr : NULL) <= 0 &&
+              (!is_addr ||  // DNS CN fallback
+               mg_tls_verify_cert_cn(&ci->subj, tls->hostname) <= 0)) {
+            mg_error(c, "failed to verify hostname");
+            return -1;
+          }
         }
         if (ci->pubkey.len > sizeof(tls->pubkey)) {
           mg_error(c, "peer public key too large");
