@@ -16819,9 +16819,14 @@ static void mg_der_debug(struct mg_der_tlv *tlv, int depth) {
 
 // Did we receive a full TLS record in the c->rtls buffer?
 static bool mg_tls_got_record(struct mg_connection *c) {
-  return c->rtls.len >= (size_t) TLS_RECHDR_SIZE &&
-         c->rtls.len >=
-             (size_t) (TLS_RECHDR_SIZE + MG_LOAD_BE16(c->rtls.buf + 3));
+  uint16_t rl;
+  if (c->rtls.len < (size_t) TLS_RECHDR_SIZE) return false;
+  rl = MG_LOAD_BE16(c->rtls.buf + 3);
+  if (rl > 16384 + 256) {  // TLS 1.3 record max length (RFC-9846 5.1)
+    mg_error(c, "TLS record too large");
+    return false;
+  }
+  return c->rtls.len >= (size_t) (TLS_RECHDR_SIZE + rl);
 }
 
 // Remove a single TLS record from the recv buffer
