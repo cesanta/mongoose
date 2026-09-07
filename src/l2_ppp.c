@@ -101,7 +101,7 @@ static uint16_t s_id;
 
 void mg_l2_ppp_init(struct mg_tcpip_if *ifp) {
   ifp->l2mtu = 1500;
-  ifp->framesize = 1500 + sizeof(struct ppp) + sizeof(struct hdlc_);
+  ifp->framesize = ifp->l2mtu + sizeof(struct ppp) + sizeof(struct hdlc_) + 2;
 }
 
 extern void mg_l2_eth_init(struct mg_tcpip_if *);
@@ -466,6 +466,7 @@ bool mg_l2_ppp_rx(struct mg_tcpip_if *ifp, enum mg_l2proto *proto,
     pay->buf = (char *) raw->buf;
     pay->len = raw->len - 2;
   }
+  if (pay->len > ifp->l2mtu + sizeof(struct ppp)) return false;  // Oversized
   return ppp_rx(ifp, proto, pay, raw);
 }
 
@@ -548,6 +549,8 @@ bool mg_l2_pppoe_rx(struct mg_tcpip_if *ifp, enum mg_l2proto *proto,
   if (!mg_l2_eth_rx(ifp, &eth_proto, pay, raw)) return false;
   pppoe = (struct pppoe *) pay->buf;            // here we handle pay, not raw
   if (pay->len < sizeof(*pppoe)) return false;  // Truncated
+  if (pay->len - sizeof(*pppoe) > ifp->l2mtu + sizeof(struct ppp))
+    return false;  // Oversized
   if (eth_proto == MG_TCPIP_L2PROTO_PPPoE_DISC) {
     MG_VERBOSE(("PPPoE_DISC"));
     if (s_state == MG_PPPoE_ST_DISC && pppoe->code == MG_PPPoE_PADO &&
