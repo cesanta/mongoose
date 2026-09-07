@@ -5789,6 +5789,7 @@ bool mg_l2_eth_rx(struct mg_tcpip_if *ifp, enum mg_l2proto *proto,
   }
   pay->buf = ((char *) eth) + hdrlen;
   pay->len = len - hdrlen;
+  if (len > ifp->framesize) return false;  // Oversized
   for (i = 0; i < sizeof(eth_types) / sizeof(uint16_t); i++) {
     if (type == eth_types[i]) break;
   }
@@ -5976,7 +5977,7 @@ static uint16_t s_id;
 
 void mg_l2_ppp_init(struct mg_tcpip_if *ifp) {
   ifp->l2mtu = 1500;
-  ifp->framesize = 1500 + sizeof(struct ppp) + sizeof(struct hdlc_);
+  ifp->framesize = ifp->l2mtu + sizeof(struct ppp) + sizeof(struct hdlc_) + 2;
 }
 
 extern void mg_l2_eth_init(struct mg_tcpip_if *);
@@ -6341,6 +6342,7 @@ bool mg_l2_ppp_rx(struct mg_tcpip_if *ifp, enum mg_l2proto *proto,
     pay->buf = (char *) raw->buf;
     pay->len = raw->len - 2;
   }
+  if (pay->len > ifp->l2mtu + sizeof(struct ppp)) return false;  // Oversized
   return ppp_rx(ifp, proto, pay, raw);
 }
 
@@ -6423,6 +6425,8 @@ bool mg_l2_pppoe_rx(struct mg_tcpip_if *ifp, enum mg_l2proto *proto,
   if (!mg_l2_eth_rx(ifp, &eth_proto, pay, raw)) return false;
   pppoe = (struct pppoe *) pay->buf;            // here we handle pay, not raw
   if (pay->len < sizeof(*pppoe)) return false;  // Truncated
+  if (pay->len - sizeof(*pppoe) > ifp->l2mtu + sizeof(struct ppp))
+    return false;  // Oversized
   if (eth_proto == MG_TCPIP_L2PROTO_PPPoE_DISC) {
     MG_VERBOSE(("PPPoE_DISC"));
     if (s_state == MG_PPPoE_ST_DISC && pppoe->code == MG_PPPoE_PADO &&
@@ -18323,6 +18327,7 @@ static int tls_bundle_find(struct tls_data *tls, struct mg_der_tlv *name,
 }
 
 bool mg_aton_(struct mg_str str, struct mg_addr *addr);
+
 static int mg_tls_recv_cert(struct mg_connection *c, bool is_client) {
   struct tls_data *tls = (struct tls_data *) c->tls;
   unsigned char *recv_buf;
@@ -18410,7 +18415,7 @@ static int mg_tls_recv_cert(struct mg_connection *c, bool is_client) {
         // First certificate in the chain is peer cert, check SAN if requested,
         // and store public key for further CertVerify step
         if (tls->hostname[0] != '\0') {
-          struct mg_addr addr;
+          struct mg_addr addr;  // use aton_ so localhost evals as a name
           bool is_addr = mg_aton_(mg_str_s(tls->hostname), &addr);
           if (mg_tls_verify_cert_san(cert, certsz, tls->hostname,
                                      is_addr ? &addr : NULL) <= 0 &&

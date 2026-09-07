@@ -135,6 +135,7 @@ bool mg_l2_eth_rx(struct mg_tcpip_if *ifp, enum mg_l2proto *proto,
   }
   pay->buf = ((char *) eth) + hdrlen;
   pay->len = len - hdrlen;
+  if (len > ifp->framesize) return false;  // Oversized
   for (i = 0; i < sizeof(eth_types) / sizeof(uint16_t); i++) {
     if (type == eth_types[i]) break;
   }
