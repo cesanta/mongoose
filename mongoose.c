@@ -9761,9 +9761,9 @@ static void read_conn(struct mg_connection *c, struct pkt *pkt) {
       MG_VERBOSE(("ignoring duplicate pkt"));
     } else {
       MG_VERBOSE(("SEQ != ACK: %x %x %x", seq, s->ack, ack));
-      tx_tcp(c->mgr->ifp, s->mac, &c->loc, &c->rem, c->dscp, TH_ACK,
-             mg_htonl(s->seq), mg_htonl(s->ack), "", 0);
     }
+    tx_tcp(c->mgr->ifp, s->mac, &c->loc, &c->rem, c->dscp, TH_ACK,
+           mg_htonl(s->seq), mg_htonl(s->ack), "", 0);
     return;  // drop it, RFC-9293 3.10.7.4: ignore ACKno
   }
   // Now process the segment for ACK and payload

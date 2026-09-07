@@ -906,11 +906,13 @@ static void test_tcp_retransmit(void) {
     now = mg_millis() - start;
     // we wait enough time for a reply
     if (now > 2 * MG_TCPIP_ACK_MS) {
-      response_recv = false;
+      response_recv = false; // response should have been received by now
       break;
     }
   }
-  ASSERT((!response_recv));  // replies should not be sent for duplicate packets
+  ASSERT((response_recv));  // retransmit the lost ACK for duplicate segs
+  ASSERT((t->flags == TH_ACK));
+  ASSERT((t->ack == mg_htonl(1003)));  // dup ACK
 
   // packet with seq_no = 1003 got lost/delayed, send seq_no = 1005
   create_tcp_simpleseg(&e, &ipp, 1005, 2, TH_PUSH | TH_ACK, 2);
