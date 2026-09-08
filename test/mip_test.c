@@ -530,6 +530,20 @@ static void test_tcp_basics(bool ipv6) {
   // no MSS sent, so it must default to 536/1220 (RFC-9293 3.7.1)
   ASSERT(((struct connstate *) (mgr.conns + 1))->dmss == (ipv6 ? 1220 : 536));
 
+  // check c->is_full advertises a zero window and recovers
+  mgr.conns->is_full = true;
+  create_tcp_simpleseg(&e, &ipp, 1001, 2, TH_ACK, 0);
+  mg_mgr_poll(&mgr, 0);
+  while (!received_response(&s_driver_data)) mg_mgr_poll(&mgr, 0);
+  ASSERT(t->flags == TH_ACK);
+  ASSERT(t->win == 0);
+  s_driver_data.len = 0;
+  mgr.conns->is_full = false;
+  mg_mgr_poll(&mgr, 0);
+  ASSERT(received_response(&s_driver_data));
+  ASSERT(t->flags == TH_ACK);
+  ASSERT(t->win == mg_htons(MG_TCPIP_WIN));
+
   // segment with seq_no within window
   create_tcp_simpleseg(&e, &ipp, 1010, 2, TH_PUSH, 2);
   mg_mgr_poll(&mgr, 0);
