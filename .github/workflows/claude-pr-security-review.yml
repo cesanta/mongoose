@@ -1,9 +1,6 @@
 name: Claude PR Security Review
 
 on:
-  pull_request:
-    types: [opened]
-
   workflow_dispatch:
     inputs:
       pr_number:
@@ -22,7 +19,7 @@ permissions:
   issues: write
 
 concurrency:
-  group: claude-pr-security-review-${{ github.event.pull_request.number || inputs.pr_number }}
+  group: claude-pr-security-review-${{ inputs.pr_number }}
   cancel-in-progress: false
 
 jobs:
@@ -33,7 +30,7 @@ jobs:
 
     env:
       GH_TOKEN: ${{ github.token }}
-      PR_NUMBER: ${{ github.event.pull_request.number || inputs.pr_number }}
+      PR_NUMBER: ${{ inputs.pr_number }}
 
     steps:
       - name: Resolve workflow variables
