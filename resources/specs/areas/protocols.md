@@ -15,7 +15,7 @@ Primary files:
 
 Perform a focused security review centered on these files and this security surface.
 
-Supporting code outside these files may be inspected when necessary to establish reachability, data flow, state, validation, mitigation, or impact, but do not independently review unrelated areas.
+Supporting code elsewhere under `src/` may be inspected when necessary to establish reachability, data flow, state, validation, mitigation, or impact, but do not inspect or report code outside `src/` or independently review unrelated areas.
 
 ## Area-Specific Security Guidance
 
@@ -24,7 +24,7 @@ Supporting code outside these files may be inspected when necessary to establish
 - Look for malformed MQTT packets that can trigger out-of-bounds reads/writes, stack buffer overflow, heap corruption, assertion/crash, or parser desynchronization.
 - Specifically check SUBSCRIBE and UNSUBSCRIBE handling for unbounded numbers of topics, malformed topic length fields, missing QoS bytes, invalid QoS values, and writes to fixed-size response arrays.
 - Verify that PUBLISH handling enforces topic length, packet length, QoS rules, retained flag handling, packet identifier requirements, and message bounds before accessing fields.
-- Check broker examples and protocol handlers for authorization bypass, cross-topic data exposure, wildcard topic mishandling, `$SYS` or reserved topic confusion, and unintended publish/subscribe access.
+- Check protocol handlers for authorization bypass, cross-topic data exposure, wildcard topic mishandling, `$SYS` or reserved topic confusion, and unintended publish/subscribe access.
 - Review MQTT reconnect/resubscribe logic for stale connection state, packet identifier reuse bugs, and memory lifetime problems after close/reconnect.
 - Treat unauthenticated single-packet broker crash, client crash from malicious broker response, or memory corruption during MQTT parsing as reportable.
 

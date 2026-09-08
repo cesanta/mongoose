@@ -12,7 +12,7 @@ Primary files:
 
 Perform a focused security review centered on these files and this security surface.
 
-Supporting code outside these files may be inspected when necessary to establish reachability, data flow, state, validation, mitigation, or impact, but do not independently review unrelated areas.
+Supporting code elsewhere under `src/` may be inspected when necessary to establish reachability, data flow, state, validation, mitigation, or impact, but do not inspect or report code outside `src/` or independently review unrelated areas.
 
 ## Area-Specific Security Guidance
 

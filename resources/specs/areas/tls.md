@@ -19,9 +19,9 @@ Primary files:
 
 Perform a focused security review centered on these files and this security surface.
 
-Supporting code outside these files may be inspected when necessary to establish reachability, data flow, state, validation, mitigation, or impact, but do not independently review unrelated areas.
+Supporting code elsewhere under `src/` may be inspected when necessary to establish reachability, data flow, state, validation, mitigation, or impact, but do not inspect or report code outside `src/` or independently review unrelated areas.
 
-Connection, core, network, and helper code may be inspected when needed to understand the complete TLS execution path.
+Connection, core, network, and helper code under `src/` may be inspected when needed to understand the complete TLS execution path.
 
 ## Area-Specific Security Guidance
 
@@ -33,7 +33,7 @@ Trace attacker-controlled TLS peer input through normal client and server execut
 
 **TLS, Certificate, Hostname Verification, and Cryptographic Validation:**
 - Review all TLS backends, including built-in TLS, mbedTLS, OpenSSL, WolfSSL, and custom TLS integration, for equivalent security behavior where possible.
-- Flag certificate verification bypasses, accidental `skip_verification` use in security-sensitive examples or defaults, missing hostname verification when `name`/SNI is available, or inconsistent validation across TLS backends.
+- Flag certificate verification bypasses, accidental `skip_verification` use in security-sensitive defaults, missing hostname verification when `name`/SNI is available, or inconsistent validation across TLS backends.
 - For hostname verification, check wildcard handling carefully. A wildcard certificate identity must not match multiple DNS labels. For example, `*.example.com` must not match `a.b.example.com`.
 - Verify that wildcard matching is applied only to certificate presented identifiers, not to arbitrary reference identifiers or general DNS glob matching.
 - Review `mg_match` or other glob/matching helpers if used for certificate identity checks, authorization checks, filesystem paths, routing, or topic matching. Flag cases where glob semantics are broader than the security policy requires.

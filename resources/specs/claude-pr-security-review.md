@@ -1,10 +1,10 @@
-Review the complete PR diff. This contains all code changes in the PR.
+Review only changes under `src/` in the complete PR diff. Ignore all other changes in the PR.
 
 # OBJECTIVE
 
 Perform a security-focused code review to identify HIGH-CONFIDENCE security vulnerabilities that could have real exploitation potential.
 
-This is not a general code review - focus ONLY on security implications newly added by this PR. Do not comment on existing security concerns.
+This is not a general code review - focus ONLY on security implications newly added by this PR under `src/`. Do not analyze, count, or report changes outside `src/`. Do not comment on existing security concerns.
 
 For this task, you will rely on the specified shared security-review sections in `resources/specs/claude-security-scan.md`, the specified security-guidance sections in the six `resources/specs/areas/*.md` prompts listed below, and `resources/specs/claude-false-positive-filtering.md` detailing patterns, precedents, exclusion rules based on which some of the identified vulnerabilities will be excluded from the final reporting. The instructions, rules and criterias found in those referenced sections and the filtering file are MANDATORY TO BE HONOURED and your security audit will have to take all of them into account.
 
@@ -29,7 +29,7 @@ Also read the `Area-Specific Security Guidance` section from every area prompt:
 * `resources/specs/areas/net_builtin.md`
 * `resources/specs/areas/protocols.md`
 
-Use only the security guidance from the area prompts and ignore their full-scan-specific `Target` sections. Consider the complete set of common and area-specific security categories regardless of which source files the PR modifies. Do not choose one area or make this PR review area-scoped. Review the PR diff and report only security vulnerabilities introduced by that PR.
+Use only the security guidance from the area prompts and ignore their full-scan-specific `Target` sections. Consider the complete set of common and area-specific security categories for every file the PR modifies under `src/`. Do not choose one area or make this PR review area-scoped. Ignore all other changed paths and report only security vulnerabilities introduced by the PR under `src/`.
 
 Use these categories to guide prioritization, not as a checklist requiring equal coverage of every item.
 
@@ -48,7 +48,7 @@ Phase 2 - Comparative Analysis:
 - Flag code that introduces new attack surfaces
 
 Phase 3 - Vulnerability Assessment:
-- Examine each modified file for security implications
+- Examine each modified file under `src/` for security implications
 - Trace data flow from user inputs to sensitive operations
 - Look for privilege boundaries being crossed unsafely
 - Identify injection points and unsafe deserialization
@@ -121,6 +121,6 @@ Better to miss some theoretical issues than flood the report with false positive
 
 Read the `HARD EXCLUSIONS` section found in the `resources/specs/claude-false-positive-filtering.md` filtering file, for each possbile vulnerability found, check if it matches any items from the patterns listed in that section and if that is the case, exclude that vulnerability from the report. DO NOT REPORT IT if a match is found. Also, take into account the project-specific filtering and reporting precedents found in the `PRECEDENTS` section of the filtering file.
 
-Begin your analysis now. Use the repository exploration tools to understand the codebase context, then analyze the PR changes for security implications.
+Begin your analysis now. Use the repository exploration tools to understand the `src/` codebase context, then analyze only the PR changes under `src/` for security implications.
 
 Your final action must be posting the PR comment. You should not reply again after posting the PR comment.

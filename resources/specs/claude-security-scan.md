@@ -18,11 +18,13 @@ YOU MUST READ AND ANALYZE THE ASSIGNED AREA PROMPT AND THE COMMON FILTERING PROM
 
 You are reviewing one assigned security area in a source repository for security vulnerabilities.
 
-The repository may contain application code, protocol parsers, networking code, embedded code, library code, examples, tests, build scripts, documentation, generated files, and third-party/vendor code.
+The `src/` directory contains the protocol parsers, networking code, embedded code, library code, generated code, and platform-specific code in scope for this review.
 
 The area-specific prompt defines the primary files and security surface for this invocation. Your task is to identify externally reachable attack surfaces within that assigned area and report only findings with a concrete vulnerability pattern, credible attacker influence, and meaningful security impact.
 
-You may inspect code outside the listed target files when that code is necessary to understand data flow, reachability, call chains, state transitions, memory ownership, mitigations, authentication or authorization, protocol interaction, exploitability, or impact. Inspecting supporting code must not turn into an independent security review of unrelated areas. Findings must remain tied to the assigned target and security surface.
+The security review target is limited to code under `src/`. Do not analyze, count, or report code outside `src/` as part of the security review.
+
+You may inspect code outside the listed target files only when it is also under `src/` and is necessary to understand data flow, reachability, call chains, state transitions, memory ownership, mitigations, authentication or authorization, protocol interaction, exploitability, or impact. Inspecting supporting code must not turn into an independent security review of unrelated areas. Findings must remain tied to the assigned target and security surface and must identify an affected file under `src/`.
 
 DO NOT modify files, create commits, open PRs, create issues or post comments! You must only produce the final JSON report requested below.
 
@@ -83,7 +85,7 @@ Do not report:
 
 ### 3. Analyze the assigned scan area
 
-This is a targeted scan centered on the primary files and security surface defined by the assigned area prompt. Follow relevant supporting code when necessary to establish reachability, data flow, state, validation, mitigation, exploitability, or impact, but do not independently review unrelated areas.
+This is a targeted scan centered on the primary files and security surface defined by the assigned area prompt. Follow relevant supporting code under `src/` when necessary to establish reachability, data flow, state, validation, mitigation, exploitability, or impact, but do not inspect code outside `src/` as part of the security review or independently review unrelated areas.
 
 Do not restrict analysis to a diff. Do not assume only changed files matter. Do not assume an issue is irrelevant because it appears in old or long-standing code.
 
@@ -149,13 +151,12 @@ Follow this methodology before producing the final JSON.
 
 ### Phase 1: Repository context research
 
-First, understand the assigned area in repository context.
+First, understand the assigned area within `src/`.
 
 Identify:
 
-* Main source directories.
-* Build systems.
-* Public APIs.
+* Relevant directories under `src/`.
+* Public APIs declared under `src/`.
 * Protocol implementations.
 * Network-facing components.
 * File parsing components.
@@ -163,10 +164,9 @@ Identify:
 * TLS, crypto, or certificate validation logic.
 * Memory management patterns.
 * Platform-specific code.
-* Example, test, fuzz, generated, and vendor directories.
 * Components in the assigned area most likely to process attacker-controlled input.
 
-Use repository files to infer the actual architecture instead of assuming a generic web application model.
+Use files under `src/` to infer the actual architecture instead of assuming a generic web application model.
 
 ### Phase 2: Attack surface mapping
 
@@ -359,10 +359,9 @@ Take into account the project-specific filtering and reporting precedents found 
 
 ## DIRECTORY AND FILE EXCLUSIONS
 
-Do not analyze or report findings from the following paths unless they are directly used by production/library code:
-- .github/
-- resources/
-- test/
+Only analyze and report findings from files under `src/`.
+
+Do not analyze or count code outside `src/` as part of the security review.
 
 ## OUTPUT REQUIREMENTS
 

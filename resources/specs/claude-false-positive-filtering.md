@@ -5,7 +5,7 @@
 3. The exploit depends on NULL, dangling, fake, or corrupted pointers/objects supplied by a local caller, including invalid `mg_connection`, `mg_mgr`, `mg_str`, iobufs, or callback data.
 4. The exploit requires manually mutating internal structs, flags, parser offsets, descriptor indexes, connection state, TLS state, MQTT/WebSocket state, or filesystem state into impossible combinations.
 5. The bug exists only in tests, fuzz harnesses, benchmarks, synthetic unit tests, or debug-only code, with no shared production logic.
-6. The issue is only in a tutorial/demo/example with no realistic production relevance or sensitive operation.
+6. The affected file is outside `src/`.
 7. The attacker must edit source code, build flags, compile-time macros, TLS backend choices, filesystem roots, or local device configuration.
 8. The attacker must directly write hardware registers, MMIO, DMA descriptors, descriptor ownership bits, IRQ state, cache registers, or peripheral configuration.
 9. Generic DoS from high traffic volume, many valid connections, slow clients, missing quotas, missing rate limits, or ordinary resource saturation.
@@ -27,7 +27,7 @@
 6. Does the report provide exact files, functions, line numbers, data flow, bounds reasoning, state reasoning, or a minimal malformed input?
 7. Is the malformed input shape clear, such as CL+TE HTTP, oversized MQTT SUBSCRIBE, malformed WebSocket length, DNS compression loop, wildcard TLS certificate, invalid packet header length, or encoded path traversal?
 8. Is the severity justified by reachability and impact?
-9. Is this a library/helper/default/example-pattern vulnerability rather than only arbitrary application misuse?
+9. Is this a library/helper/default vulnerability rather than only arbitrary application misuse?
 10. Is the fix specific enough to act on: reject CL+TE, bound arrays, validate DNS pointers, enforce one-label wildcard matching, check packet lengths, canonicalize paths, or bound RX loops?
 11. Is a DoS finding caused by a concrete implementation flaw rather than volume, slow clients, missing quotas, or capacity limits?
 12. In embedded context, can a small malformed input reliably crash, wedge, corrupt, or permanently disrupt a device/process?
@@ -53,11 +53,11 @@
 17. Filter reports requiring direct mutation of connection internals such as protocol flags, closing flags, handler pointers, iobuf fields, callback pointers, or user data.
 18. Filter reports requiring attacker control of `MG_ENABLE_*`, TLS backend macros, filesystem backend macros, compiler flags, debug flags, sanitizer settings, or platform defines.
 19. Filter direct hardware-access reports requiring writes to registers, DMA descriptors, MMIO, IRQ state, cache controls, or peripheral configuration.
-20. Filter generic “Mongoose lacks authentication” reports unless a helper, example, route pattern, auth parser, MQTT broker behavior, dashboard, upload handler, or OTA endpoint creates a concrete issue.
+20. Filter generic “Mongoose lacks authentication” reports unless a helper, route pattern, auth parser, MQTT broker behavior, dashboard, upload handler, or OTA endpoint creates a concrete issue.
 21. Filter generic rate-limit/quota/connection-cap/upload-cap findings unless a specific bug lets a small malformed input trigger crash, corruption, infinite loop, or disproportionate exhaustion.
 22. Filter purely theoretical UB, portability, unaligned-access, or signed-overflow reports with no supported-platform impact and no realistic external trigger.
 23. Filter RFC non-compliance without concrete smuggling, bypass, memory corruption, data exposure, state corruption, or crash.
-24. Keep security-relevant production-like examples: dashboards, upload servers, MQTT brokers, firmware update flows, auth examples, TLS examples, and filesystem-serving examples.
+24. Keep security-relevant production library code under `src/` for dashboards, uploads, MQTT, firmware updates, authentication, TLS, and filesystem serving.
 25. Keep client-side findings caused by malicious servers, brokers, DNS responders, TLS peers, WebSocket peers, or HTTP peers.
 26. Keep callback-related findings only when Mongoose invokes the callback normally and then unsafely continues using freed or mutated state.
 27. Keep availability findings when one malformed packet, request, certificate, DNS response, MQTT message, WebSocket frame, or small sequence can reliably crash, wedge, corrupt, or disrupt a Mongoose target.
