@@ -119,10 +119,15 @@ jobs:
 
   miprtx:
     runs-on: ubuntu-latest
-    name: MIP RTX TAP
+    strategy:
+      fail-fast: false
+      matrix:
+        ssl: ["", BUILTIN]
+    name: MIP RTX TAP SSL=${{ matrix.ssl }}
     env:
       IPV6: 0
       RTX: 1
+      SSL: ${{ matrix.ssl }}
       TFLAGS: -DMQTT_HOST -DIPV6_NOROUTING -DNO_ABORT
     steps:
     - uses: actions/checkout@v5

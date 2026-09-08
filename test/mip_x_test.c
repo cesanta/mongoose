@@ -306,6 +306,7 @@ static void mqtt_fn(struct mg_connection *c, int ev, void *ev_data) {
       // close on farewell
       MG_INFO(("%lu CLOSING", c->id));
       mg_mqtt_disconnect(c, NULL);
+      c->is_draining = true;
       data->passed = true;
     } else if (mm->data.len == 21098) {
       struct mg_mqtt_opts pub_opts;
