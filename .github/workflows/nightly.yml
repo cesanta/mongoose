@@ -116,6 +116,26 @@ jobs:
         cat log
         test/health.awk < log > json
         scp -o "StrictHostKeyChecking=no" json "root@176.9.217.245:/data/downloads/health/${{ matrix.target }}_${{ matrix.cc }}_${{ matrix.ssl }}_$(date +"%Y%m%d").json"
+
+  miprtx:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        ssl: ["", BUILTIN]
+    name: MIP RTX TAP SSL=${{ matrix.ssl }}
+    env:
+      IPV6: 0
+      RTX: 1
+      SSL: ${{ matrix.ssl }}
+      TFLAGS: -DMQTT_HOST -DIPV6_NOROUTING -DNO_ABORT
+    steps:
+    - uses: actions/checkout@v5
+      with: { fetch-depth: 2 }
+    - run: |
+        source ./test/setup_ga_network.sh ; sed -i -e "s/127.0.0.1//" test/mosquitto.conf ; ./test/setup_mqtt_server.sh
+        make -C test mip_tap_test
+
   mip89:
     runs-on: ubuntu-latest
     strategy:
@@ -146,6 +166,21 @@ jobs:
         sudo apt -y update ; sudo apt -y install binfmt-support qemu-user-static && docker run --rm --privileged multiarch/qemu-user-static --reset -p yes
         if [[ "${{ matrix.target }}" == *port* ]]; then source ./test/setup_ga_network.sh ; export ENV="-e Tmp=. -e WINEDEBUG=-all -e HOST_IP -e HOST_IPV6 -e HOST_IFC" ; sed -i -e "s/127.0.0.1//" test/mosquitto.conf; cat test/mosquitto.conf; ./test/setup_mqtt_server.sh ; make -C test port_tap_bridge ; test/port_tap_bridge & sleep 2 ; fi
         make -C test ${{ matrix.target }} IPV6=${{ matrix.ipv6 }} SSL=${{ matrix.ssl }} MULTIREC=NO
+
+  miprtxbe:
+    runs-on: ubuntu-latest
+    name: MIP RTX be s390 port
+    env:
+      IPV6: 0
+      RTX: 1
+      TFLAGS: -DMQTT_HOST -DIPV6_NOROUTING -DNO_ABORT
+    steps:
+    - uses: actions/checkout@v5
+      with: { fetch-depth: 2 }
+    - run: |
+        sudo apt -y update ; sudo apt -y install binfmt-support qemu-user-static && docker run --rm --privileged multiarch/qemu-user-static --reset -p yes
+        source ./test/setup_ga_network.sh ; export ENV="-e Tmp=. -e WINEDEBUG=-all -e HOST_IP -e HOST_IPV6 -e HOST_IFC -e RTX" ; sed -i -e "s/127.0.0.1//" test/mosquitto.conf ; ./test/setup_mqtt_server.sh ; make -C test port_tap_bridge ; test/port_tap_bridge & sleep 2
+        make -C test mip_port_s390 MULTIREC=NO
 
   l2:
     runs-on: ubuntu-latest

@@ -1456,6 +1456,14 @@ struct timeval {
 #define MG_ENABLE_TCPIP_DRIVER_INIT 1  // enabled built-in driver for
 #endif                                 // Mongoose built-in network stack
 
+#ifndef MG_ENABLE_TCPIP_TCPRTX
+#define MG_ENABLE_TCPIP_TCPRTX 0  // TCP retransmission queue
+#endif
+
+#ifndef MG_TCPIP_DHCPNAME_SIZE
+#define MG_TCPIP_DHCPNAME_SIZE 18  // struct mg_tcpip_if :: dhcp_name size
+#endif
+
 #ifndef MG_TCPIP_IP                      // e.g. MG_IPV4(192, 168, 0, 223)
 #define MG_TCPIP_IP MG_IPV4(0, 0, 0, 0)  // Default is 0.0.0.0 (DHCP)
 #endif
@@ -1490,10 +1498,6 @@ struct timeval {
 
 #ifndef MG_SET_MAC_ADDRESS
 #define MG_SET_MAC_ADDRESS(mac)
-#endif
-
-#ifndef MG_TCPIP_DHCPNAME_SIZE
-#define MG_TCPIP_DHCPNAME_SIZE 18  // struct mg_tcpip_if :: dhcp_name size
 #endif
 
 #ifndef MG_SET_WIFI_CONFIG
@@ -5100,6 +5104,7 @@ struct mg_tcpip_if {
   bool enable_req_sntp;                   // DHCP client requests an SNTP server address
   bool enable_fcs_check;                  // Verify and strip FCS from received frames
   bool enable_mac_check;                  // Drop frames not addressed to this MAC
+  bool enable_tcp_retransmit;             // Enable optional TCP retransmission queue
   bool update_mac_hash_table;             // Signal driver to refresh MAC multicast hash table
   bool is_ip_changed;                     // Set by stack when IP changes; triggers connection restart
   struct mg_tcpip_driver *driver;         // Hardware driver; must be set before mg_tcpip_init()

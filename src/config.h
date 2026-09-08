@@ -175,6 +175,14 @@
 #define MG_ENABLE_TCPIP_DRIVER_INIT 1  // enabled built-in driver for
 #endif                                 // Mongoose built-in network stack
 
+#ifndef MG_ENABLE_TCPIP_TCPRTX
+#define MG_ENABLE_TCPIP_TCPRTX 0  // TCP retransmission queue
+#endif
+
+#ifndef MG_TCPIP_DHCPNAME_SIZE
+#define MG_TCPIP_DHCPNAME_SIZE 18  // struct mg_tcpip_if :: dhcp_name size
+#endif
+
 #ifndef MG_TCPIP_IP                      // e.g. MG_IPV4(192, 168, 0, 223)
 #define MG_TCPIP_IP MG_IPV4(0, 0, 0, 0)  // Default is 0.0.0.0 (DHCP)
 #endif
@@ -209,10 +217,6 @@
 
 #ifndef MG_SET_MAC_ADDRESS
 #define MG_SET_MAC_ADDRESS(mac)
-#endif
-
-#ifndef MG_TCPIP_DHCPNAME_SIZE
-#define MG_TCPIP_DHCPNAME_SIZE 18  // struct mg_tcpip_if :: dhcp_name size
 #endif
 
 #ifndef MG_SET_WIFI_CONFIG
