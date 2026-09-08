@@ -8280,6 +8280,14 @@ void mg_multicast_restore(struct mg_connection *c, uint8_t *from) {
 #define MG_TCPIP_WIN 6000  // TCP window size
 #endif
 
+#ifndef MG_TCPIP_MIN_MSS
+#define MG_TCPIP_MIN_MSS 64  // Minimum peer MSS
+#endif
+
+#ifndef MG_TCPIP_TXQ_ALIGN
+#define MG_TCPIP_TXQ_ALIGN 1024  // Retransmit queue allocation quantum
+#endif
+
 struct connstate {
   uint32_t seq, ack;                      // TCP seq/ack counters
   uint64_t timer;                         // TCP timer (see 'ttype' below)
@@ -9581,7 +9589,7 @@ static struct mg_connection *accept_conn(struct mg_connection *lsn,
   }
   s = (struct connstate *) (c + 1);
   s->retransmit = lsn->mgr->ifp->enable_tcp_retransmit;
-  s->txq.align = MG_IO_SIZE;
+  s->txq.align = MG_TCPIP_TXQ_ALIGN;
   s->dmss = mss;  // from options in client SYN
   s->seq = mg_ntohl(pkt->tcp->ack), s->ack = mg_ntohl(pkt->tcp->seq);
   s->win = mg_ntohs(pkt->tcp->win), s->maxseq = (uint32_t) (s->seq + s->win);
@@ -9683,6 +9691,7 @@ static size_t txq_next(struct connstate *s, uint8_t **buf) {
 }
 
 static bool txq_add(struct connstate *s, const void *buf, size_t len) {
+  assert(len > 0);
   uint32_t n = (uint32_t) len;
   size_t off = s->txq.len, total = sizeof(n) + len;
   if (mg_iobuf_add(&s->txq, off, NULL, total) != total) return false;
@@ -9960,8 +9969,11 @@ static bool handle_opt(struct connstate *s, struct tcp *tcp, bool ip6) {
       if (kind == 0) break;  // End of Option List
       if (len < 2 || opts[1] == 0 || opts[1] > len) return false;  // Malformed
       optlen = opts[1];
-      if (kind == 2 && optlen == 4)  // set received MSS
-        s->dmss = (uint16_t) (((uint16_t) opts[2] << 8) + opts[3]);
+      if (kind == 2 && optlen == 4) {  // set received MSS
+        uint16_t mss = (uint16_t) (((uint16_t) opts[2] << 8) + opts[3]);
+        if (mss == 0 || mss < MG_TCPIP_MIN_MSS) return false;
+        s->dmss = mss;
+      }
     }
     MG_VERBOSE(("kind: %u, optlen: %u, len: %d\n", kind, optlen, len));
     opts += optlen;
@@ -10464,6 +10476,7 @@ void mg_tcpip_init(struct mg_mgr *mgr, struct mg_tcpip_if *ifp) {
   // If L2 address is not set, make a random one; fill MTU
   mg_l2_init(ifp);
   ifp->mtu = ifp->l2mtu;
+  if (MG_ENABLE_TCPIP_TCPRTX) ifp->enable_tcp_retransmit = true;
 
   if (ifp->dhcp_name[0] == '\0')  // If DHCP name is not set, use "mip"
     memcpy(ifp->dhcp_name, "mip", 4);
@@ -10519,7 +10532,7 @@ void mg_connect_resolved(struct mg_connection *c) {
   uint8_t *l2addr;
   struct connstate *s = (struct connstate *) (c + 1);
   s->retransmit = ifp->enable_tcp_retransmit;
-  s->txq.align = MG_IO_SIZE;
+  s->txq.align = MG_TCPIP_TXQ_ALIGN;
   c->is_resolving = 0;
   if (ifp->eport < MG_EPHEMERAL_PORT_BASE) ifp->eport = MG_EPHEMERAL_PORT_BASE;
   c->loc.port = mg_htons(ifp->eport++);
