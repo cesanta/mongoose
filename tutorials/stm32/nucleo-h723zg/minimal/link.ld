@@ -9,11 +9,22 @@ MEMORY {
   itcmram (rwx) : ORIGIN = 0x00000000, LENGTH = 64K
 }
 _estack     = ORIGIN(ram_d1) + LENGTH(ram_d1);
+_sstack     = ORIGIN(ram_d1);
 
 SECTIONS {
   .vectors  : { KEEP(*(.isr_vector)) }  > flash
   .text     : { *(.text* .text.*) }     > flash
   .rodata   : { *(.rodata*) }           > flash
+
+  .ARM.extab : {
+    *(.ARM.extab* .gnu.linkonce.armextab.*)
+  } > flash
+
+  .ARM.exidx : {
+    __exidx_start = .;
+    KEEP(*(.ARM.exidx* .gnu.linkonce.armexidx.*))
+    __exidx_end = .;
+  } > flash
 
   /* Note the .iram section, for functions copied to RAM. Required for MG_IRAM OTA support */
   .data : { _sdata = .; *(.first_data) *(.iram .iram* .iram.*) *(.data SORT(.data.*)) _edata = .; } > ram_d1 AT > flash

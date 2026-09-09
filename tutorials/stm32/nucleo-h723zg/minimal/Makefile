@@ -6,11 +6,12 @@ MGDIR = ../../../..
 CFLAGS  = -W -Wall -Wextra -Wundef -Wshadow -Wdouble-promotion
 CFLAGS += -Wformat-truncation -fno-common -Wconversion -Wno-sign-conversion
 CFLAGS += -g3 -Os -ffunction-sections -fdata-sections
-CFLAGS += -I. -I$(MGDIR) -Icmsis_core/CMSIS/Core/Include -Icmsis_h7/Include
+CFLAGS += -fno-omit-frame-pointer -funwind-tables
+CFLAGS += -I. -Icmsis_core/CMSIS/Core/Include -Icmsis_h7/Include -Imongoose
 CFLAGS += -mcpu=cortex-m7 -mthumb -mfloat-abi=hard -mfpu=fpv5-d16 $(CFLAGS_EXTRA)
 LDFLAGS ?= -Tlink.ld -nostdlib -nostartfiles --specs nosys.specs -lc -lgcc -Wl,--gc-sections -Wl,-Map=$@.map
 
-SOURCES = main.c hal.c
+SOURCES = main.c hal.c hardfault.c
 SOURCES += cmsis_h7/Source/Templates/gcc/startup_stm32h723xx.s
 SOURCES += $(MGDIR)/mongoose.c
 
@@ -23,6 +24,15 @@ firmware.bin: firmware.elf
 	arm-none-eabi-objcopy -O binary $< $@
 	@echo
 	@echo "To flash, run 'make flash', or use STM32CubeProgrammer"
+
+crash.json:
+	@echo "To get crash.json, curl http://DEVICE_IP/api/report after recovering from \
+	a hardfault and store the result in crash.json"
+
+stacktrace.txt: firmware.bin firmware.elf.map crash.json fake_target.py stacktrace.gdb
+	python3 -u fake_target.py 3334 > fake_target.log 2>&1 &
+	sleep 0.2
+	gdb-multiarch -q firmware.elf -batch -x stacktrace.gdb > $@
 
 flash: firmware.bin
 	STM32_Programmer_CLI -c port=swd -w firmware.elf -hardRst
