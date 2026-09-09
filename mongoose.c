@@ -9691,9 +9691,9 @@ static size_t txq_next(struct connstate *s, uint8_t **buf) {
 }
 
 static bool txq_add(struct connstate *s, const void *buf, size_t len) {
-  assert(len > 0);
   uint32_t n = (uint32_t) len;
   size_t off = s->txq.len, total = sizeof(n) + len;
+  assert(len > 0);
   if (mg_iobuf_add(&s->txq, off, NULL, total) != total) return false;
   memcpy(s->txq.buf + off, &n, sizeof(n));
   memcpy(s->txq.buf + off + sizeof(n), buf, len);

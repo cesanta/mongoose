@@ -981,8 +981,9 @@ static void test_tcp_retransmit_queue(void) {
   struct ipp ipp;
   struct tcp *t = (struct tcp *) (s_driver_data.buf + sizeof(e) + sizeof(ip));
   struct connstate *s;
-  size_t i, first, off, len = 0, retired;
+  size_t i, first, off, retired;
   uint8_t *data;
+  uint32_t qlen = 0;
   struct mg_tcpip_driver driver;
   struct mg_tcpip_if mif;
 
@@ -1075,12 +1076,12 @@ static void test_tcp_retransmit_queue(void) {
   while (s->seq - s->txq_una < s_rtx_len) {
     while (!received_response(&s_driver_data)) mg_mgr_poll(&mgr, 0);
   }
-  for (off = 0; off < s->txq.len; off += sizeof(uint32_t) + len) {
-    memcpy(&len, s->txq.buf + off, sizeof(uint32_t));
+  for (off = 0; off < s->txq.len; off += sizeof(qlen) + qlen) {
+    memcpy(&qlen, s->txq.buf + off, sizeof(qlen));
   }
   ASSERT(off == s->txq.len);
-  ASSERT(len == first);
-  ASSERT(memcmp(s->txq.buf + off - len, s_rtx_data + first, len) == 0);
+  ASSERT(qlen == first);
+  ASSERT(memcmp(s->txq.buf + off - qlen, s_rtx_data + first, qlen) == 0);
 
   // Draining waits for the rebuilt flight to be acknowledged before FIN
   mgr.conns->is_draining = 1;
