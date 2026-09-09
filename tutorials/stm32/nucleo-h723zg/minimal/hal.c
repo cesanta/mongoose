@@ -93,6 +93,7 @@ __attribute__((weak)) int _getpid(void) {
 
 __attribute__((weak)) int _write(int fd, char *ptr, int len) {
   (void) fd, (void) ptr, (void) len;
+  hal_uart_write_buf(USART3, ptr, len);
   return -1;
 }
 

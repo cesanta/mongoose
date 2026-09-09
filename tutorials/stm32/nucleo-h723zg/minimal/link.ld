@@ -9,6 +9,7 @@ MEMORY {
   itcmram (rwx) : ORIGIN = 0x00000000, LENGTH = 64K
 }
 _estack     = ORIGIN(ram_d1) + LENGTH(ram_d1);
+_sstack     = ORIGIN(ram_d1);
 
 SECTIONS {
   .vectors  : { KEEP(*(.isr_vector)) }  > flash
