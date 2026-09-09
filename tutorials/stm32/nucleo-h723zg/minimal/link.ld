@@ -6,6 +6,7 @@ MEMORY {
   ram_d1 (rwx)  : ORIGIN = 0x24000000, LENGTH = 320K
   ram_d2 (rwx)  : ORIGIN = 0x30000000, LENGTH = 32K
   ram_d3 (rwx)  : ORIGIN = 0x38000000, LENGTH = 16K
+  bkpsram (rw)  : ORIGIN = 0x38800000, LENGTH = 4K
   itcmram (rwx) : ORIGIN = 0x00000000, LENGTH = 64K
 }
 _estack     = ORIGIN(ram_d1) + LENGTH(ram_d1);
@@ -23,10 +24,9 @@ SECTIONS {
 
   .eth_ram : { *(.eth_ram .eth_ram*) } > ram_d1 AT > flash
 
-  /* Health record. NOLOAD and in unused DTCM, so startup code neither copies
-     nor zeroes it and the contents survive a warm reset */
-  .mg_health (NOLOAD) : { KEEP(*(.mg_health .mg_health*)) } > dtcmram
-
   . = ALIGN(8);
   _end = .;
+
+  /* Retained health record. Startup code must neither copy nor clear it. */
+  .mg_health (NOLOAD) : { KEEP(*(.mg_health .mg_health*)) } > bkpsram
 }
