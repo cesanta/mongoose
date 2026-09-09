@@ -26,8 +26,11 @@
     mac[5] = MGUID[2] & 255;         \
   } while (0)
 
-// Crash report support. Health record lives in the .mg_health region, see link.ld
-#define MG_HEALTH_RAM __attribute__((section(".mg_health")))
+// Persist Cortex-M crash reports in the 4 KB backup SRAM. hal_storage_init()
+// enables this memory before MG_HEALTH_INIT() is called.
+#define MG_HEALTH MG_HEALTH_CORTEX
+#define MG_HEALTH_CORTEX_STORAGE ((void *) D3_BKPSRAM_BASE)
+#define MG_HEALTH_CORTEX_STORAGE_SIZE (4U * 1024U)
 
 // mdash.net device management service support
 #define MG_ENABLE_MDASH 1

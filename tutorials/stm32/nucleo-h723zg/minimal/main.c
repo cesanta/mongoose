@@ -17,6 +17,14 @@
 #define LED2 PIN('E', 1)
 #define LED3 PIN('B', 14)
 
+void hal_storage_init(void) {
+  hal_backup_domain_init();
+  RCC->AHB4ENR |= RCC_AHB4ENR_BKPRAMEN;
+  (void) RCC->AHB4ENR;
+  PWR->CR2 |= PWR_CR2_BREN;
+  while ((PWR->CR2 & PWR_CR2_BRRDY) == 0) (void) 0;
+}
+
 static void log_fn(char ch, void *param) {
   hal_uart_write_buf(param, &ch, 1);
 }
@@ -27,50 +35,6 @@ static void blink_task(void) {
     hal_gpio_toggle(LED2);
   }
 }
-
-// Fault handler body. Runs in exception context: no printf, no malloc, no
-// blocking calls. Records the crash reason and a backtrace into the health
-// record, then resets.
-// "used" keeps the linker from garbage-collecting this section: the only
-// reference is the "b fault_c" branch in the naked handler below
-__attribute__((used, noinline)) static void fault_c(uint32_t *sp) {
-  extern uint8_t _estack;  // End of the main RAM region, defined in link.ld
-  size_t n = 0;
-  mg_health_record.reset_reason = MG_HEALTH_RESET_FAULT;
-  // Frame 0 is the faulting PC, frame 1 the caller's LR. Deeper frames come
-  // from a heuristic stack walk: BL pushes an odd return address that lives
-  // in flash. A stack word that merely looks like an address shows up as a
-  // bogus frame when symbolised, which is easy to filter by eye
-  mg_health_record.backtrace[n++] = sp[6] & ~1U;  // Stacked PC
-  mg_health_record.backtrace[n++] = sp[5] & ~1U;  // Stacked LR
-  for (uint32_t *p = sp + 8;
-       n < MG_HEALTH_BACKTRACE &&
-       (uintptr_t) p < (uintptr_t) sp + 4096U &&  // Bound the scan
-       (uintptr_t) p < (uintptr_t) &_estack;      // Stay in RAM
-       p++) {
-    uint32_t v = *p;
-    if ((v & 1U) && v >= 0x08000000U && v < 0x08000000U + 1024U * 1024U) {
-      mg_health_record.backtrace[n++] = v & ~1U;
-    }
-  }
-  NVIC_SystemReset();
-}
-
-// Common fault entry. EXC_RETURN bit 2 tells which stack was in use:
-// 0 = MSP, 1 = PSP. Load the faulting SP into r0 and hand it to fault_c()
-__attribute__((naked)) void HardFault_Handler(void) {
-  __asm volatile(
-      "tst lr, #4\n\t"  // Test EXC_RETURN bit 2
-      "ite eq\n\t"      // If zero, use MSP; else PSP
-      "mrseq r0, msp\n\t"
-      "mrsne r0, psp\n\t"
-      "b fault_c\n\t");
-}
-
-// Route the other fault types through the same entry point
-void MemManage_Handler(void) __attribute__((alias("HardFault_Handler")));
-void BusFault_Handler(void) __attribute__((alias("HardFault_Handler")));
-void UsageFault_Handler(void) __attribute__((alias("HardFault_Handler")));
 
 uint64_t mg_millis(void) {
   return hal_get_tick();
@@ -92,6 +56,10 @@ static void http_ev_handler(struct mg_connection *c, int ev, void *ev_data) {
     } else if (mg_match(hm->uri, mg_str("/api/kill"), NULL)) {
       SCB->SHCSR &= ~SCB_SHCSR_USGFAULTENA_Msk;
       __asm volatile("udf #0");
+    } else if (mg_match(hm->uri, mg_str("/api/report"), NULL)) {
+      struct mg_str report = mg_health_get_blob();
+      mg_http_reply(c, 200, "Content-Type: application/json\r\n", "%.*s\n",
+                    (int) report.len, report.buf);
     } else {
       mg_http_reply(c, 200, "", "Hi from Mongoose, tick %llu\n",
                     hal_get_tick());
@@ -101,9 +69,8 @@ static void http_ev_handler(struct mg_connection *c, int ev, void *ev_data) {
 
 int main(void) {
   hal_clock_init();
-
-  MG_HEALTH_INIT();  // Must be called after clock init
-
+  hal_storage_init();
+  MG_HEALTH_INIT();
   hal_uart_init(UART_DEBUG, UART_DEBUG_TX_PIN, UART_DEBUG_RX_PIN, 115200);
   mg_log_set_fn(log_fn, UART_DEBUG);
   hal_rng_init();
@@ -114,19 +81,7 @@ int main(void) {
 
   MG_INFO(("Initialised. CPU clock: %lu MHz", SystemCoreClock / 1000000));
 
-  // Report the previous boot's crash backtrace, if any
-  if (mg_health_reason() == MG_HEALTH_RESET_FAULT) {
-    char buf[MG_HEALTH_BACKTRACE * 10 + 100];
-    mg_snprintf(buf, sizeof(buf), "%s",
-                "arm-none-eabi-addr2line -pfiaC -e firmware.elf");
-    for (int i = 0; i < MG_HEALTH_BACKTRACE; i++) {
-      if (mg_health_record.backtrace[i] == 0) break;
-      mg_snprintf(buf + strlen(buf), sizeof(buf) - strlen(buf), " 0x%08lx",
-                  mg_health_record.backtrace[i]);
-    }
-    // mg_snprintf(buf + strlen(buf), sizeof(buf) - strlen(buf), "\n");
-    MG_INFO(("Previous boot crashed! Analyse with: %s", buf));
-  }
+  // MG_OTA_BOOT_CHECK();  // Must be called after clock init
 
   struct mg_mgr mgr;
   mg_mgr_init(&mgr);

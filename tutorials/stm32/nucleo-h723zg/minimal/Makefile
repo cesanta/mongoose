@@ -1,12 +1,13 @@
 # Copyright (c) 2026 Cesanta Software Limited
 # Environment setup: https://mongoose.ws/docs/getting-started/build-environment/
 
-MGDIR = ../../../..
+MGDIR = mongoose
 
 CFLAGS  = -W -Wall -Wextra -Wundef -Wshadow -Wdouble-promotion
 CFLAGS += -Wformat-truncation -fno-common -Wconversion -Wno-sign-conversion
 CFLAGS += -g3 -Os -ffunction-sections -fdata-sections
-CFLAGS += -I. -I$(MGDIR) -Icmsis_core/CMSIS/Core/Include -Icmsis_h7/Include
+CFLAGS += -fno-omit-frame-pointer -funwind-tables
+CFLAGS += -I. -Icmsis_core/CMSIS/Core/Include -Icmsis_h7/Include -Imongoose
 CFLAGS += -mcpu=cortex-m7 -mthumb -mfloat-abi=hard -mfpu=fpv5-d16 $(CFLAGS_EXTRA)
 LDFLAGS ?= -Tlink.ld -nostdlib -nostartfiles --specs nosys.specs -lc -lgcc -Wl,--gc-sections -Wl,-Map=$@.map
 
@@ -16,6 +17,10 @@ SOURCES += $(MGDIR)/mongoose.c
 
 all build example: firmware.bin
 
+mongoose/mongoose.c mongoose/mongoose.h:
+	mkdir -p mongoose/
+	cp ../../../../mongoose.[ch] mongoose/
+
 firmware.elf: cmsis_core cmsis_h7 hal.h link.ld Makefile $(SOURCES) $(MGDIR)/mongoose.h mongoose_config.h
 	arm-none-eabi-gcc $(SOURCES) $(CFLAGS) $(CFLAGS_EXTRA) $(LDFLAGS) -o $@
 
@@ -23,6 +28,15 @@ firmware.bin: firmware.elf
 	arm-none-eabi-objcopy -O binary $< $@
 	@echo
 	@echo "To flash, run 'make flash', or use STM32CubeProgrammer"
+
+crash.json:
+	@echo "To get crash.json, curl http://DEVICE_IP/api/report after recovering from \
+	a hardfault and store the result in crash.json"
+
+stacktrace.txt: firmware.bin firmware.elf.map crash.json fake_target.py stacktrace.gdb
+	python3 -u fake_target.py 3334 > fake_target.log 2>&1 &
+	sleep 0.2
+	gdb-multiarch -q firmware.elf -batch -x stacktrace.gdb > $@
 
 flash: firmware.bin
 	STM32_Programmer_CLI -c port=swd -w firmware.elf -hardRst

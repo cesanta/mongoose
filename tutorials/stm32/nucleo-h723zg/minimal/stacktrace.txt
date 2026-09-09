@@ -1,0 +1,15 @@
+The target architecture is set to "armv7e-m".
+http_ev_handler (c=0x2400da68, ev=<optimized out>, ev_data=<optimized out>) at main.c:174
+174	      __asm volatile ("udf #0");
+Fault registers: CFSR=0x00010000 HFSR=0x40000000 BFAR=0x00000000 ABFSR=0x00000000
+#0  http_ev_handler (c=0x2400da68, ev=<optimized out>, ev_data=<optimized out>) at main.c:174
+#1  0x080107aa in http_cb (c=0x2400da68, ev=<optimized out>, ev_data=<optimized out>) at mongoose/mongoose.c:4842
+#2  0x08007812 in mg_call (c=0x2400da68, ev=7, ev_data=0x2404fdd4) at mongoose/mongoose.c:2619
+#3  0x080194b8 in read_conn (c=<optimized out>, pkt=<optimized out>) at mongoose/mongoose.c:9907
+#4  rx_tcp (ifp=<optimized out>, pkt=<optimized out>) at mongoose/mongoose.c:10022
+#5  rx_ip (ifp=0x2400da68, pkt=0x2404fdc8) at mongoose/mongoose.c:10133
+#6  mg_tcpip_rx (ifp=ifp@entry=0x24007e58 <mif_>, buf=<optimized out>, len=len@entry=139) at mongoose/mongoose.c:10260
+#7  0x0801a082 in mg_tcpip_poll (ifp=0x24007e58 <mif_>, now=32453) at mongoose/mongoose.c:10413
+#8  mg_mgr_poll (mgr=mgr@entry=0x2404ffac, ms=ms@entry=0) at mongoose/mongoose.c:10642
+#9  0x08000a64 in main () at main.c:212
+[Inferior 1 (Remote target) detached]

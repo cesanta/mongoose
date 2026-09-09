@@ -91,11 +91,15 @@ static void mg_mdash_fn(struct mg_connection *c, int ev, void *ev_data) {
 }
 
 static void mg_mdash_rpc_get_info(struct mg_rpc_req *r) {
-  mg_rpc_ok(r, "{%m:%m,%m:%llu,%m:%m,%m:\"mws.%d\"}", MG_ESC("fw_version"),
-            MG_ESC(MG_MDASH_FIRMWARE_VERSION), MG_ESC("uptime"),
-            (uint64_t) (mg_millis() / 1000), MG_ESC("reboot_reason"),
-            MG_ESC(mg_health_reason_str(mg_health_reason())), MG_ESC("arch"),
-            MG_ARCH);
+  struct mg_str blob = mg_health_get_blob();
+  if (blob.buf == NULL) blob.len = 0;
+  mg_rpc_ok(r, "{%m:%m,%m:%llu,%m:%m,%m:\"mws.%d\",%m:{%m:%m,%m:%llu,%m:%m}}",
+      MG_ESC("fw_version"), MG_ESC(MG_MDASH_FIRMWARE_VERSION), MG_ESC("uptime"),
+      (uint64_t) (mg_millis() / 1000), MG_ESC("reboot_reason"),
+      MG_ESC(mg_health_reason_str(mg_health_reason())), MG_ESC("arch"), MG_ARCH,
+      MG_ESC("health"), MG_ESC("encoding"), MG_ESC("base64"), MG_ESC("size"),
+      (uint64_t) blob.len, MG_ESC("data"), mg_print_base64, (int) blob.len,
+      (uint8_t *) (blob.buf == NULL ? "" : blob.buf));
 }
 
 static void mg_mdash_rpc_ota_begin(struct mg_rpc_req *r) {

@@ -1,5 +1,21 @@
 #include "health.h"
+#include "health_cortex.h"
 
-// The one health record. Lives in RAM that survives a warm reset, see
-// MG_HEALTH_RAM and the .mg_health region in the linker script
-struct mg_health mg_health_record MG_HEALTH_RAM;
+struct mg_health mg_health_record;
+
+void mg_health_init(void) {
+  static const char magic[] = MG_HEALTH_MAGIC;
+  memset(&mg_health_record, 0, sizeof(mg_health_record));
+  memcpy(mg_health_record.magic, magic, sizeof(mg_health_record.magic));
+#if MG_HEALTH == MG_HEALTH_CORTEX
+  mg_health_cortex_init(&mg_health_cortex);
+  mg_health_record.get_blob = mg_health_cortex_get_blob;
+  mg_health_record.fn_data = &mg_health_cortex;
+#endif
+}
+
+struct mg_str mg_health_get_blob(void) {
+  return !mg_health_valid() || mg_health_record.get_blob == NULL
+             ? mg_str("")
+             : mg_health_record.get_blob(mg_health_record.fn_data);
+}
