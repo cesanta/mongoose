@@ -8311,6 +8311,7 @@ struct connstate {
   bool fin_rcvd;         // We have received FIN from the peer
   bool twclosure;        // 3-way closure done
   bool retransmit;       // Retain sent data until acknowledged
+  bool is_full;          // Advertise a zero receive window
   struct mg_iobuf txq;   // Length-prefixed sent TCP segments (RFC-9293, 3.8)
 };
 
@@ -9486,7 +9487,7 @@ static bool rx_udp(struct mg_tcpip_if *ifp, struct pkt *pkt) {
 static size_t tx_tcp(struct mg_tcpip_if *ifp, uint8_t *l2_dst,
                      struct mg_addr *ip_src, struct mg_addr *ip_dst,
                      uint8_t dscp, uint8_t flags, uint32_t seq, uint32_t ack,
-                     const void *buf, size_t len) {
+                     uint16_t win, const void *buf, size_t len) {
   uint8_t *l3p;
   struct ip *ip = NULL;
   struct tcp *tcp;
@@ -9531,7 +9532,7 @@ static size_t tx_tcp(struct mg_tcpip_if *ifp, uint8_t *l2_dst,
   tcp->seq = seq;
   tcp->ack = ack;
   tcp->flags = flags;
-  tcp->win = mg_htons(MG_TCPIP_WIN);
+  tcp->win = mg_htons(win);
   tcp->off = (uint8_t) (hlen / 4 << 4);
 #if MG_ENABLE_IPV6
   if (ip_dst->is_ip6) {
@@ -9569,7 +9570,8 @@ static size_t tx_tcp_ctrlresp(struct mg_tcpip_if *ifp, struct pkt *pkt,
   ipd.port = pkt->tcp->sport;
   if ((l2addr = get_return_l2addr(ifp, &ipd, false, pkt)) == NULL)
     return 0;  // safety net for lousy networks
-  return tx_tcp(ifp, l2addr, &ips, &ipd, 0, flags, seqno, ackno, NULL, 0);
+  return tx_tcp(ifp, l2addr, &ips, &ipd, 0, flags, seqno, ackno, MG_TCPIP_WIN,
+                NULL, 0);
 }
 
 static size_t tx_tcp_rst(struct mg_tcpip_if *ifp, struct pkt *pkt, bool toack) {
@@ -9724,7 +9726,8 @@ long mg_io_send(struct mg_connection *c, const void *buf, size_t len) {
       if (!txq_add(s, buf, len)) return MG_IO_WAIT;
     }
     sent = tx_tcp(ifp, s->mac, &c->loc, &c->rem, c->dscp, TH_PUSH | TH_ACK,
-                  mg_htonl(s->seq), mg_htonl(s->ack), buf, len);
+                  mg_htonl(s->seq), mg_htonl(s->ack),
+                  s->is_full ? 0 : MG_TCPIP_WIN, buf, len);
     if (sent == 0 || sent == (size_t) -1) {
       if (s->retransmit)
         mg_iobuf_del(&s->txq, s->txq.len - len - sizeof(uint32_t),
@@ -9797,7 +9800,8 @@ static void retransmit(struct mg_connection *c) {
   // Send the front retransmission-queue segment only (RFC-9293, 3.10.8)
   if (len == 0 ||
       tx_tcp(ifp, s->mac, &c->loc, &c->rem, c->dscp, TH_PUSH | TH_ACK,
-             mg_htonl(s->txq_seq), mg_htonl(s->ack), buf, len) == (size_t) -1) {
+             mg_htonl(s->txq_seq), mg_htonl(s->ack),
+             s->is_full ? 0 : MG_TCPIP_WIN, buf, len) == (size_t) -1) {
     mg_error(c, "retransmit");
     return;
   }
@@ -9821,7 +9825,8 @@ static void read_conn(struct mg_connection *c, struct pkt *pkt) {
     if (mg_ntohl(pkt->tcp->seq) != s->ack) {
       MG_VERBOSE(("ignoring FIN, %x != %x", mg_ntohl(pkt->tcp->seq), s->ack));
       tx_tcp(c->mgr->ifp, s->mac, &c->loc, &c->rem, c->dscp, TH_ACK,
-             mg_htonl(s->seq), mg_htonl(s->ack), "", 0);
+             mg_htonl(s->seq), mg_htonl(s->ack), s->is_full ? 0 : MG_TCPIP_WIN,
+             "", 0);
       return;
     }
     // If we initiated the closure, we reply with ACK upon receiving FIN
@@ -9843,12 +9848,14 @@ static void read_conn(struct mg_connection *c, struct pkt *pkt) {
       c->is_draining = 1;
     }
     tx_tcp(c->mgr->ifp, s->mac, &c->loc, &c->rem, c->dscp, flags,
-           mg_htonl(s->seq), mg_htonl(s->ack), "", 0);
+           mg_htonl(s->seq), mg_htonl(s->ack), s->is_full ? 0 : MG_TCPIP_WIN,
+           "", 0);
   } else if (pkt->pay.len <= 1 && mg_ntohl(pkt->tcp->seq) == s->ack - 1) {
     // Keep-Alive (RFC-9293 3.8.4, allow erroneous implementations)
     MG_VERBOSE(("%lu keepalive ACK", c->id));
     tx_tcp(c->mgr->ifp, s->mac, &c->loc, &c->rem, c->dscp, TH_ACK,
-           mg_htonl(s->seq), mg_htonl(s->ack), NULL, 0);
+           mg_htonl(s->seq), mg_htonl(s->ack), s->is_full ? 0 : MG_TCPIP_WIN,
+           NULL, 0);
     return;  // RFC-9293 3.10.7.4 discard (incorrect) payload, ACK, window
   } else if (seq != s->ack) {
     uint32_t ack = (uint32_t) (mg_htonl(pkt->tcp->seq) + pkt->pay.len);
@@ -9858,7 +9865,8 @@ static void read_conn(struct mg_connection *c, struct pkt *pkt) {
       MG_VERBOSE(("SEQ != ACK: %x %x %x", seq, s->ack, ack));
     }
     tx_tcp(c->mgr->ifp, s->mac, &c->loc, &c->rem, c->dscp, TH_ACK,
-           mg_htonl(s->seq), mg_htonl(s->ack), "", 0);
+           mg_htonl(s->seq), mg_htonl(s->ack), s->is_full ? 0 : MG_TCPIP_WIN,
+           "", 0);
     return;  // drop it, RFC-9293 3.10.7.4: ignore ACKno
   }
   // Now process the segment for ACK and payload
@@ -9892,7 +9900,8 @@ static void read_conn(struct mg_connection *c, struct pkt *pkt) {
     // Send ACK immediately
     MG_VERBOSE(("%lu imm ACK %lu", c->id, s->acked));
     tx_tcp(c->mgr->ifp, s->mac, &c->loc, &c->rem, c->dscp, TH_ACK,
-           mg_htonl(s->seq), mg_htonl(s->ack), NULL, 0);
+           mg_htonl(s->seq), mg_htonl(s->ack), s->is_full ? 0 : MG_TCPIP_WIN,
+           NULL, 0);
     s->unacked = 0;
     s->acked = s->ack;
     if (s->ttype != MIP_TTYPE_KEEPALIVE) settmout(c, MIP_TTYPE_KEEPALIVE);
@@ -10020,6 +10029,12 @@ static void rx_tcp(struct mg_tcpip_if *ifp, struct pkt *pkt) {
       settmout(c,
                MIP_TTYPE_KEEPALIVE);  // unless a former ACK timeout is pending
     read_conn(c, pkt);  // Override timer with ACK timeout if needed
+    if (c->is_full && !s->is_full) {
+      // The receive handler paused the connection: advertise zero window now
+      s->is_full = true;
+      tx_tcp(ifp, s->mac, &c->loc, &c->rem, c->dscp, TH_ACK, mg_htonl(s->seq),
+             mg_htonl(s->ack), 0, NULL, 0);
+    }
   } else
     // - we don't listen on that port; RFC-9293 3.5.2 Group 1
     // - check listening connections; RFC-9293 3.5.2 Group 2
@@ -10421,6 +10436,12 @@ static void mg_tcpip_poll(struct mg_tcpip_if *ifp, uint64_t now) {
     struct connstate *s = (struct connstate *) (c + 1);
     if ((c->is_udp && !c->is_arplooking) || c->is_listening || c->is_resolving)
       continue;
+    if (!c->is_full && s->is_full) {
+      // Application resumed the connection: advertise the restored window
+      s->is_full = false;
+      tx_tcp(ifp, s->mac, &c->loc, &c->rem, c->dscp, TH_ACK, mg_htonl(s->seq),
+             mg_htonl(s->ack), MG_TCPIP_WIN, NULL, 0);
+    }
     if (s->retransmit && s->txq.len > 0 && ifp->now > s->txq_timer) {
       if (s->txq_retries < 255) s->txq_retries++;
       // R1 reports a delivery problem; it does not close (RFC-9293, 3.8.3).
@@ -10436,7 +10457,7 @@ static void mg_tcpip_poll(struct mg_tcpip_if *ifp, uint64_t now) {
       } else if (s->ttype == MIP_TTYPE_ACK && s->acked != s->ack) {
         MG_VERBOSE(("%lu ack %x %x", c->id, s->seq, s->ack));
         tx_tcp(ifp, s->mac, &c->loc, &c->rem, c->dscp, TH_ACK, mg_htonl(s->seq),
-               mg_htonl(s->ack), NULL, 0);
+               mg_htonl(s->ack), s->is_full ? 0 : MG_TCPIP_WIN, NULL, 0);
         s->acked = s->ack;
       } else if (s->ttype == MIP_TTYPE_SYN) {
         mg_error(c, "Connection timeout");
@@ -10449,7 +10470,8 @@ static void mg_tcpip_poll(struct mg_tcpip_if *ifp, uint64_t now) {
         } else {
           MG_VERBOSE(("%lu keepalive", c->id));
           tx_tcp(ifp, s->mac, &c->loc, &c->rem, c->dscp, TH_ACK,
-                 mg_htonl(s->seq - 1), mg_htonl(s->ack), NULL, 0);
+                 mg_htonl(s->seq - 1), mg_htonl(s->ack),
+                 s->is_full ? 0 : MG_TCPIP_WIN, NULL, 0);
         }
       }
 
@@ -10513,8 +10535,8 @@ void mg_tcpip_free(struct mg_tcpip_if *ifp) {
 static void send_syn(struct mg_connection *c) {
   struct connstate *s = (struct connstate *) (c + 1);
   uint32_t isn = mg_htonl((uint32_t) mg_ntohs(c->loc.port));
-  tx_tcp(c->mgr->ifp, s->mac, &c->loc, &c->rem, c->dscp, TH_SYN, isn, 0, NULL,
-         0);
+  tx_tcp(c->mgr->ifp, s->mac, &c->loc, &c->rem, c->dscp, TH_SYN, isn, 0,
+         MG_TCPIP_WIN, NULL, 0);
 }
 
 static void l2addr_resolved(struct mg_connection *c) {
@@ -10617,7 +10639,8 @@ static void init_closure(struct mg_connection *c) {
   struct connstate *s = (struct connstate *) (c + 1);
   if (c->is_listening == false && c->is_connecting == false) {
     tx_tcp(c->mgr->ifp, s->mac, &c->loc, &c->rem, c->dscp, TH_FIN | TH_ACK,
-           mg_htonl(s->seq), mg_htonl(s->ack), NULL, 0);
+           mg_htonl(s->seq), mg_htonl(s->ack), s->is_full ? 0 : MG_TCPIP_WIN,
+           NULL, 0);
     settmout(c, MIP_TTYPE_FIN);
   }
 }
