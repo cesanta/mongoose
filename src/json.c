@@ -64,8 +64,14 @@ static double mg_atod(const char *p, int len, int *numlen) {
     i++;
     if (i < len && p[i] == '-') minus = 1, i++;
     if (i < len && p[i] == '+') i++;
-    while (i < len && p[i] >= '0' && p[i] <= '9' && exp < 308)
-      exp = exp * 10 + (p[i++] - '0');
+    // Keep consuming exponent digits even once `exp` is saturated, so that
+    // a long digit run (e.g. "1e9999999999") is still skipped in full and
+    // `numlen` below reflects the true end of the number token, not just
+    // the point where the exponent value stopped growing.
+    while (i < len && p[i] >= '0' && p[i] <= '9') {
+      if (exp < 308) exp = exp * 10 + (p[i] - '0');
+      i++;
+    }
     // use fast exponentiation
     // https://en.wikipedia.org/wiki/Exponentiation_by_squaring
     if (exp != 0) {

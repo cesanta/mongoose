@@ -3913,6 +3913,19 @@ static void test_json(void) {
     ASSERT(fabs(d - -1e-9) < tolerance);
     ASSERT(mg_json_get_num(json, "$.bad", &d) == false);
   }
+
+  // mg_json_get_num: an exponent with a very long digit run must still be
+  // skipped in full, otherwise the leftover digits desync the scanner and
+  // sibling keys after the huge number stop being found
+  {
+    double d = 0.0;
+    json = mg_str("{\"huge\":1e9999999999,\"after\":42}");
+    ASSERT(mg_json_get(json, "$.after", &n) == 29 && n == 2);
+    ASSERT(mg_json_get_num(json, "$.after", &d) == true);
+    ASSERT(fabs(d - 42.0) < 1e-12);
+    ASSERT(mg_json_get_num(json, "$.huge", &d) == true);
+    ASSERT(d > 1.0e308);  // saturates rather than parsing garbage
+  }
 }
 
 static void resp_rpc(struct mg_rpc_req *r) {
