@@ -1712,36 +1712,34 @@ static int mg_tls_verify_cert_san(const uint8_t *der, size_t dersz,
   return -1;
 }
 
+static void unpadlen(uint8_t *sig, struct mg_der_tlv *a, struct mg_der_tlv *b,
+                     uint32_t n) {
+  if (a->len > n) a->value += (a->len - n), a->len = n;
+  if (b->len > n) b->value += (b->len - n), b->len = n;
+  memset(sig, 0, n - a->len);  // short encoding
+  memmove(sig + (n - a->len), a->value, a->len);
+  memset(sig + n, 0, n - b->len);
+  memmove(sig + n + (n - b->len), b->value, b->len);
+}
+
 static int mg_tls_verify_cert_signature(const struct mg_tls_cert *cert,
                                         const struct mg_tls_cert *issuer) {
   if (issuer->is_ec_pubkey) {
     uint8_t sig[128];
     struct mg_der_tlv seq = {0, 0, 0}, a = {0, 0, 0}, b = {0, 0, 0};
-    mg_der_parse((uint8_t *) cert->sig.buf, cert->sig.len, &seq);
-    mg_der_next(&seq, &a);
-    mg_der_next(&seq, &b);
-    if (a.len == 0 || b.len == 0) {
+    if (mg_der_parse((uint8_t *) cert->sig.buf, cert->sig.len, &seq) <= 0 ||
+        seq.type != 0x30 || mg_der_next(&seq, &a) <= 0 || a.type != 0x02 ||
+        mg_der_next(&seq, &b) <= 0 || b.type != 0x02 || a.len == 0 ||
+        b.len == 0 || seq.len != 0) {
       MG_ERROR(("cert verification error"));
       return 0;
     }
     if (issuer->pubkey.len == 64) {
-      const uint32_t N = 32;
-      if (a.len > N) a.value += (a.len - N), a.len = N; // padding
-      if (b.len > N) b.value += (b.len - N), b.len = N;
-      memset(sig, 0, N - a.len); // short encoding
-      memmove(sig + (N - a.len), a.value, a.len);
-      memset(sig + N, 0, N - b.len);
-      memmove(sig + N + (N - b.len), b.value, b.len);
+      unpadlen(sig, &a, &b, 32);
       return mg_p256_verify((uint8_t *) issuer->pubkey.buf, cert->tbshash,
                             cert->tbshashsz, sig);
     } else if (issuer->pubkey.len == 96) {
-      const uint32_t N = 48;
-      if (a.len > N) a.value += (a.len - N), a.len = N;  // padding
-      if (b.len > N) b.value += (b.len - N), b.len = N;
-      memset(sig, 0, N - a.len);  // short encoding
-      memmove(sig + (N - a.len), a.value, a.len);
-      memset(sig + N, 0, N - b.len);
-      memmove(sig + N + (N - b.len), b.value, b.len);
+      unpadlen(sig, &a, &b, 48);
       return mg_p384_verify((uint8_t *) issuer->pubkey.buf, cert->tbshash,
                             cert->tbshashsz, sig);
     } else {
