@@ -67,8 +67,10 @@ bool mg_file_printf(struct mg_fs *fs, const char *path, const char *fmt, ...) {
   va_start(ap, fmt);
   data = mg_vmprintf(fmt, &ap);
   va_end(ap);
-  result = mg_file_write(fs, path, data, strlen(data));
-  mg_free(data);
+  if (data != NULL) {
+    result = mg_file_write(fs, path, data, strlen(data));
+    mg_free(data);
+  }
   return result;
 }
 
