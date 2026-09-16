@@ -11,7 +11,7 @@ CFLAGS += -I. -Icmsis_core/CMSIS/Core/Include -Icmsis_h7/Include -Imongoose
 CFLAGS += -mcpu=cortex-m7 -mthumb -mfloat-abi=hard -mfpu=fpv5-d16 $(CFLAGS_EXTRA)
 LDFLAGS ?= -Tlink.ld -nostdlib -nostartfiles --specs nosys.specs -lc -lgcc -Wl,--gc-sections -Wl,-Map=$@.map
 
-SOURCES = main.c hal.c hardfault.c
+SOURCES = main.c hal.c
 SOURCES += cmsis_h7/Source/Templates/gcc/startup_stm32h723xx.s
 SOURCES += $(MGDIR)/mongoose.c
 
