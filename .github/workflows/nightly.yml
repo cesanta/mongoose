@@ -569,11 +569,12 @@ jobs:
               infineon/xmc47_relax-make-baremetal-builtin
               infineon/xmc_plt2go_4400-make-baremetal-builtin
               infineon/xmc72_evk-make-baremetal-builtin
-              nxp/frdm-mcxn947-make-baremetal-builtin
-              nxp/frdm-mcxn947-make-freertos-builtin
-              nxp/rt1020-evk-make-baremetal-builtin
-              nxp/rt1060-evk-make-baremetal-builtin
-              nxp/rt1170-evk-make-baremetal-builtin
+              nxp/frdm-imxrt1186/minimal
+              nxp/frdm-mcxe247/minimal
+              nxp/frdm-mcxn947/minimal
+              nxp/frdm-rw612/minimal
+              nxp/rt1060-evkb/minimal
+              nxp/rt1170-evkb/minimal
           - group: rp-ti
             examples: |
               rp/pico-w
@@ -649,28 +650,6 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - group: nxp-1
-            examples: |
-              nxp/nxp-frdmk66f-freertos
-              nxp/nxp-lpcxpresso54s018m-freertos
-              nxp/nxp-mimxrt1020-freertos
-              nxp/nxp-evkbimxrt1050-lwip-freertos
-              nxp/nxp-evkmimxrt1020-lwip-freertos
-              nxp/nxp-evkmimxrt1024-lwip-freertos
-              nxp/nxp-evkmimxrt1060-lwip-freertos
-              nxp/nxp-evkmimxrt1064-lwip-freertos
-              nxp/nxp-evkmimxrt1160-cm7-lwip-freertos
-          - group: nxp-2
-            examples: |
-              nxp/nxp-evkmimxrt1170-cm7-lwip-freertos
-              nxp/nxp-frdmk64f-lwip-freertos
-              nxp/nxp-frdmk66f-lwip-freertos
-              nxp/nxp-lpcxpresso54018-lwip-freertos
-              nxp/nxp-lpcxpresso54608-lwip-freertos
-              nxp/nxp-lpcxpresso54618-lwip-freertos
-              nxp/nxp-lpcxpresso54628-lwip-freertos
-              nxp/nxp-twrk65f180m-lwip-freertos
-              nxp/nxp-twrkv58f220m-lwip-freertos
           - group: other
             examples: |
               mqtt/mqtt-client/microchip/same54-xpro
@@ -731,17 +710,11 @@ jobs:
             cflags: ""
             examples: |
               http/device-dashboard/microchip/same54-xpro
-              nxp/rt1020-evk-make-freertos-builtin
-              nxp/rt1060-evk-make-freertos-builtin
-              nxp/rt1170-evk-make-freertos-builtin
               renesas/ek-ra6m4-make-baremetal-builtin
           - group: builtin
             cflags: -DMG_TLS=MG_TLS_BUILTIN
             examples: |
               http/device-dashboard/microchip/same54-xpro
-              nxp/rt1020-evk-make-freertos-builtin
-              nxp/rt1060-evk-make-freertos-builtin
-              nxp/rt1170-evk-make-freertos-builtin
               renesas/ek-ra6m4-make-baremetal-builtin
     name: device dashboard ARM ${{ matrix.group }}
     steps:
