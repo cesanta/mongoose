@@ -67,10 +67,10 @@ MG_IRAM static void flash_unlock(void) {
   }
 }
 
-MG_IRAM static bool flash_page_start(volatile uint32_t *dst) {
+MG_IRAM static bool flash_page_start(uint32_t *dst) {
   char *base = (char *) s_mg_flash_stm32h7.start,
        *end = base + s_mg_flash_stm32h7.size;
-  volatile char *p = (char *) dst;
+  char *p = (char *) dst;
   return p >= base && p < end && ((p - base) % s_mg_flash_stm32h7.secsz) == 0;
 }
 
@@ -101,7 +101,7 @@ MG_IRAM static uint32_t flash_bank(void *addr) {
 // read-while-write, no need to disable IRQs for standalone usage
 MG_IRAM static bool mg_stm32h7_erase(void *addr) {
   bool ok = false;
-  if (flash_page_start(addr) == false) {
+  if (flash_page_start((uint32_t *) addr) == false) {
     MG_ERROR(("%p is not on a sector boundary", addr));
   } else {
     uintptr_t diff = (char *) addr - (char *) s_mg_flash_stm32h7.start;
