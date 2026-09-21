@@ -967,7 +967,7 @@ static void wcb(struct mg_connection *c, int ev, void *ev_data) {
     struct mg_http_message *hm = (struct mg_http_message *) ev_data;
     struct mg_str *wsproto = mg_http_get_header(hm, "Sec-WebSocket-Protocol");
     ASSERT(wsproto != NULL);
-    mg_ws_send(c, "hello", 0, 0);
+    mg_ws_send(c, "", 0, WEBSOCKET_OP_TEXT);
     mg_ws_printf(c, WEBSOCKET_OP_BINARY, "%.3s", "boo!!!!");
     mg_ws_printf(c, WEBSOCKET_OP_BINARY, "%s", "foobar");
     mg_ws_send(c, "", 0, WEBSOCKET_OP_PING);
@@ -981,6 +981,15 @@ static void wcb(struct mg_connection *c, int ev, void *ev_data) {
   } else if (ev == MG_EV_CLOSE) {
     p[0] += 10;
   }
+}
+
+static void wbad(struct mg_connection *c, int ev, void *ev_data) {
+  if (ev == MG_EV_WS_OPEN) {
+    mg_ws_send(c, "ABC", 3, WEBSOCKET_OP_CONTINUE);
+  } else if (ev == MG_EV_CLOSE) {
+    *(int *) c->fn_data = 1;
+  }
+  (void) ev_data;
 }
 
 static void ew2(struct mg_connection *c, int ev, void *ev_data) {
@@ -1026,6 +1035,11 @@ static void test_ws(void) {
   done = 0;
   mg_ws_connect(&mgr, url, ew2, &done, NULL);
   for (i = 0; i < 1000 && done == 0; i++) mg_mgr_poll(&mgr, 1);
+  ASSERT(done == 1);
+
+  done = 0;
+  mg_ws_connect(&mgr, url, wbad, &done, NULL);
+  for (i = 0; i < 30 && done == 0; i++) mg_mgr_poll(&mgr, 1);
   ASSERT(done == 1);
 
   mg_mgr_free(&mgr);

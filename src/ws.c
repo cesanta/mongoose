@@ -182,6 +182,12 @@ static void mg_ws_cb(struct mg_connection *c, int ev, void *ev_data) {
       op = msg.flags & 15;
       // MG_VERBOSE ("fin %d op %d len %d [%.*s]", final, op,
       //                       (int) m.data.len, (int) m.data.len, m.data.buf));
+      if ((op == WEBSOCKET_OP_CONTINUE && ofs == 0) ||
+          ((op == WEBSOCKET_OP_TEXT || op == WEBSOCKET_OP_BINARY) &&
+           ofs != 0)) {
+        mg_error(c, "invalid WS fragment sequence");
+        return;
+      }
       switch (op) {
         case WEBSOCKET_OP_CONTINUE:
           mg_call(c, MG_EV_WS_CTL, &m);
