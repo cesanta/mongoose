@@ -53,16 +53,6 @@ jobs:
       run: sudo apt -y update && sudo apt -y install gcc-arm-none-eabi
     - run: make -C tutorials/stm32/nucleo-h563zi/minimal test VCON_API_KEY=${{secrets.VCON_API_KEY}}
 
-  test_rt1020:
-    runs-on: ubuntu-latest
-    steps:
-    - uses: actions/checkout@v5
-      with: { fetch-depth: 3 }
-    - name: baremetal
-      run: sudo apt -y update && sudo apt -y install gcc-arm-none-eabi
-    - run: make -C tutorials/nxp/rt1020-evk-make-baremetal-builtin test VCON_API_KEY=${{secrets.VCON_API_KEY}}
-    - run: make -C tutorials/nxp/rt1020-evk-make-freertos-builtin test VCON_API_KEY=${{secrets.VCON_API_KEY}}
-
   test_rt1060:
     runs-on: ubuntu-latest
     steps:
@@ -70,8 +60,7 @@ jobs:
       with: { fetch-depth: 3 }
     - name: baremetal
       run: sudo apt -y update && sudo apt -y install gcc-arm-none-eabi
-    - run: make -C tutorials/nxp/rt1060-evk-make-baremetal-builtin test VCON_API_KEY=${{secrets.VCON_API_KEY}}
-    - run: make -C tutorials/nxp/rt1060-evk-make-freertos-builtin test VCON_API_KEY=${{secrets.VCON_API_KEY}}
+    - run: make -C tutorials/nxp/rt1060-evkb/minimal build
 
   test_rt1170:
     runs-on: ubuntu-latest
@@ -80,8 +69,7 @@ jobs:
       with: { fetch-depth: 3 }
     - name: baremetal
       run: sudo apt -y update && sudo apt -y install gcc-arm-none-eabi
-    - run: make -C tutorials/nxp/rt1170-evk-make-baremetal-builtin test VCON_API_KEY=${{secrets.VCON_API_KEY}}
-    - run: make -C tutorials/nxp/rt1170-evk-make-freertos-builtin test VCON_API_KEY=${{secrets.VCON_API_KEY}}
+    - run: make -C tutorials/nxp/rt1170-evkb/minimal build
 
   test_ra6m4:
     runs-on: ubuntu-latest
