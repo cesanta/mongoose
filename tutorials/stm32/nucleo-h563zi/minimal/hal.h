@@ -181,23 +181,7 @@ static inline void hal_system_init(void) {
   __ISB();
 }
 
-// Enable TAMP/RTC APB clock, backup domain write access, and RTC/TAMP kernel
-// clock (LSI). Idempotent: skips RTC init if already enabled after a reset.
-// Must be called before accessing TAMP backup registers or IWDG.
-static inline void hal_backup_domain_init(void) {
-  RCC->APB3ENR |= RCC_APB3ENR_RTCAPBEN;  // enable TAMP/RTC APB clock
-  PWR->DBPCR |= PWR_DBPCR_DBP;           // enable backup domain write access
-  if ((RCC->BDCR & RCC_BDCR_RTCEN) == 0) {  // init only once (not warm reset)
-    RCC->BDCR |= RCC_BDCR_LSION;                           // enable LSI
-    while ((RCC->BDCR & RCC_BDCR_LSIRDY) == 0) (void) 0;  // wait ready
-    RCC->BDCR |= (2U << RCC_BDCR_RTCSEL_Pos);              // LSI as clock source
-    RCC->BDCR |= RCC_BDCR_RTCEN;                           // enable RTC/TAMP clock
-  }
-}
-
 static inline void hal_clock_init(void) {
-  hal_backup_domain_init();
-
   // Set flash latency. RM0481, section 7.11.1, section 7.3.4 table 37
   CLRSET(FLASH->ACR, (FLASH_ACR_WRHIGHFREQ_Msk | FLASH_ACR_LATENCY_Msk),
          FLASH_ACR_LATENCY_5WS | FLASH_ACR_WRHIGHFREQ_1);

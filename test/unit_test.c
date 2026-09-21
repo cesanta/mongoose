@@ -3104,26 +3104,83 @@ static void uc(struct mg_connection *c, int ev, void *ev_data) {
   }
 }
 
-static int s_su_done;
+static int s_su_done;  // 1: upload ended, -1: upload rejected
+static int s_su_end;   // Number of end calls
 
-static void su_cb(struct mg_connection *c, const char *errmsg) {
-  s_su_done = errmsg ? -1 : 1;
-  mg_http_reply(c, errmsg ? 400 : 200, "", errmsg ? errmsg : "ok\n");
-  c->is_draining = 1;
+// mg_http_stream_body() callback, saves the body to a file named as the URI
+static bool su_cb(struct mg_http_message *hm, struct mg_str *data, void **p) {
+  if (hm != NULL) {  // Start
+    char path[100];
+    struct mg_str name = mg_str_n(hm->uri.buf + 1, hm->uri.len - 1);
+    *p = NULL;
+    if (!mg_path_is_sane(name)) {
+      s_su_done = -1;
+      return false;
+    }
+    mg_snprintf(path, sizeof(path), "./%.*s", (int) name.len, name.buf);
+    *p = mg_fs_open(&mg_fs_posix, path, MG_FS_WRITE);
+    return *p != NULL;
+  } else if (data != NULL) {  // Next chunk
+    struct mg_fd *fd = (struct mg_fd *) *p;
+    return fd != NULL && fd->fs->wr(fd->fd, data->buf, data->len) == data->len;
+  }
+  s_su_end++;  // End, also called when the connection drops
+  if (*p != NULL) mg_fs_close((struct mg_fd *) *p);
+  *p = NULL;
+  if (s_su_done == 0) s_su_done = 1;
+  return true;
 }
 
 static void su(struct mg_connection *c, int ev, void *ev_data) {
   if (ev == MG_EV_HTTP_HDRS) {
-    struct mg_http_message *hm = (struct mg_http_message *) ev_data;
-    struct mg_str name = mg_str_n(hm->uri.buf + 1, hm->uri.len - 1);
-    mg_http_start_upload(c, hm, name, mg_str("."), &mg_fs_posix, su_cb);
+    mg_http_stream_body(c, (struct mg_http_message *) ev_data, su_cb, NULL);
+  } else if (ev == MG_EV_HTTP_MSG) {  // Only for requests that were not streamed
+    mg_http_reply(c, 400, "", "not streamed\n");
   }
 }
 
-static void cu(struct mg_connection *c, int ev, void *ev_data) {
-  if (ev == MG_EV_CONNECT)
-    mg_printf(c, "POST %s HTTP/1.0\r\nContent-Length: 8\r\n\r\nfoo\nbar\n",
-              (char *) c->fn_data);
+// Client that announces a large body, sends a few bytes and stays silent
+static void cd(struct mg_connection *c, int ev, void *ev_data) {
+  if (ev == MG_EV_CONNECT) {
+    mg_printf(c, "POST /su_drop.txt HTTP/1.0\r\nContent-Length: 100000\r\n\r\nfoo\n");
+  }
+  (void) ev_data;
+}
+
+static char s_cr_buf[4096];  // Response body streamed by the client
+static size_t s_cr_len;
+static int s_cr_end;
+
+static bool cr_cb(struct mg_http_message *hm, struct mg_str *data, void **p) {
+  (void) p;
+  if (hm != NULL) {
+    s_cr_len = 0;
+  } else if (data != NULL) {
+    ASSERT(s_cr_len + data->len <= sizeof(s_cr_buf));
+    memcpy(s_cr_buf + s_cr_len, data->buf, data->len);
+    s_cr_len += data->len;
+  } else {
+    s_cr_end++;
+  }
+  return true;
+}
+
+// Client that streams the response body with mg_http_stream_body()
+static void cr(struct mg_connection *c, int ev, void *ev_data) {
+  if (ev == MG_EV_CONNECT) {
+    mg_printf(c, "GET / HTTP/1.0\r\n\r\n");
+  } else if (ev == MG_EV_HTTP_HDRS) {
+    ASSERT(mg_http_stream_body(c, (struct mg_http_message *) ev_data, cr_cb,
+                               NULL));
+  }
+}
+
+static void cs(struct mg_connection *c, int ev, void *ev_data) {
+  if (ev == MG_EV_HTTP_MSG) {
+    char body[3000];
+    memset(body, 'x', sizeof(body));
+    mg_http_reply(c, 200, "", "%.*s", (int) sizeof(body), body);
+  }
   (void) ev_data;
 }
 
@@ -3141,16 +3198,18 @@ static void test_http_upload(void) {
   mg_mgr_free(&mgr);
   ASSERT(mgr.conns == NULL);
 
-  // mg_http_start_upload: successful upload, file content verified
+  // mg_http_stream_body: successful upload, file content verified
   {
     char buf[FETCH_BUF_SIZE];
     struct mg_str fc;
     remove("su_ok.txt");
+    s_su_done = s_su_end = 0;
     mg_mgr_init(&mgr);
     mg_http_listen(&mgr, "http://127.0.0.1:12355", su, NULL);
     ASSERT(fetch(&mgr, buf, "http://127.0.0.1:12355",
                  "POST /su_ok.txt HTTP/1.0\r\nContent-Length: 8\r\n\r\nfoo\nbar\n") ==
            200);
+    ASSERT(s_su_done == 1 && s_su_end == 1);
     fc = mg_file_read(&mg_fs_posix, "su_ok.txt");
     ASSERT(mg_strcmp(fc, mg_str("foo\nbar\n")) == 0);
     mg_free((void *) fc.buf);
@@ -3159,14 +3218,68 @@ static void test_http_upload(void) {
     ASSERT(mgr.conns == NULL);
   }
 
-  // mg_http_start_upload: path traversal rejected, callback gets error
+  // mg_http_stream_body: path traversal rejected by the callback, "500" sent
   {
-    s_su_done = 0;
+    char buf[FETCH_BUF_SIZE];
+    s_su_done = s_su_end = 0;
     mg_mgr_init(&mgr);
     mg_http_listen(&mgr, "http://127.0.0.1:12356", su, NULL);
-    mg_http_connect(&mgr, "http://127.0.0.1:12356", cu, (void *) "/../evil.txt");
-    for (i = 0; i < 50 && !s_su_done; i++) mg_mgr_poll(&mgr, 5);
-    ASSERT(s_su_done == -1);
+    ASSERT(fetch(&mgr, buf, "http://127.0.0.1:12356",
+                 "POST /../evil.txt HTTP/1.0\r\nContent-Length: 8\r\n\r\nfoo\nbar\n") ==
+           500);
+    ASSERT(s_su_done == -1 && s_su_end == 1);
+    ASSERT(fopen("../evil.txt", "r") == NULL);
+    mg_mgr_free(&mgr);
+    ASSERT(mgr.conns == NULL);
+  }
+
+  // mg_http_stream_body: chunked request is not streamed, caller replies "400"
+  {
+    char buf[FETCH_BUF_SIZE];
+    s_su_done = s_su_end = 0;
+    remove("su_chunked.txt");
+    mg_mgr_init(&mgr);
+    mg_http_listen(&mgr, "http://127.0.0.1:12393", su, NULL);
+    ASSERT(fetch(&mgr, buf, "http://127.0.0.1:12393",
+                 "POST /su_chunked.txt HTTP/1.1\r\n"
+                 "Transfer-Encoding: chunked\r\n\r\n"
+                 "3\r\nfoo\r\n0\r\n\r\n") == 400);
+    ASSERT(s_su_done == 0 && s_su_end == 0);  // The callback was never called
+    ASSERT(fopen("su_chunked.txt", "r") == NULL);
+    mg_mgr_free(&mgr);
+    ASSERT(mgr.conns == NULL);
+  }
+
+  // mg_http_stream_body: connection drops mid-body, the end call still happens
+  {
+    struct mg_connection *cc;
+    s_su_done = s_su_end = 0;
+    remove("su_drop.txt");
+    mg_mgr_init(&mgr);
+    mg_http_listen(&mgr, "http://127.0.0.1:12391", su, NULL);
+    cc = mg_http_connect(&mgr, "http://127.0.0.1:12391", cd, NULL);
+    ASSERT(cc != NULL);
+    for (i = 0; i < 20; i++) mg_mgr_poll(&mgr, 5);
+    ASSERT(s_su_end == 0);  // Still waiting for the rest of the body
+    cc->is_closing = 1;
+    for (i = 0; i < 20; i++) mg_mgr_poll(&mgr, 5);
+    ASSERT(s_su_end == 1);
+    remove("su_drop.txt");
+    mg_mgr_free(&mgr);
+    ASSERT(mgr.conns == NULL);
+  }
+
+  // mg_http_stream_body on a client connection: response body is streamed
+  {
+    s_cr_end = 0;
+    s_cr_len = 0;
+    mg_mgr_init(&mgr);
+    mg_http_listen(&mgr, "http://127.0.0.1:12392", cs, NULL);
+    mg_http_connect(&mgr, "http://127.0.0.1:12392", cr, NULL);
+    for (i = 0; i < 50 && s_cr_end == 0; i++) mg_mgr_poll(&mgr, 5);
+    ASSERT(s_cr_end == 1);
+    ASSERT(s_cr_len == 3000);
+    ASSERT(s_cr_buf[0] == 'x' && s_cr_buf[2999] == 'x');
     mg_mgr_free(&mgr);
     ASSERT(mgr.conns == NULL);
   }

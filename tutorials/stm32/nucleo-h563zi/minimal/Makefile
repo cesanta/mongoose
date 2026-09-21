@@ -12,7 +12,7 @@ SOURCES = main.c hal.c
 SOURCES += cmsis_h5/Source/Templates/gcc/startup_stm32h563xx.s
 SOURCES += mongoose/mongoose.c
 
-all build example: firmware.signed.bin
+all build example: firmware.bin
 
 mongoose/mongoose.c mongoose/mongoose.h:
 	cp ../../../../mongoose.[ch] mongoose/
@@ -24,9 +24,6 @@ firmware.bin: firmware.elf
 	arm-none-eabi-objcopy -O binary $< $@
 	@echo
 	@echo "To flash, run 'make flash', or use STM32CubeProgrammer"
-
-sign firmware.signed.bin: firmware.bin
-	node ../../../../resources/sign.js sign firmware.bin private.pem
 
 flash: firmware.bin
 	STM32_Programmer_CLI -c port=swd mode=UR -w firmware.elf -hardRst
