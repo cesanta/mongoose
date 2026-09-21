@@ -50,7 +50,7 @@
       r.onload = function() {
         ev.target.value = '';
         document.getElementById('el3').innerText = 'Uploading...';
-        fetch(`/upload/${encodeURIComponent(f.name)}`, {
+        fetch(`/fs/${encodeURIComponent(f.name)}`, {
           method: 'POST',
           body: r.result,
         }).then(function(res) {

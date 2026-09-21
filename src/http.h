@@ -201,3 +201,26 @@ size_t mg_http_next_multipart(struct mg_str, size_t, struct mg_http_part *);
 
 // Returns the HTTP status code from a parsed response message (e.g. 200, 404).
 int mg_http_status(const struct mg_http_message *hm);
+
+// Streams a POST/PUT body to a callback as it arrives, without buffering it.
+// Call it from your connection handler on every event.
+//
+// Callback upload_fn(hm, data, user_data) is called:
+//   - at start: hm is set, data is NULL. Open the file, set user_data.
+//   - per chunk: hm is NULL, data is set. Chunks are 512 bytes aligned
+//     except the last one.
+//   - at end: both NULL. Close the file.
+// After the last chunk, "200 ok" is sent and the connection is drained.
+// Example:
+//   mg_http_stream_body(c, ev, ev_data, mg_str("/fs/*"), upload);
+// Full example:
+//   tutorials/http/file-upload-single-post
+// Related APIs:
+//   mg_http_start_upload(), mg_http_start_ota()
+// Notes:
+//   Requires Content-Length, chunked bodies are not streamed. user_data is
+//   &c->fn_data. While streaming, c->pfn is NULL
+void mg_http_stream_body(struct mg_connection *c, int ev, void *ev_data,
+                         struct mg_str uri_pattern,
+                         void (*upload_fn)(struct mg_http_message *,
+                                           struct mg_str *, void **user_data));
