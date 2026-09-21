@@ -1117,6 +1117,47 @@ void mg_http_start_ota(struct mg_connection *c, struct mg_http_message *hm,
   mg_call(c, MG_EV_READ, &c->recv.len);
 }
 
+void mg_http_stream_body(struct mg_connection *c, int ev, void *ev_data,
+                         struct mg_str uri_pattern,
+                         void (*cb)(struct mg_http_message *, struct mg_str *,
+                                    void **user_data)) {
+  struct mg_http_message *hm = (struct mg_http_message *) ev_data;
+
+  // Catch upload requests early, without buffering whole body
+  // When we receive MG_EV_HTTP_HDRS event, that means we've received all
+  // HTTP headers but not necessarily full HTTP body
+  if (ev == MG_EV_HTTP_HDRS &&
+      (mg_strcmp(hm->method, mg_str("POST")) == 0 ||
+       mg_strcmp(hm->method, mg_str("PUT")) == 0) &&
+      hm->body.len != (size_t) ~0 && mg_match(hm->uri, uri_pattern, NULL)) {
+    c->pfn = NULL;  // Silence HTTP protocol handler, we'll use MG_EV_READ
+    c->pfn_data = (void *) (ptrdiff_t) hm->body.len;  // Record expected len
+    cb(hm, NULL, &c->fn_data);  // Call handler before deleting headers
+    if (mg_http_get_header(hm, "Expect") != NULL) {
+      mg_http_reply(c, 100, NULL, "");  // If curl expects, we continue
+    }
+    mg_iobuf_del(&c->recv, 0, hm->head.len);  // Delete HTTP headers
+  }
+
+  if (c->pfn == NULL && ev != MG_EV_OPEN) {
+    if (c->pfn_data != NULL && c->recv.len > 0) {
+      // Got some uploaded data. Feed by 512-byte aligned chunks, for OTA
+      size_t left = (size_t) (ptrdiff_t) c->pfn_data, r = c->recv.len;
+      size_t aligned = r < left ? MG_ROUND_DOWN(r, 512) : left;
+      struct mg_str data = mg_str_n((char *) c->recv.buf, aligned);
+      if (data.len) cb(NULL, &data, &c->fn_data);
+      c->pfn_data = (void *) (ptrdiff_t) (left - aligned);
+      c->recv.len -= aligned;
+    }
+    if (c->pfn_data == NULL && c->is_draining == 0) {
+      // Finished upload
+      mg_http_reply(c, 200, NULL, "ok\n");
+      c->is_draining = 1;
+      cb(NULL, NULL, &c->fn_data);
+    }
+  }
+}
+
 static bool is_hex_digit(int c) {
   return (c >= '0' && c <= '9') || (c >= 'a' && c <= 'f') ||
          (c >= 'A' && c <= 'F');
