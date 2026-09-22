@@ -160,20 +160,6 @@ void mg_http_creds(struct mg_http_message *, char *, size_t, char *, size_t);
 long mg_http_upload(struct mg_connection *c, struct mg_http_message *hm,
                     struct mg_fs *fs, const char *dir, size_t max_size);
 
-// Streams the raw request body into dir/name via fs. Non-blocking: installs an
-// internal handler and returns immediately. fn is called with NULL on success
-// or an error string on failure.
-void mg_http_start_upload(struct mg_connection *c, struct mg_http_message *hm,
-                          struct mg_str name, struct mg_str dir,
-                          struct mg_fs *fs,
-                          void (*fn)(struct mg_connection *, const char *));
-
-// Starts an OTA firmware update from an HTTP POST upload.
-// Calls mg_ota_begin/write/end internally; fn is called with NULL on success,
-// or an error string on failure.
-void mg_http_start_ota(struct mg_connection *c, struct mg_http_message *hm,
-                       void (*fn)(struct mg_connection *, const char *));
-
 // Sends a 401 Unauthorized response with a Basic Auth WWW-Authenticate challenge.
 void mg_http_bauth(struct mg_connection *, const char *user, const char *pass);
 
@@ -192,7 +178,7 @@ struct mg_str mg_http_get_header_var(struct mg_str s, struct mg_str v);
 // Full examples:
 //   tutorials/http/file-upload-html-form, tutorials/http/http-server
 // Related APIs:
-//   mg_http_listen(), mg_http_start_upload()
+//   mg_http_listen(), mg_http_stream_body()
 // Notes:
 //   Call from an MG_EV_HTTP_MSG handler after the full request body is
 //   received. part.name, part.filename, and part.body are zero-copy slices into
@@ -203,24 +189,30 @@ size_t mg_http_next_multipart(struct mg_str, size_t, struct mg_http_part *);
 int mg_http_status(const struct mg_http_message *hm);
 
 // Streams a POST/PUT body to a callback as it arrives, without buffering it.
-// Call it from your connection handler on every event.
+// Call it from an MG_EV_HTTP_HDRS handler, after matching the request, e.g.
+// with mg_match(). Returns true if it took over the connection, false if the
+// request is not POST/PUT, is chunked, or has no Content-Length.
 //
 // Callback upload_fn(hm, data, user_data) is called:
-//   - at start: hm is set, data is NULL. Open the file, set user_data.
-//   - per chunk: hm is NULL, data is set. Chunks are 512 bytes aligned
-//     except the last one.
-//   - at end: both NULL. Close the file.
-// After the last chunk, "200 ok" is sent and the connection is drained.
+//   - at start: hm is set. Open the file, set *user_data.
+//   - per chunk: data is set, 512 byte aligned except the last. Not called
+//     again after a failure.
+//   - at end: both NULL. Always called once, also when the connection drops
+//     early, so release resources here. A truncated body looks like a complete
+//     one: validate before committing.
+// Return true on success, false on error.
 // Example:
-//   mg_http_stream_body(c, ev, ev_data, mg_str("/fs/*"), upload);
+//   if (ev == MG_EV_HTTP_HDRS && mg_match(hm->uri, mg_str("/fs/*"), NULL) {
+//     mg_http_stream_body(c, hm, upload, NULL));
+//   }
 // Full example:
 //   tutorials/http/file-upload-single-post
 // Related APIs:
-//   mg_http_start_upload(), mg_http_start_ota()
+//   mg_http_listen(), mg_http_next_multipart()
 // Notes:
-//   Requires Content-Length, chunked bodies are not streamed. user_data is
-//   &c->fn_data. While streaming, c->pfn is NULL
-void mg_http_stream_body(struct mg_connection *c, int ev, void *ev_data,
-                         struct mg_str uri_pattern,
-                         void (*upload_fn)(struct mg_http_message *,
-                                           struct mg_str *, void **user_data));
+//   After it returns true, this function hijacks the connection. Existing event
+//   handler not called, hm is invalid, c->data and c->fn_data are modified
+bool mg_http_stream_body(struct mg_connection *c, struct mg_http_message *hm,
+                         bool (*upload_fn)(struct mg_http_message *,
+                                           struct mg_str *, void **user_data),
+                         void *user_data);

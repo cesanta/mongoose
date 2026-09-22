@@ -977,6 +977,7 @@ bool mg_wakeup(struct mg_mgr *mgr, unsigned long conn_id, const void *buf,
 
 
 
+
 #define MG_NO_CACHE_HEADERS "Cache-Control: no-cache\r\n"
 #define MG_JSON_HEADERS "Content-Type: application/json\r\n" MG_NO_CACHE_HEADERS
 
@@ -1340,31 +1341,75 @@ static inline void mg_log_http_req(struct mg_connection *c,
             c->send.buf + n));
 }
 
-static void mg_dash_ota_cb(struct mg_connection *c, const char *errmsg) {
-  mg_http_reply(c, errmsg ? 500 : 200, NULL, errmsg ? errmsg : "ok\n");
-  c->is_draining = 1;
-}
+// State of one file upload to a dashboard file array. Owned by the upload
+// callback, which frees it in the end call
+struct mg_dash_upload {
+  struct mg_mgr *mgr;    // Manager, to notify WebSocket clients
+  struct mg_dash *dash;  // Dashboard whose file arrays get notified
+  struct mg_fd *fd;      // Destination file, opened by the request handler
+  size_t expected;       // Number of body bytes to receive
+  size_t received;       // Number of body bytes written
+};
 
-static void mg_dash_upload_cb(struct mg_connection *c, const char *errmsg) {
-  if (errmsg) {
-    mg_http_reply(c, 500, NULL, "%s\n", errmsg);
-  } else {
-    // mg_http_start_upload() repurposes c->data for its own bookkeeping,
-    // so the field set can't be cached there. Re-derive the dashboard from
-    // c->fn_data instead, and notify every file-backed array: the upload
-    // could belong to any of them, and re-querying get_dir() per recipient
-    // is what mg_dash_send_change() does anyway (directories can be
-    // user-specific)
-    struct mg_dash *dash = (struct mg_dash *) c->fn_data;
-    struct mg_field_set *fs;
-    mg_http_reply(c, 200, NULL, "ok\n");
-    for (fs = dash->sets; fs != NULL; fs = fs->next) {
-      if (fs->get_dir == NULL) continue;
-      *fs->index = -1;  // Signal mg_dash_send_change() to broadcast new size
-      mg_dash_send_change(c->mgr, fs);
+// Upload callback for mg_http_stream_body(). Notifies clients only if the whole
+// body was written. A dropped or failed upload sends no notification
+static bool mg_dash_upload_cb(struct mg_http_message *hm, struct mg_str *data,
+                              void **p) {
+  struct mg_dash_upload *up = (struct mg_dash_upload *) *p;
+  bool ok;
+  if (hm != NULL) return true;  // Start, the file is already open
+  if (data != NULL) {           // Next chunk
+    ok = up->fd->fs->wr(up->fd->fd, data->buf, data->len) == data->len;
+    if (ok) up->received += data->len;
+    return ok;
+  }
+  ok = up->received == up->expected;  // End
+  mg_fs_close(up->fd);
+  if (ok) {
+    // Notify every file-backed array: the upload could belong to any of them,
+    // and re-querying get_dir() per recipient is what mg_dash_send_change()
+    // does anyway (directories can be user-specific)
+    struct mg_field_set *set;
+    for (set = up->dash->sets; set != NULL; set = set->next) {
+      if (set->get_dir == NULL) continue;
+      *set->index = -1;  // Signal mg_dash_send_change() to broadcast new size
+      mg_dash_send_change(up->mgr, set);
     }
   }
-  c->is_draining = 1;
+  mg_free(up);
+  *p = NULL;
+  return ok;
+}
+
+// Opens dir/name and starts streaming the request body into it. Returns true
+// if streaming started, otherwise the error reply has been sent already
+static bool mg_dash_start_upload(struct mg_connection *c,
+                                 struct mg_http_message *hm,
+                                 struct mg_dash *dash, struct mg_fs *fs,
+                                 const char *dir, struct mg_str name) {
+  char path[MG_PATH_MAX];
+  struct mg_dash_upload *up = NULL;
+  struct mg_fd *fd = NULL;
+  size_t n = mg_snprintf(path, sizeof(path), "%s%c%.*s", dir, MG_DIRSEP,
+                         (int) name.len, name.buf);
+  if (n < sizeof(path)) fd = mg_fs_open(fs, path, MG_FS_WRITE);
+  if (fd != NULL) up = (struct mg_dash_upload *) mg_calloc(1, sizeof(*up));
+  if (up == NULL) {
+    if (fd != NULL) mg_fs_close(fd);
+    mg_http_reply(c, 500, MG_JSON_HEADERS, "Open failed\n");
+    return false;
+  }
+  up->mgr = c->mgr;
+  up->dash = dash;
+  up->fd = fd;
+  up->expected = hm->body.len;
+  if (mg_http_stream_body(c, hm, mg_dash_upload_cb, up)) {
+    return true;  // The callback owns up and fd now
+  }
+  mg_fs_close(fd);  // Chunked body or unexpected method: not streamed
+  mg_free(up);
+  mg_http_reply(c, 400, MG_JSON_HEADERS, "Bad request\n");
+  return false;
 }
 
 static uint64_t mg_dash_make_expiration_time(struct mg_dash *dash) {
@@ -1606,6 +1651,21 @@ static void mg_dash_handle_add(struct mg_connection *c, struct mg_dash *dash,
   }
 }
 
+// Firmware upload callback for mg_http_stream_body(). Uses *p as a flag:
+// non-NULL means an OTA session is open and must be closed by mg_ota_end()
+static bool otacb(struct mg_http_message *hm, struct mg_str *data, void **p) {
+  if (hm != NULL) {  // Start
+    if (!mg_ota_begin(hm->body.len)) return false;
+    *p = (void *) (ptrdiff_t) 1;
+    return true;
+  } else if (data != NULL) {  // Next chunk
+    return mg_ota_write(data->buf, data->len);
+  }
+  if (*p == NULL) return false;  // End. Begin failed, nothing to finish
+  *p = NULL;
+  return mg_ota_end();
+}
+
 void mg_dash_ev_handler(struct mg_connection *c, int ev, void *ev_data) {
   struct mg_dash *dash = (struct mg_dash *) c->fn_data;
   struct mg_dash_cdata *d = (struct mg_dash_cdata *) c->data;
@@ -1632,7 +1692,9 @@ void mg_dash_ev_handler(struct mg_connection *c, int ev, void *ev_data) {
       mg_handle_login(c, u);
       d->marker = CONN_HANDLED;
     } else if (mg_match(hm->uri, mg_str("/api/ota"), NULL)) {
-      mg_http_start_ota(c, hm, mg_dash_ota_cb);
+      // Authenticated above. If streaming started, the stream handler owns
+      // the connection and c->data, so skip the marker check below
+      if (mg_http_stream_body(c, hm, otacb, NULL)) return;
     } else if (mg_match(hm->uri, mg_str("/fs/*/*"), parts) &&
                (mg_strcasecmp(hm->method, mg_str("POST")) == 0 ||
                 mg_strcasecmp(hm->method, mg_str("PUT")) == 0)) {
@@ -1661,9 +1723,10 @@ void mg_dash_ev_handler(struct mg_connection *c, int ev, void *ev_data) {
           if (!set->get_dir(u, dir, sizeof(dir))) {
             mg_http_reply(c, 500, MG_JSON_HEADERS, "Upload dir error\n");
             d->marker = CONN_HANDLED;
+          } else if (mg_dash_start_upload(c, hm, dash, fs, dir, name)) {
+            return;  // The stream handler owns the connection and c->data
           } else {
-            mg_http_start_upload(c, hm, name, mg_str(dir), fs,
-                                 mg_dash_upload_cb);
+            d->marker = CONN_HANDLED;  // Error reply has been sent
           }
         }
       }
@@ -3621,7 +3684,6 @@ struct mg_health mg_health_record MG_HEALTH_RAM;
 
 
 
-
 static int mg_ncasecmp(const char *s1, const char *s2, size_t len) {
   int diff = 0;
   if (len > 0) do {
@@ -4638,137 +4700,96 @@ int mg_http_status(const struct mg_http_message *hm) {
   return atoi(hm->uri.buf);
 }
 
-struct mg_upload_priv {
-  size_t expected;
-  size_t received;
-  struct mg_fd *fd;  // non-NULL: file upload; NULL: OTA
-  void (*fn)(struct mg_connection *, const char *);
+// State of a streamed request or response body, kept in c->data. The callback
+// is kept in c->fn_data, which is free because we own the connection
+struct mg_upload_state {
+  size_t expected;  // Number of body bytes to receive
+  size_t received;  // Number of body bytes received so far
+  void *user_data;  // Passed to cb, free for cb to use
+  bool failed;      // Set when cb returned false
 };
 
-static void mg_upload_handler(struct mg_connection *c, int ev, void *ev_data) {
-  struct mg_upload_priv *p = (struct mg_upload_priv *) c->data;
-  if (p->fn == NULL) return;
-  if (ev == MG_EV_READ && c->recv.len > 0) {
-    size_t alignment = 512;
-    size_t left = p->expected > p->received ? p->expected - p->received : 0;
-    size_t aligned = c->recv.len < left ? MG_ROUND_DOWN(c->recv.len, alignment)
-                                        : left;
-    bool ok = true;
-    if (aligned > 0) {
-      if (p->fd != NULL) {
-        ok = p->fd->fs->wr(p->fd->fd, c->recv.buf, aligned) == aligned;
-      } else {
-        ok = mg_ota_write(c->recv.buf, aligned);
-      }
-    }
-    p->received += aligned;
-    mg_iobuf_del(&c->recv, 0, aligned);
-    if (!ok) {
-      if (p->fd != NULL) { mg_fs_close(p->fd); p->fd = NULL; }
-      else mg_ota_end();
-      p->fn(c, "write error");
-      mg_free(c->pfn_data); c->pfn_data = NULL; p->fn = NULL;
-    } else if (p->received >= p->expected) {
-      const char *errmsg = NULL;
-      if (p->fd != NULL) { mg_fs_close(p->fd); p->fd = NULL; }
-      else if (!mg_ota_end()) errmsg = "OTA finalize failed";
-      p->fn(c, errmsg);
-      mg_free(c->pfn_data); c->pfn_data = NULL; p->fn = NULL;
-    }
-  } else if (ev == MG_EV_ERROR || ev == MG_EV_CLOSE) {
-    if (p->fd != NULL) { mg_fs_close(p->fd); p->fd = NULL; }
-    else mg_ota_end();
-    p->fn(c, ev == MG_EV_ERROR ? (const char *) ev_data : "connection closed");
-    mg_free(c->pfn_data); c->pfn_data = NULL; p->fn = NULL;
-  }
+// Event handler installed by mg_http_stream_body(). Feeds the body to the
+// callback, then replies (servers only). It does not restore the previous
+// handler: the connection is closed after the reply.
+static void mg_stream_handler(struct mg_connection *c, int ev, void *ev_data) {
+  struct mg_upload_state *us = (struct mg_upload_state *) c->data;
+    bool (*fn)(struct mg_http_message *, struct mg_str *, void **) =
+      (bool (*)(struct mg_http_message *, struct mg_str *, void **))
+      (ptrdiff_t) c->fn_data;
   (void) ev_data;
+  if (ev == MG_EV_CLOSE || ev == MG_EV_ERROR) {
+    if (us->received < us->expected) {
+      // Connection dropped mid-upload. Let cb clean up, e.g. call mg_ota_end()
+      us->received = us->expected;  // MG_EV_ERROR is followed by MG_EV_CLOSE
+      fn(NULL, NULL, &us->user_data);
+    }
+  } else if (ev == MG_EV_READ && !c->is_draining) {
+    if (c->recv.len > 0 && us->received < us->expected) {
+      // Got some uploaded data. Feed by 512-byte aligned chunks, for OTA
+      size_t left = us->expected - us->received, r = c->recv.len;
+      size_t aligned = r < left ? MG_ROUND_DOWN(r, 512) : left;
+      struct mg_str data = mg_str_n((char *) c->recv.buf, aligned);
+      if (data.len > 0 && !us->failed) {
+        us->failed = !fn(NULL, &data, &us->user_data);
+      }
+      us->received += aligned;
+      mg_iobuf_del(&c->recv, 0, aligned);  // Shift the unprocessed tail
+    }
+    if (us->received >= us->expected) {
+      // Finished upload. Always call cb, even after error, so it can clean up
+      us->failed |= !fn(NULL, NULL, &us->user_data);
+      if (!c->is_client) {
+        mg_http_reply(c, us->failed ? 500 : 200, NULL, "%zu %s\n",
+                      us->received, us->failed ? "fail" : "ok");
+      }
+      c->is_draining = 1;
+    }
+  }
 }
 
-static void mg_upload_default_cb(struct mg_connection *c, const char *status) {
-  MG_INFO(("%lu %s", c->id, status ? status : "ok"));
-  mg_http_reply(c, status ? 500 : 200, "", "%s\n", status ? status : "ok");
-}
+bool mg_http_stream_body(struct mg_connection *c, struct mg_http_message *hm,
+                         bool (*cb)(struct mg_http_message *, struct mg_str *,
+                                    void **user_data),
+                         void *user_data) {
+  struct mg_upload_state *us = (struct mg_upload_state *) c->data;
+  struct mg_str *te = mg_http_get_header(hm, "Transfer-Encoding");
+  bool handled = false;
 
-void mg_http_start_upload(struct mg_connection *c, struct mg_http_message *hm,
-                          struct mg_str name, struct mg_str dir,
-                          struct mg_fs *fs,
-                          void (*fn)(struct mg_connection *, const char *)) {
-  struct mg_upload_priv *p = (struct mg_upload_priv *) c->data;
-  char path[MG_PATH_MAX];
-  struct mg_fd *fd;
-  if (fn == NULL) fn = mg_upload_default_cb;
-  if (sizeof(*p) > sizeof(c->data)) { fn(c, "data too small"); return; }
-  if (!mg_path_is_sane(name)) { fn(c, "bad name"); return; }
-  mg_snprintf(path, sizeof(path), "%.*s%c%.*s", (int) dir.len, dir.buf,
-              MG_DIRSEP, (int) name.len, name.buf);
-  fd = mg_fs_open(fs, path, MG_FS_WRITE);
-  if (fd == NULL) { fn(c, "open failed"); return; }
-  p->expected = hm->body.len;
-  p->received = 0;
-  p->fd = fd;
-  p->fn = fn;
-  c->fn = mg_upload_handler;
-  c->pfn_data = strdup(path);
-  c->pfn = NULL;
-  mg_iobuf_del(&c->recv, 0, hm->head.len);
-  mg_call(c, MG_EV_READ, &c->recv.len);
-}
-
-void mg_http_start_ota(struct mg_connection *c, struct mg_http_message *hm,
-                       void (*fn)(struct mg_connection *, const char *)) {
-  struct mg_upload_priv *p = (struct mg_upload_priv *) c->data;
-  if (fn == NULL) fn = mg_upload_default_cb;
-  if (sizeof(*p) > sizeof(c->data)) { fn(c, "data too small"); return; }
-  if (!mg_ota_begin(hm->body.len)) { fn(c, "ota begin failed"); return; }
-  p->expected = hm->body.len;
-  p->received = 0;
-  p->fd = NULL;
-  p->fn = fn;
-  c->fn = mg_upload_handler;
-  c->pfn = NULL;
-  mg_iobuf_del(&c->recv, 0, hm->head.len);
-  mg_call(c, MG_EV_READ, &c->recv.len);
-}
-
-void mg_http_stream_body(struct mg_connection *c, int ev, void *ev_data,
-                         struct mg_str uri_pattern,
-                         void (*cb)(struct mg_http_message *, struct mg_str *,
-                                    void **user_data)) {
-  struct mg_http_message *hm = (struct mg_http_message *) ev_data;
-
-  // Catch upload requests early, without buffering whole body
-  // When we receive MG_EV_HTTP_HDRS event, that means we've received all
-  // HTTP headers but not necessarily full HTTP body
-  if (ev == MG_EV_HTTP_HDRS &&
-      (mg_strcmp(hm->method, mg_str("POST")) == 0 ||
-       mg_strcmp(hm->method, mg_str("PUT")) == 0) &&
-      hm->body.len != (size_t) ~0 && mg_match(hm->uri, uri_pattern, NULL)) {
-    c->pfn = NULL;  // Silence HTTP protocol handler, we'll use MG_EV_READ
-    c->pfn_data = (void *) (ptrdiff_t) hm->body.len;  // Record expected len
-    cb(hm, NULL, &c->fn_data);  // Call handler before deleting headers
+  // Catch upload requests early, without buffering whole body. Called on the
+  // MG_EV_HTTP_HDRS event: we've received all HTTP headers but not necessarily
+  // the full HTTP body
+  if (hm->body.len == (size_t) ~0 ||
+      (te != NULL && mg_strcasecmp(*te, mg_str("chunked")) == 0)) {
+    // Unknown length or chunked, cannot stream. Leave it to the caller
+  } else if (!c->is_client &&
+             mg_strcmp(hm->method, mg_str("POST")) != 0 &&
+             mg_strcmp(hm->method, mg_str("PUT")) != 0) {
+    // Not an upload request. Leave it to the caller
+  } else if (sizeof(*us) > sizeof(c->data)) {
+    if (!c->is_client) {  // Nobody to reply to on a client connection
+      c->pfn = NULL;
+      mg_http_reply(c, 500, NULL, "data too small\n");
+      c->is_draining = 1;
+      cb(NULL, NULL, &user_data);  // Let cb release user_data, start skipped
+      handled = true;
+    }
+  } else {
+    c->pfn = NULL;  // Silence HTTP protocol handler
+    memset(us, 0, sizeof(*us));
+    us->expected = hm->body.len;  // Store number of bytes we expect
+    us->user_data = user_data;
+    us->failed = !cb(hm, NULL, &us->user_data);  // Call before deleting headers
     if (mg_http_get_header(hm, "Expect") != NULL) {
       mg_http_reply(c, 100, NULL, "");  // If curl expects, we continue
     }
     mg_iobuf_del(&c->recv, 0, hm->head.len);  // Delete HTTP headers
+    c->fn = mg_stream_handler;                // We own the connection from now
+    c->fn_data = (void *) (ptrdiff_t) cb;
+    mg_call(c, MG_EV_READ, &c->recv.len);  // Process the body bytes we have
+    handled = true;
   }
-
-  if (c->pfn == NULL && ev != MG_EV_OPEN) {
-    if (c->pfn_data != NULL && c->recv.len > 0) {
-      // Got some uploaded data. Feed by 512-byte aligned chunks, for OTA
-      size_t left = (size_t) (ptrdiff_t) c->pfn_data, r = c->recv.len;
-      size_t aligned = r < left ? MG_ROUND_DOWN(r, 512) : left;
-      struct mg_str data = mg_str_n((char *) c->recv.buf, aligned);
-      if (data.len) cb(NULL, &data, &c->fn_data);
-      c->pfn_data = (void *) (ptrdiff_t) (left - aligned);
-      c->recv.len -= aligned;
-    }
-    if (c->pfn_data == NULL && c->is_draining == 0) {
-      // Finished upload
-      mg_http_reply(c, 200, NULL, "ok\n");
-      c->is_draining = 1;
-      cb(NULL, NULL, &c->fn_data);
-    }
-  }
+  return handled;
 }
 
 static bool is_hex_digit(int c) {
@@ -11007,6 +11028,9 @@ static struct mg_ota_state {
   size_t size;
   uint8_t sha256[32];
   void (*fn)(const char *error_message);
+  size_t received;  // Firmware bytes written so far
+  bool open;        // mg_ota_begin() succeeded, mg_ota_end() is pending
+  const char *err;  // First error during download, NULL if none
 } *s_ota;
 
 static void s_firmware_fn(struct mg_connection *c, int ev, void *ev_data);
@@ -11127,11 +11151,38 @@ static void status_fn(const char *errmsg) {
   if (errmsg) MG_ERROR(("OTA failed: %s", errmsg));
 }
 
-static void status_fn_2(struct mg_connection *c, const char *errmsg) {
-  if (s_ota) s_ota->fn(errmsg);
+// Firmware download callback for mg_http_stream_body(). Writes chunks to the
+// OTA target and reports the result via s_ota->fn(). The end call also happens
+// when the connection drops before the whole body arrived.
+static bool s_firmware_cb(struct mg_http_message *hm, struct mg_str *data,
+                          void **p) {
+  bool finalized = false, ok;
+  (void) p;
+  if (s_ota == NULL) return false;
+  if (hm != NULL) {  // Start
+    s_ota->received = 0;
+    s_ota->open = mg_ota_begin(hm->body.len);
+    if (!s_ota->open) s_ota->err = "OTA begin failed";
+    return s_ota->open;
+  } else if (data != NULL) {  // Next chunk
+    if (!mg_ota_write(data->buf, data->len)) {
+      s_ota->err = "OTA write failed";
+      return false;
+    }
+    s_ota->received += data->len;
+    return true;
+  }
+  // End
+  if (s_ota->open) finalized = mg_ota_end();
+  if (s_ota->err == NULL && s_ota->received != s_ota->size) {
+    s_ota->err = "Connection closed";
+  }
+  if (s_ota->err == NULL && !finalized) s_ota->err = "OTA finalize failed";
+  ok = s_ota->err == NULL;
+  s_ota->fn(s_ota->err);
   mg_free(s_ota);
   s_ota = NULL;
-  mg_http_reply(c, errmsg ? 500 : 200, "", "%s\n", errmsg ? errmsg : "ok");
+  return ok;
 }
 
 static void s_firmware_fn(struct mg_connection *c, int ev, void *ev_data) {
@@ -11162,7 +11213,9 @@ static void s_firmware_fn(struct mg_connection *c, int ev, void *ev_data) {
                (unsigned long) hm->body.len, (unsigned long) s_ota->size);
     } else {
       MG_DEBUG(("Beginning OTA (%lu bytes)", (unsigned long) s_ota->size));
-      mg_http_start_ota(c, hm, status_fn_2);
+      if (!mg_http_stream_body(c, hm, s_firmware_cb, NULL)) {
+        mg_error(c, "Cannot stream firmware");
+      }
     }
   } else if (ev == MG_EV_ERROR) {
     s_ota->fn((char *) ev_data);

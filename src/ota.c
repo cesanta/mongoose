@@ -23,6 +23,9 @@ static struct mg_ota_state {
   size_t size;
   uint8_t sha256[32];
   void (*fn)(const char *error_message);
+  size_t received;  // Firmware bytes written so far
+  bool open;        // mg_ota_begin() succeeded, mg_ota_end() is pending
+  const char *err;  // First error during download, NULL if none
 } *s_ota;
 
 static void s_firmware_fn(struct mg_connection *c, int ev, void *ev_data);
@@ -143,11 +146,38 @@ static void status_fn(const char *errmsg) {
   if (errmsg) MG_ERROR(("OTA failed: %s", errmsg));
 }
 
-static void status_fn_2(struct mg_connection *c, const char *errmsg) {
-  if (s_ota) s_ota->fn(errmsg);
+// Firmware download callback for mg_http_stream_body(). Writes chunks to the
+// OTA target and reports the result via s_ota->fn(). The end call also happens
+// when the connection drops before the whole body arrived.
+static bool s_firmware_cb(struct mg_http_message *hm, struct mg_str *data,
+                          void **p) {
+  bool finalized = false, ok;
+  (void) p;
+  if (s_ota == NULL) return false;
+  if (hm != NULL) {  // Start
+    s_ota->received = 0;
+    s_ota->open = mg_ota_begin(hm->body.len);
+    if (!s_ota->open) s_ota->err = "OTA begin failed";
+    return s_ota->open;
+  } else if (data != NULL) {  // Next chunk
+    if (!mg_ota_write(data->buf, data->len)) {
+      s_ota->err = "OTA write failed";
+      return false;
+    }
+    s_ota->received += data->len;
+    return true;
+  }
+  // End
+  if (s_ota->open) finalized = mg_ota_end();
+  if (s_ota->err == NULL && s_ota->received != s_ota->size) {
+    s_ota->err = "Connection closed";
+  }
+  if (s_ota->err == NULL && !finalized) s_ota->err = "OTA finalize failed";
+  ok = s_ota->err == NULL;
+  s_ota->fn(s_ota->err);
   mg_free(s_ota);
   s_ota = NULL;
-  mg_http_reply(c, errmsg ? 500 : 200, "", "%s\n", errmsg ? errmsg : "ok");
+  return ok;
 }
 
 static void s_firmware_fn(struct mg_connection *c, int ev, void *ev_data) {
@@ -178,7 +208,9 @@ static void s_firmware_fn(struct mg_connection *c, int ev, void *ev_data) {
                (unsigned long) hm->body.len, (unsigned long) s_ota->size);
     } else {
       MG_DEBUG(("Beginning OTA (%lu bytes)", (unsigned long) s_ota->size));
-      mg_http_start_ota(c, hm, status_fn_2);
+      if (!mg_http_stream_body(c, hm, s_firmware_cb, NULL)) {
+        mg_error(c, "Cannot stream firmware");
+      }
     }
   } else if (ev == MG_EV_ERROR) {
     s_ota->fn((char *) ev_data);

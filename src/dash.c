@@ -1,5 +1,6 @@
 #include "dash.h"
 #include "http.h"
+#include "ota.h"
 #include "util.h"
 
 #define MG_NO_CACHE_HEADERS "Cache-Control: no-cache\r\n"
@@ -365,31 +366,75 @@ static inline void mg_log_http_req(struct mg_connection *c,
             c->send.buf + n));
 }
 
-static void mg_dash_ota_cb(struct mg_connection *c, const char *errmsg) {
-  mg_http_reply(c, errmsg ? 500 : 200, NULL, errmsg ? errmsg : "ok\n");
-  c->is_draining = 1;
-}
+// State of one file upload to a dashboard file array. Owned by the upload
+// callback, which frees it in the end call
+struct mg_dash_upload {
+  struct mg_mgr *mgr;    // Manager, to notify WebSocket clients
+  struct mg_dash *dash;  // Dashboard whose file arrays get notified
+  struct mg_fd *fd;      // Destination file, opened by the request handler
+  size_t expected;       // Number of body bytes to receive
+  size_t received;       // Number of body bytes written
+};
 
-static void mg_dash_upload_cb(struct mg_connection *c, const char *errmsg) {
-  if (errmsg) {
-    mg_http_reply(c, 500, NULL, "%s\n", errmsg);
-  } else {
-    // mg_http_start_upload() repurposes c->data for its own bookkeeping,
-    // so the field set can't be cached there. Re-derive the dashboard from
-    // c->fn_data instead, and notify every file-backed array: the upload
-    // could belong to any of them, and re-querying get_dir() per recipient
-    // is what mg_dash_send_change() does anyway (directories can be
-    // user-specific)
-    struct mg_dash *dash = (struct mg_dash *) c->fn_data;
-    struct mg_field_set *fs;
-    mg_http_reply(c, 200, NULL, "ok\n");
-    for (fs = dash->sets; fs != NULL; fs = fs->next) {
-      if (fs->get_dir == NULL) continue;
-      *fs->index = -1;  // Signal mg_dash_send_change() to broadcast new size
-      mg_dash_send_change(c->mgr, fs);
+// Upload callback for mg_http_stream_body(). Notifies clients only if the whole
+// body was written. A dropped or failed upload sends no notification
+static bool mg_dash_upload_cb(struct mg_http_message *hm, struct mg_str *data,
+                              void **p) {
+  struct mg_dash_upload *up = (struct mg_dash_upload *) *p;
+  bool ok;
+  if (hm != NULL) return true;  // Start, the file is already open
+  if (data != NULL) {           // Next chunk
+    ok = up->fd->fs->wr(up->fd->fd, data->buf, data->len) == data->len;
+    if (ok) up->received += data->len;
+    return ok;
+  }
+  ok = up->received == up->expected;  // End
+  mg_fs_close(up->fd);
+  if (ok) {
+    // Notify every file-backed array: the upload could belong to any of them,
+    // and re-querying get_dir() per recipient is what mg_dash_send_change()
+    // does anyway (directories can be user-specific)
+    struct mg_field_set *set;
+    for (set = up->dash->sets; set != NULL; set = set->next) {
+      if (set->get_dir == NULL) continue;
+      *set->index = -1;  // Signal mg_dash_send_change() to broadcast new size
+      mg_dash_send_change(up->mgr, set);
     }
   }
-  c->is_draining = 1;
+  mg_free(up);
+  *p = NULL;
+  return ok;
+}
+
+// Opens dir/name and starts streaming the request body into it. Returns true
+// if streaming started, otherwise the error reply has been sent already
+static bool mg_dash_start_upload(struct mg_connection *c,
+                                 struct mg_http_message *hm,
+                                 struct mg_dash *dash, struct mg_fs *fs,
+                                 const char *dir, struct mg_str name) {
+  char path[MG_PATH_MAX];
+  struct mg_dash_upload *up = NULL;
+  struct mg_fd *fd = NULL;
+  size_t n = mg_snprintf(path, sizeof(path), "%s%c%.*s", dir, MG_DIRSEP,
+                         (int) name.len, name.buf);
+  if (n < sizeof(path)) fd = mg_fs_open(fs, path, MG_FS_WRITE);
+  if (fd != NULL) up = (struct mg_dash_upload *) mg_calloc(1, sizeof(*up));
+  if (up == NULL) {
+    if (fd != NULL) mg_fs_close(fd);
+    mg_http_reply(c, 500, MG_JSON_HEADERS, "Open failed\n");
+    return false;
+  }
+  up->mgr = c->mgr;
+  up->dash = dash;
+  up->fd = fd;
+  up->expected = hm->body.len;
+  if (mg_http_stream_body(c, hm, mg_dash_upload_cb, up)) {
+    return true;  // The callback owns up and fd now
+  }
+  mg_fs_close(fd);  // Chunked body or unexpected method: not streamed
+  mg_free(up);
+  mg_http_reply(c, 400, MG_JSON_HEADERS, "Bad request\n");
+  return false;
 }
 
 static uint64_t mg_dash_make_expiration_time(struct mg_dash *dash) {
@@ -631,6 +676,21 @@ static void mg_dash_handle_add(struct mg_connection *c, struct mg_dash *dash,
   }
 }
 
+// Firmware upload callback for mg_http_stream_body(). Uses *p as a flag:
+// non-NULL means an OTA session is open and must be closed by mg_ota_end()
+static bool otacb(struct mg_http_message *hm, struct mg_str *data, void **p) {
+  if (hm != NULL) {  // Start
+    if (!mg_ota_begin(hm->body.len)) return false;
+    *p = (void *) (ptrdiff_t) 1;
+    return true;
+  } else if (data != NULL) {  // Next chunk
+    return mg_ota_write(data->buf, data->len);
+  }
+  if (*p == NULL) return false;  // End. Begin failed, nothing to finish
+  *p = NULL;
+  return mg_ota_end();
+}
+
 void mg_dash_ev_handler(struct mg_connection *c, int ev, void *ev_data) {
   struct mg_dash *dash = (struct mg_dash *) c->fn_data;
   struct mg_dash_cdata *d = (struct mg_dash_cdata *) c->data;
@@ -657,7 +717,9 @@ void mg_dash_ev_handler(struct mg_connection *c, int ev, void *ev_data) {
       mg_handle_login(c, u);
       d->marker = CONN_HANDLED;
     } else if (mg_match(hm->uri, mg_str("/api/ota"), NULL)) {
-      mg_http_start_ota(c, hm, mg_dash_ota_cb);
+      // Authenticated above. If streaming started, the stream handler owns
+      // the connection and c->data, so skip the marker check below
+      if (mg_http_stream_body(c, hm, otacb, NULL)) return;
     } else if (mg_match(hm->uri, mg_str("/fs/*/*"), parts) &&
                (mg_strcasecmp(hm->method, mg_str("POST")) == 0 ||
                 mg_strcasecmp(hm->method, mg_str("PUT")) == 0)) {
@@ -686,9 +748,10 @@ void mg_dash_ev_handler(struct mg_connection *c, int ev, void *ev_data) {
           if (!set->get_dir(u, dir, sizeof(dir))) {
             mg_http_reply(c, 500, MG_JSON_HEADERS, "Upload dir error\n");
             d->marker = CONN_HANDLED;
+          } else if (mg_dash_start_upload(c, hm, dash, fs, dir, name)) {
+            return;  // The stream handler owns the connection and c->data
           } else {
-            mg_http_start_upload(c, hm, name, mg_str(dir), fs,
-                                 mg_dash_upload_cb);
+            d->marker = CONN_HANDLED;  // Error reply has been sent
           }
         }
       }

@@ -29,7 +29,7 @@ static const char *s_tls_key =
     "4hf5Gx17YJkq5/z3k6ogPDPpoAYWIw1/sw==\n"
     "-----END EC PRIVATE KEY-----\n";
 
-static void upload(struct mg_http_message *hm, struct mg_str *data, void **p) {
+static bool upload(struct mg_http_message *hm, struct mg_str *data, void **p) {
   struct mg_fs *fs = &mg_fs_posix;
   if (hm != NULL) {
     char path[MG_PATH_MAX];
@@ -48,6 +48,7 @@ static void upload(struct mg_http_message *hm, struct mg_str *data, void **p) {
     MG_INFO(("UPLOAD END %p", p));
     if (*p) fs->cl(*p), *p = NULL;
   }
+  return true;  // signal success
 }
 
 static void fn(struct mg_connection *c, int ev, void *ev_data) {
@@ -55,13 +56,16 @@ static void fn(struct mg_connection *c, int ev, void *ev_data) {
     struct mg_tls_opts opts = {.cert = mg_str(s_tls_cert),
                                .key = mg_str(s_tls_key)};
     mg_tls_init(c, &opts);
+  } else if (ev == MG_EV_HTTP_HDRS) {
+    // Handle upload requests to /fs/*
+    struct mg_http_message *hm = (struct mg_http_message *) ev_data;
+    if (mg_match(hm->uri, mg_str("/fs/*"), NULL)) {
+      mg_http_stream_body(c, hm, upload, NULL);
+    }
   } else if (ev == MG_EV_HTTP_MSG && c->pfn != NULL) {
     struct mg_http_serve_opts opts = {.root_dir = "web_root"};
     mg_http_serve_dir(c, ev_data, &opts);
   }
-
-  // Handle upload requests to /fs/*
-  mg_http_stream_body(c, ev, ev_data, mg_str("/fs/*"), upload);
 }
 
 int main(void) {

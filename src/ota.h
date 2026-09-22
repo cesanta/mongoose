@@ -3,7 +3,7 @@
 // This is a low-level OTA API, not intended to be called directly by users.
 // Users are provided with a higher-level API:
 // - defining MG_OTA_URL enables HTTP or HTTPS pull-based updates
-// - mg_http_start_ota() enables push-based updates
+// - mg_http_stream_body() enables push-based updates
 //
 // However, it is possible to use the mg_ota_* API directly. Below is the
 // example code of a function that is called repeatedly. It expects the
