@@ -150,7 +150,7 @@ static bool graph1_fn(enum mg_dash_op op, struct mg_dash_user *u) {
   return true;
 }
 static struct mg_field_set set_graph1 = {"graph1", fields_graph1, graph1_fn,
-                                         NULL,     NULL};
+                                         NULL, NULL};
 
 #define NUM_POINTS_GRAPH2 100  // How many graph2 data points to send
 static char s_graph2_data[NUM_POINTS_GRAPH2 * 4 + 2 + 1];
@@ -218,6 +218,7 @@ void mg_dash_init(struct mg_mgr *mgr) {
 
 #if MG_ARCH == MG_ARCH_UNIX
   // Create demo files in the upload directory
+  mkdir("/tmp", 0755);
   mkdir("/tmp/dashboard", 0755);
   mg_file_printf(&mg_fs_posix, "/tmp/dashboard/device-config.json",
                  "{\"model\":\"example\",\"fw\":\"1.0\"}");

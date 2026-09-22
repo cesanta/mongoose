@@ -1555,7 +1555,6 @@ void mg_dash_ev_handler(struct mg_connection *c, int ev, void *ev_data) {
     // Received headers - check authentication and possibly start uploads/ota
     struct mg_http_message *hm = (struct mg_http_message *) ev_data;
     struct mg_dash_user *u = mg_dash_authenticate(c, hm, dash);
-
     if (mg_match(hm->uri, mg_str("/api/hi"), NULL) ||
         mg_match(hm->uri, mg_str("/api/logout"), NULL)) {
       // Do nothing, handle them MG_EV_HTTP_MSG. We bypass auth for those
@@ -1628,7 +1627,7 @@ void mg_dash_ev_handler(struct mg_connection *c, int ev, void *ev_data) {
           break;
         }
       }
-      if (ch == NULL) mg_http_reply(c, 404, MG_JSON_HEADERS, "Not Found");
+      if (ch == NULL) mg_http_reply(c, 404, MG_JSON_HEADERS, "Not Found\n");
       mg_log_http_req(c, hm);
     }
   }
@@ -2855,6 +2854,7 @@ size_t mg_vxprintf(void (*out)(char, void *), void *param, const char *fmt,
 
 
 
+
 struct mg_fd *mg_fs_open(struct mg_fs *fs, const char *path, int flags) {
   struct mg_fd *fd = (struct mg_fd *) mg_calloc(1, sizeof(*fd));
   if (fd != NULL) {
@@ -2899,6 +2899,7 @@ bool mg_file_write(struct mg_fs *fs, const char *path, const void *buf,
   char tmp[MG_PATH_MAX], rnd[10];
   size_t path_len = mg_snprintf(tmp, sizeof(tmp), "%s..%s", path,
                                 mg_random_str(rnd, sizeof(rnd)));
+  fs->rm(tmp);
   if (path_len < sizeof(tmp) &&
       (fd = mg_fs_open(fs, tmp, MG_FS_WRITE | MG_FS_EXCL)) != NULL) {
     result = fs->wr(fd->fd, buf, len) == len;
@@ -2906,8 +2907,11 @@ bool mg_file_write(struct mg_fs *fs, const char *path, const void *buf,
     if (result) {
       fs->rm(path);
       result = fs->mv(tmp, path);
+      MG_DEBUG(("mv %s -> %s result=%d", tmp, path, result));
     }
     fs->rm(tmp);
+  } else {
+    MG_ERROR(("mg_fs_open(%s) failed, path_len=%zu", tmp, path_len));
   }
   return result;
 }
@@ -3209,6 +3213,10 @@ struct mg_fs mg_fs_packed = {
 #define MG_STAT_FUNC stat
 #endif
 
+#if MG_ENABLE_LFS
+#include <dirent.h>
+#endif
+
 static int p_stat(const char *path, size_t *size, time_t *mtime) {
 #if !defined(S_ISDIR)
   MG_ERROR(("stat() API is not supported. %p %p %p", path, size, mtime));
@@ -3360,7 +3368,6 @@ struct dirent *readdir(DIR *d) {
 
 static void p_list(const char *dir, void (*fn)(const char *, void *),
                    void *userdata) {
-#if MG_ENABLE_DIRLIST
   struct dirent *dp;
   DIR *dirp;
   if ((dirp = (opendir(dir))) == NULL) return;
@@ -3369,9 +3376,6 @@ static void p_list(const char *dir, void (*fn)(const char *, void *),
     fn(dp->d_name, userdata);
   }
   closedir(dirp);
-#else
-  (void) dir, (void) fn, (void) userdata;
-#endif
 }
 
 static void *p_open(const char *path, int flags) {
@@ -6362,16 +6366,15 @@ bool mg_l2_pppoe_rx(struct mg_tcpip_if *ifp, enum mg_l2proto *proto,
 
 
 
-#if MG_ENABLE_LFS
 
-#include <fcntl.h>
-#include <littlefs/lfs.h>
-#include <string.h>
-#include <sys/stat.h>
-#include <sys/types.h>
+#if MG_ENABLE_LFS
 
 #ifndef LFS_USE_RAM
 #define LFS_USE_RAM 0  // If 1, use RAM FS. If 0, use flash
+#endif
+
+#ifndef MG_LFS_SIZE
+#define MG_LFS_SIZE (64 * 1024)
 #endif
 
 #ifndef MG_LFS_BUF_SIZE
@@ -6385,19 +6388,6 @@ bool mg_l2_pppoe_rx(struct mg_tcpip_if *ifp, enum mg_l2proto *proto,
 #if LFS_USE_RAM && !defined(MG_LFS_BLOCK_SIZE)
 #define MG_LFS_BLOCK_SIZE 8192
 #endif
-
-#ifndef DT_DIR
-#define DT_DIR 4
-#endif
-#ifndef DT_REG
-#define DT_REG 8
-#endif
-
-typedef struct mg_lfs_fd DIR;
-struct dirent {
-  char d_name[LFS_NAME_MAX + 1];
-  unsigned char d_type;
-};
 
 struct mg_lfs_fd {
   struct mg_lfs_fd *next;
@@ -6468,29 +6458,50 @@ static int lfs_driver_sync(const struct lfs_config *cfg) {
 }
 
 bool mg_lfs_init(size_t size) {
-  int result = 0;
+  //bool ok = false;
+  MG_DEBUG(("size: %zu", size));
   if (s_lfs_ready) return true;
-  if (size == 0) return false;
+  if (size == 0) {
+    MG_ERROR(("invalidsize = 0"));
+  } else {
 #if LFS_USE_RAM
-  s_cfg.block_size = MG_LFS_BLOCK_SIZE;
-  if (s_ram_fs == NULL) s_ram_fs = (uint8_t *) mg_calloc(1, size);
-  s_fs = s_ram_fs;
+    s_cfg.block_size = MG_LFS_BLOCK_SIZE;
+    if (s_ram_fs == NULL) s_ram_fs = (uint8_t *) mg_calloc(1, size);
+    s_fs = s_ram_fs;
 #else
-  if (mg_flash == NULL || mg_flash->secsz == 0 || mg_flash->size < size) return false;
-  if (mg_flash->write_fn == NULL) return false;
-  s_cfg.block_size = mg_flash->secsz;
-  s_fs = (uint8_t *) mg_flash->start + mg_flash->size - size;
+    {
+      // Some flash attributes may be initialised on ota_begin
+      int lev = mg_log_level;
+      mg_log_level = MG_LL_NONE;
+      mg_ota_begin(1);
+      mg_ota_end();
+      mg_log_set(lev);
+    }
+    if (mg_flash == NULL || mg_flash->secsz == 0 || mg_flash->size < size) {
+      MG_ERROR(("mg_flash %p secsz %zu flash_size %zu < size %zu", mg_flash, mg_flash->secsz, mg_flash->size, size));
+    } else if (mg_flash->write_fn == NULL) {
+      MG_ERROR(("flash write_fn == NULL"));
+    } else {
+      s_cfg.block_size = mg_flash->secsz;
+      s_fs = (uint8_t *) mg_flash->start + mg_flash->size - size;
+    }
 #endif
-  if (s_fs == NULL || s_cfg.block_size == 0 || size % s_cfg.block_size != 0) {
-    return false;
+    if (s_fs == NULL || s_cfg.block_size == 0 || size % s_cfg.block_size != 0) {
+      MG_ERROR(("s_fs %p blk_size %zu size %zu", s_fs, s_cfg.block_size));
+    } else {
+      s_cfg.block_count = (lfs_size_t) (size / s_cfg.block_size);
+      if (s_cfg.block_count == 0) {
+        MG_ERROR(("blk_count == 0"));
+      } else {
+        if (lfs_mount(&s_lfs, &s_cfg) != 0) lfs_format(&s_lfs, &s_cfg);
+        if (lfs_mount(&s_lfs, &s_cfg) != 0) {
+          MG_ERROR(("lfs_mount"));
+        } else {
+          s_lfs_ready = true;
+        }
+      }
+    }
   }
-  s_cfg.block_count = (lfs_size_t) (size / s_cfg.block_size);
-  if (s_cfg.block_count == 0) return false;
-  if (lfs_mount(&s_lfs, &s_cfg) != 0) {
-    lfs_format(&s_lfs, &s_cfg);
-    if (lfs_mount(&s_lfs, &s_cfg) != 0) result = -1;
-  }
-  s_lfs_ready = result == 0;
   return s_lfs_ready;
 }
 
@@ -6504,6 +6515,7 @@ static struct mg_lfs_fd *find_fd(int fd) {
 
 static struct mg_lfs_fd *open_fd(void) {
   struct mg_lfs_fd *f = NULL;
+  if (s_lfs_ready == false) mg_lfs_init(MG_LFS_SIZE);
   if (s_lfs_ready) {
     f = (struct mg_lfs_fd *) mg_calloc(1, sizeof(*f));
     if (f != NULL) {
@@ -6531,6 +6543,7 @@ int _open(const char *path, int flags, mode_t mode) {
   int err, lfs_flags = 0, fd = -1;
   struct mg_lfs_fd *f = open_fd();
   (void) mode;
+  MG_DEBUG(("%s -> %p, lfs_ready %d", path, f, s_lfs_ready));
   if (f == NULL) return -1;
   fd = f->fd;
   if ((flags & 3) == O_RDONLY) lfs_flags |= LFS_O_RDONLY;
@@ -6572,11 +6585,21 @@ int _lseek(int fd, int offset, int whence) {
 }
 
 int _rename(const char *oldname, const char *newname) {
+  if (s_lfs_ready == false) mg_lfs_init(MG_LFS_SIZE);
   return s_lfs_ready ? lfs_rename(&s_lfs, oldname, newname) : -1;
 }
 
-int _unlink_r(void *r, const char *a) {
-  (void) r;
+// Some libc rename() implementations have no atomic rename syscall and emulate
+// it as link() + unlink() instead of calling _rename() directly. LittleFS has
+// no real hard links, but forwarding to _rename() gives the same end result
+// (oldname becomes newname), which is all mg_file_write()'s atomic-write
+// pattern (write to a temp file, then rename it into place) needs
+int _link(const char *oldname, const char *newname) {
+  return _rename(oldname, newname);
+}
+
+int _unlink(const char *a) {
+  if (s_lfs_ready == false) mg_lfs_init(MG_LFS_SIZE);
   return s_lfs_ready ? lfs_remove(&s_lfs, a) : -1;
 }
 
@@ -6585,7 +6608,7 @@ DIR *opendir(const char *name) {
   if (f == NULL) return NULL;
   if (lfs_dir_open(&s_lfs, &f->dir, name) != 0) {
     close_fd(f);
-    return NULL;
+    f = NULL;
   }
   return (DIR *) f;
 }
@@ -6612,7 +6635,9 @@ struct dirent *readdir(DIR *dir) {
 
 int _stat(const char *path, struct stat *st) {
   struct lfs_info info;
+  if (s_lfs_ready == false) mg_lfs_init(MG_LFS_SIZE);
   if (!s_lfs_ready || lfs_stat(&s_lfs, path, &info) != 0) return -1;
+  memset(st, 0, sizeof(*st));
   st->st_mode = info.type == LFS_TYPE_DIR ? S_IFDIR : S_IFREG;
   st->st_size = info.size;
   return 0;
@@ -6626,9 +6651,9 @@ int _fstat(int fd, struct stat *st) {
 
 int mkdir(const char *path, mode_t mode) {
   (void) mode;
+  if (s_lfs_ready == false) mg_lfs_init(MG_LFS_SIZE);
   return s_lfs_ready ? lfs_mkdir(&s_lfs, path) : -1;
 }
-
 #endif
 
 #ifdef MG_ENABLE_LINES

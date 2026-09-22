@@ -2,6 +2,7 @@
 
 #include "arch.h"
 #include "config.h"
+#include "lfs.h"
 
 // Flags returned by mg_fs.st() and passed to mg_fs.open().
 enum { MG_FS_READ = 1, MG_FS_WRITE = 2, MG_FS_DIR = 4, MG_FS_EXCL = 8 };
@@ -40,6 +41,7 @@ void mg_fs_close(struct mg_fd *fd);
 
 // Sequential directory iterator. Call repeatedly with the same buf/len;
 // each call fills buf with the next entry name. Returns false when done.
+// Note: make sure buf[0] == 0 before the first call
 bool mg_fs_ls(struct mg_fs *fs, const char *path, char *buf, size_t len);
 
 // Reads the entire file into a heap-allocated buffer. The returned mg_str is

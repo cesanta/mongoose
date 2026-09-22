@@ -1,23 +1,26 @@
 # Copyright (c) 2026 Cesanta Software Limited
 # Environment setup: https://mongoose.ws/docs/getting-started/build-environment/
 
+MGDIR = ../../../..
+
 CFLAGS  = -W -Wall -Wextra -Wundef -Wshadow -Wdouble-promotion
 CFLAGS += -Wformat-truncation -fno-common -Wconversion -Wno-sign-conversion
 CFLAGS += -g3 -Os -ffunction-sections -fdata-sections
-CFLAGS += -I. -Icmsis_core/CMSIS/Core/Include -Icmsis_h5/Include -Imongoose
+CFLAGS += -I. -I$(MGDIR) -Icmsis_core/CMSIS/Core/Include -Icmsis_h5/Include -Imongoose
 CFLAGS += -mcpu=cortex-m33 -mthumb -mfpu=fpv5-sp-d16 -mfloat-abi=hard $(CFLAGS_EXTRA)
 LDFLAGS ?= -Tlink.ld -nostdlib -nostartfiles --specs nosys.specs -lc -lgcc -Wl,--gc-sections -Wl,-Map=$@.map
 
 SOURCES = main.c hal.c
+SOURCES += littlefs/lfs.c littlefs/lfs_util.c
 SOURCES += cmsis_h5/Source/Templates/gcc/startup_stm32h563xx.s
-SOURCES += mongoose/mongoose.c
+SOURCES += $(MGDIR)/mongoose.c
+
+# Disabled for littlefs/lfs.c
+CFLAGS += -Wno-conversion -Wno-shadow
 
 all build example: firmware.bin
 
-mongoose/mongoose.c mongoose/mongoose.h:
-	cp ../../../../mongoose.[ch] mongoose/
-
-firmware.elf: cmsis_core cmsis_h5 hal.h link.ld Makefile $(SOURCES) mongoose/mongoose.h
+firmware.elf: cmsis_core cmsis_h5 littlefs hal.h link.ld Makefile $(SOURCES) $(MGDIR)/mongoose.h
 	arm-none-eabi-gcc $(SOURCES) $(CFLAGS) $(CFLAGS_EXTRA) $(LDFLAGS) -o $@
 
 firmware.bin: firmware.elf
@@ -41,6 +44,10 @@ cmsis_core:
 
 cmsis_h5:
 	git clone -q -c advice.detachedHead=false --depth 1 -b v1.6.0 https://github.com/STMicroelectronics/cmsis-device-h5 $@
+
+littlefs/lfs.c littlefs/lfs_util.c: littlefs
+littlefs:
+	git clone -q -c advice.detachedHead=false --depth 1 -b v2.11.3 https://github.com/littlefs-project/littlefs $@
 
 clean:
 	rm -rf firmware.* cmsis_* mongoose/mongoose.*

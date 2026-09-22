@@ -778,15 +778,22 @@ a, a:visited, a:link { text-decoration: none; }
           </div>
 
           <div class="note">
-            <p>The two default files are fake - you can delete them</p>
-            <p>However the manager works - you can upload new files. They
-              are uploaded to /tmp/ directory on the device.
-              This requires stdio (fopen/fread/...) implemeneted.</p>
-            <p>The easiest way to implement it is to use a filesystem like
-              LittleFS on your internal or external flash
-              and retarget the standard library to use it.</p>
-            <p>See <a href="https://github.com/cpq/bare-metal-programming-guide/tree/main/templates/lfs/nucleo-h563zi">this example</a> on how LittleFS can be implemented on
-              Nucleo-H563ZI internal flash partition.</p>
+            <p>This file manager uses /tmp/dashboard/ directory.
+              It works on any platform that supports
+              standard file IO: fopen, fread, fwrite, fclose.
+              This includes Linux/Mac/Windows.</p>
+            <p>
+              Mongoose provides a built-in LittleFS integration that
+              makes stadard file IO work on embedded systems like STM32.
+              For that, add "#define MG_ENABLE_LFS 1" to your
+              mongoose_config.h
+            </p>
+            <p>See
+              <a href="https://github.com/cesanta/embedded-web-file-manager">this ready-to-build example</a>
+              which implements LittleFS on Nucleo-H563ZI internal flash. You
+              can upload, delete and serve files on STM32 - which is
+              a perfect use case for confuration files, keeping and viewing logs, etc.
+            </p>
           </div>
 
         </div>

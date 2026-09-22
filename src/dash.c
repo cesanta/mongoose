@@ -580,7 +580,6 @@ void mg_dash_ev_handler(struct mg_connection *c, int ev, void *ev_data) {
     // Received headers - check authentication and possibly start uploads/ota
     struct mg_http_message *hm = (struct mg_http_message *) ev_data;
     struct mg_dash_user *u = mg_dash_authenticate(c, hm, dash);
-
     if (mg_match(hm->uri, mg_str("/api/hi"), NULL) ||
         mg_match(hm->uri, mg_str("/api/logout"), NULL)) {
       // Do nothing, handle them MG_EV_HTTP_MSG. We bypass auth for those
@@ -653,7 +652,7 @@ void mg_dash_ev_handler(struct mg_connection *c, int ev, void *ev_data) {
           break;
         }
       }
-      if (ch == NULL) mg_http_reply(c, 404, MG_JSON_HEADERS, "Not Found");
+      if (ch == NULL) mg_http_reply(c, 404, MG_JSON_HEADERS, "Not Found\n");
       mg_log_http_req(c, hm);
     }
   }
