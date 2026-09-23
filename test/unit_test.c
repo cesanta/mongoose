@@ -826,7 +826,16 @@ static void test_mqtt(void) {
 static void eh1(struct mg_connection *c, int ev, void *ev_data) {
   struct mg_tls_opts *topts = (struct mg_tls_opts *) c->fn_data;
   if (ev == MG_EV_ACCEPT && topts != NULL) mg_tls_init(c, topts);
-  if (ev == MG_EV_HTTP_MSG) {
+  if (ev == MG_EV_HTTP_HDRS &&
+      mg_match(((struct mg_http_message *) ev_data)->uri, mg_str("/big.bin"),
+               NULL)) {
+    // mg_http_serve_upload: streams big uploads, called from MG_EV_HTTP_HDRS
+    struct mg_http_serve_opts sopts;
+    memset(&sopts, 0, sizeof(sopts));
+    sopts.root_dir = "./data";
+    sopts.allow_upload = true;
+    mg_http_serve_upload(c, (struct mg_http_message *) ev_data, &sopts);
+  } else if (ev == MG_EV_HTTP_MSG) {
     struct mg_http_message *hm = (struct mg_http_message *) ev_data;
     MG_INFO(("[%.*s %.*s] message len %d", (int) hm->method.len, hm->method.buf,
              (int) hm->uri.len, hm->uri.buf, (int) hm->message.len));
@@ -874,6 +883,8 @@ static void eh1(struct mg_connection *c, int ev, void *ev_data) {
       sopts.root_dir = "./data";
       sopts.ssi_pattern = "#.shtml";
       sopts.extra_headers = "C: D\r\n";
+      sopts.allow_delete = true;
+      sopts.allow_upload = true;
       mg_http_serve_dir(c, hm, &sopts);
     }
   } else if (ev == MG_EV_WS_OPEN) {
@@ -1297,15 +1308,38 @@ ASSERT(system("touch 'dirtest/a<b&c>.txt'") == 0);
 #endif
   ASSERT(fetch(&mgr, buf, url, "GET /dirtest/ HTTP/1.0\n\n") == 200);
   MG_DEBUG(("%s", buf));
-  ASSERT(mgstrstr(mg_str(buf), mg_str(">Index of /dirtest/<")) != NULL);
-  ASSERT(mgstrstr(mg_str(buf), mg_str(">fuzz.c<")) != NULL);
+  ASSERT(mgstrstr(mg_str(buf), mg_str("fuzz.c")) != NULL);
 #if MG_ARCH == MG_ARCH_UNIX
-  ASSERT(mgstrstr(mg_str(buf), mg_str(">a&lt;b&amp;c&gt;.txt<")) != NULL);
+  ASSERT(mgstrstr(mg_str(buf), mg_str("a<b&c>.txt")) != NULL);
   if (system("rm 'dirtest/a<b&c>.txt'") == 0) (void) 0;
 #endif
   ASSERT(cmpheader(buf, "A", "B"));
   ASSERT(!cmpheader(buf, "C", "D"));
   ASSERT(cmpheader(buf, "E", "F"));
+
+  {
+    // mg_http_serve_dir: allow_upload, small file first (buffered), then a
+    // big one (mg_http_serve_upload, streamed - see the MG_EV_HTTP_HDRS
+    // branch in eh1), then allow_delete
+    struct mg_str big = mg_file_read(&mg_fs_posix, "mongoose.c");
+    struct mg_str got;
+    ASSERT(big.len > MG_IO_SIZE);
+    ASSERT(fetch(&mgr, buf, url,
+                 "POST /del_me.txt HTTP/1.0\r\nContent-Length: 1\r\n\r\nx") ==
+           200);
+    ASSERT(fetch(&mgr, buf, url, "GET /del_me.txt HTTP/1.0\n\n") == 200);
+    ASSERT(fetch(&mgr, buf, url,
+                 "POST /big.bin HTTP/1.0\r\nContent-Length: %d\r\n\r\n%.*s",
+                 (int) big.len, (int) big.len, big.buf) == 200);
+    got = mg_file_read(&mg_fs_posix, "data/big.bin");
+    ASSERT(got.len == big.len && memcmp(got.buf, big.buf, big.len) == 0);
+    mg_free((void *) got.buf);
+    mg_free((void *) big.buf);
+    remove("data/big.bin");
+    ASSERT(fetch(&mgr, buf, url, "DELETE /del_me.txt HTTP/1.0\n\n") == 200);
+    ASSERT(fetch(&mgr, buf, url, "GET /del_me.txt HTTP/1.0\n\n") == 404);
+    ASSERT(fetch(&mgr, buf, url, "DELETE /del_me.txt HTTP/1.0\n\n") == 404);
+  }
 
   {
     // Credentials

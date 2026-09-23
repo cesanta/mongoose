@@ -676,127 +676,55 @@ struct printdirentrydata {
   struct mg_http_message *hm;
   const struct mg_http_serve_opts *opts;
   const char *dir;
+  size_t count;
 };
 
 #if MG_ENABLE_DIRLIST
-// Print file name, escaping HTML chars
-static size_t html_esc(void (*fn)(char, void *), void *arg, va_list *ap) {
-  const char *s = va_arg(*ap, const char *);
-  size_t i, len = 0;
-  for (i = 0; s[i] != '\0'; i++) {
-    if (s[i] == '<') {
-      len += mg_xprintf(fn, arg, "%s", "&lt;");
-    } else if (s[i] == '>') {
-      len += mg_xprintf(fn, arg, "%s", "&gt;");
-    } else if (s[i] == '&') {
-      len += mg_xprintf(fn, arg, "%s", "&amp;");
-    } else {
-      len += mg_xprintf(fn, arg, "%c", s[i]);
-    }
-  }
-  return len;
-}
-
 static void printdirentry(const char *name, void *userdata) {
   struct printdirentrydata *d = (struct printdirentrydata *) userdata;
   struct mg_fs *fs = d->opts->fs == NULL ? &mg_fs_posix : d->opts->fs;
   size_t size = 0;
   time_t t = 0;
-  char path[MG_PATH_MAX], sz[40], mod[40];
-  int flags, n = 0;
+  char path[MG_PATH_MAX];
+  int flags;
 
-  // MG_DEBUG(("[%s] [%s]", d->dir, name));
-  if (mg_snprintf(path, sizeof(path), "%s%c%s", d->dir, '/', name) >
+  if (mg_snprintf(path, sizeof(path), "%s%c%s", d->dir, '/', name) >=
       sizeof(path)) {
     MG_ERROR(("%s truncated", name));
   } else if ((flags = fs->st(path, &size, &t)) == 0) {
     MG_ERROR(("%lu stat(%s)", d->c->id, path));
   } else {
-    const char *slash = flags & MG_FS_DIR ? "/" : "";
     if (flags & MG_FS_DIR) {
-      mg_snprintf(sz, sizeof(sz), "%s", "[DIR]");
+      mg_printf(d->c, "%s\n  {%m: %m, %m: true}", //
+                d->count == 0 ? "" : ",", //
+                MG_ESC("name"), MG_ESC(name), MG_ESC("dir"));
     } else {
-      mg_snprintf(sz, sizeof(sz), "%lld", (uint64_t) size);
+      mg_printf(d->c, "%s\n  {%m: %m, %m: %zu, %m: %llu, %m: false}", //
+                d->count == 0 ? "" : ",", //
+                MG_ESC("name"), MG_ESC(name), //
+                MG_ESC("size"), size, //
+                MG_ESC("modified"), (uint64_t) t, MG_ESC("dir"));
     }
-#if defined(MG_HTTP_DIRLIST_TIME_FMT)
-    {
-      char time_str[40];
-      struct tm *time_info = localtime(&t);
-      strftime(time_str, sizeof time_str, "%Y/%m/%d %H:%M:%S", time_info);
-      mg_snprintf(mod, sizeof(mod), "%s", time_str);
-    }
-#else
-    mg_snprintf(mod, sizeof(mod), "%lu", (unsigned long) t);
-#endif
-    n = (int) mg_url_encode(name, strlen(name), path, sizeof(path));
-    mg_printf(d->c,
-              "  <tr><td><a href=\"%.*s%s\">%M%s</a></td>"
-              "<td name=%lu>%s</td><td name=%lld>%s</td></tr>\n",
-              n, path, slash, html_esc, name, slash, (unsigned long) t, mod,
-              flags & MG_FS_DIR ? (int64_t) -1 : (int64_t) size, sz);
+    d->count++;
   }
 }
 
 static void listdir(struct mg_connection *c, struct mg_http_message *hm,
                     const struct mg_http_serve_opts *opts, char *dir) {
-  const char *sort_js_code =
-      "<script>function srt(tb, sc, so, d) {"
-      "var tr = Array.prototype.slice.call(tb.rows, 0),"
-      "tr = tr.sort(function (a, b) { var c1 = a.cells[sc], c2 = b.cells[sc],"
-      "n1 = c1.getAttribute('name'), n2 = c2.getAttribute('name'), "
-      "t1 = a.cells[2].getAttribute('name'), "
-      "t2 = b.cells[2].getAttribute('name'); "
-      "return so * (t1 < 0 && t2 >= 0 ? -1 : t2 < 0 && t1 >= 0 ? 1 : "
-      "n1 ? parseInt(n2) - parseInt(n1) : "
-      "c1.textContent.trim().localeCompare(c2.textContent.trim())); });";
-  const char *sort_js_code2 =
-      "for (var i = 0; i < tr.length; i++) tb.appendChild(tr[i]); "
-      "if (!d) window.location.hash = ('sc=' + sc + '&so=' + so); "
-      "};"
-      "window.onload = function() {"
-      "var tb = document.getElementById('tb');"
-      "var m = /sc=([012]).so=(1|-1)/.exec(window.location.hash) || [0, 2, 1];"
-      "var sc = m[1], so = m[2]; document.onclick = function(ev) { "
-      "var c = ev.target.rel; if (c) {if (c == sc) so *= -1; srt(tb, c, so); "
-      "sc = c; ev.preventDefault();}};"
-      "srt(tb, sc, so, true);"
-      "}"
-      "</script>";
   struct mg_fs *fs = opts->fs == NULL ? &mg_fs_posix : opts->fs;
-  struct printdirentrydata d = {c, hm, opts, dir};
-  char tmp[10], buf[MG_PATH_MAX];
+  struct printdirentrydata d = {c, hm, opts, dir, 0};
+  char tmp[10];
   size_t off, n;
-  int len = mg_url_decode(hm->uri.buf, hm->uri.len, buf, sizeof(buf), 0);
-  struct mg_str uri = len > 0 ? mg_str_n(buf, (size_t) len) : hm->uri;
-
   mg_printf(c,
-            "HTTP/1.1 200 OK\r\n"
-            "Content-Type: text/html; charset=utf-8\r\n"
-            "%s"
-            "Content-Length:         \r\n\r\n",
-            opts->extra_headers == NULL ? "" : opts->extra_headers);
+      "HTTP/1.1 200 OK\r\n"
+      "Content-Type: application/json; charset=utf-8\r\n"
+      "%s"
+      "Content-Length:         \r\n\r\n",
+      opts->extra_headers == NULL ? "" : opts->extra_headers);
   off = c->send.len;  // Start of body
-  mg_printf(c,
-            "<!DOCTYPE html><html><head><title>Index of %M</title>%s%s"
-            "<style>th,td {text-align: left; padding-right: 1em; "
-            "font-family: monospace; }</style></head>"
-            "<body><h1>Index of %M</h1><table cellpadding=\"0\"><thead>"
-            "<tr><th><a href=\"#\" rel=\"0\">Name</a></th><th>"
-            "<a href=\"#\" rel=\"1\">Modified</a></th>"
-            "<th><a href=\"#\" rel=\"2\">Size</a></th></tr>"
-            "<tr><td colspan=\"3\"><hr></td></tr>"
-            "</thead>"
-            "<tbody id=\"tb\">\n",
-            mg_print_html_esc, (int) uri.len, uri.buf, sort_js_code, sort_js_code2,
-            mg_print_html_esc, (int) uri.len, uri.buf);
-  mg_printf(c, "%s",
-            "  <tr><td><a href=\"..\">..</a></td>"
-            "<td name=-1></td><td name=-1>[DIR]</td></tr>\n");
+  mg_printf(c, "[");
   fs->ls(dir, printdirentry, &d);
-  mg_printf(c,
-            "</tbody><tfoot><tr><td colspan=\"3\"><hr></td></tr></tfoot>"
-            "</table><address>Mongoose v.%s</address></body></html>\n",
-            MG_VERSION);
+  mg_printf(c, "\n]\n");
   n = mg_snprintf(tmp, sizeof(tmp), "%lu", (unsigned long) (c->send.len - off));
   if (n > sizeof(tmp)) n = 0;
   memcpy(c->send.buf + off - 12, tmp, n);  // Set content length
@@ -804,33 +732,43 @@ static void listdir(struct mg_connection *c, struct mg_http_message *hm,
 }
 #endif
 
+// Map requested URI to the file path (buf,len). Use root directory r.
+// r could be a path optionally followed by map: PATH,/PREFIX1=PATH1,...
+static bool uri2path(const char *r, struct mg_str uri, char *buf, size_t len) {
+  struct mg_str k, v, part, s = mg_str(r), u = {NULL, 0}, d = u;
+  size_t n;
+  while (mg_span(s, &part, &s, ',')) {
+    if (!mg_span(part, &k, &v, '=')) k = part, v = mg_str_n(NULL, 0);
+    if (v.len == 0) v = k, k = mg_str("/"), u = k, d = v;
+    if (uri.len < k.len) continue;
+    if (mg_strcmp(k, mg_str_n(uri.buf, k.len)) != 0) continue;
+    u = k, d = v;
+  }
+  n = mg_snprintf(buf, len, "%.*s", (int) d.len, d.buf);
+  if (len == 0 || n + 2 >= len) return false;  // Path overflow
+  if (n > 0 && buf[n - 1] != '/') buf[n++] = '/', buf[n] = '\0';  // Add slash
+  if (mg_url_decode(uri.buf + u.len, uri.len - u.len, buf + n, len - n, 0) < 0) {
+    return false;
+  }
+  buf[len - 1] = '\0';  // Double-check
+  n = strlen(buf);
+  if (!mg_path_is_sane(mg_str_n(buf, n))) return false;
+  while (n > 1 && buf[n - 1] == '/') buf[--n] = 0;  // Trim trailing slashes
+  return true;
+}
+
 // Resolve requested file into `path` and return its fs->st() result
-static int uri_to_path2(struct mg_connection *c, struct mg_http_message *hm,
-                        struct mg_fs *fs, struct mg_str url, struct mg_str dir,
-                        char *path, size_t path_size) {
+static int uri_to_file_status(struct mg_connection *c,
+                              struct mg_http_message *hm,
+                              struct mg_fs *fs, const char *root_dir,
+                              char *path, size_t path_size) {
   int flags, tmp;
-  // Append URI to the root_dir, and sanitize it
-  size_t n = mg_snprintf(path, path_size, "%.*s", (int) dir.len, dir.buf);
-  if (n + 2 >= path_size) {
-    mg_http_reply(c, 400, "", "Exceeded path size");
-    return -1;
-  }
-  path[path_size - 1] = '\0';
-  // Terminate root dir with slash
-  if (n > 0 && path[n - 1] != '/') path[n++] = '/', path[n] = '\0';
-  if (url.len < hm->uri.len &&
-      mg_url_decode(hm->uri.buf + url.len, hm->uri.len - url.len, path + n,
-                    path_size - n, 0) < 0) {
+  size_t n;
+  if (!uri2path(root_dir, hm->uri, path, path_size)) {
     mg_http_reply(c, 400, "", "Invalid path");
     return -1;
   }
-  path[path_size - 1] = '\0';  // Double-check
   n = strlen(path);
-  if (!mg_path_is_sane(mg_str_n(path, n))) {
-    mg_http_reply(c, 400, "", "Invalid path");
-    return -1;
-  }
-  while (n > 1 && path[n - 1] == '/') path[--n] = 0;  // Trim trailing slashes
   flags = mg_strcmp(hm->uri, mg_str("/")) == 0 ? MG_FS_DIR
                                                : fs->st(path, NULL, NULL);
   MG_VERBOSE(("%lu %.*s -> %s %d", c->id, (int) hm->uri.len, hm->uri.buf, path,
@@ -867,38 +805,86 @@ static int uri_to_path2(struct mg_connection *c, struct mg_http_message *hm,
   return flags;
 }
 
-static int uri_to_path(struct mg_connection *c, struct mg_http_message *hm,
-                       const struct mg_http_serve_opts *opts, char *path,
-                       size_t path_size) {
-  struct mg_fs *fs = opts->fs == NULL ? &mg_fs_posix : opts->fs;
-  struct mg_str k, v, part, s = mg_str(opts->root_dir), u = {NULL, 0}, p = u;
-  while (mg_span(s, &part, &s, ',')) {
-    if (!mg_span(part, &k, &v, '=')) k = part, v = mg_str_n(NULL, 0);
-    if (v.len == 0) v = k, k = mg_str("/"), u = k, p = v;
-    if (hm->uri.len < k.len) continue;
-    if (mg_strcmp(k, mg_str_n(hm->uri.buf, k.len)) != 0) continue;
-    u = k, p = v;
-  }
-  return uri_to_path2(c, hm, fs, u, p, path, path_size);
-}
-
 void mg_http_serve_dir(struct mg_connection *c, struct mg_http_message *hm,
                        const struct mg_http_serve_opts *opts) {
   char path[MG_PATH_MAX];
+  struct mg_fs *fs = opts->fs == NULL ? &mg_fs_posix : opts->fs;
   const char *sp = opts->ssi_pattern;
-  int flags = uri_to_path(c, hm, opts, path, sizeof(path));
+  int flags = uri_to_file_status(c, hm, fs, opts->root_dir, path, sizeof(path));
   if (flags < 0) {
-    // Do nothing: the response has already been sent by uri_to_path()
+    // Do nothing: the response has already been sent by uri_to_file_status()
   } else if (flags & MG_FS_DIR) {
 #if MG_ENABLE_DIRLIST
     listdir(c, hm, opts, path);
 #else
     mg_http_reply(c, 403, "", "Forbidden\n");
 #endif
+  } else if (opts->allow_delete &&
+            mg_strcasecmp(hm->method, mg_str("DELETE")) == 0) {
+    mg_http_reply(c, flags && fs->rm(path) ? 200 : 404, "", "");
+  } else if (opts->allow_upload &&
+            (mg_strcasecmp(hm->method, mg_str("POST")) == 0 ||
+             mg_strcasecmp(hm->method, mg_str("PUT")) == 0)) {
+    // Small or already fully buffered body. mg_http_serve_upload() handles
+    // the same thing without buffering, for big uploads, from MG_EV_HTTP_HDRS
+    void *fd;
+    bool ok = false;
+    fs->rm(path);  // MG_FS_WRITE appends, not truncates: drop any old file
+    if ((fd = fs->op(path, MG_FS_WRITE)) != NULL) {
+      ok = fs->wr(fd, hm->body.buf, hm->body.len) == hm->body.len;
+      fs->cl(fd);
+    }
+    mg_http_reply(c, ok ? 200 : 500, "", "");
   } else if (flags && sp != NULL && mg_match(mg_str(path), mg_str(sp), NULL)) {
     mg_http_serve_ssi(c, opts->root_dir, path);
   } else {
     mg_http_serve_file(c, hm, path, opts);
+  }
+}
+
+// mg_http_stream_body() callback for mg_http_serve_upload(). The file is
+// opened by the caller before streaming starts, so this only writes and closes
+static bool serve_upload_cb(struct mg_http_message *hm, struct mg_str *data,
+                            void **p) {
+  struct mg_fd *fd = (struct mg_fd *) *p;
+  if (hm != NULL) return fd != NULL;  // Start
+  if (data != NULL) {                 // Next chunk
+    return fd != NULL && fd->fs->wr(fd->fd, data->buf, data->len) == data->len;
+  }
+  if (fd != NULL) mg_fs_close(fd);  // End
+  *p = NULL;
+  return true;
+}
+
+// Starts a streaming upload for a big POST/PUT body, so it never sits fully
+// buffered in memory. Companion to mg_http_serve_dir(): call this from
+// MG_EV_HTTP_HDRS, and keep calling mg_http_serve_dir() from MG_EV_HTTP_MSG
+// as before - it handles uploads too, for bodies this function skips.
+// Does nothing unless opts->allow_upload is set, the method is POST or PUT,
+// and Content-Length is known and >= 2 * MG_IO_SIZE.
+void mg_http_serve_upload(struct mg_connection *c, struct mg_http_message *hm,
+                          const struct mg_http_serve_opts *opts) {
+  char path[MG_PATH_MAX];
+  struct mg_fs *fs = opts->fs == NULL ? &mg_fs_posix : opts->fs;
+  if (!opts->allow_upload) {
+    // Not enabled, nothing to do
+  } else if (mg_strcasecmp(hm->method, mg_str("POST")) != 0 &&
+            mg_strcasecmp(hm->method, mg_str("PUT")) != 0) {
+    // Not an upload request, nothing to do
+  } else if (hm->body.len == (size_t) ~0 || hm->body.len < 2 * MG_IO_SIZE) {
+    // Unknown length, or small enough for mg_http_serve_dir() to buffer it
+  } else if (!uri2path(opts->root_dir, hm->uri, path, sizeof(path))) {
+    MG_ERROR(("Invalid upload path: %.*s", (int) hm->uri.len, hm->uri.buf));
+  } else if (fs->st(path, NULL, NULL) & MG_FS_DIR) {
+    // Target is a directory, let mg_http_serve_dir() list it
+  } else {
+    struct mg_fd *fd;
+    fs->rm(path);  // MG_FS_WRITE appends, not truncates: drop any old file
+    if ((fd = mg_fs_open(fs, path, MG_FS_WRITE)) == NULL) {
+      MG_ERROR(("Cannot open %s for upload", path));
+    } else if (!mg_http_stream_body(c, hm, serve_upload_cb, fd)) {
+      mg_fs_close(fd);
+    }
   }
 }
 
