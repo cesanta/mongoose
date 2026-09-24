@@ -11,7 +11,6 @@
 #define MG_ENABLE_CUSTOM_MILLIS 1
 #define MG_ENABLE_CUSTOM_RANDOM 1
 #define MG_ENABLE_DRIVER_STM32H 1
-#define MG_ENABLE_PACKED_FS 1
 #define MG_ETH_RAM __attribute__((section(".eth_ram")))
 
 // #define MG_DRIVER_MDC_CR 4   // RMII MDC clock divider, from 0 to 5

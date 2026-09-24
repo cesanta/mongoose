@@ -167,734 +167,208 @@ fail:
 #endif
 
 
-#if MG_ENABLE_BSD_SOCKETS
+#include <stdarg.h>
 
-// Queue-based BSD shim is currently TCP/SOCK_STREAM only. UDP/SOCK_DGRAM would
-// need datagram boundaries, e.g. datagram queues or SOD/EOD framing.
-// Unconnected UDP also needs per-packet peer addresses for sendto()/recvfrom().
-// It is also IPv4-only: transports store sockaddr_in and build IPv4 URLs.
-
-#ifndef MG_ENABLE_BSD_LOG
-#define MG_ENABLE_BSD_LOG 0
-#define bsd_log(type, tag, a, b, c, n)
-#else
-#define MG_BSD_LOG_SOCK 1
-#define MG_BSD_LOG_ACCEPT 2
-#define MG_BSD_LOG_CLOSE 3
-#define MG_BSD_LOG_TRANSPORT 4
-#define MG_BSD_LOG_RESULT 5
-#define MG_BSD_LOG_CONNECT 6
-// Type is always a constant, so optimised builds fold the switch to one log.
-#define bsd_log(type, tag, a, b, c, n)                                       \
-  do {                                                                       \
-    switch (type) {                                                          \
-      case MG_BSD_LOG_SOCK: {                                                \
-        struct mg_bsd_sock *log_s = (struct mg_bsd_sock *) (a);              \
-        MG_DEBUG(("SOCK %s %ld %p", tag, (long) (n), log_s->t));             \
-        break;                                                               \
-      }                                                                      \
-      case MG_BSD_LOG_ACCEPT: {                                              \
-        struct mg_connection *log_mc = (struct mg_connection *) (a);         \
-        if ((n) >= 0) {                                                      \
-          MG_DEBUG(("ACCEPT %lu %p %u %ld", log_mc->id, c,                   \
-                   (unsigned) mg_ntohs(log_mc->rem.port), (long) (n)));      \
-        } else {                                                             \
-          MG_DEBUG(("ACCEPT %lu %p %u", log_mc->id, c,                       \
-                   (unsigned) mg_ntohs(log_mc->rem.port)));                  \
-        }                                                                    \
-        break;                                                               \
-      }                                                                      \
-      case MG_BSD_LOG_CLOSE: {                                               \
-        struct mg_connection *log_mc = (struct mg_connection *) (a);         \
-        if ((n) >= 0) MG_INFO(("CLOSE %s %lu %p %ld", tag, log_mc->id, b,    \
-                               (long) (n)));                                 \
-        else MG_DEBUG(("CLOSE %s %lu %p", tag, log_mc->id, b));              \
-        break;                                                               \
-      }                                                                      \
-      case MG_BSD_LOG_TRANSPORT:                                             \
-        if ((n) >= 0) MG_INFO(("TRANSP %s %p %ld", tag, a, (long) (n)));     \
-        else MG_DEBUG(("TRANSP %s %p", tag, a));                             \
-        break;                                                               \
-      case MG_BSD_LOG_RESULT:                                                \
-        MG_DEBUG(("RESULT %s %p %ld", tag, a, (long) (n)));                  \
-        break;                                                               \
-      case MG_BSD_LOG_CONNECT:                                               \
-        if ((c) != NULL) {                                                    \
-          MG_DEBUG(("CONNECT %s %p %p %s %ld", tag, a, b,                    \
-                    (const char *) (c), (long) (n)));                        \
-        } else {                                                             \
-          MG_DEBUG(("CONNECT %s %p %p %ld", tag, a, b, (long) (n)));         \
-        }                                                                    \
-        break;                                                               \
-    }                                                                        \
-  } while (0)
-#endif
-
-struct mg_bsd_sock {
-  void *t;                  // opaque transport handle
-  int fd;
-  int domain, type, proto;
-  bool nonblock;
-  struct sockaddr_in addr;  // bind address
-  struct sockaddr_in peer;  // peer address (after accept/connect)
-  struct mg_bsd_sock *next;
-};
-
-#define MG_BSD_FD_BASE 17777
-
-// static struct mg_mgr *s_mgr;
-static struct mg_bsd_sock *s_socks;
-
-static struct mg_bsd_sock *get(int fd) {
-  if (fd < MG_BSD_FD_BASE) return NULL;
-  for (struct mg_bsd_sock *s = s_socks; s; s = s->next)
-    if (s->fd == fd) return s;
-  return NULL;
-}
-
-static int alloc_sock(struct mg_bsd_sock *s) {
-  for (int fd = MG_BSD_FD_BASE; ; fd++) {
-    if (get(fd) == NULL) { s->fd = fd; break; }
-  }
-  s->next = s_socks;
-  s_socks = s;
-  return s->fd;
-}
-
-static void release_sock(int fd) {
-  struct mg_bsd_sock **p = &s_socks;
-  while (*p && (*p)->fd != fd) p = &(*p)->next;
-  if (*p) *p = (*p)->next;
-}
-
-int socket(int domain, int type, int proto) {
-  struct mg_bsd_sock *s = (struct mg_bsd_sock *) calloc(1, sizeof(*s));
-  if (!s) { errno = ENOMEM; return -1; }
-  s->t = mg_bsd_transport_new(domain, type, proto);
-  if (!s->t) { free(s); return -1; }
-  if (alloc_sock(s) < 0) { mg_bsd_transport_free(s->t); free(s); errno = ENOMEM; return -1; }
-  s->domain = domain; s->type = type; s->proto = proto;
-  return s->fd;
-}
-
-int bind(int fd, const struct sockaddr *addr, socklen_t len) {
-  struct mg_bsd_sock *s = get(fd);
-  if (!s) return -1;
-  memcpy(&s->addr, addr, len < sizeof(s->addr) ? len : sizeof(s->addr));
-  return 0;
-}
-
-int listen(int fd, int backlog) {
-  struct mg_bsd_sock *s = get(fd);
-  if (!s) return -1;
-  (void) backlog;
-  return mg_bsd_transport_listen(s->t, &s->addr);
-}
-
-int accept(int fd, struct sockaddr *addr, socklen_t *addrlen) {
-  struct mg_bsd_sock *ls = get(fd);
-  if (!ls) return -1;
-  struct sockaddr_in peer;
-  memset(&peer, 0, sizeof(peer));
-  void *t = mg_bsd_transport_accept(ls->t, &peer, ls->nonblock);
-  if (!t) return -1; // errno was set by transport_accept()
-  struct mg_bsd_sock *ns = (struct mg_bsd_sock *) calloc(1, sizeof(*ns));
-  if (!ns || alloc_sock(ns) < 0) { mg_bsd_transport_close(t); free(ns); errno = ENOMEM; return -1; }
-  ns->t = t; ns->domain = ls->domain; ns->type = ls->type; ns->peer = peer;
-  if (addr && addrlen) {
-    size_t sz = sizeof(peer) < *addrlen ? sizeof(peer) : *addrlen;
-    memcpy(addr, &peer, sz);
-    *addrlen = (socklen_t) sizeof(peer);
-  }
-  return ns->fd;
-}
-
-int connect(int fd, const struct sockaddr *addr, socklen_t len) {
-  struct mg_bsd_sock *s = get(fd);
-  if (!s) return -1;
-  (void) len;
-  return mg_bsd_transport_connect(s->t, (const struct sockaddr_in *) addr, s->nonblock);
-}
-
-ssize_t send(int fd, const void *buf, size_t len, int flags) {
-  struct mg_bsd_sock *s = get(fd);
-  if (!s) return -1;
-  return mg_bsd_transport_send(s->t, buf, len, s->nonblock || (flags & MSG_DONTWAIT));
-}
-
-ssize_t recv(int fd, void *buf, size_t len, int flags) {
-  struct mg_bsd_sock *s = get(fd);
-  if (!s) return -1;
-  return mg_bsd_transport_recv(s->t, buf, len, s->nonblock || (flags & MSG_DONTWAIT));
-}
-
-ssize_t sendto(int fd, const void *buf, size_t len, int flags,
-                      const struct sockaddr *dest, socklen_t addrlen) {
-  (void) fd; (void) buf; (void) len; (void) flags; (void) dest; (void) addrlen;
-  errno = EPROTONOSUPPORT;
-  return -1;
-}
-
-ssize_t recvfrom(int fd, void *buf, size_t len, int flags,
-                        struct sockaddr *src, socklen_t *addrlen) {
-  (void) fd; (void) buf; (void) len; (void) flags; (void) src; (void) addrlen;
-  errno = EPROTONOSUPPORT;
-  return -1;
-}
-
-ssize_t write(int fd, const void *buf, size_t len) { return send(fd, buf, len, 0); }
-ssize_t read(int fd, void *buf, size_t len) { return recv(fd, buf, len, 0); }
-
-int close(int fd) {
-  struct mg_bsd_sock *s = get(fd);
-  if (!s) return -1;
-  bsd_log(MG_BSD_LOG_SOCK, "CLOSE", s, NULL, NULL, (long) fd);
-  mg_bsd_transport_close(s->t);
-  bsd_log(MG_BSD_LOG_SOCK, "FREE", s, NULL, NULL, (long) fd);
-  release_sock(fd);
-  free(s);
-  return 0;
-}
-
-int shutdown(int fd, int how) { (void) how; return close(fd); }
-
-int fcntl(int fd, int cmd, int arg) {
-  struct mg_bsd_sock *s = get(fd);
-  if (!s) return -1;
-  if (cmd == F_GETFL) return s->nonblock ? O_NONBLOCK : 0;
-  if (cmd == F_SETFL) { s->nonblock = (arg & O_NONBLOCK) != 0; return 0; }
-  return -1;
-}
-
-int setsockopt(int fd, int level, int optname, const void *optval, socklen_t optlen) {
-  (void) fd; (void) level; (void) optname; (void) optval; (void) optlen;
-  return 0;
-}
-
-int getsockopt(int fd, int level, int optname, void *optval, socklen_t *optlen) {
-  (void) fd; (void) level; (void) optname;
-  if (optval && optlen && *optlen >= sizeof(int)) { *(int *) optval = 0; *optlen = sizeof(int); }
-  return 0;
-}
-
-int getsockname(int fd, struct sockaddr *addr, socklen_t *addrlen) {
-  struct mg_bsd_sock *s = get(fd);
-  if (!s) return -1;
-  size_t sz = sizeof(s->addr) < *addrlen ? sizeof(s->addr) : *addrlen;
-  memcpy(addr, &s->addr, sz);
-  *addrlen = (socklen_t) sz;
-  return 0;
-}
-
-int getpeername(int fd, struct sockaddr *addr, socklen_t *addrlen) {
-  struct mg_bsd_sock *s = get(fd);
-  if (!s) { errno = ENOTCONN; return -1; }
-  size_t sz = sizeof(s->peer) < *addrlen ? sizeof(s->peer) : *addrlen;
-  memcpy(addr, &s->peer, sz);
-  *addrlen = (socklen_t) sz;
-  return 0;
-}
-
-// select/poll: not implemented for queue-based backend
-int select(int nfds, fd_set *r, fd_set *w, fd_set *e, struct timeval *tv) {
-  (void) nfds; (void) r; (void) w; (void) e; (void) tv;
-  return 0;
-}
-
-int poll(struct pollfd *fds, unsigned int nfds, int timeout) {
-  (void) fds; (void) nfds; (void) timeout;
-  return 0;
-}
-
-// DNS stubs (overridden in the FreeRTOS backend below)
-#if !MG_ENABLE_FREERTOS
-struct hostent *gethostbyname(const char *name) { (void) name; return NULL; }
-int getaddrinfo(const char *node, const char *service,
-                       const struct addrinfo *hints, struct addrinfo **res) {
-  (void) node; (void) service; (void) hints; (void) res;
-  return -1;
-}
-void freeaddrinfo(struct addrinfo *res) { (void) res; }
-#endif
-
-int inet_pton(int af, const char *src, void *dst) {
-  struct mg_addr a;
-  memset(&a, 0, sizeof(a));
-  if (af == AF_INET && mg_aton(mg_str_s(src), &a)) { memcpy(dst, &a.addr.ip4, 4); return 1; }
-  return 0;
-}
-
-const char *inet_ntop(int af, const void *src, char *dst, socklen_t size) {
-  if (af == AF_INET && size >= 16) {
-    const uint8_t *ip = (const uint8_t *) src;
-    snprintf(dst, size, "%d.%d.%d.%d", ip[0], ip[1], ip[2], ip[3]);
-    return dst;
-  }
-  return NULL;
-}
-
-in_addr_t inet_addr(const char *cp) {
-  struct mg_addr a;
-  memset(&a, 0, sizeof(a));
-  return mg_aton(mg_str_s(cp), &a) ? a.addr.ip4 : (in_addr_t) -1;
-}
-
-static char s_ntoa_buf[16];
-char *inet_ntoa(struct in_addr in) {
-  const uint8_t *ip = (const uint8_t *) &in.s_addr;
-  snprintf(s_ntoa_buf, sizeof(s_ntoa_buf), "%d.%d.%d.%d", ip[0], ip[1], ip[2], ip[3]);
-  return s_ntoa_buf;
-}
-
-#ifdef MG_ENABLE_BSD_PROTOTYPES
-uint16_t htons(uint16_t n) { return mg_htons(n); }
-uint16_t ntohs(uint16_t n) { return mg_htons(n); }
-uint32_t htonl(uint32_t n) { return mg_htonl(n); }
-uint32_t ntohl(uint32_t n) { return mg_htonl(n); }
-#endif
-
-// ============================================================
-// FreeRTOS + Mongoose transport backend
-// ============================================================
-#if MG_ENABLE_FREERTOS
-
+#if MG_ENABLE_BSD_SOCKETS && MG_ENABLE_FREERTOS
 #include <queue.h>
 
-#ifndef MG_BSD_CHUNK_SIZE
-#define MG_BSD_CHUNK_SIZE 256
+static QueueHandle_t s_cmd_q;
+static struct mg_bsd_cmd *s_waiters;
+
+static bool bsd_qsend(QueueHandle_t q, const void *item, TickType_t ticks) {
+  if (xQueueSend(q, item, ticks) == pdTRUE) return true;
+  MG_ERROR(("queue send failed %p", q));
+  return false;
+}
 #endif
-#ifndef MG_BSD_Q_DEPTH
-#define MG_BSD_Q_DEPTH 4
+
+#if MG_ENABLE_BSD_SOCKETS
+static struct mg_mgr *s_mgr;
+
+#ifndef MG_BSD_FD_BASE
+#define MG_BSD_FD_BASE 11
+#endif
+#ifndef MG_BSD_MAX_SOCKETS
+#define MG_BSD_MAX_SOCKETS 64
 #endif
 #ifndef MG_BSD_ACCEPT_MS
-#define MG_BSD_ACCEPT_MS 3000  // Timeout for accept queue handoff
+#define MG_BSD_ACCEPT_MS 3000
 #endif
 
-struct mg_bsd_chunk { uint8_t data[MG_BSD_CHUNK_SIZE]; uint16_t len; };
-
-struct mg_xport {
-  struct mg_connection *c;  // Mongoose connection, task1-only
-  QueueHandle_t recv_q;     // task1 writes on MG_EV_READ, task2 reads in recv()
-  QueueHandle_t send_q;     // task2 writes in send(), task1 drains on MG_EV_POLL
-  QueueHandle_t accept_q;   // task1 writes on MG_EV_ACCEPT, task2 reads in accept()
-  struct sockaddr_in peer;
-  uint16_t rx_off;
-  uint64_t accept_expire;
-  int err;
-  bool closed;
-  bool orphan;  // accepted connection not handed to socket owner
-  TaskHandle_t connect_waiter;  // task blocked in connect(), woken by MG_EV_CONNECT
-  int *connect_result;          // where to store 0/−1 connect outcome
+// clang-format off
+enum bsd_op {
+  BSD_OP_NONE, BSD_OP_SOCKET, BSD_OP_BIND, BSD_OP_LISTEN, BSD_OP_FCNTL,
+  BSD_OP_ACCEPT, BSD_OP_CONNECT, BSD_OP_RECV, BSD_OP_SEND, BSD_OP_SENDTO,
+  BSD_OP_RECVFROM, BSD_OP_CLOSE, BSD_OP_POLL, BSD_OP_SELECT,
+  BSD_OP_GETHOSTBYNAME,
 };
 
-enum mg_bsd_cmd_op { BSD_CMD_LISTEN, BSD_CMD_CLOSE, BSD_CMD_CONNECT, BSD_CMD_RESOLVE };
+// A BSD API request from a user task. Gets sent via the RTOS queue, and
+// executed by the network task (mg_bsd_poll). Baremetal code calls directly
 struct mg_bsd_cmd {
-  enum mg_bsd_cmd_op type;
-  struct mg_xport *x;
-  char url[64];
-  TaskHandle_t caller;
-  int *result;
+  int result;                // return value
+  int err;                   // errno
+  enum bsd_op op;
+  bool started;              // operation initiated (connect/resolve)
+  void *caller;              // task to notify when done
+  struct mg_bsd_cmd *next;   // waiter list link
+  union {                    // op-specific arguments
+    struct { int domain, type, proto; } op_socket;
+    struct { int fd, backlog; } op_listen;
+    struct { int fd, cmd, arg; } op_fcntl;
+    struct { int fd; } op_close;
+    struct { int fd; const struct sockaddr *addr; socklen_t len; } op_bind;
+    struct { int fd; const struct sockaddr *addr; socklen_t len; } op_connect;
+    struct { int fd; struct sockaddr *addr; socklen_t *addrlen; } op_accept;
+    struct { int fd; void *buf; size_t len; int flags; } op_recv;
+    struct { int fd; const void *buf; size_t len; int flags; } op_send;
+    struct { int fd; const void *buf; size_t len; int flags; const struct sockaddr *addr; socklen_t addrlen; } op_sendto;
+    struct { int fd; void *buf; size_t len; int flags; struct sockaddr *src; socklen_t *addrlen; } op_recvfrom;
+    struct { struct pollfd *fds; nfds_t nfds; uint64_t deadline; } op_poll;
+    struct { int nfds; fd_set *r, *w, *e; uint64_t deadline; } op_select;
+    struct { const char *name; struct hostent *result; } op_gethostbyname;
+  };
+};
+#define BSD_CMD_EMPTY {0, 0, BSD_OP_NONE, 0, 0, 0, {{0, 0, 0}}}
+// clang-format on
+
+// The BSD socket outlives its Mongoose connection until the caller closes fd.
+struct mg_bsd_sock {
+  int fd, err, backlog;
+  uint64_t accept_expire;
+  struct sockaddr_in addr;
+  struct mg_connection *c;
+  struct mg_bsd_sock *listener;
+  bool used, bound, closed, nonblock, is_udp, orphan;  // closed: c was closed
 };
 
-static QueueHandle_t s_cmd_q;
+static struct mg_bsd_sock s_socks[MG_BSD_MAX_SOCKETS > 0 ?
+                                  MG_BSD_MAX_SOCKETS : 1];
 
-static bool bsd_qsend(QueueHandle_t q, const void *item, TickType_t ticks,
-                      bool reserve) {
-  BaseType_t ok = pdFALSE;
-  if (!reserve || uxQueueSpacesAvailable(q) > 1) ok = xQueueSend(q, item, ticks);
-  if (ok != pdTRUE) MG_ERROR(("%p", q));
-  return ok == pdTRUE;
+static void bsd_ev(struct mg_connection *, int, void *);
+
+// BSD-owned fd registry
+static struct mg_bsd_sock *bsd_get(int fd) {
+  int offset;
+  struct mg_bsd_sock *s;
+
+  if (fd < MG_BSD_FD_BASE) return NULL;
+  offset = fd - MG_BSD_FD_BASE;
+  if (offset >= MG_BSD_MAX_SOCKETS) return NULL;
+  s = &s_socks[offset];
+  if (!s->used || s->orphan) return NULL;
+  return s;
 }
 
-static bool xport_accept(struct mg_xport *x) {
-  if (bsd_qsend(x->accept_q, &x, 0, true)) {
-    x->orphan = false; // not an orphan anymore
-    x->accept_q = NULL;
-    return true;
+static void bsd_attach(struct mg_bsd_sock *s, struct mg_connection *c) {
+  s->c = c;
+  c->fn = bsd_ev;
+  c->fn_data = s;
+  c->is_bsd = 1;
+  c->is_udp = s->is_udp;
+}
+
+static struct mg_connection *bsd_new_conn(struct mg_bsd_sock *s) {
+  struct mg_connection *c = mg_alloc_conn(s_mgr);
+  if (c != NULL) {
+    bsd_attach(s, c);
+    LIST_ADD_HEAD(struct mg_connection, &s_mgr->conns, c);
   }
-  return false; // still an orphan, retry later
+  return c;
 }
 
-// static DNS resolve state; not reentrant (see below)
-static struct { struct mg_addr addr; bool error; TaskHandle_t caller; } s_resolve;
-// gethostbyname statics (official isn't reentrant anyway, and is obsolete)
-static struct hostent s_hostent;
-static char *s_h_aliases[1];
-static char *s_h_addr_list[2];
-static uint32_t s_h_addr;
-static char s_h_name[64];
+#if MG_ENABLE_FREERTOS
+// Complete operations blocked on c before Mongoose destroys it.
+static void bsd_finish_waiters(struct mg_bsd_sock *s, bool error) {
+  struct mg_bsd_cmd **p = &s_waiters;
 
-static void resolve_cb(struct mg_connection *c, int ev, void *ev_data) {
-  bool notify = false;
-  if (ev == MG_EV_RESOLVE) {
-    s_resolve.addr = c->rem;
-    c->is_closing = 1;
-    MG_DEBUG(("%lu resolved", c->id));
-    notify = true;
-  } else if (ev == MG_EV_ERROR) {
-    s_resolve.error = true;
-    MG_DEBUG(("%lu failed", c->id));
-    notify = true;
-  } else if (ev == MG_EV_CLOSE) {
-    s_resolve.caller = NULL;  // The resolver connection has fully unwound.
-    MG_DEBUG(("%lu done", c->id));
+  if (s->orphan) return;  // No BSD socket owner yet
+
+  while (*p != NULL) {
+    struct mg_bsd_cmd *cmd = *p;
+    int fd = -1;
+    bool read = cmd->op == BSD_OP_RECV || cmd->op == BSD_OP_RECVFROM;
+    bool send = cmd->op == BSD_OP_SEND || cmd->op == BSD_OP_SENDTO;
+
+    switch (cmd->op) {  // clang-format off
+      case BSD_OP_ACCEPT: fd = cmd->op_accept.fd; break;
+      case BSD_OP_CONNECT: fd = cmd->op_connect.fd; break;
+      case BSD_OP_RECV: fd = cmd->op_recv.fd; break;
+      case BSD_OP_SEND: fd = cmd->op_send.fd; break;
+      case BSD_OP_SENDTO: fd = cmd->op_sendto.fd; break;
+      case BSD_OP_RECVFROM: fd = cmd->op_recvfrom.fd; break;
+      default: break;
+    }  // clang-format on
+    if (fd != s->fd) {
+      p = &cmd->next;
+      continue;
+    }
+
+    *p = cmd->next;
+    if (!error && s->c != NULL && s->c->is_draining && read) {
+      cmd->result = 0;  // Orderly EOF
+    } else {
+      cmd->result = -1;
+      cmd->err = send ? EPIPE : EIO;  // Mongoose error / forced close
+    }
+    xTaskNotifyGive((TaskHandle_t) cmd->caller);
   }
-  if (notify) xTaskNotifyGive(s_resolve.caller);
-  (void) ev_data;
 }
+#endif
 
-// Allocate transport for an accepted connection (recv+send queues only)
-static struct mg_xport *xport_alloc(void) {
-  struct mg_xport *x = (struct mg_xport *) calloc(1, sizeof(*x));
-  if (!x) return NULL;
-  // +1 keeps a terminal EOF/error slot for MG_EV_CLOSE
-  x->recv_q = xQueueCreate(MG_BSD_Q_DEPTH + 1, sizeof(struct mg_bsd_chunk));
-  x->send_q = xQueueCreate(MG_BSD_Q_DEPTH, sizeof(struct mg_bsd_chunk));
-  if (!x->recv_q || !x->send_q) { mg_bsd_transport_free(x); return NULL; }
-  x->orphan = true; // haven't attached this connection to its socket
-  return x;
-}
-
-static void xport_ev(struct mg_connection *c, int ev, void *ev_data) {
-  struct mg_xport *x = (struct mg_xport *) c->fn_data;
-  if (!x) return;
+static void bsd_ev(struct mg_connection *c, int ev, void *ev_data) {
+  struct mg_bsd_sock *s = (struct mg_bsd_sock *) c->fn_data;
+  if (s == NULL) return;
 
   if (ev == MG_EV_ACCEPT) {
-    // c is the new accepted connection; x is the listening transport
-    bool ok;
-    struct mg_xport *nx = xport_alloc();
-    if (!nx) { c->fn_data = NULL; mg_error(c, "accept OOM"); return; }
-    nx->c = c;
-    nx->accept_q = x->accept_q;
-    nx->accept_expire = mg_millis() + MG_BSD_ACCEPT_MS;
-    nx->peer.sin_family = AF_INET;
-    nx->peer.sin_port = c->rem.port;
-    memcpy(&nx->peer.sin_addr, &c->rem.addr.ip4, 4);
-    c->fn_data = nx;
-    ok = xport_accept(nx); // leaves orphaned on failure, retry on POLL
-    bsd_log(MG_BSD_LOG_ACCEPT, NULL, c, x, nx, ok ? 1 : 0);
-  } else if (ev == MG_EV_POLL && x->orphan && x->accept_q) {
-    if (uxQueueSpacesAvailable(x->accept_q) > 1 && xport_accept(x)) {
-      bsd_log(MG_BSD_LOG_ACCEPT, NULL, c, NULL, x, 1);
-    } else if (mg_millis() > x->accept_expire) { // retried enough, give up
-      x->err = EIO;
-      mg_error(c, "accept_q");
+    struct mg_bsd_sock *child = NULL, *t;
+    int count = 0;
+    for (t = s_socks; t < s_socks + MG_BSD_MAX_SOCKETS; t++) {
+      if (!t->used && child == NULL) child = t;  // Find a free BSD socket slot,
+      if (t->orphan && t->listener == s) count++;  // and count pending accepts
     }
-  } else if (ev == MG_EV_READ || ev == MG_EV_POLL) {
-    if (x->recv_q) { // let POLL resume abandoned READ processing on full queue
-      // Drain c->recv into recv_q in fixed-size chunks; task1 owns c->recv
-      size_t off = 0;
-      while (off < c->recv.len) {
-        struct mg_bsd_chunk chunk;
-        size_t n = c->recv.len - off;
-        if (n > MG_BSD_CHUNK_SIZE) n = MG_BSD_CHUNK_SIZE;
-        memcpy(chunk.data, c->recv.buf + off, n);
-        chunk.len = (uint16_t) n;
-        if (uxQueueSpacesAvailable(x->recv_q) <= 1 ||
-            !bsd_qsend(x->recv_q, &chunk, 0, false)) break;  // retry later
-        off += n;
-      }
-      mg_iobuf_del(&c->recv, 0, off);
+    if (count >= s->backlog) {
+      c->fn_data = NULL;
+      mg_error(c, "accept backlog full");
+    } else if (child == NULL) {
+      c->fn_data = NULL;
+      mg_error(c, "accept rejected");
+    } else {
+      memset(child, 0, sizeof(*child));  // Claim slot
+      child->used = true;
+      child->c = c;
+      child->listener = s;
+      child->accept_expire = mg_millis() + MG_BSD_ACCEPT_MS;
+      child->is_udp = s->is_udp;
+      child->orphan = true;
+      c->fn_data = child;
+      c->is_bsd = 1;
+      c->is_udp = child->is_udp;
     }
-    if (ev == MG_EV_POLL && x->send_q) {
-      // Drain send_q → mg_send(); task1 owns c
-      struct mg_bsd_chunk chunk;
-      while (xQueuePeek(x->send_q, &chunk, 0) == pdTRUE) {
-        if (!mg_send(c, chunk.data, chunk.len)) break;  // retry later
-        xQueueReceive(x->send_q, &chunk, 0);
-      }
-    }
-  } else if (ev == MG_EV_CONNECT) {
-    // Outgoing connection established: wake the task blocked in connect()
-    if (x->connect_waiter) {
-      bsd_log(MG_BSD_LOG_CONNECT, "OK", x, c, NULL, 0);
-      if (x->connect_result) *x->connect_result = 0;
-      TaskHandle_t h = x->connect_waiter;
-      x->connect_waiter = NULL; x->connect_result = NULL;
-      xTaskNotifyGive(h);
-    }
-  } else if (ev == MG_EV_ERROR) {   // remember error condition
-    if (x->err == 0) x->err = EIO;  // and let CLOSE handle it
-    bsd_log(MG_BSD_LOG_CLOSE, "ERR", c, x, NULL, (long) x->err);
+  } else if (ev == MG_EV_ERROR) {
+    if (s->err == 0) s->err = EIO;
+#if MG_ENABLE_FREERTOS
+    bsd_finish_waiters(s, true);
+#endif
   } else if (ev == MG_EV_CLOSE) {
-    bsd_log(MG_BSD_LOG_CLOSE, "IN", c, x, NULL, -1);
-    x->c = NULL; x->closed = true; c->fn_data = NULL;
-    // If connect() is still waiting, signal failure
-    if (x->connect_waiter) {
-      bsd_log(MG_BSD_LOG_CONNECT, "FAIL", x, c, NULL, -1);
-      if (x->connect_result) *x->connect_result = -1;
-      TaskHandle_t h = x->connect_waiter;
-      x->connect_waiter = NULL; x->connect_result = NULL;
-      xTaskNotifyGive(h);
-      // The notified task owns the transport and can close/free it immediately.
-      return;
-    }
-    if (x->orphan) { // connection --> socket attachment failed
-      x->accept_q = NULL; // borrowed from listener; do not delete it here
-      bsd_log(MG_BSD_LOG_CLOSE, "FREE", c, x, NULL, -1);
-      mg_bsd_transport_free(x); // connection closed, release resources
-      return;
-    }
-    if (x->recv_q) {
-      struct mg_bsd_chunk eof;
-      bool ok;
-      memset(&eof, 0, sizeof(eof));
-      eof.len = 0;
-      ok = bsd_qsend(x->recv_q, &eof, 0, false);
-      bsd_log(MG_BSD_LOG_CLOSE, "EOF>", c, x, NULL, ok ? 1 : 0);
-      if (!ok) MG_ERROR(("recv_q close notification failed"));
-      // recv() wakeup transfers control to the transport owner.
-      return;
-    }
-    if (x->accept_q) {
-      struct mg_xport *nil = NULL;
-      bool ok;
-      ok = bsd_qsend(x->accept_q, &nil, 0, false);
-      bsd_log(MG_BSD_LOG_CLOSE, "ACCEPT>", c, x, NULL, ok ? 1 : 0);
-      if (!ok) MG_ERROR(("accept_q close notification failed"));
-      // accept() wakeup transfers control to the transport owner.
-      return;
-    }
-    bsd_log(MG_BSD_LOG_CLOSE, "OUT", c, x, NULL, -1);
+#if MG_ENABLE_FREERTOS
+    bsd_finish_waiters(s, false);
+#endif
+    s->c = NULL;
+    s->closed = true;
+    c->fn_data = NULL;
+    if (s->orphan) memset(s, 0, sizeof(*s)); // release
+  } else if (ev == MG_EV_POLL && s->orphan &&
+             mg_millis() > s->accept_expire) {
+    mg_error(c, "accept timeout");
   }
   (void) ev_data;
 }
 
-void mg_bsd_init(void) {
-  s_cmd_q = xQueueCreate(8, sizeof(struct mg_bsd_cmd));
-}
-
-void mg_bsd_poll(struct mg_mgr *mgr) {
-  struct mg_bsd_cmd cmd;
-  if (s_cmd_q == NULL) return;
-  while (xQueueReceive(s_cmd_q, &cmd, 0) == pdTRUE) {
-    bool notify = true;
-    if (cmd.type == BSD_CMD_LISTEN) {
-      struct mg_connection *c = mg_listen(mgr, cmd.url, xport_ev, cmd.x);
-      cmd.x->c = c;
-      *cmd.result = c ? 0 : -1;
-    } else if (cmd.type == BSD_CMD_CLOSE) {
-      bsd_log(MG_BSD_LOG_TRANSPORT, "CMD", cmd.x, NULL, NULL, -1);
-      if (cmd.x->c) {
-        cmd.x->c->fn_data = NULL;
-        cmd.x->c->is_draining = 1;
-        cmd.x->c = NULL;
-      }
-      cmd.x->closed = true;
-      *cmd.result = 0;
-    } else if (cmd.type == BSD_CMD_CONNECT) {
-      cmd.x->connect_waiter = cmd.caller;
-      cmd.x->connect_result = cmd.result;
-      struct mg_connection *c = mg_connect(mgr, cmd.url, xport_ev, cmd.x);
-      bsd_log(MG_BSD_LOG_CONNECT, "NEW", cmd.x, c, cmd.url, c ? 1 : 0);
-      cmd.x->c = c;
-      if (!c) { *cmd.result = -1; cmd.x->connect_waiter = NULL; cmd.x->connect_result = NULL; }
-      else notify = false;  // xport_ev notifies when connected or on error
-    } else if (cmd.type == BSD_CMD_RESOLVE) {
-      s_resolve.error = false;
-      s_resolve.caller = cmd.caller;
-      struct mg_connection *c;
-      c = mg_alloc_conn(mgr);
-      if (c == NULL) {
-      } else {
-        c->fn = resolve_cb;
-        LIST_ADD_HEAD(struct mg_connection, &mgr->conns, c);
-        mg_call(c, MG_EV_OPEN, NULL);
-        MG_DEBUG(("%lu resolve %s", c->id, cmd.url));
-        mg_resolve(c, cmd.url);
-        notify = false;  // resolve_cb notifies when done
-      }
-    }
-    if (notify) xTaskNotifyGive(cmd.caller);
-  }
-}
-
-void *mg_bsd_transport_new(int domain, int type, int proto) {
-  if (domain != AF_INET || type != SOCK_STREAM ||
-      (proto != 0 && proto != IPPROTO_TCP)) {
-    errno = EPROTONOSUPPORT;
-    return NULL;
-  }
-  // For socket() calls: allocate accept_q only; recv/send added when needed.
-  // +1 keeps a terminal slot for MG_EV_CLOSE without blocking Mongoose.
-  struct mg_xport *x = (struct mg_xport *) calloc(1, sizeof(*x));
-  if (!x) return NULL;
-  x->accept_q = xQueueCreate(MG_BSD_BACKLOG + 1, sizeof(struct mg_xport *));
-  if (!x->accept_q) { free(x); return NULL; }
-  return x;
-}
-
-void mg_bsd_transport_free(void *t) {
-  struct mg_xport *x = (struct mg_xport *) t;
-  if (!x) return;
-  bsd_log(MG_BSD_LOG_TRANSPORT, "FREE", x, NULL, NULL, -1);
-  if (x->recv_q) vQueueDelete(x->recv_q);
-  if (x->send_q) vQueueDelete(x->send_q);
-  if (x->accept_q) vQueueDelete(x->accept_q);
-  free(x);
-}
-
-int mg_bsd_transport_listen(void *t, const struct sockaddr_in *addr) {
-  struct mg_xport *x = (struct mg_xport *) t;
-  int result = -1;
-  struct mg_bsd_cmd cmd = {BSD_CMD_LISTEN, x, {0}, xTaskGetCurrentTaskHandle(), &result};
-  snprintf(cmd.url, sizeof(cmd.url), "tcp://0.0.0.0:%d", mg_ntohs(addr->sin_port));
-  if (!bsd_qsend(s_cmd_q, &cmd, portMAX_DELAY, false)) return -1;
-  ulTaskNotifyTake(pdTRUE, portMAX_DELAY);
-  return result;
-}
-
-void *mg_bsd_transport_accept(void *t, struct sockaddr_in *peer, bool nonblock) {
-  struct mg_xport *x = (struct mg_xport *) t;
-  struct mg_xport *nx = NULL;
-  TickType_t ticks = nonblock ? 0 : portMAX_DELAY;
-  if (xQueueReceive(x->accept_q, &nx, ticks) != pdTRUE) {
-    errno = x->closed ? (x->err ? x->err : EIO) : (nonblock ? EAGAIN : EIO);
-    return NULL;
-  }
-  if (!nx) { errno = x->err ? x->err : EIO; return NULL; }
-  if (peer) *peer = nx->peer;
-  return nx;
-}
-
-ssize_t mg_bsd_transport_recv(void *t, void *buf, size_t len, bool nonblock) {
-  struct mg_xport *x = (struct mg_xport *) t;
-  uint8_t *p = (uint8_t *) buf;
-  size_t recvd = 0;
-  TickType_t ticks = nonblock ? 0 : portMAX_DELAY;
-  while (recvd < len) {
-    struct mg_bsd_chunk chunk;
-    if (xQueuePeek(x->recv_q, &chunk, recvd == 0 ? ticks : 0) != pdTRUE) {
-      if (recvd > 0) break;
-      errno = x->closed ? (x->err ? x->err : EIO) : (nonblock ? EAGAIN : EIO);
-      return -1;
-    }
-    if (chunk.len == 0) {
-      if (recvd > 0) break;
-      xQueueReceive(x->recv_q, &chunk, 0);
-      if (x->err) { errno = x->err; return -1; }
-      return 0;  // EOF
-    } else {
-      size_t n = chunk.len - x->rx_off;
-      if (n > len - recvd) n = len - recvd;
-      memcpy(p + recvd, chunk.data + x->rx_off, n);
-      recvd += n;
-      x->rx_off = (uint16_t) (x->rx_off + n);
-      if (x->rx_off >= chunk.len) {
-        xQueueReceive(x->recv_q, &chunk, 0);
-        x->rx_off = 0;
-      }
-    }
-  }
-  return (ssize_t) recvd;
-}
-
-ssize_t mg_bsd_transport_send(void *t, const void *buf, size_t len, bool nonblock) {
-  struct mg_xport *x = (struct mg_xport *) t;
-  if (x->closed) { errno = x->err ? x->err : EPIPE; return -1; }
-  size_t sent = 0;
-  TickType_t ticks = nonblock ? 0 : portMAX_DELAY;
-  while (sent < len) {
-    struct mg_bsd_chunk chunk;
-    size_t n = len - sent;
-    if (n > MG_BSD_CHUNK_SIZE) n = MG_BSD_CHUNK_SIZE;
-    memcpy(chunk.data, (const uint8_t *) buf + sent, n);
-    chunk.len = (uint16_t) n;
-    if (!bsd_qsend(x->send_q, &chunk, ticks, false)) {
-      errno = x->closed ? (x->err ? x->err : EPIPE) : (nonblock ? EAGAIN : EIO);
-      return sent > 0 ? (ssize_t) sent : -1;
-    }
-    sent += n;
-  }
-  return sent > 0 ? (ssize_t) sent : (errno = EAGAIN, -1);
-}
-
-int mg_bsd_transport_connect(void *t, const struct sockaddr_in *addr, bool nonblock) {
-  struct mg_xport *x = (struct mg_xport *) t;
-  (void) nonblock;
-  if (!x->recv_q) x->recv_q = xQueueCreate(MG_BSD_Q_DEPTH + 1, sizeof(struct mg_bsd_chunk));
-  if (!x->send_q) x->send_q = xQueueCreate(MG_BSD_Q_DEPTH, sizeof(struct mg_bsd_chunk));
-  if (!x->recv_q || !x->send_q) { errno = ENOMEM; return -1; }
-  int result = -1;
-  struct mg_bsd_cmd cmd = {BSD_CMD_CONNECT, x, {0}, xTaskGetCurrentTaskHandle(), &result};
-  uint8_t *ip = (uint8_t *) &addr->sin_addr.s_addr;
-  snprintf(cmd.url, sizeof(cmd.url), "tcp://%d.%d.%d.%d:%d",
-           ip[0], ip[1], ip[2], ip[3], mg_ntohs(addr->sin_port));
-  bsd_log(MG_BSD_LOG_CONNECT, "REQ", x, NULL, cmd.url, -1);
-  if (!bsd_qsend(s_cmd_q, &cmd, portMAX_DELAY, false)) return -1;
-  ulTaskNotifyTake(pdTRUE, portMAX_DELAY);
-  if (result != 0) errno = x->err ? x->err : EIO;
-  return result;
-}
-
-// gethostbyname: resolve via Mongoose DNS (not reentrant)
-struct hostent *gethostbyname(const char *name) {
-  struct mg_bsd_cmd cmd = {BSD_CMD_RESOLVE, NULL, {0}, xTaskGetCurrentTaskHandle(), NULL};
-  snprintf(cmd.url, sizeof(cmd.url), "%s", name);
-  if (!bsd_qsend(s_cmd_q, &cmd, portMAX_DELAY, false)) return NULL;
-  ulTaskNotifyTake(pdTRUE, portMAX_DELAY);
-  if (s_resolve.error) return NULL;
-  s_h_addr = s_resolve.addr.addr.ip4;
-  s_h_addr_list[0] = (char *) &s_h_addr;
-  s_h_addr_list[1] = NULL;
-  s_h_aliases[0] = NULL;
-  snprintf(s_h_name, sizeof(s_h_name), "%s", name);
-  s_hostent.h_name = s_h_name;
-  s_hostent.h_aliases = s_h_aliases;
-  s_hostent.h_addrtype = AF_INET;
-  s_hostent.h_length = 4;
-  s_hostent.h_addr_list = s_h_addr_list;
-  return &s_hostent;
-}
-
-int getaddrinfo(const char *node, const char *service,
-                const struct addrinfo *hints, struct addrinfo **res) {
-  struct hostent *h = gethostbyname(node);
-  if (!h) return -1;
-  struct addrinfo *ai = (struct addrinfo *) calloc(1, sizeof(*ai));
-  struct sockaddr_in *sa = (struct sockaddr_in *) calloc(1, sizeof(*sa));
-  if (!ai || !sa) { free(ai); free(sa); return -1; }
-  sa->sin_family = AF_INET;
-  memcpy(&sa->sin_addr, h->h_addr, 4);
-  if (service) sa->sin_port = htons((uint16_t) atoi(service));
-  ai->ai_family = AF_INET;
-  ai->ai_socktype = hints ? hints->ai_socktype : SOCK_STREAM;
-  ai->ai_addrlen = sizeof(*sa);
-  ai->ai_addr = (struct sockaddr *) sa;
-  *res = ai;
-  return 0;
-}
-
-void freeaddrinfo(struct addrinfo *res) {
-  while (res) {
-    struct addrinfo *next = res->ai_next;
-    free(res->ai_addr);
-    free(res);
-    res = next;
-  }
-}
-
-void mg_bsd_transport_close(void *t) {
-  struct mg_xport *x = (struct mg_xport *) t;
-  bsd_log(MG_BSD_LOG_TRANSPORT, "CLOSE", x, NULL, NULL, -1);
-  if (!x->closed && x->c) {
-    int result = 0;
-    struct mg_bsd_cmd cmd = {BSD_CMD_CLOSE, x, {0}, xTaskGetCurrentTaskHandle(), &result};
-    bool ok = bsd_qsend(s_cmd_q, &cmd, portMAX_DELAY, false);
-    bsd_log(MG_BSD_LOG_TRANSPORT, "CMD>", x, NULL, NULL, ok ? 1 : 0);
-    if (ok) {
-      ulTaskNotifyTake(pdTRUE, portMAX_DELAY);
-      bsd_log(MG_BSD_LOG_RESULT, "CMD", x, NULL, NULL, (long) result);
-    }
-  }
-  bsd_log(MG_BSD_LOG_TRANSPORT, "FREE_REQ", x, NULL, NULL, -1);
-  mg_bsd_transport_free(x);
-}
-
+#if MG_ENABLE_FREERTOS
 #ifndef MG_WAKEUP_QUEUE_DEPTH
 #define MG_WAKEUP_QUEUE_DEPTH 4
 #endif
-
 
 struct wumsg {
   unsigned long id;
@@ -931,8 +405,8 @@ bool mg_wakeup_init(struct mg_mgr *mgr) {
   if (mgr->pipe.q != NULL) return true;
   mgr->pipe.q = xQueueCreate(MG_WAKEUP_QUEUE_DEPTH, sizeof(void *));
   if (mgr->pipe.q == NULL) {
-      MG_ERROR(("Cannot create queue"));
-      return false;
+    MG_ERROR(("Cannot create queue"));
+    return false;
   }
   c = mg_alloc_conn(mgr);
   if (c == NULL) {
@@ -960,15 +434,701 @@ bool mg_wakeup(struct mg_mgr *mgr, unsigned long conn_id, const void *buf,
   m->id = conn_id;
   m->len = len;
   memcpy(m->data, buf, len);
-  if (!bsd_qsend((QueueHandle_t) mgr->pipe.q, &m, 0, false)) {
+  if (!bsd_qsend((QueueHandle_t) mgr->pipe.q, &m, 0)) {
     free(m);
     return false;
   }
   return true;
 }
+#endif
 
-#endif  // MG_ENABLE_FREERTOS
+enum { BSD_READ = 1, BSD_WRITE = 2, BSD_ERROR = 4 };
+
+static int bsd_ready(struct mg_bsd_sock *s) {
+  struct mg_bsd_sock *t;
+  int ready = 0;
+
+  if (s->err != 0) return BSD_READ | BSD_ERROR;
+  if (s->c == NULL) return s->closed ? BSD_READ | BSD_ERROR : 0;
+  if (s->c->is_listening) {
+    for (t = s_socks; t < s_socks + MG_BSD_MAX_SOCKETS; t++) {
+      if (t->orphan && t->listener == s) return BSD_READ;
+    }
+    return 0;
+  }
+  if (s->c->recv.len > 0 || s->c->is_draining) ready |= BSD_READ;
+  if (!s->is_udp && !s->c->is_connecting && !s->c->is_closing &&
+      !s->c->is_draining)
+    ready |= BSD_WRITE;  // Established TCP socket
+  return ready;
+}
+
+static void bsd_close(struct mg_bsd_sock *s) {
+  struct mg_bsd_sock *t;
+
+#if MG_ENABLE_FREERTOS
+  bsd_finish_waiters(s, true);
+#endif
+  for (t = s_socks; t < s_socks + MG_BSD_MAX_SOCKETS; t++) {
+    if (t->orphan && t->listener == s) {
+      if (t->c != NULL) {
+        t->c->fn_data = NULL;
+        mg_close_conn(t->c);
+        t->c = NULL;
+      }
+      memset(t, 0, sizeof(*t));  // Release orphan
+    }
+  }
+  if (s->c != NULL) {
+    s->c->fn_data = NULL;
+    mg_close_conn(s->c);
+    s->c = NULL;
+  }
+  memset(s, 0, sizeof(*s));  // Release socket
+}
+
+static char s_hostent_name[64];
+static uint32_t s_hostent_addr;
+static char *s_hostent_addr_list[2] = {(char *) &s_hostent_addr, NULL};
+static struct hostent s_hostent = {s_hostent_name, NULL, AF_INET, 4,
+                                   s_hostent_addr_list};
+static volatile int s_resolve_done;
+
+static void bsd_resolve_fn(struct mg_connection *c, int ev, void *ev_data) {
+  (void) ev_data;
+  if (ev == MG_EV_RESOLVE) {
+    s_hostent_addr = c->rem.addr.ip4;
+    s_resolve_done = 1;
+    c->is_closing = 1;
+  } else if (ev == MG_EV_ERROR) {
+    s_resolve_done = -1;
+  }
+}
+
+// Execute a command. Runs in the network task (mg_bsd_poll) on FreeRTOS, or
+// in the caller otherwise. Returns true when done, false when the operation
+// must wait for the network task and be re-checked later.
+static bool bsd_run(struct mg_bsd_cmd *cmd) {
+  struct mg_connection *c;
+  struct mg_bsd_sock *s;
+  switch (cmd->op) {
+    case BSD_OP_NONE:
+      cmd->result = -1;
+      return true;
+    case BSD_OP_SOCKET:
+      if (s_mgr == NULL || cmd->op_socket.domain != AF_INET ||
+          (cmd->op_socket.type != SOCK_STREAM &&
+           cmd->op_socket.type != SOCK_DGRAM)) {
+        cmd->result = -1, cmd->err = EPERM;
+      } else {
+        for (s = s_socks; s < s_socks + MG_BSD_MAX_SOCKETS; s++) {
+          if (!s->used) break;  // Find a free BSD socket registry slot
+        }
+        if (s == s_socks + MG_BSD_MAX_SOCKETS) {
+          cmd->result = -1, cmd->err = EMFILE;
+        } else {
+          memset(s, 0, sizeof(*s));  // Claim slot
+          s->used = true;
+          s->is_udp = cmd->op_socket.type == SOCK_DGRAM;
+          s->fd = MG_BSD_FD_BASE + (int) (s - s_socks);
+          cmd->result = s->fd;
+        }
+      }
+      return true;
+    case BSD_OP_BIND:
+      if ((s = bsd_get(cmd->op_bind.fd)) == NULL) {
+        cmd->result = -1, cmd->err = EBADF;
+      } else {
+        const struct sockaddr_in *sa =
+            (const struct sockaddr_in *) cmd->op_bind.addr;
+        memcpy(&s->addr, sa, sizeof(s->addr));
+        s->bound = true;
+        if (!s->is_udp) {
+          cmd->result = 0;
+        } else if (s->c == NULL && (c = bsd_new_conn(s)) == NULL) {
+          cmd->result = -1, cmd->err = ENOMEM;
+        } else {
+          c = s->c;
+          c->loc.port = s->addr.sin_port;
+          c->loc.addr.ip4 = s->addr.sin_addr.s_addr;
+          c->loc.is_ip6 = false;
+          cmd->result = 0;
+        }
+      }
+      return true;
+    case BSD_OP_LISTEN: {
+      char url[32];
+
+      s = bsd_get(cmd->op_listen.fd);
+      if (s == NULL) {
+        cmd->result = -1, cmd->err = EBADF;
+      } else if (!s->bound || s->is_udp || cmd->op_listen.backlog < 1) {
+        cmd->result = -1, cmd->err = EINVAL;
+      } else if (s->c != NULL && !s->c->is_listening) {
+        cmd->result = -1, cmd->err = EINVAL;
+      } else if (s->c == NULL) {
+        mg_snprintf(url, sizeof(url), "tcp://%M:%hu", mg_print_ip4,
+                    &s->addr.sin_addr.s_addr, mg_ntohs(s->addr.sin_port));
+        if ((c = mg_listen(s_mgr, url, bsd_ev, s)) == NULL) {
+          cmd->result = -1, cmd->err = ENOMEM;
+        } else {
+          bsd_attach(s, c);
+          s->backlog = cmd->op_listen.backlog;
+          cmd->result = 0;
+        }
+      } else {
+        s->backlog = cmd->op_listen.backlog;
+        cmd->result = 0;
+      }
+      return true;
+    }
+    case BSD_OP_FCNTL:
+      if ((s = bsd_get(cmd->op_fcntl.fd)) == NULL) {
+        cmd->result = -1, cmd->err = EBADF;
+      } else if (cmd->op_fcntl.cmd == F_GETFL) {
+        cmd->result = s->nonblock ? O_NONBLOCK : 0;
+      } else if (cmd->op_fcntl.cmd == F_SETFL) {
+        s->nonblock = (cmd->op_fcntl.arg & O_NONBLOCK) != 0;
+        cmd->result = 0;
+      } else {
+        cmd->result = -1, cmd->err = EINVAL;
+      }
+      return true;
+    case BSD_OP_ACCEPT: {
+      int i;
+      struct mg_bsd_sock *child;
+
+      s = bsd_get(cmd->op_accept.fd);
+      if (s == NULL || s->c == NULL || !s->c->is_listening) {
+        cmd->result = -1, cmd->err = EINVAL;
+        return true;
+      }
+      for (i = 0, child = s_socks; i < MG_BSD_MAX_SOCKETS; i++, child++) {
+        if (child->orphan && child->listener == s) {
+          c = child->c;
+          child->orphan = false;
+          child->listener = NULL;
+          child->fd = MG_BSD_FD_BASE + i;
+          cmd->result = child->fd;
+          if (cmd->op_accept.addr != NULL && cmd->op_accept.addrlen != NULL) {
+            struct sockaddr_in *sa = (struct sockaddr_in *) cmd->op_accept.addr;
+            sa->sin_family = AF_INET;
+            sa->sin_port = c->rem.port;
+            sa->sin_addr.s_addr = c->rem.addr.ip4;
+            *cmd->op_accept.addrlen = sizeof(*sa);
+          }
+          return true;
+        }
+      }
+      if (s->nonblock) {
+        cmd->result = -1, cmd->err = EAGAIN;
+        return true;
+      }
+#if MG_ENABLE_FREERTOS
+      return false;  // No connection yet, wait
+#else
+      cmd->result = -1, cmd->err = EAGAIN;
+      return true;
+#endif
+    }
+    case BSD_OP_CONNECT:
+      if ((s = bsd_get(cmd->op_connect.fd)) == NULL) {
+        cmd->result = -1, cmd->err = EBADF;
+        return true;
+      }
+      if (!cmd->started && s->c == NULL) {
+        if (s->closed || (c = bsd_new_conn(s)) == NULL) {
+          cmd->result = -1, cmd->err = s->closed ? EIO : ENOMEM;
+          return true;
+        }
+      }
+      if ((c = s->c) == NULL) {
+        cmd->result = -1, cmd->err = s->err ? s->err : EIO;
+        return true;
+      }
+      if (!cmd->started) {
+        const struct sockaddr_in *sa =
+            (const struct sockaddr_in *) cmd->op_connect.addr;
+        c->rem.port = sa->sin_port;
+        c->rem.addr.ip4 = sa->sin_addr.s_addr;
+        c->rem.is_ip6 = false;
+        c->is_client = 1;
+        mg_connect_resolved(c);
+        cmd->started = true;
+      }
+      if (c->is_closing) {
+        cmd->result = -1, cmd->err = ECONNREFUSED;
+        return true;
+      }
+      if (!c->is_connecting) {
+        cmd->result = 0;
+        return true;
+      }
+      if (s->nonblock) {
+        cmd->result = -1, cmd->err = EINPROGRESS;
+        return true;
+      }
+#if MG_ENABLE_FREERTOS
+      return false;  // Still connecting, wait
+#else
+      cmd->result = -1, cmd->err = EINPROGRESS;
+      return true;
+#endif
+    case BSD_OP_RECV:
+      if ((s = bsd_get(cmd->op_recv.fd)) == NULL) {
+        cmd->result = -1, cmd->err = EBADF;
+        return true;
+      }
+      if ((c = s->c) == NULL) {
+        cmd->result = s->closed && s->err == 0 ? 0 : -1;
+        cmd->err = s->closed ? s->err : ENOTCONN;
+        return true;
+      }
+      if (c->recv.len > 0) {
+        size_t n = cmd->op_recv.len;
+        if (c->recv.len < n) n = c->recv.len;
+        memcpy(cmd->op_recv.buf, c->recv.buf, n);
+        if (!(cmd->op_recv.flags & MSG_PEEK)) mg_iobuf_del(&c->recv, 0, n);
+        cmd->result = (int) n;
+        return true;
+      }
+      if (s->err != 0) {
+        cmd->result = -1, cmd->err = s->err;
+        return true;
+      }
+      if (c->is_draining) {  // Orderly shutdown by peer
+        cmd->result = 0;
+        return true;
+      }
+      if (!s->nonblock && !(cmd->op_recv.flags & MSG_DONTWAIT)) {
+#if MG_ENABLE_FREERTOS
+        return false;  // No data yet, wait
+#endif
+      }
+      cmd->result = -1, cmd->err = EAGAIN;
+      return true;
+    case BSD_OP_SEND:
+      if ((s = bsd_get(cmd->op_send.fd)) == NULL) {
+        cmd->result = -1, cmd->err = EBADF;
+      } else if ((c = s->c) == NULL || s->err != 0 || c->is_closing ||
+                 c->is_draining) {
+        cmd->result = -1, cmd->err = EPIPE;
+      } else if (mg_send(c, cmd->op_send.buf, cmd->op_send.len)) {
+        cmd->result = (int) cmd->op_send.len;
+      } else if (s->nonblock || (cmd->op_send.flags & MSG_DONTWAIT)) {
+        cmd->result = -1, cmd->err = EAGAIN;
+      } else {
+#if MG_ENABLE_FREERTOS
+        return false;  // No send buffer space yet, wait
+#else
+        cmd->result = -1, cmd->err = EAGAIN;
+#endif
+      }
+      return true;
+    case BSD_OP_SENDTO:
+      if ((s = bsd_get(cmd->op_sendto.fd)) == NULL) {
+        cmd->result = -1, cmd->err = EBADF;
+      } else if ((c = s->c) == NULL || s->err != 0 || c->is_closing ||
+                 c->is_draining) {
+        cmd->result = -1, cmd->err = EPIPE;
+      } else {
+        const struct sockaddr_in *sa =
+            (const struct sockaddr_in *) cmd->op_sendto.addr;
+        c->rem.port = sa->sin_port;
+        c->rem.addr.ip4 = sa->sin_addr.s_addr;
+        c->rem.is_ip6 = false;
+        if (mg_send(c, cmd->op_sendto.buf, cmd->op_sendto.len)) {
+          cmd->result = (int) cmd->op_sendto.len;
+        } else if (s->nonblock || (cmd->op_sendto.flags & MSG_DONTWAIT)) {
+          cmd->result = -1, cmd->err = EAGAIN;
+        } else {
+#if MG_ENABLE_FREERTOS
+          return false;  // No send buffer space yet, wait
+#else
+          cmd->result = -1, cmd->err = EAGAIN;
+#endif
+        }
+      }
+      return true;
+    case BSD_OP_RECVFROM:
+      if ((s = bsd_get(cmd->op_recvfrom.fd)) == NULL) {
+        cmd->result = -1, cmd->err = EBADF;
+        return true;
+      }
+      if ((c = s->c) == NULL) {
+        cmd->result = s->closed && s->err == 0 ? 0 : -1;
+        cmd->err = s->closed ? s->err : ENOTCONN;
+        return true;
+      }
+      if (c->recv.len > 0) {
+        size_t n = cmd->op_recvfrom.len;
+        if (c->recv.len < n) n = c->recv.len;
+        memcpy(cmd->op_recvfrom.buf, c->recv.buf, n);
+        if (!(cmd->op_recvfrom.flags & MSG_PEEK)) mg_iobuf_del(&c->recv, 0, n);
+        if (cmd->op_recvfrom.src != NULL && cmd->op_recvfrom.addrlen != NULL) {
+          struct sockaddr_in *sa = (struct sockaddr_in *) cmd->op_recvfrom.src;
+          sa->sin_family = AF_INET;
+          sa->sin_port = c->rem.port;
+          sa->sin_addr.s_addr = c->rem.addr.ip4;
+          *cmd->op_recvfrom.addrlen = sizeof(*sa);
+        }
+        cmd->result = (int) n;
+        return true;
+      }
+      if (s->err != 0) {
+        cmd->result = -1, cmd->err = s->err;
+        return true;
+      }
+      if (!s->nonblock && !(cmd->op_recvfrom.flags & MSG_DONTWAIT)) {
+#if MG_ENABLE_FREERTOS
+        return false;  // No datagram yet, wait
+#endif
+      }
+      cmd->result = -1, cmd->err = EAGAIN;
+      return true;
+    case BSD_OP_CLOSE:
+      if ((s = bsd_get(cmd->op_close.fd)) == NULL) {
+        cmd->result = -1, cmd->err = EBADF;
+      } else {
+        bsd_close(s);
+        cmd->result = 0;
+      }
+      return true;
+    case BSD_OP_POLL: {
+      struct pollfd *p;
+      int i, n = 0, ready;
+
+      for (i = 0, p = cmd->op_poll.fds; i < (int) cmd->op_poll.nfds;
+           i++, p++) {
+        p->revents = 0;
+        if (p->fd < 0) continue;
+        if ((s = bsd_get(p->fd)) == NULL) {
+          p->revents = POLLNVAL;
+        } else {
+          ready = bsd_ready(s);
+          if ((p->events & POLLIN) && (ready & BSD_READ))
+            p->revents |= POLLIN;
+          if ((p->events & POLLOUT) && (ready & BSD_WRITE))
+            p->revents |= POLLOUT;
+          if (s->err != 0) p->revents |= POLLERR;
+          if (s->closed) p->revents |= POLLHUP;
+        }
+        if (p->revents != 0) n++;
+      }
+#if MG_ENABLE_FREERTOS
+      if (n == 0 && mg_millis() < cmd->op_poll.deadline)
+        return false;  // Keep caller pollfd[] intact while waiting
+#endif
+      cmd->result = n;
+      return true;
+    }
+    case BSD_OP_SELECT: {
+      fd_set rr, ww, ee;
+      fd_set *r = cmd->op_select.r;
+      fd_set *w = cmd->op_select.w;
+      fd_set *e = cmd->op_select.e;
+      int fd, n = 0, want_read, want_write, want_error, ready;
+#if MG_ENABLE_BSD_PROTOTYPES
+      int i;
+      __fd_mask bits;
+      int bitsize = (int) (sizeof(bits) * 8);
+#endif
+
+      if (cmd->op_select.nfds < 0 || cmd->op_select.nfds > FD_SETSIZE) {
+        cmd->result = -1, cmd->err = EINVAL;
+        return true;
+      }
+      FD_ZERO(&rr);
+      FD_ZERO(&ww);
+      FD_ZERO(&ee);
+#if MG_ENABLE_BSD_PROTOTYPES
+      for (i = 0; i < (cmd->op_select.nfds + bitsize - 1) / bitsize; i++) {
+        bits = 0;
+        if (r != NULL) bits |= r->__fds_bits[i];
+        if (w != NULL) bits |= w->__fds_bits[i];
+        if (e != NULL) bits |= e->__fds_bits[i];
+        while (bits != 0) {
+          fd = i * bitsize + (int) __builtin_ctzl(bits);
+          bits &= bits - 1;
+          if (fd >= cmd->op_select.nfds) continue;
+          want_read = r != NULL && FD_ISSET(fd, r);
+          want_write = w != NULL && FD_ISSET(fd, w);
+          want_error = e != NULL && FD_ISSET(fd, e);
+          if ((s = bsd_get(fd)) == NULL) goto err;
+          ready = bsd_ready(s);
+          if (want_read && (ready & BSD_READ)) FD_SET(fd, &rr);
+          if (want_write && (ready & BSD_WRITE)) FD_SET(fd, &ww);
+          if (want_error && (ready & BSD_ERROR)) FD_SET(fd, &ee);
+          if ((want_read && (ready & BSD_READ)) ||
+              (want_write && (ready & BSD_WRITE)) ||
+              (want_error && (ready & BSD_ERROR)))
+            n++;
+        }
+      }
+#else
+      for (fd = 0; fd < cmd->op_select.nfds; fd++) {
+        want_read = r != NULL && FD_ISSET(fd, r);
+        want_write = w != NULL && FD_ISSET(fd, w);
+        want_error = e != NULL && FD_ISSET(fd, e);
+        if (!want_read && !want_write && !want_error) continue;
+        if ((s = bsd_get(fd)) == NULL) goto err;
+        ready = bsd_ready(s);
+        if (want_read && (ready & BSD_READ)) FD_SET(fd, &rr);
+        if (want_write && (ready & BSD_WRITE)) FD_SET(fd, &ww);
+        if (want_error && (ready & BSD_ERROR)) FD_SET(fd, &ee);
+        if ((want_read && (ready & BSD_READ)) ||
+            (want_write && (ready & BSD_WRITE)) ||
+            (want_error && (ready & BSD_ERROR)))
+          n++;
+      }
+#endif
+#if MG_ENABLE_FREERTOS
+      if (n == 0 && mg_millis() < cmd->op_select.deadline)
+        return false;  // Keep fd sets while waiting
+#endif
+      if (r != NULL) *r = rr;
+      if (w != NULL) *w = ww;
+      if (e != NULL) *e = ee;
+      cmd->result = n;
+      return true;
+
+err:
+      cmd->result = -1, cmd->err = EBADF;
+      return true;
+    }
+    case BSD_OP_GETHOSTBYNAME:
+      if (!cmd->started) {
+        struct mg_connection *r = mg_alloc_conn(s_mgr);
+        if (r == NULL) {
+          cmd->op_gethostbyname.result = NULL;
+          return true;
+        }
+        r->fn = bsd_resolve_fn;
+        LIST_ADD_HEAD(struct mg_connection, &s_mgr->conns, r);
+        mg_call(r, MG_EV_OPEN, NULL);
+        s_resolve_done = 0;
+        mg_resolve(r, cmd->op_gethostbyname.name);
+        cmd->started = true;
+#if MG_ENABLE_FREERTOS
+        return false;  // Wait for DNS response
+#endif
+      }
+      if (s_resolve_done != 0) {
+        if (s_resolve_done < 0) {
+          cmd->op_gethostbyname.result = NULL;
+        } else {
+          mg_snprintf(s_hostent_name, sizeof(s_hostent_name), "%s",
+                      cmd->op_gethostbyname.name);
+          cmd->op_gethostbyname.result = &s_hostent;
+        }
+        return true;
+      }
+#if MG_ENABLE_FREERTOS
+      return false;  // Still resolving
+#else
+      cmd->op_gethostbyname.result = NULL;
+      return true;
+#endif
+  }
+  return true;
+}
+
+static void bsd_dispatch(struct mg_bsd_cmd *cmd) {
+#if MG_ENABLE_FREERTOS
+  if (s_cmd_q == NULL) {
+    cmd->result = -1, cmd->err = EPERM;
+  } else {
+    cmd->caller = xTaskGetCurrentTaskHandle(); 
+    if (!bsd_qsend(s_cmd_q, &cmd, portMAX_DELAY)) {
+      cmd->result = -1, cmd->err = EIO;
+    } else {
+      ulTaskNotifyTake(pdTRUE, portMAX_DELAY);
+    }
+  }
+#else
+  bsd_run(cmd);
+#endif
+}
+
+int socket(int domain, int type, int proto) {
+  struct mg_bsd_cmd cmd = BSD_CMD_EMPTY;
+  cmd.op = BSD_OP_SOCKET, cmd.op_socket.domain = domain,
+  cmd.op_socket.type = type, cmd.op_socket.proto = proto;
+  bsd_dispatch(&cmd);
+  errno = cmd.err;
+  return cmd.result;
+}
+
+int bind(int fd, const struct sockaddr *addr, socklen_t len) {
+  struct mg_bsd_cmd cmd = BSD_CMD_EMPTY;
+  cmd.op = BSD_OP_BIND, cmd.op_bind.fd = fd, cmd.op_bind.addr = addr,
+  cmd.op_bind.len = len;
+  bsd_dispatch(&cmd);
+  errno = cmd.err;
+  return cmd.result;
+}
+
+int listen(int fd, int backlog) {
+  struct mg_bsd_cmd cmd = BSD_CMD_EMPTY;
+  cmd.op = BSD_OP_LISTEN, cmd.op_listen.fd = fd,
+  cmd.op_listen.backlog = backlog;
+  bsd_dispatch(&cmd);
+  errno = cmd.err;
+  return cmd.result;
+}
+
+int fcntl(int fd, int fcmd, ...) {
+  struct mg_bsd_cmd cmd = BSD_CMD_EMPTY;
+  int arg = 0;
+
+  if (fcmd == F_SETFL) {
+    va_list ap;
+
+    va_start(ap, fcmd);
+    arg = va_arg(ap, int);
+    va_end(ap);
+  }
+  cmd.op = BSD_OP_FCNTL, cmd.op_fcntl.fd = fd, cmd.op_fcntl.cmd = fcmd,
+  cmd.op_fcntl.arg = arg;
+  bsd_dispatch(&cmd);
+  errno = cmd.err;
+  return cmd.result;
+}
+
+int accept(int fd, struct sockaddr *addr, socklen_t *addrlen) {
+  struct mg_bsd_cmd cmd = BSD_CMD_EMPTY;
+  cmd.op = BSD_OP_ACCEPT, cmd.op_accept.fd = fd, cmd.op_accept.addr = addr,
+  cmd.op_accept.addrlen = addrlen;
+  bsd_dispatch(&cmd);
+  errno = cmd.err;
+  return cmd.result;
+}
+
+int connect(int fd, const struct sockaddr *addr, socklen_t len) {
+  struct mg_bsd_cmd cmd = BSD_CMD_EMPTY;
+  cmd.op = BSD_OP_CONNECT, cmd.op_connect.fd = fd, cmd.op_connect.addr = addr,
+  cmd.op_connect.len = len;
+  bsd_dispatch(&cmd);
+  errno = cmd.err;
+  return cmd.result;
+}
+
+ssize_t recv(int fd, void *buf, size_t len, int flags) {
+  struct mg_bsd_cmd cmd = BSD_CMD_EMPTY;
+  cmd.op = BSD_OP_RECV, cmd.op_recv.fd = fd, cmd.op_recv.buf = buf,
+  cmd.op_recv.len = len, cmd.op_recv.flags = flags;
+  bsd_dispatch(&cmd);
+  errno = cmd.err;
+  return cmd.result;
+}
+
+ssize_t send(int fd, const void *buf, size_t len, int flags) {
+  struct mg_bsd_cmd cmd = BSD_CMD_EMPTY;
+  cmd.op = BSD_OP_SEND, cmd.op_send.fd = fd, cmd.op_send.buf = (void *) buf,
+  cmd.op_send.len = len, cmd.op_send.flags = flags;
+  bsd_dispatch(&cmd);
+  errno = cmd.err;
+  return cmd.result;
+}
+
+ssize_t sendto(int fd, const void *buf, size_t len, int flags,
+               const struct sockaddr *dest, socklen_t addrlen) {
+  struct mg_bsd_cmd cmd = BSD_CMD_EMPTY;
+  cmd.op = BSD_OP_SENDTO, cmd.op_sendto.fd = fd,
+  cmd.op_sendto.buf = (void *) buf, cmd.op_sendto.len = len,
+  cmd.op_sendto.flags = flags, cmd.op_sendto.addr = dest,
+  cmd.op_sendto.addrlen = addrlen;
+  bsd_dispatch(&cmd);
+  errno = cmd.err;
+  return cmd.result;
+}
+
+ssize_t recvfrom(int fd, void *buf, size_t len, int flags, struct sockaddr *src,
+                 socklen_t *addrlen) {
+  struct mg_bsd_cmd cmd = BSD_CMD_EMPTY;
+  cmd.op = BSD_OP_RECVFROM, cmd.op_recvfrom.fd = fd, cmd.op_recvfrom.buf = buf,
+  cmd.op_recvfrom.len = len, cmd.op_recvfrom.flags = flags,
+  cmd.op_recvfrom.src = src, cmd.op_recvfrom.addrlen = addrlen;
+  bsd_dispatch(&cmd);
+  errno = cmd.err;
+  return cmd.result;
+}
+
+int close(int fd) {
+  struct mg_bsd_cmd cmd = BSD_CMD_EMPTY;
+  cmd.op = BSD_OP_CLOSE, cmd.op_close.fd = fd;
+  bsd_dispatch(&cmd);
+  errno = cmd.err;
+  return cmd.result;
+}
+
+int poll(struct pollfd *fds, nfds_t nfds, int timeout) {
+  struct mg_bsd_cmd cmd = BSD_CMD_EMPTY;
+  uint64_t deadline = timeout < 0 ? (uint64_t) ~0
+                                  : mg_millis() + (uint64_t) timeout;
+
+  cmd.op = BSD_OP_POLL, cmd.op_poll.fds = fds, cmd.op_poll.nfds = nfds,
+  cmd.op_poll.deadline = deadline;
+  bsd_dispatch(&cmd);
+  errno = cmd.err;
+  return cmd.result;
+}
+
+int select(int nfds, fd_set *r, fd_set *w, fd_set *e, struct timeval *tv) {
+  struct mg_bsd_cmd cmd = BSD_CMD_EMPTY;
+  uint64_t deadline = tv == NULL ? (uint64_t) ~0
+                                 : mg_millis() + (uint64_t) tv->tv_sec * 1000 +
+                                       tv->tv_usec / 1000;
+  cmd.op = BSD_OP_SELECT, cmd.op_select.nfds = nfds, cmd.op_select.r = r,
+  cmd.op_select.w = w, cmd.op_select.e = e, cmd.op_select.deadline = deadline;
+  bsd_dispatch(&cmd);
+  errno = cmd.err;
+  return cmd.result;
+}
+
+struct hostent *gethostbyname(const char *name) {
+  struct mg_bsd_cmd cmd = BSD_CMD_EMPTY;
+  cmd.op = BSD_OP_GETHOSTBYNAME, cmd.op_gethostbyname.name = name;
+  bsd_dispatch(&cmd);
+  return cmd.op_gethostbyname.result;
+}
+
 #endif  // MG_ENABLE_BSD_SOCKETS
+
+#if MG_ENABLE_BSD_SOCKETS
+void mg_bsd_init(struct mg_mgr *mgr) {
+  s_mgr = mgr;
+#if MG_ENABLE_BSD_SOCKETS && MG_ENABLE_FREERTOS
+  s_cmd_q = xQueueCreate(16, sizeof(struct mg_bsd_cmd *));
+#endif
+}
+
+void mg_bsd_poll(struct mg_mgr *mgr) {
+  (void) mgr;
+#if MG_ENABLE_BSD_SOCKETS && MG_ENABLE_FREERTOS
+  struct mg_bsd_cmd **p, *cmd;
+  while (xQueueReceive(s_cmd_q, &cmd, 0) == pdTRUE) {
+    if (bsd_run(cmd)) {
+      xTaskNotifyGive((TaskHandle_t) cmd->caller);
+    } else {
+      cmd->next = s_waiters;
+      s_waiters = cmd;
+    }
+  }
+  p = &s_waiters;
+  while (*p != NULL) {
+    struct mg_bsd_cmd *w = *p;
+    if (bsd_run(w)) {
+      *p = w->next;
+      xTaskNotifyGive((TaskHandle_t) w->caller);
+    } else {
+      p = &w->next;
+    }
+  }
+  taskYIELD();
+#endif
+}
+#endif
 
 #ifdef MG_ENABLE_LINES
 #line 1 "src/dash.c"
@@ -8494,6 +8654,7 @@ void mg_multicast_restore(struct mg_connection *c, uint8_t *from) {
 
 
 
+
 #if MG_ENABLE_TCPIP
 #define MG_EPHEMERAL_PORT_BASE 32768
 #define PDIFF(a, b) ((size_t) (((char *) (b)) - ((char *) (a))))
@@ -8524,16 +8685,16 @@ void mg_multicast_restore(struct mg_connection *c, uint8_t *from) {
 #endif
 
 struct connstate {
-  uint32_t seq, ack;                      // TCP seq/ack counters
-  uint64_t timer;                         // TCP timer (see 'ttype' below)
-  uint64_t txq_timer;                     // TCP retransmission timer (RFC-6298, 5)
-  uint32_t acked;                         // Last ACK-ed number
-  size_t unacked;                         // Not acked bytes
-  uint32_t maxseq;                        // Max send seq (ack + window)
-  uint32_t txq_seq;                       // Sequence of first txq record (RFC-9293, 3.8)
-  uint32_t txq_una;                       // Oldest unacknowledged sequence (RFC-9293, 3.4)
-  uint16_t win;                           // destination current window size
-  uint16_t dmss;                          // destination MSS (from TCP opts)
+  uint32_t seq, ack;   // TCP seq/ack counters
+  uint64_t timer;      // TCP timer (see 'ttype' below)
+  uint64_t txq_timer;  // TCP retransmission timer (RFC-6298, 5)
+  uint32_t acked;      // Last ACK-ed number
+  size_t unacked;      // Not acked bytes
+  uint32_t maxseq;     // Max send seq (ack + window)
+  uint32_t txq_seq;    // Sequence of first txq record (RFC-9293, 3.8)
+  uint32_t txq_una;    // Oldest unacknowledged sequence (RFC-9293, 3.4)
+  uint16_t win;        // destination current window size
+  uint16_t dmss;       // destination MSS (from TCP opts)
   uint8_t mac[sizeof(struct mg_l2addr)];  // Peer hw address
   uint8_t ttype;                          // Timer type:
 #define MIP_TTYPE_KEEPALIVE 0  // Connection is idle for long, send keepalive
@@ -9302,7 +9463,7 @@ static struct ip6 *tx_ip6(struct mg_tcpip_if *ifp, uint8_t *l2_dst,
   struct ip6 *ip6 = (struct ip6 *) mg_l2_header(ifp, MG_TCPIP_L2PROTO_IPV6,
                                                 ifp->mac, l2_dst, l2p);
   memset(ip6, 0, sizeof(*ip6));
-  ip6->ver = (uint8_t) (0x60 | (dscp >> 2)); // Version 6, traffic class
+  ip6->ver = (uint8_t) (0x60 | (dscp >> 2));  // Version 6, traffic class
   ip6->label[0] = (uint8_t) (dscp << 6);
   ip6->plen = mg_htons((uint16_t) plen);
   ip6->next = next;
@@ -9771,7 +9932,7 @@ static size_t tx_tcp(struct mg_tcpip_if *ifp, uint8_t *l2_dst,
   tcp->off = (uint8_t) (hlen / 4 << 4);
 #if MG_ENABLE_IPV6
   if (ip_dst->is_ip6) {
-   tcp->csum = p6csum(ip6, tcp, 6, hlen + len);
+    tcp->csum = p6csum(ip6, tcp, 6, hlen + len);
   } else
 #endif
   {
@@ -10759,6 +10920,7 @@ void mg_tcpip_init(struct mg_mgr *mgr, struct mg_tcpip_if *ifp) {
                                            // MG_EPHEMERAL_PORT_BASE to 65535
     if (ifp->tx.buf == NULL || ifp->recv_queue.buf == NULL) MG_ERROR(("OOM"));
   }
+  mg_bsd_init(mgr);
 }
 
 void mg_tcpip_free(struct mg_tcpip_if *ifp) {
@@ -10929,6 +11091,7 @@ void mg_mgr_poll(struct mg_mgr *mgr, int ms) {
       c->is_closing = 1;
     if (c->is_closing) close_conn(c);
   }
+  mg_bsd_poll(mgr);
   (void) ms;
 }
 
