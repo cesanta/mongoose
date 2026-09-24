@@ -12777,24 +12777,22 @@ MG_IRAM static bool mg_frdm_write(void *addr, const void *buf, size_t len) {
     }
     uint32_t status;
     uint32_t dst_ofs = (uint32_t) dst - (uint32_t) s_mg_flash_frdm.start;
+    size_t tmp_buf_size = s_mg_flash_frdm.align / sizeof(uint32_t);
+    uint32_t tmp[tmp_buf_size];
     if ((char *) buf >= (char *) s_mg_flash_frdm.start &&
         (char *) buf <
             (char *) (s_mg_flash_frdm.start + s_mg_flash_frdm.size)) {
       // If we copy from FLASH to FLASH, then we first need to copy the source
       // to RAM
-      size_t tmp_buf_size = s_mg_flash_frdm.align / sizeof(uint32_t);
-      uint32_t tmp[tmp_buf_size];
-
       for (size_t i = 0; i < tmp_buf_size; i++) {
         flash_wait();
         tmp[i] = src[i];
       }
-      status = flexspi_nor->page_program(MG_FLEXSPI_NOR_INSTANCE, &config,
-                                         (uint32_t) dst_ofs, tmp, false);
     } else {
-      status = flexspi_nor->page_program(MG_FLEXSPI_NOR_INSTANCE, &config,
-                                         (uint32_t) dst_ofs, src, false);
+      memcpy(tmp, src, sizeof(tmp));
     }
+    status = flexspi_nor->page_program(MG_FLEXSPI_NOR_INSTANCE, &config,
+                                       (uint32_t) dst_ofs, tmp, false);
     src = (uint32_t *) ((char *) src + s_mg_flash_frdm.align);
     dst = (uint32_t *) ((char *) dst + s_mg_flash_frdm.align);
     if (status != 0) {
