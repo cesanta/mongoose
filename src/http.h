@@ -32,6 +32,8 @@ struct mg_http_serve_opts {
   const char *mime_types;     // Additional MIME types: "ext1=type1,ext2=type2". NULL for defaults only
   const char *page404;        // Path to a custom 404 page, e.g. "/404.html". NULL for built-in
   struct mg_fs *fs;           // Filesystem to use. NULL defaults to POSIX
+  bool allow_delete;          // Allow to DELETE files
+  bool allow_upload;          // Allow to POST/PUT files
 };
 
 // A single part of a multipart/form-data body, filled by mg_http_next_multipart().
@@ -106,13 +108,24 @@ struct mg_connection *mg_http_connect(struct mg_mgr *, const char *url,
 // Notes:
 //   Call from an MG_EV_HTTP_MSG handler. The uri in hm is mapped under
 //   opts->root_dir. Directory listing depends on MG_ENABLE_DIRLIST; SSI uses
-//   opts->ssi_pattern when configured.
+//   opts->ssi_pattern when configured. opts->allow_delete enables DELETE;
+//   opts->allow_upload enables POST/PUT, writing the whole body to a file -
+//   see mg_http_serve_upload() to also stream big uploads without buffering.
 void mg_http_serve_dir(struct mg_connection *, struct mg_http_message *hm,
                        const struct mg_http_serve_opts *);
 
 // Serves a single file at path. Call from an MG_EV_HTTP_MSG handler.
 void mg_http_serve_file(struct mg_connection *, struct mg_http_message *hm,
                         const char *path, const struct mg_http_serve_opts *);
+
+// Streams a big POST/PUT upload straight to a file, instead of buffering the
+// whole body. Optional companion to mg_http_serve_dir(): call this from
+// MG_EV_HTTP_HDRS with the same opts, and keep calling mg_http_serve_dir()
+// from MG_EV_HTTP_MSG as usual - it still handles uploads this function skips.
+// Does nothing unless opts->allow_upload is set, the method is POST or PUT,
+// and Content-Length is known and big enough.
+void mg_http_serve_upload(struct mg_connection *, struct mg_http_message *hm,
+                          const struct mg_http_serve_opts *);
 
 // Sends a complete HTTP response with Content-Length.
 //
