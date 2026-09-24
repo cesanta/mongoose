@@ -16,7 +16,6 @@
           leds: { led1: true, led2: false, led3: false },
           settings: { volume: 12, log_level: 3, name: 'Galway', enable_login: true, ota_version: '1.2.3', ota_status: 'No checks yet', ota_url: 'http://my-product.com/ota.json', ota_interval: 30 },
           metrics: { temperature: 1.2, cpu: 4, ram: 5, version: '1.2.3' },
-          files: {start: 0, end: 100, data: [{name: 'device-log-2026-04-25.txt', size: 8625563}]},
         },
       });
     </script>
@@ -110,6 +109,7 @@
         Dashboard.on('ready', function() {
           setupAutoLogout();
           document.body.style.visibility = 'visible';
+          refreshFiles();
         });
         Dashboard.login().catch(err => showLogin(true));
 
@@ -170,13 +170,80 @@
           ]);
         };
 
-        // Intercept change notifications: re-plot graphs, reload the file
-        // list whenever its size changes (file uploaded or deleted)
+        // Intercept change notifications: re-plot graphs
         Dashboard.on('change', args => {
           args?.graph1?.data && updateGraph1(args?.graph1?.data);
           args?.graph2?.data && updateGraph2(args?.graph2?.data);
-          typeof args?.files === 'number' && Dashboard.call('get', { name: 'files', start: 0, end: 100 });
         });
+
+        // File manager: served directly by the built-in mg_dash file manager
+        // (see struct mg_dash::files_dir), not by the generic data-repeat
+        // binding, since the listing endpoint returns a plain JSON array
+        const filesListEl = document.getElementById('files-list');
+        const filesCountEl = document.getElementById('files-count');
+        const filesUploadEl = document.getElementById('files-upload-input');
+
+        function renderFiles(list) {
+          filesCountEl.textContent = list.length + ' Files';
+          filesListEl.innerHTML = list.map(f => `
+            <div class="file-row">
+              <div class="file-info">
+                <span class="file-icon" aria-hidden="true">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M14 2H7a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V7Z" />
+                    <path d="M14 2v5h5" />
+                  </svg>
+                </span>
+                <div class="file-name">${f.name}</div>
+              </div>
+              <div class="file-size">${f.size}</div>
+              <div class="file-actions">
+                <a href="fs/${encodeURIComponent(f.name)}" target="_blank" class="btn btn-secondary">
+                  <svg viewBox="0 0 24 24" class="nav-icon" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M12 3v12" />
+                    <path d="m7 10 5 5 5-5" />
+                    <path d="M5 21h14" />
+                  </svg>
+                </a>
+                <button data-del="${encodeURIComponent(f.name)}" class="btn btn-secondary">
+                  <svg viewBox="0 0 24 24" class="nav-icon" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M3 6h18" />
+                    <path d="M8 6V4h8v2" />
+                    <path d="M19 6l-1 14H6L5 6" />
+                    <path d="M10 11v5" />
+                    <path d="M14 11v5" />
+                  </svg>
+                </button>
+              </div>
+            </div>`).join('');
+          filesListEl.querySelectorAll('[data-del]').forEach(btn => {
+            btn.addEventListener('click', ev => {
+              ev.preventDefault();
+              fetch('fs/' + btn.dataset.del, { method: 'DELETE' }).then(refreshFiles);
+            });
+          });
+        }
+
+        function refreshFiles() {
+          fetch('fs/')
+            .then(r => r.ok ? r.json() : Promise.reject(r.statusText))
+            .then(list => renderFiles(list.filter(f => !f.dir)))
+            .catch(err => console.log('Files list failed', err));
+        }
+
+        filesUploadEl.addEventListener('change', ev => {
+          const f = ev.target.files[0];
+          ev.target.value = '';
+          if (!f) return;
+          const reader = new FileReader();
+          reader.readAsArrayBuffer(f);
+          reader.onload = () => {
+            fetch('fs/' + encodeURIComponent(f.name), { method: 'POST', body: reader.result })
+              .then(refreshFiles)
+              .catch(err => console.log('Upload failed', err));
+          };
+        });
+
       });
     </script>
     <style>
@@ -691,7 +758,7 @@ a, a:visited, a:link { text-decoration: none; }
             <div class="panel-title">
               <span>
                 <span>File Manager</span>
-                <span class="metric-status">${files.size ?? files.data.length} Files</span>
+                <span class="metric-status" id="files-count">0 Files</span>
               </span>
               <div class="header-actions">
                 <label class="btn btn-primary">
@@ -701,43 +768,12 @@ a, a:visited, a:link { text-decoration: none; }
                     <path d="M5 21h14" />
                   </svg>
                   Upload
-                  <input type="file" hidden data-upload="files" />
+                  <input type="file" hidden id="files-upload-input" />
                 </label>
               </div>
             </div>
             <div class="panel-body">
-              <div class="file-list" data-repeat="files.data" data-iterator="f">
-                <div class="file-row">
-                  <div class="file-info">
-                    <span class="file-icon" aria-hidden="true">
-                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                        <path d="M14 2H7a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V7Z" />
-                        <path d="M14 2v5h5" />
-                      </svg>
-                    </span>
-                    <div class="file-name">${f.name}</div>
-                  </div>
-                  <div class="file-size">${f.size}</div>
-                  <div class="file-actions">
-                    <a href="fs/files/${encodeURIComponent(f.name)}" target="_blank" class="btn btn-secondary">
-                      <svg viewBox="0 0 24 24" class="nav-icon" fill="none" stroke="currentColor" stroke-width="2">
-                        <path d="M12 3v12" />
-                        <path d="m7 10 5 5 5-5" />
-                        <path d="M5 21h14" />
-                      </svg>
-                    </a>
-                    <button onclick="fetch('fs/files/${encodeURIComponent(f.name)}', {method: 'DELETE'}); return false;" class="btn btn-secondary">
-                      <svg viewBox="0 0 24 24" class="nav-icon" fill="none" stroke="currentColor" stroke-width="2">
-                        <path d="M3 6h18" />
-                        <path d="M8 6V4h8v2" />
-                        <path d="M19 6l-1 14H6L5 6" />
-                        <path d="M10 11v5" />
-                        <path d="M14 11v5" />
-                      </svg>
-                    </button>
-                  </div>
-                </div>
-              </div>
+              <div class="file-list" id="files-list"></div>
             </div>
           </div>
 
