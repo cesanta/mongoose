@@ -17,8 +17,17 @@
 #define LED2 PIN('E', 1)
 #define LED3 PIN('B', 14)
 
+enum { CRASH_SP, CRASH_LR, CRASH_PC, CRASH_STACK };
+
 static void log_fn(char ch, void *param) {
   hal_uart_write_buf(param, &ch, 1);
+}
+
+static void hal_storage_init(void) {
+  RCC->AHB4ENR |= RCC_AHB4ENR_BKPRAMEN;
+  (void) RCC->AHB4ENR;
+  PWR->CR2 |= PWR_CR2_BREN;
+  while ((PWR->CR2 & PWR_CR2_BRRDY) == 0) (void) 0;
 }
 
 static void blink_task(void) {
@@ -29,30 +38,24 @@ static void blink_task(void) {
 }
 
 // Fault handler body. Runs in exception context: no printf, no malloc, no
-// blocking calls. Records the crash reason and a backtrace into the health
+// blocking calls. Copies the unwind registers and raw stack into the health
 // record, then resets.
 // "used" keeps the linker from garbage-collecting this section: the only
 // reference is the "b fault_c" branch in the naked handler below
-__attribute__((used, noinline)) static void fault_c(uint32_t *sp) {
-  extern uint8_t _estack;  // End of the main RAM region, defined in link.ld
-  size_t n = 0;
-  mg_health_record.reset_reason = MG_HEALTH_RESET_FAULT;
-  // Frame 0 is the faulting PC, frame 1 the caller's LR. Deeper frames come
-  // from a heuristic stack walk: BL pushes an odd return address that lives
-  // in flash. A stack word that merely looks like an address shows up as a
-  // bogus frame when symbolised, which is easy to filter by eye
-  mg_health_record.backtrace[n++] = sp[6] & ~1U;  // Stacked PC
-  mg_health_record.backtrace[n++] = sp[5] & ~1U;  // Stacked LR
-  for (uint32_t *p = sp + 8;
-       n < MG_HEALTH_BACKTRACE &&
-       (uintptr_t) p < (uintptr_t) sp + 4096U &&  // Bound the scan
-       (uintptr_t) p < (uintptr_t) &_estack;      // Stay in RAM
-       p++) {
-    uint32_t v = *p;
-    if ((v & 1U) && v >= 0x08000000U && v < 0x08000000U + 1024U * 1024U) {
-      mg_health_record.backtrace[n++] = v & ~1U;
-    }
+__attribute__((used, noinline)) static void fault_c(uint32_t *frame,
+                                                     uint32_t exc_return) {
+  extern uint32_t _estack;
+  uint32_t *stack = frame + 8 + ((exc_return & (1U << 4)) ? 0 : 18);
+  uint32_t *r = mg_health_record.backtrace;
+
+  if (frame[7] & (1U << 9)) stack++;  // Eight-byte stack alignment padding
+  r[CRASH_SP] = (uint32_t) (uintptr_t) stack;
+  r[CRASH_LR] = frame[5];
+  r[CRASH_PC] = frame[6];
+  for (size_t i = 0; i < MG_HEALTH_BACKTRACE - CRASH_STACK; i++) {
+    r[CRASH_STACK + i] = stack + i < &_estack ? stack[i] : 0;
   }
+  mg_health_record.reset_reason = MG_HEALTH_RESET_FAULT;
   NVIC_SystemReset();
 }
 
@@ -60,8 +63,9 @@ __attribute__((used, noinline)) static void fault_c(uint32_t *sp) {
 // 0 = MSP, 1 = PSP. Load the faulting SP into r0 and hand it to fault_c()
 __attribute__((naked)) void HardFault_Handler(void) {
   __asm volatile(
-      "tst lr, #4\n\t"  // Test EXC_RETURN bit 2
-      "ite eq\n\t"      // If zero, use MSP; else PSP
+      "mov r1, lr\n\t"
+      "tst lr, #4\n\t"
+      "ite eq\n\t"
       "mrseq r0, msp\n\t"
       "mrsne r0, psp\n\t"
       "b fault_c\n\t");
@@ -101,9 +105,8 @@ static void http_ev_handler(struct mg_connection *c, int ev, void *ev_data) {
 
 int main(void) {
   hal_clock_init();
-
+  hal_storage_init();
   MG_HEALTH_INIT();  // Must be called after clock init
-
   hal_uart_init(UART_DEBUG, UART_DEBUG_TX_PIN, UART_DEBUG_RX_PIN, 115200);
   mg_log_set_fn(log_fn, UART_DEBUG);
   hal_rng_init();
@@ -116,16 +119,23 @@ int main(void) {
 
   // Report the previous boot's crash backtrace, if any
   if (mg_health_reason() == MG_HEALTH_RESET_FAULT) {
-    char buf[MG_HEALTH_BACKTRACE * 10 + 100];
-    mg_snprintf(buf, sizeof(buf), "%s",
-                "arm-none-eabi-addr2line -pfiaC -e firmware.elf");
-    for (int i = 0; i < MG_HEALTH_BACKTRACE; i++) {
-      if (mg_health_record.backtrace[i] == 0) break;
-      mg_snprintf(buf + strlen(buf), sizeof(buf) - strlen(buf), " 0x%08lx",
-                  mg_health_record.backtrace[i]);
+    uint32_t *r = mg_health_record.backtrace;
+    static char buf[512];
+    size_t len = mg_snprintf(
+        buf, sizeof(buf),
+        "{\"image\":\"firmware.elf\",\"binary\":\"firmware.bin\","
+        "\"regs\":{\"sp\":\"0x%08lx\",\"lr\":\"0x%08lx\","
+        "\"pc\":\"0x%08lx\"},\"stack\":{\"addr\":\"0x%08lx\","
+        "\"words\":[",
+        (unsigned long) r[CRASH_SP], (unsigned long) r[CRASH_LR],
+        (unsigned long) r[CRASH_PC], (unsigned long) r[CRASH_SP]);
+    for (size_t i = CRASH_STACK; i < MG_HEALTH_BACKTRACE; i++) {
+      len += mg_snprintf(buf + len, sizeof(buf) - len, "%s\"0x%08lx\"",
+                         i == CRASH_STACK ? "" : ",",
+                         (unsigned long) r[i]);
     }
-    // mg_snprintf(buf + strlen(buf), sizeof(buf) - strlen(buf), "\n");
-    MG_INFO(("Previous boot crashed! Analyse with: %s", buf));
+    mg_snprintf(buf + len, sizeof(buf) - len, "]}}");
+    MG_INFO(("Previous boot crash: %s", buf));
   }
 
   struct mg_mgr mgr;
