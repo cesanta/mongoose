@@ -34,7 +34,7 @@ static struct mg_field fields_status[] = {
 };
 
 static struct mg_field_set field_set_status = {
-    "status", fields_status, status_fn, NULL, NULL, NULL,
+    "status", fields_status, status_fn, NULL, NULL,
 };
 
 void mg_dash_init(struct mg_mgr *mgr) {

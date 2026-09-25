@@ -27,7 +27,7 @@ static struct mg_field fields_actions[] = {
     {NULL, MG_VAL_INT, NULL, 0},
 };
 static struct mg_field_set set_actions = {"actions", fields_actions, actions_fn,
-                                          NULL,      NULL,           NULL};
+                                          NULL,      NULL};
 
 // Control panel
 // s_led1, s_led2, s_led3 are used to communicate LED status
@@ -43,7 +43,7 @@ static struct mg_field fields_leds[] = {
     {NULL, MG_VAL_INT, NULL, 0},
 };
 static struct mg_field_set set_leds = {"leds", fields_leds, leds_fn,
-                                       NULL,   NULL,        NULL};
+                                       NULL,   NULL};
 
 // Read-only device Metrics
 static int s_ram = 32, s_cpu = 7;
@@ -66,7 +66,7 @@ static struct mg_field fields_metrics[] = {
 };
 
 static struct mg_field_set set_metrics = {"metrics", fields_metrics, metrics_fn,
-                                          NULL,      NULL,           NULL};
+                                          NULL,      NULL};
 
 // Read-write device settings
 static bool s_enable_login = false;
@@ -105,7 +105,7 @@ static struct mg_field fields_settings[] = {
 };
 
 static struct mg_field_set set_settings = {
-    "settings", fields_settings, settings_fn, NULL, NULL, NULL};
+    "settings", fields_settings, settings_fn, NULL, NULL};
 
 #define NUM_POINTS_GRAPH1 7  // How many graph1 data points to send
 
@@ -150,7 +150,7 @@ static bool graph1_fn(enum mg_dash_op op, struct mg_dash_user *u) {
   return true;
 }
 static struct mg_field_set set_graph1 = {"graph1", fields_graph1, graph1_fn,
-                                         NULL,     NULL,          NULL};
+                                         NULL,     NULL};
 
 #define NUM_POINTS_GRAPH2 100  // How many graph2 data points to send
 static char s_graph2_data[NUM_POINTS_GRAPH2 * 4 + 2 + 1];
@@ -187,7 +187,7 @@ static bool graph2_fn(enum mg_dash_op op, struct mg_dash_user *u) {
   return op == MG_DASH_READ || op == MG_DASH_WRITE;
 }
 static struct mg_field_set set_graph2 = {"graph2", fields_graph2, graph2_fn,
-                                         NULL,     NULL,          NULL};
+                                         NULL,     NULL};
 
 static int authenticate(char *user, size_t userlen, const char *pass) {
   int level = 0;  // Authentication failure
@@ -201,42 +201,14 @@ static int authenticate(char *user, size_t userlen, const char *pass) {
   return level;
 }
 
-static struct file {
-  int index;
-  char name[64];
-  size_t size;
-  uint64_t checksum;
-} s_file;
-static struct mg_field_set set_files;
-
-static bool get_dir(const struct mg_dash_user *u, char *buf, size_t len) {
-  (void) u;
+static bool files_dir(const struct mg_dash_user *u, char *buf, size_t len) {
+  (void) u;  // Same dir for every user. Key off u->name for per-user dirs
   mg_snprintf(buf, len, "%s", "/tmp/dashboard");
   return true;
 }
 
-static struct mg_field fields_files[] = {
-    {"name", MG_VAL_STR, s_file.name, sizeof(s_file.name)},
-    {"size", MG_VAL_UINT64, &s_file.size, 0},
-    {"checksum", MG_VAL_UINT64, &s_file.checksum, sizeof(s_file.checksum)},
-    {NULL, MG_VAL_INT, NULL, 0},
-};
-
-// Custom reader: let the framework fill "name" and "size", then add our
-// own field. A real implementation would hash the file instead of
-// hardcoding zero
-static bool files_fn(enum mg_dash_op op, struct mg_dash_user *u) {
-  if (op != MG_DASH_READ) return false;
-  if (!mg_dash_dir_read(&set_files, u)) return false;
-  s_file.checksum = 0;
-  return true;
-}
-
-static struct mg_field_set set_files = {"files",       fields_files, files_fn,
-                                        &s_file.index, get_dir,      NULL};
-
 void mg_dash_init(struct mg_mgr *mgr) {
-  MG_DASH_ADD_FIELD_SET(&s_dash, &set_files);
+  s_dash.files_dir = files_dir;  // Built-in file manager, see mg_dash.h
   MG_DASH_ADD_FIELD_SET(&s_dash, &set_leds);
   MG_DASH_ADD_FIELD_SET(&s_dash, &set_metrics);
   MG_DASH_ADD_FIELD_SET(&s_dash, &set_settings);

@@ -75,7 +75,7 @@ static bool arr_fn(enum mg_dash_op op, struct mg_dash_user *u) {
 }
 
 static struct mg_field_set field_set_arr = {
-    "event", fields_arr, arr_fn, &s_index, NULL, NULL,
+    "event", fields_arr, arr_fn, &s_index, NULL,
 };
 
 void mg_dash_init(struct mg_mgr *mgr) {

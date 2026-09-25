@@ -78,12 +78,7 @@ static int mg_dash_array_size(struct mg_field_set *set,
                               struct mg_dash_user *u) {
   int saved = *set->index, sz = -1;
   *set->index = -1;
-  if (set->fn) {
-    if (set->fn(MG_DASH_READ, u)) sz = *set->index;
-  } else if (set->get_dir) {
-    mg_dash_dir_read(set, u);
-    sz = *set->index;
-  }
+  if (set->fn && set->fn(MG_DASH_READ, u)) sz = *set->index;
   *set->index = saved;
   return sz;
 }
@@ -101,10 +96,7 @@ static size_t mg_dash_print_array(mg_pfn_t fn, void *arg, va_list *ap) {
   for (;;) {
     bool done = to >= 0 && *set->index > to;
     if (!done) {
-      if (set->fn)
-        set->fn(MG_DASH_READ, u);
-      else if (set->get_dir)
-        mg_dash_dir_read(set, u);
+      if (set->fn) set->fn(MG_DASH_READ, u);
       done = *set->index < 0;
     }
     if (done) break;
@@ -186,8 +178,7 @@ void mg_dash_send_change(struct mg_mgr *mgr, struct mg_field_set *set) {
                    MG_ESC("change"), MG_ESC("params"), MG_ESC(set->name), sz);
     } else {
       int saved_idx = set->index != NULL ? *set->index : 0;
-      bool ok = set->fn ? set->fn(MG_DASH_READ, u)
-                        : (set->get_dir ? mg_dash_dir_read(set, u) : true);
+      bool ok = set->fn ? set->fn(MG_DASH_READ, u) : true;
       if (!ok) {
         if (set->index != NULL) *set->index = saved_idx;
         continue;
@@ -234,8 +225,7 @@ static int mg_dash_parse_field(struct mg_str json, struct mg_field *f) {
          mg_json_get_num(json, json_path, (double *) f->value);
   } else if (f->type == MG_VAL_STR && f->value_size > 0) {
     struct mg_str tok = mg_json_get_tok(json, json_path);
-    ok = tok.len >= 2 && tok.buf[0] == '"' &&
-         tok.buf[tok.len - 1] == '"';
+    ok = tok.len >= 2 && tok.buf[0] == '"' && tok.buf[tok.len - 1] == '"';
     if (ok) mg_json_unescape(json, json_path, (char *) f->value, f->value_size);
   } else if (f->type == MG_VAL_RAW && f->value_size > 0) {
     ok = mg_snprintf((char *) f->value, f->value_size, "%.*s", json.len,
@@ -272,68 +262,6 @@ static int mg_dash_apply(struct mg_connection *c, struct mg_dash *dash,
   return total_count;
 }
 
-bool mg_dash_dir_read(struct mg_field_set *set, struct mg_dash_user *u) {
-  char dir[256], fname[128] = "";
-  struct mg_fs *fs = u->dash->upload_fs ? u->dash->upload_fs : &mg_fs_posix;
-  struct mg_field *name_field = NULL, *size_field = NULL;
-  size_t i;
-
-  if (!set->get_dir(u, dir, sizeof(dir))) return false;
-
-  for (i = 0; set->fields[i].name != NULL; i++) {
-    if (name_field == NULL && set->fields[i].type == MG_VAL_STR &&
-        strcmp(set->fields[i].name, "name") == 0)
-      name_field = &set->fields[i];
-    if (size_field == NULL && strcmp(set->fields[i].name, "size") == 0)
-      size_field = &set->fields[i];
-  }
-  if (name_field == NULL) return false;
-
-  if (*set->index == -1) {  // Size query: count all files
-    int count = 0;
-    while (mg_fs_ls(fs, dir, fname, sizeof(fname))) count++;
-    *set->index = count;
-    return true;
-  }
-
-  {  // Regular read: scan to *set->index
-    int target = *set->index, cur = 0;
-    while (mg_fs_ls(fs, dir, fname, sizeof(fname))) {
-      if (cur++ == target) {
-        mg_snprintf((char *) name_field->value, name_field->value_size, "%s",
-                    fname);
-        if (size_field != NULL) {
-          char path[512];
-          size_t sz = 0;
-          mg_snprintf(path, sizeof(path), "%s/%s", dir, fname);
-          fs->st(path, &sz, NULL);
-          if (size_field->type == MG_VAL_UINT64)
-            *(uint64_t *) size_field->value = (uint64_t) sz;
-          else if (size_field->type == MG_VAL_INT)
-            *(int *) size_field->value = (int) sz;
-        }
-        return true;
-      }
-    }
-    *set->index = -1;  // No more entries
-    return true;
-  }
-}
-
-static bool mg_dash_set_file_name(struct mg_field_set *set,
-                                  struct mg_str name) {
-  size_t i;
-  for (i = 0; set->fields[i].name != NULL; i++) {
-    struct mg_field *f = &set->fields[i];
-    if (f->type == MG_VAL_STR && strcmp(f->name, "name") == 0) {
-      mg_snprintf((char *) f->value, f->value_size, "%.*s", (int) name.len,
-                  name.buf);
-      return true;
-    }
-  }
-  return false;
-}
-
 static inline void mg_log_http_req(struct mg_connection *c,
                                    struct mg_http_message *hm) {
   int len = 0;
@@ -364,77 +292,6 @@ static inline void mg_log_http_req(struct mg_connection *c,
             c->send.len > 15 ? 3 : 0, &c->send.buf[9], hm->body.len, body_n,
             hm->body.buf, c->send.len - n, c->send.len - n - spaces,
             c->send.buf + n));
-}
-
-// State of one file upload to a dashboard file array. Owned by the upload
-// callback, which frees it in the end call
-struct mg_dash_upload {
-  struct mg_mgr *mgr;    // Manager, to notify WebSocket clients
-  struct mg_dash *dash;  // Dashboard whose file arrays get notified
-  struct mg_fd *fd;      // Destination file, opened by the request handler
-  size_t expected;       // Number of body bytes to receive
-  size_t received;       // Number of body bytes written
-};
-
-// Upload callback for mg_http_stream_body(). Notifies clients only if the whole
-// body was written. A dropped or failed upload sends no notification
-static bool mg_dash_upload_cb(struct mg_http_message *hm, struct mg_str *data,
-                              void **p) {
-  struct mg_dash_upload *up = (struct mg_dash_upload *) *p;
-  bool ok;
-  if (hm != NULL) return true;  // Start, the file is already open
-  if (data != NULL) {           // Next chunk
-    ok = up->fd->fs->wr(up->fd->fd, data->buf, data->len) == data->len;
-    if (ok) up->received += data->len;
-    return ok;
-  }
-  ok = up->received == up->expected;  // End
-  mg_fs_close(up->fd);
-  if (ok) {
-    // Notify every file-backed array: the upload could belong to any of them,
-    // and re-querying get_dir() per recipient is what mg_dash_send_change()
-    // does anyway (directories can be user-specific)
-    struct mg_field_set *set;
-    for (set = up->dash->sets; set != NULL; set = set->next) {
-      if (set->get_dir == NULL) continue;
-      *set->index = -1;  // Signal mg_dash_send_change() to broadcast new size
-      mg_dash_send_change(up->mgr, set);
-    }
-  }
-  mg_free(up);
-  *p = NULL;
-  return ok;
-}
-
-// Opens dir/name and starts streaming the request body into it. Returns true
-// if streaming started, otherwise the error reply has been sent already
-static bool mg_dash_start_upload(struct mg_connection *c,
-                                 struct mg_http_message *hm,
-                                 struct mg_dash *dash, struct mg_fs *fs,
-                                 const char *dir, struct mg_str name) {
-  char path[MG_PATH_MAX];
-  struct mg_dash_upload *up = NULL;
-  struct mg_fd *fd = NULL;
-  size_t n = mg_snprintf(path, sizeof(path), "%s%c%.*s", dir, MG_DIRSEP,
-                         (int) name.len, name.buf);
-  if (n < sizeof(path)) fd = mg_fs_open(fs, path, MG_FS_WRITE);
-  if (fd != NULL) up = (struct mg_dash_upload *) mg_calloc(1, sizeof(*up));
-  if (up == NULL) {
-    if (fd != NULL) mg_fs_close(fd);
-    mg_http_reply(c, 500, MG_JSON_HEADERS, "Open failed\n");
-    return false;
-  }
-  up->mgr = c->mgr;
-  up->dash = dash;
-  up->fd = fd;
-  up->expected = hm->body.len;
-  if (mg_http_stream_body(c, hm, mg_dash_upload_cb, up)) {
-    return true;  // The callback owns up and fd now
-  }
-  mg_fs_close(fd);  // Chunked body or unexpected method: not streamed
-  mg_free(up);
-  mg_http_reply(c, 400, MG_JSON_HEADERS, "Bad request\n");
-  return false;
 }
 
 static uint64_t mg_dash_make_expiration_time(struct mg_dash *dash) {
@@ -691,6 +548,25 @@ static bool otacb(struct mg_http_message *hm, struct mg_str *data, void **p) {
   return mg_ota_end();
 }
 
+static void mg_serve_fs(struct mg_connection *c, struct mg_http_message *hm,
+                        struct mg_dash_user *u, bool stream) {
+  struct mg_dash *dash = (struct mg_dash *) c->fn_data;
+  char root[128] = "/fs/=";
+  if (u == NULL) {
+    mg_http_reply(c, 403, MG_JSON_HEADERS, "Not Authorised\n");
+  } else if (dash->files_dir(u, root + 5, sizeof(root) - 5) == false) {
+    mg_http_reply(c, 500, MG_JSON_HEADERS, "Upload dir error\n");
+  } else {
+    struct mg_http_serve_opts o;
+    memset(&o, 0, sizeof(o));
+    o.root_dir = root;
+    o.fs = dash->upload_fs ? dash->upload_fs : &mg_fs_posix;
+    o.allow_delete = o.allow_upload = true;
+    if (stream) mg_http_serve_upload(c, hm, &o);
+    else mg_http_serve_dir(c, hm, &o);
+  }
+}
+
 void mg_dash_ev_handler(struct mg_connection *c, int ev, void *ev_data) {
   struct mg_dash *dash = (struct mg_dash *) c->fn_data;
   struct mg_dash_cdata *d = (struct mg_dash_cdata *) c->data;
@@ -704,8 +580,6 @@ void mg_dash_ev_handler(struct mg_connection *c, int ev, void *ev_data) {
     // Received headers - check authentication and possibly start uploads/ota
     struct mg_http_message *hm = (struct mg_http_message *) ev_data;
     struct mg_dash_user *u = mg_dash_authenticate(c, hm, dash);
-    struct mg_str parts[3];
-    memset(parts, 0, sizeof(parts));
 
     if (mg_match(hm->uri, mg_str("/api/hi"), NULL) ||
         mg_match(hm->uri, mg_str("/api/logout"), NULL)) {
@@ -716,45 +590,14 @@ void mg_dash_ev_handler(struct mg_connection *c, int ev, void *ev_data) {
     } else if (mg_match(hm->uri, mg_str("/api/login"), NULL) && u != NULL) {
       mg_handle_login(c, u);
       d->marker = CONN_HANDLED;
+    } else if (u != NULL && dash->files_dir != NULL &&
+               mg_match(hm->uri, mg_str("/fs/#"), NULL)) {
+      mg_serve_fs(c, hm, u, true);
+      return;  // Important - the serve_fs() call can invalidate hm
     } else if (mg_match(hm->uri, mg_str("/api/ota"), NULL)) {
       // Authenticated above. If streaming started, the stream handler owns
       // the connection and c->data, so skip the marker check below
       if (mg_http_stream_body(c, hm, otacb, NULL)) return;
-    } else if (mg_match(hm->uri, mg_str("/fs/*/*"), parts) &&
-               (mg_strcasecmp(hm->method, mg_str("POST")) == 0 ||
-                mg_strcasecmp(hm->method, mg_str("PUT")) == 0)) {
-      struct mg_field_set *set = mg_dash_find_field_set(dash, parts[0]);
-      struct mg_str name = parts[1];
-      int len =
-          mg_url_decode(name.buf, name.len, (char *) name.buf, name.len + 1, 0);
-      if (len > 0 && (size_t) len <= name.len) name.len = (size_t) len;
-      if (set == NULL || set->get_dir == NULL) {
-        mg_http_reply(c, 404, MG_JSON_HEADERS, "Not Found\n");
-        d->marker = CONN_HANDLED;
-      } else if (u == NULL) {
-        mg_http_reply(c, 403, MG_JSON_HEADERS, "Not Authorised\n");
-        d->marker = CONN_HANDLED;
-      } else if (!mg_path_is_sane(name)) {
-        mg_http_reply(c, 400, MG_JSON_HEADERS, "Bad file name\n");
-        d->marker = CONN_HANDLED;
-      } else {
-        mg_dash_set_file_name(set, name);
-        if (set->fn != NULL && !set->fn(MG_DASH_WRITE, u)) {
-          mg_http_reply(c, 403, MG_JSON_HEADERS, "Not Authorised\n");
-          d->marker = CONN_HANDLED;
-        } else {
-          char dir[256];
-          struct mg_fs *fs = dash->upload_fs ? dash->upload_fs : &mg_fs_posix;
-          if (!set->get_dir(u, dir, sizeof(dir))) {
-            mg_http_reply(c, 500, MG_JSON_HEADERS, "Upload dir error\n");
-            d->marker = CONN_HANDLED;
-          } else if (mg_dash_start_upload(c, hm, dash, fs, dir, name)) {
-            return;  // The stream handler owns the connection and c->data
-          } else {
-            d->marker = CONN_HANDLED;  // Error reply has been sent
-          }
-        }
-      }
     }
     if (d->marker != '\0') mg_log_http_req(c, hm);
   } else if (ev == MG_EV_HTTP_MSG && d->marker != '\0') {
@@ -777,42 +620,9 @@ void mg_dash_ev_handler(struct mg_connection *c, int ev, void *ev_data) {
     } else if (mg_match(hm->uri, mg_str("/api/websocket"), NULL)) {
       d->u = u;
       mg_ws_upgrade(c, hm, NULL);
-    } else if (mg_match(hm->uri, mg_str("/fs/*/*"), parts)) {
-      struct mg_field_set *set = mg_dash_find_field_set(dash, parts[0]);
-      if (set == NULL || set->get_dir == NULL) {
-        mg_http_reply(c, 404, MG_JSON_HEADERS, "Not Found");
-      } else if (u == NULL) {
-        mg_http_reply(c, 403, MG_JSON_HEADERS, "Not Authorised\n");
-      } else {
-        char dir[256], path[512];
-        struct mg_fs *fs = dash->upload_fs ? dash->upload_fs : &mg_fs_posix;
-        struct mg_str name = parts[1];
-        int len = mg_url_decode(name.buf, name.len, (char *) name.buf,
-                                name.len + 1, 0);
-        if (len > 0 && (size_t) len <= name.len) name.len = (size_t) len;
-        if (!mg_path_is_sane(name)) {
-          mg_http_reply(c, 400, MG_JSON_HEADERS, "Bad file name\n");
-          return;
-        }
-        if (!set->get_dir(u, dir, sizeof(dir))) {
-          mg_http_reply(c, 500, MG_JSON_HEADERS, "Upload dir error\n");
-          return;
-        }
-        mg_snprintf(path, sizeof(path), "%s/%.*s", dir, name.len, name.buf);
-        if (mg_strcasecmp(hm->method, mg_str("DELETE")) == 0) {
-          mg_dash_set_file_name(set, name);
-          if (set->fn != NULL && !set->fn(MG_DASH_DELETE, u)) {
-            mg_http_reply(c, 403, MG_JSON_HEADERS, "Not Authorised\n");
-          } else {
-            fs->rm(path);
-            *set->index = -1;  // Signal mg_dash_send_change() to send new size
-            mg_dash_send_change(c->mgr, set);
-            mg_http_reply(c, 200, NULL, "true");
-          }
-        } else {
-          mg_http_serve_file(c, hm, path, NULL);
-        }
-      }
+    } else if (dash->files_dir != NULL &&
+               mg_match(hm->uri, mg_str("/fs/#"), NULL)) {
+      mg_serve_fs(c, hm, u, false);
     } else if (mg_match(hm->uri, mg_str("/api/del/*/*/*"), parts) ||
                mg_match(hm->uri, mg_str("/api/del/*/*"), parts)) {
       mg_dash_handle_del(c, dash, u, parts);

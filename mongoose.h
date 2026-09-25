@@ -4647,9 +4647,7 @@ struct mg_field_set {
                // fn sets *index = -1 to signal end of iteration.
                // Size query: framework sets *index = -1 before fn(READ); fn
                // sets *index = total size
-  bool (*get_dir)(const struct mg_dash_user *u, char *buf,
-                  size_t len);  // Non-NULL: file array
-  struct mg_field_set *next;    // Next set in the list
+  struct mg_field_set *next;  // Next set in the list
 };
 
 // Custom URI handler, registered with MG_DASH_REGISTER_CUSTOM_HANDLER()
@@ -4670,6 +4668,9 @@ struct mg_dash {
   int session_auto_expiration_seconds;  // Session lifetime, 0: 1 hour default
   struct mg_dash_user *guest;           // Used when authenticate == NULL
   struct mg_fs *upload_fs;  // FS for uploads/listing, default &mg_fs_posix
+  // Resolves the built-in file manager's root dir for user u, e.g. per-user
+  // upload directories. NULL: file manager disabled
+  bool (*files_dir)(const struct mg_dash_user *u, char *buf, size_t len);
 };
 
 #define MG_DASH_ADD_FIELD_SET(dash_, set_) \
@@ -4694,43 +4695,6 @@ void mg_dash_ev_handler(struct mg_connection *c, int ev, void *ev_data);
 // Notify WebSocket clients that a field set changed: broadcasts the new
 // array size if *set->index < 0, or a single element update otherwise
 void mg_dash_send_change(struct mg_mgr *mgr, struct mg_field_set *);
-
-// Default reader for file-backed array sets (set->get_dir != NULL)
-// Usage example - this is a complete implemenation of the file manager:
-// ```c
-// static struct file {
-//   int index;
-//   char name[64];
-//   size_t size;
-//   uint64_t checksum;
-// } s_file;
-// static struct mg_field_set set_files;
-//
-// static bool get_dir(const struct mg_dash_user *u, char *buf, size_t len) {
-//   (void) u;
-//   mkdir("/tmp/dashboard", 0755);
-//   mg_snprintf(buf, len, "%s", "/tmp/dashboard");
-//   return true;
-// }
-//
-// static struct mg_field fields_files[] = {
-//     {"name", MG_VAL_STR, s_file.name, sizeof(s_file.name)},
-//     {"size", MG_VAL_UINT64, &s_file.size, 0},
-//     {"checksum", MG_VAL_UINT64, &s_file.checksum, sizeof(s_file.checksum)},
-//     {NULL, MG_VAL_INT, NULL, 0},
-// };
-//
-// static bool files_fn(enum mg_dash_op op, struct mg_dash_user *u) {
-//   if (op == MG_DASH_WRITE) return s_uploads_enabled && u->level >= 7;
-//   if (op != MG_DASH_READ) return false;
-//   if (!mg_dash_dir_read(&set_files, u)) return false;
-//   s_file.checksum = 0;  // Mock to show how to set custom fields
-//   return true;
-// }
-//
-// static struct mg_field_set set_files = {"files", fields_files, files_fn, &s_file.index, get_dir, NULL};
-// ```
-bool mg_dash_dir_read(struct mg_field_set *set, struct mg_dash_user *u);
 
 // Helper forward declarations for Mongoose CMSIS pack modules
 extern struct mg_mgr g_mgr;

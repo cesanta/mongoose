@@ -4798,23 +4798,7 @@ static struct mg_field test_files_fields[] = {
     {NULL, MG_VAL_INT, NULL, 0},
 };
 static struct mg_field_set test_files_set = {
-    "files", test_files_fields, NULL, &s_test_file_index, test_upload_dir, NULL};
-static struct test_file_entry s_delete_file;
-static char s_deleted_file[sizeof(s_delete_file.name)];
-static char s_uploaded_file[sizeof(s_delete_file.name)];
-static struct mg_field_set *s_delete_file_set;
-static bool delete_file_fn(enum mg_dash_op op, struct mg_dash_user *u) {
-  if (op == MG_DASH_READ) return mg_dash_dir_read(s_delete_file_set, u);
-  if (op == MG_DASH_WRITE) {
-    mg_snprintf(s_uploaded_file, sizeof(s_uploaded_file), "%s",
-                s_delete_file.name);
-  }
-  if (op == MG_DASH_DELETE) {
-    mg_snprintf(s_deleted_file, sizeof(s_deleted_file), "%s",
-                s_delete_file.name);
-  }
-  return true;
-}
+    "files", test_files_fields, NULL, &s_test_file_index, NULL};
 static bool arr_fn(enum mg_dash_op op, struct mg_dash_user *u) {
   (void) u;
   if (op == MG_DASH_READ) {
@@ -4861,20 +4845,18 @@ static void test_dash(void) {
       {"admin", MG_VAL_INT, &admin, sizeof(admin)},
       {NULL, MG_VAL_INT, NULL, 0},
   };
-  struct mg_field_set set1 = {"set1", fields1, set1_fn, NULL, NULL, NULL};
-  struct mg_field_set set2 = {"set2", fields2, set2_fn, NULL, NULL, NULL};
-  struct mg_field_set set3 = {"set3", fields3, set3_fn, NULL, NULL, NULL};
+  struct mg_field_set set1 = {"set1", fields1, set1_fn, NULL, NULL};
+  struct mg_field_set set2 = {"set2", fields2, set2_fn, NULL, NULL};
+  struct mg_field_set set3 = {"set3", fields3, set3_fn, NULL, NULL};
   struct mg_field arr_fields[] = {
       {"val", MG_VAL_INT, &s_arr_val, sizeof(s_arr_val)},
       {NULL, MG_VAL_INT, NULL, 0},
   };
-  struct mg_field_set arr_set = {"arr", arr_fields, arr_fn, &s_arr_index, NULL,
-                                 NULL};
+  struct mg_field_set arr_set = {"arr", arr_fields, arr_fn, &s_arr_index, NULL};
   const char *get_all_expected =
       "{\"arr\":17,\"set3\":{\"admin\":7},"
       "\"set2\":{\"two\":false},"
-      "\"set1\":{\"one\":1,\"three\":\"t: 1\"},"
-      "\"files\":0}\n";
+      "\"set1\":{\"one\":1,\"three\":\"t: 1\"}}\n";
   const char *set1_req = "POST /api/set HTTP/1.0\nContent-Length: 18\n\n"
                          "{\"set1\":{\"one\":2}}";
   const char *set1_set3_req = "POST /api/set HTTP/1.0\n"
@@ -5227,51 +5209,40 @@ static void test_dash(void) {
     ASSERT(mg_http_listen(&mgr2, url2, mg_dash_ev_handler, &dash2) != NULL);
     ASSERT(fetch(&mgr2, buf, url2, "GET /api/get HTTP/1.0\n\n") == 200);
     ASSERT(strstr(buf, files_probe) == NULL);  // no files fieldset
-    ASSERT(fetch(&mgr2, buf, url2, "GET /fs/files/test.txt HTTP/1.0\n\n") == 404);
+    ASSERT(fetch(&mgr2, buf, url2, "GET /fs/test.txt HTTP/1.0\n\n") == 404);
     ASSERT(fetch(&mgr2, buf, url2,
-                 "POST /fs/files/test.txt HTTP/1.0\nContent-Length: 5\n\nhello") ==
+                 "POST /fs/test.txt HTTP/1.0\nContent-Length: 5\n\nhello") ==
            404);
     mg_mgr_free(&mgr2);
   }
 
-  // Test files fieldset with get_dir: /fs/ endpoints active
+  // Test the built-in file manager (struct mg_dash::files_dir): /fs/ active
   {
     const char *url3 = "http://localhost:26354";
     struct mg_mgr mgr3;
     struct mg_dash dash3;
-    static int idx3;
-    static struct mg_field ff3[] = {
-        {"name", MG_VAL_STR, s_delete_file.name, sizeof(s_delete_file.name)},
-        {"size", MG_VAL_UINT64, &s_delete_file.size, 0},
-        {NULL, MG_VAL_INT, NULL, 0},
-    };
-    static struct mg_field_set fset3 = {"files", ff3, delete_file_fn, &idx3,
-                                        test_upload_dir, NULL};
+    struct mg_str uploaded;
     memset(&dash3, 0, sizeof(dash3));
-    s_deleted_file[0] = '\0';
-    s_uploaded_file[0] = '\0';
-    s_delete_file_set = &fset3;
-    MG_DASH_ADD_FIELD_SET(&dash3, &fset3);
+    dash3.files_dir = test_upload_dir;
     mg_mgr_init(&mgr3);
     mg_mem_files = mg_packed_files;
     ASSERT(mg_http_listen(&mgr3, url3, mg_dash_ev_handler, &dash3) != NULL);
     ASSERT(fetch(&mgr3, buf, url3, "GET /api/get HTTP/1.0\n\n") == 200);
-    ASSERT(strstr(buf, files_probe) != NULL);  // files fieldset present
+    ASSERT(strstr(buf, files_probe) == NULL);  // files manager is not a fieldset
     ASSERT(fetch(&mgr3, buf, url3,
-                 "DELETE /fs/files/nofile.txt HTTP/1.0\n\n") == 200);
-    ASSERT(strcmp(s_deleted_file, "nofile.txt") == 0);
+                 "DELETE /fs/nofile.txt HTTP/1.0\n\n") == 404);
     ASSERT(fetch(&mgr3, buf, url3,
-                 "DELETE /fs/files/..%2Fevil.txt HTTP/1.0\n\n") == 400);
-    ASSERT(strcmp(s_deleted_file, "nofile.txt") == 0);
+                 "DELETE /fs/..%2Fevil.txt HTTP/1.0\n\n") == 400);
     ASSERT(fetch(&mgr3, buf, url3,
-                 "PUT /fs/files/test.bin HTTP/1.0\nContent-Length: 4\n\ndata") ==
+                 "PUT /fs/test.bin HTTP/1.0\nContent-Length: 4\n\ndata") ==
            200);
-    ASSERT(strcmp(s_uploaded_file, "test.bin") == 0);
+    uploaded = mg_file_read(&mg_fs_posix, "mongoose_dash_test/test.bin");
+    ASSERT(mg_strcmp(uploaded, mg_str("data")) == 0);
+    mg_free((void *) uploaded.buf);
     ASSERT(fetch(&mgr3, buf, url3,
-                 "PUT /fs/files/..%2Fevil.bin HTTP/1.0\nContent-Length: "
+                 "PUT /fs/..%2Fevil.bin HTTP/1.0\nContent-Length: "
                  "4\n\ndata") == 400);
-    ASSERT(strcmp(s_uploaded_file, "test.bin") == 0);
-    ASSERT(fetch(&mgr3, buf, url3, "GET /api/get/files/0 HTTP/1.0\n\n") == 200);
+    ASSERT(fetch(&mgr3, buf, url3, "GET /fs/ HTTP/1.0\n\n") == 200);
     ASSERT(strstr(buf, test_bin_probe) != NULL);
     mg_mgr_free(&mgr3);
   }
