@@ -33,10 +33,6 @@
 #define MG_ENABLE_POSIX_FS 1
 #endif
 
-#ifndef MG_ENABLE_DIRLIST
-#define MG_ENABLE_DIRLIST 1
-#endif
-
 #ifndef MG_OTA_ESP32_WDT_TIMEOUT_MS
 #define MG_OTA_ESP32_WDT_TIMEOUT_MS 10000U
 #endif

@@ -833,7 +833,7 @@ static void eh1(struct mg_connection *c, int ev, void *ev_data) {
     struct mg_http_serve_opts sopts;
     memset(&sopts, 0, sizeof(sopts));
     sopts.root_dir = "./data";
-    sopts.allow_upload = true;
+    sopts.enable_upload = true;
     mg_http_serve_upload(c, (struct mg_http_message *) ev_data, &sopts);
   } else if (ev == MG_EV_HTTP_MSG) {
     struct mg_http_message *hm = (struct mg_http_message *) ev_data;
@@ -866,6 +866,7 @@ static void eh1(struct mg_connection *c, int ev, void *ev_data) {
       memset(&sopts, 0, sizeof(sopts));
       sopts.root_dir = ".";
       sopts.extra_headers = "A: B\r\nE: F\r\n";
+      sopts.enable_dir_listing = true;
       mg_http_serve_dir(c, hm, &sopts);
     } else if (mg_match(hm->uri, mg_str("/servefile"), NULL)) {
       struct mg_http_serve_opts sopts;
@@ -883,8 +884,8 @@ static void eh1(struct mg_connection *c, int ev, void *ev_data) {
       sopts.root_dir = "./data";
       sopts.ssi_pattern = "#.shtml";
       sopts.extra_headers = "C: D\r\n";
-      sopts.allow_delete = true;
-      sopts.allow_upload = true;
+      sopts.enable_delete = true;
+      sopts.enable_upload = true;
       mg_http_serve_dir(c, hm, &sopts);
     }
   } else if (ev == MG_EV_WS_OPEN) {
@@ -3569,6 +3570,7 @@ static void eh7(struct mg_connection *c, int ev, void *ev_data) {
     memset(&sopts, 0, sizeof(sopts));
     sopts.root_dir = "/";
     sopts.fs = &mg_fs_packed;
+    sopts.enable_dir_listing = true;
     mg_mem_files = mg_packed_files;
     mg_http_serve_dir(c, hm, &sopts);
   }
@@ -3738,6 +3740,7 @@ static void h7(struct mg_connection *c, int ev, void *ev_data) {
     struct mg_http_serve_opts opts;
     memset(&opts, 0, sizeof(opts));
     opts.root_dir = "./data,/foo=./dirtest";
+    opts.enable_dir_listing = true;
     mg_http_serve_dir(c, hm, &opts);
   }
 }

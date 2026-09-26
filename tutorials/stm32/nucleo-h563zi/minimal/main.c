@@ -48,8 +48,9 @@ static void http_ev_handler(struct mg_connection *c, int ev, void *ev_data) {
     } else if (mg_match(hm->uri, mg_str("/files/#"), NULL)) {
       struct mg_http_serve_opts opts = {
           .root_dir = "/files/=/fs/",
-          .allow_delete = true,
-          .allow_upload = true,
+          .enable_delete = true,
+          .enable_upload = true,
+          .enable_dir_listing = true,
       };
       mg_http_serve_dir(c, hm, &opts);
     } else {
