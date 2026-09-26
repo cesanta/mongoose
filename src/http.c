@@ -679,7 +679,6 @@ struct printdirentrydata {
   size_t count;
 };
 
-#if MG_ENABLE_DIRLIST
 static void printdirentry(const char *name, void *userdata) {
   struct printdirentrydata *d = (struct printdirentrydata *) userdata;
   struct mg_fs *fs = d->opts->fs == NULL ? &mg_fs_posix : d->opts->fs;
@@ -730,7 +729,6 @@ static void listdir(struct mg_connection *c, struct mg_http_message *hm,
   memcpy(c->send.buf + off - 12, tmp, n);  // Set content length
   c->is_resp = 0;                          // Mark response end
 }
-#endif
 
 // Map requested URI to the file path (buf,len). Use root directory r.
 // r could be a path optionally followed by map: PATH,/PREFIX1=PATH1,...
@@ -814,15 +812,15 @@ void mg_http_serve_dir(struct mg_connection *c, struct mg_http_message *hm,
   if (flags < 0) {
     // Do nothing: the response has already been sent by uri_to_file_status()
   } else if (flags & MG_FS_DIR) {
-#if MG_ENABLE_DIRLIST
-    listdir(c, hm, opts, path);
-#else
-    mg_http_reply(c, 403, "", "Forbidden\n");
-#endif
-  } else if (opts->allow_delete &&
+    if (opts->enable_dir_listing) {
+      listdir(c, hm, opts, path);
+    } else {
+      mg_http_reply(c, 403, "", "Forbidden\n");
+    }
+  } else if (opts->enable_delete &&
             mg_strcasecmp(hm->method, mg_str("DELETE")) == 0) {
     mg_http_reply(c, flags && fs->rm(path) ? 200 : 404, "", "");
-  } else if (opts->allow_upload &&
+  } else if (opts->enable_upload &&
             (mg_strcasecmp(hm->method, mg_str("POST")) == 0 ||
              mg_strcasecmp(hm->method, mg_str("PUT")) == 0)) {
     // Small or already fully buffered body. mg_http_serve_upload() handles
@@ -860,13 +858,13 @@ static bool serve_upload_cb(struct mg_http_message *hm, struct mg_str *data,
 // buffered in memory. Companion to mg_http_serve_dir(): call this from
 // MG_EV_HTTP_HDRS, and keep calling mg_http_serve_dir() from MG_EV_HTTP_MSG
 // as before - it handles uploads too, for bodies this function skips.
-// Does nothing unless opts->allow_upload is set, the method is POST or PUT,
+// Does nothing unless opts->enable_upload is set, the method is POST or PUT,
 // and Content-Length is known and >= 2 * MG_IO_SIZE.
 void mg_http_serve_upload(struct mg_connection *c, struct mg_http_message *hm,
                           const struct mg_http_serve_opts *opts) {
   char path[MG_PATH_MAX];
   struct mg_fs *fs = opts->fs == NULL ? &mg_fs_posix : opts->fs;
-  if (!opts->allow_upload) {
+  if (!opts->enable_upload) {
     // Not enabled, nothing to do
   } else if (mg_strcasecmp(hm->method, mg_str("POST")) != 0 &&
             mg_strcasecmp(hm->method, mg_str("PUT")) != 0) {

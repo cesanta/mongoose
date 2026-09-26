@@ -561,7 +561,7 @@ static void mg_serve_fs(struct mg_connection *c, struct mg_http_message *hm,
     memset(&o, 0, sizeof(o));
     o.root_dir = root;
     o.fs = dash->upload_fs ? dash->upload_fs : &mg_fs_posix;
-    o.allow_delete = o.allow_upload = true;
+    o.enable_delete = o.enable_upload = o.enable_dir_listing = true;
     if (stream) mg_http_serve_upload(c, hm, &o);
     else mg_http_serve_dir(c, hm, &o);
   }

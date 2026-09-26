@@ -50,10 +50,6 @@
 #include <time.h>
 #include <unistd.h>
 
-#ifndef MG_ENABLE_DIRLIST
-#define MG_ENABLE_DIRLIST 1
-#endif
-
 #ifndef MG_PATH_MAX
 #define MG_PATH_MAX FILENAME_MAX
 #endif
