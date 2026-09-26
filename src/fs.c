@@ -1,4 +1,5 @@
 #include "fs.h"
+#include "log.h"
 #include "printf.h"
 #include "str.h"
 #include "util.h"
@@ -47,6 +48,7 @@ bool mg_file_write(struct mg_fs *fs, const char *path, const void *buf,
   char tmp[MG_PATH_MAX], rnd[10];
   size_t path_len = mg_snprintf(tmp, sizeof(tmp), "%s..%s", path,
                                 mg_random_str(rnd, sizeof(rnd)));
+  fs->rm(tmp);
   if (path_len < sizeof(tmp) &&
       (fd = mg_fs_open(fs, tmp, MG_FS_WRITE | MG_FS_EXCL)) != NULL) {
     result = fs->wr(fd->fd, buf, len) == len;
@@ -54,8 +56,11 @@ bool mg_file_write(struct mg_fs *fs, const char *path, const void *buf,
     if (result) {
       fs->rm(path);
       result = fs->mv(tmp, path);
+      MG_DEBUG(("mv %s -> %s result=%d", tmp, path, result));
     }
     fs->rm(tmp);
+  } else {
+    MG_ERROR(("mg_fs_open(%s) failed, path_len=%zu", tmp, path_len));
   }
   return result;
 }

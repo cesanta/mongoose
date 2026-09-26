@@ -10,6 +10,10 @@
 #define MG_STAT_FUNC stat
 #endif
 
+#if MG_ENABLE_LFS
+#include <dirent.h>
+#endif
+
 static int p_stat(const char *path, size_t *size, time_t *mtime) {
 #if !defined(S_ISDIR)
   MG_ERROR(("stat() API is not supported. %p %p %p", path, size, mtime));
@@ -161,7 +165,6 @@ struct dirent *readdir(DIR *d) {
 
 static void p_list(const char *dir, void (*fn)(const char *, void *),
                    void *userdata) {
-#if MG_ENABLE_DIRLIST
   struct dirent *dp;
   DIR *dirp;
   if ((dirp = (opendir(dir))) == NULL) return;
@@ -170,9 +173,6 @@ static void p_list(const char *dir, void (*fn)(const char *, void *),
     fn(dp->d_name, userdata);
   }
   closedir(dirp);
-#else
-  (void) dir, (void) fn, (void) userdata;
-#endif
 }
 
 static void *p_open(const char *path, int flags) {

@@ -18,7 +18,8 @@
 #include <time.h>
 #include <unistd.h>
 
+#ifndef MG_PATH_MAX
 #define MG_PATH_MAX 100
-#define MG_ENABLE_DIRLIST 0
+#endif
 
 #endif

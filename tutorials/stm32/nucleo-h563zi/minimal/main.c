@@ -45,8 +45,20 @@ static void http_ev_handler(struct mg_connection *c, int ev, void *ev_data) {
     struct mg_http_message *hm = (struct mg_http_message *) ev_data;
     if (mg_match(hm->uri, mg_str("/api/tick"), NULL)) {
       mg_http_reply(c, 200, "", "{%m:%llu}\n", MG_ESC("tick"), hal_get_tick());
+    } else if (mg_match(hm->uri, mg_str("/files/#"), NULL)) {
+      struct mg_http_serve_opts opts = {
+          .root_dir = "/files/=/fs/",
+          .allow_delete = true,
+          .allow_upload = true,
+      };
+      mg_http_serve_dir(c, hm, &opts);
     } else {
-      mg_http_reply(c, 200, "", "Hi from Mongoose, tick %llu\n", hal_get_tick());
+      size_t u = hal_ram_used(), t = u + hal_ram_free();
+      mg_http_reply(c, 200, "",
+                    "Hi from Mongoose!\n"
+                    "Tick %llu\n"
+                    "RAM usage: %zu / %zu (%zu %%)\n",
+                    hal_get_tick(), u, t, (size_t) (100 * u / t));
     }
   }
 }
@@ -66,6 +78,14 @@ int main(void) {
   struct mg_mgr mgr;
   mg_mgr_init(&mgr);
   mg_http_listen(&mgr, "http://0.0.0.0", http_ev_handler, NULL);
+
+  // Create directory for Web file manager. Will be mapped to /files/ URL
+  mkdir("/fs", 0755);
+  MG_INFO(("File manager operations:"));
+  MG_INFO(("Upload: curl IP/files/NAME --data-binary @FILE"));
+  MG_INFO(("Delete: curl IP/files/NAME -X DELETE"));
+  MG_INFO(("Show:   curl IP/files/NAME"));
+  MG_INFO(("List:   curl IP/files/"));
 
   for (;;) {
     mg_mgr_poll(&mgr, 0);

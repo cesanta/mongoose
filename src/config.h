@@ -83,7 +83,7 @@
 #endif
 
 #ifndef MG_ENABLE_DIRLIST
-#define MG_ENABLE_DIRLIST 0
+#define MG_ENABLE_DIRLIST MG_ENABLE_LFS
 #endif
 
 #ifndef MG_ENABLE_CUSTOM_RANDOM
@@ -135,7 +135,7 @@
 #endif
 
 #ifndef MG_ENABLE_POSIX_FS
-#define MG_ENABLE_POSIX_FS 0
+#define MG_ENABLE_POSIX_FS MG_ENABLE_LFS
 #endif
 
 #ifndef MG_INVALID_SOCKET
