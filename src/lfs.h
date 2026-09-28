@@ -2,7 +2,7 @@
 
 #if MG_ENABLE_LFS
 #include <fcntl.h>
-#include <littlefs/lfs.h>
+#include <lfs.h>
 
 #ifndef DT_DIR
 #define DT_DIR 4
@@ -16,5 +16,5 @@ struct dirent {
   unsigned char d_type;
 };
 
-typedef struct mg_lfs_fd  DIR;
+typedef struct mg_lfs_fd DIR;
 #endif

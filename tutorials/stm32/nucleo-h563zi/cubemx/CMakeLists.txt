@@ -59,14 +59,13 @@ target_sources(${CMAKE_PROJECT_NAME} PRIVATE
 
     ${CMAKE_SOURCE_DIR}/littlefs/lfs.c
     ${CMAKE_SOURCE_DIR}/littlefs/lfs_util.c
-    #    ${CMAKE_SOURCE_DIR}/littlefs/retarget_lfs.c
 )
 
 # Add include paths
 target_include_directories(${CMAKE_PROJECT_NAME} PRIVATE
     # Add user defined include paths
     ${CMAKE_SOURCE_DIR}/mongoose/
-    ${CMAKE_SOURCE_DIR}/
+    ${CMAKE_SOURCE_DIR}/littlefs/
     ${CMAKE_SOURCE_DIR}/../../../..
 )
 
