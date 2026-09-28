@@ -117,27 +117,6 @@ int main(void) {
 
   MG_INFO(("Initialised. CPU clock: %lu MHz", SystemCoreClock / 1000000));
 
-  // Report the previous boot's crash backtrace, if any
-  if (mg_health_reason() == MG_HEALTH_RESET_FAULT) {
-    uint32_t *r = mg_health_record.backtrace;
-    static char buf[512];
-    size_t len = mg_snprintf(
-        buf, sizeof(buf),
-        "{\"image\":\"firmware.elf\",\"binary\":\"firmware.bin\","
-        "\"regs\":{\"sp\":\"0x%08lx\",\"lr\":\"0x%08lx\","
-        "\"pc\":\"0x%08lx\"},\"stack\":{\"addr\":\"0x%08lx\","
-        "\"words\":[",
-        (unsigned long) r[CRASH_SP], (unsigned long) r[CRASH_LR],
-        (unsigned long) r[CRASH_PC], (unsigned long) r[CRASH_SP]);
-    for (size_t i = CRASH_STACK; i < MG_HEALTH_BACKTRACE; i++) {
-      len += mg_snprintf(buf + len, sizeof(buf) - len, "%s\"0x%08lx\"",
-                         i == CRASH_STACK ? "" : ",",
-                         (unsigned long) r[i]);
-    }
-    mg_snprintf(buf + len, sizeof(buf) - len, "]}}");
-    MG_INFO(("Previous boot crash: %s", buf));
-  }
-
   struct mg_mgr mgr;
   mg_mgr_init(&mgr);
   mg_http_listen(&mgr, "http://0.0.0.0", http_ev_handler, NULL);

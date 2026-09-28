@@ -91,11 +91,31 @@ static void mg_mdash_fn(struct mg_connection *c, int ev, void *ev_data) {
 }
 
 static void mg_mdash_rpc_get_info(struct mg_rpc_req *r) {
-  mg_rpc_ok(r, "{%m:%m,%m:%llu,%m:%m,%m:\"mws.%d\"}", MG_ESC("fw_version"),
-            MG_ESC(MG_MDASH_FIRMWARE_VERSION), MG_ESC("uptime"),
-            (uint64_t) (mg_millis() / 1000), MG_ESC("reboot_reason"),
-            MG_ESC(mg_health_reason_str(mg_health_reason())), MG_ESC("arch"),
-            MG_ARCH);
+  if (mg_health_valid()) {
+    uint32_t *data = mg_health_record.backtrace;
+    mg_rpc_ok(r,
+              "{%m:%m,%m:%llu,%m:%m,%m:\"mws.%d\",%m:{%m:true,"
+              "%m:{%m:\"0x%08lx\",%m:\"0x%08lx\",%m:\"0x%08lx\"},"
+              "%m:{%m:\"0x%08lx\",%m:%m}}}",
+              MG_ESC("fw_version"), MG_ESC(MG_MDASH_FIRMWARE_VERSION),
+              MG_ESC("uptime"), (uint64_t) (mg_millis() / 1000),
+              MG_ESC("reboot_reason"),
+              MG_ESC(mg_health_reason_str(mg_health_reason())), MG_ESC("arch"),
+              MG_ARCH, MG_ESC("report"), MG_ESC("valid"), MG_ESC("regs"),
+              MG_ESC("sp"), (unsigned long) data[0], MG_ESC("lr"),
+              (unsigned long) data[1], MG_ESC("pc"), (unsigned long) data[2],
+              MG_ESC("stack"), MG_ESC("addr"), (unsigned long) data[0],
+              MG_ESC("data"), mg_print_base64,
+              (int) ((MG_HEALTH_BACKTRACE - 3) * sizeof(data[0])),
+              (uint8_t *) &data[3]);
+  } else {
+    mg_rpc_ok(r, "{%m:%m,%m:%llu,%m:%m,%m:\"mws.%d\",%m:{%m:false}}",
+              MG_ESC("fw_version"), MG_ESC(MG_MDASH_FIRMWARE_VERSION),
+              MG_ESC("uptime"), (uint64_t) (mg_millis() / 1000),
+              MG_ESC("reboot_reason"),
+              MG_ESC(mg_health_reason_str(mg_health_reason())), MG_ESC("arch"),
+              MG_ARCH, MG_ESC("report"), MG_ESC("valid"));
+  }
 }
 
 static void mg_mdash_rpc_ota_begin(struct mg_rpc_req *r) {
