@@ -1,0 +1,299 @@
+// SPDX-FileCopyrightText: 2026 Cesanta Software Limited
+// SPDX-License-Identifier: GPL-2.0-only or commercial
+
+#include "main.h"
+#include "mongoose.h"
+
+#define CONFIG_FILE "/fs/settings.json"
+static struct mg_fs *s_fs = &mg_fs_posix;
+
+static struct mg_dash s_dash;
+static int authenticate(char *user, size_t userlen, const char *pass);
+
+// Action buttons
+static bool s_action1, s_action2;
+static uint64_t s_action2_timeout;
+static bool actions_fn(enum mg_dash_op op, struct mg_dash_user *u) {
+  (void) u;
+  if (op == MG_DASH_READ) {
+    if (s_action2_timeout > mg_now()) s_action2 = true;
+    return true;
+  }
+  if (op == MG_DASH_WRITE) {
+    if (s_action2 == true) s_action2_timeout = mg_now() + 750;
+    return true;
+  }
+  return false;
+}
+static struct mg_field fields_actions[] = {
+    {"action1", MG_VAL_BOOL, &s_action1, sizeof(s_action1)},
+    {"action2", MG_VAL_BOOL, &s_action2, sizeof(s_action2)},
+    {NULL, MG_VAL_INT, NULL, 0},
+};
+static struct mg_field_set set_actions = {"actions", fields_actions, actions_fn,
+                                          NULL, NULL};
+
+// Control panel
+// s_led1, s_led2, s_led3 are used to communicate LED status
+static bool s_led1, s_led2, s_led3;
+static bool leds_fn(enum mg_dash_op op, struct mg_dash_user *u) {
+  (void) u;
+  if (op == MG_DASH_READ) {
+    s_led1 = HAL_GPIO_ReadPin(GPIOB, GPIO_PIN_0);
+    s_led2 = HAL_GPIO_ReadPin(GPIOF, GPIO_PIN_4);
+    s_led3 = HAL_GPIO_ReadPin(GPIOG, GPIO_PIN_4);
+  } else {
+    HAL_GPIO_WritePin(GPIOB, GPIO_PIN_0, s_led1);
+    HAL_GPIO_WritePin(GPIOF, GPIO_PIN_4, s_led2);
+    HAL_GPIO_WritePin(GPIOG, GPIO_PIN_4, s_led3);
+  }
+  return true;
+}
+static struct mg_field fields_leds[] = {
+    {"led1", MG_VAL_BOOL, &s_led1, sizeof(s_led1)},
+    {"led2", MG_VAL_BOOL, &s_led2, sizeof(s_led2)},
+    {"led3", MG_VAL_BOOL, &s_led3, sizeof(s_led3)},
+    {NULL, MG_VAL_INT, NULL, 0},
+};
+static struct mg_field_set set_leds = {"leds", fields_leds, leds_fn, NULL,
+                                       NULL};
+
+// Read-only device Metrics
+static int s_ram = 32, s_cpu = 7;
+static double s_temperature = 24.8;
+
+static bool metrics_fn(enum mg_dash_op op, struct mg_dash_user *u) {
+  (void) u;
+  if (op != MG_DASH_READ) return false;
+  s_ram = 25 + (rand() % 16);
+  s_cpu = 7 + (rand() % 21);
+  s_temperature = 14.8 + ((double) rand() / RAND_MAX) * 20.0;
+  return true;
+}
+
+static struct mg_field fields_metrics[] = {
+    {"ram", MG_VAL_INT, &s_ram, sizeof(s_ram)},
+    {"cpu", MG_VAL_INT, &s_cpu, sizeof(s_cpu)},
+    {"temperature", MG_VAL_DBL, &s_temperature, sizeof(s_temperature)},
+    {NULL, MG_VAL_INT, NULL, 0},
+};
+
+static struct mg_field_set set_metrics = {"metrics", fields_metrics, metrics_fn,
+                                          NULL, NULL};
+
+// Read-write device settings, backed by the CONFIG_FILE
+static bool s_enable_login = false;
+static double s_volume = 17.2;
+static int s_log_level = MG_LL_DEBUG;
+static char s_name[20] = "Dublin";
+static int s_ota_interval = 30;
+static char s_ota_version[] = MG_OTA_FIRMWARE_VERSION;
+static char s_ota_status[40] = "No scans yet";
+static char s_ota_url[100] = "https://my-product.com/ota.json";
+
+static bool settings_fn(enum mg_dash_op op, struct mg_dash_user *u) {
+  bool ok = true;
+  if (op == MG_DASH_READ && u->level >= 3) {
+    struct mg_str s = mg_file_read(s_fs, CONFIG_FILE);
+    MG_INFO(("----> [%.*s]", s.len, s.buf));
+    if (s.len > 0 && s.buf != NULL) {
+      mg_json_get_bool(s, "$.enable_login", &s_enable_login);
+      mg_json_get_num(s, "$.volume", &s_volume);
+      s_ota_interval =
+          (int) mg_json_get_long(s, "$.ota_interval", s_ota_interval);
+      mg_json_unescape(s, "$.name", s_name, sizeof(s_name));
+      mg_json_unescape(s, "$.ota_url", s_ota_url, sizeof(s_ota_url));
+      mg_free(s.buf);
+    }
+  } else if (op == MG_DASH_WRITE && u->level >= 7) {
+    s_dash.authenticate = s_enable_login ? authenticate : NULL;
+    mg_file_printf(s_fs, CONFIG_FILE,
+                   "{%m:%d,%m:%d,%m:%g,%m:%m,%m:%m,%m:%s}",  //
+                   MG_ESC("ota_interval"), s_ota_interval,   //
+                   MG_ESC("log_level"), s_log_level,         //
+                   MG_ESC("volume"), s_volume,               //
+                   MG_ESC("name"), MG_ESC(s_name),           //
+                   MG_ESC("ota_url"), MG_ESC(s_ota_url),     //
+                   MG_ESC("enable_login"),
+                   s_enable_login ? "true" : "false"  //
+    );
+  } else {
+    ok = false;
+  }
+  mg_log_level = s_log_level;
+  return ok;
+}
+
+static struct mg_field fields_settings[] = {
+    {"volume", MG_VAL_DBL, &s_volume, sizeof(s_volume)},
+    {"name", MG_VAL_STR, &s_name, sizeof(s_name)},
+    {"log_level", MG_VAL_INT, &s_log_level, sizeof(s_log_level)},
+    {"enable_login", MG_VAL_BOOL, &s_enable_login, sizeof(s_enable_login)},
+    {"ota_version", MG_VAL_STR, &s_ota_version, 0},
+    {"ota_status", MG_VAL_STR, &s_ota_status, sizeof(s_ota_status)},
+    {"ota_url", MG_VAL_STR, &s_ota_url, sizeof(s_ota_url)},
+    {"ota_interval", MG_VAL_INT, &s_ota_interval, sizeof(s_ota_interval)},
+    {NULL, MG_VAL_INT, NULL, 0},
+};
+
+static struct mg_field_set set_settings = {"settings", fields_settings,
+                                           settings_fn, NULL, NULL};
+
+#define NUM_POINTS_GRAPH1 7  // How many graph1 data points to send
+
+struct point {
+  uint16_t x;   // X coordinate of the data point, usually this is time
+  uint16_t y1;  // We can plot multiple values per graph,
+  uint16_t y2;  // let's plot 2 values: y1 and y2.
+};
+
+// Serialise chart data into a string: [[x,y1,y2],[x,y1,y2],...]
+// One uint16_t takes 5 character max, so one entry is 19 bytes max.
+// We could be more efficient by storing hex or base64-encoded data, but
+// let's keep it simple. However if we do, update data parsing logic in
+// the web_root/main.js
+#define POINT_SIZE 19
+static char s_graph1_data[NUM_POINTS_GRAPH1 * POINT_SIZE + 2 + 1];
+
+// Randomly generate graph points and serialise them into a string
+void read_graph1(void) {
+  size_t i, len = 0;
+  len += mg_snprintf(s_graph1_data + len, sizeof(s_graph1_data) - len, "[");
+  for (i = 0; i < NUM_POINTS_GRAPH1; i++) {
+    struct point p;
+    p.x = (uint16_t) i;
+    p.y1 = (uint16_t) (85 - ((49 * i) / NUM_POINTS_GRAPH1) + (rand() % 9));
+    p.y2 = (uint16_t) (20 + ((69 * i) / NUM_POINTS_GRAPH1) + (rand() % 5));
+    len += mg_snprintf(s_graph1_data + len, sizeof(s_graph1_data) - len,
+                       "%s[%hu,%hu,%hu]", i > 0 ? "," : "", p.x, p.y1, p.y2);
+  }
+  len += mg_snprintf(s_graph1_data + len, sizeof(s_graph1_data) - len, "]");
+}
+
+static struct mg_field fields_graph1[] = {
+    {"data", MG_VAL_RAW, s_graph1_data, sizeof(s_graph1_data)},
+    {NULL, MG_VAL_INT, NULL, 0},
+};
+
+static bool graph1_fn(enum mg_dash_op op, struct mg_dash_user *u) {
+  (void) u;
+  if (op != MG_DASH_READ) return false;
+  read_graph1();
+  return true;
+}
+static struct mg_field_set set_graph1 = {"graph1", fields_graph1, graph1_fn,
+                                         NULL, NULL};
+
+#define NUM_POINTS_GRAPH2 100  // How many graph2 data points to send
+static char s_graph2_data[NUM_POINTS_GRAPH2 * 4 + 2 + 1];
+static bool s_graph2_report = true;
+
+// Adjust t += 7, i * 9, and i * 3
+void read_graph2(void) {
+  static uint16_t t;
+  size_t i, len = 0;
+  len = mg_snprintf(s_graph2_data, sizeof(s_graph2_data), "[");
+  t += 23;
+  for (i = 0; i < NUM_POINTS_GRAPH2; i++) {
+    uint16_t x = (uint16_t) (i * 7 + t);
+    uint16_t y = (uint16_t) (i * 3 - t / 2);
+    uint8_t a = (uint8_t) (x ^ (x >> 3)) & 255;
+    uint8_t b = (uint8_t) (y ^ (y >> 4)) & 255;
+    int v =
+        70 + ((a < 128 ? a : 255 - a) >> 1) + ((b < 128 ? b : 255 - b) >> 2);
+    len += mg_snprintf(s_graph2_data + len, sizeof(s_graph2_data) - len,
+                       "%s%hhu", i > 0 ? "," : "", (uint8_t) v);
+  }
+  len += mg_snprintf(s_graph2_data + len, sizeof(s_graph2_data) - len, "]");
+}
+
+static struct mg_field fields_graph2[] = {
+    {"data", MG_VAL_RAW, s_graph2_data, sizeof(s_graph2_data)},
+    {"report", MG_VAL_BOOL, &s_graph2_report, sizeof(s_graph2_report)},
+    {NULL, MG_VAL_INT, NULL, 0},
+};
+
+static bool graph2_fn(enum mg_dash_op op, struct mg_dash_user *u) {
+  (void) u;
+  if (op == MG_DASH_READ) read_graph2();
+  return op == MG_DASH_READ || op == MG_DASH_WRITE;
+}
+static struct mg_field_set set_graph2 = {"graph2", fields_graph2, graph2_fn,
+                                         NULL, NULL};
+
+static int authenticate(char *user, size_t userlen, const char *pass) {
+  int level = 0;  // Authentication failure
+  if (strcmp(pass, "admin") == 0) {
+    mg_snprintf(user, userlen, "%s", "admin");
+    level = 7;  // Administrator
+  } else if (strcmp(pass, "user") == 0) {
+    mg_snprintf(user, userlen, "%s", "user");
+    level = 3;  // Ordinary dude
+  }
+  return level;
+}
+
+static bool files_dir(const struct mg_dash_user *u, char *buf, size_t len) {
+  (void) u;  // Same dir for every user. Key off u->name for per-user dirs
+  mg_snprintf(buf, len, "%s", "/fs");
+  return true;
+}
+
+void mg_dash_init(struct mg_mgr *mgr) {
+  s_dash.files_dir = files_dir;  // Built-in file manager, see mg_dash.h
+  MG_DASH_ADD_FIELD_SET(&s_dash, &set_leds);
+  MG_DASH_ADD_FIELD_SET(&s_dash, &set_metrics);
+  MG_DASH_ADD_FIELD_SET(&s_dash, &set_settings);
+  MG_DASH_ADD_FIELD_SET(&s_dash, &set_graph1);
+  MG_DASH_ADD_FIELD_SET(&s_dash, &set_graph2);
+  MG_DASH_ADD_FIELD_SET(&s_dash, &set_actions);
+
+  // Create upload directory
+  mkdir("/fs", 0755);
+
+  // If config file does not exist, create one
+  if (s_fs->st(CONFIG_FILE, NULL, NULL) == 0) {
+    mg_file_printf(s_fs, CONFIG_FILE, "{%m:%g}", MG_ESC("volume"), 4.23);
+  }
+
+  // Read settings from flash
+  struct mg_dash_user u = {.level = 9};  // Super mega user
+  settings_fn(MG_DASH_READ, &u);
+
+  mg_mem_files = mg_packed_files;
+  mg_http_listen(mgr, MG_HTTP_ADDR, mg_dash_ev_handler, &s_dash);
+  mg_http_listen(mgr, MG_HTTPS_ADDR, mg_dash_ev_handler, &s_dash);
+}
+
+void mg_dash_poll(struct mg_mgr *mgr) {
+  // Send metrics change periodically
+  static uint64_t timer1 = 0, timer2 = 0;
+  if (mg_timer_expired(&timer1, 30000, mg_now())) {
+    mg_dash_send_change(mgr, &set_metrics);
+  }
+  if (mg_timer_expired(&timer2, 120, mg_now()) && s_graph2_report) {
+    mg_dash_send_change(mgr, &set_graph2);
+  }
+  if (s_action2 == true && s_action2_timeout < mg_now()) {
+    s_action2 = false;
+    mg_dash_send_change(mgr, &set_actions);
+  }
+}
+
+// On desktop, build with -DMAIN flag to include main().
+// On embedded system, run this code in your main() function
+#ifdef MAIN
+int main(void) {
+  struct mg_mgr mgr;
+
+  mg_mgr_init(&mgr);
+  mg_dash_init(&mgr);
+
+  for (;;) {
+    mg_mgr_poll(&mgr, 1);
+    mg_dash_poll(&mgr);
+  }
+
+  return 0;
+}
+#endif

@@ -1,0 +1,804 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <title>My Dashboard</title>
+
+    <!-- Mongoose device dashboard -->
+    <script src="https://mongoose.ws/resources/dashboard.js"></script>
+    <script>
+      Dashboard.init({
+        debug: true,
+        auth: true,
+        data: {
+          graph1: {data: []},
+          graph2: {data: [], report: true},
+          actions: { action1: false, action2: false },
+          leds: { led1: true, led2: false, led3: false },
+          settings: { volume: 12, log_level: 3, name: 'Galway', enable_login: true, ota_version: '1.2.3', ota_status: 'No checks yet', ota_url: 'http://my-product.com/ota.json', ota_interval: 30 },
+          metrics: { temperature: 1.2, cpu: 4, ram: 5, version: '1.2.3' },
+        },
+      });
+    </script>
+
+    <script>
+      document.addEventListener("DOMContentLoaded", () => {
+
+        // Tab switching
+        const tabs = Array.from(document.querySelectorAll(".header-left .nav-link[href^='#']"));
+        const panels = Array.from(document.querySelectorAll(".tab-panel"));
+
+        const activateTab = targetId => {
+          const targetPanel = document.getElementById(targetId);
+          if (!targetPanel) return;
+
+          tabs.forEach(tab => {
+            const isActive = tab.getAttribute("href") === `#${targetId}`;
+            tab.classList.toggle("nav-link-active", isActive);
+            tab.setAttribute("aria-selected", String(isActive));
+            tab.setAttribute("tabindex", isActive ? "0" : "-1");
+          });
+
+          panels.forEach(panel => {
+            const isActive = panel.id === targetId;
+            panel.classList.toggle("tab-panel-active", isActive);
+            panel.hidden = !isActive;
+          });
+
+
+          requestAnimationFrame(() => {
+            mkGraph(graphs.graph1);
+            mkGraph(graphs.graph2);
+          });
+        };
+
+        tabs.forEach(tab => {
+          tab.addEventListener("click", event => {
+            event.preventDefault();
+            const targetId = tab.getAttribute("href").slice(1);
+            activateTab(targetId);
+            window.history.replaceState(null, "", `#${targetId}`);
+          });
+        });
+
+        const initialId = window.location.hash.slice(1) || "overview";
+        activateTab(initialId);
+
+        // Auto logout on inactivity
+        function restartAutoLogout() {
+          const autologoutTimeoutSeconds = 300;
+          if (window.autoLogoutTimerId) clearTimeout(window.autoLogoutTimerId);
+          window.autoLogoutTimerId = setTimeout(() => {
+            Dashboard.logout().then(() => location.reload());
+          }, autologoutTimeoutSeconds * 1000);
+        };
+        function setupAutoLogout() {
+          ['mousemove', 'keydown', 'scroll', 'touchstart'].forEach(ev => {
+            document.addEventListener(ev, restartAutoLogout, true);
+          });
+          restartAutoLogout();
+        };
+
+        // Login page
+        const passwordEl = document.getElementById('login-password');
+        const loginButtonEl = document.getElementById('login-submit');
+        function showLogin(yes) {
+          document.getElementById('auth').style.display = yes ? '' : 'none';
+          document.getElementById('app').style.display = yes ? 'none' : '';
+          if (yes) {
+            document.body.style.visibility = 'visible';
+            passwordEl.focus();
+            passwordEl.onkeydown = function(ev) {
+              if (ev.key === 'Enter') {
+                ev.preventDefault();
+                loginButtonEl.click();
+              }
+            };
+          }
+        };
+
+        loginButtonEl.onclick = function(ev) {
+          ev.preventDefault();
+          const username = (document.getElementById('login-username')?.value || '').trim();
+          const password = passwordEl.value || '';
+          Dashboard.login({username, password}).then(r => showLogin(false));
+          console.log('LOGIN', {username, password});
+          passwordEl.value = '';
+        };
+
+        Dashboard.on('logout', function() { showLogin(true); });
+        Dashboard.on('ready', function() {
+          setupAutoLogout();
+          document.body.style.visibility = 'visible';
+          refreshFiles();
+        });
+        Dashboard.login().catch(err => showLogin(true));
+
+        // GRAPHS
+        const graphs = {
+          graph1: {
+            el: document.getElementById("graph1"),
+            plot: null,
+            opts: {
+              width: 10, height: 10,
+              tzDate: (ts) => uPlot.tzDate(new Date(ts * 1e3), "Europe/London"),
+              legend: { show: false },
+              axes: [ { size: 25, gap: 2, }, { size: 40, gap: 2, }, ],
+              scales: { x: { time: false }, y: { range: [0, 100] }, },
+              series: [
+                {},
+                {stroke: '#22C55EFF', fill: '#22C55E1A'}, // green
+                {stroke: '#F59E0BFF', fill: '#F59E0B1A'}, // amber
+              ],
+            },
+          },
+          graph2: {
+            el: document.getElementById("graph2"),
+            plot: null,
+            opts: {
+              width: 10, height: 10,
+              legend: { show: false },
+              axes: [ { size: 25, gap: 2, }, { size: 40, gap: 2, }, ],
+              scales: { x: { time: false }, y: { range: [50, 200] }, },
+              series: [
+                {},
+                {stroke: '#058DC7FF', fill: '#058DC71A'}, // azure
+              ],
+            }
+          },
+        };
+
+        function mkGraph(g) {
+          if (!g.plot) g.plot = new uPlot(g.opts, [], g.el);
+          const rect = g.el.getBoundingClientRect();
+          if (rect.width > 0 && rect.height > 0) {
+            g.plot.setSize({ width: rect.width, height: rect.height });
+          }
+        };
+
+        function updateGraph1(data) {
+          data && graphs.graph1.plot.setData([
+            data.map(x => x[0]),
+            data.map(x => x[1]),
+            data.map(x => x[2]),
+          ]);
+        };
+
+        function updateGraph2(data) {
+          data && graphs.graph2.plot.setData([
+            data.map((_, i) => i),
+            data,
+          ]);
+        };
+
+        // Intercept change notifications: re-plot graphs
+        Dashboard.on('change', args => {
+          args?.graph1?.data && updateGraph1(args?.graph1?.data);
+          args?.graph2?.data && updateGraph2(args?.graph2?.data);
+        });
+
+        // File manager: served directly by the built-in mg_dash file manager
+        // (see struct mg_dash::files_dir), not by the generic data-repeat
+        // binding, since the listing endpoint returns a plain JSON array
+        const filesListEl = document.getElementById('files-list');
+        const filesCountEl = document.getElementById('files-count');
+        const filesUploadEl = document.getElementById('files-upload-input');
+
+        function renderFiles(list) {
+          filesCountEl.textContent = list.length + ' Files';
+          filesListEl.innerHTML = list.map(f => `
+            <div class="file-row">
+              <div class="file-info">
+                <span class="file-icon" aria-hidden="true">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M14 2H7a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V7Z" />
+                    <path d="M14 2v5h5" />
+                  </svg>
+                </span>
+                <div class="file-name">${f.name}</div>
+              </div>
+              <div class="file-size">${f.size}</div>
+              <div class="file-actions">
+                <a href="fs/${encodeURIComponent(f.name)}" target="_blank" class="btn btn-secondary">
+                  <svg viewBox="0 0 24 24" class="nav-icon" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M12 3v12" />
+                    <path d="m7 10 5 5 5-5" />
+                    <path d="M5 21h14" />
+                  </svg>
+                </a>
+                <button data-del="${encodeURIComponent(f.name)}" class="btn btn-secondary">
+                  <svg viewBox="0 0 24 24" class="nav-icon" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M3 6h18" />
+                    <path d="M8 6V4h8v2" />
+                    <path d="M19 6l-1 14H6L5 6" />
+                    <path d="M10 11v5" />
+                    <path d="M14 11v5" />
+                  </svg>
+                </button>
+              </div>
+            </div>`).join('');
+          filesListEl.querySelectorAll('[data-del]').forEach(btn => {
+            btn.addEventListener('click', ev => {
+              ev.preventDefault();
+              fetch('fs/' + btn.dataset.del, { method: 'DELETE' }).then(refreshFiles);
+            });
+          });
+        }
+
+        function refreshFiles() {
+          fetch('fs/')
+            .then(r => r.ok ? r.json() : Promise.reject(r.statusText))
+            .then(list => renderFiles(list.filter(f => !f.dir)))
+            .catch(err => console.log('Files list failed', err));
+        }
+
+        filesUploadEl.addEventListener('change', ev => {
+          const f = ev.target.files[0];
+          ev.target.value = '';
+          if (!f) return;
+          const reader = new FileReader();
+          reader.readAsArrayBuffer(f);
+          reader.onload = () => {
+            fetch('fs/' + encodeURIComponent(f.name), { method: 'POST', body: reader.result })
+              .then(refreshFiles)
+              .catch(err => console.log('Upload failed', err));
+          };
+        });
+
+      });
+    </script>
+    <style>
+:root { --color-surface-sunken: #e9eff5; --color-border-default: #d8e0ea; --color-text-toolbar: rgb(71, 85, 105); --color-text-strong: #24364d; --color-accent-border: #bae6fd; --color-accent-text: #0369a1; --color-surface-elevated: #ffffff; --font-size-body: 14px; --font-size-toolbar: 1rem; --max-width: 80rem; --spacing-1: 0.25rem; --spacing-2: 0.5rem; --spacing-3: 0.75rem; --spacing-4: 1rem; --spacing-5: 1.25rem; --spacing-6: 1.5rem; }
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body { font-family: ui-sans-serif, system-ui, sans-serif, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol", "Noto Color Emoji"; font-size: var(--font-size-body); line-height: 1.5; min-height: 100vh; color: var(--color-text-strong); }
+a, a:visited, a:link { text-decoration: none; }
+.header { z-index: 50; }
+.header-container { max-width: var(--max-width); margin: 0 auto; display: flex; align-items: center; justify-content: space-between; gap: var(--spacing-4); padding: var(--spacing-3) var(--spacing-6); }
+.header-left { display: flex; align-items: center; gap: var(--spacing-4); }
+.header-actions { display: inline-flex; align-items: center; justify-content: flex-end; gap: var(--spacing-3); flex-wrap: wrap; }
+.logo { height: 2.8rem; margin: 0 1rem; width: auto; }
+.connection-badge { display: inline-flex; align-items: center; gap: 0.4rem; padding: 4px 14px; border-radius: 14px; font-weight: 600; }
+.connection-badge-online { color: rgb(4, 120, 87); border: 1px solid rgb(167, 243, 208); background: rgb(236, 253, 245); }
+.connection-badge-offline { color: rgb(120, 44, 57); border: 1px solid rgb(243, 177, 208); background: rgb(253, 246, 245); }
+.connection-dot { width: 11px; height: 11px; border-radius: 50%; flex-shrink: 0; }
+.connection-dot-online { background: rgb(16, 185, 129); }
+.connection-dot-offline { background: rgb(185, 96, 109); }
+.nav-tabs { display: inline-flex; align-items: center; gap: var(--spacing-2); background: rgb(248, 250, 252); border: 1px solid rgb(226, 232, 240); padding: var(--spacing-1) var(--spacing-2); border-radius: 1rem; box-shadow: rgba(0, 0, 0, 0) 0px 0px 0px 0px, rgba(0, 0, 0, 0) 0px 0px 0px 0px, rgba(0, 0, 0, 0.05) 0px 2px 4px 0px inset; }
+.nav-link { display: inline-flex; align-items: center; border-radius: 0.75rem; border: 1px solid transparent; padding: var(--spacing-2) var(--spacing-4); font-weight: 600; letter-spacing: -0.01em; color: var(--color-text-toolbar); background-color: transparent; transition: all 0.15s cubic-bezier(0.4, 0, 0.2, 1); gap: var(--spacing-2); text-decoration: none; white-space: nowrap; }
+.nav-link-active { color: rgb(3, 105, 161); background: #fff; border: 1px solid rgb(186, 230, 253); }
+.nav-icon { height: 1rem; width: 1rem; flex-shrink: 0; }
+.tab-stage { max-width: var(--max-width); margin: 0 auto; padding: 0.5rem var(--spacing-6) var(--spacing-4); }
+.tab-panel { min-height: calc(100vh - 6rem); }
+.metric-tile { padding: 0.75rem 1.5rem 0.75rem; border-radius: 1rem; background: #ffffff; border: 1px solid rgba(203, 213, 225, 0.75); box-shadow: inset 0 1px 0 rgba(255, 255, 255, 1), 0 2px 6px rgba(148, 163, 184, 0.1), 0 8px 24px rgba(148, 163, 184, 0.08); display: flex; flex-direction: column; gap: 0.35rem; transition: box-shadow 0.15s ease, transform 0.15s ease; }
+.metric-tile:hover { box-shadow: inset 0 1px 0 rgba(255, 255, 255, 1), 0 4px 12px rgba(148, 163, 184, 0.18), 0 12px 32px rgba(148, 163, 184, 0.12); transform: translateY(-1px); }
+.metric-label { color: #94a3b8; font-size: 0.9rem; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; }
+.metric-value-row { display: flex; align-items: center; justify-content: space-between; gap: 0.5rem; }
+.metric-value { display: flex; align-items: baseline; gap: 0.2rem; color: #475569; }
+.metric-number { font-size: 2rem; font-weight: 700; letter-spacing: -0.04em; line-height: 1.1; }
+.metric-unit { font-size: 1rem; font-weight: 600; color: #cbd5e1; letter-spacing: -0.01em; }
+.metric-status { font-size: 0.72rem; font-weight: 700; letter-spacing: 0.07em; text-transform: uppercase; padding: 0.18rem 0.52rem; border-radius: 0.4rem; border: 1px solid transparent; white-space: nowrap; }
+.metric-status-good { color: #166534; background: #dcfce7; border-color: #86efac; }
+.metric-status-warn { color: #92400e; background: #fef3c7; border-color: #fcd34d; }
+.metric-status-alert { color: #991b1b; background: #fee2e2; border-color: #fca5a5; }
+.tab-panel[hidden] { display: none; }
+.panel-body { display: flex; flex-direction: column; gap: 0.5rem; padding: 1rem 1.25rem; flex: 1; }
+.panel-footer { display: flex; align-items: center; justify-content: flex-end; gap: 0.75rem; padding: 0.75rem 1.25rem; border-top: 1px solid #e2e8f0; }
+.field { display: flex; flex-direction: row; justify-content: space-between; align-items: center; gap: 0.75rem; }
+.field-label { font-size: 0.75rem; font-weight: 700; text-transform: uppercase; color: #94a3b8; flex-shrink: 0; white-space: nowrap; min-width: 3rem; }
+.field-input { flex: 1; min-width: 0; padding: 0.45rem 0.75rem; font-size: 0.88rem; font-family: inherit; color: #334155; border: 1px solid #e2e8f0; border-radius: 0.55rem; outline: none; transition: border-color 0.15s ease; }
+.field-input.edited { border-color: #00500040 !important; background: #00ff0020; }
+.field-input.error { border-color: #50000040; background: #ff000020; }
+.field-input::placeholder { color: #cbd5e1; }
+.field-input:hover { border-color: #cbd5e1; }
+.field-input:focus { border-color: #7dd3fc; }
+.field-input:disabled, .field-input.disabled { color: #cbd5e1; border-color: #e2e8f0; cursor: not-allowed; pointer-events: none; }
+.btn { display: inline-flex; align-items: center; justify-content: center; gap: 0.5rem; height: 2rem; padding: 0.3rem 1rem; font-size: 0.85rem; font-family: inherit; font-weight: 600; border-radius: 0.5rem; border: 1px solid transparent; cursor: pointer; transition: all 0.15s ease; white-space: nowrap; }
+.btn-secondary { color: #64748b; background: #ffffff; border-color: #e2e8f0; box-shadow: 0 1px 2px rgba(148, 163, 184, 0.1); }
+.btn-secondary:hover { background: #f1f5f9; border-color: #cbd5e1; color: #475569; }
+.btn-primary { color: #ffffff; background: linear-gradient(160deg, #38bdf8, #0ea5e9); border-color: #0284c7; box-shadow: 0 1px 3px rgba(14, 165, 233, 0.3), 0 4px 10px rgba(14, 165, 233, 0.15); }
+.btn-primary:hover { background: linear-gradient(160deg, #0ea5e9, #0284c7); box-shadow: 0 1px 3px rgba(14, 165, 233, 0.4), 0 6px 14px rgba(14, 165, 233, 0.2); }
+.btn-primary:active, .btn-secondary:active { transform: translateY(0); }
+.btn:disabled, .btn.disabled { opacity: 0.45; cursor: not-allowed; pointer-events: none; box-shadow: none; transform: none; }
+.note { color: #075985; background: #e0f2fe; border: 1px solid #7dd3fc; border-radius: 0.5rem; padding: 0.75rem 0.9rem; font-size: 0.86rem; line-height: 1.55; box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.75); display: flex; flex-direction: column; gap: 0.5rem; }
+.row { display: flex; flex-wrap: wrap; gap: 1rem; }
+#files .row { align-items: stretch; flex-wrap: nowrap; }
+#files .panel { flex: 0 0 40rem; width: 40rem; }
+#files .note { flex: 1 1 0; min-width: 0; }
+.grid { display: grid; gap: 1rem; margin: 1rem 0; align-items: stretch; }
+.panel { background: #ffffff; border: 1px solid rgba(203, 213, 225, 0.75); border-radius: 0.75rem; box-shadow: inset 0 1px 0 rgba(255, 255, 255, 1), 0 2px 6px rgba(148, 163, 184, 0.1), 0 8px 24px rgba(148, 163, 184, 0.08); overflow: hidden; display: flex; flex-direction: column; }
+.panel-title { display: flex; align-items: center; justify-content: space-between; font-size: 0.95rem; font-weight: 700; color: #334155; padding: 0 1rem; min-height: 3rem; border-bottom: 1px solid #e2e8f0; flex-shrink: 0; white-space: nowrap; gap: 1rem; }
+.file-list { display: flex; flex-direction: column; }
+.file-list:empty::before { content: "No Files"; color: #888; }
+.file-row { display: grid; grid-template-columns: minmax(0, 1fr) auto auto; align-items: center; gap: 1rem; padding: 0.82rem 0; border-top: 1px solid #edf2f7; }
+.file-row:first-child { border-top: none; }
+.file-info { display: flex; align-items: center; gap: 0.75rem; min-width: 0; }
+.file-icon { display: inline-flex; align-items: center; justify-content: center; width: 2.25rem; height: 2.25rem; color: #0369a1; background: #e0f2fe; border: 1px solid #bae6fd; border-radius: 0.65rem; flex-shrink: 0; }
+.file-icon svg { width: 1.15rem; height: 1.15rem; }
+.file-name { min-width: 0; color: #334155; font-size: 0.9rem; font-weight: 700; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.field-value { min-width: 0; color: #334155; font-size: 0.9rem; font-weight: 700; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.file-size { color: #94a3b8; font-size: 0.8rem; font-weight: 700; text-align: right; white-space: nowrap; }
+.file-actions { display: flex; align-items: center; justify-content: flex-end; gap: 0.45rem; }
+#graph1, #graph2 { width: 100%; height: 100%; min-height: 10rem; }
+.legend { display: flex; align-items: center; gap: 1rem; flex-shrink: 0; }
+.legend-item { display: flex; align-items: center; gap: 0.35rem; font-size: 0.75rem; color: #5d7088; font-weight: 600; }
+.legend-dot { width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0; }
+.legend-dot-color2 { background: rgba(237, 126, 23, 1); }
+.legend-dot-color1 { background: rgba(5, 141, 199, 1); }
+.toggle { position: relative; width: 2.75rem; height: 1.6rem; margin: 0; vertical-align: top; border: 1px solid transparent; background: #d1d5db; border-radius: 0.75rem; outline: none; cursor: pointer; -webkit-appearance: none; -moz-appearance: none; appearance: none; }
+.toggle::after { content: ""; position: absolute; left: 1px; top: 1px; width: 1.35rem; height: 1.35rem; background: #fff; border-radius: 50%; transition: all 0.3s; }
+.toggle:checked { background: #10B981; }
+.toggle:checked::after { transform: translateX(calc(100% - 3px)); }
+.toggle:disabled, .toggle.disabled { background: #d1d5db; cursor: not-allowed; }
+.toggle.edited { border-color: #0fe; }
+.u-under { top: 0 !important; }
+.hidden { display: none; }
+@media (max-width: 900px) { .grid { grid-template-columns: repeat(2, 1fr) !important; } #files .row { flex-direction: column; flex-wrap: nowrap; } #files .panel, #files .note { flex: 1 1 auto; width: 100%; } }
+@media (max-width: 640px) { .grid { grid-template-columns: 1fr !important; } .file-row { grid-template-columns: 1fr; } .file-actions { justify-content: flex-start; } .file-row { gap: 0.65rem; } .file-size { text-align: left; } }
+    </style>
+
+    <!-- uPlot graph library -->
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/uplot@1.6.32/dist/uPlot.min.css">
+    <script src="https://cdn.jsdelivr.net/npm/uplot@1.6.32/dist/uPlot.iife.min.js" defer></script>
+
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  </head>
+  <body style="visibility: hidden;">
+    <section id="auth" style="display:none; min-height: 100vh; background: radial-gradient(900px 520px at 15% 0%, rgba(56, 189, 248, 0.18), rgba(56, 189, 248, 0)), radial-gradient(760px 460px at 85% 10%, rgba(45, 212, 191, 0.14), rgba(45, 212, 191, 0)), linear-gradient(180deg, #f8fafc, #def2f7);">
+      <div class="tab-stage" style="min-height: 100vh; display: flex; align-items: center; justify-content: center;">
+        <div class="panel" style="width: 100%; max-width: 28rem;">
+          <div class="panel-title">Dashboard Sign In</div>
+          <div class="panel-body" style="gap: 0.75rem;">
+            <form id="login-form" autocomplete="on" style="display: flex; flex-direction: column; gap: 0.75rem;">
+              <div class="field">
+                <label class="field-label" for="login-password">Password</label>
+                <input id="login-password" class="field-input" type="password" name="password" autocomplete="current-password" placeholder="••••••" />
+              </div>
+              <div id="login-error" class="note" aria-live="polite" style="display:none; background: #fee2e2; border-color: #fca5a5; color: #991b1b;"></div>
+              <div style="margin: 0; color: #999;">
+                Use "admin" or "user" to sign in.
+              </div>
+              <div style="display:flex; justify-content:flex-end;">
+                <button class="btn btn-primary" id="login-submit" type="submit">Login</button>
+              </div>
+            </form>
+          </div>
+        </div>
+      </div>
+    </section>
+    <div id="app">
+   <div class="header">
+     <div class="header-container">
+       <div class="header-left">
+         <nav class="nav-tabs" role="tablist" aria-label="Primary tabs">
+           <svg class="logo" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 600" width="1200" height="600">
+             <defs>
+               <linearGradient id="g" x1="0" y1="0" x2="1" y2="1">
+                 <stop offset="0%" stop-color="#2dd4bf"/>
+                 <stop offset="100%" stop-color="#0f766e"/>
+               </linearGradient>
+             </defs>
+             <g fill="none" stroke="url(#g)" stroke-width="30" stroke-linecap="round" stroke-linejoin="round">
+               <rect x="160" y="60" width="300" height="300" rx="70"/>
+               <rect x="20" y="200" width="300" height="300" rx="70"/>
+             </g>
+             <text x="560" y="360"
+                   font-family="system-ui, -apple-system, Segoe UI, Roboto, sans-serif"
+                   font-size="180"
+                   font-weight="600"
+                   fill="#6b7280">
+               MyLogo
+             </text>
+           </svg>
+           <a href="#overview" id="tab-overview" class="nav-link nav-link-active" role="tab" aria-controls="overview" aria-selected="true">
+             <svg viewBox="0 0 24 24" class="nav-icon" fill="none" stroke="currentColor" stroke-width="2">
+               <path d="M3 11.5 12 4l9 7.5" />
+               <path d="M5 10.5V20h14v-9.5" />
+             </svg>
+             Overview
+           </a>
+           <a href="#settings" id="tab-settings" class="nav-link ${__status.userlevel > 0 && __status.userlevel < 7 ? 'hidden' : ''}" role="tab" aria-controls="settings" aria-selected="false" tabindex="-1">
+             <svg viewBox="0 0 24 24" class="nav-icon" fill="none" stroke="currentColor" stroke-width="2">
+               <circle cx="12" cy="12" r="3" />
+               <path d="M19.4 15a1.7 1.7 0 0 0 .34 1.87l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06A1.7 1.7 0 0 0 15 19.4a1.7 1.7 0 0 0-1 .6 1.7 1.7 0 0 0-.4 1.1V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-.4-1.1 1.7 1.7 0 0 0-1-.6 1.7 1.7 0 0 0-1.87.34l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06A1.7 1.7 0 0 0 4.6 15a1.7 1.7 0 0 0-.6-1 1.7 1.7 0 0 0-1.1-.4H2.8a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.1-.4 1.7 1.7 0 0 0 .6-1 1.7 1.7 0 0 0-.34-1.87l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.7 1.7 0 0 0 9 4.6c.38-.16.72-.4 1-.7.26-.3.4-.69.4-1.1V2.8a2 2 0 1 1 4 0v.1c0 .41.14.8.4 1.1.28.3.62.54 1 .7a1.7 1.7 0 0 0 1.87-.34l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06A1.7 1.7 0 0 0 19.4 9c.16.38.4.72.7 1 .3.26.69.4 1.1.4h.1a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.1.4 1.7 1.7 0 0 0-.7 1z" />
+             </svg>
+             Settings
+           </a>
+           <a href="#firmware" id="tab-firmware" class="nav-link" role="tab" aria-controls="firmware" aria-selected="false" tabindex="-1">
+             <svg viewBox="0 0 24 24" class="nav-icon" fill="none" stroke="currentColor" stroke-width="2">
+               <path d="M12 3v10" />
+               <path d="m8 9 4 4 4-4" />
+               <rect x="4" y="17" width="16" height="4" rx="2" />
+             </svg>
+             Firmware Update
+           </a>
+           <a href="#files" id="tab-files" class="nav-link" role="tab" aria-controls="files" aria-selected="false" tabindex="-1">
+             <svg viewBox="0 0 24 24" class="nav-icon" fill="none" stroke="currentColor" stroke-width="2">
+               <path d="M4 7a2 2 0 0 1 2-2h4l2 2h6a2 2 0 0 1 2 2v2H4Z" />
+               <path d="M4 11h16v7a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2Z" />
+               <path d="M8 15h8" />
+             </svg>
+             File Manager
+           </a>
+         </nav>
+         <div class="connection-badge connection-badge-${__status.online ? 'online' : 'offline'}" aria-label="connection active">
+           <span class="connection-label">${__status.online ? 'live' : 'offline'}</span>
+           <span class="connection-dot connection-dot-${__status.online ? 'online' : 'offline'}" aria-hidden="true"></span>
+         </div>
+       </div>
+       <div class="header-actions">
+         <nav class="nav-tabs">
+           <div class="nav-link">
+             <svg viewBox="0 0 24 24" class="nav-icon" fill="none" stroke="currentColor" stroke-width="2">
+               <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" />
+               <circle cx="12" cy="7" r="4" />
+             </svg>
+             <span>${__status.userlevel == 3 ? 'user' : 'admin'}</span>
+             <svg viewBox="0 0 24 24"
+                  onclick="Dashboard.logout().then(() => location.reload())"
+                  style="cursor: pointer;"
+               class="nav-icon" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+               <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" />
+               <path d="M16 17l5-5-5-5" />
+               <path d="M21 12H9" />
+             </svg>
+           </div>
+         </nav>
+       </div>
+     </div>
+   </div>
+   <main class="tab-stage">
+     <section id="overview" class="tab-panel tab-panel-active" role="tabpanel" aria-labelledby="tab-overview">
+       <div class="grid" style="grid-template-columns: repeat(5, 1fr); gap: 1rem;">
+         <article class="metric-tile">
+           <div class="metric-label">Temperature</div>
+           <div class="metric-value-row">
+             <div class="metric-value">
+               <span class="metric-number" data-bind="metrics.temperature">24.8</span>
+               <span class="metric-unit">°C</span>
+             </div>
+             <span class="metric-status metric-status-good">ok</span>
+           </div>
+         </article>
+         <article class="metric-tile">
+           <div class="metric-label">CPU Load</div>
+           <div class="metric-value-row">
+             <div class="metric-value">
+               <span class="metric-number" data-bind="metrics.cpu">37</span>
+               <span class="metric-unit">%</span>
+             </div>
+             <span class="metric-status metric-status-warn">moderate</span>
+           </div>
+         </article>
+         <article class="metric-tile">
+           <div class="metric-label">Free Memory</div>
+           <div class="metric-value-row">
+             <div class="metric-value">
+               <span class="metric-number">${metrics.ram}</span>
+               <span class="metric-unit">KB</span>
+             </div>
+             <span class="metric-status metric-status-alert" style="${metrics.ram <= 30 ? '': 'display:none;'}">low</span>
+             <span class="metric-status metric-status-warn" style="${metrics.ram <= 50 && metrics.ram > 30 ? '': 'display:none;'}">ok-ish</span>
+           </div>
+         </article>
+         <article class="metric-tile">
+           <div class="metric-label">Volume</div>
+           <div class="metric-value-row">
+             <div class="metric-value">
+               <span class="metric-number" data-bind="settings.volume">18.7</span>
+               <span class="metric-unit">dB</span>
+             </div>
+             <span class="metric-status metric-status-good">ok</span>
+           </div>
+         </article>
+         <article class="metric-tile note">
+            <div>
+                To customize this dashboard, follow
+                <a target="_blank" href="https://mongoose.ws/docs/guides/web-dashboard-guide/">https://mongoose.ws/docs/guides/web-dashboard-guide/</a>
+            </div>
+         </article>
+       </div>
+
+        <div class="grid" style="grid-template-columns: 1fr 1fr;">
+
+          <!-- Sensor History Chart -->
+          <div class="panel chart-panel">
+            <div class="panel-title">
+              <span>Static Graph</span>
+              <div class="legend">
+                <div class="legend-item"><span class="legend-dot legend-dot-color1"></span>Temperature</div>
+                <div class="legend-item"><span class="legend-dot legend-dot-color2"></span>Humidity</div>
+              </div>
+            </div>
+            <div class="panel-body">
+              <div id="graph1"></div>
+            </div>
+          </div>
+
+          <div class="panel chart-panel">
+            <div class="panel-title">
+              <span>Real-Time Graph</span>
+              <div class="legend">
+                <small>autoupdate:</small>
+                <input type="checkbox" data-bind="graph2.report" data-autosave="1" class="toggle" />
+                <div class="legend-item"><span class="legend-dot legend-dot-color1"></span>Motor Voltage</div>
+              </div>
+            </div>
+            <div class="panel-body">
+              <div id="graph2"></div>
+            </div>
+          </div>
+
+        </div>
+
+        <div class="grid" style="grid-template-columns: 300px 1fr 1fr;">
+
+          <!-- LEDs panel -->
+          <div class="panel">
+            <div class="panel-title">
+              <span>LED Control</span>
+            </div>
+            <div class="panel-body">
+              <div class="field">
+                <div class="field-label">LED1</div>
+                <input type="checkbox" data-bind="leds.led1" data-autosave="1" class="toggle" />
+              </div>
+              <div class="field">
+                <div class="field-label">LED2</div>
+                <input type="checkbox" data-bind="leds.led2" data-autosave="1" class="toggle" />
+              </div>
+              <div class="field">
+                <div class="field-label">LED3</div>
+                <input type="checkbox" data-bind="leds.led3" data-autosave="1" class="toggle" />
+              </div>
+              <div style="flex:1;"></div>
+              <span class="note">
+                To attach LED controls to your device,
+                modify read_leds() and write_leds() functions
+              </span>
+            </div>
+          </div>
+
+          <!-- Action button panel -->
+          <div class="panel">
+            <div class="panel-title">
+              <span>Start/Stop Action Button</span>
+              <span class="legend"><span class="legend-item">actions.action1=${actions.action1}</span></span>
+            </div>
+            <div class="panel-body">
+              <div class="field">
+                <div class="field-label">Press to start/stop</div>
+                <button class="btn btn-primary" data-bind="actions.action1" >Press to start/stop</button>
+              </div>
+              <div style="flex:1;"></div>
+              <span class="note">
+                This button is bound to the data-bind="actions.action1"
+                boolean field. When it is pressed, the field on a device
+                side is set to true. When unpressed, it is set to false.
+                Add device-specific code in read_actions() and write_actions()
+                to act on the button state.
+              </span>
+            </div>
+          </div>
+
+          <!-- Action button panel -->
+          <div class="panel">
+            <div class="panel-title">
+              <span>Start Action Button</span>
+              <span class="legend"><span class="legend-item">actions.action2=${actions.action2}</span></span>
+            </div>
+            <div class="panel-body">
+              <div class="field">
+                <div class="field-label">Press to start</div>
+                <button class="btn btn-primary" data-bind="actions.action2" >Press to start</button>
+              </div>
+              <div style="flex:1;"></div>
+              <span class="note">
+                This button is different - the C handler code for it
+                reacts on start, and ignores stops. Use it to implement actions
+                that start some process - like formatting SD card, which
+                finishes at some point in the future.
+                  When the process is finished, flip the boolean field
+                  back to false, and send change notification.
+              </span>
+            </div>
+          </div>
+
+        </div>
+
+      </section>
+      <section id="settings" class="tab-panel" role="tabpanel" aria-labelledby="tab-settings" hidden>
+        <div class="row">
+
+          <div class="panel">
+            <div class="panel-title">Device settings</div>
+            <div class="panel-body">
+              <div class="field">
+                <label class="field-label">Name</label>
+                <input class="field-input"type="text" data-bind="settings.name" data-autosave="1" />
+              </div>
+              <div class="field">
+                <label class="field-label">Volume</label>
+                <input class="field-input" type="text" data-bind="settings.volume" />
+              </div>
+              <div class="field">
+                <label class="field-label">Log Level</label>
+                <select class="field-input" data-bind="settings.log_level">
+                  <option value="0">Disable logs</option>
+                  <option value="1">Error</option>
+                  <option value="2">Info</option>
+                  <option value="3">Debug</option>
+                  <option value="4">Verbose (very noisy)</option>
+                </select>
+              </div>
+              <div class="field">
+                <label class="field-label">Enable login</label>
+                <input type="checkbox" data-bind="settings.enable_login" class="toggle" />
+              </div>
+            </div>
+            <div class="panel-footer">
+              <button class="btn btn-secondary" type="button" data-cancel="settings">
+                <svg viewBox="0 0 24 24" class="nav-icon" fill="none" stroke="currentColor" stroke-width="2">
+                  <path d="M18 6 6 18" />
+                  <path d="m6 6 12 12" />
+                </svg>
+                Cancel
+              </button>
+              <button class="btn btn-primary" type="button" data-save="settings">
+                <svg viewBox="0 0 24 24" class="nav-icon" fill="none" stroke="currentColor" stroke-width="2">
+                  <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2Z" />
+                  <path d="M17 21v-8H7v8" />
+                  <path d="M7 3v5h8" />
+                </svg>
+                Save
+              </button>
+            </div>
+          </div>
+
+        <div class="note" style="width: 44rem;">
+          <p>This settings panel is backed by the "settings" dashboard object
+            see Dashboard.init call at the top of index.html - and, consequently,
+            by the "settings" fieldset in mongoose_dashboard.c. </p>
+          <p>Fields are bound to the dashboard object via the data-bind attribute,
+            e.g. data-bind="setttings.name"</p>
+          <p>When you save changed fields, the changes are saved to the device.</p>
+          <p> The "NAME" field
+          has data-autosave="1", so it is autosaved when user types text.</p>
+          <p>The other fields are not auto-saved, so when they are changed,
+            dashboard.js automatically applies CSS class "edited" to them to
+            indicate they were changed but not saved.</p>
+          <p>The cancel and save buttons are attached to the settings object
+            via the data-cancel and data-save attributes. Those buttons
+            get automatically enabled or disabled based on editing status.</p>
+        </div>
+
+      </div>
+      </section>
+      <section id="firmware" class="tab-panel" role="tabpanel" aria-labelledby="tab-firmware" hidden>
+        <div class="grid" style="grid-template-columns: 28rem 1fr;">
+          <div class="panel">
+            <div class="panel-title">Firmware update via file upload</div>
+            <div class="panel-body">
+              <div class="field">
+                <div class="field-label">Current firmware version</div>
+                <span class="field-value">${settings.ota_version}</span>
+              </div>
+              <div class="field">
+                <div class="field-label">Upload new firmware</div>
+                 <label class="btn btn-primary">
+                  <svg viewBox="0 0 24 24" class="nav-icon" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M12 3v12" />
+                    <path d="m7 8 5-5 5 5" />
+                    <path d="M5 21h14" />
+                  </svg>
+                  Select .bin file
+                  <input type="file" accept=".bin" hidden data-ota="1" />
+                </label>
+
+              </div>
+            </div>
+          </div>
+          <div class="note" style="min-width: 40rem;">
+            <div>
+            This firmware update method is the simplest. Just select your
+            `firmware.bin` file and upload it.
+
+            Mongoose includes built-in firmware update support for many
+            architectures, such as STM32, RP2040, and ESP32. See
+ <a target="_blank" href="https://github.com/cesanta/mongoose/blob/master/src/ota.h">ota.h</a>
+            for the full list of supported MCUs.
+
+            If you are using STM32, it works out of the box with no additional setup.
+            For other architectures, add `#define MG_OTA MG_OTA_XXX` to your
+            mongoose_config.h.
+            </div>
+          </div>
+          <div class="panel">
+            <div class="panel-title">Firmware update via periodic URL check</div>
+            <div class="panel-body">
+              <div class="field">
+                <div class="field-label">Current firmware version</div>
+                <span class="field-value">${settings.ota_version}</span>
+              </div>
+              <div class="field">
+                <div class="field-label">Current status</div>
+                <span class="field-value">${settings.ota_status}</span>
+              </div>
+              <div class="field">
+                <div class="field-label">Check interval, seconds</div>
+                <input class="field-input"  style="max-width: 6rem;" data-bind="settings.ota_interval" data-autosave="1" />
+              </div>
+              <div class="field">
+                <div class="field-label">URL</div>
+                <input class="field-input" data-bind="settings.ota_url" data-autosave="1" />
+              </div>
+            </div>
+          </div>
+          <div class="note" style="min-width: 20rem;">
+            <div>
+              With this mechanism, you can configure an entire device fleet to update
+              automatically. Upload your firmware .bin to a web server and create a
+              JSON file that describes the firmware, including its URL, checksum, and
+              size. Mongoose periodically checks this JSON file, and if the version
+              differs from the current one, it downloads the firmware and performs the
+              update. The JSON file format is described in the
+              <a target="_blank" href="https://mongoose.ws/docs/api/ota/#mg_ota_url_check">docs</a>:
+              <pre>
+{
+  "version": "1.2.3",
+  "url": "http://my-product.com/firmwares/firmware-1.2.3.bin",
+  "size": 324645
+}
+              </pre>
+          </div>
+        </div>
+      </section>
+      <section id="files" class="tab-panel" role="tabpanel" aria-labelledby="tab-files" hidden>
+        <div class="row">
+          <div class="panel">
+            <div class="panel-title">
+              <span>
+                <span>File Manager</span>
+                <span class="metric-status" id="files-count">0 Files</span>
+              </span>
+              <div class="header-actions">
+                <label class="btn btn-primary">
+                  <svg viewBox="0 0 24 24" class="nav-icon" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M12 3v12" />
+                    <path d="m7 8 5-5 5 5" />
+                    <path d="M5 21h14" />
+                  </svg>
+                  Upload
+                  <input type="file" hidden id="files-upload-input" />
+                </label>
+              </div>
+            </div>
+            <div class="panel-body">
+              <div class="file-list" id="files-list"></div>
+            </div>
+          </div>
+
+          <div class="note">
+            <p>This file manager uses /fs/ directory.
+              It works on any platform that supports
+              standard file IO: fopen, fread, fwrite, fclose.
+              This includes Linux/Mac/Windows.</p>
+            <p>
+              Mongoose provides a built-in LittleFS integration that
+              makes standard file IO work on embedded systems like STM32.
+              For that, add "#define MG_ENABLE_LFS 1" to your
+              mongoose_config.h
+            </p>
+            <p>See
+              <a href="https://github.com/cesanta/mongoose/tree/master/tutorials/stm32/nucleo-h563zi/cubemx">this ready-to-build example</a>
+              which implements LittleFS on Nucleo-H563ZI internal flash. You
+              can upload, delete and serve files on STM32 - which is
+              a perfect use case for confuration files, keeping and viewing logs, etc.
+            </p>
+          </div>
+
+        </div>
+      </section>
+    </main>
+    </div>
+  </body>
+</html>
