@@ -6398,7 +6398,6 @@ struct mg_lfs_fd {
 static lfs_t s_lfs;
 static struct mg_lfs_fd *s_fds;
 static uint8_t *s_fs;
-static int s_next_fd = MG_LFS_FD_BASE;
 static bool s_lfs_ready;
 #if LFS_USE_RAM
 static uint8_t *s_ram_fs;
@@ -6512,17 +6511,12 @@ static struct mg_lfs_fd *find_fd(int fd) {
 }
 
 static struct mg_lfs_fd *open_fd(void) {
-  struct mg_lfs_fd *f = NULL;
+  struct mg_lfs_fd *f = NULL, *p = s_fds;
   if (s_lfs_ready == false) mg_lfs_init(MG_LFS_SIZE);
-  if (s_lfs_ready) {
-    f = (struct mg_lfs_fd *) mg_calloc(1, sizeof(*f));
-    if (f != NULL) {
-      f->isopen = true;
-      f->fd = s_next_fd++;
-      f->next = s_fds;
-      s_fds = f;
-      if (s_next_fd < MG_LFS_FD_BASE) s_next_fd = MG_LFS_FD_BASE;
-    }
+  if (s_lfs_ready && (f = (struct mg_lfs_fd *) mg_calloc(1, sizeof(*f)))) {
+    f->isopen = true, f->fd = MG_LFS_FD_BASE, f->next = s_fds;
+    while (p != NULL) p = p->fd == f->fd ? (f->fd++, s_fds) : p->next;
+    s_fds = f;
   }
   return f;
 }
