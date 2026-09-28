@@ -1,4 +1,4 @@
-VERSION = 7.21.7
+VERSION = 7.23.1
 REPO_ROOT = ../..
 MX ?= /Applications/STMicroelectronics/STM32CubeMX.app/Contents/MacOs/STM32CubeMX
 FILES = Cesanta.I-CUBE-Mongoose.pdsc Release_Notes.html mongoose_config.h README.md
@@ -44,23 +44,5 @@ mongoose.h: Mongoose
 mongoose.c: Mongoose
 	cp $(REPO_ROOT)/mongoose.c $@
 
-pk: $(PACK)
-	rm -f gen.mx
-	echo swmgr remove Cesanta.I-CUBE-Mongoose.$(VERSION) >> gen.mx
-	echo swmgr install `pwd`/Cesanta.I-CUBE-Mongoose.$(VERSION).pack ask >> gen.mx
-	echo exit >> gen.mx
-	$(MX) -q `pwd`/gen.mx
-
-
-mx: $(PACK)
-	mkdir -p $@
-	cp ../downloads/nucleo_h563zi.ioc $@
-	V=`grep 'Mcu.ThirdParty0' $@/nucleo_h563zi.ioc | sed 's,^.*se.,,'`; sed -i '' "s,$$V,$(VERSION),g" $@/nucleo_h563zi.ioc
-	rm -f gen.mx
-	echo config load `pwd`/$@/nucleo_h563zi.ioc >> gen.mx
-	echo project generate >> gen.mx
-	echo exit >> gen.mx
-	$(MX) -q `pwd`/gen.mx
-
 clean:
-	rm -rf *.pack STM32CubeMX/*.$(VERSION)_*.xml $(GENERATED) gen.mx mx
+	rm -rf *.pack STM32CubeMX/*.$(VERSION)_*.xml $(GENERATED)

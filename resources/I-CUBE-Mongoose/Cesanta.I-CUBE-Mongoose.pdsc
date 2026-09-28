@@ -8,6 +8,7 @@
   <license>License.txt</license>
   <supportContact>https://mongoose.ws/contact/</supportContact>
   <releases>
+    <release date="2026-09-28" version="7.23.1">See https://github.com/cesanta/mongoose/releases/tag/7.23</release>
     <release date="2026-05-11" version="7.21.7">See https://github.com/cesanta/mongoose/releases/tag/7.21</release>
     <release date="2026-05-05" version="7.21.5">See https://github.com/cesanta/mongoose/releases/tag/7.21</release>
     <release date="2026-04-24" version="7.21.4">See https://github.com/cesanta/mongoose/releases/tag/7.21</release>
@@ -19,7 +20,7 @@
       <keyword>IMPLEMENTED_WITH_STM32CUBEMX</keyword>
   </keywords>
   <components>
-    <component Cclass="Mongoose" Cgroup="Networking Core" Cversion="7.21.7" maxInstances="1">
+    <component Cclass="Mongoose" Cgroup="Networking Core" Cversion="7.23.1" maxInstances="1">
       <description>Networking Core</description>
       <files>
         <file category="doc" name="README.md"/>
