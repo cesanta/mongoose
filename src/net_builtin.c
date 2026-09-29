@@ -1,4 +1,5 @@
 #include "net_builtin.h"
+#include "bsd.h"
 #include "profile.h"
 
 #if MG_ENABLE_TCPIP
@@ -31,16 +32,16 @@
 #endif
 
 struct connstate {
-  uint32_t seq, ack;                      // TCP seq/ack counters
-  uint64_t timer;                         // TCP timer (see 'ttype' below)
-  uint64_t txq_timer;                     // TCP retransmission timer (RFC-6298, 5)
-  uint32_t acked;                         // Last ACK-ed number
-  size_t unacked;                         // Not acked bytes
-  uint32_t maxseq;                        // Max send seq (ack + window)
-  uint32_t txq_seq;                       // Sequence of first txq record (RFC-9293, 3.8)
-  uint32_t txq_una;                       // Oldest unacknowledged sequence (RFC-9293, 3.4)
-  uint16_t win;                           // destination current window size
-  uint16_t dmss;                          // destination MSS (from TCP opts)
+  uint32_t seq, ack;   // TCP seq/ack counters
+  uint64_t timer;      // TCP timer (see 'ttype' below)
+  uint64_t txq_timer;  // TCP retransmission timer (RFC-6298, 5)
+  uint32_t acked;      // Last ACK-ed number
+  size_t unacked;      // Not acked bytes
+  uint32_t maxseq;     // Max send seq (ack + window)
+  uint32_t txq_seq;    // Sequence of first txq record (RFC-9293, 3.8)
+  uint32_t txq_una;    // Oldest unacknowledged sequence (RFC-9293, 3.4)
+  uint16_t win;        // destination current window size
+  uint16_t dmss;       // destination MSS (from TCP opts)
   uint8_t mac[sizeof(struct mg_l2addr)];  // Peer hw address
   uint8_t ttype;                          // Timer type:
 #define MIP_TTYPE_KEEPALIVE 0  // Connection is idle for long, send keepalive
@@ -809,7 +810,7 @@ static struct ip6 *tx_ip6(struct mg_tcpip_if *ifp, uint8_t *l2_dst,
   struct ip6 *ip6 = (struct ip6 *) mg_l2_header(ifp, MG_TCPIP_L2PROTO_IPV6,
                                                 ifp->mac, l2_dst, l2p);
   memset(ip6, 0, sizeof(*ip6));
-  ip6->ver = (uint8_t) (0x60 | (dscp >> 2)); // Version 6, traffic class
+  ip6->ver = (uint8_t) (0x60 | (dscp >> 2));  // Version 6, traffic class
   ip6->label[0] = (uint8_t) (dscp << 6);
   ip6->plen = mg_htons((uint16_t) plen);
   ip6->next = next;
@@ -1278,7 +1279,7 @@ static size_t tx_tcp(struct mg_tcpip_if *ifp, uint8_t *l2_dst,
   tcp->off = (uint8_t) (hlen / 4 << 4);
 #if MG_ENABLE_IPV6
   if (ip_dst->is_ip6) {
-   tcp->csum = p6csum(ip6, tcp, 6, hlen + len);
+    tcp->csum = p6csum(ip6, tcp, 6, hlen + len);
   } else
 #endif
   {
@@ -2266,6 +2267,7 @@ void mg_tcpip_init(struct mg_mgr *mgr, struct mg_tcpip_if *ifp) {
                                            // MG_EPHEMERAL_PORT_BASE to 65535
     if (ifp->tx.buf == NULL || ifp->recv_queue.buf == NULL) MG_ERROR(("OOM"));
   }
+  mg_bsd_init(mgr);
 }
 
 void mg_tcpip_free(struct mg_tcpip_if *ifp) {
@@ -2436,6 +2438,7 @@ void mg_mgr_poll(struct mg_mgr *mgr, int ms) {
       c->is_closing = 1;
     if (c->is_closing) close_conn(c);
   }
+  mg_bsd_poll(mgr);
   (void) ms;
 }
 

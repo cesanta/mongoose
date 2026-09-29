@@ -98,6 +98,7 @@ struct mg_connection {
   unsigned is_resp : 1;           // HTTP: response is still being generated
   unsigned is_readable : 1;       // Socket is ready to read (epoll/select)
   unsigned is_writable : 1;       // Socket is ready to write (epoll/select)
+  unsigned is_bsd : 1;            // Built-in TCP/IP stack BSD socket
 };
 
 // Runs one iteration of the event loop.
