@@ -1578,7 +1578,7 @@ void mg_dash_ev_handler(struct mg_connection *c, int ev, void *ev_data) {
     // The response has been send in EV_HDRS path, so we're not reponding
     // anything but clearing the marker for the next request.
     d->marker = 0;
-    c->is_resp = 0;
+    c->pfn_data = NULL;  // Response done
   } else if (ev == MG_EV_HTTP_MSG && d->marker == '\0') {
     struct mg_http_message *hm = (struct mg_http_message *) ev_data;
     struct mg_dash_user *u = mg_dash_authenticate(c, hm, dash);
@@ -3848,7 +3848,7 @@ static void mg_http_vprintf_chunk(struct mg_connection *c, const char *fmt,
   if (c->send.len >= len + 10) {
     mg_snprintf((char *) c->send.buf + len, 9, "%08lx", c->send.len - len - 10);
     c->send.buf[len + 8] = '\r';
-    if (c->send.len == len + 10) c->is_resp = 0;  // Last chunk, reset marker
+    if (c->send.len == len + 10) c->pfn_data = NULL;  // Last chunk, done
   }
   if (!mg_send(c, "\r\n", 2)) mg_error(c, "OOM");
 }
@@ -3863,7 +3863,7 @@ void mg_http_printf_chunk(struct mg_connection *c, const char *fmt, ...) {
 void mg_http_write_chunk(struct mg_connection *c, const char *buf, size_t len) {
   mg_printf(c, "%lx\r\n", (unsigned long) len);
   if (!mg_send(c, buf, len) || !mg_send(c, "\r\n", 2)) mg_error(c, "OOM");
-  if (len == 0) c->is_resp = 0;
+  if (len == 0) c->pfn_data = NULL;  // Last chunk, response done
 }
 
 // clang-format off
@@ -3952,15 +3952,14 @@ void mg_http_reply(struct mg_connection *c, int code, const char *headers,
                            (unsigned long) (c->send.len - len));
     c->send.buf[len - 15 + n] = ' ';  // Change ending 0 to space
   }
-  c->is_resp = 0;
+  c->pfn_data = NULL;  // Response done
 }
 
 static void http_cb(struct mg_connection *, int, void *);
 static void restore_http_cb(struct mg_connection *c) {
   mg_fs_close((struct mg_fd *) c->pfn_data);
-  c->pfn_data = NULL;
+  c->pfn_data = NULL;  // Response done
   c->pfn = http_cb;
-  c->is_resp = 0;
 }
 
 char *mg_http_etag(char *buf, size_t len, size_t size, time_t mtime);
@@ -4148,7 +4147,7 @@ void mg_http_serve_file(struct mg_connection *c, struct mg_http_message *hm,
               etag, (uint64_t) cl, gzip ? "Content-Encoding: gzip\r\n" : "",
               range, hdrs);
     if (mg_strcasecmp(hm->method, mg_str("HEAD")) == 0 || c->is_closing) {
-      c->is_resp = 0;
+      c->pfn_data = NULL;  // Response done
       mg_fs_close(fd);
     } else {  // start serving static content only if not closing, see #3354
       // Track to-be-sent content length at the end of c->data, aligned
@@ -4217,7 +4216,7 @@ static void listdir(struct mg_connection *c, struct mg_http_message *hm,
   n = mg_snprintf(tmp, sizeof(tmp), "%lu", (unsigned long) (c->send.len - off));
   if (n > sizeof(tmp)) n = 0;
   memcpy(c->send.buf + off - 12, tmp, n);  // Set content length
-  c->is_resp = 0;                          // Mark response end
+  c->pfn_data = NULL;                      // Response done
 }
 
 // Map requested URI to the file path (buf,len). Use root directory r.
@@ -4271,7 +4270,7 @@ static int uri_to_file_status(struct mg_connection *c,
               "Content-Length: 0\r\n"
               "\r\n",
               (int) hm->uri.len, hm->uri.buf);
-    c->is_resp = 0;
+    c->pfn_data = NULL;  // Response done
     flags = -1;
   } else if (flags & MG_FS_DIR) {
     if (((mg_snprintf(path + n, path_size - n, "/" MG_HTTP_INDEX) > 0 &&
@@ -4616,7 +4615,9 @@ static void http_cb(struct mg_connection *c, int ev, void *ev_data) {
        c->recv.len > 0)) {  // see #2796
     struct mg_http_message hm;
     size_t ofs = 0;  // Parsing offset
-    while (c->is_resp == 0 && ofs < c->recv.len) {
+    // c->pfn_data is the "response generation in progress" marker. While it
+    // is set, don't parse the next pipelined request, to keep responses in order
+    while (c->pfn_data == NULL && ofs < c->recv.len) {
       const char *buf = (char *) c->recv.buf + ofs;
       int n = mg_http_parse(buf, c->recv.len - ofs, &hm);
       struct mg_str *te;  // Transfer - encoding header
@@ -4709,9 +4710,9 @@ static void http_cb(struct mg_connection *c, int ev, void *ev_data) {
         ofs += (size_t) n + hm.body.len;
       }
 
-      if (c->is_accepted) c->is_resp = 1;  // Start generating response
-      mg_call(c, MG_EV_HTTP_MSG, &hm);     // User handler can clear is_resp
-      if (c->is_accepted && !c->is_resp) {
+      if (c->is_accepted) c->pfn_data = c;  // Response started
+      mg_call(c, MG_EV_HTTP_MSG, &hm);  // Handler sets pfn_data NULL when done
+      if (c->is_accepted && c->pfn_data == NULL) {
         struct mg_str *cc = mg_http_get_header(&hm, "Connection");
         if (cc != NULL && mg_strcasecmp(*cc, mg_str("close")) == 0) {
           c->is_draining = 1;  // honor "Connection: close"
@@ -15268,13 +15269,8 @@ void mg_mgr_poll(struct mg_mgr *mgr, int ms) {
 
   for (c = mgr->conns; c != NULL; c = tmp) {
     long flush = 0;
-    bool is_resp = c->is_resp;
     tmp = c->next;
     mg_call(c, MG_EV_POLL, &now);
-    if (is_resp && !c->is_resp) {
-      long n = 0;
-      mg_call(c, MG_EV_READ, &n);
-    }
     MG_VERBOSE(("%lu %c%c %c%c%c%c%c %lu %lu", c->id,
                 c->is_readable ? 'r' : '-', c->is_writable ? 'w' : '-',
                 c->is_tls ? 'T' : 't', c->is_connecting ? 'C' : 'c',
@@ -27021,7 +27017,7 @@ void mg_ws_upgrade(struct mg_connection *c, struct mg_http_message *hm,
     ws_handshake(c, wskey, wsproto, fmt, &ap);
     va_end(ap);
     c->is_websocket = 1;
-    c->is_resp = 0;
+    c->pfn_data = NULL;  // HTTP response done; mg_ws_cb uses it as an offset
     mg_call(c, MG_EV_WS_OPEN, hm);
   }
 }

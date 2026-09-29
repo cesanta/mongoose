@@ -772,13 +772,8 @@ void mg_mgr_poll(struct mg_mgr *mgr, int ms) {
 
   for (c = mgr->conns; c != NULL; c = tmp) {
     long flush = 0;
-    bool is_resp = c->is_resp;
     tmp = c->next;
     mg_call(c, MG_EV_POLL, &now);
-    if (is_resp && !c->is_resp) {
-      long n = 0;
-      mg_call(c, MG_EV_READ, &n);
-    }
     MG_VERBOSE(("%lu %c%c %c%c%c%c%c %lu %lu", c->id,
                 c->is_readable ? 'r' : '-', c->is_writable ? 'w' : '-',
                 c->is_tls ? 'T' : 't', c->is_connecting ? 'C' : 'c',

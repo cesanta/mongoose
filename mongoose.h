@@ -2488,7 +2488,6 @@ struct mg_connection {
   unsigned is_closing : 1;        // Close and free immediately on next poll
   unsigned is_full : 1;           // Pause incoming reads until cleared
   unsigned is_tls_throttled : 1;  // TLS write was throttled; retry pending
-  unsigned is_resp : 1;           // HTTP: response is still being generated
   unsigned is_readable : 1;       // Socket is ready to read (epoll/select)
   unsigned is_writable : 1;       // Socket is ready to write (epoll/select)
 };

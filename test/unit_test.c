@@ -3351,7 +3351,7 @@ static void eY(struct mg_connection *c, int ev, void *ev_data) {
     c->data[0]++;
     if (c->data[0] == 10) mg_send(c, "a", 1);
     if (c->data[0] == 12) mg_send(c, "bc", 2);
-    if (c->data[0] == 30) mg_send(c, "d", 1), c->is_resp = 0, c->data[0] = 0;
+    if (c->data[0] == 30) mg_send(c, "d", 1), c->pfn_data = NULL, c->data[0] = 0;
   }
   (void) ev_data;
 }

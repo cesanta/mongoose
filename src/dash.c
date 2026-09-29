@@ -603,7 +603,7 @@ void mg_dash_ev_handler(struct mg_connection *c, int ev, void *ev_data) {
     // The response has been send in EV_HDRS path, so we're not reponding
     // anything but clearing the marker for the next request.
     d->marker = 0;
-    c->is_resp = 0;
+    c->pfn_data = NULL;  // Response done
   } else if (ev == MG_EV_HTTP_MSG && d->marker == '\0') {
     struct mg_http_message *hm = (struct mg_http_message *) ev_data;
     struct mg_dash_user *u = mg_dash_authenticate(c, hm, dash);
