@@ -220,6 +220,8 @@ Technical guides and deep dives into embedded web servers, WebUI integration and
 - [STM32 Ethernet and caches](https://mongoose.ws/articles/stm32-ethernet-and-cache/)
 - [NXP RW612 OTA Firmware Update](https://mongoose.ws/articles/rw612-ota-firmware-update/)
 - [lwIP vs Mongoose - TCP/IP Stack Integration Benchmark](https://mongoose.ws/articles/lwip-vs-mongoose-tcpip-stack-integration/)
+- [Embedded TCP/IP Stacks Comparison](https://mongoose.ws/embedded-tcpip-stack-comparison/)
+- [STM32H5 File System on Internal Flash: LittleFS + Mongoose.](https://mongoose.ws/articles/stm32h5-file-system-on-internal-flash/)
 
 
 ## Contributions
