@@ -52,7 +52,9 @@ enum mg_health_reason {
   MG_HEALTH_RESET_FAULT         // Fault handler ran, see regs[] and saved_stack
 };
 
+#ifndef MG_HEALTH_BACKTRACE
 #define MG_HEALTH_BACKTRACE 20  // Return addresses in mg_health::backtrace
+#endif
 
 struct mg_health {
   char magic[4];          // MG_HEALTH_MAGIC when the record holds valid data
