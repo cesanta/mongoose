@@ -52,14 +52,15 @@ enum mg_health_reason {
   MG_HEALTH_RESET_FAULT         // Fault handler ran, see regs[] and saved_stack
 };
 
-#ifndef MG_HEALTH_BACKTRACE
-#define MG_HEALTH_BACKTRACE 20  // Return addresses in mg_health::backtrace
+#ifndef MG_HEALTH_DATA_SIZE
+#define MG_HEALTH_DATA_SIZE 20
 #endif
 
 struct mg_health {
   char magic[4];          // MG_HEALTH_MAGIC when the record holds valid data
   uint32_t reset_reason;  // enum mg_health_reason that started this boot
-  uint32_t backtrace[MG_HEALTH_BACKTRACE];  // Crash backtrace, frame 0 first
+  uint32_t cpuid;         // ARM CPU ID
+  uint32_t data[MG_HEALTH_DATA_SIZE];
 };
 
 extern struct mg_health mg_health_record;  // Defined in health.c

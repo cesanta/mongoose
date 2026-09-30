@@ -1,6 +1,6 @@
 SRCS = mongoose.c unit_test.c packed_fs.c
 HDRS = $(wildcard ../src/*.h) $(wildcard ../src/drivers/*.h)
-DEFS ?= -DMG_MAX_HTTP_HEADERS=7 -DMG_ENABLE_LINES -DMG_ENABLE_SSI=1 -DMG_ENABLE_ASSERT=1 -DMG_ENABLE_IPV6=$(IPV6)
+DEFS ?= -DMG_MAX_HTTP_HEADERS=7 -DMG_ENABLE_LINES -DMG_ENABLE_SSI=1 -DMG_ENABLE_ASSERT=1 -DMG_ENABLE_IPV6=$(IPV6) -DMG_ENABLE_MDASH=$(MDASH)
 WARN ?= -pedantic -W -Wall -Werror -Wshadow -Wdouble-promotion -fno-common -Wconversion -Wundef
 OPTS ?= -O3 -g3
 INCS ?= -Isrc -I.
@@ -13,6 +13,7 @@ DOCKER_BIN ?= docker
 DOCKER ?= $(DOCKER_BIN) run --platform linux/amd64 --net=host --rm $(ENV) -v $(ROOT_DIR):$(ROOT_DIR) -w $(CWD)
 VCFLAGS ?= /nologo /W3 /O2 /MD /I.
 IPV6 ?= 1
+MDASH ?= 1
 ASAN ?= -fsanitize=address,undefined,alignment -fno-sanitize-recover=all -fno-omit-frame-pointer -fno-common
 ASAN_OPTIONS ?= detect_leaks=1
 # This does not include ESP32, ESP8266, Microchip; all examples that are directly placed under an OS tutorial. Also, it is needed that way...
@@ -269,6 +270,7 @@ clean: clean_tutorials clean_tutorials_embedded
 
 # MIP (net_builtin + L2 + driver) TESTS
 
+mip_test: MDASH = 0
 mip_test: mip_test.c mongoose.c mongoose.h packed_fs.c Makefile
 	$(CC) mip_test.c packed_fs.c $(CFLAGS) $(LDFLAGS) -o $@
 	ASAN_OPTIONS=$(ASAN_OPTIONS) $(RUN) ./$@
