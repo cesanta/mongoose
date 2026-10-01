@@ -46,15 +46,16 @@ __attribute__((used, noinline)) static void fault_c(uint32_t *frame,
                                                      uint32_t exc_return) {
   extern uint32_t _estack;
   uint32_t *stack = frame + 8 + ((exc_return & (1U << 4)) ? 0 : 18);
-  uint32_t *r = mg_health_record.backtrace;
+  uint32_t *r = mg_health_record.data;
 
   if (frame[7] & (1U << 9)) stack++;  // Eight-byte stack alignment padding
   r[CRASH_SP] = (uint32_t) (uintptr_t) stack;
   r[CRASH_LR] = frame[5];
   r[CRASH_PC] = frame[6];
-  for (size_t i = 0; i < MG_HEALTH_BACKTRACE - CRASH_STACK; i++) {
+  for (size_t i = 0; i < MG_HEALTH_DATA_SIZE - CRASH_STACK; i++) {
     r[CRASH_STACK + i] = stack + i < &_estack ? stack[i] : 0;
   }
+  mg_health_record.cpuid = SCB->CPUID;
   mg_health_record.reset_reason = MG_HEALTH_RESET_FAULT;
   NVIC_SystemReset();
 }

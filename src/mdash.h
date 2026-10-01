@@ -18,3 +18,4 @@
 
 void mg_mdash_init(struct mg_mgr *);
 void mg_mdash_poll(struct mg_mgr *);
+void mg_mdash_free(struct mg_mgr *);

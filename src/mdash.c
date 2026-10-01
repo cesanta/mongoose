@@ -55,7 +55,10 @@ static void mg_mdash_fn(struct mg_connection *c, int ev, void *ev_data) {
     // c->is_hexdumping = true;
     if (mg_url_is_ssl(MG_MDASH_URL)) {
       struct mg_str host = mg_url_host(MG_MDASH_URL);
-      struct mg_tls_opts opts = {.ca = mg_str(mg_mdash_ca_pem), .name = host};
+      struct mg_tls_opts opts;
+      memset(&opts, 0, sizeof(struct mg_tls_opts));
+      opts.ca = mg_str(mg_mdash_ca_pem);
+      opts.name = host;
       mg_tls_init(c, &opts);
     }
   }
@@ -65,16 +68,18 @@ static void mg_mdash_fn(struct mg_connection *c, int ev, void *ev_data) {
     // mDashTriggerEvent(s_mDashState, NULL);
   } else if (ev == MG_EV_WS_MSG) {
     struct mg_iobuf io = {0, 0, 0, 512};
-    struct mg_ws_message *wm = ev_data;
+    struct mg_ws_message *wm = (struct mg_ws_message *) ev_data;
     struct mg_str s = wm->data;
+    struct mg_rpc_req r;
     while (s.len > 0 && isspace((uint8_t) s.buf[s.len - 1])) s.len--;
     MG_INFO(("RPC: %.*s", (int) s.len, s.buf));
-    struct mg_rpc_req r = {.head = &c->mgr->rpcs,
-                           .rpc = NULL,
-                           .pfn = mg_pfn_iobuf,
-                           .pfn_data = &io,
-                           .req_data = NULL,
-                           .frame = s};
+    memset(&r, 0, sizeof(struct mg_rpc_req));
+    r.head = &c->mgr->rpcs;
+    r.rpc = NULL;
+    r.pfn = mg_pfn_iobuf;
+    r.pfn_data = &io;
+    r.req_data = NULL;
+    r.frame = s;
     mg_rpc_process(&r);
     if (io.buf != NULL) {
       MG_INFO(("     %s", io.buf));
@@ -90,32 +95,35 @@ static void mg_mdash_fn(struct mg_connection *c, int ev, void *ev_data) {
   (void) c;
 }
 
-static void mg_mdash_rpc_get_info(struct mg_rpc_req *r) {
+static size_t print_uint32(void (*fn)(char, void *), void *arg, va_list *ap) {
+  size_t n = va_arg(*ap, size_t);
+  uint32_t *p = va_arg(*ap, uint32_t *);
+  size_t len = 0;
+  while (n--) len += mg_xprintf(fn, arg, "%s%lu", len == 0 ? "" : ",", *p++);
+  return len;
+}
+
+static size_t print_crash(void (*fn)(char, void *), void *arg, va_list *ap) {
+  size_t len = 0;
   if (mg_health_valid()) {
-    uint32_t *data = mg_health_record.backtrace;
-    mg_rpc_ok(r,
-              "{%m:%m,%m:%llu,%m:%m,%m:\"mws.%d\",%m:{%m:true,"
-              "%m:{%m:\"0x%08lx\",%m:\"0x%08lx\",%m:\"0x%08lx\"},"
-              "%m:{%m:\"0x%08lx\",%m:%m}}}",
-              MG_ESC("fw_version"), MG_ESC(MG_FIRMWARE_VERSION),
-              MG_ESC("uptime"), (uint64_t) (mg_millis() / 1000),
-              MG_ESC("reboot_reason"),
-              MG_ESC(mg_health_reason_str(mg_health_reason())), MG_ESC("arch"),
-              MG_ARCH, MG_ESC("report"), MG_ESC("valid"), MG_ESC("regs"),
-              MG_ESC("sp"), (unsigned long) data[0], MG_ESC("lr"),
-              (unsigned long) data[1], MG_ESC("pc"), (unsigned long) data[2],
-              MG_ESC("stack"), MG_ESC("addr"), (unsigned long) data[0],
-              MG_ESC("data"), mg_print_base64,
-              (int) ((MG_HEALTH_BACKTRACE - 3) * sizeof(data[0])),
-              (uint8_t *) &data[3]);
-  } else {
-    mg_rpc_ok(r, "{%m:%m,%m:%llu,%m:%m,%m:\"mws.%d\",%m:{%m:false}}",
-              MG_ESC("fw_version"), MG_ESC(MG_FIRMWARE_VERSION),
-              MG_ESC("uptime"), (uint64_t) (mg_millis() / 1000),
-              MG_ESC("reboot_reason"),
-              MG_ESC(mg_health_reason_str(mg_health_reason())), MG_ESC("arch"),
-              MG_ARCH, MG_ESC("report"), MG_ESC("valid"));
+    size_t n = sizeof(mg_health_record.data) / sizeof(mg_health_record.data[0]);
+    len += mg_xprintf(fn, arg, ",%m:{%m:%hhu,%m:%u,%m:[%M]}", MG_ESC("crash"),
+                      MG_ESC("version"), mg_health_record.magic[3],  //
+                      MG_ESC("cpuid"), mg_health_record.cpuid,       //
+                      MG_ESC("data"), print_uint32, n, mg_health_record.data);
   }
+  (void) ap;
+  return len;
+}
+
+static void mg_mdash_rpc_get_info(struct mg_rpc_req *r) {
+  const char *reset_reason = mg_health_reason_str(mg_health_reason());
+  mg_rpc_ok(r, "{%m:%m,%m:%llu,%m:%m,%m:\"mws.%d\"%M}",               //
+            MG_ESC("fw_version"), MG_ESC(MG_FIRMWARE_VERSION),  //
+            MG_ESC("uptime"), (uint64_t) (mg_millis() / 1000),        //
+            MG_ESC("reboot_reason"), MG_ESC(reset_reason),            //
+            MG_ESC("arch"), MG_ARCH,                                  //
+            print_crash);
 }
 
 static void mg_mdash_rpc_ota_begin(struct mg_rpc_req *r) {
@@ -134,7 +142,7 @@ static void mg_mdash_rpc_ota_write(struct mg_rpc_req *r) {
     mg_rpc_err(r, 500, "%m", MG_ESC("data required"));
   } else {
     struct mg_str s = mg_str_n(&r->frame.buf[ofs] + 1, (size_t) (len - 2));
-    size_t n = mg_base64_decode(s.buf, s.len, s.buf, s.len); // Decode in-place
+    size_t n = mg_base64_decode(s.buf, s.len, s.buf, s.len);  // Decode in-place
     if (n == 0) {
       mg_rpc_ok(r, "%m", MG_ESC("finished"));
       mg_ota_end();
@@ -179,11 +187,18 @@ void mg_mdash_poll(struct mg_mgr *mgr) {
   }
 }
 
+void mg_mdash_free(struct mg_mgr *mgr) {
+  mg_rpc_del(&mgr->rpcs, NULL);
+}
+
 #else
 void mg_mdash_init(struct mg_mgr *mgr) {
   (void) mgr;
 }
 void mg_mdash_poll(struct mg_mgr *mgr) {
+  (void) mgr;
+}
+void mg_mdash_free(struct mg_mgr *mgr) {
   (void) mgr;
 }
 #endif

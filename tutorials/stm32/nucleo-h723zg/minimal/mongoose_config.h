@@ -28,7 +28,7 @@
 
 // Crash report support. Health record lives in the .mg_health region, see link.ld
 #define MG_HEALTH_RAM __attribute__((section(".mg_health")))
-#define MG_HEALTH_BACKTRACE 1022 // fill the 4KB backup SRAM
+#define MG_HEALTH_DATA_SIZE 1000 // fill the 4KB backup SRAM
 
 // mdash.net device management service support
 #define MG_ENABLE_MDASH 1
