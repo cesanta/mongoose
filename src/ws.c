@@ -287,7 +287,7 @@ void mg_ws_upgrade(struct mg_connection *c, struct mg_http_message *hm,
     ws_handshake(c, wskey, wsproto, fmt, &ap);
     va_end(ap);
     c->is_websocket = 1;
-    c->is_resp = 0;
+    c->pfn_data = NULL;  // HTTP response done; mg_ws_cb uses it as an offset
     mg_call(c, MG_EV_WS_OPEN, hm);
   }
 }
