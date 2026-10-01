@@ -18,7 +18,7 @@ static void log_fn(char ch, void *param) {
 
 static void blink_task(void) {
   static uint64_t blink_timer = 0;
-  if (hal_timer_expired(&blink_timer, 500, hal_get_tick())) {
+  if (hal_timer_expired(&blink_timer, 100, hal_get_tick())) {
     hal_gpio_toggle(LED1);
   }
 }

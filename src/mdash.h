@@ -12,10 +12,6 @@
 #define MG_MDASH_KEY ""
 #endif
 
-#ifndef MG_MDASH_FIRMWARE_VERSION
-#define MG_MDASH_FIRMWARE_VERSION "1.0.0"
-#endif
-
 #ifndef MG_ENABLE_MDASH
 #define MG_ENABLE_MDASH 0
 #endif

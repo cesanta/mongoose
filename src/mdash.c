@@ -97,7 +97,7 @@ static void mg_mdash_rpc_get_info(struct mg_rpc_req *r) {
               "{%m:%m,%m:%llu,%m:%m,%m:\"mws.%d\",%m:{%m:true,"
               "%m:{%m:\"0x%08lx\",%m:\"0x%08lx\",%m:\"0x%08lx\"},"
               "%m:{%m:\"0x%08lx\",%m:%m}}}",
-              MG_ESC("fw_version"), MG_ESC(MG_MDASH_FIRMWARE_VERSION),
+              MG_ESC("fw_version"), MG_ESC(MG_FIRMWARE_VERSION),
               MG_ESC("uptime"), (uint64_t) (mg_millis() / 1000),
               MG_ESC("reboot_reason"),
               MG_ESC(mg_health_reason_str(mg_health_reason())), MG_ESC("arch"),
@@ -110,7 +110,7 @@ static void mg_mdash_rpc_get_info(struct mg_rpc_req *r) {
               (uint8_t *) &data[3]);
   } else {
     mg_rpc_ok(r, "{%m:%m,%m:%llu,%m:%m,%m:\"mws.%d\",%m:{%m:false}}",
-              MG_ESC("fw_version"), MG_ESC(MG_MDASH_FIRMWARE_VERSION),
+              MG_ESC("fw_version"), MG_ESC(MG_FIRMWARE_VERSION),
               MG_ESC("uptime"), (uint64_t) (mg_millis() / 1000),
               MG_ESC("reboot_reason"),
               MG_ESC(mg_health_reason_str(mg_health_reason())), MG_ESC("arch"),

@@ -87,7 +87,7 @@ static double s_volume = 17.2;
 static int s_log_level = MG_LL_DEBUG;
 static char s_name[20] = "Dublin";
 static int s_ota_interval = 30;
-static char s_ota_version[] = MG_OTA_FIRMWARE_VERSION;
+static char s_ota_version[] = MG_FIRMWARE_VERSION;
 static char s_ota_status[40] = "No scans yet";
 static char s_ota_url[100] = "https://my-product.com/ota.json";
 

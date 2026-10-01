@@ -13,7 +13,7 @@
 
 // Scannable version tag embedded in every firmware binary, for server-side
 // version extraction. The version string starts after the "MG_VERSION:" prefix.
-static const char s_fw_version[] = "MG_VERSION:" MG_OTA_FIRMWARE_VERSION;
+static const char s_fw_version[] = "MG_VERSION:" MG_FIRMWARE_VERSION;
 
 static bool s_autocommit_ok;  // True after OTA server confirms "same version"
 

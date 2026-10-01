@@ -486,7 +486,7 @@ embedded devices and needs only a few lines added to `mongoose_config.h`:
 
 ```c
 #define MG_OTA_URL "https://mongoose.ws/ota/u/PREFIX/ota.json"  // Copy from instructions panel
-#define MG_OTA_FIRMWARE_VERSION "MY_PRODUCT_1.4.2"  // Change this
+#define MG_FIRMWARE_VERSION "MY_PRODUCT_1.4.2"  // Change this
 ```
 
 No backend programming required. The device registers itself and checks in at

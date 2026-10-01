@@ -154,7 +154,7 @@ enum {
 // needs to be defined. Fetches metadata_url, which must
 // return a JSON object like:
 // { "version": "1.2.3", "url": "FIRMWARE_URL", "size": 324645 }
-// If the server version differs from MG_OTA_FIRMWARE_VERSION, downloads
+// If the server version differs from MG_FIRMWARE_VERSION, downloads
 // FIRMWARE_URL and performs the OTA update. fn is called on every outcome:
 // NULL on successful flash, "Same version" when already up to date, or an
 // error string on failure. Pass NULL to use the default handler which logs
@@ -181,8 +181,8 @@ void mg_ota_url_check(struct mg_mgr *mgr, const char *metadata_url,
 #endif
 
 // Firmware version for mg_ota_poll(). Settable in mongoose_config.h
-#ifndef MG_OTA_FIRMWARE_VERSION
-#define MG_OTA_FIRMWARE_VERSION "1.0.0"
+#ifndef MG_FIRMWARE_VERSION
+#define MG_FIRMWARE_VERSION "1.0.0"
 #endif
 
 // Maximum version string length

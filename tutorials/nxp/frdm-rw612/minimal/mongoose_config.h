@@ -8,6 +8,11 @@
 #define MG_ENABLE_CUSTOM_MILLIS 1
 #define MG_ENABLE_CUSTOM_RANDOM 1
 #define MG_OTA MG_OTA_RW612
+#define MG_TLS MG_TLS_BUILTIN
+
+#define MG_ENABLE_MDASH 0   // Set to 1 to enable https://mdash.net
+#define MG_MDASH_KEY "..."  // Edit, see https://mdash.net/docs/#mongoose-library
+#define MG_FIRMWARE_VERSION "1.0.1"
 
 // #define MG_DRIVER_MDC_CR 51   // RMII MDC clock divider
 // #define MG_DRIVER_MDC_HOLDTIME 3 // RMII MDC Holdtime (valid values [0-7])
