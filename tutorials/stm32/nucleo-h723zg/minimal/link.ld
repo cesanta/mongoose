@@ -28,5 +28,5 @@ SECTIONS {
   _end = .;
 
   /* Retained health record. Startup code must neither copy nor clear it. */
-  .mg_health (NOLOAD) : { KEEP(*(.mg_health .mg_health*)) } > bkpsram
+  .mg_health (NOLOAD) : { KEEP(*(.mg_health .mg_health*)) } > ram_d3
 }

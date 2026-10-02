@@ -27,9 +27,10 @@
   } while (0)
 
 // Crash report support. Health record lives in the .mg_health region, see link.ld
+#define MG_ENABLE_HEALTH 1
 #define MG_HEALTH_RAM __attribute__((section(".mg_health")))
-#define MG_HEALTH_DATA_SIZE 1000 // fill the 4KB backup SRAM
+#define MG_HEALTH_DATA_SIZE 1000
 
 // mdash.net device management service support
-#define MG_ENABLE_MDASH 1
-#define MG_MDASH_KEY "u8eyWvBmkc6gw9991z1SQ8Lg"  // Set this - mDash device token
+#define MG_ENABLE_MDASH 0
+#define MG_MDASH_KEY "..."  // Set this - mDash device token

@@ -1490,6 +1490,10 @@ struct timeval {
 #define MG_ENABLE_CHACHA20 1  // When set to 0, GCM is used. For MG_TLS_BUILTIN
 #endif
 
+#ifndef MG_ENABLE_HEALTH
+#define MG_ENABLE_HEALTH 0
+#endif
+
 
 
 
@@ -4914,30 +4918,7 @@ void mg_ota_device_id(char *buf, size_t len);
 // directly.
 void mg_ota_poll(struct mg_mgr *);
 // Device health monitoring
-//
-// Keeps a small record in a RAM region that survives a warm reset, so a device
-// can tell why it restarted. The record holds a boot counter, the uptime this
-// boot has reached, and the reset reason reported by the hardware. A crash
-// loop, a hang loop and a marginal power supply each leave a different mark.
-//
-// Put MG_HEALTH_INIT() in main(), right after clock and memory init:
-//
-// ```c
-// int main(void) {
-//   hal_clock_init();
-//   MG_HEALTH_INIT();
-//   ...
-// }
-// ```
-//
-// The record must live in RAM that startup code neither copies nor zeroes.
-// See tutorials/stm32/nucleo-h723zg/minimal/link.ld for the .mg_health region,
-// and tutorials/stm32/nucleo-h723zg/minimal/mongoose_config.h for the
-// reset-reason hooks.
-//
-// On Cortex-M, a fault handler can record the crash: it sets reset_reason to
-// MG_HEALTH_RESET_FAULT and walks the stack into backtrace[]. See
-// tutorials/stm32/nucleo-h723zg/minimal/main.c for a sample HardFault_Handler.
+
 
 
 
@@ -5016,27 +4997,10 @@ static inline void mg_health_init(void) {
     memset(&mg_health_record, 0, sizeof(mg_health_record));
     memcpy(mg_health_record.magic, magic, sizeof(mg_health_record.magic));
   }
-  // h->prev_uptime = h->uptime;
-  // h->prev_reason = h->reason;
-  // h->counter++;
-  // h->uptime = 0;
-  // h->reason = mg_health_decode_reason();
-  // MG_HEALTH_RESET_CLEAR();
 }
 
-// // Record that the main loop is still alive. Called from mg_mgr_poll(), so a
-// // hung application leaves uptime frozen at the hang
-// extern uint64_t mg_health_next_ms;  // Defined in health.c
-
-// static inline void mg_health_uptime(uint64_t now_ms) {
-//   struct mg_health *h = mg_health_get();
-//   if (now_ms >= mg_health_next_ms && mg_health_valid()) {
-//     mg_health_next_ms = now_ms + 1000;
-//     h->uptime++;
-//   }
-// }
-
 #define MG_HEALTH_INIT() mg_health_init()
+extern size_t mg_print_crash_record(mg_pfn_t, void *, va_list *);
 // Cloud connector API to https://mdash.net - device management cloud
 
 

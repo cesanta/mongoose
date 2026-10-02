@@ -95,35 +95,14 @@ static void mg_mdash_fn(struct mg_connection *c, int ev, void *ev_data) {
   (void) c;
 }
 
-static size_t print_uint32(void (*fn)(char, void *), void *arg, va_list *ap) {
-  size_t n = va_arg(*ap, size_t);
-  uint32_t *p = va_arg(*ap, uint32_t *);
-  size_t len = 0;
-  while (n--) len += mg_xprintf(fn, arg, "%s%lu", len == 0 ? "" : ",", *p++);
-  return len;
-}
-
-static size_t print_crash(void (*fn)(char, void *), void *arg, va_list *ap) {
-  size_t len = 0;
-  if (mg_health_valid()) {
-    size_t n = sizeof(mg_health_record.data) / sizeof(mg_health_record.data[0]);
-    len += mg_xprintf(fn, arg, ",%m:{%m:%hhu,%m:%u,%m:[%M]}", MG_ESC("crash"),
-                      MG_ESC("version"), mg_health_record.magic[3],  //
-                      MG_ESC("cpuid"), mg_health_record.cpuid,       //
-                      MG_ESC("data"), print_uint32, n, mg_health_record.data);
-  }
-  (void) ap;
-  return len;
-}
-
 static void mg_mdash_rpc_get_info(struct mg_rpc_req *r) {
   const char *reset_reason = mg_health_reason_str(mg_health_reason());
-  mg_rpc_ok(r, "{%m:%m,%m:%llu,%m:%m,%m:\"mws.%d\"%M}",               //
+  mg_rpc_ok(r, "{%m:%m,%m:%llu,%m:%m,%m:\"mws.%d\",%m:%M}",     //
             MG_ESC("fw_version"), MG_ESC(MG_FIRMWARE_VERSION),  //
-            MG_ESC("uptime"), (uint64_t) (mg_millis() / 1000),        //
-            MG_ESC("reboot_reason"), MG_ESC(reset_reason),            //
-            MG_ESC("arch"), MG_ARCH,                                  //
-            print_crash);
+            MG_ESC("uptime"), (uint64_t) (mg_millis() / 1000),  //
+            MG_ESC("reboot_reason"), MG_ESC(reset_reason),      //
+            MG_ESC("arch"), MG_ARCH,                            //
+            MG_ESC("crash"), mg_print_crash_record);
 }
 
 static void mg_mdash_rpc_ota_begin(struct mg_rpc_req *r) {
