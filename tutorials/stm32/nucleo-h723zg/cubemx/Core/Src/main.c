@@ -18,7 +18,6 @@
 /* USER CODE END Header */
 /* Includes ------------------------------------------------------------------*/
 #include "main.h"
-#include "stm32h7xx_hal.h"
 #include "string.h"
 
 /* Private includes ----------------------------------------------------------*/
@@ -94,6 +93,9 @@ static void http_ev_handler(struct mg_connection *c, int ev, void *ev_data) {
     struct mg_http_message *hm = (struct mg_http_message *) ev_data;
     if (mg_match(hm->uri, mg_str("/api/tick"), NULL)) {
       mg_http_reply(c, 200, "", "{%m:%lu}\n", MG_ESC("tick"), HAL_GetTick());
+    } else if (mg_match(hm->uri, mg_str("/api/kill"), NULL)) {
+      SCB->SHCSR &= ~SCB_SHCSR_USGFAULTENA_Msk;
+      __asm volatile("udf #0");
     } else {
       mg_http_reply(c, 200, "", "Hi from Mongoose, tick %lu\n", HAL_GetTick());
     }
@@ -109,7 +111,7 @@ int main(void)
 {
 
   /* USER CODE BEGIN 1 */
-
+  MG_HEALTH_INIT();
   /* USER CODE END 1 */
 
   /* MPU Configuration--------------------------------------------------------*/
