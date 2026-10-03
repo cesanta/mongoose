@@ -803,11 +803,18 @@ static void test_mqtt_parse(void) {
   struct mg_mqtt_prop prop;
   // MQTT5 PUBLISH with Subscription Identifier = 5
   const uint8_t sub_id_pkt[] = {0x30, 0x06, 0x00, 0x01, 'x', 0x02, 0x0B, 0x05};
+  // MQTT5 CONNACK with Server Keep Alive = 60
+  const uint8_t connack_pkt[] = {0x20, 0x06, 0x00, 0x00, 0x03, 0x13, 0x00, 0x3C};
 
   memset(&mm, 0, sizeof(struct mg_mqtt_message));
   memset(&prop, 0, sizeof(struct mg_mqtt_prop));
   ASSERT(mg_mqtt_parse(sub_id_pkt, sizeof(sub_id_pkt), 5, &mm) == MQTT_OK);
   mg_mqtt_next_prop(&mm, &prop, 0);
+
+  ASSERT(mg_mqtt_parse(connack_pkt, sizeof(connack_pkt), 5, &mm) == MQTT_OK);
+  ASSERT(mm.ack == 0);
+  ASSERT(mg_mqtt_next_prop(&mm, &prop, 0) > 0);
+  ASSERT(prop.id == MQTT_PROP_SERVER_KEEP_ALIVE && prop.iv == 60);
 }
 
 static void test_mqtt(void) {

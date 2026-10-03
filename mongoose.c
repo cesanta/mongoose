@@ -7861,6 +7861,16 @@ int mg_mqtt_parse(const uint8_t *buf, size_t len, uint8_t version,
     case MQTT_CMD_CONNACK:
       if (end - p < 2) return MQTT_MALFORMED;
       m->ack = p[1];
+      p += 2;
+      if (version == 5) {
+        if (p >= end) return MQTT_MALFORMED;
+        len_len = (uint32_t) decode_varint(p, (size_t) (end - p), &tmp);
+        if (!len_len) return MQTT_MALFORMED;
+        m->props_size = (size_t) tmp;
+        m->props_start = (size_t) (p + len_len - buf);
+        p += len_len + m->props_size;
+        if (p > end) return MQTT_MALFORMED;
+      }
       break;
     case MQTT_CMD_PUBACK:
     case MQTT_CMD_PUBREC:
