@@ -24,6 +24,10 @@ firmware.bin: firmware.elf
 	@echo
 	@echo "To flash, run 'make flash', or use STM32CubeProgrammer"
 
+firmware.signed.bin: firmware.bin
+	test -f private.pem || node $(MGDIR)/resources/sign.js keygen
+	node $(MGDIR)/resources/sign.js sign firmware.bin
+
 flash: firmware.bin
 	STM32_Programmer_CLI -c port=swd -w firmware.elf -hardRst
 

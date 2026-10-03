@@ -34,3 +34,4 @@
 // mdash.net device management service support
 #define MG_ENABLE_MDASH 0
 #define MG_MDASH_KEY "..."  // Set this - mDash device token
+#define MG_FIRMWARE_VERSION "1.0.0"
