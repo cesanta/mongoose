@@ -45,7 +45,7 @@ the [HiveMQ Websocket Client](https://www.hivemq.com/demos/websocket-client/):
 #define MQTT_SUBSCRIBE_TOPIC "devices/" AZURE_DEVICE_ID "/messages/devicebound/#"
   ```
 
-5. Set `TLS_CA`. Visit https://mongoose.ws/tls/, enter "HUB_NAME.device.azure-devices.nett:8883" into the CA field and click on the "Get CA Certificate" button. Enable the "Show as C/C++ constant", copy-paste to your code.
+5. Set `TLS_CA`. Visit https://mongoose.ws/tls/, enter "HUB_NAME.device.azure-devices.net:8883" into the CA field and click on the "Get CA Certificate" button. Enable the "Show as C/C++ constant", copy-paste to your code.
 6. Set `TLS_KEY` and `TLS_CRT` with the output of this commands:
 
 ```sh
