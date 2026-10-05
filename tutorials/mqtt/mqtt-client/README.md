@@ -49,8 +49,8 @@ the [HiveMQ Websocket Client](https://www.hivemq.com/demos/websocket-client/):
 6. Set `TLS_KEY` and `TLS_CRT` with the output of this commands:
 
 ```sh
-sed 's/\r$//; s/._/ "&\\n"/; $!s/$/ \\/' device.key
-sed 's/\r$//; s/._/ "&\\n"/; $!s/$/ \\/' device.crt
+sed 's/\r$//; s/.*/  "&\\n"/; $!s/$/ \\/' device.key
+sed 's/\r$//; s/.*/  "&\\n"/; $!s/$/ \\/' device.crt
 ```
 7. Add to your `mongoose_config.h`:
 ```c
@@ -87,8 +87,8 @@ openssl x509 -in device.crt -noout -fingerprint -sha256 | tr -d ':' | cut -d= -f
 7. Set `TLS_KEY` and `TLS_CRT` with the output of this commands:
 
 ```sh
-sed 's/\r$//; s/._/ "&\\n"/; $!s/$/ \\/' device.key
-sed 's/\r$//; s/._/ "&\\n"/; $!s/$/ \\/' device.crt
+sed 's/\r$//; s/.*/  "&\\n"/; $!s/$/ \\/' device.key
+sed 's/\r$//; s/.*/  "&\\n"/; $!s/$/ \\/' device.crt
 ```
 
 8. In Azure EG, go to Instance / MQTT Broker / Topic spaces, add "space1" with `mg/#` pattern
