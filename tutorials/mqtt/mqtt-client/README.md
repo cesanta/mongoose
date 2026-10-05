@@ -21,7 +21,6 @@ the [HiveMQ Websocket Client](https://www.hivemq.com/demos/websocket-client/):
 2. Add `mg_mqtt_init(&mgr)` after `mg_mgr_init()`
 3. Add `mg_mqtt_poll(&mgr)` after `mg_mgr_poll()`
 
-
 ## Microsoft Azure IoT Hub
 
 1. Create IoT Hub
@@ -53,7 +52,10 @@ the [HiveMQ Websocket Client](https://www.hivemq.com/demos/websocket-client/):
 sed 's/\r$//; s/._/ "&\\n"/; $!s/$/ \\/' device.key
 sed 's/\r$//; s/._/ "&\\n"/; $!s/$/ \\/' device.crt
 ```
-
+7. Add to your `mongoose_config.h`:
+```c
+#define MG_ENABLE_CHACHA20 0
+```
 
 ## Microsoft Azure Event Grid
 
