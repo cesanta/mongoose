@@ -124,7 +124,7 @@ void mg_mqtt_poll(struct mg_mgr *mgr) {
     if (s_mqtt_conn == NULL) {
       struct mg_mqtt_opts opts = {
           .clean = true,
-          // .client_id = mg_str(MQTT_CLIENT_ID),
+          .client_id = mg_str(MQTT_CLIENT_ID),
           .user = mg_str(MQTT_USER),
           .pass = mg_str(MQTT_PASS),
           .qos = MQTT_QOS,
