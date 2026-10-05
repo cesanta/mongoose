@@ -1,8 +1,8 @@
-#include "net.h"
 #include "dns.h"
 #include "fmt.h"
 #include "log.h"
 #include "mdash.h"
+#include "net.h"
 #include "printf.h"
 #include "profile.h"
 #include "timer.h"
@@ -39,10 +39,10 @@ bool mg_dscp(struct mg_connection *c, uint8_t dscp) {
   int tos = dscp << 2, level = IPPROTO_IP, optname = IP_TOS;
   c->dscp = (unsigned) (dscp & 63);
 #if MG_ENABLE_IPV6 && !MG_ENABLE_LWIP
-  if (c->loc.is_ip6)
-    level = IPPROTO_IPV6, optname = IPV6_TCLASS;
+  if (c->loc.is_ip6) level = IPPROTO_IPV6, optname = IPV6_TCLASS;
 #endif
-  return setsockopt((MG_SOCKET_TYPE) (size_t) c->fd, level, optname, (char *) &tos, sizeof(tos)) == 0;
+  return setsockopt((MG_SOCKET_TYPE) (size_t) c->fd, level, optname,
+                    (char *) &tos, sizeof(tos)) == 0;
 #endif
 #elif MG_ENABLE_TCPIP
   c->dscp = (unsigned) (dscp & 63);
@@ -346,13 +346,15 @@ void mg_mgr_init(struct mg_mgr *mgr) {
   mgr->dns4.url = "udp://8.8.8.8:53";
   mgr->dns6.url = "udp://[2001:4860:4860::8888]:53";
   mg_tls_ctx_init(mgr);
-  MG_DEBUG(("MG_IO_SIZE: %lu, TLS: %s", MG_IO_SIZE,
+  MG_DEBUG(("MG_IO_SIZE: %lu, TLS: %s, conn size: %zu, mgr size: %zu",
+            MG_IO_SIZE,
             MG_TLS == MG_TLS_NONE      ? "none"
             : MG_TLS == MG_TLS_MBED    ? "MbedTLS"
             : MG_TLS == MG_TLS_OPENSSL ? "OpenSSL"
             : MG_TLS == MG_TLS_BUILTIN ? "builtin"
             : MG_TLS == MG_TLS_WOLFSSL ? "WolfSSL"
-                                       : "custom"));
+                                       : "custom",
+            sizeof(struct mg_connection), sizeof(struct mg_mgr)));
 #if MG_ENABLE_MDASH
   mg_mdash_init(mgr);
 #endif

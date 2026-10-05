@@ -107,7 +107,8 @@ struct tls_data {
   uint8_t random[32];      // client random from ClientHello
   uint8_t session_id[32];  // client session ID between the handshake states
   uint8_t x25519_cli[32];  // client X25519 key between the handshake states
-  uint8_t x25519_sec[32];  // x25519 secret between the handshake states
+  uint8_t p256_cli[32];    // client P-256 key between the handshake states
+  uint8_t x25519_sec[32];  // ECDHE secret (X25519 or P-256) between the states
 
   bool skip_verification;    // do not perform checks on server certificate
   bool cert_requested;       // client received a CertificateRequest
@@ -130,6 +131,7 @@ struct tls_data {
                              // verify cert
   size_t pubkeysz;           // size of the server public key
   uint8_t sighash[32];       // calculated signature verification hash
+  uint8_t sighash384[48];    // same, SHA-384, for ecdsa_secp384r1_sha384
 
   struct tls_enc enc;       // actual keys in use at this time
   struct tls_enc app_keys;  // storage during two-way auth handshake
@@ -344,6 +346,10 @@ static void mg_tls_generate_handshake_keys(struct mg_connection *c) {
   mg_hmac_sha256(tls->enc.handshake_secret, pre_extract_secret,
                  sizeof(pre_extract_secret), tls->x25519_sec,
                  sizeof(tls->x25519_sec));
+  // ECDHE keys and secret are not needed anymore, wipe for forward secrecy
+  mg_bzero(tls->x25519_cli, sizeof(tls->x25519_cli));
+  mg_bzero(tls->p256_cli, sizeof(tls->p256_cli));
+  mg_bzero(tls->x25519_sec, sizeof(tls->x25519_sec));
   mg_tls_hexdump("hs secret", tls->enc.handshake_secret, 32);
 
   // mg_sha256_final is not idempotent, need to copy sha256 context to calculate
@@ -626,8 +632,11 @@ static int mg_tls_recv_record(struct mg_connection *c) {
   return r;
 }
 
+// Hash the CertificateVerify content: SHA-256 into hash, and if hash384 is not
+// NULL, SHA-384 into hash384 for ecdsa_secp384r1_sha384
 static void mg_tls_calc_cert_verify_hash(struct mg_connection *c,
-                                         uint8_t hash[32], bool is_client) {
+                                         uint8_t hash[32], uint8_t *hash384,
+                                         bool is_client) {
   struct tls_data *tls = (struct tls_data *) c->tls;
   uint8_t sig_content[130];
   mg_sha256_ctx sha256;
@@ -647,6 +656,7 @@ static void mg_tls_calc_cert_verify_hash(struct mg_connection *c,
   mg_sha256_init(&sha256);
   mg_sha256_update(&sha256, sig_content, sizeof(sig_content));
   mg_sha256_final(hash, &sha256);
+  if (hash384 != NULL) mg_sha384(hash384, sig_content, sizeof(sig_content));
 }
 
 // read and parse ClientHello record
@@ -788,10 +798,15 @@ static bool mg_tls_server_send_ext(struct mg_connection *c) {
   return mg_tls_encrypt(c, ext, sizeof(ext), MG_TLS_HANDSHAKE);
 }
 
-// signature algorithms we actually support:
-// rsa_pkcs1_sha256, rsa_pss_rsae_sha256 and ecdsa_secp256r1_sha256
-static const uint8_t secp256r1_sig_algs[12] = {
+// signature algorithms we actually support: ecdsa_secp256r1_sha256,
+// ecdsa_secp384r1_sha384 (if enabled), rsa_pss_rsae_sha256, rsa_pkcs1_sha256
+static const uint8_t secp256r1_sig_algs[] = {
+#if MG_UECC_SUPPORTS_secp384r1
+    0x00, 0x0d, 0x00, 0x0a, 0x00, 0x08, 0x04, 0x03,
+    0x05, 0x03, 0x08, 0x04, 0x04, 0x01};
+#else
     0x00, 0x0d, 0x00, 0x08, 0x00, 0x06, 0x04, 0x03, 0x08, 0x04, 0x04, 0x01};
+#endif
 
 static bool mg_tls_server_send_cert_request(struct mg_connection *c) {
   struct tls_data *tls = (struct tls_data *) c->tls;
@@ -1071,7 +1086,7 @@ static bool mg_tls_send_cert_verify(struct mg_connection *c, bool is_client) {
   struct tls_data *tls = (struct tls_data *) c->tls;
   uint8_t hash[32] = {0};
 
-  mg_tls_calc_cert_verify_hash(c, (uint8_t *) hash, is_client);
+  mg_tls_calc_cert_verify_hash(c, (uint8_t *) hash, NULL, is_client);
 
   if (tls->rsa.n.len > 0 && tls->rsa.d.len > 0) {
     // RSA certificate verify packet
@@ -1199,6 +1214,7 @@ static bool mg_tls_client_send_hello(struct mg_connection *c) {
   struct mg_iobuf *wio = &tls->send;
 
   uint8_t x25519_pub[X25519_BYTES];
+  uint8_t p256_pub[64];  // X || Y, sent as an uncompressed point 0x04 || X || Y
 
   // - "signature algorithms we actually support", see above
   //   uint8_t secp256r1_sig_algs[]
@@ -1211,7 +1227,7 @@ static bool mg_tls_client_send_hello(struct mg_connection *c) {
                                 0xfe, 0x00, 0x00, 0xfe};
 
   // clang-format off
-  uint8_t msg_client_hello[145] = {
+  uint8_t msg_client_hello[216] = {
       // TLS Client Hello header reported as TLS1.2 (5)
       0x16, 0x03, 0x03, 0x00, 0xfe,
       // client hello, tls 1.2 (6)
@@ -1232,15 +1248,17 @@ static bool mg_tls_client_send_hello(struct mg_connection *c) {
       0x01, 0x00,
       // extensions + keyshare
       0x00, 0xfe,
-      // x25519 keyshare
-      0x00, 0x33, 0x00, 0x26, 0x00, 0x24, 0x00, 0x1d, 0x00, 0x20,
+      // keyshare: x25519
+      0x00, 0x33, 0x00, 0x6b, 0x00, 0x69, 0x00, 0x1d, 0x00, 0x20,
       PLACEHOLDER_32B,
-      // supported groups (x25519)
-      0x00, 0x0a, 0x00, 0x04, 0x00, 0x02, 0x00, 0x1d,
+      // keyshare: secp256r1, uncompressed point
+      0x00, 0x17, 0x00, 0x41, 0x04, PLACEHOLDER_32B, PLACEHOLDER_32B,
+      // supported groups (x25519, secp256r1)
+      0x00, 0x0a, 0x00, 0x06, 0x00, 0x04, 0x00, 0x1d, 0x00, 0x17,
       // supported versions (tls1.3 == 0x304)
       0x00, 0x2b, 0x00, 0x03, 0x02, 0x03, 0x04,
       // session ticket (none)
-      0x00, 0x23, 0x00, 0x00, // 144 bytes till here
+      0x00, 0x23, 0x00, 0x00, // 215 bytes till here
 	};
   // clang-format on
   const char *hostname = tls->hostname;
@@ -1253,11 +1271,11 @@ static bool mg_tls_client_send_hello(struct mg_connection *c) {
 
   // patch ClientHello with correct hostname ext length (if any)
   MG_STORE_BE16(msg_client_hello + 3,
-                hostname_extsz + 183 - 9 - 34 + sig_alg_sz);
+                hostname_extsz + 254 - 9 - 34 + sig_alg_sz);
   MG_STORE_BE16(msg_client_hello + 7,
-                hostname_extsz + 179 - 9 - 34 + sig_alg_sz);
+                hostname_extsz + 250 - 9 - 34 + sig_alg_sz);
   MG_STORE_BE16(msg_client_hello + 82,
-                hostname_extsz + 104 - 9 - 34 + sig_alg_sz);
+                hostname_extsz + 175 - 9 - 34 + sig_alg_sz);
 
   if (hostnamesz > 0) {
     MG_STORE_BE16(server_name_ext + 2, hostnamesz + 5);
@@ -1265,16 +1283,21 @@ static bool mg_tls_client_send_hello(struct mg_connection *c) {
     MG_STORE_BE16(server_name_ext + 7, hostnamesz);
   }
 
-  // calculate keyshare
+  // calculate keyshares
   if (!mg_random(tls->x25519_cli, sizeof(tls->x25519_cli))) mg_error(c, "RNG");
   mg_tls_x25519(x25519_pub, tls->x25519_cli, X25519_BASE_POINT, 1);
+  if (!mg_uecc_make_key(p256_pub, tls->p256_cli, mg_uecc_secp256r1())) {
+    mg_error(c, "P-256 key");
+    return false;  // Do not send uninitialised p256_pub
+  }
 
-  // fill in the gaps: random + session ID + keyshare
+  // fill in the gaps: random + session ID + keyshares
   if (!mg_random(tls->session_id, sizeof(tls->session_id))) mg_error(c, "RNG");
   if (!mg_random(tls->random, sizeof(tls->random))) mg_error(c, "RNG");
   memmove(msg_client_hello + 11, tls->random, sizeof(tls->random));
   memmove(msg_client_hello + 44, tls->session_id, sizeof(tls->session_id));
   memmove(msg_client_hello + 94, x25519_pub, sizeof(x25519_pub));
+  memmove(msg_client_hello + 131, p256_pub, sizeof(p256_pub));
 
   // client hello message
   if (mg_iobuf_add(wio, wio->len, msg_client_hello, sizeof(msg_client_hello)) ==
@@ -1344,17 +1367,29 @@ static int mg_tls_client_recv_hello(struct mg_connection *c) {
     }
     if (ext_len2 < (2 + 2 + 32)) goto fail;
     group = MG_LOAD_BE16(ext + j + 4);
-    if (group != 0x001d) {
+    key_exchange_len = MG_LOAD_BE16(ext + j + 6);
+    key_exchange = ext + j + 8;
+    if (key_exchange_len > ext_len2 - 4) goto fail;
+    if (group == 0x001d) {  // x25519
+      if (key_exchange_len != 32 ||
+          mg_tls_x25519(tls->x25519_sec, tls->x25519_cli, key_exchange, 1) <
+              0) {
+        mg_error(c, "bad key");
+        return -1;
+      }
+    } else if (group == 0x0017) {  // secp256r1, uncompressed point 0x04 || X || Y
+      if (key_exchange_len != 65 || key_exchange[0] != 0x04 ||
+          !mg_uecc_valid_public_key(key_exchange + 1, mg_uecc_secp256r1()) ||
+          !mg_uecc_shared_secret(key_exchange + 1, tls->p256_cli,
+                                 tls->x25519_sec, mg_uecc_secp256r1())) {
+        mg_error(c, "bad key");
+        return -1;
+      }
+    } else {
       mg_error(c, "bad key exchange group");
       return -1;
     }
-    key_exchange_len = MG_LOAD_BE16(ext + j + 6);
-    key_exchange = ext + j + 8;
-    if (key_exchange_len != 32 || mg_tls_x25519(tls->x25519_sec, tls->x25519_cli, key_exchange, 1) < 0) {
-      mg_error(c, "bad key");
-      return -1;
-    }    
-    mg_tls_hexdump("c x25519 sec", tls->x25519_sec, 32);
+    // mg_tls_hexdump("c ecdhe sec", tls->x25519_sec, 32);
     mg_tls_drop_record(c);
     /* generate handshake keys */
     mg_tls_generate_handshake_keys(c);
@@ -1619,7 +1654,7 @@ static int countdots(struct mg_str s) {
   char *p = s.buf;
   while (len--) {
     if (*(p++) == '.') ++count;
-  }    
+  }
   return count;
 }
 
@@ -1696,10 +1731,12 @@ static int mg_tls_verify_cert_signature(const struct mg_tls_cert *cert,
 #if MG_UECC_SUPPORTS_secp384r1
     if (issuer->pubkey.len == 96) {
       const uint32_t N = 48;
-      if (a.len > N) a.value += (a.len - N), a.len = N;
+      if (a.len > N) a.value += (a.len - N), a.len = N;  // padding
       if (b.len > N) b.value += (b.len - N), b.len = N;
-      memmove(sig, a.value, N);
-      memmove(sig + N, b.value, N);
+      memset(sig, 0, N - a.len);  // short encoding
+      memmove(sig + (N - a.len), a.value, a.len);
+      memset(sig + N, 0, N - b.len);
+      memmove(sig + N + (N - b.len), b.value, b.len);
       return mg_uecc_verify((uint8_t *) issuer->pubkey.buf, cert->tbshash,
                             (unsigned) cert->tbshashsz, sig,
                             mg_uecc_secp384r1());
@@ -1928,7 +1965,7 @@ static int mg_tls_recv_cert(struct mg_connection *c, bool is_client) {
     }
   }
   mg_tls_drop_message(c);
-  mg_tls_calc_cert_verify_hash(c, tls->sighash, !is_client);
+  mg_tls_calc_cert_verify_hash(c, tls->sighash, tls->sighash384, !is_client);
   return 0;
 }
 
@@ -1991,11 +2028,20 @@ static int mg_tls_recv_cert_verify(struct mg_connection *c) {
         return -1;
       }
       MG_VERBOSE(("certificate verification successful (RSA)"));
-    } else if (sigalg == 0x0403) {  // ecdsa_secp256r1_sha256
-      // Extract certificate signature and verify it using pubkey and sighash
-      uint8_t sig[64];
+    } else if (sigalg == 0x0403 ||
+               (sigalg == 0x0503 && MG_UECC_SUPPORTS_secp384r1)) {
+      // ecdsa_secp256r1_sha256 or ecdsa_secp384r1_sha384. Extract certificate
+      // signature and verify it using pubkey and sighash
+      bool is384 = sigalg == 0x0503;
+      uint32_t N = is384 ? 48 : 32;  // curve size: r and s are N bytes each
+      int ok;
+      uint8_t sig[96];
       struct mg_der_tlv seq, r, s;
-      memset(sig, 0, 64);
+      memset(sig, 0, sizeof(sig));
+      if (tls->pubkeysz != 2 * N) {
+        mg_error(c, "certverify scheme %04x does not match the key", sigalg);
+        return -1;
+      }
       if (mg_der_to_tlv(sigbuf, siglen, &seq) < 0) {
         mg_error(c, "verification message is not an ASN.1 DER sequence");
         return -1;
@@ -2009,15 +2055,24 @@ static int mg_tls_recv_cert_verify(struct mg_connection *c) {
         return -1;
       }
       // Integers may be padded with zeroes
-      if (r.len > 32) r.value = r.value + (r.len - 32), r.len = 32;
-      if (s.len > 32) s.value = s.value + (s.len - 32), s.len = 32;
+      if (r.len > N) r.value = r.value + (r.len - N), r.len = N;
+      if (s.len > N) s.value = s.value + (s.len - N), s.len = N;
 
-      // r or s may be shorter than 32 bytes, "right-justify" (network order)
-      memmove(sig + (32 - r.len), r.value, r.len);
-      memmove(sig + 32 + (32 - s.len), s.value, s.len);
+      // r or s may be shorter than N bytes, "right-justify" (network order)
+      memmove(sig + (N - r.len), r.value, r.len);
+      memmove(sig + N + (N - s.len), s.value, s.len);
 
-      if (mg_uecc_verify(tls->pubkey, tls->sighash, sizeof(tls->sighash), sig,
-                         mg_uecc_secp256r1()) != 1) {
+#if MG_UECC_SUPPORTS_secp384r1
+      if (is384) {
+        ok = mg_uecc_verify(tls->pubkey, tls->sighash384,
+                            sizeof(tls->sighash384), sig, mg_uecc_secp384r1());
+      } else
+#endif
+      {
+        ok = mg_uecc_verify(tls->pubkey, tls->sighash, sizeof(tls->sighash),
+                            sig, mg_uecc_secp256r1());
+      }
+      if (ok != 1) {
         mg_error(c, "failed to verify EC certificate (certverify)");
         return -1;
       }
@@ -2758,7 +2813,7 @@ void mg_tls_init(struct mg_connection *c, const struct mg_tls_opts *opts) {
         MG_INFO(("Parsed PKCS#8 RSA private key: %d bytes", (int) key.len));
       } else {
         mg_free((void *) key.buf);
-        MG_INFO(("Parsed PKCS#8 EC private key"));
+        MG_VERBOSE(("Parsed PKCS#8 EC private key"));
       }
     } else {
       mg_free((void *) key.buf);
@@ -2809,6 +2864,7 @@ void mg_tls_free(struct mg_connection *c) {
     }
     mg_free((void *) tls->ca_der.buf);
     mg_free((void *) tls->rsa_key_der.buf);
+    mg_bzero((unsigned char *) tls, sizeof(*tls));  // Wipe keys and secrets
   }
   mg_free(c->tls);
   c->tls = NULL;

@@ -2265,6 +2265,8 @@ void mg_tcpip_init(struct mg_mgr *mgr, struct mg_tcpip_if *ifp) {
     ifp->eport |= MG_EPHEMERAL_PORT_BASE;        // Random from
                                            // MG_EPHEMERAL_PORT_BASE to 65535
     if (ifp->tx.buf == NULL || ifp->recv_queue.buf == NULL) MG_ERROR(("OOM"));
+    MG_DEBUG(("Builtin TCP/IP init done. Queue size: %zu, extra conn size: %zu",
+              ifp->recv_queue.size, mgr->extraconnsize));
   }
 }
 
