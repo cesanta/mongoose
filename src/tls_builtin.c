@@ -2733,7 +2733,7 @@ void mg_tls_init(struct mg_connection *c, const struct mg_tls_opts *opts) {
     if (!c->is_client) tls->is_twoway = true;  // server + CA: two-way auth
   }
 
-  if (opts->cert.buf == NULL) {
+  if (opts->cert.buf == NULL || opts->cert.len == 0) {
     MG_VERBOSE(("No certificate provided"));
     goto xit;
   }
@@ -2762,7 +2762,7 @@ void mg_tls_init(struct mg_connection *c, const struct mg_tls_opts *opts) {
   }
 
   // parse PEM or DER EC key
-  if (opts->key.buf == NULL) {
+  if (opts->key.buf == NULL || opts->key.len == 0) {
     mg_error(c, "Certificate provided without a private key");
     return;
   }
