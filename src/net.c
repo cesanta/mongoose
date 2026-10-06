@@ -299,10 +299,10 @@ void mg_mgr_free(struct mg_mgr *mgr) {
   while (t != NULL) tmp = t->next, mg_free(t), t = tmp;
   mgr->timers = NULL;  // Important. Next call to poll won't touch timers
   for (c = mgr->conns; c != NULL; c = c->next) c->is_closing = 1;
-  mg_mgr_poll(mgr, 0);
 #if MG_ENABLE_MDASH
-  mg_mdash_free(mgr);
+  mg_mdash_free(mgr);  // Before the final poll, so mdash does not reconnect
 #endif
+  mg_mgr_poll(mgr, 0);
 #if MG_ENABLE_FREERTOS_TCP
   FreeRTOS_DeleteSocketSet(mgr->ss);
 #endif
