@@ -1931,6 +1931,18 @@ static int mg_tls_recv_cert(struct mg_connection *c, bool is_client) {
         }  // else r = 0 or -2 => subj not found or pubkey not matching
       }
 
+      // Single CA: accept the chain if the CA itself is in it, e.g. a
+      // cross-signed copy of the root. Same subject and same public key
+      // means the same trusted key, and the links below ci are verified
+      if (tls->ca_der.len > 0 && ca.subj.len == ci->subj.len &&
+          memcmp(ca.subj.value, ci->subj.value, ca.subj.len) == 0 &&
+          ca.pubkey.len == ci->pubkey.len &&
+          memcmp(ca.pubkey.buf, ci->pubkey.buf, ca.pubkey.len) == 0) {
+        found_ca = true;
+        MG_VERBOSE(("CA found in chain at depth %d", certnum - 1));
+        break;
+      }
+
       if (certnum == sizeof(certs) / sizeof(certs[0]) - 1) {
         mg_error(c, "too many certificates in the chain");
         return -1;
