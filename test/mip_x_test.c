@@ -593,6 +593,7 @@ bool mip_x_test(struct mg_mgr *mgr) {
 
   // Clear
   s_error = false;
+  mg_mgr_poll(mgr, 0); // prevent mDash from trashing mg_mgr_free()
   mg_mgr_free(mgr);
   ASSERT(mgr->conns == NULL);  // Deconstruction OK
   printf("HEALTH_DASHBOARD\t\"cleanup\": %s\n", s_error ? "false":"true");
