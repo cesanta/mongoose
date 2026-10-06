@@ -12,7 +12,7 @@
 #define MQTT_QOS 1
 #define MQTT_RECONNECT_PERIOD_MS 3000
 
-#define TLS_CA ""
+#define TLS_CA ""  // Use https://mongoose.ws/tls/
 #define TLS_KEY ""
 #define TLS_CRT ""
 
