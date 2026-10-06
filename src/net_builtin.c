@@ -54,6 +54,8 @@ struct connstate {
   bool twclosure;        // 3-way closure done
   bool retransmit;       // Retain sent data until acknowledged
   bool is_full;          // Advertise a zero receive window
+  bool is_closing;       // Finished, remove connection (TCP after FIN)
+  bool send_rst;         // Send RST before removing a TCP connection
   struct mg_iobuf txq;   // Length-prefixed sent TCP segments (RFC-9293, 3.8)
 };
 
@@ -1192,6 +1194,20 @@ static uint8_t *get_return_l2addr(struct mg_tcpip_if *ifp, struct mg_addr *rem,
   return NULL;
 }
 
+static void proto_error(struct mg_connection *c, bool r, const char *f, ...) {
+  char buf[64];
+  va_list ap;
+  struct connstate *s = (struct connstate *) (c + 1);
+  va_start(ap, f);
+  mg_vsnprintf(buf, sizeof(buf), f, &ap);
+  va_end(ap);
+  MG_ERROR(("%lu %ld %s", c->id, c->fd, buf));
+  c->is_closing = 1;  // Stop Mongoose I/O
+  s->is_closing = 1;  // Transport-terminal; do not send FIN
+  if (r && !c->is_udp) s->send_rst = true;  // honot TCP RST request
+  mg_call(c, MG_EV_ERROR, buf);
+}
+
 static bool rx_udp(struct mg_tcpip_if *ifp, struct pkt *pkt) {
   struct mg_connection *c = getpeer(ifp->mgr, pkt, true);
   struct connstate *s;
@@ -1214,10 +1230,10 @@ static bool rx_udp(struct mg_tcpip_if *ifp, struct pkt *pkt) {
     return false;  // safety net for lousy networks
   memcpy(s->mac, l2addr, sizeof(s->mac));
   if (c->recv.len >= MG_MAX_RECV_SIZE) {
-    mg_error(c, "max_recv_buf_size reached");
+    proto_error(c, false, "max_recv_buf_size reached");
   } else if (c->recv.size - c->recv.len < pkt->pay.len &&
              !mg_iobuf_resize(&c->recv, c->recv.len + pkt->pay.len)) {
-    mg_error(c, "oom");
+    proto_error(c, false, "oom");
   } else {
     memcpy(&c->recv.buf[c->recv.len], pkt->pay.buf, pkt->pay.len);
     c->recv.len += pkt->pay.len;
@@ -1491,7 +1507,7 @@ static void handle_tls_recv(struct mg_connection *c) {
   size_t min = avail > MG_MAX_RECV_SIZE ? MG_MAX_RECV_SIZE : avail;
   struct mg_iobuf *io = &c->recv;  // allocated on first avail > 0
   if (io->size - io->len < min && !mg_iobuf_resize(io, io->len + min)) {
-    mg_error(c, "oom");
+    proto_error(c, true, "oom");
   } else {
     // Decrypt data directly into c->recv. If io->buf = NULL or
     // io->len = io->size (no room), there can be outstanding data that can't be
@@ -1500,7 +1516,7 @@ static void handle_tls_recv(struct mg_connection *c) {
     long n = mg_tls_recv(c, io->buf != NULL ? &io->buf[io->len] : io->buf,
                          io->size - io->len);
     if (n == MG_IO_ERR) {
-      mg_error(c, "TLS recv error");
+      proto_error(c, true, "TLS recv error");
     } else if (n > 0) {
       // Decrypted successfully - trigger MG_EV_READ
       io->len += (size_t) n;
@@ -1544,7 +1560,7 @@ static void retransmit(struct mg_connection *c) {
       tx_tcp(ifp, s->mac, &c->loc, &c->rem, c->dscp, TH_PUSH | TH_ACK,
              mg_htonl(s->txq_seq), mg_htonl(s->ack),
              s->is_full ? 0 : MG_TCPIP_WIN, buf, len) == (size_t) -1) {
-    mg_error(c, "retransmit");
+    proto_error(c, false, "retransmit"); // should RST, but sending just failed
     return;
   }
   // Back off RTO after every timeout (RFC-6298, 5.5)
@@ -1577,15 +1593,11 @@ static void read_conn(struct mg_connection *c, struct pkt *pkt) {
     s->ack = (uint32_t) (mg_htonl(pkt->tcp->seq) + pkt->pay.len + 1);
     s->fin_rcvd = true;
     if (c->is_draining && s->ttype == MIP_TTYPE_FIN) {
-      if (s->seq == mg_htonl(pkt->tcp->ack)) {  // Simultaneous closure ?
-        s->seq++;                               // Yes. Increment our SEQ
-      } else {                                  // Otherwise,
-        s->seq = mg_htonl(pkt->tcp->ack);       // Set to peer's ACK
-      }
+      // Simultaneous closure ?
       s->twclosure = true;
     } else {
       // Peer closed first: send ACK only, enter CLOSE_WAIT.
-      // The connection loop will call init_closure after pending send data
+      // The connection loop will initiate closure after pending send data
       // is flushed, then send our FIN.
       c->is_draining = 1;
     }
@@ -1619,18 +1631,11 @@ static void read_conn(struct mg_connection *c, struct pkt *pkt) {
       s->twclosure = true;
   }
   if (pkt->pay.len == 0) return;
-  if (io->size - io->len < pkt->pay.len &&
+  if (!c->is_closing && io->size - io->len < pkt->pay.len &&
       !mg_iobuf_resize(io, io->len + pkt->pay.len)) {
-    mg_error(c, "oom");
+    proto_error(c, true, "oom");
     return;  // drop it
   }
-  // Copy TCP payload into the IO buffer. If the connection is plain text,
-  // we copy to c->recv. If the connection is TLS, this data is encrypted,
-  // therefore we copy that encrypted data to the c->rtls iobuffer instead,
-  // and then call mg_tls_recv() to decrypt it. NOTE: mg_tls_recv() will
-  // call back mg_io_recv() which grabs raw data from c->rtls
-  memcpy(&io->buf[io->len], pkt->pay.buf, pkt->pay.len);
-  io->len += pkt->pay.len;
   MG_VERBOSE(("%lu SEQ %x -> %x", c->id, mg_htonl(pkt->tcp->seq), s->ack));
   if (!(pkt->tcp->flags & TH_FIN)) {  // FIN already advanced s->ack
     // Advance ACK counter
@@ -1638,7 +1643,8 @@ static void read_conn(struct mg_connection *c, struct pkt *pkt) {
     s->unacked += pkt->pay.len;
   }
   // size_t diff = s->acked <= s->ack ? s->ack - s->acked : s->ack;
-  if (s->unacked > MG_TCPIP_WIN / 2 && s->acked != s->ack) {
+  if ((s->unacked > MG_TCPIP_WIN / 2 && s->acked != s->ack) ||
+      s->ttype == MIP_TTYPE_FIN) {
     // Send ACK immediately
     MG_VERBOSE(("%lu imm ACK %lu", c->id, s->acked));
     tx_tcp(c->mgr->ifp, s->mac, &c->loc, &c->rem, c->dscp, TH_ACK,
@@ -1651,6 +1657,14 @@ static void read_conn(struct mg_connection *c, struct pkt *pkt) {
     // if not already running, setup a timer to send an ACK later
     if (s->ttype != MIP_TTYPE_ACK) settmout(c, MIP_TTYPE_ACK);
   }
+  if (c->is_closing) return; // we have a "closed socket", ignore data
+  // Copy TCP payload into the IO buffer. If the connection is plain text,
+  // we copy to c->recv. If the connection is TLS, this data is encrypted,
+  // therefore we copy that encrypted data to the c->rtls iobuffer instead,
+  // and then call mg_tls_recv() to decrypt it. NOTE: mg_tls_recv() will
+  // call back mg_io_recv() which grabs raw data from c->rtls
+  memcpy(&io->buf[io->len], pkt->pay.buf, pkt->pay.len);
+  io->len += pkt->pay.len;
   if (c->is_tls) {
     c->is_tls_hs ? mg_tls_handshake(c) : handle_tls_recv(c);
   } else {
@@ -1759,11 +1773,11 @@ static void rx_tcp(struct mg_tcpip_if *ifp, struct pkt *pkt) {
     if (c->is_tls_hs) mg_tls_handshake(c);
     if (!c->is_tls_hs) c->is_tls = 0;  // user did not call mg_tls_init()
   } else if (c != NULL && c->is_connecting && pkt->tcp->flags != TH_ACK) {
-    mg_error(c, "connection refused");
+    proto_error(c, false, "connection refused");
   } else if (c != NULL && pkt->tcp->flags & TH_RST) {
     uint32_t seqno = mg_ntohl(pkt->tcp->seq);
     if (seqno >= s->ack && seqno < (s->ack + MG_TCPIP_WIN))  // RFC-9293 3.5.3
-      mg_error(c, "peer RST");  // RFC-1122 4.2.2.13
+      proto_error(c, false, "peer RST");  // RFC-1122 4.2.2.13
   } else if (c != NULL) {
     // process segment
     s->tmiss = 0;                         // Reset missed keep-alive counter
@@ -1845,7 +1859,7 @@ static void rx_ip(struct mg_tcpip_if *ifp, struct pkt *pkt) {
     if (pkt->ip->proto == 17) pkt->udp = (struct udp *) (pkt->pay.buf);
     if (pkt->ip->proto == 6) pkt->tcp = (struct tcp *) (pkt->pay.buf);
     c = getpeer(ifp->mgr, pkt, false);
-    if (c) mg_error(c, "Received fragmented packet");
+    if (c) proto_error(c, false, "Received fragmented packet");
   } else if (pkt->ip->proto == 1) {
     pkt->icmp = (struct icmp *) (pkt->pay.buf);
     if (pkt->pay.len < sizeof(*pkt->icmp)) return;
@@ -1928,7 +1942,7 @@ static void rx_ip6(struct mg_tcpip_if *ifp, struct pkt *pkt) {
         if (nhdr[0] == 17) pkt->udp = (struct udp *) (pkt->pay.buf);
         if (nhdr[0] == 6) pkt->tcp = (struct tcp *) (pkt->pay.buf);
         c = getpeer(ifp->mgr, pkt, false);
-        if (c) mg_error(c, "Received fragmented packet");
+        if (c) proto_error(c, false, "Received fragmented packet");
       }
         return;
       case 59:  // No Next Header 4.7
@@ -2193,7 +2207,7 @@ static void mg_tcpip_poll(struct mg_tcpip_if *ifp, uint64_t now) {
     }
     if (ifp->now > s->timer) {
       if (s->ttype == MIP_TTYPE_ARP) {
-        mg_error(c, "ARP timeout");
+        proto_error(c, false, "ARP timeout");
       } else if (c->is_udp) {
         continue;
       } else if (s->ttype == MIP_TTYPE_ACK && s->acked != s->ack) {
@@ -2202,13 +2216,13 @@ static void mg_tcpip_poll(struct mg_tcpip_if *ifp, uint64_t now) {
                mg_htonl(s->ack), s->is_full ? 0 : MG_TCPIP_WIN, NULL, 0);
         s->acked = s->ack;
       } else if (s->ttype == MIP_TTYPE_SYN) {
-        mg_error(c, "Connection timeout");
+        proto_error(c, false, "Connection timeout");
       } else if (s->ttype == MIP_TTYPE_FIN) {
-        c->is_closing = 1;
+        s->is_closing = 1;
         continue;
       } else {
         if (s->tmiss++ > 2) {
-          mg_error(c, "keepalive");
+          proto_error(c, false, "keepalive");
         } else {
           MG_VERBOSE(("%lu keepalive", c->id));
           tx_tcp(ifp, s->mac, &c->loc, &c->rem, c->dscp, TH_ACK,
@@ -2270,7 +2284,14 @@ void mg_tcpip_init(struct mg_mgr *mgr, struct mg_tcpip_if *ifp) {
   }
 }
 
+static void close_conn(struct mg_connection *c) {
+  struct connstate *s = (struct connstate *) (c + 1);
+  mg_iobuf_free(&s->txq);
+  mg_close_conn(c);
+}
+
 void mg_tcpip_free(struct mg_tcpip_if *ifp) {
+  while (ifp->mgr->conns != NULL) close_conn(ifp->mgr->conns); // TCP FIN wait
   mg_free(ifp->recv_queue.buf);
   mg_free(ifp->tx.buf);
   mg_free(ifp->dns4_url);
@@ -2372,27 +2393,11 @@ static void write_conn(struct mg_connection *c) {
                        : mg_io_send(c, c->send.buf, c->send.len);
   // TODO(): mg_tls_send() may return 0 forever on steady OOM
   if (len == MG_IO_ERR) {
-    mg_error(c, "tx err");
+    proto_error(c, false, "tx err");
   } else if (len > 0) {
     mg_iobuf_del(&c->send, 0, (size_t) len);
     mg_call(c, MG_EV_WRITE, &len);
   }
-}
-
-static void init_closure(struct mg_connection *c) {
-  struct connstate *s = (struct connstate *) (c + 1);
-  if (c->is_listening == false && c->is_connecting == false) {
-    tx_tcp(c->mgr->ifp, s->mac, &c->loc, &c->rem, c->dscp, TH_FIN | TH_ACK,
-           mg_htonl(s->seq), mg_htonl(s->ack), s->is_full ? 0 : MG_TCPIP_WIN,
-           NULL, 0);
-    settmout(c, MIP_TTYPE_FIN);
-  }
-}
-
-static void close_conn(struct mg_connection *c) {
-  struct connstate *s = (struct connstate *) (c + 1);
-  mg_iobuf_free(&s->txq);
-  mg_close_conn(c);
 }
 
 static bool can_write(struct mg_connection *c) {
@@ -2415,28 +2420,48 @@ void mg_mgr_poll(struct mg_mgr *mgr, int ms) {
                   !c->is_listening && !c->is_connecting;
     tmp = c->next;
     mg_call(c, MG_EV_POLL, &now);
-    MG_VERBOSE(("%lu .. %c%c%c%c%c %lu %lu", c->id, c->is_tls ? 'T' : 't',
+    MG_VERBOSE(("%lu .. %c%c%c%c%c%c %lu %lu", c->id, c->is_tls ? 'T' : 't',
                 c->is_connecting ? 'C' : 'c', c->is_tls_hs ? 'H' : 'h',
                 c->is_resolving ? 'R' : 'r', c->is_closing ? 'C' : 'c',
-                mg_tls_pending(c), c->rtls.len));
-    // order is important, TLS conn close with > 1 record in buffer (below)
-    if (is_tls && (c->rtls.len > 0 || mg_tls_pending(c) > 0))
+                s->is_closing ? 'F' : 'f', mg_tls_pending(c), c->rtls.len));
+    if (!c->is_closing) {
+      // order is important, TLS conn close with > 1 record in buffer (below)
+      if (is_tls && (c->rtls.len > 0 || mg_tls_pending(c) > 0))
       c->is_tls_hs ? mg_tls_handshake(c) : handle_tls_recv(c);
-    if (can_write(c)) write_conn(c);
-    if (is_tls && c->send.len == 0) flush = mg_tls_flush(c);
-    if (flush == MG_IO_ERR) mg_error(c, "tx err");
-    if (c->is_draining && c->send.len == 0) {
-      if (c->is_udp) c->is_closing = 1;
-      if (!c->is_udp && flush == 0 && s->txq.len == 0 &&
-          s->ttype != MIP_TTYPE_FIN)
-        init_closure(c);
+      if (can_write(c)) write_conn(c);
+      if (is_tls && c->send.len == 0) flush = mg_tls_flush(c);
     }
+    if (flush == MG_IO_ERR) proto_error(c, false, "tx err"); // should RST but
+    if (c->is_draining && c->send.len == 0 &&
+        (c->is_udp ||
+         (flush == 0 && s->txq.len == 0 && s->ttype != MIP_TTYPE_FIN)))
+      c->is_closing = 1;
     // For non-TLS, close immediately upon completing the 3-way closure
     // For TLS, handle any pending data (above) until MIP_TTYPE_FIN expires
     if (s->twclosure &&
-        (!c->is_tls || (c->rtls.len == 0 && mg_tls_pending(c) == 0)))
-      c->is_closing = 1;
-    if (c->is_closing) close_conn(c);
+        (!c->is_tls || (c->rtls.len == 0 && mg_tls_pending(c) == 0))) {
+      s->is_closing = 1;
+    } else if (c->is_closing && !s->is_closing) {
+      if (c->is_udp || c->is_listening || c->is_resolving || c->is_arplooking ||
+          c->is_connecting) {
+        close_conn(c);
+        continue;
+      } else if (s->ttype != MIP_TTYPE_FIN) {  // active TCP: initiate closure
+        size_t tx = tx_tcp(c->mgr->ifp, s->mac, &c->loc, &c->rem, c->dscp,
+                           TH_FIN | TH_ACK, mg_htonl(s->seq), mg_htonl(s->ack),
+                           s->is_full ? 0 : MG_TCPIP_WIN, NULL, 0);
+        if (tx == (size_t) -1) {
+          s->is_closing = 1;
+        } else if (tx > 0) {
+          s->seq++;
+          settmout(c, MIP_TTYPE_FIN);
+        }  // else tx = 0, should recover later or we have worse problems
+      }
+    }
+    if (s->send_rst)  // proto_error requested TCP RST, send it and close
+      tx_tcp(c->mgr->ifp, s->mac, &c->loc, &c->rem, c->dscp, TH_RST,
+             mg_htonl(s->seq), 0, 0, NULL, 0);
+    if (s->is_closing) close_conn(c);  // then removes the conn
   }
   (void) ms;
 }
@@ -2445,10 +2470,10 @@ bool mg_send(struct mg_connection *c, const void *buf, size_t len) {
   struct mg_tcpip_if *ifp = c->mgr->ifp;
   bool res = false;
   if (!c->loc.is_ip6 && (ifp->ip == 0 || ifp->state != MG_TCPIP_STATE_READY)) {
-    mg_error(c, "net down");
+    proto_error(c, false, "net down");
 #if MG_ENABLE_IPV6
   } else if (c->loc.is_ip6 && ifp->state6 != MG_TCPIP_STATE_READY) {
-    mg_error(c, "net down");
+    proto_error(c, false, "net down");
 #endif
   } else if (c->is_udp && (c->is_arplooking || c->is_resolving)) {
     // Fail to send, no target MAC or IP
