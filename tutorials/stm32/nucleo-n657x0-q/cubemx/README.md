@@ -1,3 +1,5 @@
+See full project at https://github.com/mongoose-examples/nucleo-n657x0-q-dashboard-full
+
 # Nucleo-N657X0-Q Mongoose Integration
 
 This guide explains how to bring up a production-grade Web UI dashboard on the

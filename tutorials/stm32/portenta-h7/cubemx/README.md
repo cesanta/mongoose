@@ -1,3 +1,5 @@
+See full project at https://github.com/mongoose-examples/portenta-h7-dashboard-full
+
 # Portenta H7 Mongoose Integration
 
 This guide explains how to bring up a production-grade Web UI dashboard on the

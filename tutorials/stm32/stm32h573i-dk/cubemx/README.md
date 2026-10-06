@@ -1,3 +1,5 @@
+See full project https://github.com/mongoose-examples/stm32h573i-dk-dashboard-full
+
 # STM32H573I-DK Mongoose Integration
 
 This guide explains how to bring up a production-grade Web UI dashboard on the

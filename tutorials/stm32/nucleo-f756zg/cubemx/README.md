@@ -1,3 +1,5 @@
+See full project at https://github.com/mongoose-examples/nucleo-f756zg-dashboard-full
+
 # Nucleo-F756ZG Mongoose Integration
 
 This guide explains how to bring up a production-grade Web UI dashboard on the

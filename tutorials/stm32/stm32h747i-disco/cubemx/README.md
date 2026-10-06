@@ -1,3 +1,5 @@
+See full project at https://github.com/mongoose-examples/stm32h747i-disco-dashboard-full
+
 # STM32H747I-DISCO Mongoose Integration
 
 This guide explains how to bring up a production-grade Web UI dashboard on the
