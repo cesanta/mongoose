@@ -309,6 +309,7 @@ mip_diabish: CC = gcc
 mip_diabish: CFLAGS += -std=gnu89 -Werror=declaration-after-statement -Werror=vla -Wno-pedantic
 mip_diabish: mip_test
 
+mip_vc98: MDASH = 0
 mip_vc98: mip_test.c mongoose.c mongoose.h packed_fs.c Makefile
 	$(DOCKER) mdashnet/vc98 wine cl mip_test.c packed_fs.c $(VCFLAGS) $(DEFS) $(TFLAGS) /Fe$@.exe
 	$(DOCKER) -e WINEPREFIX=/tmp/wineprefix mdashnet/vc98 wine $@.exe
