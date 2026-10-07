@@ -10,10 +10,8 @@ This MQTT client implementation implements the following:
 - Implements "ota.update" for OTA updates, see https://mongoose.ws/mqtt/
 
 By default, it uses HiveMQ public broker, and can be tested with
-the [HiveMQ Websocket Client](https://www.hivemq.com/demos/websocket-client/):
-
-- Subscribe to `mg/123/#`
-- Send a message to `mg/123/rx`
+the [HiveMQ Websocket Client](https://www.hivemq.com/demos/websocket-client/).
+Connect, subscribe to `mg/d3/#`, send a message to `mg/d3/rx`.
 
 ## Integrating into an embedded project
 
@@ -21,7 +19,42 @@ the [HiveMQ Websocket Client](https://www.hivemq.com/demos/websocket-client/):
 2. Add `mg_mqtt_init(&mgr)` after `mg_mgr_init()`
 3. Add `mg_mqtt_poll(&mgr)` after `mg_mgr_poll()`
 
+## EMQX
+
+See full walk-trough at https://mongoose.ws/articles/stm32-emqx/
+
+## Amazon AWS IoT
+
+1. Login to AWS console, choose AWS IoT
+2. On the left menu, choose Connect / Domain configurations. Copy the domain
+   name and update `MQTT_SERVER_URL`. Note to set "mqtts" and port 8883:
+   ```c
+   #define MQTT_SERVER_URL "mqtts://COPIED_DOMAIN:8883"
+   #define MQTT_CLIENT_ID "d1"
+   ```
+3. Create EC CSR for device certificate:
+   ```sh
+   openssl req -new -newkey ec -pkeyopt ec_paramgen_curve:prime256v1   -pkeyopt ec_param_enc:named_curve -nodes   -keyout device.key -out device.csr -subj /CN=d1
+   ```
+3. On the left menu, click on Manage / All devices / Things,
+   Create things, Create single thing, Set thing name to d1, No shadow,
+   Next, Upload CSR (use device.csr created on a previous step), Next,
+   Create Policy, name "AllowAll", set both action and resouce to `*`,
+   Create, Attach AllowAll to the certificate, Create Thing.
+4. Click on Things / d1 / Certificates, make the certificate active
+5. Click on the certificate, download it, rename to "device.crt"
+6. Set `TLS_CA`. Visit https://mongoose.ws/tls/, enter `DOMAIN_NAME:8883` into the CA field and click on the "Get CA Certificate" button. Enable the "Show as C/C++ constant", copy-paste to your code.
+7. Set `TLS_KEY` and `TLS_CRT` with the output of this commands:
+  ```sh
+  sed 's/\r$//; s/.*/  "&\\n"/; $!s/$/ \\/' device.key
+  sed 's/\r$//; s/.*/  "&\\n"/; $!s/$/ \\/' device.crt
+  ```
+8. Click on Test / MQTT test client, subscribe to topic `mg/#`, send a
+   message to `mg/d1/rx`
+
 ## Microsoft Azure IoT Hub
+
+See full walk-trough at https://mongoose.ws/articles/stm32-azure-iot-hub/
 
 1. Create IoT Hub
 2. Generate device self-signed certificates:
