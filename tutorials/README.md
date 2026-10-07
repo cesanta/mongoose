@@ -9,13 +9,13 @@ The fastest way to quickly get Mongoose running on your hardware is to follow ou
 
 Steps to get the most out of this code base:
 
-- Most code here has a README.md file that points to a verbose tutorial describing how to get the intended functionality out of Mongoose Network Library. Code there runs as is in Windows, Ubuntu Linux, and Mac (very few cases don't run in Windows).
+- Most workstation code here has a README.md file that points to a verbose tutorial describing how to get the intended functionality out of Mongoose Network Library. Code there runs as is in Windows, Ubuntu Linux, and Mac (very few cases don't run in Windows).
   - Navigate your way to the desired protocol or function, read the README.md file
   - Follow the linked tutorial
   - In cases were there is no tutorial:
     - Follow the [Build Tools](https://mongoose.ws/documentation/tutorials/tools/) tutorial to setup your development environment.
     - run `make all`
-- Embedded hardware tutorials are conveniently linked from OS tutorials, or grouped by vendor and board.
+- Embedded hardware tutorials are grouped by vendor and board.
   - Navigate your way to the desired board or the closest one, read the README.md file. In most cases you'll find a link to our [Wizard](https://mongoose.ws/wizard/); for others, there is a link to a [Tutorial](https://mongoose.ws/documentation/#tutorials), as described at the top of this text. The Wizard will also link you to the tutorials you'll need.
   - In cases were there you don't find a link to a tutorial:
     - Follow the [Build Tools](https://mongoose.ws/documentation/tutorials/tools/) tutorial to setup your development environment.
@@ -28,7 +28,8 @@ Steps to get the most out of this code base:
 Rules for creating a new example:
 
 - Makefile golden reference for desktop/server examples: [http-server](http/http-server/)
-- Makefile golden reference for embedded examples: [stm32/nucleo-f746zg-baremetal-builtin-rndis](stm32/nucleo-f746zg-baremetal-builtin-rndis/)
+- Makefile golden reference for embedded examples: [stm32/nucleo-f746zg/minimal](stm32/nucleo-f746zg/minimal/)
+- Desktop/server examples compile `$(REPO_ROOT)/mongoose.c` and add `$(REPO_ROOT)` to their include path
 - Examples must build on Windows, Mac and Ubuntu Linux systems
 - Assume that users installed their tools according to the [Build Tools](https://mongoose.ws/documentation/tutorials/tools/) tutorial
 - Makefiles must not include other Makefiles
@@ -37,5 +38,5 @@ Rules for creating a new example:
 - Use `$(CFLAGS) $(CFLAGS_MONGOOSE) $(CFLAGS_EXTRA)` to compile
 - If an external repository is required, download it on demand using git shallow clone. See the embedded examples golden reference
 - Keep Makefiles as short as possible, but verbose to understand them easily
-- Symlink files when required, like `mongoose.c`, `ca.pem`, etc. Make no copies
+- Symlink files when required, like `ca.pem`, etc. Make no copies
 - Examples README.md files should contain only the title and the link to the corresponding mongoose.ws tutorial page

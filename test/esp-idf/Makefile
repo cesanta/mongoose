@@ -1,5 +1,5 @@
 ROOT ?= $(realpath $(CURDIR)/../..)
-PROJECTS ?= ../../tutorials/http/device-dashboard/esp32/ ../../tutorials/micropython/esp32/ ../../tutorials/http/uart-bridge/esp32/
+PROJECTS ?= ../../tutorials/esp32/device-dashboard/ ../../tutorials/micropython/esp32/ ../../tutorials/esp32/uart-bridge/
 TARGET ?= Debug
 DOCKER = docker run --rm -v $(ROOT):$(ROOT) -v $(CURDIR):/root -w $(CURDIR) 
 IMAGE ?= espressif/idf

@@ -633,8 +633,8 @@ jobs:
       matrix:
         example:
           - path: micropython/esp32
-          - path: http/uart-bridge/esp32
-          - path: http/http-client/esp8266/http-client-server
+          - path: esp32/uart-bridge
+          - path: esp8266/http-client-server
     name: ${{ matrix.example.path }}
     env:
       GO: 0
@@ -652,7 +652,7 @@ jobs:
         include:
           - group: other
             examples: |
-              mqtt/mqtt-client/microchip/same54-xpro
+              microchip/same54-xpro/mqtt-client
               rp/pico-rmii
               stm32/nucleo-f746zg/minimal-rm2
               stm32/nucleo-f746zg/minimal-rndis
@@ -691,13 +691,13 @@ jobs:
       fail-fast: false
       matrix:
         example:
-          - path: esp32
+          - path: esp32/device-dashboard
     name: ${{ matrix.example.path }}
     steps:
       - uses: actions/checkout@v5
         with: { fetch-depth: 2 }
       - run: echo # nothing specific to install or do
-      - run: make -C tutorials/http/device-dashboard/${{ matrix.example.path }} build
+      - run: make -C tutorials/${{ matrix.example.path }} build
 
 
   device_dashboard_examples_arm:
@@ -709,12 +709,12 @@ jobs:
           - group: none
             cflags: ""
             examples: |
-              http/device-dashboard/microchip/same54-xpro
+              microchip/same54-xpro/device-dashboard
               renesas/ek-ra6m4-make-baremetal-builtin
           - group: builtin
             cflags: -DMG_TLS=MG_TLS_BUILTIN
             examples: |
-              http/device-dashboard/microchip/same54-xpro
+              microchip/same54-xpro/device-dashboard
               renesas/ek-ra6m4-make-baremetal-builtin
     name: device dashboard ARM ${{ matrix.group }}
     steps:
@@ -740,19 +740,19 @@ jobs:
           done
           exit $failed
 
-#  mqtt_dashboard_examples:
-#    runs-on: ubuntu-latest
-#    strategy:
-#      fail-fast: false
-#      matrix:
-#        example:
-#          - path:
-#    name: ${{ matrix.example.path }}
-#    steps:
-#      - uses: actions/checkout@v5
-#        with: { fetch-depth: 2 }
-#      - run: echo # nothing specific to install or do
-#      - run: make -C tutorials/${{ matrix.example.path }} build
+  mqtt_dashboard_examples_arm:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        example:
+          - path: rp/pico-rndis-device
+    name: ${{ matrix.example.path }}
+    steps:
+      - uses: actions/checkout@v5
+        with: { fetch-depth: 2 }
+      - run: sudo apt -y update && sudo apt -y install gcc-arm-none-eabi
+      - run: make -C tutorials/${{ matrix.example.path }} build
 
 
 #  dual_examples:

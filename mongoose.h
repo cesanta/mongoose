@@ -4013,7 +4013,6 @@ uint64_t mg_now(void);
 //     MG_INFO(("every second"));
 //   }
 // Full examples:
-//   tutorials/http/http-server/arduino/teensy41-http,
 //   tutorials/mqtt/mqtt-client
 // Related APIs:
 //   mg_millis(), mg_now()
