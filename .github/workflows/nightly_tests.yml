@@ -98,8 +98,8 @@ jobs:
       with: { fetch-depth: 2 }
     - name: baremetal
       run: sudo apt -y update && sudo apt -y install gcc-arm-none-eabi
-    - run:  make -C tutorials/http/device-dashboard/microchip/same54-xpro test VCON_API_KEY=${{secrets.VCON_API_KEY}}
-    - run:  make -C tutorials/mqtt/mqtt-client/microchip/same54-xpro test VCON_API_KEY=${{secrets.VCON_API_KEY}}
+    - run:  make -C tutorials/microchip/same54-xpro/device-dashboard test VCON_API_KEY=${{secrets.VCON_API_KEY}}
+    - run:  make -C tutorials/microchip/same54-xpro/mqtt-client test VCON_API_KEY=${{secrets.VCON_API_KEY}}
 
   test_pico_w5500:
     runs-on: ubuntu-latest

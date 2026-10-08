@@ -184,8 +184,8 @@ jobs:
       fail-fast: false
       matrix:
         example:
-          - path: http/uart-bridge/esp32
-          - path: http/http-client/esp8266/http-client-server
+          - path: esp32/uart-bridge
+          - path: esp8266/http-client-server
     name: ${{ matrix.example.path }}
     env:
       GO: 0
@@ -227,7 +227,7 @@ jobs:
       fail-fast: false
       matrix:
         example:
-          - path: esp32
+          - path: esp32/device-dashboard
     name: ${{ matrix.example.path }}
     env:
       GO: 0
@@ -235,12 +235,12 @@ jobs:
       - uses: actions/checkout@v5
         with: { fetch-depth: 2 }
       - run: |
-          if ./test/match_changed_files.sh '^src|tutorials/http/device-dashboard'; then
+          if ./test/match_changed_files.sh '^src|^tutorials/http/device-dashboard|^tutorials/${{ matrix.example.path }}'; then
             echo GO=1 >> $GITHUB_ENV
             # nothing specific to install or do
           fi
       - if: ${{ env.GO == 1 }}
-        run: make -C tutorials/http/device-dashboard/${{ matrix.example.path }} build
+        run: make -C tutorials/${{ matrix.example.path }} build
 
   device_dashboard_examples_arm:
     runs-on: ubuntu-latest
@@ -248,7 +248,7 @@ jobs:
       fail-fast: false
       matrix:
         example:
-          - path: http/device-dashboard/microchip/same54-xpro
+          - path: microchip/same54-xpro/device-dashboard
           - path: renesas/ek-ra6m4-make-baremetal-builtin
           - path: rp/pico-rndis
           - path: rp/pico-w
@@ -262,6 +262,27 @@ jobs:
         with: { fetch-depth: 2 }
       - run: |
           if ./test/match_changed_files.sh '^src|tutorials/http/device-dashboard|^tutorials/${{ matrix.example.path }}'; then
+            echo GO=1 >> $GITHUB_ENV
+            sudo apt -y update && sudo apt -y install gcc-arm-none-eabi
+          fi
+      - if: ${{ env.GO == 1 }}
+        run: make -C tutorials/${{ matrix.example.path }} build
+
+  mqtt_dashboard_examples_arm:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        example:
+          - path: rp/pico-rndis-device
+    name: ${{ matrix.example.path }}
+    env:
+      GO: 0
+    steps:
+      - uses: actions/checkout@v5
+        with: { fetch-depth: 2 }
+      - run: |
+          if ./test/match_changed_files.sh '^src|^tutorials/mqtt/mqtt-dashboard/device|^tutorials/${{ matrix.example.path }}'; then
             echo GO=1 >> $GITHUB_ENV
             sudo apt -y update && sudo apt -y install gcc-arm-none-eabi
           fi

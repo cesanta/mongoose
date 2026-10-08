@@ -29,20 +29,20 @@ teensy-board:
 	touch teensy-board
 
 seeeduino-xiao: arduino seeeduino-xiao-board
-	cd $(ROOT)/tutorials/mqtt/mqtt-client/arduino/sim800-mqtt && $(ARD)/arduino/arduino --verbose --verify --board Seeeduino:samd:seeed_XIAO_m0 sim800-mqtt.ino
-	cd $(ROOT)/tutorials/http/http-server/arduino/w5500-http &&  $(ARD)/arduino/arduino --verbose --verify --board Seeeduino:samd:seeed_XIAO_m0 w5500-http.ino
-	cd $(ROOT)/tutorials/mqtt/mqtt-client/arduino/w5500-mqtt &&  $(ARD)/arduino/arduino --verbose --verify --board Seeeduino:samd:seeed_XIAO_m0 w5500-mqtt.ino
+	cd $(ROOT)/tutorials/arduino/sim800-mqtt && $(ARD)/arduino/arduino --verbose --verify --board Seeeduino:samd:seeed_XIAO_m0 sim800-mqtt.ino
+	cd $(ROOT)/tutorials/arduino/w5500-http &&  $(ARD)/arduino/arduino --verbose --verify --board Seeeduino:samd:seeed_XIAO_m0 w5500-http.ino
+	cd $(ROOT)/tutorials/arduino/w5500-mqtt &&  $(ARD)/arduino/arduino --verbose --verify --board Seeeduino:samd:seeed_XIAO_m0 w5500-mqtt.ino
 
 arduino-nano: arduino
-	cd $(ROOT)/tutorials/mqtt/mqtt-client/arduino/nano-w5500-mqtt && $(ARD)/arduino/arduino --pref compiler.cpp.extra_flags=-DMG_ENABLE_LOG=0 --verbose --verify --board arduino:avr:nano nano-w5500-mqtt.ino
+	cd $(ROOT)/tutorials/arduino/nano-w5500-mqtt && $(ARD)/arduino/arduino --pref compiler.cpp.extra_flags=-DMG_ENABLE_LOG=0 --verbose --verify --board arduino:avr:nano nano-w5500-mqtt.ino
 
 esp32: arduino esp32-board
-	cd $(ROOT)/tutorials/mqtt/mqtt-client/arduino/esp32-mqtt && $(ARD)/arduino/arduino --verbose --verify --board esp32:esp32:node32s esp32-mqtt.ino
+	cd $(ROOT)/tutorials/arduino/esp32-mqtt && $(ARD)/arduino/arduino --verbose --verify --board esp32:esp32:node32s esp32-mqtt.ino
 	# Needs a board with 'LED_BUILTIN', yet somehow invocation is missing that definition (lack of include somehow amended by the IDE)
-	#cd $(ROOT)/tutorials/http/http-server/arduino/esp32-http && $(ARD)/arduino/arduino --verbose --verify --board esp32:esp32:esp32 esp32-http.ino
+	#cd $(ROOT)/tutorials/arduino/esp32-http && $(ARD)/arduino/arduino --verbose --verify --board esp32:esp32:esp32 esp32-http.ino
 
 teensy41: arduino teensy-board
-	cd $(ROOT)/tutorials/http/http-server/arduino/teensy41-http && $(ARD)/arduino/arduino --verbose --verify --board teensy41-http.ino
+	cd $(ROOT)/tutorials/arduino/teensy41-http && $(ARD)/arduino/arduino --verbose --verify --board teensy41-http.ino
 
 
 

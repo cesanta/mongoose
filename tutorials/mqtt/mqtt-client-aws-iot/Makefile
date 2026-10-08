@@ -1,8 +1,10 @@
+REPO_ROOT ?= ../../..
+
 PROG ?= client                    # Program we are building
 DELETE = rm -rf                   # Command to remove files
 OUT ?= -o $(PROG)                 # Compiler argument for output file
-CFLAGS = -W -Wall -Wextra -g -I.  # Build options
-SOURCES = main.c mongoose.c  mongoose_fs.c
+CFLAGS = -I$(REPO_ROOT) -W -Wall -Wextra -g -I.  # Build options
+SOURCES = main.c $(REPO_ROOT)/mongoose.c  mongoose_fs.c
 
 CFLAGS_EXTRA ?= -DMG_TLS=MG_TLS_BUILTIN
 

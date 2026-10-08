@@ -1,8 +1,10 @@
+REPO_ROOT ?= ../../..
+
 PROG ?= example                   # Program we are building
 DELETE = rm -rf                   # Command to remove files
 OUT ?= -o $(PROG)                 # Compiler argument for output file
-SOURCES = main.c mongoose.c  packed_fs.c      # Source code files, packed_fs.c contains ca.pem, which contains CA certs for TLS
-CFLAGS = -W -Wall -Wextra -g -I.  # Build options
+SOURCES = main.c $(REPO_ROOT)/mongoose.c  packed_fs.c      # Source code files, packed_fs.c contains ca.pem, which contains CA certs for TLS
+CFLAGS = -I$(REPO_ROOT) -W -Wall -Wextra -g -I.  # Build options
 
 # Mongoose build options. See https://mongoose.ws/documentation/#build-options
 CFLAGS_MONGOOSE += -DMG_ENABLE_LINES=1

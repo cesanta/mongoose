@@ -16,9 +16,11 @@ IPV6 ?= 1
 MDASH ?= 1
 ASAN ?= -fsanitize=address,undefined,alignment -fno-sanitize-recover=all -fno-omit-frame-pointer -fno-common
 ASAN_OPTIONS ?= detect_leaks=1
-# This does not include ESP32, ESP8266, Microchip; all examples that are directly placed under an OS tutorial. Also, it is needed that way...
-TUTORIALS_EMBEDDED := $(dir $(wildcard ../tutorials/infineon/*/Makefile)) $(dir $(wildcard ../tutorials/nxp/*/Makefile)) $(dir $(wildcard ../tutorials/rp/*/Makefile)) $(dir $(wildcard ../tutorials/renesas/*/Makefile)) $(dir $(wildcard ../tutorials/stm32/*/*/Makefile)) $(dir $(wildcard ../tutorials/ti/*/Makefile)) $(dir $(wildcard ../tutorials/wch/*/Makefile))
-TUTORIALS := ../tutorials/micropython/ $(filter-out $(TUTORIALS_EMBEDDED), $(dir $(wildcard ../tutorials/*/*/Makefile)))
+# ESP8266 tutorials are not run here.
+TUTORIALS_EMBEDDED := $(dir $(wildcard ../tutorials/esp32/*/Makefile)) $(dir $(wildcard ../tutorials/infineon/*/Makefile)) $(dir $(wildcard ../tutorials/microchip/*/*/Makefile)) $(dir $(wildcard ../tutorials/nordic/*/Makefile)) $(dir $(wildcard ../tutorials/nxp/*/Makefile)) $(dir $(wildcard ../tutorials/pico-sdk/*/Makefile)) $(dir $(wildcard ../tutorials/rp/*/Makefile)) $(dir $(wildcard ../tutorials/renesas/*/Makefile)) $(dir $(wildcard ../tutorials/stm32/*/Makefile)) $(dir $(wildcard ../tutorials/stm32/*/*/Makefile)) $(dir $(wildcard ../tutorials/ti/*/Makefile)) $(dir $(wildcard ../tutorials/wch/*/Makefile))
+TUTORIALS_ESP8266 := $(dir $(wildcard ../tutorials/esp8266/*/Makefile))
+TUTORIALS_ZEPHYR := $(dir $(wildcard ../tutorials/zephyr/*/Makefile))
+TUTORIALS := ../tutorials/micropython/ $(filter-out $(TUTORIALS_EMBEDDED) $(TUTORIALS_ESP8266) $(TUTORIALS_ZEPHYR), $(dir $(wildcard ../tutorials/*/*/Makefile)))
 TUTORIALS_QUICK := $(filter-out ../tutorials/micropython/ ../tutorials/tcpip/pcap-driver/, $(TUTORIALS))
 TUTORIALS_MAC := $(filter-out ../tutorials/micropython/ ../tutorials/tcpip/pcap-driver/ ../tutorials/tcpip/tap-driver/, $(TUTORIALS))
 TUTORIALS_WIN := $(dir $(wildcard ../tutorials/http/file-*/Makefile) $(wildcard ../tutorials/http/http-*/Makefile) $(wildcard ../tutorials/mqtt/*/Makefile) $(wildcard ../tutorials/websocket/*/Makefile) $(wildcard ../tutorials/webui/*/Makefile))
