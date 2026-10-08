@@ -6,7 +6,7 @@
 struct mg_health mg_health_record MG_HEALTH_RAM;
 
 // STM32 H723 support. Needs the _estack symbol from the linker script
-#if MG_ENABLE_HEALTH && defined(STM32H723xx_H)
+#if MG_ENABLE_HEALTH && (defined(STM32H7_DEV_ID) || defined(STM32H5))
 // Fault handler body. Runs in exception context: no printf, no malloc, no
 // blocking calls. Copies the unwind registers and raw stack into the health
 // record, then resets.

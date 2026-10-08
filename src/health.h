@@ -9,6 +9,10 @@
 #define MG_HEALTH_MAGIC {'M', 'G', 'H', '3'}  // '3' is the layout version
 #endif
 
+#if !defined(MG_HEALTH_RAM) && (defined(STM32H7_DEV_ID) || defined(STM32H5))
+#define MG_HEALTH_RAM __attribute__((section(".mg_health")))
+#endif
+
 // Places the record in RAM that survives a reset. Define in mongoose_config.h
 // to match the linker script, e.g. __attribute__((section(".mg_health")))
 #ifndef MG_HEALTH_RAM
@@ -30,7 +34,7 @@ enum mg_health_reason {
 };
 
 #ifndef MG_HEALTH_DATA_SIZE
-#define MG_HEALTH_DATA_SIZE 20
+#define MG_HEALTH_DATA_SIZE 250
 #endif
 
 struct mg_health {

@@ -3487,7 +3487,7 @@ struct mg_fs mg_fs_posix = {p_stat,  p_list, p_open,   p_close,  p_read,
 struct mg_health mg_health_record MG_HEALTH_RAM;
 
 // STM32 H723 support. Needs the _estack symbol from the linker script
-#if MG_ENABLE_HEALTH && defined(STM32H723xx_H)
+#if MG_ENABLE_HEALTH && (defined(STM32H7_DEV_ID) || defined(STM32H5))
 // Fault handler body. Runs in exception context: no printf, no malloc, no
 // blocking calls. Copies the unwind registers and raw stack into the health
 // record, then resets.
@@ -26581,11 +26581,12 @@ bool mg_random(void *buf, size_t len) {
   success = true;
 #elif MG_ARCH == MG_ARCH_CUBE && defined(HAL_RNG_MODULE_ENABLED)
   extern RNG_HandleTypeDef hrng;
+  success = true;
   for (size_t n = 0; n < len; n += sizeof(uint32_t)) {
-    uint32_t r = HAL_RNG_ReadLastRandomNumber(&hrng);
+    uint32_t r = 0;
+    if (HAL_RNG_GenerateRandomNumber(&hrng, &r) != HAL_OK) success = false;
     memcpy((char *) buf + n, &r, n + sizeof(r) > len ? len - n : sizeof(r));
   }
-  success = true;
 #elif MG_ARCH == MG_ARCH_PICOSDK
   while (len--) *p++ = (unsigned char) (get_rand_32() & 255);
   success = true;
