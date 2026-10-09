@@ -43,11 +43,12 @@ bool mg_random(void *buf, size_t len) {
   success = true;
 #elif MG_ARCH == MG_ARCH_CUBE && defined(HAL_RNG_MODULE_ENABLED)
   extern RNG_HandleTypeDef hrng;
+  success = true;
   for (size_t n = 0; n < len; n += sizeof(uint32_t)) {
-    uint32_t r = HAL_RNG_ReadLastRandomNumber(&hrng);
+    uint32_t r = 0;
+    if (HAL_RNG_GenerateRandomNumber(&hrng, &r) != HAL_OK) success = false;
     memcpy((char *) buf + n, &r, n + sizeof(r) > len ? len - n : sizeof(r));
   }
-  success = true;
 #elif MG_ARCH == MG_ARCH_PICOSDK
   while (len--) *p++ = (unsigned char) (get_rand_32() & 255);
   success = true;
