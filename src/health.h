@@ -13,6 +13,14 @@
 #define MG_HEALTH_RAM __attribute__((section(".mg_health")))
 #endif
 
+#if !defined(MG_HEALTH_DATA_SIZE) && (defined(STM32H7_DEV_ID) || defined(STM32H5))
+#define MG_HEALTH_DATA_SIZE 250
+#endif
+
+#ifndef MG_HEALTH_DATA_SIZE
+#define MG_HEALTH_DATA_SIZE 10
+#endif
+
 // Places the record in RAM that survives a reset. Define in mongoose_config.h
 // to match the linker script, e.g. __attribute__((section(".mg_health")))
 #ifndef MG_HEALTH_RAM
@@ -32,10 +40,6 @@ enum mg_health_reason {
   MG_HEALTH_RESET_WATCHDOG,     // Watchdog fired: the application stopped
   MG_HEALTH_RESET_FAULT         // Fault handler ran, see regs[] and saved_stack
 };
-
-#ifndef MG_HEALTH_DATA_SIZE
-#define MG_HEALTH_DATA_SIZE 250
-#endif
 
 struct mg_health {
   char magic[4];          // MG_HEALTH_MAGIC when the record holds valid data

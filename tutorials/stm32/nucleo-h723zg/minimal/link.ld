@@ -21,11 +21,10 @@ SECTIONS {
   _sidata = LOADADDR(.data);
 
   .bss : { _sbss = .; *(.bss SORT(.bss.*) COMMON) _ebss = .; } > ram_d1
+  _end = ALIGN(_ebss, 8);  /* Heap starts after .bss */
 
-  .eth_ram : { *(.eth_ram .eth_ram*) } > ram_d1 AT > flash
-
-  . = ALIGN(8);
-  _end = .;
+  /* Place .eth_ram into the ETH DMA accessible region */
+  .eth_ram (NOLOAD) : { *(.eth_ram .eth_ram*) } > ram_d2
 
   /* Retained health record. Startup code must neither copy nor clear it. */
   .mg_health (NOLOAD) : { KEEP(*(.mg_health .mg_health*)) } > ram_d3
