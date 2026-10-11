@@ -54,7 +54,7 @@ littlefs:
 	git clone -q -c advice.detachedHead=false --depth 1 -b v2.11.3 https://github.com/littlefs-project/littlefs $@
 
 clean:
-	rm -rf firmware.* cmsis_* mongoose/mongoose.*
+	rm -rf firmware.* cmsis_* mongoose/mongoose.* littlefs
 
 # Automated remote test. Requires env variable VCON_API_KEY set. See https://vcon.io/automated-firmware-tests/
 DEVICE_URL ?= https://dash.vcon.io/api/v3/devices/11

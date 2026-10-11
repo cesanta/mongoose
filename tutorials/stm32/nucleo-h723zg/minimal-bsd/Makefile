@@ -49,7 +49,7 @@ FreeRTOS-Kernel:
 	git clone --depth 1 -b V11.3.0 https://github.com/FreeRTOS/FreeRTOS-Kernel $@
 
 clean:
-	rm -rf firmware.* cmsis_* mongoose/mongoose.*
+	rm -rf firmware.* cmsis_* mongoose/mongoose.* FreeRTOS-Kernel
 
 
 # Automated remote test. Requires env variable VCON_API_KEY set. See https://vcon.io/automated-firmware-tests/
