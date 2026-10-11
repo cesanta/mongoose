@@ -3,6 +3,12 @@
 
 #include "hal.h"
 
+// Added to minimise the bin size: avoid pulling printf and friends
+void __assert_func(const char *s, int line, const char *fn, const char *expr) {
+  (void) s, (void) line, (void) fn, (void) expr;
+  for (;;) (void) 0;  // or trigger the fault handler
+}
+
 bool hal_timer_expired(volatile uint64_t *t, uint64_t period, uint64_t now) {
   uint64_t diff = now - *t;         // Wrap-safe elapsed time since last expiry
   if (period == 0) return false;    // Avoid division by zero

@@ -45,12 +45,15 @@ static void http_ev_handler(struct mg_connection *c, int ev, void *ev_data) {
     struct mg_http_message *hm = (struct mg_http_message *) ev_data;
     if (mg_match(hm->uri, mg_str("/api/tick"), NULL)) {
       mg_http_reply(c, 200, "", "{%m:%llu}\n", MG_ESC("tick"), hal_get_tick());
-    } else if (mg_match(hm->uri, mg_str("/api/kill"), NULL)) {
-      SCB->SHCSR &= ~SCB_SHCSR_USGFAULTENA_Msk;
-      __asm volatile("udf #0");
+    } else if (mg_match(hm->uri, mg_str("/api/crash"), NULL)) {
+      __asm volatile("udf #0");  // Trigger HardFault
     } else {
-      mg_http_reply(c, 200, "", "Hi from Mongoose, tick %llu\n",
-                    hal_get_tick());
+      mg_http_reply(c, 200, "",
+                    "Hi from Mongoose!\n"
+                    "tick:     %llu\n"
+                    "ram used: %zu\n"
+                    "ram free: %zu\n",
+                    hal_get_tick(), hal_ram_used(), hal_ram_free());
     }
   }
 }
@@ -67,12 +70,13 @@ int main(void) {
   hal_gpio_output(LED2);
   hal_gpio_output(LED3);
 
-  MG_INFO(("Initialised. CPU clock: %lu MHz", SystemCoreClock / 1000000));
-  MG_INFO(("Crash record: %M", mg_print_crash_record));
-
   struct mg_mgr mgr;
   mg_mgr_init(&mgr);
   mg_http_listen(&mgr, "http://0.0.0.0", http_ev_handler, NULL);
+
+  MG_INFO(("Initialised. CPU clock: %lu MHz", SystemCoreClock / 1000000));
+  MG_INFO(("RAM used: %zu, free: %zu", hal_ram_used(), hal_ram_free()));
+  MG_INFO(("Crash record: %M", mg_print_crash_record));
 
   for (;;) {
     mg_mgr_poll(&mgr, 0);

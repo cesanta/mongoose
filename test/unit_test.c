@@ -3663,6 +3663,14 @@ static void test_check_ip_acl(void) {
   ASSERT(mg_check_ip_acl(mg_str("-0.0.0.0/0,+1.0.0.0/8"), &ip) == 1);
   ASSERT(mg_check_ip_acl(mg_str("-0.0.0.0/0,+1.2.3.4"), &ip) == 1);
   ASSERT(mg_check_ip_acl(mg_str("-0.0.0.0/0,+1.0.0.0/16"), &ip) == 0);
+  ASSERT(mg_check_ip_acl(mg_str("+1.2.3.4xyz"), &ip) == -2);     // junk
+  ASSERT(mg_check_ip_acl(mg_str("+1.2.3.4/32abc"), &ip) == -2);  // junk
+  ASSERT(mg_check_ip_acl(mg_str("+1.2.3.4/"), &ip) == -2);
+  ASSERT(mg_check_ip_acl(mg_str("+1.2.3.4/33"), &ip) == -2);
+  ASSERT(mg_check_ip_acl(mg_str("+1.2.3.256"), &ip) == -2);
+  ASSERT(mg_check_ip_acl(mg_str("+"), &ip) == -2);
+  // Not NUL-terminated: must not read past the end of the ACL
+  ASSERT(mg_check_ip_acl(mg_str_n("+1.2.3.4xyz", 8), &ip) == 1);
   ip.is_ip6 = true;
   ASSERT(mg_check_ip_acl(mg_str("-0.0.0.0/0"), &ip) ==
          -1);  // not yet supported

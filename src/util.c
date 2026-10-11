@@ -1,5 +1,6 @@
 #include "util.h"
 #include "log.h"
+#include "net.h"
 
 // Not using memset for zeroing memory, cause it can be dropped by compiler
 // See https://github.com/cesanta/mongoose/pull/1265
@@ -143,22 +144,21 @@ uint16_t mg_crc16(uint16_t crc, const char *buf, size_t len) {
   return (uint16_t) ~c;
 }
 
-static int isbyte(int n) {
-  return n >= 0 && n <= 255;
-}
-
-static int parse_net(const char *spec, uint32_t *net, uint32_t *mask) {
-  int n, a, b, c, d, slash = 32, len = 0;
-  if ((sscanf(spec, "%d.%d.%d.%d/%d%n", &a, &b, &c, &d, &slash, &n) == 5 ||
-       sscanf(spec, "%d.%d.%d.%d%n", &a, &b, &c, &d, &n) == 4) &&
-      isbyte(a) && isbyte(b) && isbyte(c) && isbyte(d) && slash >= 0 &&
-      slash < 33) {
-    len = n;
-    *net = ((uint32_t) a << 24) | ((uint32_t) b << 16) | ((uint32_t) c << 8) |
-           (uint32_t) d;
-    *mask = slash ? (uint32_t) (0xffffffffU << (32 - slash)) : (uint32_t) 0;
+// Parse "IP" or "IP/BITS" into net and mask. The whole spec must be valid
+static bool parse_net(struct mg_str spec, uint32_t *net, uint32_t *mask) {
+  struct mg_str caps[3], ip = spec, bits = mg_str("32");
+  struct mg_addr addr;
+  uint8_t n = 0;
+  if (mg_match(spec, mg_str("*/*"), caps)) ip = caps[0], bits = caps[1];
+  // ip.len == 0 check: mg_aton() parses an empty string as 0.0.0.0
+  if (ip.len == 0 || !mg_aton(ip, &addr) || addr.is_ip6 ||
+      !mg_str_to_num(bits, 10, &n, sizeof(n)) || n > 32) {
+    return false;
   }
-  return len;
+  memcpy(net, addr.addr.ip, sizeof(*net));
+  *net = mg_ntohl(*net);
+  *mask = n ? (uint32_t) (0xffffffffU << (32 - n)) : (uint32_t) 0;
+  return true;
 }
 
 int mg_check_ip_acl(struct mg_str acl, struct mg_addr *remote_ip) {
@@ -172,7 +172,9 @@ int mg_check_ip_acl(struct mg_str acl, struct mg_addr *remote_ip) {
     while (mg_span(acl, &entry, &acl, ',')) {
       uint32_t net, mask;
       if (entry.buf[0] != '+' && entry.buf[0] != '-') return -1;
-      if (parse_net(&entry.buf[1], &net, &mask) == 0) return -2;
+      if (!parse_net(mg_str_n(entry.buf + 1, entry.len - 1), &net, &mask)) {
+        return -2;
+      }
       if ((mg_ntohl(remote_ip4) & mask) == net) allowed = entry.buf[0];
     }
   }

@@ -60,9 +60,6 @@ static PORTABLE_8439_DECL void poly1305_finish(poly1305_context *ctx,
 // ******* END:   poly1305-donna/poly1305-donna.h ********
 // ******* BEGIN: chacha-portable.c ********
 
-#include <assert.h>
-#include <string.h>
-
 // this is a fresh implementation of chacha20, based on the description in
 // rfc8349 it's such a nice compact algorithm that it is easy to do. In
 // relationship to other c implementation this implementation:

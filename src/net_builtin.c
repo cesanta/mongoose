@@ -422,8 +422,6 @@ static void onstatechange(struct mg_tcpip_if *ifp) {
       mg_tcpip_arp_request(ifp, ifp->gw, NULL);  // unsolicited GW ARP request
   } else if (ifp->state == MG_TCPIP_STATE_UP) {
     srand((unsigned int) mg_millis());
-  } else if (ifp->state == MG_TCPIP_STATE_DOWN) {
-    MG_ERROR(("Link down"));
   }
   mg_tcpip_call(ifp, MG_TCPIP_EV_STATE_CHANGE, &ifp->state);
 }
