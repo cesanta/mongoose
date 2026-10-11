@@ -6,7 +6,7 @@ CFLAGS += -Wformat-truncation -fno-common -Wconversion -Wno-sign-conversion
 CFLAGS += -g3 -Os -ffunction-sections -fdata-sections
 CFLAGS += -I. -Icmsis_core/CMSIS/Core/Include -Icmsis_g0/Include -Imongoose
 CFLAGS += -mcpu=cortex-m0 -mthumb -mfloat-abi=soft $(CFLAGS_EXTRA)
-LDFLAGS ?= -Tlink.ld -nostdlib -nostartfiles --specs nano.specs -lc -lgcc -Wl,--gc-sections -Wl,-Map=$@.map
+LDFLAGS ?= -Tlink.ld -nostdlib -nostartfiles --specs nano.specs -lc -lgcc -Wl,--gc-sections
 
 SOURCES = main.c hal.c
 SOURCES += cmsis_g0/Source/Templates/gcc/startup_stm32g031xx.s
@@ -26,6 +26,10 @@ firmware.bin: firmware.elf
 	arm-none-eabi-objcopy -O binary $< $@
 	@echo
 	@echo "To flash, run 'make flash'"
+
+# Show all symbols sorted by size
+show_symbols_sorted_by_size: firmware.bin
+	arm-none-eabi-readelf -sW firmware.elf | sed 1,3d | sed 's,^.*: ,,' | tr -s ' ' | cut -d ' ' -f 2,7 | sort -nk1 | grep -v '^0 '
 
 flash: firmware.bin
 	st-flash --reset write $< 0x8000000

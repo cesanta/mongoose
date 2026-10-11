@@ -7,7 +7,7 @@ CFLAGS += -g3 -Os -ffunction-sections -fdata-sections
 CFLAGS += -I. -Icmsis_core/CMSIS/Core/Include -Icmsis_n6/Include -Imongoose
 CFLAGS += -mcpu=cortex-m55 -mthumb -mfloat-abi=soft -mfpu=fpv5-d16 -mcmse
 CFLAGS += $(CFLAGS_EXTRA)
-LDFLAGS ?= -nostdlib -nostartfiles --specs nosys.specs -lc -lgcc -Wl,--gc-sections
+LDFLAGS ?= -nostdlib -nostartfiles --specs nano.specs -lc -lgcc -Wl,--gc-sections
 
 SOURCES = cmsis_n6/Source/Templates/gcc/startup_stm32n657xx.s
 SOURCES += main.c hal.c mongoose/mongoose.c
@@ -39,6 +39,10 @@ fsbl.elf: cmsis_core cmsis_n6 hal.h fsbl.ld Makefile $(FSBL_SOURCES)
 
 fsbl.signed.bin: fsbl.bin
 	STM32_SigningTool_CLI -s -nk -of 0x80000000 -t fsbl -hv 2.3 -align -bin $^ -o $@
+
+# Show all symbols sorted by size
+show_symbols_sorted_by_size: firmware.bin
+	arm-none-eabi-readelf -sW firmware.elf | sed 1,3d | sed 's,^.*: ,,' | tr -s ' ' | cut -d ' ' -f 2,7 | sort -nk1 | grep -v '^0 '
 
 flash: fsbl.signed.bin firmware.bin
 	STM32_Programmer_CLI -c port=swd mode=HOTPLUG -el MX25UM51245G_STM32N6570-NUCLEO.stldr -d firmware.bin 0x70100000 -hardRst
