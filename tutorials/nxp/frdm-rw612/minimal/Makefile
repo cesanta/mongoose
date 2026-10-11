@@ -12,7 +12,7 @@ CFLAGS += -Icmsis_rw612/devices/RW612/ -Icmsis_rw612/devices/RW612/periph/ -Icms
 CFLAGS += -DCPU_RW612ETA2I -DCPU_RW612ETA2I_cm33_no_dsp
 CFLAGS += -DBOOT_HEADER_ENABLE=1
 CFLAGS += -mcpu=cortex-m33+nodsp -mthumb -mfloat-abi=hard -mfpu=fpv5-sp-d16 $(CFLAGS_EXTRA)
-LDFLAGS ?= -Tlink.ld -nostdlib -nostartfiles --specs=nano.specs -lc -lgcc -Wl,--gc-sections -Wl,-Map=$@.map
+LDFLAGS ?= -Tlink.ld -nostdlib -nostartfiles --specs=nano.specs -lc -lgcc -Wl,--gc-sections
 
 SOURCES = main.c hal.c startup.c flexspi.c flash_config.c $(MGDIR)/mongoose.c
 SOURCES += cmsis_rw612/devices/RW612/drivers/fsl_clock.c
@@ -35,6 +35,10 @@ cmsis_rw612:
 	curl -sL https://mcuxpresso.nxp.com/cmsis_pack/repo/NXP.RW612_DFP.25.12.00.pack -o NXP.RW612_DFP.25.12.00.pack
 	unzip -q NXP.RW612_DFP.25.12.00.pack -d $@
 	rm NXP.RW612_DFP.25.12.00.pack
+
+# Show all symbols sorted by size
+show_symbols_sorted_by_size: firmware.bin
+	arm-none-eabi-readelf -sW firmware.elf | sed 1,3d | sed 's,^.*: ,,' | tr -s ' ' | cut -d ' ' -f 2,7 | sort -nk1 | grep -v '^0 '
 
 flash: firmware.bin
 	(echo 'loadfile firmware.elf'; echo 'reset'; echo 'exit';) | JLinkExe -device RW612 -if SWD -speed 4000 -autoconnect 1 -NoGui 1 -ExitOnError 1

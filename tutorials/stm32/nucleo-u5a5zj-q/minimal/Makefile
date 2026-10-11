@@ -5,7 +5,7 @@ CFLAGS += -Wformat-truncation -fno-common -Wconversion -Wno-sign-conversion
 CFLAGS += -g3 -Os -ffunction-sections -fdata-sections
 CFLAGS += -I. -Icmsis_core/CMSIS/Core/Include -Icmsis_u5/Include -Imongoose
 CFLAGS += -mcpu=cortex-m33 -mthumb -mfpu=fpv5-sp-d16 -mfloat-abi=hard
-LDFLAGS ?= -Tlink.ld -nostdlib -nostartfiles --specs nano.specs -lc -lgcc -Wl,--gc-sections -Wl,-Map=$@.map
+LDFLAGS ?= -Tlink.ld -nostdlib -nostartfiles --specs nano.specs -lc -lgcc -Wl,--gc-sections
 
 SOURCES = main.c hal.c wifi.c mongoose/mongoose.c
 SOURCES += cmsis_u5/Source/Templates/gcc/startup_stm32u5a5xx.s
@@ -23,6 +23,10 @@ firmware.bin: firmware.elf
 
 firmware.elf: cmsis_core cmsis_u5 $(SOURCES) mongoose/mongoose.h $(wildcard *.h) link.ld Makefile
 	arm-none-eabi-gcc $(SOURCES) $(CFLAGS) $(LDFLAGS) -o $@
+
+# Show all symbols sorted by size
+show_symbols_sorted_by_size: firmware.bin
+	arm-none-eabi-readelf -sW firmware.elf | sed 1,3d | sed 's,^.*: ,,' | tr -s ' ' | cut -d ' ' -f 2,7 | sort -nk1 | grep -v '^0 '
 
 flash: firmware.bin
 	STM32_Programmer_CLI -c port=swd -e all -w $< 0x8000000 -hardRst

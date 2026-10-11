@@ -53,13 +53,15 @@ static void http_ev_handler(struct mg_connection *c, int ev, void *ev_data) {
           .enable_dir_listing = true,
       };
       mg_http_serve_dir(c, hm, &opts);
+    } else if (mg_match(hm->uri, mg_str("/api/crash"), NULL)) {
+      __asm volatile("udf #0");  // Trigger HardFault
     } else {
-      size_t u = hal_ram_used(), t = u + hal_ram_free();
       mg_http_reply(c, 200, "",
                     "Hi from Mongoose!\n"
-                    "Tick %llu\n"
-                    "RAM usage: %zu / %zu (%zu %%)\n",
-                    hal_get_tick(), u, t, (size_t) (100 * u / t));
+                    "tick:     %llu\n"
+                    "ram used: %zu\n"
+                    "ram free: %zu\n",
+                    hal_get_tick(), hal_ram_used(), hal_ram_free());
     }
   }
 }
@@ -74,11 +76,14 @@ int main(void) {
   hal_gpio_output(LED_2);
   hal_gpio_output(LED_3);
   hal_ethernet_init();
-  MG_INFO(("Initialised. CPU clock: %lu MHz", SystemCoreClock / 1000000));
 
   struct mg_mgr mgr;
   mg_mgr_init(&mgr);
   mg_http_listen(&mgr, "http://0.0.0.0", http_ev_handler, NULL);
+
+  MG_INFO(("Initialised. CPU clock: %lu MHz", SystemCoreClock / 1000000));
+  MG_INFO(("RAM used: %zu, free: %zu", hal_ram_used(), hal_ram_free()));
+  MG_INFO(("Crash record: %M", mg_print_crash_record));
 
   // Create directory for Web file manager. Will be mapped to /files/ URL
   mkdir("/fs", 0755);

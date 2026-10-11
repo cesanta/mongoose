@@ -9,7 +9,7 @@ CFLAGS += -I. -Imongoose -Icmsis_core/CMSIS/Core/Include/
 CFLAGS += -Icmsis_mcxe247/devices/MCXE247/ -Icmsis_mcxe247/devices/MCXE247/periph0/ -Icmsis_mcxe247/devices/MCXE247/drivers/
 CFLAGS += -DCPU_MCXE247VLQ -DCPU_MCXE247VLQ_cm4
 CFLAGS += -mcpu=cortex-m4 -mthumb -mfpu=fpv4-sp-d16 -mfloat-abi=hard $(CFLAGS_EXTRA)
-LDFLAGS ?= -Tlink.ld -nostdlib -nostartfiles --specs=nano.specs -lc -lgcc -Wl,--gc-sections -Wl,-Map=$@.map
+LDFLAGS ?= -Tlink.ld -nostdlib -nostartfiles --specs=nano.specs -lc -lgcc -Wl,--gc-sections
 
 SOURCES = main.c hal.c mongoose/mongoose.c
 SOURCES += cmsis_mcxe247/devices/MCXE247/gcc/startup_MCXE247.S
@@ -37,6 +37,10 @@ cmsis_mcxe247:
 	curl -sL https://mcuxpresso.nxp.com/cmsis_pack/repo/NXP.MCXE247_DFP.26.06.00.pack -o NXP.MCXE247_DFP.26.06.00.pack
 	unzip -q NXP.MCXE247_DFP.26.06.00.pack -d $@
 	rm NXP.MCXE247_DFP.26.06.00.pack
+
+# Show all symbols sorted by size
+show_symbols_sorted_by_size: firmware.bin
+	arm-none-eabi-readelf -sW firmware.elf | sed 1,3d | sed 's,^.*: ,,' | tr -s ' ' | cut -d ' ' -f 2,7 | sort -nk1 | grep -v '^0 '
 
 clean:
 	rm -rf firmware.* cmsis_* mongoose/mongoose.*

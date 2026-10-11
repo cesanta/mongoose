@@ -6,7 +6,7 @@ CFLAGS += -Wformat-truncation -fno-common -Wconversion -Wno-sign-conversion
 CFLAGS += -g3 -Os -ffunction-sections -fdata-sections
 CFLAGS += -I. -Icmsis_core/CMSIS/Core/Include -Icmsis_f7/Include -Imongoose
 CFLAGS += -mcpu=cortex-m7 -mthumb -mfloat-abi=hard -mfpu=fpv5-sp-d16 $(CFLAGS_EXTRA)
-LDFLAGS ?= -Tlink.ld -nostdlib -nostartfiles --specs nosys.specs -lc -lgcc -Wl,--gc-sections -Wl,-Map=$@.map
+LDFLAGS ?= -Tlink.ld -nostdlib -nostartfiles --specs nano.specs -lc -lgcc -Wl,--gc-sections
 
 SOURCES = main.c hal.c
 SOURCES += cmsis_f7/Source/Templates/gcc/startup_stm32f756xx.s
@@ -25,6 +25,10 @@ firmware.bin: firmware.elf
 	arm-none-eabi-objcopy -O binary $< $@
 	@echo
 	@echo "To flash, run 'make flash', or use STM32CubeProgrammer"
+
+# Show all symbols sorted by size
+show_symbols_sorted_by_size: firmware.bin
+	arm-none-eabi-readelf -sW firmware.elf | sed 1,3d | sed 's,^.*: ,,' | tr -s ' ' | cut -d ' ' -f 2,7 | sort -nk1 | grep -v '^0 '
 
 flash: firmware.bin
 	STM32_Programmer_CLI -c port=swd -e all -w firmware.elf -hardRst

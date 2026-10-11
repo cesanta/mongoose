@@ -10,7 +10,7 @@ CFLAGS += -Icmsis_rt1186/devices/MIMXRT1186/ -Icmsis_rt1186/devices/MIMXRT1186/p
 CFLAGS += -DCPU_MIMXRT1186CVJ8C_cm33 -DCPU_MIMXRT1186CVJ8C -DMIMXRT1186_cm33_SERIES
 CFLAGS += -DXIP_EXTERNAL_FLASH=1 -DXIP_BOOT_HEADER_ENABLE=1
 CFLAGS += -mcpu=cortex-m33 -mthumb -mfpu=fpv5-sp-d16 -mfloat-abi=hard $(CFLAGS_EXTRA)
-LDFLAGS ?= -Tlink.ld -nostdlib -nostartfiles --specs=nano.specs -lc -lgcc -Wl,--gc-sections -Wl,-Map=$@.map
+LDFLAGS ?= -Tlink.ld -nostdlib -nostartfiles --specs=nano.specs -lc -lgcc -Wl,--gc-sections
 
 SOURCES = main.c hal.c flash_image.c mongoose/mongoose.c
 SOURCES += cmsis_rt1186/devices/MIMXRT1186/gcc/startup_MIMXRT1186_cm33.S
@@ -43,6 +43,10 @@ cmsis_rt1186:
 	curl -sL https://mcuxpresso.nxp.com/cmsis_pack/repo/NXP.MIMXRT1186_DFP.26.06.00.pack -o NXP.MIMXRT1186_DFP.26.06.00.pack
 	unzip -q NXP.MIMXRT1186_DFP.26.06.00.pack -d $@
 	rm NXP.MIMXRT1186_DFP.26.06.00.pack
+
+# Show all symbols sorted by size
+show_symbols_sorted_by_size: firmware.bin
+	arm-none-eabi-readelf -sW firmware.elf | sed 1,3d | sed 's,^.*: ,,' | tr -s ' ' | cut -d ' ' -f 2,7 | sort -nk1 | grep -v '^0 '
 
 clean:
 	rm -rf firmware.* cmsis_* mongoose/mongoose.*

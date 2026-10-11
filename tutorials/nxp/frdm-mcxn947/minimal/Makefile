@@ -9,7 +9,7 @@ CFLAGS += -I. -Imongoose -Icmsis_core/CMSIS/Core/Include/
 CFLAGS += -Icmsis_mcxn947/devices/MCXN947/ -Icmsis_mcxn947/devices/MCXN947/periph/ -Icmsis_mcxn947/devices/MCXN947/drivers/
 CFLAGS += -DCPU_MCXN947VDF -DCPU_MCXN947VDF_cm33 -DCPU_MCXN947VDF_cm33_core0
 CFLAGS += -mcpu=cortex-m33 -mthumb -mfloat-abi=hard -mfpu=fpv5-sp-d16 $(CFLAGS_EXTRA)
-LDFLAGS ?= -Tlink.ld -nostdlib -nostartfiles --specs=nano.specs -lc -lgcc -Wl,--gc-sections -Wl,-Map=$@.map
+LDFLAGS ?= -Tlink.ld -nostdlib -nostartfiles --specs=nano.specs -lc -lgcc -Wl,--gc-sections
 
 SOURCES = main.c hal.c mongoose/mongoose.c
 SOURCES += cmsis_mcxn947/devices/MCXN947/gcc/startup_MCXN947_cm33_core0.S
@@ -39,6 +39,10 @@ cmsis_mcxn947:
 	curl -sL https://mcuxpresso.nxp.com/cmsis_pack/repo/NXP.MCXN947_DFP.26.06.00.pack -o NXP.MCXN947_DFP.26.06.00.pack
 	unzip -q NXP.MCXN947_DFP.26.06.00.pack -d $@
 	rm NXP.MCXN947_DFP.26.06.00.pack
+
+# Show all symbols sorted by size
+show_symbols_sorted_by_size: firmware.bin
+	arm-none-eabi-readelf -sW firmware.elf | sed 1,3d | sed 's,^.*: ,,' | tr -s ' ' | cut -d ' ' -f 2,7 | sort -nk1 | grep -v '^0 '
 
 clean:
 	rm -rf firmware.* cmsis_* mongoose/mongoose.*

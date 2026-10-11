@@ -6,7 +6,7 @@ CFLAGS += -g3 -Os -ffunction-sections -fdata-sections
 CFLAGS += -Wno-cast-function-type
 CFLAGS += -I. -Icmsis_core/CMSIS/Core/Include -Icmsis_h7/Include -Imongoose
 CFLAGS += -mcpu=cortex-m7 -mthumb -mfloat-abi=hard -mfpu=fpv5-d16 -DCORE_CM7
-LDFLAGS ?= -Tlink.ld -nostdlib -nostartfiles --specs nosys.specs -lc -lgcc -Wl,--gc-sections -Wl,-Map=$@.map
+LDFLAGS ?= -Tlink.ld -nostdlib -nostartfiles --specs nano.specs -lc -lgcc -Wl,--gc-sections
 
 SOURCES = main.c wifi.c hal.c
 SOURCES += cmsis_h7/Source/Templates/gcc/startup_stm32h747xx.s
@@ -33,6 +33,10 @@ firmware.bin: firmware.elf
 mbed:
 	git clone --depth 1 --no-checkout -b extrapatches-6.17.0 https://github.com/arduino/mbed-os $@ && cd $@ && git sparse-checkout set targets/TARGET_STM/TARGET_STM32H7/TARGET_STM32H747xI/TARGET_PORTENTA_H7/COMPONENT_WHD/resources && git checkout
 	touch wiced_resource.h
+
+# Show all symbols sorted by size
+show_symbols_sorted_by_size: firmware.bin
+	arm-none-eabi-readelf -sW firmware.elf | sed 1,3d | sed 's,^.*: ,,' | tr -s ' ' | cut -d ' ' -f 2,7 | sort -nk1 | grep -v '^0 '
 
 flash: firmware.bin
 	dfu-util -a 0 -s 0x8040000:leave -D $<

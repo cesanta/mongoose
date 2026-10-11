@@ -2,6 +2,12 @@
 
 #include "hal.h"
 
+// Added to minimise the bin size: avoid pulling printf and friends
+void __assert_func(const char *s, int line, const char *fn, const char *expr) {
+  (void) s, (void) line, (void) fn, (void) expr;
+  for (;;) (void) 0;  // or trigger the fault handler
+}
+
 int _fstat(int fd, struct stat *st) {
   if (fd < 0) return -1;
   st->st_mode = S_IFCHR;
