@@ -2335,7 +2335,7 @@ void mg_connect_resolved(struct mg_connection *c) {
       memcpy(s->mac, ifp->gw6mac, sizeof(s->mac));
       l2addr_resolved(c);
     } else {
-      MG_ERROR(("No IPv6 gateway, can't connect"));
+      mg_error(c, "No IPv6 gateway, can't connect");
     }
 #endif
   } else {
@@ -2351,7 +2351,7 @@ void mg_connect_resolved(struct mg_connection *c) {
       memcpy(s->mac, ifp->gwmac, sizeof(s->mac));
       l2addr_resolved(c);
     } else {
-      MG_ERROR(("No gateway, can't connect"));
+      mg_error(c, "No gateway, can't connect");
     }
   }
 }
