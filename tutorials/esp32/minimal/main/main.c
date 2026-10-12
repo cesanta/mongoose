@@ -70,8 +70,10 @@ static void http_ev_handler(struct mg_connection *c, int ev, void *ev_data) {
   }
 }
 
+extern void wifi_init(const char *ssid, const char *pass);
+
 void app_main(void) {
-  void wifi_init(const char *ssid, const char *pass);
+  MG_HEALTH_INIT();
   wifi_init(WIFI_SSID, WIFI_PASS);
 
   struct mg_mgr mgr;
