@@ -5,6 +5,8 @@
 #include "arch.h"
 #include "printf.h"
 
+#if MG_ENABLE_HEALTH
+
 #ifndef MG_HEALTH_MAGIC
 #define MG_HEALTH_MAGIC {'M', 'G', 'H', '3'}  // '3' is the layout version
 #endif
@@ -13,19 +15,28 @@
 #define MG_HEALTH_RAM __attribute__((section(".mg_health")))
 #endif
 
-#if !defined(MG_HEALTH_DATA_SIZE) && (defined(STM32H7_DEV_ID) || defined(STM32H5) || defined(STM32C5))
-#define MG_HEALTH_DATA_SIZE 250
-#endif
-
 #ifndef MG_HEALTH_DATA_SIZE
+#if (defined(STM32H7_DEV_ID) || defined(STM32H5)) || defined(STM32C5)
+#define MG_HEALTH_DATA_SIZE 250
+#elif MG_ARCH == MG_ARCH_ESP32
+#define MG_HEALTH_DATA_SIZE 23
+#else
 #define MG_HEALTH_DATA_SIZE 10
 #endif
+#endif  // MG_HEALTH_DATA_SIZE
 
 // Places the record in RAM that survives a reset. Define in mongoose_config.h
 // to match the linker script, e.g. __attribute__((section(".mg_health")))
 #ifndef MG_HEALTH_RAM
 #define MG_HEALTH_RAM
 #endif
+
+// CPU core architecture
+enum mg_health_arch {
+  MG_HEALTH_ARCH_ARM = 0,
+  MG_HEALTH_ARCH_XTENSA,
+  MG_HEALTH_ARCH_RISCV
+};
 
 // Why the device restarted. Hardware usually reports several flags at once,
 // so these are ordered by how much they tell you: the most specific cause a
@@ -43,7 +54,8 @@ enum mg_health_reason {
 
 struct mg_health {
   char magic[4];          // MG_HEALTH_MAGIC when the record holds valid data
-  uint32_t reset_reason;  // enum mg_health_reason that started this boot
+  uint16_t reset_reason;  // enum mg_health_reason that started this boot
+  uint16_t arch;          // enum mg_health_arch, core architecture (ARM, etc)
   uint32_t cpuid;         // ARM CPU ID
   uint32_t data[MG_HEALTH_DATA_SIZE];
 };
@@ -76,6 +88,54 @@ static inline const char *mg_health_reason_str(int reason) {
   }
 }
 
+#if MG_ARCH == MG_ARCH_ESP32
+#ifndef CONFIG_ESP_COREDUMP_ENABLE_TO_FLASH
+#define CONFIG_ESP_COREDUMP_ENABLE_TO_FLASH 0
+#endif
+#ifndef ESP_PARTITION_SUBTYPE_DATA_COREDUMP
+#define ESP_PARTITION_SUBTYPE_DATA_COREDUMP 0x03
+#endif
+// clang-format off
+static inline uint16_t esp2mg(esp_reset_reason_t rr) {
+  switch(rr) {
+    case ESP_RST_POWERON: return (uint16_t) MG_HEALTH_RESET_POWER;
+#if ESP_IDF_VERSION >= ESP_IDF_VERSION_VAL(5, 2, 2)
+    case ESP_RST_PWR_GLITCH:
+#endif
+    case ESP_RST_BROWNOUT: return (uint16_t) MG_HEALTH_RESET_BROWNOUT;
+    case ESP_RST_EXT: return (uint16_t) MG_HEALTH_RESET_PIN;
+    case ESP_RST_SW: return (uint16_t) MG_HEALTH_RESET_SOFTWARE;
+    case ESP_RST_DEEPSLEEP: return (uint16_t) MG_HEALTH_RESET_LOWPOWER;
+    case ESP_RST_INT_WDT:
+    case ESP_RST_TASK_WDT:
+    case ESP_RST_WDT: return (uint16_t) MG_HEALTH_RESET_WATCHDOG;
+#if ESP_IDF_VERSION >= ESP_IDF_VERSION_VAL(5, 2, 2)
+    case ESP_RST_CPU_LOCKUP:
+#endif
+    case ESP_RST_PANIC: return (uint16_t) MG_HEALTH_RESET_FAULT;
+    default: break;
+  }
+  return (uint16_t) MG_HEALTH_RESET_UNKNOWN;
+}
+// clang-format on
+#endif
+
 #define MG_HEALTH_INIT() mg_health_init()
 extern size_t mg_print_crash_record(mg_pfn_t, void *, va_list *);
 extern void mg_health_init(void);
+#else
+#define MG_HEALTH_INIT()
+static inline int mg_health_reason(void) {
+  return 0;
+}
+static inline const char *mg_health_reason_str(int reason) {
+  (void) reason;
+  return "unknown";
+}
+static inline size_t mg_print_crash_record(mg_pfn_t fn, void *arg,
+                                           va_list *ap) {
+  (void) ap;
+  return mg_xprintf(fn, arg, "{}");
+}
+
+#endif

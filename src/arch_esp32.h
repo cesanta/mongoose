@@ -22,8 +22,10 @@
 #include <esp_system.h>
 #include <esp_mac.h>
 #include <esp_idf_version.h>
-// #include <esp_memory_utils.h>  // For health record coredumps
-// #include <esp_core_dump.h>     // For health record coredumps
+#if MG_ENABLE_HEALTH
+#include <esp_memory_utils.h>
+#include <esp_core_dump.h>
+#endif
 
 #define MG_PATH_MAX 128
 
