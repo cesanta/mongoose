@@ -4,7 +4,7 @@ MEMORY {
   sram  (rwx) : ORIGIN = 0x34000000, LENGTH = 2048K
 }
 _estack = ORIGIN(sram) + LENGTH(sram);
-_sstack = _estack - 4096;
+_sstack = _estack - 16384;  /* Stack limit, MSPLIM. TLS needs > 4 KB */
 
 SECTIONS {
   .vectors  : { KEEP(*(.isr_vector)) }  > flash

@@ -156,9 +156,13 @@ void mg_mdash_init(struct mg_mgr *mgr) {
 }
 
 void mg_mdash_poll(struct mg_mgr *mgr) {
+#if MG_TLS == MG_TLS_NONE
+  (void) mgr, (void) mg_mdash_fn;  // mdash needs wss://, nothing to do
+#else
   static uint64_t timer = 0;
-  // No RPC handlers means mdash was never set up, or mg_mdash_free() ran
-  if (mg_mdash_conn == NULL && mgr->rpcs != NULL &&
+  // No RPC handlers means mdash was never set up, or mg_mdash_free() ran.
+  // No key means mdash would reject us, so do not connect at all
+  if (mg_mdash_conn == NULL && mgr->rpcs != NULL && MG_MDASH_KEY[0] != '\0' &&
       mg_timer_expired(&timer, 1000, mg_millis())) {
     MG_INFO(("Connecting to %s", MG_MDASH_URL));
     mg_mdash_conn = mg_ws_connect(mgr, MG_MDASH_URL, mg_mdash_fn, NULL,
@@ -166,6 +170,7 @@ void mg_mdash_poll(struct mg_mgr *mgr) {
                                   "Authorization: Bearer %s\r\n",
                                   MG_MDASH_URL, MG_MDASH_KEY);
   }
+#endif
 }
 
 void mg_mdash_free(struct mg_mgr *mgr) {

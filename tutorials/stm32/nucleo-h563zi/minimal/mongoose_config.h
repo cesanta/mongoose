@@ -38,3 +38,5 @@
     mac[4] = MGUID[1] & 255;         \
     mac[5] = MGUID[2] & 255;         \
   } while (0)
+
+#define MG_ENABLE_HEALTH 1

@@ -7,8 +7,8 @@ include(pico_sdk_import.cmake)
 project(firmware)
 pico_sdk_init()
 
-add_executable(firmware main.c driver_rp2040_rmii.c mongoose/mongoose.c)
-target_include_directories(firmware PRIVATE . mongoose)
+add_executable(firmware main.c driver_rp2040_rmii.c ../../../mongoose.c)
+target_include_directories(firmware PRIVATE ../../.. ./)
 
 target_link_libraries(firmware hardware_pio hardware_dma pico_stdlib pico_rand)
 pico_add_extra_outputs(firmware)     # create map/bin/hex file etc.

@@ -2,6 +2,7 @@
 
 // Build options: https://mongoose.ws/docs/getting-started/build-options/
 #define MG_ARCH MG_ARCH_PICOSDK
+#define MG_TLS MG_TLS_BUILTIN
 #define MG_OTA MG_OTA_PICOSDK
 #define MG_IO_SIZE 2048
 

@@ -2744,9 +2744,8 @@ bool mg_ota_flash_end(struct mg_flash *flash) {
         uint8_t hash[32];
         size_t fw_size = s_size - 68;  // strip 64-byte sig + 4-byte magic
         mg_sha256(hash, (uint8_t *) base, fw_size);
-        ok = mg_uecc_verify(s_pubkey, hash, sizeof(hash),
-                            (uint8_t *) base + fw_size,
-                            mg_uecc_secp256r1()) == 1;
+        ok = mg_p256_verify(s_pubkey, hash, sizeof(hash),
+                            (uint8_t *) base + fw_size) == 1;
         MG_INFO(("Signature: %s", ok ? "ok" : "fail"));
       } else {
         ok = false;
@@ -5527,39 +5526,14 @@ size_t mg_jwt_verify_hs256(struct mg_str jwt, const struct mg_jwt_opts *opts,
 }
 
 #if MG_TLS == MG_TLS_BUILTIN
-typedef struct {
-  MG_UECC_HashContext uECC;
-  mg_sha256_ctx sha256;
-} jwt_hash_ctx;
-
-static void jwt_hash_init(const MG_UECC_HashContext *ctx) {
-  jwt_hash_ctx *c = (jwt_hash_ctx *) ctx;
-  mg_sha256_init(&c->sha256);
-}
-
-static void jwt_hash_update(const MG_UECC_HashContext *ctx, const uint8_t *msg,
-                            unsigned len) {
-  jwt_hash_ctx *c = (jwt_hash_ctx *) ctx;
-  mg_sha256_update(&c->sha256, msg, len);
-}
-
-static void jwt_hash_finish(const MG_UECC_HashContext *ctx, uint8_t *hash) {
-  jwt_hash_ctx *c = (jwt_hash_ctx *) ctx;
-  mg_sha256_final(hash, &c->sha256);
-}
-
 size_t mg_jwt_sign_es256(const struct mg_jwt_opts *opts, char *buf,
                          size_t len) {
-  uint8_t hash[32], sig[64], tmp[2 * 32 + 64];
-  jwt_hash_ctx ctx = {
-      {jwt_hash_init, jwt_hash_update, jwt_hash_finish, 64, 32, tmp},
-      {{0}, 0, 0, {0}}};
+  uint8_t hash[32], sig[64];
   size_t n = jwt_header_payload("ES256", opts, buf, len);
   size_t m;
   if (n == 0 || n + 1 >= len) return 0;
   mg_sha256(hash, (uint8_t *) buf, n);
-  if (mg_uecc_sign_deterministic(opts->private_key, hash, sizeof(hash),
-                                 &ctx.uECC, sig, mg_uecc_secp256r1()) != 1)
+  if (mg_p256_sign(opts->private_key, hash, sizeof(hash), sig) != 1)
     return 0;
   buf[n++] = '.';
   m = mg_base64url_encode(sig, sizeof(sig), buf + n, len - n);
@@ -5575,8 +5549,7 @@ size_t mg_jwt_verify_es256(struct mg_str jwt, const struct mg_jwt_opts *opts,
   if (mg_base64url_decode(s.buf, s.len, (char *) sig, sizeof(sig)) != 64)
     return 0;
   mg_sha256(hash, (uint8_t *) jwt.buf, n);
-  if (mg_uecc_verify(opts->public_key, hash, sizeof(hash), sig,
-                     mg_uecc_secp256r1()) != 1)
+  if (mg_p256_verify(opts->public_key, hash, sizeof(hash), sig) != 1)
     return 0;
   return mg_base64url_decode(p.buf, p.len, buf, len);
 }
@@ -7320,9 +7293,13 @@ void mg_mdash_init(struct mg_mgr *mgr) {
 }
 
 void mg_mdash_poll(struct mg_mgr *mgr) {
+#if MG_TLS == MG_TLS_NONE
+  (void) mgr, (void) mg_mdash_fn;  // mdash needs wss://, nothing to do
+#else
   static uint64_t timer = 0;
-  // No RPC handlers means mdash was never set up, or mg_mdash_free() ran
-  if (mg_mdash_conn == NULL && mgr->rpcs != NULL &&
+  // No RPC handlers means mdash was never set up, or mg_mdash_free() ran.
+  // No key means mdash would reject us, so do not connect at all
+  if (mg_mdash_conn == NULL && mgr->rpcs != NULL && MG_MDASH_KEY[0] != '\0' &&
       mg_timer_expired(&timer, 1000, mg_millis())) {
     MG_INFO(("Connecting to %s", MG_MDASH_URL));
     mg_mdash_conn = mg_ws_connect(mgr, MG_MDASH_URL, mg_mdash_fn, NULL,
@@ -7330,6 +7307,7 @@ void mg_mdash_poll(struct mg_mgr *mgr) {
                                   "Authorization: Bearer %s\r\n",
                                   MG_MDASH_URL, MG_MDASH_KEY);
   }
+#endif
 }
 
 void mg_mdash_free(struct mg_mgr *mgr) {
@@ -17130,6 +17108,7 @@ enum mg_tls_hs_state {
 
   // Server state machine:
   MG_TLS_STATE_SERVER_START,       // Wait for ClientHello
+  MG_TLS_STATE_SERVER_RETRY,       // Wait for ClientHello after HelloRetry
   MG_TLS_STATE_SERVER_WAIT_CERT,   // Wait for Certificate
   MG_TLS_STATE_SERVER_WAIT_CV,     // Wait for CertificateVerify
   MG_TLS_STATE_SERVER_NEGOTIATED,  // Wait for Finish
@@ -17175,9 +17154,9 @@ struct tls_data {
 
   uint8_t random[32];      // client random from ClientHello
   uint8_t session_id[32];  // client session ID between the handshake states
-  uint8_t x25519_cli[32];  // client X25519 key between the handshake states
   uint8_t p256_cli[32];    // client P-256 key between the handshake states
-  uint8_t x25519_sec[32];  // ECDHE secret (X25519 or P-256) between the states
+  uint8_t p256_peer[64];   // server: client P-256 public key X || Y
+  uint8_t ecdhe_sec[32];   // P-256 ECDHE shared secret between the states
 
   bool skip_verification;    // do not perform checks on server certificate
   bool cert_requested;       // client received a CertificateRequest
@@ -17201,6 +17180,8 @@ struct tls_data {
   size_t pubkeysz;           // size of the server public key
   uint8_t sighash[32];       // calculated signature verification hash
   uint8_t sighash384[48];    // same, SHA-384, for ecdsa_secp384r1_sha384
+  uint64_t hs_start;         // mg_millis() when the handshake started
+  uint64_t hs_proc;          // ms spent processing handshake messages
 
   struct tls_enc enc;       // actual keys in use at this time
   struct tls_enc app_keys;  // storage during two-way auth handshake
@@ -17392,7 +17373,7 @@ static void mg_tls_derive_secret(const char *label, uint8_t *key, size_t keysz,
   memmove(hash, secret, hashsz);
 }
 
-// at this point we have x25519 shared secret, we can generate a set of derived
+// at this point we have ECDHE shared secret, we can generate a set of derived
 // handshake encryption keys
 static void mg_tls_generate_handshake_keys(struct mg_connection *c) {
   struct tls_data *tls = (struct tls_data *) c->tls;
@@ -17413,12 +17394,11 @@ static void mg_tls_generate_handshake_keys(struct mg_connection *c) {
   mg_tls_derive_secret("tls13 derived", early_secret, 32, zeros_sha256_digest,
                        32, pre_extract_secret, 32);
   mg_hmac_sha256(tls->enc.handshake_secret, pre_extract_secret,
-                 sizeof(pre_extract_secret), tls->x25519_sec,
-                 sizeof(tls->x25519_sec));
+                 sizeof(pre_extract_secret), tls->ecdhe_sec,
+                 sizeof(tls->ecdhe_sec));
   // ECDHE keys and secret are not needed anymore, wipe for forward secrecy
-  mg_bzero(tls->x25519_cli, sizeof(tls->x25519_cli));
   mg_bzero(tls->p256_cli, sizeof(tls->p256_cli));
-  mg_bzero(tls->x25519_sec, sizeof(tls->x25519_sec));
+  mg_bzero(tls->ecdhe_sec, sizeof(tls->ecdhe_sec));
   mg_tls_hexdump("hs secret", tls->enc.handshake_secret, 32);
 
   // mg_sha256_final is not idempotent, need to copy sha256 context to calculate
@@ -17581,19 +17561,20 @@ static bool mg_tls_encrypt(struct mg_connection *c, const uint8_t *msg,
 
 static void verbose_alert(uint8_t *buf) {
   uint8_t level = buf[0], desc = buf[1];
-  MG_INFO(("TLS ALERT received: level=%d, desc=%d (%s)", level, desc,
-           desc == 0    ? "close_notify"
-           : desc == 10 ? "unexpected_message"
-           : desc == 20 ? "bad_record_mac"
-           : desc == 21 ? "decryption_failed"
-           : desc == 40 ? "handshake_failure"
-           : desc == 42 ? "bad_certificate"
-           : desc == 43 ? "unsupported_certificate"
-           : desc == 44 ? "certificate_revoked"
-           : desc == 45 ? "certificate_expired"
-           : desc == 46 ? "certificate_unknown"
-           : desc == 48 ? "unknown_ca"
-                        : "unknown"));
+  MG_LOG(desc == 0 ? MG_LL_VERBOSE : MG_LL_INFO,  // close_notify is normal
+         ("TLS ALERT received: level=%d, desc=%d (%s)", level, desc,
+          desc == 0    ? "close_notify"
+          : desc == 10 ? "unexpected_message"
+          : desc == 20 ? "bad_record_mac"
+          : desc == 21 ? "decryption_failed"
+          : desc == 40 ? "handshake_failure"
+          : desc == 42 ? "bad_certificate"
+          : desc == 43 ? "unsupported_certificate"
+          : desc == 44 ? "certificate_revoked"
+          : desc == 45 ? "certificate_expired"
+          : desc == 46 ? "certificate_unknown"
+          : desc == 48 ? "unknown_ca"
+                       : "unknown"));
 }
 
 // read an encrypted record, decrypt it in place
@@ -17728,7 +17709,8 @@ static void mg_tls_calc_cert_verify_hash(struct mg_connection *c,
   if (hash384 != NULL) mg_sha384(hash384, sig_content, sizeof(sig_content));
 }
 
-// read and parse ClientHello record
+// read and parse ClientHello record. Return 0 if it has a P-256 key share,
+// 1 if it does not and HelloRetryRequest must be sent, negative otherwise
 static int mg_tls_server_recv_hello(struct mg_connection *c) {
   struct tls_data *tls = (struct tls_data *) c->tls;
   struct mg_iobuf *rio = &c->rtls;
@@ -17738,9 +17720,13 @@ static int mg_tls_server_recv_hello(struct mg_connection *c) {
   uint16_t ext_len;
   uint8_t *ext;
   uint16_t msgsz;
+  bool have_p256 = false;
+  bool is_retry = tls->state == MG_TLS_STATE_SERVER_RETRY;
 
-  if (!mg_tls_got_record(c)) {
-    return MG_IO_WAIT;
+  for (;;) {
+    if (!mg_tls_got_record(c)) return MG_IO_WAIT;
+    if (!is_retry || rio->buf[0] != MG_TLS_CHANGE_CIPHER) break;
+    mg_tls_drop_record(c);  // compatibility mode CCS before 2nd ClientHello
   }
   if (rio->buf[0] != MG_TLS_HANDSHAKE || rio->buf[5] != MG_TLS_CLIENT_HELLO) {
     mg_error(c, "not a client hello packet");
@@ -17784,15 +17770,20 @@ static int mg_tls_server_recv_hello(struct mg_connection *c) {
       goto fail;
     for (k = 0; k < key_exchange_len;) {
       uint16_t m = MG_LOAD_BE16(key_exchange + k + 2);
+      uint16_t group = MG_LOAD_BE16(key_exchange + k);
       if (((uint32_t) m + k + 4) > key_exchange_len) goto fail;
-      if (m == 32 && key_exchange[k] == 0x00 && key_exchange[k + 1] == 0x1d) {
-        memmove(tls->x25519_cli, key_exchange + k + 4, m);
-        mg_tls_drop_record(c);
-        return 0;
+      // secp256r1, uncompressed point 0x04 || X || Y
+      if (group == 0x0017 && m == 65 && key_exchange[k + 4] == 0x04) {
+        memmove(tls->p256_peer, key_exchange + k + 5, 64);
+        have_p256 = true;
       }
       k += (uint16_t) (m + 4);
     }
     j += (uint16_t) (n + 4);
+  }
+  if (have_p256 || !is_retry) {  // No P-256 share: ask for it, but only once
+    mg_tls_drop_record(c);
+    return have_p256 ? 0 : 1;
   }
 fail:
   mg_error(c, "bad client hello");
@@ -17807,56 +17798,96 @@ fail:
 static bool mg_tls_server_send_hello(struct mg_connection *c) {
   struct tls_data *tls = (struct tls_data *) c->tls;
   struct mg_iobuf *wio = &tls->send;
+  uint8_t hello[155], pub[65], prv[32], hdr[5] = {0x16, 0x03, 0x03, 0, 0};
+  size_t n = sizeof(hello);  // ServerHello length, including 4-byte header
 
-  // clang-format off
-  uint8_t msg_server_hello[122] = {
-      // server hello, tls 1.2
-      0x02, 0x00, 0x00, 0x76, 0x03, 0x03,
-      // random (32 bytes)
-      PLACEHOLDER_32B,
-      // session ID length + session ID (32 bytes)
-      0x20, PLACEHOLDER_32B,
-#if MG_ENABLE_CHACHA20
-      // TLS_CHACHA20_POLY1305_SHA256 + no compression
-      0x13, 0x03, 0x00,
-#else
-      // TLS_AES_128_GCM_SHA256 + no compression
-      0x13, 0x01, 0x00,
-#endif
-      // extensions + keyshare
-      0x00, 0x2e, 0x00, 0x33, 0x00, 0x24, 0x00, 0x1d, 0x00, 0x20,
-      // x25519 keyshare
-      PLACEHOLDER_32B,
-      // supported versions (tls1.3 == 0x304)
-      0x00, 0x2b, 0x00, 0x02, 0x03, 0x04};
-  // clang-format on
-
-  // calculate keyshare
-  uint8_t x25519_pub[X25519_BYTES];
-  uint8_t x25519_prv[X25519_BYTES];
-  if (!mg_random(x25519_prv, sizeof(x25519_prv))) mg_error(c, "RNG");
-  if( mg_tls_x25519(x25519_pub, x25519_prv, X25519_BASE_POINT, 1) < 0 || mg_tls_x25519(tls->x25519_sec, x25519_prv, tls->x25519_cli, 1) < 0) {
+  // calculate P-256 keyshare and the shared secret
+  pub[0] = 0x04;  // uncompressed point 0x04 || X || Y
+  if (!mg_p256_make_key(pub + 1, prv) ||
+      !mg_p256_shared_secret(tls->p256_peer, prv, tls->ecdhe_sec)) {
+    mg_bzero(prv, sizeof(prv));
     mg_error(c, "bad key");
     return false;
   }
-  mg_tls_hexdump("s x25519 sec", tls->x25519_sec, sizeof(tls->x25519_sec));
+  mg_bzero(prv, sizeof(prv));
+  mg_tls_hexdump("s ecdhe sec", tls->ecdhe_sec, sizeof(tls->ecdhe_sec));
 
-  // fill in the gaps: random + session ID + keyshare
-  memmove(msg_server_hello + 6, tls->random, sizeof(tls->random));
-  memmove(msg_server_hello + 39, tls->session_id, sizeof(tls->session_id));
-  memmove(msg_server_hello + 84, x25519_pub, sizeof(x25519_pub));
+  hello[0] = 0x02;  // server hello, tls 1.2
+  MG_STORE_BE24(hello + 1, n - 4);
+  hello[4] = 0x03, hello[5] = 0x03;
+  if (!mg_random(hello + 6, 32)) {  // server random, RFC 8446 4.1.3
+    mg_error(c, "RNG");
+    return false;
+  }
+  hello[38] = 0x20;  // session ID length + session ID (32 bytes)
+  memmove(hello + 39, tls->session_id, sizeof(tls->session_id));
+#if MG_ENABLE_CHACHA20
+  hello[71] = 0x13, hello[72] = 0x03;  // TLS_CHACHA20_POLY1305_SHA256
+#else
+  hello[71] = 0x13, hello[72] = 0x01;  // TLS_AES_128_GCM_SHA256
+#endif
+  hello[73] = 0x00;                      // no compression
+  MG_STORE_BE16(hello + 74, 65 + 14);    // extensions length
+  MG_STORE_BE16(hello + 76, 0x0033);     // key share
+  MG_STORE_BE16(hello + 78, 65 + 4);
+  MG_STORE_BE16(hello + 80, 0x0017);     // secp256r1
+  MG_STORE_BE16(hello + 82, 65);
+  memmove(hello + 84, pub, sizeof(pub));
+  memmove(hello + 149, "\x00\x2b\x00\x02\x03\x04", 6);  // tls1.3 == 0x304
+  MG_STORE_BE16(hdr + 3, n);
 
   // server hello message
-  if (mg_iobuf_add(wio, wio->len, "\x16\x03\x03\x00\x7a", 5) == 0 ||
-      mg_iobuf_add(wio, wio->len, msg_server_hello, sizeof(msg_server_hello)) ==
-          0)
+  if (mg_iobuf_add(wio, wio->len, hdr, sizeof(hdr)) == 0 ||
+      mg_iobuf_add(wio, wio->len, hello, n) == 0)
     return false;
-  mg_sha256_update(&tls->sha256, msg_server_hello, sizeof(msg_server_hello));
+  mg_sha256_update(&tls->sha256, hello, n);
 
-  // change cipher message
-  if (mg_iobuf_add(wio, wio->len, "\x14\x03\x03\x00\x01\x01", 6) == 0)
+  // change cipher message, unless it was already sent after HelloRetryRequest
+  if (tls->state != MG_TLS_STATE_SERVER_RETRY &&
+      mg_iobuf_add(wio, wio->len, "\x14\x03\x03\x00\x01\x01", 6) == 0)
     return false;
   return true;
+}
+
+// HelloRetryRequest random, SHA-256 of "HelloRetryRequest", RFC 8446 4.1.3
+static const uint8_t hrr_random[32] = {
+    0xcf, 0x21, 0xad, 0x74, 0xe5, 0x9a, 0x61, 0x11, 0xbe, 0x1d, 0x8c,
+    0x02, 0x1e, 0x65, 0xb8, 0x91, 0xc2, 0xa2, 0x11, 0x16, 0x7a, 0xbb,
+    0x8c, 0x5e, 0x07, 0x9e, 0x09, 0xe2, 0xc8, 0xa8, 0x33, 0x9c};
+
+// put HelloRetryRequest record into wio buffer, asking for a P-256 key share.
+// Replace ClientHello in the transcript with message_hash, RFC 8446 4.4.1
+static bool mg_tls_server_send_hrr(struct mg_connection *c) {
+  struct tls_data *tls = (struct tls_data *) c->tls;
+  struct mg_iobuf *wio = &tls->send;
+  uint8_t hrr[88], hdr[5] = {0x16, 0x03, 0x03, 0, sizeof(hrr)};
+  uint8_t mh[4 + 32] = {0xfe, 0, 0, 32};  // message_hash(ClientHello1)
+
+  hrr[0] = 0x02;  // server hello, tls 1.2
+  MG_STORE_BE24(hrr + 1, sizeof(hrr) - 4);
+  hrr[4] = 0x03, hrr[5] = 0x03;
+  memmove(hrr + 6, hrr_random, sizeof(hrr_random));
+  hrr[38] = 0x20;  // session ID length + session ID (32 bytes)
+  memmove(hrr + 39, tls->session_id, sizeof(tls->session_id));
+#if MG_ENABLE_CHACHA20
+  hrr[71] = 0x13, hrr[72] = 0x03;  // TLS_CHACHA20_POLY1305_SHA256
+#else
+  hrr[71] = 0x13, hrr[72] = 0x01;  // TLS_AES_128_GCM_SHA256
+#endif
+  hrr[73] = 0x00;  // no compression
+  // extensions: supported versions tls1.3, key share secp256r1 (group only)
+  memmove(hrr + 74, "\x00\x0c\x00\x2b\x00\x02\x03\x04\x00\x33\x00\x02\x00\x17",
+          14);
+
+  mg_sha256_final(mh + 4, &tls->sha256);
+  mg_sha256_init(&tls->sha256);
+  mg_sha256_update(&tls->sha256, mh, sizeof(mh));
+  mg_sha256_update(&tls->sha256, hrr, sizeof(hrr));
+
+  // HelloRetryRequest message, followed by change cipher message
+  return mg_iobuf_add(wio, wio->len, hdr, sizeof(hdr)) != 0 &&
+         mg_iobuf_add(wio, wio->len, hrr, sizeof(hrr)) != 0 &&
+         mg_iobuf_add(wio, wio->len, "\x14\x03\x03\x00\x01\x01", 6) != 0;
 }
 
 static bool mg_tls_server_send_ext(struct mg_connection *c) {
@@ -17868,14 +17899,10 @@ static bool mg_tls_server_send_ext(struct mg_connection *c) {
 }
 
 // signature algorithms we actually support: ecdsa_secp256r1_sha256,
-// ecdsa_secp384r1_sha384 (if enabled), rsa_pss_rsae_sha256, rsa_pkcs1_sha256
+// ecdsa_secp384r1_sha384, rsa_pss_rsae_sha256, rsa_pkcs1_sha256
 static const uint8_t secp256r1_sig_algs[] = {
-#if MG_UECC_SUPPORTS_secp384r1
     0x00, 0x0d, 0x00, 0x0a, 0x00, 0x08, 0x04, 0x03,
     0x05, 0x03, 0x08, 0x04, 0x04, 0x01};
-#else
-    0x00, 0x0d, 0x00, 0x08, 0x00, 0x06, 0x04, 0x03, 0x08, 0x04, 0x04, 0x01};
-#endif
 
 static bool mg_tls_server_send_cert_request(struct mg_connection *c) {
   struct tls_data *tls = (struct tls_data *) c->tls;
@@ -17945,28 +17972,6 @@ static bool mg_tls_send_cert(struct mg_connection *c, bool is_client) {
   res = mg_tls_encrypt(c, cert, offset, MG_TLS_HANDSHAKE);
   mg_free(cert);
   return res;
-}
-
-// type adapter between uECC hash context and our sha256 implementation
-typedef struct SHA256_HashContext {
-  MG_UECC_HashContext uECC;
-  mg_sha256_ctx ctx;
-} SHA256_HashContext;
-
-static void init_SHA256(const MG_UECC_HashContext *base) {
-  SHA256_HashContext *c = (SHA256_HashContext *) base;
-  mg_sha256_init(&c->ctx);
-}
-
-static void update_SHA256(const MG_UECC_HashContext *base,
-                          const uint8_t *message, unsigned message_size) {
-  SHA256_HashContext *c = (SHA256_HashContext *) base;
-  mg_sha256_update(&c->ctx, message, message_size);
-}
-static void finish_SHA256(const MG_UECC_HashContext *base,
-                          uint8_t *hash_result) {
-  SHA256_HashContext *c = (SHA256_HashContext *) base;
-  mg_sha256_final(hash_result, &c->ctx);
 }
 
 static void mg_tls_mgf1(uint8_t *mask, size_t mask_len, const uint8_t *seed,
@@ -18211,15 +18216,13 @@ static bool mg_tls_send_cert_verify(struct mg_connection *c, bool is_client) {
   } else {
     // EC certificate verify packet
     uint8_t verify[82] = {0x0f, 0x00, 0x00, 0x00, 0x04, 0x03, 0x00, 0x00};
-    uint8_t tmp[2 * 32 + 64] = {0};
-    struct SHA256_HashContext ctx = {
-        {&init_SHA256, &update_SHA256, &finish_SHA256, 64, 32, tmp},
-        {{0}, 0, 0, {0}}};
     size_t sigsz, verifysz = 0;
     int neg1, neg2;
     uint8_t sig[64] = {0};
-    mg_uecc_sign_deterministic(tls->ec_key, hash, sizeof(hash), &ctx.uECC, sig,
-                               mg_uecc_secp256r1());
+    if (!mg_p256_sign(tls->ec_key, hash, sizeof(hash), sig)) {
+      mg_error(c, "P-256 sign");
+      return false;
+    }
 
     neg1 = !!(sig[0] & 0x80);
     neg2 = !!(sig[32] & 0x80);
@@ -18282,7 +18285,6 @@ static bool mg_tls_client_send_hello(struct mg_connection *c) {
   struct tls_data *tls = (struct tls_data *) c->tls;
   struct mg_iobuf *wio = &tls->send;
 
-  uint8_t x25519_pub[X25519_BYTES];
   uint8_t p256_pub[64];  // X || Y, sent as an uncompressed point 0x04 || X || Y
 
   // - "signature algorithms we actually support", see above
@@ -18296,11 +18298,11 @@ static bool mg_tls_client_send_hello(struct mg_connection *c) {
                                 0xfe, 0x00, 0x00, 0xfe};
 
   // clang-format off
-  uint8_t msg_client_hello[216] = {
+  uint8_t msg_client_hello[178] = {
       // TLS Client Hello header reported as TLS1.2 (5)
-      0x16, 0x03, 0x03, 0x00, 0xfe,
+      0x16, 0x03, 0x03, 0x00, 0xd8,
       // client hello, tls 1.2 (6)
-      0x01, 0x00, 0x00, 0x8c, 0x03, 0x03,
+      0x01, 0x00, 0x00, 0xd4, 0x03, 0x03,
       // random (32 bytes)
       PLACEHOLDER_32B,
       // session ID length + session ID (32 bytes)
@@ -18317,17 +18319,15 @@ static bool mg_tls_client_send_hello(struct mg_connection *c) {
       0x01, 0x00,
       // extensions + keyshare
       0x00, 0xfe,
-      // keyshare: x25519
-      0x00, 0x33, 0x00, 0x6b, 0x00, 0x69, 0x00, 0x1d, 0x00, 0x20,
-      PLACEHOLDER_32B,
       // keyshare: secp256r1, uncompressed point
+      0x00, 0x33, 0x00, 0x47, 0x00, 0x45,
       0x00, 0x17, 0x00, 0x41, 0x04, PLACEHOLDER_32B, PLACEHOLDER_32B,
-      // supported groups (x25519, secp256r1)
-      0x00, 0x0a, 0x00, 0x06, 0x00, 0x04, 0x00, 0x1d, 0x00, 0x17,
+      // supported groups (secp256r1)
+      0x00, 0x0a, 0x00, 0x04, 0x00, 0x02, 0x00, 0x17,
       // supported versions (tls1.3 == 0x304)
       0x00, 0x2b, 0x00, 0x03, 0x02, 0x03, 0x04,
       // session ticket (none)
-      0x00, 0x23, 0x00, 0x00, // 215 bytes till here
+      0x00, 0x23, 0x00, 0x00, // 177 bytes till here
 	};
   // clang-format on
   const char *hostname = tls->hostname;
@@ -18340,11 +18340,11 @@ static bool mg_tls_client_send_hello(struct mg_connection *c) {
 
   // patch ClientHello with correct hostname ext length (if any)
   MG_STORE_BE16(msg_client_hello + 3,
-                hostname_extsz + 254 - 9 - 34 + sig_alg_sz);
+                hostname_extsz + 216 - 9 - 34 + sig_alg_sz);
   MG_STORE_BE16(msg_client_hello + 7,
-                hostname_extsz + 250 - 9 - 34 + sig_alg_sz);
+                hostname_extsz + 212 - 9 - 34 + sig_alg_sz);
   MG_STORE_BE16(msg_client_hello + 82,
-                hostname_extsz + 175 - 9 - 34 + sig_alg_sz);
+                hostname_extsz + 137 - 9 - 34 + sig_alg_sz);
 
   if (hostnamesz > 0) {
     MG_STORE_BE16(server_name_ext + 2, hostnamesz + 5);
@@ -18352,21 +18352,18 @@ static bool mg_tls_client_send_hello(struct mg_connection *c) {
     MG_STORE_BE16(server_name_ext + 7, hostnamesz);
   }
 
-  // calculate keyshares
-  if (!mg_random(tls->x25519_cli, sizeof(tls->x25519_cli))) mg_error(c, "RNG");
-  mg_tls_x25519(x25519_pub, tls->x25519_cli, X25519_BASE_POINT, 1);
-  if (!mg_uecc_make_key(p256_pub, tls->p256_cli, mg_uecc_secp256r1())) {
+  // calculate keyshare
+  if (!mg_p256_make_key(p256_pub, tls->p256_cli)) {
     mg_error(c, "P-256 key");
     return false;  // Do not send uninitialised p256_pub
   }
 
-  // fill in the gaps: random + session ID + keyshares
+  // fill in the gaps: random + session ID + keyshare
   if (!mg_random(tls->session_id, sizeof(tls->session_id))) mg_error(c, "RNG");
   if (!mg_random(tls->random, sizeof(tls->random))) mg_error(c, "RNG");
   memmove(msg_client_hello + 11, tls->random, sizeof(tls->random));
   memmove(msg_client_hello + 44, tls->session_id, sizeof(tls->session_id));
-  memmove(msg_client_hello + 94, x25519_pub, sizeof(x25519_pub));
-  memmove(msg_client_hello + 131, p256_pub, sizeof(p256_pub));
+  memmove(msg_client_hello + 95, p256_pub, sizeof(p256_pub));
 
   // client hello message
   if (mg_iobuf_add(wio, wio->len, msg_client_hello, sizeof(msg_client_hello)) ==
@@ -18439,26 +18436,17 @@ static int mg_tls_client_recv_hello(struct mg_connection *c) {
     key_exchange_len = MG_LOAD_BE16(ext + j + 6);
     key_exchange = ext + j + 8;
     if (key_exchange_len > ext_len2 - 4) goto fail;
-    if (group == 0x001d) {  // x25519
-      if (key_exchange_len != 32 ||
-          mg_tls_x25519(tls->x25519_sec, tls->x25519_cli, key_exchange, 1) <
-              0) {
-        mg_error(c, "bad key");
-        return -1;
-      }
-    } else if (group == 0x0017) {  // secp256r1, uncompressed point 0x04 || X || Y
-      if (key_exchange_len != 65 || key_exchange[0] != 0x04 ||
-          !mg_uecc_valid_public_key(key_exchange + 1, mg_uecc_secp256r1()) ||
-          !mg_uecc_shared_secret(key_exchange + 1, tls->p256_cli,
-                                 tls->x25519_sec, mg_uecc_secp256r1())) {
-        mg_error(c, "bad key");
-        return -1;
-      }
-    } else {
+    if (group != 0x0017) {  // secp256r1, uncompressed point 0x04 || X || Y
       mg_error(c, "bad key exchange group");
       return -1;
     }
-    // mg_tls_hexdump("c ecdhe sec", tls->x25519_sec, 32);
+    if (key_exchange_len != 65 || key_exchange[0] != 0x04 ||
+        !mg_p256_shared_secret(key_exchange + 1, tls->p256_cli,
+                               tls->ecdhe_sec)) {  // Validates the point
+      mg_error(c, "bad key");
+      return -1;
+    }
+    // mg_tls_hexdump("c ecdhe sec", tls->ecdhe_sec, 32);
     mg_tls_drop_record(c);
     /* generate handshake keys */
     mg_tls_generate_handshake_keys(c);
@@ -18783,7 +18771,6 @@ static int mg_tls_verify_cert_signature(const struct mg_tls_cert *cert,
       MG_ERROR(("cert verification error"));
       return 0;
     }
-#if MG_UECC_SUPPORTS_secp256r1
     if (issuer->pubkey.len == 64) {
       const uint32_t N = 32;
       if (a.len > N) a.value += (a.len - N), a.len = N; // padding
@@ -18792,13 +18779,9 @@ static int mg_tls_verify_cert_signature(const struct mg_tls_cert *cert,
       memmove(sig + (N - a.len), a.value, a.len);
       memset(sig + N, 0, N - b.len);
       memmove(sig + N + (N - b.len), b.value, b.len);
-      return mg_uecc_verify((uint8_t *) issuer->pubkey.buf, cert->tbshash,
-                            (unsigned) cert->tbshashsz, sig,
-                            mg_uecc_secp256r1());
-    } else
-#endif
-#if MG_UECC_SUPPORTS_secp384r1
-    if (issuer->pubkey.len == 96) {
+      return mg_p256_verify((uint8_t *) issuer->pubkey.buf, cert->tbshash,
+                            cert->tbshashsz, sig);
+    } else if (issuer->pubkey.len == 96) {
       const uint32_t N = 48;
       if (a.len > N) a.value += (a.len - N), a.len = N;  // padding
       if (b.len > N) b.value += (b.len - N), b.len = N;
@@ -18806,12 +18789,9 @@ static int mg_tls_verify_cert_signature(const struct mg_tls_cert *cert,
       memmove(sig + (N - a.len), a.value, a.len);
       memset(sig + N, 0, N - b.len);
       memmove(sig + N + (N - b.len), b.value, b.len);
-      return mg_uecc_verify((uint8_t *) issuer->pubkey.buf, cert->tbshash,
-                            (unsigned) cert->tbshashsz, sig,
-                            mg_uecc_secp384r1());
-    } else
-#endif
-    {
+      return mg_p384_verify((uint8_t *) issuer->pubkey.buf, cert->tbshash,
+                            cert->tbshashsz, sig);
+    } else {
       MG_ERROR(("unsupported public key length: %d", issuer->pubkey.len));
       return 0;
     }
@@ -19109,8 +19089,7 @@ static int mg_tls_recv_cert_verify(struct mg_connection *c) {
         return -1;
       }
       MG_VERBOSE(("certificate verification successful (RSA)"));
-    } else if (sigalg == 0x0403 ||
-               (sigalg == 0x0503 && MG_UECC_SUPPORTS_secp384r1)) {
+    } else if (sigalg == 0x0403 || sigalg == 0x0503) {
       // ecdsa_secp256r1_sha256 or ecdsa_secp384r1_sha384. Extract certificate
       // signature and verify it using pubkey and sighash
       bool is384 = sigalg == 0x0503;
@@ -19143,15 +19122,12 @@ static int mg_tls_recv_cert_verify(struct mg_connection *c) {
       memmove(sig + (N - r.len), r.value, r.len);
       memmove(sig + N + (N - s.len), s.value, s.len);
 
-#if MG_UECC_SUPPORTS_secp384r1
       if (is384) {
-        ok = mg_uecc_verify(tls->pubkey, tls->sighash384,
-                            sizeof(tls->sighash384), sig, mg_uecc_secp384r1());
-      } else
-#endif
-      {
-        ok = mg_uecc_verify(tls->pubkey, tls->sighash, sizeof(tls->sighash),
-                            sig, mg_uecc_secp256r1());
+        ok = mg_p384_verify(tls->pubkey, tls->sighash384,
+                            sizeof(tls->sighash384), sig);
+      } else {
+        ok = mg_p256_verify(tls->pubkey, tls->sighash, sizeof(tls->sighash),
+                            sig);
       }
       if (ok != 1) {
         mg_error(c, "failed to verify EC certificate (certverify)");
@@ -19255,16 +19231,23 @@ static bool mg_tls_client_handshake(struct mg_connection *c) {
 
 static bool mg_tls_server_handshake(struct mg_connection *c) {
   struct tls_data *tls = (struct tls_data *) c->tls;
+  int r;
   switch (tls->state) {
     case MG_TLS_STATE_SERVER_START:
-      if (mg_tls_server_recv_hello(c) < 0) break;
+    case MG_TLS_STATE_SERVER_RETRY:
+      if ((r = mg_tls_server_recv_hello(c)) < 0) break;
+      if (r == 1) {  // No P-256 key share, ask for it
+        if (!mg_tls_server_send_hrr(c)) return false;
+        tls->state = MG_TLS_STATE_SERVER_RETRY;
+        break;
+      }
       if (!mg_tls_server_send_hello(c)) return false;
       mg_tls_generate_handshake_keys(c);
       if (!mg_tls_server_send_ext(c)) return false;
       if (tls->is_twoway && !mg_tls_server_send_cert_request(c)) return false;
-      if (!mg_tls_send_cert(c, false) || !mg_tls_send_cert_verify(c, false) ||
-          !mg_tls_server_send_finish(c))
-        return false;
+      if (!mg_tls_send_cert(c, false)) return false;
+      if (!mg_tls_send_cert_verify(c, false)) return false;
+      if (!mg_tls_server_send_finish(c)) return false;
       if (tls->is_twoway) {
         // generate application keys at this point, keep using handshake keys
         struct tls_enc hs_keys = tls->enc;
@@ -19305,13 +19288,24 @@ void mg_tls_handshake(struct mg_connection *c) {
   struct tls_data *tls = (struct tls_data *) c->tls;
   long n;
   bool res;
+  uint64_t t;
   if (c->is_closing) return;  // we don't clear rx buf, so ignore what's left
   if (tls->is_sntp_pending) return;
+  t = mg_millis();
   if (c->is_client) {
     // will clear is_hs when sending last chunk
     res = mg_tls_client_handshake(c);
   } else {
     res = mg_tls_server_handshake(c);
+  }
+  tls->hs_proc += mg_millis() - t;
+  if (res && !c->is_tls_hs) {
+    // CPU: key exchange, signing, certificate verification. Wait: the rest of
+    // the total, waiting for the peer and the network
+    unsigned long total = (unsigned long) (mg_millis() - tls->hs_start);
+    unsigned long cpu = (unsigned long) tls->hs_proc;
+    MG_DEBUG(("%lu TLS handshake done in %lu ms: %lu ms CPU, %lu ms peer wait",
+              c->id, total, cpu, total > cpu ? total - cpu : 0));
   }
   if (!res) {
     mg_error(c, "TLS OOM");
@@ -19731,7 +19725,7 @@ static int mg_parse_pem_certs(const struct mg_str pem, struct mg_str **ders) {
   return count;
 }
 
-size_t mg_uecc_parse_private_key(struct mg_str key, uint8_t *buf, size_t len) {
+size_t mg_p256_parse_private_key(struct mg_str key, uint8_t *buf, size_t len) {
   struct mg_str der = mg_str_n(NULL, 0);
   size_t n = 0;
   if (buf == NULL || len < 32) return 0;
@@ -19771,6 +19765,7 @@ void mg_tls_init(struct mg_connection *c, const struct mg_tls_opts *opts) {
     mg_error(c, "tls oom");
     return;
   }
+  tls->hs_start = mg_millis();
 
   tls->state =
       c->is_client ? MG_TLS_STATE_CLIENT_START : MG_TLS_STATE_SERVER_START;
@@ -19956,11 +19951,15 @@ long mg_tls_send(struct mg_connection *c, const void *buf, size_t len) {
   long n = MG_IO_WAIT;
   bool was_throttled = c->is_tls_throttled;  // see #3074
   if (!was_throttled) {                      // encrypt new data
+    size_t i, rs = MG_TLS_RECORD_SIZE > 16384 ? 16384 : MG_TLS_RECORD_SIZE;
     if (len > MG_IO_SIZE) len = MG_IO_SIZE;
-    if (len > 16384) len = 16384;
-    if (!mg_tls_encrypt(c, (const uint8_t *) buf, len, MG_TLS_APP_DATA))
-      return 0;  // returning 0 means an OOM condition (iobuf couldn't resize),
-                 // yet this is so far recoverable, let the caller decide
+    for (i = 0; i < len; i += rs) {  // Split into records, send them at once
+      size_t m = len - i < rs ? len - i : rs;
+      if (!mg_tls_encrypt(c, (const uint8_t *) buf + i, m, MG_TLS_APP_DATA))
+        return 0;  // returning 0 means an OOM condition (iobuf couldn't
+                   // resize), yet this is so far recoverable, let the caller
+                   // decide
+    }
   }  // else, resend outstanding encrypted data in tls->send
   while (tls->send.len > 0 &&
          (n = mg_io_send(c, tls->send.buf, tls->send.len)) > 0) {
@@ -22088,6 +22087,5666 @@ void mg_tls_ctx_free(struct mg_mgr *mgr) {
 #endif
 
 #ifdef MG_ENABLE_LINES
+#line 1 "src/tls_p256.c"
+#endif
+// P-256 API, mg_p256_*(), used by built-in TLS, JWT and OTA. Implemented by
+// BearSSL code below (MG_P256=MG_P256_BEAR) or tls_p256_cortex.c (LENNGREN)
+// BearSSL code: https://bearssl.org commit 7bea48e. Shared bignum and ECDSA
+// code is always compiled, it is also used by P-384, see tls_p384.c
+//
+// Copyright (c) 2016 Thomas Pornin <pornin@bolet.org>
+// Copyright (c) 2017 Thomas Pornin <pornin@bolet.org>
+//
+// Permission is hereby granted, free of charge, to any person obtaining
+// a copy of this software and associated documentation files (the
+// "Software"), to deal in the Software without restriction, including
+// without limitation the rights to use, copy, modify, merge, publish,
+// distribute, sublicense, and/or sell copies of the Software, and to
+// permit persons to whom the Software is furnished to do so, subject to
+// the following conditions:
+//
+// The above copyright notice and this permission notice shall be
+// included in all copies or substantial portions of the Software.
+//
+// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,
+// EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF
+// MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND
+// NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS
+// BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN
+// ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN
+// CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+// SOFTWARE.
+//
+// Mongoose changes: br_ / BR_ names are prefixed with mg_ / MG_, as are the
+// constant-time helpers from inner.h (NOT, MUX, EQ, ...). Structs are not
+// typedef-ed. ECDSA signing takes the caller's k instead of HMAC-DRBG, k is
+// computed by mg_p256_sign() (RFC 6979). ECDSA functions take the curve id and
+// public key directly
+
+
+
+
+#if MG_TLS == MG_TLS_BUILTIN || defined(MG_OTA_PUBLIC_KEY)
+
+// From BearSSL src/codec/ccopy.c
+void
+mg_br_ccopy(uint32_t ctl, void *dst, const void *src, size_t len)
+{
+	unsigned char *d;
+	const unsigned char *s;
+
+	d = (unsigned char *)dst;
+	s = (const unsigned char *)src;
+	while (len -- > 0) {
+		uint32_t x, y;
+
+		x = *s ++;
+		y = *d;
+		*d = (unsigned char)MG_BR_MUX(ctl, x, y);
+		d ++;
+	}
+}
+
+// From BearSSL src/int/i32_div32.c
+uint32_t
+mg_br_divrem(uint32_t hi, uint32_t lo, uint32_t d, uint32_t *r)
+{
+	/* TODO: optimize this */
+	uint32_t q;
+	uint32_t ch, cf;
+	int k;
+
+	q = 0;
+	ch = MG_BR_EQ(hi, d);
+	hi = MG_BR_MUX(ch, 0, hi);
+	for (k = 31; k > 0; k --) {
+		int j;
+		uint32_t w, ctl, hi2, lo2;
+
+		j = 32 - k;
+		w = (hi << j) | (lo >> k);
+		ctl = MG_BR_GE(w, d) | (hi >> k);
+		hi2 = (w - d) >> j;
+		lo2 = lo - (d << k);
+		hi = MG_BR_MUX(ctl, hi2, hi);
+		lo = MG_BR_MUX(ctl, lo2, lo);
+		q |= ctl << k;
+	}
+	cf = MG_BR_GE(lo, d) | hi;
+	q |= cf;
+	*r = MG_BR_MUX(cf, lo - d, lo);
+	return q;
+}
+
+// From BearSSL src/int/i31_add.c
+uint32_t
+mg_br_i31_add(uint32_t *a, const uint32_t *b, uint32_t ctl)
+{
+	uint32_t cc;
+	size_t u, m;
+
+	cc = 0;
+	m = (a[0] + 63) >> 5;
+	for (u = 1; u < m; u ++) {
+		uint32_t aw, bw, naw;
+
+		aw = a[u];
+		bw = b[u];
+		naw = aw + bw + cc;
+		cc = naw >> 31;
+		a[u] = MG_BR_MUX(ctl, naw & (uint32_t)0x7FFFFFFF, aw);
+	}
+	return cc;
+}
+
+// From BearSSL src/int/i31_bitlen.c
+uint32_t
+mg_br_i31_bit_length(uint32_t *x, size_t xlen)
+{
+	uint32_t tw, twk;
+
+	tw = 0;
+	twk = 0;
+	while (xlen -- > 0) {
+		uint32_t w, c;
+
+		c = MG_BR_EQ(tw, 0);
+		w = x[xlen];
+		tw = MG_BR_MUX(c, w, tw);
+		twk = MG_BR_MUX(c, (uint32_t)xlen, twk);
+	}
+	return (twk << 5) + MG_BR_BIT_LENGTH(tw);
+}
+
+// From BearSSL src/int/i31_decmod.c
+uint32_t
+mg_br_i31_decode_mod(uint32_t *x, const void *src, size_t len, const uint32_t *m)
+{
+	/*
+	 * Two-pass algorithm: in the first pass, we determine whether the
+	 * value fits; in the second pass, we do the actual write.
+	 *
+	 * During the first pass, 'r' contains the comparison result so
+	 * far:
+	 *  0x00000000   value is equal to the modulus
+	 *  0x00000001   value is greater than the modulus
+	 *  0xFFFFFFFF   value is lower than the modulus
+	 *
+	 * Since we iterate starting with the least significant bytes (at
+	 * the end of src[]), each new comparison overrides the previous
+	 * except when the comparison yields 0 (equal).
+	 *
+	 * During the second pass, 'r' is either 0xFFFFFFFF (value fits)
+	 * or 0x00000000 (value does not fit).
+	 *
+	 * We must iterate over all bytes of the source, _and_ possibly
+	 * some extra virtual bytes (with value 0) so as to cover the
+	 * complete modulus as well. We also add 4 such extra bytes beyond
+	 * the modulus length because it then guarantees that no accumulated
+	 * partial word remains to be processed.
+	 */
+	const unsigned char *buf;
+	size_t mlen, tlen;
+	int pass;
+	uint32_t r;
+
+	buf = (const unsigned char *)src;
+	mlen = (m[0] + 31) >> 5;
+	tlen = (mlen << 2);
+	if (tlen < len) {
+		tlen = len;
+	}
+	tlen += 4;
+	r = 0;
+	for (pass = 0; pass < 2; pass ++) {
+		size_t u, v;
+		uint32_t acc;
+		int acc_len;
+
+		v = 1;
+		acc = 0;
+		acc_len = 0;
+		for (u = 0; u < tlen; u ++) {
+			uint32_t b;
+
+			if (u < len) {
+				b = buf[len - 1 - u];
+			} else {
+				b = 0;
+			}
+			acc |= (b << acc_len);
+			acc_len += 8;
+			if (acc_len >= 31) {
+				uint32_t xw;
+
+				xw = acc & (uint32_t)0x7FFFFFFF;
+				acc_len -= 31;
+				acc = b >> (8 - acc_len);
+				if (v <= mlen) {
+					if (pass) {
+						x[v] = r & xw;
+					} else {
+						uint32_t cc;
+
+						cc = (uint32_t)MG_BR_CMP(xw, m[v]);
+						r = MG_BR_MUX(MG_BR_EQ(cc, 0), r, cc);
+					}
+				} else {
+					if (!pass) {
+						r = MG_BR_MUX(MG_BR_EQ(xw, 0), r, 1);
+					}
+				}
+				v ++;
+			}
+		}
+
+		/*
+		 * When we reach this point at the end of the first pass:
+		 * r is either 0, 1 or -1; we want to set r to 0 if it
+		 * is equal to 0 or 1, and leave it to -1 otherwise.
+		 *
+		 * When we reach this point at the end of the second pass:
+		 * r is either 0 or -1; we want to leave that value
+		 * untouched. This is a subcase of the previous.
+		 */
+		r >>= 1;
+		r |= (r << 1);
+	}
+
+	x[0] = m[0];
+	return r & (uint32_t)1;
+}
+
+// From BearSSL src/int/i31_decode.c
+void
+mg_br_i31_decode(uint32_t *x, const void *src, size_t len)
+{
+	const unsigned char *buf;
+	size_t u, v;
+	uint32_t acc;
+	int acc_len;
+
+	buf = (const unsigned char *)src;
+	u = len;
+	v = 1;
+	acc = 0;
+	acc_len = 0;
+	while (u -- > 0) {
+		uint32_t b;
+
+		b = buf[u];
+		acc |= (b << acc_len);
+		acc_len += 8;
+		if (acc_len >= 31) {
+			x[v ++] = acc & (uint32_t)0x7FFFFFFF;
+			acc_len -= 31;
+			acc = b >> (8 - acc_len);
+		}
+	}
+	if (acc_len != 0) {
+		x[v ++] = acc;
+	}
+	x[0] = mg_br_i31_bit_length(x + 1, v - 1);
+}
+
+// From BearSSL src/int/i31_encode.c
+void
+mg_br_i31_encode(void *dst, size_t len, const uint32_t *x)
+{
+	unsigned char *buf;
+	size_t k, xlen;
+	uint32_t acc;
+	int acc_len;
+
+	xlen = (x[0] + 31) >> 5;
+	if (xlen == 0) {
+		memset(dst, 0, len);
+		return;
+	}
+	buf = (unsigned char *)dst + len;
+	k = 1;
+	acc = 0;
+	acc_len = 0;
+	while (len != 0) {
+		uint32_t w;
+
+		w = (k <= xlen) ? x[k] : 0;
+		k ++;
+		if (acc_len == 0) {
+			acc = w;
+			acc_len = 31;
+		} else {
+			uint32_t z;
+
+			z = acc | (w << acc_len);
+			acc_len --;
+			acc = w >> (31 - acc_len);
+			if (len >= 4) {
+				buf -= 4;
+				len -= 4;
+				mg_br_enc32be(buf, z);
+			} else {
+				switch (len) {
+				case 3:
+					buf[-3] = (unsigned char)(z >> 16);
+					/* fall through */
+				case 2:
+					buf[-2] = (unsigned char)(z >> 8);
+					/* fall through */
+				case 1:
+					buf[-1] = (unsigned char)z;
+					break;
+				}
+				return;
+			}
+		}
+	}
+}
+
+// From BearSSL src/int/i31_fmont.c
+void
+mg_br_i31_from_monty(uint32_t *x, const uint32_t *m, uint32_t m0i)
+{
+	size_t len, u, v;
+
+	len = (m[0] + 31) >> 5;
+	for (u = 0; u < len; u ++) {
+		uint32_t f;
+		uint64_t cc;
+
+		f = MG_BR_MUL31_lo(x[1], m0i);
+		cc = 0;
+		for (v = 0; v < len; v ++) {
+			uint64_t z;
+
+			z = (uint64_t)x[v + 1] + MG_BR_MUL31(f, m[v + 1]) + cc;
+			cc = z >> 31;
+			if (v != 0) {
+				x[v] = (uint32_t)z & 0x7FFFFFFF;
+			}
+		}
+		x[len] = (uint32_t)cc;
+	}
+
+	/*
+	 * We may have to do an extra subtraction, but only if the
+	 * value in x[] is indeed greater than or equal to that of m[],
+	 * which is why we must do two calls (first call computes the
+	 * carry, second call performs the subtraction only if the carry
+	 * is 0).
+	 */
+	mg_br_i31_sub(x, m, MG_BR_NOT(mg_br_i31_sub(x, m, 0)));
+}
+
+// From BearSSL src/int/i31_iszero.c
+uint32_t
+mg_br_i31_iszero(const uint32_t *x)
+{
+	uint32_t z;
+	size_t u;
+
+	z = 0;
+	for (u = (x[0] + 31) >> 5; u > 0; u --) {
+		z |= x[u];
+	}
+	return ~(z | -z) >> 31;
+}
+
+// From BearSSL src/int/i31_modpow.c
+void
+mg_br_i31_modpow(uint32_t *x,
+	const unsigned char *e, size_t elen,
+	const uint32_t *m, uint32_t m0i, uint32_t *t1, uint32_t *t2)
+{
+	size_t mlen;
+	uint32_t k;
+
+	/*
+	 * 'mlen' is the length of m[] expressed in bytes (including
+	 * the "bit length" first field).
+	 */
+	mlen = ((m[0] + 63) >> 5) * sizeof m[0];
+
+	/*
+	 * Throughout the algorithm:
+	 * -- t1[] is in Montgomery representation; it contains x, x^2,
+	 * x^4, x^8...
+	 * -- The result is accumulated, in normal representation, in
+	 * the x[] array.
+	 * -- t2[] is used as destination buffer for each multiplication.
+	 *
+	 * Note that there is no need to call mg_br_i32_from_monty().
+	 */
+	memcpy(t1, x, mlen);
+	mg_br_i31_to_monty(t1, m);
+	mg_br_i31_zero(x, m[0]);
+	x[1] = 1;
+	for (k = 0; k < ((uint32_t)elen << 3); k ++) {
+		uint32_t ctl;
+
+		ctl = (e[elen - 1 - (k >> 3)] >> (k & 7)) & 1;
+		mg_br_i31_montymul(t2, x, t1, m, m0i);
+		MG_BR_CCOPY(ctl, x, t2, mlen);
+		mg_br_i31_montymul(t2, t1, t1, m, m0i);
+		memcpy(t1, t2, mlen);
+	}
+}
+
+// From BearSSL src/int/i31_montmul.c
+void
+mg_br_i31_montymul(uint32_t *d, const uint32_t *x, const uint32_t *y,
+	const uint32_t *m, uint32_t m0i)
+{
+	/*
+	 * Each outer loop iteration computes:
+	 *   d <- (d + xu*y + f*m) / 2^31
+	 * We have xu <= 2^31-1 and f <= 2^31-1.
+	 * Thus, if d <= 2*m-1 on input, then:
+	 *   2*m-1 + 2*(2^31-1)*m <= (2^32)*m-1
+	 * and the new d value is less than 2*m.
+	 *
+	 * We represent d over 31-bit words, with an extra word 'dh'
+	 * which can thus be only 0 or 1.
+	 */
+	size_t len, len4, u, v;
+	uint32_t dh;
+
+	len = (m[0] + 31) >> 5;
+	len4 = len & ~(size_t)3;
+	mg_br_i31_zero(d, m[0]);
+	dh = 0;
+	for (u = 0; u < len; u ++) {
+		/*
+		 * The carry for each operation fits on 32 bits:
+		 *   d[v+1] <= 2^31-1
+		 *   xu*y[v+1] <= (2^31-1)*(2^31-1)
+		 *   f*m[v+1] <= (2^31-1)*(2^31-1)
+		 *   r <= 2^32-1
+		 *   (2^31-1) + 2*(2^31-1)*(2^31-1) + (2^32-1) = 2^63 - 2^31
+		 * After division by 2^31, the new r is then at most 2^32-1
+		 *
+		 * Using a 32-bit carry has performance benefits on 32-bit
+		 * systems; however, on 64-bit architectures, we prefer to
+		 * keep the carry (r) in a 64-bit register, thus avoiding some
+		 * "clear high bits" operations.
+		 */
+		uint32_t f, xu;
+		uint32_t r;  /* Mongoose: 32-bit carry only */
+
+		xu = x[u + 1];
+		f = MG_BR_MUL31_lo((d[1] + MG_BR_MUL31_lo(x[u + 1], y[1])), m0i);
+
+		r = 0;
+		for (v = 0; v < len4; v += 4) {
+			uint64_t z;
+
+			z = (uint64_t)d[v + 1] + MG_BR_MUL31(xu, y[v + 1])
+				+ MG_BR_MUL31(f, m[v + 1]) + r;
+			r = (uint32_t)(z >> 31);
+			d[v + 0] = (uint32_t)z & 0x7FFFFFFF;
+			z = (uint64_t)d[v + 2] + MG_BR_MUL31(xu, y[v + 2])
+				+ MG_BR_MUL31(f, m[v + 2]) + r;
+			r = (uint32_t)(z >> 31);
+			d[v + 1] = (uint32_t)z & 0x7FFFFFFF;
+			z = (uint64_t)d[v + 3] + MG_BR_MUL31(xu, y[v + 3])
+				+ MG_BR_MUL31(f, m[v + 3]) + r;
+			r = (uint32_t)(z >> 31);
+			d[v + 2] = (uint32_t)z & 0x7FFFFFFF;
+			z = (uint64_t)d[v + 4] + MG_BR_MUL31(xu, y[v + 4])
+				+ MG_BR_MUL31(f, m[v + 4]) + r;
+			r = (uint32_t)(z >> 31);
+			d[v + 3] = (uint32_t)z & 0x7FFFFFFF;
+		}
+		for (; v < len; v ++) {
+			uint64_t z;
+
+			z = (uint64_t)d[v + 1] + MG_BR_MUL31(xu, y[v + 1])
+				+ MG_BR_MUL31(f, m[v + 1]) + r;
+			r = (uint32_t)(z >> 31);
+			d[v] = (uint32_t)z & 0x7FFFFFFF;
+		}
+
+		/*
+		 * Since the new dh can only be 0 or 1, the addition of
+		 * the old dh with the carry MUST fit on 32 bits, and
+		 * thus can be done into dh itself.
+		 */
+		dh += r;
+		d[len] = dh & 0x7FFFFFFF;
+		dh >>= 31;
+	}
+
+	/*
+	 * We must write back the bit length because it was overwritten in
+	 * the loop (not overwriting it would require a test in the loop,
+	 * which would yield bigger and slower code).
+	 */
+	d[0] = m[0];
+
+	/*
+	 * d[] may still be greater than m[] at that point; notably, the
+	 * 'dh' word may be non-zero.
+	 */
+	mg_br_i31_sub(d, m, MG_BR_NEQ(dh, 0) | MG_BR_NOT(mg_br_i31_sub(d, m, 0)));
+}
+
+// From BearSSL src/int/i31_muladd.c
+void
+mg_br_i31_muladd_small(uint32_t *x, uint32_t z, const uint32_t *m)
+{
+	uint32_t m_bitlen;
+	unsigned mblr;
+	size_t u, mlen;
+	uint32_t a0, a1, b0, hi, g, q, tb;
+	uint32_t under, over;
+	uint32_t cc;
+
+	/*
+	 * We can test on the modulus bit length since we accept to
+	 * leak that length.
+	 */
+	m_bitlen = m[0];
+	if (m_bitlen == 0) {
+		return;
+	}
+	if (m_bitlen <= 31) {
+		uint32_t lo;
+
+		hi = x[1] >> 1;
+		lo = (x[1] << 31) | z;
+		x[1] = mg_br_rem(hi, lo, m[1]);
+		return;
+	}
+	mlen = (m_bitlen + 31) >> 5;
+	mblr = (unsigned)m_bitlen & 31;
+
+	/*
+	 * Principle: we estimate the quotient (x*2^31+z)/m by
+	 * doing a 64/32 division with the high words.
+	 *
+	 * Let:
+	 *   w = 2^31
+	 *   a = (w*a0 + a1) * w^N + a2
+	 *   b = b0 * w^N + b2
+	 * such that:
+	 *   0 <= a0 < w
+	 *   0 <= a1 < w
+	 *   0 <= a2 < w^N
+	 *   w/2 <= b0 < w
+	 *   0 <= b2 < w^N
+	 *   a < w*b
+	 * I.e. the two top words of a are a0:a1, the top word of b is
+	 * b0, we ensured that b0 is "full" (high bit set), and a is
+	 * such that the quotient q = a/b fits on one word (0 <= q < w).
+	 *
+	 * If a = b*q + r (with 0 <= r < q), we can estimate q by
+	 * doing an Euclidean division on the top words:
+	 *   a0*w+a1 = b0*u + v  (with 0 <= v < b0)
+	 * Then the following holds:
+	 *   0 <= u <= w
+	 *   u-2 <= q <= u
+	 */
+	hi = x[mlen];
+	if (mblr == 0) {
+		a0 = x[mlen];
+		memmove(x + 2, x + 1, (mlen - 1) * sizeof *x);
+		x[1] = z;
+		a1 = x[mlen];
+		b0 = m[mlen];
+	} else {
+		a0 = ((x[mlen] << (31 - mblr)) | (x[mlen - 1] >> mblr))
+			& 0x7FFFFFFF;
+		memmove(x + 2, x + 1, (mlen - 1) * sizeof *x);
+		x[1] = z;
+		a1 = ((x[mlen] << (31 - mblr)) | (x[mlen - 1] >> mblr))
+			& 0x7FFFFFFF;
+		b0 = ((m[mlen] << (31 - mblr)) | (m[mlen - 1] >> mblr))
+			& 0x7FFFFFFF;
+	}
+
+	/*
+	 * We estimate a divisor q. If the quotient returned by mg_br_div()
+	 * is g:
+	 * -- If a0 == b0 then g == 0; we want q = 0x7FFFFFFF.
+	 * -- Otherwise:
+	 *    -- if g == 0 then we set q = 0;
+	 *    -- otherwise, we set q = g - 1.
+	 * The properties described above then ensure that the true
+	 * quotient is q-1, q or q+1.
+	 *
+	 * Take care that a0, a1 and b0 are 31-bit words, not 32-bit. We
+	 * must adjust the parameters to mg_br_div() accordingly.
+	 */
+	g = mg_br_div(a0 >> 1, a1 | (a0 << 31), b0);
+	q = MG_BR_MUX(MG_BR_EQ(a0, b0), 0x7FFFFFFF, MG_BR_MUX(MG_BR_EQ(g, 0), 0, g - 1));
+
+	/*
+	 * We subtract q*m from x (with the extra high word of value 'hi').
+	 * Since q may be off by 1 (in either direction), we may have to
+	 * add or subtract m afterwards.
+	 *
+	 * The 'tb' flag will be true (1) at the end of the loop if the
+	 * result is greater than or equal to the modulus (not counting
+	 * 'hi' or the carry).
+	 */
+	cc = 0;
+	tb = 1;
+	for (u = 1; u <= mlen; u ++) {
+		uint32_t mw, zw, xw, nxw;
+		uint64_t zl;
+
+		mw = m[u];
+		zl = MG_BR_MUL31(mw, q) + cc;
+		cc = (uint32_t)(zl >> 31);
+		zw = (uint32_t)zl & (uint32_t)0x7FFFFFFF;
+		xw = x[u];
+		nxw = xw - zw;
+		cc += nxw >> 31;
+		nxw &= 0x7FFFFFFF;
+		x[u] = nxw;
+		tb = MG_BR_MUX(MG_BR_EQ(nxw, mw), tb, MG_BR_GT(nxw, mw));
+	}
+
+	/*
+	 * If we underestimated q, then either cc < hi (one extra bit
+	 * beyond the top array word), or cc == hi and tb is true (no
+	 * extra bit, but the result is not lower than the modulus). In
+	 * these cases we must subtract m once.
+	 *
+	 * Otherwise, we may have overestimated, which will show as
+	 * cc > hi (thus a negative result). Correction is adding m once.
+	 */
+	over = MG_BR_GT(cc, hi);
+	under = ~over & (tb | MG_BR_LT(cc, hi));
+	mg_br_i31_add(x, m, over);
+	mg_br_i31_sub(x, m, under);
+}
+
+// From BearSSL src/int/i31_ninv31.c
+uint32_t
+mg_br_i31_ninv31(uint32_t x)
+{
+	uint32_t y;
+
+	y = 2 - x;
+	y *= 2 - y * x;
+	y *= 2 - y * x;
+	y *= 2 - y * x;
+	y *= 2 - y * x;
+	return MG_BR_MUX(x & 1, -y, 0) & 0x7FFFFFFF;
+}
+
+// From BearSSL src/int/i31_rshift.c
+void
+mg_br_i31_rshift(uint32_t *x, int count)
+{
+	size_t u, len;
+	uint32_t r;
+
+	len = (x[0] + 31) >> 5;
+	if (len == 0) {
+		return;
+	}
+	r = x[1] >> count;
+	for (u = 2; u <= len; u ++) {
+		uint32_t w;
+
+		w = x[u];
+		x[u - 1] = ((w << (31 - count)) | r) & 0x7FFFFFFF;
+		r = w >> count;
+	}
+	x[len] = r;
+}
+
+// From BearSSL src/int/i31_sub.c
+uint32_t
+mg_br_i31_sub(uint32_t *a, const uint32_t *b, uint32_t ctl)
+{
+	uint32_t cc;
+	size_t u, m;
+
+	cc = 0;
+	m = (a[0] + 63) >> 5;
+	for (u = 1; u < m; u ++) {
+		uint32_t aw, bw, naw;
+
+		aw = a[u];
+		bw = b[u];
+		naw = aw - bw - cc;
+		cc = naw >> 31;
+		a[u] = MG_BR_MUX(ctl, naw & 0x7FFFFFFF, aw);
+	}
+	return cc;
+}
+
+// From BearSSL src/int/i31_tmont.c
+void
+mg_br_i31_to_monty(uint32_t *x, const uint32_t *m)
+{
+	uint32_t k;
+
+	for (k = (m[0] + 31) >> 5; k > 0; k --) {
+		mg_br_i31_muladd_small(x, 0, m);
+	}
+}
+
+// From BearSSL src/ec/ecdsa_i31_bits.c
+void
+mg_br_ecdsa_i31_bits2int(uint32_t *x,
+	const void *src, size_t len, uint32_t ebitlen)
+{
+	uint32_t bitlen, hbitlen;
+	int sc;
+
+	bitlen = ebitlen - (ebitlen >> 5);
+	hbitlen = (uint32_t)len << 3;
+	if (hbitlen > bitlen) {
+		len = (bitlen + 7) >> 3;
+		sc = (int)((hbitlen - bitlen) & 7);
+	} else {
+		sc = 0;
+	}
+	mg_br_i31_zero(x, ebitlen);
+	mg_br_i31_decode(x, src, len);
+	mg_br_i31_rshift(x, sc);
+	x[0] = ebitlen;
+}
+
+// From BearSSL src/ec/ecdsa_i31_vrfy_raw.c
+#define I31_LEN     ((MG_BR_MAX_EC_SIZE + 61) / 31)
+#define POINT_LEN   (1 + (((MG_BR_MAX_EC_SIZE + 7) >> 3) << 1))
+
+uint32_t
+mg_br_ecdsa_i31_vrfy_raw(const struct mg_br_ec_impl *impl, int curve,
+	const void *hash, size_t hash_len,
+	const unsigned char *q, size_t qlen,
+	const void *sig, size_t sig_len)
+{
+	/*
+	 * IMPORTANT: this code is fit only for curves with a prime
+	 * order. This is needed so that modular reduction of the X
+	 * coordinate of a point can be done with a simple subtraction.
+	 */
+	const unsigned char *order;
+	uint32_t n[I31_LEN], r[I31_LEN], s[I31_LEN], t1[I31_LEN], t2[I31_LEN];
+	unsigned char tx[(MG_BR_MAX_EC_SIZE + 7) >> 3];
+	unsigned char ty[(MG_BR_MAX_EC_SIZE + 7) >> 3];
+	unsigned char eU[POINT_LEN];
+	size_t nlen, rlen, ulen;
+	uint32_t n0i, res;
+
+	/*
+	 * If the curve is not supported, then report an error.
+	 */
+	if (((impl->supported_curves >> curve) & 1) == 0) {
+		return 0;
+	}
+
+	/*
+	 * Get the curve parameters (generator and order).
+	 */
+	order = impl->order(curve, &nlen);
+	impl->generator(curve, &ulen);
+
+	/*
+	 * Signature length must be even.
+	 */
+	if (sig_len & 1) {
+		return 0;
+	}
+	rlen = sig_len >> 1;
+
+	/*
+	 * Public key point must have the proper size for this curve.
+	 */
+	if (qlen != ulen) {
+		return 0;
+	}
+
+	/*
+	 * Get modulus; then decode the r and s values. They must be
+	 * lower than the modulus, and s must not be null.
+	 */
+	mg_br_i31_decode(n, order, nlen);
+	n0i = mg_br_i31_ninv31(n[1]);
+	if (!mg_br_i31_decode_mod(r, sig, rlen, n)) {
+		return 0;
+	}
+	if (!mg_br_i31_decode_mod(s, (const unsigned char *)sig + rlen, rlen, n)) {
+		return 0;
+	}
+	if (mg_br_i31_iszero(s)) {
+		return 0;
+	}
+
+	/*
+	 * Invert s. We do that with a modular exponentiation; we use
+	 * the fact that for all the curves we support, the least
+	 * significant byte is not 0 or 1, so we can subtract 2 without
+	 * any carry to process.
+	 * We also want 1/s in Montgomery representation, which can be
+	 * done by converting _from_ Montgomery representation before
+	 * the inversion (because (1/s)*R = 1/(s/R)).
+	 */
+	mg_br_i31_from_monty(s, n, n0i);
+	memcpy(tx, order, nlen);
+	tx[nlen - 1] -= 2;
+	mg_br_i31_modpow(s, tx, nlen, n, n0i, t1, t2);
+
+	/*
+	 * Truncate the hash to the modulus length (in bits) and reduce
+	 * it modulo the curve order. The modular reduction can be done
+	 * with a subtraction since the truncation already reduced the
+	 * value to the modulus bit length.
+	 */
+	mg_br_ecdsa_i31_bits2int(t1, hash, hash_len, n[0]);
+	mg_br_i31_sub(t1, n, mg_br_i31_sub(t1, n, 0) ^ 1);
+
+	/*
+	 * Multiply the (truncated, reduced) hash value with 1/s, result in
+	 * t2, encoded in ty.
+	 */
+	mg_br_i31_montymul(t2, t1, s, n, n0i);
+	mg_br_i31_encode(ty, nlen, t2);
+
+	/*
+	 * Multiply r with 1/s, result in t1, encoded in tx.
+	 */
+	mg_br_i31_montymul(t1, r, s, n, n0i);
+	mg_br_i31_encode(tx, nlen, t1);
+
+	/*
+	 * Compute the point x*Q + y*G.
+	 */
+	memcpy(eU, q, ulen);
+	res = impl->muladd(eU, NULL, ulen,
+		tx, nlen, ty, nlen, curve);
+
+	/*
+	 * Get the X coordinate, reduce modulo the curve order, and
+	 * compare with the 'r' value.
+	 *
+	 * The modular reduction can be done with subtractions because
+	 * we work with curves of prime order, so the curve order is
+	 * close to the field order (Hasse's theorem).
+	 */
+	mg_br_i31_zero(t1, n[0]);
+	mg_br_i31_decode(t1, &eU[1], ulen >> 1);
+	t1[0] = n[0];
+	mg_br_i31_sub(t1, n, mg_br_i31_sub(t1, n, 0) ^ 1);
+	res &= ~mg_br_i31_sub(t1, r, 1);
+	res &= mg_br_i31_iszero(t1);
+	return res;
+}
+
+// From BearSSL src/ec/ecdsa_i31_sign_raw.c, k is given by the caller
+#define ORDER_LEN   ((MG_BR_MAX_EC_SIZE + 7) >> 3)
+
+size_t
+mg_br_ecdsa_i31_sign_raw(const struct mg_br_ec_impl *impl, int curve,
+	const void *hash_value, size_t hash_len,
+	const unsigned char *xb, size_t xlen,
+	const unsigned char *kb, void *sig)
+{
+	/*
+	 * IMPORTANT: this code is fit only for curves with a prime
+	 * order. This is needed so that modular reduction of the X
+	 * coordinate of a point can be done with a simple subtraction.
+	 * We also rely on the last byte of the curve order to be distinct
+	 * from 0 and 1.
+	 */
+	const unsigned char *order;
+	uint32_t n[I31_LEN], r[I31_LEN], s[I31_LEN], x[I31_LEN];
+	uint32_t m[I31_LEN], k[I31_LEN], t1[I31_LEN], t2[I31_LEN];
+	unsigned char tt[ORDER_LEN << 1];
+	unsigned char eU[POINT_LEN];
+	size_t nlen, ulen;
+	uint32_t n0i, ctl;
+
+	/*
+	 * If the curve is not supported, then exit with an error.
+	 */
+	if (((impl->supported_curves >> curve) & 1) == 0) {
+		return 0;
+	}
+
+	/*
+	 * Get modulus.
+	 */
+	order = impl->order(curve, &nlen);
+	mg_br_i31_decode(n, order, nlen);
+	n0i = mg_br_i31_ninv31(n[1]);
+
+	/*
+	 * Get private key as an i31 integer. This also checks that the
+	 * private key is well-defined (not zero, and less than the
+	 * curve order).
+	 */
+	if (!mg_br_i31_decode_mod(x, xb, xlen, n)) {
+		return 0;
+	}
+	if (mg_br_i31_iszero(x)) {
+		return 0;
+	}
+
+	/*
+	 * Truncate and reduce the hash value modulo the curve order.
+	 */
+	mg_br_ecdsa_i31_bits2int(m, hash_value, hash_len, n[0]);
+	mg_br_i31_sub(m, n, mg_br_i31_sub(m, n, 0) ^ 1);
+
+	/*
+	 * Mongoose: the "k" value is given by the caller (e.g. RFC 6979,
+	 * computed by uECC). It must be in [1, n-1].
+	 */
+	if (!mg_br_i31_decode_mod(k, kb, nlen, n) || mg_br_i31_iszero(k)) {
+		return 0;
+	}
+
+	/*
+	 * Compute k*G and extract the X coordinate, then reduce it
+	 * modulo the curve order. Since we support only curves with
+	 * prime order, that reduction is only a matter of computing
+	 * a subtraction.
+	 */
+	mg_br_i31_encode(tt, nlen, k);
+	ulen = impl->mulgen(eU, tt, nlen, curve);
+	mg_br_i31_zero(r, n[0]);
+	mg_br_i31_decode(r, &eU[1], ulen >> 1);
+	r[0] = n[0];
+	mg_br_i31_sub(r, n, mg_br_i31_sub(r, n, 0) ^ 1);
+
+	/*
+	 * Compute 1/k in double-Montgomery representation. We do so by
+	 * first converting _from_ Montgomery representation (twice),
+	 * then using a modular exponentiation.
+	 */
+	mg_br_i31_from_monty(k, n, n0i);
+	mg_br_i31_from_monty(k, n, n0i);
+	memcpy(tt, order, nlen);
+	tt[nlen - 1] -= 2;
+	mg_br_i31_modpow(k, tt, nlen, n, n0i, t1, t2);
+
+	/*
+	 * Compute s = (m+xr)/k (mod n).
+	 * The k[] array contains R^2/k (double-Montgomery representation);
+	 * we thus can use direct Montgomery multiplications and conversions
+	 * from Montgomery, avoiding any call to mg_br_i31_to_monty() (which
+	 * is slower).
+	 */
+	mg_br_i31_from_monty(m, n, n0i);
+	mg_br_i31_montymul(t1, x, r, n, n0i);
+	ctl = mg_br_i31_add(t1, m, 1);
+	ctl |= mg_br_i31_sub(t1, n, 0) ^ 1;
+	mg_br_i31_sub(t1, n, ctl);
+	mg_br_i31_montymul(s, t1, k, n, n0i);
+
+	/*
+	 * Encode r and s in the signature.
+	 */
+	mg_br_i31_encode(sig, nlen, r);
+	mg_br_i31_encode((unsigned char *)sig + nlen, nlen, s);
+	return nlen << 1;
+}
+
+#if MG_P256 == MG_P256_BEAR
+// From BearSSL src/ec/ec_p256_m31.c
+/*
+ * If MG_BR_NO_ARITH_SHIFT is undefined, or defined to 0, then we _assume_
+ * that right-shifting a signed negative integer copies the sign bit
+ * (arithmetic right-shift). This is "implementation-defined behaviour",
+ * i.e. it is not undefined, but it may differ between compilers. Each
+ * compiler is supposed to document its behaviour in that respect. GCC
+ * explicitly defines that an arithmetic right shift is used. We expect
+ * all other compilers to do the same, because underlying CPU offer an
+ * arithmetic right shift opcode that could not be used otherwise.
+ */
+#define MG_BR_NO_ARITH_SHIFT 0
+#if MG_BR_NO_ARITH_SHIFT
+#define ARSH(x, n)    (((uint32_t)(x) >> (n)) \
+                      | ((-((uint32_t)(x) >> 31)) << (32 - (n))))
+#define ARSHW(x, n)   (((uint64_t)(x) >> (n)) \
+                      | ((-((uint64_t)(x) >> 63)) << (64 - (n))))
+#else
+#define ARSH(x, n)    ((uint32_t)((*(int32_t *)&(x)) >> (n)))
+#define ARSHW(x, n)   ((uint64_t)((*(int64_t *)&(x)) >> (n)))
+#endif
+
+/*
+ * Convert an integer from unsigned big-endian encoding to a sequence of
+ * 30-bit words in little-endian order. The final "partial" word is
+ * returned.
+ */
+static uint32_t
+be8_to_le30(uint32_t *dst, const unsigned char *src, size_t len)
+{
+	uint32_t acc;
+	int acc_len;
+
+	acc = 0;
+	acc_len = 0;
+	while (len -- > 0) {
+		uint32_t b;
+
+		b = src[len];
+		if (acc_len < 22) {
+			acc |= b << acc_len;
+			acc_len += 8;
+		} else {
+			*dst ++ = (acc | (b << acc_len)) & 0x3FFFFFFF;
+			acc = b >> (30 - acc_len);
+			acc_len -= 22;
+		}
+	}
+	return acc;
+}
+
+/*
+ * Convert an integer (30-bit words, little-endian) to unsigned
+ * big-endian encoding. The total encoding length is provided; all
+ * the destination bytes will be filled.
+ */
+static void
+le30_to_be8(unsigned char *dst, size_t len, const uint32_t *src)
+{
+	uint32_t acc;
+	int acc_len;
+
+	acc = 0;
+	acc_len = 0;
+	while (len -- > 0) {
+		if (acc_len < 8) {
+			uint32_t w;
+
+			w = *src ++;
+			dst[len] = (unsigned char)(acc | (w << acc_len));
+			acc = w >> (8 - acc_len);
+			acc_len += 22;
+		} else {
+			dst[len] = (unsigned char)acc;
+			acc >>= 8;
+			acc_len -= 8;
+		}
+	}
+}
+
+/*
+ * Multiply two integers. Source integers are represented as arrays of
+ * nine 30-bit words, for values up to 2^270-1. Result is encoded over
+ * 18 words of 30 bits each.
+ */
+static void
+mul9(uint32_t *d, const uint32_t *a, const uint32_t *b)
+{
+	/*
+	 * Maximum intermediate result is no more than
+	 * 10376293531797946367, which fits in 64 bits. Reason:
+	 *
+	 *   10376293531797946367 = 9 * (2^30-1)^2 + 9663676406
+	 *   10376293531797946367 < 9663676407 * 2^30
+	 *
+	 * Thus, adding together 9 products of 30-bit integers, with
+	 * a carry of at most 9663676406, yields an integer that fits
+	 * on 64 bits and generates a carry of at most 9663676406.
+	 */
+	uint64_t t[17];
+	uint64_t cc;
+	int i;
+
+	t[ 0] = MG_BR_MUL31(a[0], b[0]);
+	t[ 1] = MG_BR_MUL31(a[0], b[1])
+		+ MG_BR_MUL31(a[1], b[0]);
+	t[ 2] = MG_BR_MUL31(a[0], b[2])
+		+ MG_BR_MUL31(a[1], b[1])
+		+ MG_BR_MUL31(a[2], b[0]);
+	t[ 3] = MG_BR_MUL31(a[0], b[3])
+		+ MG_BR_MUL31(a[1], b[2])
+		+ MG_BR_MUL31(a[2], b[1])
+		+ MG_BR_MUL31(a[3], b[0]);
+	t[ 4] = MG_BR_MUL31(a[0], b[4])
+		+ MG_BR_MUL31(a[1], b[3])
+		+ MG_BR_MUL31(a[2], b[2])
+		+ MG_BR_MUL31(a[3], b[1])
+		+ MG_BR_MUL31(a[4], b[0]);
+	t[ 5] = MG_BR_MUL31(a[0], b[5])
+		+ MG_BR_MUL31(a[1], b[4])
+		+ MG_BR_MUL31(a[2], b[3])
+		+ MG_BR_MUL31(a[3], b[2])
+		+ MG_BR_MUL31(a[4], b[1])
+		+ MG_BR_MUL31(a[5], b[0]);
+	t[ 6] = MG_BR_MUL31(a[0], b[6])
+		+ MG_BR_MUL31(a[1], b[5])
+		+ MG_BR_MUL31(a[2], b[4])
+		+ MG_BR_MUL31(a[3], b[3])
+		+ MG_BR_MUL31(a[4], b[2])
+		+ MG_BR_MUL31(a[5], b[1])
+		+ MG_BR_MUL31(a[6], b[0]);
+	t[ 7] = MG_BR_MUL31(a[0], b[7])
+		+ MG_BR_MUL31(a[1], b[6])
+		+ MG_BR_MUL31(a[2], b[5])
+		+ MG_BR_MUL31(a[3], b[4])
+		+ MG_BR_MUL31(a[4], b[3])
+		+ MG_BR_MUL31(a[5], b[2])
+		+ MG_BR_MUL31(a[6], b[1])
+		+ MG_BR_MUL31(a[7], b[0]);
+	t[ 8] = MG_BR_MUL31(a[0], b[8])
+		+ MG_BR_MUL31(a[1], b[7])
+		+ MG_BR_MUL31(a[2], b[6])
+		+ MG_BR_MUL31(a[3], b[5])
+		+ MG_BR_MUL31(a[4], b[4])
+		+ MG_BR_MUL31(a[5], b[3])
+		+ MG_BR_MUL31(a[6], b[2])
+		+ MG_BR_MUL31(a[7], b[1])
+		+ MG_BR_MUL31(a[8], b[0]);
+	t[ 9] = MG_BR_MUL31(a[1], b[8])
+		+ MG_BR_MUL31(a[2], b[7])
+		+ MG_BR_MUL31(a[3], b[6])
+		+ MG_BR_MUL31(a[4], b[5])
+		+ MG_BR_MUL31(a[5], b[4])
+		+ MG_BR_MUL31(a[6], b[3])
+		+ MG_BR_MUL31(a[7], b[2])
+		+ MG_BR_MUL31(a[8], b[1]);
+	t[10] = MG_BR_MUL31(a[2], b[8])
+		+ MG_BR_MUL31(a[3], b[7])
+		+ MG_BR_MUL31(a[4], b[6])
+		+ MG_BR_MUL31(a[5], b[5])
+		+ MG_BR_MUL31(a[6], b[4])
+		+ MG_BR_MUL31(a[7], b[3])
+		+ MG_BR_MUL31(a[8], b[2]);
+	t[11] = MG_BR_MUL31(a[3], b[8])
+		+ MG_BR_MUL31(a[4], b[7])
+		+ MG_BR_MUL31(a[5], b[6])
+		+ MG_BR_MUL31(a[6], b[5])
+		+ MG_BR_MUL31(a[7], b[4])
+		+ MG_BR_MUL31(a[8], b[3]);
+	t[12] = MG_BR_MUL31(a[4], b[8])
+		+ MG_BR_MUL31(a[5], b[7])
+		+ MG_BR_MUL31(a[6], b[6])
+		+ MG_BR_MUL31(a[7], b[5])
+		+ MG_BR_MUL31(a[8], b[4]);
+	t[13] = MG_BR_MUL31(a[5], b[8])
+		+ MG_BR_MUL31(a[6], b[7])
+		+ MG_BR_MUL31(a[7], b[6])
+		+ MG_BR_MUL31(a[8], b[5]);
+	t[14] = MG_BR_MUL31(a[6], b[8])
+		+ MG_BR_MUL31(a[7], b[7])
+		+ MG_BR_MUL31(a[8], b[6]);
+	t[15] = MG_BR_MUL31(a[7], b[8])
+		+ MG_BR_MUL31(a[8], b[7]);
+	t[16] = MG_BR_MUL31(a[8], b[8]);
+
+	/*
+	 * Propagate carries.
+	 */
+	cc = 0;
+	for (i = 0; i < 17; i ++) {
+		uint64_t w;
+
+		w = t[i] + cc;
+		d[i] = (uint32_t)w & 0x3FFFFFFF;
+		cc = w >> 30;
+	}
+	d[17] = (uint32_t)cc;
+}
+
+/*
+ * Square a 270-bit integer, represented as an array of nine 30-bit words.
+ * Result uses 18 words of 30 bits each.
+ */
+static void
+square9(uint32_t *d, const uint32_t *a)
+{
+	uint64_t t[17];
+	uint64_t cc;
+	int i;
+
+	t[ 0] = MG_BR_MUL31(a[0], a[0]);
+	t[ 1] = ((MG_BR_MUL31(a[0], a[1])) << 1);
+	t[ 2] = MG_BR_MUL31(a[1], a[1])
+		+ ((MG_BR_MUL31(a[0], a[2])) << 1);
+	t[ 3] = ((MG_BR_MUL31(a[0], a[3])
+		+ MG_BR_MUL31(a[1], a[2])) << 1);
+	t[ 4] = MG_BR_MUL31(a[2], a[2])
+		+ ((MG_BR_MUL31(a[0], a[4])
+		+ MG_BR_MUL31(a[1], a[3])) << 1);
+	t[ 5] = ((MG_BR_MUL31(a[0], a[5])
+		+ MG_BR_MUL31(a[1], a[4])
+		+ MG_BR_MUL31(a[2], a[3])) << 1);
+	t[ 6] = MG_BR_MUL31(a[3], a[3])
+		+ ((MG_BR_MUL31(a[0], a[6])
+		+ MG_BR_MUL31(a[1], a[5])
+		+ MG_BR_MUL31(a[2], a[4])) << 1);
+	t[ 7] = ((MG_BR_MUL31(a[0], a[7])
+		+ MG_BR_MUL31(a[1], a[6])
+		+ MG_BR_MUL31(a[2], a[5])
+		+ MG_BR_MUL31(a[3], a[4])) << 1);
+	t[ 8] = MG_BR_MUL31(a[4], a[4])
+		+ ((MG_BR_MUL31(a[0], a[8])
+		+ MG_BR_MUL31(a[1], a[7])
+		+ MG_BR_MUL31(a[2], a[6])
+		+ MG_BR_MUL31(a[3], a[5])) << 1);
+	t[ 9] = ((MG_BR_MUL31(a[1], a[8])
+		+ MG_BR_MUL31(a[2], a[7])
+		+ MG_BR_MUL31(a[3], a[6])
+		+ MG_BR_MUL31(a[4], a[5])) << 1);
+	t[10] = MG_BR_MUL31(a[5], a[5])
+		+ ((MG_BR_MUL31(a[2], a[8])
+		+ MG_BR_MUL31(a[3], a[7])
+		+ MG_BR_MUL31(a[4], a[6])) << 1);
+	t[11] = ((MG_BR_MUL31(a[3], a[8])
+		+ MG_BR_MUL31(a[4], a[7])
+		+ MG_BR_MUL31(a[5], a[6])) << 1);
+	t[12] = MG_BR_MUL31(a[6], a[6])
+		+ ((MG_BR_MUL31(a[4], a[8])
+		+ MG_BR_MUL31(a[5], a[7])) << 1);
+	t[13] = ((MG_BR_MUL31(a[5], a[8])
+		+ MG_BR_MUL31(a[6], a[7])) << 1);
+	t[14] = MG_BR_MUL31(a[7], a[7])
+		+ ((MG_BR_MUL31(a[6], a[8])) << 1);
+	t[15] = ((MG_BR_MUL31(a[7], a[8])) << 1);
+	t[16] = MG_BR_MUL31(a[8], a[8]);
+
+	/*
+	 * Propagate carries.
+	 */
+	cc = 0;
+	for (i = 0; i < 17; i ++) {
+		uint64_t w;
+
+		w = t[i] + cc;
+		d[i] = (uint32_t)w & 0x3FFFFFFF;
+		cc = w >> 30;
+	}
+	d[17] = (uint32_t)cc;
+}
+
+/*
+ * Base field modulus for P-256.
+ */
+static const uint32_t F256[] = {
+
+	0x3FFFFFFF, 0x3FFFFFFF, 0x3FFFFFFF, 0x0000003F, 0x00000000,
+	0x00000000, 0x00001000, 0x3FFFC000, 0x0000FFFF
+};
+
+/*
+ * The 'b' curve equation coefficient for P-256.
+ */
+static const uint32_t P256_B[] = {
+
+	0x27D2604B, 0x2F38F0F8, 0x053B0F63, 0x0741AC33, 0x1886BC65,
+	0x2EF555DA, 0x293E7B3E, 0x0D762A8E, 0x00005AC6
+};
+
+/*
+ * Addition in the field. Source operands shall fit on 257 bits; output
+ * will be lower than twice the modulus.
+ */
+static void
+add_f256(uint32_t *d, const uint32_t *a, const uint32_t *b)
+{
+	uint32_t w, cc;
+	int i;
+
+	cc = 0;
+	for (i = 0; i < 9; i ++) {
+		w = a[i] + b[i] + cc;
+		d[i] = w & 0x3FFFFFFF;
+		cc = w >> 30;
+	}
+	w >>= 16;
+	d[8] &= 0xFFFF;
+	d[3] -= w << 6;
+	d[6] -= w << 12;
+	d[7] += w << 14;
+	cc = w;
+	for (i = 0; i < 9; i ++) {
+		w = d[i] + cc;
+		d[i] = w & 0x3FFFFFFF;
+		cc = ARSH(w, 30);
+	}
+}
+
+/*
+ * Subtraction in the field. Source operands shall be smaller than twice
+ * the modulus; the result will fulfil the same property.
+ */
+static void
+sub_f256(uint32_t *d, const uint32_t *a, const uint32_t *b)
+{
+	uint32_t w, cc;
+	int i;
+
+	/*
+	 * We really compute a - b + 2*p to make sure that the result is
+	 * positive.
+	 */
+	w = a[0] - b[0] - 0x00002;
+	d[0] = w & 0x3FFFFFFF;
+	w = a[1] - b[1] + ARSH(w, 30);
+	d[1] = w & 0x3FFFFFFF;
+	w = a[2] - b[2] + ARSH(w, 30);
+	d[2] = w & 0x3FFFFFFF;
+	w = a[3] - b[3] + ARSH(w, 30) + 0x00080;
+	d[3] = w & 0x3FFFFFFF;
+	w = a[4] - b[4] + ARSH(w, 30);
+	d[4] = w & 0x3FFFFFFF;
+	w = a[5] - b[5] + ARSH(w, 30);
+	d[5] = w & 0x3FFFFFFF;
+	w = a[6] - b[6] + ARSH(w, 30) + 0x02000;
+	d[6] = w & 0x3FFFFFFF;
+	w = a[7] - b[7] + ARSH(w, 30) - 0x08000;
+	d[7] = w & 0x3FFFFFFF;
+	w = a[8] - b[8] + ARSH(w, 30) + 0x20000;
+	d[8] = w & 0xFFFF;
+	w >>= 16;
+	d[8] &= 0xFFFF;
+	d[3] -= w << 6;
+	d[6] -= w << 12;
+	d[7] += w << 14;
+	cc = w;
+	for (i = 0; i < 9; i ++) {
+		w = d[i] + cc;
+		d[i] = w & 0x3FFFFFFF;
+		cc = ARSH(w, 30);
+	}
+}
+
+/*
+ * Compute a multiplication in F256. Source operands shall be less than
+ * twice the modulus.
+ */
+static void
+mul_f256(uint32_t *d, const uint32_t *a, const uint32_t *b)
+{
+	uint32_t t[18];
+	uint64_t s[18];
+	uint64_t cc, x;
+	uint32_t z, c;
+	int i;
+
+	mul9(t, a, b);
+
+	/*
+	 * Modular reduction: each high word in added/subtracted where
+	 * necessary.
+	 *
+	 * The modulus is:
+	 *    p = 2^256 - 2^224 + 2^192 + 2^96 - 1
+	 * Therefore:
+	 *    2^256 = 2^224 - 2^192 - 2^96 + 1 mod p
+	 *
+	 * For a word x at bit offset n (n >= 256), we have:
+	 *    x*2^n = x*2^(n-32) - x*2^(n-64)
+	 *            - x*2^(n - 160) + x*2^(n-256) mod p
+	 *
+	 * Thus, we can nullify the high word if we reinject it at some
+	 * proper emplacements.
+	 *
+	 * We use 64-bit intermediate words to allow for carries to
+	 * accumulate easily, before performing the final propagation.
+	 */
+	for (i = 0; i < 18; i ++) {
+		s[i] = t[i];
+	}
+
+	for (i = 17; i >= 9; i --) {
+		uint64_t y;
+
+		y = s[i];
+		s[i - 1] += ARSHW(y, 2);
+		s[i - 2] += (y << 28) & 0x3FFFFFFF;
+		s[i - 2] -= ARSHW(y, 4);
+		s[i - 3] -= (y << 26) & 0x3FFFFFFF;
+		s[i - 5] -= ARSHW(y, 10);
+		s[i - 6] -= (y << 20) & 0x3FFFFFFF;
+		s[i - 8] += ARSHW(y, 16);
+		s[i - 9] += (y << 14) & 0x3FFFFFFF;
+	}
+
+	/*
+	 * Carry propagation must be signed. Moreover, we may have overdone
+	 * it a bit, and obtain a negative result.
+	 *
+	 * The loop above ran 9 times; each time, each word was augmented
+	 * by at most one extra word (in absolute value). Thus, the top
+	 * word must in fine fit in 39 bits, so the carry below will fit
+	 * on 9 bits.
+	 */
+	cc = 0;
+	for (i = 0; i < 9; i ++) {
+		x = s[i] + cc;
+		d[i] = (uint32_t)x & 0x3FFFFFFF;
+		cc = ARSHW(x, 30);
+	}
+
+	/*
+	 * All nine words fit on 30 bits, but there may be an extra
+	 * carry for a few bits (at most 9), and that carry may be
+	 * negative. Moreover, we want the result to fit on 257 bits.
+	 * The two lines below ensure that the word in d[] has length
+	 * 256 bits, and the (signed) carry (beyond 2^256) is in cc. The
+	 * significant length of cc is less than 24 bits, so we will be
+	 * able to switch to 32-bit operations.
+	 */
+	cc = ARSHW(x, 16);
+	d[8] &= 0xFFFF;
+
+	/*
+	 * One extra round of reduction, for cc*2^256, which means
+	 * adding cc*(2^224-2^192-2^96+1) to a 256-bit (nonnegative)
+	 * value. If cc is negative, then it may happen (rarely, but
+	 * not neglectibly so) that the result would be negative. In
+	 * order to avoid that, if cc is negative, then we add the
+	 * modulus once. Note that if cc is negative, then propagating
+	 * that carry must yield a value lower than the modulus, so
+	 * adding the modulus once will keep the final result under
+	 * twice the modulus.
+	 */
+	z = (uint32_t)cc;
+	d[3] -= z << 6;
+	d[6] -= (z << 12) & 0x3FFFFFFF;
+	d[7] -= ARSH(z, 18);
+	d[7] += (z << 14) & 0x3FFFFFFF;
+	d[8] += ARSH(z, 16);
+	c = z >> 31;
+	d[0] -= c;
+	d[3] += c << 6;
+	d[6] += c << 12;
+	d[7] -= c << 14;
+	d[8] += c << 16;
+	for (i = 0; i < 9; i ++) {
+		uint32_t w;
+
+		w = d[i] + z;
+		d[i] = w & 0x3FFFFFFF;
+		z = ARSH(w, 30);
+	}
+}
+
+/*
+ * Compute a square in F256. Source operand shall be less than
+ * twice the modulus.
+ */
+static void
+square_f256(uint32_t *d, const uint32_t *a)
+{
+	uint32_t t[18];
+	uint64_t s[18];
+	uint64_t cc, x;
+	uint32_t z, c;
+	int i;
+
+	square9(t, a);
+
+	/*
+	 * Modular reduction: each high word in added/subtracted where
+	 * necessary.
+	 *
+	 * The modulus is:
+	 *    p = 2^256 - 2^224 + 2^192 + 2^96 - 1
+	 * Therefore:
+	 *    2^256 = 2^224 - 2^192 - 2^96 + 1 mod p
+	 *
+	 * For a word x at bit offset n (n >= 256), we have:
+	 *    x*2^n = x*2^(n-32) - x*2^(n-64)
+	 *            - x*2^(n - 160) + x*2^(n-256) mod p
+	 *
+	 * Thus, we can nullify the high word if we reinject it at some
+	 * proper emplacements.
+	 *
+	 * We use 64-bit intermediate words to allow for carries to
+	 * accumulate easily, before performing the final propagation.
+	 */
+	for (i = 0; i < 18; i ++) {
+		s[i] = t[i];
+	}
+
+	for (i = 17; i >= 9; i --) {
+		uint64_t y;
+
+		y = s[i];
+		s[i - 1] += ARSHW(y, 2);
+		s[i - 2] += (y << 28) & 0x3FFFFFFF;
+		s[i - 2] -= ARSHW(y, 4);
+		s[i - 3] -= (y << 26) & 0x3FFFFFFF;
+		s[i - 5] -= ARSHW(y, 10);
+		s[i - 6] -= (y << 20) & 0x3FFFFFFF;
+		s[i - 8] += ARSHW(y, 16);
+		s[i - 9] += (y << 14) & 0x3FFFFFFF;
+	}
+
+	/*
+	 * Carry propagation must be signed. Moreover, we may have overdone
+	 * it a bit, and obtain a negative result.
+	 *
+	 * The loop above ran 9 times; each time, each word was augmented
+	 * by at most one extra word (in absolute value). Thus, the top
+	 * word must in fine fit in 39 bits, so the carry below will fit
+	 * on 9 bits.
+	 */
+	cc = 0;
+	for (i = 0; i < 9; i ++) {
+		x = s[i] + cc;
+		d[i] = (uint32_t)x & 0x3FFFFFFF;
+		cc = ARSHW(x, 30);
+	}
+
+	/*
+	 * All nine words fit on 30 bits, but there may be an extra
+	 * carry for a few bits (at most 9), and that carry may be
+	 * negative. Moreover, we want the result to fit on 257 bits.
+	 * The two lines below ensure that the word in d[] has length
+	 * 256 bits, and the (signed) carry (beyond 2^256) is in cc. The
+	 * significant length of cc is less than 24 bits, so we will be
+	 * able to switch to 32-bit operations.
+	 */
+	cc = ARSHW(x, 16);
+	d[8] &= 0xFFFF;
+
+	/*
+	 * One extra round of reduction, for cc*2^256, which means
+	 * adding cc*(2^224-2^192-2^96+1) to a 256-bit (nonnegative)
+	 * value. If cc is negative, then it may happen (rarely, but
+	 * not neglectibly so) that the result would be negative. In
+	 * order to avoid that, if cc is negative, then we add the
+	 * modulus once. Note that if cc is negative, then propagating
+	 * that carry must yield a value lower than the modulus, so
+	 * adding the modulus once will keep the final result under
+	 * twice the modulus.
+	 */
+	z = (uint32_t)cc;
+	d[3] -= z << 6;
+	d[6] -= (z << 12) & 0x3FFFFFFF;
+	d[7] -= ARSH(z, 18);
+	d[7] += (z << 14) & 0x3FFFFFFF;
+	d[8] += ARSH(z, 16);
+	c = z >> 31;
+	d[0] -= c;
+	d[3] += c << 6;
+	d[6] += c << 12;
+	d[7] -= c << 14;
+	d[8] += c << 16;
+	for (i = 0; i < 9; i ++) {
+		uint32_t w;
+
+		w = d[i] + z;
+		d[i] = w & 0x3FFFFFFF;
+		z = ARSH(w, 30);
+	}
+}
+
+/*
+ * Perform a "final reduction" in field F256 (field for curve P-256).
+ * The source value must be less than twice the modulus. If the value
+ * is not lower than the modulus, then the modulus is subtracted and
+ * this function returns 1; otherwise, it leaves it untouched and it
+ * returns 0.
+ */
+static uint32_t
+reduce_final_f256(uint32_t *d)
+{
+	uint32_t t[9];
+	uint32_t cc;
+	int i;
+
+	cc = 0;
+	for (i = 0; i < 9; i ++) {
+		uint32_t w;
+
+		w = d[i] - F256[i] - cc;
+		cc = w >> 31;
+		t[i] = w & 0x3FFFFFFF;
+	}
+	cc ^= 1;
+	MG_BR_CCOPY(cc, d, t, sizeof t);
+	return cc;
+}
+
+/*
+ * Jacobian coordinates for a point in P-256: affine coordinates (X,Y)
+ * are such that:
+ *   X = x / z^2
+ *   Y = y / z^3
+ * For the point at infinity, z = 0.
+ * Each point thus admits many possible representations.
+ *
+ * Coordinates are represented in arrays of 32-bit integers, each holding
+ * 30 bits of data. Values may also be slightly greater than the modulus,
+ * but they will always be lower than twice the modulus.
+ */
+struct p256_jacobian {
+	uint32_t x[9];
+	uint32_t y[9];
+	uint32_t z[9];
+};
+
+/*
+ * Convert a point to affine coordinates:
+ *  - If the point is the point at infinity, then all three coordinates
+ *    are set to 0.
+ *  - Otherwise, the 'z' coordinate is set to 1, and the 'x' and 'y'
+ *    coordinates are the 'X' and 'Y' affine coordinates.
+ * The coordinates are guaranteed to be lower than the modulus.
+ */
+static void
+p256_to_affine(struct p256_jacobian *P)
+{
+	uint32_t t1[9], t2[9];
+	int i;
+
+	/*
+	 * Invert z with a modular exponentiation: the modulus is
+	 * p = 2^256 - 2^224 + 2^192 + 2^96 - 1, and the exponent is
+	 * p-2. Exponent bit pattern (from high to low) is:
+	 *  - 32 bits of value 1
+	 *  - 31 bits of value 0
+	 *  - 1 bit of value 1
+	 *  - 96 bits of value 0
+	 *  - 94 bits of value 1
+	 *  - 1 bit of value 0
+	 *  - 1 bit of value 1
+	 * Thus, we precompute z^(2^31-1) to speed things up.
+	 *
+	 * If z = 0 (point at infinity) then the modular exponentiation
+	 * will yield 0, which leads to the expected result (all three
+	 * coordinates set to 0).
+	 */
+
+	/*
+	 * A simple square-and-multiply for z^(2^31-1). We could save about
+	 * two dozen multiplications here with an addition chain, but
+	 * this would require a bit more code, and extra stack buffers.
+	 */
+	memcpy(t1, P->z, sizeof P->z);
+	for (i = 0; i < 30; i ++) {
+		square_f256(t1, t1);
+		mul_f256(t1, t1, P->z);
+	}
+
+	/*
+	 * Square-and-multiply. Apart from the squarings, we have a few
+	 * multiplications to set bits to 1; we multiply by the original z
+	 * for setting 1 bit, and by t1 for setting 31 bits.
+	 */
+	memcpy(t2, P->z, sizeof P->z);
+	for (i = 1; i < 256; i ++) {
+		square_f256(t2, t2);
+		switch (i) {
+		case 31:
+		case 190:
+		case 221:
+		case 252:
+			mul_f256(t2, t2, t1);
+			break;
+		case 63:
+		case 253:
+		case 255:
+			mul_f256(t2, t2, P->z);
+			break;
+		}
+	}
+
+	/*
+	 * Now that we have 1/z, multiply x by 1/z^2 and y by 1/z^3.
+	 */
+	mul_f256(t1, t2, t2);
+	mul_f256(P->x, t1, P->x);
+	mul_f256(t1, t1, t2);
+	mul_f256(P->y, t1, P->y);
+	reduce_final_f256(P->x);
+	reduce_final_f256(P->y);
+
+	/*
+	 * Multiply z by 1/z. If z = 0, then this will yield 0, otherwise
+	 * this will set z to 1.
+	 */
+	mul_f256(P->z, P->z, t2);
+	reduce_final_f256(P->z);
+}
+
+/*
+ * Double a point in P-256. This function works for all valid points,
+ * including the point at infinity.
+ */
+static void
+p256_double(struct p256_jacobian *Q)
+{
+	/*
+	 * Doubling formulas are:
+	 *
+	 *   s = 4*x*y^2
+	 *   m = 3*(x + z^2)*(x - z^2)
+	 *   x' = m^2 - 2*s
+	 *   y' = m*(s - x') - 8*y^4
+	 *   z' = 2*y*z
+	 *
+	 * These formulas work for all points, including points of order 2
+	 * and points at infinity:
+	 *   - If y = 0 then z' = 0. But there is no such point in P-256
+	 *     anyway.
+	 *   - If z = 0 then z' = 0.
+	 */
+	uint32_t t1[9], t2[9], t3[9], t4[9];
+
+	/*
+	 * Compute z^2 in t1.
+	 */
+	square_f256(t1, Q->z);
+
+	/*
+	 * Compute x-z^2 in t2 and x+z^2 in t1.
+	 */
+	add_f256(t2, Q->x, t1);
+	sub_f256(t1, Q->x, t1);
+
+	/*
+	 * Compute 3*(x+z^2)*(x-z^2) in t1.
+	 */
+	mul_f256(t3, t1, t2);
+	add_f256(t1, t3, t3);
+	add_f256(t1, t3, t1);
+
+	/*
+	 * Compute 4*x*y^2 (in t2) and 2*y^2 (in t3).
+	 */
+	square_f256(t3, Q->y);
+	add_f256(t3, t3, t3);
+	mul_f256(t2, Q->x, t3);
+	add_f256(t2, t2, t2);
+
+	/*
+	 * Compute x' = m^2 - 2*s.
+	 */
+	square_f256(Q->x, t1);
+	sub_f256(Q->x, Q->x, t2);
+	sub_f256(Q->x, Q->x, t2);
+
+	/*
+	 * Compute z' = 2*y*z.
+	 */
+	mul_f256(t4, Q->y, Q->z);
+	add_f256(Q->z, t4, t4);
+
+	/*
+	 * Compute y' = m*(s - x') - 8*y^4. Note that we already have
+	 * 2*y^2 in t3.
+	 */
+	sub_f256(t2, t2, Q->x);
+	mul_f256(Q->y, t1, t2);
+	square_f256(t4, t3);
+	add_f256(t4, t4, t4);
+	sub_f256(Q->y, Q->y, t4);
+}
+
+/*
+ * Add point P2 to point P1.
+ *
+ * This function computes the wrong result in the following cases:
+ *
+ *   - If P1 == 0 but P2 != 0
+ *   - If P1 != 0 but P2 == 0
+ *   - If P1 == P2
+ *
+ * In all three cases, P1 is set to the point at infinity.
+ *
+ * Returned value is 0 if one of the following occurs:
+ *
+ *   - P1 and P2 have the same Y coordinate
+ *   - P1 == 0 and P2 == 0
+ *   - The Y coordinate of one of the points is 0 and the other point is
+ *     the point at infinity.
+ *
+ * The third case cannot actually happen with valid points, since a point
+ * with Y == 0 is a point of order 2, and there is no point of order 2 on
+ * curve P-256.
+ *
+ * Therefore, assuming that P1 != 0 and P2 != 0 on input, then the caller
+ * can apply the following:
+ *
+ *   - If the result is not the point at infinity, then it is correct.
+ *   - Otherwise, if the returned value is 1, then this is a case of
+ *     P1+P2 == 0, so the result is indeed the point at infinity.
+ *   - Otherwise, P1 == P2, so a "double" operation should have been
+ *     performed.
+ */
+static uint32_t
+p256_add(struct p256_jacobian *P1, const struct p256_jacobian *P2)
+{
+	/*
+	 * Addtions formulas are:
+	 *
+	 *   u1 = x1 * z2^2
+	 *   u2 = x2 * z1^2
+	 *   s1 = y1 * z2^3
+	 *   s2 = y2 * z1^3
+	 *   h = u2 - u1
+	 *   r = s2 - s1
+	 *   x3 = r^2 - h^3 - 2 * u1 * h^2
+	 *   y3 = r * (u1 * h^2 - x3) - s1 * h^3
+	 *   z3 = h * z1 * z2
+	 */
+	uint32_t t1[9], t2[9], t3[9], t4[9], t5[9], t6[9], t7[9];
+	uint32_t ret;
+	int i;
+
+	/*
+	 * Compute u1 = x1*z2^2 (in t1) and s1 = y1*z2^3 (in t3).
+	 */
+	square_f256(t3, P2->z);
+	mul_f256(t1, P1->x, t3);
+	mul_f256(t4, P2->z, t3);
+	mul_f256(t3, P1->y, t4);
+
+	/*
+	 * Compute u2 = x2*z1^2 (in t2) and s2 = y2*z1^3 (in t4).
+	 */
+	square_f256(t4, P1->z);
+	mul_f256(t2, P2->x, t4);
+	mul_f256(t5, P1->z, t4);
+	mul_f256(t4, P2->y, t5);
+
+	/*
+	 * Compute h = h2 - u1 (in t2) and r = s2 - s1 (in t4).
+	 * We need to test whether r is zero, so we will do some extra
+	 * reduce.
+	 */
+	sub_f256(t2, t2, t1);
+	sub_f256(t4, t4, t3);
+	reduce_final_f256(t4);
+	ret = 0;
+	for (i = 0; i < 9; i ++) {
+		ret |= t4[i];
+	}
+	ret = (ret | -ret) >> 31;
+
+	/*
+	 * Compute u1*h^2 (in t6) and h^3 (in t5);
+	 */
+	square_f256(t7, t2);
+	mul_f256(t6, t1, t7);
+	mul_f256(t5, t7, t2);
+
+	/*
+	 * Compute x3 = r^2 - h^3 - 2*u1*h^2.
+	 */
+	square_f256(P1->x, t4);
+	sub_f256(P1->x, P1->x, t5);
+	sub_f256(P1->x, P1->x, t6);
+	sub_f256(P1->x, P1->x, t6);
+
+	/*
+	 * Compute y3 = r*(u1*h^2 - x3) - s1*h^3.
+	 */
+	sub_f256(t6, t6, P1->x);
+	mul_f256(P1->y, t4, t6);
+	mul_f256(t1, t5, t3);
+	sub_f256(P1->y, P1->y, t1);
+
+	/*
+	 * Compute z3 = h*z1*z2.
+	 */
+	mul_f256(t1, P1->z, P2->z);
+	mul_f256(P1->z, t1, t2);
+
+	return ret;
+}
+
+/*
+ * Add point P2 to point P1. This is a specialised function for the
+ * case when P2 is a non-zero point in affine coordinate.
+ *
+ * This function computes the wrong result in the following cases:
+ *
+ *   - If P1 == 0
+ *   - If P1 == P2
+ *
+ * In both cases, P1 is set to the point at infinity.
+ *
+ * Returned value is 0 if one of the following occurs:
+ *
+ *   - P1 and P2 have the same Y coordinate
+ *   - The Y coordinate of P2 is 0 and P1 is the point at infinity.
+ *
+ * The second case cannot actually happen with valid points, since a point
+ * with Y == 0 is a point of order 2, and there is no point of order 2 on
+ * curve P-256.
+ *
+ * Therefore, assuming that P1 != 0 on input, then the caller
+ * can apply the following:
+ *
+ *   - If the result is not the point at infinity, then it is correct.
+ *   - Otherwise, if the returned value is 1, then this is a case of
+ *     P1+P2 == 0, so the result is indeed the point at infinity.
+ *   - Otherwise, P1 == P2, so a "double" operation should have been
+ *     performed.
+ */
+static uint32_t
+p256_add_mixed(struct p256_jacobian *P1, const struct p256_jacobian *P2)
+{
+	/*
+	 * Addtions formulas are:
+	 *
+	 *   u1 = x1
+	 *   u2 = x2 * z1^2
+	 *   s1 = y1
+	 *   s2 = y2 * z1^3
+	 *   h = u2 - u1
+	 *   r = s2 - s1
+	 *   x3 = r^2 - h^3 - 2 * u1 * h^2
+	 *   y3 = r * (u1 * h^2 - x3) - s1 * h^3
+	 *   z3 = h * z1
+	 */
+	uint32_t t1[9], t2[9], t3[9], t4[9], t5[9], t6[9], t7[9];
+	uint32_t ret;
+	int i;
+
+	/*
+	 * Compute u1 = x1 (in t1) and s1 = y1 (in t3).
+	 */
+	memcpy(t1, P1->x, sizeof t1);
+	memcpy(t3, P1->y, sizeof t3);
+
+	/*
+	 * Compute u2 = x2*z1^2 (in t2) and s2 = y2*z1^3 (in t4).
+	 */
+	square_f256(t4, P1->z);
+	mul_f256(t2, P2->x, t4);
+	mul_f256(t5, P1->z, t4);
+	mul_f256(t4, P2->y, t5);
+
+	/*
+	 * Compute h = h2 - u1 (in t2) and r = s2 - s1 (in t4).
+	 * We need to test whether r is zero, so we will do some extra
+	 * reduce.
+	 */
+	sub_f256(t2, t2, t1);
+	sub_f256(t4, t4, t3);
+	reduce_final_f256(t4);
+	ret = 0;
+	for (i = 0; i < 9; i ++) {
+		ret |= t4[i];
+	}
+	ret = (ret | -ret) >> 31;
+
+	/*
+	 * Compute u1*h^2 (in t6) and h^3 (in t5);
+	 */
+	square_f256(t7, t2);
+	mul_f256(t6, t1, t7);
+	mul_f256(t5, t7, t2);
+
+	/*
+	 * Compute x3 = r^2 - h^3 - 2*u1*h^2.
+	 */
+	square_f256(P1->x, t4);
+	sub_f256(P1->x, P1->x, t5);
+	sub_f256(P1->x, P1->x, t6);
+	sub_f256(P1->x, P1->x, t6);
+
+	/*
+	 * Compute y3 = r*(u1*h^2 - x3) - s1*h^3.
+	 */
+	sub_f256(t6, t6, P1->x);
+	mul_f256(P1->y, t4, t6);
+	mul_f256(t1, t5, t3);
+	sub_f256(P1->y, P1->y, t1);
+
+	/*
+	 * Compute z3 = h*z1*z2.
+	 */
+	mul_f256(P1->z, P1->z, t2);
+
+	return ret;
+}
+
+/*
+ * Decode a P-256 point. This function does not support the point at
+ * infinity. Returned value is 0 if the point is invalid, 1 otherwise.
+ */
+static uint32_t
+p256_decode(struct p256_jacobian *P, const void *src, size_t len)
+{
+	const unsigned char *buf;
+	uint32_t tx[9], ty[9], t1[9], t2[9];
+	uint32_t bad;
+	int i;
+
+	if (len != 65) {
+		return 0;
+	}
+	buf = (const unsigned char *)src;
+
+	/*
+	 * First byte must be 0x04 (uncompressed format). We could support
+	 * "hybrid format" (first byte is 0x06 or 0x07, and encodes the
+	 * least significant bit of the Y coordinate), but it is explicitly
+	 * forbidden by RFC 5480 (section 2.2).
+	 */
+	bad = MG_BR_NEQ(buf[0], 0x04);
+
+	/*
+	 * Decode the coordinates, and check that they are both lower
+	 * than the modulus.
+	 */
+	tx[8] = be8_to_le30(tx, buf + 1, 32);
+	ty[8] = be8_to_le30(ty, buf + 33, 32);
+	bad |= reduce_final_f256(tx);
+	bad |= reduce_final_f256(ty);
+
+	/*
+	 * Check curve equation.
+	 */
+	square_f256(t1, tx);
+	mul_f256(t1, tx, t1);
+	square_f256(t2, ty);
+	sub_f256(t1, t1, tx);
+	sub_f256(t1, t1, tx);
+	sub_f256(t1, t1, tx);
+	add_f256(t1, t1, P256_B);
+	sub_f256(t1, t1, t2);
+	reduce_final_f256(t1);
+	for (i = 0; i < 9; i ++) {
+		bad |= t1[i];
+	}
+
+	/*
+	 * Copy coordinates to the point structure.
+	 */
+	memcpy(P->x, tx, sizeof tx);
+	memcpy(P->y, ty, sizeof ty);
+	memset(P->z, 0, sizeof P->z);
+	P->z[0] = 1;
+	return MG_BR_EQ(bad, 0);
+}
+
+/*
+ * Encode a point into a buffer. This function assumes that the point is
+ * valid, in affine coordinates, and not the point at infinity.
+ */
+static void
+p256_encode(void *dst, const struct p256_jacobian *P)
+{
+	unsigned char *buf;
+
+	buf = (unsigned char *)dst;
+	buf[0] = 0x04;
+	le30_to_be8(buf + 1, 32, P->x);
+	le30_to_be8(buf + 33, 32, P->y);
+}
+
+/*
+ * Multiply a curve point by an integer. The integer is assumed to be
+ * lower than the curve order, and the base point must not be the point
+ * at infinity.
+ */
+static void
+p256_mul(struct p256_jacobian *P, const unsigned char *x, size_t xlen)
+{
+	/*
+	 * qz is a flag that is initially 1, and remains equal to 1
+	 * as long as the point is the point at infinity.
+	 *
+	 * We use a 2-bit window to handle multiplier bits by pairs.
+	 * The precomputed window really is the points P2 and P3.
+	 */
+	uint32_t qz;
+	struct p256_jacobian P2, P3, Q, T, U;
+
+	/*
+	 * Compute window values.
+	 */
+	P2 = *P;
+	p256_double(&P2);
+	P3 = *P;
+	p256_add(&P3, &P2);
+
+	/*
+	 * We start with Q = 0. We process multiplier bits 2 by 2.
+	 */
+	memset(&Q, 0, sizeof Q);
+	qz = 1;
+	while (xlen -- > 0) {
+		int k;
+
+		for (k = 6; k >= 0; k -= 2) {
+			uint32_t bits;
+			uint32_t bnz;
+
+			p256_double(&Q);
+			p256_double(&Q);
+			T = *P;
+			U = Q;
+			bits = (*x >> k) & (uint32_t)3;
+			bnz = MG_BR_NEQ(bits, 0);
+			MG_BR_CCOPY(MG_BR_EQ(bits, 2), &T, &P2, sizeof T);
+			MG_BR_CCOPY(MG_BR_EQ(bits, 3), &T, &P3, sizeof T);
+			p256_add(&U, &T);
+			MG_BR_CCOPY(bnz & qz, &Q, &T, sizeof Q);
+			MG_BR_CCOPY(bnz & ~qz, &Q, &U, sizeof Q);
+			qz &= ~bnz;
+		}
+		x ++;
+	}
+	*P = Q;
+}
+
+/*
+ * Precomputed window: k*G points, where G is the curve generator, and k
+ * is an integer from 1 to 15 (inclusive). The X and Y coordinates of
+ * the point are encoded as 9 words of 30 bits each (little-endian
+ * order).
+ */
+static const uint32_t Gwin[15][18] = {
+
+	{ 0x1898C296, 0x1284E517, 0x1EB33A0F, 0x00DF604B,
+	  0x2440F277, 0x339B958E, 0x04247F8B, 0x347CB84B,
+	  0x00006B17, 0x37BF51F5, 0x2ED901A0, 0x3315ECEC,
+	  0x338CD5DA, 0x0F9E162B, 0x1FAD29F0, 0x27F9B8EE,
+	  0x10B8BF86, 0x00004FE3 },
+
+	{ 0x07669978, 0x182D23F1, 0x3F21B35A, 0x225A789D,
+	  0x351AC3C0, 0x08E00C12, 0x34F7E8A5, 0x1EC62340,
+	  0x00007CF2, 0x227873D1, 0x3812DE74, 0x0E982299,
+	  0x1F6B798F, 0x3430DBBA, 0x366B1A7D, 0x2D040293,
+	  0x154436E3, 0x00000777 },
+
+	{ 0x06E7FD6C, 0x2D05986F, 0x3ADA985F, 0x31ADC87B,
+	  0x0BF165E6, 0x1FBE5475, 0x30A44C8F, 0x3934698C,
+	  0x00005ECB, 0x227D5032, 0x29E6C49E, 0x04FB83D9,
+	  0x0AAC0D8E, 0x24A2ECD8, 0x2C1B3869, 0x0FF7E374,
+	  0x19031266, 0x00008734 },
+
+	{ 0x2B030852, 0x024C0911, 0x05596EF5, 0x07F8B6DE,
+	  0x262BD003, 0x3779967B, 0x08FBBA02, 0x128D4CB4,
+	  0x0000E253, 0x184ED8C6, 0x310B08FC, 0x30EE0055,
+	  0x3F25B0FC, 0x062D764E, 0x3FB97F6A, 0x33CC719D,
+	  0x15D69318, 0x0000E0F1 },
+
+	{ 0x03D033ED, 0x05552837, 0x35BE5242, 0x2320BF47,
+	  0x268FDFEF, 0x13215821, 0x140D2D78, 0x02DE9454,
+	  0x00005159, 0x3DA16DA4, 0x0742ED13, 0x0D80888D,
+	  0x004BC035, 0x0A79260D, 0x06FCDAFE, 0x2727D8AE,
+	  0x1F6A2412, 0x0000E0C1 },
+
+	{ 0x3C2291A9, 0x1AC2ABA4, 0x3B215B4C, 0x131D037A,
+	  0x17DDE302, 0x0C90B2E2, 0x0602C92D, 0x05CA9DA9,
+	  0x0000B01A, 0x0FC77FE2, 0x35F1214E, 0x07E16BDF,
+	  0x003DDC07, 0x2703791C, 0x3038B7EE, 0x3DAD56FE,
+	  0x041D0C8D, 0x0000E85C },
+
+	{ 0x3187B2A3, 0x0018A1C0, 0x00FEF5B3, 0x3E7E2E2A,
+	  0x01FB607E, 0x2CC199F0, 0x37B4625B, 0x0EDBE82F,
+	  0x00008E53, 0x01F400B4, 0x15786A1B, 0x3041B21C,
+	  0x31CD8CF2, 0x35900053, 0x1A7E0E9B, 0x318366D0,
+	  0x076F780C, 0x000073EB },
+
+	{ 0x1B6FB393, 0x13767707, 0x3CE97DBB, 0x348E2603,
+	  0x354CADC1, 0x09D0B4EA, 0x1B053404, 0x1DE76FBA,
+	  0x000062D9, 0x0F09957E, 0x295029A8, 0x3E76A78D,
+	  0x3B547DAE, 0x27CEE0A2, 0x0575DC45, 0x1D8244FF,
+	  0x332F647A, 0x0000AD5A },
+
+	{ 0x10949EE0, 0x1E7A292E, 0x06DF8B3D, 0x02B2E30B,
+	  0x31F8729E, 0x24E35475, 0x30B71878, 0x35EDBFB7,
+	  0x0000EA68, 0x0DD048FA, 0x21688929, 0x0DE823FE,
+	  0x1C53FAA9, 0x0EA0C84D, 0x052A592A, 0x1FCE7870,
+	  0x11325CB2, 0x00002A27 },
+
+	{ 0x04C5723F, 0x30D81A50, 0x048306E4, 0x329B11C7,
+	  0x223FB545, 0x085347A8, 0x2993E591, 0x1B5ACA8E,
+	  0x0000CEF6, 0x04AF0773, 0x28D2EEA9, 0x2751EEEC,
+	  0x037B4A7F, 0x3B4C1059, 0x08F37674, 0x2AE906E1,
+	  0x18A88A6A, 0x00008786 },
+
+	{ 0x34BC21D1, 0x0CCE474D, 0x15048BF4, 0x1D0BB409,
+	  0x021CDA16, 0x20DE76C3, 0x34C59063, 0x04EDE20E,
+	  0x00003ED1, 0x282A3740, 0x0BE3BBF3, 0x29889DAE,
+	  0x03413697, 0x34C68A09, 0x210EBE93, 0x0C8A224C,
+	  0x0826B331, 0x00009099 },
+
+	{ 0x0624E3C4, 0x140317BA, 0x2F82C99D, 0x260C0A2C,
+	  0x25D55179, 0x194DCC83, 0x3D95E462, 0x356F6A05,
+	  0x0000741D, 0x0D4481D3, 0x2657FC8B, 0x1BA5CA71,
+	  0x3AE44B0D, 0x07B1548E, 0x0E0D5522, 0x05FDC567,
+	  0x2D1AA70E, 0x00000770 },
+
+	{ 0x06072C01, 0x23857675, 0x1EAD58A9, 0x0B8A12D9,
+	  0x1EE2FC79, 0x0177CB61, 0x0495A618, 0x20DEB82B,
+	  0x0000177C, 0x2FC7BFD8, 0x310EEF8B, 0x1FB4DF39,
+	  0x3B8530E8, 0x0F4E7226, 0x0246B6D0, 0x2A558A24,
+	  0x163353AF, 0x000063BB },
+
+	{ 0x24D2920B, 0x1C249DCC, 0x2069C5E5, 0x09AB2F9E,
+	  0x36DF3CF1, 0x1991FD0C, 0x062B97A7, 0x1E80070E,
+	  0x000054E7, 0x20D0B375, 0x2E9F20BD, 0x35090081,
+	  0x1C7A9DDC, 0x22E7C371, 0x087E3016, 0x03175421,
+	  0x3C6ECA7D, 0x0000F599 },
+
+	{ 0x259B9D5F, 0x0D9A318F, 0x23A0EF16, 0x00EBE4B7,
+	  0x088265AE, 0x2CDE2666, 0x2BAE7ADF, 0x1371A5C6,
+	  0x0000F045, 0x0D034F36, 0x1F967378, 0x1B5FA3F4,
+	  0x0EC8739D, 0x1643E62A, 0x1653947E, 0x22D1F4E6,
+	  0x0FB8D64B, 0x0000B5B9 }
+};
+
+/*
+ * Lookup one of the Gwin[] values, by index. This is constant-time.
+ */
+static void
+lookup_Gwin(struct p256_jacobian *T, uint32_t idx)
+{
+	uint32_t xy[18];
+	uint32_t k;
+	size_t u;
+
+	memset(xy, 0, sizeof xy);
+	for (k = 0; k < 15; k ++) {
+		uint32_t m;
+
+		m = -MG_BR_EQ(idx, k + 1);
+		for (u = 0; u < 18; u ++) {
+			xy[u] |= m & Gwin[k][u];
+		}
+	}
+	memcpy(T->x, &xy[0], sizeof T->x);
+	memcpy(T->y, &xy[9], sizeof T->y);
+	memset(T->z, 0, sizeof T->z);
+	T->z[0] = 1;
+}
+
+/*
+ * Multiply the generator by an integer. The integer is assumed non-zero
+ * and lower than the curve order.
+ */
+static void
+p256_mulgen(struct p256_jacobian *P, const unsigned char *x, size_t xlen)
+{
+	/*
+	 * qz is a flag that is initially 1, and remains equal to 1
+	 * as long as the point is the point at infinity.
+	 *
+	 * We use a 4-bit window to handle multiplier bits by groups
+	 * of 4. The precomputed window is constant static data, with
+	 * points in affine coordinates; we use a constant-time lookup.
+	 */
+	struct p256_jacobian Q;
+	uint32_t qz;
+
+	memset(&Q, 0, sizeof Q);
+	qz = 1;
+	while (xlen -- > 0) {
+		int k;
+		unsigned bx;
+
+		bx = *x ++;
+		for (k = 0; k < 2; k ++) {
+			uint32_t bits;
+			uint32_t bnz;
+			struct p256_jacobian T, U;
+
+			p256_double(&Q);
+			p256_double(&Q);
+			p256_double(&Q);
+			p256_double(&Q);
+			bits = (bx >> 4) & 0x0F;
+			bnz = MG_BR_NEQ(bits, 0);
+			lookup_Gwin(&T, bits);
+			U = Q;
+			p256_add_mixed(&U, &T);
+			MG_BR_CCOPY(bnz & qz, &Q, &T, sizeof Q);
+			MG_BR_CCOPY(bnz & ~qz, &Q, &U, sizeof Q);
+			qz &= ~bnz;
+			bx <<= 4;
+		}
+	}
+	*P = Q;
+}
+
+static const unsigned char P256_G[] = {
+	0x04, 0x6B, 0x17, 0xD1, 0xF2, 0xE1, 0x2C, 0x42, 0x47, 0xF8,
+	0xBC, 0xE6, 0xE5, 0x63, 0xA4, 0x40, 0xF2, 0x77, 0x03, 0x7D,
+	0x81, 0x2D, 0xEB, 0x33, 0xA0, 0xF4, 0xA1, 0x39, 0x45, 0xD8,
+	0x98, 0xC2, 0x96, 0x4F, 0xE3, 0x42, 0xE2, 0xFE, 0x1A, 0x7F,
+	0x9B, 0x8E, 0xE7, 0xEB, 0x4A, 0x7C, 0x0F, 0x9E, 0x16, 0x2B,
+	0xCE, 0x33, 0x57, 0x6B, 0x31, 0x5E, 0xCE, 0xCB, 0xB6, 0x40,
+	0x68, 0x37, 0xBF, 0x51, 0xF5
+};
+
+static const unsigned char P256_N[] = {
+	0xFF, 0xFF, 0xFF, 0xFF, 0x00, 0x00, 0x00, 0x00, 0xFF, 0xFF,
+	0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xBC, 0xE6, 0xFA, 0xAD,
+	0xA7, 0x17, 0x9E, 0x84, 0xF3, 0xB9, 0xCA, 0xC2, 0xFC, 0x63,
+	0x25, 0x51
+};
+
+static const unsigned char *
+p256_api_generator(int curve, size_t *len)
+{
+	(void)curve;
+	*len = sizeof P256_G;
+	return P256_G;
+}
+
+static const unsigned char *
+p256_api_order(int curve, size_t *len)
+{
+	(void)curve;
+	*len = sizeof P256_N;
+	return P256_N;
+}
+
+static size_t
+p256_api_xoff(int curve, size_t *len)
+{
+	(void)curve;
+	*len = 32;
+	return 1;
+}
+
+static uint32_t
+p256_api_mul(unsigned char *G, size_t Glen,
+	const unsigned char *x, size_t xlen, int curve)
+{
+	uint32_t r;
+	struct p256_jacobian P;
+
+	(void)curve;
+	if (Glen != 65) {
+		return 0;
+	}
+	r = p256_decode(&P, G, Glen);
+	p256_mul(&P, x, xlen);
+	p256_to_affine(&P);
+	p256_encode(G, &P);
+	return r;
+}
+
+static size_t
+p256_api_mulgen(unsigned char *R,
+	const unsigned char *x, size_t xlen, int curve)
+{
+	struct p256_jacobian P;
+
+	(void)curve;
+	p256_mulgen(&P, x, xlen);
+	p256_to_affine(&P);
+	p256_encode(R, &P);
+	return 65;
+}
+
+static uint32_t
+p256_api_muladd(unsigned char *A, const unsigned char *B, size_t len,
+	const unsigned char *x, size_t xlen,
+	const unsigned char *y, size_t ylen, int curve)
+{
+	struct p256_jacobian P, Q;
+	uint32_t r, t, z;
+	int i;
+
+	(void)curve;
+	if (len != 65) {
+		return 0;
+	}
+	r = p256_decode(&P, A, len);
+	p256_mul(&P, x, xlen);
+	if (B == NULL) {
+		p256_mulgen(&Q, y, ylen);
+	} else {
+		r &= p256_decode(&Q, B, len);
+		p256_mul(&Q, y, ylen);
+	}
+
+	/*
+	 * The final addition may fail in case both points are equal.
+	 */
+	t = p256_add(&P, &Q);
+	reduce_final_f256(P.z);
+	z = 0;
+	for (i = 0; i < 9; i ++) {
+		z |= P.z[i];
+	}
+	z = MG_BR_EQ(z, 0);
+	p256_double(&Q);
+
+	/*
+	 * If z is 1 then either P+Q = 0 (t = 1) or P = Q (t = 0). So we
+	 * have the following:
+	 *
+	 *   z = 0, t = 0   return P (normal addition)
+	 *   z = 0, t = 1   return P (normal addition)
+	 *   z = 1, t = 0   return Q (a 'double' case)
+	 *   z = 1, t = 1   report an error (P+Q = 0)
+	 */
+	MG_BR_CCOPY(z & ~t, &P, &Q, sizeof Q);
+	p256_to_affine(&P);
+	p256_encode(A, &P);
+	r &= ~(z & t);
+	return r;
+}
+
+static const struct mg_br_ec_impl mg_br_ec_p256_m31 = {
+	(uint32_t)0x00800000,
+	&p256_api_generator,
+	&p256_api_order,
+	&p256_api_xoff,
+	&p256_api_mul,
+	&p256_api_mulgen,
+	&p256_api_muladd
+};
+
+#undef ARSH
+#undef ARSHW
+
+// mg_p256_*() for MG_P256_BEAR, see tls_p256.h
+int mg_p256_make_key(uint8_t public_key[64], uint8_t private_key[32]) {
+  const unsigned char *n;
+  unsigned char q[65];
+  uint32_t x[I31_LEN], nn[I31_LEN];
+  size_t nlen;
+  int tries, ok = 0;
+  n = mg_br_ec_p256_m31.order(MG_BR_EC_secp256r1, &nlen);
+  mg_br_i31_decode(nn, n, nlen);
+  for (tries = 0; tries < 64 && !ok; tries++) {  // Private key in [1, n-1]
+    if (!mg_random(private_key, 32)) break;
+    ok = mg_br_i31_decode_mod(x, private_key, 32, nn) && !mg_br_i31_iszero(x);
+  }
+  if (ok) {
+    mg_br_ec_p256_m31.mulgen(q, private_key, 32, MG_BR_EC_secp256r1);
+    memcpy(public_key, q + 1, 64);
+  }
+  mg_bzero((unsigned char *) x, sizeof(x));
+  return ok;
+}
+
+int mg_p256_compute_public_key(const uint8_t private_key[32],
+                               uint8_t public_key[64]) {
+  const unsigned char *n;
+  unsigned char q[65];
+  uint32_t x[I31_LEN], nn[I31_LEN];
+  size_t nlen;
+  int ok;
+  n = mg_br_ec_p256_m31.order(MG_BR_EC_secp256r1, &nlen);
+  mg_br_i31_decode(nn, n, nlen);
+  ok = mg_br_i31_decode_mod(x, private_key, 32, nn) && !mg_br_i31_iszero(x);
+  if (ok) {
+    mg_br_ec_p256_m31.mulgen(q, private_key, 32, MG_BR_EC_secp256r1);
+    memcpy(public_key, q + 1, 64);
+  }
+  mg_bzero((unsigned char *) x, sizeof(x));
+  return ok;
+}
+
+int mg_p256_shared_secret(const uint8_t public_key[64],
+                          const uint8_t private_key[32], uint8_t secret[32]) {
+  unsigned char q[65];
+  uint32_t ok;
+  q[0] = 0x04;
+  memcpy(q + 1, public_key, 64);
+  ok = mg_br_ec_p256_m31.mul(q, sizeof(q), private_key, 32,
+                             MG_BR_EC_secp256r1);  // Validates the point
+  memcpy(secret, q + 1, 32);
+  mg_bzero(q, sizeof(q));
+  return ok == 1;
+}
+
+int mg_p256_sign_with_k(const uint8_t private_key[32], const uint8_t *hash,
+                        size_t hash_size, const uint8_t k[32],
+                        uint8_t signature[64]) {
+  return mg_br_ecdsa_i31_sign_raw(&mg_br_ec_p256_m31, MG_BR_EC_secp256r1,
+                                  hash, hash_size, private_key, 32, k,
+                                  signature) == 64;
+}
+
+int mg_p256_verify(const uint8_t public_key[64], const uint8_t *hash,
+                   size_t hash_size, const uint8_t signature[64]) {
+  unsigned char q[65];
+  q[0] = 0x04;
+  memcpy(q + 1, public_key, 64);
+  return mg_br_ecdsa_i31_vrfy_raw(&mg_br_ec_p256_m31, MG_BR_EC_secp256r1, hash,
+                                  hash_size, q, sizeof(q), signature, 64) == 1;
+}
+#endif  // MG_P256 == MG_P256_BEAR
+
+// P-256 group order n, big endian
+static const uint8_t s_p256_n[32] = {
+    0xff, 0xff, 0xff, 0xff, 0x00, 0x00, 0x00, 0x00, 0xff, 0xff, 0xff,
+    0xff, 0xff, 0xff, 0xff, 0xff, 0xbc, 0xe6, 0xfa, 0xad, 0xa7, 0x17,
+    0x9e, 0x84, 0xf3, 0xb9, 0xca, 0xc2, 0xfc, 0x63, 0x25, 0x51};
+
+// Compute d = a - n, return 1 if a < n (borrow). Constant time
+static uint32_t p256_sub_n(uint8_t d[32], const uint8_t a[32]) {
+  uint32_t borrow = 0, v;
+  int i;
+  for (i = 31; i >= 0; i--) {
+    v = (uint32_t) a[i] - s_p256_n[i] - borrow;
+    d[i] = (uint8_t) v;
+    borrow = (v >> 8) & 1;
+  }
+  return borrow;
+}
+
+// ECDSA with deterministic k, RFC 6979 section 3.2, HMAC-SHA256. For P-256,
+// qlen == hlen == 256 bits, so bits2int() is just the leftmost 32 bytes
+int mg_p256_sign(const uint8_t private_key[32], const uint8_t *hash,
+                 size_t hash_size, uint8_t signature[64]) {
+  uint8_t v[32], k[32], buf[32 + 1 + 32 + 32], h1[32], t[32];
+  uint32_t lt, nz;
+  int i, tries, ok = 0;
+
+  // h1 = bits2octets(hash): leftmost 256 bits, reduced modulo n
+  memset(h1, 0, sizeof(h1));
+  if (hash_size >= 32) {
+    memcpy(h1, hash, 32);
+  } else {
+    memcpy(h1 + 32 - hash_size, hash, hash_size);
+  }
+  lt = p256_sub_n(t, h1);
+  for (i = 0; i < 32; i++) h1[i] = (uint8_t) MG_BR_MUX(lt, h1[i], t[i]);
+
+  // Steps b-g: V = 0x01..., K = 0x00..., two HMAC rounds with x and h1
+  memset(v, 1, sizeof(v));
+  memset(k, 0, sizeof(k));
+  memcpy(buf + 33, private_key, 32);
+  memcpy(buf + 65, h1, 32);
+  for (i = 0; i < 2; i++) {
+    memcpy(buf, v, 32);
+    buf[32] = (uint8_t) i;
+    mg_hmac_sha256(k, k, 32, buf, sizeof(buf));
+    mg_hmac_sha256(v, k, 32, v, 32);
+  }
+
+  // Step h: candidate k = V, must be in [1, n-1]
+  for (tries = 0; tries < 64 && !ok; tries++) {
+    mg_hmac_sha256(v, k, 32, v, 32);
+    for (nz = 0, i = 0; i < 32; i++) nz |= v[i];
+    lt = p256_sub_n(t, v);
+    if (nz != 0 && lt) {
+      ok = mg_p256_sign_with_k(private_key, hash, hash_size, v, signature);
+    }
+    if (!ok) {  // K = HMAC_K(V || 0x00), V = HMAC_K(V)
+      memcpy(buf, v, 32);
+      buf[32] = 0;
+      mg_hmac_sha256(k, k, 32, buf, 33);
+      mg_hmac_sha256(v, k, 32, v, 32);
+    }
+  }
+  mg_bzero(v, sizeof(v));
+  mg_bzero(k, sizeof(k));
+  mg_bzero(buf, sizeof(buf));
+  mg_bzero(t, sizeof(t));
+  return ok;
+}
+
+#undef I31_LEN
+#undef POINT_LEN
+#undef ORDER_LEN
+#endif  // MG_TLS == MG_TLS_BUILTIN || defined(MG_OTA_PUBLIC_KEY)
+
+#ifdef MG_ENABLE_LINES
+#line 1 "src/tls_p256_cortex.c"
+#endif
+// P-256 for Cortex-M4/M7/M33, https://github.com/Emill/P256-Cortex-M4
+// commit ecd3ec2
+// Enabled by MG_P256=MG_P256_LENNGREN. Provides mg_p256_*(), see tls_p256.h
+//
+// Copyright (c) 2017-2021 Emil Lenngren
+// Copyright (c) 2021 Shortcut Labs AB
+//
+// Permission is hereby granted, free of charge, to any person obtaining a copy
+// of this software and associated documentation files (the "Software"), to deal
+// in the Software without restriction, including without limitation the rights
+// to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+// copies of the Software, and to permit persons to whom the Software is
+// furnished to do so, subject to the following conditions:
+//
+// The above copyright notice and this permission notice shall be included in all
+// copies or substantial portions of the Software.
+//
+// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+// IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+// FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+// AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+// LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+// OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+// SOFTWARE.
+//
+// Mongoose changes: the library's C code, header, config and GCC assembly are
+// merged into one file, the assembly is a top-level __asm__ without .end.
+// Trimmed with unifdef to keygen, ECDH, sign and verify. Uses the no-FPU field
+// multiplication and the constant RAM access pattern table lookup (safe with a
+// data cache). Internal C functions are static, casts added in slide_257().
+// mg_p256_*() wrappers are at the end
+
+
+
+
+#if MG_P256 == MG_P256_LENNGREN && \
+    (MG_TLS == MG_TLS_BUILTIN || defined(MG_OTA_PUBLIC_KEY))
+
+typedef const uint32_t (*constarr)[8];
+
+struct FGInteger {
+    // To get the value this struct represents,
+    // interpret signed_value as a two's complement 288-bit little endian integer,
+    // and negate if flip_sign is -1
+    int flip_sign; // 0 or -1
+    uint32_t signed_value[9]; // of 288 bits, 257 are useful (top 31 bits are sign-extended from bit 256)
+};
+
+struct SignPrecomp {  // p256_sign_step1() result
+    uint32_t r[8];
+    uint32_t k_inv[8];
+};
+
+struct XYInteger {
+    // To get the value this struct represents,
+    // interpret signed_value as an unsigned 288-bit little endian integer,
+    // and negate if flip_sign is -1
+    int flip_sign; // 0 or -1
+    uint32_t value[8]; // unsigned value, 0 <= value < P256_order
+};
+
+int P256_divsteps2_31(int delta, uint32_t f, uint32_t g, uint32_t res_matrix[4]);
+void P256_matrix_mul_fg_9(uint32_t a, uint32_t b, const struct FGInteger fg[2], struct FGInteger *res);
+void P256_matrix_mul_mod_n(uint32_t a, uint32_t b, const struct XYInteger xy[2], struct XYInteger *res);
+
+void P256_to_montgomery(uint32_t aR[8], const uint32_t a[8]);
+void P256_from_montgomery(uint32_t a[8], const uint32_t aR[8]);
+bool P256_check_range_p(const uint32_t a[8]);
+
+bool P256_check_range_n(const uint32_t a[8]);
+void P256_mul_mod_n(uint32_t res[8], const uint32_t a[8], const uint32_t b[8]);
+void P256_add_mod_n(uint32_t res[8], const uint32_t a[8], const uint32_t b[8]);
+void P256_reduce_mod_n_32bytes(uint32_t res[8], const uint32_t a[8]);
+
+void P256_select_point(uint32_t (*output)[8], uint32_t* table, uint32_t num_coordinates, uint32_t index);
+
+void P256_jacobian_to_affine(uint32_t affine_mont_x[8], uint32_t affine_mont_y[8], const uint32_t jacobian_mont[3][8]);
+bool P256_point_is_on_curve(const uint32_t x_mont[8], const uint32_t y_mont[8]);
+void P256_double_j(uint32_t jacobian_point_out[3][8], const uint32_t jacobian_point_in[3][8]);
+void P256_add_sub_j(uint32_t jacobian_point1[3][8], const uint32_t (*point2)[8], bool is_sub, bool p2_is_affine);
+bool P256_verify_last_step(const uint32_t r[8], const uint32_t jacobian_point[3][8]);
+
+void P256_negate_mod_p_if(uint32_t out[8], const uint32_t in[8], uint32_t should_negate);
+void P256_negate_mod_n_if(uint32_t out[8], const uint32_t in[8], uint32_t should_negate);
+
+extern uint32_t P256_order[9];
+
+static const uint32_t one_montgomery[8] = {1, 0, 0, 0xffffffff, 0xffffffff, 0xffffffff, 0xfffffffe, 0};
+
+// This table contains 1G, 3G, 5G, ... 15G in affine coordinates in montgomery form
+static const uint32_t p256_basepoint_precomp[8][2][8] = {
+{{0x18a9143c, 0x79e730d4, 0x5fedb601, 0x75ba95fc, 0x77622510, 0x79fb732b, 0xa53755c6, 0x18905f76},
+{0xce95560a, 0xddf25357, 0xba19e45c, 0x8b4ab8e4, 0xdd21f325, 0xd2e88688, 0x25885d85, 0x8571ff18}},
+{{0x4eebc127, 0xffac3f90, 0x87d81fb, 0xb027f84a, 0x87cbbc98, 0x66ad77dd, 0xb6ff747e, 0x26936a3f},
+{0xc983a7eb, 0xb04c5c1f, 0x861fe1a, 0x583e47ad, 0x1a2ee98e, 0x78820831, 0xe587cc07, 0xd5f06a29}},
+{{0xc45c61f5, 0xbe1b8aae, 0x94b9537d, 0x90ec649a, 0xd076c20c, 0x941cb5aa, 0x890523c8, 0xc9079605},
+{0xe7ba4f10, 0xeb309b4a, 0xe5eb882b, 0x73c568ef, 0x7e7a1f68, 0x3540a987, 0x2dd1e916, 0x73a076bb}},
+{{0xa0173b4f, 0x746354e, 0xd23c00f7, 0x2bd20213, 0xc23bb08, 0xf43eaab5, 0xc3123e03, 0x13ba5119},
+{0x3f5b9d4d, 0x2847d030, 0x5da67bdd, 0x6742f2f2, 0x77c94195, 0xef933bdc, 0x6e240867, 0xeaedd915}},
+{{0x264e20e8, 0x75c96e8f, 0x59a7a841, 0xabe6bfed, 0x44c8eb00, 0x2cc09c04, 0xf0c4e16b, 0xe05b3080},
+{0xa45f3314, 0x1eb7777a, 0xce5d45e3, 0x56af7bed, 0x88b12f1a, 0x2b6e019a, 0xfd835f9b, 0x86659cd}},
+{{0x6245e404, 0xea7d260a, 0x6e7fdfe0, 0x9de40795, 0x8dac1ab5, 0x1ff3a415, 0x649c9073, 0x3e7090f1},
+{0x2b944e88, 0x1a768561, 0xe57f61c8, 0x250f939e, 0x1ead643d, 0xc0daa89, 0xe125b88e, 0x68930023}},
+{{0x4b2ed709, 0xccc42563, 0x856fd30d, 0xe356769, 0x559e9811, 0xbcbcd43f, 0x5395b759, 0x738477ac},
+{0xc00ee17f, 0x35752b90, 0x742ed2e3, 0x68748390, 0xbd1f5bc1, 0x7cd06422, 0xc9e7b797, 0xfbc08769}},
+{{0xbc60055b, 0x72bcd8b7, 0x56e27e4b, 0x3cc23ee, 0xe4819370, 0xee337424, 0xad3da09, 0xe2aa0e43},
+{0x6383c45d, 0x40b8524f, 0x42a41b25, 0xd7663554, 0x778a4797, 0x64efa6de, 0x7079adf4, 0x2042170a}}
+};
+
+// This contains two tables, 8 points each in affine coordinates in montgomery form
+// The first table contains these points:
+// (2^192 - 2^128 - 2^64 - 1)G
+// (2^192 - 2^128 - 2^64 + 1)G
+// (2^192 - 2^128 + 2^64 - 1)G
+// (2^192 - 2^128 + 2^64 + 1)G
+// (2^192 + 2^128 - 2^64 - 1)G
+// (2^192 + 2^128 - 2^64 + 1)G
+// (2^192 + 2^128 + 2^64 - 1)G
+// (2^192 + 2^128 + 2^64 + 1)G
+// The second table contains the same points multiplied by 2^32
+static const uint32_t p256_basepoint_precomp2[2][8][2][8] =
+{
+{
+{{0x670844e0, 0x52d8a7c9, 0xef68a29d, 0xe33bdc, 0x4bdb7361, 0xf3d2848, 0x91c5304d, 0x5222c821},
+{0xdf73fc25, 0xea6d2944, 0x255c81b, 0xa04c0f55, 0xefe488a8, 0x29acdc97, 0x80a560de, 0xbe2e158f}},
+{{0x2b13e673, 0xfc8511ee, 0xd103ed24, 0xffc58dee, 0xea7e99b8, 0x1022523a, 0x4afc8a17, 0x8f43ea39},
+{0xc5f33d0b, 0x8f4e2dbc, 0xd0aa1681, 0x3bc099fa, 0x79ff9df1, 0xffbb7b41, 0xd58b57c4, 0x180de09d}},
+{{0x8bd1cda5, 0x56430752, 0x8e05eda5, 0x1807577f, 0x956896e9, 0x99c699b, 0xf1f0efb5, 0x83d6093d},
+{0xed97061c, 0xef5af17e, 0x30d4c3c, 0x35b977b8, 0x49229439, 0x81fa75a2, 0xa0b6d35d, 0xf5a22070}},
+{{0x74f81cf1, 0x814c5365, 0x120065b, 0xe30baff7, 0x15132621, 0x80ae1256, 0x36a80788, 0x16d2b8cb},
+{0xecc50bca, 0x33d14697, 0x17aedd21, 0x19a9dfb0, 0xedc3f766, 0x523fbcc7, 0xb2cf5afd, 0x9c4de6dd}},
+{{0xcf0d9f6d, 0x5305a9e6, 0x81a9b021, 0x5839172f, 0x75c687cf, 0xcca7a4dd, 0x844be22f, 0x36d59b3e},
+{0x111a53e9, 0xcace7e62, 0xf063f3a1, 0x91c843d4, 0xda812da, 0xbf77e5f0, 0x437f3176, 0xe64af9c}},
+{{0xcf07517d, 0xdbd568bb, 0xba6830b9, 0x2f1afba2, 0xe6c4c2a6, 0x15b6807c, 0xe4966aef, 0x91c7eabc},
+{0xd6b2b6e6, 0x716dea1b, 0x19f85b4b, 0x248c43d1, 0x4a315e2a, 0x16dcfd60, 0xc72b3d0b, 0x15fdd303}},
+{{0x42b7dfd5, 0xe40bf9f4, 0x2d934f2a, 0x673689f3, 0x30a6f50b, 0x8314beb4, 0x976ec64e, 0xd17af2bc},
+{0x1ee7ddf1, 0x39f66c4f, 0x68ea373c, 0x7f68e18b, 0x53d0b186, 0x5166c1f2, 0x7be58f14, 0x95dda601}},
+{{0x42913074, 0xd5ae356, 0x48a542b1, 0x55491b27, 0xb310732a, 0x469ca665, 0x5f1a4cc1, 0x29591d52},
+{0xb84f983f, 0xe76f5b6b, 0x9f5f84e1, 0xbe7eef41, 0x80baa189, 0x1200d496, 0x18ef332c, 0x6376551f}}
+},
+{
+{{0x7c4e54f5, 0xb9e5cbc0, 0xe1410e34, 0xc53a1a17, 0xec454425, 0x3e199130, 0x1700902e, 0xb029c97e},
+{0x786423b6, 0x2de66e11, 0xb41a95be, 0x262dc914, 0x451b683, 0x51766abd, 0x85bb6fb1, 0x55ad5f34}},
+{{0x9066cb79, 0x74f4f1c, 0x30c8b94e, 0x1ab31bd6, 0xd74275b3, 0x6d3f012f, 0x9ddcce40, 0xa214d0b1},
+{0xd165050a, 0x24aedf74, 0xe0e5dc3e, 0x95f17ece, 0xd9224456, 0x6ada9cda, 0x2dd60eea, 0x1fadb2d1}},
+{{0xe20cfb9b, 0xa3d83091, 0xba76e0cb, 0xae79c975, 0xc8858a6e, 0xa5f2a588, 0x874a3168, 0xe897a5f4},
+{0x7d48f096, 0xf6c1ef40, 0xc35b132c, 0x1f9c516b, 0x53c479fd, 0xe1040f91, 0x9df06743, 0x60e881f}},
+{{0x52a90e51, 0x9e0ad72, 0x38c50a96, 0xb7e66ea3, 0x7d997770, 0xab32ad05, 0x445671cb, 0xceaffe2},
+{0x5d37cc99, 0xdfbe753c, 0xe0fea2d5, 0x95d068cc, 0x4dd77cb6, 0x1e37cdda, 0x55530688, 0x88c5a4bb}},
+{{0xc7744f1, 0x3413f033, 0xbc816702, 0x23c05c89, 0x1192b5ac, 0x2322ee9a, 0x373180bb, 0xc1636a0},
+{0xbdde0207, 0xfe2f3d4, 0xc23578d8, 0xe1a093a, 0xc888ead, 0x6e5f0d1, 0x52a2b660, 0x9ca285a5}},
+{{0xce923964, 0xdae76995, 0xa34c7993, 0xcc96493a, 0xea73d9e7, 0xd19b5144, 0x311e6e34, 0x4a5c263},
+{0xd9a2a443, 0x7db5b32b, 0x2cfd960c, 0x3754bd33, 0xa430f15, 0xc5bcc98, 0xd9a94574, 0x5651201f}},
+{{0xfc0418fe, 0xebdd8921, 0x34e20036, 0x37015b39, 0xdf03a353, 0xcf4fcd8f, 0xf12cab16, 0xdc2de6e1},
+{0xd071df14, 0x9c17cc1a, 0x63415530, 0xd7c5e6a3, 0x68f3fb1e, 0xb5301660, 0x18269301, 0xb5f70bc9}},
+{{0x79ec1a0f, 0x2d8daefd, 0xceb39c97, 0x3bbcd6fd, 0x58f61a95, 0xf5575ffc, 0xadf7b420, 0xdbd986c4},
+{0x15f39eb7, 0x81aa8814, 0xb98d976c, 0x6ee2fcf5, 0xcf2f717d, 0x5465475d, 0x6860bbd0, 0x8e24d3c4}}
+}
+};
+
+// Takes the leftmost 256 bits in hash (treated as big endian),
+// and converts to little endian integer z.
+static void hash_to_z(uint32_t z[8], const uint8_t* hash, uint32_t hashlen) {
+    if (hashlen > 32) {
+        hashlen = 32;
+    }
+    for (uint32_t i = 0; i < hashlen; i++) {
+        ((uint8_t*)z)[i] = hash[hashlen - 1 - i];
+    }
+    for (uint32_t i = hashlen; i < 32; i++) {
+        ((uint8_t*)z)[i] = 0;
+    }
+}
+
+// Creates a representation of a (little endian integer),
+// so that r[0] + 2*r[1] + 2^2*r[2] + 2^3*r[3] + ... = a,
+// where each r[i] is -15, -13, ..., 11, 13, 15 or 0.
+// Only around 1/5.5 of the r[i] will be non-zero.
+static void slide_257(signed char r[257], const uint8_t a[32]) {
+    for (int i = 0; i < 256; ++i) {
+        r[i] = 1 & (a[i >> 3] >> (i & 7));
+    }
+    r[256] = 0;
+
+    for (int i = 0; i < 256; i++) {
+        if (r[i] != 0) {
+            for (int b = 1; b <= 4 && i + b < 256; b++) {
+                if (r[i + b] != 0) {
+                    if (r[i] + (r[i + b] << b) <= 15) {
+                        r[i] = (signed char) (r[i] + (r[i + b] << b)); r[i + b] = 0;
+                    } else if (r[i] - (r[i + b] << b) >= -15) {
+                        r[i] = (signed char) (r[i] - (r[i + b] << b));
+                        for (;;) {
+                            r[i + b] = 0;
+                            b++;
+                            if (!r[i + b]) {
+                                r[i + b] = 1;
+                                b--; // Will be added back after loop footer b++
+                                break;
+                            }
+                        }
+                    } else {
+                        break;
+                    }
+                }
+            }
+        }
+    }
+}
+
+static void P256_mod_n_inv(uint32_t out[8], const uint32_t in[8]) {
+    // This function follows the algorithm in section 12.1 of https://gcd.cr.yp.to/safegcd-20190413.pdf.
+    // It has been altered in the following ways:
+    //   1. Due to 32-bit cpu, we use 24 * 31 iterations instead of 12 * 62.
+    //   2. P-256 modulus instead of 2^255-19.
+    //      744 iterations are still enough and slightly more than the required 741 (floor((49*256+57)/17)).
+    //   3. Step 5 has been corrected to go back to step 2 instead of step 3.
+    //   4. The order of the matrix multiplications in step 6 has been changed to (T24*(T23*(T22*(...*(T1*[0, 1]))))),
+    //      where [0, 1] is a column vector to make it possible to be able to extract the "top-right corner", v, of T24*T23*...*T1.
+    //      The result v will then be contained in the first element of the resulting column vector.
+    
+    struct {
+        struct FGInteger fg[2]; // f and g
+        struct XYInteger xy[2]; // x and y
+    } state[2]; // "current" and "next"
+    
+    state[0].fg[0].flip_sign = 0; // non-negative f
+    memcpy(&state[0].fg[0].signed_value, P256_order, 36); // f
+    state[0].fg[1].flip_sign = 0; // non-negative g
+    memcpy(&state[0].fg[1].signed_value, in, 32); // g
+    state[0].fg[1].signed_value[8] = 0; // upper bits of g are 0
+    memset(&state[0].xy, 0, sizeof(state[0].xy));
+    // We later need a factor 2^-744. The montgomery multiplication gives 2^(24*-32)=2^-768, so multiply the init value (1) by 2^24 here.
+    state[0].xy[1].value[0] = 1U << 24;
+    
+    int delta = 1;
+    for (int i = 0; i < 24; i++) {
+        // Scaled translation matrix Ti
+        uint32_t matrix[4]; // element range: [-2^30, 2^31] (negative numbers are stored in two's complement form)
+        
+        // Decode f and g into two's complement representation and use the lowest 32 bits in the P256_divsteps2_31 calculation
+        uint32_t negate_f = state[i % 2].fg[0].flip_sign;
+        uint32_t negate_g = state[i % 2].fg[1].flip_sign;
+        delta = P256_divsteps2_31(delta, (state[i % 2].fg[0].signed_value[0] ^ negate_f) - negate_f, (state[i % 2].fg[1].signed_value[0] ^ negate_g) - negate_g, matrix);
+        
+        // "Jump step", calculates the new f and g values that applies after 31 divstep2 iterations
+        P256_matrix_mul_fg_9(matrix[0], matrix[1], state[i % 2].fg, &state[(i + 1) % 2].fg[0]);
+        P256_matrix_mul_fg_9(matrix[2], matrix[3], state[i % 2].fg, &state[(i + 1) % 2].fg[1]);
+        
+        // Iterate the result vector
+        // Due to montgomery multiplication inside this function, each step also adds a 2^-32 factor
+        P256_matrix_mul_mod_n(matrix[0], matrix[1], state[i % 2].xy, &state[(i + 1) % 2].xy[0]);
+        P256_matrix_mul_mod_n(matrix[2], matrix[3], state[i % 2].xy, &state[(i + 1) % 2].xy[1]);
+    }
+    // Calculates val^-1 = sgn(f) * v * 2^-744, where v is the "top-right corner" of the resulting T24*T23*...*T1 matrix.
+    // In this implementation, at this point x contains v * 2^-744.
+    P256_negate_mod_n_if(out, &state[0].xy[0].value[0], (state[0].xy[0].flip_sign ^ state[0].fg[0].flip_sign ^ state[0].fg[0].signed_value[8]) & 1);
+}
+
+// Constant time abs
+static inline uint32_t abs_int(int8_t a) {
+    uint32_t a_u = (uint32_t)(int32_t)a;
+    uint32_t mask = a_u >> 31;
+    mask |= mask << 1;
+    mask |= mask << 2;
+    uint32_t result = (-a) & mask;
+    result |= a & (mask ^ 0xf);
+    return result;
+}
+
+// Calculates scalar*P in constant time (except for the scalars 2 and n-2, for which the results take a few extra cycles to compute)
+static void scalarmult_variable_base(uint32_t output_mont_x[8], uint32_t output_mont_y[8], const uint32_t input_mont_x[8], const uint32_t input_mont_y[8], const uint32_t scalar[8]) {
+    // Based on https://eprint.iacr.org/2014/130.pdf, Algorithm 1.
+    
+    uint32_t scalar2[8];
+    int8_t e[64];
+    
+    // The algorithm used requires the scalar to be odd. If even, negate the scalar modulo p to make it odd, and later negate the end result.
+    bool even = (scalar[0] & 1) ^ 1;
+    P256_negate_mod_n_if(scalar2, scalar, even);
+    
+    // Rewrite the scalar as e[0] + 2^4*e[1] + 2^8*e[2] + ... + 2^252*e[63], where each e[i] is an odd number and -15 <= e[i] <= 15.
+    e[0] = scalar2[0] & 0xf;
+    for (int i = 1; i < 64; i++) {
+        // Extract 4 bits
+        e[i] = (scalar2[i / 8] >> ((i % 8) * 4)) & 0xf;
+        // If even, subtract 2^4 from e[i - 1] and add 1 to e[i]
+        e[i - 1] -= (int8_t) (((e[i] & 1) ^ 1) << 4);
+        e[i] |= 1;
+    }
+    
+    // Create a table of P, 3P, 5P, ... 15P.
+    uint32_t table[8][3][8];
+    memcpy(table[0][0], input_mont_x, 32);
+    memcpy(table[0][1], input_mont_y, 32);
+    memcpy(table[0][2], one_montgomery, 32);
+    P256_double_j(table[7], (constarr)table[0]);
+    for (int i = 1; i < 8; i++) {
+        memcpy(table[i], table[7], 96);
+        P256_add_sub_j(table[i], (constarr)table[i - 1], 0, 0);
+    }
+    
+    // Calculate the result as (((((((((e[63]*G)*2^4)+e[62])*2^4)+e[61])*2^4)...)+e[1])*2^4)+e[0] = (2^252*e[63] + 2^248*e[62] + ... + e[0])*G.
+    
+    uint32_t current_point[3][8];
+    
+    // e[63] is never negative
+    P256_select_point(current_point, (uint32_t*)table, 3, e[63] >> 1);
+    
+    for (uint32_t i = 63; i --> 0;) {
+        for (int j = 3; j >= 0; j--) {
+            P256_double_j(current_point, (constarr)current_point);
+        }
+        uint32_t selected_point[3][8];
+        P256_select_point(selected_point, (uint32_t*)table, 3, abs_int(e[i]) >> 1);
+        P256_negate_mod_p_if(selected_point[1], selected_point[1], (uint8_t)e[i] >> 7);
+        
+        // There is (only) one odd input scalar that leads to an exception when i == 0: n-2,
+        // in that case current_point will be equal to selected_point and hence a doubling
+        // will occur instead. We don't bother fixing the same constant time for that case since
+        // the probability of that random value to be generated is around 1/2^255 and an
+        // attacker could easily test this case anyway.
+        P256_add_sub_j(current_point, (constarr)selected_point, false, false);
+    }
+    P256_jacobian_to_affine(output_mont_x, output_mont_y, (constarr)current_point);
+    
+    // If the scalar was initially even, we now negate the result to get the correct result, since -(scalar*G) = (-scalar*G).
+    // This is done by negating y, since -(x,y) = (x,-y).
+    P256_negate_mod_p_if(output_mont_y, output_mont_y, even);
+}
+
+#define get_bit(arr, i) ((arr[(i) / 32] >> ((i) % 32)) & 1)
+
+// Calculates scalar*G in constant time
+static void scalarmult_fixed_base(uint32_t output_mont_x[8], uint32_t output_mont_y[8], const uint32_t scalar[8]) {
+    uint32_t scalar2[8];
+    
+    // Just as with the algorithm used in variable base scalar multiplication, this algorithm requires the scalar to be odd.
+    bool even = (scalar[0] & 1) ^ 1;
+    P256_negate_mod_n_if(scalar2, scalar, even);
+    
+    // This algorithm conceptually rewrites the odd scalar as s[0] + 2^1*s[1] + 2^2*s[2] + ... + 2^255*s[255], where each s[i] is -1 or 1.
+    // By initially setting s[i] to the corresponding bit S[i] in the original odd scalar S, we go from lsb to msb, and whenever a value s[i] is 0,
+    // increase s[i] by 1 and decrease s[i-1] by 2.
+    // This will result in that s[i] = S[i+1] == 1 ? 1 : -1 for i < 255, and s[255] = 1.
+    
+    // We then form the scalars abs(s[j] + s[j+64]*2^64 + s[j+128]*2^128 + s[j+192]*2^192)*(2^32 * floor(j / 32)) for different 0 <= j < 64.
+    // Each scalar times G has already been precomputed in p256_basepoint_precomp2.
+    // That way we only need 31 point doublings and 63 point additions.
+    
+    uint32_t current_point[3][8];
+    uint32_t selected_point[2][8];
+    
+    for (uint32_t i = 32; i --> 0;) {
+        {
+            uint32_t mask = get_bit(scalar2, i + 32 + 1) | (get_bit(scalar2, i + 64 + 32 + 1) << 1) | (get_bit(scalar2, i + 2 * 64 + 32 + 1) << 2);
+            if (i == 31) {
+                P256_select_point(current_point, (uint32_t*)p256_basepoint_precomp2[1], 2, mask);
+                memcpy(current_point[2], one_montgomery, 32);
+            } else {
+                P256_double_j(current_point, (constarr)current_point);
+                
+                uint32_t sign = get_bit(scalar2, i + 3 * 64 + 32 + 1) - 1; // positive: 0, negative: -1
+                mask = (mask ^ sign) & 7;
+                P256_select_point(selected_point, (uint32_t*)p256_basepoint_precomp2[1], 2, mask);
+                P256_negate_mod_p_if(selected_point[1], selected_point[1], sign & 1);
+                P256_add_sub_j(current_point, (constarr)selected_point, false, true);
+            }
+        }
+        {
+            uint32_t mask = get_bit(scalar2, i + 1) | (get_bit(scalar2, i + 64 + 1) << 1) | (get_bit(scalar2, i + 2 * 64 + 1) << 2);
+            uint32_t sign = get_bit(scalar2, i + 3 * 64 + 1) - 1; // positive: 0, negative: -1
+            mask = (mask ^ sign) & 7;
+            P256_select_point(selected_point, (uint32_t*)p256_basepoint_precomp2[0], 2, mask);
+            P256_negate_mod_p_if(selected_point[1], selected_point[1], sign & 1);
+            P256_add_sub_j(current_point, (constarr)selected_point, false, true);
+        }
+    }
+    P256_jacobian_to_affine(output_mont_x, output_mont_y, (constarr)current_point);
+    
+    // Negate final result if the scalar was initially even.
+    P256_negate_mod_p_if(output_mont_y, output_mont_y, even);
+}
+
+static void p256_convert_endianness(void* output, const void* input, size_t byte_len) {
+    for (size_t i = 0; i < byte_len / 2; i++) {
+        uint8_t t = ((uint8_t*)input)[byte_len - 1 - i];
+        ((uint8_t*)output)[byte_len - 1 - i] = ((uint8_t*)input)[i];
+        ((uint8_t*)output)[i] = t;
+    }
+}
+
+static bool p256_verify(const uint32_t public_key_x[8], const uint32_t public_key_y[8], const uint8_t* hash, uint32_t hashlen_in_bytes, const uint32_t r[8], const uint32_t s[8]) {
+    if (!P256_check_range_n(r) || !P256_check_range_n(s)) {
+        return false;
+    }
+    
+    if (!P256_check_range_p(public_key_x) || !P256_check_range_p(public_key_y)) {
+        return false;
+    }
+    
+    uint32_t pk_table[8][3][8];
+    P256_to_montgomery(pk_table[0][0], public_key_x);
+    P256_to_montgomery(pk_table[0][1], public_key_y);
+    memcpy(pk_table[0][2], one_montgomery, 32);
+    
+    if (!P256_point_is_on_curve(pk_table[0][0], pk_table[0][1])) {
+        return false;
+    }
+    
+    // Create a table of P, 3P, 5P, ..., 15P, where P is the public key.
+    P256_double_j(pk_table[7], (constarr)pk_table[0]);
+    for (int i = 1; i < 8; i++) {
+        memcpy(pk_table[i], pk_table[7], 96);
+        P256_add_sub_j(pk_table[i], (constarr)pk_table[i - 1], 0, 0);
+    }
+    
+    uint32_t z[8], w[8], u1[8], u2[8];
+    
+    hash_to_z(z, hash, hashlen_in_bytes);
+    
+    P256_mod_n_inv(w, s);
+    
+    P256_mul_mod_n(u1, z, w);
+    P256_mul_mod_n(u2, r, w);
+    
+    // Each value in these arrays will be an odd integer v, so that -15 <= v <= 15.
+    // Around 1/5.5 of them will be non-zero.
+    signed char slide_bp[257], slide_pk[257];
+    slide_257(slide_bp, (uint8_t*)u1);
+    slide_257(slide_pk, (uint8_t*)u2);
+    
+    uint32_t cp[3][8] = {0};
+    
+    for (int i = 256; i >= 0; i--) {
+        P256_double_j(cp, (constarr)cp);
+        if (slide_bp[i] > 0) {
+            P256_add_sub_j(cp, p256_basepoint_precomp[slide_bp[i]/2], 0, 1);
+        } else if (slide_bp[i] < 0) {
+            P256_add_sub_j(cp, p256_basepoint_precomp[(-slide_bp[i])/2], 1, 1);
+        }
+        if (slide_pk[i] > 0) {
+            P256_add_sub_j(cp, (constarr)pk_table[slide_pk[i]/2], 0, 0);
+        } else if (slide_pk[i] < 0) {
+            P256_add_sub_j(cp, (constarr)pk_table[(-slide_pk[i])/2], 1, 0);
+        }
+    }
+    
+    return P256_verify_last_step(r, (constarr)cp);
+}
+
+static bool p256_sign_step1(struct SignPrecomp *result, const uint32_t k[8]) {
+    do {
+        uint32_t point_res[2][8];
+        if (!P256_check_range_n(k)) {
+            break;
+        }
+        scalarmult_fixed_base(point_res[0], point_res[1], k);
+        P256_mod_n_inv(result->k_inv, k);
+        P256_from_montgomery(result->r, point_res[0]);
+        P256_reduce_mod_n_32bytes(result->r, result->r);
+        
+        uint32_t r_sum = 0;
+        for (int i = 0; i < 8; i++) {
+            r_sum |= result->r[i];
+        }
+        if (r_sum == 0) {
+            break;
+        }
+        return true;
+    } while (false);
+    
+    memset(result, 0, sizeof(struct SignPrecomp));
+    return false;
+}
+
+static bool p256_sign_step2(uint32_t r[8], uint32_t s[8], const uint8_t* hash, uint32_t hashlen_in_bytes, const uint32_t private_key[8], struct SignPrecomp *sign_precomp) {
+    do {
+        if (!P256_check_range_n(sign_precomp->k_inv) || !P256_check_range_n(sign_precomp->r)) { // just make sure user did not input an obviously invalid precomp
+            break;
+        }
+        uint32_t *const z = r;
+        hash_to_z(z, hash, hashlen_in_bytes);
+        P256_mul_mod_n(s, sign_precomp->r, private_key);
+        P256_add_mod_n(s, z, s);
+        P256_mul_mod_n(s, sign_precomp->k_inv, s);
+        
+        memcpy(r, sign_precomp->r, 32);
+        
+        uint32_t s_sum = 0;
+        for (int i = 0; i < 8; i++) {
+            s_sum |= s[i];
+        }
+        if (s_sum == 0) {
+            break;
+        }
+        memset(sign_precomp, 0, sizeof(*sign_precomp));
+        return true;
+    } while (false);
+    
+    memset(r, 0, 32);
+    memset(s, 0, 32);
+    return false;
+}
+
+static bool p256_sign(uint32_t r[8], uint32_t s[8], const uint8_t* hash, uint32_t hashlen_in_bytes, const uint32_t private_key[8], const uint32_t k[8]) {
+    struct SignPrecomp t;
+    if (!p256_sign_step1(&t, k)) {
+        memset(r, 0, 32);
+        memset(s, 0, 32);
+        return false;
+    }
+    return p256_sign_step2(r, s, hash, hashlen_in_bytes, private_key, &t);
+}
+
+static bool p256_scalarmult_base(uint32_t result_x[8], uint32_t result_y[8], const uint32_t scalar[8]) {
+    if (!P256_check_range_n(scalar)) {
+        return false;
+    }
+    scalarmult_fixed_base(result_x, result_y, scalar);
+    P256_from_montgomery(result_x, result_x);
+    P256_from_montgomery(result_y, result_y);
+    return true;
+    
+}
+
+static bool p256_keygen(uint32_t public_key_x[8], uint32_t public_key_y[8], const uint32_t private_key[8]) {
+    return p256_scalarmult_base(public_key_x, public_key_y, private_key);
+}
+
+
+static bool p256_scalarmult_generic_no_scalar_check(uint32_t output_mont_x[8], uint32_t output_mont_y[8], const uint32_t scalar[8], const uint32_t in_x[8], const uint32_t in_y[8]) {
+    if (!P256_check_range_p(in_x) || !P256_check_range_p(in_y)) {
+        return false;
+    }
+    
+    P256_to_montgomery(output_mont_x, in_x);
+    P256_to_montgomery(output_mont_y, in_y);
+    
+    if (!P256_point_is_on_curve(output_mont_x, output_mont_y)) {
+        return false;
+    }
+    
+    scalarmult_variable_base(output_mont_x, output_mont_y, output_mont_x, output_mont_y, scalar);
+    return true;
+}
+
+static bool p256_ecdh_calc_shared_secret(uint8_t shared_secret[32], const uint32_t private_key[8], const uint32_t others_public_key_x[8], const uint32_t others_public_key_y[8]) {
+    uint32_t result_x[8], result_y[8];
+    if (!p256_scalarmult_generic_no_scalar_check(result_x, result_y, private_key, others_public_key_x, others_public_key_y)) {
+        return false;
+    }
+    P256_from_montgomery(result_x, result_x);
+    p256_convert_endianness(shared_secret, result_x, 32);
+    return true;
+}
+
+// Assembler, from p256-cortex-m4-asm-gcc.S, converted to a top-level asm
+// block so it can live in the amalgamated mongoose.c
+__asm__(
+    ".pushsection .text.mg_p256,\"ax\",%progbits\n"
+    "\t.syntax unified\n"
+    "\t.thumb\n"
+    "\t.align 2\n"
+    "\t.type P256_select_point, %function\n"
+    "P256_select_point:\n"
+    "\t.global P256_select_point\n"
+    "\tpush {r0,r2,r3,r4-r11,lr}\n"
+    "\tsubs r2,#1\n"
+    "\tlsls r2,#5\n"
+    "0:\n"
+    "\trsbs r3,#0\n"
+    "\tsbcs r3,r3,r3\n"
+    "\tmvns r3,r3\n"
+    "\tldm r1!,{r6-r12,lr}\n"
+    "\tands r6,r3\n"
+    "\tands r7,r3\n"
+    "\tand r8,r3\n"
+    "\tand r9,r3\n"
+    "\tand r10,r3\n"
+    "\tand r11,r3\n"
+    "\tand r12,r3\n"
+    "\tand lr,r3\n"
+    "\tadds r1,r2\n"
+    "\tmovs r3,#1\n"
+    "1:\n"
+    "\tldr r0,[sp,#8]\n"
+    "\teors r0,r3\n"
+    "\tmrs r0,apsr\n"
+    "\tlsrs r0,#30\n"
+    "\tldm r1!,{r4,r5}\n"
+    "\tumlal r6,r2,r0,r4\n"
+    "\tumlal r7,r3,r0,r5\n"
+    "\tldm r1!,{r4,r5}\n"
+    "\tumlal r8,r2,r0,r4\n"
+    "\tumlal r9,r3,r0,r5\n"
+    "\tldm r1!,{r4,r5}\n"
+    "\tumlal r10,r2,r0,r4\n"
+    "\tumlal r11,r3,r0,r5\n"
+    "\tldm r1!,{r4,r5}\n"
+    "\tumlal r12,r2,r0,r4\n"
+    "\tumlal lr,r3,r0,r5\n"
+    "\tadds r1,r2\n"
+    "\tadds r3,#1\n"
+    "\tcmp r3,#8\n"
+    "\tbne 1b\n"
+    "\tldm sp,{r0,r4}\n"
+    "\tstm r0!,{r6-r12,lr}\n"
+    "\tstr r0,[sp]\n"
+    "\tsub r1,r1,r2, lsl #3\n"
+    "\tsubs r1,#224\n"
+    "\tsubs r4,#1\n"
+    "\tstr r4,[sp,#4]\n"
+    "\tldr r3,[sp,#8]\n"
+    "\tbne 0b\n"
+    "\tadd sp,#12\n"
+    "\tpop {r4-r11,pc}\n"
+    "\t.size P256_select_point, .-P256_select_point\n"
+    "\t.type mul288x288, %function\n"
+    "mul288x288:\n"
+    "\tpush {r4-r11,lr}\n"
+    "\tmov r4,r0\n"
+    "\tmov r5,r2\n"
+    "\tmov r6,r1\n"
+    "\tmovs r1,#72\n"
+    "\tbl setzero\n"
+    "\tldm r5,{r0-r2,r8-r12,lr}\n"
+    "\tmovs r7,#9\n"
+    "0:\n"
+    "\tldm r6!,{r5}\n"
+    "\tpush {r6,r7}\n"
+    "\tmovs r3,#0\n"
+    "\tldm r4,{r6,r7}\n"
+    "\tumaal r6,r3,r5,r0\n"
+    "\tumaal r7,r3,r5,r1\n"
+    "\tstm r4!,{r6,r7}\n"
+    "\tldm r4,{r6,r7}\n"
+    "\tumaal r6,r3,r5,r2\n"
+    "\tumaal r7,r3,r5,r8\n"
+    "\tstm r4!,{r6,r7}\n"
+    "\tldm r4,{r6,r7}\n"
+    "\tumaal r6,r3,r5,r9\n"
+    "\tumaal r7,r3,r5,r10\n"
+    "\tstm r4!,{r6,r7}\n"
+    "\tldm r4,{r6,r7}\n"
+    "\tumaal r6,r3,r5,r11\n"
+    "\tumaal r7,r3,r5,r12\n"
+    "\tstm r4!,{r6,r7}\n"
+    "\tldm r4,{r6}\n"
+    "\tumaal r3,r6,r5,lr\n"
+    "\tstm r4!,{r3,r6}\n"
+    "\tsubs r4,r4,#36\n"
+    "\tpop {r6,r7}\n"
+    "\tsubs r7,r7,#1\n"
+    "\tbne 0b\n"
+    "\tpop {r4-r11,pc}\n"
+    "\t.size mul288x288, .-mul288x288\n"
+    "\t.type setzero, %function\n"
+    "setzero:\n"
+    "\tmovs r2,#0\n"
+    "\tmovs r3,#0\n"
+    "0:\n"
+    "\tstm r0!,{r2,r3}\n"
+    "\tsubs r1,r1,#8\n"
+    "\tbne 0b\n"
+    "\tbx lr\n"
+    "\t.size setzero, .-setzero\n"
+    "\t.type P256_mulmod, %function\n"
+    "P256_mulmod:\n"
+    "\tpush {r2,lr}\n"
+    "\tsub sp,#28\n"
+    "\tldm r2,{r2,r3,r4,r5}\n"
+    "\tldm r1!,{r0,r10,lr}\n"
+    "\tumull r6,r11,r2,r0\n"
+    "\tumull r7,r12,r3,r0\n"
+    "\tumaal r7,r11,r2,r10\n"
+    "\tpush {r6,r7}\n"
+    "\tumull r8,r6,r4,r0\n"
+    "\tumaal r8,r11,r3,r10\n"
+    "\tumull r9,r7,r5,r0\n"
+    "\tumaal r9,r11,r4,r10\n"
+    "\tumaal r11,r7,r5,r10\n"
+    "\tumaal r8,r12,r2,lr\n"
+    "\tumaal r9,r12,r3,lr\n"
+    "\tumaal r11,r12,r4,lr\n"
+    "\tumaal r12,r7,r5,lr\n"
+    "\tldm r1!,{r0,r10,lr}\n"
+    "\tumaal r9,r6,r2,r0\n"
+    "\tumaal r11,r6,r3,r0\n"
+    "\tumaal r12,r6,r4,r0\n"
+    "\tumaal r6,r7,r5,r0\n"
+    "\tstrd r8,r9,[sp,#8]\n"
+    "\tmov r9,#0\n"
+    "\tumaal r11,r9,r2,r10\n"
+    "\tumaal r12,r9,r3,r10\n"
+    "\tumaal r6,r9,r4,r10\n"
+    "\tumaal r7,r9,r5,r10\n"
+    "\tmov r10,#0\n"
+    "\tumaal r12,r10,r2,lr\n"
+    "\tumaal r6,r10,r3,lr\n"
+    "\tumaal r7,r10,r4,lr\n"
+    "\tumaal r9,r10,r5,lr\n"
+    "\tldr r8,[r1],#4\n"
+    "\tmov lr,#0\n"
+    "\tumaal lr,r6,r2,r8\n"
+    "\tumaal r7,r6,r3,r8\n"
+    "\tumaal r9,r6,r4,r8\n"
+    "\tumaal r10,r6,r5,r8\n"
+    "\tldr r8,[r1],#-28\n"
+    "\tmov r0,#0\n"
+    "\tumaal r7,r0,r2,r8\n"
+    "\tumaal r9,r0,r3,r8\n"
+    "\tumaal r10,r0,r4,r8\n"
+    "\tumaal r6,r0,r5,r8\n"
+    "\tpush {r0}\n"
+    "\tldr r2,[sp,#40]\n"
+    "\tadds r2,r2,#16\n"
+    "\tldm r2,{r2,r3,r4,r5}\n"
+    "\tldr r8,[r1],#4\n"
+    "\tmov r0,#0\n"
+    "\tumaal r11,r0,r2,r8\n"
+    "\tstr r11,[sp,#16+4]\n"
+    "\tumaal r12,r0,r3,r8\n"
+    "\tumaal lr,r0,r4,r8\n"
+    "\tumaal r0,r7,r5,r8\n"
+    "\tldr r8,[r1],#4\n"
+    "\tmov r11,#0\n"
+    "\tumaal r12,r11,r2,r8\n"
+    "\tstr r12,[sp,#20+4]\n"
+    "\tumaal lr,r11,r3,r8\n"
+    "\tumaal r0,r11,r4,r8\n"
+    "\tumaal r11,r7,r5,r8\n"
+    "\tldr r8,[r1],#4\n"
+    "\tmov r12,#0\n"
+    "\tumaal lr,r12,r2,r8\n"
+    "\tstr lr,[sp,#24+4]\n"
+    "\tumaal r0,r12,r3,r8\n"
+    "\tumaal r11,r12,r4,r8\n"
+    "\tumaal r10,r12,r5,r8\n"
+    "\tldr r8,[r1],#4\n"
+    "\tmov lr,#0\n"
+    "\tumaal r0,lr,r2,r8\n"
+    "\tstr r0,[sp,#28+4]\n"
+    "\tumaal r11,lr,r3,r8\n"
+    "\tumaal r10,lr,r4,r8\n"
+    "\tumaal r6,lr,r5,r8\n"
+    "\tldm r1!,{r0,r8}\n"
+    "\tumaal r11,r9,r2,r0\n"
+    "\tstr r11,[sp,#32+4]\n"
+    "\tumaal r9,r10,r3,r0\n"
+    "\tumaal r10,r6,r4,r0\n"
+    "\tpop {r11}\n"
+    "\tumaal r11,r6,r5,r0\n"
+    "\tumaal r9,r7,r2,r8\n"
+    "\tumaal r10,r7,r3,r8\n"
+    "\tumaal r11,r7,r4,r8\n"
+    "\tumaal r6,r7,r5,r8\n"
+    "\tldm r1!,{r0,r8}\n"
+    "\tumaal r10,r12,r2,r0\n"
+    "\tumaal r11,r12,r3,r0\n"
+    "\tumaal r6,r12,r4,r0\n"
+    "\tumaal r7,r12,r5,r0\n"
+    "\tumaal r11,lr,r2,r8\n"
+    "\tumaal lr,r6,r3,r8\n"
+    "\tumaal r6,r7,r4,r8\n"
+    "\tumaal r7,r12,r5,r8\n"
+    "\tpush {r6,r7,r12}\n"
+    "\tadd r7,sp,#12\n"
+    "\tldm r7,{r0-r8}\n"
+    "\tmov r12,#0\n"
+    "\tadds r3,r0\n"
+    "\tadcs r4,r4,r1\n"
+    "\tadcs r5,r5,r2\n"
+    "\tadcs r6,r6,r0\n"
+    "\tadcs r7,r7,r1\n"
+    "\tadcs r8,r8,r0\n"
+    "\tadcs r9,r9,r1\n"
+    "\tadcs r10,r10,#0\n"
+    "\tadcs r11,r11,#0\n"
+    "\tadcs r12,r12,#0\n"
+    "\tadds r6,r3\n"
+    "\tadcs r7,r7,r4\n"
+    "\tadcs r8,r8,r2\n"
+    "\tadcs r9,r9,r3\n"
+    "\tadcs r10,r10,r2\n"
+    "\tadcs r11,r11,r3\n"
+    "\tadcs r12,r12,#0\n"
+    "\tsubs r7,r0\n"
+    "\tsbcs r8,r8,r1\n"
+    "\tsbcs r9,r9,r2\n"
+    "\tsbcs r10,r10,r3\n"
+    "\tsbcs r11,r11,#0\n"
+    "\tsbcs r12,r12,#0\n"
+    "\tpop {r1-r3}\n"
+    "\tadds r0,lr,r12\n"
+    "\tadcs r1,r1,#0\n"
+    "\tmov r12,#0\n"
+    "\tadcs r12,r12,#0\n"
+    "\tadcs r8,r8,r5\n"
+    "\tadcs r9,r9,r6\n"
+    "\tadcs r10,r10,r4\n"
+    "\tadcs r11,r11,r5\n"
+    "\tadcs r0,r0,r4\n"
+    "\tadcs r1,r1,r5\n"
+    "\tadcs r2,r2,r12\n"
+    "\tadcs r3,r3,#0\n"
+    "\tmov r12,#0\n"
+    "\tadcs r12,r12,#0\n"
+    "\tadcs r10,r10,r7\n"
+    "\tadcs r11,r11,#0\n"
+    "\tadcs r0,r0,r6\n"
+    "\tadcs r1,r1,r7\n"
+    "\tadcs r2,r2,r6\n"
+    "\tadcs r3,r3,r7\n"
+    "\tadcs r12,r12,#0\n"
+    "\tsubs r11,r4\n"
+    "\tsbcs r0,r0,r5\n"
+    "\tsbcs r1,r1,r6\n"
+    "\tsbcs r2,r2,r7\n"
+    "\tsbcs r3,r3,#0\n"
+    "\tsbcs r12,r12,#0\n"
+    "\tsubs r8,r8,#0xffffffff\n"
+    "\tsbcs r9,r9,#0xffffffff\n"
+    "\tsbcs r10,r10,#0xffffffff\n"
+    "\tsbcs r11,r11,#0\n"
+    "\tsbcs r4,r0,#0\n"
+    "\tsbcs r5,r1,#0\n"
+    "\tsbcs r6,r2,#1\n"
+    "\tsbcs r7,r3,#0xffffffff\n"
+    "\tsbc r12,r12,#0\n"
+    "\tadds r0,r8,r12\n"
+    "\tadcs r1,r9,r12\n"
+    "\tadcs r2,r10,r12\n"
+    "\tadcs r3,r11,#0\n"
+    "\tadcs r4,r4,#0\n"
+    "\tadcs r5,r5,#0\n"
+    "\tadcs r6,r6,r12, lsr #31\n"
+    "\tadcs r7,r7,r12\n"
+    "\tadd sp,sp,#40\n"
+    "\tpop {pc}\n"
+    "\t.size P256_mulmod, .-P256_mulmod\n"
+    "\t.type P256_sqrmod, %function\n"
+    "P256_sqrmod:\n"
+    "\tpush {lr}\n"
+    "\tumull r9,r10,r0,r0\n"
+    "\tumull r11,r12,r0,r1\n"
+    "\tadds r11,r11,r11\n"
+    "\tmov lr,#0\n"
+    "\tumaal r10,r11,lr,lr\n"
+    "\tpush {r9,r10}\n"
+    "\tmov r9,#0\n"
+    "\tumaal r9,r12,r0,r2\n"
+    "\tadcs r9,r9,r9\n"
+    "\tumaal r9,r11,r1,r1\n"
+    "\tpush {r9}\n"
+    "\tumull r9,r10,r0,r3\n"
+    "\tumaal r9,r12,r1,r2\n"
+    "\tadcs r9,r9,r9\n"
+    "\tumaal r9,r11,lr,lr\n"
+    "\tpush {r9}\n"
+    "\tmov r9,#0\n"
+    "\tumaal r9,r10,r0,r4\n"
+    "\tumaal r9,r12,r1,r3\n"
+    "\tadcs r9,r9,r9\n"
+    "\tumaal r9,r11,r2,r2\n"
+    "\tpush {r9}\n"
+    "\tumull r9,r8,r0,r5\n"
+    "\tumaal r9,r10,r1,r4\n"
+    "\tumaal r9,r12,r2,r3\n"
+    "\tadcs r9,r9,r9\n"
+    "\tumaal r9,r11,lr,lr\n"
+    "\tpush {r9}\n"
+    "\tmov r9,#0\n"
+    "\tumaal r9,r8,r1,r5\n"
+    "\tumaal r9,r12,r2,r4\n"
+    "\tumaal r9,r10,r0,r6\n"
+    "\tadcs r9,r9,r9\n"
+    "\tumaal r9,r11,r3,r3\n"
+    "\tpush {r9}\n"
+    "\tumull r9,r0,r0,r7\n"
+    "\tumaal r9,r10,r1,r6\n"
+    "\tumaal r9,r12,r2,r5\n"
+    "\tumaal r9,r8,r3,r4\n"
+    "\tadcs r9,r9,r9\n"
+    "\tumaal r9,r11,lr,lr\n"
+    "\tumaal r0,r8,r1,r7\n"
+    "\tumaal r0,r10,r2,r6\n"
+    "\tumaal r0,r12,r3,r5\n"
+    "\tadcs r0,r0,r0\n"
+    "\tumaal r11,r0,r4,r4\n"
+    "\tumaal r12,r8,r2,r7\n"
+    "\tumaal r12,r10,r3,r6\n"
+    "\tmovs r2,#0\n"
+    "\tumaal r12,r2,r4,r5\n"
+    "\tadcs r1,r12,r12\n"
+    "\tumaal r0,r1,lr,lr\n"
+    "\tumaal r2,r8,r3,r7\n"
+    "\tumaal r2,r10,r4,r6\n"
+    "\tadcs r2,r2,r2\n"
+    "\tumaal r1,r2,r5,r5\n"
+    "\tmovs r3,#0\n"
+    "\tumaal r3,r8,r4,r7\n"
+    "\tumaal r3,r10,r5,r6\n"
+    "\tadcs r3,r3,r3\n"
+    "\tumaal r2,r3,lr,lr\n"
+    "\tumaal r8,r10,r5,r7\n"
+    "\tadcs r8,r8,r8\n"
+    "\tumaal r3,r8,r6,r6\n"
+    "\tumull r4,r5,lr,lr\n"
+    "\tumaal r4,r10,r6,r7\n"
+    "\tadcs r4,r4,r4\n"
+    "\tumaal r4,r8,lr,lr\n"
+    "\tadcs r10,r10,r10\n"
+    "\tumaal r8,r10,r7,r7\n"
+    "\tadcs r10,r10,lr\n"
+    "\tpush {r4,r8,r10}\n"
+    "\tadd r4,sp,#12\n"
+    "\tldm r4,{r4-r8,r10,r12}\n"
+    "\tX0 .req r10\n"
+    "\tX1 .req r12\n"
+    "\tX2 .req r8\n"
+    "\tX3 .req r7\n"
+    "\tX4 .req r6\n"
+    "\tX5 .req r5\n"
+    "\tX6 .req r4\n"
+    "\tX7 .req r9\n"
+    "\tX8 .req r11\n"
+    "\tX9 .req r0\n"
+    "\tX10 .req r1\n"
+    "\tX11 .req r2\n"
+    "\tX12 .req r3\n"
+    "\tX13 .req r7\n"
+    "\tX14 .req r8\n"
+    "\tX15 .req r12\n"
+    "\tadcs X3,X3,X0\n"
+    "\tadcs X4,X4,X1\n"
+    "\tadcs X5,X5,X2\n"
+    "\tadcs X6,X6,X0\n"
+    "\tadcs X7,X7,X1\n"
+    "\tadcs X8,X8,X0\n"
+    "\tadcs X9,X9,X1\n"
+    "\tadcs X10,X10,#0\n"
+    "\tadcs X11,X11,#0\n"
+    "\tadcs lr,lr,#0\n"
+    "\tadds X6,X3\n"
+    "\tadcs X7,X7,X4\n"
+    "\tadcs X8,X8,X2\n"
+    "\tadcs X9,X9,X3\n"
+    "\tadcs X10,X10,X2\n"
+    "\tadcs X11,X11,X3\n"
+    "\tadcs lr,lr,#0\n"
+    "\tsubs X7,X0\n"
+    "\tsbcs X8,X8,X1\n"
+    "\tsbcs X9,X9,X2\n"
+    "\tsbcs X10,X10,X3\n"
+    "\tsbcs X11,X11,#0\n"
+    "\tsbcs lr,lr,#0\n"
+    "\tpop {X13,X14,X15}\n"
+    "\tadds X0,X12,lr\n"
+    "\tadcs X13,X13,#0\n"
+    "\tmov lr,#0\n"
+    "\tadcs lr,lr,#0\n"
+    "\tadcs X8,X8,X5\n"
+    "\tadcs X9,X9,X6\n"
+    "\tadcs X10,X10,X4\n"
+    "\tadcs X11,X11,X5\n"
+    "\tadcs X0,X0,X4\n"
+    "\tadcs X13,X13,X5\n"
+    "\tadcs X14,X14,lr\n"
+    "\tadcs X15,X15,#0\n"
+    "\tmov lr,#0\n"
+    "\tadcs lr,lr,#0\n"
+    "\tadcs X10,X10,X7\n"
+    "\tadcs X11,X11,#0\n"
+    "\tadcs X0,X0,X6\n"
+    "\tadcs X13,X13,X7\n"
+    "\tadcs X14,X14,X6\n"
+    "\tadcs X15,X15,X7\n"
+    "\tadcs lr,lr,#0\n"
+    "\tsubs X11,X4\n"
+    "\tsbcs X0,X0,X5\n"
+    "\tsbcs X13,X13,X6\n"
+    "\tsbcs X14,X14,X7\n"
+    "\tsbcs X15,X15,#0\n"
+    "\tsbcs lr,lr,#0\n"
+    "\tsubs r11,r11,#0xffffffff\n"
+    "\tsbcs r9,r0,#0xffffffff\n"
+    "\tsbcs r4,r1,#0xffffffff\n"
+    "\tsbcs r3,r2,#0\n"
+    "\tsbcs r6,r10,#0\n"
+    "\tsbcs r5,r7,#0\n"
+    "\tsbcs r10,r8,#1\n"
+    "\tsbcs r8,r12,#0xffffffff\n"
+    "\tsbcs r7,lr,#0\n"
+    "\tadds r0,r11,r7\n"
+    "\tadcs r1,r9,r7\n"
+    "\tadcs r2,r4,r7\n"
+    "\tadcs r3,r3,#0\n"
+    "\tadcs r4,r6,#0\n"
+    "\tadcs r5,r5,#0\n"
+    "\tadcs r6,r10,r7, lsr #31\n"
+    "\tadcs r7,r8,r7\n"
+    "\tadd sp,#28\n"
+    "\tpop {pc}\n"
+    "\t.size P256_sqrmod, .-P256_sqrmod\n"
+    "\t.type P256_submod, %function\n"
+    "P256_submod:\n"
+    "\tldm r1,{r3-r10}\n"
+    "\tldm r2!,{r0,r1,r11,r12}\n"
+    "\tsubs r3,r0\n"
+    "\tsbcs r4,r4,r1\n"
+    "\tsbcs r5,r5,r11\n"
+    "\tsbcs r6,r6,r12\n"
+    "\tldm r2,{r0,r1,r11,r12}\n"
+    "\tsbcs r7,r7,r0\n"
+    "\tsbcs r8,r8,r1\n"
+    "\tsbcs r9,r9,r11\n"
+    "\tsbcs r10,r10,r12\n"
+    "\tsbcs r11,r11,r11\n"
+    "\tadds r0,r3,r11\n"
+    "\tadcs r1,r4,r11\n"
+    "\tadcs r2,r5,r11\n"
+    "\tadcs r3,r6,#0\n"
+    "\tadcs r4,r7,#0\n"
+    "\tadcs r5,r8,#0\n"
+    "\tadcs r6,r9,r11, lsr #31\n"
+    "\tadcs r7,r10,r11\n"
+    "\tbx lr\n"
+    "\t.size P256_submod, .-P256_submod\n"
+    "\t.type P256_addmod, %function\n"
+    "P256_addmod:\n"
+    "\tldm r2,{r2-r9}\n"
+    "\tldm r1!,{r0,r10,r11,r12}\n"
+    "\tadds r2,r0\n"
+    "\tadcs r3,r3,r10\n"
+    "\tadcs r4,r4,r11\n"
+    "\tadcs r5,r5,r12\n"
+    "\tldm r1,{r0,r1,r11,r12}\n"
+    "\tadcs r6,r6,r0\n"
+    "\tadcs r7,r7,r1\n"
+    "\tadcs r8,r8,r11\n"
+    "\tadcs r9,r9,r12\n"
+    "\tmovs r10,#0\n"
+    "\tadcs r10,r10,r10\n"
+    "\tsubs r2,#0xffffffff\n"
+    "\tsbcs r3,r3,#0xffffffff\n"
+    "\tsbcs r4,r4,#0xffffffff\n"
+    "\tsbcs r5,r5,#0\n"
+    "\tsbcs r6,r6,#0\n"
+    "\tsbcs r7,r7,#0\n"
+    "\tsbcs r8,r8,#1\n"
+    "\tsbcs r9,r9,#0xffffffff\n"
+    "\tsbcs r10,r10,#0\n"
+    "\tadds r0,r2,r10\n"
+    "\tadcs r1,r3,r10\n"
+    "\tadcs r2,r4,r10\n"
+    "\tadcs r3,r5,#0\n"
+    "\tadcs r4,r6,#0\n"
+    "\tadcs r5,r7,#0\n"
+    "\tadcs r6,r8,r10, lsr #31\n"
+    "\tadcs r7,r9,r10\n"
+    "\tbx lr\n"
+    "\t.size P256_addmod, .-P256_addmod\n"
+    "\t.type P256_sqrmod_many, %function\n"
+    "P256_sqrmod_many:\n"
+    "\tpush {r8,lr}\n"
+    "0:\n"
+    "\tbl P256_sqrmod\n"
+    "\tldr r8,[sp,#0]\n"
+    "\tsubs r8,r8,#1\n"
+    "\tstr r8,[sp,#0]\n"
+    "\tbne 0b\n"
+    "\tpop {r8,pc}\n"
+    "\t.size P256_sqrmod_many, .-P256_sqrmod_many\n"
+    "\t.type P256_sqrmod_many_and_mulmod, %function\n"
+    "P256_sqrmod_many_and_mulmod:\n"
+    "\tpush {r9,lr}\n"
+    "\tbl P256_sqrmod_many\n"
+    "\tpush {r0-r7}\n"
+    "\tmov r1,sp\n"
+    "\tldr r2,[sp,#32]\n"
+    "\tbl P256_mulmod\n"
+    "\tadd sp,#36\n"
+    "\tpop {pc}\n"
+    "\t.size P256_sqrmod_many_and_mulmod, .-P256_sqrmod_many_and_mulmod\n"
+    "\t.type P256_modinv_sqrt, %function\n"
+    "P256_modinv_sqrt:\n"
+    "\tpush {r0-r8,lr}\n"
+    "\tmov r8,#1\n"
+    "\tmov r9,sp\n"
+    "\tbl P256_sqrmod_many_and_mulmod\n"
+    "\tpush {r0-r7}\n"
+    "\tbl P256_sqrmod\n"
+    "\tbl P256_sqrmod\n"
+    "\tpush {r0-r7}\n"
+    "\tmov r1,sp\n"
+    "\tadd r2,sp,#32\n"
+    "\tbl P256_mulmod\n"
+    "\tadd r8,sp,#32\n"
+    "\tstm r8,{r0-r7}\n"
+    "\tmov r8,#8-4\n"
+    "\tadd r9,sp,#32\n"
+    "\tbl P256_sqrmod_many_and_mulmod\n"
+    "\tpush {r0-r7}\n"
+    "\tmov r8,#16-8\n"
+    "\tmov r9,sp\n"
+    "\tbl P256_sqrmod_many_and_mulmod\n"
+    "\tpush {r0-r7}\n"
+    "\tmov r8,#16\n"
+    "\tmov r9,sp\n"
+    "\tbl P256_sqrmod_many_and_mulmod\n"
+    "\tpush {r0-r7}\n"
+    "\tmov r8,#32\n"
+    "\tadd r9,sp,#5*32\n"
+    "\tbl P256_sqrmod_many_and_mulmod\n"
+    "\tldr r8,[sp,#6*32]\n"
+    "\tcmp r8,#0\n"
+    "\tbne 0f\n"
+    "\tmov r8,#192-64\n"
+    "\tmov r9,sp\n"
+    "\tbl P256_sqrmod_many_and_mulmod\n"
+    "\tmov r8,#224-192\n"
+    "\tmov r9,sp\n"
+    "\tbl P256_sqrmod_many_and_mulmod\n"
+    "\tmov r8,#240-224\n"
+    "\tadd r9,sp,#32\n"
+    "\tbl P256_sqrmod_many_and_mulmod\n"
+    "\tmov r8,#248-240\n"
+    "\tadd r9,sp,#64\n"
+    "\tbl P256_sqrmod_many_and_mulmod\n"
+    "\tmov r8,#252-248\n"
+    "\tadd r9,sp,#128\n"
+    "\tbl P256_sqrmod_many_and_mulmod\n"
+    "\tmov r8,#256-252\n"
+    "\tadd r9,sp,#96\n"
+    "\tbl P256_sqrmod_many_and_mulmod\n"
+    "\tstm sp,{r0-r7}\n"
+    "\tmov r1,sp\n"
+    "\tadd r2,sp,#5*32\n"
+    "\tbl P256_mulmod\n"
+    "\tb 1f\n"
+    "0:\n"
+    "\tmov r8,#160-64\n"
+    "\tadd r9,sp,#5*32\n"
+    "\tbl P256_sqrmod_many_and_mulmod\n"
+    "\tmov r8,#254-160\n"
+    "\tbl P256_sqrmod_many\n"
+    "1:\n"
+    "\tadd sp,#6*32+4\n"
+    "\tpop {pc}\n"
+    "\t.size P256_modinv_sqrt, .-P256_modinv_sqrt\n"
+    "\t.type P256_times2, %function\n"
+    "P256_times2:\n"
+    "\tadds r0,r0\n"
+    "\tadcs r1,r1,r1\n"
+    "\tadcs r2,r2,r2\n"
+    "\tadcs r3,r3,r3\n"
+    "\tadcs r4,r4,r4\n"
+    "\tadcs r5,r5,r5\n"
+    "\tadcs r6,r6,r6\n"
+    "\tadcs r7,r7,r7\n"
+    "\tmov r8,#0\n"
+    "\tadcs r8,r8,r8\n"
+    "\tsubs r0,#0xffffffff\n"
+    "\tsbcs r1,r1,#0xffffffff\n"
+    "\tsbcs r2,r2,#0xffffffff\n"
+    "\tsbcs r3,r3,#0\n"
+    "\tsbcs r4,r4,#0\n"
+    "\tsbcs r5,r5,#0\n"
+    "\tsbcs r6,r6,#1\n"
+    "\tsbcs r7,r7,#0xffffffff\n"
+    "\tsbcs r8,r8,#0\n"
+    "\tadds r0,r8\n"
+    "\tadcs r1,r1,r8\n"
+    "\tadcs r2,r2,r8\n"
+    "\tadcs r3,r3,#0\n"
+    "\tadcs r4,r4,#0\n"
+    "\tadcs r5,r5,#0\n"
+    "\tadcs r6,r6,r8, lsr #31\n"
+    "\tadcs r7,r7,r8\n"
+    "\tbx lr\n"
+    "\t.size P256_times2, .-P256_times2\n"
+    "\t.align 2\n"
+    "R2_mod_p:\n"
+    "\t.word 3\n"
+    "\t.word 0\n"
+    "\t.word 0xffffffff\n"
+    "\t.word 0xfffffffb\n"
+    "\t.word 0xfffffffe\n"
+    "\t.word 0xffffffff\n"
+    "\t.word 0xfffffffd\n"
+    "\t.word 4\n"
+    "\t.type P256_to_montgomery, %function\n"
+    "P256_to_montgomery:\n"
+    "\t.global P256_to_montgomery\n"
+    "\tpush {r0,r4-r11,lr}\n"
+    "\tadr r2,R2_mod_p\n"
+    "\tbl P256_mulmod\n"
+    "\tpop {r8}\n"
+    "\tstm r8,{r0-r7}\n"
+    "\tpop {r4-r11,pc}\n"
+    "\t.size P256_to_montgomery, .-P256_to_montgomery\n"
+    "\t.type P256_from_montgomery, %function\n"
+    "P256_from_montgomery:\n"
+    "\t.global P256_from_montgomery\n"
+    "\tpush {r0,r4-r11,lr}\n"
+    "\tmovs r2,#0\n"
+    "\tmovs r3,#0\n"
+    "\tpush {r2-r3}\n"
+    "\tpush {r2-r3}\n"
+    "\tpush {r2-r3}\n"
+    "\tmovs r2,#1\n"
+    "\tpush {r2-r3}\n"
+    "\tmov r2,sp\n"
+    "\tbl P256_mulmod\n"
+    "\tadd sp,#32\n"
+    "\tpop {r8}\n"
+    "\tstm r8,{r0-r7}\n"
+    "\tpop {r4-r11,pc}\n"
+    "\t.size P256_from_montgomery, .-P256_from_montgomery\n"
+    "\t.type P256_check_range_p, %function\n"
+    "P256_check_range_p:\n"
+    "\t.global P256_check_range_p\n"
+    "\tpush {r4-r8,lr}\n"
+    "\tldm r0,{r1-r8}\n"
+    "\tmovs r0,#0xffffffff\n"
+    "\tsubs r1,r0\n"
+    "\tsbcs r2,r2,r0\n"
+    "\tsbcs r3,r3,r0\n"
+    "\tsbcs r4,r4,#0\n"
+    "\tsbcs r5,r5,#0\n"
+    "\tsbcs r6,r6,#0\n"
+    "\tsbcs r7,r7,#1\n"
+    "\tsbcs r8,r8,r0\n"
+    "\tsbcs r0,r0,r0\n"
+    "\tlsrs r0,#31\n"
+    "\tpop {r4-r8,pc}\n"
+    "\t.size P256_check_range_p, .-P256_check_range_p\n"
+    "\t.align 2\n"
+    "P256_order_mu:\n"
+    "\t.word 0xeedf9bfe\n"
+    "\t.word 0x012ffd85\n"
+    "\t.word 0xdf1a6c21\n"
+    "\t.word 0x43190552\n"
+    "\t.word 0xffffffff\n"
+    "\t.word 0xfffffffe\n"
+    "\t.word 0xffffffff\n"
+    "\t.word 0x0\n"
+    "\t.word 0x1\n"
+    "\t.type P256_reduce_mod_n_once, %function\n"
+    "P256_reduce_mod_n_once:\n"
+    "\tpush {lr}\n"
+    "\tadr r10,P256_order\n"
+    "\tldm r10,{r10,r11,r12,lr}\n"
+    "\tsubs r0,r10\n"
+    "\tsbcs r1,r1,r11\n"
+    "\tsbcs r2,r2,r12\n"
+    "\tsbcs r3,r3,lr\n"
+    "\tsbcs r4,r4,#0xffffffff\n"
+    "\tsbcs r5,r5,#0xffffffff\n"
+    "\tsbcs r6,r6,#0\n"
+    "\tsbcs r7,r7,#0xffffffff\n"
+    "\tsbcs r8,r8,#0\n"
+    "\tsbc r9,r9,r9\n"
+    "\tand r10,r9\n"
+    "\tand r11,r9\n"
+    "\tand r12,r9\n"
+    "\tand lr,r9\n"
+    "\tadds r0,r10\n"
+    "\tadcs r1,r1,r11\n"
+    "\tadcs r2,r2,r12\n"
+    "\tadcs r3,r3,lr\n"
+    "\tadcs r4,r4,r9\n"
+    "\tadcs r5,r5,r9\n"
+    "\tadcs r6,r6,#0\n"
+    "\tadcs r7,r7,r9\n"
+    "\tadcs r8,r8,#0\n"
+    "\tpop {pc}\n"
+    "\t.size P256_reduce_mod_n_once, .-P256_reduce_mod_n_once\n"
+    "\t.type P256_reduce_mod_n_64bytes, %function\n"
+    "P256_reduce_mod_n_64bytes:\n"
+    "\tpush {r0,r4-r11,lr}\n"
+    "\tsub sp,sp,#108\n"
+    "\tmov r10,r1\n"
+    "\tadd r0,sp,#36\n"
+    "\tadds r1,r1,#28\n"
+    "\tadr r2,P256_order_mu\n"
+    "\tbl mul288x288\n"
+    "\tmov r0,sp\n"
+    "\tadd r1,sp,#72\n"
+    "\tadr r2,P256_order\n"
+    "\tbl mul288x288\n"
+    "\tldm r10,{r0-r8}\n"
+    "\tpop {r9-r12}\n"
+    "\tsubs r0,r0,r9\n"
+    "\tsbcs r1,r1,r10\n"
+    "\tsbcs r2,r2,r11\n"
+    "\tsbcs r3,r3,r12\n"
+    "\tpop {r9-r12,lr}\n"
+    "\tsbcs r4,r4,r9\n"
+    "\tsbcs r5,r5,r10\n"
+    "\tsbcs r6,r6,r11\n"
+    "\tsbcs r7,r7,r12\n"
+    "\tsbcs r8,r8,lr\n"
+    "\tbl P256_reduce_mod_n_once\n"
+    "\tbl P256_reduce_mod_n_once\n"
+    "\tadd sp,sp,#72\n"
+    "\tpop {r9}\n"
+    "\tstm r9,{r0-r7}\n"
+    "\tpop {r4-r11,pc}\n"
+    "\t.size P256_reduce_mod_n_64bytes, .-P256_reduce_mod_n_64bytes\n"
+    "\t.type P256_reduce_mod_n_32bytes, %function\n"
+    "P256_reduce_mod_n_32bytes:\n"
+    "\t.global P256_reduce_mod_n_32bytes\n"
+    "\tpush {r0,r4-r11,lr}\n"
+    "\tldm r1,{r0-r7}\n"
+    "\tmov r8,#0\n"
+    "\tbl P256_reduce_mod_n_once\n"
+    "\tpop {r8}\n"
+    "\tstm r8,{r0-r7}\n"
+    "\tpop {r4-r11,pc}\n"
+    "\t.size P256_reduce_mod_n_32bytes, .-P256_reduce_mod_n_32bytes\n"
+    "\t.type P256_add_mod_n, %function\n"
+    "P256_add_mod_n:\n"
+    "\t.global P256_add_mod_n\n"
+    "\tpush {r0,r4-r11,lr}\n"
+    "\tmov r12,r1\n"
+    "\tldm r2,{r4-r11}\n"
+    "\tldm r12!,{r0-r3}\n"
+    "\tadds r0,r4\n"
+    "\tadcs r1,r1,r5\n"
+    "\tadcs r2,r2,r6\n"
+    "\tadcs r3,r3,r7\n"
+    "\tldm r12,{r4-r7}\n"
+    "\tadcs r4,r4,r8\n"
+    "\tadcs r5,r5,r9\n"
+    "\tadcs r6,r6,r10\n"
+    "\tadcs r7,r7,r11\n"
+    "\tmovs r8,#0\n"
+    "\tadcs r8,r8,r8\n"
+    "\tbl P256_reduce_mod_n_once\n"
+    "\tbl P256_reduce_mod_n_once\n"
+    "\tpop {r8}\n"
+    "\tstm r8,{r0-r7}\n"
+    "\tpop {r4-r11,pc}\n"
+    "\t.size P256_add_mod_n, .-P256_add_mod_n\n"
+    "\t.type P256_mul_mod_n, %function\n"
+    "P256_mul_mod_n:\n"
+    "\t.global P256_mul_mod_n\n"
+    "\tmovs r3,#0\n"
+    "\tpush {r3-r10,lr}\n"
+    "\tmov r4,r0\n"
+    "\tldm r1,{r1,r3,r5-r10}\n"
+    "\tpush {r1,r3,r5-r10}\n"
+    "\tmovs r1,#0\n"
+    "\tpush {r1}\n"
+    "\tldm r2,{r1,r3,r5-r10}\n"
+    "\tpush {r1,r3,r5-r10}\n"
+    "\tsub sp,#72\n"
+    "\tmov r0,sp\n"
+    "\tadd r1,sp,#72\n"
+    "\tadd r2,sp,#108\n"
+    "\tbl mul288x288\n"
+    "\tmov r0,r4\n"
+    "\tmov r1,sp\n"
+    "\tbl P256_reduce_mod_n_64bytes\n"
+    "\tadd sp,#144\n"
+    "\tpop {r4-r10,pc}\n"
+    "\t.size P256_mul_mod_n, .-P256_mul_mod_n\n"
+    "\t.type P256_divsteps2_31, %function\n"
+    "P256_divsteps2_31:\n"
+    "\t.global P256_divsteps2_31\n"
+    "\tpush {r3,r4-r8,lr}\n"
+    "\tmovs r4,#1\n"
+    "\tmovs r5,#0\n"
+    "\tmovs r6,#0\n"
+    "\tmovs r7,#1\n"
+    "\tmov lr,#31\n"
+    "0:\n"
+    "\tsubs r3,r0,#1\n"
+    "\tlsl r12,r2,#31\n"
+    "\tbic r3,r12,r3\n"
+    "\tasrs r3,r3,#31\n"
+    "\tlsr r8,r3,#31\n"
+    "\teors r0,r0,r3\n"
+    "\tsubs r0,r0,r3\n"
+    "\tmul r12,r1,r3\n"
+    "\tbics r1,r1,r3\n"
+    "\tumlal r1,r12,r2,r8\n"
+    "\tumaal r2,r12,r2,r3\n"
+    "\tmul r12,r4,r3\n"
+    "\tbics r4,r4,r3\n"
+    "\tumlal r4,r12,r6,r8\n"
+    "\tumaal r6,r12,r6,r3\n"
+    "\tmul r12,r5,r3\n"
+    "\tbics r5,r5,r3\n"
+    "\tumlal r5,r12,r7,r8\n"
+    "\tumaal r7,r12,r7,r3\n"
+    "\tands r12,r2,#1\n"
+    "\tadds r0,r0,#1\n"
+    "\tmul r3,r12,r1\n"
+    "\tadds r2,r2,r3\n"
+    "\tlsrs r2,r2,#1\n"
+    "\tumlal r6,r8,r12,r4\n"
+    "\tumlal r7,r8,r12,r5\n"
+    "\tadds r4,r4,r4\n"
+    "\tadds r5,r5,r5\n"
+    "\tsubs lr,lr,#1\n"
+    "\tbne 0b\n"
+    "\tpop {r3}\n"
+    "\tstm r3!,{r4-r7}\n"
+    "\tpop {r4-r8,pc}\n"
+    "\t.size P256_divsteps2_31, .-P256_divsteps2_31\n"
+    "\t.type P256_matrix_mul_fg_9, %function\n"
+    "P256_matrix_mul_fg_9:\n"
+    "\t.global P256_matrix_mul_fg_9\n"
+    "\tpush {r4-r11,lr}\n"
+    "\tand r4,r0,r0,lsl #1\n"
+    "\tasrs r4,r4,#31\n"
+    "\teors r0,r0,r4\n"
+    "\tsubs r0,r0,r4\n"
+    "\tand r5,r1,r1,lsl #1\n"
+    "\tasrs r5,r5,#31\n"
+    "\teors r1,r1,r5\n"
+    "\tsubs r1,r1,r5\n"
+    "\tldm r2!,{r6}\n"
+    "\tldr r7,[r2,#36]\n"
+    "\teors r4,r4,r6\n"
+    "\teors r5,r5,r7\n"
+    "\teors r4,r4,r5\n"
+    "\tstm r3!,{r5}\n"
+    "\tpush {r1,r2,r3}\n"
+    "\tldm r2!,{r1,r3,r5-r11}\n"
+    "\teors r1,r1,r4\n"
+    "\teors r3,r3,r4\n"
+    "\teors r5,r5,r4\n"
+    "\teors r6,r6,r4\n"
+    "\teors r7,r7,r4\n"
+    "\teor r8,r8,r4\n"
+    "\teor r9,r9,r4\n"
+    "\teor r10,r10,r4\n"
+    "\tsubs r1,r1,r4\n"
+    "\tsbcs r3,r3,r4\n"
+    "\tsbcs r5,r5,r4\n"
+    "\tsbcs r6,r6,r4\n"
+    "\tsbcs r7,r7,r4\n"
+    "\tsbcs r8,r8,r4\n"
+    "\tsbcs r9,r9,r4\n"
+    "\tsbcs r10,r10,r4\n"
+    "\teor r4,r4,r11\n"
+    "\tumull r1,lr,r0,r1\n"
+    "\tmovs r2,#0\n"
+    "\tumull r11,r12,r2,r2\n"
+    "\tumaal r2,lr,r0,r3\n"
+    "\tumaal r11,lr,r0,r5\n"
+    "\tumull r3,r5,r12,r12\n"
+    "\tumaal r3,lr,r0,r6\n"
+    "\tumaal r5,lr,r0,r7\n"
+    "\tumull r6,r7,r12,r12\n"
+    "\tumaal r6,lr,r0,r8\n"
+    "\tumaal r7,lr,r0,r9\n"
+    "\tumaal r12,lr,r0,r10\n"
+    "\tmla lr,r0,r4,lr\n"
+    "\tpop {r0,r4}\n"
+    "\tadds r4,r4,#40\n"
+    "\tldm r4!,{r8,r9}\n"
+    "\tmov r10,#0\n"
+    "\tumaal r1,r10,r0,r8\n"
+    "\tumaal r2,r10,r0,r9\n"
+    "\tadds r1,r1,r1\n"
+    "\tadcs r2,r2,r2\n"
+    "\tldm r4!,{r1,r8,r9}\n"
+    "\tumaal r10,r11,r0,r1\n"
+    "\tumaal r11,r3,r0,r8\n"
+    "\tumaal r3,r5,r0,r9\n"
+    "\tadcs r10,r10,r10\n"
+    "\tadcs r11,r11,r11\n"
+    "\tadcs r3,r3,r3\n"
+    "\tldm r4,{r1,r4,r8,r9}\n"
+    "\tumaal r5,r6,r0,r1\n"
+    "\tumaal r6,r7,r0,r4\n"
+    "\tumaal r7,r12,r0,r8\n"
+    "\tumaal r12,lr,r0,r9\n"
+    "\tadcs r5,r5,r5\n"
+    "\tadcs r6,r6,r6\n"
+    "\tadcs r7,r7,r7\n"
+    "\tadcs r12,r12,r12\n"
+    "\tsbcs lr,lr,lr\n"
+    "\tmvn lr,lr\n"
+    "\tpop {r1}\n"
+    "\tstm r1!,{r2,r10,r11}\n"
+    "\tstm r1!,{r3,r5,r6,r7,r12,lr}\n"
+    "\tpop {r4-r11,pc}\n"
+    "\t.size P256_matrix_mul_fg_9, .-P256_matrix_mul_fg_9\n"
+    "\t.align 2\n"
+    "\t.type P256_matrix_mul_mod_n, %function\n"
+    "P256_matrix_mul_mod_n:\n"
+    "\t.global P256_matrix_mul_mod_n\n"
+    "\tpush {r4-r11,lr}\n"
+    "\tand r4,r0,r0,lsl #1\n"
+    "\tasrs r4,r4,#31\n"
+    "\teors r0,r0,r4\n"
+    "\tsubs r0,r0,r4\n"
+    "\tand r5,r1,r1,lsl #1\n"
+    "\tasrs r5,r5,#31\n"
+    "\teors r1,r1,r5\n"
+    "\tsubs r1,r1,r5\n"
+    "\tldm r2!,{r6}\n"
+    "\tldr r7,[r2,#32]\n"
+    "\teors r4,r4,r6\n"
+    "\teors r5,r5,r7\n"
+    "\teors r4,r4,r5\n"
+    "\tstm r3!,{r5}\n"
+    "\tpush {r1,r2,r3}\n"
+    "\tldm r2,{r1-r3,r5-r9}\n"
+    "\teors r1,r1,r4\n"
+    "\teors r2,r2,r4\n"
+    "\teors r3,r3,r4\n"
+    "\teors r5,r5,r4\n"
+    "\teors r6,r6,r4\n"
+    "\teors r7,r7,r4\n"
+    "\teor r8,r8,r4\n"
+    "\teor r9,r9,r4\n"
+    "\tsubs r1,r1,r4\n"
+    "\tsbcs r2,r2,r4\n"
+    "\tsbcs r3,r3,r4\n"
+    "\tsbcs r5,r5,r4\n"
+    "\tsbcs r6,r6,r4\n"
+    "\tsbcs r7,r7,r4\n"
+    "\tsbcs r8,r8,r4\n"
+    "\tsbcs r9,r9,r4\n"
+    "\tsbcs r4,r4,r4\n"
+    "\tlsrs lr,r4,#31\n"
+    "\tmov r12,#0\n"
+    "\tldrd r10,r11,P256_order_local\n"
+    "\tumaal r1,r12,lr,r10\n"
+    "\tumaal r2,r12,lr,r11\n"
+    "\tldrd r10,r11,P256_order_local+8\n"
+    "\tumaal r3,r12,lr,r10\n"
+    "\tumaal r5,r12,lr,r11\n"
+    "\tumaal r6,r12,lr,r4\n"
+    "\tumaal r7,r12,lr,r4\n"
+    "\tmov r10,#0\n"
+    "\tumaal r8,r12,lr,r10\n"
+    "\tumaal r9,r12,lr,r4\n"
+    "\tumull r11,lr,r10,r10\n"
+    "\tumull r10,lr,r0,r1\n"
+    "\tumull r1,r12,r11,r11\n"
+    "\tumaal r11,lr,r0,r2\n"
+    "\tumaal r1,lr,r0,r3\n"
+    "\tumull r2,r3,r12,r12\n"
+    "\tumaal r2,lr,r0,r5\n"
+    "\tumaal r3,lr,r0,r6\n"
+    "\tumull r4,r5,r12,r12\n"
+    "\tumaal r4,lr,r0,r7\n"
+    "\tumaal r5,lr,r0,r8\n"
+    "\tumaal r12,lr,r0,r9\n"
+    "\tpop {r0,r6}\n"
+    "\tadds r6,r6,#36\n"
+    "\tldm r6!,{r8,r9}\n"
+    "\tmovs r7,#0\n"
+    "\tumaal r10,r7,r0,r8\n"
+    "\tumaal r11,r7,r0,r9\n"
+    "\tldm r6!,{r8,r9}\n"
+    "\tumaal r1,r7,r0,r8\n"
+    "\tumaal r2,r7,r0,r9\n"
+    "\tldm r6!,{r8,r9}\n"
+    "\tumaal r3,r7,r0,r8\n"
+    "\tumaal r4,r7,r0,r9\n"
+    "\tldm r6!,{r8,r9}\n"
+    "\tumaal r5,r7,r0,r8\n"
+    "\tumaal r12,r7,r0,r9\n"
+    "\tadd lr,lr,r7\n"
+    "\tldr r0,=0xee00bc4f\n"
+    "\tmul r0,r10,r0\n"
+    "\tmovs r6,#0\n"
+    "\tldrd r8,r9,P256_order_local\n"
+    "\tumaal r10,r6,r0,r8\n"
+    "\tumaal r11,r6,r0,r9\n"
+    "\tsubs r11,r11,r8\n"
+    "\tldrd r8,r10,P256_order_local+8\n"
+    "\tumaal r1,r6,r0,r8\n"
+    "\tsbcs r1,r1,r9\n"
+    "\tumaal r2,r6,r0,r10\n"
+    "\tmov r9,#-1\n"
+    "\tumaal r3,r6,r0,r9\n"
+    "\tumaal r4,r6,r0,r9\n"
+    "\tmovs r7,#0\n"
+    "\tumaal r5,r6,r0,r7\n"
+    "\tumaal r12,r6,r0,r9\n"
+    "\tumaal lr,r6,r7,r7\n"
+    "\tsbcs r2,r2,r8\n"
+    "\tsbcs r3,r3,r10\n"
+    "\tsbcs r4,r4,r9\n"
+    "\tsbcs r5,r5,r9\n"
+    "\tsbcs r12,r12,r7\n"
+    "\tsbcs lr,lr,r9\n"
+    "\tsbcs r6,r6,r7\n"
+    "\tldrd r0,r9,P256_order_local\n"
+    "\tlsrs r6,r6,#31\n"
+    "\tumaal r7,r11,r6,r0\n"
+    "\tumaal r1,r11,r6,r9\n"
+    "\tumaal r2,r11,r6,r8\n"
+    "\tumaal r3,r11,r6,r10\n"
+    "\trsbs r0,r6,#0\n"
+    "\tumaal r4,r11,r6,r0\n"
+    "\tumaal r5,r11,r6,r0\n"
+    "\tmov r8,#0\n"
+    "\tumaal r11,r12,r6,r8\n"
+    "\tumaal r12,lr,r6,r0\n"
+    "\tpop {r6}\n"
+    "\tstm r6!,{r7}\n"
+    "\tstm r6!,{r1,r2,r3,r4,r5,r11,r12}\n"
+    "\tpop {r4-r11,pc}\n"
+    "\t.ltorg\n"
+    "\t.size P256_matrix_mul_mod_n, .-P256_matrix_mul_mod_n\n"
+    "\t.align 2\n"
+    "P256_order_local:\n"
+    "\t.type P256_order, %object\n"
+    "P256_order:\n"
+    "\t.global P256_order\n"
+    "\t.word 0xFC632551\n"
+    "\t.word 0xF3B9CAC2\n"
+    "\t.word 0xA7179E84\n"
+    "\t.word 0xBCE6FAAD\n"
+    "\t.word 0xFFFFFFFF\n"
+    "\t.word 0xFFFFFFFF\n"
+    "\t.word 0\n"
+    "\t.word 0xFFFFFFFF\n"
+    "\t.word 0\n"
+    "\t.size P256_order, .-P256_order\n"
+    "\t.type P256_check_range_n, %function\n"
+    "P256_check_range_n:\n"
+    "\t.global P256_check_range_n\n"
+    "\tpush {r4-r11,lr}\n"
+    "\tldm r0,{r1-r8}\n"
+    "\torrs r0,r1,r2\n"
+    "\torrs r0,r3\n"
+    "\torrs r0,r4\n"
+    "\torrs r0,r5\n"
+    "\torrs r0,r6\n"
+    "\torrs r0,r7\n"
+    "\torrs r0,r8\n"
+    "\tbeq 0f\n"
+    "\tadr r0,P256_order\n"
+    "\tldm r0!,{r9-r12}\n"
+    "\tsubs r1,r9\n"
+    "\tsbcs r2,r2,r10\n"
+    "\tsbcs r3,r3,r11\n"
+    "\tsbcs r4,r4,r12\n"
+    "\tldm r0,{r0-r3}\n"
+    "\tsbcs r5,r5,r0\n"
+    "\tsbcs r6,r6,r1\n"
+    "\tsbcs r7,r7,r2\n"
+    "\tsbcs r8,r8,r3\n"
+    "\tsbcs r0,r0,r0\n"
+    "\tlsrs r0,#31\n"
+    "0:\n"
+    "\tpop {r4-r11,pc}\n"
+    "\t.size P256_check_range_n, .-P256_check_range_n\n"
+    "\t.align 2\n"
+    "b_mont:\n"
+    "\t.word 0x29c4bddf\n"
+    "\t.word 0xd89cdf62\n"
+    "\t.word 0x78843090\n"
+    "\t.word 0xacf005cd\n"
+    "\t.word 0xf7212ed6\n"
+    "\t.word 0xe5a220ab\n"
+    "\t.word 0x04874834\n"
+    "\t.word 0xdc30061d\n"
+    "three_mont:\n"
+    "\t.word 0x3\n"
+    "\t.word 0x0\n"
+    "\t.word 0x0\n"
+    "\t.word 0xfffffffd\n"
+    "\t.word 0xffffffff\n"
+    "\t.word 0xffffffff\n"
+    "\t.word 0xfffffffc\n"
+    "\t.word 0x2\n"
+    "\t.type P256_point_is_on_curve, %function\n"
+    "P256_point_is_on_curve:\n"
+    "\t.global P256_point_is_on_curve\n"
+    "\tpush {r0,r4-r11,lr}\n"
+    "\tldm r1,{r0-r7}\n"
+    "\tbl P256_sqrmod\n"
+    "\tpush {r0-r7}\n"
+    "\tldr r0,[sp,#32]\n"
+    "\tldm r0,{r0-r7}\n"
+    "\tbl P256_sqrmod\n"
+    "\tpush {r0-r7}\n"
+    "\tmov r1,sp\n"
+    "\tadr r2,three_mont\n"
+    "\tbl P256_submod\n"
+    "\tstm sp,{r0-r7}\n"
+    "\tldr r1,[sp,#64]\n"
+    "\tmov r2,sp\n"
+    "\tbl P256_mulmod\n"
+    "\tstm sp,{r0-r7}\n"
+    "\tadd r1,sp,#32\n"
+    "\tmov r2,sp\n"
+    "\tbl P256_submod\n"
+    "\tadr r8,b_mont\n"
+    "\tldm r8!,{r9-r12}\n"
+    "\teors r0,r9\n"
+    "\tittt eq\n"
+    "\teorseq r1,r10\n"
+    "\teorseq r2,r11\n"
+    "\teorseq r3,r12\n"
+    "\tldm r8,{r9-r12}\n"
+    "\titttt eq\n"
+    "\teorseq r4,r9\n"
+    "\teorseq r5,r10\n"
+    "\teorseq r6,r11\n"
+    "\teorseq r7,r12\n"
+    "\tmov r0,#0\n"
+    "\tit eq\n"
+    "\tmoveq r0,#1\n"
+    "\tadd sp,#68\n"
+    "\tpop {r4-r11,pc}\n"
+    "\t.size P256_point_is_on_curve, .-P256_point_is_on_curve\n"
+    "\t.align 2\n"
+    "P256_p:\n"
+    "\t.word 0xffffffff\n"
+    "\t.word 0xffffffff\n"
+    "\t.word 0xffffffff\n"
+    "\t.word 0\n"
+    "\t.word 0\n"
+    "\t.word 0\n"
+    "\t.word 1\n"
+    "\t.word 0xffffffff\n"
+    "\t.type P256_jacobian_to_affine, %function\n"
+    "P256_jacobian_to_affine:\n"
+    "\t.global P256_jacobian_to_affine\n"
+    "\tpush {r0,r1,r2,r4-r11,lr}\n"
+    "\tadds r2,#64\n"
+    "\tldm r2,{r0-r7}\n"
+    "\tmov r8,#0\n"
+    "\tbl P256_modinv_sqrt\n"
+    "\tpush {r0-r7}\n"
+    "\tbl P256_sqrmod\n"
+    "\tpush {r0-r7}\n"
+    "\tadd r1,sp,#32\n"
+    "\tmov r2,sp\n"
+    "\tbl P256_mulmod\n"
+    "\tadd r8,sp,#32\n"
+    "\tstm r8,{r0-r7}\n"
+    "\tmov r1,sp\n"
+    "\tldr r2,[sp,#72]\n"
+    "\tbl P256_mulmod\n"
+    "\tldr r8,[sp,#64]\n"
+    "\tstm r8,{r0-r7}\n"
+    "\tldr r2,[sp,#72]\n"
+    "\tadd r1,sp,#32\n"
+    "\tadds r2,r2,#32\n"
+    "\tbl P256_mulmod\n"
+    "\tldr r8,[sp,#68]\n"
+    "\tstm r8,{r0-r7}\n"
+    "\tadd sp,#76\n"
+    "\tpop {r4-r11,pc}\n"
+    "\t.size P256_jacobian_to_affine, .-P256_jacobian_to_affine\n"
+    "\t.type P256_double_j, %function\n"
+    "P256_double_j:\n"
+    "\t.global P256_double_j\n"
+    "\tpush {r0,r1,r4-r11,lr}\n"
+    "\tadds r1,#64\n"
+    "\tldm r1,{r0-r7}\n"
+    "\tbl P256_sqrmod\n"
+    "\tpush {r0-r7}\n"
+    "\tldr r1,[sp,#36]\n"
+    "\tadds r1,#32\n"
+    "\tadd r2,r1,#32\n"
+    "\tbl P256_mulmod\n"
+    "\tldr r8,[sp,#32]\n"
+    "\tadd r8,#64\n"
+    "\tstm r8,{r0-r7}\n"
+    "\tldr r1,[sp,#36]\n"
+    "\tmov r2,sp\n"
+    "\tbl P256_addmod\n"
+    "\tpush {r0-r7}\n"
+    "\tldr r1,[sp,#68]\n"
+    "\tadd r2,sp,#32\n"
+    "\tbl P256_submod\n"
+    "\tadd r8,sp,#32\n"
+    "\tstm r8,{r0-r7}\n"
+    "\tadd r1,sp,#32\n"
+    "\tmov r2,sp\n"
+    "\tbl P256_mulmod\n"
+    "\tadd r8,sp,#32\n"
+    "\tstm r8,{r0-r7}\n"
+    "\tlsl r8,r0,#31\n"
+    "\tadds r0,r0,r8, asr #31\n"
+    "\tadcs r1,r1,r8, asr #31\n"
+    "\tadcs r2,r2,r8, asr #31\n"
+    "\tadcs r3,r3,#0\n"
+    "\tadcs r4,r4,#0\n"
+    "\tadcs r5,r5,#0\n"
+    "\tadcs r6,r6,r8, lsr #31\n"
+    "\tadcs r7,r7,r8, asr #31\n"
+    "\trrxs r7,r7\n"
+    "\trrxs r6,r6\n"
+    "\trrxs r5,r5\n"
+    "\trrxs r4,r4\n"
+    "\trrxs r3,r3\n"
+    "\trrxs r2,r2\n"
+    "\trrxs r1,r1\n"
+    "\trrx r0,r0\n"
+    "\tstm sp,{r0-r7}\n"
+    "\tadd r1,sp,#32\n"
+    "\tmov r2,sp\n"
+    "\tbl P256_addmod\n"
+    "\tadd r8,sp,#32\n"
+    "\tstm r8,{r0-r7}\n"
+    "\tbl P256_sqrmod\n"
+    "\tstm sp,{r0-r7}\n"
+    "\tldr r0,[sp,#68]\n"
+    "\tadds r0,#32\n"
+    "\tldm r0,{r0-r7}\n"
+    "\tbl P256_sqrmod\n"
+    "\tldr r8,[sp,#64]\n"
+    "\tadd r8,#32\n"
+    "\tstm r8,{r0-r7}\n"
+    "\tbl P256_sqrmod\n"
+    "\tpush {r0-r7}\n"
+    "\tldrd r0,r1,[sp,#96]\n"
+    "\tadd r2,r0,#32\n"
+    "\tbl P256_mulmod\n"
+    "\tldr r8,[sp,#96]\n"
+    "\tadd r8,#32\n"
+    "\tstm r8,{r0-r7}\n"
+    "\tbl P256_times2\n"
+    "\tldr r8,[sp,#96]\n"
+    "\tstm r8,{r0-r7}\n"
+    "\tadd r1,sp,#32\n"
+    "\tmov r2,r8\n"
+    "\tbl P256_submod\n"
+    "\tldr r8,[sp,#96]\n"
+    "\tstm r8,{r0-r7}\n"
+    "\tmov r2,r8\n"
+    "\tadd r1,r2,#32\n"
+    "\tbl P256_submod\n"
+    "\tadd r8,sp,#32\n"
+    "\tstm r8,{r0-r7}\n"
+    "\tadd r1,sp,#64\n"
+    "\tadd r2,sp,#32\n"
+    "\tbl P256_mulmod\n"
+    "\tadd r8,sp,#64\n"
+    "\tstm r8,{r0-r7}\n"
+    "\tadd r1,sp,#64\n"
+    "\tmov r2,sp\n"
+    "\tbl P256_submod\n"
+    "\tldr r8,[sp,#96]\n"
+    "\tadd r8,#32\n"
+    "\tstm r8,{r0-r7}\n"
+    "\tadd sp,#104\n"
+    "\tpop {r4-r11,pc}\n"
+    "\t.size P256_double_j, .-P256_double_j\n"
+    "\t.type add_sub_helper, %function\n"
+    "add_sub_helper:\n"
+    "\tpush {lr}\n"
+    "\tldm r1!,{r5-r12}\n"
+    "\tstm r0!,{r5-r12}\n"
+    "\tldm r1!,{r5-r12}\n"
+    "\tcbz r2,0f\n"
+    "\tmov lr,#0\n"
+    "\trsbs r4,r2,#0\n"
+    "\tsubs r5,r4,r5\n"
+    "\tsbcs r6,r4,r6\n"
+    "\tsbcs r7,r4,r7\n"
+    "\tsbcs r8,lr,r8\n"
+    "\tsbcs r9,lr,r9\n"
+    "\tsbcs r10,lr,r10\n"
+    "\tsbcs r11,r2,r11\n"
+    "\tsbcs r12,r4,r12\n"
+    "0:\n"
+    "\tstm r0!,{r5-r12}\n"
+    "\tcbnz r3,1f\n"
+    "\tldm r1,{r5-r12}\n"
+    "\tstm r0,{r5-r12}\n"
+    "\tb 2f\n"
+    "1:\n"
+    "\tmovs r4,#0\n"
+    "\tumull r5,r10,r4,r4\n"
+    "\tmvns r6,r4\n"
+    "\tmvns r7,r4\n"
+    "\tmov r8,#0xffffffff\n"
+    "\tmov r9,#0xfffffffe\n"
+    "\tstm r0,{r3-r10}\n"
+    "2:\n"
+    "\tpop {pc}\n"
+    "\t.size add_sub_helper, .-add_sub_helper\n"
+    "\t.type P256_add_sub_j, %function\n"
+    "P256_add_sub_j:\n"
+    "\t.global P256_add_sub_j\n"
+    "\tpush {r0-r11,lr}\n"
+    "\tadd r4,r0,#64\n"
+    "\tldm r4,{r4-r11}\n"
+    "\torrs r4,r5\n"
+    "\torrs r4,r6\n"
+    "\torrs r4,r7\n"
+    "\torrs r4,r8\n"
+    "\torrs r4,r9\n"
+    "\torrs r4,r10\n"
+    "\torrs r4,r11\n"
+    "\tbne 2f\n"
+    "\tbl add_sub_helper\n"
+    "\tadd sp,#16\n"
+    "\tpop {r4-r11,pc}\n"
+    "2:\n"
+    "\tcbnz r3,100f\n"
+    "\tadds r1,#64\n"
+    "\tldm r1,{r0-r7}\n"
+    "\tbl P256_sqrmod\n"
+    "\tpush {r0-r7}\n"
+    "\tldr r1,[sp,#32]\n"
+    "\tmov r2,sp\n"
+    "\tbl P256_mulmod\n"
+    "\tldr r8,[sp,#32]\n"
+    "\tstm r8,{r0-r7}\n"
+    "\tldr r1,[sp,#36]\n"
+    "\tadds r1,#64\n"
+    "\tmov r2,sp\n"
+    "\tbl P256_mulmod\n"
+    "\tstm sp,{r0-r7}\n"
+    "\tldr r1,[sp,#32]\n"
+    "\tadds r1,#32\n"
+    "\tmov r2,sp\n"
+    "\tbl P256_mulmod\n"
+    "\tldr r8,[sp,#32]\n"
+    "\tadd r8,#32\n"
+    "\tstm r8,{r0-r7}\n"
+    "\tb 101f\n"
+    "100:\n"
+    "\tsub sp,#32\n"
+    "101:\n"
+    "\tldr r1,[sp,#32]\n"
+    "\tadds r1,#64\n"
+    "\tldm r1,{r0-r7}\n"
+    "\tbl P256_sqrmod\n"
+    "\tpush {r0-r7}\n"
+    "\tldr r1,[sp,#68]\n"
+    "\tmov r2,sp\n"
+    "\tbl P256_mulmod\n"
+    "\tadd r8,sp,#32\n"
+    "\tstm r8,{r0-r7}\n"
+    "\tldr r1,[sp,#64]\n"
+    "\tadds r1,#64\n"
+    "\tmov r2,sp\n"
+    "\tbl P256_mulmod\n"
+    "\tstm sp,{r0-r7}\n"
+    "\tldr r1,[sp,#68]\n"
+    "\tadds r1,#32\n"
+    "\tmov r2,sp\n"
+    "\tbl P256_mulmod\n"
+    "\tstm sp,{r0-r7}\n"
+    "\tldr r1,[sp,#64]\n"
+    "\tadd r2,sp,#32\n"
+    "\tbl P256_submod\n"
+    "\tldr r8,[sp,#64]\n"
+    "\tstm r8,{r0-r7}\n"
+    "\tbl P256_sqrmod\n"
+    "\tpush {r0-r7}\n"
+    "\tldr r2,[sp,#96]\n"
+    "\tadd r1,r2,#64\n"
+    "\tbl P256_mulmod\n"
+    "\tldr r8,[sp,#96]\n"
+    "\tadd r8,#64\n"
+    "\tstm r8,{r0-r7}\n"
+    "\tldr r1,[sp,#108]\n"
+    "\tcbnz r1,102f\n"
+    "\tldr r1,[sp,#100]\n"
+    "\tadds r1,#64\n"
+    "\tmov r2,r8\n"
+    "\tbl P256_mulmod\n"
+    "\tldr r8,[sp,#96]\n"
+    "\tadd r8,#64\n"
+    "\tstm r8,{r0-r7}\n"
+    "102:\n"
+    "\tldr r1,[sp,#96]\n"
+    "\tmov r2,sp\n"
+    "\tbl P256_mulmod\n"
+    "\tldr r8,[sp,#96]\n"
+    "\tstm r8,{r0-r7}\n"
+    "\torrs r1,r0\n"
+    "\torrs r1,r2\n"
+    "\torrs r1,r3\n"
+    "\torrs r1,r4\n"
+    "\torrs r1,r5\n"
+    "\torrs r1,r6\n"
+    "\torrs r0,r1,r7\n"
+    "3:\n"
+    "\tpush {r0}\n"
+    "\tldr r1,[sp,#100]\n"
+    "\tadds r1,#32\n"
+    "\tadd r2,sp,#36\n"
+    "\tldr r3,[sp,#108]\n"
+    "\tcbz r3,4f\n"
+    "\tbl P256_addmod\n"
+    "\tb 5f\n"
+    "4:\n"
+    "\tbl P256_submod\n"
+    "5:\n"
+    "\tldr r8,[sp,#100]\n"
+    "\tadd r8,#32\n"
+    "\tstm r8,{r0-r7}\n"
+    "\tpop {r8}\n"
+    "\torrs r1,r0\n"
+    "\torrs r1,r2\n"
+    "\torrs r1,r3\n"
+    "\torrs r1,r4\n"
+    "\torrs r1,r5\n"
+    "\torrs r1,r6\n"
+    "\torrs r1,r7\n"
+    "\torrs r1,r8\n"
+    "\tbne 6f\n"
+    "\tadd sp,#96\n"
+    "\tldm sp,{r0-r3}\n"
+    "\tbl add_sub_helper\n"
+    "\tldr r0,[sp,#0]\n"
+    "\tmov r1,r0\n"
+    "\tadd sp,#16\n"
+    "\tbl P256_double_j\n"
+    "\tpop {r4-r11,pc}\n"
+    "6:\n"
+    "\tadd r1,sp,#64\n"
+    "\tmov r2,sp\n"
+    "\tbl P256_mulmod\n"
+    "\tadd r8,sp,#64\n"
+    "\tstm r8,{r0-r7}\n"
+    "\tldr r0,[sp,#96]\n"
+    "\tadds r0,#32\n"
+    "\tldm r0,{r0-r7}\n"
+    "\tbl P256_sqrmod\n"
+    "\tstm sp,{r0-r7}\n"
+    "\tadd r1,sp,#32\n"
+    "\tldr r2,[sp,#96]\n"
+    "\tbl P256_mulmod\n"
+    "\tadd r8,sp,#32\n"
+    "\tstm r8,{r0-r7}\n"
+    "\tmov r1,sp\n"
+    "\tldr r2,[sp,#96]\n"
+    "\tbl P256_submod\n"
+    "\tldr r8,[sp,#96]\n"
+    "\tstm r8,{r0-r7}\n"
+    "\tadd r0,sp,#64\n"
+    "\tldm r0,{r0-r7}\n"
+    "\tbl P256_times2\n"
+    "\tstm sp,{r0-r7}\n"
+    "\tldr r1,[sp,#96]\n"
+    "\tmov r2,sp\n"
+    "\tbl P256_submod\n"
+    "\tldr r8,[sp,#96]\n"
+    "\tstm r8,{r0-r7}\n"
+    "\tadd r1,sp,#64\n"
+    "\tldr r2,[sp,#96]\n"
+    "\tbl P256_submod\n"
+    "\tstm sp,{r0-r7}\n"
+    "\tldr r1,[sp,#96]\n"
+    "\tadds r1,#32\n"
+    "\tmov r2,sp\n"
+    "\tbl P256_mulmod\n"
+    "\tstm sp,{r0-r7}\n"
+    "\tldr r0,[sp,#104]\n"
+    "\tmov r1,sp\n"
+    "\tadd r2,sp,#32\n"
+    "\tcbz r0,7f\n"
+    "\tbl P256_addmod\n"
+    "\tb 8f\n"
+    "7:\n"
+    "\tbl P256_submod\n"
+    "8:\n"
+    "\tldr r8,[sp,#96]\n"
+    "\tadd r8,#32\n"
+    "\tstm r8,{r0-r7}\n"
+    "\tadd sp,#112\n"
+    "\tpop {r4-r11,pc}\n"
+    "\t.size P256_add_sub_j, .-P256_add_sub_j\n"
+    "\t.type P256_verify_last_step, %function\n"
+    "P256_verify_last_step:\n"
+    "\t.global P256_verify_last_step\n"
+    "\tpush {r0,r1,r4-r11,lr}\n"
+    "\tsub sp,#32\n"
+    "\tadd r1,#64\n"
+    "\tldm r1,{r0-r7}\n"
+    "\tbl P256_sqrmod\n"
+    "\tpush {r0-r7}\n"
+    "\torrs r0,r1\n"
+    "\torrs r0,r2\n"
+    "\torrs r0,r3\n"
+    "\torrs r0,r4\n"
+    "\torrs r0,r5\n"
+    "\torrs r0,r6\n"
+    "\torrs r0,r7\n"
+    "\tbeq 0f\n"
+    "\tldr r1,[sp,#64]\n"
+    "2:\n"
+    "\tadd r0,sp,#32\n"
+    "\tbl P256_to_montgomery\n"
+    "\tadd r1,sp,#32\n"
+    "\tmov r2,sp\n"
+    "\tbl P256_mulmod\n"
+    "\tldr r8,[sp,#68]\n"
+    "\tldm r8!,{r9-r12}\n"
+    "\teors r0,r9\n"
+    "\tittt eq\n"
+    "\teorseq r1,r10\n"
+    "\teorseq r2,r11\n"
+    "\teorseq r3,r12\n"
+    "\tldm r8!,{r9-r12}\n"
+    "\titttt eq\n"
+    "\teorseq r4,r9\n"
+    "\teorseq r5,r10\n"
+    "\teorseq r6,r11\n"
+    "\teorseq r7,r12\n"
+    "\tmov r0,#1\n"
+    "\tbeq 1f\n"
+    "\tadr r0,P256_order\n"
+    "\tldm r0,{r8-r11}\n"
+    "\tldr r0,[sp,#64]\n"
+    "\tcbz r0,0f\n"
+    "\tldm r0,{r0-r7}\n"
+    "\tadds r0,r8\n"
+    "\tadcs r1,r1,r9\n"
+    "\tadcs r2,r2,r10\n"
+    "\tadcs r3,r3,r11\n"
+    "\tadcs r4,r4,#0xffffffff\n"
+    "\tadcs r5,r5,#0xffffffff\n"
+    "\tadcs r6,r6,#0\n"
+    "\tadcs r7,r7,#0xffffffff\n"
+    "\tbcs 0f\n"
+    "\tsubs r8,r0,#0xffffffff\n"
+    "\tsbcs r8,r1,#0xffffffff\n"
+    "\tsbcs r8,r2,#0xffffffff\n"
+    "\tsbcs r8,r3,#0\n"
+    "\tsbcs r8,r4,#0\n"
+    "\tsbcs r8,r5,#0\n"
+    "\tsbcs r8,r6,#1\n"
+    "\tsbcs r8,r7,#0xffffffff\n"
+    "\tbcs 0f\n"
+    "\tadd r8,sp,#32\n"
+    "\tstm r8,{r0-r7}\n"
+    "\tmovs r2,#0\n"
+    "\tstr r2,[sp,#64]\n"
+    "\tmov r1,r8\n"
+    "\tb 2b\n"
+    "0:\n"
+    "\tmovs r0,#0\n"
+    "1:\n"
+    "\tadd sp,#72\n"
+    "\tpop {r4-r11,pc}\n"
+    "\t.size P256_verify_last_step, .-P256_verify_last_step\n"
+    "\t.type P256_negate_mod_m_if, %function\n"
+    "P256_negate_mod_m_if:\n"
+    "\tpush {r4-r8,lr}\n"
+    "\trsb r8,r2,#1\n"
+    "\tmovs r6,#8\n"
+    "\tsubs r7,r7\n"
+    "0:\n"
+    "\tldm r1!,{r4,r12}\n"
+    "\tldm r3!,{r5,lr}\n"
+    "\tsbcs r5,r5,r4\n"
+    "\tumull r4,r7,r8,r4\n"
+    "\tumaal r4,r7,r2,r5\n"
+    "\tsbcs lr,lr,r12\n"
+    "\tumull r12,r7,r8,r12\n"
+    "\tumaal r12,r7,r2,lr\n"
+    "\tstm r0!,{r4,r12}\n"
+    "\tsub r6,#2\n"
+    "\tcbz r6,1f\n"
+    "\tb 0b\n"
+    "1:\n"
+    "\tpop {r4-r8,pc}\n"
+    "\t.size P256_negate_mod_m_if, .-P256_negate_mod_m_if\n"
+    "\t.type P256_negate_mod_n_if, %function\n"
+    "P256_negate_mod_n_if:\n"
+    "\t.global P256_negate_mod_n_if\n"
+    "\tldr r3,=P256_order\n"
+    "\tb P256_negate_mod_m_if\n"
+    "\t.size P256_negate_mod_n_if, .-P256_negate_mod_n_if\n"
+    "\t.type P256_negate_mod_p_if, %function\n"
+    "P256_negate_mod_p_if:\n"
+    "\t.global P256_negate_mod_p_if\n"
+    "\tadr r3,P256_p\n"
+    "\tb P256_negate_mod_m_if\n"
+    "\t.size P256_negate_mod_p_if, .-P256_negate_mod_p_if\n"
+    "\t.align 2\n"
+    ".popsection\n");  // No .end here: it would drop the C code that follows
+
+// mg_p256_*() wrappers, see tls_p256.h. The API uses big endian byte strings,
+// this library uses little endian 32-bit words, so convert both ways
+
+int mg_p256_make_key(uint8_t public_key[64], uint8_t private_key[32]) {
+  uint32_t x[8], y[8], d[8];
+  int tries, ok = 0;
+  for (tries = 0; tries < 64 && !ok; tries++) {
+    if (!mg_random(d, sizeof(d))) break;
+    ok = p256_keygen(x, y, d);
+  }
+  if (ok) {
+    p256_convert_endianness(public_key, x, 32);
+    p256_convert_endianness(public_key + 32, y, 32);
+    p256_convert_endianness(private_key, d, 32);
+  }
+  mg_bzero((unsigned char *) d, sizeof(d));
+  return ok;
+}
+
+int mg_p256_compute_public_key(const uint8_t private_key[32],
+                               uint8_t public_key[64]) {
+  uint32_t x[8], y[8], d[8];
+  int ok;
+  p256_convert_endianness(d, private_key, 32);
+  ok = p256_keygen(x, y, d);  // False if the key is out of range
+  if (ok) {
+    p256_convert_endianness(public_key, x, 32);
+    p256_convert_endianness(public_key + 32, y, 32);
+  }
+  mg_bzero((unsigned char *) d, sizeof(d));
+  return ok;
+}
+
+int mg_p256_shared_secret(const uint8_t public_key[64],
+                          const uint8_t private_key[32], uint8_t secret[32]) {
+  uint32_t x[8], y[8], d[8];
+  int ok;
+  p256_convert_endianness(x, public_key, 32);
+  p256_convert_endianness(y, public_key + 32, 32);
+  p256_convert_endianness(d, private_key, 32);
+  ok = p256_ecdh_calc_shared_secret(secret, d, x, y);  // Validates the point
+  mg_bzero((unsigned char *) d, sizeof(d));
+  return ok;
+}
+
+int mg_p256_sign_with_k(const uint8_t private_key[32], const uint8_t *hash,
+                        size_t hash_size, const uint8_t k[32],
+                        uint8_t signature[64]) {
+  uint32_t r[8], s[8], d[8], kw[8];
+  int ok;
+  p256_convert_endianness(d, private_key, 32);
+  p256_convert_endianness(kw, k, 32);
+  ok = p256_sign(r, s, hash, (uint32_t) hash_size, d, kw);  // False if k is
+                                                             // out of range
+  if (ok) {
+    p256_convert_endianness(signature, r, 32);
+    p256_convert_endianness(signature + 32, s, 32);
+  }
+  mg_bzero((unsigned char *) d, sizeof(d));
+  mg_bzero((unsigned char *) kw, sizeof(kw));
+  return ok;
+}
+
+int mg_p256_verify(const uint8_t public_key[64], const uint8_t *hash,
+                   size_t hash_size, const uint8_t signature[64]) {
+  uint32_t x[8], y[8], r[8], s[8];
+  p256_convert_endianness(x, public_key, 32);
+  p256_convert_endianness(y, public_key + 32, 32);
+  p256_convert_endianness(r, signature, 32);
+  p256_convert_endianness(s, signature + 32, 32);
+  return p256_verify(x, y, hash, (uint32_t) hash_size, r, s);  // Checks point
+}
+#undef get_bit
+#endif  // MG_P256 == MG_P256_LENNGREN
+
+#ifdef MG_ENABLE_LINES
+#line 1 "src/tls_p384.c"
+#endif
+// P-384 from BearSSL, https://bearssl.org commit 7bea48e
+// P-384 signature verification, used by built-in TLS for certificates and
+// CertificateVerify. Shared bignum and ECDSA code is in tls_p256.c
+//
+// Copyright (c) 2016 Thomas Pornin <pornin@bolet.org>
+//
+// Permission is hereby granted, free of charge, to any person obtaining
+// a copy of this software and associated documentation files (the
+// "Software"), to deal in the Software without restriction, including
+// without limitation the rights to use, copy, modify, merge, publish,
+// distribute, sublicense, and/or sell copies of the Software, and to
+// permit persons to whom the Software is furnished to do so, subject to
+// the following conditions:
+//
+// The above copyright notice and this permission notice shall be
+// included in all copies or substantial portions of the Software.
+//
+// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,
+// EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF
+// MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND
+// NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS
+// BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN
+// ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN
+// CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+// SOFTWARE.
+//
+// Mongoose changes: br_ / BR_ names are prefixed with mg_ / MG_, static
+// functions with p384_. Trimmed to P-384. Structs are not typedef-ed
+
+
+
+
+#if MG_TLS == MG_TLS_BUILTIN || defined(MG_OTA_PUBLIC_KEY)
+
+// From BearSSL src/ec/ec_secp384r1.c
+static const unsigned char P384_N[] = {
+	0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 
+	0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 
+	0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 
+	0xC7, 0x63, 0x4D, 0x81, 0xF4, 0x37, 0x2D, 0xDF, 
+	0x58, 0x1A, 0x0D, 0xB2, 0x48, 0xB0, 0xA7, 0x7A, 
+	0xEC, 0xEC, 0x19, 0x6A, 0xCC, 0xC5, 0x29, 0x73
+};
+
+static const unsigned char P384_G[] = {
+	0x04, 0xAA, 0x87, 0xCA, 0x22, 0xBE, 0x8B, 0x05,
+	0x37, 0x8E, 0xB1, 0xC7, 0x1E, 0xF3, 0x20, 0xAD,
+	0x74, 0x6E, 0x1D, 0x3B, 0x62, 0x8B, 0xA7, 0x9B,
+	0x98, 0x59, 0xF7, 0x41, 0xE0, 0x82, 0x54, 0x2A,
+	0x38, 0x55, 0x02, 0xF2, 0x5D, 0xBF, 0x55, 0x29,
+	0x6C, 0x3A, 0x54, 0x5E, 0x38, 0x72, 0x76, 0x0A,
+	0xB7, 0x36, 0x17, 0xDE, 0x4A, 0x96, 0x26, 0x2C,
+	0x6F, 0x5D, 0x9E, 0x98, 0xBF, 0x92, 0x92, 0xDC,
+	0x29, 0xF8, 0xF4, 0x1D, 0xBD, 0x28, 0x9A, 0x14,
+	0x7C, 0xE9, 0xDA, 0x31, 0x13, 0xB5, 0xF0, 0xB8,
+	0xC0, 0x0A, 0x60, 0xB1, 0xCE, 0x1D, 0x7E, 0x81,
+	0x9D, 0x7A, 0x43, 0x1D, 0x7C, 0x90, 0xEA, 0x0E,
+	0x5F
+};
+
+
+// From BearSSL src/ec/ec_prime_i31.c
+/*
+ * Parameters for supported curves (field modulus, and 'b' equation
+ * parameter; both values use the 'i31' format, and 'b' is in Montgomery
+ * representation).
+ */
+
+static const uint32_t P384_P[] = {
+	0x0000018C,
+	0x7FFFFFFF, 0x00000001, 0x00000000, 0x7FFFFFF8,
+	0x7FFFFFEF, 0x7FFFFFFF, 0x7FFFFFFF, 0x7FFFFFFF,
+	0x7FFFFFFF, 0x7FFFFFFF, 0x7FFFFFFF, 0x7FFFFFFF,
+	0x00000FFF
+};
+
+static const uint32_t P384_R2[] = {
+	0x0000018C,
+	0x00000000, 0x00000080, 0x7FFFFE00, 0x000001FF,
+	0x00000800, 0x00000000, 0x7FFFE000, 0x00001FFF,
+	0x00008000, 0x00008000, 0x00000000, 0x00000000,
+	0x00000000
+};
+
+static const uint32_t P384_B[] = {
+	0x0000018C,
+	0x6E666840, 0x070D0392, 0x5D810231, 0x7651D50C,
+	0x17E218D6, 0x1B192002, 0x44EFE441, 0x3A524E2B,
+	0x2719BA5F, 0x41F02209, 0x36C5643E, 0x5813EFFE,
+	0x000008A5
+};
+
+struct p384_curve_params {
+	const uint32_t *p;
+	const uint32_t *b;
+	const uint32_t *R2;
+	uint32_t p0i;
+	size_t point_len;
+};
+
+static inline const struct p384_curve_params *
+p384_id_to_curve(int curve)
+{
+	static const struct p384_curve_params pp = {
+		P384_P, P384_B, P384_R2, 0x00000001,  97
+	};
+
+	(void)curve;
+	return &pp;
+}
+
+#define I31_LEN   ((MG_BR_MAX_EC_SIZE + 61) / 31)
+
+/*
+ * Type for a point in Jacobian coordinates:
+ * -- three values, x, y and z, in Montgomery representation
+ * -- affine coordinates are X = x / z^2 and Y = y / z^3
+ * -- for the point at infinity, z = 0
+ */
+struct p384_jacobian {
+	uint32_t c[3][I31_LEN];
+};
+
+/*
+ * We use a custom interpreter that uses a dozen registers, and
+ * only six operations:
+ *    MSET(d, a)       copy a into d
+ *    MADD(d, a)       d = d+a (modular)
+ *    MSUB(d, a)       d = d-a (modular)
+ *    MMUL(d, a, b)    d = a*b (Montgomery multiplication)
+ *    MINV(d, a, b)    invert d modulo p; a and b are used as scratch registers
+ *    MTZ(d)           clear return value if d = 0
+ * Destination of MMUL (d) must be distinct from operands (a and b).
+ * There is no such constraint for MSUB and MADD.
+ *
+ * Registers include the operand coordinates, and temporaries.
+ */
+#define MSET(d, a)      (0x0000 + ((d) << 8) + ((a) << 4))
+#define MADD(d, a)      (0x1000 + ((d) << 8) + ((a) << 4))
+#define MSUB(d, a)      (0x2000 + ((d) << 8) + ((a) << 4))
+#define MMUL(d, a, b)   (0x3000 + ((d) << 8) + ((a) << 4) + (b))
+#define MINV(d, a, b)   (0x4000 + ((d) << 8) + ((a) << 4) + (b))
+#define MTZ(d)          (0x5000 + ((d) << 8))
+#define ENDCODE         0
+
+/*
+ * Registers for the input operands.
+ */
+#define P1x    0
+#define P1y    1
+#define P1z    2
+#define P2x    3
+#define P2y    4
+#define P2z    5
+
+/*
+ * Alternate names for the first input operand.
+ */
+#define Px     0
+#define Py     1
+#define Pz     2
+
+/*
+ * Temporaries.
+ */
+#define t1     6
+#define t2     7
+#define t3     8
+#define t4     9
+#define t5    10
+#define t6    11
+#define t7    12
+
+/*
+ * Extra scratch registers available when there is no second operand (e.g.
+ * for "double" and "affine").
+ */
+#define t8     3
+#define t9     4
+#define t10    5
+
+/*
+ * Doubling formulas are:
+ *
+ *   s = 4*x*y^2
+ *   m = 3*(x + z^2)*(x - z^2)
+ *   x' = m^2 - 2*s
+ *   y' = m*(s - x') - 8*y^4
+ *   z' = 2*y*z
+ *
+ * If y = 0 (P has order 2) then this yields infinity (z' = 0), as it
+ * should. This case should not happen anyway, because our curves have
+ * prime order, and thus do not contain any point of order 2.
+ *
+ * If P is infinity (z = 0), then again the formulas yield infinity,
+ * which is correct. Thus, this code works for all points.
+ *
+ * Cost: 8 multiplications
+ */
+static const uint16_t p384_code_double[] = {
+	/*
+	 * Compute z^2 (in t1).
+	 */
+	MMUL(t1, Pz, Pz),
+
+	/*
+	 * Compute x-z^2 (in t2) and then x+z^2 (in t1).
+	 */
+	MSET(t2, Px),
+	MSUB(t2, t1),
+	MADD(t1, Px),
+
+	/*
+	 * Compute m = 3*(x+z^2)*(x-z^2) (in t1).
+	 */
+	MMUL(t3, t1, t2),
+	MSET(t1, t3),
+	MADD(t1, t3),
+	MADD(t1, t3),
+
+	/*
+	 * Compute s = 4*x*y^2 (in t2) and 2*y^2 (in t3).
+	 */
+	MMUL(t3, Py, Py),
+	MADD(t3, t3),
+	MMUL(t2, Px, t3),
+	MADD(t2, t2),
+
+	/*
+	 * Compute x' = m^2 - 2*s.
+	 */
+	MMUL(Px, t1, t1),
+	MSUB(Px, t2),
+	MSUB(Px, t2),
+
+	/*
+	 * Compute z' = 2*y*z.
+	 */
+	MMUL(t4, Py, Pz),
+	MSET(Pz, t4),
+	MADD(Pz, t4),
+
+	/*
+	 * Compute y' = m*(s - x') - 8*y^4. Note that we already have
+	 * 2*y^2 in t3.
+	 */
+	MSUB(t2, Px),
+	MMUL(Py, t1, t2),
+	MMUL(t4, t3, t3),
+	MSUB(Py, t4),
+	MSUB(Py, t4),
+
+	ENDCODE
+};
+
+/*
+ * Addtions formulas are:
+ *
+ *   u1 = x1 * z2^2
+ *   u2 = x2 * z1^2
+ *   s1 = y1 * z2^3
+ *   s2 = y2 * z1^3
+ *   h = u2 - u1
+ *   r = s2 - s1
+ *   x3 = r^2 - h^3 - 2 * u1 * h^2
+ *   y3 = r * (u1 * h^2 - x3) - s1 * h^3
+ *   z3 = h * z1 * z2
+ *
+ * If both P1 and P2 are infinity, then z1 == 0 and z2 == 0, implying that
+ * z3 == 0, so the result is correct.
+ * If either of P1 or P2 is infinity, but not both, then z3 == 0, which is
+ * not correct.
+ * h == 0 only if u1 == u2; this happens in two cases:
+ * -- if s1 == s2 then P1 and/or P2 is infinity, or P1 == P2
+ * -- if s1 != s2 then P1 + P2 == infinity (but neither P1 or P2 is infinity)
+ *
+ * Thus, the following situations are not handled correctly:
+ * -- P1 = 0 and P2 != 0
+ * -- P1 != 0 and P2 = 0
+ * -- P1 = P2
+ * All other cases are properly computed. However, even in "incorrect"
+ * situations, the three coordinates still are properly formed field
+ * elements.
+ *
+ * The returned flag is cleared if r == 0. This happens in the following
+ * cases:
+ * -- Both points are on the same horizontal line (same Y coordinate).
+ * -- Both points are infinity.
+ * -- One point is infinity and the other is on line Y = 0.
+ * The third case cannot happen with our curves (there is no valid point
+ * on line Y = 0 since that would be a point of order 2). If the two
+ * source points are non-infinity, then remains only the case where the
+ * two points are on the same horizontal line.
+ *
+ * This allows us to detect the "P1 == P2" case, assuming that P1 != 0 and
+ * P2 != 0:
+ * -- If the returned value is not the point at infinity, then it was properly
+ * computed.
+ * -- Otherwise, if the returned flag is 1, then P1+P2 = 0, and the result
+ * is indeed the point at infinity.
+ * -- Otherwise (result is infinity, flag is 0), then P1 = P2 and we should
+ * use the 'double' code.
+ *
+ * Cost: 16 multiplications
+ */
+static const uint16_t p384_code_add[] = {
+	/*
+	 * Compute u1 = x1*z2^2 (in t1) and s1 = y1*z2^3 (in t3).
+	 */
+	MMUL(t3, P2z, P2z),
+	MMUL(t1, P1x, t3),
+	MMUL(t4, P2z, t3),
+	MMUL(t3, P1y, t4),
+
+	/*
+	 * Compute u2 = x2*z1^2 (in t2) and s2 = y2*z1^3 (in t4).
+	 */
+	MMUL(t4, P1z, P1z),
+	MMUL(t2, P2x, t4),
+	MMUL(t5, P1z, t4),
+	MMUL(t4, P2y, t5),
+
+	/*
+	 * Compute h = u2 - u1 (in t2) and r = s2 - s1 (in t4).
+	 */
+	MSUB(t2, t1),
+	MSUB(t4, t3),
+
+	/*
+	 * Report cases where r = 0 through the returned flag.
+	 */
+	MTZ(t4),
+
+	/*
+	 * Compute u1*h^2 (in t6) and h^3 (in t5).
+	 */
+	MMUL(t7, t2, t2),
+	MMUL(t6, t1, t7),
+	MMUL(t5, t7, t2),
+
+	/*
+	 * Compute x3 = r^2 - h^3 - 2*u1*h^2.
+	 * t1 and t7 can be used as scratch registers.
+	 */
+	MMUL(P1x, t4, t4),
+	MSUB(P1x, t5),
+	MSUB(P1x, t6),
+	MSUB(P1x, t6),
+
+	/*
+	 * Compute y3 = r*(u1*h^2 - x3) - s1*h^3.
+	 */
+	MSUB(t6, P1x),
+	MMUL(P1y, t4, t6),
+	MMUL(t1, t5, t3),
+	MSUB(P1y, t1),
+
+	/*
+	 * Compute z3 = h*z1*z2.
+	 */
+	MMUL(t1, P1z, P2z),
+	MMUL(P1z, t1, t2),
+
+	ENDCODE
+};
+
+/*
+ * Check that the point is on the curve. This code snippet assumes the
+ * following conventions:
+ * -- Coordinates x and y have been freshly decoded in P1 (but not
+ * converted to Montgomery coordinates yet).
+ * -- P2x, P2y and P2z are set to, respectively, R^2, b*R and 1.
+ */
+static const uint16_t p384_code_check[] = {
+
+	/* Convert x and y to Montgomery representation. */
+	MMUL(t1, P1x, P2x),
+	MMUL(t2, P1y, P2x),
+	MSET(P1x, t1),
+	MSET(P1y, t2),
+
+	/* Compute x^3 in t1. */
+	MMUL(t2, P1x, P1x),
+	MMUL(t1, P1x, t2),
+
+	/* Subtract 3*x from t1. */
+	MSUB(t1, P1x),
+	MSUB(t1, P1x),
+	MSUB(t1, P1x),
+
+	/* Add b. */
+	MADD(t1, P2y),
+
+	/* Compute y^2 in t2. */
+	MMUL(t2, P1y, P1y),
+
+	/* Compare y^2 with x^3 - 3*x + b; they must match. */
+	MSUB(t1, t2),
+	MTZ(t1),
+
+	/* Set z to 1 (in Montgomery representation). */
+	MMUL(P1z, P2x, P2z),
+
+	ENDCODE
+};
+
+/*
+ * Conversion back to affine coordinates. This code snippet assumes that
+ * the z coordinate of P2 is set to 1 (not in Montgomery representation).
+ */
+static const uint16_t p384_code_affine[] = {
+
+	/* Save z*R in t1. */
+	MSET(t1, P1z),
+
+	/* Compute z^3 in t2. */
+	MMUL(t2, P1z, P1z),
+	MMUL(t3, P1z, t2),
+	MMUL(t2, t3, P2z),
+
+	/* Invert to (1/z^3) in t2. */
+	MINV(t2, t3, t4),
+
+	/* Compute y. */
+	MSET(t3, P1y),
+	MMUL(P1y, t2, t3),
+
+	/* Compute (1/z^2) in t3. */
+	MMUL(t3, t2, t1),
+
+	/* Compute x. */
+	MSET(t2, P1x),
+	MMUL(P1x, t2, t3),
+
+	ENDCODE
+};
+
+static uint32_t
+p384_run_code(struct p384_jacobian *P1, const struct p384_jacobian *P2,
+	const struct p384_curve_params *cc, const uint16_t *code)
+{
+	uint32_t r;
+	uint32_t t[13][I31_LEN];
+	size_t u;
+
+	r = 1;
+
+	/*
+	 * Copy the two operands in the dedicated registers.
+	 */
+	memcpy(t[P1x], P1->c, 3 * I31_LEN * sizeof(uint32_t));
+	memcpy(t[P2x], P2->c, 3 * I31_LEN * sizeof(uint32_t));
+
+	/*
+	 * Run formulas.
+	 */
+	for (u = 0;; u ++) {
+		unsigned op, d, a, b;
+
+		op = code[u];
+		if (op == 0) {
+			break;
+		}
+		d = (op >> 8) & 0x0F;
+		a = (op >> 4) & 0x0F;
+		b = op & 0x0F;
+		op >>= 12;
+		switch (op) {
+			uint32_t ctl;
+			size_t plen;
+			unsigned char tp[(MG_BR_MAX_EC_SIZE + 7) >> 3];
+
+		case 0:
+			memcpy(t[d], t[a], I31_LEN * sizeof(uint32_t));
+			break;
+		case 1:
+			ctl = mg_br_i31_add(t[d], t[a], 1);
+			ctl |= MG_BR_NOT(mg_br_i31_sub(t[d], cc->p, 0));
+			mg_br_i31_sub(t[d], cc->p, ctl);
+			break;
+		case 2:
+			mg_br_i31_add(t[d], cc->p, mg_br_i31_sub(t[d], t[a], 1));
+			break;
+		case 3:
+			mg_br_i31_montymul(t[d], t[a], t[b], cc->p, cc->p0i);
+			break;
+		case 4:
+			plen = (cc->p[0] - (cc->p[0] >> 5) + 7) >> 3;
+			mg_br_i31_encode(tp, plen, cc->p);
+			tp[plen - 1] -= 2;
+			mg_br_i31_modpow(t[d], tp, plen,
+				cc->p, cc->p0i, t[a], t[b]);
+			break;
+		default:
+			r &= ~mg_br_i31_iszero(t[d]);
+			break;
+		}
+	}
+
+	/*
+	 * Copy back result.
+	 */
+	memcpy(P1->c, t[P1x], 3 * I31_LEN * sizeof(uint32_t));
+	return r;
+}
+
+static void
+p384_set_one(uint32_t *x, const uint32_t *p)
+{
+	size_t plen;
+
+	plen = (p[0] + 63) >> 5;
+	memset(x, 0, plen * sizeof *x);
+	x[0] = p[0];
+	x[1] = 0x00000001;
+}
+
+static void
+p384_point_zero(struct p384_jacobian *P, const struct p384_curve_params *cc)
+{
+	memset(P, 0, sizeof *P);
+	P->c[0][0] = P->c[1][0] = P->c[2][0] = cc->p[0];
+}
+
+static inline void
+p384_point_double(struct p384_jacobian *P, const struct p384_curve_params *cc)
+{
+	p384_run_code(P, P, cc, p384_code_double);
+}
+
+static inline uint32_t
+p384_point_add(struct p384_jacobian *P1, const struct p384_jacobian *P2, const struct p384_curve_params *cc)
+{
+	return p384_run_code(P1, P2, cc, p384_code_add);
+}
+
+static void
+p384_point_mul(struct p384_jacobian *P, const unsigned char *x, size_t xlen,
+	const struct p384_curve_params *cc)
+{
+	/*
+	 * We do a simple double-and-add ladder with a 2-bit window
+	 * to make only one add every two doublings. We thus first
+	 * precompute 2P and 3P in some local buffers.
+	 *
+	 * We always perform two doublings and one addition; the
+	 * addition is with P, 2P and 3P and is done in a temporary
+	 * array.
+	 *
+	 * The addition code cannot handle cases where one of the
+	 * operands is infinity, which is the case at the start of the
+	 * ladder. We therefore need to maintain a flag that controls
+	 * this situation.
+	 */
+	uint32_t qz;
+	struct p384_jacobian P2, P3, Q, T, U;
+
+	memcpy(&P2, P, sizeof P2);
+	p384_point_double(&P2, cc);
+	memcpy(&P3, P, sizeof P3);
+	p384_point_add(&P3, &P2, cc);
+
+	p384_point_zero(&Q, cc);
+	qz = 1;
+	while (xlen -- > 0) {
+		int k;
+
+		for (k = 6; k >= 0; k -= 2) {
+			uint32_t bits;
+			uint32_t bnz;
+
+			p384_point_double(&Q, cc);
+			p384_point_double(&Q, cc);
+			memcpy(&T, P, sizeof T);
+			memcpy(&U, &Q, sizeof U);
+			bits = (*x >> k) & (uint32_t)3;
+			bnz = MG_BR_NEQ(bits, 0);
+			MG_BR_CCOPY(MG_BR_EQ(bits, 2), &T, &P2, sizeof T);
+			MG_BR_CCOPY(MG_BR_EQ(bits, 3), &T, &P3, sizeof T);
+			p384_point_add(&U, &T, cc);
+			MG_BR_CCOPY(bnz & qz, &Q, &T, sizeof Q);
+			MG_BR_CCOPY(bnz & ~qz, &Q, &U, sizeof Q);
+			qz &= ~bnz;
+		}
+		x ++;
+	}
+	memcpy(P, &Q, sizeof Q);
+}
+
+/*
+ * Decode point into Jacobian coordinates. This function does not support
+ * the point at infinity. If the point is invalid then this returns 0, but
+ * the coordinates are still set to properly formed field elements.
+ */
+static uint32_t
+p384_point_decode(struct p384_jacobian *P, const void *src, size_t len, const struct p384_curve_params *cc)
+{
+	/*
+	 * Points must use uncompressed format:
+	 * -- first byte is 0x04;
+	 * -- coordinates X and Y use unsigned big-endian, with the same
+	 *    length as the field modulus.
+	 *
+	 * We don't support hybrid format (uncompressed, but first byte
+	 * has value 0x06 or 0x07, depending on the least significant bit
+	 * of Y) because it is rather useless, and explicitly forbidden
+	 * by PKIX (RFC 5480, section 2.2).
+	 *
+	 * We don't support compressed format either, because it is not
+	 * much used in practice (there are or were patent-related
+	 * concerns about point compression, which explains the lack of
+	 * generalised support). Also, point compression support would
+	 * need a bit more code.
+	 */
+	const unsigned char *buf;
+	size_t plen, zlen;
+	uint32_t r;
+	struct p384_jacobian Q;
+
+	buf = (const unsigned char *)src;
+	p384_point_zero(P, cc);
+	plen = (cc->p[0] - (cc->p[0] >> 5) + 7) >> 3;
+	if (len != 1 + (plen << 1)) {
+		return 0;
+	}
+	r = mg_br_i31_decode_mod(P->c[0], buf + 1, plen, cc->p);
+	r &= mg_br_i31_decode_mod(P->c[1], buf + 1 + plen, plen, cc->p);
+
+	/*
+	 * Check first byte.
+	 */
+	r &= MG_BR_EQ(buf[0], 0x04);
+	/* obsolete
+	r &= MG_BR_EQ(buf[0], 0x04) | (MG_BR_EQ(buf[0] & 0xFE, 0x06)
+		& ~(uint32_t)(buf[0] ^ buf[plen << 1]));
+	*/
+
+	/*
+	 * Convert coordinates and check that the point is valid.
+	 */
+	zlen = ((cc->p[0] + 63) >> 5) * sizeof(uint32_t);
+	memcpy(Q.c[0], cc->R2, zlen);
+	memcpy(Q.c[1], cc->b, zlen);
+	p384_set_one(Q.c[2], cc->p);
+	r &= ~p384_run_code(P, &Q, cc, p384_code_check);
+	return r;
+}
+
+/*
+ * Encode a point. This method assumes that the point is correct and is
+ * not the point at infinity. Encoded size is always 1+2*plen, where
+ * plen is the field modulus length, in bytes.
+ */
+static void
+p384_point_encode(void *dst, const struct p384_jacobian *P, const struct p384_curve_params *cc)
+{
+	unsigned char *buf;
+	uint32_t xbl;
+	size_t plen;
+	struct p384_jacobian Q, T;
+
+	buf = (unsigned char *)dst;
+	xbl = cc->p[0];
+	xbl -= (xbl >> 5);
+	plen = (xbl + 7) >> 3;
+	buf[0] = 0x04;
+	memcpy(&Q, P, sizeof *P);
+	p384_set_one(T.c[2], cc->p);
+	p384_run_code(&Q, &T, cc, p384_code_affine);
+	mg_br_i31_encode(buf + 1, plen, Q.c[0]);
+	mg_br_i31_encode(buf + 1 + plen, plen, Q.c[1]);
+}
+
+static const unsigned char *
+p384_api_generator(int curve, size_t *len)
+{
+	(void)curve;
+	*len = sizeof P384_G;
+	return P384_G;
+}
+
+static const unsigned char *
+p384_api_order(int curve, size_t *len)
+{
+	(void)curve;
+	*len = sizeof P384_N;
+	return P384_N;
+}
+
+static size_t
+p384_api_xoff(int curve, size_t *len)
+{
+	p384_api_generator(curve, len);
+	*len >>= 1;
+	return 1;
+}
+
+static uint32_t
+p384_api_mul(unsigned char *G, size_t Glen,
+	const unsigned char *x, size_t xlen, int curve)
+{
+	uint32_t r;
+	const struct p384_curve_params *cc;
+	struct p384_jacobian P;
+
+	cc = p384_id_to_curve(curve);
+	if (Glen != cc->point_len) {
+		return 0;
+	}
+	r = p384_point_decode(&P, G, Glen, cc);
+	p384_point_mul(&P, x, xlen, cc);
+	p384_point_encode(G, &P, cc);
+	return r;
+}
+
+static size_t
+p384_api_mulgen(unsigned char *R,
+	const unsigned char *x, size_t xlen, int curve)
+{
+	const unsigned char *G;
+	size_t Glen;
+
+	G = p384_api_generator(curve, &Glen);
+	memcpy(R, G, Glen);
+	p384_api_mul(R, Glen, x, xlen, curve);
+	return Glen;
+}
+
+static uint32_t
+p384_api_muladd(unsigned char *A, const unsigned char *B, size_t len,
+	const unsigned char *x, size_t xlen,
+	const unsigned char *y, size_t ylen, int curve)
+{
+	uint32_t r, t, z;
+	const struct p384_curve_params *cc;
+	struct p384_jacobian P, Q;
+
+	/*
+	 * TODO: see about merging the two ladders. Right now, we do
+	 * two independent point multiplications, which is a bit
+	 * wasteful of CPU resources (but yields short code).
+	 */
+
+	cc = p384_id_to_curve(curve);
+	if (len != cc->point_len) {
+		return 0;
+	}
+	r = p384_point_decode(&P, A, len, cc);
+	if (B == NULL) {
+		size_t Glen;
+
+		B = p384_api_generator(curve, &Glen);
+	}
+	r &= p384_point_decode(&Q, B, len, cc);
+	p384_point_mul(&P, x, xlen, cc);
+	p384_point_mul(&Q, y, ylen, cc);
+
+	/*
+	 * We want to compute P+Q. Since the base points A and B are distinct
+	 * from infinity, and the multipliers are non-zero and lower than the
+	 * curve order, then we know that P and Q are non-infinity. This
+	 * leaves two special situations to test for:
+	 * -- If P = Q then we must use p384_point_double().
+	 * -- If P+Q = 0 then we must report an error.
+	 */
+	t = p384_point_add(&P, &Q, cc);
+	p384_point_double(&Q, cc);
+	z = mg_br_i31_iszero(P.c[2]);
+
+	/*
+	 * If z is 1 then either P+Q = 0 (t = 1) or P = Q (t = 0). So we
+	 * have the following:
+	 *
+	 *   z = 0, t = 0   return P (normal addition)
+	 *   z = 0, t = 1   return P (normal addition)
+	 *   z = 1, t = 0   return Q (a 'double' case)
+	 *   z = 1, t = 1   report an error (P+Q = 0)
+	 */
+	MG_BR_CCOPY(z & ~t, &P, &Q, sizeof Q);
+	p384_point_encode(A, &P, cc);
+	r &= ~(z & t);
+
+	return r;
+}
+
+static const struct mg_br_ec_impl mg_br_ec_prime_i31 = {
+	(uint32_t)1 << MG_BR_EC_secp384r1,
+	&p384_api_generator,
+	&p384_api_order,
+	&p384_api_xoff,
+	&p384_api_mul,
+	&p384_api_mulgen,
+	&p384_api_muladd
+};
+
+// See tls_p384.h
+int mg_p384_verify(const uint8_t public_key[96], const uint8_t *hash,
+                   size_t hash_size, const uint8_t signature[96]) {
+  unsigned char q[97];
+  q[0] = 0x04;
+  memcpy(q + 1, public_key, 96);
+  return mg_br_ecdsa_i31_vrfy_raw(&mg_br_ec_prime_i31, MG_BR_EC_secp384r1, hash,
+                                  hash_size, q, sizeof(q), signature, 96) == 1;
+}
+
+// Undefine local macros, mongoose.c is one translation unit
+#undef I31_LEN
+#undef MSET
+#undef MADD
+#undef MSUB
+#undef MMUL
+#undef MINV
+#undef MTZ
+#undef ENDCODE
+#undef P1x
+#undef P1y
+#undef P1z
+#undef P2x
+#undef P2y
+#undef P2z
+#undef Px
+#undef Py
+#undef Pz
+#undef t1
+#undef t2
+#undef t3
+#undef t4
+#undef t5
+#undef t6
+#undef t7
+#undef t8
+#undef t9
+#undef t10
+#endif  // MG_TLS == MG_TLS_BUILTIN || defined(MG_OTA_PUBLIC_KEY)
+
+#ifdef MG_ENABLE_LINES
 #line 1 "src/tls_rsa.c"
 #endif
 
@@ -23054,3580 +28713,6 @@ bool mg_rsa_pkcs_verify(const uint8_t *em, size_t nlen, const uint8_t *hash,
 }
 
 #endif /* MG_TLS == MG_TLS_BUILTIN */
-
-#ifdef MG_ENABLE_LINES
-#line 1 "src/tls_uecc.c"
-#endif
-/* Copyright 2014, Kenneth MacKay. Licensed under the BSD 2-clause license. */
-
-
-
-
-#if MG_TLS == MG_TLS_BUILTIN || defined(MG_OTA_PUBLIC_KEY)
-
-#ifndef MG_UECC_RNG_MAX_TRIES
-#define MG_UECC_RNG_MAX_TRIES 64
-#endif
-
-#if MG_UECC_ENABLE_VLI_API
-#define MG_UECC_VLI_API
-#else
-#define MG_UECC_VLI_API static
-#endif
-
-#if (MG_UECC_PLATFORM == mg_uecc_avr) || (MG_UECC_PLATFORM == mg_uecc_arm) || \
-    (MG_UECC_PLATFORM == mg_uecc_arm_thumb) ||                                \
-    (MG_UECC_PLATFORM == mg_uecc_arm_thumb2)
-#define MG_UECC_CONCATX(a, ...) a##__VA_ARGS__
-#define MG_UECC_CONCAT(a, ...) MG_UECC_CONCATX(a, __VA_ARGS__)
-
-#define STRX(a) #a
-#define STR(a) STRX(a)
-
-#define EVAL(...) EVAL1(EVAL1(EVAL1(EVAL1(__VA_ARGS__))))
-#define EVAL1(...) EVAL2(EVAL2(EVAL2(EVAL2(__VA_ARGS__))))
-#define EVAL2(...) EVAL3(EVAL3(EVAL3(EVAL3(__VA_ARGS__))))
-#define EVAL3(...) EVAL4(EVAL4(EVAL4(EVAL4(__VA_ARGS__))))
-#define EVAL4(...) __VA_ARGS__
-
-#define DEC_1 0
-#define DEC_2 1
-#define DEC_3 2
-#define DEC_4 3
-#define DEC_5 4
-#define DEC_6 5
-#define DEC_7 6
-#define DEC_8 7
-#define DEC_9 8
-#define DEC_10 9
-#define DEC_11 10
-#define DEC_12 11
-#define DEC_13 12
-#define DEC_14 13
-#define DEC_15 14
-#define DEC_16 15
-#define DEC_17 16
-#define DEC_18 17
-#define DEC_19 18
-#define DEC_20 19
-#define DEC_21 20
-#define DEC_22 21
-#define DEC_23 22
-#define DEC_24 23
-#define DEC_25 24
-#define DEC_26 25
-#define DEC_27 26
-#define DEC_28 27
-#define DEC_29 28
-#define DEC_30 29
-#define DEC_31 30
-#define DEC_32 31
-
-#define DEC_(N) MG_UECC_CONCAT(DEC_, N)
-
-#define SECOND_ARG(_, val, ...) val
-#define SOME_CHECK_0 ~, 0
-#define GET_SECOND_ARG(...) SECOND_ARG(__VA_ARGS__, SOME, )
-#define SOME_OR_0(N) GET_SECOND_ARG(MG_UECC_CONCAT(SOME_CHECK_, N))
-
-#define MG_UECC_EMPTY(...)
-#define DEFER(...) __VA_ARGS__ MG_UECC_EMPTY()
-
-#define REPEAT_NAME_0() REPEAT_0
-#define REPEAT_NAME_SOME() REPEAT_SOME
-#define REPEAT_0(...)
-#define REPEAT_SOME(N, stuff) \
-  DEFER(MG_UECC_CONCAT(REPEAT_NAME_, SOME_OR_0(DEC_(N))))()(DEC_(N), stuff) stuff
-#define REPEAT(N, stuff) EVAL(REPEAT_SOME(N, stuff))
-
-#define REPEATM_NAME_0() REPEATM_0
-#define REPEATM_NAME_SOME() REPEATM_SOME
-#define REPEATM_0(...)
-#define REPEATM_SOME(N, macro) \
-  macro(N) DEFER(MG_UECC_CONCAT(REPEATM_NAME_, SOME_OR_0(DEC_(N))))()(DEC_(N), macro)
-#define REPEATM(N, macro) EVAL(REPEATM_SOME(N, macro))
-#endif
-
-// 
-
-#if (MG_UECC_WORD_SIZE == 1)
-#if MG_UECC_SUPPORTS_secp160r1
-#define MG_UECC_MAX_WORDS 21 /* Due to the size of curve_n. */
-#endif
-#if MG_UECC_SUPPORTS_secp192r1
-#undef MG_UECC_MAX_WORDS
-#define MG_UECC_MAX_WORDS 24
-#endif
-#if MG_UECC_SUPPORTS_secp224r1
-#undef MG_UECC_MAX_WORDS
-#define MG_UECC_MAX_WORDS 28
-#endif
-#if (MG_UECC_SUPPORTS_secp256r1 || MG_UECC_SUPPORTS_secp256k1)
-#undef MG_UECC_MAX_WORDS
-#define MG_UECC_MAX_WORDS 32
-#endif
-#if MG_UECC_SUPPORTS_secp384r1
-#undef MG_UECC_MAX_WORDS
-#define MG_UECC_MAX_WORDS 48
-#endif
-#elif (MG_UECC_WORD_SIZE == 4)
-#if MG_UECC_SUPPORTS_secp160r1
-#define MG_UECC_MAX_WORDS 6 /* Due to the size of curve_n. */
-#endif
-#if MG_UECC_SUPPORTS_secp192r1
-#undef MG_UECC_MAX_WORDS
-#define MG_UECC_MAX_WORDS 6
-#endif
-#if MG_UECC_SUPPORTS_secp224r1
-#undef MG_UECC_MAX_WORDS
-#define MG_UECC_MAX_WORDS 7
-#endif
-#if (MG_UECC_SUPPORTS_secp256r1 || MG_UECC_SUPPORTS_secp256k1)
-#undef MG_UECC_MAX_WORDS
-#define MG_UECC_MAX_WORDS 8
-#endif
-#if MG_UECC_SUPPORTS_secp384r1
-#undef MG_UECC_MAX_WORDS
-#define MG_UECC_MAX_WORDS 12
-#endif
-#elif (MG_UECC_WORD_SIZE == 8)
-#if MG_UECC_SUPPORTS_secp160r1
-#define MG_UECC_MAX_WORDS 3
-#endif
-#if MG_UECC_SUPPORTS_secp192r1
-#undef MG_UECC_MAX_WORDS
-#define MG_UECC_MAX_WORDS 3
-#endif
-#if MG_UECC_SUPPORTS_secp224r1
-#undef MG_UECC_MAX_WORDS
-#define MG_UECC_MAX_WORDS 4
-#endif
-#if (MG_UECC_SUPPORTS_secp256r1 || MG_UECC_SUPPORTS_secp256k1)
-#undef MG_UECC_MAX_WORDS
-#define MG_UECC_MAX_WORDS 4
-#endif
-#if MG_UECC_SUPPORTS_secp384r1
-#undef MG_UECC_MAX_WORDS
-#define MG_UECC_MAX_WORDS 6
-#endif
-#endif /* MG_UECC_WORD_SIZE */
-
-#define BITS_TO_WORDS(num_bits)                                \
-  ((wordcount_t) ((num_bits + ((MG_UECC_WORD_SIZE * 8) - 1)) / \
-                  (MG_UECC_WORD_SIZE * 8)))
-#define BITS_TO_BYTES(num_bits) ((num_bits + 7) / 8)
-
-struct MG_UECC_Curve_t {
-  wordcount_t num_words;
-  wordcount_t num_bytes;
-  bitcount_t num_n_bits;
-  mg_uecc_word_t p[MG_UECC_MAX_WORDS];
-  mg_uecc_word_t n[MG_UECC_MAX_WORDS];
-  mg_uecc_word_t G[MG_UECC_MAX_WORDS * 2];
-  mg_uecc_word_t b[MG_UECC_MAX_WORDS];
-  void (*double_jacobian)(mg_uecc_word_t *X1, mg_uecc_word_t *Y1,
-                          mg_uecc_word_t *Z1, MG_UECC_Curve curve);
-#if MG_UECC_SUPPORT_COMPRESSED_POINT
-  void (*mod_sqrt)(mg_uecc_word_t *a, MG_UECC_Curve curve);
-#endif
-  void (*x_side)(mg_uecc_word_t *result, const mg_uecc_word_t *x,
-                 MG_UECC_Curve curve);
-#if (MG_UECC_OPTIMIZATION_LEVEL > 0)
-  void (*mmod_fast)(mg_uecc_word_t *result, mg_uecc_word_t *product);
-#endif
-};
-
-#if MG_UECC_VLI_NATIVE_LITTLE_ENDIAN
-static void bcopy(uint8_t *dst, const uint8_t *src, unsigned num_bytes) {
-  while (0 != num_bytes) {
-    num_bytes--;
-    dst[num_bytes] = src[num_bytes];
-  }
-}
-#endif
-
-static cmpresult_t mg_uecc_vli_cmp_unsafe(const mg_uecc_word_t *left,
-                                          const mg_uecc_word_t *right,
-                                          wordcount_t num_words);
-
-#if (MG_UECC_PLATFORM == mg_uecc_arm ||       \
-     MG_UECC_PLATFORM == mg_uecc_arm_thumb || \
-     MG_UECC_PLATFORM == mg_uecc_arm_thumb2)
-
-#endif
-
-#if (MG_UECC_PLATFORM == mg_uecc_avr)
-
-#endif
-
-#ifndef asm_clear
-#define asm_clear 0
-#endif
-#ifndef asm_set
-#define asm_set 0
-#endif
-#ifndef asm_add
-#define asm_add 0
-#endif
-#ifndef asm_sub
-#define asm_sub 0
-#endif
-#ifndef asm_mult
-#define asm_mult 0
-#endif
-#ifndef asm_rshift1
-#define asm_rshift1 0
-#endif
-#ifndef asm_mmod_fast_secp256r1
-#define asm_mmod_fast_secp256r1 0
-#endif
-
-static MG_UECC_RNG_Function g_rng_function = NULL;
-
-void mg_uecc_set_rng(MG_UECC_RNG_Function rng_function) {
-  g_rng_function = rng_function;
-}
-
-MG_UECC_RNG_Function mg_uecc_get_rng(void) {
-  return g_rng_function;
-}
-
-int mg_uecc_curve_private_key_size(MG_UECC_Curve curve) {
-  return BITS_TO_BYTES(curve->num_n_bits);
-}
-
-int mg_uecc_curve_public_key_size(MG_UECC_Curve curve) {
-  return 2 * curve->num_bytes;
-}
-
-#if !asm_clear
-MG_UECC_VLI_API void mg_uecc_vli_clear(mg_uecc_word_t *vli,
-                                       wordcount_t num_words) {
-  wordcount_t i;
-  for (i = 0; i < num_words; ++i) {
-    vli[i] = 0;
-  }
-}
-#endif /* !asm_clear */
-
-/* Constant-time comparison to zero - secure way to compare long integers */
-/* Returns 1 if vli == 0, 0 otherwise. */
-MG_UECC_VLI_API mg_uecc_word_t mg_uecc_vli_isZero(const mg_uecc_word_t *vli,
-                                                  wordcount_t num_words) {
-  mg_uecc_word_t bits = 0;
-  wordcount_t i;
-  for (i = 0; i < num_words; ++i) {
-    bits |= vli[i];
-  }
-  return (bits == 0);
-}
-
-/* Returns nonzero if bit 'bit' of vli is set. */
-MG_UECC_VLI_API mg_uecc_word_t mg_uecc_vli_testBit(const mg_uecc_word_t *vli,
-                                                   bitcount_t bit) {
-  return (vli[bit >> MG_UECC_WORD_BITS_SHIFT] &
-          ((mg_uecc_word_t) 1 << (bit & MG_UECC_WORD_BITS_MASK)));
-}
-
-/* Counts the number of words in vli. */
-static wordcount_t vli_numDigits(const mg_uecc_word_t *vli,
-                                 const wordcount_t max_words) {
-  wordcount_t i;
-  /* Search from the end until we find a non-zero digit.
-     We do it in reverse because we expect that most digits will be nonzero. */
-  for (i = max_words - 1; i >= 0 && vli[i] == 0; --i) {
-  }
-
-  return (i + 1);
-}
-
-/* Counts the number of bits required to represent vli. */
-MG_UECC_VLI_API bitcount_t mg_uecc_vli_numBits(const mg_uecc_word_t *vli,
-                                               const wordcount_t max_words) {
-  mg_uecc_word_t i;
-  mg_uecc_word_t digit;
-
-  wordcount_t num_digits = vli_numDigits(vli, max_words);
-  if (num_digits == 0) {
-    return 0;
-  }
-
-  digit = vli[num_digits - 1];
-  for (i = 0; digit; ++i) {
-    digit >>= 1;
-  }
-
-  return (((bitcount_t) ((num_digits - 1) << MG_UECC_WORD_BITS_SHIFT)) +
-          (bitcount_t) i);
-}
-
-/* Sets dest = src. */
-#if !asm_set
-MG_UECC_VLI_API void mg_uecc_vli_set(mg_uecc_word_t *dest,
-                                     const mg_uecc_word_t *src,
-                                     wordcount_t num_words) {
-  wordcount_t i;
-  for (i = 0; i < num_words; ++i) {
-    dest[i] = src[i];
-  }
-}
-#endif /* !asm_set */
-
-/* Returns sign of left - right. */
-static cmpresult_t mg_uecc_vli_cmp_unsafe(const mg_uecc_word_t *left,
-                                          const mg_uecc_word_t *right,
-                                          wordcount_t num_words) {
-  wordcount_t i;
-  for (i = num_words - 1; i >= 0; --i) {
-    if (left[i] > right[i]) {
-      return 1;
-    } else if (left[i] < right[i]) {
-      return -1;
-    }
-  }
-  return 0;
-}
-
-/* Constant-time comparison function - secure way to compare long integers */
-/* Returns one if left == right, zero otherwise. */
-MG_UECC_VLI_API mg_uecc_word_t mg_uecc_vli_equal(const mg_uecc_word_t *left,
-                                                 const mg_uecc_word_t *right,
-                                                 wordcount_t num_words) {
-  mg_uecc_word_t diff = 0;
-  wordcount_t i;
-  for (i = num_words - 1; i >= 0; --i) {
-    diff |= (left[i] ^ right[i]);
-  }
-  return (diff == 0);
-}
-
-MG_UECC_VLI_API mg_uecc_word_t mg_uecc_vli_sub(mg_uecc_word_t *result,
-                                               const mg_uecc_word_t *left,
-                                               const mg_uecc_word_t *right,
-                                               wordcount_t num_words);
-
-/* Returns sign of left - right, in constant time. */
-MG_UECC_VLI_API cmpresult_t mg_uecc_vli_cmp(const mg_uecc_word_t *left,
-                                            const mg_uecc_word_t *right,
-                                            wordcount_t num_words) {
-  mg_uecc_word_t tmp[MG_UECC_MAX_WORDS];
-  mg_uecc_word_t neg = !!mg_uecc_vli_sub(tmp, left, right, num_words);
-  mg_uecc_word_t equal = mg_uecc_vli_isZero(tmp, num_words);
-  return (cmpresult_t) (!equal - 2 * neg);
-}
-
-/* Computes vli = vli >> 1. */
-#if !asm_rshift1
-MG_UECC_VLI_API void mg_uecc_vli_rshift1(mg_uecc_word_t *vli,
-                                         wordcount_t num_words) {
-  mg_uecc_word_t *end = vli;
-  mg_uecc_word_t carry = 0;
-
-  vli += num_words;
-  while (vli-- > end) {
-    mg_uecc_word_t temp = *vli;
-    *vli = (temp >> 1) | carry;
-    carry = temp << (MG_UECC_WORD_BITS - 1);
-  }
-}
-#endif /* !asm_rshift1 */
-
-/* Computes result = left + right, returning carry. Can modify in place. */
-#if !asm_add
-MG_UECC_VLI_API mg_uecc_word_t mg_uecc_vli_add(mg_uecc_word_t *result,
-                                               const mg_uecc_word_t *left,
-                                               const mg_uecc_word_t *right,
-                                               wordcount_t num_words) {
-  mg_uecc_word_t carry = 0;
-  wordcount_t i;
-  for (i = 0; i < num_words; ++i) {
-    mg_uecc_word_t sum = left[i] + right[i] + carry;
-    if (sum != left[i]) {
-      carry = (sum < left[i]);
-    }
-    result[i] = sum;
-  }
-  return carry;
-}
-#endif /* !asm_add */
-
-/* Computes result = left - right, returning borrow. Can modify in place. */
-#if !asm_sub
-MG_UECC_VLI_API mg_uecc_word_t mg_uecc_vli_sub(mg_uecc_word_t *result,
-                                               const mg_uecc_word_t *left,
-                                               const mg_uecc_word_t *right,
-                                               wordcount_t num_words) {
-  mg_uecc_word_t borrow = 0;
-  wordcount_t i;
-  for (i = 0; i < num_words; ++i) {
-    mg_uecc_word_t diff = left[i] - right[i] - borrow;
-    if (diff != left[i]) {
-      borrow = (diff > left[i]);
-    }
-    result[i] = diff;
-  }
-  return borrow;
-}
-#endif /* !asm_sub */
-
-#if !asm_mult || (MG_UECC_SQUARE_FUNC && !asm_square) ||               \
-    (MG_UECC_SUPPORTS_secp256k1 && (MG_UECC_OPTIMIZATION_LEVEL > 0) && \
-     ((MG_UECC_WORD_SIZE == 1) || (MG_UECC_WORD_SIZE == 8)))
-static void muladd(mg_uecc_word_t a, mg_uecc_word_t b, mg_uecc_word_t *r0,
-                   mg_uecc_word_t *r1, mg_uecc_word_t *r2) {
-#if MG_UECC_WORD_SIZE == 8
-  uint64_t a0 = a & 0xffffffff;
-  uint64_t a1 = a >> 32;
-  uint64_t b0 = b & 0xffffffff;
-  uint64_t b1 = b >> 32;
-
-  uint64_t i0 = a0 * b0;
-  uint64_t i1 = a0 * b1;
-  uint64_t i2 = a1 * b0;
-  uint64_t i3 = a1 * b1;
-
-  uint64_t p0, p1;
-
-  i2 += (i0 >> 32);
-  i2 += i1;
-  if (i2 < i1) { /* overflow */
-    i3 += 0x100000000;
-  }
-
-  p0 = (i0 & 0xffffffff) | (i2 << 32);
-  p1 = i3 + (i2 >> 32);
-
-  *r0 += p0;
-  *r1 += (p1 + (*r0 < p0));
-  *r2 += ((*r1 < p1) || (*r1 == p1 && *r0 < p0));
-#else
-  mg_uecc_dword_t p = (mg_uecc_dword_t) a * b;
-  mg_uecc_dword_t r01 = ((mg_uecc_dword_t) (*r1) << MG_UECC_WORD_BITS) | *r0;
-  r01 += p;
-  *r2 += (r01 < p);
-  *r1 = (mg_uecc_word_t) (r01 >> MG_UECC_WORD_BITS);
-  *r0 = (mg_uecc_word_t) r01;
-#endif
-}
-#endif /* muladd needed */
-
-#if !asm_mult
-MG_UECC_VLI_API void mg_uecc_vli_mult(mg_uecc_word_t *result,
-                                      const mg_uecc_word_t *left,
-                                      const mg_uecc_word_t *right,
-                                      wordcount_t num_words) {
-  mg_uecc_word_t r0 = 0;
-  mg_uecc_word_t r1 = 0;
-  mg_uecc_word_t r2 = 0;
-  wordcount_t i, k;
-
-  /* Compute each digit of result in sequence, maintaining the carries. */
-  for (k = 0; k < num_words; ++k) {
-    for (i = 0; i <= k; ++i) {
-      muladd(left[i], right[k - i], &r0, &r1, &r2);
-    }
-    result[k] = r0;
-    r0 = r1;
-    r1 = r2;
-    r2 = 0;
-  }
-  for (k = num_words; k < num_words * 2 - 1; ++k) {
-    for (i = (wordcount_t) ((k + 1) - num_words); i < num_words; ++i) {
-      muladd(left[i], right[k - i], &r0, &r1, &r2);
-    }
-    result[k] = r0;
-    r0 = r1;
-    r1 = r2;
-    r2 = 0;
-  }
-  result[num_words * 2 - 1] = r0;
-}
-#endif /* !asm_mult */
-
-#if MG_UECC_SQUARE_FUNC
-
-#if !asm_square
-static void mul2add(mg_uecc_word_t a, mg_uecc_word_t b, mg_uecc_word_t *r0,
-                    mg_uecc_word_t *r1, mg_uecc_word_t *r2) {
-#if MG_UECC_WORD_SIZE == 8
-  uint64_t a0 = a & 0xffffffffull;
-  uint64_t a1 = a >> 32;
-  uint64_t b0 = b & 0xffffffffull;
-  uint64_t b1 = b >> 32;
-
-  uint64_t i0 = a0 * b0;
-  uint64_t i1 = a0 * b1;
-  uint64_t i2 = a1 * b0;
-  uint64_t i3 = a1 * b1;
-
-  uint64_t p0, p1;
-
-  i2 += (i0 >> 32);
-  i2 += i1;
-  if (i2 < i1) { /* overflow */
-    i3 += 0x100000000ull;
-  }
-
-  p0 = (i0 & 0xffffffffull) | (i2 << 32);
-  p1 = i3 + (i2 >> 32);
-
-  *r2 += (p1 >> 63);
-  p1 = (p1 << 1) | (p0 >> 63);
-  p0 <<= 1;
-
-  *r0 += p0;
-  *r1 += (p1 + (*r0 < p0));
-  *r2 += ((*r1 < p1) || (*r1 == p1 && *r0 < p0));
-#else
-  mg_uecc_dword_t p = (mg_uecc_dword_t) a * b;
-  mg_uecc_dword_t r01 = ((mg_uecc_dword_t) (*r1) << MG_UECC_WORD_BITS) | *r0;
-  *r2 += (p >> (MG_UECC_WORD_BITS * 2 - 1));
-  p *= 2;
-  r01 += p;
-  *r2 += (r01 < p);
-  *r1 = r01 >> MG_UECC_WORD_BITS;
-  *r0 = (mg_uecc_word_t) r01;
-#endif
-}
-
-MG_UECC_VLI_API void mg_uecc_vli_square(mg_uecc_word_t *result,
-                                        const mg_uecc_word_t *left,
-                                        wordcount_t num_words) {
-  mg_uecc_word_t r0 = 0;
-  mg_uecc_word_t r1 = 0;
-  mg_uecc_word_t r2 = 0;
-
-  wordcount_t i, k;
-
-  for (k = 0; k < num_words * 2 - 1; ++k) {
-    mg_uecc_word_t min = (k < num_words ? 0 : (k + 1) - num_words);
-    for (i = min; i <= k && i <= k - i; ++i) {
-      if (i < k - i) {
-        mul2add(left[i], left[k - i], &r0, &r1, &r2);
-      } else {
-        muladd(left[i], left[k - i], &r0, &r1, &r2);
-      }
-    }
-    result[k] = r0;
-    r0 = r1;
-    r1 = r2;
-    r2 = 0;
-  }
-
-  result[num_words * 2 - 1] = r0;
-}
-#endif /* !asm_square */
-
-#else /* MG_UECC_SQUARE_FUNC */
-
-#if MG_UECC_ENABLE_VLI_API
-MG_UECC_VLI_API void mg_uecc_vli_square(mg_uecc_word_t *result,
-                                        const mg_uecc_word_t *left,
-                                        wordcount_t num_words) {
-  mg_uecc_vli_mult(result, left, left, num_words);
-}
-#endif /* MG_UECC_ENABLE_VLI_API */
-
-#endif /* MG_UECC_SQUARE_FUNC */
-
-/* Computes result = (left + right) % mod.
-   Assumes that left < mod and right < mod, and that result does not overlap
-   mod. */
-MG_UECC_VLI_API void mg_uecc_vli_modAdd(mg_uecc_word_t *result,
-                                        const mg_uecc_word_t *left,
-                                        const mg_uecc_word_t *right,
-                                        const mg_uecc_word_t *mod,
-                                        wordcount_t num_words) {
-  mg_uecc_word_t carry = mg_uecc_vli_add(result, left, right, num_words);
-  if (carry || mg_uecc_vli_cmp_unsafe(mod, result, num_words) != 1) {
-    /* result > mod (result = mod + remainder), so subtract mod to get
-     * remainder. */
-    mg_uecc_vli_sub(result, result, mod, num_words);
-  }
-}
-
-/* Computes result = (left - right) % mod.
-   Assumes that left < mod and right < mod, and that result does not overlap
-   mod. */
-MG_UECC_VLI_API void mg_uecc_vli_modSub(mg_uecc_word_t *result,
-                                        const mg_uecc_word_t *left,
-                                        const mg_uecc_word_t *right,
-                                        const mg_uecc_word_t *mod,
-                                        wordcount_t num_words) {
-  mg_uecc_word_t l_borrow = mg_uecc_vli_sub(result, left, right, num_words);
-  if (l_borrow) {
-    /* In this case, result == -diff == (max int) - diff. Since -x % d == d - x,
-       we can get the correct result from result + mod (with overflow). */
-    mg_uecc_vli_add(result, result, mod, num_words);
-  }
-}
-
-/* Computes result = product % mod, where product is 2N words long. */
-/* Currently only designed to work for curve_p or curve_n. */
-MG_UECC_VLI_API void mg_uecc_vli_mmod(mg_uecc_word_t *result,
-                                      mg_uecc_word_t *product,
-                                      const mg_uecc_word_t *mod,
-                                      wordcount_t num_words) {
-  mg_uecc_word_t mod_multiple[2 * MG_UECC_MAX_WORDS];
-  mg_uecc_word_t tmp[2 * MG_UECC_MAX_WORDS];
-  mg_uecc_word_t *v[2] = {tmp, product};
-  mg_uecc_word_t index;
-
-  /* Shift mod so its highest set bit is at the maximum position. */
-  bitcount_t shift = (bitcount_t) ((num_words * 2 * MG_UECC_WORD_BITS) -
-                                   mg_uecc_vli_numBits(mod, num_words));
-  wordcount_t word_shift = (wordcount_t) (shift / MG_UECC_WORD_BITS);
-  wordcount_t bit_shift = (wordcount_t) (shift % MG_UECC_WORD_BITS);
-  mg_uecc_word_t carry = 0;
-  mg_uecc_vli_clear(mod_multiple, word_shift);
-  if (bit_shift > 0) {
-    for (index = 0; index < (mg_uecc_word_t) num_words; ++index) {
-      mod_multiple[(mg_uecc_word_t) word_shift + index] =
-          (mg_uecc_word_t) (mod[index] << bit_shift) | carry;
-      carry = mod[index] >> (MG_UECC_WORD_BITS - bit_shift);
-    }
-  } else {
-    mg_uecc_vli_set(mod_multiple + word_shift, mod, num_words);
-  }
-
-  for (index = 1; shift >= 0; --shift) {
-    mg_uecc_word_t borrow = 0;
-    wordcount_t i;
-    for (i = 0; i < num_words * 2; ++i) {
-      mg_uecc_word_t diff = v[index][i] - mod_multiple[i] - borrow;
-      if (diff != v[index][i]) {
-        borrow = (diff > v[index][i]);
-      }
-      v[1 - index][i] = diff;
-    }
-    index = !(index ^ borrow); /* Swap the index if there was no borrow */
-    mg_uecc_vli_rshift1(mod_multiple, num_words);
-    mod_multiple[num_words - 1] |= mod_multiple[num_words]
-                                   << (MG_UECC_WORD_BITS - 1);
-    mg_uecc_vli_rshift1(mod_multiple + num_words, num_words);
-  }
-  mg_uecc_vli_set(result, v[index], num_words);
-}
-
-/* Computes result = (left * right) % mod. */
-MG_UECC_VLI_API void mg_uecc_vli_modMult(mg_uecc_word_t *result,
-                                         const mg_uecc_word_t *left,
-                                         const mg_uecc_word_t *right,
-                                         const mg_uecc_word_t *mod,
-                                         wordcount_t num_words) {
-  mg_uecc_word_t product[2 * MG_UECC_MAX_WORDS];
-  mg_uecc_vli_mult(product, left, right, num_words);
-  mg_uecc_vli_mmod(result, product, mod, num_words);
-}
-
-MG_UECC_VLI_API void mg_uecc_vli_modMult_fast(mg_uecc_word_t *result,
-                                              const mg_uecc_word_t *left,
-                                              const mg_uecc_word_t *right,
-                                              MG_UECC_Curve curve) {
-  mg_uecc_word_t product[2 * MG_UECC_MAX_WORDS];
-  mg_uecc_vli_mult(product, left, right, curve->num_words);
-#if (MG_UECC_OPTIMIZATION_LEVEL > 0)
-  curve->mmod_fast(result, product);
-#else
-  mg_uecc_vli_mmod(result, product, curve->p, curve->num_words);
-#endif
-}
-
-#if MG_UECC_SQUARE_FUNC
-
-#if MG_UECC_ENABLE_VLI_API
-/* Computes result = left^2 % mod. */
-MG_UECC_VLI_API void mg_uecc_vli_modSquare(mg_uecc_word_t *result,
-                                           const mg_uecc_word_t *left,
-                                           const mg_uecc_word_t *mod,
-                                           wordcount_t num_words) {
-  mg_uecc_word_t product[2 * MG_UECC_MAX_WORDS];
-  mg_uecc_vli_square(product, left, num_words);
-  mg_uecc_vli_mmod(result, product, mod, num_words);
-}
-#endif /* MG_UECC_ENABLE_VLI_API */
-
-MG_UECC_VLI_API void mg_uecc_vli_modSquare_fast(mg_uecc_word_t *result,
-                                                const mg_uecc_word_t *left,
-                                                MG_UECC_Curve curve) {
-  mg_uecc_word_t product[2 * MG_UECC_MAX_WORDS];
-  mg_uecc_vli_square(product, left, curve->num_words);
-#if (MG_UECC_OPTIMIZATION_LEVEL > 0)
-  curve->mmod_fast(result, product);
-#else
-  mg_uecc_vli_mmod(result, product, curve->p, curve->num_words);
-#endif
-}
-
-#else /* MG_UECC_SQUARE_FUNC */
-
-#if MG_UECC_ENABLE_VLI_API
-MG_UECC_VLI_API void mg_uecc_vli_modSquare(mg_uecc_word_t *result,
-                                           const mg_uecc_word_t *left,
-                                           const mg_uecc_word_t *mod,
-                                           wordcount_t num_words) {
-  mg_uecc_vli_modMult(result, left, left, mod, num_words);
-}
-#endif /* MG_UECC_ENABLE_VLI_API */
-
-MG_UECC_VLI_API void mg_uecc_vli_modSquare_fast(mg_uecc_word_t *result,
-                                                const mg_uecc_word_t *left,
-                                                MG_UECC_Curve curve) {
-  mg_uecc_vli_modMult_fast(result, left, left, curve);
-}
-
-#endif /* MG_UECC_SQUARE_FUNC */
-
-#define EVEN(vli) (!(vli[0] & 1))
-static void vli_modInv_update(mg_uecc_word_t *uv, const mg_uecc_word_t *mod,
-                              wordcount_t num_words) {
-  mg_uecc_word_t carry = 0;
-  if (!EVEN(uv)) {
-    carry = mg_uecc_vli_add(uv, uv, mod, num_words);
-  }
-  mg_uecc_vli_rshift1(uv, num_words);
-  if (carry) {
-    uv[num_words - 1] |= HIGH_BIT_SET;
-  }
-}
-
-/* Computes result = (1 / input) % mod. All VLIs are the same size.
-   See "From Euclid's GCD to Montgomery Multiplication to the Great Divide" */
-MG_UECC_VLI_API void mg_uecc_vli_modInv(mg_uecc_word_t *result,
-                                        const mg_uecc_word_t *input,
-                                        const mg_uecc_word_t *mod,
-                                        wordcount_t num_words) {
-  mg_uecc_word_t a[MG_UECC_MAX_WORDS], b[MG_UECC_MAX_WORDS],
-      u[MG_UECC_MAX_WORDS], v[MG_UECC_MAX_WORDS];
-  cmpresult_t cmpResult;
-
-  if (mg_uecc_vli_isZero(input, num_words)) {
-    mg_uecc_vli_clear(result, num_words);
-    return;
-  }
-
-  mg_uecc_vli_set(a, input, num_words);
-  mg_uecc_vli_set(b, mod, num_words);
-  mg_uecc_vli_clear(u, num_words);
-  u[0] = 1;
-  mg_uecc_vli_clear(v, num_words);
-  while ((cmpResult = mg_uecc_vli_cmp_unsafe(a, b, num_words)) != 0) {
-    if (EVEN(a)) {
-      mg_uecc_vli_rshift1(a, num_words);
-      vli_modInv_update(u, mod, num_words);
-    } else if (EVEN(b)) {
-      mg_uecc_vli_rshift1(b, num_words);
-      vli_modInv_update(v, mod, num_words);
-    } else if (cmpResult > 0) {
-      mg_uecc_vli_sub(a, a, b, num_words);
-      mg_uecc_vli_rshift1(a, num_words);
-      if (mg_uecc_vli_cmp_unsafe(u, v, num_words) < 0) {
-        mg_uecc_vli_add(u, u, mod, num_words);
-      }
-      mg_uecc_vli_sub(u, u, v, num_words);
-      vli_modInv_update(u, mod, num_words);
-    } else {
-      mg_uecc_vli_sub(b, b, a, num_words);
-      mg_uecc_vli_rshift1(b, num_words);
-      if (mg_uecc_vli_cmp_unsafe(v, u, num_words) < 0) {
-        mg_uecc_vli_add(v, v, mod, num_words);
-      }
-      mg_uecc_vli_sub(v, v, u, num_words);
-      vli_modInv_update(v, mod, num_words);
-    }
-  }
-  mg_uecc_vli_set(result, u, num_words);
-}
-
-/* ------ Point operations ------ */
-
-/* Copyright 2015, Kenneth MacKay. Licensed under the BSD 2-clause license. */
-
-#ifndef _UECC_CURVE_SPECIFIC_H_
-#define _UECC_CURVE_SPECIFIC_H_
-
-#define num_bytes_secp160r1 20
-#define num_bytes_secp192r1 24
-#define num_bytes_secp224r1 28
-#define num_bytes_secp256r1 32
-#define num_bytes_secp256k1 32
-#define num_bytes_secp384r1 48
-
-#if (MG_UECC_WORD_SIZE == 1)
-
-#define num_words_secp160r1 20
-#define num_words_secp192r1 24
-#define num_words_secp224r1 28
-#define num_words_secp256r1 32
-#define num_words_secp256k1 32
-#define num_words_secp384r1 48
-
-#define BYTES_TO_WORDS_8(a, b, c, d, e, f, g, h) \
-  0x##a, 0x##b, 0x##c, 0x##d, 0x##e, 0x##f, 0x##g, 0x##h
-#define BYTES_TO_WORDS_4(a, b, c, d) 0x##a, 0x##b, 0x##c, 0x##d
-
-#elif (MG_UECC_WORD_SIZE == 4)
-
-#define num_words_secp160r1 5
-#define num_words_secp192r1 6
-#define num_words_secp224r1 7
-#define num_words_secp256r1 8
-#define num_words_secp256k1 8
-#define num_words_secp384r1 12
-
-#define BYTES_TO_WORDS_8(a, b, c, d, e, f, g, h) 0x##d##c##b##a, 0x##h##g##f##e
-#define BYTES_TO_WORDS_4(a, b, c, d) 0x##d##c##b##a
-
-#elif (MG_UECC_WORD_SIZE == 8)
-
-#define num_words_secp160r1 3
-#define num_words_secp192r1 3
-#define num_words_secp224r1 4
-#define num_words_secp256r1 4
-#define num_words_secp256k1 4
-#define num_words_secp384r1 6
-
-#define BYTES_TO_WORDS_8(a, b, c, d, e, f, g, h) 0x##h##g##f##e##d##c##b##a##U
-#define BYTES_TO_WORDS_4(a, b, c, d) 0x##d##c##b##a##U
-
-#endif /* MG_UECC_WORD_SIZE */
-
-#if MG_UECC_SUPPORTS_secp160r1 || MG_UECC_SUPPORTS_secp192r1 || \
-    MG_UECC_SUPPORTS_secp224r1 || MG_UECC_SUPPORTS_secp256r1 || \
-    MG_UECC_SUPPORTS_secp384r1
-static void double_jacobian_default(mg_uecc_word_t *X1, mg_uecc_word_t *Y1,
-                                    mg_uecc_word_t *Z1, MG_UECC_Curve curve) {
-  /* t1 = X, t2 = Y, t3 = Z */
-  mg_uecc_word_t t4[MG_UECC_MAX_WORDS];
-  mg_uecc_word_t t5[MG_UECC_MAX_WORDS];
-  wordcount_t num_words = curve->num_words;
-
-  if (mg_uecc_vli_isZero(Z1, num_words)) {
-    return;
-  }
-
-  mg_uecc_vli_modSquare_fast(t4, Y1, curve);   /* t4 = y1^2 */
-  mg_uecc_vli_modMult_fast(t5, X1, t4, curve); /* t5 = x1*y1^2 = A */
-  mg_uecc_vli_modSquare_fast(t4, t4, curve);   /* t4 = y1^4 */
-  mg_uecc_vli_modMult_fast(Y1, Y1, Z1, curve); /* t2 = y1*z1 = z3 */
-  mg_uecc_vli_modSquare_fast(Z1, Z1, curve);   /* t3 = z1^2 */
-
-  mg_uecc_vli_modAdd(X1, X1, Z1, curve->p, num_words); /* t1 = x1 + z1^2 */
-  mg_uecc_vli_modAdd(Z1, Z1, Z1, curve->p, num_words); /* t3 = 2*z1^2 */
-  mg_uecc_vli_modSub(Z1, X1, Z1, curve->p, num_words); /* t3 = x1 - z1^2 */
-  mg_uecc_vli_modMult_fast(X1, X1, Z1, curve);         /* t1 = x1^2 - z1^4 */
-
-  mg_uecc_vli_modAdd(Z1, X1, X1, curve->p,
-                     num_words); /* t3 = 2*(x1^2 - z1^4) */
-  mg_uecc_vli_modAdd(X1, X1, Z1, curve->p,
-                     num_words); /* t1 = 3*(x1^2 - z1^4) */
-  if (mg_uecc_vli_testBit(X1, 0)) {
-    mg_uecc_word_t l_carry = mg_uecc_vli_add(X1, X1, curve->p, num_words);
-    mg_uecc_vli_rshift1(X1, num_words);
-    X1[num_words - 1] |= l_carry << (MG_UECC_WORD_BITS - 1);
-  } else {
-    mg_uecc_vli_rshift1(X1, num_words);
-  }
-  /* t1 = 3/2*(x1^2 - z1^4) = B */
-
-  mg_uecc_vli_modSquare_fast(Z1, X1, curve);           /* t3 = B^2 */
-  mg_uecc_vli_modSub(Z1, Z1, t5, curve->p, num_words); /* t3 = B^2 - A */
-  mg_uecc_vli_modSub(Z1, Z1, t5, curve->p, num_words); /* t3 = B^2 - 2A = x3 */
-  mg_uecc_vli_modSub(t5, t5, Z1, curve->p, num_words); /* t5 = A - x3 */
-  mg_uecc_vli_modMult_fast(X1, X1, t5, curve);         /* t1 = B * (A - x3) */
-  mg_uecc_vli_modSub(t4, X1, t4, curve->p,
-                     num_words); /* t4 = B * (A - x3) - y1^4 = y3 */
-
-  mg_uecc_vli_set(X1, Z1, num_words);
-  mg_uecc_vli_set(Z1, Y1, num_words);
-  mg_uecc_vli_set(Y1, t4, num_words);
-}
-
-/* Computes result = x^3 + ax + b. result must not overlap x. */
-static void x_side_default(mg_uecc_word_t *result, const mg_uecc_word_t *x,
-                           MG_UECC_Curve curve) {
-  mg_uecc_word_t _3[MG_UECC_MAX_WORDS] = {3}; /* -a = 3 */
-  wordcount_t num_words = curve->num_words;
-
-  mg_uecc_vli_modSquare_fast(result, x, curve);                /* r = x^2 */
-  mg_uecc_vli_modSub(result, result, _3, curve->p, num_words); /* r = x^2 - 3 */
-  mg_uecc_vli_modMult_fast(result, result, x, curve); /* r = x^3 - 3x */
-  mg_uecc_vli_modAdd(result, result, curve->b, curve->p,
-                     num_words); /* r = x^3 - 3x + b */
-}
-#endif /* MG_UECC_SUPPORTS_secp... */
-
-#if MG_UECC_SUPPORT_COMPRESSED_POINT
-#if MG_UECC_SUPPORTS_secp160r1 || MG_UECC_SUPPORTS_secp192r1 || \
-    MG_UECC_SUPPORTS_secp256r1 || MG_UECC_SUPPORTS_secp256k1 || \
-    MG_UECC_SUPPORTS_secp384r1
-/* Compute a = sqrt(a) (mod curve_p). */
-static void mod_sqrt_default(mg_uecc_word_t *a, MG_UECC_Curve curve) {
-  bitcount_t i;
-  mg_uecc_word_t p1[MG_UECC_MAX_WORDS] = {1};
-  mg_uecc_word_t l_result[MG_UECC_MAX_WORDS] = {1};
-  wordcount_t num_words = curve->num_words;
-
-  /* When curve->p == 3 (mod 4), we can compute
-     sqrt(a) = a^((curve->p + 1) / 4) (mod curve->p). */
-  mg_uecc_vli_add(p1, curve->p, p1, num_words); /* p1 = curve_p + 1 */
-  for (i = mg_uecc_vli_numBits(p1, num_words) - 1; i > 1; --i) {
-    mg_uecc_vli_modSquare_fast(l_result, l_result, curve);
-    if (mg_uecc_vli_testBit(p1, i)) {
-      mg_uecc_vli_modMult_fast(l_result, l_result, a, curve);
-    }
-  }
-  mg_uecc_vli_set(a, l_result, num_words);
-}
-#endif /* MG_UECC_SUPPORTS_secp... */
-#endif /* MG_UECC_SUPPORT_COMPRESSED_POINT */
-
-#if MG_UECC_SUPPORTS_secp160r1
-
-#if (MG_UECC_OPTIMIZATION_LEVEL > 0)
-static void vli_mmod_fast_secp160r1(mg_uecc_word_t *result,
-                                    mg_uecc_word_t *product);
-#endif
-
-static const struct MG_UECC_Curve_t curve_secp160r1 = {
-    num_words_secp160r1,
-    num_bytes_secp160r1,
-    161, /* num_n_bits */
-    {BYTES_TO_WORDS_8(FF, FF, FF, 7F, FF, FF, FF, FF),
-     BYTES_TO_WORDS_8(FF, FF, FF, FF, FF, FF, FF, FF),
-     BYTES_TO_WORDS_4(FF, FF, FF, FF)},
-    {BYTES_TO_WORDS_8(57, 22, 75, CA, D3, AE, 27, F9),
-     BYTES_TO_WORDS_8(C8, F4, 01, 00, 00, 00, 00, 00),
-     BYTES_TO_WORDS_8(00, 00, 00, 00, 01, 00, 00, 00)},
-    {BYTES_TO_WORDS_8(82, FC, CB, 13, B9, 8B, C3, 68),
-     BYTES_TO_WORDS_8(89, 69, 64, 46, 28, 73, F5, 8E),
-     BYTES_TO_WORDS_4(68, B5, 96, 4A),
-
-     BYTES_TO_WORDS_8(32, FB, C5, 7A, 37, 51, 23, 04),
-     BYTES_TO_WORDS_8(12, C9, DC, 59, 7D, 94, 68, 31),
-     BYTES_TO_WORDS_4(55, 28, A6, 23)},
-    {BYTES_TO_WORDS_8(45, FA, 65, C5, AD, D4, D4, 81),
-     BYTES_TO_WORDS_8(9F, F8, AC, 65, 8B, 7A, BD, 54),
-     BYTES_TO_WORDS_4(FC, BE, 97, 1C)},
-    &double_jacobian_default,
-#if MG_UECC_SUPPORT_COMPRESSED_POINT
-    &mod_sqrt_default,
-#endif
-    &x_side_default,
-#if (MG_UECC_OPTIMIZATION_LEVEL > 0)
-    &vli_mmod_fast_secp160r1
-#endif
-};
-
-MG_UECC_Curve mg_uecc_secp160r1(void) {
-  return &curve_secp160r1;
-}
-
-#if (MG_UECC_OPTIMIZATION_LEVEL > 0 && !asm_mmod_fast_secp160r1)
-/* Computes result = product % curve_p
-    see http://www.isys.uni-klu.ac.at/PDF/2001-0126-MT.pdf page 354
-
-    Note that this only works if log2(omega) < log2(p) / 2 */
-static void omega_mult_secp160r1(mg_uecc_word_t *result,
-                                 const mg_uecc_word_t *right);
-#if MG_UECC_WORD_SIZE == 8
-static void vli_mmod_fast_secp160r1(mg_uecc_word_t *result,
-                                    mg_uecc_word_t *product) {
-  mg_uecc_word_t tmp[2 * num_words_secp160r1];
-  mg_uecc_word_t copy;
-
-  mg_uecc_vli_clear(tmp, num_words_secp160r1);
-  mg_uecc_vli_clear(tmp + num_words_secp160r1, num_words_secp160r1);
-
-  omega_mult_secp160r1(tmp,
-                       product + num_words_secp160r1 - 1); /* (Rq, q) = q * c */
-
-  product[num_words_secp160r1 - 1] &= 0xffffffff;
-  copy = tmp[num_words_secp160r1 - 1];
-  tmp[num_words_secp160r1 - 1] &= 0xffffffff;
-  mg_uecc_vli_add(result, product, tmp,
-                  num_words_secp160r1); /* (C, r) = r + q */
-  mg_uecc_vli_clear(product, num_words_secp160r1);
-  tmp[num_words_secp160r1 - 1] = copy;
-  omega_mult_secp160r1(product, tmp + num_words_secp160r1 - 1); /* Rq*c */
-  mg_uecc_vli_add(result, result, product,
-                  num_words_secp160r1); /* (C1, r) = r + Rq*c */
-
-  while (mg_uecc_vli_cmp_unsafe(result, curve_secp160r1.p,
-                                num_words_secp160r1) > 0) {
-    mg_uecc_vli_sub(result, result, curve_secp160r1.p, num_words_secp160r1);
-  }
-}
-
-static void omega_mult_secp160r1(uint64_t *result, const uint64_t *right) {
-  uint32_t carry;
-  unsigned i;
-
-  /* Multiply by (2^31 + 1). */
-  carry = 0;
-  for (i = 0; i < num_words_secp160r1; ++i) {
-    uint64_t tmp = (right[i] >> 32) | (right[i + 1] << 32);
-    result[i] = (tmp << 31) + tmp + carry;
-    carry = (tmp >> 33) + (result[i] < tmp || (carry && result[i] == tmp));
-  }
-  result[i] = carry;
-}
-#else
-static void vli_mmod_fast_secp160r1(mg_uecc_word_t *result,
-                                    mg_uecc_word_t *product) {
-  mg_uecc_word_t tmp[2 * num_words_secp160r1];
-  mg_uecc_word_t carry;
-
-  mg_uecc_vli_clear(tmp, num_words_secp160r1);
-  mg_uecc_vli_clear(tmp + num_words_secp160r1, num_words_secp160r1);
-
-  omega_mult_secp160r1(tmp,
-                       product + num_words_secp160r1); /* (Rq, q) = q * c */
-
-  carry = mg_uecc_vli_add(result, product, tmp,
-                          num_words_secp160r1); /* (C, r) = r + q */
-  mg_uecc_vli_clear(product, num_words_secp160r1);
-  omega_mult_secp160r1(product, tmp + num_words_secp160r1); /* Rq*c */
-  carry += mg_uecc_vli_add(result, result, product,
-                           num_words_secp160r1); /* (C1, r) = r + Rq*c */
-
-  while (carry > 0) {
-    --carry;
-    mg_uecc_vli_sub(result, result, curve_secp160r1.p, num_words_secp160r1);
-  }
-  if (mg_uecc_vli_cmp_unsafe(result, curve_secp160r1.p, num_words_secp160r1) >
-      0) {
-    mg_uecc_vli_sub(result, result, curve_secp160r1.p, num_words_secp160r1);
-  }
-}
-#endif
-
-#if MG_UECC_WORD_SIZE == 1
-static void omega_mult_secp160r1(uint8_t *result, const uint8_t *right) {
-  uint8_t carry;
-  uint8_t i;
-
-  /* Multiply by (2^31 + 1). */
-  mg_uecc_vli_set(result + 4, right, num_words_secp160r1); /* 2^32 */
-  mg_uecc_vli_rshift1(result + 4, num_words_secp160r1);    /* 2^31 */
-  result[3] = right[0] << 7; /* get last bit from shift */
-
-  carry = mg_uecc_vli_add(result, result, right,
-                          num_words_secp160r1); /* 2^31 + 1 */
-  for (i = num_words_secp160r1; carry; ++i) {
-    uint16_t sum = (uint16_t) result[i] + carry;
-    result[i] = (uint8_t) sum;
-    carry = sum >> 8;
-  }
-}
-#elif MG_UECC_WORD_SIZE == 4
-static void omega_mult_secp160r1(uint32_t *result, const uint32_t *right) {
-  uint32_t carry;
-  unsigned i;
-
-  /* Multiply by (2^31 + 1). */
-  mg_uecc_vli_set(result + 1, right, num_words_secp160r1); /* 2^32 */
-  mg_uecc_vli_rshift1(result + 1, num_words_secp160r1);    /* 2^31 */
-  result[0] = right[0] << 31; /* get last bit from shift */
-
-  carry = mg_uecc_vli_add(result, result, right,
-                          num_words_secp160r1); /* 2^31 + 1 */
-  for (i = num_words_secp160r1; carry; ++i) {
-    uint64_t sum = (uint64_t) result[i] + carry;
-    result[i] = (uint32_t) sum;
-    carry = sum >> 32;
-  }
-}
-#endif /* MG_UECC_WORD_SIZE */
-#endif /* (MG_UECC_OPTIMIZATION_LEVEL > 0 && !asm_mmod_fast_secp160r1) */
-
-#endif /* MG_UECC_SUPPORTS_secp160r1 */
-
-#if MG_UECC_SUPPORTS_secp192r1
-
-#if (MG_UECC_OPTIMIZATION_LEVEL > 0)
-static void vli_mmod_fast_secp192r1(mg_uecc_word_t *result,
-                                    mg_uecc_word_t *product);
-#endif
-
-static const struct MG_UECC_Curve_t curve_secp192r1 = {
-    num_words_secp192r1,
-    num_bytes_secp192r1,
-    192, /* num_n_bits */
-    {BYTES_TO_WORDS_8(FF, FF, FF, FF, FF, FF, FF, FF),
-     BYTES_TO_WORDS_8(FE, FF, FF, FF, FF, FF, FF, FF),
-     BYTES_TO_WORDS_8(FF, FF, FF, FF, FF, FF, FF, FF)},
-    {BYTES_TO_WORDS_8(31, 28, D2, B4, B1, C9, 6B, 14),
-     BYTES_TO_WORDS_8(36, F8, DE, 99, FF, FF, FF, FF),
-     BYTES_TO_WORDS_8(FF, FF, FF, FF, FF, FF, FF, FF)},
-    {BYTES_TO_WORDS_8(12, 10, FF, 82, FD, 0A, FF, F4),
-     BYTES_TO_WORDS_8(00, 88, A1, 43, EB, 20, BF, 7C),
-     BYTES_TO_WORDS_8(F6, 90, 30, B0, 0E, A8, 8D, 18),
-
-     BYTES_TO_WORDS_8(11, 48, 79, 1E, A1, 77, F9, 73),
-     BYTES_TO_WORDS_8(D5, CD, 24, 6B, ED, 11, 10, 63),
-     BYTES_TO_WORDS_8(78, DA, C8, FF, 95, 2B, 19, 07)},
-    {BYTES_TO_WORDS_8(B1, B9, 46, C1, EC, DE, B8, FE),
-     BYTES_TO_WORDS_8(49, 30, 24, 72, AB, E9, A7, 0F),
-     BYTES_TO_WORDS_8(E7, 80, 9C, E5, 19, 05, 21, 64)},
-    &double_jacobian_default,
-#if MG_UECC_SUPPORT_COMPRESSED_POINT
-    &mod_sqrt_default,
-#endif
-    &x_side_default,
-#if (MG_UECC_OPTIMIZATION_LEVEL > 0)
-    &vli_mmod_fast_secp192r1
-#endif
-};
-
-MG_UECC_Curve mg_uecc_secp192r1(void) {
-  return &curve_secp192r1;
-}
-
-#if (MG_UECC_OPTIMIZATION_LEVEL > 0)
-/* Computes result = product % curve_p.
-   See algorithm 5 and 6 from http://www.isys.uni-klu.ac.at/PDF/2001-0126-MT.pdf
- */
-#if MG_UECC_WORD_SIZE == 1
-static void vli_mmod_fast_secp192r1(uint8_t *result, uint8_t *product) {
-  uint8_t tmp[num_words_secp192r1];
-  uint8_t carry;
-
-  mg_uecc_vli_set(result, product, num_words_secp192r1);
-
-  mg_uecc_vli_set(tmp, &product[24], num_words_secp192r1);
-  carry = mg_uecc_vli_add(result, result, tmp, num_words_secp192r1);
-
-  tmp[0] = tmp[1] = tmp[2] = tmp[3] = tmp[4] = tmp[5] = tmp[6] = tmp[7] = 0;
-  tmp[8] = product[24];
-  tmp[9] = product[25];
-  tmp[10] = product[26];
-  tmp[11] = product[27];
-  tmp[12] = product[28];
-  tmp[13] = product[29];
-  tmp[14] = product[30];
-  tmp[15] = product[31];
-  tmp[16] = product[32];
-  tmp[17] = product[33];
-  tmp[18] = product[34];
-  tmp[19] = product[35];
-  tmp[20] = product[36];
-  tmp[21] = product[37];
-  tmp[22] = product[38];
-  tmp[23] = product[39];
-  carry += mg_uecc_vli_add(result, result, tmp, num_words_secp192r1);
-
-  tmp[0] = tmp[8] = product[40];
-  tmp[1] = tmp[9] = product[41];
-  tmp[2] = tmp[10] = product[42];
-  tmp[3] = tmp[11] = product[43];
-  tmp[4] = tmp[12] = product[44];
-  tmp[5] = tmp[13] = product[45];
-  tmp[6] = tmp[14] = product[46];
-  tmp[7] = tmp[15] = product[47];
-  tmp[16] = tmp[17] = tmp[18] = tmp[19] = tmp[20] = tmp[21] = tmp[22] =
-      tmp[23] = 0;
-  carry += mg_uecc_vli_add(result, result, tmp, num_words_secp192r1);
-
-  while (carry || mg_uecc_vli_cmp_unsafe(curve_secp192r1.p, result,
-                                         num_words_secp192r1) != 1) {
-    carry -=
-        mg_uecc_vli_sub(result, result, curve_secp192r1.p, num_words_secp192r1);
-  }
-}
-#elif MG_UECC_WORD_SIZE == 4
-static void vli_mmod_fast_secp192r1(uint32_t *result, uint32_t *product) {
-  uint32_t tmp[num_words_secp192r1];
-  int carry;
-
-  mg_uecc_vli_set(result, product, num_words_secp192r1);
-
-  mg_uecc_vli_set(tmp, &product[6], num_words_secp192r1);
-  carry = mg_uecc_vli_add(result, result, tmp, num_words_secp192r1);
-
-  tmp[0] = tmp[1] = 0;
-  tmp[2] = product[6];
-  tmp[3] = product[7];
-  tmp[4] = product[8];
-  tmp[5] = product[9];
-  carry += mg_uecc_vli_add(result, result, tmp, num_words_secp192r1);
-
-  tmp[0] = tmp[2] = product[10];
-  tmp[1] = tmp[3] = product[11];
-  tmp[4] = tmp[5] = 0;
-  carry += mg_uecc_vli_add(result, result, tmp, num_words_secp192r1);
-
-  while (carry || mg_uecc_vli_cmp_unsafe(curve_secp192r1.p, result,
-                                         num_words_secp192r1) != 1) {
-    carry -=
-        mg_uecc_vli_sub(result, result, curve_secp192r1.p, num_words_secp192r1);
-  }
-}
-#else
-static void vli_mmod_fast_secp192r1(uint64_t *result, uint64_t *product) {
-  uint64_t tmp[num_words_secp192r1];
-  int carry;
-
-  mg_uecc_vli_set(result, product, num_words_secp192r1);
-
-  mg_uecc_vli_set(tmp, &product[3], num_words_secp192r1);
-  carry = (int) mg_uecc_vli_add(result, result, tmp, num_words_secp192r1);
-
-  tmp[0] = 0;
-  tmp[1] = product[3];
-  tmp[2] = product[4];
-  carry += mg_uecc_vli_add(result, result, tmp, num_words_secp192r1);
-
-  tmp[0] = tmp[1] = product[5];
-  tmp[2] = 0;
-  carry += mg_uecc_vli_add(result, result, tmp, num_words_secp192r1);
-
-  while (carry || mg_uecc_vli_cmp_unsafe(curve_secp192r1.p, result,
-                                         num_words_secp192r1) != 1) {
-    carry -=
-        mg_uecc_vli_sub(result, result, curve_secp192r1.p, num_words_secp192r1);
-  }
-}
-#endif /* MG_UECC_WORD_SIZE */
-#endif /* (MG_UECC_OPTIMIZATION_LEVEL > 0) */
-
-#endif /* MG_UECC_SUPPORTS_secp192r1 */
-
-#if MG_UECC_SUPPORTS_secp224r1
-
-#if MG_UECC_SUPPORT_COMPRESSED_POINT
-static void mod_sqrt_secp224r1(mg_uecc_word_t *a, MG_UECC_Curve curve);
-#endif
-#if (MG_UECC_OPTIMIZATION_LEVEL > 0)
-static void vli_mmod_fast_secp224r1(mg_uecc_word_t *result,
-                                    mg_uecc_word_t *product);
-#endif
-
-static const struct MG_UECC_Curve_t curve_secp224r1 = {
-    num_words_secp224r1,
-    num_bytes_secp224r1,
-    224, /* num_n_bits */
-    {BYTES_TO_WORDS_8(01, 00, 00, 00, 00, 00, 00, 00),
-     BYTES_TO_WORDS_8(00, 00, 00, 00, FF, FF, FF, FF),
-     BYTES_TO_WORDS_8(FF, FF, FF, FF, FF, FF, FF, FF),
-     BYTES_TO_WORDS_4(FF, FF, FF, FF)},
-    {BYTES_TO_WORDS_8(3D, 2A, 5C, 5C, 45, 29, DD, 13),
-     BYTES_TO_WORDS_8(3E, F0, B8, E0, A2, 16, FF, FF),
-     BYTES_TO_WORDS_8(FF, FF, FF, FF, FF, FF, FF, FF),
-     BYTES_TO_WORDS_4(FF, FF, FF, FF)},
-    {BYTES_TO_WORDS_8(21, 1D, 5C, 11, D6, 80, 32, 34),
-     BYTES_TO_WORDS_8(22, 11, C2, 56, D3, C1, 03, 4A),
-     BYTES_TO_WORDS_8(B9, 90, 13, 32, 7F, BF, B4, 6B),
-     BYTES_TO_WORDS_4(BD, 0C, 0E, B7),
-
-     BYTES_TO_WORDS_8(34, 7E, 00, 85, 99, 81, D5, 44),
-     BYTES_TO_WORDS_8(64, 47, 07, 5A, A0, 75, 43, CD),
-     BYTES_TO_WORDS_8(E6, DF, 22, 4C, FB, 23, F7, B5),
-     BYTES_TO_WORDS_4(88, 63, 37, BD)},
-    {BYTES_TO_WORDS_8(B4, FF, 55, 23, 43, 39, 0B, 27),
-     BYTES_TO_WORDS_8(BA, D8, BF, D7, B7, B0, 44, 50),
-     BYTES_TO_WORDS_8(56, 32, 41, F5, AB, B3, 04, 0C),
-     BYTES_TO_WORDS_4(85, 0A, 05, B4)},
-    &double_jacobian_default,
-#if MG_UECC_SUPPORT_COMPRESSED_POINT
-    &mod_sqrt_secp224r1,
-#endif
-    &x_side_default,
-#if (MG_UECC_OPTIMIZATION_LEVEL > 0)
-    &vli_mmod_fast_secp224r1
-#endif
-};
-
-MG_UECC_Curve mg_uecc_secp224r1(void) {
-  return &curve_secp224r1;
-}
-
-#if MG_UECC_SUPPORT_COMPRESSED_POINT
-/* Routine 3.2.4 RS;  from http://www.nsa.gov/ia/_files/nist-routines.pdf */
-static void mod_sqrt_secp224r1_rs(mg_uecc_word_t *d1, mg_uecc_word_t *e1,
-                                  mg_uecc_word_t *f1, const mg_uecc_word_t *d0,
-                                  const mg_uecc_word_t *e0,
-                                  const mg_uecc_word_t *f0) {
-  mg_uecc_word_t t[num_words_secp224r1];
-
-  mg_uecc_vli_modSquare_fast(t, d0, &curve_secp224r1);    /* t <-- d0 ^ 2 */
-  mg_uecc_vli_modMult_fast(e1, d0, e0, &curve_secp224r1); /* e1 <-- d0 * e0 */
-  mg_uecc_vli_modAdd(d1, t, f0, curve_secp224r1.p,
-                     num_words_secp224r1); /* d1 <-- t  + f0 */
-  mg_uecc_vli_modAdd(e1, e1, e1, curve_secp224r1.p,
-                     num_words_secp224r1);               /* e1 <-- e1 + e1 */
-  mg_uecc_vli_modMult_fast(f1, t, f0, &curve_secp224r1); /* f1 <-- t  * f0 */
-  mg_uecc_vli_modAdd(f1, f1, f1, curve_secp224r1.p,
-                     num_words_secp224r1); /* f1 <-- f1 + f1 */
-  mg_uecc_vli_modAdd(f1, f1, f1, curve_secp224r1.p,
-                     num_words_secp224r1); /* f1 <-- f1 + f1 */
-}
-
-/* Routine 3.2.5 RSS;  from http://www.nsa.gov/ia/_files/nist-routines.pdf */
-static void mod_sqrt_secp224r1_rss(mg_uecc_word_t *d1, mg_uecc_word_t *e1,
-                                   mg_uecc_word_t *f1, const mg_uecc_word_t *d0,
-                                   const mg_uecc_word_t *e0,
-                                   const mg_uecc_word_t *f0,
-                                   const bitcount_t j) {
-  bitcount_t i;
-
-  mg_uecc_vli_set(d1, d0, num_words_secp224r1); /* d1 <-- d0 */
-  mg_uecc_vli_set(e1, e0, num_words_secp224r1); /* e1 <-- e0 */
-  mg_uecc_vli_set(f1, f0, num_words_secp224r1); /* f1 <-- f0 */
-  for (i = 1; i <= j; i++) {
-    mod_sqrt_secp224r1_rs(d1, e1, f1, d1, e1, f1); /* RS (d1,e1,f1,d1,e1,f1) */
-  }
-}
-
-/* Routine 3.2.6 RM;  from http://www.nsa.gov/ia/_files/nist-routines.pdf */
-static void mod_sqrt_secp224r1_rm(mg_uecc_word_t *d2, mg_uecc_word_t *e2,
-                                  mg_uecc_word_t *f2, const mg_uecc_word_t *c,
-                                  const mg_uecc_word_t *d0,
-                                  const mg_uecc_word_t *e0,
-                                  const mg_uecc_word_t *d1,
-                                  const mg_uecc_word_t *e1) {
-  mg_uecc_word_t t1[num_words_secp224r1];
-  mg_uecc_word_t t2[num_words_secp224r1];
-
-  mg_uecc_vli_modMult_fast(t1, e0, e1, &curve_secp224r1); /* t1 <-- e0 * e1 */
-  mg_uecc_vli_modMult_fast(t1, t1, c, &curve_secp224r1);  /* t1 <-- t1 * c */
-  /* t1 <-- p  - t1 */
-  mg_uecc_vli_modSub(t1, curve_secp224r1.p, t1, curve_secp224r1.p,
-                     num_words_secp224r1);
-  mg_uecc_vli_modMult_fast(t2, d0, d1, &curve_secp224r1); /* t2 <-- d0 * d1 */
-  mg_uecc_vli_modAdd(t2, t2, t1, curve_secp224r1.p,
-                     num_words_secp224r1);                /* t2 <-- t2 + t1 */
-  mg_uecc_vli_modMult_fast(t1, d0, e1, &curve_secp224r1); /* t1 <-- d0 * e1 */
-  mg_uecc_vli_modMult_fast(e2, d1, e0, &curve_secp224r1); /* e2 <-- d1 * e0 */
-  mg_uecc_vli_modAdd(e2, e2, t1, curve_secp224r1.p,
-                     num_words_secp224r1);               /* e2 <-- e2 + t1 */
-  mg_uecc_vli_modSquare_fast(f2, e2, &curve_secp224r1);  /* f2 <-- e2^2 */
-  mg_uecc_vli_modMult_fast(f2, f2, c, &curve_secp224r1); /* f2 <-- f2 * c */
-  /* f2 <-- p  - f2 */
-  mg_uecc_vli_modSub(f2, curve_secp224r1.p, f2, curve_secp224r1.p,
-                     num_words_secp224r1);
-  mg_uecc_vli_set(d2, t2, num_words_secp224r1); /* d2 <-- t2 */
-}
-
-/* Routine 3.2.7 RP;  from http://www.nsa.gov/ia/_files/nist-routines.pdf */
-static void mod_sqrt_secp224r1_rp(mg_uecc_word_t *d1, mg_uecc_word_t *e1,
-                                  mg_uecc_word_t *f1, const mg_uecc_word_t *c,
-                                  const mg_uecc_word_t *r) {
-  wordcount_t i;
-  wordcount_t pow2i = 1;
-  mg_uecc_word_t d0[num_words_secp224r1];
-  mg_uecc_word_t e0[num_words_secp224r1] = {1}; /* e0 <-- 1 */
-  mg_uecc_word_t f0[num_words_secp224r1];
-
-  mg_uecc_vli_set(d0, r, num_words_secp224r1); /* d0 <-- r */
-  /* f0 <-- p  - c */
-  mg_uecc_vli_modSub(f0, curve_secp224r1.p, c, curve_secp224r1.p,
-                     num_words_secp224r1);
-  for (i = 0; i <= 6; i++) {
-    mod_sqrt_secp224r1_rss(d1, e1, f1, d0, e0, f0,
-                           pow2i); /* RSS (d1,e1,f1,d0,e0,f0,2^i) */
-    mod_sqrt_secp224r1_rm(d1, e1, f1, c, d1, e1, d0,
-                          e0); /* RM (d1,e1,f1,c,d1,e1,d0,e0) */
-    mg_uecc_vli_set(d0, d1, num_words_secp224r1); /* d0 <-- d1 */
-    mg_uecc_vli_set(e0, e1, num_words_secp224r1); /* e0 <-- e1 */
-    mg_uecc_vli_set(f0, f1, num_words_secp224r1); /* f0 <-- f1 */
-    pow2i *= 2;
-  }
-}
-
-/* Compute a = sqrt(a) (mod curve_p). */
-/* Routine 3.2.8 mp_mod_sqrt_224; from
- * http://www.nsa.gov/ia/_files/nist-routines.pdf */
-static void mod_sqrt_secp224r1(mg_uecc_word_t *a, MG_UECC_Curve curve) {
-  (void) curve;
-  bitcount_t i;
-  mg_uecc_word_t e1[num_words_secp224r1];
-  mg_uecc_word_t f1[num_words_secp224r1];
-  mg_uecc_word_t d0[num_words_secp224r1];
-  mg_uecc_word_t e0[num_words_secp224r1];
-  mg_uecc_word_t f0[num_words_secp224r1];
-  mg_uecc_word_t d1[num_words_secp224r1];
-
-  /* s = a; using constant instead of random value */
-  mod_sqrt_secp224r1_rp(d0, e0, f0, a, a); /* RP (d0, e0, f0, c, s) */
-  mod_sqrt_secp224r1_rs(d1, e1, f1, d0, e0,
-                        f0); /* RS (d1, e1, f1, d0, e0, f0) */
-  for (i = 1; i <= 95; i++) {
-    mg_uecc_vli_set(d0, d1, num_words_secp224r1); /* d0 <-- d1 */
-    mg_uecc_vli_set(e0, e1, num_words_secp224r1); /* e0 <-- e1 */
-    mg_uecc_vli_set(f0, f1, num_words_secp224r1); /* f0 <-- f1 */
-    mod_sqrt_secp224r1_rs(d1, e1, f1, d0, e0,
-                          f0); /* RS (d1, e1, f1, d0, e0, f0) */
-    if (mg_uecc_vli_isZero(d1, num_words_secp224r1)) { /* if d1 == 0 */
-      break;
-    }
-  }
-  mg_uecc_vli_modInv(f1, e0, curve_secp224r1.p,
-                     num_words_secp224r1);               /* f1 <-- 1 / e0 */
-  mg_uecc_vli_modMult_fast(a, d0, f1, &curve_secp224r1); /* a  <-- d0 / e0 */
-}
-#endif /* MG_UECC_SUPPORT_COMPRESSED_POINT */
-
-#if (MG_UECC_OPTIMIZATION_LEVEL > 0)
-/* Computes result = product % curve_p
-   from http://www.nsa.gov/ia/_files/nist-routines.pdf */
-#if MG_UECC_WORD_SIZE == 1
-static void vli_mmod_fast_secp224r1(uint8_t *result, uint8_t *product) {
-  uint8_t tmp[num_words_secp224r1];
-  int8_t carry;
-
-  /* t */
-  mg_uecc_vli_set(result, product, num_words_secp224r1);
-
-  /* s1 */
-  tmp[0] = tmp[1] = tmp[2] = tmp[3] = 0;
-  tmp[4] = tmp[5] = tmp[6] = tmp[7] = 0;
-  tmp[8] = tmp[9] = tmp[10] = tmp[11] = 0;
-  tmp[12] = product[28];
-  tmp[13] = product[29];
-  tmp[14] = product[30];
-  tmp[15] = product[31];
-  tmp[16] = product[32];
-  tmp[17] = product[33];
-  tmp[18] = product[34];
-  tmp[19] = product[35];
-  tmp[20] = product[36];
-  tmp[21] = product[37];
-  tmp[22] = product[38];
-  tmp[23] = product[39];
-  tmp[24] = product[40];
-  tmp[25] = product[41];
-  tmp[26] = product[42];
-  tmp[27] = product[43];
-  carry = mg_uecc_vli_add(result, result, tmp, num_words_secp224r1);
-
-  /* s2 */
-  tmp[12] = product[44];
-  tmp[13] = product[45];
-  tmp[14] = product[46];
-  tmp[15] = product[47];
-  tmp[16] = product[48];
-  tmp[17] = product[49];
-  tmp[18] = product[50];
-  tmp[19] = product[51];
-  tmp[20] = product[52];
-  tmp[21] = product[53];
-  tmp[22] = product[54];
-  tmp[23] = product[55];
-  tmp[24] = tmp[25] = tmp[26] = tmp[27] = 0;
-  carry += mg_uecc_vli_add(result, result, tmp, num_words_secp224r1);
-
-  /* d1 */
-  tmp[0] = product[28];
-  tmp[1] = product[29];
-  tmp[2] = product[30];
-  tmp[3] = product[31];
-  tmp[4] = product[32];
-  tmp[5] = product[33];
-  tmp[6] = product[34];
-  tmp[7] = product[35];
-  tmp[8] = product[36];
-  tmp[9] = product[37];
-  tmp[10] = product[38];
-  tmp[11] = product[39];
-  tmp[12] = product[40];
-  tmp[13] = product[41];
-  tmp[14] = product[42];
-  tmp[15] = product[43];
-  tmp[16] = product[44];
-  tmp[17] = product[45];
-  tmp[18] = product[46];
-  tmp[19] = product[47];
-  tmp[20] = product[48];
-  tmp[21] = product[49];
-  tmp[22] = product[50];
-  tmp[23] = product[51];
-  tmp[24] = product[52];
-  tmp[25] = product[53];
-  tmp[26] = product[54];
-  tmp[27] = product[55];
-  carry -= mg_uecc_vli_sub(result, result, tmp, num_words_secp224r1);
-
-  /* d2 */
-  tmp[0] = product[44];
-  tmp[1] = product[45];
-  tmp[2] = product[46];
-  tmp[3] = product[47];
-  tmp[4] = product[48];
-  tmp[5] = product[49];
-  tmp[6] = product[50];
-  tmp[7] = product[51];
-  tmp[8] = product[52];
-  tmp[9] = product[53];
-  tmp[10] = product[54];
-  tmp[11] = product[55];
-  tmp[12] = tmp[13] = tmp[14] = tmp[15] = 0;
-  tmp[16] = tmp[17] = tmp[18] = tmp[19] = 0;
-  tmp[20] = tmp[21] = tmp[22] = tmp[23] = 0;
-  tmp[24] = tmp[25] = tmp[26] = tmp[27] = 0;
-  carry -= mg_uecc_vli_sub(result, result, tmp, num_words_secp224r1);
-
-  if (carry < 0) {
-    do {
-      carry += mg_uecc_vli_add(result, result, curve_secp224r1.p,
-                               num_words_secp224r1);
-    } while (carry < 0);
-  } else {
-    while (carry || mg_uecc_vli_cmp_unsafe(curve_secp224r1.p, result,
-                                           num_words_secp224r1) != 1) {
-      carry -= mg_uecc_vli_sub(result, result, curve_secp224r1.p,
-                               num_words_secp224r1);
-    }
-  }
-}
-#elif MG_UECC_WORD_SIZE == 4
-static void vli_mmod_fast_secp224r1(uint32_t *result, uint32_t *product) {
-  uint32_t tmp[num_words_secp224r1];
-  int carry;
-
-  /* t */
-  mg_uecc_vli_set(result, product, num_words_secp224r1);
-
-  /* s1 */
-  tmp[0] = tmp[1] = tmp[2] = 0;
-  tmp[3] = product[7];
-  tmp[4] = product[8];
-  tmp[5] = product[9];
-  tmp[6] = product[10];
-  carry = mg_uecc_vli_add(result, result, tmp, num_words_secp224r1);
-
-  /* s2 */
-  tmp[3] = product[11];
-  tmp[4] = product[12];
-  tmp[5] = product[13];
-  tmp[6] = 0;
-  carry += mg_uecc_vli_add(result, result, tmp, num_words_secp224r1);
-
-  /* d1 */
-  tmp[0] = product[7];
-  tmp[1] = product[8];
-  tmp[2] = product[9];
-  tmp[3] = product[10];
-  tmp[4] = product[11];
-  tmp[5] = product[12];
-  tmp[6] = product[13];
-  carry -= mg_uecc_vli_sub(result, result, tmp, num_words_secp224r1);
-
-  /* d2 */
-  tmp[0] = product[11];
-  tmp[1] = product[12];
-  tmp[2] = product[13];
-  tmp[3] = tmp[4] = tmp[5] = tmp[6] = 0;
-  carry -= mg_uecc_vli_sub(result, result, tmp, num_words_secp224r1);
-
-  if (carry < 0) {
-    do {
-      carry += mg_uecc_vli_add(result, result, curve_secp224r1.p,
-                               num_words_secp224r1);
-    } while (carry < 0);
-  } else {
-    while (carry || mg_uecc_vli_cmp_unsafe(curve_secp224r1.p, result,
-                                           num_words_secp224r1) != 1) {
-      carry -= mg_uecc_vli_sub(result, result, curve_secp224r1.p,
-                               num_words_secp224r1);
-    }
-  }
-}
-#else
-static void vli_mmod_fast_secp224r1(uint64_t *result, uint64_t *product) {
-  uint64_t tmp[num_words_secp224r1];
-  int carry = 0;
-
-  /* t */
-  mg_uecc_vli_set(result, product, num_words_secp224r1);
-  result[num_words_secp224r1 - 1] &= 0xffffffff;
-
-  /* s1 */
-  tmp[0] = 0;
-  tmp[1] = product[3] & 0xffffffff00000000ull;
-  tmp[2] = product[4];
-  tmp[3] = product[5] & 0xffffffff;
-  mg_uecc_vli_add(result, result, tmp, num_words_secp224r1);
-
-  /* s2 */
-  tmp[1] = product[5] & 0xffffffff00000000ull;
-  tmp[2] = product[6];
-  tmp[3] = 0;
-  mg_uecc_vli_add(result, result, tmp, num_words_secp224r1);
-
-  /* d1 */
-  tmp[0] = (product[3] >> 32) | (product[4] << 32);
-  tmp[1] = (product[4] >> 32) | (product[5] << 32);
-  tmp[2] = (product[5] >> 32) | (product[6] << 32);
-  tmp[3] = product[6] >> 32;
-  carry -= mg_uecc_vli_sub(result, result, tmp, num_words_secp224r1);
-
-  /* d2 */
-  tmp[0] = (product[5] >> 32) | (product[6] << 32);
-  tmp[1] = product[6] >> 32;
-  tmp[2] = tmp[3] = 0;
-  carry -= mg_uecc_vli_sub(result, result, tmp, num_words_secp224r1);
-
-  if (carry < 0) {
-    do {
-      carry += mg_uecc_vli_add(result, result, curve_secp224r1.p,
-                               num_words_secp224r1);
-    } while (carry < 0);
-  } else {
-    while (mg_uecc_vli_cmp_unsafe(curve_secp224r1.p, result,
-                                  num_words_secp224r1) != 1) {
-      mg_uecc_vli_sub(result, result, curve_secp224r1.p, num_words_secp224r1);
-    }
-  }
-}
-#endif /* MG_UECC_WORD_SIZE */
-#endif /* (MG_UECC_OPTIMIZATION_LEVEL > 0) */
-
-#endif /* MG_UECC_SUPPORTS_secp224r1 */
-
-#if MG_UECC_SUPPORTS_secp256r1
-
-#if (MG_UECC_OPTIMIZATION_LEVEL > 0)
-static void vli_mmod_fast_secp256r1(mg_uecc_word_t *result,
-                                    mg_uecc_word_t *product);
-#endif
-
-static const struct MG_UECC_Curve_t curve_secp256r1 = {
-    num_words_secp256r1,
-    num_bytes_secp256r1,
-    256, /* num_n_bits */
-    {BYTES_TO_WORDS_8(FF, FF, FF, FF, FF, FF, FF, FF),
-     BYTES_TO_WORDS_8(FF, FF, FF, FF, 00, 00, 00, 00),
-     BYTES_TO_WORDS_8(00, 00, 00, 00, 00, 00, 00, 00),
-     BYTES_TO_WORDS_8(01, 00, 00, 00, FF, FF, FF, FF)},
-    {BYTES_TO_WORDS_8(51, 25, 63, FC, C2, CA, B9, F3),
-     BYTES_TO_WORDS_8(84, 9E, 17, A7, AD, FA, E6, BC),
-     BYTES_TO_WORDS_8(FF, FF, FF, FF, FF, FF, FF, FF),
-     BYTES_TO_WORDS_8(00, 00, 00, 00, FF, FF, FF, FF)},
-    {BYTES_TO_WORDS_8(96, C2, 98, D8, 45, 39, A1, F4),
-     BYTES_TO_WORDS_8(A0, 33, EB, 2D, 81, 7D, 03, 77),
-     BYTES_TO_WORDS_8(F2, 40, A4, 63, E5, E6, BC, F8),
-     BYTES_TO_WORDS_8(47, 42, 2C, E1, F2, D1, 17, 6B),
-
-     BYTES_TO_WORDS_8(F5, 51, BF, 37, 68, 40, B6, CB),
-     BYTES_TO_WORDS_8(CE, 5E, 31, 6B, 57, 33, CE, 2B),
-     BYTES_TO_WORDS_8(16, 9E, 0F, 7C, 4A, EB, E7, 8E),
-     BYTES_TO_WORDS_8(9B, 7F, 1A, FE, E2, 42, E3, 4F)},
-    {BYTES_TO_WORDS_8(4B, 60, D2, 27, 3E, 3C, CE, 3B),
-     BYTES_TO_WORDS_8(F6, B0, 53, CC, B0, 06, 1D, 65),
-     BYTES_TO_WORDS_8(BC, 86, 98, 76, 55, BD, EB, B3),
-     BYTES_TO_WORDS_8(E7, 93, 3A, AA, D8, 35, C6, 5A)},
-    &double_jacobian_default,
-#if MG_UECC_SUPPORT_COMPRESSED_POINT
-    &mod_sqrt_default,
-#endif
-    &x_side_default,
-#if (MG_UECC_OPTIMIZATION_LEVEL > 0)
-    &vli_mmod_fast_secp256r1
-#endif
-};
-
-MG_UECC_Curve mg_uecc_secp256r1(void) {
-  return &curve_secp256r1;
-}
-
-#if (MG_UECC_OPTIMIZATION_LEVEL > 0 && !asm_mmod_fast_secp256r1)
-/* Computes result = product % curve_p
-   from http://www.nsa.gov/ia/_files/nist-routines.pdf */
-#if MG_UECC_WORD_SIZE == 1
-static void vli_mmod_fast_secp256r1(uint8_t *result, uint8_t *product) {
-  uint8_t tmp[num_words_secp256r1];
-  int8_t carry;
-
-  /* t */
-  mg_uecc_vli_set(result, product, num_words_secp256r1);
-
-  /* s1 */
-  tmp[0] = tmp[1] = tmp[2] = tmp[3] = 0;
-  tmp[4] = tmp[5] = tmp[6] = tmp[7] = 0;
-  tmp[8] = tmp[9] = tmp[10] = tmp[11] = 0;
-  tmp[12] = product[44];
-  tmp[13] = product[45];
-  tmp[14] = product[46];
-  tmp[15] = product[47];
-  tmp[16] = product[48];
-  tmp[17] = product[49];
-  tmp[18] = product[50];
-  tmp[19] = product[51];
-  tmp[20] = product[52];
-  tmp[21] = product[53];
-  tmp[22] = product[54];
-  tmp[23] = product[55];
-  tmp[24] = product[56];
-  tmp[25] = product[57];
-  tmp[26] = product[58];
-  tmp[27] = product[59];
-  tmp[28] = product[60];
-  tmp[29] = product[61];
-  tmp[30] = product[62];
-  tmp[31] = product[63];
-  carry = mg_uecc_vli_add(tmp, tmp, tmp, num_words_secp256r1);
-  carry += mg_uecc_vli_add(result, result, tmp, num_words_secp256r1);
-
-  /* s2 */
-  tmp[12] = product[48];
-  tmp[13] = product[49];
-  tmp[14] = product[50];
-  tmp[15] = product[51];
-  tmp[16] = product[52];
-  tmp[17] = product[53];
-  tmp[18] = product[54];
-  tmp[19] = product[55];
-  tmp[20] = product[56];
-  tmp[21] = product[57];
-  tmp[22] = product[58];
-  tmp[23] = product[59];
-  tmp[24] = product[60];
-  tmp[25] = product[61];
-  tmp[26] = product[62];
-  tmp[27] = product[63];
-  tmp[28] = tmp[29] = tmp[30] = tmp[31] = 0;
-  carry += mg_uecc_vli_add(tmp, tmp, tmp, num_words_secp256r1);
-  carry += mg_uecc_vli_add(result, result, tmp, num_words_secp256r1);
-
-  /* s3 */
-  tmp[0] = product[32];
-  tmp[1] = product[33];
-  tmp[2] = product[34];
-  tmp[3] = product[35];
-  tmp[4] = product[36];
-  tmp[5] = product[37];
-  tmp[6] = product[38];
-  tmp[7] = product[39];
-  tmp[8] = product[40];
-  tmp[9] = product[41];
-  tmp[10] = product[42];
-  tmp[11] = product[43];
-  tmp[12] = tmp[13] = tmp[14] = tmp[15] = 0;
-  tmp[16] = tmp[17] = tmp[18] = tmp[19] = 0;
-  tmp[20] = tmp[21] = tmp[22] = tmp[23] = 0;
-  tmp[24] = product[56];
-  tmp[25] = product[57];
-  tmp[26] = product[58];
-  tmp[27] = product[59];
-  tmp[28] = product[60];
-  tmp[29] = product[61];
-  tmp[30] = product[62];
-  tmp[31] = product[63];
-  carry += mg_uecc_vli_add(result, result, tmp, num_words_secp256r1);
-
-  /* s4 */
-  tmp[0] = product[36];
-  tmp[1] = product[37];
-  tmp[2] = product[38];
-  tmp[3] = product[39];
-  tmp[4] = product[40];
-  tmp[5] = product[41];
-  tmp[6] = product[42];
-  tmp[7] = product[43];
-  tmp[8] = product[44];
-  tmp[9] = product[45];
-  tmp[10] = product[46];
-  tmp[11] = product[47];
-  tmp[12] = product[52];
-  tmp[13] = product[53];
-  tmp[14] = product[54];
-  tmp[15] = product[55];
-  tmp[16] = product[56];
-  tmp[17] = product[57];
-  tmp[18] = product[58];
-  tmp[19] = product[59];
-  tmp[20] = product[60];
-  tmp[21] = product[61];
-  tmp[22] = product[62];
-  tmp[23] = product[63];
-  tmp[24] = product[52];
-  tmp[25] = product[53];
-  tmp[26] = product[54];
-  tmp[27] = product[55];
-  tmp[28] = product[32];
-  tmp[29] = product[33];
-  tmp[30] = product[34];
-  tmp[31] = product[35];
-  carry += mg_uecc_vli_add(result, result, tmp, num_words_secp256r1);
-
-  /* d1 */
-  tmp[0] = product[44];
-  tmp[1] = product[45];
-  tmp[2] = product[46];
-  tmp[3] = product[47];
-  tmp[4] = product[48];
-  tmp[5] = product[49];
-  tmp[6] = product[50];
-  tmp[7] = product[51];
-  tmp[8] = product[52];
-  tmp[9] = product[53];
-  tmp[10] = product[54];
-  tmp[11] = product[55];
-  tmp[12] = tmp[13] = tmp[14] = tmp[15] = 0;
-  tmp[16] = tmp[17] = tmp[18] = tmp[19] = 0;
-  tmp[20] = tmp[21] = tmp[22] = tmp[23] = 0;
-  tmp[24] = product[32];
-  tmp[25] = product[33];
-  tmp[26] = product[34];
-  tmp[27] = product[35];
-  tmp[28] = product[40];
-  tmp[29] = product[41];
-  tmp[30] = product[42];
-  tmp[31] = product[43];
-  carry -= mg_uecc_vli_sub(result, result, tmp, num_words_secp256r1);
-
-  /* d2 */
-  tmp[0] = product[48];
-  tmp[1] = product[49];
-  tmp[2] = product[50];
-  tmp[3] = product[51];
-  tmp[4] = product[52];
-  tmp[5] = product[53];
-  tmp[6] = product[54];
-  tmp[7] = product[55];
-  tmp[8] = product[56];
-  tmp[9] = product[57];
-  tmp[10] = product[58];
-  tmp[11] = product[59];
-  tmp[12] = product[60];
-  tmp[13] = product[61];
-  tmp[14] = product[62];
-  tmp[15] = product[63];
-  tmp[16] = tmp[17] = tmp[18] = tmp[19] = 0;
-  tmp[20] = tmp[21] = tmp[22] = tmp[23] = 0;
-  tmp[24] = product[36];
-  tmp[25] = product[37];
-  tmp[26] = product[38];
-  tmp[27] = product[39];
-  tmp[28] = product[44];
-  tmp[29] = product[45];
-  tmp[30] = product[46];
-  tmp[31] = product[47];
-  carry -= mg_uecc_vli_sub(result, result, tmp, num_words_secp256r1);
-
-  /* d3 */
-  tmp[0] = product[52];
-  tmp[1] = product[53];
-  tmp[2] = product[54];
-  tmp[3] = product[55];
-  tmp[4] = product[56];
-  tmp[5] = product[57];
-  tmp[6] = product[58];
-  tmp[7] = product[59];
-  tmp[8] = product[60];
-  tmp[9] = product[61];
-  tmp[10] = product[62];
-  tmp[11] = product[63];
-  tmp[12] = product[32];
-  tmp[13] = product[33];
-  tmp[14] = product[34];
-  tmp[15] = product[35];
-  tmp[16] = product[36];
-  tmp[17] = product[37];
-  tmp[18] = product[38];
-  tmp[19] = product[39];
-  tmp[20] = product[40];
-  tmp[21] = product[41];
-  tmp[22] = product[42];
-  tmp[23] = product[43];
-  tmp[24] = tmp[25] = tmp[26] = tmp[27] = 0;
-  tmp[28] = product[48];
-  tmp[29] = product[49];
-  tmp[30] = product[50];
-  tmp[31] = product[51];
-  carry -= mg_uecc_vli_sub(result, result, tmp, num_words_secp256r1);
-
-  /* d4 */
-  tmp[0] = product[56];
-  tmp[1] = product[57];
-  tmp[2] = product[58];
-  tmp[3] = product[59];
-  tmp[4] = product[60];
-  tmp[5] = product[61];
-  tmp[6] = product[62];
-  tmp[7] = product[63];
-  tmp[8] = tmp[9] = tmp[10] = tmp[11] = 0;
-  tmp[12] = product[36];
-  tmp[13] = product[37];
-  tmp[14] = product[38];
-  tmp[15] = product[39];
-  tmp[16] = product[40];
-  tmp[17] = product[41];
-  tmp[18] = product[42];
-  tmp[19] = product[43];
-  tmp[20] = product[44];
-  tmp[21] = product[45];
-  tmp[22] = product[46];
-  tmp[23] = product[47];
-  tmp[24] = tmp[25] = tmp[26] = tmp[27] = 0;
-  tmp[28] = product[52];
-  tmp[29] = product[53];
-  tmp[30] = product[54];
-  tmp[31] = product[55];
-  carry -= mg_uecc_vli_sub(result, result, tmp, num_words_secp256r1);
-
-  if (carry < 0) {
-    do {
-      carry += mg_uecc_vli_add(result, result, curve_secp256r1.p,
-                               num_words_secp256r1);
-    } while (carry < 0);
-  } else {
-    while (carry || mg_uecc_vli_cmp_unsafe(curve_secp256r1.p, result,
-                                           num_words_secp256r1) != 1) {
-      carry -= mg_uecc_vli_sub(result, result, curve_secp256r1.p,
-                               num_words_secp256r1);
-    }
-  }
-}
-#elif MG_UECC_WORD_SIZE == 4
-static void vli_mmod_fast_secp256r1(uint32_t *result, uint32_t *product) {
-  uint32_t tmp[num_words_secp256r1];
-  int carry;
-
-  /* t */
-  mg_uecc_vli_set(result, product, num_words_secp256r1);
-
-  /* s1 */
-  tmp[0] = tmp[1] = tmp[2] = 0;
-  tmp[3] = product[11];
-  tmp[4] = product[12];
-  tmp[5] = product[13];
-  tmp[6] = product[14];
-  tmp[7] = product[15];
-  carry = (int) mg_uecc_vli_add(tmp, tmp, tmp, num_words_secp256r1);
-  carry += (int) mg_uecc_vli_add(result, result, tmp, num_words_secp256r1);
-
-  /* s2 */
-  tmp[3] = product[12];
-  tmp[4] = product[13];
-  tmp[5] = product[14];
-  tmp[6] = product[15];
-  tmp[7] = 0;
-  carry += (int) mg_uecc_vli_add(tmp, tmp, tmp, num_words_secp256r1);
-  carry += (int) mg_uecc_vli_add(result, result, tmp, num_words_secp256r1);
-
-  /* s3 */
-  tmp[0] = product[8];
-  tmp[1] = product[9];
-  tmp[2] = product[10];
-  tmp[3] = tmp[4] = tmp[5] = 0;
-  tmp[6] = product[14];
-  tmp[7] = product[15];
-  carry += (int) mg_uecc_vli_add(result, result, tmp, num_words_secp256r1);
-
-  /* s4 */
-  tmp[0] = product[9];
-  tmp[1] = product[10];
-  tmp[2] = product[11];
-  tmp[3] = product[13];
-  tmp[4] = product[14];
-  tmp[5] = product[15];
-  tmp[6] = product[13];
-  tmp[7] = product[8];
-  carry += (int) mg_uecc_vli_add(result, result, tmp, num_words_secp256r1);
-
-  /* d1 */
-  tmp[0] = product[11];
-  tmp[1] = product[12];
-  tmp[2] = product[13];
-  tmp[3] = tmp[4] = tmp[5] = 0;
-  tmp[6] = product[8];
-  tmp[7] = product[10];
-  carry -= (int) mg_uecc_vli_sub(result, result, tmp, num_words_secp256r1);
-
-  /* d2 */
-  tmp[0] = product[12];
-  tmp[1] = product[13];
-  tmp[2] = product[14];
-  tmp[3] = product[15];
-  tmp[4] = tmp[5] = 0;
-  tmp[6] = product[9];
-  tmp[7] = product[11];
-  carry -= (int) mg_uecc_vli_sub(result, result, tmp, num_words_secp256r1);
-
-  /* d3 */
-  tmp[0] = product[13];
-  tmp[1] = product[14];
-  tmp[2] = product[15];
-  tmp[3] = product[8];
-  tmp[4] = product[9];
-  tmp[5] = product[10];
-  tmp[6] = 0;
-  tmp[7] = product[12];
-  carry -= (int) mg_uecc_vli_sub(result, result, tmp, num_words_secp256r1);
-
-  /* d4 */
-  tmp[0] = product[14];
-  tmp[1] = product[15];
-  tmp[2] = 0;
-  tmp[3] = product[9];
-  tmp[4] = product[10];
-  tmp[5] = product[11];
-  tmp[6] = 0;
-  tmp[7] = product[13];
-  carry -= (int) mg_uecc_vli_sub(result, result, tmp, num_words_secp256r1);
-
-  if (carry < 0) {
-    do {
-      carry += (int) mg_uecc_vli_add(result, result, curve_secp256r1.p,
-                                     num_words_secp256r1);
-    } while (carry < 0);
-  } else {
-    while (carry || mg_uecc_vli_cmp_unsafe(curve_secp256r1.p, result,
-                                           num_words_secp256r1) != 1) {
-      carry -= (int) mg_uecc_vli_sub(result, result, curve_secp256r1.p,
-                                     num_words_secp256r1);
-    }
-  }
-}
-#else
-static void vli_mmod_fast_secp256r1(uint64_t *result, uint64_t *product) {
-  uint64_t tmp[num_words_secp256r1];
-  int carry;
-
-  /* t */
-  mg_uecc_vli_set(result, product, num_words_secp256r1);
-
-  /* s1 */
-  tmp[0] = 0;
-  tmp[1] = product[5] & 0xffffffff00000000U;
-  tmp[2] = product[6];
-  tmp[3] = product[7];
-  carry = (int) mg_uecc_vli_add(tmp, tmp, tmp, num_words_secp256r1);
-  carry += (int) mg_uecc_vli_add(result, result, tmp, num_words_secp256r1);
-
-  /* s2 */
-  tmp[1] = product[6] << 32;
-  tmp[2] = (product[6] >> 32) | (product[7] << 32);
-  tmp[3] = product[7] >> 32;
-  carry += (int) mg_uecc_vli_add(tmp, tmp, tmp, num_words_secp256r1);
-  carry += (int) mg_uecc_vli_add(result, result, tmp, num_words_secp256r1);
-
-  /* s3 */
-  tmp[0] = product[4];
-  tmp[1] = product[5] & 0xffffffff;
-  tmp[2] = 0;
-  tmp[3] = product[7];
-  carry += (int) mg_uecc_vli_add(result, result, tmp, num_words_secp256r1);
-
-  /* s4 */
-  tmp[0] = (product[4] >> 32) | (product[5] << 32);
-  tmp[1] = (product[5] >> 32) | (product[6] & 0xffffffff00000000U);
-  tmp[2] = product[7];
-  tmp[3] = (product[6] >> 32) | (product[4] << 32);
-  carry += (int) mg_uecc_vli_add(result, result, tmp, num_words_secp256r1);
-
-  /* d1 */
-  tmp[0] = (product[5] >> 32) | (product[6] << 32);
-  tmp[1] = (product[6] >> 32);
-  tmp[2] = 0;
-  tmp[3] = (product[4] & 0xffffffff) | (product[5] << 32);
-  carry -= (int) mg_uecc_vli_sub(result, result, tmp, num_words_secp256r1);
-
-  /* d2 */
-  tmp[0] = product[6];
-  tmp[1] = product[7];
-  tmp[2] = 0;
-  tmp[3] = (product[4] >> 32) | (product[5] & 0xffffffff00000000);
-  carry -= (int) mg_uecc_vli_sub(result, result, tmp, num_words_secp256r1);
-
-  /* d3 */
-  tmp[0] = (product[6] >> 32) | (product[7] << 32);
-  tmp[1] = (product[7] >> 32) | (product[4] << 32);
-  tmp[2] = (product[4] >> 32) | (product[5] << 32);
-  tmp[3] = (product[6] << 32);
-  carry -= (int) mg_uecc_vli_sub(result, result, tmp, num_words_secp256r1);
-
-  /* d4 */
-  tmp[0] = product[7];
-  tmp[1] = product[4] & 0xffffffff00000000U;
-  tmp[2] = product[5];
-  tmp[3] = product[6] & 0xffffffff00000000U;
-  carry -= (int) mg_uecc_vli_sub(result, result, tmp, num_words_secp256r1);
-
-  if (carry < 0) {
-    do {
-      carry += (int) mg_uecc_vli_add(result, result, curve_secp256r1.p,
-                                     num_words_secp256r1);
-    } while (carry < 0);
-  } else {
-    while (carry || mg_uecc_vli_cmp_unsafe(curve_secp256r1.p, result,
-                                           num_words_secp256r1) != 1) {
-      carry -= (int) mg_uecc_vli_sub(result, result, curve_secp256r1.p,
-                                     num_words_secp256r1);
-    }
-  }
-}
-#endif /* MG_UECC_WORD_SIZE */
-#endif /* (MG_UECC_OPTIMIZATION_LEVEL > 0 && !asm_mmod_fast_secp256r1) */
-
-#endif /* MG_UECC_SUPPORTS_secp256r1 */
-
-#if MG_UECC_SUPPORTS_secp256k1
-
-static void double_jacobian_secp256k1(mg_uecc_word_t *X1, mg_uecc_word_t *Y1,
-                                      mg_uecc_word_t *Z1, MG_UECC_Curve curve);
-static void x_side_secp256k1(mg_uecc_word_t *result, const mg_uecc_word_t *x,
-                             MG_UECC_Curve curve);
-#if (MG_UECC_OPTIMIZATION_LEVEL > 0)
-static void vli_mmod_fast_secp256k1(mg_uecc_word_t *result,
-                                    mg_uecc_word_t *product);
-#endif
-
-static const struct MG_UECC_Curve_t curve_secp256k1 = {
-    num_words_secp256k1,
-    num_bytes_secp256k1,
-    256, /* num_n_bits */
-    {BYTES_TO_WORDS_8(2F, FC, FF, FF, FE, FF, FF, FF),
-     BYTES_TO_WORDS_8(FF, FF, FF, FF, FF, FF, FF, FF),
-     BYTES_TO_WORDS_8(FF, FF, FF, FF, FF, FF, FF, FF),
-     BYTES_TO_WORDS_8(FF, FF, FF, FF, FF, FF, FF, FF)},
-    {BYTES_TO_WORDS_8(41, 41, 36, D0, 8C, 5E, D2, BF),
-     BYTES_TO_WORDS_8(3B, A0, 48, AF, E6, DC, AE, BA),
-     BYTES_TO_WORDS_8(FE, FF, FF, FF, FF, FF, FF, FF),
-     BYTES_TO_WORDS_8(FF, FF, FF, FF, FF, FF, FF, FF)},
-    {BYTES_TO_WORDS_8(98, 17, F8, 16, 5B, 81, F2, 59),
-     BYTES_TO_WORDS_8(D9, 28, CE, 2D, DB, FC, 9B, 02),
-     BYTES_TO_WORDS_8(07, 0B, 87, CE, 95, 62, A0, 55),
-     BYTES_TO_WORDS_8(AC, BB, DC, F9, 7E, 66, BE, 79),
-
-     BYTES_TO_WORDS_8(B8, D4, 10, FB, 8F, D0, 47, 9C),
-     BYTES_TO_WORDS_8(19, 54, 85, A6, 48, B4, 17, FD),
-     BYTES_TO_WORDS_8(A8, 08, 11, 0E, FC, FB, A4, 5D),
-     BYTES_TO_WORDS_8(65, C4, A3, 26, 77, DA, 3A, 48)},
-    {BYTES_TO_WORDS_8(07, 00, 00, 00, 00, 00, 00, 00),
-     BYTES_TO_WORDS_8(00, 00, 00, 00, 00, 00, 00, 00),
-     BYTES_TO_WORDS_8(00, 00, 00, 00, 00, 00, 00, 00),
-     BYTES_TO_WORDS_8(00, 00, 00, 00, 00, 00, 00, 00)},
-    &double_jacobian_secp256k1,
-#if MG_UECC_SUPPORT_COMPRESSED_POINT
-    &mod_sqrt_default,
-#endif
-    &x_side_secp256k1,
-#if (MG_UECC_OPTIMIZATION_LEVEL > 0)
-    &vli_mmod_fast_secp256k1
-#endif
-};
-
-MG_UECC_Curve mg_uecc_secp256k1(void) {
-  return &curve_secp256k1;
-}
-
-/* Double in place */
-static void double_jacobian_secp256k1(mg_uecc_word_t *X1, mg_uecc_word_t *Y1,
-                                      mg_uecc_word_t *Z1, MG_UECC_Curve curve) {
-  /* t1 = X, t2 = Y, t3 = Z */
-  mg_uecc_word_t t4[num_words_secp256k1];
-  mg_uecc_word_t t5[num_words_secp256k1];
-
-  if (mg_uecc_vli_isZero(Z1, num_words_secp256k1)) {
-    return;
-  }
-
-  mg_uecc_vli_modSquare_fast(t5, Y1, curve);   /* t5 = y1^2 */
-  mg_uecc_vli_modMult_fast(t4, X1, t5, curve); /* t4 = x1*y1^2 = A */
-  mg_uecc_vli_modSquare_fast(X1, X1, curve);   /* t1 = x1^2 */
-  mg_uecc_vli_modSquare_fast(t5, t5, curve);   /* t5 = y1^4 */
-  mg_uecc_vli_modMult_fast(Z1, Y1, Z1, curve); /* t3 = y1*z1 = z3 */
-
-  mg_uecc_vli_modAdd(Y1, X1, X1, curve->p,
-                     num_words_secp256k1); /* t2 = 2*x1^2 */
-  mg_uecc_vli_modAdd(Y1, Y1, X1, curve->p,
-                     num_words_secp256k1); /* t2 = 3*x1^2 */
-  if (mg_uecc_vli_testBit(Y1, 0)) {
-    mg_uecc_word_t carry =
-        mg_uecc_vli_add(Y1, Y1, curve->p, num_words_secp256k1);
-    mg_uecc_vli_rshift1(Y1, num_words_secp256k1);
-    Y1[num_words_secp256k1 - 1] |= carry << (MG_UECC_WORD_BITS - 1);
-  } else {
-    mg_uecc_vli_rshift1(Y1, num_words_secp256k1);
-  }
-  /* t2 = 3/2*(x1^2) = B */
-
-  mg_uecc_vli_modSquare_fast(X1, Y1, curve); /* t1 = B^2 */
-  mg_uecc_vli_modSub(X1, X1, t4, curve->p,
-                     num_words_secp256k1); /* t1 = B^2 - A */
-  mg_uecc_vli_modSub(X1, X1, t4, curve->p,
-                     num_words_secp256k1); /* t1 = B^2 - 2A = x3 */
-
-  mg_uecc_vli_modSub(t4, t4, X1, curve->p,
-                     num_words_secp256k1);     /* t4 = A - x3 */
-  mg_uecc_vli_modMult_fast(Y1, Y1, t4, curve); /* t2 = B * (A - x3) */
-  mg_uecc_vli_modSub(Y1, Y1, t5, curve->p,
-                     num_words_secp256k1); /* t2 = B * (A - x3) - y1^4 = y3 */
-}
-
-/* Computes result = x^3 + b. result must not overlap x. */
-static void x_side_secp256k1(mg_uecc_word_t *result, const mg_uecc_word_t *x,
-                             MG_UECC_Curve curve) {
-  mg_uecc_vli_modSquare_fast(result, x, curve);       /* r = x^2 */
-  mg_uecc_vli_modMult_fast(result, result, x, curve); /* r = x^3 */
-  mg_uecc_vli_modAdd(result, result, curve->b, curve->p,
-                     num_words_secp256k1); /* r = x^3 + b */
-}
-
-#if (MG_UECC_OPTIMIZATION_LEVEL > 0 && !asm_mmod_fast_secp256k1)
-static void omega_mult_secp256k1(mg_uecc_word_t *result,
-                                 const mg_uecc_word_t *right);
-static void vli_mmod_fast_secp256k1(mg_uecc_word_t *result,
-                                    mg_uecc_word_t *product) {
-  mg_uecc_word_t tmp[2 * num_words_secp256k1];
-  mg_uecc_word_t carry;
-
-  mg_uecc_vli_clear(tmp, num_words_secp256k1);
-  mg_uecc_vli_clear(tmp + num_words_secp256k1, num_words_secp256k1);
-
-  omega_mult_secp256k1(tmp,
-                       product + num_words_secp256k1); /* (Rq, q) = q * c */
-
-  carry = mg_uecc_vli_add(result, product, tmp,
-                          num_words_secp256k1); /* (C, r) = r + q       */
-  mg_uecc_vli_clear(product, num_words_secp256k1);
-  omega_mult_secp256k1(product, tmp + num_words_secp256k1); /* Rq*c */
-  carry += mg_uecc_vli_add(result, result, product,
-                           num_words_secp256k1); /* (C1, r) = r + Rq*c */
-
-  while (carry > 0) {
-    --carry;
-    mg_uecc_vli_sub(result, result, curve_secp256k1.p, num_words_secp256k1);
-  }
-  if (mg_uecc_vli_cmp_unsafe(result, curve_secp256k1.p, num_words_secp256k1) >
-      0) {
-    mg_uecc_vli_sub(result, result, curve_secp256k1.p, num_words_secp256k1);
-  }
-}
-
-#if MG_UECC_WORD_SIZE == 1
-static void omega_mult_secp256k1(uint8_t *result, const uint8_t *right) {
-  /* Multiply by (2^32 + 2^9 + 2^8 + 2^7 + 2^6 + 2^4 + 1). */
-  mg_uecc_word_t r0 = 0;
-  mg_uecc_word_t r1 = 0;
-  mg_uecc_word_t r2 = 0;
-  wordcount_t k;
-
-  /* Multiply by (2^9 + 2^8 + 2^7 + 2^6 + 2^4 + 1). */
-  muladd(0xD1, right[0], &r0, &r1, &r2);
-  result[0] = r0;
-  r0 = r1;
-  r1 = r2;
-  /* r2 is still 0 */
-
-  for (k = 1; k < num_words_secp256k1; ++k) {
-    muladd(0x03, right[k - 1], &r0, &r1, &r2);
-    muladd(0xD1, right[k], &r0, &r1, &r2);
-    result[k] = r0;
-    r0 = r1;
-    r1 = r2;
-    r2 = 0;
-  }
-  muladd(0x03, right[num_words_secp256k1 - 1], &r0, &r1, &r2);
-  result[num_words_secp256k1] = r0;
-  result[num_words_secp256k1 + 1] = r1;
-  /* add the 2^32 multiple */
-  result[4 + num_words_secp256k1] =
-      mg_uecc_vli_add(result + 4, result + 4, right, num_words_secp256k1);
-}
-#elif MG_UECC_WORD_SIZE == 4
-static void omega_mult_secp256k1(uint32_t *result, const uint32_t *right) {
-  /* Multiply by (2^9 + 2^8 + 2^7 + 2^6 + 2^4 + 1). */
-  uint32_t carry = 0;
-  wordcount_t k;
-
-  for (k = 0; k < num_words_secp256k1; ++k) {
-    uint64_t p = (uint64_t) 0x3D1 * right[k] + carry;
-    result[k] = (uint32_t) p;
-    carry = p >> 32;
-  }
-  result[num_words_secp256k1] = carry;
-  /* add the 2^32 multiple */
-  result[1 + num_words_secp256k1] =
-      mg_uecc_vli_add(result + 1, result + 1, right, num_words_secp256k1);
-}
-#else
-static void omega_mult_secp256k1(uint64_t *result, const uint64_t *right) {
-  mg_uecc_word_t r0 = 0;
-  mg_uecc_word_t r1 = 0;
-  mg_uecc_word_t r2 = 0;
-  wordcount_t k;
-
-  /* Multiply by (2^32 + 2^9 + 2^8 + 2^7 + 2^6 + 2^4 + 1). */
-  for (k = 0; k < num_words_secp256k1; ++k) {
-    muladd(0x1000003D1ull, right[k], &r0, &r1, &r2);
-    result[k] = r0;
-    r0 = r1;
-    r1 = r2;
-    r2 = 0;
-  }
-  result[num_words_secp256k1] = r0;
-}
-#endif /* MG_UECC_WORD_SIZE */
-#endif /* (MG_UECC_OPTIMIZATION_LEVEL > 0 &&  && !asm_mmod_fast_secp256k1) */
-
-#endif /* MG_UECC_SUPPORTS_secp256k1 */
-
-#if MG_UECC_SUPPORTS_secp384r1
-
-#if (MG_UECC_OPTIMIZATION_LEVEL > 0)
-static void vli_mmod_fast_secp384r1(mg_uecc_word_t *result,
-                                    mg_uecc_word_t *product);
-#endif
-
-static const struct MG_UECC_Curve_t curve_secp384r1 = {
-    num_words_secp384r1,
-    num_bytes_secp384r1,
-    384, /* num_n_bits */
-    /* p */
-    {BYTES_TO_WORDS_8(FF, FF, FF, FF, 00, 00, 00, 00),
-     BYTES_TO_WORDS_8(00, 00, 00, 00, FF, FF, FF, FF),
-     BYTES_TO_WORDS_8(FE, FF, FF, FF, FF, FF, FF, FF),
-     BYTES_TO_WORDS_8(FF, FF, FF, FF, FF, FF, FF, FF),
-     BYTES_TO_WORDS_8(FF, FF, FF, FF, FF, FF, FF, FF),
-     BYTES_TO_WORDS_8(FF, FF, FF, FF, FF, FF, FF, FF)},
-    /* n */
-    {BYTES_TO_WORDS_8(73, 29, C5, CC, 6A, 19, EC, EC),
-     BYTES_TO_WORDS_8(7A, A7, B0, 48, B2, 0D, 1A, 58),
-     BYTES_TO_WORDS_8(DF, 2D, 37, F4, 81, 4D, 63, C7),
-     BYTES_TO_WORDS_8(FF, FF, FF, FF, FF, FF, FF, FF),
-     BYTES_TO_WORDS_8(FF, FF, FF, FF, FF, FF, FF, FF),
-     BYTES_TO_WORDS_8(FF, FF, FF, FF, FF, FF, FF, FF)},
-    /* G = (Gx || Gy) little-endian */
-    {BYTES_TO_WORDS_8(B7, 0A, 76, 72, 38, 5E, 54, 3A),
-     BYTES_TO_WORDS_8(6C, 29, 55, BF, 5D, F2, 02, 55),
-     BYTES_TO_WORDS_8(38, 2A, 54, 82, E0, 41, F7, 59),
-     BYTES_TO_WORDS_8(98, 9B, A7, 8B, 62, 3B, 1D, 6E),
-     BYTES_TO_WORDS_8(74, AD, 20, F3, 1E, C7, B1, 8E),
-     BYTES_TO_WORDS_8(37, 05, 8B, BE, 22, CA, 87, AA),
-
-     BYTES_TO_WORDS_8(5F, 0E, EA, 90, 7C, 1D, 43, 7A),
-     BYTES_TO_WORDS_8(9D, 81, 7E, 1D, CE, B1, 60, 0A),
-     BYTES_TO_WORDS_8(C0, B8, F0, B5, 13, 31, DA, E9),
-     BYTES_TO_WORDS_8(7C, 14, 9A, 28, BD, 1D, F4, F8),
-     BYTES_TO_WORDS_8(29, DC, 92, 92, BF, 98, 9E, 5D),
-     BYTES_TO_WORDS_8(6F, 2C, 26, 96, 4A, DE, 17, 36)},
-    /* b */
-    {BYTES_TO_WORDS_8(EF, 2A, EC, D3, ED, C8, 85, 2A),
-     BYTES_TO_WORDS_8(9D, D1, 2E, 8A, 8D, 39, 56, C6),
-     BYTES_TO_WORDS_8(5A, 87, 13, 50, 8F, 08, 14, 03),
-     BYTES_TO_WORDS_8(12, 41, 81, FE, 6E, 9C, 1D, 18),
-     BYTES_TO_WORDS_8(19, 2D, F8, E3, 6B, 05, 8E, 98),
-     BYTES_TO_WORDS_8(E4, E7, 3E, E2, A7, 2F, 31, B3)},
-    &double_jacobian_default,
-#if MG_UECC_SUPPORT_COMPRESSED_POINT
-    &mod_sqrt_default,
-#endif
-    &x_side_default,
-#if (MG_UECC_OPTIMIZATION_LEVEL > 0)
-    &vli_mmod_fast_secp384r1
-#endif
-};
-
-MG_UECC_Curve mg_uecc_secp384r1(void) {
-  return &curve_secp384r1;
-}
-
-#if (MG_UECC_OPTIMIZATION_LEVEL > 0)
-static void vli_mmod_fast_secp384r1(mg_uecc_word_t *result,
-                                    mg_uecc_word_t *product) {
-  mg_uecc_vli_mmod(result, product, curve_secp384r1.p, num_words_secp384r1);
-}
-#endif
-
-#endif /* MG_UECC_SUPPORTS_secp384r1 */
-
-#endif /* _UECC_CURVE_SPECIFIC_H_ */
-
-/* Returns 1 if 'point' is the point at infinity, 0 otherwise. */
-#define EccPoint_isZero(point, curve) \
-  mg_uecc_vli_isZero((point), (wordcount_t) ((curve)->num_words * 2))
-
-/* Point multiplication algorithm using Montgomery's ladder with co-Z
-coordinates. From http://eprint.iacr.org/2011/338.pdf
-*/
-
-/* Modify (x1, y1) => (x1 * z^2, y1 * z^3) */
-static void apply_z(mg_uecc_word_t *X1, mg_uecc_word_t *Y1,
-                    const mg_uecc_word_t *const Z, MG_UECC_Curve curve) {
-  mg_uecc_word_t t1[MG_UECC_MAX_WORDS];
-
-  mg_uecc_vli_modSquare_fast(t1, Z, curve);    /* z^2 */
-  mg_uecc_vli_modMult_fast(X1, X1, t1, curve); /* x1 * z^2 */
-  mg_uecc_vli_modMult_fast(t1, t1, Z, curve);  /* z^3 */
-  mg_uecc_vli_modMult_fast(Y1, Y1, t1, curve); /* y1 * z^3 */
-}
-
-/* P = (x1, y1) => 2P, (x2, y2) => P' */
-static void XYcZ_initial_double(mg_uecc_word_t *X1, mg_uecc_word_t *Y1,
-                                mg_uecc_word_t *X2, mg_uecc_word_t *Y2,
-                                const mg_uecc_word_t *const initial_Z,
-                                MG_UECC_Curve curve) {
-  mg_uecc_word_t z[MG_UECC_MAX_WORDS];
-  wordcount_t num_words = curve->num_words;
-  if (initial_Z) {
-    mg_uecc_vli_set(z, initial_Z, num_words);
-  } else {
-    mg_uecc_vli_clear(z, num_words);
-    z[0] = 1;
-  }
-
-  mg_uecc_vli_set(X2, X1, num_words);
-  mg_uecc_vli_set(Y2, Y1, num_words);
-
-  apply_z(X1, Y1, z, curve);
-  curve->double_jacobian(X1, Y1, z, curve);
-  apply_z(X2, Y2, z, curve);
-}
-
-/* Input P = (x1, y1, Z), Q = (x2, y2, Z)
-   Output P' = (x1', y1', Z3), P + Q = (x3, y3, Z3)
-   or P => P', Q => P + Q
-*/
-static void XYcZ_add(mg_uecc_word_t *X1, mg_uecc_word_t *Y1, mg_uecc_word_t *X2,
-                     mg_uecc_word_t *Y2, MG_UECC_Curve curve) {
-  /* t1 = X1, t2 = Y1, t3 = X2, t4 = Y2 */
-  mg_uecc_word_t t5[MG_UECC_MAX_WORDS] = {0};
-  wordcount_t num_words = curve->num_words;
-
-  mg_uecc_vli_modSub(t5, X2, X1, curve->p, num_words); /* t5 = x2 - x1 */
-  mg_uecc_vli_modSquare_fast(t5, t5, curve);   /* t5 = (x2 - x1)^2 = A */
-  mg_uecc_vli_modMult_fast(X1, X1, t5, curve); /* t1 = x1*A = B */
-  mg_uecc_vli_modMult_fast(X2, X2, t5, curve); /* t3 = x2*A = C */
-  mg_uecc_vli_modSub(Y2, Y2, Y1, curve->p, num_words); /* t4 = y2 - y1 */
-  mg_uecc_vli_modSquare_fast(t5, Y2, curve); /* t5 = (y2 - y1)^2 = D */
-
-  mg_uecc_vli_modSub(t5, t5, X1, curve->p, num_words); /* t5 = D - B */
-  mg_uecc_vli_modSub(t5, t5, X2, curve->p, num_words); /* t5 = D - B - C = x3 */
-  mg_uecc_vli_modSub(X2, X2, X1, curve->p, num_words); /* t3 = C - B */
-  mg_uecc_vli_modMult_fast(Y1, Y1, X2, curve);         /* t2 = y1*(C - B) */
-  mg_uecc_vli_modSub(X2, X1, t5, curve->p, num_words); /* t3 = B - x3 */
-  mg_uecc_vli_modMult_fast(Y2, Y2, X2, curve); /* t4 = (y2 - y1)*(B - x3) */
-  mg_uecc_vli_modSub(Y2, Y2, Y1, curve->p, num_words); /* t4 = y3 */
-
-  mg_uecc_vli_set(X2, t5, num_words);
-}
-
-/* Input P = (x1, y1, Z), Q = (x2, y2, Z)
-   Output P + Q = (x3, y3, Z3), P - Q = (x3', y3', Z3)
-   or P => P - Q, Q => P + Q
-*/
-static void XYcZ_addC(mg_uecc_word_t *X1, mg_uecc_word_t *Y1,
-                      mg_uecc_word_t *X2, mg_uecc_word_t *Y2,
-                      MG_UECC_Curve curve) {
-  /* t1 = X1, t2 = Y1, t3 = X2, t4 = Y2 */
-  mg_uecc_word_t t5[MG_UECC_MAX_WORDS] = {0};
-  mg_uecc_word_t t6[MG_UECC_MAX_WORDS];
-  mg_uecc_word_t t7[MG_UECC_MAX_WORDS];
-  wordcount_t num_words = curve->num_words;
-
-  mg_uecc_vli_modSub(t5, X2, X1, curve->p, num_words); /* t5 = x2 - x1 */
-  mg_uecc_vli_modSquare_fast(t5, t5, curve);   /* t5 = (x2 - x1)^2 = A */
-  mg_uecc_vli_modMult_fast(X1, X1, t5, curve); /* t1 = x1*A = B */
-  mg_uecc_vli_modMult_fast(X2, X2, t5, curve); /* t3 = x2*A = C */
-  mg_uecc_vli_modAdd(t5, Y2, Y1, curve->p, num_words); /* t5 = y2 + y1 */
-  mg_uecc_vli_modSub(Y2, Y2, Y1, curve->p, num_words); /* t4 = y2 - y1 */
-
-  mg_uecc_vli_modSub(t6, X2, X1, curve->p, num_words); /* t6 = C - B */
-  mg_uecc_vli_modMult_fast(Y1, Y1, t6, curve); /* t2 = y1 * (C - B) = E */
-  mg_uecc_vli_modAdd(t6, X1, X2, curve->p, num_words); /* t6 = B + C */
-  mg_uecc_vli_modSquare_fast(X2, Y2, curve); /* t3 = (y2 - y1)^2 = D */
-  mg_uecc_vli_modSub(X2, X2, t6, curve->p,
-                     num_words); /* t3 = D - (B + C) = x3 */
-
-  mg_uecc_vli_modSub(t7, X1, X2, curve->p, num_words); /* t7 = B - x3 */
-  mg_uecc_vli_modMult_fast(Y2, Y2, t7, curve); /* t4 = (y2 - y1)*(B - x3) */
-  mg_uecc_vli_modSub(Y2, Y2, Y1, curve->p,
-                     num_words); /* t4 = (y2 - y1)*(B - x3) - E = y3 */
-
-  mg_uecc_vli_modSquare_fast(t7, t5, curve); /* t7 = (y2 + y1)^2 = F */
-  mg_uecc_vli_modSub(t7, t7, t6, curve->p,
-                     num_words); /* t7 = F - (B + C) = x3' */
-  mg_uecc_vli_modSub(t6, t7, X1, curve->p, num_words); /* t6 = x3' - B */
-  mg_uecc_vli_modMult_fast(t6, t6, t5, curve); /* t6 = (y2+y1)*(x3' - B) */
-  mg_uecc_vli_modSub(Y1, t6, Y1, curve->p,
-                     num_words); /* t2 = (y2+y1)*(x3' - B) - E = y3' */
-
-  mg_uecc_vli_set(X1, t7, num_words);
-}
-
-/* result may overlap point. */
-static void EccPoint_mult(mg_uecc_word_t *result, const mg_uecc_word_t *point,
-                          const mg_uecc_word_t *scalar,
-                          const mg_uecc_word_t *initial_Z, bitcount_t num_bits,
-                          MG_UECC_Curve curve) {
-  /* R0 and R1 */
-  mg_uecc_word_t Rx[2][MG_UECC_MAX_WORDS];
-  mg_uecc_word_t Ry[2][MG_UECC_MAX_WORDS];
-  mg_uecc_word_t z[MG_UECC_MAX_WORDS];
-  bitcount_t i;
-  mg_uecc_word_t nb;
-  wordcount_t num_words = curve->num_words;
-
-  mg_uecc_vli_set(Rx[1], point, num_words);
-  mg_uecc_vli_set(Ry[1], point + num_words, num_words);
-
-  XYcZ_initial_double(Rx[1], Ry[1], Rx[0], Ry[0], initial_Z, curve);
-
-  for (i = num_bits - 2; i > 0; --i) {
-    nb = !mg_uecc_vli_testBit(scalar, i);
-    XYcZ_addC(Rx[1 - nb], Ry[1 - nb], Rx[nb], Ry[nb], curve);
-    XYcZ_add(Rx[nb], Ry[nb], Rx[1 - nb], Ry[1 - nb], curve);
-  }
-
-  nb = !mg_uecc_vli_testBit(scalar, 0);
-  XYcZ_addC(Rx[1 - nb], Ry[1 - nb], Rx[nb], Ry[nb], curve);
-
-  /* Find final 1/Z value. */
-  mg_uecc_vli_modSub(z, Rx[1], Rx[0], curve->p, num_words); /* X1 - X0 */
-  mg_uecc_vli_modMult_fast(z, z, Ry[1 - nb], curve);        /* Yb * (X1 - X0) */
-  mg_uecc_vli_modMult_fast(z, z, point, curve);  /* xP * Yb * (X1 - X0) */
-  mg_uecc_vli_modInv(z, z, curve->p, num_words); /* 1 / (xP * Yb * (X1 - X0)) */
-  /* yP / (xP * Yb * (X1 - X0)) */
-  mg_uecc_vli_modMult_fast(z, z, point + num_words, curve);
-  mg_uecc_vli_modMult_fast(z, z, Rx[1 - nb],
-                           curve); /* Xb * yP / (xP * Yb * (X1 - X0)) */
-  /* End 1/Z calculation */
-
-  XYcZ_add(Rx[nb], Ry[nb], Rx[1 - nb], Ry[1 - nb], curve);
-  apply_z(Rx[0], Ry[0], z, curve);
-
-  mg_uecc_vli_set(result, Rx[0], num_words);
-  mg_uecc_vli_set(result + num_words, Ry[0], num_words);
-}
-
-static mg_uecc_word_t regularize_k(const mg_uecc_word_t *const k,
-                                   mg_uecc_word_t *k0, mg_uecc_word_t *k1,
-                                   MG_UECC_Curve curve) {
-  wordcount_t num_n_words = BITS_TO_WORDS(curve->num_n_bits);
-  bitcount_t num_n_bits = curve->num_n_bits;
-  mg_uecc_word_t carry =
-      mg_uecc_vli_add(k0, k, curve->n, num_n_words) ||
-      (num_n_bits < ((bitcount_t) num_n_words * MG_UECC_WORD_SIZE * 8) &&
-       mg_uecc_vli_testBit(k0, num_n_bits));
-  mg_uecc_vli_add(k1, k0, curve->n, num_n_words);
-  return carry;
-}
-
-/* Generates a random integer in the range 0 < random < top.
-   Both random and top have num_words words. */
-MG_UECC_VLI_API int mg_uecc_generate_random_int(mg_uecc_word_t *random,
-                                                const mg_uecc_word_t *top,
-                                                wordcount_t num_words) {
-  mg_uecc_word_t mask = (mg_uecc_word_t) -1;
-  mg_uecc_word_t tries;
-  bitcount_t num_bits = mg_uecc_vli_numBits(top, num_words);
-
-  for (tries = 0; tries < MG_UECC_RNG_MAX_TRIES; ++tries) {
-    unsigned int len = (unsigned int) (num_words * MG_UECC_WORD_SIZE);
-    if (!(g_rng_function == NULL ? mg_random((uint8_t *) random, len)
-                                 : g_rng_function((uint8_t *) random, len)))
-      return 0;
-    random[num_words - 1] &=
-        mask >> ((bitcount_t) (num_words * MG_UECC_WORD_SIZE * 8 - num_bits));
-    if (!mg_uecc_vli_isZero(random, num_words) &&
-        mg_uecc_vli_cmp(top, random, num_words) == 1) {
-      return 1;
-    }
-  }
-  return 0;
-}
-
-static mg_uecc_word_t EccPoint_compute_public_key(mg_uecc_word_t *result,
-                                                  mg_uecc_word_t *private_key,
-                                                  MG_UECC_Curve curve) {
-  mg_uecc_word_t tmp1[MG_UECC_MAX_WORDS];
-  mg_uecc_word_t tmp2[MG_UECC_MAX_WORDS];
-  mg_uecc_word_t *p2[2] = {tmp1, tmp2};
-  mg_uecc_word_t *initial_Z = 0;
-  mg_uecc_word_t carry;
-
-  /* Regularize the bitcount for the private key so that attackers cannot use a
-     side channel attack to learn the number of leading zeros. */
-  carry = regularize_k(private_key, tmp1, tmp2, curve);
-
-  /* If an RNG function was specified, try to get a random initial Z value to
-     improve protection against side-channel attacks. */
-  if (g_rng_function) {
-    if (!mg_uecc_generate_random_int(p2[carry], curve->p, curve->num_words)) {
-      return 0;
-    }
-    initial_Z = p2[carry];
-  }
-  EccPoint_mult(result, curve->G, p2[!carry], initial_Z,
-                (bitcount_t) (curve->num_n_bits + 1), curve);
-
-  if (EccPoint_isZero(result, curve)) {
-    return 0;
-  }
-  return 1;
-}
-
-#if MG_UECC_WORD_SIZE == 1
-
-MG_UECC_VLI_API void mg_uecc_vli_nativeToBytes(uint8_t *bytes, int num_bytes,
-                                               const uint8_t *native) {
-  wordcount_t i;
-  for (i = 0; i < num_bytes; ++i) {
-    bytes[i] = native[(num_bytes - 1) - i];
-  }
-}
-
-MG_UECC_VLI_API void mg_uecc_vli_bytesToNative(uint8_t *native,
-                                               const uint8_t *bytes,
-                                               int num_bytes) {
-  mg_uecc_vli_nativeToBytes(native, num_bytes, bytes);
-}
-
-#else
-
-MG_UECC_VLI_API void mg_uecc_vli_nativeToBytes(uint8_t *bytes, int num_bytes,
-                                               const mg_uecc_word_t *native) {
-  int i;
-  for (i = 0; i < num_bytes; ++i) {
-    unsigned b = (unsigned) (num_bytes - 1 - i);
-    bytes[i] = (uint8_t) (native[b / MG_UECC_WORD_SIZE] >>
-                          (8 * (b % MG_UECC_WORD_SIZE)));
-  }
-}
-
-MG_UECC_VLI_API void mg_uecc_vli_bytesToNative(mg_uecc_word_t *native,
-                                               const uint8_t *bytes,
-                                               int num_bytes) {
-  int i;
-  mg_uecc_vli_clear(native,
-                    (wordcount_t) ((num_bytes + (MG_UECC_WORD_SIZE - 1)) /
-                                   MG_UECC_WORD_SIZE));
-  for (i = 0; i < num_bytes; ++i) {
-    unsigned b = (unsigned) (num_bytes - 1 - i);
-    native[b / MG_UECC_WORD_SIZE] |= (mg_uecc_word_t) bytes[i]
-                                     << (8 * (b % MG_UECC_WORD_SIZE));
-  }
-}
-
-#endif /* MG_UECC_WORD_SIZE */
-
-int mg_uecc_make_key(uint8_t *public_key, uint8_t *private_key,
-                     MG_UECC_Curve curve) {
-#if MG_UECC_VLI_NATIVE_LITTLE_ENDIAN
-  mg_uecc_word_t *_private = (mg_uecc_word_t *) private_key;
-  mg_uecc_word_t *_public = (mg_uecc_word_t *) public_key;
-#else
-  mg_uecc_word_t _private[MG_UECC_MAX_WORDS];
-  mg_uecc_word_t _public[MG_UECC_MAX_WORDS * 2];
-#endif
-  mg_uecc_word_t tries;
-
-  for (tries = 0; tries < MG_UECC_RNG_MAX_TRIES; ++tries) {
-    if (!mg_uecc_generate_random_int(_private, curve->n,
-                                     BITS_TO_WORDS(curve->num_n_bits))) {
-      return 0;
-    }
-
-    if (EccPoint_compute_public_key(_public, _private, curve)) {
-#if MG_UECC_VLI_NATIVE_LITTLE_ENDIAN == 0
-      mg_uecc_vli_nativeToBytes(private_key, BITS_TO_BYTES(curve->num_n_bits),
-                                _private);
-      mg_uecc_vli_nativeToBytes(public_key, curve->num_bytes, _public);
-      mg_uecc_vli_nativeToBytes(public_key + curve->num_bytes, curve->num_bytes,
-                                _public + curve->num_words);
-#endif
-      return 1;
-    }
-  }
-  return 0;
-}
-
-int mg_uecc_shared_secret(const uint8_t *public_key, const uint8_t *private_key,
-                          uint8_t *secret, MG_UECC_Curve curve) {
-  mg_uecc_word_t _public[MG_UECC_MAX_WORDS * 2];
-  mg_uecc_word_t _private[MG_UECC_MAX_WORDS];
-
-  mg_uecc_word_t tmp[MG_UECC_MAX_WORDS];
-  mg_uecc_word_t *p2[2] = {_private, tmp};
-  mg_uecc_word_t *initial_Z = 0;
-  mg_uecc_word_t carry;
-  wordcount_t num_words = curve->num_words;
-  wordcount_t num_bytes = curve->num_bytes;
-
-#if MG_UECC_VLI_NATIVE_LITTLE_ENDIAN
-  bcopy((uint8_t *) _private, private_key, num_bytes);
-  bcopy((uint8_t *) _public, public_key, num_bytes * 2);
-#else
-  mg_uecc_vli_bytesToNative(_private, private_key,
-                            BITS_TO_BYTES(curve->num_n_bits));
-  mg_uecc_vli_bytesToNative(_public, public_key, num_bytes);
-  mg_uecc_vli_bytesToNative(_public + num_words, public_key + num_bytes,
-                            num_bytes);
-#endif
-
-  /* Regularize the bitcount for the private key so that attackers cannot use a
-     side channel attack to learn the number of leading zeros. */
-  carry = regularize_k(_private, _private, tmp, curve);
-
-  /* If an RNG function was specified, try to get a random initial Z value to
-     improve protection against side-channel attacks. */
-  if (g_rng_function) {
-    if (!mg_uecc_generate_random_int(p2[carry], curve->p, num_words)) {
-      return 0;
-    }
-    initial_Z = p2[carry];
-  }
-
-  EccPoint_mult(_public, _public, p2[!carry], initial_Z,
-                (bitcount_t) (curve->num_n_bits + 1), curve);
-#if MG_UECC_VLI_NATIVE_LITTLE_ENDIAN
-  bcopy((uint8_t *) secret, (uint8_t *) _public, num_bytes);
-#else
-  mg_uecc_vli_nativeToBytes(secret, num_bytes, _public);
-#endif
-  return !EccPoint_isZero(_public, curve);
-}
-
-#if MG_UECC_SUPPORT_COMPRESSED_POINT
-void mg_uecc_compress(const uint8_t *public_key, uint8_t *compressed,
-                      MG_UECC_Curve curve) {
-  wordcount_t i;
-  for (i = 0; i < curve->num_bytes; ++i) {
-    compressed[i + 1] = public_key[i];
-  }
-#if MG_UECC_VLI_NATIVE_LITTLE_ENDIAN
-  compressed[0] = 2 + (public_key[curve->num_bytes] & 0x01);
-#else
-  compressed[0] = 2 + (public_key[curve->num_bytes * 2 - 1] & 0x01);
-#endif
-}
-
-void mg_uecc_decompress(const uint8_t *compressed, uint8_t *public_key,
-                        MG_UECC_Curve curve) {
-#if MG_UECC_VLI_NATIVE_LITTLE_ENDIAN
-  mg_uecc_word_t *point = (mg_uecc_word_t *) public_key;
-#else
-  mg_uecc_word_t point[MG_UECC_MAX_WORDS * 2];
-#endif
-  mg_uecc_word_t *y = point + curve->num_words;
-#if MG_UECC_VLI_NATIVE_LITTLE_ENDIAN
-  bcopy(public_key, compressed + 1, curve->num_bytes);
-#else
-  mg_uecc_vli_bytesToNative(point, compressed + 1, curve->num_bytes);
-#endif
-  curve->x_side(y, point, curve);
-  curve->mod_sqrt(y, curve);
-
-  if ((uint8_t) (y[0] & 0x01) != (compressed[0] & 0x01)) {
-    mg_uecc_vli_sub(y, curve->p, y, curve->num_words);
-  }
-
-#if MG_UECC_VLI_NATIVE_LITTLE_ENDIAN == 0
-  mg_uecc_vli_nativeToBytes(public_key, curve->num_bytes, point);
-  mg_uecc_vli_nativeToBytes(public_key + curve->num_bytes, curve->num_bytes, y);
-#endif
-}
-#endif /* MG_UECC_SUPPORT_COMPRESSED_POINT */
-
-MG_UECC_VLI_API int mg_uecc_valid_point(const mg_uecc_word_t *point,
-                                        MG_UECC_Curve curve) {
-  mg_uecc_word_t tmp1[MG_UECC_MAX_WORDS];
-  mg_uecc_word_t tmp2[MG_UECC_MAX_WORDS];
-  wordcount_t num_words = curve->num_words;
-
-  /* The point at infinity is invalid. */
-  if (EccPoint_isZero(point, curve)) {
-    return 0;
-  }
-
-  /* x and y must be smaller than p. */
-  if (mg_uecc_vli_cmp_unsafe(curve->p, point, num_words) != 1 ||
-      mg_uecc_vli_cmp_unsafe(curve->p, point + num_words, num_words) != 1) {
-    return 0;
-  }
-
-  mg_uecc_vli_modSquare_fast(tmp1, point + num_words, curve);
-  curve->x_side(tmp2, point, curve); /* tmp2 = x^3 + ax + b */
-
-  /* Make sure that y^2 == x^3 + ax + b */
-  return (int) (mg_uecc_vli_equal(tmp1, tmp2, num_words));
-}
-
-int mg_uecc_valid_public_key(const uint8_t *public_key, MG_UECC_Curve curve) {
-#if MG_UECC_VLI_NATIVE_LITTLE_ENDIAN
-  mg_uecc_word_t *_public = (mg_uecc_word_t *) public_key;
-#else
-  mg_uecc_word_t _public[MG_UECC_MAX_WORDS * 2];
-#endif
-
-#if MG_UECC_VLI_NATIVE_LITTLE_ENDIAN == 0
-  mg_uecc_vli_bytesToNative(_public, public_key, curve->num_bytes);
-  mg_uecc_vli_bytesToNative(_public + curve->num_words,
-                            public_key + curve->num_bytes, curve->num_bytes);
-#endif
-  return mg_uecc_valid_point(_public, curve);
-}
-
-int mg_uecc_compute_public_key(const uint8_t *private_key, uint8_t *public_key,
-                               MG_UECC_Curve curve) {
-#if MG_UECC_VLI_NATIVE_LITTLE_ENDIAN
-  mg_uecc_word_t *_private = (mg_uecc_word_t *) private_key;
-  mg_uecc_word_t *_public = (mg_uecc_word_t *) public_key;
-#else
-  mg_uecc_word_t _private[MG_UECC_MAX_WORDS];
-  mg_uecc_word_t _public[MG_UECC_MAX_WORDS * 2];
-#endif
-
-#if MG_UECC_VLI_NATIVE_LITTLE_ENDIAN == 0
-  mg_uecc_vli_bytesToNative(_private, private_key,
-                            BITS_TO_BYTES(curve->num_n_bits));
-#endif
-
-  /* Make sure the private key is in the range [1, n-1]. */
-  if (mg_uecc_vli_isZero(_private, BITS_TO_WORDS(curve->num_n_bits))) {
-    return 0;
-  }
-
-  if (mg_uecc_vli_cmp(curve->n, _private, BITS_TO_WORDS(curve->num_n_bits)) !=
-      1) {
-    return 0;
-  }
-
-  /* Compute public key. */
-  if (!EccPoint_compute_public_key(_public, _private, curve)) {
-    return 0;
-  }
-
-#if MG_UECC_VLI_NATIVE_LITTLE_ENDIAN == 0
-  mg_uecc_vli_nativeToBytes(public_key, curve->num_bytes, _public);
-  mg_uecc_vli_nativeToBytes(public_key + curve->num_bytes, curve->num_bytes,
-                            _public + curve->num_words);
-#endif
-  return 1;
-}
-
-/* -------- ECDSA code -------- */
-
-static void bits2int(mg_uecc_word_t *native, const uint8_t *bits,
-                     unsigned bits_size, MG_UECC_Curve curve) {
-  unsigned num_n_bytes = (unsigned) BITS_TO_BYTES(curve->num_n_bits);
-  unsigned num_n_words = (unsigned) BITS_TO_WORDS(curve->num_n_bits);
-  int shift;
-  mg_uecc_word_t carry;
-  mg_uecc_word_t *ptr;
-
-  if (bits_size > num_n_bytes) {
-    bits_size = num_n_bytes;
-  }
-
-  mg_uecc_vli_clear(native, (wordcount_t) num_n_words);
-#if MG_UECC_VLI_NATIVE_LITTLE_ENDIAN
-  bcopy((uint8_t *) native, bits, bits_size);
-#else
-  mg_uecc_vli_bytesToNative(native, bits, (int) bits_size);
-#endif
-  if (bits_size * 8 <= (unsigned) curve->num_n_bits) {
-    return;
-  }
-  shift = (int) bits_size * 8 - curve->num_n_bits;
-  carry = 0;
-  ptr = native + num_n_words;
-  while (ptr-- > native) {
-    mg_uecc_word_t temp = *ptr;
-    *ptr = (temp >> shift) | carry;
-    carry = temp << (MG_UECC_WORD_BITS - shift);
-  }
-
-  /* Reduce mod curve_n */
-  if (mg_uecc_vli_cmp_unsafe(curve->n, native, (wordcount_t) num_n_words) !=
-      1) {
-    mg_uecc_vli_sub(native, native, curve->n, (wordcount_t) num_n_words);
-  }
-}
-
-static int mg_uecc_sign_with_k_internal(const uint8_t *private_key,
-                                        const uint8_t *message_hash,
-                                        unsigned hash_size, mg_uecc_word_t *k,
-                                        uint8_t *signature,
-                                        MG_UECC_Curve curve) {
-  mg_uecc_word_t tmp[MG_UECC_MAX_WORDS];
-  mg_uecc_word_t s[MG_UECC_MAX_WORDS];
-  mg_uecc_word_t *k2[2] = {tmp, s};
-  mg_uecc_word_t *initial_Z = 0;
-#if MG_UECC_VLI_NATIVE_LITTLE_ENDIAN
-  mg_uecc_word_t *p = (mg_uecc_word_t *) signature;
-#else
-  mg_uecc_word_t p[MG_UECC_MAX_WORDS * 2];
-#endif
-  mg_uecc_word_t carry;
-  wordcount_t num_words = curve->num_words;
-  wordcount_t num_n_words = BITS_TO_WORDS(curve->num_n_bits);
-  bitcount_t num_n_bits = curve->num_n_bits;
-
-  /* Make sure 0 < k < curve_n */
-  if (mg_uecc_vli_isZero(k, num_words) ||
-      mg_uecc_vli_cmp(curve->n, k, num_n_words) != 1) {
-    return 0;
-  }
-
-  carry = regularize_k(k, tmp, s, curve);
-  /* If an RNG function was specified, try to get a random initial Z value to
-     improve protection against side-channel attacks. */
-  if (g_rng_function) {
-    if (!mg_uecc_generate_random_int(k2[carry], curve->p, num_words)) {
-      return 0;
-    }
-    initial_Z = k2[carry];
-  }
-  EccPoint_mult(p, curve->G, k2[!carry], initial_Z,
-                (bitcount_t) (num_n_bits + 1), curve);
-  if (mg_uecc_vli_isZero(p, num_words)) {
-    return 0;
-  }
-
-  /* If an RNG function was specified, get a random number
-     to prevent side channel analysis of k. */
-  if (!g_rng_function) {
-    mg_uecc_vli_clear(tmp, num_n_words);
-    tmp[0] = 1;
-  } else if (!mg_uecc_generate_random_int(tmp, curve->n, num_n_words)) {
-    return 0;
-  }
-
-  /* Prevent side channel analysis of mg_uecc_vli_modInv() to determine
-     bits of k / the private key by premultiplying by a random number */
-  mg_uecc_vli_modMult(k, k, tmp, curve->n, num_n_words); /* k' = rand * k */
-  mg_uecc_vli_modInv(k, k, curve->n, num_n_words);       /* k = 1 / k' */
-  mg_uecc_vli_modMult(k, k, tmp, curve->n, num_n_words); /* k = 1 / k */
-
-#if MG_UECC_VLI_NATIVE_LITTLE_ENDIAN == 0
-  mg_uecc_vli_nativeToBytes(signature, curve->num_bytes, p); /* store r */
-#endif
-
-#if MG_UECC_VLI_NATIVE_LITTLE_ENDIAN
-  bcopy((uint8_t *) tmp, private_key, BITS_TO_BYTES(curve->num_n_bits));
-#else
-  mg_uecc_vli_bytesToNative(tmp, private_key,
-                            BITS_TO_BYTES(curve->num_n_bits)); /* tmp = d */
-#endif
-
-  s[num_n_words - 1] = 0;
-  mg_uecc_vli_set(s, p, num_words);
-  mg_uecc_vli_modMult(s, tmp, s, curve->n, num_n_words); /* s = r*d */
-
-  bits2int(tmp, message_hash, hash_size, curve);
-  mg_uecc_vli_modAdd(s, tmp, s, curve->n, num_n_words); /* s = e + r*d */
-  mg_uecc_vli_modMult(s, s, k, curve->n, num_n_words);  /* s = (e + r*d) / k */
-  if (mg_uecc_vli_numBits(s, num_n_words) > (bitcount_t) curve->num_bytes * 8) {
-    return 0;
-  }
-#if MG_UECC_VLI_NATIVE_LITTLE_ENDIAN
-  bcopy((uint8_t *) signature + curve->num_bytes, (uint8_t *) s,
-        curve->num_bytes);
-#else
-  mg_uecc_vli_nativeToBytes(signature + curve->num_bytes, curve->num_bytes, s);
-#endif
-  return 1;
-}
-
-#if 0
-/* For testing - sign with an explicitly specified k value */
-int mg_uecc_sign_with_k(const uint8_t *private_key, const uint8_t *message_hash,
-                     unsigned hash_size, const uint8_t *k, uint8_t *signature,
-                     MG_UECC_Curve curve) {
-  mg_uecc_word_t k2[MG_UECC_MAX_WORDS];
-  bits2int(k2, k, (unsigned) BITS_TO_BYTES(curve->num_n_bits), curve);
-  return mg_uecc_sign_with_k_internal(private_key, message_hash, hash_size, k2,
-                                   signature, curve);
-}
-#endif
-
-int mg_uecc_sign(const uint8_t *private_key, const uint8_t *message_hash,
-                 unsigned hash_size, uint8_t *signature, MG_UECC_Curve curve) {
-  mg_uecc_word_t k[MG_UECC_MAX_WORDS];
-  mg_uecc_word_t tries;
-
-  for (tries = 0; tries < MG_UECC_RNG_MAX_TRIES; ++tries) {
-    if (!mg_uecc_generate_random_int(k, curve->n,
-                                     BITS_TO_WORDS(curve->num_n_bits))) {
-      return 0;
-    }
-
-    if (mg_uecc_sign_with_k_internal(private_key, message_hash, hash_size, k,
-                                     signature, curve)) {
-      return 1;
-    }
-  }
-  return 0;
-}
-
-/* Compute an HMAC using K as a key (as in RFC 6979). Note that K is always
-   the same size as the hash result size. */
-static void HMAC_init(const MG_UECC_HashContext *hash_context,
-                      const uint8_t *K) {
-  uint8_t *pad = hash_context->tmp + 2 * hash_context->result_size;
-  unsigned i;
-  for (i = 0; i < hash_context->result_size; ++i) pad[i] = K[i] ^ 0x36;
-  for (; i < hash_context->block_size; ++i) pad[i] = 0x36;
-
-  hash_context->init_hash(hash_context);
-  hash_context->update_hash(hash_context, pad, hash_context->block_size);
-}
-
-static void HMAC_update(const MG_UECC_HashContext *hash_context,
-                        const uint8_t *message, unsigned message_size) {
-  hash_context->update_hash(hash_context, message, message_size);
-}
-
-static void HMAC_finish(const MG_UECC_HashContext *hash_context,
-                        const uint8_t *K, uint8_t *result) {
-  uint8_t *pad = hash_context->tmp + 2 * hash_context->result_size;
-  unsigned i;
-  for (i = 0; i < hash_context->result_size; ++i) pad[i] = K[i] ^ 0x5c;
-  for (; i < hash_context->block_size; ++i) pad[i] = 0x5c;
-
-  hash_context->finish_hash(hash_context, result);
-
-  hash_context->init_hash(hash_context);
-  hash_context->update_hash(hash_context, pad, hash_context->block_size);
-  hash_context->update_hash(hash_context, result, hash_context->result_size);
-  hash_context->finish_hash(hash_context, result);
-}
-
-/* V = HMAC_K(V) */
-static void update_V(const MG_UECC_HashContext *hash_context, uint8_t *K,
-                     uint8_t *V) {
-  HMAC_init(hash_context, K);
-  HMAC_update(hash_context, V, hash_context->result_size);
-  HMAC_finish(hash_context, K, V);
-}
-
-/* Deterministic signing, similar to RFC 6979. Differences are:
-    * We just use H(m) directly rather than bits2octets(H(m))
-      (it is not reduced modulo curve_n).
-    * We generate a value for k (aka T) directly rather than converting
-   endianness.
-
-   Layout of hash_context->tmp: <K> | <V> | (1 byte overlapped 0x00 or 0x01) /
-   <HMAC pad> */
-int mg_uecc_sign_deterministic(const uint8_t *private_key,
-                               const uint8_t *message_hash, unsigned hash_size,
-                               const MG_UECC_HashContext *hash_context,
-                               uint8_t *signature, MG_UECC_Curve curve) {
-  uint8_t *K = hash_context->tmp;
-  uint8_t *V = K + hash_context->result_size;
-  wordcount_t num_bytes = curve->num_bytes;
-  wordcount_t num_n_words = BITS_TO_WORDS(curve->num_n_bits);
-  bitcount_t num_n_bits = curve->num_n_bits;
-  mg_uecc_word_t tries;
-  unsigned i;
-  for (i = 0; i < hash_context->result_size; ++i) {
-    V[i] = 0x01;
-    K[i] = 0;
-  }
-
-  /* K = HMAC_K(V || 0x00 || int2octets(x) || h(m)) */
-  HMAC_init(hash_context, K);
-  V[hash_context->result_size] = 0x00;
-  HMAC_update(hash_context, V, hash_context->result_size + 1);
-  HMAC_update(hash_context, private_key, (unsigned int) num_bytes);
-  HMAC_update(hash_context, message_hash, hash_size);
-  HMAC_finish(hash_context, K, K);
-
-  update_V(hash_context, K, V);
-
-  /* K = HMAC_K(V || 0x01 || int2octets(x) || h(m)) */
-  HMAC_init(hash_context, K);
-  V[hash_context->result_size] = 0x01;
-  HMAC_update(hash_context, V, hash_context->result_size + 1);
-  HMAC_update(hash_context, private_key, (unsigned int) num_bytes);
-  HMAC_update(hash_context, message_hash, hash_size);
-  HMAC_finish(hash_context, K, K);
-
-  update_V(hash_context, K, V);
-
-  for (tries = 0; tries < MG_UECC_RNG_MAX_TRIES; ++tries) {
-    mg_uecc_word_t T[MG_UECC_MAX_WORDS];
-    uint8_t *T_ptr = (uint8_t *) T;
-    wordcount_t T_bytes = 0;
-    for (;;) {
-      update_V(hash_context, K, V);
-      for (i = 0; i < hash_context->result_size; ++i) {
-        T_ptr[T_bytes++] = V[i];
-        if (T_bytes >= num_n_words * MG_UECC_WORD_SIZE) {
-          goto filled;
-        }
-      }
-    }
-  filled:
-    if ((bitcount_t) num_n_words * MG_UECC_WORD_SIZE * 8 > num_n_bits) {
-      mg_uecc_word_t mask = (mg_uecc_word_t) -1;
-      T[num_n_words - 1] &=
-          mask >>
-          ((bitcount_t) (num_n_words * MG_UECC_WORD_SIZE * 8 - num_n_bits));
-    }
-
-    if (mg_uecc_sign_with_k_internal(private_key, message_hash, hash_size, T,
-                                     signature, curve)) {
-      return 1;
-    }
-
-    /* K = HMAC_K(V || 0x00) */
-    HMAC_init(hash_context, K);
-    V[hash_context->result_size] = 0x00;
-    HMAC_update(hash_context, V, hash_context->result_size + 1);
-    HMAC_finish(hash_context, K, K);
-
-    update_V(hash_context, K, V);
-  }
-  return 0;
-}
-
-static bitcount_t smax(bitcount_t a, bitcount_t b) {
-  return (a > b ? a : b);
-}
-
-int mg_uecc_verify(const uint8_t *public_key, const uint8_t *message_hash,
-                   unsigned hash_size, const uint8_t *signature,
-                   MG_UECC_Curve curve) {
-  mg_uecc_word_t u1[MG_UECC_MAX_WORDS], u2[MG_UECC_MAX_WORDS];
-  mg_uecc_word_t z[MG_UECC_MAX_WORDS];
-  mg_uecc_word_t sum[MG_UECC_MAX_WORDS * 2];
-  mg_uecc_word_t rx[MG_UECC_MAX_WORDS];
-  mg_uecc_word_t ry[MG_UECC_MAX_WORDS];
-  mg_uecc_word_t tx[MG_UECC_MAX_WORDS];
-  mg_uecc_word_t ty[MG_UECC_MAX_WORDS];
-  mg_uecc_word_t tz[MG_UECC_MAX_WORDS];
-  const mg_uecc_word_t *points[4];
-  const mg_uecc_word_t *point;
-  bitcount_t num_bits;
-  bitcount_t i;
-#if MG_UECC_VLI_NATIVE_LITTLE_ENDIAN
-  mg_uecc_word_t *_public = (mg_uecc_word_t *) public_key;
-#else
-  mg_uecc_word_t _public[MG_UECC_MAX_WORDS * 2];
-#endif
-  mg_uecc_word_t r[MG_UECC_MAX_WORDS], s[MG_UECC_MAX_WORDS];
-  wordcount_t num_words = curve->num_words;
-  wordcount_t num_n_words = BITS_TO_WORDS(curve->num_n_bits);
-
-  rx[num_n_words - 1] = 0;
-  r[num_n_words - 1] = 0;
-  s[num_n_words - 1] = 0;
-
-#if MG_UECC_VLI_NATIVE_LITTLE_ENDIAN
-  bcopy((uint8_t *) r, signature, curve->num_bytes);
-  bcopy((uint8_t *) s, signature + curve->num_bytes, curve->num_bytes);
-#else
-  mg_uecc_vli_bytesToNative(_public, public_key, curve->num_bytes);
-  mg_uecc_vli_bytesToNative(_public + num_words, public_key + curve->num_bytes,
-                            curve->num_bytes);
-  mg_uecc_vli_bytesToNative(r, signature, curve->num_bytes);
-  mg_uecc_vli_bytesToNative(s, signature + curve->num_bytes, curve->num_bytes);
-#endif
-
-  /* r, s must not be 0. */
-  if (mg_uecc_vli_isZero(r, num_words) || mg_uecc_vli_isZero(s, num_words)) {
-    return 0;
-  }
-
-  /* r, s must be < n. */
-  if (mg_uecc_vli_cmp_unsafe(curve->n, r, num_n_words) != 1 ||
-      mg_uecc_vli_cmp_unsafe(curve->n, s, num_n_words) != 1) {
-    return 0;
-  }
-
-  /* Calculate u1 and u2. */
-  mg_uecc_vli_modInv(z, s, curve->n, num_n_words); /* z = 1/s */
-  u1[num_n_words - 1] = 0;
-  bits2int(u1, message_hash, hash_size, curve);
-  mg_uecc_vli_modMult(u1, u1, z, curve->n, num_n_words); /* u1 = e/s */
-  mg_uecc_vli_modMult(u2, r, z, curve->n, num_n_words);  /* u2 = r/s */
-
-  /* Calculate sum = G + Q. */
-  mg_uecc_vli_set(sum, _public, num_words);
-  mg_uecc_vli_set(sum + num_words, _public + num_words, num_words);
-  mg_uecc_vli_set(tx, curve->G, num_words);
-  mg_uecc_vli_set(ty, curve->G + num_words, num_words);
-  mg_uecc_vli_modSub(z, sum, tx, curve->p, num_words); /* z = x2 - x1 */
-  XYcZ_add(tx, ty, sum, sum + num_words, curve);
-  mg_uecc_vli_modInv(z, z, curve->p, num_words); /* z = 1/z */
-  apply_z(sum, sum + num_words, z, curve);
-
-  /* Use Shamir's trick to calculate u1*G + u2*Q */
-  points[0] = 0;
-  points[1] = curve->G;
-  points[2] = _public;
-  points[3] = sum;
-  num_bits = smax(mg_uecc_vli_numBits(u1, num_n_words),
-                  mg_uecc_vli_numBits(u2, num_n_words));
-  point =
-      points[(!!mg_uecc_vli_testBit(u1, (bitcount_t) (num_bits - 1))) |
-             ((!!mg_uecc_vli_testBit(u2, (bitcount_t) (num_bits - 1))) << 1)];
-  mg_uecc_vli_set(rx, point, num_words);
-  mg_uecc_vli_set(ry, point + num_words, num_words);
-  mg_uecc_vli_clear(z, num_words);
-  z[0] = 1;
-
-  for (i = num_bits - 2; i >= 0; --i) {
-    mg_uecc_word_t index;
-    curve->double_jacobian(rx, ry, z, curve);
-
-    index = (!!mg_uecc_vli_testBit(u1, i)) |
-            (mg_uecc_word_t) ((!!mg_uecc_vli_testBit(u2, i)) << 1);
-    point = points[index];
-    if (point) {
-      mg_uecc_vli_set(tx, point, num_words);
-      mg_uecc_vli_set(ty, point + num_words, num_words);
-      apply_z(tx, ty, z, curve);
-      mg_uecc_vli_modSub(tz, rx, tx, curve->p, num_words); /* Z = x2 - x1 */
-      XYcZ_add(tx, ty, rx, ry, curve);
-      mg_uecc_vli_modMult_fast(z, z, tz, curve);
-    }
-  }
-
-  mg_uecc_vli_modInv(z, z, curve->p, num_words); /* Z = 1/Z */
-  apply_z(rx, ry, z, curve);
-
-  /* v = x1 (mod n) */
-  if (mg_uecc_vli_cmp_unsafe(curve->n, rx, num_n_words) != 1) {
-    mg_uecc_vli_sub(rx, rx, curve->n, num_n_words);
-  }
-
-  /* Accept only if v == r. */
-  return (int) (mg_uecc_vli_equal(rx, r, num_words));
-}
-
-#if MG_UECC_ENABLE_VLI_API
-
-unsigned mg_uecc_curve_num_words(MG_UECC_Curve curve) {
-  return curve->num_words;
-}
-
-unsigned mg_uecc_curve_num_bytes(MG_UECC_Curve curve) {
-  return curve->num_bytes;
-}
-
-unsigned mg_uecc_curve_num_bits(MG_UECC_Curve curve) {
-  return curve->num_bytes * 8;
-}
-
-unsigned mg_uecc_curve_num_n_words(MG_UECC_Curve curve) {
-  return BITS_TO_WORDS(curve->num_n_bits);
-}
-
-unsigned mg_uecc_curve_num_n_bytes(MG_UECC_Curve curve) {
-  return BITS_TO_BYTES(curve->num_n_bits);
-}
-
-unsigned mg_uecc_curve_num_n_bits(MG_UECC_Curve curve) {
-  return curve->num_n_bits;
-}
-
-const mg_uecc_word_t *mg_uecc_curve_p(MG_UECC_Curve curve) {
-  return curve->p;
-}
-
-const mg_uecc_word_t *mg_uecc_curve_n(MG_UECC_Curve curve) {
-  return curve->n;
-}
-
-const mg_uecc_word_t *mg_uecc_curve_G(MG_UECC_Curve curve) {
-  return curve->G;
-}
-
-const mg_uecc_word_t *mg_uecc_curve_b(MG_UECC_Curve curve) {
-  return curve->b;
-}
-
-#if MG_UECC_SUPPORT_COMPRESSED_POINT
-void mg_uecc_vli_mod_sqrt(mg_uecc_word_t *a, MG_UECC_Curve curve) {
-  curve->mod_sqrt(a, curve);
-}
-#endif
-
-void mg_uecc_vli_mmod_fast(mg_uecc_word_t *result, mg_uecc_word_t *product,
-                           MG_UECC_Curve curve) {
-#if (MG_UECC_OPTIMIZATION_LEVEL > 0)
-  curve->mmod_fast(result, product);
-#else
-  mg_uecc_vli_mmod(result, product, curve->p, curve->num_words);
-#endif
-}
-
-void mg_uecc_point_mult(mg_uecc_word_t *result, const mg_uecc_word_t *point,
-                        const mg_uecc_word_t *scalar, MG_UECC_Curve curve) {
-  mg_uecc_word_t tmp1[MG_UECC_MAX_WORDS];
-  mg_uecc_word_t tmp2[MG_UECC_MAX_WORDS];
-  mg_uecc_word_t *p2[2] = {tmp1, tmp2};
-  mg_uecc_word_t carry = regularize_k(scalar, tmp1, tmp2, curve);
-
-  EccPoint_mult(result, point, p2[!carry], 0, curve->num_n_bits + 1, curve);
-}
-
-#endif  /* MG_UECC_ENABLE_VLI_API */
-#endif  // MG_TLS_BUILTIN
-// End of uecc BSD-2
-
-#ifdef MG_ENABLE_LINES
-#line 1 "src/tls_x25519.c"
-#endif
-/**
- * Adapted from STROBE: https://strobe.sourceforge.io/
- * Copyright (c) 2015-2016 Cryptography Research, Inc.
- * Author: Mike Hamburg
- * License: MIT License
- */
-
-
-
-
-#if MG_TLS == MG_TLS_BUILTIN
-
-const uint8_t X25519_BASE_POINT[X25519_BYTES] = {9};
-
-#define X25519_WBITS 32
-
-typedef uint32_t limb_t;
-typedef uint64_t dlimb_t;
-typedef int64_t sdlimb_t;
-
-#define NLIMBS (256 / X25519_WBITS)
-typedef limb_t mg_fe[NLIMBS];
-
-static limb_t umaal(limb_t *carry, limb_t acc, limb_t mand, limb_t mier) {
-  dlimb_t tmp = (dlimb_t) mand * mier + acc + *carry;
-  *carry = (limb_t) (tmp >> X25519_WBITS);
-  return (limb_t) tmp;
-}
-
-// These functions are implemented in terms of umaal on ARM
-static limb_t adc(limb_t *carry, limb_t acc, limb_t mand) {
-  dlimb_t total = (dlimb_t) *carry + acc + mand;
-  *carry = (limb_t) (total >> X25519_WBITS);
-  return (limb_t) total;
-}
-
-static limb_t adc0(limb_t *carry, limb_t acc) {
-  dlimb_t total = (dlimb_t) *carry + acc;
-  *carry = (limb_t) (total >> X25519_WBITS);
-  return (limb_t) total;
-}
-
-// - Precondition: carry is small.
-// - Invariant: result of propagate is < 2^255 + 1 word
-// - In particular, always less than 2p.
-// - Also, output x >= min(x,19)
-static void propagate(mg_fe x, limb_t over) {
-  unsigned i;
-  limb_t carry;
-  over = x[NLIMBS - 1] >> (X25519_WBITS - 1) | over << 1;
-  x[NLIMBS - 1] &= ~((limb_t) 1 << (X25519_WBITS - 1));
-
-  carry = over * 19;
-  for (i = 0; i < NLIMBS; i++) {
-    x[i] = adc0(&carry, x[i]);
-  }
-}
-
-static void add(mg_fe out, const mg_fe a, const mg_fe b) {
-  unsigned i;
-  limb_t carry = 0;
-  for (i = 0; i < NLIMBS; i++) {
-    out[i] = adc(&carry, a[i], b[i]);
-  }
-  propagate(out, carry);
-}
-
-static void sub(mg_fe out, const mg_fe a, const mg_fe b) {
-  unsigned i;
-  sdlimb_t carry = -38;
-  for (i = 0; i < NLIMBS; i++) {
-    carry = carry + a[i] - b[i];
-    out[i] = (limb_t) carry;
-    carry >>= X25519_WBITS;
-  }
-  propagate(out, (limb_t) (1 + carry));
-}
-
-// `b` can contain less than 8 limbs, thus we use `limb_t *` instead of `mg_fe`
-// to avoid build warnings
-static void mul(mg_fe out, const mg_fe a, const limb_t *b, unsigned nb) {
-  limb_t accum[2 * NLIMBS] = {0};
-  unsigned i, j;
-
-  limb_t carry2;
-  for (i = 0; i < nb; i++) {
-    limb_t mand = b[i];
-    carry2 = 0;
-    for (j = 0; j < NLIMBS; j++) {
-      limb_t tmp;                        // "a" may be misaligned
-      memcpy(&tmp, &a[j], sizeof(tmp));  // So make an aligned copy
-      accum[i + j] = umaal(&carry2, accum[i + j], mand, tmp);
-    }
-    accum[i + j] = carry2;
-  }
-
-  carry2 = 0;
-  for (j = 0; j < NLIMBS; j++) {
-    out[j] = umaal(&carry2, accum[j], 38, accum[j + NLIMBS]);
-  }
-  propagate(out, carry2);
-}
-
-static void sqr(mg_fe out, const mg_fe a) {
-  mul(out, a, a, NLIMBS);
-}
-static void mul1(mg_fe out, const mg_fe a) {
-  mul(out, a, out, NLIMBS);
-}
-static void sqr1(mg_fe a) {
-  mul1(a, a);
-}
-
-static void condswap(limb_t a[2 * NLIMBS], limb_t b[2 * NLIMBS],
-                     limb_t doswap) {
-  unsigned i;
-  for (i = 0; i < 2 * NLIMBS; i++) {
-    limb_t xor_ab = (a[i] ^ b[i]) & doswap;
-    a[i] ^= xor_ab;
-    b[i] ^= xor_ab;
-  }
-}
-
-// Canonicalize a field element x, reducing it to the least residue which is
-// congruent to it mod 2^255-19
-// - Precondition: x < 2^255 + 1 word
-static limb_t canon(mg_fe x) {
-  // First, add 19.
-  unsigned i;
-  limb_t carry0 = 19;
-  limb_t res;
-  sdlimb_t carry;
-  for (i = 0; i < NLIMBS; i++) {
-    x[i] = adc0(&carry0, x[i]);
-  }
-  propagate(x, carry0);
-
-  // Here, 19 <= x2 < 2^255
-  // - This is because we added 19, so before propagate it can't be less
-  // than 19. After propagate, it still can't be less than 19, because if
-  // propagate does anything it adds 19.
-  // - We know that the high bit must be clear, because either the input was ~
-  // 2^255 + one word + 19 (in which case it propagates to at most 2 words) or
-  // it was < 2^255. So now, if we subtract 19, we will get back to something in
-  // [0,2^255-19).
-  carry = -19;
-  res = 0;
-  for (i = 0; i < NLIMBS; i++) {
-    carry += x[i];
-    res |= x[i] = (limb_t) carry;
-    carry >>= X25519_WBITS;
-  }
-  return (limb_t) (((dlimb_t) res - 1) >> X25519_WBITS);
-}
-
-static const limb_t a24[1] = {121665};
-
-static void ladder_part1(mg_fe xs[5]) {
-  limb_t *x2 = xs[0], *z2 = xs[1], *x3 = xs[2], *z3 = xs[3], *t1 = xs[4];
-  add(t1, x2, z2);                                 // t1 = A
-  sub(z2, x2, z2);                                 // z2 = B
-  add(x2, x3, z3);                                 // x2 = C
-  sub(z3, x3, z3);                                 // z3 = D
-  mul1(z3, t1);                                    // z3 = DA
-  mul1(x2, z2);                                    // x3 = BC
-  add(x3, z3, x2);                                 // x3 = DA+CB
-  sub(z3, z3, x2);                                 // z3 = DA-CB
-  sqr1(t1);                                        // t1 = AA
-  sqr1(z2);                                        // z2 = BB
-  sub(x2, t1, z2);                                 // x2 = E = AA-BB
-  mul(z2, x2, a24, sizeof(a24) / sizeof(a24[0]));  // z2 = E*a24
-  add(z2, z2, t1);                                 // z2 = E*a24 + AA
-}
-
-static void ladder_part2(mg_fe xs[5], const mg_fe x1) {
-  limb_t *x2 = xs[0], *z2 = xs[1], *x3 = xs[2], *z3 = xs[3], *t1 = xs[4];
-  sqr1(z3);         // z3 = (DA-CB)^2
-  mul1(z3, x1);     // z3 = x1 * (DA-CB)^2
-  sqr1(x3);         // x3 = (DA+CB)^2
-  mul1(z2, x2);     // z2 = AA*(E*a24+AA)
-  sub(x2, t1, x2);  // x2 = BB again
-  mul1(x2, t1);     // x2 = AA*BB
-}
-
-static void x25519_core(mg_fe xs[5], const uint8_t scalar[X25519_BYTES],
-                        const uint8_t *x1, int clamp) {
-  int i;
-  mg_fe x1_limbs;
-  limb_t swap = 0;
-  limb_t *x2 = xs[0], *x3 = xs[2], *z3 = xs[3];
-  memset(xs, 0, 4 * sizeof(mg_fe));
-  x2[0] = z3[0] = 1;
-  for (i = 0; i < NLIMBS; i++) {
-    x3[i] = x1_limbs[i] =
-        MG_U32(x1[i * 4 + 3], x1[i * 4 + 2], x1[i * 4 + 1], x1[i * 4]);
-  }
-
-  for (i = 255; i >= 0; i--) {
-    uint8_t bytei = scalar[i / 8];
-    limb_t doswap;
-    if (clamp) {
-      if (i / 8 == 0) {
-        bytei &= (uint8_t) ~7U;
-      } else if (i / 8 == X25519_BYTES - 1) {
-        bytei &= 0x7F;
-        bytei |= 0x40;
-      }
-    }
-    doswap = 0 - (limb_t) ((bytei >> (i % 8)) & 1);
-    condswap(x2, x3, swap ^ doswap);
-    swap = doswap;
-
-    ladder_part1(xs);
-    ladder_part2(xs, (const limb_t *) x1_limbs);
-  }
-  condswap(x2, x3, swap);
-}
-
-int mg_tls_x25519(uint8_t out[X25519_BYTES], const uint8_t scalar[X25519_BYTES],
-                  const uint8_t x1[X25519_BYTES], int clamp) {
-  int i, ret;
-  mg_fe xs[5], out_limbs;
-  limb_t *x2, *z2, *z3, *prev;
-  static const struct {
-    uint8_t a, c, n;
-  } steps[13] = {{2, 1, 1},  {2, 1, 1},  {4, 2, 3},  {2, 4, 6},  {3, 1, 1},
-                 {3, 2, 12}, {4, 3, 25}, {2, 3, 25}, {2, 4, 50}, {3, 2, 125},
-                 {3, 1, 2},  {3, 1, 2},  {3, 1, 1}};
-  x25519_core(xs, scalar, x1, clamp);
-
-  // Precomputed inversion chain
-  x2 = xs[0];
-  z2 = xs[1];
-  z3 = xs[3];
-
-  prev = z2;
-  for (i = 0; i < 13; i++) {
-    int j;
-    limb_t *a = xs[steps[i].a];
-    for (j = steps[i].n; j > 0; j--) {
-      sqr(a, prev);
-      prev = a;
-    }
-    mul1(a, xs[steps[i].c]);
-  }
-
-  // Here prev = z3
-  // x2 /= z2
-  mul(out_limbs, x2, z3, NLIMBS);
-  ret = (int) canon(out_limbs);
-  if (!clamp) ret = 0;
-  for (i = 0; i < NLIMBS; i++) {
-    uint32_t n = out_limbs[i];
-    out[i * 4] = (uint8_t) (n & 0xff);
-    out[i * 4 + 1] = (uint8_t) ((n >> 8) & 0xff);
-    out[i * 4 + 2] = (uint8_t) ((n >> 16) & 0xff);
-    out[i * 4 + 3] = (uint8_t) ((n >> 24) & 0xff);
-  }
-  return ret;
-}
-
-#endif
 
 #ifdef MG_ENABLE_LINES
 #line 1 "src/url.c"

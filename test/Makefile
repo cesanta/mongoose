@@ -78,19 +78,10 @@ LDFLAGS += -L$(WOLFSSL)/lib -lwolfssl
 endif
 
 ifeq "$(SSL)" "BUILTIN"
-DEFS += -DMG_TLS=MG_TLS_BUILTIN
+# Small TLS records: several records per TCP segment, tests record handling
+DEFS += -DMG_TLS=MG_TLS_BUILTIN -DMG_TLS_RECORD_SIZE=256
 endif
 
-tls_multirec/server: FORCE
-ifneq "$(SSL)" ""
-ifeq "$(MULTIREC)" ""
-	$(MAKE) -C tls_multirec CC=gcc
-endif
-endif
-	true
-
-FORCE:
-	true
 
 
 all:
@@ -109,13 +100,13 @@ mongoose.c: Makefile $(wildcard ../src/*.c) $(wildcard ../src/drivers/*.c)
 	cd .. && (export LC_ALL=C ; cat src/license.h; echo; echo '#include "mongoose.h"' ; (for F in src/*.c src/drivers/*.c ; do echo; echo '#ifdef MG_ENABLE_LINES'; echo "#line 1 \"$$F\""; echo '#endif'; cat $$F | sed -e 's,#include ".*,,'; done))> $@
 
 mongoose.h: $(HDRS) Makefile
-	cd .. && (export LC_ALL=C ; cat src/license.h; echo; echo '#ifndef MONGOOSE_H'; echo '#define MONGOOSE_H'; echo; cat src/version.h ; echo; echo '#ifdef __cplusplus'; echo 'extern "C" {'; echo '#endif'; cat src/arch.h src/arch_*.h src/os_*.h src/net_ft.h src/net_lwip.h src/net_rl.h src/config.h src/profile.h src/str.h src/queue.h src/fmt.h src/printf.h src/log.h src/timer.h src/fs.h src/lfs.h src/util.h src/url.h src/iobuf.h src/base64.h src/md5.h src/sha1.h src/sha256.h src/event.h src/net.h src/http.h src/ssi.h src/tls.h src/tls_x25519.h src/tls_aes128.h src/tls_uecc.h src/tls_chacha20.h src/tls_rsa.h src/tls_mbed.h src/tls_openssl.h src/ws.h src/sntp.h src/mqtt.h src/dns.h src/modbus.h src/json.h src/jwt.h src/rpc.h src/dash.h src/ota.h src/health.h src/mdash.h src/flash.h src/wifi.h src/l2.h src/net_builtin.h src/bsd.h src/drivers/*.h | sed -e '/keep/! s,#include ".*,,' -e 's,^#pragma once,,'; echo; echo '#ifdef __cplusplus'; echo '}'; echo '#endif'; echo '#endif  // MONGOOSE_H')> $@
+	cd .. && (export LC_ALL=C ; cat src/license.h; echo; echo '#ifndef MONGOOSE_H'; echo '#define MONGOOSE_H'; echo; cat src/version.h ; echo; echo '#ifdef __cplusplus'; echo 'extern "C" {'; echo '#endif'; cat src/arch.h src/arch_*.h src/os_*.h src/net_ft.h src/net_lwip.h src/net_rl.h src/config.h src/profile.h src/str.h src/queue.h src/fmt.h src/printf.h src/log.h src/timer.h src/fs.h src/lfs.h src/util.h src/url.h src/iobuf.h src/base64.h src/md5.h src/sha1.h src/sha256.h src/event.h src/net.h src/http.h src/ssi.h src/tls.h src/tls_aes128.h src/tls_p256.h src/tls_p384.h src/tls_chacha20.h src/tls_rsa.h src/tls_mbed.h src/tls_openssl.h src/ws.h src/sntp.h src/mqtt.h src/dns.h src/modbus.h src/json.h src/jwt.h src/rpc.h src/dash.h src/ota.h src/health.h src/mdash.h src/flash.h src/wifi.h src/l2.h src/net_builtin.h src/bsd.h src/drivers/*.h | sed -e '/keep/! s,#include ".*,,' -e 's,^#pragma once,,'; echo; echo '#ifdef __cplusplus'; echo '}'; echo '#endif'; echo '#endif  // MONGOOSE_H')> $@
 
 # Check that all external (exported) symbols have "mg_" prefix
 mg_prefix: mongoose.c mongoose.h
 	$(CC) mongoose.c $(CFLAGS) -c -o /tmp/x.o && nm /tmp/x.o | grep ' T ' | grep -v 'mg_' ; test $$? = 1
 
-test: Makefile mongoose.h $(SRCS) tls_multirec/server
+test: Makefile mongoose.h $(SRCS)
 	$(CC) $(SRCS) $(CFLAGS) $(LDFLAGS) -o unit_test
 	ASAN_OPTIONS=$(ASAN_OPTIONS) $(RUN) ./unit_test
 
@@ -265,7 +256,6 @@ packed_fs.c: Makefile data/ssi.h fuzz.c data/a.txt data/range.txt data/ca.pem ce
 
 clean: clean_tutorials clean_tutorials_embedded
 	rm -rf $(PROG) *.exe *.o *.dSYM *_test ut fuzzer *.gcov *.gcno *.gcda *.obj *.exe *.ilk *.pdb slow-unit* _CL_* infer-out data.txt crash-* packed_fs.c pack
-	$(MAKE) -C tls_multirec $@
 	$(MAKE) -C ../resources/I-CUBE-Mongoose $@
 	#find tutorials -maxdepth 3 -name zephyr -prune -o -name Makefile -print | xargs dirname | xargs -n1 make clean -C
 
@@ -289,7 +279,7 @@ atcmd_test: atcmd_test.c mongoose.c mongoose.h Makefile
 	$(CC) atcmd_test.c $(CFLAGS) $(LDFLAGS) -o $@
 	ASAN_OPTIONS=$(ASAN_OPTIONS) $(RUN) ./$@
 
-mip_tap_test: mip_x_test.c mip_tap_test.c mongoose.c mongoose.h packed_fs.c Makefile tls_multirec/server
+mip_tap_test: mip_x_test.c mip_tap_test.c mongoose.c mongoose.h packed_fs.c Makefile
 	$(CC) mip_tap_test.c packed_fs.c $(CFLAGS) $(LDFLAGS) -o $@
 	ASAN_OPTIONS=$(ASAN_OPTIONS) $(RUN) ./$@
 
@@ -302,7 +292,7 @@ port_tap_bridge: port_tap_bridge.c
 	cc port_tap_bridge.c -o $@
 
 # requires port_tap_bridge to be running
-mip_port_test: mip_x_test.c mip_port_test.c mongoose.c mongoose.h packed_fs.c Makefile tls_multirec/server
+mip_port_test: mip_x_test.c mip_port_test.c mongoose.c mongoose.h packed_fs.c Makefile
 	$(CC) mip_port_test.c packed_fs.c $(CFLAGS) $(LDFLAGS) -o $@
 	ASAN_OPTIONS=$(ASAN_OPTIONS) $(RUN) ./$@
 

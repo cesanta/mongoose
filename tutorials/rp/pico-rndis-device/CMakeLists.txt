@@ -7,12 +7,13 @@ pico_sdk_init()
 add_executable(firmware
   main.c
   usb_descriptors.c
-  mongoose.c
+  ../../../mongoose.c
   net.c
   pico-sdk/lib/tinyusb/lib/networking/rndis_reports.c)
 
 target_include_directories(firmware PUBLIC
-  .
+  ../../..
+  ./
   pico-sdk/lib/tinyusb/lib/networking)
 
 target_link_libraries(firmware pico_stdlib pico_rand hardware_spi tinyusb_device)

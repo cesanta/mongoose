@@ -114,3 +114,21 @@ void echo_poll(void) {
     p = &c->next;
   }
 }
+
+// On desktop, build with -DMAIN flag to include main().
+// On embedded system, run this code in your main() function
+#ifdef MAIN
+int main(void) {
+  struct mg_mgr mgr;
+
+  mg_mgr_init(&mgr);
+  echo_init(1234);
+
+  for (;;) {
+    mg_mgr_poll(&mgr, 1);
+    echo_poll();
+  }
+
+  return 0;
+}
+#endif

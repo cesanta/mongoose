@@ -21,9 +21,9 @@ static size_t verify_es256(struct mg_str token, char *claims, size_t len) {
   struct mg_jwt_opts opts = {.public_key = pub};
   // This keeps the example self-contained. A real verifier would usually keep
   // only the issuer public key, selected by kid, not the signing private key.
-  if (mg_uecc_parse_private_key(mg_str(s_ec_private_key), key, sizeof(key)) !=
+  if (mg_p256_parse_private_key(mg_str(s_ec_private_key), key, sizeof(key)) !=
           32 ||
-      mg_uecc_compute_public_key(key, pub, mg_uecc_secp256r1()) != 1) {
+      mg_p256_compute_public_key(key, pub) != 1) {
     return 0;
   }
   return mg_jwt_verify_es256(token, &opts, claims, len);
@@ -65,10 +65,9 @@ static void fn(struct mg_connection *c, int ev, void *ev_data) {
                                  .private_key = key};
       size_t keysz, n;
       keysz =
-          mg_uecc_parse_private_key(mg_str(s_ec_private_key), key, sizeof(key));
+          mg_p256_parse_private_key(mg_str(s_ec_private_key), key, sizeof(key));
       // ES256 uses a raw 64-byte r || s signature. mg_jwt_sign_es256() signs it
-      // deterministically; applications can also hash the signing input and
-      // call mg_uecc_sign() directly if they need random-nonce ECDSA.
+      // deterministically (RFC 6979), see mg_p256_sign()
       mg_snprintf(claims, CLAIMS_LEN, "{%m:%m,%m:%m}", MG_ESC("sub"),
                   MG_ESC("admin"), MG_ESC("scope"), MG_ESC("dash:read"));
       opts.claims = mg_str(claims);
