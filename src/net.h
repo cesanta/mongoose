@@ -92,7 +92,7 @@ struct mg_connection {
   unsigned is_mqtt5 : 1;          // MQTT5 connection (set by mg_mqtt_login)
   unsigned is_hexdumping : 1;     // Log hex dump of all in/out traffic
   unsigned is_draining : 1;       // Flush send buffer, then close
-  unsigned is_closing : 1;        // Close and free immediately on next poll
+  unsigned is_closing : 1;        // Request Close and free on next poll
   unsigned is_full : 1;           // Pause incoming reads until cleared
   unsigned is_tls_throttled : 1;  // TLS write was throttled; retry pending
   unsigned is_readable : 1;       // Socket is ready to read (epoll/select)

@@ -176,7 +176,6 @@ static void fcb(struct mg_connection *c, int ev, void *ev_data) {
     snprintf(fd->buf, FETCH_BUF_SIZE, "%.*s", (int) hm->message.len,
              hm->message.buf);
     fd->code = atoi(hm->uri.buf);
-    fd->closed = 1;
     c->is_closing = 1;
     MG_DEBUG(("CODE: %d, MSG: %.*s", fd->code, (int) hm->message.len,
               hm->message.buf));
@@ -214,7 +213,8 @@ static int fetch(struct mg_mgr *mgr, char *buf, const char *url,
                    // given enough traffic, the timer expires before we get a
                    // chance to see the response
   }
-  if (!fd.closed) c->is_closing = 1;
+  if (!fd.closed) // failed, force closure and conn removal, and loop end
+    ((struct connstate *) (c + 1))->is_closing = 1;
   mg_mgr_poll(mgr, 0);
   return fd.code;
 }
