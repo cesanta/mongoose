@@ -222,6 +222,13 @@ Technical guides and deep dives into embedded web servers, WebUI integration and
 - [lwIP vs Mongoose - TCP/IP Stack Integration Benchmark](https://mongoose.ws/articles/lwip-vs-mongoose-tcpip-stack-integration/)
 - [Embedded TCP/IP Stacks Comparison](https://mongoose.ws/embedded-tcpip-stack-comparison/)
 - [STM32H5 File System on Internal Flash: LittleFS + Mongoose](https://mongoose.ws/articles/stm32h5-file-system-on-internal-flash/)
+- [Firmware OTA and remote control on NXP FRDM-RW612](https://mongoose.ws/articles/mdash/)
+- [25000 WebSocket messages per second on STM32 Nucleo-H723ZG](https://mongoose.ws/articles/stm32-websocket-benchmark/)
+- [How to connect STM32 to AWS IoT Core](https://mongoose.ws/articles/stm32-aws-iot/)
+- [How to connect STM32 to Azure IoT Hub](https://mongoose.ws/articles/stm32-azure-iot-hub/)
+- [How to connect STM32 to EMQX](https://mongoose.ws/articles/stm32-emqx/)
+- [STM32 Device Management deep dive: Secure OTA, Remote Control, health monitor](https://mongoose.ws/articles/stm32-mdash-deep-dive/")
+- [STM32 TCP/IP footprint: how much flash and RAM does Mongoose take?](https://mongoose.ws/articles/tcp-ip-footprint/)
 
 
 ## Contributions
