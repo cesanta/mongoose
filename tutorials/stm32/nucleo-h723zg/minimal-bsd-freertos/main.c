@@ -60,8 +60,7 @@ static void http_ev_handler(struct mg_connection *c, int ev, void *ev_data) {
   }
 }
 
-// task1: network owner.  Runs the Mongoose event loop (mg_bsd_poll drives both
-// the TCP/IP stack and the BSD command queue) and blinks the LED.
+// task1: network owner. Runs the Mongoose event loop and blinks the LED.
 static void task1(void *args) {
   static struct mg_mgr mgr;
   mg_mgr_init(&mgr);
@@ -72,7 +71,6 @@ static void task1(void *args) {
   MG_INFO(("Crash record: %M", mg_print_crash_record));
   for (;;) {
     mg_mgr_poll(&mgr, 0);
-    mg_bsd_poll(&mgr);
     blink_task();
   }
   (void) args;
@@ -119,7 +117,6 @@ static void echo_task(void *args) {
 // task2: accept loop.  Waits for incoming connections on port 1234 and spawns
 // an echo_task for each one, allowing concurrent clients.
 static void task2(void *args) {
-  mg_bsd_init();
   int lfd = socket(AF_INET, SOCK_STREAM, 0);
   struct sockaddr_in sa = {.sin_family = AF_INET, .sin_port = htons(1234), .sin_addr = {INADDR_ANY}};
   bind(lfd, (struct sockaddr *) &sa, sizeof(sa));

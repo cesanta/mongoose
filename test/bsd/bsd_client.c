@@ -1,4 +1,5 @@
 #include <arpa/inet.h>
+#include <errno.h>
 #include <pthread.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -91,22 +92,80 @@ fail:
   exit(1);
 }
 
+enum wait_mode { WAIT_ABORT, WAIT_DRAIN, WAIT_HOLD, WAIT_CLOSE };
+
+// Wait for output, optionally draining through the final marker.
+static int wait_data(const char *host, enum wait_mode mode) {
+  struct sockaddr_in sa;
+  struct timeval timeout;
+  char buf[512];
+  ssize_t n;
+  size_t i;
+  int fd = socket(AF_INET, SOCK_STREAM, 0);
+
+  if (fd < 0) return 1;
+  memset(&sa, 0, sizeof(sa));
+  sa.sin_family = AF_INET;
+  sa.sin_port = htons(PORT);
+  if (inet_pton(AF_INET, host, &sa.sin_addr) != 1) goto fail;
+  timeout.tv_sec = 5, timeout.tv_usec = 0;
+  if (setsockopt(fd, SOL_SOCKET, SO_RCVTIMEO, &timeout, sizeof(timeout)) != 0)
+    goto fail;
+  if (connect(fd, (struct sockaddr *) &sa, sizeof(sa)) != 0) goto fail;
+  if (mode == WAIT_HOLD) {
+    usleep(100000);  // Keep the peer connected while the server fails TX
+    close(fd);
+    return 0;
+  }
+  if (mode == WAIT_CLOSE) {
+    n = recv(fd, buf, sizeof(buf), 0);
+    close(fd);
+    return n == 0 || (n < 0 && errno == ECONNRESET) ? 0 : 1;
+  }
+  for (;;) {
+    n = recv(fd, buf, sizeof(buf), 0);
+    if (n <= 0) goto fail;
+    if (mode == WAIT_ABORT) break;
+    for (i = 0; i < (size_t) n; i++) {
+      if (buf[i] == '\1') break;
+    }
+    if (i < (size_t) n) break;
+  }
+  close(fd);
+  return 0;
+
+fail:
+  close(fd);
+  return 1;
+}
+
 int main(int argc, char *argv[]) {
   pthread_t threads[NUM_CONNECTIONS];
-  int i;
+  int connections = NUM_CONNECTIONS, i;
 
-  if (argc != 2) {
-    fprintf(stderr, "usage: %s IP\n", argv[0]);
+  if (argc == 3 && strcmp(argv[2], "waitandabort") == 0)
+    return wait_data(argv[1], WAIT_ABORT);
+  if (argc == 3 && strcmp(argv[2], "waitanddrain") == 0)
+    return wait_data(argv[1], WAIT_DRAIN);
+  if (argc == 3 && strcmp(argv[2], "hold") == 0)
+    return wait_data(argv[1], WAIT_HOLD);
+  if (argc == 3 && strcmp(argv[2], "expectclose") == 0)
+    return wait_data(argv[1], WAIT_CLOSE);
+  if (argc == 3) connections = atoi(argv[2]);
+  if ((argc != 2 && argc != 3) || connections < 1 ||
+      connections > NUM_CONNECTIONS) {
+    fprintf(stderr, "usage: %s IP [connections|waitandabort|waitanddrain|hold|expectclose]\n",
+            argv[0]);
     return 1;
   }
 
   srandom(1);
 
-  for (i = 0; i < NUM_CONNECTIONS; i++) {
+  for (i = 0; i < connections; i++) {
     if (pthread_create(&threads[i], NULL, worker, argv[1]) != 0) return 1;
   }
 
-  for (i = 0; i < NUM_CONNECTIONS; i++) {
+  for (i = 0; i < connections; i++) {
     if (pthread_join(threads[i], NULL) != 0) return 1;
   }
 

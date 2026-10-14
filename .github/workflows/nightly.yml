@@ -303,6 +303,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
+        target: [bsd, bsd_nortos]
         cc: [gcc, clang, g++, clang++]
     name: bsd CC=${{ matrix.cc }}
     steps:
@@ -316,7 +317,7 @@ jobs:
         make -C test/bsd shm_tap_bridge
         test/bsd/shm_tap_bridge &
         sleep 2
-        make -C test/bsd CC=${{ matrix.cc }} > log
+        make -C test/bsd ${{ matrix.target }} CC=${{ matrix.cc }} > log
     - if: success() || failure()
       run: |
         cat log
@@ -589,10 +590,12 @@ jobs:
               stm32/nucleo-f746zg/minimal
               stm32/nucleo-f746zg/minimal-pppoe
               stm32/nucleo-f756zg/minimal
-              stm32/nucleo-h563zi/minimal
               stm32/nucleo-h723zg/minimal
+              stm32/nucleo-h723zg/minimal-bsd-baremetal
+              stm32/nucleo-h723zg/minimal-bsd-freertos
           - group: stm32-2
             examples: |
+              stm32/nucleo-h563zi/minimal
               stm32/nucleo-h743zi/minimal
               stm32/nucleo-n657x0-q/minimal
               stm32/nucleo-u5a5zj-q/minimal
