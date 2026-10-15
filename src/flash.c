@@ -4,7 +4,7 @@
 #include "ota.h"
 #ifdef MG_OTA_PUBLIC_KEY
 #include "sha256.h"
-#include "tls_uecc.h"
+#include "tls_p256.h"
 #endif
 
 #if MG_OTA != MG_OTA_NONE && MG_OTA != MG_OTA_CUSTOM
@@ -76,9 +76,8 @@ bool mg_ota_flash_end(struct mg_flash *flash) {
         uint8_t hash[32];
         size_t fw_size = s_size - 68;  // strip 64-byte sig + 4-byte magic
         mg_sha256(hash, (uint8_t *) base, fw_size);
-        ok = mg_uecc_verify(s_pubkey, hash, sizeof(hash),
-                            (uint8_t *) base + fw_size,
-                            mg_uecc_secp256r1()) == 1;
+        ok = mg_p256_verify(s_pubkey, hash, sizeof(hash),
+                            (uint8_t *) base + fw_size) == 1;
         MG_INFO(("Signature: %s", ok ? "ok" : "fail"));
       } else {
         ok = false;

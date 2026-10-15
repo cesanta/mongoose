@@ -223,8 +223,26 @@
 #define MG_ENABLE_TCPIP_PRINT_DEBUG_STATS 0
 #endif
 
+#ifndef MG_TLS_RECORD_SIZE
+#define MG_TLS_RECORD_SIZE 16384  // Max plaintext per sent TLS record, builtin
+#endif
+
 #ifndef MG_ENABLE_CHACHA20
 #define MG_ENABLE_CHACHA20 1  // When set to 0, GCM is used. For MG_TLS_BUILTIN
+#endif
+
+// P-256 implementation, for MG_TLS_BUILTIN
+#define MG_P256_LENNGREN 1  // Cortex-M4/M7/M33 asm, see tls_p256_cortex.c
+#define MG_P256_BEAR 3      // Portable C, BearSSL, see tls_p256.c
+
+#ifndef MG_P256
+#if defined(__GNUC__) && defined(__ARM_ARCH_PROFILE) && \
+    __ARM_ARCH_PROFILE == 'M' && defined(__ARM_FEATURE_DSP) && \
+    !defined(__ARM_BIG_ENDIAN)
+#define MG_P256 MG_P256_LENNGREN  // Cortex-M with DSP: M4, M7, M33, M55, M85
+#else
+#define MG_P256 MG_P256_BEAR
+#endif
 #endif
 
 #ifndef MG_ENABLE_HEALTH

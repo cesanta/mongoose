@@ -925,6 +925,10 @@ static void fcb(struct mg_connection *c, int ev, void *ev_data) {
   }
 }
 
+// Max number of mg_mgr_poll() calls fetch() waits for a response. Large
+// transfers over builtin TLS with small records (MG_TLS_RECORD_SIZE) need more
+static int s_fetch_polls = 100;
+
 static int fetch(struct mg_mgr *mgr, char *buf, const char *url,
                  const char *fmt, ...) {
   struct fetch_data fd = {buf, 0, 0};
@@ -953,7 +957,7 @@ static int fetch(struct mg_mgr *mgr, char *buf, const char *url,
   mg_vprintf(c, fmt, &ap);
   va_end(ap);
   buf[0] = '\0';
-  for (i = 0; i < 100 && buf[0] == '\0'; i++) mg_mgr_poll(mgr, 1);
+  for (i = 0; i < s_fetch_polls && buf[0] == '\0'; i++) mg_mgr_poll(mgr, 1);
   if (!fd.closed) c->is_closing = 1;
   mg_mgr_poll(mgr, 1);
   return fd.code;
@@ -1522,7 +1526,6 @@ static void test_http_404(void) {
 }
 
 static void test_tls(void) {
-//  return;
 #if MG_TLS
   struct mg_mgr mgr;
   struct mg_connection *c;
@@ -1545,6 +1548,7 @@ static void test_tls(void) {
   // POST a large file, several MSS but less than max TLS record length
   // make sure we drain TLS buffers and read all, #2619
   ASSERT(data.len > 3100 && data.len < 16384);  // pick another file on failure
+  s_fetch_polls = 5000;  // Many small TLS records, one is decrypted per poll
   ASSERT(fetch(&mgr, buf, url,
                "POST /body HTTP/1.0\n"
                "Content-Length: %lu\n\n"
@@ -1561,29 +1565,7 @@ static void test_tls(void) {
                "%s",
                bd.len, bd.buf) == 200);
   ASSERT(cmpbody(buf, bd.buf) == 0);
-#if MG_TLS == MG_TLS_BUILTIN && defined(__linux__) && \
-    MG_ENABLE_CHACHA20  // skip for non-CHACHA tests
-  // fire patched server, test multiple TLS records per TCP segment handling
-  // skip other TLS stacks to avoid "bad client hello", we are 1.3 only
-  if (access("tls_multirec/server", X_OK) == 0) {
-    ASSERT(system("tls_multirec/server -d tls_multirec &") == 0);
-    sleep(1);
-    // fetch() needs to loop enough times in order to process all TLS records;
-    // otherwise it will end with 200 and shorter file contents
-    ASSERT(fetch(&mgr, buf, "https://localhost:8443",
-                 "GET /thefile HTTP/1.0\n\n") == 200);
-    data = mg_unpacked("/Makefile");
-    ASSERT(cmpbody(buf, data.buf) == 0);  // "thefile" links to Makefile
-    ASSERT(system("killall tls_multirec/server") == 0);
-  } else {
-    printf("\nSKIPPED TLS MULTIPLE RECORDS TEST, tls_multirec/server NOT PRESENT\n");
-  }
-#else
-  printf(
-      "\n Skipping multiple TLS records per TCP segment handling test, server "
-      "is 1.3 only; re-enable when other stacks can be easily configured for "
-      "1.3\n");
-#endif
+  s_fetch_polls = 100;
 
   // Repeat the simplest test with two-way authentication
   opts.ca = mg_unpacked("/certs/ca.crt");  // configure the server for two-way
@@ -3394,7 +3376,7 @@ static void test_http_chunked_case(mg_event_handler_t s, mg_event_handler_t c,
   struct mg_mgr mgr;
   uint32_t i, crc = 0, expected_crc = mg_crc32(0, expected, strlen(expected));
   struct mg_connection *conn;
-  static uint16_t port = 32344;  // To prevent bind errors on Windows 
+  static uint16_t port = 32344;  // To prevent bind errors on Windows
   mg_snprintf(url, sizeof(url), "http://127.0.0.1:%d", port++);
   mg_mgr_init(&mgr);
   mg_http_listen(&mgr, url, s, NULL);
@@ -4424,18 +4406,39 @@ static void test_split(void) {
   ASSERT(mg_strcmp(b, mg_str("")) == 0);
 }
 
-static void test_x25519(void) {
+// RFC 6979 A.2.5: P-256, SHA-256, message "sample"
+static void test_p256(void) {
 #if MG_TLS == MG_TLS_BUILTIN
-  uint8_t key[X25519_BYTES];
-  uint8_t buf[X25519_BYTES];
-  char tmp[100];
-  size_t i;
-  for (i = 0; i < sizeof(key); i++) key[i] = (uint8_t) i;
-  for (i = 0; i < sizeof(buf); i++) buf[i] = 0;
-  mg_tls_x25519(buf, key, X25519_BASE_POINT, 1);
-  mg_snprintf(tmp, sizeof(tmp), "%M", mg_print_hex, sizeof(buf), buf);
-  MG_INFO(("%s", tmp));
-  ASSERT(mg_strcmp(mg_str("8f40c5adb6"), mg_str_n(tmp, 10)) == 0);
+  static const uint8_t x[32] = {
+      0xc9, 0xaf, 0xa9, 0xd8, 0x45, 0xba, 0x75, 0x16, 0x6b, 0x5c, 0x21,
+      0x57, 0x67, 0xb1, 0xd6, 0x93, 0x4e, 0x50, 0xc3, 0xdb, 0x36, 0xe8,
+      0x9b, 0x12, 0x7b, 0x8a, 0x62, 0x2b, 0x12, 0x0f, 0x67, 0x21};
+  static const uint8_t ux[8] = {0x60, 0xfe, 0xd4, 0xba, 0x25, 0x5a, 0x9d, 0x31};
+  static const uint8_t uy[8] = {0x79, 0x03, 0xfe, 0x10, 0x08, 0xb8, 0xbc, 0x99};
+  static const uint8_t rs[64] = {
+      0xef, 0xd4, 0x8b, 0x2a, 0xac, 0xb6, 0xa8, 0xfd, 0x11, 0x40, 0xdd, 0x9c,
+      0xd4, 0x5e, 0x81, 0xd6, 0x9d, 0x2c, 0x87, 0x7b, 0x56, 0xaa, 0xf9, 0x91,
+      0xc3, 0x4d, 0x0e, 0xa8, 0x4e, 0xaf, 0x37, 0x16, 0xf7, 0xcb, 0x1c, 0x94,
+      0x2d, 0x65, 0x7c, 0x41, 0xd4, 0x36, 0xc7, 0xa1, 0xb6, 0xe2, 0x9f, 0x65,
+      0xf3, 0xe9, 0x00, 0xdb, 0xb9, 0xaf, 0xf4, 0x06, 0x4d, 0xc4, 0xab, 0x2f,
+      0x84, 0x3a, 0xcd, 0xa8};
+  uint8_t pub[64], hash[32], sig[64], prv2[32], pub2[64], sec1[32], sec2[32];
+  mg_sha256(hash, (uint8_t *) "sample", 6);
+  ASSERT(mg_p256_compute_public_key(x, pub) == 1);
+  ASSERT(memcmp(pub, ux, sizeof(ux)) == 0);
+  ASSERT(memcmp(pub + 32, uy, sizeof(uy)) == 0);
+  ASSERT(mg_p256_sign(x, hash, sizeof(hash), sig) == 1);
+  ASSERT(memcmp(sig, rs, sizeof(rs)) == 0);
+  ASSERT(mg_p256_verify(pub, hash, sizeof(hash), sig) == 1);
+  sig[10] ^= 1;
+  ASSERT(mg_p256_verify(pub, hash, sizeof(hash), sig) == 0);
+  // ECDH: both sides compute the same secret
+  ASSERT(mg_p256_make_key(pub2, prv2) == 1);
+  ASSERT(mg_p256_shared_secret(pub2, x, sec1) == 1);
+  ASSERT(mg_p256_shared_secret(pub, prv2, sec2) == 1);
+  ASSERT(memcmp(sec1, sec2, sizeof(sec1)) == 0);
+  pub2[63] ^= 1;  // Not on the curve anymore
+  ASSERT(mg_p256_shared_secret(pub2, x, sec1) == 0);
 #endif
 }
 
@@ -4658,8 +4661,8 @@ static void test_jwt(void) {
     opts.kid = mg_str("ec-key-1");
     opts.private_key = key;
     opts.public_key = pub;
-    ASSERT(mg_uecc_parse_private_key(mg_str(key_pem), key, sizeof(key)) == 32);
-    ASSERT(mg_uecc_compute_public_key(key, pub, mg_uecc_secp256r1()) == 1);
+    ASSERT(mg_p256_parse_private_key(mg_str(key_pem), key, sizeof(key)) == 32);
+    ASSERT(mg_p256_compute_public_key(key, pub) == 1);
     n = mg_jwt_sign_es256(&opts, jwt, sizeof(jwt));
     ASSERT(n > 0 && n + 1 < sizeof(jwt));
     jwt[n] = '\0';
@@ -4681,7 +4684,7 @@ static void test_crypto(void) {
   test_sha1();
   test_sha256();
   test_sha384();
-  test_x25519();
+  test_p256();
   test_rsa();
   test_jwt();
 }

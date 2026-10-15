@@ -3,9 +3,9 @@
   "bomFormat": "CycloneDX",
   "specVersion": "1.6",
   "serialNumber": "urn:uuid:d3f8b1e2-4a7c-4d9e-bf2a-1c3e5f7a9b0d",
-  "version": 1,
+  "version": 2,
   "metadata": {
-    "timestamp": "2026-08-12T00:00:00Z",
+    "timestamp": "2026-10-13T00:00:00Z",
     "component": {
       "type": "library",
       "bom-ref": "mongoose",
@@ -34,14 +34,31 @@
   "components": [
     {
       "type": "library",
-      "bom-ref": "micro-ecc",
-      "author": "Kenneth MacKay",
-      "name": "micro-ecc",
-      "description": "ECC point operations on GF(p) curves (secp256r1). Used by Mongoose built-in TLS 1.3 for ECDH key exchange and ECDSA signatures. Source: src/tls_uecc.c, src/tls_uecc.h.",
-      "licenses": [ { "expression": "BSD-2-Clause" } ],
-      "purl": "pkg:github/kmackay/micro-ecc",
+      "bom-ref": "bearssl-ec",
+      "author": "Thomas Pornin",
+      "name": "BearSSL EC (P-256, P-384, ECDSA)",
+      "description": "P-256 (ec_p256_m31) and P-384 (ec_prime_i31) elliptic curve arithmetic, ECDSA sign and verify, and the i31 bignum code they use, derived from BearSSL. Used by Mongoose built-in TLS 1.3 for ECDHE key exchange and ECDSA signatures, by JWT ES256 and by OTA firmware signature verification. Source: src/tls_p256.c, src/tls_p256.h, src/tls_p384.c, src/tls_p384.h.",
+      "licenses": [ { "expression": "MIT" } ],
       "externalReferences": [
-        { "type": "vcs", "url": "https://github.com/kmackay/micro-ecc" }
+        { "type": "website", "url": "https://bearssl.org" }
+      ],
+      "properties": [
+        { "name": "upstream-commit", "value": "7bea48e5e850ab4cafbe68d3765cdaba13a86d6f" }
+      ]
+    },
+    {
+      "type": "library",
+      "bom-ref": "p256-cortex-m4",
+      "author": "Emil Lenngren, Shortcut Labs AB",
+      "name": "P256-Cortex-M4",
+      "description": "P-256 ECDH and ECDSA in Cortex-M assembly. Used by Mongoose built-in TLS 1.3 instead of the BearSSL P-256 code on Cortex-M cores with the DSP extension (M4, M7, M33, M55, M85). Source: src/tls_p256_cortex.c.",
+      "licenses": [ { "expression": "MIT" } ],
+      "purl": "pkg:github/Emill/P256-Cortex-M4@ecd3ec2222fc9e18b6b44c86bb7183971a2041fc",
+      "externalReferences": [
+        { "type": "vcs", "url": "https://github.com/Emill/P256-Cortex-M4" }
+      ],
+      "properties": [
+        { "name": "upstream-commit", "value": "ecd3ec2222fc9e18b6b44c86bb7183971a2041fc" }
       ]
     },
     {
@@ -53,17 +70,6 @@
       "licenses": [ { "expression": "MIT" } ],
       "externalReferences": [
         { "type": "website", "url": "https://bearssl.org" }
-      ]
-    },
-    {
-      "type": "library",
-      "bom-ref": "strobe-x25519",
-      "author": "Cryptography Research, Inc. / Mike Hamburg",
-      "name": "STROBE x25519 (adapted)",
-      "description": "X25519 Diffie-Hellman function adapted from the STROBE project. Used by Mongoose built-in TLS 1.3 for ECDH key exchange. Source: src/tls_x25519.c.",
-      "licenses": [ { "expression": "MIT" } ],
-      "externalReferences": [
-        { "type": "website", "url": "https://strobe.sourceforge.io/" }
       ]
     },
     {

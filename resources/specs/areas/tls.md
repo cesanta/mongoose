@@ -13,9 +13,10 @@ Primary files:
 - `src/tls_dummy.c`
 - `src/tls_mbed.c`
 - `src/tls_openssl.c`
+- `src/tls_p256_cortex.c`
+- `src/tls_p256.c`
+- `src/tls_p384.c`
 - `src/tls_rsa.c`
-- `src/tls_uecc.c`
-- `src/tls_x25519.c`
 
 Perform a focused security review centered on these files and this security surface.
 
@@ -38,6 +39,6 @@ Trace attacker-controlled TLS peer input through normal client and server execut
 - Verify that wildcard matching is applied only to certificate presented identifiers, not to arbitrary reference identifiers or general DNS glob matching.
 - Review `mg_match` or other glob/matching helpers if used for certificate identity checks, authorization checks, filesystem paths, routing, or topic matching. Flag cases where glob semantics are broader than the security policy requires.
 - Check certificate parsing for DER/PEM boundary errors, length overflows, malformed ASN.1, extension parsing mistakes, name constraints, SAN vs CN precedence, embedded NUL, and invalid string type handling.
-- Review TLS record parsing, handshake transcript handling, key schedule, random generation, ECC/X25519 operations, AES-GCM nonce/tag handling, and error handling for memory safety and authentication failures.
+- Review TLS record parsing, handshake transcript handling, key schedule, random generation, ECC (P-256, P-384) operations, AES-GCM nonce/tag handling, and error handling for memory safety and authentication failures.
 - Flag any behavior that silently falls back from verified TLS to unverified TLS or plaintext.
 - Check that TLS receive/send error paths cannot corrupt connection state, reuse freed buffers, or continue processing unauthenticated plaintext as encrypted data.

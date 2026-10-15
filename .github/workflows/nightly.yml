@@ -165,7 +165,7 @@ jobs:
     - run: |
         sudo apt -y update ; sudo apt -y install binfmt-support qemu-user-static && docker run --rm --privileged multiarch/qemu-user-static --reset -p yes
         if [[ "${{ matrix.target }}" == *port* ]]; then source ./test/setup_ga_network.sh ; export ENV="-e Tmp=. -e WINEDEBUG=-all -e HOST_IP -e HOST_IPV6 -e HOST_IFC" ; sed -i -e "s/127.0.0.1//" test/mosquitto.conf; cat test/mosquitto.conf; ./test/setup_mqtt_server.sh ; make -C test port_tap_bridge ; test/port_tap_bridge & sleep 2 ; fi
-        make -C test ${{ matrix.target }} IPV6=${{ matrix.ipv6 }} SSL=${{ matrix.ssl }} MULTIREC=NO
+        make -C test ${{ matrix.target }} IPV6=${{ matrix.ipv6 }} SSL=${{ matrix.ssl }}
 
   miprtxbe:
     runs-on: ubuntu-latest
@@ -180,7 +180,7 @@ jobs:
     - run: |
         sudo apt -y update ; sudo apt -y install binfmt-support qemu-user-static && docker run --rm --privileged multiarch/qemu-user-static --reset -p yes
         source ./test/setup_ga_network.sh ; export ENV="-e Tmp=. -e WINEDEBUG=-all -e HOST_IP -e HOST_IPV6 -e HOST_IFC -e RTX" ; sed -i -e "s/127.0.0.1//" test/mosquitto.conf ; ./test/setup_mqtt_server.sh ; make -C test port_tap_bridge ; test/port_tap_bridge & sleep 2
-        make -C test mip_port_s390 MULTIREC=NO
+        make -C test mip_port_s390
 
   l2:
     runs-on: ubuntu-latest
@@ -354,7 +354,7 @@ jobs:
     steps:
     - uses: actions/checkout@v5
       with: { fetch-depth: 2 }
-    - run: sudo apt -y update ; sudo apt -y install binfmt-support qemu-user-static && ./test/setup_mqtt_server.sh && docker run --rm --privileged multiarch/qemu-user-static --reset -p yes && make -C test s390 SSL=${{ matrix.ssl }} MULTIREC=NO
+    - run: sudo apt -y update ; sudo apt -y install binfmt-support qemu-user-static && ./test/setup_mqtt_server.sh && docker run --rm --privileged multiarch/qemu-user-static --reset -p yes && make -C test s390 SSL=${{ matrix.ssl }}
   armhf:
     runs-on: ubuntu-latest
     strategy:
@@ -367,7 +367,7 @@ jobs:
     steps:
     - uses: actions/checkout@v5
       with: { fetch-depth: 2 }
-    - run: sudo apt -y update ; sudo apt -y install binfmt-support qemu-user-static && ./test/setup_mqtt_server.sh && docker run --rm --privileged multiarch/qemu-user-static --reset -p yes && make -C test armhf SSL=${{ matrix.ssl }} MULTIREC=NO
+    - run: sudo apt -y update ; sudo apt -y install binfmt-support qemu-user-static && ./test/setup_mqtt_server.sh && docker run --rm --privileged multiarch/qemu-user-static --reset -p yes && make -C test armhf SSL=${{ matrix.ssl }}
   unamalgamated-mg_prefix:
     runs-on: ubuntu-latest
     strategy:

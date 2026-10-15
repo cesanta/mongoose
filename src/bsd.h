@@ -60,9 +60,6 @@ void mg_bsd_poll(struct mg_mgr *);
 #endif
 
 #if MG_ENABLE_BSD_PROTOTYPES
-#if defined(FD_SET) || defined(FD_ZERO) || defined(FD_ISSET)
-#error "Include mongoose.h before system select headers"
-#endif
 typedef unsigned int socklen_t;
 typedef unsigned long nfds_t;
 typedef uint32_t in_addr_t;
@@ -106,6 +103,8 @@ struct pollfd { int fd; short events; short revents; };
 #ifndef FD_SETSIZE
 #define FD_SETSIZE 64
 #endif
+
+#ifndef FD_ZERO
 #define _NFDBITS ((int) sizeof(__fd_mask) * 8)
 #define _howmany(x, y) (((x) + ((y) - 1)) / (y))
 typedef struct fd_set {
@@ -122,6 +121,7 @@ typedef struct fd_set {
     size_t _n = _howmany(FD_SETSIZE, _NFDBITS);                        \
     while (_n > 0) _p->__fds_bits[--_n] = 0;                           \
   } while (0)
+#endif
 
 #define h_addr h_addr_list[0]
 #define AF_INET 2

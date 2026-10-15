@@ -7,7 +7,7 @@
 #include "util.h"
 
 #if MG_TLS == MG_TLS_BUILTIN
-#include "tls_uecc.h"
+#include "tls_p256.h"
 #endif
 
 static size_t jwt_split(struct mg_str jwt, struct mg_str *h, struct mg_str *p,
@@ -95,39 +95,14 @@ size_t mg_jwt_verify_hs256(struct mg_str jwt, const struct mg_jwt_opts *opts,
 }
 
 #if MG_TLS == MG_TLS_BUILTIN
-typedef struct {
-  MG_UECC_HashContext uECC;
-  mg_sha256_ctx sha256;
-} jwt_hash_ctx;
-
-static void jwt_hash_init(const MG_UECC_HashContext *ctx) {
-  jwt_hash_ctx *c = (jwt_hash_ctx *) ctx;
-  mg_sha256_init(&c->sha256);
-}
-
-static void jwt_hash_update(const MG_UECC_HashContext *ctx, const uint8_t *msg,
-                            unsigned len) {
-  jwt_hash_ctx *c = (jwt_hash_ctx *) ctx;
-  mg_sha256_update(&c->sha256, msg, len);
-}
-
-static void jwt_hash_finish(const MG_UECC_HashContext *ctx, uint8_t *hash) {
-  jwt_hash_ctx *c = (jwt_hash_ctx *) ctx;
-  mg_sha256_final(hash, &c->sha256);
-}
-
 size_t mg_jwt_sign_es256(const struct mg_jwt_opts *opts, char *buf,
                          size_t len) {
-  uint8_t hash[32], sig[64], tmp[2 * 32 + 64];
-  jwt_hash_ctx ctx = {
-      {jwt_hash_init, jwt_hash_update, jwt_hash_finish, 64, 32, tmp},
-      {{0}, 0, 0, {0}}};
+  uint8_t hash[32], sig[64];
   size_t n = jwt_header_payload("ES256", opts, buf, len);
   size_t m;
   if (n == 0 || n + 1 >= len) return 0;
   mg_sha256(hash, (uint8_t *) buf, n);
-  if (mg_uecc_sign_deterministic(opts->private_key, hash, sizeof(hash),
-                                 &ctx.uECC, sig, mg_uecc_secp256r1()) != 1)
+  if (mg_p256_sign(opts->private_key, hash, sizeof(hash), sig) != 1)
     return 0;
   buf[n++] = '.';
   m = mg_base64url_encode(sig, sizeof(sig), buf + n, len - n);
@@ -143,8 +118,7 @@ size_t mg_jwt_verify_es256(struct mg_str jwt, const struct mg_jwt_opts *opts,
   if (mg_base64url_decode(s.buf, s.len, (char *) sig, sizeof(sig)) != 64)
     return 0;
   mg_sha256(hash, (uint8_t *) jwt.buf, n);
-  if (mg_uecc_verify(opts->public_key, hash, sizeof(hash), sig,
-                     mg_uecc_secp256r1()) != 1)
+  if (mg_p256_verify(opts->public_key, hash, sizeof(hash), sig) != 1)
     return 0;
   return mg_base64url_decode(p.buf, p.len, buf, len);
 }

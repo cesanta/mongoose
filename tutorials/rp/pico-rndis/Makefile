@@ -14,13 +14,11 @@ endif
 
 all build example: build/firmware.uf2
 
-build/firmware.uf2: pico_sdk_import.cmake mongoose/mongoose.c mongoose/mongoose.h
+build/firmware.uf2: pico_sdk_import.cmake
 
 pico_sdk_import.cmake: $(SDK_PATH)
 	cp $(SDK_PATH)/external/$@ $@
 
-mongoose/mongoose.c mongoose/mongoose.h:
-	cp ../../../$(notdir $@) $@
 
 build/firmware.uf2: $(SDK_PATH) $(wildcard *.[ch]) CMakeLists.txt Makefile
 	$(MKBUILD)
@@ -30,7 +28,7 @@ flash: build/firmware.uf2
 	picotool load $< -f
 
 clean:
-	$(RM) build pico_sdk_import.cmake mongoose/mongoose.c mongoose/mongoose.h $(SDK_PATH)
+	$(RM) build pico_sdk_import.cmake $(SDK_PATH)
 
 $(SDK_PATH):
 	git clone -c advice.detachedHead=false --quiet --depth 1 -b 2.1.1 https://github.com/raspberrypi/pico-sdk $@
