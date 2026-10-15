@@ -16,10 +16,16 @@ static void http_ev_handler(struct mg_connection *c, int ev, void *ev_data) {
   }
 }
 
+static void log_fn(char ch, void *param) {
+  (void) param;
+  putchar(ch);
+}
+
 // In an RTOS environment, give this task 8 KB of stack space.
 static void run_mongoose(void) {
   void driver_init(struct mg_mgr *mgr);
   struct mg_mgr mgr;
+  mg_log_set_fn(log_fn, NULL);
   mg_mgr_init(&mgr);
   driver_init(&mgr);
   mg_log_set(MG_LL_DEBUG);  // Set log level

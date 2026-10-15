@@ -4,8 +4,13 @@
 #include "hardware/pio.h"
 #include "mongoose.h"
 
-#define WIFI_SSID "YOUR_WIFI_NETWORK_NAME"  // SET THIS!
-#define WIFI_PASS "YOUR_WIFI_PASSWORD"      // SET THIS!
+// Set these, or pass on the command line: make WIFI_NAME=... WIFI_PASS=...
+#ifndef WIFI_SSID
+#define WIFI_SSID "YOUR_WIFI_NETWORK_NAME"
+#endif
+#ifndef WIFI_PASS
+#define WIFI_PASS "YOUR_WIFI_PASSWORD"
+#endif
 
 #define SPIPIO pio0
 #define SPISM 0

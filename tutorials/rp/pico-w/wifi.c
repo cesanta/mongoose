@@ -3,8 +3,13 @@
 
 #include "mongoose.h"
 
-#define WIFI_NAME "YOUR_WIFI_NETWORK"   // SET THIS!
-#define WIFI_PASS "YOUR_WIFI_PASSWORD"  // SET THIS!
+// Set these, or pass on the command line: make WIFI_NAME=... WIFI_PASS=...
+#ifndef WIFI_NAME
+#define WIFI_NAME "YOUR_WIFI_NETWORK"
+#endif
+#ifndef WIFI_PASS
+#define WIFI_PASS "YOUR_WIFI_PASSWORD"
+#endif
 
 // Access point setup
 #define ENABLE_AP false                  // Change to true to enable

@@ -64,12 +64,18 @@ static void fn(struct mg_connection *c, int ev, void *ev_data, void *fn_dta) {
   if (ev == MG_EV_HTTP_MSG) return mg_http_reply(c, 200, "", "ok\n");
 }
 
+static void log_fn(char ch, void *param) {
+  (void) param;
+  putchar(ch);
+}
+
 int main(void) {
   gpio_init(PICO_DEFAULT_LED_PIN);
   gpio_set_dir(PICO_DEFAULT_LED_PIN, GPIO_OUT);
   stdio_init_all();
 
   struct mg_mgr mgr;  // Initialise Mongoose event manager
+  mg_log_set_fn(log_fn, NULL);
   mg_mgr_init(&mgr);  // and attach it to the interface
 
   struct mg_tcpip_driver driver = {.tx = usb_tx, .poll = usb_poll};

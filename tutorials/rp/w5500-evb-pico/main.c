@@ -66,6 +66,11 @@ static void http_ev_handler(struct mg_connection *c, int ev, void *ev_data) {
   }
 }
 
+static void log_fn(char ch, void *param) {
+  (void) param;
+  putchar(ch);
+}
+
 // In an RTOS environment, give this task 8 KB of stack space.
 static void run_mongoose(void) {
   struct mg_mgr mgr;
@@ -75,6 +80,7 @@ static void run_mongoose(void) {
       .driver_data = &spi,
   };
   generate_mac_from_board_id(mif.mac);
+  mg_log_set_fn(log_fn, NULL);
   mg_mgr_init(&mgr);
   mg_tcpip_init(&mgr, &mif);
   MG_INFO(("Driver: W5500, MAC: %M", mg_print_mac, mif.mac));

@@ -16,3 +16,12 @@ pico_enable_stdio_usb(firmware 1)    # Route stdio to USB
 
 # Prevent extreme optimization from breaking OTA
 target_compile_options(firmware PRIVATE -fno-tree-loop-distribute-patterns)
+
+# Wi-Fi credentials from the environment, e.g. make WIFI_NAME=... WIFI_PASS=...
+# Read when build/ is configured: run "make clean" after changing them
+if (DEFINED ENV{WIFI_NAME})
+  target_compile_definitions(firmware PRIVATE "WIFI_NAME=\"$ENV{WIFI_NAME}\"")
+endif()
+if (DEFINED ENV{WIFI_PASS})
+  target_compile_definitions(firmware PRIVATE "WIFI_PASS=\"$ENV{WIFI_PASS}\"")
+endif()
