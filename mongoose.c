@@ -29056,7 +29056,7 @@ bool mg_path_is_sane(const struct mg_str path) {
 #if MG_ENABLE_CUSTOM_MILLIS
 #else
 uint64_t mg_millis(void) {
-#if MG_ARCH == MG_ARCH_ESP8266 || MG_ARCH == MG_ARCH_ESP32 || MG_ENABLE_FREERTOS
+#if MG_ARCH == MG_ARCH_ESP32 || MG_ENABLE_FREERTOS
   return xTaskGetTickCount() * portTICK_PERIOD_MS;
 #elif MG_ARCH == MG_ARCH_THREADX
   return tx_time_get() * (1000 /* MS per SEC */ / TX_TIMER_TICKS_PER_SECOND);

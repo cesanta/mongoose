@@ -31,7 +31,6 @@ extern "C" {
 #define MG_ARCH_UNIX 1          // Linux, BSD, Mac, ...
 #define MG_ARCH_WIN32 2         // Windows
 #define MG_ARCH_ESP32 3         // ESP32
-#define MG_ARCH_ESP8266 4       // ESP8266
 
 #define MG_ARCH_FREERTOS 5      // FreeRTOS <-- DEPRECATED !!!
 
@@ -73,7 +72,6 @@ extern "C" {
 
 // http://esr.ibiblio.org/?p=5095
 #define MG_BIG_ENDIAN (*(uint16_t *) "\0\xff" < 0x100)
-
 
 
 
@@ -326,32 +324,6 @@ extern "C" {
 #ifndef MG_HEALTH_DATA_SIZE
 #define MG_HEALTH_DATA_SIZE 20
 #endif
-
-#endif
-
-
-#if MG_ARCH == MG_ARCH_ESP8266
-
-#include <ctype.h>
-#include <dirent.h>
-#include <errno.h>
-#include <fcntl.h>
-#include <limits.h>
-#include <netdb.h>
-#include <stdarg.h>
-#include <stdbool.h>
-#include <stddef.h>
-#include <stdio.h>
-#include <stdlib.h>
-#include <string.h>
-#include <sys/stat.h>
-#include <sys/time.h>
-#include <sys/types.h>
-#include <time.h>
-
-#include <esp_system.h>
-
-#define MG_PATH_MAX 128
 
 #endif
 

@@ -4,7 +4,6 @@
 #define MG_ARCH_UNIX 1          // Linux, BSD, Mac, ...
 #define MG_ARCH_WIN32 2         // Windows
 #define MG_ARCH_ESP32 3         // ESP32
-#define MG_ARCH_ESP8266 4       // ESP8266
 
 #define MG_ARCH_FREERTOS 5      // FreeRTOS <-- DEPRECATED !!!
 
@@ -50,7 +49,6 @@
 #include "arch_armgcc.h"
 #include "arch_cube.h"
 #include "arch_esp32.h"
-#include "arch_esp8266.h"
 #include "arch_rtx.h"
 #include "arch_threadx.h"
 #include "arch_unix.h"
