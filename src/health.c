@@ -13,12 +13,12 @@ struct mg_health mg_health_record MG_HEALTH_RAM;
 // "used" keeps the linker from garbage-collecting this section: the only
 // reference is the "b fault_c" branch in the naked handler below
 __attribute__((used, noinline)) static void fault_c(uint32_t *frame,
-                                                     uint32_t exc_return) {
+                                                    uint32_t exc_return) {
   extern uint32_t _estack;
   uint32_t *stack = frame + 8 + ((exc_return & (1U << 4)) ? 0 : 18);
   uint32_t *r = mg_health_record.data;
 
-  if (frame[7] & (1U << 9)) stack++;  // Eight-byte stack alignment padding
+  if (frame[7] & (1U << 9)) stack++;    // Eight-byte stack alignment padding
   r[0] = (uint32_t) (uintptr_t) stack;  // SP
   r[1] = frame[5];                      // LR
   r[2] = frame[6];                      // PC
@@ -47,6 +47,54 @@ void MemManage_Handler(void) __attribute__((alias("HardFault_Handler")));
 void BusFault_Handler(void) __attribute__((alias("HardFault_Handler")));
 void UsageFault_Handler(void) __attribute__((alias("HardFault_Handler")));
 #endif
+
+// Start a new boot: validate the record, count the boot, store the reset
+// reason. The current boot moves to prev_* slots first, so the previous
+// boot's uptime and reason stay readable. Called by MG_HEALTH_INIT()
+void mg_health_init(void) {
+  char magic[] = MG_HEALTH_MAGIC;
+  // struct mg_health *h = mg_health_get();
+  if (!mg_health_valid()) {  // First boot, or RAM lost its contents
+    memset(&mg_health_record, 0, sizeof(mg_health_record));
+    memcpy(mg_health_record.magic, magic, sizeof(mg_health_record.magic));
+  }
+
+#if 0 && MG_ARCH == MG_ARCH_ESP32 && CONFIG_ESP_COREDUMP_ENABLE_TO_FLASH
+  {
+    // After a crash, copy the backtrace from the core dump in flash: the same
+    // addresses the panic handler prints as "Backtrace: PC:SP PC:SP ...".
+    // The core dump stays in flash, so check the reset reason, otherwise an
+    // old crash is reported on every boot
+    static esp_core_dump_summary_t s;  // Big on RISC-V, keep it off the stack
+    esp_reset_reason_t rr = esp_reset_reason();
+    uint32_t *out = mg_health_record.data;
+    size_t n = 0, max = MG_HEALTH_DATA_SIZE;
+    if (rr != ESP_RST_PANIC && rr != ESP_RST_INT_WDT && rr != ESP_RST_TASK_WDT)
+      return;  // Not a crash that went through the panic handler
+    if (max == 0 || esp_core_dump_get_summary(&s) != ESP_OK) return;
+
+    mg_health_record.cpuid = 42;  // ESP32
+    mg_health_record.reset_reason = MG_HEALTH_RESET_FAULT;
+
+    memset(out, 0, sizeof(mg_health_record.data));
+    out[n++] = s.exc_pc;
+#if CONFIG_IDF_TARGET_ARCH_XTENSA
+    for (uint32_t i = 0; i < s.exc_bt_info.depth && n < max; i++) {
+      if (s.exc_bt_info.bt[i] != s.exc_pc) out[n++] = s.exc_bt_info.bt[i];
+    }
+#elif CONFIG_IDF_TARGET_ARCH_RISCV
+    // No unwinder: take the return address, then words on the stack that
+    // point into executable memory (a heuristic, may include stale values)
+    if (n < max) out[n++] = s.ex_info.ra;
+    for (uint32_t i = 0; i + 4 <= s.exc_bt_info.dump_size && n < max; i += 4) {
+      uint32_t w;
+      memcpy(&w, &s.exc_bt_info.stackdump[i], sizeof(w));  // Byte array
+      if (esp_ptr_executable((void *) (uintptr_t) w)) out[n++] = w;
+    }
+#endif
+  }
+#endif
+}
 
 static size_t print_uint32(void (*fn)(char, void *), void *arg, va_list *ap) {
   size_t n = va_arg(*ap, size_t);

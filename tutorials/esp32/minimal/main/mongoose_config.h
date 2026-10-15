@@ -1,3 +1,4 @@
 #define MG_ARCH MG_ARCH_ESP32
 
-#define MG_TLS MG_TLS_NONE
+#define MG_TLS MG_TLS_BUILTIN
+//#define MG_TLS MG_TLS_MBED

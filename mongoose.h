@@ -314,10 +314,8 @@ extern "C" {
 #include <esp_system.h>
 #include <esp_mac.h>
 #include <esp_idf_version.h>
-#include <esp_ota_ops.h>
-#include <esp_task_wdt.h>
-#include <soc/soc.h>
-#include <soc/rtc_cntl_reg.h>
+// #include <esp_memory_utils.h>  // For health record coredumps
+// #include <esp_core_dump.h>     // For health record coredumps
 
 #define MG_PATH_MAX 128
 
@@ -325,55 +323,8 @@ extern "C" {
 #define MG_ENABLE_POSIX_FS 1
 #endif
 
-#ifndef MG_OTA_ESP32_WDT_TIMEOUT_MS
-#define MG_OTA_ESP32_WDT_TIMEOUT_MS 10000U
-#endif
-
-static inline void mg_ota_esp32_timer_start(void) {
-#if ESP_IDF_VERSION_MAJOR >= 5
-  esp_task_wdt_config_t cfg = {0};
-  esp_err_t err;
-
-  cfg.timeout_ms = MG_OTA_ESP32_WDT_TIMEOUT_MS;
-  cfg.idle_core_mask = 0;
-  cfg.trigger_panic = true;
-
-  err = esp_task_wdt_init(&cfg);
-  if (err == ESP_ERR_INVALID_STATE) esp_task_wdt_reconfigure(&cfg);
-#else
-  esp_task_wdt_init(MG_OTA_ESP32_WDT_TIMEOUT_MS / 1000U, true);
-#endif
-  esp_task_wdt_add(NULL);
-  esp_task_wdt_reset();
-}
-
-static inline uint32_t mg_ota_esp32_state_set(uint32_t state) {
-  if (state == 0) esp_ota_mark_app_valid_cancel_rollback();
-  REG_WRITE(RTC_CNTL_STORE0_REG, state);
-  return REG_READ(RTC_CNTL_STORE0_REG);
-}
-
-#define MG_OTA_STATE_GET() \
-  REG_READ(RTC_CNTL_STORE0_REG)
-
-#define MG_OTA_STATE_SET(v) mg_ota_esp32_state_set((uint32_t) (v))
-
-#ifndef MG_OTA_ROLLBACK_TIMER_START
-#define MG_OTA_ROLLBACK_TIMER_START() mg_ota_esp32_timer_start()
-#endif
-
-#ifndef MG_OTA_ROLLBACK_TIMER_FEED
-#define MG_OTA_ROLLBACK_TIMER_FEED() \
-  do {                               \
-    (void) esp_task_wdt_reset();     \
-  } while (0)
-#endif
-
-#ifndef MG_OTA_ROLLBACK
-#define MG_OTA_ROLLBACK()                                  \
-  do {                                                     \
-    (void) esp_ota_mark_app_invalid_rollback_and_reboot(); \
-  } while (0)
+#ifndef MG_HEALTH_DATA_SIZE
+#define MG_HEALTH_DATA_SIZE 20
 #endif
 
 #endif
@@ -4562,20 +4513,9 @@ static inline const char *mg_health_reason_str(int reason) {
   }
 }
 
-// Start a new boot: validate the record, count the boot, store the reset
-// reason. The current boot moves to prev_* slots first, so the previous
-// boot's uptime and reason stay readable. Called by MG_HEALTH_INIT()
-static inline void mg_health_init(void) {
-  char magic[] = MG_HEALTH_MAGIC;
-  // struct mg_health *h = mg_health_get();
-  if (!mg_health_valid()) {  // First boot, or RAM lost its contents
-    memset(&mg_health_record, 0, sizeof(mg_health_record));
-    memcpy(mg_health_record.magic, magic, sizeof(mg_health_record.magic));
-  }
-}
-
 #define MG_HEALTH_INIT() mg_health_init()
 extern size_t mg_print_crash_record(mg_pfn_t, void *, va_list *);
+extern void mg_health_init(void);
 // Cloud connector API to https://mdash.net - device management cloud
 
 
