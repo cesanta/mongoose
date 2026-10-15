@@ -3,6 +3,7 @@ idf_component_register(SRCS "main.c"
                             "../../../../mongoose.c"
                        INCLUDE_DIRS "."
                                     "../../../.."
+                       PRIV_REQUIRES mbedtls
                        REQUIRES esp_event
                                 esp_netif
                                 esp_partition
@@ -11,4 +12,3 @@ idf_component_register(SRCS "main.c"
                                 espcoredump
                                 nvs_flash
                                 app_update)
-component_compile_options(-DHTTP_URL="http://0.0.0.0:80")

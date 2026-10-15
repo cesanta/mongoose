@@ -76,17 +76,6 @@ static inline const char *mg_health_reason_str(int reason) {
   }
 }
 
-// Start a new boot: validate the record, count the boot, store the reset
-// reason. The current boot moves to prev_* slots first, so the previous
-// boot's uptime and reason stay readable. Called by MG_HEALTH_INIT()
-static inline void mg_health_init(void) {
-  char magic[] = MG_HEALTH_MAGIC;
-  // struct mg_health *h = mg_health_get();
-  if (!mg_health_valid()) {  // First boot, or RAM lost its contents
-    memset(&mg_health_record, 0, sizeof(mg_health_record));
-    memcpy(mg_health_record.magic, magic, sizeof(mg_health_record.magic));
-  }
-}
-
 #define MG_HEALTH_INIT() mg_health_init()
 extern size_t mg_print_crash_record(mg_pfn_t, void *, va_list *);
+extern void mg_health_init(void);
