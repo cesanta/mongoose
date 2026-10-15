@@ -661,7 +661,7 @@ static bool bsd_run(struct mg_bsd_cmd *cmd) {
       fd_set *w = cmd->op_select.w;
       fd_set *e = cmd->op_select.e;
       int fd, n = 0, want_read, want_write, want_error, ready;
-#if MG_ENABLE_BSD_PROTOTYPES
+#if defined(MG_BSD_SELECT_H)
       int i;
       __fd_mask bits;
       int bitsize = (int) (sizeof(bits) * 8);
@@ -674,7 +674,7 @@ static bool bsd_run(struct mg_bsd_cmd *cmd) {
       FD_ZERO(&rr);
       FD_ZERO(&ww);
       FD_ZERO(&ee);
-#if MG_ENABLE_BSD_PROTOTYPES
+#if defined(MG_BSD_SELECT_H)
       for (i = 0; i < (cmd->op_select.nfds + bitsize - 1) / bitsize; i++) {
         bits = 0;
         if (r != NULL) bits |= r->__fds_bits[i];

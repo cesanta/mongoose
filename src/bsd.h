@@ -63,7 +63,6 @@ void mg_bsd_poll(struct mg_mgr *);
 typedef unsigned int socklen_t;
 typedef unsigned long nfds_t;
 typedef uint32_t in_addr_t;
-typedef unsigned long __fd_mask;
 struct in_addr { in_addr_t s_addr; };
 struct in6_addr { uint8_t s6_addr[16]; };
 struct sockaddr { uint16_t sa_family; char sa_data[14]; };
@@ -100,11 +99,12 @@ struct addrinfo {
 };
 struct pollfd { int fd; short events; short revents; };
 
+#if !defined(FD_SET) && !defined(FD_ZERO) && !defined(FD_ISSET)
+#define MG_BSD_SELECT_H
+typedef unsigned long __fd_mask;
 #ifndef FD_SETSIZE
 #define FD_SETSIZE 64
 #endif
-
-#ifndef FD_ZERO
 #define _NFDBITS ((int) sizeof(__fd_mask) * 8)
 #define _howmany(x, y) (((x) + ((y) - 1)) / (y))
 typedef struct fd_set {
