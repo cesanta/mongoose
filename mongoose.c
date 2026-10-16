@@ -2067,8 +2067,8 @@ bool mg_dnsc_init(struct mg_mgr *mgr, struct mg_dns *dnsc) {
   if (dnsc->c == NULL) {
     dnsc->c = mg_connect(mgr, dnsc->url, NULL, NULL);
     if (dnsc->c == NULL) return false;
-    dnsc->c->pfn = dns_cb;
   }
+  dnsc->c->pfn = dns_cb; // do it always, DHCP-assigned DNS bootstrap needs it
   return true;
 }
 
@@ -8919,6 +8919,8 @@ static bool tcpcsum_ok(void *d, void *t) {
           0);
 }
 
+#define MG_IPISLOCAL(i, a) ((a & i->mask) == (i->ip & i->mask))
+
 #if MG_ENABLE_IPV6
 static uint16_t p6csum(void *d, void *p, uint8_t proto, size_t plen) {
   uint32_t sum;
@@ -9027,8 +9029,11 @@ static void onstatechange(struct mg_tcpip_if *ifp) {
       ifp->is_ip_changed = false;
     }
   } else if (ifp->state == MG_TCPIP_STATE_IP) {
-    if (ifp->gw != 0 && ifp->l2type == MG_TCPIP_L2_ETH)
-      mg_tcpip_arp_request(ifp, ifp->gw, NULL);  // unsolicited GW ARP request
+    if (ifp->l2type == MG_TCPIP_L2_ETH) {
+      ifp->gw_ready = false;  // remove any prior state
+      if (ifp->gw != 0)  // send an unsolicited GW ARP request
+        mg_tcpip_arp_request(ifp, ifp->gw, NULL);
+    }
   } else if (ifp->state == MG_TCPIP_STATE_UP) {
     srand((unsigned int) mg_millis());
   }
@@ -9279,6 +9284,7 @@ static void rx_icmp(struct mg_tcpip_if *ifp, struct pkt *pkt) {
 }
 
 static void setdns4(struct mg_tcpip_if *ifp, uint32_t *ip);
+static void conndns4(struct mg_tcpip_if *ifp, uint32_t ip);
 
 static bool dhcp_opt_len_ok(uint8_t len, uint8_t *p, uint8_t *end) {
   return (len >= 4 && (len & 3) == 0 && p + 6 < end);
@@ -9339,16 +9345,15 @@ static void rx_dhcp_client(struct mg_tcpip_if *ifp, struct pkt *pkt) {
       uint64_t rand;
       ifp->lease_expire = ifp->now + (uint64_t) lease * 1000;
       MG_INFO(("Lease: %u sec (%lld)", lease, ifp->lease_expire / 1000));
-      // assume DHCP server = router until ARP resolves
-      memcpy(ifp->gwmac, mg_l2_getaddr(ifp, pkt->l2), sizeof(ifp->gwmac));
-      ifp->gw_ready = true;  // NOTE(): actual gw ARP won't retry now
       if (ifp->ip != ip) ifp->is_ip_changed = true;
       ifp->ip = ip, ifp->gw = gw, ifp->mask = mask;
       ifp->state = MG_TCPIP_STATE_IP;  // BOUND state
       mg_random(&rand, sizeof(rand));
       srand((unsigned int) (rand + mg_millis()));
       if (ifp->enable_req_dns && dns != 0) {
-        setdns4(ifp, &dns);
+        setdns4(ifp, &dns);         // configure the provided DNS
+        if (MG_IPISLOCAL(ifp, dns)) // connect to a local DNS at this point
+          conndns4(ifp, dns);
         mg_tcpip_call(ifp, MG_TCPIP_EV_DHCP_DNS, &dns);
       }
       if (ifp->enable_req_sntp && sntp != 0)
@@ -9399,7 +9404,7 @@ static void rx_dhcp_server(struct mg_tcpip_if *ifp, struct pkt *pkt) {
     res.xid = pkt->dhcp->xid;
     mac = mg_l2_getaddr(ifp, pkt->l2);
     if (ifp->enable_get_gateway) {
-      ifp->gw = res.yiaddr;  // set gw IP, best-effort gwmac as DHCP server's
+      ifp->gw = res.yiaddr;  // set gw IP, and MAC
       memcpy(ifp->gwmac, mac, sizeof(ifp->gwmac));
     }
     tx_udp4(ifp, mac, ifp->ip, mg_htons(67), op == 1 ? ~0U : res.yiaddr,
@@ -9656,6 +9661,7 @@ static void rx_ndp_ra(struct mg_tcpip_if *ifp, struct pkt *pkt) {
     if (gotprefix && !fill_global(ifp, prefix, prefix_len)) return;
     if (changed) ifp->is_ip6_changed = true;
     ifp->gw6[0] = pkt->ip6->src[0], ifp->gw6[1] = pkt->ip6->src[1];
+    ifp->gw6_ready = false;  // Remove any prior state
     if (gotl2addr) memcpy(ifp->gw6mac, l2, sizeof(ifp->gw6mac));
     if (gotl2addr || ifp->l2type == MG_TCPIP_L2_PPP ||
         ifp->l2type == MG_TCPIP_L2_PPPoE) {
@@ -9670,10 +9676,8 @@ static void rx_ndp_ra(struct mg_tcpip_if *ifp, struct pkt *pkt) {
            mtu));
       ifp->mtu = (uint16_t) mtu;
     }
-    if (ifp->state6 != MG_TCPIP_STATE_READY) {
-      tx_ndp_ns(ifp, ifp->gw6, NULL);  // unsolicited GW hwaddr resolution
+    if (ifp->state6 != MG_TCPIP_STATE_READY)
       ifp->state6 = MG_TCPIP_STATE_IP;
-    }
     onstate6change(ifp);
   }
 }
@@ -9789,7 +9793,7 @@ static uint8_t *get_return_l2addr(struct mg_tcpip_if *ifp, struct mg_addr *rem,
   } else
 #endif
   {
-    if (ifp->ip != 0 && ((rem->addr.ip4 & ifp->mask) == (ifp->ip & ifp->mask)))
+    if (ifp->ip != 0 && MG_IPISLOCAL(ifp, rem->addr.ip4))
       return mg_l2_getaddr(ifp, pkt->l2);  // same LAN, get from frame
     if (ifp->gw_ready)                     // use the router
       return ifp->gwmac;                   // ignore source address in frame
@@ -10741,7 +10745,7 @@ static void mg_tcpip_poll(struct mg_tcpip_if *ifp, uint64_t now) {
   }
   // Handle gw ARP request timeout, order is important
   if (expired_1000ms && ifp->state == MG_TCPIP_STATE_IP) {
-    ifp->state = MG_TCPIP_STATE_READY;  // keep best-effort MAC or poison mark
+    ifp->state = MG_TCPIP_STATE_READY;  // gw MAC not resolved, we'll retry
     onstatechange(ifp);
   }
   if (expired_1000ms && ifp->state == MG_TCPIP_STATE_READY && !ifp->gw_ready &&
@@ -10750,10 +10754,10 @@ static void mg_tcpip_poll(struct mg_tcpip_if *ifp, uint64_t now) {
 #if MG_ENABLE_IPV6
   // Handle gw NS/NA req/resp timeout, order is important
   if (expired_1000ms && ifp->state6 == MG_TCPIP_STATE_IP) {
-    ifp->state6 = MG_TCPIP_STATE_READY;  // keep best-effort MAC or poison mark
+    ifp->state6 = MG_TCPIP_STATE_READY;  // gw6 MAC not resolved, we'll retry
     onstate6change(ifp);
   }
-  if (expired_1000ms && ifp->state == MG_TCPIP_STATE_READY && !ifp->gw6_ready &&
+  if (expired_1000ms && ifp->state6 == MG_TCPIP_STATE_READY && !ifp->gw6_ready &&
       (ifp->gw6[0] != 0 || ifp->gw6[1] != 0))
     tx_ndp_ns(ifp, ifp->gw6, NULL);  // retry GW hwaddr resolution
 #endif
@@ -10969,7 +10973,7 @@ void mg_connect_resolved(struct mg_connection *c) {
 #endif
   } else {
     uint32_t rem_ip = c->rem.addr.ip4;
-    if (ifp->ip && ((rem_ip & ifp->mask) == (ifp->ip & ifp->mask)) &&
+    if (ifp->ip && MG_IPISLOCAL(ifp, rem_ip) &&
         rem_ip != ifp->gw) {  // skip if gw (onstatechange -> ARP)
       // If we're in the same LAN, fire an ARP lookup.
       MG_DEBUG(("%lu ARP lookup...", c->id));
@@ -11114,9 +11118,30 @@ static void setdns4(struct mg_tcpip_if *ifp, uint32_t *ip) {
   MG_DEBUG(("Set DNS URL to %s", dnsc->url));
   if (ifp->mgr->use_dns6) return;
   if (dnsc->c != NULL) mg_close_conn(dnsc->c);
-  if (!mg_dnsc_init(ifp->mgr, dnsc))  // create DNS connection
-    MG_ERROR(("DNS connection creation failed"));
 }
+
+static void conndns4(struct mg_tcpip_if *ifp, uint32_t ip) {
+  struct mg_connection *c;
+  struct mg_dns *dnsc = &ifp->mgr->dns4;
+  if (ifp->mgr->use_dns6) return;
+  if ((c = mg_alloc_conn(ifp->mgr)) == NULL) {
+    MG_ERROR(("OOM, DNS connection creation failed"));
+    return;
+  } // mg_connect_svc() would block us, so we bypass it here
+  LIST_ADD_HEAD(struct mg_connection, &ifp->mgr->conns, c);
+  c->is_udp = true;
+  c->fd = (void *) (size_t) MG_INVALID_SOCKET;
+  c->is_client = true;
+  dnsc->c = c;
+  mg_call(c, MG_EV_OPEN, (void *) dnsc->url);
+  MG_DEBUG(("%lu %ld %s", c->id, c->fd, dnsc->url));
+  c->rem.addr.ip4 = ip;
+  c->rem.port = mg_htons(53);
+  mg_connect_resolved(c);
+  mg_dnsc_init(ifp->mgr, dnsc); // will fill c->pfn = dns_cb
+}
+
+
 
 void mg_tcpip_mapip(struct mg_connection *c, struct mg_addr *ip) {
   struct connstate *s = (struct connstate *) (c + 1);

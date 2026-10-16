@@ -269,8 +269,8 @@ bool mg_dnsc_init(struct mg_mgr *mgr, struct mg_dns *dnsc) {
   if (dnsc->c == NULL) {
     dnsc->c = mg_connect(mgr, dnsc->url, NULL, NULL);
     if (dnsc->c == NULL) return false;
-    dnsc->c->pfn = dns_cb;
   }
+  dnsc->c->pfn = dns_cb; // do it always, DHCP-assigned DNS bootstrap needs it
   return true;
 }
 
