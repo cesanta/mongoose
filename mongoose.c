@@ -2061,7 +2061,7 @@ static bool mg_dns_send(struct mg_connection *c, const struct mg_str *name,
 bool mg_dnsc_init(struct mg_mgr *mgr, struct mg_dns *dnsc);
 bool mg_dnsc_init(struct mg_mgr *mgr, struct mg_dns *dnsc) {
   if (dnsc->url == NULL) {
-    mg_error(0, "DNS server URL is NULL. Call mg_mgr_init()");
+    MG_ERROR(("DNS server URL is NULL. Call mg_mgr_init()"));
     return false;
   }
   if (dnsc->c == NULL) {
@@ -17589,7 +17589,7 @@ static bool mg_tls_encrypt(struct mg_connection *c, const uint8_t *msg,
       c->is_client ? tls->enc.client_write_iv : tls->enc.server_write_iv;
 
   if (msgsz > 16384) {
-    MG_ERROR(("msg longer than recordsz"));
+    mg_error(c, "msg longer than recordsz");
     return false;
   }
 
@@ -18250,19 +18250,19 @@ static bool mg_tls_send_cert_verify(struct mg_connection *c, bool is_client) {
 
     // Check bounds
     if (emlen > sizeof(em) || verifysz > sizeof(verify)) {
-      MG_ERROR(("RSA key too large for static buffers"));
+      mg_error(c, "RSA key too large for static buffers");
       return false;
     }
 
     if (!mg_tls_pss_encode(hash, sizeof(hash), &rn, em)) {
-      MG_ERROR(("Failed PSS encode"));
+      mg_error(c, "Failed PSS encode");
       return false;
     }
 
     // Validate PSS encoded message format
     if (em[emlen - 1] != 0xbc) {
-      MG_ERROR(("Invalid PSS encoding: last byte is 0x%02x, expected 0xbc",
-                em[emlen - 1]));
+      mg_error(c, "Invalid PSS encoding: last byte is 0x%02x, expected 0xbc",
+                em[emlen - 1]);
       return false;
     }
 
@@ -18275,7 +18275,7 @@ static bool mg_tls_send_cert_verify(struct mg_connection *c, bool is_client) {
     // Sign directly into the verify buffer (verify + 8 = signature location)
     memset(verify + 8, 0, emlen);  // Initialize signature area
     if (!mg_tls_rsa_sign(tls, em, emlen, verify + 8)) {
-      MG_ERROR(("Failed RSA sign"));
+      mg_error(c, "Failed RSA sign");
       return false;
     }
 
@@ -18358,8 +18358,6 @@ static bool mg_tls_client_send_hello(struct mg_connection *c) {
   struct tls_data *tls = (struct tls_data *) c->tls;
   struct mg_iobuf *wio = &tls->send;
 
-  uint8_t p256_pub[64];  // X || Y, sent as an uncompressed point 0x04 || X || Y
-
   // - "signature algorithms we actually support", see above
   //   uint8_t secp256r1_sig_algs[]
   // - all popular signature algorithms (if we don't care about verification)
@@ -18425,18 +18423,20 @@ static bool mg_tls_client_send_hello(struct mg_connection *c) {
     MG_STORE_BE16(server_name_ext + 7, hostnamesz);
   }
 
-  // calculate keyshare
-  if (!mg_p256_make_key(p256_pub, tls->p256_cli)) {
+  // calc+fill keyshare; X || Y, sent as an uncompressed point 0x04 || X || Y
+  if (!mg_p256_make_key(msg_client_hello + 95, tls->p256_cli)) {
     mg_error(c, "P-256 key");
-    return false;  // Do not send uninitialised p256_pub
+    return false;
   }
 
-  // fill in the gaps: random + session ID + keyshare
-  if (!mg_random(tls->session_id, sizeof(tls->session_id))) mg_error(c, "RNG");
-  if (!mg_random(tls->random, sizeof(tls->random))) mg_error(c, "RNG");
+  // fill in the gaps: random + session ID
+  if (!mg_random(tls->session_id, sizeof(tls->session_id)) ||
+      !mg_random(tls->random, sizeof(tls->random))) {
+    mg_error(c, "RNG");
+    return false;
+  }
   memmove(msg_client_hello + 11, tls->random, sizeof(tls->random));
   memmove(msg_client_hello + 44, tls->session_id, sizeof(tls->session_id));
-  memmove(msg_client_hello + 95, p256_pub, sizeof(p256_pub));
 
   // client hello message
   if (mg_iobuf_add(wio, wio->len, msg_client_hello, sizeof(msg_client_hello)) ==
@@ -19217,8 +19217,8 @@ static int mg_tls_recv_cert_verify(struct mg_connection *c) {
       //   0809 = rsa_pss_pss_sha256
       //   080A = rsa_pss_pss_sha384
       //   080B = rsa_pss_pss_sha512
-      MG_ERROR(("unsupported certverify signature scheme: %x of %d bytes",
-                sigalg, siglen));
+      mg_error(c, "unsupported certverify signature scheme: %x of %d bytes",
+                sigalg, siglen);
       return -1;
     }
   }
@@ -19380,8 +19380,8 @@ void mg_tls_handshake(struct mg_connection *c) {
     MG_DEBUG(("%lu TLS handshake done in %lu ms: %lu ms CPU, %lu ms peer wait",
               c->id, total, cpu, total > cpu ? total - cpu : 0));
   }
-  if (!res) {
-    mg_error(c, "TLS OOM");
+  if (!res) { // already mg_error()ed at handshake helper ?
+    if (!c->is_closing) mg_error(c, "TLS OOM"); // No, do it
     return;
   }
   while (tls->send.len > 0 &&
