@@ -263,7 +263,7 @@ static bool mg_dns_send(struct mg_connection *c, const struct mg_str *name,
 bool mg_dnsc_init(struct mg_mgr *mgr, struct mg_dns *dnsc);
 bool mg_dnsc_init(struct mg_mgr *mgr, struct mg_dns *dnsc) {
   if (dnsc->url == NULL) {
-    mg_error(0, "DNS server URL is NULL. Call mg_mgr_init()");
+    MG_ERROR(("DNS server URL is NULL. Call mg_mgr_init()"));
     return false;
   }
   if (dnsc->c == NULL) {
