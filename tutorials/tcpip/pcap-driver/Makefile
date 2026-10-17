@@ -5,7 +5,7 @@ SOURCES = main.c mongoose.c
 CFLAGS = -W -Wall -Wextra -g -I.
 CFLAGS += -lpcap
 
-# Mongoose build options. See https://mongoose.ws/documentation/#build-options
+# Mongoose build options. See https://mongoose.ws/docs/getting-started/build-environment/
 CFLAGS_MONGOOSE += -DMG_ENABLE_LINES=1 -DMG_ENABLE_TCPIP=1 -DMG_ENABLE_SOCKET=0
 CFLAGS_MONGOOSE += -DMG_ENABLE_TCPIP_DRIVER_INIT=0
 CFLAGS_EXTRA ?= -DMG_TLS=MG_TLS_BUILTIN

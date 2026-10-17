@@ -5,7 +5,7 @@ CFLAGS = -W -Wall -Wextra -g -I.  # Build options
 SOURCES += o1heap/o1heap/o1heap.c
 CFLAGS += -Io1heap/o1heap
 
-# Mongoose build options. See https://mongoose.ws/documentation/#build-options
+# Mongoose build options. See https://mongoose.ws/docs/getting-started/build-environment/
 CFLAGS_MONGOOSE += -DMG_ENABLE_CUSTOM_CALLOC
 
 ifeq ($(OS),Windows_NT)

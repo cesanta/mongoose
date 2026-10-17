@@ -7,7 +7,7 @@ SOURCES = main.c $(REPO_ROOT)/mongoose.c       # Source code files
 CFLAGS = -I$(REPO_ROOT) -W -Wall -Wextra -g -I.  # Build options
 #CFLAGS += -fsanitize=address,undefined,alignment
 
-# Mongoose build options. See https://mongoose.ws/documentation/#build-options
+# Mongoose build options. See https://mongoose.ws/docs/getting-started/build-environment/
 CFLAGS_MONGOOSE += -DMG_HTTP_DIRLIST_TIME_FMT="%Y/%m/%d %H:%M:%S"
 CFLAGS_MONGOOSE += -DMG_ENABLE_LINES=1 -DMG_ENABLE_IPV6=1 -DMG_ENABLE_SSI=1
 CFLAGS_EXTRA ?= -DMG_TLS=MG_TLS_BUILTIN

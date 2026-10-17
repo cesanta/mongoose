@@ -1,7 +1,7 @@
 SOURCES = main.c mongoose.c       # Source code files
 CFLAGS = -W -Wall -Wextra -g -I.  # Build options
 
-# Mongoose build options. See https://mongoose.ws/documentation/#build-options
+# Mongoose build options. See https://mongoose.ws/docs/getting-started/build-environment/
 CFLAGS_MONGOOSE +=
 
 ifeq ($(OS),Windows_NT)

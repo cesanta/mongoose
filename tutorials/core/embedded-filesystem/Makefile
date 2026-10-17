@@ -5,7 +5,7 @@ SOURCES = main.c mongoose.c packed_fs.c      # Source code files
 CFLAGS = -W -Wall -Wextra -g -I.  # Build options
 PACK = ./pack             # Utility to pack files into a packed filesystem
 
-# Mongoose build options. See https://mongoose.ws/documentation/#build-options
+# Mongoose build options. See https://mongoose.ws/docs/getting-started/build-environment/
 # CFLAGS_MONGOOSE +=
 
 FILES_TO_EMBED ?= $(wildcard web_root/*)

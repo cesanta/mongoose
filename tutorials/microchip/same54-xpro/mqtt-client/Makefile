@@ -8,7 +8,7 @@ LDFLAGS ?= -Tlink.ld -nostartfiles -nostdlib --specs nano.specs -lc -lgcc -Wl,--
 
 SOURCES = main.c syscalls.c startup.c
 
-# Mongoose-specific source code files and build options. See https://mongoose.ws/documentation/#build-options
+# Mongoose-specific source code files and build options. See https://mongoose.ws/docs/getting-started/build-environment/
 SOURCES += mongoose.c
 CFLAGS += -DMG_ENABLE_TCPIP=1 -DMG_ARCH=MG_ARCH_ARMGCC -DMG_ENABLE_CUSTOM_MILLIS=1 -DMG_ENABLE_LINES=1
 CFLAGS += -DMG_ENABLE_DRIVER_SAME54=1 -DMG_ENABLE_CUSTOM_RANDOM=1 $(CFLAGS_EXTRA)

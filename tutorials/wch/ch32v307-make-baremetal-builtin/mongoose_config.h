@@ -1,6 +1,6 @@
 #pragma once
 
-// See https://mongoose.ws/documentation/#build-options
+// See https://mongoose.ws/docs/getting-started/build-environment/
 #define MG_ARCH MG_ARCH_ARMGCC
 #define MG_OTA MG_OTA_CH32V307
 

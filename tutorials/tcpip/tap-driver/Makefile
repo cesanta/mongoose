@@ -4,7 +4,7 @@ OUT ?= -o $(PROG)                 # Compiler argument for output file
 SOURCES = main.c mongoose.c net.c packed_fs.c      # Source code files
 CFLAGS = -W -Wall -Wextra -g -I.  # Build options
 
-# Mongoose build options. See https://mongoose.ws/documentation/#build-options
+# Mongoose build options. See https://mongoose.ws/docs/getting-started/build-environment/
 CFLAGS_MONGOOSE += -DMG_ENABLE_LINES=1 -DMG_ENABLE_TCPIP=1 -DMG_ENABLE_SOCKET=0 -DMG_ENABLE_TCPIP_DRIVER_INIT=0
 
 # Example specific build options. See README.md

@@ -6,7 +6,7 @@ OUT ?= -o $(PROG)                 # Compiler argument for output file
 SOURCES = main.c $(REPO_ROOT)/mongoose.c       # Source code files
 CFLAGS = -I$(REPO_ROOT) -W -Wall -Wextra -g -I.  # Build options
 
-# Mongoose build options. See https://mongoose.ws/documentation/#build-options
+# Mongoose build options. See https://mongoose.ws/docs/getting-started/build-environment/
 #CFLAGS_MONGOOSE += 
 CFLAGS_EXTRA ?= -DMG_TLS=MG_TLS_BUILTIN
 

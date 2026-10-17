@@ -4,7 +4,7 @@ OUT ?= -o $(PROG)                 # Compiler argument for output file
 SOURCES = main.c mongoose.c       # Source code files
 CFLAGS = -W -Wall -Wextra -g -I.  # Build options
 
-# Mongoose build options. See https://mongoose.ws/documentation/#build-options
+# Mongoose build options. See https://mongoose.ws/docs/getting-started/build-environment/
 CFLAGS_MONGOOSE += -DMG_ENABLE_LINES
 
 ifeq ($(OS),Windows_NT)   # Windows settings. Assume MinGW compiler. To use VC: make CC=cl CFLAGS=/MD OUT=/Feprog.exe

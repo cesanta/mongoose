@@ -8,7 +8,7 @@ SOURCES = main.c $(REPO_ROOT)/mongoose.c  mongoose_fs.c
 
 CFLAGS_EXTRA ?= -DMG_TLS=MG_TLS_BUILTIN
 
-# Mongoose build options. See https://mongoose.ws/documentation/#build-options
+# Mongoose build options. See https://mongoose.ws/docs/getting-started/build-environment/
 # CFLAGS_MONGOOSE +=
 
 ifeq ($(OS),Windows_NT)   # Windows settings. Assume MinGW compiler. To use VC: make CC=cl CFLAGS=/MD OUT=/Feprog.exe

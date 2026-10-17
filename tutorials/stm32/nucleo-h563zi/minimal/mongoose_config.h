@@ -1,7 +1,7 @@
 #pragma once
 #include "hal.h"
 
-// See https://mongoose.ws/documentation/#build-options
+// See https://mongoose.ws/docs/getting-started/build-environment/
 #define MG_ARCH MG_ARCH_ARMGCC
 #define MG_TLS MG_TLS_BUILTIN
 #define MG_IO_SIZE 2048
