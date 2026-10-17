@@ -533,21 +533,6 @@ static void mg_dash_handle_add(struct mg_connection *c, struct mg_dash *dash,
   }
 }
 
-// Firmware upload callback for mg_http_stream_body(). Uses *p as a flag:
-// non-NULL means an OTA session is open and must be closed by mg_ota_end()
-static bool otacb(struct mg_http_message *hm, struct mg_str *data, void **p) {
-  if (hm != NULL) {  // Start
-    if (!mg_ota_begin(hm->body.len)) return false;
-    *p = (void *) (ptrdiff_t) 1;
-    return true;
-  } else if (data != NULL) {  // Next chunk
-    return mg_ota_write(data->buf, data->len);
-  }
-  if (*p == NULL) return false;  // End. Begin failed, nothing to finish
-  *p = NULL;
-  return mg_ota_end();
-}
-
 static void mg_serve_fs(struct mg_connection *c, struct mg_http_message *hm,
                         struct mg_dash_user *u, bool stream) {
   struct mg_dash *dash = (struct mg_dash *) c->fn_data;
@@ -596,7 +581,7 @@ void mg_dash_ev_handler(struct mg_connection *c, int ev, void *ev_data) {
     } else if (mg_match(hm->uri, mg_str("/api/ota"), NULL)) {
       // Authenticated above. If streaming started, the stream handler owns
       // the connection and c->data, so skip the marker check below
-      if (mg_http_stream_body(c, hm, otacb, NULL)) return;
+      if (mg_http_stream_body(c, hm, mg_http_ota_cb, NULL)) return;
     }
     if (d->marker != '\0') mg_log_http_req(c, hm);
   } else if (ev == MG_EV_HTTP_MSG && d->marker != '\0') {

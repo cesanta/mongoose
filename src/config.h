@@ -65,7 +65,12 @@
 #endif
 
 #ifndef MG_ENABLE_IPV6
+#if (defined(MG_ENABLE_DRIVER_MCXW71) && MG_ENABLE_DRIVER_MCXW71) || \
+    (defined(MG_ENABLE_DRIVER_RW612_154) && MG_ENABLE_DRIVER_RW612_154)
+#define MG_ENABLE_IPV6 1  // 802.15.4 radio: 6LoWPAN carries IPv6 only
+#else
 #define MG_ENABLE_IPV6 0
+#endif
 #endif
 
 #ifndef MG_IPV6_V6ONLY
@@ -211,6 +216,8 @@
 
 #endif
 
+// Set the interface hardware address. Ethernet: 6-byte MAC. 6LoWPAN: 8-byte
+// EUI-64, the IPv6 interface ID is made from it. Not set: random per boot
 #ifndef MG_SET_MAC_ADDRESS
 #define MG_SET_MAC_ADDRESS(mac)
 #endif
@@ -248,3 +255,4 @@
 #ifndef MG_ENABLE_HEALTH
 #define MG_ENABLE_HEALTH 0
 #endif
+

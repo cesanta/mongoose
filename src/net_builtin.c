@@ -1,6 +1,7 @@
 #include "net_builtin.h"
 #include "bsd.h"
 #include "profile.h"
+#include "url.h"
 
 #if MG_ENABLE_TCPIP
 #define MG_EPHEMERAL_PORT_BASE 32768
@@ -969,7 +970,7 @@ static void tx_ndp_rs(struct mg_tcpip_if *ifp) {
                        (struct mg_addr *) &ip6_allrouters),
            ifp->ip6ll, (uint64_t *) ip6_allrouters.addr.ip6, 133, 0, payload,
            payload_len);
-  MG_DEBUG(("NDP Router Solicitation sent"));
+  MG_VERBOSE(("NDP Router Solicitation sent"));
 }
 
 static void fill_prefix(uint8_t *dst, uint8_t *src, uint8_t len) {
@@ -1008,9 +1009,10 @@ static void rx_ndp_ra(struct mg_tcpip_if *ifp, struct pkt *pkt) {
   uint8_t *opts = (uint8_t *) (ra + 1);
   size_t opt_left = pkt->pay.len - sizeof(*ra);
   bool gotl2addr = false, gotprefix = false, changed = false;
+  bool ip6only = ifp->ip == 0 && !ifp->enable_dhcp_client;
   uint8_t l2[sizeof(struct mg_l2addr)];
   uint32_t mtu = 0;
-  uint8_t *prefix = NULL, prefix_len = 0;
+  uint8_t *prefix = NULL, prefix_len = 0, *dns = NULL;
 
   if (pkt->pay.len < sizeof(*ra)) return;
   if (ifp->state6 == MG_TCPIP_STATE_UP) {
@@ -1046,11 +1048,21 @@ static void rx_ndp_ra(struct mg_tcpip_if *ifp, struct pkt *pkt) {
         if (prefix_len != ifp->prefix_len ||
             !match_prefix(prefix, ifp->prefix, ifp->prefix_len))
           changed = true;
+      } else if (type == 38 && length >= 16 && ip6only && (opts[3] & 7) == 0) {
+        memcpy(ifp->nat64, opts + 4, sizeof(ifp->nat64));  // RFC-8781, /96
+      } else if (type == 25 && length >= 24 && ip6only) {
+        dns = opts + 8;  // DNS server, RFC-8106
       }
       opts += length;
       opt_left -= length;
     }
 
+    if (dns != NULL && ifp->dns6_url == NULL &&
+        (ifp->dns6_url = (char *) mg_calloc(1, 64)) != NULL) {  // First wins
+      mg_snprintf(ifp->dns6_url, 64, "udp://%M:53", mg_print_ip6, dns);
+      ifp->mgr->dns6.url = ifp->dns6_url, ifp->mgr->use_dns6 = true;
+      if (ifp->mgr->dns6.c != NULL) mg_close_conn(ifp->mgr->dns6.c);
+    }
     // fill prefix and global
     if (gotprefix && !fill_global(ifp, prefix, prefix_len)) return;
     if (changed) ifp->is_ip6_changed = true;
@@ -1076,6 +1088,208 @@ static void rx_ndp_ra(struct mg_tcpip_if *ifp, struct pkt *pkt) {
   }
 }
 
+// Routing between two interfaces, see mg_tcpip_route()
+void mg_l2_lowpan_ip6l2(const uint64_t *ip6, uint8_t *l2);
+
+// Interface with a user-set IPv6 prefix, which the router advertises
+static bool has_static_prefix(struct mg_tcpip_if *ifp) {
+  return ifp->route != NULL && !ifp->enable_slaac && ifp->prefix_len > 0 &&
+         ifp->prefix_len <= 64 && ifp->ip6[0] != 0;
+}
+
+// Router Advertisement, 4.2: our static prefix (on-link, SLAAC, we are the
+// default router), and a route to the other interface's static prefix
+static void tx_ndp_ra(struct mg_tcpip_if *ifp) {
+  struct mg_tcpip_if *peer = ifp->route;
+  uint8_t buf[sizeof(struct ndp_ra) + 16 + 32 + 16 + 16 + 24], *o;
+  struct ndp_ra *ra = (struct ndp_ra *) buf;
+  bool own = has_static_prefix(ifp), other = has_static_prefix(peer);
+  bool nat64 = own && (ifp->nat64[0] | ifp->nat64[1]) != 0;  // Prefix set
+  size_t n = sizeof(*ra);
+  if (!own && !other) return;
+  memset(buf, 0, sizeof(buf));
+  ra->cur_hop_limit = 64;
+  ra->router_lifetime = mg_htons(own ? 1800 : 0);
+  buf[n] = 1;  // Source link-layer address, 4.6.1
+  buf[n + 1] = mg_l2_ip6put(ifp->l2type, ifp->mac, buf + n + 2);
+  n += (size_t) (8 * buf[n + 1]);
+  if (own) {  // Prefix information, 4.6.2
+    o = buf + n, n += 32;
+    o[0] = 3, o[1] = 4, o[2] = ifp->prefix_len, o[3] = 0xc0;  // L, A
+    MG_STORE_BE32(o + 4, 86400);  // Valid lifetime
+    MG_STORE_BE32(o + 8, 14400);  // Preferred lifetime
+    memcpy(o + 16, ifp->prefix, sizeof(ifp->prefix));
+  }
+  if (other) {  // Route information, RFC-4191 2.3
+    o = buf + n, n += 16;
+    o[0] = 24, o[1] = 2, o[2] = peer->prefix_len;
+    MG_STORE_BE32(o + 4, 1800);  // Route lifetime
+    memcpy(o + 8, peer->prefix, sizeof(peer->prefix));
+  }
+  if (nat64) {  // We translate to IPv4: NAT64 prefix and a DNS server
+    struct mg_addr a;
+    o = buf + n, n += 16;  // NAT64 prefix, RFC-8781
+    o[0] = 38, o[1] = 2;
+    MG_STORE_BE16(o + 2, (1800 / 8) << 3);  // Lifetime in 8s units, PLC 0: /96
+    memcpy(o + 4, ifp->nat64, sizeof(ifp->nat64));
+    o = buf + n, n += 24;  // DNS server, RFC-8106: NAT64 prefix + IPv4 DNS
+    o[0] = 25, o[1] = 3;
+    MG_STORE_BE32(o + 4, 1800);  // Lifetime
+    memcpy(o + 8, ifp->nat64, sizeof(ifp->nat64));
+    if (!mg_aton(mg_url_host(peer->mgr->dns4.url), &a) || a.is_ip6)
+      a.addr.ip4 = MG_U32(8, 8, 8, 8);
+    memcpy(o + 20, &a.addr.ip4, 4);
+  }
+  tx_icmp6(ifp,
+           mg_l2_mapip(ifp->l2type, MG_TCPIP_L2ADDR_MCAST6,
+                       (struct mg_addr *) &ip6_allnodes),
+           ifp->ip6ll, (uint64_t *) ip6_allnodes.addr.ip6, 134, 0, buf, n);
+}
+
+// Remember the hardware address of a sender, to forward replies to it
+static void nb6_learn(struct mg_tcpip_if *ifp, uint64_t *ip, uint8_t *l2) {
+  size_t i, n = sizeof(ifp->nb6) / sizeof(ifp->nb6[0]);
+  for (i = 0; i < n && !MG_IP6MATCH(ifp->nb6[i].ip, ip); i++) (void) 0;
+  if (i == n) i = ifp->nb6_next, ifp->nb6_next = (uint8_t) ((i + 1) % n);
+  ifp->nb6[i].ip[0] = ip[0], ifp->nb6[i].ip[1] = ip[1];
+  memcpy(ifp->nb6[i].l2, l2, sizeof(ifp->nb6[i].l2));
+}
+
+// Hardware address to send a forwarded packet to: a learned neighbour, the
+// 6LoWPAN address made from the interface ID, or our default router
+static bool nb6_l2(struct mg_tcpip_if *ifp, uint64_t *ip, uint8_t *l2) {
+  size_t i, n = sizeof(ifp->nb6) / sizeof(ifp->nb6[0]);
+  for (i = 0; i < n && !MG_IP6MATCH(ifp->nb6[i].ip, ip); i++) (void) 0;
+  if (i < n) {
+    memcpy(l2, ifp->nb6[i].l2, sizeof(ifp->nb6[i].l2));
+  } else if (ifp->l2type == MG_TCPIP_L2_LOWPAN) {
+    mg_l2_lowpan_ip6l2(ip, l2);
+  } else if (ifp->gw6_ready) {
+    memcpy(l2, ifp->gw6mac, sizeof(ifp->gw6mac));
+  } else {
+    return false;
+  }
+  return true;
+}
+
+// NAT64, RFC-6146: translate a TCP or UDP packet sent to our nat64 prefix to
+// IPv4, send it from the other interface. Sessions are kept in ifp->nat64s,
+// when it is full the oldest one is replaced
+static void nat64_out(struct mg_tcpip_if *ifp, struct pkt *pkt, size_t len) {
+  struct mg_tcpip_if *out = ifp->route;
+  struct mg_tcpip_nat64 *e = NULL;
+  struct ip *ip;
+  uint64_t src[2], dst[2];
+  uint8_t *p, next = pkt->ip6->next;
+  size_t i, n = sizeof(ifp->nat64s) / sizeof(ifp->nat64s[0]);
+  size_t plen = len - sizeof(*pkt->ip6);
+  struct tcp *tcp = (struct tcp *) (pkt->ip6 + 1);
+  struct udp *udp = (struct udp *) tcp;  // Ports are at the same place
+  uint32_t dst4;
+  if ((next != 6 && next != 17) ||
+      plen < (next == 6 ? sizeof(*tcp) : sizeof(*udp)) ||
+      sizeof(*ip) + plen > out->mtu || out->state != MG_TCPIP_STATE_READY)
+    return;
+  src[0] = pkt->ip6->src[0], src[1] = pkt->ip6->src[1];
+  dst[0] = pkt->ip6->dst[0], dst[1] = pkt->ip6->dst[1];
+  memcpy(&dst4, (uint8_t *) dst + 12, sizeof(dst4));  // RFC-6052, /96
+  for (i = 0; i < n; i++) {
+    e = &ifp->nat64s[i];
+    if (e->proto == next && e->port6 == udp->sport &&
+        MG_IP6MATCH(e->ip6, src) && e->port4 == udp->dport && e->ip4 == dst4)
+      break;
+  }
+  if (i == n) {  // New session
+    e = &ifp->nat64s[ifp->nat64_next];
+    ifp->nat64_next = (uint8_t) ((ifp->nat64_next + 1) % n);
+    if (out->eport < MG_EPHEMERAL_PORT_BASE) out->eport = MG_EPHEMERAL_PORT_BASE;
+    e->ip6[0] = src[0], e->ip6[1] = src[1], e->ip4 = dst4, e->proto = next;
+    e->port6 = udp->sport, e->port4 = udp->dport;
+    e->lport = mg_htons(out->eport++);
+    MG_DEBUG(("NAT64 %M:%hu -> %M:%hu", mg_print_ip6, src,
+              mg_ntohs(udp->sport), mg_print_ip4, &dst4, mg_ntohs(udp->dport)));
+  }
+  ip = tx_ip(out, out->gwmac, next, 0, out->ip, dst4, plen);
+  p = (uint8_t *) (ip + 1);
+  memcpy(p, tcp, plen);
+  tcp = (struct tcp *) p, udp = (struct udp *) p;
+  udp->sport = e->lport;
+  if (next == 6) tcp->csum = 0, tcp->csum = pcsum(ip, p, plen);
+  if (next == 17) udp->csum = 0, udp->csum = pcsum(ip, p, plen);
+  driver_output(out, mg_l2_trailer(out, sizeof(*ip) + plen, p + plen));
+}
+
+// NAT64: translate an IPv4 packet of a NAT64 session back to IPv6, send it to
+// the node. Return true if the packet was taken
+static bool nat64_in(struct mg_tcpip_if *ifp, struct pkt *pkt) {
+  struct mg_tcpip_if *out = ifp->route;
+  struct mg_tcpip_nat64 *e = NULL;
+  struct udp *udp = pkt->udp != NULL ? pkt->udp : (struct udp *) pkt->tcp;
+  struct ip6 *ip6;
+  uint64_t src[2];
+  uint8_t l2[sizeof(struct mg_l2addr)], *p, next = pkt->ip->proto;
+  size_t i, n = sizeof(ifp->nat64s) / sizeof(ifp->nat64s[0]);
+  size_t plen = PDIFF(udp, pkt->pay.buf + pkt->pay.len);
+  if (out == NULL || pkt->ip->dst != ifp->ip) return false;
+  for (i = 0; i < n; i++) {
+    e = &out->nat64s[i];
+    if (e->proto == next && e->lport == udp->dport &&
+        e->port4 == udp->sport && e->ip4 == pkt->ip->src)
+      break;
+  }
+  if (i == n) return false;
+  if (sizeof(*ip6) + plen > out->mtu || !nb6_l2(out, e->ip6, l2))
+    return true;  // Drop
+  memcpy(src, out->nat64, sizeof(out->nat64));
+  memcpy((uint8_t *) src + 12, &pkt->ip->src, 4);
+  ip6 = tx_ip6(out, l2, next, 0, src, e->ip6, plen);
+  p = (uint8_t *) (ip6 + 1);
+  memcpy(p, udp, plen);
+  ((struct udp *) p)->dport = e->port6;
+  if (next == 6) {
+    struct tcp *tcp = (struct tcp *) p;
+    tcp->csum = 0, tcp->csum = p6csum(ip6, p, 6, plen);
+  } else {
+    udp = (struct udp *) p;
+    udp->csum = 0, udp->csum = p6csum(ip6, p, 17, plen);
+    if (udp->csum == 0) udp->csum = 0xffff;  // 0 is not allowed in IPv6
+  }
+  driver_output(out, mg_l2_trailer(out, sizeof(*ip6) + plen, p + plen));
+  return true;
+}
+
+// Forward a packet that is not addressed to us out the other interface.
+// Return true if the packet was taken: forwarded or dropped
+static bool fwd_ip6(struct mg_tcpip_if *ifp, struct pkt *pkt, size_t len) {
+  struct mg_tcpip_if *out = ifp->route;
+  uint64_t src[2], dst[2];
+  uint8_t l2[sizeof(struct mg_l2addr)], *d = (uint8_t *) dst, *p;
+  src[0] = pkt->ip6->src[0], src[1] = pkt->ip6->src[1];
+  dst[0] = pkt->ip6->dst[0], dst[1] = pkt->ip6->dst[1];
+  if (d[0] == 0xff || (d[0] == 0xfe && (d[1] & 0xc0) == 0x80))
+    return false;  // Multicast or link-local: not forwarded
+  if (MG_IP6MATCH(dst, ifp->ip6) || MG_IP6MATCH(dst, ifp->ip6ll))
+    return false;  // Ours
+  if (src[0] != 0 || src[1] != 0) {
+    nb6_learn(ifp, src, mg_l2_getaddr(ifp, pkt->l2));
+  }
+  if ((ifp->nat64[0] | ifp->nat64[1]) != 0 &&  // NAT64 prefix set, and ours
+      memcmp(dst, ifp->nat64, sizeof(ifp->nat64)) == 0) {
+    nat64_out(ifp, pkt, len);
+    return true;
+  }
+  if (MG_IP6MATCH(dst, out->ip6) || out->state6 < MG_TCPIP_STATE_UP ||
+      pkt->ip6->hops <= 1 || len > out->mtu || !nb6_l2(out, dst, l2)) {
+    return true;  // Drop. TODO(): ICMPv6 errors, RFC-4443
+  }
+  p = mg_l2_header(out, MG_TCPIP_L2PROTO_IPV6, out->mac, l2,
+                   (uint8_t *) out->tx.buf);
+  memcpy(p, pkt->ip6, len);
+  ((struct ip6 *) p)->hops--;
+  driver_output(out, mg_l2_trailer(out, len, p + len));
+  return true;
+}
+
 static void rx_icmp6(struct mg_tcpip_if *ifp, struct pkt *pkt) {
   if (!icmp6csum_ok(pkt->ip6, pkt->icmp6, sizeof(*pkt->icmp6) + pkt->pay.len))
     return;
@@ -1099,6 +1313,9 @@ static void rx_icmp6(struct mg_tcpip_if *ifp, struct pkt *pkt) {
         tx_icmp6(ifp, l2addr, target, ips.addr.ip6, 129, 0, pkt->pay.buf, plen);
       }
     } break;
+    case 133:  // Router Solicitation: answer if we route
+      if (ifp->route != NULL) tx_ndp_ra(ifp);
+      break;
     case 134:  // Router Advertisement
       rx_ndp_ra(ifp, pkt);
       break;
@@ -1360,9 +1577,9 @@ static struct mg_connection *accept_conn(struct mg_connection *lsn,
   if (lsn->loc.is_ip6) {
     c->rem.addr.ip6[0] = pkt->ip6->src[0],
     c->rem.addr.ip6[1] = pkt->ip6->src[1], c->rem.is_ip6 = true;
-    c->loc.addr.ip6[0] = c->mgr->ifp->ip6[0],
-    c->loc.addr.ip6[1] = c->mgr->ifp->ip6[1], c->loc.is_ip6 = true;
-    // TODO(): compare lsn to link-local, or rem as link-local: use ll instead
+    // Reply from the address the peer connected to: link-local or global
+    c->loc.addr.ip6[0] = pkt->ip6->dst[0],
+    c->loc.addr.ip6[1] = pkt->ip6->dst[1], c->loc.is_ip6 = true;
   } else
 #endif
   {
@@ -1879,6 +2096,9 @@ static void rx_ip(struct mg_tcpip_if *ifp, struct pkt *pkt) {
     MG_VERBOSE(("UDP %M:%hu -> %M:%hu len %u", mg_print_ip4, &pkt->ip->src,
                 mg_ntohs(pkt->udp->sport), mg_print_ip4, &pkt->ip->dst,
                 mg_ntohs(pkt->udp->dport), (int) pkt->pay.len));
+#if MG_ENABLE_IPV6
+    if (nat64_in(ifp, pkt)) return;
+#endif
     if (ifp->enable_dhcp_client && pkt->udp->dport == mg_htons(68) &&
         len >= offsetof(struct dhcp, options)) {
       pkt->dhcp = (struct dhcp *) (pkt->udp + 1);
@@ -1904,6 +2124,9 @@ static void rx_ip(struct mg_tcpip_if *ifp, struct pkt *pkt) {
     MG_VERBOSE(("TCP %M:%hu -> %M:%hu len %u", mg_print_ip4, &pkt->ip->src,
                 mg_ntohs(pkt->tcp->sport), mg_print_ip4, &pkt->ip->dst,
                 mg_ntohs(pkt->tcp->dport), (int) pkt->pay.len));
+#if MG_ENABLE_IPV6
+    if (nat64_in(ifp, pkt)) return;
+#endif
     rx_tcp(ifp, pkt);
   } else {
     MG_DEBUG(("Unknown IP proto %x", (int) pkt->ip->proto));
@@ -1921,6 +2144,8 @@ static void rx_ip6(struct mg_tcpip_if *ifp, struct pkt *pkt) {
   if ((pkt->ip6->ver >> 4) != 0x6) return;       // Not IPv6
   plen = mg_ntohs(pkt->ip6->plen);
   if (plen > (pkt->pay.len - sizeof(*pkt->ip6))) return;  // malformed
+  if (ifp->route != NULL && fwd_ip6(ifp, pkt, sizeof(*pkt->ip6) + plen))
+    return;
   next = pkt->ip6->next;
   nhdr = (uint8_t *) (pkt->ip6 + 1);
   while (loop) {
@@ -1930,7 +2155,7 @@ static void rx_ip6(struct mg_tcpip_if *ifp, struct pkt *pkt) {
       case 43:  // Routing 4.4
       case 60:  // Destination Options 4.6
       case 51:  // Authentication RFC-4302
-        MG_INFO(("IPv6 extension header %d", (int) next));
+        MG_DEBUG(("IPv6 extension header %d", (int) next));
         if (((uint32_t) len + 2) > plen) return;  // nhdr[0, 1]; malformed
         next = nhdr[0];
         hlen = (uint16_t) (8 * (nhdr[1] + 1));
@@ -1963,8 +2188,8 @@ static void rx_ip6(struct mg_tcpip_if *ifp, struct pkt *pkt) {
     pkt->icmp6 = (struct icmp6 *) (pkt->pay.buf);
     if (pkt->pay.len < sizeof(*pkt->icmp6)) return;
     mkpay(pkt, pkt->icmp6 + 1);
-    MG_DEBUG(("ICMPv6 %M -> %M len %u", mg_print_ip6, &pkt->ip6->src,
-              mg_print_ip6, &pkt->ip6->dst, (int) pkt->pay.len));
+    MG_VERBOSE(("ICMPv6 %M -> %M len %u", mg_print_ip6, &pkt->ip6->src,
+                mg_print_ip6, &pkt->ip6->dst, (int) pkt->pay.len));
     rx_icmp6(ifp, pkt);
   } else if (next == 17) {
     pkt->udp = (struct udp *) (pkt->pay.buf);
@@ -1974,9 +2199,9 @@ static void rx_ip6(struct mg_tcpip_if *ifp, struct pkt *pkt) {
     if (len < sizeof(*pkt->udp) || len > pkt->pay.len) return;  // malformed
     pkt->pay.len = len;  // strip excess data
     mkpay(pkt, pkt->udp + 1);
-    MG_DEBUG(("UDP %M:%hu -> %M:%hu len %u", mg_print_ip6, &pkt->ip6->src,
-              mg_ntohs(pkt->udp->sport), mg_print_ip6, &pkt->ip6->dst,
-              mg_ntohs(pkt->udp->dport), (int) pkt->pay.len));
+    MG_VERBOSE(("UDP %M:%hu -> %M:%hu len %u", mg_print_ip6, &pkt->ip6->src,
+                mg_ntohs(pkt->udp->sport), mg_print_ip6, &pkt->ip6->dst,
+                mg_ntohs(pkt->udp->dport), (int) pkt->pay.len));
     if (ifp->enable_dhcp6_client && pkt->udp->dport == mg_htons(546)) {
       pkt->dhcp6 = (struct dhcp6 *) (pkt->udp + 1);
       mkpay(pkt, pkt->dhcp6 + 1);
@@ -1998,9 +2223,9 @@ static void rx_ip6(struct mg_tcpip_if *ifp, struct pkt *pkt) {
     if (off < sizeof(*pkt->tcp) / 4 || pkt->pay.len < (uint16_t) (4 * off))
       return;
     mkpay(pkt, (uint32_t *) pkt->tcp + off);
-    MG_DEBUG(("TCP %M:%hu -> %M:%hu len %u", mg_print_ip6, &pkt->ip6->src,
-              mg_ntohs(pkt->tcp->sport), mg_print_ip6, &pkt->ip6->dst,
-              mg_ntohs(pkt->tcp->dport), (int) pkt->pay.len));
+    MG_VERBOSE(("TCP %M:%hu -> %M:%hu len %u", mg_print_ip6, &pkt->ip6->src,
+                mg_ntohs(pkt->tcp->sport), mg_print_ip6, &pkt->ip6->dst,
+                mg_ntohs(pkt->tcp->dport), (int) pkt->pay.len));
     rx_tcp(ifp, pkt);
   } else {
     MG_DEBUG(("Unknown IPv6 next hdr %x", (int) next));
@@ -2078,13 +2303,18 @@ static void mg_ip6_poll(struct mg_tcpip_if *ifp, bool s1) {
   if (ifp->state6 < MG_TCPIP_STATE_UP) return;
   if (ifp->enable_slaac && s1 && ifp->state6 == MG_TCPIP_STATE_UP)
     tx_ndp_rs(ifp);
+  if (ifp->route != NULL && s1 && ifp->now >= ifp->ra_expire) {
+    tx_ndp_ra(ifp);  // Unsolicited router advertisements, 6.2.4
+    ifp->ra_expire = ifp->now + 10000;
+  }
 }
 static void mg_ip6_link(struct mg_tcpip_if *ifp, bool drv_up, bool l2_up) {
   bool cur_drv = (ifp->state6 != MG_TCPIP_STATE_DOWN);
   bool cur_l2 = (ifp->state6 >= MG_TCPIP_STATE_UP);
   const uint8_t px[8] = {0xfe, 0x80, 0, 0, 0, 0, 0, 0};  // RFC-4291 2.5.6
   if (drv_up != cur_drv || l2_up != cur_l2) {  // link/L2 state has changed
-    if (ifp->l2type == MG_TCPIP_L2_ETH && l2_up && ifp->ip6ll[0] == 0 &&
+    if ((ifp->l2type == MG_TCPIP_L2_ETH || ifp->l2type == MG_TCPIP_L2_LOWPAN) &&
+        l2_up && ifp->ip6ll[0] == 0 &&
         ifp->ip6ll[1] == 0) {  // gen ll address
       mg_l2_genip6(ifp->l2type, ifp->ip6ll, 64, ifp->mac);
       memcpy(ifp->ip6ll, px, 8);  // RFC-2464 5
@@ -2276,8 +2506,8 @@ void mg_tcpip_init(struct mg_mgr *mgr, struct mg_tcpip_if *ifp) {
     ifp->mgr = mgr;
     mgr->extraconnsize = sizeof(struct connstate);
     if (ifp->ip == 0 && ifp->l2type != MG_TCPIP_L2_PPP &&
-        ifp->l2type != MG_TCPIP_L2_PPPoE)
-      ifp->enable_dhcp_client = true;
+        ifp->l2type != MG_TCPIP_L2_PPPoE && ifp->l2type != MG_TCPIP_L2_LOWPAN)
+      ifp->enable_dhcp_client = true;  // No IPv4 over 6LoWPAN
     mg_random(&ifp->eport, sizeof(ifp->eport));  // Random from 0 to 65535
     ifp->eport |= MG_EPHEMERAL_PORT_BASE;        // Random from
                                            // MG_EPHEMERAL_PORT_BASE to 65535
@@ -2299,7 +2529,17 @@ void mg_tcpip_free(struct mg_tcpip_if *ifp) {
   mg_free(ifp->recv_queue.buf);
   mg_free(ifp->tx.buf);
   mg_free(ifp->dns4_url);
+#if MG_ENABLE_IPV6
+  mg_free(ifp->dns6_url);
+#endif
 }
+
+#if MG_ENABLE_IPV6
+void mg_tcpip_route(struct mg_tcpip_if *if1, struct mg_tcpip_if *if2) {
+  if1->route = if2, if2->route = if1;
+  if1->ra_expire = if2->ra_expire = 0;  // Advertise at the next poll
+}
+#endif
 
 static void send_syn(struct mg_connection *c) {
   struct connstate *s = (struct connstate *) (c + 1);
@@ -2474,10 +2714,13 @@ void mg_mgr_poll(struct mg_mgr *mgr, int ms) {
 bool mg_send(struct mg_connection *c, const void *buf, size_t len) {
   struct mg_tcpip_if *ifp = c->mgr->ifp;
   bool res = false;
-  if (!c->loc.is_ip6 && (ifp->ip == 0 || ifp->state != MG_TCPIP_STATE_READY)) {
+  // While resolving, the address family is unknown yet: just queue the data
+  if (!c->is_resolving && !c->loc.is_ip6 &&
+      (ifp->ip == 0 || ifp->state != MG_TCPIP_STATE_READY)) {
     proto_error(c, false, "net down");
 #if MG_ENABLE_IPV6
-  } else if (c->loc.is_ip6 && ifp->state6 != MG_TCPIP_STATE_READY) {
+  } else if (!c->is_resolving && c->loc.is_ip6 &&
+             ifp->state6 != MG_TCPIP_STATE_READY) {
     proto_error(c, false, "net down");
 #endif
   } else if (c->is_udp && (c->is_arplooking || c->is_resolving)) {

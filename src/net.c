@@ -211,7 +211,13 @@ struct mg_connection *mg_connect_svc(struct mg_mgr *mgr, const char *url,
   if (url == NULL || url[0] == '\0') {
     MG_ERROR(("null url"));
 #if MG_ENABLE_TCPIP
-  } else if (mgr->ifp != NULL && mgr->ifp->state != MG_TCPIP_STATE_READY) {
+  } else if (mgr->ifp != NULL && mgr->ifp->state != MG_TCPIP_STATE_READY
+#if MG_ENABLE_IPV6
+             // IPv6-only links: a link-local address is enough for local peers
+             && (mgr->ifp->state6 < MG_TCPIP_STATE_UP ||
+                 mgr->ifp->ip6ll[0] == 0)
+#endif
+  ) {
     MG_ERROR(("Network is down"));
 #endif
   } else if ((c = mg_alloc_conn(mgr)) == NULL) {

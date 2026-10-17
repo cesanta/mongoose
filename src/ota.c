@@ -243,6 +243,21 @@ void mg_ota_url_check(struct mg_mgr *mgr, const char *json_url,
   }
 }
 
+// Uses *p as a flag: non-NULL means an OTA session is open and must be
+// closed by mg_ota_end()
+bool mg_http_ota_cb(struct mg_http_message *hm, struct mg_str *data, void **p) {
+  if (hm != NULL) {  // Start
+    if (!mg_ota_begin(hm->body.len)) return false;
+    *p = (void *) (ptrdiff_t) 1;
+    return true;
+  } else if (data != NULL) {  // Next chunk
+    return mg_ota_write(data->buf, data->len);
+  }
+  if (*p == NULL) return false;  // End. Begin failed, nothing to finish
+  *p = NULL;
+  return mg_ota_end();
+}
+
 void mg_ota_poll(struct mg_mgr *mgr) {
   static uint64_t t = 5000;  // Fire first time 5 sec after boot
 

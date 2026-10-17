@@ -1,6 +1,6 @@
 #pragma once
 
-// See https://mongoose.ws/documentation/#build-options
+// See https://mongoose.ws/docs/getting-started/build-environment/
 
 #define MG_ENABLE_TCPIP 1
 #define MG_ENABLE_TCPIP_DRIVER_INIT 0

@@ -56,6 +56,19 @@ extern uint8_t *mg_l2_pppoe_header(struct mg_tcpip_if *, enum mg_l2proto, struct
 extern size_t mg_l2_pppoe_trailer(struct mg_tcpip_if *, size_t, uint8_t *);
 extern bool mg_l2_pppoe_rx(struct mg_tcpip_if *, enum mg_l2proto *, struct mg_str *, struct mg_str *);
 
+extern void mg_l2_lowpan_init(struct mg_tcpip_if *);
+extern bool mg_l2_lowpan_poll(struct mg_tcpip_if *, bool);
+extern uint8_t *mg_l2_lowpan_header(struct mg_tcpip_if *, enum mg_l2proto, struct mg_l2addr *, struct mg_l2addr *, uint8_t *);
+extern size_t mg_l2_lowpan_trailer(struct mg_tcpip_if *, size_t, uint8_t *);
+extern bool mg_l2_lowpan_rx(struct mg_tcpip_if *, enum mg_l2proto *, struct mg_str *, struct mg_str *);
+extern struct mg_l2addr *mg_l2_lowpan_getaddr(struct mg_tcpip_if *, uint8_t *);
+extern struct mg_l2addr *mg_l2_lowpan_mapip(enum mg_l2addrtype, struct mg_addr *);
+#if MG_ENABLE_IPV6
+extern bool mg_l2_lowpan_genip6(uint64_t *, uint8_t, struct mg_l2addr *);
+extern bool mg_l2_lowpan_ip6get(struct mg_l2addr *, uint8_t *, uint8_t);
+extern uint8_t mg_l2_lowpan_ip6put(struct mg_l2addr *, uint8_t *);
+#endif
+
 typedef void (*l2_init_fn)(struct mg_tcpip_if *);
 typedef bool (*l2_poll_fn)(struct mg_tcpip_if *, bool);
 typedef uint8_t *((*l2_header_fn)(struct mg_tcpip_if *, enum mg_l2proto, struct mg_l2addr *, struct mg_l2addr *, uint8_t *));
@@ -71,25 +84,27 @@ typedef uint8_t (*l2_ip6put_fn)(struct mg_l2addr *, uint8_t *);
 // clang-format on
 
 static const l2_init_fn l2_init[] = {mg_l2_eth_init, mg_l2_ppp_init,
-                                     mg_l2_pppoe_init};
+                                     mg_l2_pppoe_init, mg_l2_lowpan_init};
 static const l2_poll_fn l2_poll[] = {mg_l2_eth_poll, mg_l2_ppp_poll,
-                                     mg_l2_pppoe_poll};
+                                     mg_l2_pppoe_poll, mg_l2_lowpan_poll};
 static const l2_header_fn l2_header[] = {mg_l2_eth_header, mg_l2_ppp_header,
-                                         mg_l2_pppoe_header};
+                                         mg_l2_pppoe_header,
+                                         mg_l2_lowpan_header};
 static const l2_trailer_fn l2_trailer[] = {mg_l2_eth_trailer, mg_l2_ppp_trailer,
-                                           mg_l2_pppoe_trailer};
-static const l2_rx_fn l2_rx[] = {mg_l2_eth_rx, mg_l2_ppp_rx, mg_l2_pppoe_rx};
+                                           mg_l2_pppoe_trailer, mg_l2_lowpan_trailer};
+static const l2_rx_fn l2_rx[] = {mg_l2_eth_rx, mg_l2_ppp_rx, mg_l2_pppoe_rx,
+                                 mg_l2_lowpan_rx};
 static const l2_getaddr_fn l2_getaddr[] = {mg_l2_eth_getaddr, mg_l2_ppp_getaddr,
-                                           mg_l2_ppp_getaddr};
+                                           mg_l2_ppp_getaddr, mg_l2_lowpan_getaddr};
 static const l2_mapip_fn l2_mapip[] = {mg_l2_eth_mapip, mg_l2_ppp_mapip,
-                                       mg_l2_ppp_mapip};
+                                       mg_l2_ppp_mapip, mg_l2_lowpan_mapip};
 #if MG_ENABLE_IPV6
 static const l2_genip6_fn l2_genip6[] = {mg_l2_eth_genip6, mg_l2_ppp_genip6,
-                                         mg_l2_ppp_genip6};
+                                         mg_l2_ppp_genip6, mg_l2_lowpan_genip6};
 static const l2_ip6get_fn l2_ip6get[] = {mg_l2_eth_ip6get, mg_l2_ppp_ip6get,
-                                         mg_l2_ppp_ip6get};
+                                         mg_l2_ppp_ip6get, mg_l2_lowpan_ip6get};
 static const l2_ip6put_fn l2_ip6put[] = {mg_l2_eth_ip6put, mg_l2_ppp_ip6put,
-                                         mg_l2_ppp_ip6put};
+                                         mg_l2_ppp_ip6put, mg_l2_lowpan_ip6put};
 #endif
 
 void mg_l2_init(struct mg_tcpip_if *ifp) {

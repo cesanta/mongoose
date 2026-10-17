@@ -173,6 +173,15 @@ bool mg_dns_parse(const uint8_t *buf, size_t len, struct mg_dns_message *dm) {
   return true;
 }
 
+#if MG_ENABLE_TCPIP && MG_ENABLE_IPV6
+// NAT64 prefix of the built-in stack interface, or NULL if none
+static const uint8_t *nat64_prefix(struct mg_mgr *mgr) {
+  static const uint8_t zero[12] = {0};
+  if (mgr->ifp == NULL || memcmp(mgr->ifp->nat64, zero, 12) == 0) return NULL;
+  return mgr->ifp->nat64;
+}
+#endif
+
 static void dns_cb(struct mg_connection *c, int ev, void *ev_data) {
   struct dns_data *d, *tmp;
   struct dns_data **head = (struct dns_data **) &c->mgr->active_dns_requests;
@@ -196,6 +205,14 @@ static void dns_cb(struct mg_connection *c, int ev, void *ev_data) {
         // MG_INFO(("d %p %hu %hu", d, d->txnid, dm.txnid));
         if (dm.txnid != d->txnid) continue;
         if (d->c->is_resolving) {
+#if MG_ENABLE_TCPIP && MG_ENABLE_IPV6
+          if (dm.resolved && !dm.addr.is_ip6 && nat64_prefix(c->mgr) != NULL) {
+            uint32_t ip4 = dm.addr.addr.ip4;  // DNS64: prefix + IPv4, RFC 6052
+            memcpy(dm.addr.addr.ip, nat64_prefix(c->mgr), 12);
+            memcpy(&dm.addr.addr.ip[12], &ip4, 4);
+            dm.addr.is_ip6 = true;
+          }
+#endif
           if (dm.resolved) {
             dm.addr.port = d->c->rem.port;  // Save port
             d->c->rem = dm.addr;            // Copy resolved address
@@ -314,7 +331,11 @@ void mg_resolve(struct mg_connection *c, const char *url) {
   } else {
     // host is not an IP nor a .local, send DNS resolution request
     struct mg_dns *dns = c->mgr->use_dns6 ? &c->mgr->dns6 : &c->mgr->dns4;
-    sendnsreq(c, &host, c->mgr->dnstimeout, dns, c->mgr->use_dns6);
+    bool aaaa = c->mgr->use_dns6;
+#if MG_ENABLE_TCPIP && MG_ENABLE_IPV6
+    if (nat64_prefix(c->mgr) != NULL) aaaa = false;  // DNS64: ask for A
+#endif
+    sendnsreq(c, &host, c->mgr->dnstimeout, dns, aaaa);
   }
 }
 

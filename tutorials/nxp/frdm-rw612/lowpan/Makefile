@@ -1,0 +1,63 @@
+# Environment setup: https://mongoose.ws/documentation/tutorials/tools/
+
+MGDIR = ../../../..
+
+CFLAGS  = -W -Wall -Wextra -Werror -Wundef -Wshadow -Wdouble-promotion
+CFLAGS += -Wformat-truncation -fno-common -Wno-conversion -Wno-sign-conversion
+CFLAGS += -g3 -Os -ffunction-sections -fdata-sections
+CFLAGS += -Wno-cast-function-type -Wno-old-style-declaration
+CFLAGS += -Wno-unused-parameter
+CFLAGS += -I. -I$(MGDIR) -Imongoose -Icmsis_core/CMSIS/Core/Include/
+CFLAGS += $(addprefix -Icmsis_rw612/devices/RW612/drivers/romapi/,bootloader nboot otp iap flexspi)
+CFLAGS += -Icmsis_rw612/devices/RW612/ -Icmsis_rw612/devices/RW612/periph/ -Icmsis_rw612/devices/RW612/drivers/
+CFLAGS += -DCPU_RW612ETA2I -DCPU_RW612ETA2I_cm33_no_dsp
+CFLAGS += -DBOOT_HEADER_ENABLE=1
+CFLAGS += -DRADIO_FW='"$(RADIO_FW)"'
+CFLAGS += -mcpu=cortex-m33+nodsp -mthumb -mfloat-abi=hard -mfpu=fpv5-sp-d16 $(CFLAGS_EXTRA)
+LDFLAGS ?= -Tlink.ld -nostdlib -nostartfiles --specs=nano.specs -lc -lgcc -Wl,--gc-sections
+
+SOURCES = main.c hal.c radio.c startup.c flexspi.c flash_config.c $(MGDIR)/mongoose.c
+SOURCES += cmsis_rw612/devices/RW612/drivers/fsl_clock.c
+SOURCES += cmsis_rw612/devices/RW612/drivers/fsl_trng.c
+SOURCES += cmsis_rw612/devices/RW612/drivers/fsl_reset.c
+SOURCES += $(addprefix cmsis_rw612/devices/RW612/drivers/,fsl_power.c fsl_ocotp.c \
+  romapi/bootloader/fsl_romapi.c romapi/nboot/fsl_romapi_nboot.c romapi/otp/fsl_romapi_otp.c)
+
+# NXP BLE/802.15.4 combo firmware for CPU2, linked into our image. NXP license:
+# https://github.com/NXP/wifi_nb_fw/blob/nxp-v4.4.3/LICENSE.txt
+RADIO_FW = rw61x_sb_ble_15d4_combo_a2.bin
+RADIO_FW_URL = https://github.com/NXP/wifi_nb_fw/raw/nxp-v4.4.3/rw61x/$(RADIO_FW)
+RADIO_FW_SHA256 = 2efac0d771e371377d57159c40f0909c7ecc6f6b950ce69ed2a3e02ac7eb686a
+
+all build: firmware.bin
+
+firmware.bin: firmware.elf
+	arm-none-eabi-objcopy -O binary $< $@
+	arm-none-eabi-size --format=berkeley $<
+
+firmware.elf: cmsis_core cmsis_rw612 $(RADIO_FW) $(SOURCES) $(wildcard *.h) link.ld Makefile mongoose_config.h
+	arm-none-eabi-gcc $(SOURCES) $(CFLAGS) $(LDFLAGS) -o $@
+
+cmsis_core:
+	git clone -q -c advice.detachedHead=false --depth 1 -b 5.9.0 https://github.com/ARM-software/CMSIS_5 $@
+
+$(RADIO_FW):
+	curl -sL $(RADIO_FW_URL) -o $@.tmp
+	echo "$(RADIO_FW_SHA256)  $@.tmp" | shasum -a 256 -c - >/dev/null
+	mv $@.tmp $@
+
+cmsis_rw612:
+	curl -sL https://mcuxpresso.nxp.com/cmsis_pack/repo/NXP.RW612_DFP.25.12.00.pack -o NXP.RW612_DFP.25.12.00.pack
+	unzip -q NXP.RW612_DFP.25.12.00.pack -d $@
+	rm NXP.RW612_DFP.25.12.00.pack
+
+# Show all symbols sorted by size
+show_symbols_sorted_by_size: firmware.bin
+	arm-none-eabi-readelf -sW firmware.elf | sed 1,3d | sed 's,^.*: ,,' | tr -s ' ' | cut -d ' ' -f 2,7 | sort -nk1 | grep -v '^0 '
+
+flash: firmware.bin
+	(echo 'loadfile firmware.elf'; echo 'reset'; echo 'exit';) | JLinkExe -device RW612 -if SWD -speed 4000 -autoconnect 1 -NoGui 1 -ExitOnError 1
+#	JRun --nogui --device RW612 --if SWD firmware.elf
+
+clean:
+	rm -rf firmware.* cmsis_* mongoose/mongoose.* $(RADIO_FW)

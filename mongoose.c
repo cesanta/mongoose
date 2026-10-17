@@ -1668,21 +1668,6 @@ static void mg_dash_handle_add(struct mg_connection *c, struct mg_dash *dash,
   }
 }
 
-// Firmware upload callback for mg_http_stream_body(). Uses *p as a flag:
-// non-NULL means an OTA session is open and must be closed by mg_ota_end()
-static bool otacb(struct mg_http_message *hm, struct mg_str *data, void **p) {
-  if (hm != NULL) {  // Start
-    if (!mg_ota_begin(hm->body.len)) return false;
-    *p = (void *) (ptrdiff_t) 1;
-    return true;
-  } else if (data != NULL) {  // Next chunk
-    return mg_ota_write(data->buf, data->len);
-  }
-  if (*p == NULL) return false;  // End. Begin failed, nothing to finish
-  *p = NULL;
-  return mg_ota_end();
-}
-
 static void mg_serve_fs(struct mg_connection *c, struct mg_http_message *hm,
                         struct mg_dash_user *u, bool stream) {
   struct mg_dash *dash = (struct mg_dash *) c->fn_data;
@@ -1731,7 +1716,7 @@ void mg_dash_ev_handler(struct mg_connection *c, int ev, void *ev_data) {
     } else if (mg_match(hm->uri, mg_str("/api/ota"), NULL)) {
       // Authenticated above. If streaming started, the stream handler owns
       // the connection and c->data, so skip the marker check below
-      if (mg_http_stream_body(c, hm, otacb, NULL)) return;
+      if (mg_http_stream_body(c, hm, mg_http_ota_cb, NULL)) return;
     }
     if (d->marker != '\0') mg_log_http_req(c, hm);
   } else if (ev == MG_EV_HTTP_MSG && d->marker != '\0') {
@@ -1971,6 +1956,15 @@ bool mg_dns_parse(const uint8_t *buf, size_t len, struct mg_dns_message *dm) {
   return true;
 }
 
+#if MG_ENABLE_TCPIP && MG_ENABLE_IPV6
+// NAT64 prefix of the built-in stack interface, or NULL if none
+static const uint8_t *nat64_prefix(struct mg_mgr *mgr) {
+  static const uint8_t zero[12] = {0};
+  if (mgr->ifp == NULL || memcmp(mgr->ifp->nat64, zero, 12) == 0) return NULL;
+  return mgr->ifp->nat64;
+}
+#endif
+
 static void dns_cb(struct mg_connection *c, int ev, void *ev_data) {
   struct dns_data *d, *tmp;
   struct dns_data **head = (struct dns_data **) &c->mgr->active_dns_requests;
@@ -1994,6 +1988,14 @@ static void dns_cb(struct mg_connection *c, int ev, void *ev_data) {
         // MG_INFO(("d %p %hu %hu", d, d->txnid, dm.txnid));
         if (dm.txnid != d->txnid) continue;
         if (d->c->is_resolving) {
+#if MG_ENABLE_TCPIP && MG_ENABLE_IPV6
+          if (dm.resolved && !dm.addr.is_ip6 && nat64_prefix(c->mgr) != NULL) {
+            uint32_t ip4 = dm.addr.addr.ip4;  // DNS64: prefix + IPv4, RFC 6052
+            memcpy(dm.addr.addr.ip, nat64_prefix(c->mgr), 12);
+            memcpy(&dm.addr.addr.ip[12], &ip4, 4);
+            dm.addr.is_ip6 = true;
+          }
+#endif
           if (dm.resolved) {
             dm.addr.port = d->c->rem.port;  // Save port
             d->c->rem = dm.addr;            // Copy resolved address
@@ -2112,7 +2114,11 @@ void mg_resolve(struct mg_connection *c, const char *url) {
   } else {
     // host is not an IP nor a .local, send DNS resolution request
     struct mg_dns *dns = c->mgr->use_dns6 ? &c->mgr->dns6 : &c->mgr->dns4;
-    sendnsreq(c, &host, c->mgr->dnstimeout, dns, c->mgr->use_dns6);
+    bool aaaa = c->mgr->use_dns6;
+#if MG_ENABLE_TCPIP && MG_ENABLE_IPV6
+    if (nat64_prefix(c->mgr) != NULL) aaaa = false;  // DNS64: ask for A
+#endif
+    sendnsreq(c, &host, c->mgr->dnstimeout, dns, aaaa);
   }
 }
 
@@ -5677,6 +5683,19 @@ extern uint8_t *mg_l2_pppoe_header(struct mg_tcpip_if *, enum mg_l2proto, struct
 extern size_t mg_l2_pppoe_trailer(struct mg_tcpip_if *, size_t, uint8_t *);
 extern bool mg_l2_pppoe_rx(struct mg_tcpip_if *, enum mg_l2proto *, struct mg_str *, struct mg_str *);
 
+extern void mg_l2_lowpan_init(struct mg_tcpip_if *);
+extern bool mg_l2_lowpan_poll(struct mg_tcpip_if *, bool);
+extern uint8_t *mg_l2_lowpan_header(struct mg_tcpip_if *, enum mg_l2proto, struct mg_l2addr *, struct mg_l2addr *, uint8_t *);
+extern size_t mg_l2_lowpan_trailer(struct mg_tcpip_if *, size_t, uint8_t *);
+extern bool mg_l2_lowpan_rx(struct mg_tcpip_if *, enum mg_l2proto *, struct mg_str *, struct mg_str *);
+extern struct mg_l2addr *mg_l2_lowpan_getaddr(struct mg_tcpip_if *, uint8_t *);
+extern struct mg_l2addr *mg_l2_lowpan_mapip(enum mg_l2addrtype, struct mg_addr *);
+#if MG_ENABLE_IPV6
+extern bool mg_l2_lowpan_genip6(uint64_t *, uint8_t, struct mg_l2addr *);
+extern bool mg_l2_lowpan_ip6get(struct mg_l2addr *, uint8_t *, uint8_t);
+extern uint8_t mg_l2_lowpan_ip6put(struct mg_l2addr *, uint8_t *);
+#endif
+
 typedef void (*l2_init_fn)(struct mg_tcpip_if *);
 typedef bool (*l2_poll_fn)(struct mg_tcpip_if *, bool);
 typedef uint8_t *((*l2_header_fn)(struct mg_tcpip_if *, enum mg_l2proto, struct mg_l2addr *, struct mg_l2addr *, uint8_t *));
@@ -5692,25 +5711,27 @@ typedef uint8_t (*l2_ip6put_fn)(struct mg_l2addr *, uint8_t *);
 // clang-format on
 
 static const l2_init_fn l2_init[] = {mg_l2_eth_init, mg_l2_ppp_init,
-                                     mg_l2_pppoe_init};
+                                     mg_l2_pppoe_init, mg_l2_lowpan_init};
 static const l2_poll_fn l2_poll[] = {mg_l2_eth_poll, mg_l2_ppp_poll,
-                                     mg_l2_pppoe_poll};
+                                     mg_l2_pppoe_poll, mg_l2_lowpan_poll};
 static const l2_header_fn l2_header[] = {mg_l2_eth_header, mg_l2_ppp_header,
-                                         mg_l2_pppoe_header};
+                                         mg_l2_pppoe_header,
+                                         mg_l2_lowpan_header};
 static const l2_trailer_fn l2_trailer[] = {mg_l2_eth_trailer, mg_l2_ppp_trailer,
-                                           mg_l2_pppoe_trailer};
-static const l2_rx_fn l2_rx[] = {mg_l2_eth_rx, mg_l2_ppp_rx, mg_l2_pppoe_rx};
+                                           mg_l2_pppoe_trailer, mg_l2_lowpan_trailer};
+static const l2_rx_fn l2_rx[] = {mg_l2_eth_rx, mg_l2_ppp_rx, mg_l2_pppoe_rx,
+                                 mg_l2_lowpan_rx};
 static const l2_getaddr_fn l2_getaddr[] = {mg_l2_eth_getaddr, mg_l2_ppp_getaddr,
-                                           mg_l2_ppp_getaddr};
+                                           mg_l2_ppp_getaddr, mg_l2_lowpan_getaddr};
 static const l2_mapip_fn l2_mapip[] = {mg_l2_eth_mapip, mg_l2_ppp_mapip,
-                                       mg_l2_ppp_mapip};
+                                       mg_l2_ppp_mapip, mg_l2_lowpan_mapip};
 #if MG_ENABLE_IPV6
 static const l2_genip6_fn l2_genip6[] = {mg_l2_eth_genip6, mg_l2_ppp_genip6,
-                                         mg_l2_ppp_genip6};
+                                         mg_l2_ppp_genip6, mg_l2_lowpan_genip6};
 static const l2_ip6get_fn l2_ip6get[] = {mg_l2_eth_ip6get, mg_l2_ppp_ip6get,
-                                         mg_l2_ppp_ip6get};
+                                         mg_l2_ppp_ip6get, mg_l2_lowpan_ip6get};
 static const l2_ip6put_fn l2_ip6put[] = {mg_l2_eth_ip6put, mg_l2_ppp_ip6put,
-                                         mg_l2_ppp_ip6put};
+                                         mg_l2_ppp_ip6put, mg_l2_lowpan_ip6put};
 #endif
 
 void mg_l2_init(struct mg_tcpip_if *ifp) {
@@ -6973,6 +6994,561 @@ void mg_hexdump(const void *buf, size_t len) {
   while (alen < 16) logs("   ", 3), ascii[alen++] = ' ';
   logs("  ", 2), logs((char *) ascii, 16), logs("\r\n", 2);
 }
+
+#ifdef MG_ENABLE_LINES
+#line 1 "src/lowpan.c"
+#endif
+
+
+
+
+
+
+
+// IPv6 over IEEE 802.15.4, 6LoWPAN. RFC 4944: frame format, fragmentation.
+// RFC 6282: IPHC header compression, UDP next header compression.
+// Driver tx()/rx() carry raw 802.15.4 frames: MAC header, payload, no FCS.
+//
+// L2 addresses are 8 bytes, struct mg_l2addr. Extended address: EUI-64, big
+// endian. Short address S: 0000:00ff:fe00:SSSS, which is also its IPv6
+// interface identifier, RFC 6282 3.2.2. Broadcast is short address 0xffff.
+// No link-layer security: secured frames are dropped
+
+#if MG_ENABLE_TCPIP && MG_ENABLE_IPV6
+
+#define MGI_LOWPAN_FRAME_MAX 125   // 802.15.4 frame without FCS: 127 - 2
+#define MGI_LOWPAN_MTU 1280        // IPv6 minimum MTU, RFC 8200 5
+#define MGI_LOWPAN_REASM_MS 5000   // Drop incomplete datagrams after this
+#define MGI_FCF_DATA 1U            // Frame control: data frame
+#define MGI_FCF_SECURITY 0x08U     // Frame control: security enabled
+#define MGI_FCF_ACK_REQUEST 0x20U  // Frame control: acknowledgment request
+#define MGI_FCF_PANID_COMP 0x40U   // Frame control: PAN ID compression
+#define MGI_FCF_IE 0x200U          // Frame control: IE present, 2015 frames
+#define MGI_FCF_VERSION_2006 0x1000U
+#define MGI_AM_SHORT 2U            // Addressing mode: 16-bit short address
+#define MGI_AM_EXT 3U              // Addressing mode: 64-bit extended address
+#define MGI_DISPATCH_IPV6 0x41     // Uncompressed IPv6, RFC 4944 5.1
+#define MGI_DISPATCH_FRAG1 0xc0    // First fragment, 11000xxx
+#define MGI_DISPATCH_FRAGN 0xe0    // Subsequent fragment, 11100xxx
+
+// Parsed 802.15.4 MAC header
+struct lowpan_mhr {
+  uint8_t dst[8], src[8];  // Addresses, struct mg_l2addr format
+  uint16_t dst_pan;        // Destination PAN ID
+  size_t len;              // MAC header length, without security header
+  bool secured;            // Security enabled
+};
+
+static struct mg_l2addr s_rxsrc;  // Source address returned by getaddr()
+
+static void set_short(uint8_t *a, uint16_t s) {
+  a[0] = a[1] = a[2] = a[5] = 0, a[3] = 0xff, a[4] = 0xfe;
+  a[6] = (uint8_t) (s >> 8), a[7] = (uint8_t) s;
+}
+
+static bool is_zero(const uint8_t *p, size_t n) {
+  while (n-- > 0)
+    if (*p++ != 0) return false;
+  return true;
+}
+
+// Read an address field, over-the-air byte order is little endian
+static size_t read_addr(const uint8_t *p, unsigned mode, uint8_t *a) {
+  int i;
+  if (mode == MGI_AM_SHORT) {
+    set_short(a, (uint16_t) (p[0] | (p[1] << 8)));
+    return 2;
+  }
+  for (i = 0; i < 8; i++) a[i] = p[7 - i];
+  return 8;
+}
+
+// Parse MAC header of a data frame, 2003/2006 format
+static bool parse_mhr(const uint8_t *f, size_t n, struct lowpan_mhr *h) {
+  unsigned fcf, dm, sm, ver;
+  size_t i = 3;
+  if (n < 3) return false;
+  fcf = (unsigned) (f[0] | (f[1] << 8));
+  dm = (fcf >> 10) & 3, sm = (fcf >> 14) & 3, ver = (fcf >> 12) & 3;
+  if ((fcf & 7) != MGI_FCF_DATA || (fcf & MGI_FCF_IE) || ver > 1) return false;
+  h->secured = (fcf & MGI_FCF_SECURITY) != 0;
+  if (dm < MGI_AM_SHORT || sm < MGI_AM_SHORT) return false;  // Need both addresses
+  if (i + 2 > n) return false;
+  h->dst_pan = (uint16_t) (f[i] | (f[i + 1] << 8)), i += 2;
+  if (i + (dm == MGI_AM_EXT ? 8 : 2) > n) return false;
+  i += read_addr(f + i, dm, h->dst);
+  if ((fcf & MGI_FCF_PANID_COMP) == 0) i += 2;  // Source PAN ID, if present
+  if (i + (sm == MGI_AM_EXT ? 8 : 2) > n) return false;
+  i += read_addr(f + i, sm, h->src);
+  h->len = i;
+  return true;
+}
+
+static bool is_short(const uint8_t *a) {
+  return a[0] == 0 && a[1] == 0 && a[2] == 0 && a[3] == 0xff && a[4] == 0xfe &&
+         a[5] == 0;
+}
+
+static bool is_bcast(const uint8_t *a) {
+  return is_short(a) && a[6] == 0xff && a[7] == 0xff;
+}
+
+// IPv6 interface identifier for an L2 address, RFC 6282 3.2.2
+static void make_iid(const uint8_t *a, uint8_t *iid) {
+  memcpy(iid, a, 8);
+  if (!is_short(a)) iid[0] ^= 2;  // EUI-64: flip universal/local bit
+}
+
+static size_t write_addr(uint8_t *p, const uint8_t *a) {
+  int i;
+  if (is_short(a)) {
+    p[0] = a[7], p[1] = a[6];
+    return 2;
+  }
+  for (i = 0; i < 8; i++) p[i] = a[7 - i];
+  return 8;
+}
+
+// Write MAC header for a data frame from us to dst. Return its length
+static size_t write_mhr(struct mg_tcpip_if *ifp, const uint8_t *dst,
+                        uint8_t *f) {
+  struct lowpan_data *d = &ifp->l2data.lowpan;
+  unsigned fcf = MGI_FCF_DATA | MGI_FCF_PANID_COMP | MGI_FCF_VERSION_2006;
+  size_t i = 3;
+  if (!is_bcast(dst)) fcf |= MGI_FCF_ACK_REQUEST;  // Unicast: MAC retries
+  fcf |= (is_short(dst) ? MGI_AM_SHORT : MGI_AM_EXT) << 10;
+  fcf |= (is_short(ifp->mac) ? MGI_AM_SHORT : MGI_AM_EXT) << 14;
+  f[0] = (uint8_t) fcf, f[1] = (uint8_t) (fcf >> 8), f[2] = d->seq++;
+  f[i++] = (uint8_t) d->pan_id, f[i++] = (uint8_t) (d->pan_id >> 8);
+  i += write_addr(f + i, dst);
+  i += write_addr(f + i, ifp->mac);
+  return i;
+}
+
+// Compress a unicast IPv6 address: 2 bits for the SAM/DAM field, inline
+// bytes go to out. RFC 6282 3.1.1, SAC/DAC = 0
+static unsigned compress_addr(const uint8_t *ip, const uint8_t *l2,
+                              uint8_t *out, size_t *n) {
+  static const uint8_t ll[8] = {0xfe, 0x80, 0, 0, 0, 0, 0, 0};
+  uint8_t iid[8];
+  if (memcmp(ip, ll, 8) != 0) {
+    memcpy(out + *n, ip, 16), *n += 16;
+    return 0;
+  }
+  make_iid(l2, iid);
+  if (memcmp(ip + 8, iid, 8) == 0) return 3;  // Derived from L2 address
+  if (is_short(ip + 8)) {                    // 0000:00ff:fe00:XXXX
+    memcpy(out + *n, ip + 14, 2), *n += 2;
+    return 2;
+  }
+  memcpy(out + *n, ip + 8, 8), *n += 8;
+  return 1;
+}
+
+// Compress IPv6 header to IPHC, RFC 6282 3.1. Next header is carried inline.
+// Return compressed header length
+static size_t iphc_compress(const uint8_t *ip, const uint8_t *src_l2,
+                            const uint8_t *dst_l2, uint8_t *out) {
+  unsigned tc = (unsigned) (((ip[0] & 0x0f) << 4) | (ip[1] >> 4));
+  unsigned ecn = tc & 3, dscp = tc >> 2, tf, hl;
+  uint32_t flow = ((uint32_t) (ip[1] & 0x0f) << 16) |
+                  ((uint32_t) ip[2] << 8) | ip[3];
+  size_t n = 2;
+  if (tc == 0 && flow == 0) {
+    tf = 3;
+  } else if (flow == 0) {
+    tf = 2, out[n++] = (uint8_t) ((ecn << 6) | dscp);
+  } else if (dscp == 0) {
+    tf = 1, out[n++] = (uint8_t) ((ecn << 6) | (flow >> 16));
+    out[n++] = (uint8_t) (flow >> 8), out[n++] = (uint8_t) flow;
+  } else {
+    tf = 0, out[n++] = (uint8_t) ((ecn << 6) | dscp);
+    out[n++] = (uint8_t) (flow >> 16), out[n++] = (uint8_t) (flow >> 8);
+    out[n++] = (uint8_t) flow;
+  }
+  out[n++] = ip[6];  // Next header, inline
+  hl = ip[7] == 1 ? 1 : ip[7] == 64 ? 2 : ip[7] == 255 ? 3 : 0;
+  if (hl == 0) out[n++] = ip[7];
+  out[0] = (uint8_t) (0x60 | (tf << 3) | hl);
+  out[1] = 0;
+  if (is_zero(ip + 8, 16)) {
+    out[1] |= 0x40;  // SAC = 1, SAM = 00: unspecified address
+  } else {
+    out[1] |= (uint8_t) (compress_addr(ip + 8, src_l2, out, &n) << 4);
+  }
+  if (ip[24] == 0xff) {  // Multicast, M = 1
+    out[1] |= 0x08;
+    if (ip[25] == 0x02 && is_zero(ip + 26, 13)) {  // ff02::00XX
+      out[1] |= 3, out[n++] = ip[39];
+    } else if (is_zero(ip + 26, 11)) {  // ffXX::00XX:XXXX
+      out[1] |= 2, out[n++] = ip[25];
+      memcpy(out + n, ip + 37, 3), n += 3;
+    } else if (is_zero(ip + 26, 9)) {  // ffXX::00XX:XXXX:XXXX
+      out[1] |= 1, out[n++] = ip[25];
+      memcpy(out + n, ip + 35, 5), n += 5;
+    } else {
+      memcpy(out + n, ip + 24, 16), n += 16;
+    }
+  } else {
+    out[1] |= (uint8_t) compress_addr(ip + 24, dst_l2, out, &n);
+  }
+  return n;
+}
+
+// Decompress a unicast address. Prefix is the context prefix for SAC/DAC = 1,
+// or NULL for link-local. Return inline bytes used
+static size_t decompress_addr(unsigned mode, const uint8_t *p, size_t n,
+                              const uint8_t *l2, const uint8_t *prefix,
+                              uint8_t *ip) {
+  static const size_t sizes[] = {16, 8, 2, 0};
+  if (sizes[mode] > n) return n + 1;  // Truncated: caller sees i > n
+  if (mode == 0) {
+    memcpy(ip, p, 16);
+  } else {
+    memset(ip, 0, 16), ip[0] = 0xfe, ip[1] = 0x80;
+    if (prefix != NULL) memcpy(ip, prefix, 8);
+    if (mode == 1) memcpy(ip + 8, p, 8);
+    if (mode == 2) set_short(ip + 8, (uint16_t) ((p[0] << 8) | p[1]));
+    if (mode == 3) make_iid(l2, ip + 8);
+  }
+  return sizes[mode];
+}
+
+// Decompress IPHC or uncompressed IPv6 header, RFC 6282 3.1, 4.3.
+// Write IPv6 header (and UDP header if compressed) to ip. Return its length,
+// or 0 on error. Set *used to the number of compressed bytes consumed
+static size_t iphc_decompress(const struct lowpan_mhr *h, const uint8_t *p,
+                              size_t n, uint8_t *ip, size_t *used, bool *udp) {
+  static const size_t tf_sizes[] = {4, 3, 1, 0};
+  unsigned b0, b1, tf, tc = 0, sam, dam;
+  uint32_t flow = 0;
+  size_t i = 2;
+  *udp = false;
+  if (n > 0 && p[0] == MGI_DISPATCH_IPV6) {
+    if (n < 41) return 0;
+    memcpy(ip, p + 1, 40);
+    *used = 41;
+    return 40;
+  }
+  if (n < 2 || (p[0] & 0xe0) != 0x60) return 0;
+  b0 = p[0], b1 = p[1], tf = (b0 >> 3) & 3, sam = (b1 >> 4) & 3, dam = b1 & 3;
+  if (b1 & 0x80) return 0;  // CID: no compression contexts
+  if (i + tf_sizes[tf] + ((b0 & 4) ? 0 : 1) + ((b0 & 3) ? 0 : 1) > n)
+    return 0;  // TF, next header, hop limit
+  if (tf == 0 || tf == 2) tc = (unsigned) (((p[i] & 0x3f) << 2) | (p[i] >> 6));
+  if (tf == 1) tc = p[i] >> 6;
+  if (tf == 0) flow = ((uint32_t) (p[i + 1] & 0x0f) << 16) |
+                      ((uint32_t) p[i + 2] << 8) | p[i + 3];
+  if (tf == 1) flow = ((uint32_t) (p[i] & 0x0f) << 16) |
+                      ((uint32_t) p[i + 1] << 8) | p[i + 2];
+  i += tf_sizes[tf];
+  ip[0] = (uint8_t) (0x60 | (tc >> 4));
+  ip[1] = (uint8_t) ((tc << 4) | (flow >> 16));
+  ip[2] = (uint8_t) (flow >> 8), ip[3] = (uint8_t) flow;
+  ip[4] = ip[5] = 0;  // Payload length, set by caller
+  if ((b0 & 4) == 0) ip[6] = p[i++];  // Next header inline
+  if ((b0 & 3) == 0) ip[7] = p[i++];
+  if ((b0 & 3) != 0) ip[7] = (b0 & 3) == 1 ? 1 : (b0 & 3) == 2 ? 64 : 255;
+  // Source address
+  if ((b1 & 0x40) && sam == 0) {  // SAC = 1, SAM = 00: unspecified address
+    memset(ip + 8, 0, 16);
+  } else {
+    if (b1 & 0x40) return 0;  // SAC = 1: no compression contexts
+    i += decompress_addr(sam, p + i, n - i, h->src, NULL, ip + 8);
+    if (i > n) return 0;
+  }
+  // Destination address
+  if ((b1 & 0x0c) == 0x08) {  // Multicast, stateless
+    static const size_t sizes[] = {16, 6, 4, 1};
+    if (i + sizes[dam] > n) return 0;
+    memset(ip + 24, 0, 16), ip[24] = 0xff;
+    if (dam == 0) memcpy(ip + 24, p + i, 16);
+    if (dam == 1) ip[25] = p[i], memcpy(ip + 35, p + i + 1, 5);
+    if (dam == 2) ip[25] = p[i], memcpy(ip + 37, p + i + 1, 3);
+    if (dam == 3) ip[25] = 2, ip[39] = p[i];
+    i += sizes[dam];
+  } else if ((b1 & 0x08) == 0) {  // Unicast
+    if (b1 & 0x04) return 0;  // DAC = 1: no compression contexts
+    i += decompress_addr(dam, p + i, n - i, h->dst, NULL, ip + 24);
+    if (i > n) return 0;
+  } else {
+    return 0;  // Stateful multicast is not supported
+  }
+  if (b0 & 4) {  // Next header compressed: only UDP, RFC 6282 4.3
+    static const size_t port_sizes[] = {4, 3, 3, 1};
+    uint8_t *u = ip + 40;
+    unsigned nhc;
+    if (i >= n || (p[i] & 0xf8) != 0xf0) return 0;
+    nhc = p[i++];
+    if (nhc & 4) return 0;  // Elided checksum is not supported
+    if (i + port_sizes[nhc & 3] + 2 > n) return 0;  // Ports, checksum
+    switch (nhc & 3) {
+      case 0: memcpy(u, p + i, 4), i += 4; break;
+      case 1: memcpy(u, p + i, 2), u[2] = 0xf0, u[3] = p[i + 2], i += 3; break;
+      case 2: u[0] = 0xf0, u[1] = p[i], memcpy(u + 2, p + i + 1, 2), i += 3; break;
+      default:
+        u[0] = u[2] = 0xf0, u[1] = (uint8_t) (0xb0 | (p[i] >> 4));
+        u[3] = (uint8_t) (0xb0 | (p[i] & 0x0f)), i += 1;
+        break;
+    }
+    u[4] = u[5] = 0;                    // UDP length, set by caller
+    memcpy(u + 6, p + i, 2), i += 2;    // Checksum
+    ip[6] = 17;
+    *udp = true;
+  }
+  if (i > n) return 0;
+  *used = i;
+  return *udp ? 48 : 40;
+}
+
+// Set IPv6 payload length and, for compressed UDP, UDP length
+static void set_lengths(uint8_t *ip, size_t len, bool udp) {
+  size_t plen = len - 40;
+  ip[4] = (uint8_t) (plen >> 8), ip[5] = (uint8_t) plen;
+  if (udp) ip[44] = (uint8_t) (plen >> 8), ip[45] = (uint8_t) plen;
+}
+
+void mg_l2_lowpan_init(struct mg_tcpip_if *ifp) {
+  struct lowpan_data *d = &ifp->l2data.lowpan;
+  if (is_zero(ifp->mac, 8)) {
+    ifp->mac[0] = 0x02;  // Locally administered EUI-64
+    mg_random(&ifp->mac[1], 7);
+    MG_INFO(("EUI-64 not set. Generated random: %M", mg_print_hex, 8,
+             ifp->mac));
+  }
+  ifp->l2mtu = MGI_LOWPAN_MTU;
+  ifp->framesize = MGI_LOWPAN_MTU;  // TX buffer holds an uncompressed packet
+  // Polling drivers receive one raw 802.15.4 frame at a time into the queue
+  // buffer, so it does not need to be framesize: 127 bytes max
+  if (ifp->recv_queue.size == 0) ifp->recv_queue.size = 128;
+  d->short_addr = 0xfffe;
+  d->buf = (uint8_t *) mg_calloc(1, MGI_LOWPAN_MTU);
+  if (d->buf == NULL) MG_ERROR(("OOM"));
+}
+
+bool mg_l2_lowpan_poll(struct mg_tcpip_if *ifp, bool expired_1000ms) {
+  struct lowpan_data *d = &ifp->l2data.lowpan;
+  if (expired_1000ms && d->size != 0 && ifp->now > d->expire) d->size = 0;
+  return true;
+}
+
+uint8_t *mg_l2_lowpan_header(struct mg_tcpip_if *ifp, enum mg_l2proto proto,
+                             struct mg_l2addr *src, struct mg_l2addr *dst,
+                             uint8_t *frame) {
+  struct lowpan_data *d = &ifp->l2data.lowpan;
+  d->proto = (uint8_t) proto;
+  memcpy(d->dst, dst, sizeof(d->dst));
+  (void) src;
+  return frame;  // Uncompressed packet starts at the frame start
+}
+
+// Compress the packet, send all fragments but the last directly, put the
+// last fragment into the TX buffer for the stack to send
+size_t mg_l2_lowpan_trailer(struct mg_tcpip_if *ifp, size_t len,
+                            uint8_t *cur) {
+  struct lowpan_data *d = &ifp->l2data.lowpan;
+  uint8_t *ip = cur - len, hdr[48], f[MGI_LOWPAN_FRAME_MAX];
+  const uint8_t *dst = d->dst;
+  size_t hlen, mlen, avail, chunk, off, n;
+  if (d->proto != MG_TCPIP_L2PROTO_IPV6 || len < 40 || len > MGI_LOWPAN_MTU)
+    return 0;
+  hlen = iphc_compress(ip, ifp->mac, dst, hdr);
+  mlen = write_mhr(ifp, dst, f);
+  avail = MGI_LOWPAN_FRAME_MAX - mlen;
+  if (hlen + len - 40 <= avail) {  // Fits into one frame
+    memcpy(f + mlen, hdr, hlen);
+    memcpy(f + mlen + hlen, ip + 40, len - 40);
+    n = mlen + hlen + len - 40;
+  } else {  // Fragment, RFC 4944 5.3. Offsets are in uncompressed bytes
+    uint16_t tag = d->tag++;
+    chunk = (avail - 4 - hlen) & ~(size_t) 7;  // 40 + chunk: multiple of 8
+    f[mlen] = (uint8_t) (MGI_DISPATCH_FRAG1 | (len >> 8));
+    f[mlen + 1] = (uint8_t) len;
+    f[mlen + 2] = (uint8_t) (tag >> 8), f[mlen + 3] = (uint8_t) tag;
+    memcpy(f + mlen + 4, hdr, hlen);
+    memcpy(f + mlen + 4 + hlen, ip + 40, chunk);
+    n = mlen + 4 + hlen + chunk;
+    ifp->driver->tx(f, n, ifp);
+    for (off = 40 + chunk;;) {
+      mlen = write_mhr(ifp, dst, f);
+      chunk = len - off;
+      if (chunk > ((avail - 5) & ~(size_t) 7)) chunk = (avail - 5) & ~(size_t) 7;
+      f[mlen] = (uint8_t) (MGI_DISPATCH_FRAGN | (len >> 8));
+      f[mlen + 1] = (uint8_t) len;
+      f[mlen + 2] = (uint8_t) (tag >> 8), f[mlen + 3] = (uint8_t) tag;
+      f[mlen + 4] = (uint8_t) (off / 8);
+      memcpy(f + mlen + 5, ip + off, chunk);
+      n = mlen + 5 + chunk;
+      off += chunk;
+      if (off >= len) break;
+      ifp->driver->tx(f, n, ifp);
+    }
+  }
+  memcpy(ifp->tx.buf, f, n);
+  return n;
+}
+
+bool mg_l2_lowpan_rx(struct mg_tcpip_if *ifp, enum mg_l2proto *proto,
+                     struct mg_str *pay, struct mg_str *raw) {
+  struct lowpan_data *d = &ifp->l2data.lowpan;
+  uint8_t *p = (uint8_t *) raw->buf;
+  size_t n = raw->len, hlen, used, size, off;
+  struct lowpan_mhr h;
+  bool udp;
+  if (d->buf == NULL || !parse_mhr(p, n, &h)) return false;
+  if (h.dst_pan != d->pan_id && h.dst_pan != 0xffff) return false;
+  if (!is_bcast(h.dst) && memcmp(h.dst, ifp->mac, 8) != 0 &&
+      !(is_short(h.dst) && d->short_addr != 0xfffe &&
+        MG_LOAD_BE16(h.dst + 6) == d->short_addr))
+    return false;
+  if (h.secured) return false;  // No link-layer security
+  p += h.len, n -= h.len;
+  if (n < 1) return false;
+  if ((p[0] & 0xf8) == MGI_DISPATCH_FRAG1 || (p[0] & 0xf8) == MGI_DISPATCH_FRAGN) {
+    bool first = (p[0] & 0xf8) == MGI_DISPATCH_FRAG1;
+    uint16_t tag;
+    if (n < (first ? 4U : 5U)) return false;
+    size = (size_t) (((p[0] & 7) << 8) | p[1]);
+    tag = (uint16_t) ((p[2] << 8) | p[3]);
+    if (size < 40 || size > MGI_LOWPAN_MTU) return false;
+    if (first) {
+      p += 4, n -= 4;
+      hlen = iphc_decompress(&h, p, n, d->buf, &used, &udp);
+      if (hlen == 0 || hlen + n - used > size) return false;
+      memcpy(d->buf + hlen, p + used, n - used);
+      d->size = (uint16_t) size, d->tag_rx = tag, d->udp = udp;
+      d->received = (uint16_t) (hlen + n - used);
+      memcpy(d->src, h.src, sizeof(d->src));
+      d->expire = ifp->now + MGI_LOWPAN_REASM_MS;
+    } else {
+      off = (size_t) p[4] * 8;
+      p += 5, n -= 5;
+      if (d->size != size || d->tag_rx != tag ||
+          memcmp(d->src, h.src, sizeof(d->src)) != 0 || off + n > size)
+        return false;  // Not the datagram being reassembled
+      memcpy(d->buf + off, p, n);
+      d->received = (uint16_t) (d->received + n);
+    }
+    if (d->size == 0 || d->received < d->size) return false;
+    set_lengths(d->buf, d->size, d->udp);
+    pay->buf = (char *) d->buf, pay->len = d->size;
+    d->size = 0;
+  } else {
+    hlen = iphc_decompress(&h, p, n, d->buf, &used, &udp);
+    if (hlen == 0 || hlen + n - used > MGI_LOWPAN_MTU) return false;
+    memcpy(d->buf + hlen, p + used, n - used);
+    set_lengths(d->buf, hlen + n - used, udp);
+    pay->buf = (char *) d->buf, pay->len = hlen + n - used;
+  }
+  *proto = MG_TCPIP_L2PROTO_IPV6;
+  return true;
+}
+
+struct mg_l2addr *mg_l2_lowpan_getaddr(struct mg_tcpip_if *ifp,
+                                       uint8_t *frame) {
+  struct lowpan_mhr h;
+  memset(&s_rxsrc, 0, sizeof(s_rxsrc));
+  if (parse_mhr(frame, MGI_LOWPAN_FRAME_MAX, &h))
+    memcpy(&s_rxsrc, h.src, sizeof(s_rxsrc));
+  (void) ifp;
+  return &s_rxsrc;
+}
+
+extern struct mg_l2addr s_mapip;
+
+// All broadcast and multicast goes to the 802.15.4 broadcast address
+struct mg_l2addr *mg_l2_lowpan_mapip(enum mg_l2addrtype addrtype,
+                                     struct mg_addr *addr) {
+  set_short((uint8_t *) &s_mapip, 0xffff);
+  (void) addrtype, (void) addr;
+  return &s_mapip;
+}
+
+bool mg_l2_lowpan_genip6(uint64_t *ip6, uint8_t prefix_len,
+                         struct mg_l2addr *l2addr) {
+  if (prefix_len > 64) {
+    MG_ERROR(("Prefix length > 64, UNSUPPORTED"));
+    return false;
+  }
+  ip6[0] = 0;
+  make_iid((uint8_t *) l2addr, (uint8_t *) &ip6[1]);  // RFC 6282 3.2.2
+  return true;
+}
+
+// Link-layer address of a neighbour from its IPv6 address: its interface ID
+// is made from it, RFC 6282 3.2.2. make_iid() is its own inverse
+void mg_l2_lowpan_ip6l2(const uint64_t *ip6, uint8_t *l2) {
+  make_iid((const uint8_t *) &ip6[1], l2);
+}
+
+// Link-layer address option, RFC 4944 8: length 2 for EUI-64, 1 for short
+bool mg_l2_lowpan_ip6get(struct mg_l2addr *l2addr, uint8_t *opts,
+                         uint8_t len) {
+  if (len == 2) {
+    memcpy(l2addr, opts, 8);
+  } else if (len == 1) {
+    set_short((uint8_t *) l2addr, (uint16_t) ((opts[0] << 8) | opts[1]));
+  } else {
+    return false;
+  }
+  return true;
+}
+
+uint8_t mg_l2_lowpan_ip6put(struct mg_l2addr *l2addr, uint8_t *opts) {
+  uint8_t *a = (uint8_t *) l2addr;
+  if (is_short(a)) {
+    opts[0] = a[6], opts[1] = a[7];
+    return 1;
+  }
+  memcpy(opts, a, 8);
+  return 2;
+}
+
+#elif MG_ENABLE_TCPIP
+// No IPv6: 6LoWPAN is not available. Stubs for the L2 dispatch tables
+extern struct mg_l2addr s_mapip;
+
+void mg_l2_lowpan_init(struct mg_tcpip_if *ifp) {
+  MG_ERROR(("6LoWPAN needs MG_ENABLE_IPV6"));
+  (void) ifp;
+}
+
+bool mg_l2_lowpan_poll(struct mg_tcpip_if *ifp, bool expired_1000ms) {
+  (void) ifp, (void) expired_1000ms;
+  return false;  // Link is never up
+}
+
+uint8_t *mg_l2_lowpan_header(struct mg_tcpip_if *ifp, enum mg_l2proto proto,
+                             struct mg_l2addr *src, struct mg_l2addr *dst,
+                             uint8_t *frame) {
+  (void) ifp, (void) proto, (void) src, (void) dst;
+  return frame;
+}
+
+size_t mg_l2_lowpan_trailer(struct mg_tcpip_if *ifp, size_t len,
+                            uint8_t *cur) {
+  (void) ifp, (void) len, (void) cur;
+  return 0;  // Nothing to send
+}
+
+bool mg_l2_lowpan_rx(struct mg_tcpip_if *ifp, enum mg_l2proto *proto,
+                     struct mg_str *pay, struct mg_str *raw) {
+  (void) ifp, (void) proto, (void) pay, (void) raw;
+  return false;
+}
+
+struct mg_l2addr *mg_l2_lowpan_getaddr(struct mg_tcpip_if *ifp,
+                                       uint8_t *frame) {
+  (void) ifp, (void) frame;
+  return &s_mapip;
+}
+
+struct mg_l2addr *mg_l2_lowpan_mapip(enum mg_l2addrtype addrtype,
+                                     struct mg_addr *addr) {
+  (void) addrtype, (void) addr;
+  return &s_mapip;
+}
+#endif
 
 #ifdef MG_ENABLE_LINES
 #line 1 "src/md5.c"
@@ -8442,7 +9018,13 @@ struct mg_connection *mg_connect_svc(struct mg_mgr *mgr, const char *url,
   if (url == NULL || url[0] == '\0') {
     MG_ERROR(("null url"));
 #if MG_ENABLE_TCPIP
-  } else if (mgr->ifp != NULL && mgr->ifp->state != MG_TCPIP_STATE_READY) {
+  } else if (mgr->ifp != NULL && mgr->ifp->state != MG_TCPIP_STATE_READY
+#if MG_ENABLE_IPV6
+             // IPv6-only links: a link-local address is enough for local peers
+             && (mgr->ifp->state6 < MG_TCPIP_STATE_UP ||
+                 mgr->ifp->ip6ll[0] == 0)
+#endif
+  ) {
     MG_ERROR(("Network is down"));
 #endif
   } else if ((c = mg_alloc_conn(mgr)) == NULL) {
@@ -8604,6 +9186,7 @@ void mg_multicast_restore(struct mg_connection *c, uint8_t *from) {
 #ifdef MG_ENABLE_LINES
 #line 1 "src/net_builtin.c"
 #endif
+
 
 
 
@@ -9575,7 +10158,7 @@ static void tx_ndp_rs(struct mg_tcpip_if *ifp) {
                        (struct mg_addr *) &ip6_allrouters),
            ifp->ip6ll, (uint64_t *) ip6_allrouters.addr.ip6, 133, 0, payload,
            payload_len);
-  MG_DEBUG(("NDP Router Solicitation sent"));
+  MG_VERBOSE(("NDP Router Solicitation sent"));
 }
 
 static void fill_prefix(uint8_t *dst, uint8_t *src, uint8_t len) {
@@ -9614,9 +10197,10 @@ static void rx_ndp_ra(struct mg_tcpip_if *ifp, struct pkt *pkt) {
   uint8_t *opts = (uint8_t *) (ra + 1);
   size_t opt_left = pkt->pay.len - sizeof(*ra);
   bool gotl2addr = false, gotprefix = false, changed = false;
+  bool ip6only = ifp->ip == 0 && !ifp->enable_dhcp_client;
   uint8_t l2[sizeof(struct mg_l2addr)];
   uint32_t mtu = 0;
-  uint8_t *prefix = NULL, prefix_len = 0;
+  uint8_t *prefix = NULL, prefix_len = 0, *dns = NULL;
 
   if (pkt->pay.len < sizeof(*ra)) return;
   if (ifp->state6 == MG_TCPIP_STATE_UP) {
@@ -9652,11 +10236,21 @@ static void rx_ndp_ra(struct mg_tcpip_if *ifp, struct pkt *pkt) {
         if (prefix_len != ifp->prefix_len ||
             !match_prefix(prefix, ifp->prefix, ifp->prefix_len))
           changed = true;
+      } else if (type == 38 && length >= 16 && ip6only && (opts[3] & 7) == 0) {
+        memcpy(ifp->nat64, opts + 4, sizeof(ifp->nat64));  // RFC-8781, /96
+      } else if (type == 25 && length >= 24 && ip6only) {
+        dns = opts + 8;  // DNS server, RFC-8106
       }
       opts += length;
       opt_left -= length;
     }
 
+    if (dns != NULL && ifp->dns6_url == NULL &&
+        (ifp->dns6_url = (char *) mg_calloc(1, 64)) != NULL) {  // First wins
+      mg_snprintf(ifp->dns6_url, 64, "udp://%M:53", mg_print_ip6, dns);
+      ifp->mgr->dns6.url = ifp->dns6_url, ifp->mgr->use_dns6 = true;
+      if (ifp->mgr->dns6.c != NULL) mg_close_conn(ifp->mgr->dns6.c);
+    }
     // fill prefix and global
     if (gotprefix && !fill_global(ifp, prefix, prefix_len)) return;
     if (changed) ifp->is_ip6_changed = true;
@@ -9682,6 +10276,208 @@ static void rx_ndp_ra(struct mg_tcpip_if *ifp, struct pkt *pkt) {
   }
 }
 
+// Routing between two interfaces, see mg_tcpip_route()
+void mg_l2_lowpan_ip6l2(const uint64_t *ip6, uint8_t *l2);
+
+// Interface with a user-set IPv6 prefix, which the router advertises
+static bool has_static_prefix(struct mg_tcpip_if *ifp) {
+  return ifp->route != NULL && !ifp->enable_slaac && ifp->prefix_len > 0 &&
+         ifp->prefix_len <= 64 && ifp->ip6[0] != 0;
+}
+
+// Router Advertisement, 4.2: our static prefix (on-link, SLAAC, we are the
+// default router), and a route to the other interface's static prefix
+static void tx_ndp_ra(struct mg_tcpip_if *ifp) {
+  struct mg_tcpip_if *peer = ifp->route;
+  uint8_t buf[sizeof(struct ndp_ra) + 16 + 32 + 16 + 16 + 24], *o;
+  struct ndp_ra *ra = (struct ndp_ra *) buf;
+  bool own = has_static_prefix(ifp), other = has_static_prefix(peer);
+  bool nat64 = own && (ifp->nat64[0] | ifp->nat64[1]) != 0;  // Prefix set
+  size_t n = sizeof(*ra);
+  if (!own && !other) return;
+  memset(buf, 0, sizeof(buf));
+  ra->cur_hop_limit = 64;
+  ra->router_lifetime = mg_htons(own ? 1800 : 0);
+  buf[n] = 1;  // Source link-layer address, 4.6.1
+  buf[n + 1] = mg_l2_ip6put(ifp->l2type, ifp->mac, buf + n + 2);
+  n += (size_t) (8 * buf[n + 1]);
+  if (own) {  // Prefix information, 4.6.2
+    o = buf + n, n += 32;
+    o[0] = 3, o[1] = 4, o[2] = ifp->prefix_len, o[3] = 0xc0;  // L, A
+    MG_STORE_BE32(o + 4, 86400);  // Valid lifetime
+    MG_STORE_BE32(o + 8, 14400);  // Preferred lifetime
+    memcpy(o + 16, ifp->prefix, sizeof(ifp->prefix));
+  }
+  if (other) {  // Route information, RFC-4191 2.3
+    o = buf + n, n += 16;
+    o[0] = 24, o[1] = 2, o[2] = peer->prefix_len;
+    MG_STORE_BE32(o + 4, 1800);  // Route lifetime
+    memcpy(o + 8, peer->prefix, sizeof(peer->prefix));
+  }
+  if (nat64) {  // We translate to IPv4: NAT64 prefix and a DNS server
+    struct mg_addr a;
+    o = buf + n, n += 16;  // NAT64 prefix, RFC-8781
+    o[0] = 38, o[1] = 2;
+    MG_STORE_BE16(o + 2, (1800 / 8) << 3);  // Lifetime in 8s units, PLC 0: /96
+    memcpy(o + 4, ifp->nat64, sizeof(ifp->nat64));
+    o = buf + n, n += 24;  // DNS server, RFC-8106: NAT64 prefix + IPv4 DNS
+    o[0] = 25, o[1] = 3;
+    MG_STORE_BE32(o + 4, 1800);  // Lifetime
+    memcpy(o + 8, ifp->nat64, sizeof(ifp->nat64));
+    if (!mg_aton(mg_url_host(peer->mgr->dns4.url), &a) || a.is_ip6)
+      a.addr.ip4 = MG_U32(8, 8, 8, 8);
+    memcpy(o + 20, &a.addr.ip4, 4);
+  }
+  tx_icmp6(ifp,
+           mg_l2_mapip(ifp->l2type, MG_TCPIP_L2ADDR_MCAST6,
+                       (struct mg_addr *) &ip6_allnodes),
+           ifp->ip6ll, (uint64_t *) ip6_allnodes.addr.ip6, 134, 0, buf, n);
+}
+
+// Remember the hardware address of a sender, to forward replies to it
+static void nb6_learn(struct mg_tcpip_if *ifp, uint64_t *ip, uint8_t *l2) {
+  size_t i, n = sizeof(ifp->nb6) / sizeof(ifp->nb6[0]);
+  for (i = 0; i < n && !MG_IP6MATCH(ifp->nb6[i].ip, ip); i++) (void) 0;
+  if (i == n) i = ifp->nb6_next, ifp->nb6_next = (uint8_t) ((i + 1) % n);
+  ifp->nb6[i].ip[0] = ip[0], ifp->nb6[i].ip[1] = ip[1];
+  memcpy(ifp->nb6[i].l2, l2, sizeof(ifp->nb6[i].l2));
+}
+
+// Hardware address to send a forwarded packet to: a learned neighbour, the
+// 6LoWPAN address made from the interface ID, or our default router
+static bool nb6_l2(struct mg_tcpip_if *ifp, uint64_t *ip, uint8_t *l2) {
+  size_t i, n = sizeof(ifp->nb6) / sizeof(ifp->nb6[0]);
+  for (i = 0; i < n && !MG_IP6MATCH(ifp->nb6[i].ip, ip); i++) (void) 0;
+  if (i < n) {
+    memcpy(l2, ifp->nb6[i].l2, sizeof(ifp->nb6[i].l2));
+  } else if (ifp->l2type == MG_TCPIP_L2_LOWPAN) {
+    mg_l2_lowpan_ip6l2(ip, l2);
+  } else if (ifp->gw6_ready) {
+    memcpy(l2, ifp->gw6mac, sizeof(ifp->gw6mac));
+  } else {
+    return false;
+  }
+  return true;
+}
+
+// NAT64, RFC-6146: translate a TCP or UDP packet sent to our nat64 prefix to
+// IPv4, send it from the other interface. Sessions are kept in ifp->nat64s,
+// when it is full the oldest one is replaced
+static void nat64_out(struct mg_tcpip_if *ifp, struct pkt *pkt, size_t len) {
+  struct mg_tcpip_if *out = ifp->route;
+  struct mg_tcpip_nat64 *e = NULL;
+  struct ip *ip;
+  uint64_t src[2], dst[2];
+  uint8_t *p, next = pkt->ip6->next;
+  size_t i, n = sizeof(ifp->nat64s) / sizeof(ifp->nat64s[0]);
+  size_t plen = len - sizeof(*pkt->ip6);
+  struct tcp *tcp = (struct tcp *) (pkt->ip6 + 1);
+  struct udp *udp = (struct udp *) tcp;  // Ports are at the same place
+  uint32_t dst4;
+  if ((next != 6 && next != 17) ||
+      plen < (next == 6 ? sizeof(*tcp) : sizeof(*udp)) ||
+      sizeof(*ip) + plen > out->mtu || out->state != MG_TCPIP_STATE_READY)
+    return;
+  src[0] = pkt->ip6->src[0], src[1] = pkt->ip6->src[1];
+  dst[0] = pkt->ip6->dst[0], dst[1] = pkt->ip6->dst[1];
+  memcpy(&dst4, (uint8_t *) dst + 12, sizeof(dst4));  // RFC-6052, /96
+  for (i = 0; i < n; i++) {
+    e = &ifp->nat64s[i];
+    if (e->proto == next && e->port6 == udp->sport &&
+        MG_IP6MATCH(e->ip6, src) && e->port4 == udp->dport && e->ip4 == dst4)
+      break;
+  }
+  if (i == n) {  // New session
+    e = &ifp->nat64s[ifp->nat64_next];
+    ifp->nat64_next = (uint8_t) ((ifp->nat64_next + 1) % n);
+    if (out->eport < MG_EPHEMERAL_PORT_BASE) out->eport = MG_EPHEMERAL_PORT_BASE;
+    e->ip6[0] = src[0], e->ip6[1] = src[1], e->ip4 = dst4, e->proto = next;
+    e->port6 = udp->sport, e->port4 = udp->dport;
+    e->lport = mg_htons(out->eport++);
+    MG_DEBUG(("NAT64 %M:%hu -> %M:%hu", mg_print_ip6, src,
+              mg_ntohs(udp->sport), mg_print_ip4, &dst4, mg_ntohs(udp->dport)));
+  }
+  ip = tx_ip(out, out->gwmac, next, 0, out->ip, dst4, plen);
+  p = (uint8_t *) (ip + 1);
+  memcpy(p, tcp, plen);
+  tcp = (struct tcp *) p, udp = (struct udp *) p;
+  udp->sport = e->lport;
+  if (next == 6) tcp->csum = 0, tcp->csum = pcsum(ip, p, plen);
+  if (next == 17) udp->csum = 0, udp->csum = pcsum(ip, p, plen);
+  driver_output(out, mg_l2_trailer(out, sizeof(*ip) + plen, p + plen));
+}
+
+// NAT64: translate an IPv4 packet of a NAT64 session back to IPv6, send it to
+// the node. Return true if the packet was taken
+static bool nat64_in(struct mg_tcpip_if *ifp, struct pkt *pkt) {
+  struct mg_tcpip_if *out = ifp->route;
+  struct mg_tcpip_nat64 *e = NULL;
+  struct udp *udp = pkt->udp != NULL ? pkt->udp : (struct udp *) pkt->tcp;
+  struct ip6 *ip6;
+  uint64_t src[2];
+  uint8_t l2[sizeof(struct mg_l2addr)], *p, next = pkt->ip->proto;
+  size_t i, n = sizeof(ifp->nat64s) / sizeof(ifp->nat64s[0]);
+  size_t plen = PDIFF(udp, pkt->pay.buf + pkt->pay.len);
+  if (out == NULL || pkt->ip->dst != ifp->ip) return false;
+  for (i = 0; i < n; i++) {
+    e = &out->nat64s[i];
+    if (e->proto == next && e->lport == udp->dport &&
+        e->port4 == udp->sport && e->ip4 == pkt->ip->src)
+      break;
+  }
+  if (i == n) return false;
+  if (sizeof(*ip6) + plen > out->mtu || !nb6_l2(out, e->ip6, l2))
+    return true;  // Drop
+  memcpy(src, out->nat64, sizeof(out->nat64));
+  memcpy((uint8_t *) src + 12, &pkt->ip->src, 4);
+  ip6 = tx_ip6(out, l2, next, 0, src, e->ip6, plen);
+  p = (uint8_t *) (ip6 + 1);
+  memcpy(p, udp, plen);
+  ((struct udp *) p)->dport = e->port6;
+  if (next == 6) {
+    struct tcp *tcp = (struct tcp *) p;
+    tcp->csum = 0, tcp->csum = p6csum(ip6, p, 6, plen);
+  } else {
+    udp = (struct udp *) p;
+    udp->csum = 0, udp->csum = p6csum(ip6, p, 17, plen);
+    if (udp->csum == 0) udp->csum = 0xffff;  // 0 is not allowed in IPv6
+  }
+  driver_output(out, mg_l2_trailer(out, sizeof(*ip6) + plen, p + plen));
+  return true;
+}
+
+// Forward a packet that is not addressed to us out the other interface.
+// Return true if the packet was taken: forwarded or dropped
+static bool fwd_ip6(struct mg_tcpip_if *ifp, struct pkt *pkt, size_t len) {
+  struct mg_tcpip_if *out = ifp->route;
+  uint64_t src[2], dst[2];
+  uint8_t l2[sizeof(struct mg_l2addr)], *d = (uint8_t *) dst, *p;
+  src[0] = pkt->ip6->src[0], src[1] = pkt->ip6->src[1];
+  dst[0] = pkt->ip6->dst[0], dst[1] = pkt->ip6->dst[1];
+  if (d[0] == 0xff || (d[0] == 0xfe && (d[1] & 0xc0) == 0x80))
+    return false;  // Multicast or link-local: not forwarded
+  if (MG_IP6MATCH(dst, ifp->ip6) || MG_IP6MATCH(dst, ifp->ip6ll))
+    return false;  // Ours
+  if (src[0] != 0 || src[1] != 0) {
+    nb6_learn(ifp, src, mg_l2_getaddr(ifp, pkt->l2));
+  }
+  if ((ifp->nat64[0] | ifp->nat64[1]) != 0 &&  // NAT64 prefix set, and ours
+      memcmp(dst, ifp->nat64, sizeof(ifp->nat64)) == 0) {
+    nat64_out(ifp, pkt, len);
+    return true;
+  }
+  if (MG_IP6MATCH(dst, out->ip6) || out->state6 < MG_TCPIP_STATE_UP ||
+      pkt->ip6->hops <= 1 || len > out->mtu || !nb6_l2(out, dst, l2)) {
+    return true;  // Drop. TODO(): ICMPv6 errors, RFC-4443
+  }
+  p = mg_l2_header(out, MG_TCPIP_L2PROTO_IPV6, out->mac, l2,
+                   (uint8_t *) out->tx.buf);
+  memcpy(p, pkt->ip6, len);
+  ((struct ip6 *) p)->hops--;
+  driver_output(out, mg_l2_trailer(out, len, p + len));
+  return true;
+}
+
 static void rx_icmp6(struct mg_tcpip_if *ifp, struct pkt *pkt) {
   if (!icmp6csum_ok(pkt->ip6, pkt->icmp6, sizeof(*pkt->icmp6) + pkt->pay.len))
     return;
@@ -9705,6 +10501,9 @@ static void rx_icmp6(struct mg_tcpip_if *ifp, struct pkt *pkt) {
         tx_icmp6(ifp, l2addr, target, ips.addr.ip6, 129, 0, pkt->pay.buf, plen);
       }
     } break;
+    case 133:  // Router Solicitation: answer if we route
+      if (ifp->route != NULL) tx_ndp_ra(ifp);
+      break;
     case 134:  // Router Advertisement
       rx_ndp_ra(ifp, pkt);
       break;
@@ -9966,9 +10765,9 @@ static struct mg_connection *accept_conn(struct mg_connection *lsn,
   if (lsn->loc.is_ip6) {
     c->rem.addr.ip6[0] = pkt->ip6->src[0],
     c->rem.addr.ip6[1] = pkt->ip6->src[1], c->rem.is_ip6 = true;
-    c->loc.addr.ip6[0] = c->mgr->ifp->ip6[0],
-    c->loc.addr.ip6[1] = c->mgr->ifp->ip6[1], c->loc.is_ip6 = true;
-    // TODO(): compare lsn to link-local, or rem as link-local: use ll instead
+    // Reply from the address the peer connected to: link-local or global
+    c->loc.addr.ip6[0] = pkt->ip6->dst[0],
+    c->loc.addr.ip6[1] = pkt->ip6->dst[1], c->loc.is_ip6 = true;
   } else
 #endif
   {
@@ -10485,6 +11284,9 @@ static void rx_ip(struct mg_tcpip_if *ifp, struct pkt *pkt) {
     MG_VERBOSE(("UDP %M:%hu -> %M:%hu len %u", mg_print_ip4, &pkt->ip->src,
                 mg_ntohs(pkt->udp->sport), mg_print_ip4, &pkt->ip->dst,
                 mg_ntohs(pkt->udp->dport), (int) pkt->pay.len));
+#if MG_ENABLE_IPV6
+    if (nat64_in(ifp, pkt)) return;
+#endif
     if (ifp->enable_dhcp_client && pkt->udp->dport == mg_htons(68) &&
         len >= offsetof(struct dhcp, options)) {
       pkt->dhcp = (struct dhcp *) (pkt->udp + 1);
@@ -10510,6 +11312,9 @@ static void rx_ip(struct mg_tcpip_if *ifp, struct pkt *pkt) {
     MG_VERBOSE(("TCP %M:%hu -> %M:%hu len %u", mg_print_ip4, &pkt->ip->src,
                 mg_ntohs(pkt->tcp->sport), mg_print_ip4, &pkt->ip->dst,
                 mg_ntohs(pkt->tcp->dport), (int) pkt->pay.len));
+#if MG_ENABLE_IPV6
+    if (nat64_in(ifp, pkt)) return;
+#endif
     rx_tcp(ifp, pkt);
   } else {
     MG_DEBUG(("Unknown IP proto %x", (int) pkt->ip->proto));
@@ -10527,6 +11332,8 @@ static void rx_ip6(struct mg_tcpip_if *ifp, struct pkt *pkt) {
   if ((pkt->ip6->ver >> 4) != 0x6) return;       // Not IPv6
   plen = mg_ntohs(pkt->ip6->plen);
   if (plen > (pkt->pay.len - sizeof(*pkt->ip6))) return;  // malformed
+  if (ifp->route != NULL && fwd_ip6(ifp, pkt, sizeof(*pkt->ip6) + plen))
+    return;
   next = pkt->ip6->next;
   nhdr = (uint8_t *) (pkt->ip6 + 1);
   while (loop) {
@@ -10536,7 +11343,7 @@ static void rx_ip6(struct mg_tcpip_if *ifp, struct pkt *pkt) {
       case 43:  // Routing 4.4
       case 60:  // Destination Options 4.6
       case 51:  // Authentication RFC-4302
-        MG_INFO(("IPv6 extension header %d", (int) next));
+        MG_DEBUG(("IPv6 extension header %d", (int) next));
         if (((uint32_t) len + 2) > plen) return;  // nhdr[0, 1]; malformed
         next = nhdr[0];
         hlen = (uint16_t) (8 * (nhdr[1] + 1));
@@ -10569,8 +11376,8 @@ static void rx_ip6(struct mg_tcpip_if *ifp, struct pkt *pkt) {
     pkt->icmp6 = (struct icmp6 *) (pkt->pay.buf);
     if (pkt->pay.len < sizeof(*pkt->icmp6)) return;
     mkpay(pkt, pkt->icmp6 + 1);
-    MG_DEBUG(("ICMPv6 %M -> %M len %u", mg_print_ip6, &pkt->ip6->src,
-              mg_print_ip6, &pkt->ip6->dst, (int) pkt->pay.len));
+    MG_VERBOSE(("ICMPv6 %M -> %M len %u", mg_print_ip6, &pkt->ip6->src,
+                mg_print_ip6, &pkt->ip6->dst, (int) pkt->pay.len));
     rx_icmp6(ifp, pkt);
   } else if (next == 17) {
     pkt->udp = (struct udp *) (pkt->pay.buf);
@@ -10580,9 +11387,9 @@ static void rx_ip6(struct mg_tcpip_if *ifp, struct pkt *pkt) {
     if (len < sizeof(*pkt->udp) || len > pkt->pay.len) return;  // malformed
     pkt->pay.len = len;  // strip excess data
     mkpay(pkt, pkt->udp + 1);
-    MG_DEBUG(("UDP %M:%hu -> %M:%hu len %u", mg_print_ip6, &pkt->ip6->src,
-              mg_ntohs(pkt->udp->sport), mg_print_ip6, &pkt->ip6->dst,
-              mg_ntohs(pkt->udp->dport), (int) pkt->pay.len));
+    MG_VERBOSE(("UDP %M:%hu -> %M:%hu len %u", mg_print_ip6, &pkt->ip6->src,
+                mg_ntohs(pkt->udp->sport), mg_print_ip6, &pkt->ip6->dst,
+                mg_ntohs(pkt->udp->dport), (int) pkt->pay.len));
     if (ifp->enable_dhcp6_client && pkt->udp->dport == mg_htons(546)) {
       pkt->dhcp6 = (struct dhcp6 *) (pkt->udp + 1);
       mkpay(pkt, pkt->dhcp6 + 1);
@@ -10604,9 +11411,9 @@ static void rx_ip6(struct mg_tcpip_if *ifp, struct pkt *pkt) {
     if (off < sizeof(*pkt->tcp) / 4 || pkt->pay.len < (uint16_t) (4 * off))
       return;
     mkpay(pkt, (uint32_t *) pkt->tcp + off);
-    MG_DEBUG(("TCP %M:%hu -> %M:%hu len %u", mg_print_ip6, &pkt->ip6->src,
-              mg_ntohs(pkt->tcp->sport), mg_print_ip6, &pkt->ip6->dst,
-              mg_ntohs(pkt->tcp->dport), (int) pkt->pay.len));
+    MG_VERBOSE(("TCP %M:%hu -> %M:%hu len %u", mg_print_ip6, &pkt->ip6->src,
+                mg_ntohs(pkt->tcp->sport), mg_print_ip6, &pkt->ip6->dst,
+                mg_ntohs(pkt->tcp->dport), (int) pkt->pay.len));
     rx_tcp(ifp, pkt);
   } else {
     MG_DEBUG(("Unknown IPv6 next hdr %x", (int) next));
@@ -10684,13 +11491,18 @@ static void mg_ip6_poll(struct mg_tcpip_if *ifp, bool s1) {
   if (ifp->state6 < MG_TCPIP_STATE_UP) return;
   if (ifp->enable_slaac && s1 && ifp->state6 == MG_TCPIP_STATE_UP)
     tx_ndp_rs(ifp);
+  if (ifp->route != NULL && s1 && ifp->now >= ifp->ra_expire) {
+    tx_ndp_ra(ifp);  // Unsolicited router advertisements, 6.2.4
+    ifp->ra_expire = ifp->now + 10000;
+  }
 }
 static void mg_ip6_link(struct mg_tcpip_if *ifp, bool drv_up, bool l2_up) {
   bool cur_drv = (ifp->state6 != MG_TCPIP_STATE_DOWN);
   bool cur_l2 = (ifp->state6 >= MG_TCPIP_STATE_UP);
   const uint8_t px[8] = {0xfe, 0x80, 0, 0, 0, 0, 0, 0};  // RFC-4291 2.5.6
   if (drv_up != cur_drv || l2_up != cur_l2) {  // link/L2 state has changed
-    if (ifp->l2type == MG_TCPIP_L2_ETH && l2_up && ifp->ip6ll[0] == 0 &&
+    if ((ifp->l2type == MG_TCPIP_L2_ETH || ifp->l2type == MG_TCPIP_L2_LOWPAN) &&
+        l2_up && ifp->ip6ll[0] == 0 &&
         ifp->ip6ll[1] == 0) {  // gen ll address
       mg_l2_genip6(ifp->l2type, ifp->ip6ll, 64, ifp->mac);
       memcpy(ifp->ip6ll, px, 8);  // RFC-2464 5
@@ -10882,8 +11694,8 @@ void mg_tcpip_init(struct mg_mgr *mgr, struct mg_tcpip_if *ifp) {
     ifp->mgr = mgr;
     mgr->extraconnsize = sizeof(struct connstate);
     if (ifp->ip == 0 && ifp->l2type != MG_TCPIP_L2_PPP &&
-        ifp->l2type != MG_TCPIP_L2_PPPoE)
-      ifp->enable_dhcp_client = true;
+        ifp->l2type != MG_TCPIP_L2_PPPoE && ifp->l2type != MG_TCPIP_L2_LOWPAN)
+      ifp->enable_dhcp_client = true;  // No IPv4 over 6LoWPAN
     mg_random(&ifp->eport, sizeof(ifp->eport));  // Random from 0 to 65535
     ifp->eport |= MG_EPHEMERAL_PORT_BASE;        // Random from
                                            // MG_EPHEMERAL_PORT_BASE to 65535
@@ -10905,7 +11717,17 @@ void mg_tcpip_free(struct mg_tcpip_if *ifp) {
   mg_free(ifp->recv_queue.buf);
   mg_free(ifp->tx.buf);
   mg_free(ifp->dns4_url);
+#if MG_ENABLE_IPV6
+  mg_free(ifp->dns6_url);
+#endif
 }
+
+#if MG_ENABLE_IPV6
+void mg_tcpip_route(struct mg_tcpip_if *if1, struct mg_tcpip_if *if2) {
+  if1->route = if2, if2->route = if1;
+  if1->ra_expire = if2->ra_expire = 0;  // Advertise at the next poll
+}
+#endif
 
 static void send_syn(struct mg_connection *c) {
   struct connstate *s = (struct connstate *) (c + 1);
@@ -11080,10 +11902,13 @@ void mg_mgr_poll(struct mg_mgr *mgr, int ms) {
 bool mg_send(struct mg_connection *c, const void *buf, size_t len) {
   struct mg_tcpip_if *ifp = c->mgr->ifp;
   bool res = false;
-  if (!c->loc.is_ip6 && (ifp->ip == 0 || ifp->state != MG_TCPIP_STATE_READY)) {
+  // While resolving, the address family is unknown yet: just queue the data
+  if (!c->is_resolving && !c->loc.is_ip6 &&
+      (ifp->ip == 0 || ifp->state != MG_TCPIP_STATE_READY)) {
     proto_error(c, false, "net down");
 #if MG_ENABLE_IPV6
-  } else if (c->loc.is_ip6 && ifp->state6 != MG_TCPIP_STATE_READY) {
+  } else if (!c->is_resolving && c->loc.is_ip6 &&
+             ifp->state6 != MG_TCPIP_STATE_READY) {
     proto_error(c, false, "net down");
 #endif
   } else if (c->is_udp && (c->is_arplooking || c->is_resolving)) {
@@ -11398,6 +12223,21 @@ void mg_ota_url_check(struct mg_mgr *mgr, const char *json_url,
       *(uint64_t *) c->data = mg_millis() + 5 * 1000;  // Set expiration
     }
   }
+}
+
+// Uses *p as a flag: non-NULL means an OTA session is open and must be
+// closed by mg_ota_end()
+bool mg_http_ota_cb(struct mg_http_message *hm, struct mg_str *data, void **p) {
+  if (hm != NULL) {  // Start
+    if (!mg_ota_begin(hm->body.len)) return false;
+    *p = (void *) (ptrdiff_t) 1;
+    return true;
+  } else if (data != NULL) {  // Next chunk
+    return mg_ota_write(data->buf, data->len);
+  }
+  if (*p == NULL) return false;  // End. Begin failed, nothing to finish
+  *p = NULL;
+  return mg_ota_end();
 }
 
 void mg_ota_poll(struct mg_mgr *mgr) {
@@ -12462,6 +13302,193 @@ bool mg_ota_end(void) {
   return false;
 }
 struct mg_flash *mg_flash = &s_mg_flash_mcxn;
+#endif
+
+#ifdef MG_ENABLE_LINES
+#line 1 "src/ota_mcxw71.c"
+#endif
+
+
+
+
+#if MG_OTA == MG_OTA_MCXW71
+
+// MCXW71SRM, section 11.2: ROM flash API, 8 KB sectors, 16-byte phrases,
+// 128-byte pages. Only the CM33 application flash is used; RF flash and IFR
+// (including the write-once ROM configuration) are left alone.
+struct mg_mcxw71_flash_config {
+  struct {
+    uint32_t base, size, blocks;
+    uint32_t ifr_base, ifr_size;
+  } mem[2];
+};
+
+struct mg_mcxw71_flash_api {
+  uint32_t (*init)(struct mg_mcxw71_flash_config *);
+  uint32_t (*erase)(struct mg_mcxw71_flash_config *, void *, uint32_t, uint32_t,
+                    uint32_t);
+  uint32_t (*phrase)(struct mg_mcxw71_flash_config *, void *, uint32_t,
+                     uint32_t *, uint32_t);
+  uint32_t (*page)(struct mg_mcxw71_flash_config *, void *, uint32_t,
+                   uint32_t *, uint32_t);
+};
+
+// The flash API pointer is the second entry in the ROM API table.
+#define MG_MCXW71_FLASH_API \
+  (*(const struct mg_mcxw71_flash_api *const *) 0x14816fe4U)
+#define MG_MCXW71_ERASE_KEY 0x6b65666cU  // FOUR_CHAR_CODE('l', 'f', 'e', 'k')
+
+static struct mg_mcxw71_flash_config s_mcxw71_config;
+static size_t s_mcxw71_size, s_mcxw71_received, s_mcxw71_pending;
+static uint32_t s_mcxw71_buf[4];
+static bool s_mcxw71_failed;
+
+static bool mg_mcxw71_write(void *, const void *, size_t);
+static bool mg_mcxw71_swap(void);
+static struct mg_flash s_mg_flash_mcxw71 = {
+    (void *) 0, 0x100000, 8192, 16, mg_mcxw71_write, mg_mcxw71_swap};
+struct mg_flash *mg_flash = &s_mg_flash_mcxw71;
+
+// Everything called while flash is busy, or after the application has been
+// erased, must execute from RAM or ROM. Do not log or call libc here.
+MG_IRAM static bool mg_mcxw71_write(void *addr, const void *buf, size_t len) {
+  uintptr_t dst = (uintptr_t) addr;
+  const volatile uint8_t *src = (const volatile uint8_t *) buf;
+  uint32_t irq, status = 0;
+  if (dst >= s_mg_flash_mcxw71.size || len > s_mg_flash_mcxw71.size - dst ||
+      (dst % 16) != 0 || (len % 16) != 0)
+    return false;
+
+  irq = __get_PRIMASK();
+  __disable_irq();
+  while (len > 0 && status == 0) {
+    uint32_t words[32];  // ROM needs a word-aligned source in RAM
+    volatile uint8_t *p = (volatile uint8_t *) words;
+    size_t i, n = (dst % 128) == 0 && len >= 128 ? 128 : 16;
+    for (i = 0; i < n; i++) p[i] = src[i];
+
+    // Match the MCUXpresso ROM wrappers' cache maintenance. Interrupts stay
+    // masked until the flash command completes and stale cache data is gone.
+    MCM->CPCR2 |= MCM_CPCR2_CCBC_MASK;
+    __DSB();
+    __ISB();
+    if ((dst % 8192) == 0) {
+      status = MG_MCXW71_FLASH_API->erase(
+          &s_mcxw71_config, FMU0, (uint32_t) dst, 8192, MG_MCXW71_ERASE_KEY);
+    }
+    if (status == 0) {
+      if (n == 128) {
+        status = MG_MCXW71_FLASH_API->page(&s_mcxw71_config, FMU0,
+                                           (uint32_t) dst, words, 128);
+      } else {
+        status = MG_MCXW71_FLASH_API->phrase(&s_mcxw71_config, FMU0,
+                                             (uint32_t) dst, words, 16);
+      }
+    }
+    MCM->CPCR2 |= MCM_CPCR2_CCBC_MASK;
+    __DSB();
+    __ISB();
+    dst += n, src += n, len -= n;
+  }
+  __set_PRIMASK(irq);
+  return status == 0;
+}
+
+static bool mg_mcxw71_swap(void) {
+  // The common helper verifies the staged image before the RAM copy below.
+  // A failed write must never commit, even if all expected bytes arrived.
+  return !s_mcxw71_failed;
+}
+
+MG_IRAM static void mg_mcxw71_apply(size_t size) {
+  size_t ofs, half = s_mg_flash_mcxw71.size / 2;
+  __disable_irq();
+  SysTick->CTRL = 0;
+  for (ofs = 0; ofs < size; ofs += 8192) {
+    if (!mg_mcxw71_write((void *) (uintptr_t) ofs,
+                         (const void *) (uintptr_t) (half + ofs), 8192)) {
+      // The application may already be erased. Stay in RAM for debugger
+      // recovery rather than return to partially overwritten flash.
+      for (;;) __NOP();
+    }
+  }
+  __DSB();
+  SCB->AIRCR = 0x05fa0004U;
+  __DSB();
+  for (;;) __NOP();
+}
+
+bool mg_ota_begin(size_t new_firmware_size) {
+  uint32_t status;
+  if (s_mcxw71_size != 0 || new_firmware_size == 0) return false;
+  status = MG_MCXW71_FLASH_API->init(&s_mcxw71_config);
+  if (status != 0 || s_mcxw71_config.mem[0].base != 0 ||
+      s_mcxw71_config.mem[0].size < 16384 ||
+      (s_mcxw71_config.mem[0].size % 16384) != 0) {
+    MG_ERROR(("Flash init failed: %lu", (unsigned long) status));
+    return false;
+  }
+  s_mg_flash_mcxw71.size = s_mcxw71_config.mem[0].size;
+  if (!mg_ota_flash_begin(new_firmware_size, &s_mg_flash_mcxw71)) return false;
+  s_mcxw71_size = new_firmware_size;
+  s_mcxw71_received = s_mcxw71_pending = 0;
+  s_mcxw71_failed = false;
+  return true;
+}
+
+bool mg_ota_write(const void *buf, size_t len) {
+  const uint8_t *p = (const uint8_t *) buf;
+  uint8_t *pending = (uint8_t *) s_mcxw71_buf;
+  if (s_mcxw71_size == 0 || s_mcxw71_failed) return false;
+  if (len > s_mcxw71_size - s_mcxw71_received || (len > 0 && buf == NULL)) {
+    s_mcxw71_failed = true;
+    return false;
+  }
+  s_mcxw71_received += len;
+  if (s_mcxw71_pending > 0) {
+    size_t n = 16 - s_mcxw71_pending;
+    if (n > len) n = len;
+    if (n > 0) memcpy(pending + s_mcxw71_pending, p, n);
+    s_mcxw71_pending += n;
+    if (n > 0) p += n;
+    len -= n;
+    if (s_mcxw71_pending == 16) {
+      s_mcxw71_failed = !mg_ota_flash_write(pending, 16, &s_mg_flash_mcxw71);
+      s_mcxw71_pending = 0;
+    }
+  }
+  if (!s_mcxw71_failed && len >= 16) {
+    size_t n = MG_ROUND_DOWN(len, 16);
+    s_mcxw71_failed = !mg_ota_flash_write(p, n, &s_mg_flash_mcxw71);
+    p += n, len -= n;
+  }
+  if (!s_mcxw71_failed && len > 0) {
+    memcpy(pending + s_mcxw71_pending, p, len);
+    s_mcxw71_pending += len;
+  }
+  return !s_mcxw71_failed;
+}
+
+bool mg_ota_end(void) {
+  bool ok;
+  size_t size = s_mcxw71_size;
+  if (size == 0) return false;
+  if (s_mcxw71_received != size) s_mcxw71_failed = true;
+  if (!s_mcxw71_failed && s_mcxw71_pending > 0) {
+    s_mcxw71_failed =
+        !mg_ota_flash_write(s_mcxw71_buf, s_mcxw71_pending, &s_mg_flash_mcxw71);
+  }
+  ok = mg_ota_flash_end(&s_mg_flash_mcxw71);
+  s_mcxw71_size = s_mcxw71_pending = 0;
+  if (ok) {
+    // Like RW612, this overwrites the application. It does not provide
+    // rollback or power-loss recovery during the copy. Keep power connected.
+    MG_INFO(("Applying %lu bytes from staging flash", (unsigned long) size));
+    mg_mcxw71_apply(size);
+  }
+  return false;
+}
+
 #endif
 
 #ifdef MG_ENABLE_LINES
@@ -13828,6 +14855,10 @@ size_t mg_print_l2addr(void (*out)(char, void *), void *arg, va_list *ap) {
     case MG_TCPIP_L2_PPPoE: {
       uint8_t *p = va_arg(*ap, uint8_t *);
       return print_mac(out, arg, p);
+    } break;
+    case MG_TCPIP_L2_LOWPAN: {
+      uint8_t *p = va_arg(*ap, uint8_t *);
+      return print_ieee64(out, arg, p);
     } break;
     default: break;
   }
@@ -31443,6 +32474,190 @@ struct mg_tcpip_driver mg_tcpip_driver_imxrt = {mg_tcpip_driver_imxrt_init,
 #endif
 
 #ifdef MG_ENABLE_LINES
+#line 1 "src/drivers/mcxw71.c"
+#endif
+
+
+#if MG_ENABLE_TCPIP && defined(MG_ENABLE_DRIVER_MCXW71) && \
+    MG_ENABLE_DRIVER_MCXW71
+
+// ZLL, 802.15.4 link layer. See MCXW71 reference manual and NXP
+// ieee_802_15_4 PHY sources: PhyPacketProcessor.c, PhyPlmeData.c, PhyISR.c
+struct mg_zll {
+  volatile uint32_t IRQSTS, PHY_CTRL, EVENT_TMR, TIMESTAMP, T1CMP, T2CMP,
+      T2PRIMECMP, T3CMP, T4CMP, PA_PWR, CHANNEL_NUM0, LQI_AND_RSSI,
+      MACSHORTADDRS0, MACLONGADDRS0_LSB, MACLONGADDRS0_MSB, RX_FRAME_FILTER,
+      CCA_LQI_CTRL, CCA2_CTRL, RESERVED_0, DSM_CTRL, RESERVED_1,
+      MACSHORTADDRS1, MACLONGADDRS1_LSB, MACLONGADDRS1_MSB, DUAL_PAN_CTRL,
+      CHANNEL_NUM1, SAM_CTRL, SAM_TABLE, SAM_MATCH, SAM_FREE_IDX,
+      SEQ_CTRL_STS, ACKDELAY, FILTERFAIL_CODE, RX_WTR_MARK, RESERVED_2,
+      SLOT_PRELOAD, SEQ_STATE, TMR_PRESCALE, LENIENCY_LSB, LENIENCY_MSB,
+      PART_ID, COEX_CTRL, COEX_PRIORITY, ENHACK_CTRL0;
+};
+
+#if defined(__ARM_FEATURE_CMSE) && (__ARM_FEATURE_CMSE & 2)
+#define MGI_ZLL ((struct mg_zll *) 0x58A01000)
+#define MGI_PKT_RAM ((volatile uint8_t *) 0x58A08000)
+#else
+#define MGI_ZLL ((struct mg_zll *) 0x48A01000)
+#define MGI_PKT_RAM ((volatile uint8_t *) 0x48A08000)
+#endif
+#define MGI_TX_PB MGI_PKT_RAM           // Length byte (incl. FCS), then frame
+#define MGI_RX_PB (MGI_PKT_RAM + 0x80)  // Received frame, no length byte
+
+#define MGI_IRQSTS_SEQIRQ MG_BIT(0)
+#define MGI_IRQSTS_RXIRQ MG_BIT(2)
+#define MGI_IRQSTS_RX_LEN(x) (((x) >> 24) & 0x7f)  // Frame length incl. FCS
+#define MGI_PHY_CTRL_XCVSEQ 7U
+#define MGI_PHY_CTRL_AUTOACK MG_BIT(3)
+#define MGI_PHY_CTRL_RXACKRQD MG_BIT(4)
+#define MGI_PHY_CTRL_CCABFRTX MG_BIT(5)
+#define MGI_PHY_CTRL_SLOTTED MG_BIT(6)
+#define MGI_PHY_CTRL_PROMISCUOUS MG_BIT(25)
+#define MGI_PHY_CTRL_ALL_IRQ_MASKS 0x8007ff00U  // Bits 8..18, 31: mask all IRQs
+#define MGI_SEQ_STATE_MASK 0x1fU
+#define MGI_SEQ_STATE_RX_WU 0x10U         // RX warm up
+#define MGI_SEQ_CTRL_NO_RX_RECYCLE MG_BIT(5)
+#define MGI_FRAME_FILTER 0x70bU  // Beacon, data, command; versions 0..2
+#define MGI_ACKDELAY_MASK 0x7fU
+#define MGI_ACKDELAY_VALUE 0x7cU  // -4, 802.15.4 turnaround. See PhyHwInit()
+
+enum { MGI_SEQ_IDLE = 0, MGI_SEQ_RX = 1, MGI_SEQ_TX = 2, MGI_SEQ_TR = 4 };  // PHY_CTRL[XCVSEQ]
+#define MGI_FCF_ACK_REQUEST 0x20U  // First frame byte: acknowledgment request
+#define MGI_TX_TIMEOUT 400U        // Symbols, 16 us: 127 bytes, then ACK wait
+#define MGI_TX_TRIES 10            // Tries for unacknowledged frames
+#define MGI_TX_BACKOFF 64U         // Symbols, 1 ms: backoff grows by this per try
+
+// Symbol timer, 16 us, 24 bits
+static uint32_t mg_mcxw71_symbols(void) {
+  return MGI_ZLL->EVENT_TMR >> 8;
+}
+
+static void mg_mcxw71_delay(uint32_t symbols) {
+  uint32_t start = mg_mcxw71_symbols();
+  while (((mg_mcxw71_symbols() - start) & 0xffffffU) < symbols) (void) 0;
+}
+
+// Wait for the sequence to end, up to MGI_TX_TIMEOUT symbols
+static bool mg_mcxw71_wait(void) {
+  uint32_t start = mg_mcxw71_symbols();
+  while (((mg_mcxw71_symbols() - start) & 0xffffffU) < MGI_TX_TIMEOUT) {
+    if (MGI_ZLL->IRQSTS & MGI_IRQSTS_SEQIRQ) return true;
+  }
+  return false;
+}
+
+// Stop the current sequence, wait for the sequencer to go idle. See PhyAbort()
+static void mg_mcxw71_idle(void) {
+  if (MGI_ZLL->PHY_CTRL & MGI_PHY_CTRL_XCVSEQ) {
+    while ((MGI_ZLL->SEQ_STATE & MGI_SEQ_STATE_MASK) == MGI_SEQ_STATE_RX_WU) (void) 0;
+    MGI_ZLL->PHY_CTRL &= ~MGI_PHY_CTRL_XCVSEQ;
+    while (MGI_ZLL->SEQ_STATE & MGI_SEQ_STATE_MASK) (void) 0;
+  }
+  MGI_ZLL->IRQSTS = MGI_ZLL->IRQSTS;  // Clear all flags, write 1 to clear
+}
+
+// Start a new sequence: MGI_SEQ_RX or MGI_SEQ_TX
+static void mg_mcxw71_start(uint32_t seq) {
+  MGI_ZLL->IRQSTS = MGI_ZLL->IRQSTS;
+  MGI_ZLL->PHY_CTRL |= seq;
+}
+
+// Program our addresses for hardware filtering and auto-ACK: PAN ID, short
+// address and EUI-64 (little endian), when they change. The L2 sets them
+static void mg_mcxw71_addrs(struct mg_tcpip_if *ifp) {
+  struct lowpan_data *l = &ifp->l2data.lowpan;
+  const uint8_t *e = ifp->mac;
+  uint32_t s = ((uint32_t) l->short_addr << 16) | l->pan_id;
+  uint32_t lo = (uint32_t) (e[7] | (e[6] << 8) | (e[5] << 16)) |
+                ((uint32_t) e[4] << 24);
+  uint32_t hi = (uint32_t) (e[3] | (e[2] << 8) | (e[1] << 16)) |
+                ((uint32_t) e[0] << 24);
+  if (MGI_ZLL->MACSHORTADDRS0 != s || MGI_ZLL->MACLONGADDRS0_LSB != lo ||
+      MGI_ZLL->MACLONGADDRS0_MSB != hi) {
+    mg_mcxw71_idle();
+    MGI_ZLL->MACSHORTADDRS0 = s;
+    MGI_ZLL->MACLONGADDRS0_LSB = lo, MGI_ZLL->MACLONGADDRS0_MSB = hi;
+    mg_mcxw71_start(MGI_SEQ_RX);
+  }
+}
+
+static bool mg_mcxw71_init(struct mg_tcpip_if *ifp) {
+  uint8_t channel = ifp->l2data.lowpan.channel;
+  if (ifp->l2type != MG_TCPIP_L2_LOWPAN || channel < 11 || channel > 26) {
+    MG_ERROR(("Use MG_TCPIP_L2_LOWPAN, channel 11..26"));
+    return false;
+  }
+  MGI_ZLL->SEQ_CTRL_STS |= MGI_SEQ_CTRL_NO_RX_RECYCLE;
+  // Mask all interrupts, we poll. Filter frames by address, auto-ACK
+  MGI_ZLL->PHY_CTRL = MGI_PHY_CTRL_ALL_IRQ_MASKS | MGI_PHY_CTRL_AUTOACK;
+  MGI_ZLL->IRQSTS = MGI_ZLL->IRQSTS;
+  MGI_ZLL->SAM_CTRL = 0;
+  MGI_ZLL->RX_FRAME_FILTER = MGI_FRAME_FILTER;
+  MGI_ZLL->ACKDELAY = (MGI_ZLL->ACKDELAY & ~MGI_ACKDELAY_MASK) | MGI_ACKDELAY_VALUE;
+  MGI_ZLL->TMR_PRESCALE = 5;  // 16 us timebase, one symbol
+  MGI_ZLL->CHANNEL_NUM0 = channel;
+  MGI_ZLL->PA_PWR = 0x3f;     // PA slices, max output power
+  mg_mcxw71_start(MGI_SEQ_RX);
+  mg_mcxw71_addrs(ifp);
+  return true;
+}
+
+static size_t mg_mcxw71_tx(const void *buf, size_t len,
+                           struct mg_tcpip_if *ifp) {
+  const uint8_t *p = (const uint8_t *) buf;
+  size_t i;
+  bool ok = false, ack = len > 0 && (p[0] & MGI_FCF_ACK_REQUEST);
+  int tries;
+  if (len == 0 || len > 125) return 0;  // 127 bytes max, incl. 2 bytes FCS
+  mg_mcxw71_idle();
+  MGI_TX_PB[0] = (uint8_t) (len + 2);  // FCS is added by hardware
+  for (i = 0; i < len; i++) MGI_TX_PB[i + 1] = p[i];  // 8-bit access only
+  MGI_ZLL->PHY_CTRL &= ~(MGI_PHY_CTRL_CCABFRTX | MGI_PHY_CTRL_RXACKRQD | MGI_PHY_CTRL_SLOTTED);
+  if (ack) MGI_ZLL->PHY_CTRL |= MGI_PHY_CTRL_RXACKRQD;
+  // Frames with ACK request: transmit, then receive the ACK (TR sequence),
+  // retry with growing backoff. See PhyPdDataRequest(), PhyISR.c
+  for (tries = 0; tries < (ack ? MGI_TX_TRIES : 1) && !ok; tries++) {
+    if (tries > 0) mg_mcxw71_delay(MGI_TX_BACKOFF * (uint32_t) tries);
+    mg_mcxw71_start(ack ? MGI_SEQ_TR : MGI_SEQ_TX);
+    ok = mg_mcxw71_wait() && (!ack || (MGI_ZLL->IRQSTS & MGI_IRQSTS_RXIRQ));
+    mg_mcxw71_idle();
+  }
+  MGI_ZLL->PHY_CTRL &= ~MGI_PHY_CTRL_RXACKRQD;
+  mg_mcxw71_start(MGI_SEQ_RX);
+  if (!ok) MG_DEBUG(("TX failed, %d tries", tries));
+  (void) ifp;
+  return ok ? len : 0;
+}
+
+static size_t mg_mcxw71_rx(void *buf, size_t len, struct mg_tcpip_if *ifp) {
+  uint32_t irqsts = MGI_ZLL->IRQSTS;
+  size_t i, n = 0;
+  mg_mcxw71_addrs(ifp);
+  if ((irqsts & MGI_IRQSTS_SEQIRQ) == 0) return 0;  // Still receiving
+  if (irqsts & MGI_IRQSTS_RXIRQ) {
+    n = MGI_IRQSTS_RX_LEN(irqsts);
+    n = n >= 2 ? n - 2 : 0;  // Strip FCS
+    if (n > len) n = len;
+    for (i = 0; i < n; i++) ((uint8_t *) buf)[i] = MGI_RX_PB[i];
+  }
+  mg_mcxw71_idle();
+  mg_mcxw71_start(MGI_SEQ_RX);
+  (void) ifp;
+  return n;
+}
+
+static bool mg_mcxw71_poll(struct mg_tcpip_if *ifp, bool s1) {
+  (void) ifp, (void) s1;
+  return true;  // Radio link is always up
+}
+
+struct mg_tcpip_driver mg_tcpip_driver_mcxw71 = {mg_mcxw71_init, mg_mcxw71_tx,
+                                                 mg_mcxw71_rx, mg_mcxw71_poll};
+
+#endif
+
+#ifdef MG_ENABLE_LINES
 #line 1 "src/drivers/netc.c"
 #endif
 
@@ -32871,6 +34086,481 @@ void ENET_IRQHandler(void) {
 struct mg_tcpip_driver mg_tcpip_driver_rw612 = {mg_tcpip_driver_rw612_init,
                                                 mg_tcpip_driver_rw612_tx, NULL,
                                                 mg_tcpip_driver_rw612_poll};
+#endif
+
+#ifdef MG_ENABLE_LINES
+#line 1 "src/drivers/rw612_154.c"
+#endif
+
+
+#if MG_ENABLE_TCPIP && defined(MG_ENABLE_DRIVER_RW612_154) && \
+    MG_ENABLE_DRIVER_RW612_154
+
+// The 802.15.4 radio runs NXP combo firmware on CPU2, an OpenThread RCP. We
+// are CPU3. Messages go through the IMU mailbox: IMU messages carry IMUMC
+// messages, IMUMC messages carry HDLC framed Spinel. See NXP sources:
+// mcuxsdk-core drivers/imu/fsl_imu.c, mcux-component
+// imu_adapter/fsl_adapter_imu.c, connectivity framework
+// platform/rw61x/fwk_platform_hdlc.c; OpenThread src/lib/spinel/spinel.h
+
+// IMU message FIFO registers, one block per direction. See fsl_imu.h
+struct mg_rw612_imu {
+  volatile uint32_t WR_MSG, RD_MSG, STATUS, CNTL, RD_MSG_DBG;
+};
+#define MGI_IMU ((struct mg_rw612_imu *) 0x443ff804)       // CPU3 -> CPU2
+#define MGI_IMU_PEER ((struct mg_rw612_imu *) 0x443ff818)  // CPU2 -> CPU3
+#define MGI_IMU_LOCKED MG_BIT(0)          // STATUS: FIFO locked
+#define MGI_IMU_ALMOST_FULL MG_BIT(1)     // STATUS: FIFO almost full
+#define MGI_IMU_EMPTY MG_BIT(3)           // STATUS: FIFO empty
+#define MGI_IMU_WR_PTR(s) (((s) >> 16) & 15U)
+#define MGI_IMU_INT_CLR MG_BIT(0)         // CNTL: clear message ready IRQ
+#define MGI_IMU_FLUSH MG_BIT(16)          // CNTL: flush send FIFO
+#define MGI_IMU_WAIT_FOR_ACK MG_BIT(17)   // CNTL: lock send FIFO
+#define MGI_IMU_WATERMARK(x) ((uint32_t) (x) << 20)
+#define MGI_IMU_WATERMARK_MASK (15U << 20)
+
+// IMU message: header, then payload words. See IMU_Msg_t
+struct mg_rw612_msg {
+  uint8_t type, subtype, seq, len;  // len: number of payload words
+  uint32_t payload[8];
+};
+
+// Mailbox in SMU2 shared memory, at the address CPU2 firmware expects
+struct mg_rw612_mbox {
+  uint32_t magic[2];             // Sync pattern: [0] CPU2, [1] us
+  struct mg_rw612_msg q[2][16];  // Message slots: [0] CPU2 -> us, [1] ours
+};
+#define MGI_MBOX ((volatile struct mg_rw612_mbox *) 0x443c0000)
+#define MGI_TXBUF 0x443c1508U  // Our IMUMC buffers: 16 x 264 bytes
+#define MGI_TXBUF_CNT 16
+#define MGI_TXBUF_LEN 264U
+#define MGI_SLEEP_FLAG (*(volatile uint32_t *) 0x443c2588)
+#define MGI_SYNC_MAGIC 0xabcdef89U
+
+// IMUMC message, carried in IMU payload words. See imumc_std_msg
+struct mg_rw612_imumc {
+  uint32_t src, dst;  // Endpoint addresses
+  uint16_t rfu, idx;  // Reserved
+  uint16_t len;       // Payload length, bytes
+  uint16_t flags;     // Message flags
+  uint32_t data;      // Payload buffer address
+};
+#define MGI_EPT_LOCAL 10   // Our 802.15.4 endpoint
+#define MGI_EPT_REMOTE 20  // Firmware 802.15.4 endpoint
+
+enum { MGI_MSG_CONTROL = 0, MGI_MSG_IMUMC = 8 };  // IMU message types
+enum {                                            // Control message subtypes
+  MGI_CTL_SYNC = 1,
+  MGI_CTL_SYNC_ACK = 2,
+  MGI_CTL_ACK_FOR_UNLOCK = 3,
+  MGI_CTL_CMD_BUF_ADDR = 6,
+  MGI_CTL_EPT_QUERY = 11,
+  MGI_CTL_EPT_QUERY_RSP = 12,
+  MGI_CTL_BUF_FREE = 13
+};
+
+// Spinel commands, properties and statuses we use
+enum { MGI_CMD_RESET = 1, MGI_CMD_GET = 2, MGI_CMD_SET = 3, MGI_CMD_IS = 6 };
+enum {
+  MGI_PROP_LAST_STATUS = 0,
+  MGI_PROP_NCP_VERSION = 2,
+  MGI_PROP_PHY_ENABLED = 0x20,
+  MGI_PROP_PHY_CHAN = 0x21,
+  MGI_PROP_LADDR = 0x34,
+  MGI_PROP_SADDR = 0x35,
+  MGI_PROP_PANID = 0x36,
+  MGI_PROP_RAW_STREAM = 0x37,
+  MGI_PROP_STREAM_RAW = 0x71
+};
+#define MGI_RESET_STACK 2         // RESET argument: reset the RCP stack only
+#define MGI_STATUS_RESET_MIN 112  // LAST_STATUS: RCP has reset
+#define MGI_STATUS_RESET_MAX 127
+#define MGI_TX_TIMEOUT_MS 200  // Wait for transmit done, incl. retries
+#define MGI_RSP_TIMEOUT_MS 500
+#define MGI_RXQ_CNT 4
+
+// Driver state, one radio
+struct mg_rw612 {
+  bool up;                  // IMU link synchronised
+  bool ept_ready;           // IMUMC endpoints connected
+  bool reset;               // RCP reported a reset
+  uint8_t seq;              // IMU message sequence number
+  uint16_t free_bufs;       // Free IMUMC buffers, bit per buffer
+  uint8_t hdlc[300];        // HDLC frame being received, unescaped
+  size_t hlen;              // Bytes in hdlc
+  bool esc;                 // Previous byte was an escape
+  uint8_t tid;              // Spinel transaction ID of the pending request
+  bool rsp;                 // Response to the pending request received
+  uint32_t rsp_status;      // Its status, if LAST_STATUS, else 0
+  char version[64];         // RCP version string
+  uint8_t rxq[MGI_RXQ_CNT][127];  // Received frames, no FCS
+  uint8_t rxlen[MGI_RXQ_CNT];     // Their lengths
+  uint8_t rxhead, rxtail;         // Queue indexes
+  uint16_t pan_id, short_addr;    // Addresses programmed in the RCP
+  uint8_t eui[8];
+  uint8_t channel;
+};
+static struct mg_rw612 s_rw612;
+
+static void mg_rw612_imu_send(uint8_t type, uint8_t subtype,
+                              const uint32_t *payload, uint8_t len) {
+  volatile struct mg_rw612_msg *m;
+  uint64_t expire = mg_millis() + 100;
+  uint8_t i;
+  while ((MGI_IMU->STATUS & (MGI_IMU_ALMOST_FULL | MGI_IMU_LOCKED)) &&
+         mg_millis() < expire) {
+    (void) 0;
+  }
+  m = &MGI_MBOX->q[1][MGI_IMU_WR_PTR(MGI_IMU->STATUS)];
+  m->type = type, m->subtype = subtype, m->seq = s_rw612.seq++, m->len = len;
+  for (i = 0; i < len; i++) m->payload[i] = payload[i];
+  MGI_IMU->WR_MSG = (uint32_t) (uintptr_t) m;
+}
+
+static void mg_rw612_control(uint8_t subtype, uint32_t a, uint32_t b,
+                             uint8_t len) {
+  uint32_t payload[2] = {a, b};
+  mg_rw612_imu_send(MGI_MSG_CONTROL, subtype, payload, len);
+}
+
+static void mg_rw612_queue_rx(const uint8_t *frame, size_t len) {
+  struct mg_rw612 *s = &s_rw612;
+  uint8_t next = (uint8_t) ((s->rxhead + 1) % MGI_RXQ_CNT);
+  if (next == s->rxtail || len > sizeof(s->rxq[0])) return;  // Full: drop
+  memcpy(s->rxq[s->rxhead], frame, len);
+  s->rxlen[s->rxhead] = (uint8_t) len;
+  s->rxhead = next;
+}
+
+// Spinel packed unsigned integer: 7 bits per byte, LSB first
+static size_t mg_rw612_unpack(const uint8_t *p, size_t len, uint32_t *v) {
+  size_t i;
+  *v = 0;
+  for (i = 0; i < len && i < 4; i++) {
+    *v |= (uint32_t) (p[i] & 0x7f) << (7 * i);
+    if ((p[i] & 0x80) == 0) return i + 1;
+  }
+  return 0;
+}
+
+// Handle a received Spinel frame: header, command, property, value
+static void mg_rw612_spinel(const uint8_t *f, size_t len) {
+  struct mg_rw612 *s = &s_rw612;
+  uint32_t cmd, prop, status = 0;
+  size_t n, ofs = 1;
+  uint8_t tid = f[0] & 15;
+  if (len < 3 || (n = mg_rw612_unpack(f + ofs, len - ofs, &cmd)) == 0) return;
+  ofs += n;
+  if ((n = mg_rw612_unpack(f + ofs, len - ofs, &prop)) == 0) return;
+  ofs += n;
+  if (cmd != MGI_CMD_IS) return;
+  if (prop == MGI_PROP_STREAM_RAW && tid == 0 && len - ofs >= 2) {
+    size_t flen = (size_t) (f[ofs] | (f[ofs + 1] << 8));  // Incl. FCS
+    if (flen >= 2 && ofs + 2 + flen <= len) {
+      mg_rw612_queue_rx(f + ofs + 2, flen - 2);
+    }
+  } else if (prop == MGI_PROP_LAST_STATUS) {
+    mg_rw612_unpack(f + ofs, len - ofs, &status);
+    if (tid == 0 && status >= MGI_STATUS_RESET_MIN &&
+        status <= MGI_STATUS_RESET_MAX) {
+      s->reset = true;
+    }
+  } else if (prop == MGI_PROP_NCP_VERSION) {
+    n = len - ofs < sizeof(s->version) - 1 ? len - ofs : sizeof(s->version) - 1;
+    memcpy(s->version, f + ofs, n);
+    s->version[n] = '\0';
+  }
+  if (tid != 0 && tid == s->tid) s->rsp = true, s->rsp_status = status;
+}
+
+// HDLC-lite: 0x7e delimits frames, 0x7d escapes, FCS-16 at the end
+static uint16_t mg_rw612_fcs(uint16_t fcs, uint8_t c) {
+  int i;
+  fcs ^= c;
+  for (i = 0; i < 8; i++) fcs = (fcs & 1) ? (fcs >> 1) ^ 0x8408 : fcs >> 1;
+  return fcs;
+}
+
+static void mg_rw612_hdlc_rx(const uint8_t *p, size_t len) {
+  struct mg_rw612 *s = &s_rw612;
+  size_t i, j;
+  for (i = 0; i < len; i++) {
+    uint8_t c = p[i];
+    if (c == 0x7e) {
+      if (s->hlen >= 3) {
+        uint16_t fcs = 0xffff;
+        for (j = 0; j < s->hlen; j++) fcs = mg_rw612_fcs(fcs, s->hdlc[j]);
+        if (fcs == 0xf0b8) mg_rw612_spinel(s->hdlc, s->hlen - 2);
+      }
+      s->hlen = 0, s->esc = false;
+    } else if (c == 0x7d) {
+      s->esc = true;
+    } else if (s->hlen < sizeof(s->hdlc)) {
+      s->hdlc[s->hlen++] = s->esc ? c ^ 0x20 : c;
+      s->esc = false;
+    }
+  }
+}
+
+static void mg_rw612_control_rx(volatile struct mg_rw612_msg *m) {
+  struct mg_rw612 *s = &s_rw612;
+  switch (m->subtype) {
+    case MGI_CTL_ACK_FOR_UNLOCK:
+      MGI_IMU->CNTL &= ~MGI_IMU_WAIT_FOR_ACK;
+      break;
+    case MGI_CTL_SYNC:  // As HAL_ImuCtrlHandler(): acknowledge twice
+      mg_rw612_control(MGI_CTL_SYNC_ACK, 0, 0, 0);
+      mg_rw612_control(MGI_CTL_SYNC_ACK, 0, 0, 0);
+      s->up = true;
+      break;
+    case MGI_CTL_SYNC_ACK:
+    case MGI_CTL_CMD_BUF_ADDR:
+      s->up = true;
+      break;
+    case MGI_CTL_EPT_QUERY: {  // Firmware asks if our endpoint exists
+      bool ours = m->payload[0] == MGI_EPT_LOCAL;
+      mg_rw612_control(MGI_CTL_EPT_QUERY_RSP, m->payload[0], ours, 2);
+      if (ours) s->ept_ready = true;
+      break;
+    }
+    case MGI_CTL_EPT_QUERY_RSP:
+      if (m->payload[0] == MGI_EPT_REMOTE && m->payload[1] != 0) {
+        s->ept_ready = true;
+      }
+      break;
+    case MGI_CTL_BUF_FREE: {  // Firmware is done with one of our buffers
+      uint32_t i = (m->payload[0] - MGI_TXBUF) / MGI_TXBUF_LEN;
+      if (i < MGI_TXBUF_CNT) s->free_bufs |= (uint16_t) MG_BIT(i);
+      break;
+    }
+    default:
+      break;
+  }
+}
+
+// Process all received IMU messages. See HAL_ImuReceive()
+static void mg_rw612_poll_imu(void) {
+  bool unlock = false;
+  while ((MGI_IMU_PEER->STATUS & MGI_IMU_EMPTY) == 0) {
+    struct mg_rw612_msg m;
+    volatile struct mg_rw612_msg *p;
+    uint8_t i;
+    MGI_SLEEP_FLAG &= ~1U;
+    p = (volatile struct mg_rw612_msg *) (uintptr_t) MGI_IMU->RD_MSG;
+    if (MGI_IMU_PEER->STATUS & MGI_IMU_LOCKED) unlock = true;
+    if (p == NULL) continue;
+    m.type = p->type, m.subtype = p->subtype, m.len = p->len;
+    for (i = 0; i < 8; i++) m.payload[i] = p->payload[i];
+    if (m.type == MGI_MSG_CONTROL) {
+      mg_rw612_control_rx(&m);
+    } else if (m.type == MGI_MSG_IMUMC) {
+      struct mg_rw612_imumc im;
+      memcpy(&im, m.payload, sizeof(im));
+      if (im.dst == MGI_EPT_LOCAL) {
+        mg_rw612_hdlc_rx((const uint8_t *) (uintptr_t) im.data, im.len);
+      }
+      mg_rw612_control(MGI_CTL_BUF_FREE, im.data, 0, 1);
+    }
+  }
+  MGI_IMU->CNTL |= MGI_IMU_INT_CLR;
+  MGI_SLEEP_FLAG |= 1U;
+  if (unlock) mg_rw612_control(MGI_CTL_ACK_FOR_UNLOCK, 0, 0, 0);
+}
+
+// Send bytes to the firmware endpoint, in IMUMC buffer sized chunks
+static bool mg_rw612_imumc_send(const uint8_t *p, size_t len) {
+  struct mg_rw612 *s = &s_rw612;
+  while (len > 0) {
+    size_t n = len < MGI_TXBUF_LEN ? len : MGI_TXBUF_LEN;
+    uint64_t expire = mg_millis() + 100;
+    struct mg_rw612_imumc im;
+    uint32_t i;
+    while (s->free_bufs == 0) {
+      mg_rw612_poll_imu();
+      if (mg_millis() > expire) return false;
+    }
+    for (i = 0; (s->free_bufs & MG_BIT(i)) == 0; i++) (void) 0;
+    s->free_bufs &= (uint16_t) ~MG_BIT(i);
+    memset(&im, 0, sizeof(im));
+    im.src = MGI_EPT_LOCAL, im.dst = MGI_EPT_REMOTE, im.len = (uint16_t) n;
+    im.data = MGI_TXBUF + i * MGI_TXBUF_LEN;
+    memcpy((void *) (uintptr_t) im.data, p, n);
+    mg_rw612_imu_send(MGI_MSG_IMUMC, 0, (uint32_t *) &im, sizeof(im) / 4);
+    p += n, len -= n;
+  }
+  return true;
+}
+
+// Send a Spinel frame, HDLC encoded, and wait for the response with the
+// same transaction ID. Return false on timeout
+static bool mg_rw612_request(uint8_t *f, size_t len, uint32_t timeout_ms) {
+  struct mg_rw612 *s = &s_rw612;
+  uint8_t buf[2 * 160 + 6];
+  uint16_t fcs = 0xffff;
+  size_t i, n = 0;
+  uint64_t expire = mg_millis() + timeout_ms;
+  s->tid = (uint8_t) (s->tid % 15 + 1);
+  f[0] = (uint8_t) (0x80 | s->tid);  // Header: flag, interface 0, TID
+  s->rsp = false;
+  buf[n++] = 0x7e;
+  for (i = 0; i < len + 2 && n + 3 < sizeof(buf); i++) {
+    uint8_t c;
+    if (i < len) {
+      c = f[i], fcs = mg_rw612_fcs(fcs, c);
+    } else {
+      c = (uint8_t) (i == len ? ~fcs & 0xff : ~fcs >> 8);
+    }
+    if (c == 0x7e || c == 0x7d || c == 0x11 || c == 0x13 || c == 0xf8) {
+      buf[n++] = 0x7d, c ^= 0x20;
+    }
+    buf[n++] = c;
+  }
+  buf[n++] = 0x7e;
+  if (!mg_rw612_imumc_send(buf, n)) return false;
+  while (!s->rsp && mg_millis() < expire) mg_rw612_poll_imu();
+  return s->rsp;
+}
+
+static bool mg_rw612_set(uint32_t prop, const uint8_t *val, size_t len) {
+  uint8_t f[16];
+  if (len > sizeof(f) - 3) return false;
+  f[1] = MGI_CMD_SET, f[2] = (uint8_t) prop;  // Properties used are < 0x80
+  memcpy(f + 3, val, len);
+  return mg_rw612_request(f, len + 3, MGI_RSP_TIMEOUT_MS) &&
+         s_rw612.rsp_status == 0;
+}
+
+// Program channel, PAN ID, short address and EUI-64 when they change
+static void mg_rw612_addrs(struct mg_tcpip_if *ifp) {
+  struct mg_rw612 *s = &s_rw612;
+  struct lowpan_data *l = &ifp->l2data.lowpan;
+  uint8_t v[2];
+  if (s->channel != l->channel) {
+    s->channel = l->channel;
+    if (!mg_rw612_set(MGI_PROP_PHY_CHAN, &l->channel, 1)) MG_ERROR(("chan"));
+  }
+  if (s->pan_id != l->pan_id) {
+    s->pan_id = l->pan_id;
+    v[0] = (uint8_t) l->pan_id, v[1] = (uint8_t) (l->pan_id >> 8);
+    if (!mg_rw612_set(MGI_PROP_PANID, v, 2)) MG_ERROR(("panid"));
+  }
+  if (s->short_addr != l->short_addr) {
+    s->short_addr = l->short_addr;
+    v[0] = (uint8_t) l->short_addr, v[1] = (uint8_t) (l->short_addr >> 8);
+    if (!mg_rw612_set(MGI_PROP_SADDR, v, 2)) MG_ERROR(("saddr"));
+  }
+  if (memcmp(s->eui, ifp->mac, 8) != 0) {
+    memcpy(s->eui, ifp->mac, 8);
+    if (!mg_rw612_set(MGI_PROP_LADDR, s->eui, 8)) MG_ERROR(("laddr"));
+  }
+}
+
+// Log an init error, return false
+static bool mg_rw612_fail(const char *msg) {
+  MG_ERROR(("%s", msg));
+  return false;
+}
+
+static bool mg_rw612_154_init(struct mg_tcpip_if *ifp) {
+  struct mg_rw612 *s = &s_rw612;
+  uint8_t f[8], one = 1;
+  uint64_t expire;
+  if (ifp->l2type != MG_TCPIP_L2_LOWPAN || ifp->l2data.lowpan.channel < 11 ||
+      ifp->l2data.lowpan.channel > 26) {
+    MG_ERROR(("Use MG_TCPIP_L2_LOWPAN, channel 11..26"));
+    return false;
+  }
+  if (MGI_MBOX->magic[0] != MGI_SYNC_MAGIC) {
+    MG_ERROR(("Radio firmware is not running on CPU2"));
+    return false;
+  }
+  memset(s, 0, sizeof(*s));
+  s->free_bufs = 0xffff;
+  s->pan_id = s->short_addr = 0xffff;  // Force programming
+  // Reset our send FIFO, drop stale messages. See IMU_Init()
+  MGI_IMU->CNTL |= MGI_IMU_FLUSH;
+  MGI_IMU->CNTL &= ~(MGI_IMU_FLUSH | MGI_IMU_WAIT_FOR_ACK);
+  MGI_IMU->CNTL = (MGI_IMU->CNTL & ~MGI_IMU_WATERMARK_MASK) |
+                  MGI_IMU_WATERMARK(15);
+  while ((MGI_IMU_PEER->STATUS & MGI_IMU_EMPTY) == 0) (void) MGI_IMU->RD_MSG;
+  // Synchronise the IMU link, then connect the IMUMC endpoints
+  MGI_MBOX->magic[1] = MGI_SYNC_MAGIC;
+  mg_rw612_control(MGI_CTL_SYNC, 0, 0, 0);
+  expire = mg_millis() + 1000;
+  while (!s->up && mg_millis() < expire) mg_rw612_poll_imu();
+  if (!s->up) return mg_rw612_fail("IMU sync timeout");
+  expire = mg_millis() + 2000;
+  while (!s->ept_ready && mg_millis() < expire) {
+    uint64_t retry = mg_millis() + 100;
+    mg_rw612_control(MGI_CTL_EPT_QUERY, MGI_EPT_REMOTE, 0, 1);
+    while (!s->ept_ready && mg_millis() < retry) mg_rw612_poll_imu();
+  }
+  if (!s->ept_ready) return mg_rw612_fail("IMUMC endpoint timeout");
+  // Reset the RCP stack, wait for its reset status, read its version
+  f[1] = MGI_CMD_RESET, f[2] = MGI_RESET_STACK;
+  mg_rw612_request(f, 3, MGI_RSP_TIMEOUT_MS);
+  expire = mg_millis() + 1000;
+  while (!s->reset && mg_millis() < expire) mg_rw612_poll_imu();
+  if (!s->reset) return mg_rw612_fail("RCP reset timeout");
+  f[1] = MGI_CMD_GET, f[2] = MGI_PROP_NCP_VERSION;
+  mg_rw612_request(f, 3, MGI_RSP_TIMEOUT_MS);
+  MG_INFO(("RCP: %s", s->version));
+  if (!mg_rw612_set(MGI_PROP_PHY_ENABLED, &one, 1)) {
+    return mg_rw612_fail("PHY enable failed");
+  }
+  mg_rw612_addrs(ifp);
+  if (!mg_rw612_set(MGI_PROP_RAW_STREAM, &one, 1)) {
+    return mg_rw612_fail("Raw stream enable failed");
+  }
+  return true;
+}
+
+static size_t mg_rw612_154_tx(const void *buf, size_t len,
+                              struct mg_tcpip_if *ifp) {
+  uint8_t f[3 + 2 + 127 + 4];
+  size_t n = 3;
+  if (len == 0 || len > 125) return 0;  // 127 bytes max, incl. 2 bytes FCS
+  f[1] = MGI_CMD_SET, f[2] = MGI_PROP_STREAM_RAW;
+  f[n++] = (uint8_t) (len + 2), f[n++] = 0;  // PSDU length, incl. FCS
+  memcpy(f + n, buf, len), n += len;
+  f[n++] = 0, f[n++] = 0;  // FCS, filled in by the radio
+  f[n++] = ifp->l2data.lowpan.channel;
+  f[n++] = 4;  // Max CSMA backoffs
+  f[n++] = 3;  // Max frame retries, for frames with ACK request
+  f[n++] = 1;  // CSMA-CA enabled
+  if (!mg_rw612_request(f, n, MGI_TX_TIMEOUT_MS)) {
+    MG_ERROR(("TX timeout"));
+    return 0;
+  }
+  if (s_rw612.rsp_status != 0) {
+    MG_VERBOSE(("TX failed, status %lu", (unsigned long) s_rw612.rsp_status));
+    return 0;
+  }
+  return len;
+}
+
+static size_t mg_rw612_154_rx(void *buf, size_t len, struct mg_tcpip_if *ifp) {
+  struct mg_rw612 *s = &s_rw612;
+  size_t n = 0;
+  mg_rw612_poll_imu();
+  mg_rw612_addrs(ifp);
+  if (s->rxtail != s->rxhead) {
+    n = s->rxlen[s->rxtail];
+    if (n > len) n = len;
+    memcpy(buf, s->rxq[s->rxtail], n);
+    s->rxtail = (uint8_t) ((s->rxtail + 1) % MGI_RXQ_CNT);
+  }
+  return n;
+}
+
+static bool mg_rw612_154_poll(struct mg_tcpip_if *ifp, bool s1) {
+  (void) ifp, (void) s1;
+  return s_rw612.up;
+}
+
+struct mg_tcpip_driver mg_tcpip_driver_rw612_154 = {
+    mg_rw612_154_init, mg_rw612_154_tx, mg_rw612_154_rx, mg_rw612_154_poll};
+
 #endif
 
 #ifdef MG_ENABLE_LINES

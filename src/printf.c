@@ -138,6 +138,10 @@ size_t mg_print_l2addr(void (*out)(char, void *), void *arg, va_list *ap) {
       uint8_t *p = va_arg(*ap, uint8_t *);
       return print_mac(out, arg, p);
     } break;
+    case MG_TCPIP_L2_LOWPAN: {
+      uint8_t *p = va_arg(*ap, uint8_t *);
+      return print_ieee64(out, arg, p);
+    } break;
     default: break;
   }
   return 0;

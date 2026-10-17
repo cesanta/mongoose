@@ -1251,7 +1251,12 @@ struct timeval {
 #endif
 
 #ifndef MG_ENABLE_IPV6
+#if (defined(MG_ENABLE_DRIVER_MCXW71) && MG_ENABLE_DRIVER_MCXW71) || \
+    (defined(MG_ENABLE_DRIVER_RW612_154) && MG_ENABLE_DRIVER_RW612_154)
+#define MG_ENABLE_IPV6 1  // 802.15.4 radio: 6LoWPAN carries IPv6 only
+#else
 #define MG_ENABLE_IPV6 0
+#endif
 #endif
 
 #ifndef MG_IPV6_V6ONLY
@@ -1397,6 +1402,8 @@ struct timeval {
 
 #endif
 
+// Set the interface hardware address. Ethernet: 6-byte MAC. 6LoWPAN: 8-byte
+// EUI-64, the IPv6 interface ID is made from it. Not set: random per boot
 #ifndef MG_SET_MAC_ADDRESS
 #define MG_SET_MAC_ADDRESS(mac)
 #endif
@@ -1434,6 +1441,7 @@ struct timeval {
 #ifndef MG_ENABLE_HEALTH
 #define MG_ENABLE_HEALTH 0
 #endif
+
 
 
 
@@ -4227,6 +4235,7 @@ extern void mg_mqtt_poll(struct mg_mgr *);
 
 
 
+
 // Supported OTA targets
 #define MG_OTA_NONE 0               // No OTA support
 #define MG_OTA_STM32H5 1            // STM32 H5
@@ -4242,6 +4251,7 @@ extern void mg_mqtt_poll(struct mg_mgr *);
 #define MG_OTA_RT1170 304           // IMXRT1170
 #define MG_OTA_RT1180 305           // IMXRT1180
 #define MG_OTA_MCXN 310             // MCXN947
+#define MG_OTA_MCXW71 311           // MCXW71
 #define MG_OTA_RW612 320            // FRDM-RW612
 #define MG_OTA_FLASH 900            // OTA via internal flash
 #define MG_OTA_ESP32 910            // ESP32 OTA implementation
@@ -4270,6 +4280,19 @@ bool mg_ota_write(const void *buf, size_t len);
 
 // Ends the OTA process and commits the written firmware.
 bool mg_ota_end(void);
+
+// Push-based OTA: mg_http_stream_body() callback that flashes the request
+//
+// ```c
+// if (ev == MG_EV_HTTP_HDRS) {
+//   struct mg_http_message *hm = (struct mg_http_message *) ev_data;
+//   if (mg_match(hm->uri, mg_str("/ota"), NULL) &&
+//       !mg_http_stream_body(c, hm, mg_http_ota_cb, NULL)) {
+//     mg_http_reply(c, 400, "", "POST firmware with Content-Length\n");
+//   }
+// }
+// ```
+bool mg_http_ota_cb(struct mg_http_message *hm, struct mg_str *data, void **p);
 
 // MG_OTA_ROLLBACK: swap firmware banks and reset. On flash-based OTA, the
 // default calls swap_fn() (no-op on single-bank) then resets. Override in
@@ -4583,7 +4606,13 @@ bool mg_wifi_ap_stop(void);
 #if MG_ENABLE_TCPIP
 
 // no config defaults to 0 => Ethernet
-enum mg_l2type { MG_TCPIP_L2_ETH = 0, MG_TCPIP_L2_PPP, MG_TCPIP_L2_PPPoE, MG_TCPIP_L2_USER };
+enum mg_l2type {
+  MG_TCPIP_L2_ETH = 0,
+  MG_TCPIP_L2_PPP,
+  MG_TCPIP_L2_PPPoE,
+  MG_TCPIP_L2_LOWPAN,
+  MG_TCPIP_L2_USER
+};
 
 #if defined(__DCC__)
 #pragma pack(1)
@@ -4606,10 +4635,27 @@ struct eth_data {
 struct pppoe_data {  // (struct eth_data *) &pppoe_data = pppoedata.eth
   struct eth_data eth;
 };
+struct lowpan_data {
+  uint16_t pan_id;           // User-set PAN ID
+  uint8_t channel;           // User-set channel, 11..26
+  uint16_t short_addr;       // Our short address, 0xfffe if none
+  uint8_t seq;               // MAC sequence number
+  uint8_t proto;      // Protocol of the frame being sent, enum mg_l2proto
+  uint8_t dst[8];     // Destination of the frame being sent
+  uint16_t tag;       // Next fragmentation datagram tag
+  uint8_t *buf;       // Reassembly and decompression buffer
+  uint16_t size;      // Datagram being reassembled: size, 0 if none
+  uint16_t received;  // Bytes received so far
+  uint16_t tag_rx;    // Datagram tag
+  uint8_t src[8];     // Source address
+  bool udp;           // UDP header was compressed
+  uint64_t expire;    // Reassembly deadline, ms
+};
 
 union mg_l2data {
   struct eth_data eth;
   struct pppoe_data pppoe;
+  struct lowpan_data lowpan;
 };
 
 #if defined(__DCC__)
@@ -4617,7 +4663,6 @@ union mg_l2data {
 #else
 #pragma pack(pop)
 #endif
-
 
 enum mg_l2proto {
   MG_TCPIP_L2PROTO_IPV4 = 0,
@@ -4679,6 +4724,24 @@ enum {
 };
 // clang-format on
 
+#if MG_ENABLE_IPV6
+// IPv6 neighbour learned from forwarded packets, see mg_tcpip_route()
+struct mg_tcpip_nb6 {
+  uint64_t ip[2];                        // Neighbour IPv6 address
+  uint8_t l2[sizeof(struct mg_l2addr)];  // Its hardware address
+};
+
+// NAT64 session, see mg_tcpip_if::nat64
+struct mg_tcpip_nat64 {
+  uint64_t ip6[2];  // Node's IPv6 address
+  uint32_t ip4;     // IPv4 server address
+  uint16_t port6;   // Node's port
+  uint16_t port4;   // IPv4 server port
+  uint16_t lport;   // Our port on the IPv4 interface
+  uint8_t proto;    // 6: TCP, 17: UDP, 0: unused entry
+};
+#endif
+
 // Network interface. Zero-initialise, then set the fields marked "user-set"
 // before calling mg_tcpip_init(). Fields in the "internal state" section
 // below are managed by the stack; read them freely but do not modify them.
@@ -4713,6 +4776,8 @@ struct mg_tcpip_if {
   uint8_t prefix[8];          // Global prefix bytes
   uint8_t prefix_len;         // Global prefix length in bits
   uint64_t gw6[2];            // IPv6 default gateway
+  uint8_t nat64[12];          // NAT64 /96 prefix, RFC 6052. If set, DNS asks
+                              // for IPv4 (A) and makes IPv6 from it (DNS64)
   bool enable_slaac;          // Enable SLAAC (stateless address autoconfiguration)
   bool enable_dhcp6_client;   // Enable DHCPv6 client (not yet fully implemented)
   bool is_ip6_changed;        // Set by stack when IPv6 address changes
@@ -4744,6 +4809,13 @@ struct mg_tcpip_if {
   uint8_t gw6mac[sizeof(struct mg_l2addr)];  // IPv6 gateway hardware address
   uint8_t state6;                            // Current IPv6 link/IP state (MG_TCPIP_STATE_*)
   bool gw6_ready;                            // IPv6 gateway MAC address has been resolved
+  struct mg_tcpip_if *route;                 // Forward to this interface, see mg_tcpip_route()
+  struct mg_tcpip_nb6 nb6[4];                // Neighbours learned from forwarded packets
+  uint8_t nb6_next;                          // Next nb6 entry to replace
+  struct mg_tcpip_nat64 nat64s[8];           // NAT64 sessions, if nat64 is set
+  uint8_t nat64_next;                        // Next nat64s entry to replace
+  uint64_t ra_expire;                        // Time of the next router advertisement, ms
+  char *dns6_url;                            // DNS server URL from router advertisement
 #endif
 };
 
@@ -4756,6 +4828,15 @@ void mg_tcpip_init(struct mg_mgr *, struct mg_tcpip_if *);
 
 // Frees the TX buffer and RX queue allocated by mg_tcpip_init().
 void mg_tcpip_free(struct mg_tcpip_if *);
+
+#if MG_ENABLE_IPV6
+// Forwards IPv6 packets between two interfaces: packets not addressed to us
+// go out the other interface. An interface with a static IPv6 prefix (ip6,
+// prefix and prefix_len set, SLAAC off) gets router advertisements for it,
+// the other interface gets a route to it, RFC 4191. Call after both
+// mg_tcpip_init(). Replies to the other side need its sender seen first
+void mg_tcpip_route(struct mg_tcpip_if *if1, struct mg_tcpip_if *if2);
+#endif
 
 // Pushes a received raw frame into ifp->recv_queue. Used by interrupt-driven
 // or DMA-based drivers (those with rx=NULL) to hand frames to the stack from
@@ -4789,6 +4870,8 @@ extern struct mg_tcpip_driver mg_tcpip_driver_nxp_wifi;
 extern struct mg_tcpip_driver mg_tcpip_driver_st67w6;
 extern struct mg_tcpip_driver mg_tcpip_driver_atcmd;
 extern struct mg_tcpip_driver mg_tcpip_driver_netc;
+extern struct mg_tcpip_driver mg_tcpip_driver_mcxw71;
+extern struct mg_tcpip_driver mg_tcpip_driver_rw612_154;
 
 // SPI bus abstraction for SPI-attached network chips (e.g. W5500).
 // Populate and assign to the driver's driver_data field.
@@ -5176,6 +5259,32 @@ struct mg_tcpip_driver_imxrt_data {
 #endif
 
 
+#if MG_ENABLE_TCPIP && defined(MG_ENABLE_DRIVER_MCXW71) && \
+    MG_ENABLE_DRIVER_MCXW71
+
+// NXP MCXW71 IEEE 802.15.4 radio, ZLL link layer. Frames passed to tx() and
+// returned by rx() are raw 802.15.4 frames: MAC header and payload, no FCS.
+// The transceiver (XCVR) must be set up for 802.15.4 before mg_tcpip_init(),
+// see hal_radio_init() in the FRDM-MCXW71 tutorial.
+// Use with MG_TCPIP_L2_LOWPAN: channel, PAN ID and addresses are taken from
+// ifp->l2data.lowpan and ifp->mac. No driver_data
+
+#define MG_TCPIP_DRIVER_INIT(mgr)                                   \
+  do {                                                              \
+    static struct mg_tcpip_if mif_;                                 \
+    mif_.l2type = MG_TCPIP_L2_LOWPAN;                               \
+    mif_.driver = &mg_tcpip_driver_mcxw71;                          \
+    mif_.l2data.lowpan.channel = 15;                                \
+    mif_.l2data.lowpan.pan_id = 0xabcd;                             \
+    MG_SET_MAC_ADDRESS(mif_.mac); /* EUI-64 */                      \
+    mg_tcpip_init(mgr, &mif_);                                      \
+    (mgr)->use_dns6 = true; /* IPv6 only: no IPv4 over 6LoWPAN */   \
+    MG_INFO(("Driver: mcxw71, 6LoWPAN"));                           \
+  } while (0)
+
+#endif
+
+
 #if defined(MG_ENABLE_TCPIP) && MG_ENABLE_TCPIP && \
     defined(MG_ENABLE_DRIVER_NETC) && MG_ENABLE_DRIVER_NETC
 
@@ -5390,6 +5499,36 @@ struct mg_tcpip_driver_rw612_data {
     mg_tcpip_init(mgr, &mif_);                                    \
     MG_INFO(("Driver: rw612, MAC: %M", mg_print_mac, mif_.mac)); \
   } while (0)
+
+#endif
+
+
+#if MG_ENABLE_TCPIP && defined(MG_ENABLE_DRIVER_RW612_154) && \
+    MG_ENABLE_DRIVER_RW612_154
+
+// NXP RW612 IEEE 802.15.4 radio. The radio runs on CPU2: NXP BLE/802.15.4
+// combo firmware, an OpenThread radio co-processor (RCP). The firmware must
+// be loaded and running before mg_tcpip_init(), see the FRDM-RW612 lowpan
+// tutorial. The driver talks to it over the CPU2 <-> CPU3 IMU mailbox:
+// IMUMC messages carrying HDLC framed Spinel. Frames passed to tx() and
+// returned by rx() are raw 802.15.4 frames: MAC header and payload, no FCS.
+// Use with MG_TCPIP_L2_LOWPAN: channel, PAN ID and addresses are taken from
+// ifp->l2data.lowpan and ifp->mac. No driver_data
+
+#ifndef MG_TCPIP_DRIVER_INIT
+#define MG_TCPIP_DRIVER_INIT(mgr)                                   \
+  do {                                                              \
+    static struct mg_tcpip_if mif_;                                 \
+    mif_.l2type = MG_TCPIP_L2_LOWPAN;                               \
+    mif_.driver = &mg_tcpip_driver_rw612_154;                       \
+    mif_.l2data.lowpan.channel = 15;                                \
+    mif_.l2data.lowpan.pan_id = 0xabcd;                             \
+    MG_SET_MAC_ADDRESS(mif_.mac); /* EUI-64 */                      \
+    mg_tcpip_init(mgr, &mif_);                                      \
+    (mgr)->use_dns6 = true; /* IPv6 only: no IPv4 over 6LoWPAN */   \
+    MG_INFO(("Driver: rw612_154, 6LoWPAN"));                        \
+  } while (0)
+#endif
 
 #endif
 

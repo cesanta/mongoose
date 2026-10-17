@@ -44,6 +44,24 @@ enum {
 };
 // clang-format on
 
+#if MG_ENABLE_IPV6
+// IPv6 neighbour learned from forwarded packets, see mg_tcpip_route()
+struct mg_tcpip_nb6 {
+  uint64_t ip[2];                        // Neighbour IPv6 address
+  uint8_t l2[sizeof(struct mg_l2addr)];  // Its hardware address
+};
+
+// NAT64 session, see mg_tcpip_if::nat64
+struct mg_tcpip_nat64 {
+  uint64_t ip6[2];  // Node's IPv6 address
+  uint32_t ip4;     // IPv4 server address
+  uint16_t port6;   // Node's port
+  uint16_t port4;   // IPv4 server port
+  uint16_t lport;   // Our port on the IPv4 interface
+  uint8_t proto;    // 6: TCP, 17: UDP, 0: unused entry
+};
+#endif
+
 // Network interface. Zero-initialise, then set the fields marked "user-set"
 // before calling mg_tcpip_init(). Fields in the "internal state" section
 // below are managed by the stack; read them freely but do not modify them.
@@ -78,6 +96,8 @@ struct mg_tcpip_if {
   uint8_t prefix[8];          // Global prefix bytes
   uint8_t prefix_len;         // Global prefix length in bits
   uint64_t gw6[2];            // IPv6 default gateway
+  uint8_t nat64[12];          // NAT64 /96 prefix, RFC 6052. If set, DNS asks
+                              // for IPv4 (A) and makes IPv6 from it (DNS64)
   bool enable_slaac;          // Enable SLAAC (stateless address autoconfiguration)
   bool enable_dhcp6_client;   // Enable DHCPv6 client (not yet fully implemented)
   bool is_ip6_changed;        // Set by stack when IPv6 address changes
@@ -109,6 +129,13 @@ struct mg_tcpip_if {
   uint8_t gw6mac[sizeof(struct mg_l2addr)];  // IPv6 gateway hardware address
   uint8_t state6;                            // Current IPv6 link/IP state (MG_TCPIP_STATE_*)
   bool gw6_ready;                            // IPv6 gateway MAC address has been resolved
+  struct mg_tcpip_if *route;                 // Forward to this interface, see mg_tcpip_route()
+  struct mg_tcpip_nb6 nb6[4];                // Neighbours learned from forwarded packets
+  uint8_t nb6_next;                          // Next nb6 entry to replace
+  struct mg_tcpip_nat64 nat64s[8];           // NAT64 sessions, if nat64 is set
+  uint8_t nat64_next;                        // Next nat64s entry to replace
+  uint64_t ra_expire;                        // Time of the next router advertisement, ms
+  char *dns6_url;                            // DNS server URL from router advertisement
 #endif
 };
 
@@ -121,6 +148,15 @@ void mg_tcpip_init(struct mg_mgr *, struct mg_tcpip_if *);
 
 // Frees the TX buffer and RX queue allocated by mg_tcpip_init().
 void mg_tcpip_free(struct mg_tcpip_if *);
+
+#if MG_ENABLE_IPV6
+// Forwards IPv6 packets between two interfaces: packets not addressed to us
+// go out the other interface. An interface with a static IPv6 prefix (ip6,
+// prefix and prefix_len set, SLAAC off) gets router advertisements for it,
+// the other interface gets a route to it, RFC 4191. Call after both
+// mg_tcpip_init(). Replies to the other side need its sender seen first
+void mg_tcpip_route(struct mg_tcpip_if *if1, struct mg_tcpip_if *if2);
+#endif
 
 // Pushes a received raw frame into ifp->recv_queue. Used by interrupt-driven
 // or DMA-based drivers (those with rx=NULL) to hand frames to the stack from
@@ -154,6 +190,8 @@ extern struct mg_tcpip_driver mg_tcpip_driver_nxp_wifi;
 extern struct mg_tcpip_driver mg_tcpip_driver_st67w6;
 extern struct mg_tcpip_driver mg_tcpip_driver_atcmd;
 extern struct mg_tcpip_driver mg_tcpip_driver_netc;
+extern struct mg_tcpip_driver mg_tcpip_driver_mcxw71;
+extern struct mg_tcpip_driver mg_tcpip_driver_rw612_154;
 
 // SPI bus abstraction for SPI-attached network chips (e.g. W5500).
 // Populate and assign to the driver's driver_data field.
