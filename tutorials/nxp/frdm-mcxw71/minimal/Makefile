@@ -2,7 +2,7 @@
 
 MGDIR = ../../../..
 
-CFLAGS  = -W -Wall -Wextra -Werror -Wundef -Wshadow -Wdouble-promotion
+CFLAGS  = -W -Wall -Wextra -Werror -Wundef -Wshadow
 CFLAGS += -Wformat-truncation -fno-common -Wno-conversion -Wno-sign-conversion
 CFLAGS += -g3 -Os -ffunction-sections -fdata-sections
 CFLAGS += -I. -I$(MGDIR) -Icmsis_core/CMSIS/Core/Include
@@ -10,9 +10,11 @@ CFLAGS += -Icmsis_mcxw71/MCXW/MCXW716C -Icmsis_mcxw71/MCXW/periph2
 CFLAGS += -DCPU_MCXW716CMFTA
 CFLAGS += -D__START=main -D__STARTUP_CLEAR_BSS  # For startup_MCXW716C.S
 CFLAGS += -mcpu=cortex-m33 -mthumb -mfloat-abi=hard -mfpu=fpv5-sp-d16 $(CFLAGS_EXTRA)
-LDFLAGS ?= -Tlink.ld -nostdlib -nostartfiles --specs=nano.specs -lc -lgcc -Wl,--gc-sections
+
+LDFLAGS ?= -Tlink.ld -nostdlib -nostartfiles --specs=nano.specs -lc -lm -lgcc -Wl,--gc-sections
 
 SOURCES = main.c hal.c $(MGDIR)/mongoose.c
+SOURCES += $(MGDIR)/tutorials/mqtt/mqtt-client/mongoose_mqtt.c
 SOURCES += cmsis_mcxw71/MCXW/MCXW716C/gcc/startup_MCXW716C.S
 
 all build: firmware.bin

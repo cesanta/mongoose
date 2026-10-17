@@ -154,6 +154,41 @@ extern struct mg_tcpip_driver mg_tcpip_driver_nxp_wifi;
 extern struct mg_tcpip_driver mg_tcpip_driver_st67w6;
 extern struct mg_tcpip_driver mg_tcpip_driver_atcmd;
 extern struct mg_tcpip_driver mg_tcpip_driver_netc;
+extern struct mg_tcpip_driver mg_tcpip_driver_mcxw71;
+extern struct mg_tcpip_driver mg_tcpip_driver_rw612_154;
+
+// IEEE 802.15.4 radio channel and PAN ID. Settable in mongoose_config.h
+#ifndef MG_L2_802154_CHANNEL
+#define MG_L2_802154_CHANNEL 15  // 11..26
+#endif
+#ifndef MG_L2_802154_PAN_ID
+#define MG_L2_802154_PAN_ID 0xabcd
+#endif
+
+// driver_data for IEEE 802.15.4 radio drivers. The interface is Ethernet:
+// each Ethernet frame is split into broadcast radio frames, and reassembled
+// on the other side, see mg_l2_802154_tx() and mg_l2_802154_rx()
+struct mg_l2_802154_data {
+  uint8_t channel;        // User-set channel, 11..26
+  uint16_t pan_id;        // User-set PAN ID
+  uint8_t seq, tag;       // MAC sequence number, tag of the last sent frame
+  uint8_t rxtag, rxnext;  // Frame being reassembled: tag, next fragment
+  uint8_t rxsrc[8];       // Its sender
+  uint16_t rxlen;         // Its bytes received so far
+  uint8_t rxbuf[1514];    // Reassembly buffer, one Ethernet frame
+};
+
+// Splits an Ethernet frame into radio frames, sends each by calling send().
+// Called by radio drivers' tx(). Return len, or 0 on error
+size_t mg_l2_802154_tx(struct mg_tcpip_if *ifp, const void *buf, size_t len,
+                       size_t (*send)(const uint8_t *, size_t,
+                                      struct mg_tcpip_if *));
+
+// Adds a received radio frame f of n bytes to the frame being reassembled.
+// Called by radio drivers' rx(). Return the Ethernet frame length, copied to
+// buf, when it is complete, otherwise 0
+size_t mg_l2_802154_rx(struct mg_tcpip_if *ifp, const uint8_t *f, size_t n,
+                       void *buf, size_t len);
 
 // SPI bus abstraction for SPI-attached network chips (e.g. W5500).
 // Populate and assign to the driver's driver_data field.

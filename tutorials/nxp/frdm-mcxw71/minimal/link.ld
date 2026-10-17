@@ -1,7 +1,7 @@
 /* MCXW716C memory map, see MCUXpresso SDK gcc/mcxw716_flash.ld */
 ENTRY(Reset_Handler);
 MEMORY {
-  flash(rx)  : ORIGIN = 0x00000000, LENGTH = 1024k
+  flash(rx)  : ORIGIN = 0x00000000, LENGTH = 512k  /* Upper half: OTA staging */
   sram(rwx)  : ORIGIN = 0x20000000, LENGTH = 112k
 }
 __StackTop = ORIGIN(sram) + LENGTH(sram);  /* Stack points here */
@@ -16,6 +16,7 @@ SECTIONS {
     __data_start__ = .;
     _sdata = .;
     *(.first_data)
+    *(.iram .iram.*)  /* OTA flash operations, copied to RAM by startup */
     *(.data SORT(.data.*))
     . = ALIGN(4);
     __data_end__ = .;
