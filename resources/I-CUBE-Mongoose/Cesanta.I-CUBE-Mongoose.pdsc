@@ -1,13 +1,21 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<package schemaVersion="1.7.40" xmlns:xs="http://www.w3.org/2001/XMLSchema-instance" xs:noNamespaceSchemaLocation="PACK.xsd">
+<package schemaVersion="1.7.56" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:stm32="https://developer.st.com/schemas/stm32cube/1.0.0" xsi:noNamespaceSchemaLocation="PACK.xsd">
   <vendor>Cesanta</vendor>
   <name>I-CUBE-Mongoose</name>
-  <description>Mongoose - a lightweight networking library providing TCP/IP stack, TLS, HTTP (Embedded Web Server), WebSocket, MQTT, and Firmware OTA updates. Build production-ready web device dashboards and MQTT cloud connectivity without stitching multiple components together.
-  </description>
+  <description>Mongoose - a full-stack networking library for microcontrollers: Ethernet and Wi-Fi drivers, TCP/IP stack, TLS 1.3, HTTP, WebSocket, MQTT, Modbus, OTA updates and device management, in a two-file C/C++ library, on any RTOS or bare metal.</description>
   <url>https://mongoose.ws/downloads/stm32pack/</url>
   <license>License.txt</license>
   <supportContact>https://mongoose.ws/contact/</supportContact>
+  <environments>
+    <environment name="STM32Cube">
+      <stm32:pack type="MW" friendlyName="Mongoose" shortDesc="Mongoose full-stack networking library">
+        <relocation-info parent="middleware"/>
+        <no-compatibility-constraint/>
+      </stm32:pack>
+    </environment>
+  </environments>
   <releases>
+    <release date="2026-10-19" version="7.23.2">See https://github.com/cesanta/mongoose/releases/tag/7.23</release>
     <release date="2026-09-28" version="7.23.1">See https://github.com/cesanta/mongoose/releases/tag/7.23</release>
     <release date="2026-05-11" version="7.21.7">See https://github.com/cesanta/mongoose/releases/tag/7.21</release>
     <release date="2026-05-05" version="7.21.5">See https://github.com/cesanta/mongoose/releases/tag/7.21</release>
@@ -20,7 +28,7 @@
       <keyword>IMPLEMENTED_WITH_STM32CUBEMX</keyword>
   </keywords>
   <components>
-    <component Cclass="Mongoose" Cgroup="Networking Core" Cversion="7.23.1" maxInstances="1">
+    <component Cclass="Mongoose" Cgroup="Networking Core" Cversion="7.23.2" maxInstances="1">
       <description>Networking Core</description>
       <files>
         <file category="doc" name="README.md"/>
@@ -28,7 +36,15 @@
         <file category="sourceC" name="mongoose.c" />
         <file category="header" name="mongoose_config.h"/>
         <file category="utility" name="README.md" public="false"/>
+        <file category="genAsset" name=".config/mongoose_parameters.json"/>
       </files>
+      <environments>
+        <environment name="STM32Cube">
+          <stm32:component>
+            <middleware-entry-point id="Mongoose" name="Mongoose" category="TCP/IP"/>
+          </stm32:component>
+        </environment>
+      </environments>
     </component>
   </components>
 </package>
