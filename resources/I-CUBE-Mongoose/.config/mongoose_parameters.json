@@ -1,0 +1,32 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema",
+  "version": "0.0.1",
+  "componentid": "::Mongoose:Networking Core",
+  "type": "object",
+  "grammarVersion": "3.8.0",
+  "license": "Copyright (c) Cesanta Software Limited",
+  "properties": {
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "info": {
+          "type": "object",
+          "title": "General information",
+          "properties": {
+            "description": {
+              "title": "Middleware description",
+              "type": "string",
+              "actions": [
+                {
+                  "type": "disable",
+                  "condition": "true"
+                }
+              ],
+              "default": "Mongoose networking library: TCP/IP, TLS, HTTP, WebSocket, MQTT, OTA. Edit mongoose_config.h to configure it."
+            }
+          }
+        }
+      }
+    }
+  }
+}
