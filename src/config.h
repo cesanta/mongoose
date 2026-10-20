@@ -12,6 +12,10 @@
 #define MG_ENABLE_CUSTOM_LOG 0  // Let user define their own MG_LOG
 #endif
 
+#ifndef MG_ENABLE_CUSTOM_USAGE
+#define MG_ENABLE_CUSTOM_USAGE 0  // Let user define mg_usage
+#endif
+
 #ifndef MG_ENABLE_FREERTOS
 #define MG_ENABLE_FREERTOS 0  // FreeRTOS RTOS
 #endif

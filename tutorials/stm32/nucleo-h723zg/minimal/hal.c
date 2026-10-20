@@ -45,15 +45,6 @@ __attribute__((weak)) int _fstat(int fd, struct stat *st) {
 extern unsigned char _end[];  // End of data section, start of heap. See link.ld
 static unsigned char *s_current_heap_end = _end;
 
-size_t hal_ram_used(void) {
-  return (size_t) (s_current_heap_end - _end);
-}
-
-size_t hal_ram_free(void) {
-  unsigned char endofstack;
-  return (size_t) (&endofstack - s_current_heap_end);
-}
-
 void *_sbrk(int incr) {
   unsigned char *prev_heap;
   unsigned char *heap_end = (unsigned char *) ((size_t) &heap_end - 256);

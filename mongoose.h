@@ -1142,6 +1142,10 @@ struct timeval {
 #define MG_ENABLE_CUSTOM_LOG 0  // Let user define their own MG_LOG
 #endif
 
+#ifndef MG_ENABLE_CUSTOM_USAGE
+#define MG_ENABLE_CUSTOM_USAGE 0  // Let user define mg_usage
+#endif
+
 #ifndef MG_ENABLE_FREERTOS
 #define MG_ENABLE_FREERTOS 0  // FreeRTOS RTOS
 #endif
@@ -4493,8 +4497,29 @@ static inline uint16_t esp2mg(esp_reset_reason_t rr) {
 // clang-format on
 #endif
 
+enum mg_usage_metric {
+  MG_USAGE_NUM_TASKS,
+  MG_USAGE_TASK_NAME,
+  MG_USAGE_STACK_TOTAL,
+  MG_USAGE_STACK_FREE,
+  MG_USAGE_HEAP_TOTAL,
+  MG_USAGE_HEAP_FREE
+};
+
+// Returns a task or heap metric. task is a zero-based index; NUM_TASKS and heap
+// metrics ignore it. Sizes are in bytes, TASK_NAME returns const char * cast to
+// size_t
+// Unsupported metrics and unknown totals return 0
+// Set MG_ENABLE_CUSTOM_USAGE=1 and define mg_usage() in the application to
+// provide custom measurements
+size_t mg_usage(int task, int metric);
+
 #define MG_HEALTH_INIT() mg_health_init()
 extern size_t mg_print_crash_record(mg_pfn_t, void *, va_list *);
+// JSON memory statistics via mg_usage(), suitable for %M: heap_total, heap_free,
+// and a stacks array of {name, free, total}
+// A zero total means unknown
+extern size_t mg_print_mem_stats(mg_pfn_t, void *, va_list *);
 extern void mg_health_init(void);
 extern bool mg_health_coredump_begin(size_t *size);
 extern bool mg_health_coredump_read(size_t offset, void *buf, size_t *len);
@@ -4510,6 +4535,10 @@ static inline const char *mg_health_reason_str(int reason) {
 }
 static inline size_t mg_print_crash_record(mg_pfn_t fn, void *arg,
                                            va_list *ap) {
+  (void) ap;
+  return mg_xprintf(fn, arg, "{}");
+}
+static inline size_t mg_print_mem_stats(mg_pfn_t fn, void *arg, va_list *ap) {
   (void) ap;
   return mg_xprintf(fn, arg, "{}");
 }

@@ -1,7 +1,88 @@
 #include "config.h"
 #include "health.h"
+#include <limits.h>
 
 #if MG_ENABLE_HEALTH
+#if !MG_ENABLE_CUSTOM_USAGE
+size_t mg_usage(int task, int metric) {
+  // FreeRTOS: call NUM_TASKS first to snapshot tasks and copy their names
+  // Indices and names stay valid until the next refresh, preventing duplicate
+  // or mismatched entries. STACK_FREE is minimum-ever free; STACK_TOTAL is 0
+#if MG_ENABLE_FREERTOS
+  if (metric == MG_USAGE_HEAP_FREE) return xPortGetFreeHeapSize();
+#ifdef configTOTAL_HEAP_SIZE
+  if (metric == MG_USAGE_HEAP_TOTAL) return configTOTAL_HEAP_SIZE;
+#endif
+#if configUSE_TRACE_FACILITY == 1
+  static TaskStatus_t *tasks;
+  static UBaseType_t count;
+  if (metric == MG_USAGE_NUM_TASKS) {
+    size_t size = sizeof(*tasks) + configMAX_TASK_NAME_LEN;
+    vTaskSuspendAll();
+    if (tasks != NULL) {
+      mg_free(tasks);
+      tasks = NULL;
+    }
+    count = 0;
+    UBaseType_t n = uxTaskGetNumberOfTasks();
+    if (n > 0 && (size_t) n <= INT_MAX && (size_t) n <= SIZE_MAX / size) {
+      tasks = (TaskStatus_t *) mg_calloc((size_t) n, size);
+      if (tasks != NULL) {
+        count = uxTaskGetSystemState(tasks, n, NULL);
+        if (count == n) {
+          for (UBaseType_t i = 0; i < count; i++) {
+            char *name = (char *) (tasks + n) + (size_t) i * configMAX_TASK_NAME_LEN;
+            mg_snprintf(name, configMAX_TASK_NAME_LEN, "%s", tasks[i].pcTaskName);
+            tasks[i].pcTaskName = name;
+          }
+        } else {
+          mg_free(tasks);
+          tasks = NULL;
+          count = 0;
+        }
+      }
+    }
+    (void) xTaskResumeAll();
+    return (size_t) count;
+  }
+  if (task >= 0 && (size_t) task < (size_t) count) {
+    if (metric == MG_USAGE_TASK_NAME) return (size_t) tasks[task].pcTaskName;
+    if (metric == MG_USAGE_STACK_FREE)
+      return (size_t) tasks[task].usStackHighWaterMark * sizeof(StackType_t);
+  }
+#endif
+#endif
+  (void) task;
+  (void) metric;
+  return 0;
+}
+#endif
+
+static size_t print_stacks(mg_pfn_t fn, void *arg, va_list *ap) {
+  int i;
+  int count = (int) mg_usage(-1, MG_USAGE_NUM_TASKS);
+  size_t len = mg_xprintf(fn, arg, "[");
+  for (i = 0; i < count; i++) {
+    const char *name = (const char *) mg_usage(i, MG_USAGE_TASK_NAME);
+    len += mg_xprintf(fn, arg, "%s{%m:%m,%m:%zu,%m:%zu}",
+                      i == 0 ? "" : ",", MG_ESC("name"),
+                      MG_ESC(name == NULL ? "" : name), MG_ESC("free"),
+                      (size_t) mg_usage(i, MG_USAGE_STACK_FREE), MG_ESC("total"),
+                      (size_t) mg_usage(i, MG_USAGE_STACK_TOTAL));
+  }
+  (void) ap;
+  return len + mg_xprintf(fn, arg, "]");
+}
+
+size_t mg_print_mem_stats(mg_pfn_t fn, void *arg, va_list *ap) {
+  size_t heap_total = (size_t) mg_usage(0, MG_USAGE_HEAP_TOTAL);
+  size_t heap_free = (size_t) mg_usage(0, MG_USAGE_HEAP_FREE);
+  (void) ap;
+  return mg_xprintf(fn, arg, "{%m:%zu,%m:%zu,%m:%M}",
+                    MG_ESC("heap_total"), heap_total, MG_ESC("heap_free"),
+                    heap_free, MG_ESC("stacks"), print_stacks);
+}
+
 #if MG_ARCH == MG_ARCH_ESP32
 // reusable for other platforms, currently ESP32-only
 struct mg_health_coredump {

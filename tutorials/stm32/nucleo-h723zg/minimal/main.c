@@ -4,6 +4,19 @@
 #include "hal.h"
 #include "mongoose.h"
 
+size_t mg_usage(int task, int metric) {
+  extern void *_sbrk(int incr);
+  if (metric == MG_USAGE_NUM_TASKS) return 1;
+  if (metric == MG_USAGE_TASK_NAME) return task == 0 ? (size_t) "main" : 0;
+  // Heap and stack share the free gap, neither has a fixed total
+  if (metric == MG_USAGE_HEAP_FREE ||
+      (metric == MG_USAGE_STACK_FREE && task == 0)) {
+    size_t sp = (size_t) __get_MSP(), heap = (size_t) _sbrk(0);
+    return sp > heap ? sp - heap : 0;
+  }
+  return 0;
+}
+
 #ifndef UART_DEBUG
 #define UART_DEBUG USART3
 #define UART_DEBUG_TX_PIN PIN('D', 8)
@@ -82,10 +95,8 @@ static void http_ev_handler(struct mg_connection *c, int ev, void *ev_data) {
     } else {
       mg_http_reply(c, 200, "",
                     "Hi from Mongoose!\n"
-                    "tick:     %llu\n"
-                    "ram used: %zu\n"
-                    "ram free: %zu\n",
-                    hal_get_tick(), hal_ram_used(), hal_ram_free());
+                    "tick: %llu\n%M\n",
+                    hal_get_tick(), mg_print_mem_stats);
     }
   }
 }
@@ -108,7 +119,7 @@ int main(void) {
   mg_http_listen(&mgr, "https://0.0.0.0", http_ev_handler, NULL);
 
   MG_INFO(("Initialised. CPU clock: %lu MHz", SystemCoreClock / 1000000));
-  MG_INFO(("RAM used: %zu, free: %zu", hal_ram_used(), hal_ram_free()));
+  MG_INFO(("Memory: %M", mg_print_mem_stats));
   MG_INFO(("Crash record: %M", mg_print_crash_record));
 
   for (;;) {

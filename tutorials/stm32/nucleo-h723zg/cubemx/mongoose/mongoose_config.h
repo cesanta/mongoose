@@ -1,5 +1,7 @@
 #pragma once
 #define MG_ARCH MG_ARCH_CUBE
+#define MG_ENABLE_HEALTH 1
+#define MG_ENABLE_CUSTOM_USAGE 1
 
 // Ethernet driver tunables:
 // #define MG_DRIVER_MDC_CR 4   // RMII MDC clock divider, from 0 to 5

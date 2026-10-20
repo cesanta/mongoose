@@ -84,6 +84,29 @@ static void MX_USART3_UART_Init(void);
 
 /* Private user code ---------------------------------------------------------*/
 /* USER CODE BEGIN 0 */
+size_t mg_usage(int task, int metric) {
+  extern void *_sbrk(ptrdiff_t incr);
+  extern unsigned char _end, _sstack;
+  extern uint32_t _Min_Stack_Size;
+  switch (metric) {
+    case MG_USAGE_NUM_TASKS: return 1;
+    case MG_USAGE_TASK_NAME: return task == 0 ? (size_t) "main" : 0;
+    case MG_USAGE_STACK_TOTAL:
+      return task == 0 ? (size_t) &_Min_Stack_Size : 0;
+    case MG_USAGE_STACK_FREE: {
+      size_t sp = (size_t) __get_MSP(), base = (size_t) &_sstack;
+      return task == 0 && sp > base ? sp - base : 0;
+    }
+    case MG_USAGE_HEAP_TOTAL:
+      return (size_t) &_sstack - (size_t) &_end;
+    case MG_USAGE_HEAP_FREE: {
+      size_t heap = (size_t) _sbrk(0), limit = (size_t) &_sstack;
+      return limit > heap ? limit - heap : 0;
+    }
+    default: return 0;
+  }
+}
+
 static void log_fn(char ch, void *param) {
   HAL_UART_Transmit(param, (unsigned char *) &ch, 1, HAL_MAX_DELAY);
 }
@@ -102,7 +125,8 @@ static void http_ev_handler(struct mg_connection *c, int ev, void *ev_data) {
       SCB->SHCSR &= ~SCB_SHCSR_USGFAULTENA_Msk;
       __asm volatile("udf #0");
     } else {
-      mg_http_reply(c, 200, "", "Hi from Mongoose, tick %lu\n", HAL_GetTick());
+      mg_http_reply(c, 200, "", "Hi from Mongoose, tick %lu\n%M\n",
+                    HAL_GetTick(), mg_print_mem_stats);
     }
   }
 }
