@@ -9,11 +9,11 @@
 #define MG_HEALTH_MAGIC {'M', 'G', 'H', '3'}  // '3' is the layout version
 #endif
 
-#if !defined(MG_HEALTH_RAM) && (defined(STM32H7_DEV_ID) || defined(STM32H5))
+#if !defined(MG_HEALTH_RAM) && (defined(STM32H7_DEV_ID) || defined(STM32H5) || defined(STM32C5))
 #define MG_HEALTH_RAM __attribute__((section(".mg_health")))
 #endif
 
-#if !defined(MG_HEALTH_DATA_SIZE) && (defined(STM32H7_DEV_ID) || defined(STM32H5))
+#if !defined(MG_HEALTH_DATA_SIZE) && (defined(STM32H7_DEV_ID) || defined(STM32H5) || defined(STM32C5))
 #define MG_HEALTH_DATA_SIZE 250
 #endif
 
