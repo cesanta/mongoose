@@ -15,8 +15,8 @@
 
 extern bool hal_timer_expired(volatile uint64_t *t, uint64_t prd, uint64_t now);
 extern uint64_t hal_get_tick(void);
-extern size_t hal_ram_free(void);
-extern size_t hal_ram_used(void);
+extern size_t hal_get_heap(void);   // Heap bytes reserved through _sbrk()
+extern size_t hal_get_stack(void);  // Stack bytes currently used (MSP)
 extern uint32_t SystemCoreClock;
 
 #define BIT(x) (1UL << (x))

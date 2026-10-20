@@ -5,6 +5,23 @@
 #include "arch.h"
 #include "printf.h"
 
+// Memory usage in bytes. Override in mongoose_config.h for the target.
+#ifndef MG_HEALTH_STACK_USED
+#define MG_HEALTH_STACK_USED 0
+#endif
+
+#ifndef MG_HEALTH_STACK_TOTAL
+#define MG_HEALTH_STACK_TOTAL 0
+#endif
+
+#ifndef MG_HEALTH_HEAP_USED
+#define MG_HEALTH_HEAP_USED 0
+#endif
+
+#ifndef MG_HEALTH_HEAP_TOTAL
+#define MG_HEALTH_HEAP_TOTAL 0
+#endif
+
 #ifndef MG_HEALTH_MAGIC
 #define MG_HEALTH_MAGIC {'M', 'G', 'H', '3'}  // '3' is the layout version
 #endif

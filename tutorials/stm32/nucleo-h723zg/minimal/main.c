@@ -78,9 +78,9 @@ static void http_ev_handler(struct mg_connection *c, int ev, void *ev_data) {
       mg_http_reply(c, 200, "",
                     "Hi from Mongoose!\n"
                     "tick:     %llu\n"
-                    "ram used: %zu\n"
-                    "ram free: %zu\n",
-                    hal_get_tick(), hal_ram_used(), hal_ram_free());
+                    "heap used:  %zu\n"
+                    "stack used: %zu\n",
+                    hal_get_tick(), hal_get_heap(), hal_get_stack());
     }
   }
 }
@@ -103,7 +103,7 @@ int main(void) {
   mg_http_listen(&mgr, "https://0.0.0.0", http_ev_handler, NULL);
 
   MG_INFO(("Initialised. CPU clock: %lu MHz", SystemCoreClock / 1000000));
-  MG_INFO(("RAM used: %zu, free: %zu", hal_ram_used(), hal_ram_free()));
+  MG_INFO(("Heap used: %zu, stack used: %zu", hal_get_heap(), hal_get_stack()));
   MG_INFO(("Crash record: %M", mg_print_crash_record));
 
   for (;;) {
