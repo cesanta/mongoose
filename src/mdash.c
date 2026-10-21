@@ -89,6 +89,7 @@ static void mg_mdash_fn(struct mg_connection *c, int ev, void *ev_data) {
     }
     mg_iobuf_free(&io);
   } else if (ev == MG_EV_CLOSE) {
+    mg_health_coredump_end();
     mg_mdash_conn = NULL;
     MG_INFO(("disconnected, ram %lu", 0));
   }
@@ -146,6 +147,35 @@ static void mg_mdash_rpc_ota_end(struct mg_rpc_req *r) {
   // MG_ESC("percent"));
 }
 
+static void rpc_coredump_begin(struct mg_rpc_req *r) {
+  size_t size = 0;
+  if (mg_health_coredump_begin(&size)) {
+    mg_rpc_ok(r, "{%m:%llu}", MG_ESC("size"), (uint64_t) size);
+  } else {
+    mg_rpc_err(r, 500, "%m", MG_ESC("failed"));
+  }
+}
+
+static void rpc_coredump_read(struct mg_rpc_req *r) {
+  uint8_t buf[768];
+  size_t len = sizeof(buf);
+  size_t offset = (size_t) mg_json_get_long(r->frame, "$.params.offset", -1);
+  if (mg_health_coredump_read(offset, buf, &len)) {
+    mg_rpc_ok(r, "{%m:\"%M\"}", MG_ESC("data"), mg_print_base64,
+              (int) len, buf);
+  } else {
+    mg_rpc_err(r, 500, "%m", MG_ESC("failed"));
+  }
+}
+
+static void rpc_coredump_end(struct mg_rpc_req *r) {
+  if (mg_health_coredump_end()) {
+    mg_rpc_ok(r, "true");
+  } else {
+    mg_rpc_err(r, 500, "%m", MG_ESC("failed"));
+  }
+}
+
 void mg_mdash_init(struct mg_mgr *mgr) {
   MG_INFO(("Initialising mdash agent, key [%s]", MG_MDASH_KEY));
   mg_rpc_add(&mgr->rpcs, mg_str("RPC.List"), mg_rpc_list, NULL);
@@ -153,6 +183,9 @@ void mg_mdash_init(struct mg_mgr *mgr) {
   mg_rpc_add(&mgr->rpcs, mg_str("OTA.Begin"), mg_mdash_rpc_ota_begin, NULL);
   mg_rpc_add(&mgr->rpcs, mg_str("OTA.Write"), mg_mdash_rpc_ota_write, NULL);
   mg_rpc_add(&mgr->rpcs, mg_str("OTA.End"), mg_mdash_rpc_ota_end, NULL);
+  mg_rpc_add(&mgr->rpcs, mg_str("CoreDump.Begin"), rpc_coredump_begin, NULL);
+  mg_rpc_add(&mgr->rpcs, mg_str("CoreDump.Read"), rpc_coredump_read, NULL);
+  mg_rpc_add(&mgr->rpcs, mg_str("CoreDump.End"), rpc_coredump_end, NULL);
 }
 
 void mg_mdash_poll(struct mg_mgr *mgr) {
