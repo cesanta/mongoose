@@ -32,6 +32,7 @@
 
 #if MG_ENABLE_TCPIP && !defined(MG_ENABLE_DRIVER_STM32F) && \
     !defined(MG_ENABLE_DRIVER_STM32H) && !defined(MG_ENABLE_DRIVER_STM32N) && \
+    !defined(MG_ENABLE_DRIVER_STM32C) && \
     !defined(MG_ENABLE_DRIVER_CYW) && !defined(MG_ENABLE_DRIVER_CYW_SDIO) && \
     !defined(MG_ENABLE_DRIVER_ST67W6)
 #if defined(STM32F1) || defined(STM32F2) || defined(STM32F4) || defined(STM32F7)
@@ -40,6 +41,8 @@
 #define MG_ENABLE_DRIVER_STM32H 1
 #elif defined(STM32N6)
 #define MG_ENABLE_DRIVER_STM32N 1
+#elif defined(STM32C5)
+#define MG_ENABLE_DRIVER_STM32C 1
 #else
 #error Select a driver in mongoose_config.h
 #endif
@@ -56,70 +59,8 @@
 #define MG_OTA MG_OTA_STM32H5
 #elif !defined(MG_OTA) && defined(STM32H7)
 #define MG_OTA MG_OTA_STM32H7
-#endif
-
-// OTA rollback timer via IWDG. Fixed 10 s hang-detection window (prescaler
-// /1024, LSI ~32 kHz: reload = 10 * 32000 / 1024 = 312). mg_ota_poll() feeds
-// the watchdog every 500 ms while in MG_OTA_TESTING state; if the event loop
-// hangs for 10 s, the IWDG fires and the device rolls back.
-// STM32H7 names the peripheral IWDG1; all others use IWDG.
-// The total evaluation period is set by MG_OTA_ROLLBACK_TIMEOUT_SECONDS.
-// STM32H7 names the watchdog peripheral IWDG1; all other families use IWDG.
-#if defined(IWDG1) && !defined(IWDG)
-#define MG_IWDG IWDG1
-#else
-#define MG_IWDG IWDG
-#endif
-// PR=6 → /256 prescaler, RLR=1250 → ~10 s at LSI 32 kHz.
-// Works on F4/F7/H5/H7; uses direct register writes so it is safe before HAL_Init().
-#ifndef MG_OTA_ROLLBACK_TIMER_START
-#define MG_OTA_ROLLBACK_TIMER_START()                                          \
-  do {                                                                         \
-    MG_IWDG->KR = 0xCCCCU;                              /* start + LSI  */    \
-    MG_IWDG->KR = 0x5555U;                              /* unlock PR/RLR */   \
-    MG_IWDG->PR = 6U;                                   /* /256         */    \
-    MG_IWDG->RLR = 1250U;                               /* 10 s         */    \
-    while (MG_IWDG->SR & (IWDG_SR_PVU | IWDG_SR_RVU)) (void) 0;              \
-    MG_IWDG->KR = 0xAAAAU;                              /* reload       */    \
-  } while (0)
-#endif
-
-// Feed (reload) the IWDG. Called from mg_ota_poll() every 500 ms.
-#ifndef MG_OTA_ROLLBACK_TIMER_FEED
-#define MG_OTA_ROLLBACK_TIMER_FEED() (MG_IWDG->KR = 0xAAAAU)
-#endif
-
-// OTA state in a backup register that survives warm resets but clears on POR.
-// STATE_GET reads work without any setup. STATE_SET enables the RTC APB clock
-// and unlocks backup domain write access via direct register writes, so it is
-// safe to call from any context (before or after HAL_Init).
-// H5 (TAMP->BKP0R), H7 (RTC->BKP0R), F4/F7 (RTC->BKP0R).
-#ifndef MG_OTA_STATE_GET
-#if defined(PWR_DBPCR_DBP)
-#define MG_OTA_DBP_ENABLE() (PWR->DBPCR |= PWR_DBPCR_DBP)
-#elif defined(PWR_CR1_DBP)
-#define MG_OTA_DBP_ENABLE() (PWR->CR1 |= PWR_CR1_DBP)
-#else
-#define MG_OTA_DBP_ENABLE() (PWR->CR |= PWR_CR_DBP)
-#endif
-
-#if defined(TAMP)
-#define MG_OTA_STATE_GET()                                           \
-  (RCC->APB3ENR |= RCC_APB3ENR_RTCAPBEN, TAMP->BKP0R)
-#define MG_OTA_STATE_SET(v)                                           \
-  (RCC->APB3ENR |= RCC_APB3ENR_RTCAPBEN, MG_OTA_DBP_ENABLE(),        \
-   (TAMP->BKP0R = (uint32_t) (v)), TAMP->BKP0R)
-#elif defined(RCC_APB4ENR_RTCAPBEN)
-#define MG_OTA_STATE_GET() (RTC->BKP0R)
-#define MG_OTA_STATE_SET(v)                                           \
-  (RCC->APB4ENR |= RCC_APB4ENR_RTCAPBEN, MG_OTA_DBP_ENABLE(),        \
-   (RTC->BKP0R = (uint32_t) (v)))
-#else
-#define MG_OTA_STATE_GET() (RTC->BKP0R)
-#define MG_OTA_STATE_SET(v)                                           \
-  (RCC->APB1ENR |= RCC_APB1ENR_PWREN, MG_OTA_DBP_ENABLE(),           \
-   (RTC->BKP0R = (uint32_t) (v)))
-#endif
+#elif !defined(MG_OTA) && defined(STM32C5)
+#define MG_OTA MG_OTA_STM32C5
 #endif
 
 // use HAL-defined execute-in-ram section

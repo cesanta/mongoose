@@ -2,7 +2,7 @@
 #include "log.h"
 #include "ota.h"
 
-#if MG_OTA == MG_OTA_STM32H5
+#if MG_OTA == MG_OTA_STM32H5 || MG_OTA == MG_OTA_STM32C5
 
 static bool mg_stm32h5_write(void *, const void *, size_t);
 static bool mg_stm32h5_swap(void);

@@ -3646,7 +3646,7 @@ struct mg_fs mg_fs_posix = {p_stat,  p_list, p_open,   p_close,  p_read,
 struct mg_health mg_health_record MG_HEALTH_RAM;
 
 // STM32 H723 support. Needs the _estack symbol from the linker script
-#if MG_ENABLE_HEALTH && (defined(STM32H7_DEV_ID) || defined(STM32H5))
+#if MG_ENABLE_HEALTH && (defined(STM32H7_DEV_ID) || defined(STM32H5) || defined(STM32C5))
 // Fault handler body. Runs in exception context: no printf, no malloc, no
 // blocking calls. Copies the unwind registers and raw stack into the health
 // record, then resets.
@@ -13275,7 +13275,7 @@ struct mg_flash *mg_flash = &s_mg_flash_stm32f;
 
 
 
-#if MG_OTA == MG_OTA_STM32H5
+#if MG_OTA == MG_OTA_STM32H5 || MG_OTA == MG_OTA_STM32C5
 
 static bool mg_stm32h5_write(void *, const void *, size_t);
 static bool mg_stm32h5_swap(void);
@@ -34396,7 +34396,7 @@ static uint32_t s_rxno;
 #if MG_ENABLE_DRIVER_MCXN
 void ETHERNET_IRQHandler(void);
 void ETHERNET_IRQHandler(void) {
-#elif MG_ENABLE_DRIVER_STM32H
+#elif MG_ENABLE_DRIVER_STM32H && !MG_ENABLE_DRIVER_STM32C
 void ETH_IRQHandler(void);
 void ETH_IRQHandler(void) {
 #else
@@ -34425,8 +34425,10 @@ void ETH1_IRQHandler(void) {
   }
   ETH->DMACSR =
       MG_BIT(7) | MG_BIT(8);  // Clear possible RBU RPS while processing
-  ETH->DMACRDTPR =
-      (uint32_t) (uintptr_t) &s_rxdesc[ETH_DESC_CNT - 1];  // and resume RX
+  // Resume RX: tail is the last descriptor given back to DMA. It must differ
+  // from the DMA current descriptor, or some DMAs, e.g. STM32C5, stay suspended
+  ETH->DMACRDTPR = (uint32_t) (uintptr_t) &s_rxdesc[(s_rxno + ETH_DESC_CNT - 1) %
+                                                    ETH_DESC_CNT];
 }
 
 struct mg_tcpip_driver mg_tcpip_driver_stm32h = {

@@ -1,0 +1,32 @@
+#pragma once
+#include "hal.h"
+
+// See https://mongoose.ws/docs/getting-started/build-environment/
+#define MG_ARCH MG_ARCH_ARMGCC
+#define MG_TLS MG_TLS_BUILTIN
+#define MG_OTA MG_OTA_STM32C5
+
+#define MG_ENABLE_TCPIP 1
+#define MG_ENABLE_CUSTOM_MILLIS 1
+#define MG_ENABLE_CUSTOM_RANDOM 1
+#define MG_ENABLE_DRIVER_STM32C 1
+
+// Construct MAC address from the MCU unique ID
+#define MGUID ((uint32_t *) UID_BASE)
+#define MG_SET_MAC_ADDRESS(mac)      \
+  do {                               \
+    mac[0] = 2;                      \
+    mac[1] = MGUID[0] & 255;         \
+    mac[2] = (MGUID[0] >> 10) & 255; \
+    mac[3] = (MGUID[0] >> 19) & 255; \
+    mac[4] = MGUID[1] & 255;         \
+    mac[5] = MGUID[2] & 255;         \
+  } while (0)
+
+// Crash report support. Health record lives in the .mg_health region, see link.ld
+#define MG_ENABLE_HEALTH 1
+
+// mdash.net device management service support
+#define MG_ENABLE_MDASH 0
+#define MG_MDASH_KEY "..."  // Set this - mDash device token
+#define MG_FIRMWARE_VERSION "c5a3.1.0.0"

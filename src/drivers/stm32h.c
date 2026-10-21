@@ -2,6 +2,7 @@
 
 #if MG_ENABLE_TCPIP && (MG_ENABLE_DRIVER_STM32H || MG_ENABLE_DRIVER_MCXN || \
                         MG_ENABLE_DRIVER_STM32N)
+// STM32C: vendor modded single-queue Synopsys v5.4, same settings as STM32H
 // STM32H: vendor modded single-queue Synopsys v4.2
 // STM32N: dual-queue GbE Synopsys v5.2 with no hash table option, 64-bit AXI
 // MCXNx4x: dual-queue Synopsys v5.2 with no hash table option
@@ -310,7 +311,7 @@ static uint32_t s_rxno;
 #if MG_ENABLE_DRIVER_MCXN
 void ETHERNET_IRQHandler(void);
 void ETHERNET_IRQHandler(void) {
-#elif MG_ENABLE_DRIVER_STM32H
+#elif MG_ENABLE_DRIVER_STM32H && !MG_ENABLE_DRIVER_STM32C
 void ETH_IRQHandler(void);
 void ETH_IRQHandler(void) {
 #else
@@ -339,8 +340,10 @@ void ETH1_IRQHandler(void) {
   }
   ETH->DMACSR =
       MG_BIT(7) | MG_BIT(8);  // Clear possible RBU RPS while processing
-  ETH->DMACRDTPR =
-      (uint32_t) (uintptr_t) &s_rxdesc[ETH_DESC_CNT - 1];  // and resume RX
+  // Resume RX: tail is the last descriptor given back to DMA. It must differ
+  // from the DMA current descriptor, or some DMAs, e.g. STM32C5, stay suspended
+  ETH->DMACRDTPR = (uint32_t) (uintptr_t) &s_rxdesc[(s_rxno + ETH_DESC_CNT - 1) %
+                                                    ETH_DESC_CNT];
 }
 
 struct mg_tcpip_driver mg_tcpip_driver_stm32h = {
