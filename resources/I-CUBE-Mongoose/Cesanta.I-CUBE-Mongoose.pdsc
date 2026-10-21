@@ -15,6 +15,7 @@
     </environment>
   </environments>
   <releases>
+    <release date="2026-10-21" version="7.23.3">See https://github.com/cesanta/mongoose/releases/tag/7.23</release>
     <release date="2026-10-19" version="7.23.2">See https://github.com/cesanta/mongoose/releases/tag/7.23</release>
     <release date="2026-09-28" version="7.23.1">See https://github.com/cesanta/mongoose/releases/tag/7.23</release>
     <release date="2026-05-11" version="7.21.7">See https://github.com/cesanta/mongoose/releases/tag/7.21</release>
@@ -28,7 +29,7 @@
       <keyword>IMPLEMENTED_WITH_STM32CUBEMX</keyword>
   </keywords>
   <components>
-    <component Cclass="Mongoose" Cgroup="Networking Core" Cversion="7.23.2" maxInstances="1">
+    <component Cclass="Mongoose" Cgroup="Networking Core" Cversion="7.23.3" maxInstances="1">
       <description>Networking Core</description>
       <files>
         <file category="doc" name="README.md"/>

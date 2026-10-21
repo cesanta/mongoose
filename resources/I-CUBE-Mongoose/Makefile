@@ -1,4 +1,4 @@
-VERSION = 7.23.2
+VERSION = 7.23.3
 REPO_ROOT = ../..
 MX ?= /Applications/STMicroelectronics/STM32CubeMX.app/Contents/MacOs/STM32CubeMX
 FILES = Cesanta.I-CUBE-Mongoose.pdsc Release_Notes.html mongoose_config.h README.md .config/mongoose_parameters.json
