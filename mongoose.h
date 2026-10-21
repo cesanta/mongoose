@@ -4168,6 +4168,7 @@ extern void mg_mqtt_poll(struct mg_mgr *);
 
 
 
+
 // Supported OTA targets
 #define MG_OTA_NONE 0               // No OTA support
 #define MG_OTA_STM32H5 1            // STM32 H5
@@ -4184,6 +4185,7 @@ extern void mg_mqtt_poll(struct mg_mgr *);
 #define MG_OTA_RT1170 304           // IMXRT1170
 #define MG_OTA_RT1180 305           // IMXRT1180
 #define MG_OTA_MCXN 310             // MCXN947
+#define MG_OTA_MCXW71 311           // MCXW71
 #define MG_OTA_RW612 320            // FRDM-RW612
 #define MG_OTA_FLASH 900            // OTA via internal flash
 #define MG_OTA_ESP32 910            // ESP32 OTA implementation
@@ -4212,6 +4214,19 @@ bool mg_ota_write(const void *buf, size_t len);
 
 // Ends the OTA process and commits the written firmware.
 bool mg_ota_end(void);
+
+// Push-based OTA: mg_http_stream_body() callback that flashes the request
+//
+// ```c
+// if (ev == MG_EV_HTTP_HDRS) {
+//   struct mg_http_message *hm = (struct mg_http_message *) ev_data;
+//   if (mg_match(hm->uri, mg_str("/ota"), NULL) &&
+//       !mg_http_stream_body(c, hm, mg_http_ota_cb, NULL)) {
+//     mg_http_reply(c, 400, "", "POST firmware with Content-Length\n");
+//   }
+// }
+// ```
+bool mg_http_ota_cb(struct mg_http_message *hm, struct mg_str *data, void **p);
 
 // MG_OTA_ROLLBACK: swap firmware banks and reset. On flash-based OTA, the
 // default calls swap_fn() (no-op on single-bank) then resets. Override in
@@ -4731,6 +4746,41 @@ extern struct mg_tcpip_driver mg_tcpip_driver_nxp_wifi;
 extern struct mg_tcpip_driver mg_tcpip_driver_st67w6;
 extern struct mg_tcpip_driver mg_tcpip_driver_atcmd;
 extern struct mg_tcpip_driver mg_tcpip_driver_netc;
+extern struct mg_tcpip_driver mg_tcpip_driver_mcxw71;
+extern struct mg_tcpip_driver mg_tcpip_driver_rw612_154;
+
+// IEEE 802.15.4 radio channel and PAN ID. Settable in mongoose_config.h
+#ifndef MG_L2_802154_CHANNEL
+#define MG_L2_802154_CHANNEL 15  // 11..26
+#endif
+#ifndef MG_L2_802154_PAN_ID
+#define MG_L2_802154_PAN_ID 0xabcd
+#endif
+
+// driver_data for IEEE 802.15.4 radio drivers. The interface is Ethernet:
+// each Ethernet frame is split into broadcast radio frames, and reassembled
+// on the other side, see mg_l2_802154_tx() and mg_l2_802154_rx()
+struct mg_l2_802154_data {
+  uint8_t channel;        // User-set channel, 11..26
+  uint16_t pan_id;        // User-set PAN ID
+  uint8_t seq, tag;       // MAC sequence number, tag of the last sent frame
+  uint8_t rxtag, rxnext;  // Frame being reassembled: tag, next fragment
+  uint8_t rxsrc[8];       // Its sender
+  uint16_t rxlen;         // Its bytes received so far
+  uint8_t rxbuf[1514];    // Reassembly buffer, one Ethernet frame
+};
+
+// Splits an Ethernet frame into radio frames, sends each by calling send().
+// Called by radio drivers' tx(). Return len, or 0 on error
+size_t mg_l2_802154_tx(struct mg_tcpip_if *ifp, const void *buf, size_t len,
+                       size_t (*send)(const uint8_t *, size_t,
+                                      struct mg_tcpip_if *));
+
+// Adds a received radio frame f of n bytes to the frame being reassembled.
+// Called by radio drivers' rx(). Return the Ethernet frame length, copied to
+// buf, when it is complete, otherwise 0
+size_t mg_l2_802154_rx(struct mg_tcpip_if *ifp, const uint8_t *f, size_t n,
+                       void *buf, size_t len);
 
 // SPI bus abstraction for SPI-attached network chips (e.g. W5500).
 // Populate and assign to the driver's driver_data field.
@@ -5118,6 +5168,31 @@ struct mg_tcpip_driver_imxrt_data {
 #endif
 
 
+#if MG_ENABLE_TCPIP && defined(MG_ENABLE_DRIVER_MCXW71) && \
+    MG_ENABLE_DRIVER_MCXW71
+
+// NXP MCXW71 IEEE 802.15.4 radio, ZLL link layer, as an Ethernet interface:
+// Ethernet frames are split into radio frames, see mg_l2_802154_tx().
+// The transceiver (XCVR) must be set up for 802.15.4 before mg_tcpip_init(),
+// see hal_radio_init() in the FRDM-MCXW71 tutorial.
+// driver_data: struct mg_l2_802154_data, channel and PAN ID set
+
+#define MG_TCPIP_DRIVER_INIT(mgr)                                    \
+  do {                                                               \
+    static struct mg_l2_802154_data driver_data_;                  \
+    static struct mg_tcpip_if mif_;                                  \
+    driver_data_.channel = MG_L2_802154_CHANNEL;                   \
+    driver_data_.pan_id = MG_L2_802154_PAN_ID;                     \
+    mif_.driver = &mg_tcpip_driver_mcxw71;                           \
+    mif_.driver_data = &driver_data_;                                \
+    MG_SET_MAC_ADDRESS(mif_.mac);                                    \
+    mg_tcpip_init(mgr, &mif_);                                       \
+    MG_INFO(("Driver: mcxw71, channel %d", MG_L2_802154_CHANNEL)); \
+  } while (0)
+
+#endif
+
+
 #if defined(MG_ENABLE_TCPIP) && MG_ENABLE_TCPIP && \
     defined(MG_ENABLE_DRIVER_NETC) && MG_ENABLE_DRIVER_NETC
 
@@ -5332,6 +5407,35 @@ struct mg_tcpip_driver_rw612_data {
     mg_tcpip_init(mgr, &mif_);                                    \
     MG_INFO(("Driver: rw612, MAC: %M", mg_print_mac, mif_.mac)); \
   } while (0)
+
+#endif
+
+
+#if MG_ENABLE_TCPIP && defined(MG_ENABLE_DRIVER_RW612_154) && \
+    MG_ENABLE_DRIVER_RW612_154
+
+// NXP RW612 IEEE 802.15.4 radio, as an Ethernet interface: Ethernet frames
+// are split into radio frames, see mg_l2_802154_tx(). The radio runs on
+// CPU2: NXP BLE/802.15.4 combo firmware, an OpenThread radio co-processor
+// (RCP). The firmware must be loaded and running before mg_tcpip_init(), see
+// the FRDM-RW612 eth_radio_bridge tutorial. The driver talks to it over the
+// CPU2 <-> CPU3 IMU mailbox: IMUMC messages carrying HDLC framed Spinel.
+// driver_data: struct mg_l2_802154_data, channel and PAN ID set
+
+#ifndef MG_TCPIP_DRIVER_INIT
+#define MG_TCPIP_DRIVER_INIT(mgr)                                       \
+  do {                                                                  \
+    static struct mg_l2_802154_data driver_data_;                     \
+    static struct mg_tcpip_if mif_;                                     \
+    driver_data_.channel = MG_L2_802154_CHANNEL;                      \
+    driver_data_.pan_id = MG_L2_802154_PAN_ID;                        \
+    mif_.driver = &mg_tcpip_driver_rw612_154;                           \
+    mif_.driver_data = &driver_data_;                                   \
+    MG_SET_MAC_ADDRESS(mif_.mac);                                       \
+    mg_tcpip_init(mgr, &mif_);                                          \
+    MG_INFO(("Driver: rw612_154, channel %d", MG_L2_802154_CHANNEL)); \
+  } while (0)
+#endif
 
 #endif
 

@@ -5771,6 +5771,70 @@ size_t mg_l2_driver_output(struct mg_tcpip_if *ifp, size_t len) {
 #endif
 
 #ifdef MG_ENABLE_LINES
+#line 1 "src/l2_802154.c"
+#endif
+
+
+
+#if MG_ENABLE_TCPIP
+
+// Radio frame: 802.15.4 MAC header, 15 bytes: data frame, PAN ID compression,
+// broadcast destination, our EUI-64 made from MAC as source. Then 2 bytes:
+// tag, fragment index << 4 | last fragment index. Then data. 125 bytes max,
+// 127 minus FCS
+#define MGI_802154_HDR 17
+#define MGI_802154_DATA (125 - MGI_802154_HDR)
+
+size_t mg_l2_802154_tx(struct mg_tcpip_if *ifp, const void *buf, size_t len,
+                       size_t (*send)(const uint8_t *, size_t,
+                                      struct mg_tcpip_if *)) {
+  struct mg_l2_802154_data *d =
+      (struct mg_l2_802154_data *) ifp->driver_data;
+  const uint8_t *p = (const uint8_t *) buf, *m = ifp->mac;
+  uint8_t f[MGI_802154_HDR + MGI_802154_DATA];
+  size_t i, n, last = (len - 1) / MGI_802154_DATA;
+  if (len == 0 || last > 15) return 0;
+  d->tag++;
+  for (i = 0; i <= last; i++) {
+    n = i == last ? len - i * MGI_802154_DATA : MGI_802154_DATA;
+    f[0] = 0x41, f[1] = 0xd8, f[2] = d->seq++;  // 2006 frame, see above
+    f[3] = (uint8_t) d->pan_id, f[4] = (uint8_t) (d->pan_id >> 8);
+    f[5] = f[6] = 0xff;
+    f[7] = m[5], f[8] = m[4], f[9] = m[3], f[10] = 0xfe, f[11] = 0xff;
+    f[12] = m[2], f[13] = m[1], f[14] = m[0];  // Little endian EUI-64
+    f[15] = d->tag, f[16] = (uint8_t) ((i << 4) | last);
+    memcpy(f + MGI_802154_HDR, p + i * MGI_802154_DATA, n);
+    if (send(f, MGI_802154_HDR + n, ifp) == 0) return 0;
+  }
+  return len;
+}
+
+size_t mg_l2_802154_rx(struct mg_tcpip_if *ifp, const uint8_t *f, size_t n,
+                       void *buf, size_t len) {
+  struct mg_l2_802154_data *d =
+      (struct mg_l2_802154_data *) ifp->driver_data;
+  size_t idx, last;
+  if (n <= MGI_802154_HDR || f[0] != 0x41 || f[1] != 0xd8 ||
+      f[3] != (uint8_t) d->pan_id || f[4] != (uint8_t) (d->pan_id >> 8))
+    return 0;  // Not ours
+  idx = f[16] >> 4, last = f[16] & 15;
+  if (idx == 0) d->rxtag = f[15], d->rxnext = 0, d->rxlen = 0;
+  if (idx == 0) memcpy(d->rxsrc, f + 7, sizeof(d->rxsrc));
+  n -= MGI_802154_HDR;
+  if (idx != d->rxnext || idx > last || f[15] != d->rxtag ||
+      memcmp(d->rxsrc, f + 7, sizeof(d->rxsrc)) != 0 ||
+      d->rxlen + n > sizeof(d->rxbuf))
+    return 0;  // Missed a fragment, or from another sender
+  memcpy(d->rxbuf + d->rxlen, f + MGI_802154_HDR, n);
+  d->rxlen = (uint16_t) (d->rxlen + n), d->rxnext++;
+  if (idx < last || d->rxlen > len) return 0;
+  memcpy(buf, d->rxbuf, d->rxlen);
+  return d->rxlen;
+}
+
+#endif
+
+#ifdef MG_ENABLE_LINES
 #line 1 "src/l2_eth.c"
 #endif
 
@@ -12462,6 +12526,191 @@ bool mg_ota_end(void) {
   return false;
 }
 struct mg_flash *mg_flash = &s_mg_flash_mcxn;
+#endif
+
+#ifdef MG_ENABLE_LINES
+#line 1 "src/ota_mcxw71.c"
+#endif
+
+
+
+
+#if MG_OTA == MG_OTA_MCXW71
+
+// MCXW71SRM, section 11.2: ROM flash API, 8 KB sectors, 16-byte phrases,
+// 128-byte pages. Only the CM33 application flash is used; RF flash and IFR
+// (including the write-once ROM configuration) are left alone.
+struct mg_mcxw71_flash_config {
+  struct {
+    uint32_t base, size, blocks;
+    uint32_t ifr_base, ifr_size;
+  } mem[2];
+};
+
+struct mg_mcxw71_flash_api {
+  uint32_t (*init)(struct mg_mcxw71_flash_config *);
+  uint32_t (*erase)(struct mg_mcxw71_flash_config *, void *, uint32_t, uint32_t,
+                    uint32_t);
+  uint32_t (*phrase)(struct mg_mcxw71_flash_config *, void *, uint32_t,
+                     uint32_t *, uint32_t);
+  uint32_t (*page)(struct mg_mcxw71_flash_config *, void *, uint32_t,
+                   uint32_t *, uint32_t);
+};
+
+// The flash API pointer is the second entry in the ROM API table.
+#define MG_MCXW71_FLASH_API \
+  (*(const struct mg_mcxw71_flash_api *const *) 0x14816fe4U)
+#define MG_MCXW71_ERASE_KEY 0x6b65666cU  // FOUR_CHAR_CODE('l', 'f', 'e', 'k')
+
+static struct mg_mcxw71_flash_config s_mcxw71_config;
+static size_t s_mcxw71_size, s_mcxw71_received, s_mcxw71_pending;
+static uint32_t s_mcxw71_buf[4];
+static bool s_mcxw71_failed;
+
+static bool mg_mcxw71_write(void *, const void *, size_t);
+static bool mg_mcxw71_swap(void);
+static struct mg_flash s_mg_flash_mcxw71 = {
+    (void *) 0, 0x100000, 8192, 16, mg_mcxw71_write, mg_mcxw71_swap};
+struct mg_flash *mg_flash = &s_mg_flash_mcxw71;
+
+// Everything called while flash is busy, or after the application has been
+// erased, must execute from RAM or ROM. Do not log or call libc here.
+MG_IRAM static bool mg_mcxw71_write(void *addr, const void *buf, size_t len) {
+  uintptr_t dst = (uintptr_t) addr;
+  const volatile uint8_t *src = (const volatile uint8_t *) buf;
+  uint32_t irq, status = 0;
+  if (dst >= s_mg_flash_mcxw71.size || len > s_mg_flash_mcxw71.size - dst ||
+      (dst % 16) != 0 || (len % 16) != 0)
+    return false;
+
+  irq = __get_PRIMASK();
+  __disable_irq();
+  while (len > 0 && status == 0) {
+    uint32_t words[32];  // ROM needs a word-aligned source in RAM
+    volatile uint8_t *p = (volatile uint8_t *) words;
+    size_t i, n = (dst % 128) == 0 && len >= 128 ? 128 : 16;
+    for (i = 0; i < n; i++) p[i] = src[i];
+
+    // Match the MCUXpresso ROM wrappers' cache maintenance. Interrupts stay
+    // masked until the flash command completes and stale cache data is gone.
+    MCM->CPCR2 |= MCM_CPCR2_CCBC_MASK;
+    __DSB();
+    __ISB();
+    if ((dst % 8192) == 0) {
+      status = MG_MCXW71_FLASH_API->erase(
+          &s_mcxw71_config, FMU0, (uint32_t) dst, 8192, MG_MCXW71_ERASE_KEY);
+    }
+    if (status == 0) {
+      if (n == 128) {
+        status = MG_MCXW71_FLASH_API->page(&s_mcxw71_config, FMU0,
+                                           (uint32_t) dst, words, 128);
+      } else {
+        status = MG_MCXW71_FLASH_API->phrase(&s_mcxw71_config, FMU0,
+                                             (uint32_t) dst, words, 16);
+      }
+    }
+    MCM->CPCR2 |= MCM_CPCR2_CCBC_MASK;
+    __DSB();
+    __ISB();
+    dst += n, src += n, len -= n;
+  }
+  __set_PRIMASK(irq);
+  return status == 0;
+}
+
+static bool mg_mcxw71_swap(void) {
+  // The common helper verifies the staged image before the RAM copy below.
+  // A failed write must never commit, even if all expected bytes arrived.
+  return !s_mcxw71_failed;
+}
+
+MG_IRAM static void mg_mcxw71_apply(size_t size) {
+  size_t ofs, half = s_mg_flash_mcxw71.size / 2;
+  __disable_irq();
+  SysTick->CTRL = 0;
+  for (ofs = 0; ofs < size; ofs += 8192) {
+    if (!mg_mcxw71_write((void *) (uintptr_t) ofs,
+                         (const void *) (uintptr_t) (half + ofs), 8192)) {
+      // The application may already be erased. Stay in RAM for debugger
+      // recovery rather than return to partially overwritten flash.
+      for (;;) __NOP();
+    }
+  }
+  __DSB();
+  SCB->AIRCR = 0x05fa0004U;
+  __DSB();
+  for (;;) __NOP();
+}
+
+bool mg_ota_begin(size_t new_firmware_size) {
+  uint32_t status;
+  if (s_mcxw71_size != 0 || new_firmware_size == 0) return false;
+  status = MG_MCXW71_FLASH_API->init(&s_mcxw71_config);
+  if (status != 0 || s_mcxw71_config.mem[0].base != 0 ||
+      s_mcxw71_config.mem[0].size < 16384 ||
+      (s_mcxw71_config.mem[0].size % 16384) != 0) {
+    MG_ERROR(("Flash init failed: %lu", (unsigned long) status));
+    return false;
+  }
+  s_mg_flash_mcxw71.size = s_mcxw71_config.mem[0].size;
+  if (!mg_ota_flash_begin(new_firmware_size, &s_mg_flash_mcxw71)) return false;
+  s_mcxw71_size = new_firmware_size;
+  s_mcxw71_received = s_mcxw71_pending = 0;
+  s_mcxw71_failed = false;
+  return true;
+}
+
+bool mg_ota_write(const void *buf, size_t len) {
+  const uint8_t *p = (const uint8_t *) buf;
+  uint8_t *pending = (uint8_t *) s_mcxw71_buf;
+  if (s_mcxw71_size == 0 || s_mcxw71_failed) return false;
+  if (len > s_mcxw71_size - s_mcxw71_received || (len > 0 && buf == NULL)) {
+    s_mcxw71_failed = true;
+    return false;
+  }
+  s_mcxw71_received += len;
+  if (s_mcxw71_pending > 0) {
+    size_t n = 16 - s_mcxw71_pending;
+    if (n > len) n = len;
+    if (n > 0) memcpy(pending + s_mcxw71_pending, p, n);
+    s_mcxw71_pending += n;
+    if (n > 0) p += n;
+    len -= n;
+    if (s_mcxw71_pending == 16) {
+      s_mcxw71_failed = !mg_ota_flash_write(pending, 16, &s_mg_flash_mcxw71);
+      s_mcxw71_pending = 0;
+    }
+  }
+  if (!s_mcxw71_failed && len >= 16) {
+    size_t n = MG_ROUND_DOWN(len, 16);
+    s_mcxw71_failed = !mg_ota_flash_write(p, n, &s_mg_flash_mcxw71);
+    p += n, len -= n;
+  }
+  if (!s_mcxw71_failed && len > 0) {
+    memcpy(pending + s_mcxw71_pending, p, len);
+    s_mcxw71_pending += len;
+  }
+  return !s_mcxw71_failed;
+}
+
+bool mg_ota_end(void) {
+  bool ok;
+  size_t size = s_mcxw71_size;
+  if (size == 0) return false;
+  if (s_mcxw71_received != size) s_mcxw71_failed = true;
+  if (!s_mcxw71_failed && s_mcxw71_pending > 0) {
+    s_mcxw71_failed =
+        !mg_ota_flash_write(s_mcxw71_buf, s_mcxw71_pending, &s_mg_flash_mcxw71);
+  }
+  ok = mg_ota_flash_end(&s_mg_flash_mcxw71);
+  s_mcxw71_size = s_mcxw71_pending = 0;
+  if (ok) {
+    MG_INFO(("Applying %lu bytes from staging flash", (unsigned long) size));
+    mg_mcxw71_apply(size);
+  }
+  return false;
+}
+
 #endif
 
 #ifdef MG_ENABLE_LINES
@@ -31443,6 +31692,152 @@ struct mg_tcpip_driver mg_tcpip_driver_imxrt = {mg_tcpip_driver_imxrt_init,
 #endif
 
 #ifdef MG_ENABLE_LINES
+#line 1 "src/drivers/mcxw71.c"
+#endif
+
+
+#if MG_ENABLE_TCPIP && defined(MG_ENABLE_DRIVER_MCXW71) && \
+    MG_ENABLE_DRIVER_MCXW71
+
+// ZLL, 802.15.4 link layer. See MCXW71 reference manual and NXP
+// ieee_802_15_4 PHY sources: PhyPacketProcessor.c, PhyPlmeData.c, PhyISR.c
+struct mg_zll {
+  volatile uint32_t IRQSTS, PHY_CTRL, EVENT_TMR, TIMESTAMP, T1CMP, T2CMP,
+      T2PRIMECMP, T3CMP, T4CMP, PA_PWR, CHANNEL_NUM0, LQI_AND_RSSI,
+      MACSHORTADDRS0, MACLONGADDRS0_LSB, MACLONGADDRS0_MSB, RX_FRAME_FILTER,
+      CCA_LQI_CTRL, CCA2_CTRL, RESERVED_0, DSM_CTRL, RESERVED_1,
+      MACSHORTADDRS1, MACLONGADDRS1_LSB, MACLONGADDRS1_MSB, DUAL_PAN_CTRL,
+      CHANNEL_NUM1, SAM_CTRL, SAM_TABLE, SAM_MATCH, SAM_FREE_IDX,
+      SEQ_CTRL_STS, ACKDELAY, FILTERFAIL_CODE, RX_WTR_MARK, RESERVED_2,
+      SLOT_PRELOAD, SEQ_STATE, TMR_PRESCALE, LENIENCY_LSB, LENIENCY_MSB,
+      PART_ID, COEX_CTRL, COEX_PRIORITY, ENHACK_CTRL0;
+};
+
+// TrustZone: code built for the secure state (-mcmse) uses the secure alias
+// of the radio registers, 0x5xxxxxxx. Otherwise, the non-secure alias
+#if defined(__ARM_FEATURE_CMSE) && (__ARM_FEATURE_CMSE & 2)
+#define MGI_ZLL ((struct mg_zll *) 0x58A01000)
+#define MGI_PKT_RAM ((volatile uint8_t *) 0x58A08000)
+#else
+#define MGI_ZLL ((struct mg_zll *) 0x48A01000)
+#define MGI_PKT_RAM ((volatile uint8_t *) 0x48A08000)
+#endif
+
+#define MGI_TX_PB MGI_PKT_RAM           // Length byte (incl. FCS), then frame
+#define MGI_RX_PB (MGI_PKT_RAM + 0x80)  // Received frame, no length byte
+
+#define MGI_IRQSTS_SEQIRQ MG_BIT(0)
+#define MGI_IRQSTS_RXIRQ MG_BIT(2)
+#define MGI_IRQSTS_RX_LEN(x) (((x) >> 24) & 0x7f)  // Frame length incl. FCS
+#define MGI_PHY_CTRL_XCVSEQ 7U
+#define MGI_PHY_CTRL_ALL_IRQ_MASKS 0x8007ff00U  // Bits 8..18, 31: mask all IRQs
+#define MGI_SEQ_STATE_MASK 0x1fU
+#define MGI_SEQ_STATE_RX_WU 0x10U         // RX warm up
+#define MGI_SEQ_CTRL_NO_RX_RECYCLE MG_BIT(5)
+#define MGI_FRAME_FILTER 0x70bU  // Beacon, data, command; versions 0..2
+
+enum { MGI_SEQ_IDLE = 0, MGI_SEQ_RX = 1, MGI_SEQ_TX = 2 };  // PHY_CTRL[XCVSEQ]
+#define MGI_TX_TIMEOUT 400U  // Symbols, 16 us: 127 bytes
+
+// Symbol timer, 16 us, 24 bits
+static uint32_t mg_mcxw71_symbols(void) {
+  return MGI_ZLL->EVENT_TMR >> 8;
+}
+
+// Wait for the sequence to end, up to MGI_TX_TIMEOUT symbols
+static bool mg_mcxw71_wait(void) {
+  uint32_t start = mg_mcxw71_symbols();
+  while (((mg_mcxw71_symbols() - start) & 0xffffffU) < MGI_TX_TIMEOUT) {
+    if (MGI_ZLL->IRQSTS & MGI_IRQSTS_SEQIRQ) return true;
+  }
+  return false;
+}
+
+// Stop the current sequence, wait for the sequencer to go idle. See PhyAbort()
+static void mg_mcxw71_idle(void) {
+  if (MGI_ZLL->PHY_CTRL & MGI_PHY_CTRL_XCVSEQ) {
+    while ((MGI_ZLL->SEQ_STATE & MGI_SEQ_STATE_MASK) == MGI_SEQ_STATE_RX_WU)
+      (void) 0;
+    MGI_ZLL->PHY_CTRL &= ~MGI_PHY_CTRL_XCVSEQ;
+    while (MGI_ZLL->SEQ_STATE & MGI_SEQ_STATE_MASK) (void) 0;
+  }
+  MGI_ZLL->IRQSTS = MGI_ZLL->IRQSTS;  // Clear all flags, write 1 to clear
+}
+
+// Start a new sequence: MGI_SEQ_RX or MGI_SEQ_TX
+static void mg_mcxw71_start(uint32_t seq) {
+  MGI_ZLL->IRQSTS = MGI_ZLL->IRQSTS;
+  MGI_ZLL->PHY_CTRL |= seq;
+}
+
+static bool mg_mcxw71_init(struct mg_tcpip_if *ifp) {
+  struct mg_l2_802154_data *d =
+      (struct mg_l2_802154_data *) ifp->driver_data;
+  if (d == NULL || d->channel < 11 || d->channel > 26) {
+    MG_ERROR(("Set driver_data, channel 11..26"));
+    return false;
+  }
+  MGI_ZLL->SEQ_CTRL_STS |= MGI_SEQ_CTRL_NO_RX_RECYCLE;
+  MGI_ZLL->PHY_CTRL = MGI_PHY_CTRL_ALL_IRQ_MASKS;  // Mask all IRQs, we poll
+  MGI_ZLL->IRQSTS = MGI_ZLL->IRQSTS;
+  MGI_ZLL->SAM_CTRL = 0;
+  MGI_ZLL->RX_FRAME_FILTER = MGI_FRAME_FILTER;
+  MGI_ZLL->TMR_PRESCALE = 5;  // 16 us timebase, one symbol
+  MGI_ZLL->CHANNEL_NUM0 = d->channel;
+  MGI_ZLL->MACSHORTADDRS0 = (0xfffeU << 16) | d->pan_id;  // Filter by PAN ID
+  MGI_ZLL->PA_PWR = 0x3f;  // PA slices, max output power
+  mg_mcxw71_start(MGI_SEQ_RX);
+  return true;
+}
+
+// Send one radio frame: MAC header and payload, no FCS
+static size_t mg_mcxw71_send(const uint8_t *p, size_t len,
+                             struct mg_tcpip_if *ifp) {
+  size_t i;
+  bool ok;
+  mg_mcxw71_idle();
+  MGI_TX_PB[0] = (uint8_t) (len + 2);  // FCS is added by hardware
+  for (i = 0; i < len; i++) MGI_TX_PB[i + 1] = p[i];  // 8-bit access only
+  mg_mcxw71_start(MGI_SEQ_TX);
+  ok = mg_mcxw71_wait();
+  mg_mcxw71_idle();
+  mg_mcxw71_start(MGI_SEQ_RX);
+  (void) ifp;
+  return ok ? len : 0;
+}
+
+static size_t mg_mcxw71_tx(const void *buf, size_t len,
+                           struct mg_tcpip_if *ifp) {
+  return mg_l2_802154_tx(ifp, buf, len, mg_mcxw71_send);
+}
+
+static size_t mg_mcxw71_rx(void *buf, size_t len, struct mg_tcpip_if *ifp) {
+  uint32_t irqsts = MGI_ZLL->IRQSTS;
+  uint8_t f[125];
+  size_t i, n = 0;
+  if ((irqsts & MGI_IRQSTS_SEQIRQ) == 0) return 0;  // Still receiving
+  if (irqsts & MGI_IRQSTS_RXIRQ) {
+    n = MGI_IRQSTS_RX_LEN(irqsts);
+    n = n >= 2 ? n - 2 : 0;  // Strip FCS
+    if (n > sizeof(f)) n = sizeof(f);
+    for (i = 0; i < n; i++) f[i] = MGI_RX_PB[i];
+  }
+  mg_mcxw71_idle();
+  mg_mcxw71_start(MGI_SEQ_RX);
+  return mg_l2_802154_rx(ifp, f, n, buf, len);
+}
+
+static bool mg_mcxw71_poll(struct mg_tcpip_if *ifp, bool s1) {
+  (void) ifp, (void) s1;
+  return true;  // Radio link is always up
+}
+
+struct mg_tcpip_driver mg_tcpip_driver_mcxw71 = {mg_mcxw71_init, mg_mcxw71_tx,
+                                                 mg_mcxw71_rx, mg_mcxw71_poll};
+
+#endif
+
+#ifdef MG_ENABLE_LINES
 #line 1 "src/drivers/netc.c"
 #endif
 
@@ -32871,6 +33266,460 @@ void ENET_IRQHandler(void) {
 struct mg_tcpip_driver mg_tcpip_driver_rw612 = {mg_tcpip_driver_rw612_init,
                                                 mg_tcpip_driver_rw612_tx, NULL,
                                                 mg_tcpip_driver_rw612_poll};
+#endif
+
+#ifdef MG_ENABLE_LINES
+#line 1 "src/drivers/rw612_154.c"
+#endif
+
+
+#if MG_ENABLE_TCPIP && defined(MG_ENABLE_DRIVER_RW612_154) && \
+    MG_ENABLE_DRIVER_RW612_154
+
+// The 802.15.4 radio runs NXP combo firmware on CPU2, an OpenThread RCP. We
+// are CPU3. Messages go through the IMU mailbox: IMU messages carry IMUMC
+// messages, IMUMC messages carry HDLC framed Spinel. See NXP sources:
+// mcuxsdk-core drivers/imu/fsl_imu.c, mcux-component
+// imu_adapter/fsl_adapter_imu.c, connectivity framework
+// platform/rw61x/fwk_platform_hdlc.c; OpenThread src/lib/spinel/spinel.h
+
+// IMU message FIFO registers, one block per direction. See fsl_imu.h
+struct mg_rw612_imu {
+  volatile uint32_t WR_MSG, RD_MSG, STATUS, CNTL, RD_MSG_DBG;
+};
+#define MGI_IMU ((struct mg_rw612_imu *) 0x443ff804)       // CPU3 -> CPU2
+#define MGI_IMU_PEER ((struct mg_rw612_imu *) 0x443ff818)  // CPU2 -> CPU3
+#define MGI_IMU_LOCKED MG_BIT(0)          // STATUS: FIFO locked
+#define MGI_IMU_ALMOST_FULL MG_BIT(1)     // STATUS: FIFO almost full
+#define MGI_IMU_EMPTY MG_BIT(3)           // STATUS: FIFO empty
+#define MGI_IMU_WR_PTR(s) (((s) >> 16) & 15U)
+#define MGI_IMU_INT_CLR MG_BIT(0)         // CNTL: clear message ready IRQ
+#define MGI_IMU_FLUSH MG_BIT(16)          // CNTL: flush send FIFO
+#define MGI_IMU_WAIT_FOR_ACK MG_BIT(17)   // CNTL: lock send FIFO
+#define MGI_IMU_WATERMARK(x) ((uint32_t) (x) << 20)
+#define MGI_IMU_WATERMARK_MASK (15U << 20)
+
+// IMU message: header, then payload words. See IMU_Msg_t
+struct mg_rw612_msg {
+  uint8_t type, subtype, seq, len;  // len: number of payload words
+  uint32_t payload[8];
+};
+
+// Mailbox in SMU2 shared memory, at the address CPU2 firmware expects
+struct mg_rw612_mbox {
+  uint32_t magic[2];             // Sync pattern: [0] CPU2, [1] us
+  struct mg_rw612_msg q[2][16];  // Message slots: [0] CPU2 -> us, [1] ours
+};
+#define MGI_MBOX ((volatile struct mg_rw612_mbox *) 0x443c0000)
+#define MGI_TXBUF 0x443c1508U  // Our IMUMC buffers: 16 x 264 bytes
+#define MGI_TXBUF_CNT 16
+#define MGI_TXBUF_LEN 264U
+#define MGI_SLEEP_FLAG (*(volatile uint32_t *) 0x443c2588)
+#define MGI_SYNC_MAGIC 0xabcdef89U
+
+// IMUMC message, carried in IMU payload words. See imumc_std_msg
+struct mg_rw612_imumc {
+  uint32_t src, dst;  // Endpoint addresses
+  uint16_t rfu, idx;  // Reserved
+  uint16_t len;       // Payload length, bytes
+  uint16_t flags;     // Message flags
+  uint32_t data;      // Payload buffer address
+};
+#define MGI_EPT_LOCAL 10   // Our 802.15.4 endpoint
+#define MGI_EPT_REMOTE 20  // Firmware 802.15.4 endpoint
+
+enum { MGI_MSG_CONTROL = 0, MGI_MSG_IMUMC = 8 };  // IMU message types
+enum {                                            // Control message subtypes
+  MGI_CTL_SYNC = 1,
+  MGI_CTL_SYNC_ACK = 2,
+  MGI_CTL_ACK_FOR_UNLOCK = 3,
+  MGI_CTL_CMD_BUF_ADDR = 6,
+  MGI_CTL_EPT_QUERY = 11,
+  MGI_CTL_EPT_QUERY_RSP = 12,
+  MGI_CTL_BUF_FREE = 13
+};
+
+// Spinel commands, properties and statuses we use
+enum { MGI_CMD_RESET = 1, MGI_CMD_GET = 2, MGI_CMD_SET = 3, MGI_CMD_IS = 6 };
+enum {
+  MGI_PROP_LAST_STATUS = 0,
+  MGI_PROP_NCP_VERSION = 2,
+  MGI_PROP_PHY_ENABLED = 0x20,
+  MGI_PROP_PHY_CHAN = 0x21,
+  MGI_PROP_PANID = 0x36,
+  MGI_PROP_RAW_STREAM = 0x37,
+  MGI_PROP_STREAM_RAW = 0x71
+};
+#define MGI_RESET_STACK 2         // RESET argument: reset the RCP stack only
+#define MGI_STATUS_RESET_MIN 112  // LAST_STATUS: RCP has reset
+#define MGI_STATUS_RESET_MAX 127
+#define MGI_TX_TIMEOUT_MS 200  // Wait for transmit done, incl. retries
+#define MGI_RSP_TIMEOUT_MS 500
+#define MGI_RXQ_CNT 16  // A whole Ethernet frame, 15 radio frames
+
+// Driver state, one radio
+struct mg_rw612 {
+  bool up;                  // IMU link synchronised
+  bool ept_ready;           // IMUMC endpoints connected
+  bool reset;               // RCP reported a reset
+  uint8_t seq;              // IMU message sequence number
+  uint16_t free_bufs;       // Free IMUMC buffers, bit per buffer
+  uint8_t hdlc[300];        // HDLC frame being received, unescaped
+  size_t hlen;              // Bytes in hdlc
+  bool esc;                 // Previous byte was an escape
+  uint8_t tid;              // Spinel transaction ID of the pending request
+  bool rsp;                 // Response to the pending request received
+  uint32_t rsp_status;      // Its status, if LAST_STATUS, else 0
+  char version[64];         // RCP version string
+  uint8_t rxq[MGI_RXQ_CNT][127];  // Received frames, no FCS
+  uint8_t rxlen[MGI_RXQ_CNT];     // Their lengths
+  uint8_t rxhead, rxtail;         // Queue indexes
+};
+static struct mg_rw612 s_rw612;
+
+static void mg_rw612_imu_send(uint8_t type, uint8_t subtype,
+                              const uint32_t *payload, uint8_t len) {
+  volatile struct mg_rw612_msg *m;
+  uint64_t expire = mg_millis() + 100;
+  uint8_t i;
+  while ((MGI_IMU->STATUS & (MGI_IMU_ALMOST_FULL | MGI_IMU_LOCKED)) &&
+         mg_millis() < expire) {
+    (void) 0;
+  }
+  m = &MGI_MBOX->q[1][MGI_IMU_WR_PTR(MGI_IMU->STATUS)];
+  m->type = type, m->subtype = subtype, m->seq = s_rw612.seq++, m->len = len;
+  for (i = 0; i < len; i++) m->payload[i] = payload[i];
+  MGI_IMU->WR_MSG = (uint32_t) (uintptr_t) m;
+}
+
+static void mg_rw612_control(uint8_t subtype, uint32_t a, uint32_t b,
+                             uint8_t len) {
+  uint32_t payload[2] = {a, b};
+  mg_rw612_imu_send(MGI_MSG_CONTROL, subtype, payload, len);
+}
+
+static void mg_rw612_queue_rx(const uint8_t *frame, size_t len) {
+  struct mg_rw612 *s = &s_rw612;
+  uint8_t next = (uint8_t) ((s->rxhead + 1) % MGI_RXQ_CNT);
+  if (next == s->rxtail || len > sizeof(s->rxq[0])) return;  // Full: drop
+  memcpy(s->rxq[s->rxhead], frame, len);
+  s->rxlen[s->rxhead] = (uint8_t) len;
+  s->rxhead = next;
+}
+
+// Spinel packed unsigned integer: 7 bits per byte, LSB first
+static size_t mg_rw612_unpack(const uint8_t *p, size_t len, uint32_t *v) {
+  size_t i;
+  *v = 0;
+  for (i = 0; i < len && i < 4; i++) {
+    *v |= (uint32_t) (p[i] & 0x7f) << (7 * i);
+    if ((p[i] & 0x80) == 0) return i + 1;
+  }
+  return 0;
+}
+
+// Handle a received Spinel frame: header, command, property, value
+static void mg_rw612_spinel(const uint8_t *f, size_t len) {
+  struct mg_rw612 *s = &s_rw612;
+  uint32_t cmd, prop, status = 0;
+  size_t n, ofs = 1;
+  uint8_t tid = f[0] & 15;
+  if (len < 3 || (n = mg_rw612_unpack(f + ofs, len - ofs, &cmd)) == 0) return;
+  ofs += n;
+  if ((n = mg_rw612_unpack(f + ofs, len - ofs, &prop)) == 0) return;
+  ofs += n;
+  if (cmd != MGI_CMD_IS) return;
+  if (prop == MGI_PROP_STREAM_RAW && tid == 0 && len - ofs >= 2) {
+    size_t flen = (size_t) (f[ofs] | (f[ofs + 1] << 8));  // Incl. FCS
+    if (flen >= 2 && ofs + 2 + flen <= len) {
+      mg_rw612_queue_rx(f + ofs + 2, flen - 2);
+    }
+  } else if (prop == MGI_PROP_LAST_STATUS) {
+    mg_rw612_unpack(f + ofs, len - ofs, &status);
+    if (tid == 0 && status >= MGI_STATUS_RESET_MIN &&
+        status <= MGI_STATUS_RESET_MAX) {
+      s->reset = true;
+    }
+  } else if (prop == MGI_PROP_NCP_VERSION) {
+    n = len - ofs < sizeof(s->version) - 1 ? len - ofs : sizeof(s->version) - 1;
+    memcpy(s->version, f + ofs, n);
+    s->version[n] = '\0';
+  }
+  if (tid != 0 && tid == s->tid) s->rsp = true, s->rsp_status = status;
+}
+
+// HDLC-lite: 0x7e delimits frames, 0x7d escapes, FCS-16 at the end
+static uint16_t mg_rw612_fcs(uint16_t fcs, uint8_t c) {
+  int i;
+  fcs ^= c;
+  for (i = 0; i < 8; i++) fcs = (fcs & 1) ? (fcs >> 1) ^ 0x8408 : fcs >> 1;
+  return fcs;
+}
+
+static void mg_rw612_hdlc_rx(const uint8_t *p, size_t len) {
+  struct mg_rw612 *s = &s_rw612;
+  size_t i, j;
+  for (i = 0; i < len; i++) {
+    uint8_t c = p[i];
+    if (c == 0x7e) {
+      if (s->hlen >= 3) {
+        uint16_t fcs = 0xffff;
+        for (j = 0; j < s->hlen; j++) fcs = mg_rw612_fcs(fcs, s->hdlc[j]);
+        if (fcs == 0xf0b8) mg_rw612_spinel(s->hdlc, s->hlen - 2);
+      }
+      s->hlen = 0, s->esc = false;
+    } else if (c == 0x7d) {
+      s->esc = true;
+    } else if (s->hlen < sizeof(s->hdlc)) {
+      s->hdlc[s->hlen++] = s->esc ? c ^ 0x20 : c;
+      s->esc = false;
+    }
+  }
+}
+
+static void mg_rw612_control_rx(volatile struct mg_rw612_msg *m) {
+  struct mg_rw612 *s = &s_rw612;
+  switch (m->subtype) {
+    case MGI_CTL_ACK_FOR_UNLOCK:
+      MGI_IMU->CNTL &= ~MGI_IMU_WAIT_FOR_ACK;
+      break;
+    case MGI_CTL_SYNC:  // As HAL_ImuCtrlHandler(): acknowledge twice
+      mg_rw612_control(MGI_CTL_SYNC_ACK, 0, 0, 0);
+      mg_rw612_control(MGI_CTL_SYNC_ACK, 0, 0, 0);
+      s->up = true;
+      break;
+    case MGI_CTL_SYNC_ACK:
+    case MGI_CTL_CMD_BUF_ADDR:
+      s->up = true;
+      break;
+    case MGI_CTL_EPT_QUERY: {  // Firmware asks if our endpoint exists
+      bool ours = m->payload[0] == MGI_EPT_LOCAL;
+      mg_rw612_control(MGI_CTL_EPT_QUERY_RSP, m->payload[0], ours, 2);
+      if (ours) s->ept_ready = true;
+      break;
+    }
+    case MGI_CTL_EPT_QUERY_RSP:
+      if (m->payload[0] == MGI_EPT_REMOTE && m->payload[1] != 0) {
+        s->ept_ready = true;
+      }
+      break;
+    case MGI_CTL_BUF_FREE: {  // Firmware is done with one of our buffers
+      uint32_t i = (m->payload[0] - MGI_TXBUF) / MGI_TXBUF_LEN;
+      if (i < MGI_TXBUF_CNT) s->free_bufs |= (uint16_t) MG_BIT(i);
+      break;
+    }
+    default:
+      break;
+  }
+}
+
+// Process all received IMU messages. See HAL_ImuReceive()
+static void mg_rw612_poll_imu(void) {
+  bool unlock = false;
+  while ((MGI_IMU_PEER->STATUS & MGI_IMU_EMPTY) == 0) {
+    struct mg_rw612_msg m;
+    volatile struct mg_rw612_msg *p;
+    uint8_t i;
+    MGI_SLEEP_FLAG &= ~1U;
+    p = (volatile struct mg_rw612_msg *) (uintptr_t) MGI_IMU->RD_MSG;
+    if (MGI_IMU_PEER->STATUS & MGI_IMU_LOCKED) unlock = true;
+    if (p == NULL) continue;
+    m.type = p->type, m.subtype = p->subtype, m.len = p->len;
+    for (i = 0; i < 8; i++) m.payload[i] = p->payload[i];
+    if (m.type == MGI_MSG_CONTROL) {
+      mg_rw612_control_rx(&m);
+    } else if (m.type == MGI_MSG_IMUMC) {
+      struct mg_rw612_imumc im;
+      memcpy(&im, m.payload, sizeof(im));
+      if (im.dst == MGI_EPT_LOCAL) {
+        mg_rw612_hdlc_rx((const uint8_t *) (uintptr_t) im.data, im.len);
+      }
+      mg_rw612_control(MGI_CTL_BUF_FREE, im.data, 0, 1);
+    }
+  }
+  MGI_IMU->CNTL |= MGI_IMU_INT_CLR;
+  MGI_SLEEP_FLAG |= 1U;
+  if (unlock) mg_rw612_control(MGI_CTL_ACK_FOR_UNLOCK, 0, 0, 0);
+}
+
+// Send bytes to the firmware endpoint, in IMUMC buffer sized chunks
+static bool mg_rw612_imumc_send(const uint8_t *p, size_t len) {
+  struct mg_rw612 *s = &s_rw612;
+  while (len > 0) {
+    size_t n = len < MGI_TXBUF_LEN ? len : MGI_TXBUF_LEN;
+    uint64_t expire = mg_millis() + 100;
+    struct mg_rw612_imumc im;
+    uint32_t i;
+    while (s->free_bufs == 0) {
+      mg_rw612_poll_imu();
+      if (mg_millis() > expire) return false;
+    }
+    for (i = 0; (s->free_bufs & MG_BIT(i)) == 0; i++) (void) 0;
+    s->free_bufs &= (uint16_t) ~MG_BIT(i);
+    memset(&im, 0, sizeof(im));
+    im.src = MGI_EPT_LOCAL, im.dst = MGI_EPT_REMOTE, im.len = (uint16_t) n;
+    im.data = MGI_TXBUF + i * MGI_TXBUF_LEN;
+    memcpy((void *) (uintptr_t) im.data, p, n);
+    mg_rw612_imu_send(MGI_MSG_IMUMC, 0, (uint32_t *) &im, sizeof(im) / 4);
+    p += n, len -= n;
+  }
+  return true;
+}
+
+// Send a Spinel frame, HDLC encoded, and wait for the response with the
+// same transaction ID. Return false on timeout
+static bool mg_rw612_request(uint8_t *f, size_t len, uint32_t timeout_ms) {
+  struct mg_rw612 *s = &s_rw612;
+  uint8_t buf[2 * 160 + 6];
+  uint16_t fcs = 0xffff;
+  size_t i, n = 0;
+  uint64_t expire = mg_millis() + timeout_ms;
+  s->tid = (uint8_t) (s->tid % 15 + 1);
+  f[0] = (uint8_t) (0x80 | s->tid);  // Header: flag, interface 0, TID
+  s->rsp = false;
+  buf[n++] = 0x7e;
+  for (i = 0; i < len + 2 && n + 3 < sizeof(buf); i++) {
+    uint8_t c;
+    if (i < len) {
+      c = f[i], fcs = mg_rw612_fcs(fcs, c);
+    } else {
+      c = (uint8_t) (i == len ? ~fcs & 0xff : ~fcs >> 8);
+    }
+    if (c == 0x7e || c == 0x7d || c == 0x11 || c == 0x13 || c == 0xf8) {
+      buf[n++] = 0x7d, c ^= 0x20;
+    }
+    buf[n++] = c;
+  }
+  buf[n++] = 0x7e;
+  if (!mg_rw612_imumc_send(buf, n)) return false;
+  while (!s->rsp && mg_millis() < expire) mg_rw612_poll_imu();
+  return s->rsp;
+}
+
+static bool mg_rw612_set(uint32_t prop, const uint8_t *val, size_t len) {
+  uint8_t f[16];
+  if (len > sizeof(f) - 3) return false;
+  f[1] = MGI_CMD_SET, f[2] = (uint8_t) prop;  // Properties used are < 0x80
+  memcpy(f + 3, val, len);
+  return mg_rw612_request(f, len + 3, MGI_RSP_TIMEOUT_MS) &&
+         s_rw612.rsp_status == 0;
+}
+
+// Log an init error, return false
+static bool mg_rw612_fail(const char *msg) {
+  MG_ERROR(("%s", msg));
+  return false;
+}
+
+static bool mg_rw612_154_init(struct mg_tcpip_if *ifp) {
+  struct mg_rw612 *s = &s_rw612;
+  struct mg_l2_802154_data *d =
+      (struct mg_l2_802154_data *) ifp->driver_data;
+  uint8_t f[8], one = 1, pan[2];
+  uint64_t expire;
+  if (d == NULL || d->channel < 11 || d->channel > 26) {
+    MG_ERROR(("Set driver_data, channel 11..26"));
+    return false;
+  }
+  if (MGI_MBOX->magic[0] != MGI_SYNC_MAGIC) {
+    MG_ERROR(("Radio firmware is not running on CPU2"));
+    return false;
+  }
+  memset(s, 0, sizeof(*s));
+  s->free_bufs = 0xffff;
+  // Reset our send FIFO, drop stale messages. See IMU_Init()
+  MGI_IMU->CNTL |= MGI_IMU_FLUSH;
+  MGI_IMU->CNTL &= ~(MGI_IMU_FLUSH | MGI_IMU_WAIT_FOR_ACK);
+  MGI_IMU->CNTL = (MGI_IMU->CNTL & ~MGI_IMU_WATERMARK_MASK) |
+                  MGI_IMU_WATERMARK(15);
+  while ((MGI_IMU_PEER->STATUS & MGI_IMU_EMPTY) == 0) (void) MGI_IMU->RD_MSG;
+  // Synchronise the IMU link, then connect the IMUMC endpoints
+  MGI_MBOX->magic[1] = MGI_SYNC_MAGIC;
+  mg_rw612_control(MGI_CTL_SYNC, 0, 0, 0);
+  expire = mg_millis() + 1000;
+  while (!s->up && mg_millis() < expire) mg_rw612_poll_imu();
+  if (!s->up) return mg_rw612_fail("IMU sync timeout");
+  expire = mg_millis() + 2000;
+  while (!s->ept_ready && mg_millis() < expire) {
+    uint64_t retry = mg_millis() + 100;
+    mg_rw612_control(MGI_CTL_EPT_QUERY, MGI_EPT_REMOTE, 0, 1);
+    while (!s->ept_ready && mg_millis() < retry) mg_rw612_poll_imu();
+  }
+  if (!s->ept_ready) return mg_rw612_fail("IMUMC endpoint timeout");
+  // Reset the RCP stack, wait for its reset status, read its version
+  f[1] = MGI_CMD_RESET, f[2] = MGI_RESET_STACK;
+  mg_rw612_request(f, 3, MGI_RSP_TIMEOUT_MS);
+  expire = mg_millis() + 1000;
+  while (!s->reset && mg_millis() < expire) mg_rw612_poll_imu();
+  if (!s->reset) return mg_rw612_fail("RCP reset timeout");
+  f[1] = MGI_CMD_GET, f[2] = MGI_PROP_NCP_VERSION;
+  mg_rw612_request(f, 3, MGI_RSP_TIMEOUT_MS);
+  MG_INFO(("RCP: %s", s->version));
+  if (!mg_rw612_set(MGI_PROP_PHY_ENABLED, &one, 1)) {
+    return mg_rw612_fail("PHY enable failed");
+  }
+  pan[0] = (uint8_t) d->pan_id, pan[1] = (uint8_t) (d->pan_id >> 8);
+  if (!mg_rw612_set(MGI_PROP_PHY_CHAN, &d->channel, 1) ||
+      !mg_rw612_set(MGI_PROP_PANID, pan, 2)) {
+    return mg_rw612_fail("Channel or PAN ID set failed");
+  }
+  if (!mg_rw612_set(MGI_PROP_RAW_STREAM, &one, 1)) {
+    return mg_rw612_fail("Raw stream enable failed");
+  }
+  return true;
+}
+
+// Send one radio frame: MAC header and payload, no FCS
+static size_t mg_rw612_send(const uint8_t *p, size_t len,
+                            struct mg_tcpip_if *ifp) {
+  struct mg_l2_802154_data *d =
+      (struct mg_l2_802154_data *) ifp->driver_data;
+  uint8_t f[3 + 2 + 127 + 4];
+  size_t n = 3;
+  f[1] = MGI_CMD_SET, f[2] = MGI_PROP_STREAM_RAW;
+  f[n++] = (uint8_t) (len + 2), f[n++] = 0;  // PSDU length, incl. FCS
+  memcpy(f + n, p, len), n += len;
+  f[n++] = 0, f[n++] = 0;  // FCS, filled in by the radio
+  f[n++] = d->channel;
+  f[n++] = 4;  // Max CSMA backoffs
+  f[n++] = 0;  // Max frame retries: broadcast frames are not acknowledged
+  f[n++] = 1;  // CSMA-CA enabled
+  if (!mg_rw612_request(f, n, MGI_TX_TIMEOUT_MS)) {
+    MG_ERROR(("TX timeout"));
+    return 0;
+  }
+  if (s_rw612.rsp_status != 0) {
+    MG_VERBOSE(("TX failed, status %lu", (unsigned long) s_rw612.rsp_status));
+    return 0;
+  }
+  return len;
+}
+
+static size_t mg_rw612_154_tx(const void *buf, size_t len,
+                              struct mg_tcpip_if *ifp) {
+  return mg_l2_802154_tx(ifp, buf, len, mg_rw612_send);
+}
+
+static size_t mg_rw612_154_rx(void *buf, size_t len, struct mg_tcpip_if *ifp) {
+  struct mg_rw612 *s = &s_rw612;
+  size_t res = 0;
+  mg_rw612_poll_imu();
+  while (s->rxtail != s->rxhead && res == 0) {
+    res = mg_l2_802154_rx(ifp, s->rxq[s->rxtail], s->rxlen[s->rxtail], buf,
+                          len);
+    s->rxtail = (uint8_t) ((s->rxtail + 1) % MGI_RXQ_CNT);
+  }
+  return res;
+}
+
+static bool mg_rw612_154_poll(struct mg_tcpip_if *ifp, bool s1) {
+  (void) ifp, (void) s1;
+  return s_rw612.up;
+}
+
+struct mg_tcpip_driver mg_tcpip_driver_rw612_154 = {
+    mg_rw612_154_init, mg_rw612_154_tx, mg_rw612_154_rx, mg_rw612_154_poll};
+
 #endif
 
 #ifdef MG_ENABLE_LINES

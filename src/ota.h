@@ -26,6 +26,7 @@
 #pragma once
 
 #include "arch.h"
+#include "http.h"
 #include "net.h"
 
 // Supported OTA targets
@@ -44,6 +45,7 @@
 #define MG_OTA_RT1170 304           // IMXRT1170
 #define MG_OTA_RT1180 305           // IMXRT1180
 #define MG_OTA_MCXN 310             // MCXN947
+#define MG_OTA_MCXW71 311           // MCXW71
 #define MG_OTA_RW612 320            // FRDM-RW612
 #define MG_OTA_FLASH 900            // OTA via internal flash
 #define MG_OTA_ESP32 910            // ESP32 OTA implementation
@@ -72,6 +74,19 @@ bool mg_ota_write(const void *buf, size_t len);
 
 // Ends the OTA process and commits the written firmware.
 bool mg_ota_end(void);
+
+// Push-based OTA: mg_http_stream_body() callback that flashes the request
+//
+// ```c
+// if (ev == MG_EV_HTTP_HDRS) {
+//   struct mg_http_message *hm = (struct mg_http_message *) ev_data;
+//   if (mg_match(hm->uri, mg_str("/ota"), NULL) &&
+//       !mg_http_stream_body(c, hm, mg_http_ota_cb, NULL)) {
+//     mg_http_reply(c, 400, "", "POST firmware with Content-Length\n");
+//   }
+// }
+// ```
+bool mg_http_ota_cb(struct mg_http_message *hm, struct mg_str *data, void **p);
 
 // MG_OTA_ROLLBACK: swap firmware banks and reset. On flash-based OTA, the
 // default calls swap_fn() (no-op on single-bank) then resets. Override in
