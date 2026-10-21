@@ -25,6 +25,7 @@
 #if MG_ENABLE_HEALTH
 #include <esp_memory_utils.h>
 #include <esp_core_dump.h>
+#include <esp_partition.h>
 #endif
 
 #define MG_PATH_MAX 128

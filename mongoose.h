@@ -256,6 +256,7 @@ extern "C" {
 #if MG_ENABLE_HEALTH
 #include <esp_memory_utils.h>
 #include <esp_core_dump.h>
+#include <esp_partition.h>
 #endif
 
 #define MG_PATH_MAX 128
@@ -4491,6 +4492,9 @@ static inline uint16_t esp2mg(esp_reset_reason_t rr) {
 #define MG_HEALTH_INIT() mg_health_init()
 extern size_t mg_print_crash_record(mg_pfn_t, void *, va_list *);
 extern void mg_health_init(void);
+extern bool mg_health_coredump_begin(size_t *size);
+extern bool mg_health_coredump_read(size_t offset, void *buf, size_t *len);
+extern bool mg_health_coredump_end(void);
 #else
 #define MG_HEALTH_INIT()
 static inline int mg_health_reason(void) {
@@ -4504,6 +4508,18 @@ static inline size_t mg_print_crash_record(mg_pfn_t fn, void *arg,
                                            va_list *ap) {
   (void) ap;
   return mg_xprintf(fn, arg, "{}");
+}
+static inline bool mg_health_coredump_begin(size_t *size) {
+  (void) size;
+  return false;
+}
+static inline bool mg_health_coredump_read(size_t offset, void *buf,
+                                           size_t *len) {
+  (void) offset, (void) buf, (void) len;
+  return false;
+}
+static inline bool mg_health_coredump_end(void) {
+  return false;
 }
 
 #endif

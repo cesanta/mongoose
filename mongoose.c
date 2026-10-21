@@ -3642,6 +3642,59 @@ struct mg_fs mg_fs_posix = {p_stat,  p_list, p_open,   p_close,  p_read,
 
 
 #if MG_ENABLE_HEALTH
+#if MG_ARCH == MG_ARCH_ESP32
+// reusable for other platforms, currently ESP32-only
+struct mg_health_coredump {
+  const void *ptr;
+  size_t poffset;
+  size_t size;
+};
+
+static struct mg_health_coredump s_coredump;
+#endif
+
+bool mg_health_coredump_begin(size_t *size) {
+#if MG_ARCH == MG_ARCH_ESP32 && CONFIG_ESP_COREDUMP_ENABLE_TO_FLASH
+  const esp_partition_t *p = esp_partition_find_first(
+      ESP_PARTITION_TYPE_DATA, ESP_PARTITION_SUBTYPE_DATA_COREDUMP, NULL);
+  size_t address = 0, len = 0;
+  esp_err_t err = esp_core_dump_image_get(&address, &len);
+  if (size == NULL || s_coredump.ptr != NULL || err != ESP_OK || p == NULL)
+    return false;
+  s_coredump.ptr = p;
+  s_coredump.poffset = address - p->address;
+  s_coredump.size = len;
+  *size = len;
+  return true;
+#else
+  (void) size;
+  return false;
+#endif
+}
+
+bool mg_health_coredump_read(size_t offset, void *buf, size_t *len) {
+#if MG_ARCH == MG_ARCH_ESP32 && CONFIG_ESP_COREDUMP_ENABLE_TO_FLASH
+  const esp_partition_t *p = (const esp_partition_t *) s_coredump.ptr;
+  if (p == NULL || offset > s_coredump.size)
+    return false;
+  if (*len > s_coredump.size - offset) *len = s_coredump.size - offset;
+  return esp_partition_read(p, s_coredump.poffset + offset, buf, *len) == ESP_OK;
+#else
+  (void) offset, (void) buf, (void) len;
+  return false;
+#endif
+}
+
+bool mg_health_coredump_end(void) {
+#if MG_ARCH == MG_ARCH_ESP32 && CONFIG_ESP_COREDUMP_ENABLE_TO_FLASH
+  bool ok = s_coredump.ptr != NULL;
+  memset(&s_coredump, 0, sizeof(s_coredump));
+  return ok;
+#else
+  return false;
+#endif
+}
+
 // The one health record. Lives in RAM that survives a warm reset, see
 // MG_HEALTH_RAM and the .mg_health region in the linker script
 struct mg_health mg_health_record MG_HEALTH_RAM;
@@ -7351,6 +7404,7 @@ static void mg_mdash_fn(struct mg_connection *c, int ev, void *ev_data) {
     }
     mg_iobuf_free(&io);
   } else if (ev == MG_EV_CLOSE) {
+    mg_health_coredump_end();
     mg_mdash_conn = NULL;
     MG_INFO(("disconnected, ram %lu", 0));
   }
@@ -7408,6 +7462,35 @@ static void mg_mdash_rpc_ota_end(struct mg_rpc_req *r) {
   // MG_ESC("percent"));
 }
 
+static void rpc_coredump_begin(struct mg_rpc_req *r) {
+  size_t size = 0;
+  if (mg_health_coredump_begin(&size)) {
+    mg_rpc_ok(r, "{%m:%llu}", MG_ESC("size"), (uint64_t) size);
+  } else {
+    mg_rpc_err(r, 500, "%m", MG_ESC("failed"));
+  }
+}
+
+static void rpc_coredump_read(struct mg_rpc_req *r) {
+  uint8_t buf[768];
+  size_t len = sizeof(buf);
+  size_t offset = (size_t) mg_json_get_long(r->frame, "$.params.offset", -1);
+  if (mg_health_coredump_read(offset, buf, &len)) {
+    mg_rpc_ok(r, "{%m:\"%M\"}", MG_ESC("data"), mg_print_base64,
+              (int) len, buf);
+  } else {
+    mg_rpc_err(r, 500, "%m", MG_ESC("failed"));
+  }
+}
+
+static void rpc_coredump_end(struct mg_rpc_req *r) {
+  if (mg_health_coredump_end()) {
+    mg_rpc_ok(r, "true");
+  } else {
+    mg_rpc_err(r, 500, "%m", MG_ESC("failed"));
+  }
+}
+
 void mg_mdash_init(struct mg_mgr *mgr) {
   MG_INFO(("Initialising mdash agent, key [%s]", MG_MDASH_KEY));
   mg_rpc_add(&mgr->rpcs, mg_str("RPC.List"), mg_rpc_list, NULL);
@@ -7415,6 +7498,9 @@ void mg_mdash_init(struct mg_mgr *mgr) {
   mg_rpc_add(&mgr->rpcs, mg_str("OTA.Begin"), mg_mdash_rpc_ota_begin, NULL);
   mg_rpc_add(&mgr->rpcs, mg_str("OTA.Write"), mg_mdash_rpc_ota_write, NULL);
   mg_rpc_add(&mgr->rpcs, mg_str("OTA.End"), mg_mdash_rpc_ota_end, NULL);
+  mg_rpc_add(&mgr->rpcs, mg_str("CoreDump.Begin"), rpc_coredump_begin, NULL);
+  mg_rpc_add(&mgr->rpcs, mg_str("CoreDump.Read"), rpc_coredump_read, NULL);
+  mg_rpc_add(&mgr->rpcs, mg_str("CoreDump.End"), rpc_coredump_end, NULL);
 }
 
 void mg_mdash_poll(struct mg_mgr *mgr) {

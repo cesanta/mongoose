@@ -2,6 +2,59 @@
 #include "health.h"
 
 #if MG_ENABLE_HEALTH
+#if MG_ARCH == MG_ARCH_ESP32
+// reusable for other platforms, currently ESP32-only
+struct mg_health_coredump {
+  const void *ptr;
+  size_t poffset;
+  size_t size;
+};
+
+static struct mg_health_coredump s_coredump;
+#endif
+
+bool mg_health_coredump_begin(size_t *size) {
+#if MG_ARCH == MG_ARCH_ESP32 && CONFIG_ESP_COREDUMP_ENABLE_TO_FLASH
+  const esp_partition_t *p = esp_partition_find_first(
+      ESP_PARTITION_TYPE_DATA, ESP_PARTITION_SUBTYPE_DATA_COREDUMP, NULL);
+  size_t address = 0, len = 0;
+  esp_err_t err = esp_core_dump_image_get(&address, &len);
+  if (size == NULL || s_coredump.ptr != NULL || err != ESP_OK || p == NULL)
+    return false;
+  s_coredump.ptr = p;
+  s_coredump.poffset = address - p->address;
+  s_coredump.size = len;
+  *size = len;
+  return true;
+#else
+  (void) size;
+  return false;
+#endif
+}
+
+bool mg_health_coredump_read(size_t offset, void *buf, size_t *len) {
+#if MG_ARCH == MG_ARCH_ESP32 && CONFIG_ESP_COREDUMP_ENABLE_TO_FLASH
+  const esp_partition_t *p = (const esp_partition_t *) s_coredump.ptr;
+  if (p == NULL || offset > s_coredump.size)
+    return false;
+  if (*len > s_coredump.size - offset) *len = s_coredump.size - offset;
+  return esp_partition_read(p, s_coredump.poffset + offset, buf, *len) == ESP_OK;
+#else
+  (void) offset, (void) buf, (void) len;
+  return false;
+#endif
+}
+
+bool mg_health_coredump_end(void) {
+#if MG_ARCH == MG_ARCH_ESP32 && CONFIG_ESP_COREDUMP_ENABLE_TO_FLASH
+  bool ok = s_coredump.ptr != NULL;
+  memset(&s_coredump, 0, sizeof(s_coredump));
+  return ok;
+#else
+  return false;
+#endif
+}
+
 // The one health record. Lives in RAM that survives a warm reset, see
 // MG_HEALTH_RAM and the .mg_health region in the linker script
 struct mg_health mg_health_record MG_HEALTH_RAM;
