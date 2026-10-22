@@ -12,3 +12,5 @@ idf_component_register(SRCS "main.c"
                                 espcoredump
                                 nvs_flash
                                 app_update)
+separate_arguments(CFLAGS_EXTRA)
+component_compile_options(${CFLAGS_EXTRA})

@@ -365,7 +365,7 @@ static bool st67w6_init(uint8_t *mac) {
   }
   // set clock, who cares ???
   if (!st67w6_at_cmd("AT+GET_CLOCK\r\n", 14)) return false;
-  MG_DEBUG(("%.*s", s_at_resp_len, at_resp));  // TODO(scaprile): --> VERBOSE
+  MG_VERBOSE(("%.*s", s_at_resp_len, at_resp));
   // BT-ENABLED DEPENDENCY
 
   // MODULE DEPENDENCY

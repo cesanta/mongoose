@@ -1,8 +1,10 @@
 THISDIR = $(realpath $(CURDIR))
 ROOTDIR = $(realpath $(CURDIR)/../../..)
 DOCKER ?= docker run --rm $(DA) -v $(ROOTDIR):$(ROOTDIR) -w $(THISDIR) espressif/idf
-CMD ?= idf.py build
+CMD ?= idf.py -DCFLAGS_EXTRA="$(CFLAGS_EXTRA)" build
 PORT ?= /dev/ttyUSB0
+
+CFLAGS_EXTRA ?= -DMG_TLS=MG_TLS_BUILTIN
 
 all: example
 
