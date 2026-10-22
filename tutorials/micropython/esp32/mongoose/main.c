@@ -9,7 +9,12 @@ static void t_fn(void *arg) {  // Tick periodically
 }
 
 static void fn(struct mg_connection *c, int ev, void *ev_data) {
-  if (ev == MG_EV_HTTP_MSG) mg_http_reply(c, 200, "", "hi\n");
+  if (ev == MG_EV_HTTP_HDRS) {
+    struct mg_http_message *hm = (struct mg_http_message *) ev_data;
+    if (mg_match(hm->uri, mg_str("/ota"), NULL)) {
+      mg_http_stream_body(c, hm, mg_http_ota_cb, NULL);
+    }
+  } else if (ev == MG_EV_HTTP_MSG) mg_http_reply(c, 200, "", "hi\n");
   (void) ev_data;
 }
 

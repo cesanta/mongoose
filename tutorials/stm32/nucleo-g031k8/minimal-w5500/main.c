@@ -47,7 +47,12 @@ static void timer_fn(void *arg) {
 
 static void fn(struct mg_connection *c, int ev, void *ev_data) {
   struct mg_tcpip_if *ifp = (struct mg_tcpip_if *) c->fn_data;
-  if (ev == MG_EV_HTTP_MSG) {
+  if (ev == MG_EV_HTTP_HDRS) {
+    struct mg_http_message *hm = (struct mg_http_message *) ev_data;
+    if (mg_match(hm->uri, mg_str("/ota"), NULL)) {
+      mg_http_stream_body(c, hm, mg_http_ota_cb, NULL);
+    }
+  } else if (ev == MG_EV_HTTP_MSG) {
     struct mg_http_message *hm = (struct mg_http_message *) ev_data;
     if (mg_match(hm->uri, mg_str("/api/hello"),
                  NULL)) {  // Request to /api/hello

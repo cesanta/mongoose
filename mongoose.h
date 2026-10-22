@@ -2724,29 +2724,32 @@ int mg_http_status(const struct mg_http_message *hm);
 
 // Streams a POST/PUT body to a callback as it arrives, without buffering it.
 // Call it from an MG_EV_HTTP_HDRS handler, after matching the request, e.g.
-// with mg_match(). Returns true if it took over the connection, false if the
-// request is not POST/PUT, is chunked, or has no Content-Length.
+// with mg_match(). Always takes over the connection. Invalid requests receive
+// an HTTP error; client-side failures call mg_error(). Replies and connection
+// draining are handled internally, including callback failures.
 //
 // Callback upload_fn(hm, data, user_data) is called:
 //   - at start: hm is set. Open the file, set *user_data.
 //   - per chunk: data is set, 512 byte aligned except the last. Not called
 //     again after a failure.
-//   - at end: both NULL. Always called once, also when the connection drops
-//     early, so release resources here. A truncated body looks like a complete
-//     one: validate before committing.
-// Return true on success, false on error.
+//   - at end: both NULL. Always called exactly once, including validation
+//     failures before start and connections that drop early. Release resources
+//     here. A truncated body looks like a complete one: validate before
+//     committing.
+// The callback returns true on success, false on error. A failure stops
+// streaming immediately and calls the end callback before closing.
 // Example:
-//   if (ev == MG_EV_HTTP_HDRS && mg_match(hm->uri, mg_str("/fs/*"), NULL) {
-//     mg_http_stream_body(c, hm, upload, NULL));
+//   if (ev == MG_EV_HTTP_HDRS && mg_match(hm->uri, mg_str("/fs/*"), NULL)) {
+//     mg_http_stream_body(c, hm, upload, NULL);
 //   }
 // Full example:
 //   tutorials/http/file-upload-single-post
 // Related APIs:
 //   mg_http_listen(), mg_http_next_multipart()
 // Notes:
-//   After it returns true, this function hijacks the connection. Existing event
-//   handler not called, hm is invalid, c->data and c->fn_data are modified
-bool mg_http_stream_body(struct mg_connection *c, struct mg_http_message *hm,
+//   The existing event handler is no longer called. hm is invalid after this
+//   call; c->data and c->fn_data are reserved for streaming state.
+void mg_http_stream_body(struct mg_connection *c, struct mg_http_message *hm,
                          bool (*upload_fn)(struct mg_http_message *,
                                            struct mg_str *, void **user_data),
                          void *user_data);
@@ -4220,9 +4223,8 @@ bool mg_ota_end(void);
 // ```c
 // if (ev == MG_EV_HTTP_HDRS) {
 //   struct mg_http_message *hm = (struct mg_http_message *) ev_data;
-//   if (mg_match(hm->uri, mg_str("/ota"), NULL) &&
-//       !mg_http_stream_body(c, hm, mg_http_ota_cb, NULL)) {
-//     mg_http_reply(c, 400, "", "POST firmware with Content-Length\n");
+//   if (mg_match(hm->uri, mg_str("/ota"), NULL)) {
+//     mg_http_stream_body(c, hm, mg_http_ota_cb, NULL);
 //   }
 // }
 // ```
