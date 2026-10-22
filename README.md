@@ -15,7 +15,7 @@ with an RTOS.
 
 Mongoose is ideal for implementing TCP/IP cloud connectivity, device web
 dashboards, firmware updates, and remote control. It is self-contained
-and has no external software dependencies.
+and has no external dependencies.
 
 Use it instead of lwIP + mbedTLS + httpd + an MQTT client + OTA glue code, or
 run it on top of lwIP or Zephyr.
