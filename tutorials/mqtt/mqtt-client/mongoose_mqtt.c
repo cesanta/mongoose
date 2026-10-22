@@ -120,7 +120,7 @@ void mg_mqtt_poll(struct mg_mgr *mgr) {
 
   // Reconnect if connection is closed, and send MQTT PINGs to keep
   // the connection alive or to detect connection loss
-  if (mg_timer_expired(&timer, MQTT_RECONNECT_PERIOD_MS, mg_now())) {
+  if (mg_timer_expired(&timer, MQTT_RECONNECT_PERIOD_MS, mg_millis())) {
     if (s_mqtt_conn == NULL) {
       struct mg_mqtt_opts opts = {
           .clean = true,
