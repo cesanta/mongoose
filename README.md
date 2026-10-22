@@ -7,10 +7,15 @@
 
 <img src="https://mongoose.ws/images/logo.svg" width="48" height="48"
 align="left" style="float:left;" />
-Mongoose is a full-stack embedded networking library: built-in TCP/IP stack
-with drivers, TLS 1.3, HTTP/WebSocket, MQTT and firmware OTA updates in a
-2-file C/C++ library (`mongoose.c`, `mongoose.h`), for STM32, NXP i.MX RT and
-other microcontrollers, on any RTOS or bare metal.
+Mongoose is a full-stack embedded networking library for C/C++.
+It provides TCP/IP stack with drivers, TLS 1.3, HTTP, WebSocket, MQTT, and
+firmware OTA updates in just two files: `mongoose.c` and `mongoose.h`.
+It runs on STM32, NXP i.MX RT, and other microcontrollers, on bare metal or
+with an RTOS.
+
+Mongoose is ideal for implementing TCP/IP cloud connectivity, device web
+dashboards, firmware updates, and remote control. It is self-contained
+and has no external software dependencies.
 
 Use it instead of lwIP + mbedTLS + httpd + an MQTT client + OTA glue code, or
 run it on top of lwIP or Zephyr.
@@ -28,7 +33,7 @@ products - it even runs on the International Space Station! Features include:
 - Source code is both ISO C and ISO C++ compliant
 - Very easy to integrate
 - Own TCP/IP stack for bare metal / RTOS, or run on top of any existing one (lwIP, Zephyr, ...)
-- Built-in TLS 1.3 ECC stack. Also can use external TLS libraries - mbedTLS, OpenSSL, or other
+- Built-in TLS 1.3 stack. Also can use external TLS libraries - mbedTLS, OpenSSL, or other
 - Does not depend on any other software to implement networking
 - Built-in firmware updates for STM32 H5, STM32 H7, NXP IMXRT, RP2040/2350, ESP32 and more
 - Commercial support with proactive security updates; [CRA-compliant](https://mongoose.ws/security/cra-compliance/)
