@@ -3158,8 +3158,6 @@ static bool su_cb(struct mg_http_message *hm, struct mg_str *data, void **p) {
 static void su(struct mg_connection *c, int ev, void *ev_data) {
   if (ev == MG_EV_HTTP_HDRS) {
     mg_http_stream_body(c, (struct mg_http_message *) ev_data, su_cb, NULL);
-  } else if (ev == MG_EV_HTTP_MSG) {  // Only for requests that were not streamed
-    mg_http_reply(c, 400, "", "not streamed\n");
   }
 }
 
@@ -3194,8 +3192,7 @@ static void cr(struct mg_connection *c, int ev, void *ev_data) {
   if (ev == MG_EV_CONNECT) {
     mg_printf(c, "GET / HTTP/1.0\r\n\r\n");
   } else if (ev == MG_EV_HTTP_HDRS) {
-    ASSERT(mg_http_stream_body(c, (struct mg_http_message *) ev_data, cr_cb,
-                               NULL));
+    mg_http_stream_body(c, (struct mg_http_message *) ev_data, cr_cb, NULL);
   }
 }
 
@@ -3208,12 +3205,103 @@ static void cs(struct mg_connection *c, int ev, void *ev_data) {
   (void) ev_data;
 }
 
+struct stream_test_state {
+  int fail_at, starts, chunks, ends;
+};
+
+static bool stream_test_cb(struct mg_http_message *hm, struct mg_str *data,
+                            void **p) {
+  struct stream_test_state *s = (struct stream_test_state *) *p;
+  ASSERT(s != NULL);
+  if (hm != NULL) {
+    s->starts++;
+    return s->fail_at != 1;
+  } else if (data != NULL) {
+    s->chunks++;
+    return s->fail_at != 2;
+  }
+  s->ends++;
+  *p = NULL;
+  return s->fail_at != 3;
+}
+
+static void stream_test_original(struct mg_connection *c, int ev, void *data) {
+  (void) c, (void) ev, (void) data;
+  ASSERT(false);  // Streaming must take ownership even when validation fails
+}
+
+static void test_http_stream_errors(void) {
+  static const struct {
+    const char *request;
+    int client, fail_at, body_size, code, starts, chunks;
+  } cases[] = {
+      {"GET / HTTP/1.1\r\nContent-Length: 0\r\n\r\n", 0, 0, 0, 405, 0, 0},
+      {"POST / HTTP/1.1\r\n\r\n", 0, 0, 0, 411, 0, 0},
+      {"POST / HTTP/1.1\r\nTransfer-Encoding: chunked\r\n\r\n",
+       0, 0, 0, 400, 0, 0},
+      {"POST / HTTP/1.1\r\nContent-Length: 3\r\n\r\nabc", 0, 0, 0, 200, 1, 1},
+      {"PUT / HTTP/1.1\r\nContent-Length: 0\r\n\r\n", 0, 0, 0, 200, 1, 0},
+      // Start failure must reply without waiting for the body or sending 100.
+      {"POST / HTTP/1.1\r\nContent-Length: 1000000\r\nExpect: 100-continue\r\n\r\n",
+       0, 1, 0, 500, 1, 0},
+      // Write failure must also reply before the announced body is complete.
+      {"POST / HTTP/1.1\r\nContent-Length: 1000000\r\n\r\n",
+       0, 2, 512, 500, 1, 1},
+      {"POST / HTTP/1.1\r\nContent-Length: 3\r\n\r\nabc", 0, 3, 0, 500, 1, 1},
+      // Clients close on errors and never send an HTTP error response.
+      {"HTTP/1.1 200 OK\r\n\r\n", 1, 0, 0, 411, 0, 0},
+      {"HTTP/1.1 200 OK\r\nTransfer-Encoding: chunked\r\n\r\n",
+       1, 0, 0, 400, 0, 0},
+      {"HTTP/1.1 200 OK\r\nContent-Length: 1000000\r\n\r\n",
+       1, 1, 0, 500, 1, 0},
+      {"HTTP/1.1 200 OK\r\nContent-Length: 1000000\r\n\r\n",
+       1, 2, 512, 500, 1, 1},
+      {"HTTP/1.1 200 OK\r\nContent-Length: 3\r\n\r\nabc", 1, 3, 0, 500, 1, 1},
+      {"HTTP/1.1 200 OK\r\nContent-Length: 3\r\n\r\nabc", 1, 0, 0, 200, 1, 1},
+      {"HTTP/1.1 204 No Content\r\n\r\n", 1, 0, 0, 200, 1, 0},
+  };
+  size_t i;
+  for (i = 0; i < sizeof(cases) / sizeof(cases[0]); i++) {
+    struct mg_connection c;
+    struct mg_http_message hm;
+    struct stream_test_state state = {0, 0, 0, 0};
+    char body[512];
+    memset(&c, 0, sizeof(c));
+    memset(body, 'x', sizeof(body));
+    state.fail_at = cases[i].fail_at;
+    c.is_client = cases[i].client != 0;
+    c.fn = c.pfn = stream_test_original;
+    mg_iobuf_add(&c.recv, 0, cases[i].request, strlen(cases[i].request));
+    mg_iobuf_add(&c.recv, c.recv.len, body, (size_t) cases[i].body_size);
+    ASSERT(mg_http_parse((char *) c.recv.buf, c.recv.len, &hm) > 0);
+    mg_http_stream_body(&c, &hm, stream_test_cb, &state);
+    ASSERT(c.pfn == NULL && c.is_draining);
+    ASSERT(state.starts == cases[i].starts && state.chunks == cases[i].chunks);
+    ASSERT(state.ends == 1);
+    if (c.is_client) {
+      ASSERT(c.send.len == 0);
+      ASSERT(c.is_closing == (cases[i].code != 200));
+    } else {
+      ASSERT(mg_http_parse((char *) c.send.buf, c.send.len, &hm) > 0);
+      ASSERT(mg_http_status(&hm) == cases[i].code);
+      ASSERT(hm.message.len == c.send.len);  // Exactly one response
+    }
+    mg_call(&c, MG_EV_READ, NULL);
+    mg_error(&c, "stream cleanup test");
+    mg_call(&c, MG_EV_CLOSE, NULL);
+    ASSERT(state.ends == 1);  // Error followed by close must not clean up twice
+    mg_iobuf_free(&c.recv);
+    mg_iobuf_free(&c.send);
+  }
+}
+
 static void test_http_upload(void) {
   struct mg_mgr mgr;
   const char *url = "http://127.0.0.1:12352";
   int i;
   const char *s = "ok (8 foo\nbar\n)\n";
 
+  test_http_stream_errors();
   mg_mgr_init(&mgr);
   mg_http_listen(&mgr, url, us, NULL);
   mg_http_connect(&mgr, url, uc, (void *) &s);
@@ -3257,7 +3345,7 @@ static void test_http_upload(void) {
     ASSERT(mgr.conns == NULL);
   }
 
-  // mg_http_stream_body: chunked request is not streamed, caller replies "400"
+  // mg_http_stream_body: chunked request rejected with "400", cleanup still runs
   {
     char buf[FETCH_BUF_SIZE];
     s_su_done = s_su_end = 0;
@@ -3268,7 +3356,7 @@ static void test_http_upload(void) {
                  "POST /su_chunked.txt HTTP/1.1\r\n"
                  "Transfer-Encoding: chunked\r\n\r\n"
                  "3\r\nfoo\r\n0\r\n\r\n") == 400);
-    ASSERT(s_su_done == 0 && s_su_end == 0);  // The callback was never called
+    ASSERT(s_su_done == 1 && s_su_end == 1);  // End called without start
     ASSERT(fopen("su_chunked.txt", "r") == NULL);
     mg_mgr_free(&mgr);
     ASSERT(mgr.conns == NULL);
@@ -5009,6 +5097,20 @@ static void test_dash(void) {
                "GET /api/login HTTP/1.0\n"
                "Authorization: Basic YWRtaW46YWRtaW4=\n\n") == 200);
   ASSERT(cmpbody(buf, login_admin_expected) == 0);
+
+  // OTA uses streaming and enforces the dashboard's authentication.
+  ASSERT(fetch(&mgr, buf, url,
+               "POST /api/ota HTTP/1.0\nContent-Length: 1\n\nx") == 403);
+  ASSERT(fetch(&mgr, buf, url,
+               "GET /api/ota HTTP/1.0\nContent-Length: 0\n"
+               "Authorization: Basic YWRtaW46YWRtaW4=\n\n") == 405);
+  ASSERT(fetch(&mgr, buf, url,
+               "POST /ota HTTP/1.0\nContent-Length: 1\n"
+               "Authorization: Basic YWRtaW46YWRtaW4=\n\nx") == 404);
+  ASSERT(fetch(&mgr, buf, url,
+               "POST /api/ota HTTP/1.0\nContent-Length: 1\n"
+               "Authorization: Basic YWRtaW46YWRtaW4=\n\nx") == 200);
+  ASSERT(cmpbody(buf, "1 ok\n") == 0);
 
   // set3 is admin-only
   ASSERT(fetch(&mgr, buf, url,

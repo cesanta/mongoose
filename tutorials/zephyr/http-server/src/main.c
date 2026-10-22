@@ -14,6 +14,11 @@ static void wcb(struct mg_connection *c, int ev, void *ev_data) {
   if (ev == MG_EV_ACCEPT && c->is_tls) {
     struct mg_tls_opts opts = {.cert = (char *) s_ssl_cert, .key = (char *) s_ssl_key};
     mg_tls_init(c, &opts);
+  } else if (ev == MG_EV_HTTP_HDRS) {
+    struct mg_http_message *hm = (struct mg_http_message *) ev_data;
+    if (mg_match(hm->uri, mg_str("/ota"), NULL)) {
+      mg_http_stream_body(c, hm, mg_http_ota_cb, NULL);
+    }
   } else if (ev == MG_EV_HTTP_MSG) {
     struct mg_http_message *hm = ev_data;
     MG_INFO(("%.*s %.*s %ld", (int) hm->method.len, hm->method.buf,

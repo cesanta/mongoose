@@ -208,9 +208,7 @@ static void s_firmware_fn(struct mg_connection *c, int ev, void *ev_data) {
                (unsigned long) hm->body.len, (unsigned long) s_ota->size);
     } else {
       MG_DEBUG(("Beginning OTA (%lu bytes)", (unsigned long) s_ota->size));
-      if (!mg_http_stream_body(c, hm, s_firmware_cb, NULL)) {
-        mg_error(c, "Cannot stream firmware");
-      }
+      mg_http_stream_body(c, hm, s_firmware_cb, NULL);
     }
   } else if (ev == MG_EV_ERROR) {
     s_ota->fn((char *) ev_data);
@@ -241,6 +239,21 @@ void mg_ota_url_check(struct mg_mgr *mgr, const char *json_url,
       *(uint64_t *) c->data = mg_millis() + 5 * 1000;  // Set expiration
     }
   }
+}
+
+// Uses *p as a flag: non-NULL means an OTA session is open and must be
+// closed by mg_ota_end()
+bool mg_http_ota_cb(struct mg_http_message *hm, struct mg_str *data, void **p) {
+  if (hm != NULL) {  // Start
+    if (!mg_ota_begin(hm->body.len)) return false;
+    *p = (void *) (ptrdiff_t) 1;
+    return true;
+  } else if (data != NULL) {  // Next chunk
+    return mg_ota_write(data->buf, data->len);
+  }
+  if (*p == NULL) return false;  // End. Begin failed, nothing to finish
+  *p = NULL;
+  return mg_ota_end();
 }
 
 void mg_ota_poll(struct mg_mgr *mgr) {
