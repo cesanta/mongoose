@@ -29399,8 +29399,9 @@ uint64_t mg_ntohll(uint64_t net) {
 }
 
 void mg_delayms(unsigned int ms) {
-  uint64_t to = mg_millis() + ms + 1;
-  while (mg_millis() < to) (void) 0;
+  uint64_t now, to = mg_millis() + ms + 1;
+  while ((now = mg_millis()) < to)
+    if (now + ms + 1 < to) to = now + ms + 1;
 }
 
 #if MG_ENABLE_CUSTOM_CALLOC
