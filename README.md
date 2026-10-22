@@ -1,4 +1,4 @@
-# Mongoose - Embedded Web Server / Embedded Network Library
+# Mongoose - Full-stack embedded networking library
 
 [![License: GPLv2/Commercial](https://img.shields.io/badge/License-GPLv2%20or%20Commercial-green.svg)](https://opensource.org/licenses/gpl-2.0.php)
 [![Build Status]( https://github.com/cesanta/mongoose/actions/workflows/quicktest.yml/badge.svg)](https://github.com/cesanta/mongoose/actions)
@@ -7,11 +7,15 @@
 
 <img src="https://mongoose.ws/images/logo.svg" width="48" height="48"
 align="left" style="float:left;" />
-Two files. Drop `mongoose.c` and `mongoose.h` into any C/C++ project and get a
-full network stack — HTTP, WebSocket, MQTT, TLS, firmware OTA
-updates, device dashboard — on any microcontroller or desktop OS.
+Mongoose is a full-stack embedded networking library: built-in TCP/IP stack
+with drivers, TLS 1.3, HTTP/WebSocket, MQTT and firmware OTA updates in a
+2-file C/C++ library (`mongoose.c`, `mongoose.h`), for STM32, NXP i.MX RT and
+other microcontrollers, on any RTOS or bare metal.
 
-On the market since 2004, used by vast number of open source and commercial
+Use it instead of lwIP + mbedTLS + httpd + an MQTT client + OTA glue code, or
+run it on top of lwIP or Zephyr.
+
+On the market since 2004, used by a vast number of open source and commercial
 products - it even runs on the International Space Station! Features include:
 
 - Cross-platform:
@@ -35,8 +39,32 @@ See https://mongoose.ws/ for complete documentation, videos, case studies, etc.
 
 ## Supported platforms
 
-Mongoose can work on top of any TCP/IP stack that supports BSD sockets API.
-Platforms supported by the 3rd party TCP/IP stacks:
+Mongoose has its own built-in TCP/IP stack with drivers, so it needs no
+additional software to implement networking. The built-in stack runs on bare
+metal and under any RTOS. Platforms supported by the Mongoose built-in TCP/IP
+stack:
+
+| MCU | Connectivity | Notes |
+| :-- | :----------- | :---- |
+| **STM32** | Built-in Ethernet | Ethernet-capable STM32F, STM32H5, STM32H7, STM32N6, STM32C5 variants |
+| **NXP i.MX RT** | Built-in Ethernet | RT102x, RT104x, RT105x, RT106x, RT117x, RT118x (NETC) |
+| **NXP MCX** | Built-in Ethernet | MCXN94x, MCXE247 |
+| **NXP RW612** | Eth, WiFi, 802.15.4 | Separate Ethernet and radio drivers |
+| **Microchip ATSAME54** | Built-in Ethernet | GMAC driver |
+| **Renesas RA** | Built-in Ethernet | RA6M, RA8M |
+| **Infineon XMC** | Built-in Ethernet | XMC4, XMC7 |
+| **Texas Instruments** | Built-in Ethernet | TM4C, TMS570 |
+| **RP2040, RP2350, STM32, others** | CYW43xx Wi-Fi chips | SPI or SDIO; Pico W, Pico 2 W, Pico RM2, Arduino Portenta H7 |
+| **STM32, others** | ST67W6 Wi-Fi modules | SPI; for example, STM32U5 with the ST67W611M1 module |
+| **MCUs with an NXP Wi-Fi SDK port** | NXP Wi-Fi | Requires the SDK's Wi-Fi port implementing the driver's network hooks |
+| **NXP MCXW71** | Built-in 802.15.4 radio | IPv4 over IEEE 802.15.4 |
+| **NXP RW612** | Built-in 802.15.4 radio | IPv4 over IEEE 802.15.4; requires NXP radio firmware |
+| **Any MCU with SPI** | W5500 or W5100 Ethernet chips | External Wiznet MAC+PHY |
+| **MCUs connected to a cellular modem** | Cellular | AT commands and PPP; for example, SIM800 |
+| **MCUs with CMSIS Ethernet drivers** | Ethernet via CMSIS-Driver | Requires CMSIS Ethernet MAC and PHY drivers |
+
+Mongoose can also run on top of any TCP/IP stack that supports the BSD
+sockets API. Platforms supported via 3rd party TCP/IP stacks:
 
 | TCP/IP stack    | Notes |
 | :-------------- | :------- |
@@ -44,23 +72,6 @@ Platforms supported by the 3rd party TCP/IP stacks:
 | **Zephyr**      | All devices supported by Zephyr |
 | **Other**       | Any other TCP/IP stack that supports BSD socket API, for example Amazon FreeRTOS-TCP |
 | **Linux, Mac, Windows**   | Workstations, server, single board computers, embedded Linux devices running on MPUs or FPGAs |
-
-Optionally, Mongoose provides its own built-in TCP/IP stack, eliminating the
-need for additional software to implement networking functionality. The
-built-in stack supports operation in both bare-metal and RTOS environments.
-Platforms supported by the Mongoose built-in TCP/IP stack:
-
-| Hardware       | Notes |
-| :------------- | :------- |
-| **STM32**      | All STM32 MCUs with built-in Ethernet: STM32Fxx, STM32H5xx, STM32H7xx |
-| **NXP**        |  All NXP MCUs with built-in Ethernet: IMXRT102x, IMXRT104x, IMXRT105x, IMXRT106x, IMXRT117x, RW612, MCXN94x   |
-| **Microchip**  | ATSAME54 MCUs with built-int Ethernet  |
-| **Renesas**    | RA5M, RA6M, RA8M MCUs with built-in Ethernet    |
-| **Infineon**   | XMC4, XMC7 MCUs with built-in Ethernet    |
-| **Texas Instruments**  |  TM4C, TMS570 MCUs with built-in Ethernet   |
-| **Cypress WiFi**  | Any MCU with CY43xx WiFi chips, like RP2040 Pico-W, RP2350 Pico2-W, Arduino Portenta    |
-| **Wiznet Ethernet**  | Any MCU that use Wiznet W5500 or Wiznet 5100 MAC+PHY chips    |
-| **Cellular**   | NRF9160, SIM800    |
 
 ## Usage Examples
 
@@ -158,6 +169,17 @@ int main() {
 }
 ```
 
+## Licensing
+
+Mongoose is dual-licensed:
+- GPLv2: free for open source projects. Many popular open source projects use
+  Mongoose, for example
+  [SWUpdate](https://github.com/sbabic/swupdate/tree/master/mongoose), the
+  embedded Linux update framework
+- Commercial: for closed-source products. Includes support directly from the
+  engineers who wrote the whole stack, and early security fixes.
+  See [licensing](https://mongoose.ws/licensing/)
+
 ## Commercial use
 - Mongoose is used by hundreds of businesses, from Fortune500 giants like
   Siemens, Schneider Electric, Broadcom, Bosch, Google, Samsung, Qualcomm, Caterpillar to the small businesses
@@ -227,7 +249,7 @@ Technical guides and deep dives into embedded web servers, WebUI integration and
 - [How to connect STM32 to AWS IoT Core](https://mongoose.ws/articles/stm32-aws-iot/)
 - [How to connect STM32 to Azure IoT Hub](https://mongoose.ws/articles/stm32-azure-iot-hub/)
 - [How to connect STM32 to EMQX](https://mongoose.ws/articles/stm32-emqx/)
-- [STM32 Device Management deep dive: Secure OTA, Remote Control, health monitor](https://mongoose.ws/articles/stm32-mdash-deep-dive/")
+- [STM32 Device Management deep dive: Secure OTA, Remote Control, health monitor](https://mongoose.ws/articles/stm32-mdash-deep-dive/)
 - [STM32 TCP/IP footprint: how much flash and RAM does Mongoose take?](https://mongoose.ws/articles/tcp-ip-footprint/)
 
 
