@@ -7,15 +7,12 @@
 
 <img src="https://mongoose.ws/images/logo.svg" width="48" height="48"
 align="left" style="float:left;" />
-Mongoose is a full-stack embedded networking library for C/C++.
-It provides TCP/IP stack with drivers, TLS 1.3, HTTP, WebSocket, MQTT, and
-firmware OTA updates in just two files: `mongoose.c` and `mongoose.h`.
-It runs on STM32, NXP i.MX RT, and other microcontrollers, on bare metal or
-with an RTOS.
-
-Mongoose is ideal for implementing TCP/IP cloud connectivity, device web
-dashboards, firmware updates, and remote control. It is self-contained
-and has no external dependencies.
+Mongoose is a full-stack embedded networking library for C/C++: a TCP/IP stack
+with drivers, TLS 1.3, an embedded web server (HTTP, WebSocket), MQTT and
+firmware OTA updates in two files, `mongoose.c` and `mongoose.h`. Mongoose runs on
+STM32, NXP and other microcontrollers, on bare metal or with an RTOS, with no
+external dependencies. Use it for cloud connectivity, device web dashboards,
+secure firmware updates and remote control.
 
 Use it instead of lwIP + mbedTLS + httpd + an MQTT client + OTA glue code, or
 run it on top of lwIP or Zephyr.
@@ -249,7 +246,7 @@ Technical guides and deep dives into embedded web servers, WebUI integration and
 - [lwIP vs Mongoose - TCP/IP Stack Integration Benchmark](https://mongoose.ws/articles/lwip-vs-mongoose-tcpip-stack-integration/)
 - [Embedded TCP/IP Stacks Comparison](https://mongoose.ws/embedded-tcpip-stack-comparison/)
 - [STM32H5 File System on Internal Flash: LittleFS + Mongoose](https://mongoose.ws/articles/stm32h5-file-system-on-internal-flash/)
-- [Firmware OTA and remote control on NXP FRDM-RW612](https://mongoose.ws/articles/mdash/)
+- [Firmware OTA and remote control on NXP FRDM-RW612](https://mongoose.ws/articles/rw612-mdash/)
 - [25000 WebSocket messages per second on STM32 Nucleo-H723ZG](https://mongoose.ws/articles/stm32-websocket-benchmark/)
 - [How to connect STM32 to AWS IoT Core](https://mongoose.ws/articles/stm32-aws-iot/)
 - [How to connect STM32 to Azure IoT Hub](https://mongoose.ws/articles/stm32-azure-iot-hub/)
