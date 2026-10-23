@@ -7291,9 +7291,11 @@ static void mg_mdash_rpc_get_info(struct mg_rpc_req *r) {
 }
 
 static void mg_mdash_rpc_mem_stats(struct mg_rpc_req *r) {
-  mg_rpc_ok(r, "{%m:%zu,%m:%zu}",                            //
+  mg_rpc_ok(r, "{%m:%zu,%m:%zu,%m:%zu,%m:%zu}",              //
             MG_ESC("stack_used"), (size_t) MG_HEALTH_STACK_USED,  //
-            MG_ESC("heap_used"), (size_t) MG_HEALTH_HEAP_USED);
+            MG_ESC("stack_total"), (size_t) MG_HEALTH_STACK_TOTAL,  //
+            MG_ESC("heap_used"), (size_t) MG_HEALTH_HEAP_USED,  //
+            MG_ESC("heap_total"), (size_t) MG_HEALTH_HEAP_TOTAL);
 }
 
 static void mg_mdash_rpc_ota_begin(struct mg_rpc_req *r) {
