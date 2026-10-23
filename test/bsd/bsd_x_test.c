@@ -555,7 +555,6 @@ static void task2(void *args) {
   DASHBOARD("select_child_write");
   DASHBOARD("poll_child_write");
 
-  #if 0
   s_error = false;
   s_backlog_ready = s_backlog_full = s_backlog_accept = false;
   ASSERT(xTaskCreate(backlog_task, "backlog", 512, NULL,
@@ -570,12 +569,6 @@ static void task2(void *args) {
   while (!client_done(first, &status)) vTaskDelay(1);
   check_client(status);
   DASHBOARD("listen_backlog");
-#else
-    (void) first;
-    (void) second;
-    (void) status;
-    (void) backlog_task;
-#endif
 
   s_error = false;
   // atask at higher priority than task1

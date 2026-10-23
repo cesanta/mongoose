@@ -5781,7 +5781,7 @@ size_t mg_l2_driver_output(struct mg_tcpip_if *ifp, size_t len) {
 #define MGI_802154_DATA (125 - MGI_802154_HDR)
 
 size_t mg_l2_802154_tx(struct mg_tcpip_if *ifp, const void *buf, size_t len,
-                       size_t (*send)(const uint8_t *, size_t,
+                       size_t (*send_fn)(const uint8_t *, size_t,
                                       struct mg_tcpip_if *)) {
   struct mg_l2_802154_data *d =
       (struct mg_l2_802154_data *) ifp->driver_data;
@@ -5799,7 +5799,7 @@ size_t mg_l2_802154_tx(struct mg_tcpip_if *ifp, const void *buf, size_t len,
     f[12] = m[2], f[13] = m[1], f[14] = m[0];  // Little endian EUI-64
     f[15] = d->tag, f[16] = (uint8_t) ((i << 4) | last);
     memcpy(f + MGI_802154_HDR, p + i * MGI_802154_DATA, n);
-    if (send(f, MGI_802154_HDR + n, ifp) == 0) return 0;
+    if (send_fn(f, MGI_802154_HDR + n, ifp) == 0) return 0;
   }
   return len;
 }
@@ -34528,7 +34528,7 @@ static bool st67w6_init(uint8_t *mac) {
   }
   // set clock, who cares ???
   if (!st67w6_at_cmd("AT+GET_CLOCK\r\n", 14)) return false;
-  MG_DEBUG(("%.*s", s_at_resp_len, at_resp));  // TODO(scaprile): --> VERBOSE
+  MG_VERBOSE(("%.*s", s_at_resp_len, at_resp));
   // BT-ENABLED DEPENDENCY
 
   // MODULE DEPENDENCY
