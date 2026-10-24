@@ -84,6 +84,17 @@ static void MX_USART3_UART_Init(void);
 
 /* Private user code ---------------------------------------------------------*/
 /* USER CODE BEGIN 0 */
+size_t hal_get_heap(void) {
+  extern void *_sbrk(ptrdiff_t incr);
+  extern unsigned char _end;  // Start of heap, see linker script
+  return (size_t) ((uintptr_t) _sbrk(0) - (uintptr_t) &_end);
+}
+
+size_t hal_get_stack(void) {
+  extern unsigned char _estack;  // Initial stack pointer, see linker script
+  return (size_t) ((uintptr_t) &_estack - (uintptr_t) __get_MSP());
+}
+
 static void log_fn(char ch, void *param) {
   HAL_UART_Transmit(param, (unsigned char *) &ch, 1, HAL_MAX_DELAY);
 }

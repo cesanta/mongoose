@@ -105,6 +105,14 @@ static void mg_mdash_rpc_get_info(struct mg_rpc_req *r) {
             MG_ESC("crash"), mg_print_crash_record);
 }
 
+static void mg_mdash_rpc_mem_stats(struct mg_rpc_req *r) {
+  mg_rpc_ok(r, "{%m:%zu,%m:%zu,%m:%zu,%m:%zu}",              //
+            MG_ESC("stack_used"), (size_t) MG_HEALTH_STACK_USED,  //
+            MG_ESC("stack_total"), (size_t) MG_HEALTH_STACK_TOTAL,  //
+            MG_ESC("heap_used"), (size_t) MG_HEALTH_HEAP_USED,  //
+            MG_ESC("heap_total"), (size_t) MG_HEALTH_HEAP_TOTAL);
+}
+
 static void mg_mdash_rpc_ota_begin(struct mg_rpc_req *r) {
   size_t total = (size_t) mg_json_get_long(r->frame, "$.params.size", -1);
   if (mg_ota_begin(total)) {
@@ -150,6 +158,7 @@ void mg_mdash_init(struct mg_mgr *mgr) {
   MG_INFO(("Initialising mdash agent, key [%s]", MG_MDASH_KEY));
   mg_rpc_add(&mgr->rpcs, mg_str("RPC.List"), mg_rpc_list, NULL);
   mg_rpc_add(&mgr->rpcs, mg_str("Sys.GetInfo"), mg_mdash_rpc_get_info, NULL);
+  mg_rpc_add(&mgr->rpcs, mg_str("Sys.MemStats"), mg_mdash_rpc_mem_stats, NULL);
   mg_rpc_add(&mgr->rpcs, mg_str("OTA.Begin"), mg_mdash_rpc_ota_begin, NULL);
   mg_rpc_add(&mgr->rpcs, mg_str("OTA.Write"), mg_mdash_rpc_ota_write, NULL);
   mg_rpc_add(&mgr->rpcs, mg_str("OTA.End"), mg_mdash_rpc_ota_end, NULL);
