@@ -13,6 +13,10 @@
 #define MG_HEALTH_HEAP_TOTAL ((size_t) configTOTAL_HEAP_SIZE)
 #define MG_HEALTH_HEAP_USED (MG_HEALTH_HEAP_TOTAL - xPortGetFreeHeapSize())
 
+// Per-task totals in bytes
+size_t app_task_stack_total(TaskHandle_t task);
+#define MG_HEALTH_TASK_STACK_TOTAL(task) app_task_stack_total(task)
+
 // Ethernet driver tunables:
 // #define MG_DRIVER_MDC_CR 4   // RMII MDC clock divider, from 0 to 5
 // #define MG_TCPIP_PHY_ADDR 0  // PHY address

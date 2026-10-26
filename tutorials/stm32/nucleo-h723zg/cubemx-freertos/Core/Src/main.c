@@ -25,6 +25,7 @@
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
 #include "mongoose.h"
+#include "timers.h"
 
 /* USER CODE END Includes */
 
@@ -95,6 +96,16 @@ void StartDefaultTask(void *argument);
 
 /* Private user code ---------------------------------------------------------*/
 /* USER CODE BEGIN 0 */
+size_t app_task_stack_total(TaskHandle_t task) {
+  if (task == (TaskHandle_t) defaultTaskHandle)
+    return (size_t) defaultTask_attributes.stack_size;
+  if (task == xTaskGetIdleTaskHandle())
+    return (size_t) configMINIMAL_STACK_SIZE * sizeof(StackType_t);
+  if (task == xTimerGetTimerDaemonTaskHandle())
+    return (size_t) configTIMER_TASK_STACK_DEPTH * sizeof(StackType_t);
+  return 0;  // Add other application tasks here
+}
+
 static void log_fn(char ch, void *param) {
   HAL_UART_Transmit(param, (unsigned char *) &ch, 1, HAL_MAX_DELAY);
 }

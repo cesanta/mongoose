@@ -4431,6 +4431,12 @@ void mg_ota_poll(struct mg_mgr *);
 #define MG_HEALTH_HEAP_TOTAL 0
 #endif
 
+// FreeRTOS: return the task's configured stack size in bytes, or 0 if unknown
+// Override with an application lookup, e.g. app_task_stack_total(task)
+#ifndef MG_HEALTH_TASK_STACK_TOTAL
+#define MG_HEALTH_TASK_STACK_TOTAL(task) 0
+#endif
+
 #ifndef MG_HEALTH_MAGIC
 #define MG_HEALTH_MAGIC {'M', 'G', 'H', '3'}  // '3' is the layout version
 #endif
@@ -4504,6 +4510,11 @@ static inline const char *mg_health_reason_str(int reason) {
 
 #define MG_HEALTH_INIT() mg_health_init()
 extern size_t mg_print_crash_record(mg_pfn_t, void *, va_list *);
+// JSON memory statistics, suitable for %M. Non-FreeRTOS builds retain scalar
+// stack_used/stack_total. FreeRTOS builds report a stacks array with name, used,
+// and total. Used represents peak usage, requires
+// configUSE_TRACE_FACILITY=1, stacks is null if unavailable or allocation fails.
+extern size_t mg_print_mem_stats(mg_pfn_t, void *, va_list *);
 extern void mg_health_init(void);
 // Cloud connector API to https://mdash.net - device management cloud
 
