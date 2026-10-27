@@ -186,6 +186,7 @@ jobs:
       matrix:
         example:
           - path: esp32/uart-bridge
+          - path: esp32/minimal
     name: ${{ matrix.example.path }}
     env:
       GO: 0
