@@ -214,7 +214,12 @@ size_t mg_vxprintf(void (*out)(char, void *), void *param, const char *fmt,
         n++;
       } else if (c == 's') {
         char *p = va_arg(*ap, char *);
-        if (pr == ~0U) pr = p == NULL ? 0 : strlen(p);
+        if (p != NULL && pr != ~0U) {
+          for (j = 0; j < pr && p[j] != '\0'; j++) ;  // portable strnlen()
+          pr = j;
+        } else {
+          pr = p == NULL ? 0 : strlen(p);
+        }
         for (j = 0; !minus && pr < w && j + pr < w; j++)
           n += scpy(out, param, &pad, 1);
         n += scpy(out, param, p, pr);
