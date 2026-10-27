@@ -4484,13 +4484,15 @@ static void listdir(struct mg_connection *c, struct mg_http_message *hm,
 static bool uri2path(const char *r, struct mg_str uri, char *buf, size_t len) {
   struct mg_str k, v, part, s = mg_str(r), u = {NULL, 0}, d = u;
   size_t n;
+  bool matched = false;
   while (mg_span(s, &part, &s, ',')) {
     if (!mg_span(part, &k, &v, '=')) k = part, v = mg_str_n(NULL, 0);
     if (v.len == 0) v = k, k = mg_str("/"), u = k, d = v;
     if (uri.len < k.len) continue;
     if (mg_strcmp(k, mg_str_n(uri.buf, k.len)) != 0) continue;
-    u = k, d = v;
+    u = k, d = v, matched = true;
   }
+  if (!matched) return false;
   n = mg_snprintf(buf, len, "%.*s", (int) d.len, d.buf);
   if (len == 0 || n + 2 >= len) return false;  // Path overflow
   if (n > 0 && buf[n - 1] != '/') buf[n++] = '/', buf[n] = '\0';  // Add slash
