@@ -55,8 +55,35 @@ void mg_bsd_poll(struct mg_mgr *);
 #ifndef EPIPE
 #define EPIPE 32
 #endif
+#ifndef EOPNOTSUPP
+#define EOPNOTSUPP 95
+#endif
+#ifndef EISCONN
+#define EISCONN 106
+#endif
+#ifndef EDESTADDRREQ
+#define EDESTADDRREQ 121
+#endif
+#ifndef EMSGSIZE
+#define EMSGSIZE 90
+#endif
 #ifndef EPROTONOSUPPORT
 #define EPROTONOSUPPORT 93
+#endif
+
+#if defined(__DCC__)
+#pragma pack(1)
+#else
+#pragma pack(push, 1)
+#endif
+struct mg_bsd_udp_frame {
+  uint32_t ip;
+  uint16_t port, len;
+};
+#if defined(__DCC__)
+#pragma pack(0)
+#else
+#pragma pack(pop)
 #endif
 
 #if MG_ENABLE_BSD_PROTOTYPES

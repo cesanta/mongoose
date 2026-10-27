@@ -299,7 +299,11 @@ static long recv_raw(struct mg_connection *c, void *buf, size_t len) {
     union usa usa;
     socklen_t slen = tousa(&c->rem, &usa);
     n = recvfrom(FD(c), (char *) buf, len, 0, &usa.sa, &slen);
-    if (n > 0) tomgaddr(&usa, &c->rem, slen != sizeof(usa.sin));
+    if (n > 0) {
+      struct mg_addr rem;
+      tomgaddr(&usa, &rem, slen != sizeof(usa.sin));
+      c->rem = rem;
+    }
   } else {
     n = recv(FD(c), (char *) buf, len, MSG_NONBLOCKING);
   }
