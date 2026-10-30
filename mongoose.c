@@ -3626,6 +3626,92 @@ struct mg_fs mg_fs_posix = {p_stat,  p_list, p_open,   p_close,  p_read,
 
 
 
+#if MG_ENABLE_FREERTOS
+static size_t print_freertos_stacks(mg_pfn_t fn, void *arg, va_list *ap) {
+  size_t len = 0;
+#if configUSE_TRACE_FACILITY == 1
+  struct stack_stat {
+    char name[configMAX_TASK_NAME_LEN];
+    size_t total, free_min;
+  };
+  struct stack_stat *stacks = NULL;
+  TaskStatus_t *tasks = NULL;
+  size_t count;
+  bool ok = false;
+
+  // Keep task handles and names valid until the snapshot has been copied
+  vTaskSuspendAll();
+  count = (size_t) uxTaskGetNumberOfTasks();
+  if (count == 0) {
+    ok = true;
+  } else if (count <= SIZE_MAX / sizeof(*tasks) &&
+             count <= SIZE_MAX / sizeof(*stacks)) {
+    tasks = mg_calloc(count, sizeof(*tasks));
+    stacks = mg_calloc(count, sizeof(*stacks));
+    if (tasks != NULL && stacks != NULL &&
+        (size_t) uxTaskGetSystemState(tasks, (UBaseType_t) count, NULL) == count) {
+      for (size_t i = 0; i < count; i++) {
+        mg_snprintf(stacks[i].name, sizeof(stacks[i].name), "%s",
+                    tasks[i].pcTaskName);
+        stacks[i].total = (size_t) MG_HEALTH_TASK_STACK_TOTAL(tasks[i].xHandle);
+        stacks[i].free_min =
+            (size_t) tasks[i].usStackHighWaterMark * sizeof(StackType_t);
+      }
+      ok = true;
+    }
+  }
+  (void) xTaskResumeAll();
+  mg_free(tasks);
+
+  // Format after resuming the scheduler. No task-owned pointers are retained.
+  if (ok) {
+    len += mg_xprintf(fn, arg, "[");
+    for (size_t i = 0; i < count; i++) {
+      char used[32] = "null", total[32] = "null";
+      if (stacks[i].total > 0) {
+        mg_snprintf(total, sizeof(total), "%zu", stacks[i].total);
+        if (stacks[i].total >= stacks[i].free_min) {
+          mg_snprintf(used, sizeof(used), "%zu",
+                      stacks[i].total - stacks[i].free_min);
+        }
+      }
+      len += mg_xprintf(fn, arg, "%s{%m:%m,%m:%s,%m:%s}",
+                        i == 0 ? "" : ",", MG_ESC("name"),
+                        MG_ESC(stacks[i].name), MG_ESC("used"), used,
+                        MG_ESC("total"), total);
+    }
+    len += mg_xprintf(fn, arg, "]");
+  } else {
+    len += mg_xprintf(fn, arg, "null");
+  }
+  mg_free(stacks);
+#else
+  len += mg_xprintf(fn, arg, "null");
+#endif
+  (void) ap;
+  return len;
+}
+#endif
+
+size_t mg_print_mem_stats(mg_pfn_t fn, void *arg, va_list *ap) {
+  size_t len;
+#if MG_ENABLE_FREERTOS
+  size_t heap_used = (size_t) MG_HEALTH_HEAP_USED;
+  size_t heap_total = (size_t) MG_HEALTH_HEAP_TOTAL;
+  len = mg_xprintf(fn, arg, "{%m:%zu,%m:%zu,%m:%M}",
+                   MG_ESC("heap_used"), heap_used, MG_ESC("heap_total"),
+                   heap_total, MG_ESC("stacks"), print_freertos_stacks);
+#else
+  len = mg_xprintf(fn, arg, "{%m:%zu,%m:%zu,%m:%zu,%m:%zu}",
+                   MG_ESC("stack_used"), (size_t) MG_HEALTH_STACK_USED,
+                   MG_ESC("stack_total"), (size_t) MG_HEALTH_STACK_TOTAL,
+                   MG_ESC("heap_used"), (size_t) MG_HEALTH_HEAP_USED,
+                   MG_ESC("heap_total"), (size_t) MG_HEALTH_HEAP_TOTAL);
+#endif
+  (void) ap;
+  return len;
+}
+
 // The one health record. Lives in RAM that survives a warm reset, see
 // MG_HEALTH_RAM and the .mg_health region in the linker script
 struct mg_health mg_health_record MG_HEALTH_RAM;
@@ -7349,6 +7435,10 @@ static void mg_mdash_rpc_get_info(struct mg_rpc_req *r) {
             MG_ESC("crash"), mg_print_crash_record);
 }
 
+static void mg_mdash_rpc_mem_stats(struct mg_rpc_req *r) {
+  mg_rpc_ok(r, "%M", mg_print_mem_stats);
+}
+
 static void mg_mdash_rpc_ota_begin(struct mg_rpc_req *r) {
   size_t total = (size_t) mg_json_get_long(r->frame, "$.params.size", -1);
   if (mg_ota_begin(total)) {
@@ -7394,6 +7484,7 @@ void mg_mdash_init(struct mg_mgr *mgr) {
   MG_INFO(("Initialising mdash agent, key [%s]", MG_MDASH_KEY));
   mg_rpc_add(&mgr->rpcs, mg_str("RPC.List"), mg_rpc_list, NULL);
   mg_rpc_add(&mgr->rpcs, mg_str("Sys.GetInfo"), mg_mdash_rpc_get_info, NULL);
+  mg_rpc_add(&mgr->rpcs, mg_str("Sys.MemStats"), mg_mdash_rpc_mem_stats, NULL);
   mg_rpc_add(&mgr->rpcs, mg_str("OTA.Begin"), mg_mdash_rpc_ota_begin, NULL);
   mg_rpc_add(&mgr->rpcs, mg_str("OTA.Write"), mg_mdash_rpc_ota_write, NULL);
   mg_rpc_add(&mgr->rpcs, mg_str("OTA.End"), mg_mdash_rpc_ota_end, NULL);

@@ -43,15 +43,15 @@ __attribute__((weak)) int _fstat(int fd, struct stat *st) {
 }
 
 extern unsigned char _end[];  // End of data section, start of heap. See link.ld
+extern unsigned char _estack[];  // Initial stack pointer. See link.ld
 static unsigned char *s_current_heap_end = _end;
 
-size_t hal_ram_used(void) {
-  return (size_t) (s_current_heap_end - _end);
+size_t hal_get_heap(void) {
+  return (size_t) ((uintptr_t) s_current_heap_end - (uintptr_t) _end);
 }
 
-size_t hal_ram_free(void) {
-  unsigned char endofstack;
-  return (size_t) (&endofstack - s_current_heap_end);
+size_t hal_get_stack(void) {
+  return (size_t) ((uintptr_t) _estack - (uintptr_t) __get_MSP());
 }
 
 void *_sbrk(int incr) {
