@@ -167,6 +167,7 @@ fail:
 #endif
 
 
+
 #include <stdarg.h>
 
 #if MG_ENABLE_BSD_SOCKETS && MG_ENABLE_FREERTOS
@@ -275,6 +276,57 @@ static struct mg_connection *bsd_new_conn(struct mg_bsd_sock *s) {
     LIST_ADD_HEAD(struct mg_connection, &s_mgr->conns, c);
   }
   return c;
+}
+
+// Mirror net_builtin.c::trim_len() logic
+static bool bsd_udp_too_big(struct mg_connection *c, size_t len) {
+  struct mg_tcpip_if *ifp = c->mgr->ifp;
+  size_t hlen = c->rem.is_ip6 ? 48 : 32;  // IP plus UDP headers
+  size_t cap = ifp->mtu - hlen;
+  size_t room = ifp->tx.len - (ifp->framesize - ifp->l2mtu) - hlen;
+
+  return len > cap || len > room;
+}
+
+static bool bsd_udp_send(struct mg_connection *c, uint32_t ip, uint16_t port,
+                         const void *buf, size_t len) {
+  struct mg_bsd_udp_frame *h;
+  size_t off = c->send.len, total = sizeof(*h) + len;
+
+  if (mg_iobuf_add(&c->send, off, NULL, total) != total) return false;
+  h = (struct mg_bsd_udp_frame *) (c->send.buf + off);
+  h->ip = ip;
+  h->port = port;
+  h->len = (uint16_t) len;
+  memcpy(h + 1, buf, len);
+  return true;
+}
+
+static size_t bsd_recv(struct mg_bsd_sock *s, void *buf, size_t len,
+                       int flags, struct sockaddr *src, socklen_t *addrlen) {
+  struct mg_connection *c = s->c;
+  size_t n;
+
+  if (!s->is_udp) {
+    n = c->recv.len < len ? c->recv.len : len;
+    memcpy(buf, c->recv.buf, n);
+    if (!(flags & MSG_PEEK)) mg_iobuf_del(&c->recv, 0, n);
+  } else {
+    struct mg_bsd_udp_frame *h = (struct mg_bsd_udp_frame *) c->recv.buf;
+    assert(c->recv.len >= sizeof(*h));
+    assert(h->len <= c->recv.len - sizeof(*h));
+    n = h->len < len ? h->len : len;
+    memcpy(buf, h + 1, n);
+    if (src != NULL && addrlen != NULL) {
+      struct sockaddr_in *sa = (struct sockaddr_in *) src;
+      sa->sin_family = AF_INET;
+      sa->sin_port = h->port;
+      sa->sin_addr.s_addr = h->ip;
+      *addrlen = sizeof(*sa);
+    }
+    if (!(flags & MSG_PEEK)) mg_iobuf_del(&c->recv, 0, sizeof(*h) + h->len);
+  }
+  return n;
 }
 
 #if MG_ENABLE_FREERTOS
@@ -457,9 +509,9 @@ static int bsd_ready(struct mg_bsd_sock *s) {
     return 0;
   }
   if (s->c->recv.len > 0 || s->c->is_draining) ready |= BSD_READ;
-  if (!s->is_udp && !s->c->is_connecting && !s->c->is_closing &&
+  if ((s->is_udp || !s->c->is_connecting) && !s->c->is_closing &&
       !s->c->is_draining)
-    ready |= BSD_WRITE;  // Established TCP socket
+    ready |= BSD_WRITE;  // UDP socket or established TCP socket
   return ready;
 }
 
@@ -473,7 +525,7 @@ static void bsd_close(struct mg_bsd_sock *s) {
     if (t->orphan && t->listener == s) {
       if (t->c != NULL) {
         t->c->fn_data = NULL;
-        mg_close_conn(t->c);
+        t->c->is_draining = 1;
         t->c = NULL;
       }
       memset(t, 0, sizeof(*t));  // Release orphan
@@ -481,7 +533,7 @@ static void bsd_close(struct mg_bsd_sock *s) {
   }
   if (s->c != NULL) {
     s->c->fn_data = NULL;
-    mg_close_conn(s->c);
+    s->c->is_draining = 1;
     s->c = NULL;
   }
   memset(s, 0, sizeof(*s));  // Release socket
@@ -660,8 +712,8 @@ static bool bsd_run(struct mg_bsd_cmd *cmd) {
         cmd->result = -1, cmd->err = ECONNREFUSED;
         return true;
       }
-      if (!c->is_connecting) {
-        cmd->result = 0;
+      if (s->is_udp || !c->is_connecting) {
+        cmd->result = 0;  // UDP may still resolve ARP; TCP waits for SYN/SYN-ACK
         return true;
       }
       if (s->nonblock) {
@@ -685,11 +737,8 @@ static bool bsd_run(struct mg_bsd_cmd *cmd) {
         return true;
       }
       if (c->recv.len > 0) {
-        size_t n = cmd->op_recv.len;
-        if (c->recv.len < n) n = c->recv.len;
-        memcpy(cmd->op_recv.buf, c->recv.buf, n);
-        if (!(cmd->op_recv.flags & MSG_PEEK)) mg_iobuf_del(&c->recv, 0, n);
-        cmd->result = (int) n;
+        cmd->result = (int) bsd_recv(s, cmd->op_recv.buf, cmd->op_recv.len,
+                                     cmd->op_recv.flags, NULL, NULL);
         return true;
       }
       if (s->err != 0) {
@@ -710,10 +759,17 @@ static bool bsd_run(struct mg_bsd_cmd *cmd) {
     case BSD_OP_SEND:
       if ((s = bsd_get(cmd->op_send.fd)) == NULL) {
         cmd->result = -1, cmd->err = EBADF;
-      } else if ((c = s->c) == NULL || s->err != 0 || c->is_closing ||
-                 c->is_draining) {
+      } else if (s->err != 0 || s->closed ||
+                 ((c = s->c) != NULL && (c->is_closing || c->is_draining))) {
         cmd->result = -1, cmd->err = EPIPE;
-      } else if (mg_send(c, cmd->op_send.buf, cmd->op_send.len)) {
+      } else if (c == NULL || (s->is_udp && !c->is_client)) {
+        cmd->result = -1, cmd->err = s->is_udp ? EDESTADDRREQ : EPIPE;
+      } else if (s->is_udp && bsd_udp_too_big(c, cmd->op_send.len)) {
+        cmd->result = -1, cmd->err = EMSGSIZE;
+      } else if ((s->is_udp ? bsd_udp_send(c, c->rem.addr.ip4, c->rem.port,
+                                            cmd->op_send.buf, cmd->op_send.len)
+                            : mg_send(c, cmd->op_send.buf,
+                                      cmd->op_send.len))) {
         cmd->result = (int) cmd->op_send.len;
       } else if (s->nonblock || (cmd->op_send.flags & MSG_DONTWAIT)) {
         cmd->result = -1, cmd->err = EAGAIN;
@@ -728,16 +784,20 @@ static bool bsd_run(struct mg_bsd_cmd *cmd) {
     case BSD_OP_SENDTO:
       if ((s = bsd_get(cmd->op_sendto.fd)) == NULL) {
         cmd->result = -1, cmd->err = EBADF;
+      } else if (!s->is_udp) {
+        cmd->result = -1, cmd->err = EOPNOTSUPP;
       } else if ((c = s->c) == NULL || s->err != 0 || c->is_closing ||
                  c->is_draining) {
         cmd->result = -1, cmd->err = EPIPE;
+      } else if (c->is_client) {
+        cmd->result = -1, cmd->err = EISCONN;
       } else {
         const struct sockaddr_in *sa =
             (const struct sockaddr_in *) cmd->op_sendto.addr;
-        c->rem.port = sa->sin_port;
-        c->rem.addr.ip4 = sa->sin_addr.s_addr;
-        c->rem.is_ip6 = false;
-        if (mg_send(c, cmd->op_sendto.buf, cmd->op_sendto.len)) {
+        if (bsd_udp_too_big(c, cmd->op_sendto.len)) {
+          cmd->result = -1, cmd->err = EMSGSIZE;
+        } else if (bsd_udp_send(c, sa->sin_addr.s_addr, sa->sin_port,
+                                cmd->op_sendto.buf, cmd->op_sendto.len)) {
           cmd->result = (int) cmd->op_sendto.len;
         } else if (s->nonblock || (cmd->op_sendto.flags & MSG_DONTWAIT)) {
           cmd->result = -1, cmd->err = EAGAIN;
@@ -754,6 +814,9 @@ static bool bsd_run(struct mg_bsd_cmd *cmd) {
       if ((s = bsd_get(cmd->op_recvfrom.fd)) == NULL) {
         cmd->result = -1, cmd->err = EBADF;
         return true;
+      } else if (!s->is_udp) {
+        cmd->result = -1, cmd->err = EOPNOTSUPP;
+        return true;
       }
       if ((c = s->c) == NULL) {
         cmd->result = s->closed && s->err == 0 ? 0 : -1;
@@ -761,18 +824,11 @@ static bool bsd_run(struct mg_bsd_cmd *cmd) {
         return true;
       }
       if (c->recv.len > 0) {
-        size_t n = cmd->op_recvfrom.len;
-        if (c->recv.len < n) n = c->recv.len;
-        memcpy(cmd->op_recvfrom.buf, c->recv.buf, n);
-        if (!(cmd->op_recvfrom.flags & MSG_PEEK)) mg_iobuf_del(&c->recv, 0, n);
-        if (cmd->op_recvfrom.src != NULL && cmd->op_recvfrom.addrlen != NULL) {
-          struct sockaddr_in *sa = (struct sockaddr_in *) cmd->op_recvfrom.src;
-          sa->sin_family = AF_INET;
-          sa->sin_port = c->rem.port;
-          sa->sin_addr.s_addr = c->rem.addr.ip4;
-          *cmd->op_recvfrom.addrlen = sizeof(*sa);
-        }
-        cmd->result = (int) n;
+        cmd->result = (int) bsd_recv(s, cmd->op_recvfrom.buf,
+                                     cmd->op_recvfrom.len,
+                                     cmd->op_recvfrom.flags,
+                                     cmd->op_recvfrom.src,
+                                     cmd->op_recvfrom.addrlen);
         return true;
       }
       if (s->err != 0) {
@@ -9274,6 +9330,36 @@ static void l2addr_resolved(struct mg_connection *c);
 static uint8_t *get_return_l2addr(struct mg_tcpip_if *ifp, struct mg_addr *rem,
                                   bool is_udp, struct pkt *pkt);
 
+#if MG_ENABLE_BSD_SOCKETS
+static uint8_t *sendto_cache_find(struct mg_tcpip_if *ifp, uint32_t ip) {
+  struct mg_tcpip_sendto_entry *a;
+  for (a = ifp->sendto; a < ifp->sendto + MG_TCPIP_SENDTO_CACHE_SIZE; a++) {
+    if (a->ip == ip) return (uint8_t *) &a->addr;
+  }
+  return NULL;
+}
+
+static void sendto_cache_add(struct mg_tcpip_if *ifp, uint32_t ip,
+                             const uint8_t *addr) {
+  struct mg_tcpip_sendto_entry *a;
+  for (a = ifp->sendto; a < ifp->sendto + MG_TCPIP_SENDTO_CACHE_SIZE; a++) {
+    if (a->ip == ip) return;  // already cached, skip
+    if (a->ip == 0) break;    // not present, first empty slot
+  }
+  if (a == ifp->sendto + MG_TCPIP_SENDTO_CACHE_SIZE) { // no room
+    memmove(ifp->sendto, ifp->sendto + 1,
+            sizeof(ifp->sendto[0]) * (MG_TCPIP_SENDTO_CACHE_SIZE - 1));
+    a--; // make room and point to last entry (just made)
+  }
+  a->ip = ip; // populate this entry
+  memcpy(&a->addr, addr, sizeof(a->addr));
+}
+
+static void sendto_cache_clear(struct mg_tcpip_if *ifp) {
+  memset(ifp->sendto, 0, sizeof(ifp->sendto));
+}
+#endif
+
 // RFC826, ARP assumes Ethernet MAC addresses
 static void rx_arp(struct mg_tcpip_if *ifp, struct pkt *pkt) {
   if (pkt->arp->op == mg_htons(1) && pkt->arp->tpa == ifp->ip) {
@@ -9880,30 +9966,57 @@ static void proto_error(struct mg_connection *c, bool r, const char *f, ...) {
 static bool rx_udp(struct mg_tcpip_if *ifp, struct pkt *pkt) {
   struct mg_connection *c = getpeer(ifp->mgr, pkt, true);
   struct connstate *s;
+  struct mg_addr rem;
   uint8_t *l2addr;
+  size_t len = pkt->pay.len;
   if (c == NULL) return false;  // No UDP listener on this port
   s = (struct connstate *) (c + 1);
-  c->rem.port = pkt->udp->sport;
 #if MG_ENABLE_IPV6
   if (c->loc.is_ip6) {  // matching of v4/v6 to dest is done bt getpeer()
     if (!udp6csum_ok(pkt->ip6, pkt->udp)) return false;
-    c->rem.addr.ip6[0] = pkt->ip6->src[0],
-    c->rem.addr.ip6[1] = pkt->ip6->src[1], c->rem.is_ip6 = true;
+    if (c->is_bsd && c->is_client &&
+        (c->rem.port != pkt->udp->sport ||
+         !MG_IP6MATCH(c->rem.addr.ip6, pkt->ip6->src)))
+      return true;
+    rem.addr.ip6[0] = pkt->ip6->src[0],
+    rem.addr.ip6[1] = pkt->ip6->src[1], rem.is_ip6 = true;
   } else
 #endif
   {
     if (!udpcsum_ok(pkt->ip, pkt->udp)) return false;
-    c->rem.addr.ip4 = pkt->ip->src;
+    if (c->is_bsd && c->is_client &&
+        (c->rem.port != pkt->udp->sport || c->rem.addr.ip4 != pkt->ip->src))
+      return true;
+    rem.addr.ip4 = pkt->ip->src, rem.is_ip6 = false;
   }
-  if ((l2addr = get_return_l2addr(ifp, &c->rem, true, pkt)) == NULL)
+  rem.port = pkt->udp->sport;
+  if (!c->is_bsd || c->is_client) c->rem = rem;
+  if ((l2addr = get_return_l2addr(ifp, &rem, true, pkt)) == NULL)
     return false;  // safety net for lousy networks
-  memcpy(s->mac, l2addr, sizeof(s->mac));
+  if (!c->is_bsd || c->is_client) memcpy(s->mac, l2addr, sizeof(s->mac));
+#if MG_ENABLE_BSD_SOCKETS
+  if (c->is_bsd && !rem.is_ip6 && MG_IPISLOCAL(ifp, rem.addr.ip4))
+    sendto_cache_add(ifp, rem.addr.ip4, l2addr);
+#endif
+#if MG_ENABLE_BSD_SOCKETS
+  if (c->is_bsd) len += sizeof(struct mg_bsd_udp_frame);
+#endif
   if (c->recv.len >= MG_MAX_RECV_SIZE) {
     proto_error(c, false, "max_recv_buf_size reached");
-  } else if (c->recv.size - c->recv.len < pkt->pay.len &&
-             !mg_iobuf_resize(&c->recv, c->recv.len + pkt->pay.len)) {
+  } else if (c->recv.size - c->recv.len < len &&
+             !mg_iobuf_resize(&c->recv, c->recv.len + len)) {
     proto_error(c, false, "oom");
   } else {
+#if MG_ENABLE_BSD_SOCKETS
+    if (c->is_bsd) {
+      struct mg_bsd_udp_frame *h =
+          (struct mg_bsd_udp_frame *) &c->recv.buf[c->recv.len];
+      h->ip = rem.addr.ip4;
+      h->port = rem.port;
+      h->len = (uint16_t) pkt->pay.len;
+      c->recv.len += sizeof(*h);
+    }
+#endif
     memcpy(&c->recv.buf[c->recv.len], pkt->pay.buf, pkt->pay.len);
     c->recv.len += pkt->pay.len;
     mg_call(c, MG_EV_READ, &pkt->pay.len);
@@ -10959,6 +11072,9 @@ void mg_tcpip_init(struct mg_mgr *mgr, struct mg_tcpip_if *ifp) {
 
 static void close_conn(struct mg_connection *c) {
   struct connstate *s = (struct connstate *) (c + 1);
+#if MG_ENABLE_BSD_SOCKETS
+  if (c->is_bsd && c->is_udp) sendto_cache_clear(c->mgr->ifp);
+#endif
   mg_iobuf_free(&s->txq);
   mg_close_conn(c);
 }
@@ -10980,6 +11096,11 @@ static void send_syn(struct mg_connection *c) {
 static void l2addr_resolved(struct mg_connection *c) {
   if (c->is_udp) {
     c->is_connecting = 0;
+#if MG_ENABLE_BSD_SOCKETS
+    if (c->is_bsd)
+      sendto_cache_add(c->mgr->ifp, c->rem.addr.ip4,
+                       ((struct connstate *) (c + 1))->mac);
+#endif
     mg_call(c, MG_EV_CONNECT, NULL);
   } else {
     send_syn(c);
@@ -10994,20 +11115,25 @@ void mg_connect_resolved(struct mg_connection *c) {
   s->retransmit = ifp->enable_tcp_retransmit;
   s->txq.align = MG_TCPIP_TXQ_ALIGN;
   c->is_resolving = 0;
-  if (ifp->eport < MG_EPHEMERAL_PORT_BASE) ifp->eport = MG_EPHEMERAL_PORT_BASE;
-  c->loc.port = mg_htons(ifp->eport++);
+  if (c->loc.port == 0) {
+    if (ifp->eport < MG_EPHEMERAL_PORT_BASE)
+      ifp->eport = MG_EPHEMERAL_PORT_BASE;
+    c->loc.port = mg_htons(ifp->eport++);
+  }  // otherwise retain an existing bound port
 #if MG_ENABLE_IPV6
   if (c->rem.is_ip6) {
-    if (c->rem.addr.ip6[0] == ifp->ip6ll[0]) {  // same local LAN, use ll
+    if (c->loc.addr.ip6[0] == 0 && c->loc.addr.ip6[1] == 0 &&
+        c->rem.addr.ip6[0] == ifp->ip6ll[0]) {  // same local LAN, use ll
       c->loc.addr.ip6[0] = ifp->ip6ll[0], c->loc.addr.ip6[1] = ifp->ip6ll[1];
-    } else {  // use global address
+    } else if (c->loc.addr.ip6[0] == 0 && c->loc.addr.ip6[1] == 0) {
+      // Use global address
       c->loc.addr.ip6[0] = ifp->ip6[0], c->loc.addr.ip6[1] = ifp->ip6[1];
-    }
+    } // otherwise retain an existing bound address
     c->loc.is_ip6 = true;
   } else
 #endif
   {
-    c->loc.addr.ip4 = ifp->ip;
+    if (c->loc.addr.ip4 == 0) c->loc.addr.ip4 = ifp->ip;
   }
   MG_DEBUG(("%lu %M -> %M", c->id, mg_print_ip_port, &c->loc, mg_print_ip_port,
             &c->rem));
@@ -11038,11 +11164,20 @@ void mg_connect_resolved(struct mg_connection *c) {
     uint32_t rem_ip = c->rem.addr.ip4;
     if (ifp->ip && MG_IPISLOCAL(ifp, rem_ip) &&
         rem_ip != ifp->gw) {  // skip if gw (onstatechange -> ARP)
-      // If we're in the same LAN, fire an ARP lookup.
-      MG_DEBUG(("%lu ARP lookup...", c->id));
-      mg_tcpip_arp_request(ifp, rem_ip, NULL);
-      settmout(c, MIP_TTYPE_ARP);
-      c->is_arplooking = 1;
+        // We're in the same LAN
+#if MG_ENABLE_BSD_SOCKETS
+      if (c->is_bsd && c->is_udp && // see if we already have L2 data
+          (l2addr = sendto_cache_find(ifp, rem_ip)) != NULL) {
+        memcpy(s->mac, l2addr, sizeof(s->mac));
+        l2addr_resolved(c);
+      } else
+#endif
+      {  // fire an ARP lookup
+        MG_DEBUG(("%lu ARP lookup...", c->id));
+        mg_tcpip_arp_request(ifp, rem_ip, NULL);
+        settmout(c, MIP_TTYPE_ARP);
+        c->is_arplooking = 1;
+      }
     } else if (ifp->gw_ready) {
       memcpy(s->mac, ifp->gwmac, sizeof(s->mac));
       l2addr_resolved(c);
@@ -11062,13 +11197,36 @@ bool mg_open_listener(struct mg_connection *c, const char *url) {
 }
 
 static void write_conn(struct mg_connection *c) {
-  long len = c->is_tls ? mg_tls_send(c, c->send.buf, c->send.len)
-                       : mg_io_send(c, c->send.buf, c->send.len);
+  long len;
+  size_t off = 0;
+  bool empty = false;
+#if MG_ENABLE_BSD_SOCKETS
+  struct mg_bsd_udp_frame *h;
+  if (c->is_bsd && c->is_udp) {
+    if (c->is_connecting) return;
+    h = (struct mg_bsd_udp_frame *) c->send.buf;
+    assert(c->send.len >= sizeof(*h));
+    assert(h->len <= c->send.len - sizeof(*h));
+    c->rem.port = h->port;
+    c->rem.is_ip6 = false;
+    if (!c->is_client && c->rem.addr.ip4 != h->ip) {
+      c->rem.addr.ip4 = h->ip;
+      mg_connect_resolved(c);
+      if (c->is_connecting) return;
+    }
+    len = mg_io_send(c, h + 1, h->len);
+    off = sizeof(*h), empty = h->len == 0;
+  } else
+#endif
+  {
+    len = c->is_tls ? mg_tls_send(c, c->send.buf, c->send.len)
+                    : mg_io_send(c, c->send.buf, c->send.len);
+  }
   // TODO(): mg_tls_send() may return 0 forever on steady OOM
   if (len == MG_IO_ERR) {
     proto_error(c, false, "tx err");
-  } else if (len > 0) {
-    mg_iobuf_del(&c->send, 0, (size_t) len);
+  } else if (len > 0 || empty) {
+    mg_iobuf_del(&c->send, 0, off + (size_t) len);
     mg_call(c, MG_EV_WRITE, &len);
   }
 }
@@ -15377,7 +15535,11 @@ static long recv_raw(struct mg_connection *c, void *buf, size_t len) {
     union usa usa;
     socklen_t slen = tousa(&c->rem, &usa);
     n = recvfrom(FD(c), (char *) buf, len, 0, &usa.sa, &slen);
-    if (n > 0) tomgaddr(&usa, &c->rem, slen != sizeof(usa.sin));
+    if (n > 0) {
+      struct mg_addr rem;
+      tomgaddr(&usa, &rem, slen != sizeof(usa.sin));
+      c->rem = rem;
+    }
   } else {
     n = recv(FD(c), (char *) buf, len, MSG_NONBLOCKING);
   }
