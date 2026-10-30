@@ -1475,6 +1475,11 @@ static void h4(struct mg_connection *c, int ev, void *ev_data) {
       opts.root_dir = "/a=./data";
       opts.page404 = "./data/404.html";  // existing 404 page
       mg_http_serve_dir(c, hm, &opts);
+    } else if (mg_match(hm->uri, mg_str("/unmapped"), NULL)) {
+      struct mg_http_serve_opts opts;
+      memset(&opts, 0, sizeof(opts));
+      opts.root_dir = "/a=./data";
+      mg_http_serve_dir(c, hm, &opts);
     } else if (mg_match(hm->uri, mg_str("/b/#"), NULL)) {
       struct mg_http_serve_opts opts;
       memset(&opts, 0, sizeof(opts));
@@ -1502,6 +1507,7 @@ static void test_http_404(void) {
   ASSERT(cmpbody(buf, "hello\n") == 0);
   ASSERT(fetch(&mgr, buf, url, "GET /a/a.txt HTTP/1.0\n\n") == 200);
   ASSERT(cmpbody(buf, "hello\n") == 0);
+  ASSERT(fetch(&mgr, buf, url, "GET /unmapped HTTP/1.0\n\n") == 400);
   ASSERT(fetch(&mgr, buf, url, "GET /b/a.txt HTTP/1.0\n\n") == 200);
   ASSERT(cmpbody(buf, "hello\n") == 0);
 
