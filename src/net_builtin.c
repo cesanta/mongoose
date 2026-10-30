@@ -734,6 +734,7 @@ static void rx_dhcp_client(struct mg_tcpip_if *ifp, struct pkt *pkt) {
                         : pkt->dhcp->siaddr ? pkt->dhcp->siaddr
                                             : pkt->ip->src);
     ifp->state = MG_TCPIP_STATE_REQ;  // REQUESTING state
+    ifp->lease_expire = ifp->now + 5000;  // No ACK by then: start over
   } else if (msgtype == 5) {          // DHCPACK
     if (ifp->state == MG_TCPIP_STATE_REQ && ip && gw && lease) {  // got an IP
       uint64_t rand;
@@ -2041,6 +2042,9 @@ static void mg_ip_poll(struct mg_tcpip_if *ifp, bool s1) {
   if (ifp->enable_dhcp_client && s1) {
     if (ifp->state == MG_TCPIP_STATE_UP) {
       tx_dhcp_discover(ifp);  // INIT (4.4.1)
+    } else if (ifp->state == MG_TCPIP_STATE_REQ &&
+               ifp->now >= ifp->lease_expire) {
+      ifp->state = MG_TCPIP_STATE_UP;  // REQUEST or ACK lost: DISCOVER again
     } else if (ifp->state == MG_TCPIP_STATE_READY &&
                ifp->lease_expire > 0) {  // BOUND / RENEWING / REBINDING
       if (ifp->now >= ifp->lease_expire) {

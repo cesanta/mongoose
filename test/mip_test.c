@@ -80,6 +80,10 @@ static void test_statechange(void) {
   onstatechange(&iface);
   ASSERT(executed == true);
   executed = false;
+  iface.enable_dhcp_client = true;  // DHCP REQUEST unanswered: start over
+  iface.state = MG_TCPIP_STATE_REQ, iface.lease_expire = 0;
+  mg_ip_poll(&iface, true);
+  ASSERT(iface.state == MG_TCPIP_STATE_UP);
 }
 #if MG_ENABLE_IPV6
 static void mif6_fn(struct mg_tcpip_if *ifp, int ev, void *ev_data) {
