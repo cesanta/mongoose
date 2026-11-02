@@ -2399,10 +2399,15 @@ static void test_str(void) {
   ASSERT(sn("%.*s", 1, "ab"));
   ASSERT(sn("%.1s", "ab"));
   ASSERT(sn("%.99s", "a"));
+  ASSERT(sn("%10.8s", "abc"));
+  ASSERT(sn("%-6.4s", "ab"));
+  ASSERT(sn("%5.1s", ""));
   ASSERT(sn("%11s", "a"));
   ASSERT(sn("%s", "a\0b"));
   ASSERT(sn("%2s", "a"));
   ASSERT(sn("%.*s", 3, "a\0b"));
+  ASSERT(mg_snprintf(NULL, 0, "%.8s", (char *) NULL) == 0);
+  ASSERT(mg_snprintf(NULL, 0, "%8.4s", (char *) NULL) == 8);
   ASSERT(sn("%d", 7));
   ASSERT(sn("%d", 123));
 #if MG_ARCH == MG_ARCH_UNIX
