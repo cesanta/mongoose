@@ -4109,6 +4109,8 @@ struct mg_dash {
   struct mg_fs *upload_fs;  // FS for uploads/listing, default &mg_fs_posix
   // Resolves the built-in file manager's root dir for user u, e.g. per-user
   // upload directories. NULL: file manager disabled
+  // - The returned directory must be nonempty and must not contain ',' or '=',
+  // because it is used as an mg_http_serve_opts::root_dir mapping target.
   bool (*files_dir)(const struct mg_dash_user *u, char *buf, size_t len);
 };
 
