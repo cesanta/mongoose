@@ -3,8 +3,12 @@
 
 #include "mongoose.h"
 
+#ifndef MQTT_SERVER_URL
 #define MQTT_SERVER_URL "mqtt://broker.hivemq.com:1883"
+#endif
+#ifndef MQTT_CLIENT_ID
 #define MQTT_CLIENT_ID "d3"
+#endif
 #define MQTT_USER MQTT_CLIENT_ID
 #define MQTT_PASS ""
 #define MQTT_PUBLISH_TOPIC "mg/" MQTT_CLIENT_ID "/tx"

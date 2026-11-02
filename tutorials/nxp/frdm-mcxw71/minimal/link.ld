@@ -33,6 +33,9 @@ SECTIONS {
     _ebss = .;
   } > sram
 
+  /* Health record, see MG_HEALTH_RAM: not cleared, survives a warm reset */
+  .mg_health (NOLOAD) : { KEEP(*(.mg_health .mg_health*)) } > sram
+
   . = ALIGN(8);
   _end = .;  /* Start of heap, see _sbrk() in hal.c */
 }

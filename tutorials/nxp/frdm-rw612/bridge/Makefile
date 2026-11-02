@@ -17,6 +17,7 @@ CFLAGS += -mcpu=cortex-m33+nodsp -mthumb -mfloat-abi=hard -mfpu=fpv5-sp-d16 $(CF
 LDFLAGS ?= -Tlink.ld -nostdlib -nostartfiles --specs=nano.specs -lc -lgcc -Wl,--gc-sections
 
 SOURCES = main.c hal.c radio.c startup.c flexspi.c flash_config.c $(MGDIR)/mongoose.c
+
 SOURCES += cmsis_rw612/devices/RW612/drivers/fsl_clock.c
 SOURCES += cmsis_rw612/devices/RW612/drivers/fsl_trng.c
 SOURCES += cmsis_rw612/devices/RW612/drivers/fsl_reset.c
@@ -35,8 +36,12 @@ firmware.bin: firmware.elf
 	arm-none-eabi-objcopy -O binary $< $@
 	arm-none-eabi-size --format=berkeley $<
 
-firmware.elf: cmsis_core cmsis_rw612 $(RADIO_FW) $(SOURCES) $(wildcard *.h) link.ld Makefile mongoose_config.h
+firmware.elf: cmsis_core cmsis_rw612 $(RADIO_FW) $(SOURCES) $(wildcard *.h) $(MGDIR)/mongoose.h link.ld Makefile mongoose_config.h mesh-config
 	arm-none-eabi-gcc $(SOURCES) $(CFLAGS) $(LDFLAGS) -o $@
+
+# Rebuild when overriding the board address or timing.
+.PHONY: mesh-config
+mesh-config:
 
 cmsis_core:
 	git clone -q -c advice.detachedHead=false --depth 1 -b 5.9.0 https://github.com/ARM-software/CMSIS_5 $@
@@ -56,7 +61,7 @@ show_symbols_sorted_by_size: firmware.bin
 	arm-none-eabi-readelf -sW firmware.elf | sed 1,3d | sed 's,^.*: ,,' | tr -s ' ' | cut -d ' ' -f 2,7 | sort -nk1 | grep -v '^0 '
 
 flash: firmware.bin
-	(echo 'loadfile firmware.elf'; echo 'reset'; echo 'exit';) | JLinkExe -device RW612 -if SWD -speed 4000 -autoconnect 1 -NoGui 1 -ExitOnError 1
+	(echo 'loadfile firmware.elf'; echo 'reset'; echo 'go'; echo 'exit';) | JLinkExe -device RW612 -if SWD -speed 4000 -autoconnect 1 -NoGui 1 -ExitOnError 1
 #	JRun --nogui --device RW612 --if SWD firmware.elf
 
 clean:

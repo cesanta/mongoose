@@ -9,7 +9,7 @@
 // 802.15.4 register setup. Then select the legacy 802.15.4 demodulator and
 // CCA from RX digital. See PhyHwInit() in NXP ieee_802_15_4 PHY sources,
 // PhyPacketProcessor.c
-bool hal_radio_init(void) {
+void hal_radio_init(void) {
   uint32_t stat = RFMC_RF2P4GHZ_STAT_RST_STAT_MASK |
                   RFMC_RF2P4GHZ_STAT_LP_ACK_STAT_MASK;
   size_t i, n = 1000000;
@@ -20,7 +20,10 @@ bool hal_radio_init(void) {
         RFMC_RF2P4GHZ_CTRL_RST_MASK);  // Release radio reset, no low power
   while ((RFMC->RF2P4GHZ_STAT & stat) != 0 ||
          (RFMC->XO_STAT & RFMC_XO_STAT_XTAL_RDY_MASK) == 0) {
-    if (--n == 0) return false;  // Radio did not wake up
+    if (--n == 0) {
+      MG_ERROR(("Radio init failed"));  // Radio did not wake up
+      return;
+    }
   }
   RADIO_CTRL->LL_CTRL = RADIO_CTRL_LL_CTRL_ACTIVE_LL_MASK;
   RFMC->RF2P4GHZ_CTRL |=
@@ -31,17 +34,17 @@ bool hal_radio_init(void) {
   XCVR_MISC->XCVR_CTRL &= ~XCVR_MISC_XCVR_CTRL_DEMOD_SEL_MASK;
   XCVR_MISC->XCVR_CTRL |= XCVR_MISC_XCVR_CTRL_DEMOD_SEL(2);
   XCVR_ZBDEMOD->CCA_LQI_SRC |= XCVR_ZBDEMOD_CCA_LQI_SRC_CCA1_FROM_RX_DIG(1);
-  return true;
 }
 
-// Random bytes for Mongoose, MG_ENABLE_CUSTOM_RANDOM. Entropy is radio noise:
-// receiver RSSI, sampled while the radio receives, mixed with SysTick by
-// SHA-256. Good enough for random addresses and nonces, not a certified TRNG
-bool mg_random(void *buf, size_t len) {
-  static uint32_t counter;
-  uint8_t digest[32], *p = (uint8_t *) buf;
+// Random 32 bits, for mg_random(). Entropy is radio noise: receiver RSSI,
+// sampled while the radio receives, mixed with SysTick by SHA-256. One hash
+// fills a pool of 8 words. Good enough for random addresses and nonces, not
+// a certified TRNG
+uint32_t hal_rng_read(void) {
+  static uint32_t counter, pool[8];
+  static size_t avail;
   size_t i, n;
-  while (len > 0) {
+  if (avail == 0) {
     mg_sha256_ctx ctx;
     mg_sha256_init(&ctx);
     counter++;
@@ -51,11 +54,10 @@ bool mg_random(void *buf, size_t len) {
       mg_sha256_update(&ctx, (uint8_t *) sample, sizeof(sample));
       for (n = 0; n < 50; n++) __NOP();  // Let the RSSI update
     }
-    mg_sha256_final(digest, &ctx);
-    n = len < sizeof(digest) ? len : sizeof(digest);
-    memcpy(p, digest, n), p += n, len -= n;
+    mg_sha256_final((uint8_t *) pool, &ctx);
+    avail = sizeof(pool) / sizeof(pool[0]);
   }
-  return true;
+  return pool[--avail];
 }
 
 // Added to minimise the bin size: avoid pulling printf and friends
@@ -79,6 +81,26 @@ void SysTick_Handler(void) {       // SyStick IRQ handler, triggered every 1ms
 
 uint64_t hal_get_tick(void) {
   return s_ticks;
+}
+
+uint64_t mg_micros(void);
+// SysTick runs at the core clock and reloads every millisecond. Sample
+// the tick counter and the sub-millisecond counter in one critical section.
+uint64_t mg_micros(void) {
+  uint32_t primask = __get_PRIMASK(), val, pending;
+  uint64_t ms;
+  __disable_irq();
+  ms = hal_get_tick();
+  pending = SCB->ICSR & SCB_ICSR_PENDSTSET_Msk;
+  val = SysTick->VAL;
+  if (pending != (SCB->ICSR & SCB_ICSR_PENDSTSET_Msk)) {
+    pending = SCB_ICSR_PENDSTSET_Msk;
+    val = SysTick->VAL;
+  }
+  __set_PRIMASK(primask);
+  if (pending != 0 && val != 0) ms++;
+  return ms * 1000 + ((uint64_t) (SysTick->LOAD - val) * 1000) /
+                         (SysTick->LOAD + 1);
 }
 
 uint32_t SystemCoreClock;

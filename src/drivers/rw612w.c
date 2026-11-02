@@ -1,7 +1,16 @@
 #include "net_builtin.h"
+#include "l2_mesh.h"
+#include "log.h"
 
-#if MG_ENABLE_TCPIP && defined(MG_ENABLE_DRIVER_RW612_154) && \
-    MG_ENABLE_DRIVER_RW612_154
+#if MG_ENABLE_TCPIP && defined(MG_ENABLE_DRIVER_RW612W) && \
+    MG_ENABLE_DRIVER_RW612W
+
+#include "sha256.h"
+
+#ifdef ENET
+#undef ENET
+#endif
+#include <fsl_ocotp.h>
 
 // The 802.15.4 radio runs NXP combo firmware on CPU2, an OpenThread RCP. We
 // are CPU3. Messages go through the IMU mailbox: IMU messages carry IMUMC
@@ -16,13 +25,13 @@ struct mg_rw612_imu {
 };
 #define MGI_IMU ((struct mg_rw612_imu *) 0x443ff804)       // CPU3 -> CPU2
 #define MGI_IMU_PEER ((struct mg_rw612_imu *) 0x443ff818)  // CPU2 -> CPU3
-#define MGI_IMU_LOCKED MG_BIT(0)          // STATUS: FIFO locked
-#define MGI_IMU_ALMOST_FULL MG_BIT(1)     // STATUS: FIFO almost full
-#define MGI_IMU_EMPTY MG_BIT(3)           // STATUS: FIFO empty
+#define MGI_IMU_LOCKED MG_BIT(0)       // STATUS: FIFO locked
+#define MGI_IMU_ALMOST_FULL MG_BIT(1)  // STATUS: FIFO almost full
+#define MGI_IMU_EMPTY MG_BIT(3)        // STATUS: FIFO empty
 #define MGI_IMU_WR_PTR(s) (((s) >> 16) & 15U)
-#define MGI_IMU_INT_CLR MG_BIT(0)         // CNTL: clear message ready IRQ
-#define MGI_IMU_FLUSH MG_BIT(16)          // CNTL: flush send FIFO
-#define MGI_IMU_WAIT_FOR_ACK MG_BIT(17)   // CNTL: lock send FIFO
+#define MGI_IMU_INT_CLR MG_BIT(0)        // CNTL: clear message ready IRQ
+#define MGI_IMU_FLUSH MG_BIT(16)         // CNTL: flush send FIFO
+#define MGI_IMU_WAIT_FOR_ACK MG_BIT(17)  // CNTL: lock send FIFO
 #define MGI_IMU_WATERMARK(x) ((uint32_t) (x) << 20)
 #define MGI_IMU_WATERMARK_MASK (15U << 20)
 
@@ -73,8 +82,10 @@ enum {
   MGI_PROP_NCP_VERSION = 2,
   MGI_PROP_PHY_ENABLED = 0x20,
   MGI_PROP_PHY_CHAN = 0x21,
+  MGI_PROP_SADDR = 0x35,  // Short address, little endian
   MGI_PROP_PANID = 0x36,
   MGI_PROP_RAW_STREAM = 0x37,
+  MGI_PROP_PROMISCUOUS = 0x38,
   MGI_PROP_STREAM_RAW = 0x71
 };
 #define MGI_RESET_STACK 2         // RESET argument: reset the RCP stack only
@@ -82,7 +93,6 @@ enum {
 #define MGI_STATUS_RESET_MAX 127
 #define MGI_TX_TIMEOUT_MS 200  // Wait for transmit done, incl. retries
 #define MGI_RSP_TIMEOUT_MS 500
-#define MGI_RXQ_CNT 16  // A whole Ethernet frame, 15 radio frames
 
 // Driver state, one radio
 struct mg_rw612 {
@@ -98,11 +108,13 @@ struct mg_rw612 {
   bool rsp;                 // Response to the pending request received
   uint32_t rsp_status;      // Its status, if LAST_STATUS, else 0
   char version[64];         // RCP version string
-  uint8_t rxq[MGI_RXQ_CNT][127];  // Received frames, no FCS
-  uint8_t rxlen[MGI_RXQ_CNT];     // Their lengths
-  uint8_t rxhead, rxtail;         // Queue indexes
+  bool txing;               // A send is on, see mg_rw612_start()
+  uint64_t txstart;         // Its start, ms
+  struct mg_tcpip_if *ifp;  // Our interface, for the L2 receive pool
 };
 static struct mg_rw612 s_rw612;
+static struct mg_queue s_rw612w_rx;
+static char s_rw612w_queue[2048];
 
 static void mg_rw612_imu_send(uint8_t type, uint8_t subtype,
                               const uint32_t *payload, uint8_t len) {
@@ -126,12 +138,15 @@ static void mg_rw612_control(uint8_t subtype, uint32_t a, uint32_t b,
 }
 
 static void mg_rw612_queue_rx(const uint8_t *frame, size_t len) {
-  struct mg_rw612 *s = &s_rw612;
-  uint8_t next = (uint8_t) ((s->rxhead + 1) % MGI_RXQ_CNT);
-  if (next == s->rxtail || len > sizeof(s->rxq[0])) return;  // Full: drop
-  memcpy(s->rxq[s->rxhead], frame, len);
-  s->rxlen[s->rxhead] = (uint8_t) len;
-  s->rxhead = next;
+  {
+    char *dst;
+    if (mg_queue_book(&s_rw612w_rx, &dst, len) >= len) {
+      memcpy(dst, frame, len);
+      mg_queue_add(&s_rw612w_rx, len);
+    } else {
+      s_rw612.ifp->ndrop++;
+    }
+  }
 }
 
 // Spinel packed unsigned integer: 7 bits per byte, LSB first
@@ -293,14 +308,13 @@ static bool mg_rw612_imumc_send(const uint8_t *p, size_t len) {
   return true;
 }
 
-// Send a Spinel frame, HDLC encoded, and wait for the response with the
-// same transaction ID. Return false on timeout
-static bool mg_rw612_request(uint8_t *f, size_t len, uint32_t timeout_ms) {
+// Send a Spinel frame, HDLC encoded, with a new transaction ID. Its
+// response sets rsp, see mg_rw612_spinel()
+static bool mg_rw612_post(uint8_t *f, size_t len) {
   struct mg_rw612 *s = &s_rw612;
   uint8_t buf[2 * 160 + 6];
   uint16_t fcs = 0xffff;
   size_t i, n = 0;
-  uint64_t expire = mg_millis() + timeout_ms;
   s->tid = (uint8_t) (s->tid % 15 + 1);
   f[0] = (uint8_t) (0x80 | s->tid);  // Header: flag, interface 0, TID
   s->rsp = false;
@@ -318,9 +332,15 @@ static bool mg_rw612_request(uint8_t *f, size_t len, uint32_t timeout_ms) {
     buf[n++] = c;
   }
   buf[n++] = 0x7e;
-  if (!mg_rw612_imumc_send(buf, n)) return false;
-  while (!s->rsp && mg_millis() < expire) mg_rw612_poll_imu();
-  return s->rsp;
+  return mg_rw612_imumc_send(buf, n);
+}
+
+// Send a Spinel frame and wait for its response. Return false on timeout
+static bool mg_rw612_request(uint8_t *f, size_t len, uint32_t timeout_ms) {
+  uint64_t expire = mg_millis() + timeout_ms;
+  if (!mg_rw612_post(f, len)) return false;
+  while (!s_rw612.rsp && mg_millis() < expire) mg_rw612_poll_imu();
+  return s_rw612.rsp;
 }
 
 static bool mg_rw612_set(uint32_t prop, const uint8_t *val, size_t len) {
@@ -338,27 +358,43 @@ static bool mg_rw612_fail(const char *msg) {
   return false;
 }
 
-static bool mg_rw612_154_init(struct mg_tcpip_if *ifp) {
+// Start one raw transmission. The RCP adds the FCS and reports completion.
+static size_t mgi_rw612w_radio_tx(struct mg_tcpip_if *ifp, const void *buf,
+                                  size_t len) {
+  uint8_t f[3 + 2 + 127 + 4];
+  size_t n = 3;
+  if (len > 125 || s_rw612.txing) return 0;
+  f[1] = MGI_CMD_SET, f[2] = MGI_PROP_STREAM_RAW;
+  f[n++] = (uint8_t) (len + 2), f[n++] = 0;  // PSDU length, incl. FCS
+  memcpy(f + n, buf, len), n += len;
+  f[n++] = 0, f[n++] = 0;  // FCS, filled in by the radio
+  (void) ifp;
+  f[n++] = MG_802154_CHANNEL;
+  f[n++] = 0;  // Max CSMA backoffs
+  f[n++] = 0;  // Max frame retries
+  f[n++] = 0;  // CSMA disabled for scheduled turns
+  if (!mg_rw612_post(f, n)) return 0;
+  s_rw612.txing = true, s_rw612.txstart = mg_millis();
+  return len;
+}
+
+static bool mgi_rw612w_radio_init(struct mg_tcpip_if *ifp) {
   struct mg_rw612 *s = &s_rw612;
-  struct mg_l2_802154_data *d =
-      (struct mg_l2_802154_data *) ifp->driver_data;
-  uint8_t f[8], one = 1, pan[2];
+  struct mg_tcpip_driver_rw612w_data *data = ifp->driver_data;
+  struct mg_mesh_node *node = data->mesh;
+  uint8_t f[8], one = 1, zero = 0, pan[2], addr[2], channel = MG_802154_CHANNEL;
   uint64_t expire;
-  if (d == NULL || d->channel < 11 || d->channel > 26) {
-    MG_ERROR(("Set driver_data, channel 11..26"));
-    return false;
-  }
   if (MGI_MBOX->magic[0] != MGI_SYNC_MAGIC) {
     MG_ERROR(("Radio firmware is not running on CPU2"));
     return false;
   }
   memset(s, 0, sizeof(*s));
-  s->free_bufs = 0xffff;
+  s->free_bufs = 0xffff, s->ifp = ifp;
   // Reset our send FIFO, drop stale messages. See IMU_Init()
   MGI_IMU->CNTL |= MGI_IMU_FLUSH;
   MGI_IMU->CNTL &= ~(MGI_IMU_FLUSH | MGI_IMU_WAIT_FOR_ACK);
-  MGI_IMU->CNTL = (MGI_IMU->CNTL & ~MGI_IMU_WATERMARK_MASK) |
-                  MGI_IMU_WATERMARK(15);
+  MGI_IMU->CNTL =
+      (MGI_IMU->CNTL & ~MGI_IMU_WATERMARK_MASK) | MGI_IMU_WATERMARK(15);
   while ((MGI_IMU_PEER->STATUS & MGI_IMU_EMPTY) == 0) (void) MGI_IMU->RD_MSG;
   // Synchronise the IMU link, then connect the IMUMC endpoints
   MGI_MBOX->magic[1] = MGI_SYNC_MAGIC;
@@ -385,10 +421,15 @@ static bool mg_rw612_154_init(struct mg_tcpip_if *ifp) {
   if (!mg_rw612_set(MGI_PROP_PHY_ENABLED, &one, 1)) {
     return mg_rw612_fail("PHY enable failed");
   }
-  pan[0] = (uint8_t) d->pan_id, pan[1] = (uint8_t) (d->pan_id >> 8);
-  if (!mg_rw612_set(MGI_PROP_PHY_CHAN, &d->channel, 1) ||
-      !mg_rw612_set(MGI_PROP_PANID, pan, 2)) {
-    return mg_rw612_fail("Channel or PAN ID set failed");
+  pan[0] = (uint8_t) MG_802154_PAN_ID;
+  pan[1] = (uint8_t) (MG_802154_PAN_ID >> 8);
+  addr[0] = (uint8_t) node->radio_address;
+  addr[1] = (uint8_t) (node->radio_address >> 8);
+  if (!mg_rw612_set(MGI_PROP_PHY_CHAN, &channel, 1) ||
+      !mg_rw612_set(MGI_PROP_PANID, pan, 2) ||
+      !mg_rw612_set(MGI_PROP_SADDR, addr, 2) ||
+      !mg_rw612_set(MGI_PROP_PROMISCUOUS, &zero, 1)) {
+    return mg_rw612_fail("Channel, PAN ID or address set failed");
   }
   if (!mg_rw612_set(MGI_PROP_RAW_STREAM, &one, 1)) {
     return mg_rw612_fail("Raw stream enable failed");
@@ -396,55 +437,77 @@ static bool mg_rw612_154_init(struct mg_tcpip_if *ifp) {
   return true;
 }
 
-// Send one radio frame: MAC header and payload, no FCS
-static size_t mg_rw612_send(const uint8_t *p, size_t len,
+static size_t mgi_rw612w_tx(const void *buf, size_t len,
                             struct mg_tcpip_if *ifp) {
-  struct mg_l2_802154_data *d =
-      (struct mg_l2_802154_data *) ifp->driver_data;
-  uint8_t f[3 + 2 + 127 + 4];
-  size_t n = 3;
-  f[1] = MGI_CMD_SET, f[2] = MGI_PROP_STREAM_RAW;
-  f[n++] = (uint8_t) (len + 2), f[n++] = 0;  // PSDU length, incl. FCS
-  memcpy(f + n, p, len), n += len;
-  f[n++] = 0, f[n++] = 0;  // FCS, filled in by the radio
-  f[n++] = d->channel;
-  f[n++] = 4;  // Max CSMA backoffs
-  f[n++] = 0;  // Max frame retries: broadcast frames are not acknowledged
-  f[n++] = 1;  // CSMA-CA enabled
-  if (!mg_rw612_request(f, n, MGI_TX_TIMEOUT_MS)) {
-    MG_ERROR(("TX timeout"));
-    return 0;
-  }
-  if (s_rw612.rsp_status != 0) {
-    MG_VERBOSE(("TX failed, status %lu", (unsigned long) s_rw612.rsp_status));
-    return 0;
-  }
+  struct mg_tcpip_driver_rw612w_data *data = ifp->driver_data;
+  return data->mesh->strategy->tx(data->mesh, buf, len);
+}
+
+static size_t mgi_rw612w_rx(void *buf, size_t cap, struct mg_tcpip_if *ifp) {
+  struct mg_tcpip_driver_rw612w_data *data = ifp->driver_data;
+  size_t len = data->mesh->rx_len;
+  if (len > cap) return 0;
+  if (len != 0 && buf != ifp->recv_queue.buf)
+    memcpy(buf, ifp->recv_queue.buf, len);
+  data->mesh->rx_len = 0;
   return len;
 }
 
-static size_t mg_rw612_154_tx(const void *buf, size_t len,
-                              struct mg_tcpip_if *ifp) {
-  return mg_l2_802154_tx(ifp, buf, len, mg_rw612_send);
-}
-
-static size_t mg_rw612_154_rx(void *buf, size_t len, struct mg_tcpip_if *ifp) {
-  struct mg_rw612 *s = &s_rw612;
-  size_t res = 0;
+static bool mgi_rw612w_poll(struct mg_tcpip_if *ifp, bool s1) {
+  struct mg_tcpip_driver_rw612w_data *data = ifp->driver_data;
+  struct mg_mesh_node *node = data->mesh;
+  uint64_t now = mg_micros();
+  char *buf;
+  size_t len;
+  (void) s1;
+  bool was_sending = s_rw612.txing;
   mg_rw612_poll_imu();
-  while (s->rxtail != s->rxhead && res == 0) {
-    res = mg_l2_802154_rx(ifp, s->rxq[s->rxtail], s->rxlen[s->rxtail], buf,
-                          len);
-    s->rxtail = (uint8_t) ((s->rxtail + 1) % MGI_RXQ_CNT);
+  if (s_rw612.txing &&
+      (s_rw612.rsp || mg_millis() > s_rw612.txstart + MGI_TX_TIMEOUT_MS)) {
+    if (!s_rw612.rsp) MG_ERROR(("TX timeout"));
+    s_rw612.txing = false;
   }
-  return res;
+  if (was_sending && !s_rw612.txing)
+    node->tx_at = now + node->strategy->radio->ifs_us;
+  node->now = now;
+  while (node->rx_len == 0 && (len = mg_queue_next(&s_rw612w_rx, &buf)) != 0) {
+    node->strategy->rx(node, buf, len);
+    mg_queue_del(&s_rw612w_rx, len);
+  }
+  node->strategy->tick(node, now);
+  return node->joined;
 }
 
-static bool mg_rw612_154_poll(struct mg_tcpip_if *ifp, bool s1) {
-  (void) ifp, (void) s1;
-  return s_rw612.up;
+static bool mgi_rw612w_init(struct mg_tcpip_if *ifp) {
+  struct mg_tcpip_driver_rw612w_data *data = ifp->driver_data;
+  const struct mg_mesh *strategy = data->strategy;
+  uint8_t uid[FSL_OCOTP_UID_LENGTH] = {0}, digest[32];
+  uint32_t uid_len = sizeof(uid);
+  uint16_t address;
+  OCOTP_ReadUniqueID(uid, &uid_len);
+  mg_sha256(digest, uid, sizeof(uid));
+  memcpy(ifp->mac, digest, 6);
+  ifp->mac[0] = 0x02;
+  address =
+      (uint16_t) (2 + ((unsigned) ifp->mac[4] * 256 + ifp->mac[5]) % 65532u);
+  if (strategy == NULL) strategy = &mg_mesh_default;
+  data->mesh = calloc(1, sizeof(*data->mesh));
+  if (data->mesh == NULL) return false;
+  if (!strategy->init(data->mesh, ifp, NULL, address)) {
+    free(data->mesh);
+    data->mesh = NULL;
+    return false;
+  }
+  data->mesh->strategy = strategy;
+  data->mesh->tx = mgi_rw612w_radio_tx;
+  mg_queue_init(&s_rw612w_rx, s_rw612w_queue, sizeof(s_rw612w_queue));
+  if (mgi_rw612w_radio_init(ifp)) return true;
+  strategy->free(data->mesh);
+  free(data->mesh);
+  data->mesh = NULL;
+  return false;
 }
 
-struct mg_tcpip_driver mg_tcpip_driver_rw612_154 = {
-    mg_rw612_154_init, mg_rw612_154_tx, mg_rw612_154_rx, mg_rw612_154_poll};
-
+struct mg_tcpip_driver mg_tcpip_driver_rw612w = {
+    mgi_rw612w_init, mgi_rw612w_tx, mgi_rw612w_rx, mgi_rw612w_poll};
 #endif

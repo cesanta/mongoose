@@ -96,7 +96,7 @@ int main(void) {
   hal_gpio_write(LED2, true);
   hal_gpio_output(LED3);
   hal_gpio_write(LED3, true);
-  hal_uart_init(UART_DEBUG, 115200);
+  hal_uart_init(UART_DEBUG, 115200, PIN(0, 26), PIN(0, 24));
   mg_log_set_fn(log_fn, UART_DEBUG);
 
   hal_ethernet_init();

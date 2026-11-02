@@ -4750,41 +4750,11 @@ extern struct mg_tcpip_driver mg_tcpip_driver_nxp_wifi;
 extern struct mg_tcpip_driver mg_tcpip_driver_st67w6;
 extern struct mg_tcpip_driver mg_tcpip_driver_atcmd;
 extern struct mg_tcpip_driver mg_tcpip_driver_netc;
-extern struct mg_tcpip_driver mg_tcpip_driver_mcxw71;
-extern struct mg_tcpip_driver mg_tcpip_driver_rw612_154;
 
-// IEEE 802.15.4 radio channel and PAN ID. Settable in mongoose_config.h
-#ifndef MG_L2_802154_CHANNEL
-#define MG_L2_802154_CHANNEL 15  // 11..26
-#endif
-#ifndef MG_L2_802154_PAN_ID
-#define MG_L2_802154_PAN_ID 0xabcd
-#endif
 
-// driver_data for IEEE 802.15.4 radio drivers. The interface is Ethernet:
-// each Ethernet frame is split into broadcast radio frames, and reassembled
-// on the other side, see mg_l2_802154_tx() and mg_l2_802154_rx()
-struct mg_l2_802154_data {
-  uint8_t channel;        // User-set channel, 11..26
-  uint16_t pan_id;        // User-set PAN ID
-  uint8_t seq, tag;       // MAC sequence number, tag of the last sent frame
-  uint8_t rxtag, rxnext;  // Frame being reassembled: tag, next fragment
-  uint8_t rxsrc[8];       // Its sender
-  uint16_t rxlen;         // Its bytes received so far
-  uint8_t rxbuf[1514];    // Reassembly buffer, one Ethernet frame
-};
 
-// Splits an Ethernet frame into radio frames, sends each by calling send().
-// Called by radio drivers' tx(). Return len, or 0 on error
-size_t mg_l2_802154_tx(struct mg_tcpip_if *ifp, const void *buf, size_t len,
-                       size_t (*send)(const uint8_t *, size_t,
-                                      struct mg_tcpip_if *));
 
-// Adds a received radio frame f of n bytes to the frame being reassembled.
-// Called by radio drivers' rx(). Return the Ethernet frame length, copied to
-// buf, when it is complete, otherwise 0
-size_t mg_l2_802154_rx(struct mg_tcpip_if *ifp, const uint8_t *f, size_t n,
-                       void *buf, size_t len);
+
 
 // SPI bus abstraction for SPI-attached network chips (e.g. W5500).
 // Populate and assign to the driver's driver_data field.
@@ -4836,6 +4806,86 @@ struct mg_tcpip_spi {
 #ifndef MG_ETH_RAM
 #define MG_ETH_RAM
 #endif
+
+#endif
+// Copyright (c) 2026 Cesanta Software Limited
+// All rights reserved
+//
+// Ethernet over radio, through a mesh. Mongoose sees an Ethernet interface,
+// the mesh splits Ethernet frames into radio frames. Two parts plug in:
+// - struct mg_radio: a radio standard, e.g. mg_radio_802154
+// - struct mg_mesh: how the mesh is built and routed
+
+
+
+
+
+#if MG_ENABLE_TCPIP
+
+// Monotonic time in microseconds.
+uint64_t mg_micros(void);
+
+// A radio standard
+struct mg_radio {
+  const char *name;        // For logs
+  size_t max_frame_size;   // Largest radio frame, bytes
+  uint32_t bitrate;        // Bits per second on air
+  size_t overhead;         // Bytes on air besides the frame: preamble, FCS
+  uint32_t slot_us;        // Random backoff slot duration, us
+  uint32_t cca_us;         // Channel sensing duration, us
+  uint32_t turnaround_us;  // Idle check to transmission start, us
+  uint32_t ifs_us;         // Inter-frame spacing in us: gap between transmits
+  uint8_t backoff_min;     // Initial backoff exponent
+  uint8_t backoff_max;     // Maximum backoff exponent
+  bool csma;               // Use channel sensing and backoff before TX
+  size_t header_len;       // Radio hardware header length
+  // Write the radio header, with 0xffff as the broadcast address.
+  void (*print_hdr)(const struct mg_radio *radio, uint8_t *buf, uint16_t dst,
+                    uint16_t src);
+  // Return the parsed header length, or zero for an invalid header.
+  size_t (*parse_hdr)(const struct mg_radio *radio, const uint8_t *buf,
+                      size_t len, uint16_t *dst, uint16_t *src);
+};
+
+#define MG_802154_HEADER_LEN 9   // MAC header, short addresses
+#define MG_802154_PAN_ID 0xabcd  // Our network's PAN ID
+
+#ifndef MG_802154_CHANNEL
+#define MG_802154_CHANNEL 15
+#endif
+
+extern const struct mg_radio mg_radio_802154;
+
+struct mg_mesh_node {
+  struct mg_tcpip_if *radio;       // Owning radio driver interface
+  struct mg_tcpip_if *lan;         // Bridge LAN interface, NULL for a client
+  const struct mg_mesh *strategy;  // Selected strategy
+  size_t (*tx)(struct mg_tcpip_if *, const void *, size_t);  // Radio frame TX
+  size_t rx_len;           // Complete Ethernet frame in the interface RX buffer
+  uint64_t now;            // Current driver poll time, us
+  uint64_t tx_at;          // Earliest next transmission, us
+  void *data;              // Private state owned by the strategy
+  size_t ram_used;         // Live mesh state bytes
+  size_t ram_peak;         // Peak live mesh state bytes
+  uint64_t next_tick;      // Next deadline in us, or UINT64_MAX
+  uint16_t radio_address;  // Local address supplied by the radio
+  bool joined;             // Client is a member of the mesh
+};
+
+struct mg_mesh {
+  const char *name;
+  bool (*init)(struct mg_mesh_node *node, struct mg_tcpip_if *radio,
+               struct mg_tcpip_if *lan, uint16_t radio_address);
+  void (*tick)(struct mg_mesh_node *node, uint64_t now_microseconds);
+  void (*free)(struct mg_mesh_node *node);
+  size_t (*tx)(struct mg_mesh_node *, const void *, size_t);  // ETH frame TX
+  void (*rx)(struct mg_mesh_node *, void *, size_t);          // Radio frame RX
+  bool single_bridge;            // Require exactly one bridge
+  bool scheduled_tx;             // The mesh schedules transmission turns
+  const struct mg_radio *radio;  // Radio configuration for this strategy
+};
+
+extern const struct mg_mesh mg_mesh_default;
 
 #endif
 
@@ -5181,29 +5231,73 @@ struct mg_tcpip_driver_imxrt_data {
   } while (0)
 
 #endif
+// Copyright (c) 2026 Cesanta Software Limited
+// All rights reserved
+
 
 
 #if MG_ENABLE_TCPIP && defined(MG_ENABLE_DRIVER_MCXW71) && \
     MG_ENABLE_DRIVER_MCXW71
 
-// NXP MCXW71 IEEE 802.15.4 radio, ZLL link layer, as an Ethernet interface:
-// Ethernet frames are split into radio frames, see mg_l2_802154_tx().
-// The transceiver (XCVR) must be set up for 802.15.4 before mg_tcpip_init(),
-// see hal_radio_init() in the FRDM-MCXW71 tutorial.
-// driver_data: struct mg_l2_802154_data, channel and PAN ID set
+struct mg_tcpip_driver_mcxw71_data {
+  struct mg_mesh_node *mesh;       // Driver-owned runtime state
+  const struct mg_mesh *strategy;  // NULL selects mg_mesh_default
+};
 
-#define MG_TCPIP_DRIVER_INIT(mgr)                                    \
-  do {                                                               \
-    static struct mg_l2_802154_data driver_data_;                  \
-    static struct mg_tcpip_if mif_;                                  \
-    driver_data_.channel = MG_L2_802154_CHANNEL;                   \
-    driver_data_.pan_id = MG_L2_802154_PAN_ID;                     \
-    mif_.driver = &mg_tcpip_driver_mcxw71;                           \
-    mif_.driver_data = &driver_data_;                                \
-    MG_SET_MAC_ADDRESS(mif_.mac);                                    \
-    mg_tcpip_init(mgr, &mif_);                                       \
-    MG_INFO(("Driver: mcxw71, channel %d", MG_L2_802154_CHANNEL)); \
+extern struct mg_tcpip_driver mg_tcpip_driver_mcxw71;
+
+#define MG_TCPIP_DRIVER_MCXW71_INIT(manager)                      \
+  do {                                                            \
+    static struct mg_tcpip_driver_mcxw71_data driver_data_;       \
+    static struct mg_tcpip_if mif_;                               \
+    MG_SET_MAC_ADDRESS(mif_.mac);                                 \
+    mif_.ip = MG_TCPIP_IP;                                        \
+    mif_.mask = MG_TCPIP_MASK;                                    \
+    mif_.gw = MG_TCPIP_GW;                                        \
+    mif_.mgr = (manager);                                         \
+    mif_.driver = &mg_tcpip_driver_mcxw71;                        \
+    mif_.driver_data = &driver_data_;                             \
+    mg_tcpip_init((manager), &mif_);                              \
+    MG_INFO(("Driver: mcxw71, MAC: %M", mg_print_mac, mif_.mac)); \
   } while (0)
+
+#ifndef MG_TCPIP_DRIVER_INIT
+#define MG_TCPIP_DRIVER_INIT(x) MG_TCPIP_DRIVER_MCXW71_INIT(x)
+#endif
+
+#endif
+// Copyright (c) 2026 Cesanta Software Limited
+// All rights reserved
+
+
+
+#if MG_ENABLE_TCPIP && defined(MG_ENABLE_DRIVER_MG24) && MG_ENABLE_DRIVER_MG24
+
+struct mg_tcpip_driver_mg24_data {
+  struct mg_mesh_node *mesh;       // Driver-owned runtime state
+  const struct mg_mesh *strategy;  // NULL selects mg_mesh_default
+};
+
+extern struct mg_tcpip_driver mg_tcpip_driver_mg24;
+
+#define MG_TCPIP_DRIVER_MG24_INIT(manager)                      \
+  do {                                                          \
+    static struct mg_tcpip_driver_mg24_data driver_data_;       \
+    static struct mg_tcpip_if mif_;                             \
+    MG_SET_MAC_ADDRESS(mif_.mac);                               \
+    mif_.ip = MG_TCPIP_IP;                                      \
+    mif_.mask = MG_TCPIP_MASK;                                  \
+    mif_.gw = MG_TCPIP_GW;                                      \
+    mif_.mgr = (manager);                                       \
+    mif_.driver = &mg_tcpip_driver_mg24;                        \
+    mif_.driver_data = &driver_data_;                           \
+    mg_tcpip_init((manager), &mif_);                            \
+    MG_INFO(("Driver: mg24, MAC: %M", mg_print_mac, mif_.mac)); \
+  } while (0)
+
+#ifndef MG_TCPIP_DRIVER_INIT
+#define MG_TCPIP_DRIVER_INIT(x) MG_TCPIP_DRIVER_MG24_INIT(x)
+#endif
 
 #endif
 
@@ -5253,6 +5347,40 @@ extern struct mg_tcpip_driver mg_tcpip_driver_netc;
     mg_tcpip_init(mgr, &mif_);                                 \
     MG_INFO(("Driver: netc, MAC: %M", mg_print_mac, mif_.mac)); \
   } while (0)
+
+#endif
+// Copyright (c) 2026 Cesanta Software Limited
+// All rights reserved
+
+
+
+#if MG_ENABLE_TCPIP && defined(MG_ENABLE_DRIVER_NRF52) && MG_ENABLE_DRIVER_NRF52
+
+struct mg_tcpip_driver_nrf52_data {
+  struct mg_mesh_node *mesh;       // Driver-owned runtime state
+  const struct mg_mesh *strategy;  // NULL selects mg_mesh_default
+};
+
+extern struct mg_tcpip_driver mg_tcpip_driver_nrf52;
+
+#define MG_TCPIP_DRIVER_NRF52_INIT(manager)                      \
+  do {                                                           \
+    static struct mg_tcpip_driver_nrf52_data driver_data_;       \
+    static struct mg_tcpip_if mif_;                              \
+    MG_SET_MAC_ADDRESS(mif_.mac);                                \
+    mif_.ip = MG_TCPIP_IP;                                       \
+    mif_.mask = MG_TCPIP_MASK;                                   \
+    mif_.gw = MG_TCPIP_GW;                                       \
+    mif_.mgr = (manager);                                        \
+    mif_.driver = &mg_tcpip_driver_nrf52;                        \
+    mif_.driver_data = &driver_data_;                            \
+    mg_tcpip_init((manager), &mif_);                             \
+    MG_INFO(("Driver: nrf52, MAC: %M", mg_print_mac, mif_.mac)); \
+  } while (0)
+
+#ifndef MG_TCPIP_DRIVER_INIT
+#define MG_TCPIP_DRIVER_INIT(x) MG_TCPIP_DRIVER_NRF52_INIT(x)
+#endif
 
 #endif
 
@@ -5407,6 +5535,7 @@ struct mg_tcpip_driver_rw612_data {
 #define MG_DRIVER_MDC_HOLDTIME 3
 #endif
 
+#ifndef MG_TCPIP_DRIVER_INIT
 #define MG_TCPIP_DRIVER_INIT(mgr)                                 \
   do {                                                            \
     static struct mg_tcpip_driver_rw612_data driver_data_;       \
@@ -5422,34 +5551,41 @@ struct mg_tcpip_driver_rw612_data {
     mg_tcpip_init(mgr, &mif_);                                    \
     MG_INFO(("Driver: rw612, MAC: %M", mg_print_mac, mif_.mac)); \
   } while (0)
-
 #endif
 
+#endif
+// Copyright (c) 2026 Cesanta Software Limited
+// All rights reserved
 
-#if MG_ENABLE_TCPIP && defined(MG_ENABLE_DRIVER_RW612_154) && \
-    MG_ENABLE_DRIVER_RW612_154
 
-// NXP RW612 IEEE 802.15.4 radio, as an Ethernet interface: Ethernet frames
-// are split into radio frames, see mg_l2_802154_tx(). The radio runs on
-// CPU2: NXP BLE/802.15.4 combo firmware, an OpenThread radio co-processor
-// (RCP). The firmware must be loaded and running before mg_tcpip_init(), see
-// the FRDM-RW612 eth_radio_bridge tutorial. The driver talks to it over the
-// CPU2 <-> CPU3 IMU mailbox: IMUMC messages carrying HDLC framed Spinel.
-// driver_data: struct mg_l2_802154_data, channel and PAN ID set
+
+#if MG_ENABLE_TCPIP && defined(MG_ENABLE_DRIVER_RW612W) && \
+    MG_ENABLE_DRIVER_RW612W
+
+struct mg_tcpip_driver_rw612w_data {
+  struct mg_mesh_node *mesh;       // Driver-owned runtime state
+  const struct mg_mesh *strategy;  // NULL selects mg_mesh_default
+};
+
+extern struct mg_tcpip_driver mg_tcpip_driver_rw612w;
+
+#define MG_TCPIP_DRIVER_RW612W_INIT(manager)                      \
+  do {                                                            \
+    static struct mg_tcpip_driver_rw612w_data driver_data_;       \
+    static struct mg_tcpip_if mif_;                               \
+    MG_SET_MAC_ADDRESS(mif_.mac);                                 \
+    mif_.ip = MG_TCPIP_IP;                                        \
+    mif_.mask = MG_TCPIP_MASK;                                    \
+    mif_.gw = MG_TCPIP_GW;                                        \
+    mif_.mgr = (manager);                                         \
+    mif_.driver = &mg_tcpip_driver_rw612w;                        \
+    mif_.driver_data = &driver_data_;                             \
+    mg_tcpip_init((manager), &mif_);                              \
+    MG_INFO(("Driver: rw612w, MAC: %M", mg_print_mac, mif_.mac)); \
+  } while (0)
 
 #ifndef MG_TCPIP_DRIVER_INIT
-#define MG_TCPIP_DRIVER_INIT(mgr)                                       \
-  do {                                                                  \
-    static struct mg_l2_802154_data driver_data_;                     \
-    static struct mg_tcpip_if mif_;                                     \
-    driver_data_.channel = MG_L2_802154_CHANNEL;                      \
-    driver_data_.pan_id = MG_L2_802154_PAN_ID;                        \
-    mif_.driver = &mg_tcpip_driver_rw612_154;                           \
-    mif_.driver_data = &driver_data_;                                   \
-    MG_SET_MAC_ADDRESS(mif_.mac);                                       \
-    mg_tcpip_init(mgr, &mif_);                                          \
-    MG_INFO(("Driver: rw612_154, channel %d", MG_L2_802154_CHANNEL)); \
-  } while (0)
+#define MG_TCPIP_DRIVER_INIT(x) MG_TCPIP_DRIVER_RW612W_INIT(x)
 #endif
 
 #endif

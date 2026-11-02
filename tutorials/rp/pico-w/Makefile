@@ -31,5 +31,5 @@ clean:
 	$(RM) build pico_sdk_import.cmake $(SDK_PATH)
 
 $(SDK_PATH):
-	git clone -c advice.detachedHead=false --quiet --depth 1 -b 2.1.1 https://github.com/raspberrypi/pico-sdk $@
+	git clone -c advice.detachedHead=false --quiet --depth 1 -b 2.2.0 https://github.com/raspberrypi/pico-sdk $@
 	cd $@ && git submodule update --quiet --init
