@@ -43,6 +43,29 @@ bool mg_random(void *buf, size_t len) {
   return true;
 }
 
+// BSD sockets API UDP echo server: sends each datagram back to its sender
+static int s_udp_sock = -1;
+
+static void udp_echo_init(uint16_t port) {
+  struct sockaddr_in sa = {
+      .sin_family = AF_INET,
+      .sin_port = htons(port),
+      .sin_addr = {.s_addr = INADDR_ANY},
+  };
+  s_udp_sock = socket(AF_INET, SOCK_DGRAM, 0);
+  bind(s_udp_sock, (struct sockaddr *) &sa, sizeof(sa));
+  MG_INFO(("UDP echo server on port %hu, sock %d", port, s_udp_sock));
+}
+
+static void udp_echo_poll(void) {
+  char buf[1500];
+  struct sockaddr_in sin;
+  struct sockaddr *sa = (struct sockaddr *) &sin;
+  socklen_t len = sizeof(sin);
+  ssize_t n = recvfrom(s_udp_sock, buf, sizeof(buf), MSG_DONTWAIT, sa, &len);
+  if (n > 0) sendto(s_udp_sock, buf, (size_t) n, MSG_DONTWAIT, sa, len);
+}
+
 static void http_ev_handler(struct mg_connection *c, int ev, void *ev_data) {
   if (ev == MG_EV_HTTP_HDRS) {
     struct mg_http_message *hm = (struct mg_http_message *) ev_data;
@@ -83,10 +106,14 @@ int main(void) {
   // connections. Note - baremetal implementation is non-blocking only.
   echo_init(1234);
 
+  // This is BSD sockets API UDP echo server, non-blocking too
+  udp_echo_init(1234);
+
   // Baremetal superloop. Each function in the loop must not block
   for (;;) {
     mg_mgr_poll(&mgr, 0);
     echo_poll();
+    udp_echo_poll();
     blink_task();
   }
 
