@@ -8904,8 +8904,14 @@ void mg_multicast_restore(struct mg_connection *c, uint8_t *from) {
 #define MG_TCPIP_KEEPALIVE_MS 45000  // TCP keep-alive period, ms
 #endif
 
+#ifndef MG_TCPIP_ACK_MS
 #define MG_TCPIP_ACK_MS 150    // Timeout for ACKing
+#endif
+
+#ifndef MG_TCPIP_ARP_MS
 #define MG_TCPIP_ARP_MS 100    // Timeout for ARP response
+#endif
+
 #define MG_TCPIP_SYN_MS 15000  // Timeout for connection establishment
 #define MG_TCPIP_FIN_MS 1000   // Timeout for closing connection
 #define MG_TCPIP_RTX_MS 1000   // Initial retransmission timeout (RFC-6298, 2.1)
