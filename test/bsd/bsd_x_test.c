@@ -33,6 +33,175 @@ static int s_abort = 0;
 #define DASHBOARD(x) \
   printf("HEALTH_DASHBOARD\t\"%s\": %s,\n", x, s_error ? "false" : "true")
 
+#define UDP_PORT 1235
+
+#if MG_ENABLE_FREERTOS
+static volatile bool s_tx_held, s_tx_waits;
+#endif
+
+static int open_udp(void) {
+  struct sockaddr_in sa;
+  char buf;
+  int fd;
+
+  memset(&sa, 0, sizeof(sa));
+  sa.sin_family = AF_INET;
+  sa.sin_port = htons(UDP_PORT);
+  sa.sin_addr.s_addr = INADDR_ANY;
+  ASSERT((fd = socket(AF_INET, SOCK_DGRAM, 0)) >= 0);
+  ASSERT(bind(fd, (struct sockaddr *) &sa, sizeof(sa)) == 0);
+  ASSERT(send(fd, &buf, sizeof(buf), 0) < 0 && errno == EDESTADDRREQ);
+  ASSERT(fcntl(fd, F_SETFL, O_NONBLOCK) == 0);
+  return fd;
+}
+
+static void check_udp_oversize(struct mg_mgr *mgr, int fd,
+                               const struct sockaddr *dst, socklen_t dstlen) {
+  static char buf[1600];
+  size_t len = mgr->ifp->mtu + 1;
+
+  ASSERT(len <= sizeof(buf));
+  if (dst == NULL) {
+    ASSERT(send(fd, buf, len, 0) < 0 && errno == EMSGSIZE);
+  } else {
+    ASSERT(sendto(fd, buf, len, 0, dst, dstlen) < 0 && errno == EMSGSIZE);
+  }
+}
+
+static void udp_exchange(struct mg_mgr *mgr, int fd,
+                         void (*progress)(struct mg_mgr *)) {
+  struct sockaddr_in peer, other, rogue = {0};
+  socklen_t peerlen, otherlen;
+  uint64_t deadline;
+  struct timeval zero = {0, 0};
+  struct pollfd p;
+  fd_set r, w, e;
+  bool one;
+  char buf[8];
+  ssize_t n;
+
+  for (;;) {
+    peerlen = sizeof(peer);
+    n = recvfrom(fd, buf, sizeof(buf), 0, (struct sockaddr *) &peer, &peerlen);
+    if (n >= 0) break;
+    ASSERT(errno == EAGAIN);
+    progress(mgr);
+  }
+  ASSERT(n == 5 && memcmp(buf, "hello", 5) == 0);
+  ASSERT(sendto(fd, "ready", 5, 0, (struct sockaddr *) &peer, peerlen) ==
+         5);
+  deadline = mg_millis() + 100;
+  while (mg_millis() < deadline) progress(mgr);  // Queue both UDP datagrams
+  do {
+    otherlen = sizeof(other);
+    n = recvfrom(fd, buf, sizeof(buf), 0, (struct sockaddr *) &other,
+                 &otherlen);
+    if (n < 0) {
+      ASSERT(errno == EAGAIN);
+      progress(mgr);
+    }
+  } while (n < 0);
+  one = n == 3;
+  if (one) {
+    ASSERT(memcmp(buf, "one", 3) == 0 && other.sin_port == peer.sin_port);
+  } else {
+    ASSERT(n == 4 && memcmp(buf, "two2", 4) == 0 &&
+           other.sin_port != peer.sin_port);
+  }
+  if (other.sin_port != peer.sin_port) rogue = other;
+  do {
+    otherlen = sizeof(other);
+    n = recvfrom(fd, buf, sizeof(buf), 0, (struct sockaddr *) &other,
+                 &otherlen);
+    if (n < 0) {
+      ASSERT(errno == EAGAIN);
+      progress(mgr);
+    }
+  } while (n < 0);
+  if (one) {
+    ASSERT(n == 4 && memcmp(buf, "two2", 4) == 0 &&
+           other.sin_port != peer.sin_port);
+  } else {
+    ASSERT(n == 3 && memcmp(buf, "one", 3) == 0 &&
+           other.sin_port == peer.sin_port);
+  }
+  if (other.sin_port != peer.sin_port) rogue = other;
+  check_udp_oversize(mgr, fd, (struct sockaddr *) &peer, peerlen);
+  ASSERT(sendto(fd, "peer", 4, 0, (struct sockaddr *) &peer, peerlen) == 4);
+  ASSERT(sendto(fd, "rogue", 5, 0, (struct sockaddr *) &rogue,
+                sizeof(rogue)) == 5);
+  deadline = mg_millis() + 100;
+  while (mg_millis() < deadline) progress(mgr);
+  ASSERT(connect(fd, (struct sockaddr *) &peer, peerlen) == 0);
+  ASSERT(sendto(fd, "no", 2, 0, (struct sockaddr *) &peer, peerlen) < 0 &&
+         errno == EISCONN);
+  check_udp_oversize(mgr, fd, NULL, 0);
+  ASSERT(send(fd, "more", 4, 0) == 4);
+  deadline = mg_millis() + 100;
+  while (mg_millis() < deadline) progress(mgr);  // Queue both UDP datagrams
+  do {
+    p.fd = fd, p.events = POLLIN | POLLOUT, p.revents = 0;
+    ASSERT(poll(&p, 1, 0) == 1);
+    if (!(p.revents & POLLIN)) progress(mgr);
+  } while (!(p.revents & POLLIN));
+  ASSERT(p.revents == (POLLIN | POLLOUT));
+  FD_ZERO(&r);
+  FD_ZERO(&w);
+  FD_ZERO(&e);
+  FD_SET(fd, &r);
+  FD_SET(fd, &w);
+  FD_SET(fd, &e);
+  ASSERT(select(fd + 1, &r, &w, &e, &zero) == 1);
+  ASSERT(FD_ISSET(fd, &r) && FD_ISSET(fd, &w) && !FD_ISSET(fd, &e));
+  do {
+    n = recv(fd, buf, 3, 0);
+    if (n < 0) {
+      ASSERT(errno == EAGAIN);
+      progress(mgr);
+    }
+  } while (n < 0);
+  ASSERT(n == 3 && memcmp(buf, "tru", 3) == 0);
+  do {
+    n = recv(fd, buf, sizeof(buf), MSG_PEEK);
+    if (n < 0) {
+      ASSERT(errno == EAGAIN);
+      progress(mgr);
+    }
+  } while (n < 0);
+  ASSERT(n == 4 && memcmp(buf, "peek", 4) == 0);
+  ASSERT(recv(fd, buf, sizeof(buf), 0) == 4 && memcmp(buf, "peek", 4) == 0);
+  p.events = POLLIN | POLLOUT, p.revents = 0;
+  ASSERT(poll(&p, 1, 0) == 1 && p.revents == POLLOUT);
+#if MG_ENABLE_FREERTOS
+  s_tx_waits = false, s_tx_held = true;
+#endif
+  ASSERT(send(fd, "one", 3, 0) == 3);
+  ASSERT(send(fd, "two2", 4, 0) == 4);
+  ASSERT(send(fd, "", 0, 0) == 0);
+#if MG_ENABLE_FREERTOS
+  while (!s_tx_waits) progress(mgr);  // MG_IO_WAIT keeps all records queued
+  s_tx_held = false;
+#endif
+  deadline = mg_millis() + 100;
+  while (mg_millis() < deadline) progress(mgr);  // Let rogue arrive
+  ASSERT(recv(fd, buf, sizeof(buf), MSG_DONTWAIT) < 0 && errno == EAGAIN);
+  while ((n = send(fd, "checked", 7, 0)) < 0) {
+    ASSERT(errno == EAGAIN);
+    progress(mgr);
+  }
+  ASSERT(n == 7);
+  for (;;) {
+    n = recv(fd, buf, sizeof(buf), 0);
+    if (n >= 0) break;
+    ASSERT(errno == EAGAIN);
+    progress(mgr);
+  }
+  ASSERT(n == 4 && memcmp(buf, "echo", 4) == 0);
+  ASSERT(send(fd, "echo", 4, 0) == 4);
+  progress(mgr);  // Drain the last queued datagram before close
+  ASSERT(close(fd) == 0);
+}
+
 static pid_t start_client(const char *ip, const char *connections) {
   char *cmd[4];
   pid_t pid;
@@ -42,6 +211,18 @@ static pid_t start_client(const char *ip, const char *connections) {
   cmd[1] = (char *) ip;
   cmd[2] = (char *) connections;
   cmd[3] = NULL;
+  ASSERT(posix_spawn(&pid, cmd[0], NULL, NULL, cmd, environ) == 0);
+  return pid;
+}
+
+static pid_t start_udp(const char *ip) {
+  char *cmd[3];
+  pid_t pid;
+  extern char **environ;
+
+  cmd[0] = (char *) "./bsd_udp";
+  cmd[1] = (char *) ip;
+  cmd[2] = NULL;
   ASSERT(posix_spawn(&pid, cmd[0], NULL, NULL, cmd, environ) == 0);
   return pid;
 }
@@ -60,12 +241,17 @@ static void check_client(int status) {
 static int open_listener(int backlog, bool nonblock) {
   int lfd = socket(AF_INET, SOCK_STREAM, 0);
   struct sockaddr_in sa;
+  char buf;
 
   memset(&sa, 0, sizeof(sa));
   sa.sin_family = AF_INET;
   sa.sin_port = htons(1234);
   sa.sin_addr.s_addr = INADDR_ANY;
   ASSERT(lfd >= 0);
+  ASSERT(sendto(lfd, &buf, sizeof(buf), 0, (struct sockaddr *) &sa,
+                sizeof(sa)) < 0 && errno == EOPNOTSUPP);
+  ASSERT(recvfrom(lfd, &buf, sizeof(buf), 0, NULL, NULL) < 0 &&
+         errno == EOPNOTSUPP);
   ASSERT(bind(lfd, (struct sockaddr *) &sa, sizeof(sa)) == 0);
   ASSERT(listen(lfd, backlog) == 0);
   if (nonblock) ASSERT(fcntl(lfd, F_SETFL, O_NONBLOCK) == 0);
@@ -130,11 +316,12 @@ static volatile bool s_select_waiting, s_select_done;
 static volatile bool s_poll_waiting, s_poll_done;
 static volatile bool s_ready_waiting, s_ready_done;
 static volatile bool s_backlog_ready, s_backlog_full, s_backlog_accept;
-static volatile bool s_tx_held, s_tx_waits, s_tx_fail, s_tx_error;
+static volatile bool s_tx_fail, s_tx_error;
 static volatile bool s_send_waiting;
 static volatile bool s_send_done, s_send_expect_error;
 static volatile bool s_recv_start, s_recv_waiting, s_recv_done;
 static volatile bool s_recv_expect_error;
+static volatile bool s_udp_ready, s_udp_done;
 static size_t (*s_tx)(const void *, size_t, struct mg_tcpip_if *);
 
 struct client_data {
@@ -152,6 +339,7 @@ static void select_task(void *args);
 static void readiness_task(void *args);
 static void backlog_task(void *args);
 static void tx_gate_task(void *args);
+static void udp_task(void *args);
 
 struct atask_args {
   bool listener_nonblock;
@@ -304,6 +492,21 @@ static void tx_gate_task(void *args) {
   else s_tx_held = false;
   vTaskDelete(NULL);
   (void) args;
+}
+
+static void udp_delay(struct mg_mgr *mgr) {
+  (void) mgr;
+  vTaskDelay(1);
+}
+
+static void udp_task(void *args) {
+  struct mg_mgr *mgr = (struct mg_mgr *) args;
+  int fd = open_udp();
+
+  s_udp_ready = true;
+  udp_exchange(mgr, fd, udp_delay);
+  s_udp_done = true;
+  vTaskDelete(NULL);
 }
 
 static void recv_wait_task(void *args) {
@@ -519,12 +722,22 @@ static void task2(void *args) {
   struct mg_mgr *mgr = (struct mg_mgr *)args;  // Event manager
   char *ip;
   int status;
-  pid_t first, second;
+  pid_t first, second, udp;
 
   vTaskDelay(pdMS_TO_TICKS(500));  // 500 ms
   s_error = false;
   s_wait = false;
   ip = mg_mprintf("%M", mg_print_ip4, &mgr->ifp->ip);
+  s_udp_ready = s_udp_done = false;
+  ASSERT(xTaskCreate(udp_task, "udp", 512, mgr, configMAX_PRIORITIES - 1,
+                     NULL) == pdPASS);
+  while (!s_udp_ready) vTaskDelay(1);
+  udp = start_udp(ip);
+  while (!client_done(udp, &status)) vTaskDelay(1);
+  check_client(status);
+  while (!s_udp_done) vTaskDelay(1);
+  DASHBOARD("udp");
+
   s_poll_waiting = s_poll_done = false;
   ASSERT(xTaskCreate(poll_task, "poll", 512, NULL,
                      configMAX_PRIORITIES - 1, NULL) == pdPASS);
@@ -852,6 +1065,20 @@ static void nortos_echo(struct mg_mgr *mgr, struct nortos_echo_client *clients,
   nortos_wait_client(mgr, pid);
 }
 
+static void udp_poll(struct mg_mgr *mgr) {
+  mg_mgr_poll(mgr, 0);
+}
+
+static void nortos_udp(struct mg_mgr *mgr, const char *ip) {
+  pid_t pid;
+  int fd = open_udp();
+
+  pid = start_udp(ip);
+  udp_exchange(mgr, fd, udp_poll);
+  nortos_wait_client(mgr, pid);
+  DASHBOARD("nortos_udp");
+}
+
 static void nortos_test(struct mg_mgr *mgr) {
   static const char bootstrap = '\0';
   static const char grow[512] = {0};
@@ -953,6 +1180,7 @@ static void nortos_test(struct mg_mgr *mgr) {
   ASSERT(close(fd) == 0);
   mg_mgr_poll(mgr, 0);
   DASHBOARD("nortos_nonblocking_connect");
+  nortos_udp(mgr, ip);
   mg_free(ip);
 }
 

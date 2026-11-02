@@ -4620,6 +4620,17 @@ struct mg_tcpip_driver {
 typedef void (*mg_tcpip_event_handler_t)(struct mg_tcpip_if *ifp, int ev,
                                          void *ev_data);
 
+#if MG_ENABLE_BSD_SOCKETS
+#ifndef MG_TCPIP_SENDTO_CACHE_SIZE
+#define MG_TCPIP_SENDTO_CACHE_SIZE 4
+#endif
+
+struct mg_tcpip_sendto_entry {
+  uint32_t ip;
+  struct mg_l2addr addr;
+};
+#endif
+
 // clang-format off
 // Events delivered to mg_tcpip_if.fn (user) and mg_tcpip_if.pfn (driver).
 // Each entry shows the ev_data type to cast inside the handler.
@@ -4682,6 +4693,9 @@ struct mg_tcpip_if {
   enum mg_l2type l2type;                    // Layer-2 type: Ethernet, PPP, etc. (see l2.h)
   union mg_l2data l2data;                   // Layer-2 config and state (see l2.h)
   char *dns4_url;                           // Active DNS server URL (set from DHCP or config)
+#if MG_ENABLE_BSD_SOCKETS
+  struct mg_tcpip_sendto_entry sendto[MG_TCPIP_SENDTO_CACHE_SIZE];  // Local IPv4 neighbors
+#endif
   uint64_t now;                             // Current time in ms (updated each mg_mgr_poll)
   uint64_t timer_1000ms;                    // Timestamp of last 1-second tick
   uint64_t lease_expire;                    // DHCP lease expiry time in ms
@@ -4893,8 +4907,35 @@ void mg_bsd_poll(struct mg_mgr *);
 #ifndef EPIPE
 #define EPIPE 32
 #endif
+#ifndef EOPNOTSUPP
+#define EOPNOTSUPP 95
+#endif
+#ifndef EISCONN
+#define EISCONN 106
+#endif
+#ifndef EDESTADDRREQ
+#define EDESTADDRREQ 121
+#endif
+#ifndef EMSGSIZE
+#define EMSGSIZE 90
+#endif
 #ifndef EPROTONOSUPPORT
 #define EPROTONOSUPPORT 93
+#endif
+
+#if defined(__DCC__)
+#pragma pack(1)
+#else
+#pragma pack(push, 1)
+#endif
+struct mg_bsd_udp_frame {
+  uint32_t ip;
+  uint16_t port, len;
+};
+#if defined(__DCC__)
+#pragma pack(0)
+#else
+#pragma pack(pop)
 #endif
 
 #if MG_ENABLE_BSD_PROTOTYPES
