@@ -92,7 +92,7 @@ fail:
   exit(1);
 }
 
-enum wait_mode { WAIT_ABORT, WAIT_DRAIN, WAIT_HOLD, WAIT_CLOSE };
+enum wait_mode { WAIT_ABORT, WAIT_DRAIN, WAIT_HOLD, WAIT_CLOSE, WAIT_SEND };
 
 // Wait for output, optionally draining through the final marker.
 static int wait_data(const char *host, enum wait_mode mode) {
@@ -116,6 +116,13 @@ static int wait_data(const char *host, enum wait_mode mode) {
     usleep(100000);  // Keep the peer connected while the server fails TX
     close(fd);
     return 0;
+  }
+  if (mode == WAIT_SEND) {
+    usleep(100000);  // Let the server shut down its read side
+    n = send(fd, "x", 1, 0);
+    usleep(500000);  // Keep peer connected for server SHUT_WR
+    close(fd);
+    return n == 1 ? 0 : 1;
   }
   if (mode == WAIT_CLOSE) {
     n = recv(fd, buf, sizeof(buf), 0);
@@ -151,10 +158,12 @@ int main(int argc, char *argv[]) {
     return wait_data(argv[1], WAIT_HOLD);
   if (argc == 3 && strcmp(argv[2], "expectclose") == 0)
     return wait_data(argv[1], WAIT_CLOSE);
+  if (argc == 3 && strcmp(argv[2], "sendlater") == 0)
+    return wait_data(argv[1], WAIT_SEND);
   if (argc == 3) connections = atoi(argv[2]);
   if ((argc != 2 && argc != 3) || connections < 1 ||
       connections > NUM_CONNECTIONS) {
-    fprintf(stderr, "usage: %s IP [connections|waitandabort|waitanddrain|hold|expectclose]\n",
+    fprintf(stderr, "usage: %s IP [connections|waitandabort|waitanddrain|hold|expectclose|sendlater]\n",
             argv[0]);
     return 1;
   }

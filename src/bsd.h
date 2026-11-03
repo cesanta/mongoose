@@ -55,6 +55,15 @@ void mg_bsd_poll(struct mg_mgr *);
 #ifndef EPIPE
 #define EPIPE 32
 #endif
+#ifndef EAFNOSUPPORT
+#define EAFNOSUPPORT 97
+#endif
+#ifndef ENOPROTOOPT
+#define ENOPROTOOPT 92
+#endif
+#ifndef ENOSPC
+#define ENOSPC 28
+#endif
 #ifndef EPROTONOSUPPORT
 #define EPROTONOSUPPORT 93
 #endif
@@ -136,7 +145,9 @@ typedef struct fd_set {
 #define IPPROTO_UDP 17
 #define INADDR_ANY 0
 #define INADDR_LOOPBACK 0x7f000001
+#define INADDR_NONE ((in_addr_t) -1)
 #define INET_ADDRSTRLEN 16
+#define INET6_ADDRSTRLEN 46
 #define SOL_SOCKET 0xffff
 #define SO_REUSEADDR 2
 #define SO_REUSEPORT 15

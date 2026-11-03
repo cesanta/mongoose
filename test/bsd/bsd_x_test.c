@@ -91,6 +91,22 @@ static void wait_ready(struct mg_mgr *mgr) {
   MG_INFO(("Interface started, starting main loop"));
 }
 
+static void test_inet(void) {
+  struct in_addr addr;
+  char buf[INET_ADDRSTRLEN];
+  char *str;
+
+  ASSERT(inet_pton(AF_INET, "192.0.2.1", &addr) == 1);
+  ASSERT(inet_ntop(AF_INET, &addr, buf, sizeof(buf)) != NULL);
+  ASSERT(strcmp(buf, "192.0.2.1") == 0);
+  str = inet_ntoa(addr);
+  ASSERT(str != NULL);
+  ASSERT(strcmp(str, "192.0.2.1") == 0);
+  ASSERT(inet_addr("192.0.2.1") == addr.s_addr);
+  ASSERT(inet_pton(AF_INET, "not-an-ip", &addr) == 0);
+  ASSERT(inet_pton(AF_INET6, "::1", &addr) < 0 && errno == EAFNOSUPPORT);
+}
+
 #if !MG_ENABLE_FREERTOS
 static bool s_fail_alloc;
 
@@ -132,9 +148,10 @@ static volatile bool s_ready_waiting, s_ready_done;
 static volatile bool s_backlog_ready, s_backlog_full, s_backlog_accept;
 static volatile bool s_tx_held, s_tx_waits, s_tx_fail, s_tx_error;
 static volatile bool s_send_waiting;
-static volatile bool s_send_done, s_send_expect_error;
+static volatile bool s_send_done, s_send_expect_error, s_send_expect_shutdown;
 static volatile bool s_recv_start, s_recv_waiting, s_recv_done;
 static volatile bool s_recv_expect_error;
+static volatile bool s_shutdown_waiting, s_shutdown_done;
 static size_t (*s_tx)(const void *, size_t, struct mg_tcpip_if *);
 
 struct client_data {
@@ -152,6 +169,7 @@ static void select_task(void *args);
 static void readiness_task(void *args);
 static void backlog_task(void *args);
 static void tx_gate_task(void *args);
+static void shutdown_task(void *args);
 
 struct atask_args {
   bool listener_nonblock;
@@ -300,8 +318,13 @@ static void tx_gate_task(void *args) {
   // receiver/sender > network task > gate: final send is waiting
   while (!s_send_waiting) vTaskDelay(1);
   ASSERT(!s_send_done);
-  if (s_send_expect_error) s_tx_error = s_tx_fail = true;
-  else s_tx_held = false;
+  if (s_send_expect_shutdown) {
+    ASSERT(shutdown((int) (uintptr_t) args, SHUT_WR) == 0);
+  } else if (s_send_expect_error) {
+    s_tx_error = s_tx_fail = true;
+  } else {
+    s_tx_held = false;
+  }
   vTaskDelete(NULL);
   (void) args;
 }
@@ -342,15 +365,19 @@ static void send_task(void *args) {
   n = send(fd, buf, sizeof(buf), MSG_DONTWAIT);
   ASSERT(n < 0 && errno == EAGAIN);  // Same full c->send: MSG_DONTWAIT
 
-  if (!s_send_expect_error) {
+  if (!s_send_expect_error && !s_send_expect_shutdown) {
     s_recv_start = true;  // O_NONBLOCK is per socket; now start the receiver
     while (!s_recv_waiting) vTaskDelay(1);
   }
   s_send_waiting = true;  // Gate task releases TX after this send blocks
   n = send(fd, &marker, sizeof(marker), 0);
-  if (s_send_expect_error) ASSERT(n < 0 && errno == EPIPE);
-  else ASSERT(n == (ssize_t) sizeof(marker));
+  if (s_send_expect_error || s_send_expect_shutdown) {
+    ASSERT(n < 0 && errno == EPIPE);
+  } else {
+    ASSERT(n == (ssize_t) sizeof(marker));
+  }
   s_send_done = true;
+  if (s_send_expect_shutdown) close(fd);
   vTaskDelete(NULL);
 }
 
@@ -388,7 +415,7 @@ static void atask(void *args) {
       ASSERT(result == pdPASS);
     }
     if (cfg->gate != NULL) {
-      result = xTaskCreate(cfg->gate, "gate", 256, NULL,
+      result = xTaskCreate(cfg->gate, "gate", 256, (void *) (uintptr_t) fd,
                            configMAX_PRIORITIES - 3, NULL);
       ASSERT(result == pdPASS);
     }
@@ -514,6 +541,59 @@ static void backlog_task(void *args) {
   vTaskDelete(NULL);
 }
 
+static void shutdown_task(void *args) {
+  struct sockaddr_in local, peer;
+  struct timeval zero = {0, 0};
+  struct pollfd p;
+  fd_set e;
+  socklen_t len;
+  char buf;
+  int fd, lfd;
+
+  (void) args;
+  lfd = open_listener(5, true);
+  s_shutdown_waiting = true;
+  while ((fd = accept(lfd, NULL, NULL)) < 0) {
+    ASSERT(errno == EAGAIN);
+    vTaskDelay(1);
+  }
+  len = sizeof(local);
+  ASSERT(getsockname(lfd, (struct sockaddr *) &local, &len) == 0);
+  ASSERT(len == sizeof(local) && local.sin_family == AF_INET &&
+         local.sin_port == htons(1234) &&
+         local.sin_addr.s_addr == INADDR_ANY);
+  len = sizeof(peer);
+  ASSERT(getpeername(lfd, (struct sockaddr *) &peer, &len) < 0 &&
+         errno == ENOTCONN);
+  len = sizeof(local);
+  ASSERT(getsockname(fd, (struct sockaddr *) &local, &len) == 0);
+  ASSERT(len == sizeof(local) && local.sin_family == AF_INET &&
+         local.sin_port == htons(1234));
+  len = sizeof(peer);
+  ASSERT(getpeername(fd, (struct sockaddr *) &peer, &len) == 0);
+  ASSERT(len == sizeof(peer) && peer.sin_family == AF_INET &&
+         peer.sin_port != 0);
+  ASSERT(shutdown(lfd, SHUT_RDWR) < 0 && errno == ENOTCONN);
+  ASSERT(shutdown(fd, -1) < 0 && errno == EINVAL);
+  ASSERT(shutdown(fd, SHUT_RD) == 0);
+  ASSERT(recv(fd, &buf, sizeof(buf), 0) == 0);
+  vTaskDelay(pdMS_TO_TICKS(200));  // Delayed client write must be discarded
+  ASSERT(recv(fd, &buf, sizeof(buf), 0) == 0);
+  ASSERT(shutdown(fd, SHUT_WR) == 0);
+  ASSERT(send(fd, &buf, sizeof(buf), 0) < 0 && errno == EPIPE);
+  FD_ZERO(&e);
+  FD_SET(fd, &e);
+  ASSERT(select(fd + 1, NULL, NULL, &e, &zero) == 1);
+  ASSERT(FD_ISSET(fd, &e));
+  p.fd = fd, p.events = POLLOUT, p.revents = 0;
+  ASSERT(poll(&p, 1, 0) == 1);
+  ASSERT(p.revents == POLLERR);
+  ASSERT(close(fd) == 0);
+  ASSERT(close(lfd) == 0);
+  s_shutdown_done = true;
+  vTaskDelete(NULL);
+}
+
 // task2: tests owner.
 static void task2(void *args) {
   struct mg_mgr *mgr = (struct mg_mgr *)args;  // Event manager
@@ -554,6 +634,16 @@ static void task2(void *args) {
   DASHBOARD("poll_child_read");
   DASHBOARD("select_child_write");
   DASHBOARD("poll_child_write");
+
+  s_error = false;
+  s_shutdown_waiting = s_shutdown_done = false;
+  ASSERT(xTaskCreate(shutdown_task, "shutdown", 512, NULL,
+                     configMAX_PRIORITIES - 1, NULL) == pdPASS);
+  while (!s_shutdown_waiting) vTaskDelay(1);
+  run_client(ip, "sendlater");
+  while (!s_shutdown_done) vTaskDelay(1);
+  DASHBOARD("shutdown_read");
+  DASHBOARD("shutdown_write");
 
   s_error = false;
   s_backlog_ready = s_backlog_full = s_backlog_accept = false;
@@ -669,12 +759,27 @@ static void task2(void *args) {
   while (s_wait) vTaskDelay(pdMS_TO_TICKS(10));
   s_tx_held = s_tx_fail = s_tx_error = s_send_expect_error = false;
 
+  s_error = false;
+  s_wait = s_tx_held = s_tx_waits = s_tx_fail = s_tx_error = false;
+  s_send_waiting = s_send_done = s_send_expect_error = false;
+  s_send_expect_shutdown = true;
+  ASSERT(xTaskCreate(atask, "atask", 256, (void *) &s_send_error_server,
+                     configMAX_PRIORITIES - 1, NULL) == pdPASS);
+  run_client(ip, "hold");
+  ASSERT(s_send_done);
+  DASHBOARD("shutdown_send_wakeup");
+  s_wait = true;
+  while (s_wait) vTaskDelay(pdMS_TO_TICKS(10));
+  s_tx_held = s_send_expect_shutdown = false;
+
   mg_free(ip);
 
   s_error = false;
   {
     fd_set e;
     struct pollfd p;
+    socklen_t len;
+    int err;
     int fd = socket(AF_INET, SOCK_STREAM, 0);
     struct sockaddr_in sa;
     memset(&sa, 0, sizeof(sa));
@@ -694,6 +799,12 @@ static void task2(void *args) {
     ASSERT(poll(&p, 1, 0) == 1);
     ASSERT((p.revents & POLLERR) != 0);
     ASSERT((p.revents & POLLOUT) == 0);
+    len = sizeof(err);
+    ASSERT(getsockopt(fd, SOL_SOCKET, SO_ERROR, &err, &len) == 0);
+    ASSERT(len == sizeof(err) && err == EIO);
+    len = sizeof(err), err = -1;
+    ASSERT(getsockopt(fd, SOL_SOCKET, SO_ERROR, &err, &len) == 0);
+    ASSERT(len == sizeof(err) && err == 0);
     ASSERT(close(fd) == 0);
   }
   DASHBOARD("select_error");
@@ -943,6 +1054,25 @@ static void nortos_test(struct mg_mgr *mgr) {
   DASHBOARD("nortos_poll_children");
   DASHBOARD("nortos_echo");
 
+  lfd = open_listener(5, true);
+  pid = start_client(ip, "hold");
+  fd = nortos_accept(mgr, lfd);
+  ASSERT(shutdown(fd, SHUT_RD) == 0);
+  ASSERT(recv(fd, &buf, sizeof(buf), 0) == 0);
+  ASSERT(shutdown(fd, SHUT_WR) == 0);
+  ASSERT(send(fd, &buf, sizeof(buf), 0) < 0 && errno == EPIPE);
+  FD_ZERO(&e);
+  FD_SET(fd, &e);
+  ASSERT(select(fd + 1, NULL, NULL, &e, &zero) == 1);
+  ASSERT(FD_ISSET(fd, &e));
+  p.fd = fd, p.events = POLLOUT, p.revents = 0;
+  ASSERT(poll(&p, 1, 0) == 1);
+  ASSERT(p.revents == POLLERR);
+  nortos_wait_client(mgr, pid);
+  ASSERT(close(fd) == 0);
+  ASSERT(close(lfd) == 0);
+  DASHBOARD("nortos_shutdown");
+
   fd = socket(AF_INET, SOCK_STREAM, 0);
   memset(&sa, 0, sizeof(sa));
   sa.sin_family = AF_INET;
@@ -983,6 +1113,8 @@ static bool bsd_x_test(struct mg_tcpip_driver *driver, void *driver_data, const 
 
   mg_tcpip_init(&mgr, &mif);
   ASSERT(mgr.ifp != NULL);  // driver init succeeded
+  test_inet();
+  DASHBOARD("inet");
   MG_INFO(("Init done, starting interface"));
   usleep(200000);  // 200 ms
 
