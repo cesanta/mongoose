@@ -595,6 +595,7 @@ static struct mg_connection *getpeer(struct mg_mgr *mgr, struct pkt *pkt,
     if (!c->is_udp && pkt->tcp && c->loc.port == pkt->tcp->dport &&
         ((lsn && c->is_listening && !(c->loc.is_ip6 ^ (pkt->ip6 != NULL))) ||
          (!lsn && !c->is_listening && c->rem.port == pkt->tcp->sport &&
+          !(c->loc.is_ip6 ^ (pkt->ip6 != NULL)) &&  // IP or IPv6 to same dest
           ((!c->loc.is_ip6 && c->rem.addr.ip4 == pkt->ip->src)
 #if MG_ENABLE_IPV6
            || (c->loc.is_ip6 && MG_IP6MATCH(c->rem.addr.ip6, pkt->ip6->src))
