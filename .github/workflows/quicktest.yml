@@ -83,7 +83,7 @@ jobs:
         /opt/homebrew/opt/mosquitto/sbin/mosquitto -c /Users/runner/work/mongoose/mongoose/test/mosquitto.conf.macos &
         make -C test test ASAN_OPTIONS=
   windows:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04  # Ubuntu 26.04 Docker 29.4.2 breaks 32-bit Wine; switch at >= 29.4.3
     strategy:
       fail-fast: false
       matrix:
