@@ -35,7 +35,7 @@ jobs:
       with: { fetch-depth: 2 }
     - run: make -C test ${{ matrix.target }}
   atcmdbe:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     strategy:
       fail-fast: false
       matrix:
