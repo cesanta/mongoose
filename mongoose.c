@@ -199,8 +199,9 @@ static struct mg_mgr *s_mgr;
 enum bsd_op {
   BSD_OP_NONE, BSD_OP_SOCKET, BSD_OP_BIND, BSD_OP_LISTEN, BSD_OP_FCNTL,
   BSD_OP_ACCEPT, BSD_OP_CONNECT, BSD_OP_RECV, BSD_OP_SEND, BSD_OP_SENDTO,
-  BSD_OP_RECVFROM, BSD_OP_CLOSE, BSD_OP_POLL, BSD_OP_SELECT,
-  BSD_OP_GETHOSTBYNAME,
+  BSD_OP_RECVFROM, BSD_OP_CLOSE, BSD_OP_SHUTDOWN, BSD_OP_SETSOCKOPT,
+  BSD_OP_GETSOCKOPT, BSD_OP_GETSOCKNAME, BSD_OP_GETPEERNAME, BSD_OP_POLL,
+  BSD_OP_SELECT, BSD_OP_GETHOSTBYNAME,
 };
 
 // A BSD API request from a user task. Gets sent via the RTOS queue, and
@@ -217,6 +218,7 @@ struct mg_bsd_cmd {
     struct { int fd, backlog; } op_listen;
     struct { int fd, cmd, arg; } op_fcntl;
     struct { int fd; } op_close;
+    struct { int fd, how; } op_shutdown;
     struct { int fd; const struct sockaddr *addr; socklen_t len; } op_bind;
     struct { int fd; const struct sockaddr *addr; socklen_t len; } op_connect;
     struct { int fd; struct sockaddr *addr; socklen_t *addrlen; } op_accept;
@@ -224,6 +226,9 @@ struct mg_bsd_cmd {
     struct { int fd; const void *buf; size_t len; int flags; } op_send;
     struct { int fd; const void *buf; size_t len; int flags; const struct sockaddr *addr; socklen_t addrlen; } op_sendto;
     struct { int fd; void *buf; size_t len; int flags; struct sockaddr *src; socklen_t *addrlen; } op_recvfrom;
+    struct { int fd, level, optname; const void *optval; socklen_t optlen; } op_setsockopt;
+    struct { int fd, level, optname; void *optval; socklen_t *optlen; } op_getsockopt;
+    struct { int fd; struct sockaddr *addr; socklen_t *addrlen; } op_getname;
     struct { struct pollfd *fds; nfds_t nfds; uint64_t deadline; } op_poll;
     struct { int nfds; fd_set *r, *w, *e; uint64_t deadline; } op_select;
     struct { const char *name; struct hostent *result; } op_gethostbyname;
@@ -240,6 +245,7 @@ struct mg_bsd_sock {
   struct mg_connection *c;
   struct mg_bsd_sock *listener;
   bool used, bound, closed, nonblock, is_udp, orphan;  // closed: c was closed
+  bool error_pending, is_shut_rd, is_shut_wr;
 };
 
 static struct mg_bsd_sock s_socks[MG_BSD_MAX_SOCKETS > 0 ?
@@ -258,6 +264,21 @@ static struct mg_bsd_sock *bsd_get(int fd) {
   s = &s_socks[offset];
   if (!s->used || s->orphan) return NULL;
   return s;
+}
+
+static int bsd_addr4(const struct sockaddr *addr, socklen_t len) {
+  if (addr == NULL || len < sizeof(struct sockaddr_in)) return EINVAL;
+  return addr->sa_family == AF_INET ? 0 : EAFNOSUPPORT;
+}
+
+static bool bsd_aton4(const char *str, in_addr_t *ip) {
+  struct mg_addr addr;
+  size_t len = strlen(str);
+
+  if (len == 0 || !mg_aton(mg_str_n(str, len), &addr) || addr.is_ip6)
+    return false;
+  memcpy(ip, addr.addr.ip, sizeof(*ip));
+  return true;
 }
 
 static void bsd_attach(struct mg_bsd_sock *s, struct mg_connection *c) {
@@ -345,8 +366,10 @@ static void bsd_ev(struct mg_connection *c, int ev, void *ev_data) {
       c->is_bsd = 1;
       c->is_udp = child->is_udp;
     }
+  } else if (ev == MG_EV_READ && s->is_shut_rd) {
+    mg_iobuf_del(&c->recv, 0, c->recv.len);
   } else if (ev == MG_EV_ERROR) {
-    if (s->err == 0) s->err = EIO;
+    if (s->err == 0) s->err = EIO, s->error_pending = true;
 #if MG_ENABLE_FREERTOS
     bsd_finish_waiters(s, true);
 #endif
@@ -456,9 +479,11 @@ static int bsd_ready(struct mg_bsd_sock *s) {
     }
     return 0;
   }
-  if (s->c->recv.len > 0 || s->c->is_draining) ready |= BSD_READ;
-  if (!s->is_udp && !s->c->is_connecting && !s->c->is_closing &&
-      !s->c->is_draining)
+  if (s->is_shut_rd || s->c->recv.len > 0 || s->c->is_draining)
+    ready |= BSD_READ;
+  if (s->is_shut_wr) ready |= BSD_ERROR;
+  if (!s->is_shut_wr && !s->is_udp && !s->c->is_connecting &&
+      !s->c->is_closing && !s->c->is_draining)
     ready |= BSD_WRITE;  // Established TCP socket
   return ready;
 }
@@ -535,9 +560,13 @@ static bool bsd_run(struct mg_bsd_cmd *cmd) {
         }
       }
       return true;
-    case BSD_OP_BIND:
+    case BSD_OP_BIND: {
+      int err;
+
       if ((s = bsd_get(cmd->op_bind.fd)) == NULL) {
         cmd->result = -1, cmd->err = EBADF;
+      } else if ((err = bsd_addr4(cmd->op_bind.addr, cmd->op_bind.len)) != 0) {
+        cmd->result = -1, cmd->err = err;
       } else {
         const struct sockaddr_in *sa =
             (const struct sockaddr_in *) cmd->op_bind.addr;
@@ -556,6 +585,7 @@ static bool bsd_run(struct mg_bsd_cmd *cmd) {
         }
       }
       return true;
+    }
     case BSD_OP_LISTEN: {
       char url[32];
 
@@ -631,9 +661,15 @@ static bool bsd_run(struct mg_bsd_cmd *cmd) {
       return true;
 #endif
     }
-    case BSD_OP_CONNECT:
+    case BSD_OP_CONNECT: {
+      int err;
+
       if ((s = bsd_get(cmd->op_connect.fd)) == NULL) {
         cmd->result = -1, cmd->err = EBADF;
+        return true;
+      }
+      if ((err = bsd_addr4(cmd->op_connect.addr, cmd->op_connect.len)) != 0) {
+        cmd->result = -1, cmd->err = err;
         return true;
       }
       if (!cmd->started && s->c == NULL) {
@@ -674,6 +710,7 @@ static bool bsd_run(struct mg_bsd_cmd *cmd) {
       cmd->result = -1, cmd->err = EINPROGRESS;
       return true;
 #endif
+    }
     case BSD_OP_RECV:
       if ((s = bsd_get(cmd->op_recv.fd)) == NULL) {
         cmd->result = -1, cmd->err = EBADF;
@@ -696,7 +733,7 @@ static bool bsd_run(struct mg_bsd_cmd *cmd) {
         cmd->result = -1, cmd->err = s->err;
         return true;
       }
-      if (c->is_draining) {  // Orderly shutdown by peer
+      if (s->is_shut_rd || c->is_draining) {  // Local or peer shutdown
         cmd->result = 0;
         return true;
       }
@@ -710,8 +747,8 @@ static bool bsd_run(struct mg_bsd_cmd *cmd) {
     case BSD_OP_SEND:
       if ((s = bsd_get(cmd->op_send.fd)) == NULL) {
         cmd->result = -1, cmd->err = EBADF;
-      } else if ((c = s->c) == NULL || s->err != 0 || c->is_closing ||
-                 c->is_draining) {
+      } else if (s->is_shut_wr || (c = s->c) == NULL || s->err != 0 ||
+                 c->is_closing || c->is_draining) {
         cmd->result = -1, cmd->err = EPIPE;
       } else if (mg_send(c, cmd->op_send.buf, cmd->op_send.len)) {
         cmd->result = (int) cmd->op_send.len;
@@ -725,11 +762,16 @@ static bool bsd_run(struct mg_bsd_cmd *cmd) {
 #endif
       }
       return true;
-    case BSD_OP_SENDTO:
+    case BSD_OP_SENDTO: {
+      int err;
+
       if ((s = bsd_get(cmd->op_sendto.fd)) == NULL) {
         cmd->result = -1, cmd->err = EBADF;
-      } else if ((c = s->c) == NULL || s->err != 0 || c->is_closing ||
-                 c->is_draining) {
+      } else if ((err = bsd_addr4(cmd->op_sendto.addr,
+                                  cmd->op_sendto.addrlen)) != 0) {
+        cmd->result = -1, cmd->err = err;
+      } else if (s->is_shut_wr || (c = s->c) == NULL || s->err != 0 ||
+                 c->is_closing || c->is_draining) {
         cmd->result = -1, cmd->err = EPIPE;
       } else {
         const struct sockaddr_in *sa =
@@ -750,9 +792,14 @@ static bool bsd_run(struct mg_bsd_cmd *cmd) {
         }
       }
       return true;
+    }
     case BSD_OP_RECVFROM:
       if ((s = bsd_get(cmd->op_recvfrom.fd)) == NULL) {
         cmd->result = -1, cmd->err = EBADF;
+        return true;
+      }
+      if (s->is_shut_rd) {
+        cmd->result = 0;
         return true;
       }
       if ((c = s->c) == NULL) {
@@ -762,6 +809,13 @@ static bool bsd_run(struct mg_bsd_cmd *cmd) {
       }
       if (c->recv.len > 0) {
         size_t n = cmd->op_recvfrom.len;
+
+        if (cmd->op_recvfrom.src != NULL &&
+            (cmd->op_recvfrom.addrlen == NULL ||
+             *cmd->op_recvfrom.addrlen < sizeof(struct sockaddr_in))) {
+          cmd->result = -1, cmd->err = EINVAL;
+          return true;
+        }
         if (c->recv.len < n) n = c->recv.len;
         memcpy(cmd->op_recvfrom.buf, c->recv.buf, n);
         if (!(cmd->op_recvfrom.flags & MSG_PEEK)) mg_iobuf_del(&c->recv, 0, n);
@@ -794,6 +848,95 @@ static bool bsd_run(struct mg_bsd_cmd *cmd) {
         cmd->result = 0;
       }
       return true;
+    case BSD_OP_SHUTDOWN:
+      if ((s = bsd_get(cmd->op_shutdown.fd)) == NULL) {
+        cmd->result = -1, cmd->err = EBADF;
+      } else if (cmd->op_shutdown.how != SHUT_RD &&
+                 cmd->op_shutdown.how != SHUT_WR &&
+                 cmd->op_shutdown.how != SHUT_RDWR) {
+        cmd->result = -1, cmd->err = EINVAL;
+      } else if ((c = s->c) == NULL || c->is_listening || c->is_closing ||
+                 (s->is_udp && !c->is_client)) {
+        cmd->result = -1, cmd->err = ENOTCONN;
+      } else {
+        if (cmd->op_shutdown.how != SHUT_WR) {
+          s->is_shut_rd = true;
+          mg_iobuf_del(&c->recv, 0, c->recv.len);
+        }
+        if (cmd->op_shutdown.how != SHUT_RD) s->is_shut_wr = true;
+        cmd->result = 0;
+      }
+      return true;
+    case BSD_OP_SETSOCKOPT:
+      if ((s = bsd_get(cmd->op_setsockopt.fd)) == NULL) {
+        cmd->result = -1, cmd->err = EBADF;
+      } else if (cmd->op_setsockopt.optval == NULL ||
+                 cmd->op_setsockopt.optlen != sizeof(int)) {
+        cmd->result = -1, cmd->err = EINVAL;
+      } else if ((cmd->op_setsockopt.level == SOL_SOCKET &&
+                  (cmd->op_setsockopt.optname == SO_REUSEADDR ||
+                   cmd->op_setsockopt.optname == SO_NOSIGPIPE)) ||
+                 (!s->is_udp && cmd->op_setsockopt.level == IPPROTO_TCP &&
+                  cmd->op_setsockopt.optname == TCP_NODELAY)) {
+        cmd->result = 0;
+      } else {
+        cmd->result = -1, cmd->err = ENOPROTOOPT;
+      }
+      return true;
+    case BSD_OP_GETSOCKOPT:
+      if ((s = bsd_get(cmd->op_getsockopt.fd)) == NULL) {
+        cmd->result = -1, cmd->err = EBADF;
+      } else if (cmd->op_getsockopt.level != SOL_SOCKET ||
+                 cmd->op_getsockopt.optname != SO_ERROR) {
+        cmd->result = -1, cmd->err = ENOPROTOOPT;
+      } else if (cmd->op_getsockopt.optval == NULL ||
+                 cmd->op_getsockopt.optlen == NULL ||
+                 *cmd->op_getsockopt.optlen < sizeof(int)) {
+        cmd->result = -1, cmd->err = EINVAL;
+      } else {
+        *(int *) cmd->op_getsockopt.optval =
+            s->error_pending ? s->err : 0;
+        s->error_pending = false;
+        *cmd->op_getsockopt.optlen = sizeof(int);
+        cmd->result = 0;
+      }
+      return true;
+    case BSD_OP_GETSOCKNAME:
+    case BSD_OP_GETPEERNAME:
+      if ((s = bsd_get(cmd->op_getname.fd)) == NULL) {
+        cmd->result = -1, cmd->err = EBADF;
+      } else if (cmd->op_getname.addr == NULL ||
+                 cmd->op_getname.addrlen == NULL ||
+                 *cmd->op_getname.addrlen < sizeof(struct sockaddr_in)) {
+        cmd->result = -1, cmd->err = EINVAL;
+      } else if ((c = s->c) == NULL &&
+                 (cmd->op == BSD_OP_GETPEERNAME || s->closed)) {
+        cmd->result = -1, cmd->err = ENOTCONN;
+      } else if (cmd->op == BSD_OP_GETPEERNAME &&
+                 (c->is_listening || (s->is_udp && !c->is_client))) {
+        cmd->result = -1, cmd->err = ENOTCONN;
+      } else if (c != NULL &&
+                 ((cmd->op == BSD_OP_GETSOCKNAME && c->loc.is_ip6) ||
+                  (cmd->op == BSD_OP_GETPEERNAME && c->rem.is_ip6))) {
+        cmd->result = -1, cmd->err = EAFNOSUPPORT;
+      } else {
+        struct sockaddr_in *sa = (struct sockaddr_in *) cmd->op_getname.addr;
+
+        if (c == NULL) {
+          *sa = s->addr;
+          sa->sin_family = AF_INET;
+        } else {
+          const struct mg_addr *addr = cmd->op == BSD_OP_GETSOCKNAME
+                                           ? &c->loc
+                                           : &c->rem;
+          sa->sin_family = AF_INET;
+          sa->sin_port = addr->port;
+          sa->sin_addr.s_addr = addr->addr.ip4;
+        }
+        *cmd->op_getname.addrlen = sizeof(*sa);
+        cmd->result = 0;
+      }
+      return true;
     case BSD_OP_POLL: {
       struct pollfd *p;
       int i, n = 0, ready;
@@ -810,7 +953,7 @@ static bool bsd_run(struct mg_bsd_cmd *cmd) {
             p->revents |= POLLIN;
           if ((p->events & POLLOUT) && (ready & BSD_WRITE))
             p->revents |= POLLOUT;
-          if (s->err != 0) p->revents |= POLLERR;
+          if (s->err != 0 || s->is_shut_wr) p->revents |= POLLERR;
           if (s->closed) p->revents |= POLLHUP;
         }
         if (p->revents != 0) n++;
@@ -1062,6 +1205,55 @@ int close(int fd) {
   return cmd.result;
 }
 
+int shutdown(int fd, int how) {
+  struct mg_bsd_cmd cmd = BSD_CMD_EMPTY;
+  cmd.op = BSD_OP_SHUTDOWN, cmd.op_shutdown.fd = fd,
+  cmd.op_shutdown.how = how;
+  bsd_dispatch(&cmd);
+  errno = cmd.err;
+  return cmd.result;
+}
+
+int setsockopt(int fd, int level, int optname, const void *optval,
+               socklen_t optlen) {
+  struct mg_bsd_cmd cmd = BSD_CMD_EMPTY;
+  cmd.op = BSD_OP_SETSOCKOPT, cmd.op_setsockopt.fd = fd,
+  cmd.op_setsockopt.level = level, cmd.op_setsockopt.optname = optname,
+  cmd.op_setsockopt.optval = optval, cmd.op_setsockopt.optlen = optlen;
+  bsd_dispatch(&cmd);
+  errno = cmd.err;
+  return cmd.result;
+}
+
+int getsockopt(int fd, int level, int optname, void *optval,
+               socklen_t *optlen) {
+  struct mg_bsd_cmd cmd = BSD_CMD_EMPTY;
+  cmd.op = BSD_OP_GETSOCKOPT, cmd.op_getsockopt.fd = fd,
+  cmd.op_getsockopt.level = level, cmd.op_getsockopt.optname = optname,
+  cmd.op_getsockopt.optval = optval, cmd.op_getsockopt.optlen = optlen;
+  bsd_dispatch(&cmd);
+  errno = cmd.err;
+  return cmd.result;
+}
+
+int getsockname(int fd, struct sockaddr *addr, socklen_t *addrlen) {
+  struct mg_bsd_cmd cmd = BSD_CMD_EMPTY;
+  cmd.op = BSD_OP_GETSOCKNAME, cmd.op_getname.fd = fd,
+  cmd.op_getname.addr = addr, cmd.op_getname.addrlen = addrlen;
+  bsd_dispatch(&cmd);
+  errno = cmd.err;
+  return cmd.result;
+}
+
+int getpeername(int fd, struct sockaddr *addr, socklen_t *addrlen) {
+  struct mg_bsd_cmd cmd = BSD_CMD_EMPTY;
+  cmd.op = BSD_OP_GETPEERNAME, cmd.op_getname.fd = fd,
+  cmd.op_getname.addr = addr, cmd.op_getname.addrlen = addrlen;
+  bsd_dispatch(&cmd);
+  errno = cmd.err;
+  return cmd.result;
+}
+
 int poll(struct pollfd *fds, nfds_t nfds, int timeout) {
   struct mg_bsd_cmd cmd = BSD_CMD_EMPTY;
   uint64_t deadline = timeout < 0 ? (uint64_t) ~0
@@ -1091,6 +1283,36 @@ struct hostent *gethostbyname(const char *name) {
   cmd.op = BSD_OP_GETHOSTBYNAME, cmd.op_gethostbyname.name = name;
   bsd_dispatch(&cmd);
   return cmd.op_gethostbyname.result;
+}
+
+int inet_pton(int af, const char *src, void *dst) {
+  if (af != AF_INET) {
+    errno = EAFNOSUPPORT;
+    return -1;
+  }
+  return bsd_aton4(src, dst) ? 1 : 0;
+}
+
+const char *inet_ntop(int af, const void *src, char *dst, socklen_t size) {
+  if (af != AF_INET) {
+    errno = EAFNOSUPPORT;
+    return NULL;
+  }
+  if (mg_snprintf(dst, size, "%M", mg_print_ip4, (void *) src) >= size) {
+    errno = ENOSPC;
+    return NULL;
+  }
+  return dst;
+}
+
+in_addr_t inet_addr(const char *src) {
+  in_addr_t addr;
+  return bsd_aton4(src, &addr) ? addr : INADDR_NONE;
+}
+
+char *inet_ntoa(struct in_addr addr) {
+  static char buf[INET_ADDRSTRLEN];
+  return (char *) inet_ntop(AF_INET, &addr, buf, sizeof(buf));
 }
 
 #endif  // MG_ENABLE_BSD_SOCKETS
