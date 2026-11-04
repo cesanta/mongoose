@@ -24,7 +24,7 @@ jobs:
         test/health.awk < log > json
         scp -o "StrictHostKeyChecking=no" json "root@176.9.217.245:/data/downloads/health/atcmd_${{ matrix.cc }}_$(date +"%Y%m%d").json"
   atcmd89:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04  # Ubuntu 26.04 Docker 29.4.2 breaks 32-bit Wine; switch at >= 29.4.3
     strategy:
       fail-fast: false
       matrix:
