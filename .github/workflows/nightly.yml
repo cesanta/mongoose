@@ -204,7 +204,7 @@ jobs:
         test/health.awk < log > json
         scp -o "StrictHostKeyChecking=no" json "root@176.9.217.245:/data/downloads/health/${{ matrix.target }}_${{ matrix.cc }}_${{ matrix.ipv6 }}_$(date +"%Y%m%d").json"
   l289:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04  # Ubuntu 26.04 Docker 29.4.2 breaks 32-bit Wine; switch at >= 29.4.3
     strategy:
       fail-fast: false
       matrix:
@@ -272,7 +272,7 @@ jobs:
         test/health.awk < log > json
         scp -o "StrictHostKeyChecking=no" json "root@176.9.217.245:/data/downloads/health/ATcmd_${{ matrix.cc }}_$(date +"%Y%m%d").json"
   atcmd89:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04  # Ubuntu 26.04 Docker 29.4.2 breaks 32-bit Wine; switch at >= 29.4.3
     strategy:
       fail-fast: false
       matrix:
@@ -429,7 +429,7 @@ jobs:
         scp -o "StrictHostKeyChecking=no" json "root@176.9.217.245:/data/downloads/health/macos_test_cc_${{ matrix.ssl }}_${{ matrix.select }}_$(date +"%Y%m%d").json"
 
   windows:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04  # Ubuntu 26.04 Docker 29.4.2 breaks 32-bit Wine; switch at >= 29.4.3
     strategy:
       fail-fast: false
       max-parallel: 1   # no parallel runs, to minimize MQTT errors
@@ -479,7 +479,7 @@ jobs:
     - run: make -C test riscv SSL=${{ matrix.ssl }}
 
   tutorials:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04  # MicroPython v1.22.2 fails with Ubuntu 26.04 GCC 15
     strategy:
       fail-fast: false
       matrix:
