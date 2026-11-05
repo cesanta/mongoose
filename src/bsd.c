@@ -707,8 +707,11 @@ static bool bsd_run(struct mg_bsd_cmd *cmd) {
                  cmd->op_setsockopt.optlen != sizeof(int)) {
         cmd->result = -1, cmd->err = EINVAL;
       } else if ((cmd->op_setsockopt.level == SOL_SOCKET &&
-                  (cmd->op_setsockopt.optname == SO_REUSEADDR ||
-                   cmd->op_setsockopt.optname == SO_NOSIGPIPE)) ||
+                  (cmd->op_setsockopt.optname == SO_REUSEADDR
+#ifdef SO_NOSIGPIPE
+                   || cmd->op_setsockopt.optname == SO_NOSIGPIPE
+#endif
+                   )) ||
                  (!s->is_udp && cmd->op_setsockopt.level == IPPROTO_TCP &&
                   cmd->op_setsockopt.optname == TCP_NODELAY)) {
         cmd->result = 0;
