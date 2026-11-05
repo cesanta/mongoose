@@ -1,12 +1,13 @@
 #include "config.h"
 #include "health.h"
 
+#if MG_ENABLE_HEALTH
 // The one health record. Lives in RAM that survives a warm reset, see
 // MG_HEALTH_RAM and the .mg_health region in the linker script
 struct mg_health mg_health_record MG_HEALTH_RAM;
 
-// STM32 H723 support. Needs the _estack symbol from the linker script
-#if MG_ENABLE_HEALTH && (defined(STM32H7_DEV_ID) || defined(STM32H5) || defined(STM32C5))
+// STM32 H7, H5, C5 support. Needs the _estack symbol from the linker script
+#if defined(STM32H7_DEV_ID) || defined(STM32H5) || defined(STM32C5)
 // Fault handler body. Runs in exception context: no printf, no malloc, no
 // blocking calls. Copies the unwind registers and raw stack into the health
 // record, then resets.
@@ -48,52 +49,57 @@ void BusFault_Handler(void) __attribute__((alias("HardFault_Handler")));
 void UsageFault_Handler(void) __attribute__((alias("HardFault_Handler")));
 #endif
 
-// Start a new boot: validate the record, count the boot, store the reset
-// reason. The current boot moves to prev_* slots first, so the previous
-// boot's uptime and reason stay readable. Called by MG_HEALTH_INIT()
+// Start a new boot: validate the record. Called by MG_HEALTH_INIT()
 void mg_health_init(void) {
   char magic[] = MG_HEALTH_MAGIC;
-  // struct mg_health *h = mg_health_get();
   if (!mg_health_valid()) {  // First boot, or RAM lost its contents
     memset(&mg_health_record, 0, sizeof(mg_health_record));
     memcpy(mg_health_record.magic, magic, sizeof(mg_health_record.magic));
   }
-
-#if 0 && MG_ARCH == MG_ARCH_ESP32 && CONFIG_ESP_COREDUMP_ENABLE_TO_FLASH
-  {
+#if MG_ARCH == MG_ARCH_ESP32
+#if CONFIG_IDF_TARGET_ARCH_XTENSA
+  mg_health_record.arch = (uint16_t) MG_HEALTH_ARCH_XTENSA;
+#elif CONFIG_IDF_TARGET_ARCH_RISCV
+  mg_health_record.arch = (uint16_t) MG_HEALTH_ARCH_RISCV;
+#endif
+  esp_reset_reason_t rr = esp_reset_reason();
+  mg_health_record.reset_reason = esp2mg(rr);
+#if CONFIG_ESP_COREDUMP_ENABLE_TO_FLASH == 0
+  MG_ERROR(("MG_HEALTH is enabled but CONFIG_ESP_COREDUMP_ENABLE_TO_FLASH=n"));
+#else
     // After a crash, copy the backtrace from the core dump in flash: the same
     // addresses the panic handler prints as "Backtrace: PC:SP PC:SP ...".
     // The core dump stays in flash, so check the reset reason, otherwise an
     // old crash is reported on every boot
-    static esp_core_dump_summary_t s;  // Big on RISC-V, keep it off the stack
-    esp_reset_reason_t rr = esp_reset_reason();
+    esp_core_dump_summary_t *s = calloc(1, sizeof(*s));
     uint32_t *out = mg_health_record.data;
-    size_t n = 0, max = MG_HEALTH_DATA_SIZE;
-    if (rr != ESP_RST_PANIC && rr != ESP_RST_INT_WDT && rr != ESP_RST_TASK_WDT)
-      return;  // Not a crash that went through the panic handler
-    if (max == 0 || esp_core_dump_get_summary(&s) != ESP_OK) return;
-
-    mg_health_record.cpuid = 42;  // ESP32
-    mg_health_record.reset_reason = MG_HEALTH_RESET_FAULT;
-
+    size_t n = 0;
     memset(out, 0, sizeof(mg_health_record.data));
-    out[n++] = s.exc_pc;
+    if (s == NULL) return;
+    if ((rr != ESP_RST_PANIC && rr != ESP_RST_INT_WDT &&
+         rr != ESP_RST_TASK_WDT)  // Not a crash caught by the panic handler
+        || esp_core_dump_get_summary(s) != ESP_OK) {
+      free(s);
+      return;
+    }
+    out[n++] = s->exc_pc;
+    memcpy(&out[n], s->exc_task, 16), n += 4;
 #if CONFIG_IDF_TARGET_ARCH_XTENSA
-    for (uint32_t i = 0; i < s.exc_bt_info.depth && n < max; i++) {
-      if (s.exc_bt_info.bt[i] != s.exc_pc) out[n++] = s.exc_bt_info.bt[i];
-    }
+    out[n++] = s->ex_info.exc_a[0];
+    out[n++] = s->ex_info.exc_a[1];
+    size_t len = s->exc_bt_info.depth;
+    if (len > MG_HEALTH_DATA_SIZE - n) len = (MG_HEALTH_DATA_SIZE - n);
+    memcpy(&out[n], s->exc_bt_info.bt, 4 * len); // sizeof(uint32_t)
 #elif CONFIG_IDF_TARGET_ARCH_RISCV
-    // No unwinder: take the return address, then words on the stack that
-    // point into executable memory (a heuristic, may include stale values)
-    if (n < max) out[n++] = s.ex_info.ra;
-    for (uint32_t i = 0; i + 4 <= s.exc_bt_info.dump_size && n < max; i += 4) {
-      uint32_t w;
-      memcpy(&w, &s.exc_bt_info.stackdump[i], sizeof(w));  // Byte array
-      if (esp_ptr_executable((void *) (uintptr_t) w)) out[n++] = w;
-    }
+    out[n++] = s->ex_info.exc_ra;
+    out[n++] = s->ex_info.exc_sp;
+    size_t len = s->exc_bt_info.dump_size / 4 ; // sizeof(uint32_t)
+    if (len > MG_HEALTH_DATA_SIZE - n) len = (MG_HEALTH_DATA_SIZE - n);
+    memcpy(&out[n], s->exc_bt_info.stackdump, 4 * len);
 #endif
-  }
-#endif
+    free(s);
+#endif  // CONFIG_ESP_COREDUMP_ENABLE_TO_FLASH
+#endif  // MG_ARCH_ESP32
 }
 
 static size_t print_uint32(void (*fn)(char, void *), void *arg, va_list *ap) {
@@ -107,11 +113,17 @@ static size_t print_uint32(void (*fn)(char, void *), void *arg, va_list *ap) {
 size_t mg_print_crash_record(void (*fn)(char, void *), void *arg, va_list *ap) {
   size_t len = 0;
   if (mg_health_valid() &&
-      mg_health_record.reset_reason == MG_HEALTH_RESET_FAULT) {
+      (mg_health_record.reset_reason == (uint16_t) MG_HEALTH_RESET_FAULT
+#if MG_ARCH == MG_ARCH_ESP32
+       || mg_health_record.reset_reason == (uint16_t) MG_HEALTH_RESET_WATCHDOG
+#endif
+       )) {
     size_t n = sizeof(mg_health_record.data) / sizeof(mg_health_record.data[0]);
-    len += mg_xprintf(fn, arg, "{%m:%hhu,%m:%u,%m:[%M]}",            //
-                      MG_ESC("version"), mg_health_record.magic[3],  //
-                      MG_ESC("cpuid"), mg_health_record.cpuid,       //
+    len += mg_xprintf(fn, arg, "{%m:%hhu,%m:%hu,%m:%hu,%m:%u,%m:[%M]}",  //
+                      MG_ESC("version"), mg_health_record.magic[3],      //
+                      MG_ESC("arch"), mg_health_record.arch,             //
+                      MG_ESC("reason"), mg_health_record.reset_reason,   //
+                      MG_ESC("cpuid"), mg_health_record.cpuid,           //
                       MG_ESC("data"), print_uint32, n, mg_health_record.data);
   } else {
     len += mg_xprintf(fn, arg, "{}");
@@ -119,3 +131,4 @@ size_t mg_print_crash_record(void (*fn)(char, void *), void *arg, va_list *ap) {
   (void) ap;
   return len;
 }
+#endif
