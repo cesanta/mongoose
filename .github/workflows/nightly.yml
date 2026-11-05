@@ -560,7 +560,8 @@ jobs:
 #      - run: make -C tutorials/${{ matrix.example.path }} build
 
   wizard_examples_arm:
-    runs-on: ubuntu-latest
+    # Keep rp-ti on 24.04: Pico SDK 2.1.1 pioasm fails with GCC 15; update SDK
+    runs-on: ${{ matrix.group == 'rp-ti' && 'ubuntu-24.04' || 'ubuntu-latest' }}
     strategy:
       fail-fast: false
       matrix:
