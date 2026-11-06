@@ -14,6 +14,7 @@ CFLAGS += -mcpu=cortex-m33 -mthumb -mfloat-abi=hard -mfpu=fpv5-sp-d16 $(CFLAGS_E
 LDFLAGS ?= -Tlink.ld -nostdlib -nostartfiles --specs=nano.specs -lc -lm -lgcc -Wl,--gc-sections
 
 SOURCES = main.c hal.c $(MGDIR)/mongoose.c
+
 SOURCES += $(MGDIR)/tutorials/mqtt/mqtt-client/mongoose_mqtt.c
 SOURCES += cmsis_mcxw71/MCXW/MCXW716C/gcc/startup_MCXW716C.S
 
@@ -23,8 +24,12 @@ firmware.bin: firmware.elf
 	arm-none-eabi-objcopy -O binary $< $@
 	arm-none-eabi-size --format=berkeley $<
 
-firmware.elf: cmsis_core cmsis_mcxw71 $(SOURCES) $(wildcard *.h) link.ld Makefile
+firmware.elf: cmsis_core cmsis_mcxw71 $(SOURCES) $(wildcard *.h) $(MGDIR)/mongoose.h link.ld Makefile mesh-config
 	arm-none-eabi-gcc $(SOURCES) $(CFLAGS) $(LDFLAGS) -o $@
+
+# Rebuild when overriding the board address or timing.
+.PHONY: mesh-config
+mesh-config:
 
 cmsis_core:
 	git clone -q -c advice.detachedHead=false --depth 1 -b 5.9.0 https://github.com/ARM-software/CMSIS_5 $@

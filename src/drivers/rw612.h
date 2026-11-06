@@ -27,6 +27,7 @@ struct mg_tcpip_driver_rw612_data {
 #define MG_DRIVER_MDC_HOLDTIME 3
 #endif
 
+#ifndef MG_TCPIP_DRIVER_INIT
 #define MG_TCPIP_DRIVER_INIT(mgr)                                 \
   do {                                                            \
     static struct mg_tcpip_driver_rw612_data driver_data_;       \
@@ -42,5 +43,6 @@ struct mg_tcpip_driver_rw612_data {
     mg_tcpip_init(mgr, &mif_);                                    \
     MG_INFO(("Driver: rw612, MAC: %M", mg_print_mac, mif_.mac)); \
   } while (0)
+#endif
 
 #endif

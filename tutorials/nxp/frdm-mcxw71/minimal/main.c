@@ -1,22 +1,40 @@
 // Copyright (c) 2026 Cesanta Software Limited
 // All rights reserved
-//
-// IPv4 over IEEE 802.15.4 on FRDM-MCXW71, Mongoose built-in TCP/IP stack.
-// The radio carries Ethernet frames, channel 15, PAN ID 0xabcd. With the
-// FRDM-RW612 eth_radio_bridge tutorial, gets an address from the LAN's DHCP
-// server and is reachable from the LAN. Serves pages on ports 80 and 443
 
 #include "hal.h"
 #include "mongoose.h"
 
+#ifndef UART_DEBUG
 #define UART_DEBUG LPUART1  // MCU-Link USB serial port
+#define UART_DEBUG_TX_PIN PIN('C', 3)
+#define UART_DEBUG_RX_PIN PIN('C', 2)
+#endif
+
+#define LED1 PIN('A', 19)
+#define LED2 PIN('A', 20)
+#define LED3 PIN('A', 21)
 
 static void log_fn(char ch, void *param) {
   hal_uart_write_buf(param, &ch, 1);
 }
 
+static void blink_task(void) {
+  static uint64_t blink_timer = 0;
+  if (hal_timer_expired(&blink_timer, 500, hal_get_tick())) {
+    hal_gpio_toggle(LED2);
+  }
+}
+
 uint64_t mg_millis(void) {
   return hal_get_tick();
+}
+
+bool mg_random(void *buf, size_t len) {
+  for (size_t n = 0; n < len; n += sizeof(uint32_t)) {
+    uint32_t r = hal_rng_read();
+    memcpy((char *) buf + n, &r, n + sizeof(r) > len ? len - n : sizeof(r));
+  }
+  return true;
 }
 
 // Self-signed P-256 certificate and key for the HTTPS listener. Created by:
@@ -70,16 +88,21 @@ static void http_ev_handler(struct mg_connection *c, int ev, void *ev_data) {
 }
 
 int main(void) {
-  hal_clock_init();
-  hal_uart_init(UART_DEBUG, 115200);
-  mg_log_set_fn(log_fn, UART_DEBUG);
+  MG_HEALTH_INIT();
 
-  if (!hal_radio_init()) MG_ERROR(("Radio init failed"));
+  hal_clock_init();
+  hal_uart_init(UART_DEBUG, UART_DEBUG_TX_PIN, UART_DEBUG_RX_PIN, 115200);
+  mg_log_set_fn(log_fn, UART_DEBUG);
+  hal_rng_init();
+  hal_radio_init();
+  hal_gpio_output(LED1), hal_gpio_write(LED1, true);  // Active low
+  hal_gpio_output(LED2), hal_gpio_write(LED2, true);  // Active low
+  hal_gpio_output(LED3), hal_gpio_write(LED3, true);  // Active low
 
   struct mg_mgr mgr;
   mg_mgr_init(&mgr);
-  mg_http_listen(&mgr, "http://0.0.0.0:80", http_ev_handler, NULL);
-  mg_http_listen(&mgr, "https://0.0.0.0:443", http_ev_handler, NULL);
+  mg_http_listen(&mgr, "http://0.0.0.0", http_ev_handler, NULL);
+  mg_http_listen(&mgr, "https://0.0.0.0", http_ev_handler, NULL);
   mg_mqtt_init(&mgr);
 
   MG_INFO(("Initialised. CPU clock: %lu MHz", SystemCoreClock / 1000000));
@@ -89,6 +112,7 @@ int main(void) {
   for (;;) {
     mg_mgr_poll(&mgr, 0);
     mg_mqtt_poll(&mgr);
+    blink_task();
   }
 
   return 0;

@@ -1,11 +1,14 @@
 # Mesh simulator. `make` builds and runs an example
 ROOT = ../..
-SRCS = simulator.c l2_mesh.c l2_802154.c star.c $(ROOT)/mongoose.c
-HDRS = simulator.h l2_mesh.h l2_802154.h star.h $(ROOT)/mongoose.h
+PROG ?= simulator
+SRCS = simulator.c mesh_a.c $(ROOT)/mongoose.c
+HDRS = simulator.h $(ROOT)/mongoose.h
 WARN = -pedantic -W -Wall -Werror -Wshadow -Wdouble-promotion -fno-common \
        -Wconversion -Wundef -Wmissing-prototypes -Wstrict-prototypes
 DEFS = -DMG_ENABLE_TCPIP=1 -DMG_ENABLE_TCPIP_DRIVER_INIT=0 -DMG_ENABLE_IPV6=0 \
-       -DMG_ENABLE_CUSTOM_MILLIS=1
+       -DMG_ENABLE_CUSTOM_MILLIS=1 -DMG_ENABLE_TCPIP_TCPRTX=1 \
+       -DMG_IO_SIZE=512 \
+       -DMG_TCPIP_ARP_MS=1000 -DMG_TCPIP_ACK_MS=500  # Slow radio: wait longer
 CFLAGS ?= -O2 -g0 $(WARN)
 X ?= 100
 Y ?= 100
@@ -18,15 +21,15 @@ GRID = $(shell for r in $$(seq 0 $(ROWS)); do \
          echo -node $$((c * $(X) / $(COLS))),$$((r * $(Y) / $(ROWS))); \
          done; done)
 
-all: mesh_sim
-	./mesh_sim -area $(X),$(Y) \
+all: $(PROG)
+	$(RUN) ./$(PROG) -area $(X),$(Y) \
 	  -bridge $$(($(X) / 2)),$$(($(Y) / 2)) \
-		$(GRID)
+		$(GRID) $(ARGS)
 
-mesh_sim: $(SRCS) $(HDRS) Makefile
+$(PROG): $(SRCS) $(HDRS) Makefile
 	$(CC) $(SRCS) $(CFLAGS) $(DEFS) -I. -I$(ROOT) -o $@
 
 clean:
-	rm -rf mesh_sim mesh_sim.dSYM
+	rm -rf $(PROG) $(PROG).dSYM *.exe
 
 .PHONY: all clean

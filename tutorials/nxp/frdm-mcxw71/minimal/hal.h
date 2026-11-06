@@ -17,11 +17,14 @@ uint64_t hal_get_tick(void);
 bool hal_timer_expired(volatile uint64_t *t, uint64_t period, uint64_t now);
 size_t hal_ram_used(void);
 size_t hal_ram_free(void);
-bool hal_radio_init(void);  // Set up the 2.4 GHz transceiver for 802.15.4
+void hal_radio_init(void);  // Set up the 2.4 GHz transceiver for 802.15.4
+uint32_t hal_rng_read(void);  // Random 32 bits, radio noise. See hal.c
 extern uint32_t SystemCoreClock;  // CPU clock, Hz. Set by hal_clock_init()
 
-
 #define BIT(x) (1UL << (x))
+#define PIN(port, num) ((((port) - 'A') << 8) | (num))
+#define PINNO(pin) (pin & 255)
+#define PINPORT(pin) (pin >> 8)
 #define CLRSET(reg, clear, set) ((reg) = ((reg) & ~(clear)) | (set))
 #define SIRC_FREQUENCY 6000000UL  // Slow IRC (FRO6M), Hz
 
@@ -92,15 +95,53 @@ static inline void hal_periph_clock(volatile uint32_t *mrcc, uint32_t src) {
   __DSB();
 }
 
-// LPUART1 is wired to the MCU-Link debug probe USB serial port.
-// TX = PTC3, RX = PTC2, both pin mux alternative 3. See board.h, pin_mux.c
-static inline void hal_uart_init(LPUART_Type *uart, unsigned long baud) {
+// PORT, the pin multiplexer, of a pin. Ports A..C
+static inline PORT_Type *hal_pin_port(uint16_t pin) {
+  PORT_Type *ports[] = {PORTA, PORTB, PORTC};
+  return ports[PINPORT(pin)];
+}
+
+// GPIO of a pin. Ports A..C
+static inline GPIO_Type *hal_pin_gpio(uint16_t pin) {
+  GPIO_Type *gpios[] = {GPIOA, GPIOB, GPIOC};
+  return gpios[PINPORT(pin)];
+}
+
+// Route a pin to function mux: 1 GPIO, others see the datasheet pinout.
+// Clocks its PORT: MRCC_PORTA..C are consecutive
+static inline void hal_pin_mux(uint16_t pin, uint32_t mux) {
+  hal_periph_clock(&MRCC->MRCC_PORTA + PINPORT(pin), 0);
+  hal_pin_port(pin)->PCR[PINNO(pin)] = PORT_PCR_MUX(mux);
+}
+
+static inline void hal_gpio_output(uint16_t pin) {
+  hal_pin_mux(pin, 1);
+  hal_periph_clock(&MRCC->MRCC_GPIOA + PINPORT(pin), 0);  // Consecutive, too
+  hal_pin_gpio(pin)->PDDR |= BIT(PINNO(pin));
+}
+
+static inline void hal_gpio_write(uint16_t pin, bool val) {
+  if (val) {
+    hal_pin_gpio(pin)->PSOR = BIT(PINNO(pin));
+  } else {
+    hal_pin_gpio(pin)->PCOR = BIT(PINNO(pin));
+  }
+}
+
+static inline void hal_gpio_toggle(uint16_t pin) {
+  hal_pin_gpio(pin)->PTOR = BIT(PINNO(pin));
+}
+
+// LPUART1, on tx and rx pins, pin mux alternative 3. On FRDM-MCXW71 it is
+// wired to the MCU-Link debug probe USB serial port: TX PTC3, RX PTC2, see
+// board.h, pin_mux.c
+static inline void hal_uart_init(LPUART_Type *uart, uint16_t tx, uint16_t rx,
+                                 unsigned long baud) {
   uint32_t src = MRCC_SRC_FRO192M, freq = hal_firc_freq();
   uint32_t best_osr = 16, best_sbr = 1, best_err = UINT32_MAX, osr;
   if (freq == 0) src = MRCC_SRC_FRO6M, freq = SIRC_FREQUENCY;  // FIRC off
-  hal_periph_clock(&MRCC->MRCC_PORTC, 0);
-  PORTC->PCR[2] = PORT_PCR_MUX(3);  // RX
-  PORTC->PCR[3] = PORT_PCR_MUX(3);  // TX
+  hal_pin_mux(rx, 3);
+  hal_pin_mux(tx, 3);
   hal_periph_clock(&MRCC->MRCC_LPUART1, src);
   // Find the oversampling ratio (4..32) that gives the lowest baud rate error
   for (osr = 4; osr <= 32; osr++) {
@@ -139,6 +180,11 @@ static inline void hal_wdog_disable(void) {
   WDOG0->TOVAL = 0xFFFF;
   WDOG0->CS = (WDOG0->CS & ~WDOG_CS_EN_MASK) | WDOG_CS_UPDATE_MASK;
   while ((WDOG0->CS & WDOG_CS_RCS_MASK) == 0) (void) 0;
+}
+
+// Random numbers come from radio noise, see hal_rng_read(): nothing to set
+// up here. The radio must be running, see hal_radio_init()
+static inline void hal_rng_init(void) {
 }
 
 static inline void hal_sys_init(void) {

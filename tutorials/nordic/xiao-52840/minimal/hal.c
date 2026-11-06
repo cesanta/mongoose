@@ -26,18 +26,6 @@ uint64_t hal_get_tick(void) {
   return s_ticks;
 };
 
-uint32_t SystemCoreClock = SYS_FREQUENCY;
-int hal_radio_err;      // Result of hal_radio_init()
-void SystemInit(void) {  // Called automatically by startup code
-  hal_system_init();     // Enable FPU
-  hal_radio_err = hal_radio_init();  // At the boot clock, see radio.c
-  hal_clock_init();
-  SysTick_Config(SystemCoreClock / 1000);  // Sys tick every 1ms
-}
-
-void ExitRun0Mode(void) {
-}
-
 struct stat;
 __attribute__((weak)) int _fstat(int fd, struct stat *st) {
   (void) fd, (void) st;
@@ -130,4 +118,24 @@ __attribute__((weak)) int mkdir(const char *path, int mode) {
 }
 
 __attribute__((weak)) void _init(void) {
+}
+
+uint64_t mg_micros(void);
+// SysTick runs at the core clock and reloads every millisecond. Sample
+// the tick counter and the sub-millisecond counter in one critical section.
+uint64_t mg_micros(void) {
+  uint32_t primask = __get_PRIMASK(), val, pending;
+  uint64_t ms;
+  __disable_irq();
+  ms = hal_get_tick();
+  pending = SCB->ICSR & SCB_ICSR_PENDSTSET_Msk;
+  val = SysTick->VAL;
+  if (pending != (SCB->ICSR & SCB_ICSR_PENDSTSET_Msk)) {
+    pending = SCB_ICSR_PENDSTSET_Msk;
+    val = SysTick->VAL;
+  }
+  __set_PRIMASK(primask);
+  if (pending != 0 && val != 0) ms++;
+  return ms * 1000 + ((uint64_t) (SysTick->LOAD - val) * 1000) /
+                         (SysTick->LOAD + 1);
 }

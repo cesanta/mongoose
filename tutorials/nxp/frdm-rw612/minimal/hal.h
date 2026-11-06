@@ -147,16 +147,22 @@ static inline void hal_gpio_toggle(uint16_t pin) {
 #define MG_HAL_SYSTICK MG_HAL_SYSTICK_NONE
 #endif
 
-static inline void hal_uart_init(USART_Type *uart, unsigned long baud) {
-  if (uart == USART0) {
+static inline void hal_uart_init(USART_Type *uart, unsigned long baud,
+                                 uint16_t tx_pin, uint16_t rx_pin) {
+  if (uart == USART0 && tx_pin == PIN(0, 3) &&
+      rx_pin == PIN(0, 2)) {
     IO_MUX_SetPinMux(IO_MUX_FC0_USART_DATA);
-  } else if (uart == USART1) {
+  } else if (uart == USART1 && tx_pin == PIN(0, 8) &&
+      rx_pin == PIN(0, 9)) {
     IO_MUX_SetPinMux(IO_MUX_FC1_USART_DATA);
-  } else if (uart == USART2) {
+  } else if (uart == USART2 && tx_pin == PIN(0, 14) &&
+      rx_pin == PIN(0, 13)) {
     IO_MUX_SetPinMux(IO_MUX_FC2_USART_DATA);
-  } else if (uart == USART3) {
+  } else if (uart == USART3 && tx_pin == PIN(0, 26) &&
+      rx_pin == PIN(0, 24)) {
     IO_MUX_SetPinMux(IO_MUX_FC3_USART_DATA);
-  } else if (uart == USART14) {
+  } else if (uart == USART14 && tx_pin == PIN(1, 24) &&
+      rx_pin == PIN(1, 25)) {
     IO_MUX_SetPinMux(IO_MUX_FC14_USART_DATA);
   } else {
     return;

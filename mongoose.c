@@ -874,8 +874,11 @@ static bool bsd_run(struct mg_bsd_cmd *cmd) {
                  cmd->op_setsockopt.optlen != sizeof(int)) {
         cmd->result = -1, cmd->err = EINVAL;
       } else if ((cmd->op_setsockopt.level == SOL_SOCKET &&
-                  (cmd->op_setsockopt.optname == SO_REUSEADDR ||
-                   cmd->op_setsockopt.optname == SO_NOSIGPIPE)) ||
+                  (cmd->op_setsockopt.optname == SO_REUSEADDR
+#ifdef SO_NOSIGPIPE
+                   || cmd->op_setsockopt.optname == SO_NOSIGPIPE
+#endif
+                   )) ||
                  (!s->is_udp && cmd->op_setsockopt.level == IPPROTO_TCP &&
                   cmd->op_setsockopt.optname == TCP_NODELAY)) {
         cmd->result = 0;
@@ -6008,70 +6011,6 @@ size_t mg_l2_driver_output(struct mg_tcpip_if *ifp, size_t len) {
 #endif
 
 #ifdef MG_ENABLE_LINES
-#line 1 "src/l2_802154.c"
-#endif
-
-
-
-#if MG_ENABLE_TCPIP
-
-// Radio frame: 802.15.4 MAC header, 15 bytes: data frame, PAN ID compression,
-// broadcast destination, our EUI-64 made from MAC as source. Then 2 bytes:
-// tag, fragment index << 4 | last fragment index. Then data. 125 bytes max,
-// 127 minus FCS
-#define MGI_802154_HDR 17
-#define MGI_802154_DATA (125 - MGI_802154_HDR)
-
-size_t mg_l2_802154_tx(struct mg_tcpip_if *ifp, const void *buf, size_t len,
-                       size_t (*send_fn)(const uint8_t *, size_t,
-                                      struct mg_tcpip_if *)) {
-  struct mg_l2_802154_data *d =
-      (struct mg_l2_802154_data *) ifp->driver_data;
-  const uint8_t *p = (const uint8_t *) buf, *m = ifp->mac;
-  uint8_t f[MGI_802154_HDR + MGI_802154_DATA];
-  size_t i, n, last = (len - 1) / MGI_802154_DATA;
-  if (len == 0 || last > 15) return 0;
-  d->tag++;
-  for (i = 0; i <= last; i++) {
-    n = i == last ? len - i * MGI_802154_DATA : MGI_802154_DATA;
-    f[0] = 0x41, f[1] = 0xd8, f[2] = d->seq++;  // 2006 frame, see above
-    f[3] = (uint8_t) d->pan_id, f[4] = (uint8_t) (d->pan_id >> 8);
-    f[5] = f[6] = 0xff;
-    f[7] = m[5], f[8] = m[4], f[9] = m[3], f[10] = 0xfe, f[11] = 0xff;
-    f[12] = m[2], f[13] = m[1], f[14] = m[0];  // Little endian EUI-64
-    f[15] = d->tag, f[16] = (uint8_t) ((i << 4) | last);
-    memcpy(f + MGI_802154_HDR, p + i * MGI_802154_DATA, n);
-    if (send_fn(f, MGI_802154_HDR + n, ifp) == 0) return 0;
-  }
-  return len;
-}
-
-size_t mg_l2_802154_rx(struct mg_tcpip_if *ifp, const uint8_t *f, size_t n,
-                       void *buf, size_t len) {
-  struct mg_l2_802154_data *d =
-      (struct mg_l2_802154_data *) ifp->driver_data;
-  size_t idx, last;
-  if (n <= MGI_802154_HDR || f[0] != 0x41 || f[1] != 0xd8 ||
-      f[3] != (uint8_t) d->pan_id || f[4] != (uint8_t) (d->pan_id >> 8))
-    return 0;  // Not ours
-  idx = f[16] >> 4, last = f[16] & 15;
-  if (idx == 0) d->rxtag = f[15], d->rxnext = 0, d->rxlen = 0;
-  if (idx == 0) memcpy(d->rxsrc, f + 7, sizeof(d->rxsrc));
-  n -= MGI_802154_HDR;
-  if (idx != d->rxnext || idx > last || f[15] != d->rxtag ||
-      memcmp(d->rxsrc, f + 7, sizeof(d->rxsrc)) != 0 ||
-      d->rxlen + n > sizeof(d->rxbuf))
-    return 0;  // Missed a fragment, or from another sender
-  memcpy(d->rxbuf + d->rxlen, f + MGI_802154_HDR, n);
-  d->rxlen = (uint16_t) (d->rxlen + n), d->rxnext++;
-  if (idx < last || d->rxlen > len) return 0;
-  memcpy(buf, d->rxbuf, d->rxlen);
-  return d->rxlen;
-}
-
-#endif
-
-#ifdef MG_ENABLE_LINES
 #line 1 "src/l2_eth.c"
 #endif
 
@@ -6290,6 +6229,626 @@ uint8_t mg_l2_eth_ip6put(struct mg_l2addr *l2addr, uint8_t *opts) {
   return 1;
 }
 #endif
+
+#endif
+
+#ifdef MG_ENABLE_LINES
+#line 1 "src/l2_mesh.c"
+#endif
+// Copyright (c) 2026 Cesanta Software Limited
+// All rights reserved
+
+
+
+
+
+
+#if MG_ENABLE_TCPIP
+
+#define MGI_ETH_MAX 1514
+#define MGI_TX_DST_LEN 2
+
+// Mesh header, after the radio header: type, then burst: the fragment's
+// index << 4 | the last fragment's index. Common to every radio
+#define MG_MESH_HDR_LEN 2
+
+#define MG_MESH_FRAME_HDR_LEN (MG_802154_HEADER_LEN + MG_MESH_HDR_LEN)
+
+// MAC header, 9 bytes: frame control 0x8841, a data frame, PAN ID
+// compression, short destination and source addresses; sequence number, 0,
+// as nothing uses it yet; PAN ID; destination; source. Little endian, as
+// the standard says
+static void mgi_802154_print_hdr(const struct mg_radio *radio, uint8_t *buf,
+                                 uint16_t dst, uint16_t src) {
+  buf[0] = 0x41, buf[1] = 0x88, buf[2] = 0;
+  buf[3] = (uint8_t) MG_802154_PAN_ID;
+  buf[4] = (uint8_t) (MG_802154_PAN_ID >> 8);
+  buf[5] = (uint8_t) dst, buf[6] = (uint8_t) (dst >> 8);
+  buf[7] = (uint8_t) src, buf[8] = (uint8_t) (src >> 8);
+  (void) radio;
+}
+
+static size_t mgi_802154_parse_hdr(const struct mg_radio *radio,
+                                   const uint8_t *buf, size_t len,
+                                   uint16_t *dst, uint16_t *src) {
+  (void) radio;
+  if (len < MG_802154_HEADER_LEN || buf[0] != 0x41 || buf[1] != 0x88 ||
+      buf[3] != (uint8_t) MG_802154_PAN_ID ||
+      buf[4] != (uint8_t) (MG_802154_PAN_ID >> 8)) {
+    return 0;
+  }
+  *dst = (uint16_t) (buf[5] | buf[6] << 8);
+  *src = (uint16_t) (buf[7] | buf[8] << 8);
+  return MG_802154_HEADER_LEN;
+}
+
+const struct mg_radio mg_radio_802154 = {
+    "802.15.4",            // name
+    125,                   // max_frame_size: 127 minus FCS
+    250000,                // bitrate
+    8,                     // overhead
+    320,                   // slot_us
+    128,                   // cca_us
+    100,                   // turnaround_us
+    640,                   // ifs_us
+    3,                     // backoff_min
+    5,                     // backoff_max
+    true,                  // csma
+    MG_802154_HEADER_LEN,  // header_len
+    mgi_802154_print_hdr,  // print_hdr
+    mgi_802154_parse_hdr   // parse_hdr
+};
+
+static uint64_t mgi_mesh_b_airtime(size_t len) {
+  const struct mg_radio *radio = &mg_radio_802154;
+  return ((uint64_t) (len + radio->overhead) * 8000000 + radio->bitrate - 1) /
+         radio->bitrate;
+}
+
+// Each queue record holds a destination and a complete burst.
+static size_t mgi_mesh_b_queue(struct mg_mesh_node *node, struct mg_queue *q,
+                               const void *buf, size_t len, uint16_t dst,
+                               uint8_t type) {
+  const struct mg_radio *radio = &mg_radio_802154;
+  const uint8_t *eth = (const uint8_t *) buf;
+  size_t hdr = MG_MESH_FRAME_HDR_LEN, cap = radio->max_frame_size - hdr;
+  size_t frames, size, i;
+  char *record;
+  uint8_t *out;
+  if (len < 14 || len > MGI_ETH_MAX) return 0;
+  frames = (len + cap - 1) / cap;
+  size = MGI_TX_DST_LEN + len + frames * (1 + hdr);
+  if (mg_queue_next(q, NULL) == 0) mg_queue_init(q, q->buf, q->size);
+  if (mg_queue_book(q, &record, size) < size) return 0;
+  out = (uint8_t *) record;
+  *out++ = (uint8_t) (dst >> 8);
+  *out++ = (uint8_t) dst;
+  for (i = 0; i < frames; i++) {
+    size_t chunk = len - i * cap;
+    if (chunk > cap) chunk = cap;
+    *out++ = (uint8_t) (hdr + chunk);
+    radio->print_hdr(radio, out, dst, node->radio_address);
+    out[radio->header_len] = type;
+    out[radio->header_len + 1] = (uint8_t) (i << 4 | (frames - 1));
+    memcpy(out + hdr, eth + i * cap, chunk);
+    out += hdr + chunk;
+  }
+  mg_queue_add(q, size);
+  return len;
+}
+
+// Copyright (c) 2026 Cesanta Software Limited
+// All rights reserved
+
+#define MGI_JOIN_WINDOW_US 3000
+#define MGI_JOIN_TURN_US 192
+#define MGI_JOIN_JITTER_US 640
+#define MGI_DATA_QUEUE_SIZE 2048
+#define MGI_TX_RETRY_US 32
+// Our frames: the radio header, with the radio addresses, then the mesh
+// header MG_MESH_HDR_LEN, then the payload
+#define MGI_JOIN_UP_LEN \
+  (MG_MESH_FRAME_HDR_LEN + 6)  // MGI_JOIN_UP's payload: MAC addr
+#define MGI_MAX_FRAGMENTS 14
+
+enum { MGI_JOIN_DOWN = 1, MGI_JOIN_UP, MGI_DATA_DOWN, MGI_DATA_UP };
+
+enum { MGI_TURN_IDLE, MGI_TURN_JOIN, MGI_TURN_DATA };
+
+struct mgi_mesh_b_data {
+  uint8_t rx_buf[MGI_ETH_MAX];  // Ethernet frame being reassembled
+  uint8_t rx_expected;          // Expected index | last index, 0xff if idle
+  struct mg_mesh_node *node;    // Owner of the TCP/IP interface
+  struct mg_queue tx;           // One record per burst of RF fragments
+  size_t tx_offset;             // Next queued fragment; zero for an empty frame
+  uint64_t tx_at;               // Next fragment or JOIN transmission time
+  uint64_t deadline;            // End of the current JOIN or DATA turn
+  struct mgi_mesh_b_peer *fanout;    // Next broadcast recipient
+  char tx_buf[MGI_DATA_QUEUE_SIZE];  // Transmit queue storage
+  uint32_t random;                   // PRNG state for join timing
+  struct mgi_mesh_b_peer *members;   // Bridge membership list
+  struct mgi_mesh_b_peer *current;   // Member whose turn is active or next
+  int8_t missed_rounds;  // -1 after a grant; otherwise completed rounds missed
+  uint16_t coordinator;  // Coordinator radio address
+  uint8_t phase;         // MGI_TURN_IDLE, MGI_TURN_JOIN, or MGI_TURN_DATA
+};
+
+struct mgi_mesh_b_peer {
+  struct mgi_mesh_b_peer *next;  // Next member in round-robin order
+  uint16_t radio_address;        // Source address supplied in MGI_JOIN_UP
+  uint8_t mac[6];                // Ethernet MAC supplied in MGI_JOIN_UP
+  uint8_t misses;                // Turns in a row it did not answer
+};
+
+static uint32_t mgi_mesh_b_random(struct mg_mesh_node *node,
+                                  struct mgi_mesh_b_data *data) {
+  uint32_t *random = &data->random;
+  if (*random == 0) {
+    size_t i;
+    *random = (uint32_t) mg_now();
+    for (i = 0; i < 6; i++) *random = *random * 33u + node->radio->mac[i];
+    if (*random == 0) *random = 1;
+  }
+  *random ^= *random << 13;
+  *random ^= *random >> 17;
+  *random ^= *random << 5;
+  return *random;
+}
+
+static const struct mg_radio *const s_mesh_default_radio = &mg_radio_802154;
+
+// Read a frame's radio addresses to dst and src, see mg_radio::parse_hdr(), and
+// return its type, from the mesh header. 0: not a frame of ours
+static unsigned mgi_mesh_b_frame_parse(const uint8_t *frame, size_t len,
+                                       uint16_t *dst, uint16_t *src) {
+  if (len < MG_MESH_FRAME_HDR_LEN ||
+      s_mesh_default_radio->parse_hdr(s_mesh_default_radio, frame, len, dst,
+                                      src) !=
+          s_mesh_default_radio->header_len) {
+    return 0;
+  }
+  return frame[s_mesh_default_radio->header_len];
+}
+
+// Write a frame's headers: the radio's, to dst from src, then ours: type,
+// and burst: high nibble is the index, low nibble is the last index
+static void mgi_mesh_b_frame_header(uint8_t *frame, uint16_t dst, uint16_t src,
+                                    uint8_t type, uint8_t burst) {
+  size_t h = s_mesh_default_radio->header_len;
+  s_mesh_default_radio->print_hdr(s_mesh_default_radio, frame, dst, src);
+  frame[h] = type, frame[h + 1] = burst;
+}
+
+static bool mgi_mesh_b_control_send(struct mg_mesh_node *node, uint16_t dst,
+                                    uint8_t command) {
+  struct mg_tcpip_if *ifp = node->radio;
+  uint8_t frame[MGI_JOIN_UP_LEN] = {0};
+  size_t len = MG_MESH_FRAME_HDR_LEN;
+  mgi_mesh_b_frame_header(frame, dst, node->radio_address, command, 0);
+  if (command == MGI_JOIN_UP) {
+    memcpy(frame + MG_MESH_FRAME_HDR_LEN, node->radio->mac, 6);
+    len = MGI_JOIN_UP_LEN;
+  }
+  return node->now >= node->tx_at && node->tx(ifp, frame, len) == len;
+}
+
+static size_t mgi_mesh_b_fragment_capacity(void) {
+  return s_mesh_default_radio->max_frame_size - MG_MESH_FRAME_HDR_LEN;
+}
+
+static uint64_t mgi_mesh_b_burst_time(size_t len) {
+  size_t cap = mgi_mesh_b_fragment_capacity();
+  size_t frames = len == 0 ? 1 : (len + cap - 1) / cap;
+  return (frames - 1) *
+             (mgi_mesh_b_airtime(s_mesh_default_radio->max_frame_size) +
+              s_mesh_default_radio->ifs_us) +
+         mgi_mesh_b_airtime(MG_MESH_FRAME_HDR_LEN + len - (frames - 1) * cap);
+}
+
+static void mgi_mesh_b_tx_finish(struct mgi_mesh_b_data *data) {
+  if (data->tx_offset != 0) {
+    if (data->fanout != NULL) data->fanout = data->fanout->next;
+    if (data->fanout == NULL) {
+      size_t len = mg_queue_next(&data->tx, NULL);
+      mg_queue_del(&data->tx, len);
+    }
+  }
+  data->tx_offset = 0;
+  data->tx_at = (uint64_t) -1;
+}
+
+static void mgi_mesh_b_tx_step(struct mgi_mesh_b_data *data, uint64_t now) {
+  struct mg_mesh_node *node = data->node;
+  struct mg_tcpip_if *radio = node->radio;
+  uint8_t empty[MG_MESH_FRAME_HDR_LEN], *frame = empty;
+  size_t len = MG_MESH_FRAME_HDR_LEN, record_len = 0;
+  uint16_t dst;
+  uint8_t command;
+  if (now < data->tx_at) return;
+  if (now >= data->deadline) {
+    mgi_mesh_b_tx_finish(data);
+    return;
+  }
+  dst = node->lan == NULL ? data->coordinator : data->current->radio_address;
+  command = node->lan == NULL ? MGI_DATA_UP : MGI_DATA_DOWN;
+  if (data->tx_offset != 0) {
+    char *record;
+    uint8_t *part;
+    record_len = mg_queue_next(&data->tx, &record);
+    part = (uint8_t *) record + data->tx_offset;
+    len = part[0];
+    frame = part + 1;
+    s_mesh_default_radio->print_hdr(s_mesh_default_radio, frame, dst,
+                                    node->radio_address);
+  } else {
+    mgi_mesh_b_frame_header(frame, dst, node->radio_address, command, 0);
+  }
+  if (now < data->node->tx_at || data->node->tx(radio, frame, len) != len) {
+    data->tx_at = now + MGI_TX_RETRY_US;
+    return;
+  }
+  if (data->tx_offset == 0 || (data->tx_offset += len + 1) == record_len) {
+    mgi_mesh_b_tx_finish(data);
+  } else {
+    data->tx_at = now + mgi_mesh_b_airtime(len) + s_mesh_default_radio->ifs_us;
+  }
+}
+
+static void mgi_mesh_b_tx_begin(struct mgi_mesh_b_data *data, bool burst,
+                                uint64_t now, uint64_t deadline) {
+  data->phase = MGI_TURN_DATA;
+  data->tx_offset = burst ? MGI_TX_DST_LEN : 0;
+  data->tx_at = now;
+  data->deadline = deadline;
+}
+
+// Return the assembled length, zero for an empty frame, or -1 if incomplete
+// or invalid. Full non-final fragments make the write offset derivable.
+static int mgi_mesh_b_data_receive(struct mgi_mesh_b_data *data,
+                                   const uint8_t *frame, size_t len,
+                                   uint64_t now) {
+  unsigned burst = frame[MG_MESH_FRAME_HDR_LEN - 1], index = burst >> 4,
+           last = burst & 15;
+  size_t chunk = len - MG_MESH_FRAME_HDR_LEN,
+         cap = mgi_mesh_b_fragment_capacity();
+  size_t offset = index * cap;
+  if (index == 0) {
+    data->rx_expected = (uint8_t) burst;
+    if (data->node->lan == NULL)
+      data->deadline = now + mgi_mesh_b_burst_time(MGI_ETH_MAX) +
+                       2 * s_mesh_default_radio->ifs_us + MGI_JOIN_TURN_US;
+  }
+  if (last >= MGI_MAX_FRAGMENTS || index > last || burst != data->rx_expected ||
+      chunk > cap || now > data->deadline || (index < last && chunk != cap) ||
+      (last != 0 && chunk == 0) || offset + chunk > sizeof(data->rx_buf)) {
+    data->rx_expected = 0xff;
+    return -1;
+  }
+  memcpy(data->rx_buf + offset, frame + MG_MESH_FRAME_HDR_LEN, chunk);
+  if (index < last) {
+    data->rx_expected = (uint8_t) (burst + 0x10);
+    return -1;
+  }
+  data->rx_expected = 0xff;
+  return offset + chunk == 0 || offset + chunk >= 14 ? (int) (offset + chunk)
+                                                     : -1;
+}
+
+// Bridge scheduling and Ethernet forwarding.
+
+#define MGI_MAX_MISSES 3  // Turns in a row without an answer: remove the member
+
+static uint16_t mgi_mesh_b_join_field(const uint8_t *p) {
+  return (uint16_t) ((unsigned) p[0] * 256 + p[1]);
+}
+
+// Return chaddr for an Ethernet DHCP server reply, even when broadcast.
+static const uint8_t *mgi_mesh_b_dhcp_client(const uint8_t *frame, size_t len) {
+  size_t ip_len, ihl, udp_len;
+  const uint8_t *udp, *dhcp;
+  if (len < 34 || mgi_mesh_b_join_field(frame + 12) != 0x0800 ||
+      (frame[14] >> 4) != 4 || frame[23] != 17 ||
+      (mgi_mesh_b_join_field(frame + 20) & 0x3fff) != 0)
+    return NULL;
+  ip_len = mgi_mesh_b_join_field(frame + 16);
+  ihl = (size_t) (frame[14] & 15) * 4;
+  if (ihl < 20 || ip_len > len - 14 || ip_len < ihl + 8 + 240) return NULL;
+  udp = frame + 14 + ihl;
+  udp_len = mgi_mesh_b_join_field(udp + 4);
+  if (mgi_mesh_b_join_field(udp) != 67 ||
+      mgi_mesh_b_join_field(udp + 2) != 68 || udp_len < 8 + 240 ||
+      udp_len > ip_len - ihl)
+    return NULL;
+  dhcp = udp + 8;
+  if (dhcp[0] != 2 || dhcp[1] != 1 || dhcp[2] != 6 ||
+      memcmp(dhcp + 236, "\x63\x82\x53\x63", 4) != 0)
+    return NULL;
+  return dhcp + 28;
+}
+
+static size_t mgi_mesh_b_enqueue(struct mg_mesh_node *node, const void *buf,
+                                 size_t len) {
+  struct mgi_mesh_b_data *data = (struct mgi_mesh_b_data *) node->data;
+  const uint8_t *frame = (const uint8_t *) buf;
+  if (node->lan == NULL)
+    return mgi_mesh_b_queue(node, &data->tx, buf, len, data->coordinator,
+                            MGI_DATA_UP);
+  if (len >= 14 && len <= MGI_ETH_MAX) {
+    const uint8_t *client = mgi_mesh_b_dhcp_client(frame, len);
+    const uint8_t *dst = client == NULL ? frame : client;
+    bool multicast = client == NULL && (frame[0] & 1) != 0;
+    struct mgi_mesh_b_peer *peer;
+    for (peer = data->members; peer != NULL; peer = peer->next) {
+      if (multicast || memcmp(dst, peer->mac, 6) == 0) {
+        uint16_t addr = multicast ? 0xffffu : peer->radio_address;
+        return mgi_mesh_b_queue(node, &data->tx, buf, len, addr, MGI_DATA_DOWN);
+      }
+    }
+  }
+  return 0;
+}
+
+static void mgi_mesh_b_bridge_queue_lan(struct mg_mesh_node *bridge) {
+  struct mg_queue *rx = &bridge->lan->recv_queue;
+  char *buf;
+  size_t len;
+  while ((len = mg_queue_next(rx, &buf)) > 0) {
+    bridge->strategy->tx(bridge, buf, len);
+    mg_queue_del(rx, len);
+  }
+}
+
+static void mgi_mesh_b_bridge_rx(uint64_t now, struct mg_mesh_node *b,
+                                 const uint8_t *frame, size_t len) {
+  struct mgi_mesh_b_data *data = (struct mgi_mesh_b_data *) b->data;
+  struct mgi_mesh_b_peer *peer;
+  uint16_t dst = 0, src = 0;
+  unsigned command = mgi_mesh_b_frame_parse(frame, len, &dst, &src);
+  if (command == MGI_DATA_UP && dst == b->radio_address &&
+      data->phase == MGI_TURN_DATA && data->current != NULL &&
+      src == data->current->radio_address && now <= data->deadline) {
+    int received = mgi_mesh_b_data_receive(data, frame, len, now);
+    if (received < 0) return;
+    if (received != 0) {
+      b->lan->driver->tx(data->rx_buf, (size_t) received, b->lan);
+    }
+    data->current->misses = 0;
+    data->current = data->current->next;
+    data->phase = MGI_TURN_IDLE;
+    data->deadline = now;
+    return;
+  }
+  if (len != MGI_JOIN_UP_LEN || command != MGI_JOIN_UP ||
+      dst != b->radio_address || data->phase != MGI_TURN_JOIN ||
+      now >= data->deadline) {
+    return;
+  }
+  if (src == 0 || src == 0xffffu) return;
+  for (peer = data->members; peer != NULL; peer = peer->next) {
+    if (peer->radio_address == src) break;
+  }
+  if (peer == NULL) {
+    peer = (struct mgi_mesh_b_peer *) calloc(1, sizeof(*peer));
+    if (peer == NULL) return;
+    peer->radio_address = src;
+    peer->next = data->members;
+    data->members = peer;
+  }
+  memcpy(peer->mac, frame + MG_MESH_FRAME_HDR_LEN, sizeof(peer->mac));
+}
+
+// Member peer did not answer its turn. After MGI_MAX_MISSES in a row, it is
+// gone: remove it, and its queued downlink frames
+static void mgi_mesh_b_member_missed(struct mgi_mesh_b_data *data,
+                                     struct mgi_mesh_b_peer *peer) {
+  if (++peer->misses < MGI_MAX_MISSES) return;
+  MG_INFO(("Member %M removed: no answer %d times", mg_print_mac, peer->mac,
+           MGI_MAX_MISSES));
+  if (data->fanout == peer) {
+    data->fanout = peer->next;
+    if (data->fanout == NULL) {
+      size_t len = mg_queue_next(&data->tx, NULL);
+      mg_queue_del(&data->tx, len);
+    }
+  }
+  LIST_DELETE(struct mgi_mesh_b_peer, &data->members, peer);
+  free(peer);
+}
+
+// A broadcast occupies one record and is sent once to each member in list
+// order.
+static size_t mgi_mesh_b_bridge_burst(struct mgi_mesh_b_data *data,
+                                      struct mgi_mesh_b_peer *peer) {
+  char *record;
+  size_t len;
+  while ((len = mg_queue_next(&data->tx, &record)) != 0) {
+    uint16_t dst = mgi_mesh_b_join_field((const uint8_t *) record);
+    struct mgi_mesh_b_peer *member;
+    if (dst == 0xffffu) {
+      if (data->fanout == NULL) data->fanout = data->members;
+      return data->fanout == peer ? len : 0;
+    }
+    if (dst == peer->radio_address) return len;
+    for (member = data->members; member != NULL; member = member->next) {
+      if (member->radio_address == dst) return 0;
+    }
+    mg_queue_del(&data->tx, len);  // Its destination has left.
+  }
+  return 0;
+}
+
+static uint64_t mgi_mesh_b_queued_burst_time(struct mgi_mesh_b_data *data,
+                                             size_t len) {
+  char *record;
+  size_t frames;
+  if (len == 0) return mgi_mesh_b_burst_time(0);
+  mg_queue_next(&data->tx, &record);
+  // Fragment zero carries the final index. Count overhead and IFS per frame.
+  frames =
+      ((uint8_t) record[MGI_TX_DST_LEN + MG_MESH_FRAME_HDR_LEN] & 15u) + 1u;
+  return mgi_mesh_b_airtime(len - MGI_TX_DST_LEN - frames +
+                            (frames - 1) * s_mesh_default_radio->overhead) +
+         (frames - 1) * s_mesh_default_radio->ifs_us;
+}
+
+static void mgi_mesh_b_bridge_io(uint64_t now, struct mg_mesh_node *b) {
+  struct mgi_mesh_b_data *data = (struct mgi_mesh_b_data *) b->data;
+  mgi_mesh_b_bridge_queue_lan(b);
+  if (now >= data->deadline) {
+    if (data->tx_at != (uint64_t) -1) mgi_mesh_b_tx_finish(data);
+    if (data->phase == MGI_TURN_DATA && data->current != NULL) {
+      struct mgi_mesh_b_peer *peer = data->current;
+      data->current = peer->next;
+      mgi_mesh_b_member_missed(data, peer);
+    } else if (data->phase == MGI_TURN_JOIN) {
+      data->current = data->members;
+    }
+    data->phase = MGI_TURN_IDLE;
+    if (data->current != NULL) {
+      size_t burst = mgi_mesh_b_bridge_burst(data, data->current);
+      uint64_t down = mgi_mesh_b_queued_burst_time(data, burst);
+      data->rx_expected = 0xff;
+      mgi_mesh_b_tx_begin(data, burst != 0, now,
+                          now + down + mgi_mesh_b_burst_time(MGI_ETH_MAX) +
+                              2 * s_mesh_default_radio->ifs_us +
+                              MGI_JOIN_TURN_US);
+    } else if (mgi_mesh_b_control_send(b, 0xffffu, MGI_JOIN_DOWN)) {
+      data->phase = MGI_TURN_JOIN;
+      data->deadline = now + MGI_JOIN_WINDOW_US;
+    }
+    if (data->deadline <= now) data->deadline = now + MGI_JOIN_TURN_US;
+  }
+}
+
+static void mgi_mesh_b_bridge_free(struct mgi_mesh_b_data *data) {
+  while (data->members != NULL) {
+    struct mgi_mesh_b_peer *peer = data->members;
+    data->members = peer->next;
+    free(peer);
+  }
+}
+
+static void mgi_mesh_b_node_rx(struct mg_mesh_node *n, uint64_t now,
+                               uint8_t *frame, size_t len) {
+  struct mgi_mesh_b_data *data = (struct mgi_mesh_b_data *) n->data;
+  uint16_t dst = 0, src = 0;
+  unsigned command = mgi_mesh_b_frame_parse(frame, len, &dst, &src);
+  if (command == MGI_JOIN_DOWN && len == MG_MESH_FRAME_HDR_LEN &&
+      dst == 0xffffu) {
+    if (n->joined && src == data->coordinator &&
+        ++data->missed_rounds >= MGI_MAX_MISSES) {
+      n->joined = false;
+      data->phase = MGI_TURN_IDLE;
+      data->tx_at = (uint64_t) -1;
+      data->tx_offset = 0;
+      data->rx_expected = 0xff;
+    }
+    if (!n->joined && (mgi_mesh_b_random(n, data) % 64) == 0) {
+      // Spread contenders across windows as well as within the reply window.
+      data->coordinator = src;
+      data->phase = MGI_TURN_JOIN;
+      data->tx_at = now + MGI_JOIN_TURN_US +
+                    mgi_mesh_b_random(n, data) % MGI_JOIN_JITTER_US;
+    }
+  } else if (command == MGI_DATA_DOWN && data->coordinator != 0 &&
+             dst == n->radio_address && src == data->coordinator) {
+    int received = mgi_mesh_b_data_receive(data, frame, len, now);
+    if (received < 0) return;
+    n->joined = true;
+    data->missed_rounds =
+        -1;  // This round had a grant; do not count it as missed.
+    if (received != 0) {
+      struct mg_tcpip_if *ifp = n->radio;
+      if (n->rx_len != 0 || (size_t) received > ifp->recv_queue.size) {
+        ifp->ndrop++;
+      } else {
+        memcpy(ifp->recv_queue.buf, data->rx_buf, (size_t) received);
+        n->rx_len = (size_t) received;
+      }
+    }
+    if (data->tx_at != (uint64_t) -1) mgi_mesh_b_tx_finish(data);
+    mgi_mesh_b_tx_begin(data, mg_queue_next(&data->tx, NULL) != 0, now,
+                        now + mgi_mesh_b_burst_time(MGI_ETH_MAX) +
+                            2 * s_mesh_default_radio->ifs_us +
+                            MGI_JOIN_TURN_US);
+  }
+}
+
+static void mgi_mesh_b_input(struct mg_mesh_node *node, void *buf, size_t len) {
+  uint64_t ready = node->now + node->strategy->radio->turnaround_us;
+  if (node->tx_at < ready) node->tx_at = ready;
+  node->next_tick = node->now;
+  if (node->lan != NULL)
+    mgi_mesh_b_bridge_rx(node->now, node, (const uint8_t *) buf, len);
+  else
+    mgi_mesh_b_node_rx(node, node->now, (uint8_t *) buf, len);
+}
+
+static void mgi_mesh_b_tick(struct mg_mesh_node *node, uint64_t now) {
+  struct mgi_mesh_b_data *data = (struct mgi_mesh_b_data *) node->data;
+  node->now = now;
+  if (node->lan != NULL) {
+    mgi_mesh_b_bridge_io(now, node);
+    mgi_mesh_b_tx_step(data, now);
+    node->next_tick = data->deadline;
+    if (data->tx_at < node->next_tick) node->next_tick = data->tx_at;
+    return;
+  }
+  if (data->phase == MGI_TURN_JOIN) {
+    if (data->tx_at <= now) {
+      if (now - data->tx_at <= MGI_JOIN_TURN_US && !node->joined)
+        mgi_mesh_b_control_send(node, data->coordinator, MGI_JOIN_UP);
+      data->tx_at = (uint64_t) -1;
+      data->phase = MGI_TURN_IDLE;
+    }
+  } else {
+    mgi_mesh_b_tx_step(data, now);
+  }
+  node->next_tick = data->tx_at;
+}
+
+static bool mgi_mesh_b_init(struct mg_mesh_node *node,
+                            struct mg_tcpip_if *radio, struct mg_tcpip_if *lan,
+                            uint16_t radio_address) {
+  struct mgi_mesh_b_data *data =
+      (struct mgi_mesh_b_data *) calloc(1, sizeof(*data));
+  memset(node, 0, sizeof(*node));
+  node->radio = radio;
+  node->lan = lan;
+  node->radio_address = radio_address;
+  node->next_tick = (uint64_t) -1;
+  node->ram_used = node->ram_peak = sizeof(*node);
+  if (data == NULL) return false;
+  node->ram_used += sizeof(*data);
+  node->ram_peak = node->ram_used;
+  data->rx_expected = 0xff;
+  node->data = data;
+  data->node = node;
+  data->tx_at = (uint64_t) -1;
+  mg_queue_init(&data->tx, data->tx_buf, sizeof(data->tx_buf));
+  if (lan != NULL) node->next_tick = 0;
+  return true;
+}
+
+static void mgi_mesh_b_free(struct mg_mesh_node *node) {
+  struct mgi_mesh_b_data *data = (struct mgi_mesh_b_data *) node->data;
+  if (data == NULL) return;
+  mgi_mesh_b_bridge_free(data);
+  free(data);
+  node->data = NULL;
+}
+
+const struct mg_mesh mg_mesh_default = {
+    "default",
+    mgi_mesh_b_init,
+    mgi_mesh_b_tick,
+    mgi_mesh_b_free,
+    mgi_mesh_b_enqueue,
+    mgi_mesh_b_input,
+    true,
+    true,
+    &mg_radio_802154,
+};
 
 #endif
 
@@ -8917,8 +9476,14 @@ void mg_multicast_restore(struct mg_connection *c, uint8_t *from) {
 #define MG_TCPIP_KEEPALIVE_MS 45000  // TCP keep-alive period, ms
 #endif
 
+#ifndef MG_TCPIP_ACK_MS
 #define MG_TCPIP_ACK_MS 150    // Timeout for ACKing
+#endif
+
+#ifndef MG_TCPIP_ARP_MS
 #define MG_TCPIP_ARP_MS 100    // Timeout for ARP response
+#endif
+
 #define MG_TCPIP_SYN_MS 15000  // Timeout for connection establishment
 #define MG_TCPIP_FIN_MS 1000   // Timeout for closing connection
 #define MG_TCPIP_RTX_MS 1000   // Initial retransmission timeout (RFC-6298, 2.1)
@@ -31951,6 +32516,8 @@ struct mg_tcpip_driver mg_tcpip_driver_imxrt = {mg_tcpip_driver_imxrt_init,
 #endif
 
 
+
+
 #if MG_ENABLE_TCPIP && defined(MG_ENABLE_DRIVER_MCXW71) && \
     MG_ENABLE_DRIVER_MCXW71
 
@@ -31960,12 +32527,12 @@ struct mg_zll {
   volatile uint32_t IRQSTS, PHY_CTRL, EVENT_TMR, TIMESTAMP, T1CMP, T2CMP,
       T2PRIMECMP, T3CMP, T4CMP, PA_PWR, CHANNEL_NUM0, LQI_AND_RSSI,
       MACSHORTADDRS0, MACLONGADDRS0_LSB, MACLONGADDRS0_MSB, RX_FRAME_FILTER,
-      CCA_LQI_CTRL, CCA2_CTRL, RESERVED_0, DSM_CTRL, RESERVED_1,
-      MACSHORTADDRS1, MACLONGADDRS1_LSB, MACLONGADDRS1_MSB, DUAL_PAN_CTRL,
-      CHANNEL_NUM1, SAM_CTRL, SAM_TABLE, SAM_MATCH, SAM_FREE_IDX,
-      SEQ_CTRL_STS, ACKDELAY, FILTERFAIL_CODE, RX_WTR_MARK, RESERVED_2,
-      SLOT_PRELOAD, SEQ_STATE, TMR_PRESCALE, LENIENCY_LSB, LENIENCY_MSB,
-      PART_ID, COEX_CTRL, COEX_PRIORITY, ENHACK_CTRL0;
+      CCA_LQI_CTRL, CCA2_CTRL, RESERVED_0, DSM_CTRL, RESERVED_1, MACSHORTADDRS1,
+      MACLONGADDRS1_LSB, MACLONGADDRS1_MSB, DUAL_PAN_CTRL, CHANNEL_NUM1,
+      SAM_CTRL, SAM_TABLE, SAM_MATCH, SAM_FREE_IDX, SEQ_CTRL_STS, ACKDELAY,
+      FILTERFAIL_CODE, RX_WTR_MARK, RESERVED_2, SLOT_PRELOAD, SEQ_STATE,
+      TMR_PRESCALE, LENIENCY_LSB, LENIENCY_MSB, PART_ID, COEX_CTRL,
+      COEX_PRIORITY, ENHACK_CTRL0;
 };
 
 // TrustZone: code built for the secure state (-mcmse) uses the secure alias
@@ -31983,113 +32550,392 @@ struct mg_zll {
 
 #define MGI_IRQSTS_SEQIRQ MG_BIT(0)
 #define MGI_IRQSTS_RXIRQ MG_BIT(2)
+#define MGI_IRQSTS_FILTERFAIL MG_BIT(5)  // Frame not for us
+#define MGI_IRQSTS_CRCVALID MG_BIT(15)
 #define MGI_IRQSTS_RX_LEN(x) (((x) >> 24) & 0x7f)  // Frame length incl. FCS
 #define MGI_PHY_CTRL_XCVSEQ 7U
 #define MGI_PHY_CTRL_ALL_IRQ_MASKS 0x8007ff00U  // Bits 8..18, 31: mask all IRQs
+#define MGI_PHY_CTRL_SEQMSK MG_BIT(8)           // Mask the sequence end IRQ
+#define MGI_PHY_CTRL_TRCV_MSK MG_BIT(31)        // Mask all transceiver IRQs
+#define MGI_IRQN 53                             // RF_802_15_4_IRQn
+#define MGI_NVIC_ISER ((volatile uint32_t *) 0xE000E100)  // Enable IRQ
+#define MGI_NVIC_ICER ((volatile uint32_t *) 0xE000E180)  // Disable IRQ
 #define MGI_SEQ_STATE_MASK 0x1fU
-#define MGI_SEQ_STATE_RX_WU 0x10U         // RX warm up
+#define MGI_SEQ_STATE_RX_WU 0x10U  // RX warm up
 #define MGI_SEQ_CTRL_NO_RX_RECYCLE MG_BIT(5)
 #define MGI_FRAME_FILTER 0x70bU  // Beacon, data, command; versions 0..2
 
-enum { MGI_SEQ_IDLE = 0, MGI_SEQ_RX = 1, MGI_SEQ_TX = 2 };  // PHY_CTRL[XCVSEQ]
-#define MGI_TX_TIMEOUT 400U  // Symbols, 16 us: 127 bytes
+// PHY_CTRL[XCVSEQ]
+enum { MGI_SEQ_IDLE = 0, MGI_SEQ_RX = 1, MGI_SEQ_TX = 2 };
+#define MGI_SEND_TIMEOUT_MS 60
 
-// Symbol timer, 16 us, 24 bits
-static uint32_t mg_mcxw71_symbols(void) {
-  return MGI_ZLL->EVENT_TMR >> 8;
-}
-
-// Wait for the sequence to end, up to MGI_TX_TIMEOUT symbols
-static bool mg_mcxw71_wait(void) {
-  uint32_t start = mg_mcxw71_symbols();
-  while (((mg_mcxw71_symbols() - start) & 0xffffffU) < MGI_TX_TIMEOUT) {
-    if (MGI_ZLL->IRQSTS & MGI_IRQSTS_SEQIRQ) return true;
-  }
-  return false;
-}
+static struct mg_tcpip_if *s_mcxw71_ifp;
+static struct mg_queue s_mcxw71_rx;
+static char s_mcxw71_queue[2048];
+static volatile bool s_mcxw71_txing, s_mcxw71_done;
+static uint64_t s_mcxw71_sendstart;
 
 // Stop the current sequence, wait for the sequencer to go idle. See PhyAbort()
-static void mg_mcxw71_idle(void) {
+static void mg_mcxw71_abort(void) {
   if (MGI_ZLL->PHY_CTRL & MGI_PHY_CTRL_XCVSEQ) {
     while ((MGI_ZLL->SEQ_STATE & MGI_SEQ_STATE_MASK) == MGI_SEQ_STATE_RX_WU)
       (void) 0;
     MGI_ZLL->PHY_CTRL &= ~MGI_PHY_CTRL_XCVSEQ;
     while (MGI_ZLL->SEQ_STATE & MGI_SEQ_STATE_MASK) (void) 0;
   }
-  MGI_ZLL->IRQSTS = MGI_ZLL->IRQSTS;  // Clear all flags, write 1 to clear
-}
-
-// Start a new sequence: MGI_SEQ_RX or MGI_SEQ_TX
-static void mg_mcxw71_start(uint32_t seq) {
   MGI_ZLL->IRQSTS = MGI_ZLL->IRQSTS;
-  MGI_ZLL->PHY_CTRL |= seq;
 }
 
-static bool mg_mcxw71_init(struct mg_tcpip_if *ifp) {
-  struct mg_l2_802154_data *d =
-      (struct mg_l2_802154_data *) ifp->driver_data;
-  if (d == NULL || d->channel < 11 || d->channel > 26) {
-    MG_ERROR(("Set driver_data, channel 11..26"));
-    return false;
+// Start receiving, with the sequence end IRQ on, see RF_802_15_4_IRQHandler()
+static void mg_mcxw71_listen(void) {
+  MGI_ZLL->IRQSTS = MGI_ZLL->IRQSTS;
+  MGI_ZLL->PHY_CTRL |= MGI_SEQ_RX;
+  MGI_ZLL->PHY_CTRL &= ~(MGI_PHY_CTRL_SEQMSK | MGI_PHY_CTRL_TRCV_MSK);
+  MGI_NVIC_ISER[MGI_IRQN / 32] = MG_BIT(MGI_IRQN % 32);
+}
+
+// Keep the IRQ handler out while we change the radio. The NVIC disable is
+// atomic, so PHY_CTRL updates here and there do not race
+static void mg_mcxw71_lock(void) {
+  MGI_NVIC_ICER[MGI_IRQN / 32] = MG_BIT(MGI_IRQN % 32);
+  __asm volatile("dsb; isb" ::: "memory");
+}
+
+// Start the TX sequence for the loaded frame. Its end: see the IRQ handler
+static void mg_mcxw71_go(void) {
+  MGI_ZLL->PHY_CTRL |= MGI_PHY_CTRL_TRCV_MSK | MGI_PHY_CTRL_SEQMSK;
+  mg_mcxw71_abort();
+  MGI_ZLL->IRQSTS = MGI_ZLL->IRQSTS;
+  MGI_ZLL->PHY_CTRL |= MGI_SEQ_TX;
+  MGI_ZLL->PHY_CTRL &= ~(MGI_PHY_CTRL_SEQMSK | MGI_PHY_CTRL_TRCV_MSK);
+}
+
+void RF_802_15_4_IRQHandler(void);
+void RF_802_15_4_IRQHandler(void) {
+  uint32_t irqsts = MGI_ZLL->IRQSTS;
+  if ((irqsts & MGI_IRQSTS_SEQIRQ) != 0) {
+    mg_mcxw71_abort();
+    if (s_mcxw71_txing) {
+      s_mcxw71_txing = false;
+      s_mcxw71_done = true;
+    } else if ((irqsts & (MGI_IRQSTS_RXIRQ | MGI_IRQSTS_FILTERFAIL |
+                          MGI_IRQSTS_CRCVALID)) ==
+               (MGI_IRQSTS_RXIRQ | MGI_IRQSTS_CRCVALID)) {
+      uint8_t frame[125];
+      size_t i, n = MGI_IRQSTS_RX_LEN(irqsts);
+      n = n >= 2 ? n - 2 : 0;
+      if (n > 0 && n <= sizeof(frame)) {
+        for (i = 0; i < n; i++) frame[i] = MGI_RX_PB[i];
+        {
+          char *dst;
+          if (mg_queue_book(&s_mcxw71_rx, &dst, n) >= n) {
+            memcpy(dst, frame, n);
+            mg_queue_add(&s_mcxw71_rx, n);
+          } else {
+            s_mcxw71_ifp->ndrop++;
+          }
+        }
+      }
+    }
+    mg_mcxw71_listen();
   }
+}
+
+static size_t mgi_mcxw71_radio_tx(struct mg_tcpip_if *ifp, const void *buf,
+                                  size_t len) {
+  size_t i;
+  (void) ifp;
+  if (len > 125 || s_mcxw71_txing) return 0;
+  mg_mcxw71_lock();
+  MGI_TX_PB[0] = (uint8_t) (len + 2);  // FCS is added by hardware
+  for (i = 0; i < len; i++)
+    MGI_TX_PB[i + 1] = ((const uint8_t *) buf)[i];  // 8-bit access only
+  s_mcxw71_done = false;
+  s_mcxw71_txing = true;
+  s_mcxw71_sendstart = mg_millis();
+  mg_mcxw71_go();
+  MGI_NVIC_ISER[MGI_IRQN / 32] = MG_BIT(MGI_IRQN % 32);
+  return len;
+}
+
+static bool mgi_mcxw71_radio_init(struct mg_tcpip_if *ifp) {
+  struct mg_tcpip_driver_mcxw71_data *data = ifp->driver_data;
+  struct mg_mesh_node *node = data->mesh;
+  s_mcxw71_ifp = ifp;
   MGI_ZLL->SEQ_CTRL_STS |= MGI_SEQ_CTRL_NO_RX_RECYCLE;
-  MGI_ZLL->PHY_CTRL = MGI_PHY_CTRL_ALL_IRQ_MASKS;  // Mask all IRQs, we poll
+  MGI_ZLL->PHY_CTRL = MGI_PHY_CTRL_ALL_IRQ_MASKS;
   MGI_ZLL->IRQSTS = MGI_ZLL->IRQSTS;
   MGI_ZLL->SAM_CTRL = 0;
   MGI_ZLL->RX_FRAME_FILTER = MGI_FRAME_FILTER;
-  MGI_ZLL->TMR_PRESCALE = 5;  // 16 us timebase, one symbol
-  MGI_ZLL->CHANNEL_NUM0 = d->channel;
-  MGI_ZLL->MACSHORTADDRS0 = (0xfffeU << 16) | d->pan_id;  // Filter by PAN ID
-  MGI_ZLL->PA_PWR = 0x3f;  // PA slices, max output power
-  mg_mcxw71_start(MGI_SEQ_RX);
+  MGI_ZLL->CHANNEL_NUM0 = MG_802154_CHANNEL;
+  MGI_ZLL->MACSHORTADDRS0 =
+      ((uint32_t) node->radio_address << 16) | MG_802154_PAN_ID;
+  MGI_ZLL->PA_PWR = 0x3f;
+  mg_mcxw71_listen();
   return true;
 }
 
-// Send one radio frame: MAC header and payload, no FCS
-static size_t mg_mcxw71_send(const uint8_t *p, size_t len,
-                             struct mg_tcpip_if *ifp) {
-  size_t i;
-  bool ok;
-  mg_mcxw71_idle();
-  MGI_TX_PB[0] = (uint8_t) (len + 2);  // FCS is added by hardware
-  for (i = 0; i < len; i++) MGI_TX_PB[i + 1] = p[i];  // 8-bit access only
-  mg_mcxw71_start(MGI_SEQ_TX);
-  ok = mg_mcxw71_wait();
-  mg_mcxw71_idle();
-  mg_mcxw71_start(MGI_SEQ_RX);
-  (void) ifp;
-  return ok ? len : 0;
+static size_t mgi_mcxw71_tx(const void *buf, size_t len,
+                            struct mg_tcpip_if *ifp) {
+  struct mg_tcpip_driver_mcxw71_data *data = ifp->driver_data;
+  return data->mesh->strategy->tx(data->mesh, buf, len);
 }
 
-static size_t mg_mcxw71_tx(const void *buf, size_t len,
-                           struct mg_tcpip_if *ifp) {
-  return mg_l2_802154_tx(ifp, buf, len, mg_mcxw71_send);
+static size_t mgi_mcxw71_rx(void *buf, size_t cap, struct mg_tcpip_if *ifp) {
+  struct mg_tcpip_driver_mcxw71_data *data = ifp->driver_data;
+  size_t len = data->mesh->rx_len;
+  if (len > cap) return 0;
+  if (len != 0 && buf != ifp->recv_queue.buf)
+    memcpy(buf, ifp->recv_queue.buf, len);
+  data->mesh->rx_len = 0;
+  return len;
 }
 
-static size_t mg_mcxw71_rx(void *buf, size_t len, struct mg_tcpip_if *ifp) {
-  uint32_t irqsts = MGI_ZLL->IRQSTS;
-  uint8_t f[125];
-  size_t i, n = 0;
-  if ((irqsts & MGI_IRQSTS_SEQIRQ) == 0) return 0;  // Still receiving
-  if (irqsts & MGI_IRQSTS_RXIRQ) {
-    n = MGI_IRQSTS_RX_LEN(irqsts);
-    n = n >= 2 ? n - 2 : 0;  // Strip FCS
-    if (n > sizeof(f)) n = sizeof(f);
-    for (i = 0; i < n; i++) f[i] = MGI_RX_PB[i];
+static bool mgi_mcxw71_poll(struct mg_tcpip_if *ifp, bool s1) {
+  struct mg_tcpip_driver_mcxw71_data *data = ifp->driver_data;
+  struct mg_mesh_node *node = data->mesh;
+  uint64_t now = mg_micros();
+  char *buf;
+  size_t len;
+  (void) s1;
+  if (s_mcxw71_txing &&
+      mg_millis() > s_mcxw71_sendstart + MGI_SEND_TIMEOUT_MS) {
+    mg_mcxw71_lock();
+    if (s_mcxw71_txing) {
+      mg_mcxw71_abort();
+      s_mcxw71_txing = false;
+      s_mcxw71_done = true;
+      mg_mcxw71_listen();
+    } else {
+      MGI_NVIC_ISER[MGI_IRQN / 32] = MG_BIT(MGI_IRQN % 32);
+    }
   }
-  mg_mcxw71_idle();
-  mg_mcxw71_start(MGI_SEQ_RX);
-  return mg_l2_802154_rx(ifp, f, n, buf, len);
+  if (s_mcxw71_done) {
+    s_mcxw71_done = false;
+    node->tx_at = now + node->strategy->radio->ifs_us;
+  }
+  node->now = now;
+  while (node->rx_len == 0 && (len = mg_queue_next(&s_mcxw71_rx, &buf)) != 0) {
+    node->strategy->rx(node, buf, len);
+    mg_queue_del(&s_mcxw71_rx, len);
+  }
+  node->strategy->tick(node, now);
+  return node->joined;
 }
 
-static bool mg_mcxw71_poll(struct mg_tcpip_if *ifp, bool s1) {
-  (void) ifp, (void) s1;
-  return true;  // Radio link is always up
+static bool mgi_mcxw71_init(struct mg_tcpip_if *ifp) {
+  struct mg_tcpip_driver_mcxw71_data *data = ifp->driver_data;
+  const struct mg_mesh *strategy = data->strategy;
+  uint16_t address;
+  address =
+      (uint16_t) (2 + ((unsigned) ifp->mac[4] * 256 + ifp->mac[5]) % 65532u);
+  if (strategy == NULL) strategy = &mg_mesh_default;
+  data->mesh = calloc(1, sizeof(*data->mesh));
+  if (data->mesh == NULL) return false;
+  if (!strategy->init(data->mesh, ifp, NULL, address)) {
+    free(data->mesh);
+    data->mesh = NULL;
+    return false;
+  }
+  data->mesh->strategy = strategy;
+  data->mesh->tx = mgi_mcxw71_radio_tx;
+  mg_queue_init(&s_mcxw71_rx, s_mcxw71_queue, sizeof(s_mcxw71_queue));
+  if (mgi_mcxw71_radio_init(ifp)) return true;
+  strategy->free(data->mesh);
+  free(data->mesh);
+  data->mesh = NULL;
+  return false;
 }
 
-struct mg_tcpip_driver mg_tcpip_driver_mcxw71 = {mg_mcxw71_init, mg_mcxw71_tx,
-                                                 mg_mcxw71_rx, mg_mcxw71_poll};
+struct mg_tcpip_driver mg_tcpip_driver_mcxw71 = {
+    mgi_mcxw71_init, mgi_mcxw71_tx, mgi_mcxw71_rx, mgi_mcxw71_poll};
+#endif
 
+#ifdef MG_ENABLE_LINES
+#line 1 "src/drivers/mg24.c"
+#endif
+
+
+
+
+#if MG_ENABLE_TCPIP && defined(MG_ENABLE_DRIVER_MG24) && MG_ENABLE_DRIVER_MG24
+
+#include <rail.h>
+#include <rail_ieee802154.h>
+
+// RAIL delivers raw frames and transmit completion from interrupt context.
+#define MG_MG24_TX_TIMEOUT_US 60000
+
+static struct mg_tcpip_if *s_mg24_ifp;
+static RAIL_Handle_t s_mg24_rail;
+static struct mg_queue s_mg24_rx;
+static char s_mg24_rxbuf[2048];
+static volatile bool s_mg24_txing, s_mg24_tx_done;
+static RAIL_Time_t s_mg24_txstart;  // Send start, us
+static uint8_t s_mg24_txfifo[256] __attribute__((aligned(4)));  // Power of 2
+
+// Copy a received PSDU, stripping the PHR and any stored FCS.
+static void mg_mg24_rx_frame(RAIL_Handle_t h) {
+  RAIL_RxPacketInfo_t info;
+  uint8_t f[128];
+  size_t n;
+  char *dst;
+  if (RAIL_GetRxPacketInfo(h, RAIL_RX_PACKET_HANDLE_NEWEST, &info) ==
+          RAIL_RX_PACKET_HANDLE_INVALID ||
+      info.packetStatus != RAIL_RX_PACKET_READY_SUCCESS ||
+      info.packetBytes <= 1 || info.packetBytes > sizeof(f)) {
+    return;
+  }
+  RAIL_CopyRxPacket(f, &info);
+  n = info.packetBytes - 1U;  // Strip PHR
+  if (n == f[0]) n -= 2;      // FCS stored, strip it
+  if (mg_queue_book(&s_mg24_rx, &dst, n) >= n) {
+    memcpy(dst, f + 1, n);
+    mg_queue_add(&s_mg24_rx, n);
+  } else {
+    s_mg24_ifp->ndrop++;
+  }
+}
+
+// RAIL event callback, runs in interrupt context
+static void mg_mg24_events(RAIL_Handle_t h, RAIL_Events_t events) {
+  if (events & RAIL_EVENT_CAL_NEEDED) {
+    RAIL_Calibrate(h, NULL, RAIL_CAL_ALL_PENDING);
+  }
+  if (events & RAIL_EVENT_RX_PACKET_RECEIVED) mg_mg24_rx_frame(h);
+  if (events & RAIL_EVENTS_TX_COMPLETION) s_mg24_tx_done = true;
+}
+
+// RAIL adds the FCS.
+static size_t mgi_mg24_radio_tx(struct mg_tcpip_if *ifp, const void *buf,
+                                size_t len) {
+  uint8_t phr = (uint8_t) (len + 2);  // FCS is added by hardware
+  (void) ifp;
+  if (len > 125 || s_mg24_txing) return 0;
+  RAIL_WriteTxFifo(s_mg24_rail, &phr, 1, true);  // Reset FIFO, write PHR
+  RAIL_WriteTxFifo(s_mg24_rail, (const uint8_t *) buf, (uint16_t) len, false);
+  s_mg24_tx_done = false;
+  s_mg24_txing = true, s_mg24_txstart = RAIL_GetTime();
+  if (RAIL_StartTx(s_mg24_rail, MG_802154_CHANNEL, RAIL_TX_OPTIONS_DEFAULT,
+                   NULL) != RAIL_STATUS_NO_ERROR) {
+    s_mg24_txing = false;
+    return 0;
+  }
+  return len;
+}
+
+static bool mgi_mg24_radio_init(struct mg_tcpip_if *ifp) {
+  struct mg_tcpip_driver_mg24_data *data = ifp->driver_data;
+  struct mg_mesh_node *node = data->mesh;
+  RAIL_Config_t cfg = {0};
+  RAIL_IEEE802154_Config_t cfg154 = {0};
+  RAIL_TxPowerConfig_t pwr;
+  RAIL_StateTransitions_t to_rx = {RAIL_RF_STATE_RX, RAIL_RF_STATE_RX};
+  RAIL_Events_t events = RAIL_EVENT_CAL_NEEDED | RAIL_EVENT_RX_PACKET_RECEIVED |
+                         RAIL_EVENTS_TX_COMPLETION;
+  cfg.eventsCallback = mg_mg24_events;
+  if ((s_mg24_rail = RAIL_Init(&cfg, NULL)) == NULL) {
+    MG_ERROR(("RAIL_Init failed"));
+    return false;
+  }
+  cfg154.ackConfig.enable = false;
+  cfg154.ackConfig.ackTimeout = 864;
+  cfg154.ackConfig.rxTransitions = to_rx;
+  cfg154.ackConfig.txTransitions = to_rx;
+  cfg154.timings.idleToRx = 100, cfg154.timings.idleToTx = 100;
+  cfg154.timings.rxToTx = 192, cfg154.timings.txToRx = 182;
+  cfg154.framesMask = RAIL_IEEE802154_ACCEPT_STANDARD_FRAMES;
+  cfg154.promiscuousMode = false;  // Filter by PAN ID and our short address
+  pwr.mode = RAIL_TX_POWER_MODE_2P4GIG_HP, pwr.voltage = 3300;
+  pwr.rampTime = 10;
+  if (RAIL_ConfigCal(s_mg24_rail, RAIL_CAL_ALL) != RAIL_STATUS_NO_ERROR ||
+      RAIL_ConfigEvents(s_mg24_rail, RAIL_EVENTS_ALL, events) !=
+          RAIL_STATUS_NO_ERROR ||
+      RAIL_IEEE802154_Config2p4GHzRadio(s_mg24_rail) != RAIL_STATUS_NO_ERROR ||
+      RAIL_IEEE802154_Init(s_mg24_rail, &cfg154) != RAIL_STATUS_NO_ERROR ||
+      RAIL_IEEE802154_SetPanId(s_mg24_rail, MG_802154_PAN_ID, 0) !=
+          RAIL_STATUS_NO_ERROR ||
+      RAIL_IEEE802154_SetShortAddress(s_mg24_rail, node->radio_address, 0) !=
+          RAIL_STATUS_NO_ERROR ||
+      RAIL_SetTxTransitions(s_mg24_rail, &to_rx) != RAIL_STATUS_NO_ERROR ||
+      RAIL_SetRxTransitions(s_mg24_rail, &to_rx) != RAIL_STATUS_NO_ERROR ||
+      RAIL_ConfigTxPower(s_mg24_rail, &pwr) != RAIL_STATUS_NO_ERROR ||
+      RAIL_SetTxPower(s_mg24_rail, RAIL_TX_POWER_LEVEL_2P4_HP_MAX) !=
+          RAIL_STATUS_NO_ERROR ||
+      RAIL_SetTxFifo(s_mg24_rail, s_mg24_txfifo, 0, sizeof(s_mg24_txfifo)) !=
+          sizeof(s_mg24_txfifo)) {
+    MG_ERROR(("RAIL setup failed"));
+    return false;
+  }
+  s_mg24_ifp = ifp;
+  return RAIL_StartRx(s_mg24_rail, MG_802154_CHANNEL, NULL) ==
+         RAIL_STATUS_NO_ERROR;
+}
+
+static size_t mgi_mg24_tx(const void *buf, size_t len,
+                          struct mg_tcpip_if *ifp) {
+  struct mg_tcpip_driver_mg24_data *data = ifp->driver_data;
+  return data->mesh->strategy->tx(data->mesh, buf, len);
+}
+
+static size_t mgi_mg24_rx(void *buf, size_t cap, struct mg_tcpip_if *ifp) {
+  struct mg_tcpip_driver_mg24_data *data = ifp->driver_data;
+  size_t len = data->mesh->rx_len;
+  if (len > cap) return 0;
+  if (len != 0 && buf != ifp->recv_queue.buf)
+    memcpy(buf, ifp->recv_queue.buf, len);
+  data->mesh->rx_len = 0;
+  return len;
+}
+
+static bool mgi_mg24_poll(struct mg_tcpip_if *ifp, bool s1) {
+  struct mg_tcpip_driver_mg24_data *data = ifp->driver_data;
+  struct mg_mesh_node *node = data->mesh;
+  uint64_t now = mg_micros();
+  char *buf;
+  size_t len;
+  (void) s1;
+  node->now = now;
+  if (s_mg24_txing && (s_mg24_tx_done || RAIL_GetTime() - s_mg24_txstart >
+                                             MG_MG24_TX_TIMEOUT_US)) {
+    if (!s_mg24_tx_done) {
+      RAIL_Idle(s_mg24_rail, RAIL_IDLE_ABORT, true);
+      RAIL_StartRx(s_mg24_rail, MG_802154_CHANNEL, NULL);
+    }
+    s_mg24_txing = false;
+    node->tx_at = now + node->strategy->radio->ifs_us;
+  }
+  while (node->rx_len == 0 && (len = mg_queue_next(&s_mg24_rx, &buf)) != 0) {
+    node->strategy->rx(node, buf, len);
+    mg_queue_del(&s_mg24_rx, len);
+  }
+  node->strategy->tick(node, now);
+  return node->joined;
+}
+static bool mgi_mg24_init(struct mg_tcpip_if *ifp) {
+  struct mg_tcpip_driver_mg24_data *data = ifp->driver_data;
+  const struct mg_mesh *strategy = data->strategy;
+  uint16_t address =
+      (uint16_t) (2 + ((unsigned) ifp->mac[4] * 256 + ifp->mac[5]) % 65532u);
+  if (strategy == NULL) strategy = &mg_mesh_default;
+  data->mesh = calloc(1, sizeof(*data->mesh));
+  if (data->mesh == NULL) return false;
+  if (!strategy->init(data->mesh, ifp, NULL, address)) {
+    free(data->mesh);
+    data->mesh = NULL;
+    return false;
+  }
+  data->mesh->strategy = strategy;
+  data->mesh->tx = mgi_mg24_radio_tx;
+  mg_queue_init(&s_mg24_rx, s_mg24_rxbuf, sizeof(s_mg24_rxbuf));
+  if (mgi_mg24_radio_init(ifp)) return true;
+  data->mesh->strategy->free(data->mesh);
+  free(data->mesh);
+  data->mesh = NULL;
+  return false;
+}
+struct mg_tcpip_driver mg_tcpip_driver_mg24 = {mgi_mg24_init, mgi_mg24_tx,
+                                               mgi_mg24_rx, mgi_mg24_poll};
 #endif
 
 #ifdef MG_ENABLE_LINES
@@ -32562,6 +33408,189 @@ struct mg_tcpip_driver mg_tcpip_driver_netc = {mg_tcpip_driver_netc_init,
                                                mg_tcpip_driver_netc_tx, NULL,
                                                mg_tcpip_driver_netc_poll};
 
+#endif
+
+#ifdef MG_ENABLE_LINES
+#line 1 "src/drivers/nrf52.c"
+#endif
+
+
+
+
+#if MG_ENABLE_TCPIP && defined(MG_ENABLE_DRIVER_NRF52) && MG_ENABLE_DRIVER_NRF52
+#include <nrf.h>
+
+static struct mg_tcpip_if *s_nrf52_ifp;
+static struct mg_queue s_nrf52_rx;
+static char s_nrf52_queue[2048];
+static uint8_t s_nrf52_rxbuf[128] __attribute__((aligned(4)));
+static uint8_t s_nrf52_txbuf[128] __attribute__((aligned(4)));
+static volatile bool s_nrf52_txing, s_nrf52_done;
+static uint64_t s_nrf52_started;
+
+static void mgi_nrf52_listen(void) {
+  NRF_RADIO->PACKETPTR = (uint32_t) s_nrf52_rxbuf;
+  NRF_RADIO->SHORTS =
+      RADIO_SHORTS_READY_START_Msk | RADIO_SHORTS_END_DISABLE_Msk;
+  NRF_RADIO->EVENTS_FRAMESTART = 0;
+  NRF_RADIO->EVENTS_END = 0;
+  NRF_RADIO->TASKS_RXEN = 1;
+}
+static void mgi_nrf52_disable(void) {
+  NRF_RADIO->SHORTS = 0;
+  NRF_RADIO->EVENTS_DISABLED = 0;
+  NRF_RADIO->TASKS_DISABLE = 1;
+  while (!NRF_RADIO->EVENTS_DISABLED) (void) 0;
+  NRF_RADIO->EVENTS_DISABLED = 0;
+}
+void RADIO_IRQHandler(void);
+void RADIO_IRQHandler(void) {
+  if (!NRF_RADIO->EVENTS_DISABLED) return;
+  NRF_RADIO->EVENTS_DISABLED = 0;
+  if (s_nrf52_txing) {
+    s_nrf52_txing = false;
+    s_nrf52_done = true;
+  } else if (NRF_RADIO->CRCSTATUS) {
+    struct mg_tcpip_driver_nrf52_data *data = s_nrf52_ifp->driver_data;
+    struct mg_mesh_node *node = data->mesh;
+    size_t len = s_nrf52_rxbuf[0] >= 2 ? s_nrf52_rxbuf[0] - 2U : 0;
+    uint8_t *frame = s_nrf52_rxbuf + 1;
+    uint16_t dst, src;
+    if (len <= 125 &&
+        mg_radio_802154.parse_hdr(&mg_radio_802154, frame, len, &dst, &src) !=
+            0 &&
+        (dst == 0xffffu || dst == node->radio_address)) {
+      char *dst;
+      if (mg_queue_book(&s_nrf52_rx, &dst, len) >= len) {
+        memcpy(dst, frame, len);
+        mg_queue_add(&s_nrf52_rx, len);
+      } else {
+        s_nrf52_ifp->ndrop++;
+      }
+    }
+  }
+  mgi_nrf52_listen();
+}
+static size_t mgi_nrf52_radio_tx(struct mg_tcpip_if *ifp, const void *buf,
+                                 size_t len) {
+  (void) ifp;
+  if (len > 125) return 0;
+  NVIC_DisableIRQ(RADIO_IRQn);
+  if (s_nrf52_txing || NRF_RADIO->EVENTS_FRAMESTART) {
+    NVIC_EnableIRQ(RADIO_IRQn);
+    return 0;
+  }
+  mgi_nrf52_disable();
+  s_nrf52_txbuf[0] = (uint8_t) (len + 2);
+  memcpy(s_nrf52_txbuf + 1, buf, len);
+  s_nrf52_done = false;
+  s_nrf52_txing = true;
+  s_nrf52_started = mg_micros();
+  NRF_RADIO->PACKETPTR = (uint32_t) s_nrf52_txbuf;
+  NRF_RADIO->SHORTS =
+      RADIO_SHORTS_READY_START_Msk | RADIO_SHORTS_END_DISABLE_Msk;
+  NRF_RADIO->TASKS_TXEN = 1;
+  NVIC_EnableIRQ(RADIO_IRQn);
+  return len;
+}
+static bool mgi_nrf52_radio_init(struct mg_tcpip_if *ifp) {
+  s_nrf52_ifp = ifp;
+  NRF_RADIO->POWER = 1;
+  NRF_RADIO->MODE = RADIO_MODE_MODE_Ieee802154_250Kbit;
+  NRF_RADIO->PCNF0 = (8UL << RADIO_PCNF0_LFLEN_Pos) |
+                     (RADIO_PCNF0_PLEN_32bitZero << RADIO_PCNF0_PLEN_Pos) |
+                     RADIO_PCNF0_CRCINC_Msk;
+  NRF_RADIO->PCNF1 = 127;
+  NRF_RADIO->CRCCNF = 0x202;
+  NRF_RADIO->CRCPOLY = 0x11021;
+  NRF_RADIO->CRCINIT = 0;
+  NRF_RADIO->MODECNF0 = (RADIO_MODECNF0_DTX_Center << RADIO_MODECNF0_DTX_Pos) |
+                        RADIO_MODECNF0_RU_Fast;
+  NRF_RADIO->SFD = 0xa7;
+  NRF_RADIO->FREQUENCY = 5 * (MG_802154_CHANNEL - 10);
+  NRF_RADIO->TXPOWER = RADIO_TXPOWER_TXPOWER_Pos8dBm;
+  // Correlator threshold 45 matches the RADIO reset value. A threshold of
+  // 20 caused false busy detections and persistent L2 retries.
+  NRF_RADIO->CCACTRL =
+      (RADIO_CCACTRL_CCAMODE_CarrierMode << RADIO_CCACTRL_CCAMODE_Pos) |
+      (2UL << RADIO_CCACTRL_CCACORRCNT_Pos) |
+      (45UL << RADIO_CCACTRL_CCACORRTHRES_Pos);
+  NRF_RADIO->INTENSET = RADIO_INTENSET_DISABLED_Msk;
+  NVIC_SetPriority(RADIO_IRQn, 0);
+  NVIC_EnableIRQ(RADIO_IRQn);
+  mgi_nrf52_listen();
+  return true;
+}
+static size_t mgi_nrf52_tx(const void *buf, size_t len,
+                           struct mg_tcpip_if *ifp) {
+  struct mg_tcpip_driver_nrf52_data *data = ifp->driver_data;
+  return data->mesh->strategy->tx(data->mesh, buf, len);
+}
+
+static size_t mgi_nrf52_rx(void *buf, size_t cap, struct mg_tcpip_if *ifp) {
+  struct mg_tcpip_driver_nrf52_data *data = ifp->driver_data;
+  size_t len = data->mesh->rx_len;
+  if (len > cap) return 0;
+  if (len != 0 && buf != ifp->recv_queue.buf)
+    memcpy(buf, ifp->recv_queue.buf, len);
+  data->mesh->rx_len = 0;
+  return len;
+}
+
+static bool mgi_nrf52_poll(struct mg_tcpip_if *ifp, bool s1) {
+  struct mg_tcpip_driver_nrf52_data *data = ifp->driver_data;
+  struct mg_mesh_node *node = data->mesh;
+  uint64_t now = mg_micros();
+  char *buf;
+  size_t len;
+  (void) s1;
+  if (s_nrf52_txing && mg_micros() - s_nrf52_started > 60000) {
+    NVIC_DisableIRQ(RADIO_IRQn);
+    mgi_nrf52_disable();
+    s_nrf52_txing = false;
+    s_nrf52_done = true;
+    mgi_nrf52_listen();
+    NVIC_EnableIRQ(RADIO_IRQn);
+  }
+  if (s_nrf52_done) {
+    s_nrf52_done = false;
+    node->tx_at = now + node->strategy->radio->ifs_us;
+  }
+  node->now = now;
+  while (node->rx_len == 0 && (len = mg_queue_next(&s_nrf52_rx, &buf)) != 0) {
+    node->strategy->rx(node, buf, len);
+    mg_queue_del(&s_nrf52_rx, len);
+  }
+  node->strategy->tick(node, now);
+  return node->joined;
+}
+
+static bool mgi_nrf52_init(struct mg_tcpip_if *ifp) {
+  struct mg_tcpip_driver_nrf52_data *data = ifp->driver_data;
+  const struct mg_mesh *strategy = data->strategy;
+  uint16_t address;
+  address =
+      (uint16_t) (2 + ((unsigned) ifp->mac[4] * 256 + ifp->mac[5]) % 65532u);
+  if (strategy == NULL) strategy = &mg_mesh_default;
+  data->mesh = calloc(1, sizeof(*data->mesh));
+  if (data->mesh == NULL) return false;
+  if (!strategy->init(data->mesh, ifp, NULL, address)) {
+    free(data->mesh);
+    data->mesh = NULL;
+    return false;
+  }
+  data->mesh->strategy = strategy;
+  data->mesh->tx = mgi_nrf52_radio_tx;
+  mg_queue_init(&s_nrf52_rx, s_nrf52_queue, sizeof(s_nrf52_queue));
+  if (mgi_nrf52_radio_init(ifp)) return true;
+  strategy->free(data->mesh);
+  free(data->mesh);
+  data->mesh = NULL;
+  return false;
+}
+
+struct mg_tcpip_driver mg_tcpip_driver_nrf52 = {mgi_nrf52_init, mgi_nrf52_tx,
+                                                mgi_nrf52_rx, mgi_nrf52_poll};
 #endif
 
 #ifdef MG_ENABLE_LINES
@@ -33524,12 +34553,21 @@ struct mg_tcpip_driver mg_tcpip_driver_rw612 = {mg_tcpip_driver_rw612_init,
 #endif
 
 #ifdef MG_ENABLE_LINES
-#line 1 "src/drivers/rw612_154.c"
+#line 1 "src/drivers/rw612w.c"
 #endif
 
 
-#if MG_ENABLE_TCPIP && defined(MG_ENABLE_DRIVER_RW612_154) && \
-    MG_ENABLE_DRIVER_RW612_154
+
+
+#if MG_ENABLE_TCPIP && defined(MG_ENABLE_DRIVER_RW612W) && \
+    MG_ENABLE_DRIVER_RW612W
+
+
+
+#ifdef ENET
+#undef ENET
+#endif
+#include <fsl_ocotp.h>
 
 // The 802.15.4 radio runs NXP combo firmware on CPU2, an OpenThread RCP. We
 // are CPU3. Messages go through the IMU mailbox: IMU messages carry IMUMC
@@ -33544,13 +34582,13 @@ struct mg_rw612_imu {
 };
 #define MGI_IMU ((struct mg_rw612_imu *) 0x443ff804)       // CPU3 -> CPU2
 #define MGI_IMU_PEER ((struct mg_rw612_imu *) 0x443ff818)  // CPU2 -> CPU3
-#define MGI_IMU_LOCKED MG_BIT(0)          // STATUS: FIFO locked
-#define MGI_IMU_ALMOST_FULL MG_BIT(1)     // STATUS: FIFO almost full
-#define MGI_IMU_EMPTY MG_BIT(3)           // STATUS: FIFO empty
+#define MGI_IMU_LOCKED MG_BIT(0)       // STATUS: FIFO locked
+#define MGI_IMU_ALMOST_FULL MG_BIT(1)  // STATUS: FIFO almost full
+#define MGI_IMU_EMPTY MG_BIT(3)        // STATUS: FIFO empty
 #define MGI_IMU_WR_PTR(s) (((s) >> 16) & 15U)
-#define MGI_IMU_INT_CLR MG_BIT(0)         // CNTL: clear message ready IRQ
-#define MGI_IMU_FLUSH MG_BIT(16)          // CNTL: flush send FIFO
-#define MGI_IMU_WAIT_FOR_ACK MG_BIT(17)   // CNTL: lock send FIFO
+#define MGI_IMU_INT_CLR MG_BIT(0)        // CNTL: clear message ready IRQ
+#define MGI_IMU_FLUSH MG_BIT(16)         // CNTL: flush send FIFO
+#define MGI_IMU_WAIT_FOR_ACK MG_BIT(17)  // CNTL: lock send FIFO
 #define MGI_IMU_WATERMARK(x) ((uint32_t) (x) << 20)
 #define MGI_IMU_WATERMARK_MASK (15U << 20)
 
@@ -33601,8 +34639,10 @@ enum {
   MGI_PROP_NCP_VERSION = 2,
   MGI_PROP_PHY_ENABLED = 0x20,
   MGI_PROP_PHY_CHAN = 0x21,
+  MGI_PROP_SADDR = 0x35,  // Short address, little endian
   MGI_PROP_PANID = 0x36,
   MGI_PROP_RAW_STREAM = 0x37,
+  MGI_PROP_PROMISCUOUS = 0x38,
   MGI_PROP_STREAM_RAW = 0x71
 };
 #define MGI_RESET_STACK 2         // RESET argument: reset the RCP stack only
@@ -33610,7 +34650,6 @@ enum {
 #define MGI_STATUS_RESET_MAX 127
 #define MGI_TX_TIMEOUT_MS 200  // Wait for transmit done, incl. retries
 #define MGI_RSP_TIMEOUT_MS 500
-#define MGI_RXQ_CNT 16  // A whole Ethernet frame, 15 radio frames
 
 // Driver state, one radio
 struct mg_rw612 {
@@ -33626,11 +34665,13 @@ struct mg_rw612 {
   bool rsp;                 // Response to the pending request received
   uint32_t rsp_status;      // Its status, if LAST_STATUS, else 0
   char version[64];         // RCP version string
-  uint8_t rxq[MGI_RXQ_CNT][127];  // Received frames, no FCS
-  uint8_t rxlen[MGI_RXQ_CNT];     // Their lengths
-  uint8_t rxhead, rxtail;         // Queue indexes
+  bool txing;               // A send is on, see mg_rw612_start()
+  uint64_t txstart;         // Its start, ms
+  struct mg_tcpip_if *ifp;  // Our interface, for the L2 receive pool
 };
 static struct mg_rw612 s_rw612;
+static struct mg_queue s_rw612w_rx;
+static char s_rw612w_queue[2048];
 
 static void mg_rw612_imu_send(uint8_t type, uint8_t subtype,
                               const uint32_t *payload, uint8_t len) {
@@ -33654,12 +34695,15 @@ static void mg_rw612_control(uint8_t subtype, uint32_t a, uint32_t b,
 }
 
 static void mg_rw612_queue_rx(const uint8_t *frame, size_t len) {
-  struct mg_rw612 *s = &s_rw612;
-  uint8_t next = (uint8_t) ((s->rxhead + 1) % MGI_RXQ_CNT);
-  if (next == s->rxtail || len > sizeof(s->rxq[0])) return;  // Full: drop
-  memcpy(s->rxq[s->rxhead], frame, len);
-  s->rxlen[s->rxhead] = (uint8_t) len;
-  s->rxhead = next;
+  {
+    char *dst;
+    if (mg_queue_book(&s_rw612w_rx, &dst, len) >= len) {
+      memcpy(dst, frame, len);
+      mg_queue_add(&s_rw612w_rx, len);
+    } else {
+      s_rw612.ifp->ndrop++;
+    }
+  }
 }
 
 // Spinel packed unsigned integer: 7 bits per byte, LSB first
@@ -33821,14 +34865,13 @@ static bool mg_rw612_imumc_send(const uint8_t *p, size_t len) {
   return true;
 }
 
-// Send a Spinel frame, HDLC encoded, and wait for the response with the
-// same transaction ID. Return false on timeout
-static bool mg_rw612_request(uint8_t *f, size_t len, uint32_t timeout_ms) {
+// Send a Spinel frame, HDLC encoded, with a new transaction ID. Its
+// response sets rsp, see mg_rw612_spinel()
+static bool mg_rw612_post(uint8_t *f, size_t len) {
   struct mg_rw612 *s = &s_rw612;
   uint8_t buf[2 * 160 + 6];
   uint16_t fcs = 0xffff;
   size_t i, n = 0;
-  uint64_t expire = mg_millis() + timeout_ms;
   s->tid = (uint8_t) (s->tid % 15 + 1);
   f[0] = (uint8_t) (0x80 | s->tid);  // Header: flag, interface 0, TID
   s->rsp = false;
@@ -33846,9 +34889,15 @@ static bool mg_rw612_request(uint8_t *f, size_t len, uint32_t timeout_ms) {
     buf[n++] = c;
   }
   buf[n++] = 0x7e;
-  if (!mg_rw612_imumc_send(buf, n)) return false;
-  while (!s->rsp && mg_millis() < expire) mg_rw612_poll_imu();
-  return s->rsp;
+  return mg_rw612_imumc_send(buf, n);
+}
+
+// Send a Spinel frame and wait for its response. Return false on timeout
+static bool mg_rw612_request(uint8_t *f, size_t len, uint32_t timeout_ms) {
+  uint64_t expire = mg_millis() + timeout_ms;
+  if (!mg_rw612_post(f, len)) return false;
+  while (!s_rw612.rsp && mg_millis() < expire) mg_rw612_poll_imu();
+  return s_rw612.rsp;
 }
 
 static bool mg_rw612_set(uint32_t prop, const uint8_t *val, size_t len) {
@@ -33866,27 +34915,43 @@ static bool mg_rw612_fail(const char *msg) {
   return false;
 }
 
-static bool mg_rw612_154_init(struct mg_tcpip_if *ifp) {
+// Start one raw transmission. The RCP adds the FCS and reports completion.
+static size_t mgi_rw612w_radio_tx(struct mg_tcpip_if *ifp, const void *buf,
+                                  size_t len) {
+  uint8_t f[3 + 2 + 127 + 4];
+  size_t n = 3;
+  if (len > 125 || s_rw612.txing) return 0;
+  f[1] = MGI_CMD_SET, f[2] = MGI_PROP_STREAM_RAW;
+  f[n++] = (uint8_t) (len + 2), f[n++] = 0;  // PSDU length, incl. FCS
+  memcpy(f + n, buf, len), n += len;
+  f[n++] = 0, f[n++] = 0;  // FCS, filled in by the radio
+  (void) ifp;
+  f[n++] = MG_802154_CHANNEL;
+  f[n++] = 0;  // Max CSMA backoffs
+  f[n++] = 0;  // Max frame retries
+  f[n++] = 0;  // CSMA disabled for scheduled turns
+  if (!mg_rw612_post(f, n)) return 0;
+  s_rw612.txing = true, s_rw612.txstart = mg_millis();
+  return len;
+}
+
+static bool mgi_rw612w_radio_init(struct mg_tcpip_if *ifp) {
   struct mg_rw612 *s = &s_rw612;
-  struct mg_l2_802154_data *d =
-      (struct mg_l2_802154_data *) ifp->driver_data;
-  uint8_t f[8], one = 1, pan[2];
+  struct mg_tcpip_driver_rw612w_data *data = ifp->driver_data;
+  struct mg_mesh_node *node = data->mesh;
+  uint8_t f[8], one = 1, zero = 0, pan[2], addr[2], channel = MG_802154_CHANNEL;
   uint64_t expire;
-  if (d == NULL || d->channel < 11 || d->channel > 26) {
-    MG_ERROR(("Set driver_data, channel 11..26"));
-    return false;
-  }
   if (MGI_MBOX->magic[0] != MGI_SYNC_MAGIC) {
     MG_ERROR(("Radio firmware is not running on CPU2"));
     return false;
   }
   memset(s, 0, sizeof(*s));
-  s->free_bufs = 0xffff;
+  s->free_bufs = 0xffff, s->ifp = ifp;
   // Reset our send FIFO, drop stale messages. See IMU_Init()
   MGI_IMU->CNTL |= MGI_IMU_FLUSH;
   MGI_IMU->CNTL &= ~(MGI_IMU_FLUSH | MGI_IMU_WAIT_FOR_ACK);
-  MGI_IMU->CNTL = (MGI_IMU->CNTL & ~MGI_IMU_WATERMARK_MASK) |
-                  MGI_IMU_WATERMARK(15);
+  MGI_IMU->CNTL =
+      (MGI_IMU->CNTL & ~MGI_IMU_WATERMARK_MASK) | MGI_IMU_WATERMARK(15);
   while ((MGI_IMU_PEER->STATUS & MGI_IMU_EMPTY) == 0) (void) MGI_IMU->RD_MSG;
   // Synchronise the IMU link, then connect the IMUMC endpoints
   MGI_MBOX->magic[1] = MGI_SYNC_MAGIC;
@@ -33913,10 +34978,15 @@ static bool mg_rw612_154_init(struct mg_tcpip_if *ifp) {
   if (!mg_rw612_set(MGI_PROP_PHY_ENABLED, &one, 1)) {
     return mg_rw612_fail("PHY enable failed");
   }
-  pan[0] = (uint8_t) d->pan_id, pan[1] = (uint8_t) (d->pan_id >> 8);
-  if (!mg_rw612_set(MGI_PROP_PHY_CHAN, &d->channel, 1) ||
-      !mg_rw612_set(MGI_PROP_PANID, pan, 2)) {
-    return mg_rw612_fail("Channel or PAN ID set failed");
+  pan[0] = (uint8_t) MG_802154_PAN_ID;
+  pan[1] = (uint8_t) (MG_802154_PAN_ID >> 8);
+  addr[0] = (uint8_t) node->radio_address;
+  addr[1] = (uint8_t) (node->radio_address >> 8);
+  if (!mg_rw612_set(MGI_PROP_PHY_CHAN, &channel, 1) ||
+      !mg_rw612_set(MGI_PROP_PANID, pan, 2) ||
+      !mg_rw612_set(MGI_PROP_SADDR, addr, 2) ||
+      !mg_rw612_set(MGI_PROP_PROMISCUOUS, &zero, 1)) {
+    return mg_rw612_fail("Channel, PAN ID or address set failed");
   }
   if (!mg_rw612_set(MGI_PROP_RAW_STREAM, &one, 1)) {
     return mg_rw612_fail("Raw stream enable failed");
@@ -33924,57 +34994,79 @@ static bool mg_rw612_154_init(struct mg_tcpip_if *ifp) {
   return true;
 }
 
-// Send one radio frame: MAC header and payload, no FCS
-static size_t mg_rw612_send(const uint8_t *p, size_t len,
+static size_t mgi_rw612w_tx(const void *buf, size_t len,
                             struct mg_tcpip_if *ifp) {
-  struct mg_l2_802154_data *d =
-      (struct mg_l2_802154_data *) ifp->driver_data;
-  uint8_t f[3 + 2 + 127 + 4];
-  size_t n = 3;
-  f[1] = MGI_CMD_SET, f[2] = MGI_PROP_STREAM_RAW;
-  f[n++] = (uint8_t) (len + 2), f[n++] = 0;  // PSDU length, incl. FCS
-  memcpy(f + n, p, len), n += len;
-  f[n++] = 0, f[n++] = 0;  // FCS, filled in by the radio
-  f[n++] = d->channel;
-  f[n++] = 4;  // Max CSMA backoffs
-  f[n++] = 0;  // Max frame retries: broadcast frames are not acknowledged
-  f[n++] = 1;  // CSMA-CA enabled
-  if (!mg_rw612_request(f, n, MGI_TX_TIMEOUT_MS)) {
-    MG_ERROR(("TX timeout"));
-    return 0;
-  }
-  if (s_rw612.rsp_status != 0) {
-    MG_VERBOSE(("TX failed, status %lu", (unsigned long) s_rw612.rsp_status));
-    return 0;
-  }
+  struct mg_tcpip_driver_rw612w_data *data = ifp->driver_data;
+  return data->mesh->strategy->tx(data->mesh, buf, len);
+}
+
+static size_t mgi_rw612w_rx(void *buf, size_t cap, struct mg_tcpip_if *ifp) {
+  struct mg_tcpip_driver_rw612w_data *data = ifp->driver_data;
+  size_t len = data->mesh->rx_len;
+  if (len > cap) return 0;
+  if (len != 0 && buf != ifp->recv_queue.buf)
+    memcpy(buf, ifp->recv_queue.buf, len);
+  data->mesh->rx_len = 0;
   return len;
 }
 
-static size_t mg_rw612_154_tx(const void *buf, size_t len,
-                              struct mg_tcpip_if *ifp) {
-  return mg_l2_802154_tx(ifp, buf, len, mg_rw612_send);
-}
-
-static size_t mg_rw612_154_rx(void *buf, size_t len, struct mg_tcpip_if *ifp) {
-  struct mg_rw612 *s = &s_rw612;
-  size_t res = 0;
+static bool mgi_rw612w_poll(struct mg_tcpip_if *ifp, bool s1) {
+  struct mg_tcpip_driver_rw612w_data *data = ifp->driver_data;
+  struct mg_mesh_node *node = data->mesh;
+  uint64_t now = mg_micros();
+  char *buf;
+  size_t len;
+  (void) s1;
+  bool was_sending = s_rw612.txing;
   mg_rw612_poll_imu();
-  while (s->rxtail != s->rxhead && res == 0) {
-    res = mg_l2_802154_rx(ifp, s->rxq[s->rxtail], s->rxlen[s->rxtail], buf,
-                          len);
-    s->rxtail = (uint8_t) ((s->rxtail + 1) % MGI_RXQ_CNT);
+  if (s_rw612.txing &&
+      (s_rw612.rsp || mg_millis() > s_rw612.txstart + MGI_TX_TIMEOUT_MS)) {
+    if (!s_rw612.rsp) MG_ERROR(("TX timeout"));
+    s_rw612.txing = false;
   }
-  return res;
+  if (was_sending && !s_rw612.txing)
+    node->tx_at = now + node->strategy->radio->ifs_us;
+  node->now = now;
+  while (node->rx_len == 0 && (len = mg_queue_next(&s_rw612w_rx, &buf)) != 0) {
+    node->strategy->rx(node, buf, len);
+    mg_queue_del(&s_rw612w_rx, len);
+  }
+  node->strategy->tick(node, now);
+  return node->joined;
 }
 
-static bool mg_rw612_154_poll(struct mg_tcpip_if *ifp, bool s1) {
-  (void) ifp, (void) s1;
-  return s_rw612.up;
+static bool mgi_rw612w_init(struct mg_tcpip_if *ifp) {
+  struct mg_tcpip_driver_rw612w_data *data = ifp->driver_data;
+  const struct mg_mesh *strategy = data->strategy;
+  uint8_t uid[FSL_OCOTP_UID_LENGTH] = {0}, digest[32];
+  uint32_t uid_len = sizeof(uid);
+  uint16_t address;
+  OCOTP_ReadUniqueID(uid, &uid_len);
+  mg_sha256(digest, uid, sizeof(uid));
+  memcpy(ifp->mac, digest, 6);
+  ifp->mac[0] = 0x02;
+  address =
+      (uint16_t) (2 + ((unsigned) ifp->mac[4] * 256 + ifp->mac[5]) % 65532u);
+  if (strategy == NULL) strategy = &mg_mesh_default;
+  data->mesh = calloc(1, sizeof(*data->mesh));
+  if (data->mesh == NULL) return false;
+  if (!strategy->init(data->mesh, ifp, NULL, address)) {
+    free(data->mesh);
+    data->mesh = NULL;
+    return false;
+  }
+  data->mesh->strategy = strategy;
+  data->mesh->tx = mgi_rw612w_radio_tx;
+  mg_queue_init(&s_rw612w_rx, s_rw612w_queue, sizeof(s_rw612w_queue));
+  if (mgi_rw612w_radio_init(ifp)) return true;
+  strategy->free(data->mesh);
+  free(data->mesh);
+  data->mesh = NULL;
+  return false;
 }
 
-struct mg_tcpip_driver mg_tcpip_driver_rw612_154 = {
-    mg_rw612_154_init, mg_rw612_154_tx, mg_rw612_154_rx, mg_rw612_154_poll};
-
+struct mg_tcpip_driver mg_tcpip_driver_rw612w = {
+    mgi_rw612w_init, mgi_rw612w_tx, mgi_rw612w_rx, mgi_rw612w_poll};
 #endif
 
 #ifdef MG_ENABLE_LINES
