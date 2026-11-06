@@ -9922,6 +9922,7 @@ static const struct mg_addr ip6_allrouters = {
     {{0xFF, 0x02, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0x02}}, 0, 0, true};
 static const struct mg_addr ip6_allnodes = {
     {{0xFF, 0x02, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0x01}}, 0, 0, true};
+static const uint8_t locpx[8] = {0xfe, 0x80, 0, 0, 0, 0, 0, 0};
 
 #define MG_IP6MATCH(a, b) (a[0] == b[0] && a[1] == b[1])
 #endif
@@ -10573,12 +10574,13 @@ static void rx_ndp_ra(struct mg_tcpip_if *ifp, struct pkt *pkt) {
 
   if (pkt->pay.len < sizeof(*ra)) return;
   if (ifp->state6 == MG_TCPIP_STATE_UP) {
-    MG_DEBUG(("Received NDP RA"));  // fill gw6 address
+    MG_DEBUG(("Received NDP RA"));  // fill gw6 address if RFC 4861 6.1.2
+    if (memcmp(pkt->ip6->src, locpx, 8) != 0 || pkt->ip6->hops != 255) return;
     // parse options
     while (opt_left >= 2) {
       uint8_t type = opts[0], len = opts[1];
       size_t length = (size_t) len * 8;
-      if (length == 0 || length > opt_left) break;  // malformed
+      if (length == 0 || length > opt_left) return;  // RFC 4861 6.1.2
       if (type == 1 && length >= 8) {
         // Received router's L2 address
         if (!mg_l2_ip6get(ifp->l2type, l2, opts + 2, len)) break;
@@ -10659,7 +10661,7 @@ static void rx_icmp6(struct mg_tcpip_if *ifp, struct pkt *pkt) {
       }
     } break;
     case 134:  // Router Advertisement
-      rx_ndp_ra(ifp, pkt);
+      if (pkt->icmp6->code == 0) rx_ndp_ra(ifp, pkt); // RFC 4861 6.1.2
       break;
     case 135:  // Neighbor Solicitation
       rx_ndp_ns(ifp, pkt);
@@ -11644,12 +11646,11 @@ static void mg_ip6_poll(struct mg_tcpip_if *ifp, bool s1) {
 static void mg_ip6_link(struct mg_tcpip_if *ifp, bool drv_up, bool l2_up) {
   bool cur_drv = (ifp->state6 != MG_TCPIP_STATE_DOWN);
   bool cur_l2 = (ifp->state6 >= MG_TCPIP_STATE_UP);
-  const uint8_t px[8] = {0xfe, 0x80, 0, 0, 0, 0, 0, 0};  // RFC-4291 2.5.6
   if (drv_up != cur_drv || l2_up != cur_l2) {  // link/L2 state has changed
     if (ifp->l2type == MG_TCPIP_L2_ETH && l2_up && ifp->ip6ll[0] == 0 &&
         ifp->ip6ll[1] == 0) {  // gen ll address
       mg_l2_genip6(ifp->l2type, ifp->ip6ll, 64, ifp->mac);
-      memcpy(ifp->ip6ll, px, 8);  // RFC-2464 5
+      memcpy(ifp->ip6ll, locpx, 8);  // RFC-4291 2.5.6; RFC-2464 5
     }  // just got our link local address if we didn't have one.
     // If static configuration is used, global addresses,
     // prefix length, and gw are already filled at this point.
@@ -11669,7 +11670,7 @@ static void mg_ip6_link(struct mg_tcpip_if *ifp, bool drv_up, bool l2_up) {
   if ((ifp->l2type == MG_TCPIP_L2_PPP || ifp->l2type == MG_TCPIP_L2_PPPoE) &&
       ifp->state6 == MG_TCPIP_STATE_UP && ifp->ip6ll[0] == 0 &&
       ifp->ip6ll[1] != 0) {     // IPV6CP has got an IFCID, gen ll address
-    memcpy(ifp->ip6ll, px, 8);  // RFC-5072 5
+    memcpy(ifp->ip6ll, locpx, 8);  // RFC-5072 5
     onstate6change(ifp);
   }  // just got our link local address if we didn't have one.
 }
