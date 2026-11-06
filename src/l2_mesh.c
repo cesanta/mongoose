@@ -391,7 +391,7 @@ static void mgi_mesh_b_bridge_rx(uint64_t now, struct mg_mesh_node *b,
     if (peer->radio_address == src) break;
   }
   if (peer == NULL) {
-    peer = (struct mgi_mesh_b_peer *) calloc(1, sizeof(*peer));
+    peer = (struct mgi_mesh_b_peer *) mg_calloc(1, sizeof(*peer));
     if (peer == NULL) return;
     peer->radio_address = src;
     peer->next = data->members;
@@ -415,7 +415,7 @@ static void mgi_mesh_b_member_missed(struct mgi_mesh_b_data *data,
     }
   }
   LIST_DELETE(struct mgi_mesh_b_peer, &data->members, peer);
-  free(peer);
+  mg_free(peer);
 }
 
 // A broadcast occupies one record and is sent once to each member in list
@@ -487,7 +487,7 @@ static void mgi_mesh_b_bridge_free(struct mgi_mesh_b_data *data) {
   while (data->members != NULL) {
     struct mgi_mesh_b_peer *peer = data->members;
     data->members = peer->next;
-    free(peer);
+    mg_free(peer);
   }
 }
 
@@ -574,7 +574,7 @@ static bool mgi_mesh_b_init(struct mg_mesh_node *node,
                             struct mg_tcpip_if *radio, struct mg_tcpip_if *lan,
                             uint16_t radio_address) {
   struct mgi_mesh_b_data *data =
-      (struct mgi_mesh_b_data *) calloc(1, sizeof(*data));
+      (struct mgi_mesh_b_data *) mg_calloc(1, sizeof(*data));
   memset(node, 0, sizeof(*node));
   node->radio = radio;
   node->lan = lan;
@@ -597,7 +597,7 @@ static void mgi_mesh_b_free(struct mg_mesh_node *node) {
   struct mgi_mesh_b_data *data = (struct mgi_mesh_b_data *) node->data;
   if (data == NULL) return;
   mgi_mesh_b_bridge_free(data);
-  free(data);
+  mg_free(data);
   node->data = NULL;
 }
 
