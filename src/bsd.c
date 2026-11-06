@@ -245,11 +245,11 @@ static void wufn(struct mg_connection *c, int ev, void *ev_data) {
           break;
         }
       }
-      free(m);
+      mg_free(m);
     }
   } else if (ev == MG_EV_CLOSE) {
     struct wumsg *m;
-    while (xQueueReceive(q, &m, 0) == pdTRUE) free(m);
+    while (xQueueReceive(q, &m, 0) == pdTRUE) mg_free(m);
     vQueueDelete(q);
     c->mgr->pipe.q = NULL;
   }
@@ -282,7 +282,7 @@ bool mg_wakeup(struct mg_mgr *mgr, unsigned long conn_id, const void *buf,
                size_t len) {
   struct wumsg *m;
   if (mgr->pipe.q == NULL || conn_id == 0) return false;
-  m = (struct wumsg *) calloc(1, sizeof(*m) + len);
+  m = (struct wumsg *) mg_calloc(1, sizeof(*m) + len);
   if (m == NULL) {
     MG_ERROR(("OOM"));
     return false;
@@ -291,7 +291,7 @@ bool mg_wakeup(struct mg_mgr *mgr, unsigned long conn_id, const void *buf,
   m->len = len;
   memcpy(m->data, buf, len);
   if (!bsd_qsend((QueueHandle_t) mgr->pipe.q, &m, 0)) {
-    free(m);
+    mg_free(m);
     return false;
   }
   return true;

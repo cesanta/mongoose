@@ -412,11 +412,11 @@ static void wufn(struct mg_connection *c, int ev, void *ev_data) {
           break;
         }
       }
-      free(m);
+      mg_free(m);
     }
   } else if (ev == MG_EV_CLOSE) {
     struct wumsg *m;
-    while (xQueueReceive(q, &m, 0) == pdTRUE) free(m);
+    while (xQueueReceive(q, &m, 0) == pdTRUE) mg_free(m);
     vQueueDelete(q);
     c->mgr->pipe.q = NULL;
   }
@@ -449,7 +449,7 @@ bool mg_wakeup(struct mg_mgr *mgr, unsigned long conn_id, const void *buf,
                size_t len) {
   struct wumsg *m;
   if (mgr->pipe.q == NULL || conn_id == 0) return false;
-  m = (struct wumsg *) calloc(1, sizeof(*m) + len);
+  m = (struct wumsg *) mg_calloc(1, sizeof(*m) + len);
   if (m == NULL) {
     MG_ERROR(("OOM"));
     return false;
@@ -458,7 +458,7 @@ bool mg_wakeup(struct mg_mgr *mgr, unsigned long conn_id, const void *buf,
   m->len = len;
   memcpy(m->data, buf, len);
   if (!bsd_qsend((QueueHandle_t) mgr->pipe.q, &m, 0)) {
-    free(m);
+    mg_free(m);
     return false;
   }
   return true;
@@ -12216,12 +12216,12 @@ static void s_version_fn(struct mg_connection *c, int ev, void *ev_data) {
   } else if (ev == MG_EV_HTTP_MSG) {
     struct mg_http_message *hm = (struct mg_http_message *) ev_data;
     char version[MG_OTA_MAX_VERSION_LEN];
-    double result;
     MG_DEBUG(("Got metadata: %.*s", hm->body.len, hm->body.buf));
     if (mg_http_status(hm) != 200 || mg_json_get(hm->body, "$", NULL) != 0 ||
         !mg_json_unescape(hm->body, "$.version", version, sizeof(version)) ||
         !mg_json_unescape(hm->body, "$.url", s_ota->url, sizeof(s_ota->url)) ||
-        !mg_json_get_num(hm->body, "$.size", &result) || result <= 0) {
+        !mg_str_to_num(mg_json_get_tok(hm->body, "$.size"), 10, &s_ota->size,
+                       sizeof(s_ota->size)) || s_ota->size == 0) {
       char buf[100];
       mg_snprintf(buf, sizeof(buf), "Bad metadata: %.*s", hm->body.len,
                   hm->body.buf);
@@ -12235,7 +12235,6 @@ static void s_version_fn(struct mg_connection *c, int ev, void *ev_data) {
       s_ota = NULL;
     } else {
       struct mg_connection *fc;
-      s_ota->size = (size_t) result;
       // TODO (robertc2000): parse and validate sha256
       MG_DEBUG(("Firmware version: %s, url: %s, size: %ld", version, s_ota->url,
                 s_ota->size));

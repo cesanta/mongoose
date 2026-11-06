@@ -102,12 +102,12 @@ static void s_version_fn(struct mg_connection *c, int ev, void *ev_data) {
   } else if (ev == MG_EV_HTTP_MSG) {
     struct mg_http_message *hm = (struct mg_http_message *) ev_data;
     char version[MG_OTA_MAX_VERSION_LEN];
-    double result;
     MG_DEBUG(("Got metadata: %.*s", hm->body.len, hm->body.buf));
     if (mg_http_status(hm) != 200 || mg_json_get(hm->body, "$", NULL) != 0 ||
         !mg_json_unescape(hm->body, "$.version", version, sizeof(version)) ||
         !mg_json_unescape(hm->body, "$.url", s_ota->url, sizeof(s_ota->url)) ||
-        !mg_json_get_num(hm->body, "$.size", &result) || result <= 0) {
+        !mg_str_to_num(mg_json_get_tok(hm->body, "$.size"), 10, &s_ota->size,
+                       sizeof(s_ota->size)) || s_ota->size == 0) {
       char buf[100];
       mg_snprintf(buf, sizeof(buf), "Bad metadata: %.*s", hm->body.len,
                   hm->body.buf);
@@ -121,7 +121,6 @@ static void s_version_fn(struct mg_connection *c, int ev, void *ev_data) {
       s_ota = NULL;
     } else {
       struct mg_connection *fc;
-      s_ota->size = (size_t) result;
       // TODO (robertc2000): parse and validate sha256
       MG_DEBUG(("Firmware version: %s, url: %s, size: %ld", version, s_ota->url,
                 s_ota->size));
