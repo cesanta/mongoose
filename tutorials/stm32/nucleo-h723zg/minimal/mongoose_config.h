@@ -28,6 +28,7 @@
 
 // Crash report support. Health record lives in the .mg_health region, see link.ld
 #define MG_ENABLE_HEALTH 1
+#define MG_ENABLE_CUSTOM_USAGE 1
 
 // mdash.net device management service support
 #define MG_ENABLE_MDASH 0
