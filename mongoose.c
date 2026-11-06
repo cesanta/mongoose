@@ -19827,8 +19827,8 @@ static int mg_tls_parse_cert_der(void *buf, size_t dersz,
       return -1;
     }
     if (mg_der_next(&field, &after) <= 0 || ((after.type != 0x17 || after.len != 13) && (after.type != 0x18 || after.len != 15))) return -1;
-    if (memcmp(after.value, "99991231235959Z", 15) == 0) { // RFC-5280 4.1.2.5
-      MG_ERROR(("No well-defined expiration date"));
+    if (after.len == 15 && memcmp(after.value, "99991231235959Z", 15) == 0) {
+      MG_ERROR(("No well-defined expiration date"));  // RFC-5280 4.1.2.5
       return -1;
     }
     if (now > (t = asnt2t(after.value, after.type))) {
@@ -19916,7 +19916,7 @@ static int mg_tls_parse_cert_der(void *buf, size_t dersz,
           }
           if (i.type != 0x04) return -1;
           if (mg_der_next(&i, &b) <= 0 || b.type != 0x03) return -1;
-          if (!(b.value[1] & MG_BIT(2))) certsign = false;
+          if (b.len < 2 || !(b.value[1] & MG_BIT(2))) certsign = false;
         }
       }
       if (ca && certsign) cert->is_ca = true;
@@ -20330,15 +20330,15 @@ static int mg_tls_recv_cert_verify(struct mg_connection *c) {
         mg_error(c, "certverify scheme %04x does not match the key", sigalg);
         return -1;
       }
-      if (mg_der_to_tlv(sigbuf, siglen, &seq) < 0) {
+      if (mg_der_to_tlv(sigbuf, siglen, &seq) < 0 || seq.type != 0x30) {
         mg_error(c, "verification message is not an ASN.1 DER sequence");
         return -1;
       }
-      if (mg_der_to_tlv(seq.value, seq.len, &r) < 0) {
+      if (mg_der_next(&seq, &r) <= 0 || r.type != 2) {
         mg_error(c, "missing first part of the signature");
         return -1;
       }
-      if (mg_der_to_tlv(r.value + r.len, seq.len - r.len, &s) < 0) {
+      if (mg_der_next(&seq, &s) <= 0 || s.type != 2) {
         mg_error(c, "missing second part of the signature");
         return -1;
       }
