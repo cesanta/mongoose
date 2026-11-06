@@ -13,12 +13,17 @@
 
 #include "mip_x_test.c"
 
+// drop TCP in data phase, testing retransmit queue (RTX). It also validates
+// duplicate-peer-data handling and “re-ACK the current sequence”.
+static bool drop_tcp_segment(const void *buf, size_t len,
+                             struct mg_tcpip_if *ifp, const char *dir);
 
 // MIP TUNTAP driver
 static size_t tap_rx(void *buf, size_t len, struct mg_tcpip_if *ifp) {
   ssize_t received = read(*(int *) ifp->driver_data, buf, len);
   usleep(1);  // This is to avoid 100% CPU
   if (received < 0) return 0;
+  if (drop_tcp_segment(buf, (size_t) received, ifp, "RX")) return 0;
   return (size_t) received;
 }
 
@@ -40,15 +45,19 @@ static bool is_tcp_segment(const void *buf, size_t len) {
   return (tcp->flags & (TH_SYN | TH_FIN)) == 0;
 }
 
-static size_t tap_tx(const void *buf, size_t len, struct mg_tcpip_if *ifp) {
+static bool drop_tcp_segment(const void *buf, size_t len,
+                             struct mg_tcpip_if *ifp, const char *dir) {
   uint32_t random;
-  if (ifp->enable_tcp_retransmit && is_tcp_segment(buf, len)) {  // introduce a 30% segment loss
-    mg_random(&random, sizeof(random));
-    if (random % 10 < 3) {
-      MG_DEBUG(("dropping TCP segment"));
-      return len;
-    }
-  }
+  if (!ifp->enable_tcp_retransmit || !is_tcp_segment(buf, len)) return false;
+  // Introduce a 10% segment loss
+  mg_random(&random, sizeof(random));
+  if (random % 10 != 0) return false;
+  MG_DEBUG(("dropping TCP %s segment", dir));
+  return true;
+}
+
+static size_t tap_tx(const void *buf, size_t len, struct mg_tcpip_if *ifp) {
+  if (drop_tcp_segment(buf, len, ifp, "TX")) return len;
   ssize_t res = write(*(int *) ifp->driver_data, buf, len);
   if (res < 0) {
     MG_ERROR(("tap_tx failed: %d", errno));

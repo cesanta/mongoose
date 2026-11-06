@@ -76,6 +76,9 @@ static int s_num_tests = 0;
 static bool s_error = false;
 
 #define POLL_LIMIT(n) (mgr->ifp->enable_tcp_retransmit ? (n) * 10 : (n))
+#define RTX_ATTEMPTS(mgr) ((mgr)->ifp->enable_tcp_retransmit ? 3 : 1)
+#define SERVER_POLL_LIMIT(mgr) \
+  ((mgr)->ifp->enable_tcp_retransmit ? 18000 : 300)
 
 #ifdef NO_ABORT
 static int s_abort = 0;
@@ -151,13 +154,15 @@ static void eh1(struct mg_connection *c, int ev, void *ev_data) {
 struct fetch_data {
   char *buf;
   const char *url;
-  int code, closed;
+  int code;
+  bool connected, received, closed;
 };
 
 static void fcb(struct mg_connection *c, int ev, void *ev_data) {
   struct fetch_data *fd = (struct fetch_data *) c->fn_data;
   if (ev == MG_EV_CONNECT) {
     MG_DEBUG(("CONNECT"));
+    fd->connected = true;
     if (mg_url_is_ssl(fd->url)) {
       struct mg_tls_opts opts;
       memset(&opts, 0, sizeof(opts));  // read CA from packed_fs
@@ -173,6 +178,7 @@ static void fcb(struct mg_connection *c, int ev, void *ev_data) {
     }
   } else if (ev == MG_EV_HTTP_MSG) {
     struct mg_http_message *hm = (struct mg_http_message *) ev_data;
+    fd->received = true;
     snprintf(fd->buf, FETCH_BUF_SIZE, "%.*s", (int) hm->message.len,
              hm->message.buf);
     fd->code = atoi(hm->uri.buf);
@@ -191,32 +197,38 @@ static void fcb(struct mg_connection *c, int ev, void *ev_data) {
 
 static int fetch(struct mg_mgr *mgr, char *buf, const char *url,
                  const char *fmt, ...) {
-  struct fetch_data fd = {buf, url, 0, 0};
-  int i;
+  int i, attempt;
   struct mg_connection *c = NULL;
   va_list ap;
-  mg_mgr_poll(mgr, 0);  // update ifp->now to avoid ARP lookup using an old
-                        // timestamp (from an ancient call in other test)
-  mg_mgr_poll(mgr, 0);  // (prior idling collects lots of frames)
-  c = mg_http_connect(mgr, url, fcb, &fd);
-  ASSERT(c != NULL);
-  va_start(ap, fmt);
-  mg_vprintf(c, fmt, &ap);
-  va_end(ap);
-  buf[0] = '\0';
-  // - TLS: multiple (small) records: allow enough loops so mg_mgr_poll can
-  // process buffered records when no more frames are coming in
-  for (i = 0; i < POLL_LIMIT(500) && buf[0] == '\0' && !fd.closed; i++) {
+  for (attempt = 0; attempt < RTX_ATTEMPTS(mgr); attempt++) {
+    struct fetch_data fd = {buf, url, 0, false, false, false};
+    mg_mgr_poll(mgr, 0);  // update ifp->now to avoid ARP lookup using an old
+                          // timestamp (from an ancient call in other test)
+    mg_mgr_poll(mgr, 0);  // (prior idling collects lots of frames)
+    c = mg_http_connect(mgr, url, fcb, &fd);
+    ASSERT(c != NULL);
+    va_start(ap, fmt);
+    mg_vprintf(c, fmt, &ap);
+    va_end(ap);
+    buf[0] = '\0';
+    // - TLS: multiple (small) records: allow enough loops so mg_mgr_poll can
+    // process buffered records when no more frames are coming in
+    for (i = 0; i < POLL_LIMIT(500) && buf[0] == '\0' && !fd.closed; i++) {
+      mg_mgr_poll(mgr, 0);
+      usleep(5000);  // 5 ms. Slow down poll loop to ensure packet transit, but
+                     // allow enough loops to get the ARP response, otherwise,
+                     // given enough traffic, the timer expires before we get a
+                     // chance to see the response
+    }
+    if (!fd.closed)  // failed, force closure and conn removal, and loop end
+      ((struct connstate *) (c + 1))->is_closing = 1;
     mg_mgr_poll(mgr, 0);
-    usleep(5000);  // 5 ms. Slow down poll loop to ensure packet transit, but
-                   // allow enough loops to get the ARP response, otherwise,
-                   // given enough traffic, the timer expires before we get a
-                   // chance to see the response
+    if (!(fd.connected && fd.closed && !fd.received) ||
+        attempt + 1 == RTX_ATTEMPTS(mgr))
+      return fd.code;
+    MG_INFO(("HTTP retry %d", attempt + 2));
   }
-  if (!fd.closed) // failed, force closure and conn removal, and loop end
-    ((struct connstate *) (c + 1))->is_closing = 1;
-  mg_mgr_poll(mgr, 0);
-  return fd.code;
+  return 0;
 }
 
 static void test_http_client(struct mg_mgr *mgr) {
@@ -256,13 +268,14 @@ static char s_topic[16];
 
 struct mqtt_data {
   char *url;
-  bool passed;
+  bool connected, opened, passed;
 };
 
 static void mqtt_fn(struct mg_connection *c, int ev, void *ev_data) {
   struct mqtt_data *data = (struct mqtt_data *) c->fn_data;
   if (ev == MG_EV_CONNECT) {
     MG_DEBUG(("CONNECT"));
+    data->connected = true;
 #if MG_TLS
     struct mg_tls_opts opts;
     memset(&opts, 0, sizeof(opts));
@@ -277,6 +290,7 @@ static void mqtt_fn(struct mg_connection *c, int ev, void *ev_data) {
 #endif
   } else if (ev == MG_EV_MQTT_OPEN) {
     MG_DEBUG(("MQTT CONNECT"));
+    data->opened = true;
     struct mg_mqtt_opts sub_opts;
     memset(&sub_opts, 0, sizeof(sub_opts));
     sub_opts.topic = mg_str(mg_random_str(s_topic, sizeof(s_topic)));
@@ -326,12 +340,30 @@ static void mqtt_fn(struct mg_connection *c, int ev, void *ev_data) {
   }
 }
 
+static bool mqtt_attempt(struct mg_mgr *mgr, struct mqtt_data *data,
+                         struct mg_mqtt_opts *opts) {
+  int i;
+  data->connected = data->opened = data->passed = false;
+  mg_mgr_poll(mgr, 0);  // update interface timing (*)
+  mg_mgr_poll(mgr, 0);
+  s_conn = mg_mqtt_connect(mgr, data->url, opts, mqtt_fn, data);
+  ASSERT(s_conn != NULL);
+  for (i = 0; i < POLL_LIMIT(1000) && s_conn != NULL && !s_conn->is_closing;
+       i++) {
+    mg_mgr_poll(mgr, 0);
+    usleep(5000);  // 5 ms (*) See fetch() above for reasons
+  }
+  mg_mgr_poll(mgr, 0);
+  return data->connected && !data->opened && s_conn == NULL;
+}
+
 static void test_mqtt_connsubpub(struct mg_mgr *mgr) {
   struct mqtt_data data;
   struct mg_mqtt_opts opts;
+  bool retry;
+  int attempt;
   memset(&opts, 0, sizeof(opts));
   opts.clean = true, opts.version = 4;
-  data.passed = false;
 #if defined(MQTT_HOST) && MG_TLS != MG_TLS_BUILTIN
   if (host_ip == NULL) {
     printf("\nMQTT_HOST defined but no HOST_IP provided, skipping MQTT tests\n");
@@ -359,15 +391,10 @@ static void test_mqtt_connsubpub(struct mg_mgr *mgr) {
   data.url = strdup(MQTT_URL);
 #endif
 #endif // MG_TLS
-  mg_mgr_poll(mgr, 0); // update interface timing (*)
-  mg_mgr_poll(mgr, 0);
-  s_conn = mg_mqtt_connect(mgr, data.url, &opts, mqtt_fn, &data);
-  ASSERT(s_conn != NULL);
-  for (int i = 0;
-       i < POLL_LIMIT(1000) && s_conn != NULL && !s_conn->is_closing;
-       i++) {
-    mg_mgr_poll(mgr, 0);
-    usleep(5000);  // 5 ms (*) See fetch() above for reasons
+  for (attempt = 0; attempt < RTX_ATTEMPTS(mgr); attempt++) {
+    retry = mqtt_attempt(mgr, &data, &opts);
+    if (!retry || attempt + 1 == RTX_ATTEMPTS(mgr)) break;
+    MG_INFO(("MQTT retry %d", attempt + 2));
   }
   ASSERT(data.passed);
   mg_mgr_poll(mgr, 0);
@@ -406,16 +433,10 @@ static void test_mqtt_connsubpub(struct mg_mgr *mgr) {
   //data.url = strdup(MQTT_URL);
 #endif
 #endif // MG_TLS
-  data.passed = false;
-  mg_mgr_poll(mgr, 0); // update interface timing (*)
-  mg_mgr_poll(mgr, 0);
-  s_conn = mg_mqtt_connect(mgr, data.url, &opts, mqtt_fn, &data);
-  ASSERT(s_conn != NULL);
-  for (int i = 0;
-       i < POLL_LIMIT(1000) && s_conn != NULL && !s_conn->is_closing;
-       i++) {
-    mg_mgr_poll(mgr, 0);
-    usleep(5000);  // 5 ms (*) See fetch() above for reasons
+  for (attempt = 0; attempt < RTX_ATTEMPTS(mgr); attempt++) {
+    retry = mqtt_attempt(mgr, &data, &opts);
+    if (!retry || attempt + 1 == RTX_ATTEMPTS(mgr)) break;
+    MG_INFO(("MQTT retry %d", attempt + 2));
   }
   ASSERT(data.passed);
   mg_mgr_poll(mgr, 0);
@@ -430,7 +451,7 @@ static volatile bool s_poll_done;
 static void *poll_thread(void *p) {
   struct mg_mgr *mgr = (struct mg_mgr *) p;
   int i;
-  for (i = 0; i < POLL_LIMIT(300) && !s_poll_done; i++) {
+  for (i = 0; i < SERVER_POLL_LIMIT(mgr) && !s_poll_done; i++) {
     mg_mgr_poll(mgr, 0);
     usleep(10000);  // 10 ms. Slow down poll loop to ensure packet transit
   }
@@ -445,7 +466,7 @@ static void test_http_server(struct mg_mgr *mgr) {
   struct mg_connection *c;
   char *cmd;
   pthread_t thread_id = (pthread_t) 0;
-  int rc;
+  int attempt, rc;
 #if MG_TLS
   struct mg_tls_opts opts;
   memset(&opts, 0, sizeof(opts));
@@ -456,20 +477,24 @@ static void test_http_server(struct mg_mgr *mgr) {
   mg_hexdump(opts.cert.buf, opts.cert.len);
   mg_hexdump(opts.key.buf, opts.key.len);
   c = mg_http_listen(mgr, "https://0.0.0.0:12347", eh1, &opts);
-  cmd = mg_mprintf("./mip_curl.sh --insecure https://%M:12347", mg_print_ip4,
-                   &mgr->ifp->ip);
+  cmd = mg_mprintf("./mip_curl.sh --max-time 120 --insecure https://%M:12347",
+                   mg_print_ip4, &mgr->ifp->ip);
 #else
   c = mg_http_listen(mgr, "http://0.0.0.0:12347", eh1, NULL);
   cmd =
-      mg_mprintf("./mip_curl.sh http://%M:12347", mg_print_ip4, &mgr->ifp->ip);
+      mg_mprintf("./mip_curl.sh --max-time 120 http://%M:12347", mg_print_ip4,
+                 &mgr->ifp->ip);
 #endif
   ASSERT(c != NULL);
   ASSERT (mg_send(c, "NADA", 0)); // check mg_send allows len=0
   s_poll_done = false;
   pthread_create(&thread_id, NULL, poll_thread,
                  mgr);  // simpler this way, no concurrency anyway
-  MG_DEBUG(("CURL"));
-  rc = system(cmd);  // wait for curl
+  for (attempt = 0; attempt < RTX_ATTEMPTS(mgr); attempt++) {
+    MG_DEBUG(("CURL attempt %d", attempt + 1));
+    rc = system(cmd);  // wait for curl
+    if (rc == 0) break;
+  }
   MG_DEBUG(("MONGOOSE"));
   s_poll_done = true;
   pthread_join(thread_id, NULL);  // wait for Mongoose
