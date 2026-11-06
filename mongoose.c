@@ -9976,7 +9976,7 @@ static void onstatechange(struct mg_tcpip_if *ifp) {
     if (ifp->is_ip_changed) {
       struct mg_connection *c;
       for (c = ifp->mgr->conns; c != NULL; c = c->next) {
-        if (!c->is_listening && !c->is_udp) c->is_closing = 1;
+        if (!c->is_listening && !c->is_udp && !c->loc.is_ip6) c->is_closing = 1;
       }
       ifp->is_ip_changed = false;
     }
@@ -10696,7 +10696,7 @@ static void onstate6change(struct mg_tcpip_if *ifp) {
     if (ifp->is_ip6_changed) {
       struct mg_connection *c;
       for (c = ifp->mgr->conns; c != NULL; c = c->next) {
-        if (!c->is_listening && !c->is_udp) c->is_closing = 1;
+        if (!c->is_listening && !c->is_udp && c->loc.is_ip6) c->is_closing = 1;
       }
       ifp->is_ip6_changed = false;
     }
