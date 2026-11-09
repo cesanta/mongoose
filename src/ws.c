@@ -79,11 +79,11 @@ static size_t ws_process(uint8_t *buf, size_t len, struct ws_msg *msg,
       msg->header_len = 4 + mask_len;
       msg->data_len = (((size_t) buf[2]) << 8) | buf[3];
     } else if (len >= 10 + mask_len) {
-      uint64_t data_len = ((uint64_t) be32(buf + 2) << 32) + be32(buf + 6);
-      // Sanity check, and integer overflow protection for the boundary check below
-      // data_len should not be larger than 1 GB
-      if (data_len > 1024 * 1024 * 1024) return 0;
-      msg->data_len = (size_t) data_len;
+      // Sanity check and protect the boundary check below: data_len should not
+      // be larger than 1 GB, so it fits in 32-bits
+      uint32_t hi = be32(buf + 2), lo = be32(buf + 6);
+      if (hi != 0 || lo > 1024U * 1024U * 1024U) return 0;
+      msg->data_len = (size_t) lo;
       msg->header_len = 10 + mask_len;
     }
   }
