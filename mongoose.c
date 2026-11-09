@@ -20092,7 +20092,7 @@ static void unpadlen(uint8_t *sig, struct mg_der_tlv *a, struct mg_der_tlv *b,
   memmove(sig + n + (n - b->len), b->value, b->len);
 }
 
-static int mg_tls_verify_cert_signature(const struct mg_tls_cert *cert,
+static bool mg_tls_verify_cert_signature(const struct mg_tls_cert *cert,
                                         const struct mg_tls_cert *issuer) {
   if (issuer->is_ec_pubkey) {
     uint8_t sig[128];
@@ -20102,19 +20102,19 @@ static int mg_tls_verify_cert_signature(const struct mg_tls_cert *cert,
         mg_der_next(&seq, &b) <= 0 || b.type != 0x02 || a.len == 0 ||
         b.len == 0 || seq.len != 0) {
       MG_ERROR(("cert verification error"));
-      return 0;
+      return false;
     }
     if (issuer->pubkey.len == 64) {
       unpadlen(sig, &a, &b, 32);
       return mg_p256_verify((uint8_t *) issuer->pubkey.buf, cert->tbshash,
-                            cert->tbshashsz, sig);
+                            cert->tbshashsz, sig) == 1;
     } else if (issuer->pubkey.len == 96) {
       unpadlen(sig, &a, &b, 48);
       return mg_p384_verify((uint8_t *) issuer->pubkey.buf, cert->tbshash,
-                            cert->tbshashsz, sig);
+                            cert->tbshashsz, sig) == 1;
     } else {
       MG_ERROR(("unsupported public key length: %d", issuer->pubkey.len));
-      return 0;
+      return false;
     }
   } else {
     const uint8_t *n;
@@ -20126,14 +20126,16 @@ static int mg_tls_verify_cert_signature(const struct mg_tls_cert *cert,
         mg_der_next(&seq, &modulus) <= 0 || modulus.type != 2 ||
         modulus.len == 0 || mg_der_next(&seq, &exponent) <= 0 ||
         exponent.type != 2 || exponent.len == 0) {
-      return -1;
+      MG_ERROR(("failed to parse RSA issuer public key"));
+      return false;
     }
     n = modulus.value, nlen = mg_rsa_trim_len(&n, modulus.len);
     if (nlen > sizeof(sig2) || cert->tbshashsz > nlen ||
         mg_rsa_mod_pow(modulus.value, modulus.len, exponent.value,
                        exponent.len, (uint8_t *) cert->sig.buf, cert->sig.len,
                        sig2, nlen) != 0) {
-      return 0;
+      MG_ERROR(("failed to process RSA cert sig"));
+      return false;
     }
 
     return mg_rsa_pkcs_verify(sig2, nlen, cert->tbshash, cert->tbshashsz);
