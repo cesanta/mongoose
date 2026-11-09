@@ -19047,7 +19047,7 @@ static int mg_tls_server_recv_hello(struct mg_connection *c) {
     if (!is_retry || rio->buf[0] != MG_TLS_CHANGE_CIPHER) break;
     mg_tls_drop_record(c);  // compatibility mode CCS before 2nd ClientHello
   }
-  if (rio->buf[0] != MG_TLS_HANDSHAKE || rio->buf[5] != MG_TLS_CLIENT_HELLO) {
+  if (rio->buf[0] != MG_TLS_HANDSHAKE || rio->len < 6 || rio->buf[5] != MG_TLS_CLIENT_HELLO) {
     mg_error(c, "not a client hello packet");
     return -1;
   }
@@ -19077,17 +19077,21 @@ static int mg_tls_server_recv_hello(struct mg_connection *c) {
     uint16_t k;
     uint16_t key_exchange_len;
     uint8_t *key_exchange;
-    uint16_t n = MG_LOAD_BE16(ext + j + 2);
+    uint16_t n;
+    if ((ext_len - j) < 4) goto fail;
+    n = MG_LOAD_BE16(ext + j + 2);
     if (((uint32_t) n + j + 4) > ext_len) goto fail;
     if (MG_LOAD_BE16(ext + j) != 0x0033) {  // not a key share extension, ignore
       j += (uint16_t) (n + 4);
       continue;
     }
+    if (n < 2) goto fail;
     key_exchange_len = MG_LOAD_BE16(ext + j + 4);
     key_exchange = ext + j + 6;
-    if ((key_exchange + key_exchange_len) > ((uint8_t *) rio->buf + rio->len))
+    if (key_exchange_len > n - 2)
       goto fail;
     for (k = 0; k < key_exchange_len;) {
+      if ((key_exchange_len - k) < 4) goto fail;
       uint16_t m = MG_LOAD_BE16(key_exchange + k + 2);
       uint16_t group = MG_LOAD_BE16(key_exchange + k);
       if (((uint32_t) m + k + 4) > key_exchange_len) goto fail;
