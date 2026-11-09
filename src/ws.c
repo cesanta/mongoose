@@ -63,12 +63,14 @@ static uint32_t be32(const uint8_t *p) {
          (((uint32_t) p[1]) << 16) | (((uint32_t) p[0]) << 24);
 }
 
-static size_t ws_process(uint8_t *buf, size_t len, struct ws_msg *msg) {
+static size_t ws_process(uint8_t *buf, size_t len, struct ws_msg *msg,
+                         bool *masked) {
   size_t i, n = 0, mask_len = 0;
   memset(msg, 0, sizeof(*msg));
   if (len >= 2) {
-    n = buf[1] & 0x7f;                // Frame length
-    mask_len = buf[1] & 128 ? 4 : 0;  // last bit is a mask bit
+    *masked = (buf[1] & 0x80) != 0;   // b7 Mask, b6:0 Frame length
+    n = buf[1] & 0x7f;
+    mask_len = *masked ? 4 : 0;
     msg->flags = buf[0];
     if (n < 126 && len >= mask_len) {
       msg->data_len = n;
@@ -165,17 +167,23 @@ static bool mg_ws_client_handshake(struct mg_connection *c) {
 
 static void mg_ws_cb(struct mg_connection *c, int ev, void *ev_data) {
   struct ws_msg msg;
+  bool msk;  // is this frame masked ?
   size_t ofs = (size_t) c->pfn_data;
 
   // assert(ofs < c->recv.len);
   if (ev == MG_EV_READ) {
     if (c->is_client && !c->is_websocket && mg_ws_client_handshake(c)) return;
 
-    while (ws_process(c->recv.buf + ofs, c->recv.len - ofs, &msg) > 0) {
+    while (ws_process(c->recv.buf + ofs, c->recv.len - ofs, &msg, &msk) > 0) {
       char *s = (char *) c->recv.buf + ofs + msg.header_len;
       struct mg_ws_message m;
       size_t len;
       uint8_t final, op;
+      if (msk == c->is_client) {
+        mg_error(c, c->is_client ? "masked WS server frame"
+                                 : "unmasked WS client frame");
+        return;
+      }
       m.data.buf = s, m.data.len = msg.data_len, m.flags = msg.flags;
       len = msg.header_len + msg.data_len;
       final = msg.flags & 128;
