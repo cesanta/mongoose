@@ -11027,7 +11027,7 @@ static struct mg_connection *accept_conn(struct mg_connection *lsn,
   c->loc.port = lsn->loc.port;
   if ((l2addr = get_return_l2addr(lsn->mgr->ifp, &c->rem, false, pkt)) ==
       NULL) {
-    free(c);      // safety net for lousy networks, not actually needed
+    mg_free(c);   // safety net for lousy networks, not actually needed
     return NULL;  // as path has already been checked at SYN (sending SYN+ACK)
   }
   memcpy(s->mac, l2addr, sizeof(s->mac));
