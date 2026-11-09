@@ -109,9 +109,11 @@ static size_t mkhdr(size_t len, int op, bool is_client, uint8_t *buf) {
   } else {
     uint32_t tmp;
     buf[1] = 127;
-    tmp = mg_htonl((uint32_t) (((uint64_t) len) >> 32));
+    tmp = (sizeof(len) <= sizeof(uint32_t) || len <= 0xffffffffU)
+              ? 0  // avoid some 32-bit platforms breaking it (VC98)
+              : mg_htonl((uint32_t) ((uint64_t) len >> 32));
     memcpy(&buf[2], &tmp, sizeof(tmp));
-    tmp = mg_htonl((uint32_t) (len & 0xffffffffU));
+    tmp = mg_htonl((uint32_t) len);
     memcpy(&buf[6], &tmp, sizeof(tmp));
     n = 10;
   }
