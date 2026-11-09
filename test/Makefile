@@ -1,6 +1,6 @@
 SRCS = mongoose.c unit_test.c packed_fs.c
 HDRS = $(wildcard ../src/*.h) $(wildcard ../src/drivers/*.h)
-DEFS ?= -DMG_MAX_HTTP_HEADERS=7 -DMG_ENABLE_LINES -DMG_ENABLE_SSI=1 -DMG_ENABLE_ASSERT=1 -DMG_ENABLE_IPV6=$(IPV6) -DMG_ENABLE_MDASH=$(MDASH)
+DEFS ?= -DMG_ENABLE_LINES -DMG_ENABLE_SSI=1 -DMG_ENABLE_ASSERT=1 -DMG_ENABLE_IPV6=$(IPV6) -DMG_ENABLE_MDASH=$(MDASH)
 WARN ?= -pedantic -W -Wall -Werror -Wshadow -Wdouble-promotion -fno-common -Wconversion -Wundef
 OPTS ?= -O3 -g3
 INCS ?= -Isrc -I.

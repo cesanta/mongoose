@@ -1994,17 +1994,34 @@ static void test_http_parse(void) {
     ASSERT((v = mg_http_get_header(&req, "g")) != NULL);
     ASSERT(vcmp(*v, "7"));
 
-    s = "a b HTTP/1.0\na:1\nb:2\nc:3\nd:4\ne:5\nf:6\ng:7\nh:8\n\n";
-    ASSERT(mg_http_parse(s, strlen(s), &req) == -1);  // MG_MAX_HTTP_HEADERS
+    {
+      char headers[MG_MAX_HTTP_HEADERS * 10 + 32];
+      size_t i, len = 0;
+      len += (size_t) mg_snprintf(headers + len, sizeof(headers) - len,
+                                  "a b HTTP/1.0\n");
+      for (i = 0; i <= MG_MAX_HTTP_HEADERS; i++) {
+        len += (size_t) mg_snprintf(headers + len, sizeof(headers) - len,
+                                    "h%u:1\n", (unsigned) i);
+      }
+      len += (size_t) mg_snprintf(headers + len, sizeof(headers) - len, "\n");
+      ASSERT(mg_http_parse(headers, len, &req) == -1);  // MG_MAX_HTTP_HEADERS
+    }
   }
 
   {
-    const char *s =
-        "GET /public HTTP/1.1\r\n"
-        "a:1\r\nb:2\r\nc:3\r\nd:4\r\ne:5\r\nf:6\r\ng:7\r\n"
-        "Content-Length: 43\r\n\r\n"
-        "POST /admin HTTP/1.1\r\nContent-Length: 0\r\n\r\n";
-    ASSERT(mg_http_parse(s, strlen(s), &req) == -1);
+    char headers[MG_MAX_HTTP_HEADERS * 10 + 128];
+    size_t i, len = 0;
+    len += (size_t) mg_snprintf(headers + len, sizeof(headers) - len,
+                                "GET /public HTTP/1.1\r\n");
+    for (i = 0; i < MG_MAX_HTTP_HEADERS; i++) {
+      len += (size_t) mg_snprintf(headers + len, sizeof(headers) - len,
+                                  "h%u:1\r\n", (unsigned) i);
+    }
+    len += (size_t) mg_snprintf(headers + len, sizeof(headers) - len,
+                                "Content-Length: 43\r\n\r\n"
+                                "POST /admin HTTP/1.1\r\n"
+                                "Content-Length: 0\r\n\r\n");
+    ASSERT(mg_http_parse(headers, len, &req) == -1);
   }
 
   {
