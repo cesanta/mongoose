@@ -86,22 +86,24 @@ static void MX_USART3_UART_Init(void);
 /* USER CODE BEGIN 0 */
 size_t mg_usage(int task, int metric) {
   extern void *_sbrk(ptrdiff_t incr);
-  extern unsigned char _end, _sstack;
+  extern unsigned char _end, _sstack, _estack;
   extern uint32_t _Min_Stack_Size;
   switch (metric) {
     case MG_USAGE_NUM_TASKS: return 1;
     case MG_USAGE_TASK_NAME: return task == 0 ? (size_t) "main" : 0;
     case MG_USAGE_STACK_TOTAL:
       return task == 0 ? (size_t) &_Min_Stack_Size : 0;
-    case MG_USAGE_STACK_FREE: {
-      size_t sp = (size_t) __get_MSP(), base = (size_t) &_sstack;
-      return task == 0 && sp > base ? sp - base : 0;
+    case MG_USAGE_STACK_USED: {
+      size_t sp = (size_t) __get_MSP();
+      size_t base = (size_t) &_sstack, top = (size_t) &_estack;
+      if (task != 0 || sp > top) return 0;
+      return top - (sp < base ? base : sp);
     }
     case MG_USAGE_HEAP_TOTAL:
       return (size_t) &_sstack - (size_t) &_end;
-    case MG_USAGE_HEAP_FREE: {
-      size_t heap = (size_t) _sbrk(0), limit = (size_t) &_sstack;
-      return limit > heap ? limit - heap : 0;
+    case MG_USAGE_HEAP_USED: {
+      size_t heap = (size_t) _sbrk(0), start = (size_t) &_end;
+      return heap >= start && heap <= (size_t) &_sstack ? heap - start : 0;
     }
     default: return 0;
   }
@@ -121,8 +123,7 @@ static void http_ev_handler(struct mg_connection *c, int ev, void *ev_data) {
     struct mg_http_message *hm = (struct mg_http_message *) ev_data;
     if (mg_match(hm->uri, mg_str("/api/tick"), NULL)) {
       mg_http_reply(c, 200, "", "{%m:%lu}\n", MG_ESC("tick"), HAL_GetTick());
-    } else if (mg_match(hm->uri, mg_str("/api/kill"), NULL)) {
-      SCB->SHCSR &= ~SCB_SHCSR_USGFAULTENA_Msk;
+    } else if (mg_match(hm->uri, mg_str("/api/crash"), NULL)) {
       __asm volatile("udf #0");
     } else {
       mg_http_reply(c, 200, "", "Hi from Mongoose, tick %lu\n%M\n",

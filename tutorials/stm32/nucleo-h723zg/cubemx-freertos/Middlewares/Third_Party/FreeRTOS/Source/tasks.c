@@ -328,6 +328,13 @@ typedef struct tskTaskControlBlock       /* The old naming convention is used to
  * below to enable the use of older kernel aware debuggers. */
 typedef tskTCB TCB_t;
 
+#if ( configRECORD_STACK_HIGH_ADDRESS == 1 )
+    _Static_assert( offsetof( TCB_t, pcTaskName ) == offsetof( StaticTask_t, ucDummy7 ),
+                    "StaticTask_t task-name offset must match TCB_t" );
+    _Static_assert( offsetof( TCB_t, pxEndOfStack ) == offsetof( StaticTask_t, pxDummy8 ),
+                    "StaticTask_t stack-end offset must match TCB_t" );
+#endif
+
 /*lint -save -e956 A manual analysis and inspection has been used to determine
  * which static variables must be declared volatile. */
 portDONT_DISCARD PRIVILEGED_DATA TCB_t * volatile pxCurrentTCB = NULL;

@@ -254,4 +254,6 @@ SECTIONS
     libgcc.a:* ( * )
   }
 
+  /* Retained health record. Startup code must neither copy nor clear it. */
+  .mg_health (NOLOAD) : { KEEP(*(.mg_health .mg_health*)) } > RAM_D3
 }
