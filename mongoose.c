@@ -11540,12 +11540,16 @@ static void rx_ip(struct mg_tcpip_if *ifp, struct pkt *pkt) {
   mkpay(pkt, (uint32_t *) pkt->ip + ihl);  // account for opts
   if (!ipcsum_ok(pkt->ip)) return;
   frag = mg_ntohs(pkt->ip->frag);
-  if (frag & IP_MORE_FRAGS_MSK || frag & IP_FRAG_OFFSET_MSK) {
-    struct mg_connection *c;
-    if (pkt->ip->proto == 17) pkt->udp = (struct udp *) (pkt->pay.buf);
-    if (pkt->ip->proto == 6) pkt->tcp = (struct tcp *) (pkt->pay.buf);
-    c = getpeer(ifp->mgr, pkt, false);
-    if (c) proto_error(c, false, "Received fragmented packet");
+  if (frag & IP_FRAG_OFFSET_MSK) {  // Non-first fragment: ignore
+  } else if (frag & IP_MORE_FRAGS_MSK) {  // First fragment: find and close
+    if (pkt->ip->proto == 17 && pkt->pay.len >= sizeof(*pkt->udp))
+      pkt->udp = (struct udp *) pkt->pay.buf;
+    if (pkt->ip->proto == 6 && pkt->pay.len >= sizeof(*pkt->tcp))
+      pkt->tcp = (struct tcp *) pkt->pay.buf;
+    if (pkt->udp || pkt->tcp) {
+      struct mg_connection *c = getpeer(ifp->mgr, pkt, false);
+      if (c) proto_error(c, false, "Received fragmented packet");
+    }  // else ignore                                      // else ignore
   } else if (pkt->ip->proto == 1) {
     pkt->icmp = (struct icmp *) (pkt->pay.buf);
     if (pkt->pay.len < sizeof(*pkt->icmp)) return;
@@ -11621,15 +11625,19 @@ static void rx_ip6(struct mg_tcpip_if *ifp, struct pkt *pkt) {
         len += hlen;
         nhdr += hlen;
         break;
-      case 44:  // Fragment 4.5
-      {
-        struct mg_connection *c;
-        if (((uint32_t) len + 2) > plen) return;  // nhdr[0, 1]; malformed
-        if (nhdr[0] == 17) pkt->udp = (struct udp *) (pkt->pay.buf);
-        if (nhdr[0] == 6) pkt->tcp = (struct tcp *) (pkt->pay.buf);
-        c = getpeer(ifp->mgr, pkt, false);
-        if (c) proto_error(c, false, "Received fragmented packet");
-      }
+      case 44:                                    // Fragment 4.5; no reassembly
+        if ((uint32_t) len + 8 > plen) return;    // Truncated (frag hdr = 8)
+        if ((nhdr[2] | (nhdr[3] & 0xf8)) == 0) {  // First fragment
+          size_t tlen = (size_t)(plen - len - 8);
+          if (nhdr[0] == 17 && tlen >= sizeof(*pkt->udp))
+            pkt->udp = (struct udp *) (nhdr + 8);
+          if (nhdr[0] == 6 && tlen >= sizeof(*pkt->tcp))
+            pkt->tcp = (struct tcp *) (nhdr + 8);
+          if (pkt->udp || pkt->tcp) {
+            struct mg_connection *c = getpeer(ifp->mgr, pkt, false);
+            if (c) proto_error(c, false, "Received fragmented packet");
+          }  // else ignore
+        }  // else ignore
         return;
       case 59:  // No Next Header 4.7
         return;
