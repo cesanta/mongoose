@@ -19121,9 +19121,10 @@ static int mg_tls_server_recv_hello(struct mg_connection *c) {
     if (key_exchange_len > n - 2)
       goto fail;
     for (k = 0; k < key_exchange_len;) {
+      uint16_t m, group;
       if ((key_exchange_len - k) < 4) goto fail;
-      uint16_t m = MG_LOAD_BE16(key_exchange + k + 2);
-      uint16_t group = MG_LOAD_BE16(key_exchange + k);
+      m = MG_LOAD_BE16(key_exchange + k + 2);
+      group = MG_LOAD_BE16(key_exchange + k);
       if (((uint32_t) m + k + 4) > key_exchange_len) goto fail;
       // secp256r1, uncompressed point 0x04 || X || Y
       if (group == 0x0017 && m == 65 && key_exchange[k + 4] == 0x04) {
@@ -30649,7 +30650,7 @@ static bool mg_ws_client_handshake(struct mg_connection *c) {
 
 static void mg_ws_cb(struct mg_connection *c, int ev, void *ev_data) {
   struct ws_msg msg;
-  bool msk;  // is this frame masked ?
+  bool msk = false;  // is this frame masked ?
   size_t ofs = (size_t) c->pfn_data;
 
   // assert(ofs < c->recv.len);
