@@ -21164,15 +21164,19 @@ void mg_tls_init(struct mg_connection *c, const struct mg_tls_opts *opts) {
       mg_free(all_certs);
     } else { // parse again for a possible DER (or a truncated begin string)
       if (mg_parse_pem(opts->ca, mg_str_s("CERTIFICATE"), &tls->ca_der) < 0) {
-        MG_ERROR(("Failed to load CA certificate"));
-        goto xit;
+        mg_error(c, "Failed to load CA certificate");
+        return;
       }
     } // ca_bundle_len != 0 && ca_der.len = 0 => bundle
     if (!c->is_client) tls->is_twoway = true;  // server + CA: two-way auth
   }
 
   if (opts->cert.buf == NULL || opts->cert.len == 0) {
-    MG_VERBOSE(("No certificate provided"));
+    if (!c->is_client) {
+      mg_error(c, "No server certificate provided");
+      return;
+    }
+    MG_VERBOSE(("No client certificate provided"));
     goto xit;
   }
 
