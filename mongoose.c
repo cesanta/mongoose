@@ -19827,6 +19827,10 @@ static void mg_der_debug_cert_name(const char *name, struct mg_der_tlv *tlv) {
 
 static uint64_t asnt2t(uint8_t *v, uint8_t type) {
   unsigned int y, mo, d, h, mi, ss;
+  size_t i, n = (type == 0x17) ? 10 : 12;  // YYMMDDHHMMSS / YYYYMMDDHHMMSS
+  for (i = 0; i < n; i++) {
+    if (v[i] < '0' || v[i] > '9') return 0;  // malformed time
+  }
   y = 10U * (*v++ - '0'), y += (*v++ - '0');
   if (type == 0x17) {       // UTCTime, RFC-5280 4.1.2.5.1 YYMMDDHHMMSSZ
     if (y >= 50) return (uint64_t) 0;  // 19YY is in the past
@@ -30149,7 +30153,8 @@ uint64_t mg_timegm(unsigned int year, unsigned int month, unsigned int day,
   const uint64_t day_secs = 86400;
   const uint64_t year_secs = 31536000;
   unsigned int y, ly;
-  if (year < 1970 || month == 0 || month > 12) return 0;
+  if (year < 1970 || month == 0 || month > 12 || day == 0 || day > 31)
+    return 0;
   y = year - 1900;
   ly = month > 2 ? y + 1 : y;
   return (uint64_t) sec + 60 * min + 3600 * hour +
