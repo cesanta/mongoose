@@ -137,7 +137,7 @@ static void tcpdrain_fn(struct mg_connection *c, int ev, void *ev_data) {
       tls = (struct tls_data *) mg_calloc(1, sizeof(*tls));
       ASSERT(tls != NULL);
       c->tls = tls;
-      c->is_tls = 1;
+      c->is_tls = c->is_tls_hs = 1;
       ASSERT(mg_iobuf_add(&tls->send, 0, data, sizeof(data)) == sizeof(data));
     } else
 #endif
