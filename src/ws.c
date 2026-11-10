@@ -169,7 +169,7 @@ static bool mg_ws_client_handshake(struct mg_connection *c) {
 
 static void mg_ws_cb(struct mg_connection *c, int ev, void *ev_data) {
   struct ws_msg msg;
-  bool msk;  // is this frame masked ?
+  bool msk = false;  // is this frame masked ?
   size_t ofs = (size_t) c->pfn_data;
 
   // assert(ofs < c->recv.len);
