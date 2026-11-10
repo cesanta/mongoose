@@ -132,13 +132,12 @@ static void tcpdrain_fn(struct mg_connection *c, int ev, void *ev_data) {
     s_drain_conn = c;
 #if MG_TLS == MG_TLS_BUILTIN
     if (s_drain_tls) {
-      struct mg_tls_opts opts;
       struct tls_data *tls;
 
-      memset(&opts, 0, sizeof(opts));
-      mg_tls_init(c, &opts);
-      tls = (struct tls_data *) c->tls;
+      tls = (struct tls_data *) mg_calloc(1, sizeof(*tls));
       ASSERT(tls != NULL);
+      c->tls = tls;
+      c->is_tls = 1;
       ASSERT(mg_iobuf_add(&tls->send, 0, data, sizeof(data)) == sizeof(data));
     } else
 #endif
