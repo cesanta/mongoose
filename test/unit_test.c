@@ -5246,26 +5246,37 @@ static void test_dash(void) {
                "Authorization: Basic YWRtaW46YWRtaW4=\n\n") == 200);
   ASSERT(cmpbody(buf, arr0_2_expected) == 0);
 
-  // Array deletion: single element
+  s_arr_index = 7;
   ASSERT(fetch(&mgr, buf, url,
                "GET /api/del/arr/3 HTTP/1.0\n"
+               "Authorization: Basic YWRtaW46YWRtaW4=\n\n") == 405);
+  ASSERT(strstr(buf, "Allow: DELETE\r\n") != NULL);
+  ASSERT(s_arr_index == 7);
+  ASSERT(fetch(&mgr, buf, url,
+               "GET /api/del/arr/1/3 HTTP/1.0\n"
+               "Authorization: Basic YWRtaW46YWRtaW4=\n\n") == 405);
+  ASSERT(s_arr_index == 7);
+
+  // Array deletion: single element
+  ASSERT(fetch(&mgr, buf, url,
+               "DELETE /api/del/arr/3 HTTP/1.0\n"
                "Authorization: Basic YWRtaW46YWRtaW4=\n\n") == 200);
   ASSERT(cmpbody(buf, "1\n") == 0);
 
   // Array deletion: range
   ASSERT(fetch(&mgr, buf, url,
-               "GET /api/del/arr/1/3 HTTP/1.0\n"
+               "DELETE /api/del/arr/1/3 HTTP/1.0\n"
                "Authorization: Basic YWRtaW46YWRtaW4=\n\n") == 200);
   ASSERT(cmpbody(buf, "3\n") == 0);
 
   // Array deletion: out-of-range returns 403
   ASSERT(fetch(&mgr, buf, url,
-               "GET /api/del/arr/100 HTTP/1.0\n"
+               "DELETE /api/del/arr/100 HTTP/1.0\n"
                "Authorization: Basic YWRtaW46YWRtaW4=\n\n") == 403);
 
   // Non-array set returns 404
   ASSERT(fetch(&mgr, buf, url,
-               "GET /api/del/set1/0 HTTP/1.0\n"
+               "DELETE /api/del/set1/0 HTTP/1.0\n"
                "Authorization: Basic YWRtaW46YWRtaW4=\n\n") == 404);
 
   // Test that array change notification uses "arr/INDEX" key format

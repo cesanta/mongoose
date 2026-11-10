@@ -1969,7 +1969,11 @@ void mg_dash_ev_handler(struct mg_connection *c, int ev, void *ev_data) {
       mg_serve_fs(c, hm, u, false);
     } else if (mg_match(hm->uri, mg_str("/api/del/*/*/*"), parts) ||
                mg_match(hm->uri, mg_str("/api/del/*/*"), parts)) {
-      mg_dash_handle_del(c, dash, u, parts);
+      if (mg_strcmp(hm->method, mg_str("DELETE")) == 0) {
+        mg_dash_handle_del(c, dash, u, parts);
+      } else {
+        mg_http_reply(c, 405, "Allow: DELETE\r\n", "Method Not Allowed\n");
+      }
     } else if (mg_match(hm->uri, mg_str("/api/add/*"), parts)) {
       mg_dash_handle_add(c, dash, u, parts, hm->body);
     } else if (mg_match(hm->uri, mg_str("/api/get/*/*"), parts) &&
