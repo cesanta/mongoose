@@ -22811,27 +22811,17 @@ static int mg_mbed_rng(void *ctx, unsigned char *buf, size_t len) {
 }
 #endif
 
-static bool mg_load_cert(struct mg_str str, mbedtls_x509_crt *p) {
-  int rc;
-  if (str.buf == NULL || str.buf[0] == '\0' || str.buf[0] == '*') return true;
+static int mg_load_cert(struct mg_str str, mbedtls_x509_crt *p) {
+  if (str.buf == NULL || str.buf[0] == '\0' || str.buf[0] == '*') return 0;
   if (!MG_IS_DER(str.buf)) str.len++;  // PEM, include trailing NUL
-  if ((rc = mbedtls_x509_crt_parse(p, (uint8_t *) str.buf, str.len)) != 0) {
-    MG_ERROR(("cert err %#x", -rc));
-    return false;
-  }
-  return true;
+  return mbedtls_x509_crt_parse(p, (uint8_t *) str.buf, str.len);
 }
 
-static bool mg_load_key(struct mg_str str, mbedtls_pk_context *p) {
-  int rc;
-  if (str.buf == NULL || str.buf[0] == '\0' || str.buf[0] == '*') return true;
+static int mg_load_key(struct mg_str str, mbedtls_pk_context *p) {
+  if (str.buf == NULL || str.buf[0] == '\0' || str.buf[0] == '*') return 0;
   if (!MG_IS_DER(str.buf)) str.len++;  // PEM, include trailing NUL
-  if ((rc = mbedtls_pk_parse_key(p, (uint8_t *) str.buf, str.len, NULL,
-                                 0 MG_MBEDTLS_RNG_GET)) != 0) {
-    MG_ERROR(("key err %#x", -rc));
-    return false;
-  }
-  return true;
+  return mbedtls_pk_parse_key(p, (uint8_t *) str.buf, str.len, NULL,
+                              0 MG_MBEDTLS_RNG_GET);
 }
 
 void mg_tls_free(struct mg_connection *c) {
@@ -22907,7 +22897,6 @@ void mg_tls_init(struct mg_connection *c, const struct mg_tls_opts *opts) {
     mg_error(c, "TLS OOM");
     goto fail;
   }
-  if (c->is_listening) goto fail;
   MG_DEBUG(("%lu Setting TLS", c->id));
   MG_PROF_ADD(c, "mbedtls_init_start");
   mbedtls_ssl_init(&tls->ssl);
@@ -22954,15 +22943,24 @@ void mg_tls_init(struct mg_connection *c, const struct mg_tls_opts *opts) {
                                               : MBEDTLS_SSL_VERIFY_NONE);
     tls->check_name = check_name; // host name set but no CA cert given
   } else {
-    if (mg_load_cert(opts->ca, &tls->ca) == false) goto fail;
+    if ((rc = mg_load_cert(opts->ca, &tls->ca)) != 0) {
+      mg_error(c, "CA err %#x", -mg_tls_err(c, rc));
+      goto fail;
+    }
     mbedtls_ssl_conf_ca_chain(&tls->conf, &tls->ca, NULL);
     mbedtls_ssl_conf_authmode(&tls->conf, MBEDTLS_SSL_VERIFY_REQUIRED);
   }
-  if (!mg_load_cert(opts->cert, &tls->cert)) goto fail;
-  if (!mg_load_key(opts->key, &tls->pk)) goto fail;
+  if ((rc = mg_load_cert(opts->cert, &tls->cert)) != 0) {
+    mg_error(c, "CERT err %#x", -mg_tls_err(c, rc));
+    goto fail;
+  }
+  if ((rc = mg_load_key(opts->key, &tls->pk)) != 0) {
+    mg_error(c, "Key err %#x", -mg_tls_err(c, rc));
+    goto fail;
+  }
   if (tls->cert.version &&
       (rc = mbedtls_ssl_conf_own_cert(&tls->conf, &tls->cert, &tls->pk)) != 0) {
-    mg_error(c, "own cert %#x", -mg_tls_err(c, rc));
+    mg_error(c, "own CERT %#x", -mg_tls_err(c, rc));
     goto fail;
   }
 
