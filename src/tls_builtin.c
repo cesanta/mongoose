@@ -1175,25 +1175,25 @@ static bool mg_tls_send_cert_verify(struct mg_connection *c, bool is_client) {
     // EC certificate verify packet
     uint8_t verify[82] = {0x0f, 0x00, 0x00, 0x00, 0x04, 0x03, 0x00, 0x00};
     size_t sigsz, verifysz = 0;
-    int neg1, neg2;
+    int adj1, adj2;
     uint8_t sig[64] = {0};
     if (!mg_p256_sign(tls->ec_key, hash, sizeof(hash), sig)) {
       mg_error(c, "P-256 sign");
       return false;
     }
-
-    neg1 = !!(sig[0] & 0x80);
-    neg2 = !!(sig[32] & 0x80);
+    adj1 = sig[0] == 0 && !(sig[1] & 0x80) ? -1 : !!(sig[0] & 0x80);
+    adj2 = sig[32] == 0 && !(sig[33] & 0x80) ? -1 : !!(sig[32] & 0x80);
     verify[8] = 0x30;  // ASN.1 SEQUENCE
-    verify[9] = (uint8_t) (68 + neg1 + neg2);
+    verify[9] = (uint8_t) (68 + adj1 + adj2);
     verify[10] = 0x02;  // ASN.1 INTEGER
-    verify[11] = (uint8_t) (32 + neg1);
-    memmove(verify + 12 + neg1, sig, 32);
-    verify[12 + 32 + neg1] = 0x02;  // ASN.1 INTEGER
-    verify[13 + 32 + neg1] = (uint8_t) (32 + neg2);
-    memmove(verify + 14 + 32 + neg1 + neg2, sig + 32, 32);
-
-    sigsz = (size_t) (70 + neg1 + neg2);
+    verify[11] = (uint8_t) (32 + adj1);
+    memmove(verify + (size_t) (12 + (adj1 > 0)), sig + (size_t) (adj1 < 0),
+            (size_t) (32 + (adj1 < 0)));
+    verify[12 + 32 + adj1] = 0x02;  // ASN.1 INTEGER
+    verify[13 + 32 + adj1] = (uint8_t) (32 + adj2);
+    memmove(verify + (size_t) (14 + 32 + adj1 + (adj2 > 0)),
+            sig + (size_t) (32 + (adj2 < 0)), (size_t) (32 + (adj2 < 0)));
+    sigsz = (size_t) (70 + adj1 + adj2);
     verifysz = 8U + sigsz;
     verify[3] = (uint8_t) (sigsz + 4);
     verify[7] = (uint8_t) sigsz;
