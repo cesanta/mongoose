@@ -1257,7 +1257,7 @@ static void test_frag_recv_path(void) {
   init_tcp_handshake(&e, &ipp, &mgr);  // starts with seq_no=1000, ackno=2
 
   // send fragmented TCP packet
-  ip.frag |= IP_MORE_FRAGS_MSK;  // setting More Fragments bit to 1
+  ip.frag = mg_htons(IP_MORE_FRAGS_MSK);  // setting More Fragments bit to 1
   create_tcp_simpleseg(&e, &ipp, 1001, 2, TH_PUSH | TH_ACK, 1000);
   s_sent_fragment = 1;           // "enable" fn
   mg_mgr_poll(&mgr, 0);          // call it (process fake frag IP)
