@@ -1,4 +1,5 @@
 #pragma once
+#include <stm32h7xx_hal.h>
 #define MG_ARCH MG_ARCH_CUBE
 #define MG_ENABLE_HEALTH 1
 #define MG_ENABLE_CUSTOM_USAGE 1

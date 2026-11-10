@@ -104,8 +104,7 @@ static void http_ev_handler(struct mg_connection *c, int ev, void *ev_data) {
     struct mg_http_message *hm = (struct mg_http_message *) ev_data;
     if (mg_match(hm->uri, mg_str("/api/tick"), NULL)) {
       mg_http_reply(c, 200, "", "{%m:%lu}\n", MG_ESC("tick"), HAL_GetTick());
-    } else if (mg_match(hm->uri, mg_str("/api/kill"), NULL)) {
-      SCB->SHCSR &= ~SCB_SHCSR_USGFAULTENA_Msk;
+    } else if (mg_match(hm->uri, mg_str("/api/crash"), NULL)) {
       __asm volatile("udf #0");
     } else {
       mg_http_reply(c, 200, "Content-Type: text/plain\r\n",
@@ -445,6 +444,11 @@ void StartDefaultTask(void *argument)
   mg_log_set_fn(log_fn, &huart3);
   mg_mgr_init(&mgr);
   mg_http_listen(&mgr, "http://0.0.0.0", http_ev_handler, NULL);
+
+  MG_INFO(("Initialised. CPU clock: %lu MHz", SystemCoreClock / 1000000));
+  MG_INFO(("Memory: %M", mg_print_mem_stats));
+  MG_INFO(("Crash record: %s, %M", mg_health_valid() ? "enabled" : "disabled",
+           mg_print_crash_record));
 
   /* Infinite loop */
   for(;;)

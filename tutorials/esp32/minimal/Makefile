@@ -1,10 +1,8 @@
 THISDIR = $(realpath $(CURDIR))
 ROOTDIR = $(realpath $(CURDIR)/../../..)
 DOCKER ?= docker run --rm $(DA) -v $(ROOTDIR):$(ROOTDIR) -w $(THISDIR) espressif/idf
-CMD ?= idf.py -DCFLAGS_EXTRA="$(CFLAGS_EXTRA)" build
+ARCH ?= esp32
 PORT ?= /dev/ttyUSB0
-
-CFLAGS_EXTRA ?= -DMG_TLS=MG_TLS_BUILTIN
 
 all: example
 
@@ -12,14 +10,13 @@ example:
 	true
 
 build: Makefile $(wildcard main/*)
-	$(DOCKER) $(CMD)
+	test -d build || $(DOCKER) idf.py set-target $(ARCH)
+	$(DOCKER) idf.py build
 
 flash:
-flash: CMD = idf.py flash
-flash: DA = --device $(PORT)
-flash: build
+	cd build && esptool --chip $(ARCH) --baud 460800 --port $(PORT) write-flash @flash_args
 
 clean:
-	test -d build && $(DOCKER) rm -rf build sdkconfig || true
+	test -d build && (rm -rf build sdkconfig || true)
 
 .PHONY: build

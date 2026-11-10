@@ -34,8 +34,4 @@
 #define MG_ENABLE_POSIX_FS 1
 #endif
 
-#ifndef MG_HEALTH_DATA_SIZE
-#define MG_HEALTH_DATA_SIZE 20
-#endif
-
 #endif

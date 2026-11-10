@@ -265,10 +265,6 @@ extern "C" {
 #define MG_ENABLE_POSIX_FS 1
 #endif
 
-#ifndef MG_HEALTH_DATA_SIZE
-#define MG_HEALTH_DATA_SIZE 20
-#endif
-
 #endif
 
 
@@ -4395,8 +4391,10 @@ void mg_ota_poll(struct mg_mgr *);
 #ifndef MG_HEALTH_DATA_SIZE
 #if (defined(STM32H7_DEV_ID) || defined(STM32H5)) || defined(STM32C5)
 #define MG_HEALTH_DATA_SIZE 250
-#elif MG_ARCH == MG_ARCH_ESP32
-#define MG_HEALTH_DATA_SIZE 23
+#elif MG_ARCH == MG_ARCH_ESP32 && CONFIG_IDF_TARGET_ARCH_XTENSA
+#define MG_HEALTH_DATA_SIZE 23  // 7 header words + 16 backtrace PCs
+#elif MG_ARCH == MG_ARCH_ESP32 && CONFIG_IDF_TARGET_ARCH_RISCV
+#define MG_HEALTH_DATA_SIZE 7   // PC, task name, RA, SP
 #else
 #define MG_HEALTH_DATA_SIZE 10
 #endif
@@ -4429,10 +4427,10 @@ enum mg_health_reason {
   MG_HEALTH_RESET_FAULT         // Fault handler ran, see regs[] and saved_stack
 };
 
-struct mg_health {
+struct mg_health {        // NOTE: use 32-bit fields to avoid write issues
   char magic[4];          // MG_HEALTH_MAGIC when the record holds valid data
-  uint16_t reset_reason;  // enum mg_health_reason that started this boot
-  uint16_t arch;          // enum mg_health_arch, core architecture (ARM, etc)
+  uint32_t reset_reason;  // enum mg_health_reason that started this boot
+  uint32_t arch;          // enum mg_health_arch, core architecture (ARM, etc)
   uint32_t cpuid;         // ARM CPU ID
   uint32_t data[MG_HEALTH_DATA_SIZE];
 };
@@ -4501,24 +4499,26 @@ enum mg_usage_metric {
   MG_USAGE_NUM_TASKS,
   MG_USAGE_TASK_NAME,
   MG_USAGE_STACK_TOTAL,
-  MG_USAGE_STACK_FREE,
+  MG_USAGE_STACK_USED,
+  MG_USAGE_STACK_PEAK,
   MG_USAGE_HEAP_TOTAL,
-  MG_USAGE_HEAP_FREE
+  MG_USAGE_HEAP_USED,
+  MG_USAGE_HEAP_PEAK
 };
 
 // Returns a task or heap metric. task is a zero-based index; NUM_TASKS and heap
 // metrics ignore it. Sizes are in bytes, TASK_NAME returns const char * cast to
 // size_t
-// Unsupported metrics and unknown totals return 0
+// Unsupported metrics return 0. PEAK is the maximum used since boot
 // Set MG_ENABLE_CUSTOM_USAGE=1 and define mg_usage() in the application to
 // provide custom measurements
 size_t mg_usage(int task, int metric);
 
 #define MG_HEALTH_INIT() mg_health_init()
 extern size_t mg_print_crash_record(mg_pfn_t, void *, va_list *);
-// JSON memory statistics via mg_usage(), suitable for %M: heap_total, heap_free,
-// and a stacks array of {name, free, total}
-// A zero total means unknown
+// JSON memory statistics via mg_usage(), suitable for %M: an array of
+// {name, total, used, peak} entries, starting with "heap", then task stacks
+// Unavailable metrics are reported as 0
 extern size_t mg_print_mem_stats(mg_pfn_t, void *, va_list *);
 extern void mg_health_init(void);
 extern bool mg_health_coredump_begin(size_t *size);
@@ -4540,7 +4540,7 @@ static inline size_t mg_print_crash_record(mg_pfn_t fn, void *arg,
 }
 static inline size_t mg_print_mem_stats(mg_pfn_t fn, void *arg, va_list *ap) {
   (void) ap;
-  return mg_xprintf(fn, arg, "{}");
+  return mg_xprintf(fn, arg, "[]");
 }
 static inline bool mg_health_coredump_begin(size_t *size) {
   (void) size;

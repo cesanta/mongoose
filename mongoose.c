@@ -3859,87 +3859,117 @@ struct mg_fs mg_fs_posix = {p_stat,  p_list, p_open,   p_close,  p_read,
 #endif
 
 
-#include <limits.h>
+
 
 #if MG_ENABLE_HEALTH
 #if !MG_ENABLE_CUSTOM_USAGE
+#if MG_ARCH == MG_ARCH_ESP32
+#include <esp_heap_caps.h>
+#include <freertos/FreeRTOS.h>
+#include <freertos/task.h>
+#elif MG_ENABLE_FREERTOS && defined(__GNUC__) && defined(__ELF__)
+// Some FreeRTOS allocators provide current free bytes but no low watermark.
+extern size_t xPortGetMinimumEverFreeHeapSize(void) __attribute__((weak));
+#endif
+
+#if MG_ENABLE_FREERTOS && MG_ARCH == MG_ARCH_CUBE && \
+    configUSE_TRACE_FACILITY == 1 && configRECORD_STACK_HIGH_ADDRESS != 1
+#warning \
+    "Set configRECORD_STACK_HIGH_ADDRESS to 1 in FreeRTOSConfig.h to report stack total and peak"
+#endif
+
 size_t mg_usage(int task, int metric) {
-  // FreeRTOS: call NUM_TASKS first to snapshot tasks and copy their names
-  // Indices and names stay valid until the next refresh, preventing duplicate
-  // or mismatched entries. STACK_FREE is minimum-ever free; STACK_TOTAL is 0
-#if MG_ENABLE_FREERTOS
-  if (metric == MG_USAGE_HEAP_FREE) return xPortGetFreeHeapSize();
-#ifdef configTOTAL_HEAP_SIZE
-  if (metric == MG_USAGE_HEAP_TOTAL) return configTOTAL_HEAP_SIZE;
+#if MG_ARCH == MG_ARCH_ESP32 || \
+    (MG_ENABLE_FREERTOS && defined(configTOTAL_HEAP_SIZE))
+  if (metric == MG_USAGE_HEAP_TOTAL || metric == MG_USAGE_HEAP_USED ||
+      metric == MG_USAGE_HEAP_PEAK) {
+    size_t total, available;
+#if MG_ARCH == MG_ARCH_ESP32
+    total = heap_caps_get_total_size(MALLOC_CAP_DEFAULT);
+    if (metric == MG_USAGE_HEAP_TOTAL) return total;
+    available = metric == MG_USAGE_HEAP_USED
+                    ? heap_caps_get_free_size(MALLOC_CAP_DEFAULT)
+                    : heap_caps_get_minimum_free_size(MALLOC_CAP_DEFAULT);
+#else
+    total = configTOTAL_HEAP_SIZE;
+    if (metric == MG_USAGE_HEAP_TOTAL) return total;
+    if (metric == MG_USAGE_HEAP_USED) {
+      available = xPortGetFreeHeapSize();
+    } else {
+#if defined(__GNUC__) && defined(__ELF__)
+      if (xPortGetMinimumEverFreeHeapSize == NULL) return 0;
+      available = xPortGetMinimumEverFreeHeapSize();
+#else
+      return 0;
 #endif
+    }
+#endif
+    return available <= total ? total - available : 0;
+  }
+#endif
+
+#if MG_ENABLE_FREERTOS || MG_ARCH == MG_ARCH_ESP32
 #if configUSE_TRACE_FACILITY == 1
-  static TaskStatus_t *tasks;
-  static UBaseType_t count;
-  if (metric == MG_USAGE_NUM_TASKS) {
-    size_t size = sizeof(*tasks) + configMAX_TASK_NAME_LEN;
-    vTaskSuspendAll();
-    if (tasks != NULL) {
-      mg_free(tasks);
-      tasks = NULL;
+  UBaseType_t count = uxTaskGetNumberOfTasks();
+  if (metric == MG_USAGE_NUM_TASKS) return (size_t) count;
+  if (task >= 0 && (size_t) task < count) {
+    TaskStatus_t tasks[count];
+    if ((size_t) task >= uxTaskGetSystemState(tasks, count, NULL)) return 0;
+    TaskStatus_t *t = &tasks[task];
+    if (metric == MG_USAGE_TASK_NAME) return (size_t) t->pcTaskName;
+#if (MG_ARCH == MG_ARCH_CUBE || MG_ARCH == MG_ARCH_ESP32) && \
+    configRECORD_STACK_HIGH_ADDRESS == 1
+    size_t total = 0;
+    uintptr_t tcb = (uintptr_t) t->xHandle;
+    uintptr_t base = (uintptr_t) t->pxStackBase;
+    if (tcb != 0 &&
+        t->pcTaskName == (const char *) (tcb + offsetof(StaticTask_t, ucDummy7))) {
+      StackType_t *end;
+      uintptr_t field = tcb + offsetof(StaticTask_t, pxDummy8);
+      memcpy(&end, (const void *) field, sizeof(end));
+      if (base != 0 && (uintptr_t) end >= base &&
+          (uintptr_t) end - base <= ((size_t) -1) - sizeof(*end))
+        total = (size_t) ((uintptr_t) end - base) + sizeof(*end);
     }
-    count = 0;
-    UBaseType_t n = uxTaskGetNumberOfTasks();
-    if (n > 0 && (size_t) n <= INT_MAX && (size_t) n <= SIZE_MAX / size) {
-      tasks = (TaskStatus_t *) mg_calloc((size_t) n, size);
-      if (tasks != NULL) {
-        count = uxTaskGetSystemState(tasks, n, NULL);
-        if (count == n) {
-          for (UBaseType_t i = 0; i < count; i++) {
-            char *name = (char *) (tasks + n) + (size_t) i * configMAX_TASK_NAME_LEN;
-            mg_snprintf(name, configMAX_TASK_NAME_LEN, "%s", tasks[i].pcTaskName);
-            tasks[i].pcTaskName = name;
-          }
-        } else {
-          mg_free(tasks);
-          tasks = NULL;
-          count = 0;
-        }
-      }
+    if (metric == MG_USAGE_STACK_TOTAL) return total;
+    if (metric == MG_USAGE_STACK_PEAK) {
+      size_t available =
+          (size_t) t->usStackHighWaterMark * sizeof(StackType_t);
+      return available <= total ? total - available : 0;
     }
-    (void) xTaskResumeAll();
-    return (size_t) count;
-  }
-  if (task >= 0 && (size_t) task < (size_t) count) {
-    if (metric == MG_USAGE_TASK_NAME) return (size_t) tasks[task].pcTaskName;
-    if (metric == MG_USAGE_STACK_FREE)
-      return (size_t) tasks[task].usStackHighWaterMark * sizeof(StackType_t);
+#endif
   }
 #endif
 #endif
-  (void) task;
-  (void) metric;
+  (void) task, (void) metric;
   return 0;
 }
 #endif
 
-static size_t print_stacks(mg_pfn_t fn, void *arg, va_list *ap) {
-  int i;
-  int count = (int) mg_usage(-1, MG_USAGE_NUM_TASKS);
-  size_t len = mg_xprintf(fn, arg, "[");
-  for (i = 0; i < count; i++) {
-    const char *name = (const char *) mg_usage(i, MG_USAGE_TASK_NAME);
-    len += mg_xprintf(fn, arg, "%s{%m:%m,%m:%zu,%m:%zu}",
-                      i == 0 ? "" : ",", MG_ESC("name"),
-                      MG_ESC(name == NULL ? "" : name), MG_ESC("free"),
-                      (size_t) mg_usage(i, MG_USAGE_STACK_FREE), MG_ESC("total"),
-                      (size_t) mg_usage(i, MG_USAGE_STACK_TOTAL));
-  }
-  (void) ap;
-  return len + mg_xprintf(fn, arg, "]");
+static size_t print_mem_stat(mg_pfn_t fn, void *arg, const char *name,
+                             size_t total, size_t used, size_t peak) {
+  return mg_xprintf(fn, arg, "{%m:%m,%m:%zu,%m:%zu,%m:%zu}", MG_ESC("name"),
+                    MG_ESC(name == NULL ? "" : name), MG_ESC("total"), total,
+                    MG_ESC("used"), used, MG_ESC("peak"), peak);
 }
 
 size_t mg_print_mem_stats(mg_pfn_t fn, void *arg, va_list *ap) {
-  size_t heap_total = (size_t) mg_usage(0, MG_USAGE_HEAP_TOTAL);
-  size_t heap_free = (size_t) mg_usage(0, MG_USAGE_HEAP_FREE);
+  int i, count;
+  size_t heap_total = mg_usage(0, MG_USAGE_HEAP_TOTAL);
+  size_t heap_used = mg_usage(0, MG_USAGE_HEAP_USED);
+  size_t heap_peak = mg_usage(0, MG_USAGE_HEAP_PEAK);
+  size_t len = mg_xprintf(fn, arg, "[");
+  len += print_mem_stat(fn, arg, "heap", heap_total, heap_used, heap_peak);
+  count = (int) mg_usage(-1, MG_USAGE_NUM_TASKS);
+  for (i = 0; i < count; i++) {
+    const char *name = (const char *) mg_usage(i, MG_USAGE_TASK_NAME);
+    len += mg_xprintf(fn, arg, ",");
+    len += print_mem_stat(fn, arg, name, mg_usage(i, MG_USAGE_STACK_TOTAL),
+                          mg_usage(i, MG_USAGE_STACK_USED),
+                          mg_usage(i, MG_USAGE_STACK_PEAK));
+  }
   (void) ap;
-  return mg_xprintf(fn, arg, "{%m:%zu,%m:%zu,%m:%M}",
-                    MG_ESC("heap_total"), heap_total, MG_ESC("heap_free"),
-                    heap_free, MG_ESC("stacks"), print_stacks);
+  return len + mg_xprintf(fn, arg, "]");
 }
 
 #if MG_ARCH == MG_ARCH_ESP32
@@ -3975,10 +4005,10 @@ bool mg_health_coredump_begin(size_t *size) {
 bool mg_health_coredump_read(size_t offset, void *buf, size_t *len) {
 #if MG_ARCH == MG_ARCH_ESP32 && CONFIG_ESP_COREDUMP_ENABLE_TO_FLASH
   const esp_partition_t *p = (const esp_partition_t *) s_coredump.ptr;
-  if (p == NULL || offset > s_coredump.size)
-    return false;
+  if (p == NULL || offset > s_coredump.size) return false;
   if (*len > s_coredump.size - offset) *len = s_coredump.size - offset;
-  return esp_partition_read(p, s_coredump.poffset + offset, buf, *len) == ESP_OK;
+  return esp_partition_read(p, s_coredump.poffset + offset, buf, *len) ==
+         ESP_OK;
 #else
   (void) offset, (void) buf, (void) len;
   return false;
@@ -4020,6 +4050,7 @@ __attribute__((used, noinline)) static void fault_c(uint32_t *frame,
     r[3 + i] = stack + i < &_estack ? stack[i] : 0;
   }
   mg_health_record.cpuid = SCB->CPUID;
+  mg_health_record.arch = MG_HEALTH_ARCH_ARM;
   mg_health_record.reset_reason = MG_HEALTH_RESET_FAULT;
   NVIC_SystemReset();
 }
@@ -4051,46 +4082,43 @@ void mg_health_init(void) {
   }
 #if MG_ARCH == MG_ARCH_ESP32
 #if CONFIG_IDF_TARGET_ARCH_XTENSA
-  mg_health_record.arch = (uint16_t) MG_HEALTH_ARCH_XTENSA;
+  mg_health_record.arch = MG_HEALTH_ARCH_XTENSA;
 #elif CONFIG_IDF_TARGET_ARCH_RISCV
-  mg_health_record.arch = (uint16_t) MG_HEALTH_ARCH_RISCV;
+  mg_health_record.arch = MG_HEALTH_ARCH_RISCV;
 #endif
   esp_reset_reason_t rr = esp_reset_reason();
   mg_health_record.reset_reason = esp2mg(rr);
 #if CONFIG_ESP_COREDUMP_ENABLE_TO_FLASH == 0
   MG_ERROR(("MG_HEALTH is enabled but CONFIG_ESP_COREDUMP_ENABLE_TO_FLASH=n"));
 #else
-    // After a crash, copy the backtrace from the core dump in flash: the same
-    // addresses the panic handler prints as "Backtrace: PC:SP PC:SP ...".
-    // The core dump stays in flash, so check the reset reason, otherwise an
-    // old crash is reported on every boot
-    esp_core_dump_summary_t *s = calloc(1, sizeof(*s));
-    uint32_t *out = mg_health_record.data;
-    size_t n = 0;
-    memset(out, 0, sizeof(mg_health_record.data));
-    if (s == NULL) return;
-    if ((rr != ESP_RST_PANIC && rr != ESP_RST_INT_WDT &&
-         rr != ESP_RST_TASK_WDT)  // Not a crash caught by the panic handler
-        || esp_core_dump_get_summary(s) != ESP_OK) {
-      free(s);
-      return;
-    }
-    out[n++] = s->exc_pc;
-    memcpy(&out[n], s->exc_task, 16), n += 4;
+  // After a crash, copy the backtrace from the core dump in flash: the same
+  // addresses the panic handler prints as "Backtrace: PC:SP PC:SP ...".
+  // The core dump stays in flash, so check the reset reason, otherwise an
+  // old crash is reported on every boot
+  esp_core_dump_summary_t s;
+  uint32_t *out = mg_health_record.data;
+  size_t n = 0;
+  memset(out, 0, sizeof(mg_health_record.data));
+  if ((rr != ESP_RST_PANIC && rr != ESP_RST_INT_WDT &&
+       rr != ESP_RST_TASK_WDT) ||
+      esp_core_dump_get_summary(&s) != ESP_OK) {
+    return;  //  If not panic, and if cannot get crash info, give up
+  }
+  out[n++] = s.exc_pc;                      // Crash PC
+  memcpy(&out[n], s.exc_task, 16), n += 4;  // Crashed task name
 #if CONFIG_IDF_TARGET_ARCH_XTENSA
-    out[n++] = s->ex_info.exc_a[0];
-    out[n++] = s->ex_info.exc_a[1];
-    size_t len = s->exc_bt_info.depth;
-    if (len > MG_HEALTH_DATA_SIZE - n) len = (MG_HEALTH_DATA_SIZE - n);
-    memcpy(&out[n], s->exc_bt_info.bt, 4 * len); // sizeof(uint32_t)
+  out[n++] = s.ex_info.exc_a[0];
+  out[n++] = s.ex_info.exc_a[1];
+  size_t len = s.exc_bt_info.depth;
+  if (len > MG_HEALTH_DATA_SIZE - n) len = MG_HEALTH_DATA_SIZE - n;
+  memcpy(&out[n], s.exc_bt_info.bt, 4 * len);
 #elif CONFIG_IDF_TARGET_ARCH_RISCV
-    out[n++] = s->ex_info.exc_ra;
-    out[n++] = s->ex_info.exc_sp;
-    size_t len = s->exc_bt_info.dump_size / 4 ; // sizeof(uint32_t)
-    if (len > MG_HEALTH_DATA_SIZE - n) len = (MG_HEALTH_DATA_SIZE - n);
-    memcpy(&out[n], s->exc_bt_info.stackdump, 4 * len);
+  out[n++] = s.ex_info.ra;
+  out[n++] = s.ex_info.sp;
+  size_t len = s.exc_bt_info.dump_size / 4;
+  if (len > MG_HEALTH_DATA_SIZE - n) len = MG_HEALTH_DATA_SIZE - n;
+  memcpy(&out[n], s.exc_bt_info.stackdump, 4 * len);
 #endif
-    free(s);
 #endif  // CONFIG_ESP_COREDUMP_ENABLE_TO_FLASH
 #endif  // MG_ARCH_ESP32
 }
@@ -4106,13 +4134,10 @@ static size_t print_uint32(void (*fn)(char, void *), void *arg, va_list *ap) {
 size_t mg_print_crash_record(void (*fn)(char, void *), void *arg, va_list *ap) {
   size_t len = 0;
   if (mg_health_valid() &&
-      (mg_health_record.reset_reason == (uint16_t) MG_HEALTH_RESET_FAULT
-#if MG_ARCH == MG_ARCH_ESP32
-       || mg_health_record.reset_reason == (uint16_t) MG_HEALTH_RESET_WATCHDOG
-#endif
-       )) {
+      (mg_health_record.reset_reason == MG_HEALTH_RESET_FAULT ||
+       mg_health_record.reset_reason == MG_HEALTH_RESET_WATCHDOG)) {
     size_t n = sizeof(mg_health_record.data) / sizeof(mg_health_record.data[0]);
-    len += mg_xprintf(fn, arg, "{%m:%hhu,%m:%hu,%m:%hu,%m:%u,%m:[%M]}",  //
+    len += mg_xprintf(fn, arg, "{%m:%hhu,%m:%lu,%m:%lu,%m:%u,%m:[%M]}",  //
                       MG_ESC("version"), mg_health_record.magic[3],      //
                       MG_ESC("arch"), mg_health_record.arch,             //
                       MG_ESC("reason"), mg_health_record.reset_reason,   //
