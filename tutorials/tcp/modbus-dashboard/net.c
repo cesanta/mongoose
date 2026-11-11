@@ -125,7 +125,7 @@ static struct mg_connection *start_modbus_request(struct mg_mgr *mgr,
   } else {
     send16(c, 1);  // TID. Use random?
     send16(c, 0);  // Protocol identifier: 0 (modbus)
-    uint16_t *lp = (uint16_t *) &c->send.buf[c->send.len];
+    size_t lp = c->send.len;
     send16(c, 0);  // Length: to be set later
     size_t len = c->send.len;
 
@@ -151,7 +151,8 @@ static struct mg_connection *start_modbus_request(struct mg_mgr *mgr,
       send8(c, 0);   // Object ID: 0 (vendor name)
     }
 
-    *lp = mg_htons((uint16_t) (c->send.len - len));  // Set length field
+    uint16_t length = mg_htons((uint16_t) (c->send.len - len));
+    memcpy(c->send.buf + lp, &length, sizeof(length));  // Set length field
     mg_hexdump(c->send.buf, c->send.len);
     MG_INFO(("%lu SENDING %lu", c->id, c->send.len));
 

@@ -25,10 +25,11 @@ static void fn(struct mg_connection *c, int ev, void *ev_data) {
     c->is_hexdumping = 1;
   } else if (ev == MG_EV_READ) {
     struct mg_dns_rr rr;  // Parse first question, offset 12 is header size
+    char buf[512];
     size_t n = mg_dns_parse_rr(c->recv.buf, c->recv.len, 12, true, &rr);
     MG_INFO(("DNS request parsed, result=%d", (int) n));
-    if (n > 0) {
-      char buf[512];
+    if (n > 0 &&
+        n <= sizeof(buf) - sizeof(struct mg_dns_header) - sizeof(answer)) {
       struct mg_dns_header *h = (struct mg_dns_header *) buf;
       memset(buf, 0, sizeof(buf));  // Clear the whole datagram
       h->txnid = ((struct mg_dns_header *) c->recv.buf)->txnid;  // Copy tnxid
