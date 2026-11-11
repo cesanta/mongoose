@@ -8,8 +8,14 @@ all: example
 example:
 	true
 
-build: Makefile $(wildcard main/*)
+build: Makefile $(wildcard main/*) main/net.c main/packed_fs.c
 	docker run --rm $(DA) -v $(MNT):$(MNT) -w $(CWD) espressif/idf idf.py $(CMD)
+
+main/net.c: ../../http/uart-bridge/net.c
+	cp $< $@
+
+main/packed_fs.c: ../../http/uart-bridge/packed_fs.c
+	cp $< $@
 
 flash:
 flash: CMD = flash
@@ -29,4 +35,4 @@ flash2: bridge.hex
 	esputil -p $(PORT) monitor
 
 clean:
-	rm -rf build
+	rm -rf build main/net.c main/packed_fs.c

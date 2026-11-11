@@ -23,5 +23,8 @@ all: $(PROG)              # Default target. Build and run program
 $(PROG): $(SOURCES)       # Build program from sources
 	$(CC) $(SOURCES) $(CFLAGS) $(CFLAGS_MONGOOSE) $(CFLAGS_EXTRA) $(OUT)
 
+main.c: ../webui-plain/main.c
+	cp $< $@
+
 clean:                    # Cleanup. Delete built program and all build artifacts
-	$(DELETE) $(PROG) *.o *.obj *.exe *.dSYM
+	$(DELETE) $(PROG) *.o *.obj *.exe *.dSYM main.c

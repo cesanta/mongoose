@@ -8,10 +8,10 @@ PREFIX ?= riscv-none-elf
 CFLAGS = -W -Wall -Wextra -Wundef -Wshadow -Wdouble-promotion
 CFLAGS += -Wformat-truncation -Wconversion -Wno-sign-conversion
 CFLAGS += -ffunction-sections -fdata-sections -fno-common
-CFLAGS += -DSYSCLK_FREQ_144MHz_HSE -I. -Ivendor -g3 -Os
+CFLAGS += -DSYSCLK_FREQ_144MHz_HSE -I$(ROOT) -I. -Ivendor -g3 -Os
 CFLAGS += -march=rv32imafc -mabi=ilp32
 LDFLAGS = -T vendor/link.ld -nostartfiles --specs=nano.specs --specs=nosys.specs -Wl,--gc-sections
-SOURCES = hal.c main.c mongoose.c net.c packed_fs.c
+SOURCES = hal.c main.c $(ROOT)/mongoose.c net.c packed_fs.c
 SOURCES += vendor/system_ch32v30x.c vendor/startup_ch32v30x_D8C.S
 CFLAGS += -DHTTP_URL=\"http://0.0.0.0/\" -DHTTPS_URL=\"https://0.0.0.0/\"
 
@@ -34,8 +34,17 @@ flash: firmware.bin
 	wchisp flash $<
 #	@echo; echo "IMPORTANT: configure device to 96k RAM / 224k Flash"
 
+net.c: ../../tcp/modbus-dashboard/net.c net.h
+	cp $< $@
+
+net.h: ../../tcp/modbus-dashboard/net.h
+	cp $< $@
+
+packed_fs.c: ../../tcp/modbus-dashboard/packed_fs.c
+	cp $< $@
+
 zip: firmware.bin
 	zip -r ch32v307.modbus.firmware.`date +%Y-%m-%d`.zip  firmware.*
 
 clean:
-	$(RM) firmware.* *.zip
+	$(RM) firmware.* *.zip net.c net.h packed_fs.c

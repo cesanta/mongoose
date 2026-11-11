@@ -1,8 +1,9 @@
+REPO_ROOT ?= ../../..
 PROG ?= example                   # Program we are building
 DELETE = rm -rf                   # Command to remove files
 OUT ?= -o $(PROG)                 # Compiler argument for output file
-SOURCES = main.c mongoose.c net.c packed_fs.c      # Source code files
-CFLAGS = -W -Wall -Wextra -g -I.  # Build options
+SOURCES = main.c $(REPO_ROOT)/mongoose.c net.c packed_fs.c  # Source code files
+CFLAGS = -I$(REPO_ROOT) -W -Wall -Wextra -g -I.  # Build options
 
 # Mongoose build options. See https://mongoose.ws/docs/getting-started/build-environment/
 CFLAGS_MONGOOSE += -DMG_ENABLE_LINES=1 -DMG_ENABLE_TCPIP=1 -DMG_ENABLE_SOCKET=0 -DMG_ENABLE_TCPIP_DRIVER_INIT=0
@@ -25,8 +26,17 @@ all: $(PROG)              # Default target. Build and run program
 $(PROG): $(SOURCES)       # Build program from sources
 	$(CC) $(SOURCES) $(CFLAGS) $(CFLAGS_MONGOOSE) $(CFLAGS_EXTRA) $(OUT)
 
+net.c: ../../http/device-dashboard/net.c net.h
+	cp $< $@
+
+net.h: ../../http/device-dashboard/net.h
+	cp $< $@
+
+packed_fs.c: ../../http/device-dashboard/packed_fs.c
+	cp $< $@
+
 clean:                    # Cleanup. Delete built program and all build artifacts
-	$(DELETE) $(PROG) *.o *.obj *.exe *.dSYM mbedtls
+	$(DELETE) $(PROG) *.o *.obj *.exe *.dSYM mbedtls net.c net.h packed_fs.c
 
 # see https://mongoose.ws/tutorials/tls/#how-to-build for TLS build options
 

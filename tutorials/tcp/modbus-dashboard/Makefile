@@ -29,8 +29,16 @@ web_root/bundle.js:
 	curl -s https://npm.reversehttp.com/preact,preact/hooks,htm/preact,preact-router -o $@
 
 # Generate packed filesystem for serving Web UI
-packed_fs.c: $(wildcard web_root/*) $(wildcard certs/*) Makefile web_root/bundle.js
-	node pack.js $(addsuffix ::gzip, $(wildcard web_root/*)) certs/* > $@
+packed_fs.c: $(wildcard web_root/*) $(wildcard certs/*) Makefile ../../../test/pack.js web_root/bundle.js certs/server_cert.pem certs/server_key.pem
+	node ../../../test/pack.js $(addsuffix ::gzip, $(wildcard web_root/*)) certs/* > $@
+
+certs/server_cert.pem: ../../http/device-dashboard/certs/server_cert.pem
+	mkdir -p certs
+	cp $< $@
+
+certs/server_key.pem: ../../http/device-dashboard/certs/server_key.pem
+	mkdir -p certs
+	cp $< $@
 
 mbedtls:
 	git clone --depth 1 -b v2.28.2 https://github.com/mbed-tls/mbedtls $@
@@ -43,4 +51,4 @@ endif
 
 # Cleanup. Delete built program and all build artifacts
 clean:
-	$(DELETE) $(PROG) $(PACK) *.o *.obj *.exe *.bin *.dSYM mbedtls
+	$(DELETE) $(PROG) $(PACK) *.o *.obj *.exe *.bin *.dSYM mbedtls certs/*

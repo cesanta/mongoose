@@ -1,4 +1,5 @@
-CFLAGS  = -W -Wall -Wextra -Werror -Wundef -Wshadow -Wdouble-promotion
+REPO_ROOT ?= ../../..
+CFLAGS  = -I$(REPO_ROOT) -W -Wall -Wextra -Werror -Wundef -Wshadow -Wdouble-promotion
 CFLAGS += -Wformat-truncation -fno-common -Wconversion -Wno-sign-conversion
 CFLAGS += -g3 -Os -ffunction-sections -fdata-sections
 CFLAGS += -I. -Icmsis_core/CMSIS/Core/Include -Icmsis_tm4c/Device/TI/TM4C/Include
@@ -23,7 +24,7 @@ CFLAGS += -DTM4C1294NCPDT
 CFLAGS += -Wno-conversion -Wno-sign-conversion
 
 # Mongoose options are defined in mongoose_config.h
-SOURCES += mongoose.c 
+SOURCES += $(REPO_ROOT)/mongoose.c
 
 ifeq ($(OS),Windows_NT)
   RM = cmd /C del /Q /F /S

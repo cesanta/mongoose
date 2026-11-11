@@ -3,9 +3,38 @@
 PROJECTS ?= seeeduino-xiao esp32
 ROOT ?= $(realpath $(CURDIR)/../..)
 ARD ?= $(realpath $(CURDIR))
+MONGOOSE_C = $(ROOT)/tutorials/arduino/esp32-http/mongoose.c \
+             $(ROOT)/tutorials/arduino/esp32-mqtt/mongoose.c \
+             $(ROOT)/tutorials/arduino/nano-w5500-mqtt/mongoose.c \
+             $(ROOT)/tutorials/arduino/sim800-mqtt/mongoose.c \
+             $(ROOT)/tutorials/arduino/teensy41-http/mongoose.c \
+             $(ROOT)/tutorials/arduino/w5500-http/mongoose.c \
+             $(ROOT)/tutorials/arduino/w5500-mqtt/mongoose.c \
+             $(ROOT)/tutorials/nxp/teensy-4.1/arduino/mongoose.c
+MONGOOSE_H = $(MONGOOSE_C:.c=.h)
+TEENSY_FILES = $(ROOT)/tutorials/arduino/teensy41-http/net.c $(ROOT)/tutorials/arduino/teensy41-http/net.h $(ROOT)/tutorials/arduino/teensy41-http/packed_fs.c
 
 all: $(PROJECTS)
 	echo 
+
+prepare: $(MONGOOSE_C) $(MONGOOSE_H) $(TEENSY_FILES)
+
+.PHONY: prepare
+
+$(MONGOOSE_C): $(ROOT)/mongoose.c
+	cp $< $@
+
+$(MONGOOSE_H): $(ROOT)/mongoose.h
+	cp $< $@
+
+$(ROOT)/tutorials/arduino/teensy41-http/net.c: $(ROOT)/tutorials/http/device-dashboard/net.c $(ROOT)/tutorials/arduino/teensy41-http/net.h
+	cp $< $@
+
+$(ROOT)/tutorials/arduino/teensy41-http/net.h: $(ROOT)/tutorials/http/device-dashboard/net.h
+	cp $< $@
+
+$(ROOT)/tutorials/arduino/teensy41-http/packed_fs.c: $(ROOT)/tutorials/http/device-dashboard/packed_fs.c
+	cp $< $@
 
 arduino: ENV = -v $(CWD):/root
 arduino:
@@ -28,26 +57,26 @@ teensy-board:
 	./arduino/arduino --install-boards teensy:avr
 	touch teensy-board
 
-seeeduino-xiao: arduino seeeduino-xiao-board
+seeeduino-xiao: prepare arduino seeeduino-xiao-board
 	cd $(ROOT)/tutorials/arduino/sim800-mqtt && $(ARD)/arduino/arduino --verbose --verify --board Seeeduino:samd:seeed_XIAO_m0 sim800-mqtt.ino
 	cd $(ROOT)/tutorials/arduino/w5500-http &&  $(ARD)/arduino/arduino --verbose --verify --board Seeeduino:samd:seeed_XIAO_m0 w5500-http.ino
 	cd $(ROOT)/tutorials/arduino/w5500-mqtt &&  $(ARD)/arduino/arduino --verbose --verify --board Seeeduino:samd:seeed_XIAO_m0 w5500-mqtt.ino
 
-arduino-nano: arduino
+arduino-nano: prepare arduino
 	cd $(ROOT)/tutorials/arduino/nano-w5500-mqtt && $(ARD)/arduino/arduino --pref compiler.cpp.extra_flags=-DMG_ENABLE_LOG=0 --verbose --verify --board arduino:avr:nano nano-w5500-mqtt.ino
 
-esp32: arduino esp32-board
+esp32: prepare arduino esp32-board
 	cd $(ROOT)/tutorials/arduino/esp32-mqtt && $(ARD)/arduino/arduino --verbose --verify --board esp32:esp32:node32s esp32-mqtt.ino
 	# Needs a board with 'LED_BUILTIN', yet somehow invocation is missing that definition (lack of include somehow amended by the IDE)
 	#cd $(ROOT)/tutorials/arduino/esp32-http && $(ARD)/arduino/arduino --verbose --verify --board esp32:esp32:esp32 esp32-http.ino
 
-teensy41: arduino teensy-board
+teensy41: prepare arduino teensy-board
 	cd $(ROOT)/tutorials/arduino/teensy41-http && $(ARD)/arduino/arduino --verbose --verify --board teensy41-http.ino
 
 
 
 clean:
-	rm -rf arduino 
+	rm -rf arduino $(MONGOOSE_C) $(MONGOOSE_H) $(TEENSY_FILES)
 
 # Board support gets installed in your home dir.
 # We fool make satisfying a dependency using touch above, otherwise board installation fails as it is already installed

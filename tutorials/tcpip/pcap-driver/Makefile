@@ -1,8 +1,9 @@
+REPO_ROOT ?= ../../..
 PROG ?= example
 DELETE = rm -rf
 OUT ?= -o $(PROG)
-SOURCES = main.c mongoose.c
-CFLAGS = -W -Wall -Wextra -g -I.
+SOURCES = main.c $(REPO_ROOT)/mongoose.c
+CFLAGS = -I$(REPO_ROOT) -W -Wall -Wextra -g -I.
 CFLAGS += -lpcap
 
 # Mongoose build options. See https://mongoose.ws/docs/getting-started/build-environment/

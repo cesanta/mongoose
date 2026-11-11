@@ -20,14 +20,23 @@ endif
 all: $(PROG)              # Default target. Build and run program
 	$(RUN) $(PROG) $(ARGS)
 
-web_root/bundle.js:
-	curl -s https://npm.reversehttp.com/preact,preact/hooks,htm/preact,preact-router -o $@
+web_root/bundle.js: ../device-dashboard/web_root/bundle.js
+	cp $< $@
 
-packed_fs.c: $(wildcard web_root/*) Makefile web_root/bundle.js
-	node pack.js $(addsuffix ::gzip, $(wildcard web_root/*)) > $@
+web_root/components.js: ../device-dashboard/web_root/components.js
+	cp $< $@
+
+web_root/history.min.js: ../device-dashboard/web_root/history.min.js
+	cp $< $@
+
+web_root/index.html: ../device-dashboard/web_root/index.html
+	cp $< $@
+
+packed_fs.c: $(wildcard web_root/*) Makefile ../../../test/pack.js web_root/bundle.js web_root/components.js web_root/history.min.js web_root/index.html
+	node ../../../test/pack.js $(addsuffix ::gzip, $(wildcard web_root/*)) > $@
 
 $(PROG): $(SOURCES)       # Build program from sources
 	$(CC) $(SOURCES) $(CFLAGS) $(CFLAGS_MONGOOSE) $(CFLAGS_EXTRA) $(OUT)
 
 clean:                    # Cleanup. Delete built program and all build artifacts
-	$(DELETE) $(PROG) $(PACK) *.o *.obj *.exe *.dSYM
+	$(DELETE) $(PROG) $(PACK) *.o *.obj *.exe *.dSYM web_root/bundle.js web_root/components.js web_root/history.min.js web_root/index.html

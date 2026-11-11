@@ -27,8 +27,11 @@ all: $(PROG)              # Default target. Build and run program
 $(PROG): $(SOURCES)       # Build program from sources
 	$(CC) $(SOURCES) $(CFLAGS) $(CFLAGS_MONGOOSE) $(CFLAGS_EXTRA) $(OUT)
 
+packed_fs.c: ../http-client/packed_fs.c
+	cp $< $@
+
 clean:                    # Cleanup. Delete built program and all build artifacts
-	$(DELETE) $(PROG) *.o *.obj *.exe *.dSYM mbedtls
+	$(DELETE) $(PROG) *.o *.obj *.exe *.dSYM mbedtls packed_fs.c
 
 # see https://mongoose.ws/tutorials/tls/#how-to-build for TLS build options
 

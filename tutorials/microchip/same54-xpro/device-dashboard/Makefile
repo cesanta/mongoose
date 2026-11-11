@@ -1,4 +1,5 @@
-CFLAGS  = -W -Wall -Wextra -Wundef -Wshadow -Wdouble-promotion
+REPO_ROOT ?= ../../../..
+CFLAGS  = -I$(REPO_ROOT) -W -Wall -Wextra -Wundef -Wshadow -Wdouble-promotion
 CFLAGS += -Wformat-truncation -fno-common -Wconversion
 CFLAGS += -g3 -Os -ffunction-sections -fdata-sections
 CFLAGS += -I. -Icmsis_core/CMSIS/Core/Include
@@ -9,7 +10,7 @@ LDFLAGS ?= -Tlink.ld -nostartfiles -nostdlib --specs nano.specs -lc -lgcc -Wl,--
 SOURCES = main.c syscalls.c startup.c
 
 # Mongoose-specific source code files and build options. See https://mongoose.ws/docs/getting-started/build-environment/
-SOURCES += mongoose.c net.c packed_fs.c
+SOURCES += $(REPO_ROOT)/mongoose.c net.c packed_fs.c
 CFLAGS += -DMG_ENABLE_TCPIP=1 -DMG_ARCH=MG_ARCH_ARMGCC -DMG_ENABLE_CUSTOM_MILLIS=1 -DMG_ENABLE_LINES=1
 CFLAGS += -DMG_ENABLE_DRIVER_SAME54=1 -DMG_ENABLE_CUSTOM_RANDOM=1 $(CFLAGS_EXTRA)
 
@@ -39,6 +40,15 @@ cmsis_sam:
 	curl -sL https://packs.download.microchip.com/Microchip.SAME54_DFP.3.9.244.atpack -o $@.zip
 	mkdir $@ && cd $@ && unzip ../$@.zip
 
+net.c: ../../../http/device-dashboard/net.c net.h
+	cp $< $@
+
+net.h: ../../../http/device-dashboard/net.h
+	cp $< $@
+
+packed_fs.c: ../../../http/device-dashboard/packed_fs.c
+	cp $< $@
+
 # Automated test via https://vcon.io/automated-firmware-tests/. Set VCON_API_KEY and update DEVICE_URL
 DEVICE_URL ?= https://dash.vcon.io/api/v3/devices/9
 update: firmware.bin
@@ -50,4 +60,4 @@ test: update
 	grep 'READY, IP:' /tmp/output.txt       # Check for network init
 
 clean:
-	$(RM) firmware.* cmsis_core cmsis_sam *.zip
+	$(RM) firmware.* cmsis_core cmsis_sam *.zip net.c net.h packed_fs.c

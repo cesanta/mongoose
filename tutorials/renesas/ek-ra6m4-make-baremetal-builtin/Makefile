@@ -1,4 +1,5 @@
-CFLAGS  = -W -Wall -Wextra -Werror -Wundef -Wshadow -Wdouble-promotion
+REPO_ROOT ?= ../../..
+CFLAGS  = -I$(REPO_ROOT) -W -Wall -Wextra -Werror -Wundef -Wshadow -Wdouble-promotion
 CFLAGS += -Wformat-truncation -fno-common -Wconversion -Wno-sign-conversion
 CFLAGS += -g3 -Os -ffunction-sections -fdata-sections
 CFLAGS += -I. -Icmsis_core/CMSIS/Core/Include
@@ -7,7 +8,7 @@ CFLAGS += -Icmsis_mcu/ra/fsp/src/bsp/mcu/all
 CFLAGS += -mcpu=cortex-m33 -mthumb -mfpu=fpv5-sp-d16 -mfloat-abi=hard $(CFLAGS_EXTRA)
 LDFLAGS ?= -Tlink.ld -nostdlib -nostartfiles --specs nano.specs -lc -lgcc -Wl,--gc-sections -Wl,-Map=$@.map
 
-SOURCES = main.c hal.c mongoose.c net.c packed_fs.c
+SOURCES = main.c hal.c $(REPO_ROOT)/mongoose.c net.c packed_fs.c
 # CMSIS startup and system files are deeply tied to the BSP, and we don't use it. See hal.c
 
 # Example specific build options. See README.md
@@ -37,6 +38,15 @@ cmsis_core:     # ARM CMSIS core headers
 cmsis_mcu:
 	git clone -q --depth 1 -b v5.1.0 https://github.com/renesas/fsp $@
 
+net.c: ../../http/device-dashboard/net.c net.h
+	cp $< $@
+
+net.h: ../../http/device-dashboard/net.h
+	cp $< $@
+
+packed_fs.c: ../../http/device-dashboard/packed_fs.c
+	cp $< $@
+
 
 # Automated remote test. Requires env variable VCON_API_KEY set. See https://vcon.io/automated-firmware-tests/
 DEVICE_URL ?= https://dash.vcon.io/api/v3/devices/14
@@ -50,4 +60,4 @@ test: update
 	grep 'READY, IP:' /tmp/output.txt       # Check for network init
 
 clean:
-	$(RM) firmware.* *.su cmsis_core cmsis_mcu mbedtls *.zip
+	$(RM) firmware.* *.su cmsis_core cmsis_mcu mbedtls *.zip net.c net.h packed_fs.c
