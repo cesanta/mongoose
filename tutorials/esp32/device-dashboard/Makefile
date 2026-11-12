@@ -9,8 +9,17 @@ all: example
 example:
 	true
 
-build: Makefile $(wildcard main/*)
+build: Makefile $(wildcard main/*) main/net.c main/net.h main/packed_fs.c
 	$(DOCKER) $(CMD)
+
+main/net.c: ../../http/device-dashboard/net.c main/net.h
+	cp $< $@
+
+main/net.h: ../../http/device-dashboard/net.h
+	cp $< $@
+
+main/packed_fs.c: ../../http/device-dashboard/packed_fs.c
+	cp $< $@
 
 flash:
 flash: CMD = idf.py flash
@@ -36,3 +45,4 @@ flash3:
 
 clean:
 	test -d build && $(DOCKER) rm -rf build sdkconfig || true
+	rm -f main/net.c main/net.h main/packed_fs.c

@@ -23,11 +23,23 @@ endif
 all: $(PROG)              # Default target. Build and run program
 	$(RUN) ./$(PROG) $(ARGS)
 
-$(PROG): $(SOURCES)       # Build program from sources
+$(PROG): $(SOURCES) certs/ss_ca.pem certs/ss_client.pem certs/ss_server.pem  # Build program from sources
 	$(CC) $(SOURCES) $(CFLAGS) $(CFLAGS_MONGOOSE) $(CFLAGS_EXTRA) $(OUT)
 
+certs/ss_ca.pem: ../../../test/data/ss_ca.pem
+	mkdir -p certs
+	cp $< $@
+
+certs/ss_client.pem: ../../../test/data/ss_client.pem
+	mkdir -p certs
+	cp $< $@
+
+certs/ss_server.pem: ../../../test/data/ss_server.pem
+	mkdir -p certs
+	cp $< $@
+
 clean:                    # Cleanup. Delete built program and all build artifacts
-	$(DELETE) $(PROG) *.o *.obj *.exe *.dSYM mbedtls $(PACK)
+	$(DELETE) $(PROG) *.o *.obj *.exe *.dSYM mbedtls $(PACK) certs/ss_ca.pem certs/ss_client.pem certs/ss_server.pem
 
 # Generate packed filesystem for serving credentials
 packed_fs.c: $(wildcard certs/*) Makefile

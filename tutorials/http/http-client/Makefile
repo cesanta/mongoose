@@ -24,8 +24,12 @@ endif
 all: $(PROG)              # Default target. Build and run program
 	$(RUN) ./$(PROG) $(ARGS)
 
-$(PROG): $(SOURCES)       # Build program from sources
+$(PROG): $(SOURCES) certs/ca.pem  # Build program from sources
 	$(CC) $(SOURCES) $(CFLAGS) $(CFLAGS_MONGOOSE) $(CFLAGS_EXTRA) $(OUT)
 
+certs/ca.pem: ../../../test/data/ca.pem
+	mkdir -p certs
+	cp $< $@
+
 clean:                    # Cleanup. Delete built program and all build artifacts
-	$(DELETE) $(PROG) *.o *.obj *.exe *.dSYM mbedtls $(PACK)
+	$(DELETE) $(PROG) *.o *.obj *.exe *.dSYM mbedtls $(PACK) certs/ca.pem

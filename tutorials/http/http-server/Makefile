@@ -20,14 +20,22 @@ ifeq ($(OS),Windows_NT)   # Windows settings. Assume MinGW compiler. To use VC: 
   OUT ?= -o $(PROG)             # Build output
 endif
 
-all: $(PROG)              # Default target. Build and run program
+CERTS = certs/ca.crt certs/ca.key certs/ca.srl certs/client.crt certs/client.csr \
+        certs/client.key certs/generate.sh certs/server.crt certs/server.csr \
+        certs/server.key
+
+all: $(CERTS) $(PROG)     # Default target. Build and run program
 	$(RUN) ./$(PROG) $(ARGS)
+
+certs/%: ../../../test/certs/%
+	mkdir -p certs
+	cp $< $@
 
 $(PROG): $(SOURCES)       # Build program from sources
 	$(CC) $(SOURCES) $(CFLAGS) $(CFLAGS_MONGOOSE) $(CFLAGS_EXTRA) $(OUT)
 
 clean:                    # Cleanup. Delete built program and all build artifacts
-	$(DELETE) $(PROG) *.o *.obj *.exe *.dSYM
+	$(DELETE) $(PROG) *.o *.obj *.exe *.dSYM certs/*
 
 
 vc98: CC = cl

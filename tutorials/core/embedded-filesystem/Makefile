@@ -1,8 +1,9 @@
 PROG ?= example                   # Program we are building
 DELETE = rm -rf                   # Command to remove files
 OUT ?= -o $(PROG)                 # Compiler argument for output file
-SOURCES = main.c mongoose.c packed_fs.c      # Source code files
-CFLAGS = -W -Wall -Wextra -g -I.  # Build options
+REPO_ROOT ?= ../../..
+SOURCES = main.c $(REPO_ROOT)/mongoose.c packed_fs.c  # Source code files
+CFLAGS = -I$(REPO_ROOT) -W -Wall -Wextra -g -I.  # Build options
 PACK = ./pack             # Utility to pack files into a packed filesystem
 
 # Mongoose build options. See https://mongoose.ws/docs/getting-started/build-environment/

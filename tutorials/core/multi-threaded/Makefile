@@ -1,5 +1,6 @@
-SOURCES = main.c mongoose.c       # Source code files
-CFLAGS = -W -Wall -Wextra -g -I.  # Build options
+REPO_ROOT ?= ../../..
+SOURCES = main.c $(REPO_ROOT)/mongoose.c  # Source code files
+CFLAGS = -I$(REPO_ROOT) -W -Wall -Wextra -g -I.  # Build options
 
 # Mongoose build options. See https://mongoose.ws/docs/getting-started/build-environment/
 CFLAGS_MONGOOSE +=
