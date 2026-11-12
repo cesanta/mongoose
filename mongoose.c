@@ -15353,7 +15353,7 @@ void mg_rpc_process(struct mg_rpc_req *r) {
     mg_rpc_call(r, mg_str(""));  // JSON response! call "" method handler
   } else {
     mg_rpc_err(r, -32700, "%m", mg_print_esc, (int) r->frame.len,
-               r->frame.buf);  // Invalid
+               r->frame.len ? r->frame.buf : "");  // Invalid
   }
 }
 
