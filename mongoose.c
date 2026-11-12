@@ -4906,11 +4906,15 @@ static bool uri2path(const char *r, struct mg_str uri, char *buf, size_t len) {
   n = mg_snprintf(buf, len, "%.*s", (int) d.len, d.buf);
   if (len == 0 || n + 2 >= len) return false;  // Path overflow
   if (n > 0 && buf[n - 1] != '/') buf[n++] = '/', buf[n] = '\0';  // Add slash
-  if (mg_url_decode(uri.buf + u.len, uri.len - u.len, buf + n, len - n, 0) < 0) {
-    return false;
+  {
+    int dn;
+    size_t p = n;
+    dn = mg_url_decode(uri.buf + u.len, uri.len - u.len, buf + n, len - n, 0);
+    if (dn < 0) return false;  // reject on malformed
+    buf[len - 1] = '\0';  // Double-check
+    n = strlen(buf);
+    if (n != p + (size_t) dn) return false;  // reject on embedded NULs
   }
-  buf[len - 1] = '\0';  // Double-check
-  n = strlen(buf);
   if (!mg_path_is_sane(mg_str_n(buf, n))) return false;
   while (n > 1 && buf[n - 1] == '/') buf[--n] = 0;  // Trim trailing slashes
   return true;

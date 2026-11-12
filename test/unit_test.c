@@ -1519,6 +1519,7 @@ static void test_http_404(void) {
 
   ASSERT(fetch(&mgr, buf, url, "GET /a.txt HTTP/1.0\n\n") == 200);
   ASSERT(cmpbody(buf, "hello\n") == 0);
+  ASSERT(fetch(&mgr, buf, url, "GET /a.txt%%00x HTTP/1.0\n\n") == 400);
   ASSERT(fetch(&mgr, buf, url, "GET /a/a.txt HTTP/1.0\n\n") == 200);
   ASSERT(cmpbody(buf, "hello\n") == 0);
   ASSERT(fetch(&mgr, buf, url, "GET /unmapped HTTP/1.0\n\n") == 400);
