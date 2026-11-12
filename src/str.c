@@ -88,8 +88,7 @@ bool mg_match(struct mg_str s, struct mg_str p, struct mg_str *caps) {
       if (caps && !caps->buf) caps->len = 0, caps->buf = &s.buf[j];  // Init cap
       ni = i++, nj = j + 1;
     } else if (nj > 0 && nj <= s.len &&
-               ((ni < p.len && p.buf[ni] == '#') ||
-                (j < s.len && s.buf[j] != '/'))) {
+               ((ni < p.len && p.buf[ni] == '#') || s.buf[nj - 1] != '/')) {
       i = ni, j = nj;
       if (caps && caps->buf == NULL && caps->len == 0) {
         caps--, caps->len = 0;  // Restart previous cap
