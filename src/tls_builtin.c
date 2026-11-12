@@ -1904,7 +1904,7 @@ static int mg_tls_recv_cert(struct mg_connection *c, bool is_client) {
           bool is_addr = mg_aton_(mg_str_s(tls->hostname), &addr);
           if (mg_tls_verify_cert_san(cert, certsz, tls->hostname,
                                      is_addr ? &addr : NULL) <= 0 &&
-              (!is_addr ||  // DNS CN fallback
+              (is_addr ||  // IP references require a matching SAN
                mg_tls_verify_cert_cn(&ci->subj, tls->hostname) <= 0)) {
             mg_error(c, "failed to verify hostname");
             return -1;
