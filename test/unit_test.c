@@ -72,6 +72,20 @@ static void test_match(void) {
   ASSERT(mg_match(mg_str_n("caabxa", 6), mg_str_n("#aa#bb#", 7), NULL) == 0);
   ASSERT(mg_match(mg_str_n("a__b_c", 6), mg_str_n("a*b*c", 5), NULL) == 1);
 
+  ASSERT(mg_match(mg_str("a/b/d/c"), mg_str("a/*/c"), NULL) == false);
+  ASSERT(mg_match(mg_str("a/b/c"), mg_str("a/*/c"), NULL) == true);
+  ASSERT(mg_match(mg_str("a/b/d/c"), mg_str("a/#/c"), NULL) == true);
+  {
+    struct mg_str caps[2];
+    ASSERT(mg_match(mg_str("a/b/d/c"), mg_str("a/*/c"), caps) == false);
+    ASSERT(mg_match(mg_str("a/b/c"), mg_str("a/*/c"), caps) == true);
+    ASSERT(mg_strcmp(caps[0], mg_str("b")) == 0);
+    ASSERT(mg_strcmp(caps[1], mg_str("")) == 0);
+    ASSERT(mg_match(mg_str("a/b/d/c"), mg_str("a/#/c"), caps) == true);
+    ASSERT(mg_strcmp(caps[0], mg_str("b/d")) == 0);
+    ASSERT(mg_strcmp(caps[1], mg_str("")) == 0);
+  }
+
   {
     char *ae_value = (char *) malloc(1);  // Exact size for ASAN
     ae_value[0] = 'g';
