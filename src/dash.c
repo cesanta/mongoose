@@ -599,8 +599,6 @@ void mg_dash_ev_handler(struct mg_connection *c, int ev, void *ev_data) {
       mg_http_reply(c, 200, MG_JSON_HEADERS, "hi\n");
     } else if (mg_match(hm->uri, mg_str("/api/logout"), NULL)) {
       mg_handle_logout(c);
-      mg_ws_printf(c, WEBSOCKET_OP_TEXT, "{%m:%m}", MG_ESC("method"),
-                   MG_ESC("logout"));
     } else if (mg_match(hm->uri, mg_str("/api/websocket"), NULL)) {
       d->u = u;
       mg_ws_upgrade(c, hm, NULL);

@@ -4989,6 +4989,7 @@ static void test_dash(void) {
   const char *url = "http://localhost:26352";
   const char *ws_url = "ws://localhost:26352/api/websocket";
   struct mg_mgr mgr;
+  struct mg_connection *listener;
   struct mg_dash dash;
   struct dash_ws_test ws_admin, ws_user_notify;
   bool two = false;
@@ -5117,7 +5118,44 @@ static void test_dash(void) {
   MG_DASH_ADD_FIELD_SET(&dash, &arr_set);
   mg_mgr_init(&mgr);
   mg_mem_files = mg_packed_files;
-  ASSERT(mg_http_listen(&mgr, url, mg_dash_ev_handler, &dash) != NULL);
+  listener = mg_http_listen(&mgr, url, mg_dash_ev_handler, &dash);
+  ASSERT(listener != NULL);
+
+  // Unauthenticated logout must leave a valid stream for the next response
+  {
+    const char *request = "GET /api/logout HTTP/1.1\r\nHost: h\r\n\r\n"
+                          "GET /api/hi HTTP/1.1\r\nHost: h\r\n\r\n";
+    struct mg_dash logout_dash;
+    struct mg_connection c;
+    struct mg_http_message hm;
+    size_t first_len;
+    long n;
+    memset(&logout_dash, 0, sizeof(logout_dash));
+    logout_dash.authenticate = dash_authenticate;
+    memset(&c, 0, sizeof(c));
+    c.mgr = &mgr;
+    c.fn = mg_dash_ev_handler;
+    c.fn_data = &logout_dash;
+    c.pfn = listener->pfn;
+    c.is_accepted = 1;
+    mg_call(&c, MG_EV_OPEN, NULL);
+    mg_iobuf_add(&c.recv, 0, request, strlen(request));
+    n = (long) c.recv.len;
+    mg_call(&c, MG_EV_READ, &n);
+    ASSERT(!c.is_websocket && !c.is_closing && !c.is_draining);
+    ASSERT(c.recv.len == 0);
+    ASSERT(mg_http_parse((char *) c.send.buf, c.send.len, &hm) > 0);
+    ASSERT(mg_http_status(&hm) == 401);
+    ASSERT(mg_strcmp(hm.body, mg_str("Unauthorized\n")) == 0);
+    first_len = hm.message.len;
+    ASSERT(mg_http_parse((char *) c.send.buf + first_len,
+                         c.send.len - first_len, &hm) > 0);
+    ASSERT(mg_http_status(&hm) == 200);
+    ASSERT(mg_strcmp(hm.body, mg_str("hi\n")) == 0);
+    ASSERT(first_len + hm.message.len == c.send.len);
+    mg_iobuf_free(&c.recv);
+    mg_iobuf_free(&c.send);
+  }
 
   // Test general get / set functionality
   ASSERT(fetch(&mgr, buf, url, "GET /api/get HTTP/1.0\n\n") == 200);
