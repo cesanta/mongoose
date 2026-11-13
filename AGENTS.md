@@ -40,6 +40,7 @@ This is a navigation aid, not an API reference. Read `mongoose.h` for exact
 function signatures, structs, options, examples, and constraints.
 
 - `mg_mgr_*` - event manager and polling loop
+- `mg_dash_*` - dashboard API for device web UIs, fieldsets, and live updates
 - `mg_http_*` - HTTP server, HTTP client, uploads, serving files
 - `mg_ws_*` - WebSocket server and client
 - `mg_mqtt_*` - MQTT client
@@ -239,6 +240,14 @@ Use only the dashboard files listed below. Download missing reference files;
 preserve existing files. Integrate the dashboard into the existing application
 and build files.
 
+Start from the minimal reference implementation and adapt its fields and UI.
+Keep dashboard fieldsets, callbacks, update timers, and small metric helpers
+in `dashboard.c`. Do not create `dashboard.h`, or other dashboard
+helper modules. `mongoose.h` already declares `mg_dash_init()` and
+`mg_dash_poll()`. Reuse existing board/HAL helpers for hardware measurements;
+if none exists, put a small private helper in `dashboard.c` or extend the
+existing board/HAL implementation.
+
 Expose device state through mg_field / mg_field_set.
 Call mg_dash_init() once and mg_dash_poll() in the event loop.
 For live updates, call mg_dash_send_change() from a backend timer.
@@ -252,6 +261,11 @@ fetch(), setInterval(), or a custom WebSocket client for dashboard state.
 
 Keep all the following Mongoose files together in one project directory.
 The example uses `mongoose/`; you may choose another directory name.
+If Mongoose is already installed, use the directory containing the actual
+`mongoose.c` and `mongoose.h` files, including an existing CubeMX middleware
+directory. Add the dashboard files there and update the build paths. Do not
+create a second Mongoose directory or use symlinks, forwarding headers, or
+duplicate library copies to make files appear colocated.
 
 ```
 your_project/
@@ -284,7 +298,11 @@ https://github.com/cesanta/mongoose/blob/master/resources/html2c.js
 ```
 
 Add a build rule that regenerates `file_data.c` whenever `dashboard.html` or
-`html2c.js` changes. Compile both `dashboard.c` and `file_data.c` into the
+`html2c.js` changes. Keep the upstream generator unchanged; it already inlines
+the script referenced by the HTML, so the served page does not need internet
+access. Do not download a separate `dashboard.js` or add a local `--use`
+override unless the user explicitly requests offline builds or local assets.
+Compile both `dashboard.c` and `file_data.c` into the
 application. Call `mg_dash_init()` once and `mg_dash_poll()` on every iteration
 of the existing Mongoose event loop, from the same task or thread.
 
@@ -305,7 +323,8 @@ for (;;) {
 
 ### dashboard.html rules
 
-- Use `dashboard.js` from `https://mongoose.ws/resources/dashboard.js`
+- Reference `<script src="https://mongoose.ws/resources/dashboard.js"></script>`
+  in the source HTML. Let `html2c.js` inline it into the generated asset.
 - Call `Dashboard.init({ data: { ... } })` once - this is the only direct
   Dashboard API call. Treat the rest of Dashboard as a black box.
 - Do **not** add vanilla JS event listeners, `fetch()` calls, or custom
@@ -314,7 +333,7 @@ for (;;) {
   modify the web UI authorizes the necessary `dashboard.html` edits.
 - Bind controls to device state using `data-bind` attributes
 - The `__status` object in evaluations is read-only, do not alter it
-- If you need to pass data between the UI and backend.c, add extra
+- If you need to pass data between the UI and `dashboard.c`, add extra
   fieldsets/fields - see next section about it
 - If you want to display device data in HTML, use `${}` evaluations
 
@@ -338,17 +357,24 @@ for (;;) {
 
 ### dashboard.c rules
 
-Mongoose backend exports device data as a collection of "fieldsets". Each fieldset groups several fields
+Mongoose exports device data as fieldsets. Each fieldset groups several fields
+and has one `bool fn(enum mg_dash_op, struct mg_dash_user *)` callback for
+read/write/add/delete operations. Use the declarations in the project's
+`mongoose.h`; do not copy older descriptors with separate reader/writer
+members or positional access-level arguments. Use designated initializers.
 
 Example fieldset:
 
 ```c
+static struct mg_dash s_dash;
+static bool settings_fn(enum mg_dash_op op, struct mg_dash_user *u);
+
 static struct settings {
   double volume;
   char name[10];
   int log_level;
   bool enable_login;
-} s_settings = {2.7, "Dublin", 2, false, false};
+} s_settings = {2.7, "Dublin", 2, false};
 
 static struct mg_field fields_settings[] = {
     {"volume", MG_VAL_DBL, &s_settings.volume, sizeof(s_settings.volume)},
@@ -359,14 +385,12 @@ static struct mg_field fields_settings[] = {
 };
 
 static struct mg_field_set set_settings = {
-    "settings", fields_settings, read_settings, write_settings, 3, 7, NULL,
+    .name = "settings", .fields = fields_settings, .fn = settings_fn,
 };
 ```
 
 To enable user authentication, set `authenticate` function for the dashboard descriptor:
 ```c
-static struct mg_dash s_dash;
-
 // Signature: (char *user, size_t userlen, const char *pass)
 // `user` is both input (username from the login form) and output: the function
 // may overwrite it with the canonical username. Return access level > 0 on
@@ -383,24 +407,34 @@ static int authenticate(char *user, size_t userlen, const char *pass) {
   return level;
 }
 
-static void write_settings(void) {
-  s_dash.authenticate = s_settings.enable_login ? authenticate : NULL;
+static bool settings_fn(enum mg_dash_op op, struct mg_dash_user *u) {
+  (void) u;
+  if (op == MG_DASH_WRITE) {
+    s_dash.authenticate = s_settings.enable_login ? authenticate : NULL;
+    return true;
+  }
+  return op == MG_DASH_READ;
 }
 ```
 
-Fieldset may have reader and writer function, which acts as a hardware glue. For example, "led1" variable may reflect real LED status using reader and writer:
+Use the fieldset callback as hardware glue. For example, `led1` can reflect
+the real LED state:
 
 ```c
 static struct leds {
   bool led1;
 } s_leds = {false};
 
-static void write_leds(void) {
-  gpio_write(LED1_PIN, s_leds.led1);
-}
-
-static void read_leds(void) {
-  s_leds.led1 = gpio_read(LED1_PIN);
+static bool leds_fn(enum mg_dash_op op, struct mg_dash_user *u) {
+  (void) u;
+  if (op == MG_DASH_READ) {
+    s_leds.led1 = gpio_read(LED1_PIN);
+  } else if (op == MG_DASH_WRITE) {
+    gpio_write(LED1_PIN, s_leds.led1);
+  } else {
+    return false;
+  }
+  return true;
 }
 
 static struct mg_field fields_leds[] = {
@@ -409,7 +443,7 @@ static struct mg_field fields_leds[] = {
 };
 
 static struct mg_field_set set_leds = {
-    "leds", fields_leds, read_leds, write_leds, 0, 0, NULL,
+    .name = "leds", .fields = fields_leds, .fn = leds_fn,
 };
 ```
 
@@ -435,7 +469,8 @@ static struct event {
 } s_event;
 
 static struct mg_field_set field_set_event = {
-    "event", fields_event, event_fn, &s_event.index, 0, 0, 0
+    .name = "event", .fields = fields_event,
+    .fn = event_fn, .index = &s_event.index,
 };
 ```
 
@@ -454,6 +489,20 @@ The dashboard backend must expose these exact functions: mg_dash_init() and mg_d
 Do not rename, wrap, relocate, or replace these files or functions. Do not introduce alternatives such as app_dashboard_init(), app_dashboard_poll(), web/dashboard.html, or Core/Src/dashboard.c.
 
 Board-specific STM32Cube files may exist outside mongoose/, but the Mongoose dashboard files must retain the structure and API documented above.
+
+### Dashboard completion checks
+
+- Verify actual file locations, including symlink targets, against the required
+  layout. Check that no extra dashboard source/header/JS files were introduced.
+- Check the source HTML for the upstream script reference, a single
+  `Dashboard.init()`, and declarative bindings. Networking code in the upstream
+  script inlined into `file_data.c` is expected; do not replace or edit it.
+- Verify fieldsets are registered with `MG_DASH_ADD_FIELD_SET()`, listeners use
+  `mg_dash_ev_handler`, and live metrics use `mg_dash_send_change()` on the
+  requested backend schedule. Do not resend unrelated fieldsets at that rate.
+- Regenerate `file_data.c` and build the real firmware. Report separately which
+  behavior was verified on hardware; host mocks do not establish physical LED,
+  Ethernet, RAM measurement, or refresh-rate correctness.
 
 ## Filesystem
 
