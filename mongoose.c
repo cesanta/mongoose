@@ -19593,11 +19593,11 @@ static bool mg_tls_send_cert_verify(struct mg_connection *c, bool is_client) {
     verify[10] = 0x02;  // ASN.1 INTEGER
     verify[11] = (uint8_t) (32 + adj1);
     memmove(verify + (size_t) (12 + (adj1 > 0)), sig + (size_t) (adj1 < 0),
-            (size_t) (32 + (adj1 < 0)));
+            (size_t) (32 - (adj1 < 0)));
     verify[12 + 32 + adj1] = 0x02;  // ASN.1 INTEGER
     verify[13 + 32 + adj1] = (uint8_t) (32 + adj2);
     memmove(verify + (size_t) (14 + 32 + adj1 + (adj2 > 0)),
-            sig + (size_t) (32 + (adj2 < 0)), (size_t) (32 + (adj2 < 0)));
+            sig + (size_t) (32 + (adj2 < 0)), (size_t) (32 - (adj2 < 0)));
     sigsz = (size_t) (70 + adj1 + adj2);
     verifysz = 8U + sigsz;
     verify[3] = (uint8_t) (sigsz + 4);
