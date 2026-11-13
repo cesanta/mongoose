@@ -37,7 +37,6 @@
         <file category="sourceC" name="mongoose.c" />
         <file category="header" name="mongoose_config.h"/>
         <file category="utility" name="README.md" public="false"/>
-        <file category="genAsset" name=".config/mongoose_parameters.json"/>
       </files>
       <environments>
         <environment name="STM32Cube">

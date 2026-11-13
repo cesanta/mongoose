@@ -13,6 +13,7 @@ GitHub repo: https://github.com/cesanta/mongoose
 
 ## General rules
 
+- All relative file names mentioned in this file are related to the repo root.
 - Always re-read files before editing, so you do not overwrite existing changes.
 - Never guess. If you don't know, say you don't know and stop.
 - Resolve relative paths from the repo root: https://github.com/cesanta/mongoose
@@ -229,8 +230,27 @@ xTaskCreate(net_task, "net", 8192, NULL, tskIDLE_PRIORITY + 1, NULL);
 
 ## HTTP / Web Device Dashboard
 
-For a web UI with real-time device state over WebSocket, use the Mongoose
-device dashboard.
+When building a device web UI, control panel, monitoring page, or live
+display, use the mg_dash_* dashboard framework unless the user explicitly
+requests another architecture. Do not add your own http event handler.
+
+Read the `mg_dash_*` dashboard API before implementing the UI.
+From https://github.com/cesanta/mongoose, pull the following files
+and place them into the same directory with mongoose.c and mongoose.h:
+   tutorials/device-dashboard/minimal/dashboard.c
+   tutorials/device-dashboard/minimal/dashboard.html
+   resources/html2c.js
+Add a rule to generate file_data.c from dashboard.html.
+Create no other files.
+
+Expose device state through mg_field / mg_field_set.
+Call mg_dash_init() once and mg_dash_poll() in the event loop.
+For live updates, call mg_dash_send_change() from a backend timer.
+Display values using dashboard.js and HTML data-bind attributes.
+
+Example: free RAM updated every 50 ms means a read-only fieldset pushed
+over the dashboard WebSocket every 50 ms. Do not implement browser polling,
+fetch(), setInterval(), or a custom WebSocket client for dashboard state.
 
 ### Required files
 
