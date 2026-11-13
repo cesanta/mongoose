@@ -231,17 +231,13 @@ xTaskCreate(net_task, "net", 8192, NULL, tskIDLE_PRIORITY + 1, NULL);
 ## HTTP / Web Device Dashboard
 
 When building a device web UI, control panel, monitoring page, or live
-display, use the mg_dash_* dashboard framework unless the user explicitly
-requests another architecture. Do not add your own http event handler.
+display, you MUST use the `mg_dash_*` dashboard framework unless the user
+explicitly requests another architecture. Do not add your own HTTP event handler.
 
-Read the `mg_dash_*` dashboard API before implementing the UI.
-From https://github.com/cesanta/mongoose, pull the following files
-and place them into the same directory with mongoose.c and mongoose.h:
-   tutorials/device-dashboard/minimal/dashboard.c
-   tutorials/device-dashboard/minimal/dashboard.html
-   resources/html2c.js
-Add a rule to generate file_data.c from dashboard.html.
-Create no other files.
+Read the dashboard declarations in `mongoose.h` before implementing the UI.
+Use only the dashboard files listed below. Download missing reference files;
+preserve existing files. Integrate the dashboard into the existing application
+and build files.
 
 Expose device state through mg_field / mg_field_set.
 Call mg_dash_init() once and mg_dash_poll() in the event loop.
@@ -254,7 +250,8 @@ fetch(), setInterval(), or a custom WebSocket client for dashboard state.
 
 ### Required files
 
-The following files must exist at these exact paths, regardless of the build environment:
+Keep all the following Mongoose files together in one project directory.
+The example uses `mongoose/`; you may choose another directory name.
 
 ```
 your_project/
@@ -264,6 +261,7 @@ your_project/
     ├── mongoose.c       # single source file
     ├── dashboard.c      # C-side dashboard logic
     ├── dashboard.html   # HTML/JS UI (source)
+    ├── html2c.js        # HTML-to-C generator
     └── file_data.c      # generated from dashboard.html (see below)
 ```
 
@@ -275,16 +273,20 @@ node html2c.js dashboard.html -o file_data.c
 
 `html2c.js` is at https://github.com/cesanta/mongoose/blob/master/resources/html2c.js
 
-If the project does not yet have `dashboard.c` and `dashboard.html`, fetch the
-minimal reference versions:
+For each missing `dashboard.c`, `dashboard.html`, or `html2c.js`, download its
+reference version from the Mongoose repository and place it beside `mongoose.c`
+and `mongoose.h`:
 
 ```
 https://github.com/cesanta/mongoose/blob/master/tutorials/device-dashboard/minimal/dashboard.c
 https://github.com/cesanta/mongoose/blob/master/tutorials/device-dashboard/minimal/dashboard.html
+https://github.com/cesanta/mongoose/blob/master/resources/html2c.js
 ```
 
-If the project already has `dashboard.c` and `dashboard.html`, do **not** fetch
-anything from the repository.
+Add a build rule that regenerates `file_data.c` whenever `dashboard.html` or
+`html2c.js` changes. Compile both `dashboard.c` and `file_data.c` into the
+application. Call `mg_dash_init()` once and `mg_dash_poll()` on every iteration
+of the existing Mongoose event loop, from the same task or thread.
 
 ### C integration (bare metal or RTOS main loop)
 
@@ -308,7 +310,8 @@ for (;;) {
   Dashboard API call. Treat the rest of Dashboard as a black box.
 - Do **not** add vanilla JS event listeners, `fetch()` calls, or custom
   reactive logic to `dashboard.html`.
-- Do **not** modify `dashboard.html` unless the user explicitly asks.
+- Modify `dashboard.html` only for requested UI work. A request to create or
+  modify the web UI authorizes the necessary `dashboard.html` edits.
 - Bind controls to device state using `data-bind` attributes
 - The `__status` object in evaluations is read-only, do not alter it
 - If you need to pass data between the UI and backend.c, add extra
