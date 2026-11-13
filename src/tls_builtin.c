@@ -1677,17 +1677,20 @@ static int mg_tls_verify_cert_san(const uint8_t *der, size_t dersz,
                                   const char *server_name,
                                   struct mg_addr *ref_ip) {
   struct mg_der_tlv root, field, name;
+  int r;
   bool is_addr = ref_ip != NULL;
   if (mg_der_parse((uint8_t *) der, dersz, &root) < 0) {
     MG_ERROR(("failed to parse certificate"));
     return -1;
   }
-  if (mg_der_find_oid(&root, (uint8_t *) "\x55\x1d\x11", 3, &field) <= 0) {
+  if ((r = mg_der_find_oid(&root, (uint8_t *) "\x55\x1d\x11", 3, &field)) < 0) {
     MG_ERROR(("failed to extract SAN"));
     return -1;
+  } else if (r == 0) {
+    return 0;   // No SAN
   }
-  if (mg_der_parse(field.value, field.len, &field) < 0) {
-    MG_ERROR(("SAN is not a constructed object"));
+  if (mg_der_parse(field.value, field.len, &field) < 0 || field.type != 0x30) {
+    MG_ERROR(("SAN is not a constructed object"));  // RFC 5280 4.2.1.6
     return -1;
   }
   while (mg_der_next(&field, &name) > 0) {
@@ -1714,6 +1717,7 @@ static int mg_tls_verify_cert_san(const uint8_t *der, size_t dersz,
         return 1;  // and matches the host name
     }
   }
+  MG_ERROR(("Found SAN but does not match IP or DNS name"));
   return -1;
 }
 
@@ -1901,12 +1905,15 @@ static int mg_tls_recv_cert(struct mg_connection *c, bool is_client) {
         // and store public key for further CertVerify step
         if (tls->hostname[0] != '\0') {
           struct mg_addr addr;  // use aton_ so localhost evals as a name
-          bool is_addr = mg_aton_(mg_str_s(tls->hostname), &addr);
-          if (mg_tls_verify_cert_san(cert, certsz, tls->hostname,
-                                     is_addr ? &addr : NULL) <= 0 &&
-              (is_addr ||  // IP references require a matching SAN
-               mg_tls_verify_cert_cn(&ci->subj, tls->hostname) <= 0)) {
-            mg_error(c, "failed to verify hostname");
+          bool is_addr;
+          int san;
+          is_addr = mg_aton_(mg_str_s(tls->hostname), &addr);
+          san = mg_tls_verify_cert_san(cert, certsz, tls->hostname,
+                                       is_addr ? &addr : NULL);
+          if (san < 0 ||  // RFC 6125 6.4.4 allow legacy fallback to CN
+              (san == 0 && (is_addr || mg_tls_verify_cert_cn(
+                                           &ci->subj, tls->hostname) <= 0))) {
+            mg_error(c, "failed to verify host");
             return -1;
           }
         }
