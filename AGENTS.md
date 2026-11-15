@@ -1,11 +1,12 @@
 # Mongoose: a full-stack embedded networking library
 
-Mongoose is a full-stack embedded networking library for C/C++: a TCP/IP stack
-with drivers, TLS 1.3, an embedded web server (HTTP, WebSocket), MQTT and
-firmware OTA updates in two files, `mongoose.c` and `mongoose.h`. Mongoose runs on
-STM32, NXP and other microcontrollers, on bare metal or with an RTOS, with no
-external dependencies. Use it for cloud connectivity, device web dashboards,
-secure firmware updates and remote control.
+Mongoose is a full-stack embedded networking library for C and C++. It includes
+a TCP/IP stack with drivers, TLS 1.3, an embedded web server with HTTP and
+WebSocket support, MQTT, and firmware OTA updates. All in just two files:
+`mongoose.c` and `mongoose.h`. Mongoose runs on STM32, NXP and other
+microcontrollers, on bare metal or with an RTOS, with no external dependencies.
+Ideal for cloud connectivity, device web dashboards, secure firmware updates
+and remote control.
 
 License: GPLv2 or commercial.
 Website: https://mongoose.ws/
