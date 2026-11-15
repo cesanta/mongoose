@@ -110,6 +110,11 @@
           setupAutoLogout();
           document.body.style.visibility = 'visible';
           refreshFiles();
+          // Static graph is not pushed by the device, so load it once here
+          Dashboard.call('get', 'graph1').then(r => {
+            mkGraph(graphs.graph1);
+            updateGraph1(r?.data);
+          });
         });
         Dashboard.login().catch(err => showLogin(true));
 
