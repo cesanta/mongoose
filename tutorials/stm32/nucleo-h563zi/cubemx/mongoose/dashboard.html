@@ -110,6 +110,11 @@
           setupAutoLogout();
           document.body.style.visibility = 'visible';
           refreshFiles();
+          // Static graph is not pushed by the device, so load it once here
+          Dashboard.call('get', 'graph1').then(r => {
+            mkGraph(graphs.graph1);
+            updateGraph1(r?.data);
+          });
         });
         Dashboard.login().catch(err => showLogin(true));
 
@@ -778,18 +783,18 @@ a, a:visited, a:link { text-decoration: none; }
           </div>
 
           <div class="note">
-            <p>This file manager uses /fs/ directory.
+            <p>This file manager uses /tmp/dashboard/ directory.
               It works on any platform that supports
               standard file IO: fopen, fread, fwrite, fclose.
               This includes Linux/Mac/Windows.</p>
             <p>
               Mongoose provides a built-in LittleFS integration that
-              makes standard file IO work on embedded systems like STM32.
+              makes stadard file IO work on embedded systems like STM32.
               For that, add "#define MG_ENABLE_LFS 1" to your
               mongoose_config.h
             </p>
             <p>See
-              <a href="https://github.com/cesanta/mongoose/tree/master/tutorials/stm32/nucleo-h563zi/cubemx">this ready-to-build example</a>
+              <a href="https://github.com/cesanta/embedded-web-file-manager">this ready-to-build example</a>
               which implements LittleFS on Nucleo-H563ZI internal flash. You
               can upload, delete and serve files on STM32 - which is
               a perfect use case for confuration files, keeping and viewing logs, etc.
