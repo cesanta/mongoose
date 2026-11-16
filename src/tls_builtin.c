@@ -2748,8 +2748,8 @@ void mg_tls_init(struct mg_connection *c, const struct mg_tls_opts *opts) {
       mg_error(c, "hostname too long");
       return;
     }
-    strncpy((char *) tls->hostname, opts->name.buf, sizeof(tls->hostname) - 1);
-    tls->hostname[opts->name.len] = 0;
+    memcpy(tls->hostname, opts->name.buf, opts->name.len);
+    tls->hostname[opts->name.len] = '\0';
   }
 
   // server CA certificate; parse PEM [bundle] or DER
