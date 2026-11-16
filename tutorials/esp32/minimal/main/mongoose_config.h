@@ -1,4 +1,5 @@
 #define MG_ARCH MG_ARCH_ESP32
+#define MG_OTA MG_OTA_ESP32
 
 // Crash reports and mem usage stats
 // Make sure to add to sdkconfig.defaults the following:
