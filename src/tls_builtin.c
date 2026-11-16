@@ -2762,15 +2762,16 @@ void mg_tls_init(struct mg_connection *c, const struct mg_tls_opts *opts) {
       tls->ca_bundle_der = all_certs;
       MG_VERBOSE(("%d-cert bundle", cert_count));
     } else if (cert_count > 0) {
-      tls->ca_der.buf = all_certs[0].buf;
-      tls->ca_der.len = all_certs[0].len;
+      int i;
+      tls->ca_der = all_certs[0];
+      for (i = 1; i < cert_count; i++) mg_free((void *) all_certs[i].buf);
       mg_free(all_certs);
-    } else { // parse again for a possible DER (or a truncated begin string)
+    } else {  // parse again for a possible DER (or a truncated begin string)
       if (mg_parse_pem(opts->ca, mg_str_s("CERTIFICATE"), &tls->ca_der) < 0) {
         mg_error(c, "Failed to load CA certificate");
         return;
       }
-    } // ca_bundle_len != 0 && ca_der.len = 0 => bundle
+    }  // ca_bundle_len != 0 && ca_der.len = 0 => bundle
     if (!c->is_client) tls->is_twoway = true;  // server + CA: two-way auth
   }
 
@@ -2789,8 +2790,7 @@ void mg_tls_init(struct mg_connection *c, const struct mg_tls_opts *opts) {
     int cert_count = mg_parse_pem_certs(opts->cert, &all_certs);
 
     if (cert_count > 0) {
-      tls->cert_der.buf = all_certs[0].buf;
-      tls->cert_der.len = all_certs[0].len;
+      tls->cert_der = all_certs[0];
       if (cert_count > 1) {
         tls->chain_len = (size_t) cert_count;
         tls->chain_der = all_certs;
