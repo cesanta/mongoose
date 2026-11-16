@@ -16400,9 +16400,9 @@ static long recv_raw(struct mg_connection *c, void *buf, size_t len) {
   long n = 0;
   if (c->is_udp) {
     union usa usa;
-    socklen_t slen = tousa(&c->rem, &usa);
+    socklen_t slen = sizeof(usa);
     n = recvfrom(FD(c), (char *) buf, len, 0, &usa.sa, &slen);
-    if (n > 0) tomgaddr(&usa, &c->rem, slen != sizeof(usa.sin));
+    if (n > 0) tomgaddr(&usa, &c->rem, usa.sa.sa_family == AF_INET6);
   } else {
     n = recv(FD(c), (char *) buf, len, MSG_NONBLOCKING);
   }
