@@ -761,8 +761,8 @@ static bool mg_tls_server_send_hello(struct mg_connection *c) {
 
   // calculate P-256 keyshare and the shared secret
   pub[0] = 0x04;  // uncompressed point 0x04 || X || Y
-  if (!mg_p256_make_key(pub + 1, prv) ||
-      !mg_p256_shared_secret(tls->p256_peer, prv, tls->ecdhe_sec)) {
+  if (mg_p256_make_key(pub + 1, prv) == 0 ||
+      mg_p256_shared_secret(tls->p256_peer, prv, tls->ecdhe_sec) == 0) {
     mg_bzero(prv, sizeof(prv));
     mg_error(c, "bad key");
     return false;
@@ -1177,7 +1177,7 @@ static bool mg_tls_send_cert_verify(struct mg_connection *c, bool is_client) {
     size_t sigsz, verifysz = 0;
     int adj1, adj2;
     uint8_t sig[64] = {0};
-    if (!mg_p256_sign(tls->ec_key, hash, sizeof(hash), sig)) {
+    if (mg_p256_sign(tls->ec_key, hash, sizeof(hash), sig) != 1) {
       mg_error(c, "P-256 sign");
       return false;
     }
@@ -1309,7 +1309,7 @@ static bool mg_tls_client_send_hello(struct mg_connection *c) {
   }
 
   // calc+fill keyshare; X || Y, sent as an uncompressed point 0x04 || X || Y
-  if (!mg_p256_make_key(msg_client_hello + 95, tls->p256_cli)) {
+  if (mg_p256_make_key(msg_client_hello + 95, tls->p256_cli) == 0) {
     mg_error(c, "P-256 key");
     return false;
   }
@@ -1399,8 +1399,8 @@ static int mg_tls_client_recv_hello(struct mg_connection *c) {
       return -1;
     }
     if (key_exchange_len != 65 || key_exchange[0] != 0x04 ||
-        !mg_p256_shared_secret(key_exchange + 1, tls->p256_cli,
-                               tls->ecdhe_sec)) {  // Validates the point
+        mg_p256_shared_secret(key_exchange + 1, tls->p256_cli,
+                               tls->ecdhe_sec) == 0) {  // Validates the point
       mg_error(c, "bad key");
       return -1;
     }
@@ -1781,14 +1781,14 @@ static bool mg_tls_verify_cert_signature(const struct mg_tls_cert *cert,
   }
 }
 
-static int mg_tls_verify_cert_cn(struct mg_der_tlv *subj, const char *host) {
+static bool mg_tls_verify_cert_cn(struct mg_der_tlv *subj, const char *host) {
   struct mg_der_tlv v;
-  int matched = 0;
+  bool matched = false;
   if (mg_der_find_oid(subj, (uint8_t *) "\x55\x04\x03", 3, &v) > 0) {
     struct mg_str hn, cn;
     MG_VERBOSE(("using CN: %.*s <-> %s", v.len, v.value, host));
     hn = mg_str(host), cn = mg_str_n((char *) v.value, v.len);
-    matched = (int) (countdots(hn) == countdots(cn) && mg_match(hn, cn, NULL));
+    matched = (countdots(hn) == countdots(cn) && mg_match(hn, cn, NULL));
   }
   return matched;
 }
@@ -1911,8 +1911,8 @@ static int mg_tls_recv_cert(struct mg_connection *c, bool is_client) {
           san = mg_tls_verify_cert_san(cert, certsz, tls->hostname,
                                        is_addr ? &addr : NULL);
           if (san < 0 ||  // RFC 6125 6.4.4 allow legacy fallback to CN
-              (san == 0 && (is_addr || mg_tls_verify_cert_cn(
-                                           &ci->subj, tls->hostname) <= 0))) {
+              (san == 0 &&
+               (is_addr || !mg_tls_verify_cert_cn(&ci->subj, tls->hostname)))) {
             mg_error(c, "failed to verify host");
             return -1;
           }
