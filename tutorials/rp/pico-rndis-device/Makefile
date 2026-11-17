@@ -19,7 +19,7 @@ net.h: ../../mqtt/mqtt-dashboard/device/net.h
 	cp $< $@
 
 pico-sdk:
-	git clone --depth 1 -b 2.1.0 https://github.com/raspberrypi/pico-sdk $@
+	git clone --depth 1 -b 2.2.0 https://github.com/raspberrypi/pico-sdk $@
 	cd $@ && git submodule update --init
 
 clean:
