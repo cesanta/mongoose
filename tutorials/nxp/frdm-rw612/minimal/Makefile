@@ -15,6 +15,7 @@ CFLAGS += -mcpu=cortex-m33+nodsp -mthumb -mfloat-abi=hard -mfpu=fpv5-sp-d16 $(CF
 LDFLAGS ?= -Tlink.ld -nostdlib -nostartfiles --specs=nano.specs -lc -lgcc -Wl,--gc-sections
 
 SOURCES = main.c hal.c startup.c flexspi.c flash_config.c $(MGDIR)/mongoose.c
+SOURCES += $(MGDIR)/tutorials/mqtt/mqtt-client/mongoose_mqtt.c
 SOURCES += cmsis_rw612/devices/RW612/drivers/fsl_clock.c
 SOURCES += cmsis_rw612/devices/RW612/drivers/fsl_trng.c
 SOURCES += cmsis_rw612/devices/RW612/drivers/fsl_reset.c
@@ -43,6 +44,9 @@ show_symbols_sorted_by_size: firmware.bin
 flash: firmware.bin
 	(echo 'loadfile firmware.elf'; echo 'reset'; echo 'exit';) | JLinkExe -device RW612 -if SWD -speed 4000 -autoconnect 1 -NoGui 1 -ExitOnError 1
 #	JRun --nogui --device RW612 --if SWD firmware.elf
+
+erase:
+	(echo halt && echo exec EnableEraseAllFlashBanks && echo erase && echo exit) | JLinkExe -device RW612 -if SWD -speed 4000 -autoconnect 1 -NoGui 1 -ExitOnError 1
 
 clean:
 	rm -rf firmware.* cmsis_* mongoose/mongoose.*

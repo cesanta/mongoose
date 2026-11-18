@@ -259,6 +259,7 @@ void mg_dash_init(struct mg_mgr *mgr) {
   // Read settings from flash
   struct mg_dash_user u = {.level = 9};  // Super mega user
   settings_fn(MG_DASH_READ, &u);
+  s_dash.authenticate = s_enable_login ? authenticate : NULL;
 
   mg_mem_files = mg_packed_files;
   mg_http_listen(mgr, MG_HTTP_ADDR, mg_dash_ev_handler, &s_dash);

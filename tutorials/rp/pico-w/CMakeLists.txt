@@ -7,7 +7,7 @@ include(pico_sdk_import.cmake)
 project(firmware)
 pico_sdk_init()
 
-add_executable(firmware main.c wifi.c ../../../mongoose.c)
+add_executable(firmware main.c wifi.c ../../../mongoose.c ../../mqtt/mqtt-client/mongoose_mqtt.c)
 target_include_directories(firmware PRIVATE ../../.. ./)
 
 target_link_libraries(firmware pico_stdlib hardware_spi pico_rand pico_cyw43_driver pico_cyw43_arch_none hardware_flash pico_bootrom)

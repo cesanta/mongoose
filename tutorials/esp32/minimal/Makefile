@@ -17,6 +17,4 @@ flash:
 	cd build && esptool --chip $(ARCH) --baud 460800 --port $(PORT) write-flash @flash_args
 
 clean:
-	test -d build && (rm -rf build sdkconfig || true)
-
-.PHONY: build
+	test -d build && $(DOCKER) rm -rf build sdkconfig || true

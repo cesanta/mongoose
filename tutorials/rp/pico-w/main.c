@@ -65,11 +65,13 @@ static void run_mongoose(void) {
   struct mg_mgr mgr;
   mg_log_set_fn(log_fn, NULL);
   mg_mgr_init(&mgr);
+  mg_mqtt_init(&mgr);
   mg_http_listen(&mgr, "http://0.0.0.0", http_ev_handler, NULL);
   mg_http_listen(&mgr, "https://0.0.0.0", http_ev_handler, NULL);
 
   for (;;) {
     mg_mgr_poll(&mgr, 1);
+    mg_mqtt_poll(&mgr);
     blink_task();
   }
 }

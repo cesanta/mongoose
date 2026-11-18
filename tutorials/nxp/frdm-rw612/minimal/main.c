@@ -104,6 +104,7 @@ int main(void) {
   // Start a minimal web server
   struct mg_mgr mgr;
   mg_mgr_init(&mgr);
+  mg_mqtt_init(&mgr);
   mg_http_listen(&mgr, "http://0.0.0.0", http_ev_handler, NULL);
   mg_http_listen(&mgr, "https://0.0.0.0", http_ev_handler, NULL);
 
@@ -113,6 +114,7 @@ int main(void) {
 
   for (;;) {
     mg_mgr_poll(&mgr, 0);
+    mg_mqtt_poll(&mgr);
     blink_task();
   }
 
