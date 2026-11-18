@@ -201,8 +201,7 @@ jobs:
         run: make -C tutorials/${{ matrix.example.path }} build
 
   generic_examples_arm:
-    # Keep RP on 24.04: Pico SDK 2.1.1 pioasm fails with GCC 15; update SDK
-    runs-on: ${{ startsWith(matrix.example.path, 'rp/') && 'ubuntu-24.04' || 'ubuntu-latest' }}
+    runs-on: ubuntu-latest
     strategy:
       fail-fast: false
       matrix:
@@ -245,8 +244,7 @@ jobs:
         run: make -C tutorials/${{ matrix.example.path }} build
 
   device_dashboard_examples_arm:
-    # Keep RP on 24.04: Pico SDK 2.1.1 pioasm fails with GCC 15; update SDK
-    runs-on: ${{ startsWith(matrix.example.path, 'rp/') && 'ubuntu-24.04' || 'ubuntu-latest' }}
+    runs-on: ubuntu-latest
     strategy:
       fail-fast: false
       matrix:
@@ -272,8 +270,7 @@ jobs:
         run: make -C tutorials/${{ matrix.example.path }} build
 
   mqtt_dashboard_examples_arm:
-    # Pico SDK 2.1.0 pioasm fails with GCC 15; update SDK to unpin
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-latest
     strategy:
       fail-fast: false
       matrix:

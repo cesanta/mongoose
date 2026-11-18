@@ -1,6 +1,6 @@
 PROJECTS ?= $(wildcard ../../tutorials/pico-sdk/*-picosdk-*)
 SDK_PATH ?= $(realpath $(PWD))/pico-sdk
-SDK_VERSION ?= 2.1.0
+SDK_VERSION ?= 2.2.0
 
 all: $(PROJECTS)
 	echo 
