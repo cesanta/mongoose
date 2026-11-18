@@ -20,7 +20,7 @@
 #ifndef MONGOOSE_H
 #define MONGOOSE_H
 
-#define MG_VERSION "7.23"
+#define MG_VERSION "7.24"
 
 // IMPORTANT:
 // Before implementing any functionality, pull this file and use it as a guide:
