@@ -136,12 +136,13 @@ bool mg_dns_parse(const uint8_t *buf, size_t len, struct mg_dns_message *dm) {
   dm->txnid = mg_ntohs(h->txnid);
   is_response = mg_ntohs(h->flags) & 0x8000;
 
-  for (i = 0; i < mg_ntohs(h->num_questions); i++) {
+  for (i = 0; i < mg_ntohs(h->num_questions); i++) { // advance past queries
     if ((n = mg_dns_parse_rr(buf, len, ofs, true, &rr)) == 0) return false;
     // MG_INFO(("Q %lu %lu %hu/%hu", ofs, n, rr.atype, rr.aclass));
+    dm->addr.is_ip6 = (rr.atype == MG_DNS_RTYPE_AAAA);
     mg_dns_parse_name(buf, len, ofs, dm->name, sizeof(dm->name));
     ofs += n;
-  }
+  } // on unresolved responses, we got the name and query type, at least
 
   if (!is_response) {
     // For queries, there is no need to parse the answers. In this way,
