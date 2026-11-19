@@ -1,0 +1,14 @@
+name: CPQ UDP Assessment
+
+on:
+  workflow_dispatch:
+
+jobs:
+  cpq-udp:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v5
+      with: { fetch-depth: 2 }
+    - run: |
+        source ./test/setup_ga_network.sh
+        make -C test/bsd -f failMakefile

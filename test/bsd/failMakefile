@@ -1,0 +1,14 @@
+.DEFAULT_GOAL := cpq_udp
+include Makefile
+
+.PHONY: cpq_udp bsd_cpq_test bsd_udp_cpq_peer
+
+cpq_udp: shm_tap_bridge bsd_cpq_test bsd_udp_cpq_peer
+	sh -c 'TRACE_UDP=1 ./shm_tap_bridge & pid=$$!; sleep 1; timeout 30s ./bsd_cpq_test; rc=$$?; kill $$pid >/dev/null 2>&1; wait $$pid >/dev/null 2>&1; exit $$rc'
+
+bsd_cpq_test: CFLAGS_MONGOOSE += -DMG_ENABLE_FREERTOS=1 -DCPQ_TEST
+bsd_cpq_test: FreeRTOS-Kernel bsd_cpq_test.c bsd_udp_cpq_fail.c bsd_shm_test.c
+	$(CC) $(C_INPUTS) $(FREERTOS_INPUTS) -x c bsd_shm_test.c $(CFLAGS) $(CFLAGS_MONGOOSE) $(CFLAGS_EXTRA) -o $@
+
+bsd_udp_cpq_peer: bsd_udp_cpq_peer.c
+	$(CC) bsd_udp_cpq_peer.c -o $@

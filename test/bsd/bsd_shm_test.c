@@ -95,7 +95,11 @@ bool mg_random(void *buf, size_t len) {
 }
 
 
+#ifdef CPQ_TEST
+#include "bsd_cpq_test.c"
+#else
 #include "bsd_x_test.c"
+#endif
 
 
 int main(void) {
@@ -107,7 +111,11 @@ int main(void) {
   printf("Opening SHM interface\n");
   usleep(200000);  // 200 ms
 
+#ifdef CPQ_TEST
+  result = bsd_cpq_test(&shm_driver, &shm_data, mac, debug_level);
+#else
   result = bsd_x_test(&shm_driver, &shm_data, mac, debug_level);
+#endif
   if (shm_data.shm != NULL) munmap(shm_data.shm, sizeof(*shm_data.shm));
   if (shm_data.fp != NULL) fclose(shm_data.fp);
   if (!result) return EXIT_FAILURE;

@@ -18,6 +18,15 @@
 #include "shm_queue.h"
 
 static volatile sig_atomic_t s_signo;
+static int s_trace_udp;
+
+static void trace_udp(const uint8_t *p, size_t len) {
+  if (!s_trace_udp || len < 34 || p[12] != 8 || p[13] != 0 || p[23] != 17)
+    return;
+  printf("UDP IP dst %u.%u.%u.%u -> Ethernet dst %02x:%02x:%02x:%02x:%02x:%02x\n",
+         p[30], p[31], p[32], p[33], p[0], p[1], p[2], p[3], p[4], p[5]);
+}
+
 void signal_handler(int signo) {
   s_signo = signo;
 }
@@ -58,6 +67,7 @@ int main(void) {
   }
 
   memset(shm, 0, sizeof(*shm));
+  s_trace_udp = getenv("TRACE_UDP") != NULL;
   printf("Opened shared memory: %s\n", SHM_NAME);
   signal(SIGINT, signal_handler);
   signal(SIGTERM, signal_handler);
@@ -94,6 +104,7 @@ int main(void) {
         uint8_t buf[FRAME_SIZE];
         size_t n = shm_queue_pop(&shm->to_tap, buf, sizeof(buf));
         if (n > 0) {
+          trace_udp(buf, n);
 //      printf("Got at SHM: %d bytes\n", (int) f->len);
           write(fd, buf, n);
 //      printf("Sent to TAP\n");

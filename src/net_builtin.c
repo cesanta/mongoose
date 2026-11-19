@@ -1226,6 +1226,8 @@ static bool rx_udp(struct mg_tcpip_if *ifp, struct pkt *pkt) {
   struct connstate *s;
   uint8_t *l2addr;
   if (c == NULL) return false;  // No UDP listener on this port
+  // BSD socket has an unread datagram: drop this one to keep boundaries
+  if (c->is_bsd && c->recv.len > 0) return true;
   s = (struct connstate *) (c + 1);
   c->rem.port = pkt->udp->sport;
 #if MG_ENABLE_IPV6
