@@ -43,9 +43,6 @@ static void log_fn(char ch, void *arg) {
   hal_uart_write_buf(arg, &ch, 1);
 }
 
-uint64_t mg_millis(void) {
-  return hal_get_tick();
-}
 
 int main(void) {
   static struct mg_tcpip_driver_rw612_data eth_data;

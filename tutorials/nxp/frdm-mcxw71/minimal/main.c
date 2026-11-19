@@ -25,9 +25,6 @@ static void blink_task(void) {
   }
 }
 
-uint64_t mg_millis(void) {
-  return hal_get_tick();
-}
 
 bool mg_random(void *buf, size_t len) {
   for (size_t n = 0; n < len; n += sizeof(uint32_t)) {

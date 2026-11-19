@@ -6,7 +6,7 @@ HDRS = simulator.h $(ROOT)/mongoose.h
 WARN = -pedantic -W -Wall -Werror -Wshadow -Wdouble-promotion -fno-common \
        -Wconversion -Wundef -Wmissing-prototypes -Wstrict-prototypes
 DEFS = -DMG_ENABLE_TCPIP=1 -DMG_ENABLE_TCPIP_DRIVER_INIT=0 -DMG_ENABLE_IPV6=0 \
-       -DMG_ENABLE_CUSTOM_MILLIS=1 -DMG_ENABLE_TCPIP_TCPRTX=1 \
+       -DMG_ENABLE_CUSTOM_MICROS=1 -DMG_ENABLE_TCPIP_TCPRTX=1 \
        -DMG_IO_SIZE=512 \
        -DMG_TCPIP_ARP_MS=1000 -DMG_TCPIP_ACK_MS=500  # Slow radio: wait longer
 CFLAGS ?= -O2 -g0 $(WARN)
