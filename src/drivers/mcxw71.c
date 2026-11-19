@@ -110,15 +110,7 @@ void RF_802_15_4_IRQHandler(void) {
       n = n >= 2 ? n - 2 : 0;
       if (n > 0 && n <= sizeof(frame)) {
         for (i = 0; i < n; i++) frame[i] = MGI_RX_PB[i];
-        {
-          char *dst;
-          if (mg_queue_book(&s_mcxw71_rx, &dst, n) >= n) {
-            memcpy(dst, frame, n);
-            mg_queue_add(&s_mcxw71_rx, n);
-          } else {
-            s_mcxw71_ifp->ndrop++;
-          }
-        }
+        mg_mesh_rx_queue(&s_mcxw71_rx, s_mcxw71_ifp, frame, n);
       }
     }
     mg_mcxw71_listen();
@@ -179,8 +171,6 @@ static bool mgi_mcxw71_poll(struct mg_tcpip_if *ifp, bool s1) {
   struct mg_tcpip_driver_mcxw71_data *data = ifp->driver_data;
   struct mg_mesh_node *node = data->mesh;
   uint64_t now = mg_micros();
-  char *buf;
-  size_t len;
   (void) s1;
   if (s_mcxw71_txing &&
       mg_millis() > s_mcxw71_sendstart + MGI_SEND_TIMEOUT_MS) {
@@ -199,10 +189,7 @@ static bool mgi_mcxw71_poll(struct mg_tcpip_if *ifp, bool s1) {
     node->tx_at = now + node->strategy->radio->ifs_us;
   }
   node->now = now;
-  while (node->rx_len == 0 && (len = mg_queue_next(&s_mcxw71_rx, &buf)) != 0) {
-    node->strategy->rx(node, buf, len);
-    mg_queue_del(&s_mcxw71_rx, len);
-  }
+  mg_mesh_rx_drain(node, &s_mcxw71_rx);
   node->strategy->tick(node, now);
   return node->joined;
 }
@@ -214,10 +201,10 @@ static bool mgi_mcxw71_init(struct mg_tcpip_if *ifp) {
   address =
       (uint16_t) (2 + ((unsigned) ifp->mac[4] * 256 + ifp->mac[5]) % 65532u);
   if (strategy == NULL) strategy = &mg_mesh_default;
-  data->mesh = calloc(1, sizeof(*data->mesh));
+  data->mesh = mg_calloc(1, sizeof(*data->mesh));
   if (data->mesh == NULL) return false;
   if (!strategy->init(data->mesh, ifp, NULL, address)) {
-    free(data->mesh);
+    mg_free(data->mesh);
     data->mesh = NULL;
     return false;
   }
@@ -226,7 +213,7 @@ static bool mgi_mcxw71_init(struct mg_tcpip_if *ifp) {
   mg_queue_init(&s_mcxw71_rx, s_mcxw71_queue, sizeof(s_mcxw71_queue));
   if (mgi_mcxw71_radio_init(ifp)) return true;
   strategy->free(data->mesh);
-  free(data->mesh);
+  mg_free(data->mesh);
   data->mesh = NULL;
   return false;
 }

@@ -108,6 +108,8 @@ static size_t mgi_mesh_b_queue(struct mg_mesh_node *node, struct mg_queue *q,
 #define MGI_JOIN_JITTER_US 640
 #define MGI_DATA_QUEUE_SIZE 2048
 #define MGI_TX_RETRY_US 32
+#define MGI_ANSWER_MARGIN_US 500  // Node: finish the first answer frame this
+                                  // much before the bridge stops waiting
 // Our frames: the radio header, with the radio addresses, then the mesh
 // header MG_MESH_HDR_LEN, then the payload
 #define MGI_JOIN_UP_LEN \
@@ -134,6 +136,7 @@ struct mgi_mesh_b_data {
   int8_t missed_rounds;  // -1 after a grant; otherwise completed rounds missed
   uint16_t coordinator;  // Coordinator radio address
   uint8_t phase;         // MGI_TURN_IDLE, MGI_TURN_JOIN, or MGI_TURN_DATA
+  uint64_t answer_by;    // Node: first answer frame must end on air by then
 };
 
 struct mgi_mesh_b_peer {
@@ -246,11 +249,24 @@ static void mgi_mesh_b_tx_step(struct mgi_mesh_b_data *data, uint64_t now) {
   } else {
     mgi_mesh_b_frame_header(frame, dst, node->radio_address, command, 0);
   }
+  // A node's first answer frame: if it cannot end on air before the bridge
+  // stops waiting, stay silent. The queued frame waits for the next turn
+  if (node->lan == NULL &&
+      (data->tx_offset == 0 || data->tx_offset == MGI_TX_DST_LEN) &&
+      now + mgi_mesh_b_airtime(len) > data->answer_by) {
+    data->tx_offset = 0;
+    data->tx_at = (uint64_t) -1;
+    return;
+  }
   if (now < data->node->tx_at || data->node->tx(radio, frame, len) != len) {
     data->tx_at = now + MGI_TX_RETRY_US;
     return;
   }
   if (data->tx_offset == 0 || (data->tx_offset += len + 1) == record_len) {
+    // Bridge: the turn's last frame is out, wait for the answer
+    if (node->lan != NULL)
+      data->deadline =
+          now + mgi_mesh_b_airtime(len) + MG_MESH_ANSWER_TIMEOUT_US;
     mgi_mesh_b_tx_finish(data);
   } else {
     data->tx_at = now + mgi_mesh_b_airtime(len) + s_mesh_default_radio->ifs_us;
@@ -260,6 +276,7 @@ static void mgi_mesh_b_tx_step(struct mgi_mesh_b_data *data, uint64_t now) {
 static void mgi_mesh_b_tx_begin(struct mgi_mesh_b_data *data, bool burst,
                                 uint64_t now, uint64_t deadline) {
   data->phase = MGI_TURN_DATA;
+  data->answer_by = (uint64_t) -1;  // Node sets it after a grant
   data->tx_offset = burst ? MGI_TX_DST_LEN : 0;
   data->tx_at = now;
   data->deadline = deadline;
@@ -290,6 +307,11 @@ static int mgi_mesh_b_data_receive(struct mgi_mesh_b_data *data,
   memcpy(data->rx_buf + offset, frame + MG_MESH_FRAME_HDR_LEN, chunk);
   if (index < last) {
     data->rx_expected = (uint8_t) (burst + 0x10);
+    // Bridge: an answer is under way, wait for its next fragment
+    if (data->node->lan != NULL)
+      data->deadline =
+          now + mgi_mesh_b_airtime(s_mesh_default_radio->max_frame_size) +
+          s_mesh_default_radio->ifs_us + MG_MESH_ANSWER_TIMEOUT_US;
     return -1;
   }
   data->rx_expected = 0xff;
@@ -299,7 +321,6 @@ static int mgi_mesh_b_data_receive(struct mgi_mesh_b_data *data,
 
 // Bridge scheduling and Ethernet forwarding.
 
-#define MGI_MAX_MISSES 3  // Turns in a row without an answer: remove the member
 
 static uint16_t mgi_mesh_b_join_field(const uint8_t *p) {
   return (uint16_t) ((unsigned) p[0] * 256 + p[1]);
@@ -400,13 +421,13 @@ static void mgi_mesh_b_bridge_rx(uint64_t now, struct mg_mesh_node *b,
   memcpy(peer->mac, frame + MG_MESH_FRAME_HDR_LEN, sizeof(peer->mac));
 }
 
-// Member peer did not answer its turn. After MGI_MAX_MISSES in a row, it is
-// gone: remove it, and its queued downlink frames
+// Member peer did not answer its turn. After MG_MESH_MAX_MISSES in a row, it
+// is gone: remove it, and its queued downlink frames
 static void mgi_mesh_b_member_missed(struct mgi_mesh_b_data *data,
                                      struct mgi_mesh_b_peer *peer) {
-  if (++peer->misses < MGI_MAX_MISSES) return;
+  if (++peer->misses < MG_MESH_MAX_MISSES) return;
   MG_INFO(("Member %M removed: no answer %d times", mg_print_mac, peer->mac,
-           MGI_MAX_MISSES));
+           MG_MESH_MAX_MISSES));
   if (data->fanout == peer) {
     data->fanout = peer->next;
     if (data->fanout == NULL) {
@@ -499,7 +520,7 @@ static void mgi_mesh_b_node_rx(struct mg_mesh_node *n, uint64_t now,
   if (command == MGI_JOIN_DOWN && len == MG_MESH_FRAME_HDR_LEN &&
       dst == 0xffffu) {
     if (n->joined && src == data->coordinator &&
-        ++data->missed_rounds >= MGI_MAX_MISSES) {
+        ++data->missed_rounds >= MG_MESH_MAX_MISSES) {
       n->joined = false;
       data->phase = MGI_TURN_IDLE;
       data->tx_at = (uint64_t) -1;
@@ -534,17 +555,22 @@ static void mgi_mesh_b_node_rx(struct mg_mesh_node *n, uint64_t now,
                         now + mgi_mesh_b_burst_time(MGI_ETH_MAX) +
                             2 * s_mesh_default_radio->ifs_us +
                             MGI_JOIN_TURN_US);
+    data->answer_by = now + MG_MESH_ANSWER_TIMEOUT_US - MGI_ANSWER_MARGIN_US;
   }
 }
 
+// Receive timing counts from the frame's arrival, see mg_mesh_rx_drain().
+// Without an arrival time, e.g. when called directly, use the poll time
 static void mgi_mesh_b_input(struct mg_mesh_node *node, void *buf, size_t len) {
   uint64_t ready = node->now + node->strategy->radio->turnaround_us;
+  uint64_t arrived = node->rx_at != 0 ? node->rx_at : node->now;
   if (node->tx_at < ready) node->tx_at = ready;
   node->next_tick = node->now;
-  if (node->lan != NULL)
-    mgi_mesh_b_bridge_rx(node->now, node, (const uint8_t *) buf, len);
-  else
-    mgi_mesh_b_node_rx(node, node->now, (uint8_t *) buf, len);
+  if (node->lan != NULL) {
+    mgi_mesh_b_bridge_rx(arrived, node, (const uint8_t *) buf, len);
+  } else {
+    mgi_mesh_b_node_rx(node, arrived, (uint8_t *) buf, len);
+  }
 }
 
 static void mgi_mesh_b_tick(struct mg_mesh_node *node, uint64_t now) {
@@ -599,6 +625,41 @@ static void mgi_mesh_b_free(struct mg_mesh_node *node) {
   mgi_mesh_b_bridge_free(data);
   mg_free(data);
   node->data = NULL;
+}
+
+// Receive queue record: arrival time, then the radio frame
+#define MGI_RX_STAMP_LEN sizeof(uint64_t)
+
+void mg_mesh_rx_queue(struct mg_queue *q, struct mg_tcpip_if *ifp,
+                      const void *frame, size_t len) {
+  uint64_t arrived = mg_micros();
+  size_t need = MGI_RX_STAMP_LEN + len;
+  char *dst;
+
+  if (mg_queue_book(q, &dst, need) < need) {
+    if (ifp != NULL) ifp->ndrop++;
+    return;
+  }
+  memcpy(dst, &arrived, MGI_RX_STAMP_LEN);
+  memcpy(dst + MGI_RX_STAMP_LEN, frame, len);
+  mg_queue_add(q, need);
+}
+
+void mg_mesh_rx_drain(struct mg_mesh_node *node, struct mg_queue *q) {
+  char *record;
+  size_t len;
+
+  while (node->rx_len == 0) {
+    len = mg_queue_next(q, &record);
+    if (len == 0) break;
+    if (len > MGI_RX_STAMP_LEN) {
+      memcpy(&node->rx_at, record, MGI_RX_STAMP_LEN);
+      node->strategy->rx(node, record + MGI_RX_STAMP_LEN,
+                         len - MGI_RX_STAMP_LEN);
+      node->rx_at = 0;
+    }
+    mg_queue_del(q, len);
+  }
 }
 
 const struct mg_mesh mg_mesh_default = {

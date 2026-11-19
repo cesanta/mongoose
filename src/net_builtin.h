@@ -159,6 +159,7 @@ extern struct mg_tcpip_driver mg_tcpip_driver_netc;
 #include "drivers/nrf52.h"
 #include "drivers/rw612w.h"
 #include "drivers/stm32f.h"
+#include "drivers/esp32_802154.h"
 
 // SPI bus abstraction for SPI-attached network chips (e.g. W5500).
 // Populate and assign to the driver's driver_data field.

@@ -197,33 +197,38 @@ bool mg_path_is_sane(const struct mg_str path) {
   return true;
 }
 
-#if MG_ENABLE_CUSTOM_MILLIS
-#else
-uint64_t mg_millis(void) {
-#if MG_ARCH == MG_ARCH_ESP32 || MG_ENABLE_FREERTOS
-  return xTaskGetTickCount() * portTICK_PERIOD_MS;
+// The clock lives in mg_micros(), mg_millis() is derived from it. Either one
+// can be replaced, see MG_ENABLE_CUSTOM_MICROS and MG_ENABLE_CUSTOM_MILLIS
+#if MG_ENABLE_CUSTOM_MICROS == 0
+uint64_t mg_micros(void) {
+#if MG_ARCH == MG_ARCH_ESP32
+  return (uint64_t) esp_timer_get_time();
+#elif MG_ENABLE_FREERTOS
+  return (uint64_t) xTaskGetTickCount() * portTICK_PERIOD_MS * 1000;
 #elif MG_ARCH == MG_ARCH_THREADX
-  return tx_time_get() * (1000 /* MS per SEC */ / TX_TIMER_TICKS_PER_SECOND);
+  return (uint64_t) tx_time_get() *
+         (1000 /* MS per SEC */ / TX_TIMER_TICKS_PER_SECOND) * 1000;
 #elif MG_ARCH == MG_ARCH_TIRTOS
-  return (uint64_t) Clock_getTicks();
+  return (uint64_t) Clock_getTicks() * 1000;
 #elif MG_ARCH == MG_ARCH_ZEPHYR
-  return (uint64_t) k_uptime_get();
+  return k_ticks_to_us_floor64((uint64_t) k_uptime_ticks());
 #elif MG_ARCH == MG_ARCH_CMSIS_RTOS1
-  return (uint64_t) rt_time_get();
+  return (uint64_t) rt_time_get() * 1000;
 #elif MG_ARCH == MG_ARCH_CMSIS_RTOS2
-  return (uint64_t) ((osKernelGetTickCount() * 1000) / osKernelGetTickFreq());
+  return (uint64_t) ((osKernelGetTickCount() * 1000) / osKernelGetTickFreq()) *
+         1000;
 #elif MG_ARCH == MG_ARCH_RTTHREAD
-  return (uint64_t) ((rt_tick_get() * 1000) / RT_TICK_PER_SECOND);
+  return (uint64_t) ((rt_tick_get() * 1000) / RT_TICK_PER_SECOND) * 1000;
 #elif MG_ARCH == MG_ARCH_WIN32
-  return GetTickCount();
+  return (uint64_t) GetTickCount() * 1000;
 #elif MG_ARCH == MG_ARCH_PICOSDK
-  return time_us_64() / 1000;
+  return time_us_64();
 #elif MG_ARCH == MG_ARCH_CUBE
-  return (uint64_t) HAL_GetTick();
+  return (uint64_t) HAL_GetTick() * 1000;
 #elif MG_ARCH == MG_ARCH_UNIX && defined(__APPLE__)
   // Apple CLOCK_MONOTONIC_RAW is equivalent to CLOCK_BOOTTIME on linux
   // Apple CLOCK_UPTIME_RAW is equivalent to CLOCK_MONOTONIC_RAW on linux
-  return clock_gettime_nsec_np(CLOCK_UPTIME_RAW) / 1000000;
+  return clock_gettime_nsec_np(CLOCK_UPTIME_RAW) / 1000;
 #elif MG_ARCH == MG_ARCH_UNIX
   struct timespec ts = {0, 0};
   // See #1615 - prefer monotonic clock
@@ -238,12 +243,18 @@ uint64_t mg_millis(void) {
   // adjustments performed by adjtime and NTP
   clock_gettime(CLOCK_REALTIME, &ts);
 #endif
-  return ((uint64_t) ts.tv_sec * 1000 + (uint64_t) ts.tv_nsec / 1000000);
+  return ((uint64_t) ts.tv_sec * 1000000 + (uint64_t) ts.tv_nsec / 1000);
 #elif defined(ARDUINO)
-  return (uint64_t) millis();
+  return (uint64_t) micros();
 #else
-  return (uint64_t) (time(NULL) * 1000);
+  return (uint64_t) time(NULL) * 1000000;
 #endif
+}
+#endif
+
+#if MG_ENABLE_CUSTOM_MILLIS == 0
+uint64_t mg_millis(void) {
+  return mg_micros() / 1000;
 }
 #endif
 

@@ -4,11 +4,13 @@
 
 #include "net.h"
 
-// Return milliseconds since boot (uptime). Never goes backwards.
-// On RTOS targets (FreeRTOS, ThreadX, Zephyr, etc.) uses the RTOS tick count.
-// On STM32/Cube uses HAL_GetTick(). On Arduino uses millis().
-// On Linux/macOS uses CLOCK_MONOTONIC_RAW or CLOCK_MONOTONIC; falls back to
-// CLOCK_REALTIME if neither is available.
+// Return microseconds since boot. Never goes backwards.
+// To define your own implementation, set MG_ENABLE_CUSTOM_MICROS=1
+uint64_t mg_micros(void);
+
+// Return milliseconds since boot. Never goes backwards. Calls mg_micros().
+// To define your own implementation, set MG_ENABLE_CUSTOM_MILLIS=1
+// Deprecated: use mg_micros() instead.
 uint64_t mg_millis(void);
 
 // Boot timestamp in ms since Epoch. 0 until the first successful SNTP sync;

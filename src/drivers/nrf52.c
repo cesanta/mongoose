@@ -45,13 +45,7 @@ void RADIO_IRQHandler(void) {
         mg_radio_802154.parse_hdr(&mg_radio_802154, frame, len, &dst, &src) !=
             0 &&
         (dst == 0xffffu || dst == node->radio_address)) {
-      char *dst;
-      if (mg_queue_book(&s_nrf52_rx, &dst, len) >= len) {
-        memcpy(dst, frame, len);
-        mg_queue_add(&s_nrf52_rx, len);
-      } else {
-        s_nrf52_ifp->ndrop++;
-      }
+      mg_mesh_rx_queue(&s_nrf52_rx, s_nrf52_ifp, frame, len);
     }
   }
   mgi_nrf52_listen();
@@ -126,8 +120,6 @@ static bool mgi_nrf52_poll(struct mg_tcpip_if *ifp, bool s1) {
   struct mg_tcpip_driver_nrf52_data *data = ifp->driver_data;
   struct mg_mesh_node *node = data->mesh;
   uint64_t now = mg_micros();
-  char *buf;
-  size_t len;
   (void) s1;
   if (s_nrf52_txing && mg_micros() - s_nrf52_started > 60000) {
     NVIC_DisableIRQ(RADIO_IRQn);
@@ -142,10 +134,7 @@ static bool mgi_nrf52_poll(struct mg_tcpip_if *ifp, bool s1) {
     node->tx_at = now + node->strategy->radio->ifs_us;
   }
   node->now = now;
-  while (node->rx_len == 0 && (len = mg_queue_next(&s_nrf52_rx, &buf)) != 0) {
-    node->strategy->rx(node, buf, len);
-    mg_queue_del(&s_nrf52_rx, len);
-  }
+  mg_mesh_rx_drain(node, &s_nrf52_rx);
   node->strategy->tick(node, now);
   return node->joined;
 }
@@ -157,10 +146,10 @@ static bool mgi_nrf52_init(struct mg_tcpip_if *ifp) {
   address =
       (uint16_t) (2 + ((unsigned) ifp->mac[4] * 256 + ifp->mac[5]) % 65532u);
   if (strategy == NULL) strategy = &mg_mesh_default;
-  data->mesh = calloc(1, sizeof(*data->mesh));
+  data->mesh = mg_calloc(1, sizeof(*data->mesh));
   if (data->mesh == NULL) return false;
   if (!strategy->init(data->mesh, ifp, NULL, address)) {
-    free(data->mesh);
+    mg_free(data->mesh);
     data->mesh = NULL;
     return false;
   }
@@ -169,7 +158,7 @@ static bool mgi_nrf52_init(struct mg_tcpip_if *ifp) {
   mg_queue_init(&s_nrf52_rx, s_nrf52_queue, sizeof(s_nrf52_queue));
   if (mgi_nrf52_radio_init(ifp)) return true;
   strategy->free(data->mesh);
-  free(data->mesh);
+  mg_free(data->mesh);
   data->mesh = NULL;
   return false;
 }

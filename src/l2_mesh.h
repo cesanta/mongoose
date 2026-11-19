@@ -12,9 +12,6 @@
 
 #if MG_ENABLE_TCPIP
 
-// Monotonic time in microseconds.
-uint64_t mg_micros(void);
-
 // A radio standard
 struct mg_radio {
   const char *name;        // For logs
@@ -44,6 +41,21 @@ struct mg_radio {
 #define MG_802154_CHANNEL 15
 #endif
 
+// A turn's answer must arrive this soon after the turn's last frame ends on
+// air, or the turn ends. A node that would answer later stays silent and keeps
+// its frame for the next turn. Covers the node's poll latency, the radio
+// turnaround and one full fragment's airtime, 4.3 ms on 802.15.4
+#ifndef MG_MESH_ANSWER_TIMEOUT_US
+#define MG_MESH_ANSWER_TIMEOUT_US 8000
+#endif
+
+// Misses in a row before giving up, 1 to 127. The bridge removes a member
+// that did not answer this many turns. A node leaves the mesh after this
+// many rounds without a turn
+#ifndef MG_MESH_MAX_MISSES
+#define MG_MESH_MAX_MISSES 10
+#endif
+
 extern const struct mg_radio mg_radio_802154;
 
 struct mg_mesh_node {
@@ -53,6 +65,7 @@ struct mg_mesh_node {
   size_t (*tx)(struct mg_tcpip_if *, const void *, size_t);  // Radio frame TX
   size_t rx_len;           // Complete Ethernet frame in the interface RX buffer
   uint64_t now;            // Current driver poll time, us
+  uint64_t rx_at;          // Arrival time of the radio frame being handled, us
   uint64_t tx_at;          // Earliest next transmission, us
   void *data;              // Private state owned by the strategy
   size_t ram_used;         // Live mesh state bytes
@@ -76,5 +89,17 @@ struct mg_mesh {
 };
 
 extern const struct mg_mesh mg_mesh_default;
+
+// Put a received radio frame into the driver's receive queue, together with
+// its arrival time from mg_micros(). Call it when the frame arrives, from the
+// radio interrupt if the driver has one. If the queue is full, the frame is
+// dropped and counted in ifp->ndrop
+void mg_mesh_rx_queue(struct mg_queue *q, struct mg_tcpip_if *ifp,
+                      const void *frame, size_t len);
+
+// Pass queued radio frames to the mesh, oldest first. Before each frame,
+// node->rx_at is set to its arrival time. Stops while the node holds a
+// received Ethernet frame the TCP/IP stack has not taken yet
+void mg_mesh_rx_drain(struct mg_mesh_node *node, struct mg_queue *q);
 
 #endif
