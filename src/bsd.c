@@ -1,5 +1,6 @@
 #include "bsd.h"
 #include "dns.h"
+#include "util.h"
 #include <stdarg.h>
 
 #if MG_ENABLE_BSD_SOCKETS && MG_ENABLE_FREERTOS
@@ -129,6 +130,46 @@ static struct mg_connection *bsd_new_conn(struct mg_bsd_sock *s) {
     LIST_ADD_HEAD(struct mg_connection, &s_mgr->conns, c);
   }
   return c;
+}
+
+// Mirror net_builtin.c::trim_len() logic
+static bool bsd_udp_too_big(struct mg_connection *c, size_t len) {
+  struct mg_tcpip_if *ifp = c->mgr->ifp;
+  size_t hlen = c->rem.is_ip6 ? 48 : 32;  // IP plus UDP headers
+  size_t cap = ifp->mtu - hlen;
+  size_t room = ifp->tx.len - (ifp->framesize - ifp->l2mtu) - hlen;
+
+  return len > cap || len > room;
+}
+
+static bool bsd_udp_queue(struct mg_connection *c, const void *buf,
+                          size_t len) {
+  // One raw datagram occupies c->send until write_conn() drains it.
+  return mg_iobuf_add(&c->send, c->send.len, buf, len) == len;
+}
+
+static size_t bsd_recv(struct mg_bsd_sock *s, void *buf, size_t len,
+                       int flags, struct sockaddr *src, socklen_t *addrlen) {
+  struct mg_connection *c = s->c;
+  size_t n;
+
+  if (!s->is_udp) {
+    n = c->recv.len < len ? c->recv.len : len;
+    memcpy(buf, c->recv.buf, n);
+    if (!(flags & MSG_PEEK)) mg_iobuf_del(&c->recv, 0, n);
+  } else {
+    n = c->recv.len < len ? c->recv.len : len;
+    memcpy(buf, c->recv.buf, n);
+    if (src != NULL && addrlen != NULL) {
+      struct sockaddr_in *sa = (struct sockaddr_in *) src;
+      sa->sin_family = AF_INET;
+      sa->sin_port = c->rem.port;
+      sa->sin_addr.s_addr = c->rem.addr.ip4;
+      *addrlen = sizeof(*sa);
+    }
+    if (!(flags & MSG_PEEK)) mg_iobuf_del(&c->recv, 0, c->recv.len);
+  }
+  return n;
 }
 
 #if MG_ENABLE_FREERTOS
@@ -315,9 +356,10 @@ static int bsd_ready(struct mg_bsd_sock *s) {
   if (s->is_shut_rd || s->c->recv.len > 0 || s->c->is_draining)
     ready |= BSD_READ;
   if (s->is_shut_wr) ready |= BSD_ERROR;
-  if (!s->is_shut_wr && !s->is_udp && !s->c->is_connecting &&
-      !s->c->is_closing && !s->c->is_draining)
-    ready |= BSD_WRITE;  // Established TCP socket
+  if (!s->is_shut_wr && (s->is_udp || !s->c->is_connecting) &&
+      !s->c->is_closing && !s->c->is_draining &&
+      (!s->is_udp || s->c->send.len == 0))
+    ready |= BSD_WRITE;  // UDP socket or established TCP socket
   return ready;
 }
 
@@ -331,7 +373,7 @@ static void bsd_close(struct mg_bsd_sock *s) {
     if (t->orphan && t->listener == s) {
       if (t->c != NULL) {
         t->c->fn_data = NULL;
-        mg_close_conn(t->c);
+        t->c->is_draining = 1;
         t->c = NULL;
       }
       memset(t, 0, sizeof(*t));  // Release orphan
@@ -339,7 +381,7 @@ static void bsd_close(struct mg_bsd_sock *s) {
   }
   if (s->c != NULL) {
     s->c->fn_data = NULL;
-    mg_close_conn(s->c);
+    s->c->is_draining = 1;
     s->c = NULL;
   }
   memset(s, 0, sizeof(*s));  // Release socket
@@ -529,8 +571,8 @@ static bool bsd_run(struct mg_bsd_cmd *cmd) {
         cmd->result = -1, cmd->err = ECONNREFUSED;
         return true;
       }
-      if (!c->is_connecting) {
-        cmd->result = 0;
+      if (s->is_udp || !c->is_connecting) {
+        cmd->result = 0;  // UDP may still resolve ARP; TCP waits for SYN/SYN-ACK
         return true;
       }
       if (s->nonblock) {
@@ -555,11 +597,8 @@ static bool bsd_run(struct mg_bsd_cmd *cmd) {
         return true;
       }
       if (c->recv.len > 0) {
-        size_t n = cmd->op_recv.len;
-        if (c->recv.len < n) n = c->recv.len;
-        memcpy(cmd->op_recv.buf, c->recv.buf, n);
-        if (!(cmd->op_recv.flags & MSG_PEEK)) mg_iobuf_del(&c->recv, 0, n);
-        cmd->result = (int) n;
+        cmd->result = (int) bsd_recv(s, cmd->op_recv.buf, cmd->op_recv.len,
+                                     cmd->op_recv.flags, NULL, NULL);
         return true;
       }
       if (s->err != 0) {
@@ -583,7 +622,25 @@ static bool bsd_run(struct mg_bsd_cmd *cmd) {
       } else if (s->is_shut_wr || (c = s->c) == NULL || s->err != 0 ||
                  c->is_closing || c->is_draining) {
         cmd->result = -1, cmd->err = EPIPE;
-      } else if (mg_send(c, cmd->op_send.buf, cmd->op_send.len)) {
+      } else if (c == NULL || (s->is_udp && !c->is_client)) {
+        cmd->result = -1, cmd->err = s->is_udp ? EDESTADDRREQ : EPIPE;
+      } else if (s->is_udp && cmd->op_send.len == 0) {
+        cmd->result = 0;
+      } else if (s->is_udp && bsd_udp_too_big(c, cmd->op_send.len)) {
+        cmd->result = -1, cmd->err = EMSGSIZE;
+      } else if (s->is_udp && c->send.len > 0) {
+        if (s->nonblock || (cmd->op_send.flags & MSG_DONTWAIT)) {
+          cmd->result = -1, cmd->err = EAGAIN;
+        } else {
+#if MG_ENABLE_FREERTOS
+          return false;  // One UDP datagram is pending, wait
+#else
+          cmd->result = -1, cmd->err = EAGAIN;
+#endif
+        }
+      } else if ((s->is_udp
+                      ? bsd_udp_queue(c, cmd->op_send.buf, cmd->op_send.len)
+                      : mg_send(c, cmd->op_send.buf, cmd->op_send.len))) {
         cmd->result = (int) cmd->op_send.len;
       } else if (s->nonblock || (cmd->op_send.flags & MSG_DONTWAIT)) {
         cmd->result = -1, cmd->err = EAGAIN;
@@ -600,25 +657,49 @@ static bool bsd_run(struct mg_bsd_cmd *cmd) {
 
       if ((s = bsd_get(cmd->op_sendto.fd)) == NULL) {
         cmd->result = -1, cmd->err = EBADF;
+      } else if (!s->is_udp) {
+        cmd->result = -1, cmd->err = EOPNOTSUPP;
       } else if ((err = bsd_addr4(cmd->op_sendto.addr,
                                   cmd->op_sendto.addrlen)) != 0) {
         cmd->result = -1, cmd->err = err;
       } else if (s->is_shut_wr || (c = s->c) == NULL || s->err != 0 ||
                  c->is_closing || c->is_draining) {
         cmd->result = -1, cmd->err = EPIPE;
+      } else if (c->is_client) {
+        cmd->result = -1, cmd->err = EISCONN;
       } else {
         const struct sockaddr_in *sa =
             (const struct sockaddr_in *) cmd->op_sendto.addr;
-        c->rem.port = sa->sin_port;
-        c->rem.addr.ip4 = sa->sin_addr.s_addr;
-        c->rem.is_ip6 = false;
-        if (mg_send(c, cmd->op_sendto.buf, cmd->op_sendto.len)) {
-          cmd->result = (int) cmd->op_sendto.len;
+        if (cmd->op_sendto.len == 0) {
+          cmd->result = 0;
+        } else if (bsd_udp_too_big(c, cmd->op_sendto.len)) {
+          cmd->result = -1, cmd->err = EMSGSIZE;
+        } else if (c->send.len == 0) {
+          struct mg_addr rem = c->rem;
+          bool resolve = rem.is_ip6 || rem.addr.ip4 != sa->sin_addr.s_addr;
+          c->rem.port = sa->sin_port;
+          c->rem.addr.ip4 = sa->sin_addr.s_addr;
+          c->rem.is_ip6 = false;
+          if (bsd_udp_queue(c, cmd->op_sendto.buf, cmd->op_sendto.len)) {
+            if (resolve) mg_connect_resolved(c);
+            cmd->result = (int) cmd->op_sendto.len;
+          } else {
+            c->rem = rem;
+            if (s->nonblock || (cmd->op_sendto.flags & MSG_DONTWAIT)) {
+              cmd->result = -1, cmd->err = EAGAIN;
+            } else {
+#if MG_ENABLE_FREERTOS
+              return false;  // No send buffer space yet, wait
+#else
+              cmd->result = -1, cmd->err = EAGAIN;
+#endif
+            }
+          }
         } else if (s->nonblock || (cmd->op_sendto.flags & MSG_DONTWAIT)) {
           cmd->result = -1, cmd->err = EAGAIN;
         } else {
 #if MG_ENABLE_FREERTOS
-          return false;  // No send buffer space yet, wait
+          return false;  // One UDP datagram is pending, wait
 #else
           cmd->result = -1, cmd->err = EAGAIN;
 #endif
@@ -629,6 +710,9 @@ static bool bsd_run(struct mg_bsd_cmd *cmd) {
     case BSD_OP_RECVFROM:
       if ((s = bsd_get(cmd->op_recvfrom.fd)) == NULL) {
         cmd->result = -1, cmd->err = EBADF;
+        return true;
+      } else if (!s->is_udp) {
+        cmd->result = -1, cmd->err = EOPNOTSUPP;
         return true;
       }
       if (s->is_shut_rd) {
@@ -641,25 +725,11 @@ static bool bsd_run(struct mg_bsd_cmd *cmd) {
         return true;
       }
       if (c->recv.len > 0) {
-        size_t n = cmd->op_recvfrom.len;
-
-        if (cmd->op_recvfrom.src != NULL &&
-            (cmd->op_recvfrom.addrlen == NULL ||
-             *cmd->op_recvfrom.addrlen < sizeof(struct sockaddr_in))) {
-          cmd->result = -1, cmd->err = EINVAL;
-          return true;
-        }
-        if (c->recv.len < n) n = c->recv.len;
-        memcpy(cmd->op_recvfrom.buf, c->recv.buf, n);
-        if (!(cmd->op_recvfrom.flags & MSG_PEEK)) mg_iobuf_del(&c->recv, 0, n);
-        if (cmd->op_recvfrom.src != NULL && cmd->op_recvfrom.addrlen != NULL) {
-          struct sockaddr_in *sa = (struct sockaddr_in *) cmd->op_recvfrom.src;
-          sa->sin_family = AF_INET;
-          sa->sin_port = c->rem.port;
-          sa->sin_addr.s_addr = c->rem.addr.ip4;
-          *cmd->op_recvfrom.addrlen = sizeof(*sa);
-        }
-        cmd->result = (int) n;
+        cmd->result = (int) bsd_recv(s, cmd->op_recvfrom.buf,
+                                     cmd->op_recvfrom.len,
+                                     cmd->op_recvfrom.flags,
+                                     cmd->op_recvfrom.src,
+                                     cmd->op_recvfrom.addrlen);
         return true;
       }
       if (s->err != 0) {

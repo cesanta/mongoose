@@ -64,6 +64,18 @@ void mg_bsd_poll(struct mg_mgr *);
 #ifndef ENOSPC
 #define ENOSPC 28
 #endif
+#ifndef EOPNOTSUPP
+#define EOPNOTSUPP 95
+#endif
+#ifndef EISCONN
+#define EISCONN 106
+#endif
+#ifndef EDESTADDRREQ
+#define EDESTADDRREQ 121
+#endif
+#ifndef EMSGSIZE
+#define EMSGSIZE 90
+#endif
 #ifndef EPROTONOSUPPORT
 #define EPROTONOSUPPORT 93
 #endif
