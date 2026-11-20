@@ -34,7 +34,9 @@ struct mg_tcpip_driver_stm32f_data {
 #define MG_ENABLE_ETH_IRQ()
 #endif
 
-#define MG_TCPIP_DRIVER_INIT(mgr)                                 \
+extern struct mg_tcpip_driver mg_tcpip_driver_stm32f;
+
+#define MG_TCPIP_DRIVER_STM32F_INIT(mgr)                          \
   do {                                                            \
     static struct mg_tcpip_driver_stm32f_data driver_data_;       \
     static struct mg_tcpip_if mif_;                               \
@@ -47,8 +49,12 @@ struct mg_tcpip_driver_stm32f_data {
     mif_.driver_data = &driver_data_;                             \
     MG_SET_MAC_ADDRESS(mif_.mac);                                 \
     MG_ENABLE_ETH_IRQ();                                          \
-    mg_tcpip_init(mgr, &mif_);                                    \
+    mg_tcpip_init((mgr), &mif_);                                  \
     MG_INFO(("Driver: stm32f, MAC: %M", mg_print_mac, mif_.mac)); \
   } while (0)
+
+#ifndef MG_TCPIP_DRIVER_INIT
+#define MG_TCPIP_DRIVER_INIT(x) MG_TCPIP_DRIVER_STM32F_INIT(x)
+#endif
 
 #endif

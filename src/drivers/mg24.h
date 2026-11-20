@@ -12,7 +12,7 @@ struct mg_tcpip_driver_mg24_data {
 
 extern struct mg_tcpip_driver mg_tcpip_driver_mg24;
 
-#define MG_TCPIP_DRIVER_MG24_INIT(manager)                      \
+#define MG_TCPIP_DRIVER_MG24_INIT(mgr)                          \
   do {                                                          \
     static struct mg_tcpip_driver_mg24_data driver_data_;       \
     static struct mg_tcpip_if mif_;                             \
@@ -20,10 +20,9 @@ extern struct mg_tcpip_driver mg_tcpip_driver_mg24;
     mif_.ip = MG_TCPIP_IP;                                      \
     mif_.mask = MG_TCPIP_MASK;                                  \
     mif_.gw = MG_TCPIP_GW;                                      \
-    mif_.mgr = (manager);                                       \
     mif_.driver = &mg_tcpip_driver_mg24;                        \
     mif_.driver_data = &driver_data_;                           \
-    mg_tcpip_init((manager), &mif_);                            \
+    mg_tcpip_init((mgr), &mif_);                                \
     MG_INFO(("Driver: mg24, MAC: %M", mg_print_mac, mif_.mac)); \
   } while (0)
 

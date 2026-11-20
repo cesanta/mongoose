@@ -13,7 +13,7 @@ struct mg_tcpip_driver_rw612w_data {
 
 extern struct mg_tcpip_driver mg_tcpip_driver_rw612w;
 
-#define MG_TCPIP_DRIVER_RW612W_INIT(manager)                      \
+#define MG_TCPIP_DRIVER_RW612W_INIT(mgr)                          \
   do {                                                            \
     static struct mg_tcpip_driver_rw612w_data driver_data_;       \
     static struct mg_tcpip_if mif_;                               \
@@ -21,10 +21,9 @@ extern struct mg_tcpip_driver mg_tcpip_driver_rw612w;
     mif_.ip = MG_TCPIP_IP;                                        \
     mif_.mask = MG_TCPIP_MASK;                                    \
     mif_.gw = MG_TCPIP_GW;                                        \
-    mif_.mgr = (manager);                                         \
     mif_.driver = &mg_tcpip_driver_rw612w;                        \
     mif_.driver_data = &driver_data_;                             \
-    mg_tcpip_init((manager), &mif_);                              \
+    mg_tcpip_init((mgr), &mif_);                                  \
     MG_INFO(("Driver: rw612w, MAC: %M", mg_print_mac, mif_.mac)); \
   } while (0)
 

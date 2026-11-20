@@ -135,7 +135,6 @@ void mg_tcpip_arp_request(struct mg_tcpip_if *ifp, uint32_t ip, uint8_t *mac);
 // Built-in hardware drivers. Assign one to mg_tcpip_if.driver before calling
 // mg_tcpip_init(). Each driver also requires a corresponding driver_data
 // struct; see the matching driver header for details.
-extern struct mg_tcpip_driver mg_tcpip_driver_stm32f;
 extern struct mg_tcpip_driver mg_tcpip_driver_w5500;
 extern struct mg_tcpip_driver mg_tcpip_driver_w5100;
 extern struct mg_tcpip_driver mg_tcpip_driver_tm4c;
@@ -159,6 +158,7 @@ extern struct mg_tcpip_driver mg_tcpip_driver_netc;
 #include "drivers/mcxw71.h"
 #include "drivers/nrf52.h"
 #include "drivers/rw612w.h"
+#include "drivers/stm32f.h"
 
 // SPI bus abstraction for SPI-attached network chips (e.g. W5500).
 // Populate and assign to the driver's driver_data field.
