@@ -1224,22 +1224,34 @@ static void proto_error(struct mg_connection *c, bool r, const char *f, ...) {
 static bool rx_udp(struct mg_tcpip_if *ifp, struct pkt *pkt) {
   struct mg_connection *c = getpeer(ifp->mgr, pkt, true);
   struct connstate *s;
+  struct mg_addr rem;
   uint8_t *l2addr;
   if (c == NULL) return false;  // No UDP listener on this port
+  // BSD socket has an unread datagram: drop this one to keep boundaries
+  if (c->is_bsd && c->recv.len > 0) return true;
+  if (c->is_bsd && !c->is_client && c->send.len > 0) return true;
   s = (struct connstate *) (c + 1);
-  c->rem.port = pkt->udp->sport;
 #if MG_ENABLE_IPV6
   if (c->loc.is_ip6) {  // matching of v4/v6 to dest is done bt getpeer()
     if (!udp6csum_ok(pkt->ip6, pkt->udp)) return false;
-    c->rem.addr.ip6[0] = pkt->ip6->src[0],
-    c->rem.addr.ip6[1] = pkt->ip6->src[1], c->rem.is_ip6 = true;
+    if (c->is_bsd && c->is_client &&
+        (c->rem.port != pkt->udp->sport ||
+         !MG_IP6MATCH(c->rem.addr.ip6, pkt->ip6->src)))
+      return true;
+    rem.addr.ip6[0] = pkt->ip6->src[0],
+    rem.addr.ip6[1] = pkt->ip6->src[1], rem.is_ip6 = true;
   } else
 #endif
   {
     if (!udpcsum_ok(pkt->ip, pkt->udp)) return false;
-    c->rem.addr.ip4 = pkt->ip->src;
+    if (c->is_bsd && c->is_client &&
+        (c->rem.port != pkt->udp->sport || c->rem.addr.ip4 != pkt->ip->src))
+      return true;
+    rem.addr.ip4 = pkt->ip->src, rem.is_ip6 = false;
   }
-  if ((l2addr = get_return_l2addr(ifp, &c->rem, true, pkt)) == NULL)
+  rem.port = pkt->udp->sport;
+  c->rem = rem;
+  if ((l2addr = get_return_l2addr(ifp, &rem, true, pkt)) == NULL)
     return false;  // safety net for lousy networks
   memcpy(s->mac, l2addr, sizeof(s->mac));
   if (c->recv.len >= MG_MAX_RECV_SIZE) {
@@ -2345,20 +2357,25 @@ void mg_connect_resolved(struct mg_connection *c) {
   s->retransmit = ifp->enable_tcp_retransmit;
   s->txq.align = MG_TCPIP_TXQ_ALIGN;
   c->is_resolving = 0;
-  if (ifp->eport < MG_EPHEMERAL_PORT_BASE) ifp->eport = MG_EPHEMERAL_PORT_BASE;
-  c->loc.port = mg_htons(ifp->eport++);
+  if (c->loc.port == 0) {
+    if (ifp->eport < MG_EPHEMERAL_PORT_BASE)
+      ifp->eport = MG_EPHEMERAL_PORT_BASE;
+    c->loc.port = mg_htons(ifp->eport++);
+  }  // otherwise retain an existing bound port
 #if MG_ENABLE_IPV6
   if (c->rem.is_ip6) {
-    if (c->rem.addr.ip6[0] == ifp->ip6ll[0]) {  // same local LAN, use ll
+    if (c->loc.addr.ip6[0] == 0 && c->loc.addr.ip6[1] == 0 &&
+        c->rem.addr.ip6[0] == ifp->ip6ll[0]) {  // same local LAN, use ll
       c->loc.addr.ip6[0] = ifp->ip6ll[0], c->loc.addr.ip6[1] = ifp->ip6ll[1];
-    } else {  // use global address
+    } else if (c->loc.addr.ip6[0] == 0 && c->loc.addr.ip6[1] == 0) {
+      // Use global address
       c->loc.addr.ip6[0] = ifp->ip6[0], c->loc.addr.ip6[1] = ifp->ip6[1];
-    }
+    } // otherwise retain an existing bound address
     c->loc.is_ip6 = true;
   } else
 #endif
   {
-    c->loc.addr.ip4 = ifp->ip;
+    if (c->loc.addr.ip4 == 0) c->loc.addr.ip4 = ifp->ip;
   }
   MG_DEBUG(("%lu %M -> %M", c->id, mg_print_ip_port, &c->loc, mg_print_ip_port,
             &c->rem));
@@ -2389,7 +2406,7 @@ void mg_connect_resolved(struct mg_connection *c) {
     uint32_t rem_ip = c->rem.addr.ip4;
     if (ifp->ip && MG_IPISLOCAL(ifp, rem_ip) &&
         rem_ip != ifp->gw) {  // skip if gw (onstatechange -> ARP)
-      // If we're in the same LAN, fire an ARP lookup.
+      // We're in the same LAN, fire an ARP lookup.
       MG_DEBUG(("%lu ARP lookup...", c->id));
       mg_tcpip_arp_request(ifp, rem_ip, NULL);
       settmout(c, MIP_TTYPE_ARP);

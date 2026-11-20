@@ -13,7 +13,7 @@ else
 C_WARN ?= -Wno-deprecated
 endif
 
-.PHONY: all bsd bsd_test bsd_client bsd_nortos bsd_nortos_test shm_tap_bridge \
+.PHONY: all bsd bsd_test bsd_client bsd_udp bsd_nortos bsd_nortos_test shm_tap_bridge \
         shm_port_bridge bsd_s390 bsd_nortos_s390 clean
 
 TEST_SOURCES = bsd_shm_test.c
@@ -47,11 +47,11 @@ DOCKER ?= $(DOCKER_BIN) run --platform linux/amd64 --net=host --rm $(ENV) -v $(R
 CFLAGS_MONGOOSE += -DMG_ARCH=MG_ARCH_CUSTOM
 
 
-all bsd: shm_tap_bridge bsd_client FreeRTOS-Kernel bsd_test
+all bsd: shm_tap_bridge bsd_client bsd_udp FreeRTOS-Kernel bsd_test
 	ASAN_OPTIONS=$(ASAN_OPTIONS) $(RUN) ./bsd_test $(ARGS)
 
 # also
-bsd_nortos: shm_tap_bridge bsd_client bsd_nortos_test
+bsd_nortos: shm_tap_bridge bsd_client bsd_udp bsd_nortos_test
 	ASAN_OPTIONS=$(ASAN_OPTIONS) $(RUN) ./bsd_nortos_test $(ARGS)
 
 # requires shm_tap_bridge to be running
@@ -70,6 +70,9 @@ bsd_nortos_test:
 bsd_client: bsd_client.c
 	$(CC) bsd_client.c -pthread -o $@
 
+bsd_udp: bsd_udp.c
+	$(CC) bsd_udp.c -o $@
+
 # bridge shm queue <--> TAP interface
 shm_tap_bridge: shm_tap_bridge.c shm_queue.h
 	$(CC) shm_tap_bridge.c -pthread -o $@
@@ -79,7 +82,7 @@ bsd_s390: CFLAGS_MONGOOSE += -DMG_ENABLE_BSD_PROTOTYPES=0
 bsd_s390: ASAN=
 bsd_s390: CC = $(DOCKER) mdashnet/s390 cc
 bsd_s390: RUN = $(DOCKER) --init mdashnet/s390
-bsd_s390: shm_port_bridge bsd_client FreeRTOS-Kernel bsd_test
+bsd_s390: shm_port_bridge bsd_client bsd_udp FreeRTOS-Kernel bsd_test
 	$(RUN) sh -c './shm_port_bridge & pid=$$!; sleep 1; ./bsd_test; rc=$$?; kill $$pid >/dev/null 2>&1; wait $$pid >/dev/null 2>&1; exit $$rc'
 
 #also
@@ -87,14 +90,14 @@ bsd_nortos_s390: CFLAGS_MONGOOSE += -DMG_ENABLE_BSD_PROTOTYPES=0
 bsd_nortos_s390: ASAN=
 bsd_nortos_s390: CC = $(DOCKER) mdashnet/s390 cc
 bsd_nortos_s390: RUN = $(DOCKER) --init mdashnet/s390
-bsd_nortos_s390: shm_port_bridge bsd_client bsd_nortos_test
+bsd_nortos_s390: shm_port_bridge bsd_client bsd_udp bsd_nortos_test
 	$(RUN) sh -c './shm_port_bridge & pid=$$!; sleep 1; ./bsd_nortos_test; rc=$$?; kill $$pid >/dev/null 2>&1; wait $$pid >/dev/null 2>&1; exit $$rc'
 
 shm_port_bridge: shm_port_bridge.c shm_queue.h
 	$(CC) shm_port_bridge.c $(CFLAGS) -pthread -o $@
 
 clean:                    # Cleanup. Delete built program and all build artifacts
-	rm -rf bsd_test bsd_client shm_port_bridge *.o *.obj FreeRTOS-Kernel
+	rm -rf bsd_test bsd_client bsd_udp shm_port_bridge *.o *.obj FreeRTOS-Kernel
 
 FreeRTOS-Kernel:  # FreeRTOS sources
 	git clone -q -c advice.detachedHead=false --depth 1 -b V11.2.0 https://github.com/FreeRTOS/FreeRTOS-Kernel $@

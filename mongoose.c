@@ -167,6 +167,7 @@ fail:
 #endif
 
 
+
 #include <stdarg.h>
 
 #if MG_ENABLE_BSD_SOCKETS && MG_ENABLE_FREERTOS
@@ -296,6 +297,46 @@ static struct mg_connection *bsd_new_conn(struct mg_bsd_sock *s) {
     LIST_ADD_HEAD(struct mg_connection, &s_mgr->conns, c);
   }
   return c;
+}
+
+// Mirror net_builtin.c::trim_len() logic
+static bool bsd_udp_too_big(struct mg_connection *c, size_t len) {
+  struct mg_tcpip_if *ifp = c->mgr->ifp;
+  size_t hlen = c->rem.is_ip6 ? 48 : 32;  // IP plus UDP headers
+  size_t cap = ifp->mtu - hlen;
+  size_t room = ifp->tx.len - (ifp->framesize - ifp->l2mtu) - hlen;
+
+  return len > cap || len > room;
+}
+
+static bool bsd_udp_queue(struct mg_connection *c, const void *buf,
+                          size_t len) {
+  // One raw datagram occupies c->send until write_conn() drains it.
+  return mg_iobuf_add(&c->send, c->send.len, buf, len) == len;
+}
+
+static size_t bsd_recv(struct mg_bsd_sock *s, void *buf, size_t len,
+                       int flags, struct sockaddr *src, socklen_t *addrlen) {
+  struct mg_connection *c = s->c;
+  size_t n;
+
+  if (!s->is_udp) {
+    n = c->recv.len < len ? c->recv.len : len;
+    memcpy(buf, c->recv.buf, n);
+    if (!(flags & MSG_PEEK)) mg_iobuf_del(&c->recv, 0, n);
+  } else {
+    n = c->recv.len < len ? c->recv.len : len;
+    memcpy(buf, c->recv.buf, n);
+    if (src != NULL && addrlen != NULL) {
+      struct sockaddr_in *sa = (struct sockaddr_in *) src;
+      sa->sin_family = AF_INET;
+      sa->sin_port = c->rem.port;
+      sa->sin_addr.s_addr = c->rem.addr.ip4;
+      *addrlen = sizeof(*sa);
+    }
+    if (!(flags & MSG_PEEK)) mg_iobuf_del(&c->recv, 0, c->recv.len);
+  }
+  return n;
 }
 
 #if MG_ENABLE_FREERTOS
@@ -482,9 +523,10 @@ static int bsd_ready(struct mg_bsd_sock *s) {
   if (s->is_shut_rd || s->c->recv.len > 0 || s->c->is_draining)
     ready |= BSD_READ;
   if (s->is_shut_wr) ready |= BSD_ERROR;
-  if (!s->is_shut_wr && !s->is_udp && !s->c->is_connecting &&
-      !s->c->is_closing && !s->c->is_draining)
-    ready |= BSD_WRITE;  // Established TCP socket
+  if (!s->is_shut_wr && (s->is_udp || !s->c->is_connecting) &&
+      !s->c->is_closing && !s->c->is_draining &&
+      (!s->is_udp || s->c->send.len == 0))
+    ready |= BSD_WRITE;  // UDP socket or established TCP socket
   return ready;
 }
 
@@ -498,7 +540,7 @@ static void bsd_close(struct mg_bsd_sock *s) {
     if (t->orphan && t->listener == s) {
       if (t->c != NULL) {
         t->c->fn_data = NULL;
-        mg_close_conn(t->c);
+        t->c->is_draining = 1;
         t->c = NULL;
       }
       memset(t, 0, sizeof(*t));  // Release orphan
@@ -506,7 +548,7 @@ static void bsd_close(struct mg_bsd_sock *s) {
   }
   if (s->c != NULL) {
     s->c->fn_data = NULL;
-    mg_close_conn(s->c);
+    s->c->is_draining = 1;
     s->c = NULL;
   }
   memset(s, 0, sizeof(*s));  // Release socket
@@ -696,8 +738,8 @@ static bool bsd_run(struct mg_bsd_cmd *cmd) {
         cmd->result = -1, cmd->err = ECONNREFUSED;
         return true;
       }
-      if (!c->is_connecting) {
-        cmd->result = 0;
+      if (s->is_udp || !c->is_connecting) {
+        cmd->result = 0;  // UDP may still resolve ARP; TCP waits for SYN/SYN-ACK
         return true;
       }
       if (s->nonblock) {
@@ -722,11 +764,8 @@ static bool bsd_run(struct mg_bsd_cmd *cmd) {
         return true;
       }
       if (c->recv.len > 0) {
-        size_t n = cmd->op_recv.len;
-        if (c->recv.len < n) n = c->recv.len;
-        memcpy(cmd->op_recv.buf, c->recv.buf, n);
-        if (!(cmd->op_recv.flags & MSG_PEEK)) mg_iobuf_del(&c->recv, 0, n);
-        cmd->result = (int) n;
+        cmd->result = (int) bsd_recv(s, cmd->op_recv.buf, cmd->op_recv.len,
+                                     cmd->op_recv.flags, NULL, NULL);
         return true;
       }
       if (s->err != 0) {
@@ -750,7 +789,25 @@ static bool bsd_run(struct mg_bsd_cmd *cmd) {
       } else if (s->is_shut_wr || (c = s->c) == NULL || s->err != 0 ||
                  c->is_closing || c->is_draining) {
         cmd->result = -1, cmd->err = EPIPE;
-      } else if (mg_send(c, cmd->op_send.buf, cmd->op_send.len)) {
+      } else if (c == NULL || (s->is_udp && !c->is_client)) {
+        cmd->result = -1, cmd->err = s->is_udp ? EDESTADDRREQ : EPIPE;
+      } else if (s->is_udp && cmd->op_send.len == 0) {
+        cmd->result = 0;
+      } else if (s->is_udp && bsd_udp_too_big(c, cmd->op_send.len)) {
+        cmd->result = -1, cmd->err = EMSGSIZE;
+      } else if (s->is_udp && c->send.len > 0) {
+        if (s->nonblock || (cmd->op_send.flags & MSG_DONTWAIT)) {
+          cmd->result = -1, cmd->err = EAGAIN;
+        } else {
+#if MG_ENABLE_FREERTOS
+          return false;  // One UDP datagram is pending, wait
+#else
+          cmd->result = -1, cmd->err = EAGAIN;
+#endif
+        }
+      } else if ((s->is_udp
+                      ? bsd_udp_queue(c, cmd->op_send.buf, cmd->op_send.len)
+                      : mg_send(c, cmd->op_send.buf, cmd->op_send.len))) {
         cmd->result = (int) cmd->op_send.len;
       } else if (s->nonblock || (cmd->op_send.flags & MSG_DONTWAIT)) {
         cmd->result = -1, cmd->err = EAGAIN;
@@ -767,25 +824,49 @@ static bool bsd_run(struct mg_bsd_cmd *cmd) {
 
       if ((s = bsd_get(cmd->op_sendto.fd)) == NULL) {
         cmd->result = -1, cmd->err = EBADF;
+      } else if (!s->is_udp) {
+        cmd->result = -1, cmd->err = EOPNOTSUPP;
       } else if ((err = bsd_addr4(cmd->op_sendto.addr,
                                   cmd->op_sendto.addrlen)) != 0) {
         cmd->result = -1, cmd->err = err;
       } else if (s->is_shut_wr || (c = s->c) == NULL || s->err != 0 ||
                  c->is_closing || c->is_draining) {
         cmd->result = -1, cmd->err = EPIPE;
+      } else if (c->is_client) {
+        cmd->result = -1, cmd->err = EISCONN;
       } else {
         const struct sockaddr_in *sa =
             (const struct sockaddr_in *) cmd->op_sendto.addr;
-        c->rem.port = sa->sin_port;
-        c->rem.addr.ip4 = sa->sin_addr.s_addr;
-        c->rem.is_ip6 = false;
-        if (mg_send(c, cmd->op_sendto.buf, cmd->op_sendto.len)) {
-          cmd->result = (int) cmd->op_sendto.len;
+        if (cmd->op_sendto.len == 0) {
+          cmd->result = 0;
+        } else if (bsd_udp_too_big(c, cmd->op_sendto.len)) {
+          cmd->result = -1, cmd->err = EMSGSIZE;
+        } else if (c->send.len == 0) {
+          struct mg_addr rem = c->rem;
+          bool resolve = rem.is_ip6 || rem.addr.ip4 != sa->sin_addr.s_addr;
+          c->rem.port = sa->sin_port;
+          c->rem.addr.ip4 = sa->sin_addr.s_addr;
+          c->rem.is_ip6 = false;
+          if (bsd_udp_queue(c, cmd->op_sendto.buf, cmd->op_sendto.len)) {
+            if (resolve) mg_connect_resolved(c);
+            cmd->result = (int) cmd->op_sendto.len;
+          } else {
+            c->rem = rem;
+            if (s->nonblock || (cmd->op_sendto.flags & MSG_DONTWAIT)) {
+              cmd->result = -1, cmd->err = EAGAIN;
+            } else {
+#if MG_ENABLE_FREERTOS
+              return false;  // No send buffer space yet, wait
+#else
+              cmd->result = -1, cmd->err = EAGAIN;
+#endif
+            }
+          }
         } else if (s->nonblock || (cmd->op_sendto.flags & MSG_DONTWAIT)) {
           cmd->result = -1, cmd->err = EAGAIN;
         } else {
 #if MG_ENABLE_FREERTOS
-          return false;  // No send buffer space yet, wait
+          return false;  // One UDP datagram is pending, wait
 #else
           cmd->result = -1, cmd->err = EAGAIN;
 #endif
@@ -796,6 +877,9 @@ static bool bsd_run(struct mg_bsd_cmd *cmd) {
     case BSD_OP_RECVFROM:
       if ((s = bsd_get(cmd->op_recvfrom.fd)) == NULL) {
         cmd->result = -1, cmd->err = EBADF;
+        return true;
+      } else if (!s->is_udp) {
+        cmd->result = -1, cmd->err = EOPNOTSUPP;
         return true;
       }
       if (s->is_shut_rd) {
@@ -808,25 +892,11 @@ static bool bsd_run(struct mg_bsd_cmd *cmd) {
         return true;
       }
       if (c->recv.len > 0) {
-        size_t n = cmd->op_recvfrom.len;
-
-        if (cmd->op_recvfrom.src != NULL &&
-            (cmd->op_recvfrom.addrlen == NULL ||
-             *cmd->op_recvfrom.addrlen < sizeof(struct sockaddr_in))) {
-          cmd->result = -1, cmd->err = EINVAL;
-          return true;
-        }
-        if (c->recv.len < n) n = c->recv.len;
-        memcpy(cmd->op_recvfrom.buf, c->recv.buf, n);
-        if (!(cmd->op_recvfrom.flags & MSG_PEEK)) mg_iobuf_del(&c->recv, 0, n);
-        if (cmd->op_recvfrom.src != NULL && cmd->op_recvfrom.addrlen != NULL) {
-          struct sockaddr_in *sa = (struct sockaddr_in *) cmd->op_recvfrom.src;
-          sa->sin_family = AF_INET;
-          sa->sin_port = c->rem.port;
-          sa->sin_addr.s_addr = c->rem.addr.ip4;
-          *cmd->op_recvfrom.addrlen = sizeof(*sa);
-        }
-        cmd->result = (int) n;
+        cmd->result = (int) bsd_recv(s, cmd->op_recvfrom.buf,
+                                     cmd->op_recvfrom.len,
+                                     cmd->op_recvfrom.flags,
+                                     cmd->op_recvfrom.src,
+                                     cmd->op_recvfrom.addrlen);
         return true;
       }
       if (s->err != 0) {
@@ -10900,22 +10970,34 @@ static void proto_error(struct mg_connection *c, bool r, const char *f, ...) {
 static bool rx_udp(struct mg_tcpip_if *ifp, struct pkt *pkt) {
   struct mg_connection *c = getpeer(ifp->mgr, pkt, true);
   struct connstate *s;
+  struct mg_addr rem;
   uint8_t *l2addr;
   if (c == NULL) return false;  // No UDP listener on this port
+  // BSD socket has an unread datagram: drop this one to keep boundaries
+  if (c->is_bsd && c->recv.len > 0) return true;
+  if (c->is_bsd && !c->is_client && c->send.len > 0) return true;
   s = (struct connstate *) (c + 1);
-  c->rem.port = pkt->udp->sport;
 #if MG_ENABLE_IPV6
   if (c->loc.is_ip6) {  // matching of v4/v6 to dest is done bt getpeer()
     if (!udp6csum_ok(pkt->ip6, pkt->udp)) return false;
-    c->rem.addr.ip6[0] = pkt->ip6->src[0],
-    c->rem.addr.ip6[1] = pkt->ip6->src[1], c->rem.is_ip6 = true;
+    if (c->is_bsd && c->is_client &&
+        (c->rem.port != pkt->udp->sport ||
+         !MG_IP6MATCH(c->rem.addr.ip6, pkt->ip6->src)))
+      return true;
+    rem.addr.ip6[0] = pkt->ip6->src[0],
+    rem.addr.ip6[1] = pkt->ip6->src[1], rem.is_ip6 = true;
   } else
 #endif
   {
     if (!udpcsum_ok(pkt->ip, pkt->udp)) return false;
-    c->rem.addr.ip4 = pkt->ip->src;
+    if (c->is_bsd && c->is_client &&
+        (c->rem.port != pkt->udp->sport || c->rem.addr.ip4 != pkt->ip->src))
+      return true;
+    rem.addr.ip4 = pkt->ip->src, rem.is_ip6 = false;
   }
-  if ((l2addr = get_return_l2addr(ifp, &c->rem, true, pkt)) == NULL)
+  rem.port = pkt->udp->sport;
+  c->rem = rem;
+  if ((l2addr = get_return_l2addr(ifp, &rem, true, pkt)) == NULL)
     return false;  // safety net for lousy networks
   memcpy(s->mac, l2addr, sizeof(s->mac));
   if (c->recv.len >= MG_MAX_RECV_SIZE) {
@@ -12021,20 +12103,25 @@ void mg_connect_resolved(struct mg_connection *c) {
   s->retransmit = ifp->enable_tcp_retransmit;
   s->txq.align = MG_TCPIP_TXQ_ALIGN;
   c->is_resolving = 0;
-  if (ifp->eport < MG_EPHEMERAL_PORT_BASE) ifp->eport = MG_EPHEMERAL_PORT_BASE;
-  c->loc.port = mg_htons(ifp->eport++);
+  if (c->loc.port == 0) {
+    if (ifp->eport < MG_EPHEMERAL_PORT_BASE)
+      ifp->eport = MG_EPHEMERAL_PORT_BASE;
+    c->loc.port = mg_htons(ifp->eport++);
+  }  // otherwise retain an existing bound port
 #if MG_ENABLE_IPV6
   if (c->rem.is_ip6) {
-    if (c->rem.addr.ip6[0] == ifp->ip6ll[0]) {  // same local LAN, use ll
+    if (c->loc.addr.ip6[0] == 0 && c->loc.addr.ip6[1] == 0 &&
+        c->rem.addr.ip6[0] == ifp->ip6ll[0]) {  // same local LAN, use ll
       c->loc.addr.ip6[0] = ifp->ip6ll[0], c->loc.addr.ip6[1] = ifp->ip6ll[1];
-    } else {  // use global address
+    } else if (c->loc.addr.ip6[0] == 0 && c->loc.addr.ip6[1] == 0) {
+      // Use global address
       c->loc.addr.ip6[0] = ifp->ip6[0], c->loc.addr.ip6[1] = ifp->ip6[1];
-    }
+    } // otherwise retain an existing bound address
     c->loc.is_ip6 = true;
   } else
 #endif
   {
-    c->loc.addr.ip4 = ifp->ip;
+    if (c->loc.addr.ip4 == 0) c->loc.addr.ip4 = ifp->ip;
   }
   MG_DEBUG(("%lu %M -> %M", c->id, mg_print_ip_port, &c->loc, mg_print_ip_port,
             &c->rem));
@@ -12065,7 +12152,7 @@ void mg_connect_resolved(struct mg_connection *c) {
     uint32_t rem_ip = c->rem.addr.ip4;
     if (ifp->ip && MG_IPISLOCAL(ifp, rem_ip) &&
         rem_ip != ifp->gw) {  // skip if gw (onstatechange -> ARP)
-      // If we're in the same LAN, fire an ARP lookup.
+      // We're in the same LAN, fire an ARP lookup.
       MG_DEBUG(("%lu ARP lookup...", c->id));
       mg_tcpip_arp_request(ifp, rem_ip, NULL);
       settmout(c, MIP_TTYPE_ARP);
@@ -21168,15 +21255,16 @@ void mg_tls_init(struct mg_connection *c, const struct mg_tls_opts *opts) {
       tls->ca_bundle_der = all_certs;
       MG_VERBOSE(("%d-cert bundle", cert_count));
     } else if (cert_count > 0) {
-      tls->ca_der.buf = all_certs[0].buf;
-      tls->ca_der.len = all_certs[0].len;
+      int i;
+      tls->ca_der = all_certs[0];
+      for (i = 1; i < cert_count; i++) mg_free((void *) all_certs[i].buf);
       mg_free(all_certs);
-    } else { // parse again for a possible DER (or a truncated begin string)
+    } else {  // parse again for a possible DER (or a truncated begin string)
       if (mg_parse_pem(opts->ca, mg_str_s("CERTIFICATE"), &tls->ca_der) < 0) {
         mg_error(c, "Failed to load CA certificate");
         return;
       }
-    } // ca_bundle_len != 0 && ca_der.len = 0 => bundle
+    }  // ca_bundle_len != 0 && ca_der.len = 0 => bundle
     if (!c->is_client) tls->is_twoway = true;  // server + CA: two-way auth
   }
 
@@ -21195,8 +21283,7 @@ void mg_tls_init(struct mg_connection *c, const struct mg_tls_opts *opts) {
     int cert_count = mg_parse_pem_certs(opts->cert, &all_certs);
 
     if (cert_count > 0) {
-      tls->cert_der.buf = all_certs[0].buf;
-      tls->cert_der.len = all_certs[0].len;
+      tls->cert_der = all_certs[0];
       if (cert_count > 1) {
         tls->chain_len = (size_t) cert_count;
         tls->chain_der = all_certs;

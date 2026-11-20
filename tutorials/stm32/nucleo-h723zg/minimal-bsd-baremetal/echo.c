@@ -6,7 +6,6 @@
 
 #include "mongoose.h"
 
-#include <stdio.h>
 #include <stdlib.h>
 
 struct echo_server {
@@ -43,12 +42,12 @@ int echo_init(uint16_t port) {
 
   if (fd < 0 || !echo_nonblock(fd) ||
       bind(fd, (struct sockaddr *) &sa, sizeof(sa)) < 0 || listen(fd, 3) < 0) {
-    printf("BSD echo init: %d\n", errno);
+    MG_ERROR(("BSD echo init: %d", errno));
     if (fd >= 0) close(fd);
     return 0;
   }
   s_server.sock = fd;
-  printf("BSD echo server on port %hu\n", port);
+  MG_INFO(("BSD echo server on port %hu", port));
   return 1;
 }
 
@@ -80,7 +79,7 @@ void echo_poll(void) {
     if (fd >= 0) {
       c = (struct echo_client *) calloc(1, sizeof(*c));
       if (c == NULL || !echo_nonblock(fd)) {
-        printf("BSD echo accept: %d\n", c == NULL ? ENOMEM : errno);
+        MG_ERROR(("BSD echo accept: %d", c == NULL ? ENOMEM : errno));
         close(fd);
         free(c);
       } else {
