@@ -1,7 +1,9 @@
 #pragma once
 
 #if MG_ARCH == MG_ARCH_ARMGCC
+#ifndef _POSIX_TIMERS  // Some newlib builds, e.g. Espressif's, define it
 #define _POSIX_TIMERS
+#endif
 
 #include <ctype.h>
 #if !defined(MG_ENABLE_LWIP) || !MG_ENABLE_LWIP

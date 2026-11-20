@@ -52,15 +52,17 @@
 #define MG_TLS MG_TLS_BUILTIN
 #endif
 
-#if !defined(MG_OTA) && defined(STM32F1) || defined(STM32F2) || \
-    defined(STM32F4) || defined(STM32F7)
+#ifndef MG_OTA  // Pick OTA for the STM32 family, unless set by the user
+#if defined(STM32F1) || defined(STM32F2) || defined(STM32F4) || \
+    defined(STM32F7)
 #define MG_OTA MG_OTA_STM32F
-#elif !defined(MG_OTA) && defined(STM32H5)
+#elif defined(STM32H5)
 #define MG_OTA MG_OTA_STM32H5
-#elif !defined(MG_OTA) && defined(STM32H7)
+#elif defined(STM32H7)
 #define MG_OTA MG_OTA_STM32H7
-#elif !defined(MG_OTA) && defined(STM32C5)
+#elif defined(STM32C5)
 #define MG_OTA MG_OTA_STM32C5
+#endif
 #endif
 
 // use HAL-defined execute-in-ram section
