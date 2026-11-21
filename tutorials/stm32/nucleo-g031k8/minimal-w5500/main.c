@@ -21,6 +21,14 @@ static struct spi spi_pins = {
     .cs = PIN('A', 4),
 };
 
+// SPI bus used by the W5500 driver, see MG_TCPIP_DRIVER_W5500_INIT
+struct mg_tcpip_spi mg_spi = {
+    .begin = (void (*)(void *)) spi_begin,
+    .end = (void (*)(void *)) spi_end,
+    .txn = (void (*)(void *, uint8_t *, uint8_t *, size_t)) spi_txn,
+    .spi = &spi_pins,
+};
+
 static void log_fn(char ch, void *param) {
   uart_write_buf(param, &ch, 1);
 }
@@ -82,35 +90,19 @@ int main(void) {
   // ethernet_init();                // Initialise ethernet pins
   MG_INFO(("Starting, CPU freq %g MHz", (double) SystemCoreClock / 1000000));
 
+  spi_init(&spi_pins);      // SPI must be ready before mg_mgr_init()
   struct mg_mgr mgr;        // Initialise
-  mg_mgr_init(&mgr);        // Mongoose event manager
   mg_log_set(MG_LL_DEBUG);  // Set log level
+  mg_mgr_init(&mgr);        // Mongoose event manager and W5500 driver
 
-  // Initialise Mongoose network stack
-  spi_init(&spi_pins);
-  struct mg_tcpip_spi spi = {
-      .begin = (void (*)(void *)) spi_begin,
-      .end = (void (*)(void *)) spi_end,
-      .txn = (void (*)(void *, uint8_t *, uint8_t *, size_t)) spi_txn,
-      .spi = &spi_pins,
-  };
-  struct mg_tcpip_if mif = {.mac = GENERATE_LOCALLY_ADMINISTERED_MAC(),
-                            // Uncomment below for static configuration:
-                            // .ip = mg_htonl(MG_U32(192, 168, 0, 223)),
-                            // .mask = mg_htonl(MG_U32(255, 255, 255, 0)),
-                            // .gw = mg_htonl(MG_U32(192, 168, 0, 1)),
-                            .driver = &mg_tcpip_driver_w5500,
-                            .driver_data = &spi};
-  mg_tcpip_init(&mgr, &mif);
-
-  MG_INFO(("MAC: %M. Waiting for IP...", mg_print_mac, mif.mac));
-  while (mif.state != MG_TCPIP_STATE_READY) {
+  MG_INFO(("Waiting for IP..."));
+  while (mgr.ifp->state != MG_TCPIP_STATE_READY) {
     mg_mgr_poll(&mgr, 0);
   }
 
   MG_INFO(("Initialising application..."));
-  mg_timer_add(&mgr, BLINK_PERIOD_MS, MG_TIMER_REPEAT, timer_fn, &mif);
-  mg_http_listen(&mgr, "http://0.0.0.0:80", fn, &mif);
+  mg_timer_add(&mgr, BLINK_PERIOD_MS, MG_TIMER_REPEAT, timer_fn, mgr.ifp);
+  mg_http_listen(&mgr, "http://0.0.0.0:80", fn, mgr.ifp);
 
   MG_INFO(("Starting event loop"));
   for (;;) {

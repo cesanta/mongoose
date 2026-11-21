@@ -135,7 +135,6 @@ void mg_tcpip_arp_request(struct mg_tcpip_if *ifp, uint32_t ip, uint8_t *mac);
 // Built-in hardware drivers. Assign one to mg_tcpip_if.driver before calling
 // mg_tcpip_init(). Each driver also requires a corresponding driver_data
 // struct; see the matching driver header for details.
-extern struct mg_tcpip_driver mg_tcpip_driver_w5500;
 extern struct mg_tcpip_driver mg_tcpip_driver_w5100;
 extern struct mg_tcpip_driver mg_tcpip_driver_tm4c;
 extern struct mg_tcpip_driver mg_tcpip_driver_tms570;
@@ -159,6 +158,7 @@ extern struct mg_tcpip_driver mg_tcpip_driver_netc;
 #include "drivers/nrf52.h"
 #include "drivers/rw612w.h"
 #include "drivers/stm32f.h"
+#include "drivers/w5500.h"
 
 // SPI bus abstraction for SPI-attached network chips (e.g. W5500).
 // Populate and assign to the driver's driver_data field.
@@ -168,6 +168,10 @@ struct mg_tcpip_spi {
   void (*end)(void *);                                         // Deassert chip-select (end of transaction)
   void (*txn)(void *, uint8_t *write, uint8_t *read, size_t); // Full-duplex transfer: write and read len bytes simultaneously
 };
+
+// SPI bus for SPI-attached network chips, defined by the application.
+// Used by the drivers' INIT macros, e.g. MG_TCPIP_DRIVER_W5500_INIT
+extern struct mg_tcpip_spi mg_spi;
 
 // Alignment attributes for DMA-capable Ethernet descriptor buffers.
 // Use these on driver RX/TX descriptor arrays where the hardware requires
