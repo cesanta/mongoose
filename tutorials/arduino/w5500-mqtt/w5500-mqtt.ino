@@ -8,7 +8,8 @@
 #define LED_PIN 21              // LED pin
 
 struct mg_connection *mqtt_connection;
-struct mg_tcpip_spi spi = {
+// SPI bus used by the W5500 driver, see MG_TCPIP_DRIVER_W5500_INIT
+struct mg_tcpip_spi mg_spi = {
     NULL,  // SPI metadata
     [](void *) { digitalWrite(SS_PIN, LOW); SPI.beginTransaction(SPISettings()); },
     [](void *) { digitalWrite(SS_PIN, HIGH); SPI.endTransaction(); },
@@ -20,8 +21,7 @@ struct mg_tcpip_spi spi = {
         }       
       },
 };
-struct mg_mgr mgr;                                     // Mongoose event manager
-struct mg_tcpip_if mif = {.mac = {2, 0, 1, 2, 3, 5}};  // Network interface
+struct mg_mgr mgr;  // Mongoose event manager
 
 uint64_t mg_millis(void) {
   return millis();
@@ -79,7 +79,7 @@ static void mqtt_ev_handler(struct mg_connection *c, int ev, void *ev_data) {
 }
 
 void reconnect_if_not_connected(void) {
-  if (mif.state == MG_TCPIP_STATE_READY && mqtt_connection == NULL) {
+  if (mgr.ifp->state == MG_TCPIP_STATE_READY && mqtt_connection == NULL) {
     struct mg_mqtt_opts opts = {};
     opts.clean = true;
     mqtt_connection =
@@ -95,12 +95,9 @@ void setup() {
   pinMode(SS_PIN, OUTPUT);       // to communicate with W5500 Ethernet module
   pinMode(LED_PIN, OUTPUT);  // Initialise LED
 
-  mg_mgr_init(&mgr);        // Initialise Mongoose event manager
   mg_log_set(MG_LL_DEBUG);  // Set debug log level
   mg_log_set_fn([](char ch, void *) { Serial.print(ch); }, NULL);  // Log serial
-  mif.driver = &mg_tcpip_driver_w5500;  // Use W5500 built-in driver
-  mif.driver_data = &spi;               // Pass SPI interface to W5500 driver
-  mg_tcpip_init(&mgr, &mif);            // Initialise built-in TCP/IP stack
+  mg_mgr_init(&mgr);  // Initialise Mongoose event manager and W5500 driver
 }
 
 void loop() {

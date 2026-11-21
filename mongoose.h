@@ -113,7 +113,9 @@ extern "C" {
 
 
 #if MG_ARCH == MG_ARCH_ARMGCC
+#ifndef _POSIX_TIMERS  // Some newlib builds, e.g. Espressif's, define it
 #define _POSIX_TIMERS
+#endif
 
 #include <ctype.h>
 #if !defined(MG_ENABLE_LWIP) || !MG_ENABLE_LWIP
@@ -189,15 +191,17 @@ extern "C" {
 #define MG_TLS MG_TLS_BUILTIN
 #endif
 
-#if !defined(MG_OTA) && defined(STM32F1) || defined(STM32F2) || \
-    defined(STM32F4) || defined(STM32F7)
+#ifndef MG_OTA  // Pick OTA for the STM32 family, unless set by the user
+#if defined(STM32F1) || defined(STM32F2) || defined(STM32F4) || \
+    defined(STM32F7)
 #define MG_OTA MG_OTA_STM32F
-#elif !defined(MG_OTA) && defined(STM32H5)
+#elif defined(STM32H5)
 #define MG_OTA MG_OTA_STM32H5
-#elif !defined(MG_OTA) && defined(STM32H7)
+#elif defined(STM32H7)
 #define MG_OTA MG_OTA_STM32H7
-#elif !defined(MG_OTA) && defined(STM32C5)
+#elif defined(STM32C5)
 #define MG_OTA MG_OTA_STM32C5
+#endif
 #endif
 
 // use HAL-defined execute-in-ram section
@@ -4842,7 +4846,6 @@ void mg_tcpip_arp_request(struct mg_tcpip_if *ifp, uint32_t ip, uint8_t *mac);
 // Built-in hardware drivers. Assign one to mg_tcpip_if.driver before calling
 // mg_tcpip_init(). Each driver also requires a corresponding driver_data
 // struct; see the matching driver header for details.
-extern struct mg_tcpip_driver mg_tcpip_driver_w5500;
 extern struct mg_tcpip_driver mg_tcpip_driver_w5100;
 extern struct mg_tcpip_driver mg_tcpip_driver_tm4c;
 extern struct mg_tcpip_driver mg_tcpip_driver_tms570;
@@ -4867,6 +4870,7 @@ extern struct mg_tcpip_driver mg_tcpip_driver_netc;
 
 
 
+
 // SPI bus abstraction for SPI-attached network chips (e.g. W5500).
 // Populate and assign to the driver's driver_data field.
 struct mg_tcpip_spi {
@@ -4875,6 +4879,10 @@ struct mg_tcpip_spi {
   void (*end)(void *);                                         // Deassert chip-select (end of transaction)
   void (*txn)(void *, uint8_t *write, uint8_t *read, size_t); // Full-duplex transfer: write and read len bytes simultaneously
 };
+
+// SPI bus for SPI-attached network chips, defined by the application.
+// Used by the drivers' INIT macros, e.g. MG_TCPIP_DRIVER_W5500_INIT
+extern struct mg_tcpip_spi mg_spi;
 
 // Alignment attributes for DMA-capable Ethernet descriptor buffers.
 // Use these on driver RX/TX descriptor arrays where the hardware requires
@@ -6036,6 +6044,33 @@ struct mg_tcpip_driver_tms570_data {
   } while (0)
 #endif
 
+
+
+#if MG_ENABLE_TCPIP && defined(MG_ENABLE_DRIVER_W5500) && \
+    MG_ENABLE_DRIVER_W5500
+
+extern struct mg_tcpip_driver mg_tcpip_driver_w5500;
+
+// Initialises W5500 on mgr. The application defines
+// struct mg_tcpip_spi mg_spi. Example: tutorials/rp/w5500-evb-pico
+#define MG_TCPIP_DRIVER_W5500_INIT(mgr)                          \
+  do {                                                           \
+    static struct mg_tcpip_if mif_;                              \
+    mif_.ip = MG_TCPIP_IP;                                       \
+    mif_.mask = MG_TCPIP_MASK;                                   \
+    mif_.gw = MG_TCPIP_GW;                                       \
+    mif_.driver = &mg_tcpip_driver_w5500;                        \
+    mif_.driver_data = &mg_spi;                                  \
+    MG_SET_MAC_ADDRESS(mif_.mac);                                \
+    mg_tcpip_init((mgr), &mif_);                                 \
+    MG_INFO(("Driver: w5500, MAC: %M", mg_print_mac, mif_.mac)); \
+  } while (0)
+
+#ifndef MG_TCPIP_DRIVER_INIT
+#define MG_TCPIP_DRIVER_INIT(x) MG_TCPIP_DRIVER_W5500_INIT(x)
+#endif
+
+#endif
 
 
 #if MG_ENABLE_TCPIP && defined(MG_ENABLE_DRIVER_XMC) && MG_ENABLE_DRIVER_XMC

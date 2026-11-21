@@ -2,7 +2,6 @@
 // SPDX-License-Identifier: GPL-2.0-only or commercial
 
 #include "pico/stdlib.h"
-#include "pico/unique_id.h"
 #include "hardware/pio.h"
 
 #include "mongoose.h"
@@ -97,14 +96,6 @@ static void piospi_done(PIO pio, uint sm) {
     pio_interrupt_clear(pio, 0);
 }
 
-// Construct MAC address from the unique board ID
-void genmac(unsigned char *mac) {
-  pico_unique_board_id_t board_id;
-  pico_get_unique_board_id(&board_id);
-  mac[0] = 2;
-  memcpy(&mac[1], &board_id.id[3], 5);
-}
-
 static pio_sm_config s_piospi_sm_config;
 static uint s_piospi_sm_addr;
 
@@ -142,22 +133,25 @@ static void piospi_read(uint8_t *data, size_t len) {
   piospi_done(SPIPIO, SPISM);
 }
 
-void spi_begin(void *spi) {
+static void spi_begin(void *spi) {
   (void) spi;
   gpio_put(CSPIN, 0);
 }
 
-void spi_end(void *spi) {
+static void spi_end(void *spi) {
   (void) spi;
   gpio_put(CSPIN, 1);
 }
 
 // either write or read, not both
-void spi_txn(void *arg, uint8_t *txdata, uint8_t *rxdata, size_t len) {
+static void spi_txn(void *arg, uint8_t *txdata, uint8_t *rxdata, size_t len) {
   if (txdata != NULL) piospi_write(txdata, len);
   if (rxdata != NULL) piospi_read(rxdata, len);
   (void) arg;
 }
+
+// SPI bus used by the W5500 driver, see MG_TCPIP_DRIVER_W5500_INIT
+struct mg_tcpip_spi mg_spi = {NULL, spi_begin, spi_end, spi_txn};
 
 
 static void blink_task(void) {
