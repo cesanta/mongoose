@@ -94,6 +94,10 @@
 #define MG_ENABLE_CUSTOM_MILLIS 0
 #endif
 
+#ifndef MG_ENABLE_CUSTOM_MICROS
+#define MG_ENABLE_CUSTOM_MICROS 0
+#endif
+
 #ifndef MG_ENABLE_ASSERT
 #define MG_ENABLE_ASSERT 0
 #endif

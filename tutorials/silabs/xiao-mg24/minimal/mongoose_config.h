@@ -8,7 +8,7 @@
 
 #define MG_ENABLE_TCPIP 1
 #define MG_ENABLE_DRIVER_MG24 1
-#define MG_ENABLE_CUSTOM_MILLIS 1
+#define MG_ENABLE_CUSTOM_MICROS 1
 #define MG_ENABLE_CUSTOM_RANDOM 1  // Secure Engine TRNG, see hal.c
 #define MG_ENABLE_TCPIP_TCPRTX 1  // Link can be lossy, enable retransmit
 

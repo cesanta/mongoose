@@ -23,7 +23,6 @@ static void mg_mg24_rx_frame(RAIL_Handle_t h) {
   RAIL_RxPacketInfo_t info;
   uint8_t f[128];
   size_t n;
-  char *dst;
   if (RAIL_GetRxPacketInfo(h, RAIL_RX_PACKET_HANDLE_NEWEST, &info) ==
           RAIL_RX_PACKET_HANDLE_INVALID ||
       info.packetStatus != RAIL_RX_PACKET_READY_SUCCESS ||
@@ -33,12 +32,7 @@ static void mg_mg24_rx_frame(RAIL_Handle_t h) {
   RAIL_CopyRxPacket(f, &info);
   n = info.packetBytes - 1U;  // Strip PHR
   if (n == f[0]) n -= 2;      // FCS stored, strip it
-  if (mg_queue_book(&s_mg24_rx, &dst, n) >= n) {
-    memcpy(dst, f + 1, n);
-    mg_queue_add(&s_mg24_rx, n);
-  } else {
-    s_mg24_ifp->ndrop++;
-  }
+  mg_mesh_rx_queue(&s_mg24_rx, s_mg24_ifp, f + 1, n);
 }
 
 // RAIL event callback, runs in interrupt context
@@ -136,8 +130,6 @@ static bool mgi_mg24_poll(struct mg_tcpip_if *ifp, bool s1) {
   struct mg_tcpip_driver_mg24_data *data = ifp->driver_data;
   struct mg_mesh_node *node = data->mesh;
   uint64_t now = mg_micros();
-  char *buf;
-  size_t len;
   (void) s1;
   node->now = now;
   if (s_mg24_txing && (s_mg24_tx_done || RAIL_GetTime() - s_mg24_txstart >
@@ -149,10 +141,7 @@ static bool mgi_mg24_poll(struct mg_tcpip_if *ifp, bool s1) {
     s_mg24_txing = false;
     node->tx_at = now + node->strategy->radio->ifs_us;
   }
-  while (node->rx_len == 0 && (len = mg_queue_next(&s_mg24_rx, &buf)) != 0) {
-    node->strategy->rx(node, buf, len);
-    mg_queue_del(&s_mg24_rx, len);
-  }
+  mg_mesh_rx_drain(node, &s_mg24_rx);
   node->strategy->tick(node, now);
   return node->joined;
 }
@@ -162,10 +151,10 @@ static bool mgi_mg24_init(struct mg_tcpip_if *ifp) {
   uint16_t address =
       (uint16_t) (2 + ((unsigned) ifp->mac[4] * 256 + ifp->mac[5]) % 65532u);
   if (strategy == NULL) strategy = &mg_mesh_default;
-  data->mesh = calloc(1, sizeof(*data->mesh));
+  data->mesh = mg_calloc(1, sizeof(*data->mesh));
   if (data->mesh == NULL) return false;
   if (!strategy->init(data->mesh, ifp, NULL, address)) {
-    free(data->mesh);
+    mg_free(data->mesh);
     data->mesh = NULL;
     return false;
   }
@@ -174,7 +163,7 @@ static bool mgi_mg24_init(struct mg_tcpip_if *ifp) {
   mg_queue_init(&s_mg24_rx, s_mg24_rxbuf, sizeof(s_mg24_rxbuf));
   if (mgi_mg24_radio_init(ifp)) return true;
   data->mesh->strategy->free(data->mesh);
-  free(data->mesh);
+  mg_free(data->mesh);
   data->mesh = NULL;
   return false;
 }

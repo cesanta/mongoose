@@ -1,0 +1,8 @@
+CONFIG_IDF_TARGET="esp32c6"
+CONFIG_ESPTOOLPY_FLASHSIZE_4MB=y
+CONFIG_ESP_CONSOLE_USB_SERIAL_JTAG=y
+CONFIG_IEEE802154_ENABLED=y
+# Built-in TLS handshakes need a larger stack
+CONFIG_ESP_MAIN_TASK_STACK_SIZE=12288
+# The main task busy-loops the mesh, so the idle task does not run
+CONFIG_ESP_TASK_WDT_CHECK_IDLE_TASK_CPU0=n

@@ -138,15 +138,7 @@ static void mg_rw612_control(uint8_t subtype, uint32_t a, uint32_t b,
 }
 
 static void mg_rw612_queue_rx(const uint8_t *frame, size_t len) {
-  {
-    char *dst;
-    if (mg_queue_book(&s_rw612w_rx, &dst, len) >= len) {
-      memcpy(dst, frame, len);
-      mg_queue_add(&s_rw612w_rx, len);
-    } else {
-      s_rw612.ifp->ndrop++;
-    }
-  }
+  mg_mesh_rx_queue(&s_rw612w_rx, s_rw612.ifp, frame, len);
 }
 
 // Spinel packed unsigned integer: 7 bits per byte, LSB first
@@ -457,8 +449,6 @@ static bool mgi_rw612w_poll(struct mg_tcpip_if *ifp, bool s1) {
   struct mg_tcpip_driver_rw612w_data *data = ifp->driver_data;
   struct mg_mesh_node *node = data->mesh;
   uint64_t now = mg_micros();
-  char *buf;
-  size_t len;
   (void) s1;
   bool was_sending = s_rw612.txing;
   mg_rw612_poll_imu();
@@ -470,10 +460,7 @@ static bool mgi_rw612w_poll(struct mg_tcpip_if *ifp, bool s1) {
   if (was_sending && !s_rw612.txing)
     node->tx_at = now + node->strategy->radio->ifs_us;
   node->now = now;
-  while (node->rx_len == 0 && (len = mg_queue_next(&s_rw612w_rx, &buf)) != 0) {
-    node->strategy->rx(node, buf, len);
-    mg_queue_del(&s_rw612w_rx, len);
-  }
+  mg_mesh_rx_drain(node, &s_rw612w_rx);
   node->strategy->tick(node, now);
   return node->joined;
 }
@@ -491,10 +478,10 @@ static bool mgi_rw612w_init(struct mg_tcpip_if *ifp) {
   address =
       (uint16_t) (2 + ((unsigned) ifp->mac[4] * 256 + ifp->mac[5]) % 65532u);
   if (strategy == NULL) strategy = &mg_mesh_default;
-  data->mesh = calloc(1, sizeof(*data->mesh));
+  data->mesh = mg_calloc(1, sizeof(*data->mesh));
   if (data->mesh == NULL) return false;
   if (!strategy->init(data->mesh, ifp, NULL, address)) {
-    free(data->mesh);
+    mg_free(data->mesh);
     data->mesh = NULL;
     return false;
   }
@@ -503,7 +490,7 @@ static bool mgi_rw612w_init(struct mg_tcpip_if *ifp) {
   mg_queue_init(&s_rw612w_rx, s_rw612w_queue, sizeof(s_rw612w_queue));
   if (mgi_rw612w_radio_init(ifp)) return true;
   strategy->free(data->mesh);
-  free(data->mesh);
+  mg_free(data->mesh);
   data->mesh = NULL;
   return false;
 }

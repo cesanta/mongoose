@@ -113,7 +113,9 @@ extern "C" {
 
 
 #if MG_ARCH == MG_ARCH_ARMGCC
+#ifndef _POSIX_TIMERS  // Some newlib builds, e.g. Espressif's, define it
 #define _POSIX_TIMERS
+#endif
 
 #include <ctype.h>
 #if !defined(MG_ENABLE_LWIP) || !MG_ENABLE_LWIP
@@ -189,15 +191,17 @@ extern "C" {
 #define MG_TLS MG_TLS_BUILTIN
 #endif
 
-#if !defined(MG_OTA) && defined(STM32F1) || defined(STM32F2) || \
-    defined(STM32F4) || defined(STM32F7)
+#ifndef MG_OTA  // Pick OTA for the STM32 family, unless set by the user
+#if defined(STM32F1) || defined(STM32F2) || defined(STM32F4) || \
+    defined(STM32F7)
 #define MG_OTA MG_OTA_STM32F
-#elif !defined(MG_OTA) && defined(STM32H5)
+#elif defined(STM32H5)
 #define MG_OTA MG_OTA_STM32H5
-#elif !defined(MG_OTA) && defined(STM32H7)
+#elif defined(STM32H7)
 #define MG_OTA MG_OTA_STM32H7
-#elif !defined(MG_OTA) && defined(STM32C5)
+#elif defined(STM32C5)
 #define MG_OTA MG_OTA_STM32C5
+#endif
 #endif
 
 // use HAL-defined execute-in-ram section
@@ -1222,6 +1226,10 @@ struct timeval {
 
 #ifndef MG_ENABLE_CUSTOM_MILLIS
 #define MG_ENABLE_CUSTOM_MILLIS 0
+#endif
+
+#ifndef MG_ENABLE_CUSTOM_MICROS
+#define MG_ENABLE_CUSTOM_MICROS 0
 #endif
 
 #ifndef MG_ENABLE_ASSERT
@@ -3430,11 +3438,13 @@ size_t mg_ws_vprintf(struct mg_connection *c, int op, const char *fmt,
 
 
 
-// Return milliseconds since boot (uptime). Never goes backwards.
-// On RTOS targets (FreeRTOS, ThreadX, Zephyr, etc.) uses the RTOS tick count.
-// On STM32/Cube uses HAL_GetTick(). On Arduino uses millis().
-// On Linux/macOS uses CLOCK_MONOTONIC_RAW or CLOCK_MONOTONIC; falls back to
-// CLOCK_REALTIME if neither is available.
+// Return microseconds since boot. Never goes backwards.
+// To define your own implementation, set MG_ENABLE_CUSTOM_MICROS=1
+uint64_t mg_micros(void);
+
+// Return milliseconds since boot. Never goes backwards. Calls mg_micros().
+// To define your own implementation, set MG_ENABLE_CUSTOM_MILLIS=1
+// Deprecated: use mg_micros() instead.
 uint64_t mg_millis(void);
 
 // Boot timestamp in ms since Epoch. 0 until the first successful SNTP sync;
@@ -4867,6 +4877,7 @@ extern struct mg_tcpip_driver mg_tcpip_driver_netc;
 
 
 
+
 // SPI bus abstraction for SPI-attached network chips (e.g. W5500).
 // Populate and assign to the driver's driver_data field.
 struct mg_tcpip_spi {
@@ -4933,9 +4944,6 @@ struct mg_tcpip_spi {
 
 #if MG_ENABLE_TCPIP
 
-// Monotonic time in microseconds.
-uint64_t mg_micros(void);
-
 // A radio standard
 struct mg_radio {
   const char *name;        // For logs
@@ -4965,6 +4973,21 @@ struct mg_radio {
 #define MG_802154_CHANNEL 15
 #endif
 
+// A turn's answer must arrive this soon after the turn's last frame ends on
+// air, or the turn ends. A node that would answer later stays silent and keeps
+// its frame for the next turn. Covers the node's poll latency, the radio
+// turnaround and one full fragment's airtime, 4.3 ms on 802.15.4
+#ifndef MG_MESH_ANSWER_TIMEOUT_US
+#define MG_MESH_ANSWER_TIMEOUT_US 8000
+#endif
+
+// Misses in a row before giving up, 1 to 127. The bridge removes a member
+// that did not answer this many turns. A node leaves the mesh after this
+// many rounds without a turn
+#ifndef MG_MESH_MAX_MISSES
+#define MG_MESH_MAX_MISSES 10
+#endif
+
 extern const struct mg_radio mg_radio_802154;
 
 struct mg_mesh_node {
@@ -4974,6 +4997,7 @@ struct mg_mesh_node {
   size_t (*tx)(struct mg_tcpip_if *, const void *, size_t);  // Radio frame TX
   size_t rx_len;           // Complete Ethernet frame in the interface RX buffer
   uint64_t now;            // Current driver poll time, us
+  uint64_t rx_at;          // Arrival time of the radio frame being handled, us
   uint64_t tx_at;          // Earliest next transmission, us
   void *data;              // Private state owned by the strategy
   size_t ram_used;         // Live mesh state bytes
@@ -4997,6 +5021,18 @@ struct mg_mesh {
 };
 
 extern const struct mg_mesh mg_mesh_default;
+
+// Put a received radio frame into the driver's receive queue, together with
+// its arrival time from mg_micros(). Call it when the frame arrives, from the
+// radio interrupt if the driver has one. If the queue is full, the frame is
+// dropped and counted in ifp->ndrop
+void mg_mesh_rx_queue(struct mg_queue *q, struct mg_tcpip_if *ifp,
+                      const void *frame, size_t len);
+
+// Pass queued radio frames to the mesh, oldest first. Before each frame,
+// node->rx_at is set to its arrival time. Stops while the node holds a
+// received Ethernet frame the TCP/IP stack has not taken yet
+void mg_mesh_rx_drain(struct mg_mesh_node *node, struct mg_queue *q);
 
 #endif
 
@@ -5303,6 +5339,46 @@ struct mg_tcpip_driver_cyw_data {
     mg_tcpip_init(mgr, &mif_);                                 \
     MG_INFO(("Driver: cyw, MAC: %M", mg_print_mac, mif_.mac)); \
   } while (0)
+
+#endif
+// Copyright (c) 2026 Cesanta Software Limited
+// All rights reserved
+
+
+
+#if MG_ENABLE_TCPIP && defined(MG_ENABLE_DRIVER_ESP32_802154) && \
+    MG_ENABLE_DRIVER_ESP32_802154
+
+// ESP32-C6 IEEE 802.15.4 radio, as an Ethernet interface through the mesh.
+// Needs MG_ARCH_ESP32 and CONFIG_IEEE802154_ENABLED: it uses ESP-IDF's
+// esp_ieee802154 driver, and defines its esp_ieee802154_receive_done(),
+// esp_ieee802154_transmit_done() and esp_ieee802154_transmit_failed()
+// callbacks. See tutorials/esp32/minimal-802.15.4
+struct mg_tcpip_driver_esp32_802154_data {
+  struct mg_mesh_node *mesh;       // Driver-owned runtime state
+  const struct mg_mesh *strategy;  // NULL selects mg_mesh_default
+};
+
+extern struct mg_tcpip_driver mg_tcpip_driver_esp32_802154;
+
+#define MG_TCPIP_DRIVER_ESP32_802154_INIT(manager)                      \
+  do {                                                                  \
+    static struct mg_tcpip_driver_esp32_802154_data driver_data_;       \
+    static struct mg_tcpip_if mif_;                                     \
+    MG_SET_MAC_ADDRESS(mif_.mac);                                       \
+    mif_.ip = MG_TCPIP_IP;                                              \
+    mif_.mask = MG_TCPIP_MASK;                                          \
+    mif_.gw = MG_TCPIP_GW;                                              \
+    mif_.mgr = (manager);                                               \
+    mif_.driver = &mg_tcpip_driver_esp32_802154;                        \
+    mif_.driver_data = &driver_data_;                                   \
+    mg_tcpip_init((manager), &mif_);                                    \
+    MG_INFO(("Driver: esp32_802154, MAC: %M", mg_print_mac, mif_.mac)); \
+  } while (0)
+
+#ifndef MG_TCPIP_DRIVER_INIT
+#define MG_TCPIP_DRIVER_INIT(x) MG_TCPIP_DRIVER_ESP32_802154_INIT(x)
+#endif
 
 #endif
 
