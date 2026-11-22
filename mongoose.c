@@ -6352,13 +6352,6 @@ size_t mg_l2_eth_trailer(struct mg_tcpip_if *ifp, size_t len, uint8_t *cur) {
 struct mg_l2addr *mg_l2_eth_mapip(enum mg_l2addrtype addrtype,
                                   struct mg_addr *addr);
 
-// Read an unaligned little-endian value from byte pointer p into a native integer.
-// Safe on architectures that forbid unaligned access (e.g. Cortex-M0).
-#define MG_LOAD_LE32(p)                           \
-  ((uint32_t) (((uint32_t) MG_U8P(p)[3] << 24U) | \
-               ((uint32_t) MG_U8P(p)[2] << 16U) | \
-               ((uint32_t) MG_U8P(p)[1] << 8U) | MG_U8P(p)[0]))
-
 bool mg_l2_eth_rx(struct mg_tcpip_if *ifp, enum mg_l2proto *proto,
                   struct mg_str *pay, struct mg_str *raw) {
   struct eth *eth = (struct eth *) raw->buf;
@@ -9814,6 +9807,7 @@ void mg_multicast_restore(struct mg_connection *c, uint8_t *from) {
 
 
 
+
 #if MG_ENABLE_TCPIP
 #define MG_EPHEMERAL_PORT_BASE 32768
 #define PDIFF(a, b) ((size_t) (((char *) (b)) - ((char *) (a))))
@@ -12098,6 +12092,7 @@ void mg_tcpip_qwrite(void *buf, size_t len, struct mg_tcpip_if *ifp) {
 }
 
 void mg_tcpip_init(struct mg_mgr *mgr, struct mg_tcpip_if *ifp) {
+  mg_usb_init();  // Early, so that the log reaches the USB serial port
   // If L2 address is not set, make a random one; fill MTU
   mg_l2_init(ifp);
   ifp->mtu = ifp->l2mtu;
@@ -12264,6 +12259,7 @@ void mg_mgr_poll(struct mg_mgr *mgr, int ms) {
   mg_timer_poll(&mgr->timers, now);
   mg_ota_poll(mgr);
   mg_mdash_poll(mgr);
+  mg_usb_poll();  // Also without a TCP/IP interface: USB serial only
   if (mgr->ifp == NULL || mgr->ifp->driver == NULL) return;
   mg_tcpip_poll(mgr->ifp, now);
   for (c = mgr->conns; c != NULL; c = tmp) {
@@ -37781,6 +37777,974 @@ struct mg_tcpip_driver mg_tcpip_driver_tms570 = {mg_tcpip_driver_tms570_init,
                                                mg_tcpip_driver_tms570_poll};
 #endif
 
+
+#ifdef MG_ENABLE_LINES
+#line 1 "src/drivers/usb.c"
+#endif
+
+
+
+#if MG_ENABLE_USB
+
+// Interfaces: NCM control and data 0/1 if enabled, then ACM control and data
+#define MG_USB_SERIAL_IF (2 * MG_ENABLE_USB_ETHERNET)
+#define MG_USB_NUM_IFS (2 * MG_ENABLE_USB_ETHERNET + 2 * MG_ENABLE_USB_SERIAL)
+#define MG_USB_CONFIG_LEN \
+  (9 + 85 * MG_ENABLE_USB_ETHERNET + 66 * MG_ENABLE_USB_SERIAL)
+#if MG_ENABLE_USB_ETHERNET
+#define MG_USB_PRODUCT "MongooseUsbEthernet"
+#else
+#define MG_USB_PRODUCT "MongooseUsbSerial"
+#endif
+
+// 0xdead is our example VID, for development only
+static const uint8_t s_device_desc[] = {
+    18, 1, 1, 2, 0xef, 2, 1, 64, 0xde, 0xad, 0xe4, 0x40, 0, 1, 1, 2, 3, 1};
+
+// NCM: endpoints 0x81, 0x02/0x82. ACM: endpoints 0x83, 0x04/0x84
+static const uint8_t s_config_desc[] = {
+    9, 2, MG_USB_CONFIG_LEN, 0, MG_USB_NUM_IFS, 1, 0, 0x80, 50,  // Config
+#if MG_ENABLE_USB_ETHERNET
+    8,  11,   0,    2,    2,  13,   0,  4,         // NCM association
+    9,  4,    0,    0,    1,  2,    13, 0,    4,   // NCM control interface
+    5,  0x24, 0,    0x20, 1,                       // CDC header
+    5,  0x24, 6,    0,    1,                       // Union
+    13, 0x24, 15,   5,    0,  0,    0,  0,    0xea,
+    5,  0,    0,    0,                            // Eth, 1514 bytes
+    6,  0x24, 0x1a, 0,    1,  0x21,               // NCM 1.0
+    7,  5,    0x81, 3,    16, 0,    16,           // Notification endpoint
+    9,  4,    1,    0,    0,  10,   0,  1,    0,  // Data interface, off
+    9,  4,    1,    1,    2,  10,   0,  1,    0,  // Data interface, on
+    7,  5,    0x02, 2,    64, 0,    0,            // Data OUT
+    7,  5,    0x82, 2,    64, 0,    0,            // Data IN
+#endif
+#if MG_ENABLE_USB_SERIAL
+    8, 11, MG_USB_SERIAL_IF, 2, 2, 2, 1, 6,          // ACM association
+    9, 4, MG_USB_SERIAL_IF, 0, 1, 2, 2, 1, 6,        // ACM control interface
+    5, 0x24, 0, 0x20, 1,                             // CDC header
+    5, 0x24, 1, 0, MG_USB_SERIAL_IF + 1,             // Call management
+    4, 0x24, 2, 2,                                   // ACM
+    5, 0x24, 6, MG_USB_SERIAL_IF, MG_USB_SERIAL_IF + 1,  // Union
+    7, 5, 0x83, 3, 16, 0, 16,                        // Notification endpoint
+    9, 4, MG_USB_SERIAL_IF + 1, 0, 2, 10, 0, 0, 0,   // Data interface
+    7, 5, 0x04, 2, 64, 0, 0,                         // Data OUT
+    7, 5, 0x84, 2, 64, 0, 0,                         // Data IN
+#endif
+};
+
+// Endpoint addresses, for CLEAR_FEATURE(ENDPOINT_HALT)
+static const uint8_t s_endpoints[] = {
+#if MG_ENABLE_USB_ETHERNET
+    0x81, 0x02, 0x82,
+#endif
+#if MG_ENABLE_USB_SERIAL
+    0x83, 0x04, 0x84,
+#endif
+};
+
+#if MG_ENABLE_USB_ETHERNET
+// Windows 11 binds its NCM driver through a Microsoft OS 2.0 compatible ID
+static const uint8_t s_ms_os_desc[] = {
+    10, 0, 0, 0, 0,   0,   3,   6,   46,  0,    // Set header, Windows 8.1+
+    8,  0, 1, 0, 0,   0,   36,  0,              // Configuration subset
+    8,  0, 2, 0, 0,   0,   28,  0,              // Function subset, NCM
+    20, 0, 3, 0, 'W', 'I', 'N', 'N', 'C', 'M',  // Compatible ID
+    0,  0, 0, 0, 0,   0,   0,   0,   0,   0};
+static const uint8_t s_bos_desc[] = {
+    5,    15,   33,   0,    1,    28,   16,   5,    0,    0xdf,
+    0x60, 0xdd, 0xd8, 0x89, 0x45, 0xc7, 0x4c, 0x9c, 0xd2, 0x65,
+    0x9d, 0x9e, 0x64, 0x8a, 0x9f, 0,    0,    3,    6,    sizeof(s_ms_os_desc),
+    0,    1,    0};
+
+// GET_NTB_PARAMETERS reply: NTB16 only, same limits both ways
+static const uint8_t s_ntb_params[] = {
+    28, 0, 1,  0, MG_USB_NTB_SIZE & 255, MG_USB_NTB_SIZE >> 8, 0, 0, 4, 0, 0, 0,
+    4,  0, 0,  0, MG_USB_NTB_SIZE & 255, MG_USB_NTB_SIZE >> 8, 0, 0, 4, 0, 0, 0,
+    4,  0, 16, 0};
+
+// Link notifications: speed 12 Mbit/s both ways, connected, disconnected
+static const uint8_t s_speed[] = {0xa1, 0x2a, 0,    0, 0, 0,    8,    0,
+                                  0,    0x1b, 0xb7, 0, 0, 0x1b, 0xb7, 0};
+static const uint8_t s_up[] = {0xa1, 0, 1, 0, 0, 0, 0, 0};
+static const uint8_t s_down[] = {0xa1, 0, 0, 0, 0, 0, 0, 0};
+
+// Transfer block header for one frame: NTH16, NDP16 with one datagram at
+// offset 30, so that the IP header after the 14-byte Ethernet header lands
+// on a 4-byte boundary
+static const uint8_t s_nth[30] = {'N', 'C', 'M', 'H', 12,  0,   0,  0, 0, 0,
+                                  12,  0,   'N', 'C', 'M', '0', 16, 0, 0, 0,
+                                  30,  0,   0,   0,   0,   0,   0,  0, 0, 0};
+#endif
+
+// Build string descriptor i in u->buf. Returns its length, 0 if none
+static int string_desc(struct mg_usb *u, unsigned i) {
+  static const char *strings[] = {
+      NULL,         "Mongoose", MG_USB_PRODUCT, NULL,
+      "USB Ethernet", NULL,     "USB Serial"};
+  const char *s = i < 7 ? strings[i] : NULL;
+#if MG_ENABLE_USB_ETHERNET
+  char mac[13];
+#endif
+  size_t k, n;
+  if (i == 0) return u->buf[0] = 4, u->buf[1] = 3, u->buf[2] = 9, u->buf[3] = 4;
+  if (i == 3) s = u->serial;
+#if MG_ENABLE_USB_ETHERNET
+  if (i == 5) {  // Host end of the link: the device MAC, first byte changed
+    uint8_t *m = u->ifp->mac;
+    mg_snprintf(mac, sizeof(mac), "%02X%02X%02X%02X%02X%02X",
+                ((m[0] ^ 4) | 2) & ~1, m[1], m[2], m[3], m[4], m[5]);
+    s = mac;
+  }
+#endif
+  if (s == NULL) return 0;
+  n = strlen(s) > 32 ? 32 : strlen(s);
+  memset(u->buf, 0, sizeof(u->buf));
+  for (k = 0; k < n; k++) u->buf[2 + k * 2] = (uint8_t) s[k];
+  u->buf[0] = (uint8_t) (2 + n * 2), u->buf[1] = 3;
+  return u->buf[0];
+}
+
+void mg_usb_reset(struct mg_usb *u) {
+#if MG_ENABLE_USB_SERIAL
+  static const uint8_t line[7] = {0, 0xc2, 1, 0, 0, 0, 8};  // 115200 8N1
+  u->dtr = false;
+  memcpy(u->line, line, sizeof(line));
+#endif
+#if MG_ENABLE_USB_ETHERNET
+  u->alt = false, u->filter = u->sequence = 0, u->notify = 0;
+  u->input_size = MG_USB_NTB_SIZE;
+#endif
+  u->configured = false;
+}
+
+int mg_usb_setup(struct mg_usb *u, const uint8_t *r, const void **reply) {
+  unsigned value = MG_LOAD_LE16(r + 2), index = MG_LOAD_LE16(r + 4);
+  unsigned wlen = MG_LOAD_LE16(r + 6);
+  const void *d = u->buf;
+  int n = 0;
+  switch ((r[0] << 8) | r[1]) {
+    case 0x8006:  // GET_DESCRIPTOR
+      if (value >> 8 == 1) d = s_device_desc, n = sizeof(s_device_desc);
+      if (value >> 8 == 2) d = s_config_desc, n = sizeof(s_config_desc);
+#if MG_ENABLE_USB_ETHERNET
+      if (value >> 8 == 15) d = s_bos_desc, n = sizeof(s_bos_desc);
+#endif
+      if (value >> 8 == 3) n = string_desc(u, value & 255);
+      if (n == 0) return -1;
+      break;
+    case 0x0005:  // SET_ADDRESS, applied by the driver after the status
+      if (value > 127) return -1;
+      break;
+    case 0x0009:  // SET_CONFIGURATION
+      if (value > 1) return -1;
+      mg_usb_reset(u);
+      u->configured = value == 1;
+      break;
+    case 0x8008:  // GET_CONFIGURATION
+      u->buf[0] = u->configured, n = 1;
+      break;
+    case 0x010b:  // SET_INTERFACE: only the Ethernet data interface has 1
+      if (index >= MG_USB_NUM_IFS ||
+          value > (unsigned) (MG_ENABLE_USB_ETHERNET && index == 1))
+        return -1;
+#if MG_ENABLE_USB_ETHERNET
+      if (index == 1) u->alt = value == 1, u->notify = 1;
+#endif
+      break;
+    case 0x810a:  // GET_INTERFACE
+      u->buf[0] = 0, n = 1;
+#if MG_ENABLE_USB_ETHERNET
+      if (index == 1) u->buf[0] = u->alt;
+#endif
+      break;
+#if MG_ENABLE_USB_ETHERNET
+    case 0xa183:  // GET_NTB_FORMAT: NTB16
+#endif
+    case 0x8000:  // GET_STATUS: device, interface, endpoint
+    case 0x8100:
+    case 0x8200:
+      u->buf[0] = u->buf[1] = 0, n = 2;
+      break;
+    case 0x0201:  // CLEAR_FEATURE(ENDPOINT_HALT), applied by the driver
+      if (value || index > 255 ||
+          !memchr(s_endpoints, (int) index, sizeof(s_endpoints)))
+        return -1;
+      break;
+#if MG_ENABLE_USB_ETHERNET
+    case 0xc001:  // Microsoft OS 2.0 descriptor set
+      if (index != 7) return -1;
+      d = s_ms_os_desc, n = sizeof(s_ms_os_desc);
+      break;
+    case 0x2143:  // SET_ETHERNET_PACKET_FILTER
+      u->filter = (uint16_t) value;
+      break;
+    case 0xa180:  // GET_NTB_PARAMETERS
+      d = s_ntb_params, n = sizeof(s_ntb_params);
+      break;
+    case 0x2184:  // SET_NTB_FORMAT: NTB16 only
+      if (value) return -1;
+      break;
+    case 0xa185:  // GET_NTB_INPUT_SIZE, one datagram per block
+      memset(u->buf, 0, 8);
+      MG_STORE_LE32(u->buf, u->input_size);
+      u->buf[4] = 1, n = 8;
+      break;
+    case 0x2186:  // SET_NTB_INPUT_SIZE
+      if ((wlen != 4 && wlen != 8) || MG_LOAD_LE32(r + 8) < 2048 ||
+          MG_LOAD_LE32(r + 8) > 65535)
+        return -1;
+      u->input_size = MG_LOAD_LE32(r + 8);
+      if (u->input_size > MG_USB_NTB_SIZE) u->input_size = MG_USB_NTB_SIZE;
+      break;
+#endif
+#if MG_ENABLE_USB_SERIAL
+    case 0xa121:  // GET_LINE_CODING
+      d = u->line, n = sizeof(u->line);
+      break;
+    case 0x2120:  // SET_LINE_CODING
+      if (wlen != sizeof(u->line)) return -1;
+      memcpy(u->line, r + 8, sizeof(u->line));
+      break;
+    case 0x2122:  // SET_CONTROL_LINE_STATE. Closed at 1200 baud: bootloader,
+      u->dtr = value & 1;  // after a delay that lets this request complete
+      if (!u->dtr && MG_LOAD_LE32(u->line) == 1200)
+        u->reboot = mg_millis() + 100;
+      break;
+    case 0x2123:  // SEND_BREAK
+      break;
+#endif
+    default:
+      return -1;
+  }
+  *reply = d;
+  return n > (int) wlen ? (int) wlen : n;
+}
+
+#if MG_ENABLE_USB_ETHERNET
+size_t mg_usb_notify(struct mg_usb *u, const void **msg) {
+  if (!u->notify) return 0;
+  if (u->notify == 1 && u->alt) return u->notify = 2, *msg = s_speed, 16;
+  u->notify = 0, *msg = u->alt ? s_up : s_down;
+  return 8;
+}
+
+size_t mg_usb_encode(struct mg_usb *u, uint8_t *p, const void *buf,
+                     size_t len) {
+  if (!u->alt || !u->filter || len < 14 || len > 1514 ||
+      len + 30 > u->input_size)
+    return 0;
+  memcpy(p, s_nth, sizeof(s_nth));
+  MG_STORE_LE16(p + 6, u->sequence);
+  MG_STORE_LE16(p + 8, len + 30);
+  MG_STORE_LE16(p + 22, len);
+  memcpy(p + 30, buf, len);
+  u->sequence++;
+  return len + 30;
+}
+
+// Offsets come from the host: bound every datagram by the block, and follow
+// at most 16 datagram tables so that a cyclic chain cannot loop forever
+void mg_usb_decode(struct mg_usb *u, const uint8_t *p, size_t len) {
+  size_t block, ndp, end, i, ofs, n, tables = 0;
+  if (len < 12 || MG_LOAD_LE32(p) != 0x484d434e) return;  // "NCMH"
+  block = MG_LOAD_LE16(p + 8), ndp = MG_LOAD_LE16(p + 10);
+  if (block > len) return;
+  while (ndp && tables++ < 16 && ndp + 16 <= block &&
+         MG_LOAD_LE32(p + ndp) == 0x304d434e) {  // "NCM0"
+    end = ndp + MG_LOAD_LE16(p + ndp + 4);
+    for (i = ndp + 8; i + 4 <= end && end <= block; i += 4) {
+      ofs = MG_LOAD_LE16(p + i), n = MG_LOAD_LE16(p + i + 2);
+      if (ofs == 0 || n == 0) break;
+      if (n >= 14 && n <= 1514 && ofs + n <= block)
+        mg_tcpip_qwrite((void *) (p + ofs), n, u->ifp);
+    }
+    ndp = MG_LOAD_LE16(p + ndp + 6);
+  }
+}
+#endif
+
+#if MG_ENABLE_USB_SERIAL
+void mg_usb_log(char ch, void *arg) {
+  struct mg_usb *u = (struct mg_usb *) arg;
+  if (u->head - u->tail >= MG_USB_LOG_SIZE) u->tail++;
+  u->log[u->head++ % MG_USB_LOG_SIZE] = ch;
+}
+
+size_t mg_usb_log_read(struct mg_usb *u, void *buf, size_t len) {
+  size_t n = 0;
+  while (n < len && u->tail != u->head) {
+    ((char *) buf)[n++] = u->log[u->tail++ % MG_USB_LOG_SIZE];
+  }
+  return n;
+}
+#endif
+
+#endif
+
+#ifdef MG_ENABLE_LINES
+#line 1 "src/drivers/usb_nrf52.c"
+#endif
+
+
+
+
+#if MG_ENABLE_USB && MG_ENABLE_DRIVER_USB_NRF52
+#include <nrf.h>
+
+// nRF52840 USB device controller, polled, full speed. Endpoint buffers are
+// inside the controller: EasyDMA moves each packet between them and RAM,
+// one transfer at a time, so longer IN transfers go out 64 bytes at a time.
+// EasyDMA reads RAM only, thus constant data is copied to RAM first. The
+// controller handles SET_ADDRESS by itself. Errata workarounds follow
+// Nordic's nrfx_usbd.c: 171, 187 when enabling, 199 around each DMA
+
+#define ERRATA_199 (*(volatile uint32_t *) 0x40027c1c)
+
+struct nrf_in {         // IN transfer on an endpoint
+  const uint8_t *data;  // Bytes still to send, in RAM
+  size_t left;          // How many
+  unsigned packets;     // Packets still to send
+  bool busy;            // A packet is waiting for the host
+};
+
+static struct nrf_in s_in[5];  // Index: endpoint number
+static struct mg_usb s_usb;
+static uint8_t s_req[16];        // SETUP packet, then its OUT data stage
+static uint32_t s_ep0[256 / 4];  // Control IN reply, OUT data stage
+static char s_serial[17];        // Serial number: device ID in hex
+#if MG_ENABLE_USB_ETHERNET
+static uint32_t s_note[16 / 4];  // Link notification
+static uint32_t s_rx[MG_USB_NTB_SIZE / 4], s_tx[MG_USB_NTB_SIZE / 4];
+static size_t s_rxlen;  // Received part of the OUT transfer block
+static bool s_discard;  // OUT transfer block too long: drop it
+#endif
+#if MG_ENABLE_USB_SERIAL
+static uint32_t s_log[64 / 4];  // Log output in flight
+#endif
+
+// Write an undocumented register the way Nordic's errata workarounds do
+static void errata(uint32_t addr, uint32_t value) {
+  volatile uint32_t *unlock = (volatile uint32_t *) 0x4006ec00;
+  bool locked = *unlock == 0;
+  if (locked) *unlock = 0x9375;
+  *(volatile uint32_t *) addr = value;
+  if (locked) *unlock = 0x9375;
+}
+
+// Run one EasyDMA transfer and wait for its end event
+static void dma(volatile uint32_t *task, volatile uint32_t *end) {
+  unsigned i;
+  *end = 0;
+  ERRATA_199 = 0x82;
+  *task = 1;
+  for (i = 0; *end == 0 && i < 100000; i++) (void) 0;  // Microseconds
+  *end = 0;
+  ERRATA_199 = 0;
+}
+
+// Send the next packet of the IN transfer on ep. False if it is over
+static bool in_next(unsigned ep) {
+  struct nrf_in *e = &s_in[ep];
+  size_t n = e->left > 64 ? 64 : e->left;
+  if (e->packets == 0) return false;
+  NRF_USBD->EPIN[ep].PTR = (uint32_t) (uintptr_t) e->data;
+  NRF_USBD->EPIN[ep].MAXCNT = (uint32_t) n;
+  dma(&NRF_USBD->TASKS_STARTEPIN[ep], &NRF_USBD->EVENTS_ENDEPIN[ep]);
+  e->data += n, e->left -= n, e->packets--;
+  return true;
+}
+
+// Start an IN transfer from RAM. zlp: end a multiple of 64 bytes with an
+// empty packet
+static void in_start(unsigned ep, const void *data, size_t len, bool zlp) {
+  struct nrf_in *e = &s_in[ep];
+  e->data = (const uint8_t *) data, e->left = len;
+  e->packets = (unsigned) (len / 64 + (len % 64 || len == 0 || zlp));
+  e->busy = in_next(ep);
+}
+
+// Data toggle of endpoint address ep back to DATA0
+static void dtoggle(unsigned ep) {
+  NRF_USBD->DTOGGLE = ep;  // Select the endpoint, then set its toggle
+  NRF_USBD->DTOGGLE = (USBD_DTOGGLE_VALUE_Data0 << USBD_DTOGGLE_VALUE_Pos) | ep;
+}
+
+#if MG_ENABLE_USB_ETHERNET
+// Ethernet data endpoints idle, ready to receive
+static void data_reset(void) {
+  dtoggle(0x02), dtoggle(0x82);
+  memset(&s_in[2], 0, sizeof(s_in[2]));
+  s_rxlen = 0, s_discard = false;
+  NRF_USBD->SIZE.EPOUT[2] = 0;  // Drop any received packet, accept the next
+}
+
+// A packet on the Ethernet OUT endpoint: add it to the transfer block. The
+// endpoint accepts the next packet once this one is moved or dropped
+static void rx(void) {
+  size_t n = NRF_USBD->SIZE.EPOUT[2];
+  if (n > 0 && !s_discard && s_rxlen + n <= sizeof(s_rx)) {
+    uint8_t *p = (uint8_t *) s_rx + s_rxlen;
+    NRF_USBD->EPOUT[2].PTR = (uint32_t) (uintptr_t) p;
+    NRF_USBD->EPOUT[2].MAXCNT = (uint32_t) n;
+    dma(&NRF_USBD->TASKS_STARTEPOUT[2], &NRF_USBD->EVENTS_ENDEPOUT[2]);
+    s_rxlen += n;
+  } else {
+    s_discard = s_discard || n > 0;  // An empty packet only ends the block
+    NRF_USBD->SIZE.EPOUT[2] = 0;
+  }
+  // At the advertised maximum OUT size, the host need not send a ZLP.
+  // Other transfers end with a short packet (including a ZLP)
+  if (n < 64 || s_rxlen == sizeof(s_rx)) {
+    if (!s_discard) mg_usb_decode(&s_usb, (uint8_t *) s_rx, s_rxlen);
+    s_rxlen = 0, s_discard = false;
+  }
+}
+#endif
+
+// Endpoints 1-4 on and idle if configured, else off
+static void endpoints_reset(void) {
+  memset(s_in, 0, sizeof(s_in));
+  NRF_USBD->EPINEN = 1, NRF_USBD->EPOUTEN = 1;
+  if (!s_usb.configured) return;
+#if MG_ENABLE_USB_ETHERNET
+  NRF_USBD->EPINEN |= MG_BIT(1) | MG_BIT(2), NRF_USBD->EPOUTEN |= MG_BIT(2);
+  dtoggle(0x81);
+  data_reset();
+#endif
+#if MG_ENABLE_USB_SERIAL
+  NRF_USBD->EPINEN |= MG_BIT(3) | MG_BIT(4), NRF_USBD->EPOUTEN |= MG_BIT(4);
+  dtoggle(0x83), dtoggle(0x04), dtoggle(0x84);
+  NRF_USBD->SIZE.EPOUT[4] = 0;
+#endif
+}
+
+// Run a complete control request: SETUP in s_req, then any OUT data
+static void request(void) {
+  const void *reply;
+  unsigned wlen = MG_LOAD_LE16(s_req + 6);
+  int n = mg_usb_setup(&s_usb, s_req, &reply);
+  if (n < 0) {
+    NRF_USBD->TASKS_EP0STALL = 1;
+    return;
+  }
+  switch ((s_req[0] << 8) | s_req[1]) {
+    case 0x0009:  // SET_CONFIGURATION
+      endpoints_reset();
+      break;
+#if MG_ENABLE_USB_ETHERNET
+    case 0x010b:  // SET_INTERFACE
+      if (s_req[4] == 1) data_reset();
+      break;
+#endif
+    case 0x0201:  // CLEAR_FEATURE(ENDPOINT_HALT)
+      dtoggle(s_req[4]);
+      NRF_USBD->EPSTALL =
+          (USBD_EPSTALL_STALL_UnStall << USBD_EPSTALL_STALL_Pos) | s_req[4];
+      if (!(s_req[4] & 0x80)) NRF_USBD->SIZE.EPOUT[s_req[4] & 15] = 0;
+      break;
+  }
+  if ((s_req[0] & 0x80) && wlen) {  // IN data stage. Largest reply: 160
+    memcpy(s_ep0, reply, (size_t) n);
+    in_start(0, s_ep0, (size_t) n, n < (int) wlen);
+  } else {
+    NRF_USBD->TASKS_EP0STATUS = 1;
+  }
+}
+
+// A SETUP packet: run it, or first receive its OUT data stage
+static void setup(void) {
+  const volatile uint32_t *regs = &NRF_USBD->BMREQUESTTYPE;
+  unsigned i, wlen;
+  for (i = 0; i < 8; i++) s_req[i] = (uint8_t) regs[i];
+  wlen = MG_LOAD_LE16(s_req + 6);
+  memset(&s_in[0], 0, sizeof(s_in[0]));  // Cancels the previous transfer
+  if (s_req[0] == 0 && s_req[1] == 5) return;  // SET_ADDRESS: hardware's
+  if ((s_req[0] & 0x80) || wlen == 0) {
+    request();
+  } else if (wlen > sizeof(s_req) - 8) {
+    NRF_USBD->TASKS_EP0STALL = 1;
+  } else {
+    NRF_USBD->TASKS_EP0RCVOUT = 1;  // Accept the OUT data stage
+  }
+}
+
+// A control data stage packet: an IN one acknowledged, or an OUT one arrived
+static void ep0_data(void) {
+  size_t n = NRF_USBD->SIZE.EPOUT[0];
+  if (s_req[0] & 0x80) {
+    if (!in_next(0)) NRF_USBD->TASKS_EP0STATUS = 1;
+  } else if (n != MG_LOAD_LE16(s_req + 6)) {
+    NRF_USBD->TASKS_EP0STALL = 1;
+  } else {
+    NRF_USBD->EPOUT[0].PTR = (uint32_t) (uintptr_t) s_ep0;
+    NRF_USBD->EPOUT[0].MAXCNT = (uint32_t) n;
+    dma(&NRF_USBD->TASKS_STARTEPOUT[0], &NRF_USBD->EVENTS_ENDEPOUT[0]);
+    memcpy(s_req + 8, s_ep0, n);
+    request();
+  }
+}
+
+// Follow USB power: enable the controller when VBUS appears, attach to the
+// bus once both are ready, and detach when VBUS goes. True while attached
+static bool attach(void) {
+  uint32_t power = NRF_POWER->USBREGSTATUS;
+  if (!(power & POWER_USBREGSTATUS_VBUSDETECT_Msk)) {
+    if (NRF_USBD->ENABLE) {
+      NRF_USBD->USBPULLUP = 0, NRF_USBD->ENABLE = 0;
+      mg_usb_reset(&s_usb);
+    }
+    return false;
+  }
+  if (!NRF_USBD->ENABLE) {
+    errata(0x4006ed14, 3);     // Errata 187
+    errata(0x4006ec14, 0xc0);  // Errata 171
+    NRF_USBD->EVENTCAUSE = USBD_EVENTCAUSE_READY_Msk;
+    NRF_USBD->ENABLE = 1;
+  }
+  if (NRF_USBD->USBPULLUP) return true;
+  if (!(NRF_USBD->EVENTCAUSE & USBD_EVENTCAUSE_READY_Msk) ||
+      !(power & POWER_USBREGSTATUS_OUTPUTRDY_Msk))
+    return false;
+  NRF_USBD->EVENTCAUSE = USBD_EVENTCAUSE_READY_Msk;
+  errata(0x4006ec14, 0);
+  errata(0x4006ed14, 0);
+  NRF_USBD->USBPULLUP = 1;
+  return true;
+}
+
+void mg_usb_init(void) {
+  static bool started;
+  uint32_t id[2], xtal = CLOCK_HFCLKSTAT_SRC_Msk | CLOCK_HFCLKSTAT_STATE_Msk;
+  if (started) return;
+  started = true;
+  id[0] = NRF_FICR->DEVICEID[0], id[1] = NRF_FICR->DEVICEID[1];
+  mg_snprintf(s_serial, sizeof(s_serial), "%M", mg_print_hex, (int) sizeof(id),
+              (uint8_t *) id);
+  s_usb.serial = s_serial;
+  mg_usb_reset(&s_usb);
+#if MG_ENABLE_USB_SERIAL
+  mg_log_set_fn(mg_usb_log, &s_usb);  // Log to the USB serial port
+#endif
+  if ((NRF_CLOCK->HFCLKSTAT & xtal) != xtal) {  // USB needs the crystal
+    NRF_CLOCK->TASKS_HFCLKSTART = 1;
+    while ((NRF_CLOCK->HFCLKSTAT & xtal) != xtal) (void) 0;
+  }
+  // The controller itself starts in mg_usb_poll(), once USB power is there
+}
+
+void mg_usb_poll(void) {
+  mg_usb_init();
+#if MG_ENABLE_USB_SERIAL
+  if (s_usb.reboot && mg_millis() > s_usb.reboot) {
+    NRF_POWER->GPREGRET = 0x57;  // Adafruit bootloader: stay in DFU mode
+    NVIC_SystemReset();
+  }
+#endif
+  if (!attach()) return;
+  if (NRF_USBD->EVENTS_USBRESET) {
+    NRF_USBD->EVENTS_USBRESET = 0;
+    NRF_USBD->EVENTS_EP0DATADONE = NRF_USBD->EVENTS_EPDATA = 0;
+    NRF_USBD->EPDATASTATUS = NRF_USBD->EPDATASTATUS;
+    mg_usb_reset(&s_usb);
+    endpoints_reset();
+    return;
+  }
+  if (NRF_USBD->EVENTS_EP0DATADONE) {  // Before a new SETUP replaces s_req
+    NRF_USBD->EVENTS_EP0DATADONE = 0;
+    ep0_data();
+  }
+  if (NRF_USBD->EVENTS_EP0SETUP) {
+    NRF_USBD->EVENTS_EP0SETUP = 0;
+    setup();
+  }
+  if (NRF_USBD->EVENTS_EPDATA) {  // Bit n: IN n acknowledged, 16+n: OUT n
+    uint32_t done = NRF_USBD->EPDATASTATUS;
+    unsigned i;
+    NRF_USBD->EVENTS_EPDATA = 0;
+    NRF_USBD->EPDATASTATUS = done;
+    for (i = 1; i < 5; i++) {
+      if (done & MG_BIT(i)) s_in[i].busy = in_next(i);
+    }
+#if MG_ENABLE_USB_ETHERNET
+    if (done & MG_BIT(18)) rx();
+#endif
+#if MG_ENABLE_USB_SERIAL
+    if (done & MG_BIT(20)) NRF_USBD->SIZE.EPOUT[4] = 0;  // Serial: ignored
+#endif
+  }
+#if MG_ENABLE_USB_ETHERNET
+  {
+    const void *msg;
+    size_t n;
+    if (!s_in[1].busy && (n = mg_usb_notify(&s_usb, &msg)) > 0) {
+      memcpy(s_note, msg, n);
+      in_start(1, s_note, n, false);
+    }
+  }
+#endif
+#if MG_ENABLE_USB_SERIAL
+  if (s_usb.configured && s_usb.dtr && !s_in[4].busy) {
+    size_t n = mg_usb_log_read(&s_usb, s_log, sizeof(s_log));
+    if (n > 0) in_start(4, s_log, n, true);
+  }
+#endif
+}
+
+#if MG_ENABLE_USB_ETHERNET
+static bool mg_tcpip_driver_usb_nrf52_init(struct mg_tcpip_if *ifp) {
+  s_usb.ifp = ifp;  // mg_tcpip_init() has started USB already
+  return true;
+}
+
+static size_t mg_tcpip_driver_usb_nrf52_tx(const void *buf, size_t len,
+                                           struct mg_tcpip_if *ifp) {
+  // One frame can be in flight. Keep USB moving while waiting, but bound
+  // the wait if the host stops reading or the cable is gone
+  uint64_t until = mg_millis() + 20;
+  size_t n = 0;
+  while (s_in[2].busy && mg_millis() < until) mg_usb_poll();
+  if (!s_in[2].busy) n = mg_usb_encode(&s_usb, (uint8_t *) s_tx, buf, len);
+  if (n) in_start(2, s_tx, n, n < s_usb.input_size);
+  (void) ifp;
+  return n ? len : 0;
+}
+
+// USB itself runs from mg_mgr_poll(). Report the link: Ethernet open
+static bool mg_tcpip_driver_usb_nrf52_poll(struct mg_tcpip_if *ifp, bool s1) {
+  (void) ifp;
+  return s1 && s_usb.alt && s_usb.filter;
+}
+
+struct mg_tcpip_driver mg_tcpip_driver_usb_nrf52 = {
+    mg_tcpip_driver_usb_nrf52_init, mg_tcpip_driver_usb_nrf52_tx, NULL,
+    mg_tcpip_driver_usb_nrf52_poll};
+#endif
+
+#endif
+
+#ifdef MG_ENABLE_LINES
+#line 1 "src/drivers/usb_rp.c"
+#endif
+
+
+
+
+#if MG_ENABLE_USB && MG_ENABLE_DRIVER_USB_RP
+
+// RP2040 / RP2350 USB device controller: single core, polled, full speed,
+// 64-byte single-buffered endpoints in USB DPRAM. Longer IN transfers go
+// out one packet at a time, the next one when the previous completes
+
+struct rp_ep {
+  uint8_t *buf;         // Endpoint buffer in USB DPRAM
+  io_rw_32 *ctrl;       // Buffer control register
+  const uint8_t *data;  // IN transfer: bytes still to send
+  size_t left;          // IN transfer: how many
+  unsigned packets;     // IN transfer: packets still to send
+  uint8_t pid;          // Next DATA PID, 0 or 1
+  bool busy;            // Buffer handed to the controller
+};
+
+static struct rp_ep s_ep[5][2];  // Index: endpoint number, OUT=0 IN=1
+static struct mg_usb s_usb;
+static uint8_t s_req[16];  // SETUP packet, then its OUT data stage
+static bool s_req_out;     // Waiting for that OUT data stage
+static uint8_t s_address;  // Address to apply after the status stage
+static char s_serial[2 * PICO_UNIQUE_BOARD_ID_SIZE_BYTES + 1];
+#if MG_ENABLE_USB_ETHERNET
+static uint8_t s_rx[MG_USB_NTB_SIZE], s_tx[MG_USB_NTB_SIZE];
+static size_t s_rxlen;  // Received part of the OUT transfer block
+static bool s_discard;  // OUT transfer block too long: drop it
+#endif
+#if MG_ENABLE_USB_SERIAL
+static char s_log[64];  // Log output in flight
+#endif
+
+// Hand one packet buffer to the controller. OUT: accept up to len bytes
+static void packet(unsigned ep, bool in, const void *data, unsigned len) {
+  struct rp_ep *e = &s_ep[ep][in];
+  uint32_t v = len | (e->pid ? USB_BUF_CTRL_DATA1_PID : 0) |
+               (in ? USB_BUF_CTRL_FULL : 0);
+  if (in && len) memcpy(e->buf, data, len);
+  e->pid ^= 1;
+  e->busy = true;
+  *e->ctrl = v;
+  // RP2040 datasheet: allow at least 12 cycles between writing buffer
+  // metadata and handing ownership to the controller through AVAIL
+  busy_wait_at_least_cycles(12);
+  *e->ctrl = v | USB_BUF_CTRL_AVAIL;
+}
+
+// Send the next packet of the IN transfer on ep. False if it is over
+static bool in_next(unsigned ep) {
+  struct rp_ep *e = &s_ep[ep][1];
+  unsigned n = e->left > 64 ? 64 : (unsigned) e->left;
+  if (e->packets == 0) return false;
+  packet(ep, true, e->data, n);
+  e->data += n, e->left -= n, e->packets--;
+  return true;
+}
+
+// Start an IN transfer. zlp: end a multiple of 64 bytes with an empty packet
+static void in_start(unsigned ep, const void *data, size_t len, bool zlp) {
+  struct rp_ep *e = &s_ep[ep][1];
+  e->data = (const uint8_t *) data, e->left = len;
+  e->packets = (unsigned) (len / 64 + (len % 64 || len == 0 || zlp));
+  in_next(ep);
+}
+
+// Set up endpoint ep, direction in, idle. Endpoints 1 and 3 are interrupt,
+// 2 and 4 bulk, each with a 64-byte DPRAM buffer of its own
+static void ep_init(unsigned ep, bool in) {
+  struct rp_ep *e = &s_ep[ep][in];
+  e->ctrl = in ? &usb_dpram->ep_buf_ctrl[ep].in
+               : &usb_dpram->ep_buf_ctrl[ep].out;
+  e->buf = ep ? &usb_dpram->epx_data[(ep * 2 + in) * 64] : usb_dpram->ep0_buf_a;
+  e->pid = 0, e->busy = false, e->packets = 0;
+  *e->ctrl = 0;
+  if (ep) {
+    io_rw_32 *ctrl = in ? &usb_dpram->ep_ctrl[ep - 1].in
+                        : &usb_dpram->ep_ctrl[ep - 1].out;
+    *ctrl = EP_CTRL_ENABLE_BITS | EP_CTRL_INTERRUPT_PER_BUFFER |
+            ((ep & 1 ? 3U : 2U) << EP_CTRL_BUFFER_TYPE_LSB) |
+            (uint32_t) ((uintptr_t) e->buf - (uintptr_t) usb_dpram);
+  }
+}
+
+#if MG_ENABLE_USB_ETHERNET
+// Ethernet data endpoints idle, then armed to receive if Ethernet is open
+static void data_reset(void) {
+  ep_init(2, false), ep_init(2, true);
+  s_rxlen = 0, s_discard = false;
+  if (s_usb.alt) packet(2, false, NULL, 64);
+}
+
+// A packet on the Ethernet OUT endpoint: add it to the transfer block
+static void rx(const uint8_t *buf, unsigned n) {
+  if (s_rxlen + n <= sizeof(s_rx) && !s_discard) {
+    memcpy(s_rx + s_rxlen, buf, n);
+    s_rxlen += n;
+  } else {
+    s_discard = true;
+  }
+  // At the advertised maximum OUT size, the host need not send a ZLP.
+  // Other transfers end with a short packet (including a ZLP)
+  if (n < 64 || s_rxlen == sizeof(s_rx)) {
+    if (!s_discard) mg_usb_decode(&s_usb, s_rx, s_rxlen);
+    s_rxlen = 0;
+    s_discard = false;
+  }
+  if (s_usb.alt) packet(2, false, NULL, 64);
+}
+#endif
+
+// All endpoints idle, then the serial port armed to receive if configured
+static void endpoints_reset(void) {
+  static const uint8_t eps[] = {
+      0x00, 0x80,
+#if MG_ENABLE_USB_ETHERNET
+      0x81,
+#endif
+#if MG_ENABLE_USB_SERIAL
+      0x83, 0x04, 0x84,
+#endif
+  };
+  size_t i;
+  for (i = 0; i < sizeof(eps); i++) ep_init(eps[i] & 15U, eps[i] >> 7);
+#if MG_ENABLE_USB_ETHERNET
+  data_reset();
+#endif
+#if MG_ENABLE_USB_SERIAL
+  if (s_usb.configured) packet(4, false, NULL, 64);
+#endif
+}
+
+// Stall endpoint 0 until the next SETUP
+static void stall(void) {
+  usb_hw->ep_stall_arm =
+      USB_EP_STALL_ARM_EP0_IN_BITS | USB_EP_STALL_ARM_EP0_OUT_BITS;
+  *s_ep[0][1].ctrl = USB_BUF_CTRL_STALL;
+  *s_ep[0][0].ctrl = USB_BUF_CTRL_STALL;
+}
+
+// Run a complete control request: SETUP in s_req, then any OUT data
+static void request(void) {
+  const void *reply;
+  int n = mg_usb_setup(&s_usb, s_req, &reply);
+  if (n < 0) {
+    stall();
+    return;
+  }
+  switch ((s_req[0] << 8) | s_req[1]) {
+    case 0x0005:  // SET_ADDRESS, applied after the status stage
+      s_address = s_req[2];
+      break;
+    case 0x0009:  // SET_CONFIGURATION
+      endpoints_reset();
+      break;
+#if MG_ENABLE_USB_ETHERNET
+    case 0x010b:  // SET_INTERFACE
+      if (s_req[4] == 1) data_reset();
+      break;
+#endif
+    case 0x0201: {  // CLEAR_FEATURE(ENDPOINT_HALT)
+      struct rp_ep *e = &s_ep[s_req[4] & 15][s_req[4] >> 7];
+      *e->ctrl &= ~USB_BUF_CTRL_STALL, e->pid = 0;
+      break;
+    }
+  }
+  // IN data stage, or the status stage, both starting with DATA1
+  s_ep[0][1].pid = 1;
+  in_start(0, reply, (size_t) n, n < (int) MG_LOAD_LE16(s_req + 6));
+}
+
+// A SETUP packet: run it, or first receive its OUT data stage
+static void setup(void) {
+  unsigned wlen;
+  memcpy(s_req, (const void *) usb_dpram->setup_packet, 8);
+  wlen = MG_LOAD_LE16(s_req + 6);
+  // A SETUP cancels the preceding control transfer. OUT stages use DATA1
+  ep_init(0, false), ep_init(0, true);
+  s_ep[0][0].pid = 1;
+  s_address = 0, s_req_out = false;
+  if ((s_req[0] & 0x80) || wlen == 0) {
+    request();
+  } else if (wlen > sizeof(s_req) - 8) {
+    stall();
+  } else {
+    s_req_out = true;
+    packet(0, false, NULL, 64);
+  }
+}
+
+// A buffer the controller has finished with
+static void complete(unsigned ep, bool in) {
+  struct rp_ep *e = &s_ep[ep][in];
+  unsigned n = *e->ctrl & USB_BUF_CTRL_LEN_MASK;
+  e->busy = false;
+  if (in && in_next(ep)) return;
+  if (ep == 0 && in) {  // Control IN data or status stage sent
+    if (s_address) {
+      usb_hw->dev_addr_ctrl = s_address, s_address = 0;
+    } else if ((s_req[0] & 0x80) && MG_LOAD_LE16(s_req + 6)) {
+      packet(0, false, NULL, 64);  // Host's OUT status stage
+    }
+  } else if (ep == 0 && !in && s_req_out) {  // Control OUT data stage
+    s_req_out = false;
+    if (n != MG_LOAD_LE16(s_req + 6)) {
+      stall();
+    } else {
+      memcpy(s_req + 8, e->buf, n);
+      request();
+    }
+#if MG_ENABLE_USB_ETHERNET
+  } else if (ep == 2 && !in) {
+    rx(e->buf, n);
+#endif
+#if MG_ENABLE_USB_SERIAL
+  } else if (ep == 4 && !in) {
+    packet(4, false, NULL, 64);  // Serial input is discarded: log console
+#endif
+  }
+}
+
+void mg_usb_init(void) {
+  static bool started;
+  if (started) return;
+  started = true;
+  pico_get_unique_board_id_string(s_serial, sizeof(s_serial));
+  s_usb.serial = s_serial;
+  mg_usb_reset(&s_usb);
+#if MG_ENABLE_USB_SERIAL
+  mg_log_set_fn(mg_usb_log, &s_usb);  // Log to the USB serial port
+#endif
+  reset_block(RESETS_RESET_USBCTRL_BITS);
+  unreset_block_wait(RESETS_RESET_USBCTRL_BITS);
+  memset(usb_dpram, 0, sizeof(*usb_dpram));
+  usb_hw->muxing = USB_USB_MUXING_TO_PHY_BITS | USB_USB_MUXING_SOFTCON_BITS;
+  usb_hw->pwr =
+      USB_USB_PWR_VBUS_DETECT_BITS | USB_USB_PWR_VBUS_DETECT_OVERRIDE_EN_BITS;
+  usb_hw->main_ctrl = USB_MAIN_CTRL_CONTROLLER_EN_BITS;
+  usb_hw->sie_ctrl = USB_SIE_CTRL_EP0_INT_1BUF_BITS;
+  usb_hw->inte = 0;  // Poll raw status instead of an interrupt handler
+  endpoints_reset();
+  hw_set_bits(&usb_hw->sie_ctrl, USB_SIE_CTRL_PULLUP_EN_BITS);
+}
+
+void mg_usb_poll(void) {
+  uint32_t status, done;
+  unsigned i;
+  mg_usb_init();
+  status = usb_hw->intr;
+#if MG_ENABLE_USB_SERIAL
+  if (s_usb.reboot && mg_millis() > s_usb.reboot) reset_usb_boot(0, 0);
+#endif
+  if (status & USB_INTR_BUS_RESET_BITS) {
+    usb_hw->sie_status = USB_SIE_STATUS_BUS_RESET_BITS;
+    usb_hw->dev_addr_ctrl = 0;
+    usb_hw->buf_status = 0xffffffff;
+    mg_usb_reset(&s_usb);
+    endpoints_reset();
+    return;
+  }
+  if (status & USB_INTR_SETUP_REQ_BITS) {
+    // Discard stale EP0 completions from an interrupted control transfer
+    usb_hw->buf_status = 3;
+    usb_hw->sie_status = USB_SIE_STATUS_SETUP_REC_BITS;
+    setup();
+  }
+  done = usb_hw->buf_status;
+  for (i = 0; i < 10; i++) {  // Bits: EP0 IN, EP0 OUT, EP1 IN, ...
+    if (!(done & (1U << i))) continue;
+    usb_hw->buf_status = 1U << i;
+    if (s_ep[i / 2][!(i & 1)].ctrl) complete(i / 2, !(i & 1));
+  }
+#if MG_ENABLE_USB_ETHERNET
+  if (!s_ep[1][1].busy) {
+    const void *msg;
+    size_t n = mg_usb_notify(&s_usb, &msg);
+    if (n) in_start(1, msg, n, false);
+  }
+#endif
+#if MG_ENABLE_USB_SERIAL
+  if (s_usb.configured && s_usb.dtr && !s_ep[4][1].busy) {
+    size_t n = mg_usb_log_read(&s_usb, s_log, sizeof(s_log));
+    if (n) in_start(4, s_log, n, true);
+  }
+#endif
+}
+
+#if MG_ENABLE_USB_ETHERNET
+static bool mg_tcpip_driver_usb_rp_init(struct mg_tcpip_if *ifp) {
+  s_usb.ifp = ifp;  // mg_tcpip_init() has started USB already
+  return true;
+}
+
+static size_t mg_tcpip_driver_usb_rp_tx(const void *buf, size_t len,
+                                        struct mg_tcpip_if *ifp) {
+  // One frame can be in flight. Keep USB moving while waiting, but bound
+  // the wait if the host stops reading or the cable is gone
+  uint64_t until = mg_millis() + 20;
+  size_t n = 0;
+  while (s_ep[2][1].busy && mg_millis() < until) mg_usb_poll();
+  if (!s_ep[2][1].busy) n = mg_usb_encode(&s_usb, s_tx, buf, len);
+  if (n) in_start(2, s_tx, n, n < s_usb.input_size);
+  (void) ifp;
+  return n ? len : 0;
+}
+
+// USB itself runs from mg_mgr_poll(). Report the link: Ethernet open
+static bool mg_tcpip_driver_usb_rp_poll(struct mg_tcpip_if *ifp, bool s1) {
+  (void) ifp;
+  return s1 && s_usb.alt && s_usb.filter;
+}
+
+struct mg_tcpip_driver mg_tcpip_driver_usb_rp = {
+    mg_tcpip_driver_usb_rp_init, mg_tcpip_driver_usb_rp_tx, NULL,
+    mg_tcpip_driver_usb_rp_poll};
+#endif
+
+#endif
 
 #ifdef MG_ENABLE_LINES
 #line 1 "src/drivers/w5100.c"

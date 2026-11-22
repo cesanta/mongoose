@@ -7,9 +7,6 @@ uint64_t hal_get_tick(void);
 bool hal_timer_expired(volatile uint64_t *t, uint64_t period, uint64_t now);
 size_t hal_ram_used(void);
 size_t hal_ram_free(void);
-void usb_init(void);
-void usb_poll(void);
-void usb_log(char ch, void *param);
 
 #define BIT(x) (1UL << (x))
 #define PIN(port, num) (((port) << 5) | (num))

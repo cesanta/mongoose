@@ -2,7 +2,9 @@
 #include "nrf.h"
 #define MG_ARCH MG_ARCH_ARMGCC
 #define MG_ENABLE_TCPIP 1
-#define MG_ENABLE_DRIVER_NRF52 1
+#define MG_ENABLE_DRIVER_NRF52 1      // 802.15.4 radio: the network interface
+#define MG_ENABLE_DRIVER_USB_NRF52 1  // nRF52840 USB controller
+#define MG_ENABLE_USB_SERIAL 1        // USB serial log console
 #define MG_ENABLE_TCPIP_TCPRTX 1
 #define MG_ENABLE_CUSTOM_MICROS 1
 #define MG_ENABLE_CUSTOM_RANDOM 1

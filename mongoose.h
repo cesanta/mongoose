@@ -519,22 +519,23 @@ extern "C" {
 #include <string.h>
 #include <time.h>
 
-#include <pico/stdlib.h>
+#include <hardware/structs/usb.h>
 #include <pico/rand.h>
+#include <pico/stdlib.h>
 #include <pico/unique_id.h>
 int mkdir(const char *, mode_t);
 
 #if MG_OTA == MG_OTA_PICOSDK
 #include <hardware/flash.h>
-#include <hardware/watchdog.h>
 #include <hardware/structs/watchdog.h>
+#include <hardware/watchdog.h>
 #include <pico/bootrom.h>
 
 #ifndef MG_OTA_WATCHDOG_MS
 #if PICO_RP2040
-#define MG_OTA_WATCHDOG_MS 8000U // max delay on RP2040 is 8.3 seconds
+#define MG_OTA_WATCHDOG_MS 8000U  // max delay on RP2040 is 8.3 seconds
 #else
-#define MG_OTA_WATCHDOG_MS 10000U // max delay on RP2350 is 16 seconds
+#define MG_OTA_WATCHDOG_MS 10000U  // max delay on RP2350 is 16 seconds
 #endif
 #endif
 
@@ -551,17 +552,17 @@ int mkdir(const char *, mode_t);
   (watchdog_hw->scratch[0] = (uint32_t) (v), (uint32_t) watchdog_hw->scratch[0])
 
 #if PICO_RP2040
-#define MG_OTA_ROLLBACK()                                      \
-  do {                                                         \
-    mg_flash->swap_fn();                                       \
-    *(volatile unsigned long *) 0xe000ed0c = 0x5fa0004;         \
+#define MG_OTA_ROLLBACK()                               \
+  do {                                                  \
+    mg_flash->swap_fn();                                \
+    *(volatile unsigned long *) 0xe000ed0c = 0x5fa0004; \
   } while (0)
 #else
-#define MG_OTA_ROLLBACK()                                      \
-  do {                                                         \
-    mg_flash->swap_fn();                                       \
-    ((rom_reboot_fn) rom_func_lookup(ROM_FUNC_REBOOT))(         \
-        BOOT_TYPE_NORMAL | 0x100, 1, 0, 0);                    \
+#define MG_OTA_ROLLBACK()                               \
+  do {                                                  \
+    mg_flash->swap_fn();                                \
+    ((rom_reboot_fn) rom_func_lookup(ROM_FUNC_REBOOT))( \
+        BOOT_TYPE_NORMAL | 0x100, 1, 0, 0);             \
   } while (0)
 #endif
 #endif
@@ -1319,6 +1320,26 @@ struct timeval {
 #define MG_ENABLE_TCPIP_TCPRTX 0  // TCP retransmission queue
 #endif
 
+#ifndef MG_ENABLE_DRIVER_USB_RP
+#define MG_ENABLE_DRIVER_USB_RP 0  // USB device, RP2040 / RP2350
+#endif
+
+#ifndef MG_ENABLE_DRIVER_USB_SAMD21
+#define MG_ENABLE_DRIVER_USB_SAMD21 0  // USB device, SAMD21
+#endif
+
+#ifndef MG_ENABLE_DRIVER_USB_NRF52
+#define MG_ENABLE_DRIVER_USB_NRF52 0  // USB device, nRF52840
+#endif
+
+#ifndef MG_ENABLE_USB_ETHERNET
+#define MG_ENABLE_USB_ETHERNET 0  // USB driver: CDC-NCM Ethernet interface
+#endif
+
+#ifndef MG_ENABLE_USB_SERIAL
+#define MG_ENABLE_USB_SERIAL 0  // USB driver: CDC-ACM serial log console
+#endif
+
 #ifndef MG_TCPIP_DHCPNAME_SIZE
 #define MG_TCPIP_DHCPNAME_SIZE 18  // struct mg_tcpip_if :: dhcp_name size
 #endif
@@ -2042,6 +2063,26 @@ uint64_t mg_timegm(unsigned int year, unsigned int month, unsigned int day,
     MG_U8P(p)[5] = (uint8_t) ((n) >> 16U); \
     MG_U8P(p)[6] = (uint8_t) ((n) >> 8U);  \
     MG_U8P(p)[7] = (uint8_t) (n);          \
+  } while (0)
+
+// Little-endian counterparts, e.g. for USB. Safe for unaligned access
+#define MG_LOAD_LE16(p) \
+  ((uint16_t) (((uint16_t) MG_U8P(p)[1] << 8U) | MG_U8P(p)[0]))
+#define MG_LOAD_LE32(p)                           \
+  ((uint32_t) (((uint32_t) MG_U8P(p)[3] << 24U) | \
+               ((uint32_t) MG_U8P(p)[2] << 16U) | \
+               ((uint32_t) MG_U8P(p)[1] << 8U) | MG_U8P(p)[0]))
+#define MG_STORE_LE16(p, n)               \
+  do {                                    \
+    MG_U8P(p)[0] = (uint8_t) (n);         \
+    MG_U8P(p)[1] = (uint8_t) ((n) >> 8U); \
+  } while (0)
+#define MG_STORE_LE32(p, n)                \
+  do {                                     \
+    MG_U8P(p)[0] = (uint8_t) (n);          \
+    MG_U8P(p)[1] = (uint8_t) ((n) >> 8U);  \
+    MG_U8P(p)[2] = (uint8_t) ((n) >> 16U); \
+    MG_U8P(p)[3] = (uint8_t) ((n) >> 24U); \
   } while (0)
 
 // Network / host byte-order conversion (big-endian <-> native).
@@ -6247,6 +6288,164 @@ extern struct mg_tcpip_driver mg_tcpip_driver_tms570;
 
 #endif
 
+
+
+// USB device, independent of the controller: CDC-NCM Ethernet, enabled by
+// MG_ENABLE_USB_ETHERNET, and a CDC-ACM serial port that carries the
+// Mongoose log, enabled by MG_ENABLE_USB_SERIAL. The controller drivers
+// are usb_rp.c, usb_samd21.c and usb_nrf52.c, enabled by
+// MG_ENABLE_DRIVER_USB_*. Mongoose runs USB from mg_tcpip_init() and
+// mg_mgr_poll(), so user code needs no USB calls
+
+#if MG_ENABLE_TCPIP &&                                          \
+    (MG_ENABLE_DRIVER_USB_RP || MG_ENABLE_DRIVER_USB_SAMD21 ||  \
+     MG_ENABLE_DRIVER_USB_NRF52) &&                             \
+    (MG_ENABLE_USB_ETHERNET || MG_ENABLE_USB_SERIAL)
+#define MG_ENABLE_USB 1
+
+// #if defined(MG_ENABLE_DRIVER_USB_SAMD21) && MG_ENABLE_DRIVER_USB_SAMD21
+// #define MG_USB_DEFAULT_SIZE 2048  // SAMD21: 32k RAM
+// #else
+// #define MG_USB_DEFAULT_SIZE 4096
+// #endif
+#define MG_USB_DEFAULT_SIZE 2048
+#ifndef MG_USB_NTB_SIZE  // Transfer block buffer, each direction, >= 2048
+#define MG_USB_NTB_SIZE MG_USB_DEFAULT_SIZE
+#endif
+#ifndef MG_USB_LOG_SIZE  // Serial log ring buffer
+#define MG_USB_LOG_SIZE (MG_USB_DEFAULT_SIZE / 2)
+#endif
+#ifndef MG_USB_QUEUE_SIZE  // TCP/IP stack receive queue
+#define MG_USB_QUEUE_SIZE (MG_USB_DEFAULT_SIZE * 2)
+#endif
+
+// Endpoints: 1 interrupt IN, link notifications. 2 bulk IN/OUT, Ethernet.
+// 3 interrupt IN, serial notifications (unused). 4 bulk IN/OUT, serial
+
+struct mg_usb {
+  const char *serial;  // USB serial number, set by the driver
+  bool configured;     // Host has set the configuration
+  uint8_t buf[66];     // Generated replies
+#if MG_ENABLE_USB_ETHERNET
+  struct mg_tcpip_if *ifp;    // TCP/IP interface, set by the driver
+  bool alt;                   // Ethernet open: data interface setting 1
+  uint16_t filter, sequence;  // Host packet filter, next IN block number
+  uint32_t input_size;        // Largest IN block the host accepts
+  uint8_t notify;             // Pending link notifications
+#endif
+#if MG_ENABLE_USB_SERIAL
+  bool dtr;                   // Terminal open
+  uint64_t reboot;            // mg_millis() to enter the bootloader, or 0
+  uint8_t line[7];            // Serial line coding
+  char log[MG_USB_LOG_SIZE];  // Serial log ring buffer
+  unsigned head, tail;        // Log ring write and read counters
+#endif
+};
+
+// Implemented by the enabled controller driver. Start the controller, once,
+// and send the log to the serial port
+void mg_usb_init(void);
+
+// Implemented by the enabled controller driver. Run the controller. Calls
+// mg_usb_init() first, so it works without a TCP/IP interface too
+void mg_usb_poll(void);
+
+// Unconfigured state, on start and after a bus reset. Keeps the log
+void mg_usb_reset(struct mg_usb *u);
+
+// Handle an 8-byte SETUP packet, followed by its OUT data stage if it has
+// one. Returns -1 to stall, else the IN reply length, 0 for status only
+int mg_usb_setup(struct mg_usb *u, const uint8_t *req, const void **reply);
+
+#if MG_ENABLE_USB_ETHERNET
+// Next link notification for endpoint 1. Returns its length, 0 if none
+size_t mg_usb_notify(struct mg_usb *u, const void **msg);
+
+// Wrap an Ethernet frame into a transfer block at ntb. Returns the block
+// length, 0 if the link is down or the frame does not fit
+size_t mg_usb_encode(struct mg_usb *u, uint8_t *ntb, const void *buf,
+                     size_t len);
+
+// Queue the Ethernet frames of a received transfer block to the TCP/IP stack
+void mg_usb_decode(struct mg_usb *u, const uint8_t *ntb, size_t len);
+#endif
+
+#if MG_ENABLE_USB_SERIAL
+// Log output function for mg_log_set_fn(mg_usb_log, u). Keeps the latest
+// MG_USB_LOG_SIZE characters
+void mg_usb_log(char ch, void *u);
+
+// Take up to len logged characters into buf. Returns how many
+size_t mg_usb_log_read(struct mg_usb *u, void *buf, size_t len);
+#endif
+
+#else
+#define MG_ENABLE_USB 0
+#define mg_usb_init()
+#define mg_usb_poll()
+#endif
+
+
+// nRF52840 USB device controller, see usb.h: CDC-NCM Ethernet and a CDC-ACM
+// serial log console. No TinyUSB, polled. Needs the nRF52840 device headers
+// from nrfx/mdk on the include path. Example: tutorials/nordic/xiao-52840
+
+#if MG_ENABLE_USB && MG_ENABLE_DRIVER_USB_NRF52 && MG_ENABLE_USB_ETHERNET
+
+extern struct mg_tcpip_driver mg_tcpip_driver_usb_nrf52;
+
+// Set MG_TCPIP_IP to give the device a static address and serve DHCP to the
+// USB host. Leave it unset to get an address over DHCP, e.g. from macOS
+// Internet Sharing. The device MAC comes from MG_SET_MAC_ADDRESS, random if
+// it is not set; the host end of the link gets a MAC derived from it
+#define MG_TCPIP_DRIVER_USB_NRF52_INIT(mgr)                          \
+  do {                                                               \
+    static struct mg_tcpip_if mif_;                                  \
+    mif_.ip = MG_TCPIP_IP;                                           \
+    mif_.mask = MG_TCPIP_MASK;                                       \
+    mif_.gw = MG_TCPIP_GW;                                           \
+    mif_.enable_dhcp_server = mif_.ip != 0;                          \
+    mif_.driver = &mg_tcpip_driver_usb_nrf52;                        \
+    mif_.recv_queue.size = MG_USB_QUEUE_SIZE;                        \
+    MG_SET_MAC_ADDRESS(mif_.mac);                                    \
+    mg_tcpip_init(mgr, &mif_);                                       \
+    MG_INFO(("Driver: usb_nrf52, MAC: %M", mg_print_mac, mif_.mac)); \
+  } while (0)
+
+// Like nrf52.h: both nRF52 drivers can be enabled at once, e.g. in a bridge
+#ifndef MG_TCPIP_DRIVER_INIT
+#define MG_TCPIP_DRIVER_INIT(mgr) MG_TCPIP_DRIVER_USB_NRF52_INIT(mgr)
+#endif
+
+#endif
+
+
+// RP2040 / RP2350 native USB controller, see usb.h: CDC-NCM Ethernet and
+// a CDC-ACM serial log console. No TinyUSB, polled. Example: tutorials/rp/usb
+
+#if MG_ENABLE_USB && MG_ENABLE_DRIVER_USB_RP && MG_ENABLE_USB_ETHERNET
+
+extern struct mg_tcpip_driver mg_tcpip_driver_usb_rp;
+
+// Set MG_TCPIP_IP to give the device a static address and serve DHCP to the
+// USB host. Leave it unset to get an address over DHCP, e.g. from macOS
+// Internet Sharing. The device MAC comes from MG_SET_MAC_ADDRESS, random if
+// it is not set; the host end of the link gets a MAC derived from it
+#define MG_TCPIP_DRIVER_INIT(mgr)                                 \
+  do {                                                            \
+    static struct mg_tcpip_if mif_;                               \
+    mif_.ip = MG_TCPIP_IP;                                        \
+    mif_.mask = MG_TCPIP_MASK;                                    \
+    mif_.gw = MG_TCPIP_GW;                                        \
+    mif_.enable_dhcp_server = mif_.ip != 0;                       \
+    mif_.driver = &mg_tcpip_driver_usb_rp;                        \
+    mif_.recv_queue.size = MG_USB_QUEUE_SIZE;                     \
+    MG_SET_MAC_ADDRESS(mif_.mac);                                 \
+    mg_tcpip_init(mgr, &mif_);                                    \
+    MG_INFO(("Driver: usb_rp, MAC: %M", mg_print_mac, mif_.mac)); \
+  } while (0)
+
+#endif
 
 
 #if MG_ENABLE_TCPIP && defined(MG_ENABLE_DRIVER_W5100) && \

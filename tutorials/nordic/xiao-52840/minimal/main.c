@@ -6,10 +6,6 @@
 
 #define LED1 PIN(0, 26)  // P0.26, user LED, active low
 
-static void log_fn(char ch, void *param) {
-  usb_log(ch, param);
-}
-
 static void blink_task(void) {
   static uint64_t blink_timer = 0;
   if (hal_timer_expired(&blink_timer, 500, hal_get_tick())) {
@@ -75,14 +71,12 @@ int main(void) {
   MG_HEALTH_INIT();
 
   hal_system_init();
-  usb_init();
-  mg_log_set_fn(log_fn, NULL);
   hal_rng_init();
   hal_gpio_write(LED1, true);
   hal_gpio_output(LED1);
 
   struct mg_mgr mgr;
-  mg_mgr_init(&mgr);
+  mg_mgr_init(&mgr);  // Also starts the radio and the USB log console
   mg_http_listen(&mgr, "http://0.0.0.0", http_ev_handler, NULL);
   mg_http_listen(&mgr, "https://0.0.0.0", http_ev_handler, NULL);
   mg_mqtt_init(&mgr);
@@ -92,7 +86,6 @@ int main(void) {
   MG_INFO(("Crash record: %M", mg_print_crash_record));
 
   for (;;) {
-    usb_poll();
     mg_mgr_poll(&mgr, 0);
     mg_mqtt_poll(&mgr);
     blink_task();

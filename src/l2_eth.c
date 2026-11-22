@@ -94,13 +94,6 @@ size_t mg_l2_eth_trailer(struct mg_tcpip_if *ifp, size_t len, uint8_t *cur) {
 struct mg_l2addr *mg_l2_eth_mapip(enum mg_l2addrtype addrtype,
                                   struct mg_addr *addr);
 
-// Read an unaligned little-endian value from byte pointer p into a native integer.
-// Safe on architectures that forbid unaligned access (e.g. Cortex-M0).
-#define MG_LOAD_LE32(p)                           \
-  ((uint32_t) (((uint32_t) MG_U8P(p)[3] << 24U) | \
-               ((uint32_t) MG_U8P(p)[2] << 16U) | \
-               ((uint32_t) MG_U8P(p)[1] << 8U) | MG_U8P(p)[0]))
-
 bool mg_l2_eth_rx(struct mg_tcpip_if *ifp, enum mg_l2proto *proto,
                   struct mg_str *pay, struct mg_str *raw) {
   struct eth *eth = (struct eth *) raw->buf;
