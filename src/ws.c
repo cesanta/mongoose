@@ -192,6 +192,10 @@ static void mg_ws_cb(struct mg_connection *c, int ev, void *ev_data) {
       op = msg.flags & 15;
       // MG_VERBOSE ("fin %d op %d len %d [%.*s]", final, op,
       //                       (int) m.data.len, (int) m.data.len, m.data.buf));
+      if (op >= WEBSOCKET_OP_CLOSE && (!final || msg.data_len > 125)) {
+        mg_error(c, "invalid WS control frame");
+        return; 
+      }	 // RFC-6455 5.5: control frames must be final and at most 125 bytes
       if ((op == WEBSOCKET_OP_CONTINUE && ofs == 0) ||
           ((op == WEBSOCKET_OP_TEXT || op == WEBSOCKET_OP_BINARY) &&
            ofs != 0)) {
@@ -222,7 +226,7 @@ static void mg_ws_cb(struct mg_connection *c, int ev, void *ev_data) {
           c->is_draining = 1;
           break;
         default:
-          // Per RFC6455, close conn when an unknown op is recvd
+          // Per RFC-6455, close conn when an unknown op is recvd
           mg_error(c, "unknown WS op %d", op);
           break;
       }

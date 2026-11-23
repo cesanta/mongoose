@@ -441,7 +441,7 @@ static void handle_mdns_query(struct mg_connection *c) {
   n = mg_dns_parse_rr(c->recv.buf, c->recv.len, 12, true, &rr);
   MG_VERBOSE(("mDNS request parsed, result=%d", (int) n));
   if (n > 0) {
-    // RFC-6762 Appendix C, RFC2181 11: m(n + 1-63), max 255 + 0x0
+    // RFC-6762 Appendix C, RFC-2181 11: m(n + 1-63), max 255 + 0x0
     uint8_t buf[sizeof(struct mg_dns_header) + 256 + sizeof(mdns_answer) + 4];
     struct mg_dns_header *h = (struct mg_dns_header *) buf;
     uint8_t *p = &buf[sizeof(*h)];
@@ -600,7 +600,7 @@ static void handle_mdns_response(struct mg_connection *c) {
   struct mg_dns_rr rr, rr_[5]; // A, PTR, SRV, TXT, AAAA, in that order
   struct mg_mdns_resp resp;
   size_t n, i, num, answers, roff_[5], roff = 12;  // offset 12 is header size
-  // RFC-6762 Appendix C, RFC2181 11: m(n + 1-63), max 255 + 0x0
+  // RFC-6762 Appendix C, RFC-2181 11: m(n + 1-63), max 255 + 0x0
   char name[256], srvcproto[256], instance[256], host[256];
   uint16_t atype = 0;
   answers = mg_ntohs(rh->num_answers);

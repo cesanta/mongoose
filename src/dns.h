@@ -21,7 +21,7 @@ struct mg_dns_message {
   char name[256];       // Host name
 };
 
-// DNS wire-format header (RFC 1035). All fields are in network byte order;
+// DNS wire-format header (RFC-1035). All fields are in network byte order;
 // use mg_ntohs() to read them.
 struct mg_dns_header {
   uint16_t txnid;           // Transaction ID, matched between query and response

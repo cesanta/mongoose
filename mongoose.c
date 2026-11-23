@@ -2521,7 +2521,7 @@ static void handle_mdns_query(struct mg_connection *c) {
   n = mg_dns_parse_rr(c->recv.buf, c->recv.len, 12, true, &rr);
   MG_VERBOSE(("mDNS request parsed, result=%d", (int) n));
   if (n > 0) {
-    // RFC-6762 Appendix C, RFC2181 11: m(n + 1-63), max 255 + 0x0
+    // RFC-6762 Appendix C, RFC-2181 11: m(n + 1-63), max 255 + 0x0
     uint8_t buf[sizeof(struct mg_dns_header) + 256 + sizeof(mdns_answer) + 4];
     struct mg_dns_header *h = (struct mg_dns_header *) buf;
     uint8_t *p = &buf[sizeof(*h)];
@@ -2680,7 +2680,7 @@ static void handle_mdns_response(struct mg_connection *c) {
   struct mg_dns_rr rr, rr_[5]; // A, PTR, SRV, TXT, AAAA, in that order
   struct mg_mdns_resp resp;
   size_t n, i, num, answers, roff_[5], roff = 12;  // offset 12 is header size
-  // RFC-6762 Appendix C, RFC2181 11: m(n + 1-63), max 255 + 0x0
+  // RFC-6762 Appendix C, RFC-2181 11: m(n + 1-63), max 255 + 0x0
   char name[256], srvcproto[256], instance[256], host[256];
   uint16_t atype = 0;
   answers = mg_ntohs(rh->num_answers);
@@ -5422,7 +5422,7 @@ static void http_cb(struct mg_connection *c, int ev, void *ev_data) {
           // POST and PUT should include an entity body. Therefore, they should
           // contain a Content-length header (unless the body length is 0, in
           // which case it can be omitted). Other requests can also contain a
-          // body, but their content has no defined semantics (RFC 7231)
+          // body, but their content has no defined semantics (RFC-7231)
           // It is a non-chunked request, so the offset (ofs) is updated after
           // exiting this branch.
           if (hm.body.len != 0) require_content_len = true;
@@ -10141,7 +10141,7 @@ static size_t driver_output(struct mg_tcpip_if *ifp, size_t len) {
   return n;
 }
 
-// RFC826, ARP assumes Ethernet MAC addresses
+// RFC-826, ARP assumes Ethernet MAC addresses
 void mg_tcpip_arp_request(struct mg_tcpip_if *ifp, uint32_t ip, uint8_t *mac) {
   uint8_t *l2p = (uint8_t *) ifp->tx.buf;
   struct arp *arp = (struct arp *) mg_l2_header(
@@ -10282,7 +10282,7 @@ static void tx_dhcp(struct mg_tcpip_if *ifp, uint8_t *l2_dst, uint32_t ip_src,
           sizeof(dhcp));
 }
 
-// RFC-2131 #4.3.6, #4.4.1; RFC-2132 #9.8
+// RFC-2131 4.3.6, 4.4.1; RFC-2132 9.8
 static void tx_dhcp_request_sel(struct mg_tcpip_if *ifp, uint32_t ip_req,
                                 uint32_t ip_srv) {
   uint8_t extra = (uint8_t) ((ifp->enable_req_dns ? 1 : 0) +
@@ -10309,7 +10309,7 @@ static void tx_dhcp_request_sel(struct mg_tcpip_if *ifp, uint32_t ip_req,
   MG_DEBUG(("DHCP req sent"));
 }
 
-// RFC-2131 #4.3.6, #4.4.5 (renewing: unicast, rebinding: bcast)
+// RFC-2131 4.3.6, 4.4.5 (renewing: unicast, rebinding: bcast)
 static void tx_dhcp_request_re(struct mg_tcpip_if *ifp, uint8_t *l2_dst,
                                uint32_t ip_src, uint32_t ip_dst) {
   uint8_t opts[] = {
@@ -10363,7 +10363,7 @@ static void l2addr_resolved(struct mg_connection *c);
 static uint8_t *get_return_l2addr(struct mg_tcpip_if *ifp, struct mg_addr *rem,
                                   bool is_udp, struct pkt *pkt);
 
-// RFC826, ARP assumes Ethernet MAC addresses
+// RFC-826, ARP assumes Ethernet MAC addresses
 static void rx_arp(struct mg_tcpip_if *ifp, struct pkt *pkt) {
   if (pkt->arp->op == mg_htons(1) && pkt->arp->tpa == ifp->ip) {
     // ARP request. Make a response, then send
@@ -10769,13 +10769,13 @@ static void rx_ndp_ra(struct mg_tcpip_if *ifp, struct pkt *pkt) {
 
   if (pkt->pay.len < sizeof(*ra)) return;
   if (ifp->state6 == MG_TCPIP_STATE_UP) {
-    MG_DEBUG(("Received NDP RA"));  // fill gw6 address if RFC 4861 6.1.2
+    MG_DEBUG(("Received NDP RA"));  // fill gw6 address if RFC-4861 6.1.2
     if (memcmp(pkt->ip6->src, locpx, 8) != 0 || pkt->ip6->hops != 255) return;
     // parse options
     while (opt_left >= 2) {
       uint8_t type = opts[0], len = opts[1];
       size_t length = (size_t) len * 8;
-      if (length == 0 || length > opt_left) return;  // RFC 4861 6.1.2
+      if (length == 0 || length > opt_left) return;  // RFC-4861 6.1.2
       if (type == 1 && length >= 8) {
         // Received router's L2 address
         if (!mg_l2_ip6get(ifp->l2type, l2, opts + 2, len)) break;
@@ -10856,7 +10856,7 @@ static void rx_icmp6(struct mg_tcpip_if *ifp, struct pkt *pkt) {
       }
     } break;
     case 134:  // Router Advertisement
-      if (pkt->icmp6->code == 0) rx_ndp_ra(ifp, pkt); // RFC 4861 6.1.2
+      if (pkt->icmp6->code == 0) rx_ndp_ra(ifp, pkt); // RFC-4861 6.1.2
       break;
     case 135:  // Neighbor Solicitation
       rx_ndp_ns(ifp, pkt);
@@ -18522,14 +18522,14 @@ static const uint8_t mg_secp256r1_oid[] = {
     0x3d, 0x03, 0x01, 0x07  // 1.2.840.10045.3.1.7 secp256r1
 };
 
-/* TLS 1.3 Record Content Type (RFC8446 B.1) */
+/* TLS 1.3 Record Content Type (RFC-8446 B.1) */
 #define MG_TLS_CHANGE_CIPHER 20
 #define MG_TLS_ALERT 21
 #define MG_TLS_HANDSHAKE 22
 #define MG_TLS_APP_DATA 23
 #define MG_TLS_HEARTBEAT 24
 
-/* TLS 1.3 Handshake Message Type (RFC8446 B.3) */
+/* TLS 1.3 Handshake Message Type (RFC-8446 B.3) */
 #define MG_TLS_CLIENT_HELLO 1
 #define MG_TLS_SERVER_HELLO 2
 #define MG_TLS_ENCRYPTED_EXTENSIONS 8
@@ -18541,7 +18541,7 @@ static const uint8_t mg_secp256r1_oid[] = {
 #define MG_TLS_RSA_USE_CRT 1  // CRT instead of naive RSA
 
 // handshake is re-entrant, so we need to keep track of its state state names
-// refer to RFC8446#A.1
+// refer to RFC-8446 A.1
 enum mg_tls_hs_state {
   // Client state machine:
   MG_TLS_STATE_CLIENT_START,        // Send ClientHello
@@ -19266,7 +19266,7 @@ static bool mg_tls_server_send_hello(struct mg_connection *c) {
   hello[0] = 0x02;  // server hello, tls 1.2
   MG_STORE_BE24(hello + 1, n - 4);
   hello[4] = 0x03, hello[5] = 0x03;
-  if (!mg_random(hello + 6, 32)) {  // server random, RFC 8446 4.1.3
+  if (!mg_random(hello + 6, 32)) {  // server random, RFC-8446 4.1.3
     mg_error(c, "RNG");
     return false;
   }
@@ -19300,14 +19300,14 @@ static bool mg_tls_server_send_hello(struct mg_connection *c) {
   return true;
 }
 
-// HelloRetryRequest random, SHA-256 of "HelloRetryRequest", RFC 8446 4.1.3
+// HelloRetryRequest random, SHA-256 of "HelloRetryRequest", RFC-8446 4.1.3
 static const uint8_t hrr_random[32] = {
     0xcf, 0x21, 0xad, 0x74, 0xe5, 0x9a, 0x61, 0x11, 0xbe, 0x1d, 0x8c,
     0x02, 0x1e, 0x65, 0xb8, 0x91, 0xc2, 0xa2, 0x11, 0x16, 0x7a, 0xbb,
     0x8c, 0x5e, 0x07, 0x9e, 0x09, 0xe2, 0xc8, 0xa8, 0x33, 0x9c};
 
 // put HelloRetryRequest record into wio buffer, asking for a P-256 key share.
-// Replace ClientHello in the transcript with message_hash, RFC 8446 4.4.1
+// Replace ClientHello in the transcript with message_hash, RFC-8446 4.4.1
 static bool mg_tls_server_send_hrr(struct mg_connection *c) {
   struct tls_data *tls = (struct tls_data *) c->tls;
   struct mg_iobuf *wio = &tls->send;
@@ -20183,7 +20183,7 @@ static int mg_tls_verify_cert_san(const uint8_t *der, size_t dersz,
     return 0;   // No SAN
   }
   if (mg_der_parse(field.value, field.len, &field) < 0 || field.type != 0x30) {
-    MG_ERROR(("SAN is not a constructed object"));  // RFC 5280 4.2.1.6
+    MG_ERROR(("SAN is not a constructed object"));  // RFC-5280 4.2.1.6
     return -1;
   }
   while (mg_der_next(&field, &name) > 0) {
@@ -20403,7 +20403,7 @@ static int mg_tls_recv_cert(struct mg_connection *c, bool is_client) {
           is_addr = mg_aton_(mg_str_s(tls->hostname), &addr);
           san = mg_tls_verify_cert_san(cert, certsz, tls->hostname,
                                        is_addr ? &addr : NULL);
-          if (san < 0 ||  // RFC 6125 6.4.4 allow legacy fallback to CN
+          if (san < 0 ||  // RFC-6125 6.4.4 allow legacy fallback to CN
               (san == 0 &&
                (is_addr || !mg_tls_verify_cert_cn(&ci->subj, tls->hostname)))) {
             mg_error(c, "failed to verify host");
@@ -20838,7 +20838,7 @@ static int mg_rsa_parse_der_int(const uint8_t **p, const uint8_t *end,
   return 0;
 }
 
-// RFC 5915 ECPrivateKey ::= SEQUENCE {
+// RFC-5915 ECPrivateKey ::= SEQUENCE {
 //   version INTEGER { ecPrivkeyVer1(1) },
 //   privateKey OCTET STRING,
 //   parameters [0] ECParameters {{ NamedCurve }} OPTIONAL,
@@ -30779,6 +30779,10 @@ static void mg_ws_cb(struct mg_connection *c, int ev, void *ev_data) {
       op = msg.flags & 15;
       // MG_VERBOSE ("fin %d op %d len %d [%.*s]", final, op,
       //                       (int) m.data.len, (int) m.data.len, m.data.buf));
+      if (op >= WEBSOCKET_OP_CLOSE && (!final || msg.data_len > 125)) {
+        mg_error(c, "invalid WS control frame");
+        return; 
+      }	 // RFC-6455 5.5: control frames must be final and at most 125 bytes
       if ((op == WEBSOCKET_OP_CONTINUE && ofs == 0) ||
           ((op == WEBSOCKET_OP_TEXT || op == WEBSOCKET_OP_BINARY) &&
            ofs != 0)) {
@@ -30809,7 +30813,7 @@ static void mg_ws_cb(struct mg_connection *c, int ev, void *ev_data) {
           c->is_draining = 1;
           break;
         default:
-          // Per RFC6455, close conn when an unknown op is recvd
+          // Per RFC-6455, close conn when an unknown op is recvd
           mg_error(c, "unknown WS op %d", op);
           break;
       }

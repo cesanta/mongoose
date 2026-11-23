@@ -67,7 +67,7 @@ static void fn(struct mg_connection *c, int ev, void *ev_data) {
       keysz =
           mg_p256_parse_private_key(mg_str(s_ec_private_key), key, sizeof(key));
       // ES256 uses a raw 64-byte r || s signature. mg_jwt_sign_es256() signs it
-      // deterministically (RFC 6979), see mg_p256_sign()
+      // deterministically (RFC-6979), see mg_p256_sign()
       mg_snprintf(claims, CLAIMS_LEN, "{%m:%m,%m:%m}", MG_ESC("sub"),
                   MG_ESC("admin"), MG_ESC("scope"), MG_ESC("dash:read"));
       opts.claims = mg_str(claims);

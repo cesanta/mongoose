@@ -395,7 +395,7 @@ static size_t driver_output(struct mg_tcpip_if *ifp, size_t len) {
   return n;
 }
 
-// RFC826, ARP assumes Ethernet MAC addresses
+// RFC-826, ARP assumes Ethernet MAC addresses
 void mg_tcpip_arp_request(struct mg_tcpip_if *ifp, uint32_t ip, uint8_t *mac) {
   uint8_t *l2p = (uint8_t *) ifp->tx.buf;
   struct arp *arp = (struct arp *) mg_l2_header(
@@ -536,7 +536,7 @@ static void tx_dhcp(struct mg_tcpip_if *ifp, uint8_t *l2_dst, uint32_t ip_src,
           sizeof(dhcp));
 }
 
-// RFC-2131 #4.3.6, #4.4.1; RFC-2132 #9.8
+// RFC-2131 4.3.6, 4.4.1; RFC-2132 9.8
 static void tx_dhcp_request_sel(struct mg_tcpip_if *ifp, uint32_t ip_req,
                                 uint32_t ip_srv) {
   uint8_t extra = (uint8_t) ((ifp->enable_req_dns ? 1 : 0) +
@@ -563,7 +563,7 @@ static void tx_dhcp_request_sel(struct mg_tcpip_if *ifp, uint32_t ip_req,
   MG_DEBUG(("DHCP req sent"));
 }
 
-// RFC-2131 #4.3.6, #4.4.5 (renewing: unicast, rebinding: bcast)
+// RFC-2131 4.3.6, 4.4.5 (renewing: unicast, rebinding: bcast)
 static void tx_dhcp_request_re(struct mg_tcpip_if *ifp, uint8_t *l2_dst,
                                uint32_t ip_src, uint32_t ip_dst) {
   uint8_t opts[] = {
@@ -617,7 +617,7 @@ static void l2addr_resolved(struct mg_connection *c);
 static uint8_t *get_return_l2addr(struct mg_tcpip_if *ifp, struct mg_addr *rem,
                                   bool is_udp, struct pkt *pkt);
 
-// RFC826, ARP assumes Ethernet MAC addresses
+// RFC-826, ARP assumes Ethernet MAC addresses
 static void rx_arp(struct mg_tcpip_if *ifp, struct pkt *pkt) {
   if (pkt->arp->op == mg_htons(1) && pkt->arp->tpa == ifp->ip) {
     // ARP request. Make a response, then send
@@ -1023,13 +1023,13 @@ static void rx_ndp_ra(struct mg_tcpip_if *ifp, struct pkt *pkt) {
 
   if (pkt->pay.len < sizeof(*ra)) return;
   if (ifp->state6 == MG_TCPIP_STATE_UP) {
-    MG_DEBUG(("Received NDP RA"));  // fill gw6 address if RFC 4861 6.1.2
+    MG_DEBUG(("Received NDP RA"));  // fill gw6 address if RFC-4861 6.1.2
     if (memcmp(pkt->ip6->src, locpx, 8) != 0 || pkt->ip6->hops != 255) return;
     // parse options
     while (opt_left >= 2) {
       uint8_t type = opts[0], len = opts[1];
       size_t length = (size_t) len * 8;
-      if (length == 0 || length > opt_left) return;  // RFC 4861 6.1.2
+      if (length == 0 || length > opt_left) return;  // RFC-4861 6.1.2
       if (type == 1 && length >= 8) {
         // Received router's L2 address
         if (!mg_l2_ip6get(ifp->l2type, l2, opts + 2, len)) break;
@@ -1110,7 +1110,7 @@ static void rx_icmp6(struct mg_tcpip_if *ifp, struct pkt *pkt) {
       }
     } break;
     case 134:  // Router Advertisement
-      if (pkt->icmp6->code == 0) rx_ndp_ra(ifp, pkt); // RFC 4861 6.1.2
+      if (pkt->icmp6->code == 0) rx_ndp_ra(ifp, pkt); // RFC-4861 6.1.2
       break;
     case 135:  // Neighbor Solicitation
       rx_ndp_ns(ifp, pkt);

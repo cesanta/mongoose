@@ -1197,7 +1197,7 @@ static void http_cb(struct mg_connection *c, int ev, void *ev_data) {
           // POST and PUT should include an entity body. Therefore, they should
           // contain a Content-length header (unless the body length is 0, in
           // which case it can be omitted). Other requests can also contain a
-          // body, but their content has no defined semantics (RFC 7231)
+          // body, but their content has no defined semantics (RFC-7231)
           // It is a non-chunked request, so the offset (ofs) is updated after
           // exiting this branch.
           if (hm.body.len != 0) require_content_len = true;
