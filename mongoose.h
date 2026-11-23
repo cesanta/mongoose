@@ -2832,7 +2832,7 @@ struct mg_tls_opts {
 // ```
 // Full examples:
 //   tutorials/http/http-server, tutorials/http/http-client,
-//   tutorials/mqtt/mqtt-client-aws-iot, tutorials/websocket/websocket-client
+//   tutorials/mqtt/mqtt-client, tutorials/websocket/websocket-client
 // Related APIs:
 //   mg_http_listen(), mg_http_connect(), mg_ws_connect(), mg_mqtt_connect()
 // Notes:
@@ -3606,8 +3606,7 @@ struct mg_mqtt_message {
 //   struct mg_mqtt_opts opts = {.client_id = mg_str("device1")};
 //   mg_mqtt_connect(&mgr, "mqtt://broker:1883", &opts, fn, NULL);
 // Full examples:
-//   tutorials/mqtt/mqtt-client, tutorials/mqtt/mqtt-client-aws-iot,
-//   tutorials/mqtt/ota-over-mqtt
+//   tutorials/mqtt/mqtt-client, tutorials/mqtt/ota-over-mqtt
 // Related APIs:
 //   mg_mqtt_pub(), mg_mqtt_sub(), mg_tls_init(), mg_mgr_poll()
 // Notes:
@@ -3642,8 +3641,7 @@ void mg_mqtt_login(struct mg_connection *c, const struct mg_mqtt_opts *opts);
 //   };
 //   uint16_t id = mg_mqtt_pub(c, &opts);
 // Full examples:
-//   tutorials/mqtt/mqtt-client, tutorials/mqtt/mqtt-client-aws-iot,
-//   tutorials/mqtt/ota-over-mqtt
+//   tutorials/mqtt/mqtt-client, tutorials/mqtt/ota-over-mqtt
 // Related APIs:
 //   mg_mqtt_connect(), mg_mqtt_sub(), mg_mqtt_send_header()
 // Notes:
@@ -3658,8 +3656,7 @@ uint16_t mg_mqtt_pub(struct mg_connection *c, const struct mg_mqtt_opts *opts);
 //   struct mg_mqtt_opts opts = {.topic = mg_str("device/rx"), .qos = 1};
 //   mg_mqtt_sub(c, &opts);
 // Full examples:
-//   tutorials/mqtt/mqtt-client, tutorials/mqtt/mqtt-client-aws-iot,
-//   tutorials/mqtt/ota-over-mqtt
+//   tutorials/mqtt/mqtt-client, tutorials/mqtt/ota-over-mqtt
 // Related APIs:
 //   mg_mqtt_connect(), mg_mqtt_pub(), mg_mqtt_unsub()
 // Notes:
