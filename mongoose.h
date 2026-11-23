@@ -3416,7 +3416,7 @@ void mg_ws_upgrade(struct mg_connection *, struct mg_http_message *,
 //   mg_ws_connect(), mg_ws_upgrade(), mg_ws_printf(), mg_ws_wrap()
 // Notes:
 //   op is one of WEBSOCKET_OP_*. Client connections are automatically masked
-//   per RFC 6455. On OOM, the return value can be smaller than header + len.
+//   per RFC-6455. On OOM, the return value can be smaller than header + len.
 //   Data is appended to c->send and sent by a later mg_mgr_poll() call.
 size_t mg_ws_send(struct mg_connection *, const void *buf, size_t len, int op);
 
@@ -3727,7 +3727,7 @@ struct mg_dns_message {
   char name[256];       // Host name
 };
 
-// DNS wire-format header (RFC 1035). All fields are in network byte order;
+// DNS wire-format header (RFC-1035). All fields are in network byte order;
 // use mg_ntohs() to read them.
 struct mg_dns_header {
   uint16_t txnid;           // Transaction ID, matched between query and response

@@ -29,14 +29,14 @@ static const uint8_t mg_secp256r1_oid[] = {
     0x3d, 0x03, 0x01, 0x07  // 1.2.840.10045.3.1.7 secp256r1
 };
 
-/* TLS 1.3 Record Content Type (RFC8446 B.1) */
+/* TLS 1.3 Record Content Type (RFC-8446 B.1) */
 #define MG_TLS_CHANGE_CIPHER 20
 #define MG_TLS_ALERT 21
 #define MG_TLS_HANDSHAKE 22
 #define MG_TLS_APP_DATA 23
 #define MG_TLS_HEARTBEAT 24
 
-/* TLS 1.3 Handshake Message Type (RFC8446 B.3) */
+/* TLS 1.3 Handshake Message Type (RFC-8446 B.3) */
 #define MG_TLS_CLIENT_HELLO 1
 #define MG_TLS_SERVER_HELLO 2
 #define MG_TLS_ENCRYPTED_EXTENSIONS 8
@@ -48,7 +48,7 @@ static const uint8_t mg_secp256r1_oid[] = {
 #define MG_TLS_RSA_USE_CRT 1  // CRT instead of naive RSA
 
 // handshake is re-entrant, so we need to keep track of its state state names
-// refer to RFC8446#A.1
+// refer to RFC-8446 A.1
 enum mg_tls_hs_state {
   // Client state machine:
   MG_TLS_STATE_CLIENT_START,        // Send ClientHello
@@ -773,7 +773,7 @@ static bool mg_tls_server_send_hello(struct mg_connection *c) {
   hello[0] = 0x02;  // server hello, tls 1.2
   MG_STORE_BE24(hello + 1, n - 4);
   hello[4] = 0x03, hello[5] = 0x03;
-  if (!mg_random(hello + 6, 32)) {  // server random, RFC 8446 4.1.3
+  if (!mg_random(hello + 6, 32)) {  // server random, RFC-8446 4.1.3
     mg_error(c, "RNG");
     return false;
   }
@@ -807,14 +807,14 @@ static bool mg_tls_server_send_hello(struct mg_connection *c) {
   return true;
 }
 
-// HelloRetryRequest random, SHA-256 of "HelloRetryRequest", RFC 8446 4.1.3
+// HelloRetryRequest random, SHA-256 of "HelloRetryRequest", RFC-8446 4.1.3
 static const uint8_t hrr_random[32] = {
     0xcf, 0x21, 0xad, 0x74, 0xe5, 0x9a, 0x61, 0x11, 0xbe, 0x1d, 0x8c,
     0x02, 0x1e, 0x65, 0xb8, 0x91, 0xc2, 0xa2, 0x11, 0x16, 0x7a, 0xbb,
     0x8c, 0x5e, 0x07, 0x9e, 0x09, 0xe2, 0xc8, 0xa8, 0x33, 0x9c};
 
 // put HelloRetryRequest record into wio buffer, asking for a P-256 key share.
-// Replace ClientHello in the transcript with message_hash, RFC 8446 4.4.1
+// Replace ClientHello in the transcript with message_hash, RFC-8446 4.4.1
 static bool mg_tls_server_send_hrr(struct mg_connection *c) {
   struct tls_data *tls = (struct tls_data *) c->tls;
   struct mg_iobuf *wio = &tls->send;
@@ -1690,7 +1690,7 @@ static int mg_tls_verify_cert_san(const uint8_t *der, size_t dersz,
     return 0;   // No SAN
   }
   if (mg_der_parse(field.value, field.len, &field) < 0 || field.type != 0x30) {
-    MG_ERROR(("SAN is not a constructed object"));  // RFC 5280 4.2.1.6
+    MG_ERROR(("SAN is not a constructed object"));  // RFC-5280 4.2.1.6
     return -1;
   }
   while (mg_der_next(&field, &name) > 0) {
@@ -1910,7 +1910,7 @@ static int mg_tls_recv_cert(struct mg_connection *c, bool is_client) {
           is_addr = mg_aton_(mg_str_s(tls->hostname), &addr);
           san = mg_tls_verify_cert_san(cert, certsz, tls->hostname,
                                        is_addr ? &addr : NULL);
-          if (san < 0 ||  // RFC 6125 6.4.4 allow legacy fallback to CN
+          if (san < 0 ||  // RFC-6125 6.4.4 allow legacy fallback to CN
               (san == 0 &&
                (is_addr || !mg_tls_verify_cert_cn(&ci->subj, tls->hostname)))) {
             mg_error(c, "failed to verify host");
@@ -2345,7 +2345,7 @@ static int mg_rsa_parse_der_int(const uint8_t **p, const uint8_t *end,
   return 0;
 }
 
-// RFC 5915 ECPrivateKey ::= SEQUENCE {
+// RFC-5915 ECPrivateKey ::= SEQUENCE {
 //   version INTEGER { ecPrivkeyVer1(1) },
 //   privateKey OCTET STRING,
 //   parameters [0] ECParameters {{ NamedCurve }} OPTIONAL,

@@ -4548,7 +4548,7 @@ static void test_split(void) {
   ASSERT(mg_strcmp(b, mg_str("")) == 0);
 }
 
-// RFC 6979 A.2.5: P-256, SHA-256, message "sample"
+// RFC-6979 A.2.5: P-256, SHA-256, message "sample"
 static void test_p256(void) {
 #if MG_TLS == MG_TLS_BUILTIN
   static const uint8_t x[32] = {
