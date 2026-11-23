@@ -1,43 +1,31 @@
+#include "net_builtin.h"
 #include "drivers/usb.h"
 #include "drivers/usb_nrf52.h"
-#include "net_builtin.h"
+#include "printf.h"
+#include "util.h"
 
-#if MG_ENABLE_USB && MG_ENABLE_DRIVER_USB_NRF52
+#if (MG_ENABLE_TCPIP || !MG_ENABLE_USB_ETHERNET) && \
+    MG_ENABLE_DRIVER_USB_NRF52 &&                   \
+    (MG_ENABLE_USB_ETHERNET || MG_ENABLE_USB_SERIAL)
 #include <nrf.h>
 
 // nRF52840 USB device controller, polled, full speed. Endpoint buffers are
 // inside the controller: EasyDMA moves each packet between them and RAM,
-// one transfer at a time, so longer IN transfers go out 64 bytes at a time.
-// EasyDMA reads RAM only, thus constant data is copied to RAM first. The
+// and reads RAM only, so every packet goes through s_mgi_usb_nrf52_pkt. The
 // controller handles SET_ADDRESS by itself. Errata workarounds follow
 // Nordic's nrfx_usbd.c: 171, 187 when enabling, 199 around each DMA
 
-#define ERRATA_199 (*(volatile uint32_t *) 0x40027c1c)
+#define MGI_USB_NRF52_ERRATA_199 (*(volatile uint32_t *) 0x40027c1c)
 
-struct nrf_in {         // IN transfer on an endpoint
-  const uint8_t *data;  // Bytes still to send, in RAM
-  size_t left;          // How many
-  unsigned packets;     // Packets still to send
-  bool busy;            // A packet is waiting for the host
-};
+// usb.c's event handler, see mg_usb_hw::poll()
+#define MGI_USB_NRF52_FN \
+  int (*fn)(enum mg_usb_ev, enum mg_usb_ep, void *, size_t)
 
-static struct nrf_in s_in[5];  // Index: endpoint number
-static struct mg_usb s_usb;
-static uint8_t s_req[16];        // SETUP packet, then its OUT data stage
-static uint32_t s_ep0[256 / 4];  // Control IN reply, OUT data stage
-static char s_serial[17];        // Serial number: device ID in hex
-#if MG_ENABLE_USB_ETHERNET
-static uint32_t s_note[16 / 4];  // Link notification
-static uint32_t s_rx[MG_USB_NTB_SIZE / 4], s_tx[MG_USB_NTB_SIZE / 4];
-static size_t s_rxlen;  // Received part of the OUT transfer block
-static bool s_discard;  // OUT transfer block too long: drop it
-#endif
-#if MG_ENABLE_USB_SERIAL
-static uint32_t s_log[64 / 4];  // Log output in flight
-#endif
+static uint32_t s_mgi_usb_nrf52_pkt[64 / 4];  // One packet in RAM
+static uint8_t s_mgi_usb_nrf52_req[16];       // SETUP packet, then its OUT data
 
 // Write an undocumented register the way Nordic's errata workarounds do
-static void errata(uint32_t addr, uint32_t value) {
+static void mgi_usb_nrf52_errata(uint32_t addr, uint32_t value) {
   volatile uint32_t *unlock = (volatile uint32_t *) 0x4006ec00;
   bool locked = *unlock == 0;
   if (locked) *unlock = 0x9375;
@@ -46,136 +34,110 @@ static void errata(uint32_t addr, uint32_t value) {
 }
 
 // Run one EasyDMA transfer and wait for its end event
-static void dma(volatile uint32_t *task, volatile uint32_t *end) {
+static void mgi_usb_nrf52_dma(volatile uint32_t *task, volatile uint32_t *end) {
   unsigned i;
   *end = 0;
-  ERRATA_199 = 0x82;
+  MGI_USB_NRF52_ERRATA_199 = 0x82;
   *task = 1;
   for (i = 0; *end == 0 && i < 100000; i++) (void) 0;  // Microseconds
   *end = 0;
-  ERRATA_199 = 0;
-}
-
-// Send the next packet of the IN transfer on ep. False if it is over
-static bool in_next(unsigned ep) {
-  struct nrf_in *e = &s_in[ep];
-  size_t n = e->left > 64 ? 64 : e->left;
-  if (e->packets == 0) return false;
-  NRF_USBD->EPIN[ep].PTR = (uint32_t) (uintptr_t) e->data;
-  NRF_USBD->EPIN[ep].MAXCNT = (uint32_t) n;
-  dma(&NRF_USBD->TASKS_STARTEPIN[ep], &NRF_USBD->EVENTS_ENDEPIN[ep]);
-  e->data += n, e->left -= n, e->packets--;
-  return true;
-}
-
-// Start an IN transfer from RAM. zlp: end a multiple of 64 bytes with an
-// empty packet
-static void in_start(unsigned ep, const void *data, size_t len, bool zlp) {
-  struct nrf_in *e = &s_in[ep];
-  e->data = (const uint8_t *) data, e->left = len;
-  e->packets = (unsigned) (len / 64 + (len % 64 || len == 0 || zlp));
-  e->busy = in_next(ep);
+  MGI_USB_NRF52_ERRATA_199 = 0;
 }
 
 // Data toggle of endpoint address ep back to DATA0
-static void dtoggle(unsigned ep) {
+static void mgi_usb_nrf52_dtoggle(unsigned ep) {
   NRF_USBD->DTOGGLE = ep;  // Select the endpoint, then set its toggle
   NRF_USBD->DTOGGLE = (USBD_DTOGGLE_VALUE_Data0 << USBD_DTOGGLE_VALUE_Pos) | ep;
 }
 
-#if MG_ENABLE_USB_ETHERNET
-// Ethernet data endpoints idle, ready to receive
-static void data_reset(void) {
-  dtoggle(0x02), dtoggle(0x82);
-  memset(&s_in[2], 0, sizeof(s_in[2]));
-  s_rxlen = 0, s_discard = false;
-  NRF_USBD->SIZE.EPOUT[2] = 0;  // Drop any received packet, accept the next
+// mg_usb_hw::in(): copy the packet to RAM, then into the endpoint
+static void mgi_usb_nrf52_in(enum mg_usb_ep ep, const void *buf, size_t len) {
+  if (len > 0) memcpy(s_mgi_usb_nrf52_pkt, buf, len);
+  NRF_USBD->EPIN[ep].PTR = (uint32_t) (uintptr_t) s_mgi_usb_nrf52_pkt;
+  NRF_USBD->EPIN[ep].MAXCNT = (uint32_t) len;
+  mgi_usb_nrf52_dma(&NRF_USBD->TASKS_STARTEPIN[ep],
+                    &NRF_USBD->EVENTS_ENDEPIN[ep]);
 }
 
-// A packet on the Ethernet OUT endpoint: add it to the transfer block. The
-// endpoint accepts the next packet once this one is moved or dropped
-static void rx(void) {
-  size_t n = NRF_USBD->SIZE.EPOUT[2];
-  if (n > 0 && !s_discard && s_rxlen + n <= sizeof(s_rx)) {
-    uint8_t *p = (uint8_t *) s_rx + s_rxlen;
-    NRF_USBD->EPOUT[2].PTR = (uint32_t) (uintptr_t) p;
-    NRF_USBD->EPOUT[2].MAXCNT = (uint32_t) n;
-    dma(&NRF_USBD->TASKS_STARTEPOUT[2], &NRF_USBD->EVENTS_ENDEPOUT[2]);
-    s_rxlen += n;
+// Move the packet on OUT endpoint ep to RAM, which also lets the endpoint
+// accept the next one. Returns its length
+static size_t mgi_usb_nrf52_out(unsigned ep) {
+  size_t n = NRF_USBD->SIZE.EPOUT[ep];
+  if (n == 0) {
+    NRF_USBD->SIZE.EPOUT[ep] = 0;  // Nothing to move: accept the next
   } else {
-    s_discard = s_discard || n > 0;  // An empty packet only ends the block
-    NRF_USBD->SIZE.EPOUT[2] = 0;
+    NRF_USBD->EPOUT[ep].PTR = (uint32_t) (uintptr_t) s_mgi_usb_nrf52_pkt;
+    NRF_USBD->EPOUT[ep].MAXCNT = (uint32_t) n;
+    mgi_usb_nrf52_dma(&NRF_USBD->TASKS_STARTEPOUT[ep],
+                      &NRF_USBD->EVENTS_ENDEPOUT[ep]);
   }
-  // At the advertised maximum OUT size, the host need not send a ZLP.
-  // Other transfers end with a short packet (including a ZLP)
-  if (n < 64 || s_rxlen == sizeof(s_rx)) {
-    if (!s_discard) mg_usb_decode(&s_usb, (uint8_t *) s_rx, s_rxlen);
-    s_rxlen = 0, s_discard = false;
-  }
+  return n;
+}
+
+#if MG_ENABLE_USB_ETHERNET
+// Ethernet data endpoints back to DATA0, OUT ready to receive
+static void mgi_usb_nrf52_data_reset(void) {
+  mgi_usb_nrf52_dtoggle(0x02), mgi_usb_nrf52_dtoggle(0x82);
+  NRF_USBD->SIZE.EPOUT[2] = 0;
 }
 #endif
 
 // Endpoints 1-4 on and idle if configured, else off
-static void endpoints_reset(void) {
-  memset(s_in, 0, sizeof(s_in));
+static void mgi_usb_nrf52_endpoints(bool on) {
   NRF_USBD->EPINEN = 1, NRF_USBD->EPOUTEN = 1;
-  if (!s_usb.configured) return;
+  if (!on) return;
 #if MG_ENABLE_USB_ETHERNET
   NRF_USBD->EPINEN |= MG_BIT(1) | MG_BIT(2), NRF_USBD->EPOUTEN |= MG_BIT(2);
-  dtoggle(0x81);
-  data_reset();
+  mgi_usb_nrf52_dtoggle(0x81);
+  mgi_usb_nrf52_data_reset();
 #endif
 #if MG_ENABLE_USB_SERIAL
   NRF_USBD->EPINEN |= MG_BIT(3) | MG_BIT(4), NRF_USBD->EPOUTEN |= MG_BIT(4);
-  dtoggle(0x83), dtoggle(0x04), dtoggle(0x84);
+  mgi_usb_nrf52_dtoggle(0x83), mgi_usb_nrf52_dtoggle(0x04);
+  mgi_usb_nrf52_dtoggle(0x84);
   NRF_USBD->SIZE.EPOUT[4] = 0;
 #endif
 }
 
-// Run a complete control request: SETUP in s_req, then any OUT data
-static void request(void) {
-  const void *reply;
-  unsigned wlen = MG_LOAD_LE16(s_req + 6);
-  int n = mg_usb_setup(&s_usb, s_req, &reply);
-  if (n < 0) {
+// A complete control request: usb.c answers it, then the controller follows
+static void mgi_usb_nrf52_request(MGI_USB_NRF52_FN) {
+  uint8_t *r = s_mgi_usb_nrf52_req;
+  size_t out = (r[0] & 0x80) ? 0 : MG_LOAD_LE16(r + 6);  // OUT data stage
+  int res = fn(MG_USB_EV_SETUP, MG_USB_EP_CTL, r, 8 + out);
+  if (res < 0) {
     NRF_USBD->TASKS_EP0STALL = 1;
     return;
   }
-  switch ((s_req[0] << 8) | s_req[1]) {
+  switch ((r[0] << 8) | r[1]) {
     case 0x0009:  // SET_CONFIGURATION
-      endpoints_reset();
+      mgi_usb_nrf52_endpoints(r[2] == 1);
       break;
 #if MG_ENABLE_USB_ETHERNET
     case 0x010b:  // SET_INTERFACE
-      if (s_req[4] == 1) data_reset();
+      if (r[4] == MG_USB_IF_ETH_DATA) mgi_usb_nrf52_data_reset();
       break;
 #endif
     case 0x0201:  // CLEAR_FEATURE(ENDPOINT_HALT)
-      dtoggle(s_req[4]);
+      mgi_usb_nrf52_dtoggle(r[4]);
       NRF_USBD->EPSTALL =
-          (USBD_EPSTALL_STALL_UnStall << USBD_EPSTALL_STALL_Pos) | s_req[4];
-      if (!(s_req[4] & 0x80)) NRF_USBD->SIZE.EPOUT[s_req[4] & 15] = 0;
+          (USBD_EPSTALL_STALL_UnStall << USBD_EPSTALL_STALL_Pos) | r[4];
+      if (!(r[4] & 0x80)) NRF_USBD->SIZE.EPOUT[r[4] & 15] = 0;
       break;
   }
-  if ((s_req[0] & 0x80) && wlen) {  // IN data stage. Largest reply: 160
-    memcpy(s_ep0, reply, (size_t) n);
-    in_start(0, s_ep0, (size_t) n, n < (int) wlen);
-  } else {
-    NRF_USBD->TASKS_EP0STATUS = 1;
-  }
+  if (res == 0) NRF_USBD->TASKS_EP0STATUS = 1;  // No IN data stage
 }
 
 // A SETUP packet: run it, or first receive its OUT data stage
-static void setup(void) {
+static void mgi_usb_nrf52_setup(MGI_USB_NRF52_FN) {
   const volatile uint32_t *regs = &NRF_USBD->BMREQUESTTYPE;
+  uint8_t *r = s_mgi_usb_nrf52_req;
   unsigned i, wlen;
-  for (i = 0; i < 8; i++) s_req[i] = (uint8_t) regs[i];
-  wlen = MG_LOAD_LE16(s_req + 6);
-  memset(&s_in[0], 0, sizeof(s_in[0]));  // Cancels the previous transfer
-  if (s_req[0] == 0 && s_req[1] == 5) return;  // SET_ADDRESS: hardware's
-  if ((s_req[0] & 0x80) || wlen == 0) {
-    request();
-  } else if (wlen > sizeof(s_req) - 8) {
+  for (i = 0; i < 8; i++) r[i] = (uint8_t) regs[i];
+  wlen = MG_LOAD_LE16(r + 6);
+  if (r[0] == 0 && r[1] == 5) return;  // SET_ADDRESS: the controller's
+  if ((r[0] & 0x80) || wlen == 0) {
+    mgi_usb_nrf52_request(fn);
+  } else if (wlen > sizeof(s_mgi_usb_nrf52_req) - 8) {
     NRF_USBD->TASKS_EP0STALL = 1;
   } else {
     NRF_USBD->TASKS_EP0RCVOUT = 1;  // Accept the OUT data stage
@@ -183,35 +145,36 @@ static void setup(void) {
 }
 
 // A control data stage packet: an IN one acknowledged, or an OUT one arrived
-static void ep0_data(void) {
+static void mgi_usb_nrf52_ep0_data(MGI_USB_NRF52_FN) {
+  uint8_t *r = s_mgi_usb_nrf52_req;
   size_t n = NRF_USBD->SIZE.EPOUT[0];
-  if (s_req[0] & 0x80) {
-    if (!in_next(0)) NRF_USBD->TASKS_EP0STATUS = 1;
-  } else if (n != MG_LOAD_LE16(s_req + 6)) {
+  if (r[0] & 0x80) {
+    if (!fn(MG_USB_EV_IN, MG_USB_EP_CTL, NULL, 0)) {
+      NRF_USBD->TASKS_EP0STATUS = 1;
+    }
+  } else if (n != MG_LOAD_LE16(r + 6)) {
     NRF_USBD->TASKS_EP0STALL = 1;
   } else {
-    NRF_USBD->EPOUT[0].PTR = (uint32_t) (uintptr_t) s_ep0;
-    NRF_USBD->EPOUT[0].MAXCNT = (uint32_t) n;
-    dma(&NRF_USBD->TASKS_STARTEPOUT[0], &NRF_USBD->EVENTS_ENDEPOUT[0]);
-    memcpy(s_req + 8, s_ep0, n);
-    request();
+    mgi_usb_nrf52_out(0);
+    memcpy(r + 8, s_mgi_usb_nrf52_pkt, n);
+    mgi_usb_nrf52_request(fn);
   }
 }
 
 // Follow USB power: enable the controller when VBUS appears, attach to the
 // bus once both are ready, and detach when VBUS goes. True while attached
-static bool attach(void) {
+static bool mgi_usb_nrf52_attach(MGI_USB_NRF52_FN) {
   uint32_t power = NRF_POWER->USBREGSTATUS;
   if (!(power & POWER_USBREGSTATUS_VBUSDETECT_Msk)) {
     if (NRF_USBD->ENABLE) {
       NRF_USBD->USBPULLUP = 0, NRF_USBD->ENABLE = 0;
-      mg_usb_reset(&s_usb);
+      fn(MG_USB_EV_RESET, MG_USB_EP_CTL, NULL, 0);
     }
     return false;
   }
   if (!NRF_USBD->ENABLE) {
-    errata(0x4006ed14, 3);     // Errata 187
-    errata(0x4006ec14, 0xc0);  // Errata 171
+    mgi_usb_nrf52_errata(0x4006ed14, 3);     // Errata 187
+    mgi_usb_nrf52_errata(0x4006ec14, 0xc0);  // Errata 171
     NRF_USBD->EVENTCAUSE = USBD_EVENTCAUSE_READY_Msk;
     NRF_USBD->ENABLE = 1;
   }
@@ -220,56 +183,30 @@ static bool attach(void) {
       !(power & POWER_USBREGSTATUS_OUTPUTRDY_Msk))
     return false;
   NRF_USBD->EVENTCAUSE = USBD_EVENTCAUSE_READY_Msk;
-  errata(0x4006ec14, 0);
-  errata(0x4006ed14, 0);
+  mgi_usb_nrf52_errata(0x4006ec14, 0);
+  mgi_usb_nrf52_errata(0x4006ed14, 0);
   NRF_USBD->USBPULLUP = 1;
   return true;
 }
 
-void mg_usb_init(void) {
-  static bool started;
-  uint32_t id[2], xtal = CLOCK_HFCLKSTAT_SRC_Msk | CLOCK_HFCLKSTAT_STATE_Msk;
-  if (started) return;
-  started = true;
-  id[0] = NRF_FICR->DEVICEID[0], id[1] = NRF_FICR->DEVICEID[1];
-  mg_snprintf(s_serial, sizeof(s_serial), "%M", mg_print_hex, (int) sizeof(id),
-              (uint8_t *) id);
-  s_usb.serial = s_serial;
-  mg_usb_reset(&s_usb);
-#if MG_ENABLE_USB_SERIAL
-  mg_log_set_fn(mg_usb_log, &s_usb);  // Log to the USB serial port
-#endif
-  if ((NRF_CLOCK->HFCLKSTAT & xtal) != xtal) {  // USB needs the crystal
-    NRF_CLOCK->TASKS_HFCLKSTART = 1;
-    while ((NRF_CLOCK->HFCLKSTAT & xtal) != xtal) (void) 0;
-  }
-  // The controller itself starts in mg_usb_poll(), once USB power is there
-}
-
-void mg_usb_poll(void) {
-  mg_usb_init();
-#if MG_ENABLE_USB_SERIAL
-  if (s_usb.reboot && mg_millis() > s_usb.reboot) {
-    NRF_POWER->GPREGRET = 0x57;  // Adafruit bootloader: stay in DFU mode
-    NVIC_SystemReset();
-  }
-#endif
-  if (!attach()) return;
+// mg_usb_hw::poll()
+static void mgi_usb_nrf52_poll(MGI_USB_NRF52_FN) {
+  if (!mgi_usb_nrf52_attach(fn)) return;
   if (NRF_USBD->EVENTS_USBRESET) {
     NRF_USBD->EVENTS_USBRESET = 0;
     NRF_USBD->EVENTS_EP0DATADONE = NRF_USBD->EVENTS_EPDATA = 0;
     NRF_USBD->EPDATASTATUS = NRF_USBD->EPDATASTATUS;
-    mg_usb_reset(&s_usb);
-    endpoints_reset();
+    fn(MG_USB_EV_RESET, MG_USB_EP_CTL, NULL, 0);
+    mgi_usb_nrf52_endpoints(false);
     return;
   }
-  if (NRF_USBD->EVENTS_EP0DATADONE) {  // Before a new SETUP replaces s_req
+  if (NRF_USBD->EVENTS_EP0DATADONE) {  // Before a new SETUP replaces req
     NRF_USBD->EVENTS_EP0DATADONE = 0;
-    ep0_data();
+    mgi_usb_nrf52_ep0_data(fn);
   }
   if (NRF_USBD->EVENTS_EP0SETUP) {
     NRF_USBD->EVENTS_EP0SETUP = 0;
-    setup();
+    mgi_usb_nrf52_setup(fn);
   }
   if (NRF_USBD->EVENTS_EPDATA) {  // Bit n: IN n acknowledged, 16+n: OUT n
     uint32_t done = NRF_USBD->EPDATASTATUS;
@@ -277,61 +214,44 @@ void mg_usb_poll(void) {
     NRF_USBD->EVENTS_EPDATA = 0;
     NRF_USBD->EPDATASTATUS = done;
     for (i = 1; i < 5; i++) {
-      if (done & MG_BIT(i)) s_in[i].busy = in_next(i);
+      if (done & MG_BIT(i)) fn(MG_USB_EV_IN, (enum mg_usb_ep) i, NULL, 0);
     }
 #if MG_ENABLE_USB_ETHERNET
-    if (done & MG_BIT(18)) rx();
-#endif
-#if MG_ENABLE_USB_SERIAL
-    if (done & MG_BIT(20)) NRF_USBD->SIZE.EPOUT[4] = 0;  // Serial: ignored
-#endif
-  }
-#if MG_ENABLE_USB_ETHERNET
-  {
-    const void *msg;
-    size_t n;
-    if (!s_in[1].busy && (n = mg_usb_notify(&s_usb, &msg)) > 0) {
-      memcpy(s_note, msg, n);
-      in_start(1, s_note, n, false);
+    if (done & MG_BIT(16 + MG_USB_EP_ETH_DATA)) {
+      size_t n = mgi_usb_nrf52_out(MG_USB_EP_ETH_DATA);
+      fn(MG_USB_EV_OUT, MG_USB_EP_ETH_DATA, s_mgi_usb_nrf52_pkt, n);
     }
-  }
 #endif
 #if MG_ENABLE_USB_SERIAL
-  if (s_usb.configured && s_usb.dtr && !s_in[4].busy) {
-    size_t n = mg_usb_log_read(&s_usb, s_log, sizeof(s_log));
-    if (n > 0) in_start(4, s_log, n, true);
-  }
+    if (done & MG_BIT(16 + MG_USB_EP_SER_DATA)) {
+      NRF_USBD->SIZE.EPOUT[MG_USB_EP_SER_DATA] = 0;  // Serial input: dropped
+    }
 #endif
+  }
 }
+
+// mg_usb_hw::init(): the serial number, and the crystal that USB needs. The
+// controller itself starts in poll, once USB power is there
+static void mgi_usb_nrf52_start(char serial[17]) {
+  uint32_t id[2], xtal = CLOCK_HFCLKSTAT_SRC_Msk | CLOCK_HFCLKSTAT_STATE_Msk;
+  id[0] = NRF_FICR->DEVICEID[0], id[1] = NRF_FICR->DEVICEID[1];
+  mg_snprintf(serial, 17, "%M", mg_print_hex, (int) sizeof(id), (uint8_t *) id);
+  if ((NRF_CLOCK->HFCLKSTAT & xtal) != xtal) {
+    NRF_CLOCK->TASKS_HFCLKSTART = 1;
+    while ((NRF_CLOCK->HFCLKSTAT & xtal) != xtal) (void) 0;
+  }
+}
+
+const struct mg_usb_hw mg_usb_hw_nrf52 = {
+    mgi_usb_nrf52_start, mgi_usb_nrf52_poll, mgi_usb_nrf52_in};
 
 #if MG_ENABLE_USB_ETHERNET
-static bool mg_tcpip_driver_usb_nrf52_init(struct mg_tcpip_if *ifp) {
-  s_usb.ifp = ifp;  // mg_tcpip_init() has started USB already
-  return true;
-}
-
-static size_t mg_tcpip_driver_usb_nrf52_tx(const void *buf, size_t len,
-                                           struct mg_tcpip_if *ifp) {
-  // One frame can be in flight. Keep USB moving while waiting, but bound
-  // the wait if the host stops reading or the cable is gone
-  uint64_t until = mg_millis() + 20;
-  size_t n = 0;
-  while (s_in[2].busy && mg_millis() < until) mg_usb_poll();
-  if (!s_in[2].busy) n = mg_usb_encode(&s_usb, (uint8_t *) s_tx, buf, len);
-  if (n) in_start(2, s_tx, n, n < s_usb.input_size);
-  (void) ifp;
-  return n ? len : 0;
-}
-
-// USB itself runs from mg_mgr_poll(). Report the link: Ethernet open
-static bool mg_tcpip_driver_usb_nrf52_poll(struct mg_tcpip_if *ifp, bool s1) {
-  (void) ifp;
-  return s1 && s_usb.alt && s_usb.filter;
+static bool mgi_usb_nrf52_init(struct mg_tcpip_if *ifp) {
+  return mg_usb_init(ifp, &mg_usb_hw_nrf52);
 }
 
 struct mg_tcpip_driver mg_tcpip_driver_usb_nrf52 = {
-    mg_tcpip_driver_usb_nrf52_init, mg_tcpip_driver_usb_nrf52_tx, NULL,
-    mg_tcpip_driver_usb_nrf52_poll};
+    mgi_usb_nrf52_init, mg_usb_tx, NULL, mg_usb_poll};
 #endif
 
 #endif

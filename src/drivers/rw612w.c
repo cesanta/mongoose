@@ -1,10 +1,14 @@
-#include "net_builtin.h"
-#include "l2_mesh.h"
 #include "log.h"
+#include "net_builtin.h"
+#include "radio.h"
 #include "util.h"
 
 #if MG_ENABLE_TCPIP && defined(MG_ENABLE_DRIVER_RW612W) && \
     MG_ENABLE_DRIVER_RW612W
+
+#if MG_RADIO != MG_RADIO_802154
+#error "MG_ENABLE_DRIVER_RW612W supports MG_RADIO_802154 only"
+#endif
 
 #include "sha256.h"
 
@@ -114,8 +118,6 @@ struct mg_rw612 {
   struct mg_tcpip_if *ifp;  // Our interface, for the L2 receive pool
 };
 static struct mg_rw612 s_rw612;
-static struct mg_queue s_rw612w_rx;
-static char s_rw612w_queue[2048];
 
 static void mg_rw612_imu_send(uint8_t type, uint8_t subtype,
                               const uint32_t *payload, uint8_t len) {
@@ -139,7 +141,7 @@ static void mg_rw612_control(uint8_t subtype, uint32_t a, uint32_t b,
 }
 
 static void mg_rw612_queue_rx(const uint8_t *frame, size_t len) {
-  mg_mesh_rx_queue(&s_rw612w_rx, s_rw612.ifp, frame, len);
+  mg_radio_rx_queue(s_rw612.ifp, frame, len);
 }
 
 // Spinel packed unsigned integer: 7 bits per byte, LSB first
@@ -362,7 +364,7 @@ static size_t mgi_rw612w_radio_tx(struct mg_tcpip_if *ifp, const void *buf,
   memcpy(f + n, buf, len), n += len;
   f[n++] = 0, f[n++] = 0;  // FCS, filled in by the radio
   (void) ifp;
-  f[n++] = MG_802154_CHANNEL;
+  f[n++] = MG_RADIO_CHANNEL;
   f[n++] = 0;  // Max CSMA backoffs
   f[n++] = 0;  // Max frame retries
   f[n++] = 0;  // CSMA disabled for scheduled turns
@@ -371,11 +373,9 @@ static size_t mgi_rw612w_radio_tx(struct mg_tcpip_if *ifp, const void *buf,
   return len;
 }
 
-static bool mgi_rw612w_radio_init(struct mg_tcpip_if *ifp) {
+static bool mgi_rw612w_radio_init(struct mg_tcpip_if *ifp, uint16_t address) {
   struct mg_rw612 *s = &s_rw612;
-  struct mg_tcpip_driver_rw612w_data *data = ifp->driver_data;
-  struct mg_mesh_node *node = data->mesh;
-  uint8_t f[8], one = 1, zero = 0, pan[2], addr[2], channel = MG_802154_CHANNEL;
+  uint8_t f[8], one = 1, zero = 0, pan[2], addr[2], channel = MG_RADIO_CHANNEL;
   uint64_t expire;
   if (MGI_MBOX->magic[0] != MGI_SYNC_MAGIC) {
     MG_ERROR(("Radio firmware is not running on CPU2"));
@@ -414,10 +414,10 @@ static bool mgi_rw612w_radio_init(struct mg_tcpip_if *ifp) {
   if (!mg_rw612_set(MGI_PROP_PHY_ENABLED, &one, 1)) {
     return mg_rw612_fail("PHY enable failed");
   }
-  pan[0] = (uint8_t) MG_802154_PAN_ID;
-  pan[1] = (uint8_t) (MG_802154_PAN_ID >> 8);
-  addr[0] = (uint8_t) node->radio_address;
-  addr[1] = (uint8_t) (node->radio_address >> 8);
+  pan[0] = (uint8_t) MG_RADIO_NETWORK;
+  pan[1] = (uint8_t) (MG_RADIO_NETWORK >> 8);
+  addr[0] = (uint8_t) address;
+  addr[1] = (uint8_t) (address >> 8);
   if (!mg_rw612_set(MGI_PROP_PHY_CHAN, &channel, 1) ||
       !mg_rw612_set(MGI_PROP_PANID, pan, 2) ||
       !mg_rw612_set(MGI_PROP_SADDR, addr, 2) ||
@@ -430,72 +430,30 @@ static bool mgi_rw612w_radio_init(struct mg_tcpip_if *ifp) {
   return true;
 }
 
-static size_t mgi_rw612w_tx(const void *buf, size_t len,
-                            struct mg_tcpip_if *ifp) {
-  struct mg_tcpip_driver_rw612w_data *data = ifp->driver_data;
-  return data->mesh->strategy->tx(data->mesh, buf, len);
-}
-
-static size_t mgi_rw612w_rx(void *buf, size_t cap, struct mg_tcpip_if *ifp) {
-  struct mg_tcpip_driver_rw612w_data *data = ifp->driver_data;
-  size_t len = data->mesh->rx_len;
-  if (len > cap) return 0;
-  if (len != 0 && buf != ifp->recv_queue.buf)
-    memcpy(buf, ifp->recv_queue.buf, len);
-  data->mesh->rx_len = 0;
-  return len;
-}
-
-static bool mgi_rw612w_poll(struct mg_tcpip_if *ifp, bool s1) {
-  struct mg_tcpip_driver_rw612w_data *data = ifp->driver_data;
-  struct mg_mesh_node *node = data->mesh;
-  uint64_t now = mg_micros();
-  (void) s1;
+static bool mgi_rw612w_radio_poll(struct mg_tcpip_if *ifp) {
   bool was_sending = s_rw612.txing;
+  (void) ifp;
   mg_rw612_poll_imu();
   if (s_rw612.txing &&
       (s_rw612.rsp || mg_millis() > s_rw612.txstart + MGI_TX_TIMEOUT_MS)) {
     if (!s_rw612.rsp) MG_ERROR(("TX timeout"));
     s_rw612.txing = false;
   }
-  if (was_sending && !s_rw612.txing)
-    node->tx_at = now + node->strategy->radio->ifs_us;
-  node->now = now;
-  mg_mesh_rx_drain(node, &s_rw612w_rx);
-  node->strategy->tick(node, now);
-  return node->joined;
+  return was_sending && !s_rw612.txing;
 }
 
+// The MAC comes from the chip's unique ID
 static bool mgi_rw612w_init(struct mg_tcpip_if *ifp) {
-  struct mg_tcpip_driver_rw612w_data *data = ifp->driver_data;
-  const struct mg_mesh *strategy = data->strategy;
   uint8_t uid[FSL_OCOTP_UID_LENGTH] = {0}, digest[32];
   uint32_t uid_len = sizeof(uid);
-  uint16_t address;
   OCOTP_ReadUniqueID(uid, &uid_len);
   mg_sha256(digest, uid, sizeof(uid));
   memcpy(ifp->mac, digest, 6);
   ifp->mac[0] = 0x02;
-  address =
-      (uint16_t) (2 + ((unsigned) ifp->mac[4] * 256 + ifp->mac[5]) % 65532u);
-  if (strategy == NULL) strategy = &mg_mesh_default;
-  data->mesh = mg_calloc(1, sizeof(*data->mesh));
-  if (data->mesh == NULL) return false;
-  if (!strategy->init(data->mesh, ifp, NULL, address)) {
-    mg_free(data->mesh);
-    data->mesh = NULL;
-    return false;
-  }
-  data->mesh->strategy = strategy;
-  data->mesh->tx = mgi_rw612w_radio_tx;
-  mg_queue_init(&s_rw612w_rx, s_rw612w_queue, sizeof(s_rw612w_queue));
-  if (mgi_rw612w_radio_init(ifp)) return true;
-  strategy->free(data->mesh);
-  mg_free(data->mesh);
-  data->mesh = NULL;
-  return false;
+  return mg_radio_init(ifp, mgi_rw612w_radio_init, mgi_rw612w_radio_poll,
+                       mgi_rw612w_radio_tx);
 }
 
-struct mg_tcpip_driver mg_tcpip_driver_rw612w = {
-    mgi_rw612w_init, mgi_rw612w_tx, mgi_rw612w_rx, mgi_rw612w_poll};
+struct mg_tcpip_driver mg_tcpip_driver_rw612w = {mgi_rw612w_init, mg_radio_tx,
+                                                 mg_radio_rx, mg_radio_poll};
 #endif

@@ -6,10 +6,25 @@
 // sends HTTP requests to the nodes
 
 #include "simulator.h"
+#include "mongoose.c"  // One unit: the simulator reads the private radio state
+
+// The radio state of an interface
+static struct mg_radio_node *sim_node(struct mg_tcpip_if *ifp) {
+  return (struct mg_radio_node *) ifp->driver_data;
+}
+
+// When the radio state needs its next poll, us: its next fragment, or for a
+// bridge, the end of the current turn if sooner
+static uint64_t sim_next_tick(struct mg_tcpip_if *ifp) {
+  struct mg_radio_node *node = sim_node(ifp);
+  if (node->lan != NULL && node->deadline < node->burst_at) {
+    return node->deadline;
+  }
+  return node->burst_at;
+}
 
 #define STEP_MICROSECONDS 1000  // Periodic stack timer polling only
 
-static const struct mg_mesh *s_mesh = &mg_mesh_default;
 static struct simulator s_sim;  // The simulator
 
 // Mongoose's clock: virtual time. A minute of network traffic takes far less
@@ -43,8 +58,7 @@ static void usage(const struct simulator *sim, const char *prog) {
           "  -t SEC         - simulated time, seconds, default: %g\n"
           "  -w SEC         - mesh settle time before requests, default: %g\n"
           "  -range METRES  - radio range, default: %g\n"
-          "  -loss PERCENT  - random reception loss, default: %g\n"
-          "  -m A|default   - mesh strategy, default: default\n",
+          "  -loss PERCENT  - random reception loss, default: %g\n",
           prog, sim->area.x, sim->area.y, sim->area.z,
           (double) (int64_t) sim->duration / 1e6,
           (double) (int64_t) sim->tester.wait / 1e6, sim->radio_range,
@@ -64,8 +78,7 @@ static bool add_bridge(struct simulator *sim, const char *s) {
   struct bridge *b = (struct bridge *) calloc(1, sizeof(*b));
   if (b == NULL || !parse_pos(s, &b->pos)) return free(b), false;
   if (sim->last_mac >= 0xffffu - 1u) return free(b), false;
-  next_mac(sim, b->rif.mac);
-  b->radio.address = (uint16_t) sim->last_mac;
+  next_mac(sim, b->radio.ifp.mac);
   LIST_ADD_TAIL(struct bridge, &sim->bridges, b);
   sim->num_bridges++;
   return true;
@@ -76,8 +89,7 @@ static bool add_node(struct simulator *sim, const char *s) {
   struct radio_node *n = (struct radio_node *) calloc(1, sizeof(*n));
   if (n == NULL || !parse_pos(s, &n->pos)) return free(n), false;
   if (sim->last_mac >= 0xffffu - 1u) return free(n), false;
-  next_mac(sim, n->rif.mac);
-  n->radio.address = (uint16_t) sim->last_mac;
+  next_mac(sim, n->radio.ifp.mac);
   LIST_ADD_TAIL(struct radio_node, &sim->nodes, n);
   sim->num_nodes++;
   return true;
@@ -323,50 +335,17 @@ static void init(struct simulator *sim) {
 // two idle checks can succeed before either node starts transmitting.
 // Inter-frame spacing is per sender, not a reservation of the shared air.
 uint64_t radio_airtime(size_t len) {
-  const struct mg_radio *radio = s_mesh->radio;
-  return ((uint64_t) (len + radio->overhead) * 8000000 + radio->bitrate - 1) /
-         radio->bitrate;
-}
-
-static void radio_schedule(struct simulator *sim, struct radio_frame *f,
-                           bool busy) {
-  struct radio_port *port = (struct radio_port *) f->from->driver_data;
-  const struct mg_radio *radio = s_mesh->radio;
-  bool checked = f->state == RADIO_CCA;
-  if (s_mesh->scheduled_tx || !radio->csma || (checked && !busy)) {
-    f->state = RADIO_START;
-    f->due = sim->now + (checked ? radio->turnaround_us : 0);
-    return;
-  }
-  if (!checked) {
-    f->backoff = radio->backoff_min;
-  } else if (f->backoff < radio->backoff_max) {
-    f->backoff++;
-  }
-  if (port->random == 0) {
-    size_t i;
-    port->random = (uint32_t) mg_now();
-    for (i = 0; i < 6; i++) {
-      port->random = port->random * 33u + f->from->mac[i];
-    }
-    if (port->random == 0) port->random = 1;
-  }
-  port->random ^= port->random << 13;
-  port->random ^= port->random >> 17;
-  port->random ^= port->random << 5;
-  f->state = RADIO_BACKOFF;
-  f->due = sim->now + (port->random % (1U << f->backoff)) * radio->slot_us;
-  if (f->due > sim->now) port->rx_off_until = f->due;
+  return ((uint64_t) (len + SIM_RADIO_OVERHEAD) * 8000000 + SIM_RADIO_BITRATE -
+          1) /
+         SIM_RADIO_BITRATE;
 }
 
 static size_t radio_send(struct mg_tcpip_if *ifp, const void *buf, size_t len) {
-  struct radio_port *port = (struct radio_port *) ifp->driver_data;
+  struct radio_port *port = (struct radio_port *) ifp;
   struct simulator *sim = port->sim;
   struct radio_frame *f, **p = &sim->air_head;
-  const struct mg_radio *radio = s_mesh->radio;
-  if (len < radio->header_len || len > sizeof(f->buf) ||
-      len > radio->max_frame_size || port->tx_ready_at > sim->now ||
-      radio->bitrate == 0)
+  if (len < SIM_RADIO_HDR_LEN || len > SIM_RADIO_MTU ||
+      port->tx_ready_at > sim->now)
     return 0;
   while (*p != NULL) {
     if ((*p)->from == ifp) return 0;
@@ -377,18 +356,15 @@ static size_t radio_send(struct mg_tcpip_if *ifp, const void *buf, size_t len) {
   memcpy(f->buf, buf, len);
   *p = f;
   sim->work_pending = true;
-  radio_schedule(sim, f, false);
+  f->state = RADIO_START;
+  f->due = sim->now;
   return len;
 }
 
 static void radio_receive(struct radio_port *port,
                           const struct radio_frame *f) {
-  char *buf;
-  if (mg_queue_book(&port->rx, &buf, f->len) >= f->len) {
-    memcpy(buf, f->buf, f->len);
-    mg_queue_add(&port->rx, f->len);
-    port->sim->work_pending = true;
-  }
+  mg_radio_rx_queue(&port->ifp, f->buf, f->len);
+  port->sim->work_pending = true;
 }
 
 // Test range and sample independent interference loss for this reception.
@@ -408,7 +384,8 @@ static void radio_deliver_to(struct radio_port *port,
                              const struct radio_port *from,
                              const struct radio_frame *f, uint16_t dst) {
   bool all = dst == 0xffffu;
-  if (port == from || (!all && port->address != dst)) return;
+  if (port == from || (!all && sim_node(&port->ifp)->radio_address != dst))
+    return;
   if (!visible(port->sim, from->pos, port->pos)) {
     port->sim->air_lost++;
   } else if (port->tx_until > f->start) {
@@ -419,12 +396,11 @@ static void radio_deliver_to(struct radio_port *port,
 }
 
 static void radio_deliver(struct simulator *sim, const struct radio_frame *f) {
-  const struct mg_radio *radio = s_mesh->radio;
-  const struct radio_port *from = f->from->driver_data;
+  const struct radio_port *from = (const struct radio_port *) f->from;
   uint16_t dst, src;
   struct bridge *b;
   struct radio_node *n;
-  if (radio->parse_hdr(radio, f->buf, f->len, &dst, &src) == 0) return;
+  if (!sim_parse_hdr(f->buf, f->len, &dst, &src)) return;
   for (b = sim->bridges; b != NULL; b = b->next)
     radio_deliver_to(&b->radio, from, f, dst);
   for (n = sim->nodes; n != NULL; n = n->next)
@@ -443,33 +419,19 @@ static void radio_poll(struct simulator *sim) {
     if (f->collided) {
       sim->air_collisions++;
     }
+    ((struct radio_port *) f->from)->tx_done = true;
     radio_deliver(sim, f);
     *p = f->next;
     free(f);
   }
   for (f = sim->air_head; f != NULL; f = f->next) {
-    if (f->state == RADIO_BACKOFF && f->due <= sim->now) {
-      f->state = RADIO_CCA;
-      f->due = sim->now + s_mesh->radio->cca_us;
-      ((struct radio_port *) f->from->driver_data)->rx_off_until = f->due;
-    }
-  }
-  for (f = sim->air_head; f != NULL; f = f->next) {
-    if (f->state != RADIO_CCA || f->due > sim->now) continue;
-    radio_schedule(sim, f,
-                   sim->air_busy_until > sim->now - s_mesh->radio->cca_us);
-    if (f->state == RADIO_START) {
-      ((struct radio_port *) f->from->driver_data)->rx_off_until = f->due;
-    }
-  }
-  for (f = sim->air_head; f != NULL; f = f->next) {
-    struct radio_port *port = f->from->driver_data;
+    struct radio_port *port = (struct radio_port *) f->from;
     if (f->state != RADIO_START || f->due > sim->now) continue;
     f->state = RADIO_END;
     f->start = sim->now;
     f->due = sim->now + radio_airtime(f->len);
     port->rx_off_until = port->tx_until = f->due;
-    port->tx_ready_at = f->due + s_mesh->radio->ifs_us;
+    port->tx_ready_at = f->due + SIM_RADIO_IFS_US;
     for (g = sim->air_head; g != NULL; g = g->next) {
       if (g != f && g->state == RADIO_END && g->due > sim->now) {
         f->collided = g->collided = true;
@@ -489,83 +451,41 @@ static uint64_t radio_next(const struct simulator *sim, uint64_t next) {
   return next;
 }
 
-static size_t radio_receive_frame(void *buf, size_t cap, struct mg_tcpip_if *ifp) {
-  struct radio_port *port = (struct radio_port *) ifp->driver_data;
-  char *src;
-  size_t len;
-  while ((len = mg_queue_next(&port->rx, &src)) > 0) {
-    if (len <= cap) memcpy(buf, src, len);
-    mg_queue_del(&port->rx, len);
-    if (len <= cap) {
-      if (mg_queue_next(&port->rx, &src) > 0) port->sim->work_pending = true;
-      return len;
-    }
-  }
-  return 0;
+static bool radio_hw_poll(struct mg_tcpip_if *ifp) {
+  struct radio_port *port = (struct radio_port *) ifp;
+  bool done = port->tx_done;
+  port->tx_done = false;
+  return done;
 }
 
-static size_t radio_tx(const void *buf, size_t len, struct mg_tcpip_if *ifp) {
-  struct radio_port *port = ifp->driver_data;
-  return port->mesh->strategy->tx(port->mesh, buf, len);
-}
-
-static size_t radio_rx(void *buf, size_t cap, struct mg_tcpip_if *ifp) {
-  struct radio_port *port = ifp->driver_data;
-  size_t len = port->mesh->rx_len;
-  if (len > cap) return 0;
-  if (len != 0 && buf != ifp->recv_queue.buf)
-    memcpy(buf, ifp->recv_queue.buf, len);
-  port->mesh->rx_len = 0;
-  return len;
-}
-
-static bool radio_driver_poll(struct mg_tcpip_if *ifp, bool s1) {
-  struct radio_port *port = ifp->driver_data;
-  uint8_t frame[128];
-  size_t len;
-  (void) s1;
-  port->mesh->now = mg_micros();
-  while (port->mesh->rx_len == 0 &&
-         (len = radio_receive_frame(frame, sizeof(frame), ifp)) != 0)
-    port->mesh->strategy->rx(port->mesh, frame, len);
-  s_mesh->tick(port->mesh, mg_micros());
-  return port->mesh->joined;
-}
-
-static bool radio_init(struct mg_tcpip_if *ifp) {
-  struct radio_port *port = ifp->driver_data;
-  char *buf = malloc(LAN_QUEUE_SIZE);
-  if (buf == NULL) return false;
-  mg_queue_init(&port->rx, buf, LAN_QUEUE_SIZE);
-  port->mesh = calloc(1, sizeof(*port->mesh));
-  if (port->mesh == NULL ||
-      !s_mesh->init(port->mesh, ifp, port->lan, port->address)) {
-    free(port->mesh);
-    port->mesh = NULL;
-    free(buf);
-    port->rx.buf = NULL;
-    return false;
-  }
-  port->mesh->strategy = s_mesh;
-  port->mesh->tx = radio_send;
+static bool radio_hw_init(struct mg_tcpip_if *ifp, uint16_t addr) {
+  (void) ifp, (void) addr;
   return true;
 }
 
-static struct mg_tcpip_driver s_radio_driver = {
-    radio_init, radio_tx, radio_rx, radio_driver_poll};
+static bool radio_init(struct mg_tcpip_if *ifp) {
+  struct radio_port *port = (struct radio_port *) ifp;
+  if (!mg_radio_init(ifp, radio_hw_init, radio_hw_poll, radio_send))
+    return false;
+  if (port->lan != NULL) mg_radio_bridge(ifp, port->lan);
+  return true;
+}
 
-#define MG_TCPIP_DRIVER_SIM_RADIO_INIT(manager, interface) \
-  do { \
-    struct mg_tcpip_if *mif_ = (interface); \
-    mif_->mgr = (manager); \
-    mg_tcpip_init((manager), mif_); \
+static struct mg_tcpip_driver s_radio_driver = {radio_init, mg_radio_tx,
+                                                mg_radio_rx, mg_radio_poll};
+
+#define MG_TCPIP_DRIVER_SIM_RADIO_INIT(manager, interface)            \
+  do {                                                                \
+    struct mg_tcpip_if *mif_ = (interface);                           \
+    mif_->mgr = (manager);                                            \
+    mg_tcpip_init((manager), mif_);                                   \
     MG_INFO(("Driver: sim_radio, MAC: %M", mg_print_mac, mif_->mac)); \
   } while (0)
 
-#define MG_TCPIP_DRIVER_SIM_LAN_INIT(manager, interface) \
-  do { \
-    struct mg_tcpip_if *mif_ = (interface); \
-    mg_tcpip_init((manager), mif_); \
+#define MG_TCPIP_DRIVER_SIM_LAN_INIT(manager, interface)            \
+  do {                                                              \
+    struct mg_tcpip_if *mif_ = (interface);                         \
+    mg_tcpip_init((manager), mif_);                                 \
     MG_INFO(("Driver: sim_lan, MAC: %M", mg_print_mac, mif_->mac)); \
   } while (0)
 
@@ -584,12 +504,11 @@ static void node_http_ev_handler(struct mg_connection *c, int ev,
 static void nodes_init(struct simulator *sim) {
   struct radio_node *n;
   for (n = sim->nodes; n != NULL; n = n->next) {
-    n->rif.driver = &s_radio_driver;
-    n->rif.driver_data = &n->radio;
+    n->radio.ifp.driver = &s_radio_driver;
     n->radio.sim = sim;
     n->radio.pos = &n->pos;
     mg_mgr_init(&n->mgr);
-    MG_TCPIP_DRIVER_SIM_RADIO_INIT(&n->mgr, &n->rif);
+    MG_TCPIP_DRIVER_SIM_RADIO_INIT(&n->mgr, &n->radio.ifp);
     if (n->mgr.ifp != NULL) {
       mg_http_listen(&n->mgr, "http://0.0.0.0:80", node_http_ev_handler,
                      n->mgr.ifp->mac);
@@ -601,13 +520,12 @@ static void nodes_init(struct simulator *sim) {
 static void bridges_init(struct simulator *sim) {
   struct bridge *b;
   for (b = sim->bridges; b != NULL; b = b->next) {
-    b->lif.driver = &s_lan_driver, b->rif.driver = &s_radio_driver;
-    b->rif.driver_data = &b->radio;
+    b->lif.driver = &s_lan_driver, b->radio.ifp.driver = &s_radio_driver;
     b->radio.sim = sim;
     b->radio.pos = &b->pos;
     mg_mgr_init(&b->mgr);
     b->radio.lan = &b->lif;
-    MG_TCPIP_DRIVER_SIM_RADIO_INIT(&b->mgr, &b->rif);
+    MG_TCPIP_DRIVER_SIM_RADIO_INIT(&b->mgr, &b->radio.ifp);
     mg_queue_init(&b->lif.recv_queue, (char *) calloc(1, LAN_QUEUE_SIZE),
                   LAN_QUEUE_SIZE);
     b->lif.driver->init(&b->lif);
@@ -647,25 +565,17 @@ int main(int argc, char *argv[]) {
         s_sim.radio_loss = value;
       else
         s_sim.radio_range = value;
-    } else if (strcmp(argv[i], "-m") == 0) {
-      const char *name = argv[++i];
-      if (strcmp(name, mg_mesh_a.name) == 0)
-        s_mesh = &mg_mesh_a;
-      else if (strcmp(name, mg_mesh_default.name) == 0)
-        s_mesh = &mg_mesh_default;
-      else
-        usage(&s_sim, argv[0]);
     } else {
       usage(&s_sim, argv[0]);
     }
   }
 
   printf("Area %gx%gx%g m, radio %s, mesh %s, bridges: %d, nodes: %d\n",
-         s_sim.area.x, s_sim.area.y, s_sim.area.z, s_mesh->radio->name,
-         s_mesh->name, s_sim.num_bridges, s_sim.num_nodes);
+         s_sim.area.x, s_sim.area.y, s_sim.area.z, "802.15.4", "default",
+         s_sim.num_bridges, s_sim.num_nodes);
   check_area(&s_sim);
-  if (s_mesh->single_bridge && s_sim.num_bridges != 1) {
-    fprintf(stderr, "%s requires exactly one bridge\n", s_mesh->name);
+  if (s_sim.num_bridges != 1) {
+    fprintf(stderr, "%s requires exactly one bridge\n", "default");
     return EXIT_FAILURE;
   }
 
@@ -693,13 +603,13 @@ int main(int argc, char *argv[]) {
           mesh_at = (uint64_t) -1;
           for (b = s_sim.bridges; b != NULL; b = b->next) {
             mg_mgr_poll(&b->mgr, 0);
-            if (b->radio.mesh->next_tick < mesh_at)
-              mesh_at = b->radio.mesh->next_tick;
+            if (sim_next_tick(&b->radio.ifp) < mesh_at)
+              mesh_at = sim_next_tick(&b->radio.ifp);
           }
           for (n = s_sim.nodes; n != NULL; n = n->next) {
             mg_mgr_poll(&n->mgr, 0);
-            if (n->radio.mesh->next_tick < mesh_at)
-              mesh_at = n->radio.mesh->next_tick;
+            if (sim_next_tick(&n->radio.ifp) < mesh_at)
+              mesh_at = sim_next_tick(&n->radio.ifp);
           }
         }
         if (mg_queue_next(&s_sim.tester.lif.recv_queue, &pending) > 0) {
@@ -719,19 +629,6 @@ int main(int argc, char *argv[]) {
   }
   printf("\nSimulated %g s in %.3f s", (double) (int64_t) s_sim.now / 1e6,
          (double) (clock() - started) / CLOCKS_PER_SEC);
-  if (s_sim.nodes != NULL) {
-    const struct radio_node *n;
-    size_t min = (size_t) -1, max = 0;
-    double total = 0;
-    for (n = s_sim.nodes; n != NULL; n = n->next) {
-      size_t peak = n->radio.mesh->ram_peak;
-      if (peak < min) min = peak;
-      if (peak > max) max = peak;
-      total += (double) peak;
-    }
-    printf("; peak mesh RAM per node (bytes): min %zu, max %zu, avg %.1f", min,
-           max, total / s_sim.num_nodes);
-  }
   putchar('\n');
 
   while (s_sim.air_head != NULL) {
@@ -739,14 +636,14 @@ int main(int argc, char *argv[]) {
     s_sim.air_head = f->next;
     free(f);
   }
-  printf("Radio: %lu sent, %lu collided, %lu lost\n",
-         s_sim.air_sent, s_sim.air_collisions, s_sim.air_lost);
+  printf("Radio: %lu sent, %lu collided, %lu lost\n", s_sim.air_sent,
+         s_sim.air_collisions, s_sim.air_lost);
   {
     struct radio_node *n;
     int count = 0, joined = 0;
     for (n = s_sim.nodes; n != NULL; n = n->next) {
       if (n->mgr.ifp != NULL && n->mgr.ifp->ip != 0) count++;
-      if (n->radio.mesh->joined) joined++;
+      if (sim_node(&n->radio.ifp)->joined) joined++;
     }
     printf("Nodes with IP: %d of %d, joined: %d of %d\n", count,
            s_sim.num_nodes, joined, s_sim.num_nodes);
@@ -755,18 +652,8 @@ int main(int argc, char *argv[]) {
     struct bridge *b;
     struct radio_node *n;
     mg_log_set(MG_LL_NONE);
-    for (b = s_sim.bridges; b != NULL; b = b->next) {
-      mg_mgr_free(&b->mgr);
-      s_mesh->free(b->radio.mesh);
-      free(b->radio.mesh);
-      free(b->radio.rx.buf);
-    }
-    for (n = s_sim.nodes; n != NULL; n = n->next) {
-      mg_mgr_free(&n->mgr);
-      s_mesh->free(n->radio.mesh);
-      free(n->radio.mesh);
-      free(n->radio.rx.buf);
-    }
+    for (b = s_sim.bridges; b != NULL; b = b->next) mg_mgr_free(&b->mgr);
+    for (n = s_sim.nodes; n != NULL; n = n->next) mg_mgr_free(&n->mgr);
   }
   return 0;
 }

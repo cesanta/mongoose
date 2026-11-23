@@ -13,12 +13,15 @@ static uint64_t s_radio_led_until;
 // Cumulative totals. Up: radio -> LAN; down: LAN -> radio queue.
 static uint64_t s_frames_up, s_frames_down, s_bytes_up, s_bytes_down;
 static uint64_t s_radio_sent, s_radio_received;
-static size_t (*s_radio_tx)(struct mg_tcpip_if *, const void *, size_t);
 
-static size_t radio_tx(struct mg_tcpip_if *ifp, const void *buf, size_t len) {
-  size_t sent = s_radio_tx(ifp, buf, len);
-  if (sent != 0) s_radio_sent++;
-  return sent;
+// Radio interface events: count radio frames, blink on reception
+static void radio_fn(struct mg_tcpip_if *ifp, int ev, void *ev_data) {
+  if (ev == MG_TCPIP_EV_PHY_TX) s_radio_sent++;
+  if (ev == MG_TCPIP_EV_PHY_RX) {
+    s_radio_received++;
+    s_radio_led_until = mg_millis() + 2;
+  }
+  (void) ifp, (void) ev_data;
 }
 
 static size_t eth_up(const void *buf, size_t len, struct mg_tcpip_if *ifp) {
@@ -27,31 +30,23 @@ static size_t eth_up(const void *buf, size_t len, struct mg_tcpip_if *ifp) {
   return sent;
 }
 
-static size_t eth_down(struct mg_mesh_node *node, const void *buf, size_t len) {
-  size_t queued = mg_mesh_default.tx(node, buf, len);
+static size_t eth_down(const void *buf, size_t len, struct mg_tcpip_if *ifp) {
+  size_t queued = mg_tcpip_driver_rw612w.tx(buf, len, ifp);
   if (queued != 0) s_frames_down++, s_bytes_down += queued;
   return queued;
-}
-
-static void radio_rx(struct mg_mesh_node *node, void *buf, size_t len) {
-  s_radio_received++;
-  s_radio_led_until = mg_millis() + 2;
-  mg_mesh_default.rx(node, buf, len);
 }
 
 static void log_fn(char ch, void *arg) {
   hal_uart_write_buf(arg, &ch, 1);
 }
 
-
 int main(void) {
   static struct mg_tcpip_driver_rw612_data eth_data;
   static struct mg_tcpip_if eth;
   static struct mg_tcpip_driver eth_driver;
   static char eth_queue[8192];
-  static struct mg_tcpip_driver_rw612w_data radio_data;
   static struct mg_tcpip_if radio;
-  static struct mg_mesh mesh;
+  static struct mg_tcpip_driver radio_driver;
   uint32_t lan_received = 0;
   uint64_t lan_led_until = 0;
   uint64_t link_timer = 0, stats_timer = 0;
@@ -68,15 +63,11 @@ int main(void) {
   mg_log_set_fn(log_fn, USART3);
   hal_ethernet_init();
 
-  mesh = mg_mesh_default;
-  mesh.tx = eth_down;
-  mesh.rx = radio_rx;  // Observe radio reception without modifying the driver.
-  radio_data.strategy = &mesh;
-  radio.driver = &mg_tcpip_driver_rw612w;
-  radio.driver_data = &radio_data;
+  radio_driver = mg_tcpip_driver_rw612w;
+  radio_driver.tx = eth_down;
+  radio.driver = &radio_driver;
+  radio.fn = radio_fn;
   if (!radio.driver->init(&radio)) return 1;
-  s_radio_tx = radio_data.mesh->tx;
-  radio_data.mesh->tx = radio_tx;
 
   eth_data.mdc_cr = MG_DRIVER_MDC_CR;
   eth_data.mdc_holdtime = MG_DRIVER_MDC_HOLDTIME;
@@ -90,10 +81,9 @@ int main(void) {
   if (!eth.driver->init(&eth)) return 1;
 
   ENET->RCR |= ENET_RCR_PROM_MASK;  // Receive frames addressed to radio nodes.
-  radio_data.mesh->lan = &eth;
-  radio_data.mesh->next_tick = 0;
+  mg_radio_bridge(&radio, &eth);
 
-  MG_INFO(("Ethernet/radio bridge, channel %u", MG_802154_CHANNEL));
+  MG_INFO(("Ethernet/radio bridge, channel %u", MG_RADIO_CHANNEL));
   stats_timer = mg_millis() + 5000;
   for (;;) {
     uint64_t now = mg_millis();

@@ -7,7 +7,26 @@
 
 #include "mongoose.h"
 
-extern const struct mg_mesh mg_mesh_a;
+// The simulated radio: 802.15.4, as radio.c sees it with MG_RADIO_802154
+#define SIM_RADIO_MTU 125            // Largest frame, without the FCS
+#define SIM_RADIO_BITRATE 250000     // Bits per second on air
+#define SIM_RADIO_OVERHEAD 8         // Preamble, SFD, PHR, FCS
+#define SIM_RADIO_TURNAROUND_US 100  // Receive to transmit
+#define SIM_RADIO_IFS_US 640         // Gap between transmissions
+#define SIM_RADIO_HDR_LEN 9          // MAC header, short addresses
+
+// Read the addresses from an 802.15.4 MAC header
+static inline bool sim_parse_hdr(const uint8_t *buf, size_t len, uint16_t *dst,
+                                 uint16_t *src) {
+  if (len < SIM_RADIO_HDR_LEN || buf[0] != 0x41 || buf[1] != 0x88 ||
+      buf[3] != (uint8_t) MG_RADIO_NETWORK ||
+      buf[4] != (uint8_t) (MG_RADIO_NETWORK >> 8)) {
+    return false;
+  }
+  *dst = (uint16_t) (buf[5] | buf[6] << 8);
+  *src = (uint16_t) (buf[7] | buf[8] << 8);
+  return true;
+}
 
 // A position in metres
 struct pos {
@@ -16,28 +35,25 @@ struct pos {
 
 struct simulator;
 
-// Private state of the simulated radio driver.
+// A simulated radio: its interface, and the simulated hardware's state
 struct radio_port {
-  struct simulator *sim;
+  struct mg_tcpip_if ifp;   // First: driver functions cast ifp to the port
+  struct simulator *sim;    // Where it is simulated
   struct mg_tcpip_if *lan;  // Bridge LAN interface, NULL for a node
-  const struct pos *pos;  // Location of the radio
-  uint64_t tx_until;      // Latest transmission end, us
-  uint64_t tx_ready_at;   // Inter-frame wait ends, us
-  uint64_t rx_off_until;  // Latest backoff/sensing/turnaround/TX end, us
-  struct mg_mesh_node *mesh;  // Mesh state owned by the driver
-  struct mg_queue rx;
-  uint32_t random;   // Driver backoff PRNG
-  uint16_t address;  // Preassigned radio address
+  const struct pos *pos;    // Location of the radio
+  uint64_t tx_until;        // Latest transmission end, us
+  uint64_t tx_ready_at;     // Inter-frame wait ends, us
+  uint64_t rx_off_until;    // Latest TX end, us
+  bool tx_done;             // Completion consumed by the generic driver
 };
 
 // A bridge: forwards frames between the LAN and the radio, no IP stack
 struct bridge {
-  struct bridge *next;     // Next in simulator::bridges
-  struct pos pos;          // Where it is
-  struct mg_mgr mgr;       // Polls the raw radio driver
-  struct mg_tcpip_if lif;  // LAN side: LAN driver, gets every LAN frame
-  struct mg_tcpip_if rif;  // Radio side: radio driver, gets every frame
-  struct radio_port radio;
+  struct bridge *next;      // Next in simulator::bridges
+  struct pos pos;           // Where it is
+  struct mg_mgr mgr;        // Polls the raw radio driver
+  struct mg_tcpip_if lif;   // LAN side: LAN driver, gets every LAN frame
+  struct radio_port radio;  // Radio side: radio driver, gets every frame
 };
 
 // A radio node: Mongoose on a radio interface
@@ -45,8 +61,7 @@ struct radio_node {
   struct radio_node *next;  // Next in simulator::nodes
   struct pos pos;           // Where it is
   struct mg_mgr mgr;        // Mongoose event manager
-  struct mg_tcpip_if rif;   // Radio interface. rif.ip from DHCP, 0: none yet
-  struct radio_port radio;
+  struct radio_port radio;  // Radio interface. radio.ifp.ip from DHCP
 };
 
 struct simulator;
@@ -70,7 +85,7 @@ struct lan_tester {
   double min, max, sum;     // Times of successful requests, ms
 };
 
-enum { RADIO_BACKOFF, RADIO_CCA, RADIO_START, RADIO_END };
+enum { RADIO_START, RADIO_END };
 
 // One radio frame waiting on the simulated radio channel
 struct radio_frame {
@@ -78,7 +93,7 @@ struct radio_frame {
   struct mg_tcpip_if *from;
   uint64_t due;    // Next radio event, us
   uint64_t start;  // Transmission start, for receive overlap checks
-  uint8_t state, backoff;
+  uint8_t state;
   bool collided;
   size_t len;
   uint8_t buf[1540];
@@ -91,12 +106,13 @@ struct simulator {
   struct radio_frame *air_head;  // Pending and active frames, singly linked
   uint64_t air_busy_until;       // Last transmission end, for channel sensing
   unsigned long air_sent, air_collisions;
-  unsigned long air_lost;  // Receptions lost to range, random loss or TX overlap
-  double radio_range;            // Maximum reception distance, metres
-  double radio_loss;             // In-range reception loss probability, percent
-  uint32_t loss_random;           // Reception-loss PRNG state
-  bool work_pending;            // Drain immediate work before advancing time
-  struct pos area;              // A box: all positions inside
+  unsigned long
+      air_lost;          // Receptions lost to range, random loss or TX overlap
+  double radio_range;    // Maximum reception distance, metres
+  double radio_loss;     // In-range reception loss probability, percent
+  uint32_t loss_random;  // Reception-loss PRNG state
+  bool work_pending;     // Drain immediate work before advancing time
+  struct pos area;       // A box: all positions inside
   struct bridge *bridges;       // Bridges, a list
   struct radio_node *nodes;     // Radio nodes, a list
   int num_bridges, num_nodes;   // How many

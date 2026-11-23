@@ -1,18 +1,20 @@
 // Copyright (c) 2026 Cesanta Software Limited
 // All rights reserved
+//
+// Nucleo-U5A5ZJ-Q: Mongoose over USB. One USB-C cable on CN15 gives the board
+// a CDC-NCM Ethernet interface and a CDC-ACM serial port that carries the log
 
 #include "hal.h"
 #include "mongoose.h"
 
-#define LED1 PIN(0, 26)  // P0.26, user LED, active low
-
 static void blink_task(void) {
   static uint64_t blink_timer = 0;
-  if (hal_timer_expired(&blink_timer, 500, hal_get_tick())) {
-    hal_gpio_toggle(LED1);
-  }
+  if (mg_timer_expired(&blink_timer, 500, mg_millis())) hal_gpio_toggle(LED);
 }
 
+uint64_t mg_millis(void) {
+  return hal_get_tick();
+}
 
 bool mg_random(void *buf, size_t len) {
   for (size_t n = 0; n < len; n += sizeof(uint32_t)) {
@@ -53,41 +55,34 @@ static void http_ev_handler(struct mg_connection *c, int ev, void *ev_data) {
   } else if (ev == MG_EV_HTTP_MSG) {
     struct mg_http_message *hm = (struct mg_http_message *) ev_data;
     if (mg_match(hm->uri, mg_str("/api/tick"), NULL)) {
-      mg_http_reply(c, 200, "", "{%m:%llu}\n", MG_ESC("tick"), hal_get_tick());
-    } else if (mg_match(hm->uri, mg_str("/api/crash"), NULL)) {
-      __asm volatile("udf #0");  // Trigger HardFault
+      mg_http_reply(c, 200, "", "{%m:%llu}\n", MG_ESC("tick"), mg_millis());
     } else {
       mg_http_reply(c, 200, "",
                     "Hi from Mongoose!\n"
                     "tick:     %llu\n"
                     "ram used: %zu\n"
                     "ram free: %zu\n",
-                    hal_get_tick(), hal_ram_used(), hal_ram_free());
+                    mg_millis(), hal_ram_used(), hal_ram_free());
     }
   }
 }
 
 int main(void) {
-  MG_HEALTH_INIT();
-
-  hal_system_init();
   hal_rng_init();
-  hal_gpio_write(LED1, true);
-  hal_gpio_output(LED1);
+  hal_gpio_output(LED);
+  hal_usb_init();
 
   struct mg_mgr mgr;
-  mg_mgr_init(&mgr);  // Also starts the radio and the USB log console
+  mg_mgr_init(&mgr);  // Also starts the USB driver, see mongoose_config.h
   mg_http_listen(&mgr, "http://0.0.0.0", http_ev_handler, NULL);
   mg_http_listen(&mgr, "https://0.0.0.0", http_ev_handler, NULL);
-  mg_mqtt_init(&mgr);
 
   MG_INFO(("Initialised. CPU clock: %lu MHz", SystemCoreClock / 1000000));
   MG_INFO(("RAM used: %zu, free: %zu", hal_ram_used(), hal_ram_free()));
-  MG_INFO(("Crash record: %M", mg_print_crash_record));
+  MG_INFO(("USB Ethernet + serial"));
 
   for (;;) {
     mg_mgr_poll(&mgr, 0);
-    mg_mqtt_poll(&mgr);
     blink_task();
   }
 

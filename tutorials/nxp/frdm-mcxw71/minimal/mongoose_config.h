@@ -9,6 +9,9 @@
 
 #define MG_ENABLE_TCPIP 1
 #define MG_ENABLE_DRIVER_MCXW71 1
+#ifndef MG_RADIO
+#define MG_RADIO MG_RADIO_BLE  // Raw BLE 2M; or MG_RADIO_802154
+#endif
 #define MG_ENABLE_CUSTOM_MICROS 1
 #define MG_ENABLE_CUSTOM_RANDOM 1
 #define MG_ENABLE_TCPIP_TCPRTX 1  // Link can be lossy, enable retransmit

@@ -1,10 +1,10 @@
-# Seeed XIAO nRF52840: Mongoose over USB CDC-NCM, no TinyUSB.
+# Seeed XIAO nRF52840: USB Ethernet to BLE mesh bridge, no TinyUSB.
 # Environment setup: https://mongoose.ws/documentation/tutorials/tools/
 
 MGDIR = ../../../..
 
-# Flash over USB: the board's Adafruit bootloader does serial DFU. The
-# firmware reboots into it on a 1200 baud touch. PORT: the board's USB serial
+# Flash over USB: the board's Adafruit bootloader does serial DFU. Double-tap
+# RESET to enter it, then `make flash`. PORT: the bootloader's USB serial
 # port. adafruit-nrfutil: pip install adafruit-nrfutil
 PORT ?= /dev/cu.usbmodem11301
 NRFUTIL ?= adafruit-nrfutil
@@ -36,7 +36,7 @@ firmware.zip: firmware.hex
 	$(NRFUTIL) dfu genpkg --dev-type 0x0052 --sd-req 0xFFFE --application $< $@
 
 flash: firmware.zip
-	$(NRFUTIL) dfu serial --package $< -p $(PORT) -b 115200 --singlebank --touch 1200
+	$(NRFUTIL) dfu serial --package $< -p $(PORT) -b 115200 --singlebank
 
 cmsis_core:
 	git clone -q -c advice.detachedHead=false --depth 1 -b 5.9.0 https://github.com/ARM-software/CMSIS_5 $@

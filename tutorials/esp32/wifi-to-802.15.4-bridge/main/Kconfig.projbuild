@@ -1,0 +1,16 @@
+menu "Wi-Fi to 802.15.4 bridge"
+    config BRIDGE_XIAO_ESP32C6
+        bool "Seeed XIAO ESP32-C6 antenna switch"
+        default y
+        help
+            Power the RF switch through GPIO3 and select the antenna on GPIO14.
+            Disable on boards without this switch.
+    config BRIDGE_XIAO_EXTERNAL_ANTENNA
+        bool "Use the XIAO's external antenna"
+        depends on BRIDGE_XIAO_ESP32C6
+        default n
+    config BRIDGE_RADIO_CHANNEL
+        int "802.15.4 channel, must match the radio nodes"
+        range 11 26
+        default 15
+endmenu

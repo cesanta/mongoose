@@ -4,14 +4,60 @@
 #include "hal.h"
 #include "mongoose.h"
 
+#if MG_RADIO == MG_RADIO_BLE
+// NXP release/25.06.00, gen45: gfsk_bt_0p5_h_0p5_1mbps_full_config.
+// The alternate data-rate bank is 2 Mbit/s, selected by GENFSK ENH_FEATURE.
+// Copyright 2016 Freescale Semiconductor, Inc.; 2018-2023 NXP.
+// SPDX-License-Identifier: BSD-3-Clause
+// These are the differences from the 802.15.4 setup in hal.h. Both use
+// xcvr_ble_uncoded_config for RBME (CRC and whitening).
+static const struct w71_radio_reg s_ble_regs[] = {
+    {&XCVR_MISC->IPS_FO_ADDR[0], 0x0000332c},
+    {&XCVR_MISC->IPS_FO_ADDR[1], 0x00000034},
+    {&XCVR_MISC->IPS_FO_DRS0_DATA[0], 0x20ff0000},
+    {&XCVR_MISC->IPS_FO_DRS1_DATA[0], 0x10ff0000},
+    {&XCVR_MISC->XCVR_CTRL, 0x00030140},
+    {&XCVR_PLL_DIG->CHAN_MAP, 0x00000000},
+    {&XCVR_PLL_DIG->DELAY_MATCH, 0x00040103},
+    {&XCVR_PLL_DIG->HPMCAL_CTRL, 0x00000000},
+    {&XCVR_PLL_DIG->HPM_BUMP, 0x00440122},
+    {&XCVR_PLL_DIG->HPM_SDM_RES, 0x20ff0000},
+    {&XCVR_RX_DIG->ACQ_FILT_0_3, 0x757a0202},
+    {&XCVR_RX_DIG->ACQ_FILT_0_3_DRS, 0x09023e3e},
+    {&XCVR_RX_DIG->ACQ_FILT_10_11, 0x00de0068},
+    {&XCVR_RX_DIG->ACQ_FILT_10_11_DRS, 0x00a1006e},
+    {&XCVR_RX_DIG->ACQ_FILT_4_7, 0xeb171801},
+    {&XCVR_RX_DIG->ACQ_FILT_4_7_DRS, 0xdeeb000b},
+    {&XCVR_RX_DIG->ACQ_FILT_8_9, 0x01e901c2},
+    {&XCVR_RX_DIG->ACQ_FILT_8_9_DRS, 0x002601f0},
+    {&XCVR_RX_DIG->AGC_IDX11_GAIN_CFG, 0x02047e03},
+    {&XCVR_RX_DIG->AGC_IDX11_GAIN_VAL, 0x006014fa},
+    {&XCVR_RX_DIG->CTRL0, 0x60063083},
+    {&XCVR_RX_DIG->CTRL0_DRS, 0x000020c0},
+    {&XCVR_RX_DIG->DEMOD_FILT_0_1_DRS, 0x01fe01fd},
+    {&XCVR_RX_DIG->DEMOD_FILT_2_4, 0x0bc20c24},
+    {&XCVR_RX_DIG->DEMOD_FILT_2_4_DRS, 0x0bc20c23},
+    {&XCVR_RX_DIG->RCCAL_CTRL0, 0x0000001a},
+    {&XCVR_RX_DIG->RSSI_GLOBAL_CTRL, 0x80008310},
+    {&XCVR_TX_DIG->DATARATE_CONFIG_FSK_CTRL, 0x00000000},
+    {&XCVR_TX_DIG->DATARATE_CONFIG_GFSK_CTRL, 0x00000830},
+    {&XCVR_TX_DIG->DATA_PADDING_CTRL, 0x00001010},
+    {&XCVR_TX_DIG->DATA_PADDING_CTRL_1, 0x00001404},
+    {&XCVR_TX_DIG->DATA_PADDING_CTRL_2, 0x04001c00},
+    {&XCVR_TX_DIG->GFSK_CTRL, 0x00000400},
+    {&XCVR_TX_DIG->PA_CTRL, 0x00010126},
+    {&XCVR_TX_DIG->TXDIG_CTRL, 0x00000000},
+};
+#endif
+
 // Initialise the transceiver the way NXP XCVR_Init() does it: start the RF
 // oscillator, wait for the radio to wake up, enable its clocks and load the
-// 802.15.4 register setup. Then select the legacy 802.15.4 demodulator and
-// CCA from RX digital. See PhyHwInit() in NXP ieee_802_15_4 PHY sources,
-// PhyPacketProcessor.c
+// register setup for the selected PHY. For 802.15.4, select the legacy
+// demodulator and CCA from RX digital. See PhyHwInit() in NXP ieee_802_15_4 PHY
+// sources, PhyPacketProcessor.c
 void hal_radio_init(void) {
-  uint32_t stat = RFMC_RF2P4GHZ_STAT_RST_STAT_MASK |
-                  RFMC_RF2P4GHZ_STAT_LP_ACK_STAT_MASK;
+  uint32_t stat =
+      RFMC_RF2P4GHZ_STAT_RST_STAT_MASK | RFMC_RF2P4GHZ_STAT_LP_ACK_STAT_MASK;
   size_t i, n = 1000000;
   RFMC->CTRL &= ~RFMC_CTRL_RFMC_RST_MASK;                // RFMC out of reset
   RFMC->RF2P4GHZ_CTRL |= RFMC_RF2P4GHZ_CTRL_XO_EN_MASK;  // Start RF oscillator
@@ -31,9 +77,19 @@ void hal_radio_init(void) {
   for (i = 0; i < sizeof(s_radio_regs) / sizeof(s_radio_regs[0]); i++) {
     *s_radio_regs[i].reg = s_radio_regs[i].val;
   }
+#if MG_RADIO == MG_RADIO_BLE
+  for (i = 0; i < sizeof(s_ble_regs) / sizeof(s_ble_regs[0]); i++) {
+    *s_ble_regs[i].reg = s_ble_regs[i].val;
+  }
+  RADIO_CTRL->LL_CTRL = RADIO_CTRL_LL_CTRL_ACTIVE_LL(2);  // GENFSK engine
+  // NXP GENFSK_SetBleWhitenInit(): BLE channel index with bit 6 set.
+  RBME->WHITEN_CFG = (RBME->WHITEN_CFG & ~RBME_WHITEN_CFG_WHITEN_INIT_MASK) |
+                     RBME_WHITEN_CFG_WHITEN_INIT(MG_RADIO_CHANNEL | 0x40);
+#else
   XCVR_MISC->XCVR_CTRL &= ~XCVR_MISC_XCVR_CTRL_DEMOD_SEL_MASK;
   XCVR_MISC->XCVR_CTRL |= XCVR_MISC_XCVR_CTRL_DEMOD_SEL(2);
   XCVR_ZBDEMOD->CCA_LQI_SRC |= XCVR_ZBDEMOD_CCA_LQI_SRC_CCA1_FROM_RX_DIG(1);
+#endif
 }
 
 // Random 32 bits, for mg_random(). Entropy is radio noise: receiver RSSI,
@@ -99,8 +155,8 @@ uint64_t mg_micros(void) {
   }
   __set_PRIMASK(primask);
   if (pending != 0 && val != 0) ms++;
-  return ms * 1000 + ((uint64_t) (SysTick->LOAD - val) * 1000) /
-                         (SysTick->LOAD + 1);
+  return ms * 1000 +
+         ((uint64_t) (SysTick->LOAD - val) * 1000) / (SysTick->LOAD + 1);
 }
 
 uint32_t SystemCoreClock;

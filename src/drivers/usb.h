@@ -1,96 +1,61 @@
 #pragma once
 
-// USB device, independent of the controller: CDC-NCM Ethernet, enabled by
-// MG_ENABLE_USB_ETHERNET, and a CDC-ACM serial port that carries the
-// Mongoose log, enabled by MG_ENABLE_USB_SERIAL. The controller drivers
-// are usb_rp.c, usb_samd21.c and usb_nrf52.c, enabled by
-// MG_ENABLE_DRIVER_USB_*. Mongoose runs USB from mg_tcpip_init() and
-// mg_mgr_poll(), so user code needs no USB calls
+// USB device: a CDC-NCM Ethernet interface, enabled by MG_ENABLE_USB_ETHERNET,
+// and a CDC-ACM serial port for logs, enabled by MG_ENABLE_USB_SERIAL.
 
-#if MG_ENABLE_TCPIP &&                                          \
-    (MG_ENABLE_DRIVER_USB_RP || MG_ENABLE_DRIVER_USB_SAMD21 ||  \
-     MG_ENABLE_DRIVER_USB_NRF52) &&                             \
-    (MG_ENABLE_USB_ETHERNET || MG_ENABLE_USB_SERIAL)
-#define MG_ENABLE_USB 1
-
-// #if defined(MG_ENABLE_DRIVER_USB_SAMD21) && MG_ENABLE_DRIVER_USB_SAMD21
-// #define MG_USB_DEFAULT_SIZE 2048  // SAMD21: 32k RAM
-// #else
-// #define MG_USB_DEFAULT_SIZE 4096
-// #endif
-#define MG_USB_DEFAULT_SIZE 2048
-#ifndef MG_USB_NTB_SIZE  // Transfer block buffer, each direction, >= 2048
-#define MG_USB_NTB_SIZE MG_USB_DEFAULT_SIZE
+#ifndef MG_USB_NTB_SIZE
+#define MG_USB_NTB_SIZE 2048  // Transfer block, each direction, >= 2048
 #endif
-#ifndef MG_USB_LOG_SIZE  // Serial log ring buffer
-#define MG_USB_LOG_SIZE (MG_USB_DEFAULT_SIZE / 2)
+#ifndef MG_USB_TX_SIZE
+#define MG_USB_TX_SIZE 4096  // Ethernet frames waiting to go to the host
 #endif
-#ifndef MG_USB_QUEUE_SIZE  // TCP/IP stack receive queue
-#define MG_USB_QUEUE_SIZE (MG_USB_DEFAULT_SIZE * 2)
+#ifndef MG_USB_QUEUE_SIZE
+#define MG_USB_QUEUE_SIZE 4096  // Ethernet frames from the host
+#endif
+#ifndef MG_USB_LOG_SIZE
+#define MG_USB_LOG_SIZE 1024  // Serial log ring
 #endif
 
-// Endpoints: 1 interrupt IN, link notifications. 2 bulk IN/OUT, Ethernet.
-// 3 interrupt IN, serial notifications (unused). 4 bulk IN/OUT, serial
-
-struct mg_usb {
-  const char *serial;  // USB serial number, set by the driver
-  bool configured;     // Host has set the configuration
-  uint8_t buf[66];     // Generated replies
-#if MG_ENABLE_USB_ETHERNET
-  struct mg_tcpip_if *ifp;    // TCP/IP interface, set by the driver
-  bool alt;                   // Ethernet open: data interface setting 1
-  uint16_t filter, sequence;  // Host packet filter, next IN block number
-  uint32_t input_size;        // Largest IN block the host accepts
-  uint8_t notify;             // Pending link notifications
-#endif
-#if MG_ENABLE_USB_SERIAL
-  bool dtr;                   // Terminal open
-  uint64_t reboot;            // mg_millis() to enter the bootloader, or 0
-  uint8_t line[7];            // Serial line coding
-  char log[MG_USB_LOG_SIZE];  // Serial log ring buffer
-  unsigned head, tail;        // Log ring write and read counters
-#endif
+// Endpoints, numbered as in the configuration descriptor
+enum mg_usb_ep {
+  MG_USB_EP_CTL,       // control
+  MG_USB_EP_ETH_EV,    // Ethernet link notifications, IN
+  MG_USB_EP_ETH_DATA,  // Ethernet data, IN and OUT
+  MG_USB_EP_SER_EV,    // serial notifications, IN, unused
+  MG_USB_EP_SER_DATA,  // serial data, IN and OUT
 };
 
-// Implemented by the enabled controller driver. Start the controller, once,
-// and send the log to the serial port
-void mg_usb_init(void);
+// Interfaces: the serial port's control and data first, then Ethernet's. The
+// Ethernet data interface has setting 1: Ethernet open
+#define MG_USB_IF_ETH_DATA (2 * MG_ENABLE_USB_SERIAL + 1)
 
-// Implemented by the enabled controller driver. Run the controller. Calls
-// mg_usb_init() first, so it works without a TCP/IP interface too
-void mg_usb_poll(void);
+// Controller events, reported by mg_usb_hw::poll() to its fn. What fn returns
+enum mg_usb_ev {
+  MG_USB_EV_RESET,  // Bus reset or detach. Returns 0
+  MG_USB_EV_SETUP,  // Control request, buf: the SETUP packet, then its OUT
+                    // data. Returns -1: stall, 0: no IN data stage, send
+                    // the status stage, 1: IN data stage started on ep 0
+  MG_USB_EV_IN,     // An IN packet on ep went out. Returns 1: next packet
+                    // sent, 0: transfer done
+  MG_USB_EV_OUT     // An OUT packet arrived on ep, buf and len. Returns 0
+};
 
-// Unconfigured state, on start and after a bus reset. Keeps the log
-void mg_usb_reset(struct mg_usb *u);
+// A USB device controller, implemented by its driver. Packets: up to 64 bytes
+struct mg_usb_hw {
+  void (*init)(char serial[17]);  // Start, write the serial number
+  void (*poll)(int (*fn)(enum mg_usb_ev, enum mg_usb_ep, void *buf, size_t));
+  void (*in)(enum mg_usb_ep, const void *buf, size_t len);  // Write IN packet
+};
 
-// Handle an 8-byte SETUP packet, followed by its OUT data stage if it has
-// one. Returns -1 to stall, else the IN reply length, 0 for status only
-int mg_usb_setup(struct mg_usb *u, const uint8_t *req, const void **reply);
+struct mg_tcpip_if;  // Without MG_ENABLE_TCPIP: serial console only
 
-#if MG_ENABLE_USB_ETHERNET
-// Next link notification for endpoint 1. Returns its length, 0 if none
-size_t mg_usb_notify(struct mg_usb *u, const void **msg);
+// Start the controller hw, and attach ifp: NULL for the serial console only.
+// Call again to attach ifp later; the first call's hw stays in use
+bool mg_usb_init(struct mg_tcpip_if *ifp, const struct mg_usb_hw *hw);
 
-// Wrap an Ethernet frame into a transfer block at ntb. Returns the block
-// length, 0 if the link is down or the frame does not fit
-size_t mg_usb_encode(struct mg_usb *u, uint8_t *ntb, const void *buf,
-                     size_t len);
+// Queue an Ethernet frame for the host. The controller driver's tx
+size_t mg_usb_tx(const void *buf, size_t len, struct mg_tcpip_if *ifp);
 
-// Queue the Ethernet frames of a received transfer block to the TCP/IP stack
-void mg_usb_decode(struct mg_usb *u, const uint8_t *ntb, size_t len);
-#endif
-
-#if MG_ENABLE_USB_SERIAL
-// Log output function for mg_log_set_fn(mg_usb_log, u). Keeps the latest
-// MG_USB_LOG_SIZE characters
-void mg_usb_log(char ch, void *u);
-
-// Take up to len logged characters into buf. Returns how many
-size_t mg_usb_log_read(struct mg_usb *u, void *buf, size_t len);
-#endif
-
-#else
-#define MG_ENABLE_USB 0
-#define mg_usb_init()
-#define mg_usb_poll()
-#endif
+// Run the controller. The controller driver's poll; returns true when the
+// host has the Ethernet interface open and s1 is true. Serial only: ifp NULL
+bool mg_usb_poll(struct mg_tcpip_if *ifp, bool s1);

@@ -6,6 +6,7 @@
 #define MG_ENABLE_TCPIP 1
 #define MG_ENABLE_DRIVER_RW612 1        // Ethernet
 #define MG_ENABLE_DRIVER_RW612W 1 // Mesh bridge over raw 802.15.4
+#define MG_RADIO MG_RADIO_802154  // The driver supports 802.15.4 only
 #define MG_ENABLE_CUSTOM_MICROS 1
 
 

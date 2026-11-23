@@ -2,9 +2,20 @@
 
 // nRF52840 USB device controller, see usb.h: CDC-NCM Ethernet and a CDC-ACM
 // serial log console. No TinyUSB, polled. Needs the nRF52840 device headers
-// from nrfx/mdk on the include path. Example: tutorials/nordic/xiao-52840
+// from nrfx/mdk on the include path. Example: tutorials/nordic/xiao-nrf52840
 
-#if MG_ENABLE_USB && MG_ENABLE_DRIVER_USB_NRF52 && MG_ENABLE_USB_ETHERNET
+#if (MG_ENABLE_TCPIP || !MG_ENABLE_USB_ETHERNET) && \
+    MG_ENABLE_DRIVER_USB_NRF52 &&                   \
+    (MG_ENABLE_USB_ETHERNET || MG_ENABLE_USB_SERIAL)
+
+// The controller. Without USB Ethernet, run the serial console from main():
+// mg_usb_init(NULL, &mg_usb_hw_nrf52) once, mg_usb_poll(NULL, false) in
+// the main loop
+extern const struct mg_usb_hw mg_usb_hw_nrf52;
+
+#endif
+
+#if MG_ENABLE_TCPIP && MG_ENABLE_DRIVER_USB_NRF52 && MG_ENABLE_USB_ETHERNET
 
 extern struct mg_tcpip_driver mg_tcpip_driver_usb_nrf52;
 

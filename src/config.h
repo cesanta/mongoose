@@ -187,12 +187,12 @@
 #define MG_ENABLE_DRIVER_USB_RP 0  // USB device, RP2040 / RP2350
 #endif
 
-#ifndef MG_ENABLE_DRIVER_USB_SAMD21
-#define MG_ENABLE_DRIVER_USB_SAMD21 0  // USB device, SAMD21
-#endif
-
 #ifndef MG_ENABLE_DRIVER_USB_NRF52
 #define MG_ENABLE_DRIVER_USB_NRF52 0  // USB device, nRF52840
+#endif
+
+#ifndef MG_ENABLE_DRIVER_USB_DWC2
+#define MG_ENABLE_DRIVER_USB_DWC2 0  // USB device, Synopsys DWC2: STM32 OTG
 #endif
 
 #ifndef MG_ENABLE_USB_ETHERNET

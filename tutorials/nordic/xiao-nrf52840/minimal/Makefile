@@ -2,9 +2,8 @@
 
 MGDIR = ../../../..
 
-# Flash over USB: the board's Adafruit UF2 bootloader does serial DFU. The
-# firmware resets into it on a 1200 baud touch of its USB serial port, see
-# Mongoose's src/drivers/usb_nrf52.c. PORT: the board's
+# Flash over USB: the board's Adafruit UF2 bootloader does serial DFU.
+# Double-tap RESET to enter it, then `make flash`. PORT: the bootloader's
 # USB serial port. adafruit-nrfutil: pip install adafruit-nrfutil
 PORT ?= /dev/cu.usbmodem11301
 NRFUTIL ?= adafruit-nrfutil
@@ -38,7 +37,7 @@ firmware.zip: firmware.hex
 	$(NRFUTIL) dfu genpkg --dev-type 0x0052 --sd-req 0xFFFE --application $< $@
 
 flash: firmware.zip
-	$(NRFUTIL) dfu serial --package $< -p $(PORT) -b 115200 --singlebank --touch 1200
+	$(NRFUTIL) dfu serial --package $< -p $(PORT) -b 115200 --singlebank
 
 cmsis_core:
 	git clone -q -c advice.detachedHead=false --depth 1 -b 5.9.0 https://github.com/ARM-software/CMSIS_5 $@

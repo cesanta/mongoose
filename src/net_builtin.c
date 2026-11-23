@@ -250,6 +250,7 @@ void mg_tcpip_call(struct mg_tcpip_if *ifp, int ev, void *ev_data) {
                          "TCPIP_EV_TIMER_1S",      "TCPIP_EV_WIFI_SCAN_RESULT",
                          "TCPIP_EV_WIFI_SCAN_END", "TCPIP_EV_WIFI_CONNECT_ERR",
                          "TCPIP_EV_DRIVER",        "TCPIP_EV_STATE6_CHANGE",
+                         "TCPIP_EV_PHY_RX",        "TCPIP_EV_PHY_TX",
                          "TCPIP_EV_USER"};
   if (ev != MG_TCPIP_EV_TIMER_1S && ev < (int) (sizeof(names) / sizeof(names[0]))) {
     MG_PROF_ADD(ifp, names[ev]); // TODO(): call MG_PROF_DUMP() MG_PROF_FREE()
@@ -2291,7 +2292,6 @@ void mg_tcpip_qwrite(void *buf, size_t len, struct mg_tcpip_if *ifp) {
 }
 
 void mg_tcpip_init(struct mg_mgr *mgr, struct mg_tcpip_if *ifp) {
-  mg_usb_init();  // Early, so that the log reaches the USB serial port
   // If L2 address is not set, make a random one; fill MTU
   mg_l2_init(ifp);
   ifp->mtu = ifp->l2mtu;
@@ -2458,7 +2458,6 @@ void mg_mgr_poll(struct mg_mgr *mgr, int ms) {
   mg_timer_poll(&mgr->timers, now);
   mg_ota_poll(mgr);
   mg_mdash_poll(mgr);
-  mg_usb_poll();  // Also without a TCP/IP interface: USB serial only
   if (mgr->ifp == NULL || mgr->ifp->driver == NULL) return;
   mg_tcpip_poll(mgr->ifp, now);
   for (c = mgr->conns; c != NULL; c = tmp) {

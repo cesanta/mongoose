@@ -120,9 +120,6 @@ __attribute__((weak)) int mkdir(const char *path, int mode) {
 __attribute__((weak)) void _init(void) {
 }
 
-uint64_t mg_micros(void);
-// SysTick runs at the core clock and reloads every millisecond. Sample
-// the tick counter and the sub-millisecond counter in one critical section.
 uint64_t mg_micros(void) {
   uint32_t primask = __get_PRIMASK(), val, pending;
   uint64_t ms;

@@ -8,7 +8,8 @@
 #define MQTT_CLIENT_ID "esp32c6"  // For tutorials/mqtt/mqtt-client
 
 #define MG_ENABLE_TCPIP 1                // Built-in TCP/IP stack, not lwIP
-#define MG_ENABLE_DRIVER_ESP32_802154 1  // ESP32-C6 802.15.4 radio
+#define MG_ENABLE_DRIVER_ESP32 1  // ESP32-C6 802.15.4 radio
+#define MG_RADIO MG_RADIO_802154  // The driver supports 802.15.4 only
 #define MG_ENABLE_TCPIP_TCPRTX 1         // Link can be lossy, enable retransmit
 
 // Stable MAC, so the DHCP address stays the same across reboots: the factory
