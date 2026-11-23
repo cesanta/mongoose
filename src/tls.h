@@ -66,7 +66,7 @@ struct mg_tls_opts {
 // ```
 // Full examples:
 //   tutorials/http/http-server, tutorials/http/http-client,
-//   tutorials/mqtt/mqtt-client-aws-iot, tutorials/websocket/websocket-client
+//   tutorials/mqtt/mqtt-client, tutorials/websocket/websocket-client
 // Related APIs:
 //   mg_http_listen(), mg_http_connect(), mg_ws_connect(), mg_mqtt_connect()
 // Notes:

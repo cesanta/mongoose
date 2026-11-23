@@ -6587,6 +6587,8 @@ static size_t mgi_mesh_b_queue(struct mg_mesh_node *node, struct mg_queue *q,
 #define MGI_JOIN_JITTER_US 640
 #define MGI_DATA_QUEUE_SIZE 2048
 #define MGI_TX_RETRY_US 32
+#define MGI_ANSWER_MARGIN_US 500  // Node: finish the first answer frame this
+                                  // much before the bridge stops waiting
 // Our frames: the radio header, with the radio addresses, then the mesh
 // header MG_MESH_HDR_LEN, then the payload
 #define MGI_JOIN_UP_LEN \
@@ -6613,6 +6615,7 @@ struct mgi_mesh_b_data {
   int8_t missed_rounds;  // -1 after a grant; otherwise completed rounds missed
   uint16_t coordinator;  // Coordinator radio address
   uint8_t phase;         // MGI_TURN_IDLE, MGI_TURN_JOIN, or MGI_TURN_DATA
+  uint64_t answer_by;    // Node: first answer frame must end on air by then
 };
 
 struct mgi_mesh_b_peer {
@@ -6725,11 +6728,24 @@ static void mgi_mesh_b_tx_step(struct mgi_mesh_b_data *data, uint64_t now) {
   } else {
     mgi_mesh_b_frame_header(frame, dst, node->radio_address, command, 0);
   }
+  // A node's first answer frame: if it cannot end on air before the bridge
+  // stops waiting, stay silent. The queued frame waits for the next turn
+  if (node->lan == NULL &&
+      (data->tx_offset == 0 || data->tx_offset == MGI_TX_DST_LEN) &&
+      now + mgi_mesh_b_airtime(len) > data->answer_by) {
+    data->tx_offset = 0;
+    data->tx_at = (uint64_t) -1;
+    return;
+  }
   if (now < data->node->tx_at || data->node->tx(radio, frame, len) != len) {
     data->tx_at = now + MGI_TX_RETRY_US;
     return;
   }
   if (data->tx_offset == 0 || (data->tx_offset += len + 1) == record_len) {
+    // Bridge: the turn's last frame is out, wait for the answer
+    if (node->lan != NULL)
+      data->deadline =
+          now + mgi_mesh_b_airtime(len) + MG_MESH_ANSWER_TIMEOUT_US;
     mgi_mesh_b_tx_finish(data);
   } else {
     data->tx_at = now + mgi_mesh_b_airtime(len) + s_mesh_default_radio->ifs_us;
@@ -6739,6 +6755,7 @@ static void mgi_mesh_b_tx_step(struct mgi_mesh_b_data *data, uint64_t now) {
 static void mgi_mesh_b_tx_begin(struct mgi_mesh_b_data *data, bool burst,
                                 uint64_t now, uint64_t deadline) {
   data->phase = MGI_TURN_DATA;
+  data->answer_by = (uint64_t) -1;  // Node sets it after a grant
   data->tx_offset = burst ? MGI_TX_DST_LEN : 0;
   data->tx_at = now;
   data->deadline = deadline;
@@ -6769,6 +6786,11 @@ static int mgi_mesh_b_data_receive(struct mgi_mesh_b_data *data,
   memcpy(data->rx_buf + offset, frame + MG_MESH_FRAME_HDR_LEN, chunk);
   if (index < last) {
     data->rx_expected = (uint8_t) (burst + 0x10);
+    // Bridge: an answer is under way, wait for its next fragment
+    if (data->node->lan != NULL)
+      data->deadline =
+          now + mgi_mesh_b_airtime(s_mesh_default_radio->max_frame_size) +
+          s_mesh_default_radio->ifs_us + MG_MESH_ANSWER_TIMEOUT_US;
     return -1;
   }
   data->rx_expected = 0xff;
@@ -6778,7 +6800,6 @@ static int mgi_mesh_b_data_receive(struct mgi_mesh_b_data *data,
 
 // Bridge scheduling and Ethernet forwarding.
 
-#define MGI_MAX_MISSES 3  // Turns in a row without an answer: remove the member
 
 static uint16_t mgi_mesh_b_join_field(const uint8_t *p) {
   return (uint16_t) ((unsigned) p[0] * 256 + p[1]);
@@ -6879,13 +6900,13 @@ static void mgi_mesh_b_bridge_rx(uint64_t now, struct mg_mesh_node *b,
   memcpy(peer->mac, frame + MG_MESH_FRAME_HDR_LEN, sizeof(peer->mac));
 }
 
-// Member peer did not answer its turn. After MGI_MAX_MISSES in a row, it is
-// gone: remove it, and its queued downlink frames
+// Member peer did not answer its turn. After MG_MESH_MAX_MISSES in a row, it
+// is gone: remove it, and its queued downlink frames
 static void mgi_mesh_b_member_missed(struct mgi_mesh_b_data *data,
                                      struct mgi_mesh_b_peer *peer) {
-  if (++peer->misses < MGI_MAX_MISSES) return;
+  if (++peer->misses < MG_MESH_MAX_MISSES) return;
   MG_INFO(("Member %M removed: no answer %d times", mg_print_mac, peer->mac,
-           MGI_MAX_MISSES));
+           MG_MESH_MAX_MISSES));
   if (data->fanout == peer) {
     data->fanout = peer->next;
     if (data->fanout == NULL) {
@@ -6978,7 +6999,7 @@ static void mgi_mesh_b_node_rx(struct mg_mesh_node *n, uint64_t now,
   if (command == MGI_JOIN_DOWN && len == MG_MESH_FRAME_HDR_LEN &&
       dst == 0xffffu) {
     if (n->joined && src == data->coordinator &&
-        ++data->missed_rounds >= MGI_MAX_MISSES) {
+        ++data->missed_rounds >= MG_MESH_MAX_MISSES) {
       n->joined = false;
       data->phase = MGI_TURN_IDLE;
       data->tx_at = (uint64_t) -1;
@@ -7013,17 +7034,22 @@ static void mgi_mesh_b_node_rx(struct mg_mesh_node *n, uint64_t now,
                         now + mgi_mesh_b_burst_time(MGI_ETH_MAX) +
                             2 * s_mesh_default_radio->ifs_us +
                             MGI_JOIN_TURN_US);
+    data->answer_by = now + MG_MESH_ANSWER_TIMEOUT_US - MGI_ANSWER_MARGIN_US;
   }
 }
 
+// Receive timing counts from the frame's arrival, see mg_mesh_rx_drain().
+// Without an arrival time, e.g. when called directly, use the poll time
 static void mgi_mesh_b_input(struct mg_mesh_node *node, void *buf, size_t len) {
   uint64_t ready = node->now + node->strategy->radio->turnaround_us;
+  uint64_t arrived = node->rx_at != 0 ? node->rx_at : node->now;
   if (node->tx_at < ready) node->tx_at = ready;
   node->next_tick = node->now;
-  if (node->lan != NULL)
-    mgi_mesh_b_bridge_rx(node->now, node, (const uint8_t *) buf, len);
-  else
-    mgi_mesh_b_node_rx(node, node->now, (uint8_t *) buf, len);
+  if (node->lan != NULL) {
+    mgi_mesh_b_bridge_rx(arrived, node, (const uint8_t *) buf, len);
+  } else {
+    mgi_mesh_b_node_rx(node, arrived, (uint8_t *) buf, len);
+  }
 }
 
 static void mgi_mesh_b_tick(struct mg_mesh_node *node, uint64_t now) {
@@ -7078,6 +7104,41 @@ static void mgi_mesh_b_free(struct mg_mesh_node *node) {
   mgi_mesh_b_bridge_free(data);
   mg_free(data);
   node->data = NULL;
+}
+
+// Receive queue record: arrival time, then the radio frame
+#define MGI_RX_STAMP_LEN sizeof(uint64_t)
+
+void mg_mesh_rx_queue(struct mg_queue *q, struct mg_tcpip_if *ifp,
+                      const void *frame, size_t len) {
+  uint64_t arrived = mg_micros();
+  size_t need = MGI_RX_STAMP_LEN + len;
+  char *dst;
+
+  if (mg_queue_book(q, &dst, need) < need) {
+    if (ifp != NULL) ifp->ndrop++;
+    return;
+  }
+  memcpy(dst, &arrived, MGI_RX_STAMP_LEN);
+  memcpy(dst + MGI_RX_STAMP_LEN, frame, len);
+  mg_queue_add(q, need);
+}
+
+void mg_mesh_rx_drain(struct mg_mesh_node *node, struct mg_queue *q) {
+  char *record;
+  size_t len;
+
+  while (node->rx_len == 0) {
+    len = mg_queue_next(q, &record);
+    if (len == 0) break;
+    if (len > MGI_RX_STAMP_LEN) {
+      memcpy(&node->rx_at, record, MGI_RX_STAMP_LEN);
+      node->strategy->rx(node, record + MGI_RX_STAMP_LEN,
+                         len - MGI_RX_STAMP_LEN);
+      node->rx_at = 0;
+    }
+    mg_queue_del(q, len);
+  }
 }
 
 const struct mg_mesh mg_mesh_default = {
@@ -30465,33 +30526,38 @@ bool mg_path_is_sane(const struct mg_str path) {
   return true;
 }
 
-#if MG_ENABLE_CUSTOM_MILLIS
-#else
-uint64_t mg_millis(void) {
-#if MG_ARCH == MG_ARCH_ESP32 || MG_ENABLE_FREERTOS
-  return xTaskGetTickCount() * portTICK_PERIOD_MS;
+// The clock lives in mg_micros(), mg_millis() is derived from it. Either one
+// can be replaced, see MG_ENABLE_CUSTOM_MICROS and MG_ENABLE_CUSTOM_MILLIS
+#if MG_ENABLE_CUSTOM_MICROS == 0
+uint64_t mg_micros(void) {
+#if MG_ARCH == MG_ARCH_ESP32
+  return (uint64_t) esp_timer_get_time();
+#elif MG_ENABLE_FREERTOS
+  return (uint64_t) xTaskGetTickCount() * portTICK_PERIOD_MS * 1000;
 #elif MG_ARCH == MG_ARCH_THREADX
-  return tx_time_get() * (1000 /* MS per SEC */ / TX_TIMER_TICKS_PER_SECOND);
+  return (uint64_t) tx_time_get() *
+         (1000 /* MS per SEC */ / TX_TIMER_TICKS_PER_SECOND) * 1000;
 #elif MG_ARCH == MG_ARCH_TIRTOS
-  return (uint64_t) Clock_getTicks();
+  return (uint64_t) Clock_getTicks() * 1000;
 #elif MG_ARCH == MG_ARCH_ZEPHYR
-  return (uint64_t) k_uptime_get();
+  return k_ticks_to_us_floor64((uint64_t) k_uptime_ticks());
 #elif MG_ARCH == MG_ARCH_CMSIS_RTOS1
-  return (uint64_t) rt_time_get();
+  return (uint64_t) rt_time_get() * 1000;
 #elif MG_ARCH == MG_ARCH_CMSIS_RTOS2
-  return (uint64_t) ((osKernelGetTickCount() * 1000) / osKernelGetTickFreq());
+  return (uint64_t) ((osKernelGetTickCount() * 1000) / osKernelGetTickFreq()) *
+         1000;
 #elif MG_ARCH == MG_ARCH_RTTHREAD
-  return (uint64_t) ((rt_tick_get() * 1000) / RT_TICK_PER_SECOND);
+  return (uint64_t) ((rt_tick_get() * 1000) / RT_TICK_PER_SECOND) * 1000;
 #elif MG_ARCH == MG_ARCH_WIN32
-  return GetTickCount();
+  return (uint64_t) GetTickCount() * 1000;
 #elif MG_ARCH == MG_ARCH_PICOSDK
-  return time_us_64() / 1000;
+  return time_us_64();
 #elif MG_ARCH == MG_ARCH_CUBE
-  return (uint64_t) HAL_GetTick();
+  return (uint64_t) HAL_GetTick() * 1000;
 #elif MG_ARCH == MG_ARCH_UNIX && defined(__APPLE__)
   // Apple CLOCK_MONOTONIC_RAW is equivalent to CLOCK_BOOTTIME on linux
   // Apple CLOCK_UPTIME_RAW is equivalent to CLOCK_MONOTONIC_RAW on linux
-  return clock_gettime_nsec_np(CLOCK_UPTIME_RAW) / 1000000;
+  return clock_gettime_nsec_np(CLOCK_UPTIME_RAW) / 1000;
 #elif MG_ARCH == MG_ARCH_UNIX
   struct timespec ts = {0, 0};
   // See #1615 - prefer monotonic clock
@@ -30506,12 +30572,18 @@ uint64_t mg_millis(void) {
   // adjustments performed by adjtime and NTP
   clock_gettime(CLOCK_REALTIME, &ts);
 #endif
-  return ((uint64_t) ts.tv_sec * 1000 + (uint64_t) ts.tv_nsec / 1000000);
+  return ((uint64_t) ts.tv_sec * 1000000 + (uint64_t) ts.tv_nsec / 1000);
 #elif defined(ARDUINO)
-  return (uint64_t) millis();
+  return (uint64_t) micros();
 #else
-  return (uint64_t) (time(NULL) * 1000);
+  return (uint64_t) time(NULL) * 1000000;
 #endif
+}
+#endif
+
+#if MG_ENABLE_CUSTOM_MILLIS == 0
+uint64_t mg_millis(void) {
+  return mg_micros() / 1000;
 }
 #endif
 
@@ -32614,6 +32686,201 @@ bool mg_wifi_ap_stop(void) {
 #endif
 
 #ifdef MG_ENABLE_LINES
+#line 1 "src/drivers/esp32_802154.c"
+#endif
+
+
+
+
+#if MG_ENABLE_TCPIP && defined(MG_ENABLE_DRIVER_ESP32_802154) && \
+    MG_ENABLE_DRIVER_ESP32_802154
+
+#if MG_ARCH != MG_ARCH_ESP32
+#error "MG_ENABLE_DRIVER_ESP32_802154 needs MG_ARCH_ESP32 (ESP-IDF)"
+#endif
+
+// ESP-IDF owns the PHY, coexistence and interrupts. Its callbacks run in
+// interrupt context and pass radio frames through a lock-free queue, read by
+// mgi_esp32_802154_poll(). In both directions frame[0] is the PHR, the length
+// including FCS
+#include <esp_attr.h>
+#include <esp_ieee802154.h>
+#include <esp_timer.h>
+
+static struct mg_tcpip_if *s_esp32_802154_ifp;
+static struct mg_queue s_esp32_802154_rx;
+static char s_esp32_802154_rxbuf[2048];
+static volatile bool s_esp32_802154_txing, s_esp32_802154_tx_done;
+static uint64_t s_esp32_802154_txstart;  // Send start, us
+// Frame for the radio: PHR, the length including FCS, then the PSDU
+static uint8_t s_esp32_802154_txframe[128] __attribute__((aligned(4)));
+
+// Queue a received PSDU without its FCS
+static void mg_esp32_802154_rx_frame(const uint8_t *psdu, size_t len) {
+  mg_mesh_rx_queue(&s_esp32_802154_rx, s_esp32_802154_ifp, psdu, len);
+}
+
+// ESP-IDF only: it accepts a frame and may refuse it later, because of Wi-Fi
+// coexistence, a busy channel or an abort. Such a frame is sent again after
+// this pause, until MG_MESH_TX_TIMEOUT_US. Without it, the mesh would count
+// the refused frame as sent
+#define MGI_ESP32_802154_RETRY_US 200
+
+static volatile bool s_esp32_802154_retry;         // A resend is pending
+static volatile uint32_t s_esp32_802154_retry_at;  // When to resend, us
+
+// ESP-IDF's esp_ieee802154 driver calls the three functions below by name,
+// from interrupt context. They are global only for that reason, and IRAM_ATTR
+// keeps them in IRAM
+void IRAM_ATTR esp_ieee802154_receive_done(uint8_t *frame,
+                                           esp_ieee802154_frame_info_t *info) {
+  (void) info;
+  if (frame[0] > 2) mg_esp32_802154_rx_frame(frame + 1, frame[0] - 2U);
+  esp_ieee802154_receive_handle_done(frame);
+}
+
+void IRAM_ATTR esp_ieee802154_transmit_done(const uint8_t *frame,
+                                            const uint8_t *ack,
+                                            esp_ieee802154_frame_info_t *info) {
+  (void) frame, (void) info;
+  if (ack != NULL) esp_ieee802154_receive_handle_done(ack);
+  s_esp32_802154_tx_done = true;
+}
+
+void IRAM_ATTR esp_ieee802154_transmit_failed(const uint8_t *frame,
+                                              esp_ieee802154_tx_error_t err) {
+  (void) frame;
+  if (err == ESP_IEEE802154_TX_ERR_COEXIST ||
+      err == ESP_IEEE802154_TX_ERR_CCA_BUSY ||
+      err == ESP_IEEE802154_TX_ERR_ABORT) {
+    s_esp32_802154_retry_at =
+        (uint32_t) esp_timer_get_time() + MGI_ESP32_802154_RETRY_US;
+    s_esp32_802154_retry = true;  // Set last: the poll reads it first
+  } else {
+    s_esp32_802154_tx_done = true;
+  }
+}
+
+static bool mg_esp32_802154_hw_init(uint16_t address) {
+  // rx_when_idle: the driver returns to receive after each transmission
+  return esp_ieee802154_enable() == ESP_OK &&
+         esp_ieee802154_set_promiscuous(false) == ESP_OK &&
+         esp_ieee802154_set_coordinator(false) == ESP_OK &&
+         esp_ieee802154_set_rx_when_idle(true) == ESP_OK &&
+         esp_ieee802154_set_panid(MG_802154_PAN_ID) == ESP_OK &&
+         esp_ieee802154_set_short_address(address) == ESP_OK &&
+         esp_ieee802154_set_channel(MG_802154_CHANNEL) == ESP_OK &&
+         esp_ieee802154_set_txpower(0) == ESP_OK &&
+         esp_ieee802154_receive() == ESP_OK;
+}
+
+static bool mg_esp32_802154_hw_tx(void) {
+  s_esp32_802154_retry = false;
+  return esp_ieee802154_transmit(s_esp32_802154_txframe, false) == ESP_OK;
+}
+
+static void mg_esp32_802154_hw_abort(void) {
+  s_esp32_802154_retry = false;
+  esp_ieee802154_receive();  // Stops the current operation
+}
+
+// Resend a refused frame when its pause is over. If the radio does not take
+// it, give up: the frame counts as done
+static void mg_esp32_802154_hw_poll(void) {
+  uint32_t now;
+  if (!s_esp32_802154_retry) return;
+  now = (uint32_t) esp_timer_get_time();
+  if ((int32_t) (now - s_esp32_802154_retry_at) < 0) return;
+  s_esp32_802154_retry = false;
+  if (esp_ieee802154_transmit(s_esp32_802154_txframe, false) != ESP_OK) {
+    s_esp32_802154_tx_done = true;
+  }
+}
+
+// Mesh radio transmit. The hardware adds the FCS
+static size_t mgi_esp32_802154_radio_tx(struct mg_tcpip_if *ifp,
+                                        const void *buf, size_t len) {
+  (void) ifp;
+  if (len > 125 || s_esp32_802154_txing) return 0;
+  s_esp32_802154_txframe[0] = (uint8_t) (len + 2);
+  memcpy(s_esp32_802154_txframe + 1, buf, len);
+  s_esp32_802154_tx_done = false;
+  s_esp32_802154_txing = true, s_esp32_802154_txstart = mg_micros();
+  if (!mg_esp32_802154_hw_tx()) {
+    s_esp32_802154_txing = false;
+    return 0;
+  }
+  return len;
+}
+
+static size_t mgi_esp32_802154_tx(const void *buf, size_t len,
+                                  struct mg_tcpip_if *ifp) {
+  struct mg_tcpip_driver_esp32_802154_data *data = ifp->driver_data;
+  return data->mesh->strategy->tx(data->mesh, buf, len);
+}
+
+static size_t mgi_esp32_802154_rx(void *buf, size_t cap,
+                                  struct mg_tcpip_if *ifp) {
+  struct mg_tcpip_driver_esp32_802154_data *data = ifp->driver_data;
+  size_t len = data->mesh->rx_len;
+  if (len > cap) return 0;
+  if (len != 0 && buf != ifp->recv_queue.buf)
+    memcpy(buf, ifp->recv_queue.buf, len);
+  data->mesh->rx_len = 0;
+  return len;
+}
+
+static bool mgi_esp32_802154_poll(struct mg_tcpip_if *ifp, bool s1) {
+  struct mg_tcpip_driver_esp32_802154_data *data = ifp->driver_data;
+  struct mg_mesh_node *node = data->mesh;
+  uint64_t now = mg_micros();
+  (void) s1;
+  node->now = now;
+  mg_esp32_802154_hw_poll();
+  if (s_esp32_802154_txing &&
+      (s_esp32_802154_tx_done ||
+       now - s_esp32_802154_txstart > MG_MESH_TX_TIMEOUT_US)) {
+    if (!s_esp32_802154_tx_done) mg_esp32_802154_hw_abort();
+    s_esp32_802154_txing = false;
+    node->tx_at = now + node->strategy->radio->ifs_us;
+  }
+  mg_mesh_rx_drain(node, &s_esp32_802154_rx);
+  node->strategy->tick(node, now);
+  return node->joined;
+}
+
+static bool mgi_esp32_802154_init(struct mg_tcpip_if *ifp) {
+  struct mg_tcpip_driver_esp32_802154_data *data = ifp->driver_data;
+  const struct mg_mesh *strategy = data->strategy;
+  uint16_t address =
+      (uint16_t) (2 + ((unsigned) ifp->mac[4] * 256 + ifp->mac[5]) % 65532u);
+  if (strategy == NULL) strategy = &mg_mesh_default;
+  data->mesh = mg_calloc(1, sizeof(*data->mesh));
+  if (data->mesh == NULL) return false;
+  if (!strategy->init(data->mesh, ifp, NULL, address)) {
+    mg_free(data->mesh);
+    data->mesh = NULL;
+    return false;
+  }
+  data->mesh->strategy = strategy;
+  data->mesh->tx = mgi_esp32_802154_radio_tx;
+  mg_queue_init(&s_esp32_802154_rx, s_esp32_802154_rxbuf,
+                sizeof(s_esp32_802154_rxbuf));
+  s_esp32_802154_ifp = ifp;
+  if (mg_esp32_802154_hw_init(address)) return true;
+  MG_ERROR(("802.15.4 radio init failed"));
+  data->mesh->strategy->free(data->mesh);
+  mg_free(data->mesh);
+  data->mesh = NULL;
+  return false;
+}
+
+struct mg_tcpip_driver mg_tcpip_driver_esp32_802154 = {
+    mgi_esp32_802154_init, mgi_esp32_802154_tx, mgi_esp32_802154_rx,
+    mgi_esp32_802154_poll};
+#endif
+
+#ifdef MG_ENABLE_LINES
 #line 1 "src/drivers/imxrt.c"
 #endif
 
@@ -32896,7 +33163,6 @@ struct mg_zll {
 
 // PHY_CTRL[XCVSEQ]
 enum { MGI_SEQ_IDLE = 0, MGI_SEQ_RX = 1, MGI_SEQ_TX = 2 };
-#define MGI_SEND_TIMEOUT_MS 60
 
 static struct mg_tcpip_if *s_mcxw71_ifp;
 static struct mg_queue s_mcxw71_rx;
@@ -32955,15 +33221,7 @@ void RF_802_15_4_IRQHandler(void) {
       n = n >= 2 ? n - 2 : 0;
       if (n > 0 && n <= sizeof(frame)) {
         for (i = 0; i < n; i++) frame[i] = MGI_RX_PB[i];
-        {
-          char *dst;
-          if (mg_queue_book(&s_mcxw71_rx, &dst, n) >= n) {
-            memcpy(dst, frame, n);
-            mg_queue_add(&s_mcxw71_rx, n);
-          } else {
-            s_mcxw71_ifp->ndrop++;
-          }
-        }
+        mg_mesh_rx_queue(&s_mcxw71_rx, s_mcxw71_ifp, frame, n);
       }
     }
     mg_mcxw71_listen();
@@ -33024,11 +33282,9 @@ static bool mgi_mcxw71_poll(struct mg_tcpip_if *ifp, bool s1) {
   struct mg_tcpip_driver_mcxw71_data *data = ifp->driver_data;
   struct mg_mesh_node *node = data->mesh;
   uint64_t now = mg_micros();
-  char *buf;
-  size_t len;
   (void) s1;
   if (s_mcxw71_txing &&
-      mg_millis() > s_mcxw71_sendstart + MGI_SEND_TIMEOUT_MS) {
+      mg_millis() > s_mcxw71_sendstart + MG_MESH_TX_TIMEOUT_US / 1000) {
     mg_mcxw71_lock();
     if (s_mcxw71_txing) {
       mg_mcxw71_abort();
@@ -33044,10 +33300,7 @@ static bool mgi_mcxw71_poll(struct mg_tcpip_if *ifp, bool s1) {
     node->tx_at = now + node->strategy->radio->ifs_us;
   }
   node->now = now;
-  while (node->rx_len == 0 && (len = mg_queue_next(&s_mcxw71_rx, &buf)) != 0) {
-    node->strategy->rx(node, buf, len);
-    mg_queue_del(&s_mcxw71_rx, len);
-  }
+  mg_mesh_rx_drain(node, &s_mcxw71_rx);
   node->strategy->tick(node, now);
   return node->joined;
 }
@@ -33059,10 +33312,10 @@ static bool mgi_mcxw71_init(struct mg_tcpip_if *ifp) {
   address =
       (uint16_t) (2 + ((unsigned) ifp->mac[4] * 256 + ifp->mac[5]) % 65532u);
   if (strategy == NULL) strategy = &mg_mesh_default;
-  data->mesh = calloc(1, sizeof(*data->mesh));
+  data->mesh = mg_calloc(1, sizeof(*data->mesh));
   if (data->mesh == NULL) return false;
   if (!strategy->init(data->mesh, ifp, NULL, address)) {
-    free(data->mesh);
+    mg_free(data->mesh);
     data->mesh = NULL;
     return false;
   }
@@ -33071,7 +33324,7 @@ static bool mgi_mcxw71_init(struct mg_tcpip_if *ifp) {
   mg_queue_init(&s_mcxw71_rx, s_mcxw71_queue, sizeof(s_mcxw71_queue));
   if (mgi_mcxw71_radio_init(ifp)) return true;
   strategy->free(data->mesh);
-  free(data->mesh);
+  mg_free(data->mesh);
   data->mesh = NULL;
   return false;
 }
@@ -33093,7 +33346,6 @@ struct mg_tcpip_driver mg_tcpip_driver_mcxw71 = {
 #include <rail_ieee802154.h>
 
 // RAIL delivers raw frames and transmit completion from interrupt context.
-#define MG_MG24_TX_TIMEOUT_US 60000
 
 static struct mg_tcpip_if *s_mg24_ifp;
 static RAIL_Handle_t s_mg24_rail;
@@ -33108,7 +33360,6 @@ static void mg_mg24_rx_frame(RAIL_Handle_t h) {
   RAIL_RxPacketInfo_t info;
   uint8_t f[128];
   size_t n;
-  char *dst;
   if (RAIL_GetRxPacketInfo(h, RAIL_RX_PACKET_HANDLE_NEWEST, &info) ==
           RAIL_RX_PACKET_HANDLE_INVALID ||
       info.packetStatus != RAIL_RX_PACKET_READY_SUCCESS ||
@@ -33118,12 +33369,7 @@ static void mg_mg24_rx_frame(RAIL_Handle_t h) {
   RAIL_CopyRxPacket(f, &info);
   n = info.packetBytes - 1U;  // Strip PHR
   if (n == f[0]) n -= 2;      // FCS stored, strip it
-  if (mg_queue_book(&s_mg24_rx, &dst, n) >= n) {
-    memcpy(dst, f + 1, n);
-    mg_queue_add(&s_mg24_rx, n);
-  } else {
-    s_mg24_ifp->ndrop++;
-  }
+  mg_mesh_rx_queue(&s_mg24_rx, s_mg24_ifp, f + 1, n);
 }
 
 // RAIL event callback, runs in interrupt context
@@ -33221,12 +33467,10 @@ static bool mgi_mg24_poll(struct mg_tcpip_if *ifp, bool s1) {
   struct mg_tcpip_driver_mg24_data *data = ifp->driver_data;
   struct mg_mesh_node *node = data->mesh;
   uint64_t now = mg_micros();
-  char *buf;
-  size_t len;
   (void) s1;
   node->now = now;
   if (s_mg24_txing && (s_mg24_tx_done || RAIL_GetTime() - s_mg24_txstart >
-                                             MG_MG24_TX_TIMEOUT_US)) {
+                                             MG_MESH_TX_TIMEOUT_US)) {
     if (!s_mg24_tx_done) {
       RAIL_Idle(s_mg24_rail, RAIL_IDLE_ABORT, true);
       RAIL_StartRx(s_mg24_rail, MG_802154_CHANNEL, NULL);
@@ -33234,10 +33478,7 @@ static bool mgi_mg24_poll(struct mg_tcpip_if *ifp, bool s1) {
     s_mg24_txing = false;
     node->tx_at = now + node->strategy->radio->ifs_us;
   }
-  while (node->rx_len == 0 && (len = mg_queue_next(&s_mg24_rx, &buf)) != 0) {
-    node->strategy->rx(node, buf, len);
-    mg_queue_del(&s_mg24_rx, len);
-  }
+  mg_mesh_rx_drain(node, &s_mg24_rx);
   node->strategy->tick(node, now);
   return node->joined;
 }
@@ -33247,10 +33488,10 @@ static bool mgi_mg24_init(struct mg_tcpip_if *ifp) {
   uint16_t address =
       (uint16_t) (2 + ((unsigned) ifp->mac[4] * 256 + ifp->mac[5]) % 65532u);
   if (strategy == NULL) strategy = &mg_mesh_default;
-  data->mesh = calloc(1, sizeof(*data->mesh));
+  data->mesh = mg_calloc(1, sizeof(*data->mesh));
   if (data->mesh == NULL) return false;
   if (!strategy->init(data->mesh, ifp, NULL, address)) {
-    free(data->mesh);
+    mg_free(data->mesh);
     data->mesh = NULL;
     return false;
   }
@@ -33259,7 +33500,7 @@ static bool mgi_mg24_init(struct mg_tcpip_if *ifp) {
   mg_queue_init(&s_mg24_rx, s_mg24_rxbuf, sizeof(s_mg24_rxbuf));
   if (mgi_mg24_radio_init(ifp)) return true;
   data->mesh->strategy->free(data->mesh);
-  free(data->mesh);
+  mg_free(data->mesh);
   data->mesh = NULL;
   return false;
 }
@@ -33789,13 +34030,7 @@ void RADIO_IRQHandler(void) {
         mg_radio_802154.parse_hdr(&mg_radio_802154, frame, len, &dst, &src) !=
             0 &&
         (dst == 0xffffu || dst == node->radio_address)) {
-      char *dst;
-      if (mg_queue_book(&s_nrf52_rx, &dst, len) >= len) {
-        memcpy(dst, frame, len);
-        mg_queue_add(&s_nrf52_rx, len);
-      } else {
-        s_nrf52_ifp->ndrop++;
-      }
+      mg_mesh_rx_queue(&s_nrf52_rx, s_nrf52_ifp, frame, len);
     }
   }
   mgi_nrf52_listen();
@@ -33870,10 +34105,8 @@ static bool mgi_nrf52_poll(struct mg_tcpip_if *ifp, bool s1) {
   struct mg_tcpip_driver_nrf52_data *data = ifp->driver_data;
   struct mg_mesh_node *node = data->mesh;
   uint64_t now = mg_micros();
-  char *buf;
-  size_t len;
   (void) s1;
-  if (s_nrf52_txing && mg_micros() - s_nrf52_started > 60000) {
+  if (s_nrf52_txing && mg_micros() - s_nrf52_started > MG_MESH_TX_TIMEOUT_US) {
     NVIC_DisableIRQ(RADIO_IRQn);
     mgi_nrf52_disable();
     s_nrf52_txing = false;
@@ -33886,10 +34119,7 @@ static bool mgi_nrf52_poll(struct mg_tcpip_if *ifp, bool s1) {
     node->tx_at = now + node->strategy->radio->ifs_us;
   }
   node->now = now;
-  while (node->rx_len == 0 && (len = mg_queue_next(&s_nrf52_rx, &buf)) != 0) {
-    node->strategy->rx(node, buf, len);
-    mg_queue_del(&s_nrf52_rx, len);
-  }
+  mg_mesh_rx_drain(node, &s_nrf52_rx);
   node->strategy->tick(node, now);
   return node->joined;
 }
@@ -33901,10 +34131,10 @@ static bool mgi_nrf52_init(struct mg_tcpip_if *ifp) {
   address =
       (uint16_t) (2 + ((unsigned) ifp->mac[4] * 256 + ifp->mac[5]) % 65532u);
   if (strategy == NULL) strategy = &mg_mesh_default;
-  data->mesh = calloc(1, sizeof(*data->mesh));
+  data->mesh = mg_calloc(1, sizeof(*data->mesh));
   if (data->mesh == NULL) return false;
   if (!strategy->init(data->mesh, ifp, NULL, address)) {
-    free(data->mesh);
+    mg_free(data->mesh);
     data->mesh = NULL;
     return false;
   }
@@ -33913,7 +34143,7 @@ static bool mgi_nrf52_init(struct mg_tcpip_if *ifp) {
   mg_queue_init(&s_nrf52_rx, s_nrf52_queue, sizeof(s_nrf52_queue));
   if (mgi_nrf52_radio_init(ifp)) return true;
   strategy->free(data->mesh);
-  free(data->mesh);
+  mg_free(data->mesh);
   data->mesh = NULL;
   return false;
 }
@@ -35024,15 +35254,7 @@ static void mg_rw612_control(uint8_t subtype, uint32_t a, uint32_t b,
 }
 
 static void mg_rw612_queue_rx(const uint8_t *frame, size_t len) {
-  {
-    char *dst;
-    if (mg_queue_book(&s_rw612w_rx, &dst, len) >= len) {
-      memcpy(dst, frame, len);
-      mg_queue_add(&s_rw612w_rx, len);
-    } else {
-      s_rw612.ifp->ndrop++;
-    }
-  }
+  mg_mesh_rx_queue(&s_rw612w_rx, s_rw612.ifp, frame, len);
 }
 
 // Spinel packed unsigned integer: 7 bits per byte, LSB first
@@ -35343,8 +35565,6 @@ static bool mgi_rw612w_poll(struct mg_tcpip_if *ifp, bool s1) {
   struct mg_tcpip_driver_rw612w_data *data = ifp->driver_data;
   struct mg_mesh_node *node = data->mesh;
   uint64_t now = mg_micros();
-  char *buf;
-  size_t len;
   (void) s1;
   bool was_sending = s_rw612.txing;
   mg_rw612_poll_imu();
@@ -35356,10 +35576,7 @@ static bool mgi_rw612w_poll(struct mg_tcpip_if *ifp, bool s1) {
   if (was_sending && !s_rw612.txing)
     node->tx_at = now + node->strategy->radio->ifs_us;
   node->now = now;
-  while (node->rx_len == 0 && (len = mg_queue_next(&s_rw612w_rx, &buf)) != 0) {
-    node->strategy->rx(node, buf, len);
-    mg_queue_del(&s_rw612w_rx, len);
-  }
+  mg_mesh_rx_drain(node, &s_rw612w_rx);
   node->strategy->tick(node, now);
   return node->joined;
 }
@@ -35377,10 +35594,10 @@ static bool mgi_rw612w_init(struct mg_tcpip_if *ifp) {
   address =
       (uint16_t) (2 + ((unsigned) ifp->mac[4] * 256 + ifp->mac[5]) % 65532u);
   if (strategy == NULL) strategy = &mg_mesh_default;
-  data->mesh = calloc(1, sizeof(*data->mesh));
+  data->mesh = mg_calloc(1, sizeof(*data->mesh));
   if (data->mesh == NULL) return false;
   if (!strategy->init(data->mesh, ifp, NULL, address)) {
-    free(data->mesh);
+    mg_free(data->mesh);
     data->mesh = NULL;
     return false;
   }
@@ -35389,7 +35606,7 @@ static bool mgi_rw612w_init(struct mg_tcpip_if *ifp) {
   mg_queue_init(&s_rw612w_rx, s_rw612w_queue, sizeof(s_rw612w_queue));
   if (mgi_rw612w_radio_init(ifp)) return true;
   strategy->free(data->mesh);
-  free(data->mesh);
+  mg_free(data->mesh);
   data->mesh = NULL;
   return false;
 }

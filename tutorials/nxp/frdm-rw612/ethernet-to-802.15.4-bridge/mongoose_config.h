@@ -6,7 +6,7 @@
 #define MG_ENABLE_TCPIP 1
 #define MG_ENABLE_DRIVER_RW612 1        // Ethernet
 #define MG_ENABLE_DRIVER_RW612W 1 // Mesh bridge over raw 802.15.4
-#define MG_ENABLE_CUSTOM_MILLIS 1
+#define MG_ENABLE_CUSTOM_MICROS 1
 
 
 // The bridge initializes and polls its two L2 interfaces directly.

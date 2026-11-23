@@ -18,10 +18,6 @@ uint64_t mg_micros(void) {
   return s_sim.now;
 }
 
-uint64_t mg_millis(void) {
-  return mg_micros() / 1000;
-}
-
 // Parse "X,Y,Z", or "X,Y" with Z 0. Return false if it is not that
 static bool parse_pos(const char *s, struct pos *p) {
   int n = 0;  // Characters parsed

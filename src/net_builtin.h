@@ -158,6 +158,7 @@ void mg_tcpip_arp_request(struct mg_tcpip_if *ifp, uint32_t ip, uint8_t *mac);
 #include "drivers/w5500.h"
 #include "drivers/xmc.h"
 #include "drivers/xmc7.h"
+#include "drivers/esp32_802154.h"
 
 // SPI bus abstraction for SPI-attached network chips (e.g. W5500).
 // Populate and assign to the driver's driver_data field.

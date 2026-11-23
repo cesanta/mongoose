@@ -277,7 +277,7 @@ The FRDM-RW612 example is the Ethernet bridge. The XIAO MG24 and
 FRDM-MCXW71 examples are radio clients. All three use the slotted mesh.
 
 ```sh
-make -C tutorials/nxp/frdm-rw612/bridge
+make -C tutorials/nxp/frdm-rw612/ethernet-to-802.15.4-bridge
 make -C tutorials/silabs/xiao-mg24/minimal
 make -C tutorials/nxp/frdm-mcxw71/minimal
 ```
@@ -292,7 +292,7 @@ MG24 is a node only; its radio address is derived from its MAC.
 The drivers in `src/drivers` send and receive raw 802.15.4 frames.
 They use the same slotted mesh implementation as the simulator.
 The board driver is initialized by `mg_mgr_init()`. The RW612 bridge
-has its own `bridge/main.c`, which initializes and polls the two drivers
+has its own `ethernet-to-802.15.4-bridge/main.c`, which initializes and polls the two drivers
 directly, without an event manager or local IP stack.
 
 ## Hardware integration
@@ -306,7 +306,7 @@ A NULL strategy selects `mg_mesh_default`, named `"default"`; assigning another
 raw radio frames; the selected strategy owns joining, scheduling and Ethernet
 fragmentation. Driver initialization goes through `mg_tcpip_init()`.
 
-Board examples are under `tutorials/nxp/frdm-rw612/bridge`,
+Board examples are under `tutorials/nxp/frdm-rw612/ethernet-to-802.15.4-bridge`,
 `tutorials/nxp/frdm-mcxw71/minimal`, `tutorials/silabs/xiao-mg24/minimal`, and
 `tutorials/nordic/xiao-52840/minimal`. Their HALs supply `mg_micros()`.
 
