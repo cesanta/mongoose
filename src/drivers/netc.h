@@ -26,10 +26,9 @@ struct mg_tcpip_driver_netc_data {
 #define MG_TCPIP_NETC_LINK 0
 #endif
 
-struct mg_tcpip_driver;
 extern struct mg_tcpip_driver mg_tcpip_driver_netc;
 
-#define MG_TCPIP_DRIVER_INIT(mgr)                              \
+#define MG_TCPIP_DRIVER_NETC_INIT(mgr)                           \
   do {                                                         \
     static struct mg_tcpip_driver_netc_data driver_data_;      \
     static struct mg_tcpip_if mif_;                            \
@@ -42,8 +41,12 @@ extern struct mg_tcpip_driver mg_tcpip_driver_netc;
     mif_.driver = &mg_tcpip_driver_netc;                       \
     mif_.driver_data = &driver_data_;                          \
     MG_SET_MAC_ADDRESS(mif_.mac);                              \
-    mg_tcpip_init(mgr, &mif_);                                 \
+    mg_tcpip_init((mgr), &mif_);                                 \
     MG_INFO(("Driver: netc, MAC: %M", mg_print_mac, mif_.mac)); \
   } while (0)
+
+#ifndef MG_TCPIP_DRIVER_INIT
+#define MG_TCPIP_DRIVER_INIT(x) MG_TCPIP_DRIVER_NETC_INIT(x)
+#endif
 
 #endif

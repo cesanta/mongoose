@@ -72,7 +72,9 @@ struct mg_tcpip_driver_stm32h_data {
 #define MG_IPV6_INIT(mif)
 #endif
 
-#define MG_TCPIP_DRIVER_INIT(mgr)                                 \
+extern struct mg_tcpip_driver mg_tcpip_driver_stm32h;
+
+#define MG_TCPIP_DRIVER_STM32H_INIT(mgr)                         \
   do {                                                            \
     static struct mg_tcpip_driver_stm32h_data driver_data_;       \
     static struct mg_tcpip_if mif_;                               \
@@ -86,10 +88,14 @@ struct mg_tcpip_driver_stm32h_data {
     mif_.driver_data = &driver_data_;                             \
     MG_SET_MAC_ADDRESS(mif_.mac);                                 \
     MG_IPV6_INIT(mif_);                                           \
-    mg_tcpip_init(mgr, &mif_);                                    \
+    mg_tcpip_init((mgr), &mif_);                                 \
     MG_ENABLE_ETH_IRQ();                                          \
     MG_INFO(("Driver: stm32h, MAC: %M", mg_print_mac, mif_.mac)); \
   } while (0)
+
+#ifndef MG_TCPIP_DRIVER_INIT
+#define MG_TCPIP_DRIVER_INIT(x) MG_TCPIP_DRIVER_STM32H_INIT(x)
+#endif
 
 #endif
 #endif

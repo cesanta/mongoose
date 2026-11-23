@@ -4844,25 +4844,24 @@ void mg_tcpip_qwrite(void *buf, size_t len, struct mg_tcpip_if *ifp);
 void mg_tcpip_arp_request(struct mg_tcpip_if *ifp, uint32_t ip, uint8_t *mac);
 
 // Built-in hardware drivers. Assign one to mg_tcpip_if.driver before calling
-// mg_tcpip_init(). Each driver also requires a corresponding driver_data
-// struct; see the matching driver header for details.
-extern struct mg_tcpip_driver mg_tcpip_driver_w5100;
-extern struct mg_tcpip_driver mg_tcpip_driver_tm4c;
-extern struct mg_tcpip_driver mg_tcpip_driver_tms570;
-extern struct mg_tcpip_driver mg_tcpip_driver_stm32h;
-extern struct mg_tcpip_driver mg_tcpip_driver_imxrt;
-extern struct mg_tcpip_driver mg_tcpip_driver_same54;
-extern struct mg_tcpip_driver mg_tcpip_driver_cmsis;
-extern struct mg_tcpip_driver mg_tcpip_driver_ra;
-extern struct mg_tcpip_driver mg_tcpip_driver_xmc;
-extern struct mg_tcpip_driver mg_tcpip_driver_xmc7;
-extern struct mg_tcpip_driver mg_tcpip_driver_pico_w;
-extern struct mg_tcpip_driver mg_tcpip_driver_rw612;
-extern struct mg_tcpip_driver mg_tcpip_driver_cyw;
-extern struct mg_tcpip_driver mg_tcpip_driver_nxp_wifi;
-extern struct mg_tcpip_driver mg_tcpip_driver_st67w6;
-extern struct mg_tcpip_driver mg_tcpip_driver_atcmd;
-extern struct mg_tcpip_driver mg_tcpip_driver_netc;
+// mg_tcpip_init(). See the matching driver header for configuration and
+// initialisation helpers.
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -5267,11 +5266,57 @@ struct mg_tcpip_driver_atcmd_data {
   bool unstuffing;              // internal use: unstuffing state
 };
 
+#if MG_ENABLE_TCPIP && defined(MG_ENABLE_DRIVER_ATCMD) && MG_ENABLE_DRIVER_ATCMD
+
+extern struct mg_tcpip_driver mg_tcpip_driver_atcmd;
+
+// Modem callbacks and AT script, defined by the application.
+// See tutorials/arduino/sim800-mqtt for modem configuration.
+extern struct mg_tcpip_driver_atcmd_data mg_atcmd;
+
+#define MG_TCPIP_DRIVER_ATCMD_INIT(mgr)                          \
+  do {                                                           \
+    static struct mg_tcpip_if mif_;                               \
+    mif_.ip = MG_TCPIP_IP;                                        \
+    mif_.mask = MG_TCPIP_MASK;                                    \
+    mif_.gw = MG_TCPIP_GW;                                        \
+    mif_.driver = &mg_tcpip_driver_atcmd;                          \
+    mif_.driver_data = &mg_atcmd;                                 \
+    mif_.l2type = MG_TCPIP_L2_PPP;                                \
+    MG_SET_MAC_ADDRESS(mif_.mac);                                 \
+    mg_tcpip_init((mgr), &mif_);                                 \
+    MG_INFO(("Driver: atcmd, MAC: %M", mg_print_mac, mif_.mac));    \
+  } while (0)
+
+#ifndef MG_TCPIP_DRIVER_INIT
+#define MG_TCPIP_DRIVER_INIT(x) MG_TCPIP_DRIVER_ATCMD_INIT(x)
+#endif
+
+#endif
+
 
 #if MG_ENABLE_TCPIP && defined(MG_ENABLE_DRIVER_CMSIS) && MG_ENABLE_DRIVER_CMSIS
 
 #include "Driver_ETH_MAC.h"  // keep this include
 #include "Driver_ETH_PHY.h"  // keep this include
+
+extern struct mg_tcpip_driver mg_tcpip_driver_cmsis;
+
+#define MG_TCPIP_DRIVER_CMSIS_INIT(mgr)                          \
+  do {                                                           \
+    static struct mg_tcpip_if mif_;                               \
+    mif_.ip = MG_TCPIP_IP;                                        \
+    mif_.mask = MG_TCPIP_MASK;                                    \
+    mif_.gw = MG_TCPIP_GW;                                        \
+    mif_.driver = &mg_tcpip_driver_cmsis;                          \
+    MG_SET_MAC_ADDRESS(mif_.mac);                                 \
+    mg_tcpip_init((mgr), &mif_);                                 \
+    MG_INFO(("Driver: cmsis, MAC: %M", mg_print_mac, mif_.mac));    \
+  } while (0)
+
+#ifndef MG_TCPIP_DRIVER_INIT
+#define MG_TCPIP_DRIVER_INIT(x) MG_TCPIP_DRIVER_CMSIS_INIT(x)
+#endif
 
 #endif
 
@@ -5296,7 +5341,9 @@ struct mg_tcpip_driver_cyw_data {
   bool hs;  // use chip "high-speed" mode; otherwise SPI CPOL0 CPHA0 (DS 4.2.3 Table 6)
 };
 
-#define MG_TCPIP_DRIVER_INIT(mgr)                              \
+extern struct mg_tcpip_driver mg_tcpip_driver_cyw;
+
+#define MG_TCPIP_DRIVER_CYW_INIT(mgr)                            \
   do {                                                         \
     static struct mg_tcpip_driver_cyw_data driver_data_;       \
     static struct mg_tcpip_if mif_;                            \
@@ -5308,9 +5355,13 @@ struct mg_tcpip_driver_cyw_data {
     mif_.driver_data = &driver_data_;                          \
     mif_.recv_queue.size = 8192;                               \
     mif_.mac[0] = 2; /* MAC read from OTP at driver init */    \
-    mg_tcpip_init(mgr, &mif_);                                 \
+    mg_tcpip_init((mgr), &mif_);                                 \
     MG_INFO(("Driver: cyw, MAC: %M", mg_print_mac, mif_.mac)); \
   } while (0)
+
+#ifndef MG_TCPIP_DRIVER_INIT
+#define MG_TCPIP_DRIVER_INIT(x) MG_TCPIP_DRIVER_CYW_INIT(x)
+#endif
 
 #endif
 
@@ -5345,7 +5396,9 @@ struct mg_tcpip_driver_imxrt_data {
 #define MG_DRIVER_MDC_CR 24
 #endif
 
-#define MG_TCPIP_DRIVER_INIT(mgr)                                \
+extern struct mg_tcpip_driver mg_tcpip_driver_imxrt;
+
+#define MG_TCPIP_DRIVER_IMXRT_INIT(mgr)                          \
   do {                                                           \
     static struct mg_tcpip_driver_imxrt_data driver_data_;       \
     static struct mg_tcpip_if mif_;                              \
@@ -5357,9 +5410,13 @@ struct mg_tcpip_driver_imxrt_data {
     mif_.driver = &mg_tcpip_driver_imxrt;                        \
     mif_.driver_data = &driver_data_;                            \
     MG_SET_MAC_ADDRESS(mif_.mac);                                \
-    mg_tcpip_init(mgr, &mif_);                                   \
+    mg_tcpip_init((mgr), &mif_);                                 \
     MG_INFO(("Driver: imxrt, MAC: %M", mg_print_mac, mif_.mac)); \
   } while (0)
+
+#ifndef MG_TCPIP_DRIVER_INIT
+#define MG_TCPIP_DRIVER_INIT(x) MG_TCPIP_DRIVER_IMXRT_INIT(x)
+#endif
 
 #endif
 // Copyright (c) 2026 Cesanta Software Limited
@@ -5457,10 +5514,9 @@ struct mg_tcpip_driver_netc_data {
 #define MG_TCPIP_NETC_LINK 0
 #endif
 
-struct mg_tcpip_driver;
 extern struct mg_tcpip_driver mg_tcpip_driver_netc;
 
-#define MG_TCPIP_DRIVER_INIT(mgr)                              \
+#define MG_TCPIP_DRIVER_NETC_INIT(mgr)                           \
   do {                                                         \
     static struct mg_tcpip_driver_netc_data driver_data_;      \
     static struct mg_tcpip_if mif_;                            \
@@ -5473,9 +5529,13 @@ extern struct mg_tcpip_driver mg_tcpip_driver_netc;
     mif_.driver = &mg_tcpip_driver_netc;                       \
     mif_.driver_data = &driver_data_;                          \
     MG_SET_MAC_ADDRESS(mif_.mac);                              \
-    mg_tcpip_init(mgr, &mif_);                                 \
+    mg_tcpip_init((mgr), &mif_);                                 \
     MG_INFO(("Driver: netc, MAC: %M", mg_print_mac, mif_.mac)); \
   } while (0)
+
+#ifndef MG_TCPIP_DRIVER_INIT
+#define MG_TCPIP_DRIVER_INIT(x) MG_TCPIP_DRIVER_NETC_INIT(x)
+#endif
 
 #endif
 // Copyright (c) 2026 Cesanta Software Limited
@@ -5522,7 +5582,9 @@ struct mg_tcpip_driver_nxp_wifi_data {
 };
 
 
-#define MG_TCPIP_DRIVER_INIT(mgr)                                   \
+extern struct mg_tcpip_driver mg_tcpip_driver_nxp_wifi;
+
+#define MG_TCPIP_DRIVER_NXP_WIFI_INIT(mgr)                       \
   do {                                                              \
     static struct mg_tcpip_driver_nxp_wifi_data driver_data_;       \
     static struct mg_tcpip_if mif_;                                 \
@@ -5534,9 +5596,13 @@ struct mg_tcpip_driver_nxp_wifi_data {
     mif_.driver_data = &driver_data_;                               \
     mif_.recv_queue.size = 8192;                                    \
     mif_.mac[0] = 2; /* MAC read from OTP at driver init */         \
-    mg_tcpip_init(mgr, &mif_);                                      \
+    mg_tcpip_init((mgr), &mif_);                                 \
     MG_INFO(("Driver: nxp wifi, MAC: %M", mg_print_mac, mif_.mac)); \
   } while (0)
+
+#ifndef MG_TCPIP_DRIVER_INIT
+#define MG_TCPIP_DRIVER_INIT(x) MG_TCPIP_DRIVER_NXP_WIFI_INIT(x)
+#endif
 
 #endif
 
@@ -5574,7 +5640,9 @@ struct mg_tcpip_driver_pico_w_data {
   struct mg_wifi_data wifi;
 };
 
-#define MG_TCPIP_DRIVER_INIT(mgr)                                 \
+extern struct mg_tcpip_driver mg_tcpip_driver_pico_w;
+
+#define MG_TCPIP_DRIVER_PICO_W_INIT(mgr)                         \
   do {                                                            \
     static struct mg_tcpip_driver_pico_w_data driver_data_;       \
     static struct mg_tcpip_if mif_;                               \
@@ -5586,9 +5654,13 @@ struct mg_tcpip_driver_pico_w_data {
     mif_.driver_data = &driver_data_;                             \
     mif_.recv_queue.size = 8192;                                  \
     mif_.mac[0] = 2; /* MAC read from OTP at driver init */       \
-    mg_tcpip_init(mgr, &mif_);                                    \
+    mg_tcpip_init((mgr), &mif_);                                 \
     MG_INFO(("Driver: pico-w, MAC: %M", mg_print_mac, mif_.mac)); \
   } while (0)
+
+#ifndef MG_TCPIP_DRIVER_INIT
+#define MG_TCPIP_DRIVER_INIT(x) MG_TCPIP_DRIVER_PICO_W_INIT(x)
+#endif
 
 #endif
 
@@ -5616,7 +5688,9 @@ struct mg_tcpip_driver_ra_data {
 #define MG_TCPIP_PHY_ADDR 0
 #endif
 
-#define MG_TCPIP_DRIVER_INIT(mgr)                             \
+extern struct mg_tcpip_driver mg_tcpip_driver_ra;
+
+#define MG_TCPIP_DRIVER_RA_INIT(mgr)                             \
   do {                                                        \
     static struct mg_tcpip_driver_ra_data driver_data_;       \
     static struct mg_tcpip_if mif_;                           \
@@ -5629,9 +5703,13 @@ struct mg_tcpip_driver_ra_data {
     mif_.driver = &mg_tcpip_driver_ra;                        \
     mif_.driver_data = &driver_data_;                         \
     MG_SET_MAC_ADDRESS(mif_.mac);                             \
-    mg_tcpip_init(mgr, &mif_);                                \
+    mg_tcpip_init((mgr), &mif_);                                 \
     MG_INFO(("Driver: ra, MAC: %M", mg_print_mac, mif_.mac)); \
   } while (0)
+
+#ifndef MG_TCPIP_DRIVER_INIT
+#define MG_TCPIP_DRIVER_INIT(x) MG_TCPIP_DRIVER_RA_INIT(x)
+#endif
 
 #endif
 
@@ -5663,8 +5741,9 @@ struct mg_tcpip_driver_rw612_data {
 #define MG_DRIVER_MDC_HOLDTIME 3
 #endif
 
-#ifndef MG_TCPIP_DRIVER_INIT
-#define MG_TCPIP_DRIVER_INIT(mgr)                                 \
+extern struct mg_tcpip_driver mg_tcpip_driver_rw612;
+
+#define MG_TCPIP_DRIVER_RW612_INIT(mgr)                          \
   do {                                                            \
     static struct mg_tcpip_driver_rw612_data driver_data_;       \
     static struct mg_tcpip_if mif_;                               \
@@ -5676,9 +5755,12 @@ struct mg_tcpip_driver_rw612_data {
     mif_.driver = &mg_tcpip_driver_rw612;                        \
     mif_.driver_data = &driver_data_;                             \
     MG_SET_MAC_ADDRESS(mif_.mac);                                 \
-    mg_tcpip_init(mgr, &mif_);                                    \
+    mg_tcpip_init((mgr), &mif_);                                 \
     MG_INFO(("Driver: rw612, MAC: %M", mg_print_mac, mif_.mac)); \
   } while (0)
+
+#ifndef MG_TCPIP_DRIVER_INIT
+#define MG_TCPIP_DRIVER_INIT(x) MG_TCPIP_DRIVER_RW612_INIT(x)
 #endif
 
 #endif
@@ -5734,7 +5816,9 @@ struct mg_tcpip_driver_same54_data {
   uint8_t phy_addr;
 };
 
-#define MG_TCPIP_DRIVER_INIT(mgr)                                 \
+extern struct mg_tcpip_driver mg_tcpip_driver_same54;
+
+#define MG_TCPIP_DRIVER_SAME54_INIT(mgr)                         \
   do {                                                            \
     static struct mg_tcpip_driver_same54_data driver_data_;       \
     static struct mg_tcpip_if mif_;                               \
@@ -5746,9 +5830,13 @@ struct mg_tcpip_driver_same54_data {
     mif_.driver = &mg_tcpip_driver_same54;                        \
     mif_.driver_data = &driver_data_;                             \
     MG_SET_MAC_ADDRESS(mif_.mac);                                 \
-    mg_tcpip_init(mgr, &mif_);                                    \
+    mg_tcpip_init((mgr), &mif_);                                 \
     MG_INFO(("Driver: same54, MAC: %M", mg_print_mac, mif_.mac)); \
   } while (0)
+
+#ifndef MG_TCPIP_DRIVER_INIT
+#define MG_TCPIP_DRIVER_INIT(x) MG_TCPIP_DRIVER_SAME54_INIT(x)
+#endif
 
 #endif
 
@@ -5802,7 +5890,9 @@ struct mg_tcpip_driver_st67w6_data {
   struct mg_queue send_queue; // decouple tx calls from module polls
 };
 
-#define MG_TCPIP_DRIVER_INIT(mgr)                                 \
+extern struct mg_tcpip_driver mg_tcpip_driver_st67w6;
+
+#define MG_TCPIP_DRIVER_ST67W6_INIT(mgr)                         \
   do {                                                            \
     static struct mg_tcpip_driver_st67w6_data driver_data_;       \
     static struct mg_tcpip_if mif_;                               \
@@ -5814,9 +5904,13 @@ struct mg_tcpip_driver_st67w6_data {
     mif_.driver_data = &driver_data_;                             \
     mif_.recv_queue.size = 8192;                                  \
     mif_.mac[0] = 2; /* MAC read from OTP at driver init */       \
-    mg_tcpip_init(mgr, &mif_);                                    \
+    mg_tcpip_init((mgr), &mif_);                                 \
     MG_INFO(("Driver: st67w6, MAC: %M", mg_print_mac, mif_.mac)); \
   } while (0)
+
+#ifndef MG_TCPIP_DRIVER_INIT
+#define MG_TCPIP_DRIVER_INIT(x) MG_TCPIP_DRIVER_ST67W6_INIT(x)
+#endif
 
 #endif
 
@@ -5953,7 +6047,9 @@ struct mg_tcpip_driver_stm32h_data {
 #define MG_IPV6_INIT(mif)
 #endif
 
-#define MG_TCPIP_DRIVER_INIT(mgr)                                 \
+extern struct mg_tcpip_driver mg_tcpip_driver_stm32h;
+
+#define MG_TCPIP_DRIVER_STM32H_INIT(mgr)                         \
   do {                                                            \
     static struct mg_tcpip_driver_stm32h_data driver_data_;       \
     static struct mg_tcpip_if mif_;                               \
@@ -5967,10 +6063,14 @@ struct mg_tcpip_driver_stm32h_data {
     mif_.driver_data = &driver_data_;                             \
     MG_SET_MAC_ADDRESS(mif_.mac);                                 \
     MG_IPV6_INIT(mif_);                                           \
-    mg_tcpip_init(mgr, &mif_);                                    \
+    mg_tcpip_init((mgr), &mif_);                                 \
     MG_ENABLE_ETH_IRQ();                                          \
     MG_INFO(("Driver: stm32h, MAC: %M", mg_print_mac, mif_.mac)); \
   } while (0)
+
+#ifndef MG_TCPIP_DRIVER_INIT
+#define MG_TCPIP_DRIVER_INIT(x) MG_TCPIP_DRIVER_STM32H_INIT(x)
+#endif
 
 #endif
 #endif
@@ -5995,7 +6095,9 @@ struct mg_tcpip_driver_tm4c_data {
 #define MG_DRIVER_MDC_CR 1
 #endif
 
-#define MG_TCPIP_DRIVER_INIT(mgr)                               \
+extern struct mg_tcpip_driver mg_tcpip_driver_tm4c;
+
+#define MG_TCPIP_DRIVER_TM4C_INIT(mgr)                           \
   do {                                                          \
     static struct mg_tcpip_driver_tm4c_data driver_data_;       \
     static struct mg_tcpip_if mif_;                             \
@@ -6006,9 +6108,13 @@ struct mg_tcpip_driver_tm4c_data {
     mif_.driver = &mg_tcpip_driver_tm4c;                        \
     mif_.driver_data = &driver_data_;                           \
     MG_SET_MAC_ADDRESS(mif_.mac);                               \
-    mg_tcpip_init(mgr, &mif_);                                  \
+    mg_tcpip_init((mgr), &mif_);                                 \
     MG_INFO(("Driver: tm4c, MAC: %M", mg_print_mac, mif_.mac)); \
   } while (0)
+
+#ifndef MG_TCPIP_DRIVER_INIT
+#define MG_TCPIP_DRIVER_INIT(x) MG_TCPIP_DRIVER_TM4C_INIT(x)
+#endif
 
 #endif
 
@@ -6027,7 +6133,9 @@ struct mg_tcpip_driver_tms570_data {
 #define MG_DRIVER_MDC_CR 1
 #endif
 
-#define MG_TCPIP_DRIVER_INIT(mgr)                               \
+extern struct mg_tcpip_driver mg_tcpip_driver_tms570;
+
+#define MG_TCPIP_DRIVER_TMS570_INIT(mgr)                         \
   do {                                                          \
     static struct mg_tcpip_driver_tms570_data driver_data_;     \
     static struct mg_tcpip_if mif_;                             \
@@ -6039,11 +6147,43 @@ struct mg_tcpip_driver_tms570_data {
     mif_.driver = &mg_tcpip_driver_tms570;                      \
     mif_.driver_data = &driver_data_;                           \
     MG_SET_MAC_ADDRESS(mif_.mac);                               \
-    mg_tcpip_init(mgr, &mif_);                                  \
+    mg_tcpip_init((mgr), &mif_);                                 \
     MG_INFO(("Driver: tms570, MAC: %M", mg_print_mac, mif_.mac));\
   } while (0)
+
+#ifndef MG_TCPIP_DRIVER_INIT
+#define MG_TCPIP_DRIVER_INIT(x) MG_TCPIP_DRIVER_TMS570_INIT(x)
 #endif
 
+#endif
+
+
+
+#if MG_ENABLE_TCPIP && defined(MG_ENABLE_DRIVER_W5100) && \
+    MG_ENABLE_DRIVER_W5100
+
+extern struct mg_tcpip_driver mg_tcpip_driver_w5100;
+
+// Initialises W5100 on mgr. The application defines
+// struct mg_tcpip_spi mg_spi
+#define MG_TCPIP_DRIVER_W5100_INIT(mgr)                          \
+  do {                                                           \
+    static struct mg_tcpip_if mif_;                              \
+    mif_.ip = MG_TCPIP_IP;                                       \
+    mif_.mask = MG_TCPIP_MASK;                                   \
+    mif_.gw = MG_TCPIP_GW;                                       \
+    mif_.driver = &mg_tcpip_driver_w5100;                        \
+    mif_.driver_data = &mg_spi;                                  \
+    MG_SET_MAC_ADDRESS(mif_.mac);                                \
+    mg_tcpip_init((mgr), &mif_);                                 \
+    MG_INFO(("Driver: w5100, MAC: %M", mg_print_mac, mif_.mac)); \
+  } while (0)
+
+#ifndef MG_TCPIP_DRIVER_INIT
+#define MG_TCPIP_DRIVER_INIT(x) MG_TCPIP_DRIVER_W5100_INIT(x)
+#endif
+
+#endif
 
 
 #if MG_ENABLE_TCPIP && defined(MG_ENABLE_DRIVER_W5500) && \
@@ -6101,7 +6241,9 @@ struct mg_tcpip_driver_xmc_data {
 #define MG_DRIVER_MDC_CR 4
 #endif
 
-#define MG_TCPIP_DRIVER_INIT(mgr)                                 \
+extern struct mg_tcpip_driver mg_tcpip_driver_xmc;
+
+#define MG_TCPIP_DRIVER_XMC_INIT(mgr)                            \
   do {                                                            \
     static struct mg_tcpip_driver_xmc_data driver_data_;       \
     static struct mg_tcpip_if mif_;                               \
@@ -6113,9 +6255,13 @@ struct mg_tcpip_driver_xmc_data {
     mif_.driver = &mg_tcpip_driver_xmc;                        \
     mif_.driver_data = &driver_data_;                             \
     MG_SET_MAC_ADDRESS(mif_.mac);                                 \
-    mg_tcpip_init(mgr, &mif_);                                    \
+    mg_tcpip_init((mgr), &mif_);                                 \
     MG_INFO(("Driver: xmc, MAC: %M", mg_print_mac, mif_.mac)); \
   } while (0)
+
+#ifndef MG_TCPIP_DRIVER_INIT
+#define MG_TCPIP_DRIVER_INIT(x) MG_TCPIP_DRIVER_XMC_INIT(x)
+#endif
 
 #endif
 
@@ -6135,7 +6281,9 @@ struct mg_tcpip_driver_xmc7_data {
 #define MG_DRIVER_MDC_CR 3
 #endif
 
-#define MG_TCPIP_DRIVER_INIT(mgr)                                 \
+extern struct mg_tcpip_driver mg_tcpip_driver_xmc7;
+
+#define MG_TCPIP_DRIVER_XMC7_INIT(mgr)                           \
   do {                                                            \
     static struct mg_tcpip_driver_xmc7_data driver_data_;       \
     static struct mg_tcpip_if mif_;                               \
@@ -6147,9 +6295,13 @@ struct mg_tcpip_driver_xmc7_data {
     mif_.driver = &mg_tcpip_driver_xmc7;                        \
     mif_.driver_data = &driver_data_;                             \
     MG_SET_MAC_ADDRESS(mif_.mac);                                 \
-    mg_tcpip_init(mgr, &mif_);                                    \
+    mg_tcpip_init((mgr), &mif_);                                 \
     MG_INFO(("Driver: xmc7, MAC: %M", mg_print_mac, mif_.mac)); \
   } while (0)
+
+#ifndef MG_TCPIP_DRIVER_INIT
+#define MG_TCPIP_DRIVER_INIT(x) MG_TCPIP_DRIVER_XMC7_INIT(x)
+#endif
 
 #endif
 
