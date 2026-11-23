@@ -3,7 +3,6 @@
 
 #include "hardware/spi.h"
 #include "pico/stdlib.h"
-#include "pico/unique_id.h"
 
 #include "mongoose.h"
 
@@ -11,14 +10,17 @@ enum { SPI_CS = 17, SPI_CLK = 18, SPI_TX = 19, SPI_RX = 16 };  // Pins
 // enum { SPI_CS = 5, SPI_CLK = 2, SPI_TX = 3, SPI_RX = 4 };  // Pins
 
 static void spi_begin(void *spi) {
+  (void) spi;
   gpio_put(SPI_CS, 0);
 }
 
 static void spi_end(void *spi) {
+  (void) spi;
   gpio_put(SPI_CS, 1);
 }
 
 static void spi_txn(void *spi, uint8_t *tx, uint8_t *rx, size_t len) {
+  (void) spi;
   if (tx != NULL && rx != NULL) {
     spi_write_read_blocking(spi0, tx, rx, len);
   } else if (tx != NULL) {
@@ -27,6 +29,9 @@ static void spi_txn(void *spi, uint8_t *tx, uint8_t *rx, size_t len) {
     spi_read_blocking(spi0, 0xFF, rx, len);
   }
 }
+
+// SPI bus used by the W5500 driver, see MG_TCPIP_DRIVER_W5500_INIT
+struct mg_tcpip_spi mg_spi = {NULL, spi_begin, spi_end, spi_txn};
 
 static void ethernet_init(void) {
   // Init SPI pins
@@ -37,14 +42,6 @@ static void ethernet_init(void) {
   gpio_init(SPI_CS);                          // CS
   gpio_set_dir(SPI_CS, GPIO_OUT);             // Set CS to output
   gpio_put(SPI_CS, 1);                        // And drive CS high (inactive)
-}
-
-// Construct MAC address from the unique board ID
-static void generate_mac_from_board_id(unsigned char *mac) {
-  pico_unique_board_id_t board_id;
-  pico_get_unique_board_id(&board_id);
-  mac[0] = 2;
-  memcpy(&mac[1], &board_id.id[3], 5);
 }
 
 static void blink_task(void) {
@@ -106,17 +103,9 @@ static void log_fn(char ch, void *param) {
 // In an RTOS environment, give this task 8 KB of stack space.
 static void run_mongoose(void) {
   struct mg_mgr mgr;
-  struct mg_tcpip_spi spi = {NULL, spi_begin, spi_end, spi_txn};
-  struct mg_tcpip_if mif = {
-      .driver = &mg_tcpip_driver_w5500,
-      .driver_data = &spi,
-  };
-  generate_mac_from_board_id(mif.mac);
+
   mg_log_set_fn(log_fn, NULL);
   mg_mgr_init(&mgr);
-  mg_tcpip_init(&mgr, &mif);
-  MG_INFO(("Driver: W5500, MAC: %M", mg_print_mac, mif.mac));
-
   mg_http_listen(&mgr, "http://0.0.0.0", http_ev_handler, NULL);
   mg_http_listen(&mgr, "https://0.0.0.0", http_ev_handler, NULL);
 

@@ -133,32 +133,31 @@ void mg_tcpip_qwrite(void *buf, size_t len, struct mg_tcpip_if *ifp);
 void mg_tcpip_arp_request(struct mg_tcpip_if *ifp, uint32_t ip, uint8_t *mac);
 
 // Built-in hardware drivers. Assign one to mg_tcpip_if.driver before calling
-// mg_tcpip_init(). Each driver also requires a corresponding driver_data
-// struct; see the matching driver header for details.
-extern struct mg_tcpip_driver mg_tcpip_driver_w5500;
-extern struct mg_tcpip_driver mg_tcpip_driver_w5100;
-extern struct mg_tcpip_driver mg_tcpip_driver_tm4c;
-extern struct mg_tcpip_driver mg_tcpip_driver_tms570;
-extern struct mg_tcpip_driver mg_tcpip_driver_stm32h;
-extern struct mg_tcpip_driver mg_tcpip_driver_imxrt;
-extern struct mg_tcpip_driver mg_tcpip_driver_same54;
-extern struct mg_tcpip_driver mg_tcpip_driver_cmsis;
-extern struct mg_tcpip_driver mg_tcpip_driver_ra;
-extern struct mg_tcpip_driver mg_tcpip_driver_xmc;
-extern struct mg_tcpip_driver mg_tcpip_driver_xmc7;
-extern struct mg_tcpip_driver mg_tcpip_driver_pico_w;
-extern struct mg_tcpip_driver mg_tcpip_driver_rw612;
-extern struct mg_tcpip_driver mg_tcpip_driver_cyw;
-extern struct mg_tcpip_driver mg_tcpip_driver_nxp_wifi;
-extern struct mg_tcpip_driver mg_tcpip_driver_st67w6;
-extern struct mg_tcpip_driver mg_tcpip_driver_atcmd;
-extern struct mg_tcpip_driver mg_tcpip_driver_netc;
-
-#include "drivers/mg24.h"
+// mg_tcpip_init(). See the matching driver header for configuration and
+// initialisation helpers.
+#include "drivers/at_cmd.h"
+#include "drivers/cmsis.h"
+#include "drivers/cyw.h"
+#include "drivers/imxrt.h"
 #include "drivers/mcxw71.h"
+#include "drivers/mg24.h"
+#include "drivers/netc.h"
 #include "drivers/nrf52.h"
+#include "drivers/nxp_wifi.h"
+#include "drivers/pico-w.h"
+#include "drivers/ra.h"
+#include "drivers/rw612.h"
 #include "drivers/rw612w.h"
+#include "drivers/same54.h"
+#include "drivers/st67w6.h"
 #include "drivers/stm32f.h"
+#include "drivers/stm32h.h"
+#include "drivers/tm4c.h"
+#include "drivers/tms570.h"
+#include "drivers/w5100.h"
+#include "drivers/w5500.h"
+#include "drivers/xmc.h"
+#include "drivers/xmc7.h"
 #include "drivers/esp32_802154.h"
 
 // SPI bus abstraction for SPI-attached network chips (e.g. W5500).
@@ -169,6 +168,10 @@ struct mg_tcpip_spi {
   void (*end)(void *);                                         // Deassert chip-select (end of transaction)
   void (*txn)(void *, uint8_t *write, uint8_t *read, size_t); // Full-duplex transfer: write and read len bytes simultaneously
 };
+
+// SPI bus for SPI-attached network chips, defined by the application.
+// Used by the drivers' INIT macros, e.g. MG_TCPIP_DRIVER_W5500_INIT
+extern struct mg_tcpip_spi mg_spi;
 
 // Alignment attributes for DMA-capable Ethernet descriptor buffers.
 // Use these on driver RX/TX descriptor arrays where the hardware requires

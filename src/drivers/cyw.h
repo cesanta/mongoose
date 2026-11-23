@@ -20,7 +20,9 @@ struct mg_tcpip_driver_cyw_data {
   bool hs;  // use chip "high-speed" mode; otherwise SPI CPOL0 CPHA0 (DS 4.2.3 Table 6)
 };
 
-#define MG_TCPIP_DRIVER_INIT(mgr)                              \
+extern struct mg_tcpip_driver mg_tcpip_driver_cyw;
+
+#define MG_TCPIP_DRIVER_CYW_INIT(mgr)                            \
   do {                                                         \
     static struct mg_tcpip_driver_cyw_data driver_data_;       \
     static struct mg_tcpip_if mif_;                            \
@@ -32,8 +34,12 @@ struct mg_tcpip_driver_cyw_data {
     mif_.driver_data = &driver_data_;                          \
     mif_.recv_queue.size = 8192;                               \
     mif_.mac[0] = 2; /* MAC read from OTP at driver init */    \
-    mg_tcpip_init(mgr, &mif_);                                 \
+    mg_tcpip_init((mgr), &mif_);                                 \
     MG_INFO(("Driver: cyw, MAC: %M", mg_print_mac, mif_.mac)); \
   } while (0)
+
+#ifndef MG_TCPIP_DRIVER_INIT
+#define MG_TCPIP_DRIVER_INIT(x) MG_TCPIP_DRIVER_CYW_INIT(x)
+#endif
 
 #endif

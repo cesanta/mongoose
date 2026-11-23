@@ -16,7 +16,9 @@ struct mg_tcpip_driver_same54_data {
   uint8_t phy_addr;
 };
 
-#define MG_TCPIP_DRIVER_INIT(mgr)                                 \
+extern struct mg_tcpip_driver mg_tcpip_driver_same54;
+
+#define MG_TCPIP_DRIVER_SAME54_INIT(mgr)                         \
   do {                                                            \
     static struct mg_tcpip_driver_same54_data driver_data_;       \
     static struct mg_tcpip_if mif_;                               \
@@ -28,8 +30,12 @@ struct mg_tcpip_driver_same54_data {
     mif_.driver = &mg_tcpip_driver_same54;                        \
     mif_.driver_data = &driver_data_;                             \
     MG_SET_MAC_ADDRESS(mif_.mac);                                 \
-    mg_tcpip_init(mgr, &mif_);                                    \
+    mg_tcpip_init((mgr), &mif_);                                 \
     MG_INFO(("Driver: same54, MAC: %M", mg_print_mac, mif_.mac)); \
   } while (0)
+
+#ifndef MG_TCPIP_DRIVER_INIT
+#define MG_TCPIP_DRIVER_INIT(x) MG_TCPIP_DRIVER_SAME54_INIT(x)
+#endif
 
 #endif

@@ -8,4 +8,13 @@
 
 #define MG_ENABLE_TCPIP 1
 #define MG_ENABLE_DRIVER_W5500 1
-#define MG_ENABLE_TCPIP_DRIVER_INIT 0
+
+// Construct MAC address from the unique board ID
+#define MG_SET_MAC_ADDRESS(mac)              \
+  do {                                       \
+    pico_unique_board_id_t id_;              \
+    pico_get_unique_board_id(&id_);          \
+    mac[0] = 2, mac[1] = id_.id[3];          \
+    mac[2] = id_.id[4], mac[3] = id_.id[5];  \
+    mac[4] = id_.id[6], mac[5] = id_.id[7];  \
+  } while (0)

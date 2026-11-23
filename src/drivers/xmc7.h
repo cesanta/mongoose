@@ -15,7 +15,9 @@ struct mg_tcpip_driver_xmc7_data {
 #define MG_DRIVER_MDC_CR 3
 #endif
 
-#define MG_TCPIP_DRIVER_INIT(mgr)                                 \
+extern struct mg_tcpip_driver mg_tcpip_driver_xmc7;
+
+#define MG_TCPIP_DRIVER_XMC7_INIT(mgr)                           \
   do {                                                            \
     static struct mg_tcpip_driver_xmc7_data driver_data_;       \
     static struct mg_tcpip_if mif_;                               \
@@ -27,9 +29,13 @@ struct mg_tcpip_driver_xmc7_data {
     mif_.driver = &mg_tcpip_driver_xmc7;                        \
     mif_.driver_data = &driver_data_;                             \
     MG_SET_MAC_ADDRESS(mif_.mac);                                 \
-    mg_tcpip_init(mgr, &mif_);                                    \
+    mg_tcpip_init((mgr), &mif_);                                 \
     MG_INFO(("Driver: xmc7, MAC: %M", mg_print_mac, mif_.mac)); \
   } while (0)
+
+#ifndef MG_TCPIP_DRIVER_INIT
+#define MG_TCPIP_DRIVER_INIT(x) MG_TCPIP_DRIVER_XMC7_INIT(x)
+#endif
 
 #endif
 
