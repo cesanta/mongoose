@@ -568,20 +568,40 @@ static struct mg_str guess_content_type(struct mg_str path, const char *extra) {
   return mg_str("text/plain; charset=utf-8");
 }
 
-static int getrange(struct mg_str *s, size_t *a, size_t *b) {
-  size_t i, numparsed = 0;
-  for (i = 0; i + 6 < s->len; i++) {
-    struct mg_str k, v = mg_str_n(s->buf + i + 6, s->len - i - 6);
-    if (memcmp(&s->buf[i], "bytes=", 6) != 0) continue;
-    if (mg_span(v, &k, &v, '-')) {
-      if (mg_to_size_t(k, a)) numparsed++;
-      if (v.len > 0 && mg_to_size_t(v, b)) numparsed++;
-    } else {
-      if (mg_to_size_t(v, a)) numparsed++;
-    }
-    break;
+// A decimal offset above SIZE_MAX is past the end of any file we can serve.
+static bool range_number(struct mg_str s, size_t *value) {
+  size_t i, n = 0, max = (size_t) -1;
+  for (i = 0; i < s.len; i++) {
+    size_t digit;
+    if (s.buf[i] < '0' || s.buf[i] > '9') return false;
+    digit = (size_t) (s.buf[i] - '0');
+    n = n > (max - digit) / 10 ? max : n * 10 + digit;
   }
-  return (int) numparsed;
+  *value = n;
+  return s.len > 0;
+}
+
+// Resolve a single byte range against the selected file (RFC 9110 14.1.2).
+static int getrange(struct mg_str s, size_t size, size_t *start, size_t *end) {
+  struct mg_str unit, first, last;
+  if (!mg_span(s, &unit, &s, '=') || mg_strcasecmp(unit, mg_str("bytes")) ||
+      !mg_span(s, &first, &last, '-') || first.len == s.len)
+    return 200;
+
+  *end = (size_t) -1;
+  if (first.len == 0) {
+    size_t suffix;
+    if (!range_number(last, &suffix)) return 200;
+    if (suffix == 0) return 416;
+    if (size == 0) return 200;
+    *start = suffix < size ? size - suffix : 0;
+  } else if (!range_number(first, start) ||
+             (last.len > 0 && !range_number(last, end))) {
+    return 200;
+  }
+  if (*start >= size || *end < *start) return 416;
+  if (*end >= size) *end = size - 1;
+  return 206;
 }
 
 void mg_http_serve_file(struct mg_connection *c, struct mg_http_message *hm,
@@ -629,29 +649,29 @@ void mg_http_serve_file(struct mg_connection *c, struct mg_http_message *hm,
     mg_fs_close(fd);
     mg_http_reply(c, 304, hdrs, "");
   } else {
-    int n, status = 200;
+    int status = 200;
     char range[100];
     size_t r1 = 0, r2 = 0, cl = size;
 
     // Handle Range header
     struct mg_str *rh = mg_http_get_header(hm, "Range");
     range[0] = '\0';
-    if (rh != NULL && (n = getrange(rh, &r1, &r2)) > 0) {
-      // If range is specified like "400-", set second limit to content len
-      if (n == 1) r2 = cl - 1;
-      if (r1 > r2 || r2 >= cl) {
-        status = 416;
-        cl = 0;
-        mg_snprintf(range, sizeof(range), "Content-Range: bytes */%lld\r\n",
-                    (int64_t) size);
-      } else {
-        status = 206;
-        cl = r2 - r1 + 1;
-        mg_snprintf(range, sizeof(range),
-                    "Content-Range: bytes %llu-%llu/%llu\r\n", (uint64_t) r1,
-                    (uint64_t) (r1 + cl - 1), (uint64_t) size);
-        fs->sk(fd->fd, r1);
-      }
+    if (rh != NULL && mg_strcmp(hm->method, mg_str("GET")) == 0) {
+      struct mg_str *ir = mg_http_get_header(hm, "If-Range");
+      // ETag is the only validator we send for the selected file.
+      if (ir == NULL || mg_strcmp(*ir, mg_str(etag)) == 0)
+        status = getrange(*rh, size, &r1, &r2);
+    }
+    if (status == 416) {
+      cl = 0;
+      mg_snprintf(range, sizeof(range), "Content-Range: bytes */%llu\r\n",
+                  (uint64_t) size);
+    } else if (status == 206) {
+      cl = r2 - r1 + 1;
+      mg_snprintf(range, sizeof(range),
+                  "Content-Range: bytes %llu-%llu/%llu\r\n", (uint64_t) r1,
+                  (uint64_t) r2, (uint64_t) size);
+      fs->sk(fd->fd, r1);
     }
     mg_printf(c,
               "HTTP/1.1 %d %s\r\n"
