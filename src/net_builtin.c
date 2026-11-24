@@ -1,6 +1,10 @@
 #include "net_builtin.h"
 #include "bsd.h"
+#include "mdash.h"
+#include "ota.h"
+#include "printf.h"
 #include "profile.h"
+#include "tls.h"
 
 #if MG_ENABLE_TCPIP
 #define MG_EPHEMERAL_PORT_BASE 32768

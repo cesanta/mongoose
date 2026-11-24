@@ -2953,6 +2953,7 @@ void mg_error(struct mg_connection *c, const char *fmt, ...) {
 
 
 
+
 #ifdef MG_OTA_PUBLIC_KEY
 
 
@@ -9809,6 +9810,10 @@ void mg_multicast_restore(struct mg_connection *c, uint8_t *from) {
 
 
 
+
+
+
+
 #if MG_ENABLE_TCPIP
 #define MG_EPHEMERAL_PORT_BASE 32768
 #define PDIFF(a, b) ((size_t) (((char *) (b)) - ((char *) (a))))
@@ -14455,6 +14460,7 @@ struct mg_flash *mg_flash = &s_mg_flash_frdm;
 
 
 
+
 #if MG_OTA == MG_OTA_STM32F
 
 static bool mg_stm32f_write(void *, const void *, size_t);
@@ -14710,6 +14716,7 @@ struct mg_flash *mg_flash = &s_mg_flash_stm32f;
 
 
 
+
 #if MG_OTA == MG_OTA_STM32H5 || MG_OTA == MG_OTA_STM32C5
 
 static bool mg_stm32h5_write(void *, const void *, size_t);
@@ -14879,6 +14886,7 @@ struct mg_flash *mg_flash = &s_mg_flash_stm32h5;
 #ifdef MG_ENABLE_LINES
 #line 1 "src/ota_stm32h7.c"
 #endif
+
 
 
 
@@ -34256,6 +34264,8 @@ bool __attribute__((weak)) mg_wifi_ap_stop(void) {
 #endif
 
 
+
+
 enum {                  // ID1  ID2
   MG_PHY_KSZ8x = 0x22,  // 0022 156x - KSZ8081RNB, KSZ8091RNB
   MG_PHY_DP83x = 0x2000,
@@ -36580,6 +36590,9 @@ bool mg_wifi_ap_stop(void) {
 #endif
 
 
+
+
+
 #if MG_ENABLE_TCPIP && defined(MG_ENABLE_DRIVER_STM32F) && \
     MG_ENABLE_DRIVER_STM32F
 struct stm32f_eth {
@@ -36830,6 +36843,8 @@ struct mg_tcpip_driver mg_tcpip_driver_stm32f = {
 #ifdef MG_ENABLE_LINES
 #line 1 "src/drivers/stm32h.c"
 #endif
+
+
 
 
 #if MG_ENABLE_TCPIP && (MG_ENABLE_DRIVER_STM32H || MG_ENABLE_DRIVER_MCXN || \

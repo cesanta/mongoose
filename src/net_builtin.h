@@ -132,6 +132,8 @@ void mg_tcpip_qwrite(void *buf, size_t len, struct mg_tcpip_if *ifp);
 // broadcast, or a non-NULL hint to set the target MAC field in the request.
 void mg_tcpip_arp_request(struct mg_tcpip_if *ifp, uint32_t ip, uint8_t *mac);
 
+extern uint8_t mcast_addr[6];  // Multicast MAC address programmed by drivers
+
 // Built-in hardware drivers. Assign one to mg_tcpip_if.driver before calling
 // mg_tcpip_init(). See the matching driver header for configuration and
 // initialisation helpers.

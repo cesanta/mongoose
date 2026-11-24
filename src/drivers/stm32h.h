@@ -19,6 +19,8 @@
 #endif
 #if MG_ENABLE_DRIVER_STM32H || MG_ENABLE_DRIVER_MCXN || MG_ENABLE_DRIVER_STM32N
 
+#include "phy.h"
+
 struct mg_tcpip_driver_stm32h_data {
   // MDC clock divider. MDC clock is derived from HCLK, must not exceed 2.5MHz
   //    HCLK range    DIVIDER    mdc_cr VALUE

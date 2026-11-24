@@ -1,6 +1,7 @@
 #include "flash.h"
 #include "log.h"
 #include "ota.h"
+#include "util.h"
 
 #if MG_OTA == MG_OTA_STM32H5 || MG_OTA == MG_OTA_STM32C5
 

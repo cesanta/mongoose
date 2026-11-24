@@ -1,4 +1,6 @@
 #include "phy.h"
+#include "log.h"
+#include "util.h"
 
 enum {                  // ID1  ID2
   MG_PHY_KSZ8x = 0x22,  // 0022 156x - KSZ8081RNB, KSZ8091RNB
