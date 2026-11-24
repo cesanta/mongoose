@@ -41,7 +41,7 @@ static volatile bool s_tx_held, s_tx_waits;
 
 static int open_udp(void) {
   struct sockaddr_in sa;
-  char buf;
+  char buf = 0;
   int fd;
 
   memset(&sa, 0, sizeof(sa));
@@ -264,7 +264,7 @@ static void check_client(int status) {
 static int open_listener(int backlog, bool nonblock) {
   int lfd = socket(AF_INET, SOCK_STREAM, 0);
   struct sockaddr_in sa;
-  char buf;
+  char buf = 0;
 
   memset(&sa, 0, sizeof(sa));
   sa.sin_family = AF_INET;
