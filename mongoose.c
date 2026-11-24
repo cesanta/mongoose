@@ -10050,7 +10050,7 @@ uint8_t mg_l2_ip6put(enum mg_l2type type, uint8_t *addr, uint8_t *opts);
 #endif
 bool mg_l2_poll(struct mg_tcpip_if *ifp, bool expired_1000ms);
 
-static void mg_tcpip_call(struct mg_tcpip_if *ifp, int ev, void *ev_data) {
+void mg_tcpip_call(struct mg_tcpip_if *ifp, int ev, void *ev_data) {
 #if 0 && MG_ENABLE_PROFILE
   const char *names[] = {"TCPIP_EV_STATE_CHANGE",  "TCPIP_EV_DHCP_DNS",
                          "TCPIP_EV_DHCP_SNTP",     "TCPIP_EV_ARP",
@@ -12343,7 +12343,7 @@ bool mg_send(struct mg_connection *c, const void *buf, size_t len) {
   return res;
 }
 
-uint8_t mcast_addr[6] = {0x01, 0x00, 0x5e, 0x00, 0x00, 0xfb};
+const uint8_t mcast_addr[6] = {0x01, 0x00, 0x5e, 0x00, 0x00, 0xfb};
 void mg_multicast_add(struct mg_connection *c, char *ip) {
   (void) ip;  // ip4/6_mcastmac(mcast_mac, &ip); ipv6 param
   // TODO(): actual IP -> MAC; check database, update
@@ -12685,6 +12685,7 @@ void mg_ota_poll(struct mg_mgr *mgr) {
 
 
 
+
 #if MG_OTA == MG_OTA_CH32V307
 // RM: https://www.wch-ic.com/downloads/CH32FV2x_V3xRM_PDF.html
 
@@ -12820,6 +12821,8 @@ bool mg_ota_end(void) {
 #endif
 
 
+
+
 #if MG_ARCH == MG_ARCH_ESP32 && MG_OTA == MG_OTA_ESP32
 
 static const esp_partition_t *s_ota_update_partition;
@@ -12878,6 +12881,7 @@ bool mg_ota_end(void) {
 #ifdef MG_ENABLE_LINES
 #line 1 "src/ota_imxrt.c"
 #endif
+
 
 
 
@@ -13512,6 +13516,7 @@ struct mg_flash *mg_flash = &s_mg_flash_imxrt;
 
 
 
+
 #if MG_OTA == MG_OTA_MCXN
 
 // - Flash phrase: 16 bytes; smallest portion programmed in one operation.
@@ -13726,6 +13731,7 @@ struct mg_flash *mg_flash = &s_mg_flash_mcxn;
 
 
 
+
 #if MG_OTA == MG_OTA_MCXW71
 
 // MCXW71SRM, section 11.2: ROM flash API, 8 KB sectors, 16-byte phrases,
@@ -13911,6 +13917,7 @@ bool mg_ota_end(void) {
 
 
 
+
 #if MG_OTA == MG_OTA_PICOSDK
 
 // Both RP2040 and RP2350 have no flash, low-level flash access support in
@@ -14090,6 +14097,7 @@ struct mg_flash *mg_flash = &s_mg_flash_picosdk;
 #ifdef MG_ENABLE_LINES
 #line 1 "src/ota_rw612.c"
 #endif
+
 
 
 
@@ -30992,6 +31000,8 @@ size_t mg_ws_wrap(struct mg_connection *c, size_t len, int op) {
 #endif
 
 
+
+
 #if MG_ENABLE_TCPIP && defined(MG_ENABLE_DRIVER_ATCMD) && MG_ENABLE_DRIVER_ATCMD
 
 #define MG_HDLC_FLAG 0x7e  // HDLC frame delimiter
@@ -31151,6 +31161,8 @@ static bool byte_unstuff(struct mg_tcpip_driver_atcmd_data *dd, uint8_t *p) {
 #endif
 // https://arm-software.github.io/CMSIS_5/Driver/html/index.html
 
+
+
 #if MG_ENABLE_TCPIP && defined(MG_ENABLE_DRIVER_CMSIS) && MG_ENABLE_DRIVER_CMSIS
 
 
@@ -31283,6 +31295,9 @@ static size_t cmsis_rx(void *buf, size_t buflen, struct mg_tcpip_if *ifp) {
 #endif
 
 
+
+
+#include <stddef.h>
 
 #if MG_ENABLE_TCPIP &&                                          \
     ((defined(MG_ENABLE_DRIVER_CYW) && MG_ENABLE_DRIVER_CYW) || \
@@ -32158,8 +32173,10 @@ static void cyw_update_hash_table(void) {
   // TODO(): read database, rebuild hash table
   uint32_t val = 0;
   val = 1;
+  uint8_t mac[sizeof(mcast_addr)]; // copy from const uint8_t* to uint8_t*
+  memcpy(mac, mcast_addr, sizeof(mac));
   cyw_ioctl_iovar_set2_(0, "mcast_list", (uint8_t *) &val, sizeof(val),
-                        (uint8_t *) mcast_addr, sizeof(mcast_addr));
+                        mac, sizeof(mac));
   mg_delayms(50);
 }
 
@@ -32704,6 +32721,7 @@ bool mg_wifi_ap_stop(void) {
 
 
 
+
 #if MG_ENABLE_TCPIP && defined(MG_ENABLE_DRIVER_ESP32_802154) && \
     MG_ENABLE_DRIVER_ESP32_802154
 
@@ -32895,6 +32913,9 @@ struct mg_tcpip_driver mg_tcpip_driver_esp32_802154 = {
 #ifdef MG_ENABLE_LINES
 #line 1 "src/drivers/imxrt.c"
 #endif
+
+
+
 
 
 #if MG_ENABLE_TCPIP && \
@@ -33126,6 +33147,7 @@ struct mg_tcpip_driver mg_tcpip_driver_imxrt = {mg_tcpip_driver_imxrt_init,
 
 
 
+
 #if MG_ENABLE_TCPIP && defined(MG_ENABLE_DRIVER_MCXW71) && \
     MG_ENABLE_DRIVER_MCXW71
 
@@ -33352,6 +33374,7 @@ struct mg_tcpip_driver mg_tcpip_driver_mcxw71 = {
 
 
 
+
 #if MG_ENABLE_TCPIP && defined(MG_ENABLE_DRIVER_MG24) && MG_ENABLE_DRIVER_MG24
 
 #include <rail.h>
@@ -33523,6 +33546,9 @@ struct mg_tcpip_driver mg_tcpip_driver_mg24 = {mgi_mg24_init, mgi_mg24_tx,
 #ifdef MG_ENABLE_LINES
 #line 1 "src/drivers/netc.c"
 #endif
+
+
+
 
 
 #if defined(MG_ENABLE_TCPIP) && MG_ENABLE_TCPIP && \
@@ -33999,6 +34025,7 @@ struct mg_tcpip_driver mg_tcpip_driver_netc = {mg_tcpip_driver_netc_init,
 
 
 
+
 #if MG_ENABLE_TCPIP && defined(MG_ENABLE_DRIVER_NRF52) && MG_ENABLE_DRIVER_NRF52
 #include <nrf.h>
 
@@ -34167,6 +34194,8 @@ struct mg_tcpip_driver mg_tcpip_driver_nrf52 = {mgi_nrf52_init, mgi_nrf52_tx,
 #ifdef MG_ENABLE_LINES
 #line 1 "src/drivers/nxp_wifi.c"
 #endif
+
+
 #if MG_ENABLE_TCPIP && defined(MG_ENABLE_DRIVER_NXP_WIFI) && \
     MG_ENABLE_DRIVER_NXP_WIFI
 
@@ -34470,8 +34499,11 @@ bool mg_phy_up(struct mg_phy *phy, uint8_t phy_addr, bool *full_duplex,
 #ifdef MG_ENABLE_LINES
 #line 1 "src/drivers/pico-w.c"
 #endif
+
+
 #if MG_ENABLE_TCPIP && MG_ARCH == MG_ARCH_PICOSDK && \
     defined(MG_ENABLE_DRIVER_PICO_W) && MG_ENABLE_DRIVER_PICO_W
+
 
 
 
@@ -34540,8 +34572,9 @@ static bool mg_tcpip_driver_pico_w_poll(struct mg_tcpip_if *ifp, bool s1) {
   }
   if (ifp->update_mac_hash_table) {
     // first call to _poll() is after _init(), so this is safe
-    cyw43_wifi_update_multicast_filter(&cyw43_state, (uint8_t *) mcast_addr,
-                                       true);
+    uint8_t mac[sizeof(mcast_addr)]; // copy from const uint8_t* to uint8_t*
+    memcpy(mac, mcast_addr, sizeof(mac));
+    cyw43_wifi_update_multicast_filter(&cyw43_state, mac, true);
     ifp->update_mac_hash_table = false;
   }
   if (!s1) return false;
@@ -34660,6 +34693,9 @@ bool mg_wifi_ap_stop(void) {
 #ifdef MG_ENABLE_LINES
 #line 1 "src/drivers/ra.c"
 #endif
+
+
+
 
 
 #if MG_ENABLE_TCPIP && \
@@ -34929,6 +34965,9 @@ struct mg_tcpip_driver mg_tcpip_driver_ra = {mg_tcpip_driver_ra_init,
 #endif
 
 
+
+
+
 #if MG_ENABLE_TCPIP && defined(MG_ENABLE_DRIVER_RW612) && MG_ENABLE_DRIVER_RW612
 
 struct ENET_Type {
@@ -35128,6 +35167,7 @@ struct mg_tcpip_driver mg_tcpip_driver_rw612 = {mg_tcpip_driver_rw612_init,
 #ifdef MG_ENABLE_LINES
 #line 1 "src/drivers/rw612w.c"
 #endif
+
 
 
 
@@ -35634,6 +35674,9 @@ struct mg_tcpip_driver mg_tcpip_driver_rw612w = {
 #endif
 
 
+
+
+
 #if MG_ENABLE_TCPIP && defined(MG_ENABLE_DRIVER_SAME54) && \
     MG_ENABLE_DRIVER_SAME54
 
@@ -35888,6 +35931,8 @@ struct mg_tcpip_driver mg_tcpip_driver_same54 = {
 #endif
 
 
+
+
 #if MG_ENABLE_TCPIP && \
     (defined(MG_ENABLE_DRIVER_CYW_SDIO) && MG_ENABLE_DRIVER_CYW_SDIO)
 
@@ -36062,8 +36107,12 @@ bool mg_sdio_init(struct mg_tcpip_sdio *sdio) {
 
 
 
+
+
 #if MG_ENABLE_TCPIP && defined(MG_ENABLE_DRIVER_ST67W6) && \
     MG_ENABLE_DRIVER_ST67W6
+
+bool mg_to_size_t(struct mg_str str, size_t *val);
 
 static struct mg_tcpip_if *s_ifp;
 static uint32_t s_ip, s_mask;
@@ -36405,7 +36454,6 @@ static bool st67w6_at_cmd(char *cmd, size_t len) {
 }
 
 static bool st67w6_spi_init(void);
-bool mg_to_size_t(struct mg_str str, size_t *val);
 
 static bool st67w6_init(uint8_t *mac) {
   //  struct mg_tcpip_driver_st67w6_data *d = (struct
@@ -37203,6 +37251,8 @@ struct mg_tcpip_driver mg_tcpip_driver_stm32h = {
 #endif
 
 
+
+
 #if MG_ENABLE_TCPIP && defined(MG_ENABLE_DRIVER_TM4C) && MG_ENABLE_DRIVER_TM4C
 struct tm4c_emac {
   volatile uint32_t EMACCFG, EMACFRAMEFLTR, EMACHASHTBLH, EMACHASHTBLL,
@@ -37477,6 +37527,9 @@ struct mg_tcpip_driver mg_tcpip_driver_tm4c = {mg_tcpip_driver_tm4c_init,
 #ifdef MG_ENABLE_LINES
 #line 1 "src/drivers/tms570.c"
 #endif
+
+
+
 
 
 #if MG_ENABLE_TCPIP && defined(MG_ENABLE_DRIVER_TMS570) && MG_ENABLE_DRIVER_TMS570
@@ -37933,6 +37986,9 @@ struct mg_tcpip_driver mg_tcpip_driver_w5500 = {w5500_init, w5500_tx, w5500_rx,
 #endif
 
 
+
+
+
 #if MG_ENABLE_TCPIP && defined(MG_ENABLE_DRIVER_XMC) && MG_ENABLE_DRIVER_XMC
 
 struct ETH_GLOBAL_TypeDef {
@@ -38173,6 +38229,9 @@ struct mg_tcpip_driver mg_tcpip_driver_xmc = {mg_tcpip_driver_xmc_init,
 #ifdef MG_ENABLE_LINES
 #line 1 "src/drivers/xmc7.c"
 #endif
+
+
+
 
 
 #if MG_ENABLE_TCPIP && defined(MG_ENABLE_DRIVER_XMC7) && MG_ENABLE_DRIVER_XMC7

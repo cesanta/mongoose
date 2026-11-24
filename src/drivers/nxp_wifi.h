@@ -4,6 +4,8 @@
     defined(MG_ENABLE_DRIVER_NXP_WIFI) && MG_ENABLE_DRIVER_NXP_WIFI
 
 
+#include "wifi.h"
+
 struct mg_tcpip_driver_nxp_wifi_data {
   struct mg_wifi_data wifi;
 };

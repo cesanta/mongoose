@@ -93,6 +93,8 @@ extern "C" {
 
 
 
+
+
 #if MG_ARCH == MG_ARCH_ARMCGT
 
 #include <ctype.h>
@@ -4842,11 +4844,14 @@ void mg_tcpip_free(struct mg_tcpip_if *);
 // the queue is full.
 void mg_tcpip_qwrite(void *buf, size_t len, struct mg_tcpip_if *ifp);
 
+// Delivers an interface event to the protocol and user handlers
+void mg_tcpip_call(struct mg_tcpip_if *ifp, int ev, void *ev_data);
+
 // Sends a broadcast ARP who-has request for ip. mac may be NULL for a plain
 // broadcast, or a non-NULL hint to set the target MAC field in the request.
 void mg_tcpip_arp_request(struct mg_tcpip_if *ifp, uint32_t ip, uint8_t *mac);
 
-extern uint8_t mcast_addr[6];  // Multicast MAC address programmed by drivers
+extern const uint8_t mcast_addr[6];  // Multicast MAC address programmed by drivers
 
 // Built-in hardware drivers. Assign one to mg_tcpip_if.driver before calling
 // mg_tcpip_init(). See the matching driver header for configuration and
@@ -5362,6 +5367,8 @@ extern struct mg_tcpip_driver mg_tcpip_driver_cmsis;
     ((defined(MG_ENABLE_DRIVER_CYW) && MG_ENABLE_DRIVER_CYW) || \
      (defined(MG_ENABLE_DRIVER_CYW_SDIO) && MG_ENABLE_DRIVER_CYW_SDIO))
 
+
+
 struct mg_tcpip_driver_cyw_firmware {
   const uint8_t *code_addr;
   size_t code_len;
@@ -5652,6 +5659,8 @@ extern struct mg_tcpip_driver mg_tcpip_driver_nrf52;
     defined(MG_ENABLE_DRIVER_NXP_WIFI) && MG_ENABLE_DRIVER_NXP_WIFI
 
 
+
+
 struct mg_tcpip_driver_nxp_wifi_data {
   struct mg_wifi_data wifi;
 };
@@ -5710,6 +5719,8 @@ bool mg_phy_up(struct mg_phy *, uint8_t addr, bool *full_duplex,
 #include "cyw43.h"              // keep this include
 #include "pico/cyw43_arch.h"    // keep this include
 #include "pico/unique_id.h"     // keep this include
+
+
 
 struct mg_tcpip_driver_pico_w_data {
   struct mg_wifi_data wifi;
@@ -5957,6 +5968,8 @@ bool mg_sdio_transfer(struct mg_tcpip_sdio *sdio, bool write, unsigned int f,
 
 #if MG_ENABLE_TCPIP && defined(MG_ENABLE_DRIVER_ST67W6) && \
     MG_ENABLE_DRIVER_ST67W6
+
+
 
 struct mg_tcpip_driver_st67w6_data {
   struct mg_wifi_data wifi;

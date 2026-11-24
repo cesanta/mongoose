@@ -4,6 +4,8 @@
     ((defined(MG_ENABLE_DRIVER_CYW) && MG_ENABLE_DRIVER_CYW) || \
      (defined(MG_ENABLE_DRIVER_CYW_SDIO) && MG_ENABLE_DRIVER_CYW_SDIO))
 
+#include "wifi.h"
+
 struct mg_tcpip_driver_cyw_firmware {
   const uint8_t *code_addr;
   size_t code_len;

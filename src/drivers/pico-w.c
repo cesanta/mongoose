@@ -1,9 +1,12 @@
+#include "net_builtin.h"
+
 #if MG_ENABLE_TCPIP && MG_ARCH == MG_ARCH_PICOSDK && \
     defined(MG_ENABLE_DRIVER_PICO_W) && MG_ENABLE_DRIVER_PICO_W
 
 #include "drivers/pico-w.h"
-#include "net_builtin.h"
 #include "pico/stdlib.h"
+#include "printf.h"
+#include "util.h"
 
 static struct mg_tcpip_if *s_ifp;
 static uint32_t s_ip, s_mask;
@@ -68,8 +71,9 @@ static bool mg_tcpip_driver_pico_w_poll(struct mg_tcpip_if *ifp, bool s1) {
   }
   if (ifp->update_mac_hash_table) {
     // first call to _poll() is after _init(), so this is safe
-    cyw43_wifi_update_multicast_filter(&cyw43_state, (uint8_t *) mcast_addr,
-                                       true);
+    uint8_t mac[sizeof(mcast_addr)]; // copy from const uint8_t* to uint8_t*
+    memcpy(mac, mcast_addr, sizeof(mac));
+    cyw43_wifi_update_multicast_filter(&cyw43_state, mac, true);
     ifp->update_mac_hash_table = false;
   }
   if (!s1) return false;

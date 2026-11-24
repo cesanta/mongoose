@@ -1,6 +1,7 @@
 #include "flash.h"
 #include "log.h"
 #include "ota.h"
+#include "util.h"
 
 #if MG_OTA >= MG_OTA_RT1020 && MG_OTA <= MG_OTA_RT1180
 

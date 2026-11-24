@@ -1,9 +1,11 @@
 // https://arm-software.github.io/CMSIS_5/Driver/html/index.html
 
+#include "net_builtin.h"
+
 #if MG_ENABLE_TCPIP && defined(MG_ENABLE_DRIVER_CMSIS) && MG_ENABLE_DRIVER_CMSIS
 
 #include "cmsis.h"
-#include "net_builtin.h"
+#include "log.h"
 #include "queue.h"
 
 extern ARM_DRIVER_ETH_MAC Driver_ETH_MAC0;

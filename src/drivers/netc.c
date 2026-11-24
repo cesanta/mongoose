@@ -1,4 +1,7 @@
 #include "net_builtin.h"
+#include "log.h"
+#include "phy.h"
+#include "util.h"
 
 #if defined(MG_ENABLE_TCPIP) && MG_ENABLE_TCPIP && \
     defined(MG_ENABLE_DRIVER_NETC) && MG_ENABLE_DRIVER_NETC

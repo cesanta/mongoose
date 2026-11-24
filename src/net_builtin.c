@@ -242,7 +242,7 @@ uint8_t mg_l2_ip6put(enum mg_l2type type, uint8_t *addr, uint8_t *opts);
 #endif
 bool mg_l2_poll(struct mg_tcpip_if *ifp, bool expired_1000ms);
 
-static void mg_tcpip_call(struct mg_tcpip_if *ifp, int ev, void *ev_data) {
+void mg_tcpip_call(struct mg_tcpip_if *ifp, int ev, void *ev_data) {
 #if 0 && MG_ENABLE_PROFILE
   const char *names[] = {"TCPIP_EV_STATE_CHANGE",  "TCPIP_EV_DHCP_DNS",
                          "TCPIP_EV_DHCP_SNTP",     "TCPIP_EV_ARP",
@@ -2535,7 +2535,7 @@ bool mg_send(struct mg_connection *c, const void *buf, size_t len) {
   return res;
 }
 
-uint8_t mcast_addr[6] = {0x01, 0x00, 0x5e, 0x00, 0x00, 0xfb};
+const uint8_t mcast_addr[6] = {0x01, 0x00, 0x5e, 0x00, 0x00, 0xfb};
 void mg_multicast_add(struct mg_connection *c, char *ip) {
   (void) ip;  // ip4/6_mcastmac(mcast_mac, &ip); ipv6 param
   // TODO(): actual IP -> MAC; check database, update

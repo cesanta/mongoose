@@ -1,4 +1,6 @@
 #include "net_builtin.h"
+#include "log.h"
+#include "sntp.h"
 
 #if MG_ENABLE_TCPIP && defined(MG_ENABLE_DRIVER_ATCMD) && MG_ENABLE_DRIVER_ATCMD
 

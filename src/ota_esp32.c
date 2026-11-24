@@ -1,4 +1,6 @@
 #include "arch.h"
+#include "log.h"
+#include "ota.h"
 
 #if MG_ARCH == MG_ARCH_ESP32 && MG_OTA == MG_OTA_ESP32
 

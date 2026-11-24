@@ -1,4 +1,6 @@
 #include "net_builtin.h"
+#include "log.h"
+#include "util.h"
 
 #if MG_ENABLE_TCPIP && defined(MG_ENABLE_DRIVER_TM4C) && MG_ENABLE_DRIVER_TM4C
 struct tm4c_emac {
