@@ -2147,47 +2147,76 @@ static void ehr(struct mg_connection *c, int ev, void *ev_data) {
 }
 
 static void test_http_range(void) {
+  static const struct {
+    const char *range;
+    int status;
+    const char *content_range;
+    size_t offset, len;
+  } cases[] = {
+      {"bytes=5-10", 206, "bytes 5-10/312", 5, 6},
+      {"bytes=300-", 206, "bytes 300-311/312", 300, 12},
+      {"bytes=-12", 206, "bytes 300-311/312", 300, 12},
+      {"bytes=-500", 206, "bytes 0-311/312", 0, 312},
+      {"bytes=0-312", 206, "bytes 0-311/312", 0, 312},
+      {"bytes=300-999999999999999999999999", 206, "bytes 300-311/312", 300, 12},
+      {"Bytes=0-0", 206, "bytes 0-0/312", 0, 1},
+      {"bytes=999-", 416, "bytes */312", 0, 0},
+      {"bytes=-0", 416, "bytes */312", 0, 0},
+      {"bytes=0-0,300-311", 200, NULL, 0, 312},
+      {"kilobytes=0-0", 200, NULL, 0, 312},
+  };
   struct mg_mgr mgr;
   const char *url = "http://127.0.0.1:12350";
   struct mg_http_message hm;
-  char buf[FETCH_BUF_SIZE];
+  struct mg_str file = mg_file_read(&mg_fs_posix, "data/range.txt"), *h;
+  char buf[FETCH_BUF_SIZE], etag[64];
+  size_t i;
 
   mg_mgr_init(&mgr);
   mg_http_listen(&mgr, url, ehr, NULL);
 
+  ASSERT(file.len == 312);
   ASSERT(fetch(&mgr, buf, url, "GET /range.txt HTTP/1.0\n\n") == 200);
   ASSERT(mg_http_parse(buf, strlen(buf), &hm) > 0);
-  ASSERT(hm.body.len == 312);
+  ASSERT(mg_strcmp(hm.body, file) == 0);
+  h = mg_http_get_header(&hm, "ETag");
+  ASSERT(h != NULL);
+  mg_snprintf(etag, sizeof(etag), "%.*s", (int) h->len, h->buf);
 
-  fetch(&mgr, buf, url, "%s", "GET /range.txt HTTP/1.0\nRange: bytes=5-10\n\n");
-  ASSERT(mg_http_parse(buf, strlen(buf), &hm) > 0);
-  printf("%s", buf);
-  ASSERT(mg_strcmp(hm.uri, mg_str("206")) == 0);
-  ASSERT(mg_strcmp(hm.proto, mg_str("Partial Content")) == 0);
-  ASSERT(mg_strcmp(hm.body, mg_str(" of co")) == 0);
-  ASSERT(mg_strcmp(*mg_http_get_header(&hm, "Content-Range"),
-                   mg_str("bytes 5-10/312")) == 0);
+  for (i = 0; i < sizeof(cases) / sizeof(cases[0]); i++) {
+    ASSERT(fetch(&mgr, buf, url, "GET /range.txt HTTP/1.0\nRange: %s\n\n",
+                 cases[i].range) == cases[i].status);
+    ASSERT(mg_http_parse(buf, strlen(buf), &hm) > 0);
+    ASSERT(mg_strcmp(hm.body,
+                     mg_str_n(file.buf + cases[i].offset, cases[i].len)) == 0);
+    h = mg_http_get_header(&hm, "Content-Range");
+    if (cases[i].content_range == NULL) {
+      ASSERT(h == NULL);
+    } else {
+      ASSERT(h != NULL && vcmp(*h, cases[i].content_range));
+    }
+    if (cases[i].status == 206) ASSERT(vcmp(hm.proto, "Partial Content"));
+  }
 
-  // Fetch till EOF
-  fetch(&mgr, buf, url, "%s", "GET /range.txt HTTP/1.0\nRange: bytes=300-\n\n");
-  ASSERT(mg_http_parse(buf, strlen(buf), &hm) > 0);
-  ASSERT(mg_strcmp(hm.uri, mg_str("206")) == 0);
-  ASSERT(mg_strcmp(hm.body, mg_str("is disease.\n")) == 0);
-  // MG_INFO(("----%d\n[%s]", (int) hm.body.len, buf));
+  ASSERT(fetch(&mgr, buf, url,
+               "GET /range.txt HTTP/1.0\nRange: bytes=300-\nIf-Range: %s\n\n",
+               etag) == 206);
+  ASSERT(cmpbody(buf, "is disease.\n") == 0);
+  ASSERT(fetch(&mgr, buf, url,
+               "GET /range.txt HTTP/1.0\nRange: bytes=300-\n"
+               "If-Range: \"old\"\n\n") == 200);
+  hm = gethm(buf);
+  ASSERT(mg_strcmp(hm.body, file) == 0);
+  ASSERT(mg_http_get_header(&hm, "Content-Range") == NULL);
 
-  // Fetch past EOF, must trigger 416 response
-  fetch(&mgr, buf, url, "%s", "GET /range.txt HTTP/1.0\nRange: bytes=999-\n\n");
-  ASSERT(mg_http_parse(buf, strlen(buf), &hm) > 0);
-  ASSERT(mg_strcmp(hm.uri, mg_str("416")) == 0);
-  ASSERT(hm.body.len == 0);
-  ASSERT(mg_strcmp(*mg_http_get_header(&hm, "Content-Range"),
-                   mg_str("bytes */312")) == 0);
+  ASSERT(fetch(&mgr, buf, url,
+               "HEAD /range.txt HTTP/1.0\nRange: bytes=0-0\n\n") == 200);
+  ASSERT(cmpheader(buf, "Content-Length", "312"));
+  ASSERT(fetch(&mgr, buf, url, "GET /empty.js HTTP/1.0\nRange: bytes=-1\n\n") ==
+         200);
+  ASSERT(cmpheader(buf, "Content-Length", "0"));
 
-  fetch(&mgr, buf, url, "%s",
-        "GET /range.txt HTTP/1.0\nRange: bytes=0-312\n\n");
-  ASSERT(mg_http_parse(buf, strlen(buf), &hm) > 0);
-  ASSERT(mg_strcmp(hm.uri, mg_str("416")) == 0);
-
+  mg_free((void *) file.buf);
   mg_mgr_free(&mgr);
   ASSERT(mgr.conns == NULL);
 }
