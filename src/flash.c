@@ -2,6 +2,7 @@
 #include "flash.h"
 #include "log.h"
 #include "ota.h"
+#include "util.h"
 #ifdef MG_OTA_PUBLIC_KEY
 #include "sha256.h"
 #include "tls_p256.h"

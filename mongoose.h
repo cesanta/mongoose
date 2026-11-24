@@ -4846,6 +4846,8 @@ void mg_tcpip_qwrite(void *buf, size_t len, struct mg_tcpip_if *ifp);
 // broadcast, or a non-NULL hint to set the target MAC field in the request.
 void mg_tcpip_arp_request(struct mg_tcpip_if *ifp, uint32_t ip, uint8_t *mac);
 
+extern uint8_t mcast_addr[6];  // Multicast MAC address programmed by drivers
+
 // Built-in hardware drivers. Assign one to mg_tcpip_if.driver before calling
 // mg_tcpip_init(). See the matching driver header for configuration and
 // initialisation helpers.
@@ -6066,6 +6068,8 @@ extern struct mg_tcpip_driver mg_tcpip_driver_stm32f;
 #define MG_ENABLE_DRIVER_STM32N 0
 #endif
 #if MG_ENABLE_DRIVER_STM32H || MG_ENABLE_DRIVER_MCXN || MG_ENABLE_DRIVER_STM32N
+
+
 
 struct mg_tcpip_driver_stm32h_data {
   // MDC clock divider. MDC clock is derived from HCLK, must not exceed 2.5MHz
