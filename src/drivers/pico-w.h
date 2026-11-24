@@ -7,6 +7,8 @@
 #include "pico/cyw43_arch.h"    // keep this include
 #include "pico/unique_id.h"     // keep this include
 
+#include "wifi.h"
+
 struct mg_tcpip_driver_pico_w_data {
   struct mg_wifi_data wifi;
 };

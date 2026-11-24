@@ -1,4 +1,6 @@
+#include "log.h"
 #include "sdio.h"
+#include "util.h"
 
 #if MG_ENABLE_TCPIP && \
     (defined(MG_ENABLE_DRIVER_CYW_SDIO) && MG_ENABLE_DRIVER_CYW_SDIO)

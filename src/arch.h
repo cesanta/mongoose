@@ -49,6 +49,8 @@
 #include "arch_armgcc.h"
 #include "arch_cube.h"
 #include "arch_esp32.h"
+#include "arch_mcuxpresso.h"
+#include "arch_picosdk.h"
 #include "arch_rtx.h"
 #include "arch_threadx.h"
 #include "arch_unix.h"

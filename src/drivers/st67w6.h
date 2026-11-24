@@ -3,6 +3,8 @@
 #if MG_ENABLE_TCPIP && defined(MG_ENABLE_DRIVER_ST67W6) && \
     MG_ENABLE_DRIVER_ST67W6
 
+#include "wifi.h"
+
 struct mg_tcpip_driver_st67w6_data {
   struct mg_wifi_data wifi;
   void *spi;

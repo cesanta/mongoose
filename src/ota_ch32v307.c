@@ -1,6 +1,7 @@
 #include "flash.h"
 #include "log.h"
 #include "ota.h"
+#include "util.h"
 
 #if MG_OTA == MG_OTA_CH32V307
 // RM: https://www.wch-ic.com/downloads/CH32FV2x_V3xRM_PDF.html

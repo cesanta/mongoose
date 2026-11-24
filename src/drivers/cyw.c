@@ -1,5 +1,8 @@
-#include "cyw.h"
+#include "net_builtin.h"
 #include "net.h"
+#include "printf.h"
+#include "util.h"
+#include <stddef.h>
 
 #if MG_ENABLE_TCPIP &&                                          \
     ((defined(MG_ENABLE_DRIVER_CYW) && MG_ENABLE_DRIVER_CYW) || \
@@ -875,8 +878,10 @@ static void cyw_update_hash_table(void) {
   // TODO(): read database, rebuild hash table
   uint32_t val = 0;
   val = 1;
+  uint8_t mac[sizeof(mcast_addr)]; // copy from const uint8_t* to uint8_t*
+  memcpy(mac, mcast_addr, sizeof(mac));
   cyw_ioctl_iovar_set2_(0, "mcast_list", (uint8_t *) &val, sizeof(val),
-                        (uint8_t *) mcast_addr, sizeof(mcast_addr));
+                        mac, sizeof(mac));
   mg_delayms(50);
 }
 

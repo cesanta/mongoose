@@ -1,3 +1,5 @@
+#include "net_builtin.h"
+
 #if MG_ENABLE_TCPIP && defined(MG_ENABLE_DRIVER_NXP_WIFI) && \
     MG_ENABLE_DRIVER_NXP_WIFI
 

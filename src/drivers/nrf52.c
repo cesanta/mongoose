@@ -1,6 +1,7 @@
 #include "net_builtin.h"
 #include "l2_mesh.h"
 #include "log.h"
+#include "util.h"
 
 #if MG_ENABLE_TCPIP && defined(MG_ENABLE_DRIVER_NRF52) && MG_ENABLE_DRIVER_NRF52
 #include <nrf.h>

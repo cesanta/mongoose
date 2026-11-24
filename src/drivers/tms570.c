@@ -1,4 +1,7 @@
 #include "net_builtin.h"
+#include "log.h"
+#include "phy.h"
+#include "util.h"
 
 #if MG_ENABLE_TCPIP && defined(MG_ENABLE_DRIVER_TMS570) && MG_ENABLE_DRIVER_TMS570
 struct tms570_emac_ctrl {

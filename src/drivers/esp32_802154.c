@@ -1,5 +1,6 @@
 #include "l2_mesh.h"
 #include "log.h"
+#include "util.h"
 #include "net_builtin.h"
 
 #if MG_ENABLE_TCPIP && defined(MG_ENABLE_DRIVER_ESP32_802154) && \

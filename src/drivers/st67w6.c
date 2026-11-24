@@ -1,8 +1,12 @@
-#include "st67w6.h"
+#include "net_builtin.h"
 #include "net.h"
+#include "printf.h"
+#include "util.h"
 
 #if MG_ENABLE_TCPIP && defined(MG_ENABLE_DRIVER_ST67W6) && \
     MG_ENABLE_DRIVER_ST67W6
+
+bool mg_to_size_t(struct mg_str str, size_t *val);
 
 static struct mg_tcpip_if *s_ifp;
 static uint32_t s_ip, s_mask;
@@ -344,7 +348,6 @@ static bool st67w6_at_cmd(char *cmd, size_t len) {
 }
 
 static bool st67w6_spi_init(void);
-bool mg_to_size_t(struct mg_str str, size_t *val);
 
 static bool st67w6_init(uint8_t *mac) {
   //  struct mg_tcpip_driver_st67w6_data *d = (struct
