@@ -3,16 +3,16 @@
 
 #include "hal.h"
 #include "mongoose.h"
+#include <malloc.h>
 
 size_t mg_usage(int task, int metric) {
-  extern void *_sbrk(int incr);
-  extern unsigned char _end[], _estack[];
+  extern unsigned char _estack[];
   if (metric == MG_USAGE_NUM_TASKS) return 1;
   if (metric == MG_USAGE_TASK_NAME) return task == 0 ? (size_t) "main" : 0;
   // Heap and stack share RAM, so neither has a fixed total.
   if (metric == MG_USAGE_HEAP_USED) {
-    size_t heap = (size_t) _sbrk(0), start = (size_t) _end;
-    return heap >= start && heap <= (size_t) _estack ? heap - start : 0;
+    // The program break includes freed blocks retained for reuse by malloc
+    return (size_t) mallinfo().uordblks;
   }
   if (metric == MG_USAGE_STACK_USED && task == 0) {
     size_t sp = (size_t) __get_MSP(), top = (size_t) _estack;

@@ -23,6 +23,7 @@
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
 #include "mongoose.h"
+#include <malloc.h>
 
 /* USER CODE END Includes */
 
@@ -85,7 +86,6 @@ static void MX_USART3_UART_Init(void);
 /* Private user code ---------------------------------------------------------*/
 /* USER CODE BEGIN 0 */
 size_t mg_usage(int task, int metric) {
-  extern void *_sbrk(ptrdiff_t incr);
   extern unsigned char _end, _sstack, _estack;
   extern uint32_t _Min_Stack_Size;
   switch (metric) {
@@ -101,10 +101,9 @@ size_t mg_usage(int task, int metric) {
     }
     case MG_USAGE_HEAP_TOTAL:
       return (size_t) &_sstack - (size_t) &_end;
-    case MG_USAGE_HEAP_USED: {
-      size_t heap = (size_t) _sbrk(0), start = (size_t) &_end;
-      return heap >= start && heap <= (size_t) &_sstack ? heap - start : 0;
-    }
+    case MG_USAGE_HEAP_USED:
+      // The program break includes freed blocks retained for reuse by malloc
+      return (size_t) mallinfo().uordblks;
     default: return 0;
   }
 }
