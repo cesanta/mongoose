@@ -33128,7 +33128,7 @@ static bool mg_tcpip_driver_netc_init(struct mg_tcpip_if *ifp) {
   NETC_EMDIO_PCI->CMD |= MG_BIT(2) | MG_BIT(1);  // BUS_MASTER_EN, MEM_ACCESS
   NETC_EMDIO->EMDIO_CFG =
       ((mdc_cr & 0x1ffU) << 7) | MG_BIT(2);  // MDIO_CLK_DIV, MDIO_HOLD
-  mg_phy_init(&phy, d->phy_addr, 0);
+  mg_phy_init(&phy, d->phy_addr, MG_PHY_RGMII);
 
   // Initialize ENETC1 PSI0 and port
   NETC_ENETC1_PCI->CMD |= MG_BIT(2) | MG_BIT(1);  // BUS_MASTER_EN, MEM_ACCESS
@@ -33632,20 +33632,22 @@ bool __attribute__((weak)) mg_wifi_ap_stop(void) {
 
 
 
-enum {                  // ID1  ID2
-  MG_PHY_KSZ8x = 0x22,  // 0022 156x - KSZ8081RNB, KSZ8091RNB
-  MG_PHY_DP83x = 0x2000,
-  MG_PHY_DP83867 = 0xa231,  // 2000 a231 - TI DP83867I
-  MG_PHY_DP83825 = 0xa140,  // 2000 a140 - TI DP83825I
-  MG_PHY_DP83848 = 0x5ca2,  // 2000 5ca2 - TI DP83848I
-  MG_PHY_LAN87x = 0x7,      // 0007 c0fx - LAN8720
-  MG_PHY_RTL82x = 0x1c,
-  MG_PHY_RTL8201 = 0xc816,  // 001c c816 - RTL8201F
-  MG_PHY_RTL8211 = 0xc916,  // 001c c916 - RTL8211F
-  MG_PHY_ICS1894x = 0x15,
+enum {                        // ID1  ID2
+  MG_PHY_KSZ8x = 0x22,        // 0022 156x - KSZ8081RNB, KSZ8091RNB
+  MG_PHY_DP83x = 0x2000,      //
+  MG_PHY_DP83867 = 0xa231,    // 2000 a231 - TI DP83867I
+  MG_PHY_DP83825 = 0xa140,    // 2000 a140 - TI DP83825I
+  MG_PHY_DP83848 = 0x5ca2,    // 2000 5ca2 - TI DP83848I
+  MG_PHY_LANxVSCx = 0x7,      // 0007 xxxx | cxxx: SMSC | 0xxx: Vitesse
+  MG_PHY_LAN87x = 0xc0f0,     // 0007 c0fx - LAN8720
+  MG_PHY_VSC8531 = 0x0572,    // 0007 0572 - VSC8531-02
+  MG_PHY_RTL82x = 0x1c,       //
+  MG_PHY_RTL8201 = 0xc816,    // 001c c816 - RTL8201F
+  MG_PHY_RTL8211 = 0xc916,    // 001c c916 - RTL8211F
+  MG_PHY_ICS1894x = 0x15,     //
   MG_PHY_ICS189432 = 0xf450,  // 0015 f450 - ICS1894
-  MG_PHY_YT85x = 0x4f51,
-  MG_PHY_YT8531 = 0xe91a  // 4f51 e91a - Motorcomm YT8531
+  MG_PHY_YT85x = 0x4f51,      //
+  MG_PHY_YT8531 = 0xe91a      // 4f51 e91a - Motorcomm YT8531
 };
 
 enum {
@@ -33664,45 +33666,44 @@ enum {
   MG_PHY_RTL8201_REG_RMSR = 16,   // in page 7
   MG_PHY_RTL8211_REG_PHYSR = 26,  // in page a43
   MG_PHY_ICS189432_REG_POLL = 17,
+  MG_PHY_VSC8531_REG_DACS = 28,
   MG_PHY_YT8531_REG_PHYSTS = 17,
   MG_PHY_YT8531_REG_EXT_ADDR = 30,
   MG_PHY_YT8531_REG_EXT_DATA = 31
 };
 
+// clang-format off
 static const char *mg_phy_id_to_str(uint16_t id1, uint16_t id2) {
   switch (id1) {
     case MG_PHY_DP83x:
       switch (id2) {
-        case MG_PHY_DP83867:
-          return "DP83867";
-        case MG_PHY_DP83848:
-          return "DP83848";
-        case MG_PHY_DP83825:
-          return "DP83825";
-        default:
-          return "DP83x";
+        case MG_PHY_DP83867: return "DP83867";
+        case MG_PHY_DP83848: return "DP83848";
+        case MG_PHY_DP83825: return "DP83825";
+        default: return "DP83x";
       }
-    case MG_PHY_KSZ8x:
-      return "KSZ8x";
-    case MG_PHY_LAN87x:
-      return "LAN87x";
+    case MG_PHY_KSZ8x: return "KSZ8x";
+    case MG_PHY_LANxVSCx:
+      switch (id2) {
+        case MG_PHY_VSC8531: return "VSC8531";
+        default:
+          if ((id2 & 0xFFF0) == MG_PHY_LAN87x) return "LAN87x";
+      }
+      break;
     case MG_PHY_RTL82x:
       switch (id2) {
-        case MG_PHY_RTL8201:
-          return "RTL8201";
-        case MG_PHY_RTL8211:
-          return "RTL8211";
-        default:
-          return "RTL82x";
+        case MG_PHY_RTL8201: return "RTL8201";
+        case MG_PHY_RTL8211: return "RTL8211";
+        default: return "RTL82x";
       }
-    case MG_PHY_ICS1894x:
-      return "ICS1894x";
+    case MG_PHY_ICS1894x: return "ICS1894x";
     case MG_PHY_YT85x:
       return id2 == MG_PHY_YT8531 ? "YT8531" : "YT85x";
-    default:
-      return "unknown";
+    default: break;
   }
+  return "unknown";
 }
+// clang-format on
 
 void mg_phy_init(struct mg_phy *phy, uint8_t phy_addr, uint8_t config) {
   uint16_t id1, id2;
@@ -33714,29 +33715,28 @@ void mg_phy_init(struct mg_phy *phy, uint8_t phy_addr, uint8_t config) {
   id2 = phy->read_reg(phy_addr, MG_PHY_REG_ID2);
   MG_INFO(("PHY ID: %#04x %#04x (%s)", id1, id2, mg_phy_id_to_str(id1, id2)));
 
-  if (id1 == MG_PHY_YT85x && id2 == MG_PHY_YT8531) {
-    uint16_t value;
-    // TODO (robertc2000): Autonegotiation remains disabled after PHY is reset
-    // We temporarily force enabling autoneg, until a workaround is found.
-    phy->write_reg(phy_addr, MG_PHY_REG_BCR, MG_BIT(12));
-    phy->write_reg(phy_addr, MG_PHY_YT8531_REG_EXT_ADDR, 0xa003);
-    value = phy->read_reg(phy_addr, MG_PHY_YT8531_REG_EXT_DATA);
-    value &= (uint16_t) ~(MG_BIT(3) | MG_BIT(2) | MG_BIT(1) | MG_BIT(0));
-    phy->write_reg(phy_addr, MG_PHY_YT8531_REG_EXT_DATA,
-                   (uint16_t) (value | MG_BIT(1)));  // TXDLY: 2 * 150 ps
-  }
-
-  if (id1 == MG_PHY_DP83x && id2 == MG_PHY_DP83867) {
-    phy->write_reg(phy_addr, 0x0d, 0x1f);  // write 0x10d to IO_MUX_CFG (0x0170)
-    phy->write_reg(phy_addr, 0x0e, 0x170);
-    phy->write_reg(phy_addr, 0x0d, 0x401f);
-    phy->write_reg(phy_addr, 0x0e, 0x10d);
-  }
-
-  if (config & MG_PHY_CLOCKS_MAC) {
+  if (config & MG_PHY_RGMII) {
+    if (id1 == MG_PHY_YT85x && id2 == MG_PHY_YT8531) {
+      uint16_t value;
+      // TODO (robertc2000): Autonegotiation remains disabled after PHY is reset
+      // We temporarily force enabling autoneg, until a workaround is found.
+      phy->write_reg(phy_addr, MG_PHY_REG_BCR, MG_BIT(12));
+      phy->write_reg(phy_addr, MG_PHY_YT8531_REG_EXT_ADDR, 0xa003);
+      value = phy->read_reg(phy_addr, MG_PHY_YT8531_REG_EXT_DATA);
+      value &= (uint16_t) ~(MG_BIT(3) | MG_BIT(2) | MG_BIT(1) | MG_BIT(0));
+      phy->write_reg(phy_addr, MG_PHY_YT8531_REG_EXT_DATA,
+                     (uint16_t) (value | MG_BIT(1)));  // TXDLY: 2 * 150 ps
+    } else if (id1 == MG_PHY_DP83x && id2 == MG_PHY_DP83867) {
+      phy->write_reg(phy_addr, 0x0d,
+                     0x1f);  // write 0x10d to IO_MUX_CFG (0x0170)
+      phy->write_reg(phy_addr, 0x0e, 0x170);
+      phy->write_reg(phy_addr, 0x0d, 0x401f);
+      phy->write_reg(phy_addr, 0x0e, 0x10d);
+    }
+  } else if (config & MG_PHY_CLOCKS_MAC) {  // RMII
     // Use PHY crystal oscillator (preserve defaults)
     // nothing to do
-  } else {  // MAC clocks PHY, PHY has no xtal
+  } else {  // RMII, MAC clocks PHY, PHY has no xtal.
     // Enable 50 MHz external ref clock at XI (preserve defaults)
     if (id1 == MG_PHY_DP83x && id2 != MG_PHY_DP83867 && id2 != MG_PHY_DP83848) {
       phy->write_reg(phy_addr, MG_PHY_DP83x_REG_RCSR, MG_BIT(7) | MG_BIT(0));
@@ -33749,7 +33749,7 @@ void mg_phy_init(struct mg_phy *phy, uint8_t phy_addr, uint8_t config) {
       // now do clock stuff
       phy->write_reg(phy_addr, MG_PHY_KSZ8x_REG_PC2R,
                      (uint16_t) (MG_BIT(15) | MG_BIT(8) | MG_BIT(7)));
-    } else if (id1 == MG_PHY_LAN87x) {
+    } else if (id1 == MG_PHY_LANxVSCx && (id2 & 0xFFF0) == MG_PHY_LAN87x) {
       // nothing to do
     } else if (id1 == MG_PHY_RTL82x && id2 == MG_PHY_RTL8201) {
       // assume PHY has been hardware strapped properly
@@ -33795,10 +33795,19 @@ bool mg_phy_up(struct mg_phy *phy, uint8_t phy_addr, bool *full_duplex,
       uint16_t pc1r = phy->read_reg(phy_addr, MG_PHY_KSZ8x_REG_PC1R);
       *full_duplex = pc1r & MG_BIT(2);
       *speed = (pc1r & 3) == 1 ? MG_PHY_SPEED_10M : MG_PHY_SPEED_100M;
-    } else if (id1 == MG_PHY_LAN87x) {
-      uint16_t scsr = phy->read_reg(phy_addr, MG_PHY_LAN87x_REG_SCSR);
-      *full_duplex = scsr & MG_BIT(4);
-      *speed = (scsr & MG_BIT(3)) ? MG_PHY_SPEED_100M : MG_PHY_SPEED_10M;
+    } else if (id1 == MG_PHY_LANxVSCx) {
+      uint16_t id2 = phy->read_reg(phy_addr, MG_PHY_REG_ID2);
+      if (id2 == MG_PHY_VSC8531) {
+        uint16_t dacs = phy->read_reg(phy_addr, MG_PHY_VSC8531_REG_DACS);
+        *full_duplex = dacs & MG_BIT(5);
+        *speed = (dacs & MG_BIT(4))   ? MG_PHY_SPEED_1000M
+                 : (dacs & MG_BIT(3)) ? MG_PHY_SPEED_100M
+                                      : MG_PHY_SPEED_10M;
+      } else {
+        uint16_t scsr = phy->read_reg(phy_addr, MG_PHY_LAN87x_REG_SCSR);
+        *full_duplex = scsr & MG_BIT(4);
+        *speed = (scsr & MG_BIT(3)) ? MG_PHY_SPEED_100M : MG_PHY_SPEED_10M;
+      }
     } else if (id1 == MG_PHY_RTL82x) {
       uint16_t id2 = phy->read_reg(phy_addr, MG_PHY_REG_ID2);
       if (id2 == MG_PHY_RTL8211) {
@@ -39807,7 +39816,7 @@ static bool mg_tcpip_driver_xmc7_init(struct mg_tcpip_if *ifp) {
 
   // init phy
   struct mg_phy phy = {eth_read_phy, eth_write_phy};
-  mg_phy_init(&phy, d->phy_addr, MG_PHY_CLOCKS_MAC);
+  mg_phy_init(&phy, d->phy_addr, MG_PHY_RGMII);
 
   (void) d;
   return true;

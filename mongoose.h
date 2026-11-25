@@ -5605,8 +5605,10 @@ struct mg_phy {
 enum {
   // Set if PHY LEDs are connected to ground
   MG_PHY_LEDS_ACTIVE_HIGH = (1 << 0),
-  // Set when PHY clocks MAC. Otherwise, MAC clocks PHY
-  MG_PHY_CLOCKS_MAC = (1 << 1)
+  // Set on RMII when PHY clocks MAC. Otherwise, MAC clocks PHY
+  MG_PHY_CLOCKS_MAC = (1 << 1),
+  // Set on RGMII. Otherwise, we assume RMII
+  MG_PHY_RGMII = (1 << 2)
 };
 
 enum { MG_PHY_SPEED_10M, MG_PHY_SPEED_100M, MG_PHY_SPEED_1000M };
