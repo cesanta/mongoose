@@ -12202,6 +12202,52 @@ bool mg_ota_end(void) {
 
 #if MG_OTA >= MG_OTA_RT1020 && MG_OTA <= MG_OTA_RT1180
 
+// Take non-specified Flash chip settings from dev board family
+#if MG_OTA == MG_OTA_RT1050
+#ifndef MG_IMXRT_HYPER
+#define MG_IMXRT_HYPER 1
+#endif
+#ifndef MG_IMXRT_SECTOR_SIZE
+#define MG_IMXRT_SECTOR_SIZE (256 * 1024)
+#endif
+#ifndef MG_IMXRT_BLOCK_SIZE
+#define MG_IMXRT_BLOCK_SIZE (256 * 1024)
+#endif
+#ifndef MG_IMXRT_PAGE_SIZE
+#define MG_IMXRT_PAGE_SIZE 512
+#endif
+#ifndef MG_IMXRT_FLASH_SIZE
+#define MG_IMXRT_FLASH_SIZE (64 * 1024 * 1024)
+#endif
+#else  // rest of the boards
+#ifndef MG_IMXRT_HYPER
+#define MG_IMXRT_HYPER 0
+#endif
+#ifndef MG_IMXRT_SECTOR_SIZE
+#define MG_IMXRT_SECTOR_SIZE (4 * 1024)
+#endif
+#ifndef MG_IMXRT_BLOCK_SIZE
+#define MG_IMXRT_BLOCK_SIZE (64 * 1024)
+#endif
+#ifndef MG_IMXRT_PAGE_SIZE
+#define MG_IMXRT_PAGE_SIZE 256
+#endif
+#if MG_OTA == MG_OTA_RT1180  // now define per-board flash size
+#ifndef MG_IMXRT_FLASH_SIZE
+#define MG_IMXRT_FLASH_SIZE (16 * 1024 * 1024)
+#endif
+#else  // rest of the boards
+#ifndef MG_IMXRT_FLASH_SIZE
+#define MG_IMXRT_FLASH_SIZE (8 * 1024 * 1024)
+#endif  // default flash size gate
+#endif  // per-board flash size
+#endif  // default flash settings
+
+#ifndef MG_IMXRT_PARAM_SECTOR_COUNT
+// Number of small parameter sectors at the bottom of flash
+#define MG_IMXRT_PARAM_SECTOR_COUNT 0
+#endif
+
 static bool mg_imxrt_write(void *, const void *, size_t);
 static bool mg_imxrt_swap(void);
 
@@ -12219,12 +12265,14 @@ static bool mg_imxrt_swap(void);
 #define FLEXSPI_NOR_INSTANCE 2
 #endif
 
-#if MG_OTA == MG_OTA_RT1050
-#define MG_IMXRT_SECTOR_SIZE (256 * 1024)
-#define MG_IMXRT_PAGE_SIZE 512
+#if MG_OTA == MG_OTA_RT1180
+#ifndef MG_FLEXSPI_SERIAL_CLK_FREQ
+#define MG_FLEXSPI_SERIAL_CLK_FREQ 5  // 100MHz
+#endif
 #else
-#define MG_IMXRT_SECTOR_SIZE (4 * 1024)
-#define MG_IMXRT_PAGE_SIZE 256
+#ifndef MG_FLEXSPI_SERIAL_CLK_FREQ
+#define MG_FLEXSPI_SERIAL_CLK_FREQ 7  // 133MHz
+#endif
 #endif
 
 // TODO(): fill at init, support more devices in a dynamic way
@@ -12330,6 +12378,7 @@ struct mg_flexspi_nor_config {
 #define MG_FLEXSPI_4PAD 2
 #define MG_FLEXSPI_8PAD 3
 
+// [1]'s 0x06 sets 6 post-read latency cycles, otherwise use a lower speed
 #define MG_FLEXSPI_QSPI_LUT                                                    \
   {                                                                            \
     [0] = MG_FLEXSPI_LUT_SEQ(MG_CMD_SDR, MG_FLEXSPI_1PAD, 0xEB, MG_RADDR_SDR,  \
@@ -12352,6 +12401,7 @@ struct mg_flexspi_nor_config {
                                       MG_STOP, MG_FLEXSPI_1PAD, 0x0),          \
   }
 
+// [1]'s 0x0c sets HyperBus post-address latency; use a lower speed if needed
 #define MG_FLEXSPI_HYPER_LUT                                                  \
   {                                                                           \
     [0] = MG_FLEXSPI_LUT_SEQ(MG_CMD_DDR, MG_FLEXSPI_8PAD, 0xA0, MG_RADDR_DDR, \
@@ -12574,15 +12624,31 @@ struct mg_flexspi_nor_driver_interface {
 
 static bool s_flash_irq_disabled;
 
+#if MG_IMXRT_PARAM_SECTOR_COUNT > 0
+MG_IRAM static size_t flash_sector_size(volatile uint32_t *dst) {
+  char *base = (char *) s_mg_flash_imxrt.start;
+  size_t offset = (size_t) ((char *) dst - base);
+  size_t params = MG_IMXRT_PARAM_SECTOR_COUNT * MG_IMXRT_SECTOR_SIZE;
+  if (offset >= params) return MG_IMXRT_BLOCK_SIZE;
+  return s_mg_flash_imxrt.secsz;
+}
+#endif
+
 MG_IRAM static bool flash_page_start(volatile uint32_t *dst) {
   char *base = (char *) s_mg_flash_imxrt.start,
        *end = base + s_mg_flash_imxrt.size;
   volatile char *p = (char *) dst;
+#if MG_IMXRT_PARAM_SECTOR_COUNT > 0
+  return p >= base && p < end && ((p - base) % flash_sector_size(dst)) == 0;
+#else
   return p >= base && p < end && ((p - base) % s_mg_flash_imxrt.secsz) == 0;
+#endif
 }
 
-#if MG_OTA == MG_OTA_RT1050
-// Configuration for Hyper flash memory
+#if MG_IMXRT_HYPER
+// Configuration for HyperFlash memory
+// serialClkFreq, dataValidTime, and lookupTable (MG_FLEXSPI_HYPER_LUT code)
+// must agree to flash specs
 static struct mg_flexspi_nor_config default_config = {
     .memConfig =
         {
@@ -12596,8 +12662,8 @@ static struct mg_flexspi_nor_config default_config = {
                 MG_BIT(6) | MG_BIT(4) | MG_BIT(3) | MG_BIT(0),
             .deviceType = 1,  // serial NOR
             .sflashPadType = 8,
-            .serialClkFreq = 7,  // 133MHz
-            .sflashA1Size = 64 * 1024 * 1024,
+            .serialClkFreq = MG_FLEXSPI_SERIAL_CLK_FREQ,
+            .sflashA1Size = MG_IMXRT_FLASH_SIZE,
             .dataValidTime = {15, 0},
             .busyOffset = 15,
             .busyBitPolarity = 1,
@@ -12605,22 +12671,16 @@ static struct mg_flexspi_nor_config default_config = {
             .lookupTable = MG_FLEXSPI_HYPER_LUT,
             .lutCustomSeq = MG_LUT_CUSTOM_SEQ,
         },
-    .pageSize = 512,
-    .sectorSize = 256 * 1024,
+    .pageSize = MG_IMXRT_PAGE_SIZE,
+    .sectorSize = MG_IMXRT_SECTOR_SIZE,
     .ipcmdSerialClkFreq = 1,
     .serialNorType = 1u,
-    .blockSize = 256 * 1024,
+    .blockSize = MG_IMXRT_BLOCK_SIZE,
     .isUniformBlockSize = true};
 #else
-// Note: this QSPI configuration works for RTs supporting QSPI
 // Configuration for QSPI memory
-#if MG_OTA == MG_OTA_RT1180
-#define MG_FLEXSPI_QSPI_SERIAL_CLK_FREQ 5  // 100MHz
-#define MG_FLEXSPI_QSPI_FLASH_SIZE (16 * 1024 * 1024)
-#else
-#define MG_FLEXSPI_QSPI_SERIAL_CLK_FREQ 7  // 133MHz
-#define MG_FLEXSPI_QSPI_FLASH_SIZE (8 * 1024 * 1024)
-#endif
+// serialClkFreq (AHB/read clock) and lookupTable (MG_FLEXSPI_QSPI_LUT code)
+// must agree to flash specs
 static struct mg_flexspi_nor_config default_config = {
     .memConfig = {.tag = MG_FLEXSPI_CFG_BLK_TAG,
                   .version = MG_FLEXSPI_CFG_BLK_VERSION,
@@ -12630,13 +12690,13 @@ static struct mg_flexspi_nor_config default_config = {
                   .controllerMiscOption = MG_BIT(4),
                   .deviceType = 1,  // serial NOR
                   .sflashPadType = 4,
-                  .serialClkFreq = MG_FLEXSPI_QSPI_SERIAL_CLK_FREQ,
-                  .sflashA1Size = MG_FLEXSPI_QSPI_FLASH_SIZE,
+                  .serialClkFreq = MG_FLEXSPI_SERIAL_CLK_FREQ,
+                  .sflashA1Size = MG_IMXRT_FLASH_SIZE,
                   .lookupTable = MG_FLEXSPI_QSPI_LUT},
-    .pageSize = 256,
-    .sectorSize = 4 * 1024,
+    .pageSize = MG_IMXRT_PAGE_SIZE,
+    .sectorSize = MG_IMXRT_SECTOR_SIZE,
     .ipcmdSerialClkFreq = 1,
-    .blockSize = 64 * 1024,
+    .blockSize = MG_IMXRT_BLOCK_SIZE,
     .isUniformBlockSize = false};
 #endif
 
@@ -12686,8 +12746,13 @@ MG_IRAM static bool flash_erase(struct mg_flexspi_nor_config *config,
 
   void *dst = (void *) ((char *) addr - (char *) s_mg_flash_imxrt.start);
 
+#if MG_IMXRT_PARAM_SECTOR_COUNT > 0
+  bool ok = (flexspi_nor->erase(FLEXSPI_NOR_INSTANCE, config, (uint32_t) dst,
+                                flash_sector_size(addr)) == 0);
+#else
   bool ok = (flexspi_nor->erase(FLEXSPI_NOR_INSTANCE, config, (uint32_t) dst,
                                 s_mg_flash_imxrt.secsz) == 0);
+#endif
   MG_DEBUG(("Sector starting at %p erasure: %s", addr, ok ? "ok" : "fail"));
   return ok;
 }
@@ -12750,14 +12815,13 @@ MG_IRAM static bool mg_imxrt_write(void *addr, const void *buf, size_t len) {
       }
 #else
       // When supported, prefer the read API call.
-      uint32_t src_ofs =
-          (uint32_t) src - (uint32_t) s_mg_flash_imxrt.start;
-      status = flexspi_nor->read(FLEXSPI_NOR_INSTANCE, config_ptr, tmp,
-                                 src_ofs, s_mg_flash_imxrt.align);
+      uint32_t src_ofs = (uint32_t) src - (uint32_t) s_mg_flash_imxrt.start;
+      status = flexspi_nor->read(FLEXSPI_NOR_INSTANCE, config_ptr, tmp, src_ofs,
+                                 s_mg_flash_imxrt.align);
 #endif
       if (status == 0) {
-        status = flexspi_nor->program(FLEXSPI_NOR_INSTANCE, config_ptr,
-                                      dst_ofs, tmp);
+        status = flexspi_nor->program(FLEXSPI_NOR_INSTANCE, config_ptr, dst_ofs,
+                                      tmp);
       }
     } else {
       status = flexspi_nor->program(FLEXSPI_NOR_INSTANCE, config_ptr,
@@ -12789,7 +12853,11 @@ MG_IRAM static void single_bank_swap(char *p1, char *p2, size_t s, size_t ss) {
 }
 
 MG_IRAM static bool mg_imxrt_swap(void) {
+#if MG_IMXRT_PARAM_SECTOR_COUNT > 0
+  size_t ss = MG_IMXRT_BLOCK_SIZE;
+#else
   size_t ss = s_mg_flash_imxrt.secsz;
+#endif
   char *p1 = (char *) s_mg_flash_imxrt.start;
   char *p2 = p1 + s_mg_flash_imxrt.size / 2;
   size_t s = s_mg_flash_imxrt.size / 2 - ss;
@@ -12803,7 +12871,11 @@ MG_IRAM static bool mg_imxrt_swap(void) {
 }
 
 bool mg_ota_begin(size_t new_firmware_size) {
+#if MG_IMXRT_PARAM_SECTOR_COUNT > 0
+  size_t max = s_mg_flash_imxrt.size / 2 - MG_IMXRT_BLOCK_SIZE;
+#else
   size_t max = s_mg_flash_imxrt.size / 2 - s_mg_flash_imxrt.secsz;
+#endif
   if (new_firmware_size > max) {
     MG_ERROR(("Firmware %lu too big for single-bank OTA, max %lu",
               new_firmware_size, max));
