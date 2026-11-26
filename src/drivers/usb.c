@@ -94,10 +94,11 @@ static const uint8_t s_ntb_params[] = {
     4,  0, 16, 0};
 
 // Link notifications: speed 12 Mbit/s both ways, connected, disconnected
-static const uint8_t s_speed[] = {0xa1, 0x2a, 0,    0, 0, 0,    8,    0,
-                                  0,    0x1b, 0xb7, 0, 0, 0x1b, 0xb7, 0};
-static const uint8_t s_up[] = {0xa1, 0, 1, 0, 0, 0, 0, 0};
-static const uint8_t s_down[] = {0xa1, 0, 0, 0, 0, 0, 0, 0};
+static const uint8_t s_speed[] = {
+    0xa1, 0x2a, 0, 0, MGI_USB_ETH_IF, 0, 8, 0,
+    0, 0x1b, 0xb7, 0, 0, 0x1b, 0xb7, 0};
+static const uint8_t s_up[] = {0xa1, 0, 1, 0, MGI_USB_ETH_IF, 0, 0, 0};
+static const uint8_t s_down[] = {0xa1, 0, 0, 0, MGI_USB_ETH_IF, 0, 0, 0};
 
 // Transfer block header for one frame: NTH16, NDP16 with one datagram at
 // offset 30, so that the IP header after the 14-byte Ethernet header lands
@@ -254,6 +255,8 @@ static int mgi_usb_request(const uint8_t *r, const void **reply) {
 #if MG_ENABLE_USB_ETHERNET
       if (index == MG_USB_IF_ETH_DATA) {
         s_usb.alt = value == 1, s_usb.notify = 1;
+        // Directed and broadcast by default: Windows may not set a filter
+        if (s_usb.alt) s_usb.filter = 0x0c;
         mgi_usb_idle(MG_USB_EP_ETH_DATA);
       }
 #endif

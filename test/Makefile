@@ -30,7 +30,7 @@ COMMON_CFLAGS ?= $(C_WARN) $(WARN) $(INCS) $(DEFS) $(TFLAGS) -pthread
 CFLAGS ?= $(OPTS) $(ASAN) $(COMMON_CFLAGS)
 VALGRIND_CFLAGS ?= $(OPTS) $(COMMON_CFLAGS)
 VALGRIND_RUN ?= valgrind --tool=memcheck --gen-suppressions=all --leak-check=full --show-leak-kinds=all --leak-resolution=high --track-origins=yes --error-exitcode=1 --exit-on-first-error=yes --fair-sched=yes
-.PHONY: tutorials mip_test eth_test ppp_test atcmd_test eth_vc98 ppp_vc98 atcmd_vc98 eth_s390 ppp_s390 atcmd_s390 test valgrind
+.PHONY: tutorials mip_test eth_test usb_test ppp_test atcmd_test eth_vc98 ppp_vc98 atcmd_vc98 eth_s390 ppp_s390 atcmd_s390 test valgrind
 
 ifeq "$(findstring ++,$(CC))" ""
 # $(CC) does not end with ++, i.e. we're using C. Apply C flags
@@ -88,7 +88,7 @@ all:
 tall: mg_prefix unamalgamated test valgrind fuzz fuzz_tls vc98 vc17 vc22 mingw mingw++ arm armhf riscv \
       diabish ppc_diabish s390 ppc mips tutorials tutorials_win tutorials_embedded
 
-tmip: mip_test eth_test ppp_test atcmd_test mip_tap_test pppoe_tap_test mip_port_test mip_diabish \
+tmip: mip_test eth_test usb_test ppp_test atcmd_test mip_tap_test pppoe_tap_test mip_port_test mip_diabish \
       mip_vc98 eth_vc98 ppp_vc98 atcmd_vc98 mip_ppc_diabish mip_s390 eth_s390 ppp_s390 \
       atcmd_s390 mip_port_s390 mip_ppc eth_ppc ppp_ppc atcmd_ppc mip_port_ppc mip_mips \
       eth_mips ppp_mips atcmd_mips mip_port_mips
@@ -267,6 +267,12 @@ mip_test: mip_test.c mongoose.c mongoose.h packed_fs.c Makefile
 
 eth_test: eth_test.c mongoose.c mongoose.h Makefile
 	$(CC) eth_test.c $(CFLAGS) $(LDFLAGS) -o $@
+	ASAN_OPTIONS=$(ASAN_OPTIONS) $(RUN) ./$@
+
+usb_test: DEFS += -DMG_ENABLE_TCPIP=1 -DMG_ENABLE_TCPIP_DRIVER_INIT=0 -DMG_ENABLE_USB_ETHERNET=1 -DMG_ENABLE_USB_SERIAL=1
+usb_test: usb_test.c ../src/drivers/usb.c mongoose.c mongoose.h Makefile
+	$(CC) mongoose.c $(CFLAGS) -c -o usb_test_core.o
+	$(CC) usb_test.c ../src/drivers/usb.c usb_test_core.o $(CFLAGS) -I../src -DMG_ENABLE_DRIVER_USB_DWC2=1 -Wno-sign-conversion $(LDFLAGS) -o $@
 	ASAN_OPTIONS=$(ASAN_OPTIONS) $(RUN) ./$@
 
 ppp_test: ppp_test.c mongoose.c mongoose.h Makefile
