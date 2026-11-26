@@ -519,22 +519,23 @@ extern "C" {
 #include <string.h>
 #include <time.h>
 
-#include <pico/stdlib.h>
+#include <hardware/structs/usb.h>
 #include <pico/rand.h>
+#include <pico/stdlib.h>
 #include <pico/unique_id.h>
 int mkdir(const char *, mode_t);
 
 #if MG_OTA == MG_OTA_PICOSDK
 #include <hardware/flash.h>
-#include <hardware/watchdog.h>
 #include <hardware/structs/watchdog.h>
+#include <hardware/watchdog.h>
 #include <pico/bootrom.h>
 
 #ifndef MG_OTA_WATCHDOG_MS
 #if PICO_RP2040
-#define MG_OTA_WATCHDOG_MS 8000U // max delay on RP2040 is 8.3 seconds
+#define MG_OTA_WATCHDOG_MS 8000U  // max delay on RP2040 is 8.3 seconds
 #else
-#define MG_OTA_WATCHDOG_MS 10000U // max delay on RP2350 is 16 seconds
+#define MG_OTA_WATCHDOG_MS 10000U  // max delay on RP2350 is 16 seconds
 #endif
 #endif
 
@@ -551,17 +552,17 @@ int mkdir(const char *, mode_t);
   (watchdog_hw->scratch[0] = (uint32_t) (v), (uint32_t) watchdog_hw->scratch[0])
 
 #if PICO_RP2040
-#define MG_OTA_ROLLBACK()                                      \
-  do {                                                         \
-    mg_flash->swap_fn();                                       \
-    *(volatile unsigned long *) 0xe000ed0c = 0x5fa0004;         \
+#define MG_OTA_ROLLBACK()                               \
+  do {                                                  \
+    mg_flash->swap_fn();                                \
+    *(volatile unsigned long *) 0xe000ed0c = 0x5fa0004; \
   } while (0)
 #else
-#define MG_OTA_ROLLBACK()                                      \
-  do {                                                         \
-    mg_flash->swap_fn();                                       \
-    ((rom_reboot_fn) rom_func_lookup(ROM_FUNC_REBOOT))(         \
-        BOOT_TYPE_NORMAL | 0x100, 1, 0, 0);                    \
+#define MG_OTA_ROLLBACK()                               \
+  do {                                                  \
+    mg_flash->swap_fn();                                \
+    ((rom_reboot_fn) rom_func_lookup(ROM_FUNC_REBOOT))( \
+        BOOT_TYPE_NORMAL | 0x100, 1, 0, 0);             \
   } while (0)
 #endif
 #endif
@@ -1319,6 +1320,26 @@ struct timeval {
 #define MG_ENABLE_TCPIP_TCPRTX 0  // TCP retransmission queue
 #endif
 
+#ifndef MG_ENABLE_DRIVER_USB_RP
+#define MG_ENABLE_DRIVER_USB_RP 0  // USB device, RP2040 / RP2350
+#endif
+
+#ifndef MG_ENABLE_DRIVER_USB_NRF52
+#define MG_ENABLE_DRIVER_USB_NRF52 0  // USB device, nRF52840
+#endif
+
+#ifndef MG_ENABLE_DRIVER_USB_DWC2
+#define MG_ENABLE_DRIVER_USB_DWC2 0  // USB device, Synopsys DWC2: STM32 OTG
+#endif
+
+#ifndef MG_ENABLE_USB_ETHERNET
+#define MG_ENABLE_USB_ETHERNET 0  // USB driver: CDC-NCM Ethernet interface
+#endif
+
+#ifndef MG_ENABLE_USB_SERIAL
+#define MG_ENABLE_USB_SERIAL 0  // USB driver: CDC-ACM serial log console
+#endif
+
 #ifndef MG_TCPIP_DHCPNAME_SIZE
 #define MG_TCPIP_DHCPNAME_SIZE 18  // struct mg_tcpip_if :: dhcp_name size
 #endif
@@ -2042,6 +2063,26 @@ uint64_t mg_timegm(unsigned int year, unsigned int month, unsigned int day,
     MG_U8P(p)[5] = (uint8_t) ((n) >> 16U); \
     MG_U8P(p)[6] = (uint8_t) ((n) >> 8U);  \
     MG_U8P(p)[7] = (uint8_t) (n);          \
+  } while (0)
+
+// Little-endian counterparts, e.g. for USB. Safe for unaligned access
+#define MG_LOAD_LE16(p) \
+  ((uint16_t) (((uint16_t) MG_U8P(p)[1] << 8U) | MG_U8P(p)[0]))
+#define MG_LOAD_LE32(p)                           \
+  ((uint32_t) (((uint32_t) MG_U8P(p)[3] << 24U) | \
+               ((uint32_t) MG_U8P(p)[2] << 16U) | \
+               ((uint32_t) MG_U8P(p)[1] << 8U) | MG_U8P(p)[0]))
+#define MG_STORE_LE16(p, n)               \
+  do {                                    \
+    MG_U8P(p)[0] = (uint8_t) (n);         \
+    MG_U8P(p)[1] = (uint8_t) ((n) >> 8U); \
+  } while (0)
+#define MG_STORE_LE32(p, n)                \
+  do {                                     \
+    MG_U8P(p)[0] = (uint8_t) (n);          \
+    MG_U8P(p)[1] = (uint8_t) ((n) >> 8U);  \
+    MG_U8P(p)[2] = (uint8_t) ((n) >> 16U); \
+    MG_U8P(p)[3] = (uint8_t) ((n) >> 24U); \
   } while (0)
 
 // Network / host byte-order conversion (big-endian <-> native).
@@ -4756,6 +4797,8 @@ enum {
   MG_TCPIP_EV_WIFI_CONNECT_ERR,  // Wi-Fi connection failed       driver and chip specific
   MG_TCPIP_EV_DRIVER,            // Driver-defined event          driver specific
   MG_TCPIP_EV_STATE6_CHANGE,     // IPv6 link state changed       uint8_t *(&ifp->state6)
+  MG_TCPIP_EV_PHY_RX,            // Radio frame received          struct mg_str *
+  MG_TCPIP_EV_PHY_TX,            // Radio frame about to be sent  struct mg_str *
   MG_TCPIP_EV_USER               // Starting ID for user-defined events
 };
 // clang-format on
@@ -4935,117 +4978,6 @@ extern struct mg_tcpip_spi mg_spi;
 #ifndef MG_ETH_RAM
 #define MG_ETH_RAM
 #endif
-
-#endif
-// Copyright (c) 2026 Cesanta Software Limited
-// All rights reserved
-//
-// Ethernet over radio, through a mesh. Mongoose sees an Ethernet interface,
-// the mesh splits Ethernet frames into radio frames. Two parts plug in:
-// - struct mg_radio: a radio standard, e.g. mg_radio_802154
-// - struct mg_mesh: how the mesh is built and routed
-
-
-
-
-
-#if MG_ENABLE_TCPIP
-
-// A radio standard
-struct mg_radio {
-  const char *name;        // For logs
-  size_t max_frame_size;   // Largest radio frame, bytes
-  uint32_t bitrate;        // Bits per second on air
-  size_t overhead;         // Bytes on air besides the frame: preamble, FCS
-  uint32_t slot_us;        // Random backoff slot duration, us
-  uint32_t cca_us;         // Channel sensing duration, us
-  uint32_t turnaround_us;  // Idle check to transmission start, us
-  uint32_t ifs_us;         // Inter-frame spacing in us: gap between transmits
-  uint8_t backoff_min;     // Initial backoff exponent
-  uint8_t backoff_max;     // Maximum backoff exponent
-  bool csma;               // Use channel sensing and backoff before TX
-  size_t header_len;       // Radio hardware header length
-  // Write the radio header, with 0xffff as the broadcast address.
-  void (*print_hdr)(const struct mg_radio *radio, uint8_t *buf, uint16_t dst,
-                    uint16_t src);
-  // Return the parsed header length, or zero for an invalid header.
-  size_t (*parse_hdr)(const struct mg_radio *radio, const uint8_t *buf,
-                      size_t len, uint16_t *dst, uint16_t *src);
-};
-
-#define MG_802154_HEADER_LEN 9   // MAC header, short addresses
-#define MG_802154_PAN_ID 0xabcd  // Our network's PAN ID
-
-#ifndef MG_802154_CHANNEL
-#define MG_802154_CHANNEL 15
-#endif
-
-// A turn's answer must arrive this soon after the turn's last frame ends on
-// air, or the turn ends. A node that would answer later stays silent and keeps
-// its frame for the next turn. Covers the node's poll latency, the radio
-// turnaround and one full fragment's airtime, 4.3 ms on 802.15.4
-#ifndef MG_MESH_ANSWER_TIMEOUT_US
-#define MG_MESH_ANSWER_TIMEOUT_US 8000
-#endif
-
-// A radio driver aborts a transmission that has not finished this soon, and
-// lets the mesh go on as if the frame was sent
-#ifndef MG_MESH_TX_TIMEOUT_US
-#define MG_MESH_TX_TIMEOUT_US 60000
-#endif
-
-// Misses in a row before giving up, 1 to 127. The bridge removes a member
-// that did not answer this many turns. A node leaves the mesh after this
-// many rounds without a turn
-#ifndef MG_MESH_MAX_MISSES
-#define MG_MESH_MAX_MISSES 10
-#endif
-
-extern const struct mg_radio mg_radio_802154;
-
-struct mg_mesh_node {
-  struct mg_tcpip_if *radio;       // Owning radio driver interface
-  struct mg_tcpip_if *lan;         // Bridge LAN interface, NULL for a client
-  const struct mg_mesh *strategy;  // Selected strategy
-  size_t (*tx)(struct mg_tcpip_if *, const void *, size_t);  // Radio frame TX
-  size_t rx_len;           // Complete Ethernet frame in the interface RX buffer
-  uint64_t now;            // Current driver poll time, us
-  uint64_t rx_at;          // Arrival time of the radio frame being handled, us
-  uint64_t tx_at;          // Earliest next transmission, us
-  void *data;              // Private state owned by the strategy
-  size_t ram_used;         // Live mesh state bytes
-  size_t ram_peak;         // Peak live mesh state bytes
-  uint64_t next_tick;      // Next deadline in us, or UINT64_MAX
-  uint16_t radio_address;  // Local address supplied by the radio
-  bool joined;             // Client is a member of the mesh
-};
-
-struct mg_mesh {
-  const char *name;
-  bool (*init)(struct mg_mesh_node *node, struct mg_tcpip_if *radio,
-               struct mg_tcpip_if *lan, uint16_t radio_address);
-  void (*tick)(struct mg_mesh_node *node, uint64_t now_microseconds);
-  void (*free)(struct mg_mesh_node *node);
-  size_t (*tx)(struct mg_mesh_node *, const void *, size_t);  // ETH frame TX
-  void (*rx)(struct mg_mesh_node *, void *, size_t);          // Radio frame RX
-  bool single_bridge;            // Require exactly one bridge
-  bool scheduled_tx;             // The mesh schedules transmission turns
-  const struct mg_radio *radio;  // Radio configuration for this strategy
-};
-
-extern const struct mg_mesh mg_mesh_default;
-
-// Put a received radio frame into the driver's receive queue, together with
-// its arrival time from mg_micros(). Call it when the frame arrives, from the
-// radio interrupt if the driver has one. If the queue is full, the frame is
-// dropped and counted in ifp->ndrop
-void mg_mesh_rx_queue(struct mg_queue *q, struct mg_tcpip_if *ifp,
-                      const void *frame, size_t len);
-
-// Pass queued radio frames to the mesh, oldest first. Before each frame,
-// node->rx_at is set to its arrival time. Stops while the node holds a
-// received Ethernet frame the TCP/IP stack has not taken yet
-void mg_mesh_rx_drain(struct mg_mesh_node *node, struct mg_queue *q);
 
 #endif
 
@@ -5413,36 +5345,28 @@ extern struct mg_tcpip_driver mg_tcpip_driver_cyw;
 
 
 
-#if MG_ENABLE_TCPIP && defined(MG_ENABLE_DRIVER_ESP32_802154) && \
-    MG_ENABLE_DRIVER_ESP32_802154
+#if MG_ENABLE_TCPIP && defined(MG_ENABLE_DRIVER_ESP32) && MG_ENABLE_DRIVER_ESP32
 
 // ESP32-C6 IEEE 802.15.4 radio, as an Ethernet interface through the mesh.
 // Needs MG_ARCH_ESP32 and CONFIG_IEEE802154_ENABLED.
 // See tutorials/esp32/minimal-802.15.4
-struct mg_tcpip_driver_esp32_802154_data {
-  struct mg_mesh_node *mesh;       // Driver-owned runtime state
-  const struct mg_mesh *strategy;  // NULL selects mg_mesh_default
-};
+extern struct mg_tcpip_driver mg_tcpip_driver_esp32;
 
-extern struct mg_tcpip_driver mg_tcpip_driver_esp32_802154;
-
-#define MG_TCPIP_DRIVER_ESP32_802154_INIT(manager)                      \
-  do {                                                                  \
-    static struct mg_tcpip_driver_esp32_802154_data driver_data_;       \
-    static struct mg_tcpip_if mif_;                                     \
-    MG_SET_MAC_ADDRESS(mif_.mac);                                       \
-    mif_.ip = MG_TCPIP_IP;                                              \
-    mif_.mask = MG_TCPIP_MASK;                                          \
-    mif_.gw = MG_TCPIP_GW;                                              \
-    mif_.mgr = (manager);                                               \
-    mif_.driver = &mg_tcpip_driver_esp32_802154;                        \
-    mif_.driver_data = &driver_data_;                                   \
-    mg_tcpip_init((manager), &mif_);                                    \
-    MG_INFO(("Driver: esp32_802154, MAC: %M", mg_print_mac, mif_.mac)); \
+#define MG_TCPIP_DRIVER_ESP32_INIT(manager)                      \
+  do {                                                           \
+    static struct mg_tcpip_if mif_;                              \
+    MG_SET_MAC_ADDRESS(mif_.mac);                                \
+    mif_.ip = MG_TCPIP_IP;                                       \
+    mif_.mask = MG_TCPIP_MASK;                                   \
+    mif_.gw = MG_TCPIP_GW;                                       \
+    mif_.mgr = (manager);                                        \
+    mif_.driver = &mg_tcpip_driver_esp32;                        \
+    mg_tcpip_init((manager), &mif_);                             \
+    MG_INFO(("Driver: esp32, MAC: %M", mg_print_mac, mif_.mac)); \
   } while (0)
 
 #ifndef MG_TCPIP_DRIVER_INIT
-#define MG_TCPIP_DRIVER_INIT(x) MG_TCPIP_DRIVER_ESP32_802154_INIT(x)
+#define MG_TCPIP_DRIVER_INIT(x) MG_TCPIP_DRIVER_ESP32_INIT(x)
 #endif
 
 #endif
@@ -5509,23 +5433,16 @@ extern struct mg_tcpip_driver mg_tcpip_driver_imxrt;
 #if MG_ENABLE_TCPIP && defined(MG_ENABLE_DRIVER_MCXW71) && \
     MG_ENABLE_DRIVER_MCXW71
 
-struct mg_tcpip_driver_mcxw71_data {
-  struct mg_mesh_node *mesh;       // Driver-owned runtime state
-  const struct mg_mesh *strategy;  // NULL selects mg_mesh_default
-};
-
 extern struct mg_tcpip_driver mg_tcpip_driver_mcxw71;
 
 #define MG_TCPIP_DRIVER_MCXW71_INIT(mgr)                          \
   do {                                                            \
-    static struct mg_tcpip_driver_mcxw71_data driver_data_;       \
     static struct mg_tcpip_if mif_;                               \
     MG_SET_MAC_ADDRESS(mif_.mac);                                 \
     mif_.ip = MG_TCPIP_IP;                                        \
     mif_.mask = MG_TCPIP_MASK;                                    \
     mif_.gw = MG_TCPIP_GW;                                        \
     mif_.driver = &mg_tcpip_driver_mcxw71;                        \
-    mif_.driver_data = &driver_data_;                             \
     mg_tcpip_init((mgr), &mif_);                                  \
     MG_INFO(("Driver: mcxw71, MAC: %M", mg_print_mac, mif_.mac)); \
   } while (0)
@@ -5542,23 +5459,16 @@ extern struct mg_tcpip_driver mg_tcpip_driver_mcxw71;
 
 #if MG_ENABLE_TCPIP && defined(MG_ENABLE_DRIVER_MG24) && MG_ENABLE_DRIVER_MG24
 
-struct mg_tcpip_driver_mg24_data {
-  struct mg_mesh_node *mesh;       // Driver-owned runtime state
-  const struct mg_mesh *strategy;  // NULL selects mg_mesh_default
-};
-
 extern struct mg_tcpip_driver mg_tcpip_driver_mg24;
 
 #define MG_TCPIP_DRIVER_MG24_INIT(mgr)                          \
   do {                                                          \
-    static struct mg_tcpip_driver_mg24_data driver_data_;       \
     static struct mg_tcpip_if mif_;                             \
     MG_SET_MAC_ADDRESS(mif_.mac);                               \
     mif_.ip = MG_TCPIP_IP;                                      \
     mif_.mask = MG_TCPIP_MASK;                                  \
     mif_.gw = MG_TCPIP_GW;                                      \
     mif_.driver = &mg_tcpip_driver_mg24;                        \
-    mif_.driver_data = &driver_data_;                           \
     mg_tcpip_init((mgr), &mif_);                                \
     MG_INFO(("Driver: mg24, MAC: %M", mg_print_mac, mif_.mac)); \
   } while (0)
@@ -5627,23 +5537,16 @@ extern struct mg_tcpip_driver mg_tcpip_driver_netc;
 
 #if MG_ENABLE_TCPIP && defined(MG_ENABLE_DRIVER_NRF52) && MG_ENABLE_DRIVER_NRF52
 
-struct mg_tcpip_driver_nrf52_data {
-  struct mg_mesh_node *mesh;       // Driver-owned runtime state
-  const struct mg_mesh *strategy;  // NULL selects mg_mesh_default
-};
-
 extern struct mg_tcpip_driver mg_tcpip_driver_nrf52;
 
 #define MG_TCPIP_DRIVER_NRF52_INIT(mgr)                          \
   do {                                                           \
-    static struct mg_tcpip_driver_nrf52_data driver_data_;       \
     static struct mg_tcpip_if mif_;                              \
     MG_SET_MAC_ADDRESS(mif_.mac);                                \
     mif_.ip = MG_TCPIP_IP;                                       \
     mif_.mask = MG_TCPIP_MASK;                                   \
     mif_.gw = MG_TCPIP_GW;                                       \
     mif_.driver = &mg_tcpip_driver_nrf52;                        \
-    mif_.driver_data = &driver_data_;                            \
     mg_tcpip_init((mgr), &mif_);                                 \
     MG_INFO(("Driver: nrf52, MAC: %M", mg_print_mac, mif_.mac)); \
   } while (0)
@@ -5798,6 +5701,80 @@ extern struct mg_tcpip_driver mg_tcpip_driver_ra;
 #endif
 
 #endif
+// Copyright (c) 2026 Cesanta Software Limited
+// All rights reserved
+//
+// Ethernet over radio: shared framing, scheduling and bridge forwarding.
+// Hardware drivers pass their functions to mg_radio_init().
+
+
+
+
+
+#define MG_RADIO_802154 1  // IEEE 802.15.4, 250 kbit/s
+#define MG_RADIO_BLE 2     // Bluetooth LE 2 Mbit/s PHY, raw: no BLE link layer
+
+#ifndef MG_RADIO
+#define MG_RADIO MG_RADIO_802154
+#endif
+
+// The radio network: a channel, and an id that keeps other networks out.
+// A bridge and its nodes must use the same values
+#if MG_RADIO == MG_RADIO_BLE
+#ifndef MG_RADIO_CHANNEL
+#define MG_RADIO_CHANNEL 36  // Data channel 0-36. 36: 2478 MHz, clear of Wi-Fi
+#endif
+#ifndef MG_RADIO_NETWORK
+#define MG_RADIO_NETWORK 0x71764129  // Access address
+#endif
+#else
+#ifndef MG_RADIO_CHANNEL
+#define MG_RADIO_CHANNEL 15  // Channel 11-26
+#endif
+#ifndef MG_RADIO_NETWORK
+#define MG_RADIO_NETWORK 0xabcd  // PAN ID
+#endif
+#endif
+
+// A turn's answer must arrive this soon after the turn's last frame ends on
+// air, or the turn ends. A node that would answer later stays silent and keeps
+// its frame for the next turn. Covers the node's poll latency, the radio
+// turnaround and one full fragment's airtime, 4.3 ms on 802.15.4
+#ifndef MG_RADIO_ANSWER_TIMEOUT_US
+#define MG_RADIO_ANSWER_TIMEOUT_US 8000
+#endif
+
+// A radio driver aborts a transmission that has not finished this soon, and
+// reports it done to mg_radio_poll()
+#ifndef MG_RADIO_TX_TIMEOUT_US
+#define MG_RADIO_TX_TIMEOUT_US 60000
+#endif
+
+// Membership timeout. The bridge removes a member that has not answered its
+// turns for this long, counted from the first missed turn. A node leaves the
+// mesh when it has had no turn for this long
+#ifndef MG_RADIO_TIMEOUT_MS
+#define MG_RADIO_TIMEOUT_MS 1000
+#endif
+
+#if MG_ENABLE_TCPIP
+
+bool mg_radio_init(struct mg_tcpip_if *ifp,
+                   bool (*hw_init)(struct mg_tcpip_if *, uint16_t addr),
+                   bool (*hw_poll)(struct mg_tcpip_if *),
+                   size_t (*hw_tx)(struct mg_tcpip_if *, const void *, size_t));
+bool mg_radio_poll(struct mg_tcpip_if *, bool s1);  // Run it. true: joined
+size_t mg_radio_tx(const void *, size_t, struct mg_tcpip_if *);  // Queue
+size_t mg_radio_rx(void *, size_t, struct mg_tcpip_if *);  // Received frame
+
+// Bridge LAN and radio Ethernet frames. Call after both interfaces initialize.
+void mg_radio_bridge(struct mg_tcpip_if *, struct mg_tcpip_if *lan);
+
+// Queue a received radio frame with its arrival time. Call it from the
+// receive interrupt. Frames for other radios are skipped
+void mg_radio_rx_queue(struct mg_tcpip_if *, const void *, size_t);
+
+#endif
 
 
 #if MG_ENABLE_TCPIP && defined(MG_ENABLE_DRIVER_RW612) && MG_ENABLE_DRIVER_RW612
@@ -5858,23 +5835,16 @@ extern struct mg_tcpip_driver mg_tcpip_driver_rw612;
 #if MG_ENABLE_TCPIP && defined(MG_ENABLE_DRIVER_RW612W) && \
     MG_ENABLE_DRIVER_RW612W
 
-struct mg_tcpip_driver_rw612w_data {
-  struct mg_mesh_node *mesh;       // Driver-owned runtime state
-  const struct mg_mesh *strategy;  // NULL selects mg_mesh_default
-};
-
 extern struct mg_tcpip_driver mg_tcpip_driver_rw612w;
 
 #define MG_TCPIP_DRIVER_RW612W_INIT(mgr)                          \
   do {                                                            \
-    static struct mg_tcpip_driver_rw612w_data driver_data_;       \
     static struct mg_tcpip_if mif_;                               \
     MG_SET_MAC_ADDRESS(mif_.mac);                                 \
     mif_.ip = MG_TCPIP_IP;                                        \
     mif_.mask = MG_TCPIP_MASK;                                    \
     mif_.gw = MG_TCPIP_GW;                                        \
     mif_.driver = &mg_tcpip_driver_rw612w;                        \
-    mif_.driver_data = &driver_data_;                             \
     mg_tcpip_init((mgr), &mif_);                                  \
     MG_INFO(("Driver: rw612w, MAC: %M", mg_print_mac, mif_.mac)); \
   } while (0)
@@ -6247,6 +6217,211 @@ extern struct mg_tcpip_driver mg_tcpip_driver_tms570;
 
 #endif
 
+
+
+// USB device: a CDC-NCM Ethernet interface, enabled by MG_ENABLE_USB_ETHERNET,
+// and a CDC-ACM serial port for logs, enabled by MG_ENABLE_USB_SERIAL.
+
+#ifndef MG_USB_NTB_SIZE
+#define MG_USB_NTB_SIZE 2048  // Transfer block, each direction, >= 2048
+#endif
+#ifndef MG_USB_TX_SIZE
+#define MG_USB_TX_SIZE 4096  // Ethernet frames waiting to go to the host
+#endif
+#ifndef MG_USB_QUEUE_SIZE
+#define MG_USB_QUEUE_SIZE 4096  // Ethernet frames from the host
+#endif
+#ifndef MG_USB_LOG_SIZE
+#define MG_USB_LOG_SIZE 1024  // Serial log ring
+#endif
+
+// Endpoints, numbered as in the configuration descriptor
+enum mg_usb_ep {
+  MG_USB_EP_CTL,       // control
+  MG_USB_EP_ETH_EV,    // Ethernet link notifications, IN
+  MG_USB_EP_ETH_DATA,  // Ethernet data, IN and OUT
+  MG_USB_EP_SER_EV,    // serial notifications, IN, unused
+  MG_USB_EP_SER_DATA,  // serial data, IN and OUT
+};
+
+// Interfaces: the serial port's control and data first, then Ethernet's. The
+// Ethernet data interface has setting 1: Ethernet open
+#define MG_USB_IF_ETH_DATA (2 * MG_ENABLE_USB_SERIAL + 1)
+
+// Controller events, reported by mg_usb_hw::poll() to its fn. What fn returns
+enum mg_usb_ev {
+  MG_USB_EV_RESET,  // Bus reset or detach. Returns 0
+  MG_USB_EV_SETUP,  // Control request, buf: the SETUP packet, then its OUT
+                    // data. Returns -1: stall, 0: no IN data stage, send
+                    // the status stage, 1: IN data stage started on ep 0
+  MG_USB_EV_IN,     // An IN packet on ep went out. Returns 1: next packet
+                    // sent, 0: transfer done
+  MG_USB_EV_OUT     // An OUT packet arrived on ep, buf and len. Returns 0
+};
+
+// A USB device controller, implemented by its driver. Packets: up to 64 bytes
+struct mg_usb_hw {
+  void (*init)(char serial[17]);  // Start, write the serial number
+  void (*poll)(int (*fn)(enum mg_usb_ev, enum mg_usb_ep, void *buf, size_t));
+  void (*in)(enum mg_usb_ep, const void *buf, size_t len);  // Write IN packet
+};
+
+struct mg_tcpip_if;  // Without MG_ENABLE_TCPIP: serial console only
+
+// Start the controller hw, and attach ifp: NULL for the serial console only.
+// Call again to attach ifp later; the first call's hw stays in use
+bool mg_usb_init(struct mg_tcpip_if *ifp, const struct mg_usb_hw *hw);
+
+// Queue an Ethernet frame for the host. The controller driver's tx
+size_t mg_usb_tx(const void *buf, size_t len, struct mg_tcpip_if *ifp);
+
+// Run the controller. The controller driver's poll; returns true when the
+// host has the Ethernet interface open and s1 is true. Serial only: ifp NULL
+bool mg_usb_poll(struct mg_tcpip_if *ifp, bool s1);
+
+
+// Synopsys DesignWare USB 2.0 OTG controller, "DWC2", as a device, see usb.h:
+// CDC-NCM Ethernet and a CDC-ACM serial log console. Polled, no DMA, full
+// speed. STM32 OTG_FS and OTG_HS (F2, F4, F7, H7, L4+, U5) are DWC2. Set in
+// mongoose_config.h:
+// - MG_USB_DWC2_BASE: the core's address, e.g. USB1_OTG_HS_PERIPH_BASE. The
+//   application enables its clocks, power and pins
+// - MG_USB_DWC2_ULPI 1: an external ULPI PHY, run at full speed. Default: the
+//   core's own full-speed PHY
+// - MG_USB_DWC2_UTMI 1: the core's own high-speed PHY (UTMI), run at full
+//   speed, e.g. STM32U59x/U5Ax OTG_HS. The application powers and clocks it
+// - MG_USB_DWC2_GCCFG: optional, written to the STM32 GCCFG register, e.g.
+//   its PWRDWN bit to power the core's own full-speed PHY
+// On STM32, include the device header in mongoose_config.h: the USB serial
+// number is then the chip's unique ID. Examples:
+// tutorials/stm32/portenta-h7/minimal-usb (ULPI),
+// tutorials/stm32/nucleo-u5a5zj-q/minimal-usb (UTMI)
+
+#if (MG_ENABLE_TCPIP || !MG_ENABLE_USB_ETHERNET) && \
+    MG_ENABLE_DRIVER_USB_DWC2 &&                    \
+    (MG_ENABLE_USB_ETHERNET || MG_ENABLE_USB_SERIAL)
+
+// The controller. Without USB Ethernet, run the serial console from main():
+// mg_usb_init(NULL, &mg_usb_hw_dwc2) once, mg_usb_poll(NULL, false) in
+// the main loop
+extern const struct mg_usb_hw mg_usb_hw_dwc2;
+
+#endif
+
+#if MG_ENABLE_TCPIP && MG_ENABLE_DRIVER_USB_DWC2 && MG_ENABLE_USB_ETHERNET
+
+extern struct mg_tcpip_driver mg_tcpip_driver_usb_dwc2;
+
+// Set MG_TCPIP_IP to give the device a static address and serve DHCP to the
+// USB host. Leave it unset to get an address over DHCP, e.g. from macOS
+// Internet Sharing. The device MAC comes from MG_SET_MAC_ADDRESS, random if
+// it is not set; the host end of the link gets a MAC derived from it
+#define MG_TCPIP_DRIVER_USB_DWC2_INIT(mgr)                          \
+  do {                                                              \
+    static struct mg_tcpip_if mif_;                                 \
+    mif_.ip = MG_TCPIP_IP;                                          \
+    mif_.mask = MG_TCPIP_MASK;                                      \
+    mif_.gw = MG_TCPIP_GW;                                          \
+    mif_.enable_dhcp_server = mif_.ip != 0;                         \
+    mif_.driver = &mg_tcpip_driver_usb_dwc2;                        \
+    mif_.recv_queue.size = MG_USB_QUEUE_SIZE;                       \
+    MG_SET_MAC_ADDRESS(mif_.mac);                                   \
+    mg_tcpip_init(mgr, &mif_);                                      \
+    MG_INFO(("Driver: usb_dwc2, MAC: %M", mg_print_mac, mif_.mac)); \
+  } while (0)
+
+#ifndef MG_TCPIP_DRIVER_INIT
+#define MG_TCPIP_DRIVER_INIT(mgr) MG_TCPIP_DRIVER_USB_DWC2_INIT(mgr)
+#endif
+
+#endif
+
+
+// nRF52840 USB device controller, see usb.h: CDC-NCM Ethernet and a CDC-ACM
+// serial log console. No TinyUSB, polled. Needs the nRF52840 device headers
+// from nrfx/mdk on the include path. Example: tutorials/nordic/xiao-nrf52840
+
+#if (MG_ENABLE_TCPIP || !MG_ENABLE_USB_ETHERNET) && \
+    MG_ENABLE_DRIVER_USB_NRF52 &&                   \
+    (MG_ENABLE_USB_ETHERNET || MG_ENABLE_USB_SERIAL)
+
+// The controller. Without USB Ethernet, run the serial console from main():
+// mg_usb_init(NULL, &mg_usb_hw_nrf52) once, mg_usb_poll(NULL, false) in
+// the main loop
+extern const struct mg_usb_hw mg_usb_hw_nrf52;
+
+#endif
+
+#if MG_ENABLE_TCPIP && MG_ENABLE_DRIVER_USB_NRF52 && MG_ENABLE_USB_ETHERNET
+
+extern struct mg_tcpip_driver mg_tcpip_driver_usb_nrf52;
+
+// Set MG_TCPIP_IP to give the device a static address and serve DHCP to the
+// USB host. Leave it unset to get an address over DHCP, e.g. from macOS
+// Internet Sharing. The device MAC comes from MG_SET_MAC_ADDRESS, random if
+// it is not set; the host end of the link gets a MAC derived from it
+#define MG_TCPIP_DRIVER_USB_NRF52_INIT(mgr)                          \
+  do {                                                               \
+    static struct mg_tcpip_if mif_;                                  \
+    mif_.ip = MG_TCPIP_IP;                                           \
+    mif_.mask = MG_TCPIP_MASK;                                       \
+    mif_.gw = MG_TCPIP_GW;                                           \
+    mif_.enable_dhcp_server = mif_.ip != 0;                          \
+    mif_.driver = &mg_tcpip_driver_usb_nrf52;                        \
+    mif_.recv_queue.size = MG_USB_QUEUE_SIZE;                        \
+    MG_SET_MAC_ADDRESS(mif_.mac);                                    \
+    mg_tcpip_init(mgr, &mif_);                                       \
+    MG_INFO(("Driver: usb_nrf52, MAC: %M", mg_print_mac, mif_.mac)); \
+  } while (0)
+
+// Like nrf52.h: both nRF52 drivers can be enabled at once, e.g. in a bridge
+#ifndef MG_TCPIP_DRIVER_INIT
+#define MG_TCPIP_DRIVER_INIT(mgr) MG_TCPIP_DRIVER_USB_NRF52_INIT(mgr)
+#endif
+
+#endif
+
+
+// RP2040 / RP2350 native USB controller, see usb.h: CDC-NCM Ethernet and
+// a CDC-ACM serial log console. No TinyUSB, polled. Example: tutorials/rp/usb
+
+#if (MG_ENABLE_TCPIP || !MG_ENABLE_USB_ETHERNET) && MG_ENABLE_DRIVER_USB_RP && \
+    (MG_ENABLE_USB_ETHERNET || MG_ENABLE_USB_SERIAL)
+
+// The controller. Without USB Ethernet, run the serial console from main():
+// mg_usb_init(NULL, &mg_usb_hw_rp) once, mg_usb_poll(NULL, false) in
+// the main loop
+extern const struct mg_usb_hw mg_usb_hw_rp;
+
+#endif
+
+#if MG_ENABLE_TCPIP && MG_ENABLE_DRIVER_USB_RP && MG_ENABLE_USB_ETHERNET
+
+extern struct mg_tcpip_driver mg_tcpip_driver_usb_rp;
+
+// Set MG_TCPIP_IP to give the device a static address and serve DHCP to the
+// USB host. Leave it unset to get an address over DHCP, e.g. from macOS
+// Internet Sharing. The device MAC comes from MG_SET_MAC_ADDRESS, random if
+// it is not set; the host end of the link gets a MAC derived from it
+#define MG_TCPIP_DRIVER_USB_RP_INIT(mgr)                          \
+  do {                                                            \
+    static struct mg_tcpip_if mif_;                               \
+    mif_.ip = MG_TCPIP_IP;                                        \
+    mif_.mask = MG_TCPIP_MASK;                                    \
+    mif_.gw = MG_TCPIP_GW;                                        \
+    mif_.enable_dhcp_server = mif_.ip != 0;                       \
+    mif_.driver = &mg_tcpip_driver_usb_rp;                        \
+    mif_.recv_queue.size = MG_USB_QUEUE_SIZE;                     \
+    MG_SET_MAC_ADDRESS(mif_.mac);                                 \
+    mg_tcpip_init(mgr, &mif_);                                    \
+    MG_INFO(("Driver: usb_rp, MAC: %M", mg_print_mac, mif_.mac)); \
+  } while (0)
+
+#ifndef MG_TCPIP_DRIVER_INIT
+#define MG_TCPIP_DRIVER_INIT(mgr) MG_TCPIP_DRIVER_USB_RP_INIT(mgr)
+#endif
+
+#endif
 
 
 #if MG_ENABLE_TCPIP && defined(MG_ENABLE_DRIVER_W5100) && \

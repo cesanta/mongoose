@@ -1,16 +1,17 @@
 # Environment setup: https://mongoose.ws/documentation/tutorials/tools/
 
 MGDIR = ../../../..
-SDK = silabs_sdk/platform
-RAIL = $(SDK)/radio/rail_lib
 
 CFLAGS  = -W -Wall -Wextra -Werror -Wshadow  # No -Wundef: RAIL headers
 CFLAGS += -Wformat-truncation -fno-common -Wno-conversion -Wno-sign-conversion
 CFLAGS += -g3 -Os -ffunction-sections -fdata-sections
 CFLAGS += -I. -I$(MGDIR) -Icmsis_core/CMSIS/Core/Include
-CFLAGS += -I$(SDK)/Device/SiliconLabs/EFR32MG24/Include -I$(SDK)/common/inc
-CFLAGS += -I$(RAIL)/common -I$(RAIL)/protocol/ieee802154
-CFLAGS += -I$(RAIL)/chip/efr32/efr32xg2x
+CFLAGS += -Isilabs_sdk/platform/Device/SiliconLabs/EFR32MG24/Include
+CFLAGS += -Isilabs_sdk/platform/common/inc
+CFLAGS += -Isilabs_sdk/platform/radio/rail_lib/common
+CFLAGS += -Isilabs_sdk/platform/radio/rail_lib/protocol/ieee802154
+CFLAGS += -Isilabs_sdk/platform/radio/rail_lib/protocol/ble
+CFLAGS += -Isilabs_sdk/platform/radio/rail_lib/chip/efr32/efr32xg2x
 CFLAGS += -DEFR32MG24B220F1536IM48
 CFLAGS += -D__START=main  # For startup_efr32mg24.c
 CFLAGS += -mcpu=cortex-m33 -mthumb -mfloat-abi=hard -mfpu=fpv5-sp-d16 -mcmse
@@ -21,8 +22,8 @@ LDFLAGS ?= -Tlink.ld -nostdlib -nostartfiles --specs=nano.specs -lc -lm -lgcc -W
 SOURCES = main.c hal.c $(MGDIR)/mongoose.c
 
 SOURCES += $(MGDIR)/tutorials/mqtt/mqtt-client/mongoose_mqtt.c
-SOURCES += $(SDK)/Device/SiliconLabs/EFR32MG24/Source/startup_efr32mg24.c
-SOURCES += $(SDK)/Device/SiliconLabs/EFR32MG24/Source/system_efr32mg24.c
+SOURCES += silabs_sdk/platform/Device/SiliconLabs/EFR32MG24/Source/startup_efr32mg24.c
+SOURCES += silabs_sdk/platform/Device/SiliconLabs/EFR32MG24/Source/system_efr32mg24.c
 
 # RAIL radio library, a binary blob. Simplicity SDK keeps it in Git LFS,
 # served by Silicon Labs. The oid is the file's sha256, see the LFS pointer
@@ -51,7 +52,7 @@ cmsis_core:
 # Device headers, startup code and RAIL headers from Simplicity SDK
 silabs_sdk:
 	GIT_LFS_SKIP_SMUDGE=1 git clone -q -c advice.detachedHead=false --depth 1 -b $(SDK_VERSION) --filter=blob:none --no-checkout https://github.com/SiliconLabs/simplicity_sdk $@
-	cd $@ && git sparse-checkout set --no-cone /platform/Device/SiliconLabs/EFR32MG24/ /platform/common/inc/ /platform/radio/rail_lib/common/ /platform/radio/rail_lib/protocol/ieee802154/ /platform/radio/rail_lib/chip/efr32/efr32xg2x/
+	cd $@ && git sparse-checkout set --no-cone /platform/Device/SiliconLabs/EFR32MG24/ /platform/common/inc/ /platform/radio/rail_lib/common/ /platform/radio/rail_lib/protocol/ieee802154/ /platform/radio/rail_lib/protocol/ble/ /platform/radio/rail_lib/chip/efr32/efr32xg2x/
 	cd $@ && GIT_LFS_SKIP_SMUDGE=1 git checkout -q
 
 $(LIBRAIL):

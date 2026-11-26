@@ -1,17 +1,19 @@
 #pragma once
+
 #include "nrf.h"
+
 #define MG_ARCH MG_ARCH_ARMGCC
 #define MG_ENABLE_TCPIP 1
-#define MG_ENABLE_DRIVER_NRF52 1
+#define MG_ENABLE_DRIVER_NRF52 1      // Radio: the network interface
+#define MG_ENABLE_DRIVER_USB_NRF52 1  // nRF52840 USB controller
+#define MG_ENABLE_USB_SERIAL 1        // USB serial log console
 #define MG_ENABLE_TCPIP_TCPRTX 1
 #define MG_ENABLE_CUSTOM_MICROS 1
 #define MG_ENABLE_CUSTOM_RANDOM 1
 #define MG_TLS MG_TLS_BUILTIN
 #define MQTT_CLIENT_ID "xiao-nrf52840"
 
-#ifndef MQTT_SERVER_URL
-#define MQTT_SERVER_URL "mqtt://broker.emqx.io:1883"
-#endif
+// #define MG_RADIO MG_RADIO_BLE
 
 // Stable, locally administered MAC derived from the factory device ID.
 #define MG_SET_MAC_ADDRESS(mac)                                    \

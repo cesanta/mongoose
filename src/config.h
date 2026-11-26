@@ -183,6 +183,26 @@
 #define MG_ENABLE_TCPIP_TCPRTX 0  // TCP retransmission queue
 #endif
 
+#ifndef MG_ENABLE_DRIVER_USB_RP
+#define MG_ENABLE_DRIVER_USB_RP 0  // USB device, RP2040 / RP2350
+#endif
+
+#ifndef MG_ENABLE_DRIVER_USB_NRF52
+#define MG_ENABLE_DRIVER_USB_NRF52 0  // USB device, nRF52840
+#endif
+
+#ifndef MG_ENABLE_DRIVER_USB_DWC2
+#define MG_ENABLE_DRIVER_USB_DWC2 0  // USB device, Synopsys DWC2: STM32 OTG
+#endif
+
+#ifndef MG_ENABLE_USB_ETHERNET
+#define MG_ENABLE_USB_ETHERNET 0  // USB driver: CDC-NCM Ethernet interface
+#endif
+
+#ifndef MG_ENABLE_USB_SERIAL
+#define MG_ENABLE_USB_SERIAL 0  // USB driver: CDC-ACM serial log console
+#endif
+
 #ifndef MG_TCPIP_DHCPNAME_SIZE
 #define MG_TCPIP_DHCPNAME_SIZE 18  // struct mg_tcpip_if :: dhcp_name size
 #endif

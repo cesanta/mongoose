@@ -6352,13 +6352,6 @@ size_t mg_l2_eth_trailer(struct mg_tcpip_if *ifp, size_t len, uint8_t *cur) {
 struct mg_l2addr *mg_l2_eth_mapip(enum mg_l2addrtype addrtype,
                                   struct mg_addr *addr);
 
-// Read an unaligned little-endian value from byte pointer p into a native integer.
-// Safe on architectures that forbid unaligned access (e.g. Cortex-M0).
-#define MG_LOAD_LE32(p)                           \
-  ((uint32_t) (((uint32_t) MG_U8P(p)[3] << 24U) | \
-               ((uint32_t) MG_U8P(p)[2] << 16U) | \
-               ((uint32_t) MG_U8P(p)[1] << 8U) | MG_U8P(p)[0]))
-
 bool mg_l2_eth_rx(struct mg_tcpip_if *ifp, enum mg_l2proto *proto,
                   struct mg_str *pay, struct mg_str *raw) {
   struct eth *eth = (struct eth *) raw->buf;
@@ -6472,687 +6465,6 @@ uint8_t mg_l2_eth_ip6put(struct mg_l2addr *l2addr, uint8_t *opts) {
   return 1;
 }
 #endif
-
-#endif
-
-#ifdef MG_ENABLE_LINES
-#line 1 "src/l2_mesh.c"
-#endif
-// Copyright (c) 2026 Cesanta Software Limited
-// All rights reserved
-
-
-
-
-
-
-#if MG_ENABLE_TCPIP
-
-#define MGI_ETH_MAX 1514
-#define MGI_TX_DST_LEN 2
-
-// Mesh header, after the radio header: type, then burst: the fragment's
-// index << 4 | the last fragment's index. Common to every radio
-#define MG_MESH_HDR_LEN 2
-
-#define MG_MESH_FRAME_HDR_LEN (MG_802154_HEADER_LEN + MG_MESH_HDR_LEN)
-
-// MAC header, 9 bytes: frame control 0x8841, a data frame, PAN ID
-// compression, short destination and source addresses; sequence number, 0,
-// as nothing uses it yet; PAN ID; destination; source. Little endian, as
-// the standard says
-static void mgi_802154_print_hdr(const struct mg_radio *radio, uint8_t *buf,
-                                 uint16_t dst, uint16_t src) {
-  buf[0] = 0x41, buf[1] = 0x88, buf[2] = 0;
-  buf[3] = (uint8_t) MG_802154_PAN_ID;
-  buf[4] = (uint8_t) (MG_802154_PAN_ID >> 8);
-  buf[5] = (uint8_t) dst, buf[6] = (uint8_t) (dst >> 8);
-  buf[7] = (uint8_t) src, buf[8] = (uint8_t) (src >> 8);
-  (void) radio;
-}
-
-static size_t mgi_802154_parse_hdr(const struct mg_radio *radio,
-                                   const uint8_t *buf, size_t len,
-                                   uint16_t *dst, uint16_t *src) {
-  (void) radio;
-  if (len < MG_802154_HEADER_LEN || buf[0] != 0x41 || buf[1] != 0x88 ||
-      buf[3] != (uint8_t) MG_802154_PAN_ID ||
-      buf[4] != (uint8_t) (MG_802154_PAN_ID >> 8)) {
-    return 0;
-  }
-  *dst = (uint16_t) (buf[5] | buf[6] << 8);
-  *src = (uint16_t) (buf[7] | buf[8] << 8);
-  return MG_802154_HEADER_LEN;
-}
-
-const struct mg_radio mg_radio_802154 = {
-    "802.15.4",            // name
-    125,                   // max_frame_size: 127 minus FCS
-    250000,                // bitrate
-    8,                     // overhead
-    320,                   // slot_us
-    128,                   // cca_us
-    100,                   // turnaround_us
-    640,                   // ifs_us
-    3,                     // backoff_min
-    5,                     // backoff_max
-    true,                  // csma
-    MG_802154_HEADER_LEN,  // header_len
-    mgi_802154_print_hdr,  // print_hdr
-    mgi_802154_parse_hdr   // parse_hdr
-};
-
-static uint64_t mgi_mesh_b_airtime(size_t len) {
-  const struct mg_radio *radio = &mg_radio_802154;
-  return ((uint64_t) (len + radio->overhead) * 8000000 + radio->bitrate - 1) /
-         radio->bitrate;
-}
-
-// Each queue record holds a destination and a complete burst.
-static size_t mgi_mesh_b_queue(struct mg_mesh_node *node, struct mg_queue *q,
-                               const void *buf, size_t len, uint16_t dst,
-                               uint8_t type) {
-  const struct mg_radio *radio = &mg_radio_802154;
-  const uint8_t *eth = (const uint8_t *) buf;
-  size_t hdr = MG_MESH_FRAME_HDR_LEN, cap = radio->max_frame_size - hdr;
-  size_t frames, size, i;
-  char *record;
-  uint8_t *out;
-  if (len < 14 || len > MGI_ETH_MAX) return 0;
-  frames = (len + cap - 1) / cap;
-  size = MGI_TX_DST_LEN + len + frames * (1 + hdr);
-  if (mg_queue_next(q, NULL) == 0) mg_queue_init(q, q->buf, q->size);
-  if (mg_queue_book(q, &record, size) < size) return 0;
-  out = (uint8_t *) record;
-  *out++ = (uint8_t) (dst >> 8);
-  *out++ = (uint8_t) dst;
-  for (i = 0; i < frames; i++) {
-    size_t chunk = len - i * cap;
-    if (chunk > cap) chunk = cap;
-    *out++ = (uint8_t) (hdr + chunk);
-    radio->print_hdr(radio, out, dst, node->radio_address);
-    out[radio->header_len] = type;
-    out[radio->header_len + 1] = (uint8_t) (i << 4 | (frames - 1));
-    memcpy(out + hdr, eth + i * cap, chunk);
-    out += hdr + chunk;
-  }
-  mg_queue_add(q, size);
-  return len;
-}
-
-// Copyright (c) 2026 Cesanta Software Limited
-// All rights reserved
-
-#define MGI_JOIN_WINDOW_US 3000
-#define MGI_JOIN_TURN_US 192
-#define MGI_JOIN_JITTER_US 640
-#define MGI_DATA_QUEUE_SIZE 2048
-#define MGI_TX_RETRY_US 32
-#define MGI_ANSWER_MARGIN_US 500  // Node: finish the first answer frame this
-                                  // much before the bridge stops waiting
-// Our frames: the radio header, with the radio addresses, then the mesh
-// header MG_MESH_HDR_LEN, then the payload
-#define MGI_JOIN_UP_LEN \
-  (MG_MESH_FRAME_HDR_LEN + 6)  // MGI_JOIN_UP's payload: MAC addr
-#define MGI_MAX_FRAGMENTS 14
-
-enum { MGI_JOIN_DOWN = 1, MGI_JOIN_UP, MGI_DATA_DOWN, MGI_DATA_UP };
-
-enum { MGI_TURN_IDLE, MGI_TURN_JOIN, MGI_TURN_DATA };
-
-struct mgi_mesh_b_data {
-  uint8_t rx_buf[MGI_ETH_MAX];  // Ethernet frame being reassembled
-  uint8_t rx_expected;          // Expected index | last index, 0xff if idle
-  struct mg_mesh_node *node;    // Owner of the TCP/IP interface
-  struct mg_queue tx;           // One record per burst of RF fragments
-  size_t tx_offset;             // Next queued fragment; zero for an empty frame
-  uint64_t tx_at;               // Next fragment or JOIN transmission time
-  uint64_t deadline;            // End of the current JOIN or DATA turn
-  struct mgi_mesh_b_peer *fanout;    // Next broadcast recipient
-  char tx_buf[MGI_DATA_QUEUE_SIZE];  // Transmit queue storage
-  uint32_t random;                   // PRNG state for join timing
-  struct mgi_mesh_b_peer *members;   // Bridge membership list
-  struct mgi_mesh_b_peer *current;   // Member whose turn is active or next
-  int8_t missed_rounds;  // -1 after a grant; otherwise completed rounds missed
-  uint16_t coordinator;  // Coordinator radio address
-  uint8_t phase;         // MGI_TURN_IDLE, MGI_TURN_JOIN, or MGI_TURN_DATA
-  uint64_t answer_by;    // Node: first answer frame must end on air by then
-};
-
-struct mgi_mesh_b_peer {
-  struct mgi_mesh_b_peer *next;  // Next member in round-robin order
-  uint16_t radio_address;        // Source address supplied in MGI_JOIN_UP
-  uint8_t mac[6];                // Ethernet MAC supplied in MGI_JOIN_UP
-  uint8_t misses;                // Turns in a row it did not answer
-};
-
-static uint32_t mgi_mesh_b_random(struct mg_mesh_node *node,
-                                  struct mgi_mesh_b_data *data) {
-  uint32_t *random = &data->random;
-  if (*random == 0) {
-    size_t i;
-    *random = (uint32_t) mg_now();
-    for (i = 0; i < 6; i++) *random = *random * 33u + node->radio->mac[i];
-    if (*random == 0) *random = 1;
-  }
-  *random ^= *random << 13;
-  *random ^= *random >> 17;
-  *random ^= *random << 5;
-  return *random;
-}
-
-static const struct mg_radio *const s_mesh_default_radio = &mg_radio_802154;
-
-// Read a frame's radio addresses to dst and src, see mg_radio::parse_hdr(), and
-// return its type, from the mesh header. 0: not a frame of ours
-static unsigned mgi_mesh_b_frame_parse(const uint8_t *frame, size_t len,
-                                       uint16_t *dst, uint16_t *src) {
-  if (len < MG_MESH_FRAME_HDR_LEN ||
-      s_mesh_default_radio->parse_hdr(s_mesh_default_radio, frame, len, dst,
-                                      src) !=
-          s_mesh_default_radio->header_len) {
-    return 0;
-  }
-  return frame[s_mesh_default_radio->header_len];
-}
-
-// Write a frame's headers: the radio's, to dst from src, then ours: type,
-// and burst: high nibble is the index, low nibble is the last index
-static void mgi_mesh_b_frame_header(uint8_t *frame, uint16_t dst, uint16_t src,
-                                    uint8_t type, uint8_t burst) {
-  size_t h = s_mesh_default_radio->header_len;
-  s_mesh_default_radio->print_hdr(s_mesh_default_radio, frame, dst, src);
-  frame[h] = type, frame[h + 1] = burst;
-}
-
-static bool mgi_mesh_b_control_send(struct mg_mesh_node *node, uint16_t dst,
-                                    uint8_t command) {
-  struct mg_tcpip_if *ifp = node->radio;
-  uint8_t frame[MGI_JOIN_UP_LEN] = {0};
-  size_t len = MG_MESH_FRAME_HDR_LEN;
-  mgi_mesh_b_frame_header(frame, dst, node->radio_address, command, 0);
-  if (command == MGI_JOIN_UP) {
-    memcpy(frame + MG_MESH_FRAME_HDR_LEN, node->radio->mac, 6);
-    len = MGI_JOIN_UP_LEN;
-  }
-  return node->now >= node->tx_at && node->tx(ifp, frame, len) == len;
-}
-
-static size_t mgi_mesh_b_fragment_capacity(void) {
-  return s_mesh_default_radio->max_frame_size - MG_MESH_FRAME_HDR_LEN;
-}
-
-static uint64_t mgi_mesh_b_burst_time(size_t len) {
-  size_t cap = mgi_mesh_b_fragment_capacity();
-  size_t frames = len == 0 ? 1 : (len + cap - 1) / cap;
-  return (frames - 1) *
-             (mgi_mesh_b_airtime(s_mesh_default_radio->max_frame_size) +
-              s_mesh_default_radio->ifs_us) +
-         mgi_mesh_b_airtime(MG_MESH_FRAME_HDR_LEN + len - (frames - 1) * cap);
-}
-
-static void mgi_mesh_b_tx_finish(struct mgi_mesh_b_data *data) {
-  if (data->tx_offset != 0) {
-    if (data->fanout != NULL) data->fanout = data->fanout->next;
-    if (data->fanout == NULL) {
-      size_t len = mg_queue_next(&data->tx, NULL);
-      mg_queue_del(&data->tx, len);
-    }
-  }
-  data->tx_offset = 0;
-  data->tx_at = (uint64_t) -1;
-}
-
-static void mgi_mesh_b_tx_step(struct mgi_mesh_b_data *data, uint64_t now) {
-  struct mg_mesh_node *node = data->node;
-  struct mg_tcpip_if *radio = node->radio;
-  uint8_t empty[MG_MESH_FRAME_HDR_LEN], *frame = empty;
-  size_t len = MG_MESH_FRAME_HDR_LEN, record_len = 0;
-  uint16_t dst;
-  uint8_t command;
-  if (now < data->tx_at) return;
-  if (now >= data->deadline) {
-    mgi_mesh_b_tx_finish(data);
-    return;
-  }
-  dst = node->lan == NULL ? data->coordinator : data->current->radio_address;
-  command = node->lan == NULL ? MGI_DATA_UP : MGI_DATA_DOWN;
-  if (data->tx_offset != 0) {
-    char *record;
-    uint8_t *part;
-    record_len = mg_queue_next(&data->tx, &record);
-    part = (uint8_t *) record + data->tx_offset;
-    len = part[0];
-    frame = part + 1;
-    s_mesh_default_radio->print_hdr(s_mesh_default_radio, frame, dst,
-                                    node->radio_address);
-  } else {
-    mgi_mesh_b_frame_header(frame, dst, node->radio_address, command, 0);
-  }
-  // A node's first answer frame: if it cannot end on air before the bridge
-  // stops waiting, stay silent. The queued frame waits for the next turn
-  if (node->lan == NULL &&
-      (data->tx_offset == 0 || data->tx_offset == MGI_TX_DST_LEN) &&
-      now + mgi_mesh_b_airtime(len) > data->answer_by) {
-    data->tx_offset = 0;
-    data->tx_at = (uint64_t) -1;
-    return;
-  }
-  if (now < data->node->tx_at || data->node->tx(radio, frame, len) != len) {
-    data->tx_at = now + MGI_TX_RETRY_US;
-    return;
-  }
-  if (data->tx_offset == 0 || (data->tx_offset += len + 1) == record_len) {
-    // Bridge: the turn's last frame is out, wait for the answer
-    if (node->lan != NULL)
-      data->deadline =
-          now + mgi_mesh_b_airtime(len) + MG_MESH_ANSWER_TIMEOUT_US;
-    mgi_mesh_b_tx_finish(data);
-  } else {
-    data->tx_at = now + mgi_mesh_b_airtime(len) + s_mesh_default_radio->ifs_us;
-  }
-}
-
-static void mgi_mesh_b_tx_begin(struct mgi_mesh_b_data *data, bool burst,
-                                uint64_t now, uint64_t deadline) {
-  data->phase = MGI_TURN_DATA;
-  data->answer_by = (uint64_t) -1;  // Node sets it after a grant
-  data->tx_offset = burst ? MGI_TX_DST_LEN : 0;
-  data->tx_at = now;
-  data->deadline = deadline;
-}
-
-// Return the assembled length, zero for an empty frame, or -1 if incomplete
-// or invalid. Full non-final fragments make the write offset derivable.
-static int mgi_mesh_b_data_receive(struct mgi_mesh_b_data *data,
-                                   const uint8_t *frame, size_t len,
-                                   uint64_t now) {
-  unsigned burst = frame[MG_MESH_FRAME_HDR_LEN - 1], index = burst >> 4,
-           last = burst & 15;
-  size_t chunk = len - MG_MESH_FRAME_HDR_LEN,
-         cap = mgi_mesh_b_fragment_capacity();
-  size_t offset = index * cap;
-  if (index == 0) {
-    data->rx_expected = (uint8_t) burst;
-    if (data->node->lan == NULL)
-      data->deadline = now + mgi_mesh_b_burst_time(MGI_ETH_MAX) +
-                       2 * s_mesh_default_radio->ifs_us + MGI_JOIN_TURN_US;
-  }
-  if (last >= MGI_MAX_FRAGMENTS || index > last || burst != data->rx_expected ||
-      chunk > cap || now > data->deadline || (index < last && chunk != cap) ||
-      (last != 0 && chunk == 0) || offset + chunk > sizeof(data->rx_buf)) {
-    data->rx_expected = 0xff;
-    return -1;
-  }
-  memcpy(data->rx_buf + offset, frame + MG_MESH_FRAME_HDR_LEN, chunk);
-  if (index < last) {
-    data->rx_expected = (uint8_t) (burst + 0x10);
-    // Bridge: an answer is under way, wait for its next fragment
-    if (data->node->lan != NULL)
-      data->deadline =
-          now + mgi_mesh_b_airtime(s_mesh_default_radio->max_frame_size) +
-          s_mesh_default_radio->ifs_us + MG_MESH_ANSWER_TIMEOUT_US;
-    return -1;
-  }
-  data->rx_expected = 0xff;
-  return offset + chunk == 0 || offset + chunk >= 14 ? (int) (offset + chunk)
-                                                     : -1;
-}
-
-// Bridge scheduling and Ethernet forwarding.
-
-
-static uint16_t mgi_mesh_b_join_field(const uint8_t *p) {
-  return (uint16_t) ((unsigned) p[0] * 256 + p[1]);
-}
-
-// Return chaddr for an Ethernet DHCP server reply, even when broadcast.
-static const uint8_t *mgi_mesh_b_dhcp_client(const uint8_t *frame, size_t len) {
-  size_t ip_len, ihl, udp_len;
-  const uint8_t *udp, *dhcp;
-  if (len < 34 || mgi_mesh_b_join_field(frame + 12) != 0x0800 ||
-      (frame[14] >> 4) != 4 || frame[23] != 17 ||
-      (mgi_mesh_b_join_field(frame + 20) & 0x3fff) != 0)
-    return NULL;
-  ip_len = mgi_mesh_b_join_field(frame + 16);
-  ihl = (size_t) (frame[14] & 15) * 4;
-  if (ihl < 20 || ip_len > len - 14 || ip_len < ihl + 8 + 240) return NULL;
-  udp = frame + 14 + ihl;
-  udp_len = mgi_mesh_b_join_field(udp + 4);
-  if (mgi_mesh_b_join_field(udp) != 67 ||
-      mgi_mesh_b_join_field(udp + 2) != 68 || udp_len < 8 + 240 ||
-      udp_len > ip_len - ihl)
-    return NULL;
-  dhcp = udp + 8;
-  if (dhcp[0] != 2 || dhcp[1] != 1 || dhcp[2] != 6 ||
-      memcmp(dhcp + 236, "\x63\x82\x53\x63", 4) != 0)
-    return NULL;
-  return dhcp + 28;
-}
-
-static size_t mgi_mesh_b_enqueue(struct mg_mesh_node *node, const void *buf,
-                                 size_t len) {
-  struct mgi_mesh_b_data *data = (struct mgi_mesh_b_data *) node->data;
-  const uint8_t *frame = (const uint8_t *) buf;
-  if (node->lan == NULL)
-    return mgi_mesh_b_queue(node, &data->tx, buf, len, data->coordinator,
-                            MGI_DATA_UP);
-  if (len >= 14 && len <= MGI_ETH_MAX) {
-    const uint8_t *client = mgi_mesh_b_dhcp_client(frame, len);
-    const uint8_t *dst = client == NULL ? frame : client;
-    bool multicast = client == NULL && (frame[0] & 1) != 0;
-    struct mgi_mesh_b_peer *peer;
-    for (peer = data->members; peer != NULL; peer = peer->next) {
-      if (multicast || memcmp(dst, peer->mac, 6) == 0) {
-        uint16_t addr = multicast ? 0xffffu : peer->radio_address;
-        return mgi_mesh_b_queue(node, &data->tx, buf, len, addr, MGI_DATA_DOWN);
-      }
-    }
-  }
-  return 0;
-}
-
-static void mgi_mesh_b_bridge_queue_lan(struct mg_mesh_node *bridge) {
-  struct mg_queue *rx = &bridge->lan->recv_queue;
-  char *buf;
-  size_t len;
-  while ((len = mg_queue_next(rx, &buf)) > 0) {
-    bridge->strategy->tx(bridge, buf, len);
-    mg_queue_del(rx, len);
-  }
-}
-
-static void mgi_mesh_b_bridge_rx(uint64_t now, struct mg_mesh_node *b,
-                                 const uint8_t *frame, size_t len) {
-  struct mgi_mesh_b_data *data = (struct mgi_mesh_b_data *) b->data;
-  struct mgi_mesh_b_peer *peer;
-  uint16_t dst = 0, src = 0;
-  unsigned command = mgi_mesh_b_frame_parse(frame, len, &dst, &src);
-  if (command == MGI_DATA_UP && dst == b->radio_address &&
-      data->phase == MGI_TURN_DATA && data->current != NULL &&
-      src == data->current->radio_address && now <= data->deadline) {
-    int received = mgi_mesh_b_data_receive(data, frame, len, now);
-    if (received < 0) return;
-    if (received != 0) {
-      b->lan->driver->tx(data->rx_buf, (size_t) received, b->lan);
-    }
-    data->current->misses = 0;
-    data->current = data->current->next;
-    data->phase = MGI_TURN_IDLE;
-    data->deadline = now;
-    return;
-  }
-  if (len != MGI_JOIN_UP_LEN || command != MGI_JOIN_UP ||
-      dst != b->radio_address || data->phase != MGI_TURN_JOIN ||
-      now >= data->deadline) {
-    return;
-  }
-  if (src == 0 || src == 0xffffu) return;
-  for (peer = data->members; peer != NULL; peer = peer->next) {
-    if (peer->radio_address == src) break;
-  }
-  if (peer == NULL) {
-    peer = (struct mgi_mesh_b_peer *) mg_calloc(1, sizeof(*peer));
-    if (peer == NULL) return;
-    peer->radio_address = src;
-    peer->next = data->members;
-    data->members = peer;
-  }
-  memcpy(peer->mac, frame + MG_MESH_FRAME_HDR_LEN, sizeof(peer->mac));
-}
-
-// Member peer did not answer its turn. After MG_MESH_MAX_MISSES in a row, it
-// is gone: remove it, and its queued downlink frames
-static void mgi_mesh_b_member_missed(struct mgi_mesh_b_data *data,
-                                     struct mgi_mesh_b_peer *peer) {
-  if (++peer->misses < MG_MESH_MAX_MISSES) return;
-  MG_INFO(("Member %M removed: no answer %d times", mg_print_mac, peer->mac,
-           MG_MESH_MAX_MISSES));
-  if (data->fanout == peer) {
-    data->fanout = peer->next;
-    if (data->fanout == NULL) {
-      size_t len = mg_queue_next(&data->tx, NULL);
-      mg_queue_del(&data->tx, len);
-    }
-  }
-  LIST_DELETE(struct mgi_mesh_b_peer, &data->members, peer);
-  mg_free(peer);
-}
-
-// A broadcast occupies one record and is sent once to each member in list
-// order.
-static size_t mgi_mesh_b_bridge_burst(struct mgi_mesh_b_data *data,
-                                      struct mgi_mesh_b_peer *peer) {
-  char *record;
-  size_t len;
-  while ((len = mg_queue_next(&data->tx, &record)) != 0) {
-    uint16_t dst = mgi_mesh_b_join_field((const uint8_t *) record);
-    struct mgi_mesh_b_peer *member;
-    if (dst == 0xffffu) {
-      if (data->fanout == NULL) data->fanout = data->members;
-      return data->fanout == peer ? len : 0;
-    }
-    if (dst == peer->radio_address) return len;
-    for (member = data->members; member != NULL; member = member->next) {
-      if (member->radio_address == dst) return 0;
-    }
-    mg_queue_del(&data->tx, len);  // Its destination has left.
-  }
-  return 0;
-}
-
-static uint64_t mgi_mesh_b_queued_burst_time(struct mgi_mesh_b_data *data,
-                                             size_t len) {
-  char *record;
-  size_t frames;
-  if (len == 0) return mgi_mesh_b_burst_time(0);
-  mg_queue_next(&data->tx, &record);
-  // Fragment zero carries the final index. Count overhead and IFS per frame.
-  frames =
-      ((uint8_t) record[MGI_TX_DST_LEN + MG_MESH_FRAME_HDR_LEN] & 15u) + 1u;
-  return mgi_mesh_b_airtime(len - MGI_TX_DST_LEN - frames +
-                            (frames - 1) * s_mesh_default_radio->overhead) +
-         (frames - 1) * s_mesh_default_radio->ifs_us;
-}
-
-static void mgi_mesh_b_bridge_io(uint64_t now, struct mg_mesh_node *b) {
-  struct mgi_mesh_b_data *data = (struct mgi_mesh_b_data *) b->data;
-  mgi_mesh_b_bridge_queue_lan(b);
-  if (now >= data->deadline) {
-    if (data->tx_at != (uint64_t) -1) mgi_mesh_b_tx_finish(data);
-    if (data->phase == MGI_TURN_DATA && data->current != NULL) {
-      struct mgi_mesh_b_peer *peer = data->current;
-      data->current = peer->next;
-      mgi_mesh_b_member_missed(data, peer);
-    } else if (data->phase == MGI_TURN_JOIN) {
-      data->current = data->members;
-    }
-    data->phase = MGI_TURN_IDLE;
-    if (data->current != NULL) {
-      size_t burst = mgi_mesh_b_bridge_burst(data, data->current);
-      uint64_t down = mgi_mesh_b_queued_burst_time(data, burst);
-      data->rx_expected = 0xff;
-      mgi_mesh_b_tx_begin(data, burst != 0, now,
-                          now + down + mgi_mesh_b_burst_time(MGI_ETH_MAX) +
-                              2 * s_mesh_default_radio->ifs_us +
-                              MGI_JOIN_TURN_US);
-    } else if (mgi_mesh_b_control_send(b, 0xffffu, MGI_JOIN_DOWN)) {
-      data->phase = MGI_TURN_JOIN;
-      data->deadline = now + MGI_JOIN_WINDOW_US;
-    }
-    if (data->deadline <= now) data->deadline = now + MGI_JOIN_TURN_US;
-  }
-}
-
-static void mgi_mesh_b_bridge_free(struct mgi_mesh_b_data *data) {
-  while (data->members != NULL) {
-    struct mgi_mesh_b_peer *peer = data->members;
-    data->members = peer->next;
-    mg_free(peer);
-  }
-}
-
-static void mgi_mesh_b_node_rx(struct mg_mesh_node *n, uint64_t now,
-                               uint8_t *frame, size_t len) {
-  struct mgi_mesh_b_data *data = (struct mgi_mesh_b_data *) n->data;
-  uint16_t dst = 0, src = 0;
-  unsigned command = mgi_mesh_b_frame_parse(frame, len, &dst, &src);
-  if (command == MGI_JOIN_DOWN && len == MG_MESH_FRAME_HDR_LEN &&
-      dst == 0xffffu) {
-    if (n->joined && src == data->coordinator &&
-        ++data->missed_rounds >= MG_MESH_MAX_MISSES) {
-      n->joined = false;
-      data->phase = MGI_TURN_IDLE;
-      data->tx_at = (uint64_t) -1;
-      data->tx_offset = 0;
-      data->rx_expected = 0xff;
-    }
-    if (!n->joined && (mgi_mesh_b_random(n, data) % 64) == 0) {
-      // Spread contenders across windows as well as within the reply window.
-      data->coordinator = src;
-      data->phase = MGI_TURN_JOIN;
-      data->tx_at = now + MGI_JOIN_TURN_US +
-                    mgi_mesh_b_random(n, data) % MGI_JOIN_JITTER_US;
-    }
-  } else if (command == MGI_DATA_DOWN && data->coordinator != 0 &&
-             dst == n->radio_address && src == data->coordinator) {
-    int received = mgi_mesh_b_data_receive(data, frame, len, now);
-    if (received < 0) return;
-    n->joined = true;
-    data->missed_rounds =
-        -1;  // This round had a grant; do not count it as missed.
-    if (received != 0) {
-      struct mg_tcpip_if *ifp = n->radio;
-      if (n->rx_len != 0 || (size_t) received > ifp->recv_queue.size) {
-        ifp->ndrop++;
-      } else {
-        memcpy(ifp->recv_queue.buf, data->rx_buf, (size_t) received);
-        n->rx_len = (size_t) received;
-      }
-    }
-    if (data->tx_at != (uint64_t) -1) mgi_mesh_b_tx_finish(data);
-    mgi_mesh_b_tx_begin(data, mg_queue_next(&data->tx, NULL) != 0, now,
-                        now + mgi_mesh_b_burst_time(MGI_ETH_MAX) +
-                            2 * s_mesh_default_radio->ifs_us +
-                            MGI_JOIN_TURN_US);
-    data->answer_by = now + MG_MESH_ANSWER_TIMEOUT_US - MGI_ANSWER_MARGIN_US;
-  }
-}
-
-// Receive timing counts from the frame's arrival, see mg_mesh_rx_drain().
-// Without an arrival time, e.g. when called directly, use the poll time
-static void mgi_mesh_b_input(struct mg_mesh_node *node, void *buf, size_t len) {
-  uint64_t ready = node->now + node->strategy->radio->turnaround_us;
-  uint64_t arrived = node->rx_at != 0 ? node->rx_at : node->now;
-  if (node->tx_at < ready) node->tx_at = ready;
-  node->next_tick = node->now;
-  if (node->lan != NULL) {
-    mgi_mesh_b_bridge_rx(arrived, node, (const uint8_t *) buf, len);
-  } else {
-    mgi_mesh_b_node_rx(node, arrived, (uint8_t *) buf, len);
-  }
-}
-
-static void mgi_mesh_b_tick(struct mg_mesh_node *node, uint64_t now) {
-  struct mgi_mesh_b_data *data = (struct mgi_mesh_b_data *) node->data;
-  node->now = now;
-  if (node->lan != NULL) {
-    mgi_mesh_b_bridge_io(now, node);
-    mgi_mesh_b_tx_step(data, now);
-    node->next_tick = data->deadline;
-    if (data->tx_at < node->next_tick) node->next_tick = data->tx_at;
-    return;
-  }
-  if (data->phase == MGI_TURN_JOIN) {
-    if (data->tx_at <= now) {
-      if (now - data->tx_at <= MGI_JOIN_TURN_US && !node->joined)
-        mgi_mesh_b_control_send(node, data->coordinator, MGI_JOIN_UP);
-      data->tx_at = (uint64_t) -1;
-      data->phase = MGI_TURN_IDLE;
-    }
-  } else {
-    mgi_mesh_b_tx_step(data, now);
-  }
-  node->next_tick = data->tx_at;
-}
-
-static bool mgi_mesh_b_init(struct mg_mesh_node *node,
-                            struct mg_tcpip_if *radio, struct mg_tcpip_if *lan,
-                            uint16_t radio_address) {
-  struct mgi_mesh_b_data *data =
-      (struct mgi_mesh_b_data *) mg_calloc(1, sizeof(*data));
-  memset(node, 0, sizeof(*node));
-  node->radio = radio;
-  node->lan = lan;
-  node->radio_address = radio_address;
-  node->next_tick = (uint64_t) -1;
-  node->ram_used = node->ram_peak = sizeof(*node);
-  if (data == NULL) return false;
-  node->ram_used += sizeof(*data);
-  node->ram_peak = node->ram_used;
-  data->rx_expected = 0xff;
-  node->data = data;
-  data->node = node;
-  data->tx_at = (uint64_t) -1;
-  mg_queue_init(&data->tx, data->tx_buf, sizeof(data->tx_buf));
-  if (lan != NULL) node->next_tick = 0;
-  return true;
-}
-
-static void mgi_mesh_b_free(struct mg_mesh_node *node) {
-  struct mgi_mesh_b_data *data = (struct mgi_mesh_b_data *) node->data;
-  if (data == NULL) return;
-  mgi_mesh_b_bridge_free(data);
-  mg_free(data);
-  node->data = NULL;
-}
-
-// Receive queue record: arrival time, then the radio frame
-#define MGI_RX_STAMP_LEN sizeof(uint64_t)
-
-void mg_mesh_rx_queue(struct mg_queue *q, struct mg_tcpip_if *ifp,
-                      const void *frame, size_t len) {
-  uint64_t arrived = mg_micros();
-  size_t need = MGI_RX_STAMP_LEN + len;
-  char *dst;
-
-  if (mg_queue_book(q, &dst, need) < need) {
-    if (ifp != NULL) ifp->ndrop++;
-    return;
-  }
-  memcpy(dst, &arrived, MGI_RX_STAMP_LEN);
-  memcpy(dst + MGI_RX_STAMP_LEN, frame, len);
-  mg_queue_add(q, need);
-}
-
-void mg_mesh_rx_drain(struct mg_mesh_node *node, struct mg_queue *q) {
-  char *record;
-  size_t len;
-
-  while (node->rx_len == 0) {
-    len = mg_queue_next(q, &record);
-    if (len == 0) break;
-    if (len > MGI_RX_STAMP_LEN) {
-      memcpy(&node->rx_at, record, MGI_RX_STAMP_LEN);
-      node->strategy->rx(node, record + MGI_RX_STAMP_LEN,
-                         len - MGI_RX_STAMP_LEN);
-      node->rx_at = 0;
-    }
-    mg_queue_del(q, len);
-  }
-}
-
-const struct mg_mesh mg_mesh_default = {
-    "default",
-    mgi_mesh_b_init,
-    mgi_mesh_b_tick,
-    mgi_mesh_b_free,
-    mgi_mesh_b_enqueue,
-    mgi_mesh_b_input,
-    true,
-    true,
-    &mg_radio_802154,
-};
 
 #endif
 
@@ -9814,6 +9126,7 @@ void mg_multicast_restore(struct mg_connection *c, uint8_t *from) {
 
 
 
+
 #if MG_ENABLE_TCPIP
 #define MG_EPHEMERAL_PORT_BASE 32768
 #define PDIFF(a, b) ((size_t) (((char *) (b)) - ((char *) (a))))
@@ -10057,6 +9370,7 @@ void mg_tcpip_call(struct mg_tcpip_if *ifp, int ev, void *ev_data) {
                          "TCPIP_EV_TIMER_1S",      "TCPIP_EV_WIFI_SCAN_RESULT",
                          "TCPIP_EV_WIFI_SCAN_END", "TCPIP_EV_WIFI_CONNECT_ERR",
                          "TCPIP_EV_DRIVER",        "TCPIP_EV_STATE6_CHANGE",
+                         "TCPIP_EV_PHY_RX",        "TCPIP_EV_PHY_TX",
                          "TCPIP_EV_USER"};
   if (ev != MG_TCPIP_EV_TIMER_1S && ev < (int) (sizeof(names) / sizeof(names[0]))) {
     MG_PROF_ADD(ifp, names[ev]); // TODO(): call MG_PROF_DUMP() MG_PROF_FREE()
@@ -32715,49 +32029,45 @@ bool mg_wifi_ap_stop(void) {
 #endif
 
 #ifdef MG_ENABLE_LINES
-#line 1 "src/drivers/esp32_802154.c"
+#line 1 "src/drivers/esp32.c"
 #endif
 
 
 
 
 
-#if MG_ENABLE_TCPIP && defined(MG_ENABLE_DRIVER_ESP32_802154) && \
-    MG_ENABLE_DRIVER_ESP32_802154
+#if MG_ENABLE_TCPIP && defined(MG_ENABLE_DRIVER_ESP32) && MG_ENABLE_DRIVER_ESP32
+
+#if MG_RADIO != MG_RADIO_802154
+#error "MG_ENABLE_DRIVER_ESP32 supports MG_RADIO_802154 only"
+#endif
 
 #if MG_ARCH != MG_ARCH_ESP32
-#error "MG_ENABLE_DRIVER_ESP32_802154 needs MG_ARCH_ESP32 (ESP-IDF)"
+#error "MG_ENABLE_DRIVER_ESP32 needs MG_ARCH_ESP32 (ESP-IDF)"
 #endif
 
 // ESP-IDF owns the PHY, coexistence and interrupts. Its callbacks run in
 // interrupt context and pass radio frames through a lock-free queue, read by
-// mgi_esp32_802154_poll(). In both directions frame[0] is the PHR, the length
+// mgi_esp32_poll(). In both directions frame[0] is the PHR, the length
 // including FCS
 #include <esp_attr.h>
 #include <esp_ieee802154.h>
 #include <esp_timer.h>
 
-static struct mg_tcpip_if *s_esp32_802154_ifp;
-static struct mg_queue s_esp32_802154_rx;
-static char s_esp32_802154_rxbuf[2048];
-static volatile bool s_esp32_802154_txing, s_esp32_802154_tx_done;
-static uint64_t s_esp32_802154_txstart;  // Send start, us
+static struct mg_tcpip_if *s_esp32_ifp;
+static volatile bool s_esp32_txing, s_esp32_tx_done;
+static uint64_t s_esp32_txstart;  // Send start, us
 // Frame for the radio: PHR, the length including FCS, then the PSDU
-static uint8_t s_esp32_802154_txframe[128] __attribute__((aligned(4)));
-
-// Queue a received PSDU without its FCS
-static void mg_esp32_802154_rx_frame(const uint8_t *psdu, size_t len) {
-  mg_mesh_rx_queue(&s_esp32_802154_rx, s_esp32_802154_ifp, psdu, len);
-}
+static uint8_t s_esp32_txframe[128] __attribute__((aligned(4)));
 
 // ESP-IDF only: it accepts a frame and may refuse it later, because of Wi-Fi
 // coexistence, a busy channel or an abort. Such a frame is sent again after
-// this pause, until MG_MESH_TX_TIMEOUT_US. Without it, the mesh would count
+// this pause, until MG_RADIO_TX_TIMEOUT_US. Without it, the mesh would count
 // the refused frame as sent
-#define MGI_ESP32_802154_RETRY_US 200
+#define MGI_ESP32_RETRY_US 200
 
-static volatile bool s_esp32_802154_retry;         // A resend is pending
-static volatile uint32_t s_esp32_802154_retry_at;  // When to resend, us
+static volatile bool s_esp32_retry;         // A resend is pending
+static volatile uint32_t s_esp32_retry_at;  // When to resend, us
 
 // ESP-IDF's esp_ieee802154 driver calls the three functions below by name,
 // from interrupt context. They are global only for that reason, and IRAM_ATTR
@@ -32765,7 +32075,7 @@ static volatile uint32_t s_esp32_802154_retry_at;  // When to resend, us
 void IRAM_ATTR esp_ieee802154_receive_done(uint8_t *frame,
                                            esp_ieee802154_frame_info_t *info) {
   (void) info;
-  if (frame[0] > 2) mg_esp32_802154_rx_frame(frame + 1, frame[0] - 2U);
+  if (frame[0] > 2) mg_radio_rx_queue(s_esp32_ifp, frame + 1, frame[0] - 2U);
   esp_ieee802154_receive_handle_done(frame);
 }
 
@@ -32774,7 +32084,7 @@ void IRAM_ATTR esp_ieee802154_transmit_done(const uint8_t *frame,
                                             esp_ieee802154_frame_info_t *info) {
   (void) frame, (void) info;
   if (ack != NULL) esp_ieee802154_receive_handle_done(ack);
-  s_esp32_802154_tx_done = true;
+  s_esp32_tx_done = true;
 }
 
 void IRAM_ATTR esp_ieee802154_transmit_failed(const uint8_t *frame,
@@ -32783,131 +32093,90 @@ void IRAM_ATTR esp_ieee802154_transmit_failed(const uint8_t *frame,
   if (err == ESP_IEEE802154_TX_ERR_COEXIST ||
       err == ESP_IEEE802154_TX_ERR_CCA_BUSY ||
       err == ESP_IEEE802154_TX_ERR_ABORT) {
-    s_esp32_802154_retry_at =
-        (uint32_t) esp_timer_get_time() + MGI_ESP32_802154_RETRY_US;
-    s_esp32_802154_retry = true;  // Set last: the poll reads it first
+    s_esp32_retry_at = (uint32_t) esp_timer_get_time() + MGI_ESP32_RETRY_US;
+    s_esp32_retry = true;  // Set last: the poll reads it first
   } else {
-    s_esp32_802154_tx_done = true;
+    s_esp32_tx_done = true;
   }
 }
 
-static bool mg_esp32_802154_hw_init(uint16_t address) {
-  // rx_when_idle: the driver returns to receive after each transmission
-  return esp_ieee802154_enable() == ESP_OK &&
-         esp_ieee802154_set_promiscuous(false) == ESP_OK &&
-         esp_ieee802154_set_coordinator(false) == ESP_OK &&
-         esp_ieee802154_set_rx_when_idle(true) == ESP_OK &&
-         esp_ieee802154_set_panid(MG_802154_PAN_ID) == ESP_OK &&
-         esp_ieee802154_set_short_address(address) == ESP_OK &&
-         esp_ieee802154_set_channel(MG_802154_CHANNEL) == ESP_OK &&
-         esp_ieee802154_set_txpower(0) == ESP_OK &&
-         esp_ieee802154_receive() == ESP_OK;
+// rx_when_idle: the driver returns to receive after each transmission
+static bool mgi_esp32_radio_init(struct mg_tcpip_if *ifp, uint16_t addr) {
+  s_esp32_ifp = ifp;
+  if (esp_ieee802154_enable() == ESP_OK &&
+      esp_ieee802154_set_promiscuous(false) == ESP_OK &&
+      esp_ieee802154_set_coordinator(false) == ESP_OK &&
+      esp_ieee802154_set_rx_when_idle(true) == ESP_OK &&
+      esp_ieee802154_set_panid(MG_RADIO_NETWORK) == ESP_OK &&
+      esp_ieee802154_set_short_address(addr) == ESP_OK &&
+      esp_ieee802154_set_channel(MG_RADIO_CHANNEL) == ESP_OK &&
+      esp_ieee802154_set_txpower(0) == ESP_OK &&
+      esp_ieee802154_receive() == ESP_OK) {
+    return true;
+  }
+  MG_ERROR(("802.15.4 radio init failed"));
+  return false;
 }
 
-static bool mg_esp32_802154_hw_tx(void) {
-  s_esp32_802154_retry = false;
-  return esp_ieee802154_transmit(s_esp32_802154_txframe, false) == ESP_OK;
+static bool mg_esp32_hw_tx(void) {
+  s_esp32_retry = false;
+  return esp_ieee802154_transmit(s_esp32_txframe, false) == ESP_OK;
 }
 
-static void mg_esp32_802154_hw_abort(void) {
-  s_esp32_802154_retry = false;
+static void mg_esp32_hw_abort(void) {
+  s_esp32_retry = false;
   esp_ieee802154_receive();  // Stops the current operation
 }
 
 // Resend a refused frame when its pause is over. If the radio does not take
 // it, give up: the frame counts as done
-static void mg_esp32_802154_hw_poll(void) {
+static void mg_esp32_hw_poll(void) {
   uint32_t now;
-  if (!s_esp32_802154_retry) return;
+  if (!s_esp32_retry) return;
   now = (uint32_t) esp_timer_get_time();
-  if ((int32_t) (now - s_esp32_802154_retry_at) < 0) return;
-  s_esp32_802154_retry = false;
-  if (esp_ieee802154_transmit(s_esp32_802154_txframe, false) != ESP_OK) {
-    s_esp32_802154_tx_done = true;
+  if ((int32_t) (now - s_esp32_retry_at) < 0) return;
+  s_esp32_retry = false;
+  if (esp_ieee802154_transmit(s_esp32_txframe, false) != ESP_OK) {
+    s_esp32_tx_done = true;
   }
 }
 
 // Mesh radio transmit. The hardware adds the FCS
-static size_t mgi_esp32_802154_radio_tx(struct mg_tcpip_if *ifp,
-                                        const void *buf, size_t len) {
+static size_t mgi_esp32_radio_tx(struct mg_tcpip_if *ifp, const void *buf,
+                                 size_t len) {
   (void) ifp;
-  if (len > 125 || s_esp32_802154_txing) return 0;
-  s_esp32_802154_txframe[0] = (uint8_t) (len + 2);
-  memcpy(s_esp32_802154_txframe + 1, buf, len);
-  s_esp32_802154_tx_done = false;
-  s_esp32_802154_txing = true, s_esp32_802154_txstart = mg_micros();
-  if (!mg_esp32_802154_hw_tx()) {
-    s_esp32_802154_txing = false;
+  if (len > 125 || s_esp32_txing) return 0;
+  s_esp32_txframe[0] = (uint8_t) (len + 2);
+  memcpy(s_esp32_txframe + 1, buf, len);
+  s_esp32_tx_done = false;
+  s_esp32_txing = true, s_esp32_txstart = mg_micros();
+  if (!mg_esp32_hw_tx()) {
+    s_esp32_txing = false;
     return 0;
   }
   return len;
 }
 
-static size_t mgi_esp32_802154_tx(const void *buf, size_t len,
-                                  struct mg_tcpip_if *ifp) {
-  struct mg_tcpip_driver_esp32_802154_data *data = ifp->driver_data;
-  return data->mesh->strategy->tx(data->mesh, buf, len);
-}
-
-static size_t mgi_esp32_802154_rx(void *buf, size_t cap,
-                                  struct mg_tcpip_if *ifp) {
-  struct mg_tcpip_driver_esp32_802154_data *data = ifp->driver_data;
-  size_t len = data->mesh->rx_len;
-  if (len > cap) return 0;
-  if (len != 0 && buf != ifp->recv_queue.buf)
-    memcpy(buf, ifp->recv_queue.buf, len);
-  data->mesh->rx_len = 0;
-  return len;
-}
-
-static bool mgi_esp32_802154_poll(struct mg_tcpip_if *ifp, bool s1) {
-  struct mg_tcpip_driver_esp32_802154_data *data = ifp->driver_data;
-  struct mg_mesh_node *node = data->mesh;
-  uint64_t now = mg_micros();
-  (void) s1;
-  node->now = now;
-  mg_esp32_802154_hw_poll();
-  if (s_esp32_802154_txing &&
-      (s_esp32_802154_tx_done ||
-       now - s_esp32_802154_txstart > MG_MESH_TX_TIMEOUT_US)) {
-    if (!s_esp32_802154_tx_done) mg_esp32_802154_hw_abort();
-    s_esp32_802154_txing = false;
-    node->tx_at = now + node->strategy->radio->ifs_us;
+static bool mgi_esp32_radio_poll(struct mg_tcpip_if *ifp) {
+  bool done = false;
+  (void) ifp;
+  mg_esp32_hw_poll();
+  if (s_esp32_txing && (s_esp32_tx_done || mg_micros() - s_esp32_txstart >
+                                               MG_RADIO_TX_TIMEOUT_US)) {
+    if (!s_esp32_tx_done) mg_esp32_hw_abort();
+    s_esp32_txing = false;
+    done = true;
   }
-  mg_mesh_rx_drain(node, &s_esp32_802154_rx);
-  node->strategy->tick(node, now);
-  return node->joined;
+  return done;
 }
 
-static bool mgi_esp32_802154_init(struct mg_tcpip_if *ifp) {
-  struct mg_tcpip_driver_esp32_802154_data *data = ifp->driver_data;
-  const struct mg_mesh *strategy = data->strategy;
-  uint16_t address =
-      (uint16_t) (2 + ((unsigned) ifp->mac[4] * 256 + ifp->mac[5]) % 65532u);
-  if (strategy == NULL) strategy = &mg_mesh_default;
-  data->mesh = mg_calloc(1, sizeof(*data->mesh));
-  if (data->mesh == NULL) return false;
-  if (!strategy->init(data->mesh, ifp, NULL, address)) {
-    mg_free(data->mesh);
-    data->mesh = NULL;
-    return false;
-  }
-  data->mesh->strategy = strategy;
-  data->mesh->tx = mgi_esp32_802154_radio_tx;
-  mg_queue_init(&s_esp32_802154_rx, s_esp32_802154_rxbuf,
-                sizeof(s_esp32_802154_rxbuf));
-  s_esp32_802154_ifp = ifp;
-  if (mg_esp32_802154_hw_init(address)) return true;
-  MG_ERROR(("802.15.4 radio init failed"));
-  data->mesh->strategy->free(data->mesh);
-  mg_free(data->mesh);
-  data->mesh = NULL;
-  return false;
+static bool mgi_esp32_init(struct mg_tcpip_if *ifp) {
+  return mg_radio_init(ifp, mgi_esp32_radio_init, mgi_esp32_radio_poll,
+                       mgi_esp32_radio_tx);
 }
 
-struct mg_tcpip_driver mg_tcpip_driver_esp32_802154 = {
-    mgi_esp32_802154_init, mgi_esp32_802154_tx, mgi_esp32_802154_rx,
-    mgi_esp32_802154_poll};
+struct mg_tcpip_driver mg_tcpip_driver_esp32 = {mgi_esp32_init, mg_radio_tx,
+                                                mg_radio_rx, mg_radio_poll};
 #endif
 
 #ifdef MG_ENABLE_LINES
@@ -33151,6 +32420,126 @@ struct mg_tcpip_driver mg_tcpip_driver_imxrt = {mg_tcpip_driver_imxrt_init,
 #if MG_ENABLE_TCPIP && defined(MG_ENABLE_DRIVER_MCXW71) && \
     MG_ENABLE_DRIVER_MCXW71
 
+// TrustZone: code built for the secure state (-mcmse) uses the secure alias
+// of the radio registers, 0x5xxxxxxx. Otherwise, the non-secure alias
+#if defined(__ARM_FEATURE_CMSE) && (__ARM_FEATURE_CMSE & 2)
+#define MGI_RF_BASE 0x58A00000U
+#define MGI_PKT_RAM ((volatile uint8_t *) 0x58A08000)
+#else
+#define MGI_RF_BASE 0x48A00000U
+#define MGI_PKT_RAM ((volatile uint8_t *) 0x48A08000)
+#endif
+
+#define MGI_NVIC_ISER ((volatile uint32_t *) 0xE000E100)  // Enable IRQ
+#define MGI_NVIC_ICER ((volatile uint32_t *) 0xE000E180)  // Disable IRQ
+#if MG_RADIO == MG_RADIO_BLE
+#define MGI_IRQN 54  // RF_Generic_IRQn
+#else
+#define MGI_IRQN 53  // RF_802_15_4_IRQn
+#endif
+
+// Keep the IRQ handler out while we change the radio. The NVIC disable is
+// atomic, so register updates here and there do not race
+static void mg_mcxw71_lock(void) {
+  MGI_NVIC_ICER[MGI_IRQN / 32] = MG_BIT(MGI_IRQN % 32);
+  __asm volatile("dsb; isb" ::: "memory");
+}
+
+static struct mg_tcpip_if *s_mcxw71_ifp;
+static volatile bool s_mcxw71_txing, s_mcxw71_done;
+static uint64_t s_mcxw71_sendstart;
+
+#if MG_RADIO == MG_RADIO_BLE
+
+// GENFSK Bluetooth LE uncoded mode, RM Table 489. S0 + 8-bit length, then
+// our frame. The PHY supplies the preamble, whitening and 24-bit CRC.
+struct mg_genfsk {
+  volatile uint32_t IRQ_CTRL, EVENT_TMR, T1_CMP, T2_CMP, TIMESTAMP, XCVR_CTRL,
+      XCVR_STS, XCVR_CFG, CHANNEL_NUM0, TX_POWER, NTW_ADR_CTRL, NTW_ADR[4],
+      RX_WATERMARK, DSM_CTRL, PART_ID, SLOT_PRELOAD, SLOT_TIME, TURNAROUND_TIME,
+      ACKDELAY, RXDELAY, TXDELAY, PACKET_CFG, H0_CFG, H1_CFG, CRC_CFG,
+      LENGTH_ADJ, TIMESTAMP_RX_DONE, TIMESTAMP_TX_DONE, MULT_PKT_CTRL,
+      RPA_WL_STATUS, LENGTH_MAX, EVENT_TMR_LD, EVENT_TMR_ADD, ENH_FEATURE;
+  uint32_t reserved[21];
+  volatile uint32_t SEQ_STS;
+};
+#define MGI_GFSK ((struct mg_genfsk *) (MGI_RF_BASE + 0x2000))
+#define MGI_TX_PB MGI_PKT_RAM  // Access address, S0, length, frame; no CRC
+#define MGI_RX_PB (MGI_PKT_RAM + 0x1000)  // S0, length, frame, CRC; no AA
+#define MGI_RADIO_MAX 251
+#define MGI_GFSK_IRQ_EN (MG_BIT(26) | MG_BIT(16))  // Master + sequence end
+// BLE preamble starts with the access address's first bit; transmit LSBit
+// first.
+#define MGI_GFSK_CFG \
+  (MG_BIT(24) | (((MG_RADIO_NETWORK & 1U) ? 0x55U : 0xaaU) << 16) | (1U << 4))
+
+static void mg_mcxw71_abort(void) {
+  // NXP CONNRF-767: do not abort during TX warmup.
+  while (MGI_GFSK->SEQ_STS & MG_BIT(2)) (void) 0;
+  MGI_GFSK->XCVR_CTRL = 11;  // ABORT_ALL
+  while (MGI_GFSK->XCVR_CTRL & MG_BIT(31)) (void) 0;
+  MGI_GFSK->IRQ_CTRL = MGI_GFSK_IRQ_EN | 0xffffU;  // W1C status
+}
+
+static void mg_mcxw71_listen(void) {
+  MGI_GFSK->IRQ_CTRL = MGI_GFSK_IRQ_EN | 0xffffU;
+  MGI_GFSK->XCVR_CFG = MGI_GFSK_CFG;
+  MGI_GFSK->XCVR_CTRL = 5;  // RX_START_NOW
+  MGI_NVIC_ISER[MGI_IRQN / 32] = MG_BIT(MGI_IRQN % 32);
+}
+
+static void mg_mcxw71_go(void) {
+  mg_mcxw71_abort();
+  MGI_GFSK->XCVR_CFG = MGI_GFSK_CFG;  // ABORT disables packet processing
+  MGI_GFSK->XCVR_CTRL = 1;            // TX_START_NOW
+}
+
+void RF_Generic_IRQHandler(void);
+void RF_Generic_IRQHandler(void) {
+  uint32_t status = MGI_GFSK->IRQ_CTRL;
+  if (!(status & MG_BIT(0))) return;
+  mg_mcxw71_abort();
+  if (s_mcxw71_txing) {
+    s_mcxw71_txing = false;
+    s_mcxw71_done = true;
+  } else if ((status & (MG_BIT(2) | MG_BIT(10))) ==
+             (MG_BIT(2) | MG_BIT(10))) {  // RX and CRC valid
+    uint8_t frame[MGI_RADIO_MAX];
+    size_t i, n = MGI_RX_PB[1];
+    if (n > 0 && n <= sizeof(frame)) {
+      for (i = 0; i < n; i++) frame[i] = MGI_RX_PB[i + 2];
+      mg_radio_rx_queue(s_mcxw71_ifp, frame, n);
+    }
+  }
+  mg_mcxw71_listen();
+}
+
+static bool mgi_mcxw71_radio_init(struct mg_tcpip_if *ifp, uint16_t addr) {
+  s_mcxw71_ifp = ifp;
+  (void) addr;  // Frames are filtered by mg_radio_rx_queue()
+  MGI_GFSK->IRQ_CTRL = 0xffffU;
+  mg_mcxw71_abort();
+  // GENFSK channels are MHz above 2360; MG_RADIO_CHANNEL is a BLE data index.
+  MGI_GFSK->CHANNEL_NUM0 = MG_RADIO_CHANNEL < 11 ? 44 + 2 * MG_RADIO_CHANNEL
+                                                 : 46 + 2 * MG_RADIO_CHANNEL;
+  MGI_GFSK->TX_POWER = 0x3f;
+  MGI_GFSK->NTW_ADR_CTRL = 0x301;  // 32-bit access address, match address 0
+  MGI_GFSK->NTW_ADR[0] = MG_RADIO_NETWORK;
+  MGI_GFSK->PACKET_CFG = 0x000800c8;        // H0=8 bits, length=8, AA=4 bytes
+  MGI_GFSK->H0_CFG = MGI_GFSK->H1_CFG = 0;  // No header filtering
+  MGI_GFSK->LENGTH_ADJ = 3;  // Length excludes the three CRC bytes
+  MGI_GFSK->MULT_PKT_CTRL = 0;
+  MGI_GFSK->LENGTH_MAX = 16U << 16;       // 256 bytes; software caps at 251
+  MGI_GFSK->ENH_FEATURE = 9 | MG_BIT(6);  // BLE uncoded, alternate rate: 2M
+  MGI_GFSK->XCVR_CFG = MGI_GFSK_CFG;
+  mg_mcxw71_listen();
+  return true;
+}
+
+#else
+#define MGI_ZLL ((struct mg_zll *) (MGI_RF_BASE + 0x1000))
+#define MGI_RADIO_MAX 125
+
 // ZLL, 802.15.4 link layer. See MCXW71 reference manual and NXP
 // ieee_802_15_4 PHY sources: PhyPacketProcessor.c, PhyPlmeData.c, PhyISR.c
 struct mg_zll {
@@ -33165,16 +32554,6 @@ struct mg_zll {
       COEX_PRIORITY, ENHACK_CTRL0;
 };
 
-// TrustZone: code built for the secure state (-mcmse) uses the secure alias
-// of the radio registers, 0x5xxxxxxx. Otherwise, the non-secure alias
-#if defined(__ARM_FEATURE_CMSE) && (__ARM_FEATURE_CMSE & 2)
-#define MGI_ZLL ((struct mg_zll *) 0x58A01000)
-#define MGI_PKT_RAM ((volatile uint8_t *) 0x58A08000)
-#else
-#define MGI_ZLL ((struct mg_zll *) 0x48A01000)
-#define MGI_PKT_RAM ((volatile uint8_t *) 0x48A08000)
-#endif
-
 #define MGI_TX_PB MGI_PKT_RAM           // Length byte (incl. FCS), then frame
 #define MGI_RX_PB (MGI_PKT_RAM + 0x80)  // Received frame, no length byte
 
@@ -33187,9 +32566,6 @@ struct mg_zll {
 #define MGI_PHY_CTRL_ALL_IRQ_MASKS 0x8007ff00U  // Bits 8..18, 31: mask all IRQs
 #define MGI_PHY_CTRL_SEQMSK MG_BIT(8)           // Mask the sequence end IRQ
 #define MGI_PHY_CTRL_TRCV_MSK MG_BIT(31)        // Mask all transceiver IRQs
-#define MGI_IRQN 53                             // RF_802_15_4_IRQn
-#define MGI_NVIC_ISER ((volatile uint32_t *) 0xE000E100)  // Enable IRQ
-#define MGI_NVIC_ICER ((volatile uint32_t *) 0xE000E180)  // Disable IRQ
 #define MGI_SEQ_STATE_MASK 0x1fU
 #define MGI_SEQ_STATE_RX_WU 0x10U  // RX warm up
 #define MGI_SEQ_CTRL_NO_RX_RECYCLE MG_BIT(5)
@@ -33197,12 +32573,6 @@ struct mg_zll {
 
 // PHY_CTRL[XCVSEQ]
 enum { MGI_SEQ_IDLE = 0, MGI_SEQ_RX = 1, MGI_SEQ_TX = 2 };
-
-static struct mg_tcpip_if *s_mcxw71_ifp;
-static struct mg_queue s_mcxw71_rx;
-static char s_mcxw71_queue[2048];
-static volatile bool s_mcxw71_txing, s_mcxw71_done;
-static uint64_t s_mcxw71_sendstart;
 
 // Stop the current sequence, wait for the sequencer to go idle. See PhyAbort()
 static void mg_mcxw71_abort(void) {
@@ -33221,13 +32591,6 @@ static void mg_mcxw71_listen(void) {
   MGI_ZLL->PHY_CTRL |= MGI_SEQ_RX;
   MGI_ZLL->PHY_CTRL &= ~(MGI_PHY_CTRL_SEQMSK | MGI_PHY_CTRL_TRCV_MSK);
   MGI_NVIC_ISER[MGI_IRQN / 32] = MG_BIT(MGI_IRQN % 32);
-}
-
-// Keep the IRQ handler out while we change the radio. The NVIC disable is
-// atomic, so PHY_CTRL updates here and there do not race
-static void mg_mcxw71_lock(void) {
-  MGI_NVIC_ICER[MGI_IRQN / 32] = MG_BIT(MGI_IRQN % 32);
-  __asm volatile("dsb; isb" ::: "memory");
 }
 
 // Start the TX sequence for the loaded frame. Its end: see the IRQ handler
@@ -33255,22 +32618,49 @@ void RF_802_15_4_IRQHandler(void) {
       n = n >= 2 ? n - 2 : 0;
       if (n > 0 && n <= sizeof(frame)) {
         for (i = 0; i < n; i++) frame[i] = MGI_RX_PB[i];
-        mg_mesh_rx_queue(&s_mcxw71_rx, s_mcxw71_ifp, frame, n);
+        mg_radio_rx_queue(s_mcxw71_ifp, frame, n);
       }
     }
     mg_mcxw71_listen();
   }
 }
 
+static bool mgi_mcxw71_radio_init(struct mg_tcpip_if *ifp, uint16_t addr) {
+  s_mcxw71_ifp = ifp;
+  MGI_ZLL->SEQ_CTRL_STS |= MGI_SEQ_CTRL_NO_RX_RECYCLE;
+  MGI_ZLL->PHY_CTRL = MGI_PHY_CTRL_ALL_IRQ_MASKS;
+  MGI_ZLL->IRQSTS = MGI_ZLL->IRQSTS;
+  MGI_ZLL->SAM_CTRL = 0;
+  MGI_ZLL->RX_FRAME_FILTER = MGI_FRAME_FILTER;
+  MGI_ZLL->CHANNEL_NUM0 = MG_RADIO_CHANNEL;
+  MGI_ZLL->MACSHORTADDRS0 = ((uint32_t) addr << 16) | MG_RADIO_NETWORK;
+  MGI_ZLL->PA_PWR = 0x3f;
+  mg_mcxw71_listen();
+  return true;
+}
+
+#endif
+
 static size_t mgi_mcxw71_radio_tx(struct mg_tcpip_if *ifp, const void *buf,
                                   size_t len) {
   size_t i;
   (void) ifp;
-  if (len > 125 || s_mcxw71_txing) return 0;
+  if (len > MGI_RADIO_MAX || s_mcxw71_txing) return 0;
   mg_mcxw71_lock();
+#if MG_RADIO == MG_RADIO_BLE
+  if (MGI_GFSK->SEQ_STS & MG_BIT(11)) {  // Do not interrupt a received frame
+    MGI_NVIC_ISER[MGI_IRQN / 32] = MG_BIT(MGI_IRQN % 32);
+    return 0;
+  }
+  for (i = 0; i < 4; i++)
+    MGI_TX_PB[i] = (uint8_t) (MG_RADIO_NETWORK >> (8 * i));
+  MGI_TX_PB[4] = 0, MGI_TX_PB[5] = (uint8_t) len;
+  for (i = 0; i < len; i++) MGI_TX_PB[i + 6] = ((const uint8_t *) buf)[i];
+#else
   MGI_TX_PB[0] = (uint8_t) (len + 2);  // FCS is added by hardware
   for (i = 0; i < len; i++)
     MGI_TX_PB[i + 1] = ((const uint8_t *) buf)[i];  // 8-bit access only
+#endif
   s_mcxw71_done = false;
   s_mcxw71_txing = true;
   s_mcxw71_sendstart = mg_millis();
@@ -33279,46 +32669,11 @@ static size_t mgi_mcxw71_radio_tx(struct mg_tcpip_if *ifp, const void *buf,
   return len;
 }
 
-static bool mgi_mcxw71_radio_init(struct mg_tcpip_if *ifp) {
-  struct mg_tcpip_driver_mcxw71_data *data = ifp->driver_data;
-  struct mg_mesh_node *node = data->mesh;
-  s_mcxw71_ifp = ifp;
-  MGI_ZLL->SEQ_CTRL_STS |= MGI_SEQ_CTRL_NO_RX_RECYCLE;
-  MGI_ZLL->PHY_CTRL = MGI_PHY_CTRL_ALL_IRQ_MASKS;
-  MGI_ZLL->IRQSTS = MGI_ZLL->IRQSTS;
-  MGI_ZLL->SAM_CTRL = 0;
-  MGI_ZLL->RX_FRAME_FILTER = MGI_FRAME_FILTER;
-  MGI_ZLL->CHANNEL_NUM0 = MG_802154_CHANNEL;
-  MGI_ZLL->MACSHORTADDRS0 =
-      ((uint32_t) node->radio_address << 16) | MG_802154_PAN_ID;
-  MGI_ZLL->PA_PWR = 0x3f;
-  mg_mcxw71_listen();
-  return true;
-}
-
-static size_t mgi_mcxw71_tx(const void *buf, size_t len,
-                            struct mg_tcpip_if *ifp) {
-  struct mg_tcpip_driver_mcxw71_data *data = ifp->driver_data;
-  return data->mesh->strategy->tx(data->mesh, buf, len);
-}
-
-static size_t mgi_mcxw71_rx(void *buf, size_t cap, struct mg_tcpip_if *ifp) {
-  struct mg_tcpip_driver_mcxw71_data *data = ifp->driver_data;
-  size_t len = data->mesh->rx_len;
-  if (len > cap) return 0;
-  if (len != 0 && buf != ifp->recv_queue.buf)
-    memcpy(buf, ifp->recv_queue.buf, len);
-  data->mesh->rx_len = 0;
-  return len;
-}
-
-static bool mgi_mcxw71_poll(struct mg_tcpip_if *ifp, bool s1) {
-  struct mg_tcpip_driver_mcxw71_data *data = ifp->driver_data;
-  struct mg_mesh_node *node = data->mesh;
-  uint64_t now = mg_micros();
-  (void) s1;
+static bool mgi_mcxw71_radio_poll(struct mg_tcpip_if *ifp) {
+  bool done;
+  (void) ifp;
   if (s_mcxw71_txing &&
-      mg_millis() > s_mcxw71_sendstart + MG_MESH_TX_TIMEOUT_US / 1000) {
+      mg_millis() > s_mcxw71_sendstart + MG_RADIO_TX_TIMEOUT_US / 1000) {
     mg_mcxw71_lock();
     if (s_mcxw71_txing) {
       mg_mcxw71_abort();
@@ -33329,42 +32684,18 @@ static bool mgi_mcxw71_poll(struct mg_tcpip_if *ifp, bool s1) {
       MGI_NVIC_ISER[MGI_IRQN / 32] = MG_BIT(MGI_IRQN % 32);
     }
   }
-  if (s_mcxw71_done) {
-    s_mcxw71_done = false;
-    node->tx_at = now + node->strategy->radio->ifs_us;
-  }
-  node->now = now;
-  mg_mesh_rx_drain(node, &s_mcxw71_rx);
-  node->strategy->tick(node, now);
-  return node->joined;
+  done = s_mcxw71_done;
+  s_mcxw71_done = false;
+  return done;
 }
 
 static bool mgi_mcxw71_init(struct mg_tcpip_if *ifp) {
-  struct mg_tcpip_driver_mcxw71_data *data = ifp->driver_data;
-  const struct mg_mesh *strategy = data->strategy;
-  uint16_t address;
-  address =
-      (uint16_t) (2 + ((unsigned) ifp->mac[4] * 256 + ifp->mac[5]) % 65532u);
-  if (strategy == NULL) strategy = &mg_mesh_default;
-  data->mesh = mg_calloc(1, sizeof(*data->mesh));
-  if (data->mesh == NULL) return false;
-  if (!strategy->init(data->mesh, ifp, NULL, address)) {
-    mg_free(data->mesh);
-    data->mesh = NULL;
-    return false;
-  }
-  data->mesh->strategy = strategy;
-  data->mesh->tx = mgi_mcxw71_radio_tx;
-  mg_queue_init(&s_mcxw71_rx, s_mcxw71_queue, sizeof(s_mcxw71_queue));
-  if (mgi_mcxw71_radio_init(ifp)) return true;
-  strategy->free(data->mesh);
-  mg_free(data->mesh);
-  data->mesh = NULL;
-  return false;
+  return mg_radio_init(ifp, mgi_mcxw71_radio_init, mgi_mcxw71_radio_poll,
+                       mgi_mcxw71_radio_tx);
 }
 
-struct mg_tcpip_driver mg_tcpip_driver_mcxw71 = {
-    mgi_mcxw71_init, mgi_mcxw71_tx, mgi_mcxw71_rx, mgi_mcxw71_poll};
+struct mg_tcpip_driver mg_tcpip_driver_mcxw71 = {mgi_mcxw71_init, mg_radio_tx,
+                                                 mg_radio_rx, mg_radio_poll};
 #endif
 
 #ifdef MG_ENABLE_LINES
@@ -33378,33 +32709,51 @@ struct mg_tcpip_driver mg_tcpip_driver_mcxw71 = {
 #if MG_ENABLE_TCPIP && defined(MG_ENABLE_DRIVER_MG24) && MG_ENABLE_DRIVER_MG24
 
 #include <rail.h>
+
+// A packet in the RAIL FIFOs: the radio header, then the frame
+#if MG_RADIO == MG_RADIO_BLE
+#include <rail_ble.h>
+#define MGI_MG24_HDR 2    // S0 byte, unused, then the frame length
+#define MGI_MG24_MAX 251  // Largest frame. RAIL adds and strips the CRC
+// RAIL channel: the RF channel, 2402 MHz + 2 MHz steps. Data channels 0-10
+// are RF channels 1-11, data channels 11-36 are RF channels 13-38
+#define MGI_MG24_CHANNEL \
+  (MG_RADIO_CHANNEL < 11 ? MG_RADIO_CHANNEL + 1 : MG_RADIO_CHANNEL + 2)
+#else
 #include <rail_ieee802154.h>
+#define MGI_MG24_HDR 1    // PHR: the frame length, FCS included
+#define MGI_MG24_MAX 125  // Largest frame, without the 2 byte FCS
+#define MGI_MG24_CHANNEL MG_RADIO_CHANNEL
+#endif
 
 // RAIL delivers raw frames and transmit completion from interrupt context.
 
 static struct mg_tcpip_if *s_mg24_ifp;
 static RAIL_Handle_t s_mg24_rail;
-static struct mg_queue s_mg24_rx;
-static char s_mg24_rxbuf[2048];
 static volatile bool s_mg24_txing, s_mg24_tx_done;
 static RAIL_Time_t s_mg24_txstart;  // Send start, us
 static uint8_t s_mg24_txfifo[256] __attribute__((aligned(4)));  // Power of 2
 
-// Copy a received PSDU, stripping the PHR and any stored FCS.
+// Copy a received frame, stripping the radio header and any stored CRC
 static void mg_mg24_rx_frame(RAIL_Handle_t h) {
+  static uint8_t f[MGI_MG24_HDR + MGI_MG24_MAX + 2];  // Interrupt use only
   RAIL_RxPacketInfo_t info;
-  uint8_t f[128];
   size_t n;
   if (RAIL_GetRxPacketInfo(h, RAIL_RX_PACKET_HANDLE_NEWEST, &info) ==
           RAIL_RX_PACKET_HANDLE_INVALID ||
       info.packetStatus != RAIL_RX_PACKET_READY_SUCCESS ||
-      info.packetBytes <= 1 || info.packetBytes > sizeof(f)) {
+      info.packetBytes <= MGI_MG24_HDR || info.packetBytes > sizeof(f)) {
     return;
   }
   RAIL_CopyRxPacket(f, &info);
+#if MG_RADIO == MG_RADIO_BLE
+  n = f[1];
+  if (n + MGI_MG24_HDR > (size_t) info.packetBytes) return;
+#else
   n = info.packetBytes - 1U;  // Strip PHR
   if (n == f[0]) n -= 2;      // FCS stored, strip it
-  mg_mesh_rx_queue(&s_mg24_rx, s_mg24_ifp, f + 1, n);
+#endif
+  mg_radio_rx_queue(s_mg24_ifp, f + MGI_MG24_HDR, n);
 }
 
 // RAIL event callback, runs in interrupt context
@@ -33416,17 +32765,21 @@ static void mg_mg24_events(RAIL_Handle_t h, RAIL_Events_t events) {
   if (events & RAIL_EVENTS_TX_COMPLETION) s_mg24_tx_done = true;
 }
 
-// RAIL adds the FCS.
+// RAIL adds the CRC or FCS
 static size_t mgi_mg24_radio_tx(struct mg_tcpip_if *ifp, const void *buf,
                                 size_t len) {
-  uint8_t phr = (uint8_t) (len + 2);  // FCS is added by hardware
+#if MG_RADIO == MG_RADIO_BLE
+  uint8_t hdr[MGI_MG24_HDR] = {0, (uint8_t) len};
+#else
+  uint8_t hdr[MGI_MG24_HDR] = {(uint8_t) (len + 2)};  // FCS added by hardware
+#endif
   (void) ifp;
-  if (len > 125 || s_mg24_txing) return 0;
-  RAIL_WriteTxFifo(s_mg24_rail, &phr, 1, true);  // Reset FIFO, write PHR
+  if (len > MGI_MG24_MAX || s_mg24_txing) return 0;
+  RAIL_WriteTxFifo(s_mg24_rail, hdr, sizeof(hdr), true);  // Reset, write hdr
   RAIL_WriteTxFifo(s_mg24_rail, (const uint8_t *) buf, (uint16_t) len, false);
   s_mg24_tx_done = false;
   s_mg24_txing = true, s_mg24_txstart = RAIL_GetTime();
-  if (RAIL_StartTx(s_mg24_rail, MG_802154_CHANNEL, RAIL_TX_OPTIONS_DEFAULT,
+  if (RAIL_StartTx(s_mg24_rail, MGI_MG24_CHANNEL, RAIL_TX_OPTIONS_DEFAULT,
                    NULL) != RAIL_STATUS_NO_ERROR) {
     s_mg24_txing = false;
     return 0;
@@ -33434,11 +32787,46 @@ static size_t mgi_mg24_radio_tx(struct mg_tcpip_if *ifp, const void *buf,
   return len;
 }
 
-static bool mgi_mg24_radio_init(struct mg_tcpip_if *ifp) {
-  struct mg_tcpip_driver_mg24_data *data = ifp->driver_data;
-  struct mg_mesh_node *node = data->mesh;
-  RAIL_Config_t cfg = {0};
+#if MG_RADIO == MG_RADIO_BLE
+// Raw BLE 2 Mbit/s PHY, standard packet as in nrf52.c. The 100 us state
+// transitions fit within the mesh's 300 us gap between frames
+static bool mgi_mg24_protocol_init(uint16_t addr) {
+  RAIL_StateTiming_t timing = {0};
+  (void) addr;
+  timing.idleToRx = 100, timing.idleToTx = 100;
+  timing.rxToTx = 100, timing.txToRx = 100;
+  return RAIL_BLE_Init(s_mg24_rail) == RAIL_STATUS_NO_ERROR &&
+         RAIL_BLE_ConfigPhy2MbpsViterbi(s_mg24_rail) == RAIL_STATUS_NO_ERROR &&
+         RAIL_BLE_ConfigChannelRadioParams(s_mg24_rail, 0x555555,
+                                           MG_RADIO_NETWORK, MG_RADIO_CHANNEL,
+                                           false) == RAIL_STATUS_NO_ERROR &&
+         RAIL_SetStateTiming(s_mg24_rail, &timing) == RAIL_STATUS_NO_ERROR;
+}
+#else
+// IEEE 802.15.4 with hardware filtering by PAN ID and our short address
+static bool mgi_mg24_protocol_init(uint16_t addr) {
   RAIL_IEEE802154_Config_t cfg154 = {0};
+  RAIL_StateTransitions_t to_rx = {RAIL_RF_STATE_RX, RAIL_RF_STATE_RX};
+  cfg154.ackConfig.enable = false;
+  cfg154.ackConfig.ackTimeout = 864;
+  cfg154.ackConfig.rxTransitions = to_rx;
+  cfg154.ackConfig.txTransitions = to_rx;
+  cfg154.timings.idleToRx = 100, cfg154.timings.idleToTx = 100;
+  cfg154.timings.rxToTx = 192, cfg154.timings.txToRx = 182;
+  cfg154.framesMask = RAIL_IEEE802154_ACCEPT_STANDARD_FRAMES;
+  cfg154.promiscuousMode = false;
+  return RAIL_IEEE802154_Config2p4GHzRadio(s_mg24_rail) ==
+             RAIL_STATUS_NO_ERROR &&
+         RAIL_IEEE802154_Init(s_mg24_rail, &cfg154) == RAIL_STATUS_NO_ERROR &&
+         RAIL_IEEE802154_SetPanId(s_mg24_rail, MG_RADIO_NETWORK, 0) ==
+             RAIL_STATUS_NO_ERROR &&
+         RAIL_IEEE802154_SetShortAddress(s_mg24_rail, addr, 0) ==
+             RAIL_STATUS_NO_ERROR;
+}
+#endif
+
+static bool mgi_mg24_radio_init(struct mg_tcpip_if *ifp, uint16_t addr) {
+  RAIL_Config_t cfg = {0};
   RAIL_TxPowerConfig_t pwr;
   RAIL_StateTransitions_t to_rx = {RAIL_RF_STATE_RX, RAIL_RF_STATE_RX};
   RAIL_Events_t events = RAIL_EVENT_CAL_NEEDED | RAIL_EVENT_RX_PACKET_RECEIVED |
@@ -33448,25 +32836,12 @@ static bool mgi_mg24_radio_init(struct mg_tcpip_if *ifp) {
     MG_ERROR(("RAIL_Init failed"));
     return false;
   }
-  cfg154.ackConfig.enable = false;
-  cfg154.ackConfig.ackTimeout = 864;
-  cfg154.ackConfig.rxTransitions = to_rx;
-  cfg154.ackConfig.txTransitions = to_rx;
-  cfg154.timings.idleToRx = 100, cfg154.timings.idleToTx = 100;
-  cfg154.timings.rxToTx = 192, cfg154.timings.txToRx = 182;
-  cfg154.framesMask = RAIL_IEEE802154_ACCEPT_STANDARD_FRAMES;
-  cfg154.promiscuousMode = false;  // Filter by PAN ID and our short address
   pwr.mode = RAIL_TX_POWER_MODE_2P4GIG_HP, pwr.voltage = 3300;
   pwr.rampTime = 10;
   if (RAIL_ConfigCal(s_mg24_rail, RAIL_CAL_ALL) != RAIL_STATUS_NO_ERROR ||
       RAIL_ConfigEvents(s_mg24_rail, RAIL_EVENTS_ALL, events) !=
           RAIL_STATUS_NO_ERROR ||
-      RAIL_IEEE802154_Config2p4GHzRadio(s_mg24_rail) != RAIL_STATUS_NO_ERROR ||
-      RAIL_IEEE802154_Init(s_mg24_rail, &cfg154) != RAIL_STATUS_NO_ERROR ||
-      RAIL_IEEE802154_SetPanId(s_mg24_rail, MG_802154_PAN_ID, 0) !=
-          RAIL_STATUS_NO_ERROR ||
-      RAIL_IEEE802154_SetShortAddress(s_mg24_rail, node->radio_address, 0) !=
-          RAIL_STATUS_NO_ERROR ||
+      !mgi_mg24_protocol_init(addr) ||
       RAIL_SetTxTransitions(s_mg24_rail, &to_rx) != RAIL_STATUS_NO_ERROR ||
       RAIL_SetRxTransitions(s_mg24_rail, &to_rx) != RAIL_STATUS_NO_ERROR ||
       RAIL_ConfigTxPower(s_mg24_rail, &pwr) != RAIL_STATUS_NO_ERROR ||
@@ -33478,69 +32853,32 @@ static bool mgi_mg24_radio_init(struct mg_tcpip_if *ifp) {
     return false;
   }
   s_mg24_ifp = ifp;
-  return RAIL_StartRx(s_mg24_rail, MG_802154_CHANNEL, NULL) ==
+  return RAIL_StartRx(s_mg24_rail, MGI_MG24_CHANNEL, NULL) ==
          RAIL_STATUS_NO_ERROR;
 }
 
-static size_t mgi_mg24_tx(const void *buf, size_t len,
-                          struct mg_tcpip_if *ifp) {
-  struct mg_tcpip_driver_mg24_data *data = ifp->driver_data;
-  return data->mesh->strategy->tx(data->mesh, buf, len);
-}
-
-static size_t mgi_mg24_rx(void *buf, size_t cap, struct mg_tcpip_if *ifp) {
-  struct mg_tcpip_driver_mg24_data *data = ifp->driver_data;
-  size_t len = data->mesh->rx_len;
-  if (len > cap) return 0;
-  if (len != 0 && buf != ifp->recv_queue.buf)
-    memcpy(buf, ifp->recv_queue.buf, len);
-  data->mesh->rx_len = 0;
-  return len;
-}
-
-static bool mgi_mg24_poll(struct mg_tcpip_if *ifp, bool s1) {
-  struct mg_tcpip_driver_mg24_data *data = ifp->driver_data;
-  struct mg_mesh_node *node = data->mesh;
-  uint64_t now = mg_micros();
-  (void) s1;
-  node->now = now;
+static bool mgi_mg24_radio_poll(struct mg_tcpip_if *ifp) {
+  bool done = false;
+  (void) ifp;
   if (s_mg24_txing && (s_mg24_tx_done || RAIL_GetTime() - s_mg24_txstart >
-                                             MG_MESH_TX_TIMEOUT_US)) {
+                                             MG_RADIO_TX_TIMEOUT_US)) {
     if (!s_mg24_tx_done) {
       RAIL_Idle(s_mg24_rail, RAIL_IDLE_ABORT, true);
-      RAIL_StartRx(s_mg24_rail, MG_802154_CHANNEL, NULL);
+      RAIL_StartRx(s_mg24_rail, MGI_MG24_CHANNEL, NULL);
     }
     s_mg24_txing = false;
-    node->tx_at = now + node->strategy->radio->ifs_us;
+    done = true;
   }
-  mg_mesh_rx_drain(node, &s_mg24_rx);
-  node->strategy->tick(node, now);
-  return node->joined;
+  return done;
 }
+
 static bool mgi_mg24_init(struct mg_tcpip_if *ifp) {
-  struct mg_tcpip_driver_mg24_data *data = ifp->driver_data;
-  const struct mg_mesh *strategy = data->strategy;
-  uint16_t address =
-      (uint16_t) (2 + ((unsigned) ifp->mac[4] * 256 + ifp->mac[5]) % 65532u);
-  if (strategy == NULL) strategy = &mg_mesh_default;
-  data->mesh = mg_calloc(1, sizeof(*data->mesh));
-  if (data->mesh == NULL) return false;
-  if (!strategy->init(data->mesh, ifp, NULL, address)) {
-    mg_free(data->mesh);
-    data->mesh = NULL;
-    return false;
-  }
-  data->mesh->strategy = strategy;
-  data->mesh->tx = mgi_mg24_radio_tx;
-  mg_queue_init(&s_mg24_rx, s_mg24_rxbuf, sizeof(s_mg24_rxbuf));
-  if (mgi_mg24_radio_init(ifp)) return true;
-  data->mesh->strategy->free(data->mesh);
-  mg_free(data->mesh);
-  data->mesh = NULL;
-  return false;
+  return mg_radio_init(ifp, mgi_mg24_radio_init, mgi_mg24_radio_poll,
+                       mgi_mg24_radio_tx);
 }
-struct mg_tcpip_driver mg_tcpip_driver_mg24 = {mgi_mg24_init, mgi_mg24_tx,
-                                               mgi_mg24_rx, mgi_mg24_poll};
+
+struct mg_tcpip_driver mg_tcpip_driver_mg24 = {mgi_mg24_init, mg_radio_tx,
+                                               mg_radio_rx, mg_radio_poll};
 #endif
 
 #ifdef MG_ENABLE_LINES
@@ -34029,11 +33367,25 @@ struct mg_tcpip_driver mg_tcpip_driver_netc = {mg_tcpip_driver_netc_init,
 #if MG_ENABLE_TCPIP && defined(MG_ENABLE_DRIVER_NRF52) && MG_ENABLE_DRIVER_NRF52
 #include <nrf.h>
 
+// A packet in RAM: the radio header, then the frame
+#if MG_RADIO == MG_RADIO_BLE
+#define MGI_NRF52_HDR 2    // S0 byte, unused, then the frame length
+#define MGI_NRF52_MAX 251  // Largest frame. The CRC is not in RAM
+#define MGI_NRF52_RXSTART EVENTS_ADDRESS  // A frame is being received
+#define MGI_NRF52_MHZ                                  \
+  (MG_RADIO_CHANNEL < 11 ? 2404 + 2 * MG_RADIO_CHANNEL \
+                         : 2406 + 2 * MG_RADIO_CHANNEL)
+#else
+#define MGI_NRF52_HDR 1    // PHR: the frame length, FCS included
+#define MGI_NRF52_MAX 125  // Largest frame, without the 2 byte FCS
+#define MGI_NRF52_RXSTART EVENTS_FRAMESTART  // A frame is being received
+#endif
+
+#define MGI_NRF52_IOLEN (MGI_NRF52_HDR + MGI_NRF52_MAX + 2)
+
 static struct mg_tcpip_if *s_nrf52_ifp;
-static struct mg_queue s_nrf52_rx;
-static char s_nrf52_queue[2048];
-static uint8_t s_nrf52_rxbuf[128] __attribute__((aligned(4)));
-static uint8_t s_nrf52_txbuf[128] __attribute__((aligned(4)));
+static uint8_t s_nrf52_rxbuf[MGI_NRF52_IOLEN] MG_8BYTE_ALIGNED;
+static uint8_t s_nrf52_txbuf[MGI_NRF52_IOLEN] MG_8BYTE_ALIGNED;
 static volatile bool s_nrf52_txing, s_nrf52_done;
 static uint64_t s_nrf52_started;
 
@@ -34041,10 +33393,11 @@ static void mgi_nrf52_listen(void) {
   NRF_RADIO->PACKETPTR = (uint32_t) s_nrf52_rxbuf;
   NRF_RADIO->SHORTS =
       RADIO_SHORTS_READY_START_Msk | RADIO_SHORTS_END_DISABLE_Msk;
-  NRF_RADIO->EVENTS_FRAMESTART = 0;
+  NRF_RADIO->MGI_NRF52_RXSTART = 0;
   NRF_RADIO->EVENTS_END = 0;
   NRF_RADIO->TASKS_RXEN = 1;
 }
+
 static void mgi_nrf52_disable(void) {
   NRF_RADIO->SHORTS = 0;
   NRF_RADIO->EVENTS_DISABLED = 0;
@@ -34052,6 +33405,7 @@ static void mgi_nrf52_disable(void) {
   while (!NRF_RADIO->EVENTS_DISABLED) (void) 0;
   NRF_RADIO->EVENTS_DISABLED = 0;
 }
+
 void RADIO_IRQHandler(void);
 void RADIO_IRQHandler(void) {
   if (!NRF_RADIO->EVENTS_DISABLED) return;
@@ -34060,32 +33414,31 @@ void RADIO_IRQHandler(void) {
     s_nrf52_txing = false;
     s_nrf52_done = true;
   } else if (NRF_RADIO->CRCSTATUS) {
-    struct mg_tcpip_driver_nrf52_data *data = s_nrf52_ifp->driver_data;
-    struct mg_mesh_node *node = data->mesh;
+#if MG_RADIO == MG_RADIO_BLE
+    size_t len = s_nrf52_rxbuf[1];
+#else
     size_t len = s_nrf52_rxbuf[0] >= 2 ? s_nrf52_rxbuf[0] - 2U : 0;
-    uint8_t *frame = s_nrf52_rxbuf + 1;
-    uint16_t dst, src;
-    if (len <= 125 &&
-        mg_radio_802154.parse_hdr(&mg_radio_802154, frame, len, &dst, &src) !=
-            0 &&
-        (dst == 0xffffu || dst == node->radio_address)) {
-      mg_mesh_rx_queue(&s_nrf52_rx, s_nrf52_ifp, frame, len);
-    }
+#endif
+    mg_radio_rx_queue(s_nrf52_ifp, s_nrf52_rxbuf + MGI_NRF52_HDR, len);
   }
   mgi_nrf52_listen();
 }
 static size_t mgi_nrf52_radio_tx(struct mg_tcpip_if *ifp, const void *buf,
                                  size_t len) {
   (void) ifp;
-  if (len > 125) return 0;
+  if (len > MGI_NRF52_MAX) return 0;
   NVIC_DisableIRQ(RADIO_IRQn);
-  if (s_nrf52_txing || NRF_RADIO->EVENTS_FRAMESTART) {
+  if (s_nrf52_txing || NRF_RADIO->MGI_NRF52_RXSTART) {
     NVIC_EnableIRQ(RADIO_IRQn);
     return 0;
   }
   mgi_nrf52_disable();
+#if MG_RADIO == MG_RADIO_BLE
+  s_nrf52_txbuf[0] = 0, s_nrf52_txbuf[1] = (uint8_t) len;
+#else
   s_nrf52_txbuf[0] = (uint8_t) (len + 2);
-  memcpy(s_nrf52_txbuf + 1, buf, len);
+#endif
+  memcpy(s_nrf52_txbuf + MGI_NRF52_HDR, buf, len);
   s_nrf52_done = false;
   s_nrf52_txing = true;
   s_nrf52_started = mg_micros();
@@ -34096,9 +33449,33 @@ static size_t mgi_nrf52_radio_tx(struct mg_tcpip_if *ifp, const void *buf,
   NVIC_EnableIRQ(RADIO_IRQn);
   return len;
 }
-static bool mgi_nrf52_radio_init(struct mg_tcpip_if *ifp) {
+static bool mgi_nrf52_radio_init(struct mg_tcpip_if *ifp, uint16_t addr) {
   s_nrf52_ifp = ifp;
+  (void) addr;  // Frames are filtered by mg_radio_rx_queue()
   NRF_RADIO->POWER = 1;
+#if MG_RADIO == MG_RADIO_BLE
+  // Standard BLE packet: 2 byte preamble, access address, S0 byte, 8 bit
+  // length, payload, 24 bit CRC over everything after the access address,
+  // initial value 0x555555. Whitening seeded by the channel index
+  NRF_RADIO->MODE = RADIO_MODE_MODE_Ble_2Mbit;
+  NRF_RADIO->PCNF0 = (1UL << RADIO_PCNF0_S0LEN_Pos) |
+                     (8UL << RADIO_PCNF0_LFLEN_Pos) |
+                     (RADIO_PCNF0_PLEN_16bit << RADIO_PCNF0_PLEN_Pos);
+  NRF_RADIO->PCNF1 = ((uint32_t) MGI_NRF52_MAX << RADIO_PCNF1_MAXLEN_Pos) |
+                     (3UL << RADIO_PCNF1_BALEN_Pos) | RADIO_PCNF1_WHITEEN_Msk;
+  NRF_RADIO->BASE0 = (uint32_t) MG_RADIO_NETWORK << 8;
+  NRF_RADIO->PREFIX0 = ((uint32_t) MG_RADIO_NETWORK >> 24) & 0xff;
+  NRF_RADIO->TXADDRESS = 0;
+  NRF_RADIO->RXADDRESSES = 1;
+  NRF_RADIO->CRCCNF =
+      3 | (RADIO_CRCCNF_SKIPADDR_Skip << RADIO_CRCCNF_SKIPADDR_Pos);
+  NRF_RADIO->CRCPOLY = 0x65b;
+  NRF_RADIO->CRCINIT = 0x555555;
+  NRF_RADIO->DATAWHITEIV = MG_RADIO_CHANNEL;
+  NRF_RADIO->FREQUENCY = MGI_NRF52_MHZ - 2400;
+  NRF_RADIO->MODECNF0 = (RADIO_MODECNF0_DTX_Center << RADIO_MODECNF0_DTX_Pos) |
+                        RADIO_MODECNF0_RU_Fast;
+#else
   NRF_RADIO->MODE = RADIO_MODE_MODE_Ieee802154_250Kbit;
   NRF_RADIO->PCNF0 = (8UL << RADIO_PCNF0_LFLEN_Pos) |
                      (RADIO_PCNF0_PLEN_32bitZero << RADIO_PCNF0_PLEN_Pos) |
@@ -34110,42 +33487,26 @@ static bool mgi_nrf52_radio_init(struct mg_tcpip_if *ifp) {
   NRF_RADIO->MODECNF0 = (RADIO_MODECNF0_DTX_Center << RADIO_MODECNF0_DTX_Pos) |
                         RADIO_MODECNF0_RU_Fast;
   NRF_RADIO->SFD = 0xa7;
-  NRF_RADIO->FREQUENCY = 5 * (MG_802154_CHANNEL - 10);
-  NRF_RADIO->TXPOWER = RADIO_TXPOWER_TXPOWER_Pos8dBm;
+  NRF_RADIO->FREQUENCY = 5 * (MG_RADIO_CHANNEL - 10);
   // Correlator threshold 45 matches the RADIO reset value. A threshold of
   // 20 caused false busy detections and persistent L2 retries.
   NRF_RADIO->CCACTRL =
       (RADIO_CCACTRL_CCAMODE_CarrierMode << RADIO_CCACTRL_CCAMODE_Pos) |
       (2UL << RADIO_CCACTRL_CCACORRCNT_Pos) |
       (45UL << RADIO_CCACTRL_CCACORRTHRES_Pos);
+#endif
+  NRF_RADIO->TXPOWER = RADIO_TXPOWER_TXPOWER_Pos8dBm;
   NRF_RADIO->INTENSET = RADIO_INTENSET_DISABLED_Msk;
   NVIC_SetPriority(RADIO_IRQn, 0);
   NVIC_EnableIRQ(RADIO_IRQn);
   mgi_nrf52_listen();
   return true;
 }
-static size_t mgi_nrf52_tx(const void *buf, size_t len,
-                           struct mg_tcpip_if *ifp) {
-  struct mg_tcpip_driver_nrf52_data *data = ifp->driver_data;
-  return data->mesh->strategy->tx(data->mesh, buf, len);
-}
 
-static size_t mgi_nrf52_rx(void *buf, size_t cap, struct mg_tcpip_if *ifp) {
-  struct mg_tcpip_driver_nrf52_data *data = ifp->driver_data;
-  size_t len = data->mesh->rx_len;
-  if (len > cap) return 0;
-  if (len != 0 && buf != ifp->recv_queue.buf)
-    memcpy(buf, ifp->recv_queue.buf, len);
-  data->mesh->rx_len = 0;
-  return len;
-}
-
-static bool mgi_nrf52_poll(struct mg_tcpip_if *ifp, bool s1) {
-  struct mg_tcpip_driver_nrf52_data *data = ifp->driver_data;
-  struct mg_mesh_node *node = data->mesh;
-  uint64_t now = mg_micros();
-  (void) s1;
-  if (s_nrf52_txing && mg_micros() - s_nrf52_started > MG_MESH_TX_TIMEOUT_US) {
+static bool mgi_nrf52_radio_poll(struct mg_tcpip_if *ifp) {
+  bool done;
+  (void) ifp;
+  if (s_nrf52_txing && mg_micros() - s_nrf52_started > MG_RADIO_TX_TIMEOUT_US) {
     NVIC_DisableIRQ(RADIO_IRQn);
     mgi_nrf52_disable();
     s_nrf52_txing = false;
@@ -34153,42 +33514,18 @@ static bool mgi_nrf52_poll(struct mg_tcpip_if *ifp, bool s1) {
     mgi_nrf52_listen();
     NVIC_EnableIRQ(RADIO_IRQn);
   }
-  if (s_nrf52_done) {
-    s_nrf52_done = false;
-    node->tx_at = now + node->strategy->radio->ifs_us;
-  }
-  node->now = now;
-  mg_mesh_rx_drain(node, &s_nrf52_rx);
-  node->strategy->tick(node, now);
-  return node->joined;
+  done = s_nrf52_done;
+  s_nrf52_done = false;
+  return done;
 }
 
 static bool mgi_nrf52_init(struct mg_tcpip_if *ifp) {
-  struct mg_tcpip_driver_nrf52_data *data = ifp->driver_data;
-  const struct mg_mesh *strategy = data->strategy;
-  uint16_t address;
-  address =
-      (uint16_t) (2 + ((unsigned) ifp->mac[4] * 256 + ifp->mac[5]) % 65532u);
-  if (strategy == NULL) strategy = &mg_mesh_default;
-  data->mesh = mg_calloc(1, sizeof(*data->mesh));
-  if (data->mesh == NULL) return false;
-  if (!strategy->init(data->mesh, ifp, NULL, address)) {
-    mg_free(data->mesh);
-    data->mesh = NULL;
-    return false;
-  }
-  data->mesh->strategy = strategy;
-  data->mesh->tx = mgi_nrf52_radio_tx;
-  mg_queue_init(&s_nrf52_rx, s_nrf52_queue, sizeof(s_nrf52_queue));
-  if (mgi_nrf52_radio_init(ifp)) return true;
-  strategy->free(data->mesh);
-  mg_free(data->mesh);
-  data->mesh = NULL;
-  return false;
+  return mg_radio_init(ifp, mgi_nrf52_radio_init, mgi_nrf52_radio_poll,
+                       mgi_nrf52_radio_tx);
 }
 
-struct mg_tcpip_driver mg_tcpip_driver_nrf52 = {mgi_nrf52_init, mgi_nrf52_tx,
-                                                mgi_nrf52_rx, mgi_nrf52_poll};
+struct mg_tcpip_driver mg_tcpip_driver_nrf52 = {mgi_nrf52_init, mg_radio_tx,
+                                                mg_radio_rx, mg_radio_poll};
 #endif
 
 #ifdef MG_ENABLE_LINES
@@ -34961,6 +34298,757 @@ struct mg_tcpip_driver mg_tcpip_driver_ra = {mg_tcpip_driver_ra_init,
 #endif
 
 #ifdef MG_ENABLE_LINES
+#line 1 "src/drivers/radio.c"
+#endif
+// Copyright (c) 2026 Cesanta Software Limited
+// All rights reserved
+
+
+
+
+
+
+#if MG_ENABLE_TCPIP
+
+#define MGI_ETH_MAX 1514
+#define MGI_TX_DST_LEN 2
+
+// The radio, chosen by MG_RADIO. A frame starts with the radio header, with
+// the radio addresses, then the mesh header: type, then burst: the
+// fragment's index << 4 | the last fragment's index. Then the payload
+#if MG_RADIO == MG_RADIO_BLE
+#define MGI_RADIO_MTU 251           // Largest frame: BLE 5 data length
+#define MGI_RADIO_BITRATE 2000000   // Bits per second on air
+#define MGI_RADIO_OVERHEAD 11       // Preamble, access address, length, CRC
+#define MGI_RADIO_TURNAROUND_US 40  // Receive to transmit: nRF52840 fast ramp
+#define MGI_RADIO_IFS_US 300        // Gap between transmissions
+#define MGI_RADIO_HDR_LEN 4         // Destination, source
+
+// Write the radio header. Little endian
+static void mgi_radio_write_hdr(uint8_t *buf, uint16_t dst, uint16_t src) {
+  buf[0] = (uint8_t) dst, buf[1] = (uint8_t) (dst >> 8);
+  buf[2] = (uint8_t) src, buf[3] = (uint8_t) (src >> 8);
+}
+
+// Read the radio header. The access address already keeps other networks out
+static bool mgi_radio_parse_hdr(const uint8_t *buf, size_t len, uint16_t *dst,
+                                uint16_t *src) {
+  if (len < MGI_RADIO_HDR_LEN) return false;
+  *dst = (uint16_t) (buf[0] | buf[1] << 8);
+  *src = (uint16_t) (buf[2] | buf[3] << 8);
+  return true;
+}
+#else
+#define MGI_RADIO_MTU 125            // 127 minus FCS
+#define MGI_RADIO_BITRATE 250000     // Bits per second on air
+#define MGI_RADIO_OVERHEAD 8         // Preamble, SFD, PHR, FCS
+#define MGI_RADIO_TURNAROUND_US 100  // Receive to transmit
+#define MGI_RADIO_IFS_US 640         // Gap between transmissions
+#define MGI_RADIO_HDR_LEN 9          // MAC header, short addresses
+
+// MAC header: frame control 0x8841, a data frame, PAN ID compression, short
+// destination and source addresses; sequence number, 0, as nothing uses it
+// yet; PAN ID; destination; source. Little endian, as the standard says
+static void mgi_radio_write_hdr(uint8_t *buf, uint16_t dst, uint16_t src) {
+  buf[0] = 0x41, buf[1] = 0x88, buf[2] = 0;
+  buf[3] = (uint8_t) MG_RADIO_NETWORK;
+  buf[4] = (uint8_t) (MG_RADIO_NETWORK >> 8);
+  buf[5] = (uint8_t) dst, buf[6] = (uint8_t) (dst >> 8);
+  buf[7] = (uint8_t) src, buf[8] = (uint8_t) (src >> 8);
+}
+
+// Read the MAC header. Other networks' frames fail the check
+static bool mgi_radio_parse_hdr(const uint8_t *buf, size_t len, uint16_t *dst,
+                                uint16_t *src) {
+  if (len < MGI_RADIO_HDR_LEN || buf[0] != 0x41 || buf[1] != 0x88 ||
+      buf[3] != (uint8_t) MG_RADIO_NETWORK ||
+      buf[4] != (uint8_t) (MG_RADIO_NETWORK >> 8)) {
+    return false;
+  }
+  *dst = (uint16_t) (buf[5] | buf[6] << 8);
+  *src = (uint16_t) (buf[7] | buf[8] << 8);
+  return true;
+}
+#endif
+
+#define MGI_FRAME_HDR_LEN (MGI_RADIO_HDR_LEN + 2)  // Radio and mesh headers
+#define MGI_FRAG_CAP (MGI_RADIO_MTU - MGI_FRAME_HDR_LEN)  // Payload per frame
+#define MGI_TX_QUEUE_SIZE 2048  // Ethernet frames to send, as bursts
+#define MGI_RX_STAMP_LEN sizeof(uint64_t)
+#define MGI_RX_QUEUE_SIZE (16 * (MGI_RX_STAMP_LEN + MGI_RADIO_MTU + 8))
+
+// A radio interface's state, its driver_data, allocated by mg_radio_init()
+struct mg_radio_node {
+  bool (*hw_poll)(struct mg_tcpip_if *);  // Hardware: service it
+  size_t (*hw_tx)(struct mg_tcpip_if *, const void *, size_t);  // Start TX
+  struct mg_tcpip_if *ifp;         // Radio interface
+  struct mg_tcpip_if *lan;         // Bridge: LAN interface. NULL: a node
+  struct mg_queue frames;          // Received radio frames, with arrival times
+  struct mg_queue tx;              // Ethernet frames to send, one burst each
+  uint64_t now;                    // Current poll time, us
+  uint64_t tx_at;                  // Earliest next radio TX, us
+  uint64_t burst_at;               // Next fragment TX, us
+  uint64_t deadline;               // End of the current turn, us
+  uint64_t answer_by;             // Node: first answer frame must end by then
+  uint64_t heard_at;               // Node: last frame from the bridge, us
+  size_t rx_len;                   // Ethernet frame waiting for the stack
+  size_t tx_offset;                // Next fragment of the queued burst
+  struct mgi_radio_peer *members;  // Bridge: members, round-robin order
+  struct mgi_radio_peer *current;  // Bridge: member whose turn is active/next
+  struct mgi_radio_peer *fanout;   // Bridge: next broadcast recipient
+  uint32_t random;                 // PRNG state, for join timing
+  uint16_t radio_address;          // Our radio address, made from the MAC
+  uint16_t coordinator;            // Node: the bridge's radio address
+  uint8_t phase;                   // Turn: idle, join or data
+  uint8_t rx_expected;  // Next fragment: index << 4 | last index. 0xff: idle
+  bool joined;          // Node: member of the mesh
+  bool granted;         // Node: had a turn this round
+  bool rejoin;          // Node: just left, answer the next join window
+  uint8_t missed;       // Node: rounds in a row without a turn
+  uint8_t rx_buf[MGI_ETH_MAX];         // Ethernet frame being reassembled
+  char tx_buf[MGI_TX_QUEUE_SIZE];      // Storage of the tx queue
+  char frames_buf[MGI_RX_QUEUE_SIZE];  // Storage of the frames queue
+};
+
+// Time on air of a len byte frame, us
+static uint64_t mgi_radio_airtime(size_t len) {
+  return ((uint64_t) (len + MGI_RADIO_OVERHEAD) * 8000000 + MGI_RADIO_BITRATE -
+          1) /
+         MGI_RADIO_BITRATE;
+}
+
+// Each queue record holds a destination and a complete burst.
+static size_t mgi_radio_queue(struct mg_radio_node *node, struct mg_queue *q,
+                              const void *buf, size_t len, uint16_t dst,
+                              uint8_t type) {
+  const uint8_t *eth = (const uint8_t *) buf;
+  size_t hdr = MGI_FRAME_HDR_LEN, cap = MGI_RADIO_MTU - hdr;
+  size_t frames, size, i;
+  char *record;
+  uint8_t *out;
+  if (len < 14 || len > MGI_ETH_MAX) return 0;
+  frames = (len + cap - 1) / cap;
+  size = MGI_TX_DST_LEN + len + frames * (1 + hdr);
+  if (mg_queue_next(q, NULL) == 0) mg_queue_init(q, q->buf, q->size);
+  if (mg_queue_book(q, &record, size) < size) {
+    MG_ERROR(("TX queue full: need %u, head %u, tail %u, size %u",
+              (unsigned) size, (unsigned) q->head, (unsigned) q->tail,
+              (unsigned) q->size));
+    return 0;
+  }
+  out = (uint8_t *) record;
+  *out++ = (uint8_t) (dst >> 8);
+  *out++ = (uint8_t) dst;
+  for (i = 0; i < frames; i++) {
+    size_t chunk = len - i * cap;
+    if (chunk > cap) chunk = cap;
+    *out++ = (uint8_t) (hdr + chunk);
+    mgi_radio_write_hdr(out, dst, node->radio_address);
+    out[MGI_RADIO_HDR_LEN] = type;
+    out[MGI_RADIO_HDR_LEN + 1] = (uint8_t) (i << 4 | (frames - 1));
+    memcpy(out + hdr, eth + i * cap, chunk);
+    out += hdr + chunk;
+  }
+  mg_queue_add(q, size);
+  return len;
+}
+
+#define MGI_JOIN_WINDOW_US 3000
+#define MGI_JOIN_TURN_US 192
+#define MGI_JOIN_JITTER_US 640
+#define MGI_TX_RETRY_US 32
+// Node: finish the first answer frame this much before the bridge stops
+// waiting
+#define MGI_ANSWER_MARGIN_US 500
+#define MGI_JOIN_UP_LEN (MGI_FRAME_HDR_LEN + 6)  // Payload: the MAC address
+#define MGI_MAX_FRAGMENTS 14
+// Node: rounds without a turn that prove the bridge no longer lists us
+#define MGI_MAX_MISSED_ROUNDS 3
+
+enum { MGI_JOIN_DOWN = 1, MGI_JOIN_UP, MGI_DATA_DOWN, MGI_DATA_UP };
+
+enum { MGI_TURN_IDLE, MGI_TURN_JOIN, MGI_TURN_DATA };
+
+struct mgi_radio_peer {
+  struct mgi_radio_peer *next;  // Next member in round-robin order
+  uint16_t radio_address;       // Source address supplied in MGI_JOIN_UP
+  uint8_t mac[6];               // Ethernet MAC supplied in MGI_JOIN_UP
+  uint64_t expire_at;  // First missed turn + MG_RADIO_TIMEOUT_MS, 0: answering
+};
+
+static uint32_t mgi_radio_random(struct mg_radio_node *node) {
+  uint32_t *random = &node->random;
+  if (*random == 0) {
+    size_t i;
+    *random = (uint32_t) mg_now();
+    for (i = 0; i < 6; i++) *random = *random * 33u + node->ifp->mac[i];
+    if (*random == 0) *random = 1;
+  }
+  *random ^= *random << 13;
+  *random ^= *random >> 17;
+  *random ^= *random << 5;
+  return *random;
+}
+
+// Read a frame's radio addresses to dst and src, and return its type, from
+// the mesh header. 0: not a frame of ours
+static unsigned mgi_radio_frame_parse(const uint8_t *frame, size_t len,
+                                      uint16_t *dst, uint16_t *src) {
+  if (len < MGI_FRAME_HDR_LEN || !mgi_radio_parse_hdr(frame, len, dst, src)) {
+    return 0;
+  }
+  return frame[MGI_RADIO_HDR_LEN];
+}
+
+// Write a frame's headers: the radio's, to dst from src, then ours: type,
+// and burst: high nibble is the index, low nibble is the last index
+static void mgi_radio_frame_header(uint8_t *frame, uint16_t dst, uint16_t src,
+                                   uint8_t type, uint8_t burst) {
+  mgi_radio_write_hdr(frame, dst, src);
+  frame[MGI_RADIO_HDR_LEN] = type, frame[MGI_RADIO_HDR_LEN + 1] = burst;
+}
+
+// Hand a radio frame to the hardware. The interface's fn sees it first
+static bool mgi_radio_send(struct mg_radio_node *node, const void *frame,
+                           size_t len) {
+  struct mg_str s = mg_str_n((const char *) frame, len);
+  mg_tcpip_call(node->ifp, MG_TCPIP_EV_PHY_TX, &s);
+  return node->hw_tx(node->ifp, frame, len) == len;
+}
+
+static bool mgi_radio_control_send(struct mg_radio_node *node, uint16_t dst,
+                                   uint8_t command) {
+  uint8_t frame[MGI_JOIN_UP_LEN] = {0};
+  size_t len = MGI_FRAME_HDR_LEN;
+  mgi_radio_frame_header(frame, dst, node->radio_address, command, 0);
+  if (command == MGI_JOIN_UP) {
+    memcpy(frame + MGI_FRAME_HDR_LEN, node->ifp->mac, 6);
+    len = MGI_JOIN_UP_LEN;
+  }
+  return node->now >= node->tx_at && mgi_radio_send(node, frame, len);
+}
+
+// Time on air of a burst carrying len bytes, gaps between frames included
+static uint64_t mgi_radio_burst_time(size_t len) {
+  size_t frames = len == 0 ? 1 : (len + MGI_FRAG_CAP - 1) / MGI_FRAG_CAP;
+  return (frames - 1) * (mgi_radio_airtime(MGI_RADIO_MTU) + MGI_RADIO_IFS_US) +
+         mgi_radio_airtime(MGI_FRAME_HDR_LEN + len -
+                           (frames - 1) * MGI_FRAG_CAP);
+}
+
+// End the current turn. A queued burst is used up only when done: all its
+// frames went out. Otherwise it stays queued, and a later turn sends it again
+static void mgi_radio_tx_finish(struct mg_radio_node *node, bool done) {
+  if (node->tx_offset != 0 && done) {
+    if (node->fanout != NULL) node->fanout = node->fanout->next;
+    if (node->fanout == NULL) {
+      size_t len = mg_queue_next(&node->tx, NULL);
+      mg_queue_del(&node->tx, len);
+    }
+  }
+  node->tx_offset = 0;
+  node->burst_at = (uint64_t) -1;
+}
+
+static void mgi_radio_tx_step(struct mg_radio_node *node, uint64_t now) {
+  uint8_t empty[MGI_FRAME_HDR_LEN], *frame = empty;
+  size_t len = MGI_FRAME_HDR_LEN, record_len = 0;
+  uint16_t dst;
+  uint8_t command;
+  if (now < node->burst_at) return;
+  if (now >= node->deadline) {
+    mgi_radio_tx_finish(node, false);
+    return;
+  }
+  dst = node->lan == NULL ? node->coordinator : node->current->radio_address;
+  command = node->lan == NULL ? MGI_DATA_UP : MGI_DATA_DOWN;
+  if (node->tx_offset != 0) {
+    char *record;
+    uint8_t *part;
+    record_len = mg_queue_next(&node->tx, &record);
+    part = (uint8_t *) record + node->tx_offset;
+    len = part[0];
+    frame = part + 1;
+    mgi_radio_write_hdr(frame, dst, node->radio_address);
+  } else {
+    mgi_radio_frame_header(frame, dst, node->radio_address, command, 0);
+  }
+  // A node's first answer frame: if it cannot end on air before the bridge
+  // stops waiting, stay silent. The queued frame waits for the next turn
+  if (node->lan == NULL &&
+      (node->tx_offset == 0 || node->tx_offset == MGI_TX_DST_LEN) &&
+      now + mgi_radio_airtime(len) > node->answer_by) {
+    node->tx_offset = 0;
+    node->burst_at = (uint64_t) -1;
+    return;
+  }
+  if (now < node->tx_at || !mgi_radio_send(node, frame, len)) {
+    node->burst_at = now + MGI_TX_RETRY_US;
+    return;
+  }
+  if (node->tx_offset == 0 || (node->tx_offset += len + 1) == record_len) {
+    // Bridge: the turn's last frame is out, wait for the answer
+    if (node->lan != NULL)
+      node->deadline =
+          now + mgi_radio_airtime(len) + MG_RADIO_ANSWER_TIMEOUT_US;
+    mgi_radio_tx_finish(node, true);
+  } else {
+    node->burst_at = now + mgi_radio_airtime(len) + MGI_RADIO_IFS_US;
+  }
+}
+
+static void mgi_radio_tx_begin(struct mg_radio_node *node, bool burst,
+                               uint64_t now, uint64_t deadline) {
+  node->phase = MGI_TURN_DATA;
+  node->answer_by = (uint64_t) -1;  // Node sets it after a grant
+  node->tx_offset = burst ? MGI_TX_DST_LEN : 0;
+  node->burst_at = now;
+  node->deadline = deadline;
+}
+
+// Return the assembled length, zero for an empty frame, or -1 if incomplete
+// or invalid. Full non-final fragments make the write offset derivable.
+static int mgi_radio_data_receive(struct mg_radio_node *node,
+                                  const uint8_t *frame, size_t len,
+                                  uint64_t now) {
+  unsigned burst = frame[MGI_FRAME_HDR_LEN - 1], index = burst >> 4,
+           last = burst & 15;
+  size_t chunk = len - MGI_FRAME_HDR_LEN, cap = MGI_FRAG_CAP;
+  size_t offset = index * cap;
+  if (index == 0) {
+    node->rx_expected = (uint8_t) burst;
+    if (node->lan == NULL)
+      node->deadline = now + mgi_radio_burst_time(MGI_ETH_MAX) +
+                       2 * MGI_RADIO_IFS_US + MGI_JOIN_TURN_US;
+  }
+  if (last >= MGI_MAX_FRAGMENTS || index > last || burst != node->rx_expected ||
+      chunk > cap || now > node->deadline || (index < last && chunk != cap) ||
+      (last != 0 && chunk == 0) || offset + chunk > sizeof(node->rx_buf)) {
+    MG_ERROR(
+        ("%s: fragment %u/%u dropped, expected %u/%u, %u bytes, %lld us "
+         "past deadline",
+         node->lan == NULL ? "Node" : "Bridge", index, last,
+         (unsigned) node->rx_expected >> 4, node->rx_expected & 15U,
+         (unsigned) chunk, (long long) (now - node->deadline)));
+    node->rx_expected = 0xff;
+    return -1;
+  }
+  memcpy(node->rx_buf + offset, frame + MGI_FRAME_HDR_LEN, chunk);
+  if (index < last) {
+    node->rx_expected = (uint8_t) (burst + 0x10);
+    // Bridge: an answer is under way, wait for its next fragment
+    if (node->lan != NULL)
+      node->deadline = now + mgi_radio_airtime(MGI_RADIO_MTU) +
+                       MGI_RADIO_IFS_US + MG_RADIO_ANSWER_TIMEOUT_US;
+    return -1;
+  }
+  node->rx_expected = 0xff;
+  return offset + chunk == 0 || offset + chunk >= 14 ? (int) (offset + chunk)
+                                                     : -1;
+}
+
+// Bridge scheduling and Ethernet forwarding.
+
+static uint16_t mgi_radio_join_field(const uint8_t *p) {
+  return (uint16_t) ((unsigned) p[0] * 256 + p[1]);
+}
+
+// Return chaddr for an Ethernet DHCP server reply, even when broadcast.
+static const uint8_t *mgi_radio_dhcp_client(const uint8_t *frame, size_t len) {
+  size_t ip_len, ihl, udp_len;
+  const uint8_t *udp, *dhcp;
+  if (len < 34 || mgi_radio_join_field(frame + 12) != 0x0800 ||
+      (frame[14] >> 4) != 4 || frame[23] != 17 ||
+      (mgi_radio_join_field(frame + 20) & 0x3fff) != 0)
+    return NULL;
+  ip_len = mgi_radio_join_field(frame + 16);
+  ihl = (size_t) (frame[14] & 15) * 4;
+  if (ihl < 20 || ip_len > len - 14 || ip_len < ihl + 8 + 240) return NULL;
+  udp = frame + 14 + ihl;
+  udp_len = mgi_radio_join_field(udp + 4);
+  if (mgi_radio_join_field(udp) != 67 || mgi_radio_join_field(udp + 2) != 68 ||
+      udp_len < 8 + 240 || udp_len > ip_len - ihl)
+    return NULL;
+  dhcp = udp + 8;
+  if (dhcp[0] != 2 || dhcp[1] != 1 || dhcp[2] != 6 ||
+      memcmp(dhcp + 236, "\x63\x82\x53\x63", 4) != 0)
+    return NULL;
+  return dhcp + 28;
+}
+
+static size_t mgi_radio_enqueue(struct mg_radio_node *node, const void *buf,
+                                size_t len) {
+  const uint8_t *frame = (const uint8_t *) buf;
+  if (node->lan == NULL)
+    return mgi_radio_queue(node, &node->tx, buf, len, node->coordinator,
+                           MGI_DATA_UP);
+  if (len >= 14 && len <= MGI_ETH_MAX) {
+    const uint8_t *client = mgi_radio_dhcp_client(frame, len);
+    const uint8_t *dst = client == NULL ? frame : client;
+    bool multicast = client == NULL && (frame[0] & 1) != 0;
+    struct mgi_radio_peer *peer;
+    for (peer = node->members; peer != NULL; peer = peer->next) {
+      if (multicast || memcmp(dst, peer->mac, 6) == 0) {
+        uint16_t addr = multicast ? 0xffffu : peer->radio_address;
+        return mgi_radio_queue(node, &node->tx, buf, len, addr, MGI_DATA_DOWN);
+      }
+    }
+  }
+  return 0;
+}
+
+static void mgi_radio_bridge_queue_lan(struct mg_radio_node *bridge) {
+  struct mg_queue *rx = &bridge->lan->recv_queue;
+  char *buf;
+  size_t len;
+  while ((len = mg_queue_next(rx, &buf)) > 0) {
+    bridge->ifp->driver->tx(buf, len, bridge->ifp);
+    mg_queue_del(rx, len);
+  }
+}
+
+static void mgi_radio_bridge_rx(uint64_t now, struct mg_radio_node *b,
+                                const uint8_t *frame, size_t len) {
+  struct mgi_radio_peer *peer;
+  uint16_t dst = 0, src = 0;
+  unsigned command = mgi_radio_frame_parse(frame, len, &dst, &src);
+  if (command == MGI_DATA_UP && dst == b->radio_address &&
+      b->phase == MGI_TURN_DATA && b->current != NULL &&
+      src == b->current->radio_address && now <= b->deadline) {
+    int received = mgi_radio_data_receive(b, frame, len, now);
+    if (received < 0) return;
+    if (received != 0) {
+      b->lan->driver->tx(b->rx_buf, (size_t) received, b->lan);
+    }
+    b->current->expire_at = 0;
+    b->current = b->current->next;
+    b->phase = MGI_TURN_IDLE;
+    b->deadline = now;
+    return;
+  }
+  if (command == MGI_DATA_UP && dst == b->radio_address) {
+    MG_ERROR(
+        ("Bridge: fragment %u/%u from %04x outside its turn: phase %u, "
+         "turn of %04x, %lld us past deadline",
+         frame[MGI_FRAME_HDR_LEN - 1] >> 4U, frame[MGI_FRAME_HDR_LEN - 1] & 15U,
+         src, b->phase, b->current == NULL ? 0 : b->current->radio_address,
+         (long long) (now - b->deadline)));
+    return;
+  }
+  if (len != MGI_JOIN_UP_LEN || command != MGI_JOIN_UP ||
+      dst != b->radio_address || b->phase != MGI_TURN_JOIN ||
+      now >= b->deadline) {
+    return;
+  }
+  if (src == 0 || src == 0xffffu) return;
+  for (peer = b->members; peer != NULL; peer = peer->next) {
+    if (peer->radio_address == src) break;
+  }
+  if (peer == NULL) {
+    peer = (struct mgi_radio_peer *) mg_calloc(1, sizeof(*peer));
+    if (peer == NULL) return;
+    peer->radio_address = src;
+    peer->next = b->members;
+    b->members = peer;
+    MG_DEBUG(("Member %M joined, radio address %04x", mg_print_mac,
+              frame + MGI_FRAME_HDR_LEN, src));
+  }
+  memcpy(peer->mac, frame + MGI_FRAME_HDR_LEN, sizeof(peer->mac));
+  peer->expire_at = 0;
+}
+
+// Member peer did not answer its turn. The first miss starts the timeout. If
+// it is still silent when that ends, it is gone: remove it, and its queued
+// downlink frames
+static void mgi_radio_member_missed(struct mg_radio_node *node,
+                                    struct mgi_radio_peer *peer, uint64_t now) {
+  if (peer->expire_at == 0) peer->expire_at = now + MG_RADIO_TIMEOUT_MS * 1000;
+  if (now < peer->expire_at) return;
+  MG_DEBUG(("Member %M removed: no answer for %d ms", mg_print_mac, peer->mac,
+            MG_RADIO_TIMEOUT_MS));
+  if (node->fanout == peer) {
+    node->fanout = peer->next;
+    if (node->fanout == NULL) {
+      size_t len = mg_queue_next(&node->tx, NULL);
+      mg_queue_del(&node->tx, len);
+    }
+  }
+  LIST_DELETE(struct mgi_radio_peer, &node->members, peer);
+  mg_free(peer);
+}
+
+// A broadcast occupies one record and is sent once to each member in list
+// order.
+static size_t mgi_radio_bridge_burst(struct mg_radio_node *node,
+                                     struct mgi_radio_peer *peer) {
+  char *record;
+  size_t len;
+  while ((len = mg_queue_next(&node->tx, &record)) != 0) {
+    uint16_t dst = mgi_radio_join_field((const uint8_t *) record);
+    struct mgi_radio_peer *member;
+    if (dst == 0xffffu) {
+      if (node->fanout == NULL) node->fanout = node->members;
+      return node->fanout == peer ? len : 0;
+    }
+    if (dst == peer->radio_address) return len;
+    for (member = node->members; member != NULL; member = member->next) {
+      if (member->radio_address == dst) return 0;
+    }
+    mg_queue_del(&node->tx, len);  // Its destination has left.
+  }
+  return 0;
+}
+
+static uint64_t mgi_radio_queued_burst_time(struct mg_radio_node *node,
+                                            size_t len) {
+  char *record;
+  size_t frames;
+  if (len == 0) return mgi_radio_burst_time(0);
+  mg_queue_next(&node->tx, &record);
+  // Fragment zero carries the final index. Count overhead and IFS per frame.
+  frames = ((uint8_t) record[MGI_TX_DST_LEN + MGI_FRAME_HDR_LEN] & 15u) + 1u;
+  return mgi_radio_airtime(len - MGI_TX_DST_LEN - frames +
+                           (frames - 1) * MGI_RADIO_OVERHEAD) +
+         (frames - 1) * MGI_RADIO_IFS_US;
+}
+
+static void mgi_radio_bridge_io(uint64_t now, struct mg_radio_node *b) {
+  mgi_radio_bridge_queue_lan(b);
+  if (now >= b->deadline) {
+    if (b->burst_at != (uint64_t) -1) mgi_radio_tx_finish(b, false);
+    if (b->phase == MGI_TURN_DATA && b->current != NULL) {
+      struct mgi_radio_peer *peer = b->current;
+      b->current = peer->next;
+      mgi_radio_member_missed(b, peer, now);
+    } else if (b->phase == MGI_TURN_JOIN) {
+      b->current = b->members;
+    }
+    b->phase = MGI_TURN_IDLE;
+    if (b->current != NULL) {
+      size_t burst = mgi_radio_bridge_burst(b, b->current);
+      uint64_t down = mgi_radio_queued_burst_time(b, burst);
+      b->rx_expected = 0xff;
+      down += mgi_radio_burst_time(MGI_ETH_MAX);
+      mgi_radio_tx_begin(b, burst != 0, now,
+                         now + down + 2 * MGI_RADIO_IFS_US + MGI_JOIN_TURN_US);
+    } else if (mgi_radio_control_send(b, 0xffffu, MGI_JOIN_DOWN)) {
+      b->phase = MGI_TURN_JOIN;
+      b->deadline = now + MGI_JOIN_WINDOW_US;
+    }
+    if (b->deadline <= now) b->deadline = now + MGI_JOIN_TURN_US;
+  }
+}
+
+// Node: leave the mesh, and answer the next join window. Queued frames are
+// dropped, so a node that lost its bridge does not keep a full queue that
+// refuses every new frame. The stack sees the link go down on its next 1s
+// tick, from mg_radio_poll()
+static void mgi_radio_node_leave(struct mg_radio_node *n) {
+  n->joined = false;
+  n->granted = false;
+  n->rejoin = true;
+  n->missed = 0;
+  n->phase = MGI_TURN_IDLE;
+  n->burst_at = (uint64_t) -1;
+  n->tx_offset = 0;
+  n->rx_expected = 0xff;
+  mg_queue_init(&n->tx, n->tx_buf, sizeof(n->tx_buf));
+}
+
+static void mgi_radio_node_rx(struct mg_radio_node *n, uint64_t now,
+                              uint8_t *frame, size_t len) {
+  uint16_t dst = 0, src = 0;
+  unsigned command = mgi_radio_frame_parse(frame, len, &dst, &src);
+  if (command != 0 && n->coordinator != 0 && src == n->coordinator) {
+    n->heard_at = now;
+  }
+  if (command == MGI_JOIN_DOWN && len == MGI_FRAME_HDR_LEN && dst == 0xffffu) {
+    // The bridge gives each member a turn every round, before its JOIN_DOWN.
+    // Rounds in a row without a turn mean it does not list us, e.g. it was
+    // restarted: leave at once, and answer this join window
+    if (n->joined && src == n->coordinator && n->granted) {
+      n->granted = false;
+      n->missed = 0;
+    } else if (n->joined && src == n->coordinator &&
+               ++n->missed >= MGI_MAX_MISSED_ROUNDS) {
+      MG_INFO(("Left the mesh: no turn in %d rounds", MGI_MAX_MISSED_ROUNDS));
+      mgi_radio_node_leave(n);
+    }
+    // Spread contenders across windows as well as within the reply window.
+    // A node that just left answers the first window it sees
+    if (!n->joined && (n->rejoin || (mgi_radio_random(n) % 64) == 0)) {
+      n->rejoin = false;
+      n->coordinator = src;
+      n->phase = MGI_TURN_JOIN;
+      n->burst_at =
+          now + MGI_JOIN_TURN_US + mgi_radio_random(n) % MGI_JOIN_JITTER_US;
+    }
+  } else if (command == MGI_DATA_DOWN && n->coordinator != 0 &&
+             dst == n->radio_address && src == n->coordinator) {
+    int received = mgi_radio_data_receive(n, frame, len, now);
+    if (received < 0) return;
+    if (!n->joined) MG_INFO(("Joined the mesh, bridge address %04x", src));
+    n->joined = true;
+    n->granted = true;
+    n->missed = 0;
+    if (received != 0) {
+      struct mg_tcpip_if *ifp = n->ifp;
+      if (n->rx_len != 0 || (size_t) received > ifp->recv_queue.size) {
+        ifp->ndrop++;
+      } else {
+        memcpy(ifp->recv_queue.buf, n->rx_buf, (size_t) received);
+        n->rx_len = (size_t) received;
+      }
+    }
+    // A grant that waited in the receive queue while the node was busy, e.g.
+    // computing TLS keys, is too old to answer. Leave the turn state alone:
+    // queued frames go out on the first grant that can still be answered
+    if (n->now + MGI_ANSWER_MARGIN_US >= now + MG_RADIO_ANSWER_TIMEOUT_US) {
+      return;
+    }
+    if (n->burst_at != (uint64_t) -1) mgi_radio_tx_finish(n, false);
+    mgi_radio_tx_begin(n, mg_queue_next(&n->tx, NULL) != 0, now,
+                       now + mgi_radio_burst_time(MGI_ETH_MAX) +
+                           2 * MGI_RADIO_IFS_US + MGI_JOIN_TURN_US);
+    n->answer_by = now + MG_RADIO_ANSWER_TIMEOUT_US - MGI_ANSWER_MARGIN_US;
+  }
+}
+
+// Handle a received radio frame. Its timing counts from its arrival, us
+static void mgi_radio_input(struct mg_radio_node *node, uint64_t arrived,
+                            void *buf, size_t len) {
+  uint64_t ready = node->now + MGI_RADIO_TURNAROUND_US;
+  if (node->tx_at < ready) node->tx_at = ready;
+  if (node->lan != NULL) {
+    mgi_radio_bridge_rx(arrived, node, (const uint8_t *) buf, len);
+  } else {
+    mgi_radio_node_rx(node, arrived, (uint8_t *) buf, len);
+  }
+}
+
+static void mgi_radio_tick(struct mg_radio_node *node, uint64_t now) {
+  node->now = now;
+  if (node->lan != NULL) {
+    mgi_radio_bridge_io(now, node);
+    mgi_radio_tx_step(node, now);
+    return;
+  }
+  // No JOIN_DOWN comes from a silent bridge, so the turn timeout never fires
+  if (node->joined &&
+      now > node->heard_at + (uint64_t) MG_RADIO_TIMEOUT_MS * 1000) {
+    MG_INFO(("Left the mesh: bridge silent for %d ms", MG_RADIO_TIMEOUT_MS));
+    mgi_radio_node_leave(node);
+  }
+  if (node->phase == MGI_TURN_JOIN) {
+    if (node->burst_at <= now) {
+      if (now - node->burst_at <= MGI_JOIN_TURN_US && !node->joined)
+        mgi_radio_control_send(node, node->coordinator, MGI_JOIN_UP);
+      node->burst_at = (uint64_t) -1;
+      node->phase = MGI_TURN_IDLE;
+    }
+  } else {
+    mgi_radio_tx_step(node, now);
+  }
+}
+
+bool mg_radio_init(struct mg_tcpip_if *ifp,
+                   bool (*hw_init)(struct mg_tcpip_if *, uint16_t addr),
+                   bool (*hw_poll)(struct mg_tcpip_if *),
+                   size_t (*hw_tx)(struct mg_tcpip_if *, const void *,
+                                   size_t)) {
+  struct mg_radio_node *node =
+      (struct mg_radio_node *) mg_calloc(1, sizeof(*node));
+  if (node == NULL) return false;
+  node->hw_poll = hw_poll, node->hw_tx = hw_tx;
+  node->ifp = ifp;
+  node->radio_address =
+      (uint16_t) (2 + ((unsigned) ifp->mac[4] * 256 + ifp->mac[5]) % 65532u);
+  node->burst_at = (uint64_t) -1;
+  node->rx_expected = 0xff;
+  mg_queue_init(&node->tx, node->tx_buf, sizeof(node->tx_buf));
+  mg_queue_init(&node->frames, node->frames_buf, sizeof(node->frames_buf));
+  ifp->driver_data = node;
+  if (hw_init(ifp, node->radio_address)) return true;
+  ifp->driver_data = NULL;
+  mg_free(node);
+  return false;
+}
+
+void mg_radio_bridge(struct mg_tcpip_if *ifp, struct mg_tcpip_if *lan) {
+  struct mg_radio_node *node = (struct mg_radio_node *) ifp->driver_data;
+  node->lan = lan;
+}
+
+size_t mg_radio_tx(const void *buf, size_t len, struct mg_tcpip_if *ifp) {
+  struct mg_radio_node *node = (struct mg_radio_node *) ifp->driver_data;
+  size_t n = mgi_radio_enqueue(node, buf, len);
+  if (n != len) {  // Mongoose ignores a failed send: count and report it
+    ifp->nerr++;
+    MG_ERROR(("Mesh refused a %u byte frame", (unsigned) len));
+  }
+  return n;
+}
+
+size_t mg_radio_rx(void *buf, size_t len, struct mg_tcpip_if *ifp) {
+  struct mg_radio_node *node = (struct mg_radio_node *) ifp->driver_data;
+  size_t n = node->rx_len;
+  if (n > len) return 0;
+  if (n != 0 && buf != ifp->recv_queue.buf) memcpy(buf, ifp->recv_queue.buf, n);
+  node->rx_len = 0;
+  return n;
+}
+
+void mg_radio_rx_queue(struct mg_tcpip_if *ifp, const void *frame, size_t len) {
+  struct mg_radio_node *node = (struct mg_radio_node *) ifp->driver_data;
+  uint64_t arrived = mg_micros();
+  size_t need = MGI_RX_STAMP_LEN + len;
+  uint16_t dst, src;
+  char *p;
+  if (len > MGI_RADIO_MTU ||
+      !mgi_radio_parse_hdr((const uint8_t *) frame, len, &dst, &src) ||
+      (dst != 0xffffu && dst != node->radio_address)) {
+    return;
+  }
+  if (mg_queue_book(&node->frames, &p, need) < need) {
+    ifp->ndrop++;
+    return;
+  }
+  memcpy(p, &arrived, MGI_RX_STAMP_LEN);
+  memcpy(p + MGI_RX_STAMP_LEN, frame, len);
+  mg_queue_add(&node->frames, need);
+}
+
+// Process queued radio frames, oldest first, each with its arrival time.
+// Stop while the node holds an Ethernet frame the TCP/IP stack has not taken
+// yet
+bool mg_radio_poll(struct mg_tcpip_if *ifp, bool s1) {
+  struct mg_radio_node *node = (struct mg_radio_node *) ifp->driver_data;
+  bool tx_done = node->hw_poll(ifp);
+  uint64_t now = mg_micros();
+  char *record;
+  size_t len;
+  (void) s1;
+  if (tx_done) node->tx_at = now + MGI_RADIO_IFS_US;
+  node->now = now;
+  while (node->rx_len == 0 &&
+         (len = mg_queue_next(&node->frames, &record)) != 0) {
+    if (len > MGI_RX_STAMP_LEN) {
+      struct mg_str s =
+          mg_str_n(record + MGI_RX_STAMP_LEN, len - MGI_RX_STAMP_LEN);
+      uint64_t arrived;
+      memcpy(&arrived, record, MGI_RX_STAMP_LEN);
+      mg_tcpip_call(ifp, MG_TCPIP_EV_PHY_RX, &s);
+      mgi_radio_input(node, arrived, s.buf, s.len);
+    }
+    mg_queue_del(&node->frames, len);
+  }
+  mgi_radio_tick(node, now);
+  return node->joined;
+}
+
+#endif
+
+#ifdef MG_ENABLE_LINES
 #line 1 "src/drivers/rw612.c"
 #endif
 
@@ -35175,6 +35263,10 @@ struct mg_tcpip_driver mg_tcpip_driver_rw612 = {mg_tcpip_driver_rw612_init,
 #if MG_ENABLE_TCPIP && defined(MG_ENABLE_DRIVER_RW612W) && \
     MG_ENABLE_DRIVER_RW612W
 
+#if MG_RADIO != MG_RADIO_802154
+#error "MG_ENABLE_DRIVER_RW612W supports MG_RADIO_802154 only"
+#endif
+
 
 
 #ifdef ENET
@@ -35283,8 +35375,6 @@ struct mg_rw612 {
   struct mg_tcpip_if *ifp;  // Our interface, for the L2 receive pool
 };
 static struct mg_rw612 s_rw612;
-static struct mg_queue s_rw612w_rx;
-static char s_rw612w_queue[2048];
 
 static void mg_rw612_imu_send(uint8_t type, uint8_t subtype,
                               const uint32_t *payload, uint8_t len) {
@@ -35308,7 +35398,7 @@ static void mg_rw612_control(uint8_t subtype, uint32_t a, uint32_t b,
 }
 
 static void mg_rw612_queue_rx(const uint8_t *frame, size_t len) {
-  mg_mesh_rx_queue(&s_rw612w_rx, s_rw612.ifp, frame, len);
+  mg_radio_rx_queue(s_rw612.ifp, frame, len);
 }
 
 // Spinel packed unsigned integer: 7 bits per byte, LSB first
@@ -35531,7 +35621,7 @@ static size_t mgi_rw612w_radio_tx(struct mg_tcpip_if *ifp, const void *buf,
   memcpy(f + n, buf, len), n += len;
   f[n++] = 0, f[n++] = 0;  // FCS, filled in by the radio
   (void) ifp;
-  f[n++] = MG_802154_CHANNEL;
+  f[n++] = MG_RADIO_CHANNEL;
   f[n++] = 0;  // Max CSMA backoffs
   f[n++] = 0;  // Max frame retries
   f[n++] = 0;  // CSMA disabled for scheduled turns
@@ -35540,11 +35630,9 @@ static size_t mgi_rw612w_radio_tx(struct mg_tcpip_if *ifp, const void *buf,
   return len;
 }
 
-static bool mgi_rw612w_radio_init(struct mg_tcpip_if *ifp) {
+static bool mgi_rw612w_radio_init(struct mg_tcpip_if *ifp, uint16_t address) {
   struct mg_rw612 *s = &s_rw612;
-  struct mg_tcpip_driver_rw612w_data *data = ifp->driver_data;
-  struct mg_mesh_node *node = data->mesh;
-  uint8_t f[8], one = 1, zero = 0, pan[2], addr[2], channel = MG_802154_CHANNEL;
+  uint8_t f[8], one = 1, zero = 0, pan[2], addr[2], channel = MG_RADIO_CHANNEL;
   uint64_t expire;
   if (MGI_MBOX->magic[0] != MGI_SYNC_MAGIC) {
     MG_ERROR(("Radio firmware is not running on CPU2"));
@@ -35583,10 +35671,10 @@ static bool mgi_rw612w_radio_init(struct mg_tcpip_if *ifp) {
   if (!mg_rw612_set(MGI_PROP_PHY_ENABLED, &one, 1)) {
     return mg_rw612_fail("PHY enable failed");
   }
-  pan[0] = (uint8_t) MG_802154_PAN_ID;
-  pan[1] = (uint8_t) (MG_802154_PAN_ID >> 8);
-  addr[0] = (uint8_t) node->radio_address;
-  addr[1] = (uint8_t) (node->radio_address >> 8);
+  pan[0] = (uint8_t) MG_RADIO_NETWORK;
+  pan[1] = (uint8_t) (MG_RADIO_NETWORK >> 8);
+  addr[0] = (uint8_t) address;
+  addr[1] = (uint8_t) (address >> 8);
   if (!mg_rw612_set(MGI_PROP_PHY_CHAN, &channel, 1) ||
       !mg_rw612_set(MGI_PROP_PANID, pan, 2) ||
       !mg_rw612_set(MGI_PROP_SADDR, addr, 2) ||
@@ -35599,74 +35687,32 @@ static bool mgi_rw612w_radio_init(struct mg_tcpip_if *ifp) {
   return true;
 }
 
-static size_t mgi_rw612w_tx(const void *buf, size_t len,
-                            struct mg_tcpip_if *ifp) {
-  struct mg_tcpip_driver_rw612w_data *data = ifp->driver_data;
-  return data->mesh->strategy->tx(data->mesh, buf, len);
-}
-
-static size_t mgi_rw612w_rx(void *buf, size_t cap, struct mg_tcpip_if *ifp) {
-  struct mg_tcpip_driver_rw612w_data *data = ifp->driver_data;
-  size_t len = data->mesh->rx_len;
-  if (len > cap) return 0;
-  if (len != 0 && buf != ifp->recv_queue.buf)
-    memcpy(buf, ifp->recv_queue.buf, len);
-  data->mesh->rx_len = 0;
-  return len;
-}
-
-static bool mgi_rw612w_poll(struct mg_tcpip_if *ifp, bool s1) {
-  struct mg_tcpip_driver_rw612w_data *data = ifp->driver_data;
-  struct mg_mesh_node *node = data->mesh;
-  uint64_t now = mg_micros();
-  (void) s1;
+static bool mgi_rw612w_radio_poll(struct mg_tcpip_if *ifp) {
   bool was_sending = s_rw612.txing;
+  (void) ifp;
   mg_rw612_poll_imu();
   if (s_rw612.txing &&
       (s_rw612.rsp || mg_millis() > s_rw612.txstart + MGI_TX_TIMEOUT_MS)) {
     if (!s_rw612.rsp) MG_ERROR(("TX timeout"));
     s_rw612.txing = false;
   }
-  if (was_sending && !s_rw612.txing)
-    node->tx_at = now + node->strategy->radio->ifs_us;
-  node->now = now;
-  mg_mesh_rx_drain(node, &s_rw612w_rx);
-  node->strategy->tick(node, now);
-  return node->joined;
+  return was_sending && !s_rw612.txing;
 }
 
+// The MAC comes from the chip's unique ID
 static bool mgi_rw612w_init(struct mg_tcpip_if *ifp) {
-  struct mg_tcpip_driver_rw612w_data *data = ifp->driver_data;
-  const struct mg_mesh *strategy = data->strategy;
   uint8_t uid[FSL_OCOTP_UID_LENGTH] = {0}, digest[32];
   uint32_t uid_len = sizeof(uid);
-  uint16_t address;
   OCOTP_ReadUniqueID(uid, &uid_len);
   mg_sha256(digest, uid, sizeof(uid));
   memcpy(ifp->mac, digest, 6);
   ifp->mac[0] = 0x02;
-  address =
-      (uint16_t) (2 + ((unsigned) ifp->mac[4] * 256 + ifp->mac[5]) % 65532u);
-  if (strategy == NULL) strategy = &mg_mesh_default;
-  data->mesh = mg_calloc(1, sizeof(*data->mesh));
-  if (data->mesh == NULL) return false;
-  if (!strategy->init(data->mesh, ifp, NULL, address)) {
-    mg_free(data->mesh);
-    data->mesh = NULL;
-    return false;
-  }
-  data->mesh->strategy = strategy;
-  data->mesh->tx = mgi_rw612w_radio_tx;
-  mg_queue_init(&s_rw612w_rx, s_rw612w_queue, sizeof(s_rw612w_queue));
-  if (mgi_rw612w_radio_init(ifp)) return true;
-  strategy->free(data->mesh);
-  mg_free(data->mesh);
-  data->mesh = NULL;
-  return false;
+  return mg_radio_init(ifp, mgi_rw612w_radio_init, mgi_rw612w_radio_poll,
+                       mgi_rw612w_radio_tx);
 }
 
-struct mg_tcpip_driver mg_tcpip_driver_rw612w = {
-    mgi_rw612w_init, mgi_rw612w_tx, mgi_rw612w_rx, mgi_rw612w_poll};
+struct mg_tcpip_driver mg_tcpip_driver_rw612w = {mgi_rw612w_init, mg_radio_tx,
+                                                 mg_radio_rx, mg_radio_poll};
 #endif
 
 #ifdef MG_ENABLE_LINES
@@ -37781,6 +37827,1387 @@ struct mg_tcpip_driver mg_tcpip_driver_tms570 = {mg_tcpip_driver_tms570_init,
                                                mg_tcpip_driver_tms570_poll};
 #endif
 
+
+#ifdef MG_ENABLE_LINES
+#line 1 "src/drivers/usb.c"
+#endif
+
+
+
+
+
+
+// USB Ethernet needs the TCP/IP stack, the serial console does not
+#if (MG_ENABLE_TCPIP || !MG_ENABLE_USB_ETHERNET) &&           \
+    (MG_ENABLE_DRIVER_USB_RP || MG_ENABLE_DRIVER_USB_NRF52 || \
+     MG_ENABLE_DRIVER_USB_DWC2) &&                            \
+    (MG_ENABLE_USB_ETHERNET || MG_ENABLE_USB_SERIAL)
+
+// Interfaces: ACM control and data 0/1 if enabled, then NCM control and data.
+// The serial port comes first, so that its name on macOS does not depend on
+// Ethernet: /dev/cu.usbmodem...01
+#define MGI_USB_ETH_IF (MG_USB_IF_ETH_DATA - 1)
+#define MGI_USB_NUM_IFS (2 * MG_ENABLE_USB_ETHERNET + 2 * MG_ENABLE_USB_SERIAL)
+#define MGI_USB_CONFIG_LEN \
+  (9 + 85 * MG_ENABLE_USB_ETHERNET + 66 * MG_ENABLE_USB_SERIAL)
+#if MG_ENABLE_USB_ETHERNET
+#define MGI_USB_PRODUCT "MongooseUsbEthernet"
+#else
+#define MGI_USB_PRODUCT "MongooseUsbSerial"
+#endif
+
+// VID 0xadde, PID 0x40e4: an example, for development only
+static const uint8_t s_device_desc[] = {
+    18, 1, 1, 2, 0xef, 2, 1, 64, 0xde, 0xad, 0xe4, 0x40, 0, 1, 1, 2, 3, 1};
+
+// NCM: endpoints 0x81, 0x02/0x82. ACM: endpoints 0x83, 0x04/0x84
+// clang-format off
+static const uint8_t s_config_desc[] = {
+    9, 2, MGI_USB_CONFIG_LEN, 0, MGI_USB_NUM_IFS, 1, 0, 0x80,
+    50,                                             // Config
+#if MG_ENABLE_USB_SERIAL
+    8,  11,   0,    2,    2,  2,    1,  6,          // ACM association
+    9,  4,    0,    0,    1,  2,    2,  1,    6,    // ACM control interface
+    5,  0x24, 0,    0x20, 1,                        // CDC header
+    5,  0x24, 1,    0,    1,                        // Call management
+    4,  0x24, 2,    2,                              // ACM
+    5,  0x24, 6,    0,    1,                        // Union
+    7,  5,    0x83, 3,    16, 0,    16,             // Notification endpoint
+    9,  4,    1,    0,    2,  10,   0,  0,    0,    // Data interface
+    7,  5,    0x04, 2,    64, 0,    0,              // Data OUT
+    7,  5,    0x84, 2,    64, 0,    0,              // Data IN
+#endif
+#if MG_ENABLE_USB_ETHERNET
+    8, 11, MGI_USB_ETH_IF, 2, 2, 13, 0, 4,          // NCM association
+    9, 4, MGI_USB_ETH_IF, 0, 1, 2, 13, 0, 4,        // NCM control interface
+    5, 0x24, 0, 0x20, 1,                            // CDC header
+    5, 0x24, 6, MGI_USB_ETH_IF, MGI_USB_ETH_IF + 1, // Union
+    13, 0x24, 15, 5, 0, 0, 0, 0, 0xea,
+    5, 0, 0, 0,                                     // Eth, 1514 bytes
+    6, 0x24, 0x1a, 0, 1, 0x21,                      // NCM 1.0
+    7, 5, 0x81, 3, 16, 0, 16,                       // Notification endpoint
+    9, 4, MGI_USB_ETH_IF + 1, 0, 0, 10, 0, 1, 0,    // Data interface, off
+    9, 4, MGI_USB_ETH_IF + 1, 1, 2, 10, 0, 1, 0,    // Data interface, on
+    7, 5, 0x02, 2, 64, 0, 0,                        // Data OUT
+    7, 5, 0x82, 2, 64, 0, 0,                        // Data IN
+#endif
+};
+// clang-format on
+
+// Endpoint addresses, for CLEAR_FEATURE(ENDPOINT_HALT)
+static const uint8_t s_endpoints[] = {
+#if MG_ENABLE_USB_ETHERNET
+    0x81, 0x02, 0x82,
+#endif
+#if MG_ENABLE_USB_SERIAL
+    0x83, 0x04, 0x84,
+#endif
+};
+
+#if MG_ENABLE_USB_ETHERNET
+// Windows 11 binds its NCM driver through a Microsoft OS 2.0 compatible ID
+// clang-format off
+static const uint8_t s_ms_os_desc[] = {
+    10, 0, 0, 0, 0,   0,   3,   6,   46,  0,    // Set header, Windows 8.1+
+    8,  0, 1, 0, 0,   0,   36,  0,              // Configuration subset
+    8,  0, 2, 0, MGI_USB_ETH_IF, 0, 28, 0,      // Function subset, NCM
+    20, 0, 3, 0, 'W', 'I', 'N', 'N', 'C', 'M',  // Compatible ID
+    0,  0, 0, 0, 0,   0,   0,   0,   0,   0};
+// clang-format on
+static const uint8_t s_bos_desc[] = {
+    5,    15,   33,   0,    1,    28,   16,   5,    0,    0xdf,
+    0x60, 0xdd, 0xd8, 0x89, 0x45, 0xc7, 0x4c, 0x9c, 0xd2, 0x65,
+    0x9d, 0x9e, 0x64, 0x8a, 0x9f, 0,    0,    3,    6,    sizeof(s_ms_os_desc),
+    0,    1,    0};
+
+// GET_NTB_PARAMETERS reply: NTB16 only, same limits both ways
+static const uint8_t s_ntb_params[] = {
+    28, 0, 1,  0, MG_USB_NTB_SIZE & 255, MG_USB_NTB_SIZE >> 8, 0, 0, 4, 0, 0, 0,
+    4,  0, 0,  0, MG_USB_NTB_SIZE & 255, MG_USB_NTB_SIZE >> 8, 0, 0, 4, 0, 0, 0,
+    4,  0, 16, 0};
+
+// Link notifications: speed 12 Mbit/s both ways, connected, disconnected
+static const uint8_t s_speed[] = {
+    0xa1, 0x2a, 0, 0, MGI_USB_ETH_IF, 0, 8, 0,
+    0, 0x1b, 0xb7, 0, 0, 0x1b, 0xb7, 0};
+static const uint8_t s_up[] = {0xa1, 0, 1, 0, MGI_USB_ETH_IF, 0, 0, 0};
+static const uint8_t s_down[] = {0xa1, 0, 0, 0, MGI_USB_ETH_IF, 0, 0, 0};
+
+// Transfer block header for one frame: NTH16, NDP16 with one datagram at
+// offset 30, so that the IP header after the 14-byte Ethernet header lands
+// on a 4-byte boundary
+static const uint8_t s_nth[30] = {'N', 'C', 'M', 'H', 12,  0,   0,  0, 0, 0,
+                                  12,  0,   'N', 'C', 'M', '0', 16, 0, 0, 0,
+                                  30,  0,   0,   0,   0,   0,   0,  0, 0, 0};
+#endif
+
+// An IN transfer on an endpoint, sent a packet at a time
+struct mgi_usb_in {
+  const uint8_t *data;  // Bytes still to send
+  size_t left;          // How many
+  unsigned packets;     // Packets still to send: a short or empty one ends it
+  bool busy;            // A packet is waiting for the host
+};
+
+// The USB device. There is one
+static struct mgi_usb {
+  const struct mg_usb_hw *hw;  // Controller, NULL until mg_usb_init()
+  struct mgi_usb_in in[5];     // IN transfers, by endpoint
+  char serial[17];             // Serial number, from the controller
+  bool configured;             // Host has set the configuration
+  uint8_t buf[66];             // Generated control replies
+#if MG_ENABLE_USB_ETHERNET
+  struct mg_tcpip_if *ifp;       // Ethernet interface, NULL: serial only
+  bool alt;                      // Ethernet open: data interface setting 1
+  uint16_t filter, sequence;     // Host packet filter, next IN block number
+  uint32_t input_size;           // Largest IN block the host accepts
+  uint8_t notify;                // Pending link notifications
+  struct mg_queue txq;           // Transfer blocks for the host, see tx
+  char txq_buf[MG_USB_TX_SIZE];  // Its storage
+  uint8_t rx[MG_USB_NTB_SIZE];   // OUT transfer block being received
+  size_t rxlen;                  // How much of it arrived
+  bool discard;                  // It is too long: drop it
+#endif
+#if MG_ENABLE_USB_SERIAL
+  bool dtr;                   // Terminal open
+  uint8_t line[7];            // Serial line coding
+  char log[MG_USB_LOG_SIZE];  // Log ring
+  unsigned head, tail;        // Log ring write and read counters
+  char out[64];               // Log output being sent
+#endif
+} s_usb;
+
+// Send the next packet of the IN transfer on ep. False if it is over
+static bool mgi_usb_in_next(unsigned ep) {
+  struct mgi_usb_in *e = &s_usb.in[ep];
+  size_t n = e->left > 64 ? 64 : e->left;
+  if (e->packets == 0) return false;
+  s_usb.hw->in((enum mg_usb_ep) ep, e->data, n);
+  e->data += n, e->left -= n, e->packets--;
+  return true;
+}
+
+// Start an IN transfer. zlp: end a multiple of 64 bytes with an empty packet
+static void mgi_usb_in_start(unsigned ep, const void *data, size_t len,
+                             bool zlp) {
+  struct mgi_usb_in *e = &s_usb.in[ep];
+  e->data = (const uint8_t *) data, e->left = len;
+  e->packets = (unsigned) (len / 64 + (len % 64 || len == 0 || zlp));
+  e->busy = mgi_usb_in_next(ep);
+}
+
+// Cancel the transfers on ep
+static void mgi_usb_idle(unsigned ep) {
+  memset(&s_usb.in[ep], 0, sizeof(s_usb.in[ep]));
+#if MG_ENABLE_USB_ETHERNET
+  if (ep == MG_USB_EP_ETH_DATA) s_usb.rxlen = 0, s_usb.discard = false;
+#endif
+}
+
+// Unconfigured, on start, bus reset and SET_CONFIGURATION. Keeps the log
+static void mgi_usb_unconfigure(void) {
+#if MG_ENABLE_USB_SERIAL
+  static const uint8_t line[7] = {0, 0xc2, 1, 0, 0, 0, 8};  // 115200 8N1
+  s_usb.dtr = false;
+  memcpy(s_usb.line, line, sizeof(line));
+#endif
+#if MG_ENABLE_USB_ETHERNET
+  s_usb.alt = false, s_usb.filter = s_usb.sequence = 0, s_usb.notify = 0;
+  s_usb.input_size = MG_USB_NTB_SIZE;
+#endif
+  s_usb.configured = false;
+}
+
+// Build string descriptor i in s_usb.buf. Returns its length, 0 if none
+static int mgi_usb_string(unsigned i) {
+  static const char *strings[] = {NULL,        "Mongoose",     MGI_USB_PRODUCT,
+                                  NULL,        "USB Ethernet", NULL,
+                                  "USB Serial"};
+  const char *s = i < 7 ? strings[i] : NULL;
+  char tmp[33];  // Built strings: product name, host MAC
+  uint8_t *b = s_usb.buf;
+  size_t k, n;
+  if (i == 0) return b[0] = 4, b[1] = 3, b[2] = 9, b[3] = 4;
+  if (i == 2) {  // Serial's last 4 digits: tell devices apart
+    size_t len = strlen(s_usb.serial);
+    mg_snprintf(tmp, sizeof(tmp), "%s_%s", MGI_USB_PRODUCT,
+                s_usb.serial + (len > 4 ? len - 4 : 0));
+    s = tmp;
+  }
+  if (i == 3) s = s_usb.serial;
+#if MG_ENABLE_USB_ETHERNET
+  if (i == 5 && s_usb.ifp != NULL) {  // Host end: our MAC, first byte changed
+    uint8_t *m = s_usb.ifp->mac;
+    mg_snprintf(tmp, sizeof(tmp), "%02X%02X%02X%02X%02X%02X",
+                ((m[0] ^ 4) | 2) & ~1, m[1], m[2], m[3], m[4], m[5]);
+    s = tmp;
+  }
+#endif
+  if (s == NULL) return 0;
+  n = strlen(s) > 32 ? 32 : strlen(s);
+  memset(b, 0, sizeof(s_usb.buf));
+  for (k = 0; k < n; k++) b[2 + k * 2] = (uint8_t) s[k];
+  b[0] = (uint8_t) (2 + n * 2), b[1] = 3;
+  return b[0];
+}
+
+// Answer a control request r, its OUT data at r + 8. Returns -1 to stall,
+// else the IN reply length in *reply, 0 for status only
+static int mgi_usb_request(const uint8_t *r, const void **reply) {
+  unsigned value = MG_LOAD_LE16(r + 2), index = MG_LOAD_LE16(r + 4);
+  unsigned wlen = MG_LOAD_LE16(r + 6), i;
+  const void *d = s_usb.buf;
+  int n = 0;
+  switch ((r[0] << 8) | r[1]) {
+    case 0x8006:  // GET_DESCRIPTOR
+      if (value >> 8 == 1) d = s_device_desc, n = sizeof(s_device_desc);
+      if (value >> 8 == 2) d = s_config_desc, n = sizeof(s_config_desc);
+#if MG_ENABLE_USB_ETHERNET
+      if (value >> 8 == 15) d = s_bos_desc, n = sizeof(s_bos_desc);
+#endif
+      if (value >> 8 == 3) n = mgi_usb_string(value & 255);
+      if (n == 0) return -1;
+      break;
+    case 0x0005:  // SET_ADDRESS, applied by the controller
+      if (value > 127) return -1;
+      break;
+    case 0x0009:  // SET_CONFIGURATION
+      if (value > 1) return -1;
+      mgi_usb_unconfigure();
+      for (i = 1; i < 5; i++) mgi_usb_idle(i);
+      s_usb.configured = value == 1;
+      break;
+    case 0x8008:  // GET_CONFIGURATION
+      s_usb.buf[0] = s_usb.configured, n = 1;
+      break;
+    case 0x010b:  // SET_INTERFACE: only the Ethernet data interface has 1
+      if (index >= MGI_USB_NUM_IFS ||
+          value > (unsigned) (MG_ENABLE_USB_ETHERNET &&
+                              index == MG_USB_IF_ETH_DATA))
+        return -1;
+#if MG_ENABLE_USB_ETHERNET
+      if (index == MG_USB_IF_ETH_DATA) {
+        s_usb.alt = value == 1, s_usb.notify = 1;
+        // Directed and broadcast by default: Windows may not set a filter
+        if (s_usb.alt) s_usb.filter = 0x0c;
+        mgi_usb_idle(MG_USB_EP_ETH_DATA);
+      }
+#endif
+      break;
+    case 0x810a:  // GET_INTERFACE
+      s_usb.buf[0] = 0, n = 1;
+#if MG_ENABLE_USB_ETHERNET
+      if (index == MG_USB_IF_ETH_DATA) s_usb.buf[0] = s_usb.alt;
+#endif
+      break;
+#if MG_ENABLE_USB_ETHERNET
+    case 0xa183:  // GET_NTB_FORMAT: NTB16
+#endif
+    case 0x8000:  // GET_STATUS: device, interface, endpoint
+    case 0x8100:
+    case 0x8200:
+      s_usb.buf[0] = s_usb.buf[1] = 0, n = 2;
+      break;
+    case 0x0201:  // CLEAR_FEATURE(ENDPOINT_HALT), applied by the controller
+      if (value || index > 255 ||
+          !memchr(s_endpoints, (int) index, sizeof(s_endpoints)))
+        return -1;
+      break;
+#if MG_ENABLE_USB_ETHERNET
+    case 0xc001:  // Microsoft OS 2.0 descriptor set
+      if (index != 7) return -1;
+      d = s_ms_os_desc, n = sizeof(s_ms_os_desc);
+      break;
+    case 0x2143:  // SET_ETHERNET_PACKET_FILTER
+      s_usb.filter = (uint16_t) value;
+      break;
+    case 0xa180:  // GET_NTB_PARAMETERS
+      d = s_ntb_params, n = sizeof(s_ntb_params);
+      break;
+    case 0x2184:  // SET_NTB_FORMAT: NTB16 only
+      if (value) return -1;
+      break;
+    case 0xa185:  // GET_NTB_INPUT_SIZE, one datagram per block
+      memset(s_usb.buf, 0, 8);
+      MG_STORE_LE32(s_usb.buf, s_usb.input_size);
+      s_usb.buf[4] = 1, n = 8;
+      break;
+    case 0x2186:  // SET_NTB_INPUT_SIZE
+      if ((wlen != 4 && wlen != 8) || MG_LOAD_LE32(r + 8) < 2048 ||
+          MG_LOAD_LE32(r + 8) > 65535)
+        return -1;
+      s_usb.input_size = MG_LOAD_LE32(r + 8);
+      if (s_usb.input_size > MG_USB_NTB_SIZE)
+        s_usb.input_size = MG_USB_NTB_SIZE;
+      break;
+#endif
+#if MG_ENABLE_USB_SERIAL
+    case 0xa121:  // GET_LINE_CODING
+      d = s_usb.line, n = sizeof(s_usb.line);
+      break;
+    case 0x2120:  // SET_LINE_CODING
+      if (wlen != sizeof(s_usb.line)) return -1;
+      memcpy(s_usb.line, r + 8, sizeof(s_usb.line));
+      break;
+    case 0x2122:  // SET_CONTROL_LINE_STATE
+      s_usb.dtr = value & 1;
+      break;
+    case 0x2123:  // SEND_BREAK
+      break;
+#endif
+    default:
+      return -1;
+  }
+  *reply = d;
+  return n > (int) wlen ? (int) wlen : n;
+}
+
+#if MG_ENABLE_USB_ETHERNET
+// Queue the frames of a received transfer block to the TCP/IP stack.
+// Offsets come from the host: bound every datagram by the block, and follow
+// at most 16 datagram tables so that a cyclic chain cannot loop forever
+static void mgi_usb_decode(const uint8_t *p, size_t len) {
+  size_t block, ndp, end, i, ofs, n, tables = 0;
+  if (s_usb.ifp == NULL || len < 12 || MG_LOAD_LE32(p) != 0x484d434e) return;
+  block = MG_LOAD_LE16(p + 8), ndp = MG_LOAD_LE16(p + 10);
+  if (block > len) return;
+  while (ndp && tables++ < 16 && ndp + 16 <= block &&
+         MG_LOAD_LE32(p + ndp) == 0x304d434e) {  // "NCM0"
+    end = ndp + MG_LOAD_LE16(p + ndp + 4);
+    for (i = ndp + 8; i + 4 <= end && end <= block; i += 4) {
+      ofs = MG_LOAD_LE16(p + i), n = MG_LOAD_LE16(p + i + 2);
+      if (ofs == 0 || n == 0) break;
+      if (n >= 14 && n <= 1514 && ofs + n <= block)
+        mg_tcpip_qwrite((void *) (p + ofs), n, s_usb.ifp);
+    }
+    ndp = MG_LOAD_LE16(p + ndp + 6);
+  }
+}
+
+// If the Ethernet IN endpoint is idle, start sending the first queued
+// transfer block. It stays queued until sent. Drop blocks the host cannot
+// take now: the link closed, or it lowered its block size
+static void mgi_usb_tx_next(void) {
+  char *block;
+  size_t len;
+  while (!s_usb.in[MG_USB_EP_ETH_DATA].busy &&
+         (len = mg_queue_next(&s_usb.txq, &block)) > 0) {
+    if (s_usb.alt && s_usb.filter && len <= s_usb.input_size) {
+      mgi_usb_in_start(MG_USB_EP_ETH_DATA, block, len, len < s_usb.input_size);
+    } else {
+      mg_queue_del(&s_usb.txq, len);
+    }
+  }
+}
+#endif
+
+#if MG_ENABLE_USB_SERIAL
+// Log output function: keep the latest MG_USB_LOG_SIZE characters
+static void mgi_usb_log(char ch, void *arg) {
+  if (s_usb.head - s_usb.tail >= MG_USB_LOG_SIZE) s_usb.tail++;
+  s_usb.log[s_usb.head++ % MG_USB_LOG_SIZE] = ch;
+  (void) arg;
+}
+#endif
+
+// Controller events, see enum mg_usb_ev
+static int mgi_usb_event(enum mg_usb_ev ev, enum mg_usb_ep ep, void *buf,
+                         size_t len) {
+  const uint8_t *p = (const uint8_t *) buf;
+  unsigned i;
+  if (ev == MG_USB_EV_RESET) {
+    mgi_usb_unconfigure();
+    for (i = 0; i < 5; i++) mgi_usb_idle(i);
+  } else if (ev == MG_USB_EV_SETUP) {
+    const void *reply;
+    unsigned wlen = len < 8 ? 0 : MG_LOAD_LE16(p + 6);
+    int n;
+    mgi_usb_idle(MG_USB_EP_CTL);  // A SETUP ends the previous transfer
+    if (len < 8 || (!(p[0] & 0x80) && len < 8 + wlen)) return -1;
+    if ((n = mgi_usb_request(p, &reply)) < 0) return -1;
+    if (!(p[0] & 0x80) || wlen == 0) return 0;
+    mgi_usb_in_start(MG_USB_EP_CTL, reply, (size_t) n, n < (int) wlen);
+    return 1;
+  } else if (ev == MG_USB_EV_IN && s_usb.in[ep].busy) {
+    s_usb.in[ep].busy = mgi_usb_in_next(ep);
+#if MG_ENABLE_USB_ETHERNET
+    if (ep == MG_USB_EP_ETH_DATA && !s_usb.in[ep].busy) {
+      mg_queue_del(&s_usb.txq, mg_queue_next(&s_usb.txq, NULL));  // Sent
+      mgi_usb_tx_next();
+    }
+#endif
+    return s_usb.in[ep].busy;
+#if MG_ENABLE_USB_ETHERNET
+  } else if (ev == MG_USB_EV_OUT && ep == MG_USB_EP_ETH_DATA) {
+    // Add the packet to the transfer block. At the advertised maximum OUT
+    // size, the host need not send a ZLP. Other blocks end with a short
+    // packet, possibly empty
+    if (!s_usb.discard && s_usb.rxlen + len <= sizeof(s_usb.rx)) {
+      memcpy(s_usb.rx + s_usb.rxlen, buf, len);
+      s_usb.rxlen += len;
+    } else {
+      s_usb.discard = true;
+    }
+    if (len < 64 || s_usb.rxlen == sizeof(s_usb.rx)) {
+      if (!s_usb.discard) mgi_usb_decode(s_usb.rx, s_usb.rxlen);
+      s_usb.rxlen = 0, s_usb.discard = false;
+    }
+#endif
+  }
+  return 0;
+}
+
+bool mg_usb_init(struct mg_tcpip_if *ifp, const struct mg_usb_hw *hw) {
+  if (s_usb.hw == NULL) {
+    s_usb.hw = hw;
+    mgi_usb_unconfigure();
+#if MG_ENABLE_USB_ETHERNET
+    mg_queue_init(&s_usb.txq, s_usb.txq_buf, sizeof(s_usb.txq_buf));
+#endif
+#if MG_ENABLE_USB_SERIAL
+    mg_log_set_fn(mgi_usb_log, NULL);  // Log to the USB serial port
+#endif
+    hw->init(s_usb.serial);
+  }
+#if MG_ENABLE_USB_ETHERNET
+  if (ifp != NULL) s_usb.ifp = ifp;
+#else
+  (void) ifp;
+#endif
+  return true;
+}
+
+size_t mg_usb_tx(const void *buf, size_t len, struct mg_tcpip_if *ifp) {
+#if MG_ENABLE_USB_ETHERNET
+  // Queue the frame wrapped in its transfer block, ready to send
+  size_t n = sizeof(s_nth) + len;
+  char *p;
+  if (!s_usb.alt || !s_usb.filter || len < 14 || len > 1514) return 0;
+  if (mg_queue_next(&s_usb.txq, NULL) == 0) {
+    mg_queue_init(&s_usb.txq, s_usb.txq.buf, s_usb.txq.size);  // Unwrap
+  }
+  if (mg_queue_book(&s_usb.txq, &p, n) < n) {
+    ifp->nerr++;  // Queue full: the host is not reading
+    return 0;
+  }
+  memcpy(p, s_nth, sizeof(s_nth));
+  MG_STORE_LE16(p + 6, s_usb.sequence);
+  s_usb.sequence++;
+  MG_STORE_LE16(p + 8, n);
+  MG_STORE_LE16(p + 22, len);
+  memcpy(p + sizeof(s_nth), buf, len);
+  mg_queue_add(&s_usb.txq, n);
+  mgi_usb_tx_next();
+  return len;
+#else
+  (void) ifp, (void) buf, (void) len;
+  return 0;
+#endif
+}
+
+bool mg_usb_poll(struct mg_tcpip_if *ifp, bool s1) {
+  (void) ifp;
+  if (s_usb.hw == NULL) return false;  // mg_usb_init() not called yet
+  s_usb.hw->poll(mgi_usb_event);
+#if MG_ENABLE_USB_SERIAL
+  if (s_usb.configured && s_usb.dtr && !s_usb.in[MG_USB_EP_SER_DATA].busy) {
+    size_t n = 0;
+    while (n < sizeof(s_usb.out) && s_usb.tail != s_usb.head) {
+      s_usb.out[n++] = s_usb.log[s_usb.tail++ % MG_USB_LOG_SIZE];
+    }
+    if (n > 0) mgi_usb_in_start(MG_USB_EP_SER_DATA, s_usb.out, n, true);
+  }
+#endif
+#if MG_ENABLE_USB_ETHERNET
+  if (s_usb.notify && !s_usb.in[MG_USB_EP_ETH_EV].busy) {
+    // Link notifications: the speed first if the link is up, then the state
+    if (s_usb.notify == 1 && s_usb.alt) {
+      s_usb.notify = 2;
+      mgi_usb_in_start(MG_USB_EP_ETH_EV, s_speed, sizeof(s_speed), false);
+    } else {
+      s_usb.notify = 0;
+      mgi_usb_in_start(MG_USB_EP_ETH_EV, s_usb.alt ? s_up : s_down,
+                       sizeof(s_up), false);
+    }
+  }
+  mgi_usb_tx_next();
+  return s1 && s_usb.alt && s_usb.filter;
+#else
+  (void) s1;
+  return false;
+#endif
+}
+
+#endif
+
+#ifdef MG_ENABLE_LINES
+#line 1 "src/drivers/usb_dwc2.c"
+#endif
+
+
+
+
+
+
+#if (MG_ENABLE_TCPIP || !MG_ENABLE_USB_ETHERNET) && \
+    MG_ENABLE_DRIVER_USB_DWC2 &&                    \
+    (MG_ENABLE_USB_ETHERNET || MG_ENABLE_USB_SERIAL)
+
+// DWC2 device controller, polled: no interrupt handler, no DMA. Received
+// packets come through one shared RX FIFO, each IN endpoint has a TX FIFO of
+// its own. Register layout: STM32 reference manuals, OTG chapter.
+
+#ifndef MG_USB_DWC2_BASE
+#error "MG_ENABLE_DRIVER_USB_DWC2 needs MG_USB_DWC2_BASE, the core's address"
+#endif
+#ifndef MG_USB_DWC2_ULPI
+#define MG_USB_DWC2_ULPI 0
+#endif
+#ifndef MG_USB_DWC2_UTMI
+#define MG_USB_DWC2_UTMI 0
+#endif
+#if MG_USB_DWC2_ULPI && MG_USB_DWC2_UTMI
+#error "MG_USB_DWC2_ULPI and MG_USB_DWC2_UTMI: choose one PHY"
+#endif
+#define MGI_DWC2_HS_PHY (MG_USB_DWC2_ULPI || MG_USB_DWC2_UTMI)  // At full speed
+
+// Register at offset off
+#define MGI_DWC2(off) \
+  (*(volatile uint32_t *) ((uintptr_t) (MG_USB_DWC2_BASE) + (off)))
+#define MGI_DWC2_GOTGCTL MGI_DWC2(0x000)
+#define MGI_DWC2_GUSBCFG MGI_DWC2(0x00c)
+#define MGI_DWC2_GRSTCTL MGI_DWC2(0x010)
+#define MGI_DWC2_GINTSTS MGI_DWC2(0x014)
+#define MGI_DWC2_GRXSTSP MGI_DWC2(0x020)
+#define MGI_DWC2_GRXFSIZ MGI_DWC2(0x024)
+#define MGI_DWC2_DIEPTXF0 MGI_DWC2(0x028)
+#define MGI_DWC2_GCCFG MGI_DWC2(0x038)
+#define MGI_DWC2_GSNPSID MGI_DWC2(0x040)
+#define MGI_DWC2_DIEPTXF(n) MGI_DWC2(0x100 + 4 * (n))  // n: 1..
+#define MGI_DWC2_DCFG MGI_DWC2(0x800)
+#define MGI_DWC2_DCTL MGI_DWC2(0x804)
+#define MGI_DWC2_DIEPMSK MGI_DWC2(0x810)
+#define MGI_DWC2_DOEPMSK MGI_DWC2(0x814)
+#define MGI_DWC2_DAINT MGI_DWC2(0x818)
+#define MGI_DWC2_DAINTMSK MGI_DWC2(0x81c)
+#define MGI_DWC2_DIEPCTL(n) MGI_DWC2(0x900 + 0x20 * (n))
+#define MGI_DWC2_DIEPINT(n) MGI_DWC2(0x908 + 0x20 * (n))
+#define MGI_DWC2_DIEPTSIZ(n) MGI_DWC2(0x910 + 0x20 * (n))
+#define MGI_DWC2_DOEPCTL(n) MGI_DWC2(0xb00 + 0x20 * (n))
+#define MGI_DWC2_DOEPINT(n) MGI_DWC2(0xb08 + 0x20 * (n))
+#define MGI_DWC2_DOEPTSIZ(n) MGI_DWC2(0xb10 + 0x20 * (n))
+#define MGI_DWC2_PCGCCTL MGI_DWC2(0xe00)
+#define MGI_DWC2_FIFO(n) MGI_DWC2(0x1000 * ((n) + 1))
+
+// Endpoint control bits, DIEPCTL and DOEPCTL
+#define MGI_DWC2_USBAEP MG_BIT(15)  // Active
+#define MGI_DWC2_STALL MG_BIT(21)
+#define MGI_DWC2_CNAK MG_BIT(26)
+#define MGI_DWC2_SNAK MG_BIT(27)
+#define MGI_DWC2_SD0PID MG_BIT(28)  // Next packet is DATA0
+#define MGI_DWC2_EPDIS MG_BIT(30)
+#define MGI_DWC2_EPENA MG_BIT(31)
+
+// FIFOs, in 32-bit words: RX first, then a packet's room per IN endpoint.
+// 208 words in all, so it fits a full-speed core's 320
+#define MGI_DWC2_RX_WORDS 128
+
+// usb.c's event handler, see mg_usb_hw::poll()
+#define MGI_DWC2_FN int (*fn)(enum mg_usb_ev, enum mg_usb_ep, void *, size_t)
+
+static uint32_t s_mgi_dwc2_pkt[64 / 4];  // A received packet
+static uint8_t s_mgi_dwc2_req[16];       // SETUP packet, then its OUT data
+static size_t s_mgi_dwc2_req_len;        // OUT data received so far
+static bool s_mgi_dwc2_req_out;          // Waiting for that OUT data stage
+
+// Wait until the mask bits of reg are set, or clear. Bounded
+static void mgi_dwc2_wait(volatile uint32_t *reg, uint32_t mask, bool set) {
+  unsigned i;
+  for (i = 0; ((*reg & mask) != 0) != set && i < 1000000; i++) (void) 0;
+}
+
+// Flush the TX FIFO of endpoint n, 0x10: all of them
+static void mgi_dwc2_flush_tx(unsigned n) {
+  MGI_DWC2_GRSTCTL = MG_BIT(5) | (n << 6);  // TXFFLSH, TXFNUM
+  mgi_dwc2_wait(&MGI_DWC2_GRSTCTL, MG_BIT(5), false);
+}
+
+// mg_usb_hw::in(): load one packet, then let the endpoint send it
+static void mgi_dwc2_in(enum mg_usb_ep ep, const void *buf, size_t len) {
+  const uint8_t *p = (const uint8_t *) buf;
+  size_t i, k;
+  MGI_DWC2_DIEPTSIZ(ep) = MG_BIT(19) | (uint32_t) len;  // One packet
+  MGI_DWC2_DIEPCTL(ep) |= MGI_DWC2_CNAK | MGI_DWC2_EPENA;
+  for (i = 0; i < len; i += 4) {
+    uint32_t w = 0;
+    for (k = 0; k < 4 && i + k < len; k++) w |= (uint32_t) p[i + k] << (8 * k);
+    MGI_DWC2_FIFO(ep) = w;
+  }
+}
+
+// Stop an IN transfer on endpoint ep, and empty its TX FIFO
+static void mgi_dwc2_in_stop(unsigned ep) {
+  if (MGI_DWC2_DIEPCTL(ep) & MGI_DWC2_EPENA) {
+    MGI_DWC2_DIEPCTL(ep) |= MGI_DWC2_SNAK;
+    mgi_dwc2_wait(&MGI_DWC2_DIEPINT(ep), MG_BIT(6), true);  // INEPNE
+    MGI_DWC2_DIEPCTL(ep) |= MGI_DWC2_EPDIS;
+    mgi_dwc2_wait(&MGI_DWC2_DIEPINT(ep), MG_BIT(1), true);  // EPDISD
+    MGI_DWC2_DIEPINT(ep) = MG_BIT(1);
+  }
+  mgi_dwc2_flush_tx(ep);
+}
+
+// Let OUT endpoint ep take one packet. Endpoint 0 also takes SETUPs
+static void mgi_dwc2_arm(unsigned ep) {
+  MGI_DWC2_DOEPTSIZ(ep) = (ep == 0 ? 3UL << 29 : 0) | MG_BIT(19) | 64;
+  MGI_DWC2_DOEPCTL(ep) |= MGI_DWC2_CNAK | MGI_DWC2_EPENA;
+}
+
+// Endpoint ep active, idle, DATA0 next. type: 2 bulk, 3 interrupt. out:
+// also its OUT direction, ready to receive
+static void mgi_dwc2_open(unsigned ep, uint32_t type, bool out) {
+  uint32_t ctl = 64 | MGI_DWC2_USBAEP | (type << 18) | MGI_DWC2_SD0PID;
+  mgi_dwc2_in_stop(ep);
+  MGI_DWC2_DIEPCTL(ep) = ctl | (ep << 22) | MGI_DWC2_SNAK;  // Own TX FIFO
+  if (out) {
+    MGI_DWC2_DOEPCTL(ep) = ctl;
+    mgi_dwc2_arm(ep);
+  }
+}
+
+// Stall endpoint 0, until the next SETUP
+static void mgi_dwc2_stall(void) {
+  MGI_DWC2_DIEPCTL(0) |= MGI_DWC2_STALL;
+  MGI_DWC2_DOEPCTL(0) |= MGI_DWC2_STALL;
+}
+
+// USB reset: address 0, endpoints off, FIFOs laid out again
+static void mgi_dwc2_bus_reset(void) {
+  unsigned ep;
+  for (ep = 0; ep < 5; ep++) {
+    MGI_DWC2_DOEPCTL(ep) |= MGI_DWC2_SNAK;
+    if (ep > 0) MGI_DWC2_DOEPCTL(ep) &= ~MGI_DWC2_USBAEP;
+    if (ep > 0) MGI_DWC2_DIEPCTL(ep) &= ~MGI_DWC2_USBAEP;
+    mgi_dwc2_in_stop(ep);
+  }
+  MGI_DWC2_DAINTMSK = 0x1f;           // IN endpoints 0-4: transfer complete
+  MGI_DWC2_DIEPMSK = MG_BIT(0);       // XFRC
+  MGI_DWC2_DOEPMSK = MG_BIT(3) | 1U;  // STUP, XFRC
+  MGI_DWC2_GRSTCTL = MG_BIT(4);       // RXFFLSH
+  mgi_dwc2_wait(&MGI_DWC2_GRSTCTL, MG_BIT(4), false);
+  MGI_DWC2_GRXFSIZ = MGI_DWC2_RX_WORDS;
+  MGI_DWC2_DIEPTXF0 = (16UL << 16) | MGI_DWC2_RX_WORDS;
+  for (ep = 1; ep < 5; ep++) {
+    MGI_DWC2_DIEPTXF(ep) = (16UL << 16) | (MGI_DWC2_RX_WORDS + 16 * ep);
+  }
+  MGI_DWC2_DCFG &= ~(0x7fUL << 4);  // Address 0
+  MGI_DWC2_DIEPCTL(0) &= ~3UL;      // Endpoint 0: 64-byte packets
+  MGI_DWC2_DOEPCTL(0) &= ~3UL;
+  MGI_DWC2_DOEPTSIZ(0) = 3UL << 29;  // Up to 3 SETUPs in a row
+  s_mgi_dwc2_req_out = false;
+}
+
+// A complete control request: usb.c answers it, then the controller follows
+static void mgi_dwc2_request(MGI_DWC2_FN) {
+  uint8_t *r = s_mgi_dwc2_req;
+  size_t out = (r[0] & 0x80) ? 0 : MG_LOAD_LE16(r + 6);  // OUT data stage
+  int res = fn(MG_USB_EV_SETUP, MG_USB_EP_CTL, r, 8 + out);
+  if (res < 0) {
+    mgi_dwc2_stall();
+    return;
+  }
+  switch ((r[0] << 8) | r[1]) {
+    case 0x0005:  // SET_ADDRESS: the new address goes before the status stage
+      MGI_DWC2_DCFG =
+          (MGI_DWC2_DCFG & ~(0x7fUL << 4)) | ((uint32_t) (r[2] & 0x7f) << 4);
+      break;
+    case 0x0009:  // SET_CONFIGURATION
+      if (r[2] != 1) break;
+#if MG_ENABLE_USB_ETHERNET
+      mgi_dwc2_open(MG_USB_EP_ETH_EV, 3, false);
+      mgi_dwc2_open(MG_USB_EP_ETH_DATA, 2, true);
+#endif
+#if MG_ENABLE_USB_SERIAL
+      mgi_dwc2_open(MG_USB_EP_SER_EV, 3, false);
+      mgi_dwc2_open(MG_USB_EP_SER_DATA, 2, true);
+#endif
+      break;
+#if MG_ENABLE_USB_ETHERNET
+    case 0x010b:  // SET_INTERFACE: Ethernet data endpoints back to DATA0
+      if (r[4] == MG_USB_IF_ETH_DATA) {
+        mgi_dwc2_open(MG_USB_EP_ETH_DATA, 2, r[2] == 1);
+      }
+      break;
+#endif
+    case 0x0201:  // CLEAR_FEATURE(ENDPOINT_HALT)
+      if (r[4] & 0x80) {
+        MGI_DWC2_DIEPCTL(r[4] & 15) =
+            (MGI_DWC2_DIEPCTL(r[4] & 15) & ~MGI_DWC2_STALL) | MGI_DWC2_SD0PID;
+      } else {
+        MGI_DWC2_DOEPCTL(r[4] & 15) =
+            (MGI_DWC2_DOEPCTL(r[4] & 15) & ~MGI_DWC2_STALL) | MGI_DWC2_SD0PID;
+      }
+      break;
+  }
+  if (res == 0) mgi_dwc2_in(MG_USB_EP_CTL, NULL, 0);  // Status stage
+}
+
+// A SETUP packet: run it, or first receive its OUT data stage
+static void mgi_dwc2_setup(MGI_DWC2_FN) {
+  uint8_t *r = s_mgi_dwc2_req;
+  unsigned wlen = MG_LOAD_LE16(r + 6);
+  mgi_dwc2_in_stop(0);  // A SETUP ends the previous control transfer
+  s_mgi_dwc2_req_out = false;
+  if ((r[0] & 0x80) || wlen == 0) {
+    mgi_dwc2_request(fn);
+  } else if (wlen > sizeof(s_mgi_dwc2_req) - 8) {
+    mgi_dwc2_stall();
+  } else {
+    s_mgi_dwc2_req_out = true, s_mgi_dwc2_req_len = 0;
+    mgi_dwc2_arm(0);
+  }
+}
+
+// One entry of the RX FIFO: a SETUP, OUT data, or the end of either
+static void mgi_dwc2_rx(MGI_DWC2_FN) {
+  uint32_t st = MGI_DWC2_GRXSTSP, i;
+  unsigned ep = st & 15, kind = (st >> 17) & 15;
+  size_t n = (st >> 4) & 0x7ff;
+  uint8_t *r = s_mgi_dwc2_req;
+  for (i = 0; i < (n + 3) / 4; i++) {  // Take the packet off the FIFO
+    uint32_t w = MGI_DWC2_FIFO(0);
+    if (i < sizeof(s_mgi_dwc2_pkt) / 4) s_mgi_dwc2_pkt[i] = w;
+  }
+  if (n > sizeof(s_mgi_dwc2_pkt)) n = sizeof(s_mgi_dwc2_pkt);
+  if (kind == 6) {  // SETUP packet
+    memcpy(r, s_mgi_dwc2_pkt, 8);
+  } else if (kind == 4) {  // SETUP stage done
+    MGI_DWC2_DOEPTSIZ(0) |= 3UL << 29;
+    MGI_DWC2_DOEPINT(0) = MG_BIT(3);  // STUP
+    mgi_dwc2_setup(fn);
+  } else if (kind == 2 && ep == 0 && s_mgi_dwc2_req_out) {  // Control OUT
+    size_t room = sizeof(s_mgi_dwc2_req) - 8 - s_mgi_dwc2_req_len;
+    memcpy(r + 8 + s_mgi_dwc2_req_len, s_mgi_dwc2_pkt, n < room ? n : room);
+    s_mgi_dwc2_req_len += n;
+#if MG_ENABLE_USB_ETHERNET
+  } else if (kind == 2 && ep == MG_USB_EP_ETH_DATA) {
+    fn(MG_USB_EV_OUT, MG_USB_EP_ETH_DATA, s_mgi_dwc2_pkt, n);
+#endif
+  } else if (kind == 3 && ep == 0 && s_mgi_dwc2_req_out) {  // OUT stage done
+    s_mgi_dwc2_req_out = false;
+    if (s_mgi_dwc2_req_len != MG_LOAD_LE16(r + 6)) {
+      mgi_dwc2_stall();
+    } else {
+      mgi_dwc2_request(fn);
+    }
+  } else if (kind == 3 && ep != 0) {  // An OUT packet taken: take the next
+    mgi_dwc2_arm(ep);                 // Serial input is dropped
+  }
+}
+
+// mg_usb_hw::poll()
+static void mgi_dwc2_poll(MGI_DWC2_FN) {
+  uint32_t sts = MGI_DWC2_GINTSTS;
+  if (sts & MG_BIT(12)) {  // USBRST
+    MGI_DWC2_GINTSTS = MG_BIT(12);
+    mgi_dwc2_bus_reset();
+    fn(MG_USB_EV_RESET, MG_USB_EP_CTL, NULL, 0);
+  }
+  if (sts & MG_BIT(13)) MGI_DWC2_GINTSTS = MG_BIT(13);   // ENUMDNE
+  while (MGI_DWC2_GINTSTS & MG_BIT(4)) mgi_dwc2_rx(fn);  // RXFLVL
+  if (sts & MG_BIT(18)) {                                // IEPINT
+    uint32_t daint = MGI_DWC2_DAINT;
+    unsigned ep;
+    for (ep = 0; ep < 5; ep++) {
+      uint32_t ints;
+      if (!(daint & MG_BIT(ep))) continue;
+      ints = MGI_DWC2_DIEPINT(ep);
+      MGI_DWC2_DIEPINT(ep) = ints;
+      if (!(ints & 1U)) continue;  // XFRC: the packet went out
+      if (!fn(MG_USB_EV_IN, (enum mg_usb_ep) ep, NULL, 0) && ep == 0 &&
+          (s_mgi_dwc2_req[0] & 0x80) && MG_LOAD_LE16(s_mgi_dwc2_req + 6)) {
+        mgi_dwc2_arm(0);  // IN data stage over: the host's OUT status stage
+      }
+    }
+  }
+}
+
+// Core soft reset. From core v4.20a, the reset done bit says when it is over
+static void mgi_dwc2_core_reset(void) {
+  bool done_bit = (MGI_DWC2_GSNPSID & 0xffff) >= 0x420a;
+  mgi_dwc2_wait(&MGI_DWC2_GRSTCTL, MG_BIT(31), true);  // AHBIDL
+  MGI_DWC2_GRSTCTL |= 1U;                              // CSRST
+  if (done_bit) {
+    mgi_dwc2_wait(&MGI_DWC2_GRSTCTL, MG_BIT(29), true);
+    MGI_DWC2_GRSTCTL = (MGI_DWC2_GRSTCTL & ~1U) | MG_BIT(29);
+  } else {
+    mgi_dwc2_wait(&MGI_DWC2_GRSTCTL, 1U, false);
+  }
+  mgi_dwc2_wait(&MGI_DWC2_GRSTCTL, MG_BIT(31), true);
+}
+
+// mg_usb_hw::init(): the serial number, the core as a full-speed device,
+// then attach
+static void mgi_dwc2_start(char serial[17]) {
+#if defined(UID_BASE)  // STM32: from the 96-bit unique ID
+  const volatile uint32_t *uid = (const volatile uint32_t *) UID_BASE;
+  uint32_t id[2] = {uid[0] ^ uid[2], uid[1]};
+  mg_snprintf(serial, 17, "%M", mg_print_hex, (int) sizeof(id), (uint8_t *) id);
+#else
+  mg_snprintf(serial, 17, "%s", "0000000000000000");
+#endif
+#if MG_USB_DWC2_ULPI  // 8-bit single data rate, internal VBUS indicator
+  MGI_DWC2_GUSBCFG =
+      (MGI_DWC2_GUSBCFG & ~(MG_BIT(3) | MG_BIT(6) | MG_BIT(7) | MG_BIT(17) |
+                            MG_BIT(19) | MG_BIT(20) | MG_BIT(21))) |
+      MG_BIT(4);  // ULPI
+#elif MG_USB_DWC2_UTMI
+  // The core's own high-speed PHY: UTMI, not ULPI or full-speed; no TSDPS
+  MGI_DWC2_GUSBCFG &= ~(MG_BIT(4) | MG_BIT(6) | MG_BIT(22));
+#else
+  MGI_DWC2_GUSBCFG |= MG_BIT(6);  // The core's own full-speed PHY
+#endif
+#ifdef MG_USB_DWC2_GCCFG
+  MGI_DWC2_GCCFG = MG_USB_DWC2_GCCFG;
+#endif
+  mgi_dwc2_core_reset();
+#ifdef MG_USB_DWC2_GCCFG
+  MGI_DWC2_GCCFG = MG_USB_DWC2_GCCFG;
+#endif
+  // Turnaround time: 9 for a high-speed PHY, 6 for a fast AHB otherwise.
+  // Timeout calibration: the maximum. Then device mode, which takes a while
+  MGI_DWC2_GUSBCFG = (MGI_DWC2_GUSBCFG & ~((0xfUL << 10) | 7U | MG_BIT(29))) |
+                     ((MGI_DWC2_HS_PHY ? 9UL : 6UL) << 10) | 7U | MG_BIT(30);
+  mgi_dwc2_wait(&MGI_DWC2_GINTSTS, 1U, false);  // CMOD: device mode
+  MGI_DWC2_PCGCCTL = 0;                         // PHY clock on
+  // Full speed, on a high-speed PHY (DSPD 1) or the core's own full-speed
+  // one (DSPD 3). Stall a non-empty status stage. XCVRDLY: some ULPI PHYs
+  // need it to chirp
+  MGI_DWC2_DCFG = (MGI_DWC2_DCFG & ~3U) | MG_BIT(2) |
+                  (MGI_DWC2_HS_PHY ? 1U : 3U) |
+                  (MG_USB_DWC2_ULPI ? MG_BIT(14) : 0U);
+  MGI_DWC2_DCTL |= MG_BIT(1);  // SDIS: detached while setting up
+  // No VBUS sensing: B-session valid, always
+  MGI_DWC2_GOTGCTL = (MGI_DWC2_GOTGCTL & ~MG_BIT(4)) | MG_BIT(6) | MG_BIT(7);
+  MGI_DWC2_GINTSTS = 0xffffffff;
+  mgi_dwc2_flush_tx(0x10);
+  mgi_dwc2_bus_reset();
+  MGI_DWC2_DCTL &= ~MG_BIT(1);  // Attach
+}
+
+const struct mg_usb_hw mg_usb_hw_dwc2 = {mgi_dwc2_start, mgi_dwc2_poll,
+                                         mgi_dwc2_in};
+
+#if MG_ENABLE_USB_ETHERNET
+static bool mgi_dwc2_init(struct mg_tcpip_if *ifp) {
+  return mg_usb_init(ifp, &mg_usb_hw_dwc2);
+}
+
+struct mg_tcpip_driver mg_tcpip_driver_usb_dwc2 = {mgi_dwc2_init, mg_usb_tx,
+                                                   NULL, mg_usb_poll};
+#endif
+
+#endif
+
+#ifdef MG_ENABLE_LINES
+#line 1 "src/drivers/usb_nrf52.c"
+#endif
+
+
+
+
+
+
+#if (MG_ENABLE_TCPIP || !MG_ENABLE_USB_ETHERNET) && \
+    MG_ENABLE_DRIVER_USB_NRF52 &&                   \
+    (MG_ENABLE_USB_ETHERNET || MG_ENABLE_USB_SERIAL)
+#include <nrf.h>
+
+// nRF52840 USB device controller, polled, full speed. Endpoint buffers are
+// inside the controller: EasyDMA moves each packet between them and RAM,
+// and reads RAM only, so every packet goes through s_mgi_usb_nrf52_pkt. The
+// controller handles SET_ADDRESS by itself. Errata workarounds follow
+// Nordic's nrfx_usbd.c: 171, 187 when enabling, 199 around each DMA
+
+#define MGI_USB_NRF52_ERRATA_199 (*(volatile uint32_t *) 0x40027c1c)
+
+// usb.c's event handler, see mg_usb_hw::poll()
+#define MGI_USB_NRF52_FN \
+  int (*fn)(enum mg_usb_ev, enum mg_usb_ep, void *, size_t)
+
+static uint32_t s_mgi_usb_nrf52_pkt[64 / 4];  // One packet in RAM
+static uint8_t s_mgi_usb_nrf52_req[16];       // SETUP packet, then its OUT data
+
+// Write an undocumented register the way Nordic's errata workarounds do
+static void mgi_usb_nrf52_errata(uint32_t addr, uint32_t value) {
+  volatile uint32_t *unlock = (volatile uint32_t *) 0x4006ec00;
+  bool locked = *unlock == 0;
+  if (locked) *unlock = 0x9375;
+  *(volatile uint32_t *) addr = value;
+  if (locked) *unlock = 0x9375;
+}
+
+// Run one EasyDMA transfer and wait for its end event
+static void mgi_usb_nrf52_dma(volatile uint32_t *task, volatile uint32_t *end) {
+  unsigned i;
+  *end = 0;
+  MGI_USB_NRF52_ERRATA_199 = 0x82;
+  *task = 1;
+  for (i = 0; *end == 0 && i < 100000; i++) (void) 0;  // Microseconds
+  *end = 0;
+  MGI_USB_NRF52_ERRATA_199 = 0;
+}
+
+// Data toggle of endpoint address ep back to DATA0
+static void mgi_usb_nrf52_dtoggle(unsigned ep) {
+  NRF_USBD->DTOGGLE = ep;  // Select the endpoint, then set its toggle
+  NRF_USBD->DTOGGLE = (USBD_DTOGGLE_VALUE_Data0 << USBD_DTOGGLE_VALUE_Pos) | ep;
+}
+
+// mg_usb_hw::in(): copy the packet to RAM, then into the endpoint
+static void mgi_usb_nrf52_in(enum mg_usb_ep ep, const void *buf, size_t len) {
+  if (len > 0) memcpy(s_mgi_usb_nrf52_pkt, buf, len);
+  NRF_USBD->EPIN[ep].PTR = (uint32_t) (uintptr_t) s_mgi_usb_nrf52_pkt;
+  NRF_USBD->EPIN[ep].MAXCNT = (uint32_t) len;
+  mgi_usb_nrf52_dma(&NRF_USBD->TASKS_STARTEPIN[ep],
+                    &NRF_USBD->EVENTS_ENDEPIN[ep]);
+}
+
+// Move the packet on OUT endpoint ep to RAM, which also lets the endpoint
+// accept the next one. Returns its length
+static size_t mgi_usb_nrf52_out(unsigned ep) {
+  size_t n = NRF_USBD->SIZE.EPOUT[ep];
+  if (n == 0) {
+    NRF_USBD->SIZE.EPOUT[ep] = 0;  // Nothing to move: accept the next
+  } else {
+    NRF_USBD->EPOUT[ep].PTR = (uint32_t) (uintptr_t) s_mgi_usb_nrf52_pkt;
+    NRF_USBD->EPOUT[ep].MAXCNT = (uint32_t) n;
+    mgi_usb_nrf52_dma(&NRF_USBD->TASKS_STARTEPOUT[ep],
+                      &NRF_USBD->EVENTS_ENDEPOUT[ep]);
+  }
+  return n;
+}
+
+#if MG_ENABLE_USB_ETHERNET
+// Ethernet data endpoints back to DATA0, OUT ready to receive
+static void mgi_usb_nrf52_data_reset(void) {
+  mgi_usb_nrf52_dtoggle(0x02), mgi_usb_nrf52_dtoggle(0x82);
+  NRF_USBD->SIZE.EPOUT[2] = 0;
+}
+#endif
+
+// Endpoints 1-4 on and idle if configured, else off
+static void mgi_usb_nrf52_endpoints(bool on) {
+  NRF_USBD->EPINEN = 1, NRF_USBD->EPOUTEN = 1;
+  if (!on) return;
+#if MG_ENABLE_USB_ETHERNET
+  NRF_USBD->EPINEN |= MG_BIT(1) | MG_BIT(2), NRF_USBD->EPOUTEN |= MG_BIT(2);
+  mgi_usb_nrf52_dtoggle(0x81);
+  mgi_usb_nrf52_data_reset();
+#endif
+#if MG_ENABLE_USB_SERIAL
+  NRF_USBD->EPINEN |= MG_BIT(3) | MG_BIT(4), NRF_USBD->EPOUTEN |= MG_BIT(4);
+  mgi_usb_nrf52_dtoggle(0x83), mgi_usb_nrf52_dtoggle(0x04);
+  mgi_usb_nrf52_dtoggle(0x84);
+  NRF_USBD->SIZE.EPOUT[4] = 0;
+#endif
+}
+
+// A complete control request: usb.c answers it, then the controller follows
+static void mgi_usb_nrf52_request(MGI_USB_NRF52_FN) {
+  uint8_t *r = s_mgi_usb_nrf52_req;
+  size_t out = (r[0] & 0x80) ? 0 : MG_LOAD_LE16(r + 6);  // OUT data stage
+  int res = fn(MG_USB_EV_SETUP, MG_USB_EP_CTL, r, 8 + out);
+  if (res < 0) {
+    NRF_USBD->TASKS_EP0STALL = 1;
+    return;
+  }
+  switch ((r[0] << 8) | r[1]) {
+    case 0x0009:  // SET_CONFIGURATION
+      mgi_usb_nrf52_endpoints(r[2] == 1);
+      break;
+#if MG_ENABLE_USB_ETHERNET
+    case 0x010b:  // SET_INTERFACE
+      if (r[4] == MG_USB_IF_ETH_DATA) mgi_usb_nrf52_data_reset();
+      break;
+#endif
+    case 0x0201:  // CLEAR_FEATURE(ENDPOINT_HALT)
+      mgi_usb_nrf52_dtoggle(r[4]);
+      NRF_USBD->EPSTALL =
+          (USBD_EPSTALL_STALL_UnStall << USBD_EPSTALL_STALL_Pos) | r[4];
+      if (!(r[4] & 0x80)) NRF_USBD->SIZE.EPOUT[r[4] & 15] = 0;
+      break;
+  }
+  if (res == 0) NRF_USBD->TASKS_EP0STATUS = 1;  // No IN data stage
+}
+
+// A SETUP packet: run it, or first receive its OUT data stage
+static void mgi_usb_nrf52_setup(MGI_USB_NRF52_FN) {
+  const volatile uint32_t *regs = &NRF_USBD->BMREQUESTTYPE;
+  uint8_t *r = s_mgi_usb_nrf52_req;
+  unsigned i, wlen;
+  for (i = 0; i < 8; i++) r[i] = (uint8_t) regs[i];
+  wlen = MG_LOAD_LE16(r + 6);
+  if (r[0] == 0 && r[1] == 5) return;  // SET_ADDRESS: the controller's
+  if ((r[0] & 0x80) || wlen == 0) {
+    mgi_usb_nrf52_request(fn);
+  } else if (wlen > sizeof(s_mgi_usb_nrf52_req) - 8) {
+    NRF_USBD->TASKS_EP0STALL = 1;
+  } else {
+    NRF_USBD->TASKS_EP0RCVOUT = 1;  // Accept the OUT data stage
+  }
+}
+
+// A control data stage packet: an IN one acknowledged, or an OUT one arrived
+static void mgi_usb_nrf52_ep0_data(MGI_USB_NRF52_FN) {
+  uint8_t *r = s_mgi_usb_nrf52_req;
+  size_t n = NRF_USBD->SIZE.EPOUT[0];
+  if (r[0] & 0x80) {
+    if (!fn(MG_USB_EV_IN, MG_USB_EP_CTL, NULL, 0)) {
+      NRF_USBD->TASKS_EP0STATUS = 1;
+    }
+  } else if (n != MG_LOAD_LE16(r + 6)) {
+    NRF_USBD->TASKS_EP0STALL = 1;
+  } else {
+    mgi_usb_nrf52_out(0);
+    memcpy(r + 8, s_mgi_usb_nrf52_pkt, n);
+    mgi_usb_nrf52_request(fn);
+  }
+}
+
+// Follow USB power: enable the controller when VBUS appears, attach to the
+// bus once both are ready, and detach when VBUS goes. True while attached
+static bool mgi_usb_nrf52_attach(MGI_USB_NRF52_FN) {
+  uint32_t power = NRF_POWER->USBREGSTATUS;
+  if (!(power & POWER_USBREGSTATUS_VBUSDETECT_Msk)) {
+    if (NRF_USBD->ENABLE) {
+      NRF_USBD->USBPULLUP = 0, NRF_USBD->ENABLE = 0;
+      fn(MG_USB_EV_RESET, MG_USB_EP_CTL, NULL, 0);
+    }
+    return false;
+  }
+  if (!NRF_USBD->ENABLE) {
+    mgi_usb_nrf52_errata(0x4006ed14, 3);     // Errata 187
+    mgi_usb_nrf52_errata(0x4006ec14, 0xc0);  // Errata 171
+    NRF_USBD->EVENTCAUSE = USBD_EVENTCAUSE_READY_Msk;
+    NRF_USBD->ENABLE = 1;
+  }
+  if (NRF_USBD->USBPULLUP) return true;
+  if (!(NRF_USBD->EVENTCAUSE & USBD_EVENTCAUSE_READY_Msk) ||
+      !(power & POWER_USBREGSTATUS_OUTPUTRDY_Msk))
+    return false;
+  NRF_USBD->EVENTCAUSE = USBD_EVENTCAUSE_READY_Msk;
+  mgi_usb_nrf52_errata(0x4006ec14, 0);
+  mgi_usb_nrf52_errata(0x4006ed14, 0);
+  NRF_USBD->USBPULLUP = 1;
+  return true;
+}
+
+// mg_usb_hw::poll()
+static void mgi_usb_nrf52_poll(MGI_USB_NRF52_FN) {
+  if (!mgi_usb_nrf52_attach(fn)) return;
+  if (NRF_USBD->EVENTS_USBRESET) {
+    NRF_USBD->EVENTS_USBRESET = 0;
+    NRF_USBD->EVENTS_EP0DATADONE = NRF_USBD->EVENTS_EPDATA = 0;
+    NRF_USBD->EPDATASTATUS = NRF_USBD->EPDATASTATUS;
+    fn(MG_USB_EV_RESET, MG_USB_EP_CTL, NULL, 0);
+    mgi_usb_nrf52_endpoints(false);
+    return;
+  }
+  if (NRF_USBD->EVENTS_EP0DATADONE) {  // Before a new SETUP replaces req
+    NRF_USBD->EVENTS_EP0DATADONE = 0;
+    mgi_usb_nrf52_ep0_data(fn);
+  }
+  if (NRF_USBD->EVENTS_EP0SETUP) {
+    NRF_USBD->EVENTS_EP0SETUP = 0;
+    mgi_usb_nrf52_setup(fn);
+  }
+  if (NRF_USBD->EVENTS_EPDATA) {  // Bit n: IN n acknowledged, 16+n: OUT n
+    uint32_t done = NRF_USBD->EPDATASTATUS;
+    unsigned i;
+    NRF_USBD->EVENTS_EPDATA = 0;
+    NRF_USBD->EPDATASTATUS = done;
+    for (i = 1; i < 5; i++) {
+      if (done & MG_BIT(i)) fn(MG_USB_EV_IN, (enum mg_usb_ep) i, NULL, 0);
+    }
+#if MG_ENABLE_USB_ETHERNET
+    if (done & MG_BIT(16 + MG_USB_EP_ETH_DATA)) {
+      size_t n = mgi_usb_nrf52_out(MG_USB_EP_ETH_DATA);
+      fn(MG_USB_EV_OUT, MG_USB_EP_ETH_DATA, s_mgi_usb_nrf52_pkt, n);
+    }
+#endif
+#if MG_ENABLE_USB_SERIAL
+    if (done & MG_BIT(16 + MG_USB_EP_SER_DATA)) {
+      NRF_USBD->SIZE.EPOUT[MG_USB_EP_SER_DATA] = 0;  // Serial input: dropped
+    }
+#endif
+  }
+}
+
+// mg_usb_hw::init(): the serial number, and the crystal that USB needs. The
+// controller itself starts in poll, once USB power is there
+static void mgi_usb_nrf52_start(char serial[17]) {
+  uint32_t id[2], xtal = CLOCK_HFCLKSTAT_SRC_Msk | CLOCK_HFCLKSTAT_STATE_Msk;
+  id[0] = NRF_FICR->DEVICEID[0], id[1] = NRF_FICR->DEVICEID[1];
+  mg_snprintf(serial, 17, "%M", mg_print_hex, (int) sizeof(id), (uint8_t *) id);
+  if ((NRF_CLOCK->HFCLKSTAT & xtal) != xtal) {
+    NRF_CLOCK->TASKS_HFCLKSTART = 1;
+    while ((NRF_CLOCK->HFCLKSTAT & xtal) != xtal) (void) 0;
+  }
+}
+
+const struct mg_usb_hw mg_usb_hw_nrf52 = {
+    mgi_usb_nrf52_start, mgi_usb_nrf52_poll, mgi_usb_nrf52_in};
+
+#if MG_ENABLE_USB_ETHERNET
+static bool mgi_usb_nrf52_init(struct mg_tcpip_if *ifp) {
+  return mg_usb_init(ifp, &mg_usb_hw_nrf52);
+}
+
+struct mg_tcpip_driver mg_tcpip_driver_usb_nrf52 = {
+    mgi_usb_nrf52_init, mg_usb_tx, NULL, mg_usb_poll};
+#endif
+
+#endif
+
+#ifdef MG_ENABLE_LINES
+#line 1 "src/drivers/usb_rp.c"
+#endif
+
+
+
+
+
+#if (MG_ENABLE_TCPIP || !MG_ENABLE_USB_ETHERNET) && MG_ENABLE_DRIVER_USB_RP && \
+    (MG_ENABLE_USB_ETHERNET || MG_ENABLE_USB_SERIAL)
+
+// RP2040 / RP2350 USB device controller: single core, polled, full speed,
+// 64-byte single-buffered endpoints in USB DPRAM
+
+// usb.c's event handler, see mg_usb_hw::poll()
+#define MGI_USB_RP_FN int (*fn)(enum mg_usb_ev, enum mg_usb_ep, void *, size_t)
+
+struct mgi_usb_rp_ep {
+  uint8_t *buf;    // Endpoint buffer in USB DPRAM
+  io_rw_32 *ctrl;  // Buffer control register
+  uint8_t pid;     // Next DATA PID, 0 or 1
+};
+
+static struct mgi_usb_rp_ep s_mgi_usb_rp_ep[5][2];  // Endpoint, OUT=0 IN=1
+static uint8_t s_mgi_usb_rp_req[16];  // SETUP packet, then its OUT data
+static bool s_mgi_usb_rp_req_out;     // Waiting for that OUT data stage
+static uint8_t s_mgi_usb_rp_address;  // Address to set after the status stage
+
+// Hand one packet buffer to the controller. OUT: accept up to len bytes
+static void mgi_usb_rp_packet(unsigned ep, bool in, const void *data,
+                              unsigned len) {
+  struct mgi_usb_rp_ep *e = &s_mgi_usb_rp_ep[ep][in];
+  uint32_t v = len | (e->pid ? USB_BUF_CTRL_DATA1_PID : 0) |
+               (in ? USB_BUF_CTRL_FULL : 0);
+  if (in && len) memcpy(e->buf, data, len);
+  e->pid ^= 1;
+  *e->ctrl = v;
+  // RP2040 datasheet: allow at least 12 cycles between writing buffer
+  // metadata and handing ownership to the controller through AVAIL
+  busy_wait_at_least_cycles(12);
+  *e->ctrl = v | USB_BUF_CTRL_AVAIL;
+}
+
+// mg_usb_hw::in()
+static void mgi_usb_rp_in(enum mg_usb_ep ep, const void *buf, size_t len) {
+  mgi_usb_rp_packet(ep, true, buf, (unsigned) len);
+}
+
+// Set up endpoint ep, direction in, idle. Endpoints 1 and 3 are interrupt,
+// 2 and 4 bulk, each with a 64-byte DPRAM buffer of its own
+static void mgi_usb_rp_ep_init(unsigned ep, bool in) {
+  struct mgi_usb_rp_ep *e = &s_mgi_usb_rp_ep[ep][in];
+  e->ctrl =
+      in ? &usb_dpram->ep_buf_ctrl[ep].in : &usb_dpram->ep_buf_ctrl[ep].out;
+  e->buf = ep ? &usb_dpram->epx_data[(ep * 2 + in) * 64] : usb_dpram->ep0_buf_a;
+  e->pid = 0;
+  *e->ctrl = 0;
+  if (ep) {
+    io_rw_32 *ctrl =
+        in ? &usb_dpram->ep_ctrl[ep - 1].in : &usb_dpram->ep_ctrl[ep - 1].out;
+    *ctrl = EP_CTRL_ENABLE_BITS | EP_CTRL_INTERRUPT_PER_BUFFER |
+            ((ep & 1 ? 3U : 2U) << EP_CTRL_BUFFER_TYPE_LSB) |
+            (uint32_t) ((uintptr_t) e->buf - (uintptr_t) usb_dpram);
+  }
+}
+
+#if MG_ENABLE_USB_ETHERNET
+// Ethernet data endpoints idle, OUT armed to receive if Ethernet is open
+static void mgi_usb_rp_data_reset(bool open) {
+  mgi_usb_rp_ep_init(2, false), mgi_usb_rp_ep_init(2, true);
+  if (open) mgi_usb_rp_packet(2, false, NULL, 64);
+}
+#endif
+
+// Endpoints 1-4 idle. If configured, the serial port armed to receive
+static void mgi_usb_rp_endpoints(bool on) {
+#if MG_ENABLE_USB_ETHERNET
+  mgi_usb_rp_ep_init(1, true);
+  mgi_usb_rp_data_reset(false);
+#endif
+#if MG_ENABLE_USB_SERIAL
+  mgi_usb_rp_ep_init(3, true);
+  mgi_usb_rp_ep_init(4, false), mgi_usb_rp_ep_init(4, true);
+  if (on) mgi_usb_rp_packet(4, false, NULL, 64);
+#endif
+  (void) on;
+}
+
+// Stall endpoint 0 until the next SETUP
+static void mgi_usb_rp_stall(void) {
+  usb_hw->ep_stall_arm =
+      USB_EP_STALL_ARM_EP0_IN_BITS | USB_EP_STALL_ARM_EP0_OUT_BITS;
+  *s_mgi_usb_rp_ep[0][1].ctrl = USB_BUF_CTRL_STALL;
+  *s_mgi_usb_rp_ep[0][0].ctrl = USB_BUF_CTRL_STALL;
+}
+
+// A complete control request: usb.c answers it, then the controller follows
+static void mgi_usb_rp_request(MGI_USB_RP_FN) {
+  uint8_t *r = s_mgi_usb_rp_req;
+  size_t out = (r[0] & 0x80) ? 0 : MG_LOAD_LE16(r + 6);  // OUT data stage
+  int res = fn(MG_USB_EV_SETUP, MG_USB_EP_CTL, r, 8 + out);
+  if (res < 0) {
+    mgi_usb_rp_stall();
+    return;
+  }
+  switch ((r[0] << 8) | r[1]) {
+    case 0x0005:  // SET_ADDRESS, set after the status stage
+      s_mgi_usb_rp_address = r[2];
+      break;
+    case 0x0009:  // SET_CONFIGURATION
+      mgi_usb_rp_endpoints(r[2] == 1);
+      break;
+#if MG_ENABLE_USB_ETHERNET
+    case 0x010b:  // SET_INTERFACE
+      if (r[4] == MG_USB_IF_ETH_DATA) mgi_usb_rp_data_reset(r[2] == 1);
+      break;
+#endif
+    case 0x0201: {  // CLEAR_FEATURE(ENDPOINT_HALT)
+      struct mgi_usb_rp_ep *e = &s_mgi_usb_rp_ep[r[4] & 15][r[4] >> 7];
+      *e->ctrl &= ~USB_BUF_CTRL_STALL, e->pid = 0;
+      break;
+    }
+  }
+  if (res == 0) mgi_usb_rp_packet(0, true, NULL, 0);  // Status stage, DATA1
+}
+
+// A SETUP packet: run it, or first receive its OUT data stage
+static void mgi_usb_rp_setup(MGI_USB_RP_FN) {
+  uint8_t *r = s_mgi_usb_rp_req;
+  unsigned wlen;
+  memcpy(r, (const void *) usb_dpram->setup_packet, 8);
+  wlen = MG_LOAD_LE16(r + 6);
+  // A SETUP cancels the preceding control transfer. Both its data and
+  // status stages start with DATA1
+  mgi_usb_rp_ep_init(0, false), mgi_usb_rp_ep_init(0, true);
+  s_mgi_usb_rp_ep[0][0].pid = s_mgi_usb_rp_ep[0][1].pid = 1;
+  s_mgi_usb_rp_address = 0, s_mgi_usb_rp_req_out = false;
+  if ((r[0] & 0x80) || wlen == 0) {
+    mgi_usb_rp_request(fn);
+  } else if (wlen > sizeof(s_mgi_usb_rp_req) - 8) {
+    mgi_usb_rp_stall();
+  } else {
+    s_mgi_usb_rp_req_out = true;
+    mgi_usb_rp_packet(0, false, NULL, 64);
+  }
+}
+
+// A buffer the controller has finished with
+static void mgi_usb_rp_complete(unsigned ep, bool in, MGI_USB_RP_FN) {
+  struct mgi_usb_rp_ep *e = &s_mgi_usb_rp_ep[ep][in];
+  uint8_t *r = s_mgi_usb_rp_req;
+  unsigned n = *e->ctrl & USB_BUF_CTRL_LEN_MASK;
+  if (in && fn(MG_USB_EV_IN, (enum mg_usb_ep) ep, NULL, 0)) return;
+  if (ep == 0 && in) {  // Control IN data or status stage sent
+    if (s_mgi_usb_rp_address) {
+      usb_hw->dev_addr_ctrl = s_mgi_usb_rp_address, s_mgi_usb_rp_address = 0;
+    } else if ((r[0] & 0x80) && MG_LOAD_LE16(r + 6)) {
+      mgi_usb_rp_packet(0, false, NULL, 64);  // Host's OUT status stage
+    }
+  } else if (ep == 0 && !in && s_mgi_usb_rp_req_out) {  // OUT data stage
+    s_mgi_usb_rp_req_out = false;
+    if (n != MG_LOAD_LE16(r + 6)) {
+      mgi_usb_rp_stall();
+    } else {
+      memcpy(r + 8, e->buf, n);
+      mgi_usb_rp_request(fn);
+    }
+#if MG_ENABLE_USB_ETHERNET
+  } else if (ep == MG_USB_EP_ETH_DATA && !in) {
+    fn(MG_USB_EV_OUT, MG_USB_EP_ETH_DATA, e->buf, n);
+    mgi_usb_rp_packet(ep, false, NULL, 64);
+#endif
+#if MG_ENABLE_USB_SERIAL
+  } else if (ep == MG_USB_EP_SER_DATA && !in) {
+    mgi_usb_rp_packet(ep, false, NULL, 64);  // Serial input: dropped
+#endif
+  }
+}
+
+// mg_usb_hw::poll()
+static void mgi_usb_rp_poll(MGI_USB_RP_FN) {
+  uint32_t status = usb_hw->intr, done;
+  unsigned i;
+  if (status & USB_INTR_BUS_RESET_BITS) {
+    usb_hw->sie_status = USB_SIE_STATUS_BUS_RESET_BITS;
+    usb_hw->dev_addr_ctrl = 0;
+    usb_hw->buf_status = 0xffffffff;
+    fn(MG_USB_EV_RESET, MG_USB_EP_CTL, NULL, 0);
+    mgi_usb_rp_ep_init(0, false), mgi_usb_rp_ep_init(0, true);
+    mgi_usb_rp_endpoints(false);
+    return;
+  }
+  if (status & USB_INTR_SETUP_REQ_BITS) {
+    // Discard stale EP0 completions from an interrupted control transfer
+    usb_hw->buf_status = 3;
+    usb_hw->sie_status = USB_SIE_STATUS_SETUP_REC_BITS;
+    mgi_usb_rp_setup(fn);
+  }
+  done = usb_hw->buf_status;
+  for (i = 0; i < 10; i++) {  // Bits: EP0 IN, EP0 OUT, EP1 IN, ...
+    if (!(done & (1U << i))) continue;
+    usb_hw->buf_status = 1U << i;
+    if (s_mgi_usb_rp_ep[i / 2][!(i & 1)].ctrl) {
+      mgi_usb_rp_complete(i / 2, !(i & 1), fn);
+    }
+  }
+}
+
+// mg_usb_hw::init(): the serial number, then the controller, attached
+static void mgi_usb_rp_start(char serial[17]) {
+  pico_get_unique_board_id_string(serial, 17);
+  reset_block(RESETS_RESET_USBCTRL_BITS);
+  unreset_block_wait(RESETS_RESET_USBCTRL_BITS);
+  memset(usb_dpram, 0, sizeof(*usb_dpram));
+  usb_hw->muxing = USB_USB_MUXING_TO_PHY_BITS | USB_USB_MUXING_SOFTCON_BITS;
+  usb_hw->pwr =
+      USB_USB_PWR_VBUS_DETECT_BITS | USB_USB_PWR_VBUS_DETECT_OVERRIDE_EN_BITS;
+  usb_hw->main_ctrl = USB_MAIN_CTRL_CONTROLLER_EN_BITS;
+  usb_hw->sie_ctrl = USB_SIE_CTRL_EP0_INT_1BUF_BITS;
+  usb_hw->inte = 0;  // Poll raw status instead of an interrupt handler
+  mgi_usb_rp_ep_init(0, false), mgi_usb_rp_ep_init(0, true);
+  mgi_usb_rp_endpoints(false);
+  hw_set_bits(&usb_hw->sie_ctrl, USB_SIE_CTRL_PULLUP_EN_BITS);
+}
+
+const struct mg_usb_hw mg_usb_hw_rp = {mgi_usb_rp_start, mgi_usb_rp_poll,
+                                       mgi_usb_rp_in};
+
+#if MG_ENABLE_USB_ETHERNET
+static bool mgi_usb_rp_init(struct mg_tcpip_if *ifp) {
+  return mg_usb_init(ifp, &mg_usb_hw_rp);
+}
+
+struct mg_tcpip_driver mg_tcpip_driver_usb_rp = {mgi_usb_rp_init, mg_usb_tx,
+                                                 NULL, mg_usb_poll};
+#endif
+
+#endif
 
 #ifdef MG_ENABLE_LINES
 #line 1 "src/drivers/w5100.c"

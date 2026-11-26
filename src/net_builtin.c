@@ -1,5 +1,6 @@
 #include "net_builtin.h"
 #include "bsd.h"
+#include "drivers/usb.h"
 #include "mdash.h"
 #include "ota.h"
 #include "printf.h"
@@ -249,6 +250,7 @@ void mg_tcpip_call(struct mg_tcpip_if *ifp, int ev, void *ev_data) {
                          "TCPIP_EV_TIMER_1S",      "TCPIP_EV_WIFI_SCAN_RESULT",
                          "TCPIP_EV_WIFI_SCAN_END", "TCPIP_EV_WIFI_CONNECT_ERR",
                          "TCPIP_EV_DRIVER",        "TCPIP_EV_STATE6_CHANGE",
+                         "TCPIP_EV_PHY_RX",        "TCPIP_EV_PHY_TX",
                          "TCPIP_EV_USER"};
   if (ev != MG_TCPIP_EV_TIMER_1S && ev < (int) (sizeof(names) / sizeof(names[0]))) {
     MG_PROF_ADD(ifp, names[ev]); // TODO(): call MG_PROF_DUMP() MG_PROF_FREE()

@@ -17,7 +17,7 @@ uint64_t hal_get_tick(void);
 bool hal_timer_expired(volatile uint64_t *t, uint64_t period, uint64_t now);
 size_t hal_ram_used(void);
 size_t hal_ram_free(void);
-void hal_radio_init(void);  // Set up the 2.4 GHz transceiver for 802.15.4
+void hal_radio_init(void);  // Set up the 2.4 GHz transceiver for MG_RADIO
 uint32_t hal_rng_read(void);  // Random 32 bits, radio noise. See hal.c
 extern uint32_t SystemCoreClock;  // CPU clock, Hz. Set by hal_clock_init()
 

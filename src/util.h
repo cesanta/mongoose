@@ -136,6 +136,26 @@ uint64_t mg_timegm(unsigned int year, unsigned int month, unsigned int day,
     MG_U8P(p)[7] = (uint8_t) (n);          \
   } while (0)
 
+// Little-endian counterparts, e.g. for USB. Safe for unaligned access
+#define MG_LOAD_LE16(p) \
+  ((uint16_t) (((uint16_t) MG_U8P(p)[1] << 8U) | MG_U8P(p)[0]))
+#define MG_LOAD_LE32(p)                           \
+  ((uint32_t) (((uint32_t) MG_U8P(p)[3] << 24U) | \
+               ((uint32_t) MG_U8P(p)[2] << 16U) | \
+               ((uint32_t) MG_U8P(p)[1] << 8U) | MG_U8P(p)[0]))
+#define MG_STORE_LE16(p, n)               \
+  do {                                    \
+    MG_U8P(p)[0] = (uint8_t) (n);         \
+    MG_U8P(p)[1] = (uint8_t) ((n) >> 8U); \
+  } while (0)
+#define MG_STORE_LE32(p, n)                \
+  do {                                     \
+    MG_U8P(p)[0] = (uint8_t) (n);          \
+    MG_U8P(p)[1] = (uint8_t) ((n) >> 8U);  \
+    MG_U8P(p)[2] = (uint8_t) ((n) >> 16U); \
+    MG_U8P(p)[3] = (uint8_t) ((n) >> 24U); \
+  } while (0)
+
 // Network / host byte-order conversion (big-endian <-> native).
 // mg_htons/mg_htonl/mg_htonll are aliases for the same operation (symmetric).
 uint16_t mg_ntohs(uint16_t net);

@@ -40,6 +40,8 @@ enum {
   MG_TCPIP_EV_WIFI_CONNECT_ERR,  // Wi-Fi connection failed       driver and chip specific
   MG_TCPIP_EV_DRIVER,            // Driver-defined event          driver specific
   MG_TCPIP_EV_STATE6_CHANGE,     // IPv6 link state changed       uint8_t *(&ifp->state6)
+  MG_TCPIP_EV_PHY_RX,            // Radio frame received          struct mg_str *
+  MG_TCPIP_EV_PHY_TX,            // Radio frame about to be sent  struct mg_str *
   MG_TCPIP_EV_USER               // Starting ID for user-defined events
 };
 // clang-format on
@@ -143,6 +145,7 @@ extern const uint8_t mcast_addr[6];  // Multicast MAC address programmed by driv
 #include "drivers/at_cmd.h"
 #include "drivers/cmsis.h"
 #include "drivers/cyw.h"
+#include "drivers/esp32.h"
 #include "drivers/imxrt.h"
 #include "drivers/mcxw71.h"
 #include "drivers/mg24.h"
@@ -163,7 +166,6 @@ extern const uint8_t mcast_addr[6];  // Multicast MAC address programmed by driv
 #include "drivers/w5500.h"
 #include "drivers/xmc.h"
 #include "drivers/xmc7.h"
-#include "drivers/esp32_802154.h"
 
 // SPI bus abstraction for SPI-attached network chips (e.g. W5500).
 // Populate and assign to the driver's driver_data field.
