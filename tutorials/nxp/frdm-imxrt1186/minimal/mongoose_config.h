@@ -3,6 +3,9 @@
 #define MG_ENABLE_TCPIP 1
 #define MG_ENABLE_DRIVER_NETC 1
 #define MG_OTA MG_OTA_RT1180
+// Keep the Mongoose PHY address aligned with NETC switch link binding
+#include "board_config.h"
+#define MG_TCPIP_PHY_ADDR BOARD_ETH_PHY_ADDR
 
 #define MG_IO_SIZE 256
 #define MG_ENABLE_CUSTOM_MILLIS 1

@@ -484,7 +484,9 @@ static inline uint8_t hal_uart_read_byte(LPUART_Type *uart) {
   return (uint8_t) (uart->DATA & 0xFFU);
 }
 
-#define HAL_NETC_PHY0_ADDR 5U
+// NETC switch link binding needs PHY address, shared with Mongoose config
+#include "board_config.h"
+
 #define HAL_NETC_PHY0_RESET PIN('1', 15)
 
 static inline void hal_netc_trdc_region(uint8_t mrc, uint8_t domain,
@@ -605,6 +607,11 @@ static inline void hal_netc_pins_init(void) {
   }
 }
 
+// RT1180's SoC-specific topology fixes link 0 to switch port 0, link 4 to
+// ENETC0, and link 5 between switch port 4 and ENETC1.
+// Hardcoded to use link 0; Mongoose defaults to MG_TCPIP_NETC_LINK = 0
+// Any use of other switch port x would need to access NETC_LINK_CFG[x] and
+// NETC_IERB->LxBCR instead, and Mongoose needs MG_TCPIP_NETC_LINK = x
 static inline bool hal_netc_ierb_init(void) {
   uint32_t timeout = 1000000UL;
 
@@ -624,10 +631,7 @@ static inline bool hal_netc_ierb_init(void) {
   // Attribute 1 permits MSI-X writes through the root-complex window.
   NETC_IERB->ARRAY_NUM_RC[0].RCMSIAMQR =
       (NETC_IERB->ARRAY_NUM_RC[0].RCMSIAMQR & ~(7UL << 27)) | (1UL << 27);
-  // RT1180's SoC-specific topology fixes link 0 to switch port 0, link 4 to
-  // ENETC0, and link 5 between switch port 4 and ENETC1.
-  NETC_IERB->L0BCR =
-      NETC_IERB_L0BCR_MDIO_PHYAD_PRTAD(HAL_NETC_PHY0_ADDR);
+  NETC_IERB->L0BCR = NETC_IERB_L0BCR_MDIO_PHYAD_PRTAD(BOARD_ETH_PHY_ADDR);
   __DSB();
 
   if ((NETC_PRIV->NETCSR & NETC_PRIV_NETCSR_ERROR_MASK) != 0U) return false;
