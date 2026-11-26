@@ -1280,6 +1280,8 @@ static void test_frag_send_path(void) {
   mif.driver = &driver;
   mif.driver_data = &s_driver_data;
   mg_tcpip_init(&mgr, &mif);
+  mif.ip = mg_htonl(0xa00001);
+  mif.state = MG_TCPIP_STATE_READY;  // so can_write() lets the data out
   mif.mtu = 500;  // force ad hoc small MTU to fragment IP
   mg_http_listen(&mgr, "http://0.0.0.0:80", frag_send_fn, NULL);
   mgr.conns->pfn = NULL;

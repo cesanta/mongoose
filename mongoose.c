@@ -12008,7 +12008,7 @@ static void mg_tcpip_poll(struct mg_tcpip_if *ifp, uint64_t now) {
     if (expired_1000ms) {                     // ifp->state rules over state6
       mg_ip_link(ifp, drv_up, l2_up);         // Handle IPv4
       mg_ip6_link(ifp, drv_up, l2_up);        // Handle IPv6
-      if (ifp->state < MG_TCPIP_STATE_UP) MG_ERROR(("Network is down"));
+      if (ifp->state < MG_TCPIP_STATE_UP) MG_ERROR(("Network is down, state %hhu", ifp->state));
       mg_tcpip_call(ifp, MG_TCPIP_EV_TIMER_1S, NULL);
     }
   }
@@ -12254,8 +12254,10 @@ static void write_conn(struct mg_connection *c) {
 }
 
 static bool can_write(struct mg_connection *c) {
-  return c->is_connecting == 0 && c->is_resolving == 0 && c->send.len > 0 &&
-         c->is_tls_hs == 0 && c->is_arplooking == 0;
+  struct mg_tcpip_if *ifp = c->mgr->ifp;
+  bool ready = (ifp->ip != 0 && ifp->state == MG_TCPIP_STATE_READY);
+  return ready && c->is_connecting == 0 && c->is_resolving == 0 &&
+         c->send.len > 0 && c->is_tls_hs == 0 && c->is_arplooking == 0;
 }
 
 void mg_mgr_poll(struct mg_mgr *mgr, int ms) {
