@@ -254,6 +254,9 @@ Technical guides and deep dives into embedded web servers, WebUI integration and
 - [How to connect STM32 to EMQX](https://mongoose.ws/articles/stm32-emqx/)
 - [STM32 Device Management deep dive: Secure OTA, Remote Control, health monitor](https://mongoose.ws/articles/stm32-mdash-deep-dive/)
 - [STM32 TCP/IP footprint: how much flash and RAM does Mongoose take?](https://mongoose.ws/articles/tcp-ip-footprint/)
+- [Ethernet over 802.15.4 radio](https://mongoose.ws/articles/ethernet-over-802154-radio/)
+- [Debug ESP32 crashes in production](https://mongoose.ws/articles/esp32-crashes-in-production/)
+- [Ethernet on nRF52840 over USB and BLE radio](https://mongoose.ws/articles/ethernet-on-nrf52/)
 
 
 ## Contributions
