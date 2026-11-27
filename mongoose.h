@@ -4088,7 +4088,7 @@ void mg_rpc_list(struct mg_rpc_req *r);
 #define MG_MODBUS_ADDR "tcp://0.0.0.0:8502"
 #else
 #define MG_HTTP_ADDR "http://0.0.0.0:80"
-#define MG_HTTPS_ADDR "http://0.0.0.0:443"
+#define MG_HTTPS_ADDR "https://0.0.0.0:443"
 #define MG_MODBUS_ADDR "tcp://0.0.0.0:502"
 #endif
 #endif
@@ -4169,6 +4169,8 @@ struct mg_dash {
   // - The returned directory must be nonempty and must not contain ',' or '=',
   // because it is used as an mg_http_serve_opts::root_dir mapping target.
   bool (*files_dir)(const struct mg_dash_user *u, char *buf, size_t len);
+  struct mg_str tls_cert;  // HTTPS listener certificate, PEM. Empty: no HTTPS
+  struct mg_str tls_key;   // HTTPS listener private key, PEM
 };
 
 #define MG_DASH_ADD_FIELD_SET(dash_, set_) \

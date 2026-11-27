@@ -13,6 +13,8 @@ CFLAGS += $(CFLAGS_EXTRA)
 LDFLAGS ?= -Tlink.ld -nostdlib -nostartfiles --specs nano.specs -lc -lgcc -Wl,--gc-sections
 
 SOURCES = main.c hal.c $(MGDIR)/mongoose.c
+SOURCES += $(MGDIR)/tutorials/device-dashboard/full/dashboard.c
+SOURCES += $(MGDIR)/tutorials/device-dashboard/full/file_data.c
 SOURCES += cmsis_u5/Source/Templates/gcc/startup_stm32u5a5xx.s
 
 all build: firmware.bin
@@ -32,6 +34,9 @@ cmsis_core:
 
 cmsis_u5:
 	git clone -q -c advice.detachedHead=false --depth 1 -b v1.4.2 https://github.com/STMicroelectronics/cmsis_device_u5 $@
+
+$(MGDIR)/tutorials/device-dashboard/full/file_data.c:
+	cd $(dir $@) && $(MAKE) $(notdir $@)
 
 clean:
 	rm -rf firmware.* cmsis_*

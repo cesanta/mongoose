@@ -1,6 +1,7 @@
 #include "dash.h"
 #include "http.h"
 #include "ota.h"
+#include "tls.h"
 #include "util.h"
 
 #define MG_NO_CACHE_HEADERS "Cache-Control: no-cache\r\n"
@@ -559,6 +560,12 @@ void mg_dash_ev_handler(struct mg_connection *c, int ev, void *ev_data) {
   if (ev == MG_EV_OPEN) {
     d->dash = dash;
     // c->is_hexdumping = 1;
+  } else if (ev == MG_EV_ACCEPT && c->is_tls) {
+    struct mg_tls_opts opts;
+    memset(&opts, 0, sizeof(opts));
+    opts.cert = dash->tls_cert, opts.key = dash->tls_key;
+    if (dash->tls_cert.len == 0) c->is_closing = 1;  // No cert: refuse
+    else mg_tls_init(c, &opts);
   } else if (ev == MG_EV_CLOSE && c->is_listening) {
     mg_dash_delete_users(c->mgr, dash);
   } else if (ev == MG_EV_HTTP_HDRS && d->marker == 0) {
