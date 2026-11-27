@@ -30,6 +30,7 @@ uint32_t SystemCoreClock = SYS_FREQUENCY;
 void SystemInit(void) {  // Called automatically by startup code
   hal_system_init();     // Enable FPU
   hal_clock_init();
+  SystemCoreClock = SYS_FREQUENCY;         // .data is not initialised yet
   SysTick_Config(SystemCoreClock / 1000);  // Sys tick every 1ms
 }
 

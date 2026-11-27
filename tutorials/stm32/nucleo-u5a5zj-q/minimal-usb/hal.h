@@ -38,7 +38,7 @@ enum {
   HAL_D3PRE = 1,
 };
 enum { PLL1_M = 1, PLL1_N = 80, PLL1_P = 2, PLL1_Q = 2, PLL1_R = 2 };
-#define MSIS_FREQUENCY (4 * 1024 * 1024)  // 4 Mhz
+#define MSIS_FREQUENCY 4000000  // 4 MHz
 #define SYS_FREQUENCY \
   (MSIS_FREQUENCY * PLL1_N / PLL1_M / PLL1_P / HAL_D1PRE)  // 160MHz
 #define AHB_FREQUENCY (SYS_FREQUENCY / HAL_HPRE)
