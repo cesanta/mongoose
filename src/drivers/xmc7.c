@@ -149,7 +149,7 @@ static bool mg_tcpip_driver_xmc7_init(struct mg_tcpip_if *ifp) {
 
   // init phy
   struct mg_phy phy = {eth_read_phy, eth_write_phy};
-  mg_phy_init(&phy, d->phy_addr, MG_PHY_CLOCKS_MAC);
+  mg_phy_init(&phy, d->phy_addr, MG_PHY_RGMII);
 
   (void) d;
   return true;

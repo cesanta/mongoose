@@ -242,7 +242,7 @@ static bool mg_tcpip_driver_netc_init(struct mg_tcpip_if *ifp) {
   NETC_EMDIO_PCI->CMD |= MG_BIT(2) | MG_BIT(1);  // BUS_MASTER_EN, MEM_ACCESS
   NETC_EMDIO->EMDIO_CFG =
       ((mdc_cr & 0x1ffU) << 7) | MG_BIT(2);  // MDIO_CLK_DIV, MDIO_HOLD
-  mg_phy_init(&phy, d->phy_addr, 0);
+  mg_phy_init(&phy, d->phy_addr, MG_PHY_RGMII);
 
   // Initialize ENETC1 PSI0 and port
   NETC_ENETC1_PCI->CMD |= MG_BIT(2) | MG_BIT(1);  // BUS_MASTER_EN, MEM_ACCESS
