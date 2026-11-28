@@ -21,6 +21,8 @@ LDFLAGS ?= -Tlink.ld -nostdlib -nostartfiles --specs=nano.specs -lc -lm -lgcc
 LDFLAGS += -Wl,--gc-sections -Wl,-Map=$@.map
 
 SOURCES = hal.c main.c $(MGDIR)/mongoose.c
+SOURCES += $(MGDIR)/tutorials/device-dashboard/full/dashboard.c
+SOURCES += $(MGDIR)/tutorials/device-dashboard/full/file_data.c
 SOURCES += nrfx/mdk/system_nrf52840.c nrfx/mdk/gcc_startup_nrf52840.S
 
 all build: firmware.hex
@@ -44,6 +46,9 @@ cmsis_core:
 # nRF52840 device headers, SystemInit() and the startup code
 nrfx:
 	git clone -q -c advice.detachedHead=false --depth 1 -b v2.11.0 https://github.com/NordicSemiconductor/nrfx $@
+
+$(MGDIR)/tutorials/device-dashboard/full/file_data.c:
+	cd $(dir $@) && $(MAKE) $(notdir $@)
 
 clean:
 	rm -rf firmware.* cmsis_core nrfx

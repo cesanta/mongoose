@@ -84,6 +84,9 @@
         function showLogin(yes) {
           document.getElementById('auth').style.display = yes ? '' : 'none';
           document.getElementById('app').style.display = yes ? 'none' : '';
+          if (!yes) requestAnimationFrame(() => {  // App is visible now: size graphs
+            mkGraph(graphs.graph1), mkGraph(graphs.graph2);
+          });
           if (yes) {
             document.body.style.visibility = 'visible';
             passwordEl.focus();

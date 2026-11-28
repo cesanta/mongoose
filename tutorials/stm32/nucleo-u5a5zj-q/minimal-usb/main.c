@@ -3,6 +3,7 @@
 //
 // Nucleo-U5A5ZJ-Q: Mongoose over USB. One USB-C cable on CN15 gives the board
 // a CDC-NCM Ethernet interface and a CDC-ACM serial port that carries the log
+// Important: set Nucleo's JP6 from st-link power to usb-c power
 
 #include "hal.h"
 #include "mongoose.h"
