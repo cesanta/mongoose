@@ -1,0 +1,123 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <title>WiFi Settings</title>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+
+    <!-- Mongoose device dashboard -->
+    <script src="https://mongoose.ws/resources/dashboard.js"></script>
+    <style>
+:root { --color-text-toolbar: rgb(71, 85, 105); --color-text-strong: #24364d; --font-size-body: 14px; --max-width: 80rem; --spacing-3: 0.75rem; --spacing-4: 1rem; --spacing-6: 1.5rem; }
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body { font-family: ui-sans-serif, system-ui, sans-serif, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol", "Noto Color Emoji"; font-size: var(--font-size-body); line-height: 1.5; min-height: 100vh; color: var(--color-text-strong); background: #fff; }
+.header-container { max-width: var(--max-width); margin: 0 auto; display: flex; align-items: center; gap: var(--spacing-4); padding: var(--spacing-3) var(--spacing-6); }
+.logo { height: 2.8rem; margin: 0 1rem; width: auto; }
+.connection-badge { display: inline-flex; align-items: center; gap: 0.4rem; padding: 4px 14px; border-radius: 14px; font-weight: 600; }
+.connection-badge-online { color: rgb(4, 120, 87); border: 1px solid rgb(167, 243, 208); background: rgb(236, 253, 245); }
+.connection-badge-offline { color: rgb(120, 44, 57); border: 1px solid rgb(243, 177, 208); background: rgb(253, 246, 245); }
+.connection-dot { width: 11px; height: 11px; border-radius: 50%; flex-shrink: 0; }
+.connection-dot-online { background: rgb(16, 185, 129); }
+.connection-dot-offline { background: rgb(185, 96, 109); }
+.nav-icon { height: 1rem; width: 1rem; flex-shrink: 0; }
+.stage { max-width: var(--max-width); margin: 0 auto; padding: 0.5rem var(--spacing-6) var(--spacing-4); }
+.panel { max-width: 32rem; background: #ffffff; border: 1px solid rgba(203, 213, 225, 0.75); border-radius: 0.75rem; box-shadow: inset 0 1px 0 rgba(255, 255, 255, 1), 0 2px 6px rgba(148, 163, 184, 0.1), 0 8px 24px rgba(148, 163, 184, 0.08); overflow: hidden; display: flex; flex-direction: column; }
+.panel-title { display: flex; align-items: center; font-size: 0.95rem; font-weight: 700; color: #334155; padding: 0 1rem; min-height: 3rem; border-bottom: 1px solid #e2e8f0; }
+.panel-body { display: flex; flex-direction: column; gap: 0.5rem; padding: 1rem 1.25rem; }
+.panel-footer { display: flex; align-items: center; justify-content: flex-end; gap: 0.75rem; padding: 0.75rem 1.25rem; border-top: 1px solid #e2e8f0; }
+.field { display: flex; flex-direction: row; justify-content: space-between; align-items: center; gap: 0.75rem; min-height: 2.2rem; }
+.field-label { font-size: 0.75rem; font-weight: 700; text-transform: uppercase; color: #94a3b8; flex-shrink: 0; white-space: nowrap; min-width: 3rem; }
+.field-input { flex: 1; min-width: 0; max-width: 18rem; padding: 0.45rem 0.75rem; font-size: 0.88rem; font-family: inherit; color: #334155; border: 1px solid #e2e8f0; border-radius: 0.55rem; outline: none; transition: border-color 0.15s ease; }
+.field-input.edited { border-color: #00500040 !important; background: #00ff0020; }
+.field-input::placeholder { color: #cbd5e1; }
+.field-input:hover { border-color: #cbd5e1; }
+.field-input:focus { border-color: #7dd3fc; }
+.field-value { min-width: 0; color: #334155; font-size: 0.9rem; font-weight: 700; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.btn { display: inline-flex; align-items: center; justify-content: center; gap: 0.5rem; height: 2rem; padding: 0.3rem 1rem; font-size: 0.85rem; font-family: inherit; font-weight: 600; border-radius: 0.5rem; border: 1px solid transparent; cursor: pointer; transition: all 0.15s ease; white-space: nowrap; }
+.btn-secondary { color: #64748b; background: #ffffff; border-color: #e2e8f0; box-shadow: 0 1px 2px rgba(148, 163, 184, 0.1); }
+.btn-secondary:hover { background: #f1f5f9; border-color: #cbd5e1; color: #475569; }
+.btn-primary { color: #ffffff; background: linear-gradient(160deg, #38bdf8, #0ea5e9); border-color: #0284c7; box-shadow: 0 1px 3px rgba(14, 165, 233, 0.3), 0 4px 10px rgba(14, 165, 233, 0.15); }
+.btn-primary:hover { background: linear-gradient(160deg, #0ea5e9, #0284c7); }
+.btn:disabled { opacity: 0.45; cursor: not-allowed; pointer-events: none; box-shadow: none; }
+.toggle { position: relative; width: 2.75rem; height: 1.6rem; margin: 0; vertical-align: top; border: 1px solid transparent; background: #d1d5db; border-radius: 0.75rem; outline: none; cursor: pointer; -webkit-appearance: none; -moz-appearance: none; appearance: none; }
+.toggle::after { content: ""; position: absolute; left: 1px; top: 1px; width: 1.35rem; height: 1.35rem; background: #fff; border-radius: 50%; transition: all 0.3s; }
+.toggle:checked { background: #10B981; }
+.toggle:checked::after { transform: translateX(calc(100% - 3px)); }
+.toggle.edited { border-color: #0fe; }
+    </style>
+  </head>
+  <body style="visibility: hidden;">
+    <div class="header-container">
+      <svg class="logo" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 600" width="1200" height="600">
+        <defs>
+          <linearGradient id="g" x1="0" y1="0" x2="1" y2="1">
+            <stop offset="0%" stop-color="#2dd4bf"/>
+            <stop offset="100%" stop-color="#0f766e"/>
+          </linearGradient>
+        </defs>
+        <g fill="none" stroke="url(#g)" stroke-width="30" stroke-linecap="round" stroke-linejoin="round">
+          <rect x="160" y="60" width="300" height="300" rx="70"/>
+          <rect x="20" y="200" width="300" height="300" rx="70"/>
+        </g>
+        <text x="560" y="360" font-family="system-ui, -apple-system, Segoe UI, Roboto, sans-serif"
+              font-size="180" font-weight="600" fill="#6b7280">MyLogo</text>
+      </svg>
+      <div class="connection-badge connection-badge-${__status.online ? 'online' : 'offline'}">
+        <span>${__status.online ? 'live' : 'offline'}</span>
+        <span class="connection-dot connection-dot-${__status.online ? 'online' : 'offline'}"></span>
+      </div>
+    </div>
+
+    <main class="stage">
+      <div class="panel">
+        <div class="panel-title">WiFi settings</div>
+        <div class="panel-body">
+          <div class="field">
+            <label class="field-label">WiFi name</label>
+            <input class="field-input" type="text" data-bind="wifi.ssid" />
+          </div>
+          <div class="field">
+            <label class="field-label">WiFi password</label>
+            <input class="field-input" type="password" data-bind="wifi.pass" autocomplete="new-password" placeholder="" />
+          </div>
+          <div class="field">
+            <label class="field-label">WiFi enable</label>
+            <input type="checkbox" data-bind="wifi.enable" class="toggle" />
+          </div>
+          <div class="field">
+            <label class="field-label">WiFi status</label>
+            <span class="field-value" data-bind="wifi.status"></span>
+          </div>
+        </div>
+        <div class="panel-footer">
+          <button class="btn btn-secondary" type="button" data-cancel="wifi">
+            <svg viewBox="0 0 24 24" class="nav-icon" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M18 6 6 18" />
+              <path d="m6 6 12 12" />
+            </svg>
+            Cancel
+          </button>
+          <button class="btn btn-primary" type="button" data-save="wifi">
+            <svg viewBox="0 0 24 24" class="nav-icon" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2Z" />
+              <path d="M17 21v-8H7v8" />
+              <path d="M7 3v5h8" />
+            </svg>
+            Save
+          </button>
+        </div>
+      </div>
+    </main>
+
+    <!-- At the end of body: with no login, init() loads data immediately -->
+    <script>
+      Dashboard.on('ready', () => document.body.style.visibility = 'visible');
+      Dashboard.init({
+        debug: true,
+        data: {
+          wifi: { ssid: 'MyNetwork', pass: '', enable: false, status: 'not connected' },
+        },
+      });
+    </script>
+  </body>
+</html>

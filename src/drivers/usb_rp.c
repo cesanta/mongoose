@@ -23,13 +23,20 @@ static uint8_t s_mgi_usb_rp_req[16];  // SETUP packet, then its OUT data
 static bool s_mgi_usb_rp_req_out;     // Waiting for that OUT data stage
 static uint8_t s_mgi_usb_rp_address;  // Address to set after the status stage
 
+// Per-byte memcpy variant to avoid alignment issues
+static void mgi_bcopy(void *dst, const void *src, size_t n) {
+  volatile uint8_t *d = (volatile uint8_t *) dst;
+  const volatile uint8_t *s = (const volatile uint8_t *) src;
+  while (n--) *d++ = *s++;
+}
+
 // Hand one packet buffer to the controller. OUT: accept up to len bytes
 static void mgi_usb_rp_packet(unsigned ep, bool in, const void *data,
                               unsigned len) {
   struct mgi_usb_rp_ep *e = &s_mgi_usb_rp_ep[ep][in];
   uint32_t v = len | (e->pid ? USB_BUF_CTRL_DATA1_PID : 0) |
                (in ? USB_BUF_CTRL_FULL : 0);
-  if (in && len) memcpy(e->buf, data, len);
+  if (in && len) mgi_bcopy(e->buf, data, len);
   e->pid ^= 1;
   *e->ctrl = v;
   // RP2040 datasheet: allow at least 12 cycles between writing buffer
@@ -125,7 +132,7 @@ static void mgi_usb_rp_request(MGI_USB_RP_FN) {
 static void mgi_usb_rp_setup(MGI_USB_RP_FN) {
   uint8_t *r = s_mgi_usb_rp_req;
   unsigned wlen;
-  memcpy(r, (const void *) usb_dpram->setup_packet, 8);
+  mgi_bcopy(r, (const void *) usb_dpram->setup_packet, 8);
   wlen = MG_LOAD_LE16(r + 6);
   // A SETUP cancels the preceding control transfer. Both its data and
   // status stages start with DATA1
@@ -159,12 +166,14 @@ static void mgi_usb_rp_complete(unsigned ep, bool in, MGI_USB_RP_FN) {
     if (n != MG_LOAD_LE16(r + 6)) {
       mgi_usb_rp_stall();
     } else {
-      memcpy(r + 8, e->buf, n);
+      mgi_bcopy(r + 8, e->buf, n);
       mgi_usb_rp_request(fn);
     }
 #if MG_ENABLE_USB_ETHERNET
   } else if (ep == MG_USB_EP_ETH_DATA && !in) {
-    fn(MG_USB_EV_OUT, MG_USB_EP_ETH_DATA, e->buf, n);
+    uint8_t pkt[64];  // usb.c copies it with memcpy(): give it RAM, not DPRAM
+    mgi_bcopy(pkt, e->buf, n);
+    fn(MG_USB_EV_OUT, MG_USB_EP_ETH_DATA, pkt, n);
     mgi_usb_rp_packet(ep, false, NULL, 64);
 #endif
 #if MG_ENABLE_USB_SERIAL
