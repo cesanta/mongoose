@@ -3,9 +3,9 @@
 #define MG_ARCH MG_ARCH_ARMGCC
 #define MG_TLS MG_TLS_BUILTIN
 #define MG_ENABLE_TCPIP 1
-#define MG_ENABLE_IPV6 0
 #define MG_ENABLE_CUSTOM_MILLIS 1
 #define MG_ENABLE_CUSTOM_RANDOM 1
+
 #define MG_ENABLE_DRIVER_USB_NRF52 1  // nRF52840 USB controller
 #define MG_ENABLE_USB_ETHERNET 1      // USB NCM Ethernet interface
 #define MG_ENABLE_USB_SERIAL 1        // USB serial log console
